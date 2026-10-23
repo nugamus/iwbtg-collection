@@ -13,7 +13,7 @@ Three private repos, lean CLAUDE.md files, clean-room spec skill and template, P
 - SQLite database tracks every game and every download link. Link status: `pending`, `downloaded`, `verified` (SHA-256 recorded), `dead`, `alt_found`.
 - Downloader with one handler per host (direct, Mediafire, Google Drive, Mega, Dropbox, others as found). Files are stored by SHA-256 in `archive/` and backed up to storage that is not the internet-facing server.
 - VirusTotal check for every downloaded file (usually the zip or rar): look up the SHA-256 first, upload only if VirusTotal has never seen it. VirusTotal scans the files inside an uploaded archive. Files unpacked from it are checked one by one only when VirusTotal could not look inside (password-protected or oversized archives). The API key lives in `research/.env` as `VT_API_KEY`. Public API limit is 4 requests/minute and 500/day, so checks run in a slow queue. The database stores detection count, scan date and report link. Flagged files go to manual review, because GameMaker 8 games often trigger false positives. Results decide how a file may be handled in research. They never affect the client, which never runs original code.
-- Original game files are never run on the main machine. Static extraction reads them without executing them. Recording ground-truth traces runs the original inside Windows Sandbox (built into Windows 11 Pro) or another disposable VM, started by the user. Work happens on native Windows, not WSL2, so games run without Wine.
+- Static extraction reads original files without executing them. Since 2026-10-24 the user allows running originals on the main machine (Windows Sandbox is not installed there) only when VirusTotal checked them clean, through the research gate (`research/scraper/gate.py`). Work happens on native Windows, not WSL2, so games run without Wine.
 - Binary storage: not Git or Git LFS. GitHub LFS quotas are too small for thousands of games, and originals must never reach a public repo. The database records hash and storage location.
 - Community trick and technique notes collected into `knowledge/`, each with its source.
 - Scope first: no full crawl or full archive until the 20 games are ported and work (end of Phase 5). Phase 1 catalogs only a candidate pool: the cwpat.me beginner list plus targeted lookups of single games.
@@ -96,7 +96,7 @@ Bosses and avoidance, long games, level editor, items from Potential Features.md
 - Takedown contact: a link at the bottom of the website. Set up before going public.
 - Accounts are stored in our own database; the sign-in method sits behind one interface. Reference flow: https://typebeat.sh/register.
 - Server stack: `docs/server.md` (Rust + axum, SQLite, Cloudflare Tunnel, Docker Compose, restic backups).
-- Research runs on native Windows. Original games run only in Windows Sandbox or a VM.
+- Research runs on native Windows. Originals run only when VirusTotal-clean, through the research gate (user decision, 2026-10-24).
 
 ## Open decisions
 
