@@ -1,19 +1,19 @@
 # Roadmap
 
-Order of work across both repos. No deadline: each phase ends when its check passes, not on a date.
+Order of work across all three repos (client, games, research). No deadline: each phase ends when its check passes, not on a date.
 
 ## 0. Setup (done)
 
-Two private repos, lean CLAUDE.md files, clean-room spec skill and template, Potential Features.md.
+Three private repos, lean CLAUDE.md files, clean-room spec skill and template, Potential Features.md, licenses, workspace settings with the archive guard hook.
 
 ## 1. Catalog and archive (research repo)
 
 - Scraper (Python + Playwright) collects delicious-fruit metadata: name, creators, year, difficulty, tags, clear count, page URL, download links. Ratings are never imported.
 - Gentle crawling: one request at a time, several seconds between requests, every response cached on disk, runs resume where they stopped.
 - SQLite database tracks every game and every download link. Link status: `pending`, `downloaded`, `verified` (SHA-256 recorded), `dead`, `alt_found`.
-- Downloader with one handler per host (direct, Mediafire, Google Drive, Mega, Dropbox, others as found). Files are stored by SHA-256 in `archive/` and mirrored to the home server.
-- VirusTotal check for every archived file and every file unpacked from it: look up the SHA-256 first, upload only if VirusTotal has never seen it. Public API limit is 4 requests/minute and 500/day, so checks run in a slow queue. The database stores detection count, scan date and report link. Flagged files go to manual review, because GameMaker 8 games often trigger false positives. Results decide how a file may be handled in research. They never affect the client, which never runs original code.
-- Original game files are never run on the main machine. Static extraction reads them without executing them. Recording ground-truth traces runs the original inside a disposable VM only.
+- Downloader with one handler per host (direct, Mediafire, Google Drive, Mega, Dropbox, others as found). Files are stored by SHA-256 in `archive/` and backed up to storage that is not the internet-facing server.
+- VirusTotal check for every downloaded file (usually the zip or rar): look up the SHA-256 first, upload only if VirusTotal has never seen it. VirusTotal scans the files inside an uploaded archive. Files unpacked from it are checked one by one only when VirusTotal could not look inside (password-protected or oversized archives). The API key lives in `research/.env` as `VT_API_KEY`. Public API limit is 4 requests/minute and 500/day, so checks run in a slow queue. The database stores detection count, scan date and report link. Flagged files go to manual review, because GameMaker 8 games often trigger false positives. Results decide how a file may be handled in research. They never affect the client, which never runs original code.
+- Original game files are never run on the main machine. Static extraction reads them without executing them. Recording ground-truth traces runs the original inside Windows Sandbox (built into Windows 11 Pro) or another disposable VM, started by the user. Work happens on native Windows, not WSL2, so games run without Wine.
 - Binary storage: not Git or Git LFS. GitHub LFS quotas are too small for thousands of games, and originals must never reach a public repo. The database records hash and storage location.
 - Community trick and technique notes collected into `knowledge/`, each with its source.
 - Check: user approves a list of 20 popular, short, easy games picked from the catalog.
@@ -30,9 +30,10 @@ Two private repos, lean CLAUDE.md files, clean-room spec skill and template, Pot
 
 - `docs/format/`: game package spec. A package holds metadata, physics profile, rooms, objects, assets, and the start, end and stage triggers that define timing.
 - `crates/sim`: fixed tick, physics profile from the engine spec, collision, triggers, replay as one input state per tick.
-- `crates/format`: load and validate packages.
+- `crates/format`: load and validate packages. Each package manifest records creators, source URL, permission status (`granted`, `community-assumed`, `pending`, `revoked`) and every third-party asset.
+- Workspace `Cargo.toml` with `license = "MIT OR Apache-2.0"`, `cargo-deny` license allow list (no GPL in the client), and a `cargo fmt` hook once Rust code exists.
 - Headless replay CLI: runs a replay, prints tick count and splits.
-- Check: replaying the Phase 2 inputs reproduces the original traces exactly, tick for tick, on native and WASM.
+- Check: replaying the Phase 2 inputs reproduces the original traces exactly, tick for tick, on Windows, WASM and Linux x86_64 (the server's platform).
 
 ## 4. First playable (client repo)
 
@@ -66,12 +67,15 @@ Two private repos, lean CLAUDE.md files, clean-room spec skill and template, Pot
 - Full-game runs with per-stage breakdown, submitted as replays.
 - Server re-simulates with `sim` and stores the verified tick count.
 - Anomaly flags and input-copy detection send runs to a review queue; nothing is auto-rejected on suspicion alone.
-- Players are stored behind an ID so an account system can plug in later.
-- Hosted on the home server, backups pushed to a remote Git server.
+- Accounts, sign-in and security follow `docs/server.md`.
+- Hosted on the home server; encrypted restic backups to remote storage.
 
 ## 9. Going public
 
-- Code license chosen. Published takedown process and contact.
+- Takedown page and contact at the bottom of the website. Privacy page and account deletion.
+- Third-party content (commercial music, Kayin's sprites, engine assets) cleared or excluded before any public distribution, from the repo or the server. Decide whether `community-assumed` games may be served.
+- `REUSE.toml` (put the `**` code annotation first so later game/docs entries win), `NOTICE`, and `THIRD_PARTY_LICENSES` generated with `cargo-about` for each release.
+- Non-affiliation note for the IWBTG name; consider asking Kayin.
 - One removal list honored everywhere: builds skip removed games, the server stops serving them, clients delete them on sync.
 - CI builds: minimal (1 game) and full (all ported games).
 - Contributor docs.
@@ -82,11 +86,13 @@ Bosses and avoidance, long games, level editor, items from Potential Features.md
 
 ## Decided
 
-- Ported games and their music live in this repo (`games/`) for now. When the repo grows too large, they move to the home server.
+- Code: `MIT OR Apache-2.0`. Docs, format spec and research specs: `CC-BY-4.0`. Game content belongs to its creators and is not relicensed.
+- Ported games and their music live in the private games repo for now. When it grows too large, they move to the home server.
 - Takedown contact: a link at the bottom of the website. Set up before going public.
-- Accounts are stored in our own database. The sign-in method will change over time, so it sits behind one interface. Reference for the flow: https://typebeat.sh/register.
+- Accounts are stored in our own database; the sign-in method sits behind one interface. Reference flow: https://typebeat.sh/register.
+- Server stack: `docs/server.md` (Rust + axum, SQLite, Cloudflare Tunnel, Docker Compose, restic backups).
+- Research runs on native Windows. Original games run only in Windows Sandbox or a VM.
 
 ## Open decisions
 
-- Code license.
-- Server stack and database.
+- Backup storage provider (Backblaze B2 or Hetzner Storage Box). Needed by Phase 8.

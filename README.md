@@ -16,15 +16,21 @@ crates/
   client/    The Bevy app: game select, rendering, input, audio, settings.
   server/    Leaderboard backend: submissions, replay verification, review queue.
   tools/     Small editors (first: music preview picker). Grows into the level editor.
-games/<game-id>/   Ported games in our format.
 docs/
   format/    Game package format spec.
+  server.md  Server stack and security rules.
   roadmap.md Order of work.
 Potential Features.md   Feature ideas, one line each.
 ```
 
-Original binaries, extraction output and clean-room specs live in the separate research repo, never here.
+Ported games live in the separate games repo (`iwbtg-collection-games`). Original binaries, extraction output and clean-room specs live in the research repo. Neither belongs here.
 
 ## Games and assets
 
 Each ported game belongs to its creator. This project is non-commercial and will never be monetized. Creators can have their game removed from the project, its builds and its download server (process to be published before going public).
+
+## License
+
+Code is licensed under either of [Apache License 2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT), at your option. Documentation in `docs/` is licensed under [CC BY 4.0](LICENSES/CC-BY-4.0.txt). Game content is not covered by these licenses.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
