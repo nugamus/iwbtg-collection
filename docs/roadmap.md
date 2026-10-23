@@ -12,6 +12,8 @@ Two private repos, lean CLAUDE.md files, clean-room spec skill and template, Pot
 - Gentle crawling: one request at a time, several seconds between requests, every response cached on disk, runs resume where they stopped.
 - SQLite database tracks every game and every download link. Link status: `pending`, `downloaded`, `verified` (SHA-256 recorded), `dead`, `alt_found`.
 - Downloader with one handler per host (direct, Mediafire, Google Drive, Mega, Dropbox, others as found). Files are stored by SHA-256 in `archive/` and mirrored to the home server.
+- VirusTotal check for every archived file and every file unpacked from it: look up the SHA-256 first, upload only if VirusTotal has never seen it. Public API limit is 4 requests/minute and 500/day, so checks run in a slow queue. The database stores detection count, scan date and report link. Flagged files go to manual review, because GameMaker 8 games often trigger false positives. Results decide how a file may be handled in research. They never affect the client, which never runs original code.
+- Original game files are never run on the main machine. Static extraction reads them without executing them. Recording ground-truth traces runs the original inside a disposable VM only.
 - Binary storage: not Git or Git LFS. GitHub LFS quotas are too small for thousands of games, and originals must never reach a public repo. The database records hash and storage location.
 - Community trick and technique notes collected into `knowledge/`, each with its source.
 - Check: user approves a list of 20 popular, short, easy games picked from the catalog.
@@ -78,10 +80,13 @@ Two private repos, lean CLAUDE.md files, clean-room spec skill and template, Pot
 
 Bosses and avoidance, long games, level editor, items from Potential Features.md.
 
+## Decided
+
+- Ported games and their music live in this repo (`games/`) for now. When the repo grows too large, they move to the home server.
+- Takedown contact: a link at the bottom of the website. Set up before going public.
+- Accounts are stored in our own database. The sign-in method will change over time, so it sits behind one interface. Reference for the flow: https://typebeat.sh/register.
+
 ## Open decisions
 
 - Code license.
-- Takedown contact channel.
-- Account system (user has a reference site).
 - Server stack and database.
-- Where large game assets (music) live in the client repo: plain Git, LFS or home server only.
