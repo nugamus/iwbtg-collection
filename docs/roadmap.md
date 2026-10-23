@@ -24,11 +24,13 @@ Three private repos, lean CLAUDE.md files, clean-room spec skill and template, P
 - Extract with research tools (gm8decompiler for GameMaker 8, UndertaleModTool for GameMaker Studio). Use REA for runner-level behavior the extraction cannot show (collision rules, rounding, tick order).
 - Ground-truth traces: record the original's player state (x, y, speeds, flags) every tick for scripted inputs. The recording method is chosen in this phase and documented in the first engine spec.
 - Write the engine CLONE_SPEC.md with the `clean-room-spec` skill.
+- Mechanic inventory (`specs/mechanics.md`): every mechanic seen across the 20 games, each marked as a built-in candidate or as needing a script. This shapes the format.
 - Check: the spec covers movement, jumping, double jump, saves, death and restart, with UNKNOWNs listed.
 
 ## 3. Format v0 and simulation core (client repo)
 
-- `docs/format/`: game package spec. A package holds metadata, physics profile, rooms, objects, assets, and the start, end and stage triggers that define timing.
+- `docs/format/`: game package spec, following the principles in `docs/format/README.md` (readable text, built-in objects first, sandboxed scripts, never compiled). A package holds metadata, physics profile, rooms, objects, assets, and the start, end and stage triggers that define timing.
+- Choose the script language and data syntax by comparing candidates on sandbox guarantees, determinism, WASM support and readability. Candidates: an embedded Rust scripting language such as Rhai, Luau, or a small language of our own. The user approves the choice.
 - `crates/sim`: fixed tick, physics profile from the engine spec, collision, triggers, replay as one input state per tick.
 - `crates/format`: load and validate packages. Each package manifest records creators, source URL, permission status (`granted`, `community-assumed`, `pending`, `revoked`) and every third-party asset.
 - Workspace `Cargo.toml` with `license = "MIT OR Apache-2.0"`, `cargo-deny` license allow list (no GPL in the client), and a `cargo fmt` hook once Rust code exists.
@@ -95,4 +97,5 @@ Bosses and avoidance, long games, level editor, items from Potential Features.md
 
 ## Open decisions
 
+- Script language and data file syntax for the game format. Decided in Phase 3.
 - Backup storage provider (Backblaze B2 or Hetzner Storage Box). Needed by Phase 8.

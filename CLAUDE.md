@@ -7,6 +7,7 @@
 - Never commit original game binaries, decompiled code or extracted files. Those stay in the research repo (`../research`). Ported games live in the games repo (`../games`), rebuilt in our format from clean-room specs.
 - The simulation is deterministic: fixed tick at the game's original rate, no frame time in `sim`, number handling matching the original as its CLONE_SPEC documents. Timing, splits and leaderboards count ticks, never rendered frames.
 - `sim` must not depend on Bevy.
+- Game packages are readable text and never contain compiled code. Custom behavior goes only through our sandboxed script language. See `docs/format/README.md`.
 - Each game keeps its own physics profile. Never "fix" a quirk or bug players rely on.
 - Input is a fixed set of client actions (left, right, jump, shoot, restart, ...). Games map actions; they never read raw keys.
 - Design is a priority. No generic UI; match the IWBTG style and reuse art from ported games where it fits.
