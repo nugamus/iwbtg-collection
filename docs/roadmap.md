@@ -16,7 +16,8 @@ Three private repos, lean CLAUDE.md files, clean-room spec skill and template, P
 - Original game files are never run on the main machine. Static extraction reads them without executing them. Recording ground-truth traces runs the original inside Windows Sandbox (built into Windows 11 Pro) or another disposable VM, started by the user. Work happens on native Windows, not WSL2, so games run without Wine.
 - Binary storage: not Git or Git LFS. GitHub LFS quotas are too small for thousands of games, and originals must never reach a public repo. The database records hash and storage location.
 - Community trick and technique notes collected into `knowledge/`, each with its source.
-- Check: user approves a list of 20 popular, short, easy games picked from the catalog.
+- Scope first: no full crawl or full archive until the 20 games are ported and work (end of Phase 5). Phase 1 catalogs only a candidate pool: the cwpat.me beginner list plus targeted lookups of single games.
+- Check: user approves a list of 20 popular, short, easy games picked from the candidate pool.
 
 ## 2. Clean-room pipeline (research repo)
 
@@ -50,6 +51,7 @@ Three private repos, lean CLAUDE.md files, clean-room spec skill and template, P
 - One game end to end: game spec (engine spec plus differences), conversion into our format, fixes.
 - Ranked only after a full clear in our port.
 - Check per game: full clear recorded as a replay that the headless CLI verifies.
+- Once all 20 pass: run the full delicious-fruit and wiki crawl (`research/scraper`, ~26 h) and archive the rest of the catalog.
 
 ## 6. Game select screen
 
