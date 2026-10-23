@@ -1,0 +1,17 @@
+# IWBTG Collection: client
+
+@README.md
+
+## Rules
+
+- Never commit original game binaries, decompiled code or extracted files. Those stay in the research repo (`../research`). Games here are rebuilt in our format from clean-room specs.
+- The simulation is deterministic: fixed tick at the game's original rate, no frame time in `sim`, number handling matching the original as its CLONE_SPEC documents. Timing, splits and leaderboards count ticks, never rendered frames.
+- `sim` must not depend on Bevy.
+- Each game keeps its own physics profile. Never "fix" a quirk or bug players rely on.
+- Input is a fixed set of client actions (left, right, jump, shoot, restart, ...). Games map actions; they never read raw keys.
+- Design is a priority. No generic UI; match the IWBTG style and reuse art from ported games where it fits.
+- The user does not write Rust and tests every change. End each change with: exact build/run commands, steps to perform, and what to look for (expected vs. broken).
+
+## Maintaining this harness
+
+Any agent may edit this file and `.claude/`. Keep it lean: add a line only when it would have prevented a real mistake, and delete lines that go stale.

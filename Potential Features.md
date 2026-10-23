@@ -1,0 +1,26 @@
+# Potential Features
+
+- Save states: save and load anywhere, practice mode only.
+- Practice mode: start from any stage or save, runs not ranked.
+- Death counter: per game, per stage and per session.
+- In-game timer: tick-based, always visible or toggleable.
+- Splits: per-stage times with live comparison.
+- Sum of best: best possible time built from best stage times.
+- Ghost replay: show your PB (or a leaderboard run) as a ghost.
+- Replay viewer: watch, scrub and export any stored run.
+- Input display: on-screen keys for streaming and review.
+- Hitbox view: show player and hazard hitboxes in practice.
+- Frame advance and slow motion: practice-only tools for learning tricks.
+- Performance graph: osu!-style results graph against your best run.
+- Clear tracking: cleared, ranked clear and deaths-to-clear per game.
+- Player ratings: 1-10 stars, only after a clear.
+- Favorites and collections: personal lists and shareable playlists.
+- Random game: pick a random game within current filters.
+- Player skins: swap the kid sprite without touching hitboxes.
+- LiveSplit integration: auto-splitting from tick-accurate stage triggers.
+- Discord rich presence: show current game and stage.
+- Race mode: live multiplayer races with ghosts.
+- Daily challenge: one segment a day with its own board.
+- Accessibility: colorblind palettes, screen-shake toggle, audio cues.
+- Level editor: create new games in our format.
+- Community uploads: publish and download player-made games.
