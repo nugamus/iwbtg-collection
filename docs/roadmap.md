@@ -26,6 +26,7 @@ Three private repos, lean CLAUDE.md files, clean-room spec skill and template, P
 - Ground-truth traces: record the original's player state (x, y, speeds, flags) every tick for scripted inputs. The recording method is chosen in this phase and documented in the first engine spec.
 - Write the engine CLONE_SPEC.md with the `clean-room-spec` skill.
 - Mechanic inventory (`specs/mechanics.md`): every mechanic seen across the 20 games, each marked as a built-in candidate or as needing a script. This shapes the format.
+- Trick inventory: each known trick (from `knowledge/`) gets a stable id and is marked as either a switchable engine behavior or an emergent result of physics. Game packages then declare which tricks are on, off or required, for the sim and for filtering in game select.
 - Check: the spec covers movement, jumping, double jump, saves, death and restart, with UNKNOWNs listed.
 
 ## 3. Format v0 and simulation core (client repo)

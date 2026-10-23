@@ -24,3 +24,4 @@
 - Accessibility: colorblind palettes, screen-shake toggle, audio cues.
 - Level editor: create new games in our format.
 - Community uploads: publish and download player-made games.
+- Per-game trick list: each game declares which tricks are allowed, disabled or required; game select can filter by trick.
