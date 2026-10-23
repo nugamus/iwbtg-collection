@@ -14,3 +14,4 @@ The full spec is written in roadmap Phase 3. These rules come first and every ve
 6. **Grows from research.** Every mechanic found in a CLONE_SPEC either maps to an existing built-in or becomes a new one. Script patterns that repeat across games get promoted to built-ins.
 7. **Versioned.** Each package declares its format version, and the client keeps supporting older versions.
 8. **One format for ports and new games.** The level editor reads and writes these same files.
+9. **Ports are rebuilt clean, not copied.** A port never mirrors the original's file or object layout. Near-duplicate objects collapse into one built-in with parameters (e.g. `spikeUp`, `spikeDown`, `spikeLeftSS` become one spike with a direction). Behavior shared by several games goes into the shared built-in library, not into each game. Only behavior unique to one game becomes a script, written fresh from its spec. Gameplay stays identical, and traces of the original prove it.
