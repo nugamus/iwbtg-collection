@@ -3,6 +3,14 @@
 //! See `docs/architecture.md`, "Actions and input frames" and "Text inputs for tests". Games read
 //! actions, never raw keys. Keys only appear here so the research recorder's `.inputs` files
 //! (which name original keys like `Shift`) compile to the same frames as our action-named files.
+//!
+//! Edges are per input, not per action. Each key (or, in an action-named file, each action name)
+//! keeps its own down/up state, and its press and release set the action's `pressed` and
+//! `released` bits even while another key bound to the same action keeps the action held. This is
+//! what GM8 games see: a game that checks `keyboard_check_pressed` on each of its keys, and OpenGMK
+//! itself for `vk_shift` (true when either Left or Right Shift was pressed, whatever the other one
+//! is doing). The client's input collector must build frames the same way, so that a replay and an
+//! `.inputs` file agree for the same physical input. `held` is the OR of every input's state.
 
 use std::collections::BTreeMap;
 
@@ -81,11 +89,13 @@ impl Action {
 /// both show up, which GM8 treats differently from holding for one tick.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct InputFrame {
-    /// Actions down at the end of the tick's input.
+    /// Actions down at the end of the tick's input (any of their inputs down).
     pub held: u16,
-    /// Actions that went down during the tick.
+    /// Actions one of whose inputs went down during the tick. Can be set while the action was
+    /// already held through another input (see the module docs).
     pub pressed: u16,
-    /// Actions that went up during the tick.
+    /// Actions one of whose inputs went up during the tick. Can be set while the action stays
+    /// held through another input (see the module docs).
     pub released: u16,
 }
 
@@ -131,6 +141,12 @@ pub mod vk {
     pub const SHIFT: u8 = 16;
     pub const CTRL: u8 = 17;
     pub const ALT: u8 = 18;
+    pub const LEFT_SHIFT: u8 = 160;
+    pub const RIGHT_SHIFT: u8 = 161;
+    pub const LEFT_CTRL: u8 = 162;
+    pub const RIGHT_CTRL: u8 = 163;
+    pub const LEFT_ALT: u8 = 164;
+    pub const RIGHT_ALT: u8 = 165;
     pub const ESCAPE: u8 = 27;
     pub const SPACE: u8 = 32;
     pub const PAGE_UP: u8 = 33;
@@ -194,6 +210,29 @@ pub fn key_code(name: &str) -> Option<u8> {
     Some(code)
 }
 
+/// The key the recorder actually presses or releases for a code: OpenGMK's `button_press` and
+/// `button_release` turn generic Shift, Ctrl and Alt (16, 17, 18) into the left-hand keys (160,
+/// 162, 164). So `press Shift` and `release vk:160` act on the same key.
+pub const fn recorder_key(code: u8) -> u8 {
+    match code {
+        vk::SHIFT => vk::LEFT_SHIFT,
+        vk::CTRL => vk::LEFT_CTRL,
+        vk::ALT => vk::LEFT_ALT,
+        other => other,
+    }
+}
+
+/// The generic modifier a left- or right-hand modifier counts as, as GM8's `keyboard_check` on
+/// `vk_shift`, `vk_control` and `vk_alt` reads either hand.
+const fn generic_modifier(code: u8) -> Option<u8> {
+    match code {
+        vk::LEFT_SHIFT | vk::RIGHT_SHIFT => Some(vk::SHIFT),
+        vk::LEFT_CTRL | vk::RIGHT_CTRL => Some(vk::CTRL),
+        vk::LEFT_ALT | vk::RIGHT_ALT => Some(vk::ALT),
+        _ => None,
+    }
+}
+
 /// IWBTG engine default keys for each action, used to read the research `.inputs` files.
 /// `back` has no default key. OPEN: confirm in CLONE_SPEC (none of these is confirmed yet; Q for
 /// `suicide` is a guess from common fangame engines).
@@ -239,9 +278,14 @@ impl KeyMap {
         self.keys.insert(key, action);
     }
 
-    /// The action a key stands for, if any.
+    /// The action a key stands for, if any. A left- or right-hand Shift, Ctrl or Alt that is not
+    /// bound itself takes the binding of the generic key (`vk:161` acts as `Shift`), as GM8 reads
+    /// `vk_shift` from either hand.
     pub fn action(&self, key: u8) -> Option<Action> {
-        self.keys.get(&key).copied()
+        self.keys
+            .get(&key)
+            .or_else(|| generic_modifier(key).and_then(|g| self.keys.get(&g)))
+            .copied()
     }
 }
 
@@ -303,16 +347,34 @@ pub enum LineError {
     BadEnd,
     #[error("no keys or actions given")]
     NoNames,
-    #[error("unknown key or action '{0}'")]
-    UnknownName(String),
+    /// Not a recorder key name, in a key-named file (`parse_key_inputs`).
+    #[error("unknown key '{0}' (this file takes key names, not action names)")]
+    UnknownKey(String),
+    /// Not an action name, in an action-named file (`parse_action_inputs`).
+    #[error("unknown action '{0}' (this file takes action names, not key names)")]
+    UnknownAction(String),
     #[error("key '{0}' has no action in the key map")]
     UnmappedKey(String),
 }
 
-/// What a name in a command refers to. Keys keep their own down/up state, as in the recorder,
-/// so two keys bound to one action behave like two keys.
+/// Which names an `.inputs` file uses. The caller picks: the words `left`, `right`, `up` and
+/// `down` are both key names and action names, and under a key map that binds, say, Up to `jump`
+/// they mean different actions, so the parser never guesses.
+#[derive(Clone, Copy, Debug)]
+enum Names<'a> {
+    /// Action names only (`jump`), as in our own test files.
+    Actions,
+    /// Recorder key names only (`Shift`, `vk:NN`), mapped to actions through the key map, as in
+    /// the research trace files.
+    Keys(&'a KeyMap),
+}
+
+/// What a name in a command refers to. Each source keeps its own down/up state, as each key does
+/// in the recorder, so two keys bound to one action behave like two keys (see the module docs).
+/// A file uses only one kind, so a key and an action name never share an action.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Source {
+    /// A key as the recorder holds it (after `recorder_key`).
     Key(u8),
     Action(Action),
 }
@@ -324,15 +386,27 @@ struct Event {
     action: Action,
 }
 
-/// Parses an `.inputs` file into one `InputFrame` per tick.
+/// Parses an action-named `.inputs` file (`hold jump`) into one `InputFrame` per tick. Key names
+/// are an error; use `parse_key_inputs` for recorder files.
 ///
 /// Grammar (the research trace recorder's): one command per line, `#` starts a comment, the words
 /// `frame`/`frames` and the colon are optional, frame numbers count from 0.
 /// `frame N: press NAME...`, `frame N: release NAME...`, `frames A-B: hold NAME...` (down on A,
 /// up on B+1), `frame N: end` (N is the last frame run; the last `end` line wins). Events on one
-/// frame apply in line order. A name is a key looked up in `keys`, or else an action name; a
-/// bound key wins, so `left` in a research file is the Left arrow key.
-pub fn parse_inputs(text: &str, keys: &KeyMap) -> Result<ParsedInputs, InputsError> {
+/// frame apply in line order.
+pub fn parse_action_inputs(text: &str) -> Result<ParsedInputs, InputsError> {
+    parse(text, Names::Actions)
+}
+
+/// Parses a key-named `.inputs` file, as the research trace recorder writes them (`hold Shift`),
+/// mapping each key to its action through `keys`. Same grammar as `parse_action_inputs`; action
+/// names are an error, so `left` is always the Left arrow key. Generic Shift, Ctrl and Alt are the
+/// left-hand keys, as in the recorder (`recorder_key`).
+pub fn parse_key_inputs(text: &str, keys: &KeyMap) -> Result<ParsedInputs, InputsError> {
+    parse(text, Names::Keys(keys))
+}
+
+fn parse(text: &str, names: Names) -> Result<ParsedInputs, InputsError> {
     let mut events: BTreeMap<u32, Vec<Event>> = BTreeMap::new();
     let mut end = None;
     for (index, raw) in text.lines().enumerate() {
@@ -370,7 +444,7 @@ pub fn parse_inputs(text: &str, keys: &KeyMap) -> Result<ParsedInputs, InputsErr
             return Err(err(LineError::SingleFrame(command)));
         }
         let names = words
-            .map(|w| resolve(w, keys).map_err(err))
+            .map(|w| resolve(w, names).map_err(err))
             .collect::<Result<Vec<_>, _>>()?;
         if names.is_empty() {
             return Err(err(LineError::NoNames));
@@ -437,20 +511,21 @@ fn parse_frames(s: &str) -> Result<(u32, u32), LineError> {
     }
 }
 
-/// Resolves a name: a key through the map first, else an action name.
-fn resolve(word: &str, keys: &KeyMap) -> Result<(Source, Action), LineError> {
-    if let Some(code) = key_code(word) {
-        return match keys.action(code) {
-            Some(action) => Ok((Source::Key(code), action)),
-            None => match Action::from_name(word) {
-                Some(action) => Ok((Source::Action(action), action)),
+/// Resolves a name in the file's name space.
+fn resolve(word: &str, names: Names) -> Result<(Source, Action), LineError> {
+    match names {
+        Names::Actions => match Action::from_name(word) {
+            Some(action) => Ok((Source::Action(action), action)),
+            None => Err(LineError::UnknownAction(word.to_string())),
+        },
+        Names::Keys(keys) => {
+            let code = key_code(word).ok_or_else(|| LineError::UnknownKey(word.to_string()))?;
+            let code = recorder_key(code);
+            match keys.action(code) {
+                Some(action) => Ok((Source::Key(code), action)),
                 None => Err(LineError::UnmappedKey(word.to_string())),
-            },
-        };
-    }
-    match Action::from_name(word) {
-        Some(action) => Ok((Source::Action(action), action)),
-        None => Err(LineError::UnknownName(word.to_string())),
+            }
+        }
     }
 }
 
@@ -494,11 +569,15 @@ mod tests {
     use std::collections::BTreeSet;
 
     fn parse(text: &str) -> ParsedInputs {
-        parse_inputs(text, &KeyMap::iwbtg()).expect("valid inputs")
+        parse_key_inputs(text, &KeyMap::iwbtg()).expect("valid inputs")
+    }
+
+    fn parse_actions(text: &str) -> ParsedInputs {
+        parse_action_inputs(text).expect("valid inputs")
     }
 
     fn line_error(text: &str) -> (u32, LineError) {
-        match parse_inputs(text, &KeyMap::iwbtg()) {
+        match parse_key_inputs(text, &KeyMap::iwbtg()) {
             Err(InputsError::Line { line, kind }) => (line, kind),
             other => panic!("expected a line error, got {other:?}"),
         }
@@ -584,23 +663,108 @@ mod tests {
     }
 
     #[test]
-    fn two_keys_for_one_action_keep_their_own_state() {
+    fn two_keys_for_one_action_give_per_key_edges() {
+        // Decided semantics (module docs): each key sets the action's edges on its own, as GM8
+        // games that check each key see them. The action stays held while either key is down.
         let mut map = KeyMap::iwbtg();
         map.bind(vk::SPACE, Action::Jump);
-        let p = parse_inputs(
+        let p = parse_key_inputs(
             "frames 1-5: hold Shift\nframes 3-7: hold Space\nframe 9: end",
             &map,
         )
         .expect("valid");
         assert!((1..=7).all(|f| p.frames[f].is_held(Action::Jump)));
-        assert_eq!(p.frames[6].released, J);
-        assert!(p.frames[6].is_held(Action::Jump));
+        // Space goes down while Shift holds jump: a press edge.
+        assert_eq!(
+            p.frames[3],
+            InputFrame {
+                held: J,
+                pressed: J,
+                released: 0
+            }
+        );
+        // Shift goes up while Space holds jump: a release edge, jump still held.
+        assert_eq!(
+            p.frames[6],
+            InputFrame {
+                held: J,
+                pressed: 0,
+                released: J
+            }
+        );
+        assert_eq!(p.frames[8].released, J);
         assert!(!p.frames[8].is_held(Action::Jump));
     }
 
     #[test]
+    fn modifier_keys_match_the_recorder() {
+        // The recorder presses Left Shift for `Shift`, so `vk:160` releases it.
+        let p = parse("frames 1-5: hold Shift\nframe 3: release vk:160\nframe 7: end");
+        assert_eq!(p.frames[3].released, J);
+        assert!(!p.frames[3].is_held(Action::Jump));
+        assert_eq!(
+            p,
+            parse("frames 1-2: hold Shift\nframe 6: release Shift\nframe 7: end")
+        );
+        // Right Shift is jump too, with its own state and edges, as keyboard_check(vk_shift)
+        // reads either hand.
+        let p = parse("frames 1-5: hold Shift\nframes 3-7: hold vk:161\nframe 9: end");
+        assert!((1..=7).all(|f| p.frames[f].is_held(Action::Jump)));
+        assert_eq!(p.frames[3].pressed, J);
+        assert_eq!(p.frames[6].released, J);
+        assert!(!p.frames[8].is_held(Action::Jump));
+        // Ctrl and Alt fold the same way.
+        let mut map = KeyMap::empty();
+        map.bind(vk::CTRL, Action::Shoot);
+        map.bind(vk::ALT, Action::Restart);
+        let p = parse_key_inputs(
+            "frame 1: press Ctrl vk:165\nframe 2: release vk:162 Alt\nframe 3: end",
+            &map,
+        )
+        .expect("valid");
+        assert_eq!(p.frames[1].held, Action::Shoot.bit() | Action::Restart.bit());
+        // `Alt` is Left Alt, not the Right Alt still down, so restart stays held; its release of
+        // an up key still sets the edge (RELEASE_WHILE_UP_SETS_RELEASED).
+        assert_eq!(p.frames[2].held, Action::Restart.bit());
+        assert_eq!(p.frames[2].released, Action::Shoot.bit() | Action::Restart.bit());
+        // A binding of the exact hand wins over the generic key.
+        let mut map = KeyMap::iwbtg();
+        map.bind(vk::RIGHT_SHIFT, Action::Shoot);
+        assert_eq!(map.action(vk::RIGHT_SHIFT), Some(Action::Shoot));
+        assert_eq!(map.action(vk::LEFT_SHIFT), Some(Action::Jump));
+        assert_eq!(map.action(vk::RIGHT_CTRL), None);
+    }
+
+    #[test]
+    fn key_and_action_names_are_separate_files() {
+        // A key map that binds the Up arrow to jump: in a key file `up` is that key, in an
+        // action file it is the `up` action. Neither file accepts the other kind of name.
+        let mut map = KeyMap::empty();
+        map.bind(vk::UP, Action::Jump);
+        let keys = parse_key_inputs("frames 1-5: hold up\nframe 6: end", &map).expect("valid");
+        assert!(keys.frames[1].is_held(Action::Jump));
+        let actions = parse_actions("frames 1-5: hold up\nframe 6: end");
+        assert!(actions.frames[1].is_held(Action::Up));
+        assert!(!actions.frames[1].is_held(Action::Jump));
+        assert_eq!(
+            parse_key_inputs("frame 3: press jump\nframe 9: end", &KeyMap::iwbtg()),
+            Err(InputsError::Line {
+                line: 1,
+                kind: LineError::UnknownKey("jump".into())
+            })
+        );
+        assert_eq!(
+            parse_action_inputs("frame 3: press jump\nframe 5: release Shift\nframe 9: end"),
+            Err(InputsError::Line {
+                line: 2,
+                kind: LineError::UnknownAction("Shift".into())
+            })
+        );
+    }
+
+    #[test]
     fn grammar_variants_and_action_names() {
-        let p = parse(
+        let p = parse_actions(
             "# header\n\n10 press jump left\nFRAME 11 release JUMP # tap\nframes12-13:hold right\nframe 14: end",
         );
         assert_eq!(p.frames[10].pressed, J | Action::Left.bit());
@@ -608,10 +772,14 @@ mod tests {
         assert!(p.frames[11].is_held(Action::Left));
         assert!(p.frames[12].is_held(Action::Right));
         assert!(p.frames[14].was_released(Action::Right));
-        // Keys and action names for the same action compile to the same frames.
+        // A key file and an action file for the same input compile to the same frames.
         assert_eq!(
             parse("frames 1-2: hold Shift\nframe 4: end"),
-            parse("frames 1-2: hold jump\nframe 4: end")
+            parse_actions("frames 1-2: hold jump\nframe 4: end")
+        );
+        assert_eq!(
+            parse("frame 1: press Left Shift\nframe 2: release Shift\nframe 3: end"),
+            parse_actions("frame 1: press left jump\nframe 2: release jump\nframe 3: end")
         );
     }
 
@@ -645,7 +813,14 @@ mod tests {
         assert_eq!(line_error("frame 1: press"), (1, LineError::NoNames));
         assert_eq!(
             line_error("frame 1: press Banana"),
-            (1, LineError::UnknownName("Banana".into()))
+            (1, LineError::UnknownKey("Banana".into()))
+        );
+        assert_eq!(
+            parse_action_inputs("frame 1: end\nframe 1: press Banana"),
+            Err(InputsError::Line {
+                line: 2,
+                kind: LineError::UnknownAction("Banana".into())
+            })
         );
         assert_eq!(
             line_error("frame 1: press F2"),
@@ -662,12 +837,13 @@ mod tests {
             (1, LineError::BadFrame("99999999999".into()))
         );
         assert_eq!(
-            parse_inputs("frame 1: press Shift", &KeyMap::iwbtg()),
+            parse_key_inputs("frame 1: press Shift", &KeyMap::iwbtg()),
             Err(InputsError::MissingEnd)
         );
         // Non-ASCII text is an error, not a panic.
-        assert!(parse_inputs("främe 1: end", &KeyMap::iwbtg()).is_err());
-        assert!(parse_inputs("é", &KeyMap::iwbtg()).is_err());
+        assert!(parse_key_inputs("främe 1: end", &KeyMap::iwbtg()).is_err());
+        assert!(parse_key_inputs("é", &KeyMap::iwbtg()).is_err());
+        assert!(parse_action_inputs("frame 1: press é\nframe 2: end").is_err());
     }
 
     #[test]
