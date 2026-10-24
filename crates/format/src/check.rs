@@ -7,13 +7,11 @@
 
 use crate::diag::Diagnostic;
 use crate::files::PackageFiles;
+pub use crate::files::TESTS_DIR;
 use crate::manifest::{MANIFEST_PATH, Manifest};
 
 /// Largest package, counting every shipped file (`tests/` is not shipped). 512 MiB.
 pub const MAX_PACKAGE_BYTES: u64 = 512 * 1024 * 1024;
-
-/// Folder inside a package that is never shipped or hashed.
-pub const TESTS_DIR: &str = "tests/";
 
 /// Runs every validation step on a package and returns all problems found, in step order.
 /// An empty list means the package is valid.
@@ -41,9 +39,15 @@ pub fn load_manifest<'f>(files: &'f PackageFiles, out: &mut Vec<Diagnostic>) -> 
     }
 }
 
+/// UTF-8 byte order mark. Some editors (older Windows Notepad) write it; TOML allows it.
+const UTF8_BOM: &[u8] = b"\xEF\xBB\xBF";
+
 /// The text of a required data file. Missing or non-UTF-8 files become diagnostics.
+///
+/// A leading UTF-8 byte order mark is dropped, so the `#:schema` check sees the first line and
+/// columns on line 1 do not count it. All spans and positions are relative to the returned text.
 fn read_text<'f>(files: &'f PackageFiles, path: &str, out: &mut Vec<Diagnostic>) -> Option<&'f str> {
-    let Some(bytes) = files.get(path) else {
+    let Some(bytes) = files.get(path).map(|b| b.strip_prefix(UTF8_BOM).unwrap_or(b)) else {
         out.push(Diagnostic::file_error(
             path,
             format!("the package has no `{path}`"),
@@ -118,5 +122,27 @@ mod tests {
         assert_eq!(d.len(), 1);
         assert_eq!((d[0].line, d[0].column), (2, 7));
         assert!(d[0].message.contains("UTF-8"));
+    }
+
+    #[test]
+    fn byte_order_mark_is_ignored() {
+        let mut files = PackageFiles::new();
+        files
+            .insert("game.toml", b"\xEF\xBB\xBF#:schema x\nformat = -1\n".to_vec())
+            .unwrap();
+        let d = check(&files);
+        // No `#:schema` warning; only the parse error, at the same place as without the mark.
+        assert_eq!(d.len(), 1, "{d:?}");
+        assert!(d[0].is_error());
+        assert_eq!((d[0].line, d[0].column), (2, 10));
+
+        let mut files = PackageFiles::new();
+        files
+            .insert("game.toml", b"\xEF\xBB\xBFid = \"\xff\"".to_vec())
+            .unwrap();
+        let d = check(&files);
+        // Column 7, not 8: the mark is not a character of line 1.
+        assert_eq!(d.len(), 1, "{d:?}");
+        assert_eq!((d[0].line, d[0].column), (1, 7));
     }
 }

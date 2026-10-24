@@ -48,6 +48,37 @@ impl<'a> KindRef<'a> {
     }
 }
 
+/// Prefix of a reference to an engine pack asset.
+pub const ENGINE_PREFIX: &str = "engine:";
+
+/// A reference to an engine pack asset, `engine:<pack>/<id>`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct EngineRef<'a> {
+    /// Engine pack id, a folder in `games/_engines/`.
+    pub pack: &'a str,
+    /// Asset id inside the pack.
+    pub id: &'a str,
+}
+
+impl<'a> EngineRef<'a> {
+    /// Parses `engine:<pack>/<id>`, checking both ids. `None` when `text` has no `engine:`
+    /// prefix, so the caller can treat it as a package path.
+    pub fn parse(text: &'a str) -> Option<Result<Self, String>> {
+        let rest = text.strip_prefix(ENGINE_PREFIX)?;
+        let Some((pack, id)) = rest.split_once('/') else {
+            return Some(Err(format!(
+                "engine reference `{text}` must be `engine:<pack>/<id>`"
+            )));
+        };
+        Some(
+            check_id(pack)
+                .and_then(|()| check_id(id))
+                .map(|()| EngineRef { pack, id })
+                .map_err(|e| format!("engine reference `{text}`: {e}")),
+        )
+    }
+}
+
 /// Checks a semantic version `MAJOR.MINOR.PATCH`, with optional `-pre.release` and `+build`
 /// parts (semver.org 2.0.0).
 pub fn check_semver(version: &str) -> Result<(), String> {
@@ -108,6 +139,29 @@ mod tests {
         assert!(KindRef::parse("@").is_err());
         assert!(KindRef::parse("@@a").is_err());
         assert!(KindRef::parse("Spike").is_err());
+    }
+
+    #[test]
+    fn engine_refs() {
+        assert_eq!(
+            EngineRef::parse("engine:yuuutu/kid_mask"),
+            Some(Ok(EngineRef {
+                pack: "yuuutu",
+                id: "kid_mask"
+            }))
+        );
+        assert_eq!(EngineRef::parse("music/stage1.ogg"), None);
+        for bad in [
+            "engine:",
+            "engine:yuuutu",
+            "engine:yuuutu/",
+            "engine:/kid",
+            "engine:../../etc",
+            "engine:yuuutu/sprites/kid",
+            "engine:Yuuutu/kid",
+        ] {
+            assert!(matches!(EngineRef::parse(bad), Some(Err(_))), "{bad:?} accepted");
+        }
     }
 
     #[test]

@@ -6,6 +6,23 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+/// Folder inside a package that is never shipped or hashed (docs/format/v0.md, Package layout).
+pub const TESTS_DIR: &str = "tests/";
+
+/// Package folders whose files have a fixed role (docs/format/v0.md, Package layout). A file in
+/// one of them is never the physics profile.
+pub const CONTENT_DIRS: [&str; 9] = [
+    "objects/",
+    "scripts/",
+    "timelines/",
+    "rooms/",
+    "sprites/",
+    "backgrounds/",
+    "sounds/",
+    "music/",
+    "fonts/",
+];
+
 /// Why a package could not be put into memory. Problems with file contents are
 /// [`crate::Diagnostic`]s instead.
 #[derive(Debug, thiserror::Error)]

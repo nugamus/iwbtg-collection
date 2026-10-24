@@ -12,8 +12,8 @@ use toml::Spanned;
 use toml::value::Datetime;
 
 use crate::diag::Diagnostic;
-use crate::files::{PackageFiles, check_path};
-use crate::ids::{KindRef, check_id, check_semver};
+use crate::files::{CONTENT_DIRS, PackageFiles, TESTS_DIR, check_path};
+use crate::ids::{EngineRef, KindRef, check_id, check_semver};
 use crate::number::Number;
 
 /// Path of the manifest inside a package.
@@ -255,6 +255,12 @@ struct FormatProbe {
 impl Manifest {
     /// Parses `game.toml` text. Syntax errors, missing fields, unknown keys and wrong value
     /// types come back as one diagnostic with line and column.
+    ///
+    /// A missing field is reported at the start of the table that lacks it, because that is
+    /// the span `toml` gives. For a missing top-level field (`id`, `format`, `[timing]`, ...)
+    /// the table is the whole document, so the position is always 1:1, on the `#:schema`
+    /// line, and the message names the field. This is on purpose: a root key can go anywhere
+    /// before the first `[table]` header, so no single line is more correct than another.
     pub fn parse(text: &str) -> Result<Self, Diagnostic> {
         if let Ok(FormatProbe { format: Some(format) }) = toml::from_str::<FormatProbe>(text)
             && *format.get_ref() > i64::from(FORMAT_VERSION)
@@ -314,15 +320,7 @@ impl Manifest {
         }
         // TODO(OPEN: runner differences between GM 8.0 and 8.1, from the CLONE_SPEC): nothing to
         // check yet; the sim will read `runner` once the differences are known.
-        if v.path(&self.physics, "physics") && !v.files.contains(self.physics.get_ref()) {
-            v.error(
-                self.physics.span(),
-                format!(
-                    "physics profile `{}` is not in the package",
-                    self.physics.get_ref()
-                ),
-            );
-        }
+        self.validate_physics(&mut v);
         if v.id(&self.start_room) {
             let room = format!("rooms/{}.toml", self.start_room.get_ref());
             if !v.files.contains(&room) {
@@ -374,6 +372,31 @@ impl Manifest {
                     v.error(volume.span(), "volume must be a finite number of at least 0");
                 }
             }
+        }
+    }
+
+    fn validate_physics(&self, v: &mut Validator<'_>) {
+        if !v.path(&self.physics, "physics") {
+            return;
+        }
+        let path = self.physics.get_ref();
+        if !path.ends_with(".toml")
+            || path == MANIFEST_PATH
+            || CONTENT_DIRS.iter().any(|dir| path.starts_with(dir))
+        {
+            v.error(
+                self.physics.span(),
+                format!(
+                    "physics profile `{path}` must be a `.toml` file other than `{MANIFEST_PATH}`, \
+                     outside {} (usually `physics.toml`)",
+                    CONTENT_DIRS.join(", ")
+                ),
+            );
+        } else if !v.files.contains(path) {
+            v.error(
+                self.physics.span(),
+                format!("physics profile `{path}` is not in the package"),
+            );
         }
     }
 
@@ -448,7 +471,9 @@ impl Manifest {
         let timing = self.timing.get_ref();
         v.non_empty(&timing.start.trigger, "trigger name");
         v.non_empty(&timing.end.trigger, "trigger name");
+        let start = timing.start.trigger.get_ref();
         let mut ids = BTreeSet::new();
+        let mut triggers = BTreeSet::new();
         for stage in &timing.stages {
             if v.id(&stage.id) && !ids.insert(stage.id.get_ref().as_str()) {
                 v.error(
@@ -457,7 +482,27 @@ impl Manifest {
                 );
             }
             v.non_empty(&stage.name, "stage name");
-            v.non_empty(&stage.trigger, "trigger name");
+            if !v.non_empty(&stage.trigger, "trigger name") {
+                continue;
+            }
+            // Each stage ends at its trigger, so a shared trigger would close two stages on one
+            // tick, and the start trigger would close a stage as the run begins. The last stage
+            // may end at the run's `end` trigger.
+            let trigger = stage.trigger.get_ref();
+            if trigger == start {
+                v.error(
+                    stage.trigger.span(),
+                    format!(
+                        "stage `{}` ends at trigger `{trigger}`, which is the run's start trigger",
+                        stage.id.get_ref()
+                    ),
+                );
+            } else if !triggers.insert(trigger.as_str()) {
+                v.error(
+                    stage.trigger.span(),
+                    format!("stage trigger `{trigger}` is used by two stages"),
+                );
+            }
         }
     }
 
@@ -465,9 +510,12 @@ impl Manifest {
         let mut paths = BTreeSet::new();
         for entry in &self.third_party {
             let path = entry.path.get_ref();
-            if path.starts_with("engine:") {
+            if let Some(engine_ref) = EngineRef::parse(path) {
                 // TODO(OPEN: engine packs bundled or downloaded once, docs/format/v0.md): resolve
                 // engine pack assets once packages can see engine packs.
+                if let Err(e) = engine_ref {
+                    v.error(entry.path.span(), format!("third_party path: {e}"));
+                }
             } else if v.path(&entry.path, "third_party path") && !v.files.contains(path) {
                 v.error(
                     entry.path.span(),
@@ -515,21 +563,33 @@ impl Validator<'_> {
         }
     }
 
-    /// Checks package path syntax; true when valid.
+    /// Checks package path syntax and that the file is shipped (not under `tests/`); true when
+    /// valid.
     fn path(&mut self, path: &Spanned<String>, what: &str) -> bool {
-        match check_path(path.get_ref()) {
+        let text = path.get_ref();
+        let result = check_path(text).and_then(|()| {
+            if text.starts_with(TESTS_DIR) {
+                Err("files under `tests/` are not shipped with the package")
+            } else {
+                Ok(())
+            }
+        });
+        match result {
             Ok(()) => true,
             Err(e) => {
-                self.error(path.span(), format!("{what} `{}`: {e}", path.get_ref()));
+                self.error(path.span(), format!("{what} `{text}`: {e}"));
                 false
             }
         }
     }
 
-    fn non_empty(&mut self, value: &Spanned<String>, what: &str) {
-        if value.get_ref().trim().is_empty() {
+    /// Checks that a text field is not blank; true when it is not.
+    fn non_empty(&mut self, value: &Spanned<String>, what: &str) -> bool {
+        let ok = !value.get_ref().trim().is_empty();
+        if !ok {
             self.error(value.span(), format!("{what} must not be empty"));
         }
+        ok
     }
 }
 
@@ -537,4 +597,179 @@ impl Validator<'_> {
 pub(crate) fn toml_error(file: &str, text: &str, error: &toml::de::Error) -> Diagnostic {
     let offset = error.span().map_or(0, |s| s.start);
     Diagnostic::error_at(file, text, offset, error.message().trim_end())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Diagnostic, PackageFiles, check};
+
+    /// The `tests/valid/minimal` manifest without `[timing]`, with `extra` appended at line 20.
+    fn manifest(extra: &str) -> String {
+        format!(
+            r#"#:schema ../game.schema.json
+format = 0
+id = "minimal"
+title = "Minimal"
+version = "0.1.0"
+engine_rev = 1
+runner = "gm80"
+physics = "physics.toml"
+start_room = "title"
+max_ticks = 180_000
+object_order = ["kid", "block"]
+
+[[creators]]
+name = "IWBTG Collection"
+role = "author"
+
+[source]
+url = "https://example.com/minimal"
+permission = "granted"
+{extra}"#
+        )
+    }
+
+    /// Lines 20 to 23.
+    const TIMING: &str = r#"
+[timing]
+start = { trigger = "run_start" }
+end = { trigger = "run_end" }
+"#;
+
+    /// Checks a package of `game_toml`, `physics.toml`, `rooms/title.toml` and the `extra` files
+    /// (empty; the manifest checks only look at which files exist).
+    fn run(game_toml: &str, extra: &[&str]) -> Vec<Diagnostic> {
+        let mut files = PackageFiles::new();
+        files.insert("game.toml", game_toml.as_bytes().to_vec()).unwrap();
+        for path in ["physics.toml", "rooms/title.toml"].iter().chain(extra) {
+            files.insert(*path, Vec::new()).unwrap();
+        }
+        check(&files)
+    }
+
+    /// Asserts exactly one error, at `line`, whose message contains `fragment`.
+    fn assert_one(diags: &[Diagnostic], line: u32, fragment: &str) {
+        match diags {
+            [d] if d.is_error() && d.line == line && d.message.contains(fragment) => {}
+            _ => panic!("want one error at line {line} containing {fragment:?}, got {diags:#?}"),
+        }
+    }
+
+    fn with_physics(path: &str) -> String {
+        manifest(TIMING).replace("\"physics.toml\"", &format!("\"{path}\""))
+    }
+
+    #[test]
+    fn base_manifest_is_valid() {
+        let diags = run(&manifest(TIMING), &[]);
+        assert!(diags.is_empty(), "{diags:#?}");
+    }
+
+    #[test]
+    fn physics_under_tests_is_rejected() {
+        assert_one(
+            &run(&with_physics("tests/p.toml"), &["tests/p.toml"]),
+            8,
+            "physics `tests/p.toml`: files under `tests/` are not shipped",
+        );
+    }
+
+    #[test]
+    fn physics_must_be_a_profile_file() {
+        for bad in [
+            "game.toml",
+            "rooms/title.toml",
+            "music/stage1.toml",
+            "physics.png",
+        ] {
+            assert_one(
+                &run(&with_physics(bad), &["music/stage1.toml", "physics.png"]),
+                8,
+                &format!("physics profile `{bad}` must be a `.toml` file"),
+            );
+        }
+        let diags = run(&with_physics("profiles/needle.toml"), &["profiles/needle.toml"]);
+        assert!(diags.is_empty(), "{diags:#?}");
+    }
+
+    /// A manifest with one `[[third_party]]` entry; its `path` is on line 26.
+    fn third_party(path: &str) -> String {
+        manifest(&format!(
+            r#"{TIMING}
+[[third_party]]
+path = "{path}"
+what = "Kid sprite"
+owner = "Kayin"
+license = "unknown"
+status = "to-clear"
+"#
+        ))
+    }
+
+    #[test]
+    fn third_party_under_tests_is_rejected() {
+        assert_one(
+            &run(&third_party("tests/x.ogg"), &["tests/x.ogg"]),
+            26,
+            "third_party path `tests/x.ogg`: files under `tests/` are not shipped",
+        );
+    }
+
+    #[test]
+    fn engine_third_party_paths_are_checked() {
+        let diags = run(&third_party("engine:yuuutu/kid_mask"), &[]);
+        assert!(diags.is_empty(), "{diags:#?}");
+        for bad in [
+            "engine:",
+            "engine:../../etc",
+            "engine:yuuutu",
+            "engine:yuuutu/Kid",
+        ] {
+            assert_one(
+                &run(&third_party(bad), &[]),
+                26,
+                &format!("third_party path: engine reference `{bad}`"),
+            );
+        }
+    }
+
+    /// A manifest whose `[timing]` has `stages = [<stages>]` on line 24.
+    fn stages(stages: &str) -> String {
+        manifest(&format!(
+            r#"
+[timing]
+start = {{ trigger = "run_start" }}
+end = {{ trigger = "run_end" }}
+stages = [{stages}]
+"#
+        ))
+    }
+
+    #[test]
+    fn stage_triggers_are_unique() {
+        let text =
+            stages(r#"{ id = "a", name = "A", trigger = "t" }, { id = "b", name = "B", trigger = "t" }"#);
+        let diags = run(&text, &[]);
+        assert_one(&diags, 24, "stage trigger `t` is used by two stages");
+        // Points at the second stage's trigger.
+        assert_eq!(
+            diags[0].column,
+            1 + text.lines().nth(23).unwrap().rfind("\"t\"").unwrap() as u32
+        );
+    }
+
+    #[test]
+    fn stage_trigger_is_not_the_start_trigger() {
+        let text = stages(r#"{ id = "a", name = "A", trigger = "run_start" }"#);
+        assert_one(&run(&text, &[]), 24, "which is the run's start trigger");
+    }
+
+    #[test]
+    fn last_stage_may_end_at_the_end_trigger() {
+        let text = stages(
+            r#"{ id = "a", name = "A", trigger = "a_clear" }, { id = "b", name = "B", trigger = "run_end" }"#,
+        );
+        let diags = run(&text, &[]);
+        assert!(diags.is_empty(), "{diags:#?}");
+    }
 }
