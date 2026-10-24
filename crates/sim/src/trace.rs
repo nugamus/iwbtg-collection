@@ -14,6 +14,13 @@
 //! - strings always quoted, with `"` doubled;
 //! - an empty field when a game variable could not be read.
 //!
+//! Every NaN is written as `NaN`, so a trace carries no NaN sign or payload, and [`Value::same`]
+//! treats any two NaNs as equal.
+//!
+//! The parser accepts only what the writer produces: a number written any other way (`+1`,
+//! `1.50`, `007`, `-0`, `inf` spelled differently, ...), a missing final line ending or a
+//! repeated column name is an error, so [`TraceTable::to_csv`] gives back the parsed bytes.
+//!
 //! This module does no IO: callers pass and receive text.
 
 use std::collections::BTreeMap;
@@ -100,15 +107,16 @@ impl Value {
         self.as_f64().map(|r| format!("0x{:016X}", r.to_bits()))
     }
 
-    /// Bit-exact equality: numbers compare as f64 bits (so `0.0 != -0.0` and a NaN equals only
-    /// the same NaN), strings compare as text, and kinds never mix except Int with Real.
+    /// Bit-exact equality: numbers compare as f64 bits (so `0.0 != -0.0`), strings compare as
+    /// text, and kinds never mix except Int with Real. Any two NaNs are equal: the CSV writes
+    /// every NaN as `NaN`, so NaN sign and payload are not traced.
     pub fn same(&self, other: &Value) -> bool {
         match (self, other) {
             (Value::Int(a), Value::Int(b)) => a == b,
             (Value::Str(a), Value::Str(b)) => a == b,
             (Value::Empty, Value::Empty) => true,
             _ => match (self.as_f64(), other.as_f64()) {
-                (Some(a), Some(b)) => a.to_bits() == b.to_bits(),
+                (Some(a), Some(b)) => (a.is_nan() && b.is_nan()) || a.to_bits() == b.to_bits(),
                 _ => false,
             },
         }
@@ -191,8 +199,9 @@ pub struct TraceTable {
 
 impl TraceTable {
     /// An empty table with the recorder's [`FIXED_COLUMNS`] followed by `game_vars`, quoted as
-    /// the recorder quotes them. `iwbtg trace run` builds our side with this.
-    pub fn new(game_vars: &[&str]) -> TraceTable {
+    /// the recorder quotes them. `iwbtg trace run` builds our side with this. Errors when a name
+    /// repeats (including a game variable named like a fixed column).
+    pub fn new(game_vars: &[&str]) -> Result<TraceTable, TraceError> {
         let fixed = FIXED_COLUMNS.iter().map(|name| Column {
             name: (*name).to_string(),
             quoted: false,
@@ -201,11 +210,15 @@ impl TraceTable {
             name: (*name).to_string(),
             quoted: true,
         });
-        TraceTable {
-            columns: fixed.chain(vars).collect(),
+        let columns: Vec<Column> = fixed.chain(vars).collect();
+        if let Some(name) = duplicate_column(&columns) {
+            return Err(TraceError::Invalid(format!("column {name:?} appears twice")));
+        }
+        Ok(TraceTable {
+            columns,
             rows: Vec::new(),
             line_ending: LineEnding::Lf,
-        }
+        })
     }
 
     /// Index of the column called `name`.
@@ -228,7 +241,9 @@ impl TraceTable {
 
     /// Parses recorder CSV. Unquoted cells become [`Value::Int`] when they are a plain decimal
     /// integer, [`Value::Real`] otherwise (Rust's parse is correctly rounded, so the f64 is
-    /// exact), and [`Value::Empty`] when empty. Quoted cells become [`Value::Str`].
+    /// exact), and [`Value::Empty`] when empty. Quoted cells become [`Value::Str`]. A number
+    /// not written exactly as the writer would write it is an error, as are a repeated column
+    /// name and a last line without its line ending.
     pub fn parse(text: &str) -> Result<TraceTable, TraceError> {
         let mut reader = Reader {
             bytes: text.as_bytes(),
@@ -256,6 +271,12 @@ impl TraceTable {
             columns.push(Column {
                 name: raw.text,
                 quoted: raw.quoted,
+            });
+        }
+        if let Some(name) = duplicate_column(&columns) {
+            return Err(TraceError::Parse {
+                line: 1,
+                message: format!("column {name:?} appears twice"),
             });
         }
         let mut rows = Vec::new();
@@ -287,8 +308,8 @@ impl TraceTable {
         })
     }
 
-    /// Writes the table in the recorder's format. Re-writing a parsed recorder file gives the
-    /// same bytes.
+    /// Writes the table in the recorder's format. Re-writing any table [`TraceTable::parse`]
+    /// accepted gives the same bytes.
     pub fn to_csv(&self) -> String {
         let eol = self.line_ending.as_str();
         let mut out = String::new();
@@ -315,8 +336,14 @@ impl TraceTable {
         out
     }
 
-    /// Checks every row has one value per column, so later indexing cannot go wrong.
+    /// Checks column names are unique and every row has one value per column, so later
+    /// indexing and name lookups cannot go wrong.
     fn check_shape(&self, side: &str) -> Result<(), TraceError> {
+        if let Some(name) = duplicate_column(&self.columns) {
+            return Err(TraceError::Invalid(format!(
+                "{side}: column {name:?} appears twice"
+            )));
+        }
         for (index, row) in self.rows.iter().enumerate() {
             if row.len() != self.columns.len() {
                 return Err(TraceError::Invalid(format!(
@@ -329,6 +356,15 @@ impl TraceTable {
         }
         Ok(())
     }
+}
+
+/// The first column name that appears more than once, if any.
+fn duplicate_column(columns: &[Column]) -> Option<&str> {
+    let mut seen = BTreeSet::new();
+    columns
+        .iter()
+        .map(|c| c.name.as_str())
+        .find(|name| !seen.insert(*name))
 }
 
 /// Writes `s` quoted, doubling any `"`, as the recorder's `csv_str` does.
@@ -352,18 +388,33 @@ impl RawField {
         if self.text.is_empty() {
             return Ok(Value::Empty);
         }
-        if is_plain_integer(&self.text)
+        let value = if is_plain_integer(&self.text)
             && let Ok(i) = self.text.parse::<i64>()
         {
-            return Ok(Value::Int(i));
-        }
-        match self.text.parse::<f64>() {
-            Ok(r) => Ok(Value::Real(r)),
-            Err(_) => Err(TraceError::Parse {
+            Value::Int(i)
+        } else {
+            match self.text.parse::<f64>() {
+                Ok(r) => Value::Real(r),
+                Err(_) => {
+                    return Err(TraceError::Parse {
+                        line,
+                        message: format!("{:?} is neither a number nor a quoted string", self.text),
+                    });
+                }
+            }
+        };
+        // Only the writer's own spelling round-trips: reject `+1`, `1.50`, `007`, `-0`, ...
+        let canonical = value.decimal();
+        if canonical != self.text {
+            return Err(TraceError::Parse {
                 line,
-                message: format!("{:?} is neither a number nor a quoted string", self.text),
-            }),
+                message: format!(
+                    "number {:?} is not in canonical form (expected {canonical:?})",
+                    self.text
+                ),
+            });
         }
+        Ok(value)
     }
 }
 
@@ -391,7 +442,8 @@ impl Reader<'_> {
         }
     }
 
-    /// Reads one record. `None` at end of input. The last line may lack its line ending.
+    /// Reads one record. `None` at end of input. Every line, the last included, must end with
+    /// its line ending: the recorder always writes it, so a missing one means a cut-off file.
     fn record(&mut self) -> Result<Option<Vec<RawField>>, TraceError> {
         if self.pos >= self.bytes.len() {
             return Ok(None);
@@ -401,7 +453,7 @@ impl Reader<'_> {
             fields.push(self.field()?);
             match self.bytes.get(self.pos) {
                 Some(b',') => self.pos += 1,
-                None => return Ok(Some(fields)),
+                None => return Err(self.error("last line has no line ending (file cut off?)")),
                 Some(b'\n') => {
                     self.pos += 1;
                     self.end_line(LineEnding::Lf)?;
@@ -548,13 +600,35 @@ pub struct FieldDiff {
     pub context: Vec<ContextFrame>,
 }
 
+/// One frame of context for a missing row: every compared field in each trace, if that row
+/// exists. Values follow [`MissingRow::fields`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RowFrame {
+    pub frame: i64,
+    pub a: Option<Vec<Value>>,
+    pub b: Option<Vec<Value>>,
+}
+
+/// A row present in one trace only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MissingRow {
+    pub row: RowKey,
+    /// The trace without the row.
+    pub missing_in: Side,
+    /// The compared fields, by name in `a`, in the order [`RowFrame`] lists their values.
+    pub fields: Vec<String>,
+    /// The same object and instance around this frame, oldest first, up to
+    /// [`DiffOptions::context`] frames each side, including this frame.
+    pub context: Vec<RowFrame>,
+}
+
 /// The first thing that differs between two traces.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Difference {
     /// Both traces have the row, and a field differs.
     Field(FieldDiff),
-    /// Only one trace has the row. `missing_in` names the trace without it.
-    MissingRow { row: RowKey, missing_in: Side },
+    /// Only one trace has the row.
+    MissingRow(MissingRow),
 }
 
 impl Difference {
@@ -562,7 +636,7 @@ impl Difference {
     pub fn frame(&self) -> i64 {
         match self {
             Difference::Field(d) => d.row.frame,
-            Difference::MissingRow { row, .. } => row.frame,
+            Difference::MissingRow(m) => m.row.frame,
         }
     }
 }
@@ -720,10 +794,12 @@ pub fn diff(a: &TraceTable, b: &TraceTable, opts: &DiffOptions) -> Result<TraceD
                     Side::B => result.rows_only_in_a = result.rows_only_in_a.saturating_add(1),
                 }
                 if result.first.is_none() {
-                    result.first = Some(Difference::MissingRow {
+                    result.first = Some(Difference::MissingRow(MissingRow {
                         row: key.clone(),
                         missing_in,
-                    });
+                        fields: pairs.iter().map(|p| p.name.clone()).collect(),
+                        context: row_context(a, b, &index_a, &index_b, key, &pairs, opts.context),
+                    }));
                 }
                 if !opts.summary {
                     break 'rows;
@@ -776,6 +852,37 @@ pub fn diff(a: &TraceTable, b: &TraceTable, opts: &DiffOptions) -> Result<TraceD
     Ok(result)
 }
 
+/// Keys of the same object and instance as `key`, from `context` frames before it to `context`
+/// frames after it.
+fn context_window(key: &RowKey, context: u32) -> Vec<RowKey> {
+    let span = i64::from(context);
+    let start = key.frame.saturating_sub(span);
+    let end = key.frame.saturating_add(span);
+    let mut keys = Vec::new();
+    let mut frame = start;
+    loop {
+        keys.push(RowKey {
+            frame,
+            object: key.object.clone(),
+            instance: key.instance,
+        });
+        if frame >= end {
+            break;
+        }
+        frame += 1;
+    }
+    keys
+}
+
+/// The row of `table` with key `probe`, if any.
+fn lookup_row<'t>(
+    table: &'t TraceTable,
+    index: &BTreeMap<&RowKey, usize>,
+    probe: &RowKey,
+) -> Option<&'t Vec<Value>> {
+    index.get(probe).and_then(|&row| table.rows.get(row))
+}
+
 /// The field's values in the frames around `key`, for the same object and instance.
 fn context_frames(
     a: &TraceTable,
@@ -786,33 +893,48 @@ fn context_frames(
     pair: &FieldPair,
     context: u32,
 ) -> Vec<ContextFrame> {
-    let span = i64::from(context);
-    let start = key.frame.saturating_sub(span);
-    let end = key.frame.saturating_add(span);
-    let lookup = |table: &TraceTable, index: &BTreeMap<&RowKey, usize>, probe: &RowKey, col| {
-        index
-            .get(probe)
-            .and_then(|&row| table.rows.get(row))
-            .and_then(|row| row.get(col))
-            .cloned()
+    let mut frames = Vec::new();
+    for probe in context_window(key, context) {
+        let va = lookup_row(a, index_a, &probe).and_then(|row| row.get(pair.a).cloned());
+        let vb = lookup_row(b, index_b, &probe).and_then(|row| row.get(pair.b).cloned());
+        if va.is_some() || vb.is_some() {
+            frames.push(ContextFrame {
+                frame: probe.frame,
+                a: va,
+                b: vb,
+            });
+        }
+    }
+    frames
+}
+
+/// Every compared field in the frames around `key`, for the same object and instance.
+fn row_context(
+    a: &TraceTable,
+    b: &TraceTable,
+    index_a: &BTreeMap<&RowKey, usize>,
+    index_b: &BTreeMap<&RowKey, usize>,
+    key: &RowKey,
+    pairs: &[FieldPair],
+    context: u32,
+) -> Vec<RowFrame> {
+    let pick = |row: &Vec<Value>, col: fn(&FieldPair) -> usize| -> Vec<Value> {
+        pairs
+            .iter()
+            .map(|p| row.get(col(p)).cloned().unwrap_or(Value::Empty))
+            .collect()
     };
     let mut frames = Vec::new();
-    let mut frame = start;
-    loop {
-        let probe = RowKey {
-            frame,
-            object: key.object.clone(),
-            instance: key.instance,
-        };
-        let va = lookup(a, index_a, &probe, pair.a);
-        let vb = lookup(b, index_b, &probe, pair.b);
+    for probe in context_window(key, context) {
+        let va = lookup_row(a, index_a, &probe).map(|row| pick(row, |p| p.a));
+        let vb = lookup_row(b, index_b, &probe).map(|row| pick(row, |p| p.b));
         if va.is_some() || vb.is_some() {
-            frames.push(ContextFrame { frame, a: va, b: vb });
+            frames.push(RowFrame {
+                frame: probe.frame,
+                a: va,
+                b: vb,
+            });
         }
-        if frame >= end {
-            break;
-        }
-        frame += 1;
     }
     frames
 }
@@ -859,18 +981,42 @@ impl fmt::Display for Difference {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Difference::Field(d) => d.fmt(f),
-            Difference::MissingRow { row, missing_in } => {
-                let side = match missing_in {
-                    Side::A => "a",
-                    Side::B => "b",
-                };
-                writeln!(
-                    f,
-                    "frame {}, {} #{}: row missing in {side}",
-                    row.frame, row.object, row.instance
-                )
-            }
+            Difference::MissingRow(m) => m.fmt(f),
         }
+    }
+}
+
+impl fmt::Display for MissingRow {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let side = match self.missing_in {
+            Side::A => "a",
+            Side::B => "b",
+        };
+        writeln!(
+            f,
+            "frame {}, {} #{}: row missing in {side}",
+            self.row.frame, self.row.object, self.row.instance
+        )?;
+        let show_row = |values: &Option<Vec<Value>>| match values {
+            Some(values) => values
+                .iter()
+                .map(|v| show(&Some(v.clone())))
+                .collect::<Vec<_>>()
+                .join(", "),
+            None => "-".to_string(),
+        };
+        writeln!(f, "  context (frame: a | b), fields {}:", self.fields.join(", "))?;
+        for c in &self.context {
+            let marker = if c.frame == self.row.frame { ">" } else { " " };
+            writeln!(
+                f,
+                "  {marker} {}: {} | {}",
+                c.frame,
+                show_row(&c.a),
+                show_row(&c.b)
+            )?;
+        }
+        Ok(())
     }
 }
 
@@ -957,9 +1103,71 @@ mod tests {
             "a\n1\r\n",
             "a,\n1,2\n",
             "a\n\"q\"x\n",
+            // Cut off before the final line ending.
+            "a\n1",
+            "a",
+            "a\n\"s\"",
+            // Repeated column names, bare or quoted.
+            "a,a\n1,2\n",
+            "frame,x,\"x\"\n1,2.0,3.0\n",
         ] {
             assert!(TraceTable::parse(bad).is_err(), "{bad:?} should fail");
         }
+    }
+
+    #[test]
+    fn non_canonical_numbers_are_errors() {
+        for cell in [
+            "-0",
+            "+1",
+            "007",
+            "1.50",
+            "1E5",
+            "1e5",
+            ".5",
+            "1.",
+            "infinity",
+            "Infinity",
+            "INF",
+            "+inf",
+            "nan",
+            "-NaN",
+            "99999999999999999999",
+            "1.0e0",
+        ] {
+            let text = format!("a\n{cell}\n");
+            assert!(TraceTable::parse(&text).is_err(), "{cell:?} should fail");
+        }
+        for cell in ["0", "-7", "81.0", "-0.0", "1e16", "1e-7", "inf", "-inf", "NaN"] {
+            let text = format!("a\n{cell}\n");
+            let t = TraceTable::parse(&text).unwrap_or_else(|e| panic!("{cell:?}: {e}"));
+            assert_eq!(t.to_csv(), text);
+        }
+    }
+
+    #[test]
+    fn any_two_nans_are_the_same() {
+        // A runtime NaN on x86_64 has the sign bit set; parsing "NaN" does not.
+        let runtime = f64::from_bits(0xFFF8_0000_0000_0000);
+        let parsed = TraceTable::parse("a\nNaN\n").expect("parse").rows[0][0].clone();
+        assert!(Value::Real(runtime).same(&parsed));
+        assert!(Value::Real(f64::from_bits(0x7FF0_0000_0000_0001)).same(&parsed));
+        assert!(!Value::Real(0.0).same(&Value::Real(-0.0)));
+        assert!(!Value::Real(f64::INFINITY).same(&parsed));
+    }
+
+    #[test]
+    fn new_rejects_repeated_columns() {
+        assert!(TraceTable::new(&["jump[1]", "hp"]).is_ok());
+        assert!(TraceTable::new(&["x"]).is_err());
+        assert!(TraceTable::new(&["frame"]).is_err());
+        assert!(TraceTable::new(&["hp", "hp"]).is_err());
+        let mut t = TraceTable::new(&["hp"]).expect("new");
+        t.columns.push(Column {
+            name: "object".into(),
+            quoted: true,
+        });
+        assert!(diff(&t, &t, &DiffOptions::default()).is_err());
     }
 
     #[test]
@@ -986,38 +1194,68 @@ mod tests {
         opts.ignore.insert("id".into());
         let d = diff(&a, &b, &opts).expect("diff");
         assert!(d.only_in_a.is_empty() && d.only_in_b.is_empty());
+        let both = || Some(vec![Value::Real(1.0), Value::Real(2.0)]);
         assert_eq!(
             d.first,
-            Some(Difference::MissingRow {
+            Some(Difference::MissingRow(MissingRow {
                 row: RowKey {
                     frame: 3,
                     object: "p".into(),
                     instance: 0
                 },
                 missing_in: Side::A,
-            })
+                fields: vec!["x".into(), "v".into()],
+                context: vec![
+                    RowFrame {
+                        frame: 1,
+                        a: both(),
+                        b: both(),
+                    },
+                    RowFrame {
+                        frame: 2,
+                        a: both(),
+                        b: both(),
+                    },
+                    RowFrame {
+                        frame: 3,
+                        a: None,
+                        b: both(),
+                    },
+                ],
+            }))
         );
+        let shown = d.to_string();
+        assert!(shown.contains("row missing in a"), "{shown}");
+        assert!(shown.contains("  > 3: - | 1.0, 2.0"), "{shown}");
         opts.rename.clear();
         let d = diff(&a, &b, &opts).expect("diff");
         assert_eq!(d.only_in_a, vec!["v".to_string()]);
         assert_eq!(d.only_in_b, vec!["w".to_string()]);
     }
 
-    /// Path of the research repo's GM8 traces, or `None` to skip (IWBTG_RESEARCH unset).
+    /// Every `specs/engines/<engine>/traces` folder in the research repo, sorted, or `None` to
+    /// skip (IWBTG_RESEARCH unset).
     #[allow(clippy::disallowed_methods)] // Test-only: the sim itself never reads the environment.
-    fn research_traces() -> Option<std::path::PathBuf> {
+    fn research_trace_dirs() -> Option<Vec<std::path::PathBuf>> {
         let root = std::env::var("IWBTG_RESEARCH").ok()?;
-        Some(std::path::Path::new(&root).join("specs/engines/gm8/traces"))
+        let engines = std::path::Path::new(&root).join("specs/engines");
+        let entries = std::fs::read_dir(&engines).unwrap_or_else(|e| panic!("read {engines:?}: {e}"));
+        let mut dirs: Vec<std::path::PathBuf> = entries
+            .map(|entry| entry.expect("dir entry").path().join("traces"))
+            .filter(|traces| traces.is_dir())
+            .collect();
+        dirs.sort();
+        Some(dirs)
     }
 
-    /// Every `.csv` under the research traces folder, sorted, with its text.
+    /// Every `.csv` under every engine's research traces folder, sorted, with its text.
     fn research_csvs() -> Vec<(std::path::PathBuf, String)> {
-        let Some(dir) = research_traces() else {
+        let Some(dirs) = research_trace_dirs() else {
             eprintln!("IWBTG_RESEARCH is not set; skipping research trace tests");
             return Vec::new();
         };
         let mut paths = Vec::new();
-        let mut stack = vec![dir.clone()];
+        let mut stack = dirs.clone();
         while let Some(d) = stack.pop() {
             let entries = std::fs::read_dir(&d).unwrap_or_else(|e| panic!("read {d:?}: {e}"));
             for entry in entries {
@@ -1030,7 +1268,7 @@ mod tests {
             }
         }
         paths.sort();
-        assert!(!paths.is_empty(), "no trace CSVs under {dir:?}");
+        assert!(!paths.is_empty(), "no trace CSVs under {dirs:?}");
         paths
             .into_iter()
             .map(|p| {
