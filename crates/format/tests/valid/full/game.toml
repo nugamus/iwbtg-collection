@@ -1,0 +1,66 @@
+#:schema ../../../../../docs/format/schema/v0/game.schema.json
+# Every manifest field from docs/format/v0.md, Manifest.
+format = 0
+id = "full_example"
+title = "I Wanna Test Every Field"
+version = "1.0.0-rc.1+build.7"
+source_version = "4.2"
+engine = "yuuutu"
+engine_rev = 1
+runner = "gm81"
+physics = "physics.toml"
+start_room = "title"
+tick_rate = 50
+max_ticks = 1_080_000
+object_order = [
+  "kid", "block", "spike", "save", "warp", "platform", "trigger", "@boss1",
+]
+
+[[creators]]
+name = "Example Author"
+role = "author"
+
+[[creators]]
+name = "Example Composer"
+role = "music"
+
+[[creators]]
+name = "Example Helper"
+role = "co-author"
+
+[source]
+url = "https://example.com/game/19483"
+permission = "community-assumed"
+permission_date = 2026-10-24
+permission_note = "Example fixture, no real game."
+
+[budget]
+ops_per_tick = 2_000_000
+
+[timing]
+start = { trigger = "run_start" }
+end = { trigger = "run_end" }
+stages = [
+  { id = "stage1", name = "Stage 1", trigger = "stage1_clear" },
+  { id = "boss", name = "Boss", trigger = "boss1_dead" },
+]
+
+[tricks]
+vine_check = "on"
+
+[[third_party]]
+path = "music/stage1.ogg"
+what = "Stage 1 music"
+owner = "Example rights holder"
+license = "unknown"
+status = "to-clear"
+
+[[third_party]]
+path = "engine:yuuutu/kid_idle"
+what = "Kid sprite"
+owner = "Example rights holder"
+license = "unknown"
+status = "excluded-from-public"
+
+[music.stage1]
+volume = { bits = "3FE0000000000000" }

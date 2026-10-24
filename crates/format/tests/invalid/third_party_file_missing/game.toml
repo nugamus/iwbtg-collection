@@ -1,0 +1,31 @@
+#:schema ../../../../../docs/format/schema/v0/game.schema.json
+# Invalid fixture: the expected error is under [third_party_file_missing] in ../expected.toml.
+format = 0
+id = "minimal"
+title = "Minimal"
+version = "0.1.0"
+engine_rev = 1
+runner = "gm80"
+physics = "physics.toml"
+start_room = "title"
+max_ticks = 180_000
+object_order = ["kid", "block"]
+
+[[creators]]
+name = "IWBTG Collection"
+role = "author"
+
+[source]
+url = "https://example.com/minimal"
+permission = "granted"
+
+[timing]
+start = { trigger = "run_start" }
+end = { trigger = "run_end" }
+
+[[third_party]]
+path = "music/stage1.ogg"
+what = "Stage 1 music"
+owner = "Someone"
+license = "unknown"
+status = "to-clear"

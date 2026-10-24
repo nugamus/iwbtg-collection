@@ -1,0 +1,327 @@
+# One entry per fixture folder in tests/invalid/: the single diagnostic `check` must give.
+# `message` is a fragment of the message; `severity` defaults to "error".
+
+[bad_id]
+file = "game.toml"
+line = 4
+column = 6
+message = "id `Minimal-Game` must start with a lowercase letter a-z"
+
+[bad_version]
+file = "game.toml"
+line = 6
+column = 11
+message = "version `1.0` is not semver (`MAJOR.MINOR.PATCH`, for example `1.0.0`)"
+
+[creator_role_wrong]
+file = "game.toml"
+line = 16
+column = 8
+message = "unknown variant `composer`"
+
+[creators_empty]
+file = "game.toml"
+line = 13
+column = 12
+message = "creators needs at least one entry"
+
+[empty_title]
+file = "game.toml"
+line = 5
+column = 9
+message = "title must not be empty"
+
+[engine_rev_negative]
+file = "game.toml"
+line = 7
+column = 14
+message = "invalid value: integer `-1`, expected u16"
+
+[format_negative]
+file = "game.toml"
+line = 3
+column = 10
+message = "invalid value: integer `-1`, expected u32"
+
+[format_newer]
+file = "game.toml"
+line = 3
+column = 10
+message = "this package uses format 1, but this client reads formats up to 0; update the client"
+
+[max_ticks_wrong_type]
+file = "game.toml"
+line = 11
+column = 13
+message = "invalid type: string \"lots\", expected u64"
+
+[missing_creator_name]
+file = "game.toml"
+line = 14
+column = 1
+message = "missing field `name`"
+
+[missing_creator_role]
+file = "game.toml"
+line = 14
+column = 1
+message = "missing field `role`"
+
+[missing_creators]
+file = "game.toml"
+line = 1
+column = 1
+message = "missing field `creators`"
+
+[missing_engine_rev]
+file = "game.toml"
+line = 1
+column = 1
+message = "missing field `engine_rev`"
+
+[missing_format]
+file = "game.toml"
+line = 1
+column = 1
+message = "missing field `format`"
+
+[missing_id]
+file = "game.toml"
+line = 1
+column = 1
+message = "missing field `id`"
+
+[missing_max_ticks]
+file = "game.toml"
+line = 1
+column = 1
+message = "missing field `max_ticks`"
+
+[missing_object_order]
+file = "game.toml"
+line = 1
+column = 1
+message = "missing field `object_order`"
+
+[missing_physics]
+file = "game.toml"
+line = 1
+column = 1
+message = "missing field `physics`"
+
+[missing_runner]
+file = "game.toml"
+line = 1
+column = 1
+message = "missing field `runner`"
+
+[missing_source]
+file = "game.toml"
+line = 1
+column = 1
+message = "missing field `source`"
+
+[missing_source_permission]
+file = "game.toml"
+line = 18
+column = 1
+message = "missing field `permission`"
+
+[missing_source_url]
+file = "game.toml"
+line = 18
+column = 1
+message = "missing field `url`"
+
+[missing_start_room]
+file = "game.toml"
+line = 1
+column = 1
+message = "missing field `start_room`"
+
+[missing_timing]
+file = "game.toml"
+line = 1
+column = 1
+message = "missing field `timing`"
+
+[missing_timing_end]
+file = "game.toml"
+line = 22
+column = 1
+message = "missing field `end`"
+
+[missing_timing_start]
+file = "game.toml"
+line = 22
+column = 1
+message = "missing field `start`"
+
+[missing_title]
+file = "game.toml"
+line = 1
+column = 1
+message = "missing field `title`"
+
+[missing_version]
+file = "game.toml"
+line = 1
+column = 1
+message = "missing field `version`"
+
+[music_file_missing]
+file = "game.toml"
+line = 26
+column = 8
+message = "music `stage1` has no `music/stage1.ogg`"
+
+[no_manifest]
+file = "game.toml"
+line = 1
+column = 1
+message = "the package has no `game.toml`"
+
+[object_order_bad_kind]
+file = "game.toml"
+line = 12
+column = 24
+message = "id `Block` must start with a lowercase letter a-z"
+
+[object_order_duplicate]
+file = "game.toml"
+line = 12
+column = 33
+message = "`kid` is listed twice in object_order"
+
+[object_order_package_missing]
+file = "game.toml"
+line = 12
+column = 24
+message = "`@boss1` has no `objects/boss1.toml`"
+
+[ops_over_cap]
+file = "game.toml"
+line = 27
+column = 16
+message = "ops_per_tick must be between 1 and 2000000"
+
+[permission_date_with_time]
+file = "game.toml"
+line = 21
+column = 19
+message = "permission_date must be a date without a time, for example 2026-10-24"
+
+[permission_revoked]
+file = "game.toml"
+line = 20
+column = 14
+message = "permission is `revoked`: a revoked package is never loaded, built or served"
+
+[permission_underscore]
+file = "game.toml"
+line = 20
+column = 14
+message = "unknown variant `community_assumed`"
+
+[permission_wrong]
+file = "game.toml"
+line = 20
+column = 14
+message = "unknown variant `yes`"
+
+[physics_file_missing]
+file = "game.toml"
+line = 9
+column = 11
+message = "physics profile `physics.toml` is not in the package"
+
+[runner_wrong]
+file = "game.toml"
+line = 8
+column = 10
+message = "unknown variant `gm7`, expected `gm80` or `gm81`"
+
+[schema_comment_missing]
+file = "game.toml"
+line = 1
+column = 1
+severity = "warning"
+message = "the first line should be a `#:schema` comment pointing at the JSON Schema"
+
+[source_url_not_http]
+file = "game.toml"
+line = 19
+column = 7
+message = "source url `delicious-fruit.com/game/1` must be an http:// or https:// address"
+
+[stage_id_duplicate]
+file = "game.toml"
+line = 27
+column = 10
+message = "stage id `stage1` is used twice"
+
+[start_room_file_missing]
+file = "game.toml"
+line = 10
+column = 14
+message = "start_room `title` has no `rooms/title.toml`"
+
+[syntax_error]
+file = "game.toml"
+line = 5
+column = 17
+message = "invalid basic string, expected `\"`"
+
+[third_party_file_missing]
+file = "game.toml"
+line = 27
+column = 8
+message = "third_party path `music/stage1.ogg` is not in the package"
+
+[third_party_missing_owner]
+file = "game.toml"
+line = 26
+column = 1
+message = "missing field `owner`"
+
+[third_party_status_wrong]
+file = "game.toml"
+line = 31
+column = 10
+message = "unknown variant `fine`"
+
+[tick_rate_zero]
+file = "game.toml"
+line = 11
+column = 13
+message = "tick_rate must be at least 1"
+
+[unknown_creator_key]
+file = "game.toml"
+line = 17
+column = 1
+message = "unknown field `email`, expected `name` or `role`"
+
+[unknown_root_key]
+file = "game.toml"
+line = 6
+column = 1
+message = "unknown field `author`"
+
+[unknown_root_table]
+file = "game.toml"
+line = 26
+column = 2
+message = "unknown field `extras`"
+
+[unknown_source_key]
+file = "game.toml"
+line = 21
+column = 1
+message = "unknown field `licence`"
+
+[unknown_timing_key]
+file = "game.toml"
+line = 25
+column = 1
+message = "unknown field `finish`"
