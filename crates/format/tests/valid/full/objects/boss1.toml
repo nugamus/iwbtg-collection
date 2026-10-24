@@ -1,0 +1,4 @@
+#:schema ../../../../../../docs/format/schema/v0/object.schema.json
+sprite = "boss1"
+script = "boss1"
+solid = false

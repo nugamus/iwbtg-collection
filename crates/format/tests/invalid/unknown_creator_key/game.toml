@@ -1,0 +1,25 @@
+#:schema ../../../../../docs/format/schema/v0/game.schema.json
+# Invalid fixture: the expected error is under [unknown_creator_key] in ../expected.toml.
+format = 0
+id = "minimal"
+title = "Minimal"
+version = "0.1.0"
+engine_rev = 1
+runner = "gm80"
+physics = "physics.toml"
+start_room = "title"
+max_ticks = 180_000
+object_order = ["kid", "block"]
+
+[[creators]]
+name = "IWBTG Collection"
+role = "author"
+email = "someone@example.com"
+
+[source]
+url = "https://example.com/minimal"
+permission = "granted"
+
+[timing]
+start = { trigger = "run_start" }
+end = { trigger = "run_end" }
