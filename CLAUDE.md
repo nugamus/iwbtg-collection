@@ -5,6 +5,7 @@
 ## Rules
 
 - Never commit original game binaries, decompiled code or extracted files. Those stay in the research repo (`../research`). Ported games live in the games repo (`../games`), rebuilt in our format from clean-room specs.
+- Clean room: GameMaker behavior comes only from `research/specs/` (CLONE_SPECs) and the traces there. Never read another runner's or tool's source (OpenGMK, Jtool, renex, decompiled games) while writing client code. If the spec does not answer a question, mark it OPEN and request a spec item or trace.
 - The simulation is deterministic: fixed tick at the game's original rate, no frame time in `sim`, number handling matching the original as its CLONE_SPEC documents. Timing, splits and leaderboards count ticks, never rendered frames.
 - `sim` must not depend on Bevy.
 - Game packages are readable text and never contain compiled code. Custom behavior goes only through our sandboxed script language. See `docs/format/README.md`.
