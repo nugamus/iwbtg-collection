@@ -2,7 +2,8 @@
 //!
 //! A replay is a postcard-encoded struct: header, run-length encoded input frames, trailer. The
 //! file form is canonical: `decode` accepts only bytes that `encode` would write for the same
-//! replay, so identical runs always give identical files.
+//! replay, so identical runs always give identical files. Both sides run the same consistency
+//! checks, so `encode` never writes a file that `decode` rejects.
 
 use std::fmt::Write as _;
 
@@ -19,6 +20,9 @@ pub const REPLAY_FORMAT: u16 = 1;
 /// Hard ceiling on the ticks in one replay: 48 hours at 50 ticks per second. Bounds memory when
 /// runs are expanded (6 bytes per tick) before the game's own `max_ticks` is known.
 pub const MAX_REPLAY_TICKS: u64 = 8_640_000;
+
+/// Ticks between state-hash checkpoints. Every checkpoint tick is a multiple of this.
+pub const CHECKPOINT_INTERVAL: u64 = 500;
 
 /// How a run starts. Only `NewGame` is ranked.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -57,9 +61,11 @@ pub struct Header {
 pub struct Trailer {
     /// Ticks simulated; equals the number of input frames.
     pub total_ticks: u64,
-    /// `(stage index, tick)` for each split.
+    /// `(stage index, tick)` for each split, in tick order, none past `total_ticks`. Two splits
+    /// may share a tick when several timing triggers fire in the same tick.
     pub splits: Vec<(u16, u64)>,
-    /// `(tick, state hash truncated to 16 bytes)` every 500 ticks, to locate desyncs.
+    /// `(tick, state hash truncated to 16 bytes)` every [`CHECKPOINT_INTERVAL`] ticks, to locate
+    /// desyncs. Ticks are strictly increasing multiples of the interval, none past `total_ticks`.
     pub checkpoints: Vec<(u64, [u8; 16])>,
     /// State hash after the last tick.
     pub final_hash: [u8; 32],
@@ -76,7 +82,7 @@ pub struct Replay {
     pub trailer: Trailer,
 }
 
-/// Why a replay file was rejected.
+/// Why a replay could not be encoded, or why a replay file was rejected.
 #[derive(Clone, PartialEq, Eq, Debug, thiserror::Error)]
 pub enum ReplayError {
     /// The file does not start with `IWBR`.
@@ -108,6 +114,13 @@ pub enum ReplayError {
         /// `trailer.total_ticks`.
         total_ticks: u64,
     },
+    /// A split past `total_ticks` or earlier than the split before it.
+    #[error("split {0} is past the last tick or out of order")]
+    BadSplit(u64),
+    /// A checkpoint past `total_ticks`, not on a multiple of [`CHECKPOINT_INTERVAL`], or not later
+    /// than the checkpoint before it.
+    #[error("checkpoint {0} is past the last tick, off the interval grid or out of order")]
+    BadCheckpoint(u64),
     /// The bytes decode but are not what `encode` writes (for example an overlong varint).
     #[error("replay is not in canonical form")]
     NotCanonical,
@@ -131,14 +144,24 @@ struct FileOwned {
 
 impl Replay {
     /// The canonical file bytes: adjacent equal frames merged into one run.
-    pub fn encode(&self) -> Vec<u8> {
+    ///
+    /// Fails, writing nothing, when the replay breaks a rule `decode` checks: wrong magic or
+    /// format, more than [`MAX_REPLAY_TICKS`] inputs, `total_ticks` not equal to the number of
+    /// inputs, or splits and checkpoints out of order or past the last tick.
+    pub fn encode(&self) -> Result<Vec<u8>, ReplayError> {
+        let ticks = self.inputs.len() as u64;
+        if ticks > MAX_REPLAY_TICKS {
+            return Err(ReplayError::TooManyTicks);
+        }
+        check(&self.header, ticks, &self.trailer)?;
+
         let file = FileRef {
             header: &self.header,
             runs: runs(&self.inputs),
             trailer: &self.trailer,
         };
         // Serializing plain structs, vectors and strings into a growable Vec cannot fail.
-        postcard::to_allocvec(&file).expect("postcard encoding into a Vec is infallible")
+        Ok(postcard::to_allocvec(&file).expect("postcard encoding into a Vec is infallible"))
     }
 
     /// Reads a replay file, accepting only the canonical bytes `encode` would write.
@@ -172,12 +195,7 @@ impl Replay {
                 return Err(ReplayError::TooManyTicks);
             }
         }
-        if total != file.trailer.total_ticks {
-            return Err(ReplayError::TickCountMismatch {
-                runs: total,
-                total_ticks: file.trailer.total_ticks,
-            });
-        }
+        check(&file.header, total, &file.trailer)?;
 
         if postcard::to_allocvec(&file)? != bytes {
             return Err(ReplayError::NotCanonical);
@@ -243,6 +261,39 @@ impl Replay {
         let _ = writeln!(out, "final_hash {}", hex(&t.final_hash));
         out
     }
+}
+
+/// The rules shared by `encode` and `decode`, given the real tick count (inputs or run lengths).
+fn check(header: &Header, ticks: u64, trailer: &Trailer) -> Result<(), ReplayError> {
+    if header.magic != MAGIC {
+        return Err(ReplayError::BadMagic);
+    }
+    if header.replay_format != REPLAY_FORMAT {
+        return Err(ReplayError::UnknownFormat(header.replay_format));
+    }
+    if ticks != trailer.total_ticks {
+        return Err(ReplayError::TickCountMismatch {
+            runs: ticks,
+            total_ticks: trailer.total_ticks,
+        });
+    }
+
+    let mut previous: Option<u64> = None;
+    for (index, &(_, tick)) in (0u64..).zip(&trailer.splits) {
+        if tick > ticks || previous.is_some_and(|p| tick < p) {
+            return Err(ReplayError::BadSplit(index));
+        }
+        previous = Some(tick);
+    }
+
+    let mut previous: Option<u64> = None;
+    for (index, &(tick, _)) in (0u64..).zip(&trailer.checkpoints) {
+        if tick > ticks || tick % CHECKPOINT_INTERVAL != 0 || previous.is_some_and(|p| tick <= p) {
+            return Err(ReplayError::BadCheckpoint(index));
+        }
+        previous = Some(tick);
+    }
+    Ok(())
 }
 
 /// Run-length encodes frames: maximal runs of equal frames, split only past `u32::MAX` ticks
@@ -316,13 +367,22 @@ mod tests {
         }
     }
 
+    /// A consistent replay: splits at ticks 3 and 7 (those that fit) and a checkpoint on every
+    /// interval tick from 0.
     fn replay(inputs: Vec<InputFrame>) -> Replay {
+        let ticks = inputs.len() as u64;
         Replay {
             header: header(),
             trailer: Trailer {
-                total_ticks: inputs.len() as u64,
-                splits: vec![(0, 3), (1, 7)],
-                checkpoints: vec![(0, [1; 16]), (5, [2; 16])],
+                total_ticks: ticks,
+                splits: [(0, 3), (1, 7)]
+                    .into_iter()
+                    .filter(|&(_, tick)| tick <= ticks)
+                    .collect(),
+                checkpoints: (0..=ticks)
+                    .step_by(CHECKPOINT_INTERVAL as usize)
+                    .map(|tick| (tick, [(tick / CHECKPOINT_INTERVAL) as u8; 16]))
+                    .collect(),
                 final_hash: [3; 32],
             },
             inputs,
@@ -336,6 +396,16 @@ mod tests {
         inputs.push(frame(0, 0, JUMP));
         inputs.push(frame(0, JUMP, JUMP)); // sub-tick tap
         replay(inputs)
+    }
+
+    /// Encodes a replay without the checks in `encode`, as a buggy or hostile writer could.
+    fn encode_unchecked(r: &Replay) -> Vec<u8> {
+        let file = FileRef {
+            header: &r.header,
+            runs: runs(&r.inputs),
+            trailer: &r.trailer,
+        };
+        postcard::to_allocvec(&file).unwrap()
     }
 
     /// Encodes a hand-made run list, bypassing the merging in `encode`.
@@ -385,7 +455,7 @@ mod tests {
     #[test]
     fn round_trip() {
         for r in [small(), replay(Vec::new()), replay(realistic_inputs(5_000, 7))] {
-            let bytes = r.encode();
+            let bytes = r.encode().unwrap();
             assert_eq!(&bytes[..4], b"IWBR");
             assert_eq!(Replay::decode(&bytes), Ok(r));
         }
@@ -395,19 +465,19 @@ mod tests {
     fn round_trip_from_save() {
         let mut r = small();
         r.header.start_mode = StartMode::FromSave(vec![9, 8, 7]);
-        assert_eq!(Replay::decode(&r.encode()), Ok(r));
+        assert_eq!(Replay::decode(&r.encode().unwrap()), Ok(r));
     }
 
     #[test]
     fn identical_inputs_give_identical_bytes() {
         let a = replay(realistic_inputs(2_000, 11));
         let b = replay(realistic_inputs(2_000, 11));
-        assert_eq!(a.encode(), b.encode());
+        assert_eq!(a.encode().unwrap(), b.encode().unwrap());
     }
 
     #[test]
     fn rejects_wrong_magic() {
-        let mut bytes = small().encode();
+        let mut bytes = small().encode().unwrap();
         bytes[0] = b'X';
         assert_eq!(Replay::decode(&bytes), Err(ReplayError::BadMagic));
         assert_eq!(Replay::decode(b""), Err(ReplayError::BadMagic));
@@ -418,22 +488,114 @@ mod tests {
     fn rejects_unknown_format() {
         let mut r = small();
         r.header.replay_format = REPLAY_FORMAT + 1;
-        assert_eq!(
-            Replay::decode(&r.encode()),
-            Err(ReplayError::UnknownFormat(REPLAY_FORMAT + 1))
-        );
+        let err = ReplayError::UnknownFormat(REPLAY_FORMAT + 1);
+        assert_eq!(r.encode(), Err(err.clone()));
+        assert_eq!(Replay::decode(&encode_unchecked(&r)), Err(err));
+    }
+
+    #[test]
+    fn encode_rejects_wrong_magic() {
+        let mut r = small();
+        r.header.magic = [0; 4];
+        assert_eq!(r.encode(), Err(ReplayError::BadMagic));
+    }
+
+    #[test]
+    fn encode_rejects_default_trailer() {
+        // A recorder that forgets total_ticks gets an error now, not a file decode rejects later.
+        let mut r = small();
+        r.trailer = Trailer {
+            final_hash: [3; 32],
+            ..Default::default()
+        };
+        let err = ReplayError::TickCountMismatch {
+            runs: 10,
+            total_ticks: 0,
+        };
+        assert_eq!(r.encode(), Err(err.clone()));
+        assert_eq!(Replay::decode(&encode_unchecked(&r)), Err(err));
+    }
+
+    #[test]
+    fn encode_rejects_too_many_ticks() {
+        let ticks = MAX_REPLAY_TICKS + 1;
+        let mut r = small();
+        r.inputs = vec![InputFrame::default(); ticks as usize];
+        r.trailer.total_ticks = ticks;
+        assert_eq!(r.encode(), Err(ReplayError::TooManyTicks));
+    }
+
+    #[test]
+    fn rejects_split_past_last_tick() {
+        let mut r = small();
+        r.trailer.splits = vec![(0, 3), (1, 11)];
+        let err = ReplayError::BadSplit(1);
+        assert_eq!(r.encode(), Err(err.clone()));
+        assert_eq!(Replay::decode(&encode_unchecked(&r)), Err(err));
+    }
+
+    #[test]
+    fn rejects_splits_out_of_order() {
+        let mut r = small();
+        r.trailer.splits = vec![(0, 7), (1, 3)];
+        let err = ReplayError::BadSplit(1);
+        assert_eq!(r.encode(), Err(err.clone()));
+        assert_eq!(Replay::decode(&encode_unchecked(&r)), Err(err));
+    }
+
+    #[test]
+    fn accepts_splits_on_one_tick_and_on_the_last_tick() {
+        let mut r = small();
+        r.trailer.splits = vec![(0, 4), (1, 4), (2, 10)];
+        assert_eq!(Replay::decode(&r.encode().unwrap()), Ok(r));
+    }
+
+    #[test]
+    fn rejects_checkpoint_past_last_tick() {
+        let mut r = replay(realistic_inputs(1_200, 5));
+        r.trailer.checkpoints.push((1_500, [0; 16]));
+        let err = ReplayError::BadCheckpoint(3);
+        assert_eq!(r.encode(), Err(err.clone()));
+        assert_eq!(Replay::decode(&encode_unchecked(&r)), Err(err));
+    }
+
+    #[test]
+    fn rejects_checkpoint_off_the_grid() {
+        let mut r = replay(realistic_inputs(1_200, 5));
+        r.trailer.checkpoints[1].0 = 499;
+        let err = ReplayError::BadCheckpoint(1);
+        assert_eq!(r.encode(), Err(err.clone()));
+        assert_eq!(Replay::decode(&encode_unchecked(&r)), Err(err));
+    }
+
+    #[test]
+    fn rejects_repeated_checkpoint() {
+        let mut r = replay(realistic_inputs(1_200, 5));
+        r.trailer.checkpoints[2].0 = 500;
+        let err = ReplayError::BadCheckpoint(2);
+        assert_eq!(r.encode(), Err(err.clone()));
+        assert_eq!(Replay::decode(&encode_unchecked(&r)), Err(err));
+    }
+
+    #[test]
+    fn rejects_checkpoints_out_of_order() {
+        let mut r = replay(realistic_inputs(1_200, 5));
+        r.trailer.checkpoints.swap(1, 2);
+        let err = ReplayError::BadCheckpoint(2);
+        assert_eq!(r.encode(), Err(err.clone()));
+        assert_eq!(Replay::decode(&encode_unchecked(&r)), Err(err));
     }
 
     #[test]
     fn rejects_trailing_bytes() {
-        let mut bytes = small().encode();
+        let mut bytes = small().encode().unwrap();
         bytes.extend([0, 0]);
         assert_eq!(Replay::decode(&bytes), Err(ReplayError::TrailingBytes(2)));
     }
 
     #[test]
     fn rejects_truncation() {
-        let bytes = small().encode();
+        let bytes = small().encode().unwrap();
         for len in 4..bytes.len() {
             assert!(Replay::decode(&bytes[..len]).is_err(), "length {len}");
         }
@@ -478,7 +640,7 @@ mod tests {
     fn rejects_overlong_varint() {
         // replay_format 1 is the single byte 0x01 right after the magic; 0x81 0x00 also reads
         // as 1 but is not what encode writes.
-        let bytes = small().encode();
+        let bytes = small().encode().unwrap();
         assert_eq!(bytes[4], 0x01);
         let mut long = bytes[..4].to_vec();
         long.extend([0x81, 0x00]);
@@ -489,7 +651,7 @@ mod tests {
     #[test]
     fn hour_long_replay_stays_small() {
         let r = replay(realistic_inputs(180_000, 42));
-        let bytes = r.encode();
+        let bytes = r.encode().unwrap();
         assert!(bytes.len() < 64 * 1024, "{} bytes", bytes.len());
         assert_eq!(Replay::decode(&bytes), Ok(r));
     }
@@ -497,7 +659,7 @@ mod tests {
     #[test]
     fn random_bytes_never_panic() {
         let mut rng = Lcg(0x5eed);
-        let valid = replay(realistic_inputs(3_000, 3)).encode();
+        let valid = replay(realistic_inputs(3_000, 3)).encode().unwrap();
         for i in 0..20_000 {
             let bytes: Vec<u8> = match i % 3 {
                 // Pure noise.
@@ -522,7 +684,7 @@ mod tests {
                 }
             };
             if let Ok(r) = Replay::decode(&bytes) {
-                assert_eq!(r.encode(), bytes, "accepted bytes must be canonical");
+                assert_eq!(r.encode(), Ok(bytes), "accepted bytes must be canonical");
             }
         }
     }
