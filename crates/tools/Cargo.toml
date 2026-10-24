@@ -1,0 +1,20 @@
+[package]
+name = "iwbtg-tools"
+description = "The iwbtg command-line tool: package checks, replays, trace comparison"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[[bin]]
+name = "iwbtg"
+path = "src/main.rs"
+
+[dependencies]
+iwbtg-sim.workspace = true
+iwbtg-format.workspace = true
+clap.workspace = true
+
+[lints]
+workspace = true

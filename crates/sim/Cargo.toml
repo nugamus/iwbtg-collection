@@ -1,0 +1,19 @@
+[package]
+name = "iwbtg-sim"
+description = "Deterministic simulation for IWBTG Collection: world, built-ins, kid physics, scripts, replays"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+rhai.workspace = true
+libm.workspace = true
+blake3.workspace = true
+postcard.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true
