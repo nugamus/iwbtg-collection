@@ -9,6 +9,12 @@
 //! under OpenGMK, which uses plain f64. OPEN (docs/architecture.md): whether the real GM8
 //! runner gives the same bits; settled by the Phase 2 cross-check. If it does not, only the
 //! table changes.
+//!
+//! OPEN: OpenGMK takes sin and cos from the platform C runtime (Windows x64 UCRT for the trace
+//! recorder), not from libm. The two agree on the four table angles but differ by one ulp on
+//! about 3% of other angles, 45 degrees among them (`sin`: UCRT `0.7071067811865476`, libm
+//! `0.7071067811865475`). The test `crt_golden_bits` pins measured UCRT values. Whether to follow
+//! UCRT, libm or x87 for those angles is for the CLONE_SPEC and the Phase 2 cross-check.
 
 use super::{Real, math};
 
@@ -35,7 +41,7 @@ pub struct TrigEntry {
 }
 
 /// 0 degrees: sin `0.0`, cos `1.0`. Source: f64 `sin`/`cos` of 0 radians (exact; OpenGMK plain
-/// f64 model). Not yet checked against a trace.
+/// f64 model; libm and Windows x64 UCRT agree). Not yet checked against a trace.
 pub const TRIG_0: TrigEntry = TrigEntry {
     degrees: Real::new(0.0),
     sin: Real::from_bits(0x0000_0000_0000_0000),
@@ -43,8 +49,8 @@ pub const TRIG_0: TrigEntry = TrigEntry {
 };
 
 /// 90 degrees: sin `1.0`, cos `6.123233995736766e-17`. Source: f64 `sin`/`cos` of
-/// `90 * DEG_TO_RAD` = `1.5707963267948966` (OpenGMK plain f64 model). Not yet checked against
-/// a trace.
+/// `90 * DEG_TO_RAD` = `1.5707963267948966` (OpenGMK plain f64 model; libm and Windows x64
+/// UCRT agree). Not yet checked against a trace.
 pub const TRIG_90: TrigEntry = TrigEntry {
     degrees: Real::new(90.0),
     sin: Real::from_bits(0x3FF0_0000_0000_0000),
@@ -52,8 +58,8 @@ pub const TRIG_90: TrigEntry = TrigEntry {
 };
 
 /// 180 degrees: sin `1.2246467991473532e-16`, cos `-1.0`. Source: f64 `sin`/`cos` of
-/// `180 * DEG_TO_RAD` = `3.141592653589793` (OpenGMK plain f64 model). Not yet checked against
-/// a trace.
+/// `180 * DEG_TO_RAD` = `3.141592653589793` (OpenGMK plain f64 model; libm and Windows x64
+/// UCRT agree). Not yet checked against a trace.
 pub const TRIG_180: TrigEntry = TrigEntry {
     degrees: Real::new(180.0),
     sin: Real::from_bits(0x3CA1_A626_3314_5C07),

@@ -6,7 +6,8 @@
 //! WASM and Linux.
 //!
 //! Submodules:
-//! - [`round`]: banker's rounding, integer conversion, `frac`, `sign`, `min`/`max`, GML `mod`/`div`.
+//! - [`round`](mod@round): banker's rounding, integer conversion, `frac`, `sign`, `min`/`max`,
+//!   GML `mod`/`div`.
 //! - [`compare`]: GM8 epsilon comparisons and truthiness.
 //! - [`math`]: software `sin`, `cos`, `tan`, `atan2`, `sqrt`, `pow`, `exp`, `ln`.
 //! - [`trig`]: degree helpers, the exact-bits trig table, `point_direction` and friends.
@@ -23,7 +24,7 @@ use core::fmt;
 use core::hash::{Hash, Hasher};
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 
 pub use compare::{EPSILON, TRUTH_THRESHOLD, gm_bool, gm_eq, gm_ge, gm_gt, gm_le, gm_lt, gm_ne};
 pub use math::{atan2, cos, exp, ln, pow, sin, sqrt, tan};
@@ -36,10 +37,14 @@ pub use trig::{
 
 /// A GM8 real: one IEEE binary64 double.
 ///
-/// Arithmetic is plain f64 arithmetic. Equality, `Eq` and `Hash` compare the bit pattern, so
-/// `Real` can key ordered maps and feed the state hash; `0.0` and `-0.0` differ, and a NaN equals
-/// itself. For GML-style value comparison use [`gm_eq`] and friends.
-#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+/// Arithmetic is plain f64 arithmetic. Equality and `Eq` compare the bit pattern, so `Real` can
+/// key ordered maps; `0.0` and `-0.0` differ, and a NaN equals itself. For GML-style value
+/// comparison use [`gm_eq`] and friends.
+///
+/// `Hash` and `Serialize` use [`Real::canonical_bits`], so every NaN hashes and serializes as
+/// [`Real::CANONICAL_NAN_BITS`] whatever payload the platform produced. The state hash may
+/// therefore be built from either. Deserializing keeps the bits it reads.
+#[derive(Clone, Copy, Default, Deserialize)]
 #[serde(transparent)]
 pub struct Real(f64);
 
@@ -49,8 +54,8 @@ impl Real {
     /// `1.0`.
     pub const ONE: Real = Real(1.0);
 
-    /// Bit pattern every NaN maps to in [`Real::canonical_bits`]. WASM NaN payloads are not
-    /// deterministic, so the state hash must not see them.
+    /// Bit pattern every NaN maps to in [`Real::canonical_bits`], `Hash` and `Serialize`. WASM
+    /// NaN payloads are not deterministic, so the state hash must not see them.
     pub const CANONICAL_NAN_BITS: u64 = 0x7FF8_0000_0000_0000;
 
     /// Wraps an f64.
@@ -102,9 +107,18 @@ impl PartialEq for Real {
 
 impl Eq for Real {}
 
+/// Hashes [`Real::canonical_bits`]. Consistent with bitwise `Eq`: equal bits give equal
+/// canonical bits.
 impl Hash for Real {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.to_bits().hash(state);
+        self.canonical_bits().hash(state);
+    }
+}
+
+/// Writes the f64 of [`Real::canonical_bits`], so NaN payloads never reach a serialized state.
+impl Serialize for Real {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_f64(f64::from_bits(self.canonical_bits()))
     }
 }
 

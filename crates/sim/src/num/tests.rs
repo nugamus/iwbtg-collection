@@ -70,6 +70,30 @@ fn real_serializes_as_f64() {
     assert_eq!(back, r(-7.347880794884119e-17));
 }
 
+#[test]
+fn real_serializes_nan_canonically() {
+    let payload_nan = Real::from_bits(0xFFF8_0000_0000_1234);
+    let bytes = postcard::to_allocvec(&payload_nan).expect("serializes");
+    assert_eq!(bytes, Real::CANONICAL_NAN_BITS.to_le_bytes());
+    // -0.0 is not a NaN and keeps its sign.
+    let bytes = postcard::to_allocvec(&r(-0.0)).expect("serializes");
+    assert_eq!(bytes, (-0.0f64).to_le_bytes());
+}
+
+#[test]
+fn real_hashes_nan_canonically() {
+    use core::hash::{Hash, Hasher};
+    let hash = |x: Real| {
+        let mut h = std::hash::DefaultHasher::new();
+        x.hash(&mut h);
+        h.finish()
+    };
+    let canonical = Real::from_bits(Real::CANONICAL_NAN_BITS);
+    assert_eq!(hash(Real::from_bits(0x7FF8_0000_0000_1234)), hash(canonical));
+    assert_eq!(hash(Real::from_bits(0xFFF8_0000_0000_0000)), hash(canonical));
+    assert_ne!(hash(r(0.0)), hash(r(-0.0)));
+}
+
 // ---- Rounding and conversion ----
 
 #[test]
@@ -78,7 +102,10 @@ fn round_is_bankers() {
     assert_eq!(round(r(1.5)), r(2.0));
     assert_eq!(round(r(2.5)), r(2.0));
     assert_eq!(round(r(3.5)), r(4.0));
-    assert_eq!(round(r(-0.5)), r(-0.0));
+    // Zero results are +0.0, never -0.0.
+    assert_eq!(round(r(-0.5)), r(0.0));
+    assert_eq!(round(r(-0.3)), r(0.0));
+    assert_eq!(round(r(-0.0)), r(0.0));
     assert_eq!(round(r(-1.5)), r(-2.0));
     assert_eq!(round(r(-2.5)), r(-2.0));
     assert_eq!(round(r(0.49999999999999994)), r(0.0));
@@ -121,21 +148,42 @@ fn floor_ceil_frac_sign_abs() {
     assert_eq!(ceil(r(-1.5)), r(-1.0));
     assert_eq!(frac(r(2.75)), r(0.75));
     assert_eq!(frac(r(-1.25)), r(-0.25));
+    // floor and ceil keep IEEE signed zeros (OPEN in their docs).
+    assert_eq!(ceil(r(-0.5)), r(-0.0));
+    assert_eq!(floor(r(-0.0)), r(-0.0));
     assert_eq!(sign(r(3.2)), r(1.0));
     assert_eq!(sign(r(-0.1)), r(-1.0));
     assert_eq!(sign(r(0.0)), r(0.0));
     assert_eq!(sign(r(-0.0)), r(0.0));
-    assert!(sign(r(f64::NAN)).is_nan());
+    assert_eq!(sign(r(f64::NAN)), r(0.0));
     assert_eq!(abs(r(-2.0)), r(2.0));
+}
+
+/// sign uses the comparison tolerance, so the gravity drift on trace frames 2-4 has sign 0.
+#[test]
+fn sign_uses_epsilon() {
+    assert_eq!(sign(parse("-7.347880794884119e-17")), r(0.0));
+    assert_eq!(sign(parse("7.347880794884119e-17")), r(0.0));
+    assert_eq!(sign(r(2e-13)), r(1.0));
+    assert_eq!(sign(r(-2e-13)), r(-1.0));
+    assert_eq!(sign(r(EPSILON)), r(1.0));
+    assert_eq!(sign(r(-EPSILON)), r(-1.0));
+    assert_eq!(sign(r(0.99 * EPSILON)), r(0.0));
 }
 
 #[test]
 fn min_max_clamp_lerp() {
     assert_eq!(min(r(1.0), r(2.0)), r(1.0));
     assert_eq!(max(r(1.0), r(2.0)), r(2.0));
-    // Ties keep the first argument.
+    // min keeps `a` unless `a > b`; max takes `b` unless `a > b`.
     assert_eq!(min(r(0.0), r(-0.0)), r(0.0));
-    assert_eq!(max(r(-0.0), r(0.0)), r(-0.0));
+    assert_eq!(min(r(-0.0), r(0.0)), r(-0.0));
+    assert_eq!(max(r(-0.0), r(0.0)), r(0.0));
+    assert_eq!(max(r(0.0), r(-0.0)), r(-0.0));
+    assert_eq!(max(r(f64::NAN), r(1.0)), r(1.0));
+    assert!(max(r(1.0), r(f64::NAN)).is_nan());
+    assert!(min(r(f64::NAN), r(1.0)).is_nan());
+    assert_eq!(min(r(1.0), r(f64::NAN)), r(1.0));
     assert_eq!(clamp(r(5.0), r(0.0), r(3.0)), r(3.0));
     assert_eq!(clamp(r(-1.0), r(0.0), r(3.0)), r(0.0));
     assert_eq!(clamp(r(2.0), r(0.0), r(3.0)), r(2.0));
@@ -149,17 +197,31 @@ fn gm_mod_keeps_dividend_sign() {
     assert_eq!(gm_mod(r(-7.0), r(3.0)), Ok(r(-1.0)));
     assert_eq!(gm_mod(r(7.0), r(-3.0)), Ok(r(1.0)));
     assert_eq!(gm_mod(r(-7.0), r(-3.0)), Ok(r(-1.0)));
-    assert_eq!(gm_mod(r(-6.0), r(3.0)), Ok(r(-0.0)));
     assert_eq!(gm_mod(r(5.5), r(2.0)), Ok(r(1.5)));
+    // An exact multiple gives +0.0, not fmod's -0.0.
+    assert_eq!(gm_mod(r(-6.0), r(3.0)), Ok(r(0.0)));
+    assert_eq!(gm_mod(r(-32.0), r(32.0)), Ok(r(0.0)));
+    assert_eq!(gm_mod(r(-0.0), r(3.0)), Ok(r(0.0)));
     assert_eq!(gm_mod(r(1.0), r(0.0)), Err(NumError::DivisionByZero));
     assert_eq!(gm_mod(r(1.0), r(-0.0)), Err(NumError::DivisionByZero));
 }
 
+/// `a - trunc(a / b) * b` with each step rounded, not exact fmod.
 #[test]
-fn gm_div_truncates_toward_zero() {
+fn gm_mod_is_the_rounded_formula_not_fmod() {
+    assert_eq!(gm_mod(r(1.0), r(0.1)), Ok(r(0.0)));
+    assert_eq!(libm::fmod(1.0, 0.1), 0.09999999999999995);
+    let big = r(1e17 + 16.0);
+    assert_eq!(gm_mod(big, r(3.0)), Ok(r(0.0)));
+    assert_eq!(libm::fmod(big.get(), 3.0), 2.0);
+}
+
+#[test]
+fn gm_div_floors() {
     assert_eq!(gm_div(r(7.0), r(2.0)), Ok(r(3.0)));
-    assert_eq!(gm_div(r(-7.0), r(2.0)), Ok(r(-3.0)));
-    assert_eq!(gm_div(r(7.0), r(-2.0)), Ok(r(-3.0)));
+    assert_eq!(gm_div(r(-7.0), r(2.0)), Ok(r(-4.0)));
+    assert_eq!(gm_div(r(7.0), r(-2.0)), Ok(r(-4.0)));
+    assert_eq!(gm_div(r(-33.0), r(32.0)), Ok(r(-2.0)));
     assert_eq!(gm_div(r(-7.0), r(-2.0)), Ok(r(3.0)));
     assert_eq!(gm_div(r(7.5), r(2.0)), Ok(r(3.0)));
     assert_eq!(gm_div(r(0.0), r(0.0)), Err(NumError::DivisionByZero));
@@ -177,17 +239,24 @@ fn gm_comparisons_use_epsilon() {
     assert!(!gm_gt(sum, r(0.3)));
     assert!(gm_ge(r(0.3), sum));
 
-    // The bound itself counts as equal; twice it does not.
-    assert!(gm_eq(r(0.0), r(EPSILON)));
-    assert!(!gm_eq(r(0.0), r(2.0 * EPSILON)));
-    assert!(gm_lt(r(0.0), r(2.0 * EPSILON)));
-    assert!(gm_gt(r(2.0 * EPSILON), r(0.0)));
-    assert!(!gm_le(r(2.0 * EPSILON), r(0.0)));
-    assert!(!gm_ge(r(0.0), r(2.0 * EPSILON)));
+    // The bound is exclusive: a difference of exactly EPSILON is not equal.
+    let (zero, eps) = (r(0.0), r(EPSILON));
+    assert!(!gm_eq(zero, eps) && gm_ne(zero, eps));
+    assert!(gm_lt(zero, eps) && gm_le(zero, eps));
+    assert!(!gm_gt(zero, eps) && !gm_ge(zero, eps));
+    assert!(gm_gt(eps, zero) && gm_ge(eps, zero));
+    assert!(!gm_lt(eps, zero) && !gm_le(eps, zero));
+    // Just inside the bound is equal.
+    let inside = r(0.99 * EPSILON);
+    assert!(gm_eq(zero, inside) && !gm_ne(zero, inside));
+    assert!(!gm_lt(zero, inside) && gm_le(zero, inside));
+    assert!(!gm_gt(inside, zero) && gm_ge(inside, zero));
 
+    // NaN: every comparison is false, != included.
     let nan = r(f64::NAN);
     assert!(!gm_eq(nan, nan));
-    assert!(gm_ne(nan, nan));
+    assert!(!gm_ne(nan, nan));
+    assert!(!gm_ne(nan, r(0.0)));
     assert!(!gm_lt(nan, r(0.0)) && !gm_le(nan, r(0.0)));
     assert!(!gm_gt(nan, r(0.0)) && !gm_ge(nan, r(0.0)));
 }
@@ -196,8 +265,9 @@ fn gm_comparisons_use_epsilon() {
 fn gm_bool_threshold() {
     assert!(!gm_bool(r(0.0)));
     assert!(!gm_bool(r(-1.0)));
-    assert!(!gm_bool(r(TRUTH_THRESHOLD)));
-    assert!(gm_bool(r(0.5000000000000001)));
+    assert!(!gm_bool(r(0.49999999999999994)));
+    assert!(gm_bool(r(TRUTH_THRESHOLD)));
+    assert!(gm_bool(r(0.5)));
     assert!(gm_bool(r(1.0)));
     assert!(!gm_bool(r(f64::NAN)));
 }
@@ -251,6 +321,8 @@ fn gravity_270_matches_trace_value() {
     assert_eq!(lengthdir_y(r(0.4), r(270.0)), r(0.4));
 }
 
+/// Regression guard: the table entries equal libm on the radian value, and dsin/dcos return
+/// them. Not a fidelity check (libm against libm); `crt_golden_bits` and the trace test are.
 #[test]
 fn table_entries_reproduce_f64_trig_of_the_radian() {
     for entry in TRIG_TABLE {
@@ -262,7 +334,10 @@ fn table_entries_reproduce_f64_trig_of_the_radian() {
     }
 }
 
-/// Property-style: for many angles not in the table, dsin/dcos are exactly libm on degtorad.
+/// Property-style regression guard for `lookup`: for many angles not in the table, dsin/dcos
+/// are exactly libm on degtorad. Off the table that is the implementation itself, so this only
+/// fails if `lookup` wrongly matches a non-table angle. It says nothing about fidelity; see
+/// `crt_golden_bits`.
 #[test]
 fn dsin_dcos_match_libm_off_table() {
     let in_table = |d: Real| TRIG_TABLE.iter().any(|e| e.degrees == d);
@@ -291,6 +366,54 @@ fn dsin_dcos_match_libm_off_table() {
         state ^= state << 17;
         let unit = (state >> 11) as f64 / (1u64 << 53) as f64;
         check(r(unit * 20_000.0 - 10_000.0));
+    }
+}
+
+/// Independent oracle for off-table angles: `sin` and `cos` of `degrees * DEG_TO_RAD` from the
+/// Windows x64 UCRT, which the trace recorder (OpenGMK) calls. Measured 2026-10-24 on the
+/// research machine with a black-boxed Rust std `f64::sin`/`f64::cos` (x86_64-pc-windows-msvc,
+/// rustc 1.99.1), bit patterns below. UCRT may pick a different code path on another CPU.
+///
+/// Over every quarter degree in `[0, 360]`, UCRT and libm 0.2.16 differ by one ulp at 58 angles
+/// (whole degrees: 34, 45, 53, 63, 113, 137, 207, 220, 224, 239, 284, 342, 351).
+const CRT_AGREES_WITH_LIBM: [(f64, u64, u64); 7] = [
+    (1.0, 0x3F91_DF0B_2B89_DD1E, 0x3FEF_FEC0_97F5_AF8A),
+    (10.0, 0x3FC6_3A1A_7E0B_7389, 0x3FEF_838B_8C81_1C17),
+    (30.0, 0x3FDF_FFFF_FFFF_FFFF, 0x3FEB_B67A_E858_4CAB),
+    (60.0, 0x3FEB_B67A_E858_4CAA, 0x3FE0_0000_0000_0001),
+    (135.0, 0x3FE6_A09E_667F_3BCD, 0xBFE6_A09E_667F_3BCC),
+    (200.75, 0xBFD6_ACB4_515D_D44D, 0xBFED_ECA0_ACDE_1092),
+    (1000.0, 0xBFEF_838B_8C81_1C16, 0x3FC6_3A1A_7E0B_73AA),
+];
+
+/// UCRT values (same source as [`CRT_AGREES_WITH_LIBM`]) where libm is one ulp off.
+const CRT_DIFFERS_FROM_LIBM: [(f64, u64, u64); 4] = [
+    (34.0, 0x3FE1_E4E8_8411_FD13, 0x3FEA_8779_CDA8_EEA5),
+    (45.0, 0x3FE6_A09E_667F_3BCD, 0x3FE6_A09E_667F_3BCD),
+    (53.0, 0x3FE9_8E6C_0EA2_7A14, 0x3FE3_4211_9455_BEB7),
+    (63.0, 0x3FEC_8320_1D3D_2C6C, 0x3FDD_0E2E_2B44_DE01),
+];
+
+/// dsin/dcos against the UCRT oracle. Where they agree the bits must match. Where they differ
+/// the gap is pinned at one ulp in one of sin or cos.
+///
+/// OPEN (docs/architecture.md, "Trig fidelity"): the sim uses libm here, so on these angles it
+/// differs from the trace recorder by one ulp. Whether to follow UCRT, libm or x87 is for the
+/// CLONE_SPEC and the Phase 2 cross-check; if the answer is UCRT, these angles move into the
+/// table and this test moves them to the first list.
+#[test]
+fn crt_golden_bits() {
+    for (degrees, sin_bits, cos_bits) in CRT_AGREES_WITH_LIBM {
+        assert_eq!(dsin(r(degrees)), Real::from_bits(sin_bits), "dsin {degrees}");
+        assert_eq!(dcos(r(degrees)), Real::from_bits(cos_bits), "dcos {degrees}");
+    }
+    let ulps = |a: Real, b: u64| a.to_bits().abs_diff(b);
+    for (degrees, sin_bits, cos_bits) in CRT_DIFFERS_FROM_LIBM {
+        let gaps = (ulps(dsin(r(degrees)), sin_bits), ulps(dcos(r(degrees)), cos_bits));
+        assert!(
+            gaps == (1, 0) || gaps == (0, 1),
+            "{degrees} degrees: expected a one-ulp gap to UCRT, got {gaps:?}"
+        );
     }
 }
 
