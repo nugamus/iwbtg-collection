@@ -1249,6 +1249,7 @@ mod tests {
     }
 
     /// Every `.csv` under every engine's research traces folder, sorted, with its text.
+    #[allow(clippy::disallowed_methods, reason = "test-only: reads research trace files")]
     fn research_csvs() -> Vec<(std::path::PathBuf, String)> {
         let Some(dirs) = research_trace_dirs() else {
             eprintln!("IWBTG_RESEARCH is not set; skipping research trace tests");

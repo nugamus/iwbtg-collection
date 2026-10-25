@@ -9,10 +9,12 @@
 //! - [`round`](mod@round): banker's rounding, integer conversion, `frac`, `sign`, `min`/`max`,
 //!   GML `mod`/`div`.
 //! - [`compare`]: GM8 epsilon comparisons and truthiness.
+//! - [`conv`]: rule-dependent conversions (alarms, save bytes, `string()`), declared by WP0.
 //! - [`math`]: software `sin`, `cos`, `tan`, `atan2`, `sqrt`, `pow`, `exp`, `ln`.
 //! - [`trig`]: degree helpers, the exact-bits trig table, `point_direction` and friends.
 
 pub mod compare;
+pub mod conv;
 pub mod math;
 pub mod round;
 pub mod trig;
@@ -27,6 +29,7 @@ use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAss
 use serde::{Deserialize, Serialize, Serializer};
 
 pub use compare::{EPSILON, TRUTH_THRESHOLD, gm_bool, gm_eq, gm_ge, gm_gt, gm_le, gm_lt, gm_ne};
+pub use conv::{alarm_from_real, byte_from_real, gm_string_real};
 pub use math::{atan2, cos, exp, ln, pow, sin, sqrt, tan};
 pub use round::{
     abs, ceil, clamp, floor, frac, gm_div, gm_mod, lerp, max, min, round, sign, to_int_round, to_int_trunc,

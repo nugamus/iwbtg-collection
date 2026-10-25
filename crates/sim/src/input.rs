@@ -16,7 +16,11 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-/// One client action. Each is one bit of a `u16`; the top four bits are reserved.
+/// One client action. Each is one bit of a `u16`; the top bit is reserved.
+///
+/// `Pause`, `Mute` and `Reset` are the engines' P, Ctrl+M and F2 (docs/plans/sim-core.md 2.4):
+/// they change sim state in the originals, so they are sim input. Quitting (Escape, Alt+F4) is
+/// client-only and never an action.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u16)]
 pub enum Action {
@@ -32,11 +36,17 @@ pub enum Action {
     Accept = 1 << 9,
     Back = 1 << 10,
     Menu = 1 << 11,
+    /// P: pause (kaenbyou jump block, B and xia pause, showdown keyboard_wait).
+    Pause = 1 << 12,
+    /// Ctrl+M: flips the game's music flag, which changes `sound_stop_all` calls.
+    Mute = 1 << 13,
+    /// F2: game reset (delete the temp save marker and restart, or the engine's gameReset).
+    Reset = 1 << 14,
 }
 
 impl Action {
     /// Every action, in bit order.
-    pub const ALL: [Action; 12] = [
+    pub const ALL: [Action; 15] = [
         Action::Left,
         Action::Right,
         Action::Up,
@@ -49,10 +59,13 @@ impl Action {
         Action::Accept,
         Action::Back,
         Action::Menu,
+        Action::Pause,
+        Action::Mute,
+        Action::Reset,
     ];
 
     /// Bits used by actions. Anything outside is reserved for future actions.
-    pub const MASK: u16 = 0x0fff;
+    pub const MASK: u16 = 0x7fff;
 
     /// The action's bit in `InputFrame` fields.
     pub const fn bit(self) -> u16 {
@@ -74,6 +87,9 @@ impl Action {
             Action::Accept => "accept",
             Action::Back => "back",
             Action::Menu => "menu",
+            Action::Pause => "pause",
+            Action::Mute => "mute",
+            Action::Reset => "reset",
         }
     }
 
@@ -600,6 +616,40 @@ mod tests {
     }
 
     #[test]
+    fn pause_mute_and_reset_parse_in_action_files() {
+        let p = parse_actions(
+            "frame 1: press pause\nframes 2-3: hold mute reset\nframe 4: release pause\nframe 5: end",
+        );
+        let (pause, mute, reset) = (Action::Pause.bit(), Action::Mute.bit(), Action::Reset.bit());
+        assert_eq!((pause, mute, reset), (1 << 12, 1 << 13, 1 << 14));
+        assert_eq!(
+            p.frames[1],
+            InputFrame {
+                held: pause,
+                pressed: pause,
+                released: 0
+            }
+        );
+        assert_eq!(
+            p.frames[2],
+            InputFrame {
+                held: pause | mute | reset,
+                pressed: mute | reset,
+                released: 0
+            }
+        );
+        assert_eq!(
+            p.frames[4],
+            InputFrame {
+                held: 0,
+                pressed: 0,
+                released: pause | mute | reset
+            }
+        );
+        assert_eq!(p.frames[5], InputFrame::EMPTY);
+    }
+
+    #[test]
     fn from_held_derives_edges() {
         let l = Action::Left.bit();
         let f = InputFrame::from_held(J | l, J | Action::Right.bit());
@@ -860,6 +910,7 @@ mod tests {
     }
 
     /// Reads a research trace input file. `None` when IWBTG_RESEARCH is unset, so the test skips.
+    #[allow(clippy::disallowed_methods, reason = "test-only: reads research trace files")]
     fn research_inputs(game: &str, case: &str) -> Option<String> {
         // Test-only: the sim itself reads no environment or files.
         let root = std::env::var_os("IWBTG_RESEARCH")?;

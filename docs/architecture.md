@@ -48,30 +48,44 @@ One binary for agents and CI:
 
 ## Sim module layout
 
+The layout and the owner of each file come from the [sim core plan](plans/sim-core.md) (section 13). WP0 created every file with its final public signatures.
+
 ```
 crates/sim/src/
-  lib.rs          Sim, SimStatus, StepResult, SIM_VERSION
-  num/            Real newtype, GM8 rounding and comparisons, soft math on libm, x87 trig table
-  rng.rs          GM8-compatible random generator
-  input.rs        Action, InputFrame
-  def/            Immutable game definition (GameDef) built by crates/format
-  world/          Instance store, per-rank order lists, room state, globals, save slot
-  motion.rs       GM8 speed, direction, friction and gravity model
-  collide/        Masks, bounding boxes, broadphase grid, place_meeting and friends
-  kid/            Kid state, physics profile, the three rule sets (classic, max_jumps, obj_player)
-  builtins/       One file per built-in kind (block.rs, spike.rs, save.rs, ...)
-  events.rs       Event dispatch in (rank, instance id) order
+  lib.rs          Module list, crate lints, SIM_VERSION
+  sim.rs          Sim, SimOptions { start, seed, dll_mode }, StepResult
+  error.rs        SimError: NonFinite, Overflow, Unsupported, Script
+  num/            Real newtype, GM8 rounding and comparisons, soft math on libm, trig table
+  rng.rs          GM8-compatible random generator (the only randomness)
+  input.rs        Action, InputFrame, .inputs parser, KeyMap
+  input_state.rs  This tick's frame and the keyboard_check_direct latch
+  def/            Immutable game definition (GameDef) built by crates/format; GameDefBuilder
+  rules/          RunnerRules: every UNKNOWN/Inferred rule as a switch (tick, motion, collide, room, num, sound)
+  world/          World, Instance, the Vec instance store, Ctx (spawn, destroy, request_room, emit)
+  events.rs       EventKind, EventSet, dispatch order, phases, collision phase
   tick.rs         The tick pipeline
+  alarm.rs        Alarm countdown
+  anim.rs         Image variables and the animation update
   timeline.rs     Timeline moments
-  room.rs         Room load, transitions, persistent instances
-  trigger.rs      Built-in trigger actions (data-driven traps)
-  script/         ScriptHost trait, the Rhai host (iws_engine), API registration, budget
+  motion.rs       GM8 speed, direction, friction and gravity model
+  path.rs         Path following
+  collide/        Placed masks, overlap, queries, contact moves, solid put-back, broadphase grid
+  room.rs         Room change sequence, StartPoint, start_game
+  restart.rs      Restart (R) and reset (F2) models
+  save.rs         Save slot and saved-position quantization
+  view.rs         Views and runner view follow
+  run_globals.rs  Difficulty, deaths, time, clear flag
+  kid/            Kid built-in: state, api for other built-ins, presets, actions, collision runs
+  builtins/       One file per built-in kind (block.rs, spike.rs, save.rs, ...)
+  sound.rs        Sound model (is a sound playing) and DLL adapters (sound/)
+  script/         ScriptHost trait, the Rhai host, API registration, budget, validator
   timing.rs       Start, end and stage triggers, splits
   output.rs       Audio and visual event queue for the client
+  probe.rs        Read-only trace sampling and the GM name registry (probe/)
+  setup.rs        Trace setup actions (feature "trace-setup", never in the server)
   replay.rs       Replay file encode and decode
-  trace.rs        Trace rows for comparison with the originals
+  trace.rs        Trace CSV parse, write and bit-exact diff
   hash.rs         Canonical state hash
-  error.rs        SimError
 ```
 
 Each built-in is implemented once in `builtins/<kind>.rs` and documented once in `docs/format/builtins/<kind>.md`: parameters, behavior, which event phase it runs in, which games use it, and the CLONE_SPEC section it comes from.
@@ -80,8 +94,10 @@ Each built-in is implemented once in `builtins/<kind>.rs` and documented once in
 
 Purity is enforced by tools, not by review. An agent that breaks a rule gets a build error, not a silent desync.
 
-- `crates/sim/clippy.toml`, `disallowed-methods`: `f64::{sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, exp, exp2, exp_m1, ln, ln_1p, log, log2, log10, powf, powi, cbrt, hypot, mul_add, round}`, `std::time::*`, `std::env::*`, `std::fs::*`, `std::thread::spawn`.
-- `disallowed-types`: `std::collections::{HashMap, HashSet}`, `std::time::{Instant, SystemTime}`, `f32`.
+- `crates/sim/clippy.toml`, `disallowed-methods`: `f64::{sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, exp, exp2, exp_m1, ln, ln_1p, log, log2, log10, powf, powi, cbrt, hypot, mul_add, round}`; `f64::{min, max}` (signed-zero result unspecified, lowered differently on x86 and WASM), `f64::clamp` (panics on NaN), `f64::{to_degrees, to_radians}`; `std::fs::{read, write, read_to_string, read_dir}`, `std::fs::File::{open, create}`, `std::io::stdin`, `std::process::exit`, `std::env::var`, `std::thread::spawn`.
+- `disallowed-types`: `std::collections::{HashMap, HashSet}`, `std::time::{Instant, SystemTime}`, `f32`, `std::fs::{File, OpenOptions}`, `std::net::{TcpStream, TcpListener, UdpSocket}`, `std::process::Command`, `std::hash::{DefaultHasher, RandomState}`.
+- `lib.rs` denies `clippy::print_stdout`, `clippy::print_stderr`, `clippy::float_cmp` (raw `==` on reals; built-ins compare through `num::gm_*`) and `clippy::cast_possible_truncation`. Test-only file reads carry a scoped `#[allow]` with a reason.
+- Integer counters (`tick`, `room_tick`, `next_id`, deaths, time, grid cells) use `checked_*` and halt with `SimError::Overflow`; the RNG wraps by definition. `[profile.release] overflow-checks = true`, so debug tests and release servers behave the same.
 - `usize` never appears in serialized or hashed state (wasm32 has a 32-bit `usize`).
 - `cargo deny check bans` keeps `rand`, `getrandom`, `tokio`, `bevy` and `glam` out of the sim's dependency graph. `cargo deny check licenses` keeps GPL code out of the whole workspace.
 - CI runs `cargo clippy -D warnings` on every target.
@@ -121,7 +137,7 @@ enum KindState {
 }
 ```
 
-The kind list above is a starting point. The real list comes from `research/specs/mechanics.md` (**OPEN**).
+The sketch above is the original idea. The declared types are in `crates/sim/src/world/instance.rs` and `def/builtin.rs` ([plan](plans/sim-core.md) 1.1, 1.5, 6.1): per-owner `KindState` parts (kid, built-in, script, probe), `ClassMask` collision classes instead of parent objects, alarms as reals, and the built-in list from `research/specs/mechanics.md`.
 
 - **Storage.** Instances live in a `Vec<Instance>` in creation order, so it is sorted by id. Lookup by id is a binary search. Each rank keeps a `Vec<InstId>` in creation order, for event dispatch.
 - **Creation and destruction.** New instances are appended. Destroy sets `alive = false`. A dead instance runs no further events. The sweep at the end of the tick removes dead instances with `retain`, which keeps order. (GM8 removes destroyed instances after the event that destroyed them; exact timing **OPEN**, from the CLONE_SPEC.)
@@ -133,34 +149,39 @@ The kind list above is a starting point. The real list comes from `research/spec
 
 ## Tick pipeline
 
-`Sim::step(InputFrame) -> StepResult` runs one tick. Steps marked **[GM8]** mirror GameMaker 8's frame order. The order below follows the GM8 frame loop as OpenGMK's emulator documents it (research reference only, GPL-2.0, never copied). **The exact order, and every detail inside each step, will come from `research/specs/engines/gm8/CLONE_SPEC.md`**, and traces of the originals confirm it. If the spec disagrees with this list, the spec wins and this page gets updated.
+`Sim::step(InputFrame) -> StepResult` runs one tick (`tick::run_tick`). The order follows `research/specs/engines/gm8/CLONE_SPEC.md` ("tick loop", "motion", "sprites and animation", "input"); the [sim core plan](plans/sim-core.md) section 2.1 is the detailed version. Phase placement that the spec marks Inferred or UNKNOWN is a field of `TickRules` (register ids in plan section 15), never an `if` scattered in built-ins. If the spec changes, the rule changes in that one field.
 
-| # | Step | GM8 | Notes |
+| # | Phase | Status | Isolation |
 |---|---|---|---|
-| 0 | Latch the input frame for this tick | | Held, pressed and released bits come from the replay. A tap shorter than one tick arrives as pressed and released in the same tick. |
-| 1 | `xprevious = x`, `yprevious = y` for every instance | **[GM8]** | |
-| 2 | Begin Step events | **[GM8]** | |
-| 3 | Timelines advance and fire moments | **[GM8]** | |
-| 4 | Alarms count down and fire at 0 | **[GM8]** | |
-| 5 | Keyboard events: press, held, release | **[GM8]** | The kid's jump and jump release run here or in Step, as its rule set says (`input_phase` in the physics profile). |
-| 6 | Step events: built-ins and scripts | **[GM8]** | |
-| 7 | Motion: friction, then gravity along `gravity_direction`, then `x += hspeed`, `y += vspeed`, then paths | **[GM8]** | Order inside this step from the CLONE_SPEC. |
-| 8 | Outside-room and boundary events | **[GM8]** | The kid dies outside the room, depending on the engine. |
-| 9 | Collision events | **[GM8]** | For each rank with collision handlers, each instance in order, each target rank, each target in order. Pairs are re-tested right before each event, because an earlier event may have moved them. Solid-instance handling (revert to previous position, run the event, reapply speeds) per the CLONE_SPEC. The kid's block collision (step 1 px at a time to contact, side snap, diagonal case, djump restore) runs here. |
-| 10 | End Step events | **[GM8]** | Some engines check killers here. |
-| 11 | `late()` script events | **[GM8]** position of Draw | Draw itself is not in the sim. `late()` exists for gameplay state that originals changed in Draw. |
-| 12 | Animation: `image_index += image_speed`, animation-end events | **[GM8]** | Stays in the sim, because `image_index` can change a precise mask. Exact position relative to Draw **OPEN**. |
-| 13 | Destroy sweep | | |
-| 14 | Room change, if one was requested: room end events, keep persistent instances, create the new room's instances in file order, creation code, room start events | **[GM8]** | Whether the rest of the tick is skipped after a mid-tick request **OPEN** (OpenGMK suggests it is). |
-| 15 | `tick += 1`. Timing triggers record splits as (stage, tick) | | |
-| 16 | State-hash checkpoint every 500 ticks when recording or verifying | | |
+| 0 | Latch input: build held/pressed/released for the tick; `direct_latch |= pressed` per key | Inferred (sample once before Begin Step) | `InputState::latch` |
+| 1 | Capture `xprevious/yprevious` if `prev_capture = TickStart` | UNKNOWN U1 (R1) | `TickRules::prev_capture` |
+| 2 | Begin Step | Confirmed order | |
+| 3 | Timelines advance, moments run | UNKNOWN U6 (R6) | `TickRules::timeline_slot = AfterBeginStep` (Design) |
+| 4 | Alarms: for each alarm the object handles, if value > 0 subtract 1, if now 0 fire | Confirmed order; rule Inferred (R3) | `alarm::tick` |
+| 5 | Keyboard events: held, then press, then release (keys in action-bit order) | Confirmed slot; inner order UNKNOWN U11 (R4) | `events::key_event_order()` |
+| 6 | Mouse events | Confirmed slot; no gameplay use in the 20 games | no-op phase kept for order |
+| 7 | Step | Confirmed | |
+| 8 | Motion for every instance: (capture prev if `BeforeMotion`), friction, gravity vector, path, `x += hspeed`, `y += vspeed`, polar recompute | Slot Confirmed; inner order Inferred | `motion::apply_auto_motion` |
+| 8b | Animation if `anim_slot = AfterMotion` | Inferred, sprites section (Conflict with row 13, R7) | `anim::advance` |
+| 9 | Outside Room, Intersect Boundary | Inferred slot (U4, R5) | `TickRules::boundary_slot` |
+| 10 | Collision events with the solid put-back rule | Confirmed (manual); pairing Inferred/UNKNOWN (C7, C7b, C8, C9, R12) | `events::collision_phase`, `collide::solid_resolve` |
+| 11 | End Step | Confirmed | |
+| 12 | Draw slot (`Late` handlers): instances in draw order (depth descending, then creation), visible instances only | Confirmed; Draw changes state, so it runs headless too (R15) | `events::run_draw_phase` |
+| 13 | Animation if `anim_slot = AfterDraw`: `image_index += image_speed`, wrap, Animation End | Inferred (Conflict with row 8b, R7); wrap `>=` and subtract once: Trace t-anim-1 | `anim::advance` |
+| 14 | Destroy sweep | Design (manual: removed at end of step) | `World::sweep` |
+| 15 | Room change if requested | Confirmed sequence; abort rule Inferred (R8) | `room::perform_change` |
+| 16 | `tick += 1` (checked), timing triggers, checkpoint hash every 500 ticks | Design | `tick.rs`, `timing.rs`, `hash.rs` |
+
+The trace recorder samples after row 13 and before row 15. The previous version of this table (xprevious at tick start, timelines before alarms, no Draw slot) is replaced by this one.
 
 Rules that apply to every step:
 
-- **Dispatch order.** Within an event, kinds run in `object_order` rank, and instances of a kind run in creation order. This reproduces GM8's "object index, then instance" order. GM 8.0 and 8.1 may differ (`runner = "gm80" | "gm81"` in the manifest, **OPEN**).
-- **Immediate mutation.** Built-ins and scripts change the world immediately, as GML does. Nothing is staged.
-- **Room speed.** `room_speed` is sim state. The client runs steps at that rate with its own accumulator (not Bevy's `Time<Fixed>`, because the rate can change per room). Timing counts ticks. Displayed real time is the sum of `1 / room_speed` over the ticks.
-- **Halting.** On a script error, the sim stops in `SimStatus::Halted` with the world frozen where it stopped.
+- **Dispatch order.** `events::dispatch_order` decides it (R2). Default: `object_order` rank, then creation order (Inferred); alternatives `Creation` and `DepthThenRankThenCreation`. Each phase snapshots the order once at its start; instances created during the phase join the later phases of the tick (R9). "The first instance" of a query, the kid, view follow and saveGame always comes from `World::first_of` (R21).
+- **Room change requests.** `room_goto`, `room_restart`, `game_restart` and `game_end` set one pending request (last wins, R13); the requesting handler finishes, then no further events run this tick (R8, `TickRules::room_request`).
+- **Immediate mutation.** Built-ins and scripts change the world immediately, as GML does. Create runs inside `spawn`; Destroy runs inside `destroy`.
+- **Room speed.** `room_speed` is sim state: the room file's speed on entry, 50 after the world's Room Start (R14). The client runs steps at that rate with its own accumulator (not Bevy's `Time<Fixed>`, because the rate can change per room). Timing counts ticks. Displayed real time is the sum of `1 / room_speed` over the ticks.
+- **GM 8.0 and 8.1.** `RunnerRules::for_runner(runner, engine_rev)` returns the same rules for both until a trace shows a difference (U12, R11); any difference becomes a field, never a branch in built-ins.
+- **Halting.** A script error, a non-finite value, an overflow or an unsupported case sets `SimStatus::Halted(SimError)` and freezes the world where it stopped. The sim never panics on any input (wasm32-unknown-unknown aborts on panic).
 
 ## Number handling
 
@@ -177,7 +198,8 @@ GM8 reals are IEEE binary64 doubles. Our sim uses f64 for every real.
   - **OPEN:** whether the real runner gives the same bits as OpenGMK. Settled by a Phase 2 cross-check through the research gate. Scripts use plain libm trig, because bullets do not need x87 parity.
 - **x87 fallback.** If traces show that GM8's extended-precision intermediates matter, the affected built-in formulas switch to `rustc_apfloat` X87DoubleExtended (pure Rust, the same on every platform) behind the same `Real` API, selected by `float_model = "x87_ext"` in the physics profile. Evidence so far says plain f64 is enough: OpenGMK dropped its x87 code in 2021 and still syncs TASes. **OPEN** until our own traces confirm it.
 - **Literals.** Constants in Rust are decimal literals, which Rust rounds correctly, or `from_bits` when a trace demands it. Data files may write `{ bits = "..." }` for the same reason (Delphi may parse GML literals through extended precision).
-- **NaN and infinity.** Setters reject non-finite values. The state hash maps every NaN to one bit pattern.
+- **Rules, not constants.** Every number rule with OpenGMK provenance or an open spec status (compare epsilon, truthiness, `sign`, `min`/`max` ties, signed zeros, alarm and byte conversions, `string()` rounding, float model) is a field of `NumRules` in `RunnerRules`, never a `const`, so a rule settled later becomes a new `engine_rev` (plan section 3.2).
+- **NaN and infinity** (plan 10.2, N15). `Real`'s `Eq` compares raw bits, and NaN payloads and signs differ between x86_64, wasmtime and browser engines. So every `Motion`, `Image`, alarm, view and variable setter, called from a built-in or a script, rejects a non-finite value with `SimError::NonFinite`, which halts the sim. Intermediate non-finite values inside one `num` function are allowed only if the function's result is finite. The state hash also maps every NaN to one bit pattern.
 - **Motion coupling.** As in GM8, setting `hspeed` or `vspeed` recomputes `speed` and `direction`, and setting `speed` or `direction` recomputes `hspeed` and `vspeed`. The trace shows this: `speed = 7.347880794884119e-17`, `direction = 180` once vspeed is 0. Details (the 0.0001 snap, direction wrap) come from the CLONE_SPEC.
 
 ## Collision
@@ -250,14 +272,15 @@ This is the starting surface. The generated reference is `docs/format/script-api
 - One gameplay generator in `sim::rng`, compatible with GM8's Delphi-style 32-bit LCG, so rooms that use `random()` can match the original's traces. Constants and the float derivation come from the CLONE_SPEC (OpenGMK uses multiplier 0x08088405, increment 1, step 2^-32; **OPEN** until confirmed).
 - The seed is in the replay header. It is the only randomness in the sim.
 - Each built-in documents how many random draws it consumes, so the stream stays aligned with the original.
-- Cosmetic randomness (blood, particles that do not affect gameplay) lives in the client with its own generator.
+- **Hidden consumers draw in the sim.** In the originals, blood picks its frame and gravity with `choose` and `random`, and playerface draws `irandom(3)`, from the gameplay generator (CLONE_SPEC numbers, Confirmed). So the blood emitter, blood and playerface built-ins make those draws in the sim, in the original's order (blood Create draws subimage then gravity inside `spawn`, then the emitter draws direction and speed), and send the drawn values to the client as output events. Only drawing stays in the client.
+- Particle systems: whether they draw from the gameplay generator is UNKNOWN (N10, `NumRules::particles_draw_rng`, default false as a placeholder). Until a trace shows otherwise, particle effects are client output only.
 - **OPEN (user decision, Phase 8):** how ranked runs get their seed: random per run as in the originals, a fixed seed per game, or a server-issued seed. The server can flag reused seeds either way.
 
 ## Input and replay format
 
 ### Actions and input frames
 
-- Actions: `left`, `right`, `up`, `down`, `jump`, `shoot`, `restart`, `suicide`, `skip`, `accept`, `back`, `menu`, plus reserved bits. One `u16` bit each.
+- Actions: `left`, `right`, `up`, `down`, `jump`, `shoot`, `restart`, `suicide`, `skip`, `accept`, `back`, `menu`, `pause` (P), `mute` (Ctrl+M), `reset` (F2), plus one reserved bit. One `u16` bit each. Pause, mute and reset change sim state in the originals (kaenbyou's jump ignores a press while P is pressed, mute changes `sound_stop_all` calls, F2 restarts the game), so they are sim input. Quitting (Escape, Alt+F4) stays client-only.
 - `InputFrame { held: u16, pressed: u16, released: u16 }`, one per tick. The edge bits keep sub-tick taps: GM8 sees a press and a release inside one frame as both events in the same step, which gives a different jump than holding for one tick.
 - The client collects raw OS input events between ticks into these bits. Games map actions, never raw keys.
 - Each kid rule set defines how it reads the bits (for example YoYoYo versions differ on sub-frame taps).
@@ -298,9 +321,20 @@ The server decodes the replay, checks bounds (ticks at most the game's `max_tick
 
 ## State hash
 
-- BLAKE3 over a canonical little-endian walk of the world: tick, room, room speed, RNG state, instances in id order with every field (`Real` as `to_bits`, NaN canonicalized), custom variables in `BTreeMap` order, globals, flags, save slot, timeline and alarm state.
-- No `usize`, no pointers, no hash-map order. The script log and the output queue are not hashed.
+- `hash::state_hash(&World) -> [u8; 32]` is BLAKE3 over the **postcard** encoding of a canonical `HashView` struct borrowed from `World`: every hashed field in a fixed order (tick, room, room speed, RNG state, instances in id order with every field, custom variables and globals in `BTreeMap` order, engine globals, views, pending request, persistent rooms, save slot, sound state, status, `setup_applied`). `Real` serializes its canonical bits, so every NaN hashes the same.
+- Postcard writes lengths as varints, so wasm32 and x86_64 give the same bytes. `std::hash::Hash` and its hashers are never used for state hashing: slices write their length with `write_usize` (4 bytes on wasm32, 8 on x86_64), and `DefaultHasher`/`RandomState` are unspecified across Rust versions (both are banned in the sim).
+- No `usize` in hashed state, no pointers, no hash-map order. The output queue and the broadphase grid are not hashed.
+- `setup_applied` is hashed, so a trace run that used setup actions can never match a clean verification.
 - Checkpoints store the first 16 bytes.
+
+## Sound model
+
+Audio output is the client's job, but whether a sound **is playing** is sim state: `sound_isplaying` changes game state in 15 of the 20 games (CLONE_SPEC sound, Inferred), and DLL getters decide fader object lifetimes in four. So `sim::sound` keeps a model ([plan](plans/sim-core.md) section 7):
+
+- Playing copies start at the call's tick and end after the sound's `length_ticks` (song length times tick rate, from the package). At most one MULTIMEDIA copy. `sound_isplaying` latency and the second MULTIMEDIA start are UNKNOWN switches in `SoundRules` (S1-S3); game_restart keeps sounds (Inferred, S4).
+- SuperSound (kaenbyou, eat-the-lemon) and GMFMODSimple (go-the-spook-house, xia) are adapters whose getters return the last value set (S5). `SimOptions::dll_mode = Stub` reproduces the recorder's `--stub-dlls` traces; `Model` is for play and replays.
+- The `mute` action flips the game's music flag through the world built-in; music objects then call `stop_all`, which is sim state.
+- The state is hashed. The client receives `SoundOutput` events to play, stop and fade; nothing is read back from audio.
 
 ## Comparing traces with the original
 
@@ -346,6 +380,8 @@ gravity,gravity_direction,friction,image_index,sprite_index,sprite_name,<game va
 The roadmap Phase 3 check is the trace-test row plus the cross-platform row: the Phase 2 inputs reproduce the original traces exactly on Windows, WASM and Linux x86_64.
 
 ## Open items
+
+Every GM rule the sim needs that the spec marks UNKNOWN, Inferred or Conflict is tracked with its switch, default and settling trace in the [plan's register](plans/sim-core.md#15-unknown-and-inferred-register). The items below are the broad ones.
 
 - **OPEN:** exact GM8 event order, collision handling for solid instances, destroy timing, room-change timing and 8.0 versus 8.1 differences. Source: `research/specs/engines/gm8/CLONE_SPEC.md`.
 - **OPEN:** comparison epsilon, truthiness boundary, rounding and conversion rules, motion coupling details. Source: the same spec.

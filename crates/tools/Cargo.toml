@@ -12,8 +12,9 @@ name = "iwbtg"
 path = "src/main.rs"
 
 [dependencies]
-iwbtg-sim.workspace = true
+iwbtg-sim = { workspace = true, features = ["trace-setup"] }
 iwbtg-format.workspace = true
+thiserror.workspace = true
 clap.workspace = true
 
 [lints]

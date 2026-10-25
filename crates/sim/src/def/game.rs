@@ -1,0 +1,219 @@
+//! The immutable game definition (docs/plans/sim-core.md 1.4, 4.3, 8.1).
+//!
+//! `crates/format` builds a [`GameDef`] from a package; tests build one with
+//! [`GameDefBuilder`](super::testing::GameDefBuilder). The sim never changes it. WP0 declares;
+//! WP7a owns afterwards (WP4b owns the behavior of [`RestartModel`] and [`ResetModel`]).
+
+use std::collections::BTreeMap;
+
+use super::ids::{KindId, MaskId, RoomId, SpriteId, VarId};
+use super::kind::{KindDef, RankTable, VariantSel};
+use super::path::PathDef;
+use super::physics::PhysicsProfile;
+use super::room::{RoleSet, RoomDef};
+use super::sound::SoundDef;
+use super::sprite::{Mask, SpriteDef};
+use super::timeline::TimelineDef;
+use crate::num::Real;
+use crate::rules::Runner;
+use crate::rules::num::FloatModel;
+use crate::timing::TimingDef;
+
+/// Everything the sim needs to run one game.
+#[derive(Clone, PartialEq, Debug)]
+pub struct GameDef {
+    /// Package id.
+    pub id: String,
+    /// Ticks per second of the original (`room_speed` of play rooms, usually 50).
+    pub tick_rate: u32,
+    /// Hard limit on a run's ticks, from `game.toml`.
+    pub max_ticks: u64,
+    /// The original runner.
+    pub runner: Runner,
+    /// Built-in behavior revision the package was verified against.
+    pub engine_rev: u16,
+    /// Runner FPU model, from `game.toml [engine]` (N3); copied into `NumRules::float_model`.
+    pub float_model: FloatModel,
+    /// GM "treat uninitialized variables as 0" (19 games on, keep-celebrating-for-xia off).
+    pub uninit_reads_zero: bool,
+    /// Sprites.
+    pub sprites: Vec<SpriteDef>,
+    /// Masks, referenced by sprites and kinds.
+    pub masks: Vec<Mask>,
+    /// Kinds.
+    pub kinds: Vec<KindDef>,
+    /// Rooms.
+    pub rooms: Vec<RoomDef>,
+    /// The game's first room as the package names it (title art for game select).
+    pub start_room: RoomId,
+    /// Where a new game starts (`StartPoint::NewGame`, CR7).
+    pub new_game_room: RoomId,
+    /// Persistent instances `room::start_game` creates before the first room (the `world`
+    /// built-in stands in for rInit).
+    pub boot: Vec<KindId>,
+    /// Dispatch ranks from `object_order`.
+    pub ranks: RankTable,
+    /// Kinds the sim spawns by role.
+    pub engine_kinds: BTreeMap<EngineKind, KindId>,
+    /// Variable names known at load, ids assigned from the sorted list (plan 1.1).
+    pub var_names: BTreeMap<String, VarId>,
+    /// Instance names (`NameId` index).
+    pub names: Vec<String>,
+    /// Instance groups (`GroupId` index).
+    pub groups: Vec<String>,
+    /// The kid's physics profile.
+    pub physics: PhysicsProfile,
+    /// The retry path (R key).
+    pub restart: RestartModel,
+    /// The reset path (F2).
+    pub reset: ResetModel,
+    /// Sounds.
+    pub sounds: Vec<SoundDef>,
+    /// Timelines.
+    pub timelines: Vec<TimelineDef>,
+    /// Paths.
+    pub paths: Vec<PathDef>,
+    /// Timing triggers (`[timing]`).
+    pub timing: TimingDef,
+}
+
+impl GameDef {
+    /// The kind with this id.
+    pub fn kind(&self, id: KindId) -> Option<&KindDef> {
+        self.kinds.get(id.index()?)
+    }
+
+    /// The room with this id.
+    pub fn room(&self, id: RoomId) -> Option<&RoomDef> {
+        self.rooms.get(id.index()?)
+    }
+
+    /// The sprite with this id.
+    pub fn sprite(&self, id: SpriteId) -> Option<&SpriteDef> {
+        self.sprites.get(id.index()?)
+    }
+
+    /// The mask with this id.
+    pub fn mask(&self, id: MaskId) -> Option<&Mask> {
+        self.masks.get(id.index()?)
+    }
+
+    /// Dispatch rank for an instance of `kind` spawned at run time (plan 1.3).
+    pub fn rank_for(&self, kind: KindId, variant: Option<&VariantSel>) -> Option<u16> {
+        self.ranks.rank_for(kind, variant)
+    }
+
+    /// The kind the sim spawns for an engine role, so built-ins never hard-code kind ids.
+    pub fn engine_kind(&self, k: EngineKind) -> Option<KindId> {
+        self.engine_kinds.get(&k).copied()
+    }
+}
+
+/// Engine kinds the sim spawns by role.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub enum EngineKind {
+    /// The engine controller.
+    World,
+    /// The kid.
+    Kid,
+    /// The flipped kid object (games that flip by object swap).
+    KidFlipped,
+    /// The kid's bullet.
+    KidBullet,
+    /// The bow.
+    Bow,
+    /// Blood drop.
+    Blood,
+    /// Blood emitter.
+    BloodEmitter,
+    /// GAMEOVER.
+    GameOver,
+    /// Playerface.
+    Playerface,
+}
+
+/// How the game retries after R (plan 4.3). Behavior in `restart.rs` (WP4b); the `world`
+/// built-in runs it at the world's rank, in the phase `trigger` names.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct RestartModel {
+    /// Where the retry runs (R27).
+    pub trigger: RestartTrigger,
+    /// What the retry does.
+    pub kind: RestartKind,
+    /// Room roles where R does nothing (menus).
+    pub excluded_roles: RoleSet,
+    /// Ticks spent in a boot room on `GameRestartViaBoot` (R17, TR-ROOM-01).
+    pub boot_ticks: u8,
+    /// Added to the loaded y when the saved kid was flipped (+4 in 10 Group A games).
+    pub flipped_load_dy: Real,
+    /// What a retry counts.
+    pub death_on_restart: DeathOnRestart,
+}
+
+impl Default for RestartModel {
+    /// Group A: R key press event, game_restart through one boot tick, no flipped offset.
+    fn default() -> RestartModel {
+        RestartModel {
+            trigger: RestartTrigger::KeyPressEvent,
+            kind: RestartKind::GameRestartViaBoot,
+            excluded_roles: RoleSet::default(),
+            boot_ticks: 1,
+            flipped_load_dy: Real::ZERO,
+            death_on_restart: DeathOnRestart::Nothing,
+        }
+    }
+}
+
+/// Where the retry runs (R27).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RestartTrigger {
+    /// The world's "Key R pressed" event (keyboard phase).
+    KeyPressEvent,
+    /// The world's Step, every tick while held (wanna, A3 I7).
+    StepHeld,
+    /// The world's Step, on the press.
+    StepPressed {
+        /// Skip while the game is paused (keep-celebrating-for-xia).
+        skip_while_paused: bool,
+    },
+}
+
+/// What the retry does (plan 4.3 table).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RestartKind {
+    /// Groups A (minus showdown), B, C: game_restart through the boot room.
+    GameRestartViaBoot,
+    /// kaenbyou, eat-the-lemon, go-the-spook-house: recreate the kid, go to the saved room.
+    RoomGotoSaved,
+    /// showdown: loadGame without game_restart (kid/A3.md; Conflict R26).
+    ShowdownLoad,
+    /// keep-celebrating-for-xia: recreate the kid in place, then go to the saved room.
+    RecreateInPlace,
+}
+
+/// What a retry counts besides restarting.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum DeathOnRestart {
+    /// Nothing.
+    #[default]
+    Nothing,
+    /// A death-only save of the counters (little-runner, wanna saveDeathTime).
+    SaveCounters,
+}
+
+/// How the game resets after F2 (plan 4.3). Behavior in `restart.rs` (WP4b).
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub struct ResetModel {
+    /// What the reset does.
+    pub kind: ResetKind,
+}
+
+/// What F2 does.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum ResetKind {
+    /// Groups A, B, C: delete the save's temp marker and game_restart.
+    #[default]
+    DeleteTempAndRestart,
+    /// kaenbyou, eat-the-lemon gameReset: reset globals and go to the boot room.
+    GameReset,
+}

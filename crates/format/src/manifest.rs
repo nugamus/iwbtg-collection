@@ -85,15 +85,9 @@ pub struct Manifest {
     pub music: BTreeMap<Spanned<String>, MusicSettings>,
 }
 
-/// The original GameMaker runner.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Runner {
-    /// GameMaker 8.0.
-    Gm80,
-    /// GameMaker 8.1.
-    Gm81,
-}
+/// The original GameMaker runner. One type with the sim, which selects rules by it
+/// (`RunnerRules::for_runner`).
+pub use iwbtg_sim::rules::Runner;
 
 /// One `[[creators]]` entry.
 #[derive(Debug, Clone, Deserialize)]

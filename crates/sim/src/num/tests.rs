@@ -81,6 +81,10 @@ fn real_serializes_nan_canonically() {
 }
 
 #[test]
+#[allow(
+    clippy::disallowed_types,
+    reason = "tests Real's Hash impl itself, which only test maps use; state hashing never does"
+)]
 fn real_hashes_nan_canonically() {
     use core::hash::{Hash, Hasher};
     let hash = |x: Real| {
@@ -481,6 +485,7 @@ const REAL_COLUMNS: [&str; 12] = [
 /// wherever gravity is 0.4 at direction 270 and hspeed is tiny but nonzero, it is our dcos
 /// product.
 #[test]
+#[allow(clippy::disallowed_methods, reason = "test-only: reads research trace files")]
 fn traces_match_display_and_gravity_trig() {
     let Some(dir) = traces_dir() else { return };
     let mut files = 0;

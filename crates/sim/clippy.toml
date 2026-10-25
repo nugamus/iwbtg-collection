@@ -1,5 +1,13 @@
 # Sim purity (docs/architecture.md, Sim purity): platform-dependent float math, clocks, IO,
 # threads and unordered maps are build errors here. Use sim::num and BTreeMap instead.
+# Section 10.5 of docs/plans/sim-core.md lists why each ban exists. Checked by hand once (WP0): a
+# `f64::max` call in sim code fails `cargo clippy -p iwbtg-sim -- -D warnings` with
+# `clippy::disallowed_methods`.
+
+# Tests may print (skip notices for research data); library code may not (lib.rs denies
+# print_stdout and print_stderr).
+allow-print-in-tests = true
+
 disallowed-methods = [
   { path = "f64::sin", reason = "platform libm; use num::sin" },
   { path = "f64::cos", reason = "platform libm; use num::cos" },
@@ -25,7 +33,20 @@ disallowed-methods = [
   { path = "f64::hypot", reason = "platform libm" },
   { path = "f64::mul_add", reason = "FMA changes results across targets" },
   { path = "f64::round", reason = "half away from zero; GM8 rounds half to even: use num::round" },
+  { path = "f64::min", reason = "signed-zero result unspecified, lowered differently on x86 and WASM; use num::min" },
+  { path = "f64::max", reason = "signed-zero result unspecified, lowered differently on x86 and WASM; use num::max" },
+  { path = "f64::clamp", reason = "panics on NaN or lo > hi; use num::clamp" },
+  { path = "f64::to_degrees", reason = "use num::radtodeg" },
+  { path = "f64::to_radians", reason = "use num::degtorad" },
   { path = "std::thread::spawn", reason = "the sim is single-threaded" },
+  { path = "std::io::stdin", reason = "the sim does no IO" },
+  { path = "std::fs::read", reason = "the sim does no IO; crates/format reads packages" },
+  { path = "std::fs::write", reason = "the sim does no IO" },
+  { path = "std::fs::read_to_string", reason = "the sim does no IO; crates/format reads packages" },
+  { path = "std::fs::read_dir", reason = "the sim does no IO" },
+  { path = "std::fs::File::open", reason = "the sim does no IO" },
+  { path = "std::fs::File::create", reason = "the sim does no IO" },
+  { path = "std::process::exit", reason = "the sim halts through SimStatus, never exits" },
   { path = "std::env::var", reason = "the sim reads no environment" },
 ]
 disallowed-types = [
@@ -34,4 +55,12 @@ disallowed-types = [
   { path = "std::time::Instant", reason = "the sim has no clock" },
   { path = "std::time::SystemTime", reason = "the sim has no clock" },
   { path = "f32", reason = "all reals are f64 (num::Real)" },
+  { path = "std::fs::File", reason = "the sim does no IO" },
+  { path = "std::fs::OpenOptions", reason = "the sim does no IO" },
+  { path = "std::net::TcpStream", reason = "the sim does no IO" },
+  { path = "std::net::TcpListener", reason = "the sim does no IO" },
+  { path = "std::net::UdpSocket", reason = "the sim does no IO" },
+  { path = "std::process::Command", reason = "the sim does no IO" },
+  { path = "std::hash::DefaultHasher", reason = "unspecified across Rust versions; state hashing is postcard + BLAKE3" },
+  { path = "std::hash::RandomState", reason = "random per process; state hashing is postcard + BLAKE3" },
 ]

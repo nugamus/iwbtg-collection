@@ -47,7 +47,10 @@ fn real_to_i64(original: Real, integral: f64) -> Result<i64, NumError> {
     if !(-I64_LIMIT..I64_LIMIT).contains(&integral) {
         return Err(NumError::OutOfRange(original));
     }
-    // In range and integral, so the cast is exact.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "checked above: integral and inside the i64 range, so the cast is exact"
+    )]
     Ok(integral as i64)
 }
 

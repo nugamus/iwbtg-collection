@@ -13,8 +13,19 @@ repository = "https://github.com/nugamus/iwbtg-collection"
 [workspace.dependencies]
 iwbtg-sim = { path = "crates/sim" }
 iwbtg-format = { path = "crates/format" }
-rhai = { version = "=1.26.1", default-features = false, features = ["std", "no_custom_syntax", "internals"] }
+# Rhai features per docs/decisions/0001-script-language.md and docs/plans/sim-core.md section 11.
+# WP9 owns this line after WP0 (switch to =1.27.N with compact_str once it is 14 days old).
+rhai = { version = "=1.26.1", default-features = false, features = [
+  "std",
+  "only_i64",
+  "no_time",
+  "no_module",
+  "no_custom_syntax",
+  "no_closure",
+  "internals",
+] }
 libm = { version = "=0.2.16", default-features = false }
+smallvec = { version = "=1.16.4", features = ["serde"] }
 blake3 = { version = "=1.8.7", default-features = false, features = ["std", "pure"] }
 postcard = { version = "=1.1.3", features = ["use-std"] }
 serde = { version = "1.0.229", features = ["derive"] }
@@ -33,3 +44,8 @@ float_cmp = "warn"
 
 [profile.dev.package."*"]
 opt-level = 2
+
+# Integer overflow panics in release too, so debug tests and release servers behave the same
+# (docs/plans/sim-core.md 10.3). Sim counters use checked_* and never rely on this.
+[profile.release]
+overflow-checks = true

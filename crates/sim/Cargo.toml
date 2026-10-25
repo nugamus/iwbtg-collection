@@ -11,9 +11,14 @@ publish = false
 rhai.workspace = true
 libm.workspace = true
 blake3.workspace = true
+smallvec.workspace = true
 postcard.workspace = true
 serde.workspace = true
 thiserror.workspace = true
+
+[features]
+# Trace setup actions (docs/plans/sim-core.md 9.4, 10.4). Never enabled in the server build.
+trace-setup = []
 
 [lints]
 workspace = true

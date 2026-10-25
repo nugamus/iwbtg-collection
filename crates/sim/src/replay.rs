@@ -334,6 +334,17 @@ mod tests {
             (self.0 >> 32) as u32
         }
 
+        /// The low byte of the next value.
+        fn byte(&mut self) -> u8 {
+            self.next().to_le_bytes()[0]
+        }
+
+        /// Uniform-ish index in `0..=hi`.
+        fn index(&mut self, hi: usize) -> usize {
+            let hi = u32::try_from(hi).expect("test buffers are small");
+            usize::try_from(self.range(0, hi)).expect("u32 fits in usize")
+        }
+
         /// Uniform-ish value in `lo..=hi`.
         fn range(&mut self, lo: u32, hi: u32) -> u32 {
             lo + self.next() % (hi - lo + 1)
@@ -380,8 +391,8 @@ mod tests {
                     .filter(|&(_, tick)| tick <= ticks)
                     .collect(),
                 checkpoints: (0..=ticks)
-                    .step_by(CHECKPOINT_INTERVAL as usize)
-                    .map(|tick| (tick, [(tick / CHECKPOINT_INTERVAL) as u8; 16]))
+                    .step_by(usize::try_from(CHECKPOINT_INTERVAL).expect("small"))
+                    .map(|tick| (tick, [(tick / CHECKPOINT_INTERVAL).to_le_bytes()[0]; 16]))
                     .collect(),
                 final_hash: [3; 32],
             },
@@ -462,6 +473,23 @@ mod tests {
     }
 
     #[test]
+    fn round_trip_keeps_pause_mute_and_reset() {
+        use crate::input::Action;
+        let (p, m, r) = (Action::Pause.bit(), Action::Mute.bit(), Action::Reset.bit());
+        let all = Action::MASK;
+        let replay = replay(vec![
+            frame(p, p, 0),
+            frame(p | m, m, 0),
+            frame(p | m | r, r, 0),
+            frame(0, 0, p | m | r),
+            frame(all, all, all),
+        ]);
+        let decoded = Replay::decode(&replay.encode().unwrap()).unwrap();
+        assert_eq!(decoded, replay);
+        assert_eq!(decoded.inputs[4].held, 0x7fff);
+    }
+
+    #[test]
     fn round_trip_from_save() {
         let mut r = small();
         r.header.start_mode = StartMode::FromSave(vec![9, 8, 7]);
@@ -520,7 +548,7 @@ mod tests {
     fn encode_rejects_too_many_ticks() {
         let ticks = MAX_REPLAY_TICKS + 1;
         let mut r = small();
-        r.inputs = vec![InputFrame::default(); ticks as usize];
+        r.inputs = vec![InputFrame::default(); usize::try_from(ticks).expect("fits")];
         r.trailer.total_ticks = ticks;
         assert_eq!(r.encode(), Err(ReplayError::TooManyTicks));
     }
@@ -663,22 +691,22 @@ mod tests {
         for i in 0..20_000 {
             let bytes: Vec<u8> = match i % 3 {
                 // Pure noise.
-                0 => (0..rng.range(0, 256)).map(|_| rng.next() as u8).collect(),
+                0 => (0..rng.range(0, 256)).map(|_| rng.byte()).collect(),
                 // Valid prefix, noise after it.
                 1 => {
                     let mut b = vec![b'I', b'W', b'B', b'R', 0x01];
-                    b.extend((0..rng.range(0, 256)).map(|_| rng.next() as u8));
+                    b.extend((0..rng.range(0, 256)).map(|_| rng.byte()));
                     b
                 }
                 // A valid file with a few bytes flipped and maybe truncated.
                 _ => {
                     let mut b = valid.clone();
                     for _ in 0..rng.range(1, 4) {
-                        let at = rng.range(0, b.len() as u32 - 1) as usize;
-                        b[at] = rng.next() as u8;
+                        let at = rng.index(b.len() - 1);
+                        b[at] = rng.byte();
                     }
                     if rng.range(0, 1) == 0 {
-                        b.truncate(rng.range(0, b.len() as u32) as usize);
+                        b.truncate(rng.index(b.len()));
                     }
                     b
                 }
