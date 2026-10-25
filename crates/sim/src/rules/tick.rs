@@ -19,7 +19,10 @@ pub struct TickRules {
     pub boundary_slot: BoundarySlot,
     /// R8 (Inferred / UNKNOWN U8): what still runs after a room request.
     pub room_request: RoomRequestRule,
-    /// R9 (UNKNOWN U10): an instance created during a phase runs that phase too. Default false.
+    /// R9 (UNKNOWN U10): an instance created during a phase runs that phase too. Default false,
+    /// an engine_rev 0 placeholder: CLONE_SPEC tick loop now records (recorder) that it does
+    /// when its object comes later in the order than the creator's, and not for the creator's
+    /// own object. A bool cannot say that; WP1 widens this field and WP11 changes the default.
     pub new_instances_join_phase: bool,
     /// R22: an instance destroyed this tick is still seen by collisions and queries. Default
     /// false (Design).

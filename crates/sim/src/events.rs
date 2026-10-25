@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
 use crate::def::{ClassMask, GameDef, KindId};
+use crate::error::SimError;
 use crate::input::Action;
 use crate::rules::TickRules;
 use crate::world::{Ctx, Flow, InstId, Instance, World};
@@ -160,6 +161,17 @@ pub enum KeyEdge {
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub struct ProbeState {}
 
+/// The `Probe` built-in's event set (`builtins::event_set` routes `Builtin::Probe` here).
+pub fn probe_event_set() -> EventSet {
+    unimplemented!("WP1: events::probe_event_set")
+}
+
+/// The `Probe` built-in's handler (WP1 tests, WP11 golden probe tests); `builtins::on_event`
+/// routes `Builtin::Probe` here.
+pub fn probe_on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimError> {
+    unimplemented!("WP1: events::probe_on_event")
+}
+
 /// The instances a phase visits, in dispatch order (R2), among those `filter` accepts.
 pub fn dispatch_order(w: &World, rules: &TickRules, filter: impl Fn(&Instance) -> bool) -> Vec<InstId> {
     unimplemented!("WP1: events::dispatch_order")
@@ -175,13 +187,16 @@ pub fn event_set(def: &GameDef, kind: KindId) -> &EventSet {
     unimplemented!("WP1: events::event_set")
 }
 
-/// Runs one event on one instance: the base built-in's handler, then the script's (WP9).
+/// Runs one event on one instance: the base built-in's handler (`kid::on_event` for the kid,
+/// `builtins::on_event` for the rest), then the script's (`script::on_event`, WP9) when the kind
+/// has one. A handler's `Err` halts the sim through `Ctx::halt` and gives `Flow::Halt`.
 pub fn dispatch(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Flow {
     unimplemented!("WP1: events::dispatch")
 }
 
 /// Runs an event phase: snapshot the dispatch order once, then dispatch to each instance that
-/// is still alive and active.
+/// is still alive and active. Returns `Halt` at once; handles `AbortTick` per
+/// `TickRules::room_request` (R8).
 pub fn run_phase(ctx: &mut Ctx, phase: Phase) -> Flow {
     unimplemented!("WP1: events::run_phase")
 }

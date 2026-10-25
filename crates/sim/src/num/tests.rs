@@ -3,6 +3,8 @@
 
 use super::trig::{DEG_TO_RAD, TRIG_TABLE};
 use super::*;
+use crate::rules::NumRules;
+use crate::rules::num::{CompareMode, MinMaxTies, NegZero, SignMode, Truth};
 
 fn r(x: f64) -> Real {
     Real::new(x)
@@ -100,20 +102,40 @@ fn real_hashes_nan_canonically() {
 
 // ---- Rounding and conversion ----
 
+/// The engine_rev 0 number rules.
+fn d() -> NumRules {
+    NumRules::default()
+}
+
+/// The engine_rev 0 compare epsilon.
+const EPSILON: f64 = 1e-13;
+
 #[test]
 fn round_is_bankers() {
-    assert_eq!(round(r(0.5)), r(0.0));
-    assert_eq!(round(r(1.5)), r(2.0));
-    assert_eq!(round(r(2.5)), r(2.0));
-    assert_eq!(round(r(3.5)), r(4.0));
-    // Zero results are +0.0, never -0.0.
-    assert_eq!(round(r(-0.5)), r(0.0));
-    assert_eq!(round(r(-0.3)), r(0.0));
-    assert_eq!(round(r(-0.0)), r(0.0));
-    assert_eq!(round(r(-1.5)), r(-2.0));
-    assert_eq!(round(r(-2.5)), r(-2.0));
-    assert_eq!(round(r(0.49999999999999994)), r(0.0));
-    assert_eq!(round(r(2.5000000000000004)), r(3.0));
+    let d = &d();
+    assert_eq!(round(r(0.5), d), r(0.0));
+    assert_eq!(round(r(1.5), d), r(2.0));
+    assert_eq!(round(r(2.5), d), r(2.0));
+    assert_eq!(round(r(3.5), d), r(4.0));
+    // Zero results are +0.0 under the default N4 rule.
+    assert_eq!(round(r(-0.5), d), r(0.0));
+    assert_eq!(round(r(-0.3), d), r(0.0));
+    assert_eq!(round(r(-0.0), d), r(0.0));
+    assert_eq!(round(r(-1.5), d), r(-2.0));
+    assert_eq!(round(r(-2.5), d), r(-2.0));
+    assert_eq!(round(r(0.49999999999999994), d), r(0.0));
+    assert_eq!(round(r(2.5000000000000004), d), r(3.0));
+}
+
+#[test]
+fn round_neg_zero_rule() {
+    let keep = NumRules {
+        round_neg_zero: NegZero::Keep,
+        ..d()
+    };
+    assert_eq!(round(r(-0.4), &keep), r(-0.0));
+    assert_eq!(round(r(-0.0), &keep), r(-0.0));
+    assert_eq!(round(r(0.4), &keep), r(0.0));
 }
 
 #[test]
@@ -148,51 +170,110 @@ fn int_conversion_errors_instead_of_saturating() {
 
 #[test]
 fn floor_ceil_frac_sign_abs() {
-    assert_eq!(floor(r(-1.5)), r(-2.0));
-    assert_eq!(ceil(r(-1.5)), r(-1.0));
+    let d = &d();
+    assert_eq!(floor(r(-1.5), d), r(-2.0));
+    assert_eq!(ceil(r(-1.5), d), r(-1.0));
     assert_eq!(frac(r(2.75)), r(0.75));
     assert_eq!(frac(r(-1.25)), r(-0.25));
-    // floor and ceil keep IEEE signed zeros (OPEN in their docs).
-    assert_eq!(ceil(r(-0.5)), r(-0.0));
-    assert_eq!(floor(r(-0.0)), r(-0.0));
-    assert_eq!(sign(r(3.2)), r(1.0));
-    assert_eq!(sign(r(-0.1)), r(-1.0));
-    assert_eq!(sign(r(0.0)), r(0.0));
-    assert_eq!(sign(r(-0.0)), r(0.0));
-    assert_eq!(sign(r(f64::NAN)), r(0.0));
+    // floor and ceil keep IEEE signed zeros under the default N13 rule.
+    assert_eq!(ceil(r(-0.5), d), r(-0.0));
+    assert_eq!(floor(r(-0.0), d), r(-0.0));
+    assert_eq!(sign(r(3.2), d), r(1.0));
+    assert_eq!(sign(r(-0.1), d), r(-1.0));
+    assert_eq!(sign(r(0.0), d), r(0.0));
+    assert_eq!(sign(r(-0.0), d), r(0.0));
+    assert_eq!(sign(r(f64::NAN), d), r(0.0));
     assert_eq!(abs(r(-2.0)), r(2.0));
 }
 
-/// sign uses the comparison tolerance, so the gravity drift on trace frames 2-4 has sign 0.
+#[test]
+fn floor_ceil_zero_rule() {
+    let positive = NumRules {
+        floor_ceil_zero: NegZero::Positive,
+        ..d()
+    };
+    assert_eq!(ceil(r(-0.5), &positive), r(0.0));
+    assert_eq!(floor(r(-0.0), &positive), r(0.0));
+    assert_eq!(floor(r(-1.5), &positive), r(-2.0));
+}
+
+/// The default sign uses the comparison tolerance, so the gravity drift on trace frames 2-4 has
+/// sign 0.
 #[test]
 fn sign_uses_epsilon() {
-    assert_eq!(sign(parse("-7.347880794884119e-17")), r(0.0));
-    assert_eq!(sign(parse("7.347880794884119e-17")), r(0.0));
-    assert_eq!(sign(r(2e-13)), r(1.0));
-    assert_eq!(sign(r(-2e-13)), r(-1.0));
-    assert_eq!(sign(r(EPSILON)), r(1.0));
-    assert_eq!(sign(r(-EPSILON)), r(-1.0));
-    assert_eq!(sign(r(0.99 * EPSILON)), r(0.0));
+    let d = &d();
+    assert_eq!(sign(parse("-7.347880794884119e-17"), d), r(0.0));
+    assert_eq!(sign(parse("7.347880794884119e-17"), d), r(0.0));
+    assert_eq!(sign(r(2e-13), d), r(1.0));
+    assert_eq!(sign(r(-2e-13), d), r(-1.0));
+    assert_eq!(sign(r(EPSILON), d), r(1.0));
+    assert_eq!(sign(r(-EPSILON), d), r(-1.0));
+    assert_eq!(sign(r(0.99 * EPSILON), d), r(0.0));
+}
+
+/// Exact sign, or an exact compare mode, gives the drift its sign (N11 follows N1).
+#[test]
+fn sign_exact_rules() {
+    let exact_sign = NumRules {
+        sign: SignMode::Exact,
+        ..d()
+    };
+    let exact_compare = NumRules {
+        compare: CompareMode::Exact,
+        ..d()
+    };
+    for rules in [&exact_sign, &exact_compare] {
+        assert_eq!(sign(parse("-7.347880794884119e-17"), rules), r(-1.0));
+        assert_eq!(sign(parse("5.551115123125783e-17"), rules), r(1.0));
+        assert_eq!(sign(r(-0.0), rules), r(0.0));
+        assert_eq!(sign(r(f64::NAN), rules), r(0.0));
+    }
 }
 
 #[test]
 fn min_max_clamp_lerp() {
-    assert_eq!(min(r(1.0), r(2.0)), r(1.0));
-    assert_eq!(max(r(1.0), r(2.0)), r(2.0));
+    let d = &d();
+    assert_eq!(gm_min(r(1.0), r(2.0), d), r(1.0));
+    assert_eq!(gm_max(r(1.0), r(2.0), d), r(2.0));
     // min keeps `a` unless `a > b`; max takes `b` unless `a > b`.
-    assert_eq!(min(r(0.0), r(-0.0)), r(0.0));
-    assert_eq!(min(r(-0.0), r(0.0)), r(-0.0));
-    assert_eq!(max(r(-0.0), r(0.0)), r(0.0));
-    assert_eq!(max(r(0.0), r(-0.0)), r(-0.0));
-    assert_eq!(max(r(f64::NAN), r(1.0)), r(1.0));
-    assert!(max(r(1.0), r(f64::NAN)).is_nan());
-    assert!(min(r(f64::NAN), r(1.0)).is_nan());
-    assert_eq!(min(r(1.0), r(f64::NAN)), r(1.0));
+    assert_eq!(gm_min(r(0.0), r(-0.0), d), r(0.0));
+    assert_eq!(gm_min(r(-0.0), r(0.0), d), r(-0.0));
+    assert_eq!(gm_max(r(-0.0), r(0.0), d), r(0.0));
+    assert_eq!(gm_max(r(0.0), r(-0.0), d), r(-0.0));
+    assert_eq!(gm_max(r(f64::NAN), r(1.0), d), r(1.0));
+    assert!(gm_max(r(1.0), r(f64::NAN), d).is_nan());
+    assert!(gm_min(r(f64::NAN), r(1.0), d).is_nan());
+    assert_eq!(gm_min(r(1.0), r(f64::NAN), d), r(1.0));
     assert_eq!(clamp(r(5.0), r(0.0), r(3.0)), r(3.0));
     assert_eq!(clamp(r(-1.0), r(0.0), r(3.0)), r(0.0));
     assert_eq!(clamp(r(2.0), r(0.0), r(3.0)), r(2.0));
     assert_eq!(lerp(r(0.0), r(10.0), r(0.25)), r(2.5));
     assert_eq!(lerp(r(0.1), r(0.3), r(1.0)), r(0.1) + (r(0.3) - r(0.1)));
+}
+
+#[test]
+fn min_max_ties_rule() {
+    let ge = NumRules {
+        min_max_ties: MinMaxTies::GreaterOrEqual,
+        ..d()
+    };
+    assert_eq!(gm_min(r(0.0), r(-0.0), &ge), r(-0.0));
+    assert_eq!(gm_max(r(0.0), r(-0.0), &ge), r(0.0));
+    assert_eq!(gm_min(r(1.0), r(2.0), &ge), r(1.0));
+    assert_eq!(gm_max(r(1.0), r(2.0), &ge), r(2.0));
+}
+
+#[test]
+fn repeat_count_rounds_and_stops_at_zero() {
+    let d = &d();
+    assert_eq!(gm_repeat_count(r(2.5), d), Ok(2));
+    assert_eq!(gm_repeat_count(r(3.5), d), Ok(4));
+    assert_eq!(gm_repeat_count(r(0.5), d), Ok(0));
+    assert_eq!(gm_repeat_count(r(-3.0), d), Ok(0));
+    assert_eq!(
+        gm_repeat_count(r(f64::NAN), d),
+        Err(NumError::NotFinite(r(f64::NAN)))
+    );
 }
 
 #[test]
@@ -235,45 +316,68 @@ fn gm_div_floors() {
 
 #[test]
 fn gm_comparisons_use_epsilon() {
+    let d = &d();
     let sum = r(0.1) + r(0.2);
-    assert!(gm_eq(sum, r(0.3)));
-    assert!(!gm_ne(sum, r(0.3)));
-    assert!(!gm_lt(r(0.3), sum));
-    assert!(gm_le(r(0.3), sum));
-    assert!(!gm_gt(sum, r(0.3)));
-    assert!(gm_ge(r(0.3), sum));
+    assert!(gm_eq(sum, r(0.3), d));
+    assert!(!gm_ne(sum, r(0.3), d));
+    assert!(!gm_lt(r(0.3), sum, d));
+    assert!(gm_le(r(0.3), sum, d));
+    assert!(!gm_gt(sum, r(0.3), d));
+    assert!(gm_ge(r(0.3), sum, d));
 
     // The bound is exclusive: a difference of exactly EPSILON is not equal.
     let (zero, eps) = (r(0.0), r(EPSILON));
-    assert!(!gm_eq(zero, eps) && gm_ne(zero, eps));
-    assert!(gm_lt(zero, eps) && gm_le(zero, eps));
-    assert!(!gm_gt(zero, eps) && !gm_ge(zero, eps));
-    assert!(gm_gt(eps, zero) && gm_ge(eps, zero));
-    assert!(!gm_lt(eps, zero) && !gm_le(eps, zero));
+    assert!(!gm_eq(zero, eps, d) && gm_ne(zero, eps, d));
+    assert!(gm_lt(zero, eps, d) && gm_le(zero, eps, d));
+    assert!(!gm_gt(zero, eps, d) && !gm_ge(zero, eps, d));
+    assert!(gm_gt(eps, zero, d) && gm_ge(eps, zero, d));
+    assert!(!gm_lt(eps, zero, d) && !gm_le(eps, zero, d));
     // Just inside the bound is equal.
     let inside = r(0.99 * EPSILON);
-    assert!(gm_eq(zero, inside) && !gm_ne(zero, inside));
-    assert!(!gm_lt(zero, inside) && gm_le(zero, inside));
-    assert!(!gm_gt(inside, zero) && gm_ge(inside, zero));
+    assert!(gm_eq(zero, inside, d) && !gm_ne(zero, inside, d));
+    assert!(!gm_lt(zero, inside, d) && gm_le(zero, inside, d));
+    assert!(!gm_gt(inside, zero, d) && gm_ge(inside, zero, d));
 
     // NaN: every comparison is false, != included.
     let nan = r(f64::NAN);
-    assert!(!gm_eq(nan, nan));
-    assert!(!gm_ne(nan, nan));
-    assert!(!gm_ne(nan, r(0.0)));
-    assert!(!gm_lt(nan, r(0.0)) && !gm_le(nan, r(0.0)));
-    assert!(!gm_gt(nan, r(0.0)) && !gm_ge(nan, r(0.0)));
+    assert!(!gm_eq(nan, nan, d));
+    assert!(!gm_ne(nan, nan, d));
+    assert!(!gm_ne(nan, r(0.0), d));
+    assert!(!gm_lt(nan, r(0.0), d) && !gm_le(nan, r(0.0), d));
+    assert!(!gm_gt(nan, r(0.0), d) && !gm_ge(nan, r(0.0), d));
+}
+
+#[test]
+fn gm_comparisons_exact_mode() {
+    let x = &NumRules {
+        compare: CompareMode::Exact,
+        ..d()
+    };
+    let sum = r(0.1) + r(0.2);
+    assert!(!gm_eq(sum, r(0.3), x) && gm_ne(sum, r(0.3), x));
+    assert!(!gm_lt(sum, r(0.3), x) && !gm_le(sum, r(0.3), x));
+    assert!(gm_gt(sum, r(0.3), x) && gm_ge(sum, r(0.3), x));
+    assert!(gm_eq(r(0.0), r(-0.0), x));
+    let nan = r(f64::NAN);
+    assert!(!gm_eq(nan, nan, x) && !gm_ne(nan, r(0.0), x));
+    assert!(!gm_lt(nan, r(0.0), x) && !gm_ge(nan, r(0.0), x));
 }
 
 #[test]
 fn gm_bool_threshold() {
-    assert!(!gm_bool(r(0.0)));
-    assert!(!gm_bool(r(-1.0)));
-    assert!(!gm_bool(r(0.49999999999999994)));
-    assert!(gm_bool(r(TRUTH_THRESHOLD)));
-    assert!(gm_bool(r(0.5)));
-    assert!(gm_bool(r(1.0)));
-    assert!(!gm_bool(r(f64::NAN)));
+    let d = &d();
+    assert!(!gm_bool(r(0.0), d));
+    assert!(!gm_bool(r(-1.0), d));
+    assert!(!gm_bool(r(0.49999999999999994), d));
+    assert!(gm_bool(r(0.5), d));
+    assert!(gm_bool(r(1.0), d));
+    assert!(!gm_bool(r(f64::NAN), d));
+    let gt = NumRules {
+        truth: Truth::GtHalf,
+        ..NumRules::default()
+    };
+    assert!(!gm_bool(r(0.5), &gt));
+    assert!(gm_bool(r(0.5000000000000001), &gt));
 }
 
 // ---- libm ----

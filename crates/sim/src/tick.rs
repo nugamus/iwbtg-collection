@@ -9,7 +9,9 @@ use crate::input::InputFrame;
 use crate::timing::Split;
 use crate::world::Ctx;
 
-/// Runs one tick (rows 0-16) and returns the splits it recorded. An error halts the sim.
+/// Runs one tick (rows 0-16) and returns the splits it recorded. An error halts the sim. When a
+/// phase returns `Flow::Halt` (the world is already `Halted`), the tick stops there: no sweep,
+/// no room change, no `tick += 1`.
 pub fn run_tick(ctx: &mut Ctx, input: InputFrame) -> Result<Vec<Split>, SimError> {
     unimplemented!("WP1: tick::run_tick")
 }

@@ -4,7 +4,9 @@
 //! and lookup is a binary search. WP0 ships this working version; WP1 owns it.
 
 use super::{InstId, Instance, World};
+use crate::def::GameDef;
 use crate::error::SimError;
+use crate::rules::CollideRules;
 
 impl World {
     /// Position of `id` in [`World::instances`], alive or dead-this-tick.
@@ -33,8 +35,15 @@ impl World {
                 inst.id.0, last.id.0
             )));
         }
+        self.grid.mark_moved(inst.id);
         self.instances.push(inst);
         Ok(())
+    }
+
+    /// Re-buckets the instances `get_mut` and `insert` marked as moved (`Grid::flush`, plan
+    /// 3.4). Queries are correct without it; it only keeps them fast.
+    pub fn flush_grid(&mut self, def: &GameDef, rules: &CollideRules) -> Result<(), SimError> {
+        self.grid.flush(&self.instances, def, rules)
     }
 
     /// Removes dead instances, keeping the order of the rest (tick row 14).
@@ -45,9 +54,11 @@ impl World {
 
 #[cfg(test)]
 mod tests {
+    use crate::collide::grid::Grid;
     use crate::def::{KindId, RoomId};
+    use crate::error::SimError;
     use crate::num::Real;
-    use crate::world::{InstId, Instance, World};
+    use crate::world::{Ctx, Flow, InstId, Instance, SimStatus, SpawnInit, World};
 
     fn spawn(w: &mut World, kind: u32) -> InstId {
         let id = w.alloc_id().unwrap();
@@ -84,6 +95,52 @@ mod tests {
         let left: Vec<InstId> = w.instances.iter().map(|i| i.id).collect();
         assert_eq!(left, vec![ids[0], ids[2], ids[4]]);
         assert_eq!(spawn(&mut w, 9), InstId(100_006), "ids are never reused");
+    }
+
+    #[test]
+    fn mutable_access_marks_the_grid() {
+        let mut w = World::new(RoomId(0), 1);
+        let a = spawn(&mut w, 0);
+        assert!(w.grid.moved().contains(&a), "insert marks the new instance");
+        w.grid = Grid::default();
+        assert!(w.get(a).is_some());
+        assert!(w.grid.moved().is_empty(), "reads do not mark");
+        w.get_mut(a).unwrap().solid = true;
+        assert!(w.grid.moved().contains(&a), "get_mut marks");
+        let mut other = w.clone();
+        other.grid = Grid::default();
+        assert_eq!(w, other, "the grid never makes worlds differ");
+    }
+
+    #[test]
+    fn spawn_init_default_runs_create() {
+        let init = SpawnInit::default();
+        assert!(init.run_create);
+        assert_eq!(
+            (init.xscale, init.yscale, init.angle),
+            (Real::ONE, Real::ONE, Real::ZERO)
+        );
+        assert_eq!((init.rank, init.name, init.group), (None, None, None));
+    }
+
+    #[test]
+    fn halt_sets_status_once_and_returns_halt() {
+        let mut b = crate::def::testing::GameDefBuilder::new("t");
+        b.room(crate::def::RoomDef::new("r", 64, 64));
+        let def = b.build().unwrap();
+        let rules = crate::rules::RunnerRules::default();
+        let scripts = crate::script::ScriptRuntime::default();
+        let mut w = World::new(RoomId(0), 1);
+        let mut ctx = Ctx {
+            def: &def,
+            rules: &rules,
+            w: &mut w,
+            scripts: &scripts,
+            dll_mode: crate::sound::DllMode::Stub,
+        };
+        assert_eq!(ctx.halt(SimError::non_finite("hspeed")), Flow::Halt);
+        assert_eq!(ctx.halt(SimError::overflow("tick")), Flow::Halt);
+        assert_eq!(w.status, SimStatus::Halted(SimError::non_finite("hspeed")));
     }
 
     #[test]

@@ -6,9 +6,9 @@
 //! WASM and Linux.
 //!
 //! Submodules:
-//! - [`round`](mod@round): banker's rounding, integer conversion, `frac`, `sign`, `min`/`max`,
-//!   GML `mod`/`div`.
-//! - [`compare`]: GM8 epsilon comparisons and truthiness.
+//! - [`round`](mod@round): banker's rounding, integer conversion, `frac`, `sign`, `gm_min`/`gm_max`,
+//!   `repeat` counts, GML `mod`/`div`.
+//! - [`compare`]: GM8 comparisons and truthiness under `NumRules`.
 //! - [`conv`]: rule-dependent conversions (alarms, save bytes, `string()`), declared by WP0.
 //! - [`math`]: software `sin`, `cos`, `tan`, `atan2`, `sqrt`, `pow`, `exp`, `ln`.
 //! - [`trig`]: degree helpers, the exact-bits trig table, `point_direction` and friends.
@@ -28,11 +28,12 @@ use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAss
 
 use serde::{Deserialize, Serialize, Serializer};
 
-pub use compare::{EPSILON, TRUTH_THRESHOLD, gm_bool, gm_eq, gm_ge, gm_gt, gm_le, gm_lt, gm_ne};
+pub use compare::{gm_bool, gm_eq, gm_ge, gm_gt, gm_le, gm_lt, gm_ne};
 pub use conv::{alarm_from_real, byte_from_real, gm_string_real};
 pub use math::{atan2, cos, exp, ln, pow, sin, sqrt, tan};
 pub use round::{
-    abs, ceil, clamp, floor, frac, gm_div, gm_mod, lerp, max, min, round, sign, to_int_round, to_int_trunc,
+    abs, ceil, clamp, floor, frac, gm_div, gm_max, gm_min, gm_mod, gm_repeat_count, lerp, round, sign,
+    to_int_round, to_int_trunc,
 };
 pub use trig::{
     darctan2, dcos, degtorad, dsin, lengthdir_x, lengthdir_y, point_direction, point_distance, radtodeg,

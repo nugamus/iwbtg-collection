@@ -1,7 +1,8 @@
 //! The script host (docs/plans/sim-core.md 11, decision 0001).
 //!
-//! The sim talks to scripts only through [`ScriptHost`], so the sim core never names Rhai
-//! types. WP0 declares; WP9 owns.
+//! The sim talks to scripts only through [`ScriptHost`], implemented by [`ScriptRuntime`], so
+//! the sim core never names Rhai types. `Sim` owns one `ScriptRuntime`, built from
+//! `GameDef::scripts`, and lends it to every [`Ctx`] as `ctx.scripts`. WP0 declares; WP9 owns.
 #![allow(unused_variables, reason = "WP0 stub: WP9 fills the body")]
 
 pub mod api;
@@ -11,6 +12,9 @@ pub mod validate;
 
 use serde::{Deserialize, Serialize};
 
+pub use host::ScriptRuntime;
+
+use crate::error::SimError;
 use crate::events::EventKind;
 use crate::world::{Ctx, Flow, InstId};
 
@@ -22,10 +26,21 @@ pub struct ScriptError {
     pub message: String,
 }
 
+impl From<ScriptError> for SimError {
+    fn from(e: ScriptError) -> SimError {
+        SimError::Script { message: e.message }
+    }
+}
+
 /// Something that runs script handlers.
+///
+/// Takes `&self`: a handler that spawns runs the new instance's Create inside `Ctx::spawn`,
+/// which may call back into the host, so the host must be re-entrant. Per-call state (scopes,
+/// the step budget counter) lives inside the host (interior mutability is allowed there and
+/// only there, architecture "Scripts").
 pub trait ScriptHost {
     /// Runs the script handler for `ev` on `me`, if the script has one.
-    fn on_event(&mut self, ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, ScriptError>;
+    fn on_event(&self, ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, ScriptError>;
 }
 
 /// A scripted instance's state. WP9 adds the fields.
@@ -36,7 +51,8 @@ pub struct ScriptState {}
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub struct ScriptOutput {}
 
-/// Runs the script part of an event, after the base built-in's handler.
-pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Flow {
+/// Runs the script part of an event, after the base built-in's handler, through `ctx.scripts`.
+/// An error halts the sim (through `events::dispatch`).
+pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimError> {
     unimplemented!("WP9: script::on_event")
 }

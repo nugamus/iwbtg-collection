@@ -1,5 +1,6 @@
 //! The built-in kinds (docs/plans/sim-core.md 6.1). WP0 lists every variant so the loader can
-//! parse kinds; WP6a owns the file afterwards (WP6b and WP6c add one dispatch line each).
+//! parse kinds; WP6a owns the file afterwards. Dispatch lives in `builtins/mod.rs`, where WP0
+//! routed every variant to its own file, so WP6b and WP6c edit neither file.
 
 /// Every built-in kind. A package kind is one of these, with params (a preset) or a script on
 /// top (`Scripted`, or a base built-in plus a script).

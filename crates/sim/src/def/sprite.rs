@@ -70,15 +70,35 @@ pub struct BitMask {
     words: Vec<u64>,
 }
 
+/// Most `u64` words one [`BitMask`] may hold: 2^22 words, 32 MiB, about 268 million pixels
+/// (a 16800 x 15000 mask fits). Our own limit (Design), so a package cannot make the loader
+/// allocate without bound, and the same on wasm32 and x86_64.
+pub const MAX_MASK_WORDS: u64 = 1 << 22;
+
+/// A mask too large for [`BitMask::new`] ([`MAX_MASK_WORDS`]).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, thiserror::Error)]
+#[error("collision mask {width} x {height} is too large (limit {MAX_MASK_WORDS} words of 64 px)")]
+pub struct MaskTooLarge {
+    /// Requested width.
+    pub width: u32,
+    /// Requested height.
+    pub height: u32,
+}
+
 impl BitMask {
-    /// An all-clear grid of `width` x `height` pixels.
-    pub fn new(width: u32, height: u32) -> BitMask {
+    /// An all-clear grid of `width` x `height` pixels, or an error past [`MAX_MASK_WORDS`].
+    pub fn new(width: u32, height: u32) -> Result<BitMask, MaskTooLarge> {
+        let too_large = MaskTooLarge { width, height };
         let len = u64::from(BitMask::row_words(width)) * u64::from(height);
-        BitMask {
+        if len > MAX_MASK_WORDS {
+            return Err(too_large);
+        }
+        let len = usize::try_from(len).map_err(|_| too_large)?;
+        Ok(BitMask {
             width,
             height,
-            words: vec![0; usize::try_from(len).unwrap_or(0)],
-        }
+            words: vec![0; len],
+        })
     }
 
     /// Words per row for a width.
@@ -136,7 +156,7 @@ mod tests {
 
     #[test]
     fn bitmask_get_set_across_words() {
-        let mut m = BitMask::new(70, 3);
+        let mut m = BitMask::new(70, 3).unwrap();
         assert_eq!(m.count(), 0);
         m.set(0, 0, true);
         m.set(65, 2, true);
@@ -149,5 +169,19 @@ mod tests {
         assert_eq!(m.count(), 2);
         m.set(0, 0, false);
         assert_eq!(m.count(), 1);
+    }
+
+    #[test]
+    fn bitmask_size_is_limited() {
+        assert!(BitMask::new(16_800, 64).is_ok());
+        let huge = BitMask::new(u32::MAX, u32::MAX);
+        assert_eq!(
+            huge,
+            Err(MaskTooLarge {
+                width: u32::MAX,
+                height: u32::MAX
+            })
+        );
+        assert!(BitMask::new(64, (1 << 22) + 1).is_err());
     }
 }

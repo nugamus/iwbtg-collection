@@ -2,8 +2,10 @@
 //!
 //! The kid's events run ordered lists of named actions read from `physics.toml`; every spec rule
 //! is a field value or a named action in `actions/`. Nothing family-specific hides in an
-//! `if family == B`. WP0 declares the module tree and the cross-WP signatures; WP5a owns this
-//! file (WP5b and WP5c own their files under `actions/`, `collisions/` and `state_*.rs`).
+//! `if family == B`. WP0 declares the module tree, the cross-WP signatures and the action
+//! routing ([`KidAction`], [`run_action`], [`KidCollisionRun`], [`run_collision`]); WP5a owns
+//! this file. WP5b and WP5c own their files under `actions/`, `collisions/` and `state_*.rs` and
+//! add their actions as variants of the enums there, so they never edit this file.
 #![allow(unused_variables, reason = "WP0 stubs: WP5a fills the bodies")]
 
 pub mod api;
@@ -43,6 +45,7 @@ use serde::{Deserialize, Serialize};
 pub use state::{KidGlobals, KidState};
 
 use crate::def::PhysicsProfile;
+use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
 use crate::world::{Ctx, Flow, InstId};
 
@@ -50,8 +53,94 @@ use crate::world::{Ctx, Flow, InstId};
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub struct KidOutput {}
 
-/// Runs one event on a kid instance: the profile's action list for that event.
-pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Flow {
+/// One named action in a `physics.toml` event list (`step = ["walk", "jump", ...]`, plan 5.2).
+///
+/// Split by owner like `KindState`: each part is the enum of one file under `actions/`, and the
+/// name in the file picks the part whose enum has that name (`untagged`). Names must be unique
+/// across parts.
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
+#[serde(untagged)]
+pub enum KidAction {
+    /// Every family (WP5a).
+    Common(actions::common::CommonAction),
+    /// Family A1 (WP5a).
+    A1(actions::a1::A1Action),
+    /// Family A2 (WP5c).
+    A2(actions::a2::A2Action),
+    /// Family A3 (WP5c).
+    A3(actions::a3::A3Action),
+    /// Family A4 (WP5c).
+    A4(actions::a4::A4Action),
+    /// Family A5 (WP5c).
+    A5(actions::a5::A5Action),
+    /// Family B (WP5b).
+    B(actions::b::BAction),
+    /// Family C (WP5c).
+    C(actions::c::CAction),
+    /// Gravity flips (WP5c).
+    Flip(actions::flip::FlipAction),
+    /// Slip blocks and ice (WP5c).
+    Ice(actions::ice::IceAction),
+    /// Ladders (WP5c).
+    Ladder(actions::ladder::LadderAction),
+    /// Slopes (WP5c).
+    Slope(actions::slope::SlopeAction),
+}
+
+/// Runs one named action on the kid `me`, in the file that owns it.
+pub fn run_action(ctx: &mut Ctx, me: InstId, action: &KidAction) -> Result<Flow, SimError> {
+    match action {
+        KidAction::Common(a) => actions::common::run(ctx, me, a),
+        KidAction::A1(a) => actions::a1::run(ctx, me, a),
+        KidAction::A2(a) => actions::a2::run(ctx, me, a),
+        KidAction::A3(a) => actions::a3::run(ctx, me, a),
+        KidAction::A4(a) => actions::a4::run(ctx, me, a),
+        KidAction::A5(a) => actions::a5::run(ctx, me, a),
+        KidAction::B(a) => actions::b::run(ctx, me, a),
+        KidAction::C(a) => actions::c::run(ctx, me, a),
+        KidAction::Flip(a) => actions::flip::run(ctx, me, a),
+        KidAction::Ice(a) => actions::ice::run(ctx, me, a),
+        KidAction::Ladder(a) => actions::ladder::run(ctx, me, a),
+        KidAction::Slope(a) => actions::slope::run(ctx, me, a),
+    }
+}
+
+/// One named collision run in `events.collisions` (`{ with = "block", run = "block_standard" }`,
+/// plan 5.2). Split by owner like [`KidAction`].
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
+#[serde(untagged)]
+pub enum KidCollisionRun {
+    /// `block_standard` and friends (WP5a).
+    Block(collisions::block::BlockRun),
+    /// `platform_standard` (WP5a).
+    Platform(collisions::platform::PlatformRun),
+    /// Family B runs (WP5b).
+    B(collisions::b::BRun),
+    /// Slope runs (WP5c).
+    Slope(collisions::slope::SlopeRun),
+    /// poronkusema `moving_block_por` (WP5c).
+    MovingBlock(collisions::moving_block::MovingBlockRun),
+}
+
+/// Runs one named collision run for the kid `me` against `other`, in the file that owns it.
+pub fn run_collision(
+    ctx: &mut Ctx,
+    me: InstId,
+    other: InstId,
+    run: &KidCollisionRun,
+) -> Result<Flow, SimError> {
+    match run {
+        KidCollisionRun::Block(r) => collisions::block::run(ctx, me, other, r),
+        KidCollisionRun::Platform(r) => collisions::platform::run(ctx, me, other, r),
+        KidCollisionRun::B(r) => collisions::b::run(ctx, me, other, r),
+        KidCollisionRun::Slope(r) => collisions::slope::run(ctx, me, other, r),
+        KidCollisionRun::MovingBlock(r) => collisions::moving_block::run(ctx, me, other, r),
+    }
+}
+
+/// Runs one event on a kid instance: the profile's action list for that event, through
+/// [`run_action`] and [`run_collision`].
+pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimError> {
     unimplemented!("WP5a: kid::on_event")
 }
 

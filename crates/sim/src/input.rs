@@ -12,13 +12,13 @@
 //! is doing). The client's input collector must build frames the same way, so that a replay and an
 //! `.inputs` file agree for the same physical input. `held` is the OR of every input's state.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
 /// One client action. Each is one bit of a `u16`; the top bit is reserved.
 ///
-/// `Pause`, `Mute` and `Reset` are the engines' P, Ctrl+M and F2 (docs/plans/sim-core.md 2.4):
+/// `Pause`, `Mute` and `Reset` are the engines' P, M and F2 (docs/plans/sim-core.md 2.4):
 /// they change sim state in the originals, so they are sim input. Quitting (Escape, Alt+F4) is
 /// client-only and never an action.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -38,7 +38,8 @@ pub enum Action {
     Menu = 1 << 11,
     /// P: pause (kaenbyou jump block, B and xia pause, showdown keyboard_wait).
     Pause = 1 << 12,
-    /// Ctrl+M: flips the game's music flag, which changes `sound_stop_all` calls.
+    /// M (wanna and xia also need Ctrl held, CLONE_SPEC input): flips the game's music flag,
+    /// which changes `sound_stop_all` calls.
     Mute = 1 << 13,
     /// F2: game reset (delete the temp save marker and restart, or the engine's gameReset).
     Reset = 1 << 14,
@@ -177,6 +178,9 @@ pub mod vk {
     pub const DELETE: u8 = 46;
     /// F1; F2..F12 follow.
     pub const F1: u8 = 112;
+    pub const F2: u8 = 113;
+    pub const M: u8 = b'M';
+    pub const P: u8 = b'P';
     pub const Q: u8 = b'Q';
     pub const R: u8 = b'R';
     pub const S: u8 = b'S';
@@ -250,9 +254,10 @@ const fn generic_modifier(code: u8) -> Option<u8> {
 }
 
 /// IWBTG engine default keys for each action, used to read the research `.inputs` files.
-/// `back` has no default key. OPEN: confirm in CLONE_SPEC (none of these is confirmed yet; Q for
+/// `back` has no default key. P, M and F2 are the global keys of CLONE_SPEC input (Key press
+/// events on world). OPEN: confirm in CLONE_SPEC (none of these is confirmed yet; Q for
 /// `suicide` is a guess from common fangame engines).
-pub const IWBTG_DEFAULT_KEYS: [(u8, Action); 11] = [
+pub const IWBTG_DEFAULT_KEYS: [(u8, Action); 14] = [
     (vk::SHIFT, Action::Jump),
     (vk::Z, Action::Shoot),
     (vk::R, Action::Restart),
@@ -264,12 +269,23 @@ pub const IWBTG_DEFAULT_KEYS: [(u8, Action); 11] = [
     (vk::ESCAPE, Action::Menu),
     (vk::S, Action::Skip),
     (vk::Q, Action::Suicide),
+    (vk::P, Action::Pause),
+    (vk::M, Action::Mute),
+    (vk::F2, Action::Reset),
 ];
+
+/// Keys the IWBTG default map reads as no action: a command naming one is accepted and the key
+/// is dropped. Ctrl is only the modifier of the mute key (`press Ctrl M` in the research files
+/// is one `mute` press). wanna and xia need Ctrl held for M (CLONE_SPEC input); no research
+/// file presses M there without Ctrl, so the default map does not model that (OPEN if one does).
+pub const IWBTG_IGNORED_KEYS: [u8; 1] = [vk::CTRL];
 
 /// Which action each original key stands for. Several keys may share an action.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct KeyMap {
     keys: BTreeMap<u8, Action>,
+    /// Keys that stand for no action and are dropped without an error.
+    ignored: BTreeSet<u8>,
 }
 
 impl KeyMap {
@@ -277,31 +293,59 @@ impl KeyMap {
     pub fn empty() -> KeyMap {
         KeyMap {
             keys: BTreeMap::new(),
+            ignored: BTreeSet::new(),
         }
     }
 
-    /// The IWBTG engine default map (`IWBTG_DEFAULT_KEYS`).
+    /// The IWBTG engine default map (`IWBTG_DEFAULT_KEYS`, `IWBTG_IGNORED_KEYS`).
     pub fn iwbtg() -> KeyMap {
         let mut map = KeyMap::empty();
         for (key, action) in IWBTG_DEFAULT_KEYS {
             map.bind(key, action);
+        }
+        for key in IWBTG_IGNORED_KEYS {
+            map.ignore(key);
         }
         map
     }
 
     /// Binds a virtual-key code to an action, replacing any earlier binding of that key.
     pub fn bind(&mut self, key: u8, action: Action) {
+        self.ignored.remove(&key);
         self.keys.insert(key, action);
+    }
+
+    /// Makes a key stand for no action: commands may name it, and it is dropped. Replaces any
+    /// binding of that key.
+    pub fn ignore(&mut self, key: u8) {
+        self.keys.remove(&key);
+        self.ignored.insert(key);
+    }
+
+    /// What a key does: `Some(Some(action))` when bound, `Some(None)` when ignored, `None` when
+    /// unmapped. A left- or right-hand modifier that is neither bound nor ignored itself takes
+    /// the generic key's entry.
+    fn lookup(&self, key: u8) -> Option<Option<Action>> {
+        let exact = |k: u8| {
+            self.keys
+                .get(&k)
+                .map(|a| Some(*a))
+                .or_else(|| self.ignored.contains(&k).then_some(None))
+        };
+        exact(key).or_else(|| generic_modifier(key).and_then(exact))
     }
 
     /// The action a key stands for, if any. A left- or right-hand Shift, Ctrl or Alt that is not
     /// bound itself takes the binding of the generic key (`vk:161` acts as `Shift`), as GM8 reads
     /// `vk_shift` from either hand.
     pub fn action(&self, key: u8) -> Option<Action> {
-        self.keys
-            .get(&key)
-            .or_else(|| generic_modifier(key).and_then(|g| self.keys.get(&g)))
-            .copied()
+        self.lookup(key).flatten()
+    }
+
+    /// True when the key is ignored (see [`KeyMap::ignore`]), directly or through its generic
+    /// modifier.
+    pub fn is_ignored(&self, key: u8) -> bool {
+        matches!(self.lookup(key), Some(None))
     }
 }
 
@@ -459,12 +503,16 @@ fn parse(text: &str, names: Names) -> Result<ParsedInputs, InputsError> {
         if command != "hold" && a != b {
             return Err(err(LineError::SingleFrame(command)));
         }
+        let words: Vec<&str> = words.collect();
         let names = words
+            .iter()
             .map(|w| resolve(w, names).map_err(err))
             .collect::<Result<Vec<_>, _>>()?;
-        if names.is_empty() {
+        if words.is_empty() {
             return Err(err(LineError::NoNames));
         }
+        // Ignored keys (Ctrl in the default map) resolve to nothing.
+        let names: Vec<(Source, Action)> = names.into_iter().flatten().collect();
         let mut push = |frame: u32, down: bool| {
             let list = events.entry(frame).or_default();
             list.extend(
@@ -527,18 +575,19 @@ fn parse_frames(s: &str) -> Result<(u32, u32), LineError> {
     }
 }
 
-/// Resolves a name in the file's name space.
-fn resolve(word: &str, names: Names) -> Result<(Source, Action), LineError> {
+/// Resolves a name in the file's name space. `None` for a key the map ignores.
+fn resolve(word: &str, names: Names) -> Result<Option<(Source, Action)>, LineError> {
     match names {
         Names::Actions => match Action::from_name(word) {
-            Some(action) => Ok((Source::Action(action), action)),
+            Some(action) => Ok(Some((Source::Action(action), action))),
             None => Err(LineError::UnknownAction(word.to_string())),
         },
         Names::Keys(keys) => {
             let code = key_code(word).ok_or_else(|| LineError::UnknownKey(word.to_string()))?;
             let code = recorder_key(code);
-            match keys.action(code) {
-                Some(action) => Ok((Source::Key(code), action)),
+            match keys.lookup(code) {
+                Some(Some(action)) => Ok(Some((Source::Key(code), action))),
+                Some(None) => Ok(None),
                 None => Err(LineError::UnmappedKey(word.to_string())),
             }
         }
@@ -746,6 +795,32 @@ mod tests {
         assert!(!p.frames[8].is_held(Action::Jump));
     }
 
+    /// The research files' global keys: `press F2` (kaenbyou/tr-room-12), `hold F2`
+    /// (little-runner/tr-room-04), `press Ctrl M` (clear-the-easy-miku-2 audio-miku-sync-mute).
+    #[test]
+    fn default_map_reads_the_global_keys() {
+        let p = parse(
+            "frame 2: press Ctrl M\nframe 3: release Ctrl M\nframe 5: press P\nframes 6-7: hold F2\nframe 9: end",
+        );
+        assert_eq!(p.frames[2].pressed, Action::Mute.bit());
+        assert_eq!(p.frames[2].held, Action::Mute.bit());
+        assert_eq!(p.frames[3].released, Action::Mute.bit());
+        assert_eq!(p.frames[5].pressed, Action::Pause.bit());
+        assert!(p.frames[6].is_held(Action::Reset) && p.frames[7].is_held(Action::Reset));
+        assert_eq!(p.frames[8].released, Action::Reset.bit());
+        // Ctrl alone is accepted and stands for nothing, either hand.
+        let p = parse("frame 1: press Ctrl\nframe 2: release vk:163\nframe 3: end");
+        assert!(p.frames.iter().all(|f| *f == InputFrame::EMPTY));
+        let map = KeyMap::iwbtg();
+        assert!(map.is_ignored(vk::CTRL) && map.is_ignored(vk::RIGHT_CTRL));
+        assert_eq!(map.action(vk::CTRL), None);
+        // Binding an ignored key makes it count again.
+        let mut map = KeyMap::iwbtg();
+        map.bind(vk::CTRL, Action::Shoot);
+        assert!(!map.is_ignored(vk::LEFT_CTRL));
+        assert_eq!(map.action(vk::LEFT_CTRL), Some(Action::Shoot));
+    }
+
     #[test]
     fn modifier_keys_match_the_recorder() {
         // The recorder presses Left Shift for `Shift`, so `vk:160` releases it.
@@ -873,8 +948,8 @@ mod tests {
             })
         );
         assert_eq!(
-            line_error("frame 1: press F2"),
-            (1, LineError::UnmappedKey("F2".into()))
+            line_error("frame 1: press F3"),
+            (1, LineError::UnmappedKey("F3".into()))
         );
         assert_eq!(line_error("frames 1-2: end"), (1, LineError::BadEnd));
         assert_eq!(line_error("frame 1: end Shift"), (1, LineError::BadEnd));
@@ -919,6 +994,29 @@ mod tests {
             .join(game)
             .join(format!("{case}.inputs"));
         Some(std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display())))
+    }
+
+    /// Research files that press F2 or Ctrl+M parse with the default map.
+    #[test]
+    fn real_global_key_inputs_parse() {
+        let cases = [
+            ("kaenbyou", "tr-room-12", Action::Reset),
+            ("little-runner", "tr-room-04", Action::Reset),
+            ("clear-the-easy-miku-2", "audio-miku-sync-mute-b", Action::Mute),
+            ("clear-the-easy-miku-2", "audio-miku-sync-mute-d", Action::Mute),
+        ];
+        for (game, case, action) in cases {
+            let Some(text) = research_inputs(game, case) else {
+                eprintln!("skipped: IWBTG_RESEARCH is not set");
+                return;
+            };
+            let p =
+                parse_key_inputs(&text, &KeyMap::iwbtg()).unwrap_or_else(|e| panic!("{game}/{case}: {e}"));
+            assert!(
+                p.frames.iter().any(|f| f.pressed & action.bit() != 0),
+                "{game}/{case}: no {action:?} press"
+            );
+        }
     }
 
     #[test]

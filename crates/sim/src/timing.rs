@@ -51,7 +51,23 @@ pub struct Split {
     pub tick: u64,
 }
 
-/// Tick row 16: the splits whose trigger fired this tick.
-pub fn evaluate(w: &World, def: &GameDef) -> Result<Vec<Split>, SimError> {
+/// Timing state kept in `World::timing` (hashed and saved with the world). WP8b adds the fields
+/// it needs: whether the run started, the next stage to split, the end reached.
+#[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub struct TimingState {
+    /// Set by [`raise_run_end`] (`game_clear` and anything else that ends the run); read and
+    /// cleared by [`evaluate`] at tick row 16.
+    pub run_end_raised: bool,
+}
+
+/// Raises the `run_end` trigger for this tick's row 16. The `game_clear` built-in (WP6b) calls
+/// this; nothing else needs to know how timing works.
+pub fn raise_run_end(w: &mut World) {
+    w.timing.run_end_raised = true;
+}
+
+/// Tick row 16: the splits whose trigger fired this tick. Updates `World::timing`, so a
+/// trigger fires once (a stage split is not repeated on later ticks in the same room).
+pub fn evaluate(w: &mut World, def: &GameDef) -> Result<Vec<Split>, SimError> {
     unimplemented!("WP8b: timing::evaluate")
 }

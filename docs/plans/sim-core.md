@@ -10,7 +10,9 @@ Related: [architecture](../architecture.md), [format v0](../format/v0.md), [form
 
 - GameMaker behavior comes **only** from `research/specs/`: `engines/gm8/CLONE_SPEC.md` (sections "tick loop", "motion", "collision", "numbers", "rooms", "sprites and animation", "input", "sound"), `engines/gm8/kid/{A1,A2,A3,A4,A5,B,C}.md`, `mechanics.md`, `tricks.md`, and the CSV traces under `engines/gm8/traces/`. Never read OpenGMK, Jtool or renex source, or anything under `research/extracted/`, while designing or writing client code (client `CLAUDE.md`).
 - Specs and traces change while traces are recorded. Each item names its spec section so an agent can re-read the current text. When the spec changes a rule, the code changes in the one place the [register](#15-unknown-and-inferred-register) names for it. A default changes only after the spec records a trace result; agents may read a recorded CSV to check their code, but they do not turn their own reading of a probe trace into a rule (that is spec work for research).
-- **OpenGMK-derived number rules.** The existing `crates/sim/src/num/` was written before the clean-room rule. `INVESTIGATION.md` (last section) names these rules as taken from OpenGMK source: the 1e-13 epsilon compare, truthiness `>= 0.5`, `sign` with epsilon, `mod` as a − trunc(a/b)·b, floored `div`, round −0 → +0, and the `max` tie rules. The doc comments in `num/round.rs` also cite the recorder for `floor`/`ceil` signed zeros and `min`/`max`, and `num/trig.rs` and `num/tests.rs` claim the recorder uses the UCRT for `sin`/`cos` (no spec says so). Each of these is **OPEN** behind a `NumRules` field (register N1, N2, N4, N11-N13) except `div`, which the spec Confirms truncates toward zero, so the code changes (N8). WP2 audits every `num` doc comment that cites OpenGMK or the UCRT and replaces it with an N-id.
+- **OpenGMK-derived number rules.** The existing `crates/sim/src/num/` was written before the clean-room rule. `INVESTIGATION.md` (last section) names these rules as taken from OpenGMK source: the 1e-13 epsilon compare, truthiness `>= 0.5`, `sign` with epsilon, `mod` as a − trunc(a/b)·b, floored `div`, round −0 → +0, and the `max` tie rules. The doc comments in `num/round.rs` also cite the recorder for `floor`/`ceil` signed 
+
+eros and `min`/`max`, and `num/trig.rs` and `num/tests.rs` claim the recorder uses the UCRT for `sin`/`cos` (no spec says so). Each of these is **OPEN** behind a `NumRules` field (register N1, N2, N4, N11-N13) except `div`, which the spec Confirms truncates toward zero, so the code changes (N8). WP2 audits every `num` doc comment that cites OpenGMK or the UCRT and replaces it with an N-id.
 - `sim` stays pure: no Bevy, no IO, no clock, no threads, no `HashMap`/`HashSet`, no `f32`, no platform float math, no `std::hash` hashers in state hashing. Enforced by `crates/sim/clippy.toml` and lint attributes (section 10.5), not by convention. `usize` never enters hashed or serialized state.
 - Labels: **Confirmed** (spec Confirmed section or manual), **Inferred** (spec Inferred section), **Trace** (seen in a recorded CSV; the recorder is OpenGMK, so still not proof for the real runner), **UNKNOWN** (spec UNKNOWN; the code isolates it), **Design** (our own choice, no GM behavior claimed), **Conflict** (two spec passages disagree; reported to research, code isolates both readings).
 
@@ -805,7 +807,7 @@ Spec: format v0, converter `FORMAT_NOTES.md`. The sim never reads files: `format
 ### 8.1 API
 
 ```rust
-// crates/format/src/load.rs (WP7a; WP7b adds the physics and params steps)
+// crates/format/src/load.rs (WP7a, including the calls to the WP7b steps; WP0 fixed their signatures, section 18)
 pub fn load_game(files: &PackageFiles, mode: LoadMode) -> Result<GameDef, Vec<Diagnostic>>;
 pub enum LoadMode { Strict, Trace { unmapped_kinds_inert: bool } }  // Trace: unmapped script kinds load as inert with a warning
 // crates/format/src/sprites.rs, masks.rs (WP7a)
@@ -1079,7 +1081,7 @@ Every WP ends with the user check the client `CLAUDE.md` requires. Commands assu
 
 ### WP5c: Kid families A2-A5 and C
 
-- **Owns:** `kid/actions/{a2,a3,a4,a5,c,slope,ladder,ice,flip}.rs`, `kid/collisions/{slope,moving_block}.rs`, `kid/state_ext.rs`, `tests/wp5c_*.rs`.
+- **Owns:** `kid/actions/{a2,a3,a4,a5,c,slope,ladder,ice,flip}.rs`, `kid/collisions/{slope,moving_block}.rs`, `kid/state_ext.rs` (`KidStateExt`, `KidGlobalsExt`), `def/physics_ext.rs` (`[ice]`, `[slope]`, `[ladder]`, `[flip]`), `tests/wp5c_*.rs`.
 - **Depends on:** WP5a.
 - **Spec:** kid/A2-A5.md, C.md.
 - **Done when:** every 5.3 row marked 5c works or returns `Unsupported` naming its row (tier 3 only); all 20 profiles load.
@@ -1096,14 +1098,14 @@ Every WP ends with the user check the client `CLAUDE.md` requires. Commands assu
 
 ### WP6b, WP6c: Built-ins tier 2 and tier 3
 
-- **Owns:** one `builtins/<kind>.rs` and doc page per built-in of the tier, one line each in `builtins/state.rs` and `def/builtin.rs` dispatch, `tests/wp6b_*.rs` / `wp6c_*.rs`.
+- **Owns:** one `builtins/<kind>.rs` and doc page per built-in of the tier (its four entry points, section 18), one variant each in `builtins/state.rs`, `tests/wp6b_*.rs` / `wp6c_*.rs`. Dispatch in `builtins/mod.rs` is already routed by WP0.
 - **Depends on:** WP6a (WP6c also WP9 for `scripted`).
 - **Done when:** tier complete for its games, or `Unsupported` naming the built-in.
 - **User check:** `cargo test -p iwbtg-sim wp6b` (and `wp6c`).
 
 ### WP7a: Loader: sprites, masks, rooms, objects, order
 
-- **Owns:** `crates/format/src/{load,sprites,masks,rooms,objects,order,vars,tracemap}.rs`, `crates/format/tests/wp7a_*.rs` and fixtures, `docs/format/v0.md`, schemas under `docs/format/schema/v0/` except physics.
+- **Owns:** `crates/format/src/{load,sprites,masks,rooms,objects,order,vars,tracemap}.rs`, the `[engine]` and `[timing]` parts of `crates/format/src/manifest.rs` (step 1), `crates/format/tests/wp7a_*.rs` and fixtures, `docs/format/v0.md`, schemas under `docs/format/schema/v0/` except physics.
 - **Public API:** 8.1 (WP7a part), `LoadMode`.
 - **Depends on:** WP0 (`def` types).
 - **Done when:** steps 1-6 and 8-9 of 8.2; every converter package loads in `Trace` mode with only warnings; spawnable-kind rank check; v0.md documents every 8.3 addition and the 8.4 requests are filed with research.
@@ -1133,7 +1135,7 @@ Every WP ends with the user check the client `CLAUDE.md` requires. Commands assu
 
 ### WP9: Script host (minimal, IWS profile)
 
-- **Owns:** `crates/sim/src/script/{mod,host,api,budget,validate}.rs`, the root `Cargo.toml` Rhai line after WP0, `tests/wp9_*.rs`.
+- **Owns:** `crates/sim/src/script/{mod,host,api,budget,validate}.rs` (`ScriptRuntime` in `host.rs`), `def/script.rs`, the root `Cargo.toml` Rhai line after WP0, `tests/wp9_*.rs`.
 - **Public API:** `trait ScriptHost { fn on_event(&mut self, ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, ScriptError>; }`, `script::on_event`, `ScriptState`, the validator.
 - **Depends on:** WP1.
 - **Spec:** section 11; 0001.
@@ -1160,7 +1162,8 @@ Every WP ends with the user check the client `CLAUDE.md` requires. Commands assu
 
 - Only WP0 edits `lib.rs`, `crates/sim/Cargo.toml` and `clippy.toml`. The root `Cargo.toml` is WP0's, then its Rhai line is WP9's.
 - Shared enums and structs are split by owner (1.5, 1.6): no WP edits another's state, output or globals type.
-- `def/`: WP0 creates; then `physics.rs` WP5a, `builtin.rs` WP6a, `sound.rs` WP10, `timeline.rs`/`path.rs` WP2, `class.rs` WP11, the rest WP7a.
+- `def/`: WP0 creates; then `physics.rs` WP5a, `physics_ext.rs` WP5c, `script.rs` WP9, `builtin.rs` WP6a, `sound.rs` WP10, `timeline.rs`/`path.rs` WP2, `class.rs` WP11, the rest WP7a.
+- `crates/format/clippy.toml`: WP0, then WP11 (keep its float list in step with `crates/sim/clippy.toml`).
 - `rules/`: `tick` WP1, `num`/`motion` WP2, `collide` WP3, `room` WP4a, `sound` WP10, `mod.rs` WP11.
 - `input.rs`: WP0 for the Action additions, then WP8a. `InputState` is WP1's `input_state.rs`.
 - Docs: `architecture.md` WP0 (all known updates), later changes by WP11; `physics.md` and its schema WP5a; `builtins/kid.md` WP5a; other `builtins/*.md` WP6a/b/c; `v0.md` and other schemas WP7a.
@@ -1344,3 +1347,20 @@ Each critique was re-checked against the spec before it went in. All were confir
 - Determinism: postcard + BLAKE3 hash (10.1); non-finite setters (10.2); overflow (10.3); i64 grid math (3.4); clippy additions (10.5); Rhai features and short-circuit lint (11); `NumRules` instead of consts; `trace-setup` feature unification (10.4); sorted VarIds and a non-serialized grid (1.1, 1.4); node/wasm-bindgen target (10.6).
 - Coverage: rely blockers became converter requests and gates (8.4); M1 is rely only, kaenbyou moved to M2; `iwbtg replay run` and timing triggers (WP8b); M3 split, M3b waits for Phase 4; sound model (section 7, WP10); Draw slot order and visibility (2.1 row 12); deactivated persistent instances (4.2); kid event schema (5.2); room roles (4.1); direct-read contract (2.2); playerface and blood draw order (3.3, 6.1); real-time reads (R28); timeline offset (R6b); flipped +4 is 10 games; trace inventory and kinds (9.1).
 - WP split: WP0 freezes per-owner sub-types (1.5, 1.6) so WPs never edit shared enums; WP4, WP5, WP6, WP7, WP8 split; milestone checks moved to WP11, which removes the WP5/WP6/WP7 cycles.
+## 18. WP0 contract notes
+
+The WP0 review froze these interfaces in addition to sections 1-11. Where they differ from the text above, the code and this section win.
+
+- **Halting (2.2).** Handler entry points return `Result<Flow, SimError>`: `kid::on_event`, `builtins::on_event` and each built-in's `on_event`, `script::on_event`, `kid::run_action`, `kid::run_collision`, `kid::api::kill`, `events::probe_on_event`. `events::dispatch` turns an `Err` into `Ctx::halt(e)`, which sets `SimStatus::Halted` (first error wins) and returns the new `Flow::Halt`. `dispatch`, `run_phase`, `Ctx::destroy` and `Ctx::change_kind` return `Flow` and pass `Halt` up; a handler that gets `Halt` returns it at once; `tick::run_tick` stops on `Halt` without the sweep, the room change or `tick += 1`. `SimError::Invariant` covers ids that name nothing. `kid::api::apply_param_zone` returns `Result<(), SimError>`.
+- **Ctx (1.4).** `Ctx { def, rules, w, scripts: &ScriptRuntime, dll_mode: DllMode }`. `Sim` owns the `ScriptRuntime` (built by `ScriptRuntime::new(&GameDef)` from `GameDef::scripts: Vec<ScriptDef>`, the table `ScriptId` indexes) and copies `SimOptions::dll_mode` into every `Ctx`. `ScriptHost::on_event` takes `&self`, because a script that spawns re-enters the host through Create.
+- **Instances and spawning (1.1, 1.4).** `Instance` has `name: Option<NameId>` and `group: Option<GroupId>`. `SpawnInit` has `rank: Option<u16>` (room-file rank; `None` asks `rank_for`), `xscale`, `yscale`, `angle`, `name`, `group`; its `Default` runs Create.
+- **Broadphase (3.4).** `World::instances` is private to `world` (read with `World::instances()`). `World::get_mut` and `World::insert` mark the instance in `Grid::moved`; every query also tests the moved instances; `World::flush_grid` re-buckets them (WP3 body, WP1 decides when). `Grid`'s `PartialEq` is always true.
+- **Globals.** `RunGlobals::difficulty: u8` exists for `room::start_game` (WP4a). `KidGlobals { b: KidGlobalsB, ext: KidGlobalsExt }` like `KidState`. `World::timing: TimingState` (hashed); `timing::evaluate(&mut World, &GameDef)`; `timing::raise_run_end(&mut World)` is how `game_clear` raises `run_end`.
+- **Numbers (3.2, 11).** `round`, `floor`, `ceil`, `sign`, `gm_min`, `gm_max`, `gm_eq`..`gm_ge`, `gm_bool` and `gm_repeat_count` take `&NumRules` and honor every `NumRules` variant; `num::min`/`max` and the `EPSILON`/`TRUTH_THRESHOLD` consts are gone. WP2 still owns the bodies, the `gm_div` fix and the provenance audit.
+- **Built-ins (6).** Every `builtins/<kind>.rs` has `param_specs() -> &'static [ParamSpec]`, `event_set(&KindDef) -> EventSet`, `init_state(&Params) -> Result<BuiltinState, ParamError>` and `on_event(ctx, me, ev) -> Result<Flow, SimError>`; `builtins/mod.rs` routes all four for every `Builtin`.
+- **Kid actions (5).** `KidAction` and `KidCollisionRun` are untagged enums of per-file enums (`actions::b::BAction`, `collisions::slope::SlopeRun`, ...), each file with `run(ctx, me, &Action)` (collisions also take `other`). Owners add variants in their own files; `kid::run_action` and `kid::run_collision` already route every part. `[ice]`, `[slope]`, `[ladder]`, `[flip]` live in `def/physics_ext.rs`; `FlipModel::model` lists `none`, `swap_object`, `yflag`, `grav_sign`.
+- **Reset (4.3).** `ResetModel { trigger, kind, excluded_roles }` mirrors `RestartModel`; `RestartTrigger` serves both.
+- **Loader (8).** `physics::load`, `sounds::load`, `paths::load`, `timelines::load` take `(&PackageFiles, &mut Vec<Diagnostic>)`; the table index is the id. `params::check(&GameDef, &mut Vec<Diagnostic>)` runs on the built definition. `BitMask::new` returns `Result<_, MaskTooLarge>` (limit `MAX_MASK_WORDS`).
+- **Tools (9.4).** `replay_cmd::{ReplayRunArgs, main, run, ReplaySummary}`; WP8a's `main.rs` adds the `replay run` subcommand that calls `replay_cmd::main`.
+- **Input (2.4).** The default trace key map binds P, M and F2 to `pause`, `mute`, `reset` and ignores Ctrl, so `press Ctrl M` is one `mute` press. The CLONE_SPEC input section says M mutes, with Ctrl held only in wanna and xia.
+

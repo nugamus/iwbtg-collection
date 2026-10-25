@@ -30,8 +30,9 @@ pub struct NumRules {
     pub string_decimals: StrRound,
     /// N3 (UNKNOWN): FPU precision; per game from `game.toml [engine]`.
     pub float_model: FloatModel,
-    /// N10 (UNKNOWN): particle systems draw from the gameplay RNG. Default false is a
-    /// placeholder (Design), no GM claim.
+    /// N10: particle systems draw from the gameplay RNG. Partly answered (recorder): rely room1's
+    /// emitters draw 2 values most ticks (CLONE_SPEC numbers, num-rng-a.csv); the real runner is
+    /// unchecked. Default false is an engine_rev 0 placeholder (Design) until WP11 changes it.
     pub particles_draw_rng: bool,
 }
 

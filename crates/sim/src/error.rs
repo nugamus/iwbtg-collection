@@ -1,7 +1,8 @@
 //! Why the sim halted (docs/plans/sim-core.md 2.2, 10.2, 10.3).
 //!
-//! The sim never panics on any input. A script error, a non-finite value, an overflow or an
-//! unsupported case sets `SimStatus::Halted(SimError)` and freezes the world where it stopped.
+//! The sim never panics on any input. A script error, a non-finite value, an overflow, a broken
+//! invariant or an unsupported case sets `SimStatus::Halted(SimError)` and freezes the world
+//! where it stopped.
 
 use serde::{Deserialize, Serialize};
 
@@ -30,6 +31,13 @@ pub enum SimError {
         /// What was asked for, with its register id or plan row where there is one.
         what: String,
     },
+    /// A sim invariant broke: an id that names nothing, a table out of step. Always a bug in
+    /// the sim or the loader, never a GM behavior.
+    #[error("invariant broken: {what}")]
+    Invariant {
+        /// What was found.
+        what: String,
+    },
     /// A script stopped with an error (WP9), or GML-level misuse such as reading an unset
     /// variable in a game without "treat uninitialized as 0".
     #[error("script error: {message}")]
@@ -53,6 +61,11 @@ impl SimError {
     /// `Unsupported` for `what`.
     pub fn unsupported(what: impl Into<String>) -> SimError {
         SimError::Unsupported { what: what.into() }
+    }
+
+    /// `Invariant` for `what`.
+    pub fn invariant(what: impl Into<String>) -> SimError {
+        SimError::Invariant { what: what.into() }
     }
 
     /// A `num` error in a GML operation, as a script-level error (GM8 stops the game on these).

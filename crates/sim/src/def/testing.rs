@@ -93,6 +93,7 @@ impl GameDefBuilder {
                 sounds: Vec::new(),
                 timelines: Vec::new(),
                 paths: Vec::new(),
+                scripts: Vec::new(),
                 timing: TimingDef::default(),
             },
             order: None,
@@ -164,7 +165,7 @@ impl GameDefBuilder {
         } else {
             let w = u32::try_from(bbox.right - bbox.left + 1).unwrap_or(0);
             let h = u32::try_from(bbox.bottom - bbox.top + 1).unwrap_or(0);
-            let mut bits = BitMask::new(w, h);
+            let mut bits = BitMask::new(w, h).expect("test masks are far below MAX_MASK_WORDS");
             for (x, y) in &solid {
                 bits.set(x - bbox.left, y - bbox.top, true);
             }

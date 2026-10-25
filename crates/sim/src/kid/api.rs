@@ -5,6 +5,7 @@
 #![allow(unused_variables, reason = "WP0 stubs: WP5a fills the bodies")]
 
 use crate::def::Params;
+use crate::error::SimError;
 use crate::num::Real;
 use crate::world::{Ctx, Flow, InstId, Value, World};
 
@@ -68,8 +69,8 @@ pub fn set_on_platform(ctx: &mut Ctx, kid: InstId, on: bool) {
     unimplemented!("WP5a: kid::api::set_on_platform")
 }
 
-/// Applies a parameter zone.
-pub fn apply_param_zone(ctx: &mut Ctx, kid: InstId, z: &ParamZone) {
+/// Applies a parameter zone. Errors when a value is not finite (N15) or names no kid field.
+pub fn apply_param_zone(ctx: &mut Ctx, kid: InstId, z: &ParamZone) -> Result<(), SimError> {
     unimplemented!("WP5a: kid::api::apply_param_zone")
 }
 
@@ -78,8 +79,9 @@ pub fn bow_snapshot(w: &World, kid: InstId) -> BowSnapshot {
     unimplemented!("WP5a: kid::api::bow_snapshot")
 }
 
-/// Kills the kid per the family's `[death]` order.
-pub fn kill(ctx: &mut Ctx, kid: InstId, cause: KillCause) -> Flow {
+/// Kills the kid per the family's `[death]` order. `Ok(Flow::AbortTick)` when the death
+/// requested a room change (rely in the Select role); an `Err` halts the sim.
+pub fn kill(ctx: &mut Ctx, kid: InstId, cause: KillCause) -> Result<Flow, SimError> {
     unimplemented!("WP5a: kid::api::kill")
 }
 

@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::anim::Image;
-use crate::def::{ClassMask, KindId, VarId};
+use crate::def::{ClassMask, GroupId, KindId, NameId, VarId};
 use crate::motion::Motion;
 use crate::num::Real;
 use crate::path::PathRun;
@@ -46,6 +46,11 @@ pub struct Instance {
     pub kind: KindId,
     /// Dispatch rank from `object_order`, fixed at creation.
     pub rank: u16,
+    /// Instance name from the room file (`PlacedInstance::name`): triggers find instances by
+    /// it, scripts read it, the probe resolves `ProbeTarget::Named` through it.
+    pub name: Option<NameId>,
+    /// Instance group from the room file (`PlacedInstance::group`).
+    pub group: Option<GroupId>,
     /// GM parent emulation: what collision targets and queries see.
     pub classes: ClassMask,
     /// False after destroy; swept at the end of the tick.
@@ -77,14 +82,16 @@ pub struct Instance {
 }
 
 impl Instance {
-    /// A fresh alive, active, visible instance at `(x, y)` with GM defaults: not solid, not
-    /// persistent, depth 0, no classes, default image, alarms idle (-1), no state, no variables.
+    /// A fresh alive, active, visible instance at `(x, y)` with GM defaults: no name or group,
+    /// not solid, not persistent, depth 0, no classes, default image, alarms idle (-1), no state, no variables.
     /// Spawning (`Ctx::spawn`) then applies the kind's defaults and runs Create.
     pub fn new(id: InstId, kind: KindId, rank: u16, x: Real, y: Real) -> Instance {
         Instance {
             id,
             kind,
             rank,
+            name: None,
+            group: None,
             classes: ClassMask::NONE,
             alive: true,
             active: true,

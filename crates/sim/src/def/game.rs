@@ -6,11 +6,12 @@
 
 use std::collections::BTreeMap;
 
-use super::ids::{KindId, MaskId, RoomId, SpriteId, VarId};
+use super::ids::{KindId, MaskId, RoomId, ScriptId, SpriteId, VarId};
 use super::kind::{KindDef, RankTable, VariantSel};
 use super::path::PathDef;
 use super::physics::PhysicsProfile;
 use super::room::{RoleSet, RoomDef};
+use super::script::ScriptDef;
 use super::sound::SoundDef;
 use super::sprite::{Mask, SpriteDef};
 use super::timeline::TimelineDef;
@@ -73,6 +74,9 @@ pub struct GameDef {
     pub timelines: Vec<TimelineDef>,
     /// Paths.
     pub paths: Vec<PathDef>,
+    /// Script sources, indexed by `ScriptId` (`KindDef::script`). Compiled by the script host
+    /// (WP9) when the `Sim` is built.
+    pub scripts: Vec<ScriptDef>,
     /// Timing triggers (`[timing]`).
     pub timing: TimingDef,
 }
@@ -96,6 +100,11 @@ impl GameDef {
     /// The mask with this id.
     pub fn mask(&self, id: MaskId) -> Option<&Mask> {
         self.masks.get(id.index()?)
+    }
+
+    /// The script with this id.
+    pub fn script(&self, id: ScriptId) -> Option<&ScriptDef> {
+        self.scripts.get(id.index()?)
     }
 
     /// Dispatch rank for an instance of `kind` spawned at run time (plan 1.3).
@@ -164,10 +173,11 @@ impl Default for RestartModel {
     }
 }
 
-/// Where the retry runs (R27).
+/// Where the retry (R27) or the reset runs. The key is `Action::Restart` for [`RestartModel`]
+/// and `Action::Reset` for [`ResetModel`].
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum RestartTrigger {
-    /// The world's "Key R pressed" event (keyboard phase).
+    /// The world's Key press event for the key (keyboard phase).
     KeyPressEvent,
     /// The world's Step, every tick while held (wanna, A3 I7).
     StepHeld,
@@ -201,11 +211,28 @@ pub enum DeathOnRestart {
     SaveCounters,
 }
 
-/// How the game resets after F2 (plan 4.3). Behavior in `restart.rs` (WP4b).
-#[derive(Clone, PartialEq, Eq, Debug, Default)]
+/// How the game resets after F2 (plan 4.3). Mirrors [`RestartModel`]: the `world` built-in runs
+/// it at the world's rank, in the phase `trigger` names. Behavior in `restart.rs` (WP4b).
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ResetModel {
+    /// Where the reset runs.
+    pub trigger: RestartTrigger,
     /// What the reset does.
     pub kind: ResetKind,
+    /// Room roles where F2 does nothing.
+    pub excluded_roles: RoleSet,
+}
+
+impl Default for ResetModel {
+    /// The world's "Key F2 pressed" event (global keys are Key press events on world, CLONE_SPEC
+    /// input), delete the temp marker and game_restart, in every room.
+    fn default() -> ResetModel {
+        ResetModel {
+            trigger: RestartTrigger::KeyPressEvent,
+            kind: ResetKind::default(),
+            excluded_roles: RoleSet::default(),
+        }
+    }
 }
 
 /// What F2 does.

@@ -23,12 +23,14 @@ use crate::rng::Rng;
 use crate::room::RoomRequest;
 use crate::rules::RunnerRules;
 use crate::save::SaveSlot;
-use crate::sound::SoundState;
+use crate::script::ScriptRuntime;
+use crate::sound::{DllMode, SoundState};
+use crate::timing::TimingState;
 use crate::view::View;
 use crate::{builtins, kid, run_globals};
 
-/// Everything that changes while a game runs. Hashed by `hash::state_hash` except `output` and
-/// `grid`.
+/// Everything that changes while a game runs. Every field is hashed by `hash::state_hash` except
+/// `output` and `grid` (docs/architecture.md, State hash).
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct World {
     /// Ticks since the run started.
@@ -39,8 +41,10 @@ pub struct World {
     pub room_tick: u64,
     /// GM `room_speed`: the file speed on entry, 50 after the world's Room Start (R14).
     pub room_speed: Real,
-    /// Instances in creation order, so sorted by id (plan 1.2).
-    pub instances: Vec<Instance>,
+    /// Instances in creation order, so sorted by id (plan 1.2). Private to `world` so every
+    /// mutable access goes through `World::get_mut`, which keeps the broadphase grid in step
+    /// (plan 3.4); read them with `World::instances`.
+    pub(in crate::world) instances: Vec<Instance>,
     /// The next id to hand out (checked, plan 10.3).
     pub next_id: u64,
     /// Variable names first seen at run time (scripts), plan 1.1.
@@ -63,6 +67,9 @@ pub struct World {
     pub save: Option<SaveSlot>,
     /// Which sounds play (WP10); hashed, because `sound_isplaying` changes game state.
     pub sound: SoundState,
+    /// Timing trigger state (WP8b): which splits fired, whether the run started, and the
+    /// `run_end` flag `game_clear` raises. Hashed and saved, so a restored run splits the same.
+    pub timing: TimingState,
     /// Events for the client. Not hashed, not saved.
     #[serde(skip)]
     pub output: Vec<OutputEvent>,
@@ -71,7 +78,8 @@ pub struct World {
     /// A trace setup action ran (plan 10.4). Hashed, so a run that used setup never matches a
     /// clean verification.
     pub setup_applied: bool,
-    /// Broadphase cache (WP3). Rebuilt on room entry and savestate restore; never hashed.
+    /// Broadphase cache (WP3). Rebuilt on room entry and savestate restore; never hashed, and
+    /// never makes two worlds unequal (`Grid`'s `PartialEq` is always true).
     #[serde(skip)]
     pub grid: Grid,
 }
@@ -97,6 +105,7 @@ impl World {
             persistent_rooms: BTreeMap::new(),
             save: None,
             sound: SoundState::default(),
+            timing: TimingState::default(),
             output: Vec::new(),
             status: SimStatus::Running,
             setup_applied: false,
@@ -128,7 +137,8 @@ pub enum SimStatus {
     Ended,
 }
 
-/// What every built-in, the kid, rooms and scripts work through.
+/// What every built-in, the kid, rooms and scripts work through. `Sim` builds it for each tick
+/// from its own fields (WP1); tests build it by hand.
 pub struct Ctx<'a> {
     /// The game.
     pub def: &'a GameDef,
@@ -136,4 +146,11 @@ pub struct Ctx<'a> {
     pub rules: &'a RunnerRules,
     /// The world.
     pub w: &'a mut World,
+    /// The script host with the game's compiled scripts (WP9). Shared, not `&mut`: a script
+    /// that spawns runs the new instance's Create inside `spawn`, which may run another script,
+    /// so the host is re-entered while it runs. Its per-call state stays inside the host.
+    pub scripts: &'a ScriptRuntime,
+    /// DLL sound adapters modeled or stubbed (`SimOptions::dll_mode`; WP10). Every kaenbyou
+    /// trace runs in `Stub` mode.
+    pub dll_mode: DllMode,
 }

@@ -1,5 +1,7 @@
-//! Package to `GameDef` (docs/plans/sim-core.md 8.1, 8.2). WP0 declares; WP7a owns (WP7b adds
-//! the physics and params steps).
+//! Package to `GameDef` (docs/plans/sim-core.md 8.1, 8.2). WP0 declares; WP7a owns this file,
+//! including the calls to the WP7b steps (`physics::load`, `sounds::load`, `paths::load`,
+//! `timelines::load`, `params::check`), whose signatures WP0 fixed; WP7b owns only their bodies.
+//! The manifest's `[engine]` and `[timing]` sections are WP7a's too (`manifest.rs`).
 #![allow(unused_variables, reason = "WP0 stub: WP7a fills the body")]
 
 use iwbtg_sim::def::GameDef;

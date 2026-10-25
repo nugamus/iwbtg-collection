@@ -1,0 +1,48 @@
+# Load-time purity (docs/architecture.md, Sim purity): crates/format computes gameplay data the
+# sim then runs on every target (mask rasterization, sorted var ids, ranks, gameplay_hash), on
+# the client (WASM) and the server (native). So the platform-dependent float math and unordered
+# maps banned in crates/sim/clippy.toml are banned here too. IO stays allowed: this crate reads
+# packages. Keep the float list in step with crates/sim/clippy.toml.
+
+disallowed-methods = [
+  { path = "f64::sin", reason = "platform libm; use iwbtg_sim::num::sin" },
+  { path = "f64::cos", reason = "platform libm; use iwbtg_sim::num::cos" },
+  { path = "f64::tan", reason = "platform libm; use iwbtg_sim::num::tan" },
+  { path = "f64::asin", reason = "platform libm" },
+  { path = "f64::acos", reason = "platform libm" },
+  { path = "f64::atan", reason = "platform libm" },
+  { path = "f64::atan2", reason = "platform libm; use iwbtg_sim::num::atan2" },
+  { path = "f64::sinh", reason = "platform libm" },
+  { path = "f64::cosh", reason = "platform libm" },
+  { path = "f64::tanh", reason = "platform libm" },
+  { path = "f64::sin_cos", reason = "platform libm; use iwbtg_sim::num::sin and num::cos" },
+  { path = "f64::asinh", reason = "platform libm" },
+  { path = "f64::acosh", reason = "platform libm" },
+  { path = "f64::atanh", reason = "platform libm" },
+  { path = "f64::exp", reason = "platform libm; use iwbtg_sim::num::exp" },
+  { path = "f64::exp2", reason = "platform libm" },
+  { path = "f64::exp_m1", reason = "platform libm" },
+  { path = "f64::ln", reason = "platform libm; use iwbtg_sim::num::ln" },
+  { path = "f64::ln_1p", reason = "platform libm" },
+  { path = "f64::log", reason = "platform libm" },
+  { path = "f64::log2", reason = "platform libm" },
+  { path = "f64::log10", reason = "platform libm" },
+  { path = "f64::powf", reason = "platform libm; use iwbtg_sim::num::pow" },
+  { path = "f64::powi", reason = "not correctly rounded; use iwbtg_sim::num::pow" },
+  { path = "f64::cbrt", reason = "platform libm" },
+  { path = "f64::hypot", reason = "platform libm" },
+  { path = "f64::mul_add", reason = "FMA changes results across targets" },
+  { path = "f64::round", reason = "half away from zero; GM8 rounds half to even: use iwbtg_sim::num::round" },
+  { path = "f64::min", reason = "signed-zero result unspecified, lowered differently on x86 and WASM; use iwbtg_sim::num::gm_min" },
+  { path = "f64::max", reason = "signed-zero result unspecified, lowered differently on x86 and WASM; use iwbtg_sim::num::gm_max" },
+  { path = "f64::clamp", reason = "panics on NaN or lo > hi; use iwbtg_sim::num::clamp" },
+  { path = "f64::to_degrees", reason = "use iwbtg_sim::num::radtodeg" },
+  { path = "f64::to_radians", reason = "use iwbtg_sim::num::degtorad" },
+]
+disallowed-types = [
+  { path = "std::collections::HashMap", reason = "iteration order is random; use BTreeMap" },
+  { path = "std::collections::HashSet", reason = "iteration order is random; use BTreeSet" },
+  { path = "f32", reason = "all reals are f64 (iwbtg_sim::num::Real)" },
+  { path = "std::hash::DefaultHasher", reason = "unspecified across Rust versions; hash with BLAKE3" },
+  { path = "std::hash::RandomState", reason = "random per process; hash with BLAKE3" },
+]

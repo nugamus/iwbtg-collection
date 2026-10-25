@@ -1,10 +1,13 @@
 //! The kid's physics profile, `physics.toml` (docs/plans/sim-core.md 5.1, 5.2).
 //!
 //! WP0 declares the skeleton: every section is an empty struct. WP5a owns the file and adds the
-//! fields of 5.2 and 5.3 (WP5b and WP5c ask WP5a for theirs). Every struct denies unknown
-//! fields, so a typo in a profile is a load error, not a silently ignored key.
+//! fields of 5.2 and 5.3 (WP5b asks WP5a for its fields in WP5a's sections). The `[ice]`,
+//! `[slope]`, `[ladder]` and `[flip]` sections live in `physics_ext.rs` (WP5c). Every struct
+//! denies unknown fields, so a typo in a profile is a load error, not a silently ignored key.
 
 use serde::Deserialize;
+
+pub use super::physics_ext::{FlipKind, FlipModel, IceRules, LadderRules, SlopeModel};
 
 /// The kid engine family a profile starts from (`preset = "A1"`): documentation and defaults
 /// (`kid::presets::apply`). Nothing in the sim branches on it.
@@ -108,14 +111,6 @@ profile_section! {
     VineRules;
     /// `[water]` (WP5a).
     WaterRules;
-    /// `[ice]` (WP5c).
-    IceRules;
-    /// `[slope]` (WP5c).
-    SlopeModel;
-    /// `[ladder]` (WP5c).
-    LadderRules;
-    /// `[flip]` (WP5b, WP5c).
-    FlipModel;
     /// `[death]` (WP5a).
     DeathRules;
     /// `[bullet]` (WP5a).

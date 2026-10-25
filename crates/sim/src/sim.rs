@@ -10,6 +10,7 @@ use crate::error::SimError;
 use crate::input::InputFrame;
 use crate::room::StartPoint;
 use crate::rules::RunnerRules;
+use crate::script::ScriptRuntime;
 use crate::sound::DllMode;
 use crate::timing::Split;
 use crate::world::{SimStatus, World};
@@ -43,11 +44,14 @@ pub struct Sim {
     pub(crate) rules: RunnerRules,
     pub(crate) world: World,
     pub(crate) options: SimOptions,
+    /// The compiled scripts, lent to each `Ctx` as `ctx.scripts` (WP9).
+    pub(crate) scripts: ScriptRuntime,
 }
 
 impl Sim {
     /// Sets up the world from `options.start`: rules from the game's runner and engine_rev,
-    /// boot instances, the first room, Game Start (`room::start_game`).
+    /// the script host (`ScriptRuntime::new`), boot instances, the first room, Game Start
+    /// (`room::start_game`). Every `Ctx` it builds carries `options.dll_mode`.
     pub fn new(def: Arc<GameDef>, options: SimOptions) -> Result<Sim, SimError> {
         unimplemented!("WP1: Sim::new")
     }
@@ -75,6 +79,11 @@ impl Sim {
     /// The options the run started with.
     pub fn options(&self) -> &SimOptions {
         &self.options
+    }
+
+    /// The script host of this run.
+    pub fn scripts(&self) -> &ScriptRuntime {
+        &self.scripts
     }
 
     /// The state hash of the world (`hash::state_hash`).

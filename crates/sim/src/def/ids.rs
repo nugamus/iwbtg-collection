@@ -63,6 +63,7 @@ def_id!(
     PathId
 );
 def_id!(
-    /// A script file of a scripted kind. Index into the script host's table (WP9).
+    /// A script file of a scripted kind. Index into `GameDef::scripts`; the script host (WP9)
+    /// compiles the same table in the same order.
     ScriptId
 );
