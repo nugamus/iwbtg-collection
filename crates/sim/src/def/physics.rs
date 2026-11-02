@@ -490,6 +490,9 @@ pub struct BulletRules {
     pub max: u32,
     /// Bullet speed; the bullet's `hspeed` is `speed * facing` (16).
     pub speed: Real,
+    /// Where the bullet appears, relative to the kid: `x + offset[0] * facing`, `y - offset[1] *
+    /// yflag` (family B `[2, 2]`; A1 `[0, 0]`).
+    pub offset: [Real; 2],
 }
 
 /// One step of the death sequence (kid/A1.md "Death"). `[death] order` lists them in the order a
@@ -663,7 +666,7 @@ draft_section! {
 }
 draft_section! {
     /// `[bullet]` as written.
-    BulletRulesDraft => BulletRules { max: u32, speed: Real }
+    BulletRulesDraft => BulletRules { max: u32, speed: Real, offset: [Real; 2] }
 }
 draft_section! {
     /// `[save]` as written.

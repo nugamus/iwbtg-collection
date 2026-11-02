@@ -7,18 +7,28 @@ use serde::Deserialize;
 use super::common::{down, set_sprite, state, state_mut};
 use crate::alarm;
 use crate::collide::query::{Target, place_meeting};
-use crate::def::ClassMask;
 use crate::def::physics::{GroundAlso, JumpCancel, WaterAir};
+use crate::def::{ClassMask, EngineKind};
 use crate::error::SimError;
 use crate::input::Action;
 use crate::num::{Real, gm_lt};
-use crate::world::{Ctx, Flow, InstId};
+use crate::world::{Ctx, Flow, InstId, SpawnInit};
 
 /// The actions this file implements, by their `physics.toml` names (snake case). Part of
 /// `kid::KidAction`.
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BAction {
+    /// Step, `playerMove` steps 1-2: `image_yscale` takes the current `yflag`, then `yflag`
+    /// follows `global.reverse` (the kid's mask flips one tick after the global does).
+    SyncYflag,
+    /// `playerReverse` (the gravity arrows' Alarm 1): `global.reverse` toggles, `yflag` negates,
+    /// `y` moves 4 times the new `yflag`, `curJumps` 1 and `vspeed` 0.
+    PlayerReverse,
+    /// Room Start: with `global.reverse` view 0 is enabled at angle 180, else its angle is 0.
+    SetViewAngle,
+    /// Room Start and `playerMisc`: a bow at the kid unless one exists.
+    EnsureBow,
     /// Alarm 0 with jump cancelling off (`jump.cancel = "poll_alarm"`): while Jump is up and the
     /// kid moves against gravity, `vspeed` times `release_mult` and the alarm stops; else the
     /// alarm is armed again for 1 tick.
@@ -28,6 +38,10 @@ pub enum BAction {
 /// Runs one action on the kid `me`. `kid::run_action` routes here.
 pub fn run(ctx: &mut Ctx, me: InstId, action: &BAction) -> Result<Flow, SimError> {
     match action {
+        BAction::SyncYflag => sync_yflag(ctx, me)?,
+        BAction::PlayerReverse => player_reverse(ctx, me)?,
+        BAction::SetViewAngle => set_view_angle(ctx),
+        BAction::EnsureBow => ensure_bow(ctx, me)?,
         BAction::CancelPoll => cancel_poll(ctx, me)?,
     }
     Ok(Flow::Continue)
@@ -124,5 +138,59 @@ fn cancel_poll(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     } else {
         alarm::set(i, 0, Real::ONE, &rules.num)?;
     }
+    Ok(())
+}
+
+/// `playerMove` steps 1-2 (kid/B.md Step). The scale uses last tick's `yflag`; `yflag` is then
+/// set from the global.
+fn sync_yflag(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+    let reversed = ctx.w.engine.kid.b.reverse;
+    let old = state(ctx, me)?.yflag;
+    if let Some(i) = ctx.w.get_mut(me) {
+        i.img.set_yscale(Real::new(f64::from(old)))?;
+    }
+    let s = state_mut(ctx, me)?;
+    s.yflag = if reversed { -1 } else { 1 };
+    s.flipped = reversed;
+    Ok(())
+}
+
+/// `playerReverse` on the kid `me` (kid/B.md Gravity flip). With several kids the script's
+/// per-kid toggling of the global is OPEN (a spec question, the multi-kid work in #263).
+pub(crate) fn player_reverse(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+    ctx.w.engine.kid.b.reverse = !ctx.w.engine.kid.b.reverse;
+    let new = {
+        let s = state_mut(ctx, me)?;
+        s.yflag = -s.yflag;
+        s.cur_jumps = 1;
+        s.yflag
+    };
+    if let Some(i) = ctx.w.get_mut(me) {
+        i.m.set_y(i.m.y() + Real::new(4.0 * f64::from(new)))?;
+        i.m.set_vspeed(Real::ZERO)?;
+    }
+    Ok(())
+}
+
+/// Room Start step 2: the view turns upside down while reversed.
+fn set_view_angle(ctx: &mut Ctx) {
+    let reversed = ctx.w.engine.kid.b.reverse;
+    let v = &mut ctx.w.views[0];
+    if reversed {
+        v.enabled = true;
+        v.angle = Real::new(180.0);
+    } else {
+        v.angle = Real::ZERO;
+    }
+}
+
+/// A bow at the kid's position when no bow exists (cosmetic; the bow follows the kid itself).
+fn ensure_bow(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+    if ctx.w.count_of(ClassMask::BOW) > 0 {
+        return Ok(());
+    }
+    let Some(i) = ctx.w.get(me) else { return Ok(()) };
+    let (x, y) = (i.m.x(), i.m.y());
+    ctx.spawn_engine(EngineKind::Bow, x, y, SpawnInit::default())?;
     Ok(())
 }

@@ -12,7 +12,8 @@
       "enum": [
         "create_defaults", "ensure_world", "create_bow", "first_play_save", "arm_play_timer",
         "gravity", "walk", "air_sprite", "fall_cap", "shoot", "jump", "release", "vines",
-        "play_timer", "kill", "platform_gravity_zero", "fade_in", "stop_if_frozen2", "cancel_poll"
+        "play_timer", "kill", "platform_gravity_zero", "fade_in", "stop_if_frozen2", "cancel_poll",
+        "sync_yflag", "player_reverse", "set_view_angle", "ensure_bow"
       ]
     },
     "actions": { "type": "array", "items": { "$ref": "#/$defs/action" } },
@@ -204,7 +205,8 @@
       "additionalProperties": false,
       "properties": {
         "max": { "type": "integer", "minimum": 0 },
-        "speed": { "$ref": "#/$defs/real" }
+        "speed": { "$ref": "#/$defs/real" },
+        "offset": { "type": "array", "items": { "$ref": "#/$defs/real" }, "minItems": 2, "maxItems": 2 }
       }
     },
     "save": {

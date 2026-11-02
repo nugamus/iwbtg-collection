@@ -53,6 +53,10 @@ Not yet in `[events]`: the outside-room events of the other models.
 | `shoot` | `playerShoot` on a Shoot press: a bullet at the kid when fewer than `bullet.max` exist, with `hspeed = bullet.speed * facing`. |
 | `jump` | `playerJump` on a Jump press (`jump.air = "cur_jumps"`: first jump `jump[1]` sets the counter to 2, walking off a ledge spends it, an air press uses `jump[curJumps]` and adds 1, water or `infJump` repeat `jump[maxJumps]`; `jump[n]` is 1-based): ground jump (`-jumps[0]`, sets `djump`) when a `jump.ground_classes` instance is 1 px below, or a `ground_also` condition holds; else air jump (`-jumps[1]`, `djump` false) when `djump` is set or a water 2 is below. |
 | `stop_if_frozen2` | Step action 1 of family B: with `global.frozen2`, gravity, `image_speed` and speed become 0 and the rest of the Step list is skipped. |
+| `sync_yflag` | Step, `playerMove` 1-2 (`flip.model = "yflag"`): `image_yscale` takes the current `yflag`, then `yflag` follows `global.reverse`. The mask flips one tick after the global does. |
+| `player_reverse` | `playerReverse` (the gravity arrows' Alarm 1): `global.reverse` toggles, `yflag` negates, `y` moves 4 times the new `yflag`, `curJumps` 1, `vspeed` 0. Also `kid::api::player_reverse`. OPEN: with several kids the original script's per-kid toggle of the global. |
+| `set_view_angle` | Room Start: with `global.reverse` view 0 is enabled at angle 180, else angle 0. |
+| `ensure_bow` | Room Start and `playerMisc`: a bow at the kid unless one exists. |
 | `cancel_poll` | Alarm 0 when `jump.cancel = "poll_alarm"`: Jump up and moving against gravity cuts `vspeed` by `release_mult` and stops; else re-arms for 1 tick. |
 | `release` | `playerVJump` on a Jump release: upward `vspeed` times `release_mult`, every release. |
 | `vines` | Step action 4 (`vine.model = "distance_asym"`): left vine nearer than `left_below` or right vine at exactly `right_equal`, with free space below: slide, face away, kick or drop on a press. |
@@ -89,11 +93,11 @@ Every key below is optional. Defaults are the `A1` preset's.
 
 `[vine]`: `model` = `distance_asym` or `none` (`distance_sym_early` is WP5c), `left_below` (2), `right_equal` (1), `slide` (2), `kick` (`[15, -9]`: horizontal, vertical), `drop` (3).
 
-`[water]`, `[ice]`, `[slope]`, `[ladder]`: empty until their work packages. `[flip]`: `model` (`none`, `swap_object`, `yflag`, `grav_sign`; WP5b and WP5c).
+`[water]`, `[ice]`, `[slope]`, `[ladder]`: empty until their work packages. `[flip]`: `model` (`none`, `swap_object`, `yflag`, `grav_sign`). With `yflag` (family B) a reversed kid (`yflag` -1): `walk` swaps Left and Right; `vines` slide at `slide * yflag`, kick at `kick[1] * yflag` and take the other key as the away key; `air_sprite` swaps the jump and fall sprites; `shoot` places the bullet at `y - offset[1] * yflag`; `create_defaults` reads `global.reverse` (y - 4, `curJumps` 1). `swap_object` and `grav_sign` are WP5c.
 
 `[death]`: `order`, the steps in the order they run: `sound` (not played yet, #231), `blood_emitter` (spawned with a `flipped` param), `destroy_kid`, `game_over` (it places itself at view 0 plus its own offset params), `deaths_plus_one` (checked), `save_counters` (death-only save). `select_room_reset`: in a Select room a kill requests the same room, destroys the kid and does nothing else. `stop_music`: not built (`true` is `Unsupported`). Nothing happens while `muteki` is set.
 
-`[bullet]`: `max` (4), `speed` (16).
+`[bullet]`: `max` (4), `speed` (16), `offset` (`[0, 0]`; family B `[2, 2]`: the bullet appears at `x + offset[0] * facing`, `y - offset[1] * yflag`).
 
 `[save]`: `position` (`xy_base100_bytes`, `xy_base256_bytes`, `xy_text2_dec`, `xy_previous`, `fixed_point`, `floor_nudge`), `fixed` (`[x, y]` for `fixed_point`).
 
