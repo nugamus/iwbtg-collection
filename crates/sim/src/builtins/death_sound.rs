@@ -98,6 +98,7 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
 
 /// The music volume as the client gets it: 0 to 1.
 fn fraction(s: &DeathSoundState) -> Real {
+    // gm-compare: ok (guards the division below against a zero or negative param; not a GML comparison)
     if s.start.get() > 0.0 {
         num::clamp(Real::new(s.now.get() / s.start.get()), Real::ZERO, Real::ONE)
     } else {
