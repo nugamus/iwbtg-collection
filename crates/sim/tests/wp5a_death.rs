@@ -7,7 +7,7 @@ use iwbtg_sim::def::physics::{
 use iwbtg_sim::def::testing::GameDefBuilder;
 use iwbtg_sim::def::{
     Builtin, ClassMask, EngineKind, GameDef, KidFamily, KindDef, KindId, PhysicsProfile, RoomDef, RoomId,
-    room::RoomRole,
+    VarId, room::RoomRole,
 };
 use iwbtg_sim::events::EventKind;
 use iwbtg_sim::input::Action;
@@ -53,6 +53,7 @@ fn game(with_engine_kinds: bool, tweak: impl FnOnce(&mut PhysicsProfile)) -> (Ga
     let blood_emitter = inert("blood_emitter", ClassMask::NONE, &mut b);
     let game_over = inert("game_over", ClassMask::NONE, &mut b);
     let killer = inert("killer", ClassMask::KILLER, &mut b);
+    b.def_mut().var_names.insert("flipped".into(), VarId(0));
     b.engine_kind(EngineKind::Kid, kid);
     if with_engine_kinds {
         b.engine_kind(EngineKind::World, world);
@@ -154,8 +155,6 @@ fn a_kill_runs_the_a1_death_sequence() {
             ctx.w.save = Some(slot(5, 7));
             ctx.w.engine.run.deaths = 5;
             ctx.w.engine.run.time = 9;
-            ctx.w.views[0].x = r(1600.0);
-            ctx.w.views[0].y = r(608.0);
             let flow = api::kill(ctx, kid, KillCause::Script).expect("kill");
             assert_eq!(flow, Flow::Continue);
             assert!(!ctx.w.get(kid).unwrap().alive, "the kid is destroyed");
@@ -165,11 +164,10 @@ fn a_kill_runs_the_a1_death_sequence() {
                 (r(100.0), r(200.0)),
                 "blood emitter at the kid"
             );
-            let go = ctx.w.get(first(ctx, k.game_over)).unwrap();
             assert_eq!(
-                (go.m.x(), go.m.y()),
-                (r(2000.0), r(912.0)),
-                "view corner + (400, 304)"
+                count(ctx, k.game_over),
+                1,
+                "GAMEOVER places itself (its own offset params)"
             );
             assert_eq!(ctx.w.engine.run.deaths, 6);
             let s = ctx.w.save.as_ref().unwrap();
@@ -432,7 +430,6 @@ fn the_a1_preset_is_rely() {
     assert_eq!(p.platform.snap, r(9.0));
     assert_eq!(p.vine.kick, [r(15.0), r(-9.0)]);
     assert_eq!((p.bullet.max, p.bullet.speed), (4, r(16.0)));
-    assert_eq!(p.death.gameover_offset, [r(400.0), r(304.0)]);
     assert!(p.misc.fade_in);
     assert_eq!(p.events.step.len(), 10);
 }
@@ -480,4 +477,22 @@ fn a_draft_overrides_single_fields_and_keeps_the_rest() {
     assert_eq!(p.jump.ground_classes, base.jump.ground_classes);
     assert_eq!(p.events.step, vec![KidAction::Common(CommonAction::Walk)]);
     assert_eq!(p.events.create, base.events.create);
+}
+
+#[test]
+fn the_blood_emitter_is_told_whether_the_kid_was_flipped() {
+    use iwbtg_sim::world::Value;
+    for flipped in [false, true] {
+        with_kid(
+            true,
+            |_| {},
+            |ctx, kid, k| {
+                kstate(ctx, kid).flipped = flipped;
+                api::kill(ctx, kid, KillCause::Script).expect("kill");
+                let be = ctx.w.get(first(ctx, k.blood_emitter)).unwrap();
+                let want = if flipped { Real::ONE } else { Real::ZERO };
+                assert_eq!(be.vars.get(&VarId(0)), Some(&Value::Real(want)));
+            },
+        );
+    }
 }

@@ -469,7 +469,8 @@ pub enum DeathStep {
     DeathsPlusOne,
     /// The death-only save (`saveDeathTime`): counters into the save slot.
     SaveCounters,
-    /// The GAMEOVER display at view 0's position plus `gameover_offset`.
+    /// The GAMEOVER display. It places itself at view 0 plus its own `offset_x`/`offset_y`
+    /// params in its Create (`game_over` built-in), so the offset is not a kid field.
     GameOver,
 }
 
@@ -480,8 +481,6 @@ pub struct DeathRules {
     /// The steps, in order. A1: sound, blood emitter, destroy kid, GAMEOVER, deaths + 1,
     /// death-only save.
     pub order: Vec<DeathStep>,
-    /// GAMEOVER's offset from view 0's top-left corner (A1: 400, 304).
-    pub gameover_offset: [Real; 2],
     /// In a `Select` room a kill goes to the same room again and destroys the kid, and nothing
     /// else happens (rely's special case).
     pub select_room_reset: bool,
@@ -619,7 +618,7 @@ draft_section! {
 draft_section! {
     /// `[death]` as written.
     DeathRulesDraft => DeathRules {
-        order: Vec<DeathStep>, gameover_offset: [Real; 2], select_room_reset: bool,
+        order: Vec<DeathStep>, select_room_reset: bool,
         stop_music: bool,
     }
 }

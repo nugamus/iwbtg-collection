@@ -7,17 +7,18 @@
 //!    the kid; nothing else happens, and the tick aborts for the room change.
 //! 2. While `muteki` is set, nothing happens.
 //! 3. Otherwise the steps of `death.order` run: the sound (not played yet, #231), a blood
-//!    emitter at the kid's position, destroy the kid, GAMEOVER at view 0's corner plus
-//!    `death.gameover_offset`, `global.death + 1` (checked), the death-only save.
+//!    emitter at the kid's position (its `flipped` param says whether the kid was the flipped
+//!    one), destroy the kid, GAMEOVER (it places itself at view 0 plus its own offset),
+//!    `global.death + 1` (checked), the death-only save.
 //!
 //! A kind the game does not have (no blood emitter, no GAMEOVER) is skipped.
 
 use serde::Deserialize;
 
 use super::api::KillCause;
-use crate::def::EngineKind;
 use crate::def::physics::DeathStep;
 use crate::def::room::RoomRole;
+use crate::def::{ClassMask, EngineKind, ParamValue};
 use crate::error::SimError;
 use crate::room::RoomRequest;
 use crate::save;
@@ -55,6 +56,7 @@ pub fn kill(ctx: &mut Ctx, kid: InstId, _cause: KillCause) -> Result<Flow, SimEr
         )));
     };
     let invincible = s.invincible;
+    let flipped = s.flipped || inst.classes.intersects(ClassMask::KID_FLIPPED);
     let (x, y) = (inst.m.x(), inst.m.y());
     let in_select = ctx
         .w
@@ -79,7 +81,9 @@ pub fn kill(ctx: &mut Ctx, kid: InstId, _cause: KillCause) -> Result<Flow, SimEr
         match step {
             DeathStep::Sound => {} // #231
             DeathStep::BloodEmitter => {
-                ctx.spawn_engine(EngineKind::BloodEmitter, x, y, SpawnInit::default())?;
+                let mut init = SpawnInit::default();
+                init.params.0.insert("flipped".into(), ParamValue::Bool(flipped));
+                ctx.spawn_engine(EngineKind::BloodEmitter, x, y, init)?;
             }
             DeathStep::DestroyKid => {
                 let flow = ctx.destroy(kid);
@@ -88,9 +92,7 @@ pub fn kill(ctx: &mut Ctx, kid: InstId, _cause: KillCause) -> Result<Flow, SimEr
                 }
             }
             DeathStep::GameOver => {
-                let v = &ctx.w.views[0];
-                let (gx, gy) = (v.x + rules.gameover_offset[0], v.y + rules.gameover_offset[1]);
-                ctx.spawn_engine(EngineKind::GameOver, gx, gy, SpawnInit::default())?;
+                ctx.spawn_engine(EngineKind::GameOver, x, y, SpawnInit::default())?;
             }
             DeathStep::DeathsPlusOne => {
                 let run = &mut ctx.w.engine.run;

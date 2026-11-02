@@ -129,7 +129,6 @@ fn a1() -> PhysicsProfile {
         DeathStep::DeathsPlusOne,
         DeathStep::SaveCounters,
     ];
-    p.death.gameover_offset = [r(400.0), r(304.0)];
     p.death.select_room_reset = true;
     p.bullet.max = 4;
     p.bullet.speed = r(16.0);
