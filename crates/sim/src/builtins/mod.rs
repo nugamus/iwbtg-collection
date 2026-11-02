@@ -64,10 +64,11 @@ use serde::{Deserialize, Serialize};
 
 pub use state::BuiltinState;
 
-use crate::def::{Builtin, KindDef, Params};
+use crate::def::{Builtin, KindDef, KindId, ParamValue, Params};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
-use crate::world::{Ctx, Flow, InstId};
+use crate::num::Real;
+use crate::world::{Ctx, Flow, InstId, KindState};
 
 /// Mechanism globals: trigger models, boss and item flags. WP6a adds the fields.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
@@ -113,6 +114,70 @@ pub struct ParamError {
     pub param: String,
     /// What is wrong.
     pub message: String,
+}
+
+/// A real param, `None` when absent. A param of another type is a [`ParamError`].
+pub(crate) fn param_real(p: &Params, name: &str) -> Result<Option<Real>, ParamError> {
+    match p.0.get(name) {
+        None => Ok(None),
+        Some(ParamValue::Real(r)) if r.is_finite() => Ok(Some(*r)),
+        Some(_) => Err(param_error(name, "must be a finite number")),
+    }
+}
+
+/// A flag param, `None` when absent.
+pub(crate) fn param_bool(p: &Params, name: &str) -> Result<Option<bool>, ParamError> {
+    match p.0.get(name) {
+        None => Ok(None),
+        Some(ParamValue::Bool(b)) => Ok(Some(*b)),
+        Some(_) => Err(param_error(name, "must be true or false")),
+    }
+}
+
+/// An enum param: one of `allowed`, `None` when absent.
+pub(crate) fn param_enum<'a>(
+    p: &'a Params,
+    name: &str,
+    allowed: &[&str],
+) -> Result<Option<&'a str>, ParamError> {
+    match p.0.get(name) {
+        None => Ok(None),
+        Some(ParamValue::Str(s)) if allowed.contains(&s.as_str()) => Ok(Some(s.as_str())),
+        Some(_) => Err(param_error(name, &format!("must be one of {}", allowed.join(", ")))),
+    }
+}
+
+/// A kind param, `None` when absent.
+pub(crate) fn param_kind(p: &Params, name: &str) -> Result<Option<KindId>, ParamError> {
+    match p.0.get(name) {
+        None => Ok(None),
+        Some(ParamValue::Kind(k)) => Ok(Some(*k)),
+        Some(_) => Err(param_error(name, "must name a kind")),
+    }
+}
+
+/// A [`ParamError`].
+pub(crate) fn param_error(name: &str, message: &str) -> ParamError {
+    ParamError {
+        param: name.to_owned(),
+        message: message.to_owned(),
+    }
+}
+
+/// The built-in state of instance `me`, if it has one.
+pub(crate) fn state_of(ctx: &Ctx, me: InstId) -> Option<&BuiltinState> {
+    match &ctx.w.get(me)?.state {
+        KindState::Builtin(s) => Some(s),
+        _ => None,
+    }
+}
+
+/// The built-in state of instance `me`, for changing it.
+pub(crate) fn state_mut(ctx: &mut Ctx, me: InstId) -> Option<&mut BuiltinState> {
+    match &mut ctx.w.get_mut(me)?.state {
+        KindState::Builtin(s) => Some(s),
+        _ => None,
+    }
 }
 
 /// The base built-in of instance `me`'s kind. An unknown instance or kind is an invariant break.
