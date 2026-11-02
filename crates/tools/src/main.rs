@@ -7,7 +7,6 @@ mod case;
 mod determinism_cmd;
 mod import;
 mod pkg_cmd;
-#[allow(dead_code, reason = "WP0 scaffold: WP8b fills the command")]
 mod replay_cmd;
 mod trace_cmd;
 

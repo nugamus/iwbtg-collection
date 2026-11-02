@@ -38,7 +38,7 @@ One binary for agents and CI:
 - `iwbtg pkg hash <dir>`: prints the gameplay hash and content hash.
 - `iwbtg pkg upgrade <dir>`: migrates a package to the newest format version.
 - `iwbtg room show <dir> <room>`: prints an ASCII map of a room.
-- `iwbtg replay run <dir> <replay>`: headless run. Prints the tick count, splits and final state hash (roadmap Phase 3).
+- `iwbtg replay run <dir> <replay|.inputs> [--difficulty N] [--seed N]`: headless run from a new game. Prints three lines: `ticks: N`, `splits: <index>@<tick> ...` (or `none`) and `hash: <hex>` (roadmap Phase 3). An `.inputs` file runs frames 0 through its `end` frame; a `.iwbr` replay brings its own seed. Exit 2 when the sim halts, 3 when it reaches a work package that is not merged yet.
 - `iwbtg replay dump <replay>`: prints a replay as text.
 - `iwbtg replay verify <dir> <replay>`: what the server runs.
 - `iwbtg pkg check <dir> --trace-mode`: accepts research converter output; converter gaps are warnings that name the converter request (CR1-CR15).
