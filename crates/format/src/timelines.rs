@@ -4,8 +4,9 @@
 //! `timelines/<id>.toml` holds `moments = [{ t = 0, call = "intro" }, ...]` in tick order and an
 //! optional `loop`. The def keeps the ticks (`EventKind::Moment(step)` runs on the instance that
 //! runs the timeline); the `call` names are for scripts (`moment_<call>`), which the script host
-//! reads from the file itself. A timeline whose ticks do not ascend strictly is an error.
-//! `loop = true` is accepted but the sim does not loop timelines yet: it is a warning.
+//! reads from `TimelineDef::calls`. A timeline whose ticks do not ascend strictly is an error.
+//! `loop = true` becomes `TimelineDef::looping`: a run started with `timeline::start_with_def`
+//! begins with `timeline_loop` set.
 
 use iwbtg_sim::def::TimelineDef;
 use serde::Deserialize;
@@ -89,18 +90,12 @@ pub fn load(files: &PackageFiles, diags: &mut Vec<Diagnostic>) -> Vec<TimelineDe
                 ok = false;
             }
         }
-        if file.r#loop {
-            diags.push(Diagnostic::warning_at(
-                path,
-                text,
-                text.find("loop").unwrap_or(0),
-                "`loop = true` is not supported by the sim yet; the timeline runs once",
-            ));
-        }
         if ok {
             out.push(TimelineDef {
                 name: id.to_owned(),
                 moments: file.moments.iter().map(|m| m.t).collect(),
+                calls: file.moments.iter().map(|m| m.call.clone()).collect(),
+                looping: file.r#loop,
             });
         }
     }

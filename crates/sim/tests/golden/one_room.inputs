@@ -1,0 +1,4 @@
+frame 10: hold right
+frame 20: press jump
+frame 30: release jump
+frame 60: end
