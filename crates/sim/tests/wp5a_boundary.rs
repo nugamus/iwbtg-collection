@@ -22,6 +22,7 @@ fn r(v: f64) -> Real {
 struct Kinds {
     kid: KindId,
     edge: KindId,
+    table: KindId,
     bow: KindId,
 }
 
@@ -37,6 +38,9 @@ fn game(tweak: impl FnOnce(&mut PhysicsProfile)) -> (GameDef, Kinds) {
     e.sprite = Some(tile);
     e.classes = ClassMask::EDGE_WARP;
     let edge = b.kind(e);
+    let mut t = KindDef::new("table", Builtin::EdgeWarp);
+    t.classes = ClassMask::EDGE_WARP;
+    let table = b.kind(t);
     let bow = b.kind(KindDef::new("bow", Builtin::Inert));
     b.engine_kind(EngineKind::Kid, kid);
     b.engine_kind(EngineKind::Bow, bow);
@@ -48,7 +52,15 @@ fn game(tweak: impl FnOnce(&mut PhysicsProfile)) -> (GameDef, Kinds) {
     p.death.order = vec![DeathStep::DestroyKid, DeathStep::DeathsPlusOne];
     tweak(&mut p);
     b.physics(p);
-    (b.build().expect("game builds"), Kinds { kid, edge, bow })
+    (
+        b.build().expect("game builds"),
+        Kinds {
+            kid,
+            edge,
+            bow,
+            table,
+        },
+    )
 }
 
 fn with_kid<T>(
@@ -219,6 +231,73 @@ fn none_ignores_the_events() {
         |ctx, kid, _| {
             assert_eq!(boundary(ctx, kid), Flow::Continue);
             assert!(ctx.w.get(kid).unwrap().alive);
+        },
+    );
+}
+
+/// A room-wide per-edge table (NY roomout) far from the kid, with the left edge set to room 1.
+fn table(ctx: &mut Ctx, k: &Kinds, left: bool, right: bool) {
+    let mut init = SpawnInit::default();
+    if left {
+        init.params
+            .0
+            .insert("left_room".into(), ParamValue::Room(RoomId(1)));
+    }
+    if right {
+        init.params
+            .0
+            .insert("right_room".into(), ParamValue::Room(RoomId(1)));
+    }
+    init.params
+        .0
+        .insert("down_room".into(), ParamValue::Room(RoomId(1)));
+    ctx.spawn(k.table, r(700.0), r(500.0), init).expect("edge table");
+}
+
+#[test]
+fn an_edge_table_names_the_room_of_the_crossed_edge() {
+    with_kid(
+        |_| {},
+        (-3.0, 100.0),
+        |ctx, kid, k| {
+            table(ctx, k, true, false);
+            assert_eq!(boundary(ctx, kid), Flow::AbortTick);
+            assert!(ctx.w.get(kid).unwrap().alive, "the kid persists");
+            assert_eq!(ctx.w.pending, Some(RoomRequest::Goto(RoomId(1))));
+            assert_eq!(pos(ctx, kid).0, 784.0, "and wraps like any boundary crossing");
+        },
+    );
+}
+
+#[test]
+fn an_edge_table_kills_on_an_unset_edge_but_not_at_the_top() {
+    with_kid(
+        |_| {},
+        (803.0, 100.0),
+        |ctx, kid, k| {
+            table(ctx, k, true, false);
+            boundary(ctx, kid);
+            assert!(!ctx.w.get(kid).unwrap().alive, "right is unset");
+        },
+    );
+    with_kid(
+        |_| {},
+        (100.0, -3.0),
+        |ctx, kid, k| {
+            table(ctx, k, true, true);
+            boundary(ctx, kid);
+            assert!(ctx.w.get(kid).unwrap().alive, "nothing at the top");
+            assert_eq!(ctx.w.pending, None);
+            assert_eq!(pos(ctx, kid).1, 592.0);
+        },
+    );
+    with_kid(
+        |_| {},
+        (100.0, 611.0),
+        |ctx, kid, k| {
+            table(ctx, k, false, false);
+            assert_eq!(boundary(ctx, kid), Flow::AbortTick);
+            assert_eq!(ctx.w.pending, Some(RoomRequest::Goto(RoomId(1))));
         },
     );
 }
