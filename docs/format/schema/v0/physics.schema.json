@@ -12,7 +12,8 @@
       "enum": [
         "create_defaults", "ensure_world", "create_bow", "first_play_save", "arm_play_timer",
         "gravity", "walk", "air_sprite", "fall_cap", "shoot", "jump", "release", "vines",
-        "play_timer", "kill", "platform_gravity_zero", "fade_in"
+        "play_timer", "kill", "platform_gravity_zero", "fade_in", "stop_if_frozen2", "cancel_poll",
+        "sync_yflag", "player_reverse", "set_view_angle", "ensure_bow", "killer_check", "slope_b"
       ]
     },
     "actions": { "type": "array", "items": { "$ref": "#/$defs/action" } },
@@ -50,7 +51,8 @@
         "release_mult": { "$ref": "#/$defs/real" },
         "sprite_threshold": { "$ref": "#/$defs/real" },
         "image_speed_idle": { "$ref": "#/$defs/real" },
-        "image_speed_run": { "$ref": "#/$defs/real" }
+        "image_speed_run": { "$ref": "#/$defs/real" },
+        "air_wall_probe": { "$ref": "#/$defs/real" }
       }
     },
     "input": {
@@ -123,7 +125,11 @@
         },
         "ground_sets_djump": { "type": "boolean" },
         "air": { "enum": ["djump", "cur_jumps", "djump_then_tjump"] },
-        "water_air": { "enum": ["none", "water2_without_flag", "water_unlimited", "water3_keeps"] }
+        "water_air": { "enum": ["none", "water2_without_flag", "water_unlimited", "water3_keeps"] },
+        "max_jumps": { "type": "integer", "minimum": 1 },
+        "inf_jump": { "type": "boolean" },
+        "blocked_by_pause_press": { "type": "boolean" },
+        "cancel": { "enum": ["edge", "poll_alarm"] }
       }
     },
     "fall_cap": {
@@ -150,7 +156,9 @@
         "hold_probe": { "$ref": "#/$defs/real" },
         "rule": { "enum": ["half_vspeed"] },
         "snap": { "$ref": "#/$defs/real" },
-        "take": { "enum": ["vspeed", "delta_y", "yspeed_flipped"] }
+        "take": { "enum": ["vspeed", "delta_y", "yspeed_flipped"] },
+        "reversed_above": { "$ref": "#/$defs/real" },
+        "reversed_snap": { "$ref": "#/$defs/real" }
       }
     },
     "vine": {
@@ -188,11 +196,12 @@
         "order": {
           "type": "array",
           "items": {
-            "enum": ["sound", "blood_emitter", "destroy_kid", "deaths_plus_one", "save_counters", "game_over"]
+            "enum": ["sound", "blood_emitter", "destroy_kid", "destroy_all_kids", "deaths_plus_one", "save_counters", "game_over"]
           }
         },
         "select_room_reset": { "type": "boolean" },
-        "stop_music": { "type": "boolean" }
+        "stop_music": { "type": "boolean" },
+        "first_kid": { "type": "boolean" }
       }
     },
     "bullet": {
@@ -200,7 +209,8 @@
       "additionalProperties": false,
       "properties": {
         "max": { "type": "integer", "minimum": 0 },
-        "speed": { "$ref": "#/$defs/real" }
+        "speed": { "$ref": "#/$defs/real" },
+        "offset": { "type": "array", "items": { "$ref": "#/$defs/real" }, "minItems": 2, "maxItems": 2 }
       }
     },
     "save": {
@@ -218,7 +228,8 @@
           "items": { "$ref": "#/$defs/real" },
           "minItems": 2,
           "maxItems": 2
-        }
+        },
+        "first_kid": { "type": "boolean" }
       }
     },
     "misc": {

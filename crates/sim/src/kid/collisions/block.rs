@@ -13,13 +13,14 @@
 //!    and, with `gravity.block_landing_zeroes`, `gravity = 0`.
 //! 3. `place_free(x + hspeed, y + vspeed)` false: `hspeed = 0`.
 //!
-//! The flipped kid's mirrored contact (ceiling refresh, xia's hspeed 0) is WP5b and WP5c.
+//! The reversed kid of family B (`flip.model = "yflag"`) refreshes the jump on the ceiling side
+//! instead (`vspeed <= 0`); xia's flipped kid is WP5c.
 
 use serde::Deserialize;
 
 use crate::collide::{move_contact_solid, query::place_free};
 use crate::error::SimError;
-use crate::kid::actions::common::state;
+use crate::kid::actions::common::{state, yflag};
 use crate::kid::api::refresh_air_jump;
 use crate::num::{Real, gm_gt, gm_le};
 use crate::world::{Ctx, Flow, InstId};
@@ -44,7 +45,9 @@ pub fn run(ctx: &mut Ctx, me: InstId, _other: InstId, run: &BlockRun) -> Result<
 fn block_standard(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let def = ctx.def;
     let n = &ctx.rules.num;
-    if state(ctx, me)?.flipped {
+    // The `yflag` kid (family B) is the same object, mirrored; other flipped kids are WP5c's.
+    let rev = yflag(ctx, &state(ctx, me)?) < 0;
+    if state(ctx, me)?.flipped && !rev {
         return Err(SimError::unsupported(
             "kid collision block_standard: the flipped kid (5.3 flip rows, WP5b/WP5c)",
         ));
@@ -71,10 +74,14 @@ fn block_standard(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     // 2. Vertical contact.
     let (x, y, _, vs) = pos(ctx).ok_or_else(missing)?;
     if !place_free(ctx, me, x, y + vs)? {
-        if gm_le(vs, Real::ZERO, n) {
+        // Landing is the contact in the gravity direction: down normally, up when reversed.
+        let up = gm_le(vs, Real::ZERO, n);
+        if up {
             move_contact_solid(ctx, me, Real::new(90.0), Real::new(vs.get().abs()))?;
         } else {
             move_contact_solid(ctx, me, Real::new(270.0), vs)?;
+        }
+        if up == rev {
             refresh_air_jump(ctx, me);
         }
         let i = ctx.w.get_mut(me).ok_or_else(missing)?;

@@ -6,15 +6,18 @@
 //! `platform_gravity_zero`, and so on). The `ladder` action that starts rely's Step list in plan
 //! 5.2 is WP5c; until it lands the Step list starts with `gravity` instead (#232). `ad_nudge`
 //! and `flip_swap`, dormant in rely, are left out for the same reason. The other families
-//! return the A1 profile with their `preset` recorded: WP5b and WP5c replace those arms.
+//! return the A1 profile with their `preset` recorded: WP5c replaces those arms. Family B is
+//! kaenbyou (kid/B.md).
 
 use crate::def::physics::{
-    AirJump, BoundaryModel, DeathStep, FallCapRule, GravityReapply, GroundAlso, KeyOn, KidAlarm,
-    KidCollision, KidKey, PlatformRule, PlatformTake, SavePosition, VineKeys, VineModel, WalkRead, WaterAir,
+    AirJump, BoundaryModel, DeathStep, FallCapRule, FlipKind, GravityReapply, GroundAlso, JumpCancel, KeyOn,
+    KidAlarm, KidCollision, KidKey, PlatformRule, PlatformTake, SavePosition, VineKeys, VineModel, WalkRead,
+    WaterAir,
 };
 use crate::def::{ClassMask, KidFamily, PhysicsProfile, PhysicsProfileDraft};
 use crate::input::Action;
 use crate::kid::actions::a1::A1Action;
+use crate::kid::actions::b::BAction;
 use crate::kid::actions::common::CommonAction as C;
 use crate::kid::collisions::block::BlockRun;
 use crate::kid::collisions::platform::PlatformRun;
@@ -32,8 +35,92 @@ fn common(a: C) -> KidAction {
 
 /// The default profile of a family, before a draft's overrides.
 pub fn defaults(family: KidFamily) -> PhysicsProfile {
-    let mut p = a1();
+    let mut p = match family {
+        KidFamily::B => b(),
+        _ => a1(),
+    };
     p.preset = family;
+    p
+}
+
+/// Family B, reference game kaenbyou (kid/B.md): the `yflag` flip, `cur_jumps` jumps, the End
+/// Step slope code that also turns gravity on, polling killers and Outside Room kills. eat-the-lemon
+/// overrides `jump.blocked_by_pause_press` and has no Alarm 0.
+fn b() -> PhysicsProfile {
+    let mut p = a1();
+    p.numbers.max_fall_speed = Real::ZERO;
+    p.numbers.air_wall_probe = r(2.0);
+
+    p.events.create = vec![common(C::CreateDefaults), common(C::FirstPlaySave)];
+    p.events.room_start = vec![
+        KidAction::B(BAction::EnsureBow),
+        KidAction::B(BAction::SetViewAngle),
+    ];
+    p.events.step = vec![
+        common(C::StopIfFrozen2),
+        KidAction::B(BAction::SyncYflag),
+        common(C::Walk),
+        common(C::AirSprite),
+        common(C::FallCap),
+        common(C::Shoot),
+        common(C::Jump),
+        common(C::Release),
+        common(C::Vines),
+        KidAction::B(BAction::KillerCheck),
+        KidAction::B(BAction::EnsureBow),
+    ];
+    p.events.end_step = vec![KidAction::B(BAction::SlopeB)];
+    p.events.boundary = BoundaryModel::OutsideRoomKill;
+    // Alarm 0 never runs with jump cancelling on (kid/B.md Alarm 0): listed for the polling
+    // variant, which no shipped game uses.
+    p.events.alarms = vec![KidAlarm {
+        n: 0,
+        run: vec![KidAction::B(BAction::CancelPoll)],
+    }];
+    p.events.collisions = vec![
+        KidCollision {
+            with: ClassMask::BLOCK,
+            run: KidCollisionRun::Block(BlockRun::BlockStandard),
+        },
+        KidCollision {
+            with: ClassMask::SOLIDBLOCK,
+            run: KidCollisionRun::Block(BlockRun::BlockStandard),
+        },
+        KidCollision {
+            with: ClassMask::PLATFORM,
+            run: KidCollisionRun::Platform(PlatformRun::PlatformStandard),
+        },
+    ];
+
+    p.jump.ground_classes = ClassMask::BLOCK | ClassMask::SOLIDBLOCK | ClassMask::SLOPE_WALL;
+    p.jump.ground_also = vec![GroundAlso::PlatformFlag];
+    p.jump.ground_sets_djump = false;
+    p.jump.air = AirJump::CurJumps;
+    p.jump.water_air = WaterAir::WaterUnlimited;
+    p.jump.max_jumps = 2;
+    p.jump.inf_jump = false;
+    p.jump.blocked_by_pause_press = true;
+    p.jump.cancel = JumpCancel::Edge;
+    p.fall_cap.rule = FallCapRule::ClampAgainstGravity;
+    p.gravity.reapply = GravityReapply::EndStepSlope;
+    p.gravity.block_landing_zeroes = true;
+    p.platform.take = PlatformTake::DeltaY;
+    p.platform.reversed_above = r(15.0);
+    p.platform.reversed_snap = r(24.0);
+    p.flip.model = FlipKind::Yflag;
+    p.death.order = vec![
+        DeathStep::Sound,
+        DeathStep::BloodEmitter,
+        DeathStep::GameOver,
+        DeathStep::DestroyAllKids,
+        DeathStep::DeathsPlusOne,
+        DeathStep::SaveCounters,
+    ];
+    p.death.first_kid = true;
+    p.bullet.offset = [r(2.0), r(2.0)];
+    p.save.position = SavePosition::XyPrevious;
+    p.save.first_kid = true;
+    p.misc.fade_in = false;
     p
 }
 

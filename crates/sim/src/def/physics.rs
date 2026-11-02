@@ -138,6 +138,9 @@ pub struct KidNumbers {
     pub image_speed_idle: Real,
     /// `image_speed` while running and sliding on a vine (0.5).
     pub image_speed_run: Real,
+    /// With a positive value (family B: 2), `air_sprite` shows the fall sprite only when no
+    /// `slope_wall` instance lies this many pixels in the gravity direction. 0 turns it off.
+    pub air_wall_probe: Real,
 }
 
 /// How the walk action reads the direction keys.
@@ -319,6 +322,26 @@ pub struct JumpRules {
     pub air: AirJump,
     /// When water 2 allows the air jump.
     pub water_air: WaterAir,
+    /// `cur_jumps`: the last numbered jump (`maxJumps`, B: 2).
+    pub max_jumps: u8,
+    /// `cur_jumps`: `infJump` starts on (B: false).
+    pub inf_jump: bool,
+    /// A Jump press does nothing on a tick when Pause was pressed (kaenbyou).
+    pub blocked_by_pause_press: bool,
+    /// How the jump release is read.
+    pub cancel: JumpCancel,
+}
+
+/// How the jump cut works (`[jump] cancel`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum JumpCancel {
+    /// The `release` action reads the release edge (every game with the cut switched on).
+    #[default]
+    Edge,
+    /// B's switch for jump cancelling off: a first jump arms Alarm 0 each tick and the
+    /// `cancel_poll` action cuts the jump when the key is up. The `release` action does nothing.
+    PollAlarm,
 }
 
 /// What `[fall_cap] rule` does to `vspeed`.
@@ -379,6 +402,11 @@ pub struct PlatformRules {
     pub snap: Real,
     /// What the kid takes from the platform's motion.
     pub take: PlatformTake,
+    /// The reversed kid (`flip.model = "yflag"`, `yflag` -1) lands only when `y - vspeed / 2` is
+    /// at least this many pixels below the platform's `y` (family B 15).
+    pub reversed_above: Real,
+    /// ... and is then put this many pixels below the platform's `y` (family B 24).
+    pub reversed_snap: Real,
 }
 
 /// When a platform collision lands the kid.
@@ -470,6 +498,9 @@ pub struct BulletRules {
     pub max: u32,
     /// Bullet speed; the bullet's `hspeed` is `speed * facing` (16).
     pub speed: Real,
+    /// Where the bullet appears, relative to the kid: `x + offset[0] * facing`, `y - offset[1] *
+    /// yflag` (family B `[2, 2]`; A1 `[0, 0]`).
+    pub offset: [Real; 2],
 }
 
 /// One step of the death sequence (kid/A1.md "Death"). `[death] order` lists them in the order a
@@ -483,6 +514,8 @@ pub enum DeathStep {
     BloodEmitter,
     /// Destroy the kid.
     DestroyKid,
+    /// Destroy every kid instance (family B: "destroy every player instance").
+    DestroyAllKids,
     /// `global.death` plus 1 (checked).
     DeathsPlusOne,
     /// The death-only save (`saveDeathTime`): counters into the save slot.
@@ -504,6 +537,9 @@ pub struct DeathRules {
     pub select_room_reset: bool,
     /// Death stops the music. Not built (WP10); `true` is `Unsupported`.
     pub stop_music: bool,
+    /// The blood emitter and GAMEOVER use the first kid's position and gravity instead of the
+    /// killed kid's (family B with several kids, R21).
+    pub first_kid: bool,
 }
 
 /// How a save stores the position (`save.rs` `SavedPosition`), by its package name.
@@ -548,6 +584,8 @@ pub struct SaveRules {
     pub position: SavePosition,
     /// The fixed point for `fixed_point`.
     pub fixed: Option<[Real; 2]>,
+    /// A save stores the first kid whichever kid touched the save point (family B, R21).
+    pub first_kid: bool,
 }
 
 // ---- The draft: a profile as written, before its preset fills the defaults ----
@@ -590,6 +628,7 @@ draft_section! {
     KidNumbersDraft => KidNumbers {
         jumps: Vec<Real>, gravity: Real, run_speed: Real, max_vspeed: Real, max_fall_speed: Real,
         release_mult: Real, sprite_threshold: Real, image_speed_idle: Real, image_speed_run: Real,
+        air_wall_probe: Real,
     }
 }
 draft_section! {
@@ -610,6 +649,7 @@ draft_section! {
         #[serde(deserialize_with = "class_names_opt")]
         ground_classes: ClassMask,
         ground_also: Vec<GroundAlso>, ground_sets_djump: bool, air: AirJump, water_air: WaterAir,
+        max_jumps: u8, inf_jump: bool, blocked_by_pause_press: bool, cancel: JumpCancel,
     }
 }
 draft_section! {
@@ -623,7 +663,8 @@ draft_section! {
 draft_section! {
     /// `[platform]` as written.
     PlatformRulesDraft => PlatformRules {
-        hold_probe: Real, rule: PlatformRule, snap: Real, take: PlatformTake,
+        hold_probe: Real, rule: PlatformRule, snap: Real, take: PlatformTake, reversed_above: Real,
+        reversed_snap: Real,
     }
 }
 draft_section! {
@@ -637,16 +678,16 @@ draft_section! {
     /// `[death]` as written.
     DeathRulesDraft => DeathRules {
         order: Vec<DeathStep>, select_room_reset: bool,
-        stop_music: bool,
+        stop_music: bool, first_kid: bool,
     }
 }
 draft_section! {
     /// `[bullet]` as written.
-    BulletRulesDraft => BulletRules { max: u32, speed: Real }
+    BulletRulesDraft => BulletRules { max: u32, speed: Real, offset: [Real; 2] }
 }
 draft_section! {
     /// `[save]` as written.
-    SaveRulesDraft => SaveRules { position: SavePosition, fixed: Option<[Real; 2]> }
+    SaveRulesDraft => SaveRules { position: SavePosition, fixed: Option<[Real; 2]>, first_kid: bool }
 }
 draft_section! {
     /// `[misc]` as written.

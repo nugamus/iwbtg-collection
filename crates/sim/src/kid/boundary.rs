@@ -18,8 +18,8 @@
 //!
 //! The warp target is read from the overlapping instance's [`WarpState`], which `edge_warp`
 //! shares with `warp` (OPEN until WP6b builds `edge_warp`: an `edge_warp` with a per-edge table
-//! has no `WarpState` and is `Unsupported`). `OutsideRoomKill` (family B) and `EndStepOrigin`
-//! (WP5c) are `Unsupported` here.
+//! has no `WarpState` and is `Unsupported`). `OutsideRoomKill` (family B) kills on Outside Room
+//! unless a room changer overlaps; `EndStepOrigin` (WP5c) is `Unsupported` here.
 
 use super::api::{KillCause, kill};
 use crate::builtins::state::BuiltinState;
@@ -38,14 +38,27 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Option<Flow
     let model = ctx.def.physics.events.boundary;
     match (model, ev) {
         (BoundaryModel::IntersectOrigin, EventKind::IntersectBoundary) => intersect_origin(ctx, me).map(Some),
-        (BoundaryModel::OutsideRoomKill, EventKind::OutsideRoom) => Err(SimError::unsupported(
-            "kid boundary: events.boundary outside_room_kill (5.3 edge row, WP5b)",
-        )),
+        (BoundaryModel::OutsideRoomKill, EventKind::OutsideRoom) => outside_room_kill(ctx, me).map(Some),
         (BoundaryModel::EndStepOrigin, EventKind::EndStep) => Err(SimError::unsupported(
             "kid boundary: events.boundary end_step_origin (5.3 edge row, WP5c)",
         )),
         _ => Ok(None),
     }
+}
+
+/// `outside_room_kill` (family B, kid/B.md "Outside Room"): the box is completely outside the
+/// room (the pipeline fires the event); the kid dies unless it touches a room changer (`warp`,
+/// `edge_warp`).
+fn outside_room_kill(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
+    let Some(i) = ctx.w.get(me) else {
+        return Ok(Flow::Continue);
+    };
+    let (x, y) = (i.m.x(), i.m.y());
+    let changers = ClassMask::ROOM_CHANGER | ClassMask::EDGE_WARP;
+    if instance_place(ctx, me, x, y, Target::Class(changers))?.is_some() {
+        return Ok(Flow::Continue);
+    }
+    kill(ctx, me, KillCause::Boundary)
 }
 
 fn intersect_origin(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {

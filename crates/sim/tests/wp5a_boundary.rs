@@ -212,15 +212,7 @@ fn the_event_set_follows_the_model() {
 }
 
 #[test]
-fn the_other_models_are_unsupported_and_none_ignores_the_events() {
-    with_kid(
-        |p| p.events.boundary = BoundaryModel::OutsideRoomKill,
-        (-9.0, 0.0),
-        |ctx, kid, _| {
-            assert!(kid::on_event(ctx, kid, &EventKind::OutsideRoom).is_err());
-            assert!(kid::on_event(ctx, kid, &EventKind::IntersectBoundary).is_ok());
-        },
-    );
+fn end_step_origin_is_unsupported_and_none_ignores_the_events() {
     with_kid(
         |p| p.events.boundary = BoundaryModel::EndStepOrigin,
         (-9.0, 0.0),
