@@ -51,6 +51,14 @@ impl Diagnostic {
         Self::at(Severity::Warning, file, text, offset, message)
     }
 
+    /// A warning about a whole file, pointing at line 1, column 1.
+    pub fn file_warning(file: &str, message: impl Into<String>) -> Self {
+        Self {
+            severity: Severity::Warning,
+            ..Self::file_error(file, message)
+        }
+    }
+
     /// An error about a whole file, pointing at line 1, column 1.
     pub fn file_error(file: &str, message: impl Into<String>) -> Self {
         Self {

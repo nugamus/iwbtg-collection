@@ -53,7 +53,52 @@ jobs:
         run: |
           v=$(cargo metadata --locked --format-version 1 | jq -r '.packages[] | select(.name == "wasm-bindgen") | .version')
           cargo install wasm-bindgen-cli --version "$v" --locked
-      - run: cargo test -p iwbtg-sim --test wp1_determinism --target wasm32-unknown-unknown --locked
+      - run: cargo test -p iwbtg-sim --test wp1_determinism --test golden_corpus --target wasm32-unknown-unknown --locked
+
+  # `iwbtg determinism report` on every target that can run the CLI; the next job requires the
+  # three outputs to be byte-identical (docs/plans/sim-core.md 10.6). wasm32-unknown-unknown
+  # checks the same lines through the `golden_corpus` test in the wasm32 job.
+  determinism-report:
+    name: determinism report (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {target: x86_64-pc-windows-msvc, os: windows-latest}
+          - {target: x86_64-unknown-linux-gnu, os: ubuntu-latest}
+          - {target: wasm32-wasip1, os: ubuntu-latest}
+    runs-on: ${{ matrix.os }}
+    env:
+      CARGO_TARGET_WASM32_WASIP1_RUNNER: wasmtime run --dir=/
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - if: matrix.target == 'wasm32-wasip1'
+        uses: bytecodealliance/actions/wasmtime/setup@v1
+      # An absolute corpus path: wasmtime only maps `/` (`--dir=/`), not the working directory.
+      - run: cargo run -p iwbtg-tools --target ${{ matrix.target }} --locked -- determinism report "$GITHUB_WORKSPACE/crates/sim/tests/golden" --check > report.txt
+        shell: bash
+      - uses: actions/upload-artifact@v4
+        with:
+          name: determinism-${{ matrix.target }}
+          path: report.txt
+
+  determinism-compare:
+    needs: determinism-report
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: determinism-*
+      - name: Every target printed the same bytes
+        run: |
+          ls -R .
+          # Windows may write CRLF; the report is compared as text lines.
+          for f in determinism-*/report.txt; do tr -d '\015' < "$f" > "$f.lf"; done
+          first=$(ls determinism-*/report.txt.lf | head -1)
+          cat "$first"
+          for f in determinism-*/report.txt.lf; do diff "$first" "$f"; done
 
   licenses:
     runs-on: ubuntu-latest
