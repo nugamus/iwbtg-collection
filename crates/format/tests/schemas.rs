@@ -112,7 +112,9 @@ fn v0_examples() -> Vec<(String, String)> {
 fn v0_examples_validate() {
     let examples = v0_examples();
     // game, object (x2), room, tiles, timeline, sprite, and physics.
-    for stem in ["game", "object", "room", "tiles", "timeline", "sprite"] {
+    for stem in [
+        "game", "object", "room", "tiles", "timeline", "sprite", "path", "sound",
+    ] {
         assert!(
             examples.iter().any(|(s, _)| s == stem),
             "v0.md has no example for {stem}"
@@ -220,4 +222,28 @@ fn the_physics_schema_rejects_mistakes() {
     ] {
         assert!(!validator.is_valid(&bad), "{bad} should be rejected");
     }
+}
+
+/// The path and sound schemas accept what the loader accepts and reject what it rejects.
+#[test]
+fn path_and_sound_schemas_match_the_loader() {
+    let path = load_schema("path");
+    let v = jsonschema::validator_for(&path).unwrap();
+    assert!(v.is_valid(&serde_json::json!({ "points": [[0, 0], [32, 0, 50]], "closed": true })));
+    assert!(
+        !v.is_valid(&serde_json::json!({ "points": [[0, 0]] })),
+        "needs two points"
+    );
+    assert!(!v.is_valid(&serde_json::json!({ "points": [[0, 0, 1, 2], [1, 1]] })));
+    assert!(!v.is_valid(&serde_json::json!({ "points": [[0, 0], [1, 1]], "bogus": 1 })));
+    let sound = load_schema("sound");
+    let v = jsonschema::validator_for(&sound).unwrap();
+    assert!(v.is_valid(&serde_json::json!({ "length_ticks": 100, "kind": "multimedia" })));
+    assert!(v.is_valid(&serde_json::json!({})));
+    assert!(!v.is_valid(&serde_json::json!({ "kind": "loud" })));
+    assert!(!v.is_valid(&serde_json::json!({ "length_ticks": -1 })));
+    assert!(!v.is_valid(&serde_json::json!({ "bogus": 1 })));
+    let timeline = load_schema("timeline");
+    let v = jsonschema::validator_for(&timeline).unwrap();
+    assert!(v.is_valid(&serde_json::json!({ "loop": true, "moments": [{ "t": 0, "call": "a" }] })));
 }

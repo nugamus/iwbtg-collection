@@ -38,6 +38,7 @@ fn wp1_one_tick_runs_every_phase_in_the_recorded_order() {
     b.def_mut().timelines.push(TimelineDef {
         name: "tl".into(),
         moments: vec![0],
+        ..TimelineDef::default()
     });
     let mut fx = Fx::new(b.build().unwrap());
     // A crosses the right edge (box 787..803 in an 800 px room), has alarm 0 at 1, a timeline
@@ -493,6 +494,7 @@ fn wp1_timeline_runs_moments_from_the_position_then_advances() {
     b.def_mut().timelines.push(TimelineDef {
         name: "tl".into(),
         moments: vec![0, 2, 3],
+        ..TimelineDef::default()
     });
     let def = b.build().unwrap();
     let moments_per_tick = |speed: f64, looping: bool, ticks: u32| {
@@ -562,4 +564,27 @@ fn wp1_tick_counter_overflow_halts_through_the_error() {
     let mut c = fx.ctx();
     let r = tick::run_tick_with(&mut c, InputFrame::EMPTY, &HOOKS);
     assert!(matches!(r, Err(SimError::Overflow { .. })));
+}
+
+/// `timeline::start_with_def` begins a run with `timeline_loop` set when the def says `loop`.
+#[test]
+fn start_with_def_applies_the_timeline_loop_flag() {
+    let mut b = builder();
+    b.def_mut().timelines.push(TimelineDef {
+        name: "once".into(),
+        moments: vec![0],
+        ..TimelineDef::default()
+    });
+    b.def_mut().timelines.push(TimelineDef {
+        name: "again".into(),
+        moments: vec![0],
+        looping: true,
+        ..TimelineDef::default()
+    });
+    let def = b.build().unwrap();
+    let mut run = None;
+    timeline::start_with_def(&mut run, &def, TimelineId(0), Real::ZERO).unwrap();
+    assert!(!run.as_ref().unwrap().looping);
+    timeline::start_with_def(&mut run, &def, TimelineId(1), Real::ZERO).unwrap();
+    assert!(run.as_ref().unwrap().looping);
 }
