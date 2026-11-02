@@ -9,6 +9,7 @@ use crate::alarm;
 use crate::collide::move_contact_solid;
 use crate::collide::query::{Target, instance_place, place_free, place_meeting};
 use crate::def::physics::{GroundAlso, JumpCancel, WaterAir};
+use crate::def::room::RoomRole;
 use crate::def::{ClassMask, EngineKind};
 use crate::error::SimError;
 use crate::input::Action;
@@ -206,6 +207,19 @@ fn ensure_bow(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
 
 /// `playerMisc` 1: `killPlayer` when the mask touches any killer.
 fn killer_check(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
+    if ctx.def.physics.death.killer_check_menu_rooms {
+        let role = ctx
+            .w
+            .room
+            .index()
+            .and_then(|i| ctx.def.rooms.get(i))
+            .map(|r| r.role);
+        match role {
+            Some(RoomRole::Boot | RoomRole::Title | RoomRole::Menu) => return Ok(Flow::Continue),
+            Some(RoomRole::Select) => return select_room_killer(ctx, me),
+            _ => {}
+        }
+    }
     let Some(i) = ctx.w.get(me) else {
         return Ok(Flow::Continue);
     };
@@ -309,4 +323,20 @@ fn slope_b(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         state_mut(ctx, me)?.cur_jumps = 1;
     }
     Ok(())
+}
+
+/// A Select room (A3 wanna End Step): a killer under the kid moves it back to its start instead.
+fn select_room_killer(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
+    let Some(i) = ctx.w.get(me) else {
+        return Ok(Flow::Continue);
+    };
+    let (x, y) = (i.m.x(), i.m.y());
+    if instance_place(ctx, me, x, y, Target::Class(ClassMask::KILLER))?.is_some()
+        && let Some(i) = ctx.w.get_mut(me)
+    {
+        let (sx, sy) = (i.m.xstart(), i.m.ystart());
+        i.m.set_x(sx)?;
+        i.m.set_y(sy)?;
+    }
+    Ok(Flow::Continue)
 }

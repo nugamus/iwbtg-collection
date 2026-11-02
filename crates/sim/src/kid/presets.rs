@@ -17,6 +17,7 @@ use crate::def::physics::{
 use crate::def::{ClassMask, KidFamily, PhysicsProfile, PhysicsProfileDraft};
 use crate::input::Action;
 use crate::kid::actions::a1::A1Action;
+use crate::kid::actions::a3::A3Action;
 use crate::kid::actions::b::BAction;
 use crate::kid::actions::common::CommonAction as C;
 use crate::kid::collisions::block::BlockRun;
@@ -36,10 +37,86 @@ fn common(a: C) -> KidAction {
 /// The default profile of a family, before a draft's overrides.
 pub fn defaults(family: KidFamily) -> PhysicsProfile {
     let mut p = match family {
+        KidFamily::A2 => a2(),
+        KidFamily::A3 => a3(),
         KidFamily::B => b(),
         _ => a1(),
     };
     p.preset = family;
+    p
+}
+
+/// Family A2, reference game deride-kotaro-from-aslant (kid/A2.md): rely's engine without the
+/// fade-in and the platform gravity rule. Animus and easy-miku-2 add `ad_nudge` to the Step list.
+fn a2() -> PhysicsProfile {
+    let mut p = a1();
+    p.events.step = vec![
+        common(C::Gravity),
+        common(C::Walk),
+        common(C::AirSprite),
+        common(C::FallCap),
+        common(C::Shoot),
+        common(C::Jump),
+        common(C::Release),
+        common(C::Vines),
+    ];
+    p.misc.fade_in = false;
+    p
+}
+
+/// Family A3, reference game wanna (kid/A3.md): the game's own vine-key flags, walking that
+/// ignores vines, gravity reapplied after the jump code, the killer test in the End Step and the
+/// held Suicide key in the Step. Showdown overrides the jumps and more (docs/format/examples).
+fn a3() -> PhysicsProfile {
+    let mut p = a1();
+    p.input.vine_keys = VineKeys::LatchedFlags;
+    p.vine.walk_ignores_vines = true;
+    p.events.create = vec![
+        common(C::CreateDefaults),
+        common(C::EnsureWorld),
+        common(C::CreateBow),
+        common(C::FirstPlaySave),
+        common(C::ArmPlayTimer),
+    ];
+    p.events.step = vec![
+        common(C::Walk),
+        common(C::AirSprite),
+        common(C::FallCap),
+        common(C::Shoot),
+        common(C::Jump),
+        common(C::Release),
+        common(C::Gravity),
+        KidAction::A3(A3Action::KeyFlags),
+        common(C::Vines),
+        KidAction::A3(A3Action::SuicideCheck),
+    ];
+    p.events.end_step = vec![KidAction::B(BAction::KillerCheck)];
+    p.events.keys = vec![];
+    p.events.collisions = vec![
+        KidCollision {
+            with: ClassMask::BLOCK,
+            run: KidCollisionRun::Block(BlockRun::BlockStandard),
+        },
+        KidCollision {
+            with: ClassMask::PLATFORM,
+            run: KidCollisionRun::Platform(PlatformRun::PlatformStandard),
+        },
+    ];
+    p.jump.ground_classes = ClassMask::BLOCK;
+    p.jump.ground_also = vec![GroundAlso::PlatformFlag];
+    p.jump.water_air = WaterAir::None;
+    p.gravity.block_landing_zeroes = false;
+    p.death.order = vec![
+        DeathStep::Sound,
+        DeathStep::BloodEmitter,
+        DeathStep::DestroyAllKids,
+        DeathStep::GameOver,
+        DeathStep::DeathsPlusOne,
+        DeathStep::SaveCounters,
+    ];
+    p.death.select_room_reset = false;
+    p.death.killer_check_menu_rooms = true;
+    p.misc.fade_in = false;
     p
 }
 
