@@ -6,13 +6,10 @@
 //!
 //! Spec: CLONE_SPEC rooms, "game_restart" and "Retry timeline"; kid/A3.md showdown "Restart".
 //!
-//! What is **not** here, and why (the kid fields are WP5a to WP5c):
-//! - B's retry extras (+2 to the play timer, saveDeathTime, clear `frozen`, the stale `reverse`
-//!   the new kid's Create sees) and showdown's (clear `frozen` on both kid kinds, reset the jump
-//!   values and the listed globals) need `kid::api` calls that do not exist yet. They are OPEN
-//!   follow-ups; the death count, the death-only save, the kid recreation and the room request
-//!   are done.
-//! - Stopping sounds on F2 waits for the sound model (WP10).
+//! Kid-side steps (`RestartModel::kid_steps`): B's +2 to the play timer and saveDeathTime, clearing
+//! `frozen` and `frozen2`, and showdown's jump-value reset after the load, through `kid::api`.
+//! What is **not** here: showdown's resets of the trigger, laser, move, shift, rihuto, tjump and
+//! taru globals (the mechanics' state, WP6; filed as an issue), and sounds on F2 (WP10).
 
 use crate::def::{DeathOnRestart, EngineKind, ResetKind, RestartKind, RoomId, RoomRole};
 use crate::error::SimError;
@@ -54,6 +51,7 @@ pub fn run_restart(ctx: &mut Ctx, world: InstId) -> Result<Flow, SimError> {
         ctx.w.engine.run.add_deaths(1)?;
         save::save_counters(ctx)?;
     }
+    kid_steps_before(ctx, model.kid_steps)?;
     let slot = ctx.w.save.clone();
     match model.kind {
         RestartKind::GameRestartViaBoot => {
@@ -80,7 +78,10 @@ pub fn run_restart(ctx: &mut Ctx, world: InstId) -> Result<Flow, SimError> {
                 return Ok(Flow::AbortTick);
             };
             destroy_kids(ctx, model.kind == RestartKind::RoomGotoSaved)?;
-            save::load_into(ctx, &slot)?;
+            let kid = save::load_into(ctx, &slot)?;
+            if model.kid_steps.reset_jump_values {
+                crate::kid::api::reset_jump_values(ctx, kid)?;
+            }
             let role = room_role(ctx, ctx.w.room);
             let skip = model.kind == RestartKind::RoomGotoSaved
                 && matches!(role, Some(RoomRole::Title | RoomRole::Menu));
@@ -143,6 +144,24 @@ pub fn boot_step(ctx: &mut Ctx) -> Result<Flow, SimError> {
     save::load_into(ctx, &slot)?;
     ctx.request_room(RoomRequest::Goto(slot.room));
     Ok(Flow::AbortTick)
+}
+
+/// The kid-side steps that come before the kid is destroyed (`RestartModel::kid_steps`): B's +2
+/// to the play timer and saveDeathTime (kid/B.md Restart 3.1), and clearing `frozen` and
+/// `frozen2` (B 3.3, showdown 1). The new kid's Create then sees whatever `reverse` the globals
+/// hold, because the load creates the kid before it reads the save (kid/B.md Restart, "stale
+/// `reverse`"); nothing here touches it.
+fn kid_steps_before(ctx: &mut Ctx, steps: crate::def::RetryKidSteps) -> Result<(), SimError> {
+    if steps.add_time > 0 {
+        ctx.w.engine.run.add_time(steps.add_time)?;
+    }
+    if steps.save_death_time {
+        save::save_counters(ctx)?;
+    }
+    if steps.clear_frozen {
+        crate::kid::api::clear_frozen(ctx);
+    }
+    Ok(())
 }
 
 fn excluded(ctx: &Ctx, roles: crate::def::RoleSet) -> Result<bool, SimError> {
