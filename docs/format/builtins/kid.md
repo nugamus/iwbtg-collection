@@ -14,7 +14,7 @@ Fields other built-ins read go through `kid::api`, never `KidState` directly (pl
 | `cur_jumps`, `tjump` | Family B counter and showdown's third jump. |
 | `on_platform` | Standing on a platform. Not set at Create (reads 0). |
 | `ladder`, `ladder_ud`, `ladder_jump` | Ladder flags (WP5c). |
-| `frozen`, `frozen2` | Input blocked; movement action skipped. Also `global.frozen`, `global.frozen2` (`KidGlobals`). |
+| `frozen`, `frozen2` | Input blocked; movement action skipped: with `frozen2` (the kid's own or the global) the A1 actions `walk`, `air_sprite`, `fall_cap`, `shoot`, `jump` and `release` do nothing. Also `global.frozen`, `global.frozen2` (`KidGlobals`). |
 | `yflag`, `flipped` | Gravity side. |
 | `facing` | -1 or 1. |
 | `run_speed`, `jump_speeds`, `max_vspeed`, `max_fall_speed` | Copied from `[numbers]` at Create; parameter zones change them at run time. |
@@ -38,4 +38,6 @@ Fields other built-ins read go through `kid::api`, never `KidState` directly (pl
 
 `kid::on_event` runs: Create, Room Start, Step and End Step lists; Alarm rows; Key rows; Collision rows (every row of the matching class, in order). The kid's `EventSet` follows the lists, so an empty list costs nothing.
 
-OPEN: the boundary model (Intersect Boundary, Outside Room; #240); sounds (#231); the flipped kid and the other families' actions (WP5b, WP5c).
+Boundary events follow `events.boundary` (A1: Intersect Boundary kills or warps, then wraps; see [physics.md](../physics.md)).
+
+OPEN: sounds (#231); the flipped kid and the other families' actions (WP5b, WP5c).

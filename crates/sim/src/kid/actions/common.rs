@@ -318,6 +318,12 @@ fn gravity(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     }
 }
 
+/// A1 Step action 3 runs only while `frozen2` is false: the kid's own flag or `global.frozen2`.
+/// `walk`, `air_sprite`, `fall_cap`, `shoot`, `jump` and `release` are all inside it.
+fn frozen2(ctx: &Ctx, s: &KidState) -> bool {
+    s.frozen2 || ctx.w.engine.kid.frozen2
+}
+
 /// Step action 3, steps 1-4 (A1; slip blocks are `[ice]`, WP5c).
 ///
 /// `h` is right, else minus left, both read (right first) the way `input.walk` says; frozen
@@ -328,7 +334,7 @@ fn walk(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let def = ctx.def;
     let p = &def.physics;
     let s = state(ctx, me)?;
-    if s.frozen2 || ctx.w.engine.kid.frozen2 {
+    if frozen2(ctx, &s) {
         return Ok(());
     }
     let (right, left) = match p.input.walk {
@@ -393,6 +399,9 @@ fn air_sprite(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let n = &ctx.rules.num;
     let p = &def.physics;
     let s = state(ctx, me)?;
+    if frozen2(ctx, &s) {
+        return Ok(());
+    }
     if s.on_platform {
         let Some(i) = ctx.w.get(me) else { return Ok(()) };
         let (x, y) = (i.m.x(), i.m.y());
@@ -423,6 +432,9 @@ fn air_sprite(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
 /// Step action 3 step 6: `fall_cap.rule = "clamp_abs"`: `abs(vspeed) > max_vspeed` gives
 /// `sign(vspeed) * max_vspeed`. The other rules are WP5b and WP5c.
 fn fall_cap(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+    if frozen2(ctx, &state(ctx, me)?) {
+        return Ok(());
+    }
     let rule = ctx.def.physics.fall_cap.rule;
     if !matches!(rule, FallCapRule::ClampAbs | FallCapRule::ClampAgainstGravity) {
         return Err(SimError::unsupported(format!(
@@ -452,6 +464,9 @@ fn fall_cap(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
 fn shoot(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
     let def = ctx.def;
     let s = state(ctx, me)?;
+    if frozen2(ctx, &s) {
+        return Ok(Flow::Continue);
+    }
     if s.frozen || ctx.w.engine.kid.frozen || !ctx.w.input.pressed(Action::Shoot) {
         return Ok(Flow::Continue);
     }
@@ -485,6 +500,9 @@ fn jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let def = ctx.def;
     let p = &def.physics;
     let s = state(ctx, me)?;
+    if frozen2(ctx, &s) {
+        return Ok(());
+    }
     if s.frozen || ctx.w.engine.kid.frozen || !ctx.w.input.pressed(Action::Jump) {
         return Ok(());
     }
@@ -545,6 +563,9 @@ fn release(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let def = ctx.def;
     let n = &ctx.rules.num;
     let s = state(ctx, me)?;
+    if frozen2(ctx, &s) {
+        return Ok(());
+    }
     if s.frozen
         || ctx.w.engine.kid.frozen
         || def.physics.jump.cancel == JumpCancel::PollAlarm // `cancel_poll` cuts instead
