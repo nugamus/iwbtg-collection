@@ -160,6 +160,30 @@ fn valid_test_packages_validate() {
             &fs::read_to_string(pkg.join("game.toml")).unwrap(),
         );
         checked += 1;
+        // Bundled engine packs: engine/<pack>/engine.toml and its sprites.
+        if let Ok(packs) = fs::read_dir(pkg.join("engine")) {
+            for pack in packs {
+                let pack = pack.unwrap().path();
+                let toml = pack.join("engine.toml");
+                assert_valid(
+                    "engine",
+                    &toml.display().to_string(),
+                    &fs::read_to_string(&toml).unwrap(),
+                );
+                checked += 1;
+                for e in fs::read_dir(pack.join("sprites")).into_iter().flatten() {
+                    let path = e.unwrap().path();
+                    if path.extension().is_some_and(|x| x == "toml") {
+                        assert_valid(
+                            "sprite",
+                            &path.display().to_string(),
+                            &fs::read_to_string(&path).unwrap(),
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+        }
     }
     assert!(checked >= 3, "found only {checked} files");
 }

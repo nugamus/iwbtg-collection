@@ -217,6 +217,16 @@ pub fn default_classes(b: Builtin) -> ClassMask {
     }
 }
 
+/// Whether a built-in's kind is solid by default (GM `solid`, which `place_free` reads): the
+/// block family and slopes are (mechanics `block`, `hidden_block`, `boss_gate`, `slope`); an
+/// object file or the `solid` param says otherwise.
+pub fn default_solid(b: Builtin) -> bool {
+    matches!(
+        b,
+        Builtin::Block | Builtin::BreakableBlock | Builtin::HiddenBlock | Builtin::BossGate | Builtin::Slope
+    )
+}
+
 /// Classes that a kind's params pick (Design): water `variant` 2 and 3, vine `side`, and a
 /// block with `kid_collides = false`, which has no class at all so the kid has no collision
 /// event with it (docs/format/builtins/block.md).

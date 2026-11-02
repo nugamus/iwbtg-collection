@@ -35,6 +35,7 @@ use serde_json::Value;
 
 use iwbtg_sim::def::physics::PhysicsProfileDraft;
 
+use crate::engine_pack::EnginePack;
 use crate::manifest::Manifest;
 use crate::number::Number;
 use crate::rooms::RawRoom;
@@ -229,6 +230,10 @@ pub fn generate() -> Vec<(&'static str, String)> {
     }
     vec![
         ("game", text::<Manifest>("IWBTG game.toml (format v0)")),
+        (
+            "engine",
+            text::<EnginePack>("IWBTG engine pack engine.toml (format v0)"),
+        ),
         (
             "object",
             text::<ObjectShape>("IWBTG objects/<id>.toml (format v0)"),

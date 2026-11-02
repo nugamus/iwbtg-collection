@@ -216,7 +216,17 @@ pub fn load_sprite(
     png: &[u8],
     sidecar: &SpriteSidecar,
 ) -> Result<(SpriteDef, Vec<Mask>), Diagnostic> {
-    let png_path = format!("sprites/{id}.png");
+    load_sprite_at(&format!("sprites/{id}"), png, sidecar)
+}
+
+/// [`load_sprite`] for a sprite whose files are `<stem>.png` and `<stem>.toml` (a bundled engine
+/// pack sprite lives under `engine/<pack>/sprites/`).
+pub fn load_sprite_at(
+    stem: &str,
+    png: &[u8],
+    sidecar: &SpriteSidecar,
+) -> Result<(SpriteDef, Vec<Mask>), Diagnostic> {
+    let png_path = format!("{stem}.png");
     let def = |masks: MaskSet| SpriteDef {
         frames: sidecar.frames,
         size: sidecar.frame_size,
@@ -226,7 +236,7 @@ pub fn load_sprite(
     let (fw, fh) = sidecar.frame_size;
     if fw == 0 || fh == 0 || fw > MAX_FRAME_SIDE || fh > MAX_FRAME_SIDE {
         return Err(Diagnostic::file_error(
-            &format!("sprites/{id}.toml"),
+            &format!("{stem}.toml"),
             format!("frame_size must be between 1 and {MAX_FRAME_SIDE} on each side"),
         ));
     }

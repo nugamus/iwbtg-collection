@@ -10,6 +10,7 @@ mod import;
 mod pkg_cmd;
 mod replay_cmd;
 mod room_cmd;
+mod script_cmd;
 mod trace_cmd;
 
 use std::path::{Path, PathBuf};
@@ -53,6 +54,22 @@ enum Command {
     /// Engine revisions.
     #[command(subcommand)]
     Engine(EngineCommand),
+    /// The script language.
+    #[command(subcommand)]
+    Script(ScriptCommand),
+}
+
+#[derive(Subcommand)]
+enum ScriptCommand {
+    /// Generates docs/format/script-api.md and the Rhai stubs from the registered API.
+    ApiDocs {
+        /// The docs folder to write to (default: this checkout's `docs/`).
+        #[arg(long)]
+        docs: Option<PathBuf>,
+        /// Change nothing: exit 1 when a generated file differs from the committed one.
+        #[arg(long)]
+        check: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -253,6 +270,10 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
         Command::Pkg(PkgCommand::Check { pkg, trace_mode }) => pkg_cmd::main(&pkg, trace_mode),
         Command::Pkg(PkgCommand::Fmt { pkg, check }) => pkg_cmd::fmt_main(&pkg, check),
         Command::Pkg(PkgCommand::Hash { pkg, trace_mode }) => pkg_cmd::hash_main(&pkg, trace_mode),
+        Command::Script(ScriptCommand::ApiDocs { docs, check }) => {
+            let docs = docs.unwrap_or_else(script_cmd::default_docs_dir);
+            script_cmd::main(&docs, check)
+        }
         Command::Determinism(DeterminismCommand::Report { corpus, check }) => {
             determinism_cmd::main(&corpus, check)
         }
