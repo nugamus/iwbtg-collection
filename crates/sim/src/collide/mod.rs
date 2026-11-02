@@ -12,7 +12,7 @@ pub mod query;
 pub mod resolve;
 pub mod xform;
 
-pub use bbox::{PlacedMask, instance_box, place_origin};
+pub use bbox::{PlacedMask, instance_box, place_at, place_origin, reported_box};
 pub use contact::{move_bounce_solid, move_contact_solid, move_outside_solid};
 pub use query::{
     Target, collision_line, collision_point, collision_rectangle, distance_to_object, instance_place,
