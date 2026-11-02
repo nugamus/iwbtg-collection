@@ -1,0 +1,10 @@
+#:schema ../schema/v0/physics.schema.json
+# I wanna wanna (family A3, kid/A3.md): the A3 preset as it is.
+preset = "A3"
+
+[sprites]
+idle = "kid_idle"
+running = "kid_run"
+jump = "kid_jump"
+fall = "kid_fall"
+sliding = "kid_slide"

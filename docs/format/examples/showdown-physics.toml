@@ -1,0 +1,35 @@
+#:schema ../schema/v0/physics.schema.json
+# I wanna be the Showdown (family A3, kid/A3.md "Per-game differences: showdown"): the A3 preset
+# with a third jump, no bow, no play timer in the kid, the collision and Q-press killers, and the
+# bullet at (x, y - 2). Its ice (action 3 of the Step) is WP5c.4 (#131); until then the list below
+# has no ice. The bullet limit of 1 in room046 and room049 is game code (OPEN).
+preset = "A3"
+
+[numbers]
+jumps = [8.5, 7.0, 6.0]
+
+[jump]
+air = "djump_then_tjump"
+release_twice_while_tjump = true
+
+[events]
+create = ["create_defaults", "ensure_world", "first_play_save"]
+step = ["walk", "air_sprite", "fall_cap", "shoot", "jump", "release", "key_flags", "vines"]
+end_step = []
+alarms = []
+keys = [{ action = "suicide", on = "press", run = ["kill"] }]
+collisions = [
+  { with = "block", run = "block_standard" },
+  { with = "platform", run = "platform_standard" },
+  { with = "killer", run = "kill" },
+]
+
+[bullet]
+offset = [0.0, 2.0]
+
+[sprites]
+idle = "kid_idle"
+running = "kid_run"
+jump = "kid_jump"
+fall = "kid_fall"
+sliding = "kid_slide"
