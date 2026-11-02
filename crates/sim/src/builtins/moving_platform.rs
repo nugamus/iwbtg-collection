@@ -25,8 +25,13 @@
 //! `marker_reverse` is what a touch by a fake block marker does ([`reverse_on_marker`], called by
 //! `fake_block`).
 //!
-//! OPEN, not done: `b_lines` (kaenbyou, End Step, two `collision_line` probes at the kid's
-//! `yflag` heights): `Unsupported` at load.
+//! - `b_lines` (kaenbyou, eat-the-lemon; kid/B.md): everything runs in End Step, not Step. The
+//!   same reversals and `y += yspeed`; then two `collision_line` probes from `x - 2` to `x + 33`
+//!   at `y + 8 - 25 * yflag` and `y + 8 - 10 * yflag`, with the first kid's `yflag` (1 when the
+//!   kid has no flag). When both lines touch a kid, the first kid is moved by `hspeed` if that
+//!   spot is free of solids and by `vspeed + yspeed` if that spot is free; then step 5. OPEN: the
+//!   probes use the bounding box (`prec` false; the spec does not say), the order of the two
+//!   moves (x, then y) and which kid is "first" (the lowest id).
 
 use serde::{Deserialize, Serialize};
 
@@ -34,7 +39,7 @@ use super::{
     BuiltinState, ParamError, ParamSpec, ParamType, param_bool, param_enum, param_real, state_mut, state_of,
 };
 use crate::collide::Target;
-use crate::collide::query::{instance_place, place_free};
+use crate::collide::query::{collision_line, instance_place, place_free};
 use crate::def::{ClassMask, KindDef, ParamValue, Params};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
@@ -86,6 +91,8 @@ pub enum Carry {
     ShowdownSplit,
     /// Keep-celebrating-for-xia.
     XiaGrav,
+    /// Kaenbyou and eat-the-lemon: End Step, two line probes.
+    BLines,
 }
 
 /// What a marker (fake block) touch does.
@@ -123,8 +130,10 @@ pub fn param_specs() -> &'static [ParamSpec] {
 
 /// What a kind with this base handles: Step, and the kid touching it with `start_on_touch`.
 pub fn event_set(kind: &KindDef) -> EventSet {
+    let b_lines = matches!(kind.params.0.get("carry_rule"), Some(ParamValue::Str(w)) if w == "b_lines");
     let mut set = EventSet {
-        step: true,
+        step: !b_lines,
+        end_step: b_lines,
         ..EventSet::default()
     };
     if matches!(kind.params.0.get("start_on_touch"), Some(ParamValue::Bool(true))) {
@@ -142,12 +151,7 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
     let carry = match param_enum(params, "carry_rule", CARRY)? {
         Some("showdown_split") => Carry::ShowdownSplit,
         Some("xia_grav") => Carry::XiaGrav,
-        Some("b_lines") => {
-            return Err(super::param_error(
-                "carry_rule",
-                "b_lines (kaenbyou End Step lines) is not supported yet (OPEN)",
-            ));
-        }
+        Some("b_lines") => Carry::BLines,
         _ => Carry::Yuuutu,
     };
     let marker = match param_enum(params, "marker_reverse", MARKER)? {
@@ -195,7 +199,8 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
             reverse_on_marker(ctx, me)?;
             Ok(Flow::Continue)
         }
-        EventKind::Step => step(ctx, me, &s),
+        EventKind::Step if s.carry != Carry::BLines => step(ctx, me, &s),
+        EventKind::EndStep if s.carry == Carry::BLines => step(ctx, me, &s),
         _ => Ok(Flow::Continue),
     }
 }
@@ -236,6 +241,11 @@ fn step(ctx: &mut Ctx, me: InstId, s: &MovingPlatformState) -> Result<Flow, SimE
             let new_y = y + ys;
             set_y(ctx, me, new_y)?;
             carry_split(ctx, me, x, new_y, h, v, ys)?;
+        }
+        Carry::BLines => {
+            let new_y = y + ys;
+            set_y(ctx, me, new_y)?;
+            carry_lines(ctx, me, x, new_y, h, v + ys)?;
         }
         Carry::XiaGrav => {
             let grav = if ctx.w.engine.kid.grav { -2.0 } else { 2.0 };
@@ -345,6 +355,57 @@ fn carry_yuuutu(
         dy,
         true,
     )
+}
+
+/// The first kid (lowest id) alive, with its `yflag` (1 when it has none).
+fn first_kid(ctx: &Ctx) -> Option<(InstId, Real)> {
+    let kid = ctx
+        .w
+        .instances()
+        .iter()
+        .find(|i| i.alive && i.classes.intersects(super::warp::KIDS))?
+        .id;
+    let f = crate::kid::api::KidField {
+        name: "yflag".to_owned(),
+        index: None,
+    };
+    let flag = match crate::kid::api::read_field(ctx.w, kid, &f) {
+        Some(crate::world::Value::Real(v)) => v,
+        _ => Real::ONE,
+    };
+    Some((kid, flag))
+}
+
+/// The `b_lines` carry: two lines at the kid's `yflag` heights; both must touch a kid.
+fn carry_lines(ctx: &mut Ctx, me: InstId, x: Real, y: Real, dx: Real, dy: Real) -> Result<(), SimError> {
+    let Some((kid, yflag)) = first_kid(ctx) else {
+        return Ok(());
+    };
+    let (x1, x2) = (x - Real::new(2.0), x + Real::new(33.0));
+    let target = Target::Class(super::warp::KIDS);
+    let hit = |ctx: &Ctx, k: f64| {
+        let ly = y + Real::new(8.0) - Real::new(k) * yflag;
+        collision_line(ctx, x1, ly, x2, ly, target, false, Some(me))
+    };
+    if hit(ctx, 25.0)?.is_none() || hit(ctx, 10.0)?.is_none() {
+        return Ok(());
+    }
+    let Some(k) = ctx.w.get(kid) else {
+        return Ok(());
+    };
+    let (kx, ky) = (k.m.x(), k.m.y());
+    if place_free(ctx, kid, kx + dx, ky)?
+        && let Some(k) = ctx.w.get_mut(kid)
+    {
+        k.m.set_x(kx + dx)?;
+    }
+    let kx = ctx.w.get(kid).map_or(kx, |k| k.m.x());
+    if place_free(ctx, kid, kx, ky + dy)?
+        && let Some(k) = ctx.w.get_mut(kid)
+    {
+        k.m.set_y(ky + dy)?;
+    }
+    Ok(())
 }
 
 /// The showdown carry: a horizontal part while `hspeed` is not 0 and a vertical part while
