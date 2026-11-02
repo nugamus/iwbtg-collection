@@ -175,6 +175,9 @@ pub struct RetryKidSteps {
     /// After the new kid exists: reset its jump values, speeds and jump flags
     /// (`kid::api::reset_jump_values`, showdown's loadGame).
     pub reset_jump_values: bool,
+    /// After the new kid exists: clear every trigger array and `global.triggered`
+    /// (`MechGlobals::clear_triggers`, showdown's loadGame).
+    pub clear_triggers: bool,
 }
 
 impl Default for RestartModel {
