@@ -17,6 +17,7 @@ const BOTH: ClassMask = ClassMask(ClassMask::SLOPE.0 | ClassMask::SLOPE_MIRROR.0
 
 /// The actions this file implements, by their `physics.toml` names (snake case). Part of
 /// `kid::KidAction`.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SlopeAction {

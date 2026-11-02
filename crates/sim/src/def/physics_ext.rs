@@ -10,6 +10,7 @@ use serde::Deserialize;
 use crate::num::Real;
 
 /// `[ice]`: slip blocks and ice (kid/A1.md Step action 3, kid/A3.md showdown Step action 3).
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Debug, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct IceRules {
@@ -45,6 +46,7 @@ impl Default for IceRules {
 }
 
 /// How the kid's walk reads `slip` blocks.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum IceModel {
@@ -60,6 +62,7 @@ pub enum IceModel {
 /// fairy-tale; kid/A4.md). `slope` rises to the right, `slope_mirror` to the left. A game's slope
 /// kinds carry only those classes (not `block`), so the kid's `slope` and `slope_mirror`
 /// collision rows run alone, as the original's child-object events do.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Debug, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct SlopeModel {
@@ -94,6 +97,7 @@ impl Default for SlopeModel {
 }
 
 /// How `block_slope_step` climbs.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BlockSlopeStep {
@@ -109,6 +113,7 @@ pub enum BlockSlopeStep {
 }
 
 /// The End Step downhill snap models.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Downhill {
@@ -125,6 +130,7 @@ pub enum Downhill {
 }
 
 /// `[ladder]`: ladder entry (kid/A1.md Step action 2).
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct LadderRules {
@@ -133,6 +139,7 @@ pub struct LadderRules {
 }
 
 /// The keys that start climbing.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LadderEntry {
@@ -145,6 +152,7 @@ pub enum LadderEntry {
 
 /// `[flip]`: how gravity flips (plan 5.3 flip rows). WP5c adds the other fields
 /// (`mask_flipped`, ...).
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct FlipModel {
@@ -153,6 +161,7 @@ pub struct FlipModel {
 }
 
 /// The flip models of plan 5.3, by their `physics.toml` names.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FlipKind {
