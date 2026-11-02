@@ -41,6 +41,7 @@ pub fn event_set(_kind: &KindDef) -> EventSet {
 pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
     param_enum(params, "parent_kind", PARENTS)?;
     if let Some(w) = param_real(params, "width")?
+        // gm-compare: ok (load-time param validation)
         && w.get() <= 0.0
     {
         return Err(super::param_error("width", "must be positive"));

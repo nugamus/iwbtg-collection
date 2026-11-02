@@ -71,6 +71,7 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
         _ => None,
     };
     let hide_ticks = param_real(params, "hide_ticks")?.unwrap_or(Real::new(50.0));
+    // gm-compare: ok (load-time param validation)
     if hide_ticks.get() < 1.0 {
         return Err(param_error("hide_ticks", "must be at least 1"));
     }

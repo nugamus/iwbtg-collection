@@ -27,7 +27,7 @@ use crate::collide::query::place_meeting;
 use crate::def::{KindDef, ParamValue, Params};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
-use crate::num::Real;
+use crate::num::{self, Real};
 use crate::world::{Ctx, Flow, InstId};
 
 const MODES: &[&str] = &["fall", "rise", "rise_kae"];
@@ -168,9 +168,9 @@ fn step(ctx: &mut Ctx, me: InstId, s: &DropState) -> Result<(), SimError> {
             }
         }
         Mode::RiseKae => {
-            if s.yspeed.get() == 0.0
+            if num::gm_eq(s.yspeed, Real::ZERO, &ctx.rules.num)
                 && let Some((k, vs)) = kid
-                && vs.get() > 0.0
+                && num::gm_gt(vs, Real::ZERO, &ctx.rules.num)
                 && place_meeting(ctx, me, x, y + vs - Real::new(3.0), Target::Inst(k))?
             {
                 set_yspeed(ctx, me, vs);

@@ -43,7 +43,7 @@ use crate::collide::query::{collision_line, instance_place, place_free};
 use crate::def::{ClassMask, KindDef, ParamValue, Params};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
-use crate::num::Real;
+use crate::num::{self, Real};
 use crate::world::{Ctx, Flow, InstId, KindState, World};
 
 const CARRY: &[&str] = &["yuuutu", "showdown_split", "b_lines", "xia_grav"];
@@ -211,7 +211,10 @@ fn step(ctx: &mut Ctx, me: InstId, s: &MovingPlatformState) -> Result<Flow, SimE
     };
     let (x, y) = (inst.m.x(), inst.m.y());
     let (h, v) = (inst.m.hspeed(), inst.m.vspeed());
-    let moving = h.get().abs() > 0.0 || v.get().abs() > 0.0 || s.yspeed.get().abs() > 0.0;
+    let nr = &ctx.rules.num;
+    let moving = num::gm_ne(h, Real::ZERO, nr)
+        || num::gm_ne(v, Real::ZERO, nr)
+        || num::gm_ne(s.yspeed, Real::ZERO, nr);
     if s.carry == Carry::XiaGrav && !moving {
         return Ok(Flow::Continue);
     }
@@ -221,7 +224,7 @@ fn step(ctx: &mut Ctx, me: InstId, s: &MovingPlatformState) -> Result<Flow, SimE
             h = -h;
         }
         if !place_free(ctx, me, x, y + v + ys)? {
-            if v.get().abs() > 0.0 {
+            if num::gm_ne(v, Real::ZERO, &ctx.rules.num) {
                 ys = -v;
                 v = Real::ZERO;
             } else {
@@ -263,11 +266,11 @@ fn step(ctx: &mut Ctx, me: InstId, s: &MovingPlatformState) -> Result<Flow, SimE
         }
     }
     // Step 5: negative vspeed moves into yspeed, positive yspeed into vspeed.
-    if v.get() < 0.0 {
+    if num::gm_lt(v, Real::ZERO, &ctx.rules.num) {
         ys = v;
         v = Real::ZERO;
     }
-    if ys.get() > 0.0 {
+    if num::gm_gt(ys, Real::ZERO, &ctx.rules.num) {
         v = ys;
         ys = Real::ZERO;
     }
@@ -420,12 +423,12 @@ fn carry_split(
     ys: Real,
 ) -> Result<(), SimError> {
     let probe = y - Real::new(2.0);
-    if h.get().abs() > 0.0
+    if num::gm_ne(h, Real::ZERO, &ctx.rules.num)
         && let Some(kid) = kid_at(ctx, me, x, probe, ClassMask::KID)?
     {
         carry_kid(ctx, kid, h, v + ys)?;
     }
-    if v.get().abs() > 0.0
+    if num::gm_ne(v, Real::ZERO, &ctx.rules.num)
         && let Some(kid) = kid_at(ctx, me, x, probe, ClassMask::KID)?
     {
         carry_kid(ctx, kid, Real::ZERO, v + ys)?;
