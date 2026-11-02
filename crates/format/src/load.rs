@@ -534,6 +534,23 @@ impl<'a> Loader<'a> {
         let trace = self.trace_mode();
         let _ = pending_call(&mut self.pending, || params::check(&def, trace, &mut d));
         self.diags.append(&mut d);
+        // Scripts: structure, calls, name literals and lints (WP9.3).
+        for issue in iwbtg_sim::script::validate::validate(&def) {
+            let file = def
+                .scripts
+                .get(issue.script)
+                .map_or("scripts", |s| s.name.as_str());
+            self.diags.push(Diagnostic {
+                file: file.to_owned(),
+                line: issue.line,
+                column: issue.column,
+                severity: match issue.severity {
+                    iwbtg_sim::script::validate::Severity::Error => Severity::Error,
+                    iwbtg_sim::script::validate::Severity::Warning => Severity::Warning,
+                },
+                message: issue.message,
+            });
+        }
         Some(def)
     }
 
