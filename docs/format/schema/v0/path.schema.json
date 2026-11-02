@@ -1,0 +1,89 @@
+{
+  "$defs": {
+    "Number": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "bits": {
+              "pattern": "^[0-9a-fA-F]{16}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "bits"
+          ],
+          "type": "object"
+        }
+      ],
+      "description": "A number, or { bits = \"<16 hex digits of an IEEE double>\" } for a constant that must match bit for bit."
+    },
+    "PointShape": {
+      "anyOf": [
+        {
+          "description": "`[x, y]`.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        {
+          "description": "`[x, y, speed factor]`.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        }
+      ],
+      "description": "One path point."
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A path file (`paths/<id>.toml`).",
+  "properties": {
+    "closed": {
+      "description": "The last point connects to the first; default false.",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "points": {
+      "description": "`[x, y]` or `[x, y, speed factor]` (the factor defaults to 100); at least two points.",
+      "items": {
+        "$ref": "#/$defs/PointShape"
+      },
+      "minItems": 2,
+      "type": "array"
+    },
+    "precision": {
+      "description": "Smoothing precision; default 4.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "smooth": {
+      "description": "Curved path (not supported by the sim yet: a load warning); default false.",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "points"
+  ],
+  "title": "IWBTG paths/<id>.toml (format v0)",
+  "type": "object"
+}
