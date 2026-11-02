@@ -196,11 +196,12 @@
         "order": {
           "type": "array",
           "items": {
-            "enum": ["sound", "blood_emitter", "destroy_kid", "deaths_plus_one", "save_counters", "game_over"]
+            "enum": ["sound", "blood_emitter", "destroy_kid", "destroy_all_kids", "deaths_plus_one", "save_counters", "game_over"]
           }
         },
         "select_room_reset": { "type": "boolean" },
-        "stop_music": { "type": "boolean" }
+        "stop_music": { "type": "boolean" },
+        "first_kid": { "type": "boolean" }
       }
     },
     "bullet": {
@@ -227,7 +228,8 @@
           "items": { "$ref": "#/$defs/real" },
           "minItems": 2,
           "maxItems": 2
-        }
+        },
+        "first_kid": { "type": "boolean" }
       }
     },
     "misc": {
