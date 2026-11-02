@@ -16,12 +16,29 @@
       ]
     },
     "A2Action": {
-      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`; WP5c adds one variant per action it implements.",
-      "not": {}
+      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`.",
+      "oneOf": [
+        {
+          "const": "ad_nudge",
+          "description": "Animus and easy-miku-2, the end of the movement action: with a `block` or `solidblock` 1 px\nbelow, a press of A (`extra1`) subtracts 1 from `hspeed` and a press of D (`extra2`) adds 1.",
+          "type": "string"
+        }
+      ]
     },
     "A3Action": {
-      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`; WP5c adds one variant per action it implements.",
-      "not": {}
+      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`.",
+      "oneOf": [
+        {
+          "const": "key_flags",
+          "description": "Step action 4 step 1 (wanna, showdown, rori, fairy-tale): the game's own key flags. Left,\nRight and Jump flags become 1 on the key's press tick and 0 on its release tick; they are\nnot the key's state. With a press and a release in one tick the flag ends 0 (OPEN). The\nflags live in `KidGlobalsExt`, so they outlive the kid.",
+          "type": "string"
+        },
+        {
+          "const": "suicide_check",
+          "description": "Step action 5 (wanna): the Suicide key held (not a press) outside a Boot, Title, Menu or\nSelect room runs `killPlayer` every tick.",
+          "type": "string"
+        }
+      ]
     },
     "A4Action": {
       "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`; WP5c adds one variant per action it implements.",
@@ -322,6 +339,13 @@
       "description": "`[death]` as written.",
       "properties": {
         "first_kid": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "killer_check_menu_rooms": {
           "default": null,
           "type": [
             "boolean",
@@ -637,6 +661,13 @@
           "minimum": 0,
           "type": [
             "integer",
+            "null"
+          ]
+        },
+        "release_twice_while_tjump": {
+          "default": null,
+          "type": [
+            "boolean",
             "null"
           ]
         },
@@ -1478,6 +1509,13 @@
             }
           ],
           "default": null
+        },
+        "walk_ignores_vines": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "type": "object"
