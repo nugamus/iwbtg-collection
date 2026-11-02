@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{block, difficulty_warp, kid_bullet, kid_start, save, spike, warp, world};
+use super::{block, camera, difficulty_warp, kid_bullet, kid_start, killer, save, spike, warp, world};
 
 /// A built-in instance's state.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
@@ -29,4 +29,8 @@ pub enum BuiltinState {
     Warp(warp::WarpState),
     /// `difficulty_warp` (WP6a).
     DifficultyWarp(difficulty_warp::DifficultyWarpState),
+    /// `camera` (WP6a).
+    Camera(camera::CameraState),
+    /// `killer` (WP6a).
+    Killer(killer::KillerState),
 }
