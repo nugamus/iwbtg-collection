@@ -166,7 +166,10 @@ fn pending_call<T>(pending: &mut BTreeSet<String>, f: impl FnOnce() -> T) -> Opt
     #[cfg(panic = "unwind")]
     {
         quiet_stub_panics();
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+        IN_PENDING_CALL.with(|c| c.set(c.get() + 1));
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+        IN_PENDING_CALL.with(|c| c.set(c.get() - 1));
+        match result {
             Ok(v) => Some(v),
             Err(payload) => {
                 let msg = payload
@@ -196,14 +199,22 @@ fn stub_name(msg: &str) -> Option<&str> {
         .filter(|rest| rest.starts_with("WP"))
 }
 
-/// Keeps WP0 stub panics caught by [`pending_call`] off stderr; every other panic prints as usual.
+#[cfg(panic = "unwind")]
+std::thread_local! {
+    /// How deep this thread is inside [`pending_call`]; the quiet hook only acts above 0.
+    static IN_PENDING_CALL: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+/// Keeps WP0 stub panics caught by [`pending_call`] off stderr. A stub panic anywhere else (a
+/// tool running the sim into an unmerged work package) and every other panic print as usual.
 #[cfg(panic = "unwind")]
 fn quiet_stub_panics() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
         let previous = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |info| {
-            if info.payload_as_str().and_then(stub_name).is_none() {
+            let caught = IN_PENDING_CALL.with(|c| c.get() > 0);
+            if !caught || info.payload_as_str().and_then(stub_name).is_none() {
                 previous(info);
             }
         }));

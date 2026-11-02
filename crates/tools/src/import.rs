@@ -121,12 +121,17 @@ impl RecorderArgs {
             at: DEFAULT_AT,
             ..RecorderArgs::default()
         };
-        let number =
-            |name: &str, v: &str| v.trim().parse::<u32>().map_err(|_| format!("{name} {v:?} is not a frame number"));
+        let number = |name: &str, v: &str| {
+            v.trim()
+                .parse::<u32>()
+                .map_err(|_| format!("{name} {v:?} is not a frame number"))
+        };
         while let Some(flag) = it.next() {
             let mut value = || it.next().ok_or_else(|| format!("{flag} needs a value"));
             match flag.as_str() {
-                "--object" => args.objects.extend(value()?.split(',').map(|o| o.trim().to_string())),
+                "--object" => args
+                    .objects
+                    .extend(value()?.split(',').map(|o| o.trim().to_string())),
                 "--room" => args.room = Some(value()?),
                 "--at" => args.at = number("--at", &value()?)?,
                 "--from" => args.from = number("--from", &value()?)?,
@@ -143,7 +148,9 @@ impl RecorderArgs {
                 }
                 "--gml-every" => args.gml_every.push(strip_frames(&value()?)),
                 "--gml-end" => args.gml_end.push(strip_frames(&value()?)),
-                "--skip-object" => args.skip_objects.extend(value()?.split(',').map(|o| o.trim().to_string())),
+                "--skip-object" => args
+                    .skip_objects
+                    .extend(value()?.split(',').map(|o| o.trim().to_string())),
                 "--log-calls" | "--phases" => {
                     let v = value()?;
                     args.logs.push(format!("{flag} {v}"));
@@ -1120,9 +1127,13 @@ pub fn main(
         let path = dir.join(format!("{name}.toml"));
         if path.exists() && !force {
             // Cases are finished by hand: never overwrite one without --force.
-            println!("case: {} (exists, kept; pass --force to overwrite)", path.display());
+            println!(
+                "case: {} (exists, kept; pass --force to overwrite)",
+                path.display()
+            );
         } else {
-            std::fs::create_dir_all(&dir).map_err(|e| ToolError::Message(format!("{}: {e}", dir.display())))?;
+            std::fs::create_dir_all(&dir)
+                .map_err(|e| ToolError::Message(format!("{}: {e}", dir.display())))?;
             std::fs::write(&path, case.to_toml(&imported.header))
                 .map_err(|e| ToolError::Message(format!("{}: {e}", path.display())))?;
             println!("case: {}", path.display());
@@ -1179,7 +1190,12 @@ mod tests {
         assert_eq!((a.at, a.from, a.stub_dlls), (2, 2, true));
         assert_eq!(a.gml, vec![(3, "with(player){x=96;y=567.4}".to_string())]);
         assert!(RecorderArgs::parse("iwc trace --object x --bogus 1").is_err());
-        assert!(RecorderArgs::parse("iwc trace --room r").is_err());
+        assert_eq!(
+            RecorderArgs::parse("iwc trace --room r")
+                .expect("--object is optional")
+                .object(),
+            "player"
+        );
         assert!(RecorderArgs::parse("other").is_err());
     }
 
@@ -1351,7 +1367,11 @@ mod tests {
         ];
         let mut kinds: BTreeMap<String, TraceKind> = BTreeMap::new();
         for game in &games {
-            let game_name = game.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
+            let game_name = game
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or_default()
+                .to_string();
             let pkg = package_ids
                 .iter()
                 .find(|(g, _)| *g == game_name)
@@ -1368,7 +1388,8 @@ mod tests {
             stems.sort();
             for stem in stems {
                 let source = source_of(&stem).expect("source");
-                let read = |ext: &str| std::fs::read_to_string(format!("{}.{ext}", stem.display())).expect("read");
+                let read =
+                    |ext: &str| std::fs::read_to_string(format!("{}.{ext}", stem.display())).expect("read");
                 let i = import_text(&source, &read("inputs"), &read("csv"), names.as_ref())
                     .unwrap_or_else(|e| panic!("{source}: {e}"));
                 if let Some(case) = &i.case {
@@ -1383,7 +1404,12 @@ mod tests {
         }
         assert!(kinds.len() > 400, "only {} traces", kinds.len());
         let kind = |s: &str| *kinds.get(s).unwrap_or_else(|| panic!("no trace {s}"));
-        for s in ["kaenbyou/t-alarm-1", "kaenbyou/stand", "rely-the-needle-4-2/stand", "rely-the-needle-4-2/djump"] {
+        for s in [
+            "kaenbyou/t-alarm-1",
+            "kaenbyou/stand",
+            "rely-the-needle-4-2/stand",
+            "rely-the-needle-4-2/djump",
+        ] {
             assert_eq!(kind(s), TraceKind::DiffTarget, "{s}");
         }
         for s in [

@@ -119,7 +119,9 @@ fn png(rows: &[&str]) -> Vec<u8> {
 }
 
 fn sidecar(frames: u16, w: u32, h: u32, collision: &str, bbox: Option<[i64; 4]>, extra: &str) -> Vec<u8> {
-    let bbox = bbox.map_or(String::new(), |b| format!("bbox = [{}, {}, {}, {}]\n", b[0], b[1], b[2], b[3]));
+    let bbox = bbox.map_or(String::new(), |b| {
+        format!("bbox = [{}, {}, {}, {}]\n", b[0], b[1], b[2], b[3])
+    });
     format!(
         "#:schema ../sprite.schema.json\nframes = {frames}\nframe_size = [{w}, {h}]\norigin = [0, 0]\ncollision = \"{collision}\"\n{bbox}{extra}"
     )
@@ -197,8 +199,14 @@ fn basic_package_loads_strict() {
     assert!(report.gameplay_hash.is_some());
 
     // Rooms follow room_order; file speed and role come from the room files.
-    assert_eq!(def.rooms.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), ["title", "stage1"]);
-    assert_eq!((def.rooms[0].role, def.rooms[0].file_speed), (RoomRole::Title, 60));
+    assert_eq!(
+        def.rooms.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(),
+        ["title", "stage1"]
+    );
+    assert_eq!(
+        (def.rooms[0].role, def.rooms[0].file_speed),
+        (RoomRole::Title, 60)
+    );
     assert_eq!((def.rooms[1].role, def.rooms[1].file_speed), (RoomRole::Play, 30));
     assert_eq!(def.start_room, RoomId(0));
     assert_eq!(def.new_game_room, RoomId(1));
@@ -206,10 +214,20 @@ fn basic_package_loads_strict() {
     // `run` expands row by row, in place, never sorted.
     let stage = &def.rooms[1];
     assert_eq!(stage.instances.len(), 12);
-    let pos: Vec<(f64, f64)> = stage.instances[1..7].iter().map(|i| (i.x.get(), i.y.get())).collect();
+    let pos: Vec<(f64, f64)> = stage.instances[1..7]
+        .iter()
+        .map(|i| (i.x.get(), i.y.get()))
+        .collect();
     assert_eq!(
         pos,
-        [(0.0, 576.0), (32.0, 576.0), (64.0, 576.0), (0.0, 544.0), (32.0, 544.0), (64.0, 544.0)]
+        [
+            (0.0, 576.0),
+            (32.0, 576.0),
+            (64.0, 576.0),
+            (0.0, 544.0),
+            (32.0, 544.0),
+            (64.0, 544.0)
+        ]
     );
 
     // Rank selectors: up, down (a derived variant kind with its own sprite) and the plain entry.
@@ -223,7 +241,10 @@ fn basic_package_loads_strict() {
     assert_eq!((left.kind, left.rank), (spike, 8));
     assert_ne!(spike_def.sprite, down_def.sprite);
     assert_eq!(def.rank_for(spike_down, None), Some(7));
-    assert_eq!(left.params.0.get("depth"), Some(&ParamValue::Real(Real::new(5.0))));
+    assert_eq!(
+        left.params.0.get("depth"),
+        Some(&ParamValue::Real(Real::new(5.0)))
+    );
     assert_eq!(spike_def.classes, ClassMask::KILLER);
 
     // Names and groups.
@@ -251,7 +272,12 @@ fn basic_package_loads_strict() {
     let kid_mask = def.mask(kid_def.mask.unwrap()).unwrap();
     assert_eq!(kid_mask.shape, MaskShape::Rect);
     assert_eq!(
-        (kid_mask.bbox.left, kid_mask.bbox.top, kid_mask.bbox.right, kid_mask.bbox.bottom),
+        (
+            kid_mask.bbox.left,
+            kid_mask.bbox.top,
+            kid_mask.bbox.right,
+            kid_mask.bbox.bottom
+        ),
         (12, 11, 22, 31)
     );
     let MaskSet::Shared(m) = def.sprite(spike_def.sprite.unwrap()).unwrap().masks else {
@@ -264,7 +290,15 @@ fn basic_package_loads_strict() {
 
     // Variable ids come from the sorted name list.
     let names: Vec<(&str, VarId)> = def.var_names.iter().map(|(k, v)| (k.as_str(), *v)).collect();
-    assert_eq!(names, [("depth", VarId(0)), ("difficulty", VarId(1)), ("dir", VarId(2)), ("room_to", VarId(3))]);
+    assert_eq!(
+        names,
+        [
+            ("depth", VarId(0)),
+            ("difficulty", VarId(1)),
+            ("dir", VarId(2)),
+            ("room_to", VarId(3))
+        ]
+    );
     assert_eq!(
         def.rooms[0].on_create,
         [RoomAction::SetGlobal {
@@ -298,10 +332,12 @@ fn basic_package_loads_strict() {
 
     // The warp keeps its target (a room once the warp's ParamSpec names the type).
     let warp = &stage.instances[11];
-    assert!(matches!(
-        warp.params.0.get("room_to"),
-        Some(ParamValue::Str(s)) if s == "title"
-    ) || warp.params.0.get("room_to") == Some(&ParamValue::Room(RoomId(0))));
+    assert!(
+        matches!(
+            warp.params.0.get("room_to"),
+            Some(ParamValue::Str(s)) if s == "title"
+        ) || warp.params.0.get("room_to") == Some(&ParamValue::Room(RoomId(0)))
+    );
 }
 
 #[test]
@@ -311,20 +347,31 @@ fn placed_kind_without_rank_is_an_error() {
     let r = load_report(&files, STRICT);
     let e = errors(&r);
     assert!(
-        e.iter().any(|m| m.contains("`kid_start` is placed but object_order does not list it")),
+        e.iter()
+            .any(|m| m.contains("`kid_start` is placed but object_order does not list it")),
         "{e:#?}"
     );
 }
 
 #[test]
 fn spawnable_engine_kinds_need_ranks() {
-    for engine in ["bow", "blood", "blood_emitter", "game_over", "playerface", "kid_bullet", "world"] {
+    for engine in [
+        "bow",
+        "blood",
+        "blood_emitter",
+        "game_over",
+        "playerface",
+        "kid_bullet",
+        "world",
+    ] {
         let order = ORDER.replace(&format!("\"{engine}\","), "");
         let files = package(|f| set(f, "game.toml", manifest(&order, "")));
         let r = load_report(&files, STRICT);
         let e = errors(&r);
         assert!(
-            e.iter().any(|m| m.contains(&format!("`{engine}` can be spawned but object_order does not list it"))),
+            e.iter().any(|m| m.contains(&format!(
+                "`{engine}` can be spawned but object_order does not list it"
+            ))),
             "{engine}: {e:#?}"
         );
         // Trace mode ranks it after the listed entries and names CR4.
@@ -335,7 +382,8 @@ fn spawnable_engine_kinds_need_ranks() {
     // A game that never spawns one says so.
     let order = ORDER.replace("\"playerface\",", "");
     let files = package(|f| {
-        let text = manifest(&order, "").replace("[engine]\n", "[engine]\nroles = { playerface = \"none\" }\n");
+        let text =
+            manifest(&order, "").replace("[engine]\n", "[engine]\nroles = { playerface = \"none\" }\n");
         set(f, "game.toml", text);
     });
     let (def, _) = load_ok(&files, STRICT);
@@ -347,7 +395,9 @@ fn missing_script_is_inert_in_trace_mode_only() {
     let files = package(|f| f.retain(|(p, _)| p != "scripts/boss.rhai"));
     let r = load_report(&files, STRICT);
     assert!(
-        errors(&r).iter().any(|m| m.contains("`scripts/boss.rhai` does not exist")),
+        errors(&r)
+            .iter()
+            .any(|m| m.contains("`scripts/boss.rhai` does not exist")),
         "{}",
         render(&r)
     );
@@ -358,7 +408,11 @@ fn missing_script_is_inert_in_trace_mode_only() {
     let (_, boss) = kind_named(&def, "@boss");
     assert_eq!(boss.base, Builtin::Inert);
     assert!(boss.sprite.is_some(), "an inert kind keeps its mask");
-    assert!(render(&r).contains("converter request CR1, CR2"), "{}", render(&r));
+    assert!(
+        render(&r).contains("converter request CR1, CR2"),
+        "{}",
+        render(&r)
+    );
 
     let strict_off = LoadMode::Trace {
         unmapped_kinds_inert: false,
@@ -428,7 +482,11 @@ fn timing_vocabulary_is_checked() {
         set(f, "game.toml", text);
     });
     let e = errors(&load_report(&files, STRICT));
-    assert!(e.iter().any(|m| m.contains("timing trigger `boss1_dead` is not in the vocabulary")), "{e:#?}");
+    assert!(
+        e.iter()
+            .any(|m| m.contains("timing trigger `boss1_dead` is not in the vocabulary")),
+        "{e:#?}"
+    );
 }
 
 #[test]
@@ -442,14 +500,30 @@ fn bad_references_have_positions() {
         .unwrap_or_else(|| panic!("{}", render(&r)));
     assert_eq!((d.file.as_str(), d.line), ("rooms/stage1.toml", 11));
 
-    let files = package(|f| set(f, "objects/boss.toml", b"base = \"killer\"\nsprite = \"nope\"\n".to_vec()));
+    let files = package(|f| {
+        set(
+            f,
+            "objects/boss.toml",
+            b"base = \"killer\"\nsprite = \"nope\"\n".to_vec(),
+        )
+    });
     let r = load_report(&files, STRICT);
-    assert!(errors(&r).iter().any(|m| m.starts_with("objects/boss.toml:2:10: error: sprite `nope`")), "{}", render(&r));
+    assert!(
+        errors(&r)
+            .iter()
+            .any(|m| m.starts_with("objects/boss.toml:2:10: error: sprite `nope`")),
+        "{}",
+        render(&r)
+    );
 
     // A strip whose width does not match its sidecar.
     let files = package(|f| set(f, "sprites/boss.toml", sidecar(3, 2, 1, "precise", None, "")));
     let r = load_report(&files, STRICT);
-    assert!(errors(&r).iter().any(|m| m.contains("sprites/boss.png")), "{}", render(&r));
+    assert!(
+        errors(&r).iter().any(|m| m.contains("sprites/boss.png")),
+        "{}",
+        render(&r)
+    );
 }
 
 #[test]
@@ -458,7 +532,11 @@ fn gameplay_hash_ignores_comments_and_follows_masks() {
     let base = hash(&package(|_| {}));
     let commented = package(|f| {
         set(f, "rooms/stage1.toml", format!("# a comment\n{STAGE1}"));
-        set(f, "game.toml", manifest(ORDER, "").replace("title = \"WP7a basic\"", "title = \"Renamed\""));
+        set(
+            f,
+            "game.toml",
+            manifest(ORDER, "").replace("title = \"WP7a basic\"", "title = \"Renamed\""),
+        );
     });
     assert_eq!(hash(&commented), base);
     let new_pixel = package(|f| set(f, "sprites/spike_up.png", png(&["###.", "####"])));

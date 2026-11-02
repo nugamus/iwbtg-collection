@@ -181,13 +181,34 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
     }
 }
 
+/// The work package named by a WP0 stub panic (`not implemented: WP6a: world::init_state`).
+fn unmerged_stub(payload: &(dyn std::any::Any + Send)) -> Option<String> {
+    let msg = payload
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| payload.downcast_ref::<&str>().copied())?;
+    msg.strip_prefix("not implemented: ")
+        .filter(|rest| rest.starts_with("WP"))
+        .map(str::to_owned)
+}
+
 fn main() -> ExitCode {
-    match run(Cli::parse()) {
-        Ok(true) => ExitCode::SUCCESS,
-        Ok(false) => ExitCode::from(1),
-        Err(e) => {
+    let cli = Cli::parse();
+    // Until every work package has merged, running the sim can reach a WP0 stub. Say so plainly
+    // instead of ending with a bare panic.
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run(cli))) {
+        Ok(Ok(true)) => ExitCode::SUCCESS,
+        Ok(Ok(false)) => ExitCode::from(1),
+        Ok(Err(e)) => {
             eprintln!("error: {e}");
             ExitCode::from(2)
         }
+        Err(payload) => match unmerged_stub(payload.as_ref()) {
+            Some(stub) => {
+                eprintln!("error: this needs {stub}, which is not merged yet");
+                ExitCode::from(3)
+            }
+            None => std::panic::resume_unwind(payload),
+        },
     }
 }
