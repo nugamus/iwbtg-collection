@@ -12,6 +12,8 @@ Looks like a block but is not solid, or vanishes. Source: `crates/sim/src/builti
 | `reverses_platforms` | bool | false | The loader gives it the `fake_block` class; `moving_platform` then handles the collision (`marker_reverse`). |
 | `sound` | sound | none | The client's. |
 
+**Loading.** Every param loads on an object file or a placed instance. On an object file `solid` and `visible` are the kind's own flags, not params; as instance params they apply in Create. Tests `wp6b2_params_load` and `wp6b2_params_are_checked` in `crates/format/tests/wp7a_load.rs`. Converter request CR17.
+
 - `touch`: a kid touching it destroys it (KOT blockVis).
 - `approach`: each Step, a kid within `approach_distance` destroys it (WAN blockFake, LR blockNotInvis, SHO blockKieru01).
 - `group_fade` (WAN oHiddenWall): a kid touch makes every instance of the kind fade: each Step `image_alpha -= 0.05`, destroyed at 0 or below.
