@@ -14,4 +14,4 @@ Killers that move on a circle. Each Step an orbiting instance is placed at `x = 
 | `keep_spawner` | bool | false | Spawner only: stays after spawning. |
 | `destroy_outside_room` | bool | false | object761 is destroyed outside the room. |
 
-OPEN: the wrap of a negative radians angle (it adds 2 pi here); the last bit of the trig (U-MECH-6); the objIronring chain sprite is the client's.
+OPEN (nugamus/iwbtg-collection-research#45): the wrap of a negative radians angle (it adds 2 pi here); the last bit of the trig (U-MECH-6); the objIronring chain sprite is the client's.

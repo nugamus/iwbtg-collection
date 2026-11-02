@@ -4,7 +4,7 @@
 //! `mode = "stop"` (rainbow-feather stopneedleblock): an invisible block with no events. A
 //! `trap` with `stop_on_stopper` reacts to touching it (the loader gives this kind the
 //! `trap_stopper` class). `mode = "destroy"` (help-the-fairy-tale object817): each Step it
-//! destroys every `trap` instance it overlaps. OPEN: the original uses a collision event with the
+//! destroys every `trap` instance it overlaps. OPEN (nugamus/iwbtg-collection-research#47): the original uses a collision event with the
 //! listed trap objects, which runs in the collision phase; this runs in Step.
 
 use serde::{Deserialize, Serialize};

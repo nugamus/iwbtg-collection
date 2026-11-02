@@ -13,4 +13,4 @@ Kaenbyou pathPlatform: a platform that follows a path. Source: `crates/sim/src/b
 
 Carry (End Step): when two horizontal lines from `x` to `x + 31` at `y + 8 - 25 * yflag` and `y + 8 - 10 * yflag` both touch a kid and the path position changed this tick, the first kid moves by the platform's displacement this tick, with no solid check.
 
-OPEN: the original y carry also subtracts the unscaled `lengthdir_y(path_speed, direction)` (kid/B.md); this uses the displacement alone. The line probe uses the bounding box (not specified). The four room23 platforms in kaenbyou never move as placed, so no trace checks the carry.
+OPEN (nugamus/iwbtg-collection-research#46): the original y carry also subtracts the unscaled `lengthdir_y(path_speed, direction)` (kid/B.md); this uses the displacement alone. The line probe uses the bounding box (not specified). The four room23 platforms in kaenbyou never move as placed, so no trace checks the carry.

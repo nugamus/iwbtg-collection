@@ -10,7 +10,7 @@
 //! `keep_moving_when_kid_absent` (kaenbyou `move`): with no kid in the room the platform leaves
 //! the path and keeps moving at the path speed.
 //!
-//! OPEN: the original y carry also subtracts the unscaled `lengthdir_y(path_speed, direction)`
+//! OPEN (nugamus/iwbtg-collection-research#46): the original y carry also subtracts the unscaled `lengthdir_y(path_speed, direction)`
 //! (kid/B.md); this uses the platform displacement alone. The line probe is the bounding box
 //! (`prec` false; not specified). No kaenbyou room places a moving one (room23 platforms never
 //! move as placed, traces/kaenbyou/famb-platform-b.csv).

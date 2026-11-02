@@ -31,7 +31,7 @@ Ported games live in the separate games repo (`iwbtg-collection-games`). Origina
 
 ## Games and assets
 
-Each ported game belongs to its creator. This project is non-commercial and will never be monetized. Creators can have their game removed from the project, its builds and its download server (process to be published before going public).
+Each ported game belongs to its creator. This project is non-commercial and will never be monetized. Creators can have their game removed from the project, its builds and its download server (the process is not published yet; it is tracked in [#68](https://github.com/nugamus/iwbtg-collection/issues/68)).
 
 ## License
 

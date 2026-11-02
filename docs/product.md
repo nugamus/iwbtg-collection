@@ -90,8 +90,8 @@ Games whose creators cannot be reached (`community-assumed`) may be served publi
 
 Decided 2026-11-02.
 
-- **Open source.** The client repo (code and docs) goes public at M7 (Online), not before (decided 2026-11-02). The research and games repos stay private, because they hold notes on creators' games and the ported content.
-- **Public alpha.** It starts at M7, when the client repo goes public. Nightly builds are public from then on.
+- **Open source.** The client repo (code and docs) has been public since 2026-11-02 (GitHub Actions minutes for private repos ran out, so the user made it public so CI runs). The research and games repos stay private, because they hold notes on creators' games and the ported content.
+- **Public alpha.** It starts at M7, even though the client repo is already public. Nightly builds are public from then on.
 - **Community.** There is a Discord server for players, porters and testers.
 - **Bug reports.** They arrive in two ways, and both become `triage` issues:
   - Players post them in a Discord bug channel, and the user or an agent copies them into issues.
@@ -117,7 +117,7 @@ Ideas the user wants to work out over time. Nothing here is decided.
 - **Community games.** Player-made games from the level editor, uploaded to the site, which become rankable only after curation.
 - **Performance points.** A cross-game skill ranking (see [Leaderboards](#leaderboards)).
 - **Player ratings.** 1-10 stars, only from players who cleared the game. Delicious-fruit ratings are never imported.
-- **Name.** The project gets its own original name before going public. "IWBTG Collection" is a working title.
+- **Name.** The project gets its own original name before the public alpha (M7); the repo is already public under the working title. "IWBTG Collection" is a working title.
 
 ## Per-game questions
 

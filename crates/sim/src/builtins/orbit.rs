@@ -15,7 +15,7 @@
 //!   `count` instances of `child` (a `self` orbit) at angles `angle + 360 / count * i`, then
 //!   destroys itself unless `keep_spawner`.
 //!
-//! OPEN: the radians wrap of a negative angle; whether kaenbyou roundingCherry (which keeps
+//! OPEN (nugamus/iwbtg-collection-research#45): the radians wrap of a negative angle; whether kaenbyou roundingCherry (which keeps
 //! its cherries as children and moves them itself) differs from separate orbiters (same
 //! positions); U-MECH-6 (the last bit of the trig).
 
