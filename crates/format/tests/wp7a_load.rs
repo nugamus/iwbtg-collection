@@ -986,3 +986,50 @@ fn a_gravity_flip_with_view_rotation_is_refused_at_load() {
         "{errs:?}"
     );
 }
+
+#[test]
+fn script_problems_are_diagnostics_with_file_line_column() {
+    let files = package(|f| {
+        set(
+            f,
+            "scripts/boss.rhai",
+            "fn step() {
+    if this.x > 1.0 && random(1.0) < 0.5 { destroy(this); }
+}
+",
+        );
+    });
+    let r = load_report(&files, STRICT);
+    let text = render(&r);
+    assert!(
+        text.contains("scripts/boss.rhai:2:") && text.contains("`random` draws from the RNG"),
+        "{text}"
+    );
+    assert!(!r.ok(), "{text}");
+
+    let files = package(|f| {
+        set(
+            f,
+            "scripts/boss.rhai",
+            "fn step() { if this.x == 1.5 { destroy(this); } }
+",
+        )
+    });
+    let r = load_report(&files, STRICT);
+    assert!(
+        r.ok(),
+        "a lint warning does not refuse the package: {}",
+        render(&r)
+    );
+    assert!(render(&r).contains("warning: raw `==`"), "{}", render(&r));
+
+    let files = package(|f| {
+        set(
+            f,
+            "scripts/boss.rhai",
+            "fn create() { instance_create(\"@nope\", 1, 2); }
+",
+        )
+    });
+    assert!(render(&load_report(&files, STRICT)).contains("unknown kind \"@nope\""));
+}

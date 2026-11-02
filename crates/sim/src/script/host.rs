@@ -51,7 +51,7 @@ impl std::fmt::Debug for ScriptRuntime {
 }
 
 /// The function an event calls, and its argument.
-fn event_call(ev: &EventKind) -> Option<(&'static str, Option<Dynamic>)> {
+pub(crate) fn event_call(ev: &EventKind) -> Option<(&'static str, Option<Dynamic>)> {
     Some(match ev {
         EventKind::Create => ("create", None),
         EventKind::Destroy => ("destroy", None),
