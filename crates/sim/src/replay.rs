@@ -351,12 +351,12 @@ mod tests {
         }
     }
 
-    const LEFT: u16 = 1 << 0;
-    const RIGHT: u16 = 1 << 1;
-    const JUMP: u16 = 1 << 4;
-    const SHOOT: u16 = 1 << 5;
+    const LEFT: u32 = 1 << 0;
+    const RIGHT: u32 = 1 << 1;
+    const JUMP: u32 = 1 << 4;
+    const SHOOT: u32 = 1 << 5;
 
-    fn frame(held: u16, pressed: u16, released: u16) -> InputFrame {
+    fn frame(held: u32, pressed: u32, released: u32) -> InputFrame {
         InputFrame {
             held,
             pressed,
@@ -437,9 +437,9 @@ mod tests {
     fn realistic_inputs(ticks: usize, seed: u64) -> Vec<InputFrame> {
         let mut rng = Lcg(seed);
         let mut inputs = Vec::with_capacity(ticks);
-        let mut held = 0u16;
+        let mut held = 0u32;
         while inputs.len() < ticks {
-            let mut next = 0u16;
+            let mut next = 0u32;
             match rng.range(0, 3) {
                 0 => next |= LEFT,
                 1 => next |= RIGHT,
