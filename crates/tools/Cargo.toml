@@ -19,6 +19,9 @@ clap.workspace = true
 # Trace case files (crates/tools/cases) and the research trace map (docs/plans/sim-core.md 9.2).
 serde.workspace = true
 toml.workspace = true
+serde_json.workspace = true
+# `metadata` (only here, so the sim's own graph is unchanged): the registered API as definitions.
+rhai = { workspace = true, features = ["metadata"] }
 
 [lints]
 workspace = true

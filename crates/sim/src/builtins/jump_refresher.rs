@@ -5,8 +5,8 @@
 //! (`kid::api::refresh_air_jump`), and it hides at (0, 0) for `hide_ticks` (50, the room speed),
 //! then returns to its start (Alarm 0).
 //!
-//! OPEN, not done: the `tjump` it also sets (moreJumping false, moreJumping2 true) needs a
-//! `kid::api` setter (#309); `tjump` other than `none` is refused at load.
+//! `tjump` (moreJumping `clear`, moreJumping2 `set`) also sets or clears the triple-jump flag
+//! (`kid::api::set_triple_jump`); `none` leaves it alone.
 
 use serde::{Deserialize, Serialize};
 
@@ -44,6 +44,8 @@ pub struct RefresherState {
     pub hide_ticks: Real,
     /// Where it returns to (set in Create).
     pub start: (Real, Real),
+    /// What it does to the triple-jump flag: `Some(true)` sets it, `Some(false)` clears it.
+    pub tjump: Option<bool>,
 }
 
 /// The params this built-in accepts (`builtins::param_specs` routes here).
@@ -63,19 +65,20 @@ pub fn event_set(_kind: &KindDef) -> EventSet {
 
 /// A new instance state from its params.
 pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
-    if param_enum(params, "tjump", TJUMP)?.is_some_and(|t| t != "none") {
-        return Err(param_error(
-            "tjump",
-            "setting tjump needs a kid::api setter (OPEN, #309)",
-        ));
-    }
+    let tjump = match param_enum(params, "tjump", TJUMP)? {
+        Some("set") => Some(true),
+        Some("clear") => Some(false),
+        _ => None,
+    };
     let hide_ticks = param_real(params, "hide_ticks")?.unwrap_or(Real::new(50.0));
+    // gm-compare: ok (load-time param validation)
     if hide_ticks.get() < 1.0 {
         return Err(param_error("hide_ticks", "must be at least 1"));
     }
     Ok(BuiltinState::Refresher(RefresherState {
         hide_ticks,
         start: (Real::ZERO, Real::ZERO),
+        tjump,
     }))
 }
 
@@ -96,6 +99,9 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
         }
         EventKind::Collision { with, other } if with.intersects(KIDS) => {
             api::refresh_air_jump(ctx, *other);
+            if let Some(on) = s.tjump {
+                api::set_triple_jump(ctx, *other, on);
+            }
             let rules = ctx.rules;
             if let Some(inst) = ctx.w.get_mut(me) {
                 inst.m.set_x(Real::ZERO)?;

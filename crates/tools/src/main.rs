@@ -5,10 +5,12 @@
 
 mod case;
 mod determinism_cmd;
+mod engine_cmd;
 mod import;
 mod pkg_cmd;
 mod replay_cmd;
 mod room_cmd;
+mod script_cmd;
 mod trace_cmd;
 
 use std::path::{Path, PathBuf};
@@ -49,6 +51,46 @@ enum Command {
     /// Cross-platform equality checks.
     #[command(subcommand)]
     Determinism(DeterminismCommand),
+    /// Engine revisions.
+    #[command(subcommand)]
+    Engine(EngineCommand),
+    /// The script language.
+    #[command(subcommand)]
+    Script(ScriptCommand),
+}
+
+#[derive(Subcommand)]
+enum ScriptCommand {
+    /// Generates docs/format/script-api.md and the Rhai stubs from the registered API.
+    ApiDocs {
+        /// The docs folder to write to (default: this checkout's `docs/`).
+        #[arg(long)]
+        docs: Option<PathBuf>,
+        /// Change nothing: exit 1 when a generated file differs from the committed one.
+        #[arg(long)]
+        check: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum EngineCommand {
+    /// Re-runs a package's stored replays and trace cases on a new engine_rev; prints SAFE or the differences.
+    Check {
+        /// Package folder.
+        pkg: PathBuf,
+        /// The revision to test (default: the newest this build knows).
+        #[arg(long)]
+        to: Option<u16>,
+        /// Load converter output: unmapped script kinds become inert.
+        #[arg(long)]
+        trace_mode: bool,
+        /// Research repo for the original traces (default: IWBTG_RESEARCH); without one, trace cases are not run.
+        #[arg(long)]
+        research: Option<PathBuf>,
+        /// Cases folder.
+        #[arg(long, default_value = DEFAULT_CASES)]
+        cases: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -126,6 +168,14 @@ enum PkgCommand {
         /// Load converter output: unmapped script kinds become inert.
         #[arg(long)]
         trace_mode: bool,
+    },
+    /// Formats every data file of a package in the canonical layout (docs/decisions/0002).
+    Fmt {
+        /// Package folder.
+        pkg: PathBuf,
+        /// Change nothing: list the files that would change and exit 1 if there are any.
+        #[arg(long)]
+        check: bool,
     },
     /// Prints the gameplay hash (leaderboards key on it) and the content hash (downloads).
     Hash {
@@ -218,7 +268,12 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             Ok(true)
         }
         Command::Pkg(PkgCommand::Check { pkg, trace_mode }) => pkg_cmd::main(&pkg, trace_mode),
+        Command::Pkg(PkgCommand::Fmt { pkg, check }) => pkg_cmd::fmt_main(&pkg, check),
         Command::Pkg(PkgCommand::Hash { pkg, trace_mode }) => pkg_cmd::hash_main(&pkg, trace_mode),
+        Command::Script(ScriptCommand::ApiDocs { docs, check }) => {
+            let docs = docs.unwrap_or_else(script_cmd::default_docs_dir);
+            script_cmd::main(&docs, check)
+        }
         Command::Determinism(DeterminismCommand::Report { corpus, check }) => {
             determinism_cmd::main(&corpus, check)
         }
@@ -228,6 +283,20 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             cell,
             trace_mode,
         }) => room_cmd::show_main(&pkg, &room, cell, trace_mode),
+        Command::Engine(EngineCommand::Check {
+            pkg,
+            to,
+            trace_mode,
+            research,
+            cases,
+        }) => {
+            let research = research.or_else(|| std::env::var_os("IWBTG_RESEARCH").map(PathBuf::from));
+            let traces = engine_cmd::TraceSource {
+                research: research.as_deref(),
+                cases: &cases,
+            };
+            engine_cmd::main(&pkg, to, trace_mode, Some(traces))
+        }
         Command::Replay(ReplayCommand::Run(args)) => {
             replay_cmd::main(&args)?;
             Ok(true)

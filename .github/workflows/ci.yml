@@ -31,6 +31,9 @@ jobs:
       - run: cargo test --workspace --locked
       - if: runner.os == 'Linux'
         run: cargo fmt --all -- --check
+      # The golden package is in canonical form (`iwbtg pkg fmt`); the games repo runs the same check.
+      - if: runner.os == 'Linux'
+        run: cargo run -p iwbtg-tools --locked -- pkg fmt crates/sim/tests/golden/one_room.pkg --check
 
   wasm32:
     runs-on: ubuntu-latest

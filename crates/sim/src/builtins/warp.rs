@@ -168,6 +168,7 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
         EventKind::Collision { with, other } if with.intersects(KIDS) && s.on_collide => {
             emit_transition(ctx, s.transition, s.transition_steps);
             ctx.request_room(RoomRequest::Goto(s.room_to));
+            // gm-compare: ok (the (0, 0) sentinel of the params, not a GML test)
             if s.warp_x.get() == 0.0 && s.warp_y.get() == 0.0 {
                 destroy_kid_and_bow(ctx)?;
             } else if let Some(kid) = ctx.w.get_mut(*other) {

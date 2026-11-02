@@ -1033,3 +1033,361 @@ fn script_problems_are_diagnostics_with_file_line_column() {
     });
     assert!(render(&load_report(&files, STRICT)).contains("unknown kind \"@nope\""));
 }
+
+// ---- #138: tier 3 misc built-ins (time_limit, sign, ladder, decor)
+
+fn misc_package(objects: &[(&str, &str)]) -> PackageFiles {
+    let listed: String = objects.iter().map(|(s, _)| format!("\"@{s}\", ")).collect();
+    let order = ORDER.replace("\"playerface\",", &format!("\"playerface\", {listed}"));
+    package(|f| {
+        set(f, "game.toml", manifest(&order, "").into_bytes());
+        for (stem, text) in objects {
+            f.push((format!("objects/{stem}.toml"), text.as_bytes().to_vec()));
+        }
+    })
+}
+
+#[test]
+fn wp6c3_params_load() {
+    let files = misc_package(&[
+        (
+            "my_sign",
+            "base = \"sign\"\ntext = \"Beware of the apple.\"\nmode = \"while_overlapping\"\n",
+        ),
+        (
+            "my_timer",
+            "base = \"time_limit\"\nrole = \"timer\"\nminutes = 2\nseconds = 56\non_expire = \"goto_room\"\nroom = \"title\"\nwarp_x = 32\nwarp_y = 64\n",
+        ),
+        ("my_zone", "base = \"time_limit\"\nrole = \"start_zone\"\n"),
+        ("my_ladder", "base = \"ladder\"\n"),
+        ("my_decor", "base = \"decor\"\n"),
+    ]);
+    let (def, _) = load_ok(&files, STRICT);
+    let (_, sign) = kind_named(&def, "@my_sign");
+    assert_eq!(
+        sign.params.0.get("text"),
+        Some(&ParamValue::Str("Beware of the apple.".into())),
+        "text stays text"
+    );
+    assert_eq!(
+        sign.params.0.get("mode"),
+        Some(&ParamValue::Str("while_overlapping".into()))
+    );
+    let (_, timer) = kind_named(&def, "@my_timer");
+    assert_eq!(
+        timer.params.0.get("minutes"),
+        Some(&ParamValue::Real(Real::new(2.0)))
+    );
+    assert!(
+        matches!(timer.params.0.get("room"), Some(ParamValue::Room(_))),
+        "a room param names a room"
+    );
+    let (_, ladder) = kind_named(&def, "@my_ladder");
+    assert!(ladder.classes.intersects(iwbtg_sim::def::ClassMask::LADDER));
+}
+
+#[test]
+fn wp6c3_params_are_checked() {
+    let cases = [
+        ("base = \"sign\"\ntext = 3\n", "text"),
+        ("base = \"sign\"\ntext = \"x\"\nmode = \"always\"\n", "mode"),
+        ("base = \"time_limit\"\non_expire = \"explode\"\n", "on_expire"),
+        ("base = \"time_limit\"\nroom = \"@nope\"\n", "room"),
+        ("base = \"time_limit\"\nminutes = true\n", "minutes"),
+        ("base = \"ladder\"\nrungs = 3\n", "rungs"),
+        ("base = \"decor\"\nbogus = 1\n", "bogus"),
+    ];
+    for (text, needle) in cases {
+        let files = misc_package(&[("bad", text)]);
+        let r = load_report(&files, STRICT);
+        assert!(!r.ok(), "expected an error for {text:?}:\n{}", render(&r));
+        assert!(
+            errors(&r).iter().any(|e| e.contains(needle)),
+            "{text:?}: no error mentions `{needle}`: {:?}",
+            errors(&r)
+        );
+    }
+}
+
+// ---- #291: tier 2 flag and music built-ins (boss_gate, boss_item, secret_item, item_viewer, game_clear, music)
+
+fn flags_package(objects: &[(&str, &str)]) -> PackageFiles {
+    let listed: String = objects.iter().map(|(s, _)| format!("\"@{s}\", ")).collect();
+    let order = ORDER.replace("\"playerface\",", &format!("\"playerface\", {listed}"));
+    package(|f| {
+        set(f, "game.toml", manifest(&order, "").into_bytes());
+        f.push(("sounds/theme.ogg".into(), b"ogg".to_vec()));
+        for (stem, text) in objects {
+            f.push((format!("objects/{stem}.toml"), text.as_bytes().to_vec()));
+        }
+    })
+}
+
+#[test]
+fn wp6b4_params_load() {
+    let files = flags_package(&[
+        ("gate", "base = \"boss_gate\"\nboss_index = 3\n"),
+        (
+            "reward",
+            "base = \"boss_item\"\nboss_index = 3\nwatched_object = \"@boss\"\n",
+        ),
+        ("secret", "base = \"secret_item\"\nitem_index = 15\n"),
+        ("viewer", "base = \"item_viewer\"\nkind = \"item\"\nindex = 2\n"),
+        ("finish", "base = \"game_clear\"\nsave_with_position = false\n"),
+        (
+            "bgm",
+            "base = \"music\"\ntrack = \"theme\"\nloop = false\nmode = \"every_step_if_not_playing\"\nrespects_music_off = true\n",
+        ),
+    ]);
+    let (def, _) = load_ok(&files, STRICT);
+    let real = |v: f64| ParamValue::Real(Real::new(v));
+    let (_, gate) = kind_named(&def, "@gate");
+    assert_eq!(gate.params.0.get("boss_index"), Some(&real(3.0)));
+    let (boss_id, _) = kind_named(&def, "@boss");
+    let (_, reward) = kind_named(&def, "@reward");
+    assert_eq!(
+        reward.params.0.get("watched_object"),
+        Some(&ParamValue::Kind(boss_id))
+    );
+    let (_, secret) = kind_named(&def, "@secret");
+    assert_eq!(secret.params.0.get("item_index"), Some(&real(15.0)));
+    let (_, viewer) = kind_named(&def, "@viewer");
+    assert_eq!(viewer.params.0.get("kind"), Some(&ParamValue::Str("item".into())));
+    assert_eq!(viewer.params.0.get("index"), Some(&real(2.0)));
+    let (_, finish) = kind_named(&def, "@finish");
+    assert_eq!(
+        finish.params.0.get("save_with_position"),
+        Some(&ParamValue::Bool(false))
+    );
+    let (_, bgm) = kind_named(&def, "@bgm");
+    assert!(
+        matches!(bgm.params.0.get("track"), Some(ParamValue::Sound(_))),
+        "a track names a sound"
+    );
+    assert_eq!(bgm.params.0.get("loop"), Some(&ParamValue::Bool(false)));
+    assert_eq!(
+        bgm.params.0.get("mode"),
+        Some(&ParamValue::Str("every_step_if_not_playing".into()))
+    );
+    assert_eq!(
+        bgm.params.0.get("respects_music_off"),
+        Some(&ParamValue::Bool(true))
+    );
+}
+
+/// The basic package with the WP6b.4 built-ins listed and `instance` placed in `rooms/stage1.toml`.
+fn flags_instance_errors(instance: &str) -> Vec<String> {
+    let order = ORDER.replace(
+        "\"playerface\",",
+        "\"playerface\", \"boss_gate\", \"boss_item\", \"secret_item\", \"item_viewer\", \"game_clear\", \"music\",",
+    );
+    let files = package(|f| {
+        set(f, "game.toml", manifest(&order, "").into_bytes());
+        f.push(("sounds/theme.ogg".into(), b"ogg".to_vec()));
+        let stage = STAGE1.replace(
+            "  { kind = \"warp\", x = 768, y = 512, room_to = \"title\" },
+",
+            &format!(
+                "  {{ kind = \"warp\", x = 768, y = 512, room_to = \"title\" }},
+  {instance},
+"
+            ),
+        );
+        set(f, "rooms/stage1.toml", stage.into_bytes());
+    });
+    let r = load_report(&files, STRICT);
+    assert!(
+        !r.ok(),
+        "expected an error for {instance}:
+{}",
+        render(&r)
+    );
+    errors(&r)
+}
+
+#[test]
+fn wp6b4_params_are_checked() {
+    let cases = [
+        (r#"{ kind = "boss_gate", x = 0, y = 0 }"#, "boss_index"),
+        (
+            r#"{ kind = "boss_gate", x = 0, y = 0, boss_index = 16 }"#,
+            "boss_index",
+        ),
+        (
+            r#"{ kind = "boss_gate", x = 0, y = 0, boss_index = "one" }"#,
+            "boss_index",
+        ),
+        (
+            r#"{ kind = "boss_item", x = 0, y = 0, boss_index = 0, watched_object = "nope" }"#,
+            "watched_object",
+        ),
+        (
+            r#"{ kind = "boss_item", x = 0, y = 0, boss_index = 0, watched_object = 3 }"#,
+            "watched_object",
+        ),
+        (
+            r#"{ kind = "secret_item", x = 0, y = 0, item_index = 1.5 }"#,
+            "item_index",
+        ),
+        (r#"{ kind = "item_viewer", x = 0, y = 0, index = 1 }"#, "kind"),
+        (
+            r#"{ kind = "item_viewer", x = 0, y = 0, index = 1, bogus = 1 }"#,
+            "bogus",
+        ),
+        (
+            r#"{ kind = "game_clear", x = 0, y = 0, save_with_position = "no" }"#,
+            "save_with_position",
+        ),
+        (r#"{ kind = "music", x = 0, y = 0 }"#, "track"),
+        (r#"{ kind = "music", x = 0, y = 0, track = "nope" }"#, "nope"),
+        (
+            r#"{ kind = "music", x = 0, y = 0, track = "theme", mode = "sometimes" }"#,
+            "mode",
+        ),
+        (
+            r#"{ kind = "music", x = 0, y = 0, track = "theme", loop = 1 }"#,
+            "loop",
+        ),
+        (
+            r#"{ kind = "music", x = 0, y = 0, track = "theme", respects_music_off = "yes" }"#,
+            "respects_music_off",
+        ),
+    ];
+    for (instance, needle) in cases {
+        let errs = flags_instance_errors(instance);
+        assert!(
+            errs.iter().any(|e| e.contains(needle)),
+            "{instance}: no error mentions `{needle}`: {errs:?}"
+        );
+    }
+}
+
+#[test]
+fn an_item_viewer_kind_is_a_preset_param_because_the_placed_key_kind_is_taken() {
+    // `kind` on a placed instance names the object; the viewer's own `kind` param (boss or item)
+    // can only come from an object file.
+    let files = flags_package(&[(
+        "viewer",
+        "base = \"item_viewer\"
+kind = \"trophy\"
+index = 1
+",
+    )]);
+    let r = load_report(&files, STRICT);
+    assert!(!r.ok());
+    assert!(errors(&r).iter().any(|e| e.contains("kind")), "{:?}", errors(&r));
+}
+
+// -- Engine packs (docs/format/engine.md) ------------------------------------------------------
+
+const PACK_TOML: &str = "#:schema ../engine.schema.json\nid = \"a1\"\ntitle = \"Pack A1\"\nfamily = \"A1\"\n\n[[creators]]\nname = \"Someone\"\nrole = \"art\"\n";
+
+/// The basic package with its kid sprite moved into a bundled pack `a1`.
+fn with_pack(edit: impl FnOnce(&mut Vec<(String, Vec<u8>)>)) -> PackageFiles {
+    package(|f| {
+        f.retain(|(p, _)| p != "sprites/kid.toml" && p != "sprites/kid.png");
+        let m = String::from_utf8(f[0].1.clone()).unwrap();
+        let m = m
+            .replace(
+                "[defaults.kid]\nsprite = \"kid\"",
+                "[defaults.kid]\nsprite = \"engine:a1/kid\"",
+            )
+            .replace(
+                "physics = \"physics.toml\"",
+                "physics = \"physics.toml\"\nengine_pack = \"a1\"",
+            );
+        f[0].1 = m.into_bytes();
+        f.push(("engine/a1/engine.toml".into(), PACK_TOML.as_bytes().to_vec()));
+        f.push((
+            "engine/a1/sprites/kid.toml".into(),
+            sidecar(1, 4, 4, "precise", None, ""),
+        ));
+        f.push((
+            "engine/a1/sprites/kid.png".into(),
+            png(&["....", ".##.", ".##.", "...."]),
+        ));
+        edit(f);
+    })
+}
+
+#[test]
+fn an_engine_pack_sprite_resolves_like_a_package_sprite() {
+    let (def, report) = load_ok(&with_pack(|_| {}), STRICT);
+    let (_, kid) = kind_named(&def, "kid");
+    let sprite = kid.sprite.expect("the kid has its pack sprite");
+    let (plain, _) = load_ok(&package(|_| {}), STRICT);
+    let plain_sprite = &plain.sprites[kind_named(&plain, "kid").1.sprite.unwrap().0 as usize];
+    let packed = &def.sprites[sprite.0 as usize];
+    assert_eq!(
+        (packed.frames, packed.size),
+        (plain_sprite.frames, plain_sprite.size)
+    );
+    assert!(report.gameplay_hash.is_some());
+}
+
+#[test]
+fn pack_credits_are_not_gameplay_but_pack_sprites_are() {
+    let base = load_ok(&with_pack(|_| {}), STRICT).1.gameplay_hash;
+    let credits = load_ok(
+        &with_pack(|f| {
+            set(
+                f,
+                "engine/a1/engine.toml",
+                PACK_TOML.replace("Someone", "Someone Else"),
+            )
+        }),
+        STRICT,
+    )
+    .1
+    .gameplay_hash;
+    assert_eq!(base, credits);
+    let changed = load_ok(
+        &with_pack(|f| {
+            set(
+                f,
+                "engine/a1/sprites/kid.toml",
+                sidecar(1, 4, 4, "rect", Some([0, 0, 1, 1]), ""),
+            )
+        }),
+        STRICT,
+    )
+    .1
+    .gameplay_hash;
+    assert_ne!(base, changed, "a pack sprite is gameplay data");
+}
+
+#[test]
+fn an_engine_pack_that_is_not_in_the_package_is_an_error() {
+    let files = with_pack(|f| f.retain(|(p, _)| !p.starts_with("engine/")));
+    let r = load_report(&files, STRICT);
+    let errs = errors(&r).join("\n");
+    assert!(errs.contains("engine pack `a1` is not in the package"), "{errs}");
+}
+
+#[test]
+fn an_engine_pack_without_the_sprite_is_an_error() {
+    let files = with_pack(|f| {
+        f.retain(|(p, _)| p != "engine/a1/sprites/kid.toml" && p != "engine/a1/sprites/kid.png");
+    });
+    let errs = errors(&load_report(&files, STRICT)).join("\n");
+    assert!(
+        errs.contains("`engine:a1/kid`: the engine pack `a1` has no sprite `kid`"),
+        "{errs}"
+    );
+}
+
+#[test]
+fn engine_toml_is_checked() {
+    let files = with_pack(|f| set(f, "engine/a1/engine.toml", PACK_TOML.replace("\"A1\"", "\"Z9\"")));
+    let errs = errors(&load_report(&files, STRICT)).join("\n");
+    assert!(errs.contains("family `Z9` must be one of"), "{errs}");
+    let files = with_pack(|f| {
+        set(
+            f,
+            "engine/a1/engine.toml",
+            PACK_TOML.replace("id = \"a1\"", "id = \"b\""),
+        )
+    });
+    let errs = errors(&load_report(&files, STRICT)).join("\n");
+    assert!(errs.contains("must be the folder name `a1`"), "{errs}");
+}

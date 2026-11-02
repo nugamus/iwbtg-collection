@@ -609,7 +609,9 @@ dependencies = [
  "clap",
  "iwbtg-format",
  "iwbtg-sim",
+ "rhai",
  "serde",
+ "serde_json",
  "thiserror",
  "toml",
 ]
@@ -1034,6 +1036,8 @@ dependencies = [
  "num-traits",
  "once_cell",
  "rhai_codegen",
+ "serde",
+ "serde_json",
  "smallvec",
  "smartstring",
  "thin-vec",

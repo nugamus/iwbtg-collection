@@ -45,6 +45,95 @@ pub fn main(dir: &Path, trace_mode: bool) -> Result<bool, ToolError> {
     Ok(report.ok())
 }
 
+/// `iwbtg pkg fmt <pkg> [--check]`: formats every `.toml` file of the package (`tests/` included:
+/// its files are data too) in the canonical layout, writing the ones that change. With `check`
+/// nothing is written, the files that would change are listed and the exit code is 1.
+pub fn fmt_main(dir: &Path, check: bool) -> Result<bool, ToolError> {
+    let files = load_package(dir)?;
+    let mut changed = Vec::new();
+    let mut broken = false;
+    for (path, bytes) in files
+        .iter()
+        .filter(|(p, _)| p.ends_with(".toml") && !p.starts_with(iwbtg_format::engine_pack::ENGINE_DIR))
+    {
+        let Ok(text) = std::str::from_utf8(bytes) else {
+            println!("{path}: not UTF-8");
+            broken = true;
+            continue;
+        };
+        match iwbtg_format::fmt::format_toml(text) {
+            Ok(out) if out == text => {}
+            Ok(out) => {
+                if !check {
+                    let target = dir.join(path);
+                    std::fs::write(&target, out.as_bytes())
+                        .map_err(|e| ToolError::Message(format!("{}: {e}", target.display())))?;
+                }
+                changed.push(path.to_owned());
+            }
+            Err(e) => {
+                println!("{path}: {e}");
+                broken = true;
+            }
+        }
+    }
+    let verb = if check { "would change" } else { "formatted" };
+    for p in &changed {
+        println!("{verb}: {p}");
+    }
+    if changed.is_empty() && !broken {
+        println!("no changes");
+    } else if !changed.is_empty() {
+        println!("{} file(s) {verb}", changed.len());
+    }
+    Ok(!broken && !(check && !changed.is_empty()))
+}
+
+#[cfg(test)]
+mod fmt_tests {
+    use super::*;
+
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("iwbtg-fmt-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("rooms")).unwrap();
+        dir
+    }
+
+    #[test]
+    fn fmt_writes_then_a_second_run_and_check_find_nothing() {
+        let dir = scratch("write");
+        std::fs::write(
+            dir.join("rooms/a.toml"),
+            "size=[800,608]\ninstances=[{x=1,y=2,kind=\"spike\"}]\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("game.toml"), "id = \"x\"\n").unwrap();
+        assert!(!fmt_main(&dir, true).unwrap(), "check reports the file");
+        assert_eq!(
+            std::fs::read_to_string(dir.join("rooms/a.toml")).unwrap(),
+            "size=[800,608]\ninstances=[{x=1,y=2,kind=\"spike\"}]\n",
+            "check writes nothing"
+        );
+        assert!(fmt_main(&dir, false).unwrap());
+        assert_eq!(
+            std::fs::read_to_string(dir.join("rooms/a.toml")).unwrap(),
+            "size = [800, 608]\ninstances = [\n  { kind = \"spike\", x = 1, y = 2 },\n]\n"
+        );
+        assert!(fmt_main(&dir, false).unwrap(), "idempotent: nothing left to do");
+        assert!(fmt_main(&dir, true).unwrap(), "and check agrees");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn fmt_fails_on_a_file_that_is_not_toml() {
+        let dir = scratch("bad");
+        std::fs::write(dir.join("rooms/a.toml"), "a = \n").unwrap();
+        assert!(!fmt_main(&dir, false).unwrap());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+}
+
 /// The two hashes of a package, as lowercase hex: `(gameplay_hash, content_hash)`. The gameplay
 /// hash exists only for a package that loads without errors; those errors are returned instead.
 pub fn hashes(files: &iwbtg_format::PackageFiles, trace_mode: bool) -> Result<(String, String), Vec<String>> {

@@ -157,6 +157,7 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
     let air = param_enum(params, "air_jump", AIR_JUMP)?;
     let cur_jumps = match param_real(params, "cur_jumps")? {
         None => None,
+        // gm-compare: ok (load-time param validation)
         Some(v) => match (0..=3u8).find(|w| (f64::from(*w) - v.get()).abs() < 1e-9) {
             Some(n) => Some(n),
             None => return Err(super::param_error("cur_jumps", "0, 1, 2 or 3")),
@@ -178,6 +179,7 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
     };
     Ok(BuiltinState::Water(WaterState {
         area,
+        // gm-compare: ok (param: a negative cap means none)
         fall_cap: if cap.get() < 0.0 { None } else { Some(cap) },
         refresh: param_enum(params, "refresh", REFRESH)? == Some("on_touch"),
         air_jump: air == Some("press_if_no_djump") || air == Some("djump_ignoring_flag"),
@@ -194,6 +196,7 @@ fn has_djump(ctx: &Ctx, kid: InstId) -> bool {
         name: "djump".to_owned(),
         index: None,
     };
+    // gm-compare: ok (a kid field that reads 1 or 0 as a flag)
     matches!(api::read_field(ctx.w, kid, &f), Some(Value::Real(v)) if v.get() > 0.0)
 }
 
