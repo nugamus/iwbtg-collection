@@ -790,6 +790,33 @@ mod tests {
     }
 
     #[test]
+    fn extra_actions_parse_in_action_files() {
+        let p = parse_actions(
+            "frame 1: press extra1 extra4
+frame 2: release extra1
+frame 3: end",
+        );
+        let (e1, e4) = (Action::Extra1.bit(), Action::Extra4.bit());
+        assert_eq!((e1, e4), (1 << 15, 1 << 18));
+        assert_eq!(
+            p.frames[1],
+            InputFrame {
+                held: e1 | e4,
+                pressed: e1 | e4,
+                released: 0
+            }
+        );
+        assert_eq!(
+            p.frames[2],
+            InputFrame {
+                held: e4,
+                pressed: 0,
+                released: e1
+            }
+        );
+    }
+
+    #[test]
     fn pause_mute_and_reset_parse_in_action_files() {
         let p = parse_actions(
             "frame 1: press pause\nframes 2-3: hold mute reset\nframe 4: release pause\nframe 5: end",

@@ -486,7 +486,25 @@ mod tests {
         ]);
         let decoded = Replay::decode(&replay.encode().unwrap()).unwrap();
         assert_eq!(decoded, replay);
-        assert_eq!(decoded.inputs[4].held, 0x7fff);
+        // Every action, including Extra1..Extra4 (bits 15..18), survives; the mask is the 19
+        // action bits, not the old 15-bit u16 mask.
+        assert_eq!(decoded.inputs[4].held, 0x7_ffff);
+        assert_eq!(decoded.inputs[4].held, Action::MASK);
+    }
+
+    #[test]
+    fn round_trip_keeps_extra_actions() {
+        use crate::input::Action;
+        let extras = [Action::Extra1, Action::Extra2, Action::Extra3, Action::Extra4];
+        let inputs: Vec<InputFrame> = extras
+            .iter()
+            .map(|a| frame(a.bit(), a.bit(), 0))
+            .chain([frame(0, 0, Action::Extra4.bit())])
+            .collect();
+        let replay = replay(inputs);
+        let decoded = Replay::decode(&replay.encode().unwrap()).unwrap();
+        assert_eq!(decoded, replay);
+        assert_eq!(decoded.inputs[3].held, 1 << 18);
     }
 
     #[test]
