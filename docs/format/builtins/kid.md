@@ -40,4 +40,4 @@ Fields other built-ins read go through `kid::api`, never `KidState` directly (pl
 
 Boundary events follow `events.boundary` (A1: Intersect Boundary kills or warps, then wraps; see [physics.md](../physics.md)).
 
-OPEN: sounds (#231, including family B's death sound object); the flipped kid of the group A games and the other families' actions (WP5c).
+Sounds: the `[sounds]` roles play from `jump`, `shoot`, `vines` and the death step. OPEN: family B's delayed death sound object with the music fade (#330).
