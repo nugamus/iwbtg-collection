@@ -208,6 +208,16 @@ pub(crate) fn down(s: &KidState) -> i32 {
     if s.flipped || s.yflag < 0 { -1 } else { 1 }
 }
 
+/// `yflag` for the actions that scale by it (`flip.model = "yflag"`): -1 while the kid is
+/// reversed, else 1. Other flip models keep 1: their flipped kid is another object.
+pub(crate) fn yflag(ctx: &Ctx, s: &KidState) -> i32 {
+    if ctx.def.physics.flip.model == FlipKind::Yflag && s.yflag < 0 {
+        -1
+    } else {
+        1
+    }
+}
+
 /// Create steps 1 and 2 (A1): numbers from the profile, flags cleared, `djump` true,
 /// `image_alpha` 0 when the game fades the kid in, and facing left only when the previous kid
 /// handed over `global.image_xscale = -1`.
@@ -335,6 +345,12 @@ fn walk(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         }
         WalkRead::Sampled => (ctx.w.input.held(Action::Right), ctx.w.input.held(Action::Left)),
     };
+    // Reversed (family B): the keys swap, "L reads the right key and R the left key".
+    let (right, left) = if yflag(ctx, &s) < 0 {
+        (left, right)
+    } else {
+        (right, left)
+    };
     let mut h: i32 = if right {
         1
     } else if left {
@@ -395,12 +411,31 @@ fn air_sprite(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         }
         return Ok(());
     }
+    let rev = yflag(ctx, &s) < 0;
+    // Family B: the fall sprite also needs no `slope_wall` `air_wall_probe` px in the gravity
+    // direction; when reversed, the jump sprite is the one that shows falling "up" without it.
+    let probe = p.numbers.air_wall_probe;
+    let wall_near = if gm_gt(probe, Real::ZERO, n) {
+        let Some(i) = ctx.w.get(me) else { return Ok(()) };
+        let (x, y) = (i.m.x(), i.m.y());
+        let dir = real_i(yflag(ctx, &s));
+        place_meeting(ctx, me, x, y + probe * dir, Target::Class(ClassMask::SLOPE_WALL))?
+    } else {
+        false
+    };
     let Some(i) = ctx.w.get_mut(me) else { return Ok(()) };
     let v = i.m.vspeed();
     let t = p.numbers.sprite_threshold;
-    if gm_lt(v, -t, n) {
+    // Moving with gravity is the fall sprite (not near a wall); against it, the jump sprite.
+    // Reversed (`yflag`), "with gravity" is negative `vspeed`.
+    let (with_gravity, against) = if rev {
+        (gm_lt(v, -t, n), gm_gt(v, t, n))
+    } else {
+        (gm_gt(v, t, n), gm_lt(v, -t, n))
+    };
+    if against {
         set_sprite(def, &mut i.img, p.sprites.jump);
-    } else if gm_gt(v, t, n) {
+    } else if with_gravity && !wall_near {
         set_sprite(def, &mut i.img, p.sprites.fall);
     }
     Ok(())
@@ -453,7 +488,9 @@ fn shoot(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
     let Some(i) = ctx.w.get(me) else {
         return Ok(Flow::Continue);
     };
-    let (x, y) = (i.m.x(), i.m.y());
+    let off = def.physics.bullet.offset;
+    let x = i.m.x() + off[0] * real_i(i32::from(s.facing));
+    let y = i.m.y() - off[1] * real_i(yflag(ctx, &s));
     let Some(b) = ctx.spawn_engine(EngineKind::KidBullet, x, y, SpawnInit::default())? else {
         return Err(SimError::invariant("shoot: the game has no kid_bullet kind"));
     };
@@ -592,14 +629,23 @@ fn vines(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     );
     let max_fall = p.numbers.max_fall_speed;
     let slide_fall = Real::new(2.0);
-    let (kick_h, kick_v) = (p.vine.kick[0], p.vine.kick[1]);
+    let rev = yflag(ctx, &s) < 0;
+    let yf = real_i(yflag(ctx, &s));
+    // Reversed (family B): the away key is the other one, slide and kick follow `yflag`.
+    let (right_pressed, left_pressed) = if rev {
+        (left_pressed, right_pressed)
+    } else {
+        (right_pressed, left_pressed)
+    };
+    let (kick_h, kick_v) = (p.vine.kick[0], p.vine.kick[1] * yf);
+    let slide = p.vine.slide * yf;
 
     // Left vine: face right; kick or drop on a Right press.
     if gm_lt(dl, p.vine.left_below, n) && below_free {
         state_mut(ctx, me)?.max_fall_speed = slide_fall;
         state_mut(ctx, me)?.facing = 1;
         if let Some(i) = ctx.w.get_mut(me) {
-            i.m.set_vspeed(p.vine.slide)?;
+            i.m.set_vspeed(slide)?;
             set_sprite(def, &mut i.img, p.sprites.sliding);
             i.img.set_xscale(Real::ONE)?;
             i.img.set_speed(p.numbers.image_speed_run)?;
@@ -623,7 +669,7 @@ fn vines(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         state_mut(ctx, me)?.max_fall_speed = slide_fall;
         state_mut(ctx, me)?.facing = -1;
         if let Some(i) = ctx.w.get_mut(me) {
-            i.m.set_vspeed(p.vine.slide)?;
+            i.m.set_vspeed(slide)?;
             set_sprite(def, &mut i.img, p.sprites.sliding);
             i.img.set_xscale(real_i(-1))?;
             i.img.set_speed(p.numbers.image_speed_run)?;
