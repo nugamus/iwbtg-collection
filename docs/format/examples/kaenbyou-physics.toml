@@ -1,0 +1,101 @@
+#:schema ../schema/v0/physics.schema.json
+# The kid's physics profile of Kaenbyou (family B, kid/B.md), written out in full. With
+# `preset = "B"` alone the sim gives the same profile: every value below is the preset's.
+# `[sprites]` names come from the package's sprite table.
+preset = "B"
+
+[numbers]
+jumps = [8.5, 7.0]            # jump[1], jump[2]
+gravity = 0.4                 # applied by the End Step (slope_b), not by Create
+run_speed = 3.0
+max_vspeed = 9.0
+max_fall_speed = 0.0          # unused by family B
+release_mult = 0.45
+sprite_threshold = 0.05
+image_speed_idle = 0.2
+image_speed_run = 0.5
+air_wall_probe = 2.0          # the fall sprite needs no slope wall this close
+
+[input]
+walk = "direct_latch"
+vine_keys = "edges"
+
+[events]
+create = ["create_defaults", "first_play_save"]
+room_start = ["ensure_bow", "set_view_angle"]
+step = [
+  "stop_if_frozen2", "sync_yflag", "walk", "air_sprite", "fall_cap", "shoot", "jump", "release",
+  "vines", "killer_check", "ensure_bow",
+]
+end_step = ["slope_b"]
+boundary = "outside_room_kill"
+alarms = [{ n = 0, run = ["cancel_poll"] }]   # never armed: jump cancelling is on
+keys = [{ action = "suicide", on = "press", run = ["kill"] }]
+collisions = [
+  { with = "block", run = "block_standard" },
+  { with = "solidblock", run = "block_standard" },
+  { with = "platform", run = "platform_standard" },
+]
+
+[jump]
+ground_classes = ["block", "solidblock", "slope_wall"]
+ground_also = ["platform_flag"]
+ground_sets_djump = false
+air = "cur_jumps"
+water_air = "water_unlimited"
+max_jumps = 2
+inf_jump = false
+blocked_by_pause_press = true
+cancel = "edge"
+
+[fall_cap]
+rule = "clamp_against_gravity"
+
+[gravity]
+reapply = "end_step_slope"
+block_landing_zeroes = true
+
+[platform]
+rule = "half_vspeed"
+snap = 9.0
+take = "delta_y"
+hold_probe = 4.0
+reversed_above = 15.0
+reversed_snap = 24.0
+
+[vine]
+model = "distance_asym"
+left_below = 2.0
+right_equal = 1.0
+slide = 2.0
+kick = [15.0, -9.0]
+drop = 3.0
+
+[flip]
+model = "yflag"
+
+[death]
+order = ["sound", "blood_emitter", "game_over", "destroy_all_kids", "deaths_plus_one", "save_counters"]
+select_room_reset = true
+stop_music = false
+first_kid = true
+
+[bullet]
+max = 4
+speed = 16.0
+offset = [2.0, 2.0]
+
+[save]
+position = "xy_previous"
+first_kid = true
+
+[misc]
+fade_in = false
+fade_step = 0.1
+
+[sprites]
+idle = "kid_idle"
+running = "kid_run"
+jump = "kid_jump"
+fall = "kid_fall"
+sliding = "kid_slide"

@@ -78,11 +78,26 @@ pub struct MechGlobals {
     pub bosses: u16,
     /// Item flags, one bit per item (`SaveSlot::items`).
     pub items: u16,
+    /// The music flag (`global.music`, true is muted); the `world` built-in flips it on a Mute
+    /// press and music objects read it.
+    pub music_muted: bool,
 }
 
-/// Built-in effects for the client. WP6a adds the variants.
-#[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
-pub struct BuiltinOutput {}
+/// Built-in effects for the client. Visual only: the sim never reads them back.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub enum BuiltinOutput {
+    /// A `blood_emitter` in `particles` mode made one Step's particle stream (family B death).
+    DeathParticles {
+        /// Emitter x.
+        x: Real,
+        /// Emitter y.
+        y: Real,
+        /// Particles this Step.
+        count: u32,
+        /// The kid was flipped: the particles fall up.
+        flipped: bool,
+    },
+}
 
 /// One parameter a built-in accepts; `crates/format` validates package params against these.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

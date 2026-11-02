@@ -192,19 +192,26 @@ pub fn kill(ctx: &mut Ctx, kid: InstId, cause: KillCause) -> Result<Flow, SimErr
 /// A kid field for the probe, by its GM name; `None` when this kid has no such field. Flags read
 /// as 1 or 0. Names: `djump`, `curJumps`, `tjump`, `onPlatform`, `ladder`, `ladderud`,
 /// `ladderjump`, `frozen`, `frozen2`, `yflag`, `facing`, `tempHspeed`, `maxSpeed`, `maxVspeed`,
-/// `maxFallSpeed`, `muteki`, `scale`, and `jump[i]` (`jump` alone is `jump[0]`; `jump2` and
-/// `jump3` are `jump[1]` and `jump[2]`). WP5b and WP5c add the names of their own fields.
+/// `maxFallSpeed`, `muteki`, `scale`, `maxJumps`, `infJump`, and `jump[n]` (1-based like family B's
+/// array: `jump[1]` is the ground jump; `jump` alone is the same; `jump2` and `jump3` are `jump[2]` and
+/// `jump[3]`). WP5b and WP5c add the names of their own fields.
 pub fn read_field(w: &World, kid: InstId, f: &KidField) -> Option<Value> {
     let s = state(w, kid)?;
     let real = |r: Real| Some(Value::Real(r));
     if f.name == "jump" {
-        let i = usize::try_from(f.index.unwrap_or(0)).ok()?;
+        // Family B's `jump[1]`, `jump[2]` count from 1; plain `jump` is the ground jump.
+        let i = match f.index {
+            Some(n) => usize::try_from(n).ok()?.checked_sub(1)?,
+            None => 0,
+        };
         return s.jump_speeds.get(i).copied().and_then(real);
     }
     if f.index.is_some() {
         return None;
     }
     match f.name.as_str() {
+        "maxJumps" => real(Real::new(f64::from(s.b.max_jumps))),
+        "infJump" => Some(flag(s.b.inf_jump)),
         "jump2" => s.jump_speeds.get(1).copied().and_then(real),
         "jump3" => s.jump_speeds.get(2).copied().and_then(real),
         "djump" => Some(flag(s.djump)),
@@ -226,4 +233,105 @@ pub fn read_field(w: &World, kid: InstId, f: &KidField) -> Option<Value> {
         "scale" => real(s.scale),
         _ => None,
     }
+}
+
+/// Whether the kid is the flipped one: the flipped kid's own state flag, or the flipped class
+/// (the games that flip by swapping to a second kid kind). The save reads this, not the class
+/// alone, because B and C flip by a flag on one kind.
+pub fn flipped(w: &World, kid: InstId) -> bool {
+    let Some(i) = w.get(kid) else { return false };
+    i.classes.intersects(crate::def::ClassMask::KID_FLIPPED) || state(w, kid).is_some_and(|s| s.flipped)
+}
+
+/// The facing a save stores, -1 or 1: the kid's `facing`, and for an instance with no kid state
+/// (a test stand-in) the sign of its `image_xscale`.
+pub fn saved_facing(w: &World, kid: InstId) -> i8 {
+    match state(w, kid) {
+        Some(s) => s.facing,
+        None => match w.get(kid) {
+            Some(i) if i.img.xscale().get() < 0.0 => -1,
+            _ => 1,
+        },
+    }
+}
+
+/// Puts a loaded kid in the saved orientation: `facing` (and `image_xscale`).
+///
+/// For a game that flips by flag (`[flip] model = "yflag"`, family B) the saved flipped state is
+/// `global.reverse`: it becomes the global, and the kid keeps the `yflag` its Create gave it, which
+/// is stale until its first Step fixes it (kid/B.md Restart). For the other models the kid's
+/// `flipped` flag and `yflag` follow the save. The flipped kid kind and the `+dy` offset are the
+/// loader's (`save::load_into`).
+pub fn restore_orientation(ctx: &mut Ctx, kid: InstId, flipped: bool, facing: i8) -> Result<(), SimError> {
+    let by_flag = ctx.def.physics.flip.model == crate::def::physics::FlipKind::Yflag;
+    if by_flag {
+        ctx.w.engine.kid.b.reverse = flipped;
+    }
+    let Some(i) = ctx.w.get_mut(kid) else {
+        return Err(SimError::invariant(format!(
+            "kid::api::restore_orientation: no instance {}",
+            kid.0
+        )));
+    };
+    i.img.set_xscale(Real::new(f64::from(facing)))?;
+    if let KindState::Kid(s) = &mut i.state {
+        s.facing = facing;
+        if !by_flag {
+            s.flipped = flipped;
+            s.yflag = if flipped { -1 } else { 1 };
+        }
+    }
+    Ok(())
+}
+
+/// Clears `frozen` and `frozen2`: the globals and the flags of every live kid, both kinds
+/// (B Restart step 3, showdown Restart step 1).
+pub fn clear_frozen(ctx: &mut Ctx) {
+    ctx.w.engine.kid.frozen = false;
+    ctx.w.engine.kid.frozen2 = false;
+    let ids: Vec<InstId> = ctx
+        .w
+        .instances()
+        .iter()
+        .filter(|i| matches!(i.state, KindState::Kid(_)))
+        .map(|i| i.id)
+        .collect();
+    for id in ids {
+        if let Some(s) = state_mut(ctx.w, id) {
+            s.frozen = false;
+            s.frozen2 = false;
+        }
+    }
+}
+
+/// Resets the kid's jump values to the profile's, both speeds to 0 and the jump flags
+/// (`djump` true; `tjump` true when the game has a third jump): showdown's loadGame step.
+pub fn reset_jump_values(ctx: &mut Ctx, kid: InstId) -> Result<(), SimError> {
+    let def = ctx.def;
+    let triple = def.physics.jump.air == crate::def::physics::AirJump::DjumpThenTjump;
+    let Some(i) = ctx.w.get_mut(kid) else {
+        return Err(SimError::invariant(format!(
+            "kid::api::reset_jump_values: no instance {}",
+            kid.0
+        )));
+    };
+    let KindState::Kid(s) = &mut i.state else {
+        return Err(SimError::invariant(format!(
+            "kid::api::reset_jump_values: instance {} is not a kid",
+            kid.0
+        )));
+    };
+    s.jump_speeds.clone_from(&def.physics.numbers.jumps);
+    s.djump = true;
+    s.tjump = triple;
+    i.m.set_hspeed(Real::ZERO)?;
+    i.m.set_vspeed(Real::ZERO)?;
+    Ok(())
+}
+
+/// `playerReverse` on `kid` (family B, `flip.model = "yflag"`): `global.reverse` toggles, `yflag`
+/// negates, `y` moves 4 times the new `yflag`, `curJumps` 1, `vspeed` 0. The gravity arrows call
+/// this from their Alarm 1.
+pub fn player_reverse(ctx: &mut Ctx, kid: InstId) -> Result<(), SimError> {
+    super::actions::b::player_reverse(ctx, kid)
 }

@@ -8,6 +8,7 @@
 //! add their actions as variants of the enums there, so they never edit this file.
 
 pub mod api;
+pub mod boundary;
 pub mod death;
 pub mod presets;
 pub mod state;
@@ -45,6 +46,7 @@ use smallvec::SmallVec;
 pub use state::{KidGlobals, KidState};
 
 use crate::def::PhysicsProfile;
+use crate::def::physics::{BoundaryModel, KeyOn};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
 use crate::world::{Ctx, Flow, InstId};
@@ -116,6 +118,8 @@ pub enum KidCollisionRun {
     Platform(collisions::platform::PlatformRun),
     /// Family B runs (WP5b).
     B(collisions::b::BRun),
+    /// `kill` (WP5a).
+    Death(death::DeathRun),
     /// Slope runs (WP5c).
     Slope(collisions::slope::SlopeRun),
     /// poronkusema `moving_block_por` (WP5c).
@@ -133,6 +137,7 @@ pub fn run_collision(
         KidCollisionRun::Block(r) => collisions::block::run(ctx, me, other, r),
         KidCollisionRun::Platform(r) => collisions::platform::run(ctx, me, other, r),
         KidCollisionRun::B(r) => collisions::b::run(ctx, me, other, r),
+        KidCollisionRun::Death(r) => death::run(ctx, me, other, r),
         KidCollisionRun::Slope(r) => collisions::slope::run(ctx, me, other, r),
         KidCollisionRun::MovingBlock(r) => collisions::moving_block::run(ctx, me, other, r),
     }
@@ -141,6 +146,12 @@ pub fn run_collision(
 /// Runs `list` on the kid in order; stops at the first flow that is not `Continue`.
 fn run_list(ctx: &mut Ctx, me: InstId, list: &[KidAction]) -> Result<Flow, SimError> {
     for a in list {
+        if let KidAction::Common(actions::common::CommonAction::StopIfFrozen2) = a {
+            if actions::common::stop_if_frozen2(ctx, me)? {
+                return Ok(Flow::Continue);
+            }
+            continue;
+        }
         let flow = run_action(ctx, me, a)?;
         if flow != Flow::Continue {
             return Ok(flow);
@@ -165,7 +176,33 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
         }
         return Ok(Flow::Continue);
     }
+    if let Some(flow) = boundary::on_event(ctx, me, ev)? {
+        return Ok(flow);
+    }
     let list = match ev {
+        EventKind::Alarm(n) => {
+            for row in e.alarms.iter().filter(|a| a.n == *n) {
+                let flow = run_list(ctx, me, &row.run)?;
+                if flow != Flow::Continue {
+                    return Ok(flow);
+                }
+            }
+            return Ok(Flow::Continue);
+        }
+        EventKind::KeyHeld(a) | EventKind::KeyPress(a) | EventKind::KeyRelease(a) => {
+            let on = match ev {
+                EventKind::KeyHeld(_) => KeyOn::Held,
+                EventKind::KeyPress(_) => KeyOn::Press,
+                _ => KeyOn::Release,
+            };
+            for row in e.keys.iter().filter(|k| k.action == *a && k.on == on) {
+                let flow = run_list(ctx, me, &row.run)?;
+                if flow != Flow::Continue {
+                    return Ok(flow);
+                }
+            }
+            return Ok(Flow::Continue);
+        }
         EventKind::Create => &e.create,
         EventKind::RoomStart => &e.room_start,
         EventKind::Step => &e.step,
@@ -179,8 +216,14 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
 pub fn event_set(p: &PhysicsProfile) -> EventSet {
     EventSet {
         step: !p.events.step.is_empty(),
-        end_step: !p.events.end_step.is_empty(),
+        end_step: !p.events.end_step.is_empty() || p.events.boundary == BoundaryModel::EndStepOrigin,
+        outside_room: p.events.boundary == BoundaryModel::OutsideRoomKill,
+        intersect_boundary: p.events.boundary == BoundaryModel::IntersectOrigin,
         room_start: !p.events.room_start.is_empty(),
+        alarms: p.events.alarms.iter().fold(0, |m, a| m | (1u16 << a.n.min(11))),
+        key_held: key_bits(p, KeyOn::Held),
+        key_press: key_bits(p, KeyOn::Press),
+        key_release: key_bits(p, KeyOn::Release),
         collisions: p
             .events
             .collisions
@@ -194,4 +237,13 @@ pub fn event_set(p: &PhysicsProfile) -> EventSet {
             }),
         ..EventSet::default()
     }
+}
+
+/// The bits of the actions with a key row on `on`.
+fn key_bits(p: &PhysicsProfile, on: KeyOn) -> u32 {
+    p.events
+        .keys
+        .iter()
+        .filter(|k| k.on == on)
+        .fold(0, |m, k| m | k.action.bit())
 }

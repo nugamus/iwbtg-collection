@@ -13,7 +13,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::collide::query::place_free;
-use crate::def::{ClassMask, EngineKind, RoomId};
+use crate::def::{EngineKind, RoomId};
 use crate::error::SimError;
 use crate::num::{self, Real};
 use crate::rules::NumRules;
@@ -77,14 +77,20 @@ pub fn save_now(
     model: SavedPosition,
     fixed: Option<(Real, Real)>,
 ) -> Result<(), SimError> {
+    // Family B stores the first kid whichever kid touched the save point (R21).
+    let kid = if ctx.def.physics.save.first_kid {
+        ctx.w.kid(&ctx.rules.tick).unwrap_or(kid)
+    } else {
+        kid
+    };
     let inst = ctx
         .w
         .get(kid)
         .ok_or_else(|| SimError::invariant(format!("save_now: unknown kid {}", kid.0)))?;
     let (x, y) = (inst.m.x(), inst.m.y());
     let (px, py) = (inst.m.xprevious(), inst.m.yprevious());
-    let flipped = inst.classes.intersects(ClassMask::KID_FLIPPED);
-    let facing: i8 = if inst.img.xscale().get() < 0.0 { -1 } else { 1 };
+    let flipped = crate::kid::api::flipped(ctx.w, kid);
+    let facing = crate::kid::api::saved_facing(ctx.w, kid);
     let (rx, ry) = match model {
         SavedPosition::XyPrevious => (px, py),
         SavedPosition::FixedPoint => fixed.ok_or_else(|| {
@@ -216,12 +222,11 @@ pub fn load_into(ctx: &mut Ctx, slot: &SaveSlot) -> Result<InstId, SimError> {
     } else {
         Real::ZERO
     };
-    let facing = Real::new(f64::from(slot.facing));
     if let Some(inst) = ctx.w.get_mut(id) {
         inst.persistent = true;
         inst.m.set_x(slot.x)?;
         inst.m.set_y(slot.y + dy)?;
-        inst.img.set_xscale(facing)?;
     }
+    crate::kid::api::restore_orientation(ctx, id, slot.flipped, slot.facing)?;
     Ok(id)
 }

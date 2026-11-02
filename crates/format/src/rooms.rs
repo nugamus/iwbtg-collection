@@ -53,6 +53,7 @@ pub struct RoomFile {
 
 /// One `[[views]]` entry.
 #[derive(Clone, Debug, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct ViewFile {
     /// Visible when the room starts.
@@ -65,6 +66,7 @@ pub struct ViewFile {
     pub port: Option<[Number; 4]>,
     /// Kind to follow.
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub follow: Option<Spanned<String>>,
     /// Horizontal and vertical border; default 32, 32.
     #[serde(default)]
@@ -76,6 +78,7 @@ pub struct ViewFile {
 
 /// One room creation action (plan 4.2 step 6), `{ do = "...", ... }`.
 #[derive(Clone, Debug, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "do", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ActionFile {
     /// `global.<var> = value`.
@@ -83,6 +86,7 @@ pub enum ActionFile {
         /// Global name.
         var: String,
         /// A number, string or boolean (true is 1).
+        #[cfg_attr(feature = "schema", schemars(with = "serde_json::Value"))]
         value: toml::Value,
     },
     /// `instance_create(x, y, kind)`.
@@ -95,6 +99,7 @@ pub enum ActionFile {
         y: Number,
         /// Params of the new instance.
         #[serde(default)]
+        #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, serde_json::Value>"))]
         params: BTreeMap<String, toml::Value>,
     },
     /// The engine's `loadGame` (R23).
@@ -153,10 +158,13 @@ impl InstanceFile {
 }
 
 #[derive(Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-struct RawRoom {
+pub(crate) struct RawRoom {
+    #[cfg_attr(feature = "schema", schemars(with = "[u32; 2]"))]
     size: Spanned<[u32; 2]>,
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<u32>"))]
     file_speed: Option<Spanned<u32>>,
     #[serde(default)]
     role: Option<RoleName>,
@@ -169,14 +177,18 @@ struct RawRoom {
     #[serde(default)]
     background_color: Option<String>,
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Vec<serde_json::Value>"))]
     backgrounds: Vec<toml::Value>,
     #[serde(default)]
     views_enabled: bool,
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Vec<ViewFile>"))]
     views: Vec<Spanned<ViewFile>>,
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Vec<crate::schema::InstanceShape>"))]
     instances: Vec<Spanned<BTreeMap<Spanned<String>, Spanned<toml::Value>>>>,
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Vec<ActionFile>"))]
     on_create: Vec<Spanned<ActionFile>>,
 }
 
