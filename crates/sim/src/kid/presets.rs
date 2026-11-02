@@ -9,8 +9,8 @@
 //! return the A1 profile with their `preset` recorded: WP5b and WP5c replace those arms.
 
 use crate::def::physics::{
-    AirJump, DeathStep, FallCapRule, GravityReapply, GroundAlso, KeyOn, KidAlarm, KidCollision, KidKey,
-    PlatformRule, PlatformTake, SavePosition, VineKeys, VineModel, WalkRead, WaterAir,
+    AirJump, BoundaryModel, DeathStep, FallCapRule, GravityReapply, GroundAlso, KeyOn, KidAlarm,
+    KidCollision, KidKey, PlatformRule, PlatformTake, SavePosition, VineKeys, VineModel, WalkRead, WaterAir,
 };
 use crate::def::{ClassMask, KidFamily, PhysicsProfile, PhysicsProfileDraft};
 use crate::input::Action;
@@ -75,6 +75,7 @@ fn a1() -> PhysicsProfile {
         KidAction::A1(A1Action::PlatformGravityZero),
         KidAction::A1(A1Action::FadeIn),
     ];
+    p.events.boundary = BoundaryModel::IntersectOrigin;
     p.events.alarms = vec![KidAlarm {
         n: 0,
         run: vec![common(C::PlayTimer)],
