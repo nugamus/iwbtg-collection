@@ -227,3 +227,87 @@ pub fn read_field(w: &World, kid: InstId, f: &KidField) -> Option<Value> {
         _ => None,
     }
 }
+
+/// Whether the kid is the flipped one: the flipped kid's own state flag, or the flipped class
+/// (the games that flip by swapping to a second kid kind). The save reads this, not the class
+/// alone, because B and C flip by a flag on one kind.
+pub fn flipped(w: &World, kid: InstId) -> bool {
+    let Some(i) = w.get(kid) else { return false };
+    i.classes.intersects(crate::def::ClassMask::KID_FLIPPED) || state(w, kid).is_some_and(|s| s.flipped)
+}
+
+/// The facing a save stores, -1 or 1: the kid's `facing`, and for an instance with no kid state
+/// (a test stand-in) the sign of its `image_xscale`.
+pub fn saved_facing(w: &World, kid: InstId) -> i8 {
+    match state(w, kid) {
+        Some(s) => s.facing,
+        None => match w.get(kid) {
+            Some(i) if i.img.xscale().get() < 0.0 => -1,
+            _ => 1,
+        },
+    }
+}
+
+/// Puts a loaded kid in the saved orientation: `facing` (and `image_xscale`), and for a kid with
+/// state the `flipped` flag and `yflag`. The flipped kid kind and the `+dy` offset are the
+/// loader's (`save::load_into`).
+pub fn restore_orientation(ctx: &mut Ctx, kid: InstId, flipped: bool, facing: i8) -> Result<(), SimError> {
+    let Some(i) = ctx.w.get_mut(kid) else {
+        return Err(SimError::invariant(format!(
+            "kid::api::restore_orientation: no instance {}",
+            kid.0
+        )));
+    };
+    i.img.set_xscale(Real::new(f64::from(facing)))?;
+    if let KindState::Kid(s) = &mut i.state {
+        s.facing = facing;
+        s.flipped = flipped;
+        s.yflag = if flipped { -1 } else { 1 };
+    }
+    Ok(())
+}
+
+/// Clears `frozen` and `frozen2`: the globals and the flags of every live kid, both kinds
+/// (B Restart step 3, showdown Restart step 1).
+pub fn clear_frozen(ctx: &mut Ctx) {
+    ctx.w.engine.kid.frozen = false;
+    ctx.w.engine.kid.frozen2 = false;
+    let ids: Vec<InstId> = ctx
+        .w
+        .instances()
+        .iter()
+        .filter(|i| matches!(i.state, KindState::Kid(_)))
+        .map(|i| i.id)
+        .collect();
+    for id in ids {
+        if let Some(s) = state_mut(ctx.w, id) {
+            s.frozen = false;
+            s.frozen2 = false;
+        }
+    }
+}
+
+/// Resets the kid's jump values to the profile's, both speeds to 0 and the jump flags
+/// (`djump` true; `tjump` true when the game has a third jump): showdown's loadGame step.
+pub fn reset_jump_values(ctx: &mut Ctx, kid: InstId) -> Result<(), SimError> {
+    let def = ctx.def;
+    let triple = def.physics.jump.air == crate::def::physics::AirJump::DjumpThenTjump;
+    let Some(i) = ctx.w.get_mut(kid) else {
+        return Err(SimError::invariant(format!(
+            "kid::api::reset_jump_values: no instance {}",
+            kid.0
+        )));
+    };
+    let KindState::Kid(s) = &mut i.state else {
+        return Err(SimError::invariant(format!(
+            "kid::api::reset_jump_values: instance {} is not a kid",
+            kid.0
+        )));
+    };
+    s.jump_speeds.clone_from(&def.physics.numbers.jumps);
+    s.djump = true;
+    s.tjump = triple;
+    i.m.set_hspeed(Real::ZERO)?;
+    i.m.set_vspeed(Real::ZERO)?;
+    Ok(())
+}
