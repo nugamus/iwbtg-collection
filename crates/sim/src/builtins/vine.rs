@@ -11,7 +11,7 @@ use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
 use crate::world::{Ctx, Flow, InstId};
 
-const SIDES: &[&str] = &["L", "R"];
+const SIDES: &[&str] = &["left", "right"];
 
 const SPECS: &[ParamSpec] = &[ParamSpec {
     name: "side",
@@ -32,7 +32,7 @@ pub fn event_set(_kind: &KindDef) -> EventSet {
 /// A new instance's state: none; `side` is required.
 pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
     param_enum(params, "side", SIDES)?
-        .ok_or_else(|| super::param_error("side", "a vine needs `side` (L or R)"))?;
+        .ok_or_else(|| super::param_error("side", "a vine needs `side` (left or right)"))?;
     Ok(BuiltinState::Stateless)
 }
 

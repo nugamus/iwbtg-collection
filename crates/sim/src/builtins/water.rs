@@ -38,6 +38,11 @@ const AIR_SPEED: &[&str] = &["fixed_7", "kid_jump2"];
 
 const SPECS: &[ParamSpec] = &[
     ParamSpec {
+        name: "variant",
+        ty: ParamType::Real,
+        required: false,
+    },
+    ParamSpec {
         name: "fall_cap",
         ty: ParamType::Real,
         required: false,
@@ -93,6 +98,8 @@ pub fn event_set(_kind: &KindDef) -> EventSet {
 /// `fall_cap = -1` means no cap.
 pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
     param_bool(params, "ground_jump")?;
+    // `variant` (1, 2, 3) picks the class water1, water2 or water3: the loader's.
+    param_real(params, "variant")?;
     let cap = param_real(params, "fall_cap")?.unwrap_or(Real::new(2.0));
     let air = param_enum(params, "air_jump", AIR_JUMP)?;
     if air == Some("djump_ignoring_flag") {

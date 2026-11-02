@@ -4,6 +4,6 @@ Wall-jump surface (WalljumpL, WalljumpR). **No events**: all the logic is in the
 
 | Param | Type | Default | Meaning |
 |---|---|---|---|
-| `side` | `L`, `R` | required | Which class the kind takes; the loader sets it. |
+| `side` | `left`, `right` | required | Which class the kind takes (`vine_l`, `vine_r`); the loader sets it (`crates/format/src/objects.rs`). |
 
 The mask strip (`mask_columns`) is also applied at load.
