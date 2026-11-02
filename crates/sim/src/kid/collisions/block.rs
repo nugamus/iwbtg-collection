@@ -64,7 +64,7 @@ fn block_standard(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let (x, y, hs, _) = pos(ctx).ok_or_else(missing)?;
     if !place_free(ctx, me, x + hs, y)? {
         // Family C's flipped kid reads `hspeed` 0 as right (`hspeed >= 0`), everyone else as left.
-        let right = if def.physics.flip.model == FlipKind::GravSign && rev {
+        let right = if matches!(def.physics.flip.model, FlipKind::GravSign | FlipKind::SwapObject) && rev {
             gm_ge(hs, Real::ZERO, n)
         } else {
             gm_gt(hs, Real::ZERO, n)

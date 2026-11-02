@@ -22,6 +22,7 @@ use crate::kid::actions::a5::A5Action;
 use crate::kid::actions::b::BAction;
 use crate::kid::actions::c::CAction;
 use crate::kid::actions::common::CommonAction as C;
+use crate::kid::actions::flip::FlipAction;
 use crate::kid::collisions::block::BlockRun;
 use crate::kid::collisions::platform::PlatformRun;
 use crate::kid::death::DeathRun;
@@ -64,6 +65,7 @@ fn a2() -> PhysicsProfile {
         common(C::Jump),
         common(C::Release),
         common(C::Vines),
+        KidAction::Flip(FlipAction::FlipSwap),
     ];
     p.misc.fade_in = false;
     p
@@ -92,6 +94,7 @@ fn a3() -> PhysicsProfile {
         common(C::Jump),
         common(C::Release),
         common(C::Gravity),
+        KidAction::Flip(FlipAction::FlipSwap),
         KidAction::A3(A3Action::KeyFlags),
         common(C::Vines),
         KidAction::A3(A3Action::SuicideCheck),
@@ -131,6 +134,7 @@ fn a3() -> PhysicsProfile {
 /// room edges. The world counts the play time. eat-the-new-year differs (docs/format/examples).
 fn a4() -> PhysicsProfile {
     let mut p = a1();
+    p.flip.model = FlipKind::None;
     p.ice = IceRules::default(); // no slip blocks in this family's walk
     p.numbers.release_mult = r(0.5);
     p.vine.model = VineModel::None;
@@ -190,6 +194,7 @@ fn a4() -> PhysicsProfile {
 /// the Step list, the fall cap and the killer test (docs/format/examples).
 fn a5() -> PhysicsProfile {
     let mut p = a1();
+    p.flip.model = FlipKind::None;
     p.ice = IceRules::default(); // no slip blocks in this family's walk
     p.vine.model = VineModel::None;
     p.vine.walk_ignores_vines = true;
@@ -419,6 +424,7 @@ fn a1() -> PhysicsProfile {
         common(C::Jump),
         common(C::Release),
         common(C::Vines),
+        KidAction::Flip(FlipAction::FlipSwap),
         KidAction::A1(A1Action::PlatformGravityZero),
         KidAction::A1(A1Action::FadeIn),
     ];
@@ -484,6 +490,7 @@ fn a1() -> PhysicsProfile {
     p.misc.fade_in = true;
     p.misc.fade_step = r(0.1);
     p.ice.model = IceModel::Slip;
+    p.flip.model = FlipKind::SwapObject;
     p
 }
 
