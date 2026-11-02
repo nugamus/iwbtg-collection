@@ -67,6 +67,10 @@ Not yet in `[events]`: the outside-room events of the other models.
 | `suicide_check` | A3 Step action 5: the Suicide key held (not a press) outside Boot, Title, Menu and Select rooms runs `kill` every tick. |
 | `gravity_and_unstuck` | A5 (little-runner) End Step: gravity is `numbers.gravity` every tick, frozen or not; a kid overlapping a solid goes back to `yprevious` and moves to contact toward where it was (no limit), keeping `vspeed`. |
 | `stop_if_frozen` | A5 (spook house) Step: with `frozen` the rest of the Step list is skipped and nothing is written. |
+| `ladder` | A1 Step action 2 (little-trap, rainbow, rori, fairy-tale), listed instead of `gravity`: `ladderud` clears; Up or Down (`[ladder] entry`) held, off a ladder and overlapping a `ladder` instance: on the ladder with `djump`; with no ladder overlapping any more: off; otherwise Up moves `y` up by the run speed, Down down, each with gravity and `vspeed` 0 and `ladderud` 1; Jump held leaves with `ladderjump`. Off the ladder gravity returns to `numbers.gravity`. The keys are direct reads. |
+| `ladder_sprites` | End Step: on a ladder the `back` sprite (`image_speed` 0.1), moving on it the `ladder_up_down` sprite (0.2). |
+| `ladder_jump_reset` | End Step: `ladderjump` clears (rori has only this). |
+| `ice_temp_hspeed` | Showdown Step action 3: with a slip block within `ice.temp_probe` px below, `tempHspeed` stores `hspeed` when it is 0 or the signs match and `hspeed` is not 0; otherwise `hspeed` gains it and it is multiplied by `ice.temp_decay`, zero below `ice.temp_zero_below`. Off ice it is 0. |
 | `vine_probe` | C Step 3-4: `onVineL` / `onVineR` (`KidStateExt`): the nearest left or right vine is at most 1 px away and the kid is free 1 px in the gravity direction. Computed before the jump code; `vines` reads them. |
 | `suicide_press` | C Step 10: the Suicide key pressed (not held) runs `kill`, when not frozen. |
 | `flip_grav` | `scrFlipGrav` (`flip.model = "grav_sign"`): `global.grav` negates, `djump` 1, `vspeed` 0, gravity and `image_yscale` take the new sign, `y` moves 4 times it. Also `kid::api::flip_grav`. |
@@ -108,7 +112,7 @@ Every key below is optional. Defaults are the `A1` preset's.
 
 `[vine]`: `walk_ignores_vines` (A3: `walk` has no vine rule), `model` = `distance_asym`, `distance_sym_early` (C: both sides grab at a distance of at most 1, `vine_probe` before the jump code, `vines` after it) or `none` (`distance_sym_early` is WP5c), `left_below` (2), `right_equal` (1), `slide` (2), `kick` (`[15, -9]`: horizontal, vertical), `drop` (3).
 
-`[water]`, `[ice]`, `[slope]`, `[ladder]`: empty until their work packages. `[flip]`: `model` (`none`, `swap_object`, `yflag`, `grav_sign`: family C reads `global.grav`, signs gravity and `image_yscale` at Create, has no key swap, and its flipped kid reads `hspeed` 0 as right in `block_standard`). With `yflag` (family B) a reversed kid (`yflag` -1): `walk` swaps Left and Right; `vines` slide at `slide * yflag`, kick at `kick[1] * yflag` and take the other key as the away key; `air_sprite` swaps the jump and fall sprites; `shoot` places the bullet at `y - offset[1] * yflag`; `create_defaults` reads `global.reverse` (y - 4, `curJumps` 1). `swap_object` is WP5c.4 (#131).
+`[ice]`: `model` = `none` or `slip` (A1, A2, B: `walk` adds `slip * h` to `hspeed` while below the run speed when a `slip` block is within `probe` px (4) below, reading the slip at `read` px (10), no clamp, and standing on ice subtracts `slip * sign(hspeed)` with overshoot; off ice the speed is set outright), `clamp` (C: slip clamped to the run speed), `temp_probe` (2), `temp_decay` (0.95), `temp_zero_below` (0.2) for `ice_temp_hspeed`. `[ladder]`: `entry` = `up_or_down` or `up_only`. `[water]`, `[slope]`: empty until their work packages. `[flip]`: `model` (`none`, `swap_object`, `yflag`, `grav_sign`: family C reads `global.grav`, signs gravity and `image_yscale` at Create, has no key swap, and its flipped kid reads `hspeed` 0 as right in `block_standard`). With `yflag` (family B) a reversed kid (`yflag` -1): `walk` swaps Left and Right; `vines` slide at `slide * yflag`, kick at `kick[1] * yflag` and take the other key as the away key; `air_sprite` swaps the jump and fall sprites; `shoot` places the bullet at `y - offset[1] * yflag`; `create_defaults` reads `global.reverse` (y - 4, `curJumps` 1). `swap_object` is WP5c.4 (#131).
 
 `[death]`: `order`, the steps in the order they run: `sound` (not played yet, #231), `blood_emitter` (spawned with a `flipped` param), `destroy_kid`, `destroy_all_kids` (every kid instance, family B), `game_over` (it places itself at view 0 plus its own offset params), `deaths_plus_one` (checked), `save_counters` (death-only save). `select_room_reset`: in a Select room a kill requests the same room, destroys the kid and does nothing else. `stop_music`: not built (`true` is `Unsupported`). `first_kid`: the blood emitter, `flipped` param and GAMEOVER use the first kid's position and gravity (family B with several kids). Nothing happens while `muteki` is set.
 
@@ -118,7 +122,7 @@ Every key below is optional. Defaults are the `A1` preset's.
 
 `[misc]`: `fade_in`, `fade_step` (0.1), `idle_needs_block` (spook house: `walk` shows the idle sprite only with a ground-class instance 1 px below).
 
-`[sprites]`: sprite names from the package's sprite table, by role: `idle`, `running`, `jump`, `fall`, `sliding`. A role left out leaves the sprite alone.
+`[sprites]`: sprite names from the package's sprite table, by role: `idle`, `running`, `jump`, `fall`, `sliding`, `back`, `ladder_up_down`. A role left out leaves the sprite alone.
 
 ## Converter note (CR8)
 

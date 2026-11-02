@@ -13,10 +13,12 @@
 
 use serde::Deserialize;
 
+use super::ice::{on_ice, slip_below};
 use crate::alarm;
 use crate::anim::Image;
 use crate::collide::query::{Target, distance_to_object, place_free, place_meeting};
 use crate::def::physics::FlipKind;
+use crate::def::physics::IceModel;
 use crate::def::physics::{
     AirJump, FallCapRule, GravityReapply, GroundAlso, JumpCancel, VineKeys, VineModel, WalkRead, WaterAir,
 };
@@ -26,7 +28,7 @@ use crate::error::SimError;
 use crate::input::Action;
 use crate::kid::api::KillCause;
 use crate::kid::state::KidState;
-use crate::num::{Real, gm_eq, gm_gt, gm_lt, gm_ne};
+use crate::num::{Real, gm_eq, gm_gt, gm_lt, gm_ne, sign as num_sign};
 use crate::save;
 use crate::world::{Ctx, Flow, InstId, KindState, SpawnInit};
 
@@ -430,8 +432,31 @@ fn walk(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
             gm_ne(dr, Real::ONE, n)
         };
         let open = (h == -1 && right_clear) || (h == 1 && gm_gt(dl, Real::ONE, n));
-        if let (true, Some(i)) = (open, ctx.w.get_mut(me)) {
-            i.m.set_hspeed(run * real_i(h))?;
+        if open {
+            // Slip (`[ice] model = "slip"`): with a slip block within `probe` px the speed builds
+            // up by the slip read at `read` px instead of being set (A1, A2, B: no clamp; C: 3).
+            let (ice, slip) = if p.ice.model == IceModel::Slip && on_ice(ctx, me, p.ice.probe)? {
+                (true, slip_below(ctx, me)?)
+            } else {
+                (false, Real::ZERO)
+            };
+            let Some(i) = ctx.w.get_mut(me) else { return Ok(()) };
+            if !ice {
+                i.m.set_hspeed(run * real_i(h))?;
+            } else {
+                let hs = i.m.hspeed();
+                if (h == 1 && gm_lt(hs, run, n)) || (h == -1 && gm_gt(hs, -run, n)) {
+                    let mut v = hs + slip * real_i(h);
+                    if p.ice.clamp {
+                        if gm_gt(v, run, n) {
+                            v = run;
+                        } else if gm_lt(v, -run, n) {
+                            v = -run;
+                        }
+                    }
+                    i.m.set_hspeed(v)?;
+                }
+            }
             set_sprite(def, &mut i.img, p.sprites.running);
             i.img.set_speed(p.numbers.image_speed_run)?;
         }
@@ -444,8 +469,19 @@ fn walk(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         } else {
             true
         };
+        // Standing on ice the speed decays by the slip toward 0 and may overshoot it; off ice 0.
+        let (ice, slip) = if p.ice.model == IceModel::Slip && on_ice(ctx, me, p.ice.probe)? {
+            (true, slip_below(ctx, me)?)
+        } else {
+            (false, Real::ZERO)
+        };
         if let Some(i) = ctx.w.get_mut(me) {
-            i.m.set_hspeed(Real::ZERO)?;
+            if !ice {
+                i.m.set_hspeed(Real::ZERO)?;
+            } else if gm_ne(i.m.hspeed(), Real::ZERO, n) {
+                let hs = i.m.hspeed();
+                i.m.set_hspeed(hs - slip * num_sign(hs, n))?;
+            }
             if idle {
                 set_sprite(def, &mut i.img, p.sprites.idle);
             }

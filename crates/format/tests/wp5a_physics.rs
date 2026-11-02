@@ -25,6 +25,8 @@ fn rely_written_out_in_full_equals_the_a1_preset() {
             jump: Some("kid_jump".into()),
             fall: Some("kid_fall".into()),
             sliding: Some("kid_slide".into()),
+            back: None,
+            ladder_up_down: None,
         }
     );
     let p = presets::apply(&mut d);

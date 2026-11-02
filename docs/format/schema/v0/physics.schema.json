@@ -13,7 +13,7 @@
         "create_defaults", "ensure_world", "create_bow", "first_play_save", "arm_play_timer",
         "gravity", "walk", "air_sprite", "fall_cap", "shoot", "jump", "release", "vines",
         "play_timer", "kill", "platform_gravity_zero", "fade_in", "stop_if_frozen2", "cancel_poll",
-        "vine_probe", "suicide_press", "flip_grav", "gravity_and_unstuck", "stop_if_frozen", "ad_nudge", "key_flags", "suicide_check", "sync_yflag", "player_reverse", "set_view_angle", "ensure_bow", "killer_check", "slope_b"
+        "ladder", "ladder_sprites", "ladder_jump_reset", "ice_temp_hspeed", "vine_probe", "suicide_press", "flip_grav", "gravity_and_unstuck", "stop_if_frozen", "ad_nudge", "key_flags", "suicide_check", "sync_yflag", "player_reverse", "set_view_angle", "ensure_bow", "killer_check", "slope_b"
       ]
     },
     "actions": { "type": "array", "items": { "$ref": "#/$defs/action" } },
@@ -181,9 +181,25 @@
       }
     },
     "water": { "type": "object", "additionalProperties": false },
-    "ice": { "type": "object", "additionalProperties": false },
+    "ice": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model": { "enum": ["none", "slip"] },
+        "probe": { "$ref": "#/$defs/real" },
+        "read": { "$ref": "#/$defs/real" },
+        "clamp": { "type": "boolean" },
+        "temp_probe": { "$ref": "#/$defs/real" },
+        "temp_decay": { "$ref": "#/$defs/real" },
+        "temp_zero_below": { "$ref": "#/$defs/real" }
+      }
+    },
     "slope": { "type": "object", "additionalProperties": false },
-    "ladder": { "type": "object", "additionalProperties": false },
+    "ladder": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "entry": { "enum": ["up_or_down", "up_only"] } }
+    },
     "flip": {
       "type": "object",
       "additionalProperties": false,
@@ -253,7 +269,9 @@
         "running": { "type": "string" },
         "jump": { "type": "string" },
         "fall": { "type": "string" },
-        "sliding": { "type": "string" }
+        "sliding": { "type": "string" },
+        "back": { "type": "string" },
+        "ladder_up_down": { "type": "string" }
       }
     }
   }
