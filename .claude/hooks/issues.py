@@ -4,12 +4,16 @@
                                             answered needs-user questions and the triage queue.
   python -I .claude/hooks/issues.py stop    Stop: a turn that changed files must end with a
                                             "Findings:" line (issues filed, or "none").
-  python -I .claude/hooks/issues.py --test  Self-test of the stop check.
+  python -I .claude/hooks/issues.py --test  Self-test of the stop check and the settings drift check.
+
+start also warns when the workspace-root .claude/settings.json differs from client/workspace/settings.json.
 
 The same file lives in all three repos; edit it in the client repo and copy it over.
 """
 import json, re, subprocess, sys
+from pathlib import Path
 
+WORKSPACE = Path(__file__).resolve().parents[3]  # <workspace>/<repo>/.claude/hooks/issues.py
 OWNER = "nugamus"
 REPOS = {"c": "iwbtg-collection", "r": "iwbtg-collection-research", "g": "iwbtg-collection-games"}
 AGENT_MARK = "<!-- agent -->"  # agents start every issue comment with this, so user replies stand out
@@ -33,13 +37,30 @@ def ms_key(title):
     return int(m.group(1)) if m else 99
 
 
+def settings_drift(root=WORKSPACE):
+    """A warning if the workspace-root settings differ from the tracked copy in client/workspace/, else ''."""
+    live, tracked = root / ".claude" / "settings.json", root / "client" / "workspace" / "settings.json"
+    if not tracked.is_file():
+        return ""
+    try:
+        same = live.is_file() and json.loads(live.read_text(encoding="utf-8")) == json.loads(tracked.read_text(encoding="utf-8"))
+    except ValueError:
+        same = False
+    if same:
+        return ""
+    return ("WARNING: the workspace-root .claude/settings.json is missing or differs from the tracked copy "
+            "client/workspace/settings.json. Copy the tracked one over (or land your change in the tracked copy "
+            "through a PR), then restart Claude Code. See client/docs/dev-setup.md.\n\n")
+
+
 def start():
-    q = "query {" + " ".join(f'{k}: repository(owner: "{OWNER}", name: "{v}") {{ ...R }}' for k, v in REPOS.items()) + "}" + FRAGMENT
+    warn = settings_drift()
+    q ="query {" + " ".join(f'{k}: repository(owner: "{OWNER}", name: "{v}") {{ ...R }}' for k, v in REPOS.items()) + "}" + FRAGMENT
     try:
         r = subprocess.run(["gh", "api", "graphql", "-f", f"query={q}"], capture_output=True, text=True, encoding="utf-8", timeout=30)
         data = json.loads(r.stdout)["data"]
     except Exception as e:  # offline or gh missing: say so, never block the session
-        return emit(f"Issue harness: could not reach GitHub ({type(e).__name__}). Run `gh auth status`; work from the issues once it is back.")
+        return emit(warn + f"Issue harness: could not reach GitHub ({type(e).__name__}). Run `gh auth status`; work from the issues once it is back.")
 
     ms, ready, answered, waiting, triage = {}, [], [], 0, []
     for k, repo in data.items():
@@ -70,7 +91,7 @@ def start():
     lines += ["", "Next unblocked agent-ready issues:"] + [f"- {r[3]}" for r in sorted(ready)[:5]]
     lines += ["", f"{waiting} needs-user issue(s) still wait for the user.",
               "Rules: CLAUDE.md, Issues. Unless the user names other work, offer to start the first issue above."]
-    emit("\n".join(lines))
+    emit(warn + "\n".join(lines))
 
 
 def emit(text):
@@ -123,6 +144,18 @@ def test():
     assert not turn_needs_findings([prompt, a(edit), a({"type": "text", "text": "**Findings:** #12"})])
     assert not turn_needs_findings([prompt, a({"type": "text", "text": "Just talking."})])
     assert not turn_needs_findings([prompt, a(edit), prompt, a({"type": "text", "text": "ok"})])
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        assert settings_drift(root) == ""  # no tracked copy: nothing to compare
+        (root / "client" / "workspace").mkdir(parents=True)
+        (root / "client" / "workspace" / "settings.json").write_text('{"a": 1}')
+        assert settings_drift(root).startswith("WARNING")  # root copy missing
+        (root / ".claude").mkdir()
+        (root / ".claude" / "settings.json").write_text('{ "a" : 1 }')
+        assert settings_drift(root) == ""  # same JSON, different formatting
+        (root / ".claude" / "settings.json").write_text('{"a": 2}')
+        assert settings_drift(root).startswith("WARNING")
     print("ok")
 
 
