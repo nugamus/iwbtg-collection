@@ -15,6 +15,7 @@ use rhai::{Array, Dynamic, Engine, ImmutableString, Map};
 
 use super::api::runtime_error;
 use super::budget::cost;
+use super::docs::Docs;
 use super::host::Shared;
 use crate::alarm;
 use crate::def::{ClassMask, KindId, ParamValue, Params};
@@ -157,20 +158,30 @@ fn kind_id(host: &super::host::Host, name: &str) -> Res<KindId> {
 
 /// Registers the instance API on `engine`.
 #[allow(clippy::too_many_lines, reason = "one registration per script-visible name")]
-pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
+pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mut Docs) {
     engine.register_type_with_name::<Inst>("Instance");
     engine.register_fn("==", |a: Inst, b: Inst| a == b);
     engine.register_fn("!=", |a: Inst, b: Inst| a != b);
 
     // ---- Built-in fields ----
+    docs.add("x", "Horizontal position.");
     real_prop(engine, shared, "x", |i| i.m.x(), Some(|i, v| i.m.set_x(v)));
+    docs.add("y", "Vertical position.");
     real_prop(engine, shared, "y", |i| i.m.y(), Some(|i, v| i.m.set_y(v)));
+    docs.add(
+        "hspeed",
+        "Horizontal speed; setting it updates `speed` and `direction`.",
+    );
     real_prop(
         engine,
         shared,
         "hspeed",
         |i| i.m.hspeed(),
         Some(|i, v| i.m.set_hspeed(v)),
+    );
+    docs.add(
+        "vspeed",
+        "Vertical speed; setting it updates `speed` and `direction`.",
     );
     real_prop(
         engine,
@@ -179,12 +190,20 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
         |i| i.m.vspeed(),
         Some(|i, v| i.m.set_vspeed(v)),
     );
+    docs.add(
+        "speed",
+        "Speed along `direction`; setting it updates `hspeed` and `vspeed`.",
+    );
     real_prop(
         engine,
         shared,
         "speed",
         |i| i.m.speed(),
         Some(|i, v| i.m.set_speed(v)),
+    );
+    docs.add(
+        "direction",
+        "Movement direction in degrees; setting it updates `hspeed` and `vspeed`.",
     );
     real_prop(
         engine,
@@ -193,6 +212,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
         |i| i.m.direction(),
         Some(|i, v| i.m.set_direction(v)),
     );
+    docs.add("gravity", "Gravity added each tick.");
     real_prop(
         engine,
         shared,
@@ -200,6 +220,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
         |i| i.m.gravity(),
         Some(|i, v| i.m.set_gravity(v)),
     );
+    docs.add("gravity_direction", "Direction of `gravity` in degrees.");
     real_prop(
         engine,
         shared,
@@ -207,6 +228,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
         |i| i.m.gravity_direction(),
         Some(|i, v| i.m.set_gravity_direction(v)),
     );
+    docs.add("friction", "Speed removed each tick.");
     real_prop(
         engine,
         shared,
@@ -214,10 +236,15 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
         |i| i.m.friction(),
         Some(|i, v| i.m.set_friction(v)),
     );
+    docs.add("xprevious", "`x` at the start of the tick.");
     real_prop(engine, shared, "xprevious", |i| i.m.xprevious(), None);
+    docs.add("yprevious", "`y` at the start of the tick.");
     real_prop(engine, shared, "yprevious", |i| i.m.yprevious(), None);
+    docs.add("xstart", "`x` where the instance was created.");
     real_prop(engine, shared, "xstart", |i| i.m.xstart(), None);
+    docs.add("ystart", "`y` where the instance was created.");
     real_prop(engine, shared, "ystart", |i| i.m.ystart(), None);
+    docs.add("image_index", "Current animation frame.");
     real_prop(
         engine,
         shared,
@@ -225,6 +252,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
         |i| i.img.index(),
         Some(|i, v| i.img.set_index(v)),
     );
+    docs.add("image_speed", "Animation frames per tick.");
     real_prop(
         engine,
         shared,
@@ -232,6 +260,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
         |i| i.img.speed(),
         Some(|i, v| i.img.set_speed(v)),
     );
+    docs.add("image_xscale", "Horizontal scale of the sprite.");
     real_prop(
         engine,
         shared,
@@ -239,6 +268,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
         |i| i.img.xscale(),
         Some(|i, v| i.img.set_xscale(v)),
     );
+    docs.add("image_yscale", "Vertical scale of the sprite.");
     real_prop(
         engine,
         shared,
@@ -246,6 +276,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
         |i| i.img.yscale(),
         Some(|i, v| i.img.set_yscale(v)),
     );
+    docs.add("image_angle", "Sprite rotation in degrees.");
     real_prop(
         engine,
         shared,
@@ -253,6 +284,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
         |i| i.img.angle(),
         Some(|i, v| i.img.set_angle(v)),
     );
+    docs.add("image_alpha", "Sprite opacity, 0 to 1.");
     real_prop(
         engine,
         shared,
@@ -260,6 +292,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
         |i| i.img.alpha(),
         Some(|i, v| i.img.set_alpha(v)),
     );
+    docs.add("depth", "Draw depth; a lower value draws in front.");
     real_prop(
         engine,
         shared,
@@ -276,6 +309,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
     );
     {
         let s = Rc::clone(shared);
+        docs.add("visible", "Whether the instance is drawn.");
         engine.register_get("visible", move |i: &mut Inst| -> Res<bool> {
             let i = *i;
             s.with_world(|w, _| live(w, i).map(|x| x.visible))?
@@ -286,6 +320,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
             s.with_world(|w, _| live_mut(w, i).map(|x| x.visible = v))?
         });
         let s = Rc::clone(shared);
+        docs.add("solid", "Whether the instance blocks movement.");
         engine.register_get("solid", move |i: &mut Inst| -> Res<bool> {
             let i = *i;
             s.with_world(|w, _| live(w, i).map(|x| x.solid))?
@@ -296,12 +331,14 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
             s.with_world(|w, _| live_mut(w, i).map(|x| x.solid = v))?
         });
         let s = Rc::clone(shared);
+        docs.add("id", "The instance id (never reused).");
         engine.register_get("id", move |i: &mut Inst| -> Res<f64> {
             let i = *i;
             #[allow(clippy::cast_precision_loss, reason = "ids stay far below 2^53")]
             s.with_world(|w, _| live(w, i).map(|x| x.id.0 as f64))?
         });
         let s = Rc::clone(shared);
+        docs.add("kind", "The package name of the instance's kind (`@boss`).");
         engine.register_get("kind", move |i: &mut Inst| -> Res<ImmutableString> {
             let i = *i;
             s.with_world(|w, host| {
@@ -318,6 +355,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
     // ---- The package's custom variables: `this.hp` ----
     {
         let s = Rc::clone(shared);
+        docs.add("index$get$", "Reads the package variable `name` of an instance (`i.hp`); an unknown name is an error, an unset one reads 0 when the game allows it.");
         engine.register_indexer_get(move |i: &mut Inst, name: ImmutableString| -> Res<Dynamic> {
             let i = *i;
             s.with_world(|w, host| {
@@ -331,6 +369,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
             })?
         });
         let s = Rc::clone(shared);
+        docs.add("index$set$", "Writes the package variable `name` of an instance (`i.hp = 5`); the name must be declared in the package.");
         engine.register_indexer_set(
             move |i: &mut Inst, name: ImmutableString, v: Dynamic| -> Res<()> {
                 let i = *i;
@@ -351,6 +390,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
     // ---- Alarms ----
     {
         let s = Rc::clone(shared);
+        docs.add("set_alarm", "`i.set_alarm(n, steps)` sets alarm `n` (0 to 11) to `steps` ticks, rounded as GM does; -1 means not running; a non-finite value or another `n` is an error.");
         engine.register_fn(
             "set_alarm",
             move |i: &mut Inst, n: Dynamic, steps: Dynamic| -> Res<()> {
@@ -362,6 +402,10 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
             },
         );
         let s = Rc::clone(shared);
+        docs.add(
+            "get_alarm",
+            "`i.get_alarm(n)` is the ticks left on alarm `n`, or -1 when it is not running.",
+        );
         engine.register_fn("get_alarm", move |i: &mut Inst, n: Dynamic| -> Res<f64> {
             let (i, n) = (*i, alarm_index(&n)?);
             s.with_world(|w, _| {
@@ -374,10 +418,18 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
     // ---- Instances ----
     {
         let s = Rc::clone(shared);
+        docs.add(
+            "exists",
+            "Whether the instance handle still refers to a live instance.",
+        );
         engine.register_fn("exists", move |i: Inst| -> bool {
             s.with_world(|w, _| w.exists(i.0)).unwrap_or(false)
         });
         let s = Rc::clone(shared);
+        docs.add(
+            "destroy",
+            "Destroys an instance now; its Destroy event runs first.",
+        );
         engine.register_fn("destroy", move |i: Inst| -> Res<()> {
             let flow = s.with_ctx(|ctx| ctx.destroy(i.0))?;
             if flow.is_halt() {
@@ -386,6 +438,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
             Ok(())
         });
         let s = Rc::clone(shared);
+        docs.add("instance_create", "Creates an instance of a kind at (`x`, `y`) and runs its Create event; an optional map sets its parameters. Returns the handle.");
         engine.register_fn(
             "instance_create",
             move |kind: ImmutableString, x: Dynamic, y: Dynamic| -> Res<Inst> {
@@ -406,6 +459,10 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
             },
         );
         let s = Rc::clone(shared);
+        docs.add(
+            "instances",
+            "The live instances of a kind as an array, in event order, as a snapshot at call time.",
+        );
         engine.register_fn("instances", move |kind: ImmutableString| -> Res<Array> {
             s.with_world(|w, host| {
                 let k = kind_id(host, &kind)?;
@@ -420,6 +477,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
             })?
         });
         let s = Rc::clone(shared);
+        docs.add("kid", "The kid's instance, or `()` when there is none.");
         engine.register_fn("kid", move || -> Res<Dynamic> {
             s.with_world(|w, host| {
                 Ok(w.first_of(ClassMask::KID, &host_tick(host))
@@ -431,6 +489,10 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
     // ---- Effects ----
     {
         let s = Rc::clone(shared);
+        docs.add(
+            "emit",
+            "Queues a named signal for the client (a sound cue, a flash); at most 64 bytes.",
+        );
         engine.register_fn("emit", move |name: ImmutableString| -> Res<()> {
             if name.len() > 64 {
                 return Err(runtime_error("emit: names are at most 64 bytes"));
@@ -442,6 +504,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
             })
         });
         let s = Rc::clone(shared);
+        docs.add("kill_kid", "Kills the kid as a script death.");
         engine.register_fn("kill_kid", move || -> Res<()> {
             let r = s.with_ctx(|ctx| {
                 let Some(k) = ctx.w.first_of(ClassMask::KID, &ctx.rules.tick) else {

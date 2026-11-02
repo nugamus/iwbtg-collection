@@ -374,6 +374,7 @@ impl Shared {
 pub struct Iws {
     pub(crate) engine: Engine,
     pub(crate) shared: Rc<Shared>,
+    docs: super::docs::Docs,
 }
 
 impl std::fmt::Debug for Iws {
@@ -409,8 +410,9 @@ impl Iws {
         engine.register_global_module(BasicArrayPackage::new().as_shared_module());
         engine.register_global_module(BasicMapPackage::new().as_shared_module());
         // Our functions override the packages' (the `/` on two integers gives a FLOAT).
-        super::api::register_numeric(&mut engine, &shared);
-        super::inst::register_instance_api(&mut engine, &shared);
+        let mut docs = super::docs::Docs::default();
+        super::api::register_numeric(&mut engine, &shared, &mut docs);
+        super::inst::register_instance_api(&mut engine, &shared, &mut docs);
 
         engine.disable_symbol("eval");
         engine.disable_symbol("**");
@@ -446,7 +448,7 @@ impl Iws {
                 }
             });
         }
-        Iws { engine, shared }
+        Iws { engine, shared, docs }
     }
 
     /// Starts a tick: the budget counter resets and the tick counters and the RNG are lent to
@@ -508,6 +510,11 @@ impl Iws {
     /// The Rhai engine, read-only, for `iwbtg script api-docs` (it lists the registered API).
     pub fn rhai_engine(&self) -> &Engine {
         &self.engine
+    }
+
+    /// The one-line descriptions of the registered API (`iwbtg script api-docs`).
+    pub fn docs(&self) -> &super::docs::Docs {
+        &self.docs
     }
 }
 
