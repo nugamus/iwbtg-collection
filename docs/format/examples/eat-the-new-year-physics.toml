@@ -1,7 +1,8 @@
 #:schema ../schema/v0/physics.schema.json
 # eat-the-new-year (family A4, kid/A4.md "Per-game differences"): the A4 preset with a bow, the
 # kid's own play timer in Alarm 0 and its own edges. The yaneH and yaneM slope rules are WP5c.4
-# (#131) and the roomout edge targets are game code (OPEN, see #286-style follow-ups).
+# (#131) and the roomout edge targets are an `edge_warp` with a per-edge table (docs/format/
+# builtins/edge_warp.md).
 preset = "A4"
 
 [numbers]
