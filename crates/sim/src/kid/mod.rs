@@ -40,6 +40,7 @@ pub mod collisions {
 }
 
 use serde::{Deserialize, Serialize};
+use smallvec::SmallVec;
 
 pub use state::{KidGlobals, KidState};
 
@@ -154,6 +155,16 @@ fn run_list(ctx: &mut Ctx, me: InstId, list: &[KidAction]) -> Result<Flow, SimEr
 pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimError> {
     let def = ctx.def;
     let e = &def.physics.events;
+    if let EventKind::Collision { with, other } = ev {
+        // Every row whose handler class matched, in handler order (C8, R12b).
+        for row in e.collisions.iter().filter(|c| c.with == *with) {
+            let flow = run_collision(ctx, me, *other, &row.run)?;
+            if flow != Flow::Continue {
+                return Ok(flow);
+            }
+        }
+        return Ok(Flow::Continue);
+    }
     let list = match ev {
         EventKind::Create => &e.create,
         EventKind::RoomStart => &e.room_start,
@@ -170,6 +181,17 @@ pub fn event_set(p: &PhysicsProfile) -> EventSet {
         step: !p.events.step.is_empty(),
         end_step: !p.events.end_step.is_empty(),
         room_start: !p.events.room_start.is_empty(),
+        collisions: p
+            .events
+            .collisions
+            .iter()
+            .map(|c| c.with)
+            .fold(SmallVec::new(), |mut v, c| {
+                if !v.contains(&c) {
+                    v.push(c);
+                }
+                v
+            }),
         ..EventSet::default()
     }
 }
