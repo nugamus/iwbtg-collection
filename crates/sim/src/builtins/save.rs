@@ -34,7 +34,7 @@ use crate::world::{Ctx, Flow, InstId};
 
 const TOUCH: &[&str] = &["never", "press", "shoot_press", "skip_held", "always"];
 const GRAVITY: &[&str] = &["any", "normal", "flipped"];
-const POSITION: &[&str] = &[
+pub(crate) const POSITION: &[&str] = &[
     "xy_base100",
     "xy_base256",
     "xy_text2dec",
@@ -245,7 +245,7 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
     }))
 }
 
-fn model_of(name: &str) -> SavedPosition {
+pub(crate) fn model_of(name: &str) -> SavedPosition {
     match name {
         "xy_base256" => SavedPosition::XyBase256Bytes,
         "xy_text2dec" => SavedPosition::XyText2Dec,

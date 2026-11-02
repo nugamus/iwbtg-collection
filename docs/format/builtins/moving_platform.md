@@ -22,4 +22,4 @@ Non-solid; moves by hand in Step plus the runner's automatic motion. Upward moti
 
 `xia_grav` (keep-celebrating-for-xia): runs only while `hspeed`, `vspeed` or `yspeed` is not 0; carries a kid found at `y - 2 * grav` before adding `yspeed`. OPEN: the sign of `grav` is taken from the kid's gravity flag.
 
-`b_lines` (kaenbyou, End Step, two `collision_line` probes at the kid's `yflag` heights) is OPEN and refused at load.
+`b_lines` (kaenbyou, eat-the-lemon; kid/B.md): everything runs in End Step instead of Step. The same reversals and `y += yspeed`; then two `collision_line` probes from `x - 2` to `x + 33` at `y + 8 - 25 * yflag` and `y + 8 - 10 * yflag` (the first kid's `yflag`, 1 when it has none). When both lines touch a kid, the first kid moves by `hspeed` if that spot is free of solids and by `vspeed + yspeed` if that spot is free; then step 5. OPEN: the probes use the bounding box (`prec` false; the spec does not say), the order of the two moves (x, then y), and "first kid" is the lowest id.

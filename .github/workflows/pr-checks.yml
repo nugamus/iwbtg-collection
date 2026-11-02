@@ -10,10 +10,14 @@ jobs:
         env:
           BODY: ${{ github.event.pull_request.body }}
         run: |
+          # printf, not echo: a backslash in the body (Windows paths) must not cut it short.
+          # Nothing may end the script before it reports: grep exits 1 on an empty section, so
+          # that pipeline ends in `|| true` and the message below is printed instead.
           fail=0
-          echo "$BODY" | grep -Eiq '(closes|fixes|resolves) +([a-z0-9_.-]+/[a-z0-9_.-]+)?#[0-9]+' || { echo "::error::PR body needs 'Closes #<issue>'"; fail=1; }
+          body=$(printf '%s\n' "$BODY" | tr -d '\r')
+          printf '%s\n' "$body" | grep -Eiq '(closes|fixes|resolves) +([a-z0-9_.-]+/[a-z0-9_.-]+)?#[0-9]+' || { echo "::error::PR body needs 'Closes #<issue>'"; fail=1; }
           for s in "Docs updated" "Follow-up issues" "User check"; do
-            sec=$(echo "$BODY" | awk -v h="## $s" '$0==h{f=1;next} /^## /{f=0} f' | grep -v '^\s*$' | grep -v -e 'Which docs this PR' -e 'Issues filed for findings' -e 'Commands to run')
+            sec=$(printf '%s\n' "$body" | awk -v h="## $s" '$0==h{f=1;next} /^## /{f=0} f' | grep -v '^\s*$' | grep -v -e 'Which docs this PR' -e 'Issues filed for findings' -e 'Commands to run' || true)
             [ -n "$sec" ] || { echo "::error::Fill in the '$s' section"; fail=1; }
           done
           exit $fail
