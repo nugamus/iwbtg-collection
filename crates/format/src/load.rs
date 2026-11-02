@@ -666,21 +666,7 @@ impl<'a> Loader<'a> {
         match self.sprite_ids.get(name) {
             Some(e) => Some(e.id),
             None if name.starts_with(crate::ids::ENGINE_PREFIX) => {
-                let msg = match crate::ids::EngineRef::parse(name) {
-                    Some(Ok(r))
-                        if self
-                            .files
-                            .contains(&format!("{}engine.toml", crate::engine_pack::pack_dir(r.pack))) =>
-                    {
-                        format!("`{name}`: the engine pack `{}` has no sprite `{}`", r.pack, r.id)
-                    }
-                    Some(Ok(r)) => format!(
-                        "`{name}`: the engine pack `{}` is not in the package (`iwbtg pkg check` bundles it from `../_engines/{}`)",
-                        r.pack, r.pack
-                    ),
-                    Some(Err(e)) => e,
-                    None => format!("sprite `{name}` does not exist"),
-                };
+                let msg = crate::engine_pack::unresolved(self.files, name, "sprite");
                 self.error(file, text, span, msg);
                 None
             }
@@ -868,7 +854,7 @@ impl<'a> Loader<'a> {
                     path,
                     text,
                     at..at + name.len(),
-                    format!("sound `{name}` does not exist"),
+                    crate::engine_pack::unresolved(this.files, name, "sound"),
                 );
             }
             found.map(iwbtg_sim::def::SoundId)
@@ -1153,10 +1139,13 @@ impl<'a> Loader<'a> {
         match found {
             Some(v) => v,
             None => {
-                self.diags.push(Diagnostic::file_error(
-                    file,
-                    format!("param `{key}`: `{s}` does not exist"),
-                ));
+                let why = if s.starts_with(crate::ids::ENGINE_PREFIX) {
+                    crate::engine_pack::unresolved(self.files, s, "sound")
+                } else {
+                    format!("`{s}` does not exist")
+                };
+                self.diags
+                    .push(Diagnostic::file_error(file, format!("param `{key}`: {why}")));
                 value
             }
         }
