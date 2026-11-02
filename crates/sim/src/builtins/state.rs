@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{block, kid_bullet, kid_start, spike, world};
+use super::{block, difficulty_warp, kid_bullet, kid_start, save, spike, warp, world};
 
 /// A built-in instance's state.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
@@ -23,4 +23,10 @@ pub enum BuiltinState {
     Spike(spike::SpikeState),
     /// `kid_bullet` (WP6a).
     KidBullet(kid_bullet::KidBulletState),
+    /// `save` (WP6a).
+    Save(save::SaveState),
+    /// `warp` (WP6a).
+    Warp(warp::WarpState),
+    /// `difficulty_warp` (WP6a).
+    DifficultyWarp(difficulty_warp::DifficultyWarpState),
 }

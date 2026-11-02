@@ -6,7 +6,6 @@
 //! routing ([`KidAction`], [`run_action`], [`KidCollisionRun`], [`run_collision`]); WP5a owns
 //! this file. WP5b and WP5c own their files under `actions/`, `collisions/` and `state_*.rs` and
 //! add their actions as variants of the enums there, so they never edit this file.
-#![allow(unused_variables, reason = "WP0 stubs: WP5a fills the bodies")]
 
 pub mod api;
 pub mod death;
@@ -41,6 +40,7 @@ pub mod collisions {
 }
 
 use serde::{Deserialize, Serialize};
+use smallvec::SmallVec;
 
 pub use state::{KidGlobals, KidState};
 
@@ -138,16 +138,60 @@ pub fn run_collision(
     }
 }
 
-/// Runs one event on a kid instance: the profile's action list for that event, through
-/// [`run_action`] and [`run_collision`].
-///
-/// Until WP5a.2 (#120) fills the action lists this handles nothing and continues, so a kid in a
-/// hand-built world can be spawned, killed and destroyed.
-pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimError> {
+/// Runs `list` on the kid in order; stops at the first flow that is not `Continue`.
+fn run_list(ctx: &mut Ctx, me: InstId, list: &[KidAction]) -> Result<Flow, SimError> {
+    for a in list {
+        let flow = run_action(ctx, me, a)?;
+        if flow != Flow::Continue {
+            return Ok(flow);
+        }
+    }
     Ok(Flow::Continue)
+}
+
+/// Runs one event on a kid instance: the profile's action list for that event, through
+/// [`run_action`]. Create, Room Start, Step and End Step are wired; keys, alarms, collisions and
+/// the boundary arrive with WP5a.3 and WP5a.4 and handle nothing until then.
+pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimError> {
+    let def = ctx.def;
+    let e = &def.physics.events;
+    if let EventKind::Collision { with, other } = ev {
+        // Every row whose handler class matched, in handler order (C8, R12b).
+        for row in e.collisions.iter().filter(|c| c.with == *with) {
+            let flow = run_collision(ctx, me, *other, &row.run)?;
+            if flow != Flow::Continue {
+                return Ok(flow);
+            }
+        }
+        return Ok(Flow::Continue);
+    }
+    let list = match ev {
+        EventKind::Create => &e.create,
+        EventKind::RoomStart => &e.room_start,
+        EventKind::Step => &e.step,
+        EventKind::EndStep => &e.end_step,
+        _ => return Ok(Flow::Continue),
+    };
+    run_list(ctx, me, list)
 }
 
 /// What a kid kind with this profile handles.
 pub fn event_set(p: &PhysicsProfile) -> EventSet {
-    unimplemented!("WP5a: kid::event_set")
+    EventSet {
+        step: !p.events.step.is_empty(),
+        end_step: !p.events.end_step.is_empty(),
+        room_start: !p.events.room_start.is_empty(),
+        collisions: p
+            .events
+            .collisions
+            .iter()
+            .map(|c| c.with)
+            .fold(SmallVec::new(), |mut v, c| {
+                if !v.contains(&c) {
+                    v.push(c);
+                }
+                v
+            }),
+        ..EventSet::default()
+    }
 }
