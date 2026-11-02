@@ -1344,3 +1344,17 @@ fn engine_toml_is_checked() {
     let errs = errors(&load_report(&files, STRICT)).join("\n");
     assert!(errs.contains("must be the folder name `a1`"), "{errs}");
 }
+
+#[test]
+fn sprite_pngs_follow_the_order_of_the_loaded_sprites() {
+    let files = with_pack(|_| {});
+    let (def, _) = load_ok(&files, STRICT);
+    let pngs = iwbtg_format::sprites::sprite_pngs(&files);
+    assert_eq!(pngs.len(), def.sprites.len());
+    assert!(pngs.iter().any(|(k, _)| k == "engine:a1/kid"));
+    for ((key, path), sprite) in pngs.iter().zip(&def.sprites) {
+        let bytes = files.get(path).unwrap_or_else(|| panic!("{key}: no {path}"));
+        let width = u32::from_be_bytes(bytes[16..20].try_into().unwrap());
+        assert_eq!(width, sprite.size.0 * u32::from(sprite.frames), "{key}");
+    }
+}
