@@ -34,6 +34,9 @@ pub struct PhysicsLoad {
     pub sprites: KidSpriteNames,
     /// `[sounds]` as written.
     pub sounds: KidSoundNames,
+    /// A legacy draft: it names no sprites, so the loader looks for `player_idle`,
+    /// `player_running`, `player_jump`, `player_fall` and `player_sliding` (CR8).
+    pub legacy: bool,
 }
 
 /// Reads the profile file at `path` (step 7). `trace` is `LoadMode::Trace`: a legacy `rules` that
@@ -72,6 +75,7 @@ pub fn load(
         profile,
         sprites,
         sounds,
+        legacy: false,
     })
 }
 
@@ -137,6 +141,7 @@ fn legacy_or_error(
         profile,
         sprites: KidSpriteNames::default(),
         sounds: KidSoundNames::default(),
+        legacy: true,
     })
 }
 

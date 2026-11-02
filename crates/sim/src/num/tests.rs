@@ -840,3 +840,19 @@ fn traces_match_display_and_gravity_trig() {
     assert!(files > 0, "no trace CSVs under {}", dir.display());
     assert!(gravity_rows > 0, "no gravity-270 rows found");
 }
+
+/// `atan2` with a tiny `x` is the double nearest pi/2 (`libm::atan2` is one ulp high there):
+/// `traces/rely-the-needle-4-2/djump.csv` frames 10, 24 and 26 read direction 90.0 with hspeed
+/// `-7.347880794884119e-17` and vspeed -8.1, -2.4999999999999964 and -1.6999999999999964.
+#[test]
+fn atan2_with_a_tiny_x_is_the_double_nearest_pi_over_two() {
+    use core::f64::consts::{FRAC_PI_2, FRAC_PI_4};
+    let h = r(-7.347_880_794_884_119e-17);
+    for v in [8.1, 2.499_999_999_999_996_4, 1.699_999_999_999_996_4] {
+        assert_eq!(atan2(r(v), h), r(FRAC_PI_2), "v = {v}");
+        assert_eq!(darctan2(r(v), h), r(90.0), "v = {v}");
+        assert_eq!(atan2(r(-v), h), r(-FRAC_PI_2), "v = -{v}");
+    }
+    // Not tiny: the plain libm value.
+    assert_eq!(atan2(r(1.0), r(1.0)), r(FRAC_PI_4));
+}
