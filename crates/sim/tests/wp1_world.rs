@@ -198,7 +198,7 @@ fn wp1_change_kind_runs_destroy_and_create_and_takes_the_kind() {
 #[test]
 fn wp1_emit_queues_output() {
     let mut fx = Fx::new(builder().build().unwrap());
-    fx.ctx().emit(OutputEvent::Room(RoomOutput::default()));
+    fx.ctx().emit(OutputEvent::Room(RoomOutput::GameRestarted));
     assert_eq!(fx.w.output.len(), 1);
 }
 
@@ -347,7 +347,7 @@ fn wp1_state_hash_covers_state_and_skips_caches() {
     let h0 = hash::state_hash(&fx.w);
     assert_eq!(h0, hash::state_hash(&fx.w.clone()));
     // Output, the grid and the request counter are not hashed.
-    fx.ctx().emit(OutputEvent::Room(RoomOutput::default()));
+    fx.ctx().emit(OutputEvent::Room(RoomOutput::GameRestarted));
     fx.w.grid = Default::default();
     fx.w.room_requests = 3;
     assert_eq!(hash::state_hash(&fx.w), h0);
