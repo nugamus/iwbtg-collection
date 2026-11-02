@@ -76,7 +76,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - if: matrix.target == 'wasm32-wasip1'
         uses: bytecodealliance/actions/wasmtime/setup@v1
-      - run: cargo run -p iwbtg-tools --target ${{ matrix.target }} --locked -- determinism report crates/sim/tests/golden --check > report.txt
+      # An absolute corpus path: wasmtime only maps `/` (`--dir=/`), not the working directory.
+      - run: cargo run -p iwbtg-tools --target ${{ matrix.target }} --locked -- determinism report "$GITHUB_WORKSPACE/crates/sim/tests/golden" --check > report.txt
         shell: bash
       - uses: actions/upload-artifact@v4
         with:
