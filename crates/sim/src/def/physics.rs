@@ -17,6 +17,7 @@ pub use super::physics_ext::{FlipKind, FlipModel, IceModel, IceRules, LadderEntr
 
 /// The kid engine family a profile starts from (`preset = "A1"`): documentation and defaults
 /// (`kid::presets::apply`). Nothing in the sim branches on it.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 pub enum KidFamily {
     /// kid/A1.md.
@@ -85,6 +86,7 @@ macro_rules! profile_section {
         $(
             $(#[$doc])*
             #[derive(Clone, PartialEq, Debug, Default, Deserialize)]
+            #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
             #[serde(deny_unknown_fields, default)]
             pub struct $name {}
         )*
@@ -144,6 +146,7 @@ pub struct KidNumbers {
 }
 
 /// How the walk action reads the direction keys.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WalkRead {
@@ -156,6 +159,7 @@ pub enum WalkRead {
 }
 
 /// How the vine action reads its kick and drop keys.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VineKeys {
@@ -200,6 +204,7 @@ pub struct KidEvents {
 }
 
 /// `events.boundary`: how the kid handles the room edge (plan 5.3 edge row).
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BoundaryModel {
@@ -220,6 +225,7 @@ pub enum BoundaryModel {
 }
 
 /// One `events.alarms` row.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct KidAlarm {
@@ -230,6 +236,7 @@ pub struct KidAlarm {
 }
 
 /// Which edge of a key a row reacts to.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum KeyOn {
@@ -242,11 +249,13 @@ pub enum KeyOn {
 }
 
 /// One `events.keys` row.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct KidKey {
     /// The client action by its package name (`"suicide"`).
     #[serde(deserialize_with = "action_name")]
+    #[cfg_attr(feature = "schema", schemars(with = "Action"))]
     pub action: Action,
     /// The edge.
     pub on: KeyOn,
@@ -262,17 +271,20 @@ fn action_name<'de, D: Deserializer<'de>>(d: D) -> Result<Action, D::Error> {
 
 /// One `events.collisions` row: the kid runs `run` when it collides with an instance of class
 /// `with`.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct KidCollision {
     /// The handler class (`"block"`, `"platform"`, `"killer"`).
     #[serde(deserialize_with = "class_name")]
+    #[cfg_attr(feature = "schema", schemars(with = "ClassMask"))]
     pub with: ClassMask,
     /// The named run.
     pub run: KidCollisionRun,
 }
 
 /// What `[jump] air` names as the air-jump model.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AirJump {
@@ -286,6 +298,7 @@ pub enum AirJump {
 }
 
 /// When water 2 allows the air jump.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WaterAir {
@@ -301,6 +314,7 @@ pub enum WaterAir {
 }
 
 /// An extra ground-jump condition besides the classes.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GroundAlso {
@@ -340,6 +354,7 @@ pub struct JumpRules {
 }
 
 /// How the jump cut works (`[jump] cancel`).
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum JumpCancel {
@@ -352,6 +367,7 @@ pub enum JumpCancel {
 }
 
 /// What `[fall_cap] rule` does to `vspeed`.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FallCapRule {
@@ -375,6 +391,7 @@ pub struct FallCap {
 }
 
 /// When gravity is set back to its constant.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GravityReapply {
@@ -417,6 +434,7 @@ pub struct PlatformRules {
 }
 
 /// When a platform collision lands the kid.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PlatformRule {
@@ -426,6 +444,7 @@ pub enum PlatformRule {
 }
 
 /// What a landing copies from the platform.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PlatformTake {
@@ -439,6 +458,7 @@ pub enum PlatformTake {
 }
 
 /// Vine model.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VineModel {
@@ -522,6 +542,7 @@ pub struct BulletRules {
 
 /// One step of the death sequence (kid/A1.md "Death"). `[death] order` lists them in the order a
 /// family runs them.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DeathStep {
@@ -563,6 +584,7 @@ pub struct DeathRules {
 }
 
 /// How a save stores the position (`save.rs` `SavedPosition`), by its package name.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SavePosition {
@@ -616,6 +638,7 @@ macro_rules! draft_section {
     ($(#[$doc:meta])* $draft:ident => $full:ident { $( $(#[$m:meta])* $f:ident : $t:ty ),* $(,)? }) => {
         $(#[$doc])*
         #[derive(Clone, PartialEq, Debug, Default, Deserialize)]
+        #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
         #[serde(deny_unknown_fields, default)]
         pub struct $draft {
             $( $(#[$m])* pub $f: Option<$t>, )*
@@ -667,6 +690,7 @@ draft_section! {
     /// `[jump]` as written.
     JumpRulesDraft => JumpRules {
         #[serde(deserialize_with = "class_names_opt")]
+        #[cfg_attr(feature = "schema", schemars(with = "Vec<ClassMask>"))]
         ground_classes: ClassMask,
         ground_also: Vec<GroundAlso>, ground_sets_djump: bool, release_twice_while_tjump: bool,
         air: AirJump, water_air: WaterAir,
@@ -719,6 +743,7 @@ draft_section! {
 /// `crates/format` (WP7b); `kid::presets::apply` turns it into a [`PhysicsProfile`]: the
 /// preset's profile with every field written here put over it. The sections of families that
 /// have not landed (`[ice]`, `[slope]`, `[ladder]`, `[flip]`) replace the preset's whole.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct PhysicsProfileDraft {
@@ -765,6 +790,7 @@ pub struct PhysicsProfileDraft {
 
 /// `[sprites]` as written in a package: sprite names by role, resolved to [`KidSprites`] ids by
 /// the loader.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct KidSpriteNames {

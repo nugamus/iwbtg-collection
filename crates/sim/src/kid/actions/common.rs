@@ -34,6 +34,7 @@ use crate::world::{Ctx, Flow, InstId, KindState, SpawnInit};
 
 /// The actions this file implements, by their `physics.toml` names (snake case). Part of
 /// `kid::KidAction`.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CommonAction {

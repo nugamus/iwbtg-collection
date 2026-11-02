@@ -10,6 +10,7 @@ use serde::Deserialize;
 use crate::num::Real;
 
 /// `[ice]`: slip blocks and ice (kid/A1.md Step action 3, kid/A3.md showdown Step action 3).
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Debug, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct IceRules {
@@ -45,6 +46,7 @@ impl Default for IceRules {
 }
 
 /// How the kid's walk reads `slip` blocks.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum IceModel {
@@ -57,11 +59,13 @@ pub enum IceModel {
 }
 
 /// `[slope]`: slope models (WP5c).
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct SlopeModel {}
 
 /// `[ladder]`: ladder entry (kid/A1.md Step action 2).
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct LadderRules {
@@ -70,6 +74,7 @@ pub struct LadderRules {
 }
 
 /// The keys that start climbing.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LadderEntry {
@@ -82,6 +87,7 @@ pub enum LadderEntry {
 
 /// `[flip]`: how gravity flips (plan 5.3 flip rows). WP5c adds the other fields
 /// (`mask_flipped`, ...).
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct FlipModel {
@@ -90,6 +96,7 @@ pub struct FlipModel {
 }
 
 /// The flip models of plan 5.3, by their `physics.toml` names.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FlipKind {
