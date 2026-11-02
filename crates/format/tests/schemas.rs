@@ -111,7 +111,7 @@ fn v0_examples() -> Vec<(String, String)> {
 #[test]
 fn v0_examples_validate() {
     let examples = v0_examples();
-    // game, object (x2), room, tiles, timeline, sprite, and physics (no schema yet, #123).
+    // game, object (x2), room, tiles, timeline, sprite, and physics.
     for stem in ["game", "object", "room", "tiles", "timeline", "sprite"] {
         assert!(
             examples.iter().any(|(s, _)| s == stem),
@@ -119,9 +119,6 @@ fn v0_examples_validate() {
         );
     }
     for (stem, text) in &examples {
-        if stem == "physics" {
-            continue; // the physics schema is #123
-        }
         assert_valid(stem, &format!("a v0.md example:\n{text}\n"), text);
     }
 }
@@ -189,5 +186,29 @@ fn runner_schema_covers_every_runner() {
     let runner = serde_json::to_string(&schema).unwrap();
     for name in ["gm80", "gm81"] {
         assert!(runner.contains(name), "game schema lacks runner {name}");
+    }
+}
+
+/// The rely example (`docs/format/examples/rely-physics.toml`) validates against the physics
+/// schema. That schema is written by hand (WP5a.5): generating it needs a `schema` feature on
+/// the sim's profile types.
+#[test]
+fn the_rely_physics_example_validates() {
+    let text = fs::read_to_string(client_root().join("docs/format/examples/rely-physics.toml")).unwrap();
+    assert_valid("physics", "docs/format/examples/rely-physics.toml", &text);
+}
+
+#[test]
+fn the_physics_schema_rejects_mistakes() {
+    let validator = jsonschema::validator_for(&load_schema("physics")).unwrap();
+    assert!(validator.is_valid(&serde_json::json!({ "preset": "A1", "numbers": { "run_speed": 4 } })));
+    for bad in [
+        serde_json::json!({ "bogus": 1 }),
+        serde_json::json!({ "numbers": { "run_spead": 3 } }),
+        serde_json::json!({ "events": { "step": ["wlak"] } }),
+        serde_json::json!({ "jump": { "ground_classes": ["blokc"] } }),
+        serde_json::json!({ "input": { "walk": "telepathy" } }),
+    ] {
+        assert!(!validator.is_valid(&bad), "{bad} should be rejected");
     }
 }
