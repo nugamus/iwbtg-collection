@@ -15,6 +15,7 @@
 - Any per-game design question (stripped-mode cuts, run start and end, cutscenes, secrets, mods) goes into `docs/games/<game-id>.md` (see `docs/games/README.md`). Never guess the answer in code.
 - Design is a priority. No generic UI; match the IWBTG style and reuse art from ported games where it fits.
 - The user does not write Rust and tests every change. End each change with: exact build/run commands, steps to perform, and what to look for (expected vs. broken).
+- Work comes from GitHub issues (see the client's `docs/roadmap.md`, How work flows). One issue, one branch `issue-<n>-<short-name>`, one PR with `Closes #<n>`. Stay inside the issue's scope; new work becomes a new issue. Questions only the user can answer go in an issue comment with the `needs-user` label.
 
 ## Maintaining this harness
 

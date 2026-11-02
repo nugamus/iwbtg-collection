@@ -1,115 +1,74 @@
 # Roadmap
 
-Order of work across all three repos (client, games, research). No deadline: each phase ends when its check passes, not on a date.
+The order of work across all three repos: client, research and games. There are no deadlines. A milestone ends when its "done when" check passes, not on a date.
 
-## 0. Setup (done)
+## Where to look
 
-Three private repos, lean CLAUDE.md files, clean-room spec skill and template, Potential Features.md, licenses, workspace settings with the archive guard hook.
+- **Progress: the GitHub Project "IWBTG Collection"** (github.com/users/nugamus/projects). It holds every issue from all three repos on one board.
+- **Each milestone** exists in every repo that has work for it, under the same title. Its progress bar shows how much of it is closed.
+- **Every issue** is one piece of work. Each has a goal, its dependencies (links to other issues), a "Done when" checklist and a "User check": the exact command to run and what to look for.
+- **Labels:**
+  - `agent-ready`: an agent can start the issue.
+  - `needs-user`: a decision, review or playtest that only the user can do.
+  - `size:S/M/L`: S is one agent session and M a few. An L issue gets split before work starts.
+  - `area:*`: which part of the project the issue touches.
+- **Ideas** that are not in any milestone yet are issues without a milestone (the backlog) or lines in `Potential Features.md`.
 
-## 1. Catalog and archive (research repo)
+## Milestones
 
-- Scraper (Python + Playwright) collects delicious-fruit metadata: name, creators, year, difficulty, tags, clear count, page URL, download links. Ratings are never imported.
-- Gentle crawling: one request at a time, several seconds between requests, every response cached on disk, runs resume where they stopped.
-- SQLite database tracks every game and every download link. Link status: `pending`, `downloaded`, `verified` (SHA-256 recorded), `dead`, `alt_found`.
-- Downloader with one handler per host (direct, Mediafire, Google Drive, Mega, Dropbox, others as found). Files are stored by SHA-256 in `archive/` and backed up to storage that is not the internet-facing server.
-- VirusTotal check for every downloaded file (usually the zip or rar): look up the SHA-256 first, upload only if VirusTotal has never seen it. VirusTotal scans the files inside an uploaded archive. Files unpacked from it are checked one by one only when VirusTotal could not look inside (password-protected or oversized archives). The API key lives in `research/.env` as `VT_API_KEY`. Public API limit is 4 requests/minute and 500/day, so checks run in a slow queue. The database stores detection count, scan date and report link. Flagged files go to manual review, because GameMaker 8 games often trigger false positives. Results decide how a file may be handled in research. They never affect the client, which never runs original code.
-- Static extraction reads original files without executing them. Since 2026-10-24 the user allows running originals on the main machine (Windows Sandbox is not installed there) only when VirusTotal checked them clean, through the research gate (`research/scraper/gate.py`). Work happens on native Windows, not WSL2, so games run without Wine.
-- Binary storage: not Git or Git LFS. GitHub LFS quotas are too small for thousands of games, and originals must never reach a public repo. The database records hash and storage location.
-- Community trick and technique notes collected into `knowledge/`, each with its source.
-- Scope first: no full crawl or full archive until the 20 games are ported and work (end of Phase 5). Phase 1 catalogs only a candidate pool: the cwpat.me beginner list plus targeted lookups of single games.
-- Check: user approves a list of 20 popular, short, easy games picked from the candidate pool.
+| # | Milestone | Done when |
+|---|---|---|
+| 0 | Setup and research groundwork *(done)* | Repos, specs pipeline, scraper, 20-game shortlist, GM8 CLONE_SPEC, first traces, converter, sim contracts (WP0). |
+| M1 | Kid matches the original | The sim reproduces rely_the_needle's traces (stand, double jump) tick for tick on Windows, Linux and WASM. |
+| M2 | Sim covers the 20 games | All kid families, built-ins, scripts, sound and the replay runner are in. All 20 converter packages load and trace-check. The porting pipeline design is approved. |
+| M3 | First playable | The Bevy client plays rely_the_needle on native and web, and the user confirms the feel. |
+| M4 | Ranked-ready run | Stripped ranked mode works locally: timer and cutscene freeze, mods, retry keys, HUD, practice, results, local PBs, replays, `.iwbz` with maps. |
+| M5 | 20 games | All 20 games are in Beta, each with fidelity proof and a verified full clear. |
+| M6 | Game select | osu!-style game select, downloads, 5 bundled games, controls panel and settings, built from approved mockups. |
+| M7 | Online | Accounts, verified submissions, leaderboards, review queue, profiles, cloud saves and engine upgrades run on the home server. |
+| M8 | Ghosts and races | Ghosts of leaderboard runs and live race lobbies work. |
+| M9 | Public release | Name, takedown and privacy pages, licenses, release builds, contributor docs. |
+| — | Editor v1 | The in-client editor works. It starts once M4 is done and runs alongside the later milestones. |
 
-## 2. Clean-room pipeline (research repo)
+The order of M3 and M4 versus M5: M5 ports need the M2 sim and the porting pipeline, not the client. Ports can run in parallel with M3 and M4.
 
-- Group the 20 games by engine. Start with the engine most of them share.
-- Extract with research tools (gm8decompiler for GameMaker 8, UndertaleModTool for GameMaker Studio). Use REA for runner-level behavior the extraction cannot show (collision rules, rounding, tick order).
-- Ground-truth traces: record the original's player state (x, y, speeds, flags) every tick for scripted inputs. The recording method is chosen in this phase and documented in the first engine spec.
-- Write the engine CLONE_SPEC.md with the `clean-room-spec` skill.
-- Mechanic inventory (`specs/mechanics.md`): every mechanic seen across the 20 games, each marked as a built-in candidate or as needing a script. This shapes the format.
-- Trick inventory: each known trick (from `knowledge/`) gets a stable id and is marked as either a switchable engine behavior or an emergent result of physics. Game packages then declare which tricks are on, off or required, for the sim and for filtering in game select.
-- Check: the spec covers movement, jumping, double jump, saves, death and restart, with UNKNOWNs listed.
+## How work flows
 
-## 3. Format v0 and simulation core (client repo)
+1. The user or an agent picks an issue. By default that is the lowest-numbered `agent-ready` issue in the earliest open milestone whose dependencies are closed.
+2. One issue gets one branch (`issue-<n>-<short-name>`) and one pull request whose description says `Closes #<n>`. Work found outside the issue's scope becomes a new issue.
+3. Questions only the user can answer go in an issue comment, and the issue gets the `needs-user` label. Per-game questions go in `docs/games/<game-id>.md`.
+4. The user runs the issue's User check, then merges.
 
-- `docs/format/`: game package spec, following the principles in `docs/format/README.md` (readable text, built-in objects first, sandboxed scripts, never compiled). A package holds metadata, physics profile, rooms, objects, assets, and the start, end and stage triggers that define timing.
-- Choose the script language and data syntax by comparing candidates on sandbox guarantees, determinism, WASM support and readability. Candidates: an embedded Rust scripting language such as Rhai, Luau, or a small language of our own. The user approves the choice.
-- `crates/sim`: fixed tick, physics profile from the engine spec, collision, triggers, replay as one input state per tick.
-- `crates/format`: load and validate packages. Each package manifest records creators, source URL, permission status (`granted`, `community-assumed`, `pending`, `revoked`) and every third-party asset.
-- Workspace `Cargo.toml` with `license = "MIT OR Apache-2.0"`, `cargo-deny` license allow list (no GPL in the client), and a `cargo fmt` hook once Rust code exists.
-- Headless replay CLI: runs a replay, prints tick count and splits.
-- Check: replaying the Phase 2 inputs reproduces the original traces exactly, tick for tick, on Windows, WASM and Linux x86_64 (the server's platform).
+## Research pipeline rules
 
-## 4. First playable (client repo)
+These carry over from the original phase plan.
 
-- Bevy client plays one small test package.
-- Physics at fixed tick; rendering interpolated. Frame cap setting: 60, unlimited, or custom slider.
-- Client actions, rebinding, controller support. Popup if a game menu tries to rebind.
-- Native and web builds.
-- Check: user plays it on both builds and confirms feel and known tricks against the original.
-
-## 5. First ported game, then the rest of the 20
-
-- One game end to end: game spec (engine spec plus differences), conversion into our format, fixes.
-- Ranked only after a full clear in our port.
-- Check per game: full clear recorded as a replay that the headless CLI verifies.
-- Once all 20 pass: run the full delicious-fruit and wiki crawl (`research/scraper`, ~26 h) and archive the rest of the catalog.
-
-## 6. Game select screen
-
-- Design pass first: mockups for user approval before code, built from art in the ported games.
-- osu!-style layout: selected game's background full screen, game list on the right, leaderboard on the left, filters top right, middle kept open.
-- Sort and filter by difficulty, our rating, tags, creator, year, clear count.
-- Music preview with a picker tool for track and start point (first piece of the editor).
-- Every game listed; double-click downloads it from the home server.
-
-## 7. Results and local stats
-
-- Per-stage splits, local best per stage, performance graph against best run.
-- Toggle: compare against PB run or sum of best.
-
-## 8. Leaderboard server
-
-- Full-game runs with per-stage breakdown, submitted as replays.
-- Server re-simulates with `sim` and stores the verified tick count.
-- Anomaly flags and input-copy detection send runs to a review queue; nothing is auto-rejected on suspicion alone.
-- Accounts, sign-in and security follow `docs/server.md`.
-- Hosted on the home server; encrypted restic backups to remote storage.
-
-## 9. Going public
-
-- Takedown page and contact at the bottom of the website. Privacy page and account deletion.
-- Third-party content (commercial music, Kayin's sprites, engine assets) cleared or excluded before any public distribution, from the repo or the server. `community-assumed` games may be served, credited and removed on request (user decision, 2026-11-02).
-- `REUSE.toml` (put the `**` code annotation first so later game/docs entries win), `NOTICE`, and `THIRD_PARTY_LICENSES` generated with `cargo-about` for each release.
-- Non-affiliation note for the IWBTG name; consider asking Kayin.
-- One removal list honored everywhere: builds skip removed games, the server stops serving them, clients delete them on sync.
-- CI builds: minimal (1 game) and full (all ported games).
-- Contributor docs.
-
-## Later
-
-Bosses and avoidance, long games, level editor, items from Potential Features.md.
+- **Crawling.** Delicious-fruit is crawled gently: one request at a time, several seconds apart, every response cached, runs that resume where they stopped. Ratings are never imported.
+- **Storage.** Downloads are stored by SHA-256 in `archive/` and backed up off the internet-facing server. They never go into Git or LFS, and originals never reach a public repo.
+- **VirusTotal.** Every download is checked through a slow queue (public API limit: 4 requests/minute, 500/day). Flagged files go to manual review, because GM8 games often trigger false positives.
+- **Running originals.** Originals run on the main machine only through the research gate, and only once they are VirusTotal-clean.
+- **Crawl scope.** Only the candidate pool is crawled until all 20 ports pass. The full crawl is an M5 issue.
 
 ## Decided
 
-- Code: `MIT OR Apache-2.0`. Docs, format spec and research specs: `CC-BY-4.0`. Game content belongs to its creators and is not relicensed.
-- Ported games and their music live in the private games repo for now. When it grows too large, they move to the home server.
-- Takedown contact: a link at the bottom of the website. Set up before going public.
-- Accounts are stored in our own database; the sign-in method sits behind one interface. Reference flow: https://typebeat.sh/register.
-- Server stack: `docs/server.md` (Rust + axum, SQLite, Cloudflare Tunnel, Docker Compose, restic backups).
-- Research runs on native Windows. Originals run only when VirusTotal-clean, through the research gate (user decision, 2026-10-24).
-
-- Player-facing design (ranked stripped mode, mods, leaderboards, practice, UI, distribution, races): `docs/product.md` (user decisions, 2026-11-02). Ranked boards are stripped mode only; Play original keeps personal stats.
-- Porting, assets, engines, `.iwbz` package and editor: `docs/content.md` (user decisions, 2026-11-02).
+- **Licenses.** Code is `MIT OR Apache-2.0`. Docs, the format spec and the research specs are `CC-BY-4.0`. Game content belongs to its creators.
+- **Games storage.** Ported games and their music live in the private games repo for now. When it grows too large, they move to the home server.
+- **Accounts.** Accounts live in our own database, with each sign-in method behind one interface. The server stack is described in `docs/server.md`.
+- **Research platform.** Research runs on native Windows. Originals run only when VirusTotal-clean, through the research gate (2026-10-24).
+- **Player-facing design** is in `docs/product.md`. **Porting, assets, engines, the package format and the editor** are in `docs/content.md` (2026-11-02).
+- **Script language.** Rhai stays, with a checkpoint after the first boss and avoidance ports ([0001](decisions/0001-script-language.md)). Data files stay TOML.
+- **Copyrighted music** is kept and removed on request.
+- **Tracking.** GitHub milestones and issues across the three repos, with one Project board (2026-11-02).
 
 ## Open decisions
 
-- Script language: the user wants Rhai compared with Luau and a small language of our own before committing. See `docs/content.md`.
-- Porting pipeline efficiency: a deeper design pass on converter automation and the split between agents and humans.
-- Skin system: format, ranked rules, hosting.
+Each open decision is a `needs-user` issue:
 
-- Which 5 games ship bundled with the client.
-- Public project name (an original name replaces the working title before Phase 9).
-- Curation criteria for which games get ranked boards, and a pp-style cross-game ranking. See `docs/product.md`.
-
-- Script language and data file syntax for the game format. Decided in Phase 3.
-- Backup storage provider (Backblaze B2 or Hetzner Storage Box). Needed by Phase 8.
+- Review the 20-game shortlist.
+- The porting pipeline design.
+- The 5 bundled games.
+- The project name.
+- Backup provider.
+- Skins.
+- Curation criteria.
+- pp.

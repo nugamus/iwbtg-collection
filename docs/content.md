@@ -63,7 +63,13 @@ Commercial music in fangames (Mega Man, Touhou and so on) is kept and removed on
 - **Engine packs.** Each pack matches a real fangame engine (for example YoYoYo, Seph or Kayin classic). A pack bundles the physics profile, kid sprites and sounds, default built-ins and menus. Creators pick a pack when starting a new game.
 - **Custom engines.** Creators may change physics or build their own engine. Any game whose physics differ from its pack's original is marked **custom physics** on its game page. A custom engine can be published as a pack for others to use, with credit.
 - **Medleys.** Each room may name its own physics profile. First check how the original medley actually does it. If it mixes several engines, mark it custom physics.
-- **Upgrades.** Games move to new engine revisions automatically. On each upgrade the server re-runs every stored replay, and runs that still clear are kept. Ports also re-run their original traces. A port whose traces break stays on the old revision until it is fixed.
+- **Upgrades: automatic when provably safe.** Decided by Claude on the user's request, 2026-11-02. The sim keeps every engine revision's behavior, selected by the package's `engine_rev`, so an old revision never stops working. When a new revision ships, the server tests each game on it:
+  - Every stored replay is re-run, and ports also re-run their original traces.
+  - If every replay gives the same tick count and final state hash, and every trace still matches, the game moves to the new revision automatically. Nothing a player could notice has changed.
+  - If anything differs, the game stays on its old revision, and its porter or creator gets the list of differences.
+  - They can then opt in. Runs that still clear on the new revision stay on the board, and the others move to a legacy board.
+
+  This way an engine fix never silently changes how a game feels or invalidates a record.
 - **Shared scripts.** A versioned script library (for example `lib:bullet_patterns@1`) holds boss patterns, menu templates and avoidance helpers. Patterns that repeat across games get promoted to built-ins.
 - **Expanded scope.** New games may go beyond GM8 limits: other resolutions, tick rates and bigger sprites. Changing the original engine's physics makes the game a custom engine.
 
@@ -73,7 +79,7 @@ Commercial music in fangames (Mega Man, Touhou and so on) is kept and removed on
 - One `.iwbz` holds the whole game: every ported version, every difficulty and every category. The game appears only once in game select.
 - **Maps.** As with osu! beatmap sets, selecting a game expands it into its maps: categories (Any%, 100%, True Ending) and versions. Each map has its own end trigger, computed difficulty rating and leaderboard. The difficulty settings (Medium, Hard and so on) stay mods ([product](product.md#mods)).
 - **Data syntax.** TOML stays. It is readable, and agents and people can both edit it.
-- **OPEN: the script language.** The user is unsure Rhai is the right choice. The next step is a side-by-side comparison of Rhai, Luau and a small language of our own, with example boss scripts in each.
+- **Script language: Rhai stays.** Decided by Claude on the user's request, 2026-11-02. See [0001](decisions/0001-script-language.md#revisited-2026-11-02).
 
 ## Level editor
 
@@ -107,7 +113,10 @@ Commercial music in fangames (Mega Man, Touhou and so on) is kept and removed on
 
 - **Saves.** Play original has the original's save slots, kept locally and synced to the player's account.
 - **Audio offset.** A global audio offset with a calibration screen. It moves audio playback only, never the sim.
-- **Controls.** One global set of bindings, defaulting to the fangame standard (Shift to jump, Z to shoot, R to restart). A game that uses unusual controls lists them, and the client points them out before play.
+- **Controls.** Decided 2026-11-02. There is one global set of bindings, defaulting to the fangame standard (Shift to jump, Z to shoot, R to restart).
+  - **Extra actions.** Some games need keys beyond the standard set, for example an item key or a menu key. The action set gains four generic actions, `extra1` to `extra4`, with global default keys. A game that uses one gives it a label in its package, for example "extra1: Use item". The input bits widen from `u16` to `u32` to make room.
+  - **Controls panel.** The settings page has a game picker: type to search, or scroll the list. It shows the selected game's labeled actions, highlights anything unusual, and lets players rebind the global keys from there.
+  - **Before play.** The client shows a notice when a game uses extra actions.
 - **Stripped-mode visuals.** Blood, GAME OVER and screen shake stay. Only menus and cutscenes are cut.
 - **Death.** It works as in the original: GAME OVER, then R. The timer keeps running.
 

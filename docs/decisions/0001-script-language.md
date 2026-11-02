@@ -1,6 +1,6 @@
 # 0001: Script language
 
-Status: Accepted by Claude on the user's behalf, 2026-10-24. Reopened by the user, 2026-11-02: compare with Luau and a small language of our own, with example boss scripts, before committing ([content](../content.md#package-file)).
+Status: Accepted by Claude on the user's behalf, 2026-10-24. Reopened by the user and confirmed by Claude on the user's request, 2026-11-02 (see [Revisited](#revisited-2026-11-02)).
 
 Related: [0002 data syntax](0002-data-syntax.md), [architecture](../architecture.md), [format v0](../format/v0.md), [format principles](../format/README.md).
 
@@ -227,3 +227,17 @@ Checked 2026-10-24 by the proposals and judges:
 - libm features (`default = ["arch"]`): https://github.com/rust-lang/compiler-builtins/blob/main/libm/Cargo.toml.
 - Rust float semantics: https://rust-lang.github.io/rfcs/3514-float-semantics.html and https://doc.rust-lang.org/std/primitive.f64.html.
 - GM8 numeric facts (research reference only, GPL-2.0, never copied): OpenGMK `gm8emulator/src/math.rs` and `gml/value.rs`.
+
+## Revisited 2026-11-02
+
+The user asked whether Rhai is the right choice and left the decision to Claude. Rhai stays.
+
+- **Luau** is better known to people and AI (Roblox), and faster. But it is C++. Bevy's web build targets `wasm32-unknown-unknown`, and the Rust Luau bindings (mlua) do not support that target. Its math also goes through the C library and the C++ compiler, so we would lose control over bit-identical results on Windows, WASM and Linux. Replay verification and the race ghosts depend on those results.
+- **A language of our own** would give full control, but it costs a compiler, a debugger, docs and editor support before the first boss works. That is months of work that ports nothing.
+- **Pure-Rust Lua implementations** such as piccolo are not production-ready.
+- **Rhai** is pure Rust, builds for every target, counts operations for the step budget, and routes all math through our `sim::num` functions. Its weak points can be managed:
+  - Speed: bullets, projectiles and patterns are native built-ins. Scripts only decide, and native code moves things.
+  - Unfamiliarity: the generated API docs, `.d.rhai` stubs and a library of example scripts teach agents and people the dialect.
+  - Non-coders: they never see Rhai. The editor's room painter, trigger wiring, timeline editor and boss builder write data, not scripts.
+- **Swappable.** The script host sits behind the `ScriptHost` trait, so a later switch stays possible.
+- **Checkpoint.** Re-check after the first boss and the first avoidance game are ported (Little Trap and Rori Girl): peak budget per tick, and how much agent effort the scripts took. Rhai is replaced only if one of those fails.
