@@ -1,17 +1,21 @@
 //! World and context API (docs/plans/sim-core.md 1.4).
 //!
-//! WP0 fixes the signatures and ships working versions of the plain store reads (`get`,
-//! `get_mut`, `exists`, `iter_alive`, `count_of`, `instances`) and of `Ctx::halt`; every
-//! rule-dependent body is a stub that names its owner. WP1 owns the file.
-#![allow(unused_variables, reason = "WP0 stubs: WP1 fills the bodies")]
+//! WP0 fixed the signatures; WP1 owns the file. CLONE_SPEC rooms and tick loop, Confirmed
+//! (recorder): `instance_create` runs Create at once, inside the call
+//! (traces/showdown/tr-room-14.md); after `instance_destroy` the rest of the current event still
+//! runs, the instance gets no later events (traces/rely-the-needle-4-2/tr-room-03-a-log.csv row
+//! 8) and `instance_exists` stops counting it at once (traces/kaenbyou/tr-room-08.csv row 51).
 
-use super::{Ctx, InstId, Instance, SimStatus, World};
-use crate::def::{ClassMask, EngineKind, GroupId, KindId, NameId, Params, VariantSel};
+use super::{Ctx, InstId, Instance, KindState, SimStatus, Value, World};
+use crate::def::{Builtin, ClassMask, EngineKind, GameDef, GroupId, KindDef, KindId, NameId, ParamValue, Params, VariantSel};
 use crate::error::SimError;
+use crate::events::{self, EventKind, ProbeState};
 use crate::num::Real;
 use crate::output::OutputEvent;
 use crate::room::RoomRequest;
 use crate::rules::TickRules;
+use crate::rules::tick::{ChangeKindProps, FirstRule};
+use crate::{builtins, script};
 
 /// What a handler tells the dispatcher.
 ///
@@ -37,6 +41,15 @@ impl Flow {
     /// True for [`Flow::Halt`].
     pub const fn is_halt(self) -> bool {
         matches!(self, Flow::Halt)
+    }
+
+    /// The stronger of two flows: `Halt` over `AbortTick` over `Continue`.
+    pub const fn combine(self, other: Flow) -> Flow {
+        match (self, other) {
+            (Flow::Halt, _) | (_, Flow::Halt) => Flow::Halt,
+            (Flow::AbortTick, _) | (_, Flow::AbortTick) => Flow::AbortTick,
+            _ => Flow::Continue,
+        }
     }
 }
 
@@ -109,6 +122,13 @@ impl World {
         self.instances.get_mut(i)
     }
 
+    /// Like [`World::get_mut`] without marking the grid, for changes that cannot move the
+    /// instance's box (alarms, timelines, variables, probe state).
+    pub(crate) fn get_mut_unmoved(&mut self, id: InstId) -> Option<&mut Instance> {
+        let i = self.index_of(id)?;
+        self.instances.get_mut(i)
+    }
+
     /// GML `instance_exists` on one id: alive and active.
     pub fn exists(&self, id: InstId) -> bool {
         self.get(id).is_some_and(|i| i.alive && i.active)
@@ -119,10 +139,29 @@ impl World {
         self.instances.iter().filter(|i| i.alive)
     }
 
-    /// "The first" alive, active instance whose classes intersect `class`, by
-    /// [`TickRules::first_rule`] (R21).
+    /// "The first" active instance whose classes intersect `class`, by
+    /// [`TickRules::first_rule`] (R21). Instances destroyed this tick count only under
+    /// `TickRules::dead_in_queries` (R22).
     pub fn first_of(&self, class: ClassMask, rules: &TickRules) -> Option<InstId> {
-        unimplemented!("WP1: World::first_of")
+        let ids = self
+            .instances
+            .iter()
+            .filter(|i| i.active && (i.alive || rules.dead_in_queries) && i.classes.intersects(class))
+            .map(|i| i.id);
+        self.first_among(ids, rules)
+    }
+
+    /// The first of `ids` by [`TickRules::first_rule`] (R21), for queries that found several
+    /// candidates (WP3 sorts its results through this, so the grid never decides). Ids that name
+    /// no stored instance are ignored.
+    pub fn first_among(&self, ids: impl IntoIterator<Item = InstId>, rules: &TickRules) -> Option<InstId> {
+        let found = ids.into_iter().filter_map(|id| self.get(id));
+        match rules.first_rule {
+            FirstRule::LowestId => found.map(|i| i.id).min(),
+            FirstRule::DispatchOrder => found
+                .min_by_key(|i| events::order_key(i, rules.dispatch, events::Order::Dispatch))
+                .map(|i| i.id),
+        }
     }
 
     /// GML `instance_number` on a class: alive, active instances whose classes intersect it.
@@ -136,14 +175,97 @@ impl World {
 
     /// The kid: `first_of(KID | KID_FLIPPED)`.
     pub fn kid(&self, rules: &TickRules) -> Option<InstId> {
-        unimplemented!("WP1: World::kid")
+        self.first_of(ClassMask::KID | ClassMask::KID_FLIPPED, rules)
     }
 }
 
+/// The kind `kind`, or an invariant error naming it.
+fn kind_def(def: &GameDef, kind: KindId) -> Result<&KindDef, SimError> {
+    def.kind(kind)
+        .ok_or_else(|| SimError::invariant(format!("unknown kind {}", kind.0)))
+}
+
+/// `base` params overridden by `over` (a placed instance's params override the kind's).
+fn merge_params(base: &Params, over: &Params) -> Params {
+    let mut merged = base.clone();
+    for (k, v) in &over.0 {
+        merged.0.insert(k.clone(), v.clone());
+    }
+    merged
+}
+
+/// A param as a GML value: reals and text as they are, flags as 1 or 0, resource ids as their
+/// index (GML resource ids are reals).
+fn param_value(v: &ParamValue) -> Value {
+    match v {
+        ParamValue::Real(r) => Value::Real(*r),
+        ParamValue::Bool(b) => Value::Real(if *b { Real::ONE } else { Real::ZERO }),
+        ParamValue::Str(s) => Value::Str(s.clone()),
+        ParamValue::Room(id) => Value::Real(Real::new(f64::from(id.0))),
+        ParamValue::Kind(id) => Value::Real(Real::new(f64::from(id.0))),
+        ParamValue::Sound(id) => Value::Real(Real::new(f64::from(id.0))),
+    }
+}
+
+/// The per-owner state a new instance of `kd` starts with (plan 1.5).
+fn initial_state(def: &GameDef, kd: &KindDef, params: &Params) -> Result<KindState, SimError> {
+    Ok(match kd.base {
+        Builtin::Kid => KindState::Kid(Box::default()),
+        Builtin::Probe => KindState::Probe(ProbeState::from_params(params, def)),
+        Builtin::Scripted => KindState::Script(script::ScriptState::default()),
+        Builtin::Inert => KindState::None,
+        b => KindState::Builtin(builtins::init_state(b, params).map_err(|e| {
+            SimError::invariant(format!("kind {}: {e} (the loader checks params)", kd.name))
+        })?),
+    })
+}
+
 impl Ctx<'_> {
-    /// GML `instance_create`: a new instance of `kind` at `(x, y)`. Runs Create now (Inferred).
+    /// GML `instance_create`: a new instance of `kind` at `(x, y)`. Runs Create now (Inferred;
+    /// Confirmed (recorder)), so when this returns, Create has run.
+    ///
+    /// The instance takes the kind's sprite, mask, solid, visible, depth, persistent and
+    /// classes, `init`'s scale, angle, name and group, and its rank from `init.rank` or
+    /// `GameDef::rank_for`. Params (the kind's, overridden by `init.params`) build the
+    /// built-in state and are stored as custom variables when the game knows their names
+    /// (`GameDef::var_names`). An error from Create halts the sim and is returned.
     pub fn spawn(&mut self, kind: KindId, x: Real, y: Real, init: SpawnInit) -> Result<InstId, SimError> {
-        unimplemented!("WP1: Ctx::spawn")
+        let def = self.def;
+        let kd = kind_def(def, kind)?;
+        if !x.is_finite() || !y.is_finite() {
+            return Err(SimError::non_finite("instance_create position"));
+        }
+        let rank = init
+            .rank
+            .or_else(|| def.rank_for(kind, init.variant.as_ref()))
+            .ok_or_else(|| SimError::invariant(format!("kind {} has no rank (CR4)", kd.name)))?;
+        let params = merge_params(&kd.params, &init.params);
+        let state = initial_state(def, kd, &params)?;
+        let id = self.w.alloc_id()?;
+        let mut inst = Instance::new(id, kind, rank, x, y);
+        inst.name = init.name;
+        inst.group = init.group;
+        inst.classes = kd.classes;
+        inst.solid = kd.solid;
+        inst.visible = kd.visible;
+        inst.depth = kd.depth;
+        inst.persistent = kd.persistent;
+        inst.img.set_sprite(kd.sprite);
+        inst.img.set_mask(kd.mask);
+        inst.img.set_xscale(init.xscale)?;
+        inst.img.set_yscale(init.yscale)?;
+        inst.img.set_angle(init.angle)?;
+        inst.state = state;
+        for (name, v) in &params.0 {
+            if let Some(var) = def.var_names.get(name) {
+                inst.vars.insert(*var, param_value(v));
+            }
+        }
+        self.w.insert(inst)?;
+        if init.run_create && events::dispatch(self, id, &EventKind::Create).is_halt() {
+            return Err(self.halted_error());
+        }
+        Ok(id)
     }
 
     /// Spawns the kind the game uses for an engine role; `None` when the game has none.
@@ -154,29 +276,89 @@ impl Ctx<'_> {
         y: Real,
         init: SpawnInit,
     ) -> Result<Option<InstId>, SimError> {
-        unimplemented!("WP1: Ctx::spawn_engine")
+        match self.def.engine_kind(k) {
+            Some(kind) => self.spawn(kind, x, y, init).map(Some),
+            None => Ok(None),
+        }
     }
 
-    /// GML `instance_destroy`: runs Destroy now, then marks the instance dead. `Flow::Halt` when
-    /// the Destroy handler halted the sim.
+    /// GML `instance_destroy`: runs Destroy now (the instance still exists during it), then
+    /// marks the instance dead; it runs no further events and the sweep at the end of the tick
+    /// removes it. An instance that is already destroyed, deactivated or unknown is left alone
+    /// (`Continue`). Returns the Destroy handler's flow; `Flow::Halt` when it halted the sim.
     pub fn destroy(&mut self, id: InstId) -> Flow {
-        unimplemented!("WP1: Ctx::destroy")
+        if !self.w.exists(id) {
+            return Flow::Continue;
+        }
+        let flow = events::dispatch(self, id, &EventKind::Destroy);
+        if flow.is_halt() {
+            return flow;
+        }
+        if let Some(inst) = self.w.get_mut(id) {
+            inst.alive = false;
+        }
+        flow
     }
 
-    /// GML `instance_change`. `Flow::Halt` when an event it ran halted the sim.
+    /// GML `instance_change`. With `run_events`, the old kind's Destroy runs first and the new
+    /// kind's Create last. The instance keeps its id, position, motion, alarms and variables; it
+    /// takes the new kind's rank, classes and fresh built-in state, plus the kind properties
+    /// `TickRules::change_kind` names (not in the spec, Design). `Flow::Halt` when an event it
+    /// ran halted the sim; an unknown kind or a kind without a rank halts it.
     pub fn change_kind(&mut self, id: InstId, kind: KindId, run_events: bool) -> Flow {
-        unimplemented!("WP1: Ctx::change_kind")
+        if !self.w.exists(id) {
+            return Flow::Continue;
+        }
+        let mut flow = Flow::Continue;
+        if run_events {
+            flow = events::dispatch(self, id, &EventKind::Destroy);
+            if flow.is_halt() || !self.w.exists(id) {
+                return flow;
+            }
+        }
+        let def = self.def;
+        let kd = match kind_def(def, kind) {
+            Ok(kd) => kd,
+            Err(e) => return self.halt(e),
+        };
+        let Some(rank) = def.rank_for(kind, None) else {
+            return self.halt(SimError::invariant(format!("kind {} has no rank (CR4)", kd.name)));
+        };
+        let state = match initial_state(def, kd, &kd.params) {
+            Ok(s) => s,
+            Err(e) => return self.halt(e),
+        };
+        let props = self.rules.tick.change_kind;
+        if let Some(inst) = self.w.get_mut(id) {
+            inst.kind = kind;
+            inst.rank = rank;
+            inst.classes = kd.classes;
+            inst.state = state;
+            if props == ChangeKindProps::KindDefaults {
+                inst.img.set_sprite(kd.sprite);
+                inst.img.set_mask(kd.mask);
+                inst.solid = kd.solid;
+                inst.visible = kd.visible;
+                inst.depth = kd.depth;
+                inst.persistent = kd.persistent;
+            }
+        }
+        if run_events {
+            flow = flow.combine(events::dispatch(self, id, &EventKind::Create));
+        }
+        flow
     }
 
     /// GML `room_goto` and friends: deferred to tick row 15 (Confirmed); the last request wins
-    /// (R13).
+    /// (R13). The phase running the handler applies R8 when the handler returns.
     pub fn request_room(&mut self, req: RoomRequest) {
-        unimplemented!("WP1: Ctx::request_room")
+        self.w.pending = Some(req);
+        self.w.room_requests = self.w.room_requests.saturating_add(1);
     }
 
     /// Queues an event for the client.
     pub fn emit(&mut self, ev: OutputEvent) {
-        unimplemented!("WP1: Ctx::emit")
+        self.w.output.push(ev);
     }
 
     /// Halts the sim: sets `World::status` to `Halted(e)` (the first error wins if it is
@@ -188,5 +370,13 @@ impl Ctx<'_> {
             self.w.status = SimStatus::Halted(e);
         }
         Flow::Halt
+    }
+
+    /// The error the sim halted with, for calls that return `Result` after a `Flow::Halt`.
+    pub(crate) fn halted_error(&self) -> SimError {
+        match &self.w.status {
+            SimStatus::Halted(e) => e.clone(),
+            _ => SimError::invariant("a handler returned Halt without halting the sim"),
+        }
     }
 }

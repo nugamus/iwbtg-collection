@@ -82,6 +82,11 @@ pub struct World {
     /// never makes two worlds unequal (`Grid`'s `PartialEq` is always true).
     #[serde(skip)]
     pub grid: Grid,
+    /// Room requests made since tick row 0 (`Ctx::request_room` counts them). The phases compare
+    /// it before and after each handler to apply R8, so a request is seen even when it was made
+    /// inside a nested Create. Reset at rows 0 and 15; never hashed or saved.
+    #[serde(skip)]
+    pub room_requests: u32,
 }
 
 impl World {
@@ -110,6 +115,7 @@ impl World {
             status: SimStatus::Running,
             setup_applied: false,
             grid: Grid::default(),
+            room_requests: 0,
         }
     }
 }
