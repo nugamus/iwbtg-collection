@@ -90,6 +90,9 @@ pub fn frac(x: Real) -> Real {
 /// above 0 gives `1` and any value below 0 gives `-1`. Zero and NaN give `+0.0` in both modes
 /// (NaN: OPEN).
 ///
+/// The default fits the recorder (CLONE_SPEC numbers, Confirmed (recorder)): an hspeed from
+/// `-1.4e-14` to `-9e-14` has sign 0 and `-1e-13` has sign -1
+/// (`traces/little-trap/num-eps-slip-b.csv` rows 50-51, `num-eps-slip-c.csv` rows 50-100).
 /// Slip blocks subtract `slip * sign(hspeed)`, so N11 must follow N1 (plan 3.2).
 pub fn sign(x: Real, r: &NumRules) -> Real {
     let v = x.get();
@@ -171,33 +174,32 @@ pub fn lerp(a: Real, b: Real, t: Real) -> Real {
     a + (b - a) * t
 }
 
-/// GML `a mod b` on reals: `a - trunc(a / b) * b`, each step rounded to f64, as the trace
-/// recorder (OpenGMK) computes it. The result has the sign of the dividend (`-7 mod 3 = -1`,
-/// `7 mod -3 = 1`, `5.5 mod 2 = 1.5`), but an exact multiple gives `+0.0` (`-6 mod 3 = 0`).
+/// GML `a mod b` on reals: `a - (a div b) * b` with [`gm_div`], each step rounded to f64 (N8;
+/// Confirmed formula, CLONE_SPEC numbers "div and mod"). The result has the sign of the dividend
+/// (`-7 mod 2 = -1`, `-7 mod 3 = -1`, `7 mod -3 = 1`, `5.5 mod 2 = 1.5`), but an exact multiple
+/// gives `+0.0` (`-6 mod 3 = 0`). The fraction keeps its float noise (Confirmed (recorder):
+/// `280.20000000000005 mod 256 = 24.200000000000045`, `traces/little-runner/num-divmod-save-a.csv`).
 ///
 /// This is not `fmod`, which is exact: `1 mod 0.1` is `0` here and `0.09999999999999995` with
-/// `fmod`, and `-6 mod 3` is `-0.0` with `fmod`. `trunc` gives the same bits as OpenGMK's
-/// `abs().floor() * signum()` for every input, signed zeros and NaN included.
-///
-/// OPEN: confirm in CLONE_SPEC that GM8's `mod` uses this formula on reals (not fmod, not on
-/// truncated integers), and that a divisor of exactly zero is the only error case.
+/// `fmod`, and `-6 mod 3` is `-0.0` with `fmod`. Negative operands follow the Confirmed formula;
+/// only positive ones were traced (N8). A divisor of exactly zero is
+/// [`NumError::DivisionByZero`].
 pub fn gm_mod(a: Real, b: Real) -> Result<Real, NumError> {
-    let (a, b) = (a.get(), b.get());
-    if b == 0.0 {
-        return Err(NumError::DivisionByZero);
-    }
-    Ok(Real::new(a - (a / b).trunc() * b))
+    let q = gm_div(a, b)?;
+    Ok(a - q * b)
 }
 
-/// GML `a div b` on reals: `floor(a / b)`, as the trace recorder (OpenGMK) computes it
-/// (`7 div 2 = 3`, `-7 div 2 = -4`, `7 div -2 = -4`, `7.5 div 2 = 3`).
+/// GML `a div b` on reals: `trunc(a / b)`, the quotient rounded toward zero (N8; Confirmed,
+/// CLONE_SPEC numbers "div and mod": `-7 div 2 = -3`). `7 div 2 = 3`, `7 div -2 = -3`,
+/// `7.5 div 2 = 3`. The reals are divided without converting them to integers first (Inferred;
+/// Confirmed (recorder) for positive operands: `24.200000000000045 div 1 = 24`,
+/// `traces/little-runner/num-divmod-save-a.csv` and `-b.csv` row 60).
 ///
-/// OPEN: confirm in CLONE_SPEC whether GM8 floors the quotient (OpenGMK) or truncates it
-/// toward zero (Delphi's integer `div`, which gives `-7 div 2 = -3`), whether it divides the
-/// reals or the truncated operands, and that a divisor of exactly zero is the only error case.
+/// A divisor of exactly zero (either sign) is [`NumError::DivisionByZero`]: GM8 stops the game
+/// there, and the spec keeps division by zero out of scope.
 pub fn gm_div(a: Real, b: Real) -> Result<Real, NumError> {
     if b.get() == 0.0 {
         return Err(NumError::DivisionByZero);
     }
-    Ok(Real::new((a.get() / b.get()).floor()))
+    Ok(Real::new((a.get() / b.get()).trunc()))
 }

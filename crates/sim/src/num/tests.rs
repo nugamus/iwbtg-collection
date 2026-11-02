@@ -4,7 +4,7 @@
 use super::trig::{DEG_TO_RAD, TRIG_TABLE};
 use super::*;
 use crate::rules::NumRules;
-use crate::rules::num::{CompareMode, MinMaxTies, NegZero, SignMode, Truth};
+use crate::rules::num::{AlarmConv, ByteConv, CompareMode, MinMaxTies, NegZero, SignMode, StrRound, Truth};
 
 fn r(x: f64) -> Real {
     Real::new(x)
@@ -301,15 +301,50 @@ fn gm_mod_is_the_rounded_formula_not_fmod() {
     assert_eq!(libm::fmod(big.get(), 3.0), 2.0);
 }
 
+/// N8: div truncates toward zero (Confirmed, CLONE_SPEC numbers: `-7 div 2 = -3`).
 #[test]
-fn gm_div_floors() {
-    assert_eq!(gm_div(r(7.0), r(2.0)), Ok(r(3.0)));
-    assert_eq!(gm_div(r(-7.0), r(2.0)), Ok(r(-4.0)));
-    assert_eq!(gm_div(r(7.0), r(-2.0)), Ok(r(-4.0)));
-    assert_eq!(gm_div(r(-33.0), r(32.0)), Ok(r(-2.0)));
-    assert_eq!(gm_div(r(-7.0), r(-2.0)), Ok(r(3.0)));
-    assert_eq!(gm_div(r(7.5), r(2.0)), Ok(r(3.0)));
+fn gm_div_truncates_toward_zero() {
+    for (a, b, q) in [
+        (7.0, 2.0, 3.0),
+        (-7.0, 2.0, -3.0),
+        (7.0, -2.0, -3.0),
+        (-7.0, -2.0, 3.0),
+        (-33.0, 32.0, -1.0),
+        (7.5, 2.0, 3.0),
+        (-7.5, 2.0, -3.0),
+        (1.0, 3.0, 0.0),
+        (18059.0, 3600.0, 5.0),
+        // Recorder, positive operands (traces/little-runner/num-divmod-save-a.csv row 60).
+        (24.200000000000045, 1.0, 24.0),
+        (7.7000000000000455, 1.0, 7.0),
+        (168.60000000000002, 1.0, 168.0),
+    ] {
+        assert_eq!(gm_div(r(a), r(b)), Ok(r(q)), "{a} div {b}");
+    }
+    // A quotient between -1 and 0 truncates to -0.0, the IEEE result of trunc.
+    assert_eq!(gm_div(r(-1.0), r(3.0)), Ok(r(-0.0)));
     assert_eq!(gm_div(r(0.0), r(0.0)), Err(NumError::DivisionByZero));
+    assert_eq!(gm_div(r(1.0), r(-0.0)), Err(NumError::DivisionByZero));
+}
+
+/// N8: mod is `a - (a div b) * b`, so it keeps the dividend's sign (Confirmed formula).
+#[test]
+fn gm_mod_table_follows_truncated_div() {
+    for (a, b, m) in [
+        (-7.0, 2.0, -1.0),
+        (7.0, -2.0, 1.0),
+        (-7.0, -2.0, -1.0),
+        (-33.0, 32.0, -1.0),
+        (-7.5, 2.0, -1.5),
+        // Recorder, positive operands (num-divmod-save-a.csv, -b.csv row 60).
+        (280.20000000000005, 256.0, 24.200000000000045),
+        (263.70000000000005, 256.0, 7.7000000000000455),
+        (936.6, 256.0, 168.60000000000002),
+    ] {
+        assert_eq!(gm_mod(r(a), r(b)), Ok(r(m)), "{a} mod {b}");
+        let q = gm_div(r(a), r(b)).expect("nonzero divisor");
+        assert_eq!(gm_mod(r(a), r(b)), Ok(r(a) - q * r(b)), "{a} mod {b} formula");
+    }
 }
 
 // ---- Comparisons ----
@@ -380,6 +415,131 @@ fn gm_bool_threshold() {
     assert!(gm_bool(r(0.5000000000000001), &gt));
 }
 
+// ---- Conversions (R3b, N5, N6) ----
+
+/// R3b default: round half to even, as the recorder (traces/kaenbyou/num-alarm-half-b.csv).
+#[test]
+fn alarm_from_real_rounds_half_even() {
+    let d = &d();
+    for (v, a) in [
+        (1.5, 2.0),
+        (2.5, 2.0),
+        (0.5, 0.0),
+        (3.5, 4.0),
+        (1.3, 1.0),
+        (2.0, 2.0),
+        (-0.4, 0.0),
+        (-1.5, -2.0),
+    ] {
+        assert_eq!(alarm_from_real(r(v), d), r(a), "alarm {v}");
+    }
+    assert!(alarm_from_real(r(f64::NAN), d).is_nan());
+}
+
+#[test]
+fn alarm_from_real_other_rules() {
+    let trunc = NumRules {
+        alarm_from_real: AlarmConv::Truncate,
+        ..d()
+    };
+    let keep = NumRules {
+        alarm_from_real: AlarmConv::Keep,
+        ..d()
+    };
+    assert_eq!(alarm_from_real(r(1.5), &trunc), r(1.0));
+    assert_eq!(alarm_from_real(r(-0.5), &trunc), r(0.0));
+    assert_eq!(alarm_from_real(r(1.3), &keep), r(1.3));
+}
+
+/// N5 default: round half to even, then wrap (rounding Confirmed (recorder): num-byte-save-a..d,
+/// tr-room-05-a/b/e, sh-save-restart-a/b).
+#[test]
+fn byte_from_real_rounds_half_even() {
+    let d = &d();
+    assert_eq!(d.byte_from_real, ByteConv::RoundWrap);
+    for (v, b) in [
+        (51.59999999999991, 52),
+        (59.3, 59),
+        (44.3, 44),
+        (67.4, 67),
+        (38.93, 39),
+        (36.845, 37),
+        (48.5, 48),
+        (49.5, 50),
+        (0.0, 0),
+        (255.0, 255),
+        // Out of range wraps mod 256 (OPEN).
+        (256.0, 0),
+        (455.1 - 256.0 * 1.0, 199),
+        (-1.0, 255),
+        (-0.4, 0),
+    ] {
+        assert_eq!(byte_from_real(r(v), d), b, "byte {v}");
+    }
+    assert_eq!(byte_from_real(r(f64::NAN), d), 0);
+    assert_eq!(byte_from_real(r(f64::INFINITY), d), 0);
+    assert_eq!(byte_from_real(r(1e300), d), 0);
+}
+
+#[test]
+fn byte_from_real_trunc_rule() {
+    let t = NumRules {
+        byte_from_real: ByteConv::TruncWrap,
+        ..d()
+    };
+    assert_eq!(byte_from_real(r(51.59999999999991), &t), 51);
+    assert_eq!(byte_from_real(r(67.4), &t), 67);
+    assert_eq!(byte_from_real(r(48.5), &t), 48);
+    assert_eq!(byte_from_real(r(-1.5), &t), 255);
+    assert_eq!(byte_from_real(r(257.9), &t), 1);
+}
+
+/// N6: integers get no decimals, everything else two. Recorder values the default matches
+/// (num-string-save-a/b, tr-room-07-b/c), plus the two it does not (N6 OPEN).
+#[test]
+fn gm_string_real_table() {
+    let d = &d();
+    for (v, s) in [
+        (1370.0, "1370"),
+        (551.7, "551.70"),
+        (551.6999999999999, "551.70"),
+        (0.125, "0.12"),
+        (0.375, "0.38"),
+        (0.625, "0.62"),
+        (0.875, "0.88"),
+        (183.125, "183.12"),
+        (183.005, "183.00"),
+        (0.015, "0.01"),
+        (-1.5, "-1.50"),
+        (-0.125, "-0.12"),
+        (9.995, "9.99"),
+        (9.999, "10.00"),
+        (0.0, "0"),
+        (-0.0, "0"),
+        (-3.0, "-3"),
+        (1e20, "100000000000000000000"),
+    ] {
+        assert_eq!(gm_string_real(r(v), d), s, "string({v})");
+    }
+    // N6 OPEN: the recorder writes 2.68 and 1.01 for these.
+    assert_eq!(gm_string_real(r(2.675), d), "2.67");
+    assert_eq!(gm_string_real(r(1.005), d), "1.00");
+}
+
+#[test]
+fn gm_string_real_half_away_rule() {
+    let away = NumRules {
+        string_decimals: StrRound::HalfAway,
+        ..d()
+    };
+    assert_eq!(gm_string_real(r(0.125), &away), "0.13");
+    assert_eq!(gm_string_real(r(0.375), &away), "0.38");
+    assert_eq!(gm_string_real(r(-0.125), &away), "-0.13");
+    assert_eq!(gm_string_real(r(9.875), &away), "9.88");
+    assert_eq!(gm_string_real(r(99.995), &away), gm_string_real(r(99.995), &d()));
+    assert_eq!(gm_string_real(r(551.7), &away), "551.70");
+}
+
 // ---- libm ----
 
 #[test]
@@ -419,18 +579,21 @@ fn libm_golden_bits() {
 // ---- Degree trig ----
 
 /// The value docs/architecture.md names: gravity 0.4 at gravity_direction 270 gives this hspeed
-/// in the OpenGMK traces, bit for bit.
+/// in the recorder traces, bit for bit (M6; `traces/showdown/t-mot-03-a.csv`, `kaenbyou/stand.csv`).
 #[test]
 fn gravity_270_matches_trace_value() {
     let hspeed = r(0.4) * dcos(r(270.0));
     assert_eq!(hspeed, parse("-7.347880794884119e-17"));
+    assert_eq!(hspeed.to_bits(), 0xBC95_2DC7_707E_D4D5);
     assert_eq!(lengthdir_x(r(0.4), r(270.0)), hspeed);
     assert_eq!(r(0.0) - r(0.4) * dsin(r(270.0)), r(0.4));
     assert_eq!(lengthdir_y(r(0.4), r(270.0)), r(0.4));
+    // gravity_direction -270 leaves the same residue (t-mot-03-b.csv).
+    assert_eq!(r(0.4) * dcos(r(-270.0)), hspeed);
 }
 
 /// Regression guard: the table entries equal libm on the radian value, and dsin/dcos return
-/// them. Not a fidelity check (libm against libm); `crt_golden_bits` and the trace test are.
+/// them. Not a fidelity check (libm against libm); `m6_recorder_bits` and the trace test are.
 #[test]
 fn table_entries_reproduce_f64_trig_of_the_radian() {
     for entry in TRIG_TABLE {
@@ -445,7 +608,7 @@ fn table_entries_reproduce_f64_trig_of_the_radian() {
 /// Property-style regression guard for `lookup`: for many angles not in the table, dsin/dcos
 /// are exactly libm on degtorad. Off the table that is the implementation itself, so this only
 /// fails if `lookup` wrongly matches a non-table angle. It says nothing about fidelity; see
-/// `crt_golden_bits`.
+/// `m6_recorder_bits`.
 #[test]
 fn dsin_dcos_match_libm_off_table() {
     let in_table = |d: Real| TRIG_TABLE.iter().any(|e| e.degrees == d);
@@ -477,52 +640,70 @@ fn dsin_dcos_match_libm_off_table() {
     }
 }
 
-/// Independent oracle for off-table angles: `sin` and `cos` of `degrees * DEG_TO_RAD` from the
-/// Windows x64 UCRT, which the trace recorder (OpenGMK) calls. Measured 2026-10-24 on the
-/// research machine with a black-boxed Rust std `f64::sin`/`f64::cos` (x86_64-pc-windows-msvc,
-/// rustc 1.99.1), bit patterns below. UCRT may pick a different code path on another CPU.
-///
-/// Over every quarter degree in `[0, 360]`, UCRT and libm 0.2.16 differ by one ulp at 58 angles
-/// (whole degrees: 34, 45, 53, 63, 113, 137, 207, 220, 224, 239, 284, 342, 351).
-const CRT_AGREES_WITH_LIBM: [(f64, u64, u64); 7] = [
-    (1.0, 0x3F91_DF0B_2B89_DD1E, 0x3FEF_FEC0_97F5_AF8A),
-    (10.0, 0x3FC6_3A1A_7E0B_7389, 0x3FEF_838B_8C81_1C17),
-    (30.0, 0x3FDF_FFFF_FFFF_FFFF, 0x3FEB_B67A_E858_4CAB),
-    (60.0, 0x3FEB_B67A_E858_4CAA, 0x3FE0_0000_0000_0001),
-    (135.0, 0x3FE6_A09E_667F_3BCD, 0xBFE6_A09E_667F_3BCC),
-    (200.75, 0xBFD6_ACB4_515D_D44D, 0xBFED_ECA0_ACDE_1092),
-    (1000.0, 0xBFEF_838B_8C81_1C16, 0x3FC6_3A1A_7E0B_73AA),
+/// Ten aimed shots from `traces/little-runner/num-trig-a.csv` (CLONE_SPEC numbers, Confirmed
+/// (recorder); hex values from `num-trig.md`): `(dx, dy, agl, hspeed, vspeed, speed,
+/// direction)`. Each shot has `agl = atan2(dy, dx)`, `hspeed = 3 cos(agl)`, `vspeed = 3 sin(agl)`,
+/// and speed and direction as read back from the vector.
+#[rustfmt::skip]
+const NUM_TRIG_SHOTS: [(f64, f64, u64, u64, u64, f64, f64); 10] = [
+    (858.3879532441333, 117.46834325340092, 0x3FC1_688A_63C8_4953, 0x4007_C743_F516_0A48, 0x3FDA_0838_D6D7_FD9B, 3.0, 352.20761209861473),
+    (950.7759064882666, 155.7366865068018, 0x3FC4_C823_C8B2_D961, 0x4007_AF33_1C94_6EE8, 0x3FDF_0932_3152_10B4, 3.0000000000000004, 350.6975843542303),
+    (1043.1638597324, 194.00502976020266, 0x3FC7_8946_2DE9_06C9, 0x4007_986D_0AE1_1832, 0x3FE1_8D88_A71D_E559, 3.0, 349.4646368860251),
+    (1129.5518129765333, 232.27337301360353, 0x3FC9_F58D_B6F4_E80D, 0x4007_8214_7D0E_2B6D, 0x3FE3_5611_91A0_8634, 3.0, 348.38006066107306),
+    (1071.9397662206666, 270.5417162670044, 0x3FCF_A4FA_CC42_50C9, 0x4007_4532_7D09_994C, 0x3FE7_7E08_85CB_F39D, 2.9999999999999996, 345.83520674005064),
+    (873.8980305337172, 308.8100595204053, 0x3FD5_BD3A_945A_D002, 0x4006_A0F3_78D4_89E8, 0x3FEF_FC3D_46A6_2A9B, 3.0, 340.5380783833871),
+    (631.5100772895839, 347.07840277380615, 0x3FE0_14C7_AE8E_EEE8, 0x4005_0860_C94F_EA80, 0x3FF7_1E84_2BD5_66CE, 3.0, 331.2067725095146),
+    (389.1221240454506, 333.30179920258183, 0x3FE6_AA41_B5EF_D5D8, 0x4002_3A3E_6382_5B52, 0x3FFF_39B9_5547_9FC6, 3.0, 319.41835698824417),
+    (380.7341708013173, 295.03345594918096, 0x3FE5_1897_2ABE_C22E, 0x4002_F887_8C87_295B, 0x3FFD_66B6_E179_42FC, 3.0, 322.22765596940343),
+    (438.346217557184, 256.7651126957801, 0x3FE0_F4CB_64C7_77B8, 0x4004_B573_E243_E790, 0x3FF8_42BE_7D72_9CAA, 3.0, 329.6399896292651),
 ];
 
-/// UCRT values (same source as [`CRT_AGREES_WITH_LIBM`]) where libm is one ulp off.
-const CRT_DIFFERS_FROM_LIBM: [(f64, u64, u64); 4] = [
-    (34.0, 0x3FE1_E4E8_8411_FD13, 0x3FEA_8779_CDA8_EEA5),
-    (45.0, 0x3FE6_A09E_667F_3BCD, 0x3FE6_A09E_667F_3BCD),
-    (53.0, 0x3FE9_8E6C_0EA2_7A14, 0x3FE3_4211_9455_BEB7),
-    (63.0, 0x3FEC_8320_1D3D_2C6C, 0x3FDD_0E2E_2B44_DE01),
-];
+/// Our `atan2(dy, dx)` minus the recorded `agl`, in ulps, per shot (M6 gaps).
+const ATAN2_GAPS: [i128; 10] = [0, 0, -1, 0, 0, 0, 0, 0, 0, -1];
 
-/// dsin/dcos against the UCRT oracle. Where they agree the bits must match. Where they differ
-/// the gap is pinned at one ulp in one of sin or cos.
+/// M6: the ten num-trig shots reproduce bit for bit with our libm: `atan2` (except shot 3, see
+/// below), `cos`, `sin`, `sqrt(h*h + v*v)` (not `hypot`: shot 5 reads `2.9999999999999996`) and
+/// `radtodeg(atan2(-v, h))` plus 360. This says nothing about the x87 runner (M6 OPEN).
 ///
-/// OPEN (docs/architecture.md, "Trig fidelity"): the sim uses libm here, so on these angles it
-/// differs from the trace recorder by one ulp. Whether to follow UCRT, libm or x87 is for the
-/// CLONE_SPEC and the Phase 2 cross-check; if the answer is UCRT, these angles move into the
-/// table and this test moves them to the first list.
+/// Shots 3 and 10 are M6 gaps: our `atan2` is one ulp below the recorded `agl` (shot 3:
+/// `0x3FC789462DE906C8` against `...C9`). The rest of each shot is checked from the recorded
+/// `agl`.
 #[test]
-fn crt_golden_bits() {
-    for (degrees, sin_bits, cos_bits) in CRT_AGREES_WITH_LIBM {
-        assert_eq!(dsin(r(degrees)), Real::from_bits(sin_bits), "dsin {degrees}");
-        assert_eq!(dcos(r(degrees)), Real::from_bits(cos_bits), "dcos {degrees}");
-    }
-    let ulps = |a: Real, b: u64| a.to_bits().abs_diff(b);
-    for (degrees, sin_bits, cos_bits) in CRT_DIFFERS_FROM_LIBM {
-        let gaps = (ulps(dsin(r(degrees)), sin_bits), ulps(dcos(r(degrees)), cos_bits));
-        assert!(
-            gaps == (1, 0) || gaps == (0, 1),
-            "{degrees} degrees: expected a one-ulp gap to UCRT, got {gaps:?}"
+fn m6_recorder_bits() {
+    let (o, three) = (r(0.0), r(3.0));
+    for (i, (dx, dy, agl, h, v, speed, direction)) in NUM_TRIG_SHOTS.into_iter().enumerate() {
+        let ours = atan2(r(dy), r(dx));
+        let a = Real::from_bits(agl);
+        let gap = i128::from(ours.to_bits()) - i128::from(agl);
+        assert_eq!(gap, ATAN2_GAPS[i], "atan2 gap of shot {}", i + 1);
+        let (h, v) = (Real::from_bits(h), Real::from_bits(v));
+        assert_eq!(three * cos(a), h, "hspeed of ({dx}, {dy})");
+        assert_eq!(three * sin(a), v, "vspeed of ({dx}, {dy})");
+        assert_eq!(point_distance(o, o, h, v), r(speed), "speed of ({dx}, {dy})");
+        assert_eq!(
+            point_direction(o, o, h, v),
+            r(direction),
+            "direction of ({dx}, {dy})"
         );
     }
+}
+
+/// M6: off-table angles where our libm is one ulp away from the recorder. Pinned so a libm or
+/// table change shows up; which bits are right for GM8 is OPEN (x87 vs libm). From
+/// `traces/eat-the-rori-girl/t-mot-05-b.csv`: frame 4027 id 144489 has speed 16 at direction 284
+/// and hspeed `3.870750329594679`; frame 3802 id 144474 has speed -2.5 at direction 45 and vspeed
+/// `1.7677669529663689`.
+#[test]
+fn m6_recorder_gaps() {
+    let ulps = |a: Real, b: f64| a.to_bits().abs_diff(b.to_bits());
+    let h_284 = lengthdir_x(r(16.0), r(284.0));
+    assert_eq!(h_284, r(3.8707503295946792));
+    assert_eq!(ulps(h_284, 3.870750329594679), 1);
+    assert_eq!(lengthdir_y(r(16.0), r(284.0)), r(15.524731620415945));
+    let v_45 = lengthdir_y(r(-2.5), r(45.0));
+    assert_eq!(v_45, r(1.7677669529663687));
+    assert_eq!(ulps(v_45, 1.7677669529663689), 1);
+    assert_eq!(lengthdir_x(r(-2.5), r(45.0)), r(-1.7677669529663689));
 }
 
 #[test]
@@ -586,8 +767,8 @@ const REAL_COLUMNS: [&str; 12] = [
 ];
 
 /// Reads every trace CSV. For each real field: Display reproduces the recorder's text, and
-/// wherever gravity is 0.4 at direction 270 and hspeed is tiny but nonzero, it is our dcos
-/// product.
+/// wherever gravity is 0.4 at direction 270 and a zero hspeed became tiny but nonzero, it is our
+/// dcos product (or that product added to the previous tick's residue).
 #[test]
 #[allow(clippy::disallowed_methods, reason = "test-only: reads research trace files")]
 fn traces_match_display_and_gravity_trig() {
@@ -616,19 +797,41 @@ fn traces_match_display_and_gravity_trig() {
                     .unwrap_or_else(|| panic!("{} has column {name}", path.display()))
             };
             let real_cols: Vec<usize> = REAL_COLUMNS.iter().map(|c| col(c)).collect();
-            let (hs, gr, gd) = (col("hspeed"), col("gravity"), col("gravity_direction"));
+            let (id, hs, gr, gd) = (col("id"), col("hspeed"), col("gravity"), col("gravity_direction"));
+            let residue = r(0.4) * dcos(r(270.0));
+            // The previous row's hspeed per instance id.
+            let mut previous: std::collections::BTreeMap<&str, Real> = Default::default();
             for line in lines {
                 let fields: Vec<&str> = line.split(',').collect();
                 for &c in &real_cols {
                     let field = fields[c];
                     assert_eq!(parse(field).to_string(), field, "{}", path.display());
                 }
+                let hspeed = parse(fields[hs]);
+                let before = previous.insert(fields[id], hspeed);
                 if fields[gr] == "0.4" && fields[gd] == "270.0" {
-                    // A tiny nonzero hspeed is gravity's x part added to a zero hspeed.
-                    let hspeed = parse(fields[hs]);
-                    if hspeed != r(0.0) && hspeed.get().abs() < 1e-10 {
-                        gravity_rows += 1;
-                        assert_eq!(hspeed, r(0.4) * dcos(r(270.0)), "{}", path.display());
+                    // A tiny nonzero hspeed is gravity's x part. When the previous row of the
+                    // instance had hspeed 0 (or there is none), it must be exactly the residue.
+                    // Otherwise the residue may sit on top of what game code left: nothing resets
+                    // hspeed on slip blocks (traces/little-trap/num-eps-slip-b.csv), and probes
+                    // inject values (num-eps-slip-c.csv), so those rows only count when they
+                    // match `previous + residue`.
+                    // -0.0 is zero too: a frozen kid reads hspeed -0 with gravity 0.4
+                    // (kaenbyou/famb-gravflip.csv frames 40-54), so only a nonzero value counts.
+                    let is_zero = |x: Real| x == r(0.0) || x == r(-0.0);
+                    if !is_zero(hspeed) && hspeed.get().abs() < 1e-10 {
+                        let from_zero = before.is_none_or(is_zero);
+                        let accumulated = before.is_some_and(|b| hspeed == b + residue);
+                        if hspeed == residue || accumulated {
+                            gravity_rows += 1;
+                        } else {
+                            assert!(
+                                !from_zero,
+                                "{} id {}: hspeed {hspeed:?} after a zero hspeed",
+                                path.display(),
+                                fields[id]
+                            );
+                        }
                     }
                 }
             }

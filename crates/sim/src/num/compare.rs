@@ -17,6 +17,12 @@
 //! | `a > b`  | [`gm_gt`] | `d >= e`       |
 //! | `a >= b` | [`gm_ge`] | `d > -e`       |
 //!
+//! The default fits every recorded trace (CLONE_SPEC numbers, Confirmed (recorder)): a tolerance
+//! `t` with `9e-14 < t <= 1e-13` (`traces/little-trap/num-eps-slip-b.csv` rows 50-51,
+//! `num-eps-slip-c.csv` rows 50-100), and "g equals 0.8" passes for `0.8000000000000004`
+//! (`traces/go-the-jun-g-world/num-eps-alpha.csv` rows 44-45). The real runner, the exact `t` and
+//! whether its edge is inclusive stay OPEN (N1).
+//!
 //! Under `CompareMode::Exact` they are the IEEE comparisons. In both modes every comparison is
 //! false when an operand is NaN (or `d` is NaN, as for `inf - inf` in epsilon mode), `!=`
 //! included, so `gm_ne` is not quite `!gm_eq`. How the real runner compares NaN is OPEN.
@@ -99,6 +105,10 @@ pub fn gm_ge(a: Real, b: Real, r: &NumRules) -> bool {
 
 /// GML truthiness of a real, for `if x` in ported code (N2): `x > 0.5` under `Truth::GtHalf`,
 /// `x >= 0.5` under `Truth::GeHalf` (the engine_rev 0 default). NaN is false.
+///
+/// The spec infers `> 0.5` from the manual's "rounded value 0 or less is false" with
+/// ties-to-even rounding; no trace has a fractional condition yet, so the engine_rev 0 default
+/// keeps the earlier `>= 0.5` until one does (N2).
 pub fn gm_bool(x: Real, r: &NumRules) -> bool {
     match r.truth {
         Truth::GtHalf => x.get() > HALF,

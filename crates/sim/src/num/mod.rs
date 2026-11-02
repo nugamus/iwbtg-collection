@@ -9,7 +9,7 @@
 //! - [`round`](mod@round): banker's rounding, integer conversion, `frac`, `sign`, `gm_min`/`gm_max`,
 //!   `repeat` counts, GML `mod`/`div`.
 //! - [`compare`]: GM8 comparisons and truthiness under `NumRules`.
-//! - [`conv`]: rule-dependent conversions (alarms, save bytes, `string()`), declared by WP0.
+//! - [`conv`]: rule-dependent conversions (alarms, save bytes, `string()`).
 //! - [`math`]: software `sin`, `cos`, `tan`, `atan2`, `sqrt`, `pow`, `exp`, `ln`.
 //! - [`trig`]: degree helpers, the exact-bits trig table, `point_direction` and friends.
 
@@ -46,8 +46,9 @@ pub use trig::{
 /// comparison use [`gm_eq`] and friends.
 ///
 /// `Hash` and `Serialize` use [`Real::canonical_bits`], so every NaN hashes and serializes as
-/// [`Real::CANONICAL_NAN_BITS`] whatever payload the platform produced. The state hash may
-/// therefore be built from either. Deserializing keeps the bits it reads.
+/// [`Real::CANONICAL_NAN_BITS`] whatever payload the platform produced. The state hash is BLAKE3
+/// over the postcard encoding (plan 10.1); `Hash` is only for test maps. Deserializing keeps the
+/// bits it reads.
 #[derive(Clone, Copy, Default, Deserialize)]
 #[serde(transparent)]
 pub struct Real(f64);
