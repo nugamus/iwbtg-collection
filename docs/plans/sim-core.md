@@ -518,6 +518,7 @@ pub fn perform_change(ctx: &mut Ctx, req: RoomRequest) -> Result<(), SimError>;
 The sim never touches files. The save is sim state; the client stores its bytes.
 
 ```rust
+// `flipped` is `global.reverse` for a `yflag` game (family B), the kid's flip state otherwise (#267).
 pub struct SaveSlot { pub room: RoomId, pub x: Real, pub y: Real, pub flipped: bool, pub facing: i8,
     pub difficulty: u8, pub deaths: u32, pub time: u32, pub bosses: u16, pub items: u16, pub clear: bool }
 pub enum SavedPosition { XyBase100Bytes, XyBase256Bytes, XyText2Dec, XyPrevious, FixedPoint, FloorNudge }
