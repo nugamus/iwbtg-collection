@@ -213,10 +213,15 @@ pub fn default_classes(b: Builtin) -> ClassMask {
     }
 }
 
-/// Classes that a kind's params pick (Design): water `variant` 2 and 3, vine `side`.
+/// Classes that a kind's params pick (Design): water `variant` 2 and 3, vine `side`, and a
+/// block with `kid_collides = false`, which has no class at all so the kid has no collision
+/// event with it (docs/format/builtins/block.md).
 pub fn param_classes(b: Builtin, params: &Params) -> Option<ClassMask> {
     let get = |k: &str| params.0.get(k);
     match b {
+        Builtin::Block if matches!(get("kid_collides"), Some(ParamValue::Bool(false))) => {
+            Some(ClassMask::NONE)
+        }
         Builtin::Water => match get("variant") {
             Some(ParamValue::Real(v)) if v.to_bits() == 2.0f64.to_bits() => Some(ClassMask::WATER2),
             Some(ParamValue::Real(v)) if v.to_bits() == 3.0f64.to_bits() => Some(ClassMask::WATER3),
@@ -302,6 +307,18 @@ mod tests {
         assert_eq!(
             kind_classes(Builtin::Platform, &Params::default(), ClassMask::SOLIDBLOCK),
             ClassMask::PLATFORM | ClassMask::BLOCK | ClassMask::SOLIDBLOCK
+        );
+        let mut b = Params::default();
+        assert_eq!(
+            kind_classes(Builtin::Block, &b, ClassMask::NONE),
+            ClassMask::BLOCK
+        );
+        b.0.insert("kid_collides".into(), ParamValue::Bool(false));
+        assert_eq!(kind_classes(Builtin::Block, &b, ClassMask::NONE), ClassMask::NONE);
+        assert_eq!(
+            kind_classes(Builtin::Block, &b, ClassMask::SOLIDBLOCK),
+            ClassMask::SOLIDBLOCK,
+            "counts_as still adds classes"
         );
         assert_eq!(legacy_role_classes("killer"), Some(ClassMask::KILLER));
         assert_eq!(legacy_role_classes("nope"), None);
