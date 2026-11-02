@@ -6,8 +6,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::{
-    block, blood, blood_emitter, bow, camera, difficulty_warp, game_over, kid_bullet, kid_start, killer,
-    save, spike, warp, world,
+    block, blood, blood_emitter, bow, camera, difficulty_warp, game_clear, game_over, kid_bullet, kid_start,
+    killer, music, save, spike, warp, world,
 };
 
 /// A built-in instance's state.
@@ -20,6 +20,26 @@ pub enum BuiltinState {
     World(world::WorldState),
     /// `kid_start` (WP6a).
     KidStart(kid_start::KidStartState),
+    /// `boss_gate` and `secret_item` (WP6b): the flag index.
+    Flag(u8),
+    /// `boss_item` (WP6b).
+    BossItem {
+        /// The boss flag index.
+        index: u8,
+        /// The boss kind it waits for.
+        watched: Option<crate::def::KindId>,
+    },
+    /// `item_viewer` (WP6b).
+    ItemViewer {
+        /// Shows a boss flag (else an item flag).
+        boss: bool,
+        /// The flag index.
+        index: u8,
+    },
+    /// `game_clear` (WP6b).
+    GameClear(game_clear::GameClearState),
+    /// `music` (WP6b).
+    Music(music::MusicState),
     /// `block` (WP6a).
     Block(block::BlockState),
     /// `spike` (WP6a).

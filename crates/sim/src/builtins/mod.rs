@@ -80,6 +80,38 @@ pub struct MechGlobals {
     pub items: u16,
 }
 
+impl MechGlobals {
+    /// `global.boss[i]` (bit `i` of `bosses`; `i` is 0 to 15).
+    pub fn boss(&self, i: u8) -> bool {
+        self.bosses & (1u16 << i) != 0
+    }
+
+    /// Sets `global.boss[i]`.
+    pub fn set_boss(&mut self, i: u8) {
+        self.bosses |= 1u16 << i;
+    }
+
+    /// `global.item[i]` (bit `i` of `items`; `i` is 0 to 15).
+    pub fn item(&self, i: u8) -> bool {
+        self.items & (1u16 << i) != 0
+    }
+
+    /// Sets `global.item[i]`.
+    pub fn set_item(&mut self, i: u8) {
+        self.items |= 1u16 << i;
+    }
+}
+
+/// A flag index param: a whole number 0 to 15 (the save slot holds 16 flags per word).
+pub(crate) fn flag_index(p: &Params, name: &str) -> Result<u8, ParamError> {
+    let v = param_real(p, name)?.ok_or_else(|| param_error(name, "is required"))?;
+    let n = warp::whole(v, name)?;
+    u8::try_from(n)
+        .ok()
+        .filter(|n| *n < 16)
+        .ok_or_else(|| param_error(name, "must be 0 to 15 (the save slot holds 16 flags)"))
+}
+
 /// Built-in effects for the client. Visual only: the sim never reads them back.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum BuiltinOutput {
