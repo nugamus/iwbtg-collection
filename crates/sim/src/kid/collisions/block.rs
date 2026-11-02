@@ -18,12 +18,14 @@
 
 use serde::Deserialize;
 
-use crate::collide::{move_contact_solid, query::place_free};
-use crate::def::physics::{AirJump, FlipKind};
+use crate::collide::move_contact_solid;
+use crate::collide::query::{Target, place_free, place_meeting};
+use crate::def::ClassMask;
+use crate::def::physics::{AirJump, BlockSlopeStep, FlipKind};
 use crate::error::SimError;
 use crate::kid::actions::common::{state, yflag};
 use crate::kid::api::refresh_air_jump;
-use crate::num::{Real, gm_ge, gm_gt, gm_le};
+use crate::num::{Real, gm_ge, gm_gt, gm_le, gm_lt};
 use crate::world::{Ctx, Flow, InstId};
 
 /// The collision runs this file implements, by their `physics.toml` names (snake case). Part
@@ -44,8 +46,22 @@ pub fn run(ctx: &mut Ctx, me: InstId, _other: InstId, run: &BlockRun) -> Result<
 }
 
 fn block_standard(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
-    let def = ctx.def;
-    let n = &ctx.rules.num;
+    check_flip(ctx, me)?;
+    horizontal(ctx, me, false)?;
+    vertical(ctx, me)?;
+    diagonal(ctx, me)
+}
+
+/// `block_standard` with the slope step of `[slope] block_step` in the horizontal part
+/// (`slope::SlopeRun::BlockSlopeStep`).
+pub(crate) fn block_slope_step(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+    check_flip(ctx, me)?;
+    horizontal(ctx, me, true)?;
+    vertical(ctx, me)?;
+    diagonal(ctx, me)
+}
+
+fn check_flip(ctx: &Ctx, me: InstId) -> Result<(), SimError> {
     // The `yflag` kid (family B) is the same object, mirrored; other flipped kids are WP5c's.
     let rev = yflag(ctx, &state(ctx, me)?) < 0;
     if state(ctx, me)?.flipped && !rev {
@@ -53,32 +69,87 @@ fn block_standard(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
             "kid collision block_standard: the flipped kid (5.3 flip rows, WP5b/WP5c)",
         ));
     }
-    let pos = |ctx: &Ctx| {
-        ctx.w
-            .get(me)
-            .map(|i| (i.m.x(), i.m.y(), i.m.hspeed(), i.m.vspeed()))
-    };
-    let missing = || SimError::invariant("block_standard: kid vanished");
+    Ok(())
+}
 
-    // 1. Horizontal contact.
-    let (x, y, hs, _) = pos(ctx).ok_or_else(missing)?;
-    if !place_free(ctx, me, x + hs, y)? {
-        // Family C's flipped kid reads `hspeed` 0 as right (`hspeed >= 0`), everyone else as left.
-        let right = if matches!(def.physics.flip.model, FlipKind::GravSign | FlipKind::SwapObject) && rev {
-            gm_ge(hs, Real::ZERO, n)
-        } else {
-            gm_gt(hs, Real::ZERO, n)
-        };
-        move_contact_solid(
-            ctx,
-            me,
-            Real::new(if right { 0.0 } else { 180.0 }),
-            Real::new(hs.get().abs()),
-        )?;
-        ctx.w.get_mut(me).ok_or_else(missing)?.m.set_hspeed(Real::ZERO)?;
+fn pos(ctx: &Ctx, me: InstId) -> Option<(Real, Real, Real, Real)> {
+    ctx.w
+        .get(me)
+        .map(|i| (i.m.x(), i.m.y(), i.m.hspeed(), i.m.vspeed()))
+}
+
+fn missing() -> SimError {
+    SimError::invariant("block_standard: kid vanished")
+}
+
+/// Step 1, horizontal contact. With `slope_step` the `[slope] block_step` rule applies: `free_spot`
+/// (rainbow) adds the step-up after the contact when the matching slope is `step` px ahead and the
+/// spot `step` up is free; `replace` (rori, fairy-tale) steps up instead of the contact when the
+/// shifted kid overlaps the matching slope.
+pub(crate) fn horizontal(ctx: &mut Ctx, me: InstId, slope_step: bool) -> Result<(), SimError> {
+    let def = ctx.def;
+    let n = &ctx.rules.num;
+    let rev = yflag(ctx, &state(ctx, me)?) < 0;
+    let (x, y, hs, _) = pos(ctx, me).ok_or_else(missing)?;
+    if place_free(ctx, me, x + hs, y)? {
+        return Ok(());
     }
-    // 2. Vertical contact.
-    let (x, y, _, vs) = pos(ctx).ok_or_else(missing)?;
+    let rules = &def.physics.slope;
+    let step = rules.step;
+    if slope_step && rules.block_step == BlockSlopeStep::Replace {
+        let up = if gm_lt(hs, Real::ZERO, n) {
+            Some((-step, ClassMask::SLOPE_MIRROR))
+        } else if gm_gt(hs, Real::ZERO, n) {
+            Some((step, ClassMask::SLOPE))
+        } else {
+            None
+        };
+        if let Some((dx, class)) = up
+            && place_meeting(ctx, me, x + hs, y, Target::Class(class))?
+        {
+            let i = ctx.w.get_mut(me).ok_or_else(missing)?;
+            i.m.set_x(x + dx)?;
+            i.m.set_y(y - step)?;
+            i.m.set_hspeed(Real::ZERO)?;
+            return Ok(());
+        }
+    }
+    // Family C's flipped kid reads `hspeed` 0 as right (`hspeed >= 0`), everyone else as left.
+    let right = if matches!(def.physics.flip.model, FlipKind::GravSign | FlipKind::SwapObject) && rev {
+        gm_ge(hs, Real::ZERO, n)
+    } else {
+        gm_gt(hs, Real::ZERO, n)
+    };
+    move_contact_solid(
+        ctx,
+        me,
+        Real::new(if right { 0.0 } else { 180.0 }),
+        Real::new(hs.get().abs()),
+    )?;
+    ctx.w.get_mut(me).ok_or_else(missing)?.m.set_hspeed(Real::ZERO)?;
+    if slope_step && rules.block_step == BlockSlopeStep::FreeSpot {
+        let (x, y, _, _) = pos(ctx, me).ok_or_else(missing)?;
+        let (dx, class) = if right {
+            (step, ClassMask::SLOPE)
+        } else {
+            (-step, ClassMask::SLOPE_MIRROR)
+        };
+        if place_meeting(ctx, me, x + dx, y, Target::Class(class))? && place_free(ctx, me, x + dx, y - step)?
+        {
+            let i = ctx.w.get_mut(me).ok_or_else(missing)?;
+            i.m.set_x(x + dx)?;
+            i.m.set_y(y - step)?;
+        }
+    }
+    Ok(())
+}
+
+/// Step 2, vertical contact.
+pub(crate) fn vertical(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+    let def = ctx.def;
+    let n = &ctx.rules.num;
+    let rev = yflag(ctx, &state(ctx, me)?) < 0;
+    let (x, y, _, vs) = pos(ctx, me).ok_or_else(missing)?;
     if !place_free(ctx, me, x, y + vs)? {
         // Landing is the contact in the gravity direction: down normally, up when reversed.
         let up = gm_le(vs, Real::ZERO, n);
@@ -100,8 +171,12 @@ fn block_standard(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
             i.m.set_gravity(Real::ZERO)?;
         }
     }
-    // 3. Diagonal.
-    let (x, y, hs, vs) = pos(ctx).ok_or_else(missing)?;
+    Ok(())
+}
+
+/// Step 3, diagonal.
+pub(crate) fn diagonal(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+    let (x, y, hs, vs) = pos(ctx, me).ok_or_else(missing)?;
     if !place_free(ctx, me, x + hs, y + vs)? {
         ctx.w.get_mut(me).ok_or_else(missing)?.m.set_hspeed(Real::ZERO)?;
     }

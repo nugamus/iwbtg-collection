@@ -1,0 +1,25 @@
+#:schema ../schema/v0/physics.schema.json
+# get-the-rainbow-feather (family A1, kid/A1.md "get-the-rainbow-feather"): rely's kid plus the
+# slopes. Its nanameblockL and nanameblockR are the classes `slope` and `slope_mirror`; the kid
+# climbs after a block contact, snaps down at the End Step and a slope within 2 px forces a single
+# jump. Ladders, ice and water of that game are listed by their own rows (not shown here).
+preset = "A1"
+
+[events]
+step = [
+  "gravity", "walk", "air_sprite", "fall_cap", "shoot", "jump", "slope_jump", "release", "vines",
+  "flip_swap", "platform_gravity_zero", "fade_in",
+]
+end_step = ["downhill_snap"]
+collisions = [
+  { with = "block", run = "block_slope_step" },
+  { with = "slope", run = "block_slope_step" },
+  { with = "slope_mirror", run = "block_slope_step" },
+  { with = "platform", run = "platform_standard" },
+  { with = "killer", run = "kill" },
+]
+
+[slope]
+block_step = "free_spot"
+downhill = "rainbow"
+jump_probe = 2.0

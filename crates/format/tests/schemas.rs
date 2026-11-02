@@ -212,6 +212,9 @@ fn the_family_b_physics_examples_validate() {
         "eat-the-new-year",
         "little-runner",
         "spook-house",
+        "rainbow",
+        "poronkusema",
+        "rori",
     ] {
         let path = format!("docs/format/examples/{name}-physics.toml");
         let text = fs::read_to_string(client_root().join(&path)).unwrap();

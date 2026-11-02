@@ -465,8 +465,21 @@ fn walk(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
             } else {
                 (false, Real::ZERO)
             };
+            // eat-the-new-year (`[slope] keep_hspeed`): a slope 1 px below on the downhill side
+            // (`slope` with Left or `slope_mirror` with Right) keeps the previous `hspeed`.
+            let keep = if p.slope.keep_hspeed {
+                let Some(i) = ctx.w.get(me) else { return Ok(()) };
+                let (x, y) = (i.m.x(), i.m.y());
+                let below = y + Real::ONE;
+                (h <= 0 && place_meeting(ctx, me, x, below, Target::Class(ClassMask::SLOPE))?)
+                    || (h >= 0 && place_meeting(ctx, me, x, below, Target::Class(ClassMask::SLOPE_MIRROR))?)
+            } else {
+                false
+            };
             let Some(i) = ctx.w.get_mut(me) else { return Ok(()) };
-            if !ice {
+            if keep {
+                // `hspeed` stays.
+            } else if !ice {
                 i.m.set_hspeed(run * real_i(h))?;
             } else {
                 let hs = i.m.hspeed();
@@ -554,6 +567,20 @@ fn air_sprite(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     } else {
         false
     };
+    // Rori and fairy-tale (`[slope] air_sprite_probe`): no fall sprite with a slope that close.
+    let sp = p.slope.air_sprite_probe;
+    let wall_near = wall_near
+        || (gm_gt(sp, Real::ZERO, n) && {
+            let Some(i) = ctx.w.get(me) else { return Ok(()) };
+            let (x, y) = (i.m.x(), i.m.y());
+            place_meeting(
+                ctx,
+                me,
+                x,
+                y + sp,
+                Target::Class(ClassMask::SLOPE | ClassMask::SLOPE_MIRROR),
+            )?
+        });
     let Some(i) = ctx.w.get_mut(me) else { return Ok(()) };
     let v = i.m.vspeed();
     let t = p.numbers.sprite_threshold;

@@ -13,7 +13,7 @@
         "create_defaults", "ensure_world", "create_bow", "first_play_save", "arm_play_timer",
         "gravity", "walk", "air_sprite", "fall_cap", "shoot", "jump", "release", "vines",
         "play_timer", "kill", "platform_gravity_zero", "fade_in", "stop_if_frozen2", "cancel_poll",
-        "ladder", "ladder_sprites", "ladder_jump_reset", "ice_temp_hspeed", "vine_probe", "suicide_press", "flip_grav", "flip_swap", "gravity_and_unstuck", "stop_if_frozen", "ad_nudge", "key_flags", "suicide_check", "sync_yflag", "player_reverse", "set_view_angle", "ensure_bow", "killer_check", "slope_b"
+        "ladder", "ladder_sprites", "ladder_jump_reset", "ice_temp_hspeed", "vine_probe", "suicide_press", "flip_grav", "flip_swap", "slope_jump", "downhill_snap", "gravity_and_unstuck", "stop_if_frozen", "ad_nudge", "key_flags", "suicide_check", "sync_yflag", "player_reverse", "set_view_angle", "ensure_bow", "killer_check", "slope_b"
       ]
     },
     "actions": { "type": "array", "items": { "$ref": "#/$defs/action" } },
@@ -23,7 +23,7 @@
         "kid", "kid_flipped", "kid_bullet", "block", "solidblock", "platform", "killer",
         "water1", "water2", "water3", "vine_l", "vine_r", "room_changer", "edge_warp", "save",
         "slip", "slope", "slope_wall", "ladder", "fake_block", "bullet_blocker", "trigger",
-        "trap_stopper", "moving_block", "conveyor", "param_zone", "bow", "blood"
+        "trap_stopper", "moving_block", "conveyor", "param_zone", "bow", "blood", "slope_mirror"
       ]
     },
     "classes": { "type": "array", "items": { "$ref": "#/$defs/class" } },
@@ -108,7 +108,7 @@
             "required": ["with", "run"],
             "properties": {
               "with": { "$ref": "#/$defs/class" },
-              "run": { "enum": ["block_standard", "platform_standard", "kill"] }
+              "run": { "enum": ["block_standard", "platform_standard", "kill", "block_slope_step", "slope_por_rise", "slope_yane"] }
             }
           }
         }
@@ -194,7 +194,18 @@
         "temp_zero_below": { "$ref": "#/$defs/real" }
       }
     },
-    "slope": { "type": "object", "additionalProperties": false },
+    "slope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "block_step": { "enum": ["none", "free_spot", "replace"] },
+        "step": { "$ref": "#/$defs/real" },
+        "downhill": { "enum": ["none", "por", "rainbow", "fairy_tale"] },
+        "jump_probe": { "$ref": "#/$defs/real" },
+        "air_sprite_probe": { "$ref": "#/$defs/real" },
+        "keep_hspeed": { "type": "boolean" }
+      }
+    },
     "ladder": {
       "type": "object",
       "additionalProperties": false,
