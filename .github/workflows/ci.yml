@@ -1,0 +1,49 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+jobs:
+  native:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup show   # installs the toolchain from rust-toolchain.toml
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --workspace --locked
+      - run: cargo clippy --workspace --tests --locked -- -D warnings
+      - run: cargo test --workspace --locked
+      - if: runner.os == 'Linux'
+        run: cargo fmt --all -- --check
+
+  wasm32:
+    runs-on: ubuntu-latest
+    env:
+      # Tests read fixtures through absolute paths, so the whole file system is visible to them.
+      CARGO_TARGET_WASM32_WASIP1_RUNNER: wasmtime run --dir=/
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - uses: bytecodealliance/actions/wasmtime/setup@v1
+      - run: cargo test -p iwbtg-sim -p iwbtg-format --target wasm32-wasip1 --locked
+      - run: cargo build -p iwbtg-sim -p iwbtg-format --target wasm32-unknown-unknown --locked
+
+  licenses:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check licenses
