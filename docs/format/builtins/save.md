@@ -16,4 +16,6 @@ A save point (mechanics `save`; kid specs "Saving"). The save is `save::save_now
 | `self_destroy_alarm` | real | none | Alarm 0 at Create destroys the point after this many ticks (LR object799). |
 | `blink` | bool | true | A save shows frame 1 with `image_speed` 0.017; Animation End goes back to frame 0 and stops. |
 
+**What a save stores as `flipped`.** `SaveSlot.flipped` is the game's own flip state. Games that flip by kind or by a kid flag store whether the kid was flipped; the load spawns the flipped kid kind when the game has one and puts the kid `restart.flipped_load_dy` lower. Games that flip by the `yflag` model (`[flip] model = "yflag"`, family B) store `global.reverse` there (kid/B.md Restart); the load writes it back to `global.reverse`, and never takes the flipped-kind and offset path, because family B has one kid kind. The two meanings never meet in one game, so there is one field. (`save::flip_by_kind` is the test; #267.)
+
 Handlers are declared from the kind's params. The Step, Collision and Key held handlers all run the same save code: games that save in Step or End Step (WAN, LEM, SPK) are OPEN until a trace shows a difference. The save sound and the particles (RBF) are the client's and the sound model's.
