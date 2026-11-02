@@ -33,7 +33,7 @@
 //! its values: `pause_delay` ticks after each toggle here); the effect of kaenbyou and
 //! eat-the-lemon's cheat-detection check (the spec gives the test, not what it does); whether
 //! the B timer counts in menu rooms and while dead (here: every Step); the sounds a mute or an
-//! unpause stops (`sound::stop_all`, WP10, which is not implemented yet).
+//! unpause stops (`sound::stop_all`, WP10; the model exists, this built-in does not call it yet).
 
 use serde::{Deserialize, Serialize};
 
