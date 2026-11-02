@@ -1,8 +1,21 @@
 //! Timing triggers and splits (docs/plans/sim-core.md 2.1 row 16, 9.4).
 //!
-//! Timing counts ticks, never rendered frames. Evaluated at tick row 16. WP0 declares; WP8b
-//! owns.
-#![allow(unused_variables, reason = "WP0 stub: WP8b fills the body")]
+//! Timing counts ticks, never rendered frames. Evaluated at tick row 16 (WP8b).
+//!
+//! The triggers form one ordered chain: `start`, then each stage in order, then `end`. A trigger
+//! fires at most once. Nothing fires before `start`. A stage is looked at only after the stage
+//! before it fired, so stages never fire out of order, and several triggers may fire in one tick
+//! (they are listed in chain order with the same tick). `end` may fire with stages still
+//! unreached; its index is still `stages.len() + 1`. After `end` fired, nothing fires.
+//!
+//! The tick of a split is `World::tick` after row 16's increment: the number of ticks run so far.
+//! So `run_start` fires at tick 1 (the first tick of a new game) and a run's time is
+//! `end.tick - start.tick`.
+//!
+//! Trigger conditions: `run_start` is true at once; `run_end` is true in the tick `game_clear`
+//! (or anything else) called [`raise_run_end`]; `enter_room(r)` is true while the world is in
+//! room `r` at row 16, which is the first tick after the room change (or the start of the run
+//! in that room) because the chain only looks at it once the trigger before it fired.
 
 use serde::{Deserialize, Serialize};
 
@@ -51,13 +64,18 @@ pub struct Split {
     pub tick: u64,
 }
 
-/// Timing state kept in `World::timing` (hashed and saved with the world). WP8b adds the fields
-/// it needs: whether the run started, the next stage to split, the end reached.
+/// Timing state kept in `World::timing` (hashed with the world).
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub struct TimingState {
     /// Set by [`raise_run_end`] (`game_clear` and anything else that ends the run); read and
     /// cleared by [`evaluate`] at tick row 16.
     pub run_end_raised: bool,
+    /// The `start` trigger fired.
+    pub started: bool,
+    /// How many stage triggers fired; the next one to look at.
+    pub stages_done: u16,
+    /// The `end` trigger fired.
+    pub ended: bool,
 }
 
 /// Raises the `run_end` trigger for this tick's row 16. The `game_clear` built-in (WP6b) calls
@@ -69,5 +87,45 @@ pub fn raise_run_end(w: &mut World) {
 /// Tick row 16: the splits whose trigger fired this tick. Updates `World::timing`, so a
 /// trigger fires once (a stage split is not repeated on later ticks in the same room).
 pub fn evaluate(w: &mut World, def: &GameDef) -> Result<Vec<Split>, SimError> {
-    unimplemented!("WP8b: timing::evaluate")
+    // A raise only counts for the tick it was made in.
+    let raised = std::mem::take(&mut w.timing.run_end_raised);
+    let mut out = Vec::new();
+    if w.timing.ended {
+        return Ok(out);
+    }
+    let timing = &def.timing;
+    let fired = |t: TimingTrigger, w: &World| match t {
+        TimingTrigger::RunStart => true,
+        TimingTrigger::RunEnd => raised,
+        TimingTrigger::EnterRoom(r) => w.room == r,
+    };
+    let tick = w.tick;
+    if !w.timing.started {
+        if !fired(timing.start, w) {
+            return Ok(out);
+        }
+        w.timing.started = true;
+        out.push(Split { index: 0, tick });
+    }
+    while let Some(stage) = timing.stages.get(usize::from(w.timing.stages_done)) {
+        if !fired(*stage, w) {
+            break;
+        }
+        w.timing.stages_done = w
+            .timing
+            .stages_done
+            .checked_add(1)
+            .ok_or_else(|| SimError::overflow("timing stages"))?;
+        out.push(Split {
+            index: w.timing.stages_done,
+            tick,
+        });
+    }
+    if fired(timing.end, w) {
+        w.timing.ended = true;
+        let index =
+            u16::try_from(timing.stages.len() + 1).map_err(|_| SimError::overflow("timing stages"))?;
+        out.push(Split { index, tick });
+    }
+    Ok(out)
 }

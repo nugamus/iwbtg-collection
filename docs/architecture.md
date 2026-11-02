@@ -38,14 +38,14 @@ One binary for agents and CI:
 - `iwbtg pkg hash <dir>`: prints the gameplay hash and content hash.
 - `iwbtg pkg upgrade <dir>`: migrates a package to the newest format version.
 - `iwbtg room show <dir> <room>`: prints an ASCII map of a room.
-- `iwbtg replay run <dir> <replay>`: headless run. Prints the tick count, splits and final state hash (roadmap Phase 3).
+- `iwbtg replay run <dir> <replay|.inputs> [--difficulty N] [--seed N]`: headless run from a new game. Prints three lines: `ticks: N`, `splits: <index>@<tick> ...` (or `none`) and `hash: <hex>` (roadmap Phase 3). An `.inputs` file runs frames 0 through its `end` frame; a `.iwbr` replay brings its own seed. Exit 2 when the sim halts, 3 when it reaches a work package that is not merged yet.
 - `iwbtg replay dump <replay>`: prints a replay as text.
 - `iwbtg replay verify <dir> <replay>`: what the server runs.
 - `iwbtg pkg check <dir> --trace-mode`: accepts research converter output; converter gaps are warnings that name the converter request (CR1-CR15).
 - `iwbtg trace run <pkg> <case> [-o ours.csv]`, `iwbtg trace diff <original.csv> <ours.csv>`, `iwbtg trace check <pkg>` (every case) and `iwbtg trace import <research-trace> <pkg>` (writes a case skeleton and prints its kind): see [traces](#comparing-traces-with-the-original).
 - Exit codes: 0 success, 1 a check failed (a trace differs, a package has errors), 2 the tool could not run (bad path or arguments), 3 the sim reached a work package that is not merged yet (the message names it).
 - `iwbtg profile <dir> --replay <file>`: peak script budget units and milliseconds per tick.
-- `iwbtg determinism report <corpus>`: runs the golden corpus and prints one hash list.
+- `iwbtg determinism report <corpus> [--check]`: runs the golden corpus (`crates/sim/tests/golden`) and prints one line per case: `name ticks status state_hash`. `--check` also compares with `<corpus>/expected.txt` and exits 1 on a difference. CI runs it on Windows, Linux and wasm32-wasip1 and requires byte-identical output; wasm32-unknown-unknown checks the same lines through `tests/golden_corpus.rs`.
 - `iwbtg script api-docs`: generates `docs/format/script-api.md` and `.d.rhai` stubs.
 
 ## Sim module layout
@@ -375,7 +375,7 @@ gravity,gravity_direction,friction,image_index,sprite_index,sprite_name,<game va
 | Unit tests | `num` (rounding, comparisons, trig table), `rng`, motion coupling, masks and bounding boxes, collision queries, input edges, replay round trip | `crates/sim`, `crates/format` | every `cargo test` |
 | Script conformance | Every IWS math function over 10,000 fixed inputs, every operator and overload, operation-count fixtures | `crates/sim/tests/script_conformance/` | every CI target |
 | Validator fixtures | A set of broken packages, each expecting one specific error with file, line and column | `crates/format/tests/invalid/` | every `cargo test` |
-| Engine test rooms | Small packages we make ourselves (no creator content) exercising each built-in, with golden hash lists | `crates/sim/tests/golden/` | every CI target |
+| Engine test rooms | Small worlds we make ourselves (no creator content, built with `GameDefBuilder`), one pinned state hash per case in `expected.txt`. A deliberate sim change re-pins it: `UPDATE_GOLDEN=1 cargo test -p iwbtg-sim --test golden_corpus`. More cases per built-in come with their work packages | `crates/sim/tests/golden/` | every CI target |
 | Trace tests | Every research trace case, run and diffed bit for bit | research path given by the `IWBTG_RESEARCH` environment variable; skipped when absent | locally, in a research CI job, before ranking a game |
 | Replay corpus | Each ported game's full-clear replay, plus every stored leaderboard replay once Phase 8 exists | games repo, server | every sim change |
 | Cross-platform equality | `iwbtg determinism report` on golden rooms, conformance suite and replay corpus on `x86_64-pc-windows-msvc`, `x86_64-unknown-linux-gnu`, `wasm32-wasip1` under wasmtime and `wasm32-unknown-unknown` through wasm-bindgen-test in Node. A final job requires all hash lists to be byte-identical. | GitHub Actions matrix | every PR touching `sim` or `format` |

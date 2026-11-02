@@ -4,9 +4,9 @@
 //! `replay`.
 
 mod case;
+mod determinism_cmd;
 mod import;
 mod pkg_cmd;
-#[allow(dead_code, reason = "WP0 scaffold: WP8b fills the command")]
 mod replay_cmd;
 mod trace_cmd;
 
@@ -42,6 +42,9 @@ enum Command {
     /// Headless replays.
     #[command(subcommand)]
     Replay(ReplayCommand),
+    /// Cross-platform equality checks.
+    #[command(subcommand)]
+    Determinism(DeterminismCommand),
 }
 
 #[derive(Subcommand)]
@@ -123,6 +126,18 @@ enum PkgCommand {
 }
 
 #[derive(Subcommand)]
+enum DeterminismCommand {
+    /// Runs the golden corpus and prints one line per case: name, ticks, status, state hash.
+    Report {
+        /// The golden folder (crates/sim/tests/golden): holds `expected.txt`.
+        corpus: PathBuf,
+        /// Also compare with `<corpus>/expected.txt`; exit 1 on a difference.
+        #[arg(long)]
+        check: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum ReplayCommand {
     /// Runs a replay or `.inputs` file headless and prints ticks, splits and the final hash.
     Run(replay_cmd::ReplayRunArgs),
@@ -174,6 +189,9 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             Ok(true)
         }
         Command::Pkg(PkgCommand::Check { pkg, trace_mode }) => pkg_cmd::main(&pkg, trace_mode),
+        Command::Determinism(DeterminismCommand::Report { corpus, check }) => {
+            determinism_cmd::main(&corpus, check)
+        }
         Command::Replay(ReplayCommand::Run(args)) => {
             replay_cmd::main(&args)?;
             Ok(true)

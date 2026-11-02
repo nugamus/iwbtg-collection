@@ -1277,8 +1277,9 @@ fn probe_act(
             i.m.set_y(y)
         })?,
         ProbeAct::StartTimeline(tl, pos) => {
+            let def = ctx.def;
             if let Some(inst) = ctx.w.get_mut_unmoved(me) {
-                timeline::start(&mut inst.timeline, tl, pos)?;
+                timeline::start_with_def(&mut inst.timeline, def, tl, pos)?;
             }
         }
     }

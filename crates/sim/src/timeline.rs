@@ -50,6 +50,25 @@ pub fn start(run: &mut Option<TimelineRun>, timeline: TimelineId, position: Real
     Ok(())
 }
 
+/// [`start`], then sets `timeline_loop` when the def's timeline has `loop = true`. Starters that
+/// have the game def (trigger actions, the script host) call this one.
+pub fn start_with_def(
+    run: &mut Option<TimelineRun>,
+    def: &crate::def::GameDef,
+    timeline: TimelineId,
+    position: Real,
+) -> Result<(), SimError> {
+    start(run, timeline, position)?;
+    let flagged = timeline
+        .index()
+        .and_then(|i| def.timelines.get(i))
+        .is_some_and(|t| t.looping);
+    if flagged && let Some(r) = run.as_mut() {
+        r.looping = true;
+    }
+    Ok(())
+}
+
 /// The run's timeline id and whether it still runs, for checks between moments.
 fn current(ctx: &Ctx, me: InstId) -> Option<(TimelineId, bool)> {
     let inst = ctx.w.get(me).filter(|i| i.alive && i.active)?;
