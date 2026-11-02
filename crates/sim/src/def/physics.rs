@@ -553,6 +553,8 @@ pub struct BulletRules {
 pub enum DeathStep {
     /// The death sound. Not played yet (#231).
     Sound,
+    /// Family B: creates the `death_sound` engine object (music fade, death sound a tick later).
+    DeathSound,
     /// A blood emitter at the kid's position.
     BloodEmitter,
     /// Destroy the kid.

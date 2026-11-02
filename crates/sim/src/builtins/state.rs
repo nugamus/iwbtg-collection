@@ -6,9 +6,9 @@
 use serde::{Deserialize, Serialize};
 
 use super::{
-    block, blood, blood_emitter, bow, camera, conveyor, difficulty_warp, drop_platform, edge_warp,
-    fake_block, game_clear, game_over, jump_refresher, kid_bullet, kid_param_zone, kid_start, killer,
-    moving_platform, music, save, spike, spring, trap, trigger, warp, water, world,
+    block, blood, blood_emitter, bow, camera, conveyor, death_sound, difficulty_warp, drop_platform,
+    edge_warp, fake_block, game_clear, game_over, jump_refresher, kid_bullet, kid_param_zone, kid_start,
+    killer, moving_platform, music, save, spike, spring, trap, trigger, warp, water, world,
 };
 
 /// A built-in instance's state.
@@ -41,6 +41,8 @@ pub enum BuiltinState {
     GameClear(game_clear::GameClearState),
     /// `music` (WP6b).
     Music(music::MusicState),
+    /// `death_sound` (family B death).
+    DeathSound(death_sound::DeathSoundState),
     /// `drop_platform` (WP6b).
     DropPlatform(drop_platform::DropState),
     /// `gravity_flip` (WP6b): flips up.

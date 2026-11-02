@@ -13,6 +13,7 @@ pub mod blood;
 pub mod blood_emitter;
 pub mod bow;
 pub mod camera;
+pub mod death_sound;
 pub mod difficulty_warp;
 pub mod game_over;
 pub mod kid_bullet;
@@ -306,6 +307,7 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
         Builtin::BulletBlocker => bullet_blocker::on_event(ctx, me, ev),
         Builtin::Slope => slope::on_event(ctx, me, ev),
         Builtin::Music => music::on_event(ctx, me, ev),
+        Builtin::DeathSound => death_sound::on_event(ctx, me, ev),
         Builtin::BossGate => boss_gate::on_event(ctx, me, ev),
         Builtin::BossItem => boss_item::on_event(ctx, me, ev),
         Builtin::SecretItem => secret_item::on_event(ctx, me, ev),
@@ -364,6 +366,7 @@ pub fn event_set(b: Builtin, kind: &KindDef) -> EventSet {
         Builtin::BulletBlocker => bullet_blocker::event_set(kind),
         Builtin::Slope => slope::event_set(kind),
         Builtin::Music => music::event_set(kind),
+        Builtin::DeathSound => death_sound::event_set(kind),
         Builtin::BossGate => boss_gate::event_set(kind),
         Builtin::BossItem => boss_item::event_set(kind),
         Builtin::SecretItem => secret_item::event_set(kind),
@@ -419,6 +422,7 @@ pub fn param_specs(b: Builtin) -> &'static [ParamSpec] {
         Builtin::BulletBlocker => bullet_blocker::param_specs(),
         Builtin::Slope => slope::param_specs(),
         Builtin::Music => music::param_specs(),
+        Builtin::DeathSound => death_sound::param_specs(),
         Builtin::BossGate => boss_gate::param_specs(),
         Builtin::BossItem => boss_item::param_specs(),
         Builtin::SecretItem => secret_item::param_specs(),
@@ -474,6 +478,7 @@ pub fn init_state(b: Builtin, params: &Params) -> Result<BuiltinState, ParamErro
         Builtin::BulletBlocker => bullet_blocker::init_state(params),
         Builtin::Slope => slope::init_state(params),
         Builtin::Music => music::init_state(params),
+        Builtin::DeathSound => death_sound::init_state(params),
         Builtin::BossGate => boss_gate::init_state(params),
         Builtin::BossItem => boss_item::init_state(params),
         Builtin::SecretItem => secret_item::init_state(params),

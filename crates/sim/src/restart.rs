@@ -167,6 +167,9 @@ pub fn boot_step(ctx: &mut Ctx) -> Result<Flow, SimError> {
 /// hold, because the load creates the kid before it reads the save (kid/B.md Restart, "stale
 /// `reverse`"); nothing here touches it.
 fn kid_steps_before(ctx: &mut Ctx, steps: crate::def::RetryKidSteps) -> Result<(), SimError> {
+    if steps.release_death_sound {
+        crate::builtins::death_sound::release(ctx)?;
+    }
     if steps.add_time > 0 {
         ctx.w.engine.run.add_time(steps.add_time)?;
     }

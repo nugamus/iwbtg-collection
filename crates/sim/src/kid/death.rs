@@ -91,6 +91,9 @@ pub fn kill(ctx: &mut Ctx, kid: InstId, _cause: KillCause) -> Result<Flow, SimEr
     for step in &rules.order {
         match step {
             DeathStep::Sound => {} // #231
+            DeathStep::DeathSound => {
+                ctx.spawn_engine(EngineKind::DeathSound, x, y, SpawnInit::default())?;
+            }
             DeathStep::BloodEmitter => {
                 let mut init = SpawnInit::default();
                 init.params.0.insert("flipped".into(), ParamValue::Bool(flipped));

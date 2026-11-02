@@ -139,6 +139,7 @@ fn b_retry(def: &mut GameDef) {
         save_death_time: true,
         clear_frozen: true,
         reset_jump_values: false,
+        release_death_sound: false,
     };
 }
 

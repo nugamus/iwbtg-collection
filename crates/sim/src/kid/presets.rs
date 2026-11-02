@@ -377,7 +377,7 @@ fn b() -> PhysicsProfile {
     p.platform.reversed_snap = r(24.0);
     p.flip.model = FlipKind::Yflag;
     p.death.order = vec![
-        DeathStep::Sound,
+        DeathStep::DeathSound,
         DeathStep::BloodEmitter,
         DeathStep::GameOver,
         DeathStep::DestroyAllKids,

@@ -344,7 +344,7 @@ pub struct EngineSection {
 }
 
 /// Engine role names, in `EngineKind` order.
-pub const ENGINE_ROLES: [&str; 9] = [
+pub const ENGINE_ROLES: [&str; 10] = [
     "world",
     "kid",
     "kid_flipped",
@@ -354,6 +354,7 @@ pub const ENGINE_ROLES: [&str; 9] = [
     "blood_emitter",
     "game_over",
     "playerface",
+    "death_sound",
 ];
 
 /// `float_model` values.
@@ -472,6 +473,9 @@ pub struct KidStepsSection {
     /// Reset the new kid's jump values (showdown).
     #[serde(default)]
     pub reset_jump_values: Option<bool>,
+    /// Stop the death sound and restore the music volume before the retry (B).
+    #[serde(default)]
+    pub release_death_sound: Option<bool>,
 }
 
 /// Restart kinds (plan 4.3).
@@ -570,6 +574,7 @@ impl RestartSection {
             m.kid_steps.save_death_time = k.save_death_time.unwrap_or(false);
             m.kid_steps.clear_frozen = k.clear_frozen.unwrap_or(false);
             m.kid_steps.reset_jump_values = k.reset_jump_values.unwrap_or(false);
+            m.kid_steps.release_death_sound = k.release_death_sound.unwrap_or(false);
         }
         m
     }

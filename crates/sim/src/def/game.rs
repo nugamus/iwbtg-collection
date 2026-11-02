@@ -139,6 +139,8 @@ pub enum EngineKind {
     GameOver,
     /// Playerface.
     Playerface,
+    /// Family B `objDeathSound` (the `death_sound` death step creates it).
+    DeathSound,
 }
 
 /// How the game retries after R (plan 4.3). Behavior in `restart.rs` (WP4b); the `world`
@@ -175,6 +177,9 @@ pub struct RetryKidSteps {
     /// After the new kid exists: reset its jump values, speeds and jump flags
     /// (`kid::api::reset_jump_values`, showdown's loadGame).
     pub reset_jump_values: bool,
+    /// Before the retry destroys anything: every `death_sound` stops its sound, restores the music
+    /// volume and is destroyed (B, kid/B.md Restart 2).
+    pub release_death_sound: bool,
 }
 
 impl Default for RestartModel {
