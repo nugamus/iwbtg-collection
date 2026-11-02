@@ -495,6 +495,11 @@ impl Iws {
             .call_fn::<T>(&mut scope, ast, name, args)
             .map_err(|e| script_error(&e))
     }
+
+    /// The Rhai engine, read-only, for `iwbtg script api-docs` (it lists the registered API).
+    pub fn rhai_engine(&self) -> &Engine {
+        &self.engine
+    }
 }
 
 /// A Rhai error as a [`ScriptError`] with its position; budget exhaustion has its own message.
