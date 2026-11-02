@@ -192,6 +192,24 @@ pub struct KidEvents {
     pub alarms: Vec<KidAlarm>,
     /// Key handlers (`{ action = "suicide", on = "press", run = ["kill"] }`).
     pub keys: Vec<KidKey>,
+    /// What happens at the room edge.
+    pub boundary: BoundaryModel,
+}
+
+/// `events.boundary`: how the kid handles the room edge (plan 5.3 edge row).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BoundaryModel {
+    /// Nothing: the kid is not told about the edge.
+    #[default]
+    None,
+    /// Intersect Boundary tests the origin: outside the room (strictly) kills the kid unless an
+    /// `edge_warp` overlaps it, which warps it; then the kid wraps to the opposite edge (A1).
+    IntersectOrigin,
+    /// Outside Room kills the kid unless a room changer overlaps (family B, WP5b).
+    OutsideRoomKill,
+    /// The origin test runs in End Step (WP5c).
+    EndStepOrigin,
 }
 
 /// One `events.alarms` row.
@@ -583,7 +601,7 @@ draft_section! {
     KidEventsDraft => KidEvents {
         create: Vec<KidAction>, room_start: Vec<KidAction>, step: Vec<KidAction>,
         end_step: Vec<KidAction>, collisions: Vec<KidCollision>, alarms: Vec<KidAlarm>,
-        keys: Vec<KidKey>,
+        keys: Vec<KidKey>, boundary: BoundaryModel,
     }
 }
 draft_section! {
