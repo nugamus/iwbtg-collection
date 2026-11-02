@@ -1,0 +1,402 @@
+{
+  "$defs": {
+    "ActionFile": {
+      "description": "One room creation action (plan 4.2 step 6), `{ do = \"...\", ... }`.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "`global.<var> = value`.",
+          "properties": {
+            "do": {
+              "const": "set_global",
+              "type": "string"
+            },
+            "value": {
+              "description": "A number, string or boolean (true is 1)."
+            },
+            "var": {
+              "description": "Global name.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "do",
+            "var",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "`instance_create(x, y, kind)`.",
+          "properties": {
+            "do": {
+              "const": "spawn",
+              "type": "string"
+            },
+            "kind": {
+              "description": "Kind.",
+              "type": "string"
+            },
+            "params": {
+              "additionalProperties": true,
+              "default": {},
+              "description": "Params of the new instance.",
+              "type": "object"
+            },
+            "x": {
+              "$ref": "#/$defs/Number",
+              "description": "Position."
+            },
+            "y": {
+              "$ref": "#/$defs/Number",
+              "description": "Position."
+            }
+          },
+          "required": [
+            "do",
+            "kind",
+            "x",
+            "y"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "The engine's `loadGame` (R23).",
+          "properties": {
+            "do": {
+              "const": "load_game",
+              "type": "string"
+            }
+          },
+          "required": [
+            "do"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "`instance_destroy()` (R24: `Unsupported` until the spec says which instance is self).",
+          "properties": {
+            "do": {
+              "const": "destroy_self",
+              "type": "string"
+            }
+          },
+          "required": [
+            "do"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "InstanceShape": {
+      "additionalProperties": true,
+      "description": "One entry of `instances` in a room file. Keys other than the common ones are params of the\nkind, checked against the kind's own param list at load.",
+      "properties": {
+        "angle": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`image_angle`."
+        },
+        "group": {
+          "description": "Group tag, for triggers and scripts.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "description": "Kind: a built-in name, or `@<object id>`.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Instance name, for warps and scripts.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "run": {
+          "description": "`[columns, rows]`: expands into a grid of identical instances.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "step": {
+          "description": "`[dx, dy]` spacing of the grid; default `[32, 32]`.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "x": {
+          "$ref": "#/$defs/Number",
+          "description": "Position of the first instance."
+        },
+        "xscale": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`image_xscale`."
+        },
+        "y": {
+          "$ref": "#/$defs/Number",
+          "description": "Position of the first instance."
+        },
+        "yscale": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`image_yscale`."
+        }
+      },
+      "required": [
+        "kind",
+        "x",
+        "y"
+      ],
+      "type": "object"
+    },
+    "Number": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "bits": {
+              "pattern": "^[0-9a-fA-F]{16}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "bits"
+          ],
+          "type": "object"
+        }
+      ],
+      "description": "A number, or { bits = \"<16 hex digits of an IEEE double>\" } for a constant that must match bit for bit."
+    },
+    "RoleName": {
+      "description": "A room role (`role` in room files, `excluded_roles` here).",
+      "oneOf": [
+        {
+          "const": "boot",
+          "description": "Boot room.",
+          "type": "string"
+        },
+        {
+          "const": "title",
+          "description": "Title.",
+          "type": "string"
+        },
+        {
+          "const": "menu",
+          "description": "Menu.",
+          "type": "string"
+        },
+        {
+          "const": "select",
+          "description": "Difficulty or stage select.",
+          "type": "string"
+        },
+        {
+          "const": "play",
+          "description": "Gameplay.",
+          "type": "string"
+        }
+      ]
+    },
+    "ViewFile": {
+      "additionalProperties": false,
+      "description": "One `[[views]]` entry.",
+      "properties": {
+        "border": {
+          "description": "Horizontal and vertical border; default 32, 32.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "follow": {
+          "default": null,
+          "description": "Kind to follow.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "port": {
+          "description": "Port on the screen: x, y, width, height; default the view's size at (0, 0).",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "speed": {
+          "description": "Horizontal and vertical speed limits; default -1, -1 (no limit).",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "view": {
+          "description": "View in the room: x, y, width, height.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        },
+        "visible": {
+          "default": false,
+          "description": "Visible when the room starts.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "view"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "background": {
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "background_color": {
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "backgrounds": {
+      "default": [],
+      "items": true,
+      "type": "array"
+    },
+    "file_speed": {
+      "default": null,
+      "format": "uint32",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "instances": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/InstanceShape"
+      },
+      "type": "array"
+    },
+    "music": {
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "on_create": {
+      "items": {
+        "$ref": "#/$defs/ActionFile"
+      },
+      "type": "array"
+    },
+    "persistent": {
+      "default": false,
+      "type": "boolean"
+    },
+    "role": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RoleName"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "size": {
+      "items": {
+        "format": "uint32",
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+    },
+    "views": {
+      "items": {
+        "$ref": "#/$defs/ViewFile"
+      },
+      "type": "array"
+    },
+    "views_enabled": {
+      "default": false,
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "size"
+  ],
+  "title": "IWBTG rooms/<id>.toml (format v0)",
+  "type": "object"
+}

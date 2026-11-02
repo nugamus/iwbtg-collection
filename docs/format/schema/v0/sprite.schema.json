@@ -1,0 +1,118 @@
+{
+  "$defs": {
+    "Number": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "bits": {
+              "pattern": "^[0-9a-fA-F]{16}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "bits"
+          ],
+          "type": "object"
+        }
+      ],
+      "description": "A number, or { bits = \"<16 hex digits of an IEEE double>\" } for a constant that must match bit for bit."
+    },
+    "RawCollision": {
+      "enum": [
+        "precise",
+        "rect",
+        "disk",
+        "diamond",
+        "none"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "alpha_tolerance": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Number"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "bbox": {
+      "default": null,
+      "items": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "collision": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RawCollision"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "frame_size": {
+      "items": {
+        "format": "uint32",
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+    },
+    "frames": {
+      "format": "uint16",
+      "maximum": 65535,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "mask": {
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "origin": {
+      "items": {
+        "format": "int32",
+        "type": "integer"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+    },
+    "separate_masks": {
+      "default": null,
+      "type": [
+        "boolean",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "frames",
+    "frame_size",
+    "origin"
+  ],
+  "title": "IWBTG sprites/<id>.toml (format v0)",
+  "type": "object"
+}
