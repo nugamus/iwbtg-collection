@@ -254,6 +254,11 @@
           "const": "suicide_press",
           "description": "Step 10: the Suicide key pressed (not held) runs `killPlayer`, when not frozen.",
           "type": "string"
+        },
+        {
+          "const": "teleport_to_start",
+          "description": "Key C pressed (kid/C.md \"Key C pressed\"): the kid moves to the top-left of the\n`kid_start` marker (17 px left of and 23 px above the normal spawn). Speeds, `djump` and\nthe room are unchanged; frozen does not gate it. Nothing without a marker in the room.\nListed under `events.keys` for the client action `extra1`.",
+          "type": "string"
         }
       ]
     },
