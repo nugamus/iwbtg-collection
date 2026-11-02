@@ -328,3 +328,10 @@ pub fn reset_jump_values(ctx: &mut Ctx, kid: InstId) -> Result<(), SimError> {
     i.m.set_vspeed(Real::ZERO)?;
     Ok(())
 }
+
+/// `playerReverse` on `kid` (family B, `flip.model = "yflag"`): `global.reverse` toggles, `yflag`
+/// negates, `y` moves 4 times the new `yflag`, `curJumps` 1, `vspeed` 0. The gravity arrows call
+/// this from their Alarm 1.
+pub fn player_reverse(ctx: &mut Ctx, kid: InstId) -> Result<(), SimError> {
+    super::actions::b::player_reverse(ctx, kid)
+}
