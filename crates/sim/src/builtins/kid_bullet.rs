@@ -31,8 +31,16 @@ use crate::world::{Ctx, Flow, InstId};
 const CHECKS: &[&str] = &["before_move", "collision_destroy", "stop_and_die"];
 
 const SPECS: &[ParamSpec] = &[
-    ParamSpec { name: "life", ty: ParamType::Real, required: false },
-    ParamSpec { name: "block_check", ty: ParamType::Enum(CHECKS), required: false },
+    ParamSpec {
+        name: "life",
+        ty: ParamType::Real,
+        required: false,
+    },
+    ParamSpec {
+        name: "block_check",
+        ty: ParamType::Enum(CHECKS),
+        required: false,
+    },
 ];
 
 /// How a block stops the bullet.

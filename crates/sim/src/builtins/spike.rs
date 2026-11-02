@@ -24,12 +24,36 @@ use crate::world::{Ctx, Flow, InstId};
 const DIRS: &[&str] = &["up", "down", "left", "right"];
 
 const SPECS: &[ParamSpec] = &[
-    ParamSpec { name: "dir", ty: ParamType::Enum(DIRS), required: false },
-    ParamSpec { name: "size", ty: ParamType::Real, required: false },
-    ParamSpec { name: "depth", ty: ParamType::Real, required: false },
-    ParamSpec { name: "visible", ty: ParamType::Bool, required: false },
-    ParamSpec { name: "destroys_bullets", ty: ParamType::Bool, required: false },
-    ParamSpec { name: "auto_rotate", ty: ParamType::Bool, required: false },
+    ParamSpec {
+        name: "dir",
+        ty: ParamType::Enum(DIRS),
+        required: false,
+    },
+    ParamSpec {
+        name: "size",
+        ty: ParamType::Real,
+        required: false,
+    },
+    ParamSpec {
+        name: "depth",
+        ty: ParamType::Real,
+        required: false,
+    },
+    ParamSpec {
+        name: "visible",
+        ty: ParamType::Bool,
+        required: false,
+    },
+    ParamSpec {
+        name: "destroys_bullets",
+        ty: ParamType::Bool,
+        required: false,
+    },
+    ParamSpec {
+        name: "auto_rotate",
+        ty: ParamType::Bool,
+        required: false,
+    },
 ];
 
 /// A spike's per-instance settings.
@@ -63,7 +87,10 @@ pub fn param_specs() -> &'static [ParamSpec] {
 /// `destroys_bullets`.
 pub fn event_set(kind: &KindDef) -> EventSet {
     let mut set = EventSet::default();
-    if matches!(kind.params.0.get("destroys_bullets"), Some(ParamValue::Bool(true))) {
+    if matches!(
+        kind.params.0.get("destroys_bullets"),
+        Some(ParamValue::Bool(true))
+    ) {
         set.collisions.push(ClassMask::KID_BULLET);
     }
     set

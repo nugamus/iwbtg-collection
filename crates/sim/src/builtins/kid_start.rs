@@ -28,13 +28,41 @@ const CREATES: &[&str] = &["player", "player_or_player2"];
 const SHIFT_AT: &[&str] = &["create", "room_start"];
 
 const SPECS: &[ParamSpec] = &[
-    ParamSpec { name: "offset_x", ty: ParamType::Real, required: false },
-    ParamSpec { name: "offset_y", ty: ParamType::Real, required: false },
-    ParamSpec { name: "flipped_offset_x", ty: ParamType::Real, required: false },
-    ParamSpec { name: "flipped_offset_y", ty: ParamType::Real, required: false },
-    ParamSpec { name: "creates", ty: ParamType::Enum(CREATES), required: false },
-    ParamSpec { name: "grav_gated", ty: ParamType::Bool, required: false },
-    ParamSpec { name: "shift_at", ty: ParamType::Enum(SHIFT_AT), required: false },
+    ParamSpec {
+        name: "offset_x",
+        ty: ParamType::Real,
+        required: false,
+    },
+    ParamSpec {
+        name: "offset_y",
+        ty: ParamType::Real,
+        required: false,
+    },
+    ParamSpec {
+        name: "flipped_offset_x",
+        ty: ParamType::Real,
+        required: false,
+    },
+    ParamSpec {
+        name: "flipped_offset_y",
+        ty: ParamType::Real,
+        required: false,
+    },
+    ParamSpec {
+        name: "creates",
+        ty: ParamType::Enum(CREATES),
+        required: false,
+    },
+    ParamSpec {
+        name: "grav_gated",
+        ty: ParamType::Bool,
+        required: false,
+    },
+    ParamSpec {
+        name: "shift_at",
+        ty: ParamType::Enum(SHIFT_AT),
+        required: false,
+    },
 ];
 
 /// A kid start's settings.
@@ -67,7 +95,9 @@ pub fn event_set(_kind: &KindDef) -> EventSet {
 
 /// A new instance's state from its params.
 pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
-    let r = |name: &str, default: f64| Ok::<Real, ParamError>(param_real(params, name)?.unwrap_or(Real::new(default)));
+    let r = |name: &str, default: f64| {
+        Ok::<Real, ParamError>(param_real(params, name)?.unwrap_or(Real::new(default)))
+    };
     let offset = (r("offset_x", 17.0)?, r("offset_y", 23.0)?);
     let flipped_offset = (
         param_real(params, "flipped_offset_x")?.unwrap_or(offset.1),
@@ -123,7 +153,11 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
                 EngineKind::Kid
             };
             if s.shift_in_room_start {
-                let off = if role == EngineKind::KidFlipped { s.flipped_offset } else { s.offset };
+                let off = if role == EngineKind::KidFlipped {
+                    s.flipped_offset
+                } else {
+                    s.offset
+                };
                 x += off.0;
                 y += off.1;
             }

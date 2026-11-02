@@ -149,7 +149,10 @@ pub(crate) fn param_enum<'a>(
     match p.0.get(name) {
         None => Ok(None),
         Some(ParamValue::Str(s)) if allowed.contains(&s.as_str()) => Ok(Some(s.as_str())),
-        Some(_) => Err(param_error(name, &format!("must be one of {}", allowed.join(", ")))),
+        Some(_) => Err(param_error(
+            name,
+            &format!("must be one of {}", allowed.join(", ")),
+        )),
     }
 }
 
@@ -171,7 +174,7 @@ pub(crate) fn param_error(name: &str, message: &str) -> ParamError {
 }
 
 /// The built-in state of instance `me`, if it has one.
-pub(crate) fn state_of(ctx: &Ctx, me: InstId) -> Option<&BuiltinState> {
+pub(crate) fn state_of<'a>(ctx: &'a Ctx<'_>, me: InstId) -> Option<&'a BuiltinState> {
     match &ctx.w.get(me)?.state {
         KindState::Builtin(s) => Some(s),
         _ => None,
@@ -179,7 +182,7 @@ pub(crate) fn state_of(ctx: &Ctx, me: InstId) -> Option<&BuiltinState> {
 }
 
 /// The built-in state of instance `me`, for changing it.
-pub(crate) fn state_mut(ctx: &mut Ctx, me: InstId) -> Option<&mut BuiltinState> {
+pub(crate) fn state_mut<'a>(ctx: &'a mut Ctx<'_>, me: InstId) -> Option<&'a mut BuiltinState> {
     match &mut ctx.w.get_mut(me)?.state {
         KindState::Builtin(s) => Some(s),
         _ => None,

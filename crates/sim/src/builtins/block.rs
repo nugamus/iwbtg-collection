@@ -30,15 +30,51 @@ const MASKS: &[&str] = &[
 ];
 
 const SPECS: &[ParamSpec] = &[
-    ParamSpec { name: "mask", ty: ParamType::Enum(MASKS), required: false },
-    ParamSpec { name: "visible", ty: ParamType::Bool, required: false },
-    ParamSpec { name: "depth", ty: ParamType::Real, required: false },
-    ParamSpec { name: "solid", ty: ParamType::Bool, required: false },
-    ParamSpec { name: "kid_collides", ty: ParamType::Bool, required: false },
-    ParamSpec { name: "blood_sticks", ty: ParamType::Bool, required: false },
-    ParamSpec { name: "slip", ty: ParamType::Real, required: false },
-    ParamSpec { name: "visual_spawns_collider", ty: ParamType::Bool, required: false },
-    ParamSpec { name: "collider", ty: ParamType::Kind, required: false },
+    ParamSpec {
+        name: "mask",
+        ty: ParamType::Enum(MASKS),
+        required: false,
+    },
+    ParamSpec {
+        name: "visible",
+        ty: ParamType::Bool,
+        required: false,
+    },
+    ParamSpec {
+        name: "depth",
+        ty: ParamType::Real,
+        required: false,
+    },
+    ParamSpec {
+        name: "solid",
+        ty: ParamType::Bool,
+        required: false,
+    },
+    ParamSpec {
+        name: "kid_collides",
+        ty: ParamType::Bool,
+        required: false,
+    },
+    ParamSpec {
+        name: "blood_sticks",
+        ty: ParamType::Bool,
+        required: false,
+    },
+    ParamSpec {
+        name: "slip",
+        ty: ParamType::Real,
+        required: false,
+    },
+    ParamSpec {
+        name: "visual_spawns_collider",
+        ty: ParamType::Bool,
+        required: false,
+    },
+    ParamSpec {
+        name: "collider",
+        ty: ParamType::Kind,
+        required: false,
+    },
 ];
 
 /// A block's per-instance settings.
