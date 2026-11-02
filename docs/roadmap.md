@@ -99,8 +99,13 @@ Bosses and avoidance, long games, level editor, items from Potential Features.md
 - Research runs on native Windows. Originals run only when VirusTotal-clean, through the research gate (user decision, 2026-10-24).
 
 - Player-facing design (ranked stripped mode, mods, leaderboards, practice, UI, distribution, races): `docs/product.md` (user decisions, 2026-11-02). Ranked boards are stripped mode only; Play original keeps personal stats.
+- Porting, assets, engines, `.iwbz` package and editor: `docs/content.md` (user decisions, 2026-11-02).
 
 ## Open decisions
+
+- Script language: the user wants Rhai compared with Luau and a small language of our own before committing. See `docs/content.md`.
+- Porting pipeline efficiency: a deeper design pass on converter automation and the split between agents and humans.
+- Skin system: format, ranked rules, hosting.
 
 - Which 5 games ship bundled with the client.
 - Public project name (an original name replaces the working title before Phase 9).

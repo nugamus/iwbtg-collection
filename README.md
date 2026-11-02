@@ -20,6 +20,7 @@ docs/
   format/    Game package format spec.
   games/     Per-game design questions for the user.
   product.md Player-facing decisions: ranked mode, mods, leaderboards, UI.
+  content.md Porting, assets, engines, package file, level editor.
   server.md  Server stack and security rules.
   roadmap.md Order of work.
 Potential Features.md   Feature ideas, one line each.

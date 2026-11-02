@@ -1,6 +1,6 @@
 # 0001: Script language
 
-Status: Accepted by Claude on the user's behalf, 2026-10-24 (user may revisit).
+Status: Accepted by Claude on the user's behalf, 2026-10-24. Reopened by the user, 2026-11-02: compare with Luau and a small language of our own, with example boss scripts, before committing ([content](../content.md#package-file)).
 
 Related: [0002 data syntax](0002-data-syntax.md), [architecture](../architecture.md), [format v0](../format/v0.md), [format principles](../format/README.md).
 

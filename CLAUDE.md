@@ -11,7 +11,7 @@
 - Game packages are readable text and never contain compiled code. Custom behavior goes only through our sandboxed script language. See `docs/format/README.md`.
 - Each game keeps its own physics profile. Never "fix" a quirk or bug players rely on.
 - Input is a fixed set of client actions (left, right, jump, shoot, restart, ...). Games map actions; they never read raw keys.
-- Player-facing decisions (ranked stripped mode, mods, leaderboards, UI) are in `docs/product.md`. Follow them.
+- Player-facing decisions (ranked stripped mode, mods, leaderboards, UI) are in `docs/product.md`. Porting, assets, engines, the package file and the editor are in `docs/content.md`. Follow both.
 - Any per-game design question (stripped-mode cuts, run start and end, cutscenes, secrets, mods) goes into `docs/games/<game-id>.md` (see `docs/games/README.md`). Never guess the answer in code.
 - Design is a priority. No generic UI; match the IWBTG style and reuse art from ported games where it fits.
 - The user does not write Rust and tests every change. End each change with: exact build/run commands, steps to perform, and what to look for (expected vs. broken).
