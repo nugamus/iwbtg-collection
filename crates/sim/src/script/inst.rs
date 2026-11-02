@@ -14,6 +14,7 @@ use std::rc::Rc;
 use rhai::{Array, Dynamic, Engine, ImmutableString, Map};
 
 use super::api::runtime_error;
+use super::budget::cost;
 use super::host::Shared;
 use crate::alarm;
 use crate::def::{ClassMask, KindId, ParamValue, Params};
@@ -414,6 +415,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>) {
                     .map(|x| (x.rank, x.id))
                     .collect();
                 found.sort();
+                s.charge(cost("instances").1.saturating_mul(found.len() as u64))?;
                 Ok(found.into_iter().map(|(_, id)| Dynamic::from(Inst(id))).collect())
             })?
         });
@@ -457,6 +459,7 @@ fn host_tick(host: &super::host::Host) -> crate::rules::TickRules {
 }
 
 fn spawn(s: &Rc<Shared>, kind: &str, x: Real, y: Real, params: Params) -> Res<Inst> {
+    s.charge(cost("instance_create").0)?;
     let k = s.with_world(|_, host| kind_id(host, kind))??;
     let init = SpawnInit {
         params,
