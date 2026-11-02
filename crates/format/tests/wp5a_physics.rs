@@ -133,3 +133,21 @@ fn every_action_and_run_name_is_documented() {
         assert!(SCHEMA.contains(&format!("\"{name}\"")), "schema lacks \"{name}\"");
     }
 }
+
+#[test]
+fn the_boundary_model_is_read_and_documented() {
+    let mut d = draft("[events]\nboundary = \"none\"\n").expect("parses");
+    let p = presets::apply(&mut d);
+    assert_eq!(p.events.boundary, iwbtg_sim::def::physics::BoundaryModel::None);
+    let mut d = draft("").expect("parses");
+    assert_eq!(
+        presets::apply(&mut d).events.boundary,
+        iwbtg_sim::def::physics::BoundaryModel::IntersectOrigin,
+        "the A1 preset handles Intersect Boundary"
+    );
+    assert!(draft("[events]\nboundary = \"sideways\"\n").is_err());
+    for name in ["none", "intersect_origin", "outside_room_kill", "end_step_origin"] {
+        assert!(SCHEMA.contains(&format!("\"{name}\"")), "schema lacks {name}");
+        assert!(DOC.contains(&format!("`{name}`")), "physics.md lacks `{name}`");
+    }
+}
