@@ -1,30 +1,49 @@
-//! Built-in `slope` (mechanics; docs/plans/sim-core.md 6.1). Tier 2.
-//! WP0 creates the file; WP6b owns it.
-#![allow(unused_variables, reason = "WP0 stubs: WP6b fills the bodies")]
+//! Built-in `slope` (mechanics `slope`; docs/plans/sim-core.md 6.1; docs/format/builtins/
+//! slope.md). Tier 2. WP0 creates the file; WP6b owns it.
+//!
+//! No events: a slope is solid with a precise mask, and the climb and snap rules belong to the
+//! kid (the `[slope]` model of the physics profile). `shape` picks the class and the mask and
+//! `scale_x` mirrors it; both are applied at load. This file declares and checks the params.
 
-use super::{BuiltinState, ParamError, ParamSpec};
+use super::{BuiltinState, ParamError, ParamSpec, ParamType, param_enum, param_real};
 use crate::def::{KindDef, Params};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
 use crate::world::{Ctx, Flow, InstId};
 
+const SHAPES: &[&str] = &["rise_right", "rise_left", "precise_sprite"];
+
+const SPECS: &[ParamSpec] = &[
+    ParamSpec {
+        name: "shape",
+        ty: ParamType::Enum(SHAPES),
+        required: false,
+    },
+    ParamSpec {
+        name: "scale_x",
+        ty: ParamType::Real,
+        required: false,
+    },
+];
+
 /// The params this built-in accepts (`builtins::param_specs` routes here).
 pub fn param_specs() -> &'static [ParamSpec] {
-    unimplemented!("WP6b: slope::param_specs")
+    SPECS
 }
 
-/// What a kind with this base handles (`builtins::event_set` routes here).
-pub fn event_set(kind: &KindDef) -> EventSet {
-    unimplemented!("WP6b: slope::event_set")
+/// What a kind with this base handles: nothing.
+pub fn event_set(_kind: &KindDef) -> EventSet {
+    EventSet::default()
 }
 
-/// A new instance's state from its params (`builtins::init_state` routes here). Add a
-/// `BuiltinState` variant in `state.rs` for per-instance state, or return `Stateless`.
+/// A new instance's state: none; the params are checked.
 pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
-    unimplemented!("WP6b: slope::init_state")
+    param_enum(params, "shape", SHAPES)?;
+    param_real(params, "scale_x")?;
+    Ok(BuiltinState::Stateless)
 }
 
-/// Runs one event on an instance of this built-in (`builtins::on_event` routes here).
-pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimError> {
-    unimplemented!("WP6b: slope::on_event")
+/// A slope has no events.
+pub fn on_event(_ctx: &mut Ctx, _me: InstId, _ev: &EventKind) -> Result<Flow, SimError> {
+    Ok(Flow::Continue)
 }
