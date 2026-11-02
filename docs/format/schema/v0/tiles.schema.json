@@ -1,0 +1,112 @@
+{
+  "$defs": {
+    "Number": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "bits": {
+              "pattern": "^[0-9a-fA-F]{16}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "bits"
+          ],
+          "type": "object"
+        }
+      ],
+      "description": "A number, or { bits = \"<16 hex digits of an IEEE double>\" } for a constant that must match bit for bit."
+    },
+    "TileLayerShape": {
+      "additionalProperties": false,
+      "description": "One tile layer.",
+      "properties": {
+        "depth": {
+          "$ref": "#/$defs/Number",
+          "description": "GM tile layer depth."
+        },
+        "tiles": {
+          "description": "The tiles of the layer.",
+          "items": {
+            "$ref": "#/$defs/TileShape"
+          },
+          "type": "array"
+        },
+        "tileset": {
+          "description": "Tileset id (`backgrounds/<id>.png`).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "depth",
+        "tileset",
+        "tiles"
+      ],
+      "type": "object"
+    },
+    "TileShape": {
+      "additionalProperties": false,
+      "description": "One tile or a run of identical tiles.",
+      "properties": {
+        "run": {
+          "description": "`[columns, rows]`: a grid of the same tile.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "src": {
+          "description": "Source position in the tileset image.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "x": {
+          "$ref": "#/$defs/Number",
+          "description": "Position in the room."
+        },
+        "y": {
+          "$ref": "#/$defs/Number",
+          "description": "Position in the room."
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "src"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A tile file (`rooms/<room_id>.tiles.toml`). Decorative only: tiles never affect the sim.",
+  "properties": {
+    "layers": {
+      "description": "Layers, back to front by their `depth`.",
+      "items": {
+        "$ref": "#/$defs/TileLayerShape"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "layers"
+  ],
+  "title": "IWBTG rooms/<id>.tiles.toml (format v0)",
+  "type": "object"
+}
