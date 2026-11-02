@@ -1,0 +1,43 @@
+#:schema ../schema/v0/physics.schema.json
+# I wanna go the Spook House (family A5, kid/A5.md "go-the-spook-house"): the A5 preset with the
+# Step that stops while frozen, the down-only fall cap, 0.5 sprite thresholds, the End Step
+# killer test and no room edge events. Gravity reasserts in the Step, a block landing zeroes it.
+# The wings and powerup code is unused in the game. The 3-byte base-100 save is `xy_base100_bytes`.
+preset = "A5"
+
+[numbers]
+sprite_threshold = 0.5
+
+[events]
+create = ["create_defaults", "ensure_world", "first_play_save"]
+step = ["stop_if_frozen", "gravity", "walk", "air_sprite", "fall_cap", "shoot", "jump", "release"]
+end_step = ["killer_check"]
+boundary = "none"
+alarms = []
+keys = []
+collisions = [
+  { with = "block", run = "block_standard" },
+  { with = "platform", run = "platform_standard" },
+]
+
+[jump]
+ground_classes = ["block", "water1"]
+
+[fall_cap]
+rule = "clamp_down_only"
+
+[gravity]
+reapply = "step"
+block_landing_zeroes = true
+
+[save]
+position = "xy_base100_bytes"
+
+[misc]
+idle_needs_block = true
+
+[sprites]
+idle = "kid_idle"
+running = "kid_run"
+jump = "kid_jump"
+fall = "kid_fall"

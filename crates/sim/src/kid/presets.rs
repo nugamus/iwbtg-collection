@@ -18,6 +18,7 @@ use crate::def::{ClassMask, KidFamily, PhysicsProfile, PhysicsProfileDraft};
 use crate::input::Action;
 use crate::kid::actions::a1::A1Action;
 use crate::kid::actions::a3::A3Action;
+use crate::kid::actions::a5::A5Action;
 use crate::kid::actions::b::BAction;
 use crate::kid::actions::common::CommonAction as C;
 use crate::kid::collisions::block::BlockRun;
@@ -39,6 +40,8 @@ pub fn defaults(family: KidFamily) -> PhysicsProfile {
     let mut p = match family {
         KidFamily::A2 => a2(),
         KidFamily::A3 => a3(),
+        KidFamily::A4 => a4(),
+        KidFamily::A5 => a5(),
         KidFamily::B => b(),
         _ => a1(),
     };
@@ -116,6 +119,120 @@ fn a3() -> PhysicsProfile {
     ];
     p.death.select_room_reset = false;
     p.death.killer_check_menu_rooms = true;
+    p.misc.fade_in = false;
+    p
+}
+
+/// Family A4, reference game machinary (kid/A4.md): no vines, release multiplier 0.5, the shifting
+/// fall cap, a ground jump that leaves `djump` alone, gravity set at Create only, machinary's fixed
+/// room edges. The world counts the play time. eat-the-new-year differs (docs/format/examples).
+fn a4() -> PhysicsProfile {
+    let mut p = a1();
+    p.numbers.release_mult = r(0.5);
+    p.vine.model = VineModel::None;
+    p.vine.walk_ignores_vines = true;
+    p.events.create = vec![
+        common(C::CreateDefaults),
+        common(C::EnsureWorld),
+        common(C::FirstPlaySave),
+    ];
+    p.events.step = vec![
+        common(C::Walk),
+        common(C::AirSprite),
+        common(C::FallCap),
+        common(C::Shoot),
+        common(C::Jump),
+        common(C::Release),
+    ];
+    p.events.alarms = vec![];
+    p.events.boundary = BoundaryModel::IntersectOriginFixed;
+    p.events.collisions = vec![
+        KidCollision {
+            with: ClassMask::BLOCK,
+            run: KidCollisionRun::Block(BlockRun::BlockStandard),
+        },
+        KidCollision {
+            with: ClassMask::PLATFORM,
+            run: KidCollisionRun::Platform(PlatformRun::PlatformStandard),
+        },
+        KidCollision {
+            with: ClassMask::KILLER,
+            run: KidCollisionRun::Death(DeathRun::Kill),
+        },
+    ];
+    p.jump.ground_classes = ClassMask::BLOCK;
+    p.jump.ground_also = vec![GroundAlso::PlatformFlag];
+    p.jump.ground_sets_djump = false;
+    p.jump.water_air = WaterAir::None;
+    p.fall_cap.rule = FallCapRule::ShiftThenClamp;
+    p.gravity.reapply = GravityReapply::CreateOnly;
+    p.gravity.block_landing_zeroes = false;
+    p.death.order = vec![
+        DeathStep::Sound,
+        DeathStep::BloodEmitter,
+        DeathStep::DestroyAllKids,
+        DeathStep::GameOver,
+        DeathStep::DeathsPlusOne,
+        DeathStep::SaveCounters,
+    ];
+    p.death.select_room_reset = false;
+    p.save.position = SavePosition::XyText2Dec;
+    p.misc.fade_in = false;
+    p
+}
+
+/// Family A5, reference game little-runner (kid/A5.md): rely's engine without vines and the
+/// fade-in, gravity and the unstick in the End Step, base-256 saves. go-the-spook-house overrides
+/// the Step list, the fall cap and the killer test (docs/format/examples).
+fn a5() -> PhysicsProfile {
+    let mut p = a1();
+    p.vine.model = VineModel::None;
+    p.vine.walk_ignores_vines = true;
+    p.events.create = vec![
+        common(C::CreateDefaults),
+        common(C::EnsureWorld),
+        common(C::CreateBow),
+        common(C::FirstPlaySave),
+        common(C::ArmPlayTimer),
+    ];
+    p.events.step = vec![
+        common(C::Walk),
+        common(C::AirSprite),
+        common(C::FallCap),
+        common(C::Shoot),
+        common(C::Jump),
+        common(C::Release),
+    ];
+    p.events.end_step = vec![KidAction::A5(A5Action::GravityAndUnstuck)];
+    p.events.collisions = vec![
+        KidCollision {
+            with: ClassMask::BLOCK,
+            run: KidCollisionRun::Block(BlockRun::BlockStandard),
+        },
+        KidCollision {
+            with: ClassMask::PLATFORM,
+            run: KidCollisionRun::Platform(PlatformRun::PlatformStandard),
+        },
+        KidCollision {
+            with: ClassMask::KILLER,
+            run: KidCollisionRun::Death(DeathRun::Kill),
+        },
+    ];
+    p.jump.ground_classes = ClassMask::BLOCK;
+    p.jump.ground_also = vec![GroundAlso::PlatformFlag];
+    p.jump.water_air = WaterAir::None;
+    p.gravity.reapply = GravityReapply::CreateOnly;
+    p.gravity.block_landing_zeroes = false;
+    p.death.order = vec![
+        DeathStep::Sound,
+        DeathStep::BloodEmitter,
+        DeathStep::DestroyAllKids,
+        DeathStep::GameOver,
+        DeathStep::DeathsPlusOne,
+        DeathStep::SaveCounters,
+    ];
+    p.death.select_room_reset = false;
+    p.save.position = SavePosition::XyBase256Bytes;
     p.misc.fade_in = false;
     p
 }
