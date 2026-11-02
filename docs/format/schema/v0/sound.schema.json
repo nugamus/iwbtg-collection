@@ -1,0 +1,89 @@
+{
+  "$defs": {
+    "Number": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "bits": {
+              "pattern": "^[0-9a-fA-F]{16}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "bits"
+          ],
+          "type": "object"
+        }
+      ],
+      "description": "A number, or { bits = \"<16 hex digits of an IEEE double>\" } for a constant that must match bit for bit."
+    },
+    "SoundKindShape": {
+      "description": "The `kind` values of a sound sidecar.",
+      "oneOf": [
+        {
+          "const": "normal",
+          "description": "Copies may overlap.",
+          "type": "string"
+        },
+        {
+          "const": "multimedia",
+          "description": "Music: at most one copy plays (S2).",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A sound or music sidecar (`sounds/<id>.toml`, `music/<id>.toml`).",
+  "properties": {
+    "kind": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SoundKindShape"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Overrides the folder's kind."
+    },
+    "length_ticks": {
+      "description": "Length in ticks (song length times the tick rate; converter request CR9). Without it the\nlength is 0 and the load warns.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "pan": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Default pan; default 0."
+    },
+    "volume": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Default volume; default 1."
+    }
+  },
+  "title": "IWBTG sounds/<id>.toml and music/<id>.toml (format v0)",
+  "type": "object"
+}
