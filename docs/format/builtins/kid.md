@@ -42,6 +42,8 @@ Boundary events follow `events.boundary` (A1: Intersect Boundary kills or warps,
 
 Sounds: the `[sounds]` roles play from `jump`, `shoot`, `vines` and the death step. OPEN: family B's delayed death sound object with the music fade (#330).
 
+Family C (xia, client#295): key C (`teleport_to_start`, `extra1`) is built. The restart through `scrLoadGame` is the `recreate_in_place` restart model (`[engine.restart]`, the saved grav picks the kid object); its death music, fade and pause steps belong to the `world` built-in. The jump, vine and flip rows for `slide_block`, `slope_c` and slip blocks are tier 3 and not built, because no xia room places them (a profile listing them does not load). The `objMovingPlatform` yspeed carry check against the flipped platform rule needs the T-platform trace (kid/C.md, not recorded yet). Tracked in #337.
+
 Known gaps of families A2 to A5 (client#286):
 
 - `frozen` is a flag. Wanna reads it as a countdown (`frozen > 0` forces `h` to 0 and subtracts 1), but nothing in wanna sets it above 0 (kid/A3.md), so the difference is dormant. A game that sets it above 0 needs a countdown first.
