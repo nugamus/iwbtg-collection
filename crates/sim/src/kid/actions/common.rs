@@ -7,8 +7,8 @@
 //! `SimError::Unsupported` naming its row, so a profile that lists it halts instead of silently
 //! skipping it.
 //!
-//! **OPEN (sound).** The jump, double jump, shoot and vine kick sounds are not played: the sound
-//! model is WP10 and its `sound::play` is not built. Sounds are output only, so no trace column
+//! **OPEN (sound).** The jump, double jump, shoot and vine kick sounds are not played: the
+//! sound model exists (`sound::play`, WP10) but these actions do not call it yet. Sounds are output only, so no trace column
 //! depends on them.
 
 use serde::Deserialize;
