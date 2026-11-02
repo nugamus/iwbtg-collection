@@ -52,7 +52,10 @@ pub fn fmt_main(dir: &Path, check: bool) -> Result<bool, ToolError> {
     let files = load_package(dir)?;
     let mut changed = Vec::new();
     let mut broken = false;
-    for (path, bytes) in files.iter().filter(|(p, _)| p.ends_with(".toml")) {
+    for (path, bytes) in files
+        .iter()
+        .filter(|(p, _)| p.ends_with(".toml") && !p.starts_with(iwbtg_format::engine_pack::ENGINE_DIR))
+    {
         let Ok(text) = std::str::from_utf8(bytes) else {
             println!("{path}: not UTF-8");
             broken = true;
