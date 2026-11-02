@@ -24,6 +24,7 @@ pub use builtin::Builtin;
 pub use class::ClassMask;
 pub use game::{
     DeathOnRestart, EngineKind, GameDef, ResetKind, ResetModel, RestartKind, RestartModel, RestartTrigger,
+    RetryKidSteps,
 };
 pub use ids::{
     GroupId, KindId, MaskId, NameId, PathId, RoomId, ScriptId, SoundId, SpriteId, TimelineId, VarId,

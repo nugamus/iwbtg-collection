@@ -495,7 +495,8 @@ pub fn perform_change(ctx: &mut Ctx, req: RoomRequest) -> Result<(), SimError>;
   ```rust
   // def/game.rs (WP0), behavior in room.rs (WP4b)
   pub struct RestartModel { pub trigger: RestartTrigger, pub kind: RestartKind, pub excluded_roles: RoleSet,
-      pub boot_ticks: u8, pub flipped_load_dy: Real /* +4 */, pub death_on_restart: DeathOnRestart }
+      pub boot_ticks: u8, pub flipped_load_dy: Real /* +4 */, pub death_on_restart: DeathOnRestart,
+      pub kid_steps: RetryKidSteps /* B: add_time 2, save_death_time, clear_frozen; showdown: clear_frozen, reset_jump_values (#224) */ }
   pub enum RestartTrigger { KeyPressEvent, StepHeld, StepPressed { skip_while_paused: bool } }
   pub enum RestartKind { GameRestartViaBoot, RoomGotoSaved, ShowdownLoad, RecreateInPlace }
   ```
