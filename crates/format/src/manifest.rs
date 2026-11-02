@@ -450,6 +450,28 @@ pub struct RestartSection {
     /// What a retry counts.
     #[serde(default)]
     pub death_on_restart: Option<DeathName>,
+    /// The kid-side steps of the retry (family B, showdown).
+    #[serde(default)]
+    pub kid_steps: Option<KidStepsSection>,
+}
+
+/// `restart = { kid_steps = { ... } }`; absent keys are off.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct KidStepsSection {
+    /// Ticks added to the play timer first (B: 2).
+    #[serde(default)]
+    pub add_time: Option<u32>,
+    /// Death-only save after `add_time`.
+    #[serde(default)]
+    pub save_death_time: Option<bool>,
+    /// Clear `frozen` and `frozen2`.
+    #[serde(default)]
+    pub clear_frozen: Option<bool>,
+    /// Reset the new kid's jump values (showdown).
+    #[serde(default)]
+    pub reset_jump_values: Option<bool>,
 }
 
 /// Restart kinds (plan 4.3).
@@ -539,6 +561,12 @@ impl RestartSection {
                 DeathName::Nothing => DeathOnRestart::Nothing,
                 DeathName::SaveCounters => DeathOnRestart::SaveCounters,
             };
+        }
+        if let Some(k) = &self.kid_steps {
+            m.kid_steps.add_time = k.add_time.unwrap_or(0);
+            m.kid_steps.save_death_time = k.save_death_time.unwrap_or(false);
+            m.kid_steps.clear_frozen = k.clear_frozen.unwrap_or(false);
+            m.kid_steps.reset_jump_values = k.reset_jump_values.unwrap_or(false);
         }
         m
     }
