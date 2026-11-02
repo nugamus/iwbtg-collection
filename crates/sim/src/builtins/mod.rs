@@ -60,6 +60,8 @@ pub mod spring;
 pub mod time_limit;
 pub mod trap_stopper;
 
+use std::collections::BTreeSet;
+
 use serde::{Deserialize, Serialize};
 
 pub use state::BuiltinState;
@@ -78,6 +80,30 @@ pub struct MechGlobals {
     pub bosses: u16,
     /// Item flags, one bit per item (`SaveSlot::items`).
     pub items: u16,
+    /// `global.triggered`, the `global_last` trigger model (kaenbyou).
+    pub global_triggered: Real,
+    /// `global.trigger[n]`, the `flag_array` trigger model.
+    pub trigger_flags: BTreeSet<i64>,
+    /// `global.stop[n]`, the `flag_array` model's second array (little-runner).
+    pub stop_flags: BTreeSet<i64>,
+    /// `global.switchTrigger[n]`, the `switch_array` trigger model (spook house).
+    pub switches: BTreeSet<i64>,
+}
+
+impl MechGlobals {
+    /// Clears every trigger array and `global.triggered` (a `game_restart`; the `switch_array`
+    /// model's world Room End calls [`MechGlobals::clear_switches`] instead).
+    pub fn clear_triggers(&mut self) {
+        self.global_triggered = Real::ZERO;
+        self.trigger_flags.clear();
+        self.stop_flags.clear();
+        self.switches.clear();
+    }
+
+    /// Clears the switch array (spook house world Room End).
+    pub fn clear_switches(&mut self) {
+        self.switches.clear();
+    }
 }
 
 /// Built-in effects for the client. Visual only: the sim never reads them back.
