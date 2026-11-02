@@ -299,13 +299,23 @@ fn var_columns(original: &TraceTable) -> Vec<String> {
 
 /// Runs one case against its package and returns our trace table.
 pub fn run_case(pkg: &PackageFiles, case: &TraceCase, research: &Path) -> Result<TraceTable, ToolError> {
+    run_case_rev(pkg, case, research, None)
+}
+
+/// Like [`run_case`], on engine revision `engine_rev` instead of the package's own when given.
+pub fn run_case_rev(
+    pkg: &PackageFiles,
+    case: &TraceCase,
+    research: &Path,
+    engine_rev: Option<u16>,
+) -> Result<TraceTable, ToolError> {
     if let Some(open) = &case.open {
         return Err(ToolError::Open(open.clone()));
     }
     let (original, inputs) = read_trace(case, research)?;
     let parsed = parse_key_inputs(&inputs, &KeyMap::iwbtg())
         .map_err(|e| ToolError::Message(format!("{}.inputs: {e}", case.source)))?;
-    let def = load_game(
+    let mut def = load_game(
         pkg,
         LoadMode::Trace {
             unmapped_kinds_inert: true,
@@ -321,6 +331,9 @@ pub fn run_case(pkg: &PackageFiles, case: &TraceCase, research: &Path) -> Result
                 .join("\n  ")
         ))
     })?;
+    if let Some(rev) = engine_rev {
+        def.engine_rev = rev;
+    }
     let vars = var_columns(&original);
     let resolved = resolve_case(case, &def, &vars)?;
     let mut ours = execute(case, Arc::new(def), &resolved, &parsed.frames, parsed.end, &vars)?;
