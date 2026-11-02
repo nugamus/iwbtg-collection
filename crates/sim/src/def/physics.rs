@@ -214,6 +214,10 @@ pub enum BoundaryModel {
     /// Intersect Boundary tests the origin: outside the room (strictly) kills the kid unless an
     /// `edge_warp` overlaps it, which warps it; then the kid wraps to the opposite edge (A1).
     IntersectOrigin,
+    /// Like `intersect_origin` with machinary's fixed numbers (A4): the edges are 800 by 608
+    /// whatever the room, the wrap adds or subtracts 800 sideways, adds 608 at the top and
+    /// subtracts 600 (not 608) at the bottom.
+    IntersectOriginFixed,
     /// Outside Room kills the kid unless a room changer overlaps (family B, WP5b).
     OutsideRoomKill,
     /// The origin test runs in End Step (WP5c).
@@ -496,6 +500,9 @@ pub struct KidMisc {
     pub fade_in: bool,
     /// Alpha added per Step while fading in (0.1).
     pub fade_step: Real,
+    /// `walk` shows the idle sprite only with a `jump.ground_classes` instance 1 px below
+    /// (spook house).
+    pub idle_needs_block: bool,
 }
 
 /// `[sprites]`: the kid's sprites by role. Package files give names; the loader (WP7b) resolves
@@ -725,7 +732,7 @@ draft_section! {
 }
 draft_section! {
     /// `[misc]` as written.
-    KidMiscDraft => KidMisc { fade_in: bool, fade_step: Real }
+    KidMiscDraft => KidMisc { fade_in: bool, fade_step: Real, idle_needs_block: bool }
 }
 
 /// A profile as written, before the preset fills its defaults. `toml::from_str` target of

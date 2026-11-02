@@ -45,8 +45,14 @@
       "not": {}
     },
     "A5Action": {
-      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`; WP5c adds one variant per action it implements.",
-      "not": {}
+      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`.",
+      "oneOf": [
+        {
+          "const": "gravity_and_unstuck",
+          "description": "little-runner's End Step: gravity is `numbers.gravity` every tick (frozen or not); then,\nwhen the kid overlaps a solid at its position, `y` goes back to `yprevious` and the kid\nmoves to contact toward where it was (`move_contact_solid` with no limit). `vspeed` is\nkept. (The original's `obj_wall` slope branches never run: no such object is placed.)",
+          "type": "string"
+        }
+      ]
     },
     "ActionName": {
       "description": "A client action by its package name.",
@@ -158,6 +164,11 @@
         {
           "const": "intersect_origin",
           "description": "Intersect Boundary tests the origin: outside the room (strictly) kills the kid unless an\n`edge_warp` overlaps it, which warps it; then the kid wraps to the opposite edge (A1).",
+          "type": "string"
+        },
+        {
+          "const": "intersect_origin_fixed",
+          "description": "Like `intersect_origin` with machinary's fixed numbers (A4): the edges are 800 by 608\nwhatever the room, the wrap adds or subtracts 800 sideways, adds 608 at the top and\nsubtracts 600 (not 608) at the bottom.",
           "type": "string"
         },
         {
@@ -315,6 +326,11 @@
         {
           "const": "vines",
           "description": "Step action 4: vines.",
+          "type": "string"
+        },
+        {
+          "const": "stop_if_frozen",
+          "description": "Step (spook house): with `frozen` the whole rest of the Step list is skipped (the code\nwrites no `hspeed`, gravity or `vspeed`). `kid::on_event` runs this one itself.",
           "type": "string"
         },
         {
@@ -1025,6 +1041,13 @@
             }
           ],
           "default": null
+        },
+        "idle_needs_block": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "type": "object"
