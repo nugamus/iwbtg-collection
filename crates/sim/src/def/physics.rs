@@ -492,6 +492,9 @@ pub struct VineRules {
     pub kick: [Real; 2],
     /// Drop: horizontal speed away from the vine (3).
     pub drop: Real,
+    /// The vine tests look one pixel down (`place_free(x, y + 1)`) whatever the gravity, as
+    /// Kotaro's flipped player2 does (kid/A2.md); otherwise they look in the gravity direction.
+    pub probe_down_fixed: bool,
 }
 
 /// `[misc]`.
@@ -718,7 +721,7 @@ draft_section! {
     /// `[vine]` as written.
     VineRulesDraft => VineRules {
         walk_ignores_vines: bool, model: VineModel, left_below: Real, right_equal: Real, slide: Real, kick: [Real; 2],
-        drop: Real,
+        drop: Real, probe_down_fixed: bool,
     }
 }
 draft_section! {

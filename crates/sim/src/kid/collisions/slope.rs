@@ -49,7 +49,7 @@ fn missing() -> SimError {
 fn por_rise(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let step = ctx.def.physics.slope.step;
     let n = &ctx.rules.num;
-    block::vertical(ctx, me)?;
+    block::vertical(ctx, me, true)?;
     let i = ctx.w.get(me).ok_or_else(missing)?;
     let (x, y, hs) = (i.m.x(), i.m.y(), i.m.hspeed());
     let slope = Target::Class(ClassMask::SLOPE);
@@ -102,6 +102,6 @@ fn yane(ctx: &mut Ctx, me: InstId, other: InstId) -> Result<(), SimError> {
         }
         ctx.w.get_mut(me).ok_or_else(missing)?.m.set_hspeed(Real::ZERO)?;
     }
-    block::vertical(ctx, me)?;
+    block::vertical(ctx, me, true)?;
     block::diagonal(ctx, me)
 }
