@@ -497,6 +497,8 @@ pub enum DeathName {
     Nothing,
     /// A death-only save of the counters.
     SaveCounters,
+    /// One death per live kid, then the death-only save (showdown).
+    SaveCountersPerKid,
 }
 
 /// `[engine] reset = { ... }`; absent keys keep `ResetModel::default()`.
@@ -559,6 +561,7 @@ impl RestartSection {
             m.death_on_restart = match d {
                 DeathName::Nothing => DeathOnRestart::Nothing,
                 DeathName::SaveCounters => DeathOnRestart::SaveCounters,
+                DeathName::SaveCountersPerKid => DeathOnRestart::SaveCountersPerKid,
             };
         }
         if let Some(k) = &self.kid_steps {

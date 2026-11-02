@@ -22,12 +22,22 @@ fn r(v: f64) -> Real {
 }
 
 fn game(edit: impl FnOnce(&mut GameDef)) -> (GameDef, KindId) {
+    let (def, kid, _) = game2(edit);
+    (def, kid)
+}
+
+fn game2(edit: impl FnOnce(&mut GameDef)) -> (GameDef, KindId, KindId) {
     let mut b = GameDefBuilder::new("wp5a-restart");
     let mut k = KindDef::new("kid", Builtin::Kid);
     k.persistent = true;
     k.classes = ClassMask::KID;
     let kid = b.kind(k);
     b.engine_kind(EngineKind::Kid, kid);
+    let mut f = KindDef::new("kid2", Builtin::Kid);
+    f.persistent = true;
+    f.classes = ClassMask::KID_FLIPPED;
+    let kid2 = b.kind(f);
+    b.engine_kind(EngineKind::KidFlipped, kid2);
     let room = b.room(RoomDef::new("play", 800, 608));
     b.start_room(room);
     let mut p = PhysicsProfile::default(); // no Create actions: these tests build their own state
@@ -36,7 +46,7 @@ fn game(edit: impl FnOnce(&mut GameDef)) -> (GameDef, KindId) {
     b.physics(p);
     let mut def = b.build().expect("game builds");
     edit(&mut def);
-    (def, kid)
+    (def, kid, kid2)
 }
 
 fn with_ctx<T>(def: &GameDef, f: impl FnOnce(&mut Ctx) -> T) -> T {
@@ -176,7 +186,7 @@ fn the_steps_are_off_unless_the_model_asks() {
 
 fn showdown_retry(def: &mut GameDef) {
     def.restart.kind = RestartKind::ShowdownLoad;
-    def.restart.death_on_restart = DeathOnRestart::SaveCounters;
+    def.restart.death_on_restart = DeathOnRestart::SaveCountersPerKid;
     def.restart.kid_steps = RetryKidSteps {
         clear_frozen: true,
         reset_jump_values: true,
@@ -232,5 +242,32 @@ fn the_api_steps_work_on_their_own() {
         api::reset_jump_values(ctx, a).unwrap();
         assert_eq!(ctx.w.get(a).unwrap().m.hspeed(), Real::ZERO);
         assert!(api::reset_jump_values(ctx, InstId(1)).is_err());
+    });
+}
+
+// ---- Showdown's death count follows the live kids (#246) ----
+
+#[test]
+fn showdown_counts_one_death_per_live_kid_and_none_without() {
+    let (def, kid, kid2) = game2(showdown_retry);
+    // Zero kids: no death, no save write.
+    with_ctx(&def, |ctx| {
+        ctx.w.save = Some(slot(false, 1));
+        ctx.w.engine.run.deaths = 3;
+        ctx.w.engine.run.time = 77;
+        run_restart(ctx, InstId(1)).unwrap();
+        assert_eq!(ctx.w.engine.run.deaths, 3);
+        assert_eq!(ctx.w.save.as_ref().unwrap().time, 10, "no death-only save either");
+        assert_eq!(live_kids(ctx, kid).len(), 1, "the load still makes a kid");
+    });
+    // Two kids, one of each kind: two deaths.
+    with_ctx(&def, |ctx| {
+        ctx.w.save = Some(slot(false, 1));
+        ctx.w.engine.run.deaths = 3;
+        ctx.spawn(kid, r(1.0), r(2.0), SpawnInit::default()).unwrap();
+        ctx.spawn(kid2, r(5.0), r(6.0), SpawnInit::default()).unwrap();
+        run_restart(ctx, InstId(1)).unwrap();
+        assert_eq!(ctx.w.engine.run.deaths, 5);
+        assert_eq!(ctx.w.save.as_ref().unwrap().deaths, 5);
     });
 }
