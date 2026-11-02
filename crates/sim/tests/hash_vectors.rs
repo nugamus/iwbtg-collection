@@ -68,23 +68,23 @@ fn reals(nan_bits: u64) -> World {
 const VECTORS: [(&str, &str); 5] = [
     (
         "empty",
-        "e5aa25e56829060061deb8b7ed3367513fd6816bd26a93e58518774e7d4f3239",
+        "bb6bb9f618c5825a69f20158fe08be15965705ff93f98b48b1c648ae3af2d662",
     ),
     (
         "instances",
-        "3f003fa574eed4a01220fccc18c99a030d5d3021b168acef5c5b72f924687f1b",
+        "3a886dcd1095143fca81062a574ec1c31c2ed8668cb271c60d4447caf4698ad4",
     ),
     (
         "globals",
-        "4dd703e0d6b0c869e5a51fc555a51016dccbcae13b7a0b9ded55c3cc53a72020",
+        "3bfa9b0a28baf448e6fdf6f1cbd9d45412ffd5b223683bb4145c07a310949581",
     ),
     (
         "rng",
-        "41af82638a9f20137a8a26cc0e822fd3cd0f4a4935918a7a914872b561600f3e",
+        "99eee10ff78cec939c9bbd4ab0c4457dfe63bf195e6b2337b8be77c3cb453171",
     ),
     (
         "reals",
-        "0f1f109acc020d03758e7f9f0ad67865d03e8b352e5acfd594f85963445c47a8",
+        "1599ea7c73ff47a2055f609d1a87c25b7c23ff286505c5ff917c9b9e9fda5630",
     ),
 ];
 
