@@ -56,6 +56,14 @@ Teammates share the lead's working folder, so the CLAUDE.md files require:
 
 Each client worktree builds its own `target/` folder: the first build there takes a few minutes and a few GB. Teams use several times the tokens of one session. The docs advise 3 to 5 teammates, Sonnet for teammates, and checking in on the team often. `/resume` does not bring back in-process teammates.
 
+**Which hooks fire for teammates** (checked 2026-11-02 in the first team run, three in-process Sonnet teammates):
+
+- `PreToolUse` guard (`guard_archive.py`): **fires.** A teammate's `cd archive` was blocked with the guard's message. (The check ran in a worktree that has no `archive/`, so nothing could have happened either way.)
+- `SessionStart` (`issues.py start`): **does not fire.** None of the three teammates got the project status at startup.
+- `Stop` (`issues.py stop`): **not seen.** No teammate was held to a Findings line. Treat it as not firing.
+
+So a teammate runs the status hook by hand at the start (from the workspace root: `python -I client/.claude/hooks/issues.py start`; the output is JSON, read `additionalContext`) and ends every turn that changed files with `Findings: <issue links>` or `Findings: none`, whether or not a hook asks. The lead's own session still gets both hooks.
+
 The lead prompt is `TEAM_LEAD_PROMPT.md` in the workspace root.
 
 ## Check a machine
@@ -70,6 +78,26 @@ python -I ../research/.claude/hooks/guard_archive.py --test
 ```
 
 Expected: the build ends with `Finished`. `issues.py start` prints JSON with milestone progress and the next issues. The guard prints `guard_archive self-test passed`.
+
+## CI
+
+`.github/workflows/ci.yml` runs on every PR and every push to main:
+
+Changes that touch only docs, Markdown, `workspace/` or `.claude/` skip it. Builds run without debug info or incremental state, to save time.
+
+- Windows and Linux: `cargo clippy --workspace --tests -- -D warnings`, `cargo test --workspace` (all `--locked`, warnings are errors), and `cargo fmt --check` on Linux.
+- wasm32: `cargo test -p iwbtg-sim` and `cargo test -p iwbtg-format --lib --test fixtures` on wasm32-wasip1 under wasmtime, and a wasm32-unknown-unknown build. The package-loading `wp7a_*` tests run on native targets only, because wasm32-wasip1 aborts on the panics of unmerged WP0 stubs. wasm32-unknown-unknown tests under node: #206.
+- `cargo deny check licenses`.
+
+The same checks locally, from `client/`:
+
+```
+cargo clippy --workspace --tests -- -D warnings
+cargo test --workspace
+cargo fmt --all -- --check
+```
+
+Without wasmtime, a wasm32-wasip1 test binary also runs under Node's WASI. Build it with `cargo test -p iwbtg-sim --target wasm32-wasip1 --no-run`, then run the printed `.wasm` with a small script using `node:wasi` (preview1).
 
 ## Home PC findings (2026-11-02)
 
