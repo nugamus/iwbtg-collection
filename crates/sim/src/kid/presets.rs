@@ -194,8 +194,6 @@ pub fn apply(p: &mut PhysicsProfileDraft) -> PhysicsProfile {
     if let Some(s) = d.misc {
         out.misc = s.over(out.misc);
     }
-    if let Some(s) = d.sprites {
-        out.sprites = s;
-    }
+    // `d.sprites` holds names; the loader resolves them to ids.
     out
 }
