@@ -459,7 +459,10 @@ fn game_restart<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H) -> Result<(),
     ctx.w.pending = None;
     if !ctx.rules.room.globals_survive_restart {
         ctx.w.globals.clear();
+        // The temp-file marker of a retry survives: it is a file, not a global (WP4b).
+        let boot_load = ctx.w.engine.run.boot_load;
         ctx.w.engine = EngineGlobals::default();
+        ctx.w.engine.run.boot_load = boot_load;
     }
     emit(ctx, RoomOutput::GameRestarted);
     create_boot(ctx, host)?;

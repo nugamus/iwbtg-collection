@@ -56,6 +56,14 @@ Teammates share the lead's working folder, so the CLAUDE.md files require:
 
 Each client worktree builds its own `target/` folder: the first build there takes a few minutes and a few GB. Teams use several times the tokens of one session. The docs advise 3 to 5 teammates, Sonnet for teammates, and checking in on the team often. `/resume` does not bring back in-process teammates.
 
+**Which hooks fire for teammates** (checked 2026-11-02 in the first team run, three in-process Sonnet teammates):
+
+- `PreToolUse` guard (`guard_archive.py`): **fires.** A teammate's `cd archive` was blocked with the guard's message. (The check ran in a worktree that has no `archive/`, so nothing could have happened either way.)
+- `SessionStart` (`issues.py start`): **does not fire.** None of the three teammates got the project status at startup.
+- `Stop` (`issues.py stop`): **not seen.** No teammate was held to a Findings line. Treat it as not firing.
+
+So a teammate runs the status hook by hand at the start (from the workspace root: `python -I client/.claude/hooks/issues.py start`; the output is JSON, read `additionalContext`) and ends every turn that changed files with `Findings: <issue links>` or `Findings: none`, whether or not a hook asks. The lead's own session still gets both hooks.
+
 The lead prompt is `TEAM_LEAD_PROMPT.md` in the workspace root.
 
 ## Check a machine
