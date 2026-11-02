@@ -12,7 +12,9 @@ Source: [sim core plan](../plans/sim-core.md) sections 5.1 to 5.3; `crates/sim/s
 |---|---|
 | `A1` | rely-the-needle-4-2 (kid/A1.md): rely's numbers, event lists, collisions, death order and save model. |
 | `B` | kaenbyou (kid/B.md): the `yflag` flip, `cur_jumps` jumps with water, End Step slope code and gravity, polling killer check, Outside Room kill, B's death order with the first kid. eat-the-lemon is `B` with `jump.blocked_by_pause_press = false` and no Alarm 0 (`events.alarms = []`). |
-| `A2` to `A5`, `C` | Record the family name and use the `A1` defaults until their work package (WP5c) adds theirs. |
+| `A2` | deride-kotaro-from-aslant (kid/A2.md): rely without the fade-in and `platform_gravity_zero`. Animus and easy-miku-2 add `ad_nudge`. Group A's flip by object swap is `Unsupported` (WP5c.4, #131). |
+| `A3` | wanna (kid/A3.md): latched vine-key flags, walking that ignores vines, `gravity` after the jump code, `killer_check` in the End Step, held `suicide_check`, A3's death order. showdown overrides the jumps (`djump_then_tjump`), its collisions and keys; its ice is #131. |
+| `A4`, `A5`, `C` | Record the family name and use the `A1` defaults until their work package (WP5c) adds theirs. |
 
 An empty file is the same as `preset = "A1"`. The loader rejects unknown keys, sections, action names, run names, class names and enum values, so a typo never falls back silently.
 
@@ -58,7 +60,10 @@ Not yet in `[events]`: the outside-room events of the other models.
 | `player_reverse` | `playerReverse` (the gravity arrows' Alarm 1): `global.reverse` toggles, `yflag` negates, `y` moves 4 times the new `yflag`, `curJumps` 1, `vspeed` 0. Also `kid::api::player_reverse`. OPEN: with several kids the original script's per-kid toggle of the global. |
 | `set_view_angle` | Room Start: with `global.reverse` view 0 is enabled at angle 180, else angle 0. |
 | `slope_b` | End Step, `playerSlope` (kid/B.md "End Step"): the `slope_wall` slope code, then gravity back to `numbers.gravity * yflag` (`gravity.reapply = "end_step_slope"`), which also runs in rooms without slopes. |
-| `killer_check` | `playerMisc` 1, in the Step: the kid dies when it touches a `killer` instance. It runs before motion, so it sees the position the last tick ended at. |
+| `ad_nudge` | A2 (animus, easy-miku-2), end of the movement action: with a `block` or `solidblock` 1 px below, a press of A (`extra1`) subtracts 1 from `hspeed` and a press of D (`extra2`) adds 1. Nothing while frozen (OPEN). |
+| `key_flags` | A3 Step action 4.1: the game's Left, Right and Jump flags (`KidGlobalsExt`) become 1 on the key's press tick and 0 on its release tick; `input.vine_keys = "latched_flags"` makes `vines` read them. A press and a release in one tick end 0 (OPEN). |
+| `suicide_check` | A3 Step action 5: the Suicide key held (not a press) outside Boot, Title, Menu and Select rooms runs `kill` every tick. |
+| `killer_check` | `playerMisc` 1 (B Step) or the A3 End Step: the kid dies when it touches a `killer` instance. In the Step it runs before motion, so it sees the position the last tick ended at. With `death.killer_check_menu_rooms` it does nothing in Boot, Title and Menu rooms and moves the kid to `xstart`, `ystart` in a Select room. |
 | `ensure_bow` | Room Start and `playerMisc`: a bow at the kid unless one exists. |
 | `cancel_poll` | Alarm 0 when `jump.cancel = "poll_alarm"`: Jump up and moving against gravity cuts `vspeed` by `release_mult` and stops; else re-arms for 1 tick. |
 | `release` | `playerVJump` on a Jump release: upward `vspeed` times `release_mult`, every release. |
@@ -84,9 +89,9 @@ Every key below is optional. Defaults are the `A1` preset's.
 
 `[numbers]`: `jumps` (list, ground jump then air jumps, `[8.5, 7.0]`), `gravity` (0.4), `run_speed` (3), `max_vspeed` (9), `max_fall_speed` (8, read only by `shift_then_clamp`), `release_mult` (0.45), `sprite_threshold` (0.05), `image_speed_idle` (0.2), `image_speed_run` (0.5), `air_wall_probe` (0; family B 2: `air_sprite` shows the fall sprite only with no `slope_wall` that many pixels in the gravity direction).
 
-`[input]`: `walk` = `direct_latch` (`keyboard_check_direct`, sees a tap inside one tick) or `sampled`; `vine_keys` = `edges` (this tick's press) or `latched_flags` (WP5c).
+`[input]`: `walk` = `direct_latch` (`keyboard_check_direct`, sees a tap inside one tick) or `sampled`; `vine_keys` = `edges` (this tick's press) or `latched_flags` (the `key_flags` flags).
 
-`[jump]`: `ground_classes` (class names), `ground_also` (`platform_flag`, `ladder_jump`), `ground_sets_djump`, `air` (`djump` or `cur_jumps`; `djump_then_tjump` is WP5c), `water_air` (`none`, `water2_without_flag`, `water_unlimited`; `water3_keeps` is WP5c), `max_jumps` (family B, 2), `inf_jump` (B cheat flag, false), `blocked_by_pause_press` (a tick with a Pause press does nothing), `cancel` (`edge`: the `release` action cuts the jump; `poll_alarm`: `release` does nothing and the `cancel_poll` alarm action cuts it).
+`[jump]`: `ground_classes` (class names), `ground_also` (`platform_flag`, `ladder_jump`), `ground_sets_djump`, `air` (`djump`, `cur_jumps` or `djump_then_tjump`: showdown's third jump `jumps[2]`, granted by Create, spent by a landing on a block and cut twice by `release` with `release_twice_while_tjump`; the double jump granting it in room028 is game code, OPEN), `water_air` (`none`, `water2_without_flag`, `water_unlimited`; `water3_keeps` is WP5c), `max_jumps` (family B, 2), `inf_jump` (B cheat flag, false), `release_twice_while_tjump` (false), `blocked_by_pause_press` (a tick with a Pause press does nothing), `cancel` (`edge`: the `release` action cuts the jump; `poll_alarm`: `release` does nothing and the `cancel_poll` alarm action cuts it).
 
 `[fall_cap]`: `rule` = `clamp_abs` or `clamp_against_gravity` (clamp only when `vspeed * yflag` exceeds `max_vspeed`; the others are WP5c).
 
@@ -94,7 +99,7 @@ Every key below is optional. Defaults are the `A1` preset's.
 
 `[platform]`: `hold_probe` (4), `rule` = `half_vspeed`, `snap` (9), `take` = `vspeed` or `delta_y` (the platform's `y - yprevious`, family B; `yspeed_flipped` is WP5c), `reversed_above` (family B 15) and `reversed_snap` (24).
 
-`[vine]`: `model` = `distance_asym` or `none` (`distance_sym_early` is WP5c), `left_below` (2), `right_equal` (1), `slide` (2), `kick` (`[15, -9]`: horizontal, vertical), `drop` (3).
+`[vine]`: `walk_ignores_vines` (A3: `walk` has no vine rule), `model` = `distance_asym` or `none` (`distance_sym_early` is WP5c), `left_below` (2), `right_equal` (1), `slide` (2), `kick` (`[15, -9]`: horizontal, vertical), `drop` (3).
 
 `[water]`, `[ice]`, `[slope]`, `[ladder]`: empty until their work packages. `[flip]`: `model` (`none`, `swap_object`, `yflag`, `grav_sign`). With `yflag` (family B) a reversed kid (`yflag` -1): `walk` swaps Left and Right; `vines` slide at `slide * yflag`, kick at `kick[1] * yflag` and take the other key as the away key; `air_sprite` swaps the jump and fall sprites; `shoot` places the bullet at `y - offset[1] * yflag`; `create_defaults` reads `global.reverse` (y - 4, `curJumps` 1). `swap_object` and `grav_sign` are WP5c.
 

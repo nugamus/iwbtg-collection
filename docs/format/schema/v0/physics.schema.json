@@ -13,7 +13,7 @@
         "create_defaults", "ensure_world", "create_bow", "first_play_save", "arm_play_timer",
         "gravity", "walk", "air_sprite", "fall_cap", "shoot", "jump", "release", "vines",
         "play_timer", "kill", "platform_gravity_zero", "fade_in", "stop_if_frozen2", "cancel_poll",
-        "sync_yflag", "player_reverse", "set_view_angle", "ensure_bow", "killer_check", "slope_b"
+        "ad_nudge", "key_flags", "suicide_check", "sync_yflag", "player_reverse", "set_view_angle", "ensure_bow", "killer_check", "slope_b"
       ]
     },
     "actions": { "type": "array", "items": { "$ref": "#/$defs/action" } },
@@ -128,6 +128,7 @@
         "water_air": { "enum": ["none", "water2_without_flag", "water_unlimited", "water3_keeps"] },
         "max_jumps": { "type": "integer", "minimum": 1 },
         "inf_jump": { "type": "boolean" },
+        "release_twice_while_tjump": { "type": "boolean" },
         "blocked_by_pause_press": { "type": "boolean" },
         "cancel": { "enum": ["edge", "poll_alarm"] }
       }
@@ -165,6 +166,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "walk_ignores_vines": { "type": "boolean" },
         "model": { "enum": ["none", "distance_asym", "distance_sym_early"] },
         "left_below": { "$ref": "#/$defs/real" },
         "right_equal": { "$ref": "#/$defs/real" },
@@ -201,7 +203,8 @@
         },
         "select_room_reset": { "type": "boolean" },
         "stop_music": { "type": "boolean" },
-        "first_kid": { "type": "boolean" }
+        "first_kid": { "type": "boolean" },
+        "killer_check_menu_rooms": { "type": "boolean" }
       }
     },
     "bullet": {
