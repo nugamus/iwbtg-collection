@@ -6,9 +6,9 @@
 use serde::{Deserialize, Serialize};
 
 use super::{
-    block, blood, blood_emitter, bow, camera, difficulty_warp, drop_platform, edge_warp, fake_block,
-    game_clear, game_over, kid_bullet, kid_start, killer, moving_platform, music, save, spike, trap, trigger,
-    warp, water, world,
+    block, blood, blood_emitter, bow, camera, conveyor, difficulty_warp, drop_platform, edge_warp,
+    fake_block, game_clear, game_over, jump_refresher, kid_bullet, kid_param_zone, kid_start, killer,
+    moving_platform, music, save, spike, spring, trap, trigger, warp, water, world,
 };
 
 /// A built-in instance's state.
@@ -63,6 +63,14 @@ pub enum BuiltinState {
     Trigger(trigger::TriggerState),
     /// `trap` (WP6b).
     Trap(trap::TrapState),
+    /// `jump_refresher` (WP6c).
+    Refresher(jump_refresher::RefresherState),
+    /// `spring` (WP6c).
+    Spring(spring::SpringState),
+    /// `conveyor` (WP6c).
+    Conveyor(conveyor::ConveyorState),
+    /// `kid_param_zone` (WP6c).
+    ParamZone(kid_param_zone::ZoneState),
     /// `moving_platform` (WP6b).
     MovingPlatform(moving_platform::MovingPlatformState),
     /// `water` (WP6b).
