@@ -8,7 +8,7 @@
 use serde::{Deserialize, Deserializer};
 
 use super::class::ClassMask;
-use super::ids::SpriteId;
+use super::ids::{SoundId, SpriteId};
 use crate::input::Action;
 use crate::kid::{KidAction, KidCollisionRun};
 use crate::num::Real;
@@ -81,6 +81,8 @@ pub struct PhysicsProfile {
     pub misc: KidMisc,
     /// `[sprites]`: the kid's sprites by role (resolved from names at load).
     pub sprites: KidSprites,
+    /// `[sounds]`: the kid's sounds by role (resolved from names at load).
+    pub sounds: KidSounds,
 }
 
 macro_rules! profile_section {
@@ -510,6 +512,24 @@ pub struct KidMisc {
     pub idle_needs_block: bool,
 }
 
+/// `[sounds]`: the kid's sounds by role, played through `sound::play`. Package files give names;
+/// the loader resolves them to ids. A role the game does not have stays `None` and the action
+/// plays nothing.
+#[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct KidSounds {
+    /// A ground jump (`playerJump`).
+    pub jump: Option<SoundId>,
+    /// An air jump.
+    pub double_jump: Option<SoundId>,
+    /// A shot.
+    pub shoot: Option<SoundId>,
+    /// A vine kick.
+    pub vine_kick: Option<SoundId>,
+    /// `killPlayer`'s `sound` step.
+    pub death: Option<SoundId>,
+}
+
 /// `[sprites]`: the kid's sprites by role. Package files give names; the loader (WP7b) resolves
 /// them to ids. A role the game does not have stays `None` and the action leaves the sprite
 /// alone.
@@ -551,7 +571,7 @@ pub struct BulletRules {
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DeathStep {
-    /// The death sound. Not played yet (#231).
+    /// The death sound, played by the death step `sound`.
     Sound,
     /// A blood emitter at the kid's position.
     BloodEmitter,
@@ -791,6 +811,26 @@ pub struct PhysicsProfileDraft {
     /// `[sprites]`: sprite names. `kid::presets::apply` leaves the profile's `sprites` empty;
     /// the loader (WP7b) resolves these names to ids and fills them in.
     pub sprites: Option<KidSpriteNames>,
+    /// `[sounds]`: sound names; the loader resolves them to ids like the sprite names.
+    pub sounds: Option<KidSoundNames>,
+}
+
+/// `[sounds]` as written in a package: sound names by role, resolved to [`KidSounds`] ids by the
+/// loader.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct KidSoundNames {
+    /// A ground jump.
+    pub jump: Option<String>,
+    /// An air jump.
+    pub double_jump: Option<String>,
+    /// A shot.
+    pub shoot: Option<String>,
+    /// A vine kick.
+    pub vine_kick: Option<String>,
+    /// The death sound.
+    pub death: Option<String>,
 }
 
 /// `[sprites]` as written in a package: sprite names by role, resolved to [`KidSprites`] ids by
