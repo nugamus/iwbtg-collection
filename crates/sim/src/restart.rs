@@ -11,7 +11,7 @@
 //! What is **not** here: showdown's resets of the trigger, laser, move, shift, rihuto, tjump and
 //! taru globals (the mechanics' state, WP6; filed as an issue), and sounds on F2 (WP10).
 
-use crate::def::{DeathOnRestart, EngineKind, ResetKind, RestartKind, RoomId, RoomRole};
+use crate::def::{ClassMask, DeathOnRestart, EngineKind, ResetKind, RestartKind, RoomId, RoomRole};
 use crate::error::SimError;
 use crate::room::RoomRequest;
 use crate::run_globals::{BootLoad, RunGlobals};
@@ -47,9 +47,24 @@ pub fn run_restart(ctx: &mut Ctx, world: InstId) -> Result<Flow, SimError> {
         return Ok(Flow::Continue);
     }
     let _ = world;
-    if model.death_on_restart == DeathOnRestart::SaveCounters {
-        ctx.w.engine.run.add_deaths(1)?;
-        save::save_counters(ctx)?;
+    match model.death_on_restart {
+        DeathOnRestart::Nothing => {}
+        DeathOnRestart::SaveCounters => {
+            ctx.w.engine.run.add_deaths(1)?;
+            save::save_counters(ctx)?;
+        }
+        DeathOnRestart::SaveCountersPerKid => {
+            let kids = ctx
+                .w
+                .iter_alive()
+                .filter(|i| i.classes.intersects(ClassMask::KID | ClassMask::KID_FLIPPED))
+                .count();
+            if kids > 0 {
+                let n = u32::try_from(kids).map_err(|_| SimError::overflow("live kids"))?;
+                ctx.w.engine.run.add_deaths(n)?;
+                save::save_counters(ctx)?;
+            }
+        }
     }
     kid_steps_before(ctx, model.kid_steps)?;
     let slot = ctx.w.save.clone();

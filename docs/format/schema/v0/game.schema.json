@@ -83,6 +83,11 @@
           "const": "save_counters",
           "description": "A death-only save of the counters.",
           "type": "string"
+        },
+        {
+          "const": "save_counters_per_kid",
+          "description": "One death per live kid, then the death-only save (showdown).",
+          "type": "string"
         }
       ]
     },
