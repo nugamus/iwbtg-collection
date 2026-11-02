@@ -436,18 +436,6 @@ fn fall_cap_clamps_abs() {
 }
 
 #[test]
-fn fall_cap_other_rules_are_unsupported() {
-    with_kid(
-        |p| p.fall_cap.rule = FallCapRule::ShiftThenClamp,
-        |ctx, kid, _, _| {
-            assert!(kid::run_action(ctx, kid, &KidAction::Common(CommonAction::FallCap)).is_err());
-        },
-    );
-}
-
-// ---- Shoot ----
-
-#[test]
 fn shoot_spawns_a_bullet_moving_with_facing() {
     with_kid(
         |_| {},

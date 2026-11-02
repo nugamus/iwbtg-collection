@@ -37,7 +37,12 @@ use crate::world::{Ctx, Flow, InstId};
 pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Option<Flow>, SimError> {
     let model = ctx.def.physics.events.boundary;
     match (model, ev) {
-        (BoundaryModel::IntersectOrigin, EventKind::IntersectBoundary) => intersect_origin(ctx, me).map(Some),
+        (BoundaryModel::IntersectOrigin, EventKind::IntersectBoundary) => {
+            intersect_origin(ctx, me, false).map(Some)
+        }
+        (BoundaryModel::IntersectOriginFixed, EventKind::IntersectBoundary) => {
+            intersect_origin(ctx, me, true).map(Some)
+        }
         (BoundaryModel::OutsideRoomKill, EventKind::OutsideRoom) => outside_room_kill(ctx, me).map(Some),
         (BoundaryModel::EndStepOrigin, EventKind::EndStep) => Err(SimError::unsupported(
             "kid boundary: events.boundary end_step_origin (5.3 edge row, WP5c)",
@@ -61,17 +66,22 @@ fn outside_room_kill(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
     kill(ctx, me, KillCause::Boundary)
 }
 
-fn intersect_origin(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
+fn intersect_origin(ctx: &mut Ctx, me: InstId, fixed: bool) -> Result<Flow, SimError> {
     let n = &ctx.rules.num;
     let Some(room) = ctx.def.room(ctx.w.room) else {
         return Err(SimError::invariant(
             "kid boundary: the current room does not exist",
         ));
     };
-    let (rw, rh) = (
-        Real::new(f64::from(room.width)),
-        Real::new(f64::from(room.height)),
-    );
+    // `fixed` (A4 machinary): the edges are 800 by 608 whatever the room.
+    let (rw, rh) = if fixed {
+        (Real::new(800.0), Real::new(608.0))
+    } else {
+        (
+            Real::new(f64::from(room.width)),
+            Real::new(f64::from(room.height)),
+        )
+    };
     let pos = |ctx: &Ctx| {
         ctx.w
             .get(me)
@@ -123,16 +133,16 @@ fn intersect_origin(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
     let sixteen = Real::new(16.0);
     let i = ctx.w.get_mut(me).ok_or_else(missing)?;
     if gm_lt(x, Real::ZERO, n) {
-        i.m.set_x(rw - sixteen)?;
+        i.m.set_x(if fixed { x + rw } else { rw - sixteen })?;
         i.m.set_y(y - vs)?;
     } else if gm_gt(x, rw, n) {
-        i.m.set_x(sixteen)?;
+        i.m.set_x(if fixed { x - rw } else { sixteen })?;
         i.m.set_y(y - vs)?;
     } else if gm_lt(y, Real::ZERO, n) {
-        i.m.set_y(rh - sixteen)?;
+        i.m.set_y(if fixed { y + rh } else { rh - sixteen })?;
         i.m.set_x(xprev)?;
     } else if gm_gt(y, rh, n) {
-        i.m.set_y(sixteen)?;
+        i.m.set_y(if fixed { y - Real::new(600.0) } else { sixteen })?;
         i.m.set_x(xprev)?;
     }
     Ok(if warped { Flow::AbortTick } else { Flow::Continue })
