@@ -125,6 +125,7 @@ pub fn run_tick_with(ctx: &mut Ctx, input: InputFrame, hooks: &Hooks) -> Result<
     let rules = &ctx.rules.tick;
     // Row 0.
     ctx.w.room_requests = 0;
+    ctx.scripts.begin_tick();
     ctx.w
         .input
         .latch_with(input, rules.direct_latch == DirectLatch::Latch);
@@ -144,6 +145,7 @@ pub fn run_tick_with(ctx: &mut Ctx, input: InputFrame, hooks: &Hooks) -> Result<
         None => false,
     };
     ctx.w.room_requests = 0;
+    ctx.scripts.begin_tick();
     // Row 16.
     (hooks.sound_tick)(ctx);
     ctx.w.tick = ctx
