@@ -590,6 +590,11 @@
         "model": {
           "$ref": "#/$defs/FlipKind",
           "description": "`model = \"...\"`."
+        },
+        "solidblock_no_refresh": {
+          "default": false,
+          "description": "`swap_object`: the flipped kid's solidblock contact does not restore `djump` (Kotaro\nplayer2 sets a misspelled `djump2` there, kid/A2.md).",
+          "type": "boolean"
         }
       },
       "type": "object"
@@ -1750,6 +1755,13 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "probe_down_fixed": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
           ]
         },
         "right_equal": {

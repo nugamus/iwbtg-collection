@@ -39,17 +39,17 @@ pub enum BlockRun {
 }
 
 /// Runs one collision run for the kid `me` against `other`. `kid::run_collision` routes here.
-pub fn run(ctx: &mut Ctx, me: InstId, _other: InstId, run: &BlockRun) -> Result<Flow, SimError> {
+pub fn run(ctx: &mut Ctx, me: InstId, other: InstId, run: &BlockRun) -> Result<Flow, SimError> {
     match run {
-        BlockRun::BlockStandard => block_standard(ctx, me)?,
+        BlockRun::BlockStandard => block_standard(ctx, me, other)?,
     }
     Ok(Flow::Continue)
 }
 
-fn block_standard(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+fn block_standard(ctx: &mut Ctx, me: InstId, other: InstId) -> Result<(), SimError> {
     check_flip(ctx, me)?;
     horizontal(ctx, me, false)?;
-    vertical(ctx, me)?;
+    vertical(ctx, me, refreshes(ctx, me, other))?;
     diagonal(ctx, me)
 }
 
@@ -58,7 +58,7 @@ fn block_standard(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
 pub(crate) fn block_slope_step(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     check_flip(ctx, me)?;
     horizontal(ctx, me, true)?;
-    vertical(ctx, me)?;
+    vertical(ctx, me, true)?;
     diagonal(ctx, me)
 }
 
@@ -146,7 +146,18 @@ pub(crate) fn horizontal(ctx: &mut Ctx, me: InstId, slope_step: bool) -> Result<
 }
 
 /// Step 2, vertical contact.
-pub(crate) fn vertical(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+/// Whether a landing on `other` restores `djump`: not for the flipped kid on a solidblock when
+/// `flip.solidblock_no_refresh` (Kotaro player2's misspelled `djump2`).
+fn refreshes(ctx: &Ctx, me: InstId, other: InstId) -> bool {
+    let no = ctx.def.physics.flip.solidblock_no_refresh
+        && state(ctx, me).is_ok_and(|s| s.flipped)
+        && ctx.w.get(other).is_some_and(|o| {
+            o.classes.intersects(ClassMask::SOLIDBLOCK) && !o.classes.intersects(ClassMask::BLOCK)
+        });
+    !no
+}
+
+pub(crate) fn vertical(ctx: &mut Ctx, me: InstId, refresh: bool) -> Result<(), SimError> {
     let def = ctx.def;
     let n = &ctx.rules.num;
     let rev = yflag(ctx, &state(ctx, me)?) < 0;
@@ -159,7 +170,7 @@ pub(crate) fn vertical(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         } else {
             move_contact_solid(ctx, me, Real::new(270.0), vs)?;
         }
-        if up == rev {
+        if up == rev && refresh {
             refresh_air_jump(ctx, me);
             // Showdown: a landing also spends the triple jump the Create granted.
             if def.physics.jump.air == AirJump::DjumpThenTjump {

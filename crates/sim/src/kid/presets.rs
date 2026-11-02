@@ -56,6 +56,9 @@ pub fn defaults(family: KidFamily) -> PhysicsProfile {
 /// fade-in and the platform gravity rule. Animus and easy-miku-2 add `ad_nudge` to the Step list.
 fn a2() -> PhysicsProfile {
     let mut p = a1();
+    // Kotaro's player2 (kid/A2.md): vine probes look down, solidblock does not restore `djump`.
+    p.vine.probe_down_fixed = true;
+    p.flip.solidblock_no_refresh = true;
     p.events.step = vec![
         common(C::Gravity),
         common(C::Walk),
