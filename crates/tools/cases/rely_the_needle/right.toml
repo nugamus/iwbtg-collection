@@ -1,0 +1,26 @@
+# Imported from research trace rely-the-needle-4-2/right by `iwbtg trace import`. M1b (#140): passes on the
+# package as the converter builds it (Trace load mode), with no converter change.
+# Recorder: --object player --room rSelectStage --at 2 --from 2 --x 96 --y 567.4
+source = "rely-the-needle-4-2/right"
+kind = "diff"
+start = { room = "select_stage", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "model"
+seed = 0
+setup = [
+  { frame = 2, target = "kid", set = { x = 96.0, xprevious = 96.0, y = 567.4, yprevious = 567.4 } },
+]
+ignore = ["id", "sprite_index", "sprite_name"]
+notes = [
+  "--x/--y: the recorder creates the object when none exists; setup only moves one",
+]
+
+[vars]
+
+[unprobed]
+
+[rooms]
+"select_stage" = "rSelectStage"
