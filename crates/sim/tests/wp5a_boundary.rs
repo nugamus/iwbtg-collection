@@ -34,7 +34,7 @@ fn game(tweak: impl FnOnce(&mut PhysicsProfile)) -> (GameDef, Kinds) {
     k.sprite = Some(kid_sprite);
     k.classes = ClassMask::KID;
     let kid = b.kind(k);
-    let mut e = KindDef::new("edge", Builtin::Warp);
+    let mut e = KindDef::new("edge", Builtin::EdgeWarp);
     e.sprite = Some(tile);
     e.classes = ClassMask::EDGE_WARP;
     let edge = b.kind(e);
