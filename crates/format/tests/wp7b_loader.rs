@@ -400,7 +400,7 @@ fn timelines_load_in_file_order_with_ticks() {
 }
 
 #[test]
-fn timeline_mistakes_are_errors_and_loop_is_a_warning() {
+fn timeline_mistakes_are_errors_and_loop_and_calls_reach_the_def() {
     let files = package("", |f| {
         put(
             f,
@@ -432,10 +432,12 @@ fn timeline_mistakes_are_errors_and_loop_is_a_warning() {
     });
     let (def, r) = load_ok(&files, STRICT);
     assert_eq!(def.timelines.len(), 1);
+    assert!(def.timelines[0].looping);
+    assert_eq!(def.timelines[0].calls, ["a"]);
     assert!(
-        warnings(&r)
-            .iter()
-            .any(|e| e.contains("`loop = true` is not supported"))
+        !warnings(&r).iter().any(|e| e.contains("loop")),
+        "no loop warning: {}",
+        render(&r)
     );
 }
 
