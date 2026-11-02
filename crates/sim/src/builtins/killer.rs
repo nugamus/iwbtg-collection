@@ -124,9 +124,11 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
             if let Some(v) = s.depth {
                 inst.depth = v;
             }
+            // gm-compare: ok (a speed param of 0 means not set, not a GML test)
             if s.hspeed.get().abs() > 0.0 {
                 inst.m.set_hspeed(s.hspeed)?;
             }
+            // gm-compare: ok (a speed param of 0 means not set, not a GML test)
             if s.vspeed.get().abs() > 0.0 {
                 inst.m.set_vspeed(s.vspeed)?;
             }
