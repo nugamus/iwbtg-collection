@@ -17,6 +17,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use iwbtg_format::{LoadMode, PackageFiles, load_game};
+use iwbtg_sim::def::GameDef;
 use iwbtg_sim::input::{InputFrame, parse_action_inputs};
 use iwbtg_sim::replay::{Replay, StartMode};
 use iwbtg_sim::room::StartPoint;
@@ -96,6 +97,23 @@ pub fn main(args: &ReplayRunArgs) -> Result<(), ToolError> {
     Ok(())
 }
 
+/// The frames and seed of a `.iwbr` replay's bytes; `label` names the replay in errors.
+pub fn replay_input(bytes: &[u8], label: &str) -> Result<(Vec<InputFrame>, u32), ToolError> {
+    let replay = Replay::decode(bytes).map_err(|e| ToolError::Message(format!("{label}: {e}")))?;
+    if replay.header.start_mode != StartMode::NewGame {
+        return Err(ToolError::Message(format!(
+            "{label}: only replays that start a new game can run here"
+        )));
+    }
+    let seed = u32::try_from(replay.header.rng_seed).map_err(|_| {
+        ToolError::Message(format!(
+            "{label}: the replay's seed {} does not fit the sim's 32-bit seed",
+            replay.header.rng_seed
+        ))
+    })?;
+    Ok((replay.inputs, seed))
+}
+
 /// The frames to run and the seed: a `.iwbr` replay's inputs and header seed, or the frames of an
 /// `.inputs` file (frames 0 through its `end` frame, as the trace runner ticks them) with `seed`.
 fn read_input(path: &Path, seed: u32) -> Result<(Vec<InputFrame>, u32), ToolError> {
@@ -103,22 +121,7 @@ fn read_input(path: &Path, seed: u32) -> Result<(Vec<InputFrame>, u32), ToolErro
     if is_replay {
         let bytes =
             std::fs::read(path).map_err(|e| ToolError::Message(format!("{}: {e}", path.display())))?;
-        let replay =
-            Replay::decode(&bytes).map_err(|e| ToolError::Message(format!("{}: {e}", path.display())))?;
-        if replay.header.start_mode != StartMode::NewGame {
-            return Err(ToolError::Message(format!(
-                "{}: only replays that start a new game can run here",
-                path.display()
-            )));
-        }
-        let seed = u32::try_from(replay.header.rng_seed).map_err(|_| {
-            ToolError::Message(format!(
-                "{}: the replay's seed {} does not fit the sim's 32-bit seed",
-                path.display(),
-                replay.header.rng_seed
-            ))
-        })?;
-        return Ok((replay.inputs, seed));
+        return replay_input(&bytes, &path.display().to_string());
     }
     let parsed = parse_action_inputs(&read_text(path)?)
         .map_err(|e| ToolError::Message(format!("{}: {e}", path.display())))?;
@@ -134,16 +137,25 @@ pub fn run(
     frames: &[InputFrame],
     options: SimOptions,
 ) -> Result<ReplaySummary, ToolError> {
-    let def = load_game(pkg, LoadMode::Strict).map_err(|diags| {
+    run_def(load_strict(pkg, LoadMode::Strict)?, frames, options)
+}
+
+/// Loads a package, formatting the diagnostics as an error.
+pub fn load_strict(pkg: &PackageFiles, mode: LoadMode) -> Result<GameDef, ToolError> {
+    load_game(pkg, mode).map_err(|diags| {
         ToolError::Message(format!(
-            "the package does not load:\n  {}",
-            diags
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join("\n  ")
+            "the package does not load:
+  {}",
+            diags.iter().map(ToString::to_string).collect::<Vec<_>>().join(
+                "
+  "
+            )
         ))
-    })?;
+    })
+}
+
+/// Runs a loaded game headless on these input frames, one per tick, from `options`.
+pub fn run_def(def: GameDef, frames: &[InputFrame], options: SimOptions) -> Result<ReplaySummary, ToolError> {
     let mut sim = Sim::new(Arc::new(def), options)
         .map_err(|e| ToolError::Message(format!("the sim did not start: {e}")))?;
     let mut splits = Vec::new();
