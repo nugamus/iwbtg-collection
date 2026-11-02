@@ -45,7 +45,7 @@ That's expected. `iwc convert` (research) writes its packages to `research/build
 
 ## Agent teams
 
-Several agents can work at once through Claude Code agent teams (experimental). The workspace settings turn the feature on with `"env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" }`. One session is the lead, and it starts teammates. Each teammate is a full Claude Code session with its own context. Teammates talk to the lead and each other with messages and share a task list. On Windows they run in-process: the lead's agent panel lists them, arrow keys and Enter open one, and `x` stops it. Split panes need tmux or iTerm2, which Windows Terminal and the VS Code terminal don't support.
+Several agents can work at once through Claude Code agent teams (experimental). The workspace settings turn the feature on with `"env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" }`. One session is the lead, and it starts teammates. Each teammate is a full Claude Code session with its own context. Teammates talk to the lead and each other with messages. The docs describe a shared task list, but none of the sessions has a tool to create or read one (checked 2026-11-02: the lead had only Agent, SendMessage and TaskStop, a teammate has no task tool either, and the session's `~/.claude/tasks/` folder stayed empty), so the `in-progress` labels are the task list (see Claims below). On Windows they run in-process: the lead's agent panel lists them, arrow keys and Enter open one, and `x` stops it. Split panes need tmux or iTerm2, which Windows Terminal and the VS Code terminal don't support.
 
 Teammates share the lead's working folder, so the CLAUDE.md files require:
 
