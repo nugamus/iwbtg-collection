@@ -987,6 +987,53 @@ fn a_gravity_flip_with_view_rotation_is_refused_at_load() {
     );
 }
 
+#[test]
+fn script_problems_are_diagnostics_with_file_line_column() {
+    let files = package(|f| {
+        set(
+            f,
+            "scripts/boss.rhai",
+            "fn step() {
+    if this.x > 1.0 && random(1.0) < 0.5 { destroy(this); }
+}
+",
+        );
+    });
+    let r = load_report(&files, STRICT);
+    let text = render(&r);
+    assert!(
+        text.contains("scripts/boss.rhai:2:") && text.contains("`random` draws from the RNG"),
+        "{text}"
+    );
+    assert!(!r.ok(), "{text}");
+
+    let files = package(|f| {
+        set(
+            f,
+            "scripts/boss.rhai",
+            "fn step() { if this.x == 1.5 { destroy(this); } }
+",
+        )
+    });
+    let r = load_report(&files, STRICT);
+    assert!(
+        r.ok(),
+        "a lint warning does not refuse the package: {}",
+        render(&r)
+    );
+    assert!(render(&r).contains("warning: raw `==`"), "{}", render(&r));
+
+    let files = package(|f| {
+        set(
+            f,
+            "scripts/boss.rhai",
+            "fn create() { instance_create(\"@nope\", 1, 2); }
+",
+        )
+    });
+    assert!(render(&load_report(&files, STRICT)).contains("unknown kind \"@nope\""));
+}
+
 // ---- #138: tier 3 misc built-ins (time_limit, sign, ladder, decor)
 
 fn misc_package(objects: &[(&str, &str)]) -> PackageFiles {
@@ -1343,4 +1390,50 @@ fn engine_toml_is_checked() {
     });
     let errs = errors(&load_report(&files, STRICT)).join("\n");
     assert!(errs.contains("must be the folder name `a1`"), "{errs}");
+}
+
+#[test]
+fn an_engine_pack_sound_resolves_in_the_physics_sounds() {
+    let files = with_pack(|f| {
+        set(
+            f,
+            "physics.toml",
+            "preset = \"A1\"\n[sounds]\njump = \"engine:a1/jump\"\n",
+        );
+        f.push(("engine/a1/sounds/jump.ogg".into(), b"OggS".to_vec()));
+    });
+    let (def, _) = load_ok(&files, STRICT);
+    let id = def.physics.sounds.jump.expect("the jump sound resolves");
+    assert_eq!(def.sounds[id.0 as usize].name, "engine:a1/jump");
+    // A pack sound is gameplay data; the pack's credits are not.
+    let other = with_pack(|f| {
+        set(
+            f,
+            "physics.toml",
+            "preset = \"A1\"\n[sounds]\njump = \"engine:a1/jump\"\n",
+        );
+        f.push(("engine/a1/sounds/jump.ogg".into(), b"OggS".to_vec()));
+        f.push((
+            "engine/a1/sounds/jump.toml".into(),
+            b"length_ticks = 10\n".to_vec(),
+        ));
+    });
+    let (def2, _) = load_ok(&other, STRICT);
+    assert_eq!(def2.sounds[0].length_ticks, 10, "the pack sidecar is read");
+}
+
+#[test]
+fn a_missing_engine_pack_sound_is_an_error() {
+    let files = with_pack(|f| {
+        set(
+            f,
+            "physics.toml",
+            "preset = \"A1\"\n[sounds]\njump = \"engine:a1/nope\"\n",
+        );
+    });
+    let errs = errors(&load_report(&files, STRICT)).join("\n");
+    assert!(
+        errs.contains("the engine pack `a1` has no sound `nope`"),
+        "{errs}"
+    );
 }
