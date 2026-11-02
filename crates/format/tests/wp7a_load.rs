@@ -1061,3 +1061,172 @@ fn wp6c3_params_are_checked() {
         );
     }
 }
+
+// ---- #291: tier 2 flag and music built-ins (boss_gate, boss_item, secret_item, item_viewer, game_clear, music)
+
+fn flags_package(objects: &[(&str, &str)]) -> PackageFiles {
+    let listed: String = objects.iter().map(|(s, _)| format!("\"@{s}\", ")).collect();
+    let order = ORDER.replace("\"playerface\",", &format!("\"playerface\", {listed}"));
+    package(|f| {
+        set(f, "game.toml", manifest(&order, "").into_bytes());
+        f.push(("sounds/theme.ogg".into(), b"ogg".to_vec()));
+        for (stem, text) in objects {
+            f.push((format!("objects/{stem}.toml"), text.as_bytes().to_vec()));
+        }
+    })
+}
+
+#[test]
+fn wp6b4_params_load() {
+    let files = flags_package(&[
+        ("gate", "base = \"boss_gate\"\nboss_index = 3\n"),
+        (
+            "reward",
+            "base = \"boss_item\"\nboss_index = 3\nwatched_object = \"@boss\"\n",
+        ),
+        ("secret", "base = \"secret_item\"\nitem_index = 15\n"),
+        ("viewer", "base = \"item_viewer\"\nkind = \"item\"\nindex = 2\n"),
+        ("finish", "base = \"game_clear\"\nsave_with_position = false\n"),
+        (
+            "bgm",
+            "base = \"music\"\ntrack = \"theme\"\nloop = false\nmode = \"every_step_if_not_playing\"\nrespects_music_off = true\n",
+        ),
+    ]);
+    let (def, _) = load_ok(&files, STRICT);
+    let real = |v: f64| ParamValue::Real(Real::new(v));
+    let (_, gate) = kind_named(&def, "@gate");
+    assert_eq!(gate.params.0.get("boss_index"), Some(&real(3.0)));
+    let (boss_id, _) = kind_named(&def, "@boss");
+    let (_, reward) = kind_named(&def, "@reward");
+    assert_eq!(
+        reward.params.0.get("watched_object"),
+        Some(&ParamValue::Kind(boss_id))
+    );
+    let (_, secret) = kind_named(&def, "@secret");
+    assert_eq!(secret.params.0.get("item_index"), Some(&real(15.0)));
+    let (_, viewer) = kind_named(&def, "@viewer");
+    assert_eq!(viewer.params.0.get("kind"), Some(&ParamValue::Str("item".into())));
+    assert_eq!(viewer.params.0.get("index"), Some(&real(2.0)));
+    let (_, finish) = kind_named(&def, "@finish");
+    assert_eq!(
+        finish.params.0.get("save_with_position"),
+        Some(&ParamValue::Bool(false))
+    );
+    let (_, bgm) = kind_named(&def, "@bgm");
+    assert!(
+        matches!(bgm.params.0.get("track"), Some(ParamValue::Sound(_))),
+        "a track names a sound"
+    );
+    assert_eq!(bgm.params.0.get("loop"), Some(&ParamValue::Bool(false)));
+    assert_eq!(
+        bgm.params.0.get("mode"),
+        Some(&ParamValue::Str("every_step_if_not_playing".into()))
+    );
+    assert_eq!(
+        bgm.params.0.get("respects_music_off"),
+        Some(&ParamValue::Bool(true))
+    );
+}
+
+/// The basic package with the WP6b.4 built-ins listed and `instance` placed in `rooms/stage1.toml`.
+fn flags_instance_errors(instance: &str) -> Vec<String> {
+    let order = ORDER.replace(
+        "\"playerface\",",
+        "\"playerface\", \"boss_gate\", \"boss_item\", \"secret_item\", \"item_viewer\", \"game_clear\", \"music\",",
+    );
+    let files = package(|f| {
+        set(f, "game.toml", manifest(&order, "").into_bytes());
+        f.push(("sounds/theme.ogg".into(), b"ogg".to_vec()));
+        let stage = STAGE1.replace(
+            "  { kind = \"warp\", x = 768, y = 512, room_to = \"title\" },
+",
+            &format!(
+                "  {{ kind = \"warp\", x = 768, y = 512, room_to = \"title\" }},
+  {instance},
+"
+            ),
+        );
+        set(f, "rooms/stage1.toml", stage.into_bytes());
+    });
+    let r = load_report(&files, STRICT);
+    assert!(
+        !r.ok(),
+        "expected an error for {instance}:
+{}",
+        render(&r)
+    );
+    errors(&r)
+}
+
+#[test]
+fn wp6b4_params_are_checked() {
+    let cases = [
+        (r#"{ kind = "boss_gate", x = 0, y = 0 }"#, "boss_index"),
+        (
+            r#"{ kind = "boss_gate", x = 0, y = 0, boss_index = 16 }"#,
+            "boss_index",
+        ),
+        (
+            r#"{ kind = "boss_gate", x = 0, y = 0, boss_index = "one" }"#,
+            "boss_index",
+        ),
+        (
+            r#"{ kind = "boss_item", x = 0, y = 0, boss_index = 0, watched_object = "nope" }"#,
+            "watched_object",
+        ),
+        (
+            r#"{ kind = "boss_item", x = 0, y = 0, boss_index = 0, watched_object = 3 }"#,
+            "watched_object",
+        ),
+        (
+            r#"{ kind = "secret_item", x = 0, y = 0, item_index = 1.5 }"#,
+            "item_index",
+        ),
+        (r#"{ kind = "item_viewer", x = 0, y = 0, index = 1 }"#, "kind"),
+        (
+            r#"{ kind = "item_viewer", x = 0, y = 0, index = 1, bogus = 1 }"#,
+            "bogus",
+        ),
+        (
+            r#"{ kind = "game_clear", x = 0, y = 0, save_with_position = "no" }"#,
+            "save_with_position",
+        ),
+        (r#"{ kind = "music", x = 0, y = 0 }"#, "track"),
+        (r#"{ kind = "music", x = 0, y = 0, track = "nope" }"#, "nope"),
+        (
+            r#"{ kind = "music", x = 0, y = 0, track = "theme", mode = "sometimes" }"#,
+            "mode",
+        ),
+        (
+            r#"{ kind = "music", x = 0, y = 0, track = "theme", loop = 1 }"#,
+            "loop",
+        ),
+        (
+            r#"{ kind = "music", x = 0, y = 0, track = "theme", respects_music_off = "yes" }"#,
+            "respects_music_off",
+        ),
+    ];
+    for (instance, needle) in cases {
+        let errs = flags_instance_errors(instance);
+        assert!(
+            errs.iter().any(|e| e.contains(needle)),
+            "{instance}: no error mentions `{needle}`: {errs:?}"
+        );
+    }
+}
+
+#[test]
+fn an_item_viewer_kind_is_a_preset_param_because_the_placed_key_kind_is_taken() {
+    // `kind` on a placed instance names the object; the viewer's own `kind` param (boss or item)
+    // can only come from an object file.
+    let files = flags_package(&[(
+        "viewer",
+        "base = \"item_viewer\"
+kind = \"trophy\"
+index = 1
+",
+    )]);
+    let r = load_report(&files, STRICT);
+    assert!(!r.ok());
+    assert!(errors(&r).iter().any(|e| e.contains("kind")), "{:?}", errors(&r));
+}
