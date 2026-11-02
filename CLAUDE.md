@@ -15,7 +15,18 @@
 - Any per-game design question (stripped-mode cuts, run start and end, cutscenes, secrets, mods) goes into `docs/games/<game-id>.md` (see `docs/games/README.md`). Never guess the answer in code.
 - Design is a priority. No generic UI; match the IWBTG style and reuse art from ported games where it fits.
 - The user does not write Rust and tests every change. End each change with: exact build/run commands, steps to perform, and what to look for (expected vs. broken).
-- Work comes from GitHub issues (see the client's `docs/roadmap.md`, How work flows). One issue, one branch `issue-<n>-<short-name>`, one PR with `Closes #<n>`. Stay inside the issue's scope; new work becomes a new issue. Questions only the user can answer go in an issue comment with the `needs-user` label.
+
+## Issues
+
+Work is tracked in GitHub issues across the client, research and games repos, on the Project board "IWBTG Collection". The session-start hook shows milestone progress, the next unblocked issues, answered questions and the triage queue.
+
+- Before starting, read the issue, the issues it is blocked by and its parent. Comment on it when you start (`gh issue comment`).
+- One issue, one branch `issue-<n>-<short-name>`, one PR with `Closes #<n>`. Tick the issue's Done-when boxes as they pass. Stay inside its scope.
+- **File what you find.** Whenever you notice something you will not fix in this issue (a bug, a gap, a missing test, a doc that no longer matches, an idea, a risk, a follow-up), search the open issues, then file it: `gh issue create --label triage` with Goal and Done when. Never leave a finding only in chat or in a code comment. The Stop hook makes every turn that changed files end with `Findings: <issue links>` or `Findings: none`.
+- **Triage.** Issues labeled `triage` get a milestone, a `size:` and an `area:` label, and `blocked by` links (`gh api -X POST repos/nugamus/<repo>/issues/<n>/dependencies/blocked_by -F issue_id=<blocking issue's id>`). Then remove `triage`, and add `agent-ready` if it is fully specified. Split anything `size:L` into sub-issues (`.../issues/<n>/sub_issues -F sub_issue_id=<id>`).
+- **Questions for the user** go in an issue comment, with the `needs-user` label on the issue. Then move on to other work. Start every comment you post with `<!-- agent -->`; the hook uses it to tell the user's replies from yours. When the user has answered, act on it and remove `needs-user`.
+- **Docs in the same PR.** A PR that changes behavior updates its docs (built-in pages, format spec, CLI, product or content decisions) in the same PR.
+- When a milestone's issues are all closed, close the milestone.
 
 ## Maintaining this harness
 

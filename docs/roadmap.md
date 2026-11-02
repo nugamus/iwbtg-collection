@@ -12,6 +12,8 @@ The order of work across all three repos: client, research and games. There are 
   - `needs-user`: a decision, review or playtest that only the user can do.
   - `size:S/M/L`: S is one agent session and M a few. An L issue gets split before work starts.
   - `area:*`: which part of the project the issue touches.
+  - `triage`: a new issue an agent filed, waiting to be sorted into a milestone.
+- **Sub-issues** break every large issue into steps, and `blocked by` links connect dependent issues, so the board shows what can start now.
 - **Ideas** that are not in any milestone yet are issues without a milestone (the backlog) or lines in `Potential Features.md`.
 
 ## Milestones
@@ -34,10 +36,15 @@ The order of M3 and M4 versus M5: M5 ports need the M2 sim and the porting pipel
 
 ## How work flows
 
-1. The user or an agent picks an issue. By default that is the lowest-numbered `agent-ready` issue in the earliest open milestone whose dependencies are closed.
-2. One issue gets one branch (`issue-<n>-<short-name>`) and one pull request whose description says `Closes #<n>`. Work found outside the issue's scope becomes a new issue.
-3. Questions only the user can answer go in an issue comment, and the issue gets the `needs-user` label. Per-game questions go in `docs/games/<game-id>.md`.
-4. The user runs the issue's User check, then merges.
+The rules are in each repo's `CLAUDE.md`, under Issues. Two hooks in `.claude/settings.json` enforce them:
+
+- **At session start,** the agent sees milestone progress, the next unblocked `agent-ready` issues, needs-user issues the user has answered, and the triage queue.
+- **When a turn that changed files ends,** the agent must report its findings: issues filed for anything it noticed but did not finish, or "none". New issues get `triage` until they are sorted into a milestone.
+
+1. By default an agent takes the first unblocked issue in the earliest open milestone. Issues with open sub-issues or open `blocked by` links are skipped.
+2. One issue gets one branch and one PR with `Closes #<n>`. The PR template asks for docs updated, follow-up issues and the User check, and a CI check makes sure they are filled in.
+3. Questions for the user go in issue comments, and the issue gets `needs-user`. The user replies on GitHub, and the next session acts on the reply.
+4. The user runs the User check, then merges.
 
 ## Research pipeline rules
 
