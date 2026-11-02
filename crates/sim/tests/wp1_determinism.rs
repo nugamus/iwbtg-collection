@@ -105,6 +105,11 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+// On wasm32-unknown-unknown the libtest harness does not exist; wasm-bindgen-test runs the test
+// under node (#206). Everywhere else this is a plain #[test].
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+use wasm_bindgen_test::wasm_bindgen_test as test;
+
 #[test]
 fn wp1_probe_world_10000_ticks_hashes_are_identical() {
     let (a_points, a_final) = run();

@@ -255,6 +255,16 @@ pub fn instance_place(
     Ok(q.first(&hits))
 }
 
+/// Every instance `instance_place` would consider at `(x, y)`, in store (creation) order: for
+/// built-ins that test each hit (kid_bullet's block check).
+pub fn place_hits_ids(ctx: &Ctx, me: InstId, x: Real, y: Real, t: Target) -> Result<Vec<InstId>, SimError> {
+    Ok(Q::of(ctx)
+        .place_hits(me, x, y, t, false)?
+        .into_iter()
+        .map(|i| i.id)
+        .collect())
+}
+
 /// GML `instance_position`: the point test with precise masks where the target has them.
 pub fn instance_position(ctx: &Ctx, x: Real, y: Real, t: Target) -> Result<Option<InstId>, SimError> {
     collision_point(ctx, x, y, t, true, None)
