@@ -22,7 +22,7 @@ const COUNTER: VarId = VarId(10);
 
 /// `state_hash` after the last tick, as lowercase hex. Recorded on Windows x86_64. A deliberate
 /// change to the sim or to `HASH_LAYOUT` updates it in the same PR.
-const FINAL_HASH: &str = "6ca2698e5d97952ed5f32104a8ccac719a5d9b15b4279b465966c81effff454c";
+const FINAL_HASH: &str = "07b30b2355be052d149bb06b392d4924d3a80a477a607191779b9d63bd167092";
 
 fn child(tag: &str) -> ProbeState {
     let mut s = ProbeState::new(tag, None);

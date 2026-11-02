@@ -60,6 +60,8 @@ pub mod spring;
 pub mod time_limit;
 pub mod trap_stopper;
 
+use std::collections::BTreeSet;
+
 use serde::{Deserialize, Serialize};
 
 pub use state::BuiltinState;
@@ -78,9 +80,63 @@ pub struct MechGlobals {
     pub bosses: u16,
     /// Item flags, one bit per item (`SaveSlot::items`).
     pub items: u16,
+    /// `global.triggered`, the `global_last` trigger model (kaenbyou).
+    pub global_triggered: Real,
+    /// `global.trigger[n]`, the `flag_array` trigger model.
+    pub trigger_flags: BTreeSet<i64>,
+    /// `global.stop[n]`, the `flag_array` model's second array (little-runner).
+    pub stop_flags: BTreeSet<i64>,
+    /// `global.switchTrigger[n]`, the `switch_array` trigger model (spook house).
+    pub switches: BTreeSet<i64>,
     /// The music flag (`global.music`, true is muted); the `world` built-in flips it on a Mute
     /// press and music objects read it.
     pub music_muted: bool,
+}
+
+impl MechGlobals {
+    /// `global.boss[i]` (bit `i` of `bosses`; `i` is 0 to 15).
+    pub fn boss(&self, i: u8) -> bool {
+        self.bosses & (1u16 << i) != 0
+    }
+
+    /// Sets `global.boss[i]`.
+    pub fn set_boss(&mut self, i: u8) {
+        self.bosses |= 1u16 << i;
+    }
+
+    /// `global.item[i]` (bit `i` of `items`; `i` is 0 to 15).
+    pub fn item(&self, i: u8) -> bool {
+        self.items & (1u16 << i) != 0
+    }
+
+    /// Sets `global.item[i]`.
+    pub fn set_item(&mut self, i: u8) {
+        self.items |= 1u16 << i;
+    }
+
+    /// Clears every trigger array and `global.triggered` (a `game_restart`; the `switch_array`
+    /// model's world Room End calls [`MechGlobals::clear_switches`] instead).
+    pub fn clear_triggers(&mut self) {
+        self.global_triggered = Real::ZERO;
+        self.trigger_flags.clear();
+        self.stop_flags.clear();
+        self.switches.clear();
+    }
+
+    /// Clears the switch array (spook house world Room End).
+    pub fn clear_switches(&mut self) {
+        self.switches.clear();
+    }
+}
+
+/// A flag index param: a whole number 0 to 15 (the save slot holds 16 flags per word).
+pub(crate) fn flag_index(p: &Params, name: &str) -> Result<u8, ParamError> {
+    let v = param_real(p, name)?.ok_or_else(|| param_error(name, "is required"))?;
+    let n = warp::whole(v, name)?;
+    u8::try_from(n)
+        .ok()
+        .filter(|n| *n < 16)
+        .ok_or_else(|| param_error(name, "must be 0 to 15 (the save slot holds 16 flags)"))
 }
 
 /// Built-in effects for the client. Visual only: the sim never reads them back.
@@ -96,6 +152,11 @@ pub enum BuiltinOutput {
         count: u32,
         /// The kid was flipped: the particles fall up.
         flipped: bool,
+    },
+    /// A `sign` raised its message this tick (the client shows a text box while it keeps coming).
+    TextBox {
+        /// The text.
+        text: String,
     },
 }
 
@@ -125,6 +186,8 @@ pub enum ParamType {
     Kind,
     /// A sound id.
     Sound,
+    /// Free text (a sign's message).
+    Text,
 }
 
 /// A param set a built-in cannot use.

@@ -41,7 +41,8 @@ fn type_problem(spec: &ParamSpec, value: &ParamValue) -> Option<String> {
         | (ParamType::Bool, ParamValue::Bool(_))
         | (ParamType::Room, ParamValue::Room(_))
         | (ParamType::Kind, ParamValue::Kind(_))
-        | (ParamType::Sound, ParamValue::Sound(_)) => None,
+        | (ParamType::Sound, ParamValue::Sound(_))
+        | (ParamType::Text, ParamValue::Str(_)) => None,
         // A reference the loader could not resolve is already an error of its own.
         (ParamType::Room | ParamType::Kind | ParamType::Sound, ParamValue::Str(_)) => None,
         (ParamType::Enum(words), ParamValue::Str(s)) => {
@@ -61,6 +62,7 @@ fn type_problem(spec: &ParamSpec, value: &ParamValue) -> Option<String> {
         (ParamType::Room, _) => wrong("a room"),
         (ParamType::Kind, _) => wrong("a kind"),
         (ParamType::Sound, _) => wrong("a sound"),
+        (ParamType::Text, _) => wrong("text"),
     }
 }
 
@@ -168,11 +170,14 @@ pub fn check(def: &GameDef, trace: bool, diags: &mut Vec<Diagnostic>) {
         {
             continue;
         }
-        let Some(specs) = specs_of(k.base) else { continue };
+        if specs_of(k.base).is_none() {
+            continue;
+        }
         if let Some(Err(e)) = init_of(k.base, &k.params) {
-            let missing_required = specs
-                .iter()
-                .any(|s| s.required && s.name == e.param && !k.params.0.contains_key(&e.param));
+            // A param the kind does not set: required outright (`required`) or only together with
+            // others (an edge warp needs `room_to` or per-edge rooms). A placed instance supplies
+            // them, so an unplaced default kind is not an error for lacking them.
+            let missing_required = !k.params.0.contains_key(&e.param);
             if !missing_required {
                 report(
                     diags,

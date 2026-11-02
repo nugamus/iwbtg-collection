@@ -518,6 +518,7 @@ pub fn perform_change(ctx: &mut Ctx, req: RoomRequest) -> Result<(), SimError>;
 The sim never touches files. The save is sim state; the client stores its bytes.
 
 ```rust
+// `flipped` is `global.reverse` for a `yflag` game (family B), the kid's flip state otherwise (#267).
 pub struct SaveSlot { pub room: RoomId, pub x: Real, pub y: Real, pub flipped: bool, pub facing: i8,
     pub difficulty: u8, pub deaths: u32, pub time: u32, pub bosses: u16, pub items: u16, pub clear: bool }
 pub enum SavedPosition { XyBase100Bytes, XyBase256Bytes, XyText2Dec, XyPrevious, FixedPoint, FloorNudge }
@@ -593,8 +594,8 @@ vine_keys = "edges"           # edges | latched_flags (wanna, rori, fairy-tale, 
 [events]
 create = ["create_defaults", "ensure_world", "create_bow", "first_play_save", "arm_play_timer"]
 room_start = []                # B: ["create_bow", "set_view_angle"]
-step = ["ladder", "walk", "air_sprite", "fall_cap", "shoot", "jump", "release",
-        "ad_nudge", "vines", "flip_swap", "platform_gravity_zero", "fade_in"]
+step = ["gravity", "walk", "air_sprite", "fall_cap", "shoot", "jump", "release",
+        "ad_nudge", "vines", "flip_swap", "platform_gravity_zero", "fade_in"]   # `gravity` stands for the ladder action's step 4 until WP5c builds `ladder` (see below)
 end_step = ["ladder_sprites"]
 alarms = [{ n = 0, run = ["play_timer"] }]   # B: cancel poll (unused while cancels are on)
 outside_room = []              # B: ["kill_unless_room_changer"]
@@ -656,7 +657,8 @@ Each row is one spec rule; the last column is the field or action that implement
 | B Create does not set gravity (0 until End Step) | B | `gravity.reapply = "end_step_slope"` and create gravity 0 | 5b |
 | B Room Start: create bow, set view angle | B | `events.room_start` actions `create_bow`, `set_view_angle` | 5b |
 | Create alpha 0 and +0.1 per Step (rely) | A1 rely | action `fade_in`, `misc.fade_in = true` | 5a |
-| Ladder: up/down while overlapping ladder grabs, moves 3 px, gravity/vspeed 0, jump leaves, else gravity 0.4 | A1 (little-trap, rainbow) | action `ladder` (two `direct` reads where the original reads twice), `[ladder] entry = "up_or_down" | "up_only"` | 5c |
+| Gravity back to its constant every Step unless on a ladder (A1 Step action 2 step 4; the rely profile has no ladder) | A1 (rely) | action `gravity` (`gravity.reapply = "step"`); WP5a | 5a |
+| Ladder: up/down while overlapping ladder grabs, moves 3 px, gravity/vspeed 0, jump leaves, else gravity 0.4 | A1 (little-trap, rainbow) | action `ladder` (two `direct` reads where the original reads twice), `[ladder] entry = "up_or_down" | "up_only"`. A profile that has ladders lists `ladder` instead of `gravity`: `ladder` includes the gravity reset (step 4), so the two are never listed together | 5c |
 | Walk: right wins, frozen forces 0, facing unless near vine, vine-blocked direction keeps old hspeed | A, B, C | action `walk` (`InputState::direct` under `input.walk = "direct_latch"`) | 5a |
 | Slip blocks: probe 4 px, read slip 10 px below, add/subtract `slip*sign(hspeed)`, no clamp | A1, A2, B | `[ice] model = "slip"`; uses `num::sign(.., &NumRules)` (N11) | 5c |
 | Showdown ice: tempHspeed, decay 0.95, zero below 0.2 | A3 showdown | action `ice_temp_hspeed` | 5c |
@@ -799,6 +801,7 @@ pub enum DllMode { Model, Stub }         // Stub = recorder --stub-dlls: every c
 - Model per the spec's replacement contract (Design, derived from Inferred items): copies start at the call's tick; `length_ticks` = song length × tick rate, from the package (CR9); at most one MULTIMEDIA copy (what a second start does is UNKNOWN, S2); `is_playing` latency 0 ticks (UNKNOWN, S1); game_restart keeps sounds (Inferred, S4).
 - SuperSound (kaenbyou, eat-the-lemon) and GMFMODSimple (go-the-spook-house, xia) adapters: getters return exactly the last value set (UNKNOWN, S5). Their values decide fader object lifetimes, so they affect instance ids and hashes. `SimOptions::dll_mode = Stub` reproduces `--stub-dlls` traces (every kaenbyou trace uses it); `Model` is for play and replays. CleanMem calls are no-ops.
 - The `Mute` action flips the game's music flag through the world built-in; music objects then call `stop_all`, which is sim state.
+- As built (WP10, #20): `SoundState { copies, supersound, gmfmod }`; the extra `sound::volume` (output only). `SoundOutput::{Load, Play, Stop, StopAll, Pause, Volume, Pitch}` with a `SoundTarget` (built-in id, SuperSound handle, FMOD sound, instance or group). A copy plays the ticks `start .. start + length_ticks`; `is_playing` computes this itself, `tick` (row 16) only drops ended copies. S1 delays only the start. S2 and S3 apply to MULTIMEDIA copies. S4 is read by `game_restart` (`keep_on_restart = false` stops all). The adapters take the arguments of the GML `external_call` (strings for SuperSound, numbers for FMOD); because the DLLs do not know a sound length, the script host passes `length_ticks` at load (0 = unknown, plays until stopped; the package side is OPEN).
 - Output: `SoundOutput::{Play, Stop, StopAll, Volume, Pitch}` for the client. Music sync to the tick clock is a client feature (sound Inferred contract item 5, "The user should accept or reject this").
 
 ## 8. Package loading (`crates/format`, WP7a and WP7b)
@@ -864,7 +867,7 @@ Checked against `research/build/packages/rely_the_needle/` on 2026-10-24. The cl
 | CR6 | Room `role` (boot, title, menu, select, play) | 4.1 | M1 (defaults to play) |
 | CR7 | `start_room` stays the title for game select art, plus `[engine] new_game_room = "room_1"` | `start_room = "title"` | M3b |
 | CR8 | physics.toml in the 5.2 form | 5.2 | after WP5a |
-| CR9 | Sound kind and length in ticks (ffprobe duration × 50) | section 7 | WP10 tests on packages |
+| CR9 | Sound kind and length in ticks (ffprobe duration × 50); also for files a game loads through SuperSound or GMFMODSimple, which sit in `sounds/` or `music/` and are named by stem (`GameDef::dll_sound_length`, #288) | section 7 | WP10 tests on packages |
 | CR10 | Kind names and object bases that are not built-ins of 6.1 (they load inert in Trace mode) | loader warning CR10 | M3a |
 | CR11 | Write `counts_as` instead of the legacy object key `roles` | loader warning CR11 | M3a |
 | CR12 | `[defaults.<kind>]` sprites for bare built-ins in game.toml (not only in tests/trace-map.toml) | loader warning CR12 | M3a |

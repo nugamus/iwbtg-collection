@@ -431,7 +431,7 @@ fn the_a1_preset_is_rely() {
     assert_eq!(p.vine.kick, [r(15.0), r(-9.0)]);
     assert_eq!((p.bullet.max, p.bullet.speed), (4, r(16.0)));
     assert!(p.misc.fade_in);
-    assert_eq!(p.events.step.len(), 10);
+    assert_eq!(p.events.step.len(), 11);
 }
 
 #[test]

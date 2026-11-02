@@ -1,245 +1,2124 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://iwbtg-collection/format/v0/physics.schema.json",
-  "title": "physics.toml (kid physics profile), format v0",
-  "description": "A kid physics profile as written in a package. Every key is optional: a missing key takes the value of the preset. Unknown keys are errors. Covers the sections and names of family A1 (WP5a); other families add their names (WP5b, WP5c).",
-  "type": "object",
-  "additionalProperties": false,
   "$defs": {
-    "real": { "type": "number" },
-    "action": {
-      "description": "A kid action name for an event list.",
-      "enum": [
-        "create_defaults", "ensure_world", "create_bow", "first_play_save", "arm_play_timer",
-        "gravity", "walk", "air_sprite", "fall_cap", "shoot", "jump", "release", "vines",
-        "play_timer", "kill", "platform_gravity_zero", "fade_in"
+    "A1Action": {
+      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`.",
+      "oneOf": [
+        {
+          "const": "platform_gravity_zero",
+          "description": "Step action 6 (rely): gravity 0 while `onPlatform`, overriding the Step's gravity reset.",
+          "type": "string"
+        },
+        {
+          "const": "fade_in",
+          "description": "Step action 7 (rely): while `image_alpha < 1`, add `misc.fade_step`; no clamp.",
+          "type": "string"
+        }
       ]
     },
-    "actions": { "type": "array", "items": { "$ref": "#/$defs/action" } },
-    "class": {
+    "A2Action": {
+      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`.",
+      "oneOf": [
+        {
+          "const": "ad_nudge",
+          "description": "Animus and easy-miku-2, the end of the movement action: with a `block` or `solidblock` 1 px\nbelow, a press of A (`extra1`) subtracts 1 from `hspeed` and a press of D (`extra2`) adds 1.",
+          "type": "string"
+        }
+      ]
+    },
+    "A3Action": {
+      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`.",
+      "oneOf": [
+        {
+          "const": "key_flags",
+          "description": "Step action 4 step 1 (wanna, showdown, rori, fairy-tale): the game's own key flags. Left,\nRight and Jump flags become 1 on the key's press tick and 0 on its release tick; they are\nnot the key's state. With a press and a release in one tick the flag ends 0 (OPEN). The\nflags live in `KidGlobalsExt`, so they outlive the kid.",
+          "type": "string"
+        },
+        {
+          "const": "suicide_check",
+          "description": "Step action 5 (wanna): the Suicide key held (not a press) outside a Boot, Title, Menu or\nSelect room runs `killPlayer` every tick.",
+          "type": "string"
+        }
+      ]
+    },
+    "A4Action": {
+      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`; WP5c adds one variant per action it implements.",
+      "not": {}
+    },
+    "A5Action": {
+      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`.",
+      "oneOf": [
+        {
+          "const": "gravity_and_unstuck",
+          "description": "little-runner's End Step: gravity is `numbers.gravity` every tick (frozen or not); then,\nwhen the kid overlaps a solid at its position, `y` goes back to `yprevious` and the kid\nmoves to contact toward where it was (`move_contact_solid` with no limit). `vspeed` is\nkept. (The original's `obj_wall` slope branches never run: no such object is placed.)",
+          "type": "string"
+        }
+      ]
+    },
+    "ActionName": {
+      "description": "A client action by its package name.",
+      "enum": [
+        "left",
+        "right",
+        "up",
+        "down",
+        "jump",
+        "shoot",
+        "restart",
+        "suicide",
+        "skip",
+        "accept",
+        "back",
+        "menu",
+        "pause",
+        "mute",
+        "reset",
+        "extra1",
+        "extra2",
+        "extra3",
+        "extra4"
+      ],
+      "type": "string"
+    },
+    "AirJump": {
+      "description": "What `[jump] air` names as the air-jump model.",
+      "oneOf": [
+        {
+          "const": "djump",
+          "description": "The `djump` flag (A1-A5).",
+          "type": "string"
+        },
+        {
+          "const": "cur_jumps",
+          "description": "The family B counter (WP5b).",
+          "type": "string"
+        },
+        {
+          "const": "djump_then_tjump",
+          "description": "`djump` then `tjump` (showdown, WP5c).",
+          "type": "string"
+        }
+      ]
+    },
+    "BAction": {
+      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`.",
+      "oneOf": [
+        {
+          "const": "slope_b",
+          "description": "End Step, `playerSlope`: the `slope_wall` slope code and the gravity restore.",
+          "type": "string"
+        },
+        {
+          "const": "killer_check",
+          "description": "`playerMisc` 1 (Step): the kid dies when it touches a `killer` instance. The Step runs\nbefore motion, so this is the position the last tick ended at.",
+          "type": "string"
+        },
+        {
+          "const": "sync_yflag",
+          "description": "Step, `playerMove` steps 1-2: `image_yscale` takes the current `yflag`, then `yflag`\nfollows `global.reverse` (the kid's mask flips one tick after the global does).",
+          "type": "string"
+        },
+        {
+          "const": "player_reverse",
+          "description": "`playerReverse` (the gravity arrows' Alarm 1): `global.reverse` toggles, `yflag` negates,\n`y` moves 4 times the new `yflag`, `curJumps` 1 and `vspeed` 0.",
+          "type": "string"
+        },
+        {
+          "const": "set_view_angle",
+          "description": "Room Start: with `global.reverse` view 0 is enabled at angle 180, else its angle is 0.",
+          "type": "string"
+        },
+        {
+          "const": "ensure_bow",
+          "description": "Room Start and `playerMisc`: a bow at the kid unless one exists.",
+          "type": "string"
+        },
+        {
+          "const": "cancel_poll",
+          "description": "Alarm 0 with jump cancelling off (`jump.cancel = \"poll_alarm\"`): while Jump is up and the\nkid moves against gravity, `vspeed` times `release_mult` and the alarm stops; else the\nalarm is armed again for 1 tick.",
+          "type": "string"
+        }
+      ]
+    },
+    "BRun": {
+      "description": "The collision runs this file implements, by their `physics.toml` names (snake case). Part\nof `kid::KidCollisionRun`; WP5b adds one variant per run it implements.",
+      "not": {}
+    },
+    "BlockRun": {
+      "description": "The collision runs this file implements, by their `physics.toml` names (snake case). Part\nof `kid::KidCollisionRun`.",
+      "oneOf": [
+        {
+          "const": "block_standard",
+          "description": "Kid A1 block contact, steps 1-3 above.",
+          "type": "string"
+        }
+      ]
+    },
+    "BlockSlopeStep": {
+      "description": "How `block_slope_step` climbs.",
+      "oneOf": [
+        {
+          "const": "none",
+          "description": "No slope rule in the block contact.",
+          "type": "string"
+        },
+        {
+          "const": "free_spot",
+          "description": "Rainbow: after the contact, the matching slope `step` px ahead and a free spot `step` up\nmove the kid there.",
+          "type": "string"
+        },
+        {
+          "const": "replace",
+          "description": "Rori, fairy-tale: instead of the contact, the shifted kid overlapping the matching slope\nmoves it `step` sideways and up, with no free-spot test.",
+          "type": "string"
+        }
+      ]
+    },
+    "BoundaryModel": {
+      "description": "`events.boundary`: how the kid handles the room edge (plan 5.3 edge row).",
+      "oneOf": [
+        {
+          "const": "none",
+          "description": "Nothing: the kid is not told about the edge.",
+          "type": "string"
+        },
+        {
+          "const": "intersect_origin",
+          "description": "Intersect Boundary tests the origin: outside the room (strictly) kills the kid unless an\n`edge_warp` overlaps it, which warps it; then the kid wraps to the opposite edge (A1).",
+          "type": "string"
+        },
+        {
+          "const": "intersect_origin_fixed",
+          "description": "Like `intersect_origin` with machinary's fixed numbers (A4): the edges are 800 by 608\nwhatever the room, the wrap adds or subtracts 800 sideways, adds 608 at the top and\nsubtracts 600 (not 608) at the bottom.",
+          "type": "string"
+        },
+        {
+          "const": "outside_room_kill",
+          "description": "Outside Room kills the kid unless a room changer overlaps (family B, WP5b).",
+          "type": "string"
+        },
+        {
+          "const": "end_step_origin",
+          "description": "The origin test runs in End Step (WP5c).",
+          "type": "string"
+        }
+      ]
+    },
+    "BulletRulesDraft": {
+      "additionalProperties": false,
+      "description": "`[bullet]` as written.",
+      "properties": {
+        "max": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "default": null,
+          "items": {
+            "$ref": "#/$defs/Real"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "speed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "type": "object"
+    },
+    "CAction": {
+      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`.",
+      "oneOf": [
+        {
+          "const": "vine_probe",
+          "description": "Step 3-4: `onVineL` / `onVineR`: the distance to the nearest left or right vine is at most\n1 and the kid is free 1 px in the gravity direction. Computed before the jump code; the\n`vines` action (step 12) reads them.",
+          "type": "string"
+        },
+        {
+          "const": "suicide_press",
+          "description": "Step 10: the Suicide key pressed (not held) runs `killPlayer`, when not frozen.",
+          "type": "string"
+        },
+        {
+          "const": "teleport_to_start",
+          "description": "Key C pressed (kid/C.md \"Key C pressed\"): the kid moves to the top-left of the\n`kid_start` marker (17 px left of and 23 px above the normal spawn). Speeds, `djump` and\nthe room are unchanged; frozen does not gate it. Nothing without a marker in the room.\nListed under `events.keys` for the client action `extra1`.",
+          "type": "string"
+        }
+      ]
+    },
+    "ClassName": {
       "description": "A collision class by its package name.",
       "enum": [
-        "kid", "kid_flipped", "kid_bullet", "block", "solidblock", "platform", "killer",
-        "water1", "water2", "water3", "vine_l", "vine_r", "room_changer", "edge_warp", "save",
-        "slip", "slope", "slope_wall", "ladder", "fake_block", "bullet_blocker", "trigger",
-        "trap_stopper", "moving_block", "conveyor", "param_zone", "bow", "blood"
-      ]
+        "kid",
+        "kid_flipped",
+        "kid_bullet",
+        "block",
+        "solidblock",
+        "platform",
+        "killer",
+        "water1",
+        "water2",
+        "water3",
+        "vine_l",
+        "vine_r",
+        "room_changer",
+        "edge_warp",
+        "save",
+        "slip",
+        "slope",
+        "slope_wall",
+        "ladder",
+        "fake_block",
+        "bullet_blocker",
+        "trigger",
+        "trap_stopper",
+        "moving_block",
+        "conveyor",
+        "param_zone",
+        "bow",
+        "blood",
+        "slope_mirror"
+      ],
+      "type": "string"
     },
-    "classes": { "type": "array", "items": { "$ref": "#/$defs/class" } },
-    "actionName": {
-      "enum": [
-        "left", "right", "up", "down", "jump", "shoot", "restart", "suicide", "skip", "accept",
-        "back", "menu", "pause", "mute", "reset", "extra1", "extra2", "extra3", "extra4"
-      ]
-    }
-  },
-  "properties": {
-    "preset": {
-      "description": "The family whose defaults fill every missing key. A1 is rely-the-needle-4-2; the other families currently use the A1 defaults.",
-      "enum": ["A1", "A2", "A3", "A4", "A5", "B", "C"]
-    },
-    "numbers": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "jumps": { "type": "array", "items": { "$ref": "#/$defs/real" } },
-        "gravity": { "$ref": "#/$defs/real" },
-        "run_speed": { "$ref": "#/$defs/real" },
-        "max_vspeed": { "$ref": "#/$defs/real" },
-        "max_fall_speed": { "$ref": "#/$defs/real" },
-        "release_mult": { "$ref": "#/$defs/real" },
-        "sprite_threshold": { "$ref": "#/$defs/real" },
-        "image_speed_idle": { "$ref": "#/$defs/real" },
-        "image_speed_run": { "$ref": "#/$defs/real" }
-      }
-    },
-    "input": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "walk": { "enum": ["direct_latch", "sampled"] },
-        "vine_keys": { "enum": ["edges", "latched_flags"] }
-      }
-    },
-    "events": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "create": { "$ref": "#/$defs/actions" },
-        "room_start": { "$ref": "#/$defs/actions" },
-        "step": { "$ref": "#/$defs/actions" },
-        "end_step": { "$ref": "#/$defs/actions" },
-        "alarms": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["n", "run"],
-            "properties": {
-              "n": { "type": "integer", "minimum": 0, "maximum": 11 },
-              "run": { "$ref": "#/$defs/actions" }
-            }
-          }
+    "CommonAction": {
+      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`.",
+      "oneOf": [
+        {
+          "const": "create_defaults",
+          "description": "Create step 1-2: the numbers, flags and facing a new kid starts with.",
+          "type": "string"
         },
-        "keys": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["action", "on", "run"],
-            "properties": {
-              "action": { "$ref": "#/$defs/actionName" },
-              "on": { "enum": ["held", "press", "release"] },
-              "run": { "$ref": "#/$defs/actions" }
-            }
-          }
+        {
+          "const": "ensure_world",
+          "description": "Create step 3: the world controller if the game has none in the room.",
+          "type": "string"
         },
-        "boundary": {
-          "description": "The room edge. outside_room_kill (family B) and end_step_origin are not built yet.",
-          "enum": ["none", "intersect_origin", "outside_room_kill", "end_step_origin"]
+        {
+          "const": "create_bow",
+          "description": "Create step 6: a bow at the kid's position.",
+          "type": "string"
         },
-        "collisions": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["with", "run"],
-            "properties": {
-              "with": { "$ref": "#/$defs/class" },
-              "run": { "enum": ["block_standard", "platform_standard", "kill"] }
-            }
-          }
+        {
+          "const": "first_play_save",
+          "description": "Create step 4: when no save exists, deaths and time 0 and a save at the kid's position.",
+          "type": "string"
+        },
+        {
+          "const": "arm_play_timer",
+          "description": "Create step 5: alarm 0 = `room_speed`.",
+          "type": "string"
+        },
+        {
+          "const": "gravity",
+          "description": "Step action 2 step 4: gravity back to its constant unless on a ladder.",
+          "type": "string"
+        },
+        {
+          "const": "walk",
+          "description": "Step action 3 steps 1-4: direction keys, facing, horizontal speed, running and idle sprites.",
+          "type": "string"
+        },
+        {
+          "const": "air_sprite",
+          "description": "Step action 3 step 5: jump and fall sprites, and `onPlatform` release.",
+          "type": "string"
+        },
+        {
+          "const": "fall_cap",
+          "description": "Step action 3 step 6: the speed clamp, by `fall_cap.rule`.",
+          "type": "string"
+        },
+        {
+          "const": "shoot",
+          "description": "Step action 3 step 7: shoot on press.",
+          "type": "string"
+        },
+        {
+          "const": "jump",
+          "description": "Step action 3 step 7: `playerJump` on press.",
+          "type": "string"
+        },
+        {
+          "const": "release",
+          "description": "Step action 3 step 7: `playerVJump` on release.",
+          "type": "string"
+        },
+        {
+          "const": "vines",
+          "description": "Step action 4: vines.",
+          "type": "string"
+        },
+        {
+          "const": "stop_if_frozen",
+          "description": "Step (spook house): with `frozen` the whole rest of the Step list is skipped (the code\nwrites no `hspeed`, gravity or `vspeed`). `kid::on_event` runs this one itself.",
+          "type": "string"
+        },
+        {
+          "const": "stop_if_frozen2",
+          "description": "Step (B): with `frozen2`, gravity, `image_speed` and speed become 0 and the rest of the\nStep list is skipped. `kid::on_event` runs this one itself.",
+          "type": "string"
+        },
+        {
+          "const": "play_timer",
+          "description": "Alarm 0: outside the menu roles `global.time` + 1, then alarm 0 = `room_speed` again.",
+          "type": "string"
+        },
+        {
+          "const": "kill",
+          "description": "Key Q pressed (and the killPlayer calls of key rows): the death sequence.",
+          "type": "string"
         }
-      }
+      ]
     },
-    "jump": {
-      "type": "object",
+    "DeathRulesDraft": {
       "additionalProperties": false,
+      "description": "`[death]` as written.",
       "properties": {
-        "ground_classes": { "$ref": "#/$defs/classes" },
-        "ground_also": {
-          "type": "array",
-          "items": { "enum": ["platform_flag", "ladder_jump"] }
+        "first_kid": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
         },
-        "ground_sets_djump": { "type": "boolean" },
-        "air": { "enum": ["djump", "cur_jumps", "djump_then_tjump"] },
-        "water_air": { "enum": ["none", "water2_without_flag", "water_unlimited", "water3_keeps"] }
-      }
+        "killer_check_menu_rooms": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "order": {
+          "items": {
+            "$ref": "#/$defs/DeathStep"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "select_room_reset": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "stop_music": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
     },
-    "fall_cap": {
-      "type": "object",
+    "DeathRun": {
+      "description": "The collision and key runs of this file, by their `physics.toml` names. Part of\n`kid::KidCollisionRun`.",
+      "oneOf": [
+        {
+          "const": "kill",
+          "description": "`{ with = \"killer\", run = \"kill\" }`: the other instance kills the kid.",
+          "type": "string"
+        }
+      ]
+    },
+    "DeathStep": {
+      "description": "One step of the death sequence (kid/A1.md \"Death\"). `[death] order` lists them in the order a\nfamily runs them.",
+      "oneOf": [
+        {
+          "const": "sound",
+          "description": "The death sound, played by the death step `sound`.",
+          "type": "string"
+        },
+        {
+          "const": "blood_emitter",
+          "description": "A blood emitter at the kid's position.",
+          "type": "string"
+        },
+        {
+          "const": "destroy_kid",
+          "description": "Destroy the kid.",
+          "type": "string"
+        },
+        {
+          "const": "destroy_all_kids",
+          "description": "Destroy every kid instance (family B: \"destroy every player instance\").",
+          "type": "string"
+        },
+        {
+          "const": "deaths_plus_one",
+          "description": "`global.death` plus 1 (checked).",
+          "type": "string"
+        },
+        {
+          "const": "save_counters",
+          "description": "The death-only save (`saveDeathTime`): counters into the save slot.",
+          "type": "string"
+        },
+        {
+          "const": "game_over",
+          "description": "The GAMEOVER display. It places itself at view 0 plus its own `offset_x`/`offset_y`\nparams in its Create (`game_over` built-in), so the offset is not a kid field.",
+          "type": "string"
+        }
+      ]
+    },
+    "Downhill": {
+      "description": "The End Step downhill snap models.",
+      "oneOf": [
+        {
+          "const": "none",
+          "description": "No snap.",
+          "type": "string"
+        },
+        {
+          "const": "por",
+          "description": "Poronkusema: `vspeed >= 0`, free below, on a slope last step and a slope within 12 px: down\nto contact by at most 12, running or idle sprite; then remember a slope 1 px below.",
+          "type": "string"
+        },
+        {
+          "const": "rainbow",
+          "description": "Rainbow: a slope within 5 px below, then a mirrored one: down to contact by at most 10.",
+          "type": "string"
+        },
+        {
+          "const": "fairy_tale",
+          "description": "Fairy-tale: no block 1 px below and a slope 3 px below at `xprevious`: down by at most 10.",
+          "type": "string"
+        }
+      ]
+    },
+    "FallCapDraft": {
       "additionalProperties": false,
+      "description": "`[fall_cap]` as written.",
       "properties": {
         "rule": {
-          "enum": ["clamp_abs", "clamp_against_gravity", "clamp_down_only", "shift_then_clamp"]
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FallCapRule"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
-      }
+      },
+      "type": "object"
     },
-    "gravity": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "reapply": { "enum": ["step", "end_step_slope", "create_only"] },
-        "block_landing_zeroes": { "type": "boolean" }
-      }
-    },
-    "platform": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "hold_probe": { "$ref": "#/$defs/real" },
-        "rule": { "enum": ["half_vspeed"] },
-        "snap": { "$ref": "#/$defs/real" },
-        "take": { "enum": ["vspeed", "delta_y", "yspeed_flipped"] }
-      }
-    },
-    "vine": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "model": { "enum": ["none", "distance_asym", "distance_sym_early"] },
-        "left_below": { "$ref": "#/$defs/real" },
-        "right_equal": { "$ref": "#/$defs/real" },
-        "slide": { "$ref": "#/$defs/real" },
-        "kick": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/real" },
-          "minItems": 2,
-          "maxItems": 2
+    "FallCapRule": {
+      "description": "What `[fall_cap] rule` does to `vspeed`.",
+      "oneOf": [
+        {
+          "const": "clamp_abs",
+          "description": "`abs(vspeed) > max_vspeed` gives `sign(vspeed) * max_vspeed` (A1).",
+          "type": "string"
         },
-        "drop": { "$ref": "#/$defs/real" }
-      }
+        {
+          "const": "clamp_against_gravity",
+          "description": "Clamp against gravity only (B).",
+          "type": "string"
+        },
+        {
+          "const": "clamp_down_only",
+          "description": "Clamp downward only (spook).",
+          "type": "string"
+        },
+        {
+          "const": "shift_then_clamp",
+          "description": "Shift, then clamp (A4).",
+          "type": "string"
+        }
+      ]
     },
-    "water": { "type": "object", "additionalProperties": false },
-    "ice": { "type": "object", "additionalProperties": false },
-    "slope": { "type": "object", "additionalProperties": false },
-    "ladder": { "type": "object", "additionalProperties": false },
-    "flip": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "model": { "enum": ["none", "swap_object", "yflag", "grav_sign"] }
-      }
+    "FlipAction": {
+      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`.",
+      "oneOf": [
+        {
+          "const": "flip_grav",
+          "description": "`scrFlipGrav` (family C, `flip.model = \"grav_sign\"`): `grav` negates, `djump` 1, `vspeed` 0,\ngravity takes the new sign, `image_yscale` follows (the mask mirrors with it) and `y` moves\n4 times the new `grav`. Also `kid::api::flip_grav`, for the gravity arrows.",
+          "type": "string"
+        },
+        {
+          "const": "flip_swap",
+          "description": "Group A Step (`flip.model = \"swap_object\"`, A1 Step action 5): when `global.grav` no longer\nmatches this kid object, the facing goes to `global.image_xscale`, the other kid object\nis created at `y - 4` (to the flipped object) or `y + 4` (back to the normal one), and this\ninstance is destroyed. The new kid starts from its Create: speeds 0, `djump` true.",
+          "type": "string"
+        }
+      ]
     },
-    "death": {
-      "type": "object",
+    "FlipKind": {
+      "description": "The flip models of plan 5.3, by their `physics.toml` names.",
+      "oneOf": [
+        {
+          "const": "none",
+          "description": "The game has no gravity flip.",
+          "type": "string"
+        },
+        {
+          "const": "swap_object",
+          "description": "Group A (11 games): swap to the flipped kid object at y - 4 (`flip_swap`, WP5c).",
+          "type": "string"
+        },
+        {
+          "const": "yflag",
+          "description": "Family B: the yflag (WP5b).",
+          "type": "string"
+        },
+        {
+          "const": "grav_sign",
+          "description": "Family C: the sign of grav (WP5c).",
+          "type": "string"
+        }
+      ]
+    },
+    "FlipModel": {
       "additionalProperties": false,
+      "description": "`[flip]`: how gravity flips (plan 5.3 flip rows). WP5c adds the other fields\n(`mask_flipped`, ...).",
       "properties": {
-        "order": {
-          "type": "array",
+        "model": {
+          "$ref": "#/$defs/FlipKind",
+          "description": "`model = \"...\"`."
+        },
+        "solidblock_no_refresh": {
+          "default": false,
+          "description": "`swap_object`: the flipped kid's solidblock contact does not restore `djump` (Kotaro\nplayer2 sets a misspelled `djump2` there, kid/A2.md).",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "GravityReapply": {
+      "description": "When gravity is set back to its constant.",
+      "oneOf": [
+        {
+          "const": "step",
+          "description": "Every Step, unless the kid is on a ladder (A1: Step action 2.4).",
+          "type": "string"
+        },
+        {
+          "const": "end_step_slope",
+          "description": "Other models (WP5b, WP5c).",
+          "type": "string"
+        },
+        {
+          "const": "create_only",
+          "description": "Only at Create.",
+          "type": "string"
+        }
+      ]
+    },
+    "GravityRulesDraft": {
+      "additionalProperties": false,
+      "description": "`[gravity]` as written.",
+      "properties": {
+        "block_landing_zeroes": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "reapply": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GravityReapply"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "GroundAlso": {
+      "description": "An extra ground-jump condition besides the classes.",
+      "oneOf": [
+        {
+          "const": "platform_flag",
+          "description": "`onPlatform` counts as ground.",
+          "type": "string"
+        },
+        {
+          "const": "ladder_jump",
+          "description": "`ladderjump` counts as ground.",
+          "type": "string"
+        }
+      ]
+    },
+    "IceAction": {
+      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`.",
+      "oneOf": [
+        {
+          "const": "ice_temp_hspeed",
+          "description": "Showdown Step action 3 (kid/A3.md): with a slip block within `ice.temp_probe` px below,\n`tempHspeed` stores `hspeed` when it is 0 or when the two have the same sign and `hspeed`\nis not 0; otherwise (opposite sign, or `hspeed` 0) `hspeed` gains `tempHspeed`, which is\nmultiplied by `ice.temp_decay` and becomes 0 below `ice.temp_zero_below`. Off ice it is 0.",
+          "type": "string"
+        }
+      ]
+    },
+    "IceModel": {
+      "description": "How the kid's walk reads `slip` blocks.",
+      "oneOf": [
+        {
+          "const": "none",
+          "description": "The game has no ice, or the walk ignores it.",
+          "type": "string"
+        },
+        {
+          "const": "slip",
+          "description": "While a slip block is within `probe` px, walking adds `slip * h` to `hspeed` (read at\n`read` px) and standing subtracts `slip * sign(hspeed)`.",
+          "type": "string"
+        }
+      ]
+    },
+    "IceRules": {
+      "additionalProperties": false,
+      "description": "`[ice]`: slip blocks and ice (kid/A1.md Step action 3, kid/A3.md showdown Step action 3).",
+      "properties": {
+        "clamp": {
+          "default": false,
+          "description": "Slip is clamped to the run speed (C); otherwise it is not (A1, A2, B).",
+          "type": "boolean"
+        },
+        "model": {
+          "$ref": "#/$defs/IceModel",
+          "description": "The model."
+        },
+        "probe": {
+          "$ref": "#/$defs/Real",
+          "default": 4.0,
+          "description": "Pixels in the gravity direction probed for a `slip` block (4)."
+        },
+        "read": {
+          "$ref": "#/$defs/Real",
+          "default": 10.0,
+          "description": "Pixels in the gravity direction at which the slip value is read (10)."
+        },
+        "temp_decay": {
+          "$ref": "#/$defs/Real",
+          "default": 0.95,
+          "description": "`ice_temp_hspeed`: `tempHspeed` is multiplied by this each tick off a push (0.95)."
+        },
+        "temp_probe": {
+          "$ref": "#/$defs/Real",
+          "default": 2.0,
+          "description": "`ice_temp_hspeed` (showdown): pixels probed for a `slip` block (2)."
+        },
+        "temp_zero_below": {
+          "$ref": "#/$defs/Real",
+          "default": 0.2,
+          "description": "`ice_temp_hspeed`: `tempHspeed` becomes 0 once its size is below this (0.2)."
+        }
+      },
+      "type": "object"
+    },
+    "JumpCancel": {
+      "description": "How the jump cut works (`[jump] cancel`).",
+      "oneOf": [
+        {
+          "const": "edge",
+          "description": "The `release` action reads the release edge (every game with the cut switched on).",
+          "type": "string"
+        },
+        {
+          "const": "poll_alarm",
+          "description": "B's switch for jump cancelling off: a first jump arms Alarm 0 each tick and the\n`cancel_poll` action cuts the jump when the key is up. The `release` action does nothing.",
+          "type": "string"
+        }
+      ]
+    },
+    "JumpRulesDraft": {
+      "additionalProperties": false,
+      "description": "`[jump]` as written.",
+      "properties": {
+        "air": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AirJump"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "blocked_by_pause_press": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "cancel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JumpCancel"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ground_also": {
           "items": {
-            "enum": ["sound", "blood_emitter", "destroy_kid", "deaths_plus_one", "save_counters", "game_over"]
-          }
+            "$ref": "#/$defs/GroundAlso"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
         },
-        "select_room_reset": { "type": "boolean" },
-        "stop_music": { "type": "boolean" }
-      }
+        "ground_classes": {
+          "default": null,
+          "items": {
+            "$ref": "#/$defs/ClassName"
+          },
+          "type": "array"
+        },
+        "ground_sets_djump": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "inf_jump": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "max_jumps": {
+          "default": null,
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "release_twice_while_tjump": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "water_air": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WaterAir"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
     },
-    "bullet": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "max": { "type": "integer", "minimum": 0 },
-        "speed": { "$ref": "#/$defs/real" }
-      }
+    "KeyOn": {
+      "description": "Which edge of a key a row reacts to.",
+      "oneOf": [
+        {
+          "const": "held",
+          "description": "Keyboard (held).",
+          "type": "string"
+        },
+        {
+          "const": "press",
+          "description": "Key press.",
+          "type": "string"
+        },
+        {
+          "const": "release",
+          "description": "Key release.",
+          "type": "string"
+        }
+      ]
     },
-    "save": {
-      "type": "object",
+    "KidAction": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CommonAction",
+          "description": "Every family (WP5a)."
+        },
+        {
+          "$ref": "#/$defs/A1Action",
+          "description": "Family A1 (WP5a)."
+        },
+        {
+          "$ref": "#/$defs/A2Action",
+          "description": "Family A2 (WP5c)."
+        },
+        {
+          "$ref": "#/$defs/A3Action",
+          "description": "Family A3 (WP5c)."
+        },
+        {
+          "$ref": "#/$defs/A4Action",
+          "description": "Family A4 (WP5c)."
+        },
+        {
+          "$ref": "#/$defs/A5Action",
+          "description": "Family A5 (WP5c)."
+        },
+        {
+          "$ref": "#/$defs/BAction",
+          "description": "Family B (WP5b)."
+        },
+        {
+          "$ref": "#/$defs/CAction",
+          "description": "Family C (WP5c)."
+        },
+        {
+          "$ref": "#/$defs/FlipAction",
+          "description": "Gravity flips (WP5c)."
+        },
+        {
+          "$ref": "#/$defs/IceAction",
+          "description": "Slip blocks and ice (WP5c)."
+        },
+        {
+          "$ref": "#/$defs/LadderAction",
+          "description": "Ladders (WP5c)."
+        },
+        {
+          "$ref": "#/$defs/SlopeAction",
+          "description": "Slopes (WP5c)."
+        }
+      ],
+      "description": "One named action in a `physics.toml` event list (`step = [\"walk\", \"jump\", ...]`, plan 5.2).\n\nSplit by owner like `KindState`: each part is the enum of one file under `actions/`, and the\nname in the file picks the part whose enum has that name (`untagged`). Names must be unique\nacross parts."
+    },
+    "KidAlarm": {
       "additionalProperties": false,
+      "description": "One `events.alarms` row.",
       "properties": {
-        "position": {
-          "enum": [
-            "xy_base100_bytes", "xy_base256_bytes", "xy_text2_dec", "xy_previous", "fixed_point",
-            "floor_nudge"
+        "n": {
+          "description": "The alarm number (0-11).",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "run": {
+          "description": "The actions to run.",
+          "items": {
+            "$ref": "#/$defs/KidAction"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "n",
+        "run"
+      ],
+      "type": "object"
+    },
+    "KidCollision": {
+      "additionalProperties": false,
+      "description": "One `events.collisions` row: the kid runs `run` when it collides with an instance of class\n`with`.",
+      "properties": {
+        "run": {
+          "$ref": "#/$defs/KidCollisionRun",
+          "description": "The named run."
+        },
+        "with": {
+          "$ref": "#/$defs/ClassName",
+          "description": "The handler class (`\"block\"`, `\"platform\"`, `\"killer\"`)."
+        }
+      },
+      "required": [
+        "with",
+        "run"
+      ],
+      "type": "object"
+    },
+    "KidCollisionRun": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BlockRun",
+          "description": "`block_standard` and friends (WP5a)."
+        },
+        {
+          "$ref": "#/$defs/PlatformRun",
+          "description": "`platform_standard` (WP5a)."
+        },
+        {
+          "$ref": "#/$defs/BRun",
+          "description": "Family B runs (WP5b)."
+        },
+        {
+          "$ref": "#/$defs/DeathRun",
+          "description": "`kill` (WP5a)."
+        },
+        {
+          "$ref": "#/$defs/SlopeRun",
+          "description": "Slope runs (WP5c)."
+        },
+        {
+          "$ref": "#/$defs/MovingBlockRun",
+          "description": "poronkusema `moving_block_por` (WP5c)."
+        }
+      ],
+      "description": "One named collision run in `events.collisions` (`{ with = \"block\", run = \"block_standard\" }`,\nplan 5.2). Split by owner like [`KidAction`]."
+    },
+    "KidEventsDraft": {
+      "additionalProperties": false,
+      "description": "`[events]` as written.",
+      "properties": {
+        "alarms": {
+          "items": {
+            "$ref": "#/$defs/KidAlarm"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "boundary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BoundaryModel"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "collisions": {
+          "items": {
+            "$ref": "#/$defs/KidCollision"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "create": {
+          "items": {
+            "$ref": "#/$defs/KidAction"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "end_step": {
+          "items": {
+            "$ref": "#/$defs/KidAction"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "keys": {
+          "items": {
+            "$ref": "#/$defs/KidKey"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "room_start": {
+          "items": {
+            "$ref": "#/$defs/KidAction"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "step": {
+          "items": {
+            "$ref": "#/$defs/KidAction"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "KidFamily": {
+      "description": "The kid engine family a profile starts from (`preset = \"A1\"`): documentation and defaults\n(`kid::presets::apply`). Nothing in the sim branches on it.",
+      "oneOf": [
+        {
+          "const": "A1",
+          "description": "kid/A1.md.",
+          "type": "string"
+        },
+        {
+          "const": "A2",
+          "description": "kid/A2.md.",
+          "type": "string"
+        },
+        {
+          "const": "A3",
+          "description": "kid/A3.md.",
+          "type": "string"
+        },
+        {
+          "const": "A4",
+          "description": "kid/A4.md.",
+          "type": "string"
+        },
+        {
+          "const": "A5",
+          "description": "kid/A5.md.",
+          "type": "string"
+        },
+        {
+          "const": "B",
+          "description": "kid/B.md.",
+          "type": "string"
+        },
+        {
+          "const": "C",
+          "description": "kid/C.md.",
+          "type": "string"
+        }
+      ]
+    },
+    "KidInputDraft": {
+      "additionalProperties": false,
+      "description": "`[input]` as written.",
+      "properties": {
+        "vine_keys": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VineKeys"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "walk": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WalkRead"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "KidKey": {
+      "additionalProperties": false,
+      "description": "One `events.keys` row.",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/ActionName",
+          "description": "The client action by its package name (`\"suicide\"`)."
+        },
+        "on": {
+          "$ref": "#/$defs/KeyOn",
+          "description": "The edge."
+        },
+        "run": {
+          "description": "The actions to run.",
+          "items": {
+            "$ref": "#/$defs/KidAction"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "action",
+        "on",
+        "run"
+      ],
+      "type": "object"
+    },
+    "KidMiscDraft": {
+      "additionalProperties": false,
+      "description": "`[misc]` as written.",
+      "properties": {
+        "fade_in": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "fade_step": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "idle_needs_block": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "KidNumbersDraft": {
+      "additionalProperties": false,
+      "description": "`[numbers]` as written.",
+      "properties": {
+        "air_wall_probe": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "gravity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "image_speed_idle": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "image_speed_run": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "jumps": {
+          "default": null,
+          "items": {
+            "$ref": "#/$defs/Real"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "max_fall_speed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "max_vspeed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "release_mult": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "run_speed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "sprite_threshold": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "type": "object"
+    },
+    "KidSoundNames": {
+      "additionalProperties": false,
+      "description": "`[sounds]` as written in a package: sound names by role, resolved to [`KidSounds`] ids by the\nloader.",
+      "properties": {
+        "death": {
+          "default": null,
+          "description": "The death sound.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "double_jump": {
+          "default": null,
+          "description": "An air jump.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "jump": {
+          "default": null,
+          "description": "A ground jump.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "shoot": {
+          "default": null,
+          "description": "A shot.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "vine_kick": {
+          "default": null,
+          "description": "A vine kick.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "KidSpriteNames": {
+      "additionalProperties": false,
+      "description": "`[sprites]` as written in a package: sprite names by role, resolved to [`KidSprites`] ids by\nthe loader.",
+      "properties": {
+        "back": {
+          "default": null,
+          "description": "On a ladder.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fall": {
+          "default": null,
+          "description": "Falling.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "idle": {
+          "default": null,
+          "description": "Standing.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "jump": {
+          "default": null,
+          "description": "Rising or double jumping.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ladder_up_down": {
+          "default": null,
+          "description": "Moving on a ladder.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "running": {
+          "default": null,
+          "description": "Running.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sliding": {
+          "default": null,
+          "description": "Sliding on a vine.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "LadderAction": {
+      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`.",
+      "oneOf": [
+        {
+          "const": "ladder",
+          "description": "Step action 2, instead of `gravity` (it includes the gravity reset, so the two are never\nlisted together): `ladderud` clears; Up or Down (`[ladder] entry`) held, off a ladder and\noverlapping one: on the ladder with `djump`; on a ladder with none overlapping any more:\noff; otherwise Up moves `y` up by the run speed, Down moves it down, each with gravity and\n`vspeed` 0 and `ladderud` 1, and Jump held leaves with `ladderjump`. Off the ladder\ngravity returns to `numbers.gravity`. The keys are direct reads.",
+          "type": "string"
+        },
+        {
+          "const": "ladder_sprites",
+          "description": "End Step: on a ladder the `back` sprite (`image_speed` 0.1), moving on it the\n`ladder_up_down` sprite (0.2).",
+          "type": "string"
+        },
+        {
+          "const": "ladder_jump_reset",
+          "description": "End Step: `ladderjump` clears (rori has only this part).",
+          "type": "string"
+        }
+      ]
+    },
+    "LadderEntry": {
+      "description": "The keys that start climbing.",
+      "oneOf": [
+        {
+          "const": "up_or_down",
+          "description": "Up or Down held (little-trap, rainbow).",
+          "type": "string"
+        },
+        {
+          "const": "up_only",
+          "description": "Up held only (rori, fairy-tale).",
+          "type": "string"
+        }
+      ]
+    },
+    "LadderRules": {
+      "additionalProperties": false,
+      "description": "`[ladder]`: ladder entry (kid/A1.md Step action 2).",
+      "properties": {
+        "entry": {
+          "$ref": "#/$defs/LadderEntry",
+          "description": "Which keys grab a ladder."
+        }
+      },
+      "type": "object"
+    },
+    "MovingBlockRun": {
+      "description": "The collision runs this file implements, by their `physics.toml` names (snake case). Part\nof `kid::KidCollisionRun`.",
+      "oneOf": [
+        {
+          "const": "moving_block_por",
+          "description": "Poronkusema, Collision with movingBlock, in this order:\n- ride from above: `y <= other.y + vspeed + 2`, the kid moving down relative to the block\n  (`vspeed > other.vspeed`) and `other.y - yprevious >= 8`: `y = other.y - 9`, `vspeed` the\n  block's, `onPlatform` and `djump` set;\n- bump from below: `yprevious - other.y >= height + 10`: `y = other.y + height + 12` and\n  `vspeed` the block's when that is 0 or more, else 0;\n- else pushed out sideways: `x = other.x - 6` or `other.x + width + 5`, whichever side of\n  the block's middle the kid is on.\n\nOPEN (the spec gives the numbers, not every test): the \"within `vspeed + 2`\" reading, the\nrelative-motion test and the choice of side (#314).",
+          "type": "string"
+        }
+      ]
+    },
+    "PlatformRule": {
+      "description": "When a platform collision lands the kid.",
+      "oneOf": [
+        {
+          "const": "half_vspeed",
+          "description": "`y - vspeed / 2 <= platform.y`: the kid was at or above the top half a step ago (A1).",
+          "type": "string"
+        }
+      ]
+    },
+    "PlatformRulesDraft": {
+      "additionalProperties": false,
+      "description": "`[platform]` as written.",
+      "properties": {
+        "hold_probe": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reversed_above": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reversed_snap": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rule": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlatformRule"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "snap": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "take": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlatformTake"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "PlatformRun": {
+      "description": "The collision runs this file implements, by their `physics.toml` names (snake case). Part\nof `kid::KidCollisionRun`.",
+      "oneOf": [
+        {
+          "const": "platform_standard",
+          "description": "Kid A1 platform contact.",
+          "type": "string"
+        }
+      ]
+    },
+    "PlatformTake": {
+      "description": "What a landing copies from the platform.",
+      "oneOf": [
+        {
+          "const": "vspeed",
+          "description": "The platform's `vspeed` (A1).",
+          "type": "string"
+        },
+        {
+          "const": "delta_y",
+          "description": "The platform's `y - yprevious` (family B, WP5b).",
+          "type": "string"
+        },
+        {
+          "const": "yspeed_flipped",
+          "description": "Family C (WP5c).",
+          "type": "string"
+        }
+      ]
+    },
+    "Real": {
+      "description": "A GM8 real: one IEEE binary64 double.\n\nArithmetic is plain f64 arithmetic. Equality and `Eq` compare the bit pattern, so `Real` can\nkey ordered maps; `0.0` and `-0.0` differ, and a NaN equals itself. For GML-style value\ncomparison use [`gm_eq`] and friends.\n\n`Hash` and `Serialize` use [`Real::canonical_bits`], so every NaN hashes and serializes as\n[`Real::CANONICAL_NAN_BITS`] whatever payload the platform produced. The state hash is BLAKE3\nover the postcard encoding (plan 10.1); `Hash` is only for test maps. Deserializing keeps the\nbits it reads.",
+      "format": "double",
+      "type": "number"
+    },
+    "SavePosition": {
+      "description": "How a save stores the position (`save.rs` `SavedPosition`), by its package name.",
+      "oneOf": [
+        {
+          "const": "xy_base100_bytes",
+          "description": "Base-100 bytes (13 games).",
+          "type": "string"
+        },
+        {
+          "const": "xy_base256_bytes",
+          "description": "Base-256 bytes (little-runner).",
+          "type": "string"
+        },
+        {
+          "const": "xy_text2_dec",
+          "description": "Text with two decimals (machinary, eat-the-new-year).",
+          "type": "string"
+        },
+        {
+          "const": "xy_previous",
+          "description": "`xprevious` and `yprevious` (kaenbyou, eat-the-lemon).",
+          "type": "string"
+        },
+        {
+          "const": "fixed_point",
+          "description": "A fixed point (poronkusema); needs `save.fixed`.",
+          "type": "string"
+        },
+        {
+          "const": "floor_nudge",
+          "description": "Floor with the `place_free` nudge (xia).",
+          "type": "string"
+        }
+      ]
+    },
+    "SaveRulesDraft": {
+      "additionalProperties": false,
+      "description": "`[save]` as written.",
+      "properties": {
+        "first_kid": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
           ]
         },
         "fixed": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/real" },
+          "default": null,
+          "items": {
+            "$ref": "#/$defs/Real"
+          },
+          "maxItems": 2,
           "minItems": 2,
-          "maxItems": 2
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SavePosition"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
-      }
+      },
+      "type": "object"
+    },
+    "SlopeAction": {
+      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`.",
+      "oneOf": [
+        {
+          "const": "slope_jump",
+          "description": "The end of `playerJump` (rainbow, rori, fairy-tale): on a Jump press, with a `slope` or\n`slope_mirror` within `[slope] jump_probe` px below, a single jump is forced: `vspeed` is\n`-numbers.jumps[0]` and `djump` is set. It runs after the normal jump, so it can override a\ndouble jump of the same press.",
+          "type": "string"
+        },
+        {
+          "const": "downhill_snap",
+          "description": "End Step, `[slope] downhill` (see `Downhill`).",
+          "type": "string"
+        }
+      ]
+    },
+    "SlopeModel": {
+      "additionalProperties": false,
+      "description": "`[slope]`: the slopes of group A and eat-the-new-year (kid/A1.md poronkusema, rainbow, rori,\nfairy-tale; kid/A4.md). `slope` rises to the right, `slope_mirror` to the left. A game's slope\nkinds carry only those classes (not `block`), so the kid's `slope` and `slope_mirror`\ncollision rows run alone, as the original's child-object events do.",
+      "properties": {
+        "air_sprite_probe": {
+          "$ref": "#/$defs/Real",
+          "default": 0.0,
+          "description": "`air_sprite`: no fall sprite while a slope lies this many pixels below (rori, fairy-tale: 2).\n0 means off."
+        },
+        "block_step": {
+          "$ref": "#/$defs/BlockSlopeStep",
+          "description": "How the horizontal block contact climbs (`block_slope_step`)."
+        },
+        "downhill": {
+          "$ref": "#/$defs/Downhill",
+          "description": "The End Step downhill snap (`downhill_snap`)."
+        },
+        "jump_probe": {
+          "$ref": "#/$defs/Real",
+          "default": 0.0,
+          "description": "`slope_jump`: with a slope or mirrored slope within this many pixels below a Jump press\nforces a single jump (rainbow, rori, fairy-tale: 2). 0 means off."
+        },
+        "keep_hspeed": {
+          "default": false,
+          "description": "`walk` keeps `hspeed` while a slope is 1 px below and the key points downhill\n(eat-the-new-year, kid/A4.md).",
+          "type": "boolean"
+        },
+        "step": {
+          "$ref": "#/$defs/Real",
+          "default": 3.0,
+          "description": "The climb: 3 px sideways and 3 px up."
+        }
+      },
+      "type": "object"
+    },
+    "SlopeRun": {
+      "description": "The collision runs this file implements, by their `physics.toml` names (snake case). Part\nof `kid::KidCollisionRun`.",
+      "oneOf": [
+        {
+          "const": "block_slope_step",
+          "description": "The block contact with the climb of `[slope] block_step` in its horizontal part. Used by the\n`block`, `slope` and `slope_mirror` rows of rainbow, rori and fairy-tale (kid/A1.md).",
+          "type": "string"
+        },
+        {
+          "const": "slope_por_rise",
+          "description": "Poronkusema, Collision with nanameblock: the vertical block part; a rise found by testing\n0 to 9 px up with the kid shifted by `hspeed` (0 when still inside a slope at 9, or when the\nfound spot overlaps a block); then `x` moves `step` in the direction of `hspeed` (even with\nrise 0), `y` goes up by the rise, `hspeed` 0 and the diagonal check.",
+          "type": "string"
+        },
+        {
+          "const": "slope_yane",
+          "description": "Eat-the-new-year, Collision with yaneH (`slope`) or yaneM (`slope_mirror`): when\n`place_free(x + hspeed, y)` is false and `hspeed >= 0` (H; `<= 0` for M, OPEN: mirrored) and\n`place_free(x, y + vspeed)` is false, the kid moves `step` up and sideways; `hspeed` 0.\nThen the vertical and diagonal block parts.",
+          "type": "string"
+        }
+      ]
+    },
+    "VineKeys": {
+      "description": "How the vine action reads its kick and drop keys.",
+      "oneOf": [
+        {
+          "const": "edges",
+          "description": "This tick's key press edge (A1, A2, B).",
+          "type": "string"
+        },
+        {
+          "const": "latched_flags",
+          "description": "Game-side latched flags (wanna, rori, fairy-tale, showdown; WP5c).",
+          "type": "string"
+        }
+      ]
+    },
+    "VineModel": {
+      "description": "Vine model.",
+      "oneOf": [
+        {
+          "const": "none",
+          "description": "No vines.",
+          "type": "string"
+        },
+        {
+          "const": "distance_asym",
+          "description": "Left vine below `left_below`, right vine exactly `right_equal` (A, B).",
+          "type": "string"
+        },
+        {
+          "const": "distance_sym_early",
+          "description": "Both sides within one pixel (C, WP5c).",
+          "type": "string"
+        }
+      ]
+    },
+    "VineRulesDraft": {
+      "additionalProperties": false,
+      "description": "`[vine]` as written.",
+      "properties": {
+        "drop": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "kick": {
+          "default": null,
+          "items": {
+            "$ref": "#/$defs/Real"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "left_below": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VineModel"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "probe_down_fixed": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "right_equal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "slide": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "walk_ignores_vines": {
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "WalkRead": {
+      "description": "How the walk action reads the direction keys.",
+      "oneOf": [
+        {
+          "const": "direct_latch",
+          "description": "`keyboard_check_direct`: held, or latched since the last direct read\n(`InputState::direct`; trick.restart_glitch).",
+          "type": "string"
+        },
+        {
+          "const": "sampled",
+          "description": "The tick's sampled held state.",
+          "type": "string"
+        }
+      ]
+    },
+    "WaterAir": {
+      "description": "When water 2 allows the air jump.",
+      "oneOf": [
+        {
+          "const": "none",
+          "description": "Never.",
+          "type": "string"
+        },
+        {
+          "const": "water2_without_flag",
+          "description": "A water 2 one pixel below allows the air jump even without `djump` (A1).",
+          "type": "string"
+        },
+        {
+          "const": "water_unlimited",
+          "description": "Family B (WP5b).",
+          "type": "string"
+        },
+        {
+          "const": "water3_keeps",
+          "description": "Family C (WP5c).",
+          "type": "string"
+        }
+      ]
+    },
+    "WaterRules": {
+      "additionalProperties": false,
+      "description": "`[water]` (WP5a).",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A profile as written, before the preset fills its defaults. `toml::from_str` target of\n`crates/format` (WP7b); `kid::presets::apply` turns it into a [`PhysicsProfile`]: the\npreset's profile with every field written here put over it. The sections of families that\nhave not landed (`[ice]`, `[slope]`, `[ladder]`, `[flip]`) replace the preset's whole.",
+  "properties": {
+    "bullet": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BulletRulesDraft"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[bullet]`."
+    },
+    "death": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DeathRulesDraft"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[death]`."
+    },
+    "events": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/KidEventsDraft"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[events]`."
+    },
+    "fall_cap": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FallCapDraft"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[fall_cap]`."
+    },
+    "flip": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FlipModel"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[flip]`."
+    },
+    "gravity": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GravityRulesDraft"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[gravity]`."
+    },
+    "ice": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/IceRules"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[ice]`."
+    },
+    "input": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/KidInputDraft"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[input]`."
+    },
+    "jump": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/JumpRulesDraft"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[jump]`."
+    },
+    "ladder": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LadderRules"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[ladder]`."
     },
     "misc": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "fade_in": { "type": "boolean" },
-        "fade_step": { "$ref": "#/$defs/real" }
-      }
+      "anyOf": [
+        {
+          "$ref": "#/$defs/KidMiscDraft"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[misc]`."
+    },
+    "numbers": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/KidNumbersDraft"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[numbers]`."
+    },
+    "platform": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PlatformRulesDraft"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[platform]`."
+    },
+    "preset": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/KidFamily"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`preset = \"A1\"`."
+    },
+    "save": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SaveRulesDraft"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[save]`."
+    },
+    "slope": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SlopeModel"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[slope]`."
+    },
+    "sounds": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/KidSoundNames"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[sounds]`: sound names; the loader resolves them to ids like the sprite names."
     },
     "sprites": {
-      "description": "Sprite names from the package's sprite table, by role.",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "idle": { "type": "string" },
-        "running": { "type": "string" },
-        "jump": { "type": "string" },
-        "fall": { "type": "string" },
-        "sliding": { "type": "string" }
-      }
+      "anyOf": [
+        {
+          "$ref": "#/$defs/KidSpriteNames"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[sprites]`: sprite names. `kid::presets::apply` leaves the profile's `sprites` empty;\nthe loader (WP7b) resolves these names to ids and fills them in."
+    },
+    "vine": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/VineRulesDraft"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[vine]`."
+    },
+    "water": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WaterRules"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[water]`."
     }
-  }
+  },
+  "title": "IWBTG physics.toml (kid physics profile, format v0)",
+  "type": "object"
 }

@@ -21,11 +21,18 @@ fn kid_steps_are_read() {
             add_time: 2,
             save_death_time: true,
             clear_frozen: true,
-            reset_jump_values: false
+            reset_jump_values: false,
+            clear_triggers: false
         }
     );
     let m = model("kid_steps = { reset_jump_values = true }\n").unwrap();
     assert!(m.kid_steps.reset_jump_values && m.kid_steps.add_time == 0);
+    let m = model(
+        "kid_steps = { clear_triggers = true }
+",
+    )
+    .unwrap();
+    assert!(m.kid_steps.clear_triggers && !m.kid_steps.reset_jump_values);
 }
 
 #[test]

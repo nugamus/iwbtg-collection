@@ -28,7 +28,12 @@ pub struct SaveSlot {
     pub x: Real,
     /// Saved position, after [`quantize`].
     pub y: Real,
-    /// Kid was flipped.
+    /// Gravity flipped, as the game stores it. A game that flips by swapping to a second kid kind
+    /// or by a flag on the kid (families A and C) stores whether the kid was flipped. A game that
+    /// flips by the `yflag` model (family B, `[flip] model = "yflag"`) stores `global.reverse`
+    /// here; it never flips by kind, so the two meanings never meet in one game. Only
+    /// [`flip_by_kind`] tells the loader whether this field also picks the flipped kid kind and
+    /// the `+dy` offset.
     pub flipped: bool,
     /// Kid facing, -1 or 1.
     pub facing: i8,
@@ -77,13 +82,23 @@ pub fn save_now(
     model: SavedPosition,
     fixed: Option<(Real, Real)>,
 ) -> Result<(), SimError> {
+    // Family B stores the first kid whichever kid touched the save point (R21).
+    let kid = if ctx.def.physics.save.first_kid {
+        ctx.w.kid(&ctx.rules.tick).unwrap_or(kid)
+    } else {
+        kid
+    };
     let inst = ctx
         .w
         .get(kid)
         .ok_or_else(|| SimError::invariant(format!("save_now: unknown kid {}", kid.0)))?;
     let (x, y) = (inst.m.x(), inst.m.y());
     let (px, py) = (inst.m.xprevious(), inst.m.yprevious());
-    let flipped = crate::kid::api::flipped(ctx.w, kid);
+    let flipped = if by_flag(ctx) {
+        ctx.w.engine.kid.b.reverse
+    } else {
+        crate::kid::api::flipped(ctx.w, kid)
+    };
     let facing = crate::kid::api::saved_facing(ctx.w, kid);
     let (rx, ry) = match model {
         SavedPosition::XyPrevious => (px, py),
@@ -110,6 +125,19 @@ pub fn save_now(
     };
     ctx.w.save = Some(slot);
     Ok(())
+}
+
+/// True when the game flips gravity by a flag (`[flip] model = "yflag"`, family B): its save
+/// stores `global.reverse` in [`SaveSlot::flipped`].
+fn by_flag(ctx: &Ctx) -> bool {
+    ctx.def.physics.flip.model == crate::def::physics::FlipKind::Yflag
+}
+
+/// True when [`SaveSlot::flipped`] means "the kid of the flipped kind, `flipped_load_dy` lower":
+/// every game but the ones that flip by flag, whose `flipped` is `global.reverse` and whose kid
+/// is the one kind at the saved spot.
+pub fn flip_by_kind(ctx: &Ctx, slot: &SaveSlot) -> bool {
+    slot.flipped && !by_flag(ctx)
 }
 
 /// A death-only save: counters only. The saved room, position and flags stay as they are
@@ -204,14 +232,15 @@ pub fn load_into(ctx: &mut Ctx, slot: &SaveSlot) -> Result<InstId, SimError> {
     ctx.w.engine.run.clear = slot.clear;
     ctx.w.engine.mech.bosses = slot.bosses;
     ctx.w.engine.mech.items = slot.items;
-    let role = match (slot.flipped, ctx.def.engine_kind(EngineKind::KidFlipped)) {
+    let by_kind = flip_by_kind(ctx, slot);
+    let role = match (by_kind, ctx.def.engine_kind(EngineKind::KidFlipped)) {
         (true, Some(_)) => EngineKind::KidFlipped,
         _ => EngineKind::Kid,
     };
     let id = ctx
         .spawn_engine(role, Real::ZERO, Real::ZERO, SpawnInit::default())?
         .ok_or_else(|| SimError::invariant("load_into: the game has no kid kind"))?;
-    let dy = if slot.flipped {
+    let dy = if by_kind {
         ctx.def.restart.flipped_load_dy
     } else {
         Real::ZERO

@@ -58,7 +58,7 @@ impl Sim {
     pub fn new(def: Arc<GameDef>, options: SimOptions) -> Result<Sim, SimError> {
         let mut rules = RunnerRules::for_runner(def.runner, def.engine_rev)?;
         rules.num.float_model = def.float_model;
-        let scripts = ScriptRuntime::new(&def)?;
+        let scripts = ScriptRuntime::new(&def, &rules)?;
         let mut world = World::new(def.start_room, options.seed);
         {
             let mut ctx = Ctx {

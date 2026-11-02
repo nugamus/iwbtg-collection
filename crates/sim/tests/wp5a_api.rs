@@ -129,7 +129,7 @@ fn param_zone_writes_numbers() {
         assert_eq!(s.max_fall_speed, r(1.0));
         assert_eq!(s.jump_speeds, vec![r(16.0), r(13.0), r(6.0)]);
         assert_eq!(
-            api::read_field(ctx.w, k, &field("jump", Some(1))),
+            api::read_field(ctx.w, k, &field("jump", Some(2))),
             Some(Value::Real(r(13.0)))
         );
         assert_eq!(
@@ -203,9 +203,15 @@ fn read_field_names() {
         assert_eq!(get("curJumps", None), Some(Value::Real(r(2.0))));
         assert_eq!(get("yflag", None), Some(Value::Real(r(-1.0))));
         assert_eq!(get("jump", None), Some(Value::Real(r(8.5))));
-        assert_eq!(get("jump", Some(1)), Some(Value::Real(r(7.0))));
+        assert_eq!(
+            get("jump", Some(1)),
+            Some(Value::Real(r(8.5))),
+            "1-based like B's array"
+        );
+        assert_eq!(get("jump", Some(2)), Some(Value::Real(r(7.0))));
         assert_eq!(get("jump2", None), Some(Value::Real(r(7.0))));
-        assert_eq!(get("jump", Some(2)), None);
+        assert_eq!(get("jump", Some(0)), None);
+        assert_eq!(get("jump", Some(3)), None);
         assert_eq!(get("djump", Some(0)), None);
         assert_eq!(get("nosuch", None), None);
         assert_eq!(api::read_field(ctx.w, b, &field("djump", None)), None);
@@ -231,5 +237,46 @@ fn kill_destroys_the_kid_unless_invincible() {
             api::kill(ctx, b, KillCause::Script).is_err(),
             "a block is not a kid"
         );
+    });
+}
+
+#[test]
+fn djump_and_cur_jumps_setters() {
+    with_world(|ctx, k, b| {
+        api::refresh_air_jump(ctx, k);
+        api::set_air_jump(ctx, k, false);
+        let s = kid_state(ctx, k);
+        assert!(!s.djump);
+        assert_eq!(s.cur_jumps, 1, "the counter is not touched");
+        api::set_cur_jumps(ctx, k, 2);
+        assert_eq!(kid_state(ctx, k).cur_jumps, 2);
+        // Not a kid: nothing happens.
+        api::set_air_jump(ctx, b, true);
+        api::set_cur_jumps(ctx, b, 2);
+        api::set_triple_jump(ctx, b, true);
+    });
+}
+
+#[test]
+fn triple_jump_setter() {
+    with_world(|ctx, k, _| {
+        api::set_triple_jump(ctx, k, true);
+        assert!(kid_state(ctx, k).tjump);
+        api::set_triple_jump(ctx, k, false);
+        assert!(!kid_state(ctx, k).tjump);
+    });
+}
+
+#[test]
+fn run_jump_release_cuts_an_upward_speed_and_ignores_a_fall() {
+    with_world(|ctx, k, b| {
+        let mult = ctx.def.physics.numbers.release_mult;
+        ctx.w.get_mut(k).unwrap().m.set_vspeed(r(-8.0)).unwrap();
+        api::run_jump_release(ctx, k).expect("cuts");
+        assert_eq!(ctx.w.get(k).unwrap().m.vspeed(), r(-8.0) * mult);
+        ctx.w.get_mut(k).unwrap().m.set_vspeed(r(3.0)).unwrap();
+        api::run_jump_release(ctx, k).expect("no-op");
+        assert_eq!(ctx.w.get(k).unwrap().m.vspeed(), r(3.0));
+        assert!(api::run_jump_release(ctx, b).is_err(), "not a kid");
     });
 }

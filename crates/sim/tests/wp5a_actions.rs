@@ -436,18 +436,6 @@ fn fall_cap_clamps_abs() {
 }
 
 #[test]
-fn fall_cap_other_rules_are_unsupported() {
-    with_kid(
-        |p| p.fall_cap.rule = FallCapRule::ShiftThenClamp,
-        |ctx, kid, _, _| {
-            assert!(kid::run_action(ctx, kid, &KidAction::Common(CommonAction::FallCap)).is_err());
-        },
-    );
-}
-
-// ---- Shoot ----
-
-#[test]
 fn shoot_spawns_a_bullet_moving_with_facing() {
     with_kid(
         |_| {},
@@ -607,9 +595,9 @@ fn jump_needs_a_press_and_no_freeze() {
 }
 
 #[test]
-fn other_jump_models_are_unsupported() {
+fn other_water_air_models_are_unsupported() {
     with_kid(
-        |p| p.jump.air = AirJump::CurJumps,
+        |p| p.jump.water_air = WaterAir::WaterUnlimited,
         |ctx, kid, _, _| {
             input(ctx, &[Action::Jump], &[Action::Jump], &[]);
             assert!(kid::run_action(ctx, kid, &KidAction::Common(CommonAction::Jump)).is_err());

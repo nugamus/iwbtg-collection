@@ -92,6 +92,43 @@ pub fn refresh_air_jump(ctx: &mut Ctx, kid: InstId) {
     }
 }
 
+/// Sets or clears the triple-jump flag `tjump` (showdown moreJumping and moreJumping2). Does
+/// nothing for an instance that is not a kid.
+pub fn set_triple_jump(ctx: &mut Ctx, kid: InstId, on: bool) {
+    if let Some(s) = state_mut(ctx.w, kid) {
+        s.tjump = on;
+    }
+}
+
+/// Sets or clears the air jump flag `djump` alone (showdown spring, JUN objwater2, water with
+/// `air_jump = "djump_ignoring_flag"`); the family B counter is not touched.
+/// Does nothing for an instance that is not a kid.
+pub fn set_air_jump(ctx: &mut Ctx, kid: InstId, on: bool) {
+    if let Some(s) = state_mut(ctx.w, kid) {
+        s.djump = on;
+    }
+}
+
+/// Sets the family B jump counter `curJumps` (kaenbyou's objWater2 sets 2). Does nothing for an
+/// instance that is not a kid.
+pub fn set_cur_jumps(ctx: &mut Ctx, kid: InstId, n: u8) {
+    if let Some(s) = state_mut(ctx.w, kid) {
+        s.cur_jumps = n;
+    }
+}
+
+/// Runs the kid's variable-jump release (`playerVJump`: an upward `vspeed` times `release_mult`)
+/// now, whether or not Jump was released this tick; the caller tests the release (water's
+/// same-tick clause). Does nothing while the kid is frozen. Errors for an instance that is not a
+/// kid.
+pub fn run_jump_release(ctx: &mut Ctx, kid: InstId) -> Result<(), SimError> {
+    let s = state(ctx.w, kid).ok_or_else(|| SimError::invariant("run_jump_release: not a kid"))?;
+    if s.frozen || ctx.w.engine.kid.frozen {
+        return Ok(());
+    }
+    crate::kid::actions::common::cut_jump(ctx, kid)
+}
+
 /// Sets the on-platform flag. Does nothing for an instance that is not a kid.
 pub fn set_on_platform(ctx: &mut Ctx, kid: InstId, on: bool) {
     if let Some(s) = state_mut(ctx.w, kid) {
@@ -192,19 +229,26 @@ pub fn kill(ctx: &mut Ctx, kid: InstId, cause: KillCause) -> Result<Flow, SimErr
 /// A kid field for the probe, by its GM name; `None` when this kid has no such field. Flags read
 /// as 1 or 0. Names: `djump`, `curJumps`, `tjump`, `onPlatform`, `ladder`, `ladderud`,
 /// `ladderjump`, `frozen`, `frozen2`, `yflag`, `facing`, `tempHspeed`, `maxSpeed`, `maxVspeed`,
-/// `maxFallSpeed`, `muteki`, `scale`, and `jump[i]` (`jump` alone is `jump[0]`; `jump2` and
-/// `jump3` are `jump[1]` and `jump[2]`). WP5b and WP5c add the names of their own fields.
+/// `maxFallSpeed`, `muteki`, `scale`, `maxJumps`, `infJump`, and `jump[n]` (1-based like family B's
+/// array: `jump[1]` is the ground jump; `jump` alone is the same; `jump2` and `jump3` are `jump[2]` and
+/// `jump[3]`). WP5b and WP5c add the names of their own fields.
 pub fn read_field(w: &World, kid: InstId, f: &KidField) -> Option<Value> {
     let s = state(w, kid)?;
     let real = |r: Real| Some(Value::Real(r));
     if f.name == "jump" {
-        let i = usize::try_from(f.index.unwrap_or(0)).ok()?;
+        // Family B's `jump[1]`, `jump[2]` count from 1; plain `jump` is the ground jump.
+        let i = match f.index {
+            Some(n) => usize::try_from(n).ok()?.checked_sub(1)?,
+            None => 0,
+        };
         return s.jump_speeds.get(i).copied().and_then(real);
     }
     if f.index.is_some() {
         return None;
     }
     match f.name.as_str() {
+        "maxJumps" => real(Real::new(f64::from(s.b.max_jumps))),
+        "infJump" => Some(flag(s.b.inf_jump)),
         "jump2" => s.jump_speeds.get(1).copied().and_then(real),
         "jump3" => s.jump_speeds.get(2).copied().and_then(real),
         "djump" => Some(flag(s.djump)),
@@ -248,10 +292,18 @@ pub fn saved_facing(w: &World, kid: InstId) -> i8 {
     }
 }
 
-/// Puts a loaded kid in the saved orientation: `facing` (and `image_xscale`), and for a kid with
-/// state the `flipped` flag and `yflag`. The flipped kid kind and the `+dy` offset are the
+/// Puts a loaded kid in the saved orientation: `facing` (and `image_xscale`).
+///
+/// For a game that flips by flag (`[flip] model = "yflag"`, family B) the saved flipped state is
+/// `global.reverse`: it becomes the global, and the kid keeps the `yflag` its Create gave it, which
+/// is stale until its first Step fixes it (kid/B.md Restart). For the other models the kid's
+/// `flipped` flag and `yflag` follow the save. The flipped kid kind and the `+dy` offset are the
 /// loader's (`save::load_into`).
 pub fn restore_orientation(ctx: &mut Ctx, kid: InstId, flipped: bool, facing: i8) -> Result<(), SimError> {
+    let by_flag = ctx.def.physics.flip.model == crate::def::physics::FlipKind::Yflag;
+    if by_flag {
+        ctx.w.engine.kid.b.reverse = flipped;
+    }
     let Some(i) = ctx.w.get_mut(kid) else {
         return Err(SimError::invariant(format!(
             "kid::api::restore_orientation: no instance {}",
@@ -261,8 +313,10 @@ pub fn restore_orientation(ctx: &mut Ctx, kid: InstId, flipped: bool, facing: i8
     i.img.set_xscale(Real::new(f64::from(facing)))?;
     if let KindState::Kid(s) = &mut i.state {
         s.facing = facing;
-        s.flipped = flipped;
-        s.yflag = if flipped { -1 } else { 1 };
+        if !by_flag {
+            s.flipped = flipped;
+            s.yflag = if flipped { -1 } else { 1 };
+        }
     }
     Ok(())
 }
@@ -310,4 +364,18 @@ pub fn reset_jump_values(ctx: &mut Ctx, kid: InstId) -> Result<(), SimError> {
     i.m.set_hspeed(Real::ZERO)?;
     i.m.set_vspeed(Real::ZERO)?;
     Ok(())
+}
+
+/// `playerReverse` on `kid` (family B, `flip.model = "yflag"`): `global.reverse` toggles, `yflag`
+/// negates, `y` moves 4 times the new `yflag`, `curJumps` 1, `vspeed` 0. The gravity arrows call
+/// this from their Alarm 1.
+pub fn player_reverse(ctx: &mut Ctx, kid: InstId) -> Result<(), SimError> {
+    super::actions::b::player_reverse(ctx, kid)
+}
+
+/// `scrFlipGrav` on `kid` (family C, `flip.model = "grav_sign"`): `grav` negates, `djump` 1,
+/// `vspeed` 0, gravity and `image_yscale` take the new sign and `y` moves 4 times it. The gravity
+/// arrows call this on contact.
+pub fn flip_grav(ctx: &mut Ctx, kid: InstId) -> Result<(), SimError> {
+    super::actions::flip::flip_grav(ctx, kid)
 }

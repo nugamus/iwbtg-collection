@@ -4,10 +4,12 @@
 //! `replay`.
 
 mod case;
+mod determinism_cmd;
+mod engine_cmd;
 mod import;
 mod pkg_cmd;
-#[allow(dead_code, reason = "WP0 scaffold: WP8b fills the command")]
 mod replay_cmd;
+mod room_cmd;
 mod trace_cmd;
 
 use std::path::{Path, PathBuf};
@@ -42,6 +44,36 @@ enum Command {
     /// Headless replays.
     #[command(subcommand)]
     Replay(ReplayCommand),
+    /// Rooms of a package.
+    #[command(subcommand)]
+    Room(RoomCommand),
+    /// Cross-platform equality checks.
+    #[command(subcommand)]
+    Determinism(DeterminismCommand),
+    /// Engine revisions.
+    #[command(subcommand)]
+    Engine(EngineCommand),
+}
+
+#[derive(Subcommand)]
+enum EngineCommand {
+    /// Re-runs a package's stored replays and trace cases on a new engine_rev; prints SAFE or the differences.
+    Check {
+        /// Package folder.
+        pkg: PathBuf,
+        /// The revision to test (default: the newest this build knows).
+        #[arg(long)]
+        to: Option<u16>,
+        /// Load converter output: unmapped script kinds become inert.
+        #[arg(long)]
+        trace_mode: bool,
+        /// Research repo for the original traces (default: IWBTG_RESEARCH); without one, trace cases are not run.
+        #[arg(long)]
+        research: Option<PathBuf>,
+        /// Cases folder.
+        #[arg(long, default_value = DEFAULT_CASES)]
+        cases: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -120,6 +152,51 @@ enum PkgCommand {
         #[arg(long)]
         trace_mode: bool,
     },
+    /// Formats every data file of a package in the canonical layout (docs/decisions/0002).
+    Fmt {
+        /// Package folder.
+        pkg: PathBuf,
+        /// Change nothing: list the files that would change and exit 1 if there are any.
+        #[arg(long)]
+        check: bool,
+    },
+    /// Prints the gameplay hash (leaderboards key on it) and the content hash (downloads).
+    Hash {
+        /// Package folder.
+        pkg: PathBuf,
+        /// Load converter output: unmapped script kinds become inert.
+        #[arg(long)]
+        trace_mode: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum RoomCommand {
+    /// Prints an ASCII map of a room with a legend line.
+    Show {
+        /// Package folder.
+        pkg: PathBuf,
+        /// Room id (`rooms/<id>.toml`).
+        room: String,
+        /// Pixels per character.
+        #[arg(long, default_value_t = 32)]
+        cell: u32,
+        /// Load converter output: unmapped script kinds become inert.
+        #[arg(long)]
+        trace_mode: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum DeterminismCommand {
+    /// Runs the golden corpus and prints one line per case: name, ticks, status, state hash.
+    Report {
+        /// The golden folder (crates/sim/tests/golden): holds `expected.txt`.
+        corpus: PathBuf,
+        /// Also compare with `<corpus>/expected.txt`; exit 1 on a difference.
+        #[arg(long)]
+        check: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -174,6 +251,31 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             Ok(true)
         }
         Command::Pkg(PkgCommand::Check { pkg, trace_mode }) => pkg_cmd::main(&pkg, trace_mode),
+        Command::Pkg(PkgCommand::Fmt { pkg, check }) => pkg_cmd::fmt_main(&pkg, check),
+        Command::Pkg(PkgCommand::Hash { pkg, trace_mode }) => pkg_cmd::hash_main(&pkg, trace_mode),
+        Command::Determinism(DeterminismCommand::Report { corpus, check }) => {
+            determinism_cmd::main(&corpus, check)
+        }
+        Command::Room(RoomCommand::Show {
+            pkg,
+            room,
+            cell,
+            trace_mode,
+        }) => room_cmd::show_main(&pkg, &room, cell, trace_mode),
+        Command::Engine(EngineCommand::Check {
+            pkg,
+            to,
+            trace_mode,
+            research,
+            cases,
+        }) => {
+            let research = research.or_else(|| std::env::var_os("IWBTG_RESEARCH").map(PathBuf::from));
+            let traces = engine_cmd::TraceSource {
+                research: research.as_deref(),
+                cases: &cases,
+            };
+            engine_cmd::main(&pkg, to, trace_mode, Some(traces))
+        }
         Command::Replay(ReplayCommand::Run(args)) => {
             replay_cmd::main(&args)?;
             Ok(true)

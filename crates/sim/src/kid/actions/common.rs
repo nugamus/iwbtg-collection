@@ -7,28 +7,34 @@
 //! `SimError::Unsupported` naming its row, so a profile that lists it halts instead of silently
 //! skipping it.
 //!
-//! **OPEN (sound).** The jump, double jump, shoot and vine kick sounds are not played: the sound
-//! model is WP10 and its `sound::play` is not built. Sounds are output only, so no trace column
+//! **OPEN (sound).** The jump, double jump, shoot and vine kick sounds are not played: the
+//! sound model exists (`sound::play`, WP10) but these actions do not call it yet. Sounds are output only, so no trace column
 //! depends on them.
 
 use serde::Deserialize;
 
+use super::ice::{on_ice, slip_below};
 use crate::alarm;
 use crate::anim::Image;
 use crate::collide::query::{Target, distance_to_object, place_free, place_meeting};
-use crate::def::physics::{AirJump, FallCapRule, GroundAlso, VineKeys, VineModel, WalkRead, WaterAir};
+use crate::def::physics::FlipKind;
+use crate::def::physics::IceModel;
+use crate::def::physics::{
+    AirJump, FallCapRule, GravityReapply, GroundAlso, JumpCancel, VineKeys, VineModel, WalkRead, WaterAir,
+};
 use crate::def::room::RoomRole;
 use crate::def::{ClassMask, EngineKind, GameDef, SpriteId};
 use crate::error::SimError;
 use crate::input::Action;
 use crate::kid::api::KillCause;
 use crate::kid::state::KidState;
-use crate::num::{Real, gm_eq, gm_gt, gm_lt, gm_ne};
+use crate::num::{Real, gm_eq, gm_gt, gm_lt, gm_ne, sign as num_sign};
 use crate::save;
 use crate::world::{Ctx, Flow, InstId, KindState, SpawnInit};
 
 /// The actions this file implements, by their `physics.toml` names (snake case). Part of
 /// `kid::KidAction`.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CommonAction {
@@ -58,6 +64,12 @@ pub enum CommonAction {
     Release,
     /// Step action 4: vines.
     Vines,
+    /// Step (spook house): with `frozen` the whole rest of the Step list is skipped (the code
+    /// writes no `hspeed`, gravity or `vspeed`). `kid::on_event` runs this one itself.
+    StopIfFrozen,
+    /// Step (B): with `frozen2`, gravity, `image_speed` and speed become 0 and the rest of the
+    /// Step list is skipped. `kid::on_event` runs this one itself.
+    StopIfFrozen2,
     /// Alarm 0: outside the menu roles `global.time` + 1, then alarm 0 = `room_speed` again.
     PlayTimer,
     /// Key Q pressed (and the killPlayer calls of key rows): the death sequence.
@@ -81,6 +93,13 @@ pub fn run(ctx: &mut Ctx, me: InstId, action: &CommonAction) -> Result<Flow, Sim
         CommonAction::FirstPlaySave => first_play_save(ctx, me)?,
         CommonAction::ArmPlayTimer => arm_play_timer(ctx, me)?,
         CommonAction::PlayTimer => play_timer(ctx, me)?,
+        // `kid::on_event` handles it (it must stop the list); run alone it only reports.
+        CommonAction::StopIfFrozen => {
+            stop_if_frozen(ctx, me)?;
+        }
+        CommonAction::StopIfFrozen2 => {
+            stop_if_frozen2(ctx, me)?;
+        }
         CommonAction::Kill => return super::super::death::kill(ctx, me, KillCause::Suicide),
     }
     Ok(Flow::Continue)
@@ -189,13 +208,33 @@ fn real_i(n: i32) -> Real {
 }
 
 /// A distance query result as the vine rules read it: `None` (no such instance) is far.
-fn far(d: Option<Real>) -> Real {
+pub(crate) fn far(d: Option<Real>) -> Real {
     d.unwrap_or(Real::new(f64::MAX))
 }
 
-/// +1 normally, -1 for the flipped kid (gravity points up).
-fn down(s: &KidState) -> i32 {
-    if s.flipped { -1 } else { 1 }
+/// +1 normally, -1 for the flipped kid or a negative `yflag` (gravity points up).
+pub(crate) fn down(s: &KidState) -> i32 {
+    if s.flipped || s.yflag < 0 { -1 } else { 1 }
+}
+
+/// `yflag` for the actions that scale by it (`flip.model = "yflag"`): -1 while the kid is
+/// reversed, else 1. Other flip models keep 1: their flipped kid is another object.
+pub(crate) fn yflag(ctx: &Ctx, s: &KidState) -> i32 {
+    if match ctx.def.physics.flip.model {
+        FlipKind::Yflag | FlipKind::GravSign => s.yflag < 0,
+        // The flipped kid is its own object (`player2`); its mirrored rules read like `yflag` -1.
+        FlipKind::SwapObject => s.flipped,
+        FlipKind::None => false,
+    } {
+        -1
+    } else {
+        1
+    }
+}
+
+/// Family B's reversed kid swaps Left and Right and the vine away key; family C's does not.
+pub(crate) fn keys_swapped(ctx: &Ctx, s: &KidState) -> bool {
+    ctx.def.physics.flip.model == FlipKind::Yflag && s.yflag < 0
 }
 
 /// Create steps 1 and 2 (A1): numbers from the profile, flags cleared, `djump` true,
@@ -215,13 +254,19 @@ fn create_defaults(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         s.frozen2 = false;
         s.djump = true;
         s.cur_jumps = 1;
+        s.tjump = p.jump.air == AirJump::DjumpThenTjump; // showdown Create grants it (I8)
+        s.b.max_jumps = p.jump.max_jumps;
+        s.b.inf_jump = p.jump.inf_jump;
         s.invincible = false;
         s.facing = if handed_over_left { -1 } else { 1 };
     }
     let Some(inst) = ctx.w.get_mut(me) else {
         return Err(SimError::invariant("create_defaults: kid vanished"));
     };
-    inst.m.set_gravity(p.numbers.gravity)?;
+    // B's Create does not set gravity: it stays 0 until the End Step (kid/B.md Create).
+    if p.gravity.reapply != GravityReapply::EndStepSlope {
+        inst.m.set_gravity(p.numbers.gravity)?;
+    }
     inst.img.set_speed(p.numbers.image_speed_idle)?;
     if p.misc.fade_in {
         inst.img.set_alpha(Real::ZERO)?;
@@ -229,7 +274,96 @@ fn create_defaults(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     if handed_over_left {
         inst.img.set_xscale(real_i(-1))?;
     }
+    if p.flip.model == FlipKind::Yflag {
+        reverse_at_create(ctx, me)?;
+    }
+    if p.flip.model == FlipKind::GravSign {
+        grav_at_create(ctx, me)?;
+    }
+    if p.flip.model == FlipKind::SwapObject {
+        swap_object_at_create(ctx, me)?;
+    }
     Ok(())
+}
+
+/// B Create step 2-3: `yflag` from `global.reverse` as it is now (a retry's new kid sees the
+/// value from before the save is read): 1 normally; -1 with `y - 4` and `curJumps` 1 when
+/// reversed; `image_yscale` follows `yflag`.
+fn reverse_at_create(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+    let reversed = ctx.w.engine.kid.b.reverse;
+    let yflag: i8 = if reversed { -1 } else { 1 };
+    {
+        let s = state_mut(ctx, me)?;
+        s.yflag = yflag;
+        s.flipped = reversed;
+        if reversed {
+            s.cur_jumps = 1;
+        }
+    }
+    let Some(inst) = ctx.w.get_mut(me) else {
+        return Err(SimError::invariant("create_defaults: kid vanished"));
+    };
+    if reversed {
+        inst.m.set_y(inst.m.y() - real_i(4))?;
+    }
+    inst.img.set_yscale(real_i(i32::from(yflag)))
+}
+
+/// C Create: `grav` (`global.grav`: true is the flipped kid, -1) signs gravity and `image_yscale`
+/// (which mirrors the mask: `sprPlayerMaskFlip` covers `y - 8 .. y + 12`, the mirrored box).
+fn grav_at_create(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+    let flipped = ctx.w.engine.kid.grav;
+    let yflag: i8 = if flipped { -1 } else { 1 };
+    {
+        let s = state_mut(ctx, me)?;
+        s.yflag = yflag;
+        s.flipped = flipped;
+    }
+    let g = ctx.def.physics.numbers.gravity;
+    let Some(inst) = ctx.w.get_mut(me) else {
+        return Err(SimError::invariant("create_defaults: kid vanished"));
+    };
+    inst.m.set_gravity(g * real_i(i32::from(yflag)))?;
+    inst.img.set_yscale(real_i(i32::from(yflag)))
+}
+
+/// Group A Create of the flipped kid object (`player2`): gravity and `image_yscale` are negative
+/// (`jump` and `jump2` take their sign from `down()`). The normal kid object is untouched.
+fn swap_object_at_create(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+    let Some(inst) = ctx.w.get(me) else { return Ok(()) };
+    let flipped = inst.classes.intersects(ClassMask::KID_FLIPPED);
+    state_mut(ctx, me)?.flipped = flipped;
+    if !flipped {
+        return Ok(());
+    }
+    let g = ctx.def.physics.numbers.gravity;
+    let Some(inst) = ctx.w.get_mut(me) else {
+        return Ok(());
+    };
+    inst.m.set_gravity(-g)?;
+    inst.img.set_yscale(-Real::ONE)
+}
+
+/// Spook house Step: with `frozen` (the kid's or the global) the Step list stops here, doing
+/// nothing. Returns true when it stopped the list.
+pub(crate) fn stop_if_frozen(ctx: &mut Ctx, me: InstId) -> Result<bool, SimError> {
+    let s = state(ctx, me)?;
+    Ok(s.frozen || ctx.w.engine.kid.frozen)
+}
+
+/// B Step: with `frozen2` (the global or the kid's own) the kid's gravity, `image_speed` and speed
+/// are 0 and nothing else of the Step runs. Returns true when it stopped the Step: the event
+/// list stops there (`kid::on_event`).
+pub(crate) fn stop_if_frozen2(ctx: &mut Ctx, me: InstId) -> Result<bool, SimError> {
+    if !(state(ctx, me)?.frozen2 || ctx.w.engine.kid.frozen2) {
+        return Ok(false);
+    }
+    if let Some(i) = ctx.w.get_mut(me) {
+        i.m.set_gravity(Real::ZERO)?;
+        i.img.set_speed(Real::ZERO)?;
+        i.m.set_speed(Real::ZERO)?;
+    }
+    Ok(true)
 }
 
 /// Step action 2 step 4: gravity back to its constant unless on a ladder (`gravity.reapply =
@@ -245,7 +379,7 @@ fn gravity(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     if state(ctx, me)?.ladder {
         return Ok(());
     }
-    let g = def.physics.numbers.gravity;
+    let g = def.physics.numbers.gravity * real_i(down(&state(ctx, me)?));
     match ctx.w.get_mut(me) {
         Some(i) => i.m.set_gravity(g),
         None => Ok(()),
@@ -254,7 +388,7 @@ fn gravity(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
 
 /// A1 Step action 3 runs only while `frozen2` is false: the kid's own flag or `global.frozen2`.
 /// `walk`, `air_sprite`, `fall_cap`, `shoot`, `jump` and `release` are all inside it.
-fn frozen2(ctx: &Ctx, s: &KidState) -> bool {
+pub(crate) fn frozen2(ctx: &Ctx, s: &KidState) -> bool {
     s.frozen2 || ctx.w.engine.kid.frozen2
 }
 
@@ -264,6 +398,14 @@ fn frozen2(ctx: &Ctx, s: &KidState) -> bool {
 /// forces 0. Facing changes to `h` unless the right vine distance is exactly 1 or the left vine
 /// distance is 1 or less; `hspeed` is set only when the direction is not blocked by a vine
 /// (else it keeps its old value and the sprite stays).
+/// Plays a kid sound of the profile's `[sounds]` (nothing when the game has none for the role).
+pub(crate) fn play_sound(ctx: &mut Ctx, id: Option<crate::def::SoundId>) -> Result<(), SimError> {
+    match id {
+        Some(id) => crate::sound::play(ctx, id, false),
+        None => Ok(()),
+    }
+}
+
 fn walk(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let def = ctx.def;
     let p = &def.physics;
@@ -279,6 +421,12 @@ fn walk(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         }
         WalkRead::Sampled => (ctx.w.input.held(Action::Right), ctx.w.input.held(Action::Left)),
     };
+    // Reversed (family B): the keys swap, "L reads the right key and R the left key".
+    let (right, left) = if keys_swapped(ctx, &s) {
+        (left, right)
+    } else {
+        (right, left)
+    };
     let mut h: i32 = if right {
         1
     } else if left {
@@ -289,32 +437,109 @@ fn walk(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     if s.frozen || ctx.w.engine.kid.frozen {
         h = 0;
     }
-    let (dr, dl) = vine_distances(ctx, me)?;
+    // A3 (`vine.walk_ignores_vines`): no vine rule in walking; far means "no vine".
+    let (dr, dl) = if p.vine.walk_ignores_vines {
+        (far(None), far(None))
+    } else {
+        vine_distances(ctx, me)?
+    };
     let n = &ctx.rules.num;
     let run = s.run_speed;
+    // C (`distance_sym_early`): both vine types need a distance above 1 for facing, and each
+    // direction is open when the vine on that side is further than 1.
+    let sym = p.vine.model == VineModel::DistanceSymEarly;
     if h != 0 {
-        if gm_ne(dr, Real::ONE, n) && gm_gt(dl, Real::ONE, n) {
+        let face = if sym {
+            gm_gt(dr, Real::ONE, n) && gm_gt(dl, Real::ONE, n)
+        } else {
+            gm_ne(dr, Real::ONE, n) && gm_gt(dl, Real::ONE, n)
+        };
+        if face {
             state_mut(ctx, me)?.facing = if h > 0 { 1 } else { -1 };
             if let Some(i) = ctx.w.get_mut(me) {
                 i.img.set_xscale(real_i(h))?;
             }
         }
-        let open = (h == -1 && gm_ne(dr, Real::ONE, n)) || (h == 1 && gm_gt(dl, Real::ONE, n));
-        if let (true, Some(i)) = (open, ctx.w.get_mut(me)) {
-            i.m.set_hspeed(run * real_i(h))?;
+        let right_clear = if sym {
+            gm_gt(dr, Real::ONE, n)
+        } else {
+            gm_ne(dr, Real::ONE, n)
+        };
+        let open = (h == -1 && right_clear) || (h == 1 && gm_gt(dl, Real::ONE, n));
+        if open {
+            // Slip (`[ice] model = "slip"`): with a slip block within `probe` px the speed builds
+            // up by the slip read at `read` px instead of being set (A1, A2, B: no clamp; C: 3).
+            let (ice, slip) = if p.ice.model == IceModel::Slip && on_ice(ctx, me, p.ice.probe)? {
+                (true, slip_below(ctx, me)?)
+            } else {
+                (false, Real::ZERO)
+            };
+            // eat-the-new-year (`[slope] keep_hspeed`): a slope 1 px below on the downhill side
+            // (`slope` with Left or `slope_mirror` with Right) keeps the previous `hspeed`.
+            let keep = if p.slope.keep_hspeed {
+                let Some(i) = ctx.w.get(me) else { return Ok(()) };
+                let (x, y) = (i.m.x(), i.m.y());
+                let below = y + Real::ONE;
+                (h <= 0 && place_meeting(ctx, me, x, below, Target::Class(ClassMask::SLOPE))?)
+                    || (h >= 0 && place_meeting(ctx, me, x, below, Target::Class(ClassMask::SLOPE_MIRROR))?)
+            } else {
+                false
+            };
+            let Some(i) = ctx.w.get_mut(me) else { return Ok(()) };
+            if keep {
+                // `hspeed` stays.
+            } else if !ice {
+                i.m.set_hspeed(run * real_i(h))?;
+            } else {
+                let hs = i.m.hspeed();
+                if (h == 1 && gm_lt(hs, run, n)) || (h == -1 && gm_gt(hs, -run, n)) {
+                    let mut v = hs + slip * real_i(h);
+                    if p.ice.clamp {
+                        if gm_gt(v, run, n) {
+                            v = run;
+                        } else if gm_lt(v, -run, n) {
+                            v = -run;
+                        }
+                    }
+                    i.m.set_hspeed(v)?;
+                }
+            }
             set_sprite(def, &mut i.img, p.sprites.running);
             i.img.set_speed(p.numbers.image_speed_run)?;
         }
-    } else if let Some(i) = ctx.w.get_mut(me) {
-        i.m.set_hspeed(Real::ZERO)?;
-        set_sprite(def, &mut i.img, p.sprites.idle);
-        i.img.set_speed(p.numbers.image_speed_idle)?;
+    } else {
+        let idle = if p.misc.idle_needs_block {
+            let Some(i) = ctx.w.get(me) else { return Ok(()) };
+            let (x, y) = (i.m.x(), i.m.y());
+            let below = y + real_i(down(&s));
+            place_meeting(ctx, me, x, below, Target::Class(p.jump.ground_classes))?
+        } else {
+            true
+        };
+        // Standing on ice the speed decays by the slip toward 0 and may overshoot it; off ice 0.
+        let (ice, slip) = if p.ice.model == IceModel::Slip && on_ice(ctx, me, p.ice.probe)? {
+            (true, slip_below(ctx, me)?)
+        } else {
+            (false, Real::ZERO)
+        };
+        if let Some(i) = ctx.w.get_mut(me) {
+            if !ice {
+                i.m.set_hspeed(Real::ZERO)?;
+            } else if gm_ne(i.m.hspeed(), Real::ZERO, n) {
+                let hs = i.m.hspeed();
+                i.m.set_hspeed(hs - slip * num_sign(hs, n))?;
+            }
+            if idle {
+                set_sprite(def, &mut i.img, p.sprites.idle);
+            }
+            i.img.set_speed(p.numbers.image_speed_idle)?;
+        }
     }
     Ok(())
 }
 
 /// Distances to the nearest right-side vine and left-side vine; far when there is none.
-fn vine_distances(ctx: &Ctx, me: InstId) -> Result<(Real, Real), SimError> {
+pub(crate) fn vine_distances(ctx: &Ctx, me: InstId) -> Result<(Real, Real), SimError> {
     let dr = far(distance_to_object(ctx, me, Target::Class(ClassMask::VINE_R))?);
     let dl = far(distance_to_object(ctx, me, Target::Class(ClassMask::VINE_L))?);
     Ok((dr, dl))
@@ -339,12 +564,45 @@ fn air_sprite(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         }
         return Ok(());
     }
+    let rev = yflag(ctx, &s) < 0;
+    // Family B: the fall sprite also needs no `slope_wall` `air_wall_probe` px in the gravity
+    // direction; when reversed, the jump sprite is the one that shows falling "up" without it.
+    let probe = p.numbers.air_wall_probe;
+    let wall_near = if gm_gt(probe, Real::ZERO, n) {
+        let Some(i) = ctx.w.get(me) else { return Ok(()) };
+        let (x, y) = (i.m.x(), i.m.y());
+        let dir = real_i(yflag(ctx, &s));
+        place_meeting(ctx, me, x, y + probe * dir, Target::Class(ClassMask::SLOPE_WALL))?
+    } else {
+        false
+    };
+    // Rori and fairy-tale (`[slope] air_sprite_probe`): no fall sprite with a slope that close.
+    let sp = p.slope.air_sprite_probe;
+    let wall_near = wall_near
+        || (gm_gt(sp, Real::ZERO, n) && {
+            let Some(i) = ctx.w.get(me) else { return Ok(()) };
+            let (x, y) = (i.m.x(), i.m.y());
+            place_meeting(
+                ctx,
+                me,
+                x,
+                y + sp,
+                Target::Class(ClassMask::SLOPE | ClassMask::SLOPE_MIRROR),
+            )?
+        });
     let Some(i) = ctx.w.get_mut(me) else { return Ok(()) };
     let v = i.m.vspeed();
     let t = p.numbers.sprite_threshold;
-    if gm_lt(v, -t, n) {
+    // Moving with gravity is the fall sprite (not near a wall); against it, the jump sprite.
+    // Reversed (`yflag`), "with gravity" is negative `vspeed`.
+    let (with_gravity, against) = if rev {
+        (gm_lt(v, -t, n), gm_gt(v, t, n))
+    } else {
+        (gm_gt(v, t, n), gm_lt(v, -t, n))
+    };
+    if against {
         set_sprite(def, &mut i.img, p.sprites.jump);
-    } else if gm_gt(v, t, n) {
+    } else if with_gravity && !wall_near {
         set_sprite(def, &mut i.img, p.sprites.fall);
     }
     Ok(())
@@ -357,16 +615,32 @@ fn fall_cap(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         return Ok(());
     }
     let rule = ctx.def.physics.fall_cap.rule;
-    if rule != FallCapRule::ClampAbs {
-        return Err(SimError::unsupported(format!(
-            "kid action fall_cap: rule {rule:?} (5.3 fall cap row, WP5b/WP5c)"
-        )));
-    }
     let n = &ctx.rules.num;
-    let max = state(ctx, me)?.max_vspeed;
+    let s = state(ctx, me)?;
+    let max = s.max_vspeed;
+    let sign = real_i(down(&s));
     let Some(i) = ctx.w.get_mut(me) else { return Ok(()) };
     let v = i.m.vspeed();
-    if gm_gt(Real::new(v.get().abs()), max, n) {
+    // `shift_then_clamp` (A4): beyond `maxFallSpeed` the position shifts back by the excess
+    // first (`y - sign(vspeed) * (abs(vspeed) - maxFallSpeed)`); `vspeed` is left as it is.
+    if rule == FallCapRule::ShiftThenClamp {
+        let excess = Real::new(v.get().abs()) - s.max_fall_speed;
+        if gm_gt(excess, Real::ZERO, n) {
+            let dir = if gm_lt(v, Real::ZERO, n) {
+                -Real::ONE
+            } else {
+                Real::ONE
+            };
+            i.m.set_y(i.m.y() - dir * excess)?;
+        }
+    }
+    // `clamp_abs` and `shift_then_clamp`: either direction. `clamp_against_gravity` (B) and
+    // `clamp_down_only` (spook house): only the fall, `vspeed * yflag`.
+    let too_fast = match rule {
+        FallCapRule::ClampAgainstGravity | FallCapRule::ClampDownOnly => gm_gt(v * sign, max, n),
+        _ => gm_gt(Real::new(v.get().abs()), max, n),
+    };
+    if too_fast {
         i.m.set_vspeed(if gm_lt(v, Real::ZERO, n) { -max } else { max })?;
     }
     Ok(())
@@ -390,13 +664,16 @@ fn shoot(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
     let Some(i) = ctx.w.get(me) else {
         return Ok(Flow::Continue);
     };
-    let (x, y) = (i.m.x(), i.m.y());
+    let off = def.physics.bullet.offset;
+    let x = i.m.x() + off[0] * real_i(i32::from(s.facing));
+    let y = i.m.y() - off[1] * real_i(yflag(ctx, &s));
     let Some(b) = ctx.spawn_engine(EngineKind::KidBullet, x, y, SpawnInit::default())? else {
         return Err(SimError::invariant("shoot: the game has no kid_bullet kind"));
     };
     if let Some(bi) = ctx.w.get_mut(b) {
         bi.m.set_hspeed(def.physics.bullet.speed * real_i(i32::from(s.facing)))?;
     }
+    play_sound(ctx, def.physics.sounds.shoot)?;
     Ok(if ctx.w.status == crate::world::SimStatus::Running {
         Flow::Continue
     } else {
@@ -418,11 +695,10 @@ fn jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     if s.frozen || ctx.w.engine.kid.frozen || !ctx.w.input.pressed(Action::Jump) {
         return Ok(());
     }
-    if p.jump.air != AirJump::Djump {
-        return Err(SimError::unsupported(format!(
-            "kid action jump: jump.air {:?} (5.3 jump rows, WP5b/WP5c)",
-            p.jump.air
-        )));
+    match p.jump.air {
+        AirJump::Djump => {}
+        AirJump::CurJumps => return super::b::jump(ctx, me),
+        AirJump::DjumpThenTjump => {}
     }
     let sign = real_i(down(&s));
     let Some(i) = ctx.w.get(me) else { return Ok(()) };
@@ -444,11 +720,20 @@ fn jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         if p.jump.ground_sets_djump {
             state_mut(ctx, me)?.djump = true;
         }
+        play_sound(ctx, p.sounds.jump)?;
         return Ok(());
     }
     let water2 = match p.jump.water_air {
         WaterAir::None => false,
         WaterAir::Water2WithoutFlag => place_meeting(ctx, me, x, below, Target::Class(ClassMask::WATER2))?,
+        // C: water 2 and its child water 3 give the air jump; water 3 below also keeps `djump`.
+        WaterAir::Water3Keeps => place_meeting(
+            ctx,
+            me,
+            x,
+            below,
+            Target::Class(ClassMask::WATER2 | ClassMask::WATER3),
+        )?,
         other => {
             return Err(SimError::unsupported(format!(
                 "kid action jump: jump.water_air {other:?} (5.3 jump rows, WP5b/WP5c)"
@@ -460,7 +745,23 @@ fn jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
             i.m.set_vspeed(-(sign * jump1))?;
             set_sprite(def, &mut i.img, p.sprites.jump);
         }
-        state_mut(ctx, me)?.djump = false;
+        play_sound(ctx, p.sounds.double_jump)?;
+        let keeps = p.jump.water_air == WaterAir::Water3Keeps
+            && place_meeting(ctx, me, x, below, Target::Class(ClassMask::WATER3))?;
+        state_mut(ctx, me)?.djump = keeps;
+        return Ok(());
+    }
+    // `djump_then_tjump` (showdown): the third jump, once.
+    if p.jump.air == AirJump::DjumpThenTjump && s.tjump {
+        let jump2 = s.jump_speeds.get(2).copied().unwrap_or(Real::ZERO);
+        if let Some(i) = ctx.w.get_mut(me) {
+            i.m.set_vspeed(-(sign * jump2))?;
+            set_sprite(def, &mut i.img, p.sprites.jump);
+        }
+        let s = state_mut(ctx, me)?;
+        s.djump = false;
+        s.tjump = false;
+        play_sound(ctx, p.sounds.double_jump)?;
     }
     Ok(())
 }
@@ -470,18 +771,37 @@ fn jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
 /// cut more than once.
 fn release(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let def = ctx.def;
-    let n = &ctx.rules.num;
     let s = state(ctx, me)?;
     if frozen2(ctx, &s) {
         return Ok(());
     }
-    if s.frozen || ctx.w.engine.kid.frozen || !ctx.w.input.released(Action::Jump) {
+    if s.frozen
+        || ctx.w.engine.kid.frozen
+        || def.physics.jump.cancel == JumpCancel::PollAlarm // `cancel_poll` cuts instead
+        || !ctx.w.input.released(Action::Jump)
+    {
         return Ok(());
     }
+    cut_jump(ctx, me)
+}
+
+/// The cut of `playerVJump` without the release test: an upward `vspeed` (against gravity) is
+/// multiplied by `release_mult` (and a second time while `tjump` in showdown). `kid::api::
+/// run_jump_release` calls it for water's same-tick release clause.
+pub(crate) fn cut_jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+    let def = ctx.def;
+    let n = &ctx.rules.num;
+    let s = state(ctx, me)?;
     let sign = real_i(down(&s));
     let Some(i) = ctx.w.get_mut(me) else { return Ok(()) };
     let v = i.m.vspeed();
+    let mut v = v;
     if gm_lt(sign * v, Real::ZERO, n) {
+        v *= def.physics.numbers.release_mult;
+        i.m.set_vspeed(v)?;
+    }
+    // `playerTJump` (showdown): while `tjump` is set a release cuts a second time.
+    if def.physics.jump.release_twice_while_tjump && s.tjump && gm_lt(sign * v, Real::ZERO, n) {
         i.m.set_vspeed(v * def.physics.numbers.release_mult)?;
     }
     Ok(())
@@ -499,37 +819,47 @@ fn vines(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     match p.vine.model {
         VineModel::None => return Ok(()),
         VineModel::DistanceAsym => {}
-        VineModel::DistanceSymEarly => {
-            return Err(SimError::unsupported(
-                "kid action vines: vine.model distance_sym_early (5.3 vine row C, WP5c)",
-            ));
-        }
-    }
-    if p.input.vine_keys != VineKeys::Edges {
-        return Err(SimError::unsupported(
-            "kid action vines: input.vine_keys latched_flags (5.3 vine keys row, WP5c)",
-        ));
+        VineModel::DistanceSymEarly => return super::c::vines(ctx, me),
     }
     let Some(i) = ctx.w.get(me) else { return Ok(()) };
     let (x, y) = (i.m.x(), i.m.y());
     let s = state(ctx, me)?;
     let (dr, dl) = vine_distances(ctx, me)?;
-    let below_free = place_free(ctx, me, x, y + real_i(down(&s)))?;
-    let (right_pressed, left_pressed, jump_held) = (
-        ctx.w.input.pressed(Action::Right),
-        ctx.w.input.pressed(Action::Left),
-        ctx.w.input.held(Action::Jump),
-    );
+    let probe = if p.vine.probe_down_fixed { 1 } else { down(&s) };
+    let below_free = place_free(ctx, me, x, y + real_i(probe))?;
+    // `edges`: this tick's press and the held Jump key. `latched_flags`: the game's own flags
+    // (action `key_flags`), which stay set from a press to its release.
+    let (right_pressed, left_pressed, jump_held) = match p.input.vine_keys {
+        VineKeys::Edges => (
+            ctx.w.input.pressed(Action::Right),
+            ctx.w.input.pressed(Action::Left),
+            ctx.w.input.held(Action::Jump),
+        ),
+        VineKeys::LatchedFlags => {
+            let e = &ctx.w.engine.kid.ext;
+            (e.key_right, e.key_left, e.key_jump)
+        }
+    };
     let max_fall = p.numbers.max_fall_speed;
     let slide_fall = Real::new(2.0);
-    let (kick_h, kick_v) = (p.vine.kick[0], p.vine.kick[1]);
+    let rev = keys_swapped(ctx, &s);
+    let yf = real_i(yflag(ctx, &s));
+    // Reversed (family B): the away key is the other one, slide and kick follow `yflag`.
+    let (right_pressed, left_pressed) = if rev {
+        (left_pressed, right_pressed)
+    } else {
+        (right_pressed, left_pressed)
+    };
+    let (kick_h, kick_v) = (p.vine.kick[0], p.vine.kick[1] * yf);
+    let slide = p.vine.slide * yf;
+    let mut kicked = false;
 
     // Left vine: face right; kick or drop on a Right press.
     if gm_lt(dl, p.vine.left_below, n) && below_free {
         state_mut(ctx, me)?.max_fall_speed = slide_fall;
         state_mut(ctx, me)?.facing = 1;
         if let Some(i) = ctx.w.get_mut(me) {
-            i.m.set_vspeed(p.vine.slide)?;
+            i.m.set_vspeed(slide)?;
             set_sprite(def, &mut i.img, p.sprites.sliding);
             i.img.set_xscale(Real::ONE)?;
             i.img.set_speed(p.numbers.image_speed_run)?;
@@ -538,6 +868,7 @@ fn vines(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
                     set_sprite(def, &mut i.img, p.sprites.jump);
                     i.m.set_vspeed(kick_v)?;
                     i.m.set_hspeed(kick_h)?;
+                    kicked = true;
                 } else {
                     i.m.set_hspeed(p.vine.drop)?;
                     set_sprite(def, &mut i.img, p.sprites.fall);
@@ -553,7 +884,7 @@ fn vines(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         state_mut(ctx, me)?.max_fall_speed = slide_fall;
         state_mut(ctx, me)?.facing = -1;
         if let Some(i) = ctx.w.get_mut(me) {
-            i.m.set_vspeed(p.vine.slide)?;
+            i.m.set_vspeed(slide)?;
             set_sprite(def, &mut i.img, p.sprites.sliding);
             i.img.set_xscale(real_i(-1))?;
             i.img.set_speed(p.numbers.image_speed_run)?;
@@ -562,6 +893,7 @@ fn vines(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
                     set_sprite(def, &mut i.img, p.sprites.jump);
                     i.m.set_vspeed(kick_v)?;
                     i.m.set_hspeed(-kick_h)?;
+                    kicked = true;
                 } else {
                     i.m.set_hspeed(-p.vine.drop)?;
                     set_sprite(def, &mut i.img, p.sprites.fall);
@@ -571,6 +903,9 @@ fn vines(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     }
     if gm_gt(dr, Real::ONE, n) && below_free {
         state_mut(ctx, me)?.max_fall_speed = max_fall;
+    }
+    if kicked {
+        play_sound(ctx, p.sounds.vine_kick)?;
     }
     Ok(())
 }

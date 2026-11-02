@@ -8,8 +8,10 @@
 //!
 //! Kid-side steps (`RestartModel::kid_steps`): B's +2 to the play timer and saveDeathTime, clearing
 //! `frozen` and `frozen2`, and showdown's jump-value reset after the load, through `kid::api`.
-//! What is **not** here: showdown's resets of the trigger, laser, move, shift, rihuto, tjump and
-//! taru globals (the mechanics' state, WP6; filed as an issue), and sounds on F2 (WP10).
+//! Showdown's loadGame also resets the trigger arrays (`kid_steps.clear_triggers`). What is **not**
+//! here: its laser (reiza), move (idou), shift, rihuto and taru globals, which are game code
+//! (the package's own variables, #245 follow-up), and the dormant `global.tjump` (never set to 1,
+//! kid/A3.md).
 
 use crate::def::{ClassMask, DeathOnRestart, EngineKind, ResetKind, RestartKind, RoomId, RoomRole};
 use crate::error::SimError;
@@ -96,6 +98,9 @@ pub fn run_restart(ctx: &mut Ctx, world: InstId) -> Result<Flow, SimError> {
             let kid = save::load_into(ctx, &slot)?;
             if model.kid_steps.reset_jump_values {
                 crate::kid::api::reset_jump_values(ctx, kid)?;
+            }
+            if model.kid_steps.clear_triggers {
+                ctx.w.engine.mech.clear_triggers();
             }
             let role = room_role(ctx, ctx.w.room);
             let skip = model.kind == RestartKind::RoomGotoSaved
@@ -193,7 +198,7 @@ fn place_or_create_kid(ctx: &mut Ctx, slot: &SaveSlot) -> Result<(), SimError> {
     let rules = ctx.rules;
     match ctx.w.kid(&rules.tick) {
         Some(kid) => {
-            let dy = if slot.flipped {
+            let dy = if save::flip_by_kind(ctx, slot) {
                 ctx.def.restart.flipped_load_dy
             } else {
                 crate::num::Real::ZERO

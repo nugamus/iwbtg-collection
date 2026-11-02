@@ -6,8 +6,9 @@
 use serde::{Deserialize, Serialize};
 
 use super::{
-    block, blood, blood_emitter, bow, camera, difficulty_warp, game_over, kid_bullet, kid_start, killer,
-    save, spike, warp, world,
+    block, blood, blood_emitter, bow, camera, conveyor, difficulty_warp, drop_platform, edge_warp,
+    fake_block, game_clear, game_over, jump_refresher, kid_bullet, kid_param_zone, kid_start, killer,
+    moving_platform, music, save, sign, spike, spring, time_limit, trap, trigger, warp, water, world,
 };
 
 /// A built-in instance's state.
@@ -20,6 +21,60 @@ pub enum BuiltinState {
     World(world::WorldState),
     /// `kid_start` (WP6a).
     KidStart(kid_start::KidStartState),
+    /// `boss_gate` and `secret_item` (WP6b): the flag index.
+    Flag(u8),
+    /// `boss_item` (WP6b).
+    BossItem {
+        /// The boss flag index.
+        index: u8,
+        /// The boss kind it waits for.
+        watched: Option<crate::def::KindId>,
+    },
+    /// `item_viewer` (WP6b).
+    ItemViewer {
+        /// Shows a boss flag (else an item flag).
+        boss: bool,
+        /// The flag index.
+        index: u8,
+    },
+    /// `game_clear` (WP6b).
+    GameClear(game_clear::GameClearState),
+    /// `music` (WP6b).
+    Music(music::MusicState),
+    /// `drop_platform` (WP6b).
+    DropPlatform(drop_platform::DropState),
+    /// `gravity_flip` (WP6b): flips up.
+    GravityFlip {
+        /// Sets `global.grav` (up) or clears it (down).
+        up: bool,
+    },
+    /// `bullet_blocker` (WP6b).
+    BulletBlocker {
+        /// Spares bullets while it overlaps a kid.
+        except_overlapping: bool,
+    },
+    /// `edge_warp` per-edge table (WP6b).
+    EdgeTable(edge_warp::EdgeTable),
+    /// `edge_warp` in `room_assign` mode (WP6b).
+    RoomAssign(edge_warp::RoomAssign),
+    /// `fake_block` (WP6b).
+    FakeBlock(fake_block::FakeBlockState),
+    /// `trigger` (WP6b).
+    Trigger(trigger::TriggerState),
+    /// `trap` (WP6b).
+    Trap(trap::TrapState),
+    /// `jump_refresher` (WP6c).
+    Refresher(jump_refresher::RefresherState),
+    /// `spring` (WP6c).
+    Spring(spring::SpringState),
+    /// `conveyor` (WP6c).
+    Conveyor(conveyor::ConveyorState),
+    /// `kid_param_zone` (WP6c).
+    ParamZone(kid_param_zone::ZoneState),
+    /// `moving_platform` (WP6b).
+    MovingPlatform(moving_platform::MovingPlatformState),
+    /// `water` (WP6b).
+    Water(water::WaterState),
     /// `block` (WP6a).
     Block(block::BlockState),
     /// `spike` (WP6a).
@@ -44,4 +99,8 @@ pub enum BuiltinState {
     Camera(camera::CameraState),
     /// `killer` (WP6a).
     Killer(killer::KillerState),
+    /// `sign` (WP6c).
+    Sign(sign::SignState),
+    /// `time_limit` (WP6c).
+    TimeLimit(time_limit::TimeLimitState),
 }

@@ -198,6 +198,14 @@
             "null"
           ]
         },
+        "clear_triggers": {
+          "default": null,
+          "description": "Clear the trigger arrays and `global.triggered` after the load (showdown).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "reset_jump_values": {
           "default": null,
           "description": "Reset the new kid's jump values (showdown).",

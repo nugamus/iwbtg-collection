@@ -12,7 +12,7 @@
 use std::collections::BTreeMap;
 
 use iwbtg_sim::def::physics::WalkRead;
-use iwbtg_sim::def::physics::{KidSpriteNames, PhysicsProfileDraft};
+use iwbtg_sim::def::physics::{KidSoundNames, KidSpriteNames, PhysicsProfileDraft};
 use iwbtg_sim::def::{KidFamily, PhysicsProfile};
 use iwbtg_sim::kid::presets;
 use toml::Spanned;
@@ -32,6 +32,8 @@ pub struct PhysicsLoad {
     pub profile: PhysicsProfile,
     /// `[sprites]` as written.
     pub sprites: KidSpriteNames,
+    /// `[sounds]` as written.
+    pub sounds: KidSoundNames,
     /// A legacy draft: it names no sprites, so the loader looks for `player_idle`,
     /// `player_running`, `player_jump`, `player_fall` and `player_sliding` (CR8).
     pub legacy: bool,
@@ -67,10 +69,12 @@ pub fn load(
         Err(e) => return legacy_or_error(path, text, &e, trace, diags),
     };
     let sprites = draft.sprites.clone().unwrap_or_default();
+    let sounds = draft.sounds.clone().unwrap_or_default();
     let profile = presets::apply(&mut draft);
     Some(PhysicsLoad {
         profile,
         sprites,
+        sounds,
         legacy: false,
     })
 }
@@ -136,6 +140,7 @@ fn legacy_or_error(
     Some(PhysicsLoad {
         profile,
         sprites: KidSpriteNames::default(),
+        sounds: KidSoundNames::default(),
         legacy: true,
     })
 }

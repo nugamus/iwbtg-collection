@@ -7,10 +7,16 @@
 //! - `game`, `room` and `sprite` come straight from the types the loader deserializes
 //!   ([`Manifest`], `RawRoom`, `RawSidecar`). Their `toml::Spanned` fields carry a
 //!   `schemars(with = ...)` override with the plain type.
+//! - `physics` comes from `iwbtg_sim::def::physics::PhysicsProfileDraft` and the section drafts
+//!   under it, through the sim crate's own `schema` feature. The action, collision-run and class
+//!   names come from the enums and tables the kid reads (`Action::ALL`, `ClassMask::NAMED`, the
+//!   per-file action enums), so there is no second list.
 //! - `object`, `tiles` and `timeline` come from the shape types below. The loader reads object
 //!   files key by key (every key that is not reserved is a param of the base), so the shape lists
-//!   the reserved keys and leaves the rest open. Tile and timeline files have no loader yet
-//!   (WP7b); the shapes here are the format until it lands, and its types should replace them.
+//!   the reserved keys and leaves the rest open. `tiles`, `timeline`, `path` and `sound` are
+//!   shape types here that mirror the private file structs of `timelines.rs`, `paths.rs` and
+//!   `sounds.rs` (`tests/schemas.rs` validates the loader's accepted files and rejects its
+//!   rejected ones, so they cannot drift unseen).
 //!
 //! `tests/schemas.rs` regenerates and diffs the files (`UPDATE_SCHEMAS=1 cargo test -p
 //! iwbtg-format --test schemas` rewrites them), validates the examples in v0.md and the valid
@@ -26,6 +32,8 @@ use std::collections::BTreeMap;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::Value;
+
+use iwbtg_sim::def::physics::PhysicsProfileDraft;
 
 use crate::manifest::Manifest;
 use crate::number::Number;
@@ -158,6 +166,56 @@ pub struct MomentShape {
     pub call: String,
 }
 
+/// A path file (`paths/<id>.toml`).
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PathShape {
+    /// `[x, y]` or `[x, y, speed factor]` (the factor defaults to 100); at least two points.
+    #[schemars(length(min = 2))]
+    pub points: Vec<PointShape>,
+    /// The last point connects to the first; default false.
+    pub closed: Option<bool>,
+    /// Curved path (not supported by the sim yet: a load warning); default false.
+    pub smooth: Option<bool>,
+    /// Smoothing precision; default 4.
+    pub precision: Option<u32>,
+}
+
+/// One path point.
+#[derive(Deserialize, JsonSchema)]
+#[serde(untagged)]
+pub enum PointShape {
+    /// `[x, y]`.
+    Xy([Number; 2]),
+    /// `[x, y, speed factor]`.
+    Xys([Number; 3]),
+}
+
+/// The `kind` values of a sound sidecar.
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum SoundKindShape {
+    /// Copies may overlap.
+    Normal,
+    /// Music: at most one copy plays (S2).
+    Multimedia,
+}
+
+/// A sound or music sidecar (`sounds/<id>.toml`, `music/<id>.toml`).
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SoundShape {
+    /// Length in ticks (song length times the tick rate; converter request CR9). Without it the
+    /// length is 0 and the load warns.
+    pub length_ticks: Option<u32>,
+    /// Default volume; default 1.
+    pub volume: Option<Number>,
+    /// Default pan; default 0.
+    pub pan: Option<Number>,
+    /// Overrides the folder's kind.
+    pub kind: Option<SoundKindShape>,
+}
+
 /// Every schema as `(file stem, pretty JSON text)`. The file is `<stem>.schema.json`.
 pub fn generate() -> Vec<(&'static str, String)> {
     fn text<T: JsonSchema>(title: &str) -> String {
@@ -173,6 +231,10 @@ pub fn generate() -> Vec<(&'static str, String)> {
             "object",
             text::<ObjectShape>("IWBTG objects/<id>.toml (format v0)"),
         ),
+        (
+            "physics",
+            text::<PhysicsProfileDraft>("IWBTG physics.toml (kid physics profile, format v0)"),
+        ),
         ("room", text::<RawRoom>("IWBTG rooms/<id>.toml (format v0)")),
         (
             "tiles",
@@ -185,6 +247,11 @@ pub fn generate() -> Vec<(&'static str, String)> {
         (
             "timeline",
             text::<TimelineShape>("IWBTG timelines/<id>.toml (format v0)"),
+        ),
+        ("path", text::<PathShape>("IWBTG paths/<id>.toml (format v0)")),
+        (
+            "sound",
+            text::<SoundShape>("IWBTG sounds/<id>.toml and music/<id>.toml (format v0)"),
         ),
     ]
 }

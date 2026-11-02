@@ -824,6 +824,31 @@ impl<'a> Loader<'a> {
         p.sprites.jump = pick(self, &l.sprites.jump);
         p.sprites.fall = pick(self, &l.sprites.fall);
         p.sprites.sliding = pick(self, &l.sprites.sliding);
+        // `[sounds]`: names resolved against the package's sounds.
+        let names = l.sounds;
+        let snd = |this: &mut Self, name: &Option<String>| -> Option<iwbtg_sim::def::SoundId> {
+            let name = name.as_ref()?;
+            let found = this
+                .sounds
+                .iter()
+                .position(|d| d.name == *name)
+                .and_then(|i| u32::try_from(i).ok());
+            if found.is_none() {
+                let at = text.find(name.as_str()).unwrap_or(0);
+                this.error(
+                    path,
+                    text,
+                    at..at + name.len(),
+                    format!("sound `{name}` does not exist"),
+                );
+            }
+            found.map(iwbtg_sim::def::SoundId)
+        };
+        p.sounds.jump = snd(self, &names.jump);
+        p.sounds.double_jump = snd(self, &names.double_jump);
+        p.sounds.shoot = snd(self, &names.shoot);
+        p.sounds.vine_kick = snd(self, &names.vine_kick);
+        p.sounds.death = snd(self, &names.death);
         p
     }
 

@@ -1,6 +1,5 @@
-//! Built-in `decor` (docs/plans/sim-core.md 6.1): no behavior. Tier 3.
-//! WP0 creates the file; WP6c owns it.
-#![allow(unused_variables, reason = "WP0 stubs: WP6c fills the bodies")]
+//! Built-in `decor` (docs/plans/sim-core.md 6.1; docs/format/builtins/decor.md). Tier 3.
+//! Sprite-only objects with no behavior (mechanics `builtin.decor`): no events, no params.
 
 use super::{BuiltinState, ParamError, ParamSpec};
 use crate::def::{KindDef, Params};
@@ -8,23 +7,22 @@ use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
 use crate::world::{Ctx, Flow, InstId};
 
-/// The params this built-in accepts (`builtins::param_specs` routes here).
+/// No params.
 pub fn param_specs() -> &'static [ParamSpec] {
-    unimplemented!("WP6c: decor::param_specs")
+    &[]
 }
 
-/// What a kind with this base handles (`builtins::event_set` routes here).
-pub fn event_set(kind: &KindDef) -> EventSet {
-    unimplemented!("WP6c: decor::event_set")
+/// Handles no event: the kind's own animation and depth are kind data.
+pub fn event_set(_kind: &KindDef) -> EventSet {
+    EventSet::default()
 }
 
-/// A new instance's state from its params (`builtins::init_state` routes here). Add a
-/// `BuiltinState` variant in `state.rs` for per-instance state, or return `Stateless`.
-pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
-    unimplemented!("WP6c: decor::init_state")
+/// No state.
+pub fn init_state(_params: &Params) -> Result<BuiltinState, ParamError> {
+    Ok(BuiltinState::Stateless)
 }
 
-/// Runs one event on an instance of this built-in (`builtins::on_event` routes here).
-pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimError> {
-    unimplemented!("WP6c: decor::on_event")
+/// Never called (no events); does nothing.
+pub fn on_event(_ctx: &mut Ctx, _me: InstId, _ev: &EventKind) -> Result<Flow, SimError> {
+    Ok(Flow::Continue)
 }
