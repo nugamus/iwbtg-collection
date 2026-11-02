@@ -5,7 +5,10 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{block, difficulty_warp, kid_bullet, kid_start, save, spike, warp, world};
+use super::{
+    block, blood, blood_emitter, bow, difficulty_warp, game_over, kid_bullet, kid_start, save, spike, warp,
+    world,
+};
 
 /// A built-in instance's state.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
@@ -29,4 +32,12 @@ pub enum BuiltinState {
     Warp(warp::WarpState),
     /// `difficulty_warp` (WP6a).
     DifficultyWarp(difficulty_warp::DifficultyWarpState),
+    /// `blood` (WP6a).
+    Blood(blood::BloodState),
+    /// `blood_emitter` (WP6a).
+    BloodEmitter(blood_emitter::BloodEmitterState),
+    /// `game_over` (WP6a).
+    GameOver(game_over::GameOverState),
+    /// `bow` (WP6a).
+    Bow(bow::BowState),
 }
