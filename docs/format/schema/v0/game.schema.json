@@ -171,6 +171,47 @@
         }
       ]
     },
+    "KidStepsSection": {
+      "additionalProperties": false,
+      "description": "`restart = { kid_steps = { ... } }`; absent keys are off.",
+      "properties": {
+        "add_time": {
+          "default": null,
+          "description": "Ticks added to the play timer first (B: 2).",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "clear_frozen": {
+          "default": null,
+          "description": "Clear `frozen` and `frozen2`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "reset_jump_values": {
+          "default": null,
+          "description": "Reset the new kid's jump values (showdown).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "save_death_time": {
+          "default": null,
+          "description": "Death-only save after `add_time`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
     "KindDefaults": {
       "additionalProperties": false,
       "description": "`[defaults.<builtin>]`: the sprite and mask a bare built-in kind uses, per variant\n(docs/plans/sim-core.md 8.3, \"Kind default sprites per variant\").",
@@ -406,6 +447,17 @@
             }
           ],
           "description": "y offset when the saved kid was flipped."
+        },
+        "kid_steps": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KidStepsSection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The kid-side steps of the retry (family B, showdown)."
         },
         "kind": {
           "anyOf": [

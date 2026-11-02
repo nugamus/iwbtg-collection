@@ -458,6 +458,7 @@ pub struct RestartSection {
 /// `restart = { kid_steps = { ... } }`; absent keys are off.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct KidStepsSection {
     /// Ticks added to the play timer first (B: 2).
     #[serde(default)]
