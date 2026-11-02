@@ -3,15 +3,13 @@
 //!
 //! Showdown JumpBlockD and JumpBlockS: on touch the kid motion is set to direction 90 at
 //! `speed` (10): `hspeed` 0 and `vspeed` minus the speed. Then `djump` is set (D, `djump =
-//! "set"`) or cleared (S, `djump = "clear"`). Destroyed outside the room.
-//!
-//! OPEN, not done: clearing `djump` needs a `kid::api` setter (#309); `djump = "clear"` is
-//! refused at load.
+//! "set"`, `kid::api::refresh_air_jump`) or cleared (S, `djump = "clear"`,
+//! `kid::api::set_air_jump`). Destroyed outside the room.
 
 use serde::{Deserialize, Serialize};
 
 use super::warp::KIDS;
-use super::{BuiltinState, ParamError, ParamSpec, ParamType, param_enum, param_error, param_real, state_of};
+use super::{BuiltinState, ParamError, ParamSpec, ParamType, param_enum, param_real, state_of};
 use crate::def::{KindDef, Params};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
@@ -41,6 +39,8 @@ pub struct SpringState {
     pub speed: Real,
     /// Sets `djump` after the launch.
     pub refresh: bool,
+    /// Clears `djump` after the launch.
+    pub clear: bool,
 }
 
 /// The params this built-in accepts (`builtins::param_specs` routes here).
@@ -61,15 +61,10 @@ pub fn event_set(_kind: &KindDef) -> EventSet {
 /// A new instance state from its params.
 pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
     let djump = param_enum(params, "djump", DJUMP)?;
-    if djump == Some("clear") {
-        return Err(param_error(
-            "djump",
-            "clearing djump needs a kid::api setter (OPEN, #309)",
-        ));
-    }
     Ok(BuiltinState::Spring(SpringState {
         speed: param_real(params, "speed")?.unwrap_or(Real::new(10.0)),
         refresh: djump == Some("set"),
+        clear: djump == Some("clear"),
     }))
 }
 
@@ -87,6 +82,8 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
             }
             if s.refresh {
                 api::refresh_air_jump(ctx, *other);
+            } else if s.clear {
+                api::set_air_jump(ctx, *other, false);
             }
             Ok(Flow::Continue)
         }

@@ -136,16 +136,29 @@ mod wp6c {
     }
 
     #[test]
-    fn refresher_hide_time_is_a_param_and_tjump_is_refused() {
+    fn refresher_hide_time_is_a_param() {
         let mut g = game(Builtin::JumpRefresher, params(&[("hide_ticks", real(7.0))]));
         let kid = spawn(&mut g, "kid", 0.0, 0.0);
         let rf = spawn(&mut g, "thing", 50.0, 50.0);
         touch(&mut g, rf, kid);
         assert_eq!(g.w.get(rf).unwrap().alarms[0], r(7.0));
-        let p = params(&[("tjump", word("set"))]);
-        assert!(builtins::init_state(Builtin::JumpRefresher, &p).is_err());
         let ok = params(&[("tjump", word("none"))]);
         assert!(builtins::init_state(Builtin::JumpRefresher, &ok).is_ok());
+        let bad = params(&[("tjump", word("maybe"))]);
+        assert!(builtins::init_state(Builtin::JumpRefresher, &bad).is_err());
+    }
+
+    #[test]
+    fn refresher_sets_or_clears_tjump_and_none_leaves_it() {
+        for (mode, start, want) in [("set", false, true), ("clear", true, false), ("none", true, true)] {
+            let mut g = game(Builtin::JumpRefresher, params(&[("tjump", word(mode))]));
+            let kid = spawn(&mut g, "kid", 100.0, 100.0);
+            let rf = spawn(&mut g, "thing", 120.0, 90.0);
+            with(&mut g, |c| api::set_triple_jump(c, kid, start));
+            touch(&mut g, rf, kid);
+            assert_eq!(read(&g, kid, "tjump") > 0.0, want, "tjump = {mode}");
+            assert!(djump(&g, kid), "the air jump is refreshed either way");
+        }
     }
 
     // ---- spring ------------------------------------------------------------------------------
@@ -167,14 +180,28 @@ mod wp6c {
     }
 
     #[test]
-    fn spring_keeps_djump_by_default_and_refuses_clearing() {
+    fn spring_keeps_djump_by_default() {
         let mut g = game(Builtin::Spring, Params::default());
         let kid = spawn(&mut g, "kid", 0.0, 0.0);
         let sp = spawn(&mut g, "thing", 0.0, 0.0);
         touch(&mut g, sp, kid);
         assert!(!djump(&g, kid));
-        let clear = params(&[("djump", word("clear"))]);
-        assert!(builtins::init_state(Builtin::Spring, &clear).is_err());
+        with(&mut g, |c| api::set_air_jump(c, kid, true));
+        touch(&mut g, sp, kid);
+        assert!(djump(&g, kid), "keep leaves an existing djump alone");
+    }
+
+    #[test]
+    fn spring_clear_takes_the_air_jump_away_and_still_launches() {
+        let mut g = game(Builtin::Spring, params(&[("djump", word("clear"))]));
+        let kid = spawn(&mut g, "kid", 0.0, 0.0);
+        let sp = spawn(&mut g, "thing", 0.0, 0.0);
+        with(&mut g, |c| api::set_air_jump(c, kid, true));
+        touch(&mut g, sp, kid);
+        assert!(!djump(&g, kid));
+        assert_eq!(g.w.get(kid).unwrap().m.vspeed(), r(-10.0));
+        let bad = params(&[("djump", word("toggle"))]);
+        assert!(builtins::init_state(Builtin::Spring, &bad).is_err());
     }
 
     #[test]
