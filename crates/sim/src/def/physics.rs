@@ -399,6 +399,11 @@ pub struct PlatformRules {
     pub snap: Real,
     /// What the kid takes from the platform's motion.
     pub take: PlatformTake,
+    /// The reversed kid (`flip.model = "yflag"`, `yflag` -1) lands only when `y - vspeed / 2` is
+    /// at least this many pixels below the platform's `y` (family B 15).
+    pub reversed_above: Real,
+    /// ... and is then put this many pixels below the platform's `y` (family B 24).
+    pub reversed_snap: Real,
 }
 
 /// When a platform collision lands the kid.
@@ -647,7 +652,8 @@ draft_section! {
 draft_section! {
     /// `[platform]` as written.
     PlatformRulesDraft => PlatformRules {
-        hold_probe: Real, rule: PlatformRule, snap: Real, take: PlatformTake,
+        hold_probe: Real, rule: PlatformRule, snap: Real, take: PlatformTake, reversed_above: Real,
+        reversed_snap: Real,
     }
 }
 draft_section! {

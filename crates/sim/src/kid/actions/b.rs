@@ -6,11 +6,12 @@ use serde::Deserialize;
 
 use super::common::{down, set_sprite, state, state_mut};
 use crate::alarm;
-use crate::collide::query::{Target, place_meeting};
+use crate::collide::query::{Target, instance_place, place_meeting};
 use crate::def::physics::{GroundAlso, JumpCancel, WaterAir};
 use crate::def::{ClassMask, EngineKind};
 use crate::error::SimError;
 use crate::input::Action;
+use crate::kid::api::{KillCause, kill};
 use crate::num::{Real, gm_lt};
 use crate::world::{Ctx, Flow, InstId, SpawnInit};
 
@@ -19,6 +20,9 @@ use crate::world::{Ctx, Flow, InstId, SpawnInit};
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BAction {
+    /// `playerMisc` 1 (Step): the kid dies when it touches a `killer` instance. The Step runs
+    /// before motion, so this is the position the last tick ended at.
+    KillerCheck,
     /// Step, `playerMove` steps 1-2: `image_yscale` takes the current `yflag`, then `yflag`
     /// follows `global.reverse` (the kid's mask flips one tick after the global does).
     SyncYflag,
@@ -38,6 +42,7 @@ pub enum BAction {
 /// Runs one action on the kid `me`. `kid::run_action` routes here.
 pub fn run(ctx: &mut Ctx, me: InstId, action: &BAction) -> Result<Flow, SimError> {
     match action {
+        BAction::KillerCheck => return killer_check(ctx, me),
         BAction::SyncYflag => sync_yflag(ctx, me)?,
         BAction::PlayerReverse => player_reverse(ctx, me)?,
         BAction::SetViewAngle => set_view_angle(ctx),
@@ -193,4 +198,16 @@ fn ensure_bow(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let (x, y) = (i.m.x(), i.m.y());
     ctx.spawn_engine(EngineKind::Bow, x, y, SpawnInit::default())?;
     Ok(())
+}
+
+/// `playerMisc` 1: `killPlayer` when the mask touches any killer.
+fn killer_check(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
+    let Some(i) = ctx.w.get(me) else {
+        return Ok(Flow::Continue);
+    };
+    let (x, y) = (i.m.x(), i.m.y());
+    match instance_place(ctx, me, x, y, Target::Class(ClassMask::KILLER))? {
+        Some(k) => kill(ctx, me, KillCause::Killer(k)),
+        None => Ok(Flow::Continue),
+    }
 }
