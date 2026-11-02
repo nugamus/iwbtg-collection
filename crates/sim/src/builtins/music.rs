@@ -10,9 +10,8 @@
 //! `loop` (default true) loops it. With `respects_music_off` nothing plays while music is off
 //! (`global.musicD`).
 //!
-//! OPEN, not done: the music-off flag. The world built-in holds it (`music_muted`, #249);
-//! until that merges the flag reads as on. `sound::*` is the WP10 model (#20), so these events
-//! cannot run in tests yet; the params and the event set are tested.
+//! OPEN: `sound::*` is the WP10 model (#20), so these events cannot run in tests yet; the
+//! params and the event set are tested.
 
 use super::{BuiltinState, ParamError, ParamSpec, ParamType, param_bool, param_enum, param_error};
 use crate::def::{KindDef, ParamValue, Params, SoundId};
@@ -86,9 +85,9 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
     }))
 }
 
-/// Whether music is off (`global.musicD`). OPEN: reads as on until the world holds the flag.
-fn music_off(_ctx: &Ctx) -> bool {
-    false
+/// Whether music is off (`global.musicD`; the world built-in flips `music_muted`).
+fn music_off(ctx: &Ctx) -> bool {
+    ctx.w.engine.mech.music_muted
 }
 
 /// Runs one event on a music object.
