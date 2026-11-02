@@ -1,24 +1,35 @@
 //! Read-only trace sampling, compiled into every build (docs/plans/sim-core.md 9.3).
 //!
-//! Sample point: after tick row 13, before the room change. One row per alive instance of the
-//! traced kind, in dispatch order. WP0 declares; WP8a owns.
-#![allow(unused_variables, reason = "WP0 stub: WP8a fills the body")]
+//! Sample point: after tick row 13, before the room change, which is where `Sim::step` returns
+//! (the recorder writes its rows "after End Step, drawing and the animation update, before a
+//! queued room change is applied", research `tooling/opengmk-trace/README.md`). One row per
+//! alive, active instance of the traced kind, in dispatch order (`events::dispatch_order`).
+//!
+//! Reading is side-effect free except for [`KeyRead::Direct`], which consumes the
+//! `keyboard_check_direct` latch the way the recorder's own column read did (I1). WP0 declares;
+//! WP8a owns.
 
 pub mod registry;
 
 use crate::collide::Target;
-use crate::def::{NameId, VarId};
+use crate::def::{GameDef, NameId, VarId};
+use crate::events;
 use crate::input::Action;
-use crate::kid::api::KidField;
+use crate::kid::api::{self, KidField};
+use crate::num::Real;
+use crate::rules::TickRules;
+use crate::rules::tick::FirstRule;
 use crate::sim::Sim;
 use crate::trace;
+use crate::world::{InstId, Instance, KindState, Value, World};
 
 /// What to sample each frame.
 #[derive(Clone, PartialEq, Debug)]
 pub struct Probe {
     /// The traced object: one row per alive instance.
     pub object: Target,
-    /// Columns after the recorder's fixed ones.
+    /// Columns after the recorder's fixed ones. Each row [`sample`] returns holds the 18 fixed
+    /// columns in `trace::FIXED_COLUMNS` order, then one value per entry here.
     pub columns: Vec<Column>,
 }
 
@@ -86,6 +97,11 @@ pub enum FixedColumn {
 }
 
 impl FixedColumn {
+    /// The fixed column with this recorder name.
+    pub fn from_name(name: &str) -> Option<FixedColumn> {
+        FixedColumn::ALL.into_iter().find(|c| c.name() == name)
+    }
+
     /// Every fixed column, in `trace::FIXED_COLUMNS` order.
     pub const ALL: [FixedColumn; 18] = [
         FixedColumn::Frame,
@@ -226,18 +242,394 @@ pub enum SaveField {
 
 /// The probe's rows for this frame. Takes `&mut Sim` because `KeyRead::Direct` consumes the
 /// latch.
+///
+/// One row per alive, active instance of `probe.object`, in dispatch order; each row holds the
+/// 18 fixed columns, then `probe.columns` left to right. Columns are read row by row, so a
+/// `Direct` column consumes the latch on the first row and later rows see only the held state,
+/// as the recorder's per-instance evaluation would. A value the sim does not have (a variable
+/// never set, no instance to read, a kid field this kid lacks) is an empty cell, as the recorder
+/// writes a `--vars` expression that fails. Strings the definition does not carry
+/// (`sprite_name`) are empty cells too.
 pub fn sample(sim: &mut Sim, probe: &Probe, frame: i64) -> Vec<Vec<trace::Value>> {
-    unimplemented!("WP8a: probe::sample")
+    let ids = {
+        let w = &sim.world;
+        events::dispatch_order(w, &sim.rules.tick, |i| {
+            i.alive && i.active && matches(i, probe.object)
+        })
+    };
+    let mut rows = Vec::with_capacity(ids.len());
+    for id in ids {
+        let mut row = Vec::with_capacity(FixedColumn::ALL.len() + probe.columns.len());
+        match sim.world.get(id) {
+            Some(inst) => {
+                row.extend(FixedColumn::ALL.map(|c| fixed_value(sim.def(), &sim.world, inst, c, frame)));
+            }
+            None => row.extend(FixedColumn::ALL.map(|_| trace::Value::Empty)),
+        }
+        for column in &probe.columns {
+            let value = read_column(sim, id, column, frame);
+            row.push(value);
+        }
+        rows.push(row);
+    }
+    rows
+}
+
+/// One column for the row of instance `row`.
+fn read_column(sim: &mut Sim, row: InstId, column: &Column, frame: i64) -> trace::Value {
+    if let Column::Key(KeyRead::Direct(a)) = column {
+        return truth(sim.world.input.direct(*a));
+    }
+    let (w, def, rules) = (&sim.world, &*sim.def, &sim.rules.tick);
+    match column {
+        Column::Fixed(c) => match w.get(row) {
+            Some(inst) => fixed_value(def, w, inst, *c, frame),
+            None => trace::Value::Empty,
+        },
+        Column::Field { target, field } => match target_instance(w, rules, row, target) {
+            Some(id) => read_field(def, w, id, field, frame),
+            None => trace::Value::Empty,
+        },
+        Column::Global(v) => w.globals.get(v).map_or(trace::Value::Empty, from_value),
+        Column::Count(t) => count(w, *t),
+        Column::Key(k) => match k {
+            KeyRead::Held(a) => truth(w.input.held(*a)),
+            KeyRead::Pressed(a) => truth(w.input.pressed(*a)),
+            KeyRead::Released(a) => truth(w.input.released(*a)),
+            KeyRead::Direct(_) => trace::Value::Empty,
+        },
+        Column::Save(f) => save_value(def, w, *f),
+    }
+}
+
+/// True when `inst` is one of the instances `t` names.
+fn matches(inst: &Instance, t: Target) -> bool {
+    match t {
+        Target::Class(c) => inst.classes.intersects(c),
+        Target::Kind(k) => inst.kind == k,
+        Target::Inst(id) => inst.id == id,
+        Target::Any => true,
+    }
+}
+
+/// The instance a field column reads.
+fn target_instance(w: &World, rules: &TickRules, row: InstId, t: &ProbeTarget) -> Option<InstId> {
+    match t {
+        ProbeTarget::Row => Some(row),
+        ProbeTarget::Kid => w.kid(rules),
+        ProbeTarget::First(Target::Class(c)) => w.first_of(*c, rules),
+        ProbeTarget::First(t) => first_of_target(w, rules, *t),
+        ProbeTarget::Named(n) => w
+            .iter_alive()
+            .find(|i| i.active && i.name == Some(*n))
+            .map(|i| i.id),
+    }
+}
+
+/// "The first" instance of a kind, one id or anything, by [`TickRules::first_rule`] (R21), as
+/// `World::first_of` picks one for a class.
+pub(crate) fn first_of_target(w: &World, rules: &TickRules, t: Target) -> Option<InstId> {
+    match rules.first_rule {
+        FirstRule::DispatchOrder => {
+            events::dispatch_order(w, rules, |i| i.alive && i.active && matches(i, t))
+                .first()
+                .copied()
+        }
+        FirstRule::LowestId => w
+            .iter_alive()
+            .filter(|i| i.active && matches(i, t))
+            .map(|i| i.id)
+            .min(),
+    }
+}
+
+/// GML `instance_number`: alive, active instances `t` names.
+fn count(w: &World, t: Target) -> trace::Value {
+    let n = match t {
+        Target::Class(c) => w.count_of(c),
+        t => {
+            let n = w.iter_alive().filter(|i| i.active && matches(i, t)).count();
+            u32::try_from(n).unwrap_or(u32::MAX)
+        }
+    };
+    trace::Value::Real(f64::from(n))
+}
+
+/// One field of instance `id`.
+fn read_field(def: &GameDef, w: &World, id: InstId, field: &FieldRef, frame: i64) -> trace::Value {
+    let Some(inst) = w.get(id) else {
+        return trace::Value::Empty;
+    };
+    match field {
+        FieldRef::Fixed(c) => fixed_value(def, w, inst, *c, frame),
+        FieldRef::Alarm(n) => inst
+            .alarms
+            .get(usize::from(*n))
+            .map_or(trace::Value::Empty, |a| real(*a)),
+        FieldRef::Image(f) => match f {
+            ImageField::Speed => real(inst.img.speed()),
+            ImageField::Xscale => real(inst.img.xscale()),
+            ImageField::Yscale => real(inst.img.yscale()),
+            ImageField::Angle => real(inst.img.angle()),
+            ImageField::Alpha => real(inst.img.alpha()),
+            ImageField::Visible => truth(inst.visible),
+            ImageField::Solid => truth(inst.solid),
+            ImageField::Depth => real(inst.depth),
+        },
+        FieldRef::Var(v) => inst.vars.get(v).map_or(trace::Value::Empty, from_value),
+        FieldRef::Kid(f) => match inst.state {
+            KindState::Kid(_) => api::read_field(w, id, f).map_or(trace::Value::Empty, |v| from_value(&v)),
+            _ => trace::Value::Empty,
+        },
+    }
+}
+
+/// A fixed column of `inst`, as the recorder writes it: integers for `frame`, `id` and
+/// `sprite_index` (-1 for no sprite), quoted names for `room` and `object`.
+fn fixed_value(def: &GameDef, w: &World, inst: &Instance, c: FixedColumn, frame: i64) -> trace::Value {
+    let m = &inst.m;
+    match c {
+        FixedColumn::Frame => trace::Value::Int(frame),
+        FixedColumn::Room => def
+            .room(w.room)
+            .map_or(trace::Value::Empty, |r| trace::Value::Str(r.name.clone())),
+        FixedColumn::Object => def
+            .kind(inst.kind)
+            .map_or(trace::Value::Empty, |k| trace::Value::Str(k.name.clone())),
+        FixedColumn::Id => trace::Value::Int(i64::try_from(inst.id.0).unwrap_or(i64::MAX)),
+        FixedColumn::X => real(m.x()),
+        FixedColumn::Y => real(m.y()),
+        FixedColumn::Xprevious => real(m.xprevious()),
+        FixedColumn::Yprevious => real(m.yprevious()),
+        FixedColumn::Hspeed => real(m.hspeed()),
+        FixedColumn::Vspeed => real(m.vspeed()),
+        FixedColumn::Speed => real(m.speed()),
+        FixedColumn::Direction => real(m.direction()),
+        FixedColumn::Gravity => real(m.gravity()),
+        FixedColumn::GravityDirection => real(m.gravity_direction()),
+        FixedColumn::Friction => real(m.friction()),
+        FixedColumn::ImageIndex => real(inst.img.index()),
+        FixedColumn::SpriteIndex => trace::Value::Int(inst.img.sprite().map_or(-1, |s| i64::from(s.0))),
+        // `GameDef` carries no sprite names; cases ignore this column.
+        FixedColumn::SpriteName => trace::Value::Empty,
+    }
+}
+
+/// A save slot field; every field but `Exists` is empty while no save exists.
+fn save_value(def: &GameDef, w: &World, f: SaveField) -> trace::Value {
+    let Some(s) = &w.save else {
+        return match f {
+            SaveField::Exists => truth(false),
+            _ => trace::Value::Empty,
+        };
+    };
+    match f {
+        SaveField::Exists => truth(true),
+        SaveField::Room => def
+            .room(s.room)
+            .map_or(trace::Value::Empty, |r| trace::Value::Str(r.name.clone())),
+        SaveField::X => real(s.x),
+        SaveField::Y => real(s.y),
+        SaveField::Flipped => truth(s.flipped),
+        SaveField::Facing => trace::Value::Real(f64::from(s.facing)),
+        SaveField::Difficulty => trace::Value::Real(f64::from(s.difficulty)),
+        SaveField::Deaths => trace::Value::Real(f64::from(s.deaths)),
+        SaveField::Time => trace::Value::Real(f64::from(s.time)),
+        SaveField::Bosses => trace::Value::Real(f64::from(s.bosses)),
+        SaveField::Items => trace::Value::Real(f64::from(s.items)),
+        SaveField::Clear => truth(s.clear),
+    }
+}
+
+/// A real cell.
+fn real(r: Real) -> trace::Value {
+    trace::Value::Real(r.get())
+}
+
+/// A GML boolean: 1 or 0, as a real (the recorder writes `1.0` and `0.0`).
+fn truth(b: bool) -> trace::Value {
+    trace::Value::Real(if b { 1.0 } else { 0.0 })
+}
+
+/// A GML value as a trace cell. Instance ids are reals in GML; ours never match the original's.
+fn from_value(v: &Value) -> trace::Value {
+    match v {
+        Value::Real(r) => real(*r),
+        Value::Str(s) => trace::Value::Str(s.clone()),
+        Value::Inst(id) => trace::Value::Int(i64::try_from(id.0).unwrap_or(i64::MAX)),
+        Value::None => trace::Value::Empty,
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::FixedColumn;
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::def::testing::GameDefBuilder;
+    use crate::def::{Builtin, ClassMask, KindDef, RoomDef, RoomId};
+    use crate::room::StartPoint;
+    use crate::rules::RunnerRules;
+    use crate::save::SaveSlot;
+    use crate::script::ScriptRuntime;
+    use crate::sim::SimOptions;
+    use crate::sound::DllMode;
     use crate::trace::FIXED_COLUMNS;
+    use crate::world::World;
 
     #[test]
     fn fixed_columns_match_the_recorder() {
         let names: Vec<&str> = FixedColumn::ALL.iter().map(|c| c.name()).collect();
         assert_eq!(names, FIXED_COLUMNS);
+        for c in FixedColumn::ALL {
+            assert_eq!(FixedColumn::from_name(c.name()), Some(c));
+        }
+        assert_eq!(FixedColumn::from_name("djump"), None);
+    }
+
+    /// A sim in one room with a world instance and two blocks, built without `Sim::new` so the
+    /// test runs before WP1's bodies exist. The instances are stored directly.
+    fn sim_with_blocks() -> (Sim, Vec<InstId>) {
+        let mut b = GameDefBuilder::new("probe-test");
+        let world_kind = b.kind(KindDef::new("world", Builtin::World));
+        let mut block = KindDef::new("block", Builtin::Block);
+        block.classes = ClassMask::BLOCK;
+        let block = b.kind(block);
+        b.room(RoomDef::new("room_1", 800, 608));
+        let def = b.build().expect("def");
+        let mut w = World::new(RoomId(0), 0);
+        let mut ids = Vec::new();
+        for (kind, x) in [(world_kind, 0.0), (block, 32.0), (block, 64.0)] {
+            let id = w.alloc_id().expect("id");
+            let mut inst = Instance::new(id, kind, 0, Real::new(x), Real::new(544.0));
+            if kind == block {
+                inst.classes = ClassMask::BLOCK;
+            }
+            w.insert(inst).expect("insert");
+            ids.push(id);
+        }
+        let sim = Sim {
+            def: Arc::new(def),
+            rules: RunnerRules::default(),
+            world: w,
+            options: SimOptions {
+                start: StartPoint::Room {
+                    room: RoomId(0),
+                    difficulty: 0,
+                },
+                seed: 0,
+                dll_mode: DllMode::Model,
+            },
+            scripts: ScriptRuntime::default(),
+        };
+        (sim, ids)
+    }
+
+    #[test]
+    fn fixed_values_and_save_fields_read_the_world() {
+        let (mut sim, ids) = sim_with_blocks();
+        let inst = sim.world.get(ids[1]).expect("block").clone();
+        let row: Vec<trace::Value> = FixedColumn::ALL
+            .map(|c| fixed_value(sim.def(), sim.world(), &inst, c, 7))
+            .to_vec();
+        assert_eq!(row[0], trace::Value::Int(7));
+        assert_eq!(row[1], trace::Value::Str("room_1".into()));
+        assert_eq!(row[2], trace::Value::Str("block".into()));
+        assert_eq!(row[3], trace::Value::Int(100_002));
+        assert_eq!(row[4], trace::Value::Real(32.0));
+        assert_eq!(row[13], trace::Value::Real(270.0));
+        assert_eq!(row[16], trace::Value::Int(-1));
+        assert_eq!(row[17], trace::Value::Empty);
+        assert_eq!(
+            count(sim.world(), Target::Class(ClassMask::BLOCK)),
+            trace::Value::Real(2.0)
+        );
+        assert_eq!(count(sim.world(), Target::Any), trace::Value::Real(3.0));
+        assert_eq!(
+            save_value(sim.def(), sim.world(), SaveField::Exists),
+            trace::Value::Real(0.0)
+        );
+        assert_eq!(
+            save_value(sim.def(), sim.world(), SaveField::X),
+            trace::Value::Empty
+        );
+        sim.world.save = Some(SaveSlot {
+            room: RoomId(0),
+            x: Real::new(96.0),
+            y: Real::new(567.4),
+            flipped: false,
+            facing: -1,
+            difficulty: 2,
+            deaths: 5,
+            time: 9,
+            bosses: 0,
+            items: 0,
+            clear: false,
+        });
+        assert_eq!(
+            save_value(sim.def(), sim.world(), SaveField::Exists),
+            trace::Value::Real(1.0)
+        );
+        assert_eq!(
+            save_value(sim.def(), sim.world(), SaveField::Y),
+            trace::Value::Real(567.4)
+        );
+        assert_eq!(
+            save_value(sim.def(), sim.world(), SaveField::Facing),
+            trace::Value::Real(-1.0)
+        );
+        assert_eq!(
+            save_value(sim.def(), sim.world(), SaveField::Room),
+            trace::Value::Str("room_1".into())
+        );
+        let field = |f: &FieldRef| read_field(sim.def(), sim.world(), ids[2], f, 7);
+        assert_eq!(field(&FieldRef::Alarm(0)), trace::Value::Real(-1.0));
+        assert_eq!(
+            field(&FieldRef::Image(ImageField::Visible)),
+            trace::Value::Real(1.0)
+        );
+        assert_eq!(field(&FieldRef::Var(VarId(3))), trace::Value::Empty);
+        assert_eq!(
+            field(&FieldRef::Kid(KidField {
+                name: "djump".into(),
+                index: None
+            })),
+            trace::Value::Empty,
+            "a kid field of a non-kid instance is empty"
+        );
+    }
+
+    /// `sample` walks `events::dispatch_order`, and a `Direct` column consumes the latch (I1):
+    /// a second sample in the same tick reads only the held state. Needs WP1's bodies of
+    /// `dispatch_order`, `InputState::latch` and `InputState::direct`.
+    #[test]
+    #[ignore = "needs WP1: events::dispatch_order and InputState bodies"]
+    fn sample_rows_and_direct_reads_consume_the_latch() {
+        use crate::input::InputFrame;
+        let (mut sim, _) = sim_with_blocks();
+        let right = Action::Right.bit();
+        sim.world.input.latch(InputFrame {
+            held: 0,
+            pressed: right,
+            released: right,
+        });
+        let probe = Probe {
+            object: Target::Class(ClassMask::BLOCK),
+            columns: vec![
+                Column::Key(KeyRead::Direct(Action::Right)),
+                Column::Key(KeyRead::Pressed(Action::Right)),
+                Column::Count(Target::Any),
+            ],
+        };
+        let rows = sample(&mut sim, &probe, 4);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0][4], trace::Value::Real(32.0));
+        assert_eq!(rows[1][4], trace::Value::Real(64.0));
+        assert_eq!(rows[0][18], trace::Value::Real(1.0), "the latch reads true once");
+        assert_eq!(rows[1][18], trace::Value::Real(0.0), "the first row consumed it");
+        assert_eq!(rows[1][19], trace::Value::Real(1.0), "pressed is not consumed");
+        assert_eq!(rows[0][20], trace::Value::Real(3.0));
+        let again = sample(&mut sim, &probe, 4);
+        assert_eq!(again[0][18], trace::Value::Real(0.0));
     }
 }

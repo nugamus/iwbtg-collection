@@ -1,26 +1,31 @@
 //! `iwbtg`: the command-line tool for agents and CI (docs/architecture.md, The iwbtg CLI).
 //!
 //! Commands are planned in docs/plans/sim-core.md 9.4: WP8a owns `trace` and `pkg`, WP8b
-//! `replay`. WP7a wired `pkg check` early for its user check; WP8a owns the command line.
+//! `replay`.
 
+mod case;
+mod import;
+mod pkg_cmd;
+#[allow(dead_code, reason = "WP0 scaffold: WP8b fills the command")]
+mod replay_cmd;
+mod trace_cmd;
+
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 
-// WP0 scaffolding: the command modules exist so their owners only fill them in.
-#[allow(dead_code, reason = "WP0 scaffold: WP8a wires the commands")]
-mod case;
-#[allow(dead_code, reason = "WP0 scaffold: WP8a wires the commands")]
-mod import;
-mod pkg_cmd;
-#[allow(dead_code, reason = "WP0 scaffold: WP8b wires the command")]
-mod replay_cmd;
-#[allow(dead_code, reason = "WP0 scaffold: WP8a wires the commands")]
-mod trace_cmd;
+use crate::trace_cmd::ToolError;
 
-/// The IWBTG Collection command-line tool.
+/// Where `trace import` writes cases and `trace run`/`check` read them: this crate's `cases/`.
+const DEFAULT_CASES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/cases");
+
 #[derive(Parser)]
-#[command(name = "iwbtg", version)]
+#[command(
+    name = "iwbtg",
+    version,
+    about = "IWBTG Collection tools: packages, traces, replays"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -28,19 +33,161 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Package commands.
+    /// Research trace cases: run, compare, import.
+    #[command(subcommand)]
+    Trace(TraceCommand),
+    /// Game packages.
     #[command(subcommand)]
     Pkg(PkgCommand),
+    /// Headless replays.
+    #[command(subcommand)]
+    Replay(ReplayCommand),
+}
+
+#[derive(Subcommand)]
+enum TraceCommand {
+    /// Runs one case and prints our trace CSV.
+    Run {
+        /// Package folder.
+        pkg: PathBuf,
+        /// Case file, or case name under the cases folder.
+        case: String,
+        /// Write the CSV here instead of printing it.
+        #[arg(short = 'o', long = "out")]
+        out: Option<PathBuf>,
+        /// Sample after every tick phase (not available yet).
+        #[arg(long)]
+        stages: bool,
+        /// Research repo (default: IWBTG_RESEARCH).
+        #[arg(long)]
+        research: Option<PathBuf>,
+        /// Cases folder.
+        #[arg(long, default_value = DEFAULT_CASES)]
+        cases: PathBuf,
+    },
+    /// Compares two trace CSVs bit for bit.
+    Diff {
+        /// The original trace.
+        original: PathBuf,
+        /// Our trace.
+        ours: PathBuf,
+        /// Columns not compared.
+        #[arg(long, default_values_t = ["id".to_string(), "sprite_index".to_string()])]
+        ignore: Vec<String>,
+        /// Frames of context around the first difference.
+        #[arg(long, default_value_t = iwbtg_sim::trace::DEFAULT_CONTEXT)]
+        context: u32,
+        /// List every differing field.
+        #[arg(long)]
+        summary: bool,
+    },
+    /// Runs every case of a package; fails on any difference.
+    Check {
+        /// Package folder.
+        pkg: PathBuf,
+        /// Research repo (default: IWBTG_RESEARCH).
+        #[arg(long)]
+        research: Option<PathBuf>,
+        /// Cases folder.
+        #[arg(long, default_value = DEFAULT_CASES)]
+        cases: PathBuf,
+    },
+    /// Writes a case skeleton for a research trace and prints its kind.
+    Import {
+        /// Research trace path, with or without `.csv`/`.inputs`.
+        trace: PathBuf,
+        /// Package id, or package folder.
+        pkg: String,
+        /// Research repo (default: found above the trace path).
+        #[arg(long)]
+        research: Option<PathBuf>,
+        /// Cases folder.
+        #[arg(long, default_value = DEFAULT_CASES)]
+        cases: PathBuf,
+        /// Overwrite an existing case file.
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Subcommand)]
 enum PkgCommand {
-    /// Load and check a package; prints diagnostics, then OK or the error count.
-    Check(pkg_cmd::PkgCheckArgs),
+    /// Validates and loads a package.
+    Check {
+        /// Package folder.
+        pkg: PathBuf,
+        /// Load converter output: unmapped script kinds become inert.
+        #[arg(long)]
+        trace_mode: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum ReplayCommand {
+    /// Runs a replay or `.inputs` file headless and prints ticks, splits and the final hash.
+    Run(replay_cmd::ReplayRunArgs),
+}
+
+/// `--research`, else IWBTG_RESEARCH.
+fn research_dir(arg: Option<PathBuf>) -> Result<PathBuf, ToolError> {
+    arg.or_else(|| std::env::var_os("IWBTG_RESEARCH").map(PathBuf::from))
+        .ok_or_else(|| {
+            ToolError::Message("no research repo: pass --research <dir> or set IWBTG_RESEARCH".into())
+        })
+}
+
+/// Runs a command; `Ok(false)` means it ran and found problems.
+fn run(cli: Cli) -> Result<bool, ToolError> {
+    match cli.command {
+        Command::Trace(TraceCommand::Run {
+            pkg,
+            case,
+            out,
+            stages,
+            research,
+            cases,
+        }) => {
+            let research = research_dir(research)?;
+            trace_cmd::run_main(&pkg, &case, out.as_deref(), stages, &research, &cases)?;
+            Ok(true)
+        }
+        Command::Trace(TraceCommand::Diff {
+            original,
+            ours,
+            ignore,
+            context,
+            summary,
+        }) => trace_cmd::diff_main(&original, &ours, &ignore, context, summary),
+        Command::Trace(TraceCommand::Check { pkg, research, cases }) => {
+            let research = research_dir(research)?;
+            trace_cmd::check_main(&pkg, &research, &cases)
+        }
+        Command::Trace(TraceCommand::Import {
+            trace,
+            pkg,
+            research,
+            cases,
+            force,
+        }) => {
+            let research = research.or_else(|| std::env::var_os("IWBTG_RESEARCH").map(PathBuf::from));
+            import::main(&trace, &pkg, research.as_deref().map(Path::new), &cases, force)?;
+            Ok(true)
+        }
+        Command::Pkg(PkgCommand::Check { pkg, trace_mode }) => pkg_cmd::main(&pkg, trace_mode),
+        Command::Replay(ReplayCommand::Run(args)) => {
+            replay_cmd::main(&args)?;
+            Ok(true)
+        }
+    }
 }
 
 fn main() -> ExitCode {
-    match Cli::parse().command {
-        Command::Pkg(PkgCommand::Check(args)) => pkg_cmd::main(&args),
+    match run(Cli::parse()) {
+        Ok(true) => ExitCode::SUCCESS,
+        Ok(false) => ExitCode::from(1),
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::from(2)
+        }
     }
 }

@@ -427,6 +427,19 @@ enum Names<'a> {
     /// Recorder key names only (`Shift`, `vk:NN`), mapped to actions through the key map, as in
     /// the research trace files.
     Keys(&'a KeyMap),
+    /// Like `Keys`, but a key the map neither binds nor ignores is dropped and reported instead
+    /// of being an error (`parse_key_inputs_lenient`).
+    KeysLenient(&'a KeyMap),
+}
+
+/// A key-named `.inputs` file read by [`parse_key_inputs_lenient`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KeyInputs {
+    /// The frames, without the keys in `unmapped`.
+    pub inputs: ParsedInputs,
+    /// Valid key names the map has no action for, as written in the file, sorted and without
+    /// repeats. Non-empty means the frames are not the recorded input.
+    pub unmapped: Vec<String>,
 }
 
 /// What a name in a command refers to. Each source keeps its own down/up state, as each key does
@@ -455,7 +468,7 @@ struct Event {
 /// up on B+1), `frame N: end` (N is the last frame run; the last `end` line wins). Events on one
 /// frame apply in line order.
 pub fn parse_action_inputs(text: &str) -> Result<ParsedInputs, InputsError> {
-    parse(text, Names::Actions)
+    parse(text, Names::Actions, &mut BTreeSet::new())
 }
 
 /// Parses a key-named `.inputs` file, as the research trace recorder writes them (`hold Shift`),
@@ -463,15 +476,104 @@ pub fn parse_action_inputs(text: &str) -> Result<ParsedInputs, InputsError> {
 /// names are an error, so `left` is always the Left arrow key. Generic Shift, Ctrl and Alt are the
 /// left-hand keys, as in the recorder (`recorder_key`).
 pub fn parse_key_inputs(text: &str, keys: &KeyMap) -> Result<ParsedInputs, InputsError> {
-    parse(text, Names::Keys(keys))
+    parse(text, Names::Keys(keys), &mut BTreeSet::new())
 }
 
-fn parse(text: &str, names: Names) -> Result<ParsedInputs, InputsError> {
+/// Like [`parse_key_inputs`], but a valid key name the map has no action for (the A and D of the
+/// animus A/D nudge traces) is dropped from the frames and listed in [`KeyInputs::unmapped`]
+/// instead of failing the file. Every other error stays an error. Games read actions, never raw
+/// keys, so a caller that gets a non-empty list must not treat the frames as the recorded input
+/// (`iwbtg trace import` marks such a case OPEN).
+pub fn parse_key_inputs_lenient(text: &str, keys: &KeyMap) -> Result<KeyInputs, InputsError> {
+    let mut unmapped = BTreeSet::new();
+    let inputs = parse(text, Names::KeysLenient(keys), &mut unmapped)?;
+    Ok(KeyInputs {
+        inputs,
+        unmapped: unmapped.into_iter().collect(),
+    })
+}
+
+/// The recorder command line in a research `.inputs` file's header (`# iwc trace --game ...`),
+/// without the leading `#`, or `None` when the file has none.
+///
+/// The recorder writes the command as one comment line, but a `--gml` argument with newlines
+/// inside its shell quotes continues on the following lines, which do not start with `#`
+/// (rely-the-needle-4-2/t-evo-1, num-rng-a; wanna/t-evo-2). Those lines belong to the command
+/// until its quotes close: they are joined with `\n`, as the shell passed them, and the parsers
+/// skip them. Shell quoting is POSIX: `'...'` takes everything literally, `"..."` honors `\`,
+/// and `\` outside quotes escapes the next character.
+pub fn trace_command(text: &str) -> Option<String> {
+    let mut command: Option<String> = None;
+    let mut quote = Quote::None;
+    for raw in text.lines() {
+        match command.as_mut() {
+            Some(cmd) if quote != Quote::None => {
+                cmd.push('\n');
+                cmd.push_str(raw);
+                quote = scan_quotes(quote, raw);
+            }
+            Some(_) => break,
+            None => {
+                if let Some(cmd) = command_line(raw) {
+                    quote = scan_quotes(Quote::None, cmd);
+                    command = Some(cmd.to_string());
+                }
+            }
+        }
+    }
+    command
+}
+
+/// The `iwc ...` text of a header comment line that holds the recorder command.
+fn command_line(raw: &str) -> Option<&str> {
+    let comment = raw.trim_start().strip_prefix('#')?.trim_start();
+    comment.starts_with("iwc trace").then_some(comment)
+}
+
+/// Shell quoting state at the end of a header line.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Quote {
+    None,
+    Single,
+    Double,
+}
+
+/// The quoting state after `line`, starting in `state`. A trailing `\` outside single quotes
+/// escapes the line break, which keeps the state as it is.
+fn scan_quotes(mut state: Quote, line: &str) -> Quote {
+    let mut chars = line.chars();
+    while let Some(c) = chars.next() {
+        match (state, c) {
+            (Quote::None, '\'') => state = Quote::Single,
+            (Quote::None, '"') => state = Quote::Double,
+            (Quote::None | Quote::Double, '\\') => {
+                chars.next();
+            }
+            (Quote::Single, '\'') | (Quote::Double, '"') => state = Quote::None,
+            _ => {}
+        }
+    }
+    state
+}
+
+fn parse(text: &str, names: Names, unmapped: &mut BTreeSet<String>) -> Result<ParsedInputs, InputsError> {
     let mut events: BTreeMap<u32, Vec<Event>> = BTreeMap::new();
     let mut end = None;
+    // Lines that continue the recorder command inside its shell quotes (see `trace_command`).
+    let mut header_quote = Quote::None;
+    let mut in_header = false;
     for (index, raw) in text.lines().enumerate() {
         let line = u32::try_from(index + 1).unwrap_or(u32::MAX);
         let err = |kind| InputsError::Line { line, kind };
+        if in_header && header_quote != Quote::None {
+            header_quote = scan_quotes(header_quote, raw);
+            continue;
+        }
+        if !in_header && let Some(cmd) = command_line(raw) {
+            in_header = true;
+            header_quote = scan_quotes(Quote::None, cmd);
+            continue;
+        }
         let content = raw.split('#').next().unwrap_or("").trim();
         if content.is_empty() {
             continue;
@@ -506,7 +608,13 @@ fn parse(text: &str, names: Names) -> Result<ParsedInputs, InputsError> {
         let words: Vec<&str> = words.collect();
         let names = words
             .iter()
-            .map(|w| resolve(w, names).map_err(err))
+            .map(|w| match resolve(w, names) {
+                Err(LineError::UnmappedKey(key)) if matches!(names, Names::KeysLenient(_)) => {
+                    unmapped.insert(key);
+                    Ok(None)
+                }
+                other => other.map_err(err),
+            })
             .collect::<Result<Vec<_>, _>>()?;
         if words.is_empty() {
             return Err(err(LineError::NoNames));
@@ -582,7 +690,7 @@ fn resolve(word: &str, names: Names) -> Result<Option<(Source, Action)>, LineErr
             Some(action) => Ok(Some((Source::Action(action), action))),
             None => Err(LineError::UnknownAction(word.to_string())),
         },
-        Names::Keys(keys) => {
+        Names::Keys(keys) | Names::KeysLenient(keys) => {
             let code = key_code(word).ok_or_else(|| LineError::UnknownKey(word.to_string()))?;
             let code = recorder_key(code);
             match keys.lookup(code) {
@@ -1017,6 +1125,106 @@ mod tests {
                 "{game}/{case}: no {action:?} press"
             );
         }
+    }
+
+    #[test]
+    fn header_command_continues_inside_its_quotes() {
+        let text = "# trace t.csv: game\n\
+            # iwc trace --game 1 --gml '3:a=1;\n\
+            object_event_add(world,0,0,\"global.log+='\"'\"'|'\"'\"'\");\n\
+            frame 9: end\n\
+            b=2' --out t\n\
+            # note: frame 99: press Shift\n\
+            frame 4: press Shift\n\
+            frame 6: end\n";
+        let cmd = trace_command(text).expect("command");
+        assert!(cmd.starts_with("iwc trace --game 1 --gml '3:a=1;\n"), "{cmd}");
+        assert!(cmd.ends_with("b=2' --out t"), "{cmd}");
+        assert_eq!(cmd.lines().count(), 4);
+        // The continuation lines are not commands, even one that looks like a command.
+        let p = parse(text);
+        assert_eq!(p.end, 6);
+        assert_eq!(p.frames[4].pressed, J);
+        assert_eq!(trace_command("frame 1: end\n"), None);
+        // Escapes: a quote inside double quotes or after a backslash does not open a string.
+        assert_eq!(scan_quotes(Quote::None, r#"a "b\"c" d"#), Quote::None);
+        assert_eq!(scan_quotes(Quote::None, r"a \' b"), Quote::None);
+        assert_eq!(scan_quotes(Quote::None, r"a '\"), Quote::Single);
+        assert_eq!(scan_quotes(Quote::Single, r"x' y"), Quote::None);
+        // Header lines after the command are comments again.
+        assert_eq!(
+            trace_command("# iwc trace --game 1 --out x\n# iwc trace --game 2\n"),
+            Some("iwc trace --game 1 --out x".to_string())
+        );
+    }
+
+    #[test]
+    fn lenient_parse_drops_and_reports_unmapped_keys() {
+        let text = "frame 10: press D\nframe 11: release D\nframe 15: press Right A\nframe 16: end";
+        assert_eq!(
+            parse_key_inputs(text, &KeyMap::iwbtg()),
+            Err(InputsError::Line {
+                line: 1,
+                kind: LineError::UnmappedKey("D".into())
+            })
+        );
+        let k = parse_key_inputs_lenient(text, &KeyMap::iwbtg()).expect("lenient");
+        assert_eq!(k.unmapped, vec!["A".to_string(), "D".to_string()]);
+        assert_eq!(k.inputs.frames[10], InputFrame::EMPTY);
+        assert_eq!(k.inputs.frames[15].pressed, Action::Right.bit());
+        // Unknown key names stay errors.
+        assert!(parse_key_inputs_lenient("frame 1: press Banana\nframe 2: end", &KeyMap::iwbtg()).is_err());
+        let clean = parse_key_inputs_lenient("frame 1: press Z\nframe 2: end", &KeyMap::iwbtg()).expect("ok");
+        assert!(clean.unmapped.is_empty());
+    }
+
+    /// Every research `.inputs` file parses with the default map: the multi-line recorder
+    /// commands are skipped, and only the A/D nudge traces of animus use keys without an action.
+    #[allow(clippy::disallowed_methods, reason = "test-only: reads research trace files")]
+    #[test]
+    fn every_research_inputs_file_parses() {
+        let Some(root) = std::env::var_os("IWBTG_RESEARCH") else {
+            eprintln!("skipped: IWBTG_RESEARCH is not set");
+            return;
+        };
+        let traces = std::path::Path::new(&root).join("specs/engines/gm8/traces");
+        let mut files = Vec::new();
+        for game in std::fs::read_dir(&traces).expect("traces dir") {
+            let game = game.expect("entry").path();
+            if !game.is_dir() {
+                continue;
+            }
+            for f in std::fs::read_dir(&game).expect("game dir") {
+                let f = f.expect("entry").path();
+                if f.extension().is_some_and(|e| e == "inputs") {
+                    files.push(f);
+                }
+            }
+        }
+        files.sort();
+        assert!(files.len() > 400, "only {} .inputs files", files.len());
+        let mut with_unmapped = Vec::new();
+        for f in &files {
+            let text = std::fs::read_to_string(f).expect("read");
+            let k = parse_key_inputs_lenient(&text, &KeyMap::iwbtg())
+                .unwrap_or_else(|e| panic!("{}: {e}", f.display()));
+            assert!(
+                trace_command(&text).is_some(),
+                "{}: no recorder command",
+                f.display()
+            );
+            if !k.unmapped.is_empty() {
+                with_unmapped.push((
+                    f.file_stem().map(|s| s.to_string_lossy().into_owned()),
+                    k.unmapped,
+                ));
+            }
+        }
+        for (name, keys) in &with_unmapped {
+            assert_eq!(keys, &["A".to_string(), "D".to_string()], "{name:?}");
+        }
+        let names: BTreeSet<_> = with_unmapped.iter().filter_map(|(n, _)| n.clone()).collect();
+        assert!(names.contains("a-ad-nudge"), "{names:?}");
     }
 
     #[test]
