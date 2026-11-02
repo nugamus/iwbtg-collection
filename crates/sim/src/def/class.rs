@@ -151,6 +151,24 @@ impl ClassMask {
     }
 }
 
+/// The schema of one class as written in a data file: its package name, from
+/// [`ClassMask::NAMED`] (a list of classes is `Vec<ClassMask>`).
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for ClassMask {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "ClassName".into()
+    }
+
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        let names: Vec<&str> = ClassMask::NAMED.iter().map(|(_, n)| *n).collect();
+        schemars::json_schema!({
+            "description": "A collision class by its package name.",
+            "type": "string",
+            "enum": names
+        })
+    }
+}
+
 impl BitOr for ClassMask {
     type Output = ClassMask;
     fn bitor(self, rhs: ClassMask) -> ClassMask {

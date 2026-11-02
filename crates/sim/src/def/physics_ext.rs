@@ -8,22 +8,26 @@
 use serde::Deserialize;
 
 /// `[ice]`: slip blocks and ice (WP5c).
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct IceRules {}
 
 /// `[slope]`: slope models (WP5c).
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct SlopeModel {}
 
 /// `[ladder]`: ladder entry and movement (WP5c).
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct LadderRules {}
 
 /// `[flip]`: how gravity flips (plan 5.3 flip rows). WP5c adds the other fields
 /// (`mask_flipped`, ...).
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct FlipModel {
@@ -32,6 +36,7 @@ pub struct FlipModel {
 }
 
 /// The flip models of plan 5.3, by their `physics.toml` names.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FlipKind {
