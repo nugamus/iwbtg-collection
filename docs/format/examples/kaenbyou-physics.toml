@@ -75,7 +75,7 @@ drop = 3.0
 model = "yflag"
 
 [death]
-order = ["sound", "blood_emitter", "game_over", "destroy_all_kids", "deaths_plus_one", "save_counters"]
+order = ["death_sound", "blood_emitter", "game_over", "destroy_all_kids", "deaths_plus_one", "save_counters"]
 select_room_reset = true
 stop_music = false
 first_kid = true
