@@ -1403,8 +1403,14 @@
       "type": "object"
     },
     "MovingBlockRun": {
-      "description": "The collision runs this file implements, by their `physics.toml` names (snake case). Part\nof `kid::KidCollisionRun`; WP5c adds one variant per run it implements.",
-      "not": {}
+      "description": "The collision runs this file implements, by their `physics.toml` names (snake case). Part\nof `kid::KidCollisionRun`.",
+      "oneOf": [
+        {
+          "const": "moving_block_por",
+          "description": "Poronkusema, Collision with movingBlock, in this order:\n- ride from above: `y <= other.y + vspeed + 2`, the kid moving down relative to the block\n  (`vspeed > other.vspeed`) and `other.y - yprevious >= 8`: `y = other.y - 9`, `vspeed` the\n  block's, `onPlatform` and `djump` set;\n- bump from below: `yprevious - other.y >= height + 10`: `y = other.y + height + 12` and\n  `vspeed` the block's when that is 0 or more, else 0;\n- else pushed out sideways: `x = other.x - 6` or `other.x + width + 5`, whichever side of\n  the block's middle the kid is on.\n\nOPEN (the spec gives the numbers, not every test): the \"within `vspeed + 2`\" reading, the\nrelative-motion test and the choice of side (#314).",
+          "type": "string"
+        }
+      ]
     },
     "PlatformRule": {
       "description": "When a platform collision lands the kid.",
