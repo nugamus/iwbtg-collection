@@ -37,7 +37,7 @@ One binary for agents and CI:
 - `iwbtg pkg fmt <dir>`: canonical formatting ([0002](decisions/0002-data-syntax.md)).
 - `iwbtg pkg hash <dir> [--trace-mode]`: prints `gameplay_hash:` and `content_hash:` ([versioning](format/v0.md#versioning)). A package with errors prints them and exits 1.
 - `iwbtg pkg upgrade <dir>`: migrates a package to the newest format version.
-- `iwbtg room show <dir> <room>`: prints an ASCII map of a room.
+- `iwbtg room show <dir> <room> [--cell N] [--trace-mode]`: prints an ASCII map of a room, one character per `--cell` pixels (default 32), and a legend line. Characters: `@` kid start, `S` save, `W` warp, `D` difficulty warp, `E` edge warp, `^ v < >` spike by direction, `*` killer, `#` block, `=` platform, `/` slope, `~` water, `|` vine, `o` any other kind, `.` empty. Where instances share a cell the earlier one in that list shows.
 - `iwbtg replay run <dir> <replay|.inputs> [--difficulty N] [--seed N]`: headless run from a new game. Prints three lines: `ticks: N`, `splits: <index>@<tick> ...` (or `none`) and `hash: <hex>` (roadmap Phase 3). An `.inputs` file runs frames 0 through its `end` frame; a `.iwbr` replay brings its own seed. Exit 2 when the sim halts, 3 when it reaches a work package that is not merged yet.
 - `iwbtg replay dump <replay>`: prints a replay as text.
 - `iwbtg replay verify <dir> <replay>`: what the server runs.
@@ -226,6 +226,7 @@ Scripts are Rhai under the IWS profile ([0001](decisions/0001-script-language.md
 - During a script call the world is lent to the Rhai host through an `Rc<RefCell<World>>`. Each API function borrows it briefly. Single thread, no `unsafe`, no `sync` feature.
 - Built-ins call scripts only through defined events: `collide`, `trigger`, `animation_end`, timeline moments, and the `call` trigger action.
 - The budget counter, caps and error handling are in [0001](decisions/0001-script-language.md#step-budget).
+- **The engine (WP9.1, `script/host.rs`, `script/api.rs`, `script/budget.rs`).** `script::host::Iws::new(NumRules)` builds the IWS engine: `Engine::new_raw()` with the core, arithmetic, logic, string, array and map packages only, `eval`, `**` and `**=` disabled, the 0001 limits, strict variables, the simple optimizer and fast operators off. The numeric API is `num` under the run's `NumRules` (`gm_eq`..`gm_ge`, `gm_bool`, `gm_repeat`, `div`, `mod`, rounding, libm transcendentals, `random`, `irandom`, `random_range`, `irandom_range`, `choose`, `tick`, `room_tick`); `/` on two integers is a FLOAT. **Rhai 1.26.1's built-in float comparisons use a relative epsilon**, which is neither IEEE nor GM8's rule, so the engine overrides `== != < <= > >=` with exact IEEE (a test pins `0.1 + 0.2 == 0.3` false and `gm_eq` true). The RNG and the tick counters are lent per tick (`begin_tick`, `end_tick`), so the scripts' draws are the sim's draws. The tick budget (`budget.rs`: 1,000,000 units, 200,000 per call) counts one unit per Rhai operation and ends a runaway call with a deterministic error.
 
 ### Script API (first version)
 
