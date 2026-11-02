@@ -78,6 +78,9 @@ pub struct MechGlobals {
     pub bosses: u16,
     /// Item flags, one bit per item (`SaveSlot::items`).
     pub items: u16,
+    /// The music flag (`global.music`, true is muted); the `world` built-in flips it on a Mute
+    /// press and music objects read it.
+    pub music_muted: bool,
 }
 
 /// Built-in effects for the client. WP6a adds the variants.
