@@ -16,7 +16,7 @@
 //! (`water1` allows it, `water2` and `water3` do not), which the loader sets from this param.
 //!
 //! 4. `air_jump = "djump_ignoring_flag"` (JUN objwater2): on a Jump press the -7 jump happens
-//!    whether or not `djump` is set, then `djump` is cleared (`kid::api::set_djump`).
+//!    whether or not `djump` is set, then `djump` is cleared (`kid::api::set_air_jump`).
 //! 5. `cur_jumps = n` (kaenbyou objWater2: 2): `kid::api::set_cur_jumps`.
 //! 6. `release_same_tick = true` (WAN water, ANI mugenjump, RBF object945): when Jump was released
 //!    this tick the kid's variable-jump release runs now (`kid::api::run_jump_release`).
@@ -201,7 +201,7 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
             k.m.set_vspeed(-speed * sign)?;
         }
         if s.air_ignores_flag {
-            api::set_djump(ctx, kid, false);
+            api::set_air_jump(ctx, kid, false);
         }
     }
     if let Some(n) = s.cur_jumps {

@@ -92,9 +92,18 @@ pub fn refresh_air_jump(ctx: &mut Ctx, kid: InstId) {
     }
 }
 
-/// Sets `djump` alone (water with `air_jump = "djump_ignoring_flag"` clears it after the jump).
+/// Sets or clears the triple-jump flag `tjump` (showdown moreJumping and moreJumping2). Does
+/// nothing for an instance that is not a kid.
+pub fn set_triple_jump(ctx: &mut Ctx, kid: InstId, on: bool) {
+    if let Some(s) = state_mut(ctx.w, kid) {
+        s.tjump = on;
+    }
+}
+
+/// Sets or clears the air jump flag `djump` alone (showdown spring, JUN objwater2, water with
+/// `air_jump = "djump_ignoring_flag"`); the family B counter is not touched.
 /// Does nothing for an instance that is not a kid.
-pub fn set_djump(ctx: &mut Ctx, kid: InstId, on: bool) {
+pub fn set_air_jump(ctx: &mut Ctx, kid: InstId, on: bool) {
     if let Some(s) = state_mut(ctx.w, kid) {
         s.djump = on;
     }

@@ -244,15 +244,26 @@ fn kill_destroys_the_kid_unless_invincible() {
 fn djump_and_cur_jumps_setters() {
     with_world(|ctx, k, b| {
         api::refresh_air_jump(ctx, k);
-        api::set_djump(ctx, k, false);
+        api::set_air_jump(ctx, k, false);
         let s = kid_state(ctx, k);
         assert!(!s.djump);
         assert_eq!(s.cur_jumps, 1, "the counter is not touched");
         api::set_cur_jumps(ctx, k, 2);
         assert_eq!(kid_state(ctx, k).cur_jumps, 2);
         // Not a kid: nothing happens.
-        api::set_djump(ctx, b, true);
+        api::set_air_jump(ctx, b, true);
         api::set_cur_jumps(ctx, b, 2);
+        api::set_triple_jump(ctx, b, true);
+    });
+}
+
+#[test]
+fn triple_jump_setter() {
+    with_world(|ctx, k, _| {
+        api::set_triple_jump(ctx, k, true);
+        assert!(kid_state(ctx, k).tjump);
+        api::set_triple_jump(ctx, k, false);
+        assert!(!kid_state(ctx, k).tjump);
     });
 }
 
