@@ -16,13 +16,13 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-/// One client action. Each is one bit of a `u16`; the top bit is reserved.
+/// One client action. Each is one bit of a `u32`; bits above `Extra4` are reserved.
 ///
 /// `Pause`, `Mute` and `Reset` are the engines' P, M and F2 (docs/plans/sim-core.md 2.4):
 /// they change sim state in the originals, so they are sim input. Quitting (Escape, Alt+F4) is
 /// client-only and never an action.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[repr(u16)]
+#[repr(u32)]
 pub enum Action {
     Left = 1 << 0,
     Right = 1 << 1,
@@ -43,11 +43,20 @@ pub enum Action {
     Mute = 1 << 13,
     /// F2: game reset (delete the temp save marker and restart, or the engine's gameReset).
     Reset = 1 << 14,
+    /// Generic extra actions for games that need keys beyond the standard set (docs/content.md,
+    /// Controls). A game maps them to its own meaning; the player binds them.
+    Extra1 = 1 << 15,
+    /// See [`Action::Extra1`].
+    Extra2 = 1 << 16,
+    /// See [`Action::Extra1`].
+    Extra3 = 1 << 17,
+    /// See [`Action::Extra1`].
+    Extra4 = 1 << 18,
 }
 
 impl Action {
     /// Every action, in bit order.
-    pub const ALL: [Action; 15] = [
+    pub const ALL: [Action; 19] = [
         Action::Left,
         Action::Right,
         Action::Up,
@@ -63,14 +72,18 @@ impl Action {
         Action::Pause,
         Action::Mute,
         Action::Reset,
+        Action::Extra1,
+        Action::Extra2,
+        Action::Extra3,
+        Action::Extra4,
     ];
 
     /// Bits used by actions. Anything outside is reserved for future actions.
-    pub const MASK: u16 = 0x7fff;
+    pub const MASK: u32 = 0x7_ffff;
 
     /// The action's bit in `InputFrame` fields.
-    pub const fn bit(self) -> u16 {
-        self as u16
+    pub const fn bit(self) -> u32 {
+        self as u32
     }
 
     /// Lowercase name as written in `.inputs` files and scripts (`jump`).
@@ -91,6 +104,10 @@ impl Action {
             Action::Pause => "pause",
             Action::Mute => "mute",
             Action::Reset => "reset",
+            Action::Extra1 => "extra1",
+            Action::Extra2 => "extra2",
+            Action::Extra3 => "extra3",
+            Action::Extra4 => "extra4",
         }
     }
 
@@ -107,13 +124,13 @@ impl Action {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct InputFrame {
     /// Actions down at the end of the tick's input (any of their inputs down).
-    pub held: u16,
+    pub held: u32,
     /// Actions one of whose inputs went down during the tick. Can be set while the action was
     /// already held through another input (see the module docs).
-    pub pressed: u16,
+    pub pressed: u32,
     /// Actions one of whose inputs went up during the tick. Can be set while the action stays
     /// held through another input (see the module docs).
-    pub released: u16,
+    pub released: u32,
 }
 
 impl InputFrame {
@@ -126,7 +143,7 @@ impl InputFrame {
 
     /// Frame from the held bits of the previous and the current tick, with at most one edge per
     /// action. Sub-tick taps need the event-based path (`parse_inputs` or the client's collector).
-    pub const fn from_held(previous: u16, held: u16) -> InputFrame {
+    pub const fn from_held(previous: u32, held: u32) -> InputFrame {
         InputFrame {
             held,
             pressed: held & !previous,
@@ -706,7 +723,7 @@ fn resolve(word: &str, names: Names) -> Result<Option<(Source, Action)>, LineErr
 /// never run, as in the recorder.
 fn compile(events: &BTreeMap<u32, Vec<Event>>, end: u32) -> Vec<InputFrame> {
     let mut down: BTreeMap<Source, Action> = BTreeMap::new();
-    let mut held = 0u16;
+    let mut held = 0u32;
     let mut frames = Vec::new();
     for frame in 0..=end {
         let mut out = InputFrame {
@@ -756,11 +773,11 @@ mod tests {
         }
     }
 
-    const J: u16 = Action::Jump.bit();
+    const J: u32 = Action::Jump.bit();
 
     #[test]
     fn action_bits_are_distinct_and_named() {
-        let mut all = 0u16;
+        let mut all = 0u32;
         for a in Action::ALL {
             assert_eq!(a.bit().count_ones(), 1);
             assert_eq!(all & a.bit(), 0);
@@ -770,6 +787,33 @@ mod tests {
         assert_eq!(all, Action::MASK);
         assert_eq!(Action::from_name("JUMP"), Some(Action::Jump));
         assert_eq!(Action::from_name("dash"), None);
+    }
+
+    #[test]
+    fn extra_actions_parse_in_action_files() {
+        let p = parse_actions(
+            "frame 1: press extra1 extra4
+frame 2: release extra1
+frame 3: end",
+        );
+        let (e1, e4) = (Action::Extra1.bit(), Action::Extra4.bit());
+        assert_eq!((e1, e4), (1 << 15, 1 << 18));
+        assert_eq!(
+            p.frames[1],
+            InputFrame {
+                held: e1 | e4,
+                pressed: e1 | e4,
+                released: 0
+            }
+        );
+        assert_eq!(
+            p.frames[2],
+            InputFrame {
+                held: e4,
+                pressed: 0,
+                released: e1
+            }
+        );
     }
 
     #[test]

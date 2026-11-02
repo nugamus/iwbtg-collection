@@ -70,9 +70,15 @@ use crate::events::{EventKind, EventSet};
 use crate::num::Real;
 use crate::world::{Ctx, Flow, InstId, KindState};
 
-/// Mechanism globals: trigger models, boss and item flags. WP6a adds the fields.
+/// Mechanism globals: trigger models, boss and item flags. WP6a adds the fields; WP4b added the
+/// two flag words the save slot holds.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
-pub struct MechGlobals {}
+pub struct MechGlobals {
+    /// Boss flags, one bit per boss (`SaveSlot::bosses`).
+    pub bosses: u16,
+    /// Item flags, one bit per item (`SaveSlot::items`).
+    pub items: u16,
+}
 
 /// Built-in effects for the client. WP6a adds the variants.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
