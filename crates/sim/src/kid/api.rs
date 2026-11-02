@@ -92,6 +92,43 @@ pub fn refresh_air_jump(ctx: &mut Ctx, kid: InstId) {
     }
 }
 
+/// Sets or clears the triple-jump flag `tjump` (showdown moreJumping and moreJumping2). Does
+/// nothing for an instance that is not a kid.
+pub fn set_triple_jump(ctx: &mut Ctx, kid: InstId, on: bool) {
+    if let Some(s) = state_mut(ctx.w, kid) {
+        s.tjump = on;
+    }
+}
+
+/// Sets or clears the air jump flag `djump` alone (showdown spring, JUN objwater2, water with
+/// `air_jump = "djump_ignoring_flag"`); the family B counter is not touched.
+/// Does nothing for an instance that is not a kid.
+pub fn set_air_jump(ctx: &mut Ctx, kid: InstId, on: bool) {
+    if let Some(s) = state_mut(ctx.w, kid) {
+        s.djump = on;
+    }
+}
+
+/// Sets the family B jump counter `curJumps` (kaenbyou's objWater2 sets 2). Does nothing for an
+/// instance that is not a kid.
+pub fn set_cur_jumps(ctx: &mut Ctx, kid: InstId, n: u8) {
+    if let Some(s) = state_mut(ctx.w, kid) {
+        s.cur_jumps = n;
+    }
+}
+
+/// Runs the kid's variable-jump release (`playerVJump`: an upward `vspeed` times `release_mult`)
+/// now, whether or not Jump was released this tick; the caller tests the release (water's
+/// same-tick clause). Does nothing while the kid is frozen. Errors for an instance that is not a
+/// kid.
+pub fn run_jump_release(ctx: &mut Ctx, kid: InstId) -> Result<(), SimError> {
+    let s = state(ctx.w, kid).ok_or_else(|| SimError::invariant("run_jump_release: not a kid"))?;
+    if s.frozen || ctx.w.engine.kid.frozen {
+        return Ok(());
+    }
+    crate::kid::actions::common::cut_jump(ctx, kid)
+}
+
 /// Sets the on-platform flag. Does nothing for an instance that is not a kid.
 pub fn set_on_platform(ctx: &mut Ctx, kid: InstId, on: bool) {
     if let Some(s) = state_mut(ctx.w, kid) {
