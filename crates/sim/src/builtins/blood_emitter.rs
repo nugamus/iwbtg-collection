@@ -36,7 +36,7 @@ use crate::def::{EngineKind, KindDef, ParamValue, Params};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
 use crate::input::Action;
-use crate::num::Real;
+use crate::num::{self, Real};
 use crate::output::OutputEvent;
 use crate::world::{Ctx, Flow, InstId, SpawnInit};
 
@@ -214,7 +214,8 @@ fn step(ctx: &mut Ctx, me: InstId, s: &BloodEmitterState) -> Result<Flow, SimErr
         }
         Mode::AngleSweep => {
             for step in 0..=36u32 {
-                if ctx.w.rng.random(Real::ONE).get() >= s.chance.get() {
+                let roll = ctx.w.rng.random(Real::ONE);
+                if num::gm_ge(roll, s.chance, &ctx.rules.num) {
                     continue;
                 }
                 let dir = Real::new(f64::from(step) * 10.0);

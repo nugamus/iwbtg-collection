@@ -77,6 +77,7 @@ pub fn event_set(_kind: &KindDef) -> EventSet {
 pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
     let r = |name: &str, d: f64| Ok::<Real, ParamError>(param_real(params, name)?.unwrap_or(Real::new(d)));
     let delay = r("delay", 0.0)?;
+    // gm-compare: ok (load-time param validation)
     if delay.get() < 0.0 {
         return Err(super::param_error("delay", "must be 0 or more"));
     }
@@ -107,6 +108,7 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
                 inst.m.set_y(vy + s.offset.1)?;
             }
             inst.img.set_alpha(Real::ZERO)?;
+            // gm-compare: ok (a delay param of 0 means no delay, not a GML test)
             if s.delay.get() > 0.0 {
                 inst.visible = false;
                 alarm::set(inst, 0, s.delay, rules)?;
