@@ -138,6 +138,9 @@ pub struct KidNumbers {
     pub image_speed_idle: Real,
     /// `image_speed` while running and sliding on a vine (0.5).
     pub image_speed_run: Real,
+    /// With a positive value (family B: 2), `air_sprite` shows the fall sprite only when no
+    /// `slope_wall` instance lies this many pixels in the gravity direction. 0 turns it off.
+    pub air_wall_probe: Real,
 }
 
 /// How the walk action reads the direction keys.
@@ -618,6 +621,7 @@ draft_section! {
     KidNumbersDraft => KidNumbers {
         jumps: Vec<Real>, gravity: Real, run_speed: Real, max_vspeed: Real, max_fall_speed: Real,
         release_mult: Real, sprite_threshold: Real, image_speed_idle: Real, image_speed_run: Real,
+        air_wall_probe: Real,
     }
 }
 draft_section! {
