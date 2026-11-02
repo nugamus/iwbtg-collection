@@ -114,7 +114,7 @@ pub fn run(case: &Case) -> Outcome {
         let input = (case.input)(t);
         let mut ctx = fx.ctx();
         // A halting tick returns the error and leaves the world `Halted`; the status says so.
-        let _ = tick::run_tick_with(&mut ctx, input, &HOOKS);
+        let _ = tick::run_tick(&mut ctx, input);
         ran = fx.w.tick;
     }
     Outcome {
@@ -128,14 +128,6 @@ pub fn run(case: &Case) -> Outcome {
         hash: hex(&hash::state_hash(&fx.w)),
     }
 }
-
-/// The engine's hooks, except timing: `timing::evaluate` (WP8b) does not change what these
-/// cases exercise. `sound::tick` (WP10) is the real one. When timing is wired in, delete this and
-/// call `tick::run_tick`.
-const HOOKS: tick::Hooks = tick::Hooks {
-    timing: |_, _| Ok(Vec::new()),
-    ..tick::Hooks::ENGINE
-};
 
 /// The report: one line per case.
 pub fn report() -> String {
