@@ -13,7 +13,7 @@
         "create_defaults", "ensure_world", "create_bow", "first_play_save", "arm_play_timer",
         "gravity", "walk", "air_sprite", "fall_cap", "shoot", "jump", "release", "vines",
         "play_timer", "kill", "platform_gravity_zero", "fade_in", "stop_if_frozen2", "cancel_poll",
-        "ad_nudge", "key_flags", "suicide_check", "sync_yflag", "player_reverse", "set_view_angle", "ensure_bow", "killer_check", "slope_b"
+        "gravity_and_unstuck", "stop_if_frozen", "ad_nudge", "key_flags", "suicide_check", "sync_yflag", "player_reverse", "set_view_angle", "ensure_bow", "killer_check", "slope_b"
       ]
     },
     "actions": { "type": "array", "items": { "$ref": "#/$defs/action" } },
@@ -97,8 +97,8 @@
           }
         },
         "boundary": {
-          "description": "The room edge. outside_room_kill (family B) and end_step_origin are not built yet.",
-          "enum": ["none", "intersect_origin", "outside_room_kill", "end_step_origin"]
+          "description": "The room edge. end_step_origin is not built yet.",
+          "enum": ["none", "intersect_origin", "intersect_origin_fixed", "outside_room_kill", "end_step_origin"]
         },
         "collisions": {
           "type": "array",
@@ -240,7 +240,8 @@
       "additionalProperties": false,
       "properties": {
         "fade_in": { "type": "boolean" },
-        "fade_step": { "$ref": "#/$defs/real" }
+        "fade_step": { "$ref": "#/$defs/real" },
+        "idle_needs_block": { "type": "boolean" }
       }
     },
     "sprites": {
