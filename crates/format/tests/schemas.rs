@@ -200,7 +200,7 @@ fn the_rely_physics_example_validates() {
 
 #[test]
 fn the_family_b_physics_examples_validate() {
-    for name in ["kaenbyou", "eat-the-lemon"] {
+    for name in ["kaenbyou", "eat-the-lemon", "kotaro", "wanna", "showdown"] {
         let path = format!("docs/format/examples/{name}-physics.toml");
         let text = fs::read_to_string(client_root().join(&path)).unwrap();
         assert_valid("physics", &path, &text);
