@@ -174,7 +174,7 @@ fn run_a1(ctx: &mut Ctx, kid: InstId, a: A1Action) {
 
 /// This tick's input: `held` and `pressed`/`released` given as lists of actions.
 fn input(ctx: &mut Ctx, held: &[Action], pressed: &[Action], released: &[Action]) {
-    let bits = |l: &[Action]| l.iter().fold(0u16, |a, x| a | x.bit());
+    let bits = |l: &[Action]| l.iter().fold(0u32, |a, x| a | x.bit());
     ctx.w.input.latch(InputFrame {
         held: bits(held),
         pressed: bits(pressed),
