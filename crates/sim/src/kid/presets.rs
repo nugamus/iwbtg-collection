@@ -276,7 +276,12 @@ fn c() -> PhysicsProfile {
     p.events.end_step = vec![KidAction::B(BAction::KillerCheck)];
     p.events.boundary = BoundaryModel::EndStepOrigin;
     p.events.alarms = vec![];
-    p.events.keys = vec![];
+    // Key C (client action `extra1`): teleport to the start marker (kid/C.md).
+    p.events.keys = vec![KidKey {
+        action: Action::Extra1,
+        on: KeyOn::Press,
+        run: vec![KidAction::C(CAction::TeleportToStart)],
+    }];
     p.events.collisions = vec![
         KidCollision {
             with: ClassMask::BLOCK,

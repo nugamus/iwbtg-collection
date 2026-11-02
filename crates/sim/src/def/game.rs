@@ -180,6 +180,9 @@ pub struct RetryKidSteps {
     /// Before the retry destroys anything: every `death_sound` stops its sound, restores the music
     /// volume and is destroyed (B, kid/B.md Restart 2).
     pub release_death_sound: bool,
+    /// After the new kid exists: clear every trigger array and `global.triggered`
+    /// (`MechGlobals::clear_triggers`, showdown's loadGame).
+    pub clear_triggers: bool,
 }
 
 impl Default for RestartModel {

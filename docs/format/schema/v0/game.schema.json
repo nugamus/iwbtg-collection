@@ -198,6 +198,14 @@
             "null"
           ]
         },
+        "clear_triggers": {
+          "default": null,
+          "description": "Clear the trigger arrays and `global.triggered` after the load (showdown).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "release_death_sound": {
           "default": null,
           "description": "Stop the death sound and restore the music volume before the retry (B).",

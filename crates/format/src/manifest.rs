@@ -476,6 +476,9 @@ pub struct KidStepsSection {
     /// Stop the death sound and restore the music volume before the retry (B).
     #[serde(default)]
     pub release_death_sound: Option<bool>,
+    /// Clear the trigger arrays and `global.triggered` after the load (showdown).
+    #[serde(default)]
+    pub clear_triggers: Option<bool>,
 }
 
 /// Restart kinds (plan 4.3).
@@ -575,6 +578,7 @@ impl RestartSection {
             m.kid_steps.clear_frozen = k.clear_frozen.unwrap_or(false);
             m.kid_steps.reset_jump_values = k.reset_jump_values.unwrap_or(false);
             m.kid_steps.release_death_sound = k.release_death_sound.unwrap_or(false);
+            m.kid_steps.clear_triggers = k.clear_triggers.unwrap_or(false);
         }
         m
     }
