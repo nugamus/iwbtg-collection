@@ -412,19 +412,31 @@ fn air_sprite(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         return Ok(());
     }
     let rev = yflag(ctx, &s) < 0;
+    // Family B: the fall sprite also needs no `slope_wall` `air_wall_probe` px in the gravity
+    // direction; when reversed, the jump sprite is the one that shows falling "up" without it.
+    let probe = p.numbers.air_wall_probe;
+    let wall_near = if gm_gt(probe, Real::ZERO, n) {
+        let Some(i) = ctx.w.get(me) else { return Ok(()) };
+        let (x, y) = (i.m.x(), i.m.y());
+        let dir = real_i(yflag(ctx, &s));
+        place_meeting(ctx, me, x, y + probe * dir, Target::Class(ClassMask::SLOPE_WALL))?
+    } else {
+        false
+    };
     let Some(i) = ctx.w.get_mut(me) else { return Ok(()) };
     let v = i.m.vspeed();
     let t = p.numbers.sprite_threshold;
-    // Reversed (`yflag`): the sprites swap, rising is falling.
-    let (up_sprite, down_sprite) = if rev {
-        (p.sprites.fall, p.sprites.jump)
+    // Moving with gravity is the fall sprite (not near a wall); against it, the jump sprite.
+    // Reversed (`yflag`), "with gravity" is negative `vspeed`.
+    let (with_gravity, against) = if rev {
+        (gm_lt(v, -t, n), gm_gt(v, t, n))
     } else {
-        (p.sprites.jump, p.sprites.fall)
+        (gm_gt(v, t, n), gm_lt(v, -t, n))
     };
-    if gm_lt(v, -t, n) {
-        set_sprite(def, &mut i.img, up_sprite);
-    } else if gm_gt(v, t, n) {
-        set_sprite(def, &mut i.img, down_sprite);
+    if against {
+        set_sprite(def, &mut i.img, p.sprites.jump);
+    } else if with_gravity && !wall_near {
+        set_sprite(def, &mut i.img, p.sprites.fall);
     }
     Ok(())
 }

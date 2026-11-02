@@ -6,12 +6,14 @@ use serde::Deserialize;
 
 use super::common::{down, set_sprite, state, state_mut};
 use crate::alarm;
-use crate::collide::query::{Target, place_meeting};
+use crate::collide::move_contact_solid;
+use crate::collide::query::{Target, instance_place, place_free, place_meeting};
 use crate::def::physics::{GroundAlso, JumpCancel, WaterAir};
 use crate::def::{ClassMask, EngineKind};
 use crate::error::SimError;
 use crate::input::Action;
-use crate::num::{Real, gm_lt};
+use crate::kid::api::{KillCause, kill};
+use crate::num::{Real, gm_eq, gm_gt, gm_lt, point_direction};
 use crate::world::{Ctx, Flow, InstId, SpawnInit};
 
 /// The actions this file implements, by their `physics.toml` names (snake case). Part of
@@ -19,6 +21,11 @@ use crate::world::{Ctx, Flow, InstId, SpawnInit};
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BAction {
+    /// End Step, `playerSlope`: the `slope_wall` slope code and the gravity restore.
+    SlopeB,
+    /// `playerMisc` 1 (Step): the kid dies when it touches a `killer` instance. The Step runs
+    /// before motion, so this is the position the last tick ended at.
+    KillerCheck,
     /// Step, `playerMove` steps 1-2: `image_yscale` takes the current `yflag`, then `yflag`
     /// follows `global.reverse` (the kid's mask flips one tick after the global does).
     SyncYflag,
@@ -38,6 +45,8 @@ pub enum BAction {
 /// Runs one action on the kid `me`. `kid::run_action` routes here.
 pub fn run(ctx: &mut Ctx, me: InstId, action: &BAction) -> Result<Flow, SimError> {
     match action {
+        BAction::SlopeB => slope_b(ctx, me)?,
+        BAction::KillerCheck => return killer_check(ctx, me),
         BAction::SyncYflag => sync_yflag(ctx, me)?,
         BAction::PlayerReverse => player_reverse(ctx, me)?,
         BAction::SetViewAngle => set_view_angle(ctx),
@@ -192,5 +201,112 @@ fn ensure_bow(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let Some(i) = ctx.w.get(me) else { return Ok(()) };
     let (x, y) = (i.m.x(), i.m.y());
     ctx.spawn_engine(EngineKind::Bow, x, y, SpawnInit::default())?;
+    Ok(())
+}
+
+/// `playerMisc` 1: `killPlayer` when the mask touches any killer.
+fn killer_check(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
+    let Some(i) = ctx.w.get(me) else {
+        return Ok(Flow::Continue);
+    };
+    let (x, y) = (i.m.x(), i.m.y());
+    match instance_place(ctx, me, x, y, Target::Class(ClassMask::KILLER))? {
+        Some(k) => kill(ctx, me, KillCause::Killer(k)),
+        None => Ok(Flow::Continue),
+    }
+}
+
+/// `playerSlope` (kid/B.md "End Step (player): slopes and gravity"), with `wall` the `slope_wall`
+/// class (`obj_wall`). `w*` are the position and `vspeed` the kid has at End Step; `f` is `yflag`
+/// (+1 or -1) and `gdir` the direction of gravity for `move_contact_solid` (270 or 90).
+///
+/// 1. Inside a wall: back to the previous position, `move_contact_solid` toward where it was
+///    (no limit), `vspeed` and gravity 0; with a wall 1 px in the gravity direction and none
+///    at `(wx, y - 3f)`: `x = wx`, up 3, then contact in the gravity direction (at most 10): up a
+///    slope.
+/// 2. Else with a wall at `(xprevious + image_xscale, y + 3f)`: contact in the gravity direction
+///    (at most 10): down a slope.
+/// 3. No wall 1 px in the gravity direction: gravity `numbers.gravity * f`; with no wall 1 px
+///    against it, `y = wy` (a solid there: `y = yprevious`, contact toward `wy`, no limit) and
+///    `vspeed = wSpeed`; with one, `y` moves 1 px with gravity when `(wx, y)` is not free.
+/// 4. Else, if the mask at `(wx, wy)` is in a wall and at `(x, wy)` is not: `y = wy`, gravity
+///    `numbers.gravity * f`, `vspeed = wSpeed`.
+/// 5. A wall 1 px in the gravity direction and `vspeed` 0: `curJumps` 1.
+fn slope_b(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+    let def = ctx.def;
+    let n = &ctx.rules.num;
+    let wall = Target::Class(ClassMask::SLOPE_WALL);
+    let missing = || SimError::invariant("slope_b: kid vanished");
+    let s = state(ctx, me)?;
+    let f = Real::new(f64::from(super::common::yflag(ctx, &s)));
+    let gdir = Real::new(if gm_lt(f, Real::ZERO, n) { 90.0 } else { 270.0 });
+    let gravity = def.physics.numbers.gravity * f;
+    let (wx, wy, wxpre, wypre, wspeed, xscale) = {
+        let i = ctx.w.get(me).ok_or_else(missing)?;
+        (
+            i.m.x(),
+            i.m.y(),
+            i.m.xprevious(),
+            i.m.yprevious(),
+            i.m.vspeed(),
+            i.img.xscale(),
+        )
+    };
+    let here = |ctx: &Ctx| ctx.w.get(me).map(|i| (i.m.x(), i.m.y())).ok_or_else(missing);
+
+    if place_meeting(ctx, me, wx, wy, wall)? {
+        {
+            let i = ctx.w.get_mut(me).ok_or_else(missing)?;
+            i.m.set_x(wxpre)?;
+            i.m.set_y(wypre)?;
+        }
+        move_contact_solid(ctx, me, point_direction(wxpre, wypre, wx, wy), Real::new(-1.0))?;
+        {
+            let i = ctx.w.get_mut(me).ok_or_else(missing)?;
+            i.m.set_vspeed(Real::ZERO)?;
+            i.m.set_gravity(Real::ZERO)?;
+        }
+        let (x, y) = here(ctx)?;
+        if place_meeting(ctx, me, x, y + f, wall)?
+            && !place_meeting(ctx, me, wx, y - f * Real::new(3.0), wall)?
+        {
+            {
+                let i = ctx.w.get_mut(me).ok_or_else(missing)?;
+                i.m.set_x(wx)?;
+                i.m.set_y(y - f * Real::new(3.0))?;
+            }
+            move_contact_solid(ctx, me, gdir, Real::new(10.0))?;
+        }
+    } else if place_meeting(ctx, me, wxpre + xscale, wy + f * Real::new(3.0), wall)? {
+        move_contact_solid(ctx, me, gdir, Real::new(10.0))?;
+    }
+
+    let (x, y) = here(ctx)?;
+    if !place_meeting(ctx, me, x, y + f, wall)? {
+        ctx.w.get_mut(me).ok_or_else(missing)?.m.set_gravity(gravity)?;
+        if !place_meeting(ctx, me, x, y - f, wall)? {
+            ctx.w.get_mut(me).ok_or_else(missing)?.m.set_y(wy)?;
+            if !place_free(ctx, me, x, wy)? {
+                let i = ctx.w.get_mut(me).ok_or_else(missing)?;
+                i.m.set_y(wypre)?;
+                let toward = if gm_gt(wy, wypre, n) { 270.0 } else { 90.0 };
+                move_contact_solid(ctx, me, Real::new(toward), Real::new(-1.0))?;
+            }
+            ctx.w.get_mut(me).ok_or_else(missing)?.m.set_vspeed(wspeed)?;
+        } else if !place_free(ctx, me, wx, y)? {
+            ctx.w.get_mut(me).ok_or_else(missing)?.m.set_y(y + f)?;
+        }
+    } else if place_meeting(ctx, me, wx, wy, wall)? && !place_meeting(ctx, me, x, wy, wall)? {
+        let i = ctx.w.get_mut(me).ok_or_else(missing)?;
+        i.m.set_y(wy)?;
+        i.m.set_gravity(gravity)?;
+        i.m.set_vspeed(wspeed)?;
+    }
+
+    let (x, y) = here(ctx)?;
+    let vs = ctx.w.get(me).ok_or_else(missing)?.m.vspeed();
+    if place_meeting(ctx, me, x, y + f, wall)? && gm_eq(vs, Real::ZERO, n) {
+        state_mut(ctx, me)?.cur_jumps = 1;
+    }
     Ok(())
 }

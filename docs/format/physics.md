@@ -1,6 +1,6 @@
 # `physics.toml`: the kid's physics profile
 
-One file per game, next to `game.toml`. It says how the kid moves, jumps, shoots, dies and saves. The kid is one built-in (`kid`, [builtins/kid.md](builtins/kid.md)); every difference between games is a value in this file or a named action in an event list. Nothing in the sim branches on the family. Schema: [schema/v0/physics.schema.json](schema/v0/physics.schema.json). A complete example (rely-the-needle-4-2): [examples/rely-physics.toml](examples/rely-physics.toml).
+One file per game, next to `game.toml`. It says how the kid moves, jumps, shoots, dies and saves. The kid is one built-in (`kid`, [builtins/kid.md](builtins/kid.md)); every difference between games is a value in this file or a named action in an event list. Nothing in the sim branches on the family. Schema: [schema/v0/physics.schema.json](schema/v0/physics.schema.json). Complete examples: rely-the-needle-4-2 [examples/rely-physics.toml](examples/rely-physics.toml), kaenbyou (family B) [examples/kaenbyou-physics.toml](examples/kaenbyou-physics.toml), and eat-the-lemon as the B preset plus its differences [examples/eat-the-lemon-physics.toml](examples/eat-the-lemon-physics.toml).
 
 Source: [sim core plan](../plans/sim-core.md) sections 5.1 to 5.3; `crates/sim/src/def/physics.rs`; `crates/sim/src/kid/presets.rs`.
 
@@ -11,7 +11,8 @@ Source: [sim core plan](../plans/sim-core.md) sections 5.1 to 5.3; `crates/sim/s
 | Preset | Defaults |
 |---|---|
 | `A1` | rely-the-needle-4-2 (kid/A1.md): rely's numbers, event lists, collisions, death order and save model. |
-| `A2` to `A5`, `B`, `C` | Record the family name and use the `A1` defaults until their work packages (WP5b, WP5c) add theirs. |
+| `B` | kaenbyou (kid/B.md): the `yflag` flip, `cur_jumps` jumps with water, End Step slope code and gravity, polling killer check, Outside Room kill, B's death order with the first kid. eat-the-lemon is `B` with `jump.blocked_by_pause_press = false` and no Alarm 0 (`events.alarms = []`). |
+| `A2` to `A5`, `C` | Record the family name and use the `A1` defaults until their work package (WP5c) adds theirs. |
 
 An empty file is the same as `preset = "A1"`. The loader rejects unknown keys, sections, action names, run names, class names and enum values, so a typo never falls back silently.
 
@@ -31,7 +32,7 @@ An event is an ordered list of action names. The kid runs them top to bottom; a 
 | `keys` | `[{ action = "suicide", on = "press", run = [...] }]`: `on` is `held`, `press` or `release`; `action` is a client action name |
 | `collisions` | `[{ with = "block", run = "block_standard" }]`: the kid collides with an instance of that class. Every row whose `with` matched runs, in row order |
 
-| `boundary` | the room edge: `none`, `intersect_origin` (A1), `outside_room_kill` (family B, WP5b) or `end_step_origin` (WP5c); the last two are `Unsupported` for now |
+| `boundary` | the room edge: `none`, `intersect_origin` (A1), `outside_room_kill` (family B: Outside Room kills unless a `warp` or `edge_warp` overlaps the kid) or `end_step_origin` (WP5c, `Unsupported` for now) |
 
 `intersect_origin` (kid/A1.md "Intersect Boundary"): the kid's Intersect Boundary event tests the origin (strictly: `x = room_width` is inside). Outside the room with no `edge_warp` overlapping the kid, it dies (`kill`). With one, the room it names is requested and the kid moves to its `warp_x`, `warp_y`, or, when both are 0, the kid and the bow are destroyed. Then, if the kid is alive, it wraps: `x < 0` gives `x = room_width - 16` and undoes this step's `vspeed` on `y`; `x > room_width` gives `x = 16` and the same; else `y < 0` gives `y = room_height - 16` and `x = xprevious`; else `y > room_height` gives `y = 16` and `x = xprevious`. The warp target is read from the `edge_warp`'s room and warp point (a per-edge table is `Unsupported`, #250).
 
@@ -56,6 +57,8 @@ Not yet in `[events]`: the outside-room events of the other models.
 | `sync_yflag` | Step, `playerMove` 1-2 (`flip.model = "yflag"`): `image_yscale` takes the current `yflag`, then `yflag` follows `global.reverse`. The mask flips one tick after the global does. |
 | `player_reverse` | `playerReverse` (the gravity arrows' Alarm 1): `global.reverse` toggles, `yflag` negates, `y` moves 4 times the new `yflag`, `curJumps` 1, `vspeed` 0. Also `kid::api::player_reverse`. OPEN: with several kids the original script's per-kid toggle of the global. |
 | `set_view_angle` | Room Start: with `global.reverse` view 0 is enabled at angle 180, else angle 0. |
+| `slope_b` | End Step, `playerSlope` (kid/B.md "End Step"): the `slope_wall` slope code, then gravity back to `numbers.gravity * yflag` (`gravity.reapply = "end_step_slope"`), which also runs in rooms without slopes. |
+| `killer_check` | `playerMisc` 1, in the Step: the kid dies when it touches a `killer` instance. It runs before motion, so it sees the position the last tick ended at. |
 | `ensure_bow` | Room Start and `playerMisc`: a bow at the kid unless one exists. |
 | `cancel_poll` | Alarm 0 when `jump.cancel = "poll_alarm"`: Jump up and moving against gravity cuts `vspeed` by `release_mult` and stops; else re-arms for 1 tick. |
 | `release` | `playerVJump` on a Jump release: upward `vspeed` times `release_mult`, every release. |
@@ -71,15 +74,15 @@ All real comparisons use the GM epsilon (`NumRules::compare`), so for example th
 
 | Run | What it does |
 |---|---|
-| `block_standard` | kid/A1.md "Collision with block": horizontal contact, vertical contact (a landing refreshes `djump`; `gravity.block_landing_zeroes` zeroes gravity), then the diagonal case. The flipped kid is `Unsupported` (WP5b, WP5c). |
-| `platform_standard` | kid/A1.md "Collision with platform": lands when `y - vspeed / 2 <= platform.y`; one-way from below. |
+| `block_standard` | kid/A1.md "Collision with block": horizontal contact, vertical contact (a landing refreshes `djump`; `gravity.block_landing_zeroes` zeroes gravity), then the diagonal case. With `flip.model = "yflag"` a reversed kid refreshes the jump counter on the ceiling side (`vspeed <= 0`) instead of the floor side. Another flipped kid is `Unsupported` (WP5c). |
+| `platform_standard` | kid/A1.md "Collision with platform": lands when `y - vspeed / 2 <= platform.y`; one-way from below. A reversed `yflag` kid lands when `y - vspeed / 2 >= platform.y + reversed_above` and is put at `platform.y + reversed_snap`. |
 | `kill` | The other instance kills the kid (`[death]`). |
 
 ## Sections
 
 Every key below is optional. Defaults are the `A1` preset's.
 
-`[numbers]`: `jumps` (list, ground jump then air jumps, `[8.5, 7.0]`), `gravity` (0.4), `run_speed` (3), `max_vspeed` (9), `max_fall_speed` (8, read only by `shift_then_clamp`), `release_mult` (0.45), `sprite_threshold` (0.05), `image_speed_idle` (0.2), `image_speed_run` (0.5).
+`[numbers]`: `jumps` (list, ground jump then air jumps, `[8.5, 7.0]`), `gravity` (0.4), `run_speed` (3), `max_vspeed` (9), `max_fall_speed` (8, read only by `shift_then_clamp`), `release_mult` (0.45), `sprite_threshold` (0.05), `image_speed_idle` (0.2), `image_speed_run` (0.5), `air_wall_probe` (0; family B 2: `air_sprite` shows the fall sprite only with no `slope_wall` that many pixels in the gravity direction).
 
 `[input]`: `walk` = `direct_latch` (`keyboard_check_direct`, sees a tap inside one tick) or `sampled`; `vine_keys` = `edges` (this tick's press) or `latched_flags` (WP5c).
 
@@ -89,17 +92,17 @@ Every key below is optional. Defaults are the `A1` preset's.
 
 `[gravity]`: `reapply` = `step`, or `end_step_slope` (Create leaves gravity 0; the `slope_b` action, WP5b.4, sets it; `create_only` is WP5c), `block_landing_zeroes`.
 
-`[platform]`: `hold_probe` (4), `rule` = `half_vspeed`, `snap` (9), `take` = `vspeed` (`delta_y` and `yspeed_flipped` are WP5b and WP5c).
+`[platform]`: `hold_probe` (4), `rule` = `half_vspeed`, `snap` (9), `take` = `vspeed` or `delta_y` (the platform's `y - yprevious`, family B; `yspeed_flipped` is WP5c), `reversed_above` (family B 15) and `reversed_snap` (24).
 
 `[vine]`: `model` = `distance_asym` or `none` (`distance_sym_early` is WP5c), `left_below` (2), `right_equal` (1), `slide` (2), `kick` (`[15, -9]`: horizontal, vertical), `drop` (3).
 
 `[water]`, `[ice]`, `[slope]`, `[ladder]`: empty until their work packages. `[flip]`: `model` (`none`, `swap_object`, `yflag`, `grav_sign`). With `yflag` (family B) a reversed kid (`yflag` -1): `walk` swaps Left and Right; `vines` slide at `slide * yflag`, kick at `kick[1] * yflag` and take the other key as the away key; `air_sprite` swaps the jump and fall sprites; `shoot` places the bullet at `y - offset[1] * yflag`; `create_defaults` reads `global.reverse` (y - 4, `curJumps` 1). `swap_object` and `grav_sign` are WP5c.
 
-`[death]`: `order`, the steps in the order they run: `sound` (not played yet, #231), `blood_emitter` (spawned with a `flipped` param), `destroy_kid`, `game_over` (it places itself at view 0 plus its own offset params), `deaths_plus_one` (checked), `save_counters` (death-only save). `select_room_reset`: in a Select room a kill requests the same room, destroys the kid and does nothing else. `stop_music`: not built (`true` is `Unsupported`). Nothing happens while `muteki` is set.
+`[death]`: `order`, the steps in the order they run: `sound` (not played yet, #231), `blood_emitter` (spawned with a `flipped` param), `destroy_kid`, `destroy_all_kids` (every kid instance, family B), `game_over` (it places itself at view 0 plus its own offset params), `deaths_plus_one` (checked), `save_counters` (death-only save). `select_room_reset`: in a Select room a kill requests the same room, destroys the kid and does nothing else. `stop_music`: not built (`true` is `Unsupported`). `first_kid`: the blood emitter, `flipped` param and GAMEOVER use the first kid's position and gravity (family B with several kids). Nothing happens while `muteki` is set.
 
 `[bullet]`: `max` (4), `speed` (16), `offset` (`[0, 0]`; family B `[2, 2]`: the bullet appears at `x + offset[0] * facing`, `y - offset[1] * yflag`).
 
-`[save]`: `position` (`xy_base100_bytes`, `xy_base256_bytes`, `xy_text2_dec`, `xy_previous`, `fixed_point`, `floor_nudge`), `fixed` (`[x, y]` for `fixed_point`).
+`[save]`: `position` (`xy_base100_bytes`, `xy_base256_bytes`, `xy_text2_dec`, `xy_previous`, `fixed_point`, `floor_nudge`), `fixed` (`[x, y]` for `fixed_point`), `first_kid` (a save stores the first kid whichever kid touched the save point; family B).
 
 `[misc]`: `fade_in`, `fade_step` (0.1).
 
