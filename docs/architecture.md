@@ -380,7 +380,7 @@ gravity,gravity_direction,friction,image_index,sprite_index,sprite_name,<game va
 | Layer | What | Where | When |
 |---|---|---|---|
 | Unit tests | `num` (rounding, comparisons, trig table), `rng`, motion coupling, masks and bounding boxes, collision queries, input edges, replay round trip | `crates/sim`, `crates/format` | every `cargo test` |
-| Script conformance | Every IWS math function over 10,000 fixed inputs, every operator and overload, operation-count fixtures | `crates/sim/tests/script_conformance/` | every CI target |
+| Script conformance | Every IWS math function over 10,000 fixed inputs, every operator and overload, operation-count fixtures | `crates/sim/tests/script_conformance/` (hashes pinned in `expected.txt`; `UPDATE_CONFORMANCE=1` rewrites) | every CI target |
 | Validator fixtures | A set of broken packages, each expecting one specific error with file, line and column | `crates/format/tests/invalid/` | every `cargo test` |
 | Engine test rooms | Small worlds we make ourselves (no creator content, built with `GameDefBuilder`), one pinned state hash per case in `expected.txt`. A deliberate sim change re-pins it: `UPDATE_GOLDEN=1 cargo test -p iwbtg-sim --test golden_corpus`. More cases per built-in come with their work packages | `crates/sim/tests/golden/` | every CI target |
 | Trace tests | Every research trace case, run and diffed bit for bit | research path given by the `IWBTG_RESEARCH` environment variable; skipped when absent | locally, in a research CI job, before ranking a game |

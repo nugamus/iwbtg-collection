@@ -226,3 +226,14 @@ fn the_rng_is_the_worlds() {
     let expect = g.rng.random(Real::new(1000.0)).get();
     assert_eq!(hp, expect);
 }
+
+#[test]
+fn instance_create_and_instances_charge_the_budget() {
+    let src = "fn create() { let p = instance_create(\"plain\", 5, 6); let all = instances(\"plain\"); this.hp = to_float(all.len()); }";
+    let mut f = fx(src, true);
+    f.scripts.begin_tick();
+    f.spawn(0, 0.0, 0.0);
+    let used = f.scripts.engine().expect("engine").budget().used();
+    // 50 for the spawn, 1 for the one instance returned, and a few operations.
+    assert!((51..=90).contains(&used), "used {used}");
+}

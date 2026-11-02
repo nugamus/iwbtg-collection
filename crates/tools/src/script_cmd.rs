@@ -189,14 +189,29 @@ fn markdown(funcs: &[Func]) -> String {
     {
         s.push_str(&format!("- {}\n", md_sig(f)));
     }
-    s.push_str("\n## Functions\n\n");
+    s.push_str(
+        "\n## Functions\n\nEvery call costs 1 budget unit (one Rhai operation, like each operator and each \
+         statement). The cost after each signature is what the host function charges; \"cost: 1\" means the \
+         operation only. The tick budget is 1,000,000 units and one event call may use 200,000 \
+         ([0001](../decisions/0001-script-language.md#step-budget)).\n\n",
+    );
     for f in rest
         .iter()
         .filter(|f| !is_operator(&f.name) || f.name.starts_with("index$"))
     {
-        s.push_str(&format!("- {}\n", md_sig(f)));
+        s.push_str(&format!("- {}{}\n", md_sig(f), cost_note(&f.name)));
     }
     s
+}
+
+/// ` (cost: 1 + 50)` for a function that charges extra, else ` (cost: 1)`.
+fn cost_note(name: &str) -> String {
+    match iwbtg_sim::script::budget::cost(name) {
+        (0, 0) => " (cost: 1)".to_owned(),
+        (base, 0) => format!(" (cost: 1 + {base})"),
+        (0, item) => format!(" (cost: 1 + {item} per instance returned)"),
+        (base, item) => format!(" (cost: 1 + {base} + {item} per item)"),
+    }
 }
 
 /// The generated files as `(path relative to docs/, text)`.
