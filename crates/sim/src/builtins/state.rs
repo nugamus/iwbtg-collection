@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use super::{
     block, blood, blood_emitter, bow, camera, conveyor, difficulty_warp, drop_platform, edge_warp,
     fake_block, game_clear, game_over, jump_refresher, kid_bullet, kid_param_zone, kid_start, killer,
-    moving_platform, music, save, spike, spring, trap, trigger, warp, water, world,
+    moving_platform, music, save, sign, spike, spring, time_limit, trap, trigger, warp, water, world,
 };
 
 /// A built-in instance's state.
@@ -99,4 +99,8 @@ pub enum BuiltinState {
     Camera(camera::CameraState),
     /// `killer` (WP6a).
     Killer(killer::KillerState),
+    /// `sign` (WP6c).
+    Sign(sign::SignState),
+    /// `time_limit` (WP6c).
+    TimeLimit(time_limit::TimeLimitState),
 }
