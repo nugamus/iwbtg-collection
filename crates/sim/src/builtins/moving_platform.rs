@@ -130,6 +130,9 @@ pub fn event_set(kind: &KindDef) -> EventSet {
     if matches!(kind.params.0.get("start_on_touch"), Some(ParamValue::Bool(true))) {
         set.collisions.push(super::warp::KIDS);
     }
+    if !matches!(kind.params.0.get("marker_reverse"), Some(ParamValue::Str(w)) if w == "none") {
+        set.collisions.push(ClassMask::FAKE_BLOCK);
+    }
     set
 }
 
@@ -186,6 +189,10 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
                     st.waiting = false;
                 }
             }
+            Ok(Flow::Continue)
+        }
+        EventKind::Collision { with, .. } if with.intersects(ClassMask::FAKE_BLOCK) => {
+            reverse_on_marker(ctx, me)?;
             Ok(Flow::Continue)
         }
         EventKind::Step => step(ctx, me, &s),

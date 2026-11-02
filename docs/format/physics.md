@@ -135,3 +135,7 @@ The converter writes `physics.toml` in this form for every game (plan 8.4, CR8).
 4. Key events become `events.keys` rows (`Key Q pressed` is `suicide` on `press` running `kill`), Alarm 0 an `events.alarms` row.
 5. Use sprite names from the package, never the original's ids.
 6. A spec rule with no action here yet is not guessed: the converter lists it as a gap for the work package that owns the family (5.3), and the game's trace check stays red until it lands.
+
+## Legacy drafts
+
+The converter first wrote a draft form (`rules = "classic"`, `jumps`, `gravity = 0.4`, `step_sets`, `air_jump_restore`). The loader does not read its values: it maps the file to the family preset `rules` names (`classic` is `A1`) and warns, listing the ignored keys. A `rules` word that names no family is an error, and a warning for converter output (`--trace-mode`), which falls back to `A1`. The draft's `mask = { sprite = ... }` still gives the kid its mask until `[defaults.kid]` does (CR8).
