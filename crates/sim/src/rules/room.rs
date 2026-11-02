@@ -24,6 +24,11 @@ pub struct RoomRules {
     /// Room change step 1: the order of Room End. Still open in the spec (rooms Confirmed
     /// (recorder), "Room start sequence" item 1).
     pub room_end_order: RoomEndOrder,
+    /// Room change step 6 on a revisit of a persistent room (rooms UNKNOWN: whether room
+    /// creation code runs again). Default true: the manual's step list conditions only step 4
+    /// on the room being new (Design reading). No persistent room of the 20 games has creation
+    /// code, so no game depends on it.
+    pub creation_code_on_revisit: bool,
 }
 
 impl Default for RoomRules {
@@ -35,6 +40,7 @@ impl Default for RoomRules {
             restart_events: false,
             room_start_order: RoomStartOrder::default(),
             room_end_order: RoomEndOrder::default(),
+            creation_code_on_revisit: true,
         }
     }
 }
@@ -72,8 +78,11 @@ pub enum RoomEndOrder {
     /// The ordinary dispatch order (`events::dispatch_order`, R2). Default (plan 4.2).
     #[default]
     Dispatch,
-    /// Draw order: depth descending, then creation order. The spec's Inferred reading of
-    /// showdown's Room End log (traces/showdown/tr-room-14), not shown by the log.
+    /// Draw order: depth descending, then creation order. Built after the spec's Inferred
+    /// reading of showdown's Room End log (traces/showdown/tr-room-14: the instance list looks
+    /// depth-sorted), but it does **not** reproduce that log: the log puts the carried world
+    /// (depth 0) after the 5 depth-0 warpStarts, while here the boot world has the lowest id and
+    /// so comes first among equal depths. The tie-break among equal depths is unknown.
     Depth,
 }
 
@@ -90,5 +99,6 @@ mod tests {
         assert!(!r.restart_events);
         assert_eq!(r.room_start_order, RoomStartOrder::RoomThenCarried);
         assert_eq!(r.room_end_order, RoomEndOrder::Dispatch);
+        assert!(r.creation_code_on_revisit);
     }
 }

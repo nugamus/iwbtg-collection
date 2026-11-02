@@ -7,9 +7,11 @@
 //! `events::dispatch`, which lands with WP1.
 
 mod wp4a {
+    use iwbtg_sim::collide::Target;
     use iwbtg_sim::def::testing::GameDefBuilder;
     use iwbtg_sim::def::{
-        Builtin, EngineKind, GameDef, KindDef, KindId, RoomAction, RoomDef, RoomId, RoomRole, VarId,
+        Builtin, EngineKind, GameDef, KindDef, KindId, ParamValue, Params, RoomAction, RoomDef, RoomId,
+        RoomRole, VarId, ViewDef,
     };
     use iwbtg_sim::error::SimError;
     use iwbtg_sim::events::EventKind;
@@ -24,6 +26,7 @@ mod wp4a {
     use iwbtg_sim::save::SaveSlot;
     use iwbtg_sim::script::ScriptRuntime;
     use iwbtg_sim::sound::DllMode;
+    use iwbtg_sim::trace::{TraceTable, Value as TV};
     use iwbtg_sim::world::{Ctx, Flow, InstId, Instance, SimStatus, SpawnInit, Value, World};
 
     type React = Box<dyn FnMut(&mut Probe, &mut Ctx, InstId, &str, &EventKind) -> Flow>;
@@ -35,6 +38,8 @@ mod wp4a {
         /// When set, events are logged with `+g` while this global is set.
         watch: Option<VarId>,
         react: Option<React>,
+        /// Kind name and params of every spawn that had params.
+        params: Vec<(String, Params)>,
     }
 
     fn event_name(ev: &EventKind) -> &'static str {
@@ -100,6 +105,9 @@ mod wp4a {
                 .rank
                 .or_else(|| ctx.def.rank_for(kind, init.variant.as_ref()))
                 .expect("ranked kind");
+            if !init.params.0.is_empty() {
+                self.params.push((k.name.clone(), init.params.clone()));
+            }
             let mut inst = Instance::new(id, kind, rank, x, y);
             inst.persistent = k.persistent;
             inst.depth = k.depth;
@@ -550,7 +558,7 @@ mod wp4a {
         let (def, p, _) = two_rooms(true);
         let rules = RunnerRules::default();
         let mut host = Probe::default();
-        let (mut w, r) = start(
+        let (w, r) = start(
             &def,
             &rules,
             &mut host,
@@ -560,9 +568,13 @@ mod wp4a {
             },
         );
         r.unwrap();
-        let err = change(&def, &rules, &mut w, &mut host, RoomRequest::Restart).unwrap_err();
-        assert!(matches!(err, SimError::Unsupported { .. }));
-        assert_eq!(w.status, SimStatus::Halted(err));
+        for req in [RoomRequest::Restart, RoomRequest::Goto(p)] {
+            let mut w = w.clone();
+            let err = change(&def, &rules, &mut w, &mut host, req).unwrap_err();
+            assert!(matches!(err, SimError::Unsupported { .. }), "{req:?}");
+            assert_eq!(w.status, SimStatus::Halted(err));
+            assert!(w.persistent_rooms.is_empty(), "{req:?}: nothing was stored");
+        }
     }
 
     #[test]
@@ -659,6 +671,10 @@ mod wp4a {
         );
         assert!(w.pending.is_none());
         assert_eq!(ids_of(&w, &def, "kid").len(), 1);
+        assert_eq!(
+            w.engine.run.difficulty, 0,
+            "LoadGame applies the save's difficulty (tr-room-12 row 137; it was 1 before)"
+        );
     }
 
     #[test]
@@ -818,7 +834,7 @@ mod wp4a {
         let mut stage = room("stage", 30);
         stage.persistent = true;
         let stage = b.room(stage);
-        b.start_room(title);
+        b.start_room(stage);
         let def = b.build().unwrap();
         let rules = RunnerRules::default();
         let mut host = Probe::default();
@@ -833,7 +849,10 @@ mod wp4a {
         host.log.clear();
         change(&def, &rules, &mut w, &mut host, RoomRequest::GameRestart).unwrap();
         assert_eq!(host.log, ["Create world", "GameStart world", "RoomStart world"]);
-        assert_eq!(w.room, init, "the boot room");
+        assert_eq!(
+            w.room, title,
+            "room_first (index 0), not the first Boot-role room or start_room"
+        );
         assert!(
             ids_of(&w, &def, "kid").is_empty(),
             "persistent instances are removed too"
@@ -850,10 +869,10 @@ mod wp4a {
 
         change(&def, &rules, &mut w, &mut host, RoomRequest::GameEnd).unwrap();
         assert_eq!(w.status, SimStatus::Ended);
-        assert_eq!(w.room, init);
+        assert_eq!(w.room, title);
         // An ended sim changes nothing.
-        change(&def, &rules, &mut w, &mut host, RoomRequest::Goto(stage)).unwrap();
-        assert_eq!(w.room, init);
+        change(&def, &rules, &mut w, &mut host, RoomRequest::Goto(init)).unwrap();
+        assert_eq!(w.room, title);
     }
 
     #[test]
@@ -874,7 +893,20 @@ mod wp4a {
         assert_eq!(w.save, None, "a new game deletes the save");
         assert_eq!(w.engine.run.difficulty, 3);
 
-        let mut host = Probe::default();
+        let mut host = Probe {
+            react: Some(Box::new(|host, ctx, _, name, ev| {
+                if name == "kid" && *ev == EventKind::Create {
+                    let room = &ctx.def.room(ctx.w.room).unwrap().name;
+                    host.log.push(format!(
+                        "kid sees {room} at {} difficulty {}",
+                        ctx.w.room_speed.get(),
+                        ctx.w.engine.run.difficulty
+                    ));
+                }
+                Flow::Continue
+            })),
+            ..Probe::default()
+        };
         let mut s = slot(saved);
         s.difficulty = 1;
         let (w, r) = start(&def, &rules, &mut host, StartPoint::FromSave(s.clone()));
@@ -885,6 +917,8 @@ mod wp4a {
                 "Create world",
                 "Load",
                 "Create kid",
+                // R14: the saved room's file speed, not 0 or the start room.
+                "kid sees room14 at 30 difficulty 1",
                 "Create marker",
                 "GameStart world",
                 "GameStart kid",
@@ -906,8 +940,147 @@ mod wp4a {
         );
     }
 
-    /// The recorded result behind the R23 default: in kaenbyou's load path (rSelectStage ->
-    /// rLoad, whose creation code calls room_goto -> room14) no trace row ever shows rLoad.
+    /// A persistent room whose creation code spawns a `made` instance with params.
+    fn revisit_game() -> (GameDef, RoomId, RoomId) {
+        let mut b = GameDefBuilder::new("revisit");
+        let made = probe_kind(&mut b, "made", false);
+        let mut r0 = room("p", 50);
+        r0.persistent = true;
+        r0.on_create = vec![RoomAction::Spawn {
+            kind: made,
+            x: Real::ZERO,
+            y: Real::ZERO,
+            params: num_param(),
+        }];
+        let p = b.room(r0);
+        let q = b.room(room("q", 50));
+        (b.build().unwrap(), p, q)
+    }
+
+    fn num_param() -> Params {
+        let mut params = Params::default();
+        params.0.insert("num".into(), ParamValue::Real(Real::new(2.0)));
+        params
+    }
+
+    #[test]
+    fn wp4a_creation_code_on_revisit_switch() {
+        let (def, p, q) = revisit_game();
+        for (on_revisit, want) in [(true, 2), (false, 1)] {
+            let mut rules = RunnerRules::default();
+            rules.room.creation_code_on_revisit = on_revisit;
+            let mut host = Probe::default();
+            let (mut w, r) = start(
+                &def,
+                &rules,
+                &mut host,
+                StartPoint::Room {
+                    room: p,
+                    difficulty: 0,
+                },
+            );
+            r.unwrap();
+            change(&def, &rules, &mut w, &mut host, RoomRequest::Goto(q)).unwrap();
+            change(&def, &rules, &mut w, &mut host, RoomRequest::Goto(p)).unwrap();
+            assert_eq!(ids_of(&w, &def, "made").len(), want, "on_revisit {on_revisit}");
+            assert_eq!(host.params.len(), want);
+            assert_eq!(
+                host.params[0],
+                ("made".to_string(), num_param()),
+                "Spawn passes its params"
+            );
+        }
+    }
+
+    #[test]
+    fn wp4a_game_restart_switches() {
+        let o = order_game();
+        let mut rules = RunnerRules::default();
+        rules.room.restart_events = true;
+        rules.room.globals_survive_restart = true;
+        let mut host = Probe::default();
+        let (mut w, r) = start(
+            &o.def,
+            &rules,
+            &mut host,
+            StartPoint::Room {
+                room: o.b,
+                difficulty: 2,
+            },
+        );
+        r.unwrap();
+        w.globals.insert(VarId(3), Value::Real(Real::ONE));
+        host.log.clear();
+        change(&o.def, &rules, &mut w, &mut host, RoomRequest::GameRestart).unwrap();
+        assert_eq!(
+            host.log[..2],
+            ["RoomEnd blk", "RoomEnd world"],
+            "restart_events: Room End before removal"
+        );
+        assert_eq!(w.room, o.a, "room_first");
+        assert_eq!(w.globals.get(&VarId(3)), Some(&Value::Real(Real::ONE)));
+        assert_eq!(
+            w.engine.run.difficulty, 2,
+            "globals_survive_restart keeps the engine globals"
+        );
+    }
+
+    #[test]
+    fn wp4a_views_reset_on_entry() {
+        let mut b = GameDefBuilder::new("views");
+        let follow = probe_kind(&mut b, "follow", false);
+        let r0 = b.room(room("plain", 50));
+        let mut rv = room("viewed", 50);
+        rv.views_enabled = true;
+        rv.views[0] = ViewDef {
+            visible: true,
+            view: (Real::ZERO, Real::ZERO, Real::new(800.0), Real::new(608.0)),
+            port: (Real::ZERO, Real::ZERO, Real::new(800.0), Real::new(608.0)),
+            follow: Some(follow),
+            hborder: Real::new(400.0),
+            vborder: Real::new(304.0),
+            hspeed: Real::new(-1.0),
+            vspeed: Real::new(-1.0),
+        };
+        let viewed = b.room(rv);
+        let def = b.build().unwrap();
+        let rules = RunnerRules::default();
+        let mut host = Probe::default();
+        let (mut w, r) = start(
+            &def,
+            &rules,
+            &mut host,
+            StartPoint::Room {
+                room: r0,
+                difficulty: 0,
+            },
+        );
+        r.unwrap();
+        assert!(w.views.iter().all(|v| !v.enabled));
+        change(&def, &rules, &mut w, &mut host, RoomRequest::Goto(viewed)).unwrap();
+        let v = &w.views[0];
+        assert!(v.enabled && v.visible);
+        assert_eq!(
+            (v.w, v.h, v.hborder),
+            (Real::new(800.0), Real::new(608.0), Real::new(400.0))
+        );
+        assert_eq!(v.follow, Some(Target::Kind(follow)));
+        assert!(
+            w.views[1].enabled && !w.views[1].visible,
+            "views_enabled is per room"
+        );
+        // Moved by a camera, then the room is entered again: back to the file's view.
+        w.views[0].x = Real::new(1600.0);
+        change(&def, &rules, &mut w, &mut host, RoomRequest::Goto(viewed)).unwrap();
+        assert_eq!(w.views[0].x, Real::ZERO);
+        change(&def, &rules, &mut w, &mut host, RoomRequest::Goto(r0)).unwrap();
+        assert!(w.views.iter().all(|v| !v.enabled && v.follow.is_none()));
+    }
+
+    /// kaenbyou tr-room-12 (rSelectStage -> rLoad, whose creation code loads the save and calls
+    /// room_goto -> room14) against the sim on the same room chain: the room and difficulty of
+    /// the first row after the change are what the sim has once tick row 15 finishes, and no
+    /// row ever shows rLoad.
     #[test]
     #[allow(clippy::disallowed_methods, reason = "test-only: reads research trace files")]
     fn wp4a_tr_room_12_spends_no_tick_in_rload() {
@@ -917,21 +1090,58 @@ mod wp4a {
         };
         let path = std::path::Path::new(&root).join("specs/engines/gm8/traces/kaenbyou/tr-room-12.csv");
         let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
-        let table = iwbtg_sim::trace::TraceTable::parse(&text).expect("trace parses");
-        let (frame, room) = (table.column("frame").unwrap(), table.column("room").unwrap());
-        let rows: Vec<(String, String)> = table
-            .rows
-            .iter()
-            .map(|r| (format!("{:?}", r[frame]), format!("{:?}", r[room])))
-            .collect();
-        assert!(!rows.iter().any(|(_, r)| r.contains("rLoad")), "no tick in rLoad");
-        let at = |f: &str| {
-            rows.iter()
-                .find(|(fr, _)| fr.contains(&format!("({f})")))
-                .map(|(_, r)| r.clone())
-                .unwrap_or_else(|| panic!("frame {f} missing"))
+        let table = TraceTable::parse(&text).expect("trace parses");
+        let col = |name: &str| table.column(name).unwrap_or_else(|| panic!("no column {name}"));
+        let (frame, room_col, diff) = (col("frame"), col("room"), col("global.difficulty"));
+        let row = |f: i64| {
+            let r = table
+                .rows
+                .iter()
+                .find(|r| r[frame] == TV::Int(f))
+                .unwrap_or_else(|| panic!("frame {f} missing"));
+            let TV::Str(room) = &r[room_col] else {
+                panic!("frame {f}: room is not a string")
+            };
+            let TV::Real(d) = r[diff] else {
+                panic!("frame {f}: difficulty is not a real")
+            };
+            (room.clone(), d)
         };
-        assert!(at("136").contains("rSelectStage"));
-        assert!(at("137").contains("room14"));
+        assert!(
+            !table.rows.iter().any(|r| r[room_col] == TV::Str("rLoad".into())),
+            "no tick in rLoad"
+        );
+        let (before_room, before_diff) = row(136);
+        let (after_room, after_diff) = row(137);
+        // Part 1 saved on Medium: row 52 is the first room14 tick after the save.
+        let saved_diff = row(52).1;
+        let as_u8 = |d: f64| {
+            (0..=3u8)
+                .find(|&n| Real::new(f64::from(n)) == Real::new(d))
+                .expect("difficulty 0-3")
+        };
+
+        let (def, select, load, saved) = load_game();
+        assert_eq!(def.room(select).unwrap().name, before_room);
+        let rules = RunnerRules::default();
+        let mut host = Probe::default();
+        let (mut w, r) = start(
+            &def,
+            &rules,
+            &mut host,
+            StartPoint::Room {
+                room: select,
+                difficulty: as_u8(before_diff),
+            },
+        );
+        r.unwrap();
+        let mut s = slot(saved);
+        s.difficulty = as_u8(saved_diff);
+        w.save = Some(s);
+        // Tick 136, row 15: the warp's request.
+        change(&def, &rules, &mut w, &mut host, RoomRequest::Goto(load)).unwrap();
+        assert!(w.pending.is_none(), "nothing left for tick 137");
+        assert_eq!(def.room(w.room).unwrap().name, after_room, "row 137's room");
+        assert_eq!(w.engine.run.difficulty, as_u8(after_diff), "row 137's difficulty");
     }
 }

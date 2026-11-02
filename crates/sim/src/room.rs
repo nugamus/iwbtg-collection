@@ -14,9 +14,15 @@
 //!    params (instance creation code) applied before its Create. A persistent room that was
 //!    visited before gets its stored instances back, without Create (Inferred, R18).
 //! 5. First room of the game only: Game Start for every instance.
-//! 6. The room creation actions run, as data.
+//! 6. The room creation actions run, as data. On a persistent-room revisit only when
+//!    [`RoomRules::creation_code_on_revisit`](crate::rules::RoomRules::creation_code_on_revisit)
+//!    (rooms UNKNOWN; no persistent room of the 20 games has creation code).
 //! 7. Room Start for every instance in the room when this step begins (R10): the room's own
 //!    instances, then the carried persistent ones (Confirmed (recorder), [`RoomStartOrder`]).
+//!
+//! `room_restart` and `room_goto` of the current room rebuild a non-persistent room (Inferred).
+//! For a persistent room both are UNKNOWN (unused by the 20 games) and give
+//! `SimError::Unsupported`.
 //!
 //! On entry `room_speed` is the room file's speed (Inferred, Confirmed (recorder), R14), the
 //! views are reset from the room's view definitions, and the broadphase grid starts empty (every
@@ -32,6 +38,15 @@
 //! The sequence reaches the event and spawn layer only through [`RoomHost`]. [`EngineHost`] is
 //! the real one (`events::dispatch`, `events::dispatch_order`, `Ctx::spawn`, `save::load_into`);
 //! tests pass a recording host, so the sequence is testable before those land.
+//!
+//! **Contract note for WP1 and WP8a.** Steps 1, 5 and 7 are the phases [`Phase::RoomEnd`],
+//! [`Phase::GameStart`] and [`Phase::RoomStart`], run by [`RoomHost::run_phase`] on an order
+//! this module computes, not by `events::run_phase`: `events::run_phase(ctx, phase)` takes no
+//! order, and the Confirmed (recorder) Room Start order (own instances, then carried ones) and
+//! the Room End switch need one. `events::run_phase` therefore never sees these three phases
+//! (WP1 need not handle them), and a per-phase hook for these steps (WP8a `--stages`) belongs
+//! in `RoomHost::run_phase`. Unlike R8 in the tick, `Flow::AbortTick` does not stop the
+//! sequence here (R23: the sequence always finishes).
 
 use std::collections::BTreeSet;
 
@@ -39,9 +54,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::collide::Target;
 use crate::collide::grid::Grid;
-use crate::def::{KindId, RoomAction, RoomDef, RoomId, RoomRole};
+use crate::def::{KindId, RoomAction, RoomDef, RoomId};
 use crate::error::SimError;
-use crate::events::{self, EventKind};
+use crate::events::{self, EventKind, Phase};
 use crate::num::Real;
 use crate::output::OutputEvent;
 use crate::rules::TickRules;
@@ -125,6 +140,32 @@ pub trait RoomHost {
     /// Runs one event on one instance (`events::dispatch`).
     fn dispatch(&mut self, ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Flow;
 
+    /// Runs one phase of the room sequence ([`Phase::RoomEnd`], [`Phase::GameStart`] or
+    /// [`Phase::RoomStart`]) on `order`, the snapshot taken when the step begins: each instance
+    /// that still exists at its turn gets the phase's event. `Halt` stops at once; `AbortTick`
+    /// does not stop the phase (R23). Any other phase is an invariant break.
+    fn run_phase(&mut self, ctx: &mut Ctx, phase: Phase, order: &[InstId]) -> Flow {
+        let ev = match phase {
+            Phase::RoomEnd => EventKind::RoomEnd,
+            Phase::GameStart => EventKind::GameStart,
+            Phase::RoomStart => EventKind::RoomStart,
+            _ => {
+                return ctx.halt(SimError::invariant(format!(
+                    "{phase:?} is not a room sequence phase"
+                )));
+            }
+        };
+        for &id in order {
+            if !ctx.w.exists(id) {
+                continue;
+            }
+            if self.dispatch(ctx, id, &ev) == Flow::Halt {
+                return Flow::Halt;
+            }
+        }
+        Flow::Continue
+    }
+
     /// Creates an instance and runs its Create unless `init.run_create` is off (`Ctx::spawn`).
     fn spawn(
         &mut self,
@@ -181,6 +222,10 @@ impl RoomHost for EngineHost {
 /// `GameDef::new_game_room` (what warpStart does). `Room` sets the difficulty and enters the
 /// room (the recorder's `--room` jump). `FromSave` stores the slot, sets the difficulty, loads
 /// it (the kid is created before the room, so he is carried in) and enters the saved room.
+/// Before the load, `room`, `room_speed` (the saved room's file speed, R14) and the views are
+/// already the saved room's, so the kid's Create (alarm[0] = room_speed, room-role checks) sees
+/// that room (Design: the original loads in its boot room after world's Room Start; FromSave
+/// has no boot room).
 ///
 /// An error halts the sim (`SimStatus::Halted`) and is returned.
 pub fn start_game(ctx: &mut Ctx, start: &StartPoint) -> Result<(), SimError> {
@@ -263,9 +308,9 @@ fn start_inner<H: RoomHost + ?Sized>(
         }
         StartPoint::FromSave(slot) => {
             ctx.w.save = Some(slot.clone());
-            ctx.w.engine.run.difficulty = slot.difficulty;
-            host.load_save(ctx, slot)?;
-            stop_if_halted(ctx)?;
+            let room = room_def(ctx, slot.room)?;
+            set_room_state(ctx, slot.room, room);
+            load_slot(ctx, host, slot)?;
             // The saved room is entered right below; a request the load made for it is that
             // same entry.
             ctx.w.pending = None;
@@ -328,6 +373,14 @@ fn run_request<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H, req: RoomReque
     }
 }
 
+/// Loads `slot` as loadGame does: the saved difficulty (kaenbyou tr-room-12 row 137: 0 from the
+/// save, 1 before), then the kid at the saved spot (`RoomHost::load_save`).
+fn load_slot<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H, slot: &SaveSlot) -> Result<(), SimError> {
+    ctx.w.engine.run.difficulty = slot.difficulty;
+    host.load_save(ctx, slot)?;
+    stop_if_halted(ctx)
+}
+
 /// The room a request goes to.
 fn resolve(ctx: &Ctx, req: RoomRequest) -> Result<RoomId, SimError> {
     let current = ctx.w.room;
@@ -349,19 +402,19 @@ fn resolve(ctx: &Ctx, req: RoomRequest) -> Result<RoomId, SimError> {
             .ok_or_else(|| SimError::Script {
                 message: format!("room_goto_previous: no room before room {}", current.0),
             })?,
-        RoomRequest::Restart => {
-            if room_def(ctx, current)?.persistent {
-                return Err(SimError::unsupported(
-                    "room_restart of a persistent room (rooms UNKNOWN; unused by the 20 games)",
-                ));
-            }
-            current
-        }
+        RoomRequest::Restart => current,
         RoomRequest::GameRestart | RoomRequest::GameEnd => {
             return Err(SimError::invariant(format!("{req:?} is not a room change")));
         }
     };
-    room_def(ctx, target)?;
+    // room_restart and room_goto(current) rebuild a non-persistent room (Inferred); for a
+    // persistent one both are UNKNOWN.
+    if room_def(ctx, target)?.persistent && target == current {
+        return Err(SimError::unsupported(format!(
+            "{req:?} of the current persistent room {} (rooms UNKNOWN; unused by the 20 games)",
+            current.0
+        )));
+    }
     Ok(target)
 }
 
@@ -387,8 +440,9 @@ fn create_boot<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H) -> Result<(), 
 
 /// game_restart (Inferred; R16): optionally Room End, remove every instance (persistent ones
 /// too) without events, forget the persistent rooms, clear the globals unless
-/// `globals_survive_restart`, then boot again and enter the boot room as the first room. The
-/// save (a file) and the sounds (Inferred, S4) are kept.
+/// `globals_survive_restart`, then boot again and enter `room_first` (room order index 0, the
+/// order `room_goto_next` follows; rInit in 19 of the 20 games) as the first room. The save (a
+/// file) and the sounds (Inferred, S4) are kept.
 fn game_restart<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H) -> Result<(), SimError> {
     if ctx.rules.room.restart_events {
         room_end(ctx, host)?;
@@ -409,15 +463,9 @@ fn game_restart<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H) -> Result<(),
     }
     emit(ctx, RoomOutput::GameRestarted);
     create_boot(ctx, host)?;
-    let def = ctx.def;
-    let target = def
-        .rooms
-        .iter()
-        .position(|r| r.role == RoomRole::Boot)
-        .and_then(|i| u32::try_from(i).ok())
-        .map_or(def.start_room, RoomId);
-    room_def(ctx, target)?;
-    enter(ctx, host, None, target)
+    let first = RoomId(0);
+    room_def(ctx, first)?;
+    enter(ctx, host, None, first)
 }
 
 /// Step 1: Room End for every alive, active instance that handles it.
@@ -435,7 +483,8 @@ fn room_end<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H) -> Result<(), Sim
                 .map(|i| (i.depth, i.id))
                 .collect();
             // Depth descending, then creation (id) order. Depth is never NaN (setters refuse
-            // non-finite values), so `partial_cmp` always answers.
+            // non-finite values), so `partial_cmp` always answers. This tie-break does not
+            // reproduce showdown tr-room-14 (see `RoomEndOrder::Depth`).
             v.sort_by(|a, b| {
                 b.0.get()
                     .partial_cmp(&a.0.get())
@@ -445,26 +494,29 @@ fn room_end<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H) -> Result<(), Sim
             v.into_iter().map(|(_, id)| id).collect()
         }
     };
-    run_event(ctx, host, &order, &EventKind::RoomEnd)
+    run_room_phase(ctx, host, Phase::RoomEnd, &order)
 }
 
-/// Dispatches `ev` to each instance of `order` that is still alive and active at its turn.
-/// `AbortTick` does not stop the sequence; `Halt` does.
-fn run_event<H: RoomHost + ?Sized>(
+/// Runs a room sequence phase on `order` through [`RoomHost::run_phase`]; `Halt` becomes the
+/// halting error.
+fn run_room_phase<H: RoomHost + ?Sized>(
     ctx: &mut Ctx,
     host: &mut H,
+    phase: Phase,
     order: &[InstId],
-    ev: &EventKind,
 ) -> Result<(), SimError> {
-    for &id in order {
-        if !ctx.w.exists(id) {
-            continue;
-        }
-        if host.dispatch(ctx, id, ev) == Flow::Halt {
-            return Err(halted_error(ctx));
-        }
+    match host.run_phase(ctx, phase, order) {
+        Flow::Halt => Err(halted_error(ctx)),
+        Flow::Continue | Flow::AbortTick => Ok(()),
     }
-    Ok(())
+}
+
+/// The room state on entry: room, room tick, `room_speed` = the file speed (R14), the views.
+fn set_room_state(ctx: &mut Ctx, to: RoomId, room: &RoomDef) {
+    ctx.w.room = to;
+    ctx.w.room_tick = 0;
+    ctx.w.room_speed = Real::new(f64::from(room.file_speed));
+    ctx.w.views = views_of(room);
 }
 
 /// Steps 2 to 7: leave `from` (if any) and enter `to`. `from = None` is the first room of the
@@ -517,10 +569,7 @@ fn enter<H: RoomHost + ?Sized>(
     }
 
     // Room state on entry (R14, views, output).
-    ctx.w.room = to;
-    ctx.w.room_tick = 0;
-    ctx.w.room_speed = Real::new(f64::from(room.file_speed));
-    ctx.w.views = views_of(room);
+    set_room_state(ctx, to, room);
     emit(ctx, RoomOutput::Entered { from, to });
 
     // Step 4: placed instances in file order, params before Create (inside spawn).
@@ -546,12 +595,14 @@ fn enter<H: RoomHost + ?Sized>(
     // so every instance gets it.
     if from.is_none() {
         let order = host.dispatch_order(ctx.w, &ctx.rules.tick, &|i: &Instance| i.alive && i.active);
-        run_event(ctx, host, &order, &EventKind::GameStart)?;
+        run_room_phase(ctx, host, Phase::GameStart, &order)?;
     }
 
-    // Step 6: room creation actions.
-    for action in &room.on_create {
-        run_action(ctx, host, action)?;
+    // Step 6: room creation actions; on a revisit per the switch (rooms UNKNOWN).
+    if !restoring || ctx.rules.room.creation_code_on_revisit {
+        for action in &room.on_create {
+            run_action(ctx, host, action)?;
+        }
     }
 
     // Step 7: Room Start, snapshot taken now (R10).
@@ -566,7 +617,7 @@ fn enter<H: RoomHost + ?Sized>(
         }
         RoomStartOrder::Dispatch => host.dispatch_order(ctx.w, &ctx.rules.tick, &handles),
     };
-    run_event(ctx, host, &order, &EventKind::RoomStart)
+    run_room_phase(ctx, host, Phase::RoomStart, &order)
 }
 
 /// One room creation action (step 6).
@@ -594,8 +645,7 @@ fn run_action<H: RoomHost + ?Sized>(
                 ctx.w.save.clone().ok_or_else(|| {
                     SimError::unsupported("LoadGame in room creation code with no save (R23)")
                 })?;
-            host.load_save(ctx, &slot)?;
-            stop_if_halted(ctx)?;
+            load_slot(ctx, host, &slot)?;
             ctx.w.pending = Some(RoomRequest::Goto(slot.room));
         }
         RoomAction::DestroySelf => {
