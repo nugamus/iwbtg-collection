@@ -23,7 +23,7 @@ use crate::world::{EngineGlobals, Instance, SimStatus, Value, World};
 
 /// Version of the [`HashView`] layout. Part of the hashed bytes, so a layout change can never
 /// match an old hash by accident.
-pub const HASH_LAYOUT: u32 = 3;
+pub const HASH_LAYOUT: u32 = 2;
 
 /// Replay checkpoints are taken every this many ticks (architecture "Replays").
 pub const CHECKPOINT_INTERVAL: u64 = 500;
