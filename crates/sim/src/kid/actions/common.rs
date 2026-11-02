@@ -7,8 +7,8 @@
 //! `SimError::Unsupported` naming its row, so a profile that lists it halts instead of silently
 //! skipping it.
 //!
-//! **OPEN (sound).** The jump, double jump, shoot and vine kick sounds are not played: the sound
-//! model is WP10 and its `sound::play` is not built. Sounds are output only, so no trace column
+//! **OPEN (sound).** The jump, double jump, shoot and vine kick sounds are not played: the
+//! sound model exists (`sound::play`, WP10) but these actions do not call it yet. Sounds are output only, so no trace column
 //! depends on them.
 
 use serde::Deserialize;
@@ -61,6 +61,9 @@ pub enum CommonAction {
     Release,
     /// Step action 4: vines.
     Vines,
+    /// Step (spook house): with `frozen` the whole rest of the Step list is skipped (the code
+    /// writes no `hspeed`, gravity or `vspeed`). `kid::on_event` runs this one itself.
+    StopIfFrozen,
     /// Step (B): with `frozen2`, gravity, `image_speed` and speed become 0 and the rest of the
     /// Step list is skipped. `kid::on_event` runs this one itself.
     StopIfFrozen2,
@@ -88,6 +91,9 @@ pub fn run(ctx: &mut Ctx, me: InstId, action: &CommonAction) -> Result<Flow, Sim
         CommonAction::ArmPlayTimer => arm_play_timer(ctx, me)?,
         CommonAction::PlayTimer => play_timer(ctx, me)?,
         // `kid::on_event` handles it (it must stop the list); run alone it only reports.
+        CommonAction::StopIfFrozen => {
+            stop_if_frozen(ctx, me)?;
+        }
         CommonAction::StopIfFrozen2 => {
             stop_if_frozen2(ctx, me)?;
         }
@@ -235,6 +241,7 @@ fn create_defaults(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         s.frozen2 = false;
         s.djump = true;
         s.cur_jumps = 1;
+        s.tjump = p.jump.air == AirJump::DjumpThenTjump; // showdown Create grants it (I8)
         s.b.max_jumps = p.jump.max_jumps;
         s.b.inf_jump = p.jump.inf_jump;
         s.invincible = false;
@@ -283,6 +290,13 @@ fn reverse_at_create(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     inst.img.set_yscale(real_i(i32::from(yflag)))
 }
 
+/// Spook house Step: with `frozen` (the kid's or the global) the Step list stops here, doing
+/// nothing. Returns true when it stopped the list.
+pub(crate) fn stop_if_frozen(ctx: &mut Ctx, me: InstId) -> Result<bool, SimError> {
+    let s = state(ctx, me)?;
+    Ok(s.frozen || ctx.w.engine.kid.frozen)
+}
+
 /// B Step: with `frozen2` (the global or the kid's own) the kid's gravity, `image_speed` and speed
 /// are 0 and nothing else of the Step runs. Returns true when it stopped the Step: the event
 /// list stops there (`kid::on_event`).
@@ -320,7 +334,7 @@ fn gravity(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
 
 /// A1 Step action 3 runs only while `frozen2` is false: the kid's own flag or `global.frozen2`.
 /// `walk`, `air_sprite`, `fall_cap`, `shoot`, `jump` and `release` are all inside it.
-fn frozen2(ctx: &Ctx, s: &KidState) -> bool {
+pub(crate) fn frozen2(ctx: &Ctx, s: &KidState) -> bool {
     s.frozen2 || ctx.w.engine.kid.frozen2
 }
 
@@ -361,7 +375,12 @@ fn walk(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     if s.frozen || ctx.w.engine.kid.frozen {
         h = 0;
     }
-    let (dr, dl) = vine_distances(ctx, me)?;
+    // A3 (`vine.walk_ignores_vines`): no vine rule in walking; far means "no vine".
+    let (dr, dl) = if p.vine.walk_ignores_vines {
+        (far(None), far(None))
+    } else {
+        vine_distances(ctx, me)?
+    };
     let n = &ctx.rules.num;
     let run = s.run_speed;
     if h != 0 {
@@ -377,10 +396,22 @@ fn walk(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
             set_sprite(def, &mut i.img, p.sprites.running);
             i.img.set_speed(p.numbers.image_speed_run)?;
         }
-    } else if let Some(i) = ctx.w.get_mut(me) {
-        i.m.set_hspeed(Real::ZERO)?;
-        set_sprite(def, &mut i.img, p.sprites.idle);
-        i.img.set_speed(p.numbers.image_speed_idle)?;
+    } else {
+        let idle = if p.misc.idle_needs_block {
+            let Some(i) = ctx.w.get(me) else { return Ok(()) };
+            let (x, y) = (i.m.x(), i.m.y());
+            let below = y + real_i(down(&s));
+            place_meeting(ctx, me, x, below, Target::Class(p.jump.ground_classes))?
+        } else {
+            true
+        };
+        if let Some(i) = ctx.w.get_mut(me) {
+            i.m.set_hspeed(Real::ZERO)?;
+            if idle {
+                set_sprite(def, &mut i.img, p.sprites.idle);
+            }
+            i.img.set_speed(p.numbers.image_speed_idle)?;
+        }
     }
     Ok(())
 }
@@ -448,20 +479,29 @@ fn fall_cap(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         return Ok(());
     }
     let rule = ctx.def.physics.fall_cap.rule;
-    if !matches!(rule, FallCapRule::ClampAbs | FallCapRule::ClampAgainstGravity) {
-        return Err(SimError::unsupported(format!(
-            "kid action fall_cap: rule {rule:?} (5.3 fall cap row, WP5c)"
-        )));
-    }
     let n = &ctx.rules.num;
     let s = state(ctx, me)?;
     let max = s.max_vspeed;
     let sign = real_i(down(&s));
     let Some(i) = ctx.w.get_mut(me) else { return Ok(()) };
     let v = i.m.vspeed();
-    // `clamp_abs`: either direction. `clamp_against_gravity` (B): only the fall, `vspeed * yflag`.
+    // `shift_then_clamp` (A4): beyond `maxFallSpeed` the position shifts back by the excess
+    // first (`y - sign(vspeed) * (abs(vspeed) - maxFallSpeed)`); `vspeed` is left as it is.
+    if rule == FallCapRule::ShiftThenClamp {
+        let excess = Real::new(v.get().abs()) - s.max_fall_speed;
+        if gm_gt(excess, Real::ZERO, n) {
+            let dir = if gm_lt(v, Real::ZERO, n) {
+                -Real::ONE
+            } else {
+                Real::ONE
+            };
+            i.m.set_y(i.m.y() - dir * excess)?;
+        }
+    }
+    // `clamp_abs` and `shift_then_clamp`: either direction. `clamp_against_gravity` (B) and
+    // `clamp_down_only` (spook house): only the fall, `vspeed * yflag`.
     let too_fast = match rule {
-        FallCapRule::ClampAgainstGravity => gm_gt(v * sign, max, n),
+        FallCapRule::ClampAgainstGravity | FallCapRule::ClampDownOnly => gm_gt(v * sign, max, n),
         _ => gm_gt(Real::new(v.get().abs()), max, n),
     };
     if too_fast {
@@ -521,11 +561,7 @@ fn jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     match p.jump.air {
         AirJump::Djump => {}
         AirJump::CurJumps => return super::b::jump(ctx, me),
-        AirJump::DjumpThenTjump => {
-            return Err(SimError::unsupported(
-                "kid action jump: jump.air djump_then_tjump (5.3 jump rows, WP5c)",
-            ));
-        }
+        AirJump::DjumpThenTjump => {}
     }
     let sign = real_i(down(&s));
     let Some(i) = ctx.w.get(me) else { return Ok(()) };
@@ -564,6 +600,18 @@ fn jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
             set_sprite(def, &mut i.img, p.sprites.jump);
         }
         state_mut(ctx, me)?.djump = false;
+        return Ok(());
+    }
+    // `djump_then_tjump` (showdown): the third jump, once.
+    if p.jump.air == AirJump::DjumpThenTjump && s.tjump {
+        let jump2 = s.jump_speeds.get(2).copied().unwrap_or(Real::ZERO);
+        if let Some(i) = ctx.w.get_mut(me) {
+            i.m.set_vspeed(-(sign * jump2))?;
+            set_sprite(def, &mut i.img, p.sprites.jump);
+        }
+        let s = state_mut(ctx, me)?;
+        s.djump = false;
+        s.tjump = false;
     }
     Ok(())
 }
@@ -588,7 +636,13 @@ fn release(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let sign = real_i(down(&s));
     let Some(i) = ctx.w.get_mut(me) else { return Ok(()) };
     let v = i.m.vspeed();
+    let mut v = v;
     if gm_lt(sign * v, Real::ZERO, n) {
+        v *= def.physics.numbers.release_mult;
+        i.m.set_vspeed(v)?;
+    }
+    // `playerTJump` (showdown): while `tjump` is set a release cuts a second time.
+    if def.physics.jump.release_twice_while_tjump && s.tjump && gm_lt(sign * v, Real::ZERO, n) {
         i.m.set_vspeed(v * def.physics.numbers.release_mult)?;
     }
     Ok(())
@@ -612,21 +666,24 @@ fn vines(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
             ));
         }
     }
-    if p.input.vine_keys != VineKeys::Edges {
-        return Err(SimError::unsupported(
-            "kid action vines: input.vine_keys latched_flags (5.3 vine keys row, WP5c)",
-        ));
-    }
     let Some(i) = ctx.w.get(me) else { return Ok(()) };
     let (x, y) = (i.m.x(), i.m.y());
     let s = state(ctx, me)?;
     let (dr, dl) = vine_distances(ctx, me)?;
     let below_free = place_free(ctx, me, x, y + real_i(down(&s)))?;
-    let (right_pressed, left_pressed, jump_held) = (
-        ctx.w.input.pressed(Action::Right),
-        ctx.w.input.pressed(Action::Left),
-        ctx.w.input.held(Action::Jump),
-    );
+    // `edges`: this tick's press and the held Jump key. `latched_flags`: the game's own flags
+    // (action `key_flags`), which stay set from a press to its release.
+    let (right_pressed, left_pressed, jump_held) = match p.input.vine_keys {
+        VineKeys::Edges => (
+            ctx.w.input.pressed(Action::Right),
+            ctx.w.input.pressed(Action::Left),
+            ctx.w.input.held(Action::Jump),
+        ),
+        VineKeys::LatchedFlags => {
+            let e = &ctx.w.engine.kid.ext;
+            (e.key_right, e.key_left, e.key_jump)
+        }
+    };
     let max_fall = p.numbers.max_fall_speed;
     let slide_fall = Real::new(2.0);
     let rev = yflag(ctx, &s) < 0;

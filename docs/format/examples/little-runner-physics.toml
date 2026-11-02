@@ -1,0 +1,9 @@
+#:schema ../schema/v0/physics.schema.json
+# I wanna be the Little runner (family A5, kid/A5.md): the A5 preset as it is.
+preset = "A5"
+
+[sprites]
+idle = "kid_idle"
+running = "kid_run"
+jump = "kid_jump"
+fall = "kid_fall"

@@ -193,7 +193,7 @@ fn place_or_create_kid(ctx: &mut Ctx, slot: &SaveSlot) -> Result<(), SimError> {
     let rules = ctx.rules;
     match ctx.w.kid(&rules.tick) {
         Some(kid) => {
-            let dy = if slot.flipped {
+            let dy = if save::flip_by_kind(ctx, slot) {
                 ctx.def.restart.flipped_load_dy
             } else {
                 crate::num::Real::ZERO

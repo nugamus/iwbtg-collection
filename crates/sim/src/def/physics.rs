@@ -209,6 +209,10 @@ pub enum BoundaryModel {
     /// Intersect Boundary tests the origin: outside the room (strictly) kills the kid unless an
     /// `edge_warp` overlaps it, which warps it; then the kid wraps to the opposite edge (A1).
     IntersectOrigin,
+    /// Like `intersect_origin` with machinary's fixed numbers (A4): the edges are 800 by 608
+    /// whatever the room, the wrap adds or subtracts 800 sideways, adds 608 at the top and
+    /// subtracts 600 (not 608) at the bottom.
+    IntersectOriginFixed,
     /// Outside Room kills the kid unless a room changer overlaps (family B, WP5b).
     OutsideRoomKill,
     /// The origin test runs in End Step (WP5c).
@@ -318,6 +322,9 @@ pub struct JumpRules {
     pub ground_also: Vec<GroundAlso>,
     /// A ground jump sets `djump` (false in A4).
     pub ground_sets_djump: bool,
+    /// `air = "djump_then_tjump"` (showdown): `release` cuts a second time while `tjump` is set
+    /// (`playerTJump`: `vspeed * release_mult` again when `tjump` and moving against gravity).
+    pub release_twice_while_tjump: bool,
     /// The air-jump model.
     pub air: AirJump,
     /// When water 2 allows the air jump.
@@ -448,6 +455,9 @@ pub enum VineModel {
 #[derive(Clone, PartialEq, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct VineRules {
+    /// A3 (wanna, showdown): `walk` ignores vines (no facing or movement rule near them); the vine
+    /// action alone sets `hspeed`.
+    pub walk_ignores_vines: bool,
     /// The model.
     pub model: VineModel,
     /// Left vine: grabs when the distance is below this (2).
@@ -470,6 +480,9 @@ pub struct KidMisc {
     pub fade_in: bool,
     /// Alpha added per Step while fading in (0.1).
     pub fade_step: Real,
+    /// `walk` shows the idle sprite only with a `jump.ground_classes` instance 1 px below
+    /// (spook house).
+    pub idle_needs_block: bool,
 }
 
 /// `[sprites]`: the kid's sprites by role. Package files give names; the loader (WP7b) resolves
@@ -540,6 +553,9 @@ pub struct DeathRules {
     /// The blood emitter and GAMEOVER use the first kid's position and gravity instead of the
     /// killed kid's (family B with several kids, R21).
     pub first_kid: bool,
+    /// `killer_check` does nothing in Boot, Title and Menu rooms, and in a Select room it moves
+    /// the kid to `xstart`, `ystart` instead of killing it (A3 wanna End Step).
+    pub killer_check_menu_rooms: bool,
 }
 
 /// How a save stores the position (`save.rs` `SavedPosition`), by its package name.
@@ -648,7 +664,8 @@ draft_section! {
     JumpRulesDraft => JumpRules {
         #[serde(deserialize_with = "class_names_opt")]
         ground_classes: ClassMask,
-        ground_also: Vec<GroundAlso>, ground_sets_djump: bool, air: AirJump, water_air: WaterAir,
+        ground_also: Vec<GroundAlso>, ground_sets_djump: bool, release_twice_while_tjump: bool,
+        air: AirJump, water_air: WaterAir,
         max_jumps: u8, inf_jump: bool, blocked_by_pause_press: bool, cancel: JumpCancel,
     }
 }
@@ -670,7 +687,7 @@ draft_section! {
 draft_section! {
     /// `[vine]` as written.
     VineRulesDraft => VineRules {
-        model: VineModel, left_below: Real, right_equal: Real, slide: Real, kick: [Real; 2],
+        walk_ignores_vines: bool, model: VineModel, left_below: Real, right_equal: Real, slide: Real, kick: [Real; 2],
         drop: Real,
     }
 }
@@ -678,7 +695,7 @@ draft_section! {
     /// `[death]` as written.
     DeathRulesDraft => DeathRules {
         order: Vec<DeathStep>, select_room_reset: bool,
-        stop_music: bool, first_kid: bool,
+        stop_music: bool, first_kid: bool, killer_check_menu_rooms: bool,
     }
 }
 draft_section! {
@@ -691,7 +708,7 @@ draft_section! {
 }
 draft_section! {
     /// `[misc]` as written.
-    KidMiscDraft => KidMisc { fade_in: bool, fade_step: Real }
+    KidMiscDraft => KidMisc { fade_in: bool, fade_step: Real, idle_needs_block: bool }
 }
 
 /// A profile as written, before the preset fills its defaults. `toml::from_str` target of

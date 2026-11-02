@@ -19,6 +19,7 @@
 use serde::Deserialize;
 
 use crate::collide::{move_contact_solid, query::place_free};
+use crate::def::physics::AirJump;
 use crate::error::SimError;
 use crate::kid::actions::common::{state, yflag};
 use crate::kid::api::refresh_air_jump;
@@ -83,6 +84,10 @@ fn block_standard(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         }
         if up == rev {
             refresh_air_jump(ctx, me);
+            // Showdown: a landing also spends the triple jump the Create granted.
+            if def.physics.jump.air == AirJump::DjumpThenTjump {
+                crate::kid::actions::common::state_mut(ctx, me)?.tjump = false;
+            }
         }
         let i = ctx.w.get_mut(me).ok_or_else(missing)?;
         i.m.set_vspeed(Real::ZERO)?;
