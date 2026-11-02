@@ -442,7 +442,7 @@ fn create_boot<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H) -> Result<(), 
 /// too) without events, forget the persistent rooms, clear the globals unless
 /// `globals_survive_restart`, then boot again and enter `room_first` (room order index 0, the
 /// order `room_goto_next` follows; rInit in 19 of the 20 games) as the first room. The save (a
-/// file) and the sounds (Inferred, S4) are kept.
+/// file) and the sounds (Inferred, S4: `SoundRules::keep_on_restart`) are kept.
 fn game_restart<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H) -> Result<(), SimError> {
     if ctx.rules.room.restart_events {
         room_end(ctx, host)?;
@@ -457,6 +457,9 @@ fn game_restart<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H) -> Result<(),
     ctx.w.grid = Grid::default();
     ctx.w.persistent_rooms.clear();
     ctx.w.pending = None;
+    if !ctx.rules.sound.keep_on_restart {
+        crate::sound::stop_all(ctx);
+    }
     if !ctx.rules.room.globals_survive_restart {
         ctx.w.globals.clear();
         // The temp-file marker of a retry survives: it is a file, not a global (WP4b).

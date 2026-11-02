@@ -1,0 +1,10 @@
+#:schema ../schema/v0/physics.schema.json
+# machinary (family A4, kid/A4.md): the A4 preset as it is. Its depth-layer scale system
+# (`scale`, changePlayerScale) is game code, not part of the profile.
+preset = "A4"
+
+[sprites]
+idle = "kid_idle"
+running = "kid_run"
+jump = "kid_jump"
+fall = "kid_fall"

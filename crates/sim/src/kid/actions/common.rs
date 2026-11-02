@@ -7,8 +7,8 @@
 //! `SimError::Unsupported` naming its row, so a profile that lists it halts instead of silently
 //! skipping it.
 //!
-//! **OPEN (sound).** The jump, double jump, shoot and vine kick sounds are not played: the sound
-//! model is WP10 and its `sound::play` is not built. Sounds are output only, so no trace column
+//! **OPEN (sound).** The jump, double jump, shoot and vine kick sounds are not played: the
+//! sound model exists (`sound::play`, WP10) but these actions do not call it yet. Sounds are output only, so no trace column
 //! depends on them.
 
 use serde::Deserialize;
@@ -61,6 +61,9 @@ pub enum CommonAction {
     Release,
     /// Step action 4: vines.
     Vines,
+    /// Step (spook house): with `frozen` the whole rest of the Step list is skipped (the code
+    /// writes no `hspeed`, gravity or `vspeed`). `kid::on_event` runs this one itself.
+    StopIfFrozen,
     /// Step (B): with `frozen2`, gravity, `image_speed` and speed become 0 and the rest of the
     /// Step list is skipped. `kid::on_event` runs this one itself.
     StopIfFrozen2,
@@ -88,6 +91,9 @@ pub fn run(ctx: &mut Ctx, me: InstId, action: &CommonAction) -> Result<Flow, Sim
         CommonAction::ArmPlayTimer => arm_play_timer(ctx, me)?,
         CommonAction::PlayTimer => play_timer(ctx, me)?,
         // `kid::on_event` handles it (it must stop the list); run alone it only reports.
+        CommonAction::StopIfFrozen => {
+            stop_if_frozen(ctx, me)?;
+        }
         CommonAction::StopIfFrozen2 => {
             stop_if_frozen2(ctx, me)?;
         }
@@ -284,6 +290,13 @@ fn reverse_at_create(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     inst.img.set_yscale(real_i(i32::from(yflag)))
 }
 
+/// Spook house Step: with `frozen` (the kid's or the global) the Step list stops here, doing
+/// nothing. Returns true when it stopped the list.
+pub(crate) fn stop_if_frozen(ctx: &mut Ctx, me: InstId) -> Result<bool, SimError> {
+    let s = state(ctx, me)?;
+    Ok(s.frozen || ctx.w.engine.kid.frozen)
+}
+
 /// B Step: with `frozen2` (the global or the kid's own) the kid's gravity, `image_speed` and speed
 /// are 0 and nothing else of the Step runs. Returns true when it stopped the Step: the event
 /// list stops there (`kid::on_event`).
@@ -383,10 +396,22 @@ fn walk(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
             set_sprite(def, &mut i.img, p.sprites.running);
             i.img.set_speed(p.numbers.image_speed_run)?;
         }
-    } else if let Some(i) = ctx.w.get_mut(me) {
-        i.m.set_hspeed(Real::ZERO)?;
-        set_sprite(def, &mut i.img, p.sprites.idle);
-        i.img.set_speed(p.numbers.image_speed_idle)?;
+    } else {
+        let idle = if p.misc.idle_needs_block {
+            let Some(i) = ctx.w.get(me) else { return Ok(()) };
+            let (x, y) = (i.m.x(), i.m.y());
+            let below = y + real_i(down(&s));
+            place_meeting(ctx, me, x, below, Target::Class(p.jump.ground_classes))?
+        } else {
+            true
+        };
+        if let Some(i) = ctx.w.get_mut(me) {
+            i.m.set_hspeed(Real::ZERO)?;
+            if idle {
+                set_sprite(def, &mut i.img, p.sprites.idle);
+            }
+            i.img.set_speed(p.numbers.image_speed_idle)?;
+        }
     }
     Ok(())
 }
@@ -454,20 +479,29 @@ fn fall_cap(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         return Ok(());
     }
     let rule = ctx.def.physics.fall_cap.rule;
-    if !matches!(rule, FallCapRule::ClampAbs | FallCapRule::ClampAgainstGravity) {
-        return Err(SimError::unsupported(format!(
-            "kid action fall_cap: rule {rule:?} (5.3 fall cap row, WP5c)"
-        )));
-    }
     let n = &ctx.rules.num;
     let s = state(ctx, me)?;
     let max = s.max_vspeed;
     let sign = real_i(down(&s));
     let Some(i) = ctx.w.get_mut(me) else { return Ok(()) };
     let v = i.m.vspeed();
-    // `clamp_abs`: either direction. `clamp_against_gravity` (B): only the fall, `vspeed * yflag`.
+    // `shift_then_clamp` (A4): beyond `maxFallSpeed` the position shifts back by the excess
+    // first (`y - sign(vspeed) * (abs(vspeed) - maxFallSpeed)`); `vspeed` is left as it is.
+    if rule == FallCapRule::ShiftThenClamp {
+        let excess = Real::new(v.get().abs()) - s.max_fall_speed;
+        if gm_gt(excess, Real::ZERO, n) {
+            let dir = if gm_lt(v, Real::ZERO, n) {
+                -Real::ONE
+            } else {
+                Real::ONE
+            };
+            i.m.set_y(i.m.y() - dir * excess)?;
+        }
+    }
+    // `clamp_abs` and `shift_then_clamp`: either direction. `clamp_against_gravity` (B) and
+    // `clamp_down_only` (spook house): only the fall, `vspeed * yflag`.
     let too_fast = match rule {
-        FallCapRule::ClampAgainstGravity => gm_gt(v * sign, max, n),
+        FallCapRule::ClampAgainstGravity | FallCapRule::ClampDownOnly => gm_gt(v * sign, max, n),
         _ => gm_gt(Real::new(v.get().abs()), max, n),
     };
     if too_fast {

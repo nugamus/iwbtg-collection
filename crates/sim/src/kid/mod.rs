@@ -146,6 +146,12 @@ pub fn run_collision(
 /// Runs `list` on the kid in order; stops at the first flow that is not `Continue`.
 fn run_list(ctx: &mut Ctx, me: InstId, list: &[KidAction]) -> Result<Flow, SimError> {
     for a in list {
+        if let KidAction::Common(actions::common::CommonAction::StopIfFrozen) = a {
+            if actions::common::stop_if_frozen(ctx, me)? {
+                return Ok(Flow::Continue);
+            }
+            continue;
+        }
         if let KidAction::Common(actions::common::CommonAction::StopIfFrozen2) = a {
             if actions::common::stop_if_frozen2(ctx, me)? {
                 return Ok(Flow::Continue);
@@ -218,7 +224,10 @@ pub fn event_set(p: &PhysicsProfile) -> EventSet {
         step: !p.events.step.is_empty(),
         end_step: !p.events.end_step.is_empty() || p.events.boundary == BoundaryModel::EndStepOrigin,
         outside_room: p.events.boundary == BoundaryModel::OutsideRoomKill,
-        intersect_boundary: p.events.boundary == BoundaryModel::IntersectOrigin,
+        intersect_boundary: matches!(
+            p.events.boundary,
+            BoundaryModel::IntersectOrigin | BoundaryModel::IntersectOriginFixed
+        ),
         room_start: !p.events.room_start.is_empty(),
         alarms: p.events.alarms.iter().fold(0, |m, a| m | (1u16 << a.n.min(11))),
         key_held: key_bits(p, KeyOn::Held),
