@@ -37,7 +37,7 @@ use crate::masks::{ALPHA_IN_MASK, AlphaRule};
 use crate::objects::{self, ObjectFile, kind_classes, legacy_role_classes, param_value};
 use crate::order::{OrderEntry, rank_of, resolve_ranks};
 use crate::rooms::{ActionFile, InstanceFile, RoomFile, parse_room};
-use crate::sprites::{MAX_IMAGE_SIDE, load_sprite, parse_sidecar};
+use crate::sprites::{MAX_IMAGE_SIDE, load_sprite_at, parse_sidecar};
 use crate::tracemap::{TRACE_MAP_PATH, TraceMap, TraceParam, TraceStatus, load_trace_map};
 use crate::vars::intern_vars;
 use crate::{params, paths, physics, sounds, timelines};
@@ -540,17 +540,28 @@ impl<'a> Loader<'a> {
     // -- Step 2: sprites ----------------------------------------------------------------------
 
     fn load_sprites(&mut self) {
-        let sidecars: Vec<(String, String)> = self
+        // A package sprite is keyed by its id; a bundled engine pack sprite
+        // (`engine/<pack>/sprites/<id>.toml`) by `engine:<pack>/<id>`, the way packages refer to it.
+        let sidecars: Vec<(String, String, String, Option<String>)> = self
             .files
             .iter()
             .filter_map(|(p, _)| {
-                let stem = p.strip_prefix("sprites/")?.strip_suffix(".toml")?;
-                (!stem.contains('/')).then(|| (stem.to_owned(), p.to_owned()))
+                if let Some(stem) = p.strip_prefix("sprites/").and_then(|s| s.strip_suffix(".toml")) {
+                    return (!stem.contains('/'))
+                        .then(|| (stem.to_owned(), stem.to_owned(), p.to_owned(), None));
+                }
+                let (pack, stem) = crate::engine_pack::sprite_sidecar(p)?;
+                Some((
+                    format!("{}{pack}/{stem}", crate::ids::ENGINE_PREFIX),
+                    stem.to_owned(),
+                    p.to_owned(),
+                    Some(pack.to_owned()),
+                ))
             })
             .collect();
         let mut aliases = Vec::new();
         let mut oversized = Vec::new();
-        for (id, path) in sidecars {
+        for (key, id, path, pack) in sidecars {
             let Some(text) = read_text(self.files, &path, &mut self.diags) else {
                 continue;
             };
@@ -566,7 +577,10 @@ impl<'a> Loader<'a> {
                     continue;
                 }
             };
-            let png_path = format!("sprites/{id}.png");
+            let png_path = match &pack {
+                Some(pack) => format!("{}sprites/{id}.png", crate::engine_pack::pack_dir(pack)),
+                None => format!("sprites/{id}.png"),
+            };
             let png = self.files.get(&png_path);
             if png.is_none() && sidecar.frames > 0 && sidecar.collision.shape().is_some() {
                 self.error(
@@ -580,7 +594,7 @@ impl<'a> Loader<'a> {
             let strip_w = u64::from(sidecar.frame_size.0) * u64::from(sidecar.frames);
             if strip_w > u64::from(MAX_IMAGE_SIDE) || sidecar.frame_size.1 > MAX_IMAGE_SIDE {
                 if self.trace_mode() {
-                    oversized.push(id.clone());
+                    oversized.push(key.clone());
                 } else {
                     self.error(
                         &path,
@@ -594,26 +608,31 @@ impl<'a> Loader<'a> {
                     continue;
                 }
             }
-            match load_sprite(&id, png.unwrap_or(&[]), &sidecar) {
+            match load_sprite_at(&png_path[..png_path.len() - 4], png.unwrap_or(&[]), &sidecar) {
                 Ok((mut def, masks)) => {
                     let offset = u32::try_from(self.masks.len()).unwrap_or(u32::MAX);
                     def.masks = offset_masks(&def.masks, offset);
                     self.masks.extend(masks);
                     let sid = SpriteId(u32::try_from(self.sprite_ids.len()).unwrap_or(u32::MAX));
                     if let Some(alias) = sidecar.mask.clone() {
+                        // A pack sprite's mask alias names a sprite of the same pack.
+                        let alias = match &pack {
+                            Some(pack) => format!("{}{pack}/{alias}", crate::ids::ENGINE_PREFIX),
+                            None => alias,
+                        };
                         aliases.push((
-                            id.clone(),
+                            key.clone(),
                             alias,
                             path.clone(),
                             spans.mask.clone().unwrap_or(0..0),
                         ));
                     }
-                    self.sprite_ids.insert(id, SpriteEntry { id: sid, def });
+                    self.sprite_ids.insert(key.clone(), SpriteEntry { id: sid, def });
                 }
                 Err(d) => self.diags.push(d),
             }
         }
-        // Sprite ids follow sidecar path order, which is the BTreeMap key order used above.
+        // Sprite ids follow the key order of the map (package ids and `engine:` keys together).
         for (n, entry) in self.sprite_ids.values_mut().enumerate() {
             entry.id = SpriteId(u32::try_from(n).unwrap_or(u32::MAX));
         }
@@ -644,17 +663,27 @@ impl<'a> Loader<'a> {
 
     /// A sprite by id, or an error at `span` of `file`.
     fn sprite_ref(&mut self, name: &str, file: &str, text: &str, span: Range<usize>) -> Option<SpriteId> {
-        if name.starts_with(crate::ids::ENGINE_PREFIX) {
-            self.error(
-                file,
-                text,
-                span,
-                format!("`{name}`: engine pack assets are not supported yet (OPEN 16)"),
-            );
-            return None;
-        }
         match self.sprite_ids.get(name) {
             Some(e) => Some(e.id),
+            None if name.starts_with(crate::ids::ENGINE_PREFIX) => {
+                let msg = match crate::ids::EngineRef::parse(name) {
+                    Some(Ok(r))
+                        if self
+                            .files
+                            .contains(&format!("{}engine.toml", crate::engine_pack::pack_dir(r.pack))) =>
+                    {
+                        format!("`{name}`: the engine pack `{}` has no sprite `{}`", r.pack, r.id)
+                    }
+                    Some(Ok(r)) => format!(
+                        "`{name}`: the engine pack `{}` is not in the package (`iwbtg pkg check` bundles it from `../_engines/{}`)",
+                        r.pack, r.pack
+                    ),
+                    Some(Err(e)) => e,
+                    None => format!("sprite `{name}` does not exist"),
+                };
+                self.error(file, text, span, msg);
+                None
+            }
             None => {
                 self.error(file, text, span, format!("sprite `{name}` does not exist"));
                 None
@@ -2066,6 +2095,7 @@ pub fn gameplay_hash(files: &PackageFiles, manifest: &Manifest, def: &GameDef) -
     for (path, bytes) in files.iter() {
         let data = path == MANIFEST_PATH
             || path == physics
+            || crate::engine_pack::is_gameplay_file(path)
             || [
                 "objects/",
                 "timelines/",

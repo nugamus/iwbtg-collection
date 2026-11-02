@@ -751,10 +751,10 @@ impl Manifest {
         if let Some(sv) = &self.source_version {
             v.non_empty(sv, "source_version");
         }
-        if let Some(engine) = &self.engine_pack {
-            // TODO(OPEN: engine packs bundled or downloaded once, docs/format/v0.md): check that
-            // the engine pack exists once packages can see engine packs.
-            v.id(engine);
+        if let Some(engine) = &self.engine_pack
+            && v.id(engine)
+        {
+            crate::engine_pack::validate(v.files, engine.get_ref(), v.out);
         }
         // TODO(OPEN: runner differences between GM 8.0 and 8.1, from the CLONE_SPEC): nothing to
         // check yet; the sim will read `runner` once the differences are known.
@@ -821,6 +821,7 @@ impl Manifest {
         if !path.ends_with(".toml")
             || path == MANIFEST_PATH
             || CONTENT_DIRS.iter().any(|dir| path.starts_with(dir))
+            || path.starts_with(crate::engine_pack::ENGINE_DIR)
         {
             v.error(
                 self.physics.span(),
@@ -964,10 +965,13 @@ impl Manifest {
         for entry in &self.third_party {
             let path = entry.path.get_ref();
             if let Some(engine_ref) = EngineRef::parse(path) {
-                // TODO(OPEN: engine packs bundled or downloaded once, docs/format/v0.md): resolve
-                // engine pack assets once packages can see engine packs.
-                if let Err(e) = engine_ref {
-                    v.error(entry.path.span(), format!("third_party path: {e}"));
+                match engine_ref {
+                    Err(e) => v.error(entry.path.span(), format!("third_party path: {e}")),
+                    Ok(r) if !crate::engine_pack::resolves(v.files, r) => v.error(
+                        entry.path.span(),
+                        format!("third_party path `{path}`: the engine pack has no such asset (is the pack bundled?)"),
+                    ),
+                    Ok(_) => {}
                 }
             } else if v.path(&entry.path, "third_party path") && !v.files.contains(path) {
                 v.error(
@@ -1170,8 +1174,16 @@ status = "to-clear"
 
     #[test]
     fn engine_third_party_paths_are_checked() {
-        let diags = run(&third_party("engine:yuuutu/kid_mask"), &[]);
+        let diags = run(
+            &third_party("engine:yuuutu/kid_mask"),
+            &["engine/yuuutu/sprites/kid_mask.png"],
+        );
         assert!(diags.is_empty(), "{diags:#?}");
+        assert_one(
+            &run(&third_party("engine:yuuutu/kid_mask"), &[]),
+            26,
+            "the engine pack has no such asset",
+        );
         for bad in [
             "engine:",
             "engine:../../etc",

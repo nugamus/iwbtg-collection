@@ -33,9 +33,10 @@ The sim never parses text and never touches files. `format` hands it a validated
 
 One binary for agents and CI:
 
-- `iwbtg pkg check <dir>`: full validation, one readable error list with file, line and column.
+- `iwbtg pkg check <dir>`: full validation, one readable error list with file, line and column. A package that names an `engine_pack` gets it bundled from `../_engines/<pack>/` first ([engine packs](format/engine.md)).
 - `iwbtg pkg fmt <dir> [--check]`: canonical formatting of every `.toml` file ([0002](decisions/0002-data-syntax.md), [v0](format/v0.md#common-rules-for-data-files)); `--check` lists what would change and exits 1.
 - `iwbtg pkg hash <dir> [--trace-mode]`: prints `gameplay_hash:` and `content_hash:` ([versioning](format/v0.md#versioning)). A package with errors prints them and exits 1.
+- `iwbtg script api-docs [--docs <dir>] [--check]`: writes [script-api.md](format/script-api.md) and the Rhai language-server stubs `docs/format/script/iws.d.rhai` from the functions registered on the IWS engine; `--check` exits 1 when a committed file is stale. `cargo test -p iwbtg-tools` fails on the same condition, so CI catches a stale file.
 - `iwbtg pkg upgrade <dir>`: migrates a package to the newest format version.
 - `iwbtg room show <dir> <room> [--cell N] [--trace-mode]`: prints an ASCII map of a room, one character per `--cell` pixels (default 32), and a legend line. Characters: `@` kid start, `S` save, `W` warp, `D` difficulty warp, `E` edge warp, `^ v < >` spike by direction, `*` killer, `#` block, `=` platform, `/` slope, `~` water, `|` vine, `o` any other kind, `.` empty. Where instances share a cell the earlier one in that list shows.
 - `iwbtg replay run <dir> <replay|.inputs> [--difficulty N] [--seed N]`: headless run from a new game. Prints three lines: `ticks: N`, `splits: <index>@<tick> ...` (or `none`) and `hash: <hex>` (roadmap Phase 3). An `.inputs` file runs frames 0 through its `end` frame; a `.iwbr` replay brings its own seed. Exit 2 when the sim halts, 3 when it reaches a work package that is not merged yet.
