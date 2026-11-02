@@ -11,6 +11,10 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 const EXPECTED: &str = include_str!("golden/expected.txt");
 
 #[test]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the test, not the sim, reads UPDATE_GOLDEN and rewrites the pinned file"
+)]
 fn golden_corpus_matches_the_pinned_hashes() {
     let report = golden::report();
     #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
