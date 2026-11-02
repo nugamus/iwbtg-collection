@@ -228,6 +228,10 @@ pub enum DeathOnRestart {
     Nothing,
     /// A death-only save of the counters (little-runner, wanna saveDeathTime).
     SaveCounters,
+    /// One death for each live kid (both kid kinds) and then the death-only save, and nothing
+    /// when no kid lives (showdown, kid/A3.md Restart step 2: "if a player exists, add a death
+    /// ... do the same for playerGradhiusu"; trace a3-t18-a, one kid, +1).
+    SaveCountersPerKid,
 }
 
 /// How the game resets after F2 (plan 4.3). Mirrors [`RestartModel`]: the `world` built-in runs
