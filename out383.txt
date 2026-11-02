@@ -1,8 +1,0 @@
-test non_finite_case_halts_with_non_finite ... ok
-test the_scripted_case_runs_every_event ... ok
-test golden_corpus_matches_the_pinned_hashes ... ok
-test golden_corpus_is_run_to_run_identical ... ok
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.75s
-test the_golden_walker_script_loads_clean_through_the_loader ... ok
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 32 filtered out; finished in 0.01s
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 32 filtered out; finished in 0.00s
