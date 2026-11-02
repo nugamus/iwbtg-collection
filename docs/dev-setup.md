@@ -58,7 +58,9 @@ Expected: the build ends with `Finished`. `issues.py start` prints JSON with mil
 
 `.github/workflows/ci.yml` runs on every PR and every push to main:
 
-- Windows and Linux: `cargo build`, `cargo clippy --workspace --tests -- -D warnings`, `cargo test --workspace` (all `--locked`, warnings are errors), and `cargo fmt --check` on Linux.
+Changes that touch only docs, Markdown, `workspace/` or `.claude/` skip it. Builds run without debug info or incremental state, to save time.
+
+- Windows and Linux: `cargo clippy --workspace --tests -- -D warnings`, `cargo test --workspace` (all `--locked`, warnings are errors), and `cargo fmt --check` on Linux.
 - wasm32: `cargo test -p iwbtg-sim -p iwbtg-format --target wasm32-wasip1` under wasmtime, and a wasm32-unknown-unknown build. wasm32-unknown-unknown tests under node: #206.
 - `cargo deny check licenses`.
 
