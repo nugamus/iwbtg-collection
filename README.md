@@ -18,6 +18,8 @@ crates/
   tools/     Small editors (first: music preview picker). Grows into the level editor.
 docs/
   format/    Game package format spec.
+  games/     Per-game design questions for the user.
+  product.md Player-facing decisions: ranked mode, mods, leaderboards, UI.
   server.md  Server stack and security rules.
   roadmap.md Order of work.
 Potential Features.md   Feature ideas, one line each.

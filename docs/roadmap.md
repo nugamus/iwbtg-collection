@@ -78,7 +78,7 @@ Three private repos, lean CLAUDE.md files, clean-room spec skill and template, P
 ## 9. Going public
 
 - Takedown page and contact at the bottom of the website. Privacy page and account deletion.
-- Third-party content (commercial music, Kayin's sprites, engine assets) cleared or excluded before any public distribution, from the repo or the server. Decide whether `community-assumed` games may be served.
+- Third-party content (commercial music, Kayin's sprites, engine assets) cleared or excluded before any public distribution, from the repo or the server. `community-assumed` games may be served, credited and removed on request (user decision, 2026-11-02).
 - `REUSE.toml` (put the `**` code annotation first so later game/docs entries win), `NOTICE`, and `THIRD_PARTY_LICENSES` generated with `cargo-about` for each release.
 - Non-affiliation note for the IWBTG name; consider asking Kayin.
 - One removal list honored everywhere: builds skip removed games, the server stops serving them, clients delete them on sync.
@@ -98,7 +98,13 @@ Bosses and avoidance, long games, level editor, items from Potential Features.md
 - Server stack: `docs/server.md` (Rust + axum, SQLite, Cloudflare Tunnel, Docker Compose, restic backups).
 - Research runs on native Windows. Originals run only when VirusTotal-clean, through the research gate (user decision, 2026-10-24).
 
+- Player-facing design (ranked stripped mode, mods, leaderboards, practice, UI, distribution, races): `docs/product.md` (user decisions, 2026-11-02). Ranked boards are stripped mode only; Play original keeps personal stats.
+
 ## Open decisions
+
+- Which 5 games ship bundled with the client.
+- Public project name (an original name replaces the working title before Phase 9).
+- Curation criteria for which games get ranked boards, and a pp-style cross-game ranking. See `docs/product.md`.
 
 - Script language and data file syntax for the game format. Decided in Phase 3.
 - Backup storage provider (Backblaze B2 or Hetzner Storage Box). Needed by Phase 8.

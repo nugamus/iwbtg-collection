@@ -276,7 +276,7 @@ This is the starting surface. The generated reference is `docs/format/script-api
 - Each built-in documents how many random draws it consumes, so the stream stays aligned with the original.
 - **Hidden consumers draw in the sim.** In the originals, blood picks its frame and gravity with `choose` and `random`, and playerface draws `irandom(3)`, from the gameplay generator (CLONE_SPEC numbers, Confirmed). So the blood emitter, blood and playerface built-ins make those draws in the sim, in the original's order (blood Create draws subimage then gravity inside `spawn`, then the emitter draws direction and speed), and send the drawn values to the client as output events. Only drawing stays in the client.
 - Particle systems (N10, `NumRules::particles_draw_rng`). The spec now records (recorder) that the runner draws from the gameplay generator for particles: 2 draws on most rows of rely room1, where its particle emitters run, and more when particles spawn (CLONE_SPEC numbers, Confirmed (recorder), num-rng-a.csv; the UNKNOWN entry is "partly answered"). Whether the real runner draws the same number is open. The engine_rev 0 default `false` predates that result, so rooms with particle emitters will not match the traces' RNG stream until WP11 changes the default and the particle built-ins make those draws.
-- **OPEN (user decision, Phase 8):** how ranked runs get their seed: random per run as in the originals, a fixed seed per game, or a server-issued seed. The server can flag reused seeds either way.
+- Ranked runs use a random seed per run, as in the originals; the server flags reused seeds (user decision, 2026-11-02, [product](product.md)).
 
 ## Input and replay format
 
@@ -390,5 +390,4 @@ Every GM rule the sim needs that the spec marks UNKNOWN, Inferred or Conflict is
 - **OPEN:** whether the real GM8 runner's trig and precision match OpenGMK's plain f64. Source: Phase 2 cross-check.
 - **OPEN:** the built-in kind list and each kind's parameters. Source: `research/specs/mechanics.md` (not written yet).
 - **OPEN:** whether any room really runs at a speed other than 50 (editor values 30, 60 and 5 exist, but all 20 games set 50 in code).
-- **OPEN:** ranked RNG seed policy (user decision).
 - **OPEN:** spike mask type and rotated precise masks.
