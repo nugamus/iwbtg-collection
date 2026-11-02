@@ -38,4 +38,6 @@ Fields other built-ins read go through `kid::api`, never `KidState` directly (pl
 
 `kid::on_event` runs: Create, Room Start, Step and End Step lists; Alarm rows; Key rows; Collision rows (every row of the matching class, in order). The kid's `EventSet` follows the lists, so an empty list costs nothing.
 
-OPEN: the boundary model (Intersect Boundary, Outside Room; #240); sounds (#231); the flipped kid and the other families' actions (WP5b, WP5c).
+Boundary events follow `events.boundary` (A1: Intersect Boundary kills or warps, then wraps; see [physics.md](../physics.md)).
+
+OPEN: sounds (#231); the flipped kid and the other families' actions (WP5b, WP5c).

@@ -8,6 +8,7 @@
 //! add their actions as variants of the enums there, so they never edit this file.
 
 pub mod api;
+pub mod boundary;
 pub mod death;
 pub mod presets;
 pub mod state;
@@ -45,7 +46,7 @@ use smallvec::SmallVec;
 pub use state::{KidGlobals, KidState};
 
 use crate::def::PhysicsProfile;
-use crate::def::physics::KeyOn;
+use crate::def::physics::{BoundaryModel, KeyOn};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
 use crate::world::{Ctx, Flow, InstId};
@@ -175,6 +176,9 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
         }
         return Ok(Flow::Continue);
     }
+    if let Some(flow) = boundary::on_event(ctx, me, ev)? {
+        return Ok(flow);
+    }
     let list = match ev {
         EventKind::Alarm(n) => {
             for row in e.alarms.iter().filter(|a| a.n == *n) {
@@ -212,7 +216,9 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
 pub fn event_set(p: &PhysicsProfile) -> EventSet {
     EventSet {
         step: !p.events.step.is_empty(),
-        end_step: !p.events.end_step.is_empty(),
+        end_step: !p.events.end_step.is_empty() || p.events.boundary == BoundaryModel::EndStepOrigin,
+        outside_room: p.events.boundary == BoundaryModel::OutsideRoomKill,
+        intersect_boundary: p.events.boundary == BoundaryModel::IntersectOrigin,
         room_start: !p.events.room_start.is_empty(),
         alarms: p.events.alarms.iter().fold(0, |m, a| m | (1u16 << a.n.min(11))),
         key_held: key_bits(p, KeyOn::Held),

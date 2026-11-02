@@ -32,3 +32,10 @@ fn kid_steps_are_read() {
 fn an_unknown_kid_step_is_an_error() {
     assert!(model("kid_steps = { add_tiem = 2 }\n").is_err());
 }
+
+#[test]
+fn death_on_restart_per_kid_is_read() {
+    use iwbtg_sim::def::DeathOnRestart;
+    let m = model("death_on_restart = \"save_counters_per_kid\"\n").unwrap();
+    assert_eq!(m.death_on_restart, DeathOnRestart::SaveCountersPerKid);
+}

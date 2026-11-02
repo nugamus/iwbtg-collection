@@ -95,6 +95,10 @@
             }
           }
         },
+        "boundary": {
+          "description": "The room edge. outside_room_kill (family B) and end_step_origin are not built yet.",
+          "enum": ["none", "intersect_origin", "outside_room_kill", "end_step_origin"]
+        },
         "collisions": {
           "type": "array",
           "items": {
