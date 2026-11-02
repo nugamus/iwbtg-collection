@@ -13,7 +13,9 @@ use crate::input::Action;
 use crate::kid::{KidAction, KidCollisionRun};
 use crate::num::Real;
 
-pub use super::physics_ext::{FlipKind, FlipModel, IceRules, LadderRules, SlopeModel};
+pub use super::physics_ext::{
+    BlockSlopeStep, Downhill, FlipKind, FlipModel, IceModel, IceRules, LadderEntry, LadderRules, SlopeModel,
+};
 
 /// The kid engine family a profile starts from (`preset = "A1"`): documentation and defaults
 /// (`kid::presets::apply`). Nothing in the sim branches on it.
@@ -521,6 +523,10 @@ pub struct KidSprites {
     pub fall: Option<SpriteId>,
     /// Sliding on a vine.
     pub sliding: Option<SpriteId>,
+    /// On a ladder (`sprPlayerBack`).
+    pub back: Option<SpriteId>,
+    /// Moving on a ladder (`sprPlayerLadderUpDown`).
+    pub ladder_up_down: Option<SpriteId>,
 }
 
 /// `[bullet]`: what `shoot` does.
@@ -800,4 +806,8 @@ pub struct KidSpriteNames {
     pub fall: Option<String>,
     /// Sliding on a vine.
     pub sliding: Option<String>,
+    /// On a ladder.
+    pub back: Option<String>,
+    /// Moving on a ladder.
+    pub ladder_up_down: Option<String>,
 }

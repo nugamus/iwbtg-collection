@@ -4,5 +4,7 @@ Solid with a precise mask. No events: the climb and snap rules are the kid's (th
 
 | Param | Type | Default | Meaning |
 |---|---|---|---|
-| `shape` | `rise_right`, `rise_left`, `precise_sprite` | kind data | Picks the class and mask; applied at load. |
-| `scale_x` | real | 1 | Mirrors it; applied at load. |
+| `shape` | `rise_right`, `rise_left`, `precise_sprite` | kind data | Picks the class and mask. **OPEN (#324):** the loader checks the word but does not apply it yet; a `slope` kind has class `slope` and its sprite's mask. |
+| `scale_x` | real | 1 | Mirrors it. **OPEN (#324):** checked as a number, not applied yet. |
+
+**Loading.** Both params load on an object file or a placed instance and are checked (`params::check`; tests `wp6b3_params_*` in `crates/format/tests/wp7a_load.rs`). Converter request CR17.

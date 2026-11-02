@@ -1,0 +1,23 @@
+#:schema ../schema/v0/physics.schema.json
+# eat-the-rori-girl (family A1, kid/A1.md "eat-the-rori-girl"): rely's kid plus the slopes. A slope
+# in the way replaces the contact move with a 3 px climb; a slope 2 px below forces a single jump
+# and shows no fall sprite. help-the-fairy-tale differs in its End Step: `downhill = "fairy_tale"`.
+preset = "A1"
+
+[events]
+step = [
+  "gravity", "walk", "air_sprite", "fall_cap", "shoot", "jump", "slope_jump", "release", "vines",
+  "flip_swap", "platform_gravity_zero", "fade_in",
+]
+collisions = [
+  { with = "block", run = "block_slope_step" },
+  { with = "slope", run = "block_slope_step" },
+  { with = "slope_mirror", run = "block_slope_step" },
+  { with = "platform", run = "platform_standard" },
+  { with = "killer", run = "kill" },
+]
+
+[slope]
+block_step = "replace"
+jump_probe = 2.0
+air_sprite_probe = 2.0

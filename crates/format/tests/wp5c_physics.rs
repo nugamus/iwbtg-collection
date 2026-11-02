@@ -77,3 +77,62 @@ fn spook_house_is_a5_with_its_own_step_cap_and_killer() {
     assert_eq!(p.events.end_step.len(), 1);
     assert_eq!(p.events.step.len(), 8);
 }
+
+const XIA: &str = include_str!("../../../docs/format/examples/xia-physics.toml");
+
+#[test]
+fn xia_is_the_c_preset() {
+    use iwbtg_sim::def::physics::{BoundaryModel, FlipKind, VineModel};
+    let p = presets::apply(&mut draft(XIA));
+    assert_eq!(p, presets::defaults(KidFamily::C));
+    assert_eq!(p.flip.model, FlipKind::GravSign);
+    assert_eq!(p.vine.model, VineModel::DistanceSymEarly);
+    assert_eq!(p.events.boundary, BoundaryModel::EndStepOrigin);
+}
+
+const RAINBOW: &str = include_str!("../../../docs/format/examples/rainbow-physics.toml");
+const PORONKUSEMA: &str = include_str!("../../../docs/format/examples/poronkusema-physics.toml");
+const RORI: &str = include_str!("../../../docs/format/examples/rori-physics.toml");
+const NEW_YEAR_SLOPES: &str = include_str!("../../../docs/format/examples/eat-the-new-year-physics.toml");
+
+#[test]
+fn the_slope_examples_load_with_their_models() {
+    use iwbtg_sim::def::ClassMask;
+    use iwbtg_sim::def::physics::{BlockSlopeStep, Downhill};
+    use iwbtg_sim::kid::actions::slope::SlopeAction;
+    use iwbtg_sim::kid::collisions::slope::SlopeRun;
+    use iwbtg_sim::kid::{KidAction, KidCollisionRun};
+    let r = presets::apply(&mut draft(RAINBOW));
+    assert_eq!(r.slope.block_step, BlockSlopeStep::FreeSpot);
+    assert_eq!(r.slope.downhill, Downhill::Rainbow);
+    assert!(r.events.step.contains(&KidAction::Slope(SlopeAction::SlopeJump)));
+    assert_eq!(
+        r.events.end_step,
+        vec![KidAction::Slope(SlopeAction::DownhillSnap)]
+    );
+    assert!(
+        r.events
+            .collisions
+            .iter()
+            .any(|c| c.with == ClassMask::SLOPE_MIRROR
+                && c.run == KidCollisionRun::Slope(SlopeRun::BlockSlopeStep))
+    );
+    let p = presets::apply(&mut draft(PORONKUSEMA));
+    assert_eq!(p.slope.downhill, Downhill::Por);
+    assert!(
+        p.events
+            .collisions
+            .iter()
+            .any(|c| c.run == KidCollisionRun::Slope(SlopeRun::SlopePorRise))
+    );
+    let o = presets::apply(&mut draft(RORI));
+    assert_eq!(o.slope.block_step, BlockSlopeStep::Replace);
+    let n = presets::apply(&mut draft(NEW_YEAR_SLOPES));
+    assert!(n.slope.keep_hspeed);
+    assert!(
+        n.events
+            .collisions
+            .iter()
+            .any(|c| c.run == KidCollisionRun::Slope(SlopeRun::SlopeYane))
+    );
+}
