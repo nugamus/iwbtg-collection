@@ -41,16 +41,29 @@ pub fn load(files: &PackageFiles, trace: bool, diags: &mut Vec<Diagnostic>) -> V
     let mut no_length: Vec<String> = Vec::new();
     for (folder, default_kind) in [("sounds", SoundKind::Normal), ("music", SoundKind::Multimedia)] {
         for (path, _) in files.iter() {
-            let Some(id) = path
-                .strip_prefix(folder)
-                .and_then(|p| p.strip_prefix('/'))
-                .and_then(|p| p.strip_suffix(".ogg"))
-            else {
-                continue;
-            };
-            if id.contains('/') {
+            // A package sound is `sounds/<id>.ogg`; a bundled engine pack sound is
+            // `engine/<pack>/sounds/<id>.ogg`, named `engine:<pack>/<id>` (docs/format/engine.md).
+            let (base, stem, name) =
+                if let Some((pack, id)) = crate::engine_pack::asset_file(path, folder, ".ogg") {
+                    (
+                        crate::engine_pack::pack_dir(pack),
+                        id,
+                        format!("{}{pack}/{id}", crate::ids::ENGINE_PREFIX),
+                    )
+                } else if let Some(id) = path
+                    .strip_prefix(folder)
+                    .and_then(|p| p.strip_prefix('/'))
+                    .and_then(|p| p.strip_suffix(".ogg"))
+                {
+                    (String::new(), id, id.to_owned())
+                } else {
+                    continue;
+                };
+            if stem.contains('/') {
                 continue;
             }
+            let id = name.as_str();
+            let side_stem = format!("{base}{folder}/{stem}");
             if out.iter().any(|s| s.name == id) {
                 let message = format!("`{id}` is both a sound and a music track; ids must be unique");
                 diags.push(if trace {
@@ -60,7 +73,7 @@ pub fn load(files: &PackageFiles, trace: bool, diags: &mut Vec<Diagnostic>) -> V
                 });
                 continue;
             }
-            let side_path = format!("{folder}/{id}.toml");
+            let side_path = format!("{side_stem}.toml");
             let mut def = SoundDef {
                 name: id.to_owned(),
                 kind: default_kind,
