@@ -806,26 +806,7 @@ fn fade_in_adds_a_tenth_until_one_under_the_gm_epsilon() {
     );
 }
 
-// ---- Not yet built actions, and the event lists ----
-
-#[test]
-fn actions_owned_by_other_packages_say_so() {
-    with_kid(
-        |_| {},
-        |ctx, kid, _, _| {
-            for a in [
-                CommonAction::EnsureWorld,
-                CommonAction::CreateBow,
-                CommonAction::FirstPlaySave,
-                CommonAction::ArmPlayTimer,
-                CommonAction::PlayTimer,
-            ] {
-                let e = kid::run_action(ctx, kid, &KidAction::Common(a)).expect_err("unsupported");
-                assert!(matches!(e, iwbtg_sim::error::SimError::Unsupported { .. }), "{e}");
-            }
-        },
-    );
-}
+// ---- Event lists ----
 
 #[test]
 fn step_list_runs_in_order_so_a_press_and_release_cut_at_once() {

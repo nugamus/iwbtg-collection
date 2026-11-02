@@ -1,18 +1,51 @@
 //! Kid death per family: sound, blood emitter, destroy, deaths +1, death-only save, GAMEOVER
 //! (docs/plans/sim-core.md 5.3 "Death"). Called through `kid::api::kill`. WP5a owns it.
 //!
-//! Only the family-independent core is here so far: a kill is ignored while `muteki` is set
-//! (A1 Death step 2), otherwise the kid is destroyed. The `[death]` order (sound, blood emitter,
-//! deaths +1, death-only save, GAMEOVER, the Select-role special case) is WP5a.4 (#122).
+//! Spec: kid/A1.md "Death (killPlayer)".
+//!
+//! 1. In a `Select` room (`death.select_room_reset`): request the same room again and destroy
+//!    the kid; nothing else happens, and the tick aborts for the room change.
+//! 2. While `muteki` is set, nothing happens.
+//! 3. Otherwise the steps of `death.order` run: the sound (not played yet, #231), a blood
+//!    emitter at the kid's position, destroy the kid, GAMEOVER at view 0's corner plus
+//!    `death.gameover_offset`, `global.death + 1` (checked), the death-only save.
+//!
+//! A kind the game does not have (no blood emitter, no GAMEOVER) is skipped.
+
+use serde::Deserialize;
 
 use super::api::KillCause;
+use crate::def::EngineKind;
+use crate::def::physics::DeathStep;
+use crate::def::room::RoomRole;
 use crate::error::SimError;
-use crate::world::{Ctx, Flow, InstId, KindState};
+use crate::room::RoomRequest;
+use crate::save;
+use crate::world::{Ctx, Flow, InstId, KindState, SpawnInit};
 
-/// Kills the kid `kid`. `Flow::Halt` when the destroy halted the sim; an error when `kid` is not
+/// The collision and key runs of this file, by their `physics.toml` names. Part of
+/// `kid::KidCollisionRun`.
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeathRun {
+    /// `{ with = "killer", run = "kill" }`: the other instance kills the kid.
+    Kill,
+}
+
+/// Runs a death collision run: the kid `me` meets the killer `other`.
+pub fn run(ctx: &mut Ctx, me: InstId, other: InstId, run: &DeathRun) -> Result<Flow, SimError> {
+    match run {
+        DeathRun::Kill => kill(ctx, me, KillCause::Killer(other)),
+    }
+}
+
+/// Kills the kid `kid` by the profile's `[death]` rules. `Flow::AbortTick` when the Select-room
+/// reset requested a room; `Flow::Halt` when a destroy halted the sim; an error when `kid` is not
 /// a kid. A kid that no longer exists is left alone.
 pub fn kill(ctx: &mut Ctx, kid: InstId, _cause: KillCause) -> Result<Flow, SimError> {
-    let Some(inst) = ctx.w.get(kid) else {
+    let def = ctx.def;
+    let rules = &def.physics.death;
+    let Some(inst) = ctx.w.get(kid).filter(|i| i.alive) else {
         return Ok(Flow::Continue);
     };
     let KindState::Kid(s) = &inst.state else {
@@ -21,8 +54,53 @@ pub fn kill(ctx: &mut Ctx, kid: InstId, _cause: KillCause) -> Result<Flow, SimEr
             kid.0
         )));
     };
-    if s.invincible {
+    let invincible = s.invincible;
+    let (x, y) = (inst.m.x(), inst.m.y());
+    let in_select = ctx
+        .w
+        .room
+        .index()
+        .and_then(|i| def.rooms.get(i))
+        .is_some_and(|r| r.role == RoomRole::Select);
+    if rules.select_room_reset && in_select {
+        ctx.request_room(RoomRequest::Goto(ctx.w.room));
+        let flow = ctx.destroy(kid);
+        return Ok(if flow.is_halt() { flow } else { Flow::AbortTick });
+    }
+    if invincible {
         return Ok(Flow::Continue);
     }
-    Ok(ctx.destroy(kid))
+    if rules.stop_music {
+        return Err(SimError::unsupported(
+            "kid death: death.stop_music (WP10 sound model)",
+        ));
+    }
+    for step in &rules.order {
+        match step {
+            DeathStep::Sound => {} // #231
+            DeathStep::BloodEmitter => {
+                ctx.spawn_engine(EngineKind::BloodEmitter, x, y, SpawnInit::default())?;
+            }
+            DeathStep::DestroyKid => {
+                let flow = ctx.destroy(kid);
+                if flow.is_halt() {
+                    return Ok(flow);
+                }
+            }
+            DeathStep::GameOver => {
+                let v = &ctx.w.views[0];
+                let (gx, gy) = (v.x + rules.gameover_offset[0], v.y + rules.gameover_offset[1]);
+                ctx.spawn_engine(EngineKind::GameOver, gx, gy, SpawnInit::default())?;
+            }
+            DeathStep::DeathsPlusOne => {
+                let run = &mut ctx.w.engine.run;
+                run.deaths = run
+                    .deaths
+                    .checked_add(1)
+                    .ok_or_else(|| SimError::overflow("global.death"))?;
+            }
+            DeathStep::SaveCounters => save::save_counters(ctx)?,
+        }
+    }
+    Ok(Flow::Continue)
 }
