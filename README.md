@@ -23,6 +23,7 @@ docs/
   content.md Porting, assets, engines, package file, level editor.
   server.md  Server stack and security rules.
   roadmap.md Order of work.
+  dev-setup.md Machine layout, toolchain versions, setup check.
 Potential Features.md   Feature ideas, one line each.
 ```
 
