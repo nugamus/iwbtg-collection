@@ -1,4 +1,4 @@
-//! Collision switches (docs/plans/sim-core.md 2.3, 3.4, register C2, C7b, C9, C10, C13, R12).
+//! Collision switches (docs/plans/sim-core.md 2.3, 3.4, register C2, C7b, C9, C10, C13, M7, R12).
 //!
 //! C1, C3, C4, C11, C12 and C14 live in their `collide` functions; C5 in `format::masks`.
 //! WP0 declares; WP3 owns.
@@ -14,13 +14,18 @@ pub struct CollideRules {
     /// C9 / M7 (UNKNOWN motion U7): what the final "still colliding" check of a solid pair
     /// tests.
     pub solid_recheck: SolidRecheck,
+    /// M7: where a solid pair leaves the instance when the final check still collides.
+    pub solid_keep: SolidKeep,
     /// C2 (Inferred / UNKNOWN): how a place test rounds.
     pub place_round: PlaceRound,
+    /// C2 (UNKNOWN: CLONE_SPEC collision, "how the collision box rounds an exact .5 in x"):
+    /// whether the collision box rounds the origin first or each edge after the mask offset.
+    pub box_round: BoxRound,
     /// C10 (UNKNOWN, sources disagree): `move_contact_solid` from an overlapping start.
     pub mcs_start: McsStart,
     /// C13: which boxes `distance_to_object` measures.
     pub dist_boxes: DistBoxes,
-    /// C13 ("+1 or not", UNKNOWN): offset added to the gap. WP3 picks it with the flush-kid test.
+    /// C13 ("+1 or not"): offset added to the gap. WP3 picked it with the flush-kid test.
     pub dist_offset: DistOffset,
     /// C13: how the x and y gaps combine (Design).
     pub dist_combine: DistCombine,
@@ -32,7 +37,9 @@ impl Default for CollideRules {
             pair_order: PairOrder::default(),
             recheck_nonsolid: true,
             solid_recheck: SolidRecheck::default(),
+            solid_keep: SolidKeep::default(),
             place_round: PlaceRound::default(),
+            box_round: BoxRound::default(),
             mcs_start: McsStart::default(),
             dist_boxes: DistBoxes::default(),
             dist_offset: DistOffset::default(),
@@ -61,6 +68,19 @@ pub enum SolidRecheck {
     AnySolid,
 }
 
+/// M7: where "keeps the instance at its previous place" puts it after a solid pair's event.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum SolidKeep {
+    /// At `(xprevious, yprevious)`. Default: CLONE_SPEC collision Inferred "What previous place
+    /// and new position mean" (corrected, Confirmed (recorder)): an event that moved the
+    /// embedded kid from y 584 to 583 still ends every tick at 584 (showdown t-mot-07-e.csv
+    /// rows 2-8).
+    #[default]
+    Previous,
+    /// Where the event left it (the plan's earlier M7 reading).
+    EventPosition,
+}
+
 /// C2: how a place test at `y + 1` rounds.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum PlaceRound {
@@ -71,10 +91,28 @@ pub enum PlaceRound {
     RoundThenAdd,
 }
 
+/// C2: how the collision box rounds a fractional position (ties to even either way).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum BoxRound {
+    /// Round x and y first, then add the integer mask offsets:
+    /// `bbox_left = round(x) + (left - origin_x)` (CLONE_SPEC collision Inferred "Bounding box
+    /// at unit scale"). Default, the reading the spec favours: the kid rests at x 58.5 flush
+    /// against a block at x 64 (rely-the-needle-4-2 trick-wall-align.md run d; round(58.5) =
+    /// 58, right edge 63), while the reported `bbox_right` there reads 64.
+    #[default]
+    OriginFirst,
+    /// Round each edge after adding its offset, `round(x + offset)`, like the reported `bbox_*`
+    /// values (machinary t-col-08-a.csv: x 200.5 reads 196..206). t-col-08 cannot tell whether
+    /// collisions use this box; kaenbyou's rotated spikes fit neither rule
+    /// (famb-spike-mask.md). Still OPEN in CLONE_SPEC collision.
+    AfterOffset,
+}
+
 /// C10: `move_contact_solid` when the start already overlaps a solid.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum McsStart {
-    /// Do not move (the manual). Default.
+    /// Do not move (the manual). Default; Confirmed (recorder) by little-runner
+    /// t-col-07-d.csv rows 4-5.
     #[default]
     ManualNoMove,
     /// The start is not checked; step as usual.
@@ -84,24 +122,36 @@ pub enum McsStart {
 /// C13: which boxes `distance_to_object` measures.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum DistBoxes {
-    /// The rounded, inclusive collision boxes (C1). Default.
+    /// The reported `bbox_*` boxes (`collide::bbox::reported_box`: corner rule, each edge
+    /// rounded). Default: Confirmed (recorder), a kid facing left reads distance 1 to a vine
+    /// behind him because his reported `bbox_left` is x-7 (showdown a3-t16-a.csv row 5).
     #[default]
+    Reported,
+    /// The rounded, inclusive collision boxes (C1).
     RoundedInclusive,
-    /// Unrounded `x + offset` boxes, so sub-pixel positions give fractional distances.
+    /// The reported boxes without rounding, so sub-pixel positions give fractional distances.
     Unrounded,
 }
 
 /// C13: offset added to the box gap.
+///
+/// The gap on one axis is the number of free pixels between the two boxes, 0 when they touch
+/// or overlap. `PlusOne` adds 1 on each axis where the boxes are apart, which makes the gap the
+/// difference of the facing edge coordinates.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum DistOffset {
-    /// No offset. Default until WP3's flush-kid test picks.
-    #[default]
+    /// The free-pixel gap: touching boxes give 0.
     None,
-    /// Plus one.
+    /// Plus one: touching boxes give 1. Default, picked by WP3's flush-kid test
+    /// (`tests/wp3_query.rs`, kid A1 "a flush kid is at distance 1"), and Confirmed (recorder)
+    /// by animus a-vine-right-a/b/c.csv and a-vine-left-a/b.csv row 3 (touching 1, one free
+    /// pixel 2, overlap 0).
+    #[default]
     PlusOne,
 }
 
-/// C13: how the x and y gaps combine.
+/// C13: how the x and y gaps combine. The spec does not say (requested from research); every
+/// traced case has one axis at 0, where both give the same value.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum DistCombine {
     /// `sqrt(dx*dx + dy*dy)` (Design). Default.
