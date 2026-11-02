@@ -129,11 +129,10 @@ pub fn run(case: &Case) -> Outcome {
     }
 }
 
-/// The engine's hooks, except sound and timing: `sound::tick` (WP10) and `timing::evaluate`
-/// (WP8b) are still stubs that panic, and neither changes what these cases exercise. When they
-/// land, delete this and call `tick::run_tick`.
+/// The engine's hooks, except timing: `timing::evaluate` (WP8b) does not change what these
+/// cases exercise. `sound::tick` (WP10) is the real one. When timing is wired in, delete this and
+/// call `tick::run_tick`.
 const HOOKS: tick::Hooks = tick::Hooks {
-    sound_tick: |_| {},
     timing: |_, _| Ok(Vec::new()),
     ..tick::Hooks::ENGINE
 };
