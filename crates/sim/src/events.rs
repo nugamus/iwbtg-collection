@@ -22,7 +22,7 @@ use smallvec::SmallVec;
 
 use crate::alarm;
 use crate::anim;
-use crate::def::{ClassMask, GameDef, KindId, Params, ParamValue, TimelineId, VarId};
+use crate::def::{ClassMask, GameDef, KindId, ParamValue, Params, TimelineId, VarId};
 use crate::error::SimError;
 use crate::input::Action;
 use crate::num::{Real, to_int_trunc};
@@ -510,13 +510,13 @@ fn alarm_phase(ctx: &mut Ctx) -> Flow {
         |c, id, ctl| {
             for n in 0u8..12 {
                 let inst = c.w.get_mut_unmoved(id).filter(|i| i.alive && i.active)?;
-                if c.def.kind(inst.kind).is_none_or(|k| k.events.alarms & 1 << n == 0) {
+                if c.def
+                    .kind(inst.kind)
+                    .is_none_or(|k| k.events.alarms & 1 << n == 0)
+                {
                     continue;
                 }
-                let fired = inst
-                    .alarms
-                    .get_mut(usize::from(n))
-                    .is_some_and(alarm::tick);
+                let fired = inst.alarms.get_mut(usize::from(n)).is_some_and(alarm::tick);
                 if fired && let Some(flow) = fire(c, ctl, id, &EventKind::Alarm(n)) {
                     return Some(flow);
                 }
@@ -565,16 +565,21 @@ fn keyboard_phase(ctx: &mut Ctx) -> Flow {
 /// Step, before Outside Room and Collision, traces/rely-the-needle-4-2/t-evo-1.csv frame 13).
 fn motion_phase(ctx: &mut Ctx, hooks: &Hooks) -> Flow {
     let capture = ctx.rules.tick.prev_capture == PrevCapture::BeforeMotion;
-    let flow = walk(ctx, Order::Dispatch, &|_: &Ctx, _: &Instance| true, |c, id, ctl| {
-        if capture && let Err(e) = (hooks.capture_previous)(c, id) {
-            return stop(c, e);
-        }
-        match (hooks.auto_motion)(c, id) {
-            Ok(ev) if ev.end_of_path => fire(c, ctl, id, &EventKind::EndOfPath),
-            Ok(_) => None,
-            Err(e) => stop(c, e),
-        }
-    });
+    let flow = walk(
+        ctx,
+        Order::Dispatch,
+        &|_: &Ctx, _: &Instance| true,
+        |c, id, ctl| {
+            if capture && let Err(e) = (hooks.capture_previous)(c, id) {
+                return stop(c, e);
+            }
+            match (hooks.auto_motion)(c, id) {
+                Ok(ev) if ev.end_of_path => fire(c, ctl, id, &EventKind::EndOfPath),
+                Ok(_) => None,
+                Err(e) => stop(c, e),
+            }
+        },
+    );
     if flow.is_halt() {
         return flow;
     }
@@ -614,7 +619,8 @@ fn boundary_phase(ctx: &mut Ctx, hooks: &Hooks) -> Flow {
                 Ok(None) => return None,
                 Err(e) => return stop(c, e),
             };
-            let handles = |c: &Ctx, f: fn(&EventSet) -> bool| c.w.get(id).is_some_and(|i| f(event_set(c.def, i.kind)));
+            let handles =
+                |c: &Ctx, f: fn(&EventSet) -> bool| c.w.get(id).is_some_and(|i| f(event_set(c.def, i.kind)));
             if outside(&bbox)
                 && handles(c, |s| s.outside_room)
                 && let Some(flow) = fire(c, ctl, id, &EventKind::OutsideRoom)
@@ -651,22 +657,27 @@ pub fn run_draw_phase(ctx: &mut Ctx) -> Flow {
 /// Rows 8b and 13: the animation update for every alive, active instance, visible or not, and
 /// Animation End where it fires and the kind handles it (`anim::advance`, R7).
 fn animation_phase(ctx: &mut Ctx) -> Flow {
-    walk(ctx, Order::Dispatch, &|_: &Ctx, _: &Instance| true, |c, id, ctl| {
-        let def = c.def;
-        let rules = &c.rules.tick;
-        let inst = c.w.get_mut(id)?;
-        let frames = inst
-            .img
-            .sprite()
-            .and_then(|s| def.sprite(s))
-            .map_or(0, |s| s.frames);
-        let handles = def.kind(inst.kind).is_some_and(|k| k.events.animation_end);
-        match anim::advance(&mut inst.img, frames, rules) {
-            Ok(true) if handles => fire(c, ctl, id, &EventKind::AnimationEnd),
-            Ok(_) => None,
-            Err(e) => stop(c, e),
-        }
-    })
+    walk(
+        ctx,
+        Order::Dispatch,
+        &|_: &Ctx, _: &Instance| true,
+        |c, id, ctl| {
+            let def = c.def;
+            let rules = &c.rules.tick;
+            let inst = c.w.get_mut(id)?;
+            let frames = inst
+                .img
+                .sprite()
+                .and_then(|s| def.sprite(s))
+                .map_or(0, |s| s.frames);
+            let handles = def.kind(inst.kind).is_some_and(|k| k.events.animation_end);
+            match anim::advance(&mut inst.img, frames, rules) {
+                Ok(true) if handles => fire(c, ctl, id, &EventKind::AnimationEnd),
+                Ok(_) => None,
+                Err(e) => stop(c, e),
+            }
+        },
+    )
 }
 
 /// Row 10: collision events with the solid put-back rule (plan 2.3). Uses
@@ -738,7 +749,10 @@ fn collide_one(ctx: &mut Ctx, hooks: &Hooks, a: InstId, ctl: &mut Ctl) -> Option
     let rules = &ctx.rules;
     let w = &*ctx.w;
     let rank_id = |id: InstId| w.get(id).map_or((u16::MAX, id), |i| (i.rank, i.id));
-    let dispatch_key = |id: InstId| w.get(id).map(|i| order_key(i, rules.tick.dispatch, Order::Dispatch));
+    let dispatch_key = |id: InstId| {
+        w.get(id)
+            .map(|i| order_key(i, rules.tick.dispatch, Order::Dispatch))
+    };
     match rules.collide.pair_order {
         PairOrder::OtherRankThenId => pairs.sort_by_key(|p| (rank_id(p.other), p.handler)),
         PairOrder::HandlerListOrder => pairs.sort_by_key(|p| (p.handler, dispatch_key(p.other))),
@@ -747,7 +761,12 @@ fn collide_one(ctx: &mut Ctx, hooks: &Hooks, a: InstId, ctl: &mut Ctl) -> Option
         if !ctx.w.exists(a) {
             return None;
         }
-        let Some(solid) = ctx.w.get(p.other).filter(|b| b.alive && b.active).map(|b| b.solid) else {
+        let Some(solid) = ctx
+            .w
+            .get(p.other)
+            .filter(|b| b.alive && b.active)
+            .map(|b| b.solid)
+        else {
             continue;
         };
         if solid || ctx.rules.collide.recheck_nonsolid {
@@ -1069,7 +1088,10 @@ impl ProbeState {
             _ => String::new(),
         };
         let log = match params.0.get("log") {
-            Some(ParamValue::Real(r)) => to_int_trunc(*r).ok().and_then(|v| u32::try_from(v).ok()).map(VarId),
+            Some(ParamValue::Real(r)) => to_int_trunc(*r)
+                .ok()
+                .and_then(|v| u32::try_from(v).ok())
+                .map(VarId),
             _ => None,
         };
         ProbeState::new(tag, log)
@@ -1119,7 +1141,10 @@ pub fn probe_on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow,
         return Ok(Flow::Continue);
     };
     let KindState::Probe(p) = &mut inst.state else {
-        return Err(SimError::invariant(format!("probe instance {} has no probe state", me.0)));
+        return Err(SimError::invariant(format!(
+            "probe instance {} has no probe state",
+            me.0
+        )));
     };
     p.events = p
         .events
@@ -1153,7 +1178,11 @@ pub fn probe_on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow,
 }
 
 /// Runs `f` on instance `me` if it is stored.
-fn with_inst(ctx: &mut Ctx, me: InstId, f: &mut dyn FnMut(&mut Instance) -> Result<(), SimError>) -> Result<(), SimError> {
+fn with_inst(
+    ctx: &mut Ctx,
+    me: InstId,
+    f: &mut dyn FnMut(&mut Instance) -> Result<(), SimError>,
+) -> Result<(), SimError> {
     match ctx.w.get_mut(me) {
         Some(inst) => f(inst),
         None => Ok(()),
@@ -1161,7 +1190,13 @@ fn with_inst(ctx: &mut Ctx, me: InstId, f: &mut dyn FnMut(&mut Instance) -> Resu
 }
 
 /// One probe action.
-fn probe_act(ctx: &mut Ctx, me: InstId, ev: &EventKind, act: ProbeAct, log: Option<VarId>) -> Result<Flow, SimError> {
+fn probe_act(
+    ctx: &mut Ctx,
+    me: InstId,
+    ev: &EventKind,
+    act: ProbeAct,
+    log: Option<VarId>,
+) -> Result<Flow, SimError> {
     match act {
         ProbeAct::Log(text) => {
             if let Some(var) = log {
@@ -1209,7 +1244,9 @@ fn probe_act(ctx: &mut Ctx, me: InstId, ev: &EventKind, act: ProbeAct, log: Opti
         }
         ProbeAct::DirectRead(bit) => {
             let Some(a) = Action::ALL.into_iter().find(|a| a.bit() == bit) else {
-                return Err(SimError::invariant(format!("probe reads unknown action bit {bit}")));
+                return Err(SimError::invariant(format!(
+                    "probe reads unknown action bit {bit}"
+                )));
             };
             let down = ctx.w.input.direct(a);
             if let Some(var) = log {

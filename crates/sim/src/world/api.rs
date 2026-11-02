@@ -7,7 +7,9 @@
 //! 8) and `instance_exists` stops counting it at once (traces/kaenbyou/tr-room-08.csv row 51).
 
 use super::{Ctx, InstId, Instance, KindState, SimStatus, Value, World};
-use crate::def::{Builtin, ClassMask, EngineKind, GameDef, GroupId, KindDef, KindId, NameId, ParamValue, Params, VariantSel};
+use crate::def::{
+    Builtin, ClassMask, EngineKind, GameDef, GroupId, KindDef, KindId, NameId, ParamValue, Params, VariantSel,
+};
 use crate::error::SimError;
 use crate::events::{self, EventKind, ProbeState};
 use crate::num::Real;
@@ -214,9 +216,11 @@ fn initial_state(def: &GameDef, kd: &KindDef, params: &Params) -> Result<KindSta
         Builtin::Probe => KindState::Probe(ProbeState::from_params(params, def)),
         Builtin::Scripted => KindState::Script(script::ScriptState::default()),
         Builtin::Inert => KindState::None,
-        b => KindState::Builtin(builtins::init_state(b, params).map_err(|e| {
-            SimError::invariant(format!("kind {}: {e} (the loader checks params)", kd.name))
-        })?),
+        b => {
+            KindState::Builtin(builtins::init_state(b, params).map_err(|e| {
+                SimError::invariant(format!("kind {}: {e} (the loader checks params)", kd.name))
+            })?)
+        }
     })
 }
 

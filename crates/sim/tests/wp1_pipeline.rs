@@ -5,7 +5,7 @@
 #[path = "wp1_support.rs"]
 mod support;
 
-use iwbtg_sim::def::{ClassMask, KindDef, Builtin, RoomId, TimelineDef, TimelineId};
+use iwbtg_sim::def::{Builtin, ClassMask, KindDef, RoomId, TimelineDef, TimelineId};
 use iwbtg_sim::events::{EventSet, ProbeAct, ProbeOn, ProbeState, ProbeStep, dispatch_order};
 use iwbtg_sim::input::{Action, InputFrame};
 use iwbtg_sim::num::Real;
@@ -83,7 +83,11 @@ fn wp1_dispatch_orders_follow_the_rule() {
     ] {
         let mut fx = Fx::new(def.clone());
         fx.rules.tick.dispatch = mode;
-        let only_step = |tag: &str| p(tag).style(iwbtg_sim::events::ProbeLog::Silent).with(step(ProbeOn::Step, ProbeAct::Log(format!("s{tag} "))));
+        let only_step = |tag: &str| {
+            p(tag)
+                .style(iwbtg_sim::events::ProbeLog::Silent)
+                .with(step(ProbeOn::Step, ProbeAct::Log(format!("s{tag} "))))
+        };
         fx.probe(kw, 0.0, 0.0, only_step("W"));
         fx.probe(kp, 0.0, 0.0, only_step("P"));
         let b1 = fx.probe(kblock, 0.0, 0.0, only_step("B1"));
@@ -165,7 +169,12 @@ fn room_request_fixture(rule: RoomRequestRule, nested: bool) -> Fx {
     } else {
         p("A").with(step(ProbeOn::Step, request))
     };
-    fx.probe(ka, 0.0, 0.0, a.with(step(ProbeOn::Step, ProbeAct::Log("after ".into()))));
+    fx.probe(
+        ka,
+        0.0,
+        0.0,
+        a.with(step(ProbeOn::Step, ProbeAct::Log("after ".into()))),
+    );
     fx.probe(kb, 0.0, 0.0, p("B"));
     fx
 }
@@ -177,7 +186,10 @@ fn wp1_room_request_rules() {
         fx.tick(InputFrame::EMPTY);
         let log = fx.log();
         assert!(log.ends_with("after "), "the handler finishes: {log}");
-        assert!(!log.contains("sB") && !log.contains("eA") && !log.contains("dA"), "{log}");
+        assert!(
+            !log.contains("sB") && !log.contains("eA") && !log.contains("dA"),
+            "{log}"
+        );
         assert_eq!(fx.w.room, RoomId(1));
         assert_eq!(fx.w.globals.get(&ROOM_CHANGES), Some(&vr(1.0)));
         assert_eq!((fx.w.tick, fx.w.room_tick), (1, 0));
@@ -213,8 +225,18 @@ fn wp1_halt_freezes_the_tick() {
     let kb = probe_kind(&mut b, "b");
     let kc = probe_kind(&mut b, "c");
     let mut fx = Fx::new(b.build().unwrap());
-    let a = fx.probe(ka, 0.0, 0.0, p("A").with(step(ProbeOn::BeginStep, ProbeAct::DestroySelf)));
-    fx.probe(kb, 0.0, 0.0, p("B").with(step(ProbeOn::Step, ProbeAct::Fail("boom".into()))));
+    let a = fx.probe(
+        ka,
+        0.0,
+        0.0,
+        p("A").with(step(ProbeOn::BeginStep, ProbeAct::DestroySelf)),
+    );
+    fx.probe(
+        kb,
+        0.0,
+        0.0,
+        p("B").with(step(ProbeOn::Step, ProbeAct::Fail("boom".into()))),
+    );
     fx.probe(kc, 0.0, 0.0, p("C"));
     fx.tick(InputFrame::EMPTY);
     assert_eq!(
@@ -265,7 +287,13 @@ fn wp1_draw_slot_uses_depth_then_creation_and_skips_invisible() {
             .style(iwbtg_sim::events::ProbeLog::Silent)
             .with(step(ProbeOn::Late, ProbeAct::Log(format!("d{tag} "))))
     };
-    for (tag, depth, visible) in [("Z1", 0.0, true), ("Deep", 100.0, true), ("Mid", 50.0, true), ("Hidden", 200.0, false), ("Z2", -0.0, true)] {
+    for (tag, depth, visible) in [
+        ("Z1", 0.0, true),
+        ("Deep", 100.0, true),
+        ("Mid", 50.0, true),
+        ("Hidden", 200.0, false),
+        ("Z2", -0.0, true),
+    ] {
         let id = fx.probe(k, 0.0, 0.0, draw_only(tag));
         let inst = fx.w.get_mut(id).unwrap();
         inst.depth = Real::new(depth);
@@ -306,7 +334,10 @@ fn wp1_alarms_count_fire_rearm_and_idle() {
     fx.tick(InputFrame::EMPTY);
     assert_eq!(alarms(&fx, a), (2.0, -1.0));
     assert_eq!(alarms(&fx, once).0, 0.0, "fired, reads 0");
-    assert_eq!(tokens_of(&fx.take_log(), "O"), vec!["bO", "a0O", "sO", "eO", "dO"]);
+    assert_eq!(
+        tokens_of(&fx.take_log(), "O"),
+        vec!["bO", "a0O", "sO", "eO", "dO"]
+    );
     fx.tick(InputFrame::EMPTY);
     assert_eq!(alarms(&fx, a), (1.0, -1.0));
     assert_eq!(alarms(&fx, once).0, -1.0, "then -1, no second fire");
@@ -316,11 +347,18 @@ fn wp1_alarms_count_fire_rearm_and_idle() {
     assert_eq!(alarms(&fx, a), (3.0, 1.0));
     let log = fx.take_log();
     assert!(!log.contains("a0O"), "{log}");
-    assert_eq!(tokens_of(&log, "A").iter().filter(|t| t.starts_with('a')).count(), 1);
+    assert_eq!(
+        tokens_of(&log, "A").iter().filter(|t| t.starts_with('a')).count(),
+        1
+    );
     fx.tick(InputFrame::EMPTY);
     assert_eq!(alarms(&fx, a), (2.0, 0.0));
     assert!(fx.take_log().contains("a1A "));
-    assert_eq!(fx.w.get(partial).unwrap().alarms[5], Real::new(7.0), "unhandled alarms never count");
+    assert_eq!(
+        fx.w.get(partial).unwrap().alarms[5],
+        Real::new(7.0),
+        "unhandled alarms never count"
+    );
 }
 
 #[test]
@@ -343,7 +381,10 @@ fn wp1_key_events_held_then_press_then_release_in_bit_order() {
         released: s,
     });
     let log = fx.log();
-    assert!(log.contains("khleftA khjumpA kpjumpA krshootA kpjumpJ sA "), "{log}");
+    assert!(
+        log.contains("khleftA khjumpA kpjumpA krshootA kpjumpJ sA "),
+        "{log}"
+    );
 }
 
 #[test]
@@ -435,8 +476,14 @@ fn wp1_boundary_and_animation_slots_move() {
             .collect::<String>()
     };
     assert_eq!(order_of(BoundarySlot::AfterMotion, AnimSlot::AfterDraw), "ikedn");
-    assert_eq!(order_of(BoundarySlot::AfterCollision, AnimSlot::AfterDraw), "kiedn");
-    assert_eq!(order_of(BoundarySlot::AfterMotion, AnimSlot::AfterMotion), "niked");
+    assert_eq!(
+        order_of(BoundarySlot::AfterCollision, AnimSlot::AfterDraw),
+        "kiedn"
+    );
+    assert_eq!(
+        order_of(BoundarySlot::AfterMotion, AnimSlot::AfterMotion),
+        "niked"
+    );
 }
 
 #[test]
@@ -471,7 +518,10 @@ fn wp1_timeline_runs_moments_from_the_position_then_advances() {
                     .join(","),
             );
         }
-        (out, fx.w.get(a).unwrap().timeline.as_ref().unwrap().position.get())
+        (
+            out,
+            fx.w.get(a).unwrap().timeline.as_ref().unwrap().position.get(),
+        )
     };
     // Moment N on the (N+1)th tick after setting position 0 between ticks; position reads 1
     // after the first tick (audio-rori-sync-b.csv).

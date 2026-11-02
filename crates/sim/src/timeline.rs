@@ -39,9 +39,7 @@ pub fn start(run: &mut Option<TimelineRun>, timeline: TimelineId, position: Real
     if !position.is_finite() {
         return Err(SimError::non_finite("timeline_position"));
     }
-    let (speed, looping) = run
-        .as_ref()
-        .map_or((Real::ONE, false), |r| (r.speed, r.looping));
+    let (speed, looping) = run.as_ref().map_or((Real::ONE, false), |r| (r.speed, r.looping));
     *run = Some(TimelineRun {
         timeline,
         position,
@@ -77,7 +75,12 @@ pub fn advance(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
         .def
         .timelines
         .get(run.timeline.index().unwrap_or(usize::MAX))
-        .ok_or_else(|| SimError::invariant(format!("instance {} runs unknown timeline {}", me.0, run.timeline.0)))?;
+        .ok_or_else(|| {
+            SimError::invariant(format!(
+                "instance {} runs unknown timeline {}",
+                me.0, run.timeline.0
+            ))
+        })?;
     let lo = run.position.get();
     let hi = (run.position + run.speed).get();
     let mut due: Vec<u32> = if hi >= lo {
@@ -128,5 +131,9 @@ pub fn advance(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
             r.position = Real::ZERO;
         }
     }
-    Ok(if requested { Flow::AbortTick } else { Flow::Continue })
+    Ok(if requested {
+        Flow::AbortTick
+    } else {
+        Flow::Continue
+    })
 }

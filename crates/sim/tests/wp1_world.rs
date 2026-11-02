@@ -4,9 +4,7 @@
 #[path = "wp1_support.rs"]
 mod support;
 
-use iwbtg_sim::def::{
-    Builtin, ClassMask, EngineKind, KindDef, KindId, ParamValue, Params, RoomId, VarId,
-};
+use iwbtg_sim::def::{Builtin, ClassMask, EngineKind, KindDef, KindId, ParamValue, Params, RoomId, VarId};
 use iwbtg_sim::events::{ProbeAct, ProbeLog, ProbeOn, ProbeStep, probe_event_set};
 use iwbtg_sim::hash::{self, CHECKPOINT_INTERVAL};
 use iwbtg_sim::input::InputFrame;
@@ -15,14 +13,19 @@ use iwbtg_sim::output::OutputEvent;
 use iwbtg_sim::room::RoomOutput;
 use iwbtg_sim::rules::collide::PairOrder;
 use iwbtg_sim::rules::tick::{ChangeKindProps, FirstRule};
-use iwbtg_sim::world::{Flow, InstId, SpawnInit, Value};
+use iwbtg_sim::world::{Flow, InstId, SpawnInit};
 use support::*;
 
 fn step(on: ProbeOn, act: ProbeAct) -> ProbeStep {
     ProbeStep::on(on, act)
 }
 
-fn classed(b: &mut iwbtg_sim::def::testing::GameDefBuilder, name: &str, classes: ClassMask, handlers: &[ClassMask]) -> KindId {
+fn classed(
+    b: &mut iwbtg_sim::def::testing::GameDefBuilder,
+    name: &str,
+    classes: ClassMask,
+    handlers: &[ClassMask],
+) -> KindId {
     let mut k = KindDef::new(name, Builtin::Probe);
     k.events = probe_event_set();
     k.classes = classes;
@@ -67,7 +70,10 @@ fn wp1_spawn_runs_create_inside_the_call_and_applies_the_kind() {
     assert!(fx.log().contains("sA CT after "), "{}", fx.log());
     let t = fx.w.instances().last().unwrap();
     assert!(t.id > a);
-    assert_eq!((t.rank, t.solid, t.visible, t.depth, t.classes), (1, true, false, Real::new(-5.0), ClassMask::KILLER));
+    assert_eq!(
+        (t.rank, t.solid, t.visible, t.depth, t.classes),
+        (1, true, false, Real::new(-5.0), ClassMask::KILLER)
+    );
     assert_eq!(t.img.sprite(), Some(sprite));
     assert_eq!((t.m.x(), t.m.y()), (Real::new(10.0), Real::new(20.0)));
     assert_eq!(t.vars.get(&VarId(7)), Some(&vr(3.0)), "kind param as a variable");
@@ -80,7 +86,11 @@ fn wp1_spawn_runs_create_inside_the_call_and_applies_the_kind() {
     };
     let id = c.spawn(thing, Real::ZERO, Real::ZERO, init).unwrap();
     let inst = fx.w.get(id).unwrap();
-    assert_eq!(inst.vars.get(&VarId(7)), Some(&vr(4.0)), "instance params override");
+    assert_eq!(
+        inst.vars.get(&VarId(7)),
+        Some(&vr(4.0)),
+        "instance params override"
+    );
     assert_eq!(inst.rank, 9, "a room-file rank wins");
     let iwbtg_sim::world::KindState::Probe(state) = &inst.state else {
         panic!("probe state")
@@ -88,10 +98,24 @@ fn wp1_spawn_runs_create_inside_the_call_and_applies_the_kind() {
     assert_eq!(state.events, 1, "Create ran inside spawn");
 
     let mut c = fx.ctx();
-    assert!(c.spawn(KindId(99), Real::ZERO, Real::ZERO, SpawnInit::default()).is_err());
-    assert!(c.spawn(thing, Real::new(f64::NAN), Real::ZERO, SpawnInit::default()).is_err());
-    assert!(c.spawn_engine(EngineKind::Bow, Real::ZERO, Real::ZERO, SpawnInit::default()).unwrap().is_none());
-    assert!(c.spawn_engine(EngineKind::Blood, Real::ZERO, Real::ZERO, SpawnInit::default()).unwrap().is_some());
+    assert!(
+        c.spawn(KindId(99), Real::ZERO, Real::ZERO, SpawnInit::default())
+            .is_err()
+    );
+    assert!(
+        c.spawn(thing, Real::new(f64::NAN), Real::ZERO, SpawnInit::default())
+            .is_err()
+    );
+    assert!(
+        c.spawn_engine(EngineKind::Bow, Real::ZERO, Real::ZERO, SpawnInit::default())
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        c.spawn_engine(EngineKind::Blood, Real::ZERO, Real::ZERO, SpawnInit::default())
+            .unwrap()
+            .is_some()
+    );
 }
 
 #[test]
@@ -99,7 +123,12 @@ fn wp1_ids_are_monotonic_and_never_reused() {
     let mut b = builder();
     let k = probe_kind(&mut b, "p");
     let mut fx = Fx::new(b.build().unwrap());
-    let a = fx.probe(k, 0.0, 0.0, p("A").with(step(ProbeOn::Step, ProbeAct::DestroySelf)));
+    let a = fx.probe(
+        k,
+        0.0,
+        0.0,
+        p("A").with(step(ProbeOn::Step, ProbeAct::DestroySelf)),
+    );
     let bb = fx.probe(k, 0.0, 0.0, p("B"));
     assert_eq!((a, bb), (InstId::FIRST, InstId(100_002)));
     fx.tick(InputFrame::EMPTY);
@@ -174,7 +203,11 @@ fn wp1_emit_queues_output() {
 }
 
 /// The kid probe K with handlers `handlers`, and others as given (kind, solid, touching).
-fn collision_fixture(handlers: &[ClassMask], pair_order: PairOrder, recheck_nonsolid: bool) -> (Fx, InstId, InstId, InstId) {
+fn collision_fixture(
+    handlers: &[ClassMask],
+    pair_order: PairOrder,
+    recheck_nonsolid: bool,
+) -> (Fx, InstId, InstId, InstId) {
     let mut b = builder();
     let kid = classed(&mut b, "kid", ClassMask::KID, handlers);
     let block = classed(&mut b, "block", ClassMask::BLOCK, &[]);
@@ -206,16 +239,27 @@ fn wp1_collision_pairs_follow_pair_order() {
     fx.tick(InputFrame::EMPTY);
     // By the other's rank: block (rank 1) before killer (rank 2); the solid pair goes through
     // the put-back.
-    assert_eq!(kid_collisions(&fx.log()), vec!["put".to_owned(), format!("k{}K", bl.0), format!("k{}K", x.0)]);
+    assert_eq!(
+        kid_collisions(&fx.log()),
+        vec!["put".to_owned(), format!("k{}K", bl.0), format!("k{}K", x.0)]
+    );
     let (mut fx, _, bl, x) = collision_fixture(&handlers, PairOrder::HandlerListOrder, true);
     fx.tick(InputFrame::EMPTY);
-    assert_eq!(kid_collisions(&fx.log()), vec![format!("k{}K", x.0), "put".to_owned(), format!("k{}K", bl.0)]);
+    assert_eq!(
+        kid_collisions(&fx.log()),
+        vec![format!("k{}K", x.0), "put".to_owned(), format!("k{}K", bl.0)]
+    );
 }
 
 #[test]
 fn wp1_one_other_matching_two_handlers_fires_both_in_handler_order() {
     let mut b = builder();
-    let kid = classed(&mut b, "kid", ClassMask::KID, &[ClassMask::BLOCK, ClassMask::PLATFORM]);
+    let kid = classed(
+        &mut b,
+        "kid",
+        ClassMask::KID,
+        &[ClassMask::BLOCK, ClassMask::PLATFORM],
+    );
     let platform = classed(&mut b, "platform", ClassMask::PLATFORM | ClassMask::BLOCK, &[]);
     let mut fx = Fx::new(b.build().unwrap());
     // The kid logs the handler class it ran for.
@@ -234,16 +278,28 @@ fn wp1_one_other_matching_two_handlers_fires_both_in_handler_order() {
 fn wp1_pairs_are_rechecked_before_their_event() {
     // The kid's block event moves him off the killer (clears the killer's touch flag).
     let run = |recheck: bool| {
-        let (mut fx, k, bl, x) = collision_fixture(&[ClassMask::BLOCK, ClassMask::KILLER], PairOrder::OtherRankThenId, recheck);
+        let (mut fx, k, bl, x) = collision_fixture(
+            &[ClassMask::BLOCK, ClassMask::KILLER],
+            PairOrder::OtherRankThenId,
+            recheck,
+        );
         let state = p("K").with(step(ProbeOn::Collision, ProbeAct::SetGlobal(touch_var(x), vr(0.0))).once());
         fx.w.get_mut(k).unwrap().state = iwbtg_sim::world::KindState::Probe(state);
         fx.tick(InputFrame::EMPTY);
         (kid_collisions(&fx.log()), bl, x)
     };
     let (hits, bl, _) = run(true);
-    assert_eq!(hits, vec!["put".to_owned(), format!("k{}K", bl.0)], "C7b on: the killer pair is skipped");
+    assert_eq!(
+        hits,
+        vec!["put".to_owned(), format!("k{}K", bl.0)],
+        "C7b on: the killer pair is skipped"
+    );
     let (hits, bl, x) = run(false);
-    assert_eq!(hits, vec!["put".to_owned(), format!("k{}K", bl.0), format!("k{}K", x.0)], "C7b off");
+    assert_eq!(
+        hits,
+        vec!["put".to_owned(), format!("k{}K", bl.0), format!("k{}K", x.0)],
+        "C7b off"
+    );
     // A solid pair is always re-checked (C7): two blocks, the first event clears the second.
     let mut b = builder();
     let kid = classed(&mut b, "kid", ClassMask::KID, &[ClassMask::BLOCK]);
@@ -260,16 +316,26 @@ fn wp1_pairs_are_rechecked_before_their_event() {
     let state = p("K").with(step(ProbeOn::Collision, ProbeAct::SetGlobal(touch_var(b2), vr(0.0))).once());
     fx.w.get_mut(k).unwrap().state = iwbtg_sim::world::KindState::Probe(state);
     fx.tick(InputFrame::EMPTY);
-    assert_eq!(kid_collisions(&fx.log()), vec!["put".to_owned(), format!("k{}K", b1.0)]);
+    assert_eq!(
+        kid_collisions(&fx.log()),
+        vec!["put".to_owned(), format!("k{}K", b1.0)]
+    );
 }
 
 #[test]
 fn wp1_a_destroyed_other_is_skipped() {
-    let (mut fx, k, bl, x) = collision_fixture(&[ClassMask::BLOCK, ClassMask::KILLER], PairOrder::OtherRankThenId, false);
+    let (mut fx, k, bl, x) = collision_fixture(
+        &[ClassMask::BLOCK, ClassMask::KILLER],
+        PairOrder::OtherRankThenId,
+        false,
+    );
     let state = p("K").with(step(ProbeOn::Collision, ProbeAct::Destroy(x)).once());
     fx.w.get_mut(k).unwrap().state = iwbtg_sim::world::KindState::Probe(state);
     fx.tick(InputFrame::EMPTY);
-    assert_eq!(kid_collisions(&fx.log()), vec!["put".to_owned(), format!("k{}K", bl.0)]);
+    assert_eq!(
+        kid_collisions(&fx.log()),
+        vec!["put".to_owned(), format!("k{}K", bl.0)]
+    );
 }
 
 #[test]
@@ -299,7 +365,10 @@ fn wp1_state_hash_covers_state_and_skips_caches() {
     w.get_mut(InstId::FIRST).unwrap().depth = Real::new(-0.0);
     assert_ne!(hash::state_hash(&w), h0, "reals hash by their bits");
     // Checkpoints every 500 ticks.
-    assert_eq!(hash::checkpoint(&fx.w).map(|c| c.to_vec()), Some(h0[..16].to_vec()));
+    assert_eq!(
+        hash::checkpoint(&fx.w).map(|c| c.to_vec()),
+        Some(h0[..16].to_vec())
+    );
     fx.w.tick = CHECKPOINT_INTERVAL - 1;
     assert!(hash::checkpoint(&fx.w).is_none());
     fx.w.tick = CHECKPOINT_INTERVAL * 3;
@@ -318,4 +387,8 @@ fn wp1_unknown_kind_in_dispatch_halts() {
     assert_eq!(fx.w.status, iwbtg_sim::SimStatus::Running);
     let flow = iwbtg_sim::events::dispatch(&mut fx.ctx(), a, &iwbtg_sim::events::EventKind::User(0));
     assert_eq!(flow, Flow::Halt);
-    assert!(matches!(fx.w.status, iwbtg_sim::SimStatus::Halted(iwbtg_sim::SimError::Invariant { .. })));}
+    assert!(matches!(
+        fx.w.status,
+        iwbtg_sim::SimStatus::Halted(iwbtg_sim::SimError::Invariant { .. })
+    ));
+}

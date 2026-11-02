@@ -90,12 +90,7 @@ fn engine_overlaps(ctx: &Ctx, a: InstId, b: InstId) -> Result<bool, SimError> {
     }
 }
 
-fn engine_solid_resolve(
-    ctx: &mut Ctx,
-    a: InstId,
-    b: InstId,
-    run: EventRun,
-) -> Result<Flow, SimError> {
+fn engine_solid_resolve(ctx: &mut Ctx, a: InstId, b: InstId, run: EventRun) -> Result<Flow, SimError> {
     resolve::solid_resolve(ctx, a, b, |c| run(c))
 }
 

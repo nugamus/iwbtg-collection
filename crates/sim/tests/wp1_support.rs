@@ -100,7 +100,9 @@ fn room(ctx: &mut Ctx, req: RoomRequest) -> Result<(), SimError> {
         Some(Value::Real(r)) => r.get(),
         _ => 0.0,
     };
-    ctx.w.globals.insert(ROOM_CHANGES, Value::Real(Real::new(n + 1.0)));
+    ctx.w
+        .globals
+        .insert(ROOM_CHANGES, Value::Real(Real::new(n + 1.0)));
     Ok(())
 }
 
@@ -184,9 +186,7 @@ impl Fx {
             run_create: false,
             ..SpawnInit::default()
         };
-        let id = c
-            .spawn(kind, Real::new(x), Real::new(y), init)
-            .expect("spawn");
+        let id = c.spawn(kind, Real::new(x), Real::new(y), init).expect("spawn");
         c.w.get_mut(id).expect("just spawned").state = KindState::Probe(state);
         id
     }
@@ -233,7 +233,9 @@ impl Fx {
 
 /// The log tokens of one tag, in order.
 pub fn tokens_of<'a>(log: &'a str, tag: &str) -> Vec<&'a str> {
-    log.split(' ').filter(|t| !t.is_empty() && t.ends_with(tag)).collect()
+    log.split(' ')
+        .filter(|t| !t.is_empty() && t.ends_with(tag))
+        .collect()
 }
 
 /// `Real` from an `f64`.
