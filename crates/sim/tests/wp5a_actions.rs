@@ -837,3 +837,48 @@ fn event_set_follows_the_lists() {
     let e = kid::event_set(&p);
     assert!(e.step && e.end_step && !e.room_start);
 }
+
+/// #268: A1 Step action 3 (walk, sprites, clamp, shoot, jump, release) is wholly under frozen2,
+/// by the kid's own flag or `global.frozen2`.
+#[test]
+fn all_of_step_action_3_is_skipped_while_frozen2() {
+    for global in [false, true] {
+        with_kid(
+            |_| {},
+            |ctx, kid, k, _| {
+                spawn(ctx, k.block, 80.0, 109.0);
+                if global {
+                    ctx.w.engine.kid.frozen2 = true;
+                } else {
+                    kstate(ctx, kid).frozen2 = true;
+                }
+                set_v(ctx, kid, 2.0, 12.0);
+                let before = sprite(ctx, kid);
+                input(
+                    ctx,
+                    &[Action::Right, Action::Jump, Action::Shoot],
+                    &[Action::Right, Action::Jump, Action::Shoot],
+                    &[Action::Jump],
+                );
+                for a in [
+                    CommonAction::Walk,
+                    CommonAction::AirSprite,
+                    CommonAction::FallCap,
+                    CommonAction::Shoot,
+                    CommonAction::Jump,
+                    CommonAction::Release,
+                ] {
+                    run(ctx, kid, a);
+                }
+                assert_eq!((hs(ctx, kid), vs(ctx, kid)), (2.0, 12.0), "global {global}");
+                assert_eq!(sprite(ctx, kid), before);
+                assert_eq!(ctx.w.count_of(ClassMask::KID_BULLET), 0);
+                // Not frozen: the same calls act.
+                ctx.w.engine.kid.frozen2 = false;
+                kstate(ctx, kid).frozen2 = false;
+                run(ctx, kid, CommonAction::FallCap);
+                assert_eq!(vs(ctx, kid), 9.0);
+            },
+        );
+    }
+}
