@@ -9,7 +9,7 @@ use serde::{Deserialize, Deserializer};
 
 use super::class::ClassMask;
 use super::ids::SpriteId;
-use crate::kid::KidAction;
+use crate::kid::{KidAction, KidCollisionRun};
 use crate::num::Real;
 
 pub use super::physics_ext::{FlipKind, FlipModel, IceRules, LadderRules, SlopeModel};
@@ -121,6 +121,12 @@ fn class_names<'de, D: Deserializer<'de>>(d: D) -> Result<ClassMask, D::Error> {
     Ok(mask)
 }
 
+/// One class written as a name (`"block"`) into a [`ClassMask`].
+fn class_name<'de, D: Deserializer<'de>>(d: D) -> Result<ClassMask, D::Error> {
+    let n = String::deserialize(d)?;
+    ClassMask::from_name(&n).ok_or_else(|| serde::de::Error::custom(format!("unknown class `{n}`")))
+}
+
 /// `[numbers]`: the kid's constants (A1 Create, "Numeric constants"). A preset fills them
 /// (`kid::presets::apply`); `create_defaults` copies them into the kid.
 #[derive(Clone, PartialEq, Debug, Default, Deserialize)]
@@ -192,6 +198,20 @@ pub struct KidEvents {
     pub step: Vec<KidAction>,
     /// End Step.
     pub end_step: Vec<KidAction>,
+    /// Collision handlers, in handler order (`{ with = "block", run = "block_standard" }`).
+    pub collisions: Vec<KidCollision>,
+}
+
+/// One `events.collisions` row: the kid runs `run` when it collides with an instance of class
+/// `with`.
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct KidCollision {
+    /// The handler class (`"block"`, `"platform"`, `"killer"`).
+    #[serde(deserialize_with = "class_name")]
+    pub with: ClassMask,
+    /// The named run.
+    pub run: KidCollisionRun,
 }
 
 /// What `[jump] air` names as the air-jump model.
@@ -292,6 +312,8 @@ pub enum GravityReapply {
 pub struct GravityRules {
     /// When gravity is reapplied.
     pub reapply: GravityReapply,
+    /// Landing on a block (`block_standard`) sets gravity to 0 (A1; the Step sets it back).
+    pub block_landing_zeroes: bool,
 }
 
 /// `[platform]`.
@@ -300,6 +322,34 @@ pub struct GravityRules {
 pub struct PlatformRules {
     /// Pixels below the kid probed for a platform to keep `onPlatform` (4).
     pub hold_probe: Real,
+    /// When the kid lands on a platform.
+    pub rule: PlatformRule,
+    /// Pixels above the platform's `y` the kid is put at (9).
+    pub snap: Real,
+    /// What the kid takes from the platform's motion.
+    pub take: PlatformTake,
+}
+
+/// When a platform collision lands the kid.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlatformRule {
+    /// `y - vspeed / 2 <= platform.y`: the kid was at or above the top half a step ago (A1).
+    #[default]
+    HalfVspeed,
+}
+
+/// What a landing copies from the platform.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlatformTake {
+    /// The platform's `vspeed` (A1).
+    #[default]
+    Vspeed,
+    /// The platform's `y - yprevious` (family B, WP5b).
+    DeltaY,
+    /// Family C (WP5c).
+    YspeedFlipped,
 }
 
 /// Vine model.
