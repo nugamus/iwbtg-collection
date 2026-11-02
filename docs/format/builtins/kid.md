@@ -40,4 +40,11 @@ Fields other built-ins read go through `kid::api`, never `KidState` directly (pl
 
 Boundary events follow `events.boundary` (A1: Intersect Boundary kills or warps, then wraps; see [physics.md](../physics.md)).
 
-OPEN: sounds (#231, including family B's death sound object); the flipped kid of the group A games and the other families' actions (WP5c).
+OPEN: sounds (#231, including family B's death sound object).
+
+Known gaps of families A2 to A5 (client#286):
+
+- `frozen` is a flag. Wanna reads it as a countdown (`frozen > 0` forces `h` to 0 and subtracts 1), but nothing in wanna sets it above 0 (kid/A3.md), so the difference is dormant. A game that sets it above 0 needs a countdown first.
+- A3 Step action 1 (the `frames` and `seconds` counters) is not modelled: the client counts ticks and the saved time is our own format.
+- showdown's room-specific triple jump and bullet limit (1 in room046 and room049), `ad_nudge` while frozen, `key_flags` with a press and a release in one tick, machinary's depth-layer scale, spook house's wings and powerup gravity, and little-runner's boss death sound wait for spec answers: research#43.
+- The roomout edge targets of eat-the-new-year are an `edge_warp` with a per-edge table ([edge_warp](edge_warp.md)).
