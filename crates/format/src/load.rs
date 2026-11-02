@@ -162,7 +162,7 @@ fn request_text(cr: &str) -> &'static str {
 /// the package still loads (with defaults) and `iwbtg pkg check` stays useful. Any other panic is
 /// passed on. Temporary scaffolding: WP11 removes it once every loader dependency is merged.
 /// On targets without unwinding (wasm32-unknown-unknown) the call is made directly.
-fn pending_call<T>(pending: &mut BTreeSet<String>, f: impl FnOnce() -> T) -> Option<T> {
+pub(crate) fn pending_call<T>(pending: &mut BTreeSet<String>, f: impl FnOnce() -> T) -> Option<T> {
     #[cfg(panic = "unwind")]
     {
         quiet_stub_panics();
@@ -435,8 +435,9 @@ impl<'a> Loader<'a> {
         let rooms = self.parse_rooms();
         // Step 7 (WP7b): sounds before kinds, so params can name sounds.
         let mut sounds = Vec::new();
+        let trace = self.trace_mode();
         let mut d = Vec::new();
-        if let Some(s) = pending_call(&mut self.pending, || sounds::load(self.files, &mut d)) {
+        if let Some(s) = pending_call(&mut self.pending, || sounds::load(self.files, trace, &mut d)) {
             sounds = s;
         }
         self.diags.append(&mut d);
@@ -449,10 +450,15 @@ impl<'a> Loader<'a> {
         self.load_order();
         // Step 7 (WP7b): physics.
         let mut d = Vec::new();
-        let physics = match pending_call(&mut self.pending, || physics::load(self.files, &mut d)) {
-            Some(Some(p)) => p,
-            Some(None) | None => PhysicsProfile::default(),
+        let physics_path = self.m.physics.get_ref().clone();
+        let loaded = physics::load(self.files, &physics_path, self.trace_mode(), &mut d);
+        self.diags.append(&mut d);
+        let physics = match loaded {
+            Some(l) => self.finish_physics(l, &physics_path),
+            None => PhysicsProfile::default(),
         };
+        let mut d = Vec::new();
+        physics::check_tricks(&self.m.tricks, &physics, self.manifest_text, &mut d);
         self.diags.append(&mut d);
         if self.trace_mode() {
             self.legacy_kid_mask();
@@ -522,7 +528,8 @@ impl<'a> Loader<'a> {
         };
         // Step 7 (WP7b): params against the built-ins' specs, on the built definition.
         let mut d = Vec::new();
-        let _ = pending_call(&mut self.pending, || params::check(&def, &mut d));
+        let trace = self.trace_mode();
+        let _ = pending_call(&mut self.pending, || params::check(&def, trace, &mut d));
         self.diags.append(&mut d);
         Some(def)
     }
@@ -789,6 +796,23 @@ impl<'a> Loader<'a> {
     }
 
     /// Trace mode: the kid's mask from the legacy physics.toml `mask = { sprite = ... }` (CR8).
+    /// Resolves the `[sprites]` names of a loaded profile to sprite ids.
+    fn finish_physics(&mut self, l: physics::PhysicsLoad, path: &str) -> PhysicsProfile {
+        let mut p = l.profile;
+        let text = read_text(self.files, path, &mut Vec::new()).unwrap_or("");
+        let pick = |this: &mut Self, name: &Option<String>| -> Option<SpriteId> {
+            let name = name.as_ref()?;
+            let at = text.find(name.as_str()).unwrap_or(0);
+            this.sprite_ref(name, path, text, at..at + name.len())
+        };
+        p.sprites.idle = pick(self, &l.sprites.idle);
+        p.sprites.running = pick(self, &l.sprites.running);
+        p.sprites.jump = pick(self, &l.sprites.jump);
+        p.sprites.fall = pick(self, &l.sprites.fall);
+        p.sprites.sliding = pick(self, &l.sprites.sliding);
+        p
+    }
+
     fn legacy_kid_mask(&mut self) {
         let Some(&kid) = self.kind_ids.get(Builtin::Kid.name()) else {
             return;
