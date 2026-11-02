@@ -129,7 +129,7 @@ fn param_zone_writes_numbers() {
         assert_eq!(s.max_fall_speed, r(1.0));
         assert_eq!(s.jump_speeds, vec![r(16.0), r(13.0), r(6.0)]);
         assert_eq!(
-            api::read_field(ctx.w, k, &field("jump", Some(1))),
+            api::read_field(ctx.w, k, &field("jump", Some(2))),
             Some(Value::Real(r(13.0)))
         );
         assert_eq!(
@@ -203,9 +203,15 @@ fn read_field_names() {
         assert_eq!(get("curJumps", None), Some(Value::Real(r(2.0))));
         assert_eq!(get("yflag", None), Some(Value::Real(r(-1.0))));
         assert_eq!(get("jump", None), Some(Value::Real(r(8.5))));
-        assert_eq!(get("jump", Some(1)), Some(Value::Real(r(7.0))));
+        assert_eq!(
+            get("jump", Some(1)),
+            Some(Value::Real(r(8.5))),
+            "1-based like B's array"
+        );
+        assert_eq!(get("jump", Some(2)), Some(Value::Real(r(7.0))));
         assert_eq!(get("jump2", None), Some(Value::Real(r(7.0))));
-        assert_eq!(get("jump", Some(2)), None);
+        assert_eq!(get("jump", Some(0)), None);
+        assert_eq!(get("jump", Some(3)), None);
         assert_eq!(get("djump", Some(0)), None);
         assert_eq!(get("nosuch", None), None);
         assert_eq!(api::read_field(ctx.w, b, &field("djump", None)), None);

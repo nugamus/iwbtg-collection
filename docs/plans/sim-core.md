@@ -593,8 +593,8 @@ vine_keys = "edges"           # edges | latched_flags (wanna, rori, fairy-tale, 
 [events]
 create = ["create_defaults", "ensure_world", "create_bow", "first_play_save", "arm_play_timer"]
 room_start = []                # B: ["create_bow", "set_view_angle"]
-step = ["ladder", "walk", "air_sprite", "fall_cap", "shoot", "jump", "release",
-        "ad_nudge", "vines", "flip_swap", "platform_gravity_zero", "fade_in"]
+step = ["gravity", "walk", "air_sprite", "fall_cap", "shoot", "jump", "release",
+        "ad_nudge", "vines", "flip_swap", "platform_gravity_zero", "fade_in"]   # `gravity` stands for the ladder action's step 4 until WP5c builds `ladder` (see below)
 end_step = ["ladder_sprites"]
 alarms = [{ n = 0, run = ["play_timer"] }]   # B: cancel poll (unused while cancels are on)
 outside_room = []              # B: ["kill_unless_room_changer"]
@@ -656,7 +656,8 @@ Each row is one spec rule; the last column is the field or action that implement
 | B Create does not set gravity (0 until End Step) | B | `gravity.reapply = "end_step_slope"` and create gravity 0 | 5b |
 | B Room Start: create bow, set view angle | B | `events.room_start` actions `create_bow`, `set_view_angle` | 5b |
 | Create alpha 0 and +0.1 per Step (rely) | A1 rely | action `fade_in`, `misc.fade_in = true` | 5a |
-| Ladder: up/down while overlapping ladder grabs, moves 3 px, gravity/vspeed 0, jump leaves, else gravity 0.4 | A1 (little-trap, rainbow) | action `ladder` (two `direct` reads where the original reads twice), `[ladder] entry = "up_or_down" | "up_only"` | 5c |
+| Gravity back to its constant every Step unless on a ladder (A1 Step action 2 step 4; the rely profile has no ladder) | A1 (rely) | action `gravity` (`gravity.reapply = "step"`); WP5a | 5a |
+| Ladder: up/down while overlapping ladder grabs, moves 3 px, gravity/vspeed 0, jump leaves, else gravity 0.4 | A1 (little-trap, rainbow) | action `ladder` (two `direct` reads where the original reads twice), `[ladder] entry = "up_or_down" | "up_only"`. A profile that has ladders lists `ladder` instead of `gravity`: `ladder` includes the gravity reset (step 4), so the two are never listed together | 5c |
 | Walk: right wins, frozen forces 0, facing unless near vine, vine-blocked direction keeps old hspeed | A, B, C | action `walk` (`InputState::direct` under `input.walk = "direct_latch"`) | 5a |
 | Slip blocks: probe 4 px, read slip 10 px below, add/subtract `slip*sign(hspeed)`, no clamp | A1, A2, B | `[ice] model = "slip"`; uses `num::sign(.., &NumRules)` (N11) | 5c |
 | Showdown ice: tempHspeed, decay 0.95, zero below 0.2 | A3 showdown | action `ice_temp_hspeed` | 5c |
@@ -856,7 +857,7 @@ Checked against `research/build/packages/rely_the_needle/` on 2026-10-24. The cl
 
 | Id | Request | Evidence | Gate |
 |---|---|---|---|
-| CR1 | Map rely objBLOCK (`@block_2`, `script = "block_2"`, ~600 instances, the floor under the room1 spawn) to the `block` preset with `visual_spawns_collider` | `objects/block_2.toml`; only 19 plain `block` instances in the package | M1 |
+| CR1 | Map rely objBLOCK (`@block_2`, `script = "block_2"`, ~600 instances, the floor under the room1 spawn) to the `block` preset with `visual_spawns_collider` and `collider` (the plain block kind it spawns; `kid_collides = false` on the visual). CR16 to CR18 (tier 1 and tier 2 built-in params, kind references): `research/specs/converter-requests.md` | `objects/block_2.toml`; only 19 plain `block` instances in the package | M1 |
 | CR2 | Map `warp_start` to `difficulty_warp` with `dif` from creation code, or mark it inert-safe | `objects/warp_start.toml`, placed in rSelectStage | M1b |
 | CR3 | `status = "infra"` objects (world, init, blood, bow, GAMEOVER, bloodEmitter, playerface, menus) become built-ins or are dropped, never `script =` | `objects/world.toml`, `init.toml`; trace-map `kind = ""` rows | M1 |
 | CR4 | `object_order` lists every spawnable engine kind with its original index (bow 25, GAMEOVER 51, blood 11, bloodEmitter 175, playerface 608 in rely) | trace-map rows with `kind = ""` | M1 |

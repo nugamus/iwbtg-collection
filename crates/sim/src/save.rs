@@ -77,6 +77,12 @@ pub fn save_now(
     model: SavedPosition,
     fixed: Option<(Real, Real)>,
 ) -> Result<(), SimError> {
+    // Family B stores the first kid whichever kid touched the save point (R21).
+    let kid = if ctx.def.physics.save.first_kid {
+        ctx.w.kid(&ctx.rules.tick).unwrap_or(kid)
+    } else {
+        kid
+    };
     let inst = ctx
         .w
         .get(kid)
