@@ -1,0 +1,18 @@
+#:schema ../schema/v0/physics.schema.json
+# The kid's physics profile of eat-the-lemon (family B, kid/B.md "Per-game differences"): the B
+# preset (kaenbyou) with what differs. playerJump has no pause-press guard and the player has no
+# Alarm 0.
+preset = "B"
+
+[events]
+alarms = []
+
+[jump]
+blocked_by_pause_press = false
+
+[sprites]
+idle = "kid_idle"
+running = "kid_run"
+jump = "kid_jump"
+fall = "kid_fall"
+sliding = "kid_slide"

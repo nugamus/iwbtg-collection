@@ -1,6 +1,6 @@
 # `physics.toml`: the kid's physics profile
 
-One file per game, next to `game.toml`. It says how the kid moves, jumps, shoots, dies and saves. The kid is one built-in (`kid`, [builtins/kid.md](builtins/kid.md)); every difference between games is a value in this file or a named action in an event list. Nothing in the sim branches on the family. Schema: [schema/v0/physics.schema.json](schema/v0/physics.schema.json). A complete example (rely-the-needle-4-2): [examples/rely-physics.toml](examples/rely-physics.toml).
+One file per game, next to `game.toml`. It says how the kid moves, jumps, shoots, dies and saves. The kid is one built-in (`kid`, [builtins/kid.md](builtins/kid.md)); every difference between games is a value in this file or a named action in an event list. Nothing in the sim branches on the family. Schema: [schema/v0/physics.schema.json](schema/v0/physics.schema.json). Complete examples: rely-the-needle-4-2 [examples/rely-physics.toml](examples/rely-physics.toml), kaenbyou (family B) [examples/kaenbyou-physics.toml](examples/kaenbyou-physics.toml), and eat-the-lemon as the B preset plus its differences [examples/eat-the-lemon-physics.toml](examples/eat-the-lemon-physics.toml).
 
 Source: [sim core plan](../plans/sim-core.md) sections 5.1 to 5.3; `crates/sim/src/def/physics.rs`; `crates/sim/src/kid/presets.rs`.
 
@@ -11,7 +11,8 @@ Source: [sim core plan](../plans/sim-core.md) sections 5.1 to 5.3; `crates/sim/s
 | Preset | Defaults |
 |---|---|
 | `A1` | rely-the-needle-4-2 (kid/A1.md): rely's numbers, event lists, collisions, death order and save model. |
-| `A2` to `A5`, `B`, `C` | Record the family name and use the `A1` defaults until their work packages (WP5b, WP5c) add theirs. |
+| `B` | kaenbyou (kid/B.md): the `yflag` flip, `cur_jumps` jumps with water, End Step slope code and gravity, polling killer check, Outside Room kill, B's death order with the first kid. eat-the-lemon is `B` with `jump.blocked_by_pause_press = false` and no Alarm 0 (`events.alarms = []`). |
+| `A2` to `A5`, `C` | Record the family name and use the `A1` defaults until their work package (WP5c) adds theirs. |
 
 An empty file is the same as `preset = "A1"`. The loader rejects unknown keys, sections, action names, run names, class names and enum values, so a typo never falls back silently.
 
