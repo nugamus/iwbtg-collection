@@ -1,0 +1,11 @@
+#:schema ../schema/v0/physics.schema.json
+# keep-celebrating-for-xia (family C, kid/C.md): the C preset as it is. The C key (teleport to
+# the start marker) and the restart through `scrLoadGame` are not part of the profile yet.
+preset = "C"
+
+[sprites]
+idle = "kid_idle"
+running = "kid_run"
+jump = "kid_jump"
+fall = "kid_fall"
+sliding = "kid_slide"

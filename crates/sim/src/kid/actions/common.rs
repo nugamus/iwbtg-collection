@@ -205,7 +205,7 @@ fn real_i(n: i32) -> Real {
 }
 
 /// A distance query result as the vine rules read it: `None` (no such instance) is far.
-fn far(d: Option<Real>) -> Real {
+pub(crate) fn far(d: Option<Real>) -> Real {
     d.unwrap_or(Real::new(f64::MAX))
 }
 
@@ -217,11 +217,16 @@ pub(crate) fn down(s: &KidState) -> i32 {
 /// `yflag` for the actions that scale by it (`flip.model = "yflag"`): -1 while the kid is
 /// reversed, else 1. Other flip models keep 1: their flipped kid is another object.
 pub(crate) fn yflag(ctx: &Ctx, s: &KidState) -> i32 {
-    if ctx.def.physics.flip.model == FlipKind::Yflag && s.yflag < 0 {
+    if matches!(ctx.def.physics.flip.model, FlipKind::Yflag | FlipKind::GravSign) && s.yflag < 0 {
         -1
     } else {
         1
     }
+}
+
+/// Family B's reversed kid swaps Left and Right and the vine away key; family C's does not.
+pub(crate) fn keys_swapped(ctx: &Ctx, s: &KidState) -> bool {
+    ctx.def.physics.flip.model == FlipKind::Yflag && s.yflag < 0
 }
 
 /// Create steps 1 and 2 (A1): numbers from the profile, flags cleared, `djump` true,
@@ -264,6 +269,9 @@ fn create_defaults(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     if p.flip.model == FlipKind::Yflag {
         reverse_at_create(ctx, me)?;
     }
+    if p.flip.model == FlipKind::GravSign {
+        grav_at_create(ctx, me)?;
+    }
     Ok(())
 }
 
@@ -287,6 +295,24 @@ fn reverse_at_create(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     if reversed {
         inst.m.set_y(inst.m.y() - real_i(4))?;
     }
+    inst.img.set_yscale(real_i(i32::from(yflag)))
+}
+
+/// C Create: `grav` (`global.grav`: true is the flipped kid, -1) signs gravity and `image_yscale`
+/// (which mirrors the mask: `sprPlayerMaskFlip` covers `y - 8 .. y + 12`, the mirrored box).
+fn grav_at_create(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+    let flipped = ctx.w.engine.kid.grav;
+    let yflag: i8 = if flipped { -1 } else { 1 };
+    {
+        let s = state_mut(ctx, me)?;
+        s.yflag = yflag;
+        s.flipped = flipped;
+    }
+    let g = ctx.def.physics.numbers.gravity;
+    let Some(inst) = ctx.w.get_mut(me) else {
+        return Err(SimError::invariant("create_defaults: kid vanished"));
+    };
+    inst.m.set_gravity(g * real_i(i32::from(yflag)))?;
     inst.img.set_yscale(real_i(i32::from(yflag)))
 }
 
@@ -360,7 +386,7 @@ fn walk(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         WalkRead::Sampled => (ctx.w.input.held(Action::Right), ctx.w.input.held(Action::Left)),
     };
     // Reversed (family B): the keys swap, "L reads the right key and R the left key".
-    let (right, left) = if yflag(ctx, &s) < 0 {
+    let (right, left) = if keys_swapped(ctx, &s) {
         (left, right)
     } else {
         (right, left)
@@ -383,14 +409,27 @@ fn walk(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     };
     let n = &ctx.rules.num;
     let run = s.run_speed;
+    // C (`distance_sym_early`): both vine types need a distance above 1 for facing, and each
+    // direction is open when the vine on that side is further than 1.
+    let sym = p.vine.model == VineModel::DistanceSymEarly;
     if h != 0 {
-        if gm_ne(dr, Real::ONE, n) && gm_gt(dl, Real::ONE, n) {
+        let face = if sym {
+            gm_gt(dr, Real::ONE, n) && gm_gt(dl, Real::ONE, n)
+        } else {
+            gm_ne(dr, Real::ONE, n) && gm_gt(dl, Real::ONE, n)
+        };
+        if face {
             state_mut(ctx, me)?.facing = if h > 0 { 1 } else { -1 };
             if let Some(i) = ctx.w.get_mut(me) {
                 i.img.set_xscale(real_i(h))?;
             }
         }
-        let open = (h == -1 && gm_ne(dr, Real::ONE, n)) || (h == 1 && gm_gt(dl, Real::ONE, n));
+        let right_clear = if sym {
+            gm_gt(dr, Real::ONE, n)
+        } else {
+            gm_ne(dr, Real::ONE, n)
+        };
+        let open = (h == -1 && right_clear) || (h == 1 && gm_gt(dl, Real::ONE, n));
         if let (true, Some(i)) = (open, ctx.w.get_mut(me)) {
             i.m.set_hspeed(run * real_i(h))?;
             set_sprite(def, &mut i.img, p.sprites.running);
@@ -417,7 +456,7 @@ fn walk(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
 }
 
 /// Distances to the nearest right-side vine and left-side vine; far when there is none.
-fn vine_distances(ctx: &Ctx, me: InstId) -> Result<(Real, Real), SimError> {
+pub(crate) fn vine_distances(ctx: &Ctx, me: InstId) -> Result<(Real, Real), SimError> {
     let dr = far(distance_to_object(ctx, me, Target::Class(ClassMask::VINE_R))?);
     let dl = far(distance_to_object(ctx, me, Target::Class(ClassMask::VINE_L))?);
     Ok((dr, dl))
@@ -588,6 +627,14 @@ fn jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let water2 = match p.jump.water_air {
         WaterAir::None => false,
         WaterAir::Water2WithoutFlag => place_meeting(ctx, me, x, below, Target::Class(ClassMask::WATER2))?,
+        // C: water 2 and its child water 3 give the air jump; water 3 below also keeps `djump`.
+        WaterAir::Water3Keeps => place_meeting(
+            ctx,
+            me,
+            x,
+            below,
+            Target::Class(ClassMask::WATER2 | ClassMask::WATER3),
+        )?,
         other => {
             return Err(SimError::unsupported(format!(
                 "kid action jump: jump.water_air {other:?} (5.3 jump rows, WP5b/WP5c)"
@@ -599,7 +646,9 @@ fn jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
             i.m.set_vspeed(-(sign * jump1))?;
             set_sprite(def, &mut i.img, p.sprites.jump);
         }
-        state_mut(ctx, me)?.djump = false;
+        let keeps = p.jump.water_air == WaterAir::Water3Keeps
+            && place_meeting(ctx, me, x, below, Target::Class(ClassMask::WATER3))?;
+        state_mut(ctx, me)?.djump = keeps;
         return Ok(());
     }
     // `djump_then_tjump` (showdown): the third jump, once.
@@ -660,11 +709,7 @@ fn vines(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     match p.vine.model {
         VineModel::None => return Ok(()),
         VineModel::DistanceAsym => {}
-        VineModel::DistanceSymEarly => {
-            return Err(SimError::unsupported(
-                "kid action vines: vine.model distance_sym_early (5.3 vine row C, WP5c)",
-            ));
-        }
+        VineModel::DistanceSymEarly => return super::c::vines(ctx, me),
     }
     let Some(i) = ctx.w.get(me) else { return Ok(()) };
     let (x, y) = (i.m.x(), i.m.y());
@@ -686,7 +731,7 @@ fn vines(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     };
     let max_fall = p.numbers.max_fall_speed;
     let slide_fall = Real::new(2.0);
-    let rev = yflag(ctx, &s) < 0;
+    let rev = keys_swapped(ctx, &s);
     let yf = real_i(yflag(ctx, &s));
     // Reversed (family B): the away key is the other one, slide and kick follow `yflag`.
     let (right_pressed, left_pressed) = if rev {

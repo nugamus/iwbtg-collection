@@ -5,7 +5,7 @@
 //! position the put-back leaves it in (the previous position) and the speeds it had, then runs the
 //! kid's collision run and reads the result.
 
-use iwbtg_sim::def::physics::{KidCollision, PlatformTake};
+use iwbtg_sim::def::physics::KidCollision;
 use iwbtg_sim::def::testing::GameDefBuilder;
 use iwbtg_sim::def::{Builtin, ClassMask, GameDef, KindDef, KindId, PhysicsProfile, RoomDef};
 use iwbtg_sim::events::EventKind;
@@ -347,20 +347,6 @@ fn the_half_vspeed_boundary_is_inclusive() {
         },
     );
 }
-
-#[test]
-fn other_platform_take_models_are_unsupported() {
-    with_kid(
-        |p| p.platform.take = PlatformTake::YspeedFlipped,
-        |ctx, kid, k| {
-            let p = spawn(ctx, k.platform, 80.0, 105.0);
-            let run = KidCollisionRun::Platform(PlatformRun::PlatformStandard);
-            assert!(kid::run_collision(ctx, kid, p, &run).is_err());
-        },
-    );
-}
-
-// ---- Event wiring ----
 
 #[test]
 fn collision_events_run_the_rows_for_their_handler_class() {

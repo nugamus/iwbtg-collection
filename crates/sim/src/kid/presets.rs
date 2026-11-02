@@ -20,6 +20,7 @@ use crate::kid::actions::a1::A1Action;
 use crate::kid::actions::a3::A3Action;
 use crate::kid::actions::a5::A5Action;
 use crate::kid::actions::b::BAction;
+use crate::kid::actions::c::CAction;
 use crate::kid::actions::common::CommonAction as C;
 use crate::kid::collisions::block::BlockRun;
 use crate::kid::collisions::platform::PlatformRun;
@@ -42,6 +43,7 @@ pub fn defaults(family: KidFamily) -> PhysicsProfile {
         KidFamily::A3 => a3(),
         KidFamily::A4 => a4(),
         KidFamily::A5 => a5(),
+        KidFamily::C => c(),
         KidFamily::B => b(),
         _ => a1(),
     };
@@ -233,6 +235,66 @@ fn a5() -> PhysicsProfile {
     ];
     p.death.select_room_reset = false;
     p.save.position = SavePosition::XyBase256Bytes;
+    p.misc.fade_in = false;
+    p
+}
+
+/// Family C, reference game keep-celebrating-for-xia (kid/C.md): the `grav` sign flip, the
+/// vine flags computed before the jump code, a suicide press in the Step, edge and killer tests in
+/// the End Step, water 3, the flipped platform rule. Slide blocks, slip and slopes are not in the
+/// reference game's rooms (tier 3).
+fn c() -> PhysicsProfile {
+    let mut p = a1();
+    p.events.create = vec![
+        common(C::CreateDefaults),
+        common(C::CreateBow),
+        common(C::FirstPlaySave),
+    ];
+    p.events.step = vec![
+        KidAction::C(CAction::VineProbe),
+        common(C::Walk),
+        common(C::AirSprite),
+        common(C::FallCap),
+        common(C::Shoot),
+        common(C::Jump),
+        common(C::Release),
+        KidAction::C(CAction::SuicidePress),
+        common(C::Vines),
+    ];
+    p.events.end_step = vec![KidAction::B(BAction::KillerCheck)];
+    p.events.boundary = BoundaryModel::EndStepOrigin;
+    p.events.alarms = vec![];
+    p.events.keys = vec![];
+    p.events.collisions = vec![
+        KidCollision {
+            with: ClassMask::BLOCK,
+            run: KidCollisionRun::Block(BlockRun::BlockStandard),
+        },
+        KidCollision {
+            with: ClassMask::PLATFORM,
+            run: KidCollisionRun::Platform(PlatformRun::PlatformStandard),
+        },
+    ];
+    p.jump.ground_classes = ClassMask::BLOCK | ClassMask::WATER1;
+    p.jump.ground_also = vec![GroundAlso::PlatformFlag];
+    p.jump.ground_sets_djump = true;
+    p.jump.water_air = WaterAir::Water3Keeps;
+    p.fall_cap.rule = FallCapRule::ClampAbs;
+    p.gravity.reapply = GravityReapply::CreateOnly;
+    p.gravity.block_landing_zeroes = false;
+    p.platform.take = PlatformTake::YspeedFlipped;
+    p.vine.model = VineModel::DistanceSymEarly;
+    p.flip.model = FlipKind::GravSign;
+    p.death.order = vec![
+        DeathStep::Sound,
+        DeathStep::BloodEmitter,
+        DeathStep::DestroyKid,
+        DeathStep::GameOver,
+        DeathStep::DeathsPlusOne,
+        DeathStep::SaveCounters,
+    ];
+    p.death.select_room_reset = false;
+    p.save.position = SavePosition::XyBase100Bytes;
     p.misc.fade_in = false;
     p
 }
