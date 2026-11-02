@@ -6,6 +6,7 @@ use serde::Deserialize;
 
 use super::common::{down, state, state_mut, vine_distances};
 use crate::collide::query::place_free;
+use crate::def::Builtin;
 use crate::error::SimError;
 use crate::input::Action;
 use crate::kid::api::{KillCause, kill};
@@ -24,6 +25,11 @@ pub enum CAction {
     VineProbe,
     /// Step 10: the Suicide key pressed (not held) runs `killPlayer`, when not frozen.
     SuicidePress,
+    /// Key C pressed (kid/C.md "Key C pressed"): the kid moves to the top-left of the
+    /// `kid_start` marker (17 px left of and 23 px above the normal spawn). Speeds, `djump` and
+    /// the room are unchanged; frozen does not gate it. Nothing without a marker in the room.
+    /// Listed under `events.keys` for the client action `extra1`.
+    TeleportToStart,
 }
 
 /// Runs one action on the kid `me`. `kid::run_action` routes here.
@@ -34,7 +40,26 @@ pub fn run(ctx: &mut Ctx, me: InstId, action: &CAction) -> Result<Flow, SimError
             Ok(Flow::Continue)
         }
         CAction::SuicidePress => suicide_press(ctx, me),
+        CAction::TeleportToStart => {
+            teleport_to_start(ctx, me)?;
+            Ok(Flow::Continue)
+        }
     }
+}
+
+fn teleport_to_start(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+    let marker = ctx
+        .w
+        .iter_alive()
+        .filter(|i| ctx.def.kind(i.kind).is_some_and(|k| k.base == Builtin::KidStart))
+        .map(|i| (i.m.x(), i.m.y()))
+        .next();
+    let Some((x, y)) = marker else { return Ok(()) };
+    if let Some(i) = ctx.w.get_mut(me) {
+        i.m.set_x(x)?;
+        i.m.set_y(y)?;
+    }
+    Ok(())
 }
 
 fn vine_probe(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
@@ -92,6 +117,7 @@ pub(crate) fn vines(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
             // `kick[1]` is the unflipped -9; the original writes -9 * grav.
             i.m.set_vspeed(kick_v * sign)?;
             super::common::set_sprite(def, &mut i.img, p.sprites.jump);
+            super::common::play_sound(ctx, p.sounds.vine_kick)?;
         } else {
             i.m.set_hspeed(dir * drop)?;
             super::common::set_sprite(def, &mut i.img, p.sprites.fall);

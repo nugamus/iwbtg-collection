@@ -620,6 +620,189 @@ fn a_block_collider_that_does_not_exist_is_an_error() {
     );
 }
 
+// ---- #293: tier 2 built-in params (trigger, trap, fake_block, hidden_block, world) ------------
+
+/// The basic package with the WP6b.2 kinds and every object in `objects` (`(file stem, text)`)
+/// listed in `object_order`. `my_world` is added with its default text unless given, and is the
+/// game's `world` role when `world_role` is set.
+fn wp6b2_package(objects: &[(&str, &str)], world_role: bool) -> PackageFiles {
+    let mut stems: Vec<&str> = objects.iter().map(|(s, _)| *s).collect();
+    if !stems.contains(&"my_world") {
+        stems.push("my_world");
+    }
+    let listed: String = stems.iter().map(|s| format!("\"@{s}\", ")).collect();
+    let order = ORDER.replace(
+        "\"playerface\",",
+        &format!("\"playerface\", \"trigger\", \"trap\", \"fake_block\", \"hidden_block\", {listed}"),
+    );
+    let mut manifest = manifest(&order, "");
+    if world_role {
+        manifest = manifest.replace(
+            "[engine]
+",
+            "[engine]
+roles = { world = \"@my_world\" }
+",
+        );
+    }
+    package(|f| {
+        set(f, "game.toml", manifest.into_bytes());
+        if !objects.iter().any(|(s, _)| *s == "my_world") {
+            f.push(("objects/my_world.toml".into(), MY_WORLD.as_bytes().to_vec()));
+        }
+        for (stem, text) in objects {
+            f.push((format!("objects/{stem}.toml"), text.as_bytes().to_vec()));
+        }
+    })
+}
+
+const MY_WORLD: &str = "base = \"world\"\nlatch_cleared_by_world = true\npause = \"deactivate\"\npause_delay = 5\nmute = true\ntimer_per_tick = 2\ntimer_on_restart = 2\nclear_triggers_to = 10\nclear_switches_on_room_end = true\n";
+
+#[test]
+fn wp6b2_params_load() {
+    let files = wp6b2_package(
+        &[
+            ("my_world", MY_WORLD),
+            (
+                "free_trigger",
+                "base = \"trigger\"\nmodel = \"per_object\"\ntrg = 3\ngroup = \"@flag_trigger\"\none_shot_destroy = true\nsets_frame = true\nsize = 16\n",
+            ),
+            (
+                "flag_trigger",
+                "base = \"trigger\"\nmodel = \"flag_array\"\ntrg = 7\nneed_key = 2\narray = \"stop\"\nreset = true\n",
+            ),
+            (
+                "my_trap",
+                concat!(
+                    "base = \"trap\"\ntrigger_id = 3\ntrigger_model = \"per_object\"\n",
+                    "trigger_kind = \"@free_trigger\"\ntrigger_kind_b = \"@flag_trigger\"\n",
+                    "launch = \"path\"\npath = 0\npath_end = \"reverse\"\npath_speed = 2.5\n",
+                    "stop_on_stopper = \"flush\"\nflag_guard = true\nkind = \"killer\"\n",
+                ),
+            ),
+            (
+                "my_fake",
+                "base = \"fake_block\"\nvanish_on = \"touch\"\napproach_distance = 4\nblood_solid_when_no_kid = true\nstops_bullets = true\nreverses_platforms = true\nsolid = false\nvisible = true\n",
+            ),
+            (
+                "my_hidden",
+                "base = \"hidden_block\"\nreveal_distance = 1\nstops_bullets = true\ndestroy_when_no_kid = false\n",
+            ),
+        ],
+        true,
+    );
+    let (def, _) = load_ok(&files, STRICT);
+    let word = |s: &str| ParamValue::Str(s.into());
+    let real = |v: f64| ParamValue::Real(Real::new(v));
+    let yes = ParamValue::Bool(true);
+
+    let (_, w) = kind_named(&def, "@my_world");
+    assert_eq!(w.params.0.get("pause"), Some(&word("deactivate")));
+    for (k, v) in [
+        ("pause_delay", 5.0),
+        ("timer_per_tick", 2.0),
+        ("timer_on_restart", 2.0),
+        ("clear_triggers_to", 10.0),
+    ] {
+        assert_eq!(w.params.0.get(k), Some(&real(v)), "{k}");
+    }
+    for k in ["latch_cleared_by_world", "mute", "clear_switches_on_room_end"] {
+        assert_eq!(w.params.0.get(k), Some(&yes), "{k}");
+    }
+    assert_eq!(
+        def.engine_kind(EngineKind::World),
+        Some(kind_named(&def, "@my_world").0),
+        "the object is the game's world"
+    );
+
+    let (flag_id, flag) = kind_named(&def, "@flag_trigger");
+    assert_eq!(flag.params.0.get("model"), Some(&word("flag_array")));
+    assert_eq!(flag.params.0.get("array"), Some(&word("stop")));
+    assert_eq!(flag.params.0.get("need_key"), Some(&real(2.0)));
+    assert_eq!(flag.params.0.get("reset"), Some(&yes));
+    let (free_id, free) = kind_named(&def, "@free_trigger");
+    assert_eq!(
+        free.params.0.get("group"),
+        Some(&ParamValue::Kind(flag_id)),
+        "a kind param names a kind"
+    );
+    assert_eq!(free.params.0.get("trg"), Some(&real(3.0)));
+
+    let (_, trap) = kind_named(&def, "@my_trap");
+    assert_eq!(
+        trap.params.0.get("trigger_kind"),
+        Some(&ParamValue::Kind(free_id))
+    );
+    assert_eq!(
+        trap.params.0.get("trigger_kind_b"),
+        Some(&ParamValue::Kind(flag_id))
+    );
+    assert_eq!(trap.params.0.get("launch"), Some(&word("path")));
+    assert_eq!(trap.params.0.get("path"), Some(&real(0.0)), "a path is its index");
+    assert_eq!(trap.params.0.get("path_end"), Some(&word("reverse")));
+    assert_eq!(trap.params.0.get("stop_on_stopper"), Some(&word("flush")));
+    assert_eq!(trap.params.0.get("flag_guard"), Some(&yes));
+
+    let (_, fake) = kind_named(&def, "@my_fake");
+    assert_eq!(fake.params.0.get("vanish_on"), Some(&word("touch")));
+    assert_eq!(fake.params.0.get("approach_distance"), Some(&real(4.0)));
+    assert_eq!(fake.params.0.get("reverses_platforms"), Some(&yes));
+    // `solid` and `visible` of an object file are the kind's own flags, not params.
+    assert!(!fake.solid && fake.visible);
+    assert_eq!(fake.params.0.get("solid"), None);
+    let (_, hidden) = kind_named(&def, "@my_hidden");
+    assert_eq!(hidden.params.0.get("reveal_distance"), Some(&real(1.0)));
+    assert_eq!(
+        hidden.params.0.get("destroy_when_no_kid"),
+        Some(&ParamValue::Bool(false))
+    );
+}
+
+#[test]
+fn wp6b2_params_are_checked() {
+    let cases = [
+        ("base = \"world\"\npause = \"freeze\"\n", "pause"),
+        ("base = \"world\"\nmute = 1\n", "mute"),
+        (
+            "base = \"world\"\nclear_triggers_to = \"ten\"\n",
+            "clear_triggers_to",
+        ),
+        (
+            "base = \"world\"\nclear_switches_on_room_end = \"yes\"\n",
+            "clear_switches_on_room_end",
+        ),
+        ("base = \"world\"\nbogus = 1\n", "bogus"),
+        ("base = \"trigger\"\nmodel = \"fancy\"\n", "model"),
+        ("base = \"trigger\"\narray = \"both\"\n", "array"),
+        ("base = \"trigger\"\ngroup = \"@nope\"\n", "group"),
+        ("base = \"trap\"\nlaunch = \"teleport\"\n", "launch"),
+        ("base = \"trap\"\ntrigger_kind = \"@nope\"\n", "trigger_kind"),
+        (
+            "base = \"trap\"\nstop_on_stopper = \"explode\"\n",
+            "stop_on_stopper",
+        ),
+        ("base = \"fake_block\"\nvanish_on = \"later\"\n", "vanish_on"),
+        (
+            "base = \"fake_block\"\nstops_bullets = \"yes\"\n",
+            "stops_bullets",
+        ),
+        (
+            "base = \"hidden_block\"\nreveal_distance = true\n",
+            "reveal_distance",
+        ),
+    ];
+    for (text, needle) in cases {
+        let files = wp6b2_package(&[("bad", text)], false);
+        let r = load_report(&files, STRICT);
+        assert!(!r.ok(), "expected an error for {text:?}:\n{}", render(&r));
+        assert!(
+            errors(&r).iter().any(|e| e.contains(needle)),
+            "{text:?}: no error mentions `{needle}`: {:?}",
+            errors(&r)
+        );
+    }
+}
+
 // ---- #319: tier 2 built-in params (drop_platform, gravity_flip, edge_warp, bullet_blocker, slope)
 
 /// The basic package with the WP6b.3 kinds in `object_order` and `extra_instances` appended to

@@ -88,3 +88,10 @@ running = "kid_run"
 jump = "kid_jump"
 fall = "kid_fall"
 sliding = "kid_slide"
+
+[sounds]
+jump = "snd_jump"
+double_jump = "snd_djump"
+shoot = "snd_shoot"
+vine_kick = "snd_vine"
+death = "snd_death"
