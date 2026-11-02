@@ -34,7 +34,7 @@ The sim never parses text and never touches files. `format` hands it a validated
 One binary for agents and CI:
 
 - `iwbtg pkg check <dir>`: full validation, one readable error list with file, line and column.
-- `iwbtg pkg fmt <dir>`: canonical formatting ([0002](decisions/0002-data-syntax.md)).
+- `iwbtg pkg fmt <dir> [--check]`: canonical formatting of every `.toml` file ([0002](decisions/0002-data-syntax.md), [v0](format/v0.md#common-rules-for-data-files)); `--check` lists what would change and exits 1.
 - `iwbtg pkg hash <dir>`: prints the gameplay hash and content hash.
 - `iwbtg pkg upgrade <dir>`: migrates a package to the newest format version.
 - `iwbtg room show <dir> <room>`: prints an ASCII map of a room.

@@ -123,6 +123,14 @@ enum PkgCommand {
         #[arg(long)]
         trace_mode: bool,
     },
+    /// Formats every data file of a package in the canonical layout (docs/decisions/0002).
+    Fmt {
+        /// Package folder.
+        pkg: PathBuf,
+        /// Change nothing: list the files that would change and exit 1 if there are any.
+        #[arg(long)]
+        check: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -189,6 +197,7 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             Ok(true)
         }
         Command::Pkg(PkgCommand::Check { pkg, trace_mode }) => pkg_cmd::main(&pkg, trace_mode),
+        Command::Pkg(PkgCommand::Fmt { pkg, check }) => pkg_cmd::fmt_main(&pkg, check),
         Command::Determinism(DeterminismCommand::Report { corpus, check }) => {
             determinism_cmd::main(&corpus, check)
         }
