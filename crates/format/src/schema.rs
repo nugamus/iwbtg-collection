@@ -103,6 +103,8 @@ pub struct ObjectShape {
     pub depth: Option<Number>,
     /// Extra collision classes: named classes such as `block` or `killer`, or package class names.
     pub counts_as: Option<Vec<String>>,
+    /// Classes whose touch runs the script's `collide(other)`: named classes or package class names.
+    pub collides_with: Option<Vec<String>>,
     /// Legacy converter key, read only by trace builds. Write `counts_as` instead.
     pub roles: Option<Vec<String>>,
     /// Params with defaults; instances may override.

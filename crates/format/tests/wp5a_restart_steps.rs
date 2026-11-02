@@ -22,6 +22,7 @@ fn kid_steps_are_read() {
             save_death_time: true,
             clear_frozen: true,
             reset_jump_values: false,
+            release_death_sound: false,
             clear_triggers: false
         }
     );
@@ -45,4 +46,10 @@ fn death_on_restart_per_kid_is_read() {
     use iwbtg_sim::def::DeathOnRestart;
     let m = model("death_on_restart = \"save_counters_per_kid\"\n").unwrap();
     assert_eq!(m.death_on_restart, DeathOnRestart::SaveCountersPerKid);
+    let m = model(
+        "kid_steps = { release_death_sound = true }
+",
+    )
+    .unwrap();
+    assert!(m.kid_steps.release_death_sound && !m.kid_steps.clear_frozen);
 }

@@ -33,6 +33,16 @@
         "null"
       ]
     },
+    "collides_with": {
+      "description": "Classes whose touch runs the script's `collide(other)`: named classes or package class names.",
+      "items": {
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
     "counts_as": {
       "description": "Extra collision classes: named classes such as `block` or `killer`, or package class names.",
       "items": {

@@ -206,6 +206,14 @@
             "null"
           ]
         },
+        "release_death_sound": {
+          "default": null,
+          "description": "Stop the death sound and restore the music volume before the retry (B).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "reset_jump_values": {
           "default": null,
           "description": "Reset the new kid's jump values (showdown).",
