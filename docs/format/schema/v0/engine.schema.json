@@ -1,0 +1,185 @@
+{
+  "$defs": {
+    "Creator": {
+      "additionalProperties": false,
+      "description": "One `[[creators]]` entry.",
+      "properties": {
+        "name": {
+          "description": "Name as the creator wants it shown.",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/CreatorRole",
+          "description": "What they did."
+        }
+      },
+      "required": [
+        "name",
+        "role"
+      ],
+      "type": "object"
+    },
+    "CreatorRole": {
+      "description": "A creator's role.",
+      "oneOf": [
+        {
+          "const": "author",
+          "description": "Made the game.",
+          "type": "string"
+        },
+        {
+          "const": "co-author",
+          "description": "Made the game with others.",
+          "type": "string"
+        },
+        {
+          "const": "music",
+          "description": "Made the music.",
+          "type": "string"
+        },
+        {
+          "const": "art",
+          "description": "Made the art.",
+          "type": "string"
+        },
+        {
+          "const": "tester",
+          "description": "Tested the game.",
+          "type": "string"
+        },
+        {
+          "const": "other",
+          "description": "Anything else.",
+          "type": "string"
+        }
+      ]
+    },
+    "PackAssets": {
+      "description": "Whether a pack has its asset files yet.",
+      "oneOf": [
+        {
+          "const": "pending",
+          "description": "No asset files yet.",
+          "type": "string"
+        },
+        {
+          "const": "complete",
+          "description": "The asset files are in.",
+          "type": "string"
+        }
+      ]
+    },
+    "ThirdParty": {
+      "additionalProperties": false,
+      "description": "One `[[third_party]]` entry.",
+      "properties": {
+        "license": {
+          "description": "SPDX id, or `unknown`.",
+          "type": "string"
+        },
+        "owner": {
+          "description": "Rights holder.",
+          "type": "string"
+        },
+        "path": {
+          "description": "Package path of the file.",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/ThirdPartyStatus",
+          "description": "Clearance status."
+        },
+        "what": {
+          "description": "What it is.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "what",
+        "owner",
+        "license",
+        "status"
+      ],
+      "type": "object"
+    },
+    "ThirdPartyStatus": {
+      "description": "Clearance status of a third-party file.",
+      "oneOf": [
+        {
+          "const": "cleared",
+          "description": "Cleared for public release.",
+          "type": "string"
+        },
+        {
+          "const": "to-clear",
+          "description": "Not cleared yet.",
+          "type": "string"
+        },
+        {
+          "const": "excluded-from-public",
+          "description": "Never shipped in public builds.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "`engine.toml`.",
+  "properties": {
+    "assets": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PackAssets"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`pending` while the pack has no asset files yet, `complete` once it has them."
+    },
+    "creators": {
+      "description": "Who made the pack's content.",
+      "items": {
+        "$ref": "#/$defs/Creator"
+      },
+      "type": "array"
+    },
+    "family": {
+      "description": "The physics preset the pack matches: A1, A2, A3, A4, A5, B or C.",
+      "type": "string"
+    },
+    "games": {
+      "default": [],
+      "description": "Ported games that use the pack (informational).",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "id": {
+      "description": "Pack id; the pack's folder name.",
+      "type": "string"
+    },
+    "third_party": {
+      "description": "One entry per file of the pack that is not ours; paths are relative to the pack folder\n(`sprites/kid_idle.png`).",
+      "items": {
+        "$ref": "#/$defs/ThirdParty"
+      },
+      "type": "array"
+    },
+    "title": {
+      "description": "Display title.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "title",
+    "family",
+    "creators"
+  ],
+  "title": "IWBTG engine pack engine.toml (format v0)",
+  "type": "object"
+}

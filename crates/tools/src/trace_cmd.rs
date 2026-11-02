@@ -398,7 +398,39 @@ pub fn package_id(files: &PackageFiles) -> Result<String, ToolError> {
 
 /// Loads a package folder.
 pub fn load_package(dir: &Path) -> Result<PackageFiles, ToolError> {
-    PackageFiles::load_dir(dir).map_err(|e| ToolError::Message(format!("{}: {e}", dir.display())))
+    let mut files =
+        PackageFiles::load_dir(dir).map_err(|e| ToolError::Message(format!("{}: {e}", dir.display())))?;
+    bundle_engine_pack(dir, &mut files)?;
+    Ok(files)
+}
+
+/// Bundles the engine pack of a package folder (docs/format/engine.md): when `game.toml` names an
+/// `engine_pack` and the folder has no `engine/<pack>/` yet, the pack is read from the sibling
+/// `../_engines/<pack>/` and the files the package uses are copied in under `engine/<pack>/`, as
+/// the package builder does. A pack folder that is missing is left to the loader to report.
+pub fn bundle_engine_pack(dir: &Path, files: &mut PackageFiles) -> Result<(), ToolError> {
+    let Some(pack) = files
+        .get("game.toml")
+        .and_then(|b| std::str::from_utf8(b).ok())
+        .and_then(|t| t.parse::<toml::Table>().ok())
+        .and_then(|t| t.get("engine_pack").and_then(|v| v.as_str().map(str::to_owned)))
+    else {
+        return Ok(());
+    };
+    // `dir` may be written as `.`; the sibling folder is next to the canonical package folder.
+    let root = std::fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
+    let Some(pack_dir) = root.parent().map(|p| p.join("_engines").join(&pack)) else {
+        return Ok(());
+    };
+    if !pack_dir.is_dir() {
+        return Ok(());
+    }
+    let pack_files = PackageFiles::load_dir(&pack_dir)
+        .map_err(|e| ToolError::Message(format!("{}: {e}", pack_dir.display())))?;
+    for missing in iwbtg_format::engine_pack::bundle(files, &pack, &pack_files) {
+        eprintln!("warning: `{missing}` is not in the engine pack `{pack}`");
+    }
+    Ok(())
 }
 
 /// A case by path, or by name under `<cases>/<pkg id>/`.
@@ -733,5 +765,42 @@ mod tests {
             run_case(&files, &c, Path::new("nowhere")),
             Err(ToolError::Open(r)) if r == "A/D keys"
         ));
+    }
+}
+
+#[cfg(test)]
+mod bundle_tests {
+    use super::*;
+
+    #[test]
+    fn load_package_bundles_the_pack_next_to_the_package() {
+        let root = std::env::temp_dir().join(format!("iwbtg-bundle-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let pkg = root.join("game_a");
+        let pack = root.join("_engines/a1");
+        std::fs::create_dir_all(pkg.join("rooms")).unwrap();
+        std::fs::create_dir_all(pack.join("sprites")).unwrap();
+        std::fs::write(
+            pkg.join("game.toml"),
+            "engine_pack = \"a1\"\n[defaults.kid]\nsprite = \"engine:a1/kid\"\n",
+        )
+        .unwrap();
+        std::fs::write(pack.join("engine.toml"), "id = \"a1\"\n").unwrap();
+        std::fs::write(pack.join("sprites/kid.toml"), "frames = 1\n").unwrap();
+        std::fs::write(pack.join("sprites/kid.png"), b"png").unwrap();
+        std::fs::write(pack.join("sprites/unused.png"), b"png").unwrap();
+        let files = load_package(&pkg).unwrap();
+        assert!(files.contains("engine/a1/engine.toml"));
+        assert!(files.contains("engine/a1/sprites/kid.png"));
+        assert!(files.contains("engine/a1/sprites/kid.toml"));
+        assert!(
+            !files.contains("engine/a1/sprites/unused.png"),
+            "only what the package uses"
+        );
+        assert!(
+            !pkg.join("engine").exists(),
+            "nothing is written to the package folder"
+        );
+        std::fs::remove_dir_all(&root).ok();
     }
 }
