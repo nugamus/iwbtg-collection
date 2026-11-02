@@ -133,6 +133,24 @@ pub struct InputFrame {
     pub released: u32,
 }
 
+/// The schema of an action as written in a data file: its lowercase name. The list is
+/// [`Action::ALL`], so a new action appears in the schema by itself.
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for Action {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "ActionName".into()
+    }
+
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        let names: Vec<&str> = Action::ALL.iter().map(|a| a.name()).collect();
+        schemars::json_schema!({
+            "description": "A client action by its package name.",
+            "type": "string",
+            "enum": names
+        })
+    }
+}
+
 impl InputFrame {
     /// No action held, no edges.
     pub const EMPTY: InputFrame = InputFrame {

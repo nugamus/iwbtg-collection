@@ -50,6 +50,7 @@ pub use trig::{
 /// over the postcard encoding (plan 10.1); `Hash` is only for test maps. Deserializing keeps the
 /// bits it reads.
 #[derive(Clone, Copy, Default, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(transparent)]
 pub struct Real(f64);
 
