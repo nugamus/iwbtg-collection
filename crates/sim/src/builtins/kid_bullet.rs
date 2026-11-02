@@ -25,7 +25,7 @@ use crate::collide::query::{place_hits_ids, place_meeting};
 use crate::def::{ClassMask, KindDef, ParamValue, Params};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
-use crate::num::Real;
+use crate::num::{self, Real};
 use crate::world::{Ctx, Flow, InstId};
 
 const CHECKS: &[&str] = &["before_move", "collision_destroy", "stop_and_die"];
@@ -179,7 +179,11 @@ fn move_to_contact(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         return Ok(());
     };
     let (mut x, y, h) = (inst.m.x(), inst.m.y(), inst.m.hspeed());
-    let dir = if h.get() < 0.0 { -1.0 } else { 1.0 };
+    let dir = if num::gm_lt(h, Real::ZERO, &ctx.rules.num) {
+        -1.0
+    } else {
+        1.0
+    };
     let mut left = h.get().abs();
     while left >= 1.0 && !place_meeting(ctx, me, x + Real::new(dir), y, Target::Class(ClassMask::BLOCK))? {
         x += Real::new(dir);

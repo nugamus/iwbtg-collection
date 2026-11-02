@@ -191,6 +191,7 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
     ctx.request_room(RoomRequest::Goto(a.room_to));
     if let Some(kid) = ctx.w.get_mut(*other) {
         kid.m.set_x(a.x)?;
+        // gm-compare: ok (a table entry with no y leaves the kid's y alone, not a GML test)
         if a.y.get() != 0.0 {
             kid.m.set_y(a.y)?;
         }

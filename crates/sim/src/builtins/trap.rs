@@ -387,7 +387,8 @@ fn speeds(ctx: &Ctx, me: InstId) -> (Real, Real) {
 
 fn moving(ctx: &Ctx, me: InstId) -> bool {
     let (h, v) = speeds(ctx, me);
-    h.get() != 0.0 || v.get() != 0.0
+    let nr = &ctx.rules.num;
+    num::gm_ne(h, Real::ZERO, nr) || num::gm_ne(v, Real::ZERO, nr)
 }
 
 fn set_speeds(ctx: &mut Ctx, me: InstId, h: Real, v: Real) -> Result<(), SimError> {
@@ -399,6 +400,7 @@ fn set_speeds(ctx: &mut Ctx, me: InstId, h: Real, v: Real) -> Result<(), SimErro
 }
 
 fn arm(ctx: &mut Ctx, me: InstId, n: u8, v: Real) -> Result<(), SimError> {
+    // gm-compare: ok (an alarm param of 0 means not armed, not a GML test)
     if v.get() > 0.0 {
         let rules = ctx.rules;
         if let Some(inst) = ctx.w.get_mut(me) {
@@ -469,6 +471,7 @@ fn alarm_event(ctx: &mut Ctx, me: InstId, s: &TrapState, n: u8) -> Result<(), Si
             }
             if let Some(inst) = ctx.w.get_mut(me) {
                 let mut run = path::start(&inst.m, p.path, p.speed, p.end, p.absolute)?;
+                // gm-compare: ok (a scale param of 0 means not set, not a GML test)
                 if p.scale.get() != 0.0 {
                     run.scale = p.scale;
                 }
@@ -518,7 +521,9 @@ fn alarm_event(ctx: &mut Ctx, me: InstId, s: &TrapState, n: u8) -> Result<(), Si
 
 fn move_to(ctx: &mut Ctx, me: InstId, s: &TrapState) -> Result<(), SimError> {
     let (mut ex, mut ey, mut hs, mut vs) = s.move_to;
-    if !(ex.get() == 0.0 || ey.get() == 0.0) || !trigger::stop_set(ctx, s.trg)? {
+    let nr = &ctx.rules.num;
+    if !(num::gm_eq(ex, Real::ZERO, nr) || num::gm_eq(ey, Real::ZERO, nr)) || !trigger::stop_set(ctx, s.trg)?
+    {
         return Ok(());
     }
     let rules = ctx.rules;
@@ -526,7 +531,7 @@ fn move_to(ctx: &mut Ctx, me: InstId, s: &TrapState) -> Result<(), SimError> {
         return Ok(());
     };
     let half = |step: Real| num::abs(step) * Real::new(0.5);
-    if ex.get() != 0.0 {
+    if num::gm_ne(ex, Real::ZERO, &rules.num) {
         let x = inst.m.x() + num::sign(ex - inst.m.x(), &rules.num) * hs;
         inst.m.set_x(x)?;
         if num::gm_le(num::abs(ex - x), half(hs), &rules.num) {
@@ -535,7 +540,7 @@ fn move_to(ctx: &mut Ctx, me: InstId, s: &TrapState) -> Result<(), SimError> {
             ex = Real::ONE;
         }
     }
-    if ey.get() != 0.0 {
+    if num::gm_ne(ey, Real::ZERO, &rules.num) {
         let y = inst.m.y() + num::sign(ey - inst.m.y(), &rules.num) * vs;
         inst.m.set_y(y)?;
         if num::gm_le(num::abs(ey - y), half(vs), &rules.num) {
