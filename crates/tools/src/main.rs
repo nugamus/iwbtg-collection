@@ -8,6 +8,7 @@ mod determinism_cmd;
 mod import;
 mod pkg_cmd;
 mod replay_cmd;
+mod room_cmd;
 mod trace_cmd;
 
 use std::path::{Path, PathBuf};
@@ -42,6 +43,9 @@ enum Command {
     /// Headless replays.
     #[command(subcommand)]
     Replay(ReplayCommand),
+    /// Rooms of a package.
+    #[command(subcommand)]
+    Room(RoomCommand),
     /// Cross-platform equality checks.
     #[command(subcommand)]
     Determinism(DeterminismCommand),
@@ -131,6 +135,31 @@ enum PkgCommand {
         #[arg(long)]
         check: bool,
     },
+    /// Prints the gameplay hash (leaderboards key on it) and the content hash (downloads).
+    Hash {
+        /// Package folder.
+        pkg: PathBuf,
+        /// Load converter output: unmapped script kinds become inert.
+        #[arg(long)]
+        trace_mode: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum RoomCommand {
+    /// Prints an ASCII map of a room with a legend line.
+    Show {
+        /// Package folder.
+        pkg: PathBuf,
+        /// Room id (`rooms/<id>.toml`).
+        room: String,
+        /// Pixels per character.
+        #[arg(long, default_value_t = 32)]
+        cell: u32,
+        /// Load converter output: unmapped script kinds become inert.
+        #[arg(long)]
+        trace_mode: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -198,9 +227,16 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
         }
         Command::Pkg(PkgCommand::Check { pkg, trace_mode }) => pkg_cmd::main(&pkg, trace_mode),
         Command::Pkg(PkgCommand::Fmt { pkg, check }) => pkg_cmd::fmt_main(&pkg, check),
+        Command::Pkg(PkgCommand::Hash { pkg, trace_mode }) => pkg_cmd::hash_main(&pkg, trace_mode),
         Command::Determinism(DeterminismCommand::Report { corpus, check }) => {
             determinism_cmd::main(&corpus, check)
         }
+        Command::Room(RoomCommand::Show {
+            pkg,
+            room,
+            cell,
+            trace_mode,
+        }) => room_cmd::show_main(&pkg, &room, cell, trace_mode),
         Command::Replay(ReplayCommand::Run(args)) => {
             replay_cmd::main(&args)?;
             Ok(true)

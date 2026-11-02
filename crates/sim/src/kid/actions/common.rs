@@ -398,6 +398,14 @@ pub(crate) fn frozen2(ctx: &Ctx, s: &KidState) -> bool {
 /// forces 0. Facing changes to `h` unless the right vine distance is exactly 1 or the left vine
 /// distance is 1 or less; `hspeed` is set only when the direction is not blocked by a vine
 /// (else it keeps its old value and the sprite stays).
+/// Plays a kid sound of the profile's `[sounds]` (nothing when the game has none for the role).
+pub(crate) fn play_sound(ctx: &mut Ctx, id: Option<crate::def::SoundId>) -> Result<(), SimError> {
+    match id {
+        Some(id) => crate::sound::play(ctx, id, false),
+        None => Ok(()),
+    }
+}
+
 fn walk(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let def = ctx.def;
     let p = &def.physics;
@@ -665,6 +673,7 @@ fn shoot(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
     if let Some(bi) = ctx.w.get_mut(b) {
         bi.m.set_hspeed(def.physics.bullet.speed * real_i(i32::from(s.facing)))?;
     }
+    play_sound(ctx, def.physics.sounds.shoot)?;
     Ok(if ctx.w.status == crate::world::SimStatus::Running {
         Flow::Continue
     } else {
@@ -711,6 +720,7 @@ fn jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         if p.jump.ground_sets_djump {
             state_mut(ctx, me)?.djump = true;
         }
+        play_sound(ctx, p.sounds.jump)?;
         return Ok(());
     }
     let water2 = match p.jump.water_air {
@@ -735,6 +745,7 @@ fn jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
             i.m.set_vspeed(-(sign * jump1))?;
             set_sprite(def, &mut i.img, p.sprites.jump);
         }
+        play_sound(ctx, p.sounds.double_jump)?;
         let keeps = p.jump.water_air == WaterAir::Water3Keeps
             && place_meeting(ctx, me, x, below, Target::Class(ClassMask::WATER3))?;
         state_mut(ctx, me)?.djump = keeps;
@@ -750,6 +761,7 @@ fn jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         let s = state_mut(ctx, me)?;
         s.djump = false;
         s.tjump = false;
+        play_sound(ctx, p.sounds.double_jump)?;
     }
     Ok(())
 }
@@ -840,6 +852,7 @@ fn vines(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     };
     let (kick_h, kick_v) = (p.vine.kick[0], p.vine.kick[1] * yf);
     let slide = p.vine.slide * yf;
+    let mut kicked = false;
 
     // Left vine: face right; kick or drop on a Right press.
     if gm_lt(dl, p.vine.left_below, n) && below_free {
@@ -855,6 +868,7 @@ fn vines(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
                     set_sprite(def, &mut i.img, p.sprites.jump);
                     i.m.set_vspeed(kick_v)?;
                     i.m.set_hspeed(kick_h)?;
+                    kicked = true;
                 } else {
                     i.m.set_hspeed(p.vine.drop)?;
                     set_sprite(def, &mut i.img, p.sprites.fall);
@@ -879,6 +893,7 @@ fn vines(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
                     set_sprite(def, &mut i.img, p.sprites.jump);
                     i.m.set_vspeed(kick_v)?;
                     i.m.set_hspeed(-kick_h)?;
+                    kicked = true;
                 } else {
                     i.m.set_hspeed(-p.vine.drop)?;
                     set_sprite(def, &mut i.img, p.sprites.fall);
@@ -888,6 +903,9 @@ fn vines(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     }
     if gm_gt(dr, Real::ONE, n) && below_free {
         state_mut(ctx, me)?.max_fall_speed = max_fall;
+    }
+    if kicked {
+        play_sound(ctx, p.sounds.vine_kick)?;
     }
     Ok(())
 }
