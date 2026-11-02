@@ -6,8 +6,9 @@
 use serde::{Deserialize, Serialize};
 
 use super::{
-    block, blood, blood_emitter, bow, camera, difficulty_warp, fake_block, game_clear, game_over, kid_bullet,
-    kid_start, killer, moving_platform, music, save, spike, trap, trigger, warp, water, world,
+    block, blood, blood_emitter, bow, camera, difficulty_warp, drop_platform, edge_warp, fake_block,
+    game_clear, game_over, kid_bullet, kid_start, killer, moving_platform, music, save, spike, trap, trigger,
+    warp, water, world,
 };
 
 /// A built-in instance's state.
@@ -40,6 +41,22 @@ pub enum BuiltinState {
     GameClear(game_clear::GameClearState),
     /// `music` (WP6b).
     Music(music::MusicState),
+    /// `drop_platform` (WP6b).
+    DropPlatform(drop_platform::DropState),
+    /// `gravity_flip` (WP6b): flips up.
+    GravityFlip {
+        /// Sets `global.grav` (up) or clears it (down).
+        up: bool,
+    },
+    /// `bullet_blocker` (WP6b).
+    BulletBlocker {
+        /// Spares bullets while it overlaps a kid.
+        except_overlapping: bool,
+    },
+    /// `edge_warp` per-edge table (WP6b).
+    EdgeTable(edge_warp::EdgeTable),
+    /// `edge_warp` in `room_assign` mode (WP6b).
+    RoomAssign(edge_warp::RoomAssign),
     /// `fake_block` (WP6b).
     FakeBlock(fake_block::FakeBlockState),
     /// `trigger` (WP6b).
