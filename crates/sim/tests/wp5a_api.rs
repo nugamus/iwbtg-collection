@@ -22,6 +22,9 @@ fn game() -> (GameDef, KindId, KindId) {
     let block = b.kind(KindDef::new("block", Builtin::Inert));
     let room = b.room(RoomDef::new("r", 800, 608));
     b.start_room(room);
+    let mut p = iwbtg_sim::def::PhysicsProfile::default();
+    p.death.order = vec![iwbtg_sim::def::physics::DeathStep::DestroyKid];
+    b.physics(p);
     (b.build().expect("game builds"), kid, block)
 }
 
