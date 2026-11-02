@@ -158,6 +158,9 @@ pub enum LadderEntry {
 pub struct FlipModel {
     /// `model = "..."`.
     pub model: FlipKind,
+    /// `swap_object`: the flipped kid's solidblock contact does not restore `djump` (Kotaro
+    /// player2 sets a misspelled `djump2` there, kid/A2.md).
+    pub solidblock_no_refresh: bool,
 }
 
 /// The flip models of plan 5.3, by their `physics.toml` names.
