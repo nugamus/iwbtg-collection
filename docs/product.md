@@ -86,6 +86,28 @@ Version 1 includes:
 
 Games whose creators cannot be reached (`community-assumed`) may be served publicly. They are credited clearly and removed on request through the takedown process.
 
+## Community and release
+
+Decided 2026-11-02.
+
+- **Open source.** The client repo (code and docs) goes public early. The research and games repos stay private, because they hold notes on creators' games and the ported content.
+- **Public alpha.** It starts at M6, once game select works. Nightly builds are public from then on.
+- **Community.** There is a Discord server for players, porters and testers.
+- **Bug reports.** They arrive in two ways, and both become `triage` issues:
+  - Players post them in a Discord bug channel, and the user or an agent copies them into issues.
+  - An in-client "Report bug" button sends a description, the log and the replay to the server.
+- **Crash reports** are opt-in. After a crash, the client asks whether to send the log and replay. There is no usage tracking.
+- **Donations.** Decided later. The project itself is never monetized.
+- **Replays.** Every leaderboard replay is public: anyone can download and watch it. Ghosts and races depend on this.
+- **UI language.** English and Japanese at launch. All UI strings live in translation files from the start.
+- **Identity.** The UI reuses art from ported games, credited, alongside the project's own identity: a logo and wordmark that come with the new name.
+- **Cheating is not tolerated.**
+  - Suspicious runs are flagged silently. The player is not told, so a moderator can investigate.
+  - A ban follows only once cheating is confirmed. Players are never banned on suspicion alone.
+  - Banned players lose their leaderboard access.
+  - Players can always report runs and profiles.
+  - Usernames are checked against a blocklist.
+
 ## Dreams for later
 
 Ideas the user wants to work out over time. Nothing here is decided.
