@@ -9,7 +9,7 @@ All three repos sit side by side in one workspace folder. CLAUDE.md files refer 
 ```
 IWBTG Collection/            workspace root, not a repo
   CLAUDE.md                  points to the three repos
-  .claude/settings.json      plugins, MCP denylist, deny rules, archive guard, issue hooks (in no repo, see #202)
+  .claude/settings.json      plugins, MCP denylist, deny rules, archive guard, issue hooks (in no repo; copy of client/workspace/settings.json)
   client/                    nugamus/iwbtg-collection: Bevy client, format spec, server, docs
   games/                     nugamus/iwbtg-collection-games (private): ported packages, games/<game_id>/
   research/                  nugamus/iwbtg-collection-research (private)
@@ -20,6 +20,8 @@ IWBTG Collection/            workspace root, not a repo
 ```
 
 Start Claude Code sessions from the workspace root. Its `.claude/settings.json` loads the archive guard (`research/.claude/hooks/guard_archive.py`) and the issue hooks (`client/.claude/hooks/issues.py`, the same file is in all three repos). Hooks load when a session starts, so restart Claude Code after changing them.
+
+The root settings file is in no repo. Its tracked copy is `client/workspace/settings.json`. On a new machine, copy it to `.claude/settings.json` in the workspace root. To change the settings, change the tracked copy through a PR, then copy it over. The session-start hook warns when the two differ.
 
 ## Why `games/` has no packages yet
 
@@ -57,6 +59,6 @@ Expected: the build ends with `Finished`. `issues.py start` prints JSON with mil
 - All three repos were behind GitHub; each now fast-forwards cleanly to `main`.
 - research had uncommitted trace tool work. It is saved as `backup/home-pc-2026-11-02-local-trace-work`; research#27 lands it.
 - `client/.claude/worktrees/` held six workflow worktrees with unpushed WP1, WP2, WP3, WP4a, WP7a and WP8a work. Each is saved as `backup/home-pc-2026-11-02-<wp>`, and its issue (#1, #2, #3, #4, #8, #10) points to it. #203 removes the worktrees.
-- The root `.claude/settings.json` lacked the issue hooks, and they are now added. #202 keeps it from drifting.
+- The root `.claude/settings.json` lacked the issue hooks, and they are now added. #202 added the tracked copy and the drift warning.
 - `research/tools/opengmk/src/` contradicts research/CLAUDE.md: research#28.
 - No originals, extraction output or database are tracked in any repo. `git status --ignored` shows them ignored in research.
