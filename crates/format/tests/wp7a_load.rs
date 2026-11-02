@@ -138,7 +138,7 @@ fn package(edit: impl FnOnce(&mut Vec<(String, Vec<u8>)>)) -> PackageFiles {
         ("sprites/kid.toml".into(), sidecar(1, 4, 4, "precise", None, "")),
         ("sprites/kid.png".into(), png(&["....", ".##.", ".##.", "...."])),
         ("sprites/kid_mask.toml".into(), sidecar(1, 32, 32, "rect", Some([12, 11, 22, 31]), "")),
-        ("sprites/kid_mask.png".into(), png(&[&".".repeat(32); 32])),
+        ("sprites/kid_mask.png".into(), { let row = ".".repeat(32); png(&[row.as_str(); 32]) }),
         ("sprites/block.toml".into(), sidecar(1, 2, 2, "rect", Some([0, 0, 1, 1]), "")),
         ("sprites/block.png".into(), png(&["##", "##"])),
         ("sprites/spike_up.toml".into(), sidecar(1, 4, 2, "precise", Some([0, 0, 3, 1]), "")),

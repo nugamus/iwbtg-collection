@@ -864,6 +864,12 @@ Checked against `research/build/packages/rely_the_needle/` on 2026-10-24. The cl
 | CR7 | `start_room` stays the title for game select art, plus `[engine] new_game_room = "room_1"` | `start_room = "title"` | M3b |
 | CR8 | physics.toml in the 5.2 form | 5.2 | after WP5a |
 | CR9 | Sound kind and length in ticks (ffprobe duration × 50) | section 7 | WP10 tests on packages |
+| CR10 | Kind names and object bases that are not built-ins of 6.1 (they load inert in Trace mode) | loader warning CR10 | M3a |
+| CR11 | Write `counts_as` instead of the legacy object key `roles` | loader warning CR11 | M3a |
+| CR12 | `[defaults.<kind>]` sprites for bare built-ins in game.toml (not only in tests/trace-map.toml) | loader warning CR12 | M3a |
+| CR13 | Room `file_speed` in each room file (not only in tests/trace-map.toml) | loader warning CR13 | M3a |
+| CR14 | `room_order` in game.toml (not only in tests/trace-map.toml) | loader warning CR14 | M3a |
+| CR15 | Sprite strips at most 4096 px on a side (split or re-pack wider strips) | loader warning CR15 | M3a |
 
 ## 9. Trace comparison and replay (`crates/tools`, WP8a, WP8b)
 
