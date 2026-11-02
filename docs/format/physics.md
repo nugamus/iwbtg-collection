@@ -31,7 +31,11 @@ An event is an ordered list of action names. The kid runs them top to bottom; a 
 | `keys` | `[{ action = "suicide", on = "press", run = [...] }]`: `on` is `held`, `press` or `release`; `action` is a client action name |
 | `collisions` | `[{ with = "block", run = "block_standard" }]`: the kid collides with an instance of that class. Every row whose `with` matched runs, in row order |
 
-Not yet in `[events]`: the boundary model (#240) and the outside-room events.
+| `boundary` | the room edge: `none`, `intersect_origin` (A1), `outside_room_kill` (family B, WP5b) or `end_step_origin` (WP5c); the last two are `Unsupported` for now |
+
+`intersect_origin` (kid/A1.md "Intersect Boundary"): the kid's Intersect Boundary event tests the origin (strictly: `x = room_width` is inside). Outside the room with no `edge_warp` overlapping the kid, it dies (`kill`). With one, the room it names is requested and the kid moves to its `warp_x`, `warp_y`, or, when both are 0, the kid and the bow are destroyed. Then, if the kid is alive, it wraps: `x < 0` gives `x = room_width - 16` and undoes this step's `vspeed` on `y`; `x > room_width` gives `x = 16` and the same; else `y < 0` gives `y = room_height - 16` and `x = xprevious`; else `y > room_height` gives `y = 16` and `x = xprevious`. The warp target is read from the `edge_warp`'s room and warp point (a per-edge table is `Unsupported`, #250).
+
+Not yet in `[events]`: the outside-room events of the other models.
 
 ### Actions (event lists)
 
