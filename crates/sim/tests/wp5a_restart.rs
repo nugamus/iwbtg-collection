@@ -139,6 +139,7 @@ fn b_retry(def: &mut GameDef) {
         save_death_time: true,
         clear_frozen: true,
         reset_jump_values: false,
+        clear_triggers: false,
     };
 }
 
@@ -190,9 +191,39 @@ fn showdown_retry(def: &mut GameDef) {
     def.restart.kid_steps = RetryKidSteps {
         clear_frozen: true,
         reset_jump_values: true,
+        clear_triggers: true,
         ..RetryKidSteps::default()
     };
     def.physics.jump.air = AirJump::DjumpThenTjump;
+}
+
+#[test]
+fn showdown_retry_clears_every_trigger_array() {
+    let (def, kid) = game(showdown_retry);
+    with_ctx(&def, |ctx| {
+        ctx.w.save = Some(slot(false, 1));
+        ctx.spawn(kid, r(1.0), r(2.0), SpawnInit::default()).unwrap();
+        ctx.w.engine.mech.global_triggered = r(3.0);
+        ctx.w.engine.mech.trigger_flags.insert(4);
+        ctx.w.engine.mech.stop_flags.insert(5);
+        ctx.w.engine.mech.switches.insert(6);
+        run_restart(ctx, InstId(1)).unwrap();
+        let m = &ctx.w.engine.mech;
+        assert_eq!(m.global_triggered, Real::ZERO);
+        assert!(m.trigger_flags.is_empty() && m.stop_flags.is_empty() && m.switches.is_empty());
+    });
+    // Without the step the arrays stay.
+    let (def, kid) = game(|d| {
+        showdown_retry(d);
+        d.restart.kid_steps.clear_triggers = false;
+    });
+    with_ctx(&def, |ctx| {
+        ctx.w.save = Some(slot(false, 1));
+        ctx.spawn(kid, r(1.0), r(2.0), SpawnInit::default()).unwrap();
+        ctx.w.engine.mech.trigger_flags.insert(4);
+        run_restart(ctx, InstId(1)).unwrap();
+        assert!(ctx.w.engine.mech.trigger_flags.contains(&4));
+    });
 }
 
 #[test]

@@ -6,7 +6,7 @@
 //! 1. In a `Select` room (`death.select_room_reset`): request the same room again and destroy
 //!    the kid; nothing else happens, and the tick aborts for the room change.
 //! 2. While `muteki` is set, nothing happens.
-//! 3. Otherwise the steps of `death.order` run: the sound (not played yet, #231), a blood
+//! 3. Otherwise the steps of `death.order` run: the sound (`[sounds] death`), a blood
 //!    emitter at the kid's position (its `flipped` param says whether the kid was the flipped
 //!    one), destroy the kid (`destroy_all_kids`: every kid; `first_kid`: the effects use the
 //!    first kid's position and gravity, family B), GAMEOVER (it places itself at view 0 plus its own offset),
@@ -90,7 +90,9 @@ pub fn kill(ctx: &mut Ctx, kid: InstId, _cause: KillCause) -> Result<Flow, SimEr
     }
     for step in &rules.order {
         match step {
-            DeathStep::Sound => {} // #231
+            DeathStep::Sound => {
+                super::actions::common::play_sound(ctx, ctx.def.physics.sounds.death)?;
+            }
             DeathStep::BloodEmitter => {
                 let mut init = SpawnInit::default();
                 init.params.0.insert("flipped".into(), ParamValue::Bool(flipped));
