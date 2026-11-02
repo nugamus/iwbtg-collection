@@ -178,25 +178,21 @@ pub(crate) fn register_numeric(engine: &mut Engine, shared: &Rc<Shared>) {
     {
         let s = Rc::clone(shared);
         engine.register_fn("random", move |x: f64| -> f64 {
-            s.rng.borrow_mut().random(r(x)).get()
+            s.with_rng(|g| g.random(r(x)).get())
         });
         let s = Rc::clone(shared);
         engine.register_fn("random_range", move |a: f64, b: f64| -> f64 {
-            s.rng.borrow_mut().random_range(r(a), r(b)).get()
+            s.with_rng(|g| g.random_range(r(a), r(b)).get())
         });
         let s = Rc::clone(shared);
         engine.register_fn("irandom", move |x: f64| -> Res<f64> {
-            s.rng
-                .borrow_mut()
-                .irandom(r(x))
+            s.with_rng(|g| g.irandom(r(x)))
                 .map(Real::get)
                 .map_err(|e| runtime_error(e.to_string()))
         });
         let s = Rc::clone(shared);
         engine.register_fn("irandom_range", move |a: f64, b: f64| -> Res<f64> {
-            s.rng
-                .borrow_mut()
-                .irandom_range(r(a), r(b))
+            s.with_rng(|g| g.irandom_range(r(a), r(b)))
                 .map(Real::get)
                 .map_err(|e| runtime_error(e.to_string()))
         });
@@ -204,9 +200,7 @@ pub(crate) fn register_numeric(engine: &mut Engine, shared: &Rc<Shared>) {
         engine.register_fn("choose", move |items: Array| -> Res<Dynamic> {
             let n = u32::try_from(items.len()).map_err(|_| runtime_error("choose: too many items"))?;
             let i = s
-                .rng
-                .borrow_mut()
-                .choose(n)
+                .with_rng(|g| g.choose(n))
                 .map_err(|e| runtime_error(e.to_string()))?;
             items
                 .into_iter()
@@ -218,8 +212,8 @@ pub(crate) fn register_numeric(engine: &mut Engine, shared: &Rc<Shared>) {
     // ---- Time: ticks only, as floats ----
     {
         let s = Rc::clone(shared);
-        engine.register_fn("tick", move || -> f64 { s.tick.get() as f64 });
+        engine.register_fn("tick", move || -> f64 { s.current_tick() as f64 });
         let s = Rc::clone(shared);
-        engine.register_fn("room_tick", move || -> f64 { s.room_tick.get() as f64 });
+        engine.register_fn("room_tick", move || -> f64 { s.current_room_tick() as f64 });
     }
 }

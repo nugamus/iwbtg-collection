@@ -80,7 +80,7 @@ impl Sim {
         pre_entry: &[SetupAction],
     ) -> Result<Sim, SimError> {
         let rules = RunnerRules::for_runner(def.runner, def.engine_rev)?;
-        let scripts = ScriptRuntime::new(&def)?;
+        let scripts = ScriptRuntime::new(&def, &rules)?;
         let first_room = match &options.start {
             room::StartPoint::NewGame { .. } => def.new_game_room,
             room::StartPoint::Room { room, .. } => *room,
