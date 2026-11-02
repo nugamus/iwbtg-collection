@@ -1,0 +1,20 @@
+# Imported from research trace rely-the-needle-4-2/djump by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room room1 --at 2 --from 2
+source = "rely-the-needle-4-2/djump"
+kind = "diff"
+start = { room = "room_1", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "model"
+seed = 0
+setup = []
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+
+[unprobed]
+
+[rooms]
+"room_1" = "room1"

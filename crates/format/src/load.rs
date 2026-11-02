@@ -466,7 +466,7 @@ impl<'a> Loader<'a> {
         // Step 6: variable ids, from every name the loader sees.
         let vars = self.intern(&rooms);
         // Step 4, second half, and step 5 for placed instances.
-        let room_defs = self.build_rooms(&rooms, &vars);
+        let mut room_defs = self.build_rooms(&rooms, &vars);
         // Engine kinds, boot and the spawnable-kind rank check (step 5, CR4).
         let engine_kinds = self.engine_kinds();
         let boot = self.boot(&engine_kinds);
@@ -481,6 +481,9 @@ impl<'a> Loader<'a> {
         self.diags.append(&mut d);
         // Step 8: cross-references not already resolved above.
         self.warp_targets(&room_defs);
+        if self.trace_mode() {
+            self.inert_twins(&mut room_defs);
+        }
 
         let engine = self.m.engine.as_ref().map(Spanned::get_ref);
         let start_room = self.room_ref(self.m.start_room.get_ref(), self.m.start_room.span());
@@ -689,6 +692,7 @@ impl<'a> Loader<'a> {
             }
             let mut k = KindDef::new(b.name(), b);
             k.classes = kind_classes(b, &Params::default(), ClassMask::NONE);
+            k.solid = objects::default_solid(b);
             self.push_kind(k);
         }
         let manifest = self.m;
@@ -977,7 +981,7 @@ impl<'a> Loader<'a> {
                 .sprite_ref(s.get_ref(), path, text, s.span())
                 .and_then(|s| self.mask_of(s));
         }
-        kind.solid = o.solid.unwrap_or(false);
+        kind.solid = o.solid.unwrap_or_else(|| objects::default_solid(kind.base));
         kind.visible = o.visible.unwrap_or(true);
         kind.depth = o.depth.as_ref().map_or(Real::ZERO, |d| Real::new(*d.get_ref()));
         kind.persistent = o.persistent.unwrap_or(false);
@@ -1814,6 +1818,54 @@ impl<'a> Loader<'a> {
     }
 
     // -- Step 8 ----------------------------------------------------------------------------------
+
+    /// Trace mode: a placed instance whose built-in refuses its params (a warp with no
+    /// `room_to`, CR5) would stop the sim at room start. It becomes an instance of an inert twin
+    /// of its kind (same sprite, mask, solid and classes; no events, no params), as an unmapped
+    /// kind does. `params::check` already warns about the params.
+    fn inert_twins(&mut self, rooms: &mut [RoomDef]) {
+        let mut twins: BTreeMap<KindId, KindId> = BTreeMap::new();
+        for room in rooms.iter_mut() {
+            for inst in &mut room.instances {
+                let Some(kind) = self.kinds.get(inst.kind.index().unwrap_or(usize::MAX)) else {
+                    continue;
+                };
+                if matches!(
+                    kind.base,
+                    Builtin::Kid | Builtin::Inert | Builtin::Scripted | Builtin::Probe
+                ) {
+                    continue;
+                }
+                let mut merged = kind.params.clone();
+                for (k, v) in &inst.params.0 {
+                    merged.0.insert(k.clone(), v.clone());
+                }
+                let base = kind.base;
+                let refused = matches!(
+                    pending_call(&mut self.pending, || builtins::init_state(base, &merged)),
+                    Some(Err(_))
+                );
+                if !refused {
+                    continue;
+                }
+                let twin = match twins.get(&inst.kind) {
+                    Some(t) => *t,
+                    None => {
+                        let mut t = kind.clone();
+                        t.name = format!("{}[inert]", t.name);
+                        t.base = Builtin::Inert;
+                        t.params = Params::default();
+                        t.events = iwbtg_sim::events::EventSet::default();
+                        let id = self.push_kind(t);
+                        twins.insert(inst.kind, id);
+                        id
+                    }
+                };
+                inst.kind = twin;
+                inst.params = Params::default();
+            }
+        }
+    }
 
     /// CR5: warps whose creation code (`roomTo`) was not converted have no `room_to`.
     fn warp_targets(&mut self, rooms: &[RoomDef]) {
