@@ -15,10 +15,13 @@
 //! The full jump from 1 px above the water (`ground_jump`) is the kid's: it tests the class
 //! (`water1` allows it, `water2` and `water3` do not), which the loader sets from this param.
 //!
-//! OPEN, not done: `air_jump = "djump_ignoring_flag"` (JUN objwater2: the -7 jump without
-//! `djump`, then `djump` is cleared; needs a `kid::api` setter for `djump`), the same-tick
-//! release clause (the kid's variable-jump release), NY's rectangle `area` (tests the kid's
-//! origin against a rectangle in Step) and family B's `curJumps = 2`.
+//! 4. `air_jump = "djump_ignoring_flag"` (JUN objwater2): on a Jump press the -7 jump happens
+//!    whether or not `djump` is set, then `djump` is cleared (`kid::api::set_djump`).
+//! 5. `cur_jumps = n` (kaenbyou objWater2: 2): `kid::api::set_cur_jumps`.
+//! 6. `release_same_tick = true` (WAN water, ANI mugenjump, RBF object945): when Jump was released
+//!    this tick the kid's variable-jump release runs now (`kid::api::run_jump_release`).
+//!
+//! OPEN, not done: NY's rectangle `area` (tests the kid's origin against a rectangle in Step).
 
 use serde::{Deserialize, Serialize};
 
@@ -37,6 +40,16 @@ const AIR_JUMP: &[&str] = &["none", "djump_ignoring_flag", "press_if_no_djump"];
 const AIR_SPEED: &[&str] = &["fixed_7", "kid_jump2"];
 
 const SPECS: &[ParamSpec] = &[
+    ParamSpec {
+        name: "cur_jumps",
+        ty: ParamType::Real,
+        required: false,
+    },
+    ParamSpec {
+        name: "release_same_tick",
+        ty: ParamType::Bool,
+        required: false,
+    },
     ParamSpec {
         name: "variant",
         ty: ParamType::Real,
@@ -80,6 +93,12 @@ pub struct WaterState {
     pub air_jump: bool,
     /// The air jump uses the kid's second jump speed instead of 7.
     pub kid_jump2: bool,
+    /// `djump_ignoring_flag`: the press jumps without `djump`, then clears it.
+    pub air_ignores_flag: bool,
+    /// Family B: `curJumps` is set to this on touch.
+    pub cur_jumps: Option<u8>,
+    /// A Jump release this tick cuts the jump now.
+    pub release_same_tick: bool,
 }
 
 /// The params this built-in accepts (`builtins::param_specs` routes here).
@@ -102,16 +121,20 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
     param_real(params, "variant")?;
     let cap = param_real(params, "fall_cap")?.unwrap_or(Real::new(2.0));
     let air = param_enum(params, "air_jump", AIR_JUMP)?;
-    if air == Some("djump_ignoring_flag") {
-        return Err(super::param_error(
-            "air_jump",
-            "djump_ignoring_flag needs a kid::api setter for djump (OPEN)",
-        ));
-    }
+    let cur_jumps = match param_real(params, "cur_jumps")? {
+        None => None,
+        Some(v) => match (0..=3u8).find(|w| (f64::from(*w) - v.get()).abs() < 1e-9) {
+            Some(n) => Some(n),
+            None => return Err(super::param_error("cur_jumps", "0, 1, 2 or 3")),
+        },
+    };
     Ok(BuiltinState::Water(WaterState {
         fall_cap: if cap.get() < 0.0 { None } else { Some(cap) },
         refresh: param_enum(params, "refresh", REFRESH)? == Some("on_touch"),
-        air_jump: air == Some("press_if_no_djump"),
+        air_jump: air == Some("press_if_no_djump") || air == Some("djump_ignoring_flag"),
+        air_ignores_flag: air == Some("djump_ignoring_flag"),
+        cur_jumps,
+        release_same_tick: param_bool(params, "release_same_tick")?.unwrap_or(false),
         kid_jump2: param_enum(params, "air_jump_speed", AIR_SPEED)? == Some("kid_jump2"),
     }))
 }
@@ -168,7 +191,7 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
     if s.refresh {
         api::refresh_air_jump(ctx, kid);
     }
-    if s.air_jump && ctx.w.input.pressed(Action::Jump) && !has_djump(ctx, kid) {
+    if s.air_jump && ctx.w.input.pressed(Action::Jump) && (s.air_ignores_flag || !has_djump(ctx, kid)) {
         let speed = if s.kid_jump2 {
             jump2(ctx, kid)
         } else {
@@ -177,6 +200,15 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
         if let Some(k) = ctx.w.get_mut(kid) {
             k.m.set_vspeed(-speed * sign)?;
         }
+        if s.air_ignores_flag {
+            api::set_djump(ctx, kid, false);
+        }
+    }
+    if let Some(n) = s.cur_jumps {
+        api::set_cur_jumps(ctx, kid, n);
+    }
+    if s.release_same_tick && ctx.w.input.released(Action::Jump) {
+        api::run_jump_release(ctx, kid)?;
     }
     Ok(Flow::Continue)
 }

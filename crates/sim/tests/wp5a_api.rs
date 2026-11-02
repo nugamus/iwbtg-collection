@@ -239,3 +239,33 @@ fn kill_destroys_the_kid_unless_invincible() {
         );
     });
 }
+
+#[test]
+fn djump_and_cur_jumps_setters() {
+    with_world(|ctx, k, b| {
+        api::refresh_air_jump(ctx, k);
+        api::set_djump(ctx, k, false);
+        let s = kid_state(ctx, k);
+        assert!(!s.djump);
+        assert_eq!(s.cur_jumps, 1, "the counter is not touched");
+        api::set_cur_jumps(ctx, k, 2);
+        assert_eq!(kid_state(ctx, k).cur_jumps, 2);
+        // Not a kid: nothing happens.
+        api::set_djump(ctx, b, true);
+        api::set_cur_jumps(ctx, b, 2);
+    });
+}
+
+#[test]
+fn run_jump_release_cuts_an_upward_speed_and_ignores_a_fall() {
+    with_world(|ctx, k, b| {
+        let mult = ctx.def.physics.numbers.release_mult;
+        ctx.w.get_mut(k).unwrap().m.set_vspeed(r(-8.0)).unwrap();
+        api::run_jump_release(ctx, k).expect("cuts");
+        assert_eq!(ctx.w.get(k).unwrap().m.vspeed(), r(-8.0) * mult);
+        ctx.w.get_mut(k).unwrap().m.set_vspeed(r(3.0)).unwrap();
+        api::run_jump_release(ctx, k).expect("no-op");
+        assert_eq!(ctx.w.get(k).unwrap().m.vspeed(), r(3.0));
+        assert!(api::run_jump_release(ctx, b).is_err(), "not a kid");
+    });
+}

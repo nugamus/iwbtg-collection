@@ -758,7 +758,6 @@ fn jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
 /// cut more than once.
 fn release(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let def = ctx.def;
-    let n = &ctx.rules.num;
     let s = state(ctx, me)?;
     if frozen2(ctx, &s) {
         return Ok(());
@@ -770,6 +769,16 @@ fn release(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     {
         return Ok(());
     }
+    cut_jump(ctx, me)
+}
+
+/// The cut of `playerVJump` without the release test: an upward `vspeed` (against gravity) is
+/// multiplied by `release_mult` (and a second time while `tjump` in showdown). `kid::api::
+/// run_jump_release` calls it for water's same-tick release clause.
+pub(crate) fn cut_jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+    let def = ctx.def;
+    let n = &ctx.rules.num;
+    let s = state(ctx, me)?;
     let sign = real_i(down(&s));
     let Some(i) = ctx.w.get_mut(me) else { return Ok(()) };
     let v = i.m.vspeed();
