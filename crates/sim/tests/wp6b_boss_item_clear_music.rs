@@ -1,6 +1,6 @@
 //! WP6b.4: music, boss_gate, boss_item, secret_item, item_viewer, game_clear (docs/plans/
-//! sim-core.md 6.1). Hand-built worlds; inert kinds stand in for the kid. The music events call
-//! the WP10 sound model, which is not implemented yet, so only its params are tested.
+//! sim-core.md 6.1). Hand-built worlds; inert kinds stand in for the kid. The music events run in
+//! `wp6b_music_sound.rs`; only the music params are tested here.
 
 mod wp6b {
     use iwbtg_sim::builtins;
