@@ -15,13 +15,18 @@
 //! The full jump from 1 px above the water (`ground_jump`) is the kid's: it tests the class
 //! (`water1` allows it, `water2` and `water3` do not), which the loader sets from this param.
 //!
-//! 4. `air_jump = "djump_ignoring_flag"` (JUN objwater2): on a Jump press the -7 jump happens
-//!    whether or not `djump` is set, then `djump` is cleared (`kid::api::set_air_jump`).
-//! 5. `cur_jumps = n` (kaenbyou objWater2: 2): `kid::api::set_cur_jumps`.
-//! 6. `release_same_tick = true` (WAN water, ANI mugenjump, RBF object945): when Jump was released
-//!    this tick the kid's variable-jump release runs now (`kid::api::run_jump_release`).
+//! `area` (NY water, kid/A4.md): with `area_left`, `area_right`, `area_top` and `area_bottom` the
+//! water has no collision event; each Step, every kid whose origin is strictly inside the
+//! rectangle (`left < x < right`, `top < y < bottom`) gets the same effects (cap, refresh,
+//! air jump). OPEN: the spec leaves the edge handling untested (kid-a4-water stayed inside).
 //!
-//! OPEN, not done: NY's rectangle `area` (tests the kid's origin against a rectangle in Step).
+//! Also, in this order after the refresh and the air jump:
+//!
+//! - `air_jump = "djump_ignoring_flag"` (JUN objwater2): on a Jump press the -7 jump happens
+//!   whether or not `djump` is set, then `djump` is cleared (`kid::api::set_air_jump`).
+//! - `cur_jumps = n` (kaenbyou objWater2: 2): `kid::api::set_cur_jumps`.
+//! - `release_same_tick = true` (WAN water, ANI mugenjump, RBF object945): when Jump was released
+//!   this tick the kid's variable-jump release runs now (`kid::api::run_jump_release`).
 
 use serde::{Deserialize, Serialize};
 
@@ -39,6 +44,8 @@ const REFRESH: &[&str] = &["none", "on_touch"];
 const AIR_JUMP: &[&str] = &["none", "djump_ignoring_flag", "press_if_no_djump"];
 const AIR_SPEED: &[&str] = &["fixed_7", "kid_jump2"];
 
+const AREA: [&str; 4] = ["area_left", "area_right", "area_top", "area_bottom"];
+
 const SPECS: &[ParamSpec] = &[
     ParamSpec {
         name: "cur_jumps",
@@ -48,6 +55,26 @@ const SPECS: &[ParamSpec] = &[
     ParamSpec {
         name: "release_same_tick",
         ty: ParamType::Bool,
+        required: false,
+    },
+    ParamSpec {
+        name: "area_left",
+        ty: ParamType::Real,
+        required: false,
+    },
+    ParamSpec {
+        name: "area_right",
+        ty: ParamType::Real,
+        required: false,
+    },
+    ParamSpec {
+        name: "area_top",
+        ty: ParamType::Real,
+        required: false,
+    },
+    ParamSpec {
+        name: "area_bottom",
+        ty: ParamType::Real,
         required: false,
     },
     ParamSpec {
@@ -93,6 +120,9 @@ pub struct WaterState {
     pub air_jump: bool,
     /// The air jump uses the kid's second jump speed instead of 7.
     pub kid_jump2: bool,
+    /// NY: the rectangle `(left, right, top, bottom)` tested against each kid's origin in Step,
+    /// instead of a collision event.
+    pub area: Option<(Real, Real, Real, Real)>,
     /// `djump_ignoring_flag`: the press jumps without `djump`, then clears it.
     pub air_ignores_flag: bool,
     /// Family B: `curJumps` is set to this on touch.
@@ -107,9 +137,13 @@ pub fn param_specs() -> &'static [ParamSpec] {
 }
 
 /// What a kind with this base handles: the kid touching it.
-pub fn event_set(_kind: &KindDef) -> EventSet {
+pub fn event_set(kind: &KindDef) -> EventSet {
     let mut set = EventSet::default();
-    set.collisions.push(KIDS);
+    if AREA.iter().any(|n| kind.params.0.contains_key(*n)) {
+        set.step = true;
+    } else {
+        set.collisions.push(KIDS);
+    }
     set
 }
 
@@ -128,7 +162,22 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
             None => return Err(super::param_error("cur_jumps", "0, 1, 2 or 3")),
         },
     };
+    let corners: Vec<Option<Real>> = AREA
+        .iter()
+        .map(|n| param_real(params, n))
+        .collect::<Result<_, _>>()?;
+    let area = match corners.as_slice() {
+        [None, None, None, None] => None,
+        [Some(l), Some(r), Some(t), Some(b)] => Some((*l, *r, *t, *b)),
+        _ => {
+            return Err(super::param_error(
+                "area_left",
+                "give all of area_left, area_right, area_top and area_bottom, or none",
+            ));
+        }
+    };
     Ok(BuiltinState::Water(WaterState {
+        area,
         fall_cap: if cap.get() < 0.0 { None } else { Some(cap) },
         refresh: param_enum(params, "refresh", REFRESH)? == Some("on_touch"),
         air_jump: air == Some("press_if_no_djump") || air == Some("djump_ignoring_flag"),
@@ -162,17 +211,38 @@ fn jump2(ctx: &Ctx, kid: InstId) -> Real {
 
 /// Runs one event on a water.
 pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimError> {
-    let EventKind::Collision { with, other } = ev else {
-        return Ok(Flow::Continue);
-    };
-    if !with.intersects(KIDS) {
-        return Ok(Flow::Continue);
-    }
     let Some(BuiltinState::Water(s)) = state_of(ctx, me) else {
         return Ok(Flow::Continue);
     };
     let s = s.clone();
-    let kid = *other;
+    match (ev, s.area) {
+        (EventKind::Collision { with, other }, None) if with.intersects(KIDS) => affect(ctx, &s, *other),
+        (EventKind::Step, Some((left, right, top, bottom))) => {
+            let kids: Vec<InstId> = ctx
+                .w
+                .instances()
+                .iter()
+                .filter(|i| i.alive && i.classes.intersects(KIDS))
+                .filter(|i| {
+                    let (x, y) = (i.m.x(), i.m.y());
+                    num::gm_lt(left, x, &ctx.rules.num)
+                        && num::gm_lt(x, right, &ctx.rules.num)
+                        && num::gm_lt(top, y, &ctx.rules.num)
+                        && num::gm_lt(y, bottom, &ctx.rules.num)
+                })
+                .map(|i| i.id)
+                .collect();
+            for kid in kids {
+                affect(ctx, &s, kid)?;
+            }
+            Ok(Flow::Continue)
+        }
+        _ => Ok(Flow::Continue),
+    }
+}
+
+/// What the water does to one kid: cap, refresh, air jump.
+fn affect(ctx: &mut Ctx, s: &WaterState, kid: InstId) -> Result<Flow, SimError> {
     let Some(k) = ctx.w.get(kid) else {
         return Ok(Flow::Continue);
     };
