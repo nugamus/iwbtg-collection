@@ -194,6 +194,7 @@ fn pending_call<T>(pending: &mut BTreeSet<String>, f: impl FnOnce() -> T) -> Opt
 }
 
 /// `WP7b: physics::load` from a WP0 stub's panic message.
+#[cfg(panic = "unwind")]
 fn stub_name(msg: &str) -> Option<&str> {
     msg.strip_prefix("not implemented: ")
         .filter(|rest| rest.starts_with("WP"))
@@ -2069,7 +2070,7 @@ fn canonical(h: &mut blake3::Hasher, v: &toml::Value) {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, panic = "unwind"))]
 mod tests {
     use super::*;
 

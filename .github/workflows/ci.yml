@@ -1,0 +1,58 @@
+name: CI
+on:
+  pull_request:
+    paths-ignore: ["docs/**", "**/*.md", "Potential Features.md", "workspace/**", ".claude/**"]
+  push:
+    branches: [main]
+    paths-ignore: ["docs/**", "**/*.md", "Potential Features.md", "workspace/**", ".claude/**"]
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+  # Faster CI builds: no incremental state and no debug info (neither is used on a runner).
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+jobs:
+  native:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup show   # installs the toolchain from rust-toolchain.toml
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace --tests --locked -- -D warnings
+      - run: cargo test --workspace --locked
+      - if: runner.os == 'Linux'
+        run: cargo fmt --all -- --check
+
+  wasm32:
+    runs-on: ubuntu-latest
+    env:
+      # Tests read fixtures through absolute paths, so the whole file system is visible to them.
+      CARGO_TARGET_WASM32_WASIP1_RUNNER: wasmtime run --dir=/
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - uses: bytecodealliance/actions/wasmtime/setup@v1
+      # wasm32-wasip1 aborts on panic, and the WP0 stubs that are not merged yet panic. The format
+      # integration tests that load whole packages (wp7a_*) go through them, so they run on
+      # native targets only until WP11 removes the stubs.
+      - run: cargo test -p iwbtg-sim --target wasm32-wasip1 --locked
+      - run: cargo test -p iwbtg-format --lib --test fixtures --target wasm32-wasip1 --locked
+      - run: cargo build -p iwbtg-sim -p iwbtg-format --target wasm32-unknown-unknown --locked
+
+  licenses:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check licenses
