@@ -595,6 +595,7 @@ dependencies = [
  "libm",
  "postcard",
  "rhai",
+ "schemars",
  "serde",
  "smallvec",
  "thiserror",

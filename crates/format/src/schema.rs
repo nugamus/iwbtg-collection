@@ -7,6 +7,10 @@
 //! - `game`, `room` and `sprite` come straight from the types the loader deserializes
 //!   ([`Manifest`], `RawRoom`, `RawSidecar`). Their `toml::Spanned` fields carry a
 //!   `schemars(with = ...)` override with the plain type.
+//! - `physics` comes from `iwbtg_sim::def::physics::PhysicsProfileDraft` and the section drafts
+//!   under it, through the sim crate's own `schema` feature. The action, collision-run and class
+//!   names come from the enums and tables the kid reads (`Action::ALL`, `ClassMask::NAMED`, the
+//!   per-file action enums), so there is no second list.
 //! - `object`, `tiles` and `timeline` come from the shape types below. The loader reads object
 //!   files key by key (every key that is not reserved is a param of the base), so the shape lists
 //!   the reserved keys and leaves the rest open. `tiles`, `timeline`, `path` and `sound` are
@@ -28,6 +32,8 @@ use std::collections::BTreeMap;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::Value;
+
+use iwbtg_sim::def::physics::PhysicsProfileDraft;
 
 use crate::manifest::Manifest;
 use crate::number::Number;
@@ -224,6 +230,10 @@ pub fn generate() -> Vec<(&'static str, String)> {
         (
             "object",
             text::<ObjectShape>("IWBTG objects/<id>.toml (format v0)"),
+        ),
+        (
+            "physics",
+            text::<PhysicsProfileDraft>("IWBTG physics.toml (kid physics profile, format v0)"),
         ),
         ("room", text::<RawRoom>("IWBTG rooms/<id>.toml (format v0)")),
         (
