@@ -32,6 +32,9 @@ pub struct PhysicsLoad {
     pub profile: PhysicsProfile,
     /// `[sprites]` as written.
     pub sprites: KidSpriteNames,
+    /// A legacy draft: it names no sprites, so the loader looks for `player_idle`,
+    /// `player_running`, `player_jump`, `player_fall` and `player_sliding` (CR8).
+    pub legacy: bool,
 }
 
 /// Reads the profile file at `path` (step 7). `trace` is `LoadMode::Trace`: a legacy `rules` that
@@ -65,7 +68,11 @@ pub fn load(
     };
     let sprites = draft.sprites.clone().unwrap_or_default();
     let profile = presets::apply(&mut draft);
-    Some(PhysicsLoad { profile, sprites })
+    Some(PhysicsLoad {
+        profile,
+        sprites,
+        legacy: false,
+    })
 }
 
 /// A parse failure is either a legacy draft (map it, warn) or a mistake (error at its position).
@@ -129,6 +136,7 @@ fn legacy_or_error(
     Some(PhysicsLoad {
         profile,
         sprites: KidSpriteNames::default(),
+        legacy: true,
     })
 }
 

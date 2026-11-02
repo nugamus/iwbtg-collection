@@ -809,6 +809,16 @@ impl<'a> Loader<'a> {
             let at = text.find(name.as_str()).unwrap_or(0);
             this.sprite_ref(name, path, text, at..at + name.len())
         };
+        if l.legacy {
+            // A legacy draft names no kid sprites: the converter's names, when the package has them.
+            let find = |this: &Self, name: &str| this.sprite_ids.get(name).map(|e| e.id);
+            p.sprites.idle = find(self, "player_idle");
+            p.sprites.running = find(self, "player_running");
+            p.sprites.jump = find(self, "player_jump");
+            p.sprites.fall = find(self, "player_fall");
+            p.sprites.sliding = find(self, "player_sliding");
+            return p;
+        }
         p.sprites.idle = pick(self, &l.sprites.idle);
         p.sprites.running = pick(self, &l.sprites.running);
         p.sprites.jump = pick(self, &l.sprites.jump);
