@@ -24,6 +24,9 @@ collisions = [
   { with = "killer", run = "kill" },
 ]
 
+[flip]
+model = "none"               # no gravity flip handover in showdown
+
 [bullet]
 offset = [0.0, 2.0]
 

@@ -220,7 +220,12 @@ pub(crate) fn down(s: &KidState) -> i32 {
 /// `yflag` for the actions that scale by it (`flip.model = "yflag"`): -1 while the kid is
 /// reversed, else 1. Other flip models keep 1: their flipped kid is another object.
 pub(crate) fn yflag(ctx: &Ctx, s: &KidState) -> i32 {
-    if matches!(ctx.def.physics.flip.model, FlipKind::Yflag | FlipKind::GravSign) && s.yflag < 0 {
+    if match ctx.def.physics.flip.model {
+        FlipKind::Yflag | FlipKind::GravSign => s.yflag < 0,
+        // The flipped kid is its own object (`player2`); its mirrored rules read like `yflag` -1.
+        FlipKind::SwapObject => s.flipped,
+        FlipKind::None => false,
+    } {
         -1
     } else {
         1
@@ -275,6 +280,9 @@ fn create_defaults(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     if p.flip.model == FlipKind::GravSign {
         grav_at_create(ctx, me)?;
     }
+    if p.flip.model == FlipKind::SwapObject {
+        swap_object_at_create(ctx, me)?;
+    }
     Ok(())
 }
 
@@ -319,6 +327,23 @@ fn grav_at_create(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     inst.img.set_yscale(real_i(i32::from(yflag)))
 }
 
+/// Group A Create of the flipped kid object (`player2`): gravity and `image_yscale` are negative
+/// (`jump` and `jump2` take their sign from `down()`). The normal kid object is untouched.
+fn swap_object_at_create(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+    let Some(inst) = ctx.w.get(me) else { return Ok(()) };
+    let flipped = inst.classes.intersects(ClassMask::KID_FLIPPED);
+    state_mut(ctx, me)?.flipped = flipped;
+    if !flipped {
+        return Ok(());
+    }
+    let g = ctx.def.physics.numbers.gravity;
+    let Some(inst) = ctx.w.get_mut(me) else {
+        return Ok(());
+    };
+    inst.m.set_gravity(-g)?;
+    inst.img.set_yscale(-Real::ONE)
+}
+
 /// Spook house Step: with `frozen` (the kid's or the global) the Step list stops here, doing
 /// nothing. Returns true when it stopped the list.
 pub(crate) fn stop_if_frozen(ctx: &mut Ctx, me: InstId) -> Result<bool, SimError> {
@@ -354,7 +379,7 @@ fn gravity(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     if state(ctx, me)?.ladder {
         return Ok(());
     }
-    let g = def.physics.numbers.gravity;
+    let g = def.physics.numbers.gravity * real_i(down(&state(ctx, me)?));
     match ctx.w.get_mut(me) {
         Some(i) => i.m.set_gravity(g),
         None => Ok(()),

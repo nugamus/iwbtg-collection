@@ -504,6 +504,11 @@
           "const": "flip_grav",
           "description": "`scrFlipGrav` (family C, `flip.model = \"grav_sign\"`): `grav` negates, `djump` 1, `vspeed` 0,\ngravity takes the new sign, `image_yscale` follows (the mask mirrors with it) and `y` moves\n4 times the new `grav`. Also `kid::api::flip_grav`, for the gravity arrows.",
           "type": "string"
+        },
+        {
+          "const": "flip_swap",
+          "description": "Group A Step (`flip.model = \"swap_object\"`, A1 Step action 5): when `global.grav` no longer\nmatches this kid object, the facing goes to `global.image_xscale`, the other kid object\nis created at `y - 4` (to the flipped object) or `y + 4` (back to the normal one), and this\ninstance is destroyed. The new kid starts from its Create: speeds 0, `djump` true.",
+          "type": "string"
         }
       ]
     },

@@ -22,7 +22,7 @@ vine_keys = "edges"           # edges | latched_flags
 [events]
 create = ["create_defaults", "ensure_world", "first_play_save", "arm_play_timer", "create_bow"]
 step = [
-  "gravity", "walk", "air_sprite", "fall_cap", "shoot", "jump", "release", "vines",
+  "gravity", "walk", "air_sprite", "fall_cap", "shoot", "jump", "release", "vines", "flip_swap",
   "platform_gravity_zero", "fade_in",
 ]
 boundary = "intersect_origin"
@@ -62,6 +62,9 @@ right_equal = 1.0
 slide = 2.0
 kick = [15.0, -9.0]
 drop = 3.0
+
+[flip]
+model = "swap_object"        # the flipped kid is its own object (dormant in rely)
 
 [death]
 order = ["sound", "blood_emitter", "destroy_kid", "game_over", "deaths_plus_one", "save_counters"]
