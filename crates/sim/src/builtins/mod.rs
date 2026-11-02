@@ -88,6 +88,9 @@ pub struct MechGlobals {
     pub stop_flags: BTreeSet<i64>,
     /// `global.switchTrigger[n]`, the `switch_array` trigger model (spook house).
     pub switches: BTreeSet<i64>,
+    /// The music flag (`global.music`, true is muted); the `world` built-in flips it on a Mute
+    /// press and music objects read it.
+    pub music_muted: bool,
 }
 
 impl MechGlobals {
