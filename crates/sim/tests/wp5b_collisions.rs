@@ -340,19 +340,6 @@ fn reversed_from_the_wrong_side_passes_through() {
     );
 }
 
-#[test]
-fn the_yspeed_flipped_take_is_still_unsupported() {
-    with_kid(
-        1,
-        |p| p.platform.take = PlatformTake::YspeedFlipped,
-        |ctx, kid, k| {
-            let p = spawn(ctx, k.platform, 80.0, 105.0);
-            let run = KidCollisionRun::Platform(PlatformRun::PlatformStandard);
-            assert!(kid::run_collision(ctx, kid, p, &run).is_err());
-        },
-    );
-}
-
 // ---- playerMisc: killer_check ----
 
 #[test]

@@ -19,11 +19,11 @@
 use serde::Deserialize;
 
 use crate::collide::{move_contact_solid, query::place_free};
-use crate::def::physics::AirJump;
+use crate::def::physics::{AirJump, FlipKind};
 use crate::error::SimError;
 use crate::kid::actions::common::{state, yflag};
 use crate::kid::api::refresh_air_jump;
-use crate::num::{Real, gm_gt, gm_le};
+use crate::num::{Real, gm_ge, gm_gt, gm_le};
 use crate::world::{Ctx, Flow, InstId};
 
 /// The collision runs this file implements, by their `physics.toml` names (snake case). Part
@@ -64,7 +64,12 @@ fn block_standard(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     // 1. Horizontal contact.
     let (x, y, hs, _) = pos(ctx).ok_or_else(missing)?;
     if !place_free(ctx, me, x + hs, y)? {
-        let right = gm_gt(hs, Real::ZERO, n);
+        // Family C's flipped kid reads `hspeed` 0 as right (`hspeed >= 0`), everyone else as left.
+        let right = if def.physics.flip.model == FlipKind::GravSign && rev {
+            gm_ge(hs, Real::ZERO, n)
+        } else {
+            gm_gt(hs, Real::ZERO, n)
+        };
         move_contact_solid(
             ctx,
             me,

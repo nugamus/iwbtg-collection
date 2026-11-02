@@ -223,8 +223,19 @@
       "type": "object"
     },
     "CAction": {
-      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`; WP5c adds one variant per action it implements.",
-      "not": {}
+      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`.",
+      "oneOf": [
+        {
+          "const": "vine_probe",
+          "description": "Step 3-4: `onVineL` / `onVineR`: the distance to the nearest left or right vine is at most\n1 and the kid is free 1 px in the gravity direction. Computed before the jump code; the\n`vines` action (step 12) reads them.",
+          "type": "string"
+        },
+        {
+          "const": "suicide_press",
+          "description": "Step 10: the Suicide key pressed (not held) runs `killPlayer`, when not frozen.",
+          "type": "string"
+        }
+      ]
     },
     "ClassName": {
       "description": "A collision class by its package name.",
@@ -487,8 +498,14 @@
       ]
     },
     "FlipAction": {
-      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`; WP5c adds one variant per action it implements.",
-      "not": {}
+      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`.",
+      "oneOf": [
+        {
+          "const": "flip_grav",
+          "description": "`scrFlipGrav` (family C, `flip.model = \"grav_sign\"`): `grav` negates, `djump` 1, `vspeed` 0,\ngravity takes the new sign, `image_yscale` follows (the mask mirrors with it) and `y` moves\n4 times the new `grav`. Also `kid::api::flip_grav`, for the gravity arrows.",
+          "type": "string"
+        }
+      ]
     },
     "FlipKind": {
       "description": "The flip models of plan 5.3, by their `physics.toml` names.",

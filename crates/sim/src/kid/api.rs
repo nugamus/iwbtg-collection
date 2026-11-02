@@ -335,3 +335,10 @@ pub fn reset_jump_values(ctx: &mut Ctx, kid: InstId) -> Result<(), SimError> {
 pub fn player_reverse(ctx: &mut Ctx, kid: InstId) -> Result<(), SimError> {
     super::actions::b::player_reverse(ctx, kid)
 }
+
+/// `scrFlipGrav` on `kid` (family C, `flip.model = "grav_sign"`): `grav` negates, `djump` 1,
+/// `vspeed` 0, gravity and `image_yscale` take the new sign and `y` moves 4 times it. The gravity
+/// arrows call this on contact.
+pub fn flip_grav(ctx: &mut Ctx, kid: InstId) -> Result<(), SimError> {
+    super::actions::flip::flip_grav(ctx, kid)
+}
