@@ -216,6 +216,54 @@ mod wp6b {
         assert_eq!(vspeed(&w, kid), r(9.0));
     }
 
+    fn area_water() -> G {
+        water_game(params(&[
+            ("area_left", real(0.0)),
+            ("area_right", real(100.0)),
+            ("area_top", real(50.0)),
+            ("area_bottom", real(200.0)),
+        ]))
+    }
+
+    #[test]
+    fn water_with_an_area_acts_in_step_on_kids_strictly_inside() {
+        let g = area_water();
+        let k = &g.def.kinds[usize::try_from(kind_id(&g, "water").0).unwrap()];
+        assert!(
+            k.events.step && k.events.collisions.is_empty(),
+            "no collision event"
+        );
+        let mut w = World::new(g.room, 1);
+        let water = spawn(&g, &mut w, kind_id(&g, "water"), 500.0, 500.0);
+        let inside = spawn(&g, &mut w, g.kid, 10.0, 60.0);
+        let edge = spawn(&g, &mut w, g.kid, 0.0, 60.0);
+        let below = spawn(&g, &mut w, g.kid, 10.0, 200.0);
+        for id in [inside, edge, below] {
+            set_v(&mut w, id, 6.0);
+        }
+        fire(&g, &mut w, water, &EventKind::Step);
+        assert_eq!(vspeed(&w, inside), r(2.0));
+        assert_eq!(vspeed(&w, edge), r(6.0), "x = left is not strictly inside");
+        assert_eq!(vspeed(&w, below), r(6.0), "y = bottom is not strictly inside");
+    }
+
+    #[test]
+    fn water_with_an_area_ignores_collision_events() {
+        let g = area_water();
+        let mut w = World::new(g.room, 1);
+        let water = spawn(&g, &mut w, kind_id(&g, "water"), 0.0, 0.0);
+        let kid = spawn(&g, &mut w, g.kid, 10.0, 60.0);
+        set_v(&mut w, kid, 6.0);
+        touch(&g, &mut w, water, kid, ClassMask::KID);
+        assert_eq!(vspeed(&w, kid), r(6.0));
+    }
+
+    #[test]
+    fn water_area_needs_all_four_edges() {
+        let p = params(&[("area_left", real(0.0)), ("area_right", real(1.0))]);
+        assert!(builtins::init_state(Builtin::Water, &p).is_err());
+    }
+
     #[test]
     fn water_djump_ignoring_flag_is_refused_until_the_kid_can_set_djump() {
         let p = params(&[("air_jump", word("djump_ignoring_flag"))]);
@@ -331,9 +379,79 @@ mod wp6b {
         }
     }
 
+    fn b_game(p: &[(&str, ParamValue)]) -> G {
+        let mut items = vec![("carry_rule", word("b_lines"))];
+        items.extend_from_slice(p);
+        let mut k = KindDef::new("plat", Builtin::MovingPlatform);
+        k.params = params(&items);
+        let mut tall = KindDef::new("tall", Builtin::Inert);
+        tall.classes = ClassMask::KID;
+        game(vec![k, tall])
+    }
+
+    /// One End Step, then the runner automatic motion (b_lines runs in End Step, not Step).
+    fn end_step(g: &G, w: &mut World, id: InstId) {
+        fire(g, w, id, &EventKind::EndStep);
+        let i = w.get_mut(id).unwrap();
+        let (h, v) = (i.m.hspeed(), i.m.vspeed());
+        let (x, y) = (i.m.x(), i.m.y());
+        i.m.set_x(x + h).unwrap();
+        i.m.set_y(y + v).unwrap();
+    }
+
     #[test]
-    fn platform_b_lines_is_refused() {
-        let p = params(&[("carry_rule", word("b_lines"))]);
-        assert!(builtins::init_state(Builtin::MovingPlatform, &p).is_err());
+    fn platform_b_lines_runs_in_end_step_only() {
+        let g = b_game(&[("hspeed", real(2.0))]);
+        let k = &g.def.kinds[usize::try_from(kind_id(&g, "plat").0).unwrap()];
+        assert!(k.events.end_step && !k.events.step);
+        let y = plat_game(Params::default());
+        let k = &y.def.kinds[usize::try_from(kind_id(&y, "plat").0).unwrap()];
+        assert!(k.events.step && !k.events.end_step);
+    }
+
+    #[test]
+    fn platform_b_lines_carries_a_kid_touching_both_lines() {
+        let g = b_game(&[("hspeed", real(2.0))]);
+        let mut w = World::new(g.room, 1);
+        let id = spawn(&g, &mut w, kind_id(&g, "plat"), 100.0, 100.0);
+        let kid = spawn(&g, &mut w, kind_id(&g, "tall"), 110.0, 70.0);
+        end_step(&g, &mut w, id);
+        assert_eq!(pos(&w, kid), (112.0, 70.0));
+        assert_eq!(pos(&w, id), (102.0, 100.0), "the platform moved by its own speed");
+    }
+
+    #[test]
+    fn platform_b_lines_needs_both_lines_to_touch() {
+        let g = b_game(&[("hspeed", real(2.0))]);
+        let mut w = World::new(g.room, 1);
+        let id = spawn(&g, &mut w, kind_id(&g, "plat"), 100.0, 100.0);
+        let high = spawn(&g, &mut w, kind_id(&g, "tall"), 110.0, 40.0);
+        end_step(&g, &mut w, id);
+        assert_eq!(pos(&w, high), (110.0, 40.0), "touches neither line");
+        let low = spawn(&g, &mut w, kind_id(&g, "tall"), 110.0, 95.0);
+        w.get_mut(high).unwrap().alive = false;
+        end_step(&g, &mut w, id);
+        assert_eq!(pos(&w, low), (110.0, 95.0), "only the lower line");
+    }
+
+    #[test]
+    fn platform_b_lines_moves_x_and_y_only_where_free() {
+        // A block just beside the kid stops the x move but not the y carry.
+        let g = b_game(&[("hspeed", real(2.0)), ("vspeed", real(3.0)), ("bounce", no())]);
+        let mut w = World::new(g.room, 1);
+        spawn(&g, &mut w, g.block, 143.0, 70.0);
+        let id = spawn(&g, &mut w, kind_id(&g, "plat"), 100.0, 100.0);
+        let kid = spawn(&g, &mut w, kind_id(&g, "tall"), 110.0, 70.0);
+        end_step(&g, &mut w, id);
+        assert_eq!(pos(&w, kid), (110.0, 73.0), "x blocked, y carried by vspeed 3");
+    }
+
+    #[test]
+    fn platform_b_lines_with_no_kid_just_moves() {
+        let g = b_game(&[("hspeed", real(2.0))]);
+        let mut w = World::new(g.room, 1);
+        let id = spawn(&g, &mut w, kind_id(&g, "plat"), 100.0, 100.0);
+        end_step(&g, &mut w, id);
+        assert_eq!(pos(&w, id), (102.0, 100.0));
     }
 }
