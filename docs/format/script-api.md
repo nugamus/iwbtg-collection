@@ -72,6 +72,8 @@ Read with `i.name`, write with `i.name = v` where listed read and write.
 
 Every call costs 1 budget unit (one Rhai operation, like each operator and each statement). The cost after each signature is what the host function charges; "cost: 1" means the operation only. The tick budget is 1,000,000 units and one event call may use 200,000 ([0001](../decisions/0001-script-language.md#step-budget)).
 
+Spawn caps: `instance_create` also counts toward at most 256 instances per event call (a Create it runs counts toward the call that spawned it) and 4096 per tick. Exceeding either halts the sim with a script error that names the cap.
+
 - `abs(float) -> float` (cost: 1)
 - `arctan2(float, float) -> float` (cost: 1)
 - `ceil(float) -> float` (cost: 1)

@@ -15,6 +15,12 @@ pub const MAX_TICK_BUDGET: u64 = 2_000_000;
 /// Default units for one event call.
 pub const DEFAULT_CALL_BUDGET: u64 = 200_000;
 
+/// Most instances one script event call may create (decision 0001 "Host caps"). A Create that
+/// a spawn runs counts toward the call that spawned it.
+pub const MAX_SPAWNS_PER_CALL: u32 = 256;
+/// Most instances all script calls of one tick may create.
+pub const MAX_SPAWNS_PER_TICK: u32 = 4_096;
+
 /// Budget units a host function charges on top of the one unit every operation costs
 /// (decision 0001 "Step budget"; the generated `docs/format/script-api.md` lists them).
 /// Rows are (function, units per call, units per item it returns). A function not listed costs
@@ -38,6 +44,8 @@ pub struct Budget {
     call_limit: u64,
     used: Cell<u64>,
     peak: Cell<u64>,
+    spawns_call: Cell<u32>,
+    spawns_tick: Cell<u32>,
 }
 
 impl Budget {
@@ -53,6 +61,8 @@ impl Budget {
             call_limit: call,
             used: Cell::new(0),
             peak: Cell::new(0),
+            spawns_call: Cell::new(0),
+            spawns_tick: Cell::new(0),
         }
     }
 
@@ -74,6 +84,30 @@ impl Budget {
     /// Starts a tick: the counter goes back to 0 (the peak is kept for `iwbtg profile`).
     pub fn begin_tick(&self) {
         self.used.set(0);
+        self.spawns_tick.set(0);
+    }
+
+    /// Starts an outermost script event call: its spawn count goes back to 0.
+    pub fn begin_call(&self) {
+        self.spawns_call.set(0);
+    }
+
+    /// Counts one script spawn. `Err` names the cap that the spawn would exceed.
+    pub fn count_spawn(&self) -> Result<(), String> {
+        let (call, tick) = (self.spawns_call.get() + 1, self.spawns_tick.get() + 1);
+        if call > MAX_SPAWNS_PER_CALL {
+            return Err(format!(
+                "spawn cap exceeded: a script call may create at most {MAX_SPAWNS_PER_CALL} instances"
+            ));
+        }
+        if tick > MAX_SPAWNS_PER_TICK {
+            return Err(format!(
+                "spawn cap exceeded: the scripts may create at most {MAX_SPAWNS_PER_TICK} instances per tick"
+            ));
+        }
+        self.spawns_call.set(call);
+        self.spawns_tick.set(tick);
+        Ok(())
     }
 
     /// Units used so far in this tick.

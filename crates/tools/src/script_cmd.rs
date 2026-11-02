@@ -195,6 +195,11 @@ fn markdown(funcs: &[Func]) -> String {
          operation only. The tick budget is 1,000,000 units and one event call may use 200,000 \
          ([0001](../decisions/0001-script-language.md#step-budget)).\n\n",
     );
+    s.push_str(&format!(
+        "Spawn caps: `instance_create` also counts toward at most {} instances per event call (a Create it runs counts toward the call that spawned it) and {} per tick. Exceeding either halts the sim with a script error that names the cap.\n\n",
+        iwbtg_sim::script::budget::MAX_SPAWNS_PER_CALL,
+        iwbtg_sim::script::budget::MAX_SPAWNS_PER_TICK
+    ));
     for f in rest
         .iter()
         .filter(|f| !is_operator(&f.name) || f.name.starts_with("index$"))
