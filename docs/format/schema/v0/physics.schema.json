@@ -108,7 +108,7 @@
             "required": ["with", "run"],
             "properties": {
               "with": { "$ref": "#/$defs/class" },
-              "run": { "enum": ["block_standard", "platform_standard", "kill", "block_slope_step", "slope_por_rise", "slope_yane"] }
+              "run": { "enum": ["block_standard", "platform_standard", "kill", "block_slope_step", "slope_por_rise", "slope_yane", "moving_block_por"] }
             }
           }
         }
