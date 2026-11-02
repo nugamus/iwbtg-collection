@@ -22,7 +22,7 @@ const COUNTER: VarId = VarId(10);
 
 /// `state_hash` after the last tick, as lowercase hex. Recorded on Windows x86_64. A deliberate
 /// change to the sim or to `HASH_LAYOUT` updates it in the same PR.
-const FINAL_HASH: &str = "a7c837eb014eaf93811f343bc0ef394a91d362ab65df2decae9772e45e6bf76e";
+const FINAL_HASH: &str = "bb69da783ee62462eb87257533c816700918d5182ae39d84afb1268d715957b9";
 
 fn child(tag: &str) -> ProbeState {
     let mut s = ProbeState::new(tag, None);
@@ -70,7 +70,7 @@ fn world() -> Fx {
 
 /// The input of tick `t`: Jump held in a 7-tick pattern, Right in a 13-tick pattern.
 fn input(t: u64) -> InputFrame {
-    let held = |t: u64| -> u16 {
+    let held = |t: u64| -> u32 {
         let mut h = 0;
         if t % 7 < 3 {
             h |= Action::Jump.bit();

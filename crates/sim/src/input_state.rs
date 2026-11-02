@@ -21,7 +21,7 @@ pub struct InputState {
     /// input Inferred, "updates it once at the start of each step").
     pub frame: InputFrame,
     /// Bit per action: pressed since the last direct read of that action.
-    direct_latch: u16,
+    direct_latch: u32,
 }
 
 impl InputState {
@@ -74,7 +74,7 @@ impl InputState {
 mod tests {
     use super::*;
 
-    fn frame(held: u16, pressed: u16, released: u16) -> InputFrame {
+    fn frame(held: u32, pressed: u32, released: u32) -> InputFrame {
         InputFrame {
             held,
             pressed,
