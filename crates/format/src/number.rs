@@ -25,6 +25,29 @@ impl Number {
     }
 }
 
+/// The schema of a [`Number`]: a TOML number, or `{ bits = "<16 hex digits>" }`.
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for Number {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "Number".into()
+    }
+
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "description": "A number, or { bits = \"<16 hex digits of an IEEE double>\" } for a constant that must match bit for bit.",
+            "anyOf": [
+                { "type": "number" },
+                {
+                    "type": "object",
+                    "properties": { "bits": { "type": "string", "pattern": "^[0-9a-fA-F]{16}$" } },
+                    "required": ["bits"],
+                    "additionalProperties": false
+                }
+            ]
+        })
+    }
+}
+
 impl<'de> Deserialize<'de> for Number {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         deserializer.deserialize_any(NumberVisitor)

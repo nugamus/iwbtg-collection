@@ -1,0 +1,49 @@
+{
+  "$defs": {
+    "MomentShape": {
+      "additionalProperties": false,
+      "description": "One timeline moment.",
+      "properties": {
+        "call": {
+          "description": "Runs `moment_<call>()` on the instance running the timeline.",
+          "type": "string"
+        },
+        "t": {
+          "description": "Ticks from the timeline's start.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "t",
+        "call"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A timeline file (`timelines/<id>.toml`).",
+  "properties": {
+    "loop": {
+      "description": "Start again after the last moment; default false.",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "moments": {
+      "description": "Moments, in tick order.",
+      "items": {
+        "$ref": "#/$defs/MomentShape"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "moments"
+  ],
+  "title": "IWBTG timelines/<id>.toml (format v0)",
+  "type": "object"
+}
