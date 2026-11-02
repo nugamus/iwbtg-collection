@@ -1,19 +1,19 @@
 //! The simulation handle the client, server and CLI drive (docs/plans/sim-core.md 2.1, 13 WP0).
 //!
-//! WP0 declares; WP1 owns the method bodies.
-#![allow(unused_variables, reason = "WP0 stubs: WP1 fills the bodies")]
+//! WP0 declared; WP1 owns the method bodies.
 
 use std::sync::Arc;
 
 use crate::def::GameDef;
 use crate::error::SimError;
 use crate::input::InputFrame;
-use crate::room::StartPoint;
+use crate::room::{self, StartPoint};
 use crate::rules::RunnerRules;
 use crate::script::ScriptRuntime;
 use crate::sound::DllMode;
+use crate::tick;
 use crate::timing::Split;
-use crate::world::{SimStatus, World};
+use crate::world::{Ctx, SimStatus, World};
 
 /// How a run starts.
 #[derive(Clone, PartialEq, Debug)]
@@ -52,13 +52,66 @@ impl Sim {
     /// Sets up the world from `options.start`: rules from the game's runner and engine_rev,
     /// the script host (`ScriptRuntime::new`), boot instances, the first room, Game Start
     /// (`room::start_game`). Every `Ctx` it builds carries `options.dll_mode`.
+    ///
+    /// The world starts in `GameDef::start_room` at tick 0 before `start_game` moves it. A
+    /// start that halts is returned as the error.
     pub fn new(def: Arc<GameDef>, options: SimOptions) -> Result<Sim, SimError> {
-        unimplemented!("WP1: Sim::new")
+        let mut rules = RunnerRules::for_runner(def.runner, def.engine_rev)?;
+        rules.num.float_model = def.float_model;
+        let scripts = ScriptRuntime::new(&def)?;
+        let mut world = World::new(def.start_room, options.seed);
+        {
+            let mut ctx = Ctx {
+                def: &def,
+                rules: &rules,
+                w: &mut world,
+                scripts: &scripts,
+                dll_mode: options.dll_mode,
+            };
+            room::start_game(&mut ctx, &options.start)?;
+        }
+        if let SimStatus::Halted(e) = &world.status {
+            return Err(e.clone());
+        }
+        Ok(Sim {
+            def,
+            rules,
+            world,
+            options,
+            scripts,
+        })
     }
 
-    /// Runs one tick with this input. A halted or ended sim does nothing.
+    /// Runs one tick with this input. A halted or ended sim does nothing. `World::output` holds
+    /// the client events of this tick only (cleared first). Reaching `GameDef::max_ticks` halts
+    /// with `SimError::Overflow`; any error halts (plan 2.2).
     pub fn step(&mut self, input: InputFrame) -> StepResult {
-        unimplemented!("WP1: Sim::step")
+        let mut splits = Vec::new();
+        if self.world.status == SimStatus::Running {
+            self.world.output.clear();
+            let mut ctx = Ctx {
+                def: &self.def,
+                rules: &self.rules,
+                w: &mut self.world,
+                scripts: &self.scripts,
+                dll_mode: self.options.dll_mode,
+            };
+            if ctx.w.tick >= ctx.def.max_ticks {
+                ctx.halt(SimError::overflow(format!("max_ticks ({})", ctx.def.max_ticks)));
+            } else {
+                match tick::run_tick(&mut ctx, input) {
+                    Ok(s) => splits = s,
+                    Err(e) => {
+                        ctx.halt(e);
+                    }
+                }
+            }
+        }
+        StepResult {
+            tick: self.world.tick,
+            status: self.world.status.clone(),
+            splits,
+        }
     }
 
     /// The world, read only.
