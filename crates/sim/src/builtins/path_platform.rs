@@ -108,6 +108,7 @@ pub fn event_set(kind: &KindDef) -> EventSet {
 /// A new instance state from its params.
 pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
     let id = param_real(params, "path")?.ok_or_else(|| param_error("path", "is required"))?;
+    // gm-compare: ok (load-time param validation: integer index check)
     let path = (id.get().fract() == 0.0)
         .then(|| crate::num::round::to_int_trunc(id).ok())
         .flatten()
@@ -136,6 +137,7 @@ fn start_path(ctx: &mut Ctx, me: InstId, s: &PathPlatformState, speed: Real) -> 
     }
     if let Some(inst) = ctx.w.get_mut(me) {
         let mut run = path::start(&inst.m, s.path, speed, s.end, false)?;
+        // gm-compare: ok (0 means the param was not set)
         if s.scale.get() != 0.0 {
             run.scale = s.scale;
         }

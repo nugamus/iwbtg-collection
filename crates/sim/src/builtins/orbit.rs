@@ -140,6 +140,7 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
         None
     };
     let radius = param_real(params, "radius")?;
+    // gm-compare: ok (load-time param validation, not a GML comparison)
     if radius.is_some_and(|r| r.get() < 0.0) {
         return Err(param_error("radius", "must not be negative"));
     }
@@ -260,9 +261,10 @@ fn step(ctx: &mut Ctx, me: InstId, s: &OrbitState) -> Result<Flow, SimError> {
     let mut next = angle + s.speed;
     if s.radians {
         let tau = Real::new(std::f64::consts::TAU);
-        if next.get() >= tau.get() {
+        let rules = &ctx.rules.num;
+        if num::gm_ge(next, tau, rules) {
             next -= tau;
-        } else if next.get() < 0.0 {
+        } else if num::gm_lt(next, Real::new(0.0), rules) {
             next += tau;
         }
     }
