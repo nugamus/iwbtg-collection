@@ -31,7 +31,7 @@ An event is an ordered list of action names. The kid runs them top to bottom; a 
 | `keys` | `[{ action = "suicide", on = "press", run = [...] }]`: `on` is `held`, `press` or `release`; `action` is a client action name |
 | `collisions` | `[{ with = "block", run = "block_standard" }]`: the kid collides with an instance of that class. Every row whose `with` matched runs, in row order |
 
-| `boundary` | the room edge: `none`, `intersect_origin` (A1), `outside_room_kill` (family B, WP5b) or `end_step_origin` (WP5c); the last two are `Unsupported` for now |
+| `boundary` | the room edge: `none`, `intersect_origin` (A1), `outside_room_kill` (family B: Outside Room kills unless a `warp` or `edge_warp` overlaps the kid) or `end_step_origin` (WP5c, `Unsupported` for now) |
 
 `intersect_origin` (kid/A1.md "Intersect Boundary"): the kid's Intersect Boundary event tests the origin (strictly: `x = room_width` is inside). Outside the room with no `edge_warp` overlapping the kid, it dies (`kill`). With one, the room it names is requested and the kid moves to its `warp_x`, `warp_y`, or, when both are 0, the kid and the bow are destroyed. Then, if the kid is alive, it wraps: `x < 0` gives `x = room_width - 16` and undoes this step's `vspeed` on `y`; `x > room_width` gives `x = 16` and the same; else `y < 0` gives `y = room_height - 16` and `x = xprevious`; else `y > room_height` gives `y = 16` and `x = xprevious`. The warp target is read from the `edge_warp`'s room and warp point (a per-edge table is `Unsupported`, #250).
 
@@ -56,6 +56,7 @@ Not yet in `[events]`: the outside-room events of the other models.
 | `sync_yflag` | Step, `playerMove` 1-2 (`flip.model = "yflag"`): `image_yscale` takes the current `yflag`, then `yflag` follows `global.reverse`. The mask flips one tick after the global does. |
 | `player_reverse` | `playerReverse` (the gravity arrows' Alarm 1): `global.reverse` toggles, `yflag` negates, `y` moves 4 times the new `yflag`, `curJumps` 1, `vspeed` 0. Also `kid::api::player_reverse`. OPEN: with several kids the original script's per-kid toggle of the global. |
 | `set_view_angle` | Room Start: with `global.reverse` view 0 is enabled at angle 180, else angle 0. |
+| `killer_check` | `playerMisc` 1, in the Step: the kid dies when it touches a `killer` instance. It runs before motion, so it sees the position the last tick ended at. |
 | `ensure_bow` | Room Start and `playerMisc`: a bow at the kid unless one exists. |
 | `cancel_poll` | Alarm 0 when `jump.cancel = "poll_alarm"`: Jump up and moving against gravity cuts `vspeed` by `release_mult` and stops; else re-arms for 1 tick. |
 | `release` | `playerVJump` on a Jump release: upward `vspeed` times `release_mult`, every release. |
@@ -71,8 +72,8 @@ All real comparisons use the GM epsilon (`NumRules::compare`), so for example th
 
 | Run | What it does |
 |---|---|
-| `block_standard` | kid/A1.md "Collision with block": horizontal contact, vertical contact (a landing refreshes `djump`; `gravity.block_landing_zeroes` zeroes gravity), then the diagonal case. The flipped kid is `Unsupported` (WP5b, WP5c). |
-| `platform_standard` | kid/A1.md "Collision with platform": lands when `y - vspeed / 2 <= platform.y`; one-way from below. |
+| `block_standard` | kid/A1.md "Collision with block": horizontal contact, vertical contact (a landing refreshes `djump`; `gravity.block_landing_zeroes` zeroes gravity), then the diagonal case. With `flip.model = "yflag"` a reversed kid refreshes the jump counter on the ceiling side (`vspeed <= 0`) instead of the floor side. Another flipped kid is `Unsupported` (WP5c). |
+| `platform_standard` | kid/A1.md "Collision with platform": lands when `y - vspeed / 2 <= platform.y`; one-way from below. A reversed `yflag` kid lands when `y - vspeed / 2 >= platform.y + reversed_above` and is put at `platform.y + reversed_snap`. |
 | `kill` | The other instance kills the kid (`[death]`). |
 
 ## Sections
@@ -89,7 +90,7 @@ Every key below is optional. Defaults are the `A1` preset's.
 
 `[gravity]`: `reapply` = `step`, or `end_step_slope` (Create leaves gravity 0; the `slope_b` action, WP5b.4, sets it; `create_only` is WP5c), `block_landing_zeroes`.
 
-`[platform]`: `hold_probe` (4), `rule` = `half_vspeed`, `snap` (9), `take` = `vspeed` (`delta_y` and `yspeed_flipped` are WP5b and WP5c).
+`[platform]`: `hold_probe` (4), `rule` = `half_vspeed`, `snap` (9), `take` = `vspeed` or `delta_y` (the platform's `y - yprevious`, family B; `yspeed_flipped` is WP5c), `reversed_above` (family B 15) and `reversed_snap` (24).
 
 `[vine]`: `model` = `distance_asym` or `none` (`distance_sym_early` is WP5c), `left_below` (2), `right_equal` (1), `slide` (2), `kick` (`[15, -9]`: horizontal, vertical), `drop` (3).
 
