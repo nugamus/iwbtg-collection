@@ -1,6 +1,8 @@
-//! Built-in `ladder` (mechanics; docs/plans/sim-core.md 6.1). Tier 3.
-//! WP0 creates the file; WP6c owns it.
-#![allow(unused_variables, reason = "WP0 stubs: WP6c fills the bodies")]
+//! Built-in `ladder` (docs/plans/sim-core.md 6.1; docs/format/builtins/ladder.md). Tier 3.
+//! A marker (mechanics `builtin.ladder`): the climbing is the kid's `ladder` action (A1 Step action 2).
+//!
+//! The loader gives the kind the `ladder` class (`def/class.rs` LADDER), which the kid's `ladder`
+//! action tests with `place_meeting`. The built-in itself has no events, no params and no state.
 
 use super::{BuiltinState, ParamError, ParamSpec};
 use crate::def::{KindDef, Params};
@@ -8,23 +10,22 @@ use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
 use crate::world::{Ctx, Flow, InstId};
 
-/// The params this built-in accepts (`builtins::param_specs` routes here).
+/// No params.
 pub fn param_specs() -> &'static [ParamSpec] {
-    unimplemented!("WP6c: ladder::param_specs")
+    &[]
 }
 
-/// What a kind with this base handles (`builtins::event_set` routes here).
-pub fn event_set(kind: &KindDef) -> EventSet {
-    unimplemented!("WP6c: ladder::event_set")
+/// Handles no event.
+pub fn event_set(_kind: &KindDef) -> EventSet {
+    EventSet::default()
 }
 
-/// A new instance's state from its params (`builtins::init_state` routes here). Add a
-/// `BuiltinState` variant in `state.rs` for per-instance state, or return `Stateless`.
-pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
-    unimplemented!("WP6c: ladder::init_state")
+/// No state.
+pub fn init_state(_params: &Params) -> Result<BuiltinState, ParamError> {
+    Ok(BuiltinState::Stateless)
 }
 
-/// Runs one event on an instance of this built-in (`builtins::on_event` routes here).
-pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimError> {
-    unimplemented!("WP6c: ladder::on_event")
+/// Never called (no events); does nothing.
+pub fn on_event(_ctx: &mut Ctx, _me: InstId, _ev: &EventKind) -> Result<Flow, SimError> {
+    Ok(Flow::Continue)
 }

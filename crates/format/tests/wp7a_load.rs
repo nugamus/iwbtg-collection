@@ -986,3 +986,78 @@ fn a_gravity_flip_with_view_rotation_is_refused_at_load() {
         "{errs:?}"
     );
 }
+
+// ---- #138: tier 3 misc built-ins (time_limit, sign, ladder, decor)
+
+fn misc_package(objects: &[(&str, &str)]) -> PackageFiles {
+    let listed: String = objects.iter().map(|(s, _)| format!("\"@{s}\", ")).collect();
+    let order = ORDER.replace("\"playerface\",", &format!("\"playerface\", {listed}"));
+    package(|f| {
+        set(f, "game.toml", manifest(&order, "").into_bytes());
+        for (stem, text) in objects {
+            f.push((format!("objects/{stem}.toml"), text.as_bytes().to_vec()));
+        }
+    })
+}
+
+#[test]
+fn wp6c3_params_load() {
+    let files = misc_package(&[
+        (
+            "my_sign",
+            "base = \"sign\"\ntext = \"Beware of the apple.\"\nmode = \"while_overlapping\"\n",
+        ),
+        (
+            "my_timer",
+            "base = \"time_limit\"\nrole = \"timer\"\nminutes = 2\nseconds = 56\non_expire = \"goto_room\"\nroom = \"title\"\nwarp_x = 32\nwarp_y = 64\n",
+        ),
+        ("my_zone", "base = \"time_limit\"\nrole = \"start_zone\"\n"),
+        ("my_ladder", "base = \"ladder\"\n"),
+        ("my_decor", "base = \"decor\"\n"),
+    ]);
+    let (def, _) = load_ok(&files, STRICT);
+    let (_, sign) = kind_named(&def, "@my_sign");
+    assert_eq!(
+        sign.params.0.get("text"),
+        Some(&ParamValue::Str("Beware of the apple.".into())),
+        "text stays text"
+    );
+    assert_eq!(
+        sign.params.0.get("mode"),
+        Some(&ParamValue::Str("while_overlapping".into()))
+    );
+    let (_, timer) = kind_named(&def, "@my_timer");
+    assert_eq!(
+        timer.params.0.get("minutes"),
+        Some(&ParamValue::Real(Real::new(2.0)))
+    );
+    assert!(
+        matches!(timer.params.0.get("room"), Some(ParamValue::Room(_))),
+        "a room param names a room"
+    );
+    let (_, ladder) = kind_named(&def, "@my_ladder");
+    assert!(ladder.classes.intersects(iwbtg_sim::def::ClassMask::LADDER));
+}
+
+#[test]
+fn wp6c3_params_are_checked() {
+    let cases = [
+        ("base = \"sign\"\ntext = 3\n", "text"),
+        ("base = \"sign\"\ntext = \"x\"\nmode = \"always\"\n", "mode"),
+        ("base = \"time_limit\"\non_expire = \"explode\"\n", "on_expire"),
+        ("base = \"time_limit\"\nroom = \"@nope\"\n", "room"),
+        ("base = \"time_limit\"\nminutes = true\n", "minutes"),
+        ("base = \"ladder\"\nrungs = 3\n", "rungs"),
+        ("base = \"decor\"\nbogus = 1\n", "bogus"),
+    ];
+    for (text, needle) in cases {
+        let files = misc_package(&[("bad", text)]);
+        let r = load_report(&files, STRICT);
+        assert!(!r.ok(), "expected an error for {text:?}:\n{}", render(&r));
+        assert!(
+            errors(&r).iter().any(|e| e.contains(needle)),
+            "{text:?}: no error mentions `{needle}`: {:?}",
+            errors(&r)
+        );
+    }
+}
