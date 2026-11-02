@@ -22,7 +22,7 @@ use crate::manifest::toml_error;
 use crate::number::Number;
 
 /// Keys of an object file that are not params.
-pub const RESERVED_KEYS: [&str; 11] = [
+pub const RESERVED_KEYS: [&str; 12] = [
     "base",
     "script",
     "sprite",
@@ -32,6 +32,7 @@ pub const RESERVED_KEYS: [&str; 11] = [
     "depth",
     "persistent",
     "counts_as",
+    "collides_with",
     "roles",
     "params",
 ];
@@ -59,6 +60,8 @@ pub struct ObjectFile {
     pub persistent: Option<bool>,
     /// Extra collision classes (plan 1.1): named classes or package class names.
     pub counts_as: Vec<Spanned<String>>,
+    /// Classes whose touch runs the script's `collide(other)`: named classes or package class names.
+    pub collides_with: Vec<Spanned<String>>,
     /// Legacy converter key (`roles = ["block"]`), read only in `LoadMode::Trace` (CR10).
     pub roles: Vec<Spanned<String>>,
     /// Params, in key order.
@@ -112,6 +115,7 @@ pub fn parse_object(id: &str, path: &str, text: &str) -> Result<ObjectFile, Diag
                 out.depth = Some(Spanned::new(value.span(), d));
             }
             "counts_as" => out.counts_as = strings("counts_as", value)?,
+            "collides_with" => out.collides_with = strings("collides_with", value)?,
             "roles" => out.roles = strings("roles", value)?,
             "params" => match value.get_ref() {
                 toml::Value::Table(t) => {
