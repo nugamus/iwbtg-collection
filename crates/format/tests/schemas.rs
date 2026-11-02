@@ -199,6 +199,15 @@ fn the_rely_physics_example_validates() {
 }
 
 #[test]
+fn the_family_b_physics_examples_validate() {
+    for name in ["kaenbyou", "eat-the-lemon"] {
+        let path = format!("docs/format/examples/{name}-physics.toml");
+        let text = fs::read_to_string(client_root().join(&path)).unwrap();
+        assert_valid("physics", &path, &text);
+    }
+}
+
+#[test]
 fn the_physics_schema_rejects_mistakes() {
     let validator = jsonschema::validator_for(&load_schema("physics")).unwrap();
     assert!(validator.is_valid(&serde_json::json!({ "preset": "A1", "numbers": { "run_speed": 4 } })));
