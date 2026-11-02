@@ -813,7 +813,8 @@ fn vines(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let (x, y) = (i.m.x(), i.m.y());
     let s = state(ctx, me)?;
     let (dr, dl) = vine_distances(ctx, me)?;
-    let below_free = place_free(ctx, me, x, y + real_i(down(&s)))?;
+    let probe = if p.vine.probe_down_fixed { 1 } else { down(&s) };
+    let below_free = place_free(ctx, me, x, y + real_i(probe))?;
     // `edges`: this tick's press and the held Jump key. `latched_flags`: the game's own flags
     // (action `key_flags`), which stay set from a press to its release.
     let (right_pressed, left_pressed, jump_held) = match p.input.vine_keys {
