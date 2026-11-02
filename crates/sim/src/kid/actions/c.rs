@@ -117,6 +117,7 @@ pub(crate) fn vines(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
             // `kick[1]` is the unflipped -9; the original writes -9 * grav.
             i.m.set_vspeed(kick_v * sign)?;
             super::common::set_sprite(def, &mut i.img, p.sprites.jump);
+            super::common::play_sound(ctx, p.sounds.vine_kick)?;
         } else {
             i.m.set_hspeed(dir * drop)?;
             super::common::set_sprite(def, &mut i.img, p.sprites.fall);

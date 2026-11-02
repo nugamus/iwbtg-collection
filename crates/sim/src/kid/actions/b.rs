@@ -104,6 +104,7 @@ pub(crate) fn jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
             }
         }
         state_mut(ctx, me)?.cur_jumps = 2;
+        super::common::play_sound(ctx, p.sounds.jump)?;
         return Ok(());
     }
     let max = s.b.max_jumps;
@@ -117,6 +118,7 @@ pub(crate) fn jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
             set_sprite(def, &mut i.img, p.sprites.jump);
         }
         state_mut(ctx, me)?.cur_jumps = cur.saturating_add(1);
+        super::common::play_sound(ctx, p.sounds.double_jump)?;
         return Ok(());
     }
     let in_water = match p.jump.water_air {
@@ -128,6 +130,7 @@ pub(crate) fn jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
             i.m.set_vspeed(-(sign * speed(max)))?;
         }
         state_mut(ctx, me)?.cur_jumps = max.saturating_add(1);
+        super::common::play_sound(ctx, p.sounds.double_jump)?;
     } else {
         state_mut(ctx, me)?.cur_jumps = cur;
     }

@@ -195,6 +195,45 @@ fn kid_sprite_names_resolve_to_sprite_ids() {
     );
 }
 
+#[test]
+fn kid_sound_names_resolve_to_sound_ids() {
+    let files = package("", |f| {
+        put(f, "sounds/jump.ogg", "ogg");
+        put(f, "sounds/death.ogg", "ogg");
+        put(
+            f,
+            "physics.toml",
+            "preset = \"A1\"
+[sounds]
+jump = \"jump\"
+death = \"death\"
+",
+        );
+    });
+    let (def, _) = load_ok(&files, STRICT);
+    let s = &def.physics.sounds;
+    assert!(s.jump.is_some() && s.death.is_some() && s.shoot.is_none());
+    assert_ne!(s.jump, s.death);
+    let files = package("", |f| {
+        put(
+            f,
+            "physics.toml",
+            "preset = \"A1\"
+[sounds]
+shoot = \"nope\"
+",
+        );
+    });
+    let r = load_report(&files, STRICT);
+    assert!(
+        errors(&r)
+            .iter()
+            .any(|e| e.contains("physics.toml") && e.contains("sound `nope` does not exist")),
+        "{}",
+        render(&r)
+    );
+}
+
 const LEGACY: &str =
     "rules = \"classic\"\njumps = [8.5, 7.0]\ngravity = 0.4\nstep_sets = { gravity = 0.0 }\n";
 

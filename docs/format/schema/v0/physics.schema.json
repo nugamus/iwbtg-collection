@@ -446,7 +446,7 @@
       "oneOf": [
         {
           "const": "sound",
-          "description": "The death sound. Not played yet (#231).",
+          "description": "The death sound, played by the death step `sound`.",
           "type": "string"
         },
         {
@@ -1303,6 +1303,53 @@
       },
       "type": "object"
     },
+    "KidSoundNames": {
+      "additionalProperties": false,
+      "description": "`[sounds]` as written in a package: sound names by role, resolved to [`KidSounds`] ids by the\nloader.",
+      "properties": {
+        "death": {
+          "default": null,
+          "description": "The death sound.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "double_jump": {
+          "default": null,
+          "description": "An air jump.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "jump": {
+          "default": null,
+          "description": "A ground jump.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "shoot": {
+          "default": null,
+          "description": "A shot.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "vine_kick": {
+          "default": null,
+          "description": "A vine kick.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
     "KidSpriteNames": {
       "additionalProperties": false,
       "description": "`[sprites]` as written in a package: sprite names by role, resolved to [`KidSprites`] ids by\nthe loader.",
@@ -2026,6 +2073,17 @@
         }
       ],
       "description": "`[slope]`."
+    },
+    "sounds": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/KidSoundNames"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[sounds]`: sound names; the loader resolves them to ids like the sprite names."
     },
     "sprites": {
       "anyOf": [
