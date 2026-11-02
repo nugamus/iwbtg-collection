@@ -8,6 +8,7 @@ mod determinism_cmd;
 mod import;
 mod pkg_cmd;
 mod replay_cmd;
+mod room_cmd;
 mod trace_cmd;
 
 use std::path::{Path, PathBuf};
@@ -42,6 +43,9 @@ enum Command {
     /// Headless replays.
     #[command(subcommand)]
     Replay(ReplayCommand),
+    /// Rooms of a package.
+    #[command(subcommand)]
+    Room(RoomCommand),
     /// Cross-platform equality checks.
     #[command(subcommand)]
     Determinism(DeterminismCommand),
@@ -126,6 +130,23 @@ enum PkgCommand {
 }
 
 #[derive(Subcommand)]
+enum RoomCommand {
+    /// Prints an ASCII map of a room with a legend line.
+    Show {
+        /// Package folder.
+        pkg: PathBuf,
+        /// Room id (`rooms/<id>.toml`).
+        room: String,
+        /// Pixels per character.
+        #[arg(long, default_value_t = 32)]
+        cell: u32,
+        /// Load converter output: unmapped script kinds become inert.
+        #[arg(long)]
+        trace_mode: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum DeterminismCommand {
     /// Runs the golden corpus and prints one line per case: name, ticks, status, state hash.
     Report {
@@ -192,6 +213,12 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
         Command::Determinism(DeterminismCommand::Report { corpus, check }) => {
             determinism_cmd::main(&corpus, check)
         }
+        Command::Room(RoomCommand::Show {
+            pkg,
+            room,
+            cell,
+            trace_mode,
+        }) => room_cmd::show_main(&pkg, &room, cell, trace_mode),
         Command::Replay(ReplayCommand::Run(args)) => {
             replay_cmd::main(&args)?;
             Ok(true)
