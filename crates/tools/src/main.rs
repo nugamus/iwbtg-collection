@@ -5,6 +5,7 @@
 
 mod case;
 mod determinism_cmd;
+mod engine_cmd;
 mod import;
 mod pkg_cmd;
 mod replay_cmd;
@@ -49,6 +50,30 @@ enum Command {
     /// Cross-platform equality checks.
     #[command(subcommand)]
     Determinism(DeterminismCommand),
+    /// Engine revisions.
+    #[command(subcommand)]
+    Engine(EngineCommand),
+}
+
+#[derive(Subcommand)]
+enum EngineCommand {
+    /// Re-runs a package's stored replays and trace cases on a new engine_rev; prints SAFE or the differences.
+    Check {
+        /// Package folder.
+        pkg: PathBuf,
+        /// The revision to test (default: the newest this build knows).
+        #[arg(long)]
+        to: Option<u16>,
+        /// Load converter output: unmapped script kinds become inert.
+        #[arg(long)]
+        trace_mode: bool,
+        /// Research repo for the original traces (default: IWBTG_RESEARCH); without one, trace cases are not run.
+        #[arg(long)]
+        research: Option<PathBuf>,
+        /// Cases folder.
+        #[arg(long, default_value = DEFAULT_CASES)]
+        cases: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -228,6 +253,20 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             cell,
             trace_mode,
         }) => room_cmd::show_main(&pkg, &room, cell, trace_mode),
+        Command::Engine(EngineCommand::Check {
+            pkg,
+            to,
+            trace_mode,
+            research,
+            cases,
+        }) => {
+            let research = research.or_else(|| std::env::var_os("IWBTG_RESEARCH").map(PathBuf::from));
+            let traces = engine_cmd::TraceSource {
+                research: research.as_deref(),
+                cases: &cases,
+            };
+            engine_cmd::main(&pkg, to, trace_mode, Some(traces))
+        }
         Command::Replay(ReplayCommand::Run(args)) => {
             replay_cmd::main(&args)?;
             Ok(true)
