@@ -9,3 +9,5 @@ Shows a collected boss reward or item (KAE bossItemViewer, JUN itemview5, LR, RB
 | `sprite` | | | The loader's. |
 
 Create and every Step: visible while the flag is set, invisible otherwise.
+
+**Loading.** `kind` is an object-file param only: on a placed instance `kind` is the key that names the object, so a placed viewer cannot override it. Tests `wp6b4_params_*` and `an_item_viewer_kind_is_a_preset_param...` in `crates/format/tests/wp7a_load.rs`. Converter request CR17.

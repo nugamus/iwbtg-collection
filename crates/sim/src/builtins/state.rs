@@ -6,9 +6,10 @@
 use serde::{Deserialize, Serialize};
 
 use super::{
-    block, blood, blood_emitter, bow, camera, conveyor, death_sound, difficulty_warp, drop_platform,
-    edge_warp, fake_block, game_clear, game_over, jump_refresher, kid_bullet, kid_param_zone, kid_start,
-    killer, moving_platform, music, save, spike, spring, trap, trigger, warp, water, world,
+    block, blood, blood_emitter, bow, breakable_block, camera, conveyor, death_sound, difficulty_warp,
+    drop_platform, edge_warp, fake_block, game_clear, game_over, jump_refresher, kid_bullet, kid_param_zone,
+    kid_start, killer, moving_platform, music, orbit, path_platform, save, sign, spike, spring, time_limit,
+    trap, trap_stopper, trigger, warp, water, world,
 };
 
 /// A built-in instance's state.
@@ -65,6 +66,14 @@ pub enum BuiltinState {
     Trigger(trigger::TriggerState),
     /// `trap` (WP6b).
     Trap(trap::TrapState),
+    /// `breakable_block` (WP6c).
+    Breakable(breakable_block::BreakableState),
+    /// `trap_stopper` (WP6c).
+    Stopper(trap_stopper::StopperState),
+    /// `orbit` (WP6c).
+    Orbit(orbit::OrbitState),
+    /// `path_platform` (WP6c).
+    PathPlatform(path_platform::PathPlatformState),
     /// `jump_refresher` (WP6c).
     Refresher(jump_refresher::RefresherState),
     /// `spring` (WP6c).
@@ -101,4 +110,8 @@ pub enum BuiltinState {
     Camera(camera::CameraState),
     /// `killer` (WP6a).
     Killer(killer::KillerState),
+    /// `sign` (WP6c).
+    Sign(sign::SignState),
+    /// `time_limit` (WP6c).
+    TimeLimit(time_limit::TimeLimitState),
 }

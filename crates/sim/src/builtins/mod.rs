@@ -154,6 +154,11 @@ pub enum BuiltinOutput {
         /// The kid was flipped: the particles fall up.
         flipped: bool,
     },
+    /// A `sign` raised its message this tick (the client shows a text box while it keeps coming).
+    TextBox {
+        /// The text.
+        text: String,
+    },
 }
 
 /// One parameter a built-in accepts; `crates/format` validates package params against these.
@@ -182,6 +187,8 @@ pub enum ParamType {
     Kind,
     /// A sound id.
     Sound,
+    /// Free text (a sign's message).
+    Text,
 }
 
 /// A param set a built-in cannot use.

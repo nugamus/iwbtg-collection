@@ -28,7 +28,7 @@ use crate::def::{ClassMask, KindDef, ParamValue, Params};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
 use crate::input::Action;
-use crate::num::Real;
+use crate::num::{self, Real};
 use crate::save::{self, SavedPosition};
 use crate::world::{Ctx, Flow, InstId};
 
@@ -348,7 +348,8 @@ fn touch_fires(ctx: &Ctx, s: &SaveState) -> bool {
 
 /// Saves from `kid` when the cooldown, gravity and depth rules allow it.
 fn try_save(ctx: &mut Ctx, me: InstId, s: &SaveState, kid: InstId) -> Result<Flow, SimError> {
-    if s.cooldown.get() > 0.0 && s.timer.get() >= 0.0 {
+    let nr = &ctx.rules.num;
+    if num::gm_gt(s.cooldown, Real::ZERO, nr) && num::gm_ge(s.timer, Real::ZERO, nr) {
         return Ok(Flow::Continue);
     }
     let Some(k) = ctx.w.get(kid) else {
@@ -360,7 +361,7 @@ fn try_save(ctx: &mut Ctx, me: InstId, s: &SaveState, kid: InstId) -> Result<Flo
         Gravity::Normal => !flipped,
         Gravity::Flipped => flipped,
     };
-    if !gravity_ok || (s.requires_kid_depth0 && k.depth.get().abs() > 0.0) {
+    if !gravity_ok || (s.requires_kid_depth0 && num::gm_ne(k.depth, Real::ZERO, nr)) {
         return Ok(Flow::Continue);
     }
     save::save_now(ctx, kid, model_of(&s.position), s.fixed)?;

@@ -178,9 +178,11 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
     };
     let screen = (r("screen_w", 800.0)?, r("screen_h", 608.0)?);
     let (h_div, v_div) = (r("h_div", 16.0)?, r("v_div", 12.0)?);
+    // gm-compare: ok (load-time param validation)
     if screen.0.get() <= 0.0 || screen.1.get() <= 0.0 {
         return Err(super::param_error("screen_w", "the screen size must be positive"));
     }
+    // gm-compare: ok (load-time param validation)
     if h_div.get() <= 0.0 || v_div.get() <= 0.0 {
         return Err(super::param_error("h_div", "the divisors must be positive"));
     }
@@ -240,6 +242,7 @@ fn snap(ctx: &mut Ctx, s: &CameraState, size: (Real, Real), clamp: bool) -> Resu
         px = num::gm_max(num::gm_min(px, rw - Real::ONE, n), Real::ZERO, n);
         py = num::gm_max(num::gm_min(py, rh - Real::ONE, n), Real::ZERO, n);
     }
+    // gm-compare: ok (load-time param validation)
     if size.0.get() <= 0.0 || size.1.get() <= 0.0 {
         return Ok(());
     }

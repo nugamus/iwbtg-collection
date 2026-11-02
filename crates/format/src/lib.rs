@@ -10,7 +10,9 @@
 
 pub mod check;
 pub mod diag;
+pub mod engine_pack;
 pub mod files;
+pub mod fmt;
 pub mod ids;
 pub mod manifest;
 pub mod number;

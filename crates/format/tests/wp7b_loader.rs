@@ -572,3 +572,62 @@ fn a_sound_id_used_twice_is_an_error_except_in_trace_mode() {
     let (def, _) = load_ok(&files, TRACE);
     assert_eq!(def.sounds.len(), 1);
 }
+
+// ---- trace-mode integration (#11) ---------------------------------------------------------------
+
+#[test]
+fn built_in_blocks_are_solid_unless_an_object_says_otherwise() {
+    let files = package("", |f| {
+        put(f, "objects/floor.toml", "base = \"block\"\nsprite = \"block\"\n");
+        put(
+            f,
+            "objects/visual.toml",
+            "base = \"block\"\nsprite = \"block\"\nsolid = false\n",
+        );
+    });
+    let (def, _) = load_ok(&files, STRICT);
+    let solid = |n: &str| def.kinds.iter().find(|k| k.name == n).unwrap().solid;
+    assert!(solid("block"), "the bare built-in");
+    assert!(solid("@floor"));
+    assert!(!solid("@visual"));
+    assert!(!solid("fake_block"));
+}
+
+#[test]
+fn a_legacy_profile_finds_the_converters_kid_sprites() {
+    let files = package("", |f| {
+        put(f, "physics.toml", LEGACY);
+        put(
+            f,
+            "sprites/player_idle.toml",
+            &String::from_utf8(sidecar(4, 4)).unwrap(),
+        );
+        f.push(("sprites/player_idle.png".into(), png(&["####"; 4])));
+    });
+    let (def, _) = load_ok(&files, STRICT);
+    assert!(def.physics.sprites.idle.is_some(), "player_idle is found");
+    assert!(
+        def.physics.sprites.running.is_none(),
+        "the others are not in the package"
+    );
+}
+
+#[test]
+fn a_placed_instance_its_built_in_refuses_becomes_inert_in_trace_mode_only() {
+    let room = r#"size = [800, 608]
+file_speed = 30
+instances = [
+  { kind = "kid_start", x = 48, y = 552 },
+  { kind = "warp", x = 100, y = 100 },
+]
+"#;
+    let files = with_objects(&[], Some(room));
+    let r = load_report(&files, STRICT);
+    assert!(!errors(&r).is_empty(), "strict mode refuses the warp");
+    let (def, r) = load_ok(&files, TRACE);
+    let w = def.rooms[0].instances.last().unwrap();
+    let k = &def.kinds[w.kind.0 as usize];
+    assert_eq!(k.name, "warp[inert]");
+    assert_eq!(k.base, iwbtg_sim::def::Builtin::Inert);
+    assert!(warnings(&r).iter().any(|m| m.contains("CR5")), "{}", render(&r));
+}

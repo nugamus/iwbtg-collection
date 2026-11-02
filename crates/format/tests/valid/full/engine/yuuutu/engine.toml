@@ -1,0 +1,18 @@
+#:schema ../../../../../../docs/format/schema/v0/engine.schema.json
+# Fixture pack for the `full` example package (every manifest field).
+id = "yuuutu"
+title = "Example engine pack"
+family = "A1"
+games = ["full_example"]
+assets = "complete"
+
+[[creators]]
+name = "Example Engine Author"
+role = "other"
+
+[[third_party]]
+path = "sprites/kid_idle.png"
+what = "Kid idle sprite (fixture)"
+owner = "Example Engine Author"
+license = "unknown"
+status = "to-clear"
