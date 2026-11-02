@@ -38,7 +38,7 @@ fn the_b_lists_run_in_order_without_unsupported_actions() {
     w.room_speed = r(50.0);
     // Already saved: first_play_save has nothing to do.
     w.save = Some(iwbtg_sim::save::SaveSlot {
-        room: room,
+        room,
         x: r(100.0),
         y: r(100.0),
         flipped: false,
