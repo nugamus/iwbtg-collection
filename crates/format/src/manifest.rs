@@ -7,6 +7,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
 
+use iwbtg_sim::def::{
+    DeathOnRestart, ResetKind, ResetModel, RestartKind, RestartModel, RestartTrigger, RoleSet, RoomRole,
+};
+use iwbtg_sim::num::Real;
 use serde::Deserialize;
 use toml::Spanned;
 use toml::value::Datetime;
@@ -47,9 +51,10 @@ pub struct Manifest {
     /// Version of the original we ported.
     #[serde(default)]
     pub source_version: Option<Spanned<String>>,
-    /// Engine pack id in `games/_engines/`.
+    /// Engine pack id in `games/_engines/` (`engine_pack`; `[engine]` is the engine settings
+    /// table).
     #[serde(default)]
-    pub engine: Option<Spanned<String>>,
+    pub engine_pack: Option<Spanned<String>>,
     /// Built-in behavior revision this package was verified against.
     pub engine_rev: Spanned<u16>,
     /// Original runner; selects event-order differences.
@@ -63,8 +68,19 @@ pub struct Manifest {
     pub tick_rate: Option<Spanned<u32>>,
     /// Upper bound for a replay, in ticks. The server rejects longer replays.
     pub max_ticks: Spanned<u64>,
-    /// Event and collision rank order of every kind used.
-    pub object_order: Spanned<Vec<Spanned<String>>>,
+    /// Event and collision rank order of every kind used: kind names and selectors.
+    pub object_order: Spanned<Vec<Spanned<OrderItem>>>,
+    /// GM room order (`room_goto_next`, `room_goto_previous`); rooms not listed follow in path
+    /// order.
+    #[serde(default)]
+    pub room_order: Option<Spanned<Vec<Spanned<String>>>>,
+    /// Engine settings: restart and reset models, boot kinds, number model, new-game room, engine
+    /// roles (docs/plans/sim-core.md 8.3).
+    #[serde(default)]
+    pub engine: Option<Spanned<EngineSection>>,
+    /// Default sprite and mask of bare built-in kinds, per variant (`[defaults.spike]`).
+    #[serde(default)]
+    pub defaults: BTreeMap<Spanned<String>, Spanned<KindDefaults>>,
     /// At least one creator.
     pub creators: Spanned<Vec<Creator>>,
     /// Where the original comes from and its permission status.
@@ -170,12 +186,18 @@ pub struct Timing {
     pub stages: Vec<Stage>,
 }
 
-/// `{ trigger = "name" }`.
+/// `{ trigger = "name" }`, or `{ trigger = "enter_room", room = "stage1_01" }`.
+///
+/// The loader accepts the `[timing]` vocabulary of `iwbtg_sim::timing::TimingTrigger`:
+/// `run_start`, `run_end` and `enter_room` (with `room`) ([`TIMING_TRIGGERS`]).
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TriggerRef {
-    /// A trigger name, global to the package.
+    /// A trigger name from the vocabulary.
     pub trigger: Spanned<String>,
+    /// The room, for `enter_room`.
+    #[serde(default)]
+    pub room: Option<Spanned<String>>,
 }
 
 /// One split stage.
@@ -188,6 +210,317 @@ pub struct Stage {
     pub name: Spanned<String>,
     /// The stage ends at this trigger.
     pub trigger: Spanned<String>,
+    /// The room, for `enter_room`.
+    #[serde(default)]
+    pub room: Option<Spanned<String>>,
+}
+
+/// The `[timing]` trigger vocabulary (WP8b, `iwbtg_sim::timing::TimingTrigger`).
+pub const TIMING_TRIGGERS: [&str; 3] = ["run_start", "run_end", "enter_room"];
+
+/// One `object_order` entry as written: a kind name, or a selector table
+/// `{ kind = "spike", dir = "up" }` with exactly one param key besides `kind`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum OrderItem {
+    /// `"spike"`, `"@world"`.
+    Kind(String),
+    /// `{ kind = "spike", dir = "up" }`.
+    Selector(BTreeMap<String, toml::Value>),
+}
+
+impl OrderItem {
+    /// The kind name, if the entry has a valid shape.
+    pub fn kind(&self) -> Option<&str> {
+        match self {
+            OrderItem::Kind(k) => Some(k),
+            OrderItem::Selector(t) => t.get("kind").and_then(toml::Value::as_str),
+        }
+    }
+
+    /// The selector's `(key, value)`, or why the table is malformed. `Ok(None)` for a plain name.
+    pub fn selector(&self) -> Result<Option<(&str, &toml::Value)>, String> {
+        let OrderItem::Selector(t) = self else {
+            return Ok(None);
+        };
+        if self.kind().is_none() {
+            return Err("an object_order selector needs `kind = \"<kind>\"`".to_owned());
+        }
+        let mut rest = t.iter().filter(|(k, _)| k.as_str() != "kind");
+        match (rest.next(), rest.next()) {
+            (Some((k, v)), None) => match v {
+                toml::Value::String(_)
+                | toml::Value::Integer(_)
+                | toml::Value::Float(_)
+                | toml::Value::Boolean(_) => Ok(Some((k.as_str(), v))),
+                _ => Err(format!(
+                    "selector param `{k}` must be a string, number or boolean"
+                )),
+            },
+            _ => Err(
+                "an object_order selector has `kind` and exactly one param, for example \
+                      { kind = \"spike\", dir = \"up\" }"
+                    .to_owned(),
+            ),
+        }
+    }
+}
+
+/// The `[engine]` table (docs/plans/sim-core.md 4.2, 4.3, 8.3; CR7).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EngineSection {
+    /// Where `StartPoint::NewGame` starts (CR7). Defaults to `start_room` with a warning.
+    #[serde(default)]
+    pub new_game_room: Option<Spanned<String>>,
+    /// Persistent kinds created before the first room; default: the `world` engine kind.
+    #[serde(default)]
+    pub boot: Option<Vec<Spanned<String>>>,
+    /// GM "treat uninitialized variables as 0"; default true.
+    #[serde(default)]
+    pub uninit_reads_zero: Option<bool>,
+    /// Runner FPU model (N3); default `f64`.
+    #[serde(default)]
+    pub float_model: Option<FloatModelName>,
+    /// The retry path (R).
+    #[serde(default)]
+    pub restart: Option<RestartSection>,
+    /// The reset path (F2).
+    #[serde(default)]
+    pub reset: Option<ResetSection>,
+    /// Engine roles: which kind the sim spawns as `kid_bullet`, `bow`, ... (`"none"`: the game
+    /// never spawns one). Keys: [`ENGINE_ROLES`].
+    #[serde(default)]
+    pub roles: BTreeMap<Spanned<String>, Spanned<String>>,
+}
+
+/// Engine role names, in `EngineKind` order.
+pub const ENGINE_ROLES: [&str; 9] = [
+    "world",
+    "kid",
+    "kid_flipped",
+    "kid_bullet",
+    "bow",
+    "blood",
+    "blood_emitter",
+    "game_over",
+    "playerface",
+];
+
+/// `float_model` values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+pub enum FloatModelName {
+    /// IEEE binary64.
+    #[serde(rename = "f64")]
+    F64,
+}
+
+/// A room role (`role` in room files, `excluded_roles` here).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RoleName {
+    /// Boot room.
+    Boot,
+    /// Title.
+    Title,
+    /// Menu.
+    Menu,
+    /// Difficulty or stage select.
+    Select,
+    /// Gameplay.
+    Play,
+}
+
+impl RoleName {
+    /// The sim's role.
+    pub const fn role(self) -> RoomRole {
+        match self {
+            RoleName::Boot => RoomRole::Boot,
+            RoleName::Title => RoomRole::Title,
+            RoleName::Menu => RoomRole::Menu,
+            RoleName::Select => RoomRole::Select,
+            RoleName::Play => RoomRole::Play,
+        }
+    }
+}
+
+/// Restart and reset triggers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TriggerName {
+    /// The world's Key press event.
+    KeyPressEvent,
+    /// The world's Step, every tick while held.
+    StepHeld,
+    /// The world's Step, on the press.
+    StepPressed,
+    /// The world's Step, on the press, skipped while paused.
+    StepPressedUnlessPaused,
+}
+
+impl TriggerName {
+    /// The sim's trigger.
+    pub const fn trigger(self) -> RestartTrigger {
+        match self {
+            TriggerName::KeyPressEvent => RestartTrigger::KeyPressEvent,
+            TriggerName::StepHeld => RestartTrigger::StepHeld,
+            TriggerName::StepPressed => RestartTrigger::StepPressed {
+                skip_while_paused: false,
+            },
+            TriggerName::StepPressedUnlessPaused => RestartTrigger::StepPressed {
+                skip_while_paused: true,
+            },
+        }
+    }
+}
+
+/// `[engine] restart = { ... }`; absent keys keep `RestartModel::default()`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RestartSection {
+    /// What the retry does.
+    #[serde(default)]
+    pub kind: Option<RestartKindName>,
+    /// Where it runs.
+    #[serde(default)]
+    pub trigger: Option<TriggerName>,
+    /// Roles where R does nothing.
+    #[serde(default)]
+    pub excluded_roles: Option<Vec<RoleName>>,
+    /// Boot ticks of `game_restart_via_boot`.
+    #[serde(default)]
+    pub boot_ticks: Option<u8>,
+    /// y offset when the saved kid was flipped.
+    #[serde(default)]
+    pub flipped_load_dy: Option<Spanned<Number>>,
+    /// What a retry counts.
+    #[serde(default)]
+    pub death_on_restart: Option<DeathName>,
+}
+
+/// Restart kinds (plan 4.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RestartKindName {
+    /// `GameRestartViaBoot`.
+    GameRestartViaBoot,
+    /// `RoomGotoSaved`.
+    RoomGotoSaved,
+    /// `ShowdownLoad`.
+    ShowdownLoad,
+    /// `RecreateInPlace`.
+    RecreateInPlace,
+}
+
+/// `death_on_restart` values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeathName {
+    /// Nothing.
+    Nothing,
+    /// A death-only save of the counters.
+    SaveCounters,
+}
+
+/// `[engine] reset = { ... }`; absent keys keep `ResetModel::default()`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResetSection {
+    /// What F2 does.
+    #[serde(default)]
+    pub kind: Option<ResetKindName>,
+    /// Where it runs.
+    #[serde(default)]
+    pub trigger: Option<TriggerName>,
+    /// Roles where F2 does nothing.
+    #[serde(default)]
+    pub excluded_roles: Option<Vec<RoleName>>,
+}
+
+/// Reset kinds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResetKindName {
+    /// `DeleteTempAndRestart`.
+    DeleteTempAndRestart,
+    /// `GameReset`.
+    GameReset,
+}
+
+/// A role set from names.
+pub fn role_set(roles: &[RoleName]) -> RoleSet {
+    RoleSet(roles.iter().fold(0, |acc, r| acc | r.role().bit()))
+}
+
+impl RestartSection {
+    /// The model, over `RestartModel::default()`.
+    pub fn model(&self) -> RestartModel {
+        let mut m = RestartModel::default();
+        if let Some(k) = self.kind {
+            m.kind = match k {
+                RestartKindName::GameRestartViaBoot => RestartKind::GameRestartViaBoot,
+                RestartKindName::RoomGotoSaved => RestartKind::RoomGotoSaved,
+                RestartKindName::ShowdownLoad => RestartKind::ShowdownLoad,
+                RestartKindName::RecreateInPlace => RestartKind::RecreateInPlace,
+            };
+        }
+        if let Some(t) = self.trigger {
+            m.trigger = t.trigger();
+        }
+        if let Some(r) = &self.excluded_roles {
+            m.excluded_roles = role_set(r);
+        }
+        if let Some(b) = self.boot_ticks {
+            m.boot_ticks = b;
+        }
+        if let Some(dy) = &self.flipped_load_dy {
+            m.flipped_load_dy = Real::new(dy.get_ref().0);
+        }
+        if let Some(d) = self.death_on_restart {
+            m.death_on_restart = match d {
+                DeathName::Nothing => DeathOnRestart::Nothing,
+                DeathName::SaveCounters => DeathOnRestart::SaveCounters,
+            };
+        }
+        m
+    }
+}
+
+impl ResetSection {
+    /// The model, over `ResetModel::default()`.
+    pub fn model(&self) -> ResetModel {
+        let mut m = ResetModel::default();
+        if let Some(k) = self.kind {
+            m.kind = match k {
+                ResetKindName::DeleteTempAndRestart => ResetKind::DeleteTempAndRestart,
+                ResetKindName::GameReset => ResetKind::GameReset,
+            };
+        }
+        if let Some(t) = self.trigger {
+            m.trigger = t.trigger();
+        }
+        if let Some(r) = &self.excluded_roles {
+            m.excluded_roles = role_set(r);
+        }
+        m
+    }
+}
+
+/// `[defaults.<builtin>]`: the sprite and mask a bare built-in kind uses, per variant
+/// (docs/plans/sim-core.md 8.3, "Kind default sprites per variant").
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct KindDefaults {
+    /// Default sprite.
+    #[serde(default)]
+    pub sprite: Option<Spanned<String>>,
+    /// Default object-level mask sprite.
+    #[serde(default)]
+    pub mask: Option<Spanned<String>>,
+    /// Per-variant sprites: each table has param keys to match (`dir = "up"`) plus `sprite`
+    /// and/or `mask`.
+    #[serde(default)]
+    pub variants: Vec<Spanned<BTreeMap<String, toml::Value>>>,
 }
 
 /// A trick switch.
@@ -307,7 +640,7 @@ impl Manifest {
         if let Some(sv) = &self.source_version {
             v.non_empty(sv, "source_version");
         }
-        if let Some(engine) = &self.engine {
+        if let Some(engine) = &self.engine_pack {
             // TODO(OPEN: engine packs bundled or downloaded once, docs/format/v0.md): check that
             // the engine pack exists once packages can see engine packs.
             v.id(engine);
@@ -397,14 +730,27 @@ impl Manifest {
     fn validate_object_order(&self, v: &mut Validator<'_>) {
         let mut seen = BTreeSet::new();
         for entry in self.object_order.get_ref() {
-            match KindRef::parse(entry.get_ref()) {
+            let item = entry.get_ref();
+            let selector = match item.selector() {
+                Ok(s) => s.map(|(k, value)| format!("{k}={value}")),
+                Err(e) => {
+                    v.error(entry.span(), e);
+                    continue;
+                }
+            };
+            let Some(name) = item.kind() else {
+                v.error(entry.span(), "an object_order selector needs `kind = \"<kind>\"`");
+                continue;
+            };
+            match KindRef::parse(name) {
                 Err(e) => v.error(entry.span(), e),
                 Ok(kind) => {
-                    if !seen.insert(entry.get_ref().as_str()) {
-                        v.error(
-                            entry.span(),
-                            format!("`{}` is listed twice in object_order", entry.get_ref()),
-                        );
+                    let shown = match &selector {
+                        None => name.to_owned(),
+                        Some(s) => format!("{name} {{{s}}}"),
+                    };
+                    if !seen.insert((name.to_owned(), selector)) {
+                        v.error(entry.span(), format!("`{shown}` is listed twice in object_order"));
                     }
                     match kind {
                         // TODO(OPEN: built-in kind list, from research/specs/mechanics.md): check
@@ -483,7 +829,9 @@ impl Manifest {
             // tick, and the start trigger would close a stage as the run begins. The last stage
             // may end at the run's `end` trigger.
             let trigger = stage.trigger.get_ref();
-            if trigger == start {
+            let room = stage.room.as_ref().map(|r| r.get_ref().as_str());
+            let start_room = timing.start.room.as_ref().map(|r| r.get_ref().as_str());
+            if trigger == start && room == start_room {
                 v.error(
                     stage.trigger.span(),
                     format!(
@@ -491,7 +839,7 @@ impl Manifest {
                         stage.id.get_ref()
                     ),
                 );
-            } else if !triggers.insert(trigger.as_str()) {
+            } else if !triggers.insert((trigger.as_str(), room)) {
                 v.error(
                     stage.trigger.span(),
                     format!("stage trigger `{trigger}` is used by two stages"),
