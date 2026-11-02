@@ -10,9 +10,9 @@
 //! kaenbyou (kid/B.md).
 
 use crate::def::physics::{
-    AirJump, BoundaryModel, DeathStep, FallCapRule, FlipKind, GravityReapply, GroundAlso, JumpCancel, KeyOn,
-    KidAlarm, KidCollision, KidKey, PlatformRule, PlatformTake, SavePosition, VineKeys, VineModel, WalkRead,
-    WaterAir,
+    AirJump, BoundaryModel, DeathStep, FallCapRule, FlipKind, GravityReapply, GroundAlso, IceModel, IceRules,
+    JumpCancel, KeyOn, KidAlarm, KidCollision, KidKey, PlatformRule, PlatformTake, SavePosition, VineKeys,
+    VineModel, WalkRead, WaterAir,
 };
 use crate::def::{ClassMask, KidFamily, PhysicsProfile, PhysicsProfileDraft};
 use crate::input::Action;
@@ -74,6 +74,7 @@ fn a2() -> PhysicsProfile {
 /// held Suicide key in the Step. Showdown overrides the jumps and more (docs/format/examples).
 fn a3() -> PhysicsProfile {
     let mut p = a1();
+    p.ice = IceRules::default(); // no slip blocks in this family's walk
     p.input.vine_keys = VineKeys::LatchedFlags;
     p.vine.walk_ignores_vines = true;
     p.events.create = vec![
@@ -130,6 +131,7 @@ fn a3() -> PhysicsProfile {
 /// room edges. The world counts the play time. eat-the-new-year differs (docs/format/examples).
 fn a4() -> PhysicsProfile {
     let mut p = a1();
+    p.ice = IceRules::default(); // no slip blocks in this family's walk
     p.numbers.release_mult = r(0.5);
     p.vine.model = VineModel::None;
     p.vine.walk_ignores_vines = true;
@@ -188,6 +190,7 @@ fn a4() -> PhysicsProfile {
 /// the Step list, the fall cap and the killer test (docs/format/examples).
 fn a5() -> PhysicsProfile {
     let mut p = a1();
+    p.ice = IceRules::default(); // no slip blocks in this family's walk
     p.vine.model = VineModel::None;
     p.vine.walk_ignores_vines = true;
     p.events.create = vec![
@@ -245,6 +248,7 @@ fn a5() -> PhysicsProfile {
 /// reference game's rooms (tier 3).
 fn c() -> PhysicsProfile {
     let mut p = a1();
+    p.ice.clamp = true; // slip is clamped to the run speed
     p.events.create = vec![
         common(C::CreateDefaults),
         common(C::CreateBow),
@@ -479,6 +483,7 @@ fn a1() -> PhysicsProfile {
     p.save.position = SavePosition::XyBase100Bytes;
     p.misc.fade_in = true;
     p.misc.fade_step = r(0.1);
+    p.ice.model = IceModel::Slip;
     p
 }
 

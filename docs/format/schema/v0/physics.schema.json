@@ -603,12 +603,69 @@
       ]
     },
     "IceAction": {
-      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`; WP5c adds one variant per action it implements.",
-      "not": {}
+      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`.",
+      "oneOf": [
+        {
+          "const": "ice_temp_hspeed",
+          "description": "Showdown Step action 3 (kid/A3.md): with a slip block within `ice.temp_probe` px below,\n`tempHspeed` stores `hspeed` when it is 0 or when the two have the same sign and `hspeed`\nis not 0; otherwise (opposite sign, or `hspeed` 0) `hspeed` gains `tempHspeed`, which is\nmultiplied by `ice.temp_decay` and becomes 0 below `ice.temp_zero_below`. Off ice it is 0.",
+          "type": "string"
+        }
+      ]
+    },
+    "IceModel": {
+      "description": "How the kid's walk reads `slip` blocks.",
+      "oneOf": [
+        {
+          "const": "none",
+          "description": "The game has no ice, or the walk ignores it.",
+          "type": "string"
+        },
+        {
+          "const": "slip",
+          "description": "While a slip block is within `probe` px, walking adds `slip * h` to `hspeed` (read at\n`read` px) and standing subtracts `slip * sign(hspeed)`.",
+          "type": "string"
+        }
+      ]
     },
     "IceRules": {
       "additionalProperties": false,
-      "description": "`[ice]`: slip blocks and ice (WP5c).",
+      "description": "`[ice]`: slip blocks and ice (kid/A1.md Step action 3, kid/A3.md showdown Step action 3).",
+      "properties": {
+        "clamp": {
+          "default": false,
+          "description": "Slip is clamped to the run speed (C); otherwise it is not (A1, A2, B).",
+          "type": "boolean"
+        },
+        "model": {
+          "$ref": "#/$defs/IceModel",
+          "description": "The model."
+        },
+        "probe": {
+          "$ref": "#/$defs/Real",
+          "default": 4.0,
+          "description": "Pixels in the gravity direction probed for a `slip` block (4)."
+        },
+        "read": {
+          "$ref": "#/$defs/Real",
+          "default": 10.0,
+          "description": "Pixels in the gravity direction at which the slip value is read (10)."
+        },
+        "temp_decay": {
+          "$ref": "#/$defs/Real",
+          "default": 0.95,
+          "description": "`ice_temp_hspeed`: `tempHspeed` is multiplied by this each tick off a push (0.95)."
+        },
+        "temp_probe": {
+          "$ref": "#/$defs/Real",
+          "default": 2.0,
+          "description": "`ice_temp_hspeed` (showdown): pixels probed for a `slip` block (2)."
+        },
+        "temp_zero_below": {
+          "$ref": "#/$defs/Real",
+          "default": 0.2,
+          "description": "`ice_temp_hspeed`: `tempHspeed` becomes 0 once its size is below this (0.2)."
+        }
+      },
       "type": "object"
     },
     "JumpCancel": {
@@ -1189,6 +1246,14 @@
       "additionalProperties": false,
       "description": "`[sprites]` as written in a package: sprite names by role, resolved to [`KidSprites`] ids by\nthe loader.",
       "properties": {
+        "back": {
+          "default": null,
+          "description": "On a ladder.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "fall": {
           "default": null,
           "description": "Falling.",
@@ -1208,6 +1273,14 @@
         "jump": {
           "default": null,
           "description": "Rising or double jumping.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ladder_up_down": {
+          "default": null,
+          "description": "Moving on a ladder.",
           "type": [
             "string",
             "null"
@@ -1233,12 +1306,49 @@
       "type": "object"
     },
     "LadderAction": {
-      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`; WP5c adds one variant per action it implements.",
-      "not": {}
+      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`.",
+      "oneOf": [
+        {
+          "const": "ladder",
+          "description": "Step action 2, instead of `gravity` (it includes the gravity reset, so the two are never\nlisted together): `ladderud` clears; Up or Down (`[ladder] entry`) held, off a ladder and\noverlapping one: on the ladder with `djump`; on a ladder with none overlapping any more:\noff; otherwise Up moves `y` up by the run speed, Down moves it down, each with gravity and\n`vspeed` 0 and `ladderud` 1, and Jump held leaves with `ladderjump`. Off the ladder\ngravity returns to `numbers.gravity`. The keys are direct reads.",
+          "type": "string"
+        },
+        {
+          "const": "ladder_sprites",
+          "description": "End Step: on a ladder the `back` sprite (`image_speed` 0.1), moving on it the\n`ladder_up_down` sprite (0.2).",
+          "type": "string"
+        },
+        {
+          "const": "ladder_jump_reset",
+          "description": "End Step: `ladderjump` clears (rori has only this part).",
+          "type": "string"
+        }
+      ]
+    },
+    "LadderEntry": {
+      "description": "The keys that start climbing.",
+      "oneOf": [
+        {
+          "const": "up_or_down",
+          "description": "Up or Down held (little-trap, rainbow).",
+          "type": "string"
+        },
+        {
+          "const": "up_only",
+          "description": "Up held only (rori, fairy-tale).",
+          "type": "string"
+        }
+      ]
     },
     "LadderRules": {
       "additionalProperties": false,
-      "description": "`[ladder]`: ladder entry and movement (WP5c).",
+      "description": "`[ladder]`: ladder entry (kid/A1.md Step action 2).",
+      "properties": {
+        "entry": {
+          "$ref": "#/$defs/LadderEntry",
+          "description": "Which keys grab a ladder."
+        }
+      },
       "type": "object"
     },
     "MovingBlockRun": {
