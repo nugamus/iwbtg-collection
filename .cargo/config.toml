@@ -1,0 +1,5 @@
+# wasm32-unknown-unknown test binaries (iwbtg-sim, #206) run under node through wasm-bindgen-test.
+# The runner is the wasm-bindgen CLI; its version must equal wasm-bindgen's in Cargo.lock
+# (`cargo install wasm-bindgen-cli --version <that> --locked`).
+[target.wasm32-unknown-unknown]
+runner = "wasm-bindgen-test-runner"
