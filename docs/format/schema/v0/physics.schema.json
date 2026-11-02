@@ -153,6 +153,26 @@
         }
       ]
     },
+    "BlockSlopeStep": {
+      "description": "How `block_slope_step` climbs.",
+      "oneOf": [
+        {
+          "const": "none",
+          "description": "No slope rule in the block contact.",
+          "type": "string"
+        },
+        {
+          "const": "free_spot",
+          "description": "Rainbow: after the contact, the matching slope `step` px ahead and a free spot `step` up\nmove the kid there.",
+          "type": "string"
+        },
+        {
+          "const": "replace",
+          "description": "Rori, fairy-tale: instead of the contact, the shifted kid overlapping the matching slope\nmoves it `step` sideways and up, with no free-spot test.",
+          "type": "string"
+        }
+      ]
+    },
     "BoundaryModel": {
       "description": "`events.boundary`: how the kid handles the room edge (plan 5.3 edge row).",
       "oneOf": [
@@ -267,7 +287,8 @@
         "conveyor",
         "param_zone",
         "bow",
-        "blood"
+        "blood",
+        "slope_mirror"
       ],
       "type": "string"
     },
@@ -451,6 +472,31 @@
         {
           "const": "game_over",
           "description": "The GAMEOVER display. It places itself at view 0 plus its own `offset_x`/`offset_y`\nparams in its Create (`game_over` built-in), so the offset is not a kid field.",
+          "type": "string"
+        }
+      ]
+    },
+    "Downhill": {
+      "description": "The End Step downhill snap models.",
+      "oneOf": [
+        {
+          "const": "none",
+          "description": "No snap.",
+          "type": "string"
+        },
+        {
+          "const": "por",
+          "description": "Poronkusema: `vspeed >= 0`, free below, on a slope last step and a slope within 12 px: down\nto contact by at most 12, running or idle sprite; then remember a slope 1 px below.",
+          "type": "string"
+        },
+        {
+          "const": "rainbow",
+          "description": "Rainbow: a slope within 5 px below, then a mirrored one: down to contact by at most 10.",
+          "type": "string"
+        },
+        {
+          "const": "fairy_tale",
+          "description": "Fairy-tale: no block 1 px below and a slope 3 px below at `xprevious`: down by at most 10.",
           "type": "string"
         }
       ]
@@ -1548,17 +1594,74 @@
       "type": "object"
     },
     "SlopeAction": {
-      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`; WP5c adds one variant per action it implements.",
-      "not": {}
+      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`.",
+      "oneOf": [
+        {
+          "const": "slope_jump",
+          "description": "The end of `playerJump` (rainbow, rori, fairy-tale): on a Jump press, with a `slope` or\n`slope_mirror` within `[slope] jump_probe` px below, a single jump is forced: `vspeed` is\n`-numbers.jumps[0]` and `djump` is set. It runs after the normal jump, so it can override a\ndouble jump of the same press.",
+          "type": "string"
+        },
+        {
+          "const": "downhill_snap",
+          "description": "End Step, `[slope] downhill` (see `Downhill`).",
+          "type": "string"
+        }
+      ]
     },
     "SlopeModel": {
       "additionalProperties": false,
-      "description": "`[slope]`: slope models (WP5c).",
+      "description": "`[slope]`: the slopes of group A and eat-the-new-year (kid/A1.md poronkusema, rainbow, rori,\nfairy-tale; kid/A4.md). `slope` rises to the right, `slope_mirror` to the left. A game's slope\nkinds carry only those classes (not `block`), so the kid's `slope` and `slope_mirror`\ncollision rows run alone, as the original's child-object events do.",
+      "properties": {
+        "air_sprite_probe": {
+          "$ref": "#/$defs/Real",
+          "default": 0.0,
+          "description": "`air_sprite`: no fall sprite while a slope lies this many pixels below (rori, fairy-tale: 2).\n0 means off."
+        },
+        "block_step": {
+          "$ref": "#/$defs/BlockSlopeStep",
+          "description": "How the horizontal block contact climbs (`block_slope_step`)."
+        },
+        "downhill": {
+          "$ref": "#/$defs/Downhill",
+          "description": "The End Step downhill snap (`downhill_snap`)."
+        },
+        "jump_probe": {
+          "$ref": "#/$defs/Real",
+          "default": 0.0,
+          "description": "`slope_jump`: with a slope or mirrored slope within this many pixels below a Jump press\nforces a single jump (rainbow, rori, fairy-tale: 2). 0 means off."
+        },
+        "keep_hspeed": {
+          "default": false,
+          "description": "`walk` keeps `hspeed` while a slope is 1 px below and the key points downhill\n(eat-the-new-year, kid/A4.md).",
+          "type": "boolean"
+        },
+        "step": {
+          "$ref": "#/$defs/Real",
+          "default": 3.0,
+          "description": "The climb: 3 px sideways and 3 px up."
+        }
+      },
       "type": "object"
     },
     "SlopeRun": {
-      "description": "The collision runs this file implements, by their `physics.toml` names (snake case). Part\nof `kid::KidCollisionRun`; WP5c adds one variant per run it implements.",
-      "not": {}
+      "description": "The collision runs this file implements, by their `physics.toml` names (snake case). Part\nof `kid::KidCollisionRun`.",
+      "oneOf": [
+        {
+          "const": "block_slope_step",
+          "description": "The block contact with the climb of `[slope] block_step` in its horizontal part. Used by the\n`block`, `slope` and `slope_mirror` rows of rainbow, rori and fairy-tale (kid/A1.md).",
+          "type": "string"
+        },
+        {
+          "const": "slope_por_rise",
+          "description": "Poronkusema, Collision with nanameblock: the vertical block part; a rise found by testing\n0 to 9 px up with the kid shifted by `hspeed` (0 when still inside a slope at 9, or when the\nfound spot overlaps a block); then `x` moves `step` in the direction of `hspeed` (even with\nrise 0), `y` goes up by the rise, `hspeed` 0 and the diagonal check.",
+          "type": "string"
+        },
+        {
+          "const": "slope_yane",
+          "description": "Eat-the-new-year, Collision with yaneH (`slope`) or yaneM (`slope_mirror`): when\n`place_free(x + hspeed, y)` is false and `hspeed >= 0` (H; `<= 0` for M, OPEN: mirrored) and\n`place_free(x, y + vspeed)` is false, the kid moves `step` up and sideways; `hspeed` 0.\nThen the vertical and diagonal block parts.",
+          "type": "string"
+        }
+      ]
     },
     "VineKeys": {
       "description": "How the vine action reads its kick and drop keys.",

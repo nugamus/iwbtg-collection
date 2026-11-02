@@ -58,11 +58,76 @@ pub enum IceModel {
     Slip,
 }
 
-/// `[slope]`: slope models (WP5c).
+/// `[slope]`: the slopes of group A and eat-the-new-year (kid/A1.md poronkusema, rainbow, rori,
+/// fairy-tale; kid/A4.md). `slope` rises to the right, `slope_mirror` to the left. A game's slope
+/// kinds carry only those classes (not `block`), so the kid's `slope` and `slope_mirror`
+/// collision rows run alone, as the original's child-object events do.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Clone, PartialEq, Debug, Default, Deserialize)]
+#[derive(Clone, PartialEq, Debug, Deserialize)]
 #[serde(deny_unknown_fields, default)]
-pub struct SlopeModel {}
+pub struct SlopeModel {
+    /// How the horizontal block contact climbs (`block_slope_step`).
+    pub block_step: BlockSlopeStep,
+    /// The climb: 3 px sideways and 3 px up.
+    pub step: Real,
+    /// The End Step downhill snap (`downhill_snap`).
+    pub downhill: Downhill,
+    /// `slope_jump`: with a slope or mirrored slope within this many pixels below a Jump press
+    /// forces a single jump (rainbow, rori, fairy-tale: 2). 0 means off.
+    pub jump_probe: Real,
+    /// `air_sprite`: no fall sprite while a slope lies this many pixels below (rori, fairy-tale: 2).
+    /// 0 means off.
+    pub air_sprite_probe: Real,
+    /// `walk` keeps `hspeed` while a slope is 1 px below and the key points downhill
+    /// (eat-the-new-year, kid/A4.md).
+    pub keep_hspeed: bool,
+}
+
+impl Default for SlopeModel {
+    fn default() -> SlopeModel {
+        SlopeModel {
+            block_step: BlockSlopeStep::None,
+            step: Real::new(3.0),
+            downhill: Downhill::None,
+            jump_probe: Real::ZERO,
+            air_sprite_probe: Real::ZERO,
+            keep_hspeed: false,
+        }
+    }
+}
+
+/// How `block_slope_step` climbs.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BlockSlopeStep {
+    /// No slope rule in the block contact.
+    #[default]
+    None,
+    /// Rainbow: after the contact, the matching slope `step` px ahead and a free spot `step` up
+    /// move the kid there.
+    FreeSpot,
+    /// Rori, fairy-tale: instead of the contact, the shifted kid overlapping the matching slope
+    /// moves it `step` sideways and up, with no free-spot test.
+    Replace,
+}
+
+/// The End Step downhill snap models.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Downhill {
+    /// No snap.
+    #[default]
+    None,
+    /// Poronkusema: `vspeed >= 0`, free below, on a slope last step and a slope within 12 px: down
+    /// to contact by at most 12, running or idle sprite; then remember a slope 1 px below.
+    Por,
+    /// Rainbow: a slope within 5 px below, then a mirrored one: down to contact by at most 10.
+    Rainbow,
+    /// Fairy-tale: no block 1 px below and a slope 3 px below at `xprevious`: down by at most 10.
+    FairyTale,
+}
 
 /// `[ladder]`: ladder entry (kid/A1.md Step action 2).
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
