@@ -678,6 +678,24 @@ pub struct PhysicsProfileDraft {
     pub save: Option<SaveRulesDraft>,
     /// `[misc]`.
     pub misc: Option<KidMiscDraft>,
-    /// `[sprites]`: replaces the preset's (which has none).
-    pub sprites: Option<KidSprites>,
+    /// `[sprites]`: sprite names. `kid::presets::apply` leaves the profile's `sprites` empty;
+    /// the loader (WP7b) resolves these names to ids and fills them in.
+    pub sprites: Option<KidSpriteNames>,
+}
+
+/// `[sprites]` as written in a package: sprite names by role, resolved to [`KidSprites`] ids by
+/// the loader.
+#[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct KidSpriteNames {
+    /// Standing.
+    pub idle: Option<String>,
+    /// Running.
+    pub running: Option<String>,
+    /// Rising or double jumping.
+    pub jump: Option<String>,
+    /// Falling.
+    pub fall: Option<String>,
+    /// Sliding on a vine.
+    pub sliding: Option<String>,
 }
