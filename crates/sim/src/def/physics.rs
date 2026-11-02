@@ -514,6 +514,8 @@ pub enum DeathStep {
     BloodEmitter,
     /// Destroy the kid.
     DestroyKid,
+    /// Destroy every kid instance (family B: "destroy every player instance").
+    DestroyAllKids,
     /// `global.death` plus 1 (checked).
     DeathsPlusOne,
     /// The death-only save (`saveDeathTime`): counters into the save slot.
@@ -535,6 +537,9 @@ pub struct DeathRules {
     pub select_room_reset: bool,
     /// Death stops the music. Not built (WP10); `true` is `Unsupported`.
     pub stop_music: bool,
+    /// The blood emitter and GAMEOVER use the first kid's position and gravity instead of the
+    /// killed kid's (family B with several kids, R21).
+    pub first_kid: bool,
 }
 
 /// How a save stores the position (`save.rs` `SavedPosition`), by its package name.
@@ -579,6 +584,8 @@ pub struct SaveRules {
     pub position: SavePosition,
     /// The fixed point for `fixed_point`.
     pub fixed: Option<[Real; 2]>,
+    /// A save stores the first kid whichever kid touched the save point (family B, R21).
+    pub first_kid: bool,
 }
 
 // ---- The draft: a profile as written, before its preset fills the defaults ----
@@ -671,7 +678,7 @@ draft_section! {
     /// `[death]` as written.
     DeathRulesDraft => DeathRules {
         order: Vec<DeathStep>, select_room_reset: bool,
-        stop_music: bool,
+        stop_music: bool, first_kid: bool,
     }
 }
 draft_section! {
@@ -680,7 +687,7 @@ draft_section! {
 }
 draft_section! {
     /// `[save]` as written.
-    SaveRulesDraft => SaveRules { position: SavePosition, fixed: Option<[Real; 2]> }
+    SaveRulesDraft => SaveRules { position: SavePosition, fixed: Option<[Real; 2]>, first_kid: bool }
 }
 draft_section! {
     /// `[misc]` as written.

@@ -97,11 +97,11 @@ Every key below is optional. Defaults are the `A1` preset's.
 
 `[water]`, `[ice]`, `[slope]`, `[ladder]`: empty until their work packages. `[flip]`: `model` (`none`, `swap_object`, `yflag`, `grav_sign`). With `yflag` (family B) a reversed kid (`yflag` -1): `walk` swaps Left and Right; `vines` slide at `slide * yflag`, kick at `kick[1] * yflag` and take the other key as the away key; `air_sprite` swaps the jump and fall sprites; `shoot` places the bullet at `y - offset[1] * yflag`; `create_defaults` reads `global.reverse` (y - 4, `curJumps` 1). `swap_object` and `grav_sign` are WP5c.
 
-`[death]`: `order`, the steps in the order they run: `sound` (not played yet, #231), `blood_emitter` (spawned with a `flipped` param), `destroy_kid`, `game_over` (it places itself at view 0 plus its own offset params), `deaths_plus_one` (checked), `save_counters` (death-only save). `select_room_reset`: in a Select room a kill requests the same room, destroys the kid and does nothing else. `stop_music`: not built (`true` is `Unsupported`). Nothing happens while `muteki` is set.
+`[death]`: `order`, the steps in the order they run: `sound` (not played yet, #231), `blood_emitter` (spawned with a `flipped` param), `destroy_kid`, `destroy_all_kids` (every kid instance, family B), `game_over` (it places itself at view 0 plus its own offset params), `deaths_plus_one` (checked), `save_counters` (death-only save). `select_room_reset`: in a Select room a kill requests the same room, destroys the kid and does nothing else. `stop_music`: not built (`true` is `Unsupported`). `first_kid`: the blood emitter, `flipped` param and GAMEOVER use the first kid's position and gravity (family B with several kids). Nothing happens while `muteki` is set.
 
 `[bullet]`: `max` (4), `speed` (16), `offset` (`[0, 0]`; family B `[2, 2]`: the bullet appears at `x + offset[0] * facing`, `y - offset[1] * yflag`).
 
-`[save]`: `position` (`xy_base100_bytes`, `xy_base256_bytes`, `xy_text2_dec`, `xy_previous`, `fixed_point`, `floor_nudge`), `fixed` (`[x, y]` for `fixed_point`).
+`[save]`: `position` (`xy_base100_bytes`, `xy_base256_bytes`, `xy_text2_dec`, `xy_previous`, `fixed_point`, `floor_nudge`), `fixed` (`[x, y]` for `fixed_point`), `first_kid` (a save stores the first kid whichever kid touched the save point; family B).
 
 `[misc]`: `fade_in`, `fade_step` (0.1).
 
