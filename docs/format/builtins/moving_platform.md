@@ -7,7 +7,7 @@ Non-solid; moves by hand in Step plus the runner's automatic motion. Upward moti
 | `hspeed`, `vspeed` | real | 0 | Start speeds, applied in Create. |
 | `bounce` | bool | true | `false` skips the reversals (objMovingPlatformNoBounce). |
 | `start_on_touch` | bool | false | Still until a kid touches it, then takes the start speeds. |
-| `marker_reverse` | `both`, `vertical`, `none` | `both` | What a fake block marker touch does: reverse every direction, only the vertical, or nothing (animus: `vertical`). Called by `fake_block` through `moving_platform::reverse_on_marker`. |
+| `marker_reverse` | `both`, `vertical`, `none` | `both` | What a fake block marker touch does: reverse every direction, only the vertical, or nothing (animus: `vertical`). The platform handles Collision with the `fake_block` class (unless `none`) and calls `moving_platform::reverse_on_marker`. |
 | `carry_rule` | `yuuutu`, `showdown_split`, `xia_grav`, `b_lines` | `yuuutu` | How a kid is carried. |
 
 ## Step (`yuuutu`, deride-kotaro, A1 games, A4)
