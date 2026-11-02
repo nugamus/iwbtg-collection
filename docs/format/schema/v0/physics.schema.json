@@ -450,6 +450,11 @@
           "type": "string"
         },
         {
+          "const": "death_sound",
+          "description": "Family B: creates the `death_sound` engine object (music fade, death sound a tick later).",
+          "type": "string"
+        },
+        {
           "const": "blood_emitter",
           "description": "A blood emitter at the kid's position.",
           "type": "string"

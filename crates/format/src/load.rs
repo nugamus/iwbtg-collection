@@ -1975,7 +1975,7 @@ fn engine_builtin(b: Builtin) -> bool {
 }
 
 /// Engine role name, sim role and default built-in.
-fn engine_roles() -> [(&'static str, EngineKind, Option<Builtin>); 9] {
+fn engine_roles() -> [(&'static str, EngineKind, Option<Builtin>); 10] {
     [
         ("world", EngineKind::World, Some(Builtin::World)),
         ("kid", EngineKind::Kid, Some(Builtin::Kid)),
@@ -1990,6 +1990,7 @@ fn engine_roles() -> [(&'static str, EngineKind, Option<Builtin>); 9] {
         ),
         ("game_over", EngineKind::GameOver, Some(Builtin::GameOver)),
         ("playerface", EngineKind::Playerface, Some(Builtin::Playerface)),
+        ("death_sound", EngineKind::DeathSound, None),
     ]
 }
 
