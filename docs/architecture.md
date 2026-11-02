@@ -41,7 +41,9 @@ One binary for agents and CI:
 - `iwbtg replay run <dir> <replay>`: headless run. Prints the tick count, splits and final state hash (roadmap Phase 3).
 - `iwbtg replay dump <replay>`: prints a replay as text.
 - `iwbtg replay verify <dir> <replay>`: what the server runs.
-- `iwbtg trace run <dir> <inputs> -o ours.csv` and `iwbtg trace diff <original.csv> <ours.csv>`: see [traces](#comparing-traces-with-the-original).
+- `iwbtg pkg check <dir> --trace-mode`: accepts research converter output; converter gaps are warnings that name the converter request (CR1-CR15).
+- `iwbtg trace run <pkg> <case> [-o ours.csv]`, `iwbtg trace diff <original.csv> <ours.csv>`, `iwbtg trace check <pkg>` (every case) and `iwbtg trace import <research-trace> <pkg>` (writes a case skeleton and prints its kind): see [traces](#comparing-traces-with-the-original).
+- Exit codes: 0 success, 1 a check failed (a trace differs, a package has errors), 2 the tool could not run (bad path or arguments), 3 the sim reached a work package that is not merged yet (the message names it).
 - `iwbtg profile <dir> --replay <file>`: peak script budget units and milliseconds per tick.
 - `iwbtg determinism report <corpus>`: runs the golden corpus and prints one hash list.
 - `iwbtg script api-docs`: generates `docs/format/script-api.md` and `.d.rhai` stubs.

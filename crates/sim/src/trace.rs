@@ -19,7 +19,14 @@
 //!
 //! The parser accepts only what the writer produces: a number written any other way (`+1`,
 //! `1.50`, `007`, `-0`, `inf` spelled differently, ...), a missing final line ending or a
-//! repeated column name is an error, so [`TraceTable::to_csv`] gives back the parsed bytes.
+//! repeated column is an error, so [`TraceTable::to_csv`] gives back the parsed bytes.
+//!
+//! A column is its name plus its quoting. The recorder writes a `--vars` column quoted even when
+//! the name is also a fixed column (`image_index,...,"image_index"` when `--vars` asks for
+//! `image_index` again), so a quoted game variable and a bare fixed column may share a name: they
+//! are two columns, and [`diff`] pairs each with its own counterpart. Only a name repeated with
+//! the same quoting is an error. Where a name appears twice, [`TraceTable::column`] finds the bare
+//! column, and reports show the quoted one in quotes ([`TraceTable::label`]).
 //!
 //! This module does no IO: callers pass and receive text.
 
@@ -199,8 +206,9 @@ pub struct TraceTable {
 
 impl TraceTable {
     /// An empty table with the recorder's [`FIXED_COLUMNS`] followed by `game_vars`, quoted as
-    /// the recorder quotes them. `iwbtg trace run` builds our side with this. Errors when a name
-    /// repeats (including a game variable named like a fixed column).
+    /// the recorder quotes them. `iwbtg trace run` builds our side with this. Errors when a game
+    /// variable repeats; a game variable named like a fixed column is a separate column, as in the
+    /// recorder's files.
     pub fn new(game_vars: &[&str]) -> Result<TraceTable, TraceError> {
         let fixed = FIXED_COLUMNS.iter().map(|name| Column {
             name: (*name).to_string(),
@@ -212,7 +220,7 @@ impl TraceTable {
         });
         let columns: Vec<Column> = fixed.chain(vars).collect();
         if let Some(name) = duplicate_column(&columns) {
-            return Err(TraceError::Invalid(format!("column {name:?} appears twice")));
+            return Err(TraceError::Invalid(format!("column {name} appears twice")));
         }
         Ok(TraceTable {
             columns,
@@ -221,9 +229,32 @@ impl TraceTable {
         })
     }
 
-    /// Index of the column called `name`.
+    /// Index of the column called `name`: the bare (fixed) column when a quoted game variable
+    /// shares its name.
     pub fn column(&self, name: &str) -> Option<usize> {
-        self.columns.iter().position(|c| c.name == name)
+        self.columns
+            .iter()
+            .position(|c| c.name == name && !c.quoted)
+            .or_else(|| self.columns.iter().position(|c| c.name == name))
+    }
+
+    /// Index of the column with this name and quoting.
+    pub fn column_exact(&self, name: &str, quoted: bool) -> Option<usize> {
+        self.columns
+            .iter()
+            .position(|c| c.name == name && c.quoted == quoted)
+    }
+
+    /// The column's name for reports: the bare name, or the name in quotes when it is a quoted
+    /// game variable that shares its name with a bare column of this table.
+    pub fn label(&self, index: usize) -> String {
+        match self.columns.get(index) {
+            Some(c) if c.quoted && self.columns.iter().any(|o| !o.quoted && o.name == c.name) => {
+                format!("\"{}\"", c.name)
+            }
+            Some(c) => c.name.clone(),
+            None => String::new(),
+        }
     }
 
     /// Appends a row, checking it has one value per column.
@@ -276,7 +307,7 @@ impl TraceTable {
         if let Some(name) = duplicate_column(&columns) {
             return Err(TraceError::Parse {
                 line: 1,
-                message: format!("column {name:?} appears twice"),
+                message: format!("column {name} appears twice"),
             });
         }
         let mut rows = Vec::new();
@@ -341,7 +372,7 @@ impl TraceTable {
     fn check_shape(&self, side: &str) -> Result<(), TraceError> {
         if let Some(name) = duplicate_column(&self.columns) {
             return Err(TraceError::Invalid(format!(
-                "{side}: column {name:?} appears twice"
+                "{side}: column {name} appears twice"
             )));
         }
         for (index, row) in self.rows.iter().enumerate() {
@@ -358,13 +389,20 @@ impl TraceTable {
     }
 }
 
-/// The first column name that appears more than once, if any.
-fn duplicate_column(columns: &[Column]) -> Option<&str> {
+/// The first column that appears more than once with the same quoting, if any, as the header
+/// writes it (`x` or `"x"`).
+fn duplicate_column(columns: &[Column]) -> Option<String> {
     let mut seen = BTreeSet::new();
     columns
         .iter()
-        .map(|c| c.name.as_str())
-        .find(|name| !seen.insert(*name))
+        .find(|c| !seen.insert((c.name.as_str(), c.quoted)))
+        .map(|c| {
+            if c.quoted {
+                format!("\"{}\"", c.name)
+            } else {
+                c.name.clone()
+            }
+        })
 }
 
 /// Writes `s` quoted, doubling any `"`, as the recorder's `csv_str` does.
@@ -734,26 +772,37 @@ pub fn diff(a: &TraceTable, b: &TraceTable, opts: &DiffOptions) -> Result<TraceD
 
     let mut result = TraceDiff::default();
 
-    // Pair up fields by name.
-    let is_key = |name: &str| name == FRAME_COLUMN || name == OBJECT_COLUMN;
+    // Pair up fields by name and quoting: a quoted game variable named like a fixed column pairs
+    // with the other side's quoted column, the fixed column with the fixed one. A column with no
+    // counterpart of the same quoting pairs with any unpaired column of that name.
+    let is_key = |c: &Column| !c.quoted && (c.name == FRAME_COLUMN || c.name == OBJECT_COLUMN);
     let mut pairs = Vec::new();
     let mut used_b = BTreeSet::new();
     for (ia, column) in a.columns.iter().enumerate() {
-        if is_key(&column.name) || opts.ignore.contains(&column.name) {
+        if is_key(column) || opts.ignore.contains(&column.name) {
             continue;
         }
         let name_b = opts.rename.get(&column.name).unwrap_or(&column.name);
-        match b.column(name_b) {
+        let ib = b
+            .column_exact(name_b, column.quoted)
+            .filter(|ib| !used_b.contains(ib))
+            .or_else(|| {
+                b.columns
+                    .iter()
+                    .enumerate()
+                    .position(|(ib, c)| c.name == *name_b && !used_b.contains(&ib) && !is_key(c))
+            });
+        match ib {
             Some(ib) => {
                 used_b.insert(ib);
                 pairs.push(FieldPair {
-                    name: column.name.clone(),
-                    name_b: name_b.clone(),
+                    name: a.label(ia),
+                    name_b: b.label(ib),
                     a: ia,
                     b: ib,
                 });
             }
-            None => result.only_in_a.push(column.name.clone()),
+            None => result.only_in_a.push(a.label(ia)),
         }
     }
     let ignored_b: BTreeSet<&String> = opts
@@ -762,8 +811,8 @@ pub fn diff(a: &TraceTable, b: &TraceTable, opts: &DiffOptions) -> Result<TraceD
         .map(|name| opts.rename.get(name).unwrap_or(name))
         .collect();
     for (ib, column) in b.columns.iter().enumerate() {
-        if !is_key(&column.name) && !used_b.contains(&ib) && !ignored_b.contains(&column.name) {
-            result.only_in_b.push(column.name.clone());
+        if !is_key(column) && !used_b.contains(&ib) && !ignored_b.contains(&column.name) {
+            result.only_in_b.push(b.label(ib));
         }
     }
 
@@ -1107,9 +1156,9 @@ mod tests {
             "a\n1",
             "a",
             "a\n\"s\"",
-            // Repeated column names, bare or quoted.
+            // Repeated column names with the same quoting.
             "a,a\n1,2\n",
-            "frame,x,\"x\"\n1,2.0,3.0\n",
+            "\"a\",\"a\"\n1,2\n",
         ] {
             assert!(TraceTable::parse(bad).is_err(), "{bad:?} should fail");
         }
@@ -1159,12 +1208,18 @@ mod tests {
     #[test]
     fn new_rejects_repeated_columns() {
         assert!(TraceTable::new(&["jump[1]", "hp"]).is_ok());
-        assert!(TraceTable::new(&["x"]).is_err());
-        assert!(TraceTable::new(&["frame"]).is_err());
+        // A game variable named like a fixed column is its own (quoted) column, as the recorder
+        // writes it.
+        let t = TraceTable::new(&["x", "image_index"]).expect("var named like a fixed column");
+        assert_eq!(t.column("x"), Some(4));
+        assert_eq!(t.column_exact("x", true), Some(18));
+        assert_eq!(t.label(18), "\"x\"");
+        assert_eq!(t.label(4), "x");
         assert!(TraceTable::new(&["hp", "hp"]).is_err());
+        assert!(TraceTable::new(&["x", "x"]).is_err());
         let mut t = TraceTable::new(&["hp"]).expect("new");
         t.columns.push(Column {
-            name: "object".into(),
+            name: "hp".into(),
             quoted: true,
         });
         assert!(diff(&t, &t, &DiffOptions::default()).is_err());
@@ -1233,6 +1288,32 @@ mod tests {
         assert_eq!(d.only_in_b, vec!["w".to_string()]);
     }
 
+    /// The recorder quotes a `--vars` column named like a fixed one (machinary/tr-room-13 logs
+    /// `"image_index"` and `"depth"`): it parses, round-trips, and diffs pair quoted with quoted
+    /// and bare with bare.
+    #[test]
+    fn quoted_var_named_like_a_fixed_column() {
+        let text = "frame,object,image_index,\"image_index\"\n1,\"p\",0.0,5.0\n2,\"p\",1.0,5.0\n";
+        let a = TraceTable::parse(text).expect("parse");
+        assert_eq!(a.to_csv(), text);
+        assert_eq!(a.column("image_index"), Some(2));
+        assert_eq!(a.column_exact("image_index", true), Some(3));
+        let mut b = a.clone();
+        b.rows[1][3] = Value::Real(6.0);
+        let d = diff(&a, &b, &DiffOptions::default()).expect("diff");
+        let Some(Difference::Field(first)) = &d.first else {
+            panic!("expected a field difference: {d}");
+        };
+        assert_eq!(first.field, "\"image_index\"");
+        assert_eq!(first.row.frame, 2);
+        assert!(d.only_in_a.is_empty() && d.only_in_b.is_empty());
+        // The quoted column alone on one side still pairs by name.
+        let c = TraceTable::parse("frame,object,\"image_index\"\n1,\"p\",5.0\n2,\"p\",6.0\n").expect("c");
+        let d = diff(&c, &b, &DiffOptions::default()).expect("diff");
+        assert!(d.first.is_none(), "{d}");
+        assert_eq!(d.only_in_b, vec!["image_index".to_string()]);
+    }
+
     /// Every `specs/engines/<engine>/traces` folder in the research repo, sorted, or `None` to
     /// skip (IWBTG_RESEARCH unset).
     #[allow(clippy::disallowed_methods)] // Test-only: the sim itself never reads the environment.
@@ -1279,17 +1360,23 @@ mod tests {
             .collect()
     }
 
+    /// Every research CSV parses and re-writes byte for byte. A header-only file is valid: the
+    /// traced object never existed in the frames run (rely-the-needle-4-2/tr-room-03-a).
     #[test]
     fn research_traces_parse_and_rewrite_byte_identical() {
+        let mut with_rows = 0usize;
         for (path, text) in research_csvs() {
             let table = TraceTable::parse(&text).unwrap_or_else(|e| panic!("{path:?}: {e}"));
-            assert!(!table.rows.is_empty(), "{path:?} has no rows");
+            with_rows += usize::from(!table.rows.is_empty());
             let fixed: Vec<&str> = table.columns[..FIXED_COLUMNS.len()]
                 .iter()
                 .map(|c| c.name.as_str())
                 .collect();
             assert_eq!(fixed, FIXED_COLUMNS, "{path:?} header");
             assert!(table.to_csv() == text, "{path:?} does not re-write byte for byte");
+        }
+        if research_trace_dirs().is_some() {
+            assert!(with_rows > 0, "no research CSV has rows");
         }
     }
 
@@ -1311,6 +1398,9 @@ mod tests {
     fn research_traces_one_ulp_nudge_is_found() {
         for (path, text) in research_csvs() {
             let original = TraceTable::parse(&text).expect("parse");
+            if original.rows.is_empty() {
+                continue;
+            }
             // Nudge `y` in a row near the middle by one ULP, then go through text again.
             let y = original.column("y").expect("y column");
             let row = original.rows.len() / 2;

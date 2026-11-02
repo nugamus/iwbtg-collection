@@ -16,6 +16,9 @@ iwbtg-sim = { workspace = true, features = ["trace-setup"] }
 iwbtg-format.workspace = true
 thiserror.workspace = true
 clap.workspace = true
+# Trace case files (crates/tools/cases) and the research trace map (docs/plans/sim-core.md 9.2).
+serde.workspace = true
+toml.workspace = true
 
 [lints]
 workspace = true

@@ -17,7 +17,10 @@ fn packages_dir() -> Option<PathBuf> {
     if dir.is_dir() {
         Some(dir)
     } else {
-        eprintln!("skipped: {} does not exist (run the research converter)", dir.display());
+        eprintln!(
+            "skipped: {} does not exist (run the research converter)",
+            dir.display()
+        );
         None
     }
 }
@@ -43,7 +46,11 @@ fn every_converter_package_loads_in_trace_mode() {
                 unmapped_kinds_inert: true,
             },
         );
-        let name = game.file_name().unwrap_or_default().to_string_lossy().into_owned();
+        let name = game
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
         eprintln!("{name}: {} warnings", report.diagnostics.len());
         if !report.ok() {
             let errors: Vec<String> = report
@@ -58,10 +65,17 @@ fn every_converter_package_loads_in_trace_mode() {
         if name == "rely_the_needle" {
             let all: String = report.diagnostics.iter().map(|d| format!("{d}\n")).collect();
             for cr in ["CR1", "CR3", "CR4", "CR5"] {
-                assert!(all.contains(&format!("converter request {cr}")), "rely names {cr}:\n{all}");
+                assert!(
+                    all.contains(&format!("converter request {cr}")),
+                    "rely names {cr}:\n{all}"
+                );
             }
             assert!(all.contains("CR1, CR2"), "rely names CR2:\n{all}");
         }
     }
-    assert!(failures.is_empty(), "packages that do not load:\n{}", failures.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "packages that do not load:\n{}",
+        failures.join("\n")
+    );
 }

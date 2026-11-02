@@ -935,6 +935,8 @@ iwbtg pkg check    <pkg> [--trace-mode]
 iwbtg replay run   <pkg> <replay|.inputs> [--start new-game --difficulty N]   (WP8b)
 ```
 
+Exit codes: 0 success, 1 a check failed, 2 a tool error, 3 the sim reached a WP0 stub of a work package not merged yet.
+
 `replay run` prints the tick count, splits from the `[timing]` triggers, and the final state hash (roadmap Phase 3). `crates/sim/src/timing.rs` (WP8b) evaluates triggers at phase 16.
 
 ```rust

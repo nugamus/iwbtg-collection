@@ -458,7 +458,9 @@ dependencies = [
  "clap",
  "iwbtg-format",
  "iwbtg-sim",
+ "serde",
  "thiserror",
+ "toml",
 ]
 
 [[package]]
