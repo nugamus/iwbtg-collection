@@ -224,14 +224,7 @@ fn the_event_set_follows_the_model() {
 }
 
 #[test]
-fn end_step_origin_is_unsupported_and_none_ignores_the_events() {
-    with_kid(
-        |p| p.events.boundary = BoundaryModel::EndStepOrigin,
-        (-9.0, 0.0),
-        |ctx, kid, _| {
-            assert!(kid::on_event(ctx, kid, &EventKind::EndStep).is_err());
-        },
-    );
+fn none_ignores_the_events() {
     with_kid(
         |p| p.events.boundary = BoundaryModel::None,
         (-9.0, 0.0),

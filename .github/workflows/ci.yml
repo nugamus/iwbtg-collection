@@ -100,6 +100,19 @@ jobs:
           cat "$first"
           for f in determinism-*/report.txt.lf; do diff "$first" "$f"; done
 
+  # No entropy, clock, thread or GPU crate may enter the sim's dependency graph
+  # (docs/architecture.md, Sim purity). `cargo deny` on the workspace sees every crate, so this
+  # runs on the sim alone with its own config.
+  sim-deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: crates/sim/Cargo.toml
+          arguments: --config crates/sim/deny.toml
+          command: check bans
+
   licenses:
     runs-on: ubuntu-latest
     steps:

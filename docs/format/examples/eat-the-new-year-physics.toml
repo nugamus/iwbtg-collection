@@ -1,8 +1,8 @@
 #:schema ../schema/v0/physics.schema.json
 # eat-the-new-year (family A4, kid/A4.md "Per-game differences"): the A4 preset with a bow, the
-# kid's own play timer in Alarm 0 and its own edges. The yaneH and yaneM slope rules are WP5c.4
-# (#131) and the roomout edge targets are an `edge_warp` with a per-edge table (docs/format/
-# builtins/edge_warp.md).
+# kid's own play timer in Alarm 0 and its own edges. The yaneH and yaneM slope rules are
+# `slope_yane` below (classes `slope` and `slope_mirror`); the roomout edge targets are an
+# `edge_warp` with a per-edge table (docs/format/builtins/edge_warp.md).
 preset = "A4"
 
 [numbers]
@@ -12,6 +12,16 @@ jumps = [8.5, 7.0]
 create = ["create_defaults", "ensure_world", "create_bow", "first_play_save", "arm_play_timer"]
 boundary = "intersect_origin"
 alarms = [{ n = 0, run = ["play_timer"] }]
+collisions = [
+  { with = "block", run = "block_standard" },
+  { with = "slope", run = "slope_yane" },
+  { with = "slope_mirror", run = "slope_yane" },
+  { with = "platform", run = "platform_standard" },
+  { with = "killer", run = "kill" },
+]
+
+[slope]
+keep_hspeed = true
 
 [bullet]
 speed = 13.0

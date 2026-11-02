@@ -8,12 +8,14 @@
 use serde::{Deserialize, Deserializer};
 
 use super::class::ClassMask;
-use super::ids::SpriteId;
+use super::ids::{SoundId, SpriteId};
 use crate::input::Action;
 use crate::kid::{KidAction, KidCollisionRun};
 use crate::num::Real;
 
-pub use super::physics_ext::{FlipKind, FlipModel, IceRules, LadderRules, SlopeModel};
+pub use super::physics_ext::{
+    BlockSlopeStep, Downhill, FlipKind, FlipModel, IceModel, IceRules, LadderEntry, LadderRules, SlopeModel,
+};
 
 /// The kid engine family a profile starts from (`preset = "A1"`): documentation and defaults
 /// (`kid::presets::apply`). Nothing in the sim branches on it.
@@ -79,6 +81,8 @@ pub struct PhysicsProfile {
     pub misc: KidMisc,
     /// `[sprites]`: the kid's sprites by role (resolved from names at load).
     pub sprites: KidSprites,
+    /// `[sounds]`: the kid's sounds by role (resolved from names at load).
+    pub sounds: KidSounds,
 }
 
 macro_rules! profile_section {
@@ -490,6 +494,9 @@ pub struct VineRules {
     pub kick: [Real; 2],
     /// Drop: horizontal speed away from the vine (3).
     pub drop: Real,
+    /// The vine tests look one pixel down (`place_free(x, y + 1)`) whatever the gravity, as
+    /// Kotaro's flipped player2 does (kid/A2.md); otherwise they look in the gravity direction.
+    pub probe_down_fixed: bool,
 }
 
 /// `[misc]`.
@@ -503,6 +510,24 @@ pub struct KidMisc {
     /// `walk` shows the idle sprite only with a `jump.ground_classes` instance 1 px below
     /// (spook house).
     pub idle_needs_block: bool,
+}
+
+/// `[sounds]`: the kid's sounds by role, played through `sound::play`. Package files give names;
+/// the loader resolves them to ids. A role the game does not have stays `None` and the action
+/// plays nothing.
+#[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct KidSounds {
+    /// A ground jump (`playerJump`).
+    pub jump: Option<SoundId>,
+    /// An air jump.
+    pub double_jump: Option<SoundId>,
+    /// A shot.
+    pub shoot: Option<SoundId>,
+    /// A vine kick.
+    pub vine_kick: Option<SoundId>,
+    /// `killPlayer`'s `sound` step.
+    pub death: Option<SoundId>,
 }
 
 /// `[sprites]`: the kid's sprites by role. Package files give names; the loader (WP7b) resolves
@@ -521,6 +546,10 @@ pub struct KidSprites {
     pub fall: Option<SpriteId>,
     /// Sliding on a vine.
     pub sliding: Option<SpriteId>,
+    /// On a ladder (`sprPlayerBack`).
+    pub back: Option<SpriteId>,
+    /// Moving on a ladder (`sprPlayerLadderUpDown`).
+    pub ladder_up_down: Option<SpriteId>,
 }
 
 /// `[bullet]`: what `shoot` does.
@@ -542,7 +571,7 @@ pub struct BulletRules {
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DeathStep {
-    /// The death sound. Not played yet (#231).
+    /// The death sound, played by the death step `sound`.
     Sound,
     /// A blood emitter at the kid's position.
     BloodEmitter,
@@ -712,7 +741,7 @@ draft_section! {
     /// `[vine]` as written.
     VineRulesDraft => VineRules {
         walk_ignores_vines: bool, model: VineModel, left_below: Real, right_equal: Real, slide: Real, kick: [Real; 2],
-        drop: Real,
+        drop: Real, probe_down_fixed: bool,
     }
 }
 draft_section! {
@@ -782,6 +811,26 @@ pub struct PhysicsProfileDraft {
     /// `[sprites]`: sprite names. `kid::presets::apply` leaves the profile's `sprites` empty;
     /// the loader (WP7b) resolves these names to ids and fills them in.
     pub sprites: Option<KidSpriteNames>,
+    /// `[sounds]`: sound names; the loader resolves them to ids like the sprite names.
+    pub sounds: Option<KidSoundNames>,
+}
+
+/// `[sounds]` as written in a package: sound names by role, resolved to [`KidSounds`] ids by the
+/// loader.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct KidSoundNames {
+    /// A ground jump.
+    pub jump: Option<String>,
+    /// An air jump.
+    pub double_jump: Option<String>,
+    /// A shot.
+    pub shoot: Option<String>,
+    /// A vine kick.
+    pub vine_kick: Option<String>,
+    /// The death sound.
+    pub death: Option<String>,
 }
 
 /// `[sprites]` as written in a package: sprite names by role, resolved to [`KidSprites`] ids by
@@ -800,4 +849,8 @@ pub struct KidSpriteNames {
     pub fall: Option<String>,
     /// Sliding on a vine.
     pub sliding: Option<String>,
+    /// On a ladder.
+    pub back: Option<String>,
+    /// Moving on a ladder.
+    pub ladder_up_down: Option<String>,
 }

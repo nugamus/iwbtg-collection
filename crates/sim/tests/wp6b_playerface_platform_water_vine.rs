@@ -265,8 +265,10 @@ mod wp6b {
     }
 
     #[test]
-    fn water_djump_ignoring_flag_is_refused_until_the_kid_can_set_djump() {
+    fn water_djump_ignoring_flag_loads_and_cur_jumps_must_be_whole() {
         let p = params(&[("air_jump", word("djump_ignoring_flag"))]);
+        assert!(builtins::init_state(Builtin::Water, &p).is_ok());
+        let p = params(&[("cur_jumps", real(2.5))]);
         assert!(builtins::init_state(Builtin::Water, &p).is_err());
     }
 

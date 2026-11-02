@@ -597,7 +597,7 @@ fn jump_needs_a_press_and_no_freeze() {
 #[test]
 fn other_water_air_models_are_unsupported() {
     with_kid(
-        |p| p.jump.water_air = WaterAir::Water3Keeps,
+        |p| p.jump.water_air = WaterAir::WaterUnlimited,
         |ctx, kid, _, _| {
             input(ctx, &[Action::Jump], &[Action::Jump], &[]);
             assert!(kid::run_action(ctx, kid, &KidAction::Common(CommonAction::Jump)).is_err());

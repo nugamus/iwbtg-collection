@@ -21,6 +21,8 @@ Touch zone that fires a trap id. Source: `crates/sim/src/builtins/trigger.rs`. A
 | `one_shot_destroy`, `sets_frame` | bool | false | Destroy after touch; show frame 1 (SHO). |
 | `sound`, `size` | | | The client's and the loader's. |
 
+**Loading.** Every param loads on an object file or a placed instance; `group` names a kind and must exist; a wrong word or type is an error with file and line (`params::check`). Tests `wp6b2_params_load` and `wp6b2_params_are_checked` in `crates/format/tests/wp7a_load.rs`. Converter request CR17.
+
 State: `MechGlobals` (`global_triggered`, `trigger_flags`, `stop_flags`, `switches`) and the instances' `triggered`. The sim hash covers it.
 
 OPEN: the exact read and write semantics of `triggered` (U-MECH-2; this is "all instances written, first read"); whether flag-array triggers survive R in wanna, little-runner and help-the-fairy-tale (TR-MECH-08, not run; research#39). Clearing: the `world` params `clear_triggers_to` (POR, Room Start ids 0-10) and `clear_switches_on_room_end` (SPK); `game_restart` clears every global, `MechGlobals` included, unless `globals_survive_restart` (Inferred, U-MECH-3). SHO roomChanger and loadGame clear the trigger globals too (which ones is OPEN; those live in `warp` and the save load, not here).

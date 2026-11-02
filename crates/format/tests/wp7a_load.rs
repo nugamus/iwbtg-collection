@@ -619,3 +619,370 @@ fn a_block_collider_that_does_not_exist_is_an_error() {
         render(&r)
     );
 }
+
+// ---- #293: tier 2 built-in params (trigger, trap, fake_block, hidden_block, world) ------------
+
+/// The basic package with the WP6b.2 kinds and every object in `objects` (`(file stem, text)`)
+/// listed in `object_order`. `my_world` is added with its default text unless given, and is the
+/// game's `world` role when `world_role` is set.
+fn wp6b2_package(objects: &[(&str, &str)], world_role: bool) -> PackageFiles {
+    let mut stems: Vec<&str> = objects.iter().map(|(s, _)| *s).collect();
+    if !stems.contains(&"my_world") {
+        stems.push("my_world");
+    }
+    let listed: String = stems.iter().map(|s| format!("\"@{s}\", ")).collect();
+    let order = ORDER.replace(
+        "\"playerface\",",
+        &format!("\"playerface\", \"trigger\", \"trap\", \"fake_block\", \"hidden_block\", {listed}"),
+    );
+    let mut manifest = manifest(&order, "");
+    if world_role {
+        manifest = manifest.replace(
+            "[engine]
+",
+            "[engine]
+roles = { world = \"@my_world\" }
+",
+        );
+    }
+    package(|f| {
+        set(f, "game.toml", manifest.into_bytes());
+        if !objects.iter().any(|(s, _)| *s == "my_world") {
+            f.push(("objects/my_world.toml".into(), MY_WORLD.as_bytes().to_vec()));
+        }
+        for (stem, text) in objects {
+            f.push((format!("objects/{stem}.toml"), text.as_bytes().to_vec()));
+        }
+    })
+}
+
+const MY_WORLD: &str = "base = \"world\"\nlatch_cleared_by_world = true\npause = \"deactivate\"\npause_delay = 5\nmute = true\ntimer_per_tick = 2\ntimer_on_restart = 2\nclear_triggers_to = 10\nclear_switches_on_room_end = true\n";
+
+#[test]
+fn wp6b2_params_load() {
+    let files = wp6b2_package(
+        &[
+            ("my_world", MY_WORLD),
+            (
+                "free_trigger",
+                "base = \"trigger\"\nmodel = \"per_object\"\ntrg = 3\ngroup = \"@flag_trigger\"\none_shot_destroy = true\nsets_frame = true\nsize = 16\n",
+            ),
+            (
+                "flag_trigger",
+                "base = \"trigger\"\nmodel = \"flag_array\"\ntrg = 7\nneed_key = 2\narray = \"stop\"\nreset = true\n",
+            ),
+            (
+                "my_trap",
+                concat!(
+                    "base = \"trap\"\ntrigger_id = 3\ntrigger_model = \"per_object\"\n",
+                    "trigger_kind = \"@free_trigger\"\ntrigger_kind_b = \"@flag_trigger\"\n",
+                    "launch = \"path\"\npath = 0\npath_end = \"reverse\"\npath_speed = 2.5\n",
+                    "stop_on_stopper = \"flush\"\nflag_guard = true\nkind = \"killer\"\n",
+                ),
+            ),
+            (
+                "my_fake",
+                "base = \"fake_block\"\nvanish_on = \"touch\"\napproach_distance = 4\nblood_solid_when_no_kid = true\nstops_bullets = true\nreverses_platforms = true\nsolid = false\nvisible = true\n",
+            ),
+            (
+                "my_hidden",
+                "base = \"hidden_block\"\nreveal_distance = 1\nstops_bullets = true\ndestroy_when_no_kid = false\n",
+            ),
+        ],
+        true,
+    );
+    let (def, _) = load_ok(&files, STRICT);
+    let word = |s: &str| ParamValue::Str(s.into());
+    let real = |v: f64| ParamValue::Real(Real::new(v));
+    let yes = ParamValue::Bool(true);
+
+    let (_, w) = kind_named(&def, "@my_world");
+    assert_eq!(w.params.0.get("pause"), Some(&word("deactivate")));
+    for (k, v) in [
+        ("pause_delay", 5.0),
+        ("timer_per_tick", 2.0),
+        ("timer_on_restart", 2.0),
+        ("clear_triggers_to", 10.0),
+    ] {
+        assert_eq!(w.params.0.get(k), Some(&real(v)), "{k}");
+    }
+    for k in ["latch_cleared_by_world", "mute", "clear_switches_on_room_end"] {
+        assert_eq!(w.params.0.get(k), Some(&yes), "{k}");
+    }
+    assert_eq!(
+        def.engine_kind(EngineKind::World),
+        Some(kind_named(&def, "@my_world").0),
+        "the object is the game's world"
+    );
+
+    let (flag_id, flag) = kind_named(&def, "@flag_trigger");
+    assert_eq!(flag.params.0.get("model"), Some(&word("flag_array")));
+    assert_eq!(flag.params.0.get("array"), Some(&word("stop")));
+    assert_eq!(flag.params.0.get("need_key"), Some(&real(2.0)));
+    assert_eq!(flag.params.0.get("reset"), Some(&yes));
+    let (free_id, free) = kind_named(&def, "@free_trigger");
+    assert_eq!(
+        free.params.0.get("group"),
+        Some(&ParamValue::Kind(flag_id)),
+        "a kind param names a kind"
+    );
+    assert_eq!(free.params.0.get("trg"), Some(&real(3.0)));
+
+    let (_, trap) = kind_named(&def, "@my_trap");
+    assert_eq!(
+        trap.params.0.get("trigger_kind"),
+        Some(&ParamValue::Kind(free_id))
+    );
+    assert_eq!(
+        trap.params.0.get("trigger_kind_b"),
+        Some(&ParamValue::Kind(flag_id))
+    );
+    assert_eq!(trap.params.0.get("launch"), Some(&word("path")));
+    assert_eq!(trap.params.0.get("path"), Some(&real(0.0)), "a path is its index");
+    assert_eq!(trap.params.0.get("path_end"), Some(&word("reverse")));
+    assert_eq!(trap.params.0.get("stop_on_stopper"), Some(&word("flush")));
+    assert_eq!(trap.params.0.get("flag_guard"), Some(&yes));
+
+    let (_, fake) = kind_named(&def, "@my_fake");
+    assert_eq!(fake.params.0.get("vanish_on"), Some(&word("touch")));
+    assert_eq!(fake.params.0.get("approach_distance"), Some(&real(4.0)));
+    assert_eq!(fake.params.0.get("reverses_platforms"), Some(&yes));
+    // `solid` and `visible` of an object file are the kind's own flags, not params.
+    assert!(!fake.solid && fake.visible);
+    assert_eq!(fake.params.0.get("solid"), None);
+    let (_, hidden) = kind_named(&def, "@my_hidden");
+    assert_eq!(hidden.params.0.get("reveal_distance"), Some(&real(1.0)));
+    assert_eq!(
+        hidden.params.0.get("destroy_when_no_kid"),
+        Some(&ParamValue::Bool(false))
+    );
+}
+
+#[test]
+fn wp6b2_params_are_checked() {
+    let cases = [
+        ("base = \"world\"\npause = \"freeze\"\n", "pause"),
+        ("base = \"world\"\nmute = 1\n", "mute"),
+        (
+            "base = \"world\"\nclear_triggers_to = \"ten\"\n",
+            "clear_triggers_to",
+        ),
+        (
+            "base = \"world\"\nclear_switches_on_room_end = \"yes\"\n",
+            "clear_switches_on_room_end",
+        ),
+        ("base = \"world\"\nbogus = 1\n", "bogus"),
+        ("base = \"trigger\"\nmodel = \"fancy\"\n", "model"),
+        ("base = \"trigger\"\narray = \"both\"\n", "array"),
+        ("base = \"trigger\"\ngroup = \"@nope\"\n", "group"),
+        ("base = \"trap\"\nlaunch = \"teleport\"\n", "launch"),
+        ("base = \"trap\"\ntrigger_kind = \"@nope\"\n", "trigger_kind"),
+        (
+            "base = \"trap\"\nstop_on_stopper = \"explode\"\n",
+            "stop_on_stopper",
+        ),
+        ("base = \"fake_block\"\nvanish_on = \"later\"\n", "vanish_on"),
+        (
+            "base = \"fake_block\"\nstops_bullets = \"yes\"\n",
+            "stops_bullets",
+        ),
+        (
+            "base = \"hidden_block\"\nreveal_distance = true\n",
+            "reveal_distance",
+        ),
+    ];
+    for (text, needle) in cases {
+        let files = wp6b2_package(&[("bad", text)], false);
+        let r = load_report(&files, STRICT);
+        assert!(!r.ok(), "expected an error for {text:?}:\n{}", render(&r));
+        assert!(
+            errors(&r).iter().any(|e| e.contains(needle)),
+            "{text:?}: no error mentions `{needle}`: {:?}",
+            errors(&r)
+        );
+    }
+}
+
+// ---- #319: tier 2 built-in params (drop_platform, gravity_flip, edge_warp, bullet_blocker, slope)
+
+/// The basic package with the WP6b.3 kinds in `object_order` and `extra_instances` appended to
+/// `rooms/stage1.toml` (objects and extra files through `edit`).
+fn tier2_package(extra_instances: &str, edit: impl FnOnce(&mut Vec<(String, Vec<u8>)>)) -> PackageFiles {
+    let order = ORDER.replace(
+        "\"playerface\",",
+        "\"playerface\", \"drop_platform\", \"gravity_flip\", \"edge_warp\", \"bullet_blocker\", \"slope\",",
+    );
+    package(|f| {
+        set(f, "game.toml", manifest(&order, "").into_bytes());
+        let stage = STAGE1.replace(
+            "  { kind = \"warp\", x = 768, y = 512, room_to = \"title\" },\n",
+            &format!("  {{ kind = \"warp\", x = 768, y = 512, room_to = \"title\" }},\n{extra_instances}"),
+        );
+        set(f, "rooms/stage1.toml", stage.into_bytes());
+        edit(f);
+    })
+}
+
+fn placed<'d>(def: &'d GameDef, room: &str, kind: &str) -> Vec<&'d iwbtg_sim::def::PlacedInstance> {
+    let (id, _) = kind_named(def, kind);
+    let room = def.rooms.iter().find(|r| r.name == room).expect("room");
+    room.instances.iter().filter(|i| i.kind == id).collect()
+}
+
+#[test]
+fn wp6b3_params_load_on_kinds_and_per_instance() {
+    let files = tier2_package(
+        concat!(
+            "  { kind = \"drop_platform\", x = 100, y = 100, mode = \"rise\", speed = 3, solid = true },\n",
+            "  { kind = \"gravity_flip\", x = 140, y = 100, direction = \"up\" },\n",
+            "  { kind = \"gravity_flip\", x = 180, y = 100, direction = \"down\", transition = \"grav_sign\" },\n",
+            "  { kind = \"bullet_blocker\", x = 220, y = 100, except_when_overlapping_kid = true },\n",
+            "  { kind = \"slope\", x = 260, y = 100, shape = \"rise_left\", scale_x = -1 },\n",
+            "  { kind = \"edge_warp\", x = 0, y = 0, left_room = \"title\", right_room = \"stage1\" },\n",
+            // The SPK table, resolved per placed instance (CR17): one switch with an entry, one without.
+            "  { kind = \"edge_warp\", x = 300, y = 100, mode = \"room_assign\", room_to = \"title\", warp_x = 32, warp_y = 64 },\n",
+            "  { kind = \"edge_warp\", x = 340, y = 100, mode = \"room_assign\" },\n",
+        ),
+        |f| {
+            f.push((
+                "objects/slow_drop.toml".into(),
+                b"base = \"drop_platform\"\nmode = \"rise_kae\"\nspeed = 1.5\n".to_vec(),
+            ));
+            f.push((
+                "objects/grav_down.toml".into(),
+                b"base = \"gravity_flip\"\ndirection = \"down\"\n".to_vec(),
+            ));
+        },
+    );
+    let (def, _) = load_ok(&files, STRICT);
+    let word = |s: &str| ParamValue::Str(s.into());
+
+    let drop = placed(&def, "stage1", "drop_platform")[0];
+    assert_eq!(drop.params.0.get("mode"), Some(&word("rise")));
+    assert_eq!(
+        drop.params.0.get("speed"),
+        Some(&ParamValue::Real(Real::new(3.0)))
+    );
+    assert_eq!(drop.params.0.get("solid"), Some(&ParamValue::Bool(true)));
+    let (_, slow) = kind_named(&def, "@slow_drop");
+    assert_eq!(slow.params.0.get("mode"), Some(&word("rise_kae")));
+    assert_eq!(
+        slow.params.0.get("speed"),
+        Some(&ParamValue::Real(Real::new(1.5)))
+    );
+
+    let flips = placed(&def, "stage1", "gravity_flip");
+    assert_eq!(flips[0].params.0.get("direction"), Some(&word("up")));
+    assert_eq!(flips[1].params.0.get("direction"), Some(&word("down")));
+    assert_eq!(flips[1].params.0.get("transition"), Some(&word("grav_sign")));
+    let (_, down) = kind_named(&def, "@grav_down");
+    assert_eq!(down.params.0.get("direction"), Some(&word("down")));
+
+    assert_eq!(
+        placed(&def, "stage1", "bullet_blocker")[0]
+            .params
+            .0
+            .get("except_when_overlapping_kid"),
+        Some(&ParamValue::Bool(true))
+    );
+    let slope = placed(&def, "stage1", "slope")[0];
+    assert_eq!(slope.params.0.get("shape"), Some(&word("rise_left")));
+    assert_eq!(
+        slope.params.0.get("scale_x"),
+        Some(&ParamValue::Real(Real::new(-1.0)))
+    );
+
+    let title = RoomId(def.rooms.iter().position(|r| r.name == "title").unwrap() as u32);
+    let warps = placed(&def, "stage1", "edge_warp");
+    assert_eq!(warps[0].params.0.get("left_room"), Some(&ParamValue::Room(title)));
+    assert_eq!(warps[1].params.0.get("mode"), Some(&word("room_assign")));
+    assert_eq!(
+        warps[1].params.0.get("room_to"),
+        Some(&ParamValue::Room(title)),
+        "a room name resolves to the room"
+    );
+    assert_eq!(
+        warps[1].params.0.get("warp_x"),
+        Some(&ParamValue::Real(Real::new(32.0)))
+    );
+    assert_eq!(
+        warps[1].params.0.get("warp_y"),
+        Some(&ParamValue::Real(Real::new(64.0)))
+    );
+    assert_eq!(
+        warps[2].params.0.get("room_to"),
+        None,
+        "a switch without a table entry has no target"
+    );
+}
+
+fn tier2_errors(instance: &str) -> Vec<String> {
+    let files = tier2_package(&format!("  {instance},\n"), |_| {});
+    let r = load_report(&files, STRICT);
+    assert!(!r.ok(), "expected an error for {instance}:\n{}", render(&r));
+    errors(&r)
+}
+
+#[test]
+fn wp6b3_params_are_checked() {
+    let cases = [
+        (
+            r#"{ kind = "drop_platform", x = 0, y = 0, mode = "sideways" }"#,
+            "mode",
+        ),
+        (
+            r#"{ kind = "drop_platform", x = 0, y = 0, speed = "fast" }"#,
+            "speed",
+        ),
+        (r#"{ kind = "drop_platform", x = 0, y = 0, solid = 1 }"#, "solid"),
+        (r#"{ kind = "gravity_flip", x = 0, y = 0 }"#, "direction"),
+        (
+            r#"{ kind = "gravity_flip", x = 0, y = 0, direction = "left" }"#,
+            "direction",
+        ),
+        (
+            r#"{ kind = "gravity_flip", x = 0, y = 0, direction = "up", transition = "teleport" }"#,
+            "transition",
+        ),
+        (
+            r#"{ kind = "gravity_flip", x = 0, y = 0, direction = "up", bogus = 1 }"#,
+            "bogus",
+        ),
+        (
+            r#"{ kind = "bullet_blocker", x = 0, y = 0, except_when_overlapping_kid = "yes" }"#,
+            "except_when_overlapping_kid",
+        ),
+        (r#"{ kind = "slope", x = 0, y = 0, shape = "wavy" }"#, "shape"),
+        (r#"{ kind = "slope", x = 0, y = 0, scale_x = true }"#, "scale_x"),
+        (
+            r#"{ kind = "edge_warp", x = 0, y = 0, mode = "teleport" }"#,
+            "mode",
+        ),
+        (
+            r#"{ kind = "edge_warp", x = 0, y = 0, mode = "room_assign", room_to = "nowhere" }"#,
+            "nowhere",
+        ),
+        (
+            r#"{ kind = "edge_warp", x = 0, y = 0, room_to = "title", left_room = "title" }"#,
+            "room_to",
+        ),
+    ];
+    for (instance, needle) in cases {
+        let errs = tier2_errors(instance);
+        assert!(
+            errs.iter().any(|e| e.contains(needle)),
+            "{instance}: no error mentions `{needle}`: {errs:?}"
+        );
+    }
+}
+
+#[test]
+fn a_gravity_flip_with_view_rotation_is_refused_at_load() {
+    let errs = tier2_errors(
+        r#"{ kind = "gravity_flip", x = 0, y = 0, direction = "up", transition = "yflag_with_view_rotation" }"#,
+    );
+    assert!(
+        errs.iter().any(|e| e.contains("yflag_with_view_rotation")),
+        "{errs:?}"
+    );
+}

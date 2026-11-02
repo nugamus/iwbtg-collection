@@ -10,9 +10,9 @@
 //! kaenbyou (kid/B.md).
 
 use crate::def::physics::{
-    AirJump, BoundaryModel, DeathStep, FallCapRule, FlipKind, GravityReapply, GroundAlso, JumpCancel, KeyOn,
-    KidAlarm, KidCollision, KidKey, PlatformRule, PlatformTake, SavePosition, VineKeys, VineModel, WalkRead,
-    WaterAir,
+    AirJump, BoundaryModel, DeathStep, FallCapRule, FlipKind, GravityReapply, GroundAlso, IceModel, IceRules,
+    JumpCancel, KeyOn, KidAlarm, KidCollision, KidKey, PlatformRule, PlatformTake, SavePosition, VineKeys,
+    VineModel, WalkRead, WaterAir,
 };
 use crate::def::{ClassMask, KidFamily, PhysicsProfile, PhysicsProfileDraft};
 use crate::input::Action;
@@ -20,7 +20,9 @@ use crate::kid::actions::a1::A1Action;
 use crate::kid::actions::a3::A3Action;
 use crate::kid::actions::a5::A5Action;
 use crate::kid::actions::b::BAction;
+use crate::kid::actions::c::CAction;
 use crate::kid::actions::common::CommonAction as C;
+use crate::kid::actions::flip::FlipAction;
 use crate::kid::collisions::block::BlockRun;
 use crate::kid::collisions::platform::PlatformRun;
 use crate::kid::death::DeathRun;
@@ -42,6 +44,7 @@ pub fn defaults(family: KidFamily) -> PhysicsProfile {
         KidFamily::A3 => a3(),
         KidFamily::A4 => a4(),
         KidFamily::A5 => a5(),
+        KidFamily::C => c(),
         KidFamily::B => b(),
         _ => a1(),
     };
@@ -53,6 +56,9 @@ pub fn defaults(family: KidFamily) -> PhysicsProfile {
 /// fade-in and the platform gravity rule. Animus and easy-miku-2 add `ad_nudge` to the Step list.
 fn a2() -> PhysicsProfile {
     let mut p = a1();
+    // Kotaro's player2 (kid/A2.md): vine probes look down, solidblock does not restore `djump`.
+    p.vine.probe_down_fixed = true;
+    p.flip.solidblock_no_refresh = true;
     p.events.step = vec![
         common(C::Gravity),
         common(C::Walk),
@@ -62,6 +68,7 @@ fn a2() -> PhysicsProfile {
         common(C::Jump),
         common(C::Release),
         common(C::Vines),
+        KidAction::Flip(FlipAction::FlipSwap),
     ];
     p.misc.fade_in = false;
     p
@@ -72,6 +79,7 @@ fn a2() -> PhysicsProfile {
 /// held Suicide key in the Step. Showdown overrides the jumps and more (docs/format/examples).
 fn a3() -> PhysicsProfile {
     let mut p = a1();
+    p.ice = IceRules::default(); // no slip blocks in this family's walk
     p.input.vine_keys = VineKeys::LatchedFlags;
     p.vine.walk_ignores_vines = true;
     p.events.create = vec![
@@ -89,6 +97,7 @@ fn a3() -> PhysicsProfile {
         common(C::Jump),
         common(C::Release),
         common(C::Gravity),
+        KidAction::Flip(FlipAction::FlipSwap),
         KidAction::A3(A3Action::KeyFlags),
         common(C::Vines),
         KidAction::A3(A3Action::SuicideCheck),
@@ -128,6 +137,8 @@ fn a3() -> PhysicsProfile {
 /// room edges. The world counts the play time. eat-the-new-year differs (docs/format/examples).
 fn a4() -> PhysicsProfile {
     let mut p = a1();
+    p.flip.model = FlipKind::None;
+    p.ice = IceRules::default(); // no slip blocks in this family's walk
     p.numbers.release_mult = r(0.5);
     p.vine.model = VineModel::None;
     p.vine.walk_ignores_vines = true;
@@ -186,6 +197,8 @@ fn a4() -> PhysicsProfile {
 /// the Step list, the fall cap and the killer test (docs/format/examples).
 fn a5() -> PhysicsProfile {
     let mut p = a1();
+    p.flip.model = FlipKind::None;
+    p.ice = IceRules::default(); // no slip blocks in this family's walk
     p.vine.model = VineModel::None;
     p.vine.walk_ignores_vines = true;
     p.events.create = vec![
@@ -233,6 +246,72 @@ fn a5() -> PhysicsProfile {
     ];
     p.death.select_room_reset = false;
     p.save.position = SavePosition::XyBase256Bytes;
+    p.misc.fade_in = false;
+    p
+}
+
+/// Family C, reference game keep-celebrating-for-xia (kid/C.md): the `grav` sign flip, the
+/// vine flags computed before the jump code, a suicide press in the Step, edge and killer tests in
+/// the End Step, water 3, the flipped platform rule. Slide blocks, slip and slopes are not in the
+/// reference game's rooms (tier 3).
+fn c() -> PhysicsProfile {
+    let mut p = a1();
+    p.ice.clamp = true; // slip is clamped to the run speed
+    p.events.create = vec![
+        common(C::CreateDefaults),
+        common(C::CreateBow),
+        common(C::FirstPlaySave),
+    ];
+    p.events.step = vec![
+        KidAction::C(CAction::VineProbe),
+        common(C::Walk),
+        common(C::AirSprite),
+        common(C::FallCap),
+        common(C::Shoot),
+        common(C::Jump),
+        common(C::Release),
+        KidAction::C(CAction::SuicidePress),
+        common(C::Vines),
+    ];
+    p.events.end_step = vec![KidAction::B(BAction::KillerCheck)];
+    p.events.boundary = BoundaryModel::EndStepOrigin;
+    p.events.alarms = vec![];
+    // Key C (client action `extra1`): teleport to the start marker (kid/C.md).
+    p.events.keys = vec![KidKey {
+        action: Action::Extra1,
+        on: KeyOn::Press,
+        run: vec![KidAction::C(CAction::TeleportToStart)],
+    }];
+    p.events.collisions = vec![
+        KidCollision {
+            with: ClassMask::BLOCK,
+            run: KidCollisionRun::Block(BlockRun::BlockStandard),
+        },
+        KidCollision {
+            with: ClassMask::PLATFORM,
+            run: KidCollisionRun::Platform(PlatformRun::PlatformStandard),
+        },
+    ];
+    p.jump.ground_classes = ClassMask::BLOCK | ClassMask::WATER1;
+    p.jump.ground_also = vec![GroundAlso::PlatformFlag];
+    p.jump.ground_sets_djump = true;
+    p.jump.water_air = WaterAir::Water3Keeps;
+    p.fall_cap.rule = FallCapRule::ClampAbs;
+    p.gravity.reapply = GravityReapply::CreateOnly;
+    p.gravity.block_landing_zeroes = false;
+    p.platform.take = PlatformTake::YspeedFlipped;
+    p.vine.model = VineModel::DistanceSymEarly;
+    p.flip.model = FlipKind::GravSign;
+    p.death.order = vec![
+        DeathStep::Sound,
+        DeathStep::BloodEmitter,
+        DeathStep::DestroyKid,
+        DeathStep::GameOver,
+        DeathStep::DeathsPlusOne,
+        DeathStep::SaveCounters,
+    ];
+    p.death.select_room_reset = false;
+    p.save.position = SavePosition::XyBase100Bytes;
     p.misc.fade_in = false;
     p
 }
@@ -353,6 +432,7 @@ fn a1() -> PhysicsProfile {
         common(C::Jump),
         common(C::Release),
         common(C::Vines),
+        KidAction::Flip(FlipAction::FlipSwap),
         KidAction::A1(A1Action::PlatformGravityZero),
         KidAction::A1(A1Action::FadeIn),
     ];
@@ -417,6 +497,8 @@ fn a1() -> PhysicsProfile {
     p.save.position = SavePosition::XyBase100Bytes;
     p.misc.fade_in = true;
     p.misc.fade_step = r(0.1);
+    p.ice.model = IceModel::Slip;
+    p.flip.model = FlipKind::SwapObject;
     p
 }
 

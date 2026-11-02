@@ -19,8 +19,9 @@
 //! The warp target is read from the overlapping instance's [`WarpState`], which `edge_warp`
 //! shares with `warp`; an `edge_warp` with a per-edge table (NY roomout, `EdgeTable`) is read
 //! instead, whether or not the kid touches it: the first edge crossed (left, right, up, down)
-//! names the room, with no target the kid dies (at the top nothing happens). `OutsideRoomKill` (family B) kills on Outside Room
-//! unless a room changer overlaps; `EndStepOrigin` (WP5c) is `Unsupported` here.
+//! names the room, with no target the kid dies (at the top nothing happens). `OutsideRoomKill`
+//! (family B) kills on Outside Room unless a room changer overlaps; `EndStepOrigin` (family C)
+//! kills in the End Step when the origin is outside the room, then lets the End Step list run.
 
 use super::api::{KillCause, kill};
 use crate::builtins::edge_warp::Edge;
@@ -46,11 +47,37 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Option<Flow
             intersect_origin(ctx, me, true).map(Some)
         }
         (BoundaryModel::OutsideRoomKill, EventKind::OutsideRoom) => outside_room_kill(ctx, me).map(Some),
-        (BoundaryModel::EndStepOrigin, EventKind::EndStep) => Err(SimError::unsupported(
-            "kid boundary: events.boundary end_step_origin (5.3 edge row, WP5c)",
-        )),
+        // The check comes first; a surviving kid goes on to the End Step list (the killer test).
+        (BoundaryModel::EndStepOrigin, EventKind::EndStep) => {
+            let flow = end_step_origin(ctx, me)?;
+            Ok(if flow == Flow::Continue { None } else { Some(flow) })
+        }
         _ => Ok(None),
     }
+}
+
+/// `end_step_origin` (family C, kid/C.md End Step 1): in the End Step the kid dies when its
+/// origin is outside the room (`x < 0`, `x > room_width`, `y < 0`, `y > room_height`, all strict).
+/// There is no wrap and no room changer lookup.
+fn end_step_origin(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
+    let n = &ctx.rules.num;
+    let Some(room) = ctx.def.room(ctx.w.room) else {
+        return Err(SimError::invariant(
+            "kid boundary: the current room does not exist",
+        ));
+    };
+    let (rw, rh) = (
+        Real::new(f64::from(room.width)),
+        Real::new(f64::from(room.height)),
+    );
+    let Some(i) = ctx.w.get(me) else {
+        return Ok(Flow::Continue);
+    };
+    let (x, y) = (i.m.x(), i.m.y());
+    if gm_lt(x, Real::ZERO, n) || gm_gt(x, rw, n) || gm_lt(y, Real::ZERO, n) || gm_gt(y, rh, n) {
+        return kill(ctx, me, KillCause::Boundary);
+    }
+    Ok(Flow::Continue)
 }
 
 /// `outside_room_kill` (family B, kid/B.md "Outside Room"): the box is completely outside the
