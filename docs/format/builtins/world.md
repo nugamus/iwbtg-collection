@@ -13,6 +13,8 @@ The engine controller, placed in `[engine] boot`. It is not a GM port: it does w
 | `clear_triggers_to` | whole | none | Room Start sets `global.trigger[0]` to `[n]` false (poronkusema: 10). |
 | `clear_switches_on_room_end` | bool | false | Room End clears the switch array (go-the-spook-house). |
 
+**Loading.** The params go on the game's world object file (`base = "world"`) that `[engine.roles] world = "@<id>"` names, and are checked like any built-in's. Tests `wp6b2_params_load` and `wp6b2_params_are_checked` in `crates/format/tests/wp7a_load.rs`. The converter request for them is on research#31.
+
 What it does:
 
 - **Create**: slot 1, deaths 0, time 0.

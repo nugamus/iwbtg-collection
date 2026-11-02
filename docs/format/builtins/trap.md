@@ -19,6 +19,8 @@ Trigger-launched mover. Source: `crates/sim/src/builtins/trap.rs`. It launches o
 | `destroy_outside_room` | bool | false | |
 | `kind`, `sound`, `sound_if_trigger` | | | The class the loader gives it; sound is the client's. |
 
+**Loading.** Every param loads on an object file or a placed instance. `trigger_kind`, `trigger_kind_b` and `trigger_kind_c` name kinds and must exist; `path` is a path index (the position of `paths/<id>.toml` in file path order), written as a number. Tests `wp6b2_params_load` and `wp6b2_params_are_checked` in `crates/format/tests/wp7a_load.rs`. Converter request CR17.
+
 ## Stop chain
 
 Launch sets flag 1, then arms Alarm 0 to `alm` (only when above 0) and sets flag 2. Alarm 0 stops it and arms Alarm 1 to `alm2`. Alarm 1 relaunches with `h2`, `v2` when idle, flag 2 and the trigger still matches (flag 3), then arms Alarm 2 to `alm3` (flag 4). Alarm 2 stops it and arms Alarm 3 to `alm4`. Alarm 3 relaunches with `h3`, `v3` when idle, flag 4 and the trigger still matches (flag 5). If the trigger no longer matches the chain ends.
