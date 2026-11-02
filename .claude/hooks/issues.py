@@ -25,7 +25,9 @@ fragment R on Repository {
   milestones(first: 30, states: OPEN) { nodes { title
     open: issues(states: OPEN) { totalCount } closed: issues(states: CLOSED) { totalCount } } }
   ready: issues(first: 100, states: OPEN, labels: ["agent-ready"]) { nodes { number title
-    milestone { title } blockedBy(first: 20) { nodes { state } } subIssuesSummary { total completed } } }
+    milestone { title } blockedBy(first: 20) { nodes { state } } subIssuesSummary { total completed }
+    labels(first: 20) { nodes { name } } } }
+  claimed: issues(first: 50, states: OPEN, labels: ["in-progress"]) { nodes { number title } }
   user: issues(first: 50, states: OPEN, labels: ["needs-user"]) { nodes { number title
     comments(last: 1) { nodes { body } } } }
   triage: issues(first: 20, states: OPEN, labels: ["triage"]) { totalCount nodes { number title } }
@@ -62,7 +64,7 @@ def start():
     except Exception as e:  # offline or gh missing: say so, never block the session
         return emit(warn + f"Issue harness: could not reach GitHub ({type(e).__name__}). Run `gh auth status`; work from the issues once it is back.")
 
-    ms, ready, answered, waiting, triage = {}, [], [], 0, []
+    ms, ready, answered, waiting, triage, claimed = {}, [], [], 0, [], []
     for k, repo in data.items():
         name = REPOS[k]
         for m in repo["milestones"]["nodes"]:
@@ -70,6 +72,8 @@ def start():
             ms[m["title"]] = (o + m["open"]["totalCount"], c + m["closed"]["totalCount"])
         for i in repo["ready"]["nodes"]:
             s = i["subIssuesSummary"]
+            if "in-progress" in [l["name"] for l in i["labels"]["nodes"]]:
+                continue  # another agent has claimed it
             if i["milestone"] and all(b["state"] == "CLOSED" for b in i["blockedBy"]["nodes"]) and s["total"] == s["completed"]:
                 ready.append((ms_key(i["milestone"]["title"]), name != REPOS["c"], i["number"], f"{name}#{i['number']} {i['title']} [{i['milestone']['title']}]"))
         for i in repo["user"]["nodes"]:
@@ -79,6 +83,7 @@ def start():
             else:
                 waiting += 1
         triage += [f"{name}#{i['number']} {i['title']}" for i in repo["triage"]["nodes"]]
+        claimed += [f"{name}#{i['number']} {i['title']}" for i in repo["claimed"]["nodes"]]
 
     lines = ["# Project status (from GitHub issues)", "", "Milestones (closed/total across repos):"]
     for t in sorted(ms, key=lambda t: (ms_key(t), t)):
@@ -88,7 +93,9 @@ def start():
         lines += ["", "The user answered these needs-user issues. Read the reply, act on it, remove `needs-user`:"] + [f"- {a}" for a in answered]
     if triage:
         lines += ["", f"Triage queue ({len(triage)}): give each a milestone, size, area, `blocked by` links, then remove `triage`:"] + [f"- {t}" for t in triage]
-    lines += ["", "Next unblocked agent-ready issues:"] + [f"- {r[3]}" for r in sorted(ready)[:5]]
+    if claimed:
+        lines += ["", "In progress (claimed by an agent; do not start these):"] + [f"- {c}" for c in claimed]
+    lines += ["", "Next unblocked agent-ready issues (unclaimed):"] + [f"- {r[3]}" for r in sorted(ready)[:10]]
     lines += ["", f"{waiting} needs-user issue(s) still wait for the user.",
               "Rules: CLAUDE.md, Issues. Unless the user names other work, offer to start the first issue above."]
     emit(warn + "\n".join(lines))

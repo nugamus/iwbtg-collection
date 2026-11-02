@@ -9,6 +9,8 @@ All three repos sit side by side in one workspace folder. CLAUDE.md files refer 
 ```
 IWBTG Collection/            workspace root, not a repo
   CLAUDE.md                  points to the three repos
+  TEAM_LEAD_PROMPT.md        prompt that starts an agent-team lead (in no repo)
+  worktrees/                 one git worktree per working agent (in no repo)
   .claude/settings.json      plugins, MCP denylist, deny rules, archive guard, issue hooks (in no repo; copy of client/workspace/settings.json)
   client/                    nugamus/iwbtg-collection: Bevy client, format spec, server, docs
   games/                     nugamus/iwbtg-collection-games (private): ported packages, games/<game_id>/
@@ -40,6 +42,21 @@ That's expected. `iwc convert` (research) writes its packages to `research/build
 | Claude Code | 2.1.316 | |
 | OpenGMK tracer | `research/tools/opengmk/bin/gm8emulator.exe`, sha256 `d83371ba68900fa3…` | built from OpenGMK 9e4282e6 + `iwc-trace.patch`. The source checkout is also on disk in `tools/opengmk/src/`, see research#28 |
 | REA | MCP server `rea`, available in sessions | `rea-linux` is blocked in settings |
+
+## Agent teams
+
+Several agents can work at once through Claude Code agent teams (experimental). The workspace settings turn the feature on with `"env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" }`. One session is the lead, and it starts teammates. Each teammate is a full Claude Code session with its own context. Teammates talk to the lead and each other with messages and share a task list. On Windows they run in-process: the lead's agent panel lists them, arrow keys and Enter open one, and `x` stops it. Split panes need tmux or iTerm2, which Windows Terminal and the VS Code terminal don't support.
+
+Teammates share the lead's working folder, so the CLAUDE.md files require:
+
+- **One worktree per agent:** `IWBTG Collection/worktrees/<repo>-<issue>`, created with `git worktree add ../worktrees/<repo>-<n> -b issue-<n>-<name> origin/main` from inside the repo. The main checkouts stay on `main`. `worktrees/` is in no repo.
+- **Claims:** the `in-progress` label, in all three repos. The session-start hook lists claimed issues separately and leaves them out of the next-issues list.
+- **Merging:** teammates open PRs and send the link to the lead. The lead merges one at a time and removes the worktree.
+- **Research data work** (crawls, downloads, extraction, traces, the converter) needs `archive/`, `extracted/`, `db/` and `tools/`. Those exist only in the main research checkout, so that work runs there, one agent at a time.
+
+Each client worktree builds its own `target/` folder: the first build there takes a few minutes and a few GB. Teams use several times the tokens of one session. The docs advise 3 to 5 teammates, Sonnet for teammates, and checking in on the team often. `/resume` does not bring back in-process teammates.
+
+The lead prompt is `TEAM_LEAD_PROMPT.md` in the workspace root.
 
 ## Check a machine
 
