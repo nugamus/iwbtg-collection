@@ -15,7 +15,11 @@
 - Any per-game design question (stripped-mode cuts, run start and end, cutscenes, secrets, mods) goes into `docs/games/<game-id>.md` (see `docs/games/README.md`). Never guess the answer in code.
 - Design is a priority. No generic UI; match the IWBTG style and reuse art from ported games where it fits.
 - The user does not write code. Every PR still gets a User check section (exact commands, steps, expected vs. broken). The user tests only what they can see or play: client UI and rendering, playtests, design, and `needs-user` issues. Those PRs wait for the user to merge. Any other PR (sim, format, tools, research, docs) you merge yourself (`gh pr merge --squash --delete-branch`) once CI is green and you have run its User check and pasted the output into the PR.
-- One agent works at a time. Finish or hand off the current issue before starting another.
+- **Several agents may work at once** (Claude Code agent teams; client/docs/dev-setup.md, Agent teams). Teammates share the lead's folder, so:
+  - Each agent works only in its own git worktree, never in the main checkout (that stays on `main` for the lead): from the repo, `git worktree add ../worktrees/<repo>-<n> -b issue-<n>-<short-name> origin/main`, then use that folder's absolute path for every command and file edit.
+  - Claim an issue before starting: add the `in-progress` label and comment. Skip issues that already have it. One issue per agent at a time. Remove the label if you hand the issue back.
+  - Teammates open the PR and send its link to the lead. The lead merges one PR at a time (rebase the branch on main first when it is behind) and then removes the worktree (`git worktree remove`).
+  - Two agents never edit the same files at once. The lead hands out issues that touch different files.
 
 ## Issues
 
