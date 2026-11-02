@@ -1,0 +1,24 @@
+#:schema ../../../../../docs/format/schema/v0/game.schema.json
+# The golden one-room package: the smallest valid game, for `iwbtg replay run`.
+format = 0
+id = "one_room"
+title = "One room"
+version = "0.1.0"
+engine_rev = 0
+runner = "gm80"
+physics = "physics.toml"
+start_room = "title"
+max_ticks = 180_000
+object_order = ["world", "kid", "kid_bullet", "bow", "blood", "blood_emitter", "game_over", "playerface", "block"]
+
+[[creators]]
+name = "IWBTG Collection"
+role = "author"
+
+[source]
+url = "https://example.com/minimal"
+permission = "granted"
+
+[timing]
+start = { trigger = "run_start" }
+end = { trigger = "run_end" }
