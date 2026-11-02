@@ -39,6 +39,28 @@ pub fn sprite_sidecar(path: &str) -> Option<(&str, &str)> {
     (!id.contains('/')).then_some((pack, id))
 }
 
+/// For `engine/<pack>/<folder>/<id><ext>`: `(pack, id)`.
+pub fn asset_file<'a>(path: &'a str, folder: &str, ext: &str) -> Option<(&'a str, &'a str)> {
+    let (pack, rest) = path.strip_prefix(ENGINE_DIR)?.split_once('/')?;
+    let id = rest.strip_prefix(folder)?.strip_prefix('/')?.strip_suffix(ext)?;
+    (!id.contains('/')).then_some((pack, id))
+}
+
+/// Why `engine:<pack>/<id>` found no `what` (`sprite`, `sound`) in the package, for an error.
+pub fn unresolved(files: &PackageFiles, name: &str, what: &str) -> String {
+    match EngineRef::parse(name) {
+        Some(Ok(r)) if files.contains(&format!("{}engine.toml", pack_dir(r.pack))) => {
+            format!("`{name}`: the engine pack `{}` has no {what} `{}`", r.pack, r.id)
+        }
+        Some(Ok(r)) => format!(
+            "`{name}`: the engine pack `{}` is not in the package (`iwbtg pkg check` bundles it from `../_engines/{}`)",
+            r.pack, r.pack
+        ),
+        Some(Err(e)) => e,
+        None => format!("{what} `{name}` does not exist"),
+    }
+}
+
 /// True for a bundled pack file that is gameplay data (sprites, sounds, music), so the gameplay
 /// hash covers it; `engine.toml` (credits) is not.
 pub fn is_gameplay_file(path: &str) -> bool {

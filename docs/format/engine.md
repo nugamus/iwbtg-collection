@@ -43,7 +43,7 @@ The generated schema is `docs/format/schema/v0/engine.schema.json`. Unknown keys
 
 ## Loading
 
-A pack sprite loads like a package sprite, with its files under `engine/<pack>/sprites/`; the loader keys it as `engine:<pack>/<id>`. Pack sprites, sounds and music are gameplay data and enter the gameplay hash; `engine.toml` (credits) does not. Only sprite references resolve in the loader today; pack sounds and music are carried and credited but not yet referenced.
+A pack sprite loads like a package sprite, with its files under `engine/<pack>/sprites/`; the loader keys it as `engine:<pack>/<id>`. A pack sound (`engine/<pack>/sounds/<id>.ogg`) or music track (`engine/<pack>/music/<id>.ogg`, with the same optional `.toml` sidecar) loads like a package one and is named `engine:<pack>/<id>`, so it can be used wherever a sound name is read: the physics profile's `[sounds]` and sound params of built-ins. Sound and music ids stay unique per pack (a stem in both folders is the same error as in a package). Pack sprites, sounds and music are gameplay data and enter the gameplay hash; `engine.toml` (credits) does not. Scripts do not validate sound names yet, so an `engine:` string in a script is not checked.
 
 ## Bundling
 

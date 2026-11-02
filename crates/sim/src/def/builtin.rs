@@ -71,6 +71,8 @@ pub enum Builtin {
     Slope,
     /// Music player.
     Music,
+    /// Family B `objDeathSound`: fades the music and plays the death sound a tick later.
+    DeathSound,
     /// Boss gate.
     BossGate,
     /// Boss item.
@@ -120,7 +122,7 @@ pub enum Builtin {
 
 impl Builtin {
     /// Every built-in, in declaration order.
-    pub const ALL: [Builtin; 50] = [
+    pub const ALL: [Builtin; 51] = [
         Builtin::World,
         Builtin::Kid,
         Builtin::KidBullet,
@@ -151,6 +153,7 @@ impl Builtin {
         Builtin::BulletBlocker,
         Builtin::Slope,
         Builtin::Music,
+        Builtin::DeathSound,
         Builtin::BossGate,
         Builtin::BossItem,
         Builtin::SecretItem,
@@ -206,6 +209,7 @@ impl Builtin {
             Builtin::BulletBlocker => "bullet_blocker",
             Builtin::Slope => "slope",
             Builtin::Music => "music",
+            Builtin::DeathSound => "death_sound",
             Builtin::BossGate => "boss_gate",
             Builtin::BossItem => "boss_item",
             Builtin::SecretItem => "secret_item",

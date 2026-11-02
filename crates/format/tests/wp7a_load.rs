@@ -686,7 +686,7 @@ fn wp6b2_params_load() {
             ),
             (
                 "my_hidden",
-                "base = \"hidden_block\"\nreveal_distance = 1\nstops_bullets = true\ndestroy_when_no_kid = false\n",
+                "base = \"hidden_block\"\nreveal_distance = 1\nstops_bullets = true\ndestroy_when_no_kid = false\ndestroyed_by_bullet = true\ndestroyed_by_blood = true\n",
             ),
         ],
         true,
@@ -756,6 +756,8 @@ fn wp6b2_params_load() {
         hidden.params.0.get("destroy_when_no_kid"),
         Some(&ParamValue::Bool(false))
     );
+    assert_eq!(hidden.params.0.get("destroyed_by_bullet"), Some(&yes));
+    assert_eq!(hidden.params.0.get("destroyed_by_blood"), Some(&yes));
 }
 
 #[test]
@@ -985,6 +987,53 @@ fn a_gravity_flip_with_view_rotation_is_refused_at_load() {
         errs.iter().any(|e| e.contains("yflag_with_view_rotation")),
         "{errs:?}"
     );
+}
+
+#[test]
+fn script_problems_are_diagnostics_with_file_line_column() {
+    let files = package(|f| {
+        set(
+            f,
+            "scripts/boss.rhai",
+            "fn step() {
+    if this.x > 1.0 && random(1.0) < 0.5 { destroy(this); }
+}
+",
+        );
+    });
+    let r = load_report(&files, STRICT);
+    let text = render(&r);
+    assert!(
+        text.contains("scripts/boss.rhai:2:") && text.contains("`random` draws from the RNG"),
+        "{text}"
+    );
+    assert!(!r.ok(), "{text}");
+
+    let files = package(|f| {
+        set(
+            f,
+            "scripts/boss.rhai",
+            "fn step() { if this.x == 1.5 { destroy(this); } }
+",
+        )
+    });
+    let r = load_report(&files, STRICT);
+    assert!(
+        r.ok(),
+        "a lint warning does not refuse the package: {}",
+        render(&r)
+    );
+    assert!(render(&r).contains("warning: raw `==`"), "{}", render(&r));
+
+    let files = package(|f| {
+        set(
+            f,
+            "scripts/boss.rhai",
+            "fn create() { instance_create(\"@nope\", 1, 2); }
+",
+        )
+    });
+    assert!(render(&load_report(&files, STRICT)).contains("unknown kind \"@nope\""));
 }
 
 // ---- #138: tier 3 misc built-ins (time_limit, sign, ladder, decor)
@@ -1343,6 +1392,137 @@ fn engine_toml_is_checked() {
     });
     let errs = errors(&load_report(&files, STRICT)).join("\n");
     assert!(errs.contains("must be the folder name `a1`"), "{errs}");
+}
+
+#[test]
+fn an_engine_pack_sound_resolves_in_the_physics_sounds() {
+    let files = with_pack(|f| {
+        set(
+            f,
+            "physics.toml",
+            "preset = \"A1\"\n[sounds]\njump = \"engine:a1/jump\"\n",
+        );
+        f.push(("engine/a1/sounds/jump.ogg".into(), b"OggS".to_vec()));
+    });
+    let (def, _) = load_ok(&files, STRICT);
+    let id = def.physics.sounds.jump.expect("the jump sound resolves");
+    assert_eq!(def.sounds[id.0 as usize].name, "engine:a1/jump");
+    // A pack sound is gameplay data; the pack's credits are not.
+    let other = with_pack(|f| {
+        set(
+            f,
+            "physics.toml",
+            "preset = \"A1\"\n[sounds]\njump = \"engine:a1/jump\"\n",
+        );
+        f.push(("engine/a1/sounds/jump.ogg".into(), b"OggS".to_vec()));
+        f.push((
+            "engine/a1/sounds/jump.toml".into(),
+            b"length_ticks = 10\n".to_vec(),
+        ));
+    });
+    let (def2, _) = load_ok(&other, STRICT);
+    assert_eq!(def2.sounds[0].length_ticks, 10, "the pack sidecar is read");
+}
+
+#[test]
+fn a_missing_engine_pack_sound_is_an_error() {
+    let files = with_pack(|f| {
+        set(
+            f,
+            "physics.toml",
+            "preset = \"A1\"\n[sounds]\njump = \"engine:a1/nope\"\n",
+        );
+    });
+    let errs = errors(&load_report(&files, STRICT)).join("\n");
+    assert!(
+        errs.contains("the engine pack `a1` has no sound `nope`"),
+        "{errs}"
+    );
+}
+
+// ---- #139: scripted objects get their events from the script and `collides_with`
+
+fn scripted_package() -> PackageFiles {
+    let order = ORDER.replace("\"playerface\",", "\"playerface\", \"@mover\",");
+    package(|f| {
+        set(f, "game.toml", manifest(&order, "").into_bytes());
+        let stage = STAGE1.replace(
+            "  { kind = \"warp\", x = 768, y = 512, room_to = \"title\" },\n",
+            "  { kind = \"warp\", x = 768, y = 512, room_to = \"title\" },\n  { kind = \"@mover\", x = 100, y = 100 },\n",
+        );
+        set(f, "rooms/stage1.toml", stage.into_bytes());
+        f.push((
+            "objects/mover.toml".into(),
+            b"script = \"mover\"\nsprite = \"block\"\ncollides_with = [\"kid_bullet\"]\n".to_vec(),
+        ));
+        f.push((
+            "scripts/mover.rhai".into(),
+            b"fn create() { this.set_alarm(0, 2); }\nfn step() { this.x += 1.0; }\nfn alarm(n) { this.y = 7.0; }\nfn collide(other) { this.y = 0.0; }\n"
+                .to_vec(),
+        ));
+    })
+}
+
+#[test]
+fn a_scripted_kind_handles_what_its_script_defines_and_its_collides_with() {
+    let (def, _) = load_ok(&scripted_package(), STRICT);
+    let (_, mover) = kind_named(&def, "@mover");
+    assert_eq!(mover.base, iwbtg_sim::def::Builtin::Scripted);
+    assert!(mover.events.step, "step() is defined");
+    assert_ne!(mover.events.alarms, 0, "alarm(n) is defined");
+    assert!(!mover.events.end_step && !mover.events.begin_step);
+    assert_eq!(
+        mover.events.collisions.as_slice(),
+        &[iwbtg_sim::def::ClassMask::KID_BULLET],
+        "collides_with names the classes collide(other) listens to"
+    );
+    let (_, boss) = kind_named(&def, "@boss");
+    assert!(!boss.events.step, "a script with only create() adds nothing");
+}
+
+#[test]
+fn a_scripted_object_runs_in_a_room() {
+    use iwbtg_sim::input::InputFrame;
+    let (def, _) = load_ok(&scripted_package(), STRICT);
+    let stage = iwbtg_sim::def::RoomId(def.rooms.iter().position(|r| r.name == "stage1").unwrap() as u32);
+    let (mover_kind, _) = kind_named(&def, "@mover");
+    let mut sim = iwbtg_sim::Sim::new(
+        std::sync::Arc::new(def),
+        iwbtg_sim::SimOptions {
+            start: iwbtg_sim::StartPoint::Room {
+                room: stage,
+                difficulty: 0,
+            },
+            seed: 1,
+            dll_mode: iwbtg_sim::sound::DllMode::Stub,
+        },
+    )
+    .expect("the sim starts");
+    let at = |sim: &iwbtg_sim::Sim| {
+        let i = sim
+            .world()
+            .instances()
+            .iter()
+            .find(|i| i.kind == mover_kind)
+            .expect("mover");
+        (i.m.x().get(), i.m.y().get())
+    };
+    assert_eq!(at(&sim), (100.0, 100.0));
+    for _ in 0..3 {
+        sim.step(InputFrame::EMPTY);
+    }
+    assert_eq!(
+        at(&sim),
+        (103.0, 7.0),
+        "step() moved it 3 times and the alarm set y"
+    );
+    let hash = sim.state_hash();
+    let mut again =
+        iwbtg_sim::Sim::new(std::sync::Arc::new(sim.def().clone()), sim.options().clone()).unwrap();
+    for _ in 0..3 {
+        again.step(InputFrame::EMPTY);
+    }
+    assert_eq!(again.state_hash(), hash, "two runs hash the same");
 }
 
 #[test]

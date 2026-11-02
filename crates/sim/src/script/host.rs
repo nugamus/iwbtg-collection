@@ -51,7 +51,7 @@ impl std::fmt::Debug for ScriptRuntime {
 }
 
 /// The function an event calls, and its argument.
-fn event_call(ev: &EventKind) -> Option<(&'static str, Option<Dynamic>)> {
+pub(crate) fn event_call(ev: &EventKind) -> Option<(&'static str, Option<Dynamic>)> {
     Some(match ev {
         EventKind::Create => ("create", None),
         EventKind::Destroy => ("destroy", None),
@@ -349,6 +349,15 @@ impl Shared {
         };
         *self.world.borrow_mut() = Some(w);
         Ok(r)
+    }
+
+    /// Charges `units` of host work to the tick budget; a script error when the budget is spent.
+    pub(crate) fn charge(&self, units: u64) -> Res<()> {
+        if self.budget.charge(units) {
+            Ok(())
+        } else {
+            Err(super::api::runtime_error("script budget exceeded"))
+        }
     }
 
     fn push_log(&self, line: String) {

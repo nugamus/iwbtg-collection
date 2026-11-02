@@ -23,7 +23,9 @@ use iwbtg_sim::def::{
     VariantSel, ViewDef,
 };
 use iwbtg_sim::num::Real;
+use iwbtg_sim::rules::RunnerRules;
 use iwbtg_sim::rules::num::FloatModel;
+use iwbtg_sim::script::ScriptRuntime;
 use iwbtg_sim::timing::{TimingDef, TimingTrigger};
 use iwbtg_sim::world::Value;
 use toml::Spanned;
@@ -287,6 +289,8 @@ struct Loader<'a> {
     names: Vec<String>,
     /// Package-defined class names, in first-use order (`ClassMask::package`).
     package_classes: Vec<String>,
+    /// `collides_with` per kind name: the classes its script's `collide(other)` listens to.
+    collides: BTreeMap<String, Vec<ClassMask>>,
     groups: Vec<String>,
 }
 
@@ -318,6 +322,7 @@ impl<'a> Loader<'a> {
             appended: BTreeSet::new(),
             names: Vec::new(),
             package_classes: Vec::new(),
+            collides: BTreeMap::new(),
             groups: Vec::new(),
         }
     }
@@ -494,7 +499,7 @@ impl<'a> Loader<'a> {
                 start_room
             }
         };
-        let def = GameDef {
+        let mut def = GameDef {
             id: self.m.id.get_ref().clone(),
             tick_rate: self.m.tick_rate(),
             max_ticks: *self.m.max_ticks.get_ref(),
@@ -529,11 +534,29 @@ impl<'a> Loader<'a> {
             scripts: std::mem::take(&mut self.scripts),
             timing: timing?,
         };
+        self.merge_script_events(&mut def);
         // Step 7 (WP7b): params against the built-ins' specs, on the built definition.
         let mut d = Vec::new();
         let trace = self.trace_mode();
         let _ = pending_call(&mut self.pending, || params::check(&def, trace, &mut d));
         self.diags.append(&mut d);
+        // Scripts: structure, calls, name literals and lints (WP9.3).
+        for issue in iwbtg_sim::script::validate::validate(&def) {
+            let file = def
+                .scripts
+                .get(issue.script)
+                .map_or("scripts", |s| s.name.as_str());
+            self.diags.push(Diagnostic {
+                file: file.to_owned(),
+                line: issue.line,
+                column: issue.column,
+                severity: match issue.severity {
+                    iwbtg_sim::script::validate::Severity::Error => Severity::Error,
+                    iwbtg_sim::script::validate::Severity::Warning => Severity::Warning,
+                },
+                message: issue.message,
+            });
+        }
         Some(def)
     }
 
@@ -666,21 +689,7 @@ impl<'a> Loader<'a> {
         match self.sprite_ids.get(name) {
             Some(e) => Some(e.id),
             None if name.starts_with(crate::ids::ENGINE_PREFIX) => {
-                let msg = match crate::ids::EngineRef::parse(name) {
-                    Some(Ok(r))
-                        if self
-                            .files
-                            .contains(&format!("{}engine.toml", crate::engine_pack::pack_dir(r.pack))) =>
-                    {
-                        format!("`{name}`: the engine pack `{}` has no sprite `{}`", r.pack, r.id)
-                    }
-                    Some(Ok(r)) => format!(
-                        "`{name}`: the engine pack `{}` is not in the package (`iwbtg pkg check` bundles it from `../_engines/{}`)",
-                        r.pack, r.pack
-                    ),
-                    Some(Err(e)) => e,
-                    None => format!("sprite `{name}` does not exist"),
-                };
+                let msg = crate::engine_pack::unresolved(self.files, name, "sprite");
                 self.error(file, text, span, msg);
                 None
             }
@@ -868,7 +877,7 @@ impl<'a> Loader<'a> {
                     path,
                     text,
                     at..at + name.len(),
-                    format!("sound `{name}` does not exist"),
+                    crate::engine_pack::unresolved(this.files, name, "sound"),
                 );
             }
             found.map(iwbtg_sim::def::SoundId)
@@ -1069,6 +1078,21 @@ impl<'a> Loader<'a> {
                 ),
             }
         }
+        let mut collides = Vec::new();
+        for c in &o.collides_with {
+            match self.class_named(c.get_ref()) {
+                Some(m) => collides.push(m),
+                None => self.error(
+                    path,
+                    text,
+                    c.span(),
+                    format!("too many package classes for `{}` (at most 16)", c.get_ref()),
+                ),
+            }
+        }
+        if !collides.is_empty() {
+            self.collides.insert(name.clone(), collides);
+        }
         if !o.roles.is_empty() {
             if self.trace_mode() {
                 self.note("CR11", name.clone());
@@ -1153,10 +1177,13 @@ impl<'a> Loader<'a> {
         match found {
             Some(v) => v,
             None => {
-                self.diags.push(Diagnostic::file_error(
-                    file,
-                    format!("param `{key}`: `{s}` does not exist"),
-                ));
+                let why = if s.starts_with(crate::ids::ENGINE_PREFIX) {
+                    crate::engine_pack::unresolved(self.files, s, "sound")
+                } else {
+                    format!("`{s}` does not exist")
+                };
+                self.diags
+                    .push(Diagnostic::file_error(file, format!("param `{key}`: {why}")));
                 value
             }
         }
@@ -1832,9 +1859,56 @@ impl<'a> Loader<'a> {
             } else {
                 pending_call(&mut self.pending, || builtins::event_set(kind.base, &kind))
             };
-            if let Some(set) = set {
+            if let Some(mut set) = set {
+                if let Some(masks) = self.collides.get(&kind.name) {
+                    set.collisions.extend(masks.iter().copied());
+                }
                 self.kinds[i].events = set;
             }
+        }
+    }
+
+    /// Adds what each kind's script handles to its event set (the `scripted` built-in and a
+    /// base with a script): the script's functions, from the compiled script. Needs the finished
+    /// definition, so it runs after it is built. A script that does not compile is an error.
+    fn merge_script_events(&mut self, def: &mut GameDef) {
+        if def.scripts.is_empty() {
+            return;
+        }
+        let rules = match RunnerRules::for_runner(def.runner, def.engine_rev) {
+            Ok(mut r) => {
+                r.num.float_model = def.float_model;
+                r
+            }
+            Err(e) => {
+                self.diags
+                    .push(Diagnostic::file_error(MANIFEST_PATH, format!("scripts: {e}")));
+                return;
+            }
+        };
+        let runtime = match ScriptRuntime::new(def, &rules) {
+            Ok(r) => r,
+            Err(e) => {
+                self.diags
+                    .push(Diagnostic::file_error(MANIFEST_PATH, format!("scripts: {e}")));
+                return;
+            }
+        };
+        for k in &mut def.kinds {
+            let Some(sid) = k.script else { continue };
+            let s = runtime.event_set(sid);
+            let e = &mut k.events;
+            e.begin_step |= s.begin_step;
+            e.step |= s.step;
+            e.end_step |= s.end_step;
+            e.late |= s.late;
+            e.alarms |= s.alarms;
+            e.user |= s.user;
+            e.outside_room |= s.outside_room;
+            e.intersect_boundary |= s.intersect_boundary;
+            e.animation_end |= s.animation_end;
+            e.room_start |= s.room_start;
+            e.room_end |= s.room_end;
         }
     }
 
@@ -1969,7 +2043,7 @@ fn engine_builtin(b: Builtin) -> bool {
 }
 
 /// Engine role name, sim role and default built-in.
-fn engine_roles() -> [(&'static str, EngineKind, Option<Builtin>); 9] {
+fn engine_roles() -> [(&'static str, EngineKind, Option<Builtin>); 10] {
     [
         ("world", EngineKind::World, Some(Builtin::World)),
         ("kid", EngineKind::Kid, Some(Builtin::Kid)),
@@ -1984,6 +2058,7 @@ fn engine_roles() -> [(&'static str, EngineKind, Option<Builtin>); 9] {
         ),
         ("game_over", EngineKind::GameOver, Some(Builtin::GameOver)),
         ("playerface", EngineKind::Playerface, Some(Builtin::Playerface)),
+        ("death_sound", EngineKind::DeathSound, None),
     ]
 }
 
