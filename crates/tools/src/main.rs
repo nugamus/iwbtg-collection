@@ -123,6 +123,14 @@ enum PkgCommand {
         #[arg(long)]
         trace_mode: bool,
     },
+    /// Prints the gameplay hash (leaderboards key on it) and the content hash (downloads).
+    Hash {
+        /// Package folder.
+        pkg: PathBuf,
+        /// Load converter output: unmapped script kinds become inert.
+        #[arg(long)]
+        trace_mode: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -189,6 +197,7 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             Ok(true)
         }
         Command::Pkg(PkgCommand::Check { pkg, trace_mode }) => pkg_cmd::main(&pkg, trace_mode),
+        Command::Pkg(PkgCommand::Hash { pkg, trace_mode }) => pkg_cmd::hash_main(&pkg, trace_mode),
         Command::Determinism(DeterminismCommand::Report { corpus, check }) => {
             determinism_cmd::main(&corpus, check)
         }
