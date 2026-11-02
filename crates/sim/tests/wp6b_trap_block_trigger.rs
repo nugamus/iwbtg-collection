@@ -522,6 +522,30 @@ mod wp6b {
         assert!(!alive(&w, bullet));
     }
 
+    #[test]
+    fn xia_hidden_block_is_destroyed_by_a_shot_and_by_blood_only_while_invisible() {
+        let g = hidden_game(&[("destroyed_by_bullet", yes()), ("destroyed_by_blood", yes())]);
+        let mut w = World::new(g.room, 1);
+        let bullet = spawn(&g, &mut w, KindId(1), 100.0, 100.0);
+        let shot = spawn(&g, &mut w, kind_id(&g, "hid"), 100.0, 100.0);
+        touch(&g, &mut w, shot, bullet, ClassMask::KID_BULLET);
+        assert!(!alive(&w, shot));
+        assert!(alive(&w, bullet), "stops_bullets is its own param");
+        let bled = spawn(&g, &mut w, kind_id(&g, "hid"), 100.0, 100.0);
+        touch(&g, &mut w, bled, bullet, ClassMask::BLOOD);
+        assert!(!alive(&w, bled), "blood destroys it while invisible");
+        let shown = spawn(&g, &mut w, kind_id(&g, "hid"), 100.0, 100.0);
+        w.get_mut(shown).unwrap().visible = true;
+        touch(&g, &mut w, shown, bullet, ClassMask::BLOOD);
+        assert!(alive(&w, shown), "a revealed block ignores blood");
+        let plain = hidden_game(&[]);
+        let mut w2 = World::new(plain.room, 1);
+        let b = spawn(&plain, &mut w2, kind_id(&plain, "hid"), 100.0, 100.0);
+        let bullet2 = spawn(&plain, &mut w2, KindId(1), 100.0, 100.0);
+        touch(&plain, &mut w2, b, bullet2, ClassMask::KID_BULLET);
+        assert!(alive(&w2, b), "without the params a shot does nothing");
+    }
+
     // ---- fake_block -------------------------------------------------------------------------
 
     fn fake_game(p: &[(&str, ParamValue)]) -> G {

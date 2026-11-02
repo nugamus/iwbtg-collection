@@ -686,7 +686,7 @@ fn wp6b2_params_load() {
             ),
             (
                 "my_hidden",
-                "base = \"hidden_block\"\nreveal_distance = 1\nstops_bullets = true\ndestroy_when_no_kid = false\n",
+                "base = \"hidden_block\"\nreveal_distance = 1\nstops_bullets = true\ndestroy_when_no_kid = false\ndestroyed_by_bullet = true\ndestroyed_by_blood = true\n",
             ),
         ],
         true,
@@ -756,6 +756,8 @@ fn wp6b2_params_load() {
         hidden.params.0.get("destroy_when_no_kid"),
         Some(&ParamValue::Bool(false))
     );
+    assert_eq!(hidden.params.0.get("destroyed_by_bullet"), Some(&yes));
+    assert_eq!(hidden.params.0.get("destroyed_by_blood"), Some(&yes));
 }
 
 #[test]
