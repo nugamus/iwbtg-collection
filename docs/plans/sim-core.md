@@ -123,7 +123,7 @@ pub struct Instance {
   ```
 
   Default `RankThenCreation` (Inferred: object index order, then creation order). Alternatives `Creation` and `DepthThenRankThenCreation` (the spec lists depth as UNKNOWN, and T-ORD-1 gives two blocks different depths on purpose). T-ORD-1 is recorded (`rely-the-needle-4-2/t-ord-1`); the default changes when the spec records its result.
-- **Snapshot per phase.** Each phase takes `dispatch_order` once at its start and walks that list, skipping instances that are dead or inactive by the time their turn comes. Instances created during the phase are not in the snapshot (default of UNKNOWN U10, register R9, switch `TickRules::new_instances_join_phase`).
+- **Snapshot per phase.** Each phase takes `dispatch_order` once at its start and walks that list, skipping instances that are dead or inactive by the time their turn comes. Whether instances created during the phase join it is R9 (`TickRules::new_instances_join_phase`): default `LaterInOrder`, they join when their place in the order comes after the creator's object (Confirmed by the recorder, CLONE_SPEC U10).
 - **"The first instance"** (R21). The manual says only "the first is returned" (instance_position) and "only the first is followed" (views) without defining "first". Every place that picks one instance out of several (queries that return an id, `World::kid`, `player.x` reads in built-ins, view follow, saveGame's kid) calls `World::first_of`, which sorts candidates by `TickRules::first_rule` (`DispatchOrder` default, alternative `LowestId`). Trace `eat-the-lemon/famb-multikid-restart*` (recorded) settles it. The broadphase grid never decides order.
 - **Draw order** (Confirmed manual: depth descending, then creation order). Used by the Draw-slot phase (2.1 row 12) and the client.
 
@@ -1206,7 +1206,7 @@ Every rule the sim needs that the spec marks UNKNOWN, Inferred or Conflict, or t
 | R7c | Drawn and collision subimage after a sprite switch | Inferred | `Image::subimage()` | `floor(index) mod frames` | ANIM-SWITCH |
 | R7d | Default image state | Inferred (image_speed 1, scales 1, alpha 1) | `Image::default` | as Inferred | — |
 | R8 | What still runs after a room request in the tick | Inferred / UNKNOWN U8 | `TickRules::room_request` | `AbortTick` after the handler | t-room-1 (rec), TR-ROOM-02 |
-| R9 | New instance runs the current phase | UNKNOWN U10 | `TickRules::new_instances_join_phase` | false | t-evo-1 (rec), BLOOD-COUNT |
+| R9 | New instance runs the current phase | Confirmed (recorder) U10, except an object whose turn already passed (not traced) | `TickRules::new_instances_join_phase: JoinPhase` (`Never`, `LaterInOrder`, `Always`) | `LaterInOrder` | tr-room-03-b-log, a3-t17-b, t-evo-1 (rec), BLOOD-COUNT |
 | R10 | Instances created during Room Start get Room Start | UNKNOWN U9 | same snapshot rule | no | t-room-1 (rec), TR-ROOM-14 |
 | R11 | GM 8.1 differences | UNKNOWN U12 | `RunnerRules::for_runner(Gm81)` | same as 8.0 | T-EVO-2 |
 | R12 | Order of one instance's collision pairs | Inferred (by the other's object order, then creation) / UNKNOWN | `CollideRules::pair_order` | `OtherRankThenId`; alternative `HandlerListOrder` | t-col-06 (rec), T-MOT-08, k-platform (rec) |
@@ -1311,7 +1311,7 @@ Every rule the sim needs that the spec marks UNKNOWN, Inferred or Conflict, or t
 | K1 | Resting frac(y) .4 (depends on C11) | Inferred | emergent | — | famb-spawn-settle (567.0, 567.4, 567.4), k-spawn-idle (rec) |
 | K2 | RORI/FT boundary roomTo lookup with no instance | UNKNOWN | kid action `edge_lookup_point_first` | treat as no changer, kill | rori/fairy-tale edge trace |
 | K3 | niseblock second count test | UNKNOWN | `fake_block` param `second_test` | passes | — |
-| K4 | Bullet runs its own Step on its creation tick | UNKNOWN | R9 | no | t-evo-1 (rec), k-bullets (rec) |
+| K4 | Bullet runs its own Step on its creation tick | follows R9 | R9 | per R9 `LaterInOrder`: yes when the bullet's object comes later in the order than the kid's | t-evo-1 (rec), k-bullets (rec) |
 | K5 | Water reads pressed/released during collisions | Inferred | input frame fixed for the tick | yes | a-water (rec) |
 | K6 | Shared-last trigger semantics | Inferred / UNKNOWN U-MECH-2 | `trigger` model `shared_last` | all instances written, first read | TR-MECH-01 |
 | K7 | Flag-array triggers across R | UNKNOWN U-MECH-3 | R16 | cleared on game_restart | TR-MECH-08 |
