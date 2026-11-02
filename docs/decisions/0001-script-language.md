@@ -71,7 +71,7 @@ Points the judges raised that change the merged design:
 ### Cargo features
 
 ```toml
-rhai = { version = "=1.27.N", default-features = false, features = [
+rhai = { version = "=1.27.0", default-features = false, features = [
   "std", "only_i64", "no_time", "no_module", "no_custom_syntax",
   "no_closure", "compact_str", "internals",
 ] }
@@ -216,7 +216,7 @@ fn collide(other) {
 
 - **OPEN:** exact GM8 comparison epsilon, truthiness boundary and bitwise semantics. Source: `research/specs/engines/gm8/CLONE_SPEC.md` (not written yet).
 - **OPEN:** final host cost table and cap values, set from the benchmarks.
-- **OPEN:** confirm the Rhai 1.27.x release to pin on or after 2026-11-04, and run `cargo deny check licenses` on it.
+- Closed (#90): Rhai pinned at `=1.27.0` with `compact_str`; `cargo deny check licenses` passes. Correction to the Version pin section: with `compact_str`, Rhai 1.27.0 no longer uses `smartstring` in code, but its `Cargo.toml` still lists it as a non-optional dependency, so the MPL-2.0 crate stays in `Cargo.lock` and `deny.toml` keeps allowing MPL-2.0 (unmodified, file-level copyleft).
 
 ## Evidence
 
