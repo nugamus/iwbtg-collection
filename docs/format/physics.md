@@ -56,6 +56,7 @@ Not yet in `[events]`: the outside-room events of the other models.
 | `sync_yflag` | Step, `playerMove` 1-2 (`flip.model = "yflag"`): `image_yscale` takes the current `yflag`, then `yflag` follows `global.reverse`. The mask flips one tick after the global does. |
 | `player_reverse` | `playerReverse` (the gravity arrows' Alarm 1): `global.reverse` toggles, `yflag` negates, `y` moves 4 times the new `yflag`, `curJumps` 1, `vspeed` 0. Also `kid::api::player_reverse`. OPEN: with several kids the original script's per-kid toggle of the global. |
 | `set_view_angle` | Room Start: with `global.reverse` view 0 is enabled at angle 180, else angle 0. |
+| `slope_b` | End Step, `playerSlope` (kid/B.md "End Step"): the `slope_wall` slope code, then gravity back to `numbers.gravity * yflag` (`gravity.reapply = "end_step_slope"`), which also runs in rooms without slopes. |
 | `killer_check` | `playerMisc` 1, in the Step: the kid dies when it touches a `killer` instance. It runs before motion, so it sees the position the last tick ended at. |
 | `ensure_bow` | Room Start and `playerMisc`: a bow at the kid unless one exists. |
 | `cancel_poll` | Alarm 0 when `jump.cancel = "poll_alarm"`: Jump up and moving against gravity cuts `vspeed` by `release_mult` and stops; else re-arms for 1 tick. |
@@ -80,7 +81,7 @@ All real comparisons use the GM epsilon (`NumRules::compare`), so for example th
 
 Every key below is optional. Defaults are the `A1` preset's.
 
-`[numbers]`: `jumps` (list, ground jump then air jumps, `[8.5, 7.0]`), `gravity` (0.4), `run_speed` (3), `max_vspeed` (9), `max_fall_speed` (8, read only by `shift_then_clamp`), `release_mult` (0.45), `sprite_threshold` (0.05), `image_speed_idle` (0.2), `image_speed_run` (0.5).
+`[numbers]`: `jumps` (list, ground jump then air jumps, `[8.5, 7.0]`), `gravity` (0.4), `run_speed` (3), `max_vspeed` (9), `max_fall_speed` (8, read only by `shift_then_clamp`), `release_mult` (0.45), `sprite_threshold` (0.05), `image_speed_idle` (0.2), `image_speed_run` (0.5), `air_wall_probe` (0; family B 2: `air_sprite` shows the fall sprite only with no `slope_wall` that many pixels in the gravity direction).
 
 `[input]`: `walk` = `direct_latch` (`keyboard_check_direct`, sees a tap inside one tick) or `sampled`; `vine_keys` = `edges` (this tick's press) or `latched_flags` (WP5c).
 
