@@ -48,6 +48,12 @@ jobs:
       - run: cargo test -p iwbtg-sim --target wasm32-wasip1 --locked
       - run: cargo test -p iwbtg-format --lib --test fixtures --target wasm32-wasip1 --locked
       - run: cargo build -p iwbtg-sim -p iwbtg-format --target wasm32-unknown-unknown --locked
+      # The runner (.cargo/config.toml) is the wasm-bindgen CLI, which must match the lock file.
+      - name: Install wasm-bindgen CLI at the locked version
+        run: |
+          v=$(cargo metadata --locked --format-version 1 | jq -r '.packages[] | select(.name == "wasm-bindgen") | .version')
+          cargo install wasm-bindgen-cli --version "$v" --locked
+      - run: cargo test -p iwbtg-sim --test wp1_determinism --target wasm32-unknown-unknown --locked
 
   licenses:
     runs-on: ubuntu-latest

@@ -16,6 +16,11 @@ postcard.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 
+# Test harness for wasm32-unknown-unknown under node (#206). Its runner is the wasm-bindgen CLI,
+# which must match the wasm-bindgen version in Cargo.lock.
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dev-dependencies]
+wasm-bindgen-test = "0.3"
+
 [features]
 # Trace setup actions (docs/plans/sim-core.md 9.4, 10.4). Never enabled in the server build.
 trace-setup = []
