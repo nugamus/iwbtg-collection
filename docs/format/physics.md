@@ -51,7 +51,9 @@ Not yet in `[events]`: the outside-room events of the other models.
 | `air_sprite` | Step action 3.5: jump and fall sprites past `sprite_threshold`; on a platform, clears `onPlatform` when none is `platform.hold_probe` px below. |
 | `fall_cap` | Step action 3.6: `abs(vspeed) > max_vspeed` becomes `sign * max_vspeed` (`fall_cap.rule = "clamp_abs"`). |
 | `shoot` | `playerShoot` on a Shoot press: a bullet at the kid when fewer than `bullet.max` exist, with `hspeed = bullet.speed * facing`. |
-| `jump` | `playerJump` on a Jump press: ground jump (`-jumps[0]`, sets `djump`) when a `jump.ground_classes` instance is 1 px below, or a `ground_also` condition holds; else air jump (`-jumps[1]`, `djump` false) when `djump` is set or a water 2 is below. |
+| `jump` | `playerJump` on a Jump press (`jump.air = "cur_jumps"`: first jump `jump[1]` sets the counter to 2, walking off a ledge spends it, an air press uses `jump[curJumps]` and adds 1, water or `infJump` repeat `jump[maxJumps]`; `jump[n]` is 1-based): ground jump (`-jumps[0]`, sets `djump`) when a `jump.ground_classes` instance is 1 px below, or a `ground_also` condition holds; else air jump (`-jumps[1]`, `djump` false) when `djump` is set or a water 2 is below. |
+| `stop_if_frozen2` | Step action 1 of family B: with `global.frozen2`, gravity, `image_speed` and speed become 0 and the rest of the Step list is skipped. |
+| `cancel_poll` | Alarm 0 when `jump.cancel = "poll_alarm"`: Jump up and moving against gravity cuts `vspeed` by `release_mult` and stops; else re-arms for 1 tick. |
 | `release` | `playerVJump` on a Jump release: upward `vspeed` times `release_mult`, every release. |
 | `vines` | Step action 4 (`vine.model = "distance_asym"`): left vine nearer than `left_below` or right vine at exactly `right_equal`, with free space below: slide, face away, kick or drop on a press. |
 | `platform_gravity_zero` | Step action 6 (rely): gravity 0 while `onPlatform`. |
@@ -77,11 +79,11 @@ Every key below is optional. Defaults are the `A1` preset's.
 
 `[input]`: `walk` = `direct_latch` (`keyboard_check_direct`, sees a tap inside one tick) or `sampled`; `vine_keys` = `edges` (this tick's press) or `latched_flags` (WP5c).
 
-`[jump]`: `ground_classes` (class names), `ground_also` (`platform_flag`, `ladder_jump`), `ground_sets_djump`, `air` (`djump`; `cur_jumps` and `djump_then_tjump` are WP5b and WP5c), `water_air` (`none`, `water2_without_flag`; the others are WP5b and WP5c).
+`[jump]`: `ground_classes` (class names), `ground_also` (`platform_flag`, `ladder_jump`), `ground_sets_djump`, `air` (`djump` or `cur_jumps`; `djump_then_tjump` is WP5c), `water_air` (`none`, `water2_without_flag`, `water_unlimited`; `water3_keeps` is WP5c), `max_jumps` (family B, 2), `inf_jump` (B cheat flag, false), `blocked_by_pause_press` (a tick with a Pause press does nothing), `cancel` (`edge`: the `release` action cuts the jump; `poll_alarm`: `release` does nothing and the `cancel_poll` alarm action cuts it).
 
-`[fall_cap]`: `rule` = `clamp_abs` (the others are WP5b and WP5c).
+`[fall_cap]`: `rule` = `clamp_abs` or `clamp_against_gravity` (clamp only when `vspeed * yflag` exceeds `max_vspeed`; the others are WP5c).
 
-`[gravity]`: `reapply` = `step` (the others are WP5b and WP5c), `block_landing_zeroes`.
+`[gravity]`: `reapply` = `step`, or `end_step_slope` (Create leaves gravity 0; the `slope_b` action, WP5b.4, sets it; `create_only` is WP5c), `block_landing_zeroes`.
 
 `[platform]`: `hold_probe` (4), `rule` = `half_vspeed`, `snap` (9), `take` = `vspeed` (`delta_y` and `yspeed_flipped` are WP5b and WP5c).
 

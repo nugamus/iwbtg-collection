@@ -32,7 +32,7 @@ Fields other built-ins read go through `kid::api`, never `KidState` directly (pl
 | `apply_param_zone(ctx, kid, zone)` | Writes `run_speed`, `max_vspeed`, `max_fall_speed`, `jump`, `jump2`, `jump3` (GM names `maxSpeed`, `maxVspeed`, `maxFallSpeed` too). Errors, applying nothing, on a non-real, non-finite or unknown value. The values stay until another zone or a new kid's Create. |
 | `bow_snapshot(world, kid)` | Position, scales and alpha, for the bow. |
 | `kill(ctx, kid, cause)` | The death sequence of `[death]`; `AbortTick` when a Select room reset asked for a room. |
-| `read_field(world, kid, field)` | A kid field by GM name for the trace probe (`djump`, `curJumps`, `onPlatform`, `jump[1]`, ...); none for an unknown name. |
+| `read_field(world, kid, field)` | A kid field by GM name for the trace probe (`djump`, `curJumps`, `onPlatform`, `jump[1]` (1-based, the ground jump), `maxJumps`, `infJump`, ...); none for an unknown name. |
 
 ## Events
 
