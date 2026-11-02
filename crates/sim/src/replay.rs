@@ -351,12 +351,12 @@ mod tests {
         }
     }
 
-    const LEFT: u16 = 1 << 0;
-    const RIGHT: u16 = 1 << 1;
-    const JUMP: u16 = 1 << 4;
-    const SHOOT: u16 = 1 << 5;
+    const LEFT: u32 = 1 << 0;
+    const RIGHT: u32 = 1 << 1;
+    const JUMP: u32 = 1 << 4;
+    const SHOOT: u32 = 1 << 5;
 
-    fn frame(held: u16, pressed: u16, released: u16) -> InputFrame {
+    fn frame(held: u32, pressed: u32, released: u32) -> InputFrame {
         InputFrame {
             held,
             pressed,
@@ -437,9 +437,9 @@ mod tests {
     fn realistic_inputs(ticks: usize, seed: u64) -> Vec<InputFrame> {
         let mut rng = Lcg(seed);
         let mut inputs = Vec::with_capacity(ticks);
-        let mut held = 0u16;
+        let mut held = 0u32;
         while inputs.len() < ticks {
-            let mut next = 0u16;
+            let mut next = 0u32;
             match rng.range(0, 3) {
                 0 => next |= LEFT,
                 1 => next |= RIGHT,
@@ -486,7 +486,25 @@ mod tests {
         ]);
         let decoded = Replay::decode(&replay.encode().unwrap()).unwrap();
         assert_eq!(decoded, replay);
-        assert_eq!(decoded.inputs[4].held, 0x7fff);
+        // Every action, including Extra1..Extra4 (bits 15..18), survives; the mask is the 19
+        // action bits, not the old 15-bit u16 mask.
+        assert_eq!(decoded.inputs[4].held, 0x7_ffff);
+        assert_eq!(decoded.inputs[4].held, Action::MASK);
+    }
+
+    #[test]
+    fn round_trip_keeps_extra_actions() {
+        use crate::input::Action;
+        let extras = [Action::Extra1, Action::Extra2, Action::Extra3, Action::Extra4];
+        let inputs: Vec<InputFrame> = extras
+            .iter()
+            .map(|a| frame(a.bit(), a.bit(), 0))
+            .chain([frame(0, 0, Action::Extra4.bit())])
+            .collect();
+        let replay = replay(inputs);
+        let decoded = Replay::decode(&replay.encode().unwrap()).unwrap();
+        assert_eq!(decoded, replay);
+        assert_eq!(decoded.inputs[3].held, 1 << 18);
     }
 
     #[test]
