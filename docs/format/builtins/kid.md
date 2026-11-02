@@ -42,7 +42,7 @@ Boundary events follow `events.boundary` (A1: Intersect Boundary kills or warps,
 
 OPEN: sounds (#231, including family B's death sound object).
 
-Family C (xia, client#295): key C (`teleport_to_start`, `extra1`) is built. The restart through `scrLoadGame` is the `recreate_in_place` restart model (`[engine.restart]`, the saved grav picks the kid object); its death music, fade and pause steps belong to the `world` built-in. The jump, vine and flip rows for `slide_block`, `slope_c` and slip blocks are tier 3 and not built, because no xia room places them (a profile listing them does not load). The `objMovingPlatform` yspeed carry check against the flipped platform rule needs the T-platform trace (kid/C.md, not recorded yet).
+Family C (xia, client#295): key C (`teleport_to_start`, `extra1`) is built. The restart through `scrLoadGame` is the `recreate_in_place` restart model (`[engine.restart]`, the saved grav picks the kid object); its death music, fade and pause steps belong to the `world` built-in. The jump, vine and flip rows for `slide_block`, `slope_c` and slip blocks are tier 3 and not built, because no xia room places them (a profile listing them does not load). The `objMovingPlatform` yspeed carry check against the flipped platform rule needs the T-platform trace (kid/C.md, not recorded yet). Tracked in #337.
 
 Known gaps of families A2 to A5 (client#286):
 
