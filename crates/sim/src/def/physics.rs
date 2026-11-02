@@ -319,6 +319,26 @@ pub struct JumpRules {
     pub air: AirJump,
     /// When water 2 allows the air jump.
     pub water_air: WaterAir,
+    /// `cur_jumps`: the last numbered jump (`maxJumps`, B: 2).
+    pub max_jumps: u8,
+    /// `cur_jumps`: `infJump` starts on (B: false).
+    pub inf_jump: bool,
+    /// A Jump press does nothing on a tick when Pause was pressed (kaenbyou).
+    pub blocked_by_pause_press: bool,
+    /// How the jump release is read.
+    pub cancel: JumpCancel,
+}
+
+/// How the jump cut works (`[jump] cancel`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum JumpCancel {
+    /// The `release` action reads the release edge (every game with the cut switched on).
+    #[default]
+    Edge,
+    /// B's switch for jump cancelling off: a first jump arms Alarm 0 each tick and the
+    /// `cancel_poll` action cuts the jump when the key is up. The `release` action does nothing.
+    PollAlarm,
 }
 
 /// What `[fall_cap] rule` does to `vspeed`.
@@ -470,6 +490,9 @@ pub struct BulletRules {
     pub max: u32,
     /// Bullet speed; the bullet's `hspeed` is `speed * facing` (16).
     pub speed: Real,
+    /// Where the bullet appears, relative to the kid: `x + offset[0] * facing`, `y - offset[1] *
+    /// yflag` (family B `[2, 2]`; A1 `[0, 0]`).
+    pub offset: [Real; 2],
 }
 
 /// One step of the death sequence (kid/A1.md "Death"). `[death] order` lists them in the order a
@@ -610,6 +633,7 @@ draft_section! {
         #[serde(deserialize_with = "class_names_opt")]
         ground_classes: ClassMask,
         ground_also: Vec<GroundAlso>, ground_sets_djump: bool, air: AirJump, water_air: WaterAir,
+        max_jumps: u8, inf_jump: bool, blocked_by_pause_press: bool, cancel: JumpCancel,
     }
 }
 draft_section! {
@@ -642,7 +666,7 @@ draft_section! {
 }
 draft_section! {
     /// `[bullet]` as written.
-    BulletRulesDraft => BulletRules { max: u32, speed: Real }
+    BulletRulesDraft => BulletRules { max: u32, speed: Real, offset: [Real; 2] }
 }
 draft_section! {
     /// `[save]` as written.

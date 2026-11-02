@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     block, blood, blood_emitter, bow, camera, difficulty_warp, game_clear, game_over, kid_bullet, kid_start,
-    killer, music, save, spike, warp, world,
+    killer, moving_platform, music, save, spike, warp, water, world,
 };
 
 /// A built-in instance's state.
@@ -40,6 +40,10 @@ pub enum BuiltinState {
     GameClear(game_clear::GameClearState),
     /// `music` (WP6b).
     Music(music::MusicState),
+    /// `moving_platform` (WP6b).
+    MovingPlatform(moving_platform::MovingPlatformState),
+    /// `water` (WP6b).
+    Water(water::WaterState),
     /// `block` (WP6a).
     Block(block::BlockState),
     /// `spike` (WP6a).

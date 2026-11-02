@@ -146,6 +146,12 @@ pub fn run_collision(
 /// Runs `list` on the kid in order; stops at the first flow that is not `Continue`.
 fn run_list(ctx: &mut Ctx, me: InstId, list: &[KidAction]) -> Result<Flow, SimError> {
     for a in list {
+        if let KidAction::Common(actions::common::CommonAction::StopIfFrozen2) = a {
+            if actions::common::stop_if_frozen2(ctx, me)? {
+                return Ok(Flow::Continue);
+            }
+            continue;
+        }
         let flow = run_action(ctx, me, a)?;
         if flow != Flow::Continue {
             return Ok(flow);
