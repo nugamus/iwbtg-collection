@@ -12,7 +12,7 @@
       "enum": [
         "create_defaults", "ensure_world", "create_bow", "first_play_save", "arm_play_timer",
         "gravity", "walk", "air_sprite", "fall_cap", "shoot", "jump", "release", "vines",
-        "play_timer", "kill", "platform_gravity_zero", "fade_in"
+        "play_timer", "kill", "platform_gravity_zero", "fade_in", "stop_if_frozen2", "cancel_poll"
       ]
     },
     "actions": { "type": "array", "items": { "$ref": "#/$defs/action" } },
@@ -123,7 +123,11 @@
         },
         "ground_sets_djump": { "type": "boolean" },
         "air": { "enum": ["djump", "cur_jumps", "djump_then_tjump"] },
-        "water_air": { "enum": ["none", "water2_without_flag", "water_unlimited", "water3_keeps"] }
+        "water_air": { "enum": ["none", "water2_without_flag", "water_unlimited", "water3_keeps"] },
+        "max_jumps": { "type": "integer", "minimum": 1 },
+        "inf_jump": { "type": "boolean" },
+        "blocked_by_pause_press": { "type": "boolean" },
+        "cancel": { "enum": ["edge", "poll_alarm"] }
       }
     },
     "fall_cap": {

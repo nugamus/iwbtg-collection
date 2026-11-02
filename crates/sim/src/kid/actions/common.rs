@@ -16,7 +16,10 @@ use serde::Deserialize;
 use crate::alarm;
 use crate::anim::Image;
 use crate::collide::query::{Target, distance_to_object, place_free, place_meeting};
-use crate::def::physics::{AirJump, FallCapRule, GroundAlso, VineKeys, VineModel, WalkRead, WaterAir};
+use crate::def::physics::FlipKind;
+use crate::def::physics::{
+    AirJump, FallCapRule, GravityReapply, GroundAlso, JumpCancel, VineKeys, VineModel, WalkRead, WaterAir,
+};
 use crate::def::room::RoomRole;
 use crate::def::{ClassMask, EngineKind, GameDef, SpriteId};
 use crate::error::SimError;
@@ -58,6 +61,9 @@ pub enum CommonAction {
     Release,
     /// Step action 4: vines.
     Vines,
+    /// Step (B): with `frozen2`, gravity, `image_speed` and speed become 0 and the rest of the
+    /// Step list is skipped. `kid::on_event` runs this one itself.
+    StopIfFrozen2,
     /// Alarm 0: outside the menu roles `global.time` + 1, then alarm 0 = `room_speed` again.
     PlayTimer,
     /// Key Q pressed (and the killPlayer calls of key rows): the death sequence.
@@ -81,6 +87,10 @@ pub fn run(ctx: &mut Ctx, me: InstId, action: &CommonAction) -> Result<Flow, Sim
         CommonAction::FirstPlaySave => first_play_save(ctx, me)?,
         CommonAction::ArmPlayTimer => arm_play_timer(ctx, me)?,
         CommonAction::PlayTimer => play_timer(ctx, me)?,
+        // `kid::on_event` handles it (it must stop the list); run alone it only reports.
+        CommonAction::StopIfFrozen2 => {
+            stop_if_frozen2(ctx, me)?;
+        }
         CommonAction::Kill => return super::super::death::kill(ctx, me, KillCause::Suicide),
     }
     Ok(Flow::Continue)
@@ -193,9 +203,9 @@ fn far(d: Option<Real>) -> Real {
     d.unwrap_or(Real::new(f64::MAX))
 }
 
-/// +1 normally, -1 for the flipped kid (gravity points up).
-fn down(s: &KidState) -> i32 {
-    if s.flipped { -1 } else { 1 }
+/// +1 normally, -1 for the flipped kid or a negative `yflag` (gravity points up).
+pub(crate) fn down(s: &KidState) -> i32 {
+    if s.flipped || s.yflag < 0 { -1 } else { 1 }
 }
 
 /// Create steps 1 and 2 (A1): numbers from the profile, flags cleared, `djump` true,
@@ -215,13 +225,18 @@ fn create_defaults(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         s.frozen2 = false;
         s.djump = true;
         s.cur_jumps = 1;
+        s.b.max_jumps = p.jump.max_jumps;
+        s.b.inf_jump = p.jump.inf_jump;
         s.invincible = false;
         s.facing = if handed_over_left { -1 } else { 1 };
     }
     let Some(inst) = ctx.w.get_mut(me) else {
         return Err(SimError::invariant("create_defaults: kid vanished"));
     };
-    inst.m.set_gravity(p.numbers.gravity)?;
+    // B's Create does not set gravity: it stays 0 until the End Step (kid/B.md Create).
+    if p.gravity.reapply != GravityReapply::EndStepSlope {
+        inst.m.set_gravity(p.numbers.gravity)?;
+    }
     inst.img.set_speed(p.numbers.image_speed_idle)?;
     if p.misc.fade_in {
         inst.img.set_alpha(Real::ZERO)?;
@@ -229,7 +244,48 @@ fn create_defaults(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     if handed_over_left {
         inst.img.set_xscale(real_i(-1))?;
     }
+    if p.flip.model == FlipKind::Yflag {
+        reverse_at_create(ctx, me)?;
+    }
     Ok(())
+}
+
+/// B Create step 2-3: `yflag` from `global.reverse` as it is now (a retry's new kid sees the
+/// value from before the save is read): 1 normally; -1 with `y - 4` and `curJumps` 1 when
+/// reversed; `image_yscale` follows `yflag`.
+fn reverse_at_create(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+    let reversed = ctx.w.engine.kid.b.reverse;
+    let yflag: i8 = if reversed { -1 } else { 1 };
+    {
+        let s = state_mut(ctx, me)?;
+        s.yflag = yflag;
+        s.flipped = reversed;
+        if reversed {
+            s.cur_jumps = 1;
+        }
+    }
+    let Some(inst) = ctx.w.get_mut(me) else {
+        return Err(SimError::invariant("create_defaults: kid vanished"));
+    };
+    if reversed {
+        inst.m.set_y(inst.m.y() - real_i(4))?;
+    }
+    inst.img.set_yscale(real_i(i32::from(yflag)))
+}
+
+/// B Step: with `frozen2` (the global or the kid's own) the kid's gravity, `image_speed` and speed
+/// are 0 and nothing else of the Step runs. Returns true when it stopped the Step: the event
+/// list stops there (`kid::on_event`).
+pub(crate) fn stop_if_frozen2(ctx: &mut Ctx, me: InstId) -> Result<bool, SimError> {
+    if !(state(ctx, me)?.frozen2 || ctx.w.engine.kid.frozen2) {
+        return Ok(false);
+    }
+    if let Some(i) = ctx.w.get_mut(me) {
+        i.m.set_gravity(Real::ZERO)?;
+        i.img.set_speed(Real::ZERO)?;
+        i.m.set_speed(Real::ZERO)?;
+    }
+    Ok(true)
 }
 
 /// Step action 2 step 4: gravity back to its constant unless on a ladder (`gravity.reapply =
@@ -357,16 +413,23 @@ fn fall_cap(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         return Ok(());
     }
     let rule = ctx.def.physics.fall_cap.rule;
-    if rule != FallCapRule::ClampAbs {
+    if !matches!(rule, FallCapRule::ClampAbs | FallCapRule::ClampAgainstGravity) {
         return Err(SimError::unsupported(format!(
-            "kid action fall_cap: rule {rule:?} (5.3 fall cap row, WP5b/WP5c)"
+            "kid action fall_cap: rule {rule:?} (5.3 fall cap row, WP5c)"
         )));
     }
     let n = &ctx.rules.num;
-    let max = state(ctx, me)?.max_vspeed;
+    let s = state(ctx, me)?;
+    let max = s.max_vspeed;
+    let sign = real_i(down(&s));
     let Some(i) = ctx.w.get_mut(me) else { return Ok(()) };
     let v = i.m.vspeed();
-    if gm_gt(Real::new(v.get().abs()), max, n) {
+    // `clamp_abs`: either direction. `clamp_against_gravity` (B): only the fall, `vspeed * yflag`.
+    let too_fast = match rule {
+        FallCapRule::ClampAgainstGravity => gm_gt(v * sign, max, n),
+        _ => gm_gt(Real::new(v.get().abs()), max, n),
+    };
+    if too_fast {
         i.m.set_vspeed(if gm_lt(v, Real::ZERO, n) { -max } else { max })?;
     }
     Ok(())
@@ -418,11 +481,14 @@ fn jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     if s.frozen || ctx.w.engine.kid.frozen || !ctx.w.input.pressed(Action::Jump) {
         return Ok(());
     }
-    if p.jump.air != AirJump::Djump {
-        return Err(SimError::unsupported(format!(
-            "kid action jump: jump.air {:?} (5.3 jump rows, WP5b/WP5c)",
-            p.jump.air
-        )));
+    match p.jump.air {
+        AirJump::Djump => {}
+        AirJump::CurJumps => return super::b::jump(ctx, me),
+        AirJump::DjumpThenTjump => {
+            return Err(SimError::unsupported(
+                "kid action jump: jump.air djump_then_tjump (5.3 jump rows, WP5c)",
+            ));
+        }
     }
     let sign = real_i(down(&s));
     let Some(i) = ctx.w.get(me) else { return Ok(()) };
@@ -475,7 +541,11 @@ fn release(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     if frozen2(ctx, &s) {
         return Ok(());
     }
-    if s.frozen || ctx.w.engine.kid.frozen || !ctx.w.input.released(Action::Jump) {
+    if s.frozen
+        || ctx.w.engine.kid.frozen
+        || def.physics.jump.cancel == JumpCancel::PollAlarm // `cancel_poll` cuts instead
+        || !ctx.w.input.released(Action::Jump)
+    {
         return Ok(());
     }
     let sign = real_i(down(&s));
