@@ -10,7 +10,7 @@ start also warns when the workspace-root .claude/settings.json differs from clie
 
 The same file lives in all three repos; edit it in the client repo and copy it over.
 """
-import json, re, subprocess, sys
+import json, os, re, subprocess, sys
 from pathlib import Path
 
 WORKSPACE = Path(__file__).resolve().parents[3]  # <workspace>/<repo>/.claude/hooks/issues.py
@@ -124,6 +124,15 @@ def turn_needs_findings(entries):
     return edited and not FINDINGS.search(last_text)
 
 
+def stop_needs_findings(inp, entries):
+    """True if the Stop hook must block. The hook input's `last_assistant_message` is the reply being
+    delivered; the transcript file can still lack it when the hook runs, so a Findings line there passes."""
+    last = inp.get("last_assistant_message")
+    if isinstance(last, str) and FINDINGS.search(last):
+        return False
+    return turn_needs_findings(entries)
+
+
 def stop():
     inp = json.load(sys.stdin)
     if inp.get("stop_hook_active"):
@@ -132,8 +141,12 @@ def stop():
         with open(inp["transcript_path"], encoding="utf-8") as f:
             entries = [json.loads(l) for l in f if l.strip()]
     except (OSError, KeyError, ValueError):
-        return
-    if turn_needs_findings(entries):
+        entries = []  # unreadable transcript: decide from the hook input alone
+    if os.environ.get("IWBTG_HOOK_LOG"):  # debugging aid for #219: what the hook saw
+        with open(os.environ["IWBTG_HOOK_LOG"], "a", encoding="utf-8") as log:
+            log.write(json.dumps({"keys": sorted(inp), "last": str(inp.get("last_assistant_message"))[-200:],
+                                  "entries": len(entries), "needs": stop_needs_findings(inp, entries)}) + "\n")
+    if stop_needs_findings(inp, entries):
         print(json.dumps({"decision": "block", "reason": (
             "Before you stop: file a GitHub issue for every bug, gap, missing test, doc drift, idea or follow-up "
             "you noticed this turn that you did not finish (`gh issue create --label triage`, with Goal and Done when; "
@@ -151,6 +164,13 @@ def test():
     assert not turn_needs_findings([prompt, a(edit), a({"type": "text", "text": "**Findings:** #12"})])
     assert not turn_needs_findings([prompt, a({"type": "text", "text": "Just talking."})])
     assert not turn_needs_findings([prompt, a(edit), prompt, a({"type": "text", "text": "ok"})])
+    # The transcript may not hold the final reply yet (#219): the hook input's last message decides.
+    stale = [prompt, a(edit), a({"type": "text", "text": "Working on it."})]
+    assert stop_needs_findings({}, stale)
+    assert stop_needs_findings({"last_assistant_message": "Done."}, stale)
+    assert not stop_needs_findings({"last_assistant_message": "Done.\n\nFindings: none"}, stale)
+    assert not stop_needs_findings({"last_assistant_message": "Done.\n\nFindings: none"}, [])
+    assert stop_needs_findings({"last_assistant_message": 5}, stale)
     import tempfile
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
