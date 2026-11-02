@@ -60,6 +60,7 @@ pub struct KidOutput {}
 /// Split by owner like `KindState`: each part is the enum of one file under `actions/`, and the
 /// name in the file picks the part whose enum has that name (`untagged`). Names must be unique
 /// across parts.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
 #[serde(untagged)]
 pub enum KidAction {
@@ -109,6 +110,7 @@ pub fn run_action(ctx: &mut Ctx, me: InstId, action: &KidAction) -> Result<Flow,
 
 /// One named collision run in `events.collisions` (`{ with = "block", run = "block_standard" }`,
 /// plan 5.2). Split by owner like [`KidAction`].
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
 #[serde(untagged)]
 pub enum KidCollisionRun {
