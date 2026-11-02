@@ -13,14 +13,18 @@
 
 use serde::Deserialize;
 
+use crate::alarm;
 use crate::anim::Image;
 use crate::collide::query::{Target, distance_to_object, place_free, place_meeting};
 use crate::def::physics::{AirJump, FallCapRule, GroundAlso, VineKeys, VineModel, WalkRead, WaterAir};
+use crate::def::room::RoomRole;
 use crate::def::{ClassMask, EngineKind, GameDef, SpriteId};
 use crate::error::SimError;
 use crate::input::Action;
+use crate::kid::api::KillCause;
 use crate::kid::state::KidState;
 use crate::num::{Real, gm_eq, gm_gt, gm_lt, gm_ne};
+use crate::save;
 use crate::world::{Ctx, Flow, InstId, KindState, SpawnInit};
 
 /// The actions this file implements, by their `physics.toml` names (snake case). Part of
@@ -30,13 +34,13 @@ use crate::world::{Ctx, Flow, InstId, KindState, SpawnInit};
 pub enum CommonAction {
     /// Create step 1-2: the numbers, flags and facing a new kid starts with.
     CreateDefaults,
-    /// Create step 3: the world controller if missing. Not built yet (WP6a `world`).
+    /// Create step 3: the world controller if the game has none in the room.
     EnsureWorld,
-    /// Create step 6: the bow. Not built yet (WP6a `bow`).
+    /// Create step 6: a bow at the kid's position.
     CreateBow,
-    /// Create step 4: the first-play save. Not built yet (WP4b `save_now`).
+    /// Create step 4: when no save exists, deaths and time 0 and a save at the kid's position.
     FirstPlaySave,
-    /// Create step 5: alarm 0 for the play timer. Not built yet (WP5a.4).
+    /// Create step 5: alarm 0 = `room_speed`.
     ArmPlayTimer,
     /// Step action 2 step 4: gravity back to its constant unless on a ladder.
     Gravity,
@@ -54,8 +58,10 @@ pub enum CommonAction {
     Release,
     /// Step action 4: vines.
     Vines,
-    /// Alarm 0: the play timer. Not built yet (WP5a.4).
+    /// Alarm 0: outside the menu roles `global.time` + 1, then alarm 0 = `room_speed` again.
     PlayTimer,
+    /// Key Q pressed (and the killPlayer calls of key rows): the death sequence.
+    Kill,
 }
 
 /// Runs one action on the kid `me`. `kid::run_action` routes here.
@@ -70,18 +76,78 @@ pub fn run(ctx: &mut Ctx, me: InstId, action: &CommonAction) -> Result<Flow, Sim
         CommonAction::Jump => jump(ctx, me)?,
         CommonAction::Release => release(ctx, me)?,
         CommonAction::Vines => vines(ctx, me)?,
-        CommonAction::EnsureWorld => return unsupported("ensure_world (5.3 Create row, WP6a world)"),
-        CommonAction::CreateBow => return unsupported("create_bow (5.3 Create row, WP6a bow)"),
-        CommonAction::FirstPlaySave => return unsupported("first_play_save (5.3 Create row, WP4b save_now)"),
-        CommonAction::ArmPlayTimer | CommonAction::PlayTimer => {
-            return unsupported("play timer (5.3 play timer row, WP5a.4)");
-        }
+        CommonAction::EnsureWorld => ensure_world(ctx)?,
+        CommonAction::CreateBow => return create_bow(ctx, me),
+        CommonAction::FirstPlaySave => first_play_save(ctx, me)?,
+        CommonAction::ArmPlayTimer => arm_play_timer(ctx, me)?,
+        CommonAction::PlayTimer => play_timer(ctx, me)?,
+        CommonAction::Kill => return super::super::death::kill(ctx, me, KillCause::Suicide),
     }
     Ok(Flow::Continue)
 }
 
-fn unsupported(what: &str) -> Result<Flow, SimError> {
-    Err(SimError::unsupported(format!("kid action {what}")))
+/// Create step 3: spawns the game's `world` kind when no live instance of it exists.
+fn ensure_world(ctx: &mut Ctx) -> Result<(), SimError> {
+    let Some(kind) = ctx.def.engine_kind(EngineKind::World) else {
+        return Ok(());
+    };
+    if ctx.w.iter_alive().any(|i| i.kind == kind) {
+        return Ok(());
+    }
+    ctx.spawn(kind, Real::ZERO, Real::ZERO, SpawnInit::default())?;
+    Ok(())
+}
+
+/// Create step 6: a bow at the kid's position (the game may have none).
+fn create_bow(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
+    let Some(i) = ctx.w.get(me) else {
+        return Ok(Flow::Continue);
+    };
+    let (x, y) = (i.m.x(), i.m.y());
+    ctx.spawn_engine(EngineKind::Bow, x, y, SpawnInit::default())?;
+    Ok(Flow::Continue)
+}
+
+/// Create step 4: with no save, `global.death` and `global.time` become 0 and the position is
+/// saved with the game's model (`[save]`).
+fn first_play_save(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+    if ctx.w.save.is_some() {
+        return Ok(());
+    }
+    let rules = &ctx.def.physics.save;
+    ctx.w.engine.run.deaths = 0;
+    ctx.w.engine.run.time = 0;
+    let fixed = rules.fixed.map(|[x, y]| (x, y));
+    save::save_now(ctx, me, rules.position.model(), fixed)
+}
+
+/// Create step 5: `alarm[0] = room_speed`.
+fn arm_play_timer(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+    let speed = ctx.w.room_speed;
+    let rules = ctx.rules;
+    match ctx.w.get_mut(me) {
+        Some(i) => alarm::set(i, 0, speed, &rules.num),
+        None => Ok(()),
+    }
+}
+
+/// Alarm 0: `global.time` + 1 unless the room is the init, title, menu or select room (checked),
+/// then alarm 0 again. Time stops counting while no kid exists (only this alarm counts it).
+fn play_timer(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+    let counts = ctx
+        .w
+        .room
+        .index()
+        .and_then(|i| ctx.def.rooms.get(i))
+        .is_none_or(|r| r.role == RoomRole::Play);
+    if counts {
+        let run = &mut ctx.w.engine.run;
+        run.time = run
+            .time
+            .checked_add(1)
+            .ok_or_else(|| SimError::overflow("global.time"))?;
+    }
+    arm_play_timer(ctx, me)
 }
 
 /// The kid's state, or a broken invariant when `me` is not a kid.
