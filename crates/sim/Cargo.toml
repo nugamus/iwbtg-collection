@@ -15,6 +15,7 @@ smallvec.workspace = true
 postcard.workspace = true
 serde.workspace = true
 thiserror.workspace = true
+schemars = { workspace = true, optional = true }
 
 # Test harness for wasm32-unknown-unknown under node (#206). Its runner is the wasm-bindgen CLI,
 # which must match the wasm-bindgen version in Cargo.lock.
@@ -22,6 +23,9 @@ thiserror.workspace = true
 wasm-bindgen-test = "0.3"
 
 [features]
+# JSON Schema of `PhysicsProfileDraft` for docs/format/schema/v0/physics.schema.json (#255); the
+# format crate's `schema` feature turns it on. Never in the client or the server.
+schema = ["dep:schemars"]
 # Trace setup actions (docs/plans/sim-core.md 9.4, 10.4). Never enabled in the server build.
 trace-setup = []
 
