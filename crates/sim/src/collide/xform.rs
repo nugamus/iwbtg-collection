@@ -69,17 +69,20 @@ pub(crate) fn int_of(v: f64, what: &str) -> Result<i64, SimError> {
 
 /// Checked `a + b`.
 pub(crate) fn add(a: i64, b: i64) -> Result<i64, SimError> {
-    a.checked_add(b).ok_or_else(|| SimError::overflow("collision coordinate"))
+    a.checked_add(b)
+        .ok_or_else(|| SimError::overflow("collision coordinate"))
 }
 
 /// Checked `a - b`.
 pub(crate) fn sub(a: i64, b: i64) -> Result<i64, SimError> {
-    a.checked_sub(b).ok_or_else(|| SimError::overflow("collision coordinate"))
+    a.checked_sub(b)
+        .ok_or_else(|| SimError::overflow("collision coordinate"))
 }
 
 /// Checked `-a`.
 fn neg(a: i64) -> Result<i64, SimError> {
-    a.checked_neg().ok_or_else(|| SimError::overflow("collision coordinate"))
+    a.checked_neg()
+        .ok_or_else(|| SimError::overflow("collision coordinate"))
 }
 
 /// True for a scale of exactly 1 or -1.
@@ -111,7 +114,11 @@ fn axis_range(lo: i64, hi: i64, scale: Real) -> Result<Option<(i64, i64)>, SimEr
         }
         (a, b)
     };
-    if s < 0.0 { Ok(Some((neg(b)?, neg(a)?))) } else { Ok(Some((a, b))) }
+    if s < 0.0 {
+        Ok(Some((neg(b)?, neg(a)?)))
+    } else {
+        Ok(Some((a, b)))
+    }
 }
 
 /// The sprite offset a room offset `u` samples on one axis (inverse of [`axis_range`]), or
@@ -239,19 +246,43 @@ mod tests {
 
     #[test]
     fn mirror_keeps_the_kid_box() {
-        assert_eq!(map_box(KID, &xf((1.0, 1.0), 0.0)).unwrap(), rect(95, 188, 105, 208));
-        assert_eq!(map_box(KID, &xf((-1.0, 1.0), 0.0)).unwrap(), rect(95, 188, 105, 208));
-        assert_eq!(map_box(KID, &xf((1.0, -1.0), 0.0)).unwrap(), rect(95, 192, 105, 212));
+        assert_eq!(
+            map_box(KID, &xf((1.0, 1.0), 0.0)).unwrap(),
+            rect(95, 188, 105, 208)
+        );
+        assert_eq!(
+            map_box(KID, &xf((-1.0, 1.0), 0.0)).unwrap(),
+            rect(95, 188, 105, 208)
+        );
+        assert_eq!(
+            map_box(KID, &xf((1.0, -1.0), 0.0)).unwrap(),
+            rect(95, 192, 105, 212)
+        );
     }
 
     #[test]
     fn right_angles_rotate_offsets() {
         // offsets x -5..5, y -12..8
-        assert_eq!(map_box(KID, &xf((1.0, 1.0), 90.0)).unwrap(), rect(88, 195, 108, 205));
-        assert_eq!(map_box(KID, &xf((1.0, 1.0), 180.0)).unwrap(), rect(95, 192, 105, 212));
-        assert_eq!(map_box(KID, &xf((1.0, 1.0), 270.0)).unwrap(), rect(92, 195, 112, 205));
-        assert_eq!(map_box(KID, &xf((1.0, 1.0), -90.0)).unwrap(), rect(92, 195, 112, 205));
-        assert_eq!(map_box(KID, &xf((1.0, 1.0), 450.0)).unwrap(), rect(88, 195, 108, 205));
+        assert_eq!(
+            map_box(KID, &xf((1.0, 1.0), 90.0)).unwrap(),
+            rect(88, 195, 108, 205)
+        );
+        assert_eq!(
+            map_box(KID, &xf((1.0, 1.0), 180.0)).unwrap(),
+            rect(95, 192, 105, 212)
+        );
+        assert_eq!(
+            map_box(KID, &xf((1.0, 1.0), 270.0)).unwrap(),
+            rect(92, 195, 112, 205)
+        );
+        assert_eq!(
+            map_box(KID, &xf((1.0, 1.0), -90.0)).unwrap(),
+            rect(92, 195, 112, 205)
+        );
+        assert_eq!(
+            map_box(KID, &xf((1.0, 1.0), 450.0)).unwrap(),
+            rect(88, 195, 108, 205)
+        );
     }
 
     #[test]
@@ -270,7 +301,14 @@ mod tests {
 
     #[test]
     fn map_pixel_inverts_map_box_corners() {
-        for scale in [(1.0, 1.0), (-1.0, 1.0), (1.0, -1.0), (-1.0, -1.0), (2.0, 0.5), (-0.5, 3.0)] {
+        for scale in [
+            (1.0, 1.0),
+            (-1.0, 1.0),
+            (1.0, -1.0),
+            (-1.0, -1.0),
+            (2.0, 0.5),
+            (-0.5, 3.0),
+        ] {
             for angle in [0.0, 90.0, 180.0, 270.0] {
                 let t = xf(scale, angle);
                 let b = map_box(KID, &t).unwrap();
@@ -278,7 +316,8 @@ mod tests {
                     for x in b.left - 2..=b.right + 2 {
                         let inside = (b.left..=b.right).contains(&x) && (b.top..=b.bottom).contains(&y);
                         let (sx, sy) = map_pixel(x, y, &t).unwrap().unwrap();
-                        let hits = (KID.left..=KID.right).contains(&sx) && (KID.top..=KID.bottom).contains(&sy);
+                        let hits =
+                            (KID.left..=KID.right).contains(&sx) && (KID.top..=KID.bottom).contains(&sy);
                         assert_eq!(inside, hits, "scale {scale:?} angle {angle} at ({x}, {y})");
                     }
                 }

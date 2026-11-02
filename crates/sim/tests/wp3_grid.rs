@@ -6,7 +6,8 @@ mod wp3_support;
 mod wp3 {
     use iwbtg_sim::collide::grid::Grid;
     use iwbtg_sim::collide::{
-        Target, collision_line, collision_point, collision_rectangle, instance_place, place_free, place_meeting,
+        Target, collision_line, collision_point, collision_rectangle, instance_place, place_free,
+        place_meeting,
     };
     use iwbtg_sim::def::ClassMask;
     use iwbtg_sim::error::SimError;
@@ -71,7 +72,11 @@ mod wp3 {
                 }
                 _ => {
                     let s = rng.pick(&[g.spike_sprite, g.spike_centre_sprite]);
-                    let angle = if rng.below(40) == 0 { 45.0 } else { rng.pick(&[0.0, 90.0, 180.0, 270.0, -90.0]) };
+                    let angle = if rng.below(40) == 0 {
+                        45.0
+                    } else {
+                        rng.pick(&[0.0, 90.0, 180.0, 270.0, -90.0])
+                    };
                     let img = Img::sprite(s)
                         .angle(angle)
                         .xscale(rng.pick(&[1.0, -1.0, 0.5, 2.0, -0.5]))
@@ -143,7 +148,9 @@ mod wp3 {
             Query::Rect(x1, y1, x2, y2, t, p) => {
                 Answer::Id(collision_rectangle(ctx, r(x1), r(y1), r(x2), r(y2), t, p, None))
             }
-            Query::Line(x1, y1, x2, y2, t, p) => Answer::Id(collision_line(ctx, r(x1), r(y1), r(x2), r(y2), t, p, None)),
+            Query::Line(x1, y1, x2, y2, t, p) => {
+                Answer::Id(collision_line(ctx, r(x1), r(y1), r(x2), r(y2), t, p, None))
+            }
         }
     }
 
@@ -233,10 +240,26 @@ mod wp3 {
         let near = g.add_block(64.0, 64.0);
         g.w.grid = Grid::rebuild(&g.w, &g.def, &g.rules.collide).unwrap();
         let ctx = g.ctx();
-        assert_eq!(collision_point(&ctx, r(1.0e12 + 5.0), r(-3.0e11 + 5.0), Target::Any, false, None).unwrap(), Some(far));
-        let all = collision_rectangle(&ctx, r(-1.0e15), r(-1.0e15), r(1.0e15), r(1.0e15), Target::Any, false, None);
+        assert_eq!(
+            collision_point(&ctx, r(1.0e12 + 5.0), r(-3.0e11 + 5.0), Target::Any, false, None).unwrap(),
+            Some(far)
+        );
+        let all = collision_rectangle(
+            &ctx,
+            r(-1.0e15),
+            r(-1.0e15),
+            r(1.0e15),
+            r(1.0e15),
+            Target::Any,
+            false,
+            None,
+        );
         assert_eq!(all.unwrap(), Some(far), "same rank: the lower id comes first");
-        let cands = ctx.w.grid.candidates(i64::MIN, i64::MIN, i64::MAX, i64::MAX).unwrap();
+        let cands = ctx
+            .w
+            .grid
+            .candidates(i64::MIN, i64::MIN, i64::MAX, i64::MAX)
+            .unwrap();
         assert_eq!(cands, vec![far, near]);
     }
 }

@@ -106,7 +106,10 @@ fn slot_for(inst: &Instance, def: &GameDef, rules: &CollideRules) -> Slot {
     let reported = reported_box(def, inst, at, rules);
     let boxes: Vec<IRect> = match (collision, reported) {
         (Err(_), Err(_)) => return Slot::Overflow,
-        (c, r) => [c.ok().flatten(), r.ok().flatten()].into_iter().flatten().collect(),
+        (c, r) => [c.ok().flatten(), r.ok().flatten()]
+            .into_iter()
+            .flatten()
+            .collect(),
     };
     let Some(first) = boxes.first() else {
         return Slot::Nowhere;
@@ -200,19 +203,20 @@ impl Grid {
             right: r.right.div_euclid(CELL),
             bottom: r.bottom.div_euclid(CELL),
         };
-        // Only rows that hold a cell: a huge query rectangle never walks empty rows.
-        if let (Some(((lo, _), _)), Some(((hi, _), _))) = (self.cells.first_key_value(), self.cells.last_key_value()) {
-            let top = c.top.max(*lo);
-            let bottom = c.bottom.min(*hi);
-            let mut cy = top;
-            while cy <= bottom {
-                for (_, ids) in self.cells.range((cy, c.left)..=(cy, c.right)) {
-                    out.extend(ids.iter().copied());
-                }
-                match cy.checked_add(1) {
-                    Some(n) => cy = n,
-                    None => break,
-                }
+        // Only rows that hold a cell: the walk jumps to the next occupied row, so a huge query
+        // rectangle costs one map lookup per occupied row, never one step per empty row.
+        let mut cy = c.top;
+        while let Some(((ky, _), _)) = self.cells.range((cy, c.left)..).next() {
+            let ky = *ky;
+            if ky > c.bottom {
+                break;
+            }
+            for (_, ids) in self.cells.range((ky, c.left)..=(ky, c.right)) {
+                out.extend(ids.iter().copied());
+            }
+            match ky.checked_add(1) {
+                Some(n) => cy = n,
+                None => break,
             }
         }
         Ok(out.into_iter().collect())
@@ -231,7 +235,12 @@ impl Grid {
     /// Re-buckets the moved instances from their current boxes and clears the set. Called
     /// through `World::flush_grid`. Entries of instances no longer in `instances` (swept) are
     /// dropped along the way, so the grid does not grow over a long room.
-    pub fn flush(&mut self, instances: &[Instance], def: &GameDef, rules: &CollideRules) -> Result<(), SimError> {
+    pub fn flush(
+        &mut self,
+        instances: &[Instance],
+        def: &GameDef,
+        rules: &CollideRules,
+    ) -> Result<(), SimError> {
         let moved = std::mem::take(&mut self.moved);
         if !self.built {
             // Queries test every instance until the grid is built.
@@ -251,7 +260,12 @@ impl Grid {
         }
         let limit = instances.len().saturating_mul(2).saturating_add(64);
         if self.placed.len() > limit {
-            let gone: Vec<InstId> = self.placed.keys().copied().filter(|id| find(*id).is_none()).collect();
+            let gone: Vec<InstId> = self
+                .placed
+                .keys()
+                .copied()
+                .filter(|id| find(*id).is_none())
+                .collect();
             for id in gone {
                 self.unplace(id);
             }

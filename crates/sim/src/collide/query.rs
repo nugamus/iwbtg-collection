@@ -82,14 +82,20 @@ impl<'a> Q<'a> {
 
     /// The instance `id`, or `Invariant`.
     pub(crate) fn inst(&self, id: InstId) -> Result<&'a Instance, SimError> {
-        self.w
-            .get(id)
-            .ok_or_else(|| SimError::invariant(format!("collision query on instance {} that does not exist", id.0)))
+        self.w.get(id).ok_or_else(|| {
+            SimError::invariant(format!(
+                "collision query on instance {} that does not exist",
+                id.0
+            ))
+        })
     }
 
     /// Active, alive (or dead with R22 on), not `notme`, and named by `t`.
     fn eligible(&self, inst: &Instance, t: Target, notme: Option<InstId>) -> bool {
-        Some(inst.id) != notme && inst.active && (inst.alive || self.rules.tick.dead_in_queries) && t.matches(inst)
+        Some(inst.id) != notme
+            && inst.active
+            && (inst.alive || self.rules.tick.dead_in_queries)
+            && t.matches(inst)
     }
 
     /// Candidates that may touch `region`, sorted by id: grid hits plus moved instances, or
@@ -174,7 +180,8 @@ impl<'a> Q<'a> {
             }
             let at = (c.m.x(), c.m.y());
             let precise = if prec {
-                self.placed(c)?.filter(|p| matches!(p.mask.shape, MaskShape::Bits(_)))
+                self.placed(c)?
+                    .filter(|p| matches!(p.mask.shape, MaskShape::Bits(_)))
             } else {
                 None
             };
@@ -197,19 +204,26 @@ impl<'a> Q<'a> {
         let tick = &self.rules.tick;
         let by = |key: fn(&Instance) -> (u16, InstId)| hits.iter().map(|i| key(i)).min().map(|k| k.1);
         match (tick.first_rule, tick.dispatch) {
-            (FirstRule::LowestId, _) | (FirstRule::DispatchOrder, DispatchOrder::Creation) => by(|i| (0, i.id)),
+            (FirstRule::LowestId, _) | (FirstRule::DispatchOrder, DispatchOrder::Creation) => {
+                by(|i| (0, i.id))
+            }
             (FirstRule::DispatchOrder, DispatchOrder::RankThenCreation) => by(|i| (i.rank, i.id)),
             (FirstRule::DispatchOrder, DispatchOrder::DepthThenRankThenCreation) => {
                 // Depth order is WP1's to define; ask its dispatch order.
                 let set: BTreeSet<InstId> = hits.iter().map(|i| i.id).collect();
-                events::dispatch_order(self.w, tick, |i| set.contains(&i.id)).first().copied()
+                events::dispatch_order(self.w, tick, |i| set.contains(&i.id))
+                    .first()
+                    .copied()
             }
         }
     }
 
     /// The room pixel a real point places at (C12: rounded like a position, C2).
     fn pixel(&self, x: Real, y: Real) -> Result<(i64, i64), SimError> {
-        Ok((place_origin(x, &self.rules.collide)?, place_origin(y, &self.rules.collide)?))
+        Ok((
+            place_origin(x, &self.rules.collide)?,
+            place_origin(y, &self.rules.collide)?,
+        ))
     }
 }
 
@@ -229,7 +243,13 @@ pub fn place_meeting(ctx: &Ctx, me: InstId, x: Real, y: Real, t: Target) -> Resu
 }
 
 /// GML `instance_place`.
-pub fn instance_place(ctx: &Ctx, me: InstId, x: Real, y: Real, t: Target) -> Result<Option<InstId>, SimError> {
+pub fn instance_place(
+    ctx: &Ctx,
+    me: InstId,
+    x: Real,
+    y: Real,
+    t: Target,
+) -> Result<Option<InstId>, SimError> {
     let q = Q::of(ctx);
     let hits = q.place_hits(me, x, y, t, false)?;
     Ok(q.first(&hits))
@@ -375,7 +395,14 @@ pub fn collision_line(
 fn dist_edges(q: &Q, inst: &Instance) -> Result<[Real; 4], SimError> {
     let at = (inst.m.x(), inst.m.y());
     let rules = &q.rules.collide;
-    let from_rect = |b: IRect| [real_of(b.left), real_of(b.top), real_of(b.right), real_of(b.bottom)];
+    let from_rect = |b: IRect| {
+        [
+            real_of(b.left),
+            real_of(b.top),
+            real_of(b.right),
+            real_of(b.bottom),
+        ]
+    };
     let edges = match rules.dist_boxes {
         DistBoxes::Reported => reported_box(q.def, inst, at, rules)?.map(from_rect),
         DistBoxes::RoundedInclusive => instance_box(q.def, inst, at, rules)?.map(|p| from_rect(p.bbox)),
@@ -385,7 +412,10 @@ fn dist_edges(q: &Q, inst: &Instance) -> Result<[Real; 4], SimError> {
         (Some(e), _) => Ok(e),
         (None, DistBoxes::Unrounded) => Ok([at.0, at.1, at.0, at.1]),
         (None, _) => {
-            let (x, y) = (real_of(place_origin(at.0, rules)?), real_of(place_origin(at.1, rules)?));
+            let (x, y) = (
+                real_of(place_origin(at.0, rules)?),
+                real_of(place_origin(at.1, rules)?),
+            );
             Ok([x, y, x, y])
         }
     }
@@ -477,11 +507,23 @@ mod tests {
     fn axis_gap_offsets() {
         let r = Real::new;
         // Touching: 767 | 768.
-        assert_eq!(axis_gap(r(757.0), r(767.0), r(768.0), r(799.0), DistOffset::PlusOne), r(1.0));
-        assert_eq!(axis_gap(r(757.0), r(767.0), r(768.0), r(799.0), DistOffset::None), r(0.0));
+        assert_eq!(
+            axis_gap(r(757.0), r(767.0), r(768.0), r(799.0), DistOffset::PlusOne),
+            r(1.0)
+        );
+        assert_eq!(
+            axis_gap(r(757.0), r(767.0), r(768.0), r(799.0), DistOffset::None),
+            r(0.0)
+        );
         // One free pixel, from either side.
-        assert_eq!(axis_gap(r(769.0), r(790.0), r(700.0), r(767.0), DistOffset::PlusOne), r(2.0));
+        assert_eq!(
+            axis_gap(r(769.0), r(790.0), r(700.0), r(767.0), DistOffset::PlusOne),
+            r(2.0)
+        );
         // Overlap.
-        assert_eq!(axis_gap(r(0.0), r(10.0), r(10.0), r(20.0), DistOffset::PlusOne), r(0.0));
+        assert_eq!(
+            axis_gap(r(0.0), r(10.0), r(10.0), r(20.0), DistOffset::PlusOne),
+            r(0.0)
+        );
     }
 }

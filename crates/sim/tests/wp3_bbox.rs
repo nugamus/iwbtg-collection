@@ -95,7 +95,11 @@ mod wp3 {
             let ctx = g.ctx();
             let y1 = place_at(r(y), r(1.0), &ctx.rules.collide).unwrap();
             assert_eq!(place_free(&ctx, k, r(112.0), r(y)).unwrap(), free, "free at {y}");
-            assert_eq!(!place_free(&ctx, k, r(112.0), y1).unwrap(), grounded, "grounded at {y}");
+            assert_eq!(
+                !place_free(&ctx, k, r(112.0), y1).unwrap(),
+                grounded,
+                "grounded at {y}"
+            );
         }
         // C2 alternative: round(y) + 1 makes 566.5 airborne.
         g.rules.collide.place_round = PlaceRound::RoundThenAdd;
@@ -117,14 +121,35 @@ mod wp3 {
         assert_eq!(rbox(&g, k), rect(798, 1088, 810, 1108), "t-col-01-a row 46");
         let ctx = g.ctx();
         assert!(place_free(&ctx, k, r(805.0), r(1100.4)).unwrap());
-        assert!(!place_free(&ctx, k, r(804.0), r(1100.4)).unwrap(), "d -> -d-1 would make 805 collide");
+        assert!(
+            !place_free(&ctx, k, r(804.0), r(1100.4)).unwrap(),
+            "d -> -d-1 would make 805 collide"
+        );
         // move_contact_solid(180, 3) from 806 stops at 805 (t-col-07-d), from 804 does not move.
         let hits = |x, y| place_free(&ctx, k, x, y).map(|f| !f);
-        let end = contact_steps((r(806.0), r(1100.4)), r(180.0), Some(3), McsStart::ManualNoMove, hits, || Ok(1000));
+        let end = contact_steps(
+            (r(806.0), r(1100.4)),
+            r(180.0),
+            Some(3),
+            McsStart::ManualNoMove,
+            hits,
+            || Ok(1000),
+        );
         assert_eq!(end.unwrap(), (r(805.0), r(1100.4)));
         let hits = |x, y| place_free(&ctx, k, x, y).map(|f| !f);
-        let end = contact_steps((r(804.0), r(1100.4)), r(180.0), Some(3), McsStart::ManualNoMove, hits, || Ok(1000));
-        assert_eq!(end.unwrap(), (r(804.0), r(1100.4)), "embedded start does not move (C10)");
+        let end = contact_steps(
+            (r(804.0), r(1100.4)),
+            r(180.0),
+            Some(3),
+            McsStart::ManualNoMove,
+            hits,
+            || Ok(1000),
+        );
+        assert_eq!(
+            end.unwrap(),
+            (r(804.0), r(1100.4)),
+            "embedded start does not move (C10)"
+        );
     }
 
     /// Plan 12: spike pixel counts. The up triangle has 544 pixels (CLONE_SPEC collision,
@@ -176,12 +201,27 @@ mod wp3 {
         let ctx = g.ctx();
         let t = Target::Inst(spike);
         // bbox_bottom = 288 (y = 280): rows 0 only; the tip covers columns 335..336.
-        assert!(place_meeting(&ctx, k, r(336.0), r(280.0), t).unwrap(), "box 331..341 covers the tip");
-        assert!(!place_meeting(&ctx, k, r(329.0), r(280.0), t).unwrap(), "box 324..334 misses the tip");
-        assert!(place_meeting(&ctx, k, r(330.0), r(280.0), t).unwrap(), "box 325..335 touches 335");
+        assert!(
+            place_meeting(&ctx, k, r(336.0), r(280.0), t).unwrap(),
+            "box 331..341 covers the tip"
+        );
+        assert!(
+            !place_meeting(&ctx, k, r(329.0), r(280.0), t).unwrap(),
+            "box 324..334 misses the tip"
+        );
+        assert!(
+            place_meeting(&ctx, k, r(330.0), r(280.0), t).unwrap(),
+            "box 325..335 touches 335"
+        );
         // Side touch at floor level: the bottom rows are full width.
-        assert!(place_meeting(&ctx, k, r(316.0), r(311.0), t).unwrap(), "bbox_right 321 at the base");
-        assert!(!place_meeting(&ctx, k, r(314.0), r(311.0), t).unwrap(), "bbox_right 319 left of the spike");
+        assert!(
+            place_meeting(&ctx, k, r(316.0), r(311.0), t).unwrap(),
+            "bbox_right 321 at the base"
+        );
+        assert!(
+            !place_meeting(&ctx, k, r(314.0), r(311.0), t).unwrap(),
+            "bbox_right 319 left of the spike"
+        );
         // Bounding boxes overlap here, pixels do not (upper-left corner of the box).
         assert!(!place_meeting(&ctx, k, r(316.0), r(283.0), t).unwrap());
     }
@@ -205,7 +245,10 @@ mod wp3 {
     /// equals the recorded `bbox_*` on every row of the kid traces that log `image_xscale`
     /// (CLONE_SPEC collision Confirmed (recorder): general bbox rule, the x-7 mirrored box).
     #[test]
-    #[allow(clippy::cast_possible_truncation, reason = "trace bbox values are small integers")]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "trace bbox values are small integers"
+    )]
     fn reported_box_matches_kid_traces() {
         let files = [
             "help-the-fairy-tale/t-col-01-a.csv",
@@ -215,7 +258,12 @@ mod wp3 {
             "rely-the-needle-4-2/mask-mirror.csv",
             "showdown/a3-t16-a.csv",
         ];
-        if std::env::var_os("IWBTG_RESEARCH").is_none() {
+        #[allow(
+            clippy::disallowed_methods,
+            reason = "tests may read research files; the sim itself never does IO"
+        )]
+        let unset = std::env::var_os("IWBTG_RESEARCH").is_none();
+        if unset {
             eprintln!("skipped: IWBTG_RESEARCH is not set");
             return;
         }
@@ -227,7 +275,12 @@ mod wp3 {
             };
             let col = |n: &str| t.column(n).unwrap_or_else(|| panic!("{f}: no column {n}"));
             let (cx, cy, cs) = (col("x"), col("y"), col("image_xscale"));
-            let (cl, ct, cr, cb) = (col("bbox_left"), col("bbox_top"), col("bbox_right"), col("bbox_bottom"));
+            let (cl, ct, cr, cb) = (
+                col("bbox_left"),
+                col("bbox_top"),
+                col("bbox_right"),
+                col("bbox_bottom"),
+            );
             let mut g = game(4096, 4096);
             for row in &t.rows {
                 let v = |c: usize| row[c].as_f64();
@@ -242,7 +295,12 @@ mod wp3 {
                     v(cr).unwrap() as i64,
                     v(cb).unwrap() as i64,
                 );
-                assert_eq!(b, want, "{f} frame {:?} at ({x}, {y}) xscale {s}", row[0].decimal());
+                assert_eq!(
+                    b,
+                    want,
+                    "{f} frame {:?} at ({x}, {y}) xscale {s}",
+                    row[0].decimal()
+                );
                 rows += 1;
             }
         }

@@ -79,26 +79,25 @@ fn owner_origin(def: &GameDef, mask: MaskId) -> (i32, i32) {
 /// the shared one, or the current subimage's (`Image::subimage`, R7c, C6).
 pub fn instance_mask<'a>(def: &'a GameDef, inst: &Instance) -> Result<Option<MaskAt<'a>>, SimError> {
     if let Some(m) = inst.img.mask() {
-        let mask = def
-            .mask(m)
-            .ok_or_else(|| SimError::invariant(format!("mask {m:?} of instance {} does not exist", inst.id.0)))?;
+        let mask = def.mask(m).ok_or_else(|| {
+            SimError::invariant(format!("mask {m:?} of instance {} does not exist", inst.id.0))
+        })?;
         return Ok(Some((mask, owner_origin(def, m))));
     }
     let Some(s) = inst.img.sprite() else {
         return Ok(None);
     };
-    let sprite = def
-        .sprite(s)
-        .ok_or_else(|| SimError::invariant(format!("sprite {s:?} of instance {} does not exist", inst.id.0)))?;
+    let sprite = def.sprite(s).ok_or_else(|| {
+        SimError::invariant(format!("sprite {s:?} of instance {} does not exist", inst.id.0))
+    })?;
     let id = match &sprite.masks {
         MaskSet::Shared(m) => *m,
         MaskSet::PerFrame(v) => {
             let Some(sub) = inst.img.subimage(sprite.frames) else {
                 return Ok(None);
             };
-            *v.get(usize::from(sub)).ok_or_else(|| {
-                SimError::invariant(format!("sprite {s:?} has no mask for subimage {sub}"))
-            })?
+            *v.get(usize::from(sub))
+                .ok_or_else(|| SimError::invariant(format!("sprite {s:?} has no mask for subimage {sub}")))?
         }
     };
     let mask = def
@@ -120,7 +119,10 @@ pub fn instance_box<'a>(
     let Some((mask, origin)) = instance_mask(def, inst)? else {
         return Ok(None);
     };
-    if matches!(mask.shape, MaskShape::Empty) || mask.bbox.left > mask.bbox.right || mask.bbox.top > mask.bbox.bottom {
+    if matches!(mask.shape, MaskShape::Empty)
+        || mask.bbox.left > mask.bbox.right
+        || mask.bbox.top > mask.bbox.bottom
+    {
         return Ok(None);
     }
     let mut xf = Xform {
@@ -166,7 +168,11 @@ pub fn instance_box<'a>(
 /// t-col-09-a..g.csv, wanna mask-rotate.csv): per axis `L = (mask_left - origin_x) * xscale`
 /// and `R = (mask_right + 1 - origin_x) * xscale - 1`; the four corners rotate by image_angle
 /// (`dx = u cos a + v sin a`, `dy = -u sin a + v cos a`), x and y are added, then min and max.
-pub fn reported_edges(def: &GameDef, inst: &Instance, at: (Real, Real)) -> Result<Option<[Real; 4]>, SimError> {
+pub fn reported_edges(
+    def: &GameDef,
+    inst: &Instance,
+    at: (Real, Real),
+) -> Result<Option<[Real; 4]>, SimError> {
     let Some((mask, origin)) = instance_mask(def, inst)? else {
         return Ok(None);
     };
@@ -252,7 +258,10 @@ mod tests {
             place_origin(Real::new(f64::INFINITY), &r),
             Err(SimError::NonFinite { .. })
         ));
-        assert!(matches!(place_origin(Real::new(1e300), &r), Err(SimError::Overflow { .. })));
+        assert!(matches!(
+            place_origin(Real::new(1e300), &r),
+            Err(SimError::Overflow { .. })
+        ));
     }
 
     #[test]

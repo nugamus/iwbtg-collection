@@ -35,7 +35,10 @@ pub fn move_contact_solid(ctx: &mut Ctx, me: InstId, dir: Real, maxdist: Real) -
         let start = (inst.m.x(), inst.m.y());
         let reach = || solid_reach(&q, me);
         let hits = |x: Real, y: Real| Ok(!q.place_hits(me, x, y, Target::Any, true)?.is_empty());
-        (start, contact_steps(start, dir, limit, ctx.rules.collide.mcs_start, hits, reach)?)
+        (
+            start,
+            contact_steps(start, dir, limit, ctx.rules.collide.mcs_start, hits, reach)?,
+        )
     };
     set_position(ctx, me, start, end)
 }
@@ -124,7 +127,9 @@ pub fn contact_steps(
             Some(b) => b,
             None if limit.is_some_and(|l| l <= QUICK_STEPS) => u64::MAX,
             None => {
-                let f = reach.take().ok_or_else(|| SimError::invariant("contact reach computed twice"))?;
+                let f = reach
+                    .take()
+                    .ok_or_else(|| SimError::invariant("contact reach computed twice"))?;
                 let b = f()?;
                 bound = Some(b);
                 b
@@ -182,7 +187,9 @@ pub fn outside_steps(
             return Ok(pos);
         }
         if taken > bound {
-            return Err(SimError::invariant("move_outside_solid still overlaps past every solid"));
+            return Err(SimError::invariant(
+                "move_outside_solid still overlaps past every solid",
+            ));
         }
         pos = (pos.0 + dx, pos.1 + dy);
         taken += 1;

@@ -82,7 +82,8 @@ pub fn image(i: Img) -> Image {
         alpha: 1.0,
     };
     let bytes = postcard::to_allocvec(&m).expect("mirror serializes");
-    let img: Image = postcard::from_bytes(&bytes).expect("Image layout changed: update wp3_support::ImageMirror");
+    let img: Image =
+        postcard::from_bytes(&bytes).expect("Image layout changed: update wp3_support::ImageMirror");
     let ok = img.sprite() == i.sprite
         && img.mask() == i.mask
         && img.xscale() == Real::new(i.xscale)
@@ -130,7 +131,8 @@ pub fn motion(pos: (f64, f64), prev: (f64, f64), speed: (f64, f64)) -> Motion {
         friction: 0.0,
     };
     let bytes = postcard::to_allocvec(&m).expect("mirror serializes");
-    let mo: Motion = postcard::from_bytes(&bytes).expect("Motion layout changed: update wp3_support::MotionMirror");
+    let mo: Motion =
+        postcard::from_bytes(&bytes).expect("Motion layout changed: update wp3_support::MotionMirror");
     let ok = mo.x() == Real::new(pos.0)
         && mo.y() == Real::new(pos.1)
         && mo.xprevious() == Real::new(prev.0)
@@ -154,6 +156,40 @@ pub fn spike_rows() -> Vec<String> {
         .collect()
 }
 
+/// A 15x15 disk of radius 7 (the loader rasterizes disk masks to bits; plan 3.4).
+pub fn disk_rows() -> Vec<String> {
+    (0..15i32)
+        .map(|y| {
+            (0..15i32)
+                .map(|x| {
+                    if (x - 7) * (x - 7) + (y - 7) * (y - 7) <= 49 {
+                        '#'
+                    } else {
+                        '.'
+                    }
+                })
+                .collect()
+        })
+        .collect()
+}
+
+/// A 15x15 diamond (the loader rasterizes diamond masks to bits; plan 3.4).
+pub fn diamond_rows() -> Vec<String> {
+    (0..15i32)
+        .map(|y| {
+            (0..15i32)
+                .map(|x| {
+                    if (x - 7).abs() + (y - 7).abs() <= 7 {
+                        '#'
+                    } else {
+                        '.'
+                    }
+                })
+                .collect()
+        })
+        .collect()
+}
+
 /// A test game: kinds and sprites, plus a world to put instances in.
 pub struct Game {
     pub def: GameDef,
@@ -171,6 +207,14 @@ pub struct Game {
     pub spike_centre_sprite: SpriteId,
     /// A 32x8 rectangle, origin (0, 0) (platform).
     pub platform_sprite: SpriteId,
+    /// A 15x15 rectangle, origin (7, 7).
+    pub rect_centre_sprite: SpriteId,
+    /// [`disk_rows`], origin (7, 7).
+    pub disk_sprite: SpriteId,
+    /// [`diamond_rows`], origin (7, 7).
+    pub diamond_sprite: SpriteId,
+    /// A 1x1 rectangle, origin (0, 0): a one-pixel probe for place queries.
+    pub dot_sprite: SpriteId,
     pub kid: KindId,
     pub block: KindId,
     pub spike: KindId,
@@ -188,6 +232,12 @@ pub fn game(w: u32, h: u32) -> Game {
     let spike_sprite = b.sprite_bits(&rows, (0, 0));
     let spike_centre_sprite = b.sprite_bits(&rows, (16, 16));
     let platform_sprite = b.sprite_rect((32, 8), (0, 0));
+    let rect_centre_sprite = b.sprite_rect((15, 15), (7, 7));
+    let disk = disk_rows();
+    let disk_sprite = b.sprite_bits(&disk.iter().map(String::as_str).collect::<Vec<_>>(), (7, 7));
+    let diamond = diamond_rows();
+    let diamond_sprite = b.sprite_bits(&diamond.iter().map(String::as_str).collect::<Vec<_>>(), (7, 7));
+    let dot_sprite = b.sprite_rect((1, 1), (0, 0));
     let mut k = KindDef::new("kid", Builtin::Kid);
     k.classes = ClassMask::KID;
     let kid = b.kind(k);
@@ -216,6 +266,10 @@ pub fn game(w: u32, h: u32) -> Game {
         spike_sprite,
         spike_centre_sprite,
         platform_sprite,
+        rect_centre_sprite,
+        disk_sprite,
+        diamond_sprite,
+        dot_sprite,
         kid,
         block,
         spike,

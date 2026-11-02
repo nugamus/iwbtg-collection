@@ -27,7 +27,12 @@ use crate::world::{Ctx, Flow, InstId};
 /// keep it at its previous place (M7, module docs).
 ///
 /// A `Flow::Halt` from the event returns at once. When the event destroyed `a`, nothing moves.
-pub fn solid_resolve(ctx: &mut Ctx, a: InstId, b: InstId, run: impl FnOnce(&mut Ctx) -> Flow) -> Result<Flow, SimError> {
+pub fn solid_resolve(
+    ctx: &mut Ctx,
+    a: InstId,
+    b: InstId,
+    run: impl FnOnce(&mut Ctx) -> Flow,
+) -> Result<Flow, SimError> {
     let prev = {
         let inst = Q::of(ctx).inst(a)?;
         (inst.m.xprevious(), inst.m.yprevious())
