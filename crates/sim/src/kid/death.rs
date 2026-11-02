@@ -11,7 +11,7 @@ use crate::world::{Ctx, Flow, InstId, KindState};
 
 /// Kills the kid `kid`. `Flow::Halt` when the destroy halted the sim; an error when `kid` is not
 /// a kid. A kid that no longer exists is left alone.
-pub fn kill(ctx: &mut Ctx, kid: InstId, cause: KillCause) -> Result<Flow, SimError> {
+pub fn kill(ctx: &mut Ctx, kid: InstId, _cause: KillCause) -> Result<Flow, SimError> {
     let Some(inst) = ctx.w.get(kid) else {
         return Ok(Flow::Continue);
     };

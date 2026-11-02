@@ -5,7 +5,12 @@
 //! `[slope]`, `[ladder]` and `[flip]` sections live in `physics_ext.rs` (WP5c). Every struct
 //! denies unknown fields, so a typo in a profile is a load error, not a silently ignored key.
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
+
+use super::class::ClassMask;
+use super::ids::SpriteId;
+use crate::kid::KidAction;
+use crate::num::Real;
 
 pub use super::physics_ext::{FlipKind, FlipModel, IceRules, LadderRules, SlopeModel};
 
@@ -70,6 +75,8 @@ pub struct PhysicsProfile {
     pub save: SaveRules,
     /// `[misc]`.
     pub misc: KidMisc,
+    /// `[sprites]`: the kid's sprites by role (resolved from names at load).
+    pub sprites: KidSprites,
 }
 
 /// A profile as written, before the preset fills its defaults. `toml::from_str` target of
@@ -93,30 +100,273 @@ macro_rules! profile_section {
 }
 
 profile_section! {
-    /// `[numbers]`: jumps, gravity, run speed, caps, release multiplier (WP5a).
-    KidNumbers;
-    /// `[input]`: walk read mode, tap fix, vine keys (WP5a).
-    KidInput;
-    /// `[events]`: action lists per event, collisions, boundary (WP5a).
-    KidEvents;
-    /// `[jump]` (WP5a).
-    JumpRules;
-    /// `[fall_cap]` (WP5a).
-    FallCap;
-    /// `[gravity]` (WP5a).
-    GravityRules;
-    /// `[platform]` (WP5a).
-    PlatformRules;
-    /// `[vine]` (WP5a).
-    VineRules;
     /// `[water]` (WP5a).
     WaterRules;
     /// `[death]` (WP5a).
     DeathRules;
-    /// `[bullet]` (WP5a).
-    BulletRules;
     /// `[save]` (WP5a).
     SaveRules;
-    /// `[misc]` (WP5a).
-    KidMisc;
+}
+
+/// A class list written as names (`["block", "solidblock", "water1"]`) into one [`ClassMask`].
+/// An unknown name is a load error.
+fn class_names<'de, D: Deserializer<'de>>(d: D) -> Result<ClassMask, D::Error> {
+    let names = Vec::<String>::deserialize(d)?;
+    let mut mask = ClassMask::NONE;
+    for n in &names {
+        let c = ClassMask::from_name(n)
+            .ok_or_else(|| serde::de::Error::custom(format!("unknown class `{n}`")))?;
+        mask |= c;
+    }
+    Ok(mask)
+}
+
+/// `[numbers]`: the kid's constants (A1 Create, "Numeric constants"). A preset fills them
+/// (`kid::presets::apply`); `create_defaults` copies them into the kid.
+#[derive(Clone, PartialEq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct KidNumbers {
+    /// Ground jump speed, then the air jumps in order (positive magnitudes; A1 `[8.5, 7.0]`).
+    pub jumps: Vec<Real>,
+    /// Gravity the kid runs at (0.4).
+    pub gravity: Real,
+    /// Run speed, `maxSpeed` (3).
+    pub run_speed: Real,
+    /// Speed clamp, `maxVspeed` (9).
+    pub max_vspeed: Real,
+    /// `maxFallSpeed`: read only by `fall_cap = "shift_then_clamp"` (A4).
+    pub max_fall_speed: Real,
+    /// The jump release multiplier (0.45).
+    pub release_mult: Real,
+    /// Vertical speed beyond which the jump or fall sprite shows (0.05).
+    pub sprite_threshold: Real,
+    /// `image_speed` while standing, at Create and in the air (0.2).
+    pub image_speed_idle: Real,
+    /// `image_speed` while running and sliding on a vine (0.5).
+    pub image_speed_run: Real,
+}
+
+/// How the walk action reads the direction keys.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WalkRead {
+    /// `keyboard_check_direct`: held, or latched since the last direct read
+    /// (`InputState::direct`; trick.restart_glitch).
+    #[default]
+    DirectLatch,
+    /// The tick's sampled held state.
+    Sampled,
+}
+
+/// How the vine action reads its kick and drop keys.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VineKeys {
+    /// This tick's key press edge (A1, A2, B).
+    #[default]
+    Edges,
+    /// Game-side latched flags (wanna, rori, fairy-tale, showdown; WP5c).
+    LatchedFlags,
+}
+
+/// `[input]`: how the kid reads keys.
+#[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct KidInput {
+    /// `walk = "direct_latch"` or `"sampled"`.
+    pub walk: WalkRead,
+    /// `vine_keys = "edges"` or `"latched_flags"`.
+    pub vine_keys: VineKeys,
+}
+
+/// `[events]`: ordered action lists per event (plan 5.2). Collisions, keys, alarms and the
+/// boundary arrive with the collision runs and death (WP5a.3, WP5a.4).
+#[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct KidEvents {
+    /// Create.
+    pub create: Vec<KidAction>,
+    /// Room Start.
+    pub room_start: Vec<KidAction>,
+    /// Step.
+    pub step: Vec<KidAction>,
+    /// End Step.
+    pub end_step: Vec<KidAction>,
+}
+
+/// What `[jump] air` names as the air-jump model.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AirJump {
+    /// The `djump` flag (A1-A5).
+    #[default]
+    Djump,
+    /// The family B counter (WP5b).
+    CurJumps,
+    /// `djump` then `tjump` (showdown, WP5c).
+    DjumpThenTjump,
+}
+
+/// When water 2 allows the air jump.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WaterAir {
+    /// Never.
+    None,
+    /// A water 2 one pixel below allows the air jump even without `djump` (A1).
+    #[default]
+    Water2WithoutFlag,
+    /// Family B (WP5b).
+    WaterUnlimited,
+    /// Family C (WP5c).
+    Water3Keeps,
+}
+
+/// An extra ground-jump condition besides the classes.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GroundAlso {
+    /// `onPlatform` counts as ground.
+    PlatformFlag,
+    /// `ladderjump` counts as ground.
+    LadderJump,
+}
+
+/// `[jump]`.
+#[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct JumpRules {
+    /// Classes that count as ground one pixel in the gravity direction
+    /// (`["block", "solidblock", "water1"]`).
+    #[serde(deserialize_with = "class_names")]
+    pub ground_classes: ClassMask,
+    /// Extra ground conditions (`["platform_flag", "ladder_jump"]`).
+    pub ground_also: Vec<GroundAlso>,
+    /// A ground jump sets `djump` (false in A4).
+    pub ground_sets_djump: bool,
+    /// The air-jump model.
+    pub air: AirJump,
+    /// When water 2 allows the air jump.
+    pub water_air: WaterAir,
+}
+
+/// What `[fall_cap] rule` does to `vspeed`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FallCapRule {
+    /// `abs(vspeed) > max_vspeed` gives `sign(vspeed) * max_vspeed` (A1).
+    #[default]
+    ClampAbs,
+    /// Clamp against gravity only (B).
+    ClampAgainstGravity,
+    /// Clamp downward only (spook).
+    ClampDownOnly,
+    /// Shift, then clamp (A4).
+    ShiftThenClamp,
+}
+
+/// `[fall_cap]`.
+#[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct FallCap {
+    /// The rule.
+    pub rule: FallCapRule,
+}
+
+/// When gravity is set back to its constant.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GravityReapply {
+    /// Every Step, unless the kid is on a ladder (A1: Step action 2.4).
+    #[default]
+    Step,
+    /// Other models (WP5b, WP5c).
+    EndStepSlope,
+    /// Only at Create.
+    CreateOnly,
+}
+
+/// `[gravity]`.
+#[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct GravityRules {
+    /// When gravity is reapplied.
+    pub reapply: GravityReapply,
+}
+
+/// `[platform]`.
+#[derive(Clone, PartialEq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct PlatformRules {
+    /// Pixels below the kid probed for a platform to keep `onPlatform` (4).
+    pub hold_probe: Real,
+}
+
+/// Vine model.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VineModel {
+    /// No vines.
+    None,
+    /// Left vine below `left_below`, right vine exactly `right_equal` (A, B).
+    #[default]
+    DistanceAsym,
+    /// Both sides within one pixel (C, WP5c).
+    DistanceSymEarly,
+}
+
+/// `[vine]`.
+#[derive(Clone, PartialEq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct VineRules {
+    /// The model.
+    pub model: VineModel,
+    /// Left vine: grabs when the distance is below this (2).
+    pub left_below: Real,
+    /// Right vine: grabs when the distance equals this (1).
+    pub right_equal: Real,
+    /// Vertical speed while sliding (2).
+    pub slide: Real,
+    /// Kick: horizontal speed and vertical speed (15, -9).
+    pub kick: [Real; 2],
+    /// Drop: horizontal speed away from the vine (3).
+    pub drop: Real,
+}
+
+/// `[misc]`.
+#[derive(Clone, PartialEq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct KidMisc {
+    /// The kid starts transparent and fades in (rely: alpha 0, +`fade_step` per Step).
+    pub fade_in: bool,
+    /// Alpha added per Step while fading in (0.1).
+    pub fade_step: Real,
+}
+
+/// `[sprites]`: the kid's sprites by role. Package files give names; the loader (WP7b) resolves
+/// them to ids. A role the game does not have stays `None` and the action leaves the sprite
+/// alone.
+#[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct KidSprites {
+    /// Standing.
+    pub idle: Option<SpriteId>,
+    /// Running.
+    pub running: Option<SpriteId>,
+    /// Rising or double jumping.
+    pub jump: Option<SpriteId>,
+    /// Falling.
+    pub fall: Option<SpriteId>,
+    /// Sliding on a vine.
+    pub sliding: Option<SpriteId>,
+}
+
+/// `[bullet]`: what `shoot` does.
+#[derive(Clone, PartialEq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct BulletRules {
+    /// Shooting needs fewer than this many bullets in the room (4).
+    pub max: u32,
+    /// Bullet speed; the bullet's `hspeed` is `speed * facing` (16).
+    pub speed: Real,
 }
