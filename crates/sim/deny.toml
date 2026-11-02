@@ -1,0 +1,28 @@
+# Dependency ban for the sim, checked per crate (docs/architecture.md, Sim purity):
+#   cargo deny --manifest-path crates/sim/Cargo.toml check --config crates/sim/deny.toml bans
+# The root deny.toml sees the whole workspace (it will hold Bevy), so the sim's graph needs its own.
+# No crate that reads entropy, clocks, threads or the GPU at run time may enter the sim's graph.
+
+[graph]
+# Test and tool crates are not the sim's runtime graph.
+exclude-dev = true
+all-features = true
+
+[bans]
+multiple-versions = "allow"
+wildcards = "allow"
+deny = [
+  { crate = "rand" },
+  { crate = "rand_core" },
+  { crate = "rand_chacha" },
+  { crate = "tokio" },
+  { crate = "bevy" },
+  { crate = "glam" },
+  { crate = "wgpu" },
+  # The one documented exception: rhai turns on ahash's `compile-time-rng`, so the proc macro
+  # `const-random-macro` asks getrandom for rhai's internal hash keys once per build, at compile
+  # time. Nothing draws entropy at run time (the run-time graph has no getrandom caller), and
+  # WP9 checks that no script-visible result depends on rhai's hash-map order. Any other path to
+  # getrandom fails this check.
+  { crate = "getrandom", wrappers = ["const-random-macro"] },
+]
