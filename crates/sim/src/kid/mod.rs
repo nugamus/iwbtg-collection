@@ -140,8 +140,11 @@ pub fn run_collision(
 
 /// Runs one event on a kid instance: the profile's action list for that event, through
 /// [`run_action`] and [`run_collision`].
+///
+/// Until WP5a.2 (#120) fills the action lists this handles nothing and continues, so a kid in a
+/// hand-built world can be spawned, killed and destroyed.
 pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimError> {
-    unimplemented!("WP5a: kid::on_event")
+    Ok(Flow::Continue)
 }
 
 /// What a kid kind with this profile handles.
