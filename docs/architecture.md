@@ -285,8 +285,8 @@ This is the starting surface. The generated reference is `docs/format/script-api
 
 ### Actions and input frames
 
-- Actions: `left`, `right`, `up`, `down`, `jump`, `shoot`, `restart`, `suicide`, `skip`, `accept`, `back`, `menu`, `pause` (P), `mute` (M; wanna and xia also need Ctrl held), `reset` (F2), plus one reserved bit. One `u16` bit each. Pause, mute and reset change sim state in the originals (kaenbyou's jump ignores a press while P is pressed, mute changes `sound_stop_all` calls, F2 restarts the game), so they are sim input. Quitting (Escape, Alt+F4) stays client-only.
-- `InputFrame { held: u16, pressed: u16, released: u16 }`, one per tick. The edge bits keep sub-tick taps: GM8 sees a press and a release inside one frame as both events in the same step, which gives a different jump than holding for one tick.
+- Actions: `left`, `right`, `up`, `down`, `jump`, `shoot`, `restart`, `suicide`, `skip`, `accept`, `back`, `menu`, `pause` (P), `mute` (M; wanna and xia also need Ctrl held), `reset` (F2), and `extra1` to `extra4`, generic actions for games that need keys beyond the standard set (a game maps each to its own meaning; the player binds them). One `u32` bit each (bits 0 to 18, `Action::MASK` = `0x7_ffff`; the higher bits are reserved). Pause, mute and reset change sim state in the originals (kaenbyou's jump ignores a press while P is pressed, mute changes `sound_stop_all` calls, F2 restarts the game), so they are sim input. Quitting (Escape, Alt+F4) stays client-only.
+- `InputFrame { held: u32, pressed: u32, released: u32 }`, one per tick. The edge bits keep sub-tick taps: GM8 sees a press and a release inside one frame as both events in the same step, which gives a different jump than holding for one tick.
 - The client collects raw OS input events between ticks into these bits. Games map actions, never raw keys.
 - Each kid rule set defines how it reads the bits (for example YoYoYo versions differ on sub-frame taps).
 
