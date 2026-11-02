@@ -81,6 +81,16 @@ const SPECS: &[ParamSpec] = &[
         ty: ParamType::Real,
         required: false,
     },
+    ParamSpec {
+        name: "clear_triggers_to",
+        ty: ParamType::Real,
+        required: false,
+    },
+    ParamSpec {
+        name: "clear_switches_on_room_end",
+        ty: ParamType::Bool,
+        required: false,
+    },
 ];
 
 /// The world's settings and pause state.
@@ -98,6 +108,10 @@ pub struct WorldState {
     pub timer_per_tick: u32,
     /// Added to the play time on the retry (family B: 2).
     pub timer_on_restart: u32,
+    /// Room Start sets `global.trigger[0..=n]` false (poronkusema: 10).
+    pub clear_triggers_to: Option<u32>,
+    /// Room End clears the switch array (spook house).
+    pub clear_switches_on_room_end: bool,
     /// The game is paused (instances deactivated).
     pub paused: bool,
     /// Ticks until a pause toggle is accepted.
@@ -121,6 +135,10 @@ pub fn event_set(kind: &KindDef) -> EventSet {
     EventSet {
         step: true,
         room_start: true,
+        room_end: matches!(
+            kind.params.0.get("clear_switches_on_room_end"),
+            Some(ParamValue::Bool(true))
+        ),
         key_press,
         ..EventSet::default()
     }
@@ -142,6 +160,11 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
         mute: param_bool(params, "mute")?.unwrap_or(false),
         timer_per_tick: count(params, "timer_per_tick")?,
         timer_on_restart: count(params, "timer_on_restart")?,
+        clear_triggers_to: match param_real(params, "clear_triggers_to")? {
+            None => None,
+            Some(v) => Some(super::warp::whole(v, "clear_triggers_to")?),
+        },
+        clear_switches_on_room_end: param_bool(params, "clear_switches_on_room_end")?.unwrap_or(false),
         paused: false,
         pause_counter: 0,
         deactivated: Vec::new(),
@@ -173,6 +196,16 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
         }
         EventKind::RoomStart => {
             ctx.w.room_speed = Real::new(f64::from(def.tick_rate));
+            if let Some(n) = s.clear_triggers_to {
+                let flags = &mut ctx.w.engine.mech.trigger_flags;
+                for id in 0..=i64::from(n) {
+                    flags.remove(&id);
+                }
+            }
+            Ok(Flow::Continue)
+        }
+        EventKind::RoomEnd if s.clear_switches_on_room_end => {
+            ctx.w.engine.mech.clear_switches();
             Ok(Flow::Continue)
         }
         EventKind::KeyPress(Action::Restart) if def.restart.trigger == RestartTrigger::KeyPressEvent => {
