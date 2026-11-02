@@ -38,66 +38,88 @@ pub const MAX_OPS_PER_TICK: u64 = 2_000_000;
 
 /// The parsed `game.toml`.
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
     /// Format major version. The client reads every version up to [`FORMAT_VERSION`].
+    #[cfg_attr(feature = "schema", schemars(with = "u32"))]
     pub format: Spanned<u32>,
     /// Package id, snake_case. Stable forever; leaderboards key on it.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub id: Spanned<String>,
     /// Display title.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub title: Spanned<String>,
     /// Semver of our port. For humans.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub version: Spanned<String>,
     /// Version of the original we ported.
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub source_version: Option<Spanned<String>>,
     /// Engine pack id in `games/_engines/` (`engine_pack`; `[engine]` is the engine settings
     /// table).
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub engine_pack: Option<Spanned<String>>,
     /// Built-in behavior revision this package was verified against.
+    #[cfg_attr(feature = "schema", schemars(with = "u16"))]
     pub engine_rev: Spanned<u16>,
     /// Original runner; selects event-order differences.
+    #[cfg_attr(feature = "schema", schemars(with = "crate::schema::RunnerSchema"))]
     pub runner: Spanned<Runner>,
     /// Path to the physics profile.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub physics: Spanned<String>,
     /// First room.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub start_room: Spanned<String>,
     /// Default room speed; [`DEFAULT_TICK_RATE`] if absent. Rooms may override.
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<u32>"))]
     pub tick_rate: Option<Spanned<u32>>,
     /// Upper bound for a replay, in ticks. The server rejects longer replays.
+    #[cfg_attr(feature = "schema", schemars(with = "u64"))]
     pub max_ticks: Spanned<u64>,
     /// Event and collision rank order of every kind used: kind names and selectors.
+    #[cfg_attr(feature = "schema", schemars(with = "Vec<OrderItem>"))]
     pub object_order: Spanned<Vec<Spanned<OrderItem>>>,
     /// GM room order (`room_goto_next`, `room_goto_previous`); rooms not listed follow in path
     /// order.
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
     pub room_order: Option<Spanned<Vec<Spanned<String>>>>,
     /// Engine settings: restart and reset models, boot kinds, number model, new-game room, engine
     /// roles (docs/plans/sim-core.md 8.3).
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<EngineSection>"))]
     pub engine: Option<Spanned<EngineSection>>,
     /// Default sprite and mask of bare built-in kinds, per variant (`[defaults.spike]`).
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, KindDefaults>"))]
     pub defaults: BTreeMap<Spanned<String>, Spanned<KindDefaults>>,
     /// At least one creator.
+    #[cfg_attr(feature = "schema", schemars(with = "Vec<Creator>"))]
     pub creators: Spanned<Vec<Creator>>,
     /// Where the original comes from and its permission status.
+    #[cfg_attr(feature = "schema", schemars(with = "Source"))]
     pub source: Spanned<Source>,
     /// Script budget.
     #[serde(default)]
     pub budget: Option<Budget>,
     /// Run timing: start and end triggers and stages.
+    #[cfg_attr(feature = "schema", schemars(with = "Timing"))]
     pub timing: Spanned<Timing>,
     /// Switches for tricks that are engine behaviors.
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, TrickSetting>"))]
     pub tricks: BTreeMap<Spanned<String>, Spanned<TrickSetting>>,
     /// One entry per file that is not the creator's own work or ours.
     #[serde(default)]
     pub third_party: Vec<ThirdParty>,
     /// Optional per-track settings, keyed by music id.
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, MusicSettings>"))]
     pub music: BTreeMap<Spanned<String>, MusicSettings>,
 }
 
@@ -107,9 +129,11 @@ pub use iwbtg_sim::rules::Runner;
 
 /// One `[[creators]]` entry.
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Creator {
     /// Name as the creator wants it shown.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub name: Spanned<String>,
     /// What they did.
     pub role: CreatorRole,
@@ -117,6 +141,7 @@ pub struct Creator {
 
 /// A creator's role.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub enum CreatorRole {
     /// Made the game.
@@ -135,14 +160,18 @@ pub enum CreatorRole {
 
 /// The `[source]` table.
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Source {
     /// Original game page.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub url: Spanned<String>,
     /// Permission status.
+    #[cfg_attr(feature = "schema", schemars(with = "Permission"))]
     pub permission: Spanned<Permission>,
     /// When the status was last set (a local date).
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub permission_date: Option<Spanned<Datetime>>,
     /// Where the permission came from, or why it is pending.
     #[serde(default)]
@@ -151,6 +180,7 @@ pub struct Source {
 
 /// Permission to port the game.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub enum Permission {
     /// The creator said yes.
@@ -165,16 +195,19 @@ pub enum Permission {
 
 /// The `[budget]` table.
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Budget {
     /// Script budget units per tick; [`DEFAULT_OPS_PER_TICK`] if absent, at most
     /// [`MAX_OPS_PER_TICK`].
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<u64>"))]
     pub ops_per_tick: Option<Spanned<u64>>,
 }
 
 /// The `[timing]` table.
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Timing {
     /// The run starts at this trigger.
@@ -191,27 +224,35 @@ pub struct Timing {
 /// The loader accepts the `[timing]` vocabulary of `iwbtg_sim::timing::TimingTrigger`:
 /// `run_start`, `run_end` and `enter_room` (with `room`) ([`TIMING_TRIGGERS`]).
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct TriggerRef {
     /// A trigger name from the vocabulary.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub trigger: Spanned<String>,
     /// The room, for `enter_room`.
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub room: Option<Spanned<String>>,
 }
 
 /// One split stage.
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Stage {
     /// Stage id, unique within the package.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub id: Spanned<String>,
     /// Display name.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub name: Spanned<String>,
     /// The stage ends at this trigger.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub trigger: Spanned<String>,
     /// The room, for `enter_room`.
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub room: Option<Spanned<String>>,
 }
 
@@ -221,12 +262,16 @@ pub const TIMING_TRIGGERS: [&str; 3] = ["run_start", "run_end", "enter_room"];
 /// One `object_order` entry as written: a kind name, or a selector table
 /// `{ kind = "spike", dir = "up" }` with exactly one param key besides `kind`.
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(untagged)]
 pub enum OrderItem {
     /// `"spike"`, `"@world"`.
     Kind(String),
     /// `{ kind = "spike", dir = "up" }`.
-    Selector(BTreeMap<String, toml::Value>),
+    Selector(
+        #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, serde_json::Value>"))]
+        BTreeMap<String, toml::Value>,
+    ),
 }
 
 impl OrderItem {
@@ -268,13 +313,16 @@ impl OrderItem {
 
 /// The `[engine]` table (docs/plans/sim-core.md 4.2, 4.3, 8.3; CR7).
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct EngineSection {
     /// Where `StartPoint::NewGame` starts (CR7). Defaults to `start_room` with a warning.
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub new_game_room: Option<Spanned<String>>,
     /// Persistent kinds created before the first room; default: the `world` engine kind.
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
     pub boot: Option<Vec<Spanned<String>>>,
     /// GM "treat uninitialized variables as 0"; default true.
     #[serde(default)]
@@ -291,6 +339,7 @@ pub struct EngineSection {
     /// Engine roles: which kind the sim spawns as `kid_bullet`, `bow`, ... (`"none"`: the game
     /// never spawns one). Keys: [`ENGINE_ROLES`].
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, String>"))]
     pub roles: BTreeMap<Spanned<String>, Spanned<String>>,
 }
 
@@ -309,6 +358,7 @@ pub const ENGINE_ROLES: [&str; 9] = [
 
 /// `float_model` values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum FloatModelName {
     /// IEEE binary64.
     #[serde(rename = "f64")]
@@ -317,6 +367,7 @@ pub enum FloatModelName {
 
 /// A room role (`role` in room files, `excluded_roles` here).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum RoleName {
     /// Boot room.
@@ -346,6 +397,7 @@ impl RoleName {
 
 /// Restart and reset triggers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum TriggerName {
     /// The world's Key press event.
@@ -376,6 +428,7 @@ impl TriggerName {
 
 /// `[engine] restart = { ... }`; absent keys keep `RestartModel::default()`.
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct RestartSection {
     /// What the retry does.
@@ -392,6 +445,7 @@ pub struct RestartSection {
     pub boot_ticks: Option<u8>,
     /// y offset when the saved kid was flipped.
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<Number>"))]
     pub flipped_load_dy: Option<Spanned<Number>>,
     /// What a retry counts.
     #[serde(default)]
@@ -400,6 +454,7 @@ pub struct RestartSection {
 
 /// Restart kinds (plan 4.3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum RestartKindName {
     /// `GameRestartViaBoot`.
@@ -414,6 +469,7 @@ pub enum RestartKindName {
 
 /// `death_on_restart` values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum DeathName {
     /// Nothing.
@@ -424,6 +480,7 @@ pub enum DeathName {
 
 /// `[engine] reset = { ... }`; absent keys keep `ResetModel::default()`.
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct ResetSection {
     /// What F2 does.
@@ -439,6 +496,7 @@ pub struct ResetSection {
 
 /// Reset kinds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ResetKindName {
     /// `DeleteTempAndRestart`.
@@ -509,22 +567,30 @@ impl ResetSection {
 /// `[defaults.<builtin>]`: the sprite and mask a bare built-in kind uses, per variant
 /// (docs/plans/sim-core.md 8.3, "Kind default sprites per variant").
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct KindDefaults {
     /// Default sprite.
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub sprite: Option<Spanned<String>>,
     /// Default object-level mask sprite.
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub mask: Option<Spanned<String>>,
     /// Per-variant sprites: each table has param keys to match (`dir = "up"`) plus `sprite`
     /// and/or `mask`.
     #[serde(default)]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "Vec<BTreeMap<String, serde_json::Value>>")
+    )]
     pub variants: Vec<Spanned<BTreeMap<String, toml::Value>>>,
 }
 
 /// A trick switch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum TrickSetting {
     /// The trick works.
@@ -537,15 +603,20 @@ pub enum TrickSetting {
 
 /// One `[[third_party]]` entry.
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct ThirdParty {
     /// Package path of the file.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub path: Spanned<String>,
     /// What it is.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub what: Spanned<String>,
     /// Rights holder.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub owner: Spanned<String>,
     /// SPDX id, or `unknown`.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub license: Spanned<String>,
     /// Clearance status.
     pub status: ThirdPartyStatus,
@@ -553,6 +624,7 @@ pub struct ThirdParty {
 
 /// Clearance status of a third-party file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 pub enum ThirdPartyStatus {
     /// Cleared for public release.
@@ -565,17 +637,21 @@ pub enum ThirdPartyStatus {
 
 /// One `[music.<id>]` table.
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct MusicSettings {
     /// Playback volume, 1.0 is unchanged.
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<Number>"))]
     pub volume: Option<Spanned<Number>>,
 }
 
 /// Only the `format` key, read before the full parse so a newer package gets a clear
 /// "update the client" error instead of an unknown-key error.
 #[derive(Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 struct FormatProbe {
+    #[cfg_attr(feature = "schema", schemars(with = "Option<i64>"))]
     format: Option<Spanned<i64>>,
 }
 

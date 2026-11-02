@@ -82,24 +82,33 @@ pub struct SpriteSidecar {
 }
 
 #[derive(Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-struct RawSidecar {
+pub(crate) struct RawSidecar {
+    #[cfg_attr(feature = "schema", schemars(with = "u16"))]
     frames: Spanned<u16>,
+    #[cfg_attr(feature = "schema", schemars(with = "[u32; 2]"))]
     frame_size: Spanned<[u32; 2]>,
+    #[cfg_attr(feature = "schema", schemars(with = "[i32; 2]"))]
     origin: Spanned<[i32; 2]>,
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<RawCollision>"))]
     collision: Option<Spanned<RawCollision>>,
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<[i64; 4]>"))]
     bbox: Option<Spanned<[i64; 4]>>,
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<Number>"))]
     alpha_tolerance: Option<Spanned<Number>>,
     #[serde(default)]
     separate_masks: Option<bool>,
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     mask: Option<Spanned<String>>,
 }
 
 #[derive(Deserialize, Clone, Copy)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 enum RawCollision {
     Precise,
