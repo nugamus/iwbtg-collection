@@ -351,6 +351,15 @@ impl Shared {
         Ok(r)
     }
 
+    /// Charges `units` of host work to the tick budget; a script error when the budget is spent.
+    pub(crate) fn charge(&self, units: u64) -> Res<()> {
+        if self.budget.charge(units) {
+            Ok(())
+        } else {
+            Err(super::api::runtime_error("script budget exceeded"))
+        }
+    }
+
     fn push_log(&self, line: String) {
         let mut log = self.log.borrow_mut();
         if log.len() < LOG_CAP {

@@ -70,62 +70,64 @@ Read with `i.name`, write with `i.name = v` where listed read and write.
 
 ## Functions
 
-- `abs(float) -> float`
-- `arctan2(float, float) -> float`
-- `ceil(float) -> float`
-- `choose(array) -> ?` (can fail)
-- `clamp(float, float, float) -> float`
-- `cos(float) -> float`
-- `darctan2(float, float) -> float`
-- `dcos(float) -> float`
-- `degtorad(float) -> float`
-- `destroy(Instance) -> ()` (can fail)
-- `div(float, float) -> float` (can fail)
-- `dsin(float) -> float`
-- `emit(string) -> ()` (can fail)
-- `exists(Instance) -> bool`
-- `exp(float) -> float`
-- `floor(float) -> float`
-- `frac(float) -> float`
-- `get_alarm(Instance, ?) -> float` (can fail)
-- `gm_bool(float) -> bool`
-- `gm_eq(float, float) -> bool`
-- `gm_ge(float, float) -> bool`
-- `gm_gt(float, float) -> bool`
-- `gm_le(float, float) -> bool`
-- `gm_lt(float, float) -> bool`
-- `gm_ne(float, float) -> bool`
-- `gm_repeat(float) -> int` (can fail)
-- `index$get$(Instance, string) -> ?` (can fail)
-- `index$set$(Instance, string, ?) -> ()` (can fail)
-- `instance_create(string, ?, ?) -> Instance` (can fail)
-- `instance_create(string, ?, ?, map) -> Instance` (can fail)
-- `instances(string) -> Dynamic>` (can fail)
-- `irandom(float) -> float` (can fail)
-- `irandom_range(float, float) -> float` (can fail)
-- `kid() -> ?` (can fail)
-- `kill_kid() -> ()` (can fail)
-- `lengthdir_x(float, float) -> float`
-- `lengthdir_y(float, float) -> float`
-- `lerp(float, float, float) -> float`
-- `ln(float) -> float`
-- `max(float, float) -> float`
-- `min(float, float) -> float`
-- `mod(float, float) -> float` (can fail)
-- `point_direction(float, float, float, float) -> float`
-- `point_distance(float, float, float, float) -> float`
-- `pow(float, float) -> float`
-- `radtodeg(float) -> float`
-- `random(float) -> float`
-- `random_range(float, float) -> float`
-- `room_tick() -> float`
-- `round(float) -> float`
-- `set_alarm(Instance, ?, ?) -> ()` (can fail)
-- `sign(float) -> float`
-- `sin(float) -> float`
-- `sqr(float) -> float`
-- `sqrt(float) -> float`
-- `tan(float) -> float`
-- `tick() -> float`
-- `to_float(int) -> float`
-- `to_int(float) -> int` (can fail)
+Every call costs 1 budget unit (one Rhai operation, like each operator and each statement). The cost after each signature is what the host function charges; "cost: 1" means the operation only. The tick budget is 1,000,000 units and one event call may use 200,000 ([0001](../decisions/0001-script-language.md#step-budget)).
+
+- `abs(float) -> float` (cost: 1)
+- `arctan2(float, float) -> float` (cost: 1)
+- `ceil(float) -> float` (cost: 1)
+- `choose(array) -> ?` (can fail) (cost: 1)
+- `clamp(float, float, float) -> float` (cost: 1)
+- `cos(float) -> float` (cost: 1)
+- `darctan2(float, float) -> float` (cost: 1)
+- `dcos(float) -> float` (cost: 1)
+- `degtorad(float) -> float` (cost: 1)
+- `destroy(Instance) -> ()` (can fail) (cost: 1)
+- `div(float, float) -> float` (can fail) (cost: 1)
+- `dsin(float) -> float` (cost: 1)
+- `emit(string) -> ()` (can fail) (cost: 1)
+- `exists(Instance) -> bool` (cost: 1)
+- `exp(float) -> float` (cost: 1)
+- `floor(float) -> float` (cost: 1)
+- `frac(float) -> float` (cost: 1)
+- `get_alarm(Instance, ?) -> float` (can fail) (cost: 1)
+- `gm_bool(float) -> bool` (cost: 1)
+- `gm_eq(float, float) -> bool` (cost: 1)
+- `gm_ge(float, float) -> bool` (cost: 1)
+- `gm_gt(float, float) -> bool` (cost: 1)
+- `gm_le(float, float) -> bool` (cost: 1)
+- `gm_lt(float, float) -> bool` (cost: 1)
+- `gm_ne(float, float) -> bool` (cost: 1)
+- `gm_repeat(float) -> int` (can fail) (cost: 1)
+- `index$get$(Instance, string) -> ?` (can fail) (cost: 1)
+- `index$set$(Instance, string, ?) -> ()` (can fail) (cost: 1)
+- `instance_create(string, ?, ?) -> Instance` (can fail) (cost: 1 + 50)
+- `instance_create(string, ?, ?, map) -> Instance` (can fail) (cost: 1 + 50)
+- `instances(string) -> Dynamic>` (can fail) (cost: 1 + 1 per instance returned)
+- `irandom(float) -> float` (can fail) (cost: 1)
+- `irandom_range(float, float) -> float` (can fail) (cost: 1)
+- `kid() -> ?` (can fail) (cost: 1)
+- `kill_kid() -> ()` (can fail) (cost: 1)
+- `lengthdir_x(float, float) -> float` (cost: 1)
+- `lengthdir_y(float, float) -> float` (cost: 1)
+- `lerp(float, float, float) -> float` (cost: 1)
+- `ln(float) -> float` (cost: 1)
+- `max(float, float) -> float` (cost: 1)
+- `min(float, float) -> float` (cost: 1)
+- `mod(float, float) -> float` (can fail) (cost: 1)
+- `point_direction(float, float, float, float) -> float` (cost: 1)
+- `point_distance(float, float, float, float) -> float` (cost: 1)
+- `pow(float, float) -> float` (cost: 1)
+- `radtodeg(float) -> float` (cost: 1)
+- `random(float) -> float` (cost: 1)
+- `random_range(float, float) -> float` (cost: 1)
+- `room_tick() -> float` (cost: 1)
+- `round(float) -> float` (cost: 1)
+- `set_alarm(Instance, ?, ?) -> ()` (can fail) (cost: 1)
+- `sign(float) -> float` (cost: 1)
+- `sin(float) -> float` (cost: 1)
+- `sqr(float) -> float` (cost: 1)
+- `sqrt(float) -> float` (cost: 1)
+- `tan(float) -> float` (cost: 1)
+- `tick() -> float` (cost: 1)
+- `to_float(int) -> float` (cost: 1)
+- `to_int(float) -> int` (can fail) (cost: 1)

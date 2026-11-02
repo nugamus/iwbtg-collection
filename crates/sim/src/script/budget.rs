@@ -15,6 +15,21 @@ pub const MAX_TICK_BUDGET: u64 = 2_000_000;
 /// Default units for one event call.
 pub const DEFAULT_CALL_BUDGET: u64 = 200_000;
 
+/// Budget units a host function charges on top of the one unit every operation costs
+/// (decision 0001 "Step budget"; the generated `docs/format/script-api.md` lists them).
+/// Rows are (function, units per call, units per item it returns). A function not listed costs
+/// only its operation.
+pub const COSTS: &[(&str, u64, u64)] = &[("instance_create", 50, 0), ("instances", 0, 1)];
+
+/// The extra units `name` charges: (per call, per item). `(0, 0)` for a function not listed.
+#[must_use]
+pub fn cost(name: &str) -> (u64, u64) {
+    COSTS
+        .iter()
+        .find(|(n, _, _)| *n == name)
+        .map_or((0, 0), |(_, base, item)| (*base, *item))
+}
+
 /// The budget counters. Interior mutability is allowed here only (architecture "Scripts"): the
 /// Rhai callbacks hold a shared reference.
 #[derive(Debug)]

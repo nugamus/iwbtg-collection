@@ -110,7 +110,7 @@ The sandbox has four layers:
 
 ### Step budget
 
-- One budget unit is one Rhai operation (one `on_progress` callback). Host functions that do real work charge extra units to the same counter: for example `spawn` 50, each instance returned by `instances()` 1, each collision query 20 plus 1 per candidate tested. The cost table lives in `docs/format/script-api.md`.
+- One budget unit is one Rhai operation (one `on_progress` callback). Host functions that do real work charge extra units to the same counter: for example `instance_create` 50, each instance returned by `instances()` 1, each collision query 20 plus 1 per candidate tested. The cost table lives in `docs/format/script-api.md`.
 - Counting: the `on_progress(|ops| ...)` closure adds 1 to a tick-wide `Cell<u64>`, which resets at the start of every tick. It returns `Some("budget")` when the tick counter passes the tick budget or when `ops` (the per-call count) passes the call budget. Rhai then ends the call with `ErrorTerminated`.
 - Defaults: tick budget 1,000,000 units across all script calls in a tick. Call budget 200,000 units per event call. A package may raise its tick budget in `game.toml` up to a hard cap of 2,000,000.
 - Host caps: 256 script spawns per call, 4,096 per tick, 50,000 live instances per room.
@@ -196,7 +196,7 @@ fn collide(other) {
 
 ### Tests
 
-- Conformance suite in `crates/sim/tests/script_conformance/`: every IWS math function over 10,000 fixed inputs, every operator and overload, and operation-count fixtures. It runs on every CI target and its hash lists must be byte-identical.
+- Conformance suite in `crates/sim/tests/script_conformance/`: every IWS math function over 10,000 fixed inputs, every operator and overload, and operation-count fixtures. It runs on every CI target and its hash lists (`expected.txt`, compiled into the test) must be byte-identical. `UPDATE_CONFORMANCE=1 cargo test -p iwbtg-sim --test script_conformance` rewrites them.
 - Benchmarks of the Rori Girl and Easy Miku 2 avoidances, native and WASM, early in Phase 3.
 
 ### Costs we accept
