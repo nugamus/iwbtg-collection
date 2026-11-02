@@ -552,3 +552,70 @@ fn load_game_returns_the_def_or_the_errors() {
     let errs = iwbtg_format::load_game(&broken, STRICT).unwrap_err();
     assert!(errs.iter().any(|d| d.file == "rooms/stage1.toml"));
 }
+
+// ---- #234: tier 1 built-in params ---------------------------------------------------------
+
+#[test]
+fn tier1_params_load_and_the_block_collider_resolves_to_a_kind() {
+    let files = package(|f| {
+        f.push((
+            "objects/rely_block.toml".into(),
+            b"base = \"block\"\nsprite = \"block\"\nvisual_spawns_collider = true\ncollider = \"block\"\nkid_collides = false\n".to_vec(),
+        ));
+        f.push((
+            "objects/start_b.toml".into(),
+            b"base = \"kid_start\"\nshift_at = \"room_start\"\ngrav_gated = false\ncreates = \"player_or_player2\"\n".to_vec(),
+        ));
+        f.push((
+            "objects/bullet_b.toml".into(),
+            b"base = \"kid_bullet\"\nblock_check = \"collision_destroy\"\n".to_vec(),
+        ));
+        f.push((
+            "objects/spike_b.toml".into(),
+            b"base = \"spike\"\nsprite = \"spike_up\"\nauto_rotate = true\nsize = 16\n".to_vec(),
+        ));
+    });
+    let (def, _) = load_ok(&files, TRACE);
+    let (block_id, plain) = kind_named(&def, "block");
+    assert_eq!(plain.classes, ClassMask::BLOCK);
+    let (_, rely) = kind_named(&def, "@rely_block");
+    assert_eq!(
+        rely.params.0.get("collider"),
+        Some(&ParamValue::Kind(block_id)),
+        "a kind param names a kind"
+    );
+    assert_eq!(
+        rely.params.0.get("visual_spawns_collider"),
+        Some(&ParamValue::Bool(true))
+    );
+    assert_eq!(rely.classes, ClassMask::NONE, "kid_collides = false drops BLOCK");
+    let (_, start) = kind_named(&def, "@start_b");
+    assert_eq!(start.params.0.get("grav_gated"), Some(&ParamValue::Bool(false)));
+    assert_eq!(
+        start.params.0.get("shift_at"),
+        Some(&ParamValue::Str("room_start".into()))
+    );
+    let (_, bullet) = kind_named(&def, "@bullet_b");
+    assert_eq!(
+        bullet.params.0.get("block_check"),
+        Some(&ParamValue::Str("collision_destroy".into()))
+    );
+    let (_, spike) = kind_named(&def, "@spike_b");
+    assert_eq!(spike.params.0.get("auto_rotate"), Some(&ParamValue::Bool(true)));
+}
+
+#[test]
+fn a_block_collider_that_does_not_exist_is_an_error() {
+    let files = package(|f| {
+        f.push((
+            "objects/rely_block.toml".into(),
+            b"base = \"block\"\nvisual_spawns_collider = true\ncollider = \"@nope\"\n".to_vec(),
+        ));
+    });
+    let r = load_report(&files, STRICT);
+    assert!(
+        errors(&r).iter().any(|e| e.contains("collider")),
+        "{}",
+        render(&r)
+    );
+}
