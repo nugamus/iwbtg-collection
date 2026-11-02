@@ -10,6 +10,8 @@ The engine controller, placed in `[engine] boot`. It is not a GM port: it does w
 | `mute` | bool | false | A Mute press flips `MechGlobals::music_muted` (`global.music`, true is muted). The Ctrl in Ctrl+M (wanna, xia) is the client's binding of the action. |
 | `timer_per_tick` | whole | 0 | Added to the play time every Step while not paused (family B: 2, centiseconds at 50 ticks). |
 | `timer_on_restart` | whole | 0 | Added to the play time on the retry, before the restart (family B: 2). |
+| `clear_triggers_to` | whole | none | Room Start sets `global.trigger[0]` to `[n]` false (poronkusema: 10). |
+| `clear_switches_on_room_end` | bool | false | Room End clears the switch array (go-the-spook-house). |
 
 What it does:
 
