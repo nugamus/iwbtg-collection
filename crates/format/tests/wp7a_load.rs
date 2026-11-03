@@ -1524,3 +1524,15 @@ fn a_scripted_object_runs_in_a_room() {
     }
     assert_eq!(again.state_hash(), hash, "two runs hash the same");
 }
+
+#[test]
+fn the_golden_walker_script_loads_clean_through_the_loader() {
+    // The golden corpus (crates/sim/tests/golden) runs this script; here the loader and the
+    // validator accept the same text. The corpus names its kinds without `@`.
+    let source =
+        include_str!("../../sim/tests/golden/scripted_walker.rhai").replace("\"spark\"", "\"@boss\"");
+    let files = package(|f| set(f, "scripts/boss.rhai", source));
+    let r = load_report(&files, STRICT);
+    assert!(r.ok(), "{}", render(&r));
+    assert!(!render(&r).contains("scripts/boss.rhai"), "{}", render(&r));
+}
