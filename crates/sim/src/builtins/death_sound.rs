@@ -5,6 +5,7 @@
 //! The kid's death step `death_sound` creates it. It fades the music and plays the death sound
 //! one tick after its Create:
 //!
+//! - Create: without a `music` param the music playing now is the one to fade (`sound::current_music`).
 //! - Create: `now_vol` = `start_volume` (10000 = full, the original's SuperSound scale, hundredths
 //!   of a dB); an alarm of 1 tick for the sound.
 //! - Step, while music is not muted (`MechGlobals::music_muted`): the music volume is set from
@@ -56,7 +57,7 @@ const STEP: f64 = 100.0;
 pub struct DeathSoundState {
     /// The death sound effect (none: only the fade).
     pub sound: Option<SoundId>,
-    /// The music to fade (none: only the sound).
+    /// The music to fade: the `music` param, else the music playing at Create (none: only the sound).
     pub music: Option<SoundId>,
     /// The volume the fade starts from (10000).
     pub start: Real,
@@ -114,6 +115,13 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
     let s = s.clone();
     match ev {
         EventKind::Create => {
+            // No `music` param: fade the music playing now (the original's `curMusic`).
+            if s.music.is_none() {
+                let current = sound::current_music(ctx.w);
+                if let Some(BuiltinState::DeathSound(st)) = state_mut(ctx, me) {
+                    st.music = current;
+                }
+            }
             let rules = &ctx.rules.num;
             if let Some(inst) = ctx.w.get_mut(me) {
                 alarm::set(inst, 0, Real::ONE, rules)?;
