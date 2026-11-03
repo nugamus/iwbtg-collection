@@ -237,3 +237,68 @@ fn instance_create_and_instances_charge_the_budget() {
     // 50 for the spawn, 1 for the one instance returned, and a few operations.
     assert!((51..=90).contains(&used), "used {used}");
 }
+
+#[test]
+fn a_call_may_create_256_instances_and_not_257() {
+    let ok = "fn create() { for i in 0..256 { instance_create(\"plain\", 0, 0); } }";
+    let mut f = fx(ok, true);
+    f.spawn(0, 0.0, 0.0);
+    assert_eq!(f.halted(), None);
+
+    let over = "fn create() {\n    for i in 0..257 {\n        instance_create(\"plain\", 0, 0);\n    }\n}\n";
+    let mut f = fx(over, true);
+    let e = f
+        .ctx()
+        .spawn(KindId(0), Real::new(0.0), Real::new(0.0), SpawnInit::default())
+        .expect_err("the cap stops Create")
+        .to_string();
+    assert!(
+        e.contains("spawn cap exceeded") && e.contains("at most 256 instances"),
+        "{e}"
+    );
+    assert!(
+        e.contains("scripts/walker.rhai") && e.contains("line 3") && e.contains("tick 0"),
+        "{e}"
+    );
+}
+
+#[test]
+fn the_scripts_may_create_4096_instances_per_tick_and_not_more() {
+    let src = "fn step() { for i in 0..256 { instance_create(\"plain\", 0, 0); } }";
+    // 16 calls of 256 are exactly 4,096.
+    let mut f = fx(src, true);
+    for _ in 0..16 {
+        f.spawn(0, 0.0, 0.0);
+    }
+    f.run(1);
+    assert_eq!(f.halted(), None);
+
+    let mut f = fx(src, true);
+    for _ in 0..17 {
+        f.spawn(0, 0.0, 0.0);
+    }
+    f.run(1);
+    let e = f.halted().expect("halted");
+    assert!(
+        e.contains("at most 4096 instances per tick") && e.contains("tick 0"),
+        "{e}"
+    );
+}
+
+#[test]
+fn a_room_may_not_grow_past_50000_live_instances() {
+    // 16 calls of 256 are 4,096 a tick, the most the scripts may spawn; 13 ticks pass 50,000.
+    let src = "fn step() { for i in 0..256 { instance_create(\"plain\", 0, 0); } }";
+    let mut f = fx(src, true);
+    for _ in 0..16 {
+        f.spawn(0, 0.0, 0.0);
+    }
+    f.run(12);
+    assert_eq!(f.halted(), None, "12 ticks hold 49,152 + 16 instances");
+    f.run(1);
+    let e = f.halted().expect("halted");
+    assert!(
+        e.contains("instance cap exceeded") && e.contains("50000 live instances"),
+        "{e}"
+    );
+}
