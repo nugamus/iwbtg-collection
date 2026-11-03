@@ -51,6 +51,7 @@ fn slope_jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     }
     let i = ctx.w.get(me).ok_or_else(missing)?;
     let (x, y) = (i.m.x(), i.m.y());
+    // gm-compare: ok (`probe` is a profile param, 0 turns the rule off; not a GML comparison)
     if probe == Real::ZERO || !place_meeting(ctx, me, x, y + probe, Target::Class(BOTH))? {
         return Ok(());
     }
