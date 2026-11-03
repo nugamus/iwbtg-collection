@@ -39,6 +39,8 @@ pub struct RoomFile {
     pub file_speed: Option<Spanned<u32>>,
     /// Role (CR6); `None` is play.
     pub role: Option<RoleName>,
+    /// R does nothing in this room (`no_restart`).
+    pub no_restart: bool,
     /// GM persistent room.
     pub persistent: bool,
     /// GM "enable the use of views".
@@ -169,6 +171,8 @@ pub(crate) struct RawRoom {
     #[serde(default)]
     role: Option<RoleName>,
     #[serde(default)]
+    no_restart: bool,
+    #[serde(default)]
     persistent: bool,
     #[serde(default)]
     music: Option<String>,
@@ -233,6 +237,7 @@ pub fn parse_room(id: &str, path: &str, text: &str) -> Result<RoomFile, Diagnost
         size: (w, h),
         file_speed: raw.file_speed,
         role: raw.role,
+        no_restart: raw.no_restart,
         persistent: raw.persistent,
         views_enabled: raw.views_enabled,
         views: raw.views,
@@ -349,6 +354,7 @@ instances = [
         let text = r#"size = [800, 608]
 file_speed = 30
 role = "select"
+no_restart = true
 views_enabled = true
 on_create = [
   { do = "set_global", var = "difficulty", value = 1 },
@@ -364,6 +370,7 @@ follow = "kid"
         let r = parse_room("r", "rooms/r.toml", text).unwrap();
         assert_eq!(r.file_speed.as_ref().map(|s| *s.get_ref()), Some(30));
         assert_eq!(r.role, Some(RoleName::Select));
+        assert!(r.no_restart);
         assert_eq!(r.views.len(), 1);
         assert_eq!(r.on_create.len(), 3);
         assert!(matches!(r.on_create[2].get_ref(), ActionFile::LoadGame));
