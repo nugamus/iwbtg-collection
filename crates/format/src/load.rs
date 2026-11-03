@@ -731,6 +731,7 @@ impl<'a> Loader<'a> {
             let mut k = KindDef::new(b.name(), b);
             k.classes = kind_classes(b, &Params::default(), ClassMask::NONE);
             k.solid = objects::default_solid(b);
+            k.persistent = objects::default_persistent(b);
             self.push_kind(k);
         }
         let manifest = self.m;
@@ -1057,7 +1058,9 @@ impl<'a> Loader<'a> {
         kind.solid = o.solid.unwrap_or_else(|| objects::default_solid(kind.base));
         kind.visible = o.visible.unwrap_or(true);
         kind.depth = o.depth.as_ref().map_or(Real::ZERO, |d| Real::new(*d.get_ref()));
-        kind.persistent = o.persistent.unwrap_or(false);
+        kind.persistent = o
+            .persistent
+            .unwrap_or_else(|| objects::default_persistent(kind.base));
         for (key, value) in &o.params {
             match param_value(value.get_ref()) {
                 Ok(p) => {

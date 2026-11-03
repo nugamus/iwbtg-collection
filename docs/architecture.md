@@ -358,6 +358,10 @@ Audio output is the client's job, but whether a sound **is playing** is sim stat
 
 Ground truth comes from the research repo. The Phase 2 recorder runs the original under OpenGMK with `iwc-trace.patch` and writes one CSV per case, next to its `.inputs` file, in `research/specs/engines/<engine>/traces/<game>/<case>.csv`. Selected frames are cross-checked against the real GM8 runner through the research gate.
 
+### Recorder behavior the trace runner copies
+
+The runner sets `DirectLatch::None` (the recorder has no `keyboard_check_direct` latch). Probe reads follow the recorder's row timing: `keyboard_check_pressed` and `keyboard_check_released` read 0 (rows are written after the frame), and `player.x` with no player instance reads 0 (uninitialized variables as 0, `[engine] uninit_reads_zero`).
+
 ### CSV columns
 
 The recorder's columns, as in `research/specs/engines/gm8/traces/rely-the-needle-4-2/djump.csv`:
