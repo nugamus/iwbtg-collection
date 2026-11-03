@@ -284,3 +284,21 @@ fn the_scripts_may_create_4096_instances_per_tick_and_not_more() {
         "{e}"
     );
 }
+
+#[test]
+fn a_room_may_not_grow_past_50000_live_instances() {
+    // 16 calls of 256 are 4,096 a tick, the most the scripts may spawn; 13 ticks pass 50,000.
+    let src = "fn step() { for i in 0..256 { instance_create(\"plain\", 0, 0); } }";
+    let mut f = fx(src, true);
+    for _ in 0..16 {
+        f.spawn(0, 0.0, 0.0);
+    }
+    f.run(12);
+    assert_eq!(f.halted(), None, "12 ticks hold 49,152 + 16 instances");
+    f.run(1);
+    let e = f.halted().expect("halted");
+    assert!(
+        e.contains("instance cap exceeded") && e.contains("50000 live instances"),
+        "{e}"
+    );
+}
