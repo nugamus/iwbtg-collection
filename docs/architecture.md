@@ -235,7 +235,7 @@ Scripts are Rhai under the IWS profile ([0001](decisions/0001-script-language.md
 
 ### Script API (first version)
 
-This is the starting surface. The generated reference is `docs/format/script-api.md`, and the code is the authority. Every number the API returns is a FLOAT. Every function that takes a kind, sound, room or trigger name is checked at load when the name is a string literal.
+This is the starting surface. The generated reference is `docs/format/script-api.md`, and the code is the authority; a name marked *planned* below is not registered yet, and a script that calls it fails validation. Every number the API returns is a FLOAT. Every function that takes a kind, sound, room or trigger name is checked at load when the name is a string literal.
 
 **Event functions** a script file may define: `create()`, `begin_step()`, `step()`, `end_step()`, `alarm(n)`, `collide(other)`, `trigger(name)`, `outside_room()`, `animation_end()`, `room_start()`, `room_end()`, `destroy()`, `late()`, `moment_<name>()`, and the client-only `draw(d)`.
 
@@ -244,7 +244,7 @@ This is the starting surface. The generated reference is `docs/format/script-api
 - Read and write: `x`, `y`, `hspeed`, `vspeed`, `speed`, `direction`, `gravity`, `gravity_direction`, `friction`, `sprite`, `image_index`, `image_speed`, `image_xscale`, `image_yscale`, `image_angle`, `image_alpha`, `visible`, `solid`, `depth`.
 - Read only: `xstart`, `ystart`, `xprevious`, `yprevious`, `kind`, `name`, `group`, `id`.
 - Custom variables: `this.hp = 20.0`. Unset reads are errors.
-- `this.param("hp")`: a parameter set on the instance in the room file or in the object file.
+- Parameters: the map given to `instance_create` sets them. Reading a parameter set in the room file or the object file from a script is *planned* (there is no `param` function).
 
 **Instances**
 
@@ -253,30 +253,30 @@ This is the starting surface. The generated reference is `docs/format/script-api
 | `instance_create(kind, x, y)` and `instance_create(kind, x, y, #{ ... })` (`spawn` is a reserved word in Rhai) | Returns the new `Inst`. The map sets built-in variables and parameters. |
 | `destroy(i)` | |
 | `exists(i)` | |
-| `instances(kind_or_group)` | Array in (rank, id) order, snapshotted at call time. Replaces GML `with`. |
-| `count(kind_or_group)` | |
-| `nearest(kind, x, y)` | Ties broken by (rank, id). |
-| `find(name)` | The instance with that `name` in the current room. |
+| `instances(kind)` | Array in event order, snapshotted at call time. Replaces GML `with`. Groups are *planned*. |
+| `count(kind_or_group)` | *Planned.* |
+| `nearest(kind, x, y)` | *Planned.* Ties broken by (rank, id). |
+| `find(name)` | *Planned.* The instance with that `name` in the current room. |
 
-**Collision**: `place_meeting(i, x, y, role_or_kind)`, `place_free(i, x, y)`, `collision_point(x, y, role_or_kind)`, `collision_rect(x1, y1, x2, y2, role_or_kind)`, `collision_line(x1, y1, x2, y2, role_or_kind)`. Each returns a bool or the first `Inst` in (rank, id) order.
+**Collision** (*planned*): `place_meeting(i, x, y, role_or_kind)`, `place_free(i, x, y)`, `collision_point(x, y, role_or_kind)`, `collision_rect(x1, y1, x2, y2, role_or_kind)`, `collision_line(x1, y1, x2, y2, role_or_kind)`. Each returns a bool or the first `Inst` in (rank, id) order.
 
-**Kid**: `kid()` returns a read-only view (`x`, `y`, `hspeed`, `vspeed`, `facing`, `alive`, `on_ground`), or `()` if there is no kid. `kill_kid()`. `set_kid_gravity(dir)` for gravity flips. Other knobs are added only with a CLONE_SPEC reason.
+**Kid**: `kid()` returns the kid's `Inst` handle, or `()` if there is no kid (the view of `facing`, `alive` and `on_ground` is *planned*). `kill_kid()`. `set_kid_gravity(dir)` for gravity flips is *planned*. Other knobs are added only with a CLONE_SPEC reason.
 
-**Rooms, triggers and timing**: `room_goto(room)`, `room_restart()`, `emit(trigger_name)`, `start_timeline(i, timeline)`, `stop_timeline(i)`, `set_alarm(n, ticks)`, `alarm_left(n)`, `tick()`, `room_tick()`, `room_speed()`.
+**Rooms, triggers and timing**: `emit(name)`, `this.set_alarm(n, ticks)` (a method of the instance, so `other.set_alarm(...)` works too), `this.get_alarm(n)`, `tick()` and `room_tick()` are registered. *Planned*: `room_goto(room)`, `room_restart()`, `start_timeline(i, timeline)`, `stop_timeline(i)`, `room_speed()`.
 
-**State**: `global_get(name)`, `global_set(name, v)`, `flag(name)`, `set_flag(name, v)` (flags go into the save slot).
+**State** (*planned*): `global_get(name)`, `global_set(name, v)`, `flag(name)`, `set_flag(name, v)` (flags go into the save slot).
 
-**Input** (for menus and quizzes): `pressed(action)`, `held(action)`, `released(action)`.
+**Input** (*planned*; for menus and quizzes): `pressed(action)`, `held(action)`, `released(action)`.
 
-**Audio and effects** (queued for the client, never read back): `play_sound(id)`, `play_music(id)`, `play_music(id, #{ from_tick: n })`, `stop_music()`, `shake(ticks, strength)`.
+**Audio and effects** (*planned*, queued for the client, never read back; #402): `play_sound(id)`, `play_music(id)`, `play_music(id, #{ from_tick: n })`, `stop_music()`, `shake(ticks, strength)`.
 
-**Menus and text**: `text_box(...)`, `menu(...)`. Exact shape **OPEN**, from the quiz, battle menu and difficulty menu in the shortlist games.
+**Menus and text** (*planned*): `text_box(...)`, `menu(...)`. Exact shape **OPEN**, from the quiz, battle menu and difficulty menu in the shortlist games.
 
-**Random**: `random(x)`, `irandom(n)`, `random_range(a, b)`, `choose([...])`. All draw from the sim's GM8 generator.
+**Random**: `random(x)`, `irandom(n)`, `random_range(a, b)`, `irandom_range(a, b)`, `choose([...])`. All draw from the sim's GM8 generator.
 
-**Math** (all in `sim::num`): `sin`, `cos`, `tan`, `atan2`, `dsin`, `dcos`, `darctan2`, `sqrt`, `pow`, `exp`, `ln`, `abs`, `sign`, `floor`, `ceil`, `round` (banker's), `frac`, `min`, `max`, `clamp`, `lerp`, `div`, `mod`, `point_direction`, `point_distance`, `lengthdir_x`, `lengthdir_y`, `gm_eq`, `gm_ne`, `gm_lt`, `gm_le`, `gm_gt`, `gm_ge`, `gm_bool`.
+**Math** (all in `sim::num`): `sin`, `cos`, `tan`, `arctan2`, `dsin`, `dcos`, `darctan2`, `sqrt`, `pow`, `exp`, `ln`, `abs`, `sign`, `floor`, `ceil`, `round` (banker's), `frac`, `min`, `max`, `clamp`, `lerp`, `div`, `mod`, `point_direction`, `point_distance`, `lengthdir_x`, `lengthdir_y`, `gm_eq`, `gm_ne`, `gm_lt`, `gm_le`, `gm_gt`, `gm_ge`, `gm_bool`, plus `sqr`, `degtorad`, `radtodeg`, `to_float`, `to_int` and `gm_repeat`.
 
-**Draw** (client only, inside `draw(d)`): `d.sprite(...)`, `d.rect(...)`, `d.text(...)`, `d.bar(...)`. No setters on anything.
+**Draw** (*planned*; client only, inside `draw(d)`): `d.sprite(...)`, `d.rect(...)`, `d.text(...)`, `d.bar(...)`. No setters on anything.
 
 ## Random numbers
 

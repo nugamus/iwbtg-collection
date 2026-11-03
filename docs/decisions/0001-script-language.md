@@ -151,14 +151,14 @@ These are rules for the IWS engine, the script API and every Rust built-in.
 Example:
 
 ```rhai
-fn create() { this.hp = 20.0; set_alarm(0, 50); }
+fn create() { this.hp = 20.0; this.set_alarm(0, 50); }
 
 fn alarm(n) {
     if n == 0 {
         for i in 0..12 {
-            spawn("@orb", this.x, this.y, #{ speed: 4.0, direction: i * 30.0 });
+            instance_create("@orb", this.x, this.y, #{ speed: 4.0, direction: i * 30.0 });
         }
-        set_alarm(0, 25);
+        this.set_alarm(0, 25);
     }
 }
 
