@@ -14,7 +14,7 @@ setup = []
 ignore = ["id", "sprite_index", "sprite_name"]
 
 [vars]
-"instance_number(objDeathSound)" = "instance_number(@death_sound)"
+"instance_number(objDeathSound)" = "instance_number(@death_sound_2)"
 "instance_number(player)" = "instance_number(kid)"
 
 [unprobed]

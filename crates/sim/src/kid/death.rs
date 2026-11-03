@@ -21,6 +21,7 @@ use crate::def::physics::DeathStep;
 use crate::def::room::RoomRole;
 use crate::def::{ClassMask, EngineKind, ParamValue};
 use crate::error::SimError;
+use crate::num::Real;
 use crate::room::RoomRequest;
 use crate::save;
 use crate::world::{Ctx, Flow, InstId, KindState, SpawnInit};
@@ -94,7 +95,13 @@ pub fn kill(ctx: &mut Ctx, kid: InstId, _cause: KillCause) -> Result<Flow, SimEr
                 super::actions::common::play_sound(ctx, ctx.def.physics.sounds.death)?;
             }
             DeathStep::DeathSound => {
-                ctx.spawn_engine(EngineKind::DeathSound, x, y, SpawnInit::default())?;
+                // killPlayer: instance_create(0, 0, objDeathSound), not the kid's position (kid/B.md).
+                ctx.spawn_engine(
+                    EngineKind::DeathSound,
+                    Real::ZERO,
+                    Real::ZERO,
+                    SpawnInit::default(),
+                )?;
             }
             DeathStep::BloodEmitter => {
                 let mut init = SpawnInit::default();
