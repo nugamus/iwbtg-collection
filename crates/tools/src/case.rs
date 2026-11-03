@@ -22,6 +22,8 @@
 //! ]
 //! vars = { "player.x" = "kid.x" }   # original column -> probe expression in our names
 //! ignore = ["id", "sprite_index", "sprite_name"]
+//! latch = { "global.tr_x" = [3, 20] }  # recorder `--gml` reads: the column holds the `vars` value
+//!                                    # of the frame before the last read frame (0 before the first)
 //! unprobed = { "bbox_left" = "no probe column (OPEN)" }   # not compared, reported by check
 //! rooms = { template = "rTemplate" }                     # our room id -> original room name
 //! open = "why the case cannot run yet"                   # optional; check skips it
@@ -76,6 +78,10 @@ pub struct TraceCase {
     pub vars: BTreeMap<String, String>,
     /// Columns not compared.
     pub ignore: Vec<String>,
+    /// Columns the recorder's own `--gml` wrote only before the listed frames (a save file read
+    /// into a global): the column keeps the `vars` value of the frame before the last read frame,
+    /// 0 before the first.
+    pub latch: BTreeMap<String, Vec<u32>>,
     /// Columns not compared because no probe column exists for them yet, with the reason.
     pub unprobed: BTreeMap<String, String>,
     /// Our room id to the original room name, for the `room` column.
@@ -214,6 +220,8 @@ struct RawCase {
     #[serde(default)]
     ignore: Option<Vec<String>>,
     #[serde(default)]
+    latch: BTreeMap<String, Vec<u32>>,
+    #[serde(default)]
     unprobed: BTreeMap<String, String>,
     #[serde(default)]
     rooms: BTreeMap<String, String>,
@@ -328,6 +336,7 @@ impl TraceCase {
             ignore: raw
                 .ignore
                 .unwrap_or_else(|| DEFAULT_IGNORE.iter().map(|s| s.to_string()).collect()),
+            latch: raw.latch,
             unprobed: raw.unprobed,
             rooms: raw.rooms,
             notes: raw.notes,
@@ -397,6 +406,17 @@ impl TraceCase {
                 let _ = writeln!(out, "  {},", quote(n));
             }
             let _ = writeln!(out, "]");
+        }
+        if !self.latch.is_empty() {
+            let rows: Vec<String> = self
+                .latch
+                .iter()
+                .map(|(k, v)| {
+                    let frames: Vec<String> = v.iter().map(u32::to_string).collect();
+                    format!("{} = [{}]", quote(k), frames.join(", "))
+                })
+                .collect();
+            let _ = writeln!(out, "latch = {{ {} }}", rows.join(", "));
         }
         // Tables last: every key after a `[table]` header belongs to that table.
         write_table(&mut out, "vars", &self.vars);
@@ -517,6 +537,7 @@ mod tests {
                 .into_iter()
                 .collect(),
             ignore: vec!["id".into()],
+            latch: [("global.tr_x".to_string(), vec![3, 20])].into_iter().collect(),
             unprobed: [("bbox_left".to_string(), "no probe column".to_string())]
                 .into_iter()
                 .collect(),

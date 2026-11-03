@@ -14,8 +14,8 @@ ignore = ["id", "sprite_index", "sprite_name"]
 
 [vars]
 "instance_number(player)" = "instance_number(kid)"
-"savePoint.image_index" = "save.image_index"
-"savePoint.saveTimer" = "save.saveTimer"
+"savePoint.image_index" = "@save_point_v_hard.image_index"
+"savePoint.saveTimer" = "@save_point_v_hard.saveTimer"
 
 [unprobed]
 

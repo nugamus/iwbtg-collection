@@ -2,7 +2,7 @@
 # Recorder: --object world --room rTraps --at 2 --from 2 --stub-dlls
 source = "kaenbyou/famb-death-timing-b"
 kind = "diff"
-open = "object GAMEOVER is not in the trace map; object bloodEmitter is not in the trace map"
+open = "needs the converter game_over preset @game_over_2 and the bloodEmitter life (research#89, #90)"
 start = { room = "traps", difficulty = 0 }
 at = 2
 first_frame = 2
@@ -16,6 +16,14 @@ ignore = ["id", "sprite_index", "sprite_name"]
 [vars]
 "instance_number(objDeathSound)" = "instance_number(@death_sound_2)"
 "instance_number(player)" = "instance_number(kid)"
+"instance_number(bloodEmitter)" = "instance_number(@blood_emitter_2)"
+"bloodEmitter.x" = "@blood_emitter_2.x"
+"bloodEmitter.y" = "@blood_emitter_2.y"
+"instance_number(GAMEOVER)" = "instance_number(@game_over_2)"
+"GAMEOVER.visible" = "@game_over_2.visible"
+"GAMEOVER.alarm[0]" = "@game_over_2.alarm[0]"
+"GAMEOVER.x" = "@game_over_2.x"
+"GAMEOVER.y" = "@game_over_2.y"
 
 [unprobed]
 
