@@ -65,7 +65,7 @@ pub fn sprite_images(files: &PackageFiles) -> Vec<Option<SpriteImage>> {
         .collect()
 }
 
-fn decode_png(bytes: &[u8]) -> Option<SpriteImage> {
+pub fn decode_png(bytes: &[u8]) -> Option<SpriteImage> {
     let mut decoder = png::Decoder::new(std::io::Cursor::new(bytes));
     decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
     let mut reader = decoder.read_info().ok()?;

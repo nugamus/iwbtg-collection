@@ -19,8 +19,8 @@ use crate::package::{Package, SpriteImage, sprite_images};
 
 /// The running game. Not `Send` (the script host shares state by `Rc`), so it is a non-send
 /// resource and only main-thread systems touch it.
-struct Game {
-    sim: Sim,
+pub(crate) struct Game {
+    pub(crate) sim: Sim,
 }
 
 /// The Bevy image of each sprite strip, by `SpriteId`, with the strip size.
@@ -33,7 +33,7 @@ struct Drawn(BTreeMap<InstId, Entity>);
 
 /// The room size in pixels.
 #[derive(Resource)]
-struct RoomSize(Vec2);
+pub(crate) struct RoomSize(pub(crate) Vec2);
 
 /// Decoded sprite strips, waiting for the Startup system to upload them.
 #[derive(Resource)]
@@ -115,6 +115,9 @@ pub fn run(pkg: Package, cap: FrameCap, screenshot: Option<std::path::PathBuf>) 
     .insert_resource(ClearColor(Color::BLACK))
     .insert_resource(RoomSize(Vec2::new(width, height)))
     .insert_resource(PendingImages(images))
+    .insert_resource(crate::art::ArtFiles(pkg.files.clone()))
+    .init_resource::<crate::art::ArtImages>()
+    .init_resource::<crate::art::ShownArt>()
     .init_resource::<Drawn>()
     .insert_non_send(Game { sim })
     .insert_resource(Collector::new())
@@ -134,7 +137,7 @@ pub fn run(pkg: Package, cap: FrameCap, screenshot: Option<std::path::PathBuf>) 
         collect_input.in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
     )
     .add_systems(FixedUpdate, tick)
-    .add_systems(Update, (sync_instances, overlay))
+    .add_systems(Update, (crate::art::sync_room_art, sync_instances, overlay))
     .add_systems(Last, limit_frames);
     if let Some(path) = screenshot {
         app.insert_resource(ScreenshotTo(path))

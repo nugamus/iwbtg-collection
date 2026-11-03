@@ -3,6 +3,7 @@
 //! The sim ticks at the game's rate on a fixed clock, whatever the frame rate; every visible
 //! instance with a sprite is drawn where the sim last put it.
 
+mod art;
 mod input;
 mod package;
 mod view;
