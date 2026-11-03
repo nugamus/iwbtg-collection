@@ -50,6 +50,10 @@ pub struct Issue {
     pub severity: Severity,
     /// What is wrong, with the fix when there is one.
     pub message: String,
+    /// For a string literal that names nothing: what it should name (`"sound"`) and the text.
+    /// The format loader uses it to explain an `engine:<pack>/<id>` name that does not resolve
+    /// the same way the physics `[sounds]` do.
+    pub unknown: Option<(String, String)>,
 }
 
 /// The event functions the host calls, with their argument counts. `draw(d)` and `trigger(name)`
@@ -188,8 +192,16 @@ pub enum Names {
 
 /// API functions that take a name, as (function, argument index, what it names). A new API
 /// function that takes a kind, sound or room gets a row here.
-pub const NAME_ARGS: &[(&str, usize, Names)] =
-    &[("instance_create", 0, Names::Kind), ("instances", 0, Names::Kind)];
+///
+/// A row whose function is not registered yet is inert (the call is already an error); the sound
+/// rows are ready for `play_sound` and `play_music`. Pack sounds and music are named
+/// `engine:<pack>/<id>` and are in `GameDef::sounds` under that name, like the package's own.
+pub const NAME_ARGS: &[(&str, usize, Names)] = &[
+    ("instance_create", 0, Names::Kind),
+    ("instances", 0, Names::Kind),
+    ("play_sound", 0, Names::Sound),
+    ("play_music", 0, Names::Sound),
+];
 
 /// Whether `name` is something `what` in the package.
 #[must_use]
@@ -268,7 +280,15 @@ impl Ctx<'_> {
             column: pos.position().and_then(|c| u32::try_from(c).ok()).unwrap_or(1),
             severity,
             message,
+            unknown: None,
         });
+    }
+
+    fn unknown_name(&mut self, pos: Position, what: Names, name: &str) {
+        self.error(pos, format!("unknown {} \"{name}\"", what.noun()));
+        if let Some(last) = self.issues.last_mut() {
+            last.unknown = Some((what.noun().to_owned(), name.to_owned()));
+        }
     }
 
     fn error(&mut self, pos: Position, message: impl Into<String>) {
@@ -634,7 +654,7 @@ fn check_call(cx: &mut Ctx, c: &FnCallExpr, pos: Position, method: bool) {
                 && let Some(Expr::StringConstant(s, p)) = c.args.get(*index)
                 && !resolves(cx.def, *what, s)
             {
-                cx.error(*p, format!("unknown {} \"{s}\"", what.noun()));
+                cx.unknown_name(*p, *what, s);
             }
         }
     }
@@ -762,6 +782,42 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// `play_sound` and `play_music` are not in the API yet; stubs let the name rows be tested.
+    #[test]
+    fn sound_and_music_names_resolve_including_engine_pack_names() {
+        use crate::def::testing::GameDefBuilder;
+        use crate::def::{RoomDef, SoundDef, SoundKind};
+        use crate::num::Real;
+        let mut b = GameDefBuilder::new("t373");
+        let room = b.room(RoomDef::new("room", 320, 240));
+        b.start_room(room);
+        let mut def = b.build().expect("def");
+        for name in ["boom", "engine:a1/jump"] {
+            def.sounds.push(SoundDef {
+                name: name.into(),
+                kind: SoundKind::default(),
+                length_ticks: 10,
+                volume: Real::new(1.0),
+                pan: Real::new(0.0),
+            });
+        }
+        let mut iws = Iws::new(RunnerRules::default().num);
+        iws.engine
+            .register_fn("play_sound", |_: rhai::ImmutableString| {});
+        iws.engine
+            .register_fn("play_music", |_: rhai::ImmutableString| {});
+        let registry = Registry::new(&iws);
+        let check = |src: &str| check_script(&iws, &registry, &def, 0, src);
+        assert!(check("fn step() { play_sound(\"boom\"); play_sound(\"engine:a1/jump\"); play_music(\"engine:a1/jump\"); }").is_empty());
+        let i = check("fn step() { play_sound(\"engine:a1/gone\"); play_music(\"nope\"); }");
+        assert_eq!(i.len(), 2, "{i:#?}");
+        assert_eq!(
+            i[0].unknown,
+            Some(("sound".to_owned(), "engine:a1/gone".to_owned()))
+        );
+        assert_eq!(i[0].message, "unknown sound \"engine:a1/gone\"");
     }
 
     #[test]

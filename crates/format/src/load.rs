@@ -542,19 +542,20 @@ impl<'a> Loader<'a> {
         self.diags.append(&mut d);
         // Scripts: structure, calls, name literals and lints (WP9.3).
         for issue in iwbtg_sim::script::validate::validate(&def) {
+            let (line, column, severity) = (issue.line, issue.column, issue.severity);
             let file = def
                 .scripts
                 .get(issue.script)
                 .map_or("scripts", |s| s.name.as_str());
             self.diags.push(Diagnostic {
                 file: file.to_owned(),
-                line: issue.line,
-                column: issue.column,
-                severity: match issue.severity {
+                line,
+                column,
+                severity: match severity {
                     iwbtg_sim::script::validate::Severity::Error => Severity::Error,
                     iwbtg_sim::script::validate::Severity::Warning => Severity::Warning,
                 },
-                message: issue.message,
+                message: script_issue_message(self.files, issue),
             });
         }
         Some(def)
@@ -2286,9 +2287,58 @@ fn canonical(h: &mut blake3::Hasher, v: &toml::Value) {
     }
 }
 
+/// The message of a script validator issue. A sound or music name that starts with `engine:`
+/// gets the engine pack error, the same text as the physics `[sounds]` (#373).
+fn script_issue_message(files: &PackageFiles, issue: iwbtg_sim::script::validate::Issue) -> String {
+    match &issue.unknown {
+        Some((what, name)) if name.starts_with(crate::ids::ENGINE_PREFIX) => {
+            crate::engine_pack::unresolved(files, name, what)
+        }
+        _ => issue.message,
+    }
+}
+
 #[cfg(all(test, panic = "unwind"))]
 mod tests {
     use super::*;
+
+    fn unknown_issue(name: &str) -> iwbtg_sim::script::validate::Issue {
+        iwbtg_sim::script::validate::Issue {
+            script: 0,
+            line: 1,
+            column: 1,
+            severity: iwbtg_sim::script::validate::Severity::Error,
+            message: format!("unknown sound \"{name}\""),
+            unknown: Some(("sound".to_owned(), name.to_owned())),
+        }
+    }
+
+    #[test]
+    fn a_script_engine_name_gets_the_engine_pack_error() {
+        let mut files = PackageFiles::new();
+        files
+            .insert(
+                "engine/a1/engine.toml",
+                b"id = \"a1\"
+"
+                .to_vec(),
+            )
+            .unwrap();
+        // A pack that is bundled but lacks the sound, and a pack that is not bundled.
+        assert_eq!(
+            script_issue_message(&files, unknown_issue("engine:a1/jump")),
+            crate::engine_pack::unresolved(&files, "engine:a1/jump", "sound")
+        );
+        assert!(
+            script_issue_message(&files, unknown_issue("engine:a1/jump")).contains("has no sound `jump`")
+        );
+        assert!(script_issue_message(&files, unknown_issue("engine:zz/jump")).contains("not in the package"));
+        // A plain name keeps the validator's message.
+        assert_eq!(
+            script_issue_message(&files, unknown_issue("boom")),
+            "unknown sound \"boom\""
+        );
+    }
 
     #[test]
     fn stub_names() {
