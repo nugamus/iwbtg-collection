@@ -20,7 +20,9 @@
 )]
 
 use iwbtg_sim::def::testing::GameDefBuilder;
-use iwbtg_sim::def::{Builtin, ClassMask, GameDef, KindDef, KindId, RoomDef, RoomId, VarId};
+use iwbtg_sim::def::{
+    Builtin, ClassMask, GameDef, KindDef, KindId, RoomDef, RoomId, ScriptDef, ScriptId, VarId,
+};
 use iwbtg_sim::events::{ProbeAct, ProbeOn, ProbeState, ProbeStep, probe_event_set};
 use iwbtg_sim::hash;
 use iwbtg_sim::input::{Action, InputFrame};
@@ -95,6 +97,12 @@ pub fn cases() -> Vec<Case> {
             input: random_input,
         },
         Case {
+            name: "scripted_object",
+            ticks: 3_000,
+            build: scripted_object,
+            input: no_input,
+        },
+        Case {
             name: "non_finite_halts",
             ticks: 100,
             build: non_finite,
@@ -105,6 +113,21 @@ pub fn cases() -> Vec<Case> {
 
 /// Runs one case.
 pub fn run(case: &Case) -> Outcome {
+    let (fx, ran) = run_fixture(case);
+    Outcome {
+        name: case.name,
+        ticks: ran,
+        status: match &fx.w.status {
+            SimStatus::Running => "running".to_owned(),
+            SimStatus::Halted(e) => format!("halted:{e}"),
+            other => format!("{other:?}"),
+        },
+        hash: hex(&hash::state_hash(&fx.w)),
+    }
+}
+
+/// Runs one case and returns the finished fixture and the ticks it ran.
+pub fn run_fixture(case: &Case) -> (Fixture, u64) {
     let mut fx = (case.build)();
     let mut ran = 0;
     for t in 0..case.ticks {
@@ -117,16 +140,7 @@ pub fn run(case: &Case) -> Outcome {
         let _ = tick::run_tick(&mut ctx, input);
         ran = fx.w.tick;
     }
-    Outcome {
-        name: case.name,
-        ticks: ran,
-        status: match &fx.w.status {
-            SimStatus::Running => "running".to_owned(),
-            SimStatus::Halted(e) => format!("halted:{e}"),
-            other => format!("{other:?}"),
-        },
-        hash: hex(&hash::state_hash(&fx.w)),
-    }
+    (fx, ran)
 }
 
 /// The report: one line per case.
@@ -356,5 +370,54 @@ fn non_finite() -> Fixture {
         ProbeStep::on(ProbeOn::Step, ProbeAct::Move(r(f64::NAN), r(0.0))).at(12),
     ];
     fx.probe(bad, 50.0, 50.0, s);
+    fx
+}
+
+/// Scripted objects (WP9): a walker script with create, step, alarm and collide bounces between
+/// two walls and spawns sparks (another script, destroyed by its alarm) from alarm draws of the
+/// one RNG. The scripts are the files `scripted_walker.rhai` and `scripted_spark.rhai`; the
+/// format crate's loader test loads the same text through a package.
+fn scripted_object() -> Fixture {
+    let mut b = builder();
+    let sprite = b.sprite_rect((16, 16), (8, 8));
+    let mut walker = KindDef::new("walker", Builtin::Block);
+    walker.script = Some(ScriptId(0));
+    walker.sprite = Some(sprite);
+    let mut spark = KindDef::new("spark", Builtin::Block);
+    spark.script = Some(ScriptId(1));
+    let mut wall = KindDef::new("wall", Builtin::Block);
+    wall.sprite = Some(sprite);
+    wall.classes = ClassMask::package(0).expect("class");
+    b.kind(walker);
+    b.kind(spark);
+    b.kind(wall);
+    let mut def = b.build().expect("golden def");
+    def.scripts.push(ScriptDef {
+        name: "scripts/walker.rhai".into(),
+        source: include_str!("scripted_walker.rhai").into(),
+    });
+    def.scripts.push(ScriptDef {
+        name: "scripts/spark.rhai".into(),
+        source: include_str!("scripted_spark.rhai").into(),
+    });
+    def.var_names.insert("hp".into(), VarId(1));
+    let rules = RunnerRules::default();
+    let scripts = ScriptRuntime::new(&def, &rules).expect("golden scripts compile");
+    let mut events = scripts.event_set(ScriptId(0));
+    events.collisions.push(ClassMask::package(0).expect("class"));
+    def.kinds[0].events = events;
+    def.kinds[1].events = scripts.event_set(ScriptId(1));
+    let mut fx = Fixture::new(def, 9);
+    fx.scripts = scripts;
+    let mut c = fx.ctx();
+    for (kind, x, y) in [
+        (2, 300.0, 300.0),
+        (2, 600.0, 300.0),
+        (0, 150.0, 300.0),
+        (0, 450.0, 300.0),
+    ] {
+        c.spawn(KindId(kind), r(x), r(y), SpawnInit::default())
+            .expect("golden spawn");
+    }
     fx
 }
