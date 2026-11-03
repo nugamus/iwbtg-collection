@@ -5,7 +5,7 @@ Family B's `objDeathSound` (kid/B.md "Death (killPlayer)", kaenbyou traces famb-
 | Param | Type | Default | Meaning |
 |---|---|---|---|
 | `sound` | sound | none | The death sound effect. |
-| `music` | sound | none | The music to fade. |
+| `music` | sound | the music playing at Create | The music to fade. Unset: the music playing when the object is created (the newest unended looping or MULTIMEDIA built-in copy, `sound::current_music`), because the original fades `curMusic`, which room and boss code set at run time. No music playing: only the sound. |
 | `start_volume` | real | 10000 | The fade's start, on the original's SuperSound scale (10000 is full). |
 
 - **Position**: the death step creates it at (0, 0), not at the kid (killPlayer: `instance_create(0,0,objDeathSound)`; kaenbyou audio-supersound-deathfade-a reads x 0).
