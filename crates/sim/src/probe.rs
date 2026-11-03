@@ -338,14 +338,19 @@ fn read_column(sim: &mut Sim, row: InstId, column: &Column, frame: i64) -> trace
         },
         Column::Field { target, field } => match target_instance(w, rules, row, target) {
             Some(id) => read_field(def, w, id, field, frame),
+            // `player.x` with no player reads 0 under "treat uninitialized variables as 0"
+            // (kaenbyou t5-input-restart-latch-b.csv f32-f34: id, x and hspeed all 0.0).
+            None if def.uninit_reads_zero => trace::Value::Real(0.0),
             None => trace::Value::Empty,
         },
         Column::Global(v) => w.globals.get(v).map_or(trace::Value::Empty, from_value),
         Column::Count(t) => count(w, *t),
         Column::Key(k) => match k {
             KeyRead::Held(a) => truth(w.input.held(*a)),
-            KeyRead::Pressed(a) => truth(w.input.pressed(*a)),
-            KeyRead::Released(a) => truth(w.input.released(*a)),
+            // The recorder writes its rows after the frame, when the pressed and released flags
+            // are already cleared: `keyboard_check_pressed` reads 0 on the press frame
+            // (traces/kaenbyou/t5-input-restart-latch.md, f42).
+            KeyRead::Pressed(_) | KeyRead::Released(_) => truth(false),
             KeyRead::Direct(_) => trace::Value::Empty,
         },
         Column::Save(f) => save_value(def, w, *f),
@@ -702,9 +707,36 @@ mod tests {
         assert_eq!(rows[1][4], trace::Value::Real(64.0));
         assert_eq!(rows[0][18], trace::Value::Real(1.0), "the latch reads true once");
         assert_eq!(rows[1][18], trace::Value::Real(0.0), "the first row consumed it");
-        assert_eq!(rows[1][19], trace::Value::Real(1.0), "pressed is not consumed");
+        assert_eq!(
+            rows[1][19],
+            trace::Value::Real(0.0),
+            "pressed reads 0 after the frame"
+        );
         assert_eq!(rows[0][20], trace::Value::Real(3.0));
         let again = sample(&mut sim, &probe, 4);
         assert_eq!(again[0][18], trace::Value::Real(0.0));
+    }
+
+    /// A field of an instance that does not exist reads 0 (uninitialized variables as 0), and the
+    /// pressed flag reads 0 (the recorder writes its rows after the frame).
+    #[test]
+    fn missing_instance_reads_zero_and_pressed_reads_zero() {
+        use crate::input::InputFrame;
+        let (mut sim, ids) = sim_with_blocks();
+        let col = Column::Field {
+            target: ProbeTarget::Kid,
+            field: FieldRef::Image(ImageField::Visible),
+        };
+        assert_eq!(read_column(&mut sim, ids[0], &col, 3), trace::Value::Real(0.0));
+        sim.world.input.latch(InputFrame {
+            held: 0,
+            pressed: Action::Right.bit(),
+            released: 0,
+        });
+        let pressed = Column::Key(KeyRead::Pressed(Action::Right));
+        assert_eq!(
+            read_column(&mut sim, ids[0], &pressed, 3),
+            trace::Value::Real(0.0)
+        );
     }
 }
