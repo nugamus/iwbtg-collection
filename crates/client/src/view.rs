@@ -65,6 +65,15 @@ impl std::str::FromStr for FrameCap {
     }
 }
 
+/// The part of the image holding frame `frame`. The image is a grid read row by row; the frames
+/// per row follow from the image width (the sim does not carry `columns`), so a plain strip is
+/// one row.
+fn frame_rect(frame: u32, (w, h): (f32, f32), image: Vec2) -> Rect {
+    let columns = ((image.x / w).round() as u32).max(1);
+    let (x, y) = ((frame % columns) as f32 * w, (frame / columns) as f32 * h);
+    Rect::new(x, y, x + w, y + h)
+}
+
 /// The frame cap in force.
 #[derive(Resource)]
 struct Cap(FrameCap);
@@ -317,7 +326,7 @@ fn sync_instances(
         let x = inst.m.x().get() as f32 + off.x - room.0.x / 2.0;
         let y = room.0.y / 2.0 - (inst.m.y().get() as f32 + off.y);
         let z = -(inst.depth.get() as f32) / 1000.0 + (inst.id.0 % 1000) as f32 * 1e-6;
-        let rect = Rect::new(frame as f32 * w, 0.0, (frame + 1) as f32 * w, strip.y as f32);
+        let rect = frame_rect(frame, (w, h), strip.as_vec2());
         let transform = Transform::from_xyz(x, y, z)
             .with_rotation(Quat::from_rotation_z(angle))
             .with_scale(Vec3::new(sx, sy, 1.0));
@@ -386,5 +395,19 @@ mod tests {
         assert_eq!("Unlimited".parse(), Ok(FrameCap::Unlimited));
         assert!("0".parse::<FrameCap>().is_err());
         assert!("fast".parse::<FrameCap>().is_err());
+    }
+
+    #[test]
+    fn frames_come_from_the_grid_row_by_row() {
+        let strip = Vec2::new(40.0, 10.0);
+        assert_eq!(
+            frame_rect(3, (10.0, 10.0), strip),
+            Rect::new(30.0, 0.0, 40.0, 10.0)
+        );
+        let grid = Vec2::new(30.0, 20.0);
+        assert_eq!(
+            frame_rect(4, (10.0, 10.0), grid),
+            Rect::new(10.0, 10.0, 20.0, 20.0)
+        );
     }
 }
