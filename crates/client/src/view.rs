@@ -93,7 +93,12 @@ struct Stats {
 struct Overlay;
 
 /// Opens the window and runs until it closes.
-pub fn run(pkg: Package, cap: FrameCap, screenshot: Option<std::path::PathBuf>) -> Result<(), String> {
+pub fn run(
+    pkg: Package,
+    cap: FrameCap,
+    audio_offset_ms: u32,
+    screenshot: Option<std::path::PathBuf>,
+) -> Result<(), String> {
     let def = Arc::clone(&pkg.def);
     let options = SimOptions {
         // Like a replay: a new game, in the game's `new_game_room`. The title and menus come with
@@ -106,6 +111,9 @@ pub fn run(pkg: Package, cap: FrameCap, screenshot: Option<std::path::PathBuf>) 
     let room = def.room(sim.world().room).ok_or("the start room is missing")?;
     let (width, height) = (room.width as f32, room.height as f32);
     let images = sprite_images(&pkg.files);
+    // The first room's start runs inside `Sim::new`; `step` clears its output, so take it now.
+    let mut audio_queue = crate::audio::Queue::new(audio_offset_ms);
+    audio_queue.push(Instant::now(), &sim.world().output);
     let mut app = App::new();
     app.add_plugins(
         DefaultPlugins
@@ -131,6 +139,9 @@ pub fn run(pkg: Package, cap: FrameCap, screenshot: Option<std::path::PathBuf>) 
     .insert_non_send(Game { sim })
     .insert_resource(Collector::new())
     .insert_resource(Cap(cap))
+    .insert_resource(audio_queue)
+    .insert_resource(crate::audio::Sounds::new(&pkg.files))
+    .init_resource::<crate::audio::Shake>()
     .insert_resource(Stats {
         window_start: Instant::now(),
         ticks: 0,
@@ -146,6 +157,7 @@ pub fn run(pkg: Package, cap: FrameCap, screenshot: Option<std::path::PathBuf>) 
         collect_input.in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
     )
     .add_systems(FixedUpdate, tick)
+    .add_systems(Update, (crate::audio::play, crate::audio::apply_shake))
     .add_systems(Update, (crate::art::sync_room_art, sync_instances, overlay))
     .add_systems(Last, limit_frames);
     if let Some(path) = screenshot {
@@ -224,10 +236,19 @@ fn collect_input(keys: Res<ButtonInput<KeyCode>>, mut collector: ResMut<Collecto
 }
 
 /// One sim tick: runs on the fixed clock, as many times per frame as the clock is behind.
-fn tick(mut game: NonSendMut<Game>, mut collector: ResMut<Collector>, mut stats: ResMut<Stats>) {
+fn tick(
+    mut game: NonSendMut<Game>,
+    mut collector: ResMut<Collector>,
+    mut stats: ResMut<Stats>,
+    mut audio: ResMut<crate::audio::Queue>,
+    mut shake: ResMut<crate::audio::Shake>,
+) {
     let frame = collector.take_frame();
     if game.sim.step(frame).status == SimStatus::Running {
         stats.ticks += 1;
+        let output = &game.sim.world().output;
+        audio.push(Instant::now(), output);
+        shake.tick(output);
     }
 }
 

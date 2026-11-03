@@ -35,6 +35,8 @@ The sim never parses text and never touches files. `format` hands it a validated
 
 Room art (`art.rs`): when the sim's room changes the client rebuilds the room's background colour, background image and tile layers from `rooms/<id>.toml` and `rooms/<id>.tiles.toml` (how they are drawn: docs/format/v0.md, Tiles). `crates/client/demo-art.pkg` shows a tiled background and two tile layers.
 
+Audio (`audio.rs`): each tick's `SoundOutput` events (and a script `emit(name)`, which plays the package sound of that name) go into a queue that is played back through Bevy's audio (Ogg Vorbis only, `bevy_audio` + `vorbis`). The sim decides what plays and for how long; the client only plays, loops, stops, pauses and sets volume and pitch per voice. SuperSound volumes are hundredths of a dB and become a linear factor; DLL handles (`Load { file }`) map to the package sound with the same file stem. `--audio-offset <ms>` (0 to 500, default 0) holds every cue back by that long, so it moves playback only and never the sim; it is not saved yet. The first room's start runs inside `Sim::new` and `step` clears the output, so the client queues that initial output itself. `shake(ticks, strength)` moves the camera by up to `strength` pixels each frame while it runs (a client effect with its own wobble, not the sim's random numbers). `crates/client/demo-audio.pkg` has jump, shoot and death sounds and a looping tune.
+
 ### The `iwbtg` CLI
 
 One binary for agents and CI:
