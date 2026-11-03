@@ -522,6 +522,7 @@ fn host_tick(host: &super::host::Host) -> crate::rules::TickRules {
 }
 
 fn spawn(s: &Rc<Shared>, kind: &str, x: Real, y: Real, params: Params) -> Res<Inst> {
+    s.budget.count_spawn().map_err(runtime_error)?;
     s.charge(cost("instance_create").0)?;
     let k = s.with_world(|_, host| kind_id(host, kind))??;
     let init = SpawnInit {
