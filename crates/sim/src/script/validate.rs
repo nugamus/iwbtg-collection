@@ -89,6 +89,10 @@ pub const STATE_FNS: &[&str] = &[
     "destroy",
     "emit",
     "kill_kid",
+    "play_sound",
+    "play_music",
+    "stop_music",
+    "shake",
     "print",
     "debug",
 ];
@@ -826,7 +830,6 @@ fn g() { let t = S + OFF + B; t + N }
         }
     }
 
-    /// `play_sound` and `play_music` are not in the API yet; stubs let the name rows be tested.
     #[test]
     fn sound_and_music_names_resolve_including_engine_pack_names() {
         use crate::def::testing::GameDefBuilder;
@@ -845,11 +848,7 @@ fn g() { let t = S + OFF + B; t + N }
                 pan: Real::new(0.0),
             });
         }
-        let mut iws = Iws::new(RunnerRules::default().num);
-        iws.engine
-            .register_fn("play_sound", |_: rhai::ImmutableString| {});
-        iws.engine
-            .register_fn("play_music", |_: rhai::ImmutableString| {});
+        let iws = Iws::new(RunnerRules::default().num);
         let registry = Registry::new(&iws);
         let check = |src: &str| check_script(&iws, &registry, &def, 0, src);
         assert!(check("fn step() { play_sound(\"boom\"); play_sound(\"engine:a1/jump\"); play_music(\"engine:a1/jump\"); }").is_empty());

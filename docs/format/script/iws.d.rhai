@@ -176,6 +176,10 @@ fn min(_: float, _: float) -> float;
 
 fn mod(_: float, _: float) -> float;
 
+fn play_music(_: string) -> ();
+
+fn play_sound(_: string) -> ();
+
 fn point_direction(_: float, _: float, _: float, _: float) -> float;
 
 fn point_distance(_: float, _: float, _: float, _: float) -> float;
@@ -230,6 +234,8 @@ fn set y(_: Instance, _: ?) -> ();
 
 fn set_alarm(_: Instance, _: ?, _: ?) -> ();
 
+fn shake(_: ?, _: ?) -> ();
+
 fn sign(_: float) -> float;
 
 fn sin(_: float) -> float;
@@ -237,6 +243,8 @@ fn sin(_: float) -> float;
 fn sqr(_: float) -> float;
 
 fn sqrt(_: float) -> float;
+
+fn stop_music() -> ();
 
 fn tan(_: float) -> float;
 
