@@ -94,7 +94,6 @@ mod tests {
     use iwbtg_sim::input::Action;
 
     use super::*;
-    use iwbtg_sim::input::Action;
 
     #[test]
     fn a_held_key_is_held_and_pressed_once() {
