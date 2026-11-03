@@ -874,6 +874,7 @@ Checked against `research/build/packages/rely_the_needle/` on 2026-10-24. The cl
 | CR13 | Room `file_speed` in each room file (not only in tests/trace-map.toml) | loader warning CR13 | M3a |
 | CR14 | `room_order` in game.toml (not only in tests/trace-map.toml) | loader warning CR14 | M3a |
 | CR15 | Sprite strips at most 4096 px on a side (split or re-pack wider strips) | loader warning CR15 | M3a |
+| CR19 | Write the params the built-ins take: `moving_platform` kind instead of `platform[moving]`; `save` `min_difficulty_removed` (Medium 0, Hard 1, in A3 games 2, VHard 2) instead of `difficulty`; bare `slope` instead of `dir`; `gravity_flip` `direction = "up"` or `"down"` instead of `up`. Sounds and music share one id space: a sound and a music track with the same name become `death` and `death_2` | loader warning `unknown param` (research#57); `docs/format/builtins/{moving_platform,platform,save,slope,gravity_flip}.md`; research/specs/converter-requests.md CR19 | M3a (`pkg check --trace-mode` on the 20 packages shows no `unknown param` and no duplicate sound or music id; #142) |
 
 ## 9. Trace comparison and replay (`crates/tools`, WP8a, WP8b)
 
