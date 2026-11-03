@@ -173,6 +173,21 @@ fn family_b_retry_adds_two_to_the_timer_saves_it_and_clears_frozen() {
 }
 
 #[test]
+fn r_does_nothing_in_a_no_restart_room() {
+    // animus room52 (#445): a play room where the original's R event is off.
+    let (mut def, kid) = game(|d| d.restart.kind = RestartKind::RoomGotoSaved);
+    let start = def.start_room;
+    def.rooms[start.0 as usize].no_restart = true;
+    with_ctx(&def, |ctx| {
+        ctx.w.save = Some(slot(false, 1));
+        let old = ctx.spawn(kid, r(1.0), r(2.0), SpawnInit::default()).unwrap();
+        run_restart(ctx, old).unwrap();
+        assert_eq!(ctx.w.get(old).unwrap().m.x(), r(1.0), "the kid stays");
+        assert!(ctx.w.pending.is_none());
+    });
+}
+
+#[test]
 fn the_steps_are_off_unless_the_model_asks() {
     let (def, kid) = game(|d| d.restart.kind = RestartKind::RoomGotoSaved);
     with_ctx(&def, |ctx| {

@@ -22,7 +22,7 @@ use crate::world::{Ctx, Flow, InstId};
 
 /// Runs `GameDef::restart` (the R key), called by the world instance `world`.
 ///
-/// Nothing happens in a room whose role is in `excluded_roles`. Then by kind:
+/// Nothing happens in a room whose role is in `excluded_roles` or that sets `no_restart`. Then by kind:
 ///
 /// - `GameRestartViaBoot` (groups A, B, C): count the death and write the death-only save when
 ///   `death_on_restart` says so; the kid, if one lives, is moved to the saved spot (on the R tick
@@ -45,7 +45,7 @@ use crate::world::{Ctx, Flow, InstId};
 /// `Ok(Flow::AbortTick)` when a room change was requested (R8), else `Continue`.
 pub fn run_restart(ctx: &mut Ctx, world: InstId) -> Result<Flow, SimError> {
     let model = ctx.def.restart.clone();
-    if excluded(ctx, model.excluded_roles)? {
+    if excluded(ctx, model.excluded_roles)? || ctx.def.room(ctx.w.room).is_some_and(|r| r.no_restart) {
         return Ok(Flow::Continue);
     }
     let _ = world;
