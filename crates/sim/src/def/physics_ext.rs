@@ -70,6 +70,9 @@ pub struct SlopeModel {
     pub block_step: BlockSlopeStep,
     /// The climb: 3 px sideways and 3 px up.
     pub step: Real,
+    /// Which way the `slope_mirror` row's contact goes for a right hit or `hspeed` 0, when the
+    /// climb does not apply (rori: `left`, a bug the original keeps; fairy-tale: `right`).
+    pub mirror_contact: MirrorContact,
     /// The End Step downhill snap (`downhill_snap`).
     pub downhill: Downhill,
     /// `slope_jump`: with a slope or mirrored slope within this many pixels below a Jump press
@@ -88,12 +91,28 @@ impl Default for SlopeModel {
         SlopeModel {
             block_step: BlockSlopeStep::None,
             step: Real::new(3.0),
+            mirror_contact: MirrorContact::Normal,
             downhill: Downhill::None,
             jump_probe: Real::ZERO,
             air_sprite_probe: Real::ZERO,
             keep_hspeed: false,
         }
     }
+}
+
+/// The contact direction of the `slope_mirror` row's right hit (kid/A1.md, "Collision with
+/// nanameblockR").
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MirrorContact {
+    /// The block rule: a right hit contacts toward 0, `hspeed` 0 toward 180.
+    #[default]
+    Normal,
+    /// Rori: a right hit and `hspeed` 0 contact toward 180 (a bug the original keeps).
+    Left,
+    /// Fairy-tale: a right hit and `hspeed` 0 contact toward 0.
+    Right,
 }
 
 /// How `block_slope_step` climbs.
