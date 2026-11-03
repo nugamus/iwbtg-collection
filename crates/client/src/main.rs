@@ -27,6 +27,10 @@ struct Args {
     /// rate either way.
     #[arg(long, value_name = "FPS", default_value = "60")]
     fps: view::FrameCap,
+    /// Blend frames between the last two ticks for smoother motion on fast displays. Off by
+    /// default: the originals draw every step, so a blended frame shows positions the game never had.
+    #[arg(long)]
+    interpolate: bool,
     /// Hold the sound back by this many milliseconds (0 to 500) to line it up with the picture on
     /// a slow audio device. It moves playback only, never the sim.
     #[arg(long, value_name = "MS", default_value_t = 0, value_parser = clap::value_parser!(u32).range(0..=500))]
@@ -39,7 +43,13 @@ struct Args {
 fn main() -> ExitCode {
     let args = Args::parse();
     match package::open(&args.package, args.trace_mode) {
-        Ok(pkg) => match view::run(pkg, args.fps, args.audio_offset, args.screenshot) {
+        Ok(pkg) => match view::run(
+            pkg,
+            args.fps,
+            args.interpolate,
+            args.audio_offset,
+            args.screenshot,
+        ) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("{e}");
