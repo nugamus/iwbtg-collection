@@ -238,6 +238,12 @@ fn set_alpha(fixed: Res<Time<Fixed>>, mut previous: ResMut<Previous>) {
     previous.alpha = f64::from(fixed.overstep_fraction());
 }
 
+/// A number with two decimals, without the sign of a tiny negative that rounds to zero.
+fn two(v: f64) -> String {
+    let text = format!("{v:.2}");
+    if text == "-0.00" { "0.00".to_string() } else { text }
+}
+
 /// Adds this frame's key events to the collector.
 fn collect_input(keys: Res<ButtonInput<KeyCode>>, mut collector: ResMut<Collector>) {
     for key in keys.get_just_pressed().filter_map(|k| key_code(*k)) {
@@ -308,11 +314,11 @@ fn overlay(
     );
     let kid = match world.kid(&game.sim.rules().tick).and_then(|id| world.get(id)) {
         Some(k) => format!(
-            "kid x {:.2}  y {:.2}  hspeed {:.2}  vspeed {:.2}",
-            k.m.x().get(),
-            k.m.y().get(),
-            k.m.hspeed().get() + 0.0,
-            k.m.vspeed().get() + 0.0,
+            "kid x {}  y {}  hspeed {}  vspeed {}",
+            two(k.m.x().get()),
+            two(k.m.y().get()),
+            two(k.m.hspeed().get()),
+            two(k.m.vspeed().get()),
         ),
         None => "no kid".to_string(),
     };
@@ -483,5 +489,12 @@ mod tests {
         assert_eq!(blend(Some((0.0, 0.0)), (10.0, 20.0), 0.0), (0.0, 0.0));
         assert_eq!(blend(None, (10.0, 20.0), 0.5), (10.0, 20.0));
         assert_eq!(blend(Some((0.0, 0.0)), (300.0, 0.0), 0.5), (300.0, 0.0));
+    }
+
+    #[test]
+    fn two_decimals_never_show_a_negative_zero() {
+        assert_eq!(two(-0.000_001), "0.00");
+        assert_eq!(two(-1.5), "-1.50");
+        assert_eq!(two(567.4), "567.40");
     }
 }
