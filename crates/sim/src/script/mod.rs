@@ -6,6 +6,7 @@
 
 pub mod api;
 pub mod budget;
+mod consts;
 pub mod docs;
 pub mod host;
 pub mod inst;
