@@ -9,7 +9,7 @@ publish = false
 
 [dependencies]
 iwbtg-sim.workspace = true
-iwbtg-format.workspace = true
+iwbtg-format = { workspace = true, features = ["schema"] }
 # Features picked by hand: 2D rendering and windowing, no 3D, audio or gamepad yet (those pull system libraries).
 clap.workspace = true
 png.workspace = true

@@ -9,6 +9,7 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::sprite::{Anchor, SpriteImageMode};
 use iwbtg_format::files::PackageFiles;
+use iwbtg_format::schema::TilesShape;
 use iwbtg_sim::def::RoomId;
 
 use crate::package::decode_png;
@@ -75,10 +76,12 @@ fn hex_color(s: &str) -> Option<[f32; 3]> {
     Some([c(0)?, c(2)?, c(4)?])
 }
 
-/// Reads the art keys of a room file and its optional tiles file. The loader already checked the
-/// files, so anything unreadable here is skipped.
+/// Reads the art keys of a room file and its optional tiles file. The tiles use the format's own
+/// `TilesShape`; the loader already checked both files, so a file unreadable here is skipped.
 pub fn parse_room_art(room: &str, tiles: Option<&str>) -> RoomArt {
     let mut art = RoomArt::default();
+    // shortcut: the room's background keys are read by hand because the format crate throws them
+    // away; drop this when #462 lands.
     if let Ok(t) = room.parse::<toml::Table>() {
         art.color = t
             .get("background_color")
@@ -86,40 +89,31 @@ pub fn parse_room_art(room: &str, tiles: Option<&str>) -> RoomArt {
             .and_then(hex_color);
         art.background = t.get("background").and_then(|v| v.as_str()).map(String::from);
     }
-    let Some(t) = tiles.and_then(|s| s.parse::<toml::Table>().ok()) else {
+    let Some(shape) = tiles.and_then(|s| toml::from_str::<TilesShape>(s).ok()) else {
         return art;
     };
-    for layer in t.get("layers").and_then(|v| v.as_array()).into_iter().flatten() {
-        let (Some(depth), Some(tileset)) = (
-            layer.get("depth").and_then(number),
-            layer.get("tileset").and_then(|v| v.as_str()),
-        ) else {
-            continue;
-        };
-        let tiles = layer
-            .get("tiles")
-            .and_then(|v| v.as_array())
-            .into_iter()
-            .flatten()
-            .filter_map(|t| {
-                let run = t.get("run").and_then(pair).unwrap_or((1.0, 1.0));
-                Some(Tile {
-                    pos: (number(t.get("x")?)?, number(t.get("y")?)?),
-                    src: pair(t.get("src")?)?,
-                    run: (run.0 as u32, run.1 as u32),
+    art.layers = shape
+        .layers
+        .into_iter()
+        .map(|l| Layer {
+            depth: l.depth.0,
+            tileset: l.tileset,
+            tiles: l
+                .tiles
+                .into_iter()
+                .map(|t| Tile {
+                    pos: (t.x.0, t.y.0),
+                    src: (t.src[0].0, t.src[1].0),
+                    run: t.run.map_or((1, 1), |[c, r]| (c, r)),
                 })
-            })
-            .collect();
-        art.layers.push(Layer {
-            depth,
-            tileset: tileset.to_string(),
-            tiles,
-        });
-    }
+                .collect(),
+        })
+        .collect();
     art
 }
 
 /// The size of one tile of a tileset: `tile_size = [w, h]` in `backgrounds/<id>.toml`.
+// shortcut: read by hand because no format type has the tileset sidecar; drop this when #462 lands.
 fn tile_size(files: &PackageFiles, tileset: &str) -> (u32, u32) {
     files
         .get(&format!("backgrounds/{tileset}.toml"))
