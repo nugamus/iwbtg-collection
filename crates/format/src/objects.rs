@@ -227,7 +227,7 @@ pub fn default_solid(b: Builtin) -> bool {
     )
 }
 
-/// Classes that a kind's params pick (Design): water `variant` 2 and 3, vine `side`, and a
+/// Classes that a kind's params pick (Design): water `variant` 2 and 3, vine `side`, a killer with `kill_outside_view` (no class: it kills in its own collision), and a
 /// block with `kid_collides = false`, which has no class at all so the kid has no collision
 /// event with it (docs/format/builtins/block.md).
 pub fn param_classes(b: Builtin, params: &Params) -> Option<ClassMask> {
@@ -241,6 +241,9 @@ pub fn param_classes(b: Builtin, params: &Params) -> Option<ClassMask> {
             Some(ParamValue::Real(v)) if v.to_bits() == 3.0f64.to_bits() => Some(ClassMask::WATER3),
             _ => None,
         },
+        Builtin::Killer if matches!(get("kill_outside_view"), Some(ParamValue::Bool(true))) => {
+            Some(ClassMask::NONE)
+        }
         Builtin::Vine => match get("side") {
             Some(ParamValue::Str(s)) if s == "left" => Some(ClassMask::VINE_L),
             Some(ParamValue::Str(s)) if s == "right" => Some(ClassMask::VINE_R),
@@ -336,5 +339,20 @@ mod tests {
         );
         assert_eq!(legacy_role_classes("killer"), Some(ClassMask::KILLER));
         assert_eq!(legacy_role_classes("nope"), None);
+    }
+
+    /// A killer with `kill_outside_view` (kaenbyou borderKiller) is not in the `killer` class.
+    #[test]
+    fn kill_outside_view_drops_the_killer_class() {
+        let mut p = Params::default();
+        assert_eq!(
+            kind_classes(Builtin::Killer, &p, ClassMask::NONE),
+            ClassMask::KILLER
+        );
+        p.0.insert("kill_outside_view".into(), ParamValue::Bool(true));
+        assert_eq!(
+            kind_classes(Builtin::Killer, &p, ClassMask::NONE),
+            ClassMask::NONE
+        );
     }
 }
