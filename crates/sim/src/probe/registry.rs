@@ -349,7 +349,10 @@ mod tests {
         );
         // The engine's globals come first, even when the package interned a variable of that name
         // (a save point's `difficulty` parameter does).
-        assert_eq!(column("global.difficulty", &d), Ok(Column::Engine(EngineVar::Difficulty)));
+        assert_eq!(
+            column("global.difficulty", &d),
+            Ok(Column::Engine(EngineVar::Difficulty))
+        );
         assert_eq!(column("global.death", &d), Ok(Column::Engine(EngineVar::Death)));
         assert_eq!(column("global.paused", &d), Ok(Column::Engine(EngineVar::Paused)));
         assert_eq!(column("room_speed", &d), Ok(Column::Engine(EngineVar::RoomSpeed)));
