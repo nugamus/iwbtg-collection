@@ -317,7 +317,11 @@ fn sync_instances(
         let x = inst.m.x().get() as f32 + off.x - room.0.x / 2.0;
         let y = room.0.y / 2.0 - (inst.m.y().get() as f32 + off.y);
         let z = -(inst.depth.get() as f32) / 1000.0 + (inst.id.0 % 1000) as f32 * 1e-6;
-        let rect = Rect::new(frame as f32 * w, 0.0, (frame + 1) as f32 * w, strip.y as f32);
+        // The image is a grid of `columns` frames per row (a single row for a plain strip).
+        let columns = ((strip.x as f32 / w).round() as u32).max(1);
+        let (col, row) = (frame % columns, frame / columns);
+        let (x0, y0) = (col as f32 * w, row as f32 * h);
+        let rect = Rect::new(x0, y0, x0 + w, y0 + h);
         let transform = Transform::from_xyz(x, y, z)
             .with_rotation(Quat::from_rotation_z(angle))
             .with_scale(Vec3::new(sx, sy, 1.0));
