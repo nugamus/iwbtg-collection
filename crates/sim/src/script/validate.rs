@@ -310,7 +310,7 @@ fn check_script(iws: &Iws, registry: &Registry, def: &GameDef, script: usize, so
         impure: BTreeSet::new(),
         issues: Vec::new(),
     };
-    let ast = match iws.engine.compile(source) {
+    let ast = match iws.compile_ast(source) {
         Ok(ast) => ast,
         Err(e) => {
             cx.error(e.position(), format!("compile error: {}", e.err_type()));
@@ -364,6 +364,7 @@ struct SwitchFrame {
 
 fn scan_tokens(iws: &Iws, source: &str) -> Tokens {
     let inputs = [source];
+    iws.reset_consts();
     let (stream, _) = iws.engine.lex(&inputs);
     let mut out = Tokens {
         fn_pos: BTreeMap::new(),
@@ -731,6 +732,47 @@ fn check_name_compare(cx: &mut Ctx, e: &Expr) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn run_f(src: &str, f: &str) -> f64 {
+        let iws = Iws::new(RunnerRules::default().num);
+        let ast = iws.compile(src).expect("compiles");
+        iws.call_fn::<f64>(&ast, f, ()).expect("runs")
+    }
+
+    #[test]
+    fn a_top_level_const_is_visible_in_functions() {
+        let src = "const S = 4.0; const N = -3; const OFF = -1.5; const B = S;
+                   fn f() { S * 2.0 }
+fn g() { let t = S + OFF + B; t + N }
+                   fn h(x) { let y = 1.0; y + x }";
+        assert!((run_f(src, "f") - 8.0).abs() < 1e-12);
+        assert!((run_f(src, "g") - (4.0 - 1.5 + 4.0 - 3.0)).abs() < 1e-12);
+        let iws = Iws::new(RunnerRules::default().num);
+        let ast = iws
+            .compile("const NAME = \"a\"; fn f() { if NAME + \"b\" == \"ab\" { 1.0 } else { 0.0 } }")
+            .expect("compiles");
+        assert!((iws.call_fn::<f64>(&ast, "f", ()).expect("runs") - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn a_const_does_not_leak_into_the_next_script() {
+        let iws = Iws::new(RunnerRules::default().num);
+        iws.compile("const S = 4.0; fn f() { S }").expect("compiles");
+        assert!(
+            iws.compile("fn f() { S }").is_err(),
+            "S is undefined in a script without it"
+        );
+        // A property with the const's name is not replaced.
+        let ast = iws.compile("const hp = 4.0; fn f(i) { i.hp }").expect("compiles");
+        assert!(iws.call_fn::<f64>(&ast, "f", (1_i64,)).is_err());
+    }
+
+    #[test]
+    fn a_const_that_is_an_expression_is_top_level_only() {
+        let iws = Iws::new(RunnerRules::default().num);
+        let err = iws.compile("const S = 2.0 * 3.0; fn f() { S }").unwrap_err();
+        assert!(err.message.contains("S"), "{err}");
+    }
 
     #[test]
     fn classified_functions_cover_the_registry() {

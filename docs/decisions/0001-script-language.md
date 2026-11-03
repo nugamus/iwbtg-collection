@@ -138,7 +138,7 @@ These are rules for the IWS engine, the script API and every Rust built-in.
 
 ### How scripts call the API
 
-- A scripted object has one `.rhai` file of event functions. The file may contain only `fn` and `const` items at top level.
+- A scripted object has one `.rhai` file of event functions. The file may contain only `fn` and `const` items at top level. A `const` whose value is a literal (a number, a string, `true` or `false`, a number with a minus sign) is visible inside every function below it, as if the literal were written there; a const whose value is an expression works at the top level only, a const must be declared above the function that uses it, and its name cannot be reused for a variable or a parameter.
 - The host calls an event function with `this` bound (`call_fn_with_options` with `bind_this_ptr`). `this` is an `Inst` handle: an instance id plus a generation check.
 - Event functions, named after GM events so ports map one to one: `create()`, `begin_step()`, `step()`, `end_step()`, `alarm(n)`, `collide(other)` (only for kinds listed in the object's `collides_with`), `trigger(name)`, `outside_room()`, `animation_end()`, `room_start()`, `room_end()`, `destroy()`, `late()` and `moment_<name>()` for timeline entries.
 - `late()` runs at the position of GM8's Draw event, after End Step, and may change state. It exists because some originals change gameplay state in Draw.
