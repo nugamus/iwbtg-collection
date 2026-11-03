@@ -5,7 +5,7 @@ kind = "diff"
 start = { room = "room_1", difficulty = 1 }
 at = 2
 first_frame = 2
-object = "save"
+object = "@save_point"
 original_object = "savePoint"
 dll_mode = "stub"
 seed = 0
@@ -15,7 +15,6 @@ ignore = ["id", "sprite_index", "sprite_name"]
 [vars]
 
 [unprobed]
-"saveTimer" = "the built-in now counts it like kaenbyou with on_touch = skip_held and cooldown = 30; the converter does not emit those params yet (research#55), and the frame-140 restart row is #412"
 "distance_to_object(player)" = "a function call; the probe reads variables only (OPEN)"
 
 [rooms]
