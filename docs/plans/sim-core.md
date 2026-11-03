@@ -1255,7 +1255,7 @@ Every rule the sim needs that the spec marks UNKNOWN, Inferred or Conflict, or t
 | M3 | Negative speed representation | UNKNOWN U4 | `Motion::recompute_cartesian` | store speed as written | t-mot-05 (rec) |
 | M4 | Direction when h and v are both 0 | UNKNOWN U5 | `Motion::recompute_polar` | `atan2(-0.0, 0.0)` result | t-mot-06 (rec) |
 | M5 | Polar recompute formula and zero signs | Inferred, Trace-consistent | `Motion::recompute_polar` | `radtodeg(atan2(-v, h))`, +360 if `< 0` | stand, t-alarm-1 |
-| M6 | Trig bits for non-table angles: x87 vs libm | UNKNOWN numbers | `num::trig` | libm, table for 0/90/180/270; `atan2` correctly rounded (double-double refinement of libm), snapped to the double below pi/2 when `\|x\| / \|y\| < 1e-15` (cutoff OPEN, between 3.5e-16 and ordinary vectors) | num-trig, kaenbyou land-moving, vines |
+| M6 | Trig bits for non-table angles: x87 vs libm | UNKNOWN numbers | `num::trig` | libm, table for 0/90/180/270; `atan2` correctly rounded (double-double refinement of libm), snapped to the double below pi/2 when `\|x\| / \|y\| < 1e-13` (cutoff OPEN, between 1.9e-14 and 6.8e-5, traces rely num-rng-b and kaenbyou t-mot-04) | num-trig, kaenbyou land-moving, vines |
 | M7 | Solid re-move uses current speeds; "kept at previous place" | Inferred / UNKNOWN motion U7 | `collide::solid_resolve`, `CollideRules::solid_recheck` | add speeds after event; recheck vs `b`; restore event position | T-MOT-07, t-col-04 (rec) |
 | M8 | Path following | UNKNOWN U9, U-MECH-4 | `path::advance` | linear segments by `speed / length`, closed loops wrap | TR-MECH-02 |
 
