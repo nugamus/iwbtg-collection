@@ -173,6 +173,25 @@ fn family_b_retry_adds_two_to_the_timer_saves_it_and_clears_frozen() {
 }
 
 #[test]
+fn a_death_only_save_without_a_death_is_save_death_time_on_game_restart_via_boot() {
+    // wanna (C13): saveDeathTime runs before loadGame and R adds no death (#441).
+    let (def, kid) = game(|d| {
+        d.restart.kind = RestartKind::GameRestartViaBoot;
+        d.restart.kid_steps.save_death_time = true;
+    });
+    with_ctx(&def, |ctx| {
+        ctx.w.save = Some(slot(false, 1));
+        ctx.w.engine.run.time = 10;
+        ctx.w.engine.run.deaths = 3;
+        let old = ctx.spawn(kid, r(1.0), r(2.0), SpawnInit::default()).unwrap();
+        run_restart(ctx, old).unwrap();
+        assert_eq!(ctx.w.engine.run.deaths, 3, "no death");
+        assert_eq!(ctx.w.save.as_ref().unwrap().time, 10, "the time is saved");
+        assert_eq!(ctx.w.save.as_ref().unwrap().deaths, 3, "and the deaths");
+    });
+}
+
+#[test]
 fn the_steps_are_off_unless_the_model_asks() {
     let (def, kid) = game(|d| d.restart.kind = RestartKind::RoomGotoSaved);
     with_ctx(&def, |ctx| {
