@@ -91,6 +91,8 @@ pub fn key_code(key: bevy::input::keyboard::KeyCode) -> Option<u8> {
 
 #[cfg(test)]
 mod tests {
+    use iwbtg_sim::input::Action;
+
     use super::*;
     use iwbtg_sim::input::Action;
 

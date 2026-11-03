@@ -204,6 +204,12 @@ fn setup(
     commands.insert_resource(Textures(textures));
 }
 
+/// A number with two decimals, without the sign of a tiny negative that rounds to zero.
+fn two(v: f64) -> String {
+    let text = format!("{v:.2}");
+    if text == "-0.00" { "0.00".to_string() } else { text }
+}
+
 /// Adds this frame's key events to the collector.
 fn collect_input(keys: Res<ButtonInput<KeyCode>>, mut collector: ResMut<Collector>) {
     for key in keys.get_just_pressed().filter_map(|k| key_code(*k)) {
@@ -252,12 +258,29 @@ fn overlay(
         SimStatus::Halted(e) => format!("  HALTED: {e}"),
         SimStatus::Ended => "  ended".to_string(),
     };
+    let world = game.sim.world();
+    let room = game.sim.def().room(world.room).map_or_else(
+        || "?".to_string(),
+        |r| format!("{} ({}x{})", r.name, r.width, r.height),
+    );
+    let kid = match world.kid(&game.sim.rules().tick).and_then(|id| world.get(id)) {
+        Some(k) => format!(
+            "kid x {}  y {}  hspeed {}  vspeed {}",
+            two(k.m.x().get()),
+            two(k.m.y().get()),
+            two(k.m.hspeed().get()),
+            two(k.m.vspeed().get()),
+        ),
+        None => "no kid".to_string(),
+    };
     label.0 = format!(
-        "ticks/s {:.1} (game {})  fps {:.0}  tick {}{status}  [F3 hides]",
+        "ticks/s {:.1} (game {})  fps {:.0}  tick {}{status}  [F3 hides]
+room {room}
+{kid}",
         stats.ticks_per_second,
         game.sim.def().tick_rate,
         stats.frames_per_second,
-        game.sim.world().tick,
+        world.tick,
     );
 }
 
@@ -409,5 +432,12 @@ mod tests {
             frame_rect(4, (10.0, 10.0), grid),
             Rect::new(10.0, 10.0, 20.0, 20.0)
         );
+    }
+
+    #[test]
+    fn two_decimals_never_show_a_negative_zero() {
+        assert_eq!(two(-0.000_001), "0.00");
+        assert_eq!(two(-1.5), "-1.50");
+        assert_eq!(two(567.4), "567.40");
     }
 }
