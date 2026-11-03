@@ -1,0 +1,26 @@
+# Imported from research trace kaenbyou/num-alarm-half by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object objBossSampleBuffed --room rBossSampleBuffed --at 2 --from 2 --stub-dlls (1 --gml)
+source = "kaenbyou/num-alarm-half"
+kind = "diff"
+open = "setup sets global.god_mode, and no spec says what the game reads it for (OPEN, research issue on god_mode)"
+start = { room = "boss_sample_buffed", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "@boss_sample_buffed"
+original_object = "objBossSampleBuffed"
+dll_mode = "stub"
+seed = 0
+setup = [
+  { frame = 3, global = "god_mode", value = 1.0 },
+  { frame = 3, target = "@boss_sample_buffed", set = { buff = 1.0 } },
+]
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+"instance_number(objBossBullet)" = "instance_number(@boss_bullet)"
+"instance_number(player)" = "instance_number(kid)"
+
+[unprobed]
+
+[rooms]
+"boss_sample_buffed" = "rBossSampleBuffed"

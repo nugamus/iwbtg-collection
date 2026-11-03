@@ -8,6 +8,10 @@ use crate::def::GameDef;
 use crate::error::SimError;
 use crate::rules::CollideRules;
 
+/// Most live instances a world holds (decision 0001, host caps; the room format caps a room's
+/// own instances at the same number). Spawning past it halts the sim.
+pub const MAX_LIVE_INSTANCES: usize = 50_000;
+
 impl World {
     /// Position of `id` in [`World::instances`], alive or dead-this-tick.
     pub fn index_of(&self, id: InstId) -> Option<usize> {
@@ -25,8 +29,15 @@ impl World {
     }
 
     /// Appends an instance. Its id must be greater than every id already stored (ids from
-    /// [`World::alloc_id`] are), which keeps the store sorted; anything else is an error.
+    /// [`World::alloc_id`] are), which keeps the store sorted; anything else is an error. Past
+    /// [`MAX_LIVE_INSTANCES`] live instances it is an error too.
     pub fn insert(&mut self, inst: Instance) -> Result<(), SimError> {
+        // `len` counts instances destroyed this tick, so the exact count runs only near the cap.
+        if self.instances.len() >= MAX_LIVE_INSTANCES && self.iter_alive().count() >= MAX_LIVE_INSTANCES {
+            return Err(SimError::unsupported(format!(
+                "instance cap exceeded: a room holds at most {MAX_LIVE_INSTANCES} live instances"
+            )));
+        }
         if let Some(last) = self.instances.last()
             && last.id >= inst.id
         {
@@ -79,6 +90,22 @@ mod tests {
         assert!(w.get(InstId(5)).is_none());
         let stale = Instance::new(a, KindId(0), 0, Real::ZERO, Real::ZERO);
         assert!(w.insert(stale).is_err(), "out-of-order insert is refused");
+    }
+
+    #[test]
+    fn the_live_instance_cap_halts_a_spawn() {
+        use super::MAX_LIVE_INSTANCES;
+        let mut w = World::new(RoomId(0), 1);
+        let ids: Vec<InstId> = (0..MAX_LIVE_INSTANCES).map(|_| spawn(&mut w, 0)).collect();
+        let id = w.alloc_id().unwrap();
+        let err = w
+            .insert(Instance::new(id, KindId(0), 0, Real::ZERO, Real::ZERO))
+            .unwrap_err();
+        assert!(err.to_string().contains("50000 live instances"), "{err}");
+        // Instances destroyed this tick do not count, even before the sweep.
+        w.get_mut(ids[0]).unwrap().alive = false;
+        spawn(&mut w, 0);
+        assert_eq!(w.iter_alive().count(), MAX_LIVE_INSTANCES);
     }
 
     #[test]

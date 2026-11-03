@@ -916,13 +916,14 @@ ignore = ["id", "sprite_index"]
 // crates/sim/src/probe.rs (WP8a): read-only sampling, compiled into every build
 pub struct Probe { pub object: Target, pub columns: Vec<Column> }
 pub enum Column { Fixed(FixedColumn), Field { target: ProbeTarget, field: FieldRef }, Global(VarId),
-                  Count(Target), Key(KeyRead), Save(SaveField) }
+                  Count(Target), Key(KeyRead), Save(SaveField), Engine(EngineVar) }
 pub enum KeyRead { Held(Action), Pressed(Action), Released(Action), Direct(Action) }
 pub fn sample(sim: &mut Sim, probe: &Probe, frame: i64) -> Vec<Vec<trace::Value>>;
 // crates/sim/src/probe/registry.rs (WP8a): GM name -> field
 pub fn resolve(name: &str, def: &GameDef) -> Option<FieldRef>;   // "djump", "curJumps", "jump[1]", "alarm[0]", "image_index", ...
 ```
 
+- `Engine(EngineVar)` reads engine state the package does not declare as a variable: `global.difficulty`, `death`, `time`, `savenum`, `clear`, `frozen`, `frozen2`, `reverse`, `grav`, `paused` and `room_speed`. These names win over a package variable of the same name (a save point's `difficulty` parameter interns one). Audio settings (`global.audio_*`, `stream_music`) are not sim state; cases list them in `[unprobed]`. `grav` on a family B kid reads the profile gravity (kid/B.md: declared, never read); `saveTimer` on a `save` instance reads its cooldown timer. `save.<name>` is a save slot field when it is one, else a field of the first `save` instance.
 - Kid fields resolve through `kid::api::read_field` (1.6), so WP8a never depends on `KidState` layout; save fields through `SaveField`.
 - `KeyRead::Direct` **consumes** the latch, because the recorder's own `keyboard_check_direct` column read it at the sample point and so changed the original run the same way. `sample` therefore takes `&mut Sim`. Whether the recorder's read really consumed it is checked against `t4-input-direct-tap-*` and `t5-input-restart-latch-*` (I1).
 - Sample point: after phase 13, before the room change (2.1). One row per alive instance of the traced kind, in dispatch order. Rows only for frames the original has.

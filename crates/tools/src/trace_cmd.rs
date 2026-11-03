@@ -404,31 +404,14 @@ pub fn load_package(dir: &Path) -> Result<PackageFiles, ToolError> {
     Ok(files)
 }
 
-/// Bundles the engine pack of a package folder (docs/format/engine.md): when `game.toml` names an
-/// `engine_pack` and the folder has no `engine/<pack>/` yet, the pack is read from the sibling
-/// `../_engines/<pack>/` and the files the package uses are copied in under `engine/<pack>/`, as
-/// the package builder does. A pack folder that is missing is left to the loader to report.
+/// Bundles the engine pack of a package folder (docs/format/engine.md); see
+/// `iwbtg_format::engine_pack::bundle_sibling`.
 pub fn bundle_engine_pack(dir: &Path, files: &mut PackageFiles) -> Result<(), ToolError> {
-    let Some(pack) = files
-        .get("game.toml")
-        .and_then(|b| std::str::from_utf8(b).ok())
-        .and_then(|t| t.parse::<toml::Table>().ok())
-        .and_then(|t| t.get("engine_pack").and_then(|v| v.as_str().map(str::to_owned)))
-    else {
-        return Ok(());
-    };
-    // `dir` may be written as `.`; the sibling folder is next to the canonical package folder.
-    let root = std::fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
-    let Some(pack_dir) = root.parent().map(|p| p.join("_engines").join(&pack)) else {
-        return Ok(());
-    };
-    if !pack_dir.is_dir() {
-        return Ok(());
-    }
-    let pack_files = PackageFiles::load_dir(&pack_dir)
-        .map_err(|e| ToolError::Message(format!("{}: {e}", pack_dir.display())))?;
-    for missing in iwbtg_format::engine_pack::bundle(files, &pack, &pack_files) {
-        eprintln!("warning: `{missing}` is not in the engine pack `{pack}`");
+    let pack_dir = dir.display();
+    let missing = iwbtg_format::engine_pack::bundle_sibling(dir, files)
+        .map_err(|e| ToolError::Message(format!("{pack_dir}: {e}")))?;
+    for m in missing {
+        eprintln!("warning: `{m}` is not in the engine pack");
     }
     Ok(())
 }

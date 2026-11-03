@@ -1,0 +1,27 @@
+# Imported from research trace kaenbyou/t-mot-04 by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object objBossBullet --room rBossSample --at 2 --from 1480 --stub-dlls (1 --gml)
+source = "kaenbyou/t-mot-04"
+kind = "diff"
+open = "setup sets global.god_mode, and no spec says what the game reads it for (OPEN, research issue on god_mode)"
+start = { room = "boss_sample", difficulty = 0 }
+at = 2
+first_frame = 1480
+object = "@boss_bullet"
+original_object = "objBossBullet"
+dll_mode = "stub"
+seed = 0
+setup = [
+  { frame = 3, global = "god_mode", value = 1.0 },
+]
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+"objBossSample.nextAttack" = "@boss_sample.nextAttack"
+"objBossSample.windy" = "@boss_sample.windy"
+"player.hspeed" = "kid.hspeed"
+"player.x" = "kid.x"
+
+[unprobed]
+
+[rooms]
+"boss_sample" = "rBossSample"

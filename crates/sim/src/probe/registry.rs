@@ -7,7 +7,7 @@
 //! or a save field. Original GameMaker names never reach the sim: `iwbtg trace import` translates
 //! them through the package's trace map first.
 
-use super::{Column, FieldRef, FixedColumn, ImageField, KeyRead, ProbeTarget, SaveField};
+use super::{Column, EngineVar, FieldRef, FixedColumn, ImageField, KeyRead, ProbeTarget, SaveField};
 use crate::collide::Target;
 use crate::def::{ClassMask, GameDef, KindId, NameId};
 use crate::input::Action;
@@ -76,11 +76,12 @@ pub fn resolve(name: &str, def: &GameDef) -> Option<FieldRef> {
 /// - `kid.<field>`: a field of the kid (`World::kid`, R21);
 /// - `<kind>.<field>`: a field of the first instance of that kind (R21);
 /// - `named(<instance name>).<field>`: a field of the instance with that room-file name;
-/// - `global.<name>`: a global the package declares;
+/// - `global.<name>`: a global the package declares, else engine state (`difficulty`, `death`, `time`,
+///   `savenum`, `clear`, `frozen`, `frozen2`, `reverse`, `grav`, `paused`); `room_speed` is engine state too;
 /// - `instance_number(<target>)`, where a target is a kind name or `class:<class name>`;
 /// - `keyboard_check(<action>)`, `keyboard_check_pressed(...)`, `keyboard_check_released(...)`,
 ///   `keyboard_check_direct(...)`, with an action name (`jump`, `right`);
-/// - `save.<field>`: `exists`, `room`, `x`, `y`, `flipped`, `facing`, `difficulty`, `deaths`,
+/// - `save.<field>`: (a slot field, else the field of the first `save` kind instance) `exists`, `room`, `x`, `y`, `flipped`, `facing`, `difficulty`, `deaths`,
 ///   `time`, `bosses`, `items`, `clear`.
 ///
 /// The error says what could not be read.
@@ -106,16 +107,21 @@ pub fn column(expr: &str, def: &GameDef) -> Result<Column, String> {
         if index.is_some() {
             return Err(format!("{expr:?}: global arrays are not probe columns"));
         }
+        // The engine's own globals first: `var_names` also holds instance parameters (a save
+        // point's `difficulty`), which are not the global of that name.
+        if let Some(v) = EngineVar::global(base) {
+            return Ok(Column::Engine(v));
+        }
         return def
             .var_names
             .get(base)
             .map(|v| Column::Global(*v))
             .ok_or_else(|| format!("{expr:?}: the package declares no global {base:?}"));
     }
-    if let Some(name) = expr.strip_prefix("save.") {
-        return save_field(name)
-            .map(Column::Save)
-            .ok_or_else(|| format!("{expr:?} is not a save field"));
+    // A save slot field; a name that is none falls through, because `save` is also the save
+    // point's kind (`save.image_index` is that kind's field).
+    if let Some(f) = expr.strip_prefix("save.").and_then(save_field) {
+        return Ok(Column::Save(f));
     }
     if let Some(rest) = expr.strip_prefix("named(") {
         let (inst, field) = rest
@@ -138,6 +144,9 @@ pub fn column(expr: &str, def: &GameDef) -> Result<Column, String> {
             ))
         };
         return field_column(owner_target, field, def, expr);
+    }
+    if expr == "room_speed" {
+        return Ok(Column::Engine(EngineVar::RoomSpeed));
     }
     field_column(ProbeTarget::Row, expr, def, expr)
 }
@@ -338,7 +347,16 @@ mod tests {
                 FieldRef::Image(ImageField::Visible)
             )
         );
-        assert_eq!(column("global.difficulty", &d), Ok(Column::Global(VarId(1))));
+        // The engine's globals come first, even when the package interned a variable of that name
+        // (a save point's `difficulty` parameter does).
+        assert_eq!(
+            column("global.difficulty", &d),
+            Ok(Column::Engine(EngineVar::Difficulty))
+        );
+        assert_eq!(column("global.death", &d), Ok(Column::Engine(EngineVar::Death)));
+        assert_eq!(column("global.paused", &d), Ok(Column::Engine(EngineVar::Paused)));
+        assert_eq!(column("room_speed", &d), Ok(Column::Engine(EngineVar::RoomSpeed)));
+        assert_eq!(column("global.hp", &d), Ok(Column::Global(VarId(0))));
         assert_eq!(
             column("instance_number(@bullet)", &d),
             Ok(Column::Count(Target::Kind(KindId(1))))
@@ -361,7 +379,7 @@ mod tests {
         );
         assert_eq!(column("save.deaths", &d), Ok(Column::Save(SaveField::Deaths)));
         for bad in [
-            "global.grav",
+            "global.audio_music_volume",
             "global.a[1]",
             "player.x",
             "kid.bbox_left",
