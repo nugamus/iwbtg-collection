@@ -1,6 +1,6 @@
 #:schema ../../../../../docs/format/schema/v0/sprite.schema.json
 frames = 1
 frame_size = [32, 32]
-origin = [0, 0]
+origin = [17, 23]
 collision = "rect"
 bbox = [12, 11, 22, 31]
