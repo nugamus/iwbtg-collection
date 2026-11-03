@@ -460,7 +460,10 @@ mod wp6a {
     /// tick (timer 1 to 0) saves again.
     #[test]
     fn skip_held_timer_counts_only_on_held_ticks() {
-        let g = save_game(params(&[("on_touch", word("skip_held")), ("cooldown", real(30.0))]));
+        let g = save_game(params(&[
+            ("on_touch", word("skip_held")),
+            ("cooldown", real(30.0)),
+        ]));
         let (mut w, sp, _kid) = save_world(&g);
         for _ in 0..40 {
             fire(&g, &mut w, sp, &EventKind::Step);
