@@ -44,39 +44,39 @@ op >=(_: float, _: int) -> bool;
 
 op >=(_: int, _: float) -> bool;
 
-fn abs(_: float) -> float;
+fn abs(_: ?) -> float;
 
-fn arctan2(_: float, _: float) -> float;
+fn arctan2(_: ?, _: ?) -> float;
 
-fn ceil(_: float) -> float;
+fn ceil(_: ?) -> float;
 
 fn choose(_: array) -> ?;
 
-fn clamp(_: float, _: float, _: float) -> float;
+fn clamp(_: ?, _: ?, _: ?) -> float;
 
-fn cos(_: float) -> float;
+fn cos(_: ?) -> float;
 
-fn darctan2(_: float, _: float) -> float;
+fn darctan2(_: ?, _: ?) -> float;
 
-fn dcos(_: float) -> float;
+fn dcos(_: ?) -> float;
 
-fn degtorad(_: float) -> float;
+fn degtorad(_: ?) -> float;
 
 fn destroy(_: Instance) -> ();
 
-fn div(_: float, _: float) -> float;
+fn div(_: ?, _: ?) -> float;
 
-fn dsin(_: float) -> float;
+fn dsin(_: ?) -> float;
 
 fn emit(_: string) -> ();
 
 fn exists(_: Instance) -> bool;
 
-fn exp(_: float) -> float;
+fn exp(_: ?) -> float;
 
-fn floor(_: float) -> float;
+fn floor(_: ?) -> float;
 
-fn frac(_: float) -> float;
+fn frac(_: ?) -> float;
 
 fn get depth(_: Instance) -> float;
 
@@ -128,21 +128,21 @@ fn get ystart(_: Instance) -> float;
 
 fn get_alarm(_: Instance, _: ?) -> float;
 
-fn gm_bool(_: float) -> bool;
+fn gm_bool(_: ?) -> bool;
 
-fn gm_eq(_: float, _: float) -> bool;
+fn gm_eq(_: ?, _: ?) -> bool;
 
-fn gm_ge(_: float, _: float) -> bool;
+fn gm_ge(_: ?, _: ?) -> bool;
 
-fn gm_gt(_: float, _: float) -> bool;
+fn gm_gt(_: ?, _: ?) -> bool;
 
-fn gm_le(_: float, _: float) -> bool;
+fn gm_le(_: ?, _: ?) -> bool;
 
-fn gm_lt(_: float, _: float) -> bool;
+fn gm_lt(_: ?, _: ?) -> bool;
 
-fn gm_ne(_: float, _: float) -> bool;
+fn gm_ne(_: ?, _: ?) -> bool;
 
-fn gm_repeat(_: float) -> int;
+fn gm_repeat(_: ?) -> int;
 
 fn index$get$(_: Instance, _: string) -> ?;
 
@@ -154,43 +154,43 @@ fn instance_create(_: string, _: ?, _: ?, _: map) -> Instance;
 
 fn instances(_: string) -> Dynamic>;
 
-fn irandom(_: float) -> float;
+fn irandom(_: ?) -> float;
 
-fn irandom_range(_: float, _: float) -> float;
+fn irandom_range(_: ?, _: ?) -> float;
 
 fn kid() -> ?;
 
 fn kill_kid() -> ();
 
-fn lengthdir_x(_: float, _: float) -> float;
+fn lengthdir_x(_: ?, _: ?) -> float;
 
-fn lengthdir_y(_: float, _: float) -> float;
+fn lengthdir_y(_: ?, _: ?) -> float;
 
-fn lerp(_: float, _: float, _: float) -> float;
+fn lerp(_: ?, _: ?, _: ?) -> float;
 
-fn ln(_: float) -> float;
+fn ln(_: ?) -> float;
 
-fn max(_: float, _: float) -> float;
+fn max(_: ?, _: ?) -> float;
 
-fn min(_: float, _: float) -> float;
+fn min(_: ?, _: ?) -> float;
 
-fn mod(_: float, _: float) -> float;
+fn mod(_: ?, _: ?) -> float;
 
-fn point_direction(_: float, _: float, _: float, _: float) -> float;
+fn point_direction(_: ?, _: ?, _: ?, _: ?) -> float;
 
-fn point_distance(_: float, _: float, _: float, _: float) -> float;
+fn point_distance(_: ?, _: ?, _: ?, _: ?) -> float;
 
-fn pow(_: float, _: float) -> float;
+fn pow(_: ?, _: ?) -> float;
 
-fn radtodeg(_: float) -> float;
+fn radtodeg(_: ?) -> float;
 
-fn random(_: float) -> float;
+fn random(_: ?) -> float;
 
-fn random_range(_: float, _: float) -> float;
+fn random_range(_: ?, _: ?) -> float;
 
 fn room_tick() -> float;
 
-fn round(_: float) -> float;
+fn round(_: ?) -> float;
 
 fn set depth(_: Instance, _: ?) -> ();
 
@@ -230,18 +230,22 @@ fn set y(_: Instance, _: ?) -> ();
 
 fn set_alarm(_: Instance, _: ?, _: ?) -> ();
 
+fn sign(_: ?) -> float;
+
 fn sign(_: float) -> float;
 
-fn sin(_: float) -> float;
+fn sign(_: int) -> float;
 
-fn sqr(_: float) -> float;
+fn sin(_: ?) -> float;
 
-fn sqrt(_: float) -> float;
+fn sqr(_: ?) -> float;
 
-fn tan(_: float) -> float;
+fn sqrt(_: ?) -> float;
+
+fn tan(_: ?) -> float;
 
 fn tick() -> float;
 
 fn to_float(_: int) -> float;
 
-fn to_int(_: float) -> int;
+fn to_int(_: ?) -> int;
