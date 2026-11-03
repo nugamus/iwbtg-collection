@@ -14,6 +14,8 @@ use iwbtg_sim::sim::{Sim, SimOptions};
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::world::{InstId, SimStatus};
 
+mod hud;
+
 use crate::input::{Collector, key_code};
 use crate::package::{Package, SpriteImage, sprite_images};
 
@@ -128,13 +130,17 @@ pub fn run(pkg: Package, cap: FrameCap, screenshot: Option<std::path::PathBuf>) 
     })
     // The sim ticks at the game's rate on a fixed clock; frames only draw what the last tick left.
     .insert_resource(Time::<Fixed>::from_hz(f64::from(def.tick_rate.max(1))))
-    .add_systems(Startup, setup)
+    .init_resource::<hud::SignText>()
+    .add_systems(Startup, (setup, hud::setup))
     .add_systems(
         RunFixedMainLoop,
         collect_input.in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
     )
     .add_systems(FixedUpdate, tick)
-    .add_systems(Update, (sync_instances, overlay))
+    .add_systems(
+        Update,
+        (sync_instances, overlay, hud::show_sign, hud::show_countdown),
+    )
     .add_systems(Last, limit_frames);
     if let Some(path) = screenshot {
         app.insert_resource(ScreenshotTo(path))
@@ -206,10 +212,16 @@ fn collect_input(keys: Res<ButtonInput<KeyCode>>, mut collector: ResMut<Collecto
 }
 
 /// One sim tick: runs on the fixed clock, as many times per frame as the clock is behind.
-fn tick(mut game: NonSendMut<Game>, mut collector: ResMut<Collector>, mut stats: ResMut<Stats>) {
+fn tick(
+    mut game: NonSendMut<Game>,
+    mut collector: ResMut<Collector>,
+    mut stats: ResMut<Stats>,
+    mut sign: ResMut<hud::SignText>,
+) {
     let frame = collector.take_frame();
     if game.sim.step(frame).status == SimStatus::Running {
         stats.ticks += 1;
+        hud::note_tick(&mut sign, &game.sim.world().output);
     }
 }
 

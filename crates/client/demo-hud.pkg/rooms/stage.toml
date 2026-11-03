@@ -1,0 +1,16 @@
+#:schema ../../../../../docs/format/schema/v0/room.schema.json
+size = [800, 608]
+file_speed = 50
+views_enabled = false
+instances = [
+  { kind = "kid_start", x = 64, y = 544 },
+  { kind = "block", x = 0, y = 576, run = [25, 1], step = [32, 32] },
+  { kind = "block", x = 0, y = 0, run = [25, 1], step = [32, 32] },
+  { kind = "block", x = 0, y = 32, run = [1, 17], step = [32, 32] },
+  { kind = "block", x = 768, y = 32, run = [1, 17], step = [32, 32] },
+  { kind = "block", x = 320, y = 480, run = [3, 1], step = [32, 32] },
+  { kind = "spike", x = 480, y = 544, run = [4, 1], step = [32, 32], dir = "up" },
+  { kind = "sign", x = 160, y = 544, text = "A sign. This box shows while you stand on it.", mode = "while_overlapping" },
+  { kind = "time_limit", x = 640, y = 40, hours = 0, minutes = 1, seconds = 30, on_expire = "nothing" },
+  { kind = "time_limit", role = "start_zone", x = 64, y = 544 },
+]
