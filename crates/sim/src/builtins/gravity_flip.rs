@@ -8,7 +8,7 @@
 //!
 //! `transition`: `swap_object` and `grav_sign` are the same write here. `yflag_with_view_rotation`
 //! (KAE objGravUp and objGravDown: rotate the view 12 degrees per tick, then reverse the kid
-//! `yflag`) is refused at load until the view rotation and the kid yflag flip exist (OPEN).
+//! `yflag`) is refused at load until the view rotation and the kid yflag flip exist (OPEN, nugamus/iwbtg-collection-research#51).
 
 use super::{BuiltinState, ParamError, ParamSpec, ParamType, param_enum, param_error, state_of};
 use crate::def::{ClassMask, KindDef, Params};
@@ -58,7 +58,7 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
     if param_enum(params, "transition", TRANSITIONS)? == Some("yflag_with_view_rotation") {
         return Err(param_error(
             "transition",
-            "yflag_with_view_rotation (KAE) is not supported yet (OPEN: view rotation, kid yflag flip)",
+            "yflag_with_view_rotation (KAE) is not supported yet (OPEN, nugamus/iwbtg-collection-research#51: view rotation, kid yflag flip)",
         ));
     }
     let up = param_enum(params, "direction", DIRECTIONS)?

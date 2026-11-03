@@ -10,6 +10,7 @@ use std::rc::Rc;
 
 use rhai::{Array, Dynamic, Engine, EvalAltResult, Position};
 
+use super::docs::Docs;
 use super::host::Shared;
 use crate::num::{self, NumError, Real};
 
@@ -39,12 +40,27 @@ fn r(v: f64) -> Real {
     clippy::cast_precision_loss,
     reason = "exact IEEE comparison is the point; integers in scripts stay far below 2^53"
 )]
-fn register_raw_comparisons(engine: &mut Engine) {
+fn register_raw_comparisons(engine: &mut Engine, docs: &mut Docs) {
+    docs.add("==", "Equality. Numbers compare exactly (IEEE), instances by identity; use `gm_eq` for GML's epsilon comparison.");
     engine.register_fn("==", |a: f64, b: f64| -> bool { a == b });
+    docs.add(
+        "!=",
+        "Inequality, exact like `==`; use `gm_ne` for GML's epsilon comparison.",
+    );
     engine.register_fn("!=", |a: f64, b: f64| -> bool { a != b });
+    docs.add("<", "Less than, exact IEEE; use `gm_lt` for GML's rule.");
     engine.register_fn("<", |a: f64, b: f64| -> bool { a < b });
+    docs.add(
+        "<=",
+        "Less than or equal, exact IEEE; use `gm_le` for GML's rule.",
+    );
     engine.register_fn("<=", |a: f64, b: f64| -> bool { a <= b });
+    docs.add(">", "Greater than, exact IEEE; use `gm_gt` for GML's rule.");
     engine.register_fn(">", |a: f64, b: f64| -> bool { a > b });
+    docs.add(
+        ">=",
+        "Greater than or equal, exact IEEE; use `gm_ge` for GML's rule.",
+    );
     engine.register_fn(">=", |a: f64, b: f64| -> bool { a >= b });
     engine.register_fn("==", |a: i64, b: f64| -> bool { a as f64 == b });
     engine.register_fn("==", |a: f64, b: i64| -> bool { a == b as f64 });
@@ -61,7 +77,7 @@ fn register_raw_comparisons(engine: &mut Engine) {
 }
 
 /// Registers the numeric and random functions on `engine`.
-pub(crate) fn register_numeric(engine: &mut Engine, shared: &Rc<Shared>) {
+pub(crate) fn register_numeric(engine: &mut Engine, shared: &Rc<Shared>, docs: &mut Docs) {
     // ---- GML comparisons and truth (NumRules) ----
     macro_rules! cmp {
         ($name:literal, $f:path) => {{
@@ -69,43 +85,71 @@ pub(crate) fn register_numeric(engine: &mut Engine, shared: &Rc<Shared>) {
             engine.register_fn($name, move |a: f64, b: f64| -> bool { $f(r(a), r(b), &s.num) });
         }};
     }
+    docs.add("gm_eq", "GML `a == b` on reals: equal within the run's epsilon.");
     cmp!("gm_eq", num::gm_eq);
+    docs.add("gm_ne", "GML `a != b` on reals, with the run's epsilon.");
     cmp!("gm_ne", num::gm_ne);
+    docs.add("gm_lt", "GML `a < b` on reals, with the run's epsilon.");
     cmp!("gm_lt", num::gm_lt);
+    docs.add("gm_le", "GML `a <= b` on reals, with the run's epsilon.");
     cmp!("gm_le", num::gm_le);
+    docs.add("gm_gt", "GML `a > b` on reals, with the run's epsilon.");
     cmp!("gm_gt", num::gm_gt);
+    docs.add("gm_ge", "GML `a >= b` on reals, with the run's epsilon.");
     cmp!("gm_ge", num::gm_ge);
     {
         let s = Rc::clone(shared);
+        docs.add("gm_bool", "GML truthiness of a real (true from 0.5).");
         engine.register_fn("gm_bool", move |x: f64| -> bool { num::gm_bool(r(x), &s.num) });
     }
     {
         let s = Rc::clone(shared);
+        docs.add(
+            "gm_repeat",
+            "The iteration count GML's `repeat` gives for a real (rounded); a bad count is an error.",
+        );
         engine.register_fn("gm_repeat", move |x: f64| -> Res<i64> {
             let n = num::gm_repeat_count(r(x), &s.num).map_err(|e| num_err("gm_repeat", e))?;
             i64::try_from(n).map_err(|_| runtime_error("gm_repeat: count out of range"))
         });
     }
 
-    register_raw_comparisons(engine);
+    register_raw_comparisons(engine, docs);
 
     // ---- Conversions and division ----
+    docs.add("to_float", "An integer as a float.");
     engine.register_fn("to_float", |x: i64| -> f64 { x as f64 });
+    docs.add(
+        "to_int",
+        "A float truncated toward zero as an integer; a non-finite or huge value is an error.",
+    );
     engine.register_fn("to_int", |x: f64| -> Res<i64> {
         num::to_int_trunc(r(x)).map_err(|e| num_err("to_int", e))
     });
     // `/` on two integers gives a FLOAT, as in GML (`1 / 2 == 0.5`); a zero divisor is an error.
+    docs.add(
+        "/",
+        "Division. Two integers give a float (`1 / 2` is 0.5); a zero integer divisor is an error.",
+    );
     engine.register_fn("/", |a: i64, b: i64| -> Res<f64> {
         if b == 0 {
             return Err(runtime_error("division by zero"));
         }
         Ok(a as f64 / b as f64)
     });
+    docs.add(
+        "div",
+        "GML `a div b`: integer division truncated toward zero; a zero divisor is an error.",
+    );
     engine.register_fn("div", |a: f64, b: f64| -> Res<f64> {
         num::gm_div(r(a), r(b))
             .map(Real::get)
             .map_err(|e| num_err("div", e))
     });
+    docs.add(
+        "mod",
+        "GML `a mod b`: `a - (a div b) * b`; a zero divisor is an error.",
+    );
     engine.register_fn("mod", |a: f64, b: f64| -> Res<f64> {
         num::gm_mod(r(a), r(b))
             .map(Real::get)
@@ -119,57 +163,103 @@ pub(crate) fn register_numeric(engine: &mut Engine, shared: &Rc<Shared>) {
             engine.register_fn($name, move |x: f64| -> f64 { $f(r(x), &s.num).get() });
         }};
     }
+    docs.add(
+        "round",
+        "GML `round`: the nearest integer under the run's rounding rule.",
+    );
     unary_rules!("round", num::round);
+    docs.add("floor", "Largest integer not above `x`.");
     unary_rules!("floor", num::floor);
+    docs.add("ceil", "Smallest integer not below `x`.");
     unary_rules!("ceil", num::ceil);
+    docs.add("sign", "-1, 0 or 1 by the sign of `x`.");
     unary_rules!("sign", num::sign);
     {
         let s = Rc::clone(shared);
+        docs.add("min", "The smaller of two numbers (GML tie rules).");
         engine.register_fn("min", move |a: f64, b: f64| -> f64 {
             num::gm_min(r(a), r(b), &s.num).get()
         });
         let s = Rc::clone(shared);
+        docs.add("max", "The larger of two numbers (GML tie rules).");
         engine.register_fn("max", move |a: f64, b: f64| -> f64 {
             num::gm_max(r(a), r(b), &s.num).get()
         });
     }
+    docs.add("abs", "Absolute value.");
     engine.register_fn("abs", |x: f64| -> f64 { num::abs(r(x)).get() });
+    docs.add("frac", "The fractional part of `x`, with the sign of `x`.");
     engine.register_fn("frac", |x: f64| -> f64 { num::frac(r(x)).get() });
+    docs.add("clamp", "`x` limited to the range `lo` to `hi`.");
     engine.register_fn("clamp", |x: f64, lo: f64, hi: f64| -> f64 {
         num::clamp(r(x), r(lo), r(hi)).get()
     });
+    docs.add("lerp", "Linear interpolation from `a` to `b` by `t`.");
     engine.register_fn("lerp", |a: f64, b: f64, t: f64| -> f64 {
         num::lerp(r(a), r(b), r(t)).get()
     });
 
     // ---- Transcendentals: libm in software, never std ----
+    docs.add("sqrt", "Square root.");
     engine.register_fn("sqrt", |x: f64| -> f64 { num::sqrt(r(x)).get() });
+    docs.add("sqr", "`x` squared.");
     engine.register_fn("sqr", |x: f64| -> f64 { x * x });
+    docs.add("pow", "`x` to the power `y` (software libm). There is no `**`.");
     engine.register_fn("pow", |x: f64, y: f64| -> f64 { num::pow(r(x), r(y)).get() });
+    docs.add("exp", "e to the power `x` (software libm).");
     engine.register_fn("exp", |x: f64| -> f64 { num::exp(r(x)).get() });
+    docs.add("ln", "Natural logarithm (software libm).");
     engine.register_fn("ln", |x: f64| -> f64 { num::ln(r(x)).get() });
+    docs.add("sin", "Sine of an angle in radians (software libm).");
     engine.register_fn("sin", |x: f64| -> f64 { num::sin(r(x)).get() });
+    docs.add("cos", "Cosine of an angle in radians (software libm).");
     engine.register_fn("cos", |x: f64| -> f64 { num::cos(r(x)).get() });
+    docs.add("tan", "Tangent of an angle in radians (software libm).");
     engine.register_fn("tan", |x: f64| -> f64 { num::tan(r(x)).get() });
+    docs.add(
+        "arctan2",
+        "Angle in radians of the point (`x`, `y`) (software libm).",
+    );
     engine.register_fn("arctan2", |y: f64, x: f64| -> f64 {
         num::atan2(r(y), r(x)).get()
     });
+    docs.add("degtorad", "Degrees to radians.");
     engine.register_fn("degtorad", |x: f64| -> f64 { num::degtorad(r(x)).get() });
+    docs.add("radtodeg", "Radians to degrees.");
     engine.register_fn("radtodeg", |x: f64| -> f64 { num::radtodeg(r(x)).get() });
+    docs.add("dsin", "Sine of an angle in degrees.");
     engine.register_fn("dsin", |x: f64| -> f64 { num::dsin(r(x)).get() });
+    docs.add("dcos", "Cosine of an angle in degrees.");
     engine.register_fn("dcos", |x: f64| -> f64 { num::dcos(r(x)).get() });
+    docs.add("darctan2", "Angle in degrees of the point (`x`, `y`).");
     engine.register_fn("darctan2", |y: f64, x: f64| -> f64 {
         num::darctan2(r(y), r(x)).get()
     });
+    docs.add(
+        "point_direction",
+        "Direction in degrees from (`x1`, `y1`) to (`x2`, `y2`), as GML.",
+    );
     engine.register_fn("point_direction", |x1: f64, y1: f64, x2: f64, y2: f64| -> f64 {
         num::point_direction(r(x1), r(y1), r(x2), r(y2)).get()
     });
+    docs.add(
+        "point_distance",
+        "Distance between (`x1`, `y1`) and (`x2`, `y2`).",
+    );
     engine.register_fn("point_distance", |x1: f64, y1: f64, x2: f64, y2: f64| -> f64 {
         num::point_distance(r(x1), r(y1), r(x2), r(y2)).get()
     });
+    docs.add(
+        "lengthdir_x",
+        "Horizontal part of a vector of length `len` toward `dir` degrees.",
+    );
     engine.register_fn("lengthdir_x", |len: f64, dir: f64| -> f64 {
         num::lengthdir_x(r(len), r(dir)).get()
     });
+    docs.add(
+        "lengthdir_y",
+        "Vertical part of a vector of length `len` toward `dir` degrees (up is negative, as GML).",
+    );
     engine.register_fn("lengthdir_y", |len: f64, dir: f64| -> f64 {
         num::lengthdir_y(r(len), r(dir)).get()
     });
@@ -177,26 +267,43 @@ pub(crate) fn register_numeric(engine: &mut Engine, shared: &Rc<Shared>) {
     // ---- The one RNG (GM8-compatible, seeded from the replay header) ----
     {
         let s = Rc::clone(shared);
+        docs.add("random", "A float from 0 up to `x`, from the run's one RNG.");
         engine.register_fn("random", move |x: f64| -> f64 {
             s.with_rng(|g| g.random(r(x)).get())
         });
         let s = Rc::clone(shared);
+        docs.add(
+            "random_range",
+            "A float between `a` and `b`, from the run's one RNG.",
+        );
         engine.register_fn("random_range", move |a: f64, b: f64| -> f64 {
             s.with_rng(|g| g.random_range(r(a), r(b)).get())
         });
         let s = Rc::clone(shared);
+        docs.add(
+            "irandom",
+            "An integer from 0 to `x` inclusive, from the run's one RNG.",
+        );
         engine.register_fn("irandom", move |x: f64| -> Res<f64> {
             s.with_rng(|g| g.irandom(r(x)))
                 .map(Real::get)
                 .map_err(|e| runtime_error(e.to_string()))
         });
         let s = Rc::clone(shared);
+        docs.add(
+            "irandom_range",
+            "An integer between `a` and `b` inclusive, from the run's one RNG.",
+        );
         engine.register_fn("irandom_range", move |a: f64, b: f64| -> Res<f64> {
             s.with_rng(|g| g.irandom_range(r(a), r(b)))
                 .map(Real::get)
                 .map_err(|e| runtime_error(e.to_string()))
         });
         let s = Rc::clone(shared);
+        docs.add(
+            "choose",
+            "One element of the array, picked by the run's one RNG; an empty array is an error.",
+        );
         engine.register_fn("choose", move |items: Array| -> Res<Dynamic> {
             let n = u32::try_from(items.len()).map_err(|_| runtime_error("choose: too many items"))?;
             let i = s
@@ -212,8 +319,10 @@ pub(crate) fn register_numeric(engine: &mut Engine, shared: &Rc<Shared>) {
     // ---- Time: ticks only, as floats ----
     {
         let s = Rc::clone(shared);
+        docs.add("tick", "The run's tick counter.");
         engine.register_fn("tick", move || -> f64 { s.current_tick() as f64 });
         let s = Rc::clone(shared);
+        docs.add("room_tick", "Ticks since the current room started.");
         engine.register_fn("room_tick", move || -> f64 { s.current_room_tick() as f64 });
     }
 }

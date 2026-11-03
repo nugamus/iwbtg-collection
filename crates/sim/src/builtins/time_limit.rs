@@ -14,7 +14,7 @@
 //! `on_expire`: `kill` kills the first kid and destroys the timer, `shake` spawns the `shake`
 //! kind and destroys the timer, `nothing` destroys the timer, `goto_room` goes to `room` and
 //! places or destroys the kid like a warp. The H:MM:SS display is the client's.
-//! OPEN: the original kills player2 instead of player when `global.grav` is set; here the
+//! OPEN (#356): the original kills player2 instead of player when `global.grav` is set; here the
 //! first kid is killed, whichever kind it is.
 
 use serde::{Deserialize, Serialize};
