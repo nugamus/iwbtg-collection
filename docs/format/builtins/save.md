@@ -7,7 +7,7 @@ A save point (mechanics `save`; kid specs "Saving"). The save is `save::save_now
 | `on_touch` | `never`, `press`, `shoot_press`, `skip_held`, `always` | `press` | What the touching kid must do. `press`: S or Z (shoot or skip action) pressed this tick (rely, wanna, lemon, xia). `shoot_press`: Z only (little-trap). `skip_held`: S held while overlapping the kid (kaenbyou, eat-the-lemon). `always`: touch is enough (poronkusema, LR object738). |
 | `on_shot` | bool | false | A bullet hit saves, from the live kid (most games). |
 | `once` | bool | false | Destroyed after saving (autosave). |
-| `cooldown` | real | 0 | `saveTimer` is set to it on a save and counts down every Step; a save needs it below 0. 0 never gates (rely sets the timer but never checks it). 30 elsewhere. |
+| `cooldown` | real | 0 | `saveTimer` is set to it on a save and counts down every Step; a save needs it below 0. 0 never gates (rely sets the timer but never checks it). 30 elsewhere. With `on_touch = "skip_held"` (kaenbyou) the timer starts at -1, Step does not count it, and it counts down by 1 only on ticks S is held and only while above 0; a save needs it at most 0, then sets it to `cooldown`. |
 | `min_difficulty_removed` | real (whole) | none | Destroyed in Create when the difficulty is above it (savePoint 1, Medium 0, VHard 2, Imp 3). |
 | `requires_gravity` | `any`, `normal`, `flipped` | `any` | The kid must match. Flipped means `global.grav` or the flipped kid kind (FT savePoint2, xia). |
 | `requires_kid_depth0` | bool | false | The kid's depth must be 0 (machinary). |
