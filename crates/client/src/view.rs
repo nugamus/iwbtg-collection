@@ -243,12 +243,29 @@ fn overlay(
         SimStatus::Halted(e) => format!("  HALTED: {e}"),
         SimStatus::Ended => "  ended".to_string(),
     };
+    let world = game.sim.world();
+    let room = game.sim.def().room(world.room).map_or_else(
+        || "?".to_string(),
+        |r| format!("{} ({}x{})", r.name, r.width, r.height),
+    );
+    let kid = match world.kid(&game.sim.rules().tick).and_then(|id| world.get(id)) {
+        Some(k) => format!(
+            "kid x {:.2}  y {:.2}  hspeed {:.2}  vspeed {:.2}",
+            k.m.x().get(),
+            k.m.y().get(),
+            k.m.hspeed().get() + 0.0,
+            k.m.vspeed().get() + 0.0,
+        ),
+        None => "no kid".to_string(),
+    };
     label.0 = format!(
-        "ticks/s {:.1} (game {})  fps {:.0}  tick {}{status}  [F3 hides]",
+        "ticks/s {:.1} (game {})  fps {:.0}  tick {}{status}  [F3 hides]
+room {room}
+{kid}",
         stats.ticks_per_second,
         game.sim.def().tick_rate,
         stats.frames_per_second,
-        game.sim.world().tick,
+        world.tick,
     );
 }
 
