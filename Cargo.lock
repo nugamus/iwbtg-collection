@@ -3394,6 +3394,7 @@ dependencies = [
  "iwbtg-sim",
  "png",
  "thiserror 2.0.21",
+ "toml",
 ]
 
 [[package]]
