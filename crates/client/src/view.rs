@@ -14,6 +14,7 @@ use iwbtg_sim::sim::{Sim, SimOptions};
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::world::{InstId, SimStatus};
 
+use crate::bindings::{Bindings, PadInput};
 use crate::input::{Collector, key_code};
 use crate::package::{Package, SpriteImage, sprite_images};
 
@@ -84,7 +85,12 @@ struct Stats {
 struct Overlay;
 
 /// Opens the window and runs until it closes.
-pub fn run(pkg: Package, cap: FrameCap, screenshot: Option<std::path::PathBuf>) -> Result<(), String> {
+pub fn run(
+    pkg: Package,
+    cap: FrameCap,
+    screenshot: Option<std::path::PathBuf>,
+    bindings: Bindings,
+) -> Result<(), String> {
     let def = Arc::clone(&pkg.def);
     let options = SimOptions {
         // Like a replay: a new game, in the game's `new_game_room`. The title and menus come with
@@ -117,7 +123,7 @@ pub fn run(pkg: Package, cap: FrameCap, screenshot: Option<std::path::PathBuf>) 
     .insert_resource(PendingImages(images))
     .init_resource::<Drawn>()
     .insert_non_send(Game { sim })
-    .insert_resource(Collector::new())
+    .insert_resource(Collector::new(bindings))
     .insert_resource(Cap(cap))
     .insert_resource(Stats {
         window_start: Instant::now(),
@@ -131,7 +137,7 @@ pub fn run(pkg: Package, cap: FrameCap, screenshot: Option<std::path::PathBuf>) 
     .add_systems(Startup, setup)
     .add_systems(
         RunFixedMainLoop,
-        collect_input.in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
+        (collect_input, collect_pad).in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
     )
     .add_systems(FixedUpdate, tick)
     .add_systems(Update, (sync_instances, overlay))
@@ -202,6 +208,41 @@ fn collect_input(keys: Res<ButtonInput<KeyCode>>, mut collector: ResMut<Collecto
     }
     for key in keys.get_just_released().filter_map(|k| key_code(*k)) {
         collector.release(key);
+    }
+}
+
+/// Stick deflection that counts as a press.
+const STICK_THRESHOLD: f32 = 0.5;
+
+/// Feeds the controllers' state to the collector. With several controllers, an input is down when
+/// any of them has it down.
+fn collect_pad(pads: Query<&Gamepad>, mut collector: ResMut<Collector>) {
+    use bevy::input::gamepad::{GamepadAxis as A, GamepadButton as B};
+    for input in PadInput::ALL {
+        let down = pads.iter().any(|g| {
+            let button = |b| g.pressed(b);
+            match input {
+                PadInput::South => button(B::South),
+                PadInput::East => button(B::East),
+                PadInput::West => button(B::West),
+                PadInput::North => button(B::North),
+                PadInput::LeftBumper => button(B::LeftTrigger),
+                PadInput::RightBumper => button(B::RightTrigger),
+                PadInput::LeftTrigger => button(B::LeftTrigger2),
+                PadInput::RightTrigger => button(B::RightTrigger2),
+                PadInput::Select => button(B::Select),
+                PadInput::Start => button(B::Start),
+                PadInput::DPadUp => button(B::DPadUp),
+                PadInput::DPadDown => button(B::DPadDown),
+                PadInput::DPadLeft => button(B::DPadLeft),
+                PadInput::DPadRight => button(B::DPadRight),
+                PadInput::StickUp => g.get(A::LeftStickY).is_some_and(|v| v > STICK_THRESHOLD),
+                PadInput::StickDown => g.get(A::LeftStickY).is_some_and(|v| v < -STICK_THRESHOLD),
+                PadInput::StickLeft => g.get(A::LeftStickX).is_some_and(|v| v < -STICK_THRESHOLD),
+                PadInput::StickRight => g.get(A::LeftStickX).is_some_and(|v| v > STICK_THRESHOLD),
+            }
+        });
+        collector.set_pad(input, down);
     }
 }
 
