@@ -615,8 +615,8 @@ impl<'a> Loader<'a> {
                 );
                 continue;
             }
-            let strip_w = u64::from(sidecar.frame_size.0) * u64::from(sidecar.frames);
-            if strip_w > u64::from(MAX_IMAGE_SIDE) || sidecar.frame_size.1 > MAX_IMAGE_SIDE {
+            let (img_w, img_h) = sidecar.image_size();
+            if img_w > u64::from(MAX_IMAGE_SIDE) || img_h > u64::from(MAX_IMAGE_SIDE) {
                 if self.trace_mode() {
                     oversized.push(key.clone());
                 } else {
@@ -625,8 +625,7 @@ impl<'a> Loader<'a> {
                         text,
                         spans.frames.clone(),
                         format!(
-                            "the strip is {strip_w} x {} px; images are at most {MAX_IMAGE_SIDE} px a side",
-                            sidecar.frame_size.1
+                            "the image is {img_w} x {img_h} px; images are at most {MAX_IMAGE_SIDE} px a side (set `columns` to wrap the frames into rows)"
                         ),
                     );
                     continue;

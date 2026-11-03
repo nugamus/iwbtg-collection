@@ -68,6 +68,16 @@
         }
       ]
     },
+    "columns": {
+      "default": null,
+      "format": "uint16",
+      "maximum": 65535,
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
     "frame_size": {
       "items": {
         "format": "uint32",
