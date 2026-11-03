@@ -1,2 +1,0 @@
-kid/actions/slope.rs: if probe == Real::ZERO || !place_meeting(ctx, me, x, y + probe, Target::Class(BOTH))? {
-kid/api.rs: Some(i) if i.img.xscale().get() < 0.0 => -1,

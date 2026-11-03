@@ -286,6 +286,7 @@ pub fn saved_facing(w: &World, kid: InstId) -> i8 {
     match state(w, kid) {
         Some(s) => s.facing,
         None => match w.get(kid) {
+            // gm-compare: ok (sign of the stand-in's scale, set by the test to -1 or 1; not a GML comparison)
             Some(i) if i.img.xscale().get() < 0.0 => -1,
             _ => 1,
         },
