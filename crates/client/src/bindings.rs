@@ -211,7 +211,13 @@ impl Bindings {
                 .filter(|p| self.pad_action(*p) == Some(action))
                 .map(PadInput::name)
                 .collect();
-            let or_dash = |v: Vec<String>| if v.is_empty() { "-".to_string() } else { v.join(", ") };
+            let or_dash = |v: Vec<String>| {
+                if v.is_empty() {
+                    "-".to_string()
+                } else {
+                    v.join(", ")
+                }
+            };
             out.push_str(&format!(
                 "{:<8} keys: {:<18} pad: {}\n",
                 action.name(),

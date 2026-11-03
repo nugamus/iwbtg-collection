@@ -1,7 +1,7 @@
 //! Turns key presses into one `InputFrame` per tick. The collector has no Bevy logic, so it is tested
 //! like any other code (docs/architecture.md, Actions and input frames).
 
-use iwbtg_sim::input::{Action, InputFrame, vk};
+use iwbtg_sim::input::{InputFrame, vk};
 
 use crate::bindings::{Bindings, PadInput};
 
@@ -96,16 +96,58 @@ impl Collector {
 pub fn key_code(key: bevy::input::keyboard::KeyCode) -> Option<u8> {
     use bevy::input::keyboard::KeyCode as K;
     const LETTERS: [K; 26] = [
-        K::KeyA, K::KeyB, K::KeyC, K::KeyD, K::KeyE, K::KeyF, K::KeyG, K::KeyH, K::KeyI, K::KeyJ,
-        K::KeyK, K::KeyL, K::KeyM, K::KeyN, K::KeyO, K::KeyP, K::KeyQ, K::KeyR, K::KeyS, K::KeyT,
-        K::KeyU, K::KeyV, K::KeyW, K::KeyX, K::KeyY, K::KeyZ,
+        K::KeyA,
+        K::KeyB,
+        K::KeyC,
+        K::KeyD,
+        K::KeyE,
+        K::KeyF,
+        K::KeyG,
+        K::KeyH,
+        K::KeyI,
+        K::KeyJ,
+        K::KeyK,
+        K::KeyL,
+        K::KeyM,
+        K::KeyN,
+        K::KeyO,
+        K::KeyP,
+        K::KeyQ,
+        K::KeyR,
+        K::KeyS,
+        K::KeyT,
+        K::KeyU,
+        K::KeyV,
+        K::KeyW,
+        K::KeyX,
+        K::KeyY,
+        K::KeyZ,
     ];
     const DIGITS: [K; 10] = [
-        K::Digit0, K::Digit1, K::Digit2, K::Digit3, K::Digit4, K::Digit5, K::Digit6, K::Digit7,
-        K::Digit8, K::Digit9,
+        K::Digit0,
+        K::Digit1,
+        K::Digit2,
+        K::Digit3,
+        K::Digit4,
+        K::Digit5,
+        K::Digit6,
+        K::Digit7,
+        K::Digit8,
+        K::Digit9,
     ];
     const FUNCTION: [K; 12] = [
-        K::F1, K::F2, K::F3, K::F4, K::F5, K::F6, K::F7, K::F8, K::F9, K::F10, K::F11, K::F12,
+        K::F1,
+        K::F2,
+        K::F3,
+        K::F4,
+        K::F5,
+        K::F6,
+        K::F7,
+        K::F8,
+        K::F9,
+        K::F10,
+        K::F11,
+        K::F12,
     ];
     if let Some(i) = LETTERS.iter().position(|k| *k == key) {
         return Some(b'A' + i as u8);
@@ -145,6 +187,7 @@ pub fn key_code(key: bevy::input::keyboard::KeyCode) -> Option<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use iwbtg_sim::input::Action;
 
     #[test]
     fn a_held_key_is_held_and_pressed_once() {
