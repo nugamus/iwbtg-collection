@@ -1,0 +1,29 @@
+# Imported from research trace kaenbyou/tr-room-12 by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object world --room - --at 2 --from 0 --stub-dlls
+# Frames 0..1 ran before the room jump (boot rooms); they are not compared.
+source = "kaenbyou/tr-room-12"
+kind = "diff"
+open = "no --room: the trace starts from the game's boot rooms, which are client UI (plan 4.2)"
+start = { room = "", difficulty = 0 }
+at = 2
+first_frame = 0
+object = "@world"
+original_object = "world"
+dll_mode = "stub"
+seed = 0
+setup = []
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+"instance_number(player)" = "instance_number(kid)"
+"player.image_xscale" = "kid.image_xscale"
+"player.vspeed" = "kid.vspeed"
+"player.x" = "kid.x"
+"player.xprevious" = "kid.xprevious"
+"player.y" = "kid.y"
+"player.yprevious" = "kid.yprevious"
+
+[unprobed]
+"file_exists(global.saving_directory+\"SaveData1\")" = "a function call; the probe reads variables only (OPEN)"
+
+[rooms]

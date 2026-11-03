@@ -1,0 +1,22 @@
+# Imported from research trace kaenbyou/t5-input-restart-latch-a by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room rAvoidance --at 2 --from 2 --stub-dlls
+source = "kaenbyou/t5-input-restart-latch-a"
+kind = "diff"
+start = { room = "avoidance", difficulty = 3 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "stub"
+seed = 0
+setup = []
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+"keyboard_check(vk_left)" = "keyboard_check(left)"
+"keyboard_check_direct(vk_left)" = "keyboard_check_direct(left)"
+
+[unprobed]
+
+[rooms]
+"avoidance" = "rAvoidance"

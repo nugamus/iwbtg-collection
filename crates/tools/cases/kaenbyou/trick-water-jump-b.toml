@@ -1,0 +1,31 @@
+# Imported from research trace kaenbyou/trick-water-jump-b by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room rTraps --at 2 --from 2 --stub-dlls --x 288 --y 480
+source = "kaenbyou/trick-water-jump-b"
+kind = "diff"
+start = { room = "traps", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "stub"
+seed = 0
+setup = [
+  { frame = 2, target = "kid", set = { x = 288.0, xprevious = 288.0, y = 480.0, yprevious = 480.0 } },
+]
+ignore = ["id", "sprite_index", "sprite_name"]
+notes = [
+  "--x/--y: the recorder creates the object when none exists; setup only moves one",
+]
+
+[vars]
+"instance_number(player)" = "instance_number(kid)"
+
+[unprobed]
+"bbox_bottom" = "no probe field for `bbox_bottom` (OPEN)"
+"bbox_top" = "no probe field for `bbox_top` (OPEN)"
+"objWater.bbox_bottom" = "no probe field for `bbox_bottom` (OPEN)"
+"objWater.bbox_left" = "no probe field for `bbox_left` (OPEN)"
+"objWater.bbox_top" = "no probe field for `bbox_top` (OPEN)"
+
+[rooms]
+"traps" = "rTraps"

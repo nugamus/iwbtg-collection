@@ -1,0 +1,27 @@
+# Imported from research trace kaenbyou/t-anim-1 by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room rTemplate --at 2 --from 2 --stub-dlls --x 96 --y 567.4 (1 --gml)
+source = "kaenbyou/t-anim-1"
+kind = "diff"
+start = { room = "template", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "stub"
+seed = 0
+setup = [
+  { frame = 2, target = "kid", set = { x = 96.0, xprevious = 96.0, y = 567.4, yprevious = 567.4 } },
+  { frame = 11, target = "kid", set = { image_index = 0.0 } },
+]
+ignore = ["id", "sprite_index", "sprite_name"]
+notes = [
+  "--x/--y: the recorder creates the object when none exists; setup only moves one",
+]
+
+[vars]
+
+[unprobed]
+"image_number" = "no probe field for `image_number` (OPEN)"
+
+[rooms]
+"template" = "rTemplate"

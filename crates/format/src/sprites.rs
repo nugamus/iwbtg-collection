@@ -206,6 +206,29 @@ pub fn parse_sidecar(path: &str, text: &str) -> Result<(SpriteSidecar, SidecarSp
     ))
 }
 
+/// The sprites of a package in the order of `GameDef::sprites` (by id, bundled engine pack
+/// sprites keyed `engine:<pack>/<id>` among them): `(key, path of its PNG strip)`. A viewer uses
+/// it to find the image of a `SpriteId`; `tests/wp7a_load.rs` pins the order against the loader.
+pub fn sprite_pngs(files: &crate::files::PackageFiles) -> Vec<(String, String)> {
+    let mut out: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+    for (path, _) in files.iter() {
+        if let Some(stem) = path
+            .strip_prefix("sprites/")
+            .and_then(|s| s.strip_suffix(".toml"))
+        {
+            if !stem.contains('/') {
+                out.insert(stem.to_owned(), format!("sprites/{stem}.png"));
+            }
+        } else if let Some((pack, id)) = crate::engine_pack::sprite_sidecar(path) {
+            out.insert(
+                format!("{}{pack}/{id}", crate::ids::ENGINE_PREFIX),
+                format!("{}sprites/{id}.png", crate::engine_pack::pack_dir(pack)),
+            );
+        }
+    }
+    out.into_iter().collect()
+}
+
 /// Decodes a PNG strip, splits frames and builds the masks. Image pixels never reach the sim.
 ///
 /// The returned [`SpriteDef`]'s `masks` index the returned `Vec<Mask>` from 0; the loader offsets
