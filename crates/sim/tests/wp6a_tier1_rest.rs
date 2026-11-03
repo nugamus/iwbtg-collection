@@ -298,6 +298,39 @@ mod wp6a {
         assert!(!kind_events(&g).outside_room);
     }
 
+    /// `kill_outside_view` (kaenbyou borderKiller): no `killer` class, a kid collision event, and
+    /// the kid dies only when its origin is outside view 0 (each side strict).
+    #[test]
+    fn killer_kill_outside_view_kills_only_outside_the_view() {
+        let g = game(
+            Builtin::Killer,
+            params(&[("kill_outside_view", ParamValue::Bool(true))]),
+        );
+        assert_eq!(kind_events(&g).collisions.len(), 1);
+        let touch = |g: &G, kx: f64, ky: f64| {
+            let mut w = World::new(g.room, 1);
+            w.views[0].x = r(100.0);
+            w.views[0].y = r(50.0);
+            w.views[0].w = r(800.0);
+            w.views[0].h = r(608.0);
+            let kid = spawn(g, &mut w, g.kid, kx, ky);
+            let id = spawn(g, &mut w, g.thing, 0.0, 0.0);
+            let kids = ClassMask::KID;
+            // The stand-in kid is inert, so reaching the kill is an invariant error ("not a kid").
+            let ev = EventKind::Collision {
+                with: kids,
+                other: kid,
+            };
+            with(g, &mut w, |c| builtins::on_event(c, id, &ev)).is_err()
+        };
+        assert!(!touch(&g, 100.0, 50.0), "on the corner: inside");
+        assert!(!touch(&g, 900.0, 658.0), "on the far corner: inside");
+        assert!(touch(&g, 99.0, 300.0), "left of the view");
+        assert!(touch(&g, 901.0, 300.0), "right of the view");
+        assert!(touch(&g, 300.0, 49.0), "above the view");
+        assert!(touch(&g, 300.0, 659.0), "below the view");
+    }
+
     // ---- platform ---------------------------------------------------------------------------
 
     #[test]
