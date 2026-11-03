@@ -51,6 +51,10 @@ Practice can start from any stage, any save point or any room, and it supports s
 
 The timer, splits, death counter and input display can each be turned on or off.
 
+## Music sync
+
+The tick clock is the authority for music. When music playback drifts more than 2 ticks (40 ms at 50 Hz) from where the tick clock says it should be, the client seeks it back, so avoidance-game bullets stay on the beat after lag spikes or on slow PCs. Smaller drift is left alone, so normal play has no audible skips. Pausing and the death and restart rules seek exactly. Replays and ghosts count ticks only, so music sync never affects timing.
+
 ## Results screen
 
 After a clear, the results screen shows:

@@ -262,6 +262,35 @@ pub fn bundle(files: &mut PackageFiles, pack: &str, pack_files: &PackageFiles) -
     missing
 }
 
+/// Bundles the engine pack of a package folder: when `game.toml` names an `engine_pack` and the
+/// folder has no `engine/<pack>/` yet, the pack is read from the sibling `../_engines/<pack>/`
+/// and what the package uses is copied in (see [`bundle`]). Returns the references the pack does
+/// not have. A pack folder that does not exist is left to the loader to report. Nothing is
+/// written to disk.
+pub fn bundle_sibling(
+    dir: &std::path::Path,
+    files: &mut PackageFiles,
+) -> Result<Vec<String>, crate::files::LoadError> {
+    let Some(pack) = files
+        .get("game.toml")
+        .and_then(|b| std::str::from_utf8(b).ok())
+        .and_then(|t| t.parse::<toml::Table>().ok())
+        .and_then(|t| t.get("engine_pack").and_then(|v| v.as_str().map(str::to_owned)))
+    else {
+        return Ok(Vec::new());
+    };
+    // `dir` may be written as `.`; the sibling folder is next to the canonical package folder.
+    let root = std::fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
+    let Some(pack_dir) = root.parent().map(|p| p.join("_engines").join(&pack)) else {
+        return Ok(Vec::new());
+    };
+    if !pack_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let pack_files = PackageFiles::load_dir(&pack_dir)?;
+    Ok(bundle(files, &pack, &pack_files))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

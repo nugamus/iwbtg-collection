@@ -45,3 +45,34 @@ fn non_finite_case_halts_with_non_finite() {
     assert!(out.status.starts_with("halted"), "{}", out.line());
     assert!(out.ticks < case.ticks, "the run stopped early: {}", out.line());
 }
+
+/// The scripted case really runs create, step, alarm and collide: the walkers bounce off the
+/// walls (collide emits `walker_reset` every third hit), the alarm spawns sparks, and the sim
+/// never halts.
+#[test]
+fn the_scripted_case_runs_every_event() {
+    use iwbtg_sim::output::OutputEvent;
+    use iwbtg_sim::script::ScriptOutput;
+    use iwbtg_sim::world::SimStatus;
+    let case = golden::cases()
+        .into_iter()
+        .find(|c| c.name == "scripted_object")
+        .expect("the case exists");
+    let (fx, ran) = golden::run_fixture(&case);
+    assert_eq!(fx.w.status, SimStatus::Running);
+    assert_eq!(ran, case.ticks);
+    let resets = fx
+        .w
+        .output
+        .iter()
+        .filter(|e| matches!(e, OutputEvent::Script(ScriptOutput::Emit { name }) if name == "walker_reset"))
+        .count();
+    assert!(resets >= 2, "collide ran {resets} resets");
+    // Four instances were placed; sparks came from the alarm.
+    let newest = fx.w.iter_alive().map(|i| i.id.0).max().expect("alive");
+    let oldest = fx.w.iter_alive().map(|i| i.id.0).min().expect("alive");
+    assert!(
+        newest - oldest >= 6,
+        "ids {oldest}..{newest}: the alarm spawned sparks"
+    );
+}

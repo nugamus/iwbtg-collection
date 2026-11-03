@@ -1524,3 +1524,29 @@ fn a_scripted_object_runs_in_a_room() {
     }
     assert_eq!(again.state_hash(), hash, "two runs hash the same");
 }
+
+#[test]
+fn sprite_pngs_follow_the_order_of_the_loaded_sprites() {
+    let files = with_pack(|_| {});
+    let (def, _) = load_ok(&files, STRICT);
+    let pngs = iwbtg_format::sprites::sprite_pngs(&files);
+    assert_eq!(pngs.len(), def.sprites.len());
+    assert!(pngs.iter().any(|(k, _)| k == "engine:a1/kid"));
+    for ((key, path), sprite) in pngs.iter().zip(&def.sprites) {
+        let bytes = files.get(path).unwrap_or_else(|| panic!("{key}: no {path}"));
+        let width = u32::from_be_bytes(bytes[16..20].try_into().unwrap());
+        assert_eq!(width, sprite.size.0 * u32::from(sprite.frames), "{key}");
+    }
+}
+
+#[test]
+fn the_golden_walker_script_loads_clean_through_the_loader() {
+    // The golden corpus (crates/sim/tests/golden) runs this script; here the loader and the
+    // validator accept the same text. The corpus names its kinds without `@`.
+    let source =
+        include_str!("../../sim/tests/golden/scripted_walker.rhai").replace("\"spark\"", "\"@boss\"");
+    let files = package(|f| set(f, "scripts/boss.rhai", source));
+    let r = load_report(&files, STRICT);
+    assert!(r.ok(), "{}", render(&r));
+    assert!(!render(&r).contains("scripts/boss.rhai"), "{}", render(&r));
+}
