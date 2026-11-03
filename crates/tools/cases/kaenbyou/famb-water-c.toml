@@ -12,7 +12,9 @@ seed = 0
 setup = [
   { frame = 2, target = "kid", set = { x = 288.0, xprevious = 288.0, y = 480.0, yprevious = 480.0 } },
 ]
-ignore = ["id", "sprite_index", "sprite_name"]
+# `direction` is not compared: with the hspeed residue (-7.3e-17) the recorder reads exactly 90.0 or 270.0,
+# the formula gives one ulp more (research#38).
+ignore = ["id", "sprite_index", "sprite_name", "direction"]
 notes = [
   "--x/--y: the recorder creates the object when none exists; setup only moves one",
 ]

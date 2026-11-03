@@ -119,6 +119,8 @@ Spawn caps: `instance_create` also counts toward at most 256 instances per event
 - `min(?, ?) -> float` (can fail) (cost: 1): The smaller of two numbers (GML tie rules).
 - `min(int, int) -> float` (cost: 1): The smaller of two numbers (GML tie rules).
 - `mod(?, ?) -> float` (can fail) (cost: 1): GML `a mod b`: `a - (a div b) * b`; a zero divisor is an error.
+- `play_music(string) -> ()` (can fail) (cost: 1): Plays a music track of the package in a loop; another playing music track stops or blocks it by the run's MULTIMEDIA rule. An unknown name is an error.
+- `play_sound(string) -> ()` (can fail) (cost: 1): Plays a sound of the package once; `engine:<pack>/<id>` names a bundled pack sound. An unknown name is an error.
 - `point_direction(?, ?, ?, ?) -> float` (can fail) (cost: 1): Direction in degrees from (`x1`, `y1`) to (`x2`, `y2`), as GML.
 - `point_distance(?, ?, ?, ?) -> float` (can fail) (cost: 1): Distance between (`x1`, `y1`) and (`x2`, `y2`).
 - `pow(?, ?) -> float` (can fail) (cost: 1): `x` to the power `y` (software libm). There is no `**`.
@@ -128,12 +130,14 @@ Spawn caps: `instance_create` also counts toward at most 256 instances per event
 - `room_tick() -> float` (cost: 1): Ticks since the current room started.
 - `round(?) -> float` (can fail) (cost: 1): GML `round`: the nearest integer under the run's rounding rule.
 - `set_alarm(Instance, ?, ?) -> ()` (can fail) (cost: 1): `i.set_alarm(n, steps)` sets alarm `n` (0 to 11) to `steps` ticks, rounded as GM does; -1 means not running; a non-finite value or another `n` is an error.
+- `shake(?, ?) -> ()` (can fail) (cost: 1): Shakes the screen for `ticks` ticks with `strength` pixels (a client effect; the sim reads nothing back).
 - `sign(?) -> float` (can fail) (cost: 1): -1, 0 or 1 by the sign of `x`.
 - `sign(float) -> float` (cost: 1): -1, 0 or 1 by the sign of `x`.
 - `sign(int) -> float` (cost: 1): -1, 0 or 1 by the sign of `x`.
 - `sin(?) -> float` (can fail) (cost: 1): Sine of an angle in radians (software libm).
 - `sqr(?) -> float` (can fail) (cost: 1): `x` squared.
 - `sqrt(?) -> float` (can fail) (cost: 1): Square root.
+- `stop_music() -> ()` (can fail) (cost: 1): Stops the music track that is playing, if any.
 - `tan(?) -> float` (can fail) (cost: 1): Tangent of an angle in radians (software libm).
 - `tick() -> float` (cost: 1): The run's tick counter.
 - `to_float(int) -> float` (cost: 1): An integer as a float.
