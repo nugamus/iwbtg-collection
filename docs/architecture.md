@@ -29,6 +29,10 @@ One Cargo workspace in `client/`, `license = "MIT OR Apache-2.0"`, toolchain pin
 
 The sim never parses text and never touches files. `format` hands it a validated `GameDef`. The client and server hand it input frames.
 
+### The client (`iwbtg-client`)
+
+`cargo run -p iwbtg-client -- <package folder> [--trace-mode]` opens a package in a window (Bevy 0.20, 2D rendering and windowing only; audio, gamepad and 3D features are off until they are needed, because they pull system libraries). `package.rs` opens the folder like `iwbtg pkg check` does (engine pack bundled from `../_engines`, strict load) and prints the errors of a broken package. `view.rs` owns the `sim::Sim` as a non-send resource (the script host is not `Send`) and draws every visible instance that has a sprite, one Bevy sprite each, using the strip image of its `SpriteId` (`iwbtg_format::sprites::sprite_pngs` gives the order), its origin, frame, scale, angle and alpha, at the position and depth the sim reports. The room is letterboxed to fit the window and drawn with nearest-neighbor filtering. The sim does not tick yet: the fixed-tick loop is #145. `crates/client/demo.pkg` is a small original package for trying it. `--screenshot <png>` saves the window after a few frames and exits, for checks.
+
 ### The `iwbtg` CLI
 
 One binary for agents and CI:
