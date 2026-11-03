@@ -1,0 +1,27 @@
+# Imported from research trace kaenbyou/famb-platform-b by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object pathPlatform --room room23 --at 2 --from 2 --stub-dlls (1 --gml)
+source = "kaenbyou/famb-platform-b"
+kind = "diff"
+start = { room = "room_10", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "@path_platform"
+original_object = "pathPlatform"
+dll_mode = "stub"
+seed = 0
+setup = [
+  { frame = 3, target = "kid", set = { x = 1152.0, xprevious = 1152.0, y = 540.0, yprevious = 540.0 } },
+]
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+"instance_number(player)" = "instance_number(kid)"
+
+[unprobed]
+"touch" = "custom variable of the unmapped @path_platform (a script kind); no probe field until its script exists (OPEN)"
+"path_index" = "no probe field for `path_index` (OPEN)"
+"path_position" = "no probe field for `path_position` (OPEN)"
+"path_speed" = "no probe field for `path_speed` (OPEN)"
+
+[rooms]
+"room_10" = "room23"

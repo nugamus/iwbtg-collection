@@ -1,0 +1,26 @@
+# Imported from research trace kaenbyou/famb-jump-heights-a by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room room14 --at 2 --from 2 --stub-dlls --x 49 --y 535
+source = "kaenbyou/famb-jump-heights-a"
+kind = "diff"
+start = { room = "room_1", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "stub"
+seed = 0
+setup = [
+  { frame = 2, target = "kid", set = { x = 49.0, xprevious = 49.0, y = 535.0, yprevious = 535.0 } },
+]
+ignore = ["id", "sprite_index", "sprite_name"]
+notes = [
+  "--x/--y: the recorder creates the object when none exists; setup only moves one",
+]
+
+[vars]
+"instance_number(player)" = "instance_number(kid)"
+
+[unprobed]
+
+[rooms]
+"room_1" = "room14"

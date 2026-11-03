@@ -1,0 +1,24 @@
+# Imported from research trace kaenbyou/famb-gravflip by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room rHub --at 2 --from 2 --stub-dlls
+source = "kaenbyou/famb-gravflip"
+kind = "diff"
+start = { room = "hub", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "stub"
+seed = 0
+setup = []
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+"instance_number(player)" = "instance_number(kid)"
+
+[unprobed]
+"view_angle[0]" = "no probe field for `view_angle[0]` (OPEN)"
+"bbox_bottom" = "no probe field for `bbox_bottom` (OPEN)"
+"bbox_top" = "no probe field for `bbox_top` (OPEN)"
+
+[rooms]
+"hub" = "rHub"

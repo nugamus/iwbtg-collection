@@ -1,0 +1,23 @@
+# Imported from research trace kaenbyou/famb-bullets-a by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object bullet --room room14 --at 2 --from 2 --stub-dlls
+source = "kaenbyou/famb-bullets-a"
+kind = "diff"
+start = { room = "room_1", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "@bullet"
+original_object = "bullet"
+dll_mode = "stub"
+seed = 0
+setup = []
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+"instance_number(bullet)" = "instance_number(@bullet)"
+"player.image_xscale" = "kid.image_xscale"
+"player.x" = "kid.x"
+
+[unprobed]
+
+[rooms]
+"room_1" = "room14"

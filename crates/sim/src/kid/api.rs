@@ -272,6 +272,15 @@ pub fn read_field(w: &World, kid: InstId, f: &KidField) -> Option<Value> {
     }
 }
 
+/// Kid fields that come from the game's profile, not from the kid's state; `None` for any other
+/// name. `grav`: family B declares `grav` 0.4 in Create and never reads it (kid/B.md), so a game
+/// that flips by `yflag` reads its profile gravity. Other families use `grav` as a sign, which the
+/// kid state does not hold as a field.
+pub fn read_field_def(def: &crate::def::GameDef, f: &KidField) -> Option<Value> {
+    let by_flag = def.physics.flip.model == crate::def::physics::FlipKind::Yflag;
+    (f.name == "grav" && f.index.is_none() && by_flag).then_some(Value::Real(def.physics.numbers.gravity))
+}
+
 /// Whether the kid is the flipped one: the flipped kid's own state flag, or the flipped class
 /// (the games that flip by swapping to a second kid kind). The save reads this, not the class
 /// alone, because B and C flip by a flag on one kind.

@@ -113,7 +113,7 @@ The sandbox has four layers:
 - One budget unit is one Rhai operation (one `on_progress` callback). Host functions that do real work charge extra units to the same counter: for example `instance_create` 50, each instance returned by `instances()` 1, each collision query 20 plus 1 per candidate tested. The cost table lives in `docs/format/script-api.md`.
 - Counting: the `on_progress(|ops| ...)` closure adds 1 to a tick-wide `Cell<u64>`, which resets at the start of every tick. It returns `Some("budget")` when the tick counter passes the tick budget or when `ops` (the per-call count) passes the call budget. Rhai then ends the call with `ErrorTerminated`.
 - Defaults: tick budget 1,000,000 units across all script calls in a tick. Call budget 200,000 units per event call. A package may raise its tick budget in `game.toml` up to a hard cap of 2,000,000.
-- Host caps: 256 script spawns per call, 4,096 per tick, 50,000 live instances per room.
+- Host caps: 256 script spawns per call, 4,096 per tick (enforced; a Create run by a spawn counts toward the spawning call), 50,000 live instances per room (enforced in `World::insert`, so scripts and built-ins alike; instances destroyed this tick do not count).
 - Exceeding any budget or cap is a deterministic script error. It can only happen to a runaway script, because of the CI rule below.
 - CI rule: a script's measured peak use must stay under 25% of its package's tick budget over the package's test replays. `iwbtg profile <pkg> --replay <file>` reports peak units and milliseconds per tick. The validator warns at 10%.
 - Operation counts are deterministic for a fixed Rhai version, optimization level and script. That is why the version is pinned and part of `SIM_VERSION`.
@@ -138,7 +138,7 @@ These are rules for the IWS engine, the script API and every Rust built-in.
 
 ### How scripts call the API
 
-- A scripted object has one `.rhai` file of event functions. The file may contain only `fn` and `const` items at top level.
+- A scripted object has one `.rhai` file of event functions. The file may contain only `fn` and `const` items at top level. A `const` whose value is a literal (a number, a string, `true` or `false`, a number with a minus sign) is visible inside every function below it, as if the literal were written there; a const whose value is an expression works at the top level only, a const must be declared above the function that uses it, and its name cannot be reused for a variable or a parameter.
 - The host calls an event function with `this` bound (`call_fn_with_options` with `bind_this_ptr`). `this` is an `Inst` handle: an instance id plus a generation check.
 - Event functions, named after GM events so ports map one to one: `create()`, `begin_step()`, `step()`, `end_step()`, `alarm(n)`, `collide(other)` (only for kinds listed in the object's `collides_with`), `trigger(name)`, `outside_room()`, `animation_end()`, `room_start()`, `room_end()`, `destroy()`, `late()` and `moment_<name>()` for timeline entries.
 - `late()` runs at the position of GM8's Draw event, after End Step, and may change state. It exists because some originals change gameplay state in Draw.
@@ -151,14 +151,14 @@ These are rules for the IWS engine, the script API and every Rust built-in.
 Example:
 
 ```rhai
-fn create() { this.hp = 20.0; set_alarm(0, 50); }
+fn create() { this.hp = 20.0; this.set_alarm(0, 50); }
 
 fn alarm(n) {
     if n == 0 {
         for i in 0..12 {
-            spawn("@orb", this.x, this.y, #{ speed: 4.0, direction: i * 30.0 });
+            instance_create("@orb", this.x, this.y, #{ speed: 4.0, direction: i * 30.0 });
         }
-        set_alarm(0, 25);
+        this.set_alarm(0, 25);
     }
 }
 

@@ -11,6 +11,7 @@
 
 pub mod registry;
 
+use crate::builtins::state::BuiltinState;
 use crate::collide::Target;
 use crate::def::{GameDef, NameId, VarId};
 use crate::events;
@@ -53,6 +54,55 @@ pub enum Column {
     Key(KeyRead),
     /// A save slot field (decoded save files, plan 9.1 kind 3).
     Save(SaveField),
+    /// Engine state the original keeps in a global or a built-in variable (`global.death`,
+    /// `room_speed`), when the package declares no variable of that name.
+    Engine(EngineVar),
+}
+
+/// Engine state a probe column can read without the package declaring a variable for it.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum EngineVar {
+    /// `global.difficulty`.
+    Difficulty,
+    /// `global.death`.
+    Death,
+    /// `global.time`.
+    Time,
+    /// `global.savenum`, the save slot number.
+    Savenum,
+    /// `global.clear`.
+    Clear,
+    /// `global.frozen`.
+    Frozen,
+    /// `global.frozen2`.
+    Frozen2,
+    /// `global.reverse` (family B gravity flag).
+    Reverse,
+    /// `global.grav` (flipped-kid flag of the games that swap kid kinds).
+    Grav,
+    /// `global.paused`: the `world` built-in's pause flag; 0 when the game has none.
+    Paused,
+    /// `room_speed`.
+    RoomSpeed,
+}
+
+impl EngineVar {
+    /// The engine variable a GM global name (without `global.`) names.
+    pub fn global(name: &str) -> Option<EngineVar> {
+        Some(match name {
+            "difficulty" => EngineVar::Difficulty,
+            "death" => EngineVar::Death,
+            "time" => EngineVar::Time,
+            "savenum" => EngineVar::Savenum,
+            "clear" => EngineVar::Clear,
+            "frozen" => EngineVar::Frozen,
+            "frozen2" => EngineVar::Frozen2,
+            "reverse" => EngineVar::Reverse,
+            "grav" => EngineVar::Grav,
+            "paused" => EngineVar::Paused,
+            _ => return None,
+        })
+    }
 }
 
 /// The recorder's fixed columns, in `trace::FIXED_COLUMNS` order.
@@ -299,6 +349,25 @@ fn read_column(sim: &mut Sim, row: InstId, column: &Column, frame: i64) -> trace
             KeyRead::Direct(_) => trace::Value::Empty,
         },
         Column::Save(f) => save_value(def, w, *f),
+        Column::Engine(v) => engine_value(w, *v),
+    }
+}
+
+/// An engine variable as a GML real.
+fn engine_value(w: &World, v: EngineVar) -> trace::Value {
+    let g = &w.engine;
+    match v {
+        EngineVar::Difficulty => trace::Value::Real(f64::from(g.run.difficulty)),
+        EngineVar::Death => trace::Value::Real(f64::from(g.run.deaths)),
+        EngineVar::Time => trace::Value::Real(f64::from(g.run.time)),
+        EngineVar::Savenum => trace::Value::Real(f64::from(g.run.slot)),
+        EngineVar::Clear => truth(g.run.clear),
+        EngineVar::Frozen => truth(g.kid.frozen),
+        EngineVar::Frozen2 => truth(g.kid.frozen2),
+        EngineVar::Reverse => truth(g.kid.b.reverse),
+        EngineVar::Grav => truth(g.kid.grav),
+        EngineVar::Paused => truth(w.iter_alive().any(|i| crate::builtins::world::is_paused(w, i.id))),
+        EngineVar::RoomSpeed => real(w.room_speed),
     }
 }
 
@@ -378,7 +447,13 @@ fn read_field(def: &GameDef, w: &World, id: InstId, field: &FieldRef, frame: i64
         },
         FieldRef::Var(v) => inst.vars.get(v).map_or(trace::Value::Empty, from_value),
         FieldRef::Kid(f) => match inst.state {
-            KindState::Kid(_) => api::read_field(w, id, f).map_or(trace::Value::Empty, |v| from_value(&v)),
+            KindState::Kid(_) => api::read_field(w, id, f)
+                .or_else(|| api::read_field_def(def, f))
+                .map_or(trace::Value::Empty, |v| from_value(&v)),
+            // The save point's cooldown, the original's `saveTimer`.
+            KindState::Builtin(BuiltinState::Save(ref s)) if f.name == "saveTimer" && f.index.is_none() => {
+                real(s.timer)
+            }
             _ => trace::Value::Empty,
         },
     }

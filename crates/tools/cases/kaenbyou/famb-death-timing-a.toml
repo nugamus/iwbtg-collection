@@ -1,0 +1,26 @@
+# Imported from research trace kaenbyou/famb-death-timing-a by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room rTraps --at 2 --from 2 --stub-dlls
+source = "kaenbyou/famb-death-timing-a"
+kind = "diff"
+start = { room = "traps", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "stub"
+seed = 0
+setup = []
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+
+[unprobed]
+"bbox_bottom" = "no probe field for `bbox_bottom` (OPEN)"
+"bbox_left" = "no probe field for `bbox_left` (OPEN)"
+"bbox_right" = "no probe field for `bbox_right` (OPEN)"
+"bbox_top" = "no probe field for `bbox_top` (OPEN)"
+"distance_to_object(playerKiller)" = "a function call; the probe reads variables only (OPEN)"
+"execute_string(\"return place_meeting(x\"+chr(44)+\"y\"+chr(44)+\"playerKiller)\")" = "a function call; the probe reads variables only (OPEN)"
+
+[rooms]
+"traps" = "rTraps"
