@@ -15,6 +15,7 @@ ignore = ["id", "sprite_index", "sprite_name"]
 [vars]
 
 [unprobed]
+"saveTimer" = "kaenbyou counts it only while S is held and stops at 0 (kid/B.md Saving); the save built-in counts every Step (#410)"
 "distance_to_object(player)" = "a function call; the probe reads variables only (OPEN)"
 
 [rooms]
