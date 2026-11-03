@@ -268,6 +268,20 @@ pub(crate) fn register_numeric(engine: &mut Engine, shared: &Rc<Shared>, docs: &
     }
     docs.add("abs", "Absolute value.");
     engine.register_fn("abs", wrap1(|x: f64| -> f64 { num::abs(r(x)).get() }));
+    // Rhai's own integer `abs`, `min` and `max` return integers and beat the `Dynamic` forms, so
+    // the integer forms are registered exactly and give floats.
+    #[allow(clippy::cast_precision_loss, reason = "script integers stay far below 2^53")]
+    {
+        engine.register_fn("abs", |x: i64| -> f64 { num::abs(r(x as f64)).get() });
+        let s = Rc::clone(shared);
+        engine.register_fn("min", move |a: i64, b: i64| -> f64 {
+            num::gm_min(r(a as f64), r(b as f64), &s.num).get()
+        });
+        let s = Rc::clone(shared);
+        engine.register_fn("max", move |a: i64, b: i64| -> f64 {
+            num::gm_max(r(a as f64), r(b as f64), &s.num).get()
+        });
+    }
     docs.add("frac", "The fractional part of `x`, with the sign of `x`.");
     engine.register_fn("frac", wrap1(|x: f64| -> f64 { num::frac(r(x)).get() }));
     docs.add("clamp", "`x` limited to the range `lo` to `hi`.");

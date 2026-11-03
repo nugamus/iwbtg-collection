@@ -46,6 +46,8 @@ op >=(_: int, _: float) -> bool;
 
 fn abs(_: ?) -> float;
 
+fn abs(_: int) -> float;
+
 fn arctan2(_: ?, _: ?) -> float;
 
 fn ceil(_: ?) -> float;
@@ -172,7 +174,11 @@ fn ln(_: ?) -> float;
 
 fn max(_: ?, _: ?) -> float;
 
+fn max(_: int, _: int) -> float;
+
 fn min(_: ?, _: ?) -> float;
+
+fn min(_: int, _: int) -> float;
 
 fn mod(_: ?, _: ?) -> float;
 

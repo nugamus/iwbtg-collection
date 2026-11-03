@@ -72,7 +72,10 @@ Read with `i.name`, write with `i.name = v` where listed read and write.
 
 Every call costs 1 budget unit (one Rhai operation, like each operator and each statement). The cost after each signature is what the host function charges; "cost: 1" means the operation only. The tick budget is 1,000,000 units and one event call may use 200,000 ([0001](../decisions/0001-script-language.md#step-budget)).
 
+Spawn caps: `instance_create` also counts toward at most 256 instances per event call (a Create it runs counts toward the call that spawned it) and 4096 per tick. Exceeding either halts the sim with a script error that names the cap.
+
 - `abs(?) -> float` (can fail) (cost: 1): Absolute value.
+- `abs(int) -> float` (cost: 1): Absolute value.
 - `arctan2(?, ?) -> float` (can fail) (cost: 1): Angle in radians of the point (`x`, `y`) (software libm).
 - `ceil(?) -> float` (can fail) (cost: 1): Smallest integer not below `x`.
 - `choose(array) -> ?` (can fail) (cost: 1): One element of the array, picked by the run's one RNG; an empty array is an error.
@@ -112,7 +115,9 @@ Every call costs 1 budget unit (one Rhai operation, like each operator and each 
 - `lerp(?, ?, ?) -> float` (can fail) (cost: 1): Linear interpolation from `a` to `b` by `t`.
 - `ln(?) -> float` (can fail) (cost: 1): Natural logarithm (software libm).
 - `max(?, ?) -> float` (can fail) (cost: 1): The larger of two numbers (GML tie rules).
+- `max(int, int) -> float` (cost: 1): The larger of two numbers (GML tie rules).
 - `min(?, ?) -> float` (can fail) (cost: 1): The smaller of two numbers (GML tie rules).
+- `min(int, int) -> float` (cost: 1): The smaller of two numbers (GML tie rules).
 - `mod(?, ?) -> float` (can fail) (cost: 1): GML `a mod b`: `a - (a div b) * b`; a zero divisor is an error.
 - `point_direction(?, ?, ?, ?) -> float` (can fail) (cost: 1): Direction in degrees from (`x1`, `y1`) to (`x2`, `y2`), as GML.
 - `point_distance(?, ?, ?, ?) -> float` (can fail) (cost: 1): Distance between (`x1`, `y1`) and (`x2`, `y2`).

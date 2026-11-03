@@ -86,3 +86,40 @@ fn a_non_number_is_an_error_with_a_message() {
     let e = iws.rhai_engine().eval::<Dynamic>("sin(\"x\")").unwrap_err();
     assert!(format!("{e:?}").contains("expected a number"), "{e:?}");
 }
+
+/// Rhai's own integer overloads (`abs`, `min`, `max`, `sign`...) must not beat ours: every
+/// numeric function gives a float for integer arguments.
+#[test]
+fn integer_arguments_give_float_results() {
+    let mut bad = Vec::new();
+    for src in [
+        "abs(-3)",
+        "min(1, 2)",
+        "max(1, 2)",
+        "min(1, 2.0)",
+        "max(1.0, 2)",
+        "abs(-3.0)",
+        "sign(-3)",
+        "floor(3)",
+        "ceil(3)",
+        "round(3)",
+        "clamp(5, 1, 3)",
+        "sqr(3)",
+        "lerp(1, 3, 1)",
+        "frac(3)",
+        "mod(7, 3)",
+        "div(7, 3)",
+        "random(3)",
+        "irandom(3)",
+        "sqrt(4)",
+    ] {
+        let v: Dynamic = Iws::new(RunnerRules::default().num)
+            .rhai_engine()
+            .eval::<Dynamic>(src)
+            .unwrap_or_else(|e| panic!("`{src}` failed: {e:?}"));
+        if !v.is_float() {
+            bad.push(format!("`{src}` gave {}", v.type_name()));
+        }
+    }
+    assert!(bad.is_empty(), "{bad:#?}");
+}

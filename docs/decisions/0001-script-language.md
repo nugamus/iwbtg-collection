@@ -113,7 +113,7 @@ The sandbox has four layers:
 - One budget unit is one Rhai operation (one `on_progress` callback). Host functions that do real work charge extra units to the same counter: for example `instance_create` 50, each instance returned by `instances()` 1, each collision query 20 plus 1 per candidate tested. The cost table lives in `docs/format/script-api.md`.
 - Counting: the `on_progress(|ops| ...)` closure adds 1 to a tick-wide `Cell<u64>`, which resets at the start of every tick. It returns `Some("budget")` when the tick counter passes the tick budget or when `ops` (the per-call count) passes the call budget. Rhai then ends the call with `ErrorTerminated`.
 - Defaults: tick budget 1,000,000 units across all script calls in a tick. Call budget 200,000 units per event call. A package may raise its tick budget in `game.toml` up to a hard cap of 2,000,000.
-- Host caps: 256 script spawns per call, 4,096 per tick, 50,000 live instances per room.
+- Host caps: 256 script spawns per call, 4,096 per tick (enforced; a Create run by a spawn counts toward the spawning call), 50,000 live instances per room (not enforced yet).
 - Exceeding any budget or cap is a deterministic script error. It can only happen to a runaway script, because of the CI rule below.
 - CI rule: a script's measured peak use must stay under 25% of its package's tick budget over the package's test replays. `iwbtg profile <pkg> --replay <file>` reports peak units and milliseconds per tick. The validator warns at 10%.
 - Operation counts are deterministic for a fixed Rhai version, optimization level and script. That is why the version is pinned and part of `SIM_VERSION`.
