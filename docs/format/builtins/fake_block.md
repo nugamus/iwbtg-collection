@@ -17,6 +17,6 @@ Looks like a block but is not solid, or vanishes. Source: `crates/sim/src/builti
 - `touch`: a kid touching it destroys it (KOT blockVis).
 - `approach`: each Step, a kid within `approach_distance` destroys it (WAN blockFake, LR blockNotInvis, SHO blockKieru01).
 - `group_fade` (WAN oHiddenWall): a kid touch makes every instance of the kind fade: each Step `image_alpha -= 0.05`, destroyed at 0 or below.
-- `tile_delete` (spook house oPatFakeBlock) is refused at load: it also makes 10 particles at random offsets and the draw order is not in the spec (OPEN).
+- `tile_delete` (spook house oPatFakeBlock) is refused at load: it also makes 10 particles at random offsets and the draw order is not in the spec (OPEN, nugamus/iwbtg-collection-research#50).
 
 OPEN: the WAN blockFake test that runs only while player2 does not exist.

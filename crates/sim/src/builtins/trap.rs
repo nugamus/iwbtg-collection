@@ -26,7 +26,7 @@
 //! toward, horizontal first (`flush`). `destroy_outside_room` destroys it outside the room.
 //! The sound and `kind` (the class the loader gives it) are the loader's and the client's.
 //!
-//! OPEN, not done: the kaenbyou pathFree End Step conversion of a running path to straight
+//! OPEN, not done (nugamus/iwbtg-collection-research#49): the kaenbyou pathFree End Step conversion of a running path to straight
 //! motion; U-MECH-4 (the path start tick) and U-MECH-8 (stop chain timing) follow the generic
 //! alarm and path rules until traces answer them.
 

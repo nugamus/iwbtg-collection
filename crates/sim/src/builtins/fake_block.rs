@@ -16,7 +16,7 @@
 //! moving platforms reverse (`moving_platform` `marker_reverse`) is the loader's, set from
 //! `reverses_platforms`.
 //!
-//! OPEN, not done: `tile_delete` (spook house oPatFakeBlock: deletes the tile under it and
+//! OPEN, not done (nugamus/iwbtg-collection-research#50): `tile_delete` (spook house oPatFakeBlock: deletes the tile under it and
 //! makes 10 particles at random offsets up to 12 px; the draw order is not in the spec) is
 //! refused at load; the WAN blockFake test that runs only while player2 does not exist.
 
@@ -144,7 +144,7 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
         Some("tile_delete") => {
             return Err(param_error(
                 "vanish_on",
-                "tile_delete (spook house oPatFakeBlock) is not supported yet (OPEN: particle draw order)",
+                "tile_delete (spook house oPatFakeBlock) is not supported yet (OPEN, nugamus/iwbtg-collection-research#50: particle draw order)",
             ));
         }
         _ => Vanish::Approach,

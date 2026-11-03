@@ -6,7 +6,7 @@
 //! - `add_each_tick` (rainbow-feather object830 and object831, h -2 and 2): `h` is added to a
 //!   touching kid `hspeed` on every collision tick.
 //! - `set_on_top_edge` (showdown BlockHidari and BlockMigi, h -4 and 4): in Step, a kid touching
-//!   the line from `(x + 32, y - 1)` to `(x, y)` gets `hspeed = h`. OPEN: showdown does the same
+//!   the line from `(x + 32, y - 1)` to `(x, y)` gets `hspeed = h`. OPEN (nugamus/iwbtg-collection-research#53): showdown does the same
 //!   to pushBlock (not a built-in), and the probe uses the bounding box (`prec` false).
 
 use serde::{Deserialize, Serialize};
