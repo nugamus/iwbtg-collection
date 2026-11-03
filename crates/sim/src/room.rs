@@ -434,10 +434,17 @@ fn room_def<'d>(ctx: &Ctx<'d>, room: RoomId) -> Result<&'d RoomDef, SimError> {
 /// and audio-supersound-deathfade-c.csv; rely-the-needle-4-2/t-room-1.csv: 0.0 on frame 0, then
 /// one per tick). `StartPoint::Room` gives the boot instances that one update.
 fn age_boot(ctx: &mut Ctx) -> Result<(), SimError> {
-    let ids: Vec<_> = ctx.w.iter_alive().filter(|i| i.persistent).map(|i| i.id).collect();
+    let ids: Vec<_> = ctx
+        .w
+        .iter_alive()
+        .filter(|i| i.persistent)
+        .map(|i| i.id)
+        .collect();
     for id in ids {
         let frames = ctx.w.get(id).and_then(|i| i.img.sprite()).map_or(0, |s| {
-            s.index().and_then(|n| ctx.def.sprites.get(n)).map_or(0, |d| d.frames)
+            s.index()
+                .and_then(|n| ctx.def.sprites.get(n))
+                .map_or(0, |d| d.frames)
         });
         if let Some(inst) = ctx.w.get_mut(id) {
             crate::anim::advance(&mut inst.img, frames, &ctx.rules.tick)?;
