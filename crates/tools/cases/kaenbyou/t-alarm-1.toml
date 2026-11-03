@@ -1,0 +1,24 @@
+# Imported from research trace kaenbyou/t-alarm-1 by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object bullet --room rTemplate --at 2 --from 2 --stub-dlls (1 --gml)
+source = "kaenbyou/t-alarm-1"
+kind = "diff"
+start = { room = "template", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "@bullet"
+original_object = "bullet"
+dll_mode = "stub"
+seed = 0
+setup = [
+  { frame = 3, target = "kid", set = { x = 96.0, xprevious = 96.0, y = 567.4, yprevious = 567.4 } },
+]
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+"player.x" = "kid.x"
+"player.y" = "kid.y"
+
+[unprobed]
+
+[rooms]
+"template" = "rTemplate"

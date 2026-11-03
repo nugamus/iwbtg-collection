@@ -1,0 +1,25 @@
+# Imported from research trace kaenbyou/tr-room-08 by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room rHub --at 2 --from 2 --stub-dlls (5 --gml)
+source = "kaenbyou/tr-room-08"
+kind = "probe_read"
+open = "object savePointVHard is a variant of kind save (params): a first-of or count over the kind is not the object (OPEN); probe read: map the decoded globals to save.* columns in [vars], then drop this line"
+start = { room = "hub", difficulty = 1 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "stub"
+seed = 0
+setup = [
+  { frame = 1, global = "savenum", value = 1.0 },
+]
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+"instance_number(savePointVHard)" = "instance_number(save)"
+"savePointVHard.saveTimer" = "save.saveTimer"
+
+[unprobed]
+
+[rooms]
+"hub" = "rHub"

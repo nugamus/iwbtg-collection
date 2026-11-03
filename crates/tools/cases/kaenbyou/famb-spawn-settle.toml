@@ -1,0 +1,21 @@
+# Imported from research trace kaenbyou/famb-spawn-settle by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room room14 --at 2 --from 2 --stub-dlls
+source = "kaenbyou/famb-spawn-settle"
+kind = "diff"
+start = { room = "room_1", difficulty = 3 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "stub"
+seed = 0
+setup = []
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+"instance_number(player)" = "instance_number(kid)"
+
+[unprobed]
+
+[rooms]
+"room_1" = "room14"

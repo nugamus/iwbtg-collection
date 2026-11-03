@@ -1,0 +1,27 @@
+# Imported from research trace kaenbyou/famb-wall-align-c by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room room14 --at 2 --from 2 --stub-dlls --x 48.5 --y 119
+source = "kaenbyou/famb-wall-align-c"
+kind = "diff"
+start = { room = "room_1", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "stub"
+seed = 0
+setup = [
+  { frame = 2, target = "kid", set = { x = 48.5, xprevious = 48.5, y = 119.0, yprevious = 119.0 } },
+]
+ignore = ["id", "sprite_index", "sprite_name"]
+notes = [
+  "--x/--y: the recorder creates the object when none exists; setup only moves one",
+]
+
+[vars]
+
+[unprobed]
+"bbox_left" = "no probe field for `bbox_left` (OPEN)"
+"bbox_right" = "no probe field for `bbox_right` (OPEN)"
+
+[rooms]
+"room_1" = "room14"

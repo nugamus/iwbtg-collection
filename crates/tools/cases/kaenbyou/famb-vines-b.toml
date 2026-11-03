@@ -1,0 +1,29 @@
+# Imported from research trace kaenbyou/famb-vines-b by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room rHub --at 2 --from 2 --stub-dlls --x 37 --y 200
+source = "kaenbyou/famb-vines-b"
+kind = "diff"
+start = { room = "hub", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "stub"
+seed = 0
+setup = [
+  { frame = 2, target = "kid", set = { x = 37.0, xprevious = 37.0, y = 200.0, yprevious = 200.0 } },
+]
+ignore = ["id", "sprite_index", "sprite_name"]
+notes = [
+  "--x/--y: the recorder creates the object when none exists; setup only moves one",
+]
+
+[vars]
+"instance_number(player)" = "instance_number(kid)"
+
+[unprobed]
+"bbox_left" = "no probe field for `bbox_left` (OPEN)"
+"distance_to_object(WalljumpL)" = "a function call; the probe reads variables only (OPEN)"
+"distance_to_object(WalljumpR)" = "a function call; the probe reads variables only (OPEN)"
+
+[rooms]
+"hub" = "rHub"
