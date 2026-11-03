@@ -296,6 +296,9 @@ fn start_inner<H: RoomHost + ?Sized>(
     stop_if_halted(ctx)?;
     ctx.w.pending = None;
     create_boot(ctx, host)?;
+    if matches!(start, StartPoint::Room { .. }) {
+        age_boot(ctx)?;
+    }
     let target = match start {
         StartPoint::NewGame { difficulty } => {
             ctx.w.save = None;
@@ -423,6 +426,24 @@ fn room_def<'d>(ctx: &Ctx<'d>, room: RoomId) -> Result<&'d RoomDef, SimError> {
     let def = ctx.def;
     def.room(room)
         .ok_or_else(|| SimError::invariant(format!("room {} does not exist", room.0)))
+}
+
+/// The recorder's `--room` jump happens on frame 1, so the boot instances (rInit's world) have
+/// already had one animation update when the first sampled tick (frame 2) runs: the world, which
+/// has no sprite, reads `image_index` 2.0 on frame 2 (traces/kaenbyou/t5-input-restart-latch-b.csv
+/// and audio-supersound-deathfade-c.csv; rely-the-needle-4-2/t-room-1.csv: 0.0 on frame 0, then
+/// one per tick). `StartPoint::Room` gives the boot instances that one update.
+fn age_boot(ctx: &mut Ctx) -> Result<(), SimError> {
+    let ids: Vec<_> = ctx.w.iter_alive().filter(|i| i.persistent).map(|i| i.id).collect();
+    for id in ids {
+        let frames = ctx.w.get(id).and_then(|i| i.img.sprite()).map_or(0, |s| {
+            s.index().and_then(|n| ctx.def.sprites.get(n)).map_or(0, |d| d.frames)
+        });
+        if let Some(inst) = ctx.w.get_mut(id) {
+            crate::anim::advance(&mut inst.img, frames, &ctx.rules.tick)?;
+        }
+    }
+    Ok(())
 }
 
 /// Creates the `GameDef::boot` kinds at (0, 0), as persistent instances.
