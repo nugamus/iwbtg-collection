@@ -8,7 +8,8 @@
 //! End Step (WAN, LEM, SPK) use the same code here, OPEN until a trace shows a difference.
 //!
 //! Cooldown: `saveTimer` is set to `cooldown` on a save and counts down every Step; a save needs
-//! it below 0. rely has no working cooldown (it is set but never checked), so `cooldown = 0`
+//! it below 0. With `on_touch = "skip_held"` (kaenbyou) it counts down only on ticks S is held and
+//! only while above 0, and a save needs it at most 0. rely has no working cooldown (it is set but never checked), so `cooldown = 0`
 //! never gates. The blink (`blink`, default on; kid/A1.md "Saving"): a save shows frame 1 with
 //! `image_speed` 0.017, Animation End goes back to frame 0 and stops.
 //!
@@ -285,7 +286,8 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
             Ok(Flow::Continue)
         }
         EventKind::Alarm(0) if s.self_destroy.is_some() => Ok(ctx.destroy(me)),
-        EventKind::Step => {
+        // `skip_held` (kaenbyou "Key S", kid/B.md Saving): the timer counts only in the key event.
+        EventKind::Step if s.on_touch != Touch::SkipHeld => {
             if let Some(BuiltinState::Save(st)) = state_mut(ctx, me) {
                 st.timer -= Real::ONE;
             }
@@ -314,6 +316,16 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
             }
         }
         EventKind::KeyHeld(Action::Skip) if s.on_touch == Touch::SkipHeld => {
+            // Every tick S is held: subtract 1 while above 0, then save when it is at most 0 and
+            // the mask touches the kid (the gate in `try_save` reads the updated timer).
+            let nr = &ctx.rules.num;
+            let mut s = s;
+            if num::gm_gt(s.timer, Real::ZERO, nr) {
+                s.timer -= Real::ONE;
+                if let Some(BuiltinState::Save(st)) = state_mut(ctx, me) {
+                    st.timer = s.timer;
+                }
+            }
             let hit = place_meeting(ctx, me, own_x(ctx, me)?, own_y(ctx, me)?, Target::Class(KIDS))?;
             if !hit {
                 return Ok(Flow::Continue);
@@ -356,7 +368,12 @@ fn touch_fires(ctx: &Ctx, s: &SaveState) -> bool {
 /// Saves from `kid` when the cooldown, gravity and depth rules allow it.
 fn try_save(ctx: &mut Ctx, me: InstId, s: &SaveState, kid: InstId) -> Result<Flow, SimError> {
     let nr = &ctx.rules.num;
-    if num::gm_gt(s.cooldown, Real::ZERO, nr) && num::gm_ge(s.timer, Real::ZERO, nr) {
+    let gated = if s.on_touch == Touch::SkipHeld {
+        num::gm_gt(s.timer, Real::ZERO, nr)
+    } else {
+        num::gm_gt(s.cooldown, Real::ZERO, nr) && num::gm_ge(s.timer, Real::ZERO, nr)
+    };
+    if gated {
         return Ok(Flow::Continue);
     }
     let Some(k) = ctx.w.get(kid) else {
