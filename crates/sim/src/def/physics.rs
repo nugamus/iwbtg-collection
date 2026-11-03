@@ -14,7 +14,8 @@ use crate::kid::{KidAction, KidCollisionRun};
 use crate::num::Real;
 
 pub use super::physics_ext::{
-    BlockSlopeStep, Downhill, FlipKind, FlipModel, IceModel, IceRules, LadderEntry, LadderRules, SlopeModel,
+    BlockSlopeStep, Downhill, FlipKind, FlipModel, IceModel, IceRules, LadderEntry, LadderRules,
+    MirrorContact, SlopeModel,
 };
 
 /// The kid engine family a profile starts from (`preset = "A1"`): documentation and defaults

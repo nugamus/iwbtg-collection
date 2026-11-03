@@ -2,7 +2,7 @@
 //! reads only overlaps, so a rectangle stands in for the precise mask). The kid's box is x-5..x+5,
 //! y-12..y+8 (origin (5, 12), 11 x 21).
 
-use iwbtg_sim::def::physics::{BlockSlopeStep, Downhill};
+use iwbtg_sim::def::physics::{BlockSlopeStep, Downhill, MirrorContact};
 use iwbtg_sim::def::testing::GameDefBuilder;
 use iwbtg_sim::def::{Builtin, ClassMask, GameDef, KidFamily, KindDef, KindId, PhysicsProfile, RoomDef};
 use iwbtg_sim::input::{Action, InputFrame};
@@ -167,6 +167,43 @@ fn replace_steps_up_instead_of_the_contact() {
                 (103.0, 97.0, 0.0),
                 "no free-spot test, no contact move"
             );
+        },
+    );
+}
+
+#[test]
+fn the_mirror_row_right_hit_contacts_by_the_games_rule() {
+    // A right hit on a `slope_mirror` (no climb: the climb looks for a `slope`): rori contacts
+    // toward 180 (a bug the original keeps), fairy-tale toward 0, the others by the block rule.
+    for (rule, want_x) in [
+        (MirrorContact::Normal, 104.0),
+        (MirrorContact::Left, 94.0),
+        (MirrorContact::Right, 104.0),
+    ] {
+        with_kid(
+            |p| {
+                p.slope.block_step = BlockSlopeStep::Replace;
+                p.slope.mirror_contact = rule;
+            },
+            |ctx, kid, k| {
+                let s = put(ctx, k.mirror, 110.0, 90.0);
+                speeds(ctx, kid, 6.0, 0.0);
+                collide(ctx, kid, s, SlopeRun::BlockSlopeStep);
+                assert_eq!(at(ctx, kid).0, want_x, "{rule:?}");
+            },
+        );
+    }
+    // Against a `slope` the rule does not apply.
+    with_kid(
+        |p| {
+            p.slope.block_step = BlockSlopeStep::FreeSpot;
+            p.slope.mirror_contact = MirrorContact::Left;
+        },
+        |ctx, kid, k| {
+            let s = put(ctx, k.slope, 110.0, 90.0);
+            speeds(ctx, kid, 6.0, 0.0);
+            collide(ctx, kid, s, SlopeRun::BlockSlopeStep);
+            assert_eq!(at(ctx, kid).0, 104.0);
         },
     );
 }

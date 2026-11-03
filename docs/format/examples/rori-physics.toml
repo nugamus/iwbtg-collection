@@ -19,5 +19,6 @@ collisions = [
 
 [slope]
 block_step = "replace"
+mirror_contact = "left"
 jump_probe = 2.0
 air_sprite_probe = 2.0

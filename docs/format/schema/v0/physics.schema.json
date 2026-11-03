@@ -1464,6 +1464,26 @@
       },
       "type": "object"
     },
+    "MirrorContact": {
+      "description": "The contact direction of the `slope_mirror` row's right hit (kid/A1.md, \"Collision with\nnanameblockR\").",
+      "oneOf": [
+        {
+          "const": "normal",
+          "description": "The block rule: a right hit contacts toward 0, `hspeed` 0 toward 180.",
+          "type": "string"
+        },
+        {
+          "const": "left",
+          "description": "Rori: a right hit and `hspeed` 0 contact toward 180 (a bug the original keeps).",
+          "type": "string"
+        },
+        {
+          "const": "right",
+          "description": "Fairy-tale: a right hit and `hspeed` 0 contact toward 0.",
+          "type": "string"
+        }
+      ]
+    },
     "MovingBlockRun": {
       "description": "The collision runs this file implements, by their `physics.toml` names (snake case). Part\nof `kid::KidCollisionRun`.",
       "oneOf": [
@@ -1702,6 +1722,10 @@
           "default": false,
           "description": "`walk` keeps `hspeed` while a slope is 1 px below and the key points downhill\n(eat-the-new-year, kid/A4.md).",
           "type": "boolean"
+        },
+        "mirror_contact": {
+          "$ref": "#/$defs/MirrorContact",
+          "description": "Which way the `slope_mirror` row's contact goes for a right hit or `hspeed` 0, when the\nclimb does not apply (rori: `left`, a bug the original keeps; fairy-tale: `right`)."
         },
         "step": {
           "$ref": "#/$defs/Real",
