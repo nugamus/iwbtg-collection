@@ -19,8 +19,8 @@ use crate::package::{Package, SpriteImage, sprite_images};
 
 /// The running game. Not `Send` (the script host shares state by `Rc`), so it is a non-send
 /// resource and only main-thread systems touch it.
-struct Game {
-    sim: Sim,
+pub(crate) struct Game {
+    pub(crate) sim: Sim,
 }
 
 /// The Bevy image of each sprite strip, by `SpriteId`, with the strip size.
@@ -33,7 +33,7 @@ struct Drawn(BTreeMap<InstId, Entity>);
 
 /// The room size in pixels.
 #[derive(Resource)]
-struct RoomSize(Vec2);
+pub(crate) struct RoomSize(pub(crate) Vec2);
 
 /// Decoded sprite strips, waiting for the Startup system to upload them.
 #[derive(Resource)]
@@ -65,6 +65,44 @@ impl std::str::FromStr for FrameCap {
     }
 }
 
+/// Frames blend between the last two ticks with `--interpolate`. Off by default: the originals
+/// draw every step, so a blended frame shows positions the game never had. `pos` is where each
+/// instance was before the last tick.
+#[derive(Resource, Default)]
+struct Previous {
+    on: bool,
+    /// How far the fixed clock is into the next tick, 0 to 1.
+    alpha: f64,
+    room: Option<iwbtg_sim::def::RoomId>,
+    pos: BTreeMap<InstId, (f64, f64)>,
+}
+
+/// An instance that moves farther than this in one tick (a warp, a teleport) is drawn at its
+/// new place at once instead of sliding across the room.
+const MAX_BLEND_DISTANCE: f64 = 32.0;
+
+/// The drawn position `alpha` (0 to 1) of the way from `prev` to `cur`. No blend without a
+/// previous position or after a jump.
+fn blend(prev: Option<(f64, f64)>, cur: (f64, f64), alpha: f64) -> (f64, f64) {
+    match prev {
+        Some((px, py))
+            if (cur.0 - px).abs() <= MAX_BLEND_DISTANCE && (cur.1 - py).abs() <= MAX_BLEND_DISTANCE =>
+        {
+            (px + (cur.0 - px) * alpha, py + (cur.1 - py) * alpha)
+        }
+        _ => cur,
+    }
+}
+
+/// The part of the image holding frame `frame`. The image is a grid read row by row; the frames
+/// per row follow from the image width (the sim does not carry `columns`), so a plain strip is
+/// one row.
+fn frame_rect(frame: u32, (w, h): (f32, f32), image: Vec2) -> Rect {
+    let columns = ((image.x / w).round() as u32).max(1);
+    let (x, y) = ((frame % columns) as f32 * w, (frame / columns) as f32 * h);
+    Rect::new(x, y, x + w, y + h)
+}
+
 /// The frame cap in force.
 #[derive(Resource)]
 struct Cap(FrameCap);
@@ -84,7 +122,12 @@ struct Stats {
 struct Overlay;
 
 /// Opens the window and runs until it closes.
-pub fn run(pkg: Package, cap: FrameCap, screenshot: Option<std::path::PathBuf>) -> Result<(), String> {
+pub fn run(
+    pkg: Package,
+    cap: FrameCap,
+    interpolate: bool,
+    screenshot: Option<std::path::PathBuf>,
+) -> Result<(), String> {
     let def = Arc::clone(&pkg.def);
     let options = SimOptions {
         // Like a replay: a new game, in the game's `new_game_room`. The title and menus come with
@@ -115,10 +158,17 @@ pub fn run(pkg: Package, cap: FrameCap, screenshot: Option<std::path::PathBuf>) 
     .insert_resource(ClearColor(Color::BLACK))
     .insert_resource(RoomSize(Vec2::new(width, height)))
     .insert_resource(PendingImages(images))
+    .insert_resource(crate::art::ArtFiles(pkg.files.clone()))
+    .init_resource::<crate::art::ArtImages>()
+    .init_resource::<crate::art::ShownArt>()
     .init_resource::<Drawn>()
     .insert_non_send(Game { sim })
     .insert_resource(Collector::new())
     .insert_resource(Cap(cap))
+    .insert_resource(Previous {
+        on: interpolate,
+        ..default()
+    })
     .insert_resource(Stats {
         window_start: Instant::now(),
         ticks: 0,
@@ -134,7 +184,13 @@ pub fn run(pkg: Package, cap: FrameCap, screenshot: Option<std::path::PathBuf>) 
         collect_input.in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
     )
     .add_systems(FixedUpdate, tick)
-    .add_systems(Update, (sync_instances, overlay))
+    .add_systems(
+        Update,
+        (
+            crate::art::sync_room_art,
+            (set_alpha, sync_instances, overlay).chain(),
+        ),
+    )
     .add_systems(Last, limit_frames);
     if let Some(path) = screenshot {
         app.insert_resource(ScreenshotTo(path))
@@ -195,6 +251,17 @@ fn setup(
     commands.insert_resource(Textures(textures));
 }
 
+/// Remembers how far the fixed clock is into the next tick, for `--interpolate`.
+fn set_alpha(fixed: Res<Time<Fixed>>, mut previous: ResMut<Previous>) {
+    previous.alpha = f64::from(fixed.overstep_fraction());
+}
+
+/// A number with two decimals, without the sign of a tiny negative that rounds to zero.
+fn two(v: f64) -> String {
+    let text = format!("{v:.2}");
+    if text == "-0.00" { "0.00".to_string() } else { text }
+}
+
 /// Adds this frame's key events to the collector.
 fn collect_input(keys: Res<ButtonInput<KeyCode>>, mut collector: ResMut<Collector>) {
     for key in keys.get_just_pressed().filter_map(|k| key_code(*k)) {
@@ -206,7 +273,22 @@ fn collect_input(keys: Res<ButtonInput<KeyCode>>, mut collector: ResMut<Collecto
 }
 
 /// One sim tick: runs on the fixed clock, as many times per frame as the clock is behind.
-fn tick(mut game: NonSendMut<Game>, mut collector: ResMut<Collector>, mut stats: ResMut<Stats>) {
+fn tick(
+    mut game: NonSendMut<Game>,
+    mut collector: ResMut<Collector>,
+    mut stats: ResMut<Stats>,
+    mut previous: ResMut<Previous>,
+) {
+    if previous.on {
+        let world = game.sim.world();
+        previous.room = Some(world.room);
+        previous.pos = world
+            .instances()
+            .iter()
+            .filter(|i| i.alive)
+            .map(|i| (i.id, (i.m.x().get(), i.m.y().get())))
+            .collect();
+    }
     let frame = collector.take_frame();
     if game.sim.step(frame).status == SimStatus::Running {
         stats.ticks += 1;
@@ -243,12 +325,29 @@ fn overlay(
         SimStatus::Halted(e) => format!("  HALTED: {e}"),
         SimStatus::Ended => "  ended".to_string(),
     };
+    let world = game.sim.world();
+    let room = game.sim.def().room(world.room).map_or_else(
+        || "?".to_string(),
+        |r| format!("{} ({}x{})", r.name, r.width, r.height),
+    );
+    let kid = match world.kid(&game.sim.rules().tick).and_then(|id| world.get(id)) {
+        Some(k) => format!(
+            "kid x {}  y {}  hspeed {}  vspeed {}",
+            two(k.m.x().get()),
+            two(k.m.y().get()),
+            two(k.m.hspeed().get()),
+            two(k.m.vspeed().get()),
+        ),
+        None => "no kid".to_string(),
+    };
     label.0 = format!(
-        "ticks/s {:.1} (game {})  fps {:.0}  tick {}{status}  [F3 hides]",
+        "ticks/s {:.1} (game {})  fps {:.0}  tick {}{status}  [F3 hides]
+room {room}
+{kid}",
         stats.ticks_per_second,
         game.sim.def().tick_rate,
         stats.frames_per_second,
-        game.sim.world().tick,
+        world.tick,
     );
 }
 
@@ -283,10 +382,13 @@ fn sync_instances(
     textures: Option<Res<Textures>>,
     room: Res<RoomSize>,
     mut drawn: ResMut<Drawn>,
+    previous: Res<Previous>,
     mut query: Query<(&mut Sprite, &mut Transform)>,
 ) {
     let Some(textures) = textures else { return };
     let def = game.sim.def();
+    let alpha = previous.alpha;
+    let same_room = previous.room == Some(game.sim.world().room);
     let mut alive = BTreeMap::new();
     for inst in game.sim.world().instances() {
         if !inst.alive || !inst.visible {
@@ -314,10 +416,20 @@ fn sync_instances(
         let (sin, cos) = angle.sin_cos();
         let off = Vec2::new(off.x * cos + off.y * sin, -off.x * sin + off.y * cos);
         // GM: y grows downward from the room corner. Bevy: y up from the centre.
-        let x = inst.m.x().get() as f32 + off.x - room.0.x / 2.0;
-        let y = room.0.y / 2.0 - (inst.m.y().get() as f32 + off.y);
+        let cur = (inst.m.x().get(), inst.m.y().get());
+        let (px, py) = if previous.on {
+            blend(
+                previous.pos.get(&inst.id).copied().filter(|_| same_room),
+                cur,
+                alpha,
+            )
+        } else {
+            cur
+        };
+        let x = px as f32 + off.x - room.0.x / 2.0;
+        let y = room.0.y / 2.0 - (py as f32 + off.y);
         let z = -(inst.depth.get() as f32) / 1000.0 + (inst.id.0 % 1000) as f32 * 1e-6;
-        let rect = Rect::new(frame as f32 * w, 0.0, (frame + 1) as f32 * w, strip.y as f32);
+        let rect = frame_rect(frame, (w, h), strip.as_vec2());
         let transform = Transform::from_xyz(x, y, z)
             .with_rotation(Quat::from_rotation_z(angle))
             .with_scale(Vec3::new(sx, sy, 1.0));
@@ -386,5 +498,35 @@ mod tests {
         assert_eq!("Unlimited".parse(), Ok(FrameCap::Unlimited));
         assert!("0".parse::<FrameCap>().is_err());
         assert!("fast".parse::<FrameCap>().is_err());
+    }
+
+    #[test]
+    fn blend_moves_part_of_the_way_and_never_across_a_jump() {
+        assert_eq!(blend(Some((0.0, 0.0)), (10.0, 20.0), 0.5), (5.0, 10.0));
+        assert_eq!(blend(Some((0.0, 0.0)), (10.0, 20.0), 1.0), (10.0, 20.0));
+        assert_eq!(blend(Some((0.0, 0.0)), (10.0, 20.0), 0.0), (0.0, 0.0));
+        assert_eq!(blend(None, (10.0, 20.0), 0.5), (10.0, 20.0));
+        assert_eq!(blend(Some((0.0, 0.0)), (300.0, 0.0), 0.5), (300.0, 0.0));
+    }
+
+    #[test]
+    fn frames_come_from_the_grid_row_by_row() {
+        let strip = Vec2::new(40.0, 10.0);
+        assert_eq!(
+            frame_rect(3, (10.0, 10.0), strip),
+            Rect::new(30.0, 0.0, 40.0, 10.0)
+        );
+        let grid = Vec2::new(30.0, 20.0);
+        assert_eq!(
+            frame_rect(4, (10.0, 10.0), grid),
+            Rect::new(10.0, 10.0, 20.0, 20.0)
+        );
+    }
+
+    #[test]
+    fn two_decimals_never_show_a_negative_zero() {
+        assert_eq!(two(-0.000_001), "0.00");
+        assert_eq!(two(-1.5), "-1.50");
+        assert_eq!(two(567.4), "567.40");
     }
 }

@@ -1,7 +1,7 @@
 //! Turns key presses into one `InputFrame` per tick. The collector has no Bevy logic, so it is tested
 //! like any other code (docs/architecture.md, Actions and input frames).
 
-use iwbtg_sim::input::{Action, InputFrame, KeyMap, vk};
+use iwbtg_sim::input::{InputFrame, KeyMap, vk};
 
 /// Collects key events between two ticks. Edges are per key, as the sim's input docs require: a
 /// press and a release inside one tick both show up, and a second key bound to the same action
@@ -91,6 +91,8 @@ pub fn key_code(key: bevy::input::keyboard::KeyCode) -> Option<u8> {
 
 #[cfg(test)]
 mod tests {
+    use iwbtg_sim::input::Action;
+
     use super::*;
 
     #[test]

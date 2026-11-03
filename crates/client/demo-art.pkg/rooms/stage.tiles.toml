@@ -1,0 +1,9 @@
+layers = [
+  { depth = 1000000, tileset = "stone", tiles = [
+    { x = 96, y = 96, src = [0, 0], run = [6, 2] },
+    { x = 96, y = 160, src = [32, 0], run = [6, 1] },
+  ] },
+  { depth = -100, tileset = "stone", tiles = [
+    { x = 480, y = 480, src = [32, 0], run = [2, 2] },
+  ] },
+]

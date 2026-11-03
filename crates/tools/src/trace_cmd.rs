@@ -262,7 +262,41 @@ pub fn execute(
             break;
         }
     }
+    latch_columns(case, &mut table);
     Ok(table)
+}
+
+/// The case's `latch` columns: a row shows the column's value as of the frame before the last
+/// read frame at or before it, 0 before the first read (the recorder's `--gml` copied it then).
+fn latch_columns(case: &TraceCase, table: &mut TraceTable) {
+    for (name, reads) in &case.latch {
+        let Some(col) = table.columns.iter().position(|c| &c.name == name) else {
+            continue;
+        };
+        let series: Vec<(i64, trace::Value)> = table
+            .rows
+            .iter()
+            .filter_map(|r| match r.first() {
+                Some(trace::Value::Int(f)) => Some((*f, r[col].clone())),
+                _ => None,
+            })
+            .collect();
+        for row in &mut table.rows {
+            let Some(trace::Value::Int(frame)) = row.first().cloned() else {
+                continue;
+            };
+            let read = reads.iter().copied().filter(|r| i64::from(*r) <= frame).max();
+            row[col] = read
+                .and_then(|r| {
+                    series
+                        .iter()
+                        .rev()
+                        .find(|(f, _)| *f < i64::from(r))
+                        .map(|(_, v)| v.clone())
+                })
+                .unwrap_or(trace::Value::Real(0.0));
+        }
+    }
 }
 
 /// A full row from a probe row: the fixed columns with the original room and object names, then
@@ -757,6 +791,25 @@ mod tests {
 #[cfg(test)]
 mod bundle_tests {
     use super::*;
+
+    #[test]
+    fn latch_holds_the_value_before_the_last_read() {
+        let mut table = TraceTable::new(&["v"]).unwrap();
+        let fixed = trace::FIXED_COLUMNS.len();
+        for f in 2..8_i64 {
+            let mut row = vec![trace::Value::Empty; fixed + 1];
+            row[0] = trace::Value::Int(f);
+            row[fixed] = trace::Value::Real(f as f64 * 10.0);
+            table.push_row(row).unwrap();
+        }
+        let case = TraceCase {
+            latch: [("v".to_string(), vec![4, 6])].into_iter().collect(),
+            ..TraceCase::default()
+        };
+        latch_columns(&case, &mut table);
+        let got: Vec<f64> = table.rows.iter().map(|r| r[fixed].as_f64().unwrap()).collect();
+        assert_eq!(got, vec![0.0, 0.0, 30.0, 30.0, 50.0, 50.0]);
+    }
 
     #[test]
     fn load_package_bundles_the_pack_next_to_the_package() {
