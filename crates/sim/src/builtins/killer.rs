@@ -5,15 +5,18 @@
 //! kid's "Collision with killer" kills; no kill code here. Create applies the instance settings
 //! (the cherry: `image_speed` 1/15, a move, a scale) and Outside Room destroys when
 //! `destroy_outside_room` (the cherry, default off for a plain killer). The bounce rule of the
-//! bouncing cherries (U-MECH-5) is tier 3 and not here.
+//! bouncing cherries (U-MECH-5) is tier 3 and not here. `kill_outside_view` (kaenbyou borderKiller)
+//! drops the `killer` class (`format::objects::param_classes`) and kills in its own kid collision.
 
 use serde::{Deserialize, Serialize};
 
+use super::warp::KIDS;
 use super::{BuiltinState, ParamError, ParamSpec, ParamType, param_bool, param_real, state_of};
 use crate::def::{KindDef, ParamValue, Params};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
-use crate::num::Real;
+use crate::kid::api::{KillCause, kill};
+use crate::num::{self, Real};
 use crate::world::{Ctx, Flow, InstId};
 
 const SPECS: &[ParamSpec] = &[
@@ -52,6 +55,11 @@ const SPECS: &[ParamSpec] = &[
         ty: ParamType::Bool,
         required: false,
     },
+    ParamSpec {
+        name: "kill_outside_view",
+        ty: ParamType::Bool,
+        required: false,
+    },
 ];
 
 /// A killer's per-instance settings.
@@ -76,20 +84,30 @@ pub fn param_specs() -> &'static [ParamSpec] {
     SPECS
 }
 
-/// What a kind with this base handles: Outside Room when `destroy_outside_room`.
+/// What a kind with this base handles: Outside Room when `destroy_outside_room`, and the kid
+/// touching it when `kill_outside_view`.
 pub fn event_set(kind: &KindDef) -> EventSet {
-    EventSet {
+    let mut set = EventSet {
         outside_room: matches!(
             kind.params.0.get("destroy_outside_room"),
             Some(ParamValue::Bool(true))
         ),
         ..EventSet::default()
+    };
+    if kill_outside_view(kind.params.0.get("kill_outside_view")) {
+        set.collisions.push(KIDS);
     }
+    set
+}
+
+fn kill_outside_view(v: Option<&ParamValue>) -> bool {
+    matches!(v, Some(ParamValue::Bool(true)))
 }
 
 /// A new instance's state from its params.
 pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
     param_bool(params, "destroy_outside_room")?;
+    param_bool(params, "kill_outside_view")?;
     Ok(BuiltinState::Killer(KillerState {
         image_speed: param_real(params, "image_speed")?,
         hspeed: param_real(params, "hspeed")?.unwrap_or(Real::ZERO),
@@ -135,6 +153,25 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
             Ok(Flow::Continue)
         }
         EventKind::OutsideRoom => Ok(ctx.destroy(me)),
+        // `kill_outside_view` (kaenbyou borderKiller): the kid dies when its origin is outside
+        // view 0, each side strict (kid/B.md).
+        EventKind::Collision { with, other } if with.intersects(KIDS) => {
+            let nr = &ctx.rules.num;
+            let v = &ctx.w.views[0];
+            let Some(k) = ctx.w.get(*other) else {
+                return Ok(Flow::Continue);
+            };
+            let (x, y) = (k.m.x(), k.m.y());
+            let outside = num::gm_lt(x, v.x, nr)
+                || num::gm_gt(x, v.x + v.w, nr)
+                || num::gm_lt(y, v.y, nr)
+                || num::gm_gt(y, v.y + v.h, nr);
+            if outside {
+                kill(ctx, *other, KillCause::Killer(me))
+            } else {
+                Ok(Flow::Continue)
+            }
+        }
         _ => Ok(Flow::Continue),
     }
 }

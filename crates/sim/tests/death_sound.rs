@@ -34,7 +34,6 @@ fn game() -> (GameDef, KindId, KindId) {
     let kid = b.kind(k);
     let mut dk = KindDef::new("death_sound", Builtin::DeathSound);
     dk.params.0.insert("sound".into(), ParamValue::Sound(DEATH));
-    dk.params.0.insert("music".into(), ParamValue::Sound(MUSIC));
     let ds = b.kind(dk);
     b.engine_kind(EngineKind::Kid, kid);
     b.engine_kind(EngineKind::DeathSound, ds);
@@ -186,10 +185,65 @@ fn the_death_step_creates_the_object_and_the_retry_releases_it() {
             })
             .unwrap()
             .id;
+        let ds = ctx.w.get(id).unwrap();
+        assert_eq!(
+            (ds.m.x(), ds.m.y()),
+            (Real::ZERO, Real::ZERO),
+            "made at (0, 0), not at the kid (1, 2)"
+        );
         builtins::on_event(ctx, id, &EventKind::Alarm(0)).unwrap();
         assert!(playing(ctx, DEATH));
         builtins::death_sound::release(ctx).expect("release");
         assert!(!playing(ctx, DEATH), "the death sound stops");
         assert_eq!(alive(ctx), 0, "and the object is gone");
+    });
+}
+
+#[test]
+fn without_a_music_param_it_fades_the_music_playing_at_create() {
+    run(|ctx, _, ds| {
+        // The looping music plays first; a one-shot effect after it is not music.
+        sound::play(ctx, MUSIC, true).expect("music");
+        sound::play(ctx, DEATH, false).expect("effect");
+        let mut p = Params::default();
+        p.0.insert("sound".into(), ParamValue::Sound(DEATH));
+        let id = ctx
+            .spawn(
+                ds,
+                r(0.0),
+                r(0.0),
+                SpawnInit {
+                    params: p,
+                    ..SpawnInit::default()
+                },
+            )
+            .expect("spawn");
+        builtins::on_event(ctx, id, &EventKind::Create).expect("create");
+        for _ in 0..2 {
+            step(ctx, id);
+        }
+        assert_eq!(volumes(ctx), vec![1.0, 0.99]);
+    });
+}
+
+#[test]
+fn without_a_music_param_and_no_music_playing_only_the_sound_plays() {
+    run(|ctx, _, ds| {
+        let mut p = Params::default();
+        p.0.insert("sound".into(), ParamValue::Sound(DEATH));
+        let id = ctx
+            .spawn(
+                ds,
+                r(0.0),
+                r(0.0),
+                SpawnInit {
+                    params: p,
+                    ..SpawnInit::default()
+                },
+            )
+            .expect("spawn");
+        builtins::on_event(ctx, id, &EventKind::Create).expect("create");
+        step(ctx, id);
+        assert!(volumes(ctx).is_empty());
     });
 }

@@ -241,6 +241,18 @@ pub fn volume(ctx: &mut Ctx, s: SoundId, value: Real) -> Result<(), SimError> {
     Ok(())
 }
 
+/// The music playing now: the sound of the newest built-in copy that is MULTIMEDIA or looping and
+/// has not ended (music is what loops or streams; effects are one-shots). `None` when there is none.
+/// A `death_sound` without a `music` param fades this one (kaenbyou `curMusic`, set at run time).
+pub fn current_music(w: &World) -> Option<SoundId> {
+    w.sound
+        .copies
+        .iter()
+        .rev()
+        .find(|c| (c.multimedia || c.looping) && active(w.tick, c.start_tick, c.length_ticks, c.looping))
+        .map(|c| c.sound)
+}
+
 /// GML `sound_isplaying`. A copy is visible `rules.isplaying_latency` ticks after its play call
 /// (S1, default 0: at once, Confirmed (recorder)); a stop is visible at once. An unknown sound
 /// id is not playing.

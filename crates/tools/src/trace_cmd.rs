@@ -19,6 +19,7 @@ use iwbtg_sim::def::{GameDef, KindId, NameId, RoomId};
 use iwbtg_sim::input::{InputFrame, KeyMap, parse_key_inputs};
 use iwbtg_sim::num::Real;
 use iwbtg_sim::probe::{self, Column, Probe, ProbeTarget, registry};
+use iwbtg_sim::rules::tick::DirectLatch;
 use iwbtg_sim::setup::SetupAction;
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::trace::{self, DiffOptions, TraceDiff, TraceTable};
@@ -232,6 +233,8 @@ pub fn execute(
     };
     let mut sim = Sim::new_with_setup(def, resolved.options.clone(), &resolved.pre_entry)
         .map_err(|e| ToolError::Message(format!("{}: sim did not start: {e}", case.source)))?;
+    // The recorder has no keyboard_check_direct latch (CLONE_SPEC input, Confirmed (recorder)).
+    sim.set_direct_latch(DirectLatch::None);
     for frame in frame_range(case, inputs_end) {
         for s in resolved.per_frame.get(&frame).into_iter().flatten() {
             sim.apply_setup(s)

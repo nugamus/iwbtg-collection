@@ -455,6 +455,33 @@ mod wp6a {
         assert_eq!((i.img.index(), i.img.speed()), (r(0.0), r(0.0)));
     }
 
+    /// kaenbyou Key S (kid/B.md Saving, famb-save-restart-b.csv): saveTimer is -1 and Step does not
+    /// count; a held tick saves and sets 30; the next held ticks count 29 ... 1 and the 30th held
+    /// tick (timer 1 to 0) saves again.
+    #[test]
+    fn skip_held_timer_counts_only_on_held_ticks() {
+        let g = save_game(params(&[
+            ("on_touch", word("skip_held")),
+            ("cooldown", real(30.0)),
+        ]));
+        let (mut w, sp, _kid) = save_world(&g);
+        for _ in 0..40 {
+            fire(&g, &mut w, sp, &EventKind::Step);
+        }
+        fire(&g, &mut w, sp, &EventKind::KeyHeld(Action::Skip));
+        assert!(w.save.is_some(), "Step never counted the timer below its start");
+        w.save = None;
+        for _ in 0..50 {
+            fire(&g, &mut w, sp, &EventKind::Step);
+        }
+        for held in 1..30 {
+            fire(&g, &mut w, sp, &EventKind::KeyHeld(Action::Skip));
+            assert!(w.save.is_none(), "held tick {held}: timer above 0");
+        }
+        fire(&g, &mut w, sp, &EventKind::KeyHeld(Action::Skip));
+        assert!(w.save.is_some(), "timer reached 0: saves again");
+    }
+
     #[test]
     fn held_s_saves_only_while_overlapping_the_kid() {
         let g = save_game(params(&[

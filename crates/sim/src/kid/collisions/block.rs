@@ -21,7 +21,7 @@ use serde::Deserialize;
 use crate::collide::move_contact_solid;
 use crate::collide::query::{Target, place_free, place_meeting};
 use crate::def::ClassMask;
-use crate::def::physics::{AirJump, BlockSlopeStep, FlipKind};
+use crate::def::physics::{AirJump, BlockSlopeStep, FlipKind, MirrorContact};
 use crate::error::SimError;
 use crate::kid::actions::common::{state, yflag};
 use crate::kid::api::refresh_air_jump;
@@ -48,18 +48,41 @@ pub fn run(ctx: &mut Ctx, me: InstId, other: InstId, run: &BlockRun) -> Result<F
 
 fn block_standard(ctx: &mut Ctx, me: InstId, other: InstId) -> Result<(), SimError> {
     check_flip(ctx, me)?;
-    horizontal(ctx, me, false)?;
+    horizontal(ctx, me, SlopeRow::None)?;
     vertical(ctx, me, refreshes(ctx, me, other))?;
     diagonal(ctx, me)
 }
 
 /// `block_standard` with the slope step of `[slope] block_step` in the horizontal part
 /// (`slope::SlopeRun::BlockSlopeStep`).
-pub(crate) fn block_slope_step(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+pub(crate) fn block_slope_step(ctx: &mut Ctx, me: InstId, other: InstId) -> Result<(), SimError> {
     check_flip(ctx, me)?;
-    horizontal(ctx, me, true)?;
+    // The `slope_mirror` row is the collision with a slope that carries only that class.
+    let mirror_row = ctx.w.get(other).is_some_and(|o| {
+        o.classes.intersects(ClassMask::SLOPE_MIRROR) && !o.classes.intersects(ClassMask::BLOCK)
+    });
+    horizontal(
+        ctx,
+        me,
+        if mirror_row {
+            SlopeRow::Mirror
+        } else {
+            SlopeRow::Other
+        },
+    )?;
     vertical(ctx, me, true)?;
     diagonal(ctx, me)
+}
+
+/// Which collision row runs the horizontal contact.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SlopeRow {
+    /// The plain `block` rule, no slope step.
+    None,
+    /// `block_slope_step` against a block or a `slope`.
+    Other,
+    /// `block_slope_step` against a `slope_mirror`.
+    Mirror,
 }
 
 fn check_flip(ctx: &Ctx, me: InstId) -> Result<(), SimError> {
@@ -87,7 +110,8 @@ fn missing() -> SimError {
 /// (rainbow) adds the step-up after the contact when the matching slope is `step` px ahead and the
 /// spot `step` up is free; `replace` (rori, fairy-tale) steps up instead of the contact when the
 /// shifted kid overlaps the matching slope.
-pub(crate) fn horizontal(ctx: &mut Ctx, me: InstId, slope_step: bool) -> Result<(), SimError> {
+pub(crate) fn horizontal(ctx: &mut Ctx, me: InstId, row: SlopeRow) -> Result<(), SimError> {
+    let slope_step = row != SlopeRow::None;
     let def = ctx.def;
     let n = &ctx.rules.num;
     let rev = yflag(ctx, &state(ctx, me)?) < 0;
@@ -116,11 +140,20 @@ pub(crate) fn horizontal(ctx: &mut Ctx, me: InstId, slope_step: bool) -> Result<
         }
     }
     // Family C's flipped kid reads `hspeed` 0 as right (`hspeed >= 0`), everyone else as left.
-    let right = if matches!(def.physics.flip.model, FlipKind::GravSign | FlipKind::SwapObject) && rev {
+    let mut right = if matches!(def.physics.flip.model, FlipKind::GravSign | FlipKind::SwapObject) && rev {
         gm_ge(hs, Real::ZERO, n)
     } else {
         gm_gt(hs, Real::ZERO, n)
     };
+    // Rori and fairy-tale: in the `slope_mirror` row a right hit or `hspeed` 0 has its own contact
+    // direction (a left hit that reaches here is the normal left contact).
+    if row == SlopeRow::Mirror && gm_ge(hs, Real::ZERO, n) {
+        match rules.mirror_contact {
+            MirrorContact::Normal => {}
+            MirrorContact::Left => right = false,
+            MirrorContact::Right => right = true,
+        }
+    }
     move_contact_solid(
         ctx,
         me,

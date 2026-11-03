@@ -615,8 +615,8 @@ impl<'a> Loader<'a> {
                 );
                 continue;
             }
-            let strip_w = u64::from(sidecar.frame_size.0) * u64::from(sidecar.frames);
-            if strip_w > u64::from(MAX_IMAGE_SIDE) || sidecar.frame_size.1 > MAX_IMAGE_SIDE {
+            let (img_w, img_h) = sidecar.image_size();
+            if img_w > u64::from(MAX_IMAGE_SIDE) || img_h > u64::from(MAX_IMAGE_SIDE) {
                 if self.trace_mode() {
                     oversized.push(key.clone());
                 } else {
@@ -625,8 +625,7 @@ impl<'a> Loader<'a> {
                         text,
                         spans.frames.clone(),
                         format!(
-                            "the strip is {strip_w} x {} px; images are at most {MAX_IMAGE_SIDE} px a side",
-                            sidecar.frame_size.1
+                            "the image is {img_w} x {img_h} px; images are at most {MAX_IMAGE_SIDE} px a side (set `columns` to wrap the frames into rows)"
                         ),
                     );
                     continue;
@@ -732,6 +731,7 @@ impl<'a> Loader<'a> {
             let mut k = KindDef::new(b.name(), b);
             k.classes = kind_classes(b, &Params::default(), ClassMask::NONE);
             k.solid = objects::default_solid(b);
+            k.persistent = objects::default_persistent(b);
             self.push_kind(k);
         }
         let manifest = self.m;
@@ -1058,7 +1058,9 @@ impl<'a> Loader<'a> {
         kind.solid = o.solid.unwrap_or_else(|| objects::default_solid(kind.base));
         kind.visible = o.visible.unwrap_or(true);
         kind.depth = o.depth.as_ref().map_or(Real::ZERO, |d| Real::new(*d.get_ref()));
-        kind.persistent = o.persistent.unwrap_or(false);
+        kind.persistent = o
+            .persistent
+            .unwrap_or_else(|| objects::default_persistent(kind.base));
         for (key, value) in &o.params {
             match param_value(value.get_ref()) {
                 Ok(p) => {

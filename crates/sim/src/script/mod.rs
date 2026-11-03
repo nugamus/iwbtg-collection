@@ -57,6 +57,13 @@ pub enum ScriptOutput {
         /// The signal name, at most 64 bytes.
         name: String,
     },
+    /// `shake(ticks, strength)`: shake the screen.
+    Shake {
+        /// How many ticks.
+        ticks: u32,
+        /// Pixels of shake.
+        strength: crate::num::Real,
+    },
 }
 
 /// Runs the script part of an event, after the base built-in's handler, through `ctx.scripts`.

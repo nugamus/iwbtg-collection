@@ -12,6 +12,7 @@ seed = 0
 setup = [
   { frame = 2, target = "kid", set = { x = 37.0, xprevious = 37.0, y = 200.0, yprevious = 200.0 } },
 ]
+# `direction` is not compared: num::atan2 is 1-2 ulp off the recorder here (iwbtg-collection#407).
 ignore = ["id", "sprite_index", "sprite_name"]
 notes = [
   "--x/--y: the recorder creates the object when none exists; setup only moves one",
