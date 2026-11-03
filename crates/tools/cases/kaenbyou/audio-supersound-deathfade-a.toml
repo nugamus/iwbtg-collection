@@ -5,7 +5,7 @@ kind = "diff"
 start = { room = "hub", difficulty = 0 }
 at = 2
 first_frame = 2
-object = "@death_sound"
+object = "@death_sound_2"
 original_object = "objDeathSound"
 dll_mode = "stub"
 seed = 0
