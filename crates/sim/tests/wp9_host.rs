@@ -302,3 +302,43 @@ fn a_room_may_not_grow_past_50000_live_instances() {
         "{e}"
     );
 }
+
+#[test]
+fn scripts_play_sounds_and_music_and_shake() {
+    use iwbtg_sim::def::{SoundDef, SoundKind};
+    use iwbtg_sim::sound::SoundOutput;
+    let src = "fn step() { play_sound(\"boom\"); play_music(\"song\"); shake(5, 2.5); }\n\
+               fn alarm(n) { stop_music(); }";
+    let mut f = fx(src, true);
+    for (name, kind) in [("boom", SoundKind::Normal), ("song", SoundKind::Multimedia)] {
+        f.def.sounds.push(SoundDef {
+            name: name.into(),
+            kind,
+            length_ticks: 100,
+            volume: Real::new(1.0),
+            pan: Real::new(0.0),
+        });
+    }
+    f.scripts = ScriptRuntime::new(&f.def, &f.rules).expect("scripts compile");
+    f.spawn(0, 0.0, 0.0);
+    f.run(1);
+    assert_eq!(f.halted(), None);
+    let out = &f.w.output;
+    assert!(
+        out.iter()
+            .any(|e| matches!(e, OutputEvent::Sound(SoundOutput::Play { looping: false, .. })))
+    );
+    assert!(
+        out.iter()
+            .any(|e| matches!(e, OutputEvent::Sound(SoundOutput::Play { looping: true, .. })))
+    );
+    assert!(
+        out.iter()
+            .any(|e| matches!(e, OutputEvent::Script(ScriptOutput::Shake { ticks: 5, .. })))
+    );
+    // An unknown name halts the sim with the name in the error.
+    let mut f = fx("fn step() { play_sound(\"nope\"); }", true);
+    f.spawn(0, 0.0, 0.0);
+    f.run(1);
+    assert!(f.halted().expect("halted").contains("unknown sound `nope`"));
+}

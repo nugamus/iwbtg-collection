@@ -264,6 +264,13 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
     let s = s.clone();
     match ev {
         EventKind::Create => {
+            // The blink art rests on frame 0: Create sets `image_speed` 0 before anything else
+            // (kid/B.md Saving; traces/kaenbyou/famb-save-restart-b.csv, image_speed 0.0 on frame 2).
+            if s.blink
+                && let Some(inst) = ctx.w.get_mut(me)
+            {
+                inst.img.set_speed(Real::ZERO)?;
+            }
             if let Some(max) = s.min_difficulty_removed
                 && ctx.w.engine.run.difficulty > max
             {

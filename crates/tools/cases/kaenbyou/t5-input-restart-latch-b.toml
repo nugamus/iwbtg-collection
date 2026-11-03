@@ -18,10 +18,10 @@ ignore = ["id", "sprite_index", "sprite_name"]
 "keyboard_check_direct(vk_left)" = "keyboard_check_direct(left)"
 "keyboard_check_pressed(vk_left)" = "keyboard_check_pressed(left)"
 "player.hspeed" = "kid.hspeed"
-"player.id" = "kid.id"
 "player.x" = "kid.x"
 
 [unprobed]
+"player.id" = "instance ids never match the original's (the column tells a new kid from the old one)"
 
 [rooms]
 "avoidance" = "rAvoidance"

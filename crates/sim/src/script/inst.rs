@@ -503,6 +503,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
                 }));
             })
         });
+        register_audio(engine, shared, docs);
         let s = Rc::clone(shared);
         docs.add("kill_kid", "Kills the kid as a script death.");
         engine.register_fn("kill_kid", move || -> Res<()> {
@@ -515,6 +516,77 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
             r.map_err(sim_err)
         });
     }
+}
+
+/// A sound or music of the package (or a bundled engine pack) by name.
+fn sound_id(def: &crate::def::GameDef, name: &str) -> Res<crate::def::SoundId> {
+    def.sounds
+        .iter()
+        .position(|d| d.name == name)
+        .and_then(|i| u32::try_from(i).ok())
+        .map(crate::def::SoundId)
+        .ok_or_else(|| runtime_error(format!("unknown sound `{name}`")))
+}
+
+/// `play_sound`, `play_music`, `stop_music` and `shake` (#402). Sounds go through the same
+/// `sound` module as the built-ins, so MULTIMEDIA rules and `sound_isplaying` agree.
+fn register_audio(engine: &mut Engine, shared: &Rc<Shared>, docs: &mut Docs) {
+    let s = Rc::clone(shared);
+    docs.add(
+        "play_sound",
+        "Plays a sound of the package once; `engine:<pack>/<id>` names a bundled pack sound. An unknown name is an error.",
+    );
+    engine.register_fn("play_sound", move |name: ImmutableString| -> Res<()> {
+        s.with_ctx(|ctx| {
+            let id = sound_id(ctx.def, &name)?;
+            crate::sound::play(ctx, id, false).map_err(sim_err)
+        })?
+    });
+    let s = Rc::clone(shared);
+    docs.add(
+        "play_music",
+        "Plays a music track of the package in a loop; another playing music track stops or blocks it by the run's MULTIMEDIA rule. An unknown name is an error.",
+    );
+    engine.register_fn("play_music", move |name: ImmutableString| -> Res<()> {
+        s.with_ctx(|ctx| {
+            let id = sound_id(ctx.def, &name)?;
+            crate::sound::play(ctx, id, true).map_err(sim_err)
+        })?
+    });
+    let s = Rc::clone(shared);
+    docs.add("stop_music", "Stops the music track that is playing, if any.");
+    engine.register_fn("stop_music", move || -> Res<()> {
+        s.with_ctx(|ctx| {
+            if let Some(id) = ctx.w.sound.copies.iter().find(|c| c.multimedia).map(|c| c.sound) {
+                crate::sound::stop(ctx, id);
+            }
+        })
+    });
+    let s = Rc::clone(shared);
+    docs.add(
+        "shake",
+        "Shakes the screen for `ticks` ticks with `strength` pixels (a client effect; the sim reads nothing back).",
+    );
+    engine.register_fn("shake", move |ticks: Dynamic, strength: Dynamic| -> Res<()> {
+        let (t, st) = (num(&ticks, "shake")?, num(&strength, "shake")?);
+        if !t.is_finite() || !st.is_finite() || t < 0.0 || st < 0.0 || t > 65_535.0 {
+            return Err(runtime_error(
+                "shake: ticks (0 to 65535) and strength must be finite and not negative",
+            ));
+        }
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "checked above"
+        )]
+        let ticks = crate::num::round(Real::new(t), &s.num).get() as u32;
+        s.with_world(|w, _| {
+            w.output.push(OutputEvent::Script(ScriptOutput::Shake {
+                ticks,
+                strength: Real::new(st),
+            }));
+        })
+    });
 }
 
 fn host_tick(host: &super::host::Host) -> crate::rules::TickRules {
