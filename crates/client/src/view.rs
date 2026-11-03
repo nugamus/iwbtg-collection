@@ -21,8 +21,8 @@ use crate::package::{Package, SpriteImage, sprite_images};
 
 /// The running game. Not `Send` (the script host shares state by `Rc`), so it is a non-send
 /// resource and only main-thread systems touch it.
-struct Game {
-    sim: Sim,
+pub(crate) struct Game {
+    pub(crate) sim: Sim,
 }
 
 /// The Bevy image of each sprite strip, by `SpriteId`, with the strip size.
@@ -35,7 +35,7 @@ struct Drawn(BTreeMap<InstId, Entity>);
 
 /// The room size in pixels.
 #[derive(Resource)]
-struct RoomSize(Vec2);
+pub(crate) struct RoomSize(pub(crate) Vec2);
 
 /// Decoded sprite strips, waiting for the Startup system to upload them.
 #[derive(Resource)]
@@ -117,6 +117,9 @@ pub fn run(pkg: Package, cap: FrameCap, screenshot: Option<std::path::PathBuf>) 
     .insert_resource(ClearColor(Color::BLACK))
     .insert_resource(RoomSize(Vec2::new(width, height)))
     .insert_resource(PendingImages(images))
+    .insert_resource(crate::art::ArtFiles(pkg.files.clone()))
+    .init_resource::<crate::art::ArtImages>()
+    .init_resource::<crate::art::ShownArt>()
     .init_resource::<Drawn>()
     .insert_non_send(Game { sim })
     .insert_resource(Collector::new())
@@ -139,7 +142,13 @@ pub fn run(pkg: Package, cap: FrameCap, screenshot: Option<std::path::PathBuf>) 
     .add_systems(FixedUpdate, tick)
     .add_systems(
         Update,
-        (sync_instances, overlay, hud::show_sign, hud::show_countdown),
+        (
+            crate::art::sync_room_art,
+            sync_instances,
+            overlay,
+            hud::show_sign,
+            hud::show_countdown,
+        ),
     )
     .add_systems(Last, limit_frames);
     if let Some(path) = screenshot {
@@ -201,6 +210,12 @@ fn setup(
     commands.insert_resource(Textures(textures));
 }
 
+/// A number with two decimals, without the sign of a tiny negative that rounds to zero.
+fn two(v: f64) -> String {
+    let text = format!("{v:.2}");
+    if text == "-0.00" { "0.00".to_string() } else { text }
+}
+
 /// Adds this frame's key events to the collector.
 fn collect_input(keys: Res<ButtonInput<KeyCode>>, mut collector: ResMut<Collector>) {
     for key in keys.get_just_pressed().filter_map(|k| key_code(*k)) {
@@ -255,12 +270,29 @@ fn overlay(
         SimStatus::Halted(e) => format!("  HALTED: {e}"),
         SimStatus::Ended => "  ended".to_string(),
     };
+    let world = game.sim.world();
+    let room = game.sim.def().room(world.room).map_or_else(
+        || "?".to_string(),
+        |r| format!("{} ({}x{})", r.name, r.width, r.height),
+    );
+    let kid = match world.kid(&game.sim.rules().tick).and_then(|id| world.get(id)) {
+        Some(k) => format!(
+            "kid x {}  y {}  hspeed {}  vspeed {}",
+            two(k.m.x().get()),
+            two(k.m.y().get()),
+            two(k.m.hspeed().get()),
+            two(k.m.vspeed().get()),
+        ),
+        None => "no kid".to_string(),
+    };
     label.0 = format!(
-        "ticks/s {:.1} (game {})  fps {:.0}  tick {}{status}  [F3 hides]",
+        "ticks/s {:.1} (game {})  fps {:.0}  tick {}{status}  [F3 hides]
+room {room}
+{kid}",
         stats.ticks_per_second,
         game.sim.def().tick_rate,
         stats.frames_per_second,
-        game.sim.world().tick,
+        world.tick,
     );
 }
 
@@ -398,5 +430,12 @@ mod tests {
         assert_eq!("Unlimited".parse(), Ok(FrameCap::Unlimited));
         assert!("0".parse::<FrameCap>().is_err());
         assert!("fast".parse::<FrameCap>().is_err());
+    }
+
+    #[test]
+    fn two_decimals_never_show_a_negative_zero() {
+        assert_eq!(two(-0.000_001), "0.00");
+        assert_eq!(two(-1.5), "-1.50");
+        assert_eq!(two(567.4), "567.40");
     }
 }

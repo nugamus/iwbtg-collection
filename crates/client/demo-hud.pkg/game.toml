@@ -25,7 +25,10 @@ mask = "kid_mask"
 sprite = "block"
 
 [defaults.sign]
-sprite = "block"
+sprite = "signpost"
+
+[defaults.time_limit]
+variants = [{ role = "start_zone", sprite = "zone" }]
 
 [defaults.spike]
 sprite = "spike_up"
