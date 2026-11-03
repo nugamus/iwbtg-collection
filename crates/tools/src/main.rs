@@ -20,8 +20,9 @@ use clap::{Parser, Subcommand};
 
 use crate::trace_cmd::ToolError;
 
-/// Where `trace import` writes cases and `trace run`/`check` read them: this crate's `cases/`.
-const DEFAULT_CASES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/cases");
+/// Where the cases folder is looked for when `--cases` is not given: `crates/tools/cases` in the
+/// current folder or the nearest folder above it (so any folder of a checkout works).
+const CASES_IN_CHECKOUT: &str = "crates/tools/cases";
 
 #[derive(Parser)]
 #[command(
@@ -87,9 +88,9 @@ enum EngineCommand {
         /// Research repo for the original traces (default: IWBTG_RESEARCH); without one, trace cases are not run.
         #[arg(long)]
         research: Option<PathBuf>,
-        /// Cases folder.
-        #[arg(long, default_value = DEFAULT_CASES)]
-        cases: PathBuf,
+        /// Cases folder (default: IWBTG_CASES, else `crates/tools/cases` of the checkout around the current folder).
+        #[arg(long)]
+        cases: Option<PathBuf>,
     },
 }
 
@@ -110,9 +111,9 @@ enum TraceCommand {
         /// Research repo (default: IWBTG_RESEARCH).
         #[arg(long)]
         research: Option<PathBuf>,
-        /// Cases folder.
-        #[arg(long, default_value = DEFAULT_CASES)]
-        cases: PathBuf,
+        /// Cases folder (default: IWBTG_CASES, else `crates/tools/cases` of the checkout around the current folder).
+        #[arg(long)]
+        cases: Option<PathBuf>,
     },
     /// Compares two trace CSVs bit for bit.
     Diff {
@@ -137,9 +138,9 @@ enum TraceCommand {
         /// Research repo (default: IWBTG_RESEARCH).
         #[arg(long)]
         research: Option<PathBuf>,
-        /// Cases folder.
-        #[arg(long, default_value = DEFAULT_CASES)]
-        cases: PathBuf,
+        /// Cases folder (default: IWBTG_CASES, else `crates/tools/cases` of the checkout around the current folder).
+        #[arg(long)]
+        cases: Option<PathBuf>,
     },
     /// Writes a case skeleton for a research trace and prints its kind.
     Import {
@@ -150,9 +151,9 @@ enum TraceCommand {
         /// Research repo (default: found above the trace path).
         #[arg(long)]
         research: Option<PathBuf>,
-        /// Cases folder.
-        #[arg(long, default_value = DEFAULT_CASES)]
-        cases: PathBuf,
+        /// Cases folder (default: IWBTG_CASES, else `crates/tools/cases` of the checkout around the current folder).
+        #[arg(long)]
+        cases: Option<PathBuf>,
         /// Overwrite an existing case file.
         #[arg(long)]
         force: bool,
@@ -230,6 +231,36 @@ fn research_dir(arg: Option<PathBuf>) -> Result<PathBuf, ToolError> {
         })
 }
 
+/// The cases folder: `--cases`, else IWBTG_CASES, else `crates/tools/cases` in the current folder
+/// or the nearest folder above it. Decided at run time, never from the build machine's paths, so
+/// a moved checkout and a wasm32 build (with the folder preopened) work.
+fn cases_dir(arg: Option<PathBuf>) -> Result<PathBuf, ToolError> {
+    let env = std::env::var_os("IWBTG_CASES").map(PathBuf::from);
+    let cwd = std::env::current_dir().ok();
+    resolve_cases(arg, env, cwd.as_deref())
+}
+
+fn resolve_cases(
+    arg: Option<PathBuf>,
+    env: Option<PathBuf>,
+    cwd: Option<&Path>,
+) -> Result<PathBuf, ToolError> {
+    if let Some(dir) = arg.or(env) {
+        return Ok(dir);
+    }
+    if let Some(cwd) = cwd {
+        for dir in cwd.ancestors() {
+            let candidate = dir.join(CASES_IN_CHECKOUT);
+            if candidate.is_dir() {
+                return Ok(candidate);
+            }
+        }
+    }
+    Err(ToolError::Message(format!(
+        "no cases folder: pass --cases <dir>, set IWBTG_CASES, or run inside a checkout that has {CASES_IN_CHECKOUT}"
+    )))
+}
+
 /// Runs a command; `Ok(false)` means it ran and found problems.
 fn run(cli: Cli) -> Result<bool, ToolError> {
     match cli.command {
@@ -242,6 +273,7 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             cases,
         }) => {
             let research = research_dir(research)?;
+            let cases = cases_dir(cases)?;
             trace_cmd::run_main(&pkg, &case, out.as_deref(), stages, &research, &cases)?;
             Ok(true)
         }
@@ -254,6 +286,7 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
         }) => trace_cmd::diff_main(&original, &ours, &ignore, context, summary),
         Command::Trace(TraceCommand::Check { pkg, research, cases }) => {
             let research = research_dir(research)?;
+            let cases = cases_dir(cases)?;
             trace_cmd::check_main(&pkg, &research, &cases)
         }
         Command::Trace(TraceCommand::Import {
@@ -264,6 +297,7 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             force,
         }) => {
             let research = research.or_else(|| std::env::var_os("IWBTG_RESEARCH").map(PathBuf::from));
+            let cases = cases_dir(cases)?;
             import::main(&trace, &pkg, research.as_deref().map(Path::new), &cases, force)?;
             Ok(true)
         }
@@ -291,6 +325,12 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             cases,
         }) => {
             let research = research.or_else(|| std::env::var_os("IWBTG_RESEARCH").map(PathBuf::from));
+            // Cases only matter when there is a research repo to run them against.
+            let cases = match cases_dir(cases) {
+                Ok(dir) => dir,
+                Err(e) if research.is_some() => return Err(e),
+                Err(_) => PathBuf::from(CASES_IN_CHECKOUT),
+            };
             let traces = engine_cmd::TraceSource {
                 research: research.as_deref(),
                 cases: &cases,
@@ -333,5 +373,61 @@ fn main() -> ExitCode {
             }
             None => std::panic::resume_unwind(payload),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("iwbtg-cases-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn the_flag_beats_the_environment_beats_the_checkout() {
+        let root = scratch("order");
+        std::fs::create_dir_all(root.join(CASES_IN_CHECKOUT)).unwrap();
+        let flag = Some(PathBuf::from("flag"));
+        let env = Some(PathBuf::from("env"));
+        assert_eq!(
+            resolve_cases(flag.clone(), env.clone(), Some(&root)).unwrap(),
+            PathBuf::from("flag")
+        );
+        assert_eq!(
+            resolve_cases(None, env, Some(&root)).unwrap(),
+            PathBuf::from("env")
+        );
+        assert_eq!(
+            resolve_cases(None, None, Some(&root)).unwrap(),
+            root.join(CASES_IN_CHECKOUT)
+        );
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_moved_checkout_is_found_from_a_folder_below_it() {
+        let root = scratch("below");
+        std::fs::create_dir_all(root.join(CASES_IN_CHECKOUT)).unwrap();
+        let below = root.join("crates/sim/src");
+        std::fs::create_dir_all(&below).unwrap();
+        assert_eq!(
+            resolve_cases(None, None, Some(&below)).unwrap(),
+            root.join(CASES_IN_CHECKOUT)
+        );
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn no_cases_folder_is_an_error_that_says_what_to_do() {
+        let root = scratch("none");
+        let Err(ToolError::Message(m)) = resolve_cases(None, None, Some(&root)) else {
+            panic!("expected an error");
+        };
+        assert!(m.contains("--cases") && m.contains("IWBTG_CASES"), "{m}");
+        std::fs::remove_dir_all(&root).ok();
     }
 }
