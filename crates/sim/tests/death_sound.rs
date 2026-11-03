@@ -186,6 +186,12 @@ fn the_death_step_creates_the_object_and_the_retry_releases_it() {
             })
             .unwrap()
             .id;
+        let ds = ctx.w.get(id).unwrap();
+        assert_eq!(
+            (ds.m.x(), ds.m.y()),
+            (Real::ZERO, Real::ZERO),
+            "made at (0, 0), not at the kid (1, 2)"
+        );
         builtins::on_event(ctx, id, &EventKind::Alarm(0)).unwrap();
         assert!(playing(ctx, DEATH));
         builtins::death_sound::release(ctx).expect("release");

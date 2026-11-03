@@ -874,6 +874,10 @@ Checked against `research/build/packages/rely_the_needle/` on 2026-10-24. The cl
 | CR13 | Room `file_speed` in each room file (not only in tests/trace-map.toml) | loader warning CR13 | M3a |
 | CR14 | `room_order` in game.toml (not only in tests/trace-map.toml) | loader warning CR14 | M3a |
 | CR15 | Sprite strips at most 4096 px on a side (split or re-pack wider strips) | loader warning CR15 | M3a |
+| CR16 | Tier 1 params per built-in: `block` `kid_collides`, `slip`, `mask`; `kid_start` `shift_at`, `grav_gated`, `creates`, `offset_x`, `offset_y`; `kid_bullet` `block_check`, `life`; `spike` `dir`, `size`, `auto_rotate`, `destroys_bullets`; and add the built-ins that exist to `known_kinds` | research/specs/converter-requests.md CR16; `docs/format/builtins/{block,kid_start,kid_bullet,spike}.md`; kid/A1.md to A4.md, B.md | M3a (a game's own trace check shows no unknown param for these) |
+| CR17 | Tier 2 params: `vine` `side`; `water` `variant`, `fall_cap`, `refresh`, `air_jump`; `moving_platform` `hspeed`, `vspeed`, `bounce`, `carry_rule`; `fake_block`, `hidden_block`, `trigger`, `trap`, `edge_warp`, `drop_platform`, `gravity_flip`, `bullet_blocker`, `slope`, `boss_gate`, `boss_item`, `secret_item`, `item_viewer`, `game_clear`, `music` params; objects a built-in cannot express yet stay unmapped | research/specs/converter-requests.md CR17 (client PRs #253, #257, #266, #271); `docs/format/builtins/<kind>.md` | M3a |
+| CR18 | A kind-typed param (`collider`, `watched_object`, `trigger_kind`, `group`) is the id of a preset written `"@id"`, or a bare built-in name; an unknown bare name is inert in Trace mode (CR10) and an error in Strict mode | research/specs/converter-requests.md CR18; loader error for a missing target | M3a |
+| CR19 | Write the params the built-ins take: `moving_platform` kind instead of `platform[moving]`; `save` `min_difficulty_removed` (Medium 0, Hard 1, in A3 games 2, VHard 2) instead of `difficulty`; bare `slope` instead of `dir`; `gravity_flip` `direction = "up"` or `"down"` instead of `up`. Sounds and music share one id space: a sound and a music track with the same name become `death` and `death_2` | loader warning `unknown param` (research#57); `docs/format/builtins/{moving_platform,platform,save,slope,gravity_flip}.md`; research/specs/converter-requests.md CR19 | M3a (`pkg check --trace-mode` on the 20 packages shows no `unknown param` and no duplicate sound or music id; #142) |
 
 ## 9. Trace comparison and replay (`crates/tools`, WP8a, WP8b)
 
@@ -907,7 +911,7 @@ vars = { "alarm[0]" = "alarm0", "player.x" = "kid.x", "player.y" = "kid.y" }
 ignore = ["id", "sprite_index"]
 ```
 
-- `setup` is a fixed vocabulary (set a field of the kid, of the first instance of a kind, or of a named instance; set a global; set a `SaveSlot` field). It replaces `--gml` assignments, `--x` and `--y`. Entries with `frame <= first_frame` run before `start_game` enters the room.
+- `setup` is a fixed vocabulary (set a field of the kid, of the first instance of a kind (a kind names its loader-derived variants too, `save[min_difficulty_removed=2]` is a `save`, as in the probe's `kind.var` reads), or of a named instance; set a global; set a `SaveSlot` field). It replaces `--gml` assignments, `--x` and `--y`. Entries with `frame <= first_frame` run before `start_game` enters the room.
 - Frame mapping: the row at `first_frame` is the state after the first tick in the room (kaenbyou t-speed-1). Our run treats tick k as frame `first_frame + k`. Inputs come from the `.inputs` file by frame number through the engine key map (`KeyMap`).
 
 ### 9.3 Probe and field registry
@@ -1251,7 +1255,7 @@ Every rule the sim needs that the spec marks UNKNOWN, Inferred or Conflict, or t
 | M3 | Negative speed representation | UNKNOWN U4 | `Motion::recompute_cartesian` | store speed as written | t-mot-05 (rec) |
 | M4 | Direction when h and v are both 0 | UNKNOWN U5 | `Motion::recompute_polar` | `atan2(-0.0, 0.0)` result | t-mot-06 (rec) |
 | M5 | Polar recompute formula and zero signs | Inferred, Trace-consistent | `Motion::recompute_polar` | `radtodeg(atan2(-v, h))`, +360 if `< 0` | stand, t-alarm-1 |
-| M6 | Trig bits for non-table angles: x87 vs libm | UNKNOWN numbers | `num::trig` | libm, table for 0/90/180/270 | num-trig |
+| M6 | Trig bits for non-table angles: x87 vs libm | UNKNOWN numbers | `num::trig` | libm, table for 0/90/180/270; `atan2` correctly rounded (double-double refinement of libm), snapped to the double below pi/2 when `\|x\| / \|y\| < 1e-13` (cutoff OPEN, between 1.9e-14 and 6.8e-5, traces rely num-rng-b and kaenbyou t-mot-04) | num-trig, kaenbyou land-moving, vines |
 | M7 | Solid re-move uses current speeds; "kept at previous place" | Inferred / UNKNOWN motion U7 | `collide::solid_resolve`, `CollideRules::solid_recheck` | add speeds after event; recheck vs `b`; restore event position | T-MOT-07, t-col-04 (rec) |
 | M8 | Path following | UNKNOWN U9, U-MECH-4 | `path::advance` | linear segments by `speed / length`, closed loops wrap | TR-MECH-02 |
 

@@ -217,6 +217,13 @@ pub fn default_classes(b: Builtin) -> ClassMask {
     }
 }
 
+/// Whether a built-in's kind is persistent by default: the kid is in all 20 games (CLONE_SPEC
+/// rooms: "The player object is persistent in all 20 games"), so a restart that creates the kid
+/// and then changes room keeps it and its id. An object file's `persistent` says otherwise.
+pub fn default_persistent(b: Builtin) -> bool {
+    matches!(b, Builtin::Kid)
+}
+
 /// Whether a built-in's kind is solid by default (GM `solid`, which `place_free` reads): the
 /// block family and slopes are (mechanics `block`, `hidden_block`, `boss_gate`, `slope`); an
 /// object file or the `solid` param says otherwise.
@@ -227,7 +234,7 @@ pub fn default_solid(b: Builtin) -> bool {
     )
 }
 
-/// Classes that a kind's params pick (Design): water `variant` 2 and 3, vine `side`, and a
+/// Classes that a kind's params pick (Design): water `variant` 2 and 3, vine `side`, a killer with `kill_outside_view` (no class: it kills in its own collision), and a
 /// block with `kid_collides = false`, which has no class at all so the kid has no collision
 /// event with it (docs/format/builtins/block.md).
 pub fn param_classes(b: Builtin, params: &Params) -> Option<ClassMask> {
@@ -241,6 +248,9 @@ pub fn param_classes(b: Builtin, params: &Params) -> Option<ClassMask> {
             Some(ParamValue::Real(v)) if v.to_bits() == 3.0f64.to_bits() => Some(ClassMask::WATER3),
             _ => None,
         },
+        Builtin::Killer if matches!(get("kill_outside_view"), Some(ParamValue::Bool(true))) => {
+            Some(ClassMask::NONE)
+        }
         Builtin::Vine => match get("side") {
             Some(ParamValue::Str(s)) if s == "left" => Some(ClassMask::VINE_L),
             Some(ParamValue::Str(s)) if s == "right" => Some(ClassMask::VINE_R),
@@ -336,5 +346,28 @@ mod tests {
         );
         assert_eq!(legacy_role_classes("killer"), Some(ClassMask::KILLER));
         assert_eq!(legacy_role_classes("nope"), None);
+    }
+
+    /// The kid is persistent by default (all 20 games), no other built-in is.
+    #[test]
+    fn only_the_kid_is_persistent_by_default() {
+        assert!(default_persistent(Builtin::Kid));
+        assert!(!default_persistent(Builtin::Block));
+        assert!(!default_persistent(Builtin::Save));
+    }
+
+    /// A killer with `kill_outside_view` (kaenbyou borderKiller) is not in the `killer` class.
+    #[test]
+    fn kill_outside_view_drops_the_killer_class() {
+        let mut p = Params::default();
+        assert_eq!(
+            kind_classes(Builtin::Killer, &p, ClassMask::NONE),
+            ClassMask::KILLER
+        );
+        p.0.insert("kill_outside_view".into(), ParamValue::Bool(true));
+        assert_eq!(
+            kind_classes(Builtin::Killer, &p, ClassMask::NONE),
+            ClassMask::NONE
+        );
     }
 }

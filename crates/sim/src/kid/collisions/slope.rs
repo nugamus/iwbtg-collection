@@ -35,7 +35,7 @@ pub enum SlopeRun {
 /// Runs one collision run for the kid `me` against `other`. `kid::run_collision` routes here.
 pub fn run(ctx: &mut Ctx, me: InstId, other: InstId, run: &SlopeRun) -> Result<Flow, SimError> {
     match run {
-        SlopeRun::BlockSlopeStep => block::block_slope_step(ctx, me)?,
+        SlopeRun::BlockSlopeStep => block::block_slope_step(ctx, me, other)?,
         SlopeRun::SlopePorRise => por_rise(ctx, me)?,
         SlopeRun::SlopeYane => yane(ctx, me, other)?,
     }
