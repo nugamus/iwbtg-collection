@@ -4,7 +4,7 @@ A save point (mechanics `save`; kid specs "Saving"). The save is `save::save_now
 
 | Param | Type | Default | Meaning |
 |---|---|---|---|
-| `on_touch` | `never`, `press`, `shoot_press`, `skip_held`, `always` | `press` | What the touching kid must do. `press`: S or Z (shoot or skip action) pressed this tick (rely, wanna, lemon, xia). `shoot_press`: Z only (little-trap). `skip_held`: S held while overlapping the kid (kaenbyou, eat-the-lemon). `always`: touch is enough (poronkusema, LR object738). |
+| `on_touch` | `never`, `press`, `shoot_press`, `skip_held`, `always` | `press` | What the touching kid must do. `press`: S or Z (shoot or skip action) pressed this tick (rely, wanna, xia). `shoot_press`: Z only (little-trap, eat-the-lemon; eat-the-lemon saves in End Step with `on_shot` and `cooldown = 30`, no Key S event, kid/B.md lemon difference 6). `skip_held`: S held while overlapping the kid (kaenbyou). `always`: touch is enough (poronkusema, LR object738). |
 | `on_shot` | bool | false | A bullet hit saves, from the live kid (most games). |
 | `once` | bool | false | Destroyed after saving (autosave). |
 | `cooldown` | real | 0 | `saveTimer` is set to it on a save and counts down every Step; a save needs it below 0. 0 never gates (rely sets the timer but never checks it). 30 elsewhere. With `on_touch = "skip_held"` (kaenbyou) the timer starts at -1, Step does not count it, and it counts down by 1 only on ticks S is held and only while above 0; a save needs it at most 0, then sets it to `cooldown`. |

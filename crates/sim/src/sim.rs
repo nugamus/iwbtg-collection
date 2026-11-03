@@ -124,6 +124,12 @@ impl Sim {
         &self.def
     }
 
+    /// Turns the `keyboard_check_direct` latch off or on for this run. The trace runner turns it
+    /// off, as the recorder has no latch (CLONE_SPEC input, Confirmed (recorder)).
+    pub fn set_direct_latch(&mut self, latch: crate::rules::tick::DirectLatch) {
+        self.rules.tick.direct_latch = latch;
+    }
+
     /// The rules of this run.
     pub fn rules(&self) -> &RunnerRules {
         &self.rules
