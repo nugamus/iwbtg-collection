@@ -10,22 +10,16 @@
 //! either calls `.get()` on a `Real` (an empty-argument `get`) or compares with a `Real::...`
 //! constant. A raw comparison that is bookkeeping and not a GML comparison (counters, our own
 //! state machine) carries the marker `gm-compare: ok (<why>)` in a comment on the same line or the
-//! line above. Sites that were there when the lint arrived are grandfathered in
-//! `gm_compare_baseline.txt` (one `path: trimmed line` each) until they are reviewed; the list only
-//! shrinks. The lint cannot see a comparison of two `Real` values that never call `.get()` (for
+//! line above. There is no baseline: every site is fixed or marked. The lint cannot see a comparison of two `Real` values that never call `.get()` (for
 //! example `inst.m.hspeed() == other`): review still has to catch those.
-//!
-//! `UPDATE_GM_COMPARE_BASELINE=1 cargo test -p iwbtg-sim --test lint_gm_compare` rewrites the
-//! baseline (do not use it to hide a new comparison: use `gm_*` or the marker).
 
 // A source scan: the test, not the sim, reads files and the environment. Not for wasm32 (no file system).
 #![cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 #![allow(
     clippy::disallowed_methods,
-    reason = "the test, not the sim, reads the source files, UPDATE_GM_COMPARE_BASELINE and rewrites the baseline"
+    reason = "the test, not the sim, reads the source files and the environment"
 )]
 
-use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -90,45 +84,20 @@ fn flagged(root: &Path) -> Vec<(String, String)> {
     out
 }
 
-fn baseline_path(root: &Path) -> PathBuf {
-    root.join("tests/gm_compare_baseline.txt")
-}
-
 fn entry((path, line): &(String, String)) -> String {
     format!("{path}: {line}")
 }
 
 #[test]
-fn raw_comparisons_of_reals_are_marked_or_grandfathered() {
+fn raw_comparisons_of_reals_are_marked() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let found: Vec<String> = flagged(root).iter().map(entry).collect();
-    if std::env::var_os("UPDATE_GM_COMPARE_BASELINE").is_some() {
-        let mut text = found.join("\n");
-        text.push('\n');
-        fs::write(baseline_path(root), text).unwrap();
-        return;
-    }
-    let baseline: BTreeSet<String> = fs::read_to_string(baseline_path(root))
-        .unwrap_or_default()
-        .replace("\r\n", "\n")
-        .lines()
-        .filter(|l| !l.is_empty())
-        .map(str::to_owned)
-        .collect();
-    let new: Vec<&String> = found.iter().filter(|e| !baseline.contains(*e)).collect();
     assert!(
-        new.is_empty(),
-        "raw comparison of reals (GML comparisons go through num::gm_eq .. gm_ge with the run's NumRules; \
-         a comparison that is bookkeeping, not GML, gets a `{MARKER} (<why>)` comment on the line or the \
-         line above):\n  {}",
-        new.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("\n  ")
-    );
-    let gone: Vec<&String> = baseline.iter().filter(|e| !found.contains(*e)).collect();
-    assert!(
-        gone.is_empty(),
-        "these grandfathered comparisons are gone or changed; remove them from tests/gm_compare_baseline.txt \
-         (UPDATE_GM_COMPARE_BASELINE=1 rewrites it):\n  {}",
-        gone.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("\n  ")
+        found.is_empty(),
+        "raw comparison of reals (GML comparisons go through num::gm_eq .. gm_ge with the run's NumRules;          a comparison that is bookkeeping, not GML, gets a `{MARKER} (<why>)` comment on the line or the          line above):
+  {}",
+        found.join("
+  ")
     );
 }
 

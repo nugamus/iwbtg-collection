@@ -2,16 +2,19 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use bevy::asset::RenderAssetUsages;
 use bevy::camera::ScalingMode;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use bevy::sprite::Anchor;
 use iwbtg_sim::room::StartPoint;
 use iwbtg_sim::sim::{Sim, SimOptions};
 use iwbtg_sim::sound::DllMode;
-use iwbtg_sim::world::InstId;
+use iwbtg_sim::world::{InstId, SimStatus};
 
+use crate::input::{Collector, key_code};
 use crate::package::{Package, SpriteImage, sprite_images};
 
 /// The running game. Not `Send` (the script host shares state by `Rc`), so it is a non-send
@@ -36,8 +39,52 @@ struct RoomSize(Vec2);
 #[derive(Resource)]
 struct PendingImages(Vec<Option<SpriteImage>>);
 
+/// How many frames per second the window draws at most. The sim ticks at the game's rate
+/// whatever this is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FrameCap {
+    /// At most this many frames per second.
+    Fps(u32),
+    /// No limit.
+    Unlimited,
+}
+
+impl std::str::FromStr for FrameCap {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<FrameCap, String> {
+        if s.eq_ignore_ascii_case("unlimited") {
+            return Ok(FrameCap::Unlimited);
+        }
+        match s.parse::<u32>() {
+            Ok(n) if n >= 1 => Ok(FrameCap::Fps(n)),
+            _ => Err(format!(
+                "`{s}`: expected a number of frames per second (1 or more) or `unlimited`"
+            )),
+        }
+    }
+}
+
+/// The frame cap in force.
+#[derive(Resource)]
+struct Cap(FrameCap);
+
+/// Ticks and frames counted over the last full second of wall time, for the overlay.
+#[derive(Resource)]
+struct Stats {
+    window_start: Instant,
+    ticks: u32,
+    frames: u32,
+    ticks_per_second: f64,
+    frames_per_second: f64,
+}
+
+/// The overlay text entity.
+#[derive(Component)]
+struct Overlay;
+
 /// Opens the window and runs until it closes.
-pub fn run(pkg: Package, screenshot: Option<std::path::PathBuf>) -> Result<(), String> {
+pub fn run(pkg: Package, cap: FrameCap, screenshot: Option<std::path::PathBuf>) -> Result<(), String> {
     let def = Arc::clone(&pkg.def);
     let options = SimOptions {
         // Like a replay: a new game, in the game's `new_game_room`. The title and menus come with
@@ -58,6 +105,8 @@ pub fn run(pkg: Package, screenshot: Option<std::path::PathBuf>) -> Result<(), S
                 primary_window: Some(Window {
                     title: format!("IWBTG Collection: {}", def.id),
                     resolution: (width as u32, height as u32).into(),
+                    // The frame cap does the pacing; vsync would pin it to the monitor.
+                    present_mode: bevy::window::PresentMode::AutoNoVsync,
                     ..default()
                 }),
                 ..default()
@@ -68,8 +117,25 @@ pub fn run(pkg: Package, screenshot: Option<std::path::PathBuf>) -> Result<(), S
     .insert_resource(PendingImages(images))
     .init_resource::<Drawn>()
     .insert_non_send(Game { sim })
+    .insert_resource(Collector::new())
+    .insert_resource(Cap(cap))
+    .insert_resource(Stats {
+        window_start: Instant::now(),
+        ticks: 0,
+        frames: 0,
+        ticks_per_second: 0.0,
+        frames_per_second: 0.0,
+    })
+    // The sim ticks at the game's rate on a fixed clock; frames only draw what the last tick left.
+    .insert_resource(Time::<Fixed>::from_hz(f64::from(def.tick_rate.max(1))))
     .add_systems(Startup, setup)
-    .add_systems(Update, sync_instances);
+    .add_systems(
+        RunFixedMainLoop,
+        collect_input.in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
+    )
+    .add_systems(FixedUpdate, tick)
+    .add_systems(Update, (sync_instances, overlay))
+    .add_systems(Last, limit_frames);
     if let Some(path) = screenshot {
         app.insert_resource(ScreenshotTo(path))
             .add_systems(Update, take_screenshot);
@@ -85,6 +151,17 @@ fn setup(
     room: Res<RoomSize>,
 ) {
     // The room always fits the window, whatever its size: letterboxed, never cropped.
+    commands.spawn((
+        Text2d::new(""),
+        TextFont {
+            font_size: bevy::text::FontSize::Px(14.0),
+            ..default()
+        },
+        TextColor(Color::srgb(1.0, 1.0, 0.4)),
+        Anchor::TOP_LEFT,
+        Transform::from_xyz(-room.0.x / 2.0 + 4.0, room.0.y / 2.0 - 4.0, 1000.0),
+        Overlay,
+    ));
     commands.spawn((
         Camera2d,
         Projection::from(OrthographicProjection {
@@ -116,6 +193,87 @@ fn setup(
         })
         .collect();
     commands.insert_resource(Textures(textures));
+}
+
+/// Adds this frame's key events to the collector.
+fn collect_input(keys: Res<ButtonInput<KeyCode>>, mut collector: ResMut<Collector>) {
+    for key in keys.get_just_pressed().filter_map(|k| key_code(*k)) {
+        collector.press(key);
+    }
+    for key in keys.get_just_released().filter_map(|k| key_code(*k)) {
+        collector.release(key);
+    }
+}
+
+/// One sim tick: runs on the fixed clock, as many times per frame as the clock is behind.
+fn tick(mut game: NonSendMut<Game>, mut collector: ResMut<Collector>, mut stats: ResMut<Stats>) {
+    let frame = collector.take_frame();
+    if game.sim.step(frame).status == SimStatus::Running {
+        stats.ticks += 1;
+    }
+}
+
+/// F3 shows or hides the overlay; once a second it recounts ticks and frames per second.
+fn overlay(
+    game: NonSend<Game>,
+    keys: Res<ButtonInput<KeyCode>>,
+    mut stats: ResMut<Stats>,
+    mut text: Single<(&mut Text2d, &mut Visibility), With<Overlay>>,
+) {
+    stats.frames += 1;
+    let elapsed = stats.window_start.elapsed();
+    if elapsed >= Duration::from_secs(1) {
+        let secs = elapsed.as_secs_f64();
+        stats.ticks_per_second = f64::from(stats.ticks) / secs;
+        stats.frames_per_second = f64::from(stats.frames) / secs;
+        stats.ticks = 0;
+        stats.frames = 0;
+        stats.window_start = Instant::now();
+    }
+    let (label, visibility) = &mut *text;
+    if keys.just_pressed(KeyCode::F3) {
+        **visibility = if **visibility == Visibility::Hidden {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+    }
+    let status = match &game.sim.world().status {
+        SimStatus::Running => String::new(),
+        SimStatus::Halted(e) => format!("  HALTED: {e}"),
+        SimStatus::Ended => "  ended".to_string(),
+    };
+    label.0 = format!(
+        "ticks/s {:.1} (game {})  fps {:.0}  tick {}{status}  [F3 hides]",
+        stats.ticks_per_second,
+        game.sim.def().tick_rate,
+        stats.frames_per_second,
+        game.sim.world().tick,
+    );
+}
+
+/// Holds the frame back to the cap: sleeps most of the wait, spins the last stretch.
+fn limit_frames(cap: Res<Cap>, mut last: Local<Option<Instant>>) {
+    let FrameCap::Fps(fps) = cap.0 else {
+        *last = None;
+        return;
+    };
+    let target = Duration::from_secs_f64(1.0 / f64::from(fps));
+    let start = *last.get_or_insert_with(Instant::now);
+    let spin = Duration::from_micros(1500);
+    loop {
+        let spent = start.elapsed();
+        if spent >= target {
+            break;
+        }
+        let left = target - spent;
+        if left > spin {
+            std::thread::sleep(left - spin);
+        } else {
+            std::hint::spin_loop();
+        }
+    }
+    *last = Some(Instant::now());
 }
 
 /// Makes the entities match the sim's instances: spawn, move, frame, remove.
@@ -200,7 +358,7 @@ fn sync_instances(
 #[derive(Resource)]
 struct ScreenshotTo(std::path::PathBuf);
 
-/// Frame 30 asks for a screenshot; frame 90 exits (the file is written by then).
+/// Frame 90 asks for a screenshot (the overlay has counted a second by then); frame 150 exits (the file is written by then).
 fn take_screenshot(
     mut commands: Commands,
     to: Res<ScreenshotTo>,
@@ -208,12 +366,25 @@ fn take_screenshot(
     mut exit: MessageWriter<AppExit>,
 ) {
     *frame += 1;
-    if *frame == 30 {
+    if *frame == 90 {
         commands
             .spawn(bevy::render::view::screenshot::Screenshot::primary_window())
             .observe(bevy::render::view::screenshot::save_to_disk(to.0.clone()));
     }
-    if *frame == 90 {
+    if *frame == 150 {
         exit.write(AppExit::Success);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_frame_cap_parses() {
+        assert_eq!("60".parse(), Ok(FrameCap::Fps(60)));
+        assert_eq!("Unlimited".parse(), Ok(FrameCap::Unlimited));
+        assert!("0".parse::<FrameCap>().is_err());
+        assert!("fast".parse::<FrameCap>().is_err());
     }
 }
