@@ -11,7 +11,7 @@ dll_mode = "stub"
 seed = 0
 setup = []
 # `direction` is not compared: num::atan2 is 1-2 ulp off the recorder here (iwbtg-collection#407).
-ignore = ["id", "sprite_index", "sprite_name", "direction"]
+ignore = ["id", "sprite_index", "sprite_name"]
 
 [vars]
 "instance_number(player)" = "instance_number(kid)"

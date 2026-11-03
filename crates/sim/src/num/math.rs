@@ -34,8 +34,11 @@ pub fn tan(x: Real) -> Real {
 /// Near an axis the recorder is not correctly rounded: with `|x| / |y|` up to at least `3.5e-16`
 /// (`kaenbyou/famb-vines-a.csv` frames 32 to 35, hspeed `-7.3e-17`) its direction is exactly 90.0,
 /// which is the double below pi/2 (`rely-the-needle-4-2/djump.csv` frame 10 and 24 agree, ratio
-/// `2.9e-17`), not the correctly rounded angle. So below a ratio of `1e-15` this returns that double;
-/// the cutoff is a guess between `3.5e-16` and the first ordinary vector (OPEN, research).
+/// `2.9e-17`), not the correctly rounded angle. The recorded traces keep it exact up to a ratio of
+/// `1.9e-14` (`rely-the-needle-4-2/num-rng-b.csv`, `kaenbyou/famb-platform-a.csv` frame 50 at
+/// `1.96e-15`) and give an ordinary angle from `6.8e-5` (`kaenbyou/t-mot-04.csv`). So below a ratio
+/// of `1e-13` this returns the double below pi/2; the cutoff inside that gap is a guess (OPEN,
+/// research#426).
 pub fn atan2(y: Real, x: Real) -> Real {
     let (yv, xv) = (y.get(), x.get());
     let a = libm::atan2(yv, xv);
@@ -44,7 +47,7 @@ pub fn atan2(y: Real, x: Real) -> Real {
     if !(ya > 1e-100 && ya < 1e100 && xa < 1e100 && (xa == 0.0 || xa > 1e-100)) {
         return Real::new(a);
     }
-    if xa < ya * 1e-15 {
+    if xa < ya * 1e-13 {
         return Real::new(core::f64::consts::FRAC_PI_2.copysign(yv));
     }
     let (s, c) = dd_sin_cos(a);

@@ -14,7 +14,7 @@ setup = [
 ]
 # `direction` is not compared: with the hspeed residue (-7.3e-17) the recorder reads exactly 90.0 or 270.0,
 # the formula gives one ulp more (research#38).
-ignore = ["id", "sprite_index", "sprite_name", "direction"]
+ignore = ["id", "sprite_index", "sprite_name"]
 
 [vars]
 "instance_number(player)" = "instance_number(kid)"

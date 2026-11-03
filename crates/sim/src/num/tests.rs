@@ -868,3 +868,15 @@ fn atan2_is_correctly_rounded_for_ordinary_vectors() {
     assert_eq!(atan2(r(1.0), r(-1.0)), r(2.356_194_490_192_345));
     assert_eq!(atan2(r(-1.0), r(-1.0)), r(-2.356_194_490_192_345));
 }
+
+/// The recorder reads exactly 90 and 270 for a kid with the hspeed residue even at a ratio of
+/// 2e-15 (kaenbyou famb-platform-a frame 50, rely num-rng-b up to 1.9e-14); an ordinary vector is
+/// not snapped (#428).
+#[test]
+fn near_axis_directions_snap_to_the_axis() {
+    let h = parse("-7.347880794884119e-17");
+    let o = r(0.0);
+    assert_eq!(point_direction(o, o, h, r(-0.03749999999999998)), r(90.0));
+    assert_eq!(point_direction(o, o, h, r(0.3625)), r(270.0));
+    assert_ne!(point_direction(o, o, r(1e-5), r(-1.0)), r(90.0));
+}
