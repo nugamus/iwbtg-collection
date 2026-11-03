@@ -1,7 +1,7 @@
 //! Turns key presses into one `InputFrame` per tick. The collector has no Bevy logic, so it is tested
 //! like any other code (docs/architecture.md, Actions and input frames).
 
-use iwbtg_sim::input::{InputFrame, vk};
+use iwbtg_sim::input::{Action, InputFrame, vk};
 
 use crate::bindings::{Bindings, PadInput};
 
@@ -17,6 +17,8 @@ pub struct Collector {
     pad_down: [bool; PadInput::ALL.len()],
     pressed: u32,
     released: u32,
+    /// The frame the last tick took, for the overlay.
+    last: InputFrame,
 }
 
 impl Collector {
@@ -28,7 +30,24 @@ impl Collector {
             pad_down: [false; PadInput::ALL.len()],
             pressed: 0,
             released: 0,
+            last: InputFrame::EMPTY,
         }
+    }
+
+    /// What the last tick saw, for the overlay: the actions held or pressed, then the controller
+    /// inputs that are down.
+    pub fn describe(&self) -> String {
+        let actions: Vec<&str> = Action::ALL
+            .into_iter()
+            .filter(|a| self.last.is_held(*a) || self.last.was_pressed(*a))
+            .map(Action::name)
+            .collect();
+        let pads: Vec<&str> = PadInput::ALL
+            .into_iter()
+            .filter(|p| self.pad_down[*p as usize])
+            .map(PadInput::name)
+            .collect();
+        format!("input: {}  pad: {}", actions.join(" "), pads.join(" "))
     }
 
     /// A key went down.
@@ -88,7 +107,37 @@ impl Collector {
         };
         self.pressed = 0;
         self.released = 0;
+        self.last = frame;
         frame
+    }
+}
+
+/// Turns one stick axis into a press. A pad that rests away from the centre (an axis the OS maps
+/// wrongly, or a motion-sensor device that shows up as a pad) must never count as held: the axis
+/// is ignored until it has been seen near the centre, and a press needs a clear push, with a
+/// lower bar to let go.
+#[derive(Default)]
+pub struct StickGate {
+    centred: bool,
+    down: bool,
+}
+
+impl StickGate {
+    /// Pushed past this counts as a press.
+    pub const PRESS: f32 = 0.6;
+    /// Back inside this counts as a release (and as seen at the centre).
+    pub const RELEASE: f32 = 0.3;
+
+    /// The next reading of the axis in the direction this gate watches (negate for the other way);
+    /// returns whether the direction is down.
+    pub fn update(&mut self, value: f32) -> bool {
+        if value < Self::RELEASE {
+            self.centred = true;
+            self.down = false;
+        } else if self.centred && value > Self::PRESS {
+            self.down = true;
+        }
+        self.down
     }
 }
 
@@ -188,6 +237,30 @@ pub fn key_code(key: bevy::input::keyboard::KeyCode) -> Option<u8> {
 mod tests {
     use super::*;
     use iwbtg_sim::input::Action;
+
+    #[test]
+    fn a_stick_must_be_seen_at_the_centre_before_it_counts() {
+        let mut g = StickGate::default();
+        // An axis stuck at full deflection never presses.
+        assert!((0..10).all(|_| !g.update(1.0)));
+        assert!(!g.update(0.0));
+        assert!(g.update(0.9));
+        // Hysteresis: a wobble between the bars keeps the state.
+        assert!(g.update(0.4));
+        assert!(!g.update(0.2));
+        assert!(!g.update(0.4));
+        // A small drift never presses.
+        assert!(!g.update(0.5));
+    }
+
+    #[test]
+    fn the_overlay_text_names_what_the_last_tick_saw() {
+        let mut c = Collector::new(Bindings::default());
+        c.press(vk::Z);
+        c.set_pad(PadInput::South, true);
+        c.take_frame();
+        assert_eq!(c.describe(), "input: jump shoot  pad: south");
+    }
 
     #[test]
     fn a_held_key_is_held_and_pressed_once() {

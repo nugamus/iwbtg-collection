@@ -15,7 +15,7 @@ use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::world::{InstId, SimStatus};
 
 use crate::bindings::{Bindings, PadInput};
-use crate::input::{Collector, key_code};
+use crate::input::{Collector, StickGate, key_code};
 use crate::package::{Package, SpriteImage, sprite_images};
 
 /// The running game. Not `Send` (the script host shares state by `Rc`), so it is a non-send
@@ -217,37 +217,59 @@ fn collect_input(keys: Res<ButtonInput<KeyCode>>, mut collector: ResMut<Collecto
     }
 }
 
-/// Stick deflection that counts as a press.
-const STICK_THRESHOLD: f32 = 0.5;
-
-/// Feeds the controllers' state to the collector. With several controllers, an input is down when
-/// any of them has it down.
-fn collect_pad(pads: Query<&Gamepad>, mut collector: ResMut<Collector>) {
+/// Feeds the controller's state to the collector. Only the active controller counts: the one that
+/// last had a button pressed. A DualSense over Bluetooth can show up as a second device (motion
+/// sensors) whose axes never rest at zero, and that must not walk the kid right. The stick goes
+/// through `StickGate`, so an axis that never rests at the centre is ignored.
+fn collect_pad(
+    pads: Query<(Entity, &Gamepad)>,
+    mut collector: ResMut<Collector>,
+    mut active: Local<Option<Entity>>,
+    mut gates: Local<[StickGate; 4]>,
+) {
     use bevy::input::gamepad::{GamepadAxis as A, GamepadButton as B};
+    if let Some((entity, _)) = pads.iter().find(|(_, g)| g.get_pressed().next().is_some())
+        && *active != Some(entity)
+    {
+        *active = Some(entity);
+        *gates = Default::default();
+    }
+    let pad = active.and_then(|e| pads.get(e).ok()).map(|(_, g)| g);
+    let Some(g) = pad else {
+        for input in PadInput::ALL {
+            collector.set_pad(input, false);
+        }
+        return;
+    };
+    let axis = |a| g.get(a).unwrap_or(0.0);
+    let stick = [
+        gates[0].update(axis(A::LeftStickY)),
+        gates[1].update(-axis(A::LeftStickY)),
+        gates[2].update(-axis(A::LeftStickX)),
+        gates[3].update(axis(A::LeftStickX)),
+    ];
     for input in PadInput::ALL {
-        let down = pads.iter().any(|g| {
-            let button = |b| g.pressed(b);
-            match input {
-                PadInput::South => button(B::South),
-                PadInput::East => button(B::East),
-                PadInput::West => button(B::West),
-                PadInput::North => button(B::North),
-                PadInput::LeftBumper => button(B::LeftTrigger),
-                PadInput::RightBumper => button(B::RightTrigger),
-                PadInput::LeftTrigger => button(B::LeftTrigger2),
-                PadInput::RightTrigger => button(B::RightTrigger2),
-                PadInput::Select => button(B::Select),
-                PadInput::Start => button(B::Start),
-                PadInput::DPadUp => button(B::DPadUp),
-                PadInput::DPadDown => button(B::DPadDown),
-                PadInput::DPadLeft => button(B::DPadLeft),
-                PadInput::DPadRight => button(B::DPadRight),
-                PadInput::StickUp => g.get(A::LeftStickY).is_some_and(|v| v > STICK_THRESHOLD),
-                PadInput::StickDown => g.get(A::LeftStickY).is_some_and(|v| v < -STICK_THRESHOLD),
-                PadInput::StickLeft => g.get(A::LeftStickX).is_some_and(|v| v < -STICK_THRESHOLD),
-                PadInput::StickRight => g.get(A::LeftStickX).is_some_and(|v| v > STICK_THRESHOLD),
-            }
-        });
+        let button = |b| g.pressed(b);
+        let down = match input {
+            PadInput::South => button(B::South),
+            PadInput::East => button(B::East),
+            PadInput::West => button(B::West),
+            PadInput::North => button(B::North),
+            PadInput::LeftBumper => button(B::LeftTrigger),
+            PadInput::RightBumper => button(B::RightTrigger),
+            PadInput::LeftTrigger => button(B::LeftTrigger2),
+            PadInput::RightTrigger => button(B::RightTrigger2),
+            PadInput::Select => button(B::Select),
+            PadInput::Start => button(B::Start),
+            PadInput::DPadUp => button(B::DPadUp),
+            PadInput::DPadDown => button(B::DPadDown),
+            PadInput::DPadLeft => button(B::DPadLeft),
+            PadInput::DPadRight => button(B::DPadRight),
+            PadInput::StickUp => stick[0],
+            PadInput::StickDown => stick[1],
+            PadInput::StickLeft => stick[2],
+            PadInput::StickRight => stick[3],
+        };
         collector.set_pad(input, down);
     }
 }
@@ -265,6 +287,7 @@ fn overlay(
     game: NonSend<Game>,
     keys: Res<ButtonInput<KeyCode>>,
     mut stats: ResMut<Stats>,
+    collector: Res<Collector>,
     mut text: Single<(&mut Text2d, &mut Visibility), With<Overlay>>,
 ) {
     stats.frames += 1;
@@ -308,11 +331,13 @@ fn overlay(
     label.0 = format!(
         "ticks/s {:.1} (game {})  fps {:.0}  tick {}{status}  [F3 hides]
 room {room}
-{kid}",
+{kid}
+{input}",
         stats.ticks_per_second,
         game.sim.def().tick_rate,
         stats.frames_per_second,
         world.tick,
+        input = collector.describe(),
     );
 }
 
