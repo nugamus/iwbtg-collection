@@ -40,7 +40,7 @@ That's expected. `iwc convert` (research) writes its packages to `research/build
 | gh | 2.102.0 | logged in as nugamus |
 | git | 2.52.0.windows.1 | |
 | Claude Code | 2.1.316 | |
-| OpenGMK tracer | `research/tools/opengmk/bin/gm8emulator.exe`, sha256 `d83371ba68900fa3…` | built from OpenGMK 9e4282e6 + `iwc-trace.patch`. The source checkout is also on disk in `tools/opengmk/src/`, see research#28 |
+| OpenGMK tracer | `research/tools/opengmk/bin/gm8emulator.exe`, sha256 `d83371ba68900fa3…` | built from OpenGMK 9e4282e6 + `iwc-trace.patch`. The source checkout is also on disk in `tools/opengmk/src/`, only to rebuild the tracer: no agent opens, reads or greps it except to apply `iwc-trace.patch` and build, and never while writing specs or client code (research#28) |
 | REA | MCP server `rea`, available in sessions | `rea-linux` is blocked in settings |
 
 ## Agent teams
@@ -105,5 +105,5 @@ Without wasmtime, a wasm32-wasip1 test binary also runs under Node's WASI. Build
 - research had uncommitted trace tool work. It is saved as `backup/home-pc-2026-11-02-local-trace-work`; research#27 lands it.
 - `client/.claude/worktrees/` held six workflow worktrees with unpushed WP1, WP2, WP3, WP4a, WP7a and WP8a work. Each is saved as `backup/home-pc-2026-11-02-<wp>`, and its issue (#1, #2, #3, #4, #8, #10) points to it. #203 removes the worktrees.
 - The root `.claude/settings.json` lacked the issue hooks, and they are now added. #202 added the tracked copy and the drift warning.
-- `research/tools/opengmk/src/` contradicts research/CLAUDE.md: research#28.
+- `research/tools/opengmk/src/` is kept only to rebuild the tracer; research/CLAUDE.md now says so (research#28).
 - No originals, extraction output or database are tracked in any repo. `git status --ignored` shows them ignored in research.

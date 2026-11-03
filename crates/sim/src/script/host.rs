@@ -191,6 +191,9 @@ impl ScriptHost for ScriptRuntime {
         }
         let kind_name = ctx.def.kind(kind).map_or("?", |k| k.name.as_str()).to_owned();
         let tick = ctx.w.tick;
+        if shared.depth.get() == 0 {
+            shared.budget.begin_call();
+        }
         shared.depth.set(shared.depth.get() + 1);
         shared.dll_mode.set(ctx.dll_mode);
         let live = std::mem::replace(ctx.w, World::new(crate::def::RoomId(0), 0));
