@@ -14,7 +14,7 @@
 //!   when the kid is met at `(x, y + vsp - 3)`, the kid's `y += yspeed`; then the block's
 //!   `y += yspeed`.
 //!
-//! `solid` is applied in Create when given. OPEN, not done: the flipped kid (the specs test one
+//! `solid` is applied in Create when given. OPEN, not done (nugamus/iwbtg-collection-research#52): the flipped kid (the specs test one
 //! kid object only).
 
 use serde::{Deserialize, Serialize};
