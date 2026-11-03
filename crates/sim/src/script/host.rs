@@ -260,6 +260,8 @@ pub struct Shared {
     pub(crate) host: OnceCell<Host>,
     pub(crate) dll_mode: Cell<DllMode>,
     pub(crate) depth: Cell<u32>,
+    /// Top-level consts seen while a script is lexed (`consts.rs`).
+    consts: RefCell<super::consts::ConstScan>,
 }
 
 /// What the registered functions need beyond the world: the game, the rules, the way back to
@@ -399,6 +401,7 @@ impl Iws {
             host: OnceCell::new(),
             dll_mode: Cell::new(DllMode::Stub),
             depth: Cell::new(0),
+            consts: RefCell::default(),
         });
         let mut engine = Engine::new_raw();
         // Only language-core packages: no `BasicMathPackage` (its sin, cos, pow and round call
@@ -414,6 +417,15 @@ impl Iws {
         super::api::register_numeric(&mut engine, &shared, &mut docs);
         super::inst::register_instance_api(&mut engine, &shared, &mut docs);
 
+        {
+            // A top-level `const` is visible inside functions (#366).
+            let s = Rc::clone(&shared);
+            #[allow(
+                deprecated,
+                reason = "Rhai marks the volatile `internals` hook; the pin keeps it stable"
+            )]
+            engine.on_parse_token(move |tok, _, _| s.consts.borrow_mut().token(tok));
+        }
         engine.disable_symbol("eval");
         engine.disable_symbol("**");
         engine.disable_symbol("**=");
@@ -477,9 +489,20 @@ impl Iws {
 
     /// Compiles `source` under the IWS profile.
     pub fn compile(&self, source: &str) -> Result<AST, ScriptError> {
-        self.engine.compile(source).map_err(|e| ScriptError {
+        self.compile_ast(source).map_err(|e| ScriptError {
             message: format!("compile error: {e}"),
         })
+    }
+
+    /// Forgets the consts of the last script (before lexing a new one).
+    pub(crate) fn reset_consts(&self) {
+        self.shared.consts.borrow_mut().reset();
+    }
+
+    /// Compiles `source`, keeping Rhai's parse error (the validator reports its position).
+    pub(crate) fn compile_ast(&self, source: &str) -> Result<AST, rhai::ParseError> {
+        self.reset_consts();
+        self.engine.compile(source)
     }
 
     /// Evaluates one expression (tests, the validator's constant checks).
