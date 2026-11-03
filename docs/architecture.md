@@ -272,7 +272,7 @@ This is the starting surface. The generated reference is `docs/format/script-api
 
 **Input** (*planned*; for menus and quizzes): `pressed(action)`, `held(action)`, `released(action)`.
 
-**Audio and effects** (*planned*, queued for the client, never read back; #402): `play_sound(id)`, `play_music(id)`, `play_music(id, #{ from_tick: n })`, `stop_music()`, `shake(ticks, strength)`.
+**Audio and effects** (queued for the client, never read back): `play_sound(name)`, `play_music(name)` (a loop; another track stops or blocks it by the run's MULTIMEDIA rule), `stop_music()` and `shake(ticks, strength)` are registered; sound names are checked at load, and a pack sound is `engine:<pack>/<id>`. *Planned*: `play_music(name, #{ from_tick: n })`.
 
 **Menus and text** (*planned*): `text_box(...)`, `menu(...)`. Exact shape **OPEN**, from the quiz, battle menu and difficulty menu in the shortlist games.
 
