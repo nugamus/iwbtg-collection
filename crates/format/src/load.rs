@@ -1423,6 +1423,7 @@ impl<'a> Loader<'a> {
                     RoomRole::Play
                 }
             };
+            def.no_restart = f.no_restart;
             def.file_speed = match &f.file_speed {
                 Some(s) => *s.get_ref(),
                 None => match self
@@ -2145,7 +2146,7 @@ fn read_text<'f>(files: &'f PackageFiles, path: &str, out: &mut Vec<Diagnostic>)
 // Step 9: gameplay_hash.
 
 /// `game.toml` keys that cannot change the sim (docs/format/v0.md, Versioning).
-const COSMETIC_MANIFEST_KEYS: [&str; 7] = [
+const COSMETIC_MANIFEST_KEYS: [&str; 8] = [
     "title",
     "version",
     "source_version",
@@ -2153,6 +2154,7 @@ const COSMETIC_MANIFEST_KEYS: [&str; 7] = [
     "source",
     "third_party",
     "music",
+    "key_art",
 ];
 
 /// BLAKE3 over the canonical parsed form of everything that can change the sim

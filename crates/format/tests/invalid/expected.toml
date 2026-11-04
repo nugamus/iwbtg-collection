@@ -49,6 +49,25 @@ line = 3
 column = 10
 message = "this package uses format 1, but this client reads formats up to 0; update the client"
 
+[key_art_file_missing]
+file = "game.toml"
+line = 27
+column = 9
+message = "key_art image `art/missing.png` is not in the package"
+
+[key_art_not_16_9]
+file = "game.toml"
+line = 27
+column = 9
+severity = "warning"
+message = "key_art image `art/key.png` is 1024 x 768; key art should be 16:9"
+
+[key_art_not_png]
+file = "game.toml"
+line = 27
+column = 9
+message = "key_art image `art/key.png`: not a readable PNG"
+
 [max_ticks_wrong_type]
 file = "game.toml"
 line = 11

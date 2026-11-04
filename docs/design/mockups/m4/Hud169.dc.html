@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>In-run HUD 16:9</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- 1920x1080: the 800x608 game fills the height (1.78x), side panels take the 249 px left on each side. Background art fills behind everything. -->
+<div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8">
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1920px" h="1080px" hue="250" blur="{{blur}}" dim="0.45" tag="bottom-left" label="I wanna be the Kaenbyou" hint-size="1920px,1080px"></dc-import></div>
+
+  <div style="position: absolute; left: 249px; top: 0; width: 1422px; height: 1080px; overflow: hidden; box-shadow: 0 0 60px rgba(0,0,0,.6)">
+    <div style="width: 800px; height: 608px; transform: scale(1.77632); transform-origin: 0 0"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div>
+    <sc-if value="{{paused}}" hint-placeholder-val="{{ false }}">
+      <div style="position: absolute; inset: 0; background: rgba(0,0,0,.5)"></div>
+    </sc-if>
+  </div>
+
+  <div style="position: absolute; left: 0; top: 352px"><dc-import name="Leaderboard" scenario="{{lb}}" density="full" width="232" rows="7" hint-size="232px,360px"></dc-import></div>
+
+  <div style="position: absolute; left: 1694px; top: 300px"><dc-import name="RunInfo" mode="{{mode}}" paused="{{paused}}" time="{{time}}" width="206" hint-size="206px,420px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"lb":{"editor":"enum","options":["top","p25","below","local","offline","empty"],"default":"p25"},"mode":{"editor":"enum","options":["ranked","mods","unranked"],"default":"ranked"},"blur":{"editor":"range","min":0,"max":100,"step":1,"unit":"%","default":60},"paused":{"editor":"boolean","default":false},"time":{"editor":"text","default":"38:02.56"},"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      lb: this.props.lb ?? 'p25',
+      mode: this.props.mode ?? 'ranked',
+      blur: this.props.blur ?? 60,
+      paused: this.props.paused === true || this.props.paused === 'true',
+      time: this.props.time ?? '38:02.56',
+    };
+  }
+}
+</script>
+</body>
+</html>

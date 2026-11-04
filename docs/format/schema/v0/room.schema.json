@@ -353,6 +353,10 @@
         "null"
       ]
     },
+    "no_restart": {
+      "default": false,
+      "type": "boolean"
+    },
     "on_create": {
       "items": {
         "$ref": "#/$defs/ActionFile"

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pause 16:9</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;family=Pixelify+Sans:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+@keyframes pb-cherry{from{transform:translateX(0)}to{transform:translateX(-42px)}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
+.pb-item:focus-visible{outline:2px solid #ffffff;outline-offset:3px}
+</style>
+</helmet>
+<!-- The game stays visible and frozen, darkened; the background system keeps running; the ranked timer keeps running (HUD flag). -->
+<div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14">
+  <div style="position: absolute; inset: 0"><dc-import name="Hud169" paused="{{ true }}" time="38:09.02" hint-size="1920px,1080px"></dc-import></div>
+  <div style="--s: 1.77632; position: absolute; left: 960px; top: 540px; transform: translate(-50%, -50%) scale(1.77632); transform-origin: 50% 50%">
+    <dc-import name="PauseBox" selected="0" hint-size="300px,250px"></dc-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

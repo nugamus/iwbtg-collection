@@ -64,3 +64,7 @@ status = "excluded-from-public"
 
 [music.stage1]
 volume = { bits = "3FE0000000000000" }
+
+[key_art]
+image = "art/key.png"
+maps = { hard = "art/key_hard.png" }

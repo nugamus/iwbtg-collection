@@ -1,5 +1,5 @@
 # Dependency ban for the sim, checked per crate (docs/architecture.md, Sim purity):
-#   cargo deny --manifest-path crates/sim/Cargo.toml check --config crates/sim/deny.toml bans
+#   cargo deny --manifest-path crates/sim/Cargo.toml --config crates/sim/deny.toml check bans
 # The root deny.toml sees the whole workspace (it will hold Bevy), so the sim's graph needs its own.
 # No crate that reads entropy, clocks, threads or the GPU at run time may enter the sim's graph.
 
