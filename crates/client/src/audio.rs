@@ -418,8 +418,9 @@ impl Shake {
 /// Moves the camera by the shake.
 pub fn apply_shake(shake: Res<Shake>, mut camera: Single<&mut Transform, With<Camera2d>>) {
     let o = shake.offset();
-    camera.translation.x = o.x;
-    camera.translation.y = o.y;
+    // Added to the centre `view::follow_view` sets every frame, so it never builds up.
+    camera.translation.x += o.x;
+    camera.translation.y += o.y;
 }
 
 #[cfg(test)]
