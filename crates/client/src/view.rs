@@ -128,6 +128,7 @@ pub fn run(
     pkg: Package,
     cap: FrameCap,
     interpolate: bool,
+    audio_offset_ms: u32,
     screenshot: Option<std::path::PathBuf>,
 ) -> Result<(), String> {
     let def = Arc::clone(&pkg.def);
@@ -142,6 +143,9 @@ pub fn run(
     let room = def.room(sim.world().room).ok_or("the start room is missing")?;
     let (width, height) = (room.width as f32, room.height as f32);
     let images = sprite_images(&pkg.files);
+    // The first room's start runs inside `Sim::new`; `step` clears its output, so take it now.
+    let mut audio_queue = crate::audio::Queue::new(audio_offset_ms);
+    audio_queue.push(Instant::now(), &sim.world().output);
     let mut app = App::new();
     app.add_plugins(
         DefaultPlugins
@@ -168,6 +172,9 @@ pub fn run(
     .insert_non_send(Game { sim })
     .insert_resource(Collector::new())
     .insert_resource(Cap(cap))
+    .insert_resource(audio_queue)
+    .insert_resource(crate::audio::Sounds::new(&pkg.files))
+    .init_resource::<crate::audio::Shake>()
     .insert_resource(Previous {
         on: interpolate,
         ..default()
@@ -195,6 +202,8 @@ pub fn run(
             (set_alpha, sync_instances, overlay).chain(),
             hud::show_sign,
             hud::show_countdown,
+            crate::audio::play,
+            crate::audio::apply_shake,
         ),
     )
     .add_systems(Last, limit_frames);
@@ -283,6 +292,8 @@ fn tick(
     mut game: NonSendMut<Game>,
     mut collector: ResMut<Collector>,
     mut stats: ResMut<Stats>,
+    mut audio: ResMut<crate::audio::Queue>,
+    mut shake: ResMut<crate::audio::Shake>,
     mut previous: ResMut<Previous>,
     mut sign: ResMut<hud::SignText>,
 ) {
@@ -299,7 +310,10 @@ fn tick(
     let frame = collector.take_frame();
     if game.sim.step(frame).status == SimStatus::Running {
         stats.ticks += 1;
-        hud::note_tick(&mut sign, &game.sim.world().output);
+        let output = &game.sim.world().output;
+        hud::note_tick(&mut sign, output);
+        audio.push(Instant::now(), output);
+        shake.tick(output);
     }
 }
 
