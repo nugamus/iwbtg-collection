@@ -1,11 +1,17 @@
 //! `iwbtg-client <package>`: opens a game package in a window (docs/architecture.md, Crates).
+//! `iwbtg-client --ui-gallery`: the UI kit's component gallery (docs/architecture.md, UI).
 //!
 //! The sim ticks at the game's rate on a fixed clock, whatever the frame rate; every visible
 //! instance with a sprite is drawn where the sim last put it.
 
+// The browser build opens only the gallery until the web client loads packages, so the game
+// path is compiled there but not called.
+#![cfg_attr(target_arch = "wasm32", allow(dead_code, unused_imports))]
+
 mod art;
 mod input;
 mod package;
+mod ui;
 mod view;
 
 use std::path::PathBuf;
@@ -18,7 +24,14 @@ use clap::Parser;
 #[command(name = "iwbtg-client", version, about = "IWBTG Collection client")]
 struct Args {
     /// Package folder (a folder with a game.toml).
-    package: PathBuf,
+    #[arg(required_unless_present = "ui_gallery")]
+    package: Option<PathBuf>,
+    /// Open the UI gallery (every UI component, for design review) instead of a game.
+    #[arg(long)]
+    ui_gallery: bool,
+    /// Turn off slides, fades and pops: every UI transition lands at once.
+    #[arg(long)]
+    reduced_motion: bool,
     /// Load converter output: unmapped script kinds become inert.
     #[arg(long)]
     trace_mode: bool,
@@ -35,9 +48,17 @@ struct Args {
     screenshot: Option<PathBuf>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn main() -> ExitCode {
     let args = Args::parse();
-    match package::open(&args.package, args.trace_mode) {
+    if args.ui_gallery {
+        ui::gallery::run(args.screenshot, args.reduced_motion);
+        return ExitCode::SUCCESS;
+    }
+    let Some(package) = args.package else {
+        return ExitCode::FAILURE;
+    };
+    match package::open(&package, args.trace_mode) {
         Ok(pkg) => match view::run(pkg, args.fps, args.interpolate, args.screenshot) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
@@ -46,8 +67,15 @@ fn main() -> ExitCode {
             }
         },
         Err(e) => {
-            eprintln!("{}: {e}", args.package.display());
+            eprintln!("{}: {e}", package.display());
             ExitCode::FAILURE
         }
     }
+}
+
+/// In a browser there is no command line and no package folder yet: the build opens the UI
+/// gallery (docs/dev-setup.md, UI gallery in a browser).
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    ui::gallery::run(None, false);
 }

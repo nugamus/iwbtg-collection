@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>IWBTG Collection: UI gallery</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0d14; }
+  canvas { display: block; outline: none; }
+</style>
+</head>
+<body>
+<!-- The browser build of iwbtg-client (docs/dev-setup.md, UI gallery in a browser). `pkg/` is
+     what wasm-bindgen writes; it is not committed. -->
+<script type="module">
+  import init from "./pkg/iwbtg-client.js";
+  init();
+</script>
+</body>
+</html>
