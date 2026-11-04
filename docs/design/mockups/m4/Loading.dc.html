@@ -11,6 +11,8 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
 <style>
 body{margin:0}
+@keyframes ld-cherry{from{transform:translateX(0)}to{transform:translateX(-84px)}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
 </style>
 </helmet>
 <!-- Select to gameplay. Starts by itself once loaded, shown for at least 1.5 s. Esc returns to game select. -->
@@ -52,13 +54,19 @@ body{margin:0}
       </div>
     </div>
 
-    <div style="display: flex; flex-direction: column; gap: 10px; padding: 0 4px">
-      <div style="height: 3px; border-radius: 2px; background: rgba(255,255,255,.14); overflow: hidden"><div style="width: 64%; height: 100%; background: #ffffff"></div></div>
-      <div style="display: flex; justify-content: space-between; font-size: 15px; color: #c9cde0">
-        <span>Loading · starts by itself</span>
-        <span><span style="font-weight: 700; color: #f3f4f8">Esc</span> back to game select</span>
+    <div style="display: flex; align-items: center; gap: 16px; padding: 0 4px">
+      <span style="width: 42px; height: 48px; flex: none; overflow: hidden" aria-hidden="true">
+        <img src="/_blob/2a631fa814971f261b2f85280bf1b4ef" alt="" width="84" height="48" style="display: block; image-rendering: pixelated; animation: ld-cherry 640ms steps(2) infinite">
+      </span>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 15px; color: #c9cde0">
+          <span><span style="font-weight: 700; color: #f3f4f8">Loading</span> · starts by itself</span>
+          <span><span style="font-weight: 700; color: #f3f4f8">Esc</span> back to game select</span>
+        </div>
+        <div style="height: 3px; border-radius: 2px; background: rgba(255,255,255,.14); overflow: hidden"><div style="width: 64%; height: 100%; background: linear-gradient(90deg, #ff3d55, #ffffff)"></div></div>
       </div>
     </div>
+    <span style="padding: 0 4px; font-size: 15px; color: #a2a8bc">Tip: hold <span style="font-weight: 700; color: #e3e5ee">R</span> on the results screen to retry straight away.</span>
   </div>
 </div>
 </x-dc>

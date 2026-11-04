@@ -1,12 +1,13 @@
 # M4 mockups: game select, loading, HUD, pause, results (draft)
 
-Draft for #478, second round, built from the user's feedback on PR #480 (2026-11-04). Live canvas: https://claude.ai/artifact/QbvtFDFHrx3HhRmuTGTM9w. The source files are in this folder: `canvas.json` places the artboards, each `.dc.html` is one artboard.
+Draft for #478, third round (round 2 from the user's feedback on PR #480; round 3 adds art on list panels, the title wedge, the footer split and mod select), built from the user's feedback on PR #480 (2026-11-04). Live canvas: https://claude.ai/artifact/QbvtFDFHrx3HhRmuTGTM9w. The source files are in this folder: `canvas.json` places the artboards, each `.dc.html` is one artboard.
 
 Direction: modernise IWBTG without losing its identity. Structure, motion and behaviour follow osu!lazer (MIT); look comes from IWBTG and fangame art. No pixel fonts for UI text (only inside the game-space pause box), no bordered boxes; spacing, type and a restrained accent carry the hierarchy.
 
 | File | Artboard |
 |---|---|
-| `Main.dc.html` | Game select 16:9, Kaenbyou expanded to its entries |
+| `Main.dc.html` | Game select 16:9, Kaenbyou expanded to its entries; every game panel carries its own art |
+| `ModSelect.dc.html` | Mod select sheet over game select |
 | `SelectNoClears.dc.html` | Game select, an entry with no clears |
 | `Loading.dc.html`, `LoadingUnranked.dc.html` | Loading card, ranked and unranked |
 | `Hud169.dc.html`, `Hud169Local.dc.html` | HUD 16:9, Global and Local leaderboard |
@@ -15,7 +16,7 @@ Direction: modernise IWBTG without losing its identity. Structure, motion and be
 | `Pause169.dc.html`, `Pause43.dc.html` | Pause B (the in-game PAUSE box) at 16:9 and 4:3 |
 | `Results169.dc.html`, `Results169Slower.dc.html` | Results 16:9: new PB, and slower than PB |
 | `Results43.dc.html`, `Results43Slower.dc.html` | Results 4:3, same two states |
-| `Backdrop.dc.html` | The one background system (art, blur slider, dim) every screen uses |
+| `Backdrop.dc.html` | The one background system (art, blur slider, dim) every screen uses; five placeholder scenes (castle, forest, city, cave, sea) |
 | `Leaderboard.dc.html`, `RunInfo.dc.html`, `PauseBox.dc.html`, `GameScene.dc.html` | Shared parts the screens import |
 
 ## Shared design language

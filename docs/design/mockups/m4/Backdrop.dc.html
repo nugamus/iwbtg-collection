@@ -27,13 +27,14 @@ body{margin:0}
       <sc-for list="{{stars}}" as="s" hint-placeholder-count="30">
         <rect x="{{s.x}}" y="{{s.y}}" width="{{s.r}}" height="{{s.r}}" fill="#ffffff" opacity="{{s.o}}"></rect>
       </sc-for>
-      <circle cx="{{moonX}}" cy="210" r="120" fill="{{moon}}" opacity=".9"></circle>
-      <circle cx="{{moonX}}" cy="210" r="190" fill="{{moon}}" opacity=".08"></circle>
-      <path d="M0 560 L120 520 L260 548 L380 470 L520 520 L640 452 L790 512 L930 440 L1080 500 L1220 430 L1360 498 L1480 462 L1600 500 L1600 900 L0 900 Z" fill="{{far}}"></path>
-      <path d="M980 440 h48 v-120 h24 v-28 h16 v28 h40 v-28 h16 v28 h24 v120 h40 v-200 h20 v-40 h12 v40 h20 v200 h48 v-90 h20 v-20 h12 v20 h20 v90 h40 v140 h-400 Z" fill="{{mid}}"></path>
-      <path d="M0 640 L180 600 L330 632 L520 584 L700 628 L900 590 L1100 636 L1300 596 L1600 630 L1600 900 L0 900 Z" fill="{{mid}}"></path>
-      <path d="{{spikes}}" fill="{{near}}"></path>
-      <rect x="0" y="800" width="1600" height="100" fill="{{near}}"></rect>
+      <circle cx="{{moonX}}" cy="210" r="{{moonR}}" fill="{{moon}}" opacity=".9"></circle>
+      <circle cx="{{moonX}}" cy="210" r="{{haloR}}" fill="{{moon}}" opacity=".08"></circle>
+      <path d="{{farD}}" fill="{{far}}"></path>
+      <path d="{{midD}}" fill="{{mid}}"></path>
+      <sc-for list="{{lights}}" as="l" hint-placeholder-count="20">
+        <rect x="{{l.x}}" y="{{l.y}}" width="{{l.w}}" height="{{l.h}}" fill="{{l.c}}" opacity="{{l.o}}"></rect>
+      </sc-for>
+      <path d="{{nearD}}" fill="{{near}}"></path>
     </svg>
   </div>
   <div style="position: absolute; inset: 0; background: {{dimBg}}"></div>
@@ -44,7 +45,7 @@ body{margin:0}
   </sc-if>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"hue":{"editor":"range","min":0,"max":360,"step":1,"default":250},"blur":{"editor":"range","min":0,"max":100,"step":1,"unit":"%","default":0},"dim":{"editor":"range","min":0,"max":0.9,"step":0.05,"default":0.3},"tag":{"editor":"enum","options":["bottom-left","top-right","none"],"default":"bottom-left"},"label":{"editor":"text","default":"game art"},"w":{"editor":"text","default":"1600px"},"h":{"editor":"text","default":"900px"},"$preview":{"width":1600,"height":900}}'>
+<script type="text/x-dc" data-dc-script data-props='{"hue":{"editor":"range","min":0,"max":360,"step":1,"default":250},"scene":{"editor":"enum","options":["castle","forest","city","cave","sea"],"default":"castle"},"blur":{"editor":"range","min":0,"max":100,"step":1,"unit":"%","default":0},"dim":{"editor":"range","min":0,"max":0.9,"step":0.05,"default":0.3},"tag":{"editor":"enum","options":["bottom-left","top-right","none"],"default":"bottom-left"},"label":{"editor":"text","default":"game art"},"w":{"editor":"text","default":"1600px"},"h":{"editor":"text","default":"900px"},"$preview":{"width":1600,"height":900}}'>
 class Component extends DCLogic {
   renderVals() {
     const h = Number(this.props.hue ?? 250);
@@ -56,10 +57,51 @@ class Component extends DCLogic {
     const rnd = () => (seed = (seed * 48271) % 2147483647) / 2147483647;
     const stars = [];
     for (let i = 0; i < 46; i++) stars.push({ x: Math.round(rnd() * 1600), y: Math.round(rnd() * 420), r: rnd() > 0.85 ? 4 : 2, o: (0.25 + rnd() * 0.6).toFixed(2) });
-    // a row of spikes along the bottom, the one motif every fangame shares
-    let spikes = 'M0 800';
-    for (let x = 0; x < 1600; x += 64) spikes += ` L${x + 32} ${x % 256 === 0 ? 700 : 736} L${x + 64} 800`;
-    spikes += ' Z';
+    const scene = this.props.scene ?? 'castle';
+    const R = (a, b) => Math.round(a + rnd() * (b - a));
+    // the one motif every fangame shares: a row of spikes
+    const spikes = (base, tall) => { let d = `M0 ${base}`; for (let x = 0; x < 1600; x += 64) d += ` L${x + 32} ${x % 256 === 0 ? base - tall : base - tall * 0.65} L${x + 64} ${base}`; return d + ` L1600 900 L0 900 Z`; };
+    const ridge = (base, amp, step) => { let d = `M0 ${base}`; for (let x = 0; x <= 1600; x += step) d += ` L${x} ${base - R(0, amp)}`; return d + ' L1600 900 L0 900 Z'; };
+    let farD = '', midD = '', nearD = '', lights = [], moonR = 120;
+    if (scene === 'forest') {
+      farD = ridge(560, 90, 80);
+      for (let x = -40; x < 1640; x += R(48, 76)) { const b = R(660, 700), hgt = R(150, 280), w = R(50, 70); midD += `M${x} ${b} L${x + w / 2} ${b - hgt} L${x + w} ${b} Z M${x + w / 2 - 5} ${b} h10 v30 h-10 Z `; }
+      midD += 'M0 690 H1600 V900 H0 Z';
+      nearD = ridge(800, 24, 32);
+      for (let i = 0; i < 34; i++) lights.push({ x: R(0, 1600), y: R(480, 760), w: 3, h: 3, c: '#d8ff8a', o: (0.4 + rnd() * 0.6).toFixed(2) });
+    } else if (scene === 'city') {
+      for (let x = 0; x < 1600; x += R(50, 110)) { const hgt = R(80, 220); farD += `M${x} 600 v-${hgt} h${R(40, 90)} v${hgt} Z `; }
+      farD += 'M0 600 H1600 V900 H0 Z';
+      for (let x = -20; x < 1600; x += R(110, 190)) {
+        const w = R(90, 150), hgt = R(220, 420), top = 720 - hgt;
+        midD += `M${x} 720 v-${hgt} h${w} v${hgt} Z `;
+        for (let wy = top + 24; wy < 700; wy += 30) for (let wx = x + 14; wx < x + w - 14; wx += 22) if (rnd() > 0.55) lights.push({ x: wx, y: wy, w: 10, h: 14, c: rnd() > 0.2 ? '#ffd98a' : '#8fd8ff', o: (0.5 + rnd() * 0.4).toFixed(2) });
+      }
+      midD += 'M0 720 H1600 V900 H0 Z';
+      nearD = spikes(820, 90);
+    } else if (scene === 'cave') {
+      moonR = 0;
+      farD = 'M0 0 H1600 V40 ';
+      for (let x = 1600; x > 0; x -= R(40, 90)) farD += `L${x} ${R(60, 300)} L${x - 20} 50 `;
+      farD += 'L0 40 Z ' + ridge(620, 120, 60);
+      for (let x = 0; x < 1600; x += R(140, 260)) { const w = R(60, 120), hgt = R(120, 260); midD += `M${x} 740 L${x + 10} ${740 - hgt} L${x + w - 10} ${740 - hgt + 30} L${x + w} 740 Z `; }
+      midD += 'M0 740 H1600 V900 H0 Z';
+      nearD = 'M0 820 H1600 V900 H0 Z ';
+      for (let x = 30; x < 1600; x += R(90, 170)) { const hgt = R(40, 110); nearD += `M${x} 820 L${x + 14} ${820 - hgt} L${x + 28} 820 Z `; lights.push({ x: x + 10, y: 820 - hgt + 8, w: 6, h: Math.round(hgt / 2), c: '#7ff3ff', o: '0.75' }); }
+      for (let i = 0; i < 20; i++) lights.push({ x: R(0, 1600), y: R(320, 760), w: 2, h: 2, c: '#7ff3ff', o: (0.3 + rnd() * 0.5).toFixed(2) });
+    } else if (scene === 'sea') {
+      farD = 'M0 560 H1600 V900 H0 Z';
+      for (let i = 0; i < 14; i++) { const w = R(60, 200); lights.push({ x: 1100 + (h % 90) * 3 - w / 2 + R(-30, 30), y: 580 + i * 18, w, h: 3, c: '#ffffff', o: (0.12 + rnd() * 0.25).toFixed(2) }); }
+      for (let i = 0; i < 9; i++) { const x = R(0, 1500), y = R(380, 640), n = R(2, 5); midD += `M${x} ${y} h${32 * n} v32 h-${32 * n} Z `; }
+      nearD = 'M0 790 ';
+      for (let x = 0; x <= 1600; x += 40) nearD += `Q${x + 20} ${x % 80 === 0 ? 770 : 810} ${x + 40} 790 `;
+      nearD += 'L1600 900 L0 900 Z';
+    } else {
+      farD = 'M0 560 L120 520 L260 548 L380 470 L520 520 L640 452 L790 512 L930 440 L1080 500 L1220 430 L1360 498 L1480 462 L1600 500 L1600 900 L0 900 Z';
+      midD = 'M980 440 h48 v-120 h24 v-28 h16 v28 h40 v-28 h16 v28 h24 v120 h40 v-200 h20 v-40 h12 v40 h20 v200 h48 v-90 h20 v-20 h12 v20 h20 v90 h40 v140 h-400 Z M0 640 L180 600 L330 632 L520 584 L700 628 L900 590 L1100 636 L1300 596 L1600 630 L1600 900 L0 900 Z';
+      lights.push({ x: 1128, y: 300, w: 8, h: 12, c: '#ffd98a', o: '0.8' }, { x: 1196, y: 340, w: 8, h: 12, c: '#ffd98a', o: '0.6' }, { x: 1272, y: 420, w: 8, h: 12, c: '#ffd98a', o: '0.7' });
+      nearD = spikes(800, 100);
+    }
     const hsl = (hh, s, l) => `hsl(${((hh % 360) + 360) % 360} ${s}% ${l}%)`;
     return {
       gid: 'sky' + h,
@@ -70,8 +112,8 @@ class Component extends DCLogic {
       far: hsl(h + 10, 35, 19),
       mid: hsl(h, 32, 12),
       near: hsl(h - 10, 30, 6),
-      stars,
-      spikes,
+      stars: scene === 'cave' ? [] : stars,
+      farD, midD, nearD, lights, moonR, haloR: moonR ? 190 : 0,
       filter: `blur(${(blurPct / 100 * 40).toFixed(1)}px)`,
       dimBg: `rgba(5,6,10,${dim.toFixed(2)})`,
       showTag: tag !== 'none' && tag !== false && tag !== 'false',
