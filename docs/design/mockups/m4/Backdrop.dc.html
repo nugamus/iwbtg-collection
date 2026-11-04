@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Background system</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- One background system for select, loading, gameplay, pause and results: the selected game's art, a user blur slider, a dim. The art here is a placeholder. -->
+<div style="position: relative; width: {{w}}; height: {{h}}; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8">
+  <div style="position: absolute; inset: -4%; filter: {{filter}}">
+    <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" width="100%" height="100%" style="display: block; shape-rendering: crispEdges" aria-hidden="true">
+      <defs>
+        <linearGradient id="{{gid}}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="{{skyTop}}"></stop>
+          <stop offset="1" stop-color="{{skyBottom}}"></stop>
+        </linearGradient>
+      </defs>
+      <rect width="1600" height="900" fill="url(#{{gid}})"></rect>
+      <sc-for list="{{stars}}" as="s" hint-placeholder-count="30">
+        <rect x="{{s.x}}" y="{{s.y}}" width="{{s.r}}" height="{{s.r}}" fill="#ffffff" opacity="{{s.o}}"></rect>
+      </sc-for>
+      <circle cx="{{moonX}}" cy="210" r="120" fill="{{moon}}" opacity=".9"></circle>
+      <circle cx="{{moonX}}" cy="210" r="190" fill="{{moon}}" opacity=".08"></circle>
+      <path d="M0 560 L120 520 L260 548 L380 470 L520 520 L640 452 L790 512 L930 440 L1080 500 L1220 430 L1360 498 L1480 462 L1600 500 L1600 900 L0 900 Z" fill="{{far}}"></path>
+      <path d="M980 440 h48 v-120 h24 v-28 h16 v28 h40 v-28 h16 v28 h24 v120 h40 v-200 h20 v-40 h12 v40 h20 v200 h48 v-90 h20 v-20 h12 v20 h20 v90 h40 v140 h-400 Z" fill="{{mid}}"></path>
+      <path d="M0 640 L180 600 L330 632 L520 584 L700 628 L900 590 L1100 636 L1300 596 L1600 630 L1600 900 L0 900 Z" fill="{{mid}}"></path>
+      <path d="{{spikes}}" fill="{{near}}"></path>
+      <rect x="0" y="800" width="1600" height="100" fill="{{near}}"></rect>
+    </svg>
+  </div>
+  <div style="position: absolute; inset: 0; background: {{dimBg}}"></div>
+  <sc-if value="{{showTag}}" hint-placeholder-val="{{ true }}">
+    <div style="position: absolute; top: {{tagT}}; right: {{tagR}}; bottom: {{tagB}}; left: {{tagL}}; display: flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 10px; background: rgba(0,0,0,.45); transform: skewX(-11.31deg)">
+      <span style="transform: skewX(11.31deg); font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: #c9cde0">Placeholder art · {{label}}</span>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"hue":{"editor":"range","min":0,"max":360,"step":1,"default":250},"blur":{"editor":"range","min":0,"max":100,"step":1,"unit":"%","default":0},"dim":{"editor":"range","min":0,"max":0.9,"step":0.05,"default":0.3},"tag":{"editor":"enum","options":["bottom-left","top-right","none"],"default":"bottom-left"},"label":{"editor":"text","default":"game art"},"w":{"editor":"text","default":"1600px"},"h":{"editor":"text","default":"900px"},"$preview":{"width":1600,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const h = Number(this.props.hue ?? 250);
+    const blurPct = Number(this.props.blur ?? 0);
+    const dim = Number(this.props.dim ?? 0.3);
+    const tag = this.props.tag ?? 'bottom-left';
+    // deterministic star field
+    let seed = Math.round(h * 7919) % 2147483647 || 1;
+    const rnd = () => (seed = (seed * 48271) % 2147483647) / 2147483647;
+    const stars = [];
+    for (let i = 0; i < 46; i++) stars.push({ x: Math.round(rnd() * 1600), y: Math.round(rnd() * 420), r: rnd() > 0.85 ? 4 : 2, o: (0.25 + rnd() * 0.6).toFixed(2) });
+    // a row of spikes along the bottom, the one motif every fangame shares
+    let spikes = 'M0 800';
+    for (let x = 0; x < 1600; x += 64) spikes += ` L${x + 32} ${x % 256 === 0 ? 700 : 736} L${x + 64} 800`;
+    spikes += ' Z';
+    const hsl = (hh, s, l) => `hsl(${((hh % 360) + 360) % 360} ${s}% ${l}%)`;
+    return {
+      gid: 'sky' + h,
+      skyTop: hsl(h, 50, 10),
+      skyBottom: hsl(h + 28, 55, 30),
+      moon: hsl(h + 50, 85, 86),
+      moonX: 1100 + Math.round((h % 90) * 3),
+      far: hsl(h + 10, 35, 19),
+      mid: hsl(h, 32, 12),
+      near: hsl(h - 10, 30, 6),
+      stars,
+      spikes,
+      filter: `blur(${(blurPct / 100 * 40).toFixed(1)}px)`,
+      dimBg: `rgba(5,6,10,${dim.toFixed(2)})`,
+      showTag: tag !== 'none' && tag !== false && tag !== 'false',
+      tagT: tag === 'top-right' ? '16px' : 'auto', tagR: tag === 'top-right' ? '20px' : 'auto',
+      tagB: tag === 'top-right' ? 'auto' : '16px', tagL: tag === 'top-right' ? 'auto' : '20px',
+      label: this.props.label ?? 'game art',
+      w: this.props.w ?? '100%', h: this.props.h ?? '100%',
+    };
+  }
+}
+</script>
+</body>
+</html>

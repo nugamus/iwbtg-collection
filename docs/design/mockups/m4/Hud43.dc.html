@@ -8,109 +8,29 @@
 <body>
 <x-dc>
 <helmet>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&amp;family=Silkscreen:wght@400;700&amp;family=Pixelify+Sans:wght@500;700&amp;family=Barlow+Semi+Condensed:wght@400;500;600;700&amp;display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;family=Pixelify+Sans:wght@500;600;700&amp;display=swap">
 <style>
 body{margin:0}
-/* layout: 1024x768, game at 1x leaves 112px side bands and 80px top and bottom bands; the HUD packs into those */
-.q-root{--ground:#0a0c18;--panel:rgba(9,11,24,.78);--edge:#2d335e;--ink:#eef0fa;--muted:#a3a9cc;--cherry:#ff3b55;--ahead:#4be08f;--behind:#ff8f5a;--gold:#ffd34d;position:relative;width:1024px;height:768px;overflow:hidden;background:var(--ground);color:var(--ink);font-family:'Barlow Semi Condensed',system-ui,sans-serif}
-.q-bg{position:absolute;left:112px;top:80px;width:800px;height:608px;transform:scale(1.6);filter:blur(6px) brightness(.42) saturate(1.25)}
-.q-game{position:absolute;left:112px;top:80px;width:800px;height:608px;box-shadow:0 0 0 2px #05060d,0 0 0 4px rgba(255,255,255,.09)}
-.q-lbl{font-family:'Silkscreen',monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-.q-num{font-family:'Press Start 2P',monospace;font-variant-numeric:tabular-nums}
-.ahead{color:var(--ahead)}.behind{color:var(--behind)}.gold{color:var(--gold)}.dim{color:#7d84ad}
-.q-cell{display:flex;flex-direction:column;gap:6px;padding:10px 12px}
-.q-cell.cur{background:rgba(255,59,85,.18)}
-.q-key{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:76px;height:60px;background:#12152b;color:var(--muted);box-shadow:0 -3px 0 0 var(--edge),0 3px 0 0 var(--edge),-3px 0 0 0 var(--edge),3px 0 0 0 var(--edge)}
-.q-key.on{background:var(--cherry);color:#fff;box-shadow:0 -3px 0 0 #ff8fa0,0 3px 0 0 #a3122a,-3px 0 0 0 #ff8fa0,3px 0 0 0 #a3122a}
-.q-key b{font-family:'Press Start 2P',monospace;font-size:14px;font-weight:400}
-.q-key span{font-family:'Silkscreen',monospace;font-size:11px}
-.q-pip{width:12px;height:12px;background:#2d335e}.q-pip.done{background:var(--ink)}.q-pip.now{background:var(--cherry)}
 </style>
 </helmet>
-<div class="q-root">
-  <div class="q-bg"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div>
-  <div class="q-game"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div>
-
-  <!-- top band -->
-  <div style="position: absolute; left: 0; top: 0; width: 1024px; height: 80px; box-sizing: border-box; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; background: rgba(9,11,24,.6)">
-    <div style="display: flex; flex-direction: column; gap: 8px">
-      <div style="display: flex; align-items: baseline; gap: 10px">
-        <span style="font-family: 'Pixelify Sans', monospace; font-size: 24px; font-weight: 700">Stage 5</span>
-        <span class="q-lbl">of 7 · Example Fangame</span>
-      </div>
-      <div style="display: flex; gap: 6px" aria-label="Stage 5 of 7"><div class="q-pip done"></div><div class="q-pip done"></div><div class="q-pip done"></div><div class="q-pip done"></div><div class="q-pip now"></div><div class="q-pip"></div><div class="q-pip"></div></div>
-    </div>
-    <sc-if value="{{showTimer}}" hint-placeholder-val="{{ true }}">
-    <div style="display: flex; align-items: center; gap: 20px">
-      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px">
-        <span class="q-lbl" style="color: #ff8fa0">Ranked · Very Hard</span>
-        <span class="q-lbl ahead">−9.78 at Stage 4</span>
-      </div>
-      <span class="q-num" style="font-size: 32px">7:52.34</span>
-    </div>
+<!-- 1024x768: the game shrinks to 0.8x (640x486) so both side panels keep their room. -->
+<div style="position: relative; width: 1024px; height: 768px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8">
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1024px" h="768px" hue="250" blur="{{blur}}" dim="0.45" tag="bottom-left" label="I wanna be the Kaenbyou" hint-size="1024px,768px"></dc-import></div>
+  <div style="position: absolute; left: 204px; top: 141px; width: 640px; height: 487px; overflow: hidden; box-shadow: 0 0 40px rgba(0,0,0,.6)">
+    <div style="width: 800px; height: 608px; transform: scale(.8); transform-origin: 0 0"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div>
+    <sc-if value="{{paused}}" hint-placeholder-val="{{ false }}">
+      <div style="position: absolute; inset: 0; background: rgba(0,0,0,.5)"></div>
     </sc-if>
   </div>
-
-  <!-- left band: splits as a column of stage cells -->
-  <sc-if value="{{showSplits}}" hint-placeholder-val="{{ true }}">
-  <div style="position: absolute; left: 0; top: 80px; width: 108px; height: 608px; display: flex; flex-direction: column; justify-content: space-between; background: rgba(9,11,24,.6)">
-    <sc-for list="{{splits}}" as="r" hint-placeholder-count="7">
-      <div class="q-cell {{r.row}}">
-        <span class="q-lbl" style="color: #eef0fa">{{r.short}}</span>
-        <span class="q-num {{r.cls}}" style="font-size: 10px">{{r.delta}}</span>
-        <span class="q-num {{r.tcls}}" style="font-size: 10px">{{r.time}}</span>
-      </div>
-    </sc-for>
-  </div>
-  </sc-if>
-
-  <!-- right band: input display stacked -->
-  <sc-if value="{{showInputs}}" hint-placeholder-val="{{ true }}">
-  <div style="position: absolute; left: 916px; top: 80px; width: 108px; height: 608px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px">
-    <span class="q-lbl">Input</span>
-    <div class="q-key"><b>&lt;</b><span>Left</span></div>
-    <div class="q-key on"><b>&gt;</b><span>Right</span></div>
-    <div class="q-key on"><b>Sh</b><span>Jump</span></div>
-    <div class="q-key"><b>Z</b><span>Shoot</span></div>
-  </div>
-  </sc-if>
-
-  <!-- bottom band -->
-  <div style="position: absolute; left: 0; top: 688px; width: 1024px; height: 80px; box-sizing: border-box; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; background: rgba(9,11,24,.6)">
-    <sc-if value="{{showDeaths}}" hint-placeholder-val="{{ true }}">
-    <div style="display: flex; align-items: center; gap: 14px">
-      <svg width="22" height="26" viewBox="0 0 22 26" aria-hidden="true" style="shape-rendering: crispEdges"><rect x="10" y="0" width="2" height="9" fill="#2f9a43"></rect><rect x="12" y="0" width="7" height="3" fill="#47c45d"></rect><rect x="3" y="9" width="16" height="16" fill="#d3122c"></rect><rect x="1" y="12" width="20" height="10" fill="#d3122c"></rect><rect x="5" y="12" width="4" height="4" fill="#ff9aa7"></rect></svg>
-      <span class="q-num" style="font-size: 22px">215</span>
-      <span style="font-size: 16px; color: #a3a9cc">Stage 5: 30</span>
-    </div>
-    </sc-if>
-    <sc-if value="{{showSplits}}" hint-placeholder-val="{{ true }}">
-    <span style="font-size: 16px; color: #a3a9cc">Sum of best <b class="q-num" style="font-size: 12px; color: #eef0fa; font-weight: 400">12:20.00</b></span>
-    </sc-if>
-    <span style="font-size: 16px; color: #a3a9cc">Esc pause · R last save · Q restart</span>
-  </div>
+  <div style="position: absolute; left: 0; top: 200px"><dc-import name="Leaderboard" scenario="p25" density="noflag" width="192" rows="7" hint-size="192px,360px"></dc-import></div>
+  <div style="position: absolute; left: 860px; top: 190px"><dc-import name="RunInfo" layout="compact" paused="{{paused}}" time="38:02.56" width="152" hint-size="152px,380px"></dc-import></div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"showTimer":{"editor":"boolean","default":true,"section":"HUD"},"showSplits":{"editor":"boolean","default":true,"section":"HUD"},"showDeaths":{"editor":"boolean","default":true,"section":"HUD"},"showInputs":{"editor":"boolean","default":true,"section":"HUD"},"$preview":{"width":1024,"height":768}}'>
+<script type="text/x-dc" data-dc-script data-props='{"blur":{"editor":"range","min":0,"max":100,"step":1,"unit":"%","default":60},"paused":{"editor":"boolean","default":false},"$preview":{"width":1024,"height":768}}'>
 class Component extends DCLogic {
-renderVals() {
-const p = this.props;
-return {
-showTimer: p.showTimer ?? true,
-showSplits: p.showSplits ?? true,
-showDeaths: p.showDeaths ?? true,
-showInputs: p.showInputs ?? true,
-splits: [
-{ short: 'Stage 1', delta: '−2.68', cls: 'ahead', time: '0:58.42', tcls: '', row: '' },
-{ short: 'Stage 2', delta: '+1.10', cls: 'behind', time: '2:40.60', tcls: '', row: '' },
-{ short: 'Stage 3', delta: '−7.32', cls: 'gold', time: '4:46.20', tcls: '', row: '' },
-{ short: 'Stage 4', delta: '−9.78', cls: 'ahead', time: '6:17.24', tcls: '', row: '' },
-{ short: 'Stage 5', delta: '...', cls: 'dim', time: '8:46.90', tcls: 'dim', row: 'cur' },
-{ short: 'Stage 6', delta: '', cls: '', time: '10:42.20', tcls: 'dim', row: '' },
-{ short: 'Boss', delta: '', cls: '', time: '12:51.30', tcls: 'dim', row: '' }
-]
-};
-}
+  renderVals() {
+    return { blur: this.props.blur ?? 60, paused: this.props.paused === true || this.props.paused === 'true' };
+  }
 }
 </script>
 </body>

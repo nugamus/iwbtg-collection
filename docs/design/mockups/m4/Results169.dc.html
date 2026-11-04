@@ -2,150 +2,252 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Results 16:9</title>
+<title>Results</title>
 <script src="./support.js"></script>
 </head>
 <body>
 <x-dc>
 <helmet>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&amp;family=Silkscreen:wght@400;700&amp;family=Pixelify+Sans:wght@500;700&amp;family=Barlow+Semi+Condensed:wght@400;500;600;700&amp;display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
 <style>
 body{margin:0}
-/* layout: verdict column on the left (time, rank, deaths), evidence on the right (splits, deaths graph), replay actions along the bottom */
-.r-panel{background:rgba(9,11,24,.84);box-shadow:0 -3px 0 0 #2d335e,0 3px 0 0 #2d335e,-3px 0 0 0 #2d335e,3px 0 0 0 #2d335e}
-.r-lbl{font-family:'Silkscreen',monospace;font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:#a3a9cc}
-.r-num{font-family:'Press Start 2P',monospace;font-variant-numeric:tabular-nums}
-.ahead{color:#4be08f}.behind{color:#ff8f5a}.gold{color:#ffd34d}
-.r-tr{display:grid;grid-template-columns:1.3fr .7fr 1fr 1fr 1fr 1fr;align-items:center;height:42px;font-size:21px;font-weight:600;border-bottom:2px solid #1c2142}
-.r-tr .r-num{font-size:13px;text-align:right}
-.r-btn{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:12px;height:64px;padding:0 28px;background:#12152b;font-family:'Pixelify Sans',monospace;font-size:24px;font-weight:700;color:#eef0fa;cursor:pointer;box-shadow:0 -3px 0 0 #2d335e,0 3px 0 0 #2d335e,-3px 0 0 0 #2d335e,3px 0 0 0 #2d335e}
-.r-btn:focus-visible{outline:4px solid #ffd34d;outline-offset:6px}
-.r-btn.pri{background:#ff3b55;box-shadow:0 -3px 0 0 #ff8fa0,0 3px 0 0 #a3122a,-3px 0 0 0 #ff8fa0,3px 0 0 0 #a3122a}
-.r-btn small{font-family:'Silkscreen',monospace;font-size:13px;font-weight:400;opacity:.85}
 </style>
 </helmet>
-<div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0a0c18; color: #eef0fa; font-family: 'Barlow Semi Condensed', system-ui, sans-serif">
-  <div style="position: absolute; left: 560px; top: 236px; width: 800px; height: 608px; transform: scale(2.6); filter: blur(9px) brightness(.3) saturate(1.2)"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div>
+<!-- One page, cleared runs only. Hero time + placement, rank change, rivals frozen at your final position, then splits, deaths per stage, death timeline and an optional heatmap. No bordered panels: spacing, type and quiet colour carry the hierarchy. -->
+<div style="position: relative; width: {{W}}px; height: {{H}}px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="{{W}}px" h="{{H}}px" hue="250" blur="35" dim="0.62" tag="top-right" label="I wanna be the Kaenbyou" hint-size="100%,100%"></dc-import></div>
 
-  <!-- header -->
-  <div style="position: absolute; left: 96px; top: 64px; width: 1728px; display: flex; justify-content: space-between; align-items: flex-end">
-    <div style="display: flex; flex-direction: column; gap: 8px">
-      <span class="r-lbl" style="color: #ff8fa0">Clear · 2026-11-04 21:14</span>
-      <span style="font-family: 'Pixelify Sans', monospace; font-size: 56px; font-weight: 700; line-height: 1">Example Fangame</span>
-    </div>
-    <div style="display: flex; gap: 12px">
-      <span class="r-lbl" style="padding: 8px 14px; background: #ff3b55; color: #fff">Ranked</span>
-      <span class="r-lbl" style="padding: 8px 14px; background: #12152b; color: #eef0fa; box-shadow: 0 0 0 2px #2d335e">Very Hard</span>
-    </div>
-  </div>
+  <div style="position: absolute; inset: 0; box-sizing: border-box; padding: {{pad}}; display: grid; grid-template-columns: {{rivalsW}}px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; column-gap: {{colGap}}px; row-gap: {{rowGap}}px">
 
-  <!-- verdict -->
-  <div class="r-panel" style="position: absolute; left: 96px; top: 200px; width: 640px; height: 712px; box-sizing: border-box; padding: 40px 44px; display: flex; flex-direction: column; justify-content: space-between">
-    <div style="display: flex; flex-direction: column; gap: 14px">
-      <span class="r-lbl">Time</span>
-      <span class="r-num" style="font-size: 64px; line-height: 1">12:34.56</span>
-      <div style="display: flex; align-items: center; gap: 14px">
-        <span class="r-num gold" style="font-size: 16px; padding: 8px 12px; background: rgba(255,211,77,.12)">New PB −16.74</span>
-        <span style="font-size: 20px; color: #a3a9cc">37,728 ticks</span>
-      </div>
+    <!-- header -->
+    <div style="grid-column: 1 / 3; display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; padding-left: 10px">
+      <span style="font-family: 'Barlow Condensed', sans-serif; font-size: {{titleSize}}px; font-weight: 700">I wanna be the Kaenbyou</span>
+      <span style="font-size: {{smallSize}}px; font-weight: 600; color: #c9cde0">Very Hard · Any%</span>
+      <span style="font-size: {{smallSize}}px; color: #a2a8bc">Cleared 3 Nov 2026, 21:14</span>
     </div>
-    <div style="display: flex; flex-direction: column; gap: 12px; padding-top: 28px; border-top: 2px solid #2d335e">
-      <span class="r-lbl">Leaderboard · Very Hard</span>
-      <div style="display: flex; align-items: baseline; gap: 18px">
-        <span class="r-num" style="font-size: 52px">#47</span>
-        <span style="font-size: 24px; color: #a3a9cc">of 1,203 players</span>
-      </div>
-      <span style="font-size: 20px; color: #a3a9cc">Up from #61 · pending server check</span>
-    </div>
-    <div style="display: flex; align-items: center; gap: 20px; padding-top: 28px; border-top: 2px solid #2d335e">
-      <svg width="44" height="52" viewBox="0 0 22 26" aria-hidden="true" style="shape-rendering: crispEdges; flex: none"><rect x="10" y="0" width="2" height="9" fill="#2f9a43"></rect><rect x="12" y="0" width="7" height="3" fill="#47c45d"></rect><rect x="3" y="9" width="16" height="16" fill="#d3122c"></rect><rect x="1" y="12" width="20" height="10" fill="#d3122c"></rect><rect x="5" y="12" width="4" height="4" fill="#ff9aa7"></rect><rect x="13" y="19" width="4" height="3" fill="#8e0a1c"></rect></svg>
-      <div style="display: flex; flex-direction: column; gap: 8px">
-        <span class="r-lbl">Deaths</span>
-        <span class="r-num" style="font-size: 36px">342</span>
-      </div>
-      <span style="margin-left: auto; font-size: 20px; color: #a3a9cc; text-align: right">PB run: 389<br>Fewest-deaths board #188</span>
-    </div>
-    <div style="display: flex; justify-content: space-between; padding-top: 28px; border-top: 2px solid #2d335e; font-size: 22px">
-      <span>Sum of best <b class="r-num" style="font-size: 15px; font-weight: 400">12:20.00</b></span>
-      <span style="color: #a3a9cc">Possible timesave <b class="r-num gold" style="font-size: 15px; font-weight: 400">14.56</b></span>
-    </div>
-  </div>
 
-  <!-- evidence -->
-  <div class="r-panel" style="position: absolute; left: 816px; top: 200px; width: 1008px; height: 712px; box-sizing: border-box; padding: 32px 40px; display: flex; flex-direction: column; gap: 28px">
-    <div style="display: flex; flex-direction: column">
-      <div class="r-tr" style="height: 30px; border-bottom-color: #2d335e">
-        <span class="r-lbl">Stage</span><span class="r-lbl" style="text-align: right">Deaths</span><span class="r-lbl" style="text-align: right">Segment</span><span class="r-lbl" style="text-align: right">Best</span><span class="r-lbl" style="text-align: right">Split</span><span class="r-lbl" style="text-align: right">vs PB</span>
-      </div>
-      <sc-for list="{{rows}}" as="r" hint-placeholder-count="7">
-        <div class="r-tr">
-          <span>{{r.name}}</span>
-          <span class="r-num">{{r.deaths}}</span>
-          <span class="r-num {{r.scls}}">{{r.seg}}</span>
-          <span class="r-num" style="color: #a3a9cc">{{r.best}}</span>
-          <span class="r-num">{{r.split}}</span>
-          <span class="r-num {{r.cls}}">{{r.delta}}</span>
+    <!-- rivals: the gameplay leaderboard, frozen at your final position, #1 pinned -->
+    <div style="display: flex; flex-direction: column; gap: 10px; min-height: 0">
+      <dc-import name="Leaderboard" scenario="{{lbScenario}}" density="{{lbDensity}}" width="{{rivalsW}}" rows="{{lbRows}}" hint-size="300px,560px"></dc-import>
+    </div>
+
+    <!-- main column -->
+    <div style="display: flex; flex-direction: column; gap: {{sectionGap}}px; min-width: 0; min-height: 0">
+
+      <!-- hero -->
+      <div style="display: flex; align-items: flex-end; gap: {{heroGap}}px; flex-wrap: wrap">
+        <div style="display: flex; align-items: baseline; line-height: .82; font-family: 'Barlow Condensed', sans-serif; font-weight: 600">
+          <span style="font-size: {{heroSize}}px; letter-spacing: -.02em">{{heroMain}}</span>
+          <span style="font-size: {{heroCsSize}}px; color: #c9cde0">{{heroCs}}</span>
         </div>
-      </sc-for>
-    </div>
-
-    <div style="display: flex; flex-direction: column; gap: 14px; flex: 1">
-      <div style="display: flex; justify-content: space-between">
-        <span class="r-lbl">Deaths per stage</span>
-        <span class="r-lbl">Most: Stage 3 · 77</span>
+        <div style="display: flex; flex-direction: column; gap: 6px; padding-bottom: 4px">
+          <sc-if value="{{isPb}}" hint-placeholder-val="{{ true }}">
+            <div style="align-self: flex-start; height: 26px; padding: 0 12px; border-radius: 10px; background: #ffffff; display: flex; align-items: center; transform: skewX(-11.31deg)">
+              <span style="transform: skewX(11.31deg); font-size: 13px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #0b0d14">New PB</span>
+            </div>
+          </sc-if>
+          <sc-if value="{{notPb}}" hint-placeholder-val="{{ false }}">
+            <span style="font-size: {{smallSize}}px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a2a8bc">Not a PB</span>
+          </sc-if>
+          <div style="display: flex; align-items: baseline; gap: 10px; line-height: 1">
+            <span style="font-family: 'Barlow Condensed', sans-serif; font-size: {{placeSize}}px; font-weight: 700; color: {{placeColor}}">{{placeText}}</span>
+            <span style="font-size: {{smallSize}}px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #c9cde0">{{placeLabel}}</span>
+          </div>
+        </div>
       </div>
-      <div role="img" aria-label="Deaths per stage: Stage 1 21, Stage 2 48, Stage 3 77, Stage 4 39, Stage 5 64, Stage 6 52, Boss 41" style="flex: 1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 24px; align-items: end; border-bottom: 2px solid #2d335e; background: repeating-linear-gradient(0deg, transparent 0 39px, #1c2142 39px 40px)">
-        <sc-for list="{{bars}}" as="b" hint-placeholder-count="7">
-          <div style="display: flex; flex-direction: column; align-items: center; gap: 8px">
-            <span class="r-num" style="font-size: 12px">{{b.n}}</span>
-            <div style="width: 100%; height: {{b.h}}; background: {{b.c}}"></div>
+
+      <!-- rank change -->
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; max-width: {{changeMax}}px">
+        <sc-for list="{{changes}}" as="c" hint-placeholder-count="3">
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">{{c.label}}</span>
+            <span style="font-size: {{changeSize}}px; font-weight: 600; white-space: nowrap">{{c.value}}</span>
+            <span style="font-size: {{smallSize}}px; font-weight: 600; color: {{c.noteColor}}; white-space: nowrap">{{c.note}}</span>
           </div>
         </sc-for>
       </div>
-      <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 24px; text-align: center; font-size: 18px; color: #a3a9cc">
-        <span>Stage 1</span><span>Stage 2</span><span>Stage 3</span><span>Stage 4</span><span>Stage 5</span><span>Stage 6</span><span>Boss</span>
+
+      <!-- details -->
+      <div style="display: grid; grid-template-columns: minmax(0, {{splitFr}}fr) minmax(0, 1fr); gap: {{detailGap}}px; min-height: 0">
+
+        <!-- splits -->
+        <div style="display: flex; flex-direction: column; font-size: {{tableSize}}px">
+          <div style="display: grid; grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(0, 1fr)); height: {{headH}}px; align-items: end; padding-bottom: 6px; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">
+            <span>Stage</span><span style="text-align: right">Segment</span><span style="text-align: right">Split</span><span style="text-align: right">vs PB</span>
+          </div>
+          <sc-for list="{{splits}}" as="s" hint-placeholder-count="7">
+            <div style="display: grid; grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(0, 1fr)); height: {{rowH}}px; align-items: center; border-top: 1px solid rgba(255,255,255,.07)">
+              <span style="font-weight: 600">{{s.name}}</span>
+              <span style="text-align: right; color: {{s.segColor}}; font-weight: {{s.segWeight}}">{{s.goldMark}}{{s.seg}}</span>
+              <span style="text-align: right; color: #c9cde0">{{s.split}}</span>
+              <span style="text-align: right; font-weight: 600; color: {{s.deltaColor}}">{{s.delta}}</span>
+            </div>
+          </sc-for>
+          <div style="display: grid; grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(0, 1fr)); height: {{rowH}}px; align-items: center; border-top: 1px solid rgba(255,255,255,.22); color: #c9cde0">
+            <span>Sum of best</span><span></span><span style="text-align: right; font-weight: 600; color: #f3f4f8">{{sob}}</span><span></span>
+          </div>
+          <div style="display: grid; grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(0, 1fr)); height: {{rowH}}px; align-items: center; color: #c9cde0">
+            <span>Possible time save</span><span></span><span style="text-align: right; font-weight: 600; color: #f3f4f8">{{save}}</span><span></span>
+          </div>
+          <span style="padding-top: 8px; font-size: 12px; color: #a2a8bc">{{legend}}</span>
+        </div>
+
+        <!-- charts -->
+        <div style="display: flex; flex-direction: column; gap: {{chartGap}}px; min-width: 0">
+          <div style="display: flex; flex-direction: column; gap: 10px">
+            <div style="display: flex; justify-content: space-between; align-items: baseline">
+              <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Deaths per stage</span>
+              <span style="font-size: {{smallSize}}px; font-weight: 600">{{deathTotal}} total</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; height: {{chartH}}px; align-items: end; border-bottom: 1px solid rgba(255,255,255,.18)">
+              <sc-for list="{{bars}}" as="b" hint-placeholder-count="7">
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%">
+                  <span style="font-size: 12px; font-weight: 600; color: #c9cde0">{{b.n}}</span>
+                  <div style="width: 60%; height: {{b.h}}%; border-radius: 3px 3px 0 0; background: {{b.fill}}"></div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; font-size: 12px; color: #a2a8bc; text-align: center">
+              <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>Boss</span>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <div style="display: flex; justify-content: space-between; align-items: baseline">
+              <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Death timeline</span>
+              <span style="font-size: 12px; color: #a2a8bc">0:00 → {{heroMain}}{{heroCs}}</span>
+            </div>
+            <svg viewBox="0 0 1000 40" preserveAspectRatio="none" width="100%" height="{{tlH}}" style="display: block" role="img" aria-label="Each death as a tick along the run; stage boundaries marked">
+              <rect x="0" y="19.5" width="1000" height="1" fill="rgba(255,255,255,.18)"></rect>
+              <path d="{{tlBounds}}" stroke="rgba(255,255,255,.35)" stroke-width="2" fill="none"></path>
+              <path d="{{tlPath}}" stroke="rgba(255,255,255,.55)" stroke-width="1" fill="none"></path>
+            </svg>
+          </div>
+
+          <sc-if value="{{showHeat}}" hint-placeholder-val="{{ true }}">
+            <div style="display: flex; gap: 20px; align-items: flex-start">
+              <div style="position: relative; width: 256px; height: 195px; flex: none; overflow: hidden; border-radius: 6px">
+                <div style="width: 800px; height: 608px; transform: scale(.32); transform-origin: 0 0; filter: saturate(.4) brightness(.7)"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div>
+                <sc-for list="{{heat}}" as="d" hint-placeholder-count="6">
+                  <div style="position: absolute; left: {{d.x}}px; top: {{d.y}}px; width: {{d.r}}px; height: {{d.r}}px; margin: {{d.m}}px 0 0 {{d.m}}px; border-radius: 50%; background: {{d.bg}}"></div>
+                </sc-for>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 2px">
+                <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Where you died · Stage 5</span>
+                <span style="font-size: 14px; color: #c9cde0; max-width: 240px; line-height: 1.4">Shown when you hover or select a stage in the splits. 288 deaths, most on the spike floor.</span>
+                <span style="align-self: flex-start; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #ffc46b">Optional · may be cut</span>
+              </div>
+            </div>
+          </sc-if>
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- actions -->
-  <div style="position: absolute; left: 96px; top: 960px; width: 1728px; display: flex; justify-content: space-between">
-    <div style="display: flex; gap: 20px">
-      <button class="r-btn" type="button">Retry <small>Q</small></button>
-      <button class="r-btn" type="button">Game list <small>Esc</small></button>
-    </div>
-    <div style="display: flex; gap: 20px">
-      <button class="r-btn" type="button">Save replay</button>
-      <button class="r-btn" type="button">Watch replay</button>
-      <button class="r-btn pri" type="button">Upload to leaderboard</button>
+    <!-- footer -->
+    <div style="grid-column: 1 / 3; display: flex; align-items: center; gap: 12px; padding-left: 10px">
+      <a href="Main.dc.html" style="height: {{btnH}}px; padding: 0 22px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: center; transform: skewX(-11.31deg); text-decoration: none; color: #f3f4f8">
+        <span style="transform: skewX(11.31deg); font-size: {{btnSize}}px; font-weight: 600">Back</span>
+      </a>
+      <span style="flex: 1"></span>
+      <button type="button" style="all: unset; height: {{btnH}}px; padding: 0 22px; border-radius: 10px; background: #ff3d55; display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer">
+        <span style="transform: skewX(11.31deg); display: flex; align-items: baseline; gap: 10px; font-size: {{btnSize}}px; font-weight: 700; color: #ffffff">Retry <span style="font-size: 12px; font-weight: 600; opacity: .8">hold R</span></span>
+      </button>
+      <sc-for list="{{actions}}" as="a" hint-placeholder-count="3">
+        <button type="button" style="all: unset; height: {{btnH}}px; padding: 0 20px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer">
+          <span style="transform: skewX(11.31deg); font-size: {{btnSize}}px; font-weight: 600; color: #f3f4f8">{{a}}</span>
+        </button>
+      </sc-for>
     </div>
   </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1920,"height":1080}}'>
+<script type="text/x-dc" data-dc-script data-props='{"layout":{"editor":"enum","options":["169","43"],"default":"169"},"scenario":{"editor":"enum","options":["pb","slower"],"default":"pb"},"$preview":{"width":1920,"height":1080}}'>
 class Component extends DCLogic {
-renderVals() {
-return {
-rows: [
-{ name: 'Stage 1', deaths: '21', seg: '0:58.42', scls: '', best: '0:57.90', split: '0:58.42', delta: '−2.68', cls: 'ahead' },
-{ name: 'Stage 2', deaths: '48', seg: '1:42.18', scls: '', best: '1:36.22', split: '2:40.60', delta: '+1.10', cls: 'behind' },
-{ name: 'Stage 3', deaths: '77', seg: '2:05.60', scls: 'gold', best: '2:05.60', split: '4:46.20', delta: '−7.32', cls: 'ahead' },
-{ name: 'Stage 4', deaths: '39', seg: '1:31.04', scls: '', best: '1:29.86', split: '6:17.24', delta: '−9.78', cls: 'ahead' },
-{ name: 'Stage 5', deaths: '64', seg: '2:21.36', scls: '', best: '2:17.02', split: '8:38.60', delta: '−8.30', cls: 'ahead' },
-{ name: 'Stage 6', deaths: '52', seg: '1:49.92', scls: 'gold', best: '1:49.92', split: '10:28.52', delta: '−13.68', cls: 'ahead' },
-{ name: 'Boss', deaths: '41', seg: '2:06.04', scls: '', best: '2:03.48', split: '12:34.56', delta: '−16.74', cls: 'ahead' }
-],
-bars: [
-{ n: '21', h: '44px', c: '#a3a9cc' },
-{ n: '48', h: '100px', c: '#a3a9cc' },
-{ n: '77', h: '160px', c: '#ff3b55' },
-{ n: '39', h: '81px', c: '#a3a9cc' },
-{ n: '64', h: '133px', c: '#a3a9cc' },
-{ n: '52', h: '108px', c: '#a3a9cc' },
-{ n: '41', h: '85px', c: '#a3a9cc' }
-]
-};
-}
+  renderVals() {
+    const L = String(this.props.layout ?? '169');
+    const S = this.props.scenario ?? 'pb';
+    const big = L !== '43';
+    const pb = S === 'pb';
+    const fmt = (s) => {
+      const c = Math.round(Math.abs(s) * 100), h = Math.floor(c / 360000), m = Math.floor(c / 6000) % 60, sec = Math.floor(c / 100) % 60, cs = c % 100;
+      const p = (n) => String(n).padStart(2, '0');
+      return (h ? h + ':' + p(m) : String(m)) + ':' + p(sec) + '.' + p(cs);
+    };
+    const dfmt = (d) => {
+      const a = Math.abs(d), sign = d < 0 ? '−' : '+';
+      return sign + (a < 60 ? a.toFixed(2) : fmt(a));
+    };
+    const names = ['Stage 1', 'Stage 2', 'Stage 3', 'Stage 4', 'Stage 5', 'Stage 6', 'Boss'];
+    const oldPb = [212.40, 268.10, 301.56, 344.20, 415.88, 380.12, 457.86];
+    const newPb = [205.84, 271.32, 288.10, 336.48, 392.14, 371.90, 426.68];
+    const slow = [210.06, 266.90, 318.44, 352.12, 430.76, 369.80, 450.32];
+    const bestBefore = [207.12, 262.40, 295.02, 330.10, 401.66, 368.44, 421.30];
+    const run = pb ? newPb : slow;
+    const ref = pb ? oldPb : newPb;
+    const best = pb ? bestBefore : bestBefore.map((b, i) => Math.min(b, newPb[i]));
+    const deaths = pb ? [38, 61, 104, 152, 288, 197, 444] : [44, 70, 131, 160, 301, 180, 402];
+    let cr = 0, cp = 0;
+    const splits = run.map((seg, i) => {
+      cr += seg; cp += ref[i];
+      const gold = seg < best[i];
+      const d = cr - cp;
+      return {
+        name: names[i], seg: fmt(seg), split: fmt(cr), delta: dfmt(d),
+        deltaColor: d < 0 ? '#45d483' : '#ff6b6b',
+        segColor: gold ? '#ffc93c' : '#f3f4f8', segWeight: gold ? 700 : 500, goldMark: gold ? '★ ' : '',
+      };
+    });
+    const total = run.reduce((a, b) => a + b, 0);
+    const sobV = run.map((s, i) => Math.min(s, best[i])).reduce((a, b) => a + b, 0);
+    const pbTotal = pb ? oldPb.reduce((a, b) => a + b, 0) : newPb.reduce((a, b) => a + b, 0);
+    const heroFull = fmt(total), dot = heroFull.lastIndexOf('.');
+    const dmax = Math.max(...deaths);
+    const bars = deaths.map((n) => ({ n, h: Math.round((n / dmax) * 82), fill: n === dmax ? 'rgba(255,255,255,.85)' : 'rgba(255,255,255,.38)' }));
+    // death timeline: each death a tick at its time in the run
+    let acc = 0, tl = '', bounds = '', seed = pb ? 17 : 29;
+    const rnd = () => (seed = (seed * 48271) % 2147483647) / 2147483647;
+    run.forEach((seg, i) => {
+      for (let k = 0; k < deaths[i]; k++) {
+        const x = ((acc + seg * Math.pow(rnd(), 0.7)) / total) * 1000;
+        const hgt = 6 + rnd() * 10;
+        tl += `M${x.toFixed(1)} ${(20 - hgt).toFixed(1)}v${(hgt * 2).toFixed(1)}`;
+      }
+      acc += seg;
+      if (i < run.length - 1) bounds += `M${((acc / total) * 1000).toFixed(1)} 2v36`;
+    });
+    const heat = [[150, 175, 46, .55], [176, 176, 38, .5], [124, 176, 30, .4], [196, 104, 34, .45], [140, 140, 26, .35], [92, 150, 22, .3], [210, 176, 26, .4], [232, 90, 22, .3]]
+      .map(([x, y, r, a]) => ({ x, y, r, m: -r / 2, bg: `radial-gradient(circle, rgba(255,94,77,${a}) 0, rgba(255,94,77,0) 70%)` }));
+    const changes = pb ? [
+      { label: 'Global placement', value: '#30 → #25', note: '▲ 5 places', noteColor: '#45d483' },
+      { label: 'Personal best', value: '39:40.12 → ' + heroFull, note: dfmt(total - pbTotal), noteColor: '#45d483' },
+      { label: 'Account', value: '13 games cleared', note: '48,213 total deaths', noteColor: '#c9cde0' },
+    ] : [
+      { label: 'Global placement', value: '#25', note: 'unchanged', noteColor: '#a2a8bc' },
+      { label: 'Personal best', value: fmt(pbTotal) + ' stands', note: dfmt(total - pbTotal) + ' this run', noteColor: '#ff6b6b' },
+      { label: 'Account', value: '13 games cleared', note: '49,501 total deaths', noteColor: '#c9cde0' },
+    ];
+    return {
+      W: big ? 1920 : 1024, H: big ? 1080 : 768,
+      pad: big ? '40px 64px 36px 54px' : '20px 24px 18px 14px',
+      rivalsW: big ? 300 : 206, colGap: big ? 72 : 26, rowGap: big ? 28 : 14,
+      lbScenario: pb ? 'final' : 'finalSlow', lbDensity: big ? 'full' : 'noflag', lbRows: big ? 9 : 7,
+      titleSize: big ? 30 : 22, smallSize: big ? 15 : 13,
+      sectionGap: big ? 34 : 16, heroGap: big ? 36 : 20, heroSize: big ? 156 : 84, heroCsSize: big ? 84 : 46,
+      heroMain: heroFull.slice(0, dot), heroCs: heroFull.slice(dot),
+      isPb: pb, notPb: !pb,
+      placeText: pb ? '#25' : 'PB #25', placeLabel: 'Global', placeColor: pb ? '#ffffff' : '#c9cde0', placeSize: big ? 64 : 34,
+      changes, changeMax: big ? 1100 : 740, changeSize: big ? 24 : 17,
+      splitFr: big ? 1.05 : 1.1, detailGap: big ? 72 : 28,
+      tableSize: big ? 17 : 13, rowH: big ? 40 : 27, headH: big ? 26 : 20,
+      splits, sob: fmt(sobV), save: fmt(total - sobV),
+      legend: '★ gold = best segment ever · − ahead of PB · + behind PB',
+      chartGap: big ? 30 : 16, chartH: big ? 150 : 92, deathTotal: deaths.reduce((a, b) => a + b, 0).toLocaleString('en-US'),
+      bars, tlPath: tl, tlBounds: bounds, tlH: big ? 56 : 40,
+      showHeat: big, heat,
+      btnH: big ? 48 : 38, btnSize: big ? 17 : 14,
+      actions: ['Watch replay', 'Save replay', 'Upload replay'],
+    };
+  }
 }
 </script>
 </body>

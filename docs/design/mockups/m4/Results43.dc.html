@@ -2,134 +2,25 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Results 4:3</title>
+<title>Results 4:3, new PB</title>
 <script src="./support.js"></script>
 </head>
 <body>
 <x-dc>
 <helmet>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&amp;family=Silkscreen:wght@400;700&amp;family=Pixelify+Sans:wght@500;700&amp;family=Barlow+Semi+Condensed:wght@400;500;600;700&amp;display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;family=Pixelify+Sans:wght@500;600;700&amp;display=swap">
 <style>
 body{margin:0}
-/* layout: same content as 16:9, stacked: verdict strip, then splits beside the deaths graph, actions at the bottom */
-.s-panel{background:rgba(9,11,24,.86);box-shadow:0 -3px 0 0 #2d335e,0 3px 0 0 #2d335e,-3px 0 0 0 #2d335e,3px 0 0 0 #2d335e}
-.s-lbl{font-family:'Silkscreen',monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#a3a9cc}
-.s-num{font-family:'Press Start 2P',monospace;font-variant-numeric:tabular-nums}
-.ahead{color:#4be08f}.behind{color:#ff8f5a}.gold{color:#ffd34d}
-.s-tr{display:grid;grid-template-columns:1.2fr .7fr 1fr 1fr .9fr;align-items:center;height:34px;font-size:18px;font-weight:600;border-bottom:2px solid #1c2142}
-.s-tr .s-num{font-size:11px;text-align:right}
-.s-btn{all:unset;box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:8px;height:52px;padding:0 18px;background:#12152b;font-family:'Pixelify Sans',monospace;font-size:19px;font-weight:700;color:#eef0fa;cursor:pointer;box-shadow:0 -3px 0 0 #2d335e,0 3px 0 0 #2d335e,-3px 0 0 0 #2d335e,3px 0 0 0 #2d335e}
-.s-btn:focus-visible{outline:3px solid #ffd34d;outline-offset:5px}
-.s-btn.pri{background:#ff3b55;box-shadow:0 -3px 0 0 #ff8fa0,0 3px 0 0 #a3122a,-3px 0 0 0 #ff8fa0,3px 0 0 0 #a3122a}
 </style>
 </helmet>
-<div style="position: relative; width: 1024px; height: 768px; overflow: hidden; background: #0a0c18; color: #eef0fa; font-family: 'Barlow Semi Condensed', system-ui, sans-serif">
-  <div style="position: absolute; left: 112px; top: 80px; width: 800px; height: 608px; transform: scale(1.6); filter: blur(7px) brightness(.3) saturate(1.2)"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div>
-
-  <div style="position: absolute; left: 32px; top: 24px; width: 960px; height: 720px; display: flex; flex-direction: column; gap: 20px">
-    <div style="display: flex; justify-content: space-between; align-items: flex-end">
-      <div style="display: flex; flex-direction: column; gap: 6px">
-        <span class="s-lbl" style="color: #ff8fa0">Clear · 2026-11-04 21:14</span>
-        <span style="font-family: 'Pixelify Sans', monospace; font-size: 34px; font-weight: 700; line-height: 1">Example Fangame</span>
-      </div>
-      <div style="display: flex; gap: 10px">
-        <span class="s-lbl" style="padding: 6px 10px; background: #ff3b55; color: #fff">Ranked</span>
-        <span class="s-lbl" style="padding: 6px 10px; background: #12152b; color: #eef0fa; box-shadow: 0 0 0 2px #2d335e">Very Hard</span>
-      </div>
-    </div>
-
-    <div class="s-panel" style="display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 24px; padding: 20px 28px">
-      <div style="display: flex; flex-direction: column; gap: 10px">
-        <span class="s-lbl">Time</span>
-        <span class="s-num" style="font-size: 34px; line-height: 1">12:34.56</span>
-        <span class="s-num gold" style="font-size: 11px">New PB −16.74</span>
-      </div>
-      <div style="display: flex; flex-direction: column; gap: 10px">
-        <span class="s-lbl">Rank · Very Hard</span>
-        <span class="s-num" style="font-size: 30px; line-height: 1">#47</span>
-        <span style="font-size: 16px; color: #a3a9cc">of 1,203 · up from #61</span>
-      </div>
-      <div style="display: flex; flex-direction: column; gap: 10px">
-        <span class="s-lbl">Deaths</span>
-        <span class="s-num" style="font-size: 30px; line-height: 1">342</span>
-        <span style="font-size: 16px; color: #a3a9cc">PB run: 389</span>
-      </div>
-    </div>
-
-    <div style="display: grid; grid-template-columns: 560px 1fr; gap: 20px; flex: 1">
-      <div class="s-panel" style="padding: 16px 20px; display: flex; flex-direction: column">
-        <div class="s-tr" style="height: 24px; border-bottom-color: #2d335e">
-          <span class="s-lbl">Stage</span><span class="s-lbl" style="text-align: right">Deaths</span><span class="s-lbl" style="text-align: right">Segment</span><span class="s-lbl" style="text-align: right">Split</span><span class="s-lbl" style="text-align: right">vs PB</span>
-        </div>
-        <sc-for list="{{rows}}" as="r" hint-placeholder-count="7">
-          <div class="s-tr">
-            <span>{{r.name}}</span>
-            <span class="s-num">{{r.deaths}}</span>
-            <span class="s-num {{r.scls}}">{{r.seg}}</span>
-            <span class="s-num">{{r.split}}</span>
-            <span class="s-num {{r.cls}}">{{r.delta}}</span>
-          </div>
-        </sc-for>
-        <div style="display: flex; justify-content: space-between; margin-top: auto; padding-top: 12px; font-size: 17px">
-          <span>Sum of best <b class="s-num" style="font-size: 11px; font-weight: 400">12:20.00</b></span>
-          <span style="color: #a3a9cc">Timesave <b class="s-num gold" style="font-size: 11px; font-weight: 400">14.56</b></span>
-        </div>
-      </div>
-
-      <div class="s-panel" style="padding: 16px 20px; display: flex; flex-direction: column; gap: 10px">
-        <span class="s-lbl">Deaths per stage</span>
-        <div role="img" aria-label="Deaths per stage: Stage 1 21, Stage 2 48, Stage 3 77, Stage 4 39, Stage 5 64, Stage 6 52, Boss 41" style="flex: 1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; align-items: end; border-bottom: 2px solid #2d335e">
-          <sc-for list="{{bars}}" as="b" hint-placeholder-count="7">
-            <div style="display: flex; flex-direction: column; align-items: center; gap: 6px">
-              <span class="s-num" style="font-size: 9px">{{b.n}}</span>
-              <div style="width: 100%; height: {{b.h}}; background: {{b.c}}"></div>
-            </div>
-          </sc-for>
-        </div>
-        <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; text-align: center; font-family: 'Silkscreen', monospace; font-size: 11px; color: #a3a9cc">
-          <span>S1</span><span>S2</span><span>S3</span><span>S4</span><span>S5</span><span>S6</span><span>Boss</span>
-        </div>
-      </div>
-    </div>
-
-    <div style="display: flex; justify-content: space-between">
-      <div style="display: flex; gap: 14px">
-        <button class="s-btn" type="button">Retry</button>
-        <button class="s-btn" type="button">Game list</button>
-      </div>
-      <div style="display: flex; gap: 14px">
-        <button class="s-btn" type="button">Save replay</button>
-        <button class="s-btn" type="button">Watch replay</button>
-        <button class="s-btn pri" type="button">Upload</button>
-      </div>
-    </div>
-  </div>
+<!-- 4:3: same page, tighter; the heatmap drops out at this size. -->
+<div style="width: 1024px; height: 768px">
+  <dc-import name="Results169" layout="43" scenario="pb" hint-size="1024px,768px"></dc-import>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1024,"height":768}}'>
 class Component extends DCLogic {
-renderVals() {
-return {
-rows: [
-{ name: 'Stage 1', deaths: '21', seg: '0:58.42', scls: '', split: '0:58.42', delta: '−2.68', cls: 'ahead' },
-{ name: 'Stage 2', deaths: '48', seg: '1:42.18', scls: '', split: '2:40.60', delta: '+1.10', cls: 'behind' },
-{ name: 'Stage 3', deaths: '77', seg: '2:05.60', scls: 'gold', split: '4:46.20', delta: '−7.32', cls: 'ahead' },
-{ name: 'Stage 4', deaths: '39', seg: '1:31.04', scls: '', split: '6:17.24', delta: '−9.78', cls: 'ahead' },
-{ name: 'Stage 5', deaths: '64', seg: '2:21.36', scls: '', split: '8:38.60', delta: '−8.30', cls: 'ahead' },
-{ name: 'Stage 6', deaths: '52', seg: '1:49.92', scls: 'gold', split: '10:28.52', delta: '−13.68', cls: 'ahead' },
-{ name: 'Boss', deaths: '41', seg: '2:06.04', scls: '', split: '12:34.56', delta: '−16.74', cls: 'ahead' }
-],
-bars: [
-{ n: '21', h: '42px', c: '#a3a9cc' },
-{ n: '48', h: '96px', c: '#a3a9cc' },
-{ n: '77', h: '154px', c: '#ff3b55' },
-{ n: '39', h: '78px', c: '#a3a9cc' },
-{ n: '64', h: '128px', c: '#a3a9cc' },
-{ n: '52', h: '104px', c: '#a3a9cc' },
-{ n: '41', h: '82px', c: '#a3a9cc' }
-]
-};
-}
+  renderVals() { return {}; }
 }
 </script>
 </body>
