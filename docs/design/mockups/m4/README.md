@@ -17,6 +17,7 @@ Direction: modernise IWBTG without losing its identity. Structure, motion and be
 | `Results169.dc.html`, `Results169Slower.dc.html` | Results 16:9: new PB, and slower than PB |
 | `Results43.dc.html`, `Results43Slower.dc.html` | Results 4:3, same two states |
 | `Backdrop.dc.html` | The one background system (art, blur slider, dim) every screen uses; five placeholder scenes (castle, forest, city, cave, sea) |
+| `ProfileCard.dc.html` | Player card: compact in the game select footer, expanded on results with this run's changes |
 | `Leaderboard.dc.html`, `RunInfo.dc.html`, `PauseBox.dc.html`, `GameScene.dc.html` | Shared parts the screens import |
 
 ## Shared design language

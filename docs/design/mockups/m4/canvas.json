@@ -155,6 +155,13 @@
       "w": 1920,
       "h": 1080,
       "title": "Mod select (opens from the Mods button)"
+    },
+    "ProfileCard.dc.html": {
+      "x": 3620,
+      "y": 7340,
+      "w": 420,
+      "h": 108,
+      "title": "Player card (footer size)"
     }
   },
   "createdOnFiles": {
@@ -206,7 +213,7 @@
       "x": 0,
       "y": 7040,
       "text": "Shared parts",
-      "maxW": 3540
+      "maxW": 4040
     },
     "motion": {
       "x": 1680,
@@ -230,7 +237,7 @@
       "w": 440,
       "size": "m",
       "fill": "orange",
-      "text": "Still open: the status set (Ranked / Unranked / …), the mod list (SD, MR, HB, NB, FL, SS, SL, FA are examples of the kinds in docs/product.md, not decisions), the star rating formula, and whether the death heatmap stays."
+      "text": "Still open: the status set (Ranked / Unranked / …), the mod list (SD, MR, HB, NB, FL, SS, SL, FA are examples of the kinds in docs/product.md, not decisions), the star rating formula, whether the death heatmap stays, the overall rank on the player card (needs the performance system) and the result badges (ideas, no system yet)."
     }
   },
   "order": [
@@ -255,7 +262,8 @@
     "GameScene.dc.html",
     "Leaderboard.dc.html",
     "RunInfo.dc.html",
-    "PauseBox.dc.html"
+    "PauseBox.dc.html",
+    "ProfileCard.dc.html"
   ],
   "pages": [],
   "title": "IWBTG Collection: game select, HUD, pause and results"

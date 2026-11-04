@@ -34,37 +34,42 @@ body{margin:0}
     <!-- main column -->
     <div style="display: flex; flex-direction: column; gap: {{sectionGap}}px; min-width: 0; min-height: 0">
 
-      <!-- hero -->
-      <div style="display: flex; align-items: flex-end; gap: {{heroGap}}px; flex-wrap: wrap">
-        <div style="display: flex; align-items: baseline; line-height: .82; font-family: 'Barlow Condensed', sans-serif; font-weight: 600">
-          <span style="font-size: {{heroSize}}px; letter-spacing: -.02em">{{heroMain}}</span>
-          <span style="font-size: {{heroCsSize}}px; color: #c9cde0">{{heroCs}}</span>
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 6px; padding-bottom: 4px">
-          <sc-if value="{{isPb}}" hint-placeholder-val="{{ true }}">
-            <div style="align-self: flex-start; height: 26px; padding: 0 12px; border-radius: 10px; background: #ffffff; display: flex; align-items: center; transform: skewX(-11.31deg)">
-              <span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #0b0d14"><img src="/_blob/4c631e9e3893f215e44417d2cae2b519" alt="" width="14" height="16" style="image-rendering: pixelated">New PB</span>
+      <!-- hero: time, placement and rank change on the left; the player card on the right -->
+      <div style="display: flex; align-items: flex-start; gap: {{heroGap}}px">
+        <div style="display: flex; flex-direction: column; gap: {{sectionGap}}px">
+          <div style="display: flex; align-items: flex-end; gap: {{heroGap}}px">
+          <div style="display: flex; align-items: baseline; line-height: .82; font-family: 'Barlow Condensed', sans-serif; font-weight: 600">
+            <span style="font-size: {{heroSize}}px; letter-spacing: -.02em">{{heroMain}}</span>
+            <span style="font-size: {{heroCsSize}}px; color: #c9cde0">{{heroCs}}</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px; padding-bottom: 4px">
+            <sc-if value="{{isPb}}" hint-placeholder-val="{{ true }}">
+              <div style="align-self: flex-start; height: 26px; padding: 0 12px; border-radius: 10px; background: #ffffff; display: flex; align-items: center; transform: skewX(-11.31deg)">
+                <span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #0b0d14"><img src="/_blob/4c631e9e3893f215e44417d2cae2b519" alt="" width="14" height="16" style="image-rendering: pixelated">New PB</span>
+              </div>
+            </sc-if>
+            <sc-if value="{{notPb}}" hint-placeholder-val="{{ false }}">
+              <span style="font-size: {{smallSize}}px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a2a8bc">Not a PB</span>
+            </sc-if>
+            <div style="display: flex; align-items: baseline; gap: 10px; line-height: 1">
+              <span style="font-family: 'Barlow Condensed', sans-serif; font-size: {{placeSize}}px; font-weight: 700; color: {{placeColor}}">{{placeText}}</span>
+              <span style="font-size: {{smallSize}}px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #c9cde0">{{placeLabel}}</span>
             </div>
-          </sc-if>
-          <sc-if value="{{notPb}}" hint-placeholder-val="{{ false }}">
-            <span style="font-size: {{smallSize}}px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a2a8bc">Not a PB</span>
-          </sc-if>
-          <div style="display: flex; align-items: baseline; gap: 10px; line-height: 1">
-            <span style="font-family: 'Barlow Condensed', sans-serif; font-size: {{placeSize}}px; font-weight: 700; color: {{placeColor}}">{{placeText}}</span>
-            <span style="font-size: {{smallSize}}px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #c9cde0">{{placeLabel}}</span>
           </div>
+          </div>
+        <!-- rank change -->
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; max-width: {{changeMax}}px">
+          <sc-for list="{{changes}}" as="c" hint-placeholder-count="3">
+            <div style="display: flex; flex-direction: column; gap: 4px">
+              <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">{{c.label}}</span>
+              <span style="font-size: {{changeSize}}px; font-weight: 600; white-space: nowrap">{{c.value}}</span>
+              <span style="font-size: {{smallSize}}px; font-weight: 600; color: {{c.noteColor}}; white-space: nowrap">{{c.note}}</span>
+            </div>
+          </sc-for>
         </div>
-      </div>
-
-      <!-- rank change -->
-      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; max-width: {{changeMax}}px">
-        <sc-for list="{{changes}}" as="c" hint-placeholder-count="3">
-          <div style="display: flex; flex-direction: column; gap: 4px">
-            <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">{{c.label}}</span>
-            <span style="font-size: {{changeSize}}px; font-weight: 600; white-space: nowrap">{{c.value}}</span>
-            <span style="font-size: {{smallSize}}px; font-weight: 600; color: {{c.noteColor}}; white-space: nowrap">{{c.note}}</span>
-          </div>
-        </sc-for>
+        </div>
+        <span style="flex: 1"></span>
+        <div style="width: {{cardW}}px; height: {{cardH}}px; align-self: flex-start"><dc-import name="ProfileCard" variant="{{cardVariant}}" scenario="{{scenario}}" hint-size="620px,280px"></dc-import></div>
       </div>
 
       <!-- details -->
@@ -126,8 +131,8 @@ body{margin:0}
 
           <sc-if value="{{showHeat}}" hint-placeholder-val="{{ true }}">
             <div style="display: flex; gap: 20px; align-items: flex-start">
-              <div style="position: relative; width: 256px; height: 195px; flex: none; overflow: hidden; border-radius: 6px">
-                <div style="width: 800px; height: 608px; transform: scale(.32); transform-origin: 0 0; filter: saturate(.4) brightness(.7)"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div>
+              <div style="position: relative; width: 224px; height: 170px; flex: none; overflow: hidden; border-radius: 6px">
+                <div style="width: 800px; height: 608px; transform: scale(.28); transform-origin: 0 0; filter: saturate(.4) brightness(.7)"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div>
                 <sc-for list="{{heat}}" as="d" hint-placeholder-count="6">
                   <div style="position: absolute; left: {{d.x}}px; top: {{d.y}}px; width: {{d.r}}px; height: {{d.r}}px; margin: {{d.m}}px 0 0 {{d.m}}px; border-radius: 50%; background: {{d.bg}}"></div>
                 </sc-for>
@@ -216,15 +221,14 @@ class Component extends DCLogic {
       if (i < run.length - 1) bounds += `M${((acc / total) * 1000).toFixed(1)} 2v36`;
     });
     const heat = [[150, 175, 46, .55], [176, 176, 38, .5], [124, 176, 30, .4], [196, 104, 34, .45], [140, 140, 26, .35], [92, 150, 22, .3], [210, 176, 26, .4], [232, 90, 22, .3]]
+      .map(([x0, y0, r0, a]) => [Math.round(x0 * .875), Math.round(y0 * .875), Math.round(r0 * .875), a])
       .map(([x, y, r, a]) => ({ x, y, r, m: -r / 2, bg: `radial-gradient(circle, rgba(255,94,77,${a}) 0, rgba(255,94,77,0) 70%)` }));
     const changes = pb ? [
       { label: 'Global placement', value: '#30 → #25', note: '▲ 5 places', noteColor: '#45d483' },
       { label: 'Personal best', value: '39:40.12 → ' + heroFull, note: dfmt(total - pbTotal), noteColor: '#45d483' },
-      { label: 'Account', value: '13 games cleared', note: '48,213 total deaths', noteColor: '#c9cde0' },
     ] : [
       { label: 'Global placement', value: '#25', note: 'unchanged', noteColor: '#a2a8bc' },
       { label: 'Personal best', value: fmt(pbTotal) + ' stands', note: dfmt(total - pbTotal) + ' this run', noteColor: '#ff6b6b' },
-      { label: 'Account', value: '13 games cleared', note: '49,501 total deaths', noteColor: '#c9cde0' },
     ];
     return {
       W: big ? 1920 : 1024, H: big ? 1080 : 768,
@@ -236,12 +240,13 @@ class Component extends DCLogic {
       heroMain: heroFull.slice(0, dot), heroCs: heroFull.slice(dot),
       isPb: pb, notPb: !pb,
       placeText: pb ? '#25' : 'PB #25', placeLabel: 'Global', placeColor: pb ? '#ffffff' : '#c9cde0', placeSize: big ? 64 : 34,
-      changes, changeMax: big ? 1100 : 740, changeSize: big ? 24 : 17,
+      changes, changeMax: big ? 760 : 480, scenario: S,
+      cardVariant: big ? 'results' : 'results-compact', cardW: big ? 620 : 330, cardH: big ? 280 : 172, changeSize: big ? 24 : 17,
       splitFr: big ? 1.05 : 1.1, detailGap: big ? 72 : 28,
       tableSize: big ? 17 : 13, rowH: big ? 40 : 27, headH: big ? 26 : 20,
       splits, sob: fmt(sobV), save: fmt(total - sobV),
       legend: '★ gold = best segment ever · − ahead of PB · + behind PB',
-      chartGap: big ? 30 : 16, chartH: big ? 150 : 92, deathTotal: deaths.reduce((a, b) => a + b, 0).toLocaleString('en-US'),
+      chartGap: big ? 30 : 16, chartH: big ? 120 : 92, deathTotal: deaths.reduce((a, b) => a + b, 0).toLocaleString('en-US'),
       bars, tlPath: tl, tlBounds: bounds, tlH: big ? 56 : 40,
       showHeat: big, heat,
       btnH: big ? 48 : 38, btnSize: big ? 17 : 14,
