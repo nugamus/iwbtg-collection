@@ -249,6 +249,7 @@ pub fn run(
             hud::show_sign,
             hud::show_countdown,
             crate::audio::play,
+            crate::audio::sync_music.after(crate::audio::play),
         ),
     )
     .add_systems(Last, limit_frames);
