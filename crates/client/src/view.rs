@@ -14,6 +14,8 @@ use iwbtg_sim::sim::{Sim, SimOptions};
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::world::{InstId, SimStatus};
 
+mod hud;
+
 use crate::input::{Collector, key_code};
 use crate::package::{Package, SpriteImage, sprite_images};
 
@@ -268,7 +270,8 @@ pub fn run(
     })
     // The sim ticks at the game's rate on a fixed clock; frames only draw what the last tick left.
     .insert_resource(Time::<Fixed>::from_hz(f64::from(def.tick_rate.max(1))))
-    .add_systems(Startup, setup)
+    .init_resource::<hud::SignText>()
+    .add_systems(Startup, (setup, hud::setup))
     .add_systems(
         RunFixedMainLoop,
         collect_input.in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
@@ -282,7 +285,10 @@ pub fn run(
             crate::audio::apply_shake.after(follow_view),
             crate::art::sync_room_art.after(follow_view),
             (set_alpha, sync_instances, overlay).chain().after(follow_view),
+            hud::show_sign,
+            hud::show_countdown,
             crate::audio::play,
+            crate::audio::sync_music.after(crate::audio::play),
         ),
     )
     .add_systems(Last, limit_frames);
@@ -422,6 +428,7 @@ fn tick(
     mut audio: ResMut<crate::audio::Queue>,
     mut shake: ResMut<crate::audio::Shake>,
     mut previous: ResMut<Previous>,
+    mut sign: ResMut<hud::SignText>,
 ) {
     if previous.on {
         let world = game.sim.world();
@@ -440,6 +447,7 @@ fn tick(
     if game.sim.step(frame).status == SimStatus::Running {
         stats.ticks += 1;
         let output = &game.sim.world().output;
+        hud::note_tick(&mut sign, output);
         audio.push(Instant::now(), output);
         shake.tick(output);
     }
