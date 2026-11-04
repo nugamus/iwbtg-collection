@@ -1,0 +1,20 @@
+{"v":3,"createdOnFiles":{"v":1,"at":"2026-11-04T12:00:00Z"},"title":"IWBTG Collection: HUD, pause and results","launch":{"view":"canvas"},"pages":[],
+"boards":{
+"Main.dc.html":{"x":0,"y":300,"w":1920,"h":1080,"title":"1 HUD 16:9, all on"},
+"HudMinimal169.dc.html":{"x":2000,"y":300,"w":1920,"h":1080,"title":"2 HUD 16:9, minimal"},
+"Hud43.dc.html":{"x":4000,"y":300,"w":1024,"h":768,"title":"3 HUD 4:3, all on"},
+"HudMinimal43.dc.html":{"x":5104,"y":300,"w":1024,"h":768,"title":"4 HUD 4:3, minimal"},
+"PauseHold.dc.html":{"x":0,"y":1800,"w":1920,"h":1080,"title":"5 Pause A: hold to quit (osu!-style)"},
+"PauseInGame.dc.html":{"x":2000,"y":1800,"w":1920,"h":1080,"title":"6 Pause B: the game's own pause frame"},
+"PauseRunSheet.dc.html":{"x":4000,"y":1800,"w":1920,"h":1080,"title":"7 Pause C: run sheet"},
+"Results169.dc.html":{"x":0,"y":3300,"w":1920,"h":1080,"title":"8 Results 16:9"},
+"Results43.dc.html":{"x":2000,"y":3300,"w":1024,"h":768,"title":"9 Results 4:3"},
+"GameScene.dc.html":{"x":3104,"y":3300,"w":800,"h":608,"title":"Placeholder game room (stands in for each game's own art)"}
+},
+"order":["Main.dc.html","HudMinimal169.dc.html","Hud43.dc.html","HudMinimal43.dc.html","PauseHold.dc.html","PauseInGame.dc.html","PauseRunSheet.dc.html","Results169.dc.html","Results43.dc.html","GameScene.dc.html"],
+"notes":{
+"t1":{"x":0,"y":0,"text":"In-run HUD: game at integer scale, blurred letterbox","kind":"title1","maxW":6128},
+"t2":{"x":0,"y":1500,"text":"Pause: three directions, ranked timer keeps running","kind":"title1","maxW":5920},
+"t3":{"x":0,"y":3000,"text":"Results screen","kind":"title1","maxW":3904}
+},
+"designSystems":[]}

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pause B: the game's own pause frame</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&amp;family=Silkscreen:wght@400;700&amp;family=Pixelify+Sans:wght@500;700&amp;family=Barlow+Semi+Condensed:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+/* layout: the HUD stays as in play; the pause lives INSIDE the 800x608 game area in a GameMaker-style text box at game pixels */
+.pb-item{all:unset;display:flex;align-items:center;gap:16px;height:40px;font-family:'Press Start 2P',monospace;font-size:16px;color:#c9cbd6;cursor:pointer}
+.pb-item:focus-visible{outline:2px solid #ffd34d;outline-offset:4px}
+.pb-item.sel{color:#fff}
+</style>
+</helmet>
+<div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0a0c18; color: #eef0fa; font-family: 'Barlow Semi Condensed', system-ui, sans-serif">
+  <div style="position: absolute; inset: 0"><dc-import name="Main" time="7:58.80" hint-size="1920px,1080px"></dc-import></div>
+
+  <!-- game area dims, HUD stays readable -->
+  <div style="position: absolute; left: 560px; top: 236px; width: 800px; height: 608px; background: rgba(0,0,0,.55)"></div>
+
+  <!-- timer-still-running flag over the timer panel -->
+  <div style="position: absolute; left: 1432px; top: 196px; display: flex; align-items: center; gap: 10px">
+    <div style="width: 12px; height: 12px; background: #ff3b55; box-shadow: 0 0 0 4px rgba(255,59,85,.3)"></div>
+    <span style="font-family: 'Silkscreen', monospace; font-size: 15px; letter-spacing: .08em; text-transform: uppercase; color: #ff8fa0">Paused · timer running +0:06.46</span>
+  </div>
+
+  <!-- the pause frame, drawn at game pixels -->
+  <div style="position: absolute; left: 736px; top: 372px; width: 448px; height: 336px; box-sizing: border-box; background: #000; border: 4px solid #fff; box-shadow: 0 0 0 4px #000, 0 0 0 6px #6b6f80; padding: 28px 36px; display: flex; flex-direction: column; gap: 22px">
+    <div style="display: flex; align-items: center; justify-content: space-between">
+      <span style="font-family: 'Press Start 2P', monospace; font-size: 28px; color: #fff">PAUSE</span>
+      <span style="font-family: 'Press Start 2P', monospace; font-size: 12px; color: #ff6b80">7:58.80</span>
+    </div>
+    <div style="display: flex; flex-direction: column">
+      <button class="pb-item sel" type="button">
+        <svg width="20" height="22" viewBox="0 0 20 22" aria-hidden="true" style="shape-rendering: crispEdges"><rect x="9" y="0" width="2" height="7" fill="#2f9a43"></rect><rect x="11" y="0" width="6" height="2" fill="#47c45d"></rect><rect x="3" y="7" width="14" height="14" fill="#d3122c"></rect><rect x="1" y="10" width="18" height="8" fill="#d3122c"></rect><rect x="5" y="10" width="3" height="3" fill="#ff9aa7"></rect></svg>
+        <span>Continue</span>
+      </button>
+      <button class="pb-item" type="button"><span style="width: 20px"></span><span>Retry from save</span></button>
+      <button class="pb-item" type="button"><span style="width: 20px"></span><span>Restart run</span></button>
+      <button class="pb-item" type="button"><span style="width: 20px"></span><span>Quit</span></button>
+    </div>
+    <span style="font-family: 'Press Start 2P', monospace; font-size: 10px; line-height: 1.6; color: #8a8fa3; margin-top: auto">Esc continue · hold Esc quit</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

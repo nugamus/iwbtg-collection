@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>In-run HUD 16:9</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&amp;family=Silkscreen:wght@400;700&amp;family=Pixelify+Sans:wght@500;700&amp;family=Barlow+Semi+Condensed:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+/* layout: 1920x1080, 800x608 game at 1x in the middle, blurred copy fills the letterbox, HUD lives in the side bands */
+.h-root{--ground:#0a0c18;--panel:rgba(9,11,24,.74);--edge:#2d335e;--ink:#eef0fa;--muted:#a3a9cc;--cherry:#ff3b55;--ahead:#4be08f;--behind:#ff8f5a;--gold:#ffd34d;position:relative;width:1920px;height:1080px;overflow:hidden;background:var(--ground);color:var(--ink);font-family:'Barlow Semi Condensed',system-ui,sans-serif}
+.h-bg{position:absolute;left:560px;top:236px;width:800px;height:608px;transform:scale(2.6);filter:blur(7px) brightness(.42) saturate(1.25)}
+.h-vig{position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(10,12,24,0) 35%,rgba(10,12,24,.8) 100%)}
+.h-game{position:absolute;left:560px;top:236px;width:800px;height:608px;box-shadow:0 0 0 2px #05060d,0 0 0 5px rgba(255,255,255,.09),0 40px 120px rgba(0,0,0,.7)}
+.h-panel{background:var(--panel);box-shadow:0 -3px 0 0 var(--edge),0 3px 0 0 var(--edge),-3px 0 0 0 var(--edge),3px 0 0 0 var(--edge);padding:20px 24px}
+.h-lbl{font-family:'Silkscreen',monospace;font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.h-num{font-family:'Press Start 2P',monospace;font-variant-numeric:tabular-nums}
+.ahead{color:var(--ahead)}.behind{color:var(--behind)}.gold{color:var(--gold)}.dim{color:#7d84ad}
+.h-row{display:grid;grid-template-columns:20px 1fr 96px 120px;align-items:center;height:40px;font-size:22px;font-weight:600}
+.h-row.cur{background:rgba(255,59,85,.14)}
+.h-row .h-num{font-size:14px;text-align:right}
+.h-key{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:64px;background:#12152b;color:var(--muted);box-shadow:0 -3px 0 0 var(--edge),0 3px 0 0 var(--edge),-3px 0 0 0 var(--edge),3px 0 0 0 var(--edge),0 7px 0 0 #05060d}
+.h-key.on{background:var(--cherry);color:#fff;transform:translateY(4px);box-shadow:0 -3px 0 0 #ff8fa0,0 3px 0 0 #a3122a,-3px 0 0 0 #ff8fa0,3px 0 0 0 #a3122a}
+.h-key b{font-family:'Press Start 2P',monospace;font-size:16px;font-weight:400}
+.h-key span{font-family:'Silkscreen',monospace;font-size:12px;letter-spacing:.06em}
+.h-pip{width:18px;height:18px;background:#2d335e}
+.h-pip.done{background:var(--ink)}
+.h-pip.now{background:var(--cherry);box-shadow:0 0 0 3px rgba(255,59,85,.35)}
+.h-chip{font-family:'Silkscreen',monospace;font-size:14px;letter-spacing:.06em;padding:6px 12px;background:#12152b;color:var(--ink);box-shadow:0 -2px 0 0 var(--edge),0 2px 0 0 var(--edge),-2px 0 0 0 var(--edge),2px 0 0 0 var(--edge)}
+</style>
+</helmet>
+<div class="h-root">
+  <div class="h-bg"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div>
+  <div class="h-vig"></div>
+  <div class="h-game"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div>
+
+  <!-- stage progress above the game -->
+  <div style="position: absolute; left: 560px; top: 168px; width: 800px; display: flex; align-items: center; justify-content: space-between">
+    <div style="display: flex; align-items: baseline; gap: 16px">
+      <span style="font-family: 'Pixelify Sans', monospace; font-size: 32px; font-weight: 700">Stage 5</span>
+      <span class="h-lbl">of 7</span>
+    </div>
+    <div style="display: flex; gap: 8px" aria-label="Stage 5 of 7">
+      <div class="h-pip done"></div><div class="h-pip done"></div><div class="h-pip done"></div><div class="h-pip done"></div><div class="h-pip now"></div><div class="h-pip"></div><div class="h-pip"></div>
+    </div>
+  </div>
+
+  <!-- splits, left band -->
+  <sc-if value="{{showSplits}}" hint-placeholder-val="{{ true }}">
+  <div class="h-panel" style="position: absolute; left: 72px; top: 236px; width: 416px; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <span class="h-lbl" style="color: #ff8fa0">Ranked · Very Hard</span>
+      <span style="font-family: 'Pixelify Sans', monospace; font-size: 30px; font-weight: 700">Example Fangame</span>
+      <span style="font-size: 18px; color: #a3a9cc">Compared with PB 12:51.30</span>
+    </div>
+    <div style="display: flex; flex-direction: column">
+      <sc-for list="{{splits}}" as="r" hint-placeholder-count="7">
+        <div class="h-row {{r.row}}">
+          <span>
+            <sc-if value="{{r.current}}" hint-placeholder-val="{{ false }}"><svg width="12" height="16" viewBox="0 0 12 16" aria-hidden="true" style="display: block"><rect x="0" y="0" width="4" height="16" fill="#ff3b55"></rect><rect x="4" y="3" width="4" height="10" fill="#ff3b55"></rect><rect x="8" y="6" width="4" height="4" fill="#ff3b55"></rect></svg></sc-if>
+          </span>
+          <span>{{r.name}}</span>
+          <span class="h-num {{r.cls}}">{{r.delta}}</span>
+          <span class="h-num {{r.tcls}}">{{r.time}}</span>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 2px solid #2d335e; font-size: 20px">
+      <div style="display: flex; justify-content: space-between"><span>Previous segment</span><span class="h-num ahead" style="font-size: 14px">−2.46</span></div>
+      <div style="display: flex; justify-content: space-between"><span>Sum of best</span><span class="h-num" style="font-size: 14px">12:20.00</span></div>
+      <div style="display: flex; justify-content: space-between"><span>Best possible time</span><span class="h-num" style="font-size: 14px">12:27.66</span></div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- timer, right band -->
+  <sc-if value="{{showTimer}}" hint-placeholder-val="{{ true }}">
+  <div class="h-panel" style="position: absolute; left: 1432px; top: 236px; width: 416px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; justify-content: space-between; align-items: center">
+      <span class="h-lbl">Time</span>
+      <span class="h-lbl ahead">−9.78 at Stage 4</span>
+    </div>
+    <span class="h-num" style="font-size: 52px; line-height: 1; letter-spacing: -2px">{{time}}</span>
+    <span style="font-size: 18px; color: #a3a9cc">23,617 ticks at 50 per second</span>
+  </div>
+  </sc-if>
+
+  <!-- deaths -->
+  <sc-if value="{{showDeaths}}" hint-placeholder-val="{{ true }}">
+  <div class="h-panel" style="position: absolute; left: 1432px; top: 420px; width: 416px; box-sizing: border-box; display: flex; align-items: center; gap: 20px">
+    <svg width="44" height="52" viewBox="0 0 22 26" aria-hidden="true" style="shape-rendering: crispEdges; flex: none"><rect x="10" y="0" width="2" height="9" fill="#2f9a43"></rect><rect x="12" y="0" width="7" height="3" fill="#47c45d"></rect><rect x="3" y="9" width="16" height="16" fill="#d3122c"></rect><rect x="1" y="12" width="20" height="10" fill="#d3122c"></rect><rect x="5" y="12" width="4" height="4" fill="#ff9aa7"></rect><rect x="13" y="19" width="4" height="3" fill="#8e0a1c"></rect></svg>
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <span class="h-lbl">Deaths</span>
+      <span class="h-num" style="font-size: 36px; line-height: 1">215</span>
+    </div>
+    <div style="margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; font-size: 18px; color: #a3a9cc">
+      <span>Stage 5: <b style="color: #eef0fa">30</b></span>
+      <span>PB run: 233</span>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- input display -->
+  <sc-if value="{{showInputs}}" hint-placeholder-val="{{ true }}">
+  <div class="h-panel" style="position: absolute; left: 1432px; top: 636px; width: 416px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px">
+    <span class="h-lbl">Input</span>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+      <div class="h-key"><b>&lt;</b><span>Left</span></div>
+      <div class="h-key on"><b>&gt;</b><span>Right</span></div>
+      <div class="h-key on"><b>Sh</b><span>Jump</span></div>
+      <div class="h-key"><b>Z</b><span>Shoot</span></div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- run status under the game -->
+  <div style="position: absolute; left: 560px; top: 872px; width: 800px; display: flex; align-items: center; justify-content: space-between">
+    <div style="display: flex; gap: 12px">
+      <span class="h-chip" style="background: #ff3b55; color: #fff">Ranked</span>
+      <span class="h-chip">Very Hard</span>
+    </div>
+    <span style="font-size: 18px; color: #a3a9cc">Esc pause · R last save · Q restart run</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"showTimer":{"editor":"boolean","default":true,"section":"HUD"},"showSplits":{"editor":"boolean","default":true,"section":"HUD"},"showDeaths":{"editor":"boolean","default":true,"section":"HUD"},"showInputs":{"editor":"boolean","default":true,"section":"HUD"},"time":{"editor":null,"default":"7:52.34"},"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+renderVals() {
+const p = this.props;
+return {
+showTimer: p.showTimer ?? true,
+showSplits: p.showSplits ?? true,
+showDeaths: p.showDeaths ?? true,
+showInputs: p.showInputs ?? true,
+time: p.time ?? '7:52.34',
+splits: [
+{ name: 'Stage 1', delta: '−2.68', cls: 'ahead', time: '0:58.42', tcls: '', row: '', current: false },
+{ name: 'Stage 2', delta: '+1.10', cls: 'behind', time: '2:40.60', tcls: '', row: '', current: false },
+{ name: 'Stage 3', delta: '−7.32', cls: 'gold', time: '4:46.20', tcls: '', row: '', current: false },
+{ name: 'Stage 4', delta: '−9.78', cls: 'ahead', time: '6:17.24', tcls: '', row: '', current: false },
+{ name: 'Stage 5', delta: '', cls: '', time: '8:46.90', tcls: 'dim', row: 'cur', current: true },
+{ name: 'Stage 6', delta: '', cls: '', time: '10:42.20', tcls: 'dim', row: '', current: false },
+{ name: 'Boss', delta: '', cls: '', time: '12:51.30', tcls: 'dim', row: '', current: false }
+]
+};
+}
+}
+</script>
+</body>
+</html>

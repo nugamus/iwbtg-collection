@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Results 16:9</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&amp;family=Silkscreen:wght@400;700&amp;family=Pixelify+Sans:wght@500;700&amp;family=Barlow+Semi+Condensed:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+/* layout: verdict column on the left (time, rank, deaths), evidence on the right (splits, deaths graph), replay actions along the bottom */
+.r-panel{background:rgba(9,11,24,.84);box-shadow:0 -3px 0 0 #2d335e,0 3px 0 0 #2d335e,-3px 0 0 0 #2d335e,3px 0 0 0 #2d335e}
+.r-lbl{font-family:'Silkscreen',monospace;font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:#a3a9cc}
+.r-num{font-family:'Press Start 2P',monospace;font-variant-numeric:tabular-nums}
+.ahead{color:#4be08f}.behind{color:#ff8f5a}.gold{color:#ffd34d}
+.r-tr{display:grid;grid-template-columns:1.3fr .7fr 1fr 1fr 1fr 1fr;align-items:center;height:42px;font-size:21px;font-weight:600;border-bottom:2px solid #1c2142}
+.r-tr .r-num{font-size:13px;text-align:right}
+.r-btn{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:12px;height:64px;padding:0 28px;background:#12152b;font-family:'Pixelify Sans',monospace;font-size:24px;font-weight:700;color:#eef0fa;cursor:pointer;box-shadow:0 -3px 0 0 #2d335e,0 3px 0 0 #2d335e,-3px 0 0 0 #2d335e,3px 0 0 0 #2d335e}
+.r-btn:focus-visible{outline:4px solid #ffd34d;outline-offset:6px}
+.r-btn.pri{background:#ff3b55;box-shadow:0 -3px 0 0 #ff8fa0,0 3px 0 0 #a3122a,-3px 0 0 0 #ff8fa0,3px 0 0 0 #a3122a}
+.r-btn small{font-family:'Silkscreen',monospace;font-size:13px;font-weight:400;opacity:.85}
+</style>
+</helmet>
+<div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0a0c18; color: #eef0fa; font-family: 'Barlow Semi Condensed', system-ui, sans-serif">
+  <div style="position: absolute; left: 560px; top: 236px; width: 800px; height: 608px; transform: scale(2.6); filter: blur(9px) brightness(.3) saturate(1.2)"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div>
+
+  <!-- header -->
+  <div style="position: absolute; left: 96px; top: 64px; width: 1728px; display: flex; justify-content: space-between; align-items: flex-end">
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <span class="r-lbl" style="color: #ff8fa0">Clear · 2026-11-04 21:14</span>
+      <span style="font-family: 'Pixelify Sans', monospace; font-size: 56px; font-weight: 700; line-height: 1">Example Fangame</span>
+    </div>
+    <div style="display: flex; gap: 12px">
+      <span class="r-lbl" style="padding: 8px 14px; background: #ff3b55; color: #fff">Ranked</span>
+      <span class="r-lbl" style="padding: 8px 14px; background: #12152b; color: #eef0fa; box-shadow: 0 0 0 2px #2d335e">Very Hard</span>
+    </div>
+  </div>
+
+  <!-- verdict -->
+  <div class="r-panel" style="position: absolute; left: 96px; top: 200px; width: 640px; height: 712px; box-sizing: border-box; padding: 40px 44px; display: flex; flex-direction: column; justify-content: space-between">
+    <div style="display: flex; flex-direction: column; gap: 14px">
+      <span class="r-lbl">Time</span>
+      <span class="r-num" style="font-size: 64px; line-height: 1">12:34.56</span>
+      <div style="display: flex; align-items: center; gap: 14px">
+        <span class="r-num gold" style="font-size: 16px; padding: 8px 12px; background: rgba(255,211,77,.12)">New PB −16.74</span>
+        <span style="font-size: 20px; color: #a3a9cc">37,728 ticks</span>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 12px; padding-top: 28px; border-top: 2px solid #2d335e">
+      <span class="r-lbl">Leaderboard · Very Hard</span>
+      <div style="display: flex; align-items: baseline; gap: 18px">
+        <span class="r-num" style="font-size: 52px">#47</span>
+        <span style="font-size: 24px; color: #a3a9cc">of 1,203 players</span>
+      </div>
+      <span style="font-size: 20px; color: #a3a9cc">Up from #61 · pending server check</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 20px; padding-top: 28px; border-top: 2px solid #2d335e">
+      <svg width="44" height="52" viewBox="0 0 22 26" aria-hidden="true" style="shape-rendering: crispEdges; flex: none"><rect x="10" y="0" width="2" height="9" fill="#2f9a43"></rect><rect x="12" y="0" width="7" height="3" fill="#47c45d"></rect><rect x="3" y="9" width="16" height="16" fill="#d3122c"></rect><rect x="1" y="12" width="20" height="10" fill="#d3122c"></rect><rect x="5" y="12" width="4" height="4" fill="#ff9aa7"></rect><rect x="13" y="19" width="4" height="3" fill="#8e0a1c"></rect></svg>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <span class="r-lbl">Deaths</span>
+        <span class="r-num" style="font-size: 36px">342</span>
+      </div>
+      <span style="margin-left: auto; font-size: 20px; color: #a3a9cc; text-align: right">PB run: 389<br>Fewest-deaths board #188</span>
+    </div>
+    <div style="display: flex; justify-content: space-between; padding-top: 28px; border-top: 2px solid #2d335e; font-size: 22px">
+      <span>Sum of best <b class="r-num" style="font-size: 15px; font-weight: 400">12:20.00</b></span>
+      <span style="color: #a3a9cc">Possible timesave <b class="r-num gold" style="font-size: 15px; font-weight: 400">14.56</b></span>
+    </div>
+  </div>
+
+  <!-- evidence -->
+  <div class="r-panel" style="position: absolute; left: 816px; top: 200px; width: 1008px; height: 712px; box-sizing: border-box; padding: 32px 40px; display: flex; flex-direction: column; gap: 28px">
+    <div style="display: flex; flex-direction: column">
+      <div class="r-tr" style="height: 30px; border-bottom-color: #2d335e">
+        <span class="r-lbl">Stage</span><span class="r-lbl" style="text-align: right">Deaths</span><span class="r-lbl" style="text-align: right">Segment</span><span class="r-lbl" style="text-align: right">Best</span><span class="r-lbl" style="text-align: right">Split</span><span class="r-lbl" style="text-align: right">vs PB</span>
+      </div>
+      <sc-for list="{{rows}}" as="r" hint-placeholder-count="7">
+        <div class="r-tr">
+          <span>{{r.name}}</span>
+          <span class="r-num">{{r.deaths}}</span>
+          <span class="r-num {{r.scls}}">{{r.seg}}</span>
+          <span class="r-num" style="color: #a3a9cc">{{r.best}}</span>
+          <span class="r-num">{{r.split}}</span>
+          <span class="r-num {{r.cls}}">{{r.delta}}</span>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 14px; flex: 1">
+      <div style="display: flex; justify-content: space-between">
+        <span class="r-lbl">Deaths per stage</span>
+        <span class="r-lbl">Most: Stage 3 · 77</span>
+      </div>
+      <div role="img" aria-label="Deaths per stage: Stage 1 21, Stage 2 48, Stage 3 77, Stage 4 39, Stage 5 64, Stage 6 52, Boss 41" style="flex: 1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 24px; align-items: end; border-bottom: 2px solid #2d335e; background: repeating-linear-gradient(0deg, transparent 0 39px, #1c2142 39px 40px)">
+        <sc-for list="{{bars}}" as="b" hint-placeholder-count="7">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 8px">
+            <span class="r-num" style="font-size: 12px">{{b.n}}</span>
+            <div style="width: 100%; height: {{b.h}}; background: {{b.c}}"></div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 24px; text-align: center; font-size: 18px; color: #a3a9cc">
+        <span>Stage 1</span><span>Stage 2</span><span>Stage 3</span><span>Stage 4</span><span>Stage 5</span><span>Stage 6</span><span>Boss</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- actions -->
+  <div style="position: absolute; left: 96px; top: 960px; width: 1728px; display: flex; justify-content: space-between">
+    <div style="display: flex; gap: 20px">
+      <button class="r-btn" type="button">Retry <small>Q</small></button>
+      <button class="r-btn" type="button">Game list <small>Esc</small></button>
+    </div>
+    <div style="display: flex; gap: 20px">
+      <button class="r-btn" type="button">Save replay</button>
+      <button class="r-btn" type="button">Watch replay</button>
+      <button class="r-btn pri" type="button">Upload to leaderboard</button>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+renderVals() {
+return {
+rows: [
+{ name: 'Stage 1', deaths: '21', seg: '0:58.42', scls: '', best: '0:57.90', split: '0:58.42', delta: '−2.68', cls: 'ahead' },
+{ name: 'Stage 2', deaths: '48', seg: '1:42.18', scls: '', best: '1:36.22', split: '2:40.60', delta: '+1.10', cls: 'behind' },
+{ name: 'Stage 3', deaths: '77', seg: '2:05.60', scls: 'gold', best: '2:05.60', split: '4:46.20', delta: '−7.32', cls: 'ahead' },
+{ name: 'Stage 4', deaths: '39', seg: '1:31.04', scls: '', best: '1:29.86', split: '6:17.24', delta: '−9.78', cls: 'ahead' },
+{ name: 'Stage 5', deaths: '64', seg: '2:21.36', scls: '', best: '2:17.02', split: '8:38.60', delta: '−8.30', cls: 'ahead' },
+{ name: 'Stage 6', deaths: '52', seg: '1:49.92', scls: 'gold', best: '1:49.92', split: '10:28.52', delta: '−13.68', cls: 'ahead' },
+{ name: 'Boss', deaths: '41', seg: '2:06.04', scls: '', best: '2:03.48', split: '12:34.56', delta: '−16.74', cls: 'ahead' }
+],
+bars: [
+{ n: '21', h: '44px', c: '#a3a9cc' },
+{ n: '48', h: '100px', c: '#a3a9cc' },
+{ n: '77', h: '160px', c: '#ff3b55' },
+{ n: '39', h: '81px', c: '#a3a9cc' },
+{ n: '64', h: '133px', c: '#a3a9cc' },
+{ n: '52', h: '108px', c: '#a3a9cc' },
+{ n: '41', h: '85px', c: '#a3a9cc' }
+]
+};
+}
+}
+</script>
+</body>
+</html>
