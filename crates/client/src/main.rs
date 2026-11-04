@@ -6,6 +6,7 @@
 mod art;
 mod input;
 mod package;
+mod savefile;
 mod view;
 
 use std::path::PathBuf;
@@ -30,6 +31,9 @@ struct Args {
     /// default: the originals draw every step, so a blended frame shows positions the game never had.
     #[arg(long)]
     interpolate: bool,
+    /// Never read or write the save file: always start a new game (ranked runs, checks).
+    #[arg(long)]
+    no_save_file: bool,
     /// Save a screenshot of the window to this PNG after a few frames and exit (for checks).
     #[arg(long, value_name = "PNG")]
     screenshot: Option<PathBuf>,
@@ -37,6 +41,9 @@ struct Args {
 
 fn main() -> ExitCode {
     let args = Args::parse();
+    savefile::configure(savefile::Options {
+        disabled: args.no_save_file,
+    });
     match package::open(&args.package, args.trace_mode) {
         Ok(pkg) => match view::run(pkg, args.fps, args.interpolate, args.screenshot) {
             Ok(()) => ExitCode::SUCCESS,
