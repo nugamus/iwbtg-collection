@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Loading, ranked</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+@keyframes ld-cherry{from{transform:translateX(0)}to{transform:translateX(-84px)}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
+</style>
+</helmet>
+<!-- Select to gameplay. Starts by itself once loaded, shown for at least 1.5 s. Esc returns to game select. -->
+<div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1920px" h="1080px" hue="250" blur="45" dim="0.55" tag="none" hint-size="1920px,1080px"></dc-import></div>
+
+  <div style="position: absolute; left: 580px; top: 170px; width: 760px; display: flex; flex-direction: column; gap: 22px">
+    <div style="border-radius: 10px; overflow: hidden; background: rgba(12,14,22,.82); box-shadow: 0 30px 80px rgba(0,0,0,.5)">
+      <div style="position: relative; height: 240px">
+        <dc-import name="Backdrop" w="760px" h="240px" hue="250" blur="0" dim="0.1" tag="top-right" label="I wanna be the Kaenbyou" hint-size="760px,240px"></dc-import>
+        <div style="position: absolute; inset: 0; background: linear-gradient(0deg, rgba(12,14,22,.95) 0%, rgba(12,14,22,0) 60%)"></div>
+        <div style="position: absolute; left: 32px; bottom: 18px; display: flex; flex-direction: column; gap: 4px">
+          <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 50px; font-weight: 700; line-height: 1">I wanna be the Kaenbyou</span>
+          <span style="font-size: 17px; color: #c9cde0">by <span style="font-weight: 600; color: #f3f4f8">Kira☆~Kira☆~</span></span>
+        </div>
+      </div>
+      <div style="padding: 22px 32px 28px; display: flex; flex-direction: column; gap: 22px">
+        <div style="display: flex; align-items: center; gap: 10px">
+          <div style="height: 26px; padding: 0 12px; border-radius: 10px; background: #ff6070; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 14px; font-weight: 700; color: #10121a">★ 6.84</span></div>
+          <span style="font-size: 18px; font-weight: 600">Very Hard · Any%</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+          <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Your PB</span><span style="font-size: 26px; font-weight: 600">38:12.46</span><span style="font-size: 14px; color: #a2a8bc">#25 Global</span></div>
+          <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Global #1</span><span style="font-size: 26px; font-weight: 600">31:42.18</span><span style="font-size: 14px; color: #a2a8bc">tsukimi</span></div>
+          <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Stages</span><span style="font-size: 26px; font-weight: 600">7</span><span style="font-size: 14px; color: #a2a8bc">average clear 54:20.36</span></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; min-height: 28px">
+          <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc; width: 56px">Mods</span>
+          <sc-if value="{{unranked}}" hint-placeholder-val="{{ false }}">
+            <div style="height: 26px; padding: 0 12px; border-radius: 10px; background: #ffc46b; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #2a1d05">Unranked</span></div>
+            <div style="height: 26px; min-width: 40px; padding: 0 8px; box-sizing: border-box; border-radius: 10px; background: rgba(255,255,255,.16); display: flex; align-items: center; justify-content: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 700">SL</span></div>
+            <span style="font-size: 15px; color: #e3e5ee">Slow motion 75% is a practice assist, so this run won’t reach the leaderboard.</span>
+          </sc-if>
+          <sc-if value="{{ranked}}" hint-placeholder-val="{{ true }}">
+            <div style="height: 26px; min-width: 40px; padding: 0 8px; box-sizing: border-box; border-radius: 10px; background: rgba(255,255,255,.16); display: flex; align-items: center; justify-content: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 700">SD</span></div>
+            <span style="font-size: 15px; color: #e3e5ee">Sudden Death · ranked</span>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 16px; padding: 0 4px">
+      <span style="width: 42px; height: 48px; flex: none; overflow: hidden" aria-hidden="true">
+        <img src="/_blob/2a631fa814971f261b2f85280bf1b4ef" alt="" width="84" height="48" style="display: block; image-rendering: pixelated; animation: ld-cherry 640ms steps(2) infinite">
+      </span>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 15px; color: #c9cde0">
+          <span><span style="font-weight: 700; color: #f3f4f8">Loading</span> · starts by itself</span>
+          <span><span style="font-weight: 700; color: #f3f4f8">Esc</span> back to game select</span>
+        </div>
+        <div style="height: 3px; border-radius: 2px; background: rgba(255,255,255,.14); overflow: hidden"><div style="width: 64%; height: 100%; background: linear-gradient(90deg, #ff3d55, #ffffff)"></div></div>
+      </div>
+    </div>
+    <span style="padding: 0 4px; font-size: 15px; color: #a2a8bc">Tip: hold <span style="font-weight: 700; color: #e3e5ee">R</span> on the results screen to retry straight away.</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"unranked":{"editor":"boolean","default":false},"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const u = this.props.unranked === true || this.props.unranked === 'true';
+    return { unranked: u, ranked: !u };
+  }
+}
+</script>
+</body>
+</html>

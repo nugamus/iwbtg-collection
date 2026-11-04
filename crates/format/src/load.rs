@@ -1423,6 +1423,7 @@ impl<'a> Loader<'a> {
                     RoomRole::Play
                 }
             };
+            def.no_restart = f.no_restart;
             def.file_speed = match &f.file_speed {
                 Some(s) => *s.get_ref(),
                 None => match self

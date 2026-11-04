@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Game select</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- Game select, modelled on song select: a fangame is the parent, each difficulty and category is a child entry with its own leaderboard. Right: the list, every game panel carrying its own background art. Left: the selected game's title wedge, stats, stages, then Details / Ranking. -->
+<div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1920px" h="1080px" hue="250" scene="castle" blur="14" dim="0.38" tag="none" hint-size="1920px,1080px"></dc-import></div>
+  <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 1152px; background: linear-gradient(90deg, rgba(0,0,0,.3), rgba(0,0,0,0))"></div>
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 140px; background: linear-gradient(0deg, rgba(0,0,0,.6), rgba(0,0,0,0))"></div>
+
+  <!-- top left: the music preview -->
+  <div style="position: absolute; left: 64px; top: 24px; display: flex; gap: 12px; align-items: center">
+    <div style="height: 48px; padding: 0 18px; border-radius: 10px; background: rgba(12,14,22,.5); display: flex; align-items: center; transform: skewX(-11.31deg)">
+      <div style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 12px">
+        <div style="display: flex; align-items: flex-end; gap: 3px; height: 18px" aria-hidden="true">
+          <span style="width: 3px; height: 10px; border-radius: 1px; background: #ff3d55"></span><span style="width: 3px; height: 18px; border-radius: 1px; background: #ff3d55"></span><span style="width: 3px; height: 7px; border-radius: 1px; background: #ff3d55"></span><span style="width: 3px; height: 14px; border-radius: 1px; background: #ff3d55"></span>
+        </div>
+        <div style="display: flex; flex-direction: column; line-height: 1.1">
+          <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Music preview</span>
+          <span style="font-size: 14px; font-weight: 600">Kaenbyou · [stage 1 music]</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- top right: search, group, sort, filters -->
+  <div style="position: absolute; left: 1040px; top: 24px; width: 840px; display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; gap: 10px">
+      <label for="sel-search" style="flex: 1; height: 48px; border-radius: 10px; background: rgba(12,14,22,.72); display: flex; align-items: center; transform: skewX(-11.31deg)">
+        <span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 12px; padding: 0 18px; width: 100%">
+          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle cx="7.5" cy="7.5" r="5.5" stroke="#a2a8bc" stroke-width="2" fill="none"></circle><path d="M12 12l4.5 4.5" stroke="#a2a8bc" stroke-width="2" stroke-linecap="round"></path></svg>
+          <input id="sel-search" type="search" placeholder="Search 20 games: title, creator, tag" style="all: unset; flex: 1; font-size: 16px; color: #f3f4f8">
+        </span>
+      </label>
+      <button type="button" style="all: unset; height: 48px; padding: 0 18px; border-radius: 10px; background: rgba(12,14,22,.72); display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer">
+        <span style="transform: skewX(11.31deg); font-size: 15px; font-weight: 600">Collections ▾</span>
+      </button>
+    </div>
+    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+      <sc-for list="{{controls}}" as="c" hint-placeholder-count="4">
+        <button type="button" style="all: unset; height: 34px; padding: 0 14px; border-radius: 10px; background: {{c.bg}}; display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer">
+          <span style="transform: skewX(11.31deg); display: flex; gap: 6px; font-size: 14px"><span style="color: #a2a8bc">{{c.k}}</span><span style="font-weight: 600; color: {{c.color}}">{{c.v}}</span></span>
+        </button>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- right: the list -->
+  <div style="position: absolute; left: 0; top: 150px; width: 1920px; display: flex; flex-direction: column; gap: 3px">
+    <sc-for list="{{panels}}" as="p" hint-placeholder-count="12">
+      <div style="position: relative; margin-left: {{p.x}}px; width: 1000px; height: {{p.h}}px; border-radius: 10px; overflow: hidden; transform: skewX(-11.31deg); background: {{p.bg}}; box-shadow: {{p.shadow}}">
+        <sc-if value="{{p.isGame}}" hint-placeholder-val="{{ true }}">
+          <div style="position: absolute; left: -30px; top: 0; width: 1060px; height: 72px; transform: skewX(11.31deg)">
+            <dc-import name="Backdrop" w="1060px" h="72px" hue="{{p.hue}}" scene="{{p.scene}}" blur="0" dim="0" tag="none" hint-size="1060px,72px"></dc-import>
+          </div>
+          <div style="position: absolute; inset: 0; background: {{p.veil}}"></div>
+          <div style="position: absolute; inset: 0; display: flex; align-items: center; gap: 16px; padding: 0 26px; transform: skewX(11.31deg)">
+            <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; width: 520px; text-shadow: 0 1px 8px rgba(0,0,0,.6)">
+              <span style="font-size: 23px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{p.title}}</span>
+              <span style="font-size: 14px; color: #dfe2ec">{{p.creator}}</span>
+            </div>
+            <div style="display: flex; gap: 5px; align-items: center">
+              <sc-for list="{{p.dots}}" as="d" hint-placeholder-count="4">
+                <span style="width: 10px; height: 10px; border-radius: 3px; background: {{d}}; box-shadow: 0 0 0 2px rgba(0,0,0,.35)"></span>
+              </sc-for>
+            </div>
+            <sc-if value="{{p.cleared}}" hint-placeholder-val="{{ false }}">
+              <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #ffffff; text-shadow: 0 1px 6px rgba(0,0,0,.6)">
+                <img src="/_blob/4c631e9e3893f215e44417d2cae2b519" alt="" width="14" height="16" style="image-rendering: pixelated">Cleared
+              </span>
+            </sc-if>
+          </div>
+        </sc-if>
+        <sc-if value="{{p.isEntry}}" hint-placeholder-val="{{ false }}">
+          <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: {{p.starBg}}"></div>
+          <div style="position: absolute; inset: 0; display: flex; align-items: center; gap: 16px; padding: 0 22px 0 26px; transform: skewX(11.31deg)">
+            <div style="height: 24px; min-width: 64px; padding: 0 9px; box-sizing: border-box; border-radius: 8px; background: {{p.starBg}}; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #10121a">★ {{p.stars}}</div>
+            <span style="width: 300px; font-size: 17px; font-weight: {{p.weight}}">{{p.title}}</span>
+            <span style="font-size: 15px; font-weight: 600; color: {{p.pbColor}}">{{p.pb}}</span>
+          </div>
+        </sc-if>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- left: title wedge with the game's art -->
+  <div style="position: absolute; left: -48px; top: 92px; width: 980px; height: 318px; border-radius: 10px; overflow: hidden; transform: skewX(-11.31deg); box-shadow: 0 24px 60px rgba(0,0,0,.45)">
+    <div style="position: absolute; left: -40px; top: 0; width: 1060px; height: 318px; transform: skewX(11.31deg)">
+      <dc-import name="Backdrop" w="1060px" h="318px" hue="250" scene="castle" blur="0" dim="0.05" tag="none" hint-size="1060px,318px"></dc-import>
+    </div>
+    <div style="position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8,9,14,.9) 0%, rgba(8,9,14,.62) 55%, rgba(8,9,14,.12) 100%)"></div>
+    <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, #ff3d55, rgba(255,61,85,0) 70%)"></div>
+    <div style="position: absolute; inset: 0; transform: skewX(11.31deg); padding: 28px 40px 26px 112px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px">
+      <div style="display: flex; gap: 8px; align-items: center">
+        <div style="height: 26px; padding: 0 12px; border-radius: 10px; background: #8ecbff; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #0b1a2a">Ranked</span></div>
+        <div style="height: 26px; padding: 0 12px; border-radius: 10px; background: {{selStarBg}}; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 14px; font-weight: 700; color: #10121a">★ {{selStars}}</span></div>
+        <span style="padding-left: 6px; font-size: 16px; font-weight: 600; color: #e3e5ee">{{selEntry}}</span>
+      </div>
+      <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 76px; font-weight: 700; font-style: italic; line-height: .92; letter-spacing: -.01em; text-shadow: 0 4px 28px rgba(0,0,0,.55)">I wanna be the Kaenbyou</span>
+      <div style="display: flex; align-items: center; gap: 10px; font-size: 18px; color: #dfe2ec">
+        <div style="width: 26px; height: 26px; border-radius: 13px; background: hsl(48 70% 52%); display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #10121a">K</div>
+        <span>by <span style="font-weight: 700; color: #ffffff">Kira☆~Kira☆~</span> · [year]</span>
+      </div>
+      <div style="display: flex; align-items: flex-end; justify-content: space-between; margin-top: auto">
+        <div style="display: flex; gap: 8px">
+          <sc-for list="{{tags}}" as="t" hint-placeholder-count="3">
+            <span style="height: 26px; padding: 0 12px; border-radius: 10px; background: rgba(255,255,255,.14); display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 14px; font-weight: 500">{{t}}</span></span>
+          </sc-for>
+        </div>
+        <!-- difficulty spread: every entry of this game on one star axis -->
+        <div style="display: flex; flex-direction: column; gap: 6px; width: 250px" aria-label="Entries from 3.12 to 8.21 stars">
+          <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #c9cde0">5 entries</span>
+          <div style="position: relative; height: 18px">
+            <div style="position: absolute; left: 0; right: 0; top: 8px; height: 2px; border-radius: 1px; background: linear-gradient(90deg, #7fc8ff, #6fe0c0, #a9e266, #f2d55a, #ff9f55, #ff6070, #d457ad, #9a6cf5)"></div>
+            <sc-for list="{{spread}}" as="s" hint-placeholder-count="5">
+              <span style="position: absolute; left: {{s.x}}%; top: {{s.top}}px; width: {{s.size}}px; height: {{s.size}}px; margin-left: {{s.m}}px; border-radius: 50%; background: {{s.c}}; box-shadow: {{s.ring}}"></span>
+            </sc-for>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 11px; color: #a2a8bc"><span>0★</span><span>9★</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- left: stats with small marks -->
+  <div style="position: absolute; left: 64px; top: 432px; width: 900px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 18px">
+    <sc-for list="{{stats}}" as="s" hint-placeholder-count="6">
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <span style="display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a2a8bc">
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="{{s.icon}}" stroke="#a2a8bc" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>{{s.k}}
+        </span>
+        <span style="font-size: 22px; font-weight: 600; color: {{s.color}}">{{s.v}}</span>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- left: the stages, with your deaths per stage -->
+  <div style="position: absolute; left: 54px; top: 510px; display: flex; gap: 8px">
+    <sc-for list="{{stages}}" as="g" hint-placeholder-count="7">
+      <div style="position: relative; width: 116px; height: 52px; border-radius: 10px; overflow: hidden; transform: skewX(-11.31deg); margin-left: 10px">
+        <div style="position: absolute; left: -10px; top: -14px; width: 136px; height: 104px; transform: skewX(11.31deg); filter: hue-rotate({{g.rot}}deg) brightness(.75)">
+          <div style="width: 800px; height: 608px; transform: scale(.17); transform-origin: 0 0"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div>
+        </div>
+        <div style="position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8,9,14,.85), rgba(8,9,14,.25))"></div>
+        <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: {{g.heat}}"></div>
+        <div style="position: absolute; inset: 0; transform: skewX(11.31deg); display: flex; align-items: center; justify-content: space-between; padding: 0 14px 0 16px">
+          <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 700">{{g.name}}</span>
+          <span style="display: flex; flex-direction: column; align-items: flex-end; line-height: 1.05"><span style="font-size: 14px; font-weight: 700">{{g.deaths}}</span><span style="font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: #c9cde0">deaths</span></span>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- left, below: Details / Ranking -->
+  <div style="position: absolute; left: 54px; top: 590px; width: 860px; display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; align-items: flex-end; gap: 28px; padding-left: 10px">
+      <button type="button" style="all: unset; display: flex; flex-direction: column; gap: 6px; cursor: pointer"><span style="font-size: 17px; font-weight: 600; color: #a2a8bc">Details</span><span style="height: 2px; background: transparent"></span></button>
+      <button type="button" aria-pressed="true" style="all: unset; display: flex; flex-direction: column; gap: 6px; cursor: pointer"><span style="font-size: 17px; font-weight: 700; color: #ffffff">Ranking</span><span style="height: 2px; border-radius: 1px; background: #ff3d55"></span></button>
+      <span style="flex: 1"></span>
+      <sc-if value="{{offline}}" hint-placeholder-val="{{ false }}">
+        <span style="display: flex; align-items: center; gap: 6px; padding-bottom: 8px; font-size: 13px; font-weight: 600; color: #ffc46b"><span style="width: 6px; height: 6px; border-radius: 3px; background: #ffc46b"></span>Offline · cached 3h ago</span>
+      </sc-if>
+      <button type="button" style="all: unset; height: 32px; padding: 0 14px; border-radius: 10px; background: rgba(12,14,22,.72); display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer; margin-bottom: 2px">
+        <span style="transform: skewX(11.31deg); display: flex; gap: 6px; font-size: 14px"><span style="color: #a2a8bc">Scope</span><span style="font-weight: 600">Global ▾</span></span>
+      </button>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 3px">
+      <sc-for list="{{ranking}}" as="r" hint-placeholder-count="5">
+        <div style="position: relative; margin-left: 10px; width: 820px; height: 50px; border-radius: 10px; background: {{r.bg}}; transform: skewX(-11.31deg)">
+          <div style="position: absolute; inset: 0; display: grid; grid-template-columns: 52px 36px minmax(0, 1fr) 120px 110px 100px; gap: 12px; align-items: center; padding: 0 20px 0 16px; transform: skewX(11.31deg)">
+            <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 700; color: {{r.rankColor}}">{{r.rank}}</span>
+            <div style="width: 34px; height: 34px; border-radius: 8px; background: {{r.avBg}}; display: grid; place-items: center; font-size: 15px; font-weight: 700; color: rgba(255,255,255,.88)">{{r.initial}}</div>
+            <span style="display: flex; align-items: center; gap: 8px; min-width: 0"><span style="font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.name}}</span><span style="width: 18px; height: 12px; flex: none; border-radius: 2px; background: {{r.flag}}"></span></span>
+            <span style="font-size: 18px; font-weight: 700; text-align: right">{{r.time}}</span>
+            <span style="font-size: 15px; color: #c9cde0; text-align: right">{{r.deaths}}</span>
+            <span style="font-size: 14px; color: #a2a8bc; text-align: right">{{r.date}}</span>
+          </div>
+        </div>
+      </sc-for>
+      <sc-if value="{{empty}}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 16px 0 0 26px; display: flex; flex-direction: column; gap: 4px">
+          <span style="font-size: 20px; font-weight: 600">No clears yet — be the first</span>
+          <span style="font-size: 15px; color: #a2a8bc">Your first clear sets the world record for this entry.</span>
+        </div>
+      </sc-if>
+    </div>
+    <sc-if value="{{hasPin}}" hint-placeholder-val="{{ true }}">
+      <div style="position: relative; margin: 8px 0 0 10px; width: 840px; height: 50px; border-radius: 10px; background: rgba(255,255,255,.22); box-shadow: 0 6px 18px rgba(0,0,0,.35); transform: skewX(-11.31deg)">
+        <div style="position: absolute; inset: 0; display: grid; grid-template-columns: 52px 36px minmax(0, 1fr) 120px 110px 100px; gap: 12px; align-items: center; padding: 0 20px 0 16px; transform: skewX(11.31deg)">
+          <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 700">#25</span>
+          <div style="width: 34px; height: 34px; border-radius: 8px; background: hsl(352 58% 46%); display: grid; place-items: center; font-size: 15px; font-weight: 700">N</div>
+          <span style="display: flex; align-items: baseline; gap: 10px"><span style="font-size: 17px; font-weight: 700">nugamus</span><span style="font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #e3e5ee">Your PB</span></span>
+          <span style="font-size: 18px; font-weight: 700; text-align: right">38:12.46</span>
+          <span style="font-size: 15px; color: #e3e5ee; text-align: right">1,284</span>
+          <span style="font-size: 14px; color: #e3e5ee; text-align: right">3 Nov</span>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+
+  <!-- footer: Back and Options left; Random and Mods right, then the player card in the corner -->
+  <div style="position: absolute; left: 64px; right: 64px; bottom: 26px; display: flex; align-items: flex-end; gap: 12px">
+    <button type="button" style="all: unset; height: 52px; padding: 0 26px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer"><span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 600"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M9 2L4 7l5 5" stroke="#f3f4f8" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>Back</span></button>
+    <button type="button" style="all: unset; height: 52px; padding: 0 24px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer"><span style="transform: skewX(11.31deg); font-size: 17px; font-weight: 600">Options</span></button>
+    <span style="flex: 1"></span>
+    <button type="button" style="all: unset; height: 52px; padding: 0 24px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer"><span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 600"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="1.5" width="13" height="13" rx="3" stroke="#f3f4f8" stroke-width="1.6" fill="none"></rect><circle cx="5" cy="5" r="1.3" fill="#f3f4f8"></circle><circle cx="11" cy="11" r="1.3" fill="#f3f4f8"></circle><circle cx="8" cy="8" r="1.3" fill="#f3f4f8"></circle></svg>Random</span></button>
+    <a href="ModSelect.dc.html" style="height: 52px; padding: 0 28px; border-radius: 10px; background: #ff3d55; display: flex; align-items: center; transform: skewX(-11.31deg); text-decoration: none; box-shadow: 0 8px 24px rgba(255,61,85,.35)">
+      <span style="transform: skewX(11.31deg); display: flex; align-items: baseline; gap: 10px; font-size: 19px; font-weight: 700; color: #ffffff">Mods <span style="font-size: 13px; font-weight: 600; opacity: .85">none</span></span>
+    </a>
+    <div style="width: 420px; height: 108px; margin-left: 18px"><dc-import name="ProfileCard" variant="footer" hint-size="420px,108px"></dc-import></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"state":{"editor":"enum","options":["normal","empty","offline"],"default":"normal"},"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const state = this.props.state ?? 'normal';
+    const empty = state === 'empty';
+    const ramp = [[0, '#7fc8ff'], [2, '#6fe0c0'], [3, '#a9e266'], [4, '#f2d55a'], [5, '#ff9f55'], [6, '#ff6070'], [7, '#d457ad'], [8, '#9a6cf5']];
+    const starColor = (s) => { let c = ramp[0][1]; for (const [k, v] of ramp) if (s >= k) c = v; return c; };
+    const game = (title, creator, hue, scene, stars, cleared) => ({ isGame: true, isEntry: false, title, creator, hue, scene, dots: stars.map(starColor), cleared });
+    const kaen = [3.12, 4.87, 6.84, 8.21, 5.63];
+    const list = [
+      game('I wanna eat the lemon', 'AutumnWater', 52, 'forest', [2.4, 3.9, 5.1], true),
+      game('I wanna be the Little runner', 'ヨーヨー', 140, 'forest', [3.3, 4.6], true),
+      game('I wanna help the Fairy tale', 'れおちゅー', 300, 'city', [3.8, 5.2, 6.1], false),
+      Object.assign(game('I wanna be the Kaenbyou', 'Kira☆~Kira☆~', 250, 'castle', kaen, true), { selected: true }),
+      { entry: 'Medium · Any%', stars: 3.12, pb: '24:51.30' },
+      { entry: 'Hard · Any%', stars: 4.87, pb: '31:08.94' },
+      { entry: 'Very Hard · Any%', stars: 6.84, pb: '38:12.46' },
+      { entry: 'Impossible · Any%', stars: 8.21, pb: null },
+      { entry: 'Hard · 100%', stars: 5.63, pb: null },
+      game('I wanna be the Machinary', 'メガビリー', 190, 'cave', [4.1, 5.9, 7.2], false),
+      game('I wanna go the Spook House', 'Sephalos, Patrickgh3', 20, 'sea', [5.4, 7.0], true),
+      game('I wanna Rely The Needle 4.2', 'NineightA', 330, 'city', [6.2, 7.9], false),
+    ];
+    const selIdx = empty ? 7 : 6;
+    const panels = list.map((p, i) => {
+      if (p.isGame) {
+        const sel = !!p.selected;
+        return Object.assign({}, p, {
+          x: sel ? 1035 : 1060, h: 72, bg: '#0b0d14',
+          veil: sel ? 'linear-gradient(90deg, rgba(8,9,14,.82) 0%, rgba(8,9,14,.45) 45%, rgba(8,9,14,0) 100%)' : 'linear-gradient(90deg, rgba(8,9,14,.9) 0%, rgba(8,9,14,.6) 45%, rgba(8,9,14,.2) 100%)',
+          shadow: sel ? '0 0 0 2px rgba(255,255,255,.55), 0 10px 30px rgba(0,0,0,.5)' : '0 4px 12px rgba(0,0,0,.25)',
+        });
+      }
+      const sel = i === selIdx;
+      return {
+        isGame: false, isEntry: true, title: p.entry, stars: p.stars.toFixed(2), starBg: starColor(p.stars),
+        pb: p.pb || 'No PB', pbColor: p.pb ? '#f3f4f8' : '#a2a8bc', weight: sel ? 700 : 500,
+        x: sel ? 1065 : 1090, h: 45, bg: sel ? 'rgba(255,255,255,.26)' : 'rgba(14,16,24,.82)',
+        shadow: sel ? '0 6px 18px rgba(0,0,0,.4)' : 'none',
+      };
+    });
+    const sel = list[selIdx];
+    const snap = (s) => Math.round(s * 50) / 50;
+    const t = (i) => snap(1902.18 + 11.4 * (i - 1) + 0.85 * Math.pow(i - 1, 1.55));
+    const fmt = (s) => { const c = Math.round(s * 100), h = Math.floor(c / 360000), m = Math.floor(c / 6000) % 60, sec = Math.floor(c / 100) % 60, cs = c % 100; const p = (n) => String(n).padStart(2, '0'); return (h ? h + ':' + p(m) : String(m)) + ':' + p(sec) + '.' + p(cs); };
+    const NAMES = ['tsukimi', 'bluespike', 'kestrel', 'mochi_dash', 'VaultHop'];
+    const FLAGS = ['radial-gradient(circle at 50% 50%, #bc002d 3px, #ffffff 3.6px)', 'linear-gradient(#111 33%, #dd0000 33% 66%, #ffce00 66%)', 'linear-gradient(90deg, #0055a4 33%, #ffffff 33% 66%, #ef4135 66%)', 'linear-gradient(90deg, transparent 5px, #fecc00 5px 8px, transparent 8px), linear-gradient(transparent 4px, #fecc00 4px 7px, transparent 7px), #006aa7', 'linear-gradient(#ffffff 50%, #dc143c 50%)', 'linear-gradient(#ae1c28 33%, #ffffff 33% 66%, #21468b 66%)', 'radial-gradient(circle at 28% 32%, #ffde00 2px, #de2910 2.6px)'];
+    const dates = ['12 Sep', '30 Oct', '2 Nov', '18 Aug', '27 Oct'];
+    const ranking = empty ? [] : NAMES.map((name, k) => {
+      const i = k + 1;
+      return {
+        rank: '#' + i, name, initial: name[0].toUpperCase(), avBg: `hsl(${(i * 47) % 360} 42% 36%)`, flag: FLAGS[(i * 3) % FLAGS.length],
+        time: fmt(t(i)), deaths: (420 + ((i * 2741) % 1900)).toLocaleString('en-US'), date: dates[k],
+        bg: i === 1 ? 'rgba(255,201,60,.16)' : 'rgba(12,14,22,.62)', rankColor: i === 1 ? '#ffc93c' : '#a2a8bc',
+      };
+    });
+    const I = {
+      flag: 'M3 12.5V1.5M3 2h7l-1.5 2.5L10 7H3',
+      clock: 'M7 1.5a5.5 5.5 0 1 0 0 11a5.5 5.5 0 1 0 0-11M7 4v3.2l2 1.3',
+      check: 'M7 1.5a5.5 5.5 0 1 0 0 11a5.5 5.5 0 1 0 0-11M4.6 7.2l1.7 1.7l3.2-3.4',
+      bolt: 'M8 1.5L3.5 8H7l-1 4.5L10.5 6H7z',
+      skull: 'M7 1.5c-3 0-5 2-5 4.6c0 1.6.8 2.7 2 3.3v2.1h6V9.4c1.2-.6 2-1.7 2-3.3c0-2.6-2-4.6-5-4.6M5 6.5h.01M9 6.5h.01',
+      crown: 'M2 11.5h10M2.5 10L2 4l3 2.5L7 2.5l2 4L12 4l-.5 6z',
+    };
+    const stats = empty ? [
+      { k: 'Stages', v: '7', color: '#f3f4f8', icon: I.flag }, { k: 'Avg clear', v: 'No clears', color: '#a2a8bc', icon: I.clock }, { k: 'Clear rate', v: 'No clears', color: '#a2a8bc', icon: I.check },
+      { k: 'Your PB', v: '—', color: '#a2a8bc', icon: I.bolt }, { k: 'Your deaths', v: '2,117', color: '#f3f4f8', icon: I.skull }, { k: 'World record', v: '—', color: '#a2a8bc', icon: I.crown },
+    ] : [
+      { k: 'Stages', v: '7', color: '#f3f4f8', icon: I.flag }, { k: 'Avg clear', v: '54:20.36', color: '#f3f4f8', icon: I.clock }, { k: 'Clear rate', v: '3.8%', color: '#f3f4f8', icon: I.check },
+      { k: 'Your PB', v: '38:12.46', color: '#f3f4f8', icon: I.bolt }, { k: 'Your deaths', v: '9,412', color: '#f3f4f8', icon: I.skull }, { k: 'World record', v: fmt(t(1)), color: '#f3f4f8', icon: I.crown },
+    ];
+    const sd = empty ? [61, 140, 233, 410, 702, 571, 0] : [380, 611, 1040, 1520, 2880, 1972, 1009];
+    const smax = Math.max(...sd);
+    const stages = sd.map((n, i) => ({
+      name: i === 6 ? 'Boss' : String(i + 1), deaths: n ? n.toLocaleString('en-US') : '—', rot: i * 48,
+      heat: n === smax ? '#ff3d55' : `rgba(255,255,255,${(0.15 + 0.5 * n / smax).toFixed(2)})`,
+    }));
+    const spread = kaen.map((s) => {
+      const on = s === sel.stars;
+      return { x: (s / 9 * 100).toFixed(1), c: starColor(s), size: on ? 16 : 10, m: on ? -8 : -5, top: on ? 1 : 4, ring: on ? '0 0 0 3px #ffffff' : '0 0 0 2px rgba(0,0,0,.5)' };
+    });
+    return {
+      panels, offline: state === 'offline', empty, hasPin: !empty,
+      selEntry: sel.entry, selStars: sel.stars.toFixed(2), selStarBg: starColor(sel.stars),
+      stats, ranking, stages, spread,
+      tags: ['Needle', 'Avoidance', 'Adventure', 'Gimmick'],
+      controls: [
+        { k: 'Group', v: 'Game', bg: 'rgba(12,14,22,.72)', color: '#f3f4f8' },
+        { k: 'Sort', v: 'Stars ▾', bg: 'rgba(12,14,22,.72)', color: '#f3f4f8' },
+        { k: '', v: 'Cleared', bg: 'rgba(255,255,255,.2)', color: '#ffffff' },
+        { k: '', v: 'Uncleared', bg: 'rgba(12,14,22,.72)', color: '#c9cde0' },
+        { k: 'Status', v: 'Ranked ▾', bg: 'rgba(12,14,22,.72)', color: '#f3f4f8' },
+        { k: 'Creator', v: 'Any ▾', bg: 'rgba(12,14,22,.72)', color: '#f3f4f8' },
+        { k: 'Year', v: 'Any ▾', bg: 'rgba(12,14,22,.72)', color: '#f3f4f8' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>
