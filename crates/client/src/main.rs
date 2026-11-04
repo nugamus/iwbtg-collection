@@ -4,6 +4,7 @@
 //! instance with a sprite is drawn where the sim last put it.
 
 mod art;
+mod audio;
 mod input;
 mod package;
 mod screen;
@@ -31,6 +32,10 @@ struct Args {
     /// default: the originals draw every step, so a blended frame shows positions the game never had.
     #[arg(long)]
     interpolate: bool,
+    /// Hold the sound back by this many milliseconds (0 to 500) to line it up with the picture on
+    /// a slow audio device. It moves playback only, never the sim.
+    #[arg(long, value_name = "MS", default_value_t = 0, value_parser = clap::value_parser!(u32).range(0..=500))]
+    audio_offset: u32,
     /// Start fullscreen (F11 toggles).
     #[arg(long)]
     fullscreen: bool,
@@ -62,7 +67,13 @@ fn main() -> ExitCode {
         window: args.window,
     });
     match package::open(&args.package, args.trace_mode) {
-        Ok(pkg) => match view::run(pkg, args.fps, args.interpolate, args.screenshot) {
+        Ok(pkg) => match view::run(
+            pkg,
+            args.fps,
+            args.interpolate,
+            args.audio_offset,
+            args.screenshot,
+        ) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("{e}");
