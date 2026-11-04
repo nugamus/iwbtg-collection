@@ -64,3 +64,18 @@ status = "excluded-from-public"
 
 [music.stage1]
 volume = { bits = "3FE0000000000000" }
+
+[[maps]]
+id = "medium"
+name = "Medium"
+difficulty = "Medium"
+
+[[maps]]
+id = "hard_any"
+name = "Hard Any%"
+difficulty = "Hard"
+category = "Any%"
+version = "4.2"
+start = { trigger = "run_start" }
+end = { trigger = "run_end" }
+stages = [{ id = "boss", name = "Boss", trigger = "boss1_dead" }]
