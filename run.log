@@ -1,0 +1,5 @@
+[2m2026-11-04T12:33:33.120295Z[0m [32m INFO[0m [2mbevy_render::renderer[0m[2m:[0m AdapterInfo { name: "AMD Radeon RX 6700 XT", vendor: 4098, device: 29663, device_type: DiscreteGpu, device_pci_bus_id: "", driver: "AMD proprietary driver", driver_info: "26.10.1 (AMD proprietary shader compiler)", backend: Vulkan, subgroup_min_size: 32, subgroup_max_size: 64, transient_saves_memory: Some(false), limit_bucket: None }
+[2m2026-11-04T12:33:33.228052Z[0m [32m INFO[0m [2mbevy_winit::system[0m[2m:[0m Creating new window IWBTG Collection: demo_view (63v0)
+[2m2026-11-04T12:33:33.403637Z[0m [32m INFO[0m [2mbevy_render::batching::gpu_preprocessing[0m[2m:[0m GPU preprocessing is fully supported on this device.
+[2m2026-11-04T12:36:09.201851Z[0m [32m INFO[0m [2mbevy_window::system[0m[2m:[0m No windows are open, exiting
+[2m2026-11-04T12:36:09.202071Z[0m [32m INFO[0m [2mbevy_winit::system[0m[2m:[0m Closing window 63v0
