@@ -288,6 +288,81 @@
       },
       "type": "object"
     },
+    "MapEntry": {
+      "additionalProperties": false,
+      "description": "One `[[maps]]` entry (docs/format/v0.md, Maps). Timing keys it leaves out come from\n`[timing]`.",
+      "properties": {
+        "category": {
+          "default": null,
+          "description": "The run category (\"Any%\", \"100%\", \"True Ending\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "difficulty": {
+          "default": null,
+          "description": "The original's built-in difficulty this map plays, as the game names it (\"Medium\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "end": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TriggerRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The run ends at this trigger; default `[timing].end`."
+        },
+        "id": {
+          "description": "Map id, unique within the package. Stable forever; leaderboards key on it.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Display name in game select.",
+          "type": "string"
+        },
+        "stages": {
+          "description": "Stages in order; default `[timing].stages`. `[]` is a single-stage map.",
+          "items": {
+            "$ref": "#/$defs/Stage"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TriggerRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The run starts at this trigger; default `[timing].start`."
+        },
+        "version": {
+          "default": null,
+          "description": "The original's version this map plays; default `source_version`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "type": "object"
+    },
     "MusicSettings": {
       "additionalProperties": false,
       "description": "One `[music.<id>]` table.",
@@ -863,6 +938,13 @@
         }
       ],
       "description": "Art for the background system and the game select list; absent: the first ranked\nroom's background ([`crate::key_art`])."
+    },
+    "maps": {
+      "description": "Maps: each built-in difficulty, category and version, with its own timing and board.\nAbsent: one map, [`DEFAULT_MAP_ID`], timed by `[timing]`.",
+      "items": {
+        "$ref": "#/$defs/MapEntry"
+      },
+      "type": "array"
     },
     "max_ticks": {
       "description": "Upper bound for a replay, in ticks. The server rejects longer replays.",
