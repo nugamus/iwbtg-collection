@@ -35,6 +35,6 @@ Each ported game belongs to its creator. This project is non-commercial and will
 
 ## License
 
-Code is licensed under either of [Apache License 2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT), at your option. Documentation in `docs/` is licensed under [CC BY 4.0](LICENSES/CC-BY-4.0.txt). The bundled fonts in `crates/client/assets/fonts/` (Barlow, Barlow Condensed, Pixelify Sans, a subset of Noto Sans Symbols 2) are under the SIL Open Font License 1.1; their licence files sit next to them. Game content is not covered by these licenses.
+Code is licensed under either of [Apache License 2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT), at your option. Documentation in `docs/` is licensed under [CC BY 4.0](LICENSES/CC-BY-4.0.txt). The bundled fonts in `crates/client/assets/fonts/` (Barlow, Barlow Condensed, Pixelify Sans, a subset of Noto Sans Symbols 2, a subset of Noto Sans JP) are under the SIL Open Font License 1.1; their licence files sit next to them. Game content is not covered by these licenses.
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.

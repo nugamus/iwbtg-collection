@@ -7,7 +7,7 @@ use bevy::text::{FontFeatureTag, FontFeatures, FontSize, FontSource, FontStyle, 
 
 /// Every face we ship. Bevy registers each under its embedded family name, so text asks for a
 /// family and a weight and the font database picks the face.
-const FACES: [&[u8]; 11] = [
+const FACES: [&[u8]; 12] = [
     include_bytes!("../../assets/fonts/Barlow-Regular.ttf"),
     include_bytes!("../../assets/fonts/Barlow-Medium.ttf"),
     include_bytes!("../../assets/fonts/Barlow-SemiBold.ttf"),
@@ -20,6 +20,9 @@ const FACES: [&[u8]; 11] = [
     include_bytes!("../../assets/fonts/PixelifySans.ttf"),
     // Symbols Barlow lacks (★ ☆ ▾ ✓, arrows, geometric shapes): a subset of Noto Sans Symbols 2.
     include_bytes!("../../assets/fonts/NotoSansSymbols2-subset.ttf"),
+    // Japanese kana, punctuation, full-width forms and the 2965 JIS level 1 kanji, one weight
+    // (Medium) for every weight: a subset of Noto Sans JP, about 1 MB.
+    include_bytes!("../../assets/fonts/NotoSansJP-subset.ttf"),
 ];
 
 /// Keeps the font assets alive.
@@ -48,12 +51,12 @@ pub enum Family {
 }
 
 impl Family {
-    /// The family list text asks for: the family, then the symbol fallback.
+    /// The family list text asks for: the family, then the symbol and Japanese fallbacks.
     fn names(self) -> &'static str {
         match self {
-            Family::Barlow => "Barlow, 'Noto Sans Symbols 2'",
-            Family::Condensed => "'Barlow Condensed', 'Noto Sans Symbols 2'",
-            Family::Pixel => "'Pixelify Sans', 'Noto Sans Symbols 2'",
+            Family::Barlow => "Barlow, 'Noto Sans Symbols 2', 'Noto Sans JP'",
+            Family::Condensed => "'Barlow Condensed', 'Noto Sans Symbols 2', 'Noto Sans JP'",
+            Family::Pixel => "'Pixelify Sans', 'Noto Sans Symbols 2', 'Noto Sans JP'",
         }
     }
 }
