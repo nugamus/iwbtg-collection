@@ -539,6 +539,22 @@ fn gameplay_hash_ignores_comments_and_follows_masks() {
         );
     });
     assert_eq!(hash(&commented), base);
+    // Key art is cosmetic (#491): adding `[key_art]` and its image keeps the hash.
+    let key_art = package(|f| {
+        set(
+            f,
+            "game.toml",
+            format!(
+                "{}
+[key_art]
+image = \"art/key.png\"
+",
+                manifest(ORDER, "")
+            ),
+        );
+        f.push(("art/key.png".into(), png(&["#"])));
+    });
+    assert_eq!(hash(&key_art), base);
     let new_pixel = package(|f| set(f, "sprites/spike_up.png", png(&["###.", "####"])));
     assert_ne!(hash(&new_pixel), base);
     let moved = package(|f| set(f, "rooms/stage1.toml", STAGE1.replace("x = 48", "x = 49")));
