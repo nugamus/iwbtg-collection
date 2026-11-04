@@ -1,0 +1,20 @@
+#:schema ../../../../../docs/format/schema/v0/room.schema.json
+size = [2400, 608]
+file_speed = 50
+views_enabled = true
+views = [
+  { visible = true, view = [0, 0, 800, 608], port = [0, 0, 800, 608], follow = "kid", border = [200, 64] },
+]
+background = "sky"
+background_color = "#101030"
+instances = [
+  { kind = "kid_start", x = 64, y = 544 },
+  { kind = "block", x = 0, y = 576, run = [75, 1], step = [32, 32] },
+  { kind = "block", x = 0, y = 0, run = [75, 1], step = [32, 32] },
+  { kind = "block", x = 0, y = 32, run = [1, 17], step = [32, 32] },
+  { kind = "block", x = 2368, y = 32, run = [1, 17], step = [32, 32] },
+  { kind = "block", x = 320, y = 480, run = [3, 1], step = [32, 32] },
+  { kind = "block", x = 1200, y = 480, run = [3, 1], step = [32, 32] },
+  { kind = "spike", x = 1600, y = 544, run = [4, 1], step = [32, 32], dir = "up" },
+  { kind = "block", x = 2000, y = 448, run = [4, 1], step = [32, 32] },
+]
