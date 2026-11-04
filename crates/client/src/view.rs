@@ -184,7 +184,7 @@ pub fn run(
         RunFixedMainLoop,
         collect_input.in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
     )
-    .add_systems(FixedUpdate, tick)
+    .add_systems(FixedUpdate, (tick, follow_room_speed).chain())
     .add_systems(
         Update,
         (
@@ -296,10 +296,36 @@ fn tick(
     }
 }
 
+/// The ticks per second the sim's current room speed asks for: `room_speed` as the room file or
+/// the game set it, at least 1 (a game that sets 0 or less would stop the clock) and at most 1000.
+fn room_hz(room_speed: f64) -> f64 {
+    if room_speed.is_finite() {
+        room_speed.clamp(1.0, 1000.0)
+    } else {
+        1.0
+    }
+}
+
+/// Sets the fixed clock to the rate `room_speed` asks for, when it is not already that.
+fn retune(fixed: &mut Time<Fixed>, room_speed: f64) {
+    let hz = room_hz(room_speed);
+    if (fixed.timestep().as_secs_f64().recip() - hz).abs() > 1e-6 {
+        fixed.set_timestep_hz(hz);
+    }
+}
+
+/// Retunes the fixed clock when the sim's `room_speed` changes (a room's file speed on entry, or a
+/// game setting it), so the game ticks at the rate it asks for. Runs after the sim's tick, so the
+/// next tick already uses the new rate.
+fn follow_room_speed(game: NonSend<Game>, mut fixed: ResMut<Time<Fixed>>) {
+    retune(&mut fixed, game.sim.world().room_speed.get());
+}
+
 /// F3 shows or hides the overlay; once a second it recounts ticks and frames per second.
 fn overlay(
     game: NonSend<Game>,
     keys: Res<ButtonInput<KeyCode>>,
+    fixed: Res<Time<Fixed>>,
     mut stats: ResMut<Stats>,
     mut text: Single<(&mut Text2d, &mut Visibility), With<Overlay>>,
 ) {
@@ -346,7 +372,7 @@ fn overlay(
 room {room}
 {kid}",
         stats.ticks_per_second,
-        game.sim.def().tick_rate,
+        fixed.timestep().as_secs_f64().recip().round(),
         stats.frames_per_second,
         world.tick,
     );
@@ -529,5 +555,32 @@ mod tests {
         assert_eq!(two(-0.000_001), "0.00");
         assert_eq!(two(-1.5), "-1.50");
         assert_eq!(two(567.4), "567.40");
+    }
+
+    #[test]
+    fn the_clock_follows_room_speed_within_sane_bounds() {
+        assert_eq!(room_hz(50.0), 50.0);
+        assert_eq!(room_hz(25.0), 25.0);
+        // A game that sets 0 or a negative speed must not stop or reverse the clock.
+        assert_eq!(room_hz(0.0), 1.0);
+        assert_eq!(room_hz(-30.0), 1.0);
+        assert_eq!(room_hz(1e9), 1000.0);
+        assert_eq!(room_hz(f64::NAN), 1.0);
+    }
+
+    #[test]
+    fn the_fixed_clock_is_retuned_when_room_speed_changes_and_left_alone_otherwise() {
+        let mut fixed = Time::<Fixed>::from_hz(50.0);
+        retune(&mut fixed, 50.0);
+        assert_eq!(fixed.timestep(), Duration::from_millis(20));
+        // A room at 25 steps per second: 40 ms per tick.
+        retune(&mut fixed, 25.0);
+        assert_eq!(fixed.timestep(), Duration::from_millis(40));
+        // Back to the game's rate on the next room.
+        retune(&mut fixed, 50.0);
+        assert_eq!(fixed.timestep(), Duration::from_millis(20));
+        // A game that sets a silly speed gets the clamped one.
+        retune(&mut fixed, 0.0);
+        assert_eq!(fixed.timestep(), Duration::from_secs(1));
     }
 }
