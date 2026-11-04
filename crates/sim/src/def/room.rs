@@ -18,6 +18,8 @@ pub struct RoomDef {
     pub height: u32,
     /// What the room is for; replaces the engines' "not rInit/rMenu/rTitle/rSelectStage" tests.
     pub role: RoomRole,
+    /// R does nothing here (animus room52: its world Key R event is off in that room, #445).
+    pub no_restart: bool,
     /// `room_speed` on entry, before the world's Room Start (Inferred, R14).
     pub file_speed: u32,
     /// GM persistent room.
@@ -41,6 +43,7 @@ impl RoomDef {
             width,
             height,
             role: RoomRole::Play,
+            no_restart: false,
             file_speed: 50,
             persistent: false,
             views_enabled: false,

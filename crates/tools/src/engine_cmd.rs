@@ -308,7 +308,7 @@ mod tests {
             header: Header {
                 magic: MAGIC,
                 replay_format: REPLAY_FORMAT,
-                sim_version: 0,
+                sim_version: iwbtg_sim::SIM_VERSION,
                 package_id: "golden".into(),
                 gameplay_hash: [0; 32],
                 engine_rev: 0,

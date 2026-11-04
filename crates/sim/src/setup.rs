@@ -107,6 +107,7 @@ impl Sim {
             world,
             options,
             scripts,
+            rows_done: false,
         })
     }
 }
@@ -353,6 +354,7 @@ mod tests {
                 dll_mode: DllMode::Stub,
             },
             scripts: ScriptRuntime::default(),
+            rows_done: false,
         }
     }
 

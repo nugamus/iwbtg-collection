@@ -14,14 +14,15 @@ repository = "https://github.com/nugamus/iwbtg-collection"
 iwbtg-sim = { path = "crates/sim" }
 iwbtg-format = { path = "crates/format" }
 # Rhai features per docs/decisions/0001-script-language.md and docs/plans/sim-core.md section 11.
-# WP9 owns this line after WP0 (switch to =1.27.N with compact_str once it is 14 days old).
-rhai = { version = "=1.26.1", default-features = false, features = [
+# WP9 owns this line. Pinned at 1.27.0 (14 days old on 2026-11-04) with compact_str (decision 0001).
+rhai = { version = "=1.27.0", default-features = false, features = [
   "std",
   "only_i64",
   "no_time",
   "no_module",
   "no_custom_syntax",
   "no_closure",
+  "compact_str",
   "internals",
 ] }
 libm = { version = "=0.2.16", default-features = false }

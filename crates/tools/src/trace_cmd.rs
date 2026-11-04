@@ -244,7 +244,14 @@ pub fn execute(
             .ok()
             .and_then(|f| frames.get(f).copied())
             .unwrap_or(InputFrame::EMPTY);
-        let step = sim.step(input);
+        // On the tick of a room change the recorder samples before the change (the old room's
+        // instances, the kid already moved; kid/B.md Restart timing, #450).
+        let room_change = sim.step_rows(input);
+        let mut sampled = Vec::new();
+        if room_change && frame >= case.first_frame {
+            sampled = probe::sample(&mut sim, &probe, i64::from(frame));
+        }
+        let step = sim.finish_step();
         if let SimStatus::Halted(e) = &step.status {
             return Err(ToolError::Message(format!(
                 "{}: frame {frame}: the sim halted: {e}",
@@ -252,7 +259,10 @@ pub fn execute(
             )));
         }
         if frame >= case.first_frame {
-            for row in probe::sample(&mut sim, &probe, i64::from(frame)) {
+            if !room_change {
+                sampled = probe::sample(&mut sim, &probe, i64::from(frame));
+            }
+            for row in sampled {
                 table
                     .push_row(splice(case, &resolved.columns, row))
                     .map_err(|e| ToolError::Message(e.to_string()))?;

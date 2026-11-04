@@ -539,6 +539,22 @@ fn gameplay_hash_ignores_comments_and_follows_masks() {
         );
     });
     assert_eq!(hash(&commented), base);
+    // Key art is cosmetic (#491): adding `[key_art]` and its image keeps the hash.
+    let key_art = package(|f| {
+        set(
+            f,
+            "game.toml",
+            format!(
+                "{}
+[key_art]
+image = \"art/key.png\"
+",
+                manifest(ORDER, "")
+            ),
+        );
+        f.push(("art/key.png".into(), png(&["#"])));
+    });
+    assert_eq!(hash(&key_art), base);
     let new_pixel = package(|f| set(f, "sprites/spike_up.png", png(&["###.", "####"])));
     assert_ne!(hash(&new_pixel), base);
     let moved = package(|f| set(f, "rooms/stage1.toml", STAGE1.replace("x = 48", "x = 49")));
@@ -979,14 +995,14 @@ fn wp6b3_params_are_checked() {
 }
 
 #[test]
-fn a_gravity_flip_with_view_rotation_is_refused_at_load() {
-    let errs = tier2_errors(
-        r#"{ kind = "gravity_flip", x = 0, y = 0, direction = "up", transition = "yflag_with_view_rotation" }"#,
+fn a_gravity_flip_with_view_rotation_loads() {
+    let files = tier2_package(
+        r#"  { kind = "gravity_flip", x = 0, y = 0, direction = "up", transition = "yflag_with_view_rotation" },
+"#,
+        |_| {},
     );
-    assert!(
-        errs.iter().any(|e| e.contains("yflag_with_view_rotation")),
-        "{errs:?}"
-    );
+    let r = load_report(&files, STRICT);
+    assert!(r.ok(), "{}", render(&r));
 }
 
 #[test]
