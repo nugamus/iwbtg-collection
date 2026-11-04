@@ -49,7 +49,7 @@ pub(crate) struct ViewRect {
 
 impl ViewRect {
     /// The whole room.
-    fn whole(room: Vec2) -> ViewRect {
+    pub(crate) fn whole(room: Vec2) -> ViewRect {
         ViewRect {
             x: 0.0,
             y: 0.0,
@@ -57,6 +57,11 @@ impl ViewRect {
             h: room.y,
             angle: 0.0,
         }
+    }
+
+    /// Whether the view shows less than the room or is turned, so the camera must be clipped.
+    pub(crate) fn clips(&self, room: Vec2) -> bool {
+        (self.w - room.x).abs() > 0.5 || (self.h - room.y).abs() > 0.5 || self.angle.abs() > 1e-3
     }
 
     /// The view's centre in the room-centred, y-up world the sprites are placed in.
@@ -153,7 +158,7 @@ struct Stats {
 
 /// The overlay text entity.
 #[derive(Component)]
-struct Overlay;
+pub(crate) struct Overlay;
 
 /// Opens the window and runs until it closes.
 pub fn run(
@@ -297,7 +302,7 @@ fn setup(
 /// OPEN: `--interpolate` does not smooth the view between ticks (the sim has no previous view);
 /// the direction of `view_angle` is taken as counter-clockwise on screen, as the room's angle
 /// column in the gravity-flip trace only logs the value.
-fn follow_view(
+pub(crate) fn follow_view(
     game: NonSend<Game>,
     mut room: ResMut<RoomSize>,
     mut rect: ResMut<ViewRect>,
