@@ -1,6 +1,6 @@
-# M4 mockups: game select, loading, HUD, pause, results (draft)
+# M4 mockups: game select, loading, HUD, pause, results
 
-Draft for #478, third round (round 2 from the user's feedback on PR #480; round 3 adds art on list panels, the title wedge, the footer split and mod select), built from the user's feedback on PR #480 (2026-11-04). Live canvas: https://claude.ai/artifact/QbvtFDFHrx3HhRmuTGTM9w. The source files are in this folder: `canvas.json` places the artboards, each `.dc.html` is one artboard.
+Approved by the user as the current design on 2026-11-04 (#478, PR #480; three feedback rounds on the PR). Implementation issues link here: build each screen from its artboard. Live canvas: https://claude.ai/artifact/QbvtFDFHrx3HhRmuTGTM9w. The source files are in this folder: `canvas.json` places the artboards, each `.dc.html` is one artboard, and the numbers in its script are the sample data drawn.
 
 Direction: modernise IWBTG without losing its identity. Structure, motion and behaviour follow osu!lazer (MIT); look comes from IWBTG and fangame art. No pixel fonts for UI text (only inside the game-space pause box), no bordered boxes; spacing, type and a restrained accent carry the hierarchy.
 

@@ -27,7 +27,7 @@ osu!-style mods are chosen in the game list before starting. The full mod list i
 - **Visual mods.** For example hitboxes or hiding the background.
 - **Practice assists.** Save states, slow motion and frame advance. A run with these is never ranked.
 
-Difficulty is not a mod (decided 2026-11-04). A fangame is the parent entry in game select, and each built-in difficulty and each category (Any%, 100%, ...) is a child entry with its own leaderboard, like beatmap difficulties under a beatmap set. Every mod combination has its own leaderboard, and the leaderboard filters by mods. A bottom-bar toggle turns on auto-retry, which restarts the run from the start after a death (as in osu!). It is meant for Sudden Death and deathless attempts.
+Difficulty is not a mod (decided 2026-11-04). A fangame is the parent entry in game select, and each built-in difficulty and each category (Any%, 100%, ...) is a child entry, a map in [content](content.md) terms, with its own leaderboard, like beatmap difficulties under a beatmap set. Every mod combination has its own leaderboard, and the leaderboard filters by mods. A bottom-bar toggle turns on auto-retry, which restarts the run from the start after a death (as in osu!). It is meant for Sudden Death and deathless attempts.
 
 ## Leaderboards
 
@@ -51,7 +51,7 @@ Practice can start from any stage, any save point or any room, and it supports s
 
 ## Game select and loading
 
-Modelled on osu!lazer song select (decided 2026-11-04). The list of games is on the right; selecting a game expands its difficulty and category entries. The left shows the selected entry's header (title, creator, year, stage count, average clear time, global clear rate, your PB and deaths, tags, status, star difficulty rating) and Details / Ranking tabs. Search, group and sort sit on top; Back, Mods, Random and Options in the footer. A loading card (title, entry, creator, stars, your PB, the global #1, active mods, and an Unranked pill with the reason when it applies) shows for at least 1.5 s and starts the run by itself; Esc goes back.
+Modelled on osu!lazer song select (decided 2026-11-04). The list of games is on the right; selecting a game expands its difficulty and category entries. The left shows the selected entry's header (title, creator, year, stage count, average clear time, global clear rate, your PB and deaths, tags, status, star difficulty rating) and Details / Ranking tabs. Each game panel in the list carries the game's own background art. Search, group and sort sit on top. The footer has Back and Options on the left, Random and Mods on the right, and the player card in the bottom-right corner (avatar, name, overall rank, games cleared, deaths, play time, a collection bar). Mods open as a sheet over game select, grouped by kind, and say which leaderboard the run will count for. A loading card (title, entry, creator, stars, your PB, the global #1, active mods, and an Unranked pill with the reason when it applies) shows for at least 1.5 s and starts the run by itself; Esc goes back.
 
 ## In-game display
 
@@ -78,12 +78,15 @@ Only cleared runs get a results screen; quit or abandoned runs do not. One page 
 - The final time as the biggest element, with the leaderboard placement next to it. Unranked runs show an Unranked pill instead of a placement.
 - Rank change: placement before and after, PB before and after with the delta ("First clear" when there was no PB), and account totals.
 - Rivals: the in-run leaderboard frozen at your final position, with #1 pinned.
+- The player card, expanded: overall rank and its trend, collection progress, and what this run changed (deaths, play time, entries cleared).
 - Splits (segment, split, delta against the PB, gold for a best-ever segment), sum of best and possible time save; deaths per stage; a death timeline. A per-stage death heatmap is optional.
 - Back, Retry (hold to retry), Watch replay, Save replay, Upload replay.
 
 Ahead and behind always use + and − signs as well as colour; gold best segments also get a marker.
 
 ## Look and screen
+
+The approved screen designs (game select, mod select, loading, HUD, pause, results, player card) are in [design/mockups/m4](design/mockups/m4/README.md). Build from them.
 
 - Modernise IWBTG without losing its identity: structure, motion and behaviour from osu!lazer and modern rhythm games, look from IWBTG and real fangame art. No pixel font for UI text and no bordered box around every element; pixel type stays in game-space parts such as the pause box. Shared language: 0.2 horizontal shear on rows, panels and pills with upright text, 10 px corner radius, OutQuint easing for most transitions. (2026-11-04)
 - Games keep their aspect ratio and are never stretched; integer scale where it fits. GM8 games are 800x608, about 4:3.
