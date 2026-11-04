@@ -139,6 +139,8 @@ pub enum EngineKind {
     GameOver,
     /// Playerface.
     Playerface,
+    /// Family B `objDeathSound` (the `death_sound` death step creates it).
+    DeathSound,
 }
 
 /// How the game retries after R (plan 4.3). Behavior in `restart.rs` (WP4b); the `world`
@@ -157,6 +159,30 @@ pub struct RestartModel {
     pub flipped_load_dy: Real,
     /// What a retry counts.
     pub death_on_restart: DeathOnRestart,
+    /// The kid-side steps of the retry (family B, showdown).
+    pub kid_steps: RetryKidSteps,
+}
+
+/// The kid-side steps of a retry that only some games have (kid/B.md "Restart", kid/A3.md
+/// showdown "Restart"). All off by default.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct RetryKidSteps {
+    /// Ticks added to the play timer before the retry (B: 2, then `save_death_time`).
+    pub add_time: u32,
+    /// Write the death-only save (saveDeathTime) after `add_time`, before the kid is destroyed.
+    pub save_death_time: bool,
+    /// Clear `frozen` and `frozen2` (the globals and every kid's own flags) before the kid is
+    /// destroyed (B, showdown).
+    pub clear_frozen: bool,
+    /// After the new kid exists: reset its jump values, speeds and jump flags
+    /// (`kid::api::reset_jump_values`, showdown's loadGame).
+    pub reset_jump_values: bool,
+    /// Before the retry destroys anything: every `death_sound` stops its sound, restores the music
+    /// volume and is destroyed (B, kid/B.md Restart 2).
+    pub release_death_sound: bool,
+    /// After the new kid exists: clear every trigger array and `global.triggered`
+    /// (`MechGlobals::clear_triggers`, showdown's loadGame).
+    pub clear_triggers: bool,
 }
 
 impl Default for RestartModel {
@@ -169,6 +195,7 @@ impl Default for RestartModel {
             boot_ticks: 1,
             flipped_load_dy: Real::ZERO,
             death_on_restart: DeathOnRestart::Nothing,
+            kid_steps: RetryKidSteps::default(),
         }
     }
 }
@@ -209,6 +236,10 @@ pub enum DeathOnRestart {
     Nothing,
     /// A death-only save of the counters (little-runner, wanna saveDeathTime).
     SaveCounters,
+    /// One death for each live kid (both kid kinds) and then the death-only save, and nothing
+    /// when no kid lives (showdown, kid/A3.md Restart step 2: "if a player exists, add a death
+    /// ... do the same for playerGradhiusu"; trace a3-t18-a, one kid, +1).
+    SaveCountersPerKid,
 }
 
 /// How the game resets after F2 (plan 4.3). Mirrors [`RestartModel`]: the `world` built-in runs

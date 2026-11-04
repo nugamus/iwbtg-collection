@@ -9,8 +9,8 @@
 //!
 //! | Bits | Use |
 //! |---|---|
-//! | 0-27 | the named classes below |
-//! | 28-31 | reserved for WP11 (a WP that needs a new named bit asks the integrator) |
+//! | 0-28 | the named classes below (28, `slope_mirror`, added by WP5c.4c) |
+//! | 29-31 | reserved for WP11 (a WP that needs a new named bit asks the integrator) |
 //! | 32-47 | 16 package-defined classes ([`ClassMask::package`]) |
 //! | 48-63 | reserved |
 //!
@@ -83,9 +83,11 @@ impl ClassMask {
     pub const BOW: ClassMask = ClassMask(1 << 26);
     /// Blood.
     pub const BLOOD: ClassMask = ClassMask(1 << 27);
+    /// Slopes that rise to the left (`nanameblockR`, `yaneM`); `slope` rises to the right.
+    pub const SLOPE_MIRROR: ClassMask = ClassMask(1 << 28);
 
     /// Every named class with its package-format name, in bit order.
-    pub const NAMED: [(ClassMask, &'static str); 28] = [
+    pub const NAMED: [(ClassMask, &'static str); 29] = [
         (ClassMask::KID, "kid"),
         (ClassMask::KID_FLIPPED, "kid_flipped"),
         (ClassMask::KID_BULLET, "kid_bullet"),
@@ -114,6 +116,7 @@ impl ClassMask {
         (ClassMask::PARAM_ZONE, "param_zone"),
         (ClassMask::BOW, "bow"),
         (ClassMask::BLOOD, "blood"),
+        (ClassMask::SLOPE_MIRROR, "slope_mirror"),
     ];
 
     /// First bit of the package-defined classes.
@@ -151,6 +154,24 @@ impl ClassMask {
     }
 }
 
+/// The schema of one class as written in a data file: its package name, from
+/// [`ClassMask::NAMED`] (a list of classes is `Vec<ClassMask>`).
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for ClassMask {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "ClassName".into()
+    }
+
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        let names: Vec<&str> = ClassMask::NAMED.iter().map(|(_, n)| *n).collect();
+        schemars::json_schema!({
+            "description": "A collision class by its package name.",
+            "type": "string",
+            "enum": names
+        })
+    }
+}
+
 impl BitOr for ClassMask {
     type Output = ClassMask;
     fn bitor(self, rhs: ClassMask) -> ClassMask {
@@ -183,7 +204,7 @@ mod tests {
             assert!(!all.intersects(*c));
             all |= *c;
         }
-        assert_eq!(all.0, (1 << 28) - 1);
+        assert_eq!(all.0, (1 << 29) - 1);
     }
 
     #[test]

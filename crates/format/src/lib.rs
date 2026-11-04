@@ -10,10 +10,14 @@
 
 pub mod check;
 pub mod diag;
+pub mod engine_pack;
 pub mod files;
+pub mod fmt;
 pub mod ids;
 pub mod manifest;
 pub mod number;
+#[cfg(feature = "schema")]
+pub mod schema;
 
 // Loader (docs/plans/sim-core.md 8.1).
 pub mod load;

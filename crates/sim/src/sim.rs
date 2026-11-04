@@ -58,7 +58,7 @@ impl Sim {
     pub fn new(def: Arc<GameDef>, options: SimOptions) -> Result<Sim, SimError> {
         let mut rules = RunnerRules::for_runner(def.runner, def.engine_rev)?;
         rules.num.float_model = def.float_model;
-        let scripts = ScriptRuntime::new(&def)?;
+        let scripts = ScriptRuntime::new(&def, &rules)?;
         let mut world = World::new(def.start_room, options.seed);
         {
             let mut ctx = Ctx {
@@ -122,6 +122,12 @@ impl Sim {
     /// The game.
     pub fn def(&self) -> &GameDef {
         &self.def
+    }
+
+    /// Turns the `keyboard_check_direct` latch off or on for this run. The trace runner turns it
+    /// off, as the recorder has no latch (CLONE_SPEC input, Confirmed (recorder)).
+    pub fn set_direct_latch(&mut self, latch: crate::rules::tick::DirectLatch) {
+        self.rules.tick.direct_latch = latch;
     }
 
     /// The rules of this run.

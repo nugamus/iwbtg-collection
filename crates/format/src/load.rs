@@ -23,7 +23,9 @@ use iwbtg_sim::def::{
     VariantSel, ViewDef,
 };
 use iwbtg_sim::num::Real;
+use iwbtg_sim::rules::RunnerRules;
 use iwbtg_sim::rules::num::FloatModel;
+use iwbtg_sim::script::ScriptRuntime;
 use iwbtg_sim::timing::{TimingDef, TimingTrigger};
 use iwbtg_sim::world::Value;
 use toml::Spanned;
@@ -37,7 +39,7 @@ use crate::masks::{ALPHA_IN_MASK, AlphaRule};
 use crate::objects::{self, ObjectFile, kind_classes, legacy_role_classes, param_value};
 use crate::order::{OrderEntry, rank_of, resolve_ranks};
 use crate::rooms::{ActionFile, InstanceFile, RoomFile, parse_room};
-use crate::sprites::{MAX_IMAGE_SIDE, load_sprite, parse_sidecar};
+use crate::sprites::{MAX_IMAGE_SIDE, load_sprite_at, parse_sidecar};
 use crate::tracemap::{TRACE_MAP_PATH, TraceMap, TraceParam, TraceStatus, load_trace_map};
 use crate::vars::intern_vars;
 use crate::{params, paths, physics, sounds, timelines};
@@ -162,7 +164,7 @@ fn request_text(cr: &str) -> &'static str {
 /// the package still loads (with defaults) and `iwbtg pkg check` stays useful. Any other panic is
 /// passed on. Temporary scaffolding: WP11 removes it once every loader dependency is merged.
 /// On targets without unwinding (wasm32-unknown-unknown) the call is made directly.
-fn pending_call<T>(pending: &mut BTreeSet<String>, f: impl FnOnce() -> T) -> Option<T> {
+pub(crate) fn pending_call<T>(pending: &mut BTreeSet<String>, f: impl FnOnce() -> T) -> Option<T> {
     #[cfg(panic = "unwind")]
     {
         quiet_stub_panics();
@@ -287,6 +289,8 @@ struct Loader<'a> {
     names: Vec<String>,
     /// Package-defined class names, in first-use order (`ClassMask::package`).
     package_classes: Vec<String>,
+    /// `collides_with` per kind name: the classes its script's `collide(other)` listens to.
+    collides: BTreeMap<String, Vec<ClassMask>>,
     groups: Vec<String>,
 }
 
@@ -318,6 +322,7 @@ impl<'a> Loader<'a> {
             appended: BTreeSet::new(),
             names: Vec::new(),
             package_classes: Vec::new(),
+            collides: BTreeMap::new(),
             groups: Vec::new(),
         }
     }
@@ -435,8 +440,9 @@ impl<'a> Loader<'a> {
         let rooms = self.parse_rooms();
         // Step 7 (WP7b): sounds before kinds, so params can name sounds.
         let mut sounds = Vec::new();
+        let trace = self.trace_mode();
         let mut d = Vec::new();
-        if let Some(s) = pending_call(&mut self.pending, || sounds::load(self.files, &mut d)) {
+        if let Some(s) = pending_call(&mut self.pending, || sounds::load(self.files, trace, &mut d)) {
             sounds = s;
         }
         self.diags.append(&mut d);
@@ -449,10 +455,15 @@ impl<'a> Loader<'a> {
         self.load_order();
         // Step 7 (WP7b): physics.
         let mut d = Vec::new();
-        let physics = match pending_call(&mut self.pending, || physics::load(self.files, &mut d)) {
-            Some(Some(p)) => p,
-            Some(None) | None => PhysicsProfile::default(),
+        let physics_path = self.m.physics.get_ref().clone();
+        let loaded = physics::load(self.files, &physics_path, self.trace_mode(), &mut d);
+        self.diags.append(&mut d);
+        let physics = match loaded {
+            Some(l) => self.finish_physics(l, &physics_path),
+            None => PhysicsProfile::default(),
         };
+        let mut d = Vec::new();
+        physics::check_tricks(&self.m.tricks, &physics, self.manifest_text, &mut d);
         self.diags.append(&mut d);
         if self.trace_mode() {
             self.legacy_kid_mask();
@@ -460,7 +471,7 @@ impl<'a> Loader<'a> {
         // Step 6: variable ids, from every name the loader sees.
         let vars = self.intern(&rooms);
         // Step 4, second half, and step 5 for placed instances.
-        let room_defs = self.build_rooms(&rooms, &vars);
+        let mut room_defs = self.build_rooms(&rooms, &vars);
         // Engine kinds, boot and the spawnable-kind rank check (step 5, CR4).
         let engine_kinds = self.engine_kinds();
         let boot = self.boot(&engine_kinds);
@@ -475,6 +486,9 @@ impl<'a> Loader<'a> {
         self.diags.append(&mut d);
         // Step 8: cross-references not already resolved above.
         self.warp_targets(&room_defs);
+        if self.trace_mode() {
+            self.inert_twins(&mut room_defs);
+        }
 
         let engine = self.m.engine.as_ref().map(Spanned::get_ref);
         let start_room = self.room_ref(self.m.start_room.get_ref(), self.m.start_room.span());
@@ -485,7 +499,7 @@ impl<'a> Loader<'a> {
                 start_room
             }
         };
-        let def = GameDef {
+        let mut def = GameDef {
             id: self.m.id.get_ref().clone(),
             tick_rate: self.m.tick_rate(),
             max_ticks: *self.m.max_ticks.get_ref(),
@@ -520,27 +534,58 @@ impl<'a> Loader<'a> {
             scripts: std::mem::take(&mut self.scripts),
             timing: timing?,
         };
+        self.merge_script_events(&mut def);
         // Step 7 (WP7b): params against the built-ins' specs, on the built definition.
         let mut d = Vec::new();
-        let _ = pending_call(&mut self.pending, || params::check(&def, &mut d));
+        let trace = self.trace_mode();
+        let _ = pending_call(&mut self.pending, || params::check(&def, trace, &mut d));
         self.diags.append(&mut d);
+        // Scripts: structure, calls, name literals and lints (WP9.3).
+        for issue in iwbtg_sim::script::validate::validate(&def) {
+            let (line, column, severity) = (issue.line, issue.column, issue.severity);
+            let file = def
+                .scripts
+                .get(issue.script)
+                .map_or("scripts", |s| s.name.as_str());
+            self.diags.push(Diagnostic {
+                file: file.to_owned(),
+                line,
+                column,
+                severity: match severity {
+                    iwbtg_sim::script::validate::Severity::Error => Severity::Error,
+                    iwbtg_sim::script::validate::Severity::Warning => Severity::Warning,
+                },
+                message: script_issue_message(self.files, issue),
+            });
+        }
         Some(def)
     }
 
     // -- Step 2: sprites ----------------------------------------------------------------------
 
     fn load_sprites(&mut self) {
-        let sidecars: Vec<(String, String)> = self
+        // A package sprite is keyed by its id; a bundled engine pack sprite
+        // (`engine/<pack>/sprites/<id>.toml`) by `engine:<pack>/<id>`, the way packages refer to it.
+        let sidecars: Vec<(String, String, String, Option<String>)> = self
             .files
             .iter()
             .filter_map(|(p, _)| {
-                let stem = p.strip_prefix("sprites/")?.strip_suffix(".toml")?;
-                (!stem.contains('/')).then(|| (stem.to_owned(), p.to_owned()))
+                if let Some(stem) = p.strip_prefix("sprites/").and_then(|s| s.strip_suffix(".toml")) {
+                    return (!stem.contains('/'))
+                        .then(|| (stem.to_owned(), stem.to_owned(), p.to_owned(), None));
+                }
+                let (pack, stem) = crate::engine_pack::sprite_sidecar(p)?;
+                Some((
+                    format!("{}{pack}/{stem}", crate::ids::ENGINE_PREFIX),
+                    stem.to_owned(),
+                    p.to_owned(),
+                    Some(pack.to_owned()),
+                ))
             })
             .collect();
         let mut aliases = Vec::new();
         let mut oversized = Vec::new();
-        for (id, path) in sidecars {
+        for (key, id, path, pack) in sidecars {
             let Some(text) = read_text(self.files, &path, &mut self.diags) else {
                 continue;
             };
@@ -556,7 +601,10 @@ impl<'a> Loader<'a> {
                     continue;
                 }
             };
-            let png_path = format!("sprites/{id}.png");
+            let png_path = match &pack {
+                Some(pack) => format!("{}sprites/{id}.png", crate::engine_pack::pack_dir(pack)),
+                None => format!("sprites/{id}.png"),
+            };
             let png = self.files.get(&png_path);
             if png.is_none() && sidecar.frames > 0 && sidecar.collision.shape().is_some() {
                 self.error(
@@ -567,43 +615,47 @@ impl<'a> Loader<'a> {
                 );
                 continue;
             }
-            let strip_w = u64::from(sidecar.frame_size.0) * u64::from(sidecar.frames);
-            if strip_w > u64::from(MAX_IMAGE_SIDE) || sidecar.frame_size.1 > MAX_IMAGE_SIDE {
+            let (img_w, img_h) = sidecar.image_size();
+            if img_w > u64::from(MAX_IMAGE_SIDE) || img_h > u64::from(MAX_IMAGE_SIDE) {
                 if self.trace_mode() {
-                    oversized.push(id.clone());
+                    oversized.push(key.clone());
                 } else {
                     self.error(
                         &path,
                         text,
                         spans.frames.clone(),
                         format!(
-                            "the strip is {strip_w} x {} px; images are at most {MAX_IMAGE_SIDE} px a side",
-                            sidecar.frame_size.1
+                            "the image is {img_w} x {img_h} px; images are at most {MAX_IMAGE_SIDE} px a side (set `columns` to wrap the frames into rows)"
                         ),
                     );
                     continue;
                 }
             }
-            match load_sprite(&id, png.unwrap_or(&[]), &sidecar) {
+            match load_sprite_at(&png_path[..png_path.len() - 4], png.unwrap_or(&[]), &sidecar) {
                 Ok((mut def, masks)) => {
                     let offset = u32::try_from(self.masks.len()).unwrap_or(u32::MAX);
                     def.masks = offset_masks(&def.masks, offset);
                     self.masks.extend(masks);
                     let sid = SpriteId(u32::try_from(self.sprite_ids.len()).unwrap_or(u32::MAX));
                     if let Some(alias) = sidecar.mask.clone() {
+                        // A pack sprite's mask alias names a sprite of the same pack.
+                        let alias = match &pack {
+                            Some(pack) => format!("{}{pack}/{alias}", crate::ids::ENGINE_PREFIX),
+                            None => alias,
+                        };
                         aliases.push((
-                            id.clone(),
+                            key.clone(),
                             alias,
                             path.clone(),
                             spans.mask.clone().unwrap_or(0..0),
                         ));
                     }
-                    self.sprite_ids.insert(id, SpriteEntry { id: sid, def });
+                    self.sprite_ids.insert(key.clone(), SpriteEntry { id: sid, def });
                 }
                 Err(d) => self.diags.push(d),
             }
         }
-        // Sprite ids follow sidecar path order, which is the BTreeMap key order used above.
+        // Sprite ids follow the key order of the map (package ids and `engine:` keys together).
         for (n, entry) in self.sprite_ids.values_mut().enumerate() {
             entry.id = SpriteId(u32::try_from(n).unwrap_or(u32::MAX));
         }
@@ -634,17 +686,13 @@ impl<'a> Loader<'a> {
 
     /// A sprite by id, or an error at `span` of `file`.
     fn sprite_ref(&mut self, name: &str, file: &str, text: &str, span: Range<usize>) -> Option<SpriteId> {
-        if name.starts_with(crate::ids::ENGINE_PREFIX) {
-            self.error(
-                file,
-                text,
-                span,
-                format!("`{name}`: engine pack assets are not supported yet (OPEN 16)"),
-            );
-            return None;
-        }
         match self.sprite_ids.get(name) {
             Some(e) => Some(e.id),
+            None if name.starts_with(crate::ids::ENGINE_PREFIX) => {
+                let msg = crate::engine_pack::unresolved(self.files, name, "sprite");
+                self.error(file, text, span, msg);
+                None
+            }
             None => {
                 self.error(file, text, span, format!("sprite `{name}` does not exist"));
                 None
@@ -682,6 +730,8 @@ impl<'a> Loader<'a> {
             }
             let mut k = KindDef::new(b.name(), b);
             k.classes = kind_classes(b, &Params::default(), ClassMask::NONE);
+            k.solid = objects::default_solid(b);
+            k.persistent = objects::default_persistent(b);
             self.push_kind(k);
         }
         let manifest = self.m;
@@ -789,6 +839,58 @@ impl<'a> Loader<'a> {
     }
 
     /// Trace mode: the kid's mask from the legacy physics.toml `mask = { sprite = ... }` (CR8).
+    /// Resolves the `[sprites]` names of a loaded profile to sprite ids.
+    fn finish_physics(&mut self, l: physics::PhysicsLoad, path: &str) -> PhysicsProfile {
+        let mut p = l.profile;
+        let text = read_text(self.files, path, &mut Vec::new()).unwrap_or("");
+        let pick = |this: &mut Self, name: &Option<String>| -> Option<SpriteId> {
+            let name = name.as_ref()?;
+            let at = text.find(name.as_str()).unwrap_or(0);
+            this.sprite_ref(name, path, text, at..at + name.len())
+        };
+        if l.legacy {
+            // A legacy draft names no kid sprites: the converter's names, when the package has them.
+            let find = |this: &Self, name: &str| this.sprite_ids.get(name).map(|e| e.id);
+            p.sprites.idle = find(self, "player_idle");
+            p.sprites.running = find(self, "player_running");
+            p.sprites.jump = find(self, "player_jump");
+            p.sprites.fall = find(self, "player_fall");
+            p.sprites.sliding = find(self, "player_sliding");
+            return p;
+        }
+        p.sprites.idle = pick(self, &l.sprites.idle);
+        p.sprites.running = pick(self, &l.sprites.running);
+        p.sprites.jump = pick(self, &l.sprites.jump);
+        p.sprites.fall = pick(self, &l.sprites.fall);
+        p.sprites.sliding = pick(self, &l.sprites.sliding);
+        // `[sounds]`: names resolved against the package's sounds.
+        let names = l.sounds;
+        let snd = |this: &mut Self, name: &Option<String>| -> Option<iwbtg_sim::def::SoundId> {
+            let name = name.as_ref()?;
+            let found = this
+                .sounds
+                .iter()
+                .position(|d| d.name == *name)
+                .and_then(|i| u32::try_from(i).ok());
+            if found.is_none() {
+                let at = text.find(name.as_str()).unwrap_or(0);
+                this.error(
+                    path,
+                    text,
+                    at..at + name.len(),
+                    crate::engine_pack::unresolved(this.files, name, "sound"),
+                );
+            }
+            found.map(iwbtg_sim::def::SoundId)
+        };
+        p.sounds.jump = snd(self, &names.jump);
+        p.sounds.double_jump = snd(self, &names.double_jump);
+        p.sounds.shoot = snd(self, &names.shoot);
+        p.sounds.vine_kick = snd(self, &names.vine_kick);
+        p.sounds.death = snd(self, &names.death);
+        p
+    }
+
     fn legacy_kid_mask(&mut self) {
         let Some(&kid) = self.kind_ids.get(Builtin::Kid.name()) else {
             return;
@@ -953,10 +1055,12 @@ impl<'a> Loader<'a> {
                 .sprite_ref(s.get_ref(), path, text, s.span())
                 .and_then(|s| self.mask_of(s));
         }
-        kind.solid = o.solid.unwrap_or(false);
+        kind.solid = o.solid.unwrap_or_else(|| objects::default_solid(kind.base));
         kind.visible = o.visible.unwrap_or(true);
         kind.depth = o.depth.as_ref().map_or(Real::ZERO, |d| Real::new(*d.get_ref()));
-        kind.persistent = o.persistent.unwrap_or(false);
+        kind.persistent = o
+            .persistent
+            .unwrap_or_else(|| objects::default_persistent(kind.base));
         for (key, value) in &o.params {
             match param_value(value.get_ref()) {
                 Ok(p) => {
@@ -976,6 +1080,21 @@ impl<'a> Loader<'a> {
                     format!("too many package classes for `{}` (at most 16)", c.get_ref()),
                 ),
             }
+        }
+        let mut collides = Vec::new();
+        for c in &o.collides_with {
+            match self.class_named(c.get_ref()) {
+                Some(m) => collides.push(m),
+                None => self.error(
+                    path,
+                    text,
+                    c.span(),
+                    format!("too many package classes for `{}` (at most 16)", c.get_ref()),
+                ),
+            }
+        }
+        if !collides.is_empty() {
+            self.collides.insert(name.clone(), collides);
         }
         if !o.roles.is_empty() {
             if self.trace_mode() {
@@ -1061,10 +1180,13 @@ impl<'a> Loader<'a> {
         match found {
             Some(v) => v,
             None => {
-                self.diags.push(Diagnostic::file_error(
-                    file,
-                    format!("param `{key}`: `{s}` does not exist"),
-                ));
+                let why = if s.starts_with(crate::ids::ENGINE_PREFIX) {
+                    crate::engine_pack::unresolved(self.files, s, "sound")
+                } else {
+                    format!("`{s}` does not exist")
+                };
+                self.diags
+                    .push(Diagnostic::file_error(file, format!("param `{key}`: {why}")));
                 value
             }
         }
@@ -1301,6 +1423,7 @@ impl<'a> Loader<'a> {
                     RoomRole::Play
                 }
             };
+            def.no_restart = f.no_restart;
             def.file_speed = match &f.file_speed {
                 Some(s) => *s.get_ref(),
                 None => match self
@@ -1740,9 +1863,56 @@ impl<'a> Loader<'a> {
             } else {
                 pending_call(&mut self.pending, || builtins::event_set(kind.base, &kind))
             };
-            if let Some(set) = set {
+            if let Some(mut set) = set {
+                if let Some(masks) = self.collides.get(&kind.name) {
+                    set.collisions.extend(masks.iter().copied());
+                }
                 self.kinds[i].events = set;
             }
+        }
+    }
+
+    /// Adds what each kind's script handles to its event set (the `scripted` built-in and a
+    /// base with a script): the script's functions, from the compiled script. Needs the finished
+    /// definition, so it runs after it is built. A script that does not compile is an error.
+    fn merge_script_events(&mut self, def: &mut GameDef) {
+        if def.scripts.is_empty() {
+            return;
+        }
+        let rules = match RunnerRules::for_runner(def.runner, def.engine_rev) {
+            Ok(mut r) => {
+                r.num.float_model = def.float_model;
+                r
+            }
+            Err(e) => {
+                self.diags
+                    .push(Diagnostic::file_error(MANIFEST_PATH, format!("scripts: {e}")));
+                return;
+            }
+        };
+        let runtime = match ScriptRuntime::new(def, &rules) {
+            Ok(r) => r,
+            Err(e) => {
+                self.diags
+                    .push(Diagnostic::file_error(MANIFEST_PATH, format!("scripts: {e}")));
+                return;
+            }
+        };
+        for k in &mut def.kinds {
+            let Some(sid) = k.script else { continue };
+            let s = runtime.event_set(sid);
+            let e = &mut k.events;
+            e.begin_step |= s.begin_step;
+            e.step |= s.step;
+            e.end_step |= s.end_step;
+            e.late |= s.late;
+            e.alarms |= s.alarms;
+            e.user |= s.user;
+            e.outside_room |= s.outside_room;
+            e.intersect_boundary |= s.intersect_boundary;
+            e.animation_end |= s.animation_end;
+            e.room_start |= s.room_start;
+            e.room_end |= s.room_end;
         }
     }
 
@@ -1791,6 +1961,54 @@ impl<'a> Loader<'a> {
 
     // -- Step 8 ----------------------------------------------------------------------------------
 
+    /// Trace mode: a placed instance whose built-in refuses its params (a warp with no
+    /// `room_to`, CR5) would stop the sim at room start. It becomes an instance of an inert twin
+    /// of its kind (same sprite, mask, solid and classes; no events, no params), as an unmapped
+    /// kind does. `params::check` already warns about the params.
+    fn inert_twins(&mut self, rooms: &mut [RoomDef]) {
+        let mut twins: BTreeMap<KindId, KindId> = BTreeMap::new();
+        for room in rooms.iter_mut() {
+            for inst in &mut room.instances {
+                let Some(kind) = self.kinds.get(inst.kind.index().unwrap_or(usize::MAX)) else {
+                    continue;
+                };
+                if matches!(
+                    kind.base,
+                    Builtin::Kid | Builtin::Inert | Builtin::Scripted | Builtin::Probe
+                ) {
+                    continue;
+                }
+                let mut merged = kind.params.clone();
+                for (k, v) in &inst.params.0 {
+                    merged.0.insert(k.clone(), v.clone());
+                }
+                let base = kind.base;
+                let refused = matches!(
+                    pending_call(&mut self.pending, || builtins::init_state(base, &merged)),
+                    Some(Err(_))
+                );
+                if !refused {
+                    continue;
+                }
+                let twin = match twins.get(&inst.kind) {
+                    Some(t) => *t,
+                    None => {
+                        let mut t = kind.clone();
+                        t.name = format!("{}[inert]", t.name);
+                        t.base = Builtin::Inert;
+                        t.params = Params::default();
+                        t.events = iwbtg_sim::events::EventSet::default();
+                        let id = self.push_kind(t);
+                        twins.insert(inst.kind, id);
+                        id
+                    }
+                };
+                inst.kind = twin;
+                inst.params = Params::default();
+            }
+        }
+    }
+
     /// CR5: warps whose creation code (`roomTo`) was not converted have no `room_to`.
     fn warp_targets(&mut self, rooms: &[RoomDef]) {
         for r in rooms {
@@ -1829,7 +2047,7 @@ fn engine_builtin(b: Builtin) -> bool {
 }
 
 /// Engine role name, sim role and default built-in.
-fn engine_roles() -> [(&'static str, EngineKind, Option<Builtin>); 9] {
+fn engine_roles() -> [(&'static str, EngineKind, Option<Builtin>); 10] {
     [
         ("world", EngineKind::World, Some(Builtin::World)),
         ("kid", EngineKind::Kid, Some(Builtin::Kid)),
@@ -1844,6 +2062,7 @@ fn engine_roles() -> [(&'static str, EngineKind, Option<Builtin>); 9] {
         ),
         ("game_over", EngineKind::GameOver, Some(Builtin::GameOver)),
         ("playerface", EngineKind::Playerface, Some(Builtin::Playerface)),
+        ("death_sound", EngineKind::DeathSound, None),
     ]
 }
 
@@ -1955,6 +2174,7 @@ pub fn gameplay_hash(files: &PackageFiles, manifest: &Manifest, def: &GameDef) -
     for (path, bytes) in files.iter() {
         let data = path == MANIFEST_PATH
             || path == physics
+            || crate::engine_pack::is_gameplay_file(path)
             || [
                 "objects/",
                 "timelines/",
@@ -2070,9 +2290,58 @@ fn canonical(h: &mut blake3::Hasher, v: &toml::Value) {
     }
 }
 
+/// The message of a script validator issue. A sound or music name that starts with `engine:`
+/// gets the engine pack error, the same text as the physics `[sounds]` (#373).
+fn script_issue_message(files: &PackageFiles, issue: iwbtg_sim::script::validate::Issue) -> String {
+    match &issue.unknown {
+        Some((what, name)) if name.starts_with(crate::ids::ENGINE_PREFIX) => {
+            crate::engine_pack::unresolved(files, name, what)
+        }
+        _ => issue.message,
+    }
+}
+
 #[cfg(all(test, panic = "unwind"))]
 mod tests {
     use super::*;
+
+    fn unknown_issue(name: &str) -> iwbtg_sim::script::validate::Issue {
+        iwbtg_sim::script::validate::Issue {
+            script: 0,
+            line: 1,
+            column: 1,
+            severity: iwbtg_sim::script::validate::Severity::Error,
+            message: format!("unknown sound \"{name}\""),
+            unknown: Some(("sound".to_owned(), name.to_owned())),
+        }
+    }
+
+    #[test]
+    fn a_script_engine_name_gets_the_engine_pack_error() {
+        let mut files = PackageFiles::new();
+        files
+            .insert(
+                "engine/a1/engine.toml",
+                b"id = \"a1\"
+"
+                .to_vec(),
+            )
+            .unwrap();
+        // A pack that is bundled but lacks the sound, and a pack that is not bundled.
+        assert_eq!(
+            script_issue_message(&files, unknown_issue("engine:a1/jump")),
+            crate::engine_pack::unresolved(&files, "engine:a1/jump", "sound")
+        );
+        assert!(
+            script_issue_message(&files, unknown_issue("engine:a1/jump")).contains("has no sound `jump`")
+        );
+        assert!(script_issue_message(&files, unknown_issue("engine:zz/jump")).contains("not in the package"));
+        // A plain name keeps the validator's message.
+        assert_eq!(
+            script_issue_message(&files, unknown_issue("boom")),
+            "unknown sound \"boom\""
+        );
+    }
 
     #[test]
     fn stub_names() {

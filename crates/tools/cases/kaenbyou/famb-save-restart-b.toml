@@ -1,0 +1,21 @@
+# Imported from research trace kaenbyou/famb-save-restart-b by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object savePoint --room room14 --at 2 --from 2 --stub-dlls (1 --gml)
+source = "kaenbyou/famb-save-restart-b"
+kind = "diff"
+start = { room = "room_1", difficulty = 1 }
+at = 2
+first_frame = 2
+object = "@save_point"
+original_object = "savePoint"
+dll_mode = "stub"
+seed = 0
+setup = []
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+
+[unprobed]
+"distance_to_object(player)" = "a function call; the probe reads variables only (OPEN)"
+
+[rooms]
+"room_1" = "room14"

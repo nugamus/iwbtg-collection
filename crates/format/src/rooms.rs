@@ -39,6 +39,8 @@ pub struct RoomFile {
     pub file_speed: Option<Spanned<u32>>,
     /// Role (CR6); `None` is play.
     pub role: Option<RoleName>,
+    /// R does nothing in this room (`no_restart`).
+    pub no_restart: bool,
     /// GM persistent room.
     pub persistent: bool,
     /// GM "enable the use of views".
@@ -53,6 +55,7 @@ pub struct RoomFile {
 
 /// One `[[views]]` entry.
 #[derive(Clone, Debug, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct ViewFile {
     /// Visible when the room starts.
@@ -65,6 +68,7 @@ pub struct ViewFile {
     pub port: Option<[Number; 4]>,
     /// Kind to follow.
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub follow: Option<Spanned<String>>,
     /// Horizontal and vertical border; default 32, 32.
     #[serde(default)]
@@ -76,6 +80,7 @@ pub struct ViewFile {
 
 /// One room creation action (plan 4.2 step 6), `{ do = "...", ... }`.
 #[derive(Clone, Debug, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "do", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ActionFile {
     /// `global.<var> = value`.
@@ -83,6 +88,7 @@ pub enum ActionFile {
         /// Global name.
         var: String,
         /// A number, string or boolean (true is 1).
+        #[cfg_attr(feature = "schema", schemars(with = "serde_json::Value"))]
         value: toml::Value,
     },
     /// `instance_create(x, y, kind)`.
@@ -95,6 +101,7 @@ pub enum ActionFile {
         y: Number,
         /// Params of the new instance.
         #[serde(default)]
+        #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, serde_json::Value>"))]
         params: BTreeMap<String, toml::Value>,
     },
     /// The engine's `loadGame` (R23).
@@ -153,13 +160,18 @@ impl InstanceFile {
 }
 
 #[derive(Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-struct RawRoom {
+pub(crate) struct RawRoom {
+    #[cfg_attr(feature = "schema", schemars(with = "[u32; 2]"))]
     size: Spanned<[u32; 2]>,
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<u32>"))]
     file_speed: Option<Spanned<u32>>,
     #[serde(default)]
     role: Option<RoleName>,
+    #[serde(default)]
+    no_restart: bool,
     #[serde(default)]
     persistent: bool,
     #[serde(default)]
@@ -169,14 +181,18 @@ struct RawRoom {
     #[serde(default)]
     background_color: Option<String>,
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Vec<serde_json::Value>"))]
     backgrounds: Vec<toml::Value>,
     #[serde(default)]
     views_enabled: bool,
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Vec<ViewFile>"))]
     views: Vec<Spanned<ViewFile>>,
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Vec<crate::schema::InstanceShape>"))]
     instances: Vec<Spanned<BTreeMap<Spanned<String>, Spanned<toml::Value>>>>,
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Vec<ActionFile>"))]
     on_create: Vec<Spanned<ActionFile>>,
 }
 
@@ -221,6 +237,7 @@ pub fn parse_room(id: &str, path: &str, text: &str) -> Result<RoomFile, Diagnost
         size: (w, h),
         file_speed: raw.file_speed,
         role: raw.role,
+        no_restart: raw.no_restart,
         persistent: raw.persistent,
         views_enabled: raw.views_enabled,
         views: raw.views,
@@ -337,6 +354,7 @@ instances = [
         let text = r#"size = [800, 608]
 file_speed = 30
 role = "select"
+no_restart = true
 views_enabled = true
 on_create = [
   { do = "set_global", var = "difficulty", value = 1 },
@@ -352,6 +370,7 @@ follow = "kid"
         let r = parse_room("r", "rooms/r.toml", text).unwrap();
         assert_eq!(r.file_speed.as_ref().map(|s| *s.get_ref()), Some(30));
         assert_eq!(r.role, Some(RoleName::Select));
+        assert!(r.no_restart);
         assert_eq!(r.views.len(), 1);
         assert_eq!(r.on_create.len(), 3);
         assert!(matches!(r.on_create[2].get_ref(), ActionFile::LoadGame));

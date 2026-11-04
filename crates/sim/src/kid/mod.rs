@@ -6,9 +6,9 @@
 //! routing ([`KidAction`], [`run_action`], [`KidCollisionRun`], [`run_collision`]); WP5a owns
 //! this file. WP5b and WP5c own their files under `actions/`, `collisions/` and `state_*.rs` and
 //! add their actions as variants of the enums there, so they never edit this file.
-#![allow(unused_variables, reason = "WP0 stubs: WP5a fills the bodies")]
 
 pub mod api;
+pub mod boundary;
 pub mod death;
 pub mod presets;
 pub mod state;
@@ -41,10 +41,12 @@ pub mod collisions {
 }
 
 use serde::{Deserialize, Serialize};
+use smallvec::SmallVec;
 
 pub use state::{KidGlobals, KidState};
 
 use crate::def::PhysicsProfile;
+use crate::def::physics::{BoundaryModel, KeyOn};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
 use crate::world::{Ctx, Flow, InstId};
@@ -58,6 +60,7 @@ pub struct KidOutput {}
 /// Split by owner like `KindState`: each part is the enum of one file under `actions/`, and the
 /// name in the file picks the part whose enum has that name (`untagged`). Names must be unique
 /// across parts.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
 #[serde(untagged)]
 pub enum KidAction {
@@ -107,6 +110,7 @@ pub fn run_action(ctx: &mut Ctx, me: InstId, action: &KidAction) -> Result<Flow,
 
 /// One named collision run in `events.collisions` (`{ with = "block", run = "block_standard" }`,
 /// plan 5.2). Split by owner like [`KidAction`].
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
 #[serde(untagged)]
 pub enum KidCollisionRun {
@@ -116,6 +120,8 @@ pub enum KidCollisionRun {
     Platform(collisions::platform::PlatformRun),
     /// Family B runs (WP5b).
     B(collisions::b::BRun),
+    /// `kill` (WP5a).
+    Death(death::DeathRun),
     /// Slope runs (WP5c).
     Slope(collisions::slope::SlopeRun),
     /// poronkusema `moving_block_por` (WP5c).
@@ -133,18 +139,122 @@ pub fn run_collision(
         KidCollisionRun::Block(r) => collisions::block::run(ctx, me, other, r),
         KidCollisionRun::Platform(r) => collisions::platform::run(ctx, me, other, r),
         KidCollisionRun::B(r) => collisions::b::run(ctx, me, other, r),
+        KidCollisionRun::Death(r) => death::run(ctx, me, other, r),
         KidCollisionRun::Slope(r) => collisions::slope::run(ctx, me, other, r),
         KidCollisionRun::MovingBlock(r) => collisions::moving_block::run(ctx, me, other, r),
     }
 }
 
+/// Runs `list` on the kid in order; stops at the first flow that is not `Continue`.
+fn run_list(ctx: &mut Ctx, me: InstId, list: &[KidAction]) -> Result<Flow, SimError> {
+    for a in list {
+        if let KidAction::Common(actions::common::CommonAction::StopIfFrozen) = a {
+            if actions::common::stop_if_frozen(ctx, me)? {
+                return Ok(Flow::Continue);
+            }
+            continue;
+        }
+        if let KidAction::Common(actions::common::CommonAction::StopIfFrozen2) = a {
+            if actions::common::stop_if_frozen2(ctx, me)? {
+                return Ok(Flow::Continue);
+            }
+            continue;
+        }
+        let flow = run_action(ctx, me, a)?;
+        if flow != Flow::Continue {
+            return Ok(flow);
+        }
+    }
+    Ok(Flow::Continue)
+}
+
 /// Runs one event on a kid instance: the profile's action list for that event, through
-/// [`run_action`] and [`run_collision`].
+/// [`run_action`]. Create, Room Start, Step and End Step are wired; keys, alarms, collisions and
+/// the boundary arrive with WP5a.3 and WP5a.4 and handle nothing until then.
 pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimError> {
-    unimplemented!("WP5a: kid::on_event")
+    let def = ctx.def;
+    let e = &def.physics.events;
+    if let EventKind::Collision { with, other } = ev {
+        // Every row whose handler class matched, in handler order (C8, R12b).
+        for row in e.collisions.iter().filter(|c| c.with == *with) {
+            let flow = run_collision(ctx, me, *other, &row.run)?;
+            if flow != Flow::Continue {
+                return Ok(flow);
+            }
+        }
+        return Ok(Flow::Continue);
+    }
+    if let Some(flow) = boundary::on_event(ctx, me, ev)? {
+        return Ok(flow);
+    }
+    let list = match ev {
+        EventKind::Alarm(n) => {
+            for row in e.alarms.iter().filter(|a| a.n == *n) {
+                let flow = run_list(ctx, me, &row.run)?;
+                if flow != Flow::Continue {
+                    return Ok(flow);
+                }
+            }
+            return Ok(Flow::Continue);
+        }
+        EventKind::KeyHeld(a) | EventKind::KeyPress(a) | EventKind::KeyRelease(a) => {
+            let on = match ev {
+                EventKind::KeyHeld(_) => KeyOn::Held,
+                EventKind::KeyPress(_) => KeyOn::Press,
+                _ => KeyOn::Release,
+            };
+            for row in e.keys.iter().filter(|k| k.action == *a && k.on == on) {
+                let flow = run_list(ctx, me, &row.run)?;
+                if flow != Flow::Continue {
+                    return Ok(flow);
+                }
+            }
+            return Ok(Flow::Continue);
+        }
+        EventKind::Create => &e.create,
+        EventKind::RoomStart => &e.room_start,
+        EventKind::Step => &e.step,
+        EventKind::EndStep => &e.end_step,
+        _ => return Ok(Flow::Continue),
+    };
+    run_list(ctx, me, list)
 }
 
 /// What a kid kind with this profile handles.
 pub fn event_set(p: &PhysicsProfile) -> EventSet {
-    unimplemented!("WP5a: kid::event_set")
+    EventSet {
+        step: !p.events.step.is_empty(),
+        end_step: !p.events.end_step.is_empty() || p.events.boundary == BoundaryModel::EndStepOrigin,
+        outside_room: p.events.boundary == BoundaryModel::OutsideRoomKill,
+        intersect_boundary: matches!(
+            p.events.boundary,
+            BoundaryModel::IntersectOrigin | BoundaryModel::IntersectOriginFixed
+        ),
+        room_start: !p.events.room_start.is_empty(),
+        alarms: p.events.alarms.iter().fold(0, |m, a| m | (1u16 << a.n.min(11))),
+        key_held: key_bits(p, KeyOn::Held),
+        key_press: key_bits(p, KeyOn::Press),
+        key_release: key_bits(p, KeyOn::Release),
+        collisions: p
+            .events
+            .collisions
+            .iter()
+            .map(|c| c.with)
+            .fold(SmallVec::new(), |mut v, c| {
+                if !v.contains(&c) {
+                    v.push(c);
+                }
+                v
+            }),
+        ..EventSet::default()
+    }
+}
+
+/// The bits of the actions with a key row on `on`.
+fn key_bits(p: &PhysicsProfile, on: KeyOn) -> u32 {
+    p.events
+        .keys
+        .iter()
+        .filter(|k| k.on == on)
+        .fold(0, |m, k| m | k.action.bit())
 }

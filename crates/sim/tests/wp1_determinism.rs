@@ -22,7 +22,7 @@ const COUNTER: VarId = VarId(10);
 
 /// `state_hash` after the last tick, as lowercase hex. Recorded on Windows x86_64. A deliberate
 /// change to the sim or to `HASH_LAYOUT` updates it in the same PR.
-const FINAL_HASH: &str = "0a9eed7ad81641f240912b81c02e5ca6b09558737747ef9d57fa6b9451e5f338";
+const FINAL_HASH: &str = "07b30b2355be052d149bb06b392d4924d3a80a477a607191779b9d63bd167092";
 
 fn child(tag: &str) -> ProbeState {
     let mut s = ProbeState::new(tag, None);
@@ -70,7 +70,7 @@ fn world() -> Fx {
 
 /// The input of tick `t`: Jump held in a 7-tick pattern, Right in a 13-tick pattern.
 fn input(t: u64) -> InputFrame {
-    let held = |t: u64| -> u16 {
+    let held = |t: u64| -> u32 {
         let mut h = 0;
         if t % 7 < 3 {
             h |= Action::Jump.bit();
@@ -104,6 +104,11 @@ fn run() -> (Vec<[u8; 16]>, [u8; 32]) {
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
+
+// On wasm32-unknown-unknown the libtest harness does not exist; wasm-bindgen-test runs the test
+// under node (#206). Everywhere else this is a plain #[test].
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+use wasm_bindgen_test::wasm_bindgen_test as test;
 
 #[test]
 fn wp1_probe_world_10000_ticks_hashes_are_identical() {

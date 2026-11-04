@@ -1,0 +1,26 @@
+# Imported from research trace kaenbyou/famb-platform-a by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room room23 --at 2 --from 2 --stub-dlls (1 --gml)
+source = "kaenbyou/famb-platform-a"
+kind = "diff"
+start = { room = "room_10", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "stub"
+seed = 0
+setup = [
+  { frame = 3, target = "kid", set = { x = 1152.0, xprevious = 1152.0, y = 540.0, yprevious = 540.0 } },
+]
+# `direction` is not compared: with the hspeed residue (-7.3e-17) the recorder reads exactly 90.0 or 270.0,
+# the formula gives one ulp more (research#38).
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+"instance_number(player)" = "instance_number(kid)"
+
+[unprobed]
+"bbox_bottom" = "no probe field for `bbox_bottom` (OPEN)"
+
+[rooms]
+"room_10" = "room23"

@@ -67,6 +67,8 @@ pub struct SpriteSidecar {
     pub frames: u16,
     /// Frame size in pixels.
     pub frame_size: (u32, u32),
+    /// Frames per row of the image grid, read row by row; 0 is one row of all frames (the strip).
+    pub columns: u16,
     /// Origin in sprite space; may lie outside the frame.
     pub origin: (i32, i32),
     /// Mask shape.
@@ -81,25 +83,59 @@ pub struct SpriteSidecar {
     pub mask: Option<String>,
 }
 
+impl SpriteSidecar {
+    /// The image grid as `(columns, rows)`: `columns` frames per row (all frames when unset).
+    pub fn grid(&self) -> (u32, u32) {
+        let frames = u32::from(self.frames).max(1);
+        let cols = if self.columns == 0 {
+            frames
+        } else {
+            u32::from(self.columns)
+        };
+        (cols, frames.div_ceil(cols))
+    }
+
+    /// The image size in pixels the sidecar asks for: the grid times the frame size.
+    pub fn image_size(&self) -> (u64, u64) {
+        let (cols, rows) = self.grid();
+        (
+            u64::from(self.frame_size.0) * u64::from(cols),
+            u64::from(self.frame_size.1) * u64::from(rows),
+        )
+    }
+}
+
 #[derive(Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-struct RawSidecar {
+pub(crate) struct RawSidecar {
+    #[cfg_attr(feature = "schema", schemars(with = "u16"))]
     frames: Spanned<u16>,
+    #[cfg_attr(feature = "schema", schemars(with = "[u32; 2]"))]
     frame_size: Spanned<[u32; 2]>,
+    #[cfg_attr(feature = "schema", schemars(with = "[i32; 2]"))]
     origin: Spanned<[i32; 2]>,
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<u16>"))]
+    columns: Option<Spanned<u16>>,
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<RawCollision>"))]
     collision: Option<Spanned<RawCollision>>,
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<[i64; 4]>"))]
     bbox: Option<Spanned<[i64; 4]>>,
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<Number>"))]
     alpha_tolerance: Option<Spanned<Number>>,
     #[serde(default)]
     separate_masks: Option<bool>,
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     mask: Option<Spanned<String>>,
 }
 
 #[derive(Deserialize, Clone, Copy)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 enum RawCollision {
     Precise,
@@ -133,6 +169,19 @@ pub fn parse_sidecar(path: &str, text: &str) -> Result<(SpriteSidecar, SidecarSp
             format!("frame_size must be between 1 and {MAX_FRAME_SIDE} on each side"),
         ));
     }
+    let columns = match &raw.columns {
+        None => 0,
+        Some(c) => {
+            let v = *c.get_ref();
+            if v == 0 || v > *raw.frames.get_ref().max(&1) {
+                return Err(err(
+                    c.span(),
+                    format!("columns must be between 1 and frames ({})", raw.frames.get_ref()),
+                ));
+            }
+            v
+        }
+    };
     let tolerance = match &raw.alpha_tolerance {
         None => 0,
         Some(t) => {
@@ -186,6 +235,7 @@ pub fn parse_sidecar(path: &str, text: &str) -> Result<(SpriteSidecar, SidecarSp
         SpriteSidecar {
             frames: *raw.frames.get_ref(),
             frame_size: (fw, fh),
+            columns,
             origin: (ox, oy),
             collision,
             bbox,
@@ -195,6 +245,29 @@ pub fn parse_sidecar(path: &str, text: &str) -> Result<(SpriteSidecar, SidecarSp
         },
         spans,
     ))
+}
+
+/// The sprites of a package in the order of `GameDef::sprites` (by id, bundled engine pack
+/// sprites keyed `engine:<pack>/<id>` among them): `(key, path of its PNG strip)`. A viewer uses
+/// it to find the image of a `SpriteId`; `tests/wp7a_load.rs` pins the order against the loader.
+pub fn sprite_pngs(files: &crate::files::PackageFiles) -> Vec<(String, String)> {
+    let mut out: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+    for (path, _) in files.iter() {
+        if let Some(stem) = path
+            .strip_prefix("sprites/")
+            .and_then(|s| s.strip_suffix(".toml"))
+        {
+            if !stem.contains('/') {
+                out.insert(stem.to_owned(), format!("sprites/{stem}.png"));
+            }
+        } else if let Some((pack, id)) = crate::engine_pack::sprite_sidecar(path) {
+            out.insert(
+                format!("{}{pack}/{id}", crate::ids::ENGINE_PREFIX),
+                format!("{}sprites/{id}.png", crate::engine_pack::pack_dir(pack)),
+            );
+        }
+    }
+    out.into_iter().collect()
 }
 
 /// Decodes a PNG strip, splits frames and builds the masks. Image pixels never reach the sim.
@@ -207,7 +280,17 @@ pub fn load_sprite(
     png: &[u8],
     sidecar: &SpriteSidecar,
 ) -> Result<(SpriteDef, Vec<Mask>), Diagnostic> {
-    let png_path = format!("sprites/{id}.png");
+    load_sprite_at(&format!("sprites/{id}"), png, sidecar)
+}
+
+/// [`load_sprite`] for a sprite whose files are `<stem>.png` and `<stem>.toml` (a bundled engine
+/// pack sprite lives under `engine/<pack>/sprites/`).
+pub fn load_sprite_at(
+    stem: &str,
+    png: &[u8],
+    sidecar: &SpriteSidecar,
+) -> Result<(SpriteDef, Vec<Mask>), Diagnostic> {
+    let png_path = format!("{stem}.png");
     let def = |masks: MaskSet| SpriteDef {
         frames: sidecar.frames,
         size: sidecar.frame_size,
@@ -217,7 +300,7 @@ pub fn load_sprite(
     let (fw, fh) = sidecar.frame_size;
     if fw == 0 || fh == 0 || fw > MAX_FRAME_SIDE || fh > MAX_FRAME_SIDE {
         return Err(Diagnostic::file_error(
-            &format!("sprites/{id}.toml"),
+            &format!("{stem}.toml"),
             format!("frame_size must be between 1 and {MAX_FRAME_SIDE} on each side"),
         ));
     }
@@ -228,17 +311,18 @@ pub fn load_sprite(
         return Ok((def(MaskSet::Shared(MaskId(0))), vec![empty_mask()]));
     };
     let (rgba, w, h) = decode_rgba(png).map_err(|e| Diagnostic::file_error(&png_path, e))?;
-    let strip_w = u64::from(fw) * u64::from(sidecar.frames);
-    if u64::from(w) != strip_w || h != fh {
+    let (img_w, img_h) = sidecar.image_size();
+    if u64::from(w) != img_w || u64::from(h) != img_h {
+        let (cols, rows) = sidecar.grid();
         return Err(Diagnostic::file_error(
             &png_path,
             format!(
-                "image is {w} x {h}, but the sidecar says {} frames of {fw} x {fh} ({strip_w} x {fh})",
+                "image is {w} x {h}, but the sidecar says {} frames of {fw} x {fh} in {cols} column(s) and {rows} row(s) ({img_w} x {img_h})",
                 sidecar.frames
             ),
         ));
     }
-    let frames = split_frames(&rgba, fw, fh, sidecar.frames);
+    let frames = split_frames(&rgba, fw, fh, sidecar.frames, sidecar.grid().0);
     let all: Vec<&[u8]> = frames.iter().map(Vec::as_slice).collect();
     let tol = sidecar.alpha_tolerance;
     // One mask per frame only when frames can differ: separate masks, more than one frame, and
@@ -261,17 +345,24 @@ pub fn load_sprite(
     }
 }
 
-/// Copies frame `i` of a strip out as its own `fw` x `fh` RGBA buffer.
-fn split_frames(rgba: &[u8], fw: u32, fh: u32, frames: u16) -> Vec<Vec<u8>> {
-    let row_bytes = usize::try_from(fw).unwrap_or(0) * 4;
-    let strip_row = row_bytes * usize::from(frames);
+/// Copies each frame of the image grid out as its own `fw` x `fh` RGBA buffer; frame `f` is at
+/// column `f % cols`, row `f / cols`.
+fn split_frames(rgba: &[u8], fw: u32, fh: u32, frames: u16, cols: u32) -> Vec<Vec<u8>> {
+    let (fw, fh, cols) = (
+        usize::try_from(fw).unwrap_or(0),
+        usize::try_from(fh).unwrap_or(0),
+        usize::try_from(cols).unwrap_or(1).max(1),
+    );
+    let row_bytes = fw * 4;
+    let image_row = row_bytes * cols;
     (0..usize::from(frames))
         .map(|f| {
-            let mut out = Vec::with_capacity(row_bytes * usize::try_from(fh).unwrap_or(0));
-            for y in 0..usize::try_from(fh).unwrap_or(0) {
-                let start = y * strip_row + f * row_bytes;
-                if let Some(row) = rgba.get(start..start + row_bytes) {
-                    out.extend_from_slice(row);
+            let (col, row) = (f % cols, f / cols);
+            let mut out = Vec::with_capacity(row_bytes * fh);
+            for y in 0..fh {
+                let start = (row * fh + y) * image_row + col * row_bytes;
+                if let Some(r) = rgba.get(start..start + row_bytes) {
+                    out.extend_from_slice(r);
                 }
             }
             out
@@ -355,12 +446,58 @@ mod tests {
         SpriteSidecar {
             frames: 2,
             frame_size: (2, 1),
+            columns: 0,
             origin: (0, 0),
             collision: Collision::Precise,
             bbox,
             alpha_tolerance: 0,
             separate_masks: separate,
             mask: None,
+        }
+    }
+
+    #[test]
+    fn grid_of_rows_splits_like_a_strip() {
+        // Three 2 x 1 frames in two columns: frame 2 is alone in row 1. Frame 0 opaque at its
+        // left pixel, frame 1 at its right pixel, frame 2 at its right pixel.
+        let o = [0, 0, 0, 255];
+        let t = [0, 0, 0, 0];
+        let px: Vec<u8> = [o, t, t, o, t, o, t, t].concat();
+        let png = png_rgba(4, 2, &px);
+        let mut sc = sidecar(true, None);
+        sc.frames = 3;
+        sc.columns = 2;
+        assert_eq!(sc.image_size(), (4, 2));
+        let (def, masks) = load_sprite("s", &png, &sc).unwrap();
+        assert_eq!(
+            def.masks,
+            MaskSet::PerFrame(vec![MaskId(0), MaskId(1), MaskId(2)])
+        );
+        assert_eq!(
+            (masks[0].bbox.left, masks[1].bbox.left, masks[2].bbox.left),
+            (0, 1, 1)
+        );
+        // A strip-shaped image is wrong for a grid sidecar.
+        assert!(load_sprite("s", &two_frames(), &sc).is_err());
+    }
+
+    #[test]
+    fn columns_must_fit_the_frames() {
+        let ok = "frames = 3
+frame_size = [2, 1]
+origin = [0, 0]
+columns = 2
+";
+        assert_eq!(parse_sidecar("s.toml", ok).unwrap().0.columns, 2);
+        for bad in ["columns = 0", "columns = 4"] {
+            let t = format!(
+                "frames = 3
+frame_size = [2, 1]
+origin = [0, 0]
+{bad}
+"
+            );
+            assert!(parse_sidecar("s.toml", &t).is_err(), "{bad}");
         }
     }
 

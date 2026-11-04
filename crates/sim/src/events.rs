@@ -102,11 +102,11 @@ pub struct EventSet {
     /// Bit `n`: alarm `n`. An alarm ticks only when the object handles it (Confirmed).
     pub alarms: u16,
     /// Bit per action (`Action::bit`): Keyboard (held) events.
-    pub key_held: u16,
+    pub key_held: u32,
     /// Bit per action: Key Press events.
-    pub key_press: u16,
+    pub key_press: u32,
     /// Bit per action: Key Release events.
-    pub key_release: u16,
+    pub key_release: u32,
     /// Collision handler classes, in handler order.
     pub collisions: SmallVec<[ClassMask; 4]>,
     /// Outside Room.
@@ -949,7 +949,7 @@ pub enum ProbeAct {
     /// A room request.
     RequestRoom(RoomRequest),
     /// `keyboard_check_direct` on the action with this bit; logs `D1` or `D0`.
-    DirectRead(u16),
+    DirectRead(u32),
     /// `instance_change`.
     ChangeKind(KindId, bool),
     /// Halt with a script error carrying this message.
@@ -1277,8 +1277,9 @@ fn probe_act(
             i.m.set_y(y)
         })?,
         ProbeAct::StartTimeline(tl, pos) => {
+            let def = ctx.def;
             if let Some(inst) = ctx.w.get_mut_unmoved(me) {
-                timeline::start(&mut inst.timeline, tl, pos)?;
+                timeline::start_with_def(&mut inst.timeline, def, tl, pos)?;
             }
         }
     }

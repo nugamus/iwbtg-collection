@@ -1,0 +1,31 @@
+# Imported from research trace kaenbyou/famb-save-restart-a by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room room14 --at 2 --from 2 --stub-dlls (18 --gml)
+source = "kaenbyou/famb-save-restart-a"
+kind = "probe_read"
+start = { room = "room_1", difficulty = 1 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "stub"
+seed = 0
+setup = []
+# Recorder reads of the decoded save file, before these frames (famb-save-restart.md).
+latch = { "global.tr_x" = [3, 20, 21, 22, 50, 51, 52, 80, 81, 82, 140, 141, 142, 180, 181, 182, 190], "global.tr_y" = [3, 20, 21, 22, 50, 51, 52, 80, 81, 82, 140, 141, 142, 180, 181, 182, 190], "global.tr_xs" = [3, 20, 21, 22, 50, 51, 52, 80, 81, 82, 140, 141, 142, 180, 181, 182, 190], "global.tr_rev" = [3, 20, 21, 22, 50, 51, 52, 80, 81, 82, 140, 141, 142, 180, 181, 182, 190], "global.tr_death" = [3, 20, 21, 22, 50, 51, 52, 80, 81, 82, 140, 141, 142, 180, 181, 182, 190] }
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+"instance_number(player)" = "instance_number(kid)"
+"instance_number(savePoint)" = "instance_number(@save_point)"
+"global.tr_x" = "save.x"
+"global.tr_y" = "save.y"
+"global.tr_xs" = "save.facing"
+"global.tr_rev" = "save.flipped"
+"global.tr_death" = "save.deaths"
+
+[unprobed]
+"global.tr_at" = "the recorder's own frame counter, not game state"
+"global.tr_room" = "the original's room index; ours is a room id"
+
+[rooms]
+"room_1" = "room14"

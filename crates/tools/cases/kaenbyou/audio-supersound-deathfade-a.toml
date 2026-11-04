@@ -1,0 +1,25 @@
+# Imported from research trace kaenbyou/audio-supersound-deathfade-a by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object objDeathSound --room rHub --at 2 --from 2 --stub-dlls
+source = "kaenbyou/audio-supersound-deathfade-a"
+kind = "diff"
+start = { room = "hub", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "@death_sound_2"
+original_object = "objDeathSound"
+dll_mode = "stub"
+seed = 0
+setup = []
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+"instance_number(player)" = "instance_number(kid)"
+
+[unprobed]
+"global.stream_music" = "the sim has no audio settings: sound is the client's, never sim state (sound mode)"
+"global.audio_music_muted" = "the sim has no audio settings: sound is the client's, never sim state (sound mode)"
+"global.audio_sound_volume" = "the sim has no audio settings: sound is the client's, never sim state (sound mode)"
+"global.audio_music_volume" = "the sim has no audio settings: sound is the client's, never sim state (sound mode)"
+
+[rooms]
+"hub" = "rHub"

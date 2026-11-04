@@ -12,6 +12,7 @@ use crate::world::{Ctx, Flow, InstId};
 
 /// The actions this file implements, by their `physics.toml` names (snake case). Part of
 /// `kid::KidAction`; WP5c adds one variant per action it implements.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum A4Action {}

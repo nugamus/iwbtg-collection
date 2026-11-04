@@ -1,0 +1,42 @@
+#:schema ../../../../docs/format/schema/v0/game.schema.json
+format = 0
+id = "demo"
+title = "Demo room"
+version = "0.1.0"
+engine_rev = 0
+runner = "gm80"
+physics = "physics.toml"
+start_room = "stage"
+max_ticks = 180_000
+object_order = [
+  "world", "kid", "block", { kind = "spike", dir = "up" }, "kid_start", "kid_bullet", "blood",
+  "blood_emitter", "game_over", "bow", "playerface",
+]
+
+[engine]
+new_game_room = "stage"
+float_model = "f64"
+
+[defaults.kid]
+sprite = "kid"
+mask = "kid_mask"
+
+[defaults.block]
+sprite = "block"
+
+[defaults.spike]
+sprite = "spike_up"
+
+[[creators]]
+name = "IWBTG Collection"
+role = "author"
+
+[source]
+url = "https://github.com/nugamus/iwbtg-collection"
+permission = "granted"
+permission_note = "Original demo art made for this repository."
+
+[timing]
+start = { trigger = "run_start" }
+end = { trigger = "run_end" }
+stages = []

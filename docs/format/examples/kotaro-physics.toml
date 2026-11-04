@@ -1,0 +1,13 @@
+#:schema ../schema/v0/physics.schema.json
+# deride-kotaro-from-aslant (family A2, kid/A2.md): the A2 preset as it is. Animus and
+# easy-miku-2 add the A/D nudge at the end of the movement action:
+#   step = ["gravity", "walk", "air_sprite", "fall_cap", "shoot", "jump", "release", "ad_nudge", "vines", "flip_swap"]
+# (the keys A and D are mapped to the generic actions extra1 and extra2).
+preset = "A2"
+
+[sprites]
+idle = "kid_idle"
+running = "kid_run"
+jump = "kid_jump"
+fall = "kid_fall"
+sliding = "kid_slide"

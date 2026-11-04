@@ -1,0 +1,130 @@
+{
+  "$defs": {
+    "Number": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "bits": {
+              "pattern": "^[0-9a-fA-F]{16}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "bits"
+          ],
+          "type": "object"
+        }
+      ],
+      "description": "A number, or { bits = \"<16 hex digits of an IEEE double>\" } for a constant that must match bit for bit."
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "An object file (`objects/<id>.toml`): a preset or a scripted object.",
+  "properties": {
+    "base": {
+      "description": "Built-in base kind.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "collides_with": {
+      "description": "Classes whose touch runs the script's `collide(other)`: named classes or package class names.",
+      "items": {
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "counts_as": {
+      "description": "Extra collision classes: named classes such as `block` or `killer`, or package class names.",
+      "items": {
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "depth": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "GM `depth`; default 0."
+    },
+    "mask": {
+      "description": "Object-level collision mask sprite (GM object `mask`).",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "params": {
+      "additionalProperties": true,
+      "description": "Params with defaults; instances may override.",
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "persistent": {
+      "description": "GM `persistent`; default false.",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "roles": {
+      "description": "Legacy converter key, read only by trace builds. Write `counts_as` instead.",
+      "items": {
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "script": {
+      "description": "Script id (`scripts/<id>.rhai`).",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "solid": {
+      "description": "GM `solid`; default false.",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "sprite": {
+      "description": "Default sprite id.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "visible": {
+      "description": "GM `visible`; default true.",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    }
+  },
+  "title": "IWBTG objects/<id>.toml (format v0)",
+  "type": "object"
+}

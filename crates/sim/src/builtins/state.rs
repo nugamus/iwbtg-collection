@@ -5,10 +5,117 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::{
+    block, blood, blood_emitter, bow, breakable_block, camera, conveyor, death_sound, difficulty_warp,
+    drop_platform, edge_warp, fake_block, game_clear, game_over, jump_refresher, kid_bullet, kid_param_zone,
+    kid_start, killer, moving_platform, music, orbit, path_platform, save, sign, spike, spring, time_limit,
+    trap, trap_stopper, trigger, warp, water, world,
+};
+
 /// A built-in instance's state.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub enum BuiltinState {
     /// No per-instance state.
     #[default]
     Stateless,
+    /// `world` (WP6a).
+    World(world::WorldState),
+    /// `kid_start` (WP6a).
+    KidStart(kid_start::KidStartState),
+    /// `boss_gate` and `secret_item` (WP6b): the flag index.
+    Flag(u8),
+    /// `boss_item` (WP6b).
+    BossItem {
+        /// The boss flag index.
+        index: u8,
+        /// The boss kind it waits for.
+        watched: Option<crate::def::KindId>,
+    },
+    /// `item_viewer` (WP6b).
+    ItemViewer {
+        /// Shows a boss flag (else an item flag).
+        boss: bool,
+        /// The flag index.
+        index: u8,
+    },
+    /// `game_clear` (WP6b).
+    GameClear(game_clear::GameClearState),
+    /// `music` (WP6b).
+    Music(music::MusicState),
+    /// `death_sound` (family B death).
+    DeathSound(death_sound::DeathSoundState),
+    /// `drop_platform` (WP6b).
+    DropPlatform(drop_platform::DropState),
+    /// `gravity_flip` (WP6b): flips up.
+    GravityFlip {
+        /// Sets `global.grav` (up) or clears it (down).
+        up: bool,
+        /// `yflag_with_view_rotation` (kaenbyou): rotate view 0, then flip every kid.
+        rotate: bool,
+        /// `rotate`: this activation has started (the original's `played`).
+        played: bool,
+    },
+    /// `bullet_blocker` (WP6b).
+    BulletBlocker {
+        /// Spares bullets while it overlaps a kid.
+        except_overlapping: bool,
+    },
+    /// `edge_warp` per-edge table (WP6b).
+    EdgeTable(edge_warp::EdgeTable),
+    /// `edge_warp` in `room_assign` mode (WP6b).
+    RoomAssign(edge_warp::RoomAssign),
+    /// `fake_block` (WP6b).
+    FakeBlock(fake_block::FakeBlockState),
+    /// `trigger` (WP6b).
+    Trigger(trigger::TriggerState),
+    /// `trap` (WP6b).
+    Trap(trap::TrapState),
+    /// `breakable_block` (WP6c).
+    Breakable(breakable_block::BreakableState),
+    /// `trap_stopper` (WP6c).
+    Stopper(trap_stopper::StopperState),
+    /// `orbit` (WP6c).
+    Orbit(orbit::OrbitState),
+    /// `path_platform` (WP6c).
+    PathPlatform(path_platform::PathPlatformState),
+    /// `jump_refresher` (WP6c).
+    Refresher(jump_refresher::RefresherState),
+    /// `spring` (WP6c).
+    Spring(spring::SpringState),
+    /// `conveyor` (WP6c).
+    Conveyor(conveyor::ConveyorState),
+    /// `kid_param_zone` (WP6c).
+    ParamZone(kid_param_zone::ZoneState),
+    /// `moving_platform` (WP6b).
+    MovingPlatform(moving_platform::MovingPlatformState),
+    /// `water` (WP6b).
+    Water(water::WaterState),
+    /// `block` (WP6a).
+    Block(block::BlockState),
+    /// `spike` (WP6a).
+    Spike(spike::SpikeState),
+    /// `kid_bullet` (WP6a).
+    KidBullet(kid_bullet::KidBulletState),
+    /// `save` (WP6a).
+    Save(save::SaveState),
+    /// `warp` (WP6a).
+    Warp(warp::WarpState),
+    /// `difficulty_warp` (WP6a).
+    DifficultyWarp(difficulty_warp::DifficultyWarpState),
+    /// `blood` (WP6a).
+    Blood(blood::BloodState),
+    /// `blood_emitter` (WP6a).
+    BloodEmitter(blood_emitter::BloodEmitterState),
+    /// `game_over` (WP6a).
+    GameOver(game_over::GameOverState),
+    /// `bow` (WP6a).
+    Bow(bow::BowState),
+    /// `camera` (WP6a).
+    Camera(camera::CameraState),
+    /// `killer` (WP6a).
+    Killer(killer::KillerState),
+    /// `sign` (WP6c).
+    Sign(sign::SignState),
+    /// `time_limit` (WP6c).
+    TimeLimit(time_limit::TimeLimitState),
 }

@@ -3,11 +3,13 @@
 //! The sim talks to scripts only through [`ScriptHost`], implemented by [`ScriptRuntime`], so
 //! the sim core never names Rhai types. `Sim` owns one `ScriptRuntime`, built from
 //! `GameDef::scripts`, and lends it to every [`Ctx`] as `ctx.scripts`. WP0 declares; WP9 owns.
-#![allow(unused_variables, reason = "WP0 stub: WP9 fills the body")]
 
 pub mod api;
 pub mod budget;
+mod consts;
+pub mod docs;
 pub mod host;
+pub mod inst;
 pub mod validate;
 
 use serde::{Deserialize, Serialize};
@@ -47,12 +49,28 @@ pub trait ScriptHost {
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub struct ScriptState {}
 
-/// Script effects for the client. WP9 adds the variants.
-#[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
-pub struct ScriptOutput {}
+/// Script effects for the client.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub enum ScriptOutput {
+    /// `emit(name)`: a named signal for the client (a sound cue, a UI flash).
+    Emit {
+        /// The signal name, at most 64 bytes.
+        name: String,
+    },
+    /// `shake(ticks, strength)`: shake the screen.
+    Shake {
+        /// How many ticks.
+        ticks: u32,
+        /// Pixels of shake.
+        strength: crate::num::Real,
+    },
+}
 
 /// Runs the script part of an event, after the base built-in's handler, through `ctx.scripts`.
 /// An error halts the sim (through `events::dispatch`).
 pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimError> {
-    unimplemented!("WP9: script::on_event")
+    match ctx.scripts.clone().on_event(ctx, me, ev) {
+        Ok(f) => Ok(f),
+        Err(e) => Err(e.into()),
+    }
 }

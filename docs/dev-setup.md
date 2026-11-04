@@ -40,12 +40,12 @@ That's expected. `iwc convert` (research) writes its packages to `research/build
 | gh | 2.102.0 | logged in as nugamus |
 | git | 2.52.0.windows.1 | |
 | Claude Code | 2.1.316 | |
-| OpenGMK tracer | `research/tools/opengmk/bin/gm8emulator.exe`, sha256 `d83371ba68900fa3…` | built from OpenGMK 9e4282e6 + `iwc-trace.patch`. The source checkout is also on disk in `tools/opengmk/src/`, see research#28 |
+| OpenGMK tracer | `research/tools/opengmk/bin/gm8emulator.exe`, sha256 `d83371ba68900fa3…` | built from OpenGMK 9e4282e6 + `iwc-trace.patch`. The source checkout is also on disk in `tools/opengmk/src/`, only to rebuild the tracer: no agent opens, reads or greps it except to apply `iwc-trace.patch` and build, and never while writing specs or client code (research#28) |
 | REA | MCP server `rea`, available in sessions | `rea-linux` is blocked in settings |
 
 ## Agent teams
 
-Several agents can work at once through Claude Code agent teams (experimental). The workspace settings turn the feature on with `"env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" }`. One session is the lead, and it starts teammates. Each teammate is a full Claude Code session with its own context. Teammates talk to the lead and each other with messages and share a task list. On Windows they run in-process: the lead's agent panel lists them, arrow keys and Enter open one, and `x` stops it. Split panes need tmux or iTerm2, which Windows Terminal and the VS Code terminal don't support.
+Several agents can work at once through Claude Code agent teams (experimental). The workspace settings turn the feature on with `"env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" }`. One session is the lead, and it starts teammates. Each teammate is a full Claude Code session with its own context. Teammates talk to the lead and each other with messages. The docs describe a shared task list, but none of the sessions has a tool to create or read one (checked 2026-11-02: the lead had only Agent, SendMessage and TaskStop, a teammate has no task tool either, and the session's `~/.claude/tasks/` folder stayed empty), so the `in-progress` labels are the task list (see Claims below). On Windows they run in-process: the lead's agent panel lists them, arrow keys and Enter open one, and `x` stops it. Split panes need tmux or iTerm2, which Windows Terminal and the VS Code terminal don't support.
 
 Teammates share the lead's working folder, so the CLAUDE.md files require:
 
@@ -55,6 +55,14 @@ Teammates share the lead's working folder, so the CLAUDE.md files require:
 - **Research data work** (crawls, downloads, extraction, traces, the converter) needs `archive/`, `extracted/`, `db/` and `tools/`. Those exist only in the main research checkout, so that work runs there, one agent at a time.
 
 Each client worktree builds its own `target/` folder: the first build there takes a few minutes and a few GB. Teams use several times the tokens of one session. The docs advise 3 to 5 teammates, Sonnet for teammates, and checking in on the team often. `/resume` does not bring back in-process teammates.
+
+**Which hooks fire for teammates** (checked 2026-11-02 in the first team run, three in-process Sonnet teammates):
+
+- `PreToolUse` guard (`guard_archive.py`): **fires.** A teammate's `cd archive` was blocked with the guard's message. (The check ran in a worktree that has no `archive/`, so nothing could have happened either way.)
+- `SessionStart` (`issues.py start`): **does not fire.** None of the three teammates got the project status at startup.
+- `Stop` (`issues.py stop`): **not seen.** No teammate was held to a Findings line. Treat it as not firing.
+
+So a teammate runs the status hook by hand at the start (from the workspace root: `python -I client/.claude/hooks/issues.py start`; the output is JSON, read `additionalContext`) and ends every turn that changed files with `Findings: <issue links>` or `Findings: none`, whether or not a hook asks. The lead's own session still gets both hooks.
 
 The lead prompt is `TEAM_LEAD_PROMPT.md` in the workspace root.
 
@@ -78,8 +86,8 @@ Expected: the build ends with `Finished`. `issues.py start` prints JSON with mil
 Changes that touch only docs, Markdown, `workspace/` or `.claude/` skip it. Builds run without debug info or incremental state, to save time.
 
 - Windows and Linux: `cargo clippy --workspace --tests -- -D warnings`, `cargo test --workspace` (all `--locked`, warnings are errors), and `cargo fmt --check` on Linux.
-- wasm32: `cargo test -p iwbtg-sim` and `cargo test -p iwbtg-format --lib --test fixtures` on wasm32-wasip1 under wasmtime, and a wasm32-unknown-unknown build. The package-loading `wp7a_*` tests run on native targets only, because wasm32-wasip1 aborts on the panics of unmerged WP0 stubs. wasm32-unknown-unknown tests under node: #206.
-- `cargo deny check licenses`.
+- wasm32: `cargo test -p iwbtg-sim` and `cargo test -p iwbtg-format --lib --test fixtures` on wasm32-wasip1 under wasmtime, and a wasm32-unknown-unknown build. The package-loading `wp7a_*` tests run on native targets only, because wasm32-wasip1 aborts on the panics of unmerged WP0 stubs. On wasm32-unknown-unknown, `wp1_determinism` runs under node through `wasm-bindgen-test` (`.cargo/config.toml` sets the runner): `cargo test -p iwbtg-sim --test wp1_determinism --target wasm32-unknown-unknown`. The runner is the wasm-bindgen CLI, and its version must equal `wasm-bindgen` in Cargo.lock: `cargo install wasm-bindgen-cli --version <lock version> --locked`. Other sim tests still need the same `#[wasm_bindgen_test]` switch to run there.
+- `cargo deny check licenses`, and the sim's dependency ban: `cargo deny --manifest-path crates/sim/Cargo.toml --config crates/sim/deny.toml check bans` (docs/architecture.md, Sim purity).
 
 The same checks locally, from `client/`:
 
@@ -97,5 +105,5 @@ Without wasmtime, a wasm32-wasip1 test binary also runs under Node's WASI. Build
 - research had uncommitted trace tool work. It is saved as `backup/home-pc-2026-11-02-local-trace-work`; research#27 lands it.
 - `client/.claude/worktrees/` held six workflow worktrees with unpushed WP1, WP2, WP3, WP4a, WP7a and WP8a work. Each is saved as `backup/home-pc-2026-11-02-<wp>`, and its issue (#1, #2, #3, #4, #8, #10) points to it. #203 removes the worktrees.
 - The root `.claude/settings.json` lacked the issue hooks, and they are now added. #202 added the tracked copy and the drift warning.
-- `research/tools/opengmk/src/` contradicts research/CLAUDE.md: research#28.
+- `research/tools/opengmk/src/` is kept only to rebuild the tracer; research/CLAUDE.md now says so (research#28).
 - No originals, extraction output or database are tracked in any repo. `git status --ignored` shows them ignored in research.

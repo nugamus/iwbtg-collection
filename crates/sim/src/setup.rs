@@ -80,7 +80,7 @@ impl Sim {
         pre_entry: &[SetupAction],
     ) -> Result<Sim, SimError> {
         let rules = RunnerRules::for_runner(def.runner, def.engine_rev)?;
-        let scripts = ScriptRuntime::new(&def)?;
+        let scripts = ScriptRuntime::new(&def, &rules)?;
         let first_room = match &options.start {
             room::StartPoint::NewGame { .. } => def.new_game_room,
             room::StartPoint::Room { room, .. } => *room,
@@ -115,7 +115,7 @@ impl Sim {
 fn apply(def: &GameDef, rules: &RunnerRules, w: &mut World, s: &SetupAction) -> Result<(), SimError> {
     match s {
         SetupAction::SetField { target, field, value } => {
-            let id = target_instance(rules, w, target)?;
+            let id = target_instance(def, rules, w, target)?;
             let inst = w
                 .get_mut(id)
                 .ok_or_else(|| SimError::invariant(format!("setup target {} not stored", id.0)))?;
@@ -130,14 +130,19 @@ fn apply(def: &GameDef, rules: &RunnerRules, w: &mut World, s: &SetupAction) -> 
 }
 
 /// The instance a `SetField` writes.
-fn target_instance(rules: &RunnerRules, w: &World, t: &ProbeTarget) -> Result<InstId, SimError> {
+fn target_instance(
+    def: &GameDef,
+    rules: &RunnerRules,
+    w: &World,
+    t: &ProbeTarget,
+) -> Result<InstId, SimError> {
     let found = match t {
         ProbeTarget::Row => {
             return Err(SimError::unsupported("setup target `Row` names no instance"));
         }
         ProbeTarget::Kid => w.kid(&rules.tick),
         ProbeTarget::First(crate::collide::Target::Class(c)) => w.first_of(*c, &rules.tick),
-        ProbeTarget::First(t) => first_of_target(w, &rules.tick, *t),
+        ProbeTarget::First(t) => first_of_target(def, w, &rules.tick, *t),
         ProbeTarget::Named(n) => w
             .iter_alive()
             .find(|i| i.active && i.name == Some(*n))

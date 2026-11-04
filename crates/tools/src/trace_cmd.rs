@@ -19,6 +19,7 @@ use iwbtg_sim::def::{GameDef, KindId, NameId, RoomId};
 use iwbtg_sim::input::{InputFrame, KeyMap, parse_key_inputs};
 use iwbtg_sim::num::Real;
 use iwbtg_sim::probe::{self, Column, Probe, ProbeTarget, registry};
+use iwbtg_sim::rules::tick::DirectLatch;
 use iwbtg_sim::setup::SetupAction;
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::trace::{self, DiffOptions, TraceDiff, TraceTable};
@@ -232,6 +233,8 @@ pub fn execute(
     };
     let mut sim = Sim::new_with_setup(def, resolved.options.clone(), &resolved.pre_entry)
         .map_err(|e| ToolError::Message(format!("{}: sim did not start: {e}", case.source)))?;
+    // The recorder has no keyboard_check_direct latch (CLONE_SPEC input, Confirmed (recorder)).
+    sim.set_direct_latch(DirectLatch::None);
     for frame in frame_range(case, inputs_end) {
         for s in resolved.per_frame.get(&frame).into_iter().flatten() {
             sim.apply_setup(s)
@@ -259,7 +262,41 @@ pub fn execute(
             break;
         }
     }
+    latch_columns(case, &mut table);
     Ok(table)
+}
+
+/// The case's `latch` columns: a row shows the column's value as of the frame before the last
+/// read frame at or before it, 0 before the first read (the recorder's `--gml` copied it then).
+fn latch_columns(case: &TraceCase, table: &mut TraceTable) {
+    for (name, reads) in &case.latch {
+        let Some(col) = table.columns.iter().position(|c| &c.name == name) else {
+            continue;
+        };
+        let series: Vec<(i64, trace::Value)> = table
+            .rows
+            .iter()
+            .filter_map(|r| match r.first() {
+                Some(trace::Value::Int(f)) => Some((*f, r[col].clone())),
+                _ => None,
+            })
+            .collect();
+        for row in &mut table.rows {
+            let Some(trace::Value::Int(frame)) = row.first().cloned() else {
+                continue;
+            };
+            let read = reads.iter().copied().filter(|r| i64::from(*r) <= frame).max();
+            row[col] = read
+                .and_then(|r| {
+                    series
+                        .iter()
+                        .rev()
+                        .find(|(f, _)| *f < i64::from(r))
+                        .map(|(_, v)| v.clone())
+                })
+                .unwrap_or(trace::Value::Real(0.0));
+        }
+    }
 }
 
 /// A full row from a probe row: the fixed columns with the original room and object names, then
@@ -299,13 +336,23 @@ fn var_columns(original: &TraceTable) -> Vec<String> {
 
 /// Runs one case against its package and returns our trace table.
 pub fn run_case(pkg: &PackageFiles, case: &TraceCase, research: &Path) -> Result<TraceTable, ToolError> {
+    run_case_rev(pkg, case, research, None)
+}
+
+/// Like [`run_case`], on engine revision `engine_rev` instead of the package's own when given.
+pub fn run_case_rev(
+    pkg: &PackageFiles,
+    case: &TraceCase,
+    research: &Path,
+    engine_rev: Option<u16>,
+) -> Result<TraceTable, ToolError> {
     if let Some(open) = &case.open {
         return Err(ToolError::Open(open.clone()));
     }
     let (original, inputs) = read_trace(case, research)?;
     let parsed = parse_key_inputs(&inputs, &KeyMap::iwbtg())
         .map_err(|e| ToolError::Message(format!("{}.inputs: {e}", case.source)))?;
-    let def = load_game(
+    let mut def = load_game(
         pkg,
         LoadMode::Trace {
             unmapped_kinds_inert: true,
@@ -321,6 +368,9 @@ pub fn run_case(pkg: &PackageFiles, case: &TraceCase, research: &Path) -> Result
                 .join("\n  ")
         ))
     })?;
+    if let Some(rev) = engine_rev {
+        def.engine_rev = rev;
+    }
     let vars = var_columns(&original);
     let resolved = resolve_case(case, &def, &vars)?;
     let mut ours = execute(case, Arc::new(def), &resolved, &parsed.frames, parsed.end, &vars)?;
@@ -385,7 +435,22 @@ pub fn package_id(files: &PackageFiles) -> Result<String, ToolError> {
 
 /// Loads a package folder.
 pub fn load_package(dir: &Path) -> Result<PackageFiles, ToolError> {
-    PackageFiles::load_dir(dir).map_err(|e| ToolError::Message(format!("{}: {e}", dir.display())))
+    let mut files =
+        PackageFiles::load_dir(dir).map_err(|e| ToolError::Message(format!("{}: {e}", dir.display())))?;
+    bundle_engine_pack(dir, &mut files)?;
+    Ok(files)
+}
+
+/// Bundles the engine pack of a package folder (docs/format/engine.md); see
+/// `iwbtg_format::engine_pack::bundle_sibling`.
+pub fn bundle_engine_pack(dir: &Path, files: &mut PackageFiles) -> Result<(), ToolError> {
+    let pack_dir = dir.display();
+    let missing = iwbtg_format::engine_pack::bundle_sibling(dir, files)
+        .map_err(|e| ToolError::Message(format!("{pack_dir}: {e}")))?;
+    for m in missing {
+        eprintln!("warning: `{m}` is not in the engine pack");
+    }
+    Ok(())
 }
 
 /// A case by path, or by name under `<cases>/<pkg id>/`.
@@ -720,5 +785,61 @@ mod tests {
             run_case(&files, &c, Path::new("nowhere")),
             Err(ToolError::Open(r)) if r == "A/D keys"
         ));
+    }
+}
+
+#[cfg(test)]
+mod bundle_tests {
+    use super::*;
+
+    #[test]
+    fn latch_holds_the_value_before_the_last_read() {
+        let mut table = TraceTable::new(&["v"]).unwrap();
+        let fixed = trace::FIXED_COLUMNS.len();
+        for f in 2..8_i64 {
+            let mut row = vec![trace::Value::Empty; fixed + 1];
+            row[0] = trace::Value::Int(f);
+            row[fixed] = trace::Value::Real(f as f64 * 10.0);
+            table.push_row(row).unwrap();
+        }
+        let case = TraceCase {
+            latch: [("v".to_string(), vec![4, 6])].into_iter().collect(),
+            ..TraceCase::default()
+        };
+        latch_columns(&case, &mut table);
+        let got: Vec<f64> = table.rows.iter().map(|r| r[fixed].as_f64().unwrap()).collect();
+        assert_eq!(got, vec![0.0, 0.0, 30.0, 30.0, 50.0, 50.0]);
+    }
+
+    #[test]
+    fn load_package_bundles_the_pack_next_to_the_package() {
+        let root = std::env::temp_dir().join(format!("iwbtg-bundle-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let pkg = root.join("game_a");
+        let pack = root.join("_engines/a1");
+        std::fs::create_dir_all(pkg.join("rooms")).unwrap();
+        std::fs::create_dir_all(pack.join("sprites")).unwrap();
+        std::fs::write(
+            pkg.join("game.toml"),
+            "engine_pack = \"a1\"\n[defaults.kid]\nsprite = \"engine:a1/kid\"\n",
+        )
+        .unwrap();
+        std::fs::write(pack.join("engine.toml"), "id = \"a1\"\n").unwrap();
+        std::fs::write(pack.join("sprites/kid.toml"), "frames = 1\n").unwrap();
+        std::fs::write(pack.join("sprites/kid.png"), b"png").unwrap();
+        std::fs::write(pack.join("sprites/unused.png"), b"png").unwrap();
+        let files = load_package(&pkg).unwrap();
+        assert!(files.contains("engine/a1/engine.toml"));
+        assert!(files.contains("engine/a1/sprites/kid.png"));
+        assert!(files.contains("engine/a1/sprites/kid.toml"));
+        assert!(
+            !files.contains("engine/a1/sprites/unused.png"),
+            "only what the package uses"
+        );
+        assert!(
+            !pkg.join("engine").exists(),
+            "nothing is written to the package folder"
+        );
+        std::fs::remove_dir_all(&root).ok();
     }
 }

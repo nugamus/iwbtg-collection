@@ -296,6 +296,9 @@ fn start_inner<H: RoomHost + ?Sized>(
     stop_if_halted(ctx)?;
     ctx.w.pending = None;
     create_boot(ctx, host)?;
+    if matches!(start, StartPoint::Room { .. }) {
+        age_boot(ctx)?;
+    }
     let target = match start {
         StartPoint::NewGame { difficulty } => {
             ctx.w.save = None;
@@ -425,6 +428,31 @@ fn room_def<'d>(ctx: &Ctx<'d>, room: RoomId) -> Result<&'d RoomDef, SimError> {
         .ok_or_else(|| SimError::invariant(format!("room {} does not exist", room.0)))
 }
 
+/// The recorder's `--room` jump happens on frame 1, so the boot instances (rInit's world) have
+/// already had one animation update when the first sampled tick (frame 2) runs: the world, which
+/// has no sprite, reads `image_index` 2.0 on frame 2 (traces/kaenbyou/t5-input-restart-latch-b.csv
+/// and audio-supersound-deathfade-c.csv; rely-the-needle-4-2/t-room-1.csv: 0.0 on frame 0, then
+/// one per tick). `StartPoint::Room` gives the boot instances that one update.
+fn age_boot(ctx: &mut Ctx) -> Result<(), SimError> {
+    let ids: Vec<_> = ctx
+        .w
+        .iter_alive()
+        .filter(|i| i.persistent)
+        .map(|i| i.id)
+        .collect();
+    for id in ids {
+        let frames = ctx.w.get(id).and_then(|i| i.img.sprite()).map_or(0, |s| {
+            s.index()
+                .and_then(|n| ctx.def.sprites.get(n))
+                .map_or(0, |d| d.frames)
+        });
+        if let Some(inst) = ctx.w.get_mut(id) {
+            crate::anim::advance(&mut inst.img, frames, &ctx.rules.tick)?;
+        }
+    }
+    Ok(())
+}
+
 /// Creates the `GameDef::boot` kinds at (0, 0), as persistent instances.
 fn create_boot<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H) -> Result<(), SimError> {
     let def = ctx.def;
@@ -442,7 +470,7 @@ fn create_boot<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H) -> Result<(), 
 /// too) without events, forget the persistent rooms, clear the globals unless
 /// `globals_survive_restart`, then boot again and enter `room_first` (room order index 0, the
 /// order `room_goto_next` follows; rInit in 19 of the 20 games) as the first room. The save (a
-/// file) and the sounds (Inferred, S4) are kept.
+/// file) and the sounds (Inferred, S4: `SoundRules::keep_on_restart`) are kept.
 fn game_restart<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H) -> Result<(), SimError> {
     if ctx.rules.room.restart_events {
         room_end(ctx, host)?;
@@ -457,9 +485,15 @@ fn game_restart<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H) -> Result<(),
     ctx.w.grid = Grid::default();
     ctx.w.persistent_rooms.clear();
     ctx.w.pending = None;
+    if !ctx.rules.sound.keep_on_restart {
+        crate::sound::stop_all(ctx);
+    }
     if !ctx.rules.room.globals_survive_restart {
         ctx.w.globals.clear();
+        // The temp-file marker of a retry survives: it is a file, not a global (WP4b).
+        let boot_load = ctx.w.engine.run.boot_load;
         ctx.w.engine = EngineGlobals::default();
+        ctx.w.engine.run.boot_load = boot_load;
     }
     emit(ctx, RoomOutput::GameRestarted);
     create_boot(ctx, host)?;

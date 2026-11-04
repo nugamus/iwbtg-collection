@@ -17,5 +17,18 @@ blake3.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 
+schemars = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+
+[features]
+# JSON Schemas for the data files (docs/format/schema/v0), generated from the types here (#212).
+schema = ["dep:schemars", "dep:serde_json", "iwbtg-sim/schema"]
+
+[dev-dependencies]
+# Turns `schema` on for this crate's own tests, so `cargo test -p iwbtg-format` checks the schemas.
+iwbtg-format = { path = ".", features = ["schema"] }
+jsonschema.workspace = true
+serde_json.workspace = true
+
 [lints]
 workspace = true

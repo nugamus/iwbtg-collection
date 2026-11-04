@@ -1,0 +1,24 @@
+# Imported from research trace kaenbyou/audio-supersound-deathfade-c by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object world --room rHub --at 2 --from 2 --stub-dlls
+source = "kaenbyou/audio-supersound-deathfade-c"
+kind = "diff"
+start = { room = "hub", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "@world"
+original_object = "world"
+dll_mode = "stub"
+seed = 0
+setup = []
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+"instance_number(objDeathSound)" = "instance_number(@death_sound_2)"
+"instance_number(player)" = "instance_number(kid)"
+"player.x" = "kid.x"
+"player.y" = "kid.y"
+
+[unprobed]
+
+[rooms]
+"hub" = "rHub"

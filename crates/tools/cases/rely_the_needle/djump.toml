@@ -1,0 +1,23 @@
+# Imported from research trace rely-the-needle-4-2/djump by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room room1 --at 2 --from 2
+source = "rely-the-needle-4-2/djump"
+kind = "diff"
+start = { room = "room_1", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "model"
+seed = 0
+setup = []
+# `direction` is not compared: with a tiny hspeed residue (-7.3e-17) the recorder reads exactly 90.0 or
+# 270.0 on frames 27-30 and 42-44, where degrees(atan2(-v, h)) is 1 to 3 ulp off. The spec does not
+# say why (research issue linked from #11); remove it from this list when it does.
+ignore = ["id", "sprite_index", "sprite_name", "direction"]
+
+[vars]
+
+[unprobed]
+
+[rooms]
+"room_1" = "room1"

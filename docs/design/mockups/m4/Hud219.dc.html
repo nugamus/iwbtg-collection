@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>In-run HUD 21:9</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;family=Pixelify+Sans:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- 2560x1080: side panels grow to their 360 px maximum; the rest goes to the background art, never to stretching the game. -->
+<div style="position: relative; width: 2560px; height: 1080px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8">
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="2560px" h="1080px" hue="250" blur="{{blur}}" dim="0.45" tag="bottom-left" label="I wanna be the Kaenbyou" hint-size="2560px,1080px"></dc-import></div>
+  <div style="position: absolute; left: 569px; top: 0; width: 1422px; height: 1080px; overflow: hidden; box-shadow: 0 0 60px rgba(0,0,0,.6)">
+    <div style="width: 800px; height: 608px; transform: scale(1.77632); transform-origin: 0 0"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div>
+  </div>
+  <div style="position: absolute; left: 216px; top: 340px"><dc-import name="Leaderboard" scenario="p25" density="full" width="330" rows="7" hint-size="330px,360px"></dc-import></div>
+  <div style="position: absolute; left: 2032px; top: 300px"><dc-import name="RunInfo" time="38:02.56" width="300" hint-size="300px,420px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"blur":{"editor":"range","min":0,"max":100,"step":1,"unit":"%","default":60},"$preview":{"width":2560,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() { return { blur: this.props.blur ?? 60 }; }
+}
+</script>
+</body>
+</html>

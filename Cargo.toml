@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/sim", "crates/format", "crates/tools"]
+members = ["crates/sim", "crates/format", "crates/tools", "crates/client"]
 
 [workspace.package]
 version = "0.1.0"
@@ -36,6 +36,9 @@ png = "0.18.1"
 sha2 = "0.11.1"
 thiserror = "2.0.21"
 clap = { version = "4.6.7", features = ["derive"] }
+schemars = { version = "1.2.3", features = ["derive"] }
+serde_json = "1"
+jsonschema = { version = "0.60.2", default-features = false }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

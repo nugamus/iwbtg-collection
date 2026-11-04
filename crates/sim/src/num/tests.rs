@@ -659,7 +659,7 @@ const NUM_TRIG_SHOTS: [(f64, f64, u64, u64, u64, f64, f64); 10] = [
 ];
 
 /// Our `atan2(dy, dx)` minus the recorded `agl`, in ulps, per shot (M6 gaps).
-const ATAN2_GAPS: [i128; 10] = [0, 0, -1, 0, 0, 0, 0, 0, 0, -1];
+const ATAN2_GAPS: [i128; 10] = [0; 10];
 
 /// M6: the ten num-trig shots reproduce bit for bit with our libm: `atan2` (except shot 3, see
 /// below), `cos`, `sin`, `sqrt(h*h + v*v)` (not `hypot`: shot 5 reads `2.9999999999999996`) and
@@ -839,4 +839,44 @@ fn traces_match_display_and_gravity_trig() {
     }
     assert!(files > 0, "no trace CSVs under {}", dir.display());
     assert!(gravity_rows > 0, "no gravity-270 rows found");
+}
+
+/// `atan2` with a tiny `x` is the double below pi/2 (not the angle `libm::atan2` gives):
+/// `traces/rely-the-needle-4-2/djump.csv` frames 10, 24 and 26 read direction 90.0 with hspeed
+/// `-7.347880794884119e-17` and vspeed -8.1, -2.4999999999999964 and -1.6999999999999964.
+#[test]
+fn atan2_with_a_tiny_x_is_the_double_nearest_pi_over_two() {
+    use core::f64::consts::{FRAC_PI_2, FRAC_PI_4};
+    let h = r(-7.347_880_794_884_119e-17);
+    for v in [8.1, 2.499_999_999_999_996_4, 1.699_999_999_999_996_4] {
+        assert_eq!(atan2(r(v), h), r(FRAC_PI_2), "v = {v}");
+        assert_eq!(darctan2(r(v), h), r(90.0), "v = {v}");
+        assert_eq!(atan2(r(-v), h), r(-FRAC_PI_2), "v = -{v}");
+    }
+    // Not tiny: the plain libm value.
+    assert_eq!(atan2(r(1.0), r(1.0)), r(FRAC_PI_4));
+}
+
+/// `atan2` is correctly rounded for ordinary vectors: kaenbyou land-moving frame 10 (hspeed 3,
+/// vspeed -8.1, direction `0x40516B51B9E71DBC`) and vines frame 22 (`29.827084654474746` is the
+/// recorder's value; the pre-fix error was 2 ulp).
+#[test]
+fn atan2_is_correctly_rounded_for_ordinary_vectors() {
+    let d = point_direction(r(0.0), r(0.0), r(3.0), r(-8.1));
+    assert_eq!(d.to_bits(), 0x4051_6B51_B9E7_1DBC);
+    assert_eq!(atan2(r(1.0), r(1.0)), r(core::f64::consts::FRAC_PI_4));
+    assert_eq!(atan2(r(1.0), r(-1.0)), r(2.356_194_490_192_345));
+    assert_eq!(atan2(r(-1.0), r(-1.0)), r(-2.356_194_490_192_345));
+}
+
+/// The recorder reads exactly 90 and 270 for a kid with the hspeed residue even at a ratio of
+/// 2e-15 (kaenbyou famb-platform-a frame 50, rely num-rng-b up to 1.9e-14); an ordinary vector is
+/// not snapped (#428).
+#[test]
+fn near_axis_directions_snap_to_the_axis() {
+    let h = parse("-7.347880794884119e-17");
+    let o = r(0.0);
+    assert_eq!(point_direction(o, o, h, r(-0.03749999999999998)), r(90.0));
+    assert_eq!(point_direction(o, o, h, r(0.3625)), r(270.0));
+    assert_ne!(point_direction(o, o, r(1e-5), r(-1.0)), r(90.0));
 }

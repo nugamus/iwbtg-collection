@@ -1,0 +1,24 @@
+# Imported from research trace kaenbyou/tr-room-08 by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room rHub --at 2 --from 2 --stub-dlls (5 --gml)
+source = "kaenbyou/tr-room-08"
+kind = "probe_read"
+start = { room = "hub", difficulty = 1 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "stub"
+seed = 0
+setup = []
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+"global.timestep" = "global.time"
+"instance_number(savePointVHard)" = "instance_number(@save_point_v_hard)"
+"savePointVHard.saveTimer" = "@save_point_v_hard.saveTimer"
+
+[unprobed]
+"global.iwcdump" = "the recorder's string dump of the decoded save list; the save fields are probed in famb-save-restart-a"
+
+[rooms]
+"hub" = "rHub"

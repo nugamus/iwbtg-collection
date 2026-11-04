@@ -1,22 +1,143 @@
-//! The `platform_standard` collision run (docs/plans/sim-core.md 5.3, `[platform]`). WP0 creates
-//! the file; WP5a owns it.
-#![allow(
-    unused_variables,
-    reason = "WP0 stub: WP5a adds the variants and their bodies"
-)]
+//! The `platform_standard` collision run (docs/plans/sim-core.md 5.3, `[platform]`). WP5a owns
+//! it.
+//!
+//! Spec: kid/A1.md "Collision with platform (platform is not solid)". With
+//! `platform.rule = "half_vspeed"`: when `y - vspeed / 2 <= platform.y` (the kid was at or above
+//! the top half a step ago) the kid lands: if the platform's `vspeed >= 0`, the kid's `y` becomes
+//! `platform.y - snap` and its `vspeed` the platform's; `onPlatform` and `djump` are set either
+//! way. Otherwise nothing, so a kid coming from below passes through.
 
 use serde::Deserialize;
 
+use crate::builtins::state::BuiltinState;
+use crate::def::physics::{PlatformRule, PlatformTake};
 use crate::error::SimError;
-use crate::world::{Ctx, Flow, InstId};
+use crate::kid::actions::common::{state, yflag};
+use crate::kid::api::{refresh_air_jump, set_on_platform};
+use crate::num::{Real, gm_ge, gm_le};
+use crate::world::{Ctx, Flow, InstId, KindState};
 
 /// The collision runs this file implements, by their `physics.toml` names (snake case). Part
-/// of `kid::KidCollisionRun`; WP5a adds one variant per run it implements.
+/// of `kid::KidCollisionRun`.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum PlatformRun {}
+pub enum PlatformRun {
+    /// Kid A1 platform contact.
+    PlatformStandard,
+}
 
 /// Runs one collision run for the kid `me` against `other`. `kid::run_collision` routes here.
 pub fn run(ctx: &mut Ctx, me: InstId, other: InstId, run: &PlatformRun) -> Result<Flow, SimError> {
-    match *run {}
+    match run {
+        PlatformRun::PlatformStandard => platform_standard(ctx, me, other)?,
+    }
+    Ok(Flow::Continue)
+}
+
+fn platform_standard(ctx: &mut Ctx, me: InstId, other: InstId) -> Result<(), SimError> {
+    let def = ctx.def;
+    let n = &ctx.rules.num;
+    let p = &def.physics.platform;
+    let PlatformRule::HalfVspeed = p.rule;
+    if p.take == PlatformTake::YspeedFlipped {
+        return yspeed_flipped(ctx, me, other);
+    }
+    let missing = || SimError::invariant("platform_standard: kid or platform vanished");
+    let (ky, kvs) = ctx
+        .w
+        .get(me)
+        .map(|i| (i.m.y(), i.m.vspeed()))
+        .ok_or_else(missing)?;
+    let (py, pvs, pyprev) = ctx
+        .w
+        .get(other)
+        .map(|i| (i.m.y(), i.m.vspeed(), i.m.yprevious()))
+        .ok_or_else(missing)?;
+    // `vspeed` takes the platform's `vspeed` (A1) or its movement this tick (family B).
+    let taken = match p.take {
+        PlatformTake::DeltaY => py - pyprev,
+        _ => pvs,
+    };
+    // The reversed kid (family B `yflag`) lands from below, the mirror rule.
+    let reversed = yflag(ctx, &state(ctx, me)?) < 0;
+    let half = ky - kvs * Real::new(0.5);
+    let (lands, snap_y) = if reversed {
+        (gm_ge(half, py + p.reversed_above, n), py + p.reversed_snap)
+    } else {
+        (gm_le(half, py, n), py - p.snap)
+    };
+    if lands {
+        if gm_ge(pvs, Real::ZERO, n) {
+            let i = ctx.w.get_mut(me).ok_or_else(missing)?;
+            i.m.set_y(snap_y)?;
+            i.m.set_vspeed(taken)?;
+        }
+        set_on_platform(ctx, me, true);
+        refresh_air_jump(ctx, me);
+    }
+    Ok(())
+}
+
+/// `platform.take = "yspeed_flipped"` (family C): normally the A1 rule. A flipped kid lands from
+/// below when `y - vspeed / 2 >= platform.y + height - 1` (`height` is the platform sprite's), and,
+/// when the platform's `yspeed` is 0 or less, is put at `platform.y + height + 8` with the platform's
+/// `yspeed` as its `vspeed`. `onPlatform` and `djump` are set either way. Normal gravity reads
+/// the platform's `vspeed`, flipped gravity its `yspeed` (the moving platform's hand-applied speed).
+fn yspeed_flipped(ctx: &mut Ctx, me: InstId, other: InstId) -> Result<(), SimError> {
+    let def = ctx.def;
+    let n = &ctx.rules.num;
+    let p = &def.physics.platform;
+    let missing = || SimError::invariant("platform_standard: kid or platform vanished");
+    let (ky, kvs) = ctx
+        .w
+        .get(me)
+        .map(|i| (i.m.y(), i.m.vspeed()))
+        .ok_or_else(missing)?;
+    let (py, pvs, kind, yspeed) = ctx
+        .w
+        .get(other)
+        .map(|i| {
+            let ys = match &i.state {
+                KindState::Builtin(BuiltinState::MovingPlatform(m)) => m.yspeed,
+                _ => Real::ZERO,
+            };
+            (i.m.y(), i.m.vspeed(), i.kind, ys)
+        })
+        .ok_or_else(missing)?;
+    let half = ky - kvs * Real::new(0.5);
+    let reversed = yflag(ctx, &state(ctx, me)?) < 0;
+    let lands = if reversed {
+        let height = def
+            .kind(kind)
+            .and_then(|k| k.sprite)
+            .and_then(|s| s.index())
+            .and_then(|i| def.sprites.get(i))
+            .map_or(0, |s| s.size.1);
+        let h = Real::new(f64::from(height));
+        if gm_ge(half, py + h - Real::ONE, n) {
+            if gm_le(yspeed, Real::ZERO, n) {
+                let i = ctx.w.get_mut(me).ok_or_else(missing)?;
+                i.m.set_y(py + h + Real::new(8.0))?;
+                i.m.set_vspeed(yspeed)?;
+            }
+            true
+        } else {
+            false
+        }
+    } else if gm_le(half, py, n) {
+        if gm_ge(pvs, Real::ZERO, n) {
+            let i = ctx.w.get_mut(me).ok_or_else(missing)?;
+            i.m.set_y(py - p.snap)?;
+            i.m.set_vspeed(pvs)?;
+        }
+        true
+    } else {
+        false
+    };
+    if lands {
+        set_on_platform(ctx, me, true);
+        refresh_air_jump(ctx, me);
+    }
+    Ok(())
 }

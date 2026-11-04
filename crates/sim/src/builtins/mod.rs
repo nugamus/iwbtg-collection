@@ -13,6 +13,7 @@ pub mod blood;
 pub mod blood_emitter;
 pub mod bow;
 pub mod camera;
+pub mod death_sound;
 pub mod difficulty_warp;
 pub mod game_over;
 pub mod kid_bullet;
@@ -60,22 +61,105 @@ pub mod spring;
 pub mod time_limit;
 pub mod trap_stopper;
 
+use std::collections::BTreeSet;
+
 use serde::{Deserialize, Serialize};
 
 pub use state::BuiltinState;
 
-use crate::def::{Builtin, KindDef, Params};
+use crate::def::{Builtin, KindDef, KindId, ParamValue, Params};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
-use crate::world::{Ctx, Flow, InstId};
+use crate::num::Real;
+use crate::world::{Ctx, Flow, InstId, KindState};
 
-/// Mechanism globals: trigger models, boss and item flags. WP6a adds the fields.
+/// Mechanism globals: trigger models, boss and item flags. WP6a adds the fields; WP4b added the
+/// two flag words the save slot holds.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
-pub struct MechGlobals {}
+pub struct MechGlobals {
+    /// Boss flags, one bit per boss (`SaveSlot::bosses`).
+    pub bosses: u16,
+    /// Item flags, one bit per item (`SaveSlot::items`).
+    pub items: u16,
+    /// `global.triggered`, the `global_last` trigger model (kaenbyou).
+    pub global_triggered: Real,
+    /// `global.trigger[n]`, the `flag_array` trigger model.
+    pub trigger_flags: BTreeSet<i64>,
+    /// `global.stop[n]`, the `flag_array` model's second array (little-runner).
+    pub stop_flags: BTreeSet<i64>,
+    /// `global.switchTrigger[n]`, the `switch_array` trigger model (spook house).
+    pub switches: BTreeSet<i64>,
+    /// The music flag (`global.music`, true is muted); the `world` built-in flips it on a Mute
+    /// press and music objects read it.
+    pub music_muted: bool,
+}
 
-/// Built-in effects for the client. WP6a adds the variants.
-#[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
-pub struct BuiltinOutput {}
+impl MechGlobals {
+    /// `global.boss[i]` (bit `i` of `bosses`; `i` is 0 to 15).
+    pub fn boss(&self, i: u8) -> bool {
+        self.bosses & (1u16 << i) != 0
+    }
+
+    /// Sets `global.boss[i]`.
+    pub fn set_boss(&mut self, i: u8) {
+        self.bosses |= 1u16 << i;
+    }
+
+    /// `global.item[i]` (bit `i` of `items`; `i` is 0 to 15).
+    pub fn item(&self, i: u8) -> bool {
+        self.items & (1u16 << i) != 0
+    }
+
+    /// Sets `global.item[i]`.
+    pub fn set_item(&mut self, i: u8) {
+        self.items |= 1u16 << i;
+    }
+
+    /// Clears every trigger array and `global.triggered` (a `game_restart`; the `switch_array`
+    /// model's world Room End calls [`MechGlobals::clear_switches`] instead).
+    pub fn clear_triggers(&mut self) {
+        self.global_triggered = Real::ZERO;
+        self.trigger_flags.clear();
+        self.stop_flags.clear();
+        self.switches.clear();
+    }
+
+    /// Clears the switch array (spook house world Room End).
+    pub fn clear_switches(&mut self) {
+        self.switches.clear();
+    }
+}
+
+/// A flag index param: a whole number 0 to 15 (the save slot holds 16 flags per word).
+pub(crate) fn flag_index(p: &Params, name: &str) -> Result<u8, ParamError> {
+    let v = param_real(p, name)?.ok_or_else(|| param_error(name, "is required"))?;
+    let n = warp::whole(v, name)?;
+    u8::try_from(n)
+        .ok()
+        .filter(|n| *n < 16)
+        .ok_or_else(|| param_error(name, "must be 0 to 15 (the save slot holds 16 flags)"))
+}
+
+/// Built-in effects for the client. Visual only: the sim never reads them back.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub enum BuiltinOutput {
+    /// A `blood_emitter` in `particles` mode made one Step's particle stream (family B death).
+    DeathParticles {
+        /// Emitter x.
+        x: Real,
+        /// Emitter y.
+        y: Real,
+        /// Particles this Step.
+        count: u32,
+        /// The kid was flipped: the particles fall up.
+        flipped: bool,
+    },
+    /// A `sign` raised its message this tick (the client shows a text box while it keeps coming).
+    TextBox {
+        /// The text.
+        text: String,
+    },
+}
 
 /// One parameter a built-in accepts; `crates/format` validates package params against these.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -103,6 +187,8 @@ pub enum ParamType {
     Kind,
     /// A sound id.
     Sound,
+    /// Free text (a sign's message).
+    Text,
 }
 
 /// A param set a built-in cannot use.
@@ -113,6 +199,73 @@ pub struct ParamError {
     pub param: String,
     /// What is wrong.
     pub message: String,
+}
+
+/// A real param, `None` when absent. A param of another type is a [`ParamError`].
+pub(crate) fn param_real(p: &Params, name: &str) -> Result<Option<Real>, ParamError> {
+    match p.0.get(name) {
+        None => Ok(None),
+        Some(ParamValue::Real(r)) if r.is_finite() => Ok(Some(*r)),
+        Some(_) => Err(param_error(name, "must be a finite number")),
+    }
+}
+
+/// A flag param, `None` when absent.
+pub(crate) fn param_bool(p: &Params, name: &str) -> Result<Option<bool>, ParamError> {
+    match p.0.get(name) {
+        None => Ok(None),
+        Some(ParamValue::Bool(b)) => Ok(Some(*b)),
+        Some(_) => Err(param_error(name, "must be true or false")),
+    }
+}
+
+/// An enum param: one of `allowed`, `None` when absent.
+pub(crate) fn param_enum<'a>(
+    p: &'a Params,
+    name: &str,
+    allowed: &[&str],
+) -> Result<Option<&'a str>, ParamError> {
+    match p.0.get(name) {
+        None => Ok(None),
+        Some(ParamValue::Str(s)) if allowed.contains(&s.as_str()) => Ok(Some(s.as_str())),
+        Some(_) => Err(param_error(
+            name,
+            &format!("must be one of {}", allowed.join(", ")),
+        )),
+    }
+}
+
+/// A kind param, `None` when absent.
+pub(crate) fn param_kind(p: &Params, name: &str) -> Result<Option<KindId>, ParamError> {
+    match p.0.get(name) {
+        None => Ok(None),
+        Some(ParamValue::Kind(k)) => Ok(Some(*k)),
+        Some(_) => Err(param_error(name, "must name a kind")),
+    }
+}
+
+/// A [`ParamError`].
+pub(crate) fn param_error(name: &str, message: &str) -> ParamError {
+    ParamError {
+        param: name.to_owned(),
+        message: message.to_owned(),
+    }
+}
+
+/// The built-in state of instance `me`, if it has one.
+pub(crate) fn state_of<'a>(ctx: &'a Ctx<'_>, me: InstId) -> Option<&'a BuiltinState> {
+    match &ctx.w.get(me)?.state {
+        KindState::Builtin(s) => Some(s),
+        _ => None,
+    }
+}
+
+/// The built-in state of instance `me`, for changing it.
+pub(crate) fn state_mut<'a>(ctx: &'a mut Ctx<'_>, me: InstId) -> Option<&'a mut BuiltinState> {
+    match &mut ctx.w.get_mut(me)?.state {
+        KindState::Builtin(s) => Some(s),
+        _ => None,
+    }
 }
 
 /// The base built-in of instance `me`'s kind. An unknown instance or kind is an invariant break.
@@ -161,6 +314,7 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
         Builtin::BulletBlocker => bullet_blocker::on_event(ctx, me, ev),
         Builtin::Slope => slope::on_event(ctx, me, ev),
         Builtin::Music => music::on_event(ctx, me, ev),
+        Builtin::DeathSound => death_sound::on_event(ctx, me, ev),
         Builtin::BossGate => boss_gate::on_event(ctx, me, ev),
         Builtin::BossItem => boss_item::on_event(ctx, me, ev),
         Builtin::SecretItem => secret_item::on_event(ctx, me, ev),
@@ -219,6 +373,7 @@ pub fn event_set(b: Builtin, kind: &KindDef) -> EventSet {
         Builtin::BulletBlocker => bullet_blocker::event_set(kind),
         Builtin::Slope => slope::event_set(kind),
         Builtin::Music => music::event_set(kind),
+        Builtin::DeathSound => death_sound::event_set(kind),
         Builtin::BossGate => boss_gate::event_set(kind),
         Builtin::BossItem => boss_item::event_set(kind),
         Builtin::SecretItem => secret_item::event_set(kind),
@@ -274,6 +429,7 @@ pub fn param_specs(b: Builtin) -> &'static [ParamSpec] {
         Builtin::BulletBlocker => bullet_blocker::param_specs(),
         Builtin::Slope => slope::param_specs(),
         Builtin::Music => music::param_specs(),
+        Builtin::DeathSound => death_sound::param_specs(),
         Builtin::BossGate => boss_gate::param_specs(),
         Builtin::BossItem => boss_item::param_specs(),
         Builtin::SecretItem => secret_item::param_specs(),
@@ -329,6 +485,7 @@ pub fn init_state(b: Builtin, params: &Params) -> Result<BuiltinState, ParamErro
         Builtin::BulletBlocker => bullet_blocker::init_state(params),
         Builtin::Slope => slope::init_state(params),
         Builtin::Music => music::init_state(params),
+        Builtin::DeathSound => death_sound::init_state(params),
         Builtin::BossGate => boss_gate::init_state(params),
         Builtin::BossItem => boss_item::init_state(params),
         Builtin::SecretItem => secret_item::init_state(params),

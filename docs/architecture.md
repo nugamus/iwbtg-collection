@@ -29,23 +29,31 @@ One Cargo workspace in `client/`, `license = "MIT OR Apache-2.0"`, toolchain pin
 
 The sim never parses text and never touches files. `format` hands it a validated `GameDef`. The client and server hand it input frames.
 
+### The client (`iwbtg-client`)
+
+`cargo run -p iwbtg-client -- <package folder> [--trace-mode] [--fps <N|unlimited>] [--interpolate]` opens a package in a window (Bevy 0.20, 2D rendering and windowing only; audio, gamepad and 3D features are off until they are needed, because they pull system libraries). `package.rs` opens the folder like `iwbtg pkg check` does (engine pack bundled from `../_engines`, strict load) and prints the errors of a broken package. `view.rs` owns the `sim::Sim` as a non-send resource (the script host is not `Send`) and draws every visible instance that has a sprite, one Bevy sprite each, using the image of its `SpriteId`, a strip or, with `columns`, a grid read row by row (the frame is found from the image width; `iwbtg_format::sprites::sprite_pngs` gives the order), its origin, frame, scale, angle and alpha, at the position and depth the sim reports. The room is letterboxed to fit the window and drawn with nearest-neighbor filtering. The sim ticks on Bevy's fixed clock (`Time<Fixed>`, set to the game's `tick_rate`, 50 for the IWBTG games), so the tick rate does not depend on the frame rate; a slow frame runs several ticks, a fast one none (Bevy clamps one frame's catch-up to 250 ms, so after a long stall the sim slows down instead of racing). Each tick takes one `InputFrame` from `input.rs`, whose collector keeps per-key edges between ticks and uses the IWBTG default keys (arrows, Shift jump, Z shoot, R restart, Q suicide, P pause, M mute, F2 reset). Frames draw the state the last tick left, with no interpolation by default (the originals draw every step, so a frame between two ticks would show something the game never had). `--interpolate` is an option for fast displays: each frame draws every instance that way between its position before the last tick and its position after it, by how far the fixed clock is into the next tick; an instance that moved more than 32 px in one tick, a new instance, and any instance after a room change is drawn at its new place at once. It changes only the picture, never the sim. The frame cap (`--fps`, default 60, or `unlimited`) is a sleep-and-spin limiter at the end of each frame; vsync is off. An overlay in the top-left corner shows ticks per second, frames per second, the tick count, the room (name and size) and the kid's x, y, hspeed and vspeed (or `no kid`); F3 hides and shows it. A halted sim stays on screen with its error in the overlay. Rooms that change `room_speed` mid-game are not followed yet. `crates/client/demo.pkg` is a small original package for trying it; `demo-grid.pkg` is the same with a four-colour 2x2 `columns` kid. `--screenshot <png>` saves the window after a few frames and exits, for checks.
+
+Room art (`art.rs`): when the sim's room changes the client rebuilds the room's background colour, background image and tile layers from `rooms/<id>.toml` and `rooms/<id>.tiles.toml` (how they are drawn: docs/format/v0.md, Tiles). `crates/client/demo-art.pkg` shows a tiled background and two tile layers.
+
 ### The `iwbtg` CLI
 
 One binary for agents and CI:
 
-- `iwbtg pkg check <dir>`: full validation, one readable error list with file, line and column.
-- `iwbtg pkg fmt <dir>`: canonical formatting ([0002](decisions/0002-data-syntax.md)).
-- `iwbtg pkg hash <dir>`: prints the gameplay hash and content hash.
+- `iwbtg pkg check <dir>`: full validation, one readable error list with file, line and column. A package that names an `engine_pack` gets it bundled from `../_engines/<pack>/` first ([engine packs](format/engine.md)).
+- `iwbtg pkg fmt <dir> [--check]`: canonical formatting of every `.toml` file ([0002](decisions/0002-data-syntax.md), [v0](format/v0.md#common-rules-for-data-files)); `--check` lists what would change and exits 1.
+- `iwbtg pkg hash <dir> [--trace-mode]`: prints `gameplay_hash:` and `content_hash:` ([versioning](format/v0.md#versioning)). A package with errors prints them and exits 1.
+- `iwbtg script api-docs [--docs <dir>] [--check]`: writes [script-api.md](format/script-api.md) and the Rhai language-server stubs `docs/format/script/iws.d.rhai` from the functions registered on the IWS engine; `--check` exits 1 when a committed file is stale. `cargo test -p iwbtg-tools` fails on the same condition, so CI catches a stale file.
 - `iwbtg pkg upgrade <dir>`: migrates a package to the newest format version.
-- `iwbtg room show <dir> <room>`: prints an ASCII map of a room.
-- `iwbtg replay run <dir> <replay>`: headless run. Prints the tick count, splits and final state hash (roadmap Phase 3).
+- `iwbtg room show <dir> <room> [--cell N] [--trace-mode]`: prints an ASCII map of a room, one character per `--cell` pixels (default 32), and a legend line. Characters: `@` kid start, `S` save, `W` warp, `D` difficulty warp, `E` edge warp, `^ v < >` spike by direction, `*` killer, `#` block, `=` platform, `/` slope, `~` water, `|` vine, `o` any other kind, `.` empty. Where instances share a cell the earlier one in that list shows.
+- `iwbtg replay run <dir> <replay|.inputs> [--difficulty N] [--seed N]`: headless run from a new game. Prints three lines: `ticks: N`, `splits: <index>@<tick> ...` (or `none`) and `hash: <hex>` (roadmap Phase 3). An `.inputs` file runs frames 0 through its `end` frame; a `.iwbr` replay brings its own seed. Exit 2 when the sim halts, 3 when it reaches a work package that is not merged yet.
+- `iwbtg engine check <dir> [--to N] [--trace-mode] [--research <dir>] [--cases <dir>]`: tests a package on engine revision N (default: the newest this build knows) against its own `engine_rev` ([content](content.md#engines)). Re-runs every stored replay (`tests/replays/*.iwbr`; same tick count, splits and final hash) and every trace case of the package (our trace under N equals ours under the old revision; needs `--research` or `IWBTG_RESEARCH`). Prints one line each, then `SAFE`, or `NOT SAFE: <n> difference(s)` after the differing lines. A package with no replays and no cases prints `NOT PROVEN`. Exit 0 only for SAFE, 1 otherwise, 2 when something could not run.
 - `iwbtg replay dump <replay>`: prints a replay as text.
 - `iwbtg replay verify <dir> <replay>`: what the server runs.
 - `iwbtg pkg check <dir> --trace-mode`: accepts research converter output; converter gaps are warnings that name the converter request (CR1-CR15).
-- `iwbtg trace run <pkg> <case> [-o ours.csv]`, `iwbtg trace diff <original.csv> <ours.csv>`, `iwbtg trace check <pkg>` (every case) and `iwbtg trace import <research-trace> <pkg>` (writes a case skeleton and prints its kind): see [traces](#comparing-traces-with-the-original).
+- `iwbtg trace run <pkg> <case> [-o ours.csv]`, `iwbtg trace diff <original.csv> <ours.csv>`, `iwbtg trace check <pkg>` (every case) and `iwbtg trace import <research-trace> <pkg>` (writes a case skeleton and prints its kind): see [traces](#comparing-traces-with-the-original). The cases folder (`--cases`, on all four commands and on `engine check`) defaults to `$IWBTG_CASES`, else `crates/tools/cases` in the current folder or the nearest folder above it; it is looked up at run time, so a moved checkout works, and a wasm32 build needs the checkout preopened (`wasmtime run --dir <checkout>::/ ...`, run from `/`) or `--cases`.
 - Exit codes: 0 success, 1 a check failed (a trace differs, a package has errors), 2 the tool could not run (bad path or arguments), 3 the sim reached a work package that is not merged yet (the message names it).
 - `iwbtg profile <dir> --replay <file>`: peak script budget units and milliseconds per tick.
-- `iwbtg determinism report <corpus>`: runs the golden corpus and prints one hash list.
+- `iwbtg determinism report <corpus> [--check]`: runs the golden corpus (`crates/sim/tests/golden`) and prints one line per case: `name ticks status state_hash`. `--check` also compares with `<corpus>/expected.txt` and exits 1 on a difference. CI runs it on Windows, Linux and wasm32-wasip1 and requires byte-identical output; wasm32-unknown-unknown checks the same lines through `tests/golden_corpus.rs`.
 - `iwbtg script api-docs`: generates `docs/format/script-api.md` and `.d.rhai` stubs.
 
 ## Sim module layout
@@ -100,10 +108,10 @@ Purity is enforced by tools wherever a tool can see the mistake, so an agent tha
 - `disallowed-types`: `std::collections::{HashMap, HashSet}`, `std::time::{Instant, SystemTime}`, `f32`, `std::fs::{File, OpenOptions, DirEntry}`, `std::net::{TcpStream, TcpListener, UdpSocket}`, `std::process::Command`, `std::thread::Builder`, `std::hash::{DefaultHasher, RandomState}`.
 - `crates/format/clippy.toml` bans the same float methods and `HashMap`/`HashSet`, `f32`, `DefaultHasher`, `RandomState`: the loader computes gameplay data (mask rasterization, sorted variable ids, ranks, `gameplay_hash`) on the client (WASM) and the server (native). IO stays allowed there, because it reads packages.
 - `lib.rs` denies `clippy::print_stdout`, `clippy::print_stderr`, `clippy::float_cmp` and `clippy::cast_possible_truncation`. Test-only file and environment reads carry a scoped `#[allow]` with a reason.
-- **Review rule: GML comparisons go through `num::gm_*`.** `clippy::float_cmp` only sees raw `f64` operands (`a.get() == b.get()`), and it never covers `<` or `>`. `Real`'s own `==` compares bits (it keys ordered maps and makes state comparable), so `inst.m.hspeed() == Real::ZERO` compiles without a lint and is false for `-0.0`. Wherever the original compared reals in GML, built-ins and scripts call `gm_eq`..`gm_ge` with the run's `NumRules`; `Real ==` and `<` on `.get()` are only for our own bookkeeping. Reviewers check this; a custom lint is an open item.
+- **Review rule: GML comparisons go through `num::gm_*`.** `clippy::float_cmp` only sees raw `f64` operands (`a.get() == b.get()`), and it never covers `<` or `>`. `Real`'s own `==` compares bits (it keys ordered maps and makes state comparable), so `inst.m.hspeed() == Real::ZERO` compiles without a lint and is false for `-0.0`. Wherever the original compared reals in GML, built-ins and scripts call `gm_eq`..`gm_ge` with the run's `NumRules`; `Real ==` and `<` on `.get()` are only for our own bookkeeping. Reviewers check this, and `crates/sim/tests/lint_gm_compare.rs` (part of `cargo test`, so CI) enforces the part a text scan can see: in `src/builtins/` and `src/kid/` a line that compares with `.get()` or against a `Real::` constant fails unless it carries a `gm-compare: ok (<why>)` comment on the line or the line above. There is no baseline: every site is fixed or marked. The lint cannot see a `Real == Real` comparison that never calls `.get()`.
 - Integer counters (`tick`, `room_tick`, `next_id`, deaths, time, grid cells) use `checked_*` and halt with `SimError::Overflow`; the RNG wraps by definition. `[profile.release] overflow-checks = true`, so debug tests and release servers behave the same.
 - `usize` never appears in serialized or hashed state (wasm32 has a 32-bit `usize`).
-- **Review rule: dependencies.** No crate that reads entropy, clocks, threads or the GPU at run time enters the sim's graph (`rand`, `tokio`, `bevy`, `glam`). `deny.toml` does not enforce this yet: `cargo deny` checks the whole workspace graph, which will hold Bevy once the client crate exists. Today `getrandom` 0.2 is in the sim's graph through `rhai -> ahash -> const-random -> const-random-macro`, at compile time only: rhai turns on `ahash`'s `compile-time-rng`, so a proc macro picks rhai's internal hash keys once per build. Nothing draws entropy at run time, but those keys differ between builds, so WP9 checks that no script-visible result depends on rhai's hash-map order. Check with `cargo tree -p iwbtg-sim -i getrandom --target all`. A per-crate ban is a CI item (WP11). `cargo deny check licenses` keeps GPL code out of the whole workspace.
+- **Dependencies, checked per crate.** No crate that reads entropy, clocks, threads or the GPU at run time enters the sim's graph. `crates/sim/deny.toml` bans `rand`, `rand_core`, `rand_chacha`, `tokio`, `bevy`, `glam`, `wgpu` and `getrandom`, with every feature on and dev-dependencies left out; CI runs it as the `sim-deps` job, and locally `cargo deny --manifest-path crates/sim/Cargo.toml --config crates/sim/deny.toml check bans`. The root `deny.toml` cannot do this, because it checks the whole workspace graph, which will hold Bevy once the client crate exists (it keeps GPL code out: `cargo deny check licenses`). **The one exception:** `getrandom` 0.2 is in the sim's graph through `rhai -> ahash -> const-random -> const-random-macro`, at compile time only: rhai turns on `ahash`'s `compile-time-rng`, so a proc macro picks rhai's internal hash keys once per build. The config allows `getrandom` only as a dependency of `const-random-macro` (`wrappers`); any other path to it fails the check. Nothing draws entropy at run time, but those keys differ between builds, so WP9 checks that no script-visible result depends on rhai's hash-map order. To look at it: `cargo tree -p iwbtg-sim -i getrandom --target all`.
 - CI runs `cargo clippy -D warnings` on every target.
 - The sim is never built for i686 or any other x87 target. Never `target-cpu=native`.
 
@@ -149,6 +157,7 @@ The sketch above is the original idea. The declared types are in `crates/sim/src
 - **Package objects.** A package object (`@boss1`) is `KindState::Scripted` or inherits a built-in with `base = "projectile"`, `base = "trigger"` and so on. A scripted object with a base keeps the base's native behavior and roles; the script adds events. Collision with the kid works through roles, never through script code.
 - **The kid** is a built-in. Scripts read it, can kill it and can set documented knobs (for example gravity flip). They never replace its physics.
 - **Globals and save slot.** Game-wide variables persist across rooms, like GM globals. The save slot (room, position, gravity, flags) is part of the sim state. The client writes it to disk between sessions. Ranked replays always start from a new game.
+- **Retry, reset and saves (WP4b).** The `world` built-in calls `restart::run_restart` (R) and `run_reset` (F2) at its rank, in the phase `[engine.restart].trigger` names. `game_restart_via_boot` moves (or creates) the kid at the saved spot, counts a death when `death_on_restart = "save_counters"`, requests `game_restart` and sets `RunGlobals::boot_load`, the stand-in for the temp file: it survives the restart, `restart::boot_step` (world Step) counts `boot_ticks` down and on the last boot tick loads the slot and requests the saved room (timeline N, N+1, N+2). `boot_ticks = 0` is `Unsupported` (R17). The other kinds recreate the kid and request the saved room at once; showdown has no `game_restart` (R26: kid/A3.md wins over the rooms table). Kid-side extras (B's timer and `reverse`, showdown's `frozen`) wait for `kid::api`. `save::quantize` has six position models; `save_now` reads the kid through its instance only. `view::follow_update` runs the runner view follow (border halved when larger than half the view, clamp, speed limit; speed 0 freezes an axis).
 - **Output queue.** Audio and visual effects (`play_sound`, `play_music`, screen shake, blood) are events pushed to `output`. The client consumes them. The sim never reads anything back from audio or rendering.
 
 ## Tick pipeline
@@ -222,13 +231,17 @@ GM8 reals are IEEE binary64 doubles. Our sim uses f64 for every real.
 Scripts are Rhai under the IWS profile ([0001](decisions/0001-script-language.md)). The sim talks to them only through the `ScriptHost` trait, so the sim core never names Rhai types.
 
 - A scripted object's events run in the same pipeline slots as built-in events, in the same (rank, id) order.
-- During a script call the world is lent to the Rhai host through an `Rc<RefCell<World>>`. Each API function borrows it briefly. Single thread, no `unsafe`, no `sync` feature.
+- During a script call the world is lent to the Rhai host: `on_event` swaps a placeholder into `ctx.w` and parks the live world in the host (`RefCell<Option<World>>`). Each API function borrows it briefly; a function that needs a whole `Ctx` (spawn, destroy, kill) takes the world out, builds a `Ctx` and puts it back, so a spawned instance's Create can run its own script. The world is restored also on errors. Single thread, no `unsafe`, no `sync` feature.
 - Built-ins call scripts only through defined events: `collide`, `trigger`, `animation_end`, timeline moments, and the `call` trigger action.
 - The budget counter, caps and error handling are in [0001](decisions/0001-script-language.md#step-budget).
+- **The engine (WP9.1, `script/host.rs`, `script/api.rs`, `script/budget.rs`).** `script::host::Iws::new(NumRules)` builds the IWS engine: `Engine::new_raw()` with the core, arithmetic, logic, string, array and map packages only, `eval`, `**` and `**=` disabled, the 0001 limits, strict variables, the simple optimizer and fast operators off. The numeric API is `num` under the run's `NumRules` (`gm_eq`..`gm_ge`, `gm_bool`, `gm_repeat`, `div`, `mod`, rounding, libm transcendentals, `random`, `irandom`, `random_range`, `irandom_range`, `choose`, `tick`, `room_tick`); `/` on two integers is a FLOAT. **Rhai's built-in float comparisons (1.26.1 and 1.27.0) use a relative epsilon**, which is neither IEEE nor GM8's rule, so the engine overrides `== != < <= > >=` with exact IEEE (a test pins `0.1 + 0.2 == 0.3` false and `gm_eq` true). The RNG and the tick counters are lent per tick (`begin_tick`, `end_tick`), so the scripts' draws are the sim's draws. The tick budget (`budget.rs`: 1,000,000 units, 200,000 per call) counts one unit per Rhai operation and ends a runaway call with a deterministic error.
+- **The host (WP9.2, `script/host.rs`, `script/inst.rs`).** `ScriptRuntime::new(def, rules)` compiles every script (a compile error is a load-time `SimError::Script` with the file and position) and keeps the functions each defines. `script::on_event` (called by `events::dispatch` after the base built-in) maps the event to a function (`create`, `begin_step`, `step`, `end_step`, `late`, `alarm(n)`, `user(n)`, `collide(other)`, `outside_room`, `intersect_boundary`, `animation_end`, `room_start`, `room_end`, `game_start`, `destroy`, `end_of_path`) and calls it with `this` bound to the instance; a function the script does not define is skipped. `ScriptRuntime::event_set(id)` gives the events a script handles (the loader merges it into the kind's `EventSet`; collision classes stay the kind's business). The instance API is `Inst` handles (ids are never reused, so a stale handle is a script error, and `exists(h)` tells) with the built-in fields as properties, the package's custom variables through the same syntax (`this.hp`, mapped by `GameDef::var_names`; an unknown name is an error, an unset one reads 0 when `uninit_reads_zero`), `set_alarm(n, steps)`, `get_alarm(n)`, `instance_create`, `destroy`, `exists`, `instances(kind)` (event order), `kid()`, `emit(name)` and `kill_kid()`. Scripts nest at most 8 deep. A script call may create at most 256 instances and all scripts 4,096 per tick (`budget::MAX_SPAWNS_PER_CALL`, `MAX_SPAWNS_PER_TICK`; a Create a spawn runs counts toward the spawning call); exceeding either halts the sim with a script error that names the cap, file, line and tick. No more than 50,000 instances are live at once (`world::store::MAX_LIVE_INSTANCES`, checked in `World::insert` for every spawn, script or built-in): the 50,001st halts the sim with `instance cap exceeded`. The tick loop calls `ScriptRuntime::begin_tick` at row 0 to reset the budget. An error becomes `SimError::Script` with `file: message (line, position) [kind, instance, event, tick]` and halts the sim.
+- **The validator (WP9.3, `script/validate.rs`).** `script::validate::validate(&GameDef)` checks every script without running it and returns `Issue { script, line, column, severity, message }`; the format loader turns them into diagnostics (`scripts/boss.rhai:2:9: error: ...`), so the client, the server and `iwbtg pkg check` refuse the same scripts. Errors: the script does not compile (strict variables, `eval` and `**` disabled); a top-level item that is not `fn` or `const`; an event function (`step`, `alarm`, `moment_<name>`, ...) with the wrong argument count; a call of a function that is neither registered nor defined in the file, or with a wrong argument count; a string literal passed to `instance_create` or `instances`, or compared with `.kind`, that names no kind (`NAME_ARGS` also resolves sounds and rooms when an API function takes them); a call that draws from the RNG, changes state or calls a script function that does, in a right operand of `&&` or `||` (Rhai short-circuits, GML evaluates both; the left operand always runs, so it is fine; use `&` or `|` on bools, or evaluate into a variable first); `switch` on float case values (read from the token stream, because Rhai hashes case values away); a real-valued property or number function used as a condition (`if this.hspeed`; a number literal is already a Rhai compile error). Warning: raw `==` or `!=` where an operand is a float literal or a real property (use `gm_eq`/`gm_ne`). The walk runs on the AST the engine compiles with the simple optimizer, so code the optimizer removes (an empty `if`, an unused `let` of a pure call) is not checked. The function classification lists (`RNG_FNS`, `STATE_FNS`, `NUMBER_FNS`, `OTHER_PURE_FNS`, `REAL_PROPS`) are pinned to the registry by tests: a new API function must be added to one of them.
+- **API descriptions (#364, `script/docs.rs`).** Each registered function, operator and property has a one-line description added next to its registration with `docs.add(name, text)` (overloads share one). `iwbtg script api-docs` prints them into `docs/format/script-api.md` and fails when a registered name has none, so a new API function cannot land undocumented.
 
 ### Script API (first version)
 
-This is the starting surface. The generated reference is `docs/format/script-api.md`, and the code is the authority. Every number the API returns is a FLOAT. Every function that takes a kind, sound, room or trigger name is checked at load when the name is a string literal.
+This is the starting surface. The generated reference is `docs/format/script-api.md`, and the code is the authority; a name marked *planned* below is not registered yet, and a script that calls it fails validation. Every number the API returns is a FLOAT. Every function that takes a kind, sound, room or trigger name is checked at load when the name is a string literal.
 
 **Event functions** a script file may define: `create()`, `begin_step()`, `step()`, `end_step()`, `alarm(n)`, `collide(other)`, `trigger(name)`, `outside_room()`, `animation_end()`, `room_start()`, `room_end()`, `destroy()`, `late()`, `moment_<name>()`, and the client-only `draw(d)`.
 
@@ -237,39 +250,39 @@ This is the starting surface. The generated reference is `docs/format/script-api
 - Read and write: `x`, `y`, `hspeed`, `vspeed`, `speed`, `direction`, `gravity`, `gravity_direction`, `friction`, `sprite`, `image_index`, `image_speed`, `image_xscale`, `image_yscale`, `image_angle`, `image_alpha`, `visible`, `solid`, `depth`.
 - Read only: `xstart`, `ystart`, `xprevious`, `yprevious`, `kind`, `name`, `group`, `id`.
 - Custom variables: `this.hp = 20.0`. Unset reads are errors.
-- `this.param("hp")`: a parameter set on the instance in the room file or in the object file.
+- Parameters: the map given to `instance_create` sets them. Reading a parameter set in the room file or the object file from a script is *planned* (there is no `param` function).
 
 **Instances**
 
 | Function | Notes |
 |---|---|
-| `spawn(kind, x, y)` and `spawn(kind, x, y, #{ ... })` | Returns the new `Inst`. The map sets built-in variables and parameters. |
+| `instance_create(kind, x, y)` and `instance_create(kind, x, y, #{ ... })` (`spawn` is a reserved word in Rhai) | Returns the new `Inst`. The map sets built-in variables and parameters. |
 | `destroy(i)` | |
 | `exists(i)` | |
-| `instances(kind_or_group)` | Array in (rank, id) order, snapshotted at call time. Replaces GML `with`. |
-| `count(kind_or_group)` | |
-| `nearest(kind, x, y)` | Ties broken by (rank, id). |
-| `find(name)` | The instance with that `name` in the current room. |
+| `instances(kind)` | Array in event order, snapshotted at call time. Replaces GML `with`. Groups are *planned*. |
+| `count(kind_or_group)` | *Planned.* |
+| `nearest(kind, x, y)` | *Planned.* Ties broken by (rank, id). |
+| `find(name)` | *Planned.* The instance with that `name` in the current room. |
 
-**Collision**: `place_meeting(i, x, y, role_or_kind)`, `place_free(i, x, y)`, `collision_point(x, y, role_or_kind)`, `collision_rect(x1, y1, x2, y2, role_or_kind)`, `collision_line(x1, y1, x2, y2, role_or_kind)`. Each returns a bool or the first `Inst` in (rank, id) order.
+**Collision** (*planned*): `place_meeting(i, x, y, role_or_kind)`, `place_free(i, x, y)`, `collision_point(x, y, role_or_kind)`, `collision_rect(x1, y1, x2, y2, role_or_kind)`, `collision_line(x1, y1, x2, y2, role_or_kind)`. Each returns a bool or the first `Inst` in (rank, id) order.
 
-**Kid**: `kid()` returns a read-only view (`x`, `y`, `hspeed`, `vspeed`, `facing`, `alive`, `on_ground`), or `()` if there is no kid. `kill_kid()`. `set_kid_gravity(dir)` for gravity flips. Other knobs are added only with a CLONE_SPEC reason.
+**Kid**: `kid()` returns the kid's `Inst` handle, or `()` if there is no kid (the view of `facing`, `alive` and `on_ground` is *planned*). `kill_kid()`. `set_kid_gravity(dir)` for gravity flips is *planned*. Other knobs are added only with a CLONE_SPEC reason.
 
-**Rooms, triggers and timing**: `room_goto(room)`, `room_restart()`, `emit(trigger_name)`, `start_timeline(i, timeline)`, `stop_timeline(i)`, `set_alarm(n, ticks)`, `alarm_left(n)`, `tick()`, `room_tick()`, `room_speed()`.
+**Rooms, triggers and timing**: `emit(name)`, `this.set_alarm(n, ticks)` (a method of the instance, so `other.set_alarm(...)` works too), `this.get_alarm(n)`, `tick()` and `room_tick()` are registered. *Planned*: `room_goto(room)`, `room_restart()`, `start_timeline(i, timeline)`, `stop_timeline(i)`, `room_speed()`.
 
-**State**: `global_get(name)`, `global_set(name, v)`, `flag(name)`, `set_flag(name, v)` (flags go into the save slot).
+**State** (*planned*): `global_get(name)`, `global_set(name, v)`, `flag(name)`, `set_flag(name, v)` (flags go into the save slot).
 
-**Input** (for menus and quizzes): `pressed(action)`, `held(action)`, `released(action)`.
+**Input** (*planned*; for menus and quizzes): `pressed(action)`, `held(action)`, `released(action)`.
 
-**Audio and effects** (queued for the client, never read back): `play_sound(id)`, `play_music(id)`, `play_music(id, #{ from_tick: n })`, `stop_music()`, `shake(ticks, strength)`.
+**Audio and effects** (queued for the client, never read back): `play_sound(name)`, `play_music(name)` (a loop; another track stops or blocks it by the run's MULTIMEDIA rule), `stop_music()` and `shake(ticks, strength)` are registered; sound names are checked at load, and a pack sound is `engine:<pack>/<id>`. *Planned*: `play_music(name, #{ from_tick: n })`.
 
-**Menus and text**: `text_box(...)`, `menu(...)`. Exact shape **OPEN**, from the quiz, battle menu and difficulty menu in the shortlist games.
+**Menus and text** (*planned*): `text_box(...)`, `menu(...)`. Exact shape **OPEN**, from the quiz, battle menu and difficulty menu in the shortlist games.
 
-**Random**: `random(x)`, `irandom(n)`, `random_range(a, b)`, `choose([...])`. All draw from the sim's GM8 generator.
+**Random**: `random(x)`, `irandom(n)`, `random_range(a, b)`, `irandom_range(a, b)`, `choose([...])`. All draw from the sim's GM8 generator.
 
-**Math** (all in `sim::num`): `sin`, `cos`, `tan`, `atan2`, `dsin`, `dcos`, `darctan2`, `sqrt`, `pow`, `exp`, `ln`, `abs`, `sign`, `floor`, `ceil`, `round` (banker's), `frac`, `min`, `max`, `clamp`, `lerp`, `div`, `mod`, `point_direction`, `point_distance`, `lengthdir_x`, `lengthdir_y`, `gm_eq`, `gm_ne`, `gm_lt`, `gm_le`, `gm_gt`, `gm_ge`, `gm_bool`.
+**Math** (all in `sim::num`): `sin`, `cos`, `tan`, `arctan2`, `dsin`, `dcos`, `darctan2`, `sqrt`, `pow`, `exp`, `ln`, `abs`, `sign`, `floor`, `ceil`, `round` (banker's), `frac`, `min`, `max`, `clamp`, `lerp`, `div`, `mod`, `point_direction`, `point_distance`, `lengthdir_x`, `lengthdir_y`, `gm_eq`, `gm_ne`, `gm_lt`, `gm_le`, `gm_gt`, `gm_ge`, `gm_bool`, plus `sqr`, `degtorad`, `radtodeg`, `to_float`, `to_int` and `gm_repeat`.
 
-**Draw** (client only, inside `draw(d)`): `d.sprite(...)`, `d.rect(...)`, `d.text(...)`, `d.bar(...)`. No setters on anything.
+**Draw** (*planned*; client only, inside `draw(d)`): `d.sprite(...)`, `d.rect(...)`, `d.text(...)`, `d.bar(...)`. No setters on anything.
 
 ## Random numbers
 
@@ -284,8 +297,8 @@ This is the starting surface. The generated reference is `docs/format/script-api
 
 ### Actions and input frames
 
-- Actions: `left`, `right`, `up`, `down`, `jump`, `shoot`, `restart`, `suicide`, `skip`, `accept`, `back`, `menu`, `pause` (P), `mute` (M; wanna and xia also need Ctrl held), `reset` (F2), plus one reserved bit. One `u16` bit each. Pause, mute and reset change sim state in the originals (kaenbyou's jump ignores a press while P is pressed, mute changes `sound_stop_all` calls, F2 restarts the game), so they are sim input. Quitting (Escape, Alt+F4) stays client-only.
-- `InputFrame { held: u16, pressed: u16, released: u16 }`, one per tick. The edge bits keep sub-tick taps: GM8 sees a press and a release inside one frame as both events in the same step, which gives a different jump than holding for one tick.
+- Actions: `left`, `right`, `up`, `down`, `jump`, `shoot`, `restart`, `suicide`, `skip`, `accept`, `back`, `menu`, `pause` (P), `mute` (M; wanna and xia also need Ctrl held), `reset` (F2), and `extra1` to `extra4`, generic actions for games that need keys beyond the standard set (a game maps each to its own meaning; the player binds them). One `u32` bit each (bits 0 to 18, `Action::MASK` = `0x7_ffff`; the higher bits are reserved). Pause, mute and reset change sim state in the originals (kaenbyou's jump ignores a press while P is pressed, mute changes `sound_stop_all` calls, F2 restarts the game), so they are sim input. Quitting (Escape, Alt+F4) stays client-only.
+- `InputFrame { held: u32, pressed: u32, released: u32 }`, one per tick. The edge bits keep sub-tick taps: GM8 sees a press and a release inside one frame as both events in the same step, which gives a different jump than holding for one tick.
 - The client collects raw OS input events between ticks into these bits. Games map actions, never raw keys.
 - Each kid rule set defines how it reads the bits (for example YoYoYo versions differ on sub-frame taps).
 
@@ -330,6 +343,7 @@ The server decodes the replay, checks bounds (ticks at most the game's `max_tick
 - No `usize` in hashed state, no pointers, no hash-map order. The output queue and the broadphase grid are not hashed.
 - `setup_applied` is hashed, so a trace run that used setup actions can never match a clean verification.
 - Checkpoints store the first 16 bytes.
+- `hash::HASH_LAYOUT` versions the encoding. Adding fields to a state struct (for example `KidGlobals`) changes the hash but not the layout: re-pin the vectors in `tests/hash_vectors.rs` and the final hash in `tests/wp1_determinism.rs`. Bump `HASH_LAYOUT` only when the encoding itself changes.
 
 ## Sound model
 
@@ -338,11 +352,17 @@ Audio output is the client's job, but whether a sound **is playing** is sim stat
 - Playing copies start at the call's tick and end after the sound's `length_ticks` (song length times tick rate, from the package). At most one MULTIMEDIA copy. `sound_isplaying` latency and the second MULTIMEDIA start are UNKNOWN switches in `SoundRules` (S1-S3); game_restart keeps sounds (Inferred, S4).
 - SuperSound (kaenbyou, eat-the-lemon) and GMFMODSimple (go-the-spook-house, xia) are adapters whose getters return the last value set (S5). `SimOptions::dll_mode = Stub` reproduces the recorder's `--stub-dlls` traces; `Model` is for play and replays.
 - The `mute` action flips the game's music flag through the world built-in; music objects then call `stop_all`, which is sim state.
+- Built-in copies play the ticks `start .. start + length_ticks` (looping: until stopped). `sound::is_playing` computes that itself; tick row 16 (`sound::tick`) only drops ended copies, SuperSound sounds and FMOD instances. S1 (latency) delays only a start; S2 and S3 govern a second MULTIMEDIA start; S4 (`keep_on_restart`) is read by `game_restart`. The built-in model runs in `Stub` mode too: the recorder stubs only the DLLs.
+- DLL adapters (`sound::{supersound, gmfmod, cleanmem}`) are called by the script host with the arguments of the GML `external_call`. SuperSound returns strings (`"1"`, `"0"`, `"-1"` for is-playing); FMOD returns numbers (0 is an error); in `Stub` mode every call returns `""` or 0 and changes nothing. The DLLs do not know a sound length, so the host passes `length_ticks` at load (0 = unknown, plays until stopped). OPEN: where the package supplies those lengths (follow-up).
 - The state is hashed. The client receives `SoundOutput` events to play, stop and fade; nothing is read back from audio.
 
 ## Comparing traces with the original
 
 Ground truth comes from the research repo. The Phase 2 recorder runs the original under OpenGMK with `iwc-trace.patch` and writes one CSV per case, next to its `.inputs` file, in `research/specs/engines/<engine>/traces/<game>/<case>.csv`. Selected frames are cross-checked against the real GM8 runner through the research gate.
+
+### Recorder behavior the trace runner copies
+
+The runner sets `DirectLatch::None` (the recorder has no `keyboard_check_direct` latch). Probe reads follow the recorder's row timing: `keyboard_check_pressed` and `keyboard_check_released` read 0 (rows are written after the frame), and `player.x` with no player instance reads 0 (uninitialized variables as 0, `[engine] uninit_reads_zero`).
 
 ### CSV columns
 
@@ -364,6 +384,7 @@ gravity,gravity_direction,friction,image_index,sprite_index,sprite_name,<game va
 - `iwbtg trace run <pkg> <case.inputs> -o ours.csv` writes our side with the same columns, translated through the map.
 - `iwbtg trace diff <original.csv> <ours.csv> --map trace-map.toml` compares every field bit for bit and stops at the first difference. It prints the frame, the field, both values in decimal and hex bits, the ULP distance, 5 frames of context on each side, and the inputs of the previous 10 frames.
 - **Sub-trace mode** (`--stages`) records our state after each pipeline step, so the diff can name the step where our value first left the original's path.
+- A case's `latch` key (column to read frames) reproduces a recorder `--gml` that copied a value (a decoded save field) into a global before chosen frames: the column holds the `vars` value of the frame before the last read, 0 before the first.
 - Every ported game needs at least one trace case per mechanic it uses before it is ranked.
 
 ## Testing strategy
@@ -371,9 +392,9 @@ gravity,gravity_direction,friction,image_index,sprite_index,sprite_name,<game va
 | Layer | What | Where | When |
 |---|---|---|---|
 | Unit tests | `num` (rounding, comparisons, trig table), `rng`, motion coupling, masks and bounding boxes, collision queries, input edges, replay round trip | `crates/sim`, `crates/format` | every `cargo test` |
-| Script conformance | Every IWS math function over 10,000 fixed inputs, every operator and overload, operation-count fixtures | `crates/sim/tests/script_conformance/` | every CI target |
+| Script conformance | Every IWS math function over 10,000 fixed inputs, every operator and overload, operation-count fixtures | `crates/sim/tests/script_conformance/` (hashes pinned in `expected.txt`; `UPDATE_CONFORMANCE=1` rewrites) | every CI target |
 | Validator fixtures | A set of broken packages, each expecting one specific error with file, line and column | `crates/format/tests/invalid/` | every `cargo test` |
-| Engine test rooms | Small packages we make ourselves (no creator content) exercising each built-in, with golden hash lists | `crates/sim/tests/golden/` | every CI target |
+| Engine test rooms | Small worlds we make ourselves (no creator content, built with `GameDefBuilder`), one pinned state hash per case in `expected.txt`. A deliberate sim change re-pins it: `UPDATE_GOLDEN=1 cargo test -p iwbtg-sim --test golden_corpus`. More cases per built-in come with their work packages | `crates/sim/tests/golden/` | every CI target |
 | Trace tests | Every research trace case, run and diffed bit for bit | research path given by the `IWBTG_RESEARCH` environment variable; skipped when absent | locally, in a research CI job, before ranking a game |
 | Replay corpus | Each ported game's full-clear replay, plus every stored leaderboard replay once Phase 8 exists | games repo, server | every sim change |
 | Cross-platform equality | `iwbtg determinism report` on golden rooms, conformance suite and replay corpus on `x86_64-pc-windows-msvc`, `x86_64-unknown-linux-gnu`, `wasm32-wasip1` under wasmtime and `wasm32-unknown-unknown` through wasm-bindgen-test in Node. A final job requires all hash lists to be byte-identical. | GitHub Actions matrix | every PR touching `sim` or `format` |

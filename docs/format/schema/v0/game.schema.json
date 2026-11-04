@@ -1,0 +1,942 @@
+{
+  "$defs": {
+    "Budget": {
+      "additionalProperties": false,
+      "description": "The `[budget]` table.",
+      "properties": {
+        "ops_per_tick": {
+          "default": null,
+          "description": "Script budget units per tick; [`DEFAULT_OPS_PER_TICK`] if absent, at most\n[`MAX_OPS_PER_TICK`].",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "Creator": {
+      "additionalProperties": false,
+      "description": "One `[[creators]]` entry.",
+      "properties": {
+        "name": {
+          "description": "Name as the creator wants it shown.",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/CreatorRole",
+          "description": "What they did."
+        }
+      },
+      "required": [
+        "name",
+        "role"
+      ],
+      "type": "object"
+    },
+    "CreatorRole": {
+      "description": "A creator's role.",
+      "oneOf": [
+        {
+          "const": "author",
+          "description": "Made the game.",
+          "type": "string"
+        },
+        {
+          "const": "co-author",
+          "description": "Made the game with others.",
+          "type": "string"
+        },
+        {
+          "const": "music",
+          "description": "Made the music.",
+          "type": "string"
+        },
+        {
+          "const": "art",
+          "description": "Made the art.",
+          "type": "string"
+        },
+        {
+          "const": "tester",
+          "description": "Tested the game.",
+          "type": "string"
+        },
+        {
+          "const": "other",
+          "description": "Anything else.",
+          "type": "string"
+        }
+      ]
+    },
+    "DeathName": {
+      "description": "`death_on_restart` values.",
+      "oneOf": [
+        {
+          "const": "nothing",
+          "description": "Nothing.",
+          "type": "string"
+        },
+        {
+          "const": "save_counters",
+          "description": "A death-only save of the counters.",
+          "type": "string"
+        },
+        {
+          "const": "save_counters_per_kid",
+          "description": "One death per live kid, then the death-only save (showdown).",
+          "type": "string"
+        }
+      ]
+    },
+    "EngineSection": {
+      "additionalProperties": false,
+      "description": "The `[engine]` table (docs/plans/sim-core.md 4.2, 4.3, 8.3; CR7).",
+      "properties": {
+        "boot": {
+          "default": null,
+          "description": "Persistent kinds created before the first room; default: the `world` engine kind.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "float_model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FloatModelName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Runner FPU model (N3); default `f64`."
+        },
+        "new_game_room": {
+          "default": null,
+          "description": "Where `StartPoint::NewGame` starts (CR7). Defaults to `start_room` with a warning.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reset": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetSection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The reset path (F2)."
+        },
+        "restart": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RestartSection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The retry path (R)."
+        },
+        "roles": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "description": "Engine roles: which kind the sim spawns as `kid_bullet`, `bow`, ... (`\"none\"`: the game\nnever spawns one). Keys: [`ENGINE_ROLES`].",
+          "type": "object"
+        },
+        "uninit_reads_zero": {
+          "default": null,
+          "description": "GM \"treat uninitialized variables as 0\"; default true.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "FloatModelName": {
+      "description": "`float_model` values.",
+      "oneOf": [
+        {
+          "const": "f64",
+          "description": "IEEE binary64.",
+          "type": "string"
+        }
+      ]
+    },
+    "KidStepsSection": {
+      "additionalProperties": false,
+      "description": "`restart = { kid_steps = { ... } }`; absent keys are off.",
+      "properties": {
+        "add_time": {
+          "default": null,
+          "description": "Ticks added to the play timer first (B: 2).",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "clear_frozen": {
+          "default": null,
+          "description": "Clear `frozen` and `frozen2`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "clear_triggers": {
+          "default": null,
+          "description": "Clear the trigger arrays and `global.triggered` after the load (showdown).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "release_death_sound": {
+          "default": null,
+          "description": "Stop the death sound and restore the music volume before the retry (B).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "reset_jump_values": {
+          "default": null,
+          "description": "Reset the new kid's jump values (showdown).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "save_death_time": {
+          "default": null,
+          "description": "Death-only save after `add_time`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "KindDefaults": {
+      "additionalProperties": false,
+      "description": "`[defaults.<builtin>]`: the sprite and mask a bare built-in kind uses, per variant\n(docs/plans/sim-core.md 8.3, \"Kind default sprites per variant\").",
+      "properties": {
+        "mask": {
+          "default": null,
+          "description": "Default object-level mask sprite.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sprite": {
+          "default": null,
+          "description": "Default sprite.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "variants": {
+          "default": [],
+          "description": "Per-variant sprites: each table has param keys to match (`dir = \"up\"`) plus `sprite`\nand/or `mask`.",
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "MusicSettings": {
+      "additionalProperties": false,
+      "description": "One `[music.<id>]` table.",
+      "properties": {
+        "volume": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Playback volume, 1.0 is unchanged."
+        }
+      },
+      "type": "object"
+    },
+    "Number": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "bits": {
+              "pattern": "^[0-9a-fA-F]{16}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "bits"
+          ],
+          "type": "object"
+        }
+      ],
+      "description": "A number, or { bits = \"<16 hex digits of an IEEE double>\" } for a constant that must match bit for bit."
+    },
+    "OrderItem": {
+      "anyOf": [
+        {
+          "description": "`\"spike\"`, `\"@world\"`.",
+          "type": "string"
+        },
+        {
+          "additionalProperties": true,
+          "description": "`{ kind = \"spike\", dir = \"up\" }`.",
+          "type": "object"
+        }
+      ],
+      "description": "One `object_order` entry as written: a kind name, or a selector table\n`{ kind = \"spike\", dir = \"up\" }` with exactly one param key besides `kind`."
+    },
+    "Permission": {
+      "description": "Permission to port the game.",
+      "oneOf": [
+        {
+          "const": "granted",
+          "description": "The creator said yes.",
+          "type": "string"
+        },
+        {
+          "const": "community-assumed",
+          "description": "Covered by the community's standing assumption.",
+          "type": "string"
+        },
+        {
+          "const": "pending",
+          "description": "Asked, no answer yet.",
+          "type": "string"
+        },
+        {
+          "const": "revoked",
+          "description": "The creator said no. A revoked package is never loaded, built or served.",
+          "type": "string"
+        }
+      ]
+    },
+    "ResetKindName": {
+      "description": "Reset kinds.",
+      "oneOf": [
+        {
+          "const": "delete_temp_and_restart",
+          "description": "`DeleteTempAndRestart`.",
+          "type": "string"
+        },
+        {
+          "const": "game_reset",
+          "description": "`GameReset`.",
+          "type": "string"
+        }
+      ]
+    },
+    "ResetSection": {
+      "additionalProperties": false,
+      "description": "`[engine] reset = { ... }`; absent keys keep `ResetModel::default()`.",
+      "properties": {
+        "excluded_roles": {
+          "description": "Roles where F2 does nothing.",
+          "items": {
+            "$ref": "#/$defs/RoleName"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetKindName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What F2 does."
+        },
+        "trigger": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TriggerName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Where it runs."
+        }
+      },
+      "type": "object"
+    },
+    "RestartKindName": {
+      "description": "Restart kinds (plan 4.3).",
+      "oneOf": [
+        {
+          "const": "game_restart_via_boot",
+          "description": "`GameRestartViaBoot`.",
+          "type": "string"
+        },
+        {
+          "const": "room_goto_saved",
+          "description": "`RoomGotoSaved`.",
+          "type": "string"
+        },
+        {
+          "const": "showdown_load",
+          "description": "`ShowdownLoad`.",
+          "type": "string"
+        },
+        {
+          "const": "recreate_in_place",
+          "description": "`RecreateInPlace`.",
+          "type": "string"
+        }
+      ]
+    },
+    "RestartSection": {
+      "additionalProperties": false,
+      "description": "`[engine] restart = { ... }`; absent keys keep `RestartModel::default()`.",
+      "properties": {
+        "boot_ticks": {
+          "default": null,
+          "description": "Boot ticks of `game_restart_via_boot`.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "death_on_restart": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeathName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What a retry counts."
+        },
+        "excluded_roles": {
+          "description": "Roles where R does nothing.",
+          "items": {
+            "$ref": "#/$defs/RoleName"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "flipped_load_dy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "y offset when the saved kid was flipped."
+        },
+        "kid_steps": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KidStepsSection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The kid-side steps of the retry (family B, showdown)."
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RestartKindName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What the retry does."
+        },
+        "trigger": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TriggerName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Where it runs."
+        }
+      },
+      "type": "object"
+    },
+    "RoleName": {
+      "description": "A room role (`role` in room files, `excluded_roles` here).",
+      "oneOf": [
+        {
+          "const": "boot",
+          "description": "Boot room.",
+          "type": "string"
+        },
+        {
+          "const": "title",
+          "description": "Title.",
+          "type": "string"
+        },
+        {
+          "const": "menu",
+          "description": "Menu.",
+          "type": "string"
+        },
+        {
+          "const": "select",
+          "description": "Difficulty or stage select.",
+          "type": "string"
+        },
+        {
+          "const": "play",
+          "description": "Gameplay.",
+          "type": "string"
+        }
+      ]
+    },
+    "RunnerSchema": {
+      "description": "The `runner` values (`iwbtg_sim::rules::Runner`, which lives in the sim crate and has no\nschema). `tests/schemas.rs` fails to compile when a runner is added there without a variant\nhere.",
+      "oneOf": [
+        {
+          "const": "gm80",
+          "description": "GameMaker 8.0.",
+          "type": "string"
+        },
+        {
+          "const": "gm81",
+          "description": "GameMaker 8.1.",
+          "type": "string"
+        }
+      ]
+    },
+    "Source": {
+      "additionalProperties": false,
+      "description": "The `[source]` table.",
+      "properties": {
+        "permission": {
+          "$ref": "#/$defs/Permission",
+          "description": "Permission status."
+        },
+        "permission_date": {
+          "default": null,
+          "description": "When the status was last set (a local date).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "permission_note": {
+          "default": null,
+          "description": "Where the permission came from, or why it is pending.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "description": "Original game page.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "permission"
+      ],
+      "type": "object"
+    },
+    "Stage": {
+      "additionalProperties": false,
+      "description": "One split stage.",
+      "properties": {
+        "id": {
+          "description": "Stage id, unique within the package.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Display name.",
+          "type": "string"
+        },
+        "room": {
+          "default": null,
+          "description": "The room, for `enter_room`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "trigger": {
+          "description": "The stage ends at this trigger.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "trigger"
+      ],
+      "type": "object"
+    },
+    "ThirdParty": {
+      "additionalProperties": false,
+      "description": "One `[[third_party]]` entry.",
+      "properties": {
+        "license": {
+          "description": "SPDX id, or `unknown`.",
+          "type": "string"
+        },
+        "owner": {
+          "description": "Rights holder.",
+          "type": "string"
+        },
+        "path": {
+          "description": "Package path of the file.",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/ThirdPartyStatus",
+          "description": "Clearance status."
+        },
+        "what": {
+          "description": "What it is.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "what",
+        "owner",
+        "license",
+        "status"
+      ],
+      "type": "object"
+    },
+    "ThirdPartyStatus": {
+      "description": "Clearance status of a third-party file.",
+      "oneOf": [
+        {
+          "const": "cleared",
+          "description": "Cleared for public release.",
+          "type": "string"
+        },
+        {
+          "const": "to-clear",
+          "description": "Not cleared yet.",
+          "type": "string"
+        },
+        {
+          "const": "excluded-from-public",
+          "description": "Never shipped in public builds.",
+          "type": "string"
+        }
+      ]
+    },
+    "Timing": {
+      "additionalProperties": false,
+      "description": "The `[timing]` table.",
+      "properties": {
+        "end": {
+          "$ref": "#/$defs/TriggerRef",
+          "description": "The run ends at this trigger."
+        },
+        "stages": {
+          "description": "Stages in order; each ends at its trigger. May be absent for a single-stage game.",
+          "items": {
+            "$ref": "#/$defs/Stage"
+          },
+          "type": "array"
+        },
+        "start": {
+          "$ref": "#/$defs/TriggerRef",
+          "description": "The run starts at this trigger."
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "type": "object"
+    },
+    "TrickSetting": {
+      "description": "A trick switch.",
+      "oneOf": [
+        {
+          "const": "on",
+          "description": "The trick works.",
+          "type": "string"
+        },
+        {
+          "const": "off",
+          "description": "The trick is disabled.",
+          "type": "string"
+        },
+        {
+          "const": "required",
+          "description": "The trick works and the game needs it.",
+          "type": "string"
+        }
+      ]
+    },
+    "TriggerName": {
+      "description": "Restart and reset triggers.",
+      "oneOf": [
+        {
+          "const": "key_press_event",
+          "description": "The world's Key press event.",
+          "type": "string"
+        },
+        {
+          "const": "step_held",
+          "description": "The world's Step, every tick while held.",
+          "type": "string"
+        },
+        {
+          "const": "step_pressed",
+          "description": "The world's Step, on the press.",
+          "type": "string"
+        },
+        {
+          "const": "step_pressed_unless_paused",
+          "description": "The world's Step, on the press, skipped while paused.",
+          "type": "string"
+        }
+      ]
+    },
+    "TriggerRef": {
+      "additionalProperties": false,
+      "description": "`{ trigger = \"name\" }`, or `{ trigger = \"enter_room\", room = \"stage1_01\" }`.\n\nThe loader accepts the `[timing]` vocabulary of `iwbtg_sim::timing::TimingTrigger`:\n`run_start`, `run_end` and `enter_room` (with `room`) ([`TIMING_TRIGGERS`]).",
+      "properties": {
+        "room": {
+          "default": null,
+          "description": "The room, for `enter_room`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "trigger": {
+          "description": "A trigger name from the vocabulary.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "trigger"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The parsed `game.toml`.",
+  "properties": {
+    "budget": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Budget"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Script budget."
+    },
+    "creators": {
+      "description": "At least one creator.",
+      "items": {
+        "$ref": "#/$defs/Creator"
+      },
+      "type": "array"
+    },
+    "defaults": {
+      "additionalProperties": {
+        "$ref": "#/$defs/KindDefaults"
+      },
+      "description": "Default sprite and mask of bare built-in kinds, per variant (`[defaults.spike]`).",
+      "type": "object"
+    },
+    "engine": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EngineSection"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Engine settings: restart and reset models, boot kinds, number model, new-game room, engine\nroles (docs/plans/sim-core.md 8.3)."
+    },
+    "engine_pack": {
+      "default": null,
+      "description": "Engine pack id in `games/_engines/` (`engine_pack`; `[engine]` is the engine settings\ntable).",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "engine_rev": {
+      "description": "Built-in behavior revision this package was verified against.",
+      "format": "uint16",
+      "maximum": 65535,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "format": {
+      "description": "Format major version. The client reads every version up to [`FORMAT_VERSION`].",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "id": {
+      "description": "Package id, snake_case. Stable forever; leaderboards key on it.",
+      "type": "string"
+    },
+    "max_ticks": {
+      "description": "Upper bound for a replay, in ticks. The server rejects longer replays.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "music": {
+      "additionalProperties": {
+        "$ref": "#/$defs/MusicSettings"
+      },
+      "description": "Optional per-track settings, keyed by music id.",
+      "type": "object"
+    },
+    "object_order": {
+      "description": "Event and collision rank order of every kind used: kind names and selectors.",
+      "items": {
+        "$ref": "#/$defs/OrderItem"
+      },
+      "type": "array"
+    },
+    "physics": {
+      "description": "Path to the physics profile.",
+      "type": "string"
+    },
+    "room_order": {
+      "default": null,
+      "description": "GM room order (`room_goto_next`, `room_goto_previous`); rooms not listed follow in path\norder.",
+      "items": {
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "runner": {
+      "$ref": "#/$defs/RunnerSchema",
+      "description": "Original runner; selects event-order differences."
+    },
+    "source": {
+      "$ref": "#/$defs/Source",
+      "description": "Where the original comes from and its permission status."
+    },
+    "source_version": {
+      "default": null,
+      "description": "Version of the original we ported.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "start_room": {
+      "description": "First room.",
+      "type": "string"
+    },
+    "third_party": {
+      "description": "One entry per file that is not the creator's own work or ours.",
+      "items": {
+        "$ref": "#/$defs/ThirdParty"
+      },
+      "type": "array"
+    },
+    "tick_rate": {
+      "default": null,
+      "description": "Default room speed; [`DEFAULT_TICK_RATE`] if absent. Rooms may override.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "timing": {
+      "$ref": "#/$defs/Timing",
+      "description": "Run timing: start and end triggers and stages."
+    },
+    "title": {
+      "description": "Display title.",
+      "type": "string"
+    },
+    "tricks": {
+      "additionalProperties": {
+        "$ref": "#/$defs/TrickSetting"
+      },
+      "description": "Switches for tricks that are engine behaviors.",
+      "type": "object"
+    },
+    "version": {
+      "description": "Semver of our port. For humans.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "format",
+    "id",
+    "title",
+    "version",
+    "engine_rev",
+    "runner",
+    "physics",
+    "start_room",
+    "max_ticks",
+    "object_order",
+    "creators",
+    "source",
+    "timing"
+  ],
+  "title": "IWBTG game.toml (format v0)",
+  "type": "object"
+}

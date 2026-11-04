@@ -11,6 +11,7 @@
 
 pub mod registry;
 
+use crate::builtins::state::BuiltinState;
 use crate::collide::Target;
 use crate::def::{GameDef, NameId, VarId};
 use crate::events;
@@ -53,6 +54,55 @@ pub enum Column {
     Key(KeyRead),
     /// A save slot field (decoded save files, plan 9.1 kind 3).
     Save(SaveField),
+    /// Engine state the original keeps in a global or a built-in variable (`global.death`,
+    /// `room_speed`), when the package declares no variable of that name.
+    Engine(EngineVar),
+}
+
+/// Engine state a probe column can read without the package declaring a variable for it.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum EngineVar {
+    /// `global.difficulty`.
+    Difficulty,
+    /// `global.death`.
+    Death,
+    /// `global.time`.
+    Time,
+    /// `global.savenum`, the save slot number.
+    Savenum,
+    /// `global.clear`.
+    Clear,
+    /// `global.frozen`.
+    Frozen,
+    /// `global.frozen2`.
+    Frozen2,
+    /// `global.reverse` (family B gravity flag).
+    Reverse,
+    /// `global.grav` (flipped-kid flag of the games that swap kid kinds).
+    Grav,
+    /// `global.paused`: the `world` built-in's pause flag; 0 when the game has none.
+    Paused,
+    /// `room_speed`.
+    RoomSpeed,
+}
+
+impl EngineVar {
+    /// The engine variable a GM global name (without `global.`) names.
+    pub fn global(name: &str) -> Option<EngineVar> {
+        Some(match name {
+            "difficulty" => EngineVar::Difficulty,
+            "death" => EngineVar::Death,
+            "time" => EngineVar::Time,
+            "savenum" => EngineVar::Savenum,
+            "clear" => EngineVar::Clear,
+            "frozen" => EngineVar::Frozen,
+            "frozen2" => EngineVar::Frozen2,
+            "reverse" => EngineVar::Reverse,
+            "grav" => EngineVar::Grav,
+            "paused" => EngineVar::Paused,
+            _ => return None,
+        })
+    }
 }
 
 /// The recorder's fixed columns, in `trace::FIXED_COLUMNS` order.
@@ -254,7 +304,7 @@ pub fn sample(sim: &mut Sim, probe: &Probe, frame: i64) -> Vec<Vec<trace::Value>
     let ids = {
         let w = &sim.world;
         events::dispatch_order(w, &sim.rules.tick, |i| {
-            i.alive && i.active && matches(i, probe.object)
+            i.alive && i.active && matches(sim.def(), i, probe.object)
         })
     };
     let mut rows = Vec::with_capacity(ids.len());
@@ -286,39 +336,81 @@ fn read_column(sim: &mut Sim, row: InstId, column: &Column, frame: i64) -> trace
             Some(inst) => fixed_value(def, w, inst, *c, frame),
             None => trace::Value::Empty,
         },
-        Column::Field { target, field } => match target_instance(w, rules, row, target) {
+        Column::Field { target, field } => match target_instance(def, w, rules, row, target) {
             Some(id) => read_field(def, w, id, field, frame),
+            // `player.x` with no player reads 0 under "treat uninitialized variables as 0"
+            // (kaenbyou t5-input-restart-latch-b.csv f32-f34: id, x and hspeed all 0.0).
+            None if def.uninit_reads_zero => trace::Value::Real(0.0),
             None => trace::Value::Empty,
         },
         Column::Global(v) => w.globals.get(v).map_or(trace::Value::Empty, from_value),
-        Column::Count(t) => count(w, *t),
+        Column::Count(t) => count(def, w, *t),
         Column::Key(k) => match k {
             KeyRead::Held(a) => truth(w.input.held(*a)),
-            KeyRead::Pressed(a) => truth(w.input.pressed(*a)),
-            KeyRead::Released(a) => truth(w.input.released(*a)),
+            // The recorder writes its rows after the frame, when the pressed and released flags
+            // are already cleared: `keyboard_check_pressed` reads 0 on the press frame
+            // (traces/kaenbyou/t5-input-restart-latch.md, f42).
+            KeyRead::Pressed(_) | KeyRead::Released(_) => truth(false),
             KeyRead::Direct(_) => trace::Value::Empty,
         },
         Column::Save(f) => save_value(def, w, *f),
+        Column::Engine(v) => engine_value(w, *v),
     }
 }
 
-/// True when `inst` is one of the instances `t` names.
-fn matches(inst: &Instance, t: Target) -> bool {
+/// An engine variable as a GML real.
+fn engine_value(w: &World, v: EngineVar) -> trace::Value {
+    let g = &w.engine;
+    match v {
+        EngineVar::Difficulty => trace::Value::Real(f64::from(g.run.difficulty)),
+        EngineVar::Death => trace::Value::Real(f64::from(g.run.deaths)),
+        EngineVar::Time => trace::Value::Real(f64::from(g.run.time)),
+        EngineVar::Savenum => trace::Value::Real(f64::from(g.run.slot)),
+        EngineVar::Clear => truth(g.run.clear),
+        EngineVar::Frozen => truth(g.kid.frozen),
+        EngineVar::Frozen2 => truth(g.kid.frozen2),
+        EngineVar::Reverse => truth(g.kid.b.reverse),
+        EngineVar::Grav => truth(g.kid.grav),
+        EngineVar::Paused => truth(w.iter_alive().any(|i| crate::builtins::world::is_paused(w, i.id))),
+        EngineVar::RoomSpeed => real(w.room_speed),
+    }
+}
+
+/// True when `inst` is one of the instances `t` names. A kind names its derived variants too
+/// (`save[min_difficulty_removed=2]` is a `save`), as a GM object index covers its children.
+fn matches(def: &GameDef, inst: &Instance, t: Target) -> bool {
     match t {
         Target::Class(c) => inst.classes.intersects(c),
-        Target::Kind(k) => inst.kind == k,
+        Target::Kind(k) => inst.kind == k || is_variant(def, inst.kind, k),
         Target::Inst(id) => inst.id == id,
         Target::Any => true,
     }
 }
 
+/// Whether `kind` is a variant the loader derived from `base` (`<base>[<params>]`).
+fn is_variant(def: &GameDef, kind: crate::def::KindId, base: crate::def::KindId) -> bool {
+    match (def.kind(kind), def.kind(base)) {
+        (Some(v), Some(b)) => v
+            .name
+            .strip_prefix(b.name.as_str())
+            .is_some_and(|rest| rest.starts_with('[')),
+        _ => false,
+    }
+}
+
 /// The instance a field column reads.
-fn target_instance(w: &World, rules: &TickRules, row: InstId, t: &ProbeTarget) -> Option<InstId> {
+fn target_instance(
+    def: &GameDef,
+    w: &World,
+    rules: &TickRules,
+    row: InstId,
+    t: &ProbeTarget,
+) -> Option<InstId> {
     match t {
         ProbeTarget::Row => Some(row),
         ProbeTarget::Kid => w.kid(rules),
         ProbeTarget::First(Target::Class(c)) => w.first_of(*c, rules),
-        ProbeTarget::First(t) => first_of_target(w, rules, *t),
+        ProbeTarget::First(t) => first_of_target(def, w, rules, *t),
         ProbeTarget::Named(n) => w
             .iter_alive()
             .find(|i| i.active && i.name == Some(*n))
@@ -328,27 +420,27 @@ fn target_instance(w: &World, rules: &TickRules, row: InstId, t: &ProbeTarget) -
 
 /// "The first" instance of a kind, one id or anything, by [`TickRules::first_rule`] (R21), as
 /// `World::first_of` picks one for a class.
-pub(crate) fn first_of_target(w: &World, rules: &TickRules, t: Target) -> Option<InstId> {
+pub(crate) fn first_of_target(def: &GameDef, w: &World, rules: &TickRules, t: Target) -> Option<InstId> {
     match rules.first_rule {
         FirstRule::DispatchOrder => {
-            events::dispatch_order(w, rules, |i| i.alive && i.active && matches(i, t))
+            events::dispatch_order(w, rules, |i| i.alive && i.active && matches(def, i, t))
                 .first()
                 .copied()
         }
         FirstRule::LowestId => w
             .iter_alive()
-            .filter(|i| i.active && matches(i, t))
+            .filter(|i| i.active && matches(def, i, t))
             .map(|i| i.id)
             .min(),
     }
 }
 
 /// GML `instance_number`: alive, active instances `t` names.
-fn count(w: &World, t: Target) -> trace::Value {
+fn count(def: &GameDef, w: &World, t: Target) -> trace::Value {
     let n = match t {
         Target::Class(c) => w.count_of(c),
         t => {
-            let n = w.iter_alive().filter(|i| i.active && matches(i, t)).count();
+            let n = w.iter_alive().filter(|i| i.active && matches(def, i, t)).count();
             u32::try_from(n).unwrap_or(u32::MAX)
         }
     };
@@ -378,7 +470,13 @@ fn read_field(def: &GameDef, w: &World, id: InstId, field: &FieldRef, frame: i64
         },
         FieldRef::Var(v) => inst.vars.get(v).map_or(trace::Value::Empty, from_value),
         FieldRef::Kid(f) => match inst.state {
-            KindState::Kid(_) => api::read_field(w, id, f).map_or(trace::Value::Empty, |v| from_value(&v)),
+            KindState::Kid(_) => api::read_field(w, id, f)
+                .or_else(|| api::read_field_def(def, f))
+                .map_or(trace::Value::Empty, |v| from_value(&v)),
+            // The save point's cooldown, the original's `saveTimer`.
+            KindState::Builtin(BuiltinState::Save(ref s)) if f.name == "saveTimer" && f.index.is_none() => {
+                real(s.timer)
+            }
             _ => trace::Value::Empty,
         },
     }
@@ -541,10 +639,13 @@ mod tests {
         assert_eq!(row[16], trace::Value::Int(-1));
         assert_eq!(row[17], trace::Value::Empty);
         assert_eq!(
-            count(sim.world(), Target::Class(ClassMask::BLOCK)),
+            count(sim.def(), sim.world(), Target::Class(ClassMask::BLOCK)),
             trace::Value::Real(2.0)
         );
-        assert_eq!(count(sim.world(), Target::Any), trace::Value::Real(3.0));
+        assert_eq!(
+            count(sim.def(), sim.world(), Target::Any),
+            trace::Value::Real(3.0)
+        );
         assert_eq!(
             save_value(sim.def(), sim.world(), SaveField::Exists),
             trace::Value::Real(0.0)
@@ -627,9 +728,57 @@ mod tests {
         assert_eq!(rows[1][4], trace::Value::Real(64.0));
         assert_eq!(rows[0][18], trace::Value::Real(1.0), "the latch reads true once");
         assert_eq!(rows[1][18], trace::Value::Real(0.0), "the first row consumed it");
-        assert_eq!(rows[1][19], trace::Value::Real(1.0), "pressed is not consumed");
+        assert_eq!(
+            rows[1][19],
+            trace::Value::Real(0.0),
+            "pressed reads 0 after the frame"
+        );
         assert_eq!(rows[0][20], trace::Value::Real(3.0));
         let again = sample(&mut sim, &probe, 4);
         assert_eq!(again[0][18], trace::Value::Real(0.0));
+    }
+
+    /// A field of an instance that does not exist reads 0 (uninitialized variables as 0), and the
+    /// pressed flag reads 0 (the recorder writes its rows after the frame).
+    #[test]
+    fn missing_instance_reads_zero_and_pressed_reads_zero() {
+        use crate::input::InputFrame;
+        let (mut sim, ids) = sim_with_blocks();
+        let col = Column::Field {
+            target: ProbeTarget::Kid,
+            field: FieldRef::Image(ImageField::Visible),
+        };
+        assert_eq!(read_column(&mut sim, ids[0], &col, 3), trace::Value::Real(0.0));
+        sim.world.input.latch(InputFrame {
+            held: 0,
+            pressed: Action::Right.bit(),
+            released: 0,
+        });
+        let pressed = Column::Key(KeyRead::Pressed(Action::Right));
+        assert_eq!(
+            read_column(&mut sim, ids[0], &pressed, 3),
+            trace::Value::Real(0.0)
+        );
+    }
+
+    /// A kind target covers the variants the loader derives from it (`save[min_difficulty_removed=2]`
+    /// is a `save`): the original's `savePoint` probe reads the instance of its child object.
+    #[test]
+    fn kind_target_covers_derived_variants() {
+        let mut b = GameDefBuilder::new("probe-variants");
+        let plain = b.kind(KindDef::new("save", Builtin::Save));
+        let variant = b.kind(KindDef::new("save[min_difficulty_removed=2]", Builtin::Save));
+        let other = b.kind(KindDef::new("saver", Builtin::Save));
+        b.room(RoomDef::new("room_1", 800, 608));
+        let def = b.build().expect("def");
+        let mut w = World::new(RoomId(0), 0);
+        for kind in [variant, other] {
+            let id = w.alloc_id().expect("id");
+            w.insert(Instance::new(id, kind, 0, Real::ZERO, Real::ZERO))
+                .expect("insert");
+        }
+        assert_eq!(count(&def, &w, Target::Kind(plain)), trace::Value::Real(1.0));
+        assert_eq!(count(&def, &w, Target::Kind(variant)), trace::Value::Real(1.0));
+        assert_eq!(count(&def, &w, Target::Kind(other)), trace::Value::Real(1.0));
     }
 }

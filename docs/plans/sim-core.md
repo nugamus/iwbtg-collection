@@ -495,7 +495,8 @@ pub fn perform_change(ctx: &mut Ctx, req: RoomRequest) -> Result<(), SimError>;
   ```rust
   // def/game.rs (WP0), behavior in room.rs (WP4b)
   pub struct RestartModel { pub trigger: RestartTrigger, pub kind: RestartKind, pub excluded_roles: RoleSet,
-      pub boot_ticks: u8, pub flipped_load_dy: Real /* +4 */, pub death_on_restart: DeathOnRestart }
+      pub boot_ticks: u8, pub flipped_load_dy: Real /* +4 */, pub death_on_restart: DeathOnRestart,
+      pub kid_steps: RetryKidSteps /* B: add_time 2, save_death_time, clear_frozen; showdown: clear_frozen, reset_jump_values (#224) */ }
   pub enum RestartTrigger { KeyPressEvent, StepHeld, StepPressed { skip_while_paused: bool } }
   pub enum RestartKind { GameRestartViaBoot, RoomGotoSaved, ShowdownLoad, RecreateInPlace }
   ```
@@ -517,6 +518,7 @@ pub fn perform_change(ctx: &mut Ctx, req: RoomRequest) -> Result<(), SimError>;
 The sim never touches files. The save is sim state; the client stores its bytes.
 
 ```rust
+// `flipped` is `global.reverse` for a `yflag` game (family B), the kid's flip state otherwise (#267).
 pub struct SaveSlot { pub room: RoomId, pub x: Real, pub y: Real, pub flipped: bool, pub facing: i8,
     pub difficulty: u8, pub deaths: u32, pub time: u32, pub bosses: u16, pub items: u16, pub clear: bool }
 pub enum SavedPosition { XyBase100Bytes, XyBase256Bytes, XyText2Dec, XyPrevious, FixedPoint, FloorNudge }
@@ -592,8 +594,8 @@ vine_keys = "edges"           # edges | latched_flags (wanna, rori, fairy-tale, 
 [events]
 create = ["create_defaults", "ensure_world", "create_bow", "first_play_save", "arm_play_timer"]
 room_start = []                # B: ["create_bow", "set_view_angle"]
-step = ["ladder", "walk", "air_sprite", "fall_cap", "shoot", "jump", "release",
-        "ad_nudge", "vines", "flip_swap", "platform_gravity_zero", "fade_in"]
+step = ["gravity", "walk", "air_sprite", "fall_cap", "shoot", "jump", "release",
+        "ad_nudge", "vines", "flip_swap", "platform_gravity_zero", "fade_in"]   # `gravity` stands for the ladder action's step 4 until WP5c builds `ladder` (see below)
 end_step = ["ladder_sprites"]
 alarms = [{ n = 0, run = ["play_timer"] }]   # B: cancel poll (unused while cancels are on)
 outside_room = []              # B: ["kill_unless_room_changer"]
@@ -655,7 +657,8 @@ Each row is one spec rule; the last column is the field or action that implement
 | B Create does not set gravity (0 until End Step) | B | `gravity.reapply = "end_step_slope"` and create gravity 0 | 5b |
 | B Room Start: create bow, set view angle | B | `events.room_start` actions `create_bow`, `set_view_angle` | 5b |
 | Create alpha 0 and +0.1 per Step (rely) | A1 rely | action `fade_in`, `misc.fade_in = true` | 5a |
-| Ladder: up/down while overlapping ladder grabs, moves 3 px, gravity/vspeed 0, jump leaves, else gravity 0.4 | A1 (little-trap, rainbow) | action `ladder` (two `direct` reads where the original reads twice), `[ladder] entry = "up_or_down" | "up_only"` | 5c |
+| Gravity back to its constant every Step unless on a ladder (A1 Step action 2 step 4; the rely profile has no ladder) | A1 (rely) | action `gravity` (`gravity.reapply = "step"`); WP5a | 5a |
+| Ladder: up/down while overlapping ladder grabs, moves 3 px, gravity/vspeed 0, jump leaves, else gravity 0.4 | A1 (little-trap, rainbow) | action `ladder` (two `direct` reads where the original reads twice), `[ladder] entry = "up_or_down" | "up_only"`. A profile that has ladders lists `ladder` instead of `gravity`: `ladder` includes the gravity reset (step 4), so the two are never listed together | 5c |
 | Walk: right wins, frozen forces 0, facing unless near vine, vine-blocked direction keeps old hspeed | A, B, C | action `walk` (`InputState::direct` under `input.walk = "direct_latch"`) | 5a |
 | Slip blocks: probe 4 px, read slip 10 px below, add/subtract `slip*sign(hspeed)`, no clamp | A1, A2, B | `[ice] model = "slip"`; uses `num::sign(.., &NumRules)` (N11) | 5c |
 | Showdown ice: tempHspeed, decay 0.95, zero below 0.2 | A3 showdown | action `ice_temp_hspeed` | 5c |
@@ -798,6 +801,7 @@ pub enum DllMode { Model, Stub }         // Stub = recorder --stub-dlls: every c
 - Model per the spec's replacement contract (Design, derived from Inferred items): copies start at the call's tick; `length_ticks` = song length × tick rate, from the package (CR9); at most one MULTIMEDIA copy (what a second start does is UNKNOWN, S2); `is_playing` latency 0 ticks (UNKNOWN, S1); game_restart keeps sounds (Inferred, S4).
 - SuperSound (kaenbyou, eat-the-lemon) and GMFMODSimple (go-the-spook-house, xia) adapters: getters return exactly the last value set (UNKNOWN, S5). Their values decide fader object lifetimes, so they affect instance ids and hashes. `SimOptions::dll_mode = Stub` reproduces `--stub-dlls` traces (every kaenbyou trace uses it); `Model` is for play and replays. CleanMem calls are no-ops.
 - The `Mute` action flips the game's music flag through the world built-in; music objects then call `stop_all`, which is sim state.
+- As built (WP10, #20): `SoundState { copies, supersound, gmfmod }`; the extra `sound::volume` (output only). `SoundOutput::{Load, Play, Stop, StopAll, Pause, Volume, Pitch}` with a `SoundTarget` (built-in id, SuperSound handle, FMOD sound, instance or group). A copy plays the ticks `start .. start + length_ticks`; `is_playing` computes this itself, `tick` (row 16) only drops ended copies. S1 delays only the start. S2 and S3 apply to MULTIMEDIA copies. S4 is read by `game_restart` (`keep_on_restart = false` stops all). The adapters take the arguments of the GML `external_call` (strings for SuperSound, numbers for FMOD); because the DLLs do not know a sound length, the script host passes `length_ticks` at load (0 = unknown, plays until stopped; the package side is OPEN).
 - Output: `SoundOutput::{Play, Stop, StopAll, Volume, Pitch}` for the client. Music sync to the tick clock is a client feature (sound Inferred contract item 5, "The user should accept or reject this").
 
 ## 8. Package loading (`crates/format`, WP7a and WP7b)
@@ -855,7 +859,7 @@ Checked against `research/build/packages/rely_the_needle/` on 2026-10-24. The cl
 
 | Id | Request | Evidence | Gate |
 |---|---|---|---|
-| CR1 | Map rely objBLOCK (`@block_2`, `script = "block_2"`, ~600 instances, the floor under the room1 spawn) to the `block` preset with `visual_spawns_collider` | `objects/block_2.toml`; only 19 plain `block` instances in the package | M1 |
+| CR1 | Map rely objBLOCK (`@block_2`, `script = "block_2"`, ~600 instances, the floor under the room1 spawn) to the `block` preset with `visual_spawns_collider` and `collider` (the plain block kind it spawns; `kid_collides = false` on the visual). CR16 to CR18 (tier 1 and tier 2 built-in params, kind references): `research/specs/converter-requests.md` | `objects/block_2.toml`; only 19 plain `block` instances in the package | M1 |
 | CR2 | Map `warp_start` to `difficulty_warp` with `dif` from creation code, or mark it inert-safe | `objects/warp_start.toml`, placed in rSelectStage | M1b |
 | CR3 | `status = "infra"` objects (world, init, blood, bow, GAMEOVER, bloodEmitter, playerface, menus) become built-ins or are dropped, never `script =` | `objects/world.toml`, `init.toml`; trace-map `kind = ""` rows | M1 |
 | CR4 | `object_order` lists every spawnable engine kind with its original index (bow 25, GAMEOVER 51, blood 11, bloodEmitter 175, playerface 608 in rely) | trace-map rows with `kind = ""` | M1 |
@@ -863,13 +867,17 @@ Checked against `research/build/packages/rely_the_needle/` on 2026-10-24. The cl
 | CR6 | Room `role` (boot, title, menu, select, play) | 4.1 | M1 (defaults to play) |
 | CR7 | `start_room` stays the title for game select art, plus `[engine] new_game_room = "room_1"` | `start_room = "title"` | M3b |
 | CR8 | physics.toml in the 5.2 form | 5.2 | after WP5a |
-| CR9 | Sound kind and length in ticks (ffprobe duration × 50) | section 7 | WP10 tests on packages |
+| CR9 | Sound kind and length in ticks (ffprobe duration × 50); also for files a game loads through SuperSound or GMFMODSimple, which sit in `sounds/` or `music/` and are named by stem (`GameDef::dll_sound_length`, #288) | section 7 | WP10 tests on packages |
 | CR10 | Kind names and object bases that are not built-ins of 6.1 (they load inert in Trace mode) | loader warning CR10 | M3a |
 | CR11 | Write `counts_as` instead of the legacy object key `roles` | loader warning CR11 | M3a |
 | CR12 | `[defaults.<kind>]` sprites for bare built-ins in game.toml (not only in tests/trace-map.toml) | loader warning CR12 | M3a |
 | CR13 | Room `file_speed` in each room file (not only in tests/trace-map.toml) | loader warning CR13 | M3a |
 | CR14 | `room_order` in game.toml (not only in tests/trace-map.toml) | loader warning CR14 | M3a |
 | CR15 | Sprite strips at most 4096 px on a side (split or re-pack wider strips) | loader warning CR15 | M3a |
+| CR16 | Tier 1 params per built-in: `block` `kid_collides`, `slip`, `mask`; `kid_start` `shift_at`, `grav_gated`, `creates`, `offset_x`, `offset_y`; `kid_bullet` `block_check`, `life`; `spike` `dir`, `size`, `auto_rotate`, `destroys_bullets`; and add the built-ins that exist to `known_kinds` | research/specs/converter-requests.md CR16; `docs/format/builtins/{block,kid_start,kid_bullet,spike}.md`; kid/A1.md to A4.md, B.md | M3a (a game's own trace check shows no unknown param for these) |
+| CR17 | Tier 2 params: `vine` `side`; `water` `variant`, `fall_cap`, `refresh`, `air_jump`; `moving_platform` `hspeed`, `vspeed`, `bounce`, `carry_rule`; `fake_block`, `hidden_block`, `trigger`, `trap`, `edge_warp`, `drop_platform`, `gravity_flip`, `bullet_blocker`, `slope`, `boss_gate`, `boss_item`, `secret_item`, `item_viewer`, `game_clear`, `music` params; objects a built-in cannot express yet stay unmapped | research/specs/converter-requests.md CR17 (client PRs #253, #257, #266, #271); `docs/format/builtins/<kind>.md` | M3a |
+| CR18 | A kind-typed param (`collider`, `watched_object`, `trigger_kind`, `group`) is the id of a preset written `"@id"`, or a bare built-in name; an unknown bare name is inert in Trace mode (CR10) and an error in Strict mode | research/specs/converter-requests.md CR18; loader error for a missing target | M3a |
+| CR19 | Write the params the built-ins take: `moving_platform` kind instead of `platform[moving]`; `save` `min_difficulty_removed` (Medium 0, Hard 1, in A3 games 2, VHard 2) instead of `difficulty`; bare `slope` instead of `dir`; `gravity_flip` `direction = "up"` or `"down"` instead of `up`. Sounds and music share one id space: a sound and a music track with the same name become `death` and `death_2` | loader warning `unknown param` (research#57); `docs/format/builtins/{moving_platform,platform,save,slope,gravity_flip}.md`; research/specs/converter-requests.md CR19 | M3a (`pkg check --trace-mode` on the 20 packages shows no `unknown param` and no duplicate sound or music id; #142) |
 
 ## 9. Trace comparison and replay (`crates/tools`, WP8a, WP8b)
 
@@ -903,7 +911,7 @@ vars = { "alarm[0]" = "alarm0", "player.x" = "kid.x", "player.y" = "kid.y" }
 ignore = ["id", "sprite_index"]
 ```
 
-- `setup` is a fixed vocabulary (set a field of the kid, of the first instance of a kind, or of a named instance; set a global; set a `SaveSlot` field). It replaces `--gml` assignments, `--x` and `--y`. Entries with `frame <= first_frame` run before `start_game` enters the room.
+- `setup` is a fixed vocabulary (set a field of the kid, of the first instance of a kind (a kind names its loader-derived variants too, `save[min_difficulty_removed=2]` is a `save`, as in the probe's `kind.var` reads), or of a named instance; set a global; set a `SaveSlot` field). It replaces `--gml` assignments, `--x` and `--y`. Entries with `frame <= first_frame` run before `start_game` enters the room.
 - Frame mapping: the row at `first_frame` is the state after the first tick in the room (kaenbyou t-speed-1). Our run treats tick k as frame `first_frame + k`. Inputs come from the `.inputs` file by frame number through the engine key map (`KeyMap`).
 
 ### 9.3 Probe and field registry
@@ -912,13 +920,14 @@ ignore = ["id", "sprite_index"]
 // crates/sim/src/probe.rs (WP8a): read-only sampling, compiled into every build
 pub struct Probe { pub object: Target, pub columns: Vec<Column> }
 pub enum Column { Fixed(FixedColumn), Field { target: ProbeTarget, field: FieldRef }, Global(VarId),
-                  Count(Target), Key(KeyRead), Save(SaveField) }
+                  Count(Target), Key(KeyRead), Save(SaveField), Engine(EngineVar) }
 pub enum KeyRead { Held(Action), Pressed(Action), Released(Action), Direct(Action) }
 pub fn sample(sim: &mut Sim, probe: &Probe, frame: i64) -> Vec<Vec<trace::Value>>;
 // crates/sim/src/probe/registry.rs (WP8a): GM name -> field
 pub fn resolve(name: &str, def: &GameDef) -> Option<FieldRef>;   // "djump", "curJumps", "jump[1]", "alarm[0]", "image_index", ...
 ```
 
+- `Engine(EngineVar)` reads engine state the package does not declare as a variable: `global.difficulty`, `death`, `time`, `savenum`, `clear`, `frozen`, `frozen2`, `reverse`, `grav`, `paused` and `room_speed`. These names win over a package variable of the same name (a save point's `difficulty` parameter interns one). Audio settings (`global.audio_*`, `stream_music`) are not sim state; cases list them in `[unprobed]`. `grav` on a family B kid reads the profile gravity (kid/B.md: declared, never read); `saveTimer` on a `save` instance reads its cooldown timer. `save.<name>` is a save slot field when it is one, else a field of the first `save` instance.
 - Kid fields resolve through `kid::api::read_field` (1.6), so WP8a never depends on `KidState` layout; save fields through `SaveField`.
 - `KeyRead::Direct` **consumes** the latch, because the recorder's own `keyboard_check_direct` column read it at the sample point and so changed the original run the same way. `sample` therefore takes `&mut Sim`. Whether the recorder's read really consumed it is checked against `t4-input-direct-tap-*` and `t5-input-restart-latch-*` (I1).
 - Sample point: after phase 13, before the room change (2.1). One row per alive instance of the traced kind, in dispatch order. Rows only for frames the original has.
@@ -1246,7 +1255,7 @@ Every rule the sim needs that the spec marks UNKNOWN, Inferred or Conflict, or t
 | M3 | Negative speed representation | UNKNOWN U4 | `Motion::recompute_cartesian` | store speed as written | t-mot-05 (rec) |
 | M4 | Direction when h and v are both 0 | UNKNOWN U5 | `Motion::recompute_polar` | `atan2(-0.0, 0.0)` result | t-mot-06 (rec) |
 | M5 | Polar recompute formula and zero signs | Inferred, Trace-consistent | `Motion::recompute_polar` | `radtodeg(atan2(-v, h))`, +360 if `< 0` | stand, t-alarm-1 |
-| M6 | Trig bits for non-table angles: x87 vs libm | UNKNOWN numbers | `num::trig` | libm, table for 0/90/180/270 | num-trig |
+| M6 | Trig bits for non-table angles: x87 vs libm | UNKNOWN numbers | `num::trig` | libm, table for 0/90/180/270; `atan2` correctly rounded (double-double refinement of libm), snapped to the double below pi/2 when `\|x\| / \|y\| < 1e-13` (cutoff OPEN, between 1.9e-14 and 6.8e-5, traces rely num-rng-b and kaenbyou t-mot-04) | num-trig, kaenbyou land-moving, vines |
 | M7 | Solid re-move uses current speeds; "kept at previous place" | Inferred / UNKNOWN motion U7 | `collide::solid_resolve`, `CollideRules::solid_recheck` | add speeds after event; recheck vs `b`; restore event position | T-MOT-07, t-col-04 (rec) |
 | M8 | Path following | UNKNOWN U9, U-MECH-4 | `path::advance` | linear segments by `speed / length`, closed loops wrap | TR-MECH-02 |
 
