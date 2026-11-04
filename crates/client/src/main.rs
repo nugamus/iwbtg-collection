@@ -7,6 +7,7 @@ mod art;
 mod audio;
 mod input;
 mod package;
+mod savefile;
 mod screen;
 mod view;
 
@@ -32,6 +33,9 @@ struct Args {
     /// default: the originals draw every step, so a blended frame shows positions the game never had.
     #[arg(long)]
     interpolate: bool,
+    /// Never read or write the save file: always start a new game (ranked runs, checks).
+    #[arg(long)]
+    no_save_file: bool,
     /// Hold the sound back by this many milliseconds (0 to 500) to line it up with the picture on
     /// a slow audio device. It moves playback only, never the sim.
     #[arg(long, value_name = "MS", default_value_t = 0, value_parser = clap::value_parser!(u32).range(0..=500))]
@@ -65,6 +69,9 @@ fn main() -> ExitCode {
         fullscreen: args.fullscreen,
         ratio,
         window: args.window,
+    });
+    savefile::configure(savefile::Options {
+        disabled: args.no_save_file,
     });
     match package::open(&args.package, args.trace_mode) {
         Ok(pkg) => match view::run(
