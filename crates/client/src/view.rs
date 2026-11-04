@@ -221,6 +221,11 @@ fn setup(
     ));
     commands.spawn((
         Camera2d,
+        // The backdrop's own camera draws first; this one draws the game over it.
+        Camera {
+            clear_color: ClearColorConfig::None,
+            ..default()
+        },
         Projection::from(OrthographicProjection {
             scaling_mode: ScalingMode::AutoMin {
                 min_width: room.0.x,

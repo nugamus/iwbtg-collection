@@ -9,9 +9,11 @@ use bevy::input_focus::tab_navigation::TabGroup;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use bevy::ui::IsDefaultUiCamera;
 use bevy::ui_widgets::Activate;
 
 use super::UiKitPlugin;
+use super::backdrop::{self, Backdrop, dim};
 use super::fonts::{Family, Type};
 use super::motion::{Ease, OffsetX, Opacity, ReducedMotion, Tween, Width};
 use super::shape::{Band, FadeMask, Shape, Side, UiOpacity, Veil};
@@ -54,7 +56,7 @@ pub fn run(
     .insert_resource(ClearColor(tokens::GROUND))
     .insert_resource(ReducedMotion(reduced_motion))
     .add_systems(Startup, setup)
-    .add_systems(Update, (fit_to_window, slide_on_hover, drift_list, motion_switch))
+    .add_systems(Update, (fit_to_window, slide_on_hover, drift_list, motion_switch, backdrop_keys))
     .add_observer(on_activate);
     if let Some(path) = screenshot {
         app.insert_resource(crate::view::ScreenshotTo(path))
@@ -282,7 +284,20 @@ fn game_panel(
 }
 
 fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res<ReducedMotion>) {
-    commands.spawn(Camera2d);
+    // The backdrop has its own camera; this one draws over it and must not clear.
+    commands.spawn((
+        Camera2d,
+        Camera {
+            clear_color: ClearColorConfig::None,
+            ..default()
+        },
+        IsDefaultUiCamera,
+    ));
+    commands.insert_resource(BackdropArts(
+        [245.0, 140.0, 330.0, 190.0]
+            .map(|hue| images.add(backdrop::scene_image(hue)))
+            .to_vec(),
+    ));
     let castle = images.add(scenery(250.0));
     let forest = images.add(scenery(140.0));
     let city = images.add(scenery(300.0));
@@ -427,6 +442,10 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
                     c.spawn((
                         text(&motion_label(reduced.0), Type::barlow(14.0, 500), tokens::MUTED),
                         MotionState,
+                    ));
+                    c.spawn((
+                        text("", Type::barlow(14.0, 500), tokens::MUTED),
+                        BackdropState,
                     ));
                 });
             c.spawn((
@@ -635,6 +654,57 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
             TabGroup::default(),
         ))
         .add_children(&[left, right]);
+}
+
+/// The stand-in art the A key cycles through.
+#[derive(Resource)]
+struct BackdropArts(Vec<Handle<Image>>);
+
+/// The line that reports the backdrop's state.
+#[derive(Component)]
+struct BackdropState;
+
+/// A cycles the art (it cross-fades), [ and ] move the blur, D cycles the dim of each screen.
+fn backdrop_keys(
+    keys: Res<ButtonInput<KeyCode>>,
+    arts: Res<BackdropArts>,
+    mut backdrop: ResMut<Backdrop>,
+    mut label: Query<&mut Text, With<BackdropState>>,
+    mut index: Local<(usize, usize)>,
+) {
+    const DIMS: [(&str, f32); 4] = [
+        ("select", dim::SELECT),
+        ("loading", dim::LOADING),
+        ("gameplay", dim::GAMEPLAY),
+        ("results", dim::RESULTS),
+    ];
+    let first = backdrop.art.is_none();
+    if keys.just_pressed(KeyCode::KeyA) || first {
+        if !first {
+            index.0 = (index.0 + 1) % arts.0.len();
+        }
+        backdrop.art = Some(arts.0[index.0].clone());
+    }
+    if keys.just_pressed(KeyCode::KeyD) {
+        index.1 = (index.1 + 1) % DIMS.len();
+    }
+    backdrop.dim = DIMS[index.1].1;
+    if keys.just_pressed(KeyCode::BracketRight) {
+        backdrop.blur = (backdrop.blur + 0.1).min(1.0);
+    }
+    if keys.just_pressed(KeyCode::BracketLeft) {
+        backdrop.blur = (backdrop.blur - 0.1).max(0.0);
+    }
+    for mut text in &mut label {
+        text.0 = format!(
+            "Backdrop: art {} of {} (A) · blur {:.0}% ([ ]) · dim {} {:.2} (D)",
+            index.0 + 1,
+            arts.0.len(),
+            backdrop.blur * 100.0,
+            DIMS[index.1].0,
+            backdrop.dim
+        );
+    }
 }
 
 fn motion_label(on: bool) -> String {
