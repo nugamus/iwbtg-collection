@@ -176,6 +176,29 @@
         }
       ]
     },
+    "KeyArtSection": {
+      "additionalProperties": false,
+      "description": "The `[key_art]` table (docs/format/v0.md, Key art).",
+      "properties": {
+        "image": {
+          "default": null,
+          "description": "The game's key art: a PNG inside the package, 1920 x 1080 recommended.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "maps": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "description": "Per-map overrides, keyed by map id: a PNG for that map instead of `image`.",
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
     "KidStepsSection": {
       "additionalProperties": false,
       "description": "`restart = { kid_steps = { ... } }`; absent keys are off.",
@@ -904,6 +927,17 @@
     "id": {
       "description": "Package id, snake_case. Stable forever; leaderboards key on it.",
       "type": "string"
+    },
+    "key_art": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/KeyArtSection"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Art for the background system and the game select list; absent: the first ranked\nroom's background ([`crate::key_art`])."
     },
     "maps": {
       "description": "Maps: each built-in difficulty, category and version, with its own timing and board.\nAbsent: one map, [`DEFAULT_MAP_ID`], timed by `[timing]`.",

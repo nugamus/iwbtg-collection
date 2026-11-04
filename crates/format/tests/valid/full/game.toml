@@ -79,3 +79,7 @@ version = "4.2"
 start = { trigger = "run_start" }
 end = { trigger = "run_end" }
 stages = [{ id = "boss", name = "Boss", trigger = "boss1_dead" }]
+
+[key_art]
+image = "art/key.png"
+maps = { hard_any = "art/key_hard.png" }

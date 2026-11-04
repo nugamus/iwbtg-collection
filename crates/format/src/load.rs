@@ -2207,7 +2207,7 @@ fn read_text<'f>(files: &'f PackageFiles, path: &str, out: &mut Vec<Diagnostic>)
 // Step 9: gameplay_hash.
 
 /// `game.toml` keys that cannot change the sim (docs/format/v0.md, Versioning).
-const COSMETIC_MANIFEST_KEYS: [&str; 7] = [
+const COSMETIC_MANIFEST_KEYS: [&str; 8] = [
     "title",
     "version",
     "source_version",
@@ -2215,6 +2215,7 @@ const COSMETIC_MANIFEST_KEYS: [&str; 7] = [
     "source",
     "third_party",
     "music",
+    "key_art",
 ];
 
 /// `[[maps]]` keys that are only shown: renaming a map keeps its board.
