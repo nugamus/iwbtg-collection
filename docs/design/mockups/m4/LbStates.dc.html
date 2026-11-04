@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Live leaderboard positions and states</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="position: relative; width: 1580px; height: 620px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8">
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1580px" h="620px" hue="250" blur="60" dim="0.5" tag="none" hint-size="1580px,620px"></dc-import></div>
+  <div style="position: absolute; inset: 0; box-sizing: border-box; padding: 48px 60px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 40px">
+    <sc-for list="{{cols}}" as="c" hint-placeholder-count="5">
+      <div style="display: flex; flex-direction: column; gap: 22px">
+        <div style="display: flex; flex-direction: column; gap: 4px; padding-left: 10px">
+          <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 24px; font-weight: 700">{{c.title}}</span>
+          <span style="font-size: 14px; color: #a2a8bc; line-height: 1.35">{{c.sub}}</span>
+        </div>
+        <dc-import name="Leaderboard" scenario="{{c.scenario}}" density="full" width="250" rows="7" hint-size="250px,380px"></dc-import>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1580,"height":620}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      cols: [
+        { scenario: 'top', title: '#1 at 0:00', sub: 'Every run starts on top; your row pushes to the top edge.' },
+        { scenario: 'p25', title: 'Around #25', sub: 'Stage cleared: 3 s pace flash against #24’s split.' },
+        { scenario: 'below', title: 'Below the top 100', sub: 'Rank keeps counting; the 99 runs above you show.' },
+        { scenario: 'empty', title: 'No clears yet', sub: 'Only your live row.' },
+        { scenario: 'offline', title: 'Offline', sub: 'Cached top 100; the run uploads when back online.' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -122,6 +122,17 @@ pub fn run_tick(ctx: &mut Ctx, input: InputFrame) -> Result<Vec<Split>, SimError
 /// 2-13 is skipped and the tick goes on at row 14. Row 15 resets `room_tick` to 0 after a room
 /// change; otherwise row 16 counts it up.
 pub fn run_tick_with(ctx: &mut Ctx, input: InputFrame, hooks: &Hooks) -> Result<Vec<Split>, SimError> {
+    if run_rows(ctx, input, hooks).is_none() {
+        return Ok(Vec::new());
+    }
+    finish_tick(ctx, hooks)
+}
+
+/// Rows 0-14 of a tick. `None` when the sim halted (no sweep, no room change). Follow with
+/// [`finish_tick`]; between the two, `World::pending` still holds a room request, and the world
+/// is what the original's recorder samples on the tick of a room change (the old room's
+/// instances; #450).
+pub fn run_rows(ctx: &mut Ctx, input: InputFrame, hooks: &Hooks) -> Option<()> {
     let rules = &ctx.rules.tick;
     // Row 0.
     ctx.w.room_requests = 0;
@@ -130,11 +141,14 @@ pub fn run_tick_with(ctx: &mut Ctx, input: InputFrame, hooks: &Hooks) -> Result<
         .input
         .latch_with(input, rules.direct_latch == DirectLatch::Latch);
     // Rows 1-13; `None` from `rows` means the sim halted.
-    let Some(()) = rows(ctx, hooks) else {
-        return Ok(Vec::new());
-    };
+    rows(ctx, hooks)?;
     // Row 14.
     ctx.w.sweep();
+    Some(())
+}
+
+/// Rows 15-16 of a tick, after [`run_rows`] returned `Some`.
+pub fn finish_tick(ctx: &mut Ctx, hooks: &Hooks) -> Result<Vec<Split>, SimError> {
     // Row 15.
     let changed = match ctx.w.pending.take() {
         Some(req) => {

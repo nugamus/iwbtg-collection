@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>In-run HUD, small window</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;family=Pixelify+Sans:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- 960x540: the game keeps priority (0.89x). The leaderboard collapses to rank and avatar plus your own time; the stats stack under the timer and the input display hides. -->
+<div style="position: relative; width: 960px; height: 540px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8">
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="960px" h="540px" hue="250" blur="{{blur}}" dim="0.45" tag="none" hint-size="960px,540px"></dc-import></div>
+  <div style="position: absolute; left: 124px; top: 0; width: 712px; height: 540px; overflow: hidden; box-shadow: 0 0 40px rgba(0,0,0,.6)">
+    <div style="width: 800px; height: 608px; transform: scale(.88816); transform-origin: 0 0"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div>
+  </div>
+  <div style="position: absolute; left: -4px; top: 92px"><dc-import name="Leaderboard" scenario="p25" density="mini" width="124" rows="7" hint-size="124px,360px"></dc-import></div>
+  <div style="position: absolute; left: 846px; top: 150px"><dc-import name="RunInfo" layout="stack" time="38:02.56" width="106" hint-size="106px,260px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"blur":{"editor":"range","min":0,"max":100,"step":1,"unit":"%","default":60},"$preview":{"width":960,"height":540}}'>
+class Component extends DCLogic {
+  renderVals() { return { blur: this.props.blur ?? 60 }; }
+}
+</script>
+</body>
+</html>

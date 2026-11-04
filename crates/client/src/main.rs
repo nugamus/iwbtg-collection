@@ -4,8 +4,10 @@
 //! instance with a sprite is drawn where the sim last put it.
 
 mod bindings;
+mod art;
 mod input;
 mod package;
+mod screen;
 mod view;
 
 use std::path::PathBuf;
@@ -38,6 +40,21 @@ struct Args {
     /// Bindings file (default: the user's config folder, iwbtg-collection/bindings.toml).
     #[arg(long, value_name = "FILE")]
     bindings_file: Option<PathBuf>,
+    /// Blend frames between the last two ticks for smoother motion on fast displays. Off by
+    /// default: the originals draw every step, so a blended frame shows positions the game never had.
+    #[arg(long)]
+    interpolate: bool,
+    /// Start fullscreen (F11 toggles).
+    #[arg(long)]
+    fullscreen: bool,
+    /// The shape of the area the game may use: native, 4:3, 16:9, 16:10, 21:9 or 32:9 (F10 cycles).
+    /// The game is scaled by whole steps inside it; the rest is a blurred copy of the background.
+    #[arg(long, value_name = "RATIO", default_value = "native")]
+    ratio: String,
+    /// Windowed size, WIDTHxHEIGHT (F9 cycles the presets: 800x608, 1280x720, 1600x1216, 1920x1080,
+    /// 2560x1440, 3200x2432).
+    #[arg(long, value_name = "WxH", value_parser = screen::parse_size)]
+    window: Option<(u32, u32)>,
     /// Save a screenshot of the window to this PNG after a few frames and exit (for checks).
     #[arg(long, value_name = "PNG")]
     screenshot: Option<PathBuf>,
@@ -72,6 +89,18 @@ fn main() -> ExitCode {
         print!("{}", bindings.describe());
         return ExitCode::SUCCESS;
     }
+    let ratio = match screen::parse_ratio(&args.ratio) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("--ratio {}: {e}", args.ratio);
+            return ExitCode::FAILURE;
+        }
+    };
+    screen::configure(screen::Options {
+        fullscreen: args.fullscreen,
+        ratio,
+        window: args.window,
+    });
     let Some(package) = &args.package else {
         if args.bind.is_empty() {
             eprintln!("give a package folder to play, or --bind / --show-bindings");
@@ -80,7 +109,7 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     };
     match package::open(package, args.trace_mode) {
-        Ok(pkg) => match view::run(pkg, args.fps, args.screenshot, bindings) {
+        Ok(pkg) => match view::run(pkg, args.fps, args.interpolate, args.screenshot, bindings) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("{e}");

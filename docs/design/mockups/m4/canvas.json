@@ -1,0 +1,270 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Main.dc.html": {
+      "x": 0,
+      "y": 300,
+      "w": 1920,
+      "h": 1080,
+      "title": "Game select 16:9 (a game expanded to its entries)"
+    },
+    "SelectNoClears.dc.html": {
+      "x": 2000,
+      "y": 300,
+      "w": 1920,
+      "h": 1080,
+      "title": "Game select: entry with no clears"
+    },
+    "Loading.dc.html": {
+      "x": 4000,
+      "y": 300,
+      "w": 1920,
+      "h": 1080,
+      "title": "Loading: ranked"
+    },
+    "LoadingUnranked.dc.html": {
+      "x": 6000,
+      "y": 300,
+      "w": 1920,
+      "h": 1080,
+      "title": "Loading: unranked"
+    },
+    "Hud169.dc.html": {
+      "x": 0,
+      "y": 1800,
+      "w": 1920,
+      "h": 1080,
+      "title": "HUD 16:9, Global"
+    },
+    "Hud169Local.dc.html": {
+      "x": 2000,
+      "y": 1800,
+      "w": 1920,
+      "h": 1080,
+      "title": "HUD 16:9, Local"
+    },
+    "Hud43.dc.html": {
+      "x": 4000,
+      "y": 1800,
+      "w": 1024,
+      "h": 768,
+      "title": "HUD 4:3"
+    },
+    "Hud219.dc.html": {
+      "x": 5104,
+      "y": 1800,
+      "w": 2560,
+      "h": 1080,
+      "title": "HUD 21:9"
+    },
+    "HudSmall.dc.html": {
+      "x": 7744,
+      "y": 1800,
+      "w": 960,
+      "h": 540,
+      "title": "HUD small window (960x540)"
+    },
+    "LbStates.dc.html": {
+      "x": 0,
+      "y": 3300,
+      "w": 1580,
+      "h": 620,
+      "title": "Leaderboard positions, empty and offline"
+    },
+    "Pause169.dc.html": {
+      "x": 0,
+      "y": 4340,
+      "w": 1920,
+      "h": 1080,
+      "title": "Pause 16:9"
+    },
+    "Pause43.dc.html": {
+      "x": 2000,
+      "y": 4340,
+      "w": 1024,
+      "h": 768,
+      "title": "Pause 4:3"
+    },
+    "Results169.dc.html": {
+      "x": 0,
+      "y": 5840,
+      "w": 1920,
+      "h": 1080,
+      "title": "Results 16:9: new PB, better placement"
+    },
+    "Results169Slower.dc.html": {
+      "x": 2000,
+      "y": 5840,
+      "w": 1920,
+      "h": 1080,
+      "title": "Results 16:9: slower than PB"
+    },
+    "Results43.dc.html": {
+      "x": 4000,
+      "y": 5840,
+      "w": 1024,
+      "h": 768,
+      "title": "Results 4:3: new PB"
+    },
+    "Results43Slower.dc.html": {
+      "x": 5104,
+      "y": 5840,
+      "w": 1024,
+      "h": 768,
+      "title": "Results 4:3: slower than PB"
+    },
+    "Backdrop.dc.html": {
+      "x": 0,
+      "y": 7340,
+      "w": 1600,
+      "h": 900,
+      "title": "Background system (placeholder art)"
+    },
+    "GameScene.dc.html": {
+      "x": 1680,
+      "y": 7340,
+      "w": 800,
+      "h": 608,
+      "title": "Placeholder game room"
+    },
+    "Leaderboard.dc.html": {
+      "x": 2560,
+      "y": 7340,
+      "w": 260,
+      "h": 400,
+      "title": "Leaderboard component"
+    },
+    "RunInfo.dc.html": {
+      "x": 2900,
+      "y": 7340,
+      "w": 240,
+      "h": 420,
+      "title": "Run info component"
+    },
+    "PauseBox.dc.html": {
+      "x": 3220,
+      "y": 7340,
+      "w": 320,
+      "h": 260,
+      "title": "Pause box (game pixels)"
+    },
+    "ModSelect.dc.html": {
+      "x": 8000,
+      "y": 300,
+      "w": 1920,
+      "h": 1080,
+      "title": "Mod select (opens from the Mods button)"
+    },
+    "ProfileCard.dc.html": {
+      "x": 3620,
+      "y": 7340,
+      "w": 420,
+      "h": 108,
+      "title": "Player card (footer size)"
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-11-04T12:00:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "notes": {
+    "t1": {
+      "kind": "title1",
+      "x": 0,
+      "y": 0,
+      "text": "Game select, mods and loading",
+      "maxW": 9920
+    },
+    "t2": {
+      "kind": "title1",
+      "x": 0,
+      "y": 1500,
+      "text": "In-run HUD: leaderboard, game, run info",
+      "maxW": 8704
+    },
+    "t3": {
+      "kind": "title1",
+      "x": 0,
+      "y": 3000,
+      "text": "Live leaderboard",
+      "maxW": 3000
+    },
+    "t4": {
+      "kind": "title1",
+      "x": 0,
+      "y": 4040,
+      "text": "Pause: the in-game PAUSE box",
+      "maxW": 3024
+    },
+    "t5": {
+      "kind": "title1",
+      "x": 0,
+      "y": 5540,
+      "text": "Results: one page, cleared runs only",
+      "maxW": 6128
+    },
+    "t6": {
+      "kind": "title1",
+      "x": 0,
+      "y": 7040,
+      "text": "Shared parts",
+      "maxW": 4040
+    },
+    "motion": {
+      "x": 1680,
+      "y": 3300,
+      "w": 440,
+      "size": "m",
+      "fill": "blue",
+      "text": "Motion (not drawn): rows, panels and pills use a 0.2 shear with upright text and a 10 px radius. Most moves ease OutQuint over 300–500 ms; small pops use OutElastic. The selected list panel slides 25 px left in 400 ms; the header slides in from the left in 600 ms. Leaderboard rows reorder with a 450 ms slide; your row widens 20 px with a pop. The pace flash holds 3 s, then fades back to your time. Missing avatars fade to the real image in 300 ms."
+    },
+    "data": {
+      "x": 2200,
+      "y": 3300,
+      "w": 440,
+      "size": "m",
+      "fill": "teal",
+      "text": "Sample data: titles and creators come from our port list. Every other number, player name, avatar and music title is invented. All art is a placeholder (five scenes stand in for each game's real background) except the delicious fruit, which is the real sprite. Times are tick counts at 50 per second, shown to hundredths."
+    },
+    "open": {
+      "x": 2720,
+      "y": 3300,
+      "w": 440,
+      "size": "m",
+      "fill": "orange",
+      "text": "Still open: the status set (Ranked / Unranked / …), the mod list (SD, MR, HB, NB, FL, SS, SL, FA are examples of the kinds in docs/product.md, not decisions), the star rating formula, whether the death heatmap stays, the overall rank on the player card (needs the performance system) and the result badges (ideas, no system yet)."
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "SelectNoClears.dc.html",
+    "Loading.dc.html",
+    "LoadingUnranked.dc.html",
+    "ModSelect.dc.html",
+    "Hud169.dc.html",
+    "Hud169Local.dc.html",
+    "Hud43.dc.html",
+    "Hud219.dc.html",
+    "HudSmall.dc.html",
+    "LbStates.dc.html",
+    "Pause169.dc.html",
+    "Pause43.dc.html",
+    "Results169.dc.html",
+    "Results169Slower.dc.html",
+    "Results43.dc.html",
+    "Results43Slower.dc.html",
+    "Backdrop.dc.html",
+    "GameScene.dc.html",
+    "Leaderboard.dc.html",
+    "RunInfo.dc.html",
+    "PauseBox.dc.html",
+    "ProfileCard.dc.html"
+  ],
+  "pages": [],
+  "title": "IWBTG Collection: game select, HUD, pause and results"
+}
