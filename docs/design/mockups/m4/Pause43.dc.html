@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pause 4:3</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;family=Pixelify+Sans:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+@keyframes pb-cherry{from{transform:translateX(0)}to{transform:translateX(-42px)}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
+.pb-item:focus-visible{outline:2px solid #ffffff;outline-offset:3px}
+</style>
+</helmet>
+<!-- At 4:3 the box scales with the 0.8x game, so it stays in game pixels. Selection here is on Restart run. -->
+<div style="position: relative; width: 1024px; height: 768px; overflow: hidden; background: #0b0d14">
+  <div style="position: absolute; inset: 0"><dc-import name="Hud43" paused="{{ true }}" hint-size="1024px,768px"></dc-import></div>
+  <div style="--s: .8; position: absolute; left: 524px; top: 384px; transform: translate(-50%, -50%) scale(.8); transform-origin: 50% 50%">
+    <dc-import name="PauseBox" selected="2" hint-size="300px,250px"></dc-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1024,"height":768}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

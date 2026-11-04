@@ -77,7 +77,7 @@ Commercial music in fangames (Mega Man, Touhou and so on) is kept and removed on
 
 - A game ships as one `.iwbz` file: a zip with its own extension, like osu!'s `.osz`. Double-clicking it imports the game.
 - One `.iwbz` holds the whole game: every ported version, every difficulty and every category. The game appears only once in game select.
-- **Maps.** As with osu! beatmap sets, selecting a game expands it into its maps: categories (Any%, 100%, True Ending) and versions. Each map has its own end trigger, computed difficulty rating and leaderboard. The difficulty settings (Medium, Hard and so on) stay mods ([product](product.md#mods)).
+- **Maps.** As with osu! beatmap sets, selecting a game expands it into its maps: each built-in difficulty (Medium, Hard and so on) and each category (Any%, 100%, True Ending), and versions. Each map has its own end trigger, star difficulty rating and leaderboard. Difficulty is a map, not a mod (user, 2026-11-04; [product](product.md#mods)).
 - **Data syntax.** TOML stays. It is readable, and agents and people can both edit it.
 - **Script language: Rhai stays.** Decided by Claude on the user's request, 2026-11-02. See [0001](decisions/0001-script-language.md#revisited-2026-11-02).
 
@@ -124,7 +124,7 @@ Commercial music in fangames (Mega Man, Touhou and so on) is kept and removed on
 
 Changes [format v0](format/v0.md) needs before format 1:
 
-- **Maps.** Versions and categories inside one package, each with its own timing triggers.
+- **Maps.** Versions and categories inside one package, each with its own timing triggers. Done: `[[maps]]` ([v0](format/v0.md#maps)); how a map starts the original's difficulty is still open.
 - **Stripped mode.**
   - Where the ranked run starts and ends.
   - What it cuts.

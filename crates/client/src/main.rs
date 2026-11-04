@@ -4,9 +4,11 @@
 //! instance with a sprite is drawn where the sim last put it.
 
 mod art;
+mod audio;
 mod input;
 mod package;
 mod savefile;
+mod screen;
 mod view;
 
 use std::path::PathBuf;
@@ -34,6 +36,21 @@ struct Args {
     /// Never read or write the save file: always start a new game (ranked runs, checks).
     #[arg(long)]
     no_save_file: bool,
+    /// Hold the sound back by this many milliseconds (0 to 500) to line it up with the picture on
+    /// a slow audio device. It moves playback only, never the sim.
+    #[arg(long, value_name = "MS", default_value_t = 0, value_parser = clap::value_parser!(u32).range(0..=500))]
+    audio_offset: u32,
+    /// Start fullscreen (F11 toggles).
+    #[arg(long)]
+    fullscreen: bool,
+    /// The shape of the area the game may use: native, 4:3, 16:9, 16:10, 21:9 or 32:9 (F10 cycles).
+    /// The game is scaled by whole steps inside it; the rest is a blurred copy of the background.
+    #[arg(long, value_name = "RATIO", default_value = "native")]
+    ratio: String,
+    /// Windowed size, WIDTHxHEIGHT (F9 cycles the presets: 800x608, 1280x720, 1600x1216, 1920x1080,
+    /// 2560x1440, 3200x2432).
+    #[arg(long, value_name = "WxH", value_parser = screen::parse_size)]
+    window: Option<(u32, u32)>,
     /// Save a screenshot of the window to this PNG after a few frames and exit (for checks).
     #[arg(long, value_name = "PNG")]
     screenshot: Option<PathBuf>,
@@ -41,11 +58,29 @@ struct Args {
 
 fn main() -> ExitCode {
     let args = Args::parse();
+    let ratio = match screen::parse_ratio(&args.ratio) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("--ratio {}: {e}", args.ratio);
+            return ExitCode::FAILURE;
+        }
+    };
+    screen::configure(screen::Options {
+        fullscreen: args.fullscreen,
+        ratio,
+        window: args.window,
+    });
     savefile::configure(savefile::Options {
         disabled: args.no_save_file,
     });
     match package::open(&args.package, args.trace_mode) {
-        Ok(pkg) => match view::run(pkg, args.fps, args.interpolate, args.screenshot) {
+        Ok(pkg) => match view::run(
+            pkg,
+            args.fps,
+            args.interpolate,
+            args.audio_offset,
+            args.screenshot,
+        ) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("{e}");

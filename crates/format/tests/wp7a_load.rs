@@ -539,6 +539,22 @@ fn gameplay_hash_ignores_comments_and_follows_masks() {
         );
     });
     assert_eq!(hash(&commented), base);
+    // Key art is cosmetic (#491): adding `[key_art]` and its image keeps the hash.
+    let key_art = package(|f| {
+        set(
+            f,
+            "game.toml",
+            format!(
+                "{}
+[key_art]
+image = \"art/key.png\"
+",
+                manifest(ORDER, "")
+            ),
+        );
+        f.push(("art/key.png".into(), png(&["#"])));
+    });
+    assert_eq!(hash(&key_art), base);
     let new_pixel = package(|f| set(f, "sprites/spike_up.png", png(&["###.", "####"])));
     assert_ne!(hash(&new_pixel), base);
     let moved = package(|f| set(f, "rooms/stage1.toml", STAGE1.replace("x = 48", "x = 49")));
@@ -979,14 +995,14 @@ fn wp6b3_params_are_checked() {
 }
 
 #[test]
-fn a_gravity_flip_with_view_rotation_is_refused_at_load() {
-    let errs = tier2_errors(
-        r#"{ kind = "gravity_flip", x = 0, y = 0, direction = "up", transition = "yflag_with_view_rotation" }"#,
+fn a_gravity_flip_with_view_rotation_loads() {
+    let files = tier2_package(
+        r#"  { kind = "gravity_flip", x = 0, y = 0, direction = "up", transition = "yflag_with_view_rotation" },
+"#,
+        |_| {},
     );
-    assert!(
-        errs.iter().any(|e| e.contains("yflag_with_view_rotation")),
-        "{errs:?}"
-    );
+    let r = load_report(&files, STRICT);
+    assert!(r.ok(), "{}", render(&r));
 }
 
 #[test]
@@ -1549,4 +1565,81 @@ fn the_golden_walker_script_loads_clean_through_the_loader() {
     let r = load_report(&files, STRICT);
     assert!(r.ok(), "{}", render(&r));
     assert!(!render(&r).contains("scripts/boss.rhai"), "{}", render(&r));
+}
+
+// ---- #31: maps ------------------------------------------------------------------------------
+
+const TWO_MAPS: &str = r#"
+[[maps]]
+id = "any"
+name = "Any%"
+category = "Any%"
+
+[[maps]]
+id = "hard_stage1"
+name = "Hard, Stage 1"
+difficulty = "Hard"
+category = "Stage 1"
+end = { trigger = "enter_room", room = "title" }
+stages = []
+"#;
+
+#[test]
+fn maps_get_their_own_timing_and_inherit_the_rest() {
+    let files = package(|f| set(f, "game.toml", manifest(ORDER, TWO_MAPS)));
+    let report = load_report(&files, STRICT);
+    assert!(report.ok(), "{}", render(&report));
+    let ids: Vec<&str> = report.maps.iter().map(|m| m.id.as_str()).collect();
+    assert_eq!(ids, ["any", "hard_stage1"]);
+    let def = report.def.as_ref().unwrap();
+    // `any` inherits `[timing]`.
+    assert_eq!(report.maps[0].timing, def.timing);
+    let hard = &report.maps[1].timing;
+    assert_eq!(hard.start, TimingTrigger::RunStart);
+    assert!(hard.stages.is_empty());
+    assert!(matches!(hard.end, TimingTrigger::EnterRoom(_)));
+}
+
+#[test]
+fn a_package_without_maps_has_one_main_map() {
+    let report = load_report(&package(|_| {}), STRICT);
+    assert_eq!(report.maps.len(), 1);
+    assert_eq!(report.maps[0].id, "main");
+    assert_eq!(report.maps[0].timing, report.def.as_ref().unwrap().timing);
+}
+
+#[test]
+fn a_map_trigger_must_reach_a_room_that_exists() {
+    let bad = TWO_MAPS.replace("room = \"title\"", "room = \"nowhere\"");
+    let files = package(|f| set(f, "game.toml", manifest(ORDER, &bad)));
+    let report = load_report(&files, STRICT);
+    assert!(!report.ok());
+    assert!(
+        report
+            .diagnostics
+            .iter()
+            .any(|d| d.file == "game.toml" && d.message.contains("nowhere")),
+        "{}",
+        render(&report)
+    );
+    // The broken map is left out; the other still resolves.
+    let ids: Vec<&str> = report.maps.iter().map(|m| m.id.as_str()).collect();
+    assert_eq!(ids, ["any"]);
+}
+
+#[test]
+fn renaming_a_map_keeps_the_gameplay_hash() {
+    let hash = |text: &str| {
+        let files = package(|f| set(f, "game.toml", manifest(ORDER, text)));
+        load_report(&files, STRICT).gameplay_hash.expect("loads")
+    };
+    let base = hash(TWO_MAPS);
+    assert_eq!(
+        hash(&TWO_MAPS.replace("name = \"Any%\"", "name = \"Any% (glitched)\"")),
+        base
+    );
+    assert_ne!(
+        hash(&TWO_MAPS.replace("room = \"title\"", "room = \"stage1\"")),
+        base
+    );
 }

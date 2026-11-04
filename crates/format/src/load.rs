@@ -34,7 +34,7 @@ use crate::check::check;
 use crate::diag::{Diagnostic, Severity, has_errors};
 use crate::files::PackageFiles;
 use crate::ids::check_id;
-use crate::manifest::{ENGINE_ROLES, MANIFEST_PATH, Manifest, TIMING_TRIGGERS};
+use crate::manifest::{DEFAULT_MAP_ID, ENGINE_ROLES, MANIFEST_PATH, Manifest, TIMING_TRIGGERS};
 use crate::masks::{ALPHA_IN_MASK, AlphaRule};
 use crate::objects::{self, ObjectFile, kind_classes, legacy_role_classes, param_value};
 use crate::order::{OrderEntry, rank_of, resolve_ranks};
@@ -73,6 +73,18 @@ pub struct LoadReport {
     pub diagnostics: Vec<Diagnostic>,
     /// BLAKE3 over the canonical parsed form ([`gameplay_hash`]).
     pub gameplay_hash: Option<[u8; 32]>,
+    /// Every map's timing chain, in `[[maps]]` order (one `main` map without `[[maps]]`); maps
+    /// whose triggers do not resolve are left out (their errors are in `diagnostics`).
+    pub maps: Vec<MapTiming>,
+}
+
+/// One map's resolved timing chain (docs/format/v0.md, Maps).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MapTiming {
+    /// Map id.
+    pub id: String,
+    /// Start, stages and end.
+    pub timing: TimingDef,
 }
 
 impl LoadReport {
@@ -102,6 +114,7 @@ pub fn load_report(files: &PackageFiles, mode: LoadMode) -> LoadReport {
                 def: None,
                 diagnostics: diags,
                 gameplay_hash: None,
+                maps: Vec::new(),
             };
         }
     };
@@ -118,6 +131,7 @@ pub fn load_report(files: &PackageFiles, mode: LoadMode) -> LoadReport {
         def,
         diagnostics: diags,
         gameplay_hash,
+        maps: std::mem::take(&mut l.maps),
     }
 }
 
@@ -292,6 +306,8 @@ struct Loader<'a> {
     /// `collides_with` per kind name: the classes its script's `collide(other)` listens to.
     collides: BTreeMap<String, Vec<ClassMask>>,
     groups: Vec<String>,
+    /// Resolved map timing chains.
+    maps: Vec<MapTiming>,
 }
 
 impl<'a> Loader<'a> {
@@ -324,6 +340,7 @@ impl<'a> Loader<'a> {
             package_classes: Vec::new(),
             collides: BTreeMap::new(),
             groups: Vec::new(),
+            maps: Vec::new(),
         }
     }
 
@@ -479,6 +496,7 @@ impl<'a> Loader<'a> {
         // Events per kind, now that the physics profile is known.
         self.event_sets(&physics);
         let timing = self.timing();
+        self.maps = self.map_timings(timing.as_ref());
         let mut d = Vec::new();
         let timelines =
             pending_call(&mut self.pending, || timelines::load(self.files, &mut d)).unwrap_or_default();
@@ -1933,6 +1951,49 @@ impl<'a> Loader<'a> {
         })
     }
 
+    /// Each map's chain. Keys a map leaves out reuse `[timing]`'s result, so their errors are
+    /// reported once.
+    fn map_timings(&mut self, base: Option<&TimingDef>) -> Vec<MapTiming> {
+        let m = self.m;
+        if m.maps.is_empty() {
+            return base
+                .map(|b| MapTiming {
+                    id: DEFAULT_MAP_ID.to_owned(),
+                    timing: b.clone(),
+                })
+                .into_iter()
+                .collect();
+        }
+        let mut out = Vec::new();
+        for map in &m.maps {
+            let start = match &map.start {
+                Some(t) => self.trigger(&t.trigger, t.room.as_ref()),
+                None => base.map(|b| b.start),
+            };
+            let end = match &map.end {
+                Some(t) => self.trigger(&t.trigger, t.room.as_ref()),
+                None => base.map(|b| b.end),
+            };
+            let stages = match &map.stages {
+                Some(list) => {
+                    let all: Vec<_> = list
+                        .iter()
+                        .map(|s| self.trigger(&s.trigger, s.room.as_ref()))
+                        .collect();
+                    all.into_iter().collect::<Option<Vec<_>>>()
+                }
+                None => base.map(|b| b.stages.clone()),
+            };
+            if let (Some(start), Some(end), Some(stages)) = (start, end, stages) {
+                out.push(MapTiming {
+                    id: map.id.get_ref().clone(),
+                    timing: TimingDef { start, end, stages },
+                });
+            }
+        }
+        out
+    }
+
     fn trigger(&mut self, name: &Spanned<String>, room: Option<&Spanned<String>>) -> Option<TimingTrigger> {
         match (name.get_ref().as_str(), room) {
             ("run_start", None) => Some(TimingTrigger::RunStart),
@@ -2146,7 +2207,7 @@ fn read_text<'f>(files: &'f PackageFiles, path: &str, out: &mut Vec<Diagnostic>)
 // Step 9: gameplay_hash.
 
 /// `game.toml` keys that cannot change the sim (docs/format/v0.md, Versioning).
-const COSMETIC_MANIFEST_KEYS: [&str; 7] = [
+const COSMETIC_MANIFEST_KEYS: [&str; 8] = [
     "title",
     "version",
     "source_version",
@@ -2154,7 +2215,11 @@ const COSMETIC_MANIFEST_KEYS: [&str; 7] = [
     "source",
     "third_party",
     "music",
+    "key_art",
 ];
+
+/// `[[maps]]` keys that are only shown: renaming a map keeps its board.
+const COSMETIC_MAP_KEYS: [&str; 3] = ["name", "difficulty", "category"];
 
 /// BLAKE3 over the canonical parsed form of everything that can change the sim
 /// (docs/format/v0.md, Versioning; architecture "Versions"): the gameplay fields of `game.toml`,
@@ -2199,6 +2264,13 @@ pub fn gameplay_hash(files: &PackageFiles, manifest: &Manifest, def: &GameDef) -
             if path == MANIFEST_PATH {
                 for k in COSMETIC_MANIFEST_KEYS {
                     table.remove(k);
+                }
+                if let Some(toml::Value::Array(maps)) = table.get_mut("maps") {
+                    for map in maps.iter_mut().filter_map(toml::Value::as_table_mut) {
+                        for k in COSMETIC_MAP_KEYS {
+                            map.remove(k);
+                        }
+                    }
                 }
             }
             hash_bytes(&mut h, path.as_bytes());

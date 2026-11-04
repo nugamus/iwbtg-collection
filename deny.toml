@@ -1,7 +1,8 @@
 # cargo deny check: no copyleft code in the client (roadmap Phase 3).
 [licenses]
 # MPL-2.0 is file-level copyleft, not GPL: unmodified MPL crates (smartstring, used by rhai) put no
-# obligation on our code. Never vendor or modify an MPL crate without revisiting this.
+# obligation on our code. Rhai 1.27.0 still lists smartstring as an unconditional dependency even with
+# `compact_str`, so the crate stays in Cargo.lock and this allowance stays (#90). Never vendor or modify an MPL crate without revisiting this.
 allow = ["MIT", "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Zlib",
          "Unicode-3.0", "CC0-1.0", "BSL-1.0", "MIT-0", "0BSD", "MPL-2.0"]
 confidence-threshold = 0.9
