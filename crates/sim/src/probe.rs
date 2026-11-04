@@ -619,6 +619,7 @@ mod tests {
                 dll_mode: DllMode::Model,
             },
             scripts: ScriptRuntime::default(),
+            rows_done: false,
         };
         (sim, ids)
     }

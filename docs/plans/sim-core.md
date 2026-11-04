@@ -994,7 +994,7 @@ Golden engine rooms (`crates/sim/tests/golden/*.rs`, built with `def::testing::G
 
 Spec for the language: [0001](../decisions/0001-script-language.md). GML rules the ported scripts must keep come from CLONE_SPEC numbers.
 
-- Rhai setup per 0001: features `std`, `only_i64`, `no_time`, `no_module`, `no_custom_syntax`, `no_closure`, `internals` on 1.26.1 now (0001 allows 1.26.1 without `compact_str` until 1.27.x is 14 days old, 2026-11-04); WP9 switches to `=1.27.N` with `compact_str` after that date. WP0 changes the root `Cargo.toml` line; WP9 owns it afterwards.
+- Rhai setup per 0001: features `std`, `only_i64`, `no_time`, `no_module`, `no_custom_syntax`, `no_closure`, `compact_str`, `internals` on `=1.27.0` (pinned by #90 on or after 2026-11-04, when 1.27.0 was 14 days old). WP0 changes the root `Cargo.toml` line; WP9 owns it afterwards.
 - `Engine::new_raw()` with only our packages; `eval`, `**`, `**=` disabled. Done-criteria check both.
 - **Both operands always evaluated** (Confirmed for `&&`, `||`, `^^`). Rhai short-circuits `&&`/`||`. The IWS validator rejects any call that can draw from the RNG or change state inside an operand of `&&` or `||` and suggests Rhai's non-short-circuit `&`/`|` on bools, or evaluating first into a variable.
 - `if` and `repeat` on reals: ported code calls `gm_bool(x)` and `gm_repeat_count(x)` (rounded, Confirmed), which read `NumRules`.

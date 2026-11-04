@@ -155,6 +155,7 @@ pub fn run(
                 ..default()
             }),
     )
+    .add_plugins(crate::screen::ScreenPlugin)
     .insert_resource(ClearColor(Color::BLACK))
     .insert_resource(RoomSize(Vec2::new(width, height)))
     .insert_resource(PendingImages(images))
