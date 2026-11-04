@@ -278,6 +278,92 @@ impl Sounds {
 #[derive(Component)]
 pub struct Voice(SoundTarget);
 
+/// Seeks a looping tune back when it drifts more than this many ticks from the tick clock
+/// (docs/product.md, Music sync).
+pub const MAX_DRIFT_TICKS: f64 = 2.0;
+
+/// Ticks to leave a tune alone after it starts or is seeked: its position takes a moment to settle.
+const SETTLE_TICKS: f64 = 10.0;
+
+/// Where the tick clock says one looping tune should be. The sim's tick count is the authority:
+/// the tune is expected at the time it has been playing in ticks (pitch speeds it up, a pause
+/// holds it), wrapped to its length. Pure, so it is tested without a sound device.
+#[derive(Component, Clone, Debug, PartialEq)]
+pub struct MusicSync {
+    /// The tick (with its fraction) the position below belongs to.
+    anchor_tick: f64,
+    /// The tune position in seconds at the anchor.
+    anchor_pos: f64,
+    speed: f64,
+    paused: bool,
+    /// Length of one loop in seconds.
+    length: f64,
+    /// No checks before this tick.
+    settle_until: f64,
+}
+
+impl MusicSync {
+    /// A tune that starts now, at `tick` (counting the fraction of the tick the clock is into),
+    /// `length` seconds long.
+    pub fn new(tick: f64, speed: f64, length: f64) -> MusicSync {
+        MusicSync {
+            anchor_tick: tick,
+            anchor_pos: 0.0,
+            speed,
+            paused: false,
+            length,
+            settle_until: tick + SETTLE_TICKS,
+        }
+    }
+
+    /// Where the tune should be at `tick`, in seconds into the loop.
+    pub fn expected(&self, tick: f64, tick_rate: f64) -> f64 {
+        let played = if self.paused {
+            0.0
+        } else {
+            (tick - self.anchor_tick).max(0.0) / tick_rate * self.speed
+        };
+        (self.anchor_pos + played).rem_euclid(self.length)
+    }
+
+    fn reanchor(&mut self, tick: f64, tick_rate: f64) {
+        self.anchor_pos = self.expected(tick, tick_rate);
+        self.anchor_tick = tick;
+    }
+
+    /// The pitch changed: later time counts at the new speed.
+    pub fn set_speed(&mut self, tick: f64, tick_rate: f64, speed: f64) {
+        self.reanchor(tick, tick_rate);
+        self.speed = speed;
+    }
+
+    /// Pausing holds the expected position; resuming continues from it.
+    pub fn set_paused(&mut self, tick: f64, tick_rate: f64, paused: bool) {
+        if paused != self.paused {
+            self.reanchor(tick, tick_rate);
+            self.paused = paused;
+            self.settle_until = tick + SETTLE_TICKS;
+        }
+    }
+
+    /// The position to seek to when the tune is at `actual` seconds and has drifted more than
+    /// [`MAX_DRIFT_TICKS`] from the tick clock; `None` when it is close enough (or settling,
+    /// or paused). The drift is the short way round the loop.
+    pub fn correction(&mut self, tick: f64, tick_rate: f64, actual: f64) -> Option<f64> {
+        if self.paused || tick < self.settle_until {
+            return None;
+        }
+        let expected = self.expected(tick, tick_rate);
+        let mut drift = (actual.rem_euclid(self.length) - expected).abs();
+        drift = drift.min(self.length - drift);
+        if drift <= MAX_DRIFT_TICKS / tick_rate {
+            return None;
+        }
+        self.settle_until = tick + SETTLE_TICKS;
+        Some(expected)
+    }
+}
+
 fn is_adapter(t: SoundTarget) -> bool {
     !matches!(t, SoundTarget::Builtin(_))
 }
@@ -289,9 +375,13 @@ pub fn play(
     mut queue: ResMut<Queue>,
     mut sounds: ResMut<Sounds>,
     mut assets: ResMut<Assets<AudioSource>>,
-    mut voices: Query<(Entity, &Voice, Option<&mut AudioSink>)>,
+    mut voices: Query<(Entity, &Voice, Option<&mut AudioSink>, Option<&mut MusicSync>)>,
+    fixed: Res<Time<Fixed>>,
 ) {
     let def = game.sim.def();
+    let tick_rate = f64::from(def.tick_rate.max(1));
+    // The tick count with the part of the next tick the fixed clock is already into.
+    let now_tick = game.sim.world().tick as f64 + f64::from(fixed.overstep_fraction());
     for cue in queue.due(Instant::now()) {
         for cmd in sounds.mixer.handle(def, &cue) {
             match cmd {
@@ -317,7 +407,12 @@ pub fn play(
                             h
                         }
                     };
-                    commands.spawn((
+                    // A looping tune with a known length follows the tick clock.
+                    let length = def
+                        .sounds
+                        .get(sound.0 as usize)
+                        .map_or(0.0, |d| f64::from(d.length_ticks) / tick_rate);
+                    let mut voice = commands.spawn((
                         AudioPlayer::new(handle),
                         PlaybackSettings {
                             mode: if looping {
@@ -331,9 +426,12 @@ pub fn play(
                         },
                         Voice(target),
                     ));
+                    if looping && length > 0.0 {
+                        voice.insert(MusicSync::new(now_tick, f64::from(speed), length));
+                    }
                 }
                 Cmd::Stop(t) => {
-                    for (e, v, _) in &voices {
+                    for (e, v, _, _) in &voices {
                         if v.0 == t
                             || matches!((t, v.0), (SoundTarget::FmodSound(s), SoundTarget::FmodInstance { sound, .. }) if s == sound)
                         {
@@ -342,34 +440,64 @@ pub fn play(
                     }
                 }
                 Cmd::StopAll { adapter } => {
-                    for (e, v, _) in &voices {
+                    for (e, v, _, _) in &voices {
                         if is_adapter(v.0) == adapter {
                             commands.entity(e).despawn();
                         }
                     }
                 }
                 Cmd::Pause { target, paused } => {
-                    for (_, v, sink) in &mut voices {
-                        if let (true, Some(sink)) = (v.0 == target, sink) {
+                    for (_, v, sink, sync) in &mut voices {
+                        if v.0 != target {
+                            continue;
+                        }
+                        if let Some(mut sync) = sync {
+                            sync.set_paused(now_tick, tick_rate, paused);
+                        }
+                        if let Some(sink) = sink {
                             if paused { sink.pause() } else { sink.play() }
                         }
                     }
                 }
                 Cmd::Volume { target, volume } => {
-                    for (_, v, sink) in &mut voices {
+                    for (_, v, sink, _) in &mut voices {
                         if let (true, Some(mut sink)) = (v.0 == target, sink) {
                             sink.set_volume(Volume::Linear(volume));
                         }
                     }
                 }
                 Cmd::Speed { target, speed } => {
-                    for (_, v, sink) in &mut voices {
-                        if let (true, Some(sink)) = (v.0 == target, sink) {
+                    for (_, v, sink, sync) in &mut voices {
+                        if v.0 != target {
+                            continue;
+                        }
+                        if let Some(mut sync) = sync {
+                            sync.set_speed(now_tick, tick_rate, f64::from(speed));
+                        }
+                        if let Some(sink) = sink {
                             sink.set_speed(speed);
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+/// Keeps looping tunes on the tick clock: a tune that has drifted more than two ticks (40 ms at
+/// 50 Hz) from where the sim tick count says it should be is seeked back to that position;
+/// smaller drift is left alone, so normal play has no audible skips.
+pub fn sync_music(
+    game: NonSend<Game>,
+    fixed: Res<Time<Fixed>>,
+    mut tunes: Query<(&AudioSink, &mut MusicSync)>,
+) {
+    let tick_rate = f64::from(game.sim.def().tick_rate.max(1));
+    let now_tick = game.sim.world().tick as f64 + f64::from(fixed.overstep_fraction());
+    for (sink, mut sync) in &mut tunes {
+        if let Some(to) = sync.correction(now_tick, tick_rate, sink.position().as_secs_f64()) {
+            // A source that cannot seek stays where it is; the next check tries again.
+            let _ = sink.try_seek(Duration::from_secs_f64(to));
         }
     }
 }
@@ -467,6 +595,56 @@ mod tests {
         assert!((linear(SoundTarget::Super(1), -2000.0) - 0.1).abs() < 1e-6);
         assert_eq!(linear(SoundTarget::Builtin(SoundId(0)), 0.5), 0.5);
         assert_eq!(linear(SoundTarget::FmodGroup(1), -1.0), 0.0);
+    }
+
+    const RATE: f64 = 50.0;
+
+    #[test]
+    fn a_tune_on_the_beat_is_left_alone() {
+        // A 10 s loop started at tick 100; at tick 400 (6 s in) the sink reads 6.01 s.
+        let mut m = MusicSync::new(100.0, 1.0, 10.0);
+        assert!((m.expected(400.0, RATE) - 6.0).abs() < 1e-9);
+        assert_eq!(m.correction(400.0, RATE, 6.01), None);
+        // One tick (20 ms) of drift is fine, and so are two ticks.
+        assert_eq!(m.correction(400.0, RATE, 6.02), None);
+        assert_eq!(m.correction(400.0, RATE, 6.039), None);
+    }
+
+    #[test]
+    fn a_lag_spike_is_seeked_back_to_the_tick_clock() {
+        // The sim stalled for 0.5 s while the sound device kept playing: the tick clock is at
+        // 6.0 s, the sink at 6.5 s.
+        let mut m = MusicSync::new(100.0, 1.0, 10.0);
+        let to = m.correction(400.0, RATE, 6.5).expect("seeks");
+        assert!((to - 6.0).abs() < 1e-9);
+        // It is left alone right after (the seek takes a moment to show).
+        assert_eq!(m.correction(401.0, RATE, 6.5), None);
+        // And checked again once it has settled.
+        assert!(m.correction(420.0, RATE, 9.0).is_some());
+    }
+
+    #[test]
+    fn the_drift_is_measured_round_the_loop() {
+        // Expected 0.01 s into the loop, the sink 0.01 s before the end of the last one: 20 ms off.
+        let mut m = MusicSync::new(0.0, 1.0, 10.0);
+        assert_eq!(m.correction(500.5, RATE, 9.99), None);
+        // The other way round: expected 9.99, sink 0.01.
+        let mut m = MusicSync::new(0.0, 1.0, 10.0);
+        assert_eq!(m.correction(499.5, RATE, 0.0), None);
+    }
+
+    #[test]
+    fn pitch_speeds_the_expected_position_and_a_pause_holds_it() {
+        let mut m = MusicSync::new(0.0, 1.0, 100.0);
+        // 2 s at normal speed, then double speed for 2 s of ticks: 2 + 4 = 6 s.
+        m.set_speed(100.0, RATE, 2.0);
+        assert!((m.expected(200.0, RATE) - 6.0).abs() < 1e-9);
+        // Paused at tick 200: still 6 s at tick 300; resumed at 300, 1 s of ticks at 2x later.
+        m.set_paused(200.0, RATE, true);
+        assert!((m.expected(300.0, RATE) - 6.0).abs() < 1e-9);
+        assert_eq!(m.correction(300.0, RATE, 99.0), None);
+        m.set_paused(300.0, RATE, false);
+        assert!((m.expected(350.0, RATE) - 8.0).abs() < 1e-9);
     }
 
     #[test]

@@ -244,6 +244,7 @@ pub fn run(
             crate::art::sync_room_art.after(follow_view),
             (set_alpha, sync_instances, overlay).chain().after(follow_view),
             crate::audio::play,
+            crate::audio::sync_music.after(crate::audio::play),
         ),
     )
     .add_systems(Last, limit_frames);
