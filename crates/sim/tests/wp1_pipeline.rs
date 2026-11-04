@@ -210,6 +210,18 @@ fn wp1_room_request_rules() {
 }
 
 #[test]
+fn wp1_rows_stop_before_the_room_change() {
+    // #450: the recorder samples the tick of a room change before the change.
+    let mut fx = room_request_fixture(RoomRequestRule::AbortTick, false);
+    let mut c = fx.ctx();
+    assert!(tick::run_rows(&mut c, InputFrame::EMPTY, &HOOKS).is_some());
+    assert_eq!(c.w.room, RoomId(0), "still the old room");
+    assert_eq!(c.w.pending, Some(RoomRequest::Goto(RoomId(1))));
+    tick::finish_tick(&mut c, &HOOKS).expect("finish");
+    assert_eq!((c.w.room, c.w.tick, c.w.room_tick), (RoomId(1), 1, 0));
+}
+
+#[test]
 fn wp1_last_room_request_wins() {
     let mut fx = Fx::new(builder().build().unwrap());
     let mut c = fx.ctx();
