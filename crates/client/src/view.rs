@@ -66,7 +66,10 @@ impl ViewRect {
 
     /// The view's centre in the room-centred, y-up world the sprites are placed in.
     fn centre(&self, room: Vec2) -> Vec2 {
-        Vec2::new(self.x + self.w / 2.0 - room.x / 2.0, room.y / 2.0 - (self.y + self.h / 2.0))
+        Vec2::new(
+            self.x + self.w / 2.0 - room.x / 2.0,
+            room.y / 2.0 - (self.y + self.h / 2.0),
+        )
     }
 }
 
@@ -627,10 +630,20 @@ mod tests {
         // The whole room: the world's origin.
         assert_eq!(ViewRect::whole(room).centre(room), Vec2::ZERO);
         // An 800 x 608 view at the room's left edge is 800 px left of the room's centre.
-        let v = ViewRect { x: 0.0, y: 0.0, w: 800.0, h: 608.0, angle: 0.0 };
+        let v = ViewRect {
+            x: 0.0,
+            y: 0.0,
+            w: 800.0,
+            h: 608.0,
+            angle: 0.0,
+        };
         assert_eq!(v.centre(room), Vec2::new(-800.0, 0.0));
         // Scrolled 100 px right and 50 px down: right and down in GM, so +x and -y here.
-        let v = ViewRect { x: 100.0, y: 50.0, ..v };
+        let v = ViewRect {
+            x: 100.0,
+            y: 50.0,
+            ..v
+        };
         assert_eq!(v.centre(room), Vec2::new(-700.0, -50.0));
     }
 }

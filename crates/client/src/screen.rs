@@ -188,7 +188,10 @@ fn apply(
     let clip = view.clips(room.0);
     let (projection, cam) = &mut *camera;
     cam.viewport = clip.then(|| {
-        let (w, h) = (((view.w * scale).round() as u32).max(1), ((view.h * scale).round() as u32).max(1));
+        let (w, h) = (
+            ((view.w * scale).round() as u32).max(1),
+            ((view.h * scale).round() as u32).max(1),
+        );
         bevy::camera::Viewport {
             physical_position: UVec2::new(size.0.saturating_sub(w) / 2, size.1.saturating_sub(h) / 2),
             physical_size: UVec2::new(w.min(size.0), h.min(size.1)),
