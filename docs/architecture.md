@@ -35,6 +35,8 @@ The sim never parses text and never touches files. `format` hands it a validated
 
 Room art (`art.rs`): when the sim's room changes the client rebuilds the room's background colour, background image and tile layers from `rooms/<id>.toml` and `rooms/<id>.tiles.toml` (how they are drawn: docs/format/v0.md, Tiles). `crates/client/demo-art.pkg` shows a tiled background and two tile layers.
 
+Screen (`screen.rs`, `ScreenPlugin`): the game is scaled by whole steps (never blurred) and centred; `layout` picks the biggest whole scale that fits the area the chosen ratio allows (a window smaller than the game shrinks it instead of cutting it off). The camera runs one world unit per `scale` physical pixels, with a half-pixel shift when the leftover is odd so game pixels sit on screen pixels. Outside the game the window shows a dimmed, blurred copy of the room's background image (or its colour), kept under a black panel the size of the room. There is no settings screen yet (#53): `--fullscreen`, `--ratio native|4:3|16:9|16:10|21:9|32:9`, `--window WIDTHxHEIGHT` (physical pixels) and the keys F11 (fullscreen), F10 (next ratio) and F9 (next windowed size: 800x608, 1280x720, 1600x1216, 1920x1080, 2560x1440, 3200x2432). The window title shows the size, scale and ratio. `demo-art.pkg` has a background to see the blur.
+
 ### The `iwbtg` CLI
 
 One binary for agents and CI:
