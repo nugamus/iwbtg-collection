@@ -46,6 +46,8 @@ pub struct Sim {
     pub(crate) options: SimOptions,
     /// The compiled scripts, lent to each `Ctx` as `ctx.scripts` (WP9).
     pub(crate) scripts: ScriptRuntime,
+    /// Between `step_rows` and `finish_step`.
+    pub(crate) rows_done: bool,
 }
 
 impl Sim {
@@ -79,6 +81,7 @@ impl Sim {
             world,
             options,
             scripts,
+            rows_done: false,
         })
     }
 
@@ -86,7 +89,15 @@ impl Sim {
     /// the client events of this tick only (cleared first). Reaching `GameDef::max_ticks` halts
     /// with `SimError::Overflow`; any error halts (plan 2.2).
     pub fn step(&mut self, input: InputFrame) -> StepResult {
-        let mut splits = Vec::new();
+        self.step_rows(input);
+        self.finish_step()
+    }
+
+    /// Rows 0-14 of [`Sim::step`]. Returns whether a room change is pending: the world then is
+    /// what the original's recorder samples on the tick of a room change (the old room's
+    /// instances with the kid already moved, #450). Call [`Sim::finish_step`] next; `step` does.
+    pub fn step_rows(&mut self, input: InputFrame) -> bool {
+        self.rows_done = false;
         if self.world.status == SimStatus::Running {
             self.world.output.clear();
             let mut ctx = Ctx {
@@ -99,11 +110,28 @@ impl Sim {
             if ctx.w.tick >= ctx.def.max_ticks {
                 ctx.halt(SimError::overflow(format!("max_ticks ({})", ctx.def.max_ticks)));
             } else {
-                match tick::run_tick(&mut ctx, input) {
-                    Ok(s) => splits = s,
-                    Err(e) => {
-                        ctx.halt(e);
-                    }
+                self.rows_done = tick::run_rows(&mut ctx, input, &tick::Hooks::ENGINE).is_some();
+            }
+        }
+        self.rows_done && self.world.pending.is_some()
+    }
+
+    /// Rows 15-16 of [`Sim::step`] (the room change, the sound tick, the tick count). Does nothing
+    /// after a halted [`Sim::step_rows`].
+    pub fn finish_step(&mut self) -> StepResult {
+        let mut splits = Vec::new();
+        if std::mem::take(&mut self.rows_done) {
+            let mut ctx = Ctx {
+                def: &self.def,
+                rules: &self.rules,
+                w: &mut self.world,
+                scripts: &self.scripts,
+                dll_mode: self.options.dll_mode,
+            };
+            match tick::finish_tick(&mut ctx, &tick::Hooks::ENGINE) {
+                Ok(s) => splits = s,
+                Err(e) => {
+                    ctx.halt(e);
                 }
             }
         }
