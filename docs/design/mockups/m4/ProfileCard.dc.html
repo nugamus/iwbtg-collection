@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Player card</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- The player card: small in the game select footer (like the old osu! user panel), expanded on results with what this run changed. Overall rank needs the performance system, which is still open. -->
+<div style="position: relative; width: {{W}}px; height: {{H}}px; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <div style="position: absolute; inset: 0; border-radius: 10px; overflow: hidden; transform: skewX(-11.31deg); background: linear-gradient(100deg, rgba(14,16,24,.9) 0%, rgba(14,16,24,.78) 60%, rgba(40,14,22,.78) 100%); box-shadow: 0 12px 36px rgba(0,0,0,.4)">
+    <span style="position: absolute; right: 18px; top: {{rankTop}}px; transform: skewX(11.31deg); font-family: 'Barlow Condensed', sans-serif; font-size: {{rankSize}}px; font-weight: 700; font-style: italic; line-height: 1; color: rgba(255,255,255,.07); white-space: nowrap">#{{overall}}</span>
+    <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(90deg, #ff3d55, rgba(255,61,85,0) 75%)"></div>
+  </div>
+
+  <div style="position: absolute; inset: 0; box-sizing: border-box; padding: {{pad}}; display: flex; flex-direction: column; gap: {{gap}}px">
+    <!-- identity row -->
+    <div style="display: flex; align-items: center; gap: 14px">
+      <div style="width: {{av}}px; height: {{av}}px; flex: none; border-radius: 10px; background: linear-gradient(135deg, hsl(352 62% 52%), hsl(330 55% 30%)); display: grid; place-items: center; font-family: 'Barlow Condensed', sans-serif; font-size: {{avFont}}px; font-weight: 700; box-shadow: 0 6px 16px rgba(0,0,0,.35)">N</div>
+      <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1">
+        <span style="display: flex; align-items: center; gap: 8px"><span style="font-size: {{nameSize}}px; font-weight: 700">nugamus</span><span style="width: 18px; height: 12px; border-radius: 2px; background: linear-gradient(90deg, transparent 5px, #fecc00 5px 8px, transparent 8px), linear-gradient(transparent 4px, #fecc00 4px 7px, transparent 7px), #006aa7"></span></span>
+        <span style="font-size: {{lineSize}}px; color: #c9cde0">Overall <span style="font-weight: 700; color: #ffffff">#{{overall}}</span><sc-if value="{{showRankDelta}}" hint-placeholder-val="{{ false }}"> <span style="font-weight: 700; color: #45d483">▲ 12</span></sc-if> · {{clearedLine}}</span>
+        <sc-if value="{{small}}" hint-placeholder-val="{{ true }}">
+          <span style="font-size: 13px; color: #c9cde0">Deaths <span style="font-weight: 600; color: #ffffff">48,213</span> · Play time <span style="font-weight: 600; color: #ffffff">212h</span></span>
+        </sc-if>
+      </div>
+      <sc-if value="{{showSpark}}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px">
+          <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Overall rank · 30 days</span>
+          <svg width="170" height="44" viewBox="0 0 170 44" role="img" aria-label="Overall rank rose from #1,388 to #1,192 over 30 days">
+            <path d="{{sparkArea}}" fill="rgba(69,212,131,.14)"></path>
+            <path d="{{sparkLine}}" stroke="#45d483" stroke-width="2" fill="none" stroke-linejoin="round"></path>
+            <circle cx="166" cy="{{sparkEndY}}" r="3.5" fill="#ffffff"></circle>
+          </svg>
+        </div>
+      </sc-if>
+    </div>
+
+    <!-- collection progress, the "level bar" -->
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: #c9cde0"><span>Collection</span><span><span style="color: #ffffff">13</span> / 20 games cleared</span></div>
+      <div style="position: relative; height: {{barH}}px; border-radius: 3px; background: rgba(255,255,255,.12); overflow: hidden">
+        <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 65%; background: linear-gradient(90deg, #ff3d55, #ffb3bd)"></div>
+        <sc-for list="{{ticks}}" as="k" hint-placeholder-count="19">
+          <span style="position: absolute; top: 0; bottom: 0; left: {{k}}%; width: 2px; background: rgba(8,9,14,.55)"></span>
+        </sc-for>
+      </div>
+    </div>
+
+    <sc-if value="{{expanded}}" hint-placeholder-val="{{ false }}">
+      <!-- what this run changed -->
+      <div style="display: grid; grid-template-columns: repeat({{cols}}, minmax(0, 1fr)); gap: 16px">
+        <sc-for list="{{cells}}" as="c" hint-placeholder-count="4">
+          <div style="display: flex; flex-direction: column; gap: 2px">
+            <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">{{c.k}}</span>
+            <span style="font-size: {{cellSize}}px; font-weight: 600; white-space: nowrap">{{c.v}}</span>
+            <span style="font-size: 13px; font-weight: 600; color: {{c.dColor}}; white-space: nowrap">{{c.d}}</span>
+          </div>
+        </sc-for>
+      </div>
+      <sc-if value="{{hasBadges}}" hint-placeholder-val="{{ true }}">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap">
+          <sc-for list="{{badges}}" as="b" hint-placeholder-count="2">
+            <span style="height: 30px; padding: 0 14px 0 10px; border-radius: 10px; background: {{b.bg}}; display: flex; align-items: center; transform: skewX(-11.31deg)">
+              <span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: {{b.ink}}">
+                <img src="/_blob/4c631e9e3893f215e44417d2cae2b519" alt="" width="14" height="16" style="image-rendering: pixelated">{{b.label}}
+              </span>
+            </span>
+          </sc-for>
+        </div>
+      </sc-if>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"variant":{"editor":"enum","options":["footer","results","results-compact"],"default":"footer"},"scenario":{"editor":"enum","options":["pb","slower"],"default":"pb"},"$preview":{"width":420,"height":108}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const v = this.props.variant ?? 'footer';
+    const pb = (this.props.scenario ?? 'pb') === 'pb';
+    const footer = v === 'footer', full = v === 'results';
+    // rank history: smaller is better, so the line climbs as rank improves
+    const hist = [1388, 1381, 1379, 1352, 1350, 1349, 1331, 1318, 1320, 1297, 1290, 1266, 1262, 1258, 1240, 1236, 1231, 1220, 1219, 1212, 1204, pb ? 1192 : 1204];
+    const lo = Math.min(...hist), hi = Math.max(...hist);
+    const pts = hist.map((r, i) => [4 + i * (162 / (hist.length - 1)), 6 + (r - lo) / (hi - lo) * 32]);
+    const line = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+    const ticks = []; for (let i = 1; i < 20; i++) ticks.push(i * 5);
+    const cells = pb ? [
+      { k: 'Overall rank', v: '#1,192', d: '▲ 12 from #1,204', dColor: '#45d483' },
+      { k: 'Total deaths', v: '48,213', d: '+1,284 this run', dColor: '#c9cde0' },
+      { k: 'Play time', v: '212h 14m', d: '+38m 12s', dColor: '#c9cde0' },
+      { k: 'Kaenbyou', v: '4 / 5 entries', d: 'cleared', dColor: '#c9cde0' },
+    ] : [
+      { k: 'Overall rank', v: '#1,204', d: 'unchanged', dColor: '#a2a8bc' },
+      { k: 'Total deaths', v: '49,501', d: '+1,288 this run', dColor: '#c9cde0' },
+      { k: 'Play time', v: '212h 54m', d: '+39m 58s', dColor: '#c9cde0' },
+      { k: 'Kaenbyou', v: '4 / 5 entries', d: 'cleared', dColor: '#c9cde0' },
+    ];
+    const badges = [
+      { label: 'Sub-40:00 · Kaenbyou Very Hard', bg: 'rgba(255,201,60,.2)', ink: '#ffd977' },
+      { label: 'Fewest deaths on stage 5 yet', bg: 'rgba(255,255,255,.1)', ink: '#e3e5ee' },
+    ];
+    return {
+      W: footer ? 420 : full ? 620 : 330, H: footer ? 108 : full ? 280 : 172,
+      pad: footer ? '12px 24px 12px 18px' : full ? '18px 26px 18px 22px' : '14px 20px 14px 18px',
+      gap: footer ? 8 : full ? 14 : 10,
+      av: footer ? 52 : full ? 72 : 44, avFont: footer ? 26 : full ? 36 : 22,
+      nameSize: footer ? 19 : full ? 24 : 17, lineSize: footer ? 13 : full ? 15 : 13,
+      rankSize: footer ? 64 : full ? 120 : 64, rankTop: footer ? 8 : full ? 4 : 6,
+      overall: pb && !footer ? '1,192' : '1,204', showRankDelta: pb && !footer,
+      clearedLine: footer ? '13 cleared' : '13 games cleared',
+      small: footer, expanded: !footer, cols: full ? 4 : 2,
+      cells: full ? cells : cells.slice(0, 2), cellSize: full ? 20 : 16,
+      showSpark: full, sparkLine: line, sparkArea: line + ' L166 44 L4 44 Z', sparkEndY: pts[pts.length - 1][1].toFixed(1),
+      ticks, barH: footer ? 5 : 6,
+      hasBadges: full && pb, badges,
+    };
+  }
+}
+</script>
+</body>
+</html>

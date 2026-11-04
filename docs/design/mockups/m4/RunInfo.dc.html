@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Run info panel</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- Right panel: deliberately sparse. Mods row only when mods are on or the run is unranked; nothing there means ranked. -->
+<div style="width: {{width}}px; display: flex; flex-direction: column; gap: {{gapMain}}px; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <sc-if value="{{paused}}" hint-placeholder-val="{{ false }}">
+    <div style="display: flex; align-items: center; gap: 8px">
+      <span style="width: 8px; height: 8px; border-radius: 4px; background: #ff3d55; box-shadow: 0 0 0 4px rgba(255,61,85,.25)"></span>
+      <span style="font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #ffb3bd">Paused · timer running</span>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{hasModRow}}" hint-placeholder-val="{{ false }}">
+    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap">
+      <sc-if value="{{unranked}}" hint-placeholder-val="{{ false }}">
+        <div style="height: 24px; padding: 0 12px; border-radius: 10px; background: #ffc46b; display: flex; align-items: center; transform: skewX(-11.31deg)">
+          <span style="transform: skewX(11.31deg); font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #2a1d05">Unranked</span>
+        </div>
+      </sc-if>
+      <sc-for list="{{mods}}" as="m" hint-placeholder-count="1">
+        <div title="{{m.name}}" style="height: 24px; min-width: 38px; padding: 0 8px; box-sizing: border-box; border-radius: 10px; background: rgba(255,255,255,.16); display: flex; align-items: center; justify-content: center; transform: skewX(-11.31deg)">
+          <span style="transform: skewX(11.31deg); font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 700; letter-spacing: .04em">{{m.code}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <div style="display: flex; align-items: baseline; line-height: .9; font-family: 'Barlow Condensed', sans-serif; font-weight: 600">
+    <span style="font-size: {{timerSize}}px; letter-spacing: -.01em">{{timeMain}}</span>
+    <span style="font-size: {{csSize}}px; color: #c9cde0">{{timeCs}}</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: {{statCols}}; gap: {{statGap}}; max-width: {{width}}px">
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Deaths</span>
+      <span style="font-size: {{statSize}}px; font-weight: 600">1,284</span>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Stage</span>
+      <span style="font-size: {{statSize}}px; font-weight: 600">5<span style="color: #a2a8bc"> / 7</span></span>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">This stage</span>
+      <span style="font-size: {{statSize}}px; font-weight: 600">212</span>
+    </div>
+  </div>
+
+  <sc-if value="{{showInput}}" hint-placeholder-val="{{ true }}">
+    <div style="display: flex; flex-direction: column; gap: 14px; padding-top: 10px" aria-label="Input display: Right and Jump held">
+      <div style="display: flex; gap: 18px">
+        <sc-for list="{{arrows}}" as="k" hint-placeholder-count="4">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; width: 26px">
+            <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true" style="transform: rotate({{k.rot}}deg); filter: {{k.glow}}"><path d="M13 4 L22 14 H16.5 V22 H9.5 V14 H4 Z" fill="{{k.color}}"></path></svg>
+            <span style="width: 18px; height: 2px; border-radius: 1px; background: {{k.bar}}"></span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 10px 14px">
+        <sc-for list="{{buttons}}" as="k" hint-placeholder-count="3">
+          <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px">
+            <span style="font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: {{k.color}}; text-shadow: {{k.shadow}}">{{k.label}}</span>
+            <span style="width: 18px; height: 2px; border-radius: 1px; background: {{k.bar}}"></span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"mode":{"editor":"enum","options":["ranked","mods","unranked"],"default":"ranked"},"layout":{"editor":"enum","options":["full","compact","stack"],"default":"full"},"paused":{"editor":"boolean","default":false},"time":{"editor":"text","default":"42:10.34"},"width":{"editor":"int","min":100,"max":360,"default":220},"$preview":{"width":240,"height":420}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const mode = this.props.mode ?? 'ranked';
+    const layout = this.props.layout ?? 'full';
+    const stack = layout === 'stack', compact = layout === 'compact';
+    const paused = this.props.paused === true || this.props.paused === 'true';
+    const time = String(this.props.time ?? '42:10.34');
+    const dot = time.lastIndexOf('.');
+    const W = Number(this.props.width ?? 220);
+    const held = { right: true, jump: true };
+    const on = (k) => !!held[k];
+    const arrows = [['left', -90], ['up', 0], ['down', 180], ['right', 90]].map(([k, rot]) => ({
+      rot, color: on(k) ? '#ffffff' : 'rgba(255,255,255,.22)', glow: on(k) ? 'drop-shadow(0 0 6px rgba(255,255,255,.55))' : 'none', bar: on(k) ? '#ff3d55' : 'transparent',
+    }));
+    const buttons = [['Jump', 'jump'], ['Shoot', 'shoot'], ['Restart', 'restart']].map(([label, k]) => ({
+      label, color: on(k) ? '#ffffff' : 'rgba(255,255,255,.28)', shadow: on(k) ? '0 0 8px rgba(255,255,255,.5)' : 'none', bar: on(k) ? '#ff3d55' : 'transparent',
+    }));
+    const mods = mode === 'mods' ? [{ code: 'SD', name: 'Sudden Death' }] : mode === 'unranked' ? [{ code: 'SL', name: 'Slow motion 75%' }] : [];
+    return {
+      width: W, paused,
+      unranked: mode === 'unranked', mods, hasModRow: mode !== 'ranked',
+      timeMain: dot > 0 ? time.slice(0, dot) : time, timeCs: dot > 0 ? time.slice(dot) : '',
+      timerSize: stack ? 30 : compact ? 44 : 58, csSize: stack ? 19 : compact ? 28 : 36,
+      statCols: stack ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0, 1fr))', statGap: stack ? '6px' : '14px 16px', statSize: stack ? 16 : compact ? 20 : 24,
+      gapMain: stack ? 10 : 18,
+      showInput: !stack, arrows, buttons,
+    };
+  }
+}
+</script>
+</body>
+</html>

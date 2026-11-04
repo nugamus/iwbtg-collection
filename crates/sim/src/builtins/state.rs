@@ -50,6 +50,10 @@ pub enum BuiltinState {
     GravityFlip {
         /// Sets `global.grav` (up) or clears it (down).
         up: bool,
+        /// `yflag_with_view_rotation` (kaenbyou): rotate view 0, then flip every kid.
+        rotate: bool,
+        /// `rotate`: this activation has started (the original's `played`).
+        played: bool,
     },
     /// `bullet_blocker` (WP6b).
     BulletBlocker {

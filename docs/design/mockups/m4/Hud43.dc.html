@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>In-run HUD 4:3</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;family=Pixelify+Sans:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- 1024x768: the game shrinks to 0.8x (640x486) so both side panels keep their room. -->
+<div style="position: relative; width: 1024px; height: 768px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8">
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1024px" h="768px" hue="250" blur="{{blur}}" dim="0.45" tag="bottom-left" label="I wanna be the Kaenbyou" hint-size="1024px,768px"></dc-import></div>
+  <div style="position: absolute; left: 204px; top: 141px; width: 640px; height: 487px; overflow: hidden; box-shadow: 0 0 40px rgba(0,0,0,.6)">
+    <div style="width: 800px; height: 608px; transform: scale(.8); transform-origin: 0 0"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div>
+    <sc-if value="{{paused}}" hint-placeholder-val="{{ false }}">
+      <div style="position: absolute; inset: 0; background: rgba(0,0,0,.5)"></div>
+    </sc-if>
+  </div>
+  <div style="position: absolute; left: 0; top: 200px"><dc-import name="Leaderboard" scenario="p25" density="noflag" width="192" rows="7" hint-size="192px,360px"></dc-import></div>
+  <div style="position: absolute; left: 860px; top: 190px"><dc-import name="RunInfo" layout="compact" paused="{{paused}}" time="38:02.56" width="152" hint-size="152px,380px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"blur":{"editor":"range","min":0,"max":100,"step":1,"unit":"%","default":60},"paused":{"editor":"boolean","default":false},"$preview":{"width":1024,"height":768}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { blur: this.props.blur ?? 60, paused: this.props.paused === true || this.props.paused === 'true' };
+  }
+}
+</script>
+</body>
+</html>

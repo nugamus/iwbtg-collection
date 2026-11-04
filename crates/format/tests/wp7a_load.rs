@@ -979,14 +979,14 @@ fn wp6b3_params_are_checked() {
 }
 
 #[test]
-fn a_gravity_flip_with_view_rotation_is_refused_at_load() {
-    let errs = tier2_errors(
-        r#"{ kind = "gravity_flip", x = 0, y = 0, direction = "up", transition = "yflag_with_view_rotation" }"#,
+fn a_gravity_flip_with_view_rotation_loads() {
+    let files = tier2_package(
+        r#"  { kind = "gravity_flip", x = 0, y = 0, direction = "up", transition = "yflag_with_view_rotation" },
+"#,
+        |_| {},
     );
-    assert!(
-        errs.iter().any(|e| e.contains("yflag_with_view_rotation")),
-        "{errs:?}"
-    );
+    let r = load_report(&files, STRICT);
+    assert!(r.ok(), "{}", render(&r));
 }
 
 #[test]
