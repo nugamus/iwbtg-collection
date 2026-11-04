@@ -33,9 +33,51 @@ struct Textures(Vec<Option<(Handle<Image>, UVec2)>>);
 #[derive(Resource, Default)]
 struct Drawn(BTreeMap<InstId, Entity>);
 
-/// The room size in pixels.
+/// The size in pixels of the room the sim is in (kept in step with the sim's room).
 #[derive(Resource)]
 pub(crate) struct RoomSize(pub(crate) Vec2);
+
+/// What the screen shows of the room: view 0's rectangle in room pixels (GM coordinates, y down)
+/// and its angle in degrees, or the whole room when the room has no enabled, visible view 0.
+/// `w` and `h` are the size the game is scaled to fit in the window.
+#[derive(Resource, Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ViewRect {
+    pub(crate) x: f32,
+    pub(crate) y: f32,
+    pub(crate) w: f32,
+    pub(crate) h: f32,
+    pub(crate) angle: f32,
+}
+
+impl ViewRect {
+    /// The whole room.
+    pub(crate) fn whole(room: Vec2) -> ViewRect {
+        ViewRect {
+            x: 0.0,
+            y: 0.0,
+            w: room.x,
+            h: room.y,
+            angle: 0.0,
+        }
+    }
+
+    /// Whether the view shows less than the room or is turned, so the camera must be clipped.
+    pub(crate) fn clips(&self, room: Vec2) -> bool {
+        (self.w - room.x).abs() > 0.5 || (self.h - room.y).abs() > 0.5 || self.angle.abs() > 1e-3
+    }
+
+    /// The view's centre in the room-centred, y-up world the sprites are placed in.
+    fn centre(&self, room: Vec2) -> Vec2 {
+        Vec2::new(
+            self.x + self.w / 2.0 - room.x / 2.0,
+            room.y / 2.0 - (self.y + self.h / 2.0),
+        )
+    }
+}
+
+/// Marks the camera that draws the game.
+#[derive(Component)]
+pub(crate) struct GameCamera;
 
 /// Decoded sprite strips, waiting for the Startup system to upload them.
 #[derive(Resource)]
@@ -121,7 +163,7 @@ struct Stats {
 
 /// The overlay text entity.
 #[derive(Component)]
-struct Overlay;
+pub(crate) struct Overlay;
 
 /// Opens the window and runs until it closes.
 pub fn run(
@@ -164,6 +206,7 @@ pub fn run(
     .add_plugins(crate::screen::ScreenPlugin)
     .insert_resource(ClearColor(Color::BLACK))
     .insert_resource(RoomSize(Vec2::new(width, height)))
+    .insert_resource(ViewRect::whole(Vec2::new(width, height)))
     .insert_resource(PendingImages(images))
     .insert_resource(crate::art::ArtFiles(pkg.files.clone()))
     .init_resource::<crate::art::ArtImages>()
@@ -194,16 +237,18 @@ pub fn run(
         RunFixedMainLoop,
         collect_input.in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
     )
-    .add_systems(FixedUpdate, tick)
+    .add_systems(FixedUpdate, (tick, follow_room_speed).chain())
     .add_systems(
         Update,
         (
-            crate::art::sync_room_art,
-            (set_alpha, sync_instances, overlay).chain(),
+            follow_view,
+            // Shake adds its offset on top of the view centre `follow_view` just set.
+            crate::audio::apply_shake.after(follow_view),
+            crate::art::sync_room_art.after(follow_view),
+            (set_alpha, sync_instances, overlay).chain().after(follow_view),
             hud::show_sign,
             hud::show_countdown,
             crate::audio::play,
-            crate::audio::apply_shake,
         ),
     )
     .add_systems(Last, limit_frames);
@@ -235,6 +280,7 @@ fn setup(
     ));
     commands.spawn((
         Camera2d,
+        GameCamera,
         Projection::from(OrthographicProjection {
             scaling_mode: ScalingMode::AutoMin {
                 min_width: room.0.x,
@@ -264,6 +310,54 @@ fn setup(
         })
         .collect();
     commands.insert_resource(Textures(textures));
+}
+
+/// Points the camera at view 0 of the sim's room (the runner's view follow already moved it this
+/// tick): the camera centres on the view and turns with its angle, and the overlay stays at the
+/// view's top-left corner. Rooms without an enabled, visible view 0 show the whole room. Also keeps
+/// `RoomSize` equal to the current room, so rooms of different sizes place their sprites right.
+///
+/// OPEN: `--interpolate` does not smooth the view between ticks (the sim has no previous view);
+/// the direction of `view_angle` is taken as counter-clockwise on screen, as the room's angle
+/// column in the gravity-flip trace only logs the value.
+pub(crate) fn follow_view(
+    game: NonSend<Game>,
+    mut room: ResMut<RoomSize>,
+    mut rect: ResMut<ViewRect>,
+    mut camera: Single<&mut Transform, (With<GameCamera>, Without<Overlay>)>,
+    mut overlay: Single<&mut Transform, (With<Overlay>, Without<GameCamera>)>,
+) {
+    let world = game.sim.world();
+    let Some(def) = game.sim.def().room(world.room) else {
+        return;
+    };
+    let size = Vec2::new(def.width as f32, def.height as f32);
+    if room.0 != size {
+        room.0 = size;
+    }
+    let next = match world.views.first() {
+        Some(v) if v.enabled && v.visible && v.w.get() >= 1.0 && v.h.get() >= 1.0 => ViewRect {
+            x: v.x.get() as f32,
+            y: v.y.get() as f32,
+            w: v.w.get() as f32,
+            h: v.h.get() as f32,
+            angle: v.angle.get() as f32,
+        },
+        _ => ViewRect::whole(size),
+    };
+    if *rect != next {
+        *rect = next;
+    }
+    let turn = Quat::from_rotation_z(next.angle.to_radians());
+    let centre = next.centre(size);
+    camera.translation.x = centre.x;
+    camera.translation.y = centre.y;
+    camera.rotation = turn;
+    // The overlay sits 4 px inside the view's top-left corner and stays upright on screen.
+    let corner = turn * Vec3::new(-next.w / 2.0 + 4.0, next.h / 2.0 - 4.0, 0.0);
+    overlay.translation.x = centre.x + corner.x;
+    overlay.translation.y = centre.y + corner.y;
+    overlay.rotation = turn;
 }
 
 /// Remembers how far the fixed clock is into the next tick, for `--interpolate`.
@@ -317,10 +411,36 @@ fn tick(
     }
 }
 
+/// The ticks per second the sim's current room speed asks for: `room_speed` as the room file or
+/// the game set it, at least 1 (a game that sets 0 or less would stop the clock) and at most 1000.
+fn room_hz(room_speed: f64) -> f64 {
+    if room_speed.is_finite() {
+        room_speed.clamp(1.0, 1000.0)
+    } else {
+        1.0
+    }
+}
+
+/// Sets the fixed clock to the rate `room_speed` asks for, when it is not already that.
+fn retune(fixed: &mut Time<Fixed>, room_speed: f64) {
+    let hz = room_hz(room_speed);
+    if (fixed.timestep().as_secs_f64().recip() - hz).abs() > 1e-6 {
+        fixed.set_timestep_hz(hz);
+    }
+}
+
+/// Retunes the fixed clock when the sim's `room_speed` changes (a room's file speed on entry, or a
+/// game setting it), so the game ticks at the rate it asks for. Runs after the sim's tick, so the
+/// next tick already uses the new rate.
+fn follow_room_speed(game: NonSend<Game>, mut fixed: ResMut<Time<Fixed>>) {
+    retune(&mut fixed, game.sim.world().room_speed.get());
+}
+
 /// F3 shows or hides the overlay; once a second it recounts ticks and frames per second.
 fn overlay(
     game: NonSend<Game>,
     keys: Res<ButtonInput<KeyCode>>,
+    fixed: Res<Time<Fixed>>,
     mut stats: ResMut<Stats>,
     mut text: Single<(&mut Text2d, &mut Visibility), With<Overlay>>,
 ) {
@@ -367,7 +487,7 @@ fn overlay(
 room {room}
 {kid}",
         stats.ticks_per_second,
-        game.sim.def().tick_rate,
+        fixed.timestep().as_secs_f64().recip().round(),
         stats.frames_per_second,
         world.tick,
     );
@@ -550,5 +670,55 @@ mod tests {
         assert_eq!(two(-0.000_001), "0.00");
         assert_eq!(two(-1.5), "-1.50");
         assert_eq!(two(567.4), "567.40");
+    }
+
+    #[test]
+    fn the_clock_follows_room_speed_within_sane_bounds() {
+        assert_eq!(room_hz(50.0), 50.0);
+        assert_eq!(room_hz(25.0), 25.0);
+        // A game that sets 0 or a negative speed must not stop or reverse the clock.
+        assert_eq!(room_hz(0.0), 1.0);
+        assert_eq!(room_hz(-30.0), 1.0);
+        assert_eq!(room_hz(1e9), 1000.0);
+        assert_eq!(room_hz(f64::NAN), 1.0);
+    }
+
+    #[test]
+    fn the_fixed_clock_is_retuned_when_room_speed_changes_and_left_alone_otherwise() {
+        let mut fixed = Time::<Fixed>::from_hz(50.0);
+        retune(&mut fixed, 50.0);
+        assert_eq!(fixed.timestep(), Duration::from_millis(20));
+        // A room at 25 steps per second: 40 ms per tick.
+        retune(&mut fixed, 25.0);
+        assert_eq!(fixed.timestep(), Duration::from_millis(40));
+        // Back to the game's rate on the next room.
+        retune(&mut fixed, 50.0);
+        assert_eq!(fixed.timestep(), Duration::from_millis(20));
+        // A game that sets a silly speed gets the clamped one.
+        retune(&mut fixed, 0.0);
+        assert_eq!(fixed.timestep(), Duration::from_secs(1));
+    }
+
+    #[test]
+    fn a_view_centres_the_camera_in_the_room_centred_world() {
+        let room = Vec2::new(2400.0, 608.0);
+        // The whole room: the world's origin.
+        assert_eq!(ViewRect::whole(room).centre(room), Vec2::ZERO);
+        // An 800 x 608 view at the room's left edge is 800 px left of the room's centre.
+        let v = ViewRect {
+            x: 0.0,
+            y: 0.0,
+            w: 800.0,
+            h: 608.0,
+            angle: 0.0,
+        };
+        assert_eq!(v.centre(room), Vec2::new(-800.0, 0.0));
+        // Scrolled 100 px right and 50 px down: right and down in GM, so +x and -y here.
+        let v = ViewRect {
+            x: 100.0,
+            y: 50.0,
+            ..v
+        };
+        assert_eq!(v.centre(room), Vec2::new(-700.0, -50.0));
     }
 }
