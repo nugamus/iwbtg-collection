@@ -19,6 +19,7 @@ use crate::diag::Diagnostic;
 use crate::files::{CONTENT_DIRS, PackageFiles, TESTS_DIR, check_path};
 use crate::ids::{EngineRef, KindRef, check_id, check_semver};
 use crate::number::Number;
+use crate::sprites::MAX_IMAGE_SIDE;
 
 /// Path of the manifest inside a package.
 pub const MANIFEST_PATH: &str = "game.toml";
@@ -121,6 +122,10 @@ pub struct Manifest {
     #[serde(default)]
     #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, MusicSettings>"))]
     pub music: BTreeMap<Spanned<String>, MusicSettings>,
+    /// Art for the background system and the game select list; absent: the first ranked
+    /// room's background ([`crate::key_art`]).
+    #[serde(default)]
+    pub key_art: Option<KeyArtSection>,
 }
 
 /// The original GameMaker runner. One type with the sim, which selects rules by it
@@ -686,6 +691,21 @@ pub struct MusicSettings {
     pub volume: Option<Spanned<Number>>,
 }
 
+/// The `[key_art]` table (docs/format/v0.md, Key art).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct KeyArtSection {
+    /// The game's key art: a PNG inside the package, 1920 x 1080 recommended.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub image: Option<Spanned<String>>,
+    /// Per-map overrides, keyed by map id: a PNG for that map instead of `image`.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, String>"))]
+    pub maps: BTreeMap<Spanned<String>, Spanned<String>>,
+}
+
 /// Only the `format` key, read before the full parse so a newer package gets a clear
 /// "update the client" error instead of an unknown-key error.
 #[derive(Deserialize)]
@@ -799,6 +819,7 @@ impl Manifest {
             v.id(key);
         }
         self.validate_third_party(&mut v);
+        self.validate_key_art(&mut v);
         for (track, settings) in &self.music {
             if v.id(track) {
                 let file = format!("music/{}.ogg", track.get_ref());
@@ -965,6 +986,20 @@ impl Manifest {
         }
     }
 
+    fn validate_key_art(&self, v: &mut Validator<'_>) {
+        let Some(section) = &self.key_art else {
+            return;
+        };
+        if let Some(image) = &section.image {
+            v.key_art_image(image, "key_art image");
+        }
+        for (map, image) in &section.maps {
+            // TODO(OPEN: maps, #31): check `map` against the package's maps once they exist.
+            v.id(map);
+            v.key_art_image(image, &format!("key_art map `{}`", map.get_ref()));
+        }
+    }
+
     fn validate_third_party(&self, v: &mut Validator<'_>) {
         let mut paths = BTreeSet::new();
         for entry in &self.third_party {
@@ -1042,6 +1077,42 @@ impl Validator<'_> {
                 self.error(path.span(), format!("{what} `{text}`: {e}"));
                 false
             }
+        }
+    }
+
+    /// Checks a key art path and its image (docs/format/v0.md, Key art): a shipped PNG that
+    /// decodes and fits the image limit; a warning when it is not 16:9 or under 1280 x 720.
+    fn key_art_image(&mut self, path: &Spanned<String>, what: &str) {
+        if !self.path(path, what) {
+            return;
+        }
+        let text = path.get_ref();
+        if !text.ends_with(".png") {
+            self.error(path.span(), format!("{what} `{text}` must be a `.png` file"));
+            return;
+        }
+        let Some(bytes) = self.files.get(text) else {
+            self.error(path.span(), format!("{what} `{text}` is not in the package"));
+            return;
+        };
+        match crate::key_art::image_size(bytes) {
+            Err(e) => self.error(path.span(), format!("{what} `{text}`: {e}")),
+            Ok((w, h)) if w > MAX_IMAGE_SIDE || h > MAX_IMAGE_SIDE => self.error(
+                path.span(),
+                format!("{what} `{text}` is {w} x {h}; images are at most {MAX_IMAGE_SIDE} px on a side"),
+            ),
+            Ok((w, h)) if !crate::key_art::is_recommended_size(w, h) => {
+                self.out.push(Diagnostic::warning_at(
+                    MANIFEST_PATH,
+                    self.text,
+                    path.span().start,
+                    format!(
+                        "{what} `{text}` is {w} x {h}; key art should be 16:9 and at least 1280 x 720 \
+                         (1920 x 1080 recommended)"
+                    ),
+                ));
+            }
+            Ok(_) => {}
         }
     }
 
