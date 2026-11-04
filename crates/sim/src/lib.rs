@@ -60,4 +60,4 @@ pub use world::{Ctx, SimStatus, World};
 
 /// Changes whenever a sim change could alter any outcome, including any Rhai upgrade
 /// (architecture "Versions").
-pub const SIM_VERSION: u32 = 0;
+pub const SIM_VERSION: u32 = 1;
