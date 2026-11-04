@@ -14,6 +14,8 @@ iwbtg-format = { workspace = true, features = ["schema"] }
 # no 3D, audio or gamepad yet (those pull system libraries).
 clap.workspace = true
 png.workspace = true
+svgtypes.workspace = true
+tiny-skia.workspace = true
 thiserror.workspace = true
 toml.workspace = true
 bevy = { version = "0.20.1", default-features = false, features = [
