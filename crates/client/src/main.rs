@@ -63,19 +63,19 @@ struct Args {
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> ExitCode {
     let args = Args::parse();
-    if args.ui_gallery {
-        ui::gallery::run(args.screenshot, args.reduced_motion);
-        return ExitCode::SUCCESS;
-    }
-    let Some(package) = args.package else {
-        return ExitCode::FAILURE;
-    };
     let ratio = match screen::parse_ratio(&args.ratio) {
         Ok(r) => r,
         Err(e) => {
             eprintln!("--ratio {}: {e}", args.ratio);
             return ExitCode::FAILURE;
         }
+    };
+    if args.ui_gallery {
+        ui::gallery::run(args.screenshot, args.reduced_motion, args.window, ratio);
+        return ExitCode::SUCCESS;
+    }
+    let Some(package) = args.package else {
+        return ExitCode::FAILURE;
     };
     screen::configure(screen::Options {
         fullscreen: args.fullscreen,
@@ -101,5 +101,5 @@ fn main() -> ExitCode {
 /// gallery (docs/dev-setup.md, UI gallery in a browser).
 #[cfg(target_arch = "wasm32")]
 fn main() {
-    ui::gallery::run(None, false);
+    ui::gallery::run(None, false, None, None);
 }

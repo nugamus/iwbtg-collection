@@ -24,12 +24,26 @@ use super::widgets::{
 const DESIGN: Vec2 = Vec2::new(1920.0, 1080.0);
 
 /// Opens the gallery window and runs until it closes.
-pub fn run(screenshot: Option<std::path::PathBuf>, reduced_motion: bool) {
+///
+/// `window` (`--window`) sets the size in physical pixels; `ratio` (`--ratio`) without a window
+/// makes a 1600-wide window of that ratio. Either one makes the window exactly that many pixels
+/// whatever the monitor's scaling, so `--screenshot` images come out at the size asked for.
+pub fn run(
+    screenshot: Option<std::path::PathBuf>,
+    reduced_motion: bool,
+    window: Option<(u32, u32)>,
+    ratio: Option<(u32, u32)>,
+) {
+    let size = window.or_else(|| ratio.map(|(w, h)| (1600, 1600 * h / w)));
+    let resolution = match size {
+        Some((w, h)) => bevy::window::WindowResolution::new(w, h).with_scale_factor_override(1.0),
+        None => (1600, 900).into(),
+    };
     let mut app = App::new();
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
         primary_window: Some(Window {
             title: "IWBTG Collection: UI gallery".to_string(),
-            resolution: (1600, 900).into(),
+            resolution,
             #[cfg(target_arch = "wasm32")]
             fit_canvas_to_parent: true,
             ..default()
