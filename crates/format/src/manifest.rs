@@ -122,10 +122,77 @@ pub struct Manifest {
     #[serde(default)]
     #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, MusicSettings>"))]
     pub music: BTreeMap<Spanned<String>, MusicSettings>,
+    /// Maps: each built-in difficulty, category and version, with its own timing and board.
+    /// Absent: one map, [`DEFAULT_MAP_ID`], timed by `[timing]`.
+    #[serde(default)]
+    pub maps: Vec<MapEntry>,
     /// Art for the background system and the game select list; absent: the first ranked
     /// room's background ([`crate::key_art`]).
     #[serde(default)]
     pub key_art: Option<KeyArtSection>,
+}
+
+/// Id of the one map of a package without `[[maps]]`.
+pub const DEFAULT_MAP_ID: &str = "main";
+
+/// One `[[maps]]` entry (docs/format/v0.md, Maps). Timing keys it leaves out come from
+/// `[timing]`.
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct MapEntry {
+    /// Map id, unique within the package. Stable forever; leaderboards key on it.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub id: Spanned<String>,
+    /// Display name in game select.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub name: Spanned<String>,
+    /// The original's built-in difficulty this map plays, as the game names it ("Medium").
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub difficulty: Option<Spanned<String>>,
+    /// The run category ("Any%", "100%", "True Ending").
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub category: Option<Spanned<String>>,
+    /// The original's version this map plays; default `source_version`.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub version: Option<Spanned<String>>,
+    /// The run starts at this trigger; default `[timing].start`.
+    #[serde(default)]
+    pub start: Option<TriggerRef>,
+    /// The run ends at this trigger; default `[timing].end`.
+    #[serde(default)]
+    pub end: Option<TriggerRef>,
+    /// Stages in order; default `[timing].stages`. `[]` is a single-stage map.
+    #[serde(default)]
+    pub stages: Option<Vec<Stage>>,
+}
+
+fn opt_str(s: &Option<Spanned<String>>) -> Option<&str> {
+    s.as_ref().map(|v| v.get_ref().as_str())
+}
+
+/// A map with its timing filled in from `[timing]` ([`Manifest::map_list`]).
+#[derive(Debug, Clone, Copy)]
+pub struct MapView<'a> {
+    /// Map id.
+    pub id: &'a str,
+    /// Display name.
+    pub name: &'a str,
+    /// Built-in difficulty, if any.
+    pub difficulty: Option<&'a str>,
+    /// Category, if any.
+    pub category: Option<&'a str>,
+    /// The original's version, if known.
+    pub version: Option<&'a str>,
+    /// Start trigger.
+    pub start: &'a TriggerRef,
+    /// End trigger.
+    pub end: &'a TriggerRef,
+    /// Stages in order.
+    pub stages: &'a [Stage],
 }
 
 /// The original GameMaker runner. One type with the sim, which selects rules by it
@@ -749,6 +816,38 @@ impl Manifest {
             .map_or(DEFAULT_TICK_RATE, |t| *t.get_ref())
     }
 
+    /// Every map in order, with its timing filled in from `[timing]`. A package without
+    /// `[[maps]]` has one map, [`DEFAULT_MAP_ID`], named after the game.
+    pub fn map_list(&self) -> Vec<MapView<'_>> {
+        let timing = self.timing.get_ref();
+        let source_version = self.source_version.as_ref().map(|v| v.get_ref().as_str());
+        if self.maps.is_empty() {
+            return vec![MapView {
+                id: DEFAULT_MAP_ID,
+                name: self.title.get_ref(),
+                difficulty: None,
+                category: None,
+                version: source_version,
+                start: &timing.start,
+                end: &timing.end,
+                stages: &timing.stages,
+            }];
+        }
+        self.maps
+            .iter()
+            .map(|m| MapView {
+                id: m.id.get_ref(),
+                name: m.name.get_ref(),
+                difficulty: opt_str(&m.difficulty),
+                category: opt_str(&m.category),
+                version: opt_str(&m.version).or(source_version),
+                start: m.start.as_ref().unwrap_or(&timing.start),
+                end: m.end.as_ref().unwrap_or(&timing.end),
+                stages: m.stages.as_deref().unwrap_or(&timing.stages),
+            })
+            .collect()
+    }
+
     /// Script budget units per tick.
     pub fn ops_per_tick(&self) -> u64 {
         self.budget
@@ -813,6 +912,7 @@ impl Manifest {
             );
         }
         self.validate_timing(&mut v);
+        self.validate_maps(&mut v);
         for key in self.tricks.keys() {
             // TODO(OPEN: trick ids, from the research trick inventory): check `key` against the
             // known trick ids.
@@ -949,39 +1049,37 @@ impl Manifest {
         let timing = self.timing.get_ref();
         v.non_empty(&timing.start.trigger, "trigger name");
         v.non_empty(&timing.end.trigger, "trigger name");
-        let start = timing.start.trigger.get_ref();
+        validate_stages(v, &timing.start, &timing.stages);
+    }
+
+    fn validate_maps(&self, v: &mut Validator<'_>) {
+        let timing = self.timing.get_ref();
         let mut ids = BTreeSet::new();
-        let mut triggers = BTreeSet::new();
-        for stage in &timing.stages {
-            if v.id(&stage.id) && !ids.insert(stage.id.get_ref().as_str()) {
+        for map in &self.maps {
+            if v.id(&map.id) && !ids.insert(map.id.get_ref().as_str()) {
                 v.error(
-                    stage.id.span(),
-                    format!("stage id `{}` is used twice", stage.id.get_ref()),
+                    map.id.span(),
+                    format!("map id `{}` is used twice", map.id.get_ref()),
                 );
             }
-            v.non_empty(&stage.name, "stage name");
-            if !v.non_empty(&stage.trigger, "trigger name") {
-                continue;
+            v.non_empty(&map.name, "map name");
+            for (field, what) in [
+                (&map.difficulty, "difficulty"),
+                (&map.category, "category"),
+                (&map.version, "map version"),
+            ] {
+                if let Some(value) = field {
+                    v.non_empty(value, what);
+                }
             }
-            // Each stage ends at its trigger, so a shared trigger would close two stages on one
-            // tick, and the start trigger would close a stage as the run begins. The last stage
-            // may end at the run's `end` trigger.
-            let trigger = stage.trigger.get_ref();
-            let room = stage.room.as_ref().map(|r| r.get_ref().as_str());
-            let start_room = timing.start.room.as_ref().map(|r| r.get_ref().as_str());
-            if trigger == start && room == start_room {
-                v.error(
-                    stage.trigger.span(),
-                    format!(
-                        "stage `{}` ends at trigger `{trigger}`, which is the run's start trigger",
-                        stage.id.get_ref()
-                    ),
-                );
-            } else if !triggers.insert((trigger.as_str(), room)) {
-                v.error(
-                    stage.trigger.span(),
-                    format!("stage trigger `{trigger}` is used by two stages"),
-                );
+            for trigger in [&map.start, &map.end].into_iter().flatten() {
+                v.non_empty(&trigger.trigger, "trigger name");
+            }
+            // Stages inherited with an inherited start were checked under `[timing]`.
+            if map.start.is_some() || map.stages.is_some() {
+                let start = map.start.as_ref().unwrap_or(&timing.start);
+                let stages = map.stages.as_deref().unwrap_or(&timing.stages);
+                validate_stages(v, start, stages);
             }
         }
     }
@@ -994,8 +1092,13 @@ impl Manifest {
             v.key_art_image(image, "key_art image");
         }
         for (map, image) in &section.maps {
-            // TODO(OPEN: maps, #31): check `map` against the package's maps once they exist.
             v.id(map);
+            if !self.map_list().iter().any(|m| m.id == map.get_ref().as_str()) {
+                v.error(
+                    map.span(),
+                    format!("key_art map `{}` is not a map of this package", map.get_ref()),
+                );
+            }
             v.key_art_image(image, &format!("key_art map `{}`", map.get_ref()));
         }
     }
@@ -1028,6 +1131,46 @@ impl Manifest {
             v.non_empty(&entry.what, "what");
             v.non_empty(&entry.owner, "owner");
             v.non_empty(&entry.license, "license");
+        }
+    }
+}
+
+/// Stage ids are unique, stage names and triggers are not blank, and no two stages (nor a stage
+/// and the start) share a trigger.
+fn validate_stages(v: &mut Validator<'_>, start_ref: &TriggerRef, stages: &[Stage]) {
+    let start = start_ref.trigger.get_ref();
+    let mut ids = BTreeSet::new();
+    let mut triggers = BTreeSet::new();
+    for stage in stages {
+        if v.id(&stage.id) && !ids.insert(stage.id.get_ref().as_str()) {
+            v.error(
+                stage.id.span(),
+                format!("stage id `{}` is used twice", stage.id.get_ref()),
+            );
+        }
+        v.non_empty(&stage.name, "stage name");
+        if !v.non_empty(&stage.trigger, "trigger name") {
+            continue;
+        }
+        // Each stage ends at its trigger, so a shared trigger would close two stages on one
+        // tick, and the start trigger would close a stage as the run begins. The last stage
+        // may end at the run's `end` trigger.
+        let trigger = stage.trigger.get_ref();
+        let room = stage.room.as_ref().map(|r| r.get_ref().as_str());
+        let start_room = start_ref.room.as_ref().map(|r| r.get_ref().as_str());
+        if trigger == start && room == start_room {
+            v.error(
+                stage.trigger.span(),
+                format!(
+                    "stage `{}` ends at trigger `{trigger}`, which is the run's start trigger",
+                    stage.id.get_ref()
+                ),
+            );
+        } else if !triggers.insert((trigger.as_str(), room)) {
+            v.error(
+                stage.trigger.span(),
+                format!("stage trigger `{trigger}` is used by two stages"),
+            );
         }
     }
 }
@@ -1312,5 +1455,66 @@ stages = [{stages}]
         );
         let diags = run(&text, &[]);
         assert!(diags.is_empty(), "{diags:#?}");
+    }
+
+    /// The line (1-based) of the first line of `text` that contains `needle`.
+    fn line_of(text: &str, needle: &str) -> u32 {
+        1 + text.lines().position(|l| l.contains(needle)).unwrap() as u32
+    }
+
+    #[test]
+    fn map_ids_are_unique_and_names_not_blank() {
+        let text = manifest(&format!(
+            "{TIMING}
+[[maps]]
+id = \"any\"
+name = \"Any%\"
+
+[[maps]]
+id = \"any\"
+name = \"Again\"
+"
+        ));
+        let line = 1 + line_of(&text, "name = \"Any%\"") + 2;
+        assert_one(&run(&text, &[]), line, "map id `any` is used twice");
+        let text = manifest(&format!(
+            "{TIMING}
+[[maps]]
+id = \"any\"
+name = \" \"
+"
+        ));
+        assert_one(
+            &run(&text, &[]),
+            line_of(&text, "name = \" \""),
+            "map name must not be empty",
+        );
+    }
+
+    #[test]
+    fn map_stages_follow_the_stage_rules() {
+        let text = manifest(&format!(
+            "{TIMING}
+[[maps]]
+id = \"a\"
+name = \"A\"
+stages = [{{ id = \"s\", name = \"S\", trigger = \"run_start\" }}]
+"
+        ));
+        assert_one(
+            &run(&text, &[]),
+            line_of(&text, "stages = ["),
+            "which is the run's start trigger",
+        );
+        // A map that only sets `end` inherits stages already checked under `[timing]`.
+        let text = manifest(&format!(
+            "{TIMING}
+[[maps]]
+id = \"a\"
+name = \"A\"
+end = {{ trigger = \"run_end\" }}
+"
+        ));
+        assert!(run(&text, &[]).is_empty());
     }
 }
