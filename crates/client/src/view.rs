@@ -14,14 +14,10 @@ use iwbtg_sim::sim::{Sim, SimOptions};
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::world::{InstId, SimStatus};
 
-<<<<<<< HEAD
-use crate::bindings::{Bindings, PadInput};
-use crate::input::{Collector, StickGate, key_code};
-=======
 mod hud;
 
-use crate::input::{Collector, key_code};
->>>>>>> origin/main
+use crate::bindings::{Bindings, PadInput};
+use crate::input::{Collector, StickGate, key_code};
 use crate::package::{Package, SpriteImage, sprite_images};
 
 /// The running game. Not `Send` (the script host shares state by `Rc`), so it is a non-send
