@@ -83,6 +83,8 @@ Measured on the home PC (Ryzen 7 7800X3D, 64 GB, NVMe) on 2026-11-05:
 | `target/` of one worktree | 8 to 21 GB | 6 GB |
 | CI, whole matrix | 2 to 3 min | |
 
+Tried and not adopted (#532, 2026-11-05): Bevy's `dynamic_linking` feature cut a client rebuild after touching `view.rs` from 3.5 s to 2.4 s, but it is a second feature set, so every worktree would build Bevy twice (minutes and gigabytes) and tests and clippy would need the feature too. Splitting `iwbtg-client` into a library and a thin binary saves at most the binary's own compile (about 2 s of the 3.5 s) while the crate is about 4,000 lines. Look again when the client crate passes about 15,000 lines or a rebuild passes 15 s.
+
 What follows from it:
 
 - `.cargo/config.toml` links with `rust-lld` on Windows, and `Cargo.toml` keeps only line tables as debug info for our crates and none for dependencies: faster links and a smaller `target/`.
