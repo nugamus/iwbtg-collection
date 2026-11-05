@@ -107,9 +107,9 @@ Expected: the build ends with `Finished`. `issues.py start` prints JSON with mil
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every PR, in the merge queue and on every push to main. Its `changes` job skips the build jobs when a change touches only docs, Markdown, `workspace/` or `.claude/`; the `ci-ok` job then reports success, so the one required check always appears. Builds run without debug info or incremental state, to save time. Only runs on `main` write the Rust cache (`save-if`); PR runs restore it.
+`.github/workflows/ci.yml` runs on every PR and every push to main. Its `changes` job skips the build jobs when a change touches only docs, Markdown, `workspace/` or `.claude/`; the `ci-ok` job then reports success, so the one required check always appears. Builds run without debug info or incremental state, to save time. Only runs on `main` write the Rust cache (`save-if`); PR runs restore it.
 
-**Merge queue (#528).** `main` has a ruleset that requires `ci-ok` and `body` and merges through a merge queue (squash). `gh pr merge <n> --squash --auto` queues a PR: GitHub merges it with the current `main` (and the PRs ahead of it), runs CI on that and merges when green, so nobody updates branches or polls CI. A PR that fails in the queue is dropped from it with the failing run linked. The repository admin can bypass the ruleset.
+**Auto-merge (#528).** A ruleset on `main` requires the `ci-ok` and `body` checks; the repository admin can bypass it. `gh pr merge <n> --squash --auto` turns on auto-merge, and GitHub merges the PR when both are green, so nobody polls CI. Branches don't have to be up to date with `main` (that would stall auto-merge, which doesn't update branches), so the push run on `main` is the check after each merge; a PR that changes pinned hashes is updated with `gh pr update-branch <n>` before its auto-merge. GitHub's merge queue would update and test each PR against `main` itself, but it is not offered for repositories owned by a personal account (the ruleset API refused it, 2026-11-05). The workflows keep their `merge_group` triggers in case the repo moves to an organization.
 
 The checks:
 

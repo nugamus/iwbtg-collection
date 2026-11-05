@@ -1,5 +1,5 @@
 name: CI
-# Every PR runs this workflow so the required `ci-ok` check always reports (merge queue, #528).
+# Every PR runs this workflow so the required `ci-ok` check always reports (auto-merge, #528).
 # A change that touches only docs, Markdown, workspace/ or .claude/ skips the build jobs.
 on:
   pull_request:
