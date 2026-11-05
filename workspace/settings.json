@@ -49,6 +49,12 @@
             "args": ["-I", "${CLAUDE_PROJECT_DIR}/research/.claude/hooks/guard_archive.py"],
             "onFailure": "block",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python",
+            "args": ["-I", "${CLAUDE_PROJECT_DIR}/client/.claude/hooks/build_guard.py"],
+            "timeout": 10
           }
         ]
       }
