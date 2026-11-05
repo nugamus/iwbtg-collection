@@ -11,7 +11,7 @@
 //! rectangle, line, position and place queries must all agree on one solid pixel and one empty
 //! box pixel.
 
-mod wp3_support;
+use crate::wp3_support;
 
 mod wp3 {
     use std::collections::BTreeSet;

@@ -25,7 +25,7 @@
 
 A cold build of the workspace is about 7 minutes, a warm incremental one seconds. CI runs the full check matrix in about 3 minutes, off this PC. So:
 
-- While working, build and test only what you touched: `cargo test -p <crate> --test <file>` or `cargo test -p <crate> <module>::`. Run `cargo clippy --workspace --tests -- -D warnings` and `cargo test --workspace` once, right before the PR, then let CI run the rest.
+- While working, build and test only what you touched: `cargo test -p <crate> --test it <file>::` (each crate's integration tests are one `it` executable, #517; a new test file must be listed in `tests/it.rs`). Run `cargo clippy --workspace --tests -- -D warnings` and `cargo test --workspace` once, right before the PR, then let CI run the rest.
 - Never change the build fingerprint: no `RUSTFLAGS`, `--config`, `CARGO_PROFILE_*` or feature flags that differ from the defaults. Each change rebuilds every dependency (about 5 minutes) and again when you switch back.
 - Run cargo in the foreground (the workspace settings allow 45 minutes). Never end your turn "waiting for" a background command: a teammate is not woken when it finishes, and sat idle 30 to 60 minutes per wait in the 2026-11-04 team run until the lead pinged it.
 - `python -I client/.claude/stats.py` (from the workspace root) shows where each session's time went.
