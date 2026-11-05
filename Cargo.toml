@@ -46,8 +46,14 @@ unsafe_code = "forbid"
 [workspace.lints.clippy]
 float_cmp = "warn"
 
+# Local build speed (docs/dev-setup.md, Build speed): line tables only for our crates (backtraces
+# keep file and line), no debug info for dependencies. Faster links, a much smaller target/.
+[profile.dev]
+debug = "line-tables-only"
+
 [profile.dev.package."*"]
 opt-level = 2
+debug = false
 
 # Integer overflow panics in release too, so debug tests and release servers behave the same
 # (docs/plans/sim-core.md 10.3). Sim counters use checked_* and never rely on this.
