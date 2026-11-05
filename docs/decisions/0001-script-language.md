@@ -196,7 +196,7 @@ fn collide(other) {
 
 ### Tests
 
-- Conformance suite in `crates/sim/tests/script_conformance/`: every IWS math function over 10,000 fixed inputs, every operator and overload, and operation-count fixtures. It runs on every CI target and its hash lists (`expected.txt`, compiled into the test) must be byte-identical. `UPDATE_CONFORMANCE=1 cargo test -p iwbtg-sim --test script_conformance` rewrites them.
+- Conformance suite in `crates/sim/tests/script_conformance/`: every IWS math function over 10,000 fixed inputs, every operator and overload, and operation-count fixtures. It runs on every CI target and its hash lists (`expected.txt`, compiled into the test) must be byte-identical. `UPDATE_CONFORMANCE=1 cargo test -p iwbtg-sim --test it script_conformance::` rewrites them.
 - Benchmarks of the Rori Girl and Easy Miku 2 avoidances, native and WASM, early in Phase 3.
 
 ### Costs we accept

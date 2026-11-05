@@ -78,8 +78,8 @@ Measured on the home PC (Ryzen 7 7800X3D, 64 GB, NVMe) on 2026-11-05:
 | Cold build, three worktrees at once (2026-11-04 run) | 10 min or more, often hit the old 10-minute tool limit | |
 | Then every test binary of the workspace | | 3 min 20 s more |
 | Touch `crates/client/src/main.rs`, rebuild the client | 13 s | 4 s |
-| Touch `crates/sim/src/lib.rs`, rebuild all 82 test binaries | 33 s | 17 s |
-| Run `cargo test --workspace` once built | 20 s (7 s of tests, the rest starting 82 executables, #517) | |
+| Touch `crates/sim/src/lib.rs`, rebuild every test binary | 33 s (82 binaries) | 7 s (12 binaries, #517) |
+| Run `cargo test --workspace` once built | 20 s (7 s of tests, the rest starting 82 executables) | 10 s |
 | `target/` of one worktree | 8 to 21 GB | 6 GB |
 | CI, whole matrix | 2 to 3 min | |
 
