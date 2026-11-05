@@ -4,7 +4,7 @@
 //! results are hashed per function. The hash list and the operation-count fixtures live in
 //! `expected.txt` and are compiled into the test, so every CI target (native Linux and Windows,
 //! wasm32-wasip1) checks the same bytes: a function that gives another bit on one target fails
-//! there. `UPDATE_CONFORMANCE=1 cargo test -p iwbtg-sim --test script_conformance` rewrites the
+//! there. `UPDATE_CONFORMANCE=1 cargo test -p iwbtg-sim --test it script_conformance::` rewrites the
 //! file; the diff is the review.
 
 use std::fmt::Write as _;
