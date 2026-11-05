@@ -36,6 +36,16 @@ pub struct SpriteImage {
 
 /// Opens the package folder `dir`: reads it, bundles its engine pack from `../_engines` and
 /// loads it. `trace_mode` is for research converter output.
+/// The package command-line arguments.
+#[derive(clap::Args, Debug)]
+pub struct PackageArgs {
+    /// Package folder (a folder with a game.toml).
+    pub package: std::path::PathBuf,
+    /// Load converter output: unmapped script kinds become inert.
+    #[arg(long)]
+    pub trace_mode: bool,
+}
+
 pub fn open(dir: &Path, trace_mode: bool) -> Result<Package, OpenError> {
     let mut files =
         PackageFiles::load_dir(dir).map_err(|e| OpenError::Files(format!("{}: {e}", dir.display())))?;
