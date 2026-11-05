@@ -86,6 +86,7 @@ Measured on the home PC (Ryzen 7 7800X3D, 64 GB, NVMe) on 2026-11-05:
 What follows from it:
 
 - `.cargo/config.toml` links with `rust-lld` on Windows, and `Cargo.toml` keeps only line tables as debug info for our crates and none for dependencies: faster links and a smaller `target/`.
+- `.claude/hooks/build_guard.py` (PreToolUse, all sessions and teammates) blocks cargo commands that change the fingerprint or run in the background; `# build-guard: ok (<why>)` in the command overrides it. Self-test: `python -I client/.claude/hooks/build_guard.py --test`.
 - Anything that changes the build fingerprint (`RUSTFLAGS`, `--config`, `CARGO_PROFILE_*`, a different linker) rebuilds all dependencies, about 5 minutes, and again on the way back. Don't copy CI's `RUSTFLAGS`/`CARGO_INCREMENTAL` into local commands.
 - Keep worktrees per lane and warm (above). A cold worktree costs 5 to 10 minutes and 10 to 20 GB.
 - Locally, run the tests of what you changed; run the full workspace once before the PR and let CI do the rest.
