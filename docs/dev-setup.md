@@ -107,9 +107,11 @@ Expected: the build ends with `Finished`. `issues.py start` prints JSON with mil
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every PR and every push to main:
+`.github/workflows/ci.yml` runs on every PR and every push to main. Its `changes` job skips the build jobs when a change touches only docs, Markdown, `workspace/` or `.claude/`; the `ci-ok` job then reports success, so the one required check always appears. Builds run without debug info or incremental state, to save time. Only runs on `main` write the Rust cache (`save-if`); PR runs restore it.
 
-Changes that touch only docs, Markdown, `workspace/` or `.claude/` skip it. Builds run without debug info or incremental state, to save time.
+**Auto-merge (#528).** A ruleset on `main` requires the `ci-ok` and `body` checks; the repository admin can bypass it. `gh pr merge <n> --squash --auto` turns on auto-merge, and GitHub merges the PR when both are green, so nobody polls CI. Branches don't have to be up to date with `main` (that would stall auto-merge, which doesn't update branches), so the push run on `main` is the check after each merge; a PR that changes pinned hashes is updated with `gh pr update-branch <n>` before its auto-merge. GitHub's merge queue would update and test each PR against `main` itself, but it is not offered for repositories owned by a personal account (the ruleset API refused it, 2026-11-05). The workflows keep their `merge_group` triggers in case the repo moves to an organization.
+
+The checks:
 
 - Windows and Linux: `cargo clippy --workspace --tests -- -D warnings`, `cargo test --workspace` (all `--locked`, warnings are errors), and `cargo fmt --check` on Linux.
 - wasm32: `cargo test -p iwbtg-sim` and `cargo test -p iwbtg-format --lib --test fixtures` on wasm32-wasip1 under wasmtime, and a wasm32-unknown-unknown build. The package-loading `wp7a_*` tests run on native targets only, because wasm32-wasip1 aborts on the panics of unmerged WP0 stubs. On wasm32-unknown-unknown, `wp1_determinism` runs under node through `wasm-bindgen-test` (`.cargo/config.toml` sets the runner): `cargo test -p iwbtg-sim --test wp1_determinism --target wasm32-unknown-unknown`. The runner is the wasm-bindgen CLI, and its version must equal `wasm-bindgen` in Cargo.lock: `cargo install wasm-bindgen-cli --version <lock version> --locked`. Other sim tests still need the same `#[wasm_bindgen_test]` switch to run there.
