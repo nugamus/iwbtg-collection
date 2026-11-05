@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 rust-version = "1.99"
 repository = "https://github.com/nugamus/iwbtg-collection"
 
-# Exact pins: any change here can change simulation outcomes (docs/architecture.md, Versions).
+# Exact pins: any change here can change simulation outcomes (docs/architecture/replay.md, Versions).
 [workspace.dependencies]
 iwbtg-sim = { path = "crates/sim" }
 iwbtg-format = { path = "crates/format" }

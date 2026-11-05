@@ -1,5 +1,5 @@
 //! `iwbtg determinism report <corpus>`: runs the golden corpus and prints one line per case
-//! (docs/architecture.md, The iwbtg CLI; docs/plans/sim-core.md 10.6).
+//! (docs/architecture/cli.md, The iwbtg CLI; docs/plans/sim-core.md 10.6).
 //!
 //! The cases are `crates/sim/tests/golden/mod.rs`, included here so the CLI and the sim's own
 //! test run the same code. `<corpus>` is the golden folder: it holds `expected.txt`, the pinned
