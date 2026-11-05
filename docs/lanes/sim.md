@@ -7,7 +7,7 @@
 
 - One former test file: `cargo test -p iwbtg-sim --test it <file>::`; unit tests: `--lib <module>::`.
 - Determinism: `--test wp1_determinism`, `--test golden_corpus`.
-- A deliberate change to hashed state re-pins three things (and only then): `tests/hash_vectors.rs`, the `FINAL_HASH` in `tests/wp1_determinism.rs`, and the golden corpus (`UPDATE_GOLDEN=1 cargo test -p iwbtg-sim --test golden_corpus`). `HASH_LAYOUT` changes only with the encoding.
+- A deliberate change to hashed state re-pins three things (and only then) with `cargo xtask repin`: `tests/hash_vectors.rs`, the `FINAL_HASH` in `tests/wp1_determinism.rs` and the golden corpus. `HASH_LAYOUT` changes only with the encoding.
 - Script conformance: `UPDATE_CONFORMANCE=1 cargo test -p iwbtg-sim --test it script_conformance::`.
 
 ## Pitfalls seen before
