@@ -7,6 +7,8 @@ Columns:
   turns    model calls
   ctx      average context per call, thousands of tokens (cost grows with it)
   build    hours spent inside cargo commands, and that share of the wall time
+  idle     hours with no tool running and no model call for over 5 minutes in a row: waiting for a
+           message (teammates: usually the lead; a lead session: usually the user)
   10min    cargo commands that hit the 10-minute tool limit or were moved to the background
   merges   merges of main into a branch (`git merge origin/main`, `gh pr update-branch`)
   confl    tool results that showed a merge conflict
@@ -20,8 +22,16 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-WORKSPACE = Path(__file__).resolve().parents[2]
-PROJECTS = Path.home() / ".claude" / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(WORKSPACE))
+def projects_dir():
+    """Transcripts of the workspace root this file sits under (also from a worktree in worktrees/)."""
+    for parent in Path(__file__).resolve().parents:
+        d = Path.home() / ".claude" / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(parent))
+        if (parent / "client").is_dir() and d.is_dir():
+            return d
+    return d
+
+
+PROJECTS = projects_dir()
 
 
 def ts(s):
@@ -29,7 +39,7 @@ def ts(s):
 
 
 def scan(path):
-    r = dict(first=None, last=None, turns=0, ctx=0, cargo=0.0, slow=0, merges=0, confl=0, prs=0)
+    r = dict(first=None, last=None, turns=0, ctx=0, cargo=0.0, idle=0.0, slow=0, merges=0, confl=0, prs=0)
     pending = {}
     for line in path.open(encoding="utf-8", errors="replace"):
         try:
@@ -40,8 +50,10 @@ def scan(path):
         if not t:
             continue
         t = ts(t)
+        if r["last"] and not pending and (t - r["last"]).total_seconds() > 300:
+            r["idle"] += (t - r["last"]).total_seconds()
         r["first"] = r["first"] or t
-        r["last"] = t
+        r["last"] = max(r["last"] or t, t)  # queued notices carry their older send time
         m = e.get("message") or {}
         if e.get("type") == "assistant" and m.get("usage"):
             u = m["usage"]
@@ -78,7 +90,7 @@ def row(name, r):
     share = r["cargo"] / 3600 / wall * 100 if wall else 0
     ctx = r["ctx"] / max(1, r["turns"]) / 1000
     return (f"{name:28s} {r['first']:%m-%d %H:%M} {wall:5.1f}h {r['turns']:5d} {ctx:5.0f}k "
-            f"{r['cargo'] / 3600:5.1f}h {share:3.0f}% {r['slow']:5d} {r['merges']:6d} {r['confl']:5d} {r['prs']:3d}")
+            f"{r['cargo'] / 3600:5.1f}h {share:3.0f}% {r['idle'] / 3600:5.1f}h {r['slow']:5d} {r['merges']:6d} {r['confl']:5d} {r['prs']:3d}")
 
 
 def main():
@@ -89,8 +101,8 @@ def main():
         sys.exit(f"no transcripts at {PROJECTS}")
     since = datetime.now(timezone.utc) - timedelta(days=a.days)
     print(f"{'session / teammate':28s} {'start':11s} {'wall':>6s} {'turns':>5s} {'ctx':>6s} {'build':>6s} {'%':>4s} "
-          f"{'10min':>5s} {'merges':>6s} {'confl':>5s} {'PRs':>3s}")
-    total = dict(wall=0.0, cargo=0.0)
+          f"{'idle':>6s} {'10min':>5s} {'merges':>6s} {'confl':>5s} {'PRs':>3s}")
+    total = dict(wall=0.0, cargo=0.0, idle=0.0)
     for lead in sorted(PROJECTS.glob("*.jsonl"), key=lambda p: p.stat().st_mtime):
         r = scan(lead)
         if not r["first"] or r["last"] < since or r["turns"] < 5:
@@ -104,9 +116,11 @@ def main():
             print(row("  " + name[:26], s))
             total["wall"] += (s["last"] - s["first"]).total_seconds() / 3600
             total["cargo"] += s["cargo"] / 3600
+            total["idle"] += s["idle"] / 3600
     if total["wall"]:
         print(f"\nTeammates: {total['cargo']:.1f}h of {total['wall']:.1f}h inside cargo "
-              f"({total['cargo'] / total['wall'] * 100:.0f}%).")
+              f"({total['cargo'] / total['wall'] * 100:.0f}%), {total['idle']:.1f}h idle "
+              f"({total['idle'] / total['wall'] * 100:.0f}%).")
 
 
 if __name__ == "__main__":
