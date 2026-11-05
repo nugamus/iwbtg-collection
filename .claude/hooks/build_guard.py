@@ -2,7 +2,7 @@
 
 Blocks the two habits that cost the most build time:
   1. Changing the build fingerprint (RUSTFLAGS, CARGO_PROFILE_*, CARGO_INCREMENTAL, CARGO_TARGET_DIR,
-     cargo --config): each change rebuilds every dependency (about 5 minutes) and again on the way back.
+     CARGO_BUILD_* except CARGO_BUILD_JOBS, cargo --config): each change rebuilds every dependency (about 5 minutes) and again on the way back.
   2. Starting cargo in the background: a teammate is not woken when it finishes and sits idle until
      the lead pings it (30 to 60 minutes per wait in the 2026-11-04 run).
 
@@ -20,7 +20,7 @@ OVERRIDE = re.compile(r"build-guard:\s*ok")
 CARGO = re.compile(r"(^|[\s;&|(])cargo(\.exe)?\s+(\+\S+\s+)?(build|check|clippy|test|run|nextest|doc|bench)\b")
 FINGERPRINT = re.compile(
     r"\b(RUSTFLAGS|RUSTDOCFLAGS|CARGO_ENCODED_RUSTFLAGS|CARGO_PROFILE_\w+|CARGO_INCREMENTAL|CARGO_TARGET_DIR"
-    r"|CARGO_BUILD_\w+)\s*=|\$env:(RUSTFLAGS|CARGO_PROFILE_\w+|CARGO_INCREMENTAL|CARGO_TARGET_DIR|CARGO_BUILD_\w+)"
+    r"|CARGO_BUILD_(?!JOBS)\w+)\s*=|\$env:(RUSTFLAGS|CARGO_PROFILE_\w+|CARGO_INCREMENTAL|CARGO_TARGET_DIR|CARGO_BUILD_(?!JOBS)\w+)"
     r"|\s--config[\s=]"
 )
 
@@ -80,6 +80,7 @@ def self_test():
         {"command": "cargo test --workspace # build-guard: ok (lead watching CI parity)", "run_in_background": True},
         {"command": "RUSTFLAGS=x cargo build # build-guard: ok (one-off timing)"},
         {"command": "cargo install wasm-bindgen-cli --version 0.2.100 --locked"},
+        {"command": "CARGO_BUILD_JOBS=6 cargo test --workspace"},  # job count is not in the fingerprint
     ]
     bad = [c for c in blocked if not check(c)] + [c for c in allowed if check(c)]
     for c in bad:
