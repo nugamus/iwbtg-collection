@@ -1,4 +1,4 @@
-//! Trace rows for comparison with the originals (docs/architecture.md, "Comparing traces with
+//! Trace rows for comparison with the originals (docs/architecture/traces.md, "Comparing traces with
 //! the original").
 //!
 //! A [`TraceTable`] holds one CSV in the research recorder's format: a header, then one row per
