@@ -83,6 +83,14 @@ Measured on the home PC (Ryzen 7 7800X3D, 64 GB, NVMe) on 2026-11-05:
 | `target/` of one worktree | 8 to 21 GB | 6 GB |
 | CI, whole matrix | 2 to 3 min | |
 
+**Windows Defender** scans every executable the build writes (82 test executables per run before #517). Excluding the build output folders, and only those, speeds builds and test runs up. It needs an administrator PowerShell, so the user runs it once:
+
+```
+Add-MpPreference -ExclusionPath "C:\Users\Nugamus\Desktop\Code Projects\IWBTG Collection\client\target","C:\Users\Nugamus\Desktop\Code Projects\IWBTG Collection\worktrees\*\target"
+```
+
+Never exclude the whole workspace: `research/archive/` and `research/extracted/` hold untrusted downloads that Defender must keep scanning. A Windows Dev Drive (ReFS, Defender's performance mode) would help more, but means moving the workspace, which also moves every Claude Code transcript and memory path; not done.
+
 Tried and not adopted (#532, 2026-11-05): Bevy's `dynamic_linking` feature cut a client rebuild after touching `view.rs` from 3.5 s to 2.4 s, but it is a second feature set, so every worktree would build Bevy twice (minutes and gigabytes) and tests and clippy would need the feature too. Splitting `iwbtg-client` into a library and a thin binary saves at most the binary's own compile (about 2 s of the 3.5 s) while the crate is about 4,000 lines. Look again when the client crate passes about 15,000 lines or a rebuild passes 15 s.
 
 What follows from it:
