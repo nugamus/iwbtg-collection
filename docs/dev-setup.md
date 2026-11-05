@@ -49,12 +49,12 @@ Several agents can work at once through Claude Code agent teams (experimental). 
 
 Teammates share the lead's working folder, so the CLAUDE.md files require:
 
-- **One worktree per agent:** `IWBTG Collection/worktrees/<repo>-<issue>`, created with `git worktree add ../worktrees/<repo>-<n> -b issue-<n>-<name> origin/main` from inside the repo. The main checkouts stay on `main`. `worktrees/` is in no repo.
+- **One worktree per lane:** `IWBTG Collection/worktrees/<repo>-<lane>` (`client-ui`, `client-data`, `client-sim`), created once with `git worktree add ../worktrees/<repo>-<lane> -b issue-<n>-<name> origin/main` from inside the repo. Each next issue is a new branch in the same worktree (`git switch -c issue-<n>-<name> origin/main`), so its `target/` stays warm. The main checkouts stay on `main`. `worktrees/` is in no repo.
 - **Claims:** the `in-progress` label, in all three repos. The session-start hook lists claimed issues separately and leaves them out of the next-issues list.
-- **Merging:** teammates open PRs and send the link to the lead. The lead merges one at a time and removes the worktree.
+- **Merging:** teammates open PRs and send the link to the lead. The lead merges one at a time. Lane worktrees are kept between issues.
 - **Research data work** (crawls, downloads, extraction, traces, the converter) needs `archive/`, `extracted/`, `db/` and `tools/`. Those exist only in the main research checkout, so that work runs there, one agent at a time.
 
-Each client worktree builds its own `target/` folder: the first build there takes a few minutes and a few GB. Teams use several times the tokens of one session. The docs advise 3 to 5 teammates, Sonnet for teammates, and checking in on the team often. `/resume` does not bring back in-process teammates.
+Each client worktree builds its own `target/` folder: the first build there takes about 5 minutes alone and over 10 when three teammates start at once. That is why worktrees are per lane and never removed between issues (see Build speed). Teams use several times the tokens of one session. The docs advise 3 to 5 teammates, Sonnet for teammates, and checking in on the team often. `/resume` does not bring back in-process teammates.
 
 **Which hooks fire for teammates** (checked 2026-11-02 in the first team run, three in-process Sonnet teammates):
 
@@ -65,6 +65,31 @@ Each client worktree builds its own `target/` folder: the first build there take
 So a teammate runs the status hook by hand at the start (from the workspace root: `python -I client/.claude/hooks/issues.py start`; the output is JSON, read `additionalContext`) and ends every turn that changed files with `Findings: <issue links>` or `Findings: none`, whether or not a hook asks. The lead's own session still gets both hooks.
 
 The lead prompt is `TEAM_LEAD_PROMPT.md` in the workspace root.
+
+**Background commands don't wake a teammate** (checked 2026-11-05 in the transcripts of the 2026-11-04 run): when a teammate ends its turn "waiting for" a background cargo run, the completion notice is queued and only delivered when the lead next messages it. Teammates sat idle 30 to 60 minutes per wait, about half of that run. Teammates run cargo in the foreground; the workspace settings raise the shell tool limit to 45 minutes (`BASH_MAX_TIMEOUT_MS`) and the default to 15 (`BASH_DEFAULT_TIMEOUT_MS`).
+
+## Build speed
+
+Measured on the home PC (Ryzen 7 7800X3D, 64 GB, NVMe) on 2026-11-05:
+
+| Step | Before | With this setup |
+|---|---|---|
+| Cold build of `iwbtg-client`, one build alone | 4 min 50 s | 3 min 45 s |
+| Cold build, three worktrees at once (2026-11-04 run) | 10 min or more, often hit the old 10-minute tool limit | |
+| Then every test binary of the workspace | | 3 min 20 s more |
+| Touch `crates/client/src/main.rs`, rebuild the client | 13 s | 4 s |
+| Touch `crates/sim/src/lib.rs`, rebuild all 82 test binaries | 33 s | 17 s |
+| Run `cargo test --workspace` once built | 20 s (7 s of tests, the rest starting 82 executables, #517) | |
+| `target/` of one worktree | 8 to 21 GB | 6 GB |
+| CI, whole matrix | 2 to 3 min | |
+
+What follows from it:
+
+- `.cargo/config.toml` links with `rust-lld` on Windows, and `Cargo.toml` keeps only line tables as debug info for our crates and none for dependencies: faster links and a smaller `target/`.
+- Anything that changes the build fingerprint (`RUSTFLAGS`, `--config`, `CARGO_PROFILE_*`, a different linker) rebuilds all dependencies, about 5 minutes, and again on the way back. Don't copy CI's `RUSTFLAGS`/`CARGO_INCREMENTAL` into local commands.
+- Keep worktrees per lane and warm (above). A cold worktree costs 5 to 10 minutes and 10 to 20 GB.
+- Locally, run the tests of what you changed; run the full workspace once before the PR and let CI do the rest.
+- `python -I client/.claude/stats.py [--days N]` from the workspace root reads the Claude Code transcripts and prints, per session and teammate, wall time, turns, average context, time inside cargo, slow cargo calls, merges of `main`, conflicts and PRs.
 
 ## Check a machine
 

@@ -16,10 +16,19 @@
 - Design is a priority. No generic UI; match the IWBTG style and reuse art from ported games where it fits.
 - The user does not write code. Every PR still gets a User check section (exact commands, steps, expected vs. broken). The user tests only what they can see or play: client UI and rendering, playtests, design, and `needs-user` issues. Those PRs wait for the user to merge. Any other PR (sim, format, tools, research, docs) you merge yourself (`gh pr merge --squash --delete-branch`) once CI is green and you have run its User check and pasted the output into the PR.
 - **Several agents may work at once** (Claude Code agent teams; client/docs/dev-setup.md, Agent teams). Teammates share the lead's folder, so:
-  - Each agent works only in its own git worktree, never in the main checkout (that stays on `main` for the lead): from the repo, `git worktree add ../worktrees/<repo>-<n> -b issue-<n>-<short-name> origin/main`, then use that folder's absolute path for every command and file edit.
+  - Each agent works only in its own git worktree, never in the main checkout (that stays on `main` for the lead). Worktrees belong to a lane, not an issue, so their `target/` stays warm: `../worktrees/<repo>-<lane>` (for example `client-ui`). Create it once with `git worktree add ../worktrees/<repo>-<lane> -b issue-<n>-<short-name> origin/main`. For the next issue, commit, then `git fetch` and `git switch -c issue-<n>-<short-name> origin/main` in the same worktree. Use its absolute path for every command and file edit. A new worktree costs a 7 to 15 minute cold build; never remove one between issues.
   - Claim an issue before starting: add the `in-progress` label and comment. Skip issues that already have it. One issue per agent at a time. Remove the label if you hand the issue back.
-  - Teammates open the PR and send its link to the lead. The lead merges one PR at a time (rebase the branch on main first when it is behind) and then removes the worktree (`git worktree remove`).
+  - Teammates open the PR and send its link to the lead. The lead merges one PR at a time (rebase the branch on main first when it is behind). Lane worktrees stay.
   - Two agents never edit the same files at once. The lead hands out issues that touch different files.
+
+## Builds
+
+A cold build of the workspace is about 7 minutes, a warm incremental one seconds. CI runs the full check matrix in about 3 minutes, off this PC. So:
+
+- While working, build and test only what you touched: `cargo test -p <crate> --test <file>` or `cargo test -p <crate> <module>::`. Run `cargo clippy --workspace --tests -- -D warnings` and `cargo test --workspace` once, right before the PR, then let CI run the rest.
+- Never change the build fingerprint: no `RUSTFLAGS`, `--config`, `CARGO_PROFILE_*` or feature flags that differ from the defaults. Each change rebuilds every dependency (about 5 minutes) and again when you switch back.
+- Run cargo in the foreground (the workspace settings allow 45 minutes). Never end your turn "waiting for" a background command: a teammate is not woken when it finishes, and sat idle 30 to 60 minutes per wait in the 2026-11-04 team run until the lead pinged it.
+- `python -I client/.claude/stats.py` (from the workspace root) shows where each session's time went.
 
 ## Issues
 
