@@ -7,10 +7,10 @@ use iwbtg_sim::rules::RunnerRules;
 use iwbtg_sim::script::host::Iws;
 use iwbtg_sim::script::validate::{EVENT_FNS, validate};
 
-const ARCHITECTURE: &str = include_str!("../../../docs/architecture.md");
+const ARCHITECTURE: &str = include_str!("../../../docs/architecture/sim.md");
 const DOCS: [(&str, &str); 3] = [
     ("docs/format/v0.md", include_str!("../../../docs/format/v0.md")),
-    ("docs/architecture.md", ARCHITECTURE),
+    ("docs/architecture/sim.md", ARCHITECTURE),
     (
         "docs/decisions/0001-script-language.md",
         include_str!("../../../docs/decisions/0001-script-language.md"),
