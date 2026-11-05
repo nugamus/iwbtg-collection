@@ -89,7 +89,7 @@ What follows from it:
 - `.claude/hooks/build_guard.py` (PreToolUse, all sessions and teammates) blocks cargo commands that change the fingerprint or run in the background; `# build-guard: ok (<why>)` in the command overrides it. Self-test: `python -I client/.claude/hooks/build_guard.py --test`.
 - Anything that changes the build fingerprint (`RUSTFLAGS`, `--config`, `CARGO_PROFILE_*`, a different linker) rebuilds all dependencies, about 5 minutes, and again on the way back. Don't copy CI's `RUSTFLAGS`/`CARGO_INCREMENTAL` into local commands.
 - Keep worktrees per lane and warm (above). A cold worktree costs 5 to 10 minutes and 10 to 20 GB.
-- Locally, run the tests of what you changed; run the full workspace once before the PR and let CI do the rest.
+- Locally, run the tests of what you changed; run `cargo xtask check` once before the PR (only the changed crates and their dependents; `--all` for everything) and let CI do the rest.
 - `python -I client/.claude/stats.py [--days N]` from the workspace root reads the Claude Code transcripts and prints, per session and teammate, wall time, turns, average context, time inside cargo, idle time (waiting for a message), slow cargo calls, merges of `main`, conflicts and PRs.
 
 ## Check a machine

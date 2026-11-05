@@ -6,7 +6,7 @@
 ## Build and test
 
 - `cargo test -p iwbtg-format --test it <file>::` for one former test file, `--test fixtures` for the validator fixtures, `--lib` for unit tests.
-- Schemas are generated: `UPDATE_SCHEMAS=1 cargo test -p iwbtg-format --test schemas`. Never hand-merge a schema file; regenerate it after merging `main`.
+- Schemas are generated: `cargo xtask regen`. Never hand-merge a schema file; regenerate it after merging `main`.
 - A package check: `cargo run -p iwbtg-tools -- pkg check <dir>`; canonical formatting: `pkg fmt <dir> --check`.
 
 ## Pitfalls seen before
