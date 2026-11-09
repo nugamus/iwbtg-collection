@@ -287,6 +287,11 @@ impl Queue {
             .extend(cues(output).into_iter().map(|c| (now + self.offset, c)));
     }
 
+    /// Drops every waiting cue (a retry starts the run again).
+    pub fn clear(&mut self) {
+        self.pending.clear();
+    }
+
     /// The cues whose time has come.
     pub fn due(&mut self, now: Instant) -> Vec<Cue> {
         let mut out = Vec::new();
@@ -312,6 +317,27 @@ impl Sounds {
             handles: HashMap::new(),
             mixer: Mixer::default(),
         }
+    }
+}
+
+/// Silences the run for a retry: every voice stops, waiting cues and the mixer's memory go, and
+/// a running shake ends. The new run's room start then plays from a clean slate.
+pub fn reset(world: &mut World) {
+    let voices: Vec<Entity> = world
+        .query_filtered::<Entity, With<Voice>>()
+        .iter(world)
+        .collect();
+    for voice in voices {
+        world.despawn(voice);
+    }
+    if let Some(mut queue) = world.get_resource_mut::<Queue>() {
+        queue.clear();
+    }
+    if let Some(mut sounds) = world.get_resource_mut::<Sounds>() {
+        sounds.mixer = Mixer::default();
+    }
+    if let Some(mut shake) = world.get_resource_mut::<Shake>() {
+        *shake = Shake::default();
     }
 }
 
