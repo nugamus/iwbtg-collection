@@ -44,7 +44,7 @@ The rules are in each repo's `CLAUDE.md`, under Issues. Two hooks in `.claude/se
 1. By default an agent takes the first unblocked issue in the earliest open milestone. Issues with open sub-issues or open `blocked by` links are skipped.
 2. One issue gets one branch and one PR with `Closes #<n>`. The PR template asks for docs updated, follow-up issues and the User check, and a CI check makes sure they are filled in.
 3. Questions for the user go in issue comments, and the issue gets `needs-user`. The user replies on GitHub, and the next session acts on the reply.
-4. The user runs the User check, then merges.
+4. CI and the agent's own User check run gate the merge; the agent or lead merges. The user tests merged UI changes on `main` in batches and files what they find (decided 2026-11-05).
 
 ## Research pipeline rules
 

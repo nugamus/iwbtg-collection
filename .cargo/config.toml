@@ -3,3 +3,12 @@
 # (`cargo install wasm-bindgen-cli --version <that> --locked`).
 [target.wasm32-unknown-unknown]
 runner = "wasm-bindgen-test-runner"
+
+# rust-lld links the Bevy client about twice as fast as link.exe (docs/dev-setup.md, Build speed).
+# The rustup toolchain ships it; the MSVC libraries are still found as with link.exe.
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"
+
+# `cargo xtask <command>`: check, repin, regen, pr-body (crates/xtask, #529).
+[alias]
+xtask = "run -q -p xtask --"

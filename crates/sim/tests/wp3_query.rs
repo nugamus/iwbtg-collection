@@ -1,7 +1,7 @@
 //! WP3: queries, distance_to_object, contact moves and the solid put-back
 //! (docs/plans/sim-core.md 3.4, 12; CLONE_SPEC collision).
 
-mod wp3_support;
+use crate::wp3_support;
 
 mod wp3 {
     use iwbtg_sim::collide::contact::{contact_steps, mcs_step_limit, outside_steps};

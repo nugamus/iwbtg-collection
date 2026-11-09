@@ -2,6 +2,7 @@ name: PR checks
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
+  merge_group:   # the body was checked when the PR joined the queue; this run only reports success
 jobs:
   body:
     runs-on: ubuntu-latest
@@ -9,6 +10,7 @@ jobs:
       - name: PR links an issue and fills in docs and follow-ups
         env:
           BODY: ${{ github.event.pull_request.body }}
+        if: github.event_name == 'pull_request'
         run: |
           # printf, not echo: a backslash in the body (Windows paths) must not cut it short.
           # Nothing may end the script before it reports: grep exits 1 on an empty section, so

@@ -1,6 +1,6 @@
 //! Shared fixture for the WP1 tests (docs/plans/sim-core.md 12, WP1 row).
 //!
-//! Included by the other `wp1_*.rs` files with `#[path]`; compiled alone it has no tests. The
+//! Loaded with `#[path]` by `tests/it.rs` (for the wp1 modules there) and `wp1_determinism.rs`; it has no tests. The
 //! pipeline runs with stand-in hooks, because motion (WP2), collision geometry (WP3), rooms
 //! (WP4a), views (WP4b), timing (WP8b) and sound (WP10) are separate work packages:
 //!
