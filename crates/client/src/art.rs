@@ -136,6 +136,18 @@ const COLOR_Z: f32 = -996.0;
 #[derive(Resource)]
 pub struct ArtFiles(pub PackageFiles);
 
+/// Room backgrounds and tile layers for one package.
+pub struct ArtPlugin(pub PackageFiles);
+
+impl Plugin for ArtPlugin {
+    fn build(&self, app: &mut App) {
+        app.insert_resource(ArtFiles(self.0.clone()))
+            .init_resource::<ArtImages>()
+            .init_resource::<ShownArt>()
+            .add_systems(Update, sync_room_art.after(crate::view::follow_view));
+    }
+}
+
 /// Decoded background and tileset images, by id.
 #[derive(Resource, Default)]
 pub struct ArtImages(HashMap<String, Option<(Handle<Image>, UVec2)>>);

@@ -1,21 +1,25 @@
-//! `iwbtg-client <package>`: opens a game package in a window (docs/architecture.md, Crates).
-//! `iwbtg-client --ui-gallery`: the UI kit's component gallery (docs/architecture.md, UI).
+//! `iwbtg-client <package>`: opens a game package in a window (docs/architecture/client.md).
+//! `iwbtg-client --ui-gallery`: the UI kit's component gallery (docs/architecture/client.md, UI).
 //!
 //! The sim ticks at the game's rate on a fixed clock, whatever the frame rate; every visible
 //! instance with a sprite is drawn where the sim last put it.
+//!
+//! Each module owns its command-line flags (a clap `Args` group) and its systems (a Bevy
+//! `Plugin`). A new module adds one `mod` line, one flattened group and one plugin here and
+//! nothing else (#530), so parallel client work doesn't collide in this file.
 
 // The browser build opens only the gallery until the web client loads packages, so the game
 // path is compiled there but not called.
 #![cfg_attr(target_arch = "wasm32", allow(dead_code, unused_imports))]
 
 mod art;
+mod audio;
 mod input;
 mod package;
 mod screen;
 mod ui;
 mod view;
 
-use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::Parser;
@@ -24,74 +28,54 @@ use clap::Parser;
 #[derive(Parser)]
 #[command(name = "iwbtg-client", version, about = "IWBTG Collection client")]
 struct Args {
-    /// Package folder (a folder with a game.toml).
-    #[arg(required_unless_present = "ui_gallery")]
-    package: Option<PathBuf>,
-    /// Open the UI gallery (every UI component, for design review) instead of a game.
-    #[arg(long)]
-    ui_gallery: bool,
-    /// Turn off slides, fades and pops: every UI transition lands at once.
-    #[arg(long)]
-    reduced_motion: bool,
-    /// Load converter output: unmapped script kinds become inert.
-    #[arg(long)]
-    trace_mode: bool,
-    /// Frame cap: a number of frames per second, or `unlimited`. The sim ticks at the game's
-    /// rate either way.
-    #[arg(long, value_name = "FPS", default_value = "60")]
-    fps: view::FrameCap,
-    /// Blend frames between the last two ticks for smoother motion on fast displays. Off by
-    /// default: the originals draw every step, so a blended frame shows positions the game never had.
-    #[arg(long)]
-    interpolate: bool,
-    /// Start fullscreen (F11 toggles).
-    #[arg(long)]
-    fullscreen: bool,
-    /// The shape of the area the game may use: native, 4:3, 16:9, 16:10, 21:9 or 32:9 (F10 cycles).
-    /// The game is scaled by whole steps inside it; the rest is a blurred copy of the background.
-    #[arg(long, value_name = "RATIO", default_value = "native")]
-    ratio: String,
-    /// Windowed size, WIDTHxHEIGHT (F9 cycles the presets: 800x608, 1280x720, 1600x1216, 1920x1080,
-    /// 2560x1440, 3200x2432).
-    #[arg(long, value_name = "WxH", value_parser = screen::parse_size)]
-    window: Option<(u32, u32)>,
-    /// Save a screenshot of the window to this PNG after a few frames and exit (for checks).
-    #[arg(long, value_name = "PNG")]
-    screenshot: Option<PathBuf>,
+    #[command(flatten)]
+    package: package::PackageArgs,
+    #[command(flatten)]
+    view: view::ViewArgs,
+    #[command(flatten)]
+    audio: audio::AudioArgs,
+    #[command(flatten)]
+    screen: screen::ScreenArgs,
+    #[command(flatten)]
+    ui: ui::UiArgs,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> ExitCode {
     let args = Args::parse();
-    let ratio = match screen::parse_ratio(&args.ratio) {
-        Ok(r) => r,
+    if let Err(e) = screen::configure(&args.screen) {
+        eprintln!("{e}");
+        return ExitCode::FAILURE;
+    }
+    if args.ui.ui_gallery {
+        // `configure` has checked the ratio.
+        let ratio = screen::parse_ratio(&args.screen.ratio).unwrap_or(None);
+        ui::gallery::run(args.view.screenshot, args.ui.reduced_motion, args.screen.window, ratio);
+        return ExitCode::SUCCESS;
+    }
+    // Clap requires the package unless `--ui-gallery` is given.
+    let Some(dir) = args.package.package else {
+        return ExitCode::FAILURE;
+    };
+    let pkg = match package::open(&dir, args.package.trace_mode) {
+        Ok(pkg) => pkg,
         Err(e) => {
-            eprintln!("--ratio {}: {e}", args.ratio);
+            eprintln!("{}: {e}", dir.display());
             return ExitCode::FAILURE;
         }
     };
-    if args.ui_gallery {
-        ui::gallery::run(args.screenshot, args.reduced_motion, args.window, ratio);
-        return ExitCode::SUCCESS;
-    }
-    let Some(package) = args.package else {
-        return ExitCode::FAILURE;
-    };
-    screen::configure(screen::Options {
-        fullscreen: args.fullscreen,
-        ratio,
-        window: args.window,
+    let audio = args.audio;
+    let result = view::run(pkg, args.view, |app, pkg| {
+        app.add_plugins((
+            screen::ScreenPlugin,
+            art::ArtPlugin(pkg.files.clone()),
+            audio::AudioPlugin::new(&audio, &pkg.files),
+        ));
     });
-    match package::open(&package, args.trace_mode) {
-        Ok(pkg) => match view::run(pkg, args.fps, args.interpolate, args.screenshot) {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(e) => {
-                eprintln!("{e}");
-                ExitCode::FAILURE
-            }
-        },
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("{}: {e}", package.display());
+            eprintln!("{e}");
             ExitCode::FAILURE
         }
     }
@@ -102,4 +86,16 @@ fn main() -> ExitCode {
 #[cfg(target_arch = "wasm32")]
 fn main() {
     ui::gallery::run(None, false, None, None);
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::CommandFactory;
+
+    /// Clap checks the flattened groups only when it builds the command: two modules with the same
+    /// flag or group name fail here instead of at start-up.
+    #[test]
+    fn the_command_line_is_consistent() {
+        super::Args::command().debug_assert();
+    }
 }
