@@ -49,12 +49,12 @@ Several agents can work at once through Claude Code agent teams (experimental). 
 
 Teammates share the lead's working folder, so the CLAUDE.md files require:
 
-- **One worktree per agent:** `IWBTG Collection/worktrees/<repo>-<issue>`, created with `git worktree add ../worktrees/<repo>-<n> -b issue-<n>-<name> origin/main` from inside the repo. The main checkouts stay on `main`. `worktrees/` is in no repo.
+- **One worktree per lane:** `IWBTG Collection/worktrees/<repo>-<lane>` (`client-ui`, `client-data`, `client-sim`), created once with `git worktree add ../worktrees/<repo>-<lane> -b issue-<n>-<name> origin/main` from inside the repo. Each next issue is a new branch in the same worktree (`git switch -c issue-<n>-<name> origin/main`), so its `target/` stays warm. The main checkouts stay on `main`. `worktrees/` is in no repo.
 - **Claims:** the `in-progress` label, in all three repos. The session-start hook lists claimed issues separately and leaves them out of the next-issues list.
-- **Merging:** teammates open PRs and send the link to the lead. The lead merges one at a time and removes the worktree.
+- **Merging:** teammates open PRs and send the link to the lead. The lead merges one at a time with `gh pr merge --squash`. Lane worktrees are kept between issues, so never `--delete-branch`: gh then also removes a local worktree checked out on that branch (seen 2026-11-05). All three repos have GitHub's `delete_branch_on_merge` on (set 2026-11-05), which deletes the merged branch and retargets PRs based on it to `main`.
 - **Research data work** (crawls, downloads, extraction, traces, the converter) needs `archive/`, `extracted/`, `db/` and `tools/`. Those exist only in the main research checkout, so that work runs there, one agent at a time.
 
-Each client worktree builds its own `target/` folder: the first build there takes a few minutes and a few GB. Teams use several times the tokens of one session. The docs advise 3 to 5 teammates, Sonnet for teammates, and checking in on the team often. `/resume` does not bring back in-process teammates.
+Each client worktree builds its own `target/` folder: the first build there takes about 5 minutes alone and over 10 when three teammates start at once. That is why worktrees are per lane and never removed between issues (see Build speed). Teams use several times the tokens of one session. The docs advise 3 to 5 teammates, Sonnet for teammates, and checking in on the team often. `/resume` does not bring back in-process teammates.
 
 **Which hooks fire for teammates** (checked 2026-11-02 in the first team run, three in-process Sonnet teammates):
 
@@ -65,6 +65,42 @@ Each client worktree builds its own `target/` folder: the first build there take
 So a teammate runs the status hook by hand at the start (from the workspace root: `python -I client/.claude/hooks/issues.py start`; the output is JSON, read `additionalContext`) and ends every turn that changed files with `Findings: <issue links>` or `Findings: none`, whether or not a hook asks. The lead's own session still gets both hooks.
 
 The lead prompt is `TEAM_LEAD_PROMPT.md` in the workspace root.
+
+**Background commands don't wake a teammate** (checked 2026-11-05 in the transcripts of the 2026-11-04 run): when a teammate ends its turn "waiting for" a background cargo run, the completion notice is queued and only delivered when the lead next messages it. Teammates sat idle 30 to 60 minutes per wait: the data and sim teammates were idle 2.3 of their 3.3 and 3.1 hours. Teammates run cargo in the foreground; the workspace settings raise the shell tool limit to 45 minutes (`BASH_MAX_TIMEOUT_MS`) and the default to 15 (`BASH_DEFAULT_TIMEOUT_MS`).
+
+## Build speed
+
+Measured on the home PC (Ryzen 7 7800X3D, 64 GB, NVMe) on 2026-11-05:
+
+| Step | Before | With this setup |
+|---|---|---|
+| Cold build of `iwbtg-client`, one build alone | 4 min 50 s | 3 min 45 s |
+| Cold build, three worktrees at once (2026-11-04 run) | 10 min or more, often hit the old 10-minute tool limit | |
+| Then every test binary of the workspace | | 3 min 20 s more |
+| Touch `crates/client/src/main.rs`, rebuild the client | 13 s | 4 s |
+| Touch `crates/sim/src/lib.rs`, rebuild every test binary | 33 s (82 binaries) | 7 s (12 binaries, #517) |
+| Run `cargo test --workspace` once built | 20 s (7 s of tests, the rest starting 82 executables) | 10 s |
+| `target/` of one worktree | 8 to 21 GB | 6 GB |
+| CI, whole matrix | 2 to 3 min | |
+
+**Windows Defender** scans every executable the build writes (82 test executables per run before #517). Excluding the build output folders, and only those, speeds builds and test runs up. It needs an administrator PowerShell, so the user runs it once:
+
+```
+Add-MpPreference -ExclusionPath "C:\Users\Nugamus\Desktop\Code Projects\IWBTG Collection\client\target","C:\Users\Nugamus\Desktop\Code Projects\IWBTG Collection\worktrees\*\target"
+```
+
+Never exclude the whole workspace: `research/archive/` and `research/extracted/` hold untrusted downloads that Defender must keep scanning. A Windows Dev Drive (ReFS, Defender's performance mode) would help more, but means moving the workspace, which also moves every Claude Code transcript and memory path; not done.
+
+Tried and not adopted (#532, 2026-11-05): Bevy's `dynamic_linking` feature cut a client rebuild after touching `view.rs` from 3.5 s to 2.4 s, but it is a second feature set, so every worktree would build Bevy twice (minutes and gigabytes) and tests and clippy would need the feature too. Splitting `iwbtg-client` into a library and a thin binary saves at most the binary's own compile (about 2 s of the 3.5 s) while the crate is about 4,000 lines. Look again when the client crate passes about 15,000 lines or a rebuild passes 15 s.
+
+What follows from it:
+
+- `.cargo/config.toml` links with `rust-lld` on Windows, and `Cargo.toml` keeps only line tables as debug info for our crates and none for dependencies: faster links and a smaller `target/`.
+- `.claude/hooks/build_guard.py` (PreToolUse, all sessions and teammates) blocks cargo commands that change the fingerprint or run in the background; `# build-guard: ok (<why>)` in the command overrides it. Self-test: `python -I client/.claude/hooks/build_guard.py --test`.
+- Anything that changes the build fingerprint (`RUSTFLAGS`, `--config`, `CARGO_PROFILE_*`, a different linker) rebuilds all dependencies, about 5 minutes, and again on the way back. Don't copy CI's `RUSTFLAGS`/`CARGO_INCREMENTAL` into local commands.
+- Keep worktrees per lane and warm (above). A cold worktree costs 5 to 10 minutes and 10 to 20 GB.
+- Locally, run the tests of what you changed; run `cargo xtask check` once before the PR (only the changed crates and their dependents; `--all` for everything) and let CI do the rest.
+- `python -I client/.claude/stats.py [--days N]` from the workspace root reads the Claude Code transcripts and prints, per session and teammate, wall time, turns, average context, time inside cargo, idle time (waiting for a message), slow cargo calls, merges of `main`, conflicts and PRs.
 
 ## Check a machine
 
@@ -81,13 +117,15 @@ Expected: the build ends with `Finished`. `issues.py start` prints JSON with mil
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every PR and every push to main:
+`.github/workflows/ci.yml` runs on every PR and every push to main. Its `changes` job skips the build jobs when a change touches only docs, Markdown, `workspace/` or `.claude/`; the `ci-ok` job then reports success, so the one required check always appears. Builds run without debug info or incremental state, to save time. Only runs on `main` write the Rust cache (`save-if`); PR runs restore it.
 
-Changes that touch only docs, Markdown, `workspace/` or `.claude/` skip it. Builds run without debug info or incremental state, to save time.
+**Auto-merge (#528).** A ruleset on `main` requires the `ci-ok` and `body` checks; the repository admin can bypass it. `gh pr merge <n> --squash --auto` turns on auto-merge, and GitHub merges the PR when both are green, so nobody polls CI. Branches don't have to be up to date with `main` (that would stall auto-merge, which doesn't update branches), so the push run on `main` is the check after each merge; a PR that changes pinned hashes is updated with `gh pr update-branch <n>` before its auto-merge. GitHub's merge queue would update and test each PR against `main` itself, but it is not offered for repositories owned by a personal account (the ruleset API refused it, 2026-11-05). The workflows keep their `merge_group` triggers in case the repo moves to an organization.
+
+The checks:
 
 - Windows and Linux: `cargo clippy --workspace --tests -- -D warnings`, `cargo test --workspace` (all `--locked`, warnings are errors), and `cargo fmt --check` on Linux.
 - wasm32: `cargo test -p iwbtg-sim` and `cargo test -p iwbtg-format --lib --test fixtures` on wasm32-wasip1 under wasmtime, and a wasm32-unknown-unknown build. The package-loading `wp7a_*` tests run on native targets only, because wasm32-wasip1 aborts on the panics of unmerged WP0 stubs. On wasm32-unknown-unknown, `wp1_determinism` runs under node through `wasm-bindgen-test` (`.cargo/config.toml` sets the runner): `cargo test -p iwbtg-sim --test wp1_determinism --target wasm32-unknown-unknown`. The runner is the wasm-bindgen CLI, and its version must equal `wasm-bindgen` in Cargo.lock: `cargo install wasm-bindgen-cli --version <lock version> --locked`. Other sim tests still need the same `#[wasm_bindgen_test]` switch to run there.
-- `cargo deny check licenses`, and the sim's dependency ban: `cargo deny --manifest-path crates/sim/Cargo.toml --config crates/sim/deny.toml check bans` (docs/architecture.md, Sim purity).
+- `cargo deny check licenses`, and the sim's dependency ban: `cargo deny --manifest-path crates/sim/Cargo.toml --config crates/sim/deny.toml check bans` (docs/architecture/sim.md, Sim purity).
 
 The same checks locally, from `client/`:
 

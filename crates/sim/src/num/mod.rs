@@ -1,4 +1,4 @@
-//! Number handling for the sim (docs/architecture.md, "Number handling").
+//! Number handling for the sim (docs/architecture/sim.md, "Number handling").
 //!
 //! Every real in built-ins is a [`Real`]: an IEEE binary64 double, like a GM8 real. Only exact
 //! IEEE operations (`+ - * /`, `sqrt`, `floor`, `ceil`, `trunc`) run on hardware. Everything

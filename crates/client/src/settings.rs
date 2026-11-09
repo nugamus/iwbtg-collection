@@ -1,12 +1,11 @@
 //! The settings file: one versioned TOML file in the user's config folder that holds every
-//! player setting (docs/architecture.md, Settings). The client reads it at start and writes it
+//! player setting (docs/architecture/client.md, Settings). The client reads it at start and writes it
 //! when a setting changes; the settings screens of M6 only edit it.
 //!
 //! Reading is forgiving: an unknown key, a wrong type or an out-of-range value is a warning on
 //! stderr and that entry keeps its default; the rest of the file still counts. Nothing here
 //! touches the sim.
 
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -15,10 +14,10 @@ use toml::{Table, Value};
 /// The layout version this build writes.
 pub const VERSION: i64 = 1;
 /// The largest audio offset, in milliseconds.
-pub const MAX_AUDIO_OFFSET_MS: u32 = 500;
+pub const MAX_AUDIO_OFFSET_MS: u32 = crate::audio::MAX_OFFSET_MS;
 
 /// Every player setting.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
     /// Start fullscreen.
     pub fullscreen: bool,
@@ -30,8 +29,9 @@ pub struct Settings {
     pub audio_offset_ms: u32,
     /// The debug overlay (F3) is shown.
     pub overlay: bool,
-    /// Key bindings: action name to key name (the input layer, #27, reads and validates them).
-    pub bindings: BTreeMap<String, String>,
+    /// The `[bindings]` table, kept as written: the input layer (#27) owns its layout and checks
+    /// it; this file only stores it.
+    pub bindings: Table,
 }
 
 impl Default for Settings {
@@ -42,7 +42,7 @@ impl Default for Settings {
             window: None,
             audio_offset_ms: 0,
             overlay: true,
-            bindings: BTreeMap::new(),
+            bindings: Table::new(),
         }
     }
 }
@@ -75,7 +75,7 @@ impl Settings {
                 ("display", Value::Table(t)) => s.read_display(t, warnings),
                 ("audio", Value::Table(t)) => s.read_audio(t, warnings),
                 ("hud", Value::Table(t)) => s.read_hud(t, warnings),
-                ("bindings", Value::Table(t)) => s.read_bindings(t, warnings),
+                ("bindings", Value::Table(t)) => s.bindings = t.clone(),
                 ("display" | "audio" | "hud" | "bindings", _) => {
                     warnings.push(format!("`[{key}]` must be a table, using defaults"));
                 }
@@ -130,16 +130,6 @@ impl Settings {
         }
     }
 
-    fn read_bindings(&mut self, t: &Table, w: &mut Vec<String>) {
-        for (action, value) in t {
-            match value {
-                Value::String(k) => {
-                    self.bindings.insert(action.clone(), k.clone());
-                }
-                _ => w.push(format!("bindings.{action} must be a key name, ignored")),
-            }
-        }
-    }
 
     /// The file's text.
     pub fn to_toml(&self) -> String {
@@ -153,16 +143,12 @@ impl Settings {
         audio.insert("offset_ms".into(), i64::from(self.audio_offset_ms).into());
         let mut hud = Table::new();
         hud.insert("overlay".into(), self.overlay.into());
-        let mut bindings = Table::new();
-        for (a, k) in &self.bindings {
-            bindings.insert(a.clone(), k.clone().into());
-        }
         let mut root = Table::new();
         root.insert("version".into(), VERSION.into());
         root.insert("display".into(), display.into());
         root.insert("audio".into(), audio.into());
         root.insert("hud".into(), hud.into());
-        root.insert("bindings".into(), bindings.into());
+        root.insert("bindings".into(), self.bindings.clone().into());
         toml::to_string(&root).unwrap_or_default()
     }
 }
@@ -222,9 +208,11 @@ fn store() -> std::sync::MutexGuard<'static, Option<Store>> {
     STORE.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// Reads the file once at start and keeps the result for [`get`] and [`update`].
-pub fn load() -> Settings {
-    let path = default_path();
+/// Reads the file once at start and keeps the result for [`get`] and [`update`]. `isolated`
+/// (a `--screenshot` check) neither reads nor writes the file: it starts from the defaults, so the
+/// picture does not depend on the machine, and its flags are not saved.
+pub fn load(isolated: bool) -> Settings {
+    let path = if isolated { None } else { default_path() };
     let current = path.as_deref().map(read_file).unwrap_or_default();
     *store() = Some(Store {
         path,
@@ -284,7 +272,7 @@ mod tests {
             overlay: false,
             ..Settings::default()
         };
-        s.bindings.insert("jump".into(), "ShiftLeft".into());
+        s.bindings = "[keys]\njump = [\"ShiftLeft\"]\n".parse().unwrap();
         let (back, w) = parse(&s.to_toml());
         assert_eq!(back, s);
         assert!(w.is_empty(), "{w:?}");
@@ -298,16 +286,15 @@ mod tests {
              [display]\nfullscreen = true\nratio = \"5:4\"\nwindow = 7\nextra = 1\n\
              [audio]\noffset_ms = 9000\n\
              [hud]\noverlay = false\n\
-             [bindings]\njump = \"Space\"\nshoot = 3\n",
+             [bindings]\njump = \"Space\"\n",
         );
         assert!(s.fullscreen, "the good entry beside bad ones still counts");
         assert_eq!(s.ratio, None);
         assert_eq!(s.window, None);
         assert_eq!(s.audio_offset_ms, 0);
         assert!(!s.overlay);
-        assert_eq!(s.bindings.get("jump").map(String::as_str), Some("Space"));
-        assert!(!s.bindings.contains_key("shoot"));
-        assert_eq!(w.len(), 6, "{w:?}");
+        assert_eq!(s.bindings.get("jump").and_then(Value::as_str), Some("Space"));
+        assert_eq!(w.len(), 5, "{w:?}");
     }
 
     #[test]
