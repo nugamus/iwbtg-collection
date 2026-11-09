@@ -508,7 +508,7 @@ pub fn perform_change(ctx: &mut Ctx, req: RoomRequest) -> Result<(), SimError>;
   | `ShowdownLoad` | `KeyPressEvent` | showdown | kid/A3.md showdown "Restart": clear frozen on both kid kinds, add a death and saveDeathTime and destroy each, loadGame (create kid at (0,0), reset jump values and the listed globals), write temp, saveExe, loadDeathTime; **no game_restart**. |
   | `RecreateInPlace` | `StepPressed { skip_while_paused: true }` | keep-celebrating-for-xia | Destroy kid, create kid at the saved spot in the current room, then `Goto(saved room)` (rooms Confirmed). |
 
-- **Conflict (R26).** The rooms table puts showdown in Group A ("loadGame ... then game_restart"), but `kid/A3.md` (showdown Restart, step 4) says "There is no game_restart". A3 read showdown's scripts in full, so the plan follows A3 and reports the conflict to research (section 16). The rooms section's "16 of the 20 games" therefore counts 15 here.
+- **R26 (settled).** Showdown's R has no game_restart (research PR #98; recorder `traces/showdown/a3-t18-a.csv` f41-43). The rooms section now counts 15 of the 20 games with a full game restart, matching this plan.
 - `boot_ticks` is the single number to change after TR-ROOM-01. Whether the boot tick exists at all is UNKNOWN (rooms: "whether a room change consumes a tick").
 - `room_restart` (kaenbyou warpStart, xia death in difficulty room) is `RoomRequest::Restart`.
 - `Reset` (F2): Groups A, B, C delete the save's temp marker and game_restart; kaenbyou/lemon gameReset resets globals and goes to the boot room (rooms Confirmed). `GameDef::reset: ResetModel` mirrors `RestartModel`.
@@ -1242,7 +1242,7 @@ Every rule the sim needs that the spec marks UNKNOWN, Inferred or Conflict, or t
 | R23 | room_goto during the room change (room creation code) | UNKNOWN (rooms) | `RoomRules::nested_request` | `ChainAfterSequence`, max 8 | tr-room-12 (rec) |
 | R24 | instance_destroy() in room creation code | UNKNOWN (rooms) | `RoomAction::DestroySelf` | `Unsupported` | request (section 16) |
 | R25 | Deferral grain: code action or event action list | UNKNOWN (rooms 1) | handler boundary | end of handler (Design) | request |
-| R26 | Showdown restart path | Conflict: rooms table (Group A, game_restart) vs kid/A3.md (no game_restart) | `GameDef::restart.kind` | `ShowdownLoad` per A3 | research fix (section 16) |
+| R26 | Showdown restart path | Confirmed (recorder): R has no game_restart; the R tick makes a new kid in the old room, the next tick is the reloaded room with the same kid | `GameDef::restart.kind` | `ShowdownLoad` | traces/showdown/a3-t18-a.csv f41-43 (rec) |
 | R27 | Restart trigger phase per engine | Confirmed per game (rooms, A3 I7) | `RestartModel::trigger` | per 4.3 table | tr-room-01-a (rec), sh-save-restart (rec) |
 | R28 | Runner real-time reads (`fps`, clocks) | Design | world built-in, script API | `fps = tick_rate`; clocks from ticks | — |
 
@@ -1351,7 +1351,7 @@ To the user (WP0 updates the documents):
 
 To research (WP7a files these with the converter requests of 8.4):
 
-- **Conflict R26:** the rooms table puts showdown in Group A with game_restart; `kid/A3.md` showdown Restart says there is no game_restart. Please settle and fix one of them.
+- R26 (showdown restart) is settled by research PR #98; nothing to request.
 - **Spec items requested:** R22 (destroyed instance in collisions and queries), R24 (instance_destroy in room creation code), R25 (deferral grain), N14 (literal parsing), C13 combination of x and y gaps.
 - **Recorded traces waiting for analysis** that settle defaults here: t-ord-1, t-evo-1, t-room-1, tr-room-01-a, tr-room-04, tr-room-08, tr-room-12, t-alarm-2, num-eps-slip, num-eps-alpha, num-alarm-half, num-divmod-save, num-string-save, t-col-01..09, t-mot-02/04/05/06, anim-nosprite, draw-bow-lag, famB-multikid-restart, t4/t5 input traces.
 - The `INVESTIGATION.md` provenance note lists the epsilon and truthiness; the plan also tracks sign, min/max, signed zeros and the UCRT trig claim as OpenGMK-derived (N11-N13, M6).
