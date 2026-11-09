@@ -12,6 +12,7 @@ mod audio;
 mod bindings;
 mod input;
 mod package;
+mod savefile;
 mod screen;
 mod view;
 
@@ -33,6 +34,8 @@ struct Args {
     screen: screen::ScreenArgs,
     #[command(flatten)]
     bindings: bindings::BindingsArgs,
+    #[command(flatten)]
+    save: savefile::SaveArgs,
 }
 
 fn main() -> ExitCode {
@@ -59,6 +62,7 @@ fn main() -> ExitCode {
         }
         return ExitCode::SUCCESS;
     };
+    savefile::configure(&args.save);
     let pkg = match package::open(package, args.package.trace_mode) {
         Ok(pkg) => pkg,
         Err(e) => {
@@ -71,6 +75,7 @@ fn main() -> ExitCode {
         app.add_plugins((
             screen::ScreenPlugin,
             bindings::BindingsPlugin(bindings),
+            savefile::SavePlugin,
             art::ArtPlugin(pkg.files.clone()),
             audio::AudioPlugin::new(&audio, &pkg.files),
         ));
