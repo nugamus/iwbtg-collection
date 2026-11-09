@@ -3417,6 +3417,7 @@ dependencies = [
  "iwbtg-format",
  "iwbtg-sim",
  "png",
+ "postcard",
  "thiserror 2.0.21",
  "toml",
 ]
