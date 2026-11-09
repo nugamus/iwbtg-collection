@@ -1,7 +1,7 @@
 //! WP3: placement, bounding boxes, standing heights, mirror and spike masks
 //! (docs/plans/sim-core.md 3.4, 12; CLONE_SPEC collision).
 
-mod wp3_support;
+use crate::wp3_support;
 
 mod wp3 {
     use iwbtg_sim::collide::bbox::reported_box;

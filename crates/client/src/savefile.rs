@@ -16,21 +16,23 @@ use iwbtg_sim::save::SaveSlot;
 
 use crate::view::Game;
 
-#[derive(Clone, Copy, Default)]
-pub struct Options {
-    /// Never read or write the save file.
-    pub disabled: bool,
+/// The save file's command-line flags (main.rs flattens each module's group, #530).
+#[derive(clap::Args, Debug, Clone, Copy, Default)]
+pub struct SaveArgs {
+    /// Never read or write the save file: always start a new game (ranked runs, checks).
+    #[arg(long)]
+    pub no_save_file: bool,
 }
 
-static OPTIONS: OnceLock<Options> = OnceLock::new();
+static OPTIONS: OnceLock<SaveArgs> = OnceLock::new();
 
 /// Called by `main` before the game starts.
-pub fn configure(options: Options) {
-    let _ = OPTIONS.set(options);
+pub fn configure(args: &SaveArgs) {
+    let _ = OPTIONS.set(*args);
 }
 
 fn enabled() -> bool {
-    !OPTIONS.get().is_some_and(|o| o.disabled)
+    !OPTIONS.get().is_some_and(|o| o.no_save_file)
 }
 
 /// Where a game's save lives: the user's data folder.

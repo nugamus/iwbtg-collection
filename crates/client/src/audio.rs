@@ -22,6 +22,47 @@ use crate::view::Game;
 /// may run.
 pub const MAX_OFFSET_MS: u32 = 500;
 
+/// The audio command-line flags.
+#[derive(clap::Args, Debug)]
+pub struct AudioArgs {
+    /// Hold the sound back by this many milliseconds (0 to 500) to line it up with the picture on
+    /// a slow audio device. It moves playback only, never the sim.
+    #[arg(long, value_name = "MS", default_value_t = 0, value_parser = clap::value_parser!(u32).range(0..=i64::from(MAX_OFFSET_MS)))]
+    pub audio_offset: u32,
+}
+
+/// Sound, music and screen shake for one package.
+pub struct AudioPlugin {
+    offset_ms: u32,
+    files: PackageFiles,
+}
+
+impl AudioPlugin {
+    pub fn new(args: &AudioArgs, files: &PackageFiles) -> AudioPlugin {
+        AudioPlugin {
+            offset_ms: args.audio_offset,
+            files: files.clone(),
+        }
+    }
+}
+
+impl Plugin for AudioPlugin {
+    fn build(&self, app: &mut App) {
+        app.insert_resource(Queue::new(self.offset_ms))
+            .insert_resource(Sounds::new(&self.files))
+            .init_resource::<Shake>()
+            .add_systems(
+                Update,
+                (
+                    // Shake adds its offset on top of the view centre `follow_view` just set.
+                    apply_shake.after(crate::view::follow_view),
+                    play,
+                    sync_music.after(play),
+                ),
+            );
+    }
+}
+
 /// What the client acts on from one tick's output.
 #[derive(Clone, PartialEq, Debug)]
 pub enum Cue {
