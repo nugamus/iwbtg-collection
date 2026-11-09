@@ -440,9 +440,11 @@ fn tick(
     if previous.on {
         let world = game.sim.world();
         previous.room = Some(world.room);
-        previous.view = game.sim.def().room(world.room).map(|d| {
-            view_of(world, Vec2::new(d.width as f32, d.height as f32))
-        });
+        previous.view = game
+            .sim
+            .def()
+            .room(world.room)
+            .map(|d| view_of(world, Vec2::new(d.width as f32, d.height as f32)));
         previous.pos = world
             .instances()
             .iter()
@@ -785,10 +787,19 @@ mod tests {
     fn the_view_moves_part_of_the_way_between_ticks() {
         let mid = blend_view(Some(view(100.0, 0.0)), view(108.0, 4.0), 0.5);
         assert_eq!((mid.x, mid.y), (104.0, 2.0));
-        assert_eq!(blend_view(Some(view(100.0, 0.0)), view(108.0, 4.0), 1.0), view(108.0, 4.0));
-        assert_eq!(blend_view(Some(view(100.0, 0.0)), view(108.0, 4.0), 0.0), view(100.0, 0.0));
+        assert_eq!(
+            blend_view(Some(view(100.0, 0.0)), view(108.0, 4.0), 1.0),
+            view(108.0, 4.0)
+        );
+        assert_eq!(
+            blend_view(Some(view(100.0, 0.0)), view(108.0, 4.0), 0.0),
+            view(100.0, 0.0)
+        );
         // The turn is blended too.
-        let turned = ViewRect { angle: 12.0, ..view(0.0, 0.0) };
+        let turned = ViewRect {
+            angle: 12.0,
+            ..view(0.0, 0.0)
+        };
         assert_eq!(blend_view(Some(view(0.0, 0.0)), turned, 0.5).angle, 6.0);
     }
 
@@ -796,10 +807,19 @@ mod tests {
     fn the_view_never_slides_across_a_jump_or_a_resize() {
         // No previous view, a snap of the view, a resize and a half turn all land at once.
         assert_eq!(blend_view(None, view(500.0, 0.0), 0.5), view(500.0, 0.0));
-        assert_eq!(blend_view(Some(view(0.0, 0.0)), view(500.0, 0.0), 0.5), view(500.0, 0.0));
-        let small = ViewRect { w: 400.0, ..view(0.0, 0.0) };
+        assert_eq!(
+            blend_view(Some(view(0.0, 0.0)), view(500.0, 0.0), 0.5),
+            view(500.0, 0.0)
+        );
+        let small = ViewRect {
+            w: 400.0,
+            ..view(0.0, 0.0)
+        };
         assert_eq!(blend_view(Some(view(0.0, 0.0)), small, 0.5), small);
-        let flipped = ViewRect { angle: 180.0, ..view(0.0, 0.0) };
+        let flipped = ViewRect {
+            angle: 180.0,
+            ..view(0.0, 0.0)
+        };
         assert_eq!(blend_view(Some(view(0.0, 0.0)), flipped, 0.5), flipped);
     }
 }
