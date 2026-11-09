@@ -58,11 +58,7 @@ impl Plugin for RetryPlugin {
         .add_systems(FixedUpdate, watch.after(SimTick))
         .add_systems(
             Update,
-            (
-                key,
-                apply.run_if(|retry: Res<Retry>| retry.pending.is_some()),
-            )
-                .chain(),
+            (key, apply.run_if(|retry: Res<Retry>| retry.pending.is_some())).chain(),
         );
     }
 }

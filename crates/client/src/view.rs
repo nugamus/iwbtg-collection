@@ -208,7 +208,8 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
         seed: 0,
         dll_mode: DllMode::Model,
     };
-    let sim = Sim::new(Arc::clone(&def), options.clone()).map_err(|e| format!("the game did not start: {e}"))?;
+    let sim =
+        Sim::new(Arc::clone(&def), options.clone()).map_err(|e| format!("the game did not start: {e}"))?;
     let room = def.room(sim.world().room).ok_or("the start room is missing")?;
     let (width, height) = (room.width as f32, room.height as f32);
     let images = sprite_images(&pkg.files);
