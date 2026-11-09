@@ -10,12 +10,14 @@ use std::fmt::Write as _;
 use serde::{Deserialize, Serialize};
 
 use crate::input::InputFrame;
+use crate::mods::ModSet;
 
 /// File magic, the first four bytes of every replay.
 pub const MAGIC: [u8; 4] = *b"IWBR";
 
 /// The replay layout version this module reads and writes. Bump it on any layout change.
-pub const REPLAY_FORMAT: u16 = 1;
+/// 2: the header's `mods` (#35).
+pub const REPLAY_FORMAT: u16 = 2;
 
 /// Hard ceiling on the ticks in one replay: 48 hours at 50 ticks per second. Bounds memory when
 /// runs are expanded (6 bytes per tick) before the game's own `max_ticks` is known.
@@ -52,6 +54,8 @@ pub struct Header {
     pub rng_seed: u64,
     /// New game or a saved state.
     pub start_mode: StartMode,
+    /// The mods the run was played with (`crate::mods`). Every bit must name a known mod.
+    pub mods: ModSet,
     /// Client build that recorded the replay, for bug reports only.
     pub client_build_id: String,
 }
@@ -121,6 +125,9 @@ pub enum ReplayError {
     /// than the checkpoint before it.
     #[error("checkpoint {0} is past the last tick, off the interval grid or out of order")]
     BadCheckpoint(u64),
+    /// A mods bit that names no mod in `crate::mods::MODS`.
+    #[error("unknown mods bits {0:#x}")]
+    UnknownMods(u32),
     /// The bytes decode but are not what `encode` writes (for example an overlong varint).
     #[error("replay is not in canonical form")]
     NotCanonical,
@@ -236,6 +243,7 @@ impl Replay {
                 let _ = writeln!(out, "start_mode from_save {}", hex(save));
             }
         }
+        let _ = writeln!(out, "mods {}", h.mods.codes());
         let _ = writeln!(out, "client_build_id {:?}", h.client_build_id);
 
         let runs = runs(&self.inputs);
@@ -270,6 +278,9 @@ fn check(header: &Header, ticks: u64, trailer: &Trailer) -> Result<(), ReplayErr
     }
     if header.replay_format != REPLAY_FORMAT {
         return Err(ReplayError::UnknownFormat(header.replay_format));
+    }
+    if !header.mods.is_known() {
+        return Err(ReplayError::UnknownMods(header.mods.bits()));
     }
     if ticks != trailer.total_ticks {
         return Err(ReplayError::TickCountMismatch {
@@ -374,6 +385,7 @@ mod tests {
             engine_rev: 1,
             rng_seed: 0x1234_5678_9abc_def0,
             start_mode: StartMode::NewGame,
+            mods: ModSet::NONE,
             client_build_id: "test-build".to_string(),
         }
     }
@@ -512,6 +524,27 @@ mod tests {
         let mut r = small();
         r.header.start_mode = StartMode::FromSave(vec![9, 8, 7]);
         assert_eq!(Replay::decode(&r.encode().unwrap()), Ok(r));
+    }
+
+    #[test]
+    fn round_trip_keeps_mods() {
+        let mut r = small();
+        r.header.mods = ModSet::parse("SD,NB").unwrap();
+        let decoded = Replay::decode(&r.encode().unwrap()).unwrap();
+        assert_eq!(decoded.header.mods.codes(), "SD+NB");
+        assert!(decoded.dump().contains("mods SD+NB
+"));
+    }
+
+    #[test]
+    fn rejects_unknown_mods_bits() {
+        let mut r = small();
+        let bits: u32 = 1 << 30;
+        // Only a decoded file can carry unknown bits; build one through serde.
+        r.header.mods = postcard::from_bytes::<ModSet>(&postcard::to_allocvec(&bits).unwrap()).unwrap();
+        let err = ReplayError::UnknownMods(bits);
+        assert_eq!(r.encode(), Err(err.clone()));
+        assert_eq!(Replay::decode(&encode_unchecked(&r)), Err(err));
     }
 
     #[test]
@@ -684,12 +717,12 @@ mod tests {
 
     #[test]
     fn rejects_overlong_varint() {
-        // replay_format 1 is the single byte 0x01 right after the magic; 0x81 0x00 also reads
-        // as 1 but is not what encode writes.
+        // replay_format 2 is the single byte 0x02 right after the magic; 0x82 0x00 also reads
+        // as 2 but is not what encode writes.
         let bytes = small().encode().unwrap();
-        assert_eq!(bytes[4], 0x01);
+        assert_eq!(bytes[4], 0x02);
         let mut long = bytes[..4].to_vec();
-        long.extend([0x81, 0x00]);
+        long.extend([0x82, 0x00]);
         long.extend(&bytes[5..]);
         assert_eq!(Replay::decode(&long), Err(ReplayError::NotCanonical));
     }
@@ -712,7 +745,7 @@ mod tests {
                 0 => (0..rng.range(0, 256)).map(|_| rng.byte()).collect(),
                 // Valid prefix, noise after it.
                 1 => {
-                    let mut b = vec![b'I', b'W', b'B', b'R', 0x01];
+                    let mut b = vec![b'I', b'W', b'B', b'R', 0x02];
                     b.extend((0..rng.range(0, 256)).map(|_| rng.byte()));
                     b
                 }

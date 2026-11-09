@@ -75,6 +75,11 @@ impl ViewRect {
     }
 }
 
+/// The fixed-clock systems that advance the sim (the tick and the clock retune). Other modules
+/// gate them with a run condition, as Sudden Death does when the run is over (mods.rs).
+#[derive(SystemSet, Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub(crate) struct SimTick;
+
 /// Marks the camera that draws the game.
 #[derive(Component)]
 pub(crate) struct GameCamera;
@@ -245,7 +250,7 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
         RunFixedMainLoop,
         collect_input.in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
     )
-    .add_systems(FixedUpdate, (tick, follow_room_speed).chain())
+    .add_systems(FixedUpdate, (tick, follow_room_speed).chain().in_set(SimTick))
     .add_systems(
         Update,
         (

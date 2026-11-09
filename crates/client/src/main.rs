@@ -10,6 +10,7 @@
 mod art;
 mod audio;
 mod input;
+mod mods;
 mod package;
 mod screen;
 mod view;
@@ -30,6 +31,8 @@ struct Args {
     audio: audio::AudioArgs,
     #[command(flatten)]
     screen: screen::ScreenArgs,
+    #[command(flatten)]
+    mods: mods::ModsArgs,
 }
 
 fn main() -> ExitCode {
@@ -46,11 +49,14 @@ fn main() -> ExitCode {
         }
     };
     let audio = args.audio;
+    let run_mods = args.mods.mods;
+    eprintln!("{}", mods::describe(run_mods));
     let result = view::run(pkg, args.view, |app, pkg| {
         app.add_plugins((
             screen::ScreenPlugin,
             art::ArtPlugin(pkg.files.clone()),
             audio::AudioPlugin::new(&audio, &pkg.files),
+            mods::ModsPlugin(run_mods),
         ));
     });
     match result {
