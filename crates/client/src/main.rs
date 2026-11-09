@@ -50,7 +50,12 @@ fn main() -> ExitCode {
     if args.ui.ui_gallery {
         // `configure` has checked the ratio.
         let ratio = screen::parse_ratio(&args.screen.ratio).unwrap_or(None);
-        ui::gallery::run(args.view.screenshot, args.ui.reduced_motion, args.screen.window, ratio);
+        ui::gallery::run(
+            args.view.screenshot,
+            args.ui.reduced_motion,
+            args.screen.window,
+            ratio,
+        );
         return ExitCode::SUCCESS;
     }
     // Clap requires the package unless `--ui-gallery` is given.
