@@ -116,7 +116,11 @@ mod tests {
     fn only_built_mods_are_accepted() {
         assert_eq!(parse_built("sd").unwrap().codes(), "SD");
         assert_eq!(parse_built("").unwrap(), ModSet::NONE);
-        assert!(parse_built("SD,SL").unwrap_err().contains("SL (Slow motion) is not built yet"));
+        assert!(
+            parse_built("SD,SL")
+                .unwrap_err()
+                .contains("SL (Slow motion) is not built yet")
+        );
         assert!(parse_built("ZZ").unwrap_err().contains("unknown mod"));
     }
 

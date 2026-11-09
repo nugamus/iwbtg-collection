@@ -110,9 +110,7 @@ impl Mod {
     /// The mod's table row.
     pub fn def(self) -> &'static ModDef {
         // MODS lists every mod once, so the search always finds it.
-        MODS.iter()
-            .find(|d| d.id == self)
-            .expect("MODS lists every mod")
+        MODS.iter().find(|d| d.id == self).expect("MODS lists every mod")
     }
 
     /// The mod whose code is `code` (case ignored).
@@ -247,7 +245,10 @@ mod tests {
 
     #[test]
     fn unknown_bits_are_rejected() {
-        assert_eq!(ModSet::from_bits(0b11), Some(ModSet::NONE.with(Mod::SuddenDeath).with(Mod::Hitboxes)));
+        assert_eq!(
+            ModSet::from_bits(0b11),
+            Some(ModSet::NONE.with(Mod::SuddenDeath).with(Mod::Hitboxes))
+        );
         assert_eq!(ModSet::from_bits(1 << 31), None);
         assert!(!ModSet(1 << MODS.len()).is_known());
     }

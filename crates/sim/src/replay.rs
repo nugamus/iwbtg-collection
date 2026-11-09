@@ -532,8 +532,10 @@ mod tests {
         r.header.mods = ModSet::parse("SD,NB").unwrap();
         let decoded = Replay::decode(&r.encode().unwrap()).unwrap();
         assert_eq!(decoded.header.mods.codes(), "SD+NB");
-        assert!(decoded.dump().contains("mods SD+NB
-"));
+        assert!(decoded.dump().contains(
+            "mods SD+NB
+"
+        ));
     }
 
     #[test]
