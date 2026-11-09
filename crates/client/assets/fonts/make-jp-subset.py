@@ -9,7 +9,7 @@ chars=set()
 # kana, punctuation, fullwidth forms
 for a,b in [(0x3000,0x30FF),(0x31F0,0x31FF),(0xFF00,0xFFEF),(0x2010,0x2027),(0x25A0,0x25EF)]:
     chars|=set(range(a,b+1))
-# JIS X 0208 level 1 and 2 kanji
+# JIS X 0208 level 1 kanji (lead bytes 0x88..0x98)
 for lead in range(0x88,0x99):
     for trail in range(0x40,0xFD):
         if trail==0x7F: continue
