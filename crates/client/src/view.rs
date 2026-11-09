@@ -9,7 +9,6 @@ use bevy::camera::ScalingMode;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::sprite::Anchor;
-use iwbtg_sim::room::StartPoint;
 use iwbtg_sim::sim::{Sim, SimOptions};
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::world::{InstId, SimStatus};
@@ -193,7 +192,7 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
     let options = SimOptions {
         // Like a replay: a new game, in the game's `new_game_room`. The title and menus come with
         // the rest of the client; until then the first thing on screen is the first room.
-        start: StartPoint::NewGame { difficulty: 0 },
+        start: crate::savefile::start_point(&def),
         seed: 0,
         dll_mode: DllMode::Model,
     };
