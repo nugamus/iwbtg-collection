@@ -7,9 +7,9 @@
 //! `Plugin`). A new module adds one `mod` line, one flattened group and one plugin here and
 //! nothing else (#530), so parallel client work doesn't collide in this file.
 
-mod bindings;
 mod art;
 mod audio;
+mod bindings;
 mod input;
 mod package;
 mod screen;

@@ -12,8 +12,8 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use iwbtg_sim::input::{Action, IWBTG_DEFAULT_KEYS, key_code, vk};
 use bevy::prelude::*;
+use iwbtg_sim::input::{Action, IWBTG_DEFAULT_KEYS, key_code, vk};
 use serde::{Deserialize, Serialize};
 
 /// A controller input as the collector sees it: a button, or a stick pushed past the dead zone.
