@@ -2,8 +2,7 @@
 //! alarms, keys, the direct latch, boundary events, animation slots and timelines
 //! (docs/plans/sim-core.md 2.1, 2.2, 12).
 
-#[path = "wp1_support.rs"]
-mod support;
+use crate::wp1_support as support;
 
 use iwbtg_sim::def::{Builtin, ClassMask, KindDef, RoomId, TimelineDef, TimelineId};
 use iwbtg_sim::events::{EventSet, ProbeAct, ProbeOn, ProbeState, ProbeStep, dispatch_order};

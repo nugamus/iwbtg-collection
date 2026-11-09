@@ -1,4 +1,4 @@
-//! Replay file (`.iwbr`) encode and decode. See docs/architecture.md, "Replay file (.iwbr)".
+//! Replay file (`.iwbr`) encode and decode. See docs/architecture/replay.md, "Replay file (.iwbr)".
 //!
 //! A replay is a postcard-encoded struct: header, run-length encoded input frames, trailer. The
 //! file form is canonical: `decode` accepts only bytes that `encode` would write for the same

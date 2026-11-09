@@ -1,6 +1,6 @@
 //! Client actions and per-tick input frames, plus the `.inputs` text format for tests and traces.
 //!
-//! See `docs/architecture.md`, "Actions and input frames" and "Text inputs for tests". Games read
+//! See `docs/architecture/replay.md`, "Actions and input frames" and "Text inputs for tests". Games read
 //! actions, never raw keys. Keys only appear here so the research recorder's `.inputs` files
 //! (which name original keys like `Shift`) compile to the same frames as our action-named files.
 //!

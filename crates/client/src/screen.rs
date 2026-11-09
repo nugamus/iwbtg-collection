@@ -14,7 +14,7 @@ use iwbtg_sim::def::RoomId;
 
 use crate::art::{ArtFiles, parse_room_art};
 use crate::package::decode_png;
-use crate::view::{Game, RoomSize};
+use crate::view::{Game, GameCamera, RoomSize, ViewRect};
 
 /// The aspect ratios fullscreen offers; `None` is the monitor's own.
 pub const RATIOS: [Option<(u32, u32)>; 6] = [
@@ -57,6 +57,22 @@ pub fn parse_size(s: &str) -> Result<(u32, u32), String> {
         .ok_or_else(|| "a window size is WIDTHxHEIGHT, at least 200 x 200".to_string())
 }
 
+/// The screen's command-line flags.
+#[derive(clap::Args, Debug)]
+pub struct ScreenArgs {
+    /// Start fullscreen (F11 toggles).
+    #[arg(long)]
+    pub fullscreen: bool,
+    /// The shape of the area the game may use: native, 4:3, 16:9, 16:10, 21:9 or 32:9 (F10 cycles).
+    /// The game is scaled by whole steps inside it; the rest is a blurred copy of the background.
+    #[arg(long, value_name = "RATIO", default_value = "native")]
+    pub ratio: String,
+    /// Windowed size, WIDTHxHEIGHT (F9 cycles the presets: 800x608, 1280x720, 1600x1216, 1920x1080,
+    /// 2560x1440, 3200x2432).
+    #[arg(long, value_name = "WxH", value_parser = parse_size)]
+    pub window: Option<(u32, u32)>,
+}
+
 /// What the command line asked for.
 #[derive(Clone, Copy, Default)]
 pub struct Options {
@@ -68,8 +84,14 @@ pub struct Options {
 static OPTIONS: OnceLock<Options> = OnceLock::new();
 
 /// Called by `main` before the window opens.
-pub fn configure(options: Options) {
-    let _ = OPTIONS.set(options);
+pub fn configure(args: &ScreenArgs) -> Result<(), String> {
+    let ratio = parse_ratio(&args.ratio).map_err(|e| format!("--ratio {}: {e}", args.ratio))?;
+    let _ = OPTIONS.set(Options {
+        fullscreen: args.fullscreen,
+        ratio,
+        window: args.window,
+    });
+    Ok(())
 }
 
 /// The scale of one game pixel in screen pixels, and whether the picture needs the half-pixel
@@ -122,7 +144,12 @@ impl Plugin for ScreenPlugin {
         })
         .insert_resource(StartSize(o.window))
         .init_resource::<Letterbox>()
-        .add_systems(Update, (keys, apply, letterbox).chain());
+        .add_systems(
+            Update,
+            (keys, apply, letterbox, keep_letterbox)
+                .chain()
+                .after(crate::view::follow_view),
+        );
     }
 }
 
@@ -156,12 +183,15 @@ fn ratio_name(r: Option<(u32, u32)>) -> String {
     r.map_or("native".to_string(), |(w, h)| format!("{w}:{h}"))
 }
 
-/// Sets the window mode and the camera: whole-pixel scale, centred.
+/// Sets the window mode and the camera: whole-pixel scale, centred. The game is scaled to fit the
+/// view (the whole room when it has none). When the view shows less than the room, or is turned,
+/// the camera is clipped to the view's rectangle so nothing of the room shows beside it.
 fn apply(
     mut screen: ResMut<Screen>,
     room: Res<RoomSize>,
+    view: Res<ViewRect>,
     mut window: Single<&mut Window, With<PrimaryWindow>>,
-    mut camera: Single<&mut Projection, With<Camera2d>>,
+    mut camera: Single<(&mut Projection, &mut Camera), With<GameCamera>>,
 ) {
     let mode = if screen.fullscreen {
         WindowMode::BorderlessFullscreen(MonitorSelection::Current)
@@ -176,14 +206,32 @@ fn apply(
         window.resolution.physical_height(),
     );
     let ratio = RATIOS[screen.ratio];
-    let (scale, (odd_x, odd_y)) = layout(size, ratio, (room.0.x as u32, room.0.y as u32));
-    if let Projection::Orthographic(o) = &mut **camera {
+    let (scale, (odd_x, odd_y)) = layout(size, ratio, (view.w as u32, view.h as u32));
+    let clip = view.clips(room.0);
+    let (projection, cam) = &mut *camera;
+    cam.viewport = clip.then(|| {
+        let (w, h) = (
+            ((view.w * scale).round() as u32).max(1),
+            ((view.h * scale).round() as u32).max(1),
+        );
+        bevy::camera::Viewport {
+            physical_position: UVec2::new(size.0.saturating_sub(w) / 2, size.1.saturating_sub(h) / 2),
+            physical_size: UVec2::new(w.min(size.0), h.min(size.1)),
+            ..default()
+        }
+    });
+    if let Projection::Orthographic(o) = &mut **projection {
         // One world unit is `scale` physical pixels.
         o.scaling_mode = ScalingMode::WindowSize;
         o.scale = window.resolution.scale_factor() / scale;
         // Half a pixel when the leftover is odd, so game pixels sit on screen pixels.
         let shift = |odd: bool, px: u32| if odd { 0.5 / px.max(1) as f32 } else { 0.0 };
-        o.viewport_origin = Vec2::new(0.5 + shift(odd_x, size.0), 0.5 - shift(odd_y, size.1));
+        // A clipped camera already sits on whole pixels.
+        o.viewport_origin = if clip {
+            Vec2::splat(0.5)
+        } else {
+            Vec2::new(0.5 + shift(odd_x, size.0), 0.5 - shift(odd_y, size.1))
+        };
     }
     let base = screen.title.get_or_insert_with(|| window.title.clone()).clone();
     let title = format!(
@@ -299,15 +347,14 @@ fn letterbox_image(files: &iwbtg_format::files::PackageFiles, room: &str) -> Ima
 }
 
 /// Fills everything outside the game with the blurred background, and keeps a black panel the
-/// size of the room above it, so the blur never shows through a room with no art.
+/// size of the view above it, so the blur never shows through a room with no art. Both follow
+/// the camera.
 fn letterbox(
     mut commands: Commands,
     game: NonSend<Game>,
     files: Res<ArtFiles>,
     mut images: ResMut<Assets<Image>>,
     mut state: ResMut<Letterbox>,
-    camera: Single<&Projection, With<Camera2d>>,
-    mut sprites: Query<&mut Sprite>,
 ) {
     let room = game.sim.world().room;
     let Some(def) = game.sim.def().room(room) else {
@@ -334,15 +381,30 @@ fn letterbox(
                 .id(),
         );
     }
-    // Cover the whole visible area, whatever its shape.
-    let Projection::Orthographic(o) = *camera else {
+}
+
+/// Keeps the letterbox sprite over the whole visible area, whatever its shape, and the panel at
+/// the view's size, both with the camera.
+fn keep_letterbox(
+    state: Res<Letterbox>,
+    camera: Single<(&Projection, &Transform), With<GameCamera>>,
+    view: Res<ViewRect>,
+    mut sprites: Query<(&mut Sprite, &mut Transform), Without<GameCamera>>,
+) {
+    let (projection, camera) = *camera;
+    let Projection::Orthographic(o) = projection else {
         return;
     };
-    let area = o.area.size().max(room_size) * 1.05;
-    if let Some(e) = state.sprite
-        && let Ok(mut s) = sprites.get_mut(e)
-    {
-        s.custom_size = Some(area);
+    let area = o.area.size().max(Vec2::new(view.w, view.h)) * 1.05;
+    for (entity, size) in [(state.sprite, area), (state.panel, Vec2::new(view.w, view.h))] {
+        if let Some(e) = entity
+            && let Ok((mut s, mut t)) = sprites.get_mut(e)
+        {
+            s.custom_size = Some(size);
+            t.translation.x = camera.translation.x;
+            t.translation.y = camera.translation.y;
+            t.rotation = camera.rotation;
+        }
     }
 }
 

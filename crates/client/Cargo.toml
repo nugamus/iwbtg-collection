@@ -11,13 +11,13 @@ publish = false
 iwbtg-sim.workspace = true
 iwbtg-format = { workspace = true, features = ["schema"] }
 # Features picked by hand: 2D rendering, windowing and bevy_ui (docs/decisions/0003-ui-toolkit.md),
-# no 3D, audio or gamepad yet (those pull system libraries).
+# no 3D or gamepad yet (those pull system libraries); audio is Ogg Vorbis only.
 clap.workspace = true
 png.workspace = true
 thiserror.workspace = true
 toml.workspace = true
 bevy = { version = "0.20.1", default-features = false, features = [
-  "2d_bevy_render", "default_app", "std", "bevy_winit", "default_font", "multi_threaded", "x11", "wayland", "webgl2",
+  "2d_bevy_render", "default_app", "std", "bevy_winit", "default_font", "multi_threaded", "bevy_audio", "vorbis", "x11", "wayland", "webgl2",
   "ui_api", "ui_bevy_render", "bevy_ui_widgets", "ui_picking",
 ] }
 
