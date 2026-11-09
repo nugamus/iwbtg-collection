@@ -146,14 +146,17 @@ fn keys(
     }
     if keys.just_pressed(KeyCode::F11) {
         screen.fullscreen = !screen.fullscreen;
+        crate::settings::update(|s| s.fullscreen = screen.fullscreen);
     }
     if keys.just_pressed(KeyCode::F10) {
         screen.ratio = (screen.ratio + 1) % RATIOS.len();
+        crate::settings::update(|s| s.ratio = RATIOS[screen.ratio]);
     }
     if keys.just_pressed(KeyCode::F9) && !screen.fullscreen {
         screen.window = (screen.window + 1) % WINDOWS.len();
         let (w, h) = WINDOWS[screen.window];
         window.resolution.set_physical_resolution(w, h);
+        crate::settings::update(|s| s.window = Some((w, h)));
     }
 }
 

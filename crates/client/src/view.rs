@@ -277,6 +277,11 @@ fn setup(
         TextColor(Color::srgb(1.0, 1.0, 0.4)),
         Anchor::TOP_LEFT,
         Transform::from_xyz(-room.0.x / 2.0 + 4.0, room.0.y / 2.0 - 4.0, 1000.0),
+        if crate::settings::get().overlay {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        },
         Overlay,
     ));
     commands.spawn((
@@ -462,6 +467,7 @@ fn overlay(
         } else {
             Visibility::Hidden
         };
+        crate::settings::update(|s| s.overlay = **visibility != Visibility::Hidden);
     }
     let status = match &game.sim.world().status {
         SimStatus::Running => String::new(),

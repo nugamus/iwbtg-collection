@@ -8,6 +8,7 @@ mod audio;
 mod input;
 mod package;
 mod screen;
+mod settings;
 mod view;
 
 use std::path::PathBuf;
@@ -33,16 +34,16 @@ struct Args {
     #[arg(long)]
     interpolate: bool,
     /// Hold the sound back by this many milliseconds (0 to 500) to line it up with the picture on
-    /// a slow audio device. It moves playback only, never the sim.
-    #[arg(long, value_name = "MS", default_value_t = 0, value_parser = clap::value_parser!(u32).range(0..=500))]
-    audio_offset: u32,
-    /// Start fullscreen (F11 toggles).
+    /// a slow audio device. It moves playback only, never the sim. Saved in the settings file.
+    #[arg(long, value_name = "MS", value_parser = clap::value_parser!(u32).range(0..=500))]
+    audio_offset: Option<u32>,
+    /// Start fullscreen (F11 toggles). Saved in the settings file, like `--ratio` and `--window`.
     #[arg(long)]
     fullscreen: bool,
     /// The shape of the area the game may use: native, 4:3, 16:9, 16:10, 21:9 or 32:9 (F10 cycles).
     /// The game is scaled by whole steps inside it; the rest is a blurred copy of the background.
-    #[arg(long, value_name = "RATIO", default_value = "native")]
-    ratio: String,
+    #[arg(long, value_name = "RATIO")]
+    ratio: Option<String>,
     /// Windowed size, WIDTHxHEIGHT (F9 cycles the presets: 800x608, 1280x720, 1600x1216, 1920x1080,
     /// 2560x1440, 3200x2432).
     #[arg(long, value_name = "WxH", value_parser = screen::parse_size)]
@@ -54,24 +55,41 @@ struct Args {
 
 fn main() -> ExitCode {
     let args = Args::parse();
-    let ratio = match screen::parse_ratio(&args.ratio) {
-        Ok(r) => r,
-        Err(e) => {
-            eprintln!("--ratio {}: {e}", args.ratio);
+    // The settings file gives the defaults; a flag on the command line overrides its entry and
+    // is saved, so the next start without the flag keeps it.
+    settings::load();
+    let ratio = match args.ratio.as_deref().map(screen::parse_ratio) {
+        Some(Ok(r)) => Some(r),
+        Some(Err(e)) => {
+            eprintln!("--ratio {}: {e}", args.ratio.as_deref().unwrap_or_default());
             return ExitCode::FAILURE;
         }
+        None => None,
     };
+    settings::update(|s| {
+        s.fullscreen |= args.fullscreen;
+        if let Some(r) = ratio {
+            s.ratio = r;
+        }
+        if args.window.is_some() {
+            s.window = args.window;
+        }
+        if let Some(ms) = args.audio_offset {
+            s.audio_offset_ms = ms;
+        }
+    });
+    let saved = settings::get();
     screen::configure(screen::Options {
-        fullscreen: args.fullscreen,
-        ratio,
-        window: args.window,
+        fullscreen: saved.fullscreen,
+        ratio: saved.ratio,
+        window: saved.window,
     });
     match package::open(&args.package, args.trace_mode) {
         Ok(pkg) => match view::run(
             pkg,
             args.fps,
             args.interpolate,
-            args.audio_offset,
+            saved.audio_offset_ms,
             args.screenshot,
         ) {
             Ok(()) => ExitCode::SUCCESS,
