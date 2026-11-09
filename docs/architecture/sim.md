@@ -115,22 +115,22 @@ The sketch above is the original idea. The declared types are in `crates/sim/src
 | # | Phase | Status | Isolation |
 |---|---|---|---|
 | 0 | Latch input: build held/pressed/released for the tick; `direct_latch |= pressed` per key | Inferred (sample once before Begin Step) | `InputState::latch` |
-| 1 | Capture `xprevious/yprevious` if `prev_capture = TickStart` | UNKNOWN U1 (R1) | `TickRules::prev_capture` |
+| 1 | Capture `xprevious/yprevious` if `prev_capture = TickStart` (default) | Confirmed (recorder) U1 (R1) | `TickRules::prev_capture` |
 | 2 | Begin Step | Confirmed order | |
-| 3 | Timelines advance, moments run | UNKNOWN U6 (R6) | `TickRules::timeline_slot = AfterBeginStep` (Design) |
-| 4 | Alarms: for each alarm the object handles, if value > 0 subtract 1, if now 0 fire | Confirmed order; rule Inferred (R3) | `alarm::tick` |
+| 3 | Timelines advance, moments run | Slot Confirmed (recorder) U6 (R6); moments for speed > 1 UNKNOWN | `TickRules::timeline_slot = AfterBeginStep` |
+| 4 | Alarms: for each alarm the object handles, a value > 0 loses 1 and fires when that leaves it at or below 0; a value of exactly 0 becomes -1 without firing | Confirmed order; rule Confirmed (recorder) (R3) | `alarm::tick` |
 | 5 | Keyboard events: held, then press, then release (keys in action-bit order) | Confirmed slot; inner order UNKNOWN U11 (R4) | `events::key_event_order()` |
 | 6 | Mouse events | Confirmed slot; no gameplay use in the 20 games | no-op phase kept for order |
 | 7 | Step | Confirmed | |
 | 8 | Motion for every instance: (capture prev if `BeforeMotion`), friction, gravity vector, path, `x += hspeed`, `y += vspeed`, polar recompute | Slot Confirmed; inner order Inferred | `motion::apply_auto_motion` |
-| 8b | Animation if `anim_slot = AfterMotion` | Inferred, sprites section (Conflict with row 13, R7) | `anim::advance` |
-| 9 | Outside Room, Intersect Boundary | Inferred slot (U4, R5) | `TickRules::boundary_slot` |
+| 8b | Animation if `anim_slot = AfterMotion` | Alternative; the recorder puts it at row 13 (R7) | `anim::advance` |
+| 9 | Outside Room, Intersect Boundary | Confirmed (recorder) slot (U4, R5) | `TickRules::boundary_slot` |
 | 10 | Collision events with the solid put-back rule | Confirmed (manual); pairing Inferred/UNKNOWN (C7, C7b, C8, C9, R12) | `events::collision_phase`, `collide::solid_resolve` |
 | 11 | End Step | Confirmed | |
 | 12 | Draw slot (`Late` handlers): instances in draw order (depth descending, then creation), visible instances only | Confirmed; Draw changes state, so it runs headless too (R15) | `events::run_draw_phase` |
-| 13 | Animation if `anim_slot = AfterDraw`: `image_index += image_speed`, wrap, Animation End | Inferred (Conflict with row 8b, R7); wrap `>=` and subtract once: Trace t-anim-1 | `anim::advance` |
+| 13 | Animation if `anim_slot = AfterDraw` (default): `image_index += image_speed`, wrap, Animation End | Confirmed (recorder) (R7): slot, wrap `>=` and subtract once | `anim::advance` |
 | 14 | Destroy sweep | Design (manual: removed at end of step) | `World::sweep` |
-| 15 | Room change if requested | Confirmed sequence; abort rule Inferred (R8) | `room::perform_change` |
+| 15 | Room change if requested | Confirmed sequence; abort rule Confirmed (recorder) (R8) | `room::perform_change` |
 | 16 | `tick += 1` (checked), timing triggers, checkpoint hash every 500 ticks | Design | `tick.rs`, `timing.rs`, `hash.rs` |
 
 The trace recorder samples after row 13 and before row 15. The previous version of this table (xprevious at tick start, timelines before alarms, no Draw slot) is replaced by this one.

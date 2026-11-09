@@ -12,7 +12,9 @@ pub struct TickRules {
     pub prev_capture: PrevCapture,
     /// R2 (U2, answered by the recorder): instance order within a phase.
     pub dispatch: DispatchOrder,
-    /// R21 (UNKNOWN): which instance is "the first" in queries, the kid, view follow, saveGame.
+    /// R21 (answered by the recorder: the first in instance order, which for one object is the
+    /// lowest id; famB-multikid-restart-b rows 25-26): which instance is "the first" in queries,
+    /// the kid, view follow, saveGame.
     pub first_rule: FirstRule,
     /// R6 (U6, answered by the recorder): where timelines advance.
     pub timeline_slot: TimelineSlot,
