@@ -14,8 +14,8 @@ use bevy::window::{MonitorSelection, PrimaryWindow, WindowMode};
 use iwbtg_sim::def::RoomId;
 
 use crate::art::{ArtFiles, parse_room_art};
-use crate::settings::{self, Settings};
 use crate::package::decode_png;
+use crate::settings::{self, Settings};
 use crate::view::{Game, GameCamera, RoomSize, ViewRect};
 
 /// The aspect ratios fullscreen offers; `None` is the monitor's own.

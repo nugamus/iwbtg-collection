@@ -130,7 +130,6 @@ impl Settings {
         }
     }
 
-
     /// The file's text.
     pub fn to_toml(&self) -> String {
         let mut display = Table::new();
@@ -223,10 +222,7 @@ pub fn load(isolated: bool) -> Settings {
 
 /// The current settings (the defaults before [`load`]).
 pub fn get() -> Settings {
-    store()
-        .as_ref()
-        .map(|s| s.current.clone())
-        .unwrap_or_default()
+    store().as_ref().map(|s| s.current.clone()).unwrap_or_default()
 }
 
 /// Changes the settings and writes the file when something changed.

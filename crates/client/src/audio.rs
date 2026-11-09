@@ -53,6 +53,9 @@ impl AudioPlugin {
 
 impl Plugin for AudioPlugin {
     fn build(&self, app: &mut App) {
+        if self.offset_ms > 0 {
+            info!("audio offset {} ms", self.offset_ms);
+        }
         app.insert_resource(Queue::new(self.offset_ms))
             .insert_resource(Sounds::new(&self.files))
             .init_resource::<Shake>()
