@@ -1,4 +1,4 @@
-//! Validator fixtures (docs/architecture.md, Testing strategy).
+//! Validator fixtures (docs/architecture/testing.md, Testing strategy).
 //!
 //! - `tests/valid/<pkg>/`: must check with no diagnostics at all.
 //! - `tests/invalid/<case>/`: must give exactly the one diagnostic listed under `[<case>]` in

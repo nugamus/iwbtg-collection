@@ -31,6 +31,8 @@ fragment R on Repository {
   user: issues(first: 50, states: OPEN, labels: ["needs-user"]) { nodes { number title
     comments(last: 1) { nodes { body } } } }
   triage: issues(first: 20, states: OPEN, labels: ["triage"]) { totalCount nodes { number title } }
+  prs: pullRequests(first: 30, states: OPEN) { nodes { number title headRefName isDraft mergeable
+    autoMergeRequest { enabledAt } } }
 }"""
 
 
@@ -55,6 +57,28 @@ def settings_drift(root=WORKSPACE):
             "through a PR), then restart Claude Code. See client/docs/dev-setup.md.\n\n")
 
 
+def worktrees(root=WORKSPACE):
+    """One line per extra git worktree of each repo: folder, branch, uncommitted files."""
+    out = []
+    for repo in ("client", "research", "games"):
+        try:
+            r = subprocess.run(["git", "-C", str(root / repo), "worktree", "list", "--porcelain"],
+                               capture_output=True, text=True, encoding="utf-8", timeout=10)
+        except Exception:
+            continue
+        for block in r.stdout.strip().split("\n\n")[1:]:  # the first is the main checkout
+            f = dict(l.split(" ", 1) if " " in l else (l, "") for l in block.splitlines())
+            path = Path(f.get("worktree", ""))
+            branch = f.get("branch", "").removeprefix("refs/heads/") or "(detached)"
+            try:
+                dirty = subprocess.run(["git", "-C", str(path), "status", "--porcelain"], capture_output=True,
+                                       text=True, encoding="utf-8", timeout=10).stdout.count("\n")
+            except Exception:
+                dirty = 0
+            out.append(f"- worktrees/{path.name}: {branch}" + (f", {dirty} uncommitted file(s)" if dirty else ""))
+    return out
+
+
 def start():
     warn = settings_drift()
     q ="query {" + " ".join(f'{k}: repository(owner: "{OWNER}", name: "{v}") {{ ...R }}' for k, v in REPOS.items()) + "}" + FRAGMENT
@@ -64,7 +88,7 @@ def start():
     except Exception as e:  # offline or gh missing: say so, never block the session
         return emit(warn + f"Issue harness: could not reach GitHub ({type(e).__name__}). Run `gh auth status`; work from the issues once it is back.")
 
-    ms, ready, answered, waiting, triage, claimed = {}, [], [], 0, [], []
+    ms, ready, answered, waiting, triage, claimed, prs = {}, [], [], 0, [], [], []
     for k, repo in data.items():
         name = REPOS[k]
         for m in repo["milestones"]["nodes"]:
@@ -84,6 +108,10 @@ def start():
                 waiting += 1
         triage += [f"{name}#{i['number']} {i['title']}" for i in repo["triage"]["nodes"]]
         claimed += [f"{name}#{i['number']} {i['title']}" for i in repo["claimed"]["nodes"]]
+        for p in repo["prs"]["nodes"]:
+            notes = [n for n, on in (("draft", p["isDraft"]), ("CONFLICTS with main", p["mergeable"] == "CONFLICTING"),
+                                     ("auto-merge on", p["autoMergeRequest"])) if on]
+            prs.append(f"{name}#{p['number']} {p['title']} ({p['headRefName']}" + "".join(f"; {n}" for n in notes) + ")")
 
     lines = ["# Project status (from GitHub issues)", "", "Milestones (closed/total across repos):"]
     for t in sorted(ms, key=lambda t: (ms_key(t), t)):
@@ -95,6 +123,11 @@ def start():
         lines += ["", f"Triage queue ({len(triage)}): give each a milestone, size, area, `blocked by` links, then remove `triage`:"] + [f"- {t}" for t in triage]
     if claimed:
         lines += ["", "In progress (claimed by an agent; do not start these):"] + [f"- {c}" for c in claimed]
+    if prs:
+        lines += ["", "Open PRs:"] + [f"- {p}" for p in prs]
+    wt = worktrees()
+    if wt:
+        lines += ["", "Worktrees (lanes keep theirs between issues):"] + wt
     lines += ["", "Next unblocked agent-ready issues (unclaimed):"] + [f"- {r[3]}" for r in sorted(ready)[:10]]
     lines += ["", f"{waiting} needs-user issue(s) still wait for the user.",
               "Rules: CLAUDE.md, Issues. Unless the user names other work, offer to start the first issue above."]

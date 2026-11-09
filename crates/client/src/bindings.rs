@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use iwbtg_sim::input::{Action, IWBTG_DEFAULT_KEYS, key_code, vk};
+use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 /// A controller input as the collector sees it: a button, or a stick pushed past the dead zone.
@@ -417,5 +418,48 @@ mod tests {
         for code in [vk::LEFT_SHIFT, vk::SPACE, vk::F1 + 4, b'Z', b'7', 20, vk::PAGE_UP] {
             assert_eq!(key_from_name(&key_name(code)), Some(code));
         }
+    }
+}
+
+/// The bindings' command-line flags (main.rs flattens each module's group, #530).
+#[derive(clap::Args, Debug)]
+pub struct BindingsArgs {
+    /// Change a global binding and save it: `ACTION=INPUT[,INPUT...]`, an input being a key name
+    /// (`Space`, `LShift`, `F5`) or `pad:<button>` (`pad:south`, `pad:dpad-left`, `pad:stick-up`).
+    /// Repeatable. Replaces that action's keys (or controller inputs). With a package, the game
+    /// then starts; without one, the bindings are only saved.
+    #[arg(long, value_name = "ACTION=INPUT")]
+    pub bind: Vec<String>,
+    /// Print the global bindings and exit.
+    #[arg(long)]
+    pub show_bindings: bool,
+    /// Bindings file (default: the user's config folder, iwbtg-collection/bindings.toml).
+    #[arg(long, value_name = "FILE")]
+    pub bindings_file: Option<PathBuf>,
+}
+
+/// Loads the bindings file, applying and saving any `--bind` changes.
+pub fn load(args: &BindingsArgs) -> Result<Bindings, String> {
+    let path = match &args.bindings_file {
+        Some(p) => p.clone(),
+        None => default_path().ok_or("no config folder found; pass --bindings-file")?,
+    };
+    let mut config = load_config(&path)?;
+    if !args.bind.is_empty() {
+        for spec in &args.bind {
+            config.set(spec)?;
+        }
+        save_config(&path, &config)?;
+        eprintln!("bindings saved to {}", path.display());
+    }
+    Bindings::from_config(&config).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// Puts the input collector, built from the player's bindings, into the app.
+pub struct BindingsPlugin(pub Bindings);
+
+impl Plugin for BindingsPlugin {
+    fn build(&self, app: &mut App) {
+        app.insert_resource(crate::input::Collector::new(self.0.clone()));
     }
 }

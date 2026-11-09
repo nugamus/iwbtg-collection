@@ -16,7 +16,7 @@ use iwbtg_sim::world::{InstId, SimStatus};
 
 mod hud;
 
-use crate::bindings::{Bindings, PadInput};
+use crate::bindings::PadInput;
 use crate::input::{Collector, StickGate, key_code};
 use crate::package::{Package, SpriteImage, sprite_images};
 
@@ -166,15 +166,30 @@ struct Stats {
 #[derive(Component)]
 pub(crate) struct Overlay;
 
-/// Opens the window and runs until it closes.
-pub fn run(
-    pkg: Package,
-    cap: FrameCap,
-    interpolate: bool,
-    audio_offset_ms: u32,
-    screenshot: Option<std::path::PathBuf>,
-    bindings: Bindings,
-) -> Result<(), String> {
+/// The view's command-line flags (main.rs flattens each module's group, #530).
+#[derive(clap::Args, Debug)]
+pub struct ViewArgs {
+    /// Frame cap: a number of frames per second, or `unlimited`. The sim ticks at the game's
+    /// rate either way.
+    #[arg(long, value_name = "FPS", default_value = "60")]
+    pub fps: FrameCap,
+    /// Blend frames between the last two ticks for smoother motion on fast displays. Off by
+    /// default: the originals draw every step, so a blended frame shows positions the game never had.
+    #[arg(long)]
+    pub interpolate: bool,
+    /// Save a screenshot of the window to this PNG after a few frames and exit (for checks).
+    #[arg(long, value_name = "PNG")]
+    pub screenshot: Option<std::path::PathBuf>,
+}
+
+/// Opens the window and runs until it closes. `plugins` adds the other modules' plugins (main.rs
+/// lists them), after the window and the view's own resources are in place.
+pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package)) -> Result<(), String> {
+    let ViewArgs {
+        fps: cap,
+        interpolate,
+        screenshot,
+    } = args;
     let def = Arc::clone(&pkg.def);
     let options = SimOptions {
         // Like a replay: a new game, in the game's `new_game_room`. The title and menus come with
@@ -188,8 +203,7 @@ pub fn run(
     let (width, height) = (room.width as f32, room.height as f32);
     let images = sprite_images(&pkg.files);
     // The first room's start runs inside `Sim::new`; `step` clears its output, so take it now.
-    let mut audio_queue = crate::audio::Queue::new(audio_offset_ms);
-    audio_queue.push(Instant::now(), &sim.world().output);
+    let first_output = sim.world().output.clone();
     let mut app = App::new();
     app.add_plugins(
         DefaultPlugins
@@ -205,21 +219,13 @@ pub fn run(
                 ..default()
             }),
     )
-    .add_plugins(crate::screen::ScreenPlugin)
     .insert_resource(ClearColor(Color::BLACK))
     .insert_resource(RoomSize(Vec2::new(width, height)))
     .insert_resource(ViewRect::whole(Vec2::new(width, height)))
     .insert_resource(PendingImages(images))
-    .insert_resource(crate::art::ArtFiles(pkg.files.clone()))
-    .init_resource::<crate::art::ArtImages>()
-    .init_resource::<crate::art::ShownArt>()
     .init_resource::<Drawn>()
     .insert_non_send(Game { sim })
-    .insert_resource(Collector::new(bindings))
     .insert_resource(Cap(cap))
-    .insert_resource(audio_queue)
-    .insert_resource(crate::audio::Sounds::new(&pkg.files))
-    .init_resource::<crate::audio::Shake>()
     .insert_resource(Previous {
         on: interpolate,
         ..default()
@@ -244,17 +250,16 @@ pub fn run(
         Update,
         (
             follow_view,
-            // Shake adds its offset on top of the view centre `follow_view` just set.
-            crate::audio::apply_shake.after(follow_view),
-            crate::art::sync_room_art.after(follow_view),
             (set_alpha, sync_instances, overlay).chain().after(follow_view),
             hud::show_sign,
             hud::show_countdown,
-            crate::audio::play,
-            crate::audio::sync_music.after(crate::audio::play),
         ),
     )
     .add_systems(Last, limit_frames);
+    plugins(&mut app, &pkg);
+    if let Some(mut queue) = app.world_mut().get_resource_mut::<crate::audio::Queue>() {
+        queue.push(Instant::now(), &first_output);
+    }
     if let Some(path) = screenshot {
         app.insert_resource(ScreenshotTo(path))
             .add_systems(Update, take_screenshot);

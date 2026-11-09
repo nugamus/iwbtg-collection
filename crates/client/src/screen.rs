@@ -57,6 +57,22 @@ pub fn parse_size(s: &str) -> Result<(u32, u32), String> {
         .ok_or_else(|| "a window size is WIDTHxHEIGHT, at least 200 x 200".to_string())
 }
 
+/// The screen's command-line flags.
+#[derive(clap::Args, Debug)]
+pub struct ScreenArgs {
+    /// Start fullscreen (F11 toggles).
+    #[arg(long)]
+    pub fullscreen: bool,
+    /// The shape of the area the game may use: native, 4:3, 16:9, 16:10, 21:9 or 32:9 (F10 cycles).
+    /// The game is scaled by whole steps inside it; the rest is a blurred copy of the background.
+    #[arg(long, value_name = "RATIO", default_value = "native")]
+    pub ratio: String,
+    /// Windowed size, WIDTHxHEIGHT (F9 cycles the presets: 800x608, 1280x720, 1600x1216, 1920x1080,
+    /// 2560x1440, 3200x2432).
+    #[arg(long, value_name = "WxH", value_parser = parse_size)]
+    pub window: Option<(u32, u32)>,
+}
+
 /// What the command line asked for.
 #[derive(Clone, Copy, Default)]
 pub struct Options {
@@ -68,8 +84,14 @@ pub struct Options {
 static OPTIONS: OnceLock<Options> = OnceLock::new();
 
 /// Called by `main` before the window opens.
-pub fn configure(options: Options) {
-    let _ = OPTIONS.set(options);
+pub fn configure(args: &ScreenArgs) -> Result<(), String> {
+    let ratio = parse_ratio(&args.ratio).map_err(|e| format!("--ratio {}: {e}", args.ratio))?;
+    let _ = OPTIONS.set(Options {
+        fullscreen: args.fullscreen,
+        ratio,
+        window: args.window,
+    });
+    Ok(())
 }
 
 /// The scale of one game pixel in screen pixels, and whether the picture needs the half-pixel

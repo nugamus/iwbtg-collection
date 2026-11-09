@@ -1,5 +1,5 @@
 //! Turns key presses into one `InputFrame` per tick. The collector has no Bevy logic, so it is tested
-//! like any other code (docs/architecture.md, Actions and input frames).
+//! like any other code (docs/architecture/replay.md, Actions and input frames).
 
 use iwbtg_sim::input::{Action, InputFrame, vk};
 

@@ -1,5 +1,5 @@
 //! State hash test vectors (#92): fixed worlds with pinned BLAKE3 hashes, so any change to the
-//! canonical encoding (docs/architecture.md, State hash; `hash::HASH_LAYOUT`) fails here.
+//! canonical encoding (docs/architecture/sim.md, State hash; `hash::HASH_LAYOUT`) fails here.
 //!
 //! A deliberate encoding change bumps `HASH_LAYOUT` and updates every vector in the same PR.
 
