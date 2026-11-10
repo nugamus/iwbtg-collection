@@ -18,6 +18,7 @@ mod input;
 mod package;
 mod savefile;
 mod screen;
+mod settings;
 mod ui;
 mod view;
 
@@ -46,13 +47,20 @@ struct Args {
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> ExitCode {
     let args = Args::parse();
+    // The settings file gives the defaults the flags override (settings.rs). A `--screenshot`
+    // check neither reads nor writes it, so it looks the same on every machine.
+    settings::load(args.view.screenshot.is_some());
     if let Err(e) = screen::configure(&args.screen) {
         eprintln!("{e}");
         return ExitCode::FAILURE;
     }
     if args.ui.ui_gallery {
         // `configure` has checked the ratio.
-        let ratio = screen::parse_ratio(&args.screen.ratio).unwrap_or(None);
+        let ratio = args
+            .screen
+            .ratio
+            .as_deref()
+            .and_then(|r| screen::parse_ratio(r).ok().flatten());
         ui::gallery::run(
             args.view.screenshot,
             args.ui.reduced_motion,
