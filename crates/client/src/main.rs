@@ -15,7 +15,9 @@
 mod art;
 mod audio;
 mod input;
+mod mods;
 mod package;
+mod retry;
 mod savefile;
 mod screen;
 mod settings;
@@ -41,7 +43,11 @@ struct Args {
     #[command(flatten)]
     ui: ui::UiArgs,
     #[command(flatten)]
+    mods: mods::ModsArgs,
+    #[command(flatten)]
     save: savefile::SaveArgs,
+    #[command(flatten)]
+    retry: retry::RetryArgs,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -82,12 +88,17 @@ fn main() -> ExitCode {
         }
     };
     let audio = args.audio;
+    let run_mods = args.mods.mods;
+    let retry = args.retry;
+    eprintln!("{}", mods::describe(run_mods));
     let result = view::run(pkg, args.view, |app, pkg| {
         app.add_plugins((
             screen::ScreenPlugin,
             savefile::SavePlugin,
             art::ArtPlugin(pkg.files.clone()),
             audio::AudioPlugin::new(&audio, &pkg.files),
+            mods::ModsPlugin(run_mods),
+            retry::RetryPlugin(retry),
         ));
     });
     match result {
