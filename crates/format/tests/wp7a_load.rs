@@ -1643,3 +1643,94 @@ fn renaming_a_map_keeps_the_gameplay_hash() {
         base
     );
 }
+
+// ---- #32: stripped mode markers ---------------------------------------------------------------
+
+const STRIPPED: &str = r#"
+[[maps]]
+id = "medium"
+name = "Medium"
+
+[[maps]]
+id = "hard"
+name = "Hard"
+stripped_start = { globals = { difficulty = 2 } }
+
+[stripped]
+start = { room = "stage1", globals = { difficulty = 1, clear = false, file = "save1", exact = { bits = "3FB999999999999A" } } }
+cutscenes = [
+  { id = "boss_intro", kind = "@boss" },
+  { id = "title_scroll", room = "title" },
+]
+dialogues = [
+  { id = "npc", kind = "warp", advance = "jump", timeout_ticks = 150 },
+]
+
+[stripped.cut]
+rooms = [{ room = "title", to = "stage1" }]
+kinds = ["kid_start"]
+instances = [{ room = "stage1", name = "boss_a" }]
+"#;
+
+fn stripped_errors(text: &str) -> Vec<String> {
+    let files = package(|f| set(f, "game.toml", manifest(ORDER, text)));
+    errors(&load_report(&files, STRICT))
+}
+
+#[test]
+fn every_stripped_field_loads() {
+    let files = package(|f| set(f, "game.toml", manifest(ORDER, STRIPPED)));
+    let report = load_report(&files, STRICT);
+    assert!(report.ok(), "{}", render(&report));
+    assert!(report.diagnostics.is_empty(), "{}", render(&report));
+}
+
+#[test]
+fn stripped_mode_rejects_bad_markers() {
+    let cases: [(&str, &str, &str); 14] = [
+        ("room = \"stage1\", globals", "room = \"nowhere\", globals", "room `nowhere` does not exist"),
+        ("difficulty = 1,", "1difficulty = 1,", "is not a variable name"),
+        ("clear = false", "clear = [1]", "global `clear`"),
+        ("to = \"stage1\"", "to = \"lost\"", "room `lost` does not exist"),
+        ("rooms = [{ room = \"title\", to = \"stage1\" }]", "rooms = [{ room = \"title\", to = \"stage1\" }, { room = \"stage1\", to = \"title\" }]", "which is cut too"),
+        ("kinds = [\"kid_start\"]", "kinds = [\"@ghost\"]", "cut kind `@ghost` is not a kind"),
+        ("kinds = [\"kid_start\"]", "kinds = [\"kid_start\", \"kid_start\"]", "is cut twice"),
+        ("name = \"boss_a\"", "name = \"boss_b\"", "has no instance named `boss_b`"),
+        ("kind = \"@boss\" }", "kind = \"@boss\", room = \"title\" }", "has both `kind` and `room`"),
+        ("{ id = \"boss_intro\", kind = \"@boss\" }", "{ id = \"boss_intro\" }", "needs `kind` or `room`"),
+        ("id = \"npc\"", "id = \"boss_intro\"", "region id `boss_intro` is used twice"),
+        ("advance = \"jump\"", "advance = \"space\"", "`space` is not an action"),
+        ("timeout_ticks = 150", "timeout_ticks = 0", "timeout_ticks must be at least 1"),
+        ("kind = \"warp\", advance", "kind = \"@npc\", advance", "region kind `@npc` is not a kind"),
+    ];
+    for (from, to, want) in cases {
+        assert!(STRIPPED.contains(from), "case text `{from}` not in STRIPPED");
+        let errs = stripped_errors(&STRIPPED.replacen(from, to, 1));
+        assert!(
+            errs.iter().any(|e| e.contains(want)),
+            "`{to}` should give `{want}`, got {errs:#?}"
+        );
+    }
+}
+
+#[test]
+fn the_ranked_start_room_cannot_be_cut() {
+    // Named start room.
+    let errs = stripped_errors(&STRIPPED.replace("{ room = \"title\", to = \"stage1\" }", "{ room = \"stage1\", to = \"title\" }"));
+    assert!(errs.iter().any(|e| e.contains("ranked start room `stage1` is cut")), "{errs:#?}");
+    // Default start room: `[engine].new_game_room` is `stage1`.
+    let no_start = "\n[stripped.cut]\nrooms = [{ room = \"stage1\", to = \"title\" }]\n";
+    let errs = stripped_errors(no_start);
+    assert!(errs.iter().any(|e| e.contains("ranked runs start in `stage1`")), "{errs:#?}");
+}
+
+#[test]
+fn stripped_markers_count_for_the_gameplay_hash() {
+    let hash = |text: &str| {
+        let files = package(|f| set(f, "game.toml", manifest(ORDER, text)));
+        load_report(&files, STRICT).gameplay_hash.expect("loads")
+    };
+    let base = hash(STRIPPED);
+    assert_ne!(hash(&STRIPPED.replace("timeout_ticks = 150", "timeout_ticks = 100")), base);
+    assert_ne!(hash(&STRIPPED.replace("difficulty = 2", "difficulty = 3")), base);
+}

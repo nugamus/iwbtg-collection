@@ -1,0 +1,61 @@
+#:schema ../../../../../docs/format/schema/v0/game.schema.json
+# Every [stripped] field and a map's stripped_start (docs/format/v0.md, Stripped mode).
+format = 0
+id = "stripped_example"
+title = "I Wanna Test Stripped Mode"
+version = "0.1.0"
+engine_rev = 0
+runner = "gm80"
+physics = "physics.toml"
+start_room = "title"
+max_ticks = 180_000
+room_order = ["title", "intro", "stage1", "ending"]
+object_order = [
+  "world", "kid", "kid_bullet", "bow", "blood", "blood_emitter", "game_over", "playerface",
+  "@sign", "@textbox", "@cutscene",
+]
+
+[engine]
+new_game_room = "intro"
+
+[[creators]]
+name = "IWBTG Collection"
+role = "author"
+
+[source]
+url = "https://example.com/stripped"
+permission = "granted"
+
+[timing]
+start = { trigger = "run_start" }
+end = { trigger = "enter_room", room = "ending" }
+
+[[maps]]
+id = "medium"
+name = "Medium"
+difficulty = "Medium"
+
+[[maps]]
+id = "hard"
+name = "Hard"
+difficulty = "Hard"
+stripped_start = { globals = { difficulty = 1 } }
+
+[stripped]
+start = { room = "stage1", globals = { difficulty = 0, gameclear = false, savefile = "save1" } }
+cutscenes = [
+  { id = "boss_intro", kind = "@cutscene" },
+  { id = "ending", room = "ending" },
+]
+dialogues = [
+  { id = "npc_talk", kind = "@textbox", advance = "shoot", timeout_ticks = 150 },
+]
+
+[stripped.cut]
+rooms = [
+  { room = "intro", to = "stage1" },
+]
+kinds = ["@sign"]
+instances = [
+  { room = "stage1", name = "tutorial_text" },
+]

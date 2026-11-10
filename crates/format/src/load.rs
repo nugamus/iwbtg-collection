@@ -27,14 +27,13 @@ use iwbtg_sim::rules::RunnerRules;
 use iwbtg_sim::rules::num::FloatModel;
 use iwbtg_sim::script::ScriptRuntime;
 use iwbtg_sim::timing::{TimingDef, TimingTrigger};
-use iwbtg_sim::world::Value;
 use toml::Spanned;
 
 use crate::check::check;
 use crate::diag::{Diagnostic, Severity, has_errors};
 use crate::files::PackageFiles;
 use crate::ids::check_id;
-use crate::manifest::{DEFAULT_MAP_ID, ENGINE_ROLES, MANIFEST_PATH, Manifest, TIMING_TRIGGERS};
+use crate::manifest::{DEFAULT_MAP_ID, ENGINE_ROLES, MANIFEST_PATH, Manifest, TIMING_TRIGGERS, global_value};
 use crate::masks::{ALPHA_IN_MASK, AlphaRule};
 use crate::objects::{self, ObjectFile, kind_classes, legacy_role_classes, param_value};
 use crate::order::{OrderEntry, rank_of, resolve_ranks};
@@ -504,6 +503,7 @@ impl<'a> Loader<'a> {
         self.diags.append(&mut d);
         // Step 8: cross-references not already resolved above.
         self.warp_targets(&room_defs);
+        self.stripped_refs(&rooms);
         if self.trace_mode() {
             self.inert_twins(&mut room_defs);
         }
@@ -1699,16 +1699,12 @@ impl<'a> Loader<'a> {
     ) -> Option<RoomAction> {
         match a {
             ActionFile::SetGlobal { var, value } => {
-                let value = match value {
-                    toml::Value::String(s) => Value::Str(s.clone()),
-                    toml::Value::Boolean(b) => Value::Real(if *b { Real::ONE } else { Real::ZERO }),
-                    other => match objects::number(other) {
-                        Ok(n) => Value::Real(Real::new(n)),
-                        Err(e) => {
-                            self.error(path, text, span, format!("set_global `{var}`: {e}"));
-                            return None;
-                        }
-                    },
+                let value = match global_value(value) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        self.error(path, text, span, format!("set_global `{var}`: {e}"));
+                        return None;
+                    }
                 };
                 let var = *vars.get(var)?;
                 Some(RoomAction::SetGlobal { var, value })
@@ -2071,6 +2067,109 @@ impl<'a> Loader<'a> {
     }
 
     /// CR5: warps whose creation code (`roomTo`) was not converted have no `room_to`.
+    /// `[stripped]` and each map's `stripped_start` (docs/format/v0.md, Stripped mode): rooms,
+    /// kinds and instance names resolve; no ranked start room and no cut room's `to` is cut.
+    fn stripped_refs(&mut self, rooms: &[ParsedRoom<'_>]) {
+        let m = self.m;
+        let section = m.stripped.as_ref();
+        let cut = section.and_then(|s| s.cut.as_ref());
+        let cut_rooms: BTreeSet<&str> = cut
+            .map(|c| c.rooms.iter().map(|r| r.room.get_ref().as_str()).collect())
+            .unwrap_or_default();
+        let starts = section
+            .and_then(|s| s.start.as_ref())
+            .into_iter()
+            .chain(m.maps.iter().filter_map(|map| map.stripped_start.as_ref()));
+        for start in starts {
+            if let Some(room) = &start.room {
+                self.room_ref(room.get_ref(), room.span());
+                if cut_rooms.contains(room.get_ref().as_str()) {
+                    self.manifest_error(
+                        room.span(),
+                        format!("ranked start room `{}` is cut", room.get_ref()),
+                    );
+                }
+            }
+        }
+        // The default start: `[engine].new_game_room`, else `start_room`.
+        let default_start = m
+            .engine
+            .as_ref()
+            .and_then(|e| e.get_ref().new_game_room.as_ref())
+            .unwrap_or(&m.start_room);
+        let start_defaults =
+            section.and_then(|s| s.start.as_ref()).and_then(|s| s.room.as_ref()).is_none();
+        let map_overrides = !m.maps.is_empty()
+            && m.maps
+                .iter()
+                .all(|map| map.stripped_start.as_ref().is_some_and(|s| s.room.is_some()));
+        if start_defaults && !map_overrides && cut_rooms.contains(default_start.get_ref().as_str()) {
+            self.manifest_error(
+                default_start.span(),
+                format!(
+                    "ranked runs start in `{}` (no `[stripped].start.room`), which is cut",
+                    default_start.get_ref()
+                ),
+            );
+        }
+        let Some(section) = section else {
+            return;
+        };
+        if let Some(cut) = cut {
+            for entry in &cut.rooms {
+                self.room_ref(entry.room.get_ref(), entry.room.span());
+                self.room_ref(entry.to.get_ref(), entry.to.span());
+            }
+            for kind in &cut.kinds {
+                if !self.kind_ids.contains_key(kind.get_ref().as_str()) {
+                    self.manifest_error(
+                        kind.span(),
+                        format!("cut kind `{}` is not a kind of this package", kind.get_ref()),
+                    );
+                }
+            }
+            for entry in &cut.instances {
+                let Some(room) = rooms.iter().find(|r| r.file.id == *entry.room.get_ref()) else {
+                    self.room_ref(entry.room.get_ref(), entry.room.span());
+                    continue;
+                };
+                let named = room
+                    .file
+                    .instances
+                    .iter()
+                    .any(|i| i.name.as_ref().is_some_and(|n| n.get_ref() == entry.name.get_ref()));
+                if !named {
+                    self.manifest_error(
+                        entry.name.span(),
+                        format!(
+                            "room `{}` has no instance named `{}`",
+                            entry.room.get_ref(),
+                            entry.name.get_ref()
+                        ),
+                    );
+                }
+            }
+        }
+        let regions = section
+            .cutscenes
+            .iter()
+            .map(|c| (&c.kind, &c.room))
+            .chain(section.dialogues.iter().map(|d| (&d.kind, &d.room)));
+        for (kind, room) in regions {
+            if let Some(kind) = kind
+                && !self.kind_ids.contains_key(kind.get_ref().as_str())
+            {
+                self.manifest_error(
+                    kind.span(),
+                    format!("region kind `{}` is not a kind of this package", kind.get_ref()),
+                );
+            }
+            if let Some(room) = room {
+                self.room_ref(room.get_ref(), room.span());
+            }
+        }
+    }
+
     fn warp_targets(&mut self, rooms: &[RoomDef]) {
         for r in rooms {
             let missing = r
