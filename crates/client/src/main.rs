@@ -16,6 +16,7 @@ mod retry;
 mod savefile;
 mod screen;
 mod settings;
+mod storage;
 mod view;
 
 use std::process::ExitCode;

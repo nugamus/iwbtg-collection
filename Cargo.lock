@@ -3420,6 +3420,7 @@ dependencies = [
  "postcard",
  "thiserror 2.0.21",
  "toml",
+ "web-sys",
 ]
 
 [[package]]
