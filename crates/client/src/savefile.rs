@@ -1,12 +1,12 @@
-//! The save slot on disk (docs/architecture.md, Globals and save slot). The sim keeps the slot in
+//! The save slot between sessions (docs/architecture/sim.md, Globals and save slot), kept through
+//! `storage.rs`: a file natively, browser storage on the web. The sim keeps the slot in
 //! its state and never touches files; the client writes it whenever it changes and reads it when
 //! the game starts, so closing the window keeps the save like the originals' save file.
 //!
-//! One file per game: `<data folder>/iwbtg-collection/saves/<game id>.save` (postcard bytes of the
-//! sim's `SaveSlot`). `--no-save-file` never reads or writes it: ranked runs and checks always
+//! One entry per game, `saves/<game id>.save` in the data area (postcard bytes of the sim's
+//! `SaveSlot`). `--no-save-file` never reads or writes it: ranked runs and checks always
 //! start from a new game.
 
-use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use bevy::prelude::*;
@@ -14,6 +14,7 @@ use iwbtg_sim::def::GameDef;
 use iwbtg_sim::room::StartPoint;
 use iwbtg_sim::save::SaveSlot;
 
+use crate::storage::{self, Store};
 use crate::view::Game;
 
 /// The save file's command-line flags (main.rs flattens each module's group, #530).
@@ -35,74 +36,70 @@ fn enabled() -> bool {
     !OPTIONS.get().is_some_and(|o| o.no_save_file)
 }
 
-/// Where a game's save lives: the user's data folder.
-pub fn path_for(game_id: &str) -> Option<PathBuf> {
-    let base = if cfg!(windows) {
-        std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
-    } else {
-        std::env::var_os("XDG_DATA_HOME")
-            .map(PathBuf::from)
-            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
-    };
-    base.map(|b| {
-        b.join("iwbtg-collection")
-            .join("saves")
-            .join(format!("{game_id}.save"))
-    })
+/// A game's save in the data area of [`storage`] (native:
+/// `<data folder>/iwbtg-collection/saves/<game id>.save`; web: a `localStorage` entry).
+pub fn name_for(game_id: &str) -> String {
+    format!("saves/{game_id}.save")
 }
 
-/// Reads a save file. `Ok(None)` is no file.
-pub fn read(path: &Path, def: &GameDef) -> Result<Option<SaveSlot>, String> {
-    let bytes = match std::fs::read(path) {
-        Ok(b) => b,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(format!("{}: {e}", path.display())),
+/// Reads a save. `Ok(None)` is nothing saved.
+pub fn read(store: &Store, name: &str, def: &GameDef) -> Result<Option<SaveSlot>, String> {
+    let Some(bytes) = store.read(name)? else {
+        return Ok(None);
     };
+    let place = store.describe(name);
     let slot: SaveSlot =
-        postcard::from_bytes(&bytes).map_err(|e| format!("{}: not a save file ({e})", path.display()))?;
+        postcard::from_bytes(&bytes).map_err(|e| format!("{place}: not a save file ({e})"))?;
     if def.room(slot.room).is_none() {
         return Err(format!(
-            "{}: the saved room does not exist in this version of the game",
-            path.display()
+            "{place}: the saved room does not exist in this version of the game"
         ));
     }
     Ok(Some(slot))
 }
 
-fn write(path: &Path, slot: &SaveSlot) -> Result<(), String> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    }
+fn write(store: &Store, name: &str, slot: &SaveSlot) -> Result<(), String> {
     let bytes = postcard::to_stdvec(slot).map_err(|e| e.to_string())?;
-    // Write beside it and rename, so a crash never leaves half a save.
-    let tmp = path.with_extension("save.tmp");
-    std::fs::write(&tmp, bytes).map_err(|e| format!("{}: {e}", tmp.display()))?;
-    std::fs::rename(&tmp, path).map_err(|e| format!("{}: {e}", path.display()))
+    // Natively written beside the file and renamed, so a crash never leaves half a save.
+    store.write(name, &bytes)
 }
 
-/// Where the game starts: the saved spot when a good save file exists, else a new game. A broken
-/// file is a warning on stderr, not an error.
+/// Where the game starts: the saved spot when a good save exists, else a new game. A broken
+/// save or unreadable storage is a warning, not an error.
 pub fn start_point(def: &GameDef) -> StartPoint {
     let new_game = StartPoint::NewGame { difficulty: 0 };
     if !enabled() {
         return new_game;
     }
-    let Some(path) = path_for(&def.id) else {
+    let Some(store) = Store::data() else {
         return new_game;
     };
-    match read(&path, def) {
+    match read(&store, &name_for(&def.id), def) {
         Ok(Some(slot)) => StartPoint::FromSave(slot),
         Ok(None) => new_game,
         Err(e) => {
-            eprintln!("warning: ignoring the save file, starting a new game: {e}");
+            storage::warn(&format!("ignoring the save file, starting a new game: {e}"));
             new_game
         }
     }
 }
 
-/// The slot as last written, to spot changes.
-#[derive(Resource, Default)]
-struct Written(Option<SaveSlot>);
+/// The slot as last written, to spot changes, and where it goes (opened once, so a browser with
+/// storage turned off warns once, not at every save).
+#[derive(Resource)]
+struct Written {
+    slot: Option<SaveSlot>,
+    store: Option<Store>,
+}
+
+impl Default for Written {
+    fn default() -> Self {
+        Written {
+            slot: None,
+            store: Store::data(),
+        }
+    }
+}
 
 /// Writes the file when the sim's slot changes; a deleted slot (a new game) deletes the file.
 fn persist(game: NonSend<Game>, mut written: ResMut<Written>, mut started: Local<bool>) {
@@ -110,27 +107,24 @@ fn persist(game: NonSend<Game>, mut written: ResMut<Written>, mut started: Local
     if !*started {
         // The slot the game started with is already on disk (or was never saved).
         *started = true;
-        written.0.clone_from(slot);
+        written.slot.clone_from(slot);
         return;
     }
-    if *slot == written.0 {
+    if *slot == written.slot {
         return;
     }
-    let Some(path) = path_for(&game.sim.def().id) else {
-        return;
-    };
-    let result = match slot {
-        Some(s) => write(&path, s),
-        None => match std::fs::remove_file(&path) {
-            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("{}: {e}", path.display())),
-            _ => Ok(()),
-        },
-    };
-    if let Err(e) = result {
-        // Keep playing; try again at the next change.
-        eprintln!("warning: could not update the save file: {e}");
+    if let Some(store) = &written.store {
+        let name = name_for(&game.sim.def().id);
+        let result = match slot {
+            Some(s) => write(store, &name, s),
+            None => store.remove(&name),
+        };
+        if let Err(e) = result {
+            // Keep playing; try again at the next change.
+            storage::warn(&format!("could not update the save file: {e}"));
+        }
     }
-    written.0.clone_from(slot);
+    written.slot.clone_from(slot);
 }
 
 pub struct SavePlugin;
@@ -169,33 +163,34 @@ mod tests {
         crate::package::open(&dir, false).unwrap().def
     }
 
-    fn temp(name: &str) -> PathBuf {
+    fn temp(name: &str) -> Store {
         let d = std::env::temp_dir().join(format!("iwbtg-save-test-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
-        d.join("x.save")
+        Store::at(d)
     }
+
+    const NAME: &str = "saves/x.save";
 
     #[test]
     fn a_save_round_trips_through_the_file() {
         let def = demo_def();
-        let path = temp("round");
-        write(&path, &slot()).unwrap();
-        assert_eq!(read(&path, &def).unwrap(), Some(slot()));
+        let store = temp("round");
+        write(&store, NAME, &slot()).unwrap();
+        assert_eq!(read(&store, NAME, &def).unwrap(), Some(slot()));
     }
 
     #[test]
     fn a_missing_file_is_no_save_and_a_broken_one_is_an_error() {
         let def = demo_def();
-        let path = temp("broken");
-        assert_eq!(read(&path, &def).unwrap(), None);
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, b"junk").unwrap();
-        assert!(read(&path, &def).unwrap_err().contains("not a save file"));
+        let store = temp("broken");
+        assert_eq!(read(&store, NAME, &def).unwrap(), None);
+        store.write(NAME, b"junk").unwrap();
+        assert!(read(&store, NAME, &def).unwrap_err().contains("not a save file"));
         // A room the game does not have.
         let mut bad = slot();
         bad.room = RoomId(9999);
-        write(&path, &bad).unwrap();
-        assert!(read(&path, &def).unwrap_err().contains("does not exist"));
+        write(&store, NAME, &bad).unwrap();
+        assert!(read(&store, NAME, &def).unwrap_err().contains("does not exist"));
     }
 
     #[test]
@@ -230,9 +225,9 @@ mod tests {
             .save
             .clone()
             .expect("walking onto the save point saves");
-        let path = temp("resume");
-        write(&path, &slot).unwrap();
-        let loaded = read(&path, &def).unwrap().unwrap();
+        let store = temp("resume");
+        write(&store, NAME, &slot).unwrap();
+        let loaded = read(&store, NAME, &def).unwrap().unwrap();
         let again = Sim::new(def.clone(), options(StartPoint::FromSave(loaded))).unwrap();
         let world = again.world();
         let kid = world.get(world.kid(&again.rules().tick).unwrap()).unwrap();
