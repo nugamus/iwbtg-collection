@@ -1,15 +1,16 @@
-//! The settings file: one versioned TOML file in the user's config folder that holds every
-//! player setting (docs/architecture/client.md, Settings). The client reads it at start and writes it
+//! The settings file: one versioned TOML file that holds every player setting, kept through
+//! `storage.rs` (a file in the user's config folder natively, browser storage on the web) (docs/architecture/client.md, Settings). The client reads it at start and writes it
 //! when a setting changes; the settings screens of M6 only edit it.
 //!
 //! Reading is forgiving: an unknown key, a wrong type or an out-of-range value is a warning on
 //! stderr and that entry keeps its default; the rest of the file still counts. Nothing here
 //! touches the sim.
 
-use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use toml::{Table, Value};
+
+use crate::storage::{self, Store};
 
 /// The layout version this build writes.
 pub const VERSION: i64 = 1;
@@ -152,58 +153,43 @@ impl Settings {
     }
 }
 
-/// Where the file lives: `$IWBTG_CONFIG_DIR`, else `%APPDATA%` on Windows, else
-/// `$XDG_CONFIG_HOME` or `~/.config`, then `iwbtg-collection/settings.toml`.
-pub fn default_path() -> Option<PathBuf> {
-    let env = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
-    if let Some(dir) = env("IWBTG_CONFIG_DIR") {
-        return Some(dir.join("settings.toml"));
-    }
-    let base = if cfg!(windows) {
-        env("APPDATA")
-    } else {
-        env("XDG_CONFIG_HOME").or_else(|| env("HOME").map(|h| h.join(".config")))
-    }?;
-    Some(base.join("iwbtg-collection").join("settings.toml"))
-}
+/// The file's name in the config area of [`storage`] (native: `iwbtg-collection/settings.toml`
+/// in the config folder; web: a `localStorage` entry).
+pub const FILE: &str = "settings.toml";
 
-/// Reads the file at `path`. A missing file is the defaults, silently.
-pub fn read_file(path: &Path) -> Settings {
-    match std::fs::read_to_string(path) {
-        Ok(text) => {
+/// Reads the settings from `store`. Nothing stored is the defaults, silently; every problem is a
+/// warning and the entry keeps its default.
+pub fn read_from(store: &Store) -> Settings {
+    match store.read_text(FILE) {
+        Ok(Some(text)) => {
             let mut warnings = Vec::new();
             let s = Settings::parse(&text, &mut warnings);
             for w in warnings {
-                eprintln!("settings {}: {w}", path.display());
+                storage::warn(&format!("settings {}: {w}", store.describe(FILE)));
             }
             s
         }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Settings::default(),
+        Ok(None) => Settings::default(),
         Err(e) => {
-            eprintln!("settings {}: cannot read ({e}), using defaults", path.display());
+            storage::warn(&format!("settings {e}, using defaults"));
             Settings::default()
         }
     }
 }
 
-/// Writes the file beside itself and renames it, so a crash never leaves half a file.
-pub fn write_file(path: &Path, s: &Settings) -> std::io::Result<()> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
-    let tmp = path.with_extension("toml.tmp");
-    std::fs::write(&tmp, s.to_toml())?;
-    std::fs::rename(&tmp, path)
+/// Writes the settings to `store` (natively beside the file, then renamed).
+pub fn write_to(store: &Store, s: &Settings) -> Result<(), String> {
+    store.write_text(FILE, &s.to_toml())
 }
 
-struct Store {
-    path: Option<PathBuf>,
+struct Slot {
+    store: Option<Store>,
     current: Settings,
 }
 
-static STORE: Mutex<Option<Store>> = Mutex::new(None);
+static STORE: Mutex<Option<Slot>> = Mutex::new(None);
 
-fn store() -> std::sync::MutexGuard<'static, Option<Store>> {
+fn store() -> std::sync::MutexGuard<'static, Option<Slot>> {
     STORE.lock().unwrap_or_else(|e| e.into_inner())
 }
 
@@ -211,10 +197,10 @@ fn store() -> std::sync::MutexGuard<'static, Option<Store>> {
 /// (a `--screenshot` check) neither reads nor writes the file: it starts from the defaults, so the
 /// picture does not depend on the machine, and its flags are not saved.
 pub fn load(isolated: bool) -> Settings {
-    let path = if isolated { None } else { default_path() };
-    let current = path.as_deref().map(read_file).unwrap_or_default();
-    *store() = Some(Store {
-        path,
+    let backing = if isolated { None } else { Store::config() };
+    let current = backing.as_ref().map(read_from).unwrap_or_default();
+    *store() = Some(Slot {
+        store: backing,
         current: current.clone(),
     });
     current
@@ -234,10 +220,11 @@ pub fn update(change: impl FnOnce(&mut Settings)) {
     if next == st.current {
         return;
     }
-    if let Some(path) = &st.path
-        && let Err(e) = write_file(path, &next)
+    if let Some(store) = &st.store
+        && let Err(e) = write_to(store, &next)
     {
-        eprintln!("settings {}: cannot write ({e})", path.display());
+        // Keep the change for this session; the next change tries again.
+        storage::warn(&format!("settings {e}"));
     }
     st.current = next;
 }
@@ -310,14 +297,20 @@ mod tests {
     #[test]
     fn file_write_and_read() {
         let dir = std::env::temp_dir().join(format!("iwbtg-settings-test-{}", std::process::id()));
-        let path = dir.join("nested").join("settings.toml");
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = Store::at(dir.join("nested"));
+        assert_eq!(
+            read_from(&store),
+            Settings::default(),
+            "nothing stored is the defaults"
+        );
         let s = Settings {
             audio_offset_ms: 75,
             ..Settings::default()
         };
-        write_file(&path, &s).unwrap();
-        assert_eq!(read_file(&path).audio_offset_ms, 75);
-        assert_eq!(read_file(&dir.join("missing.toml")), Settings::default());
+        write_to(&store, &s).unwrap();
+        assert_eq!(read_from(&store).audio_offset_ms, 75);
+        assert!(dir.join("nested").join("settings.toml").is_file());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

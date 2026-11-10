@@ -18,6 +18,7 @@ use super::timeline::TimelineDef;
 use crate::num::Real;
 use crate::rules::Runner;
 use crate::rules::num::FloatModel;
+use crate::stripped::StrippedDef;
 use crate::timing::TimingDef;
 
 /// Everything the sim needs to run one game.
@@ -79,6 +80,9 @@ pub struct GameDef {
     pub scripts: Vec<ScriptDef>,
     /// Timing triggers (`[timing]`).
     pub timing: TimingDef,
+    /// Ranked (stripped) mode: `[stripped]` resolved (`crate::stripped`). Used only by
+    /// `PlayMode::Stripped` runs.
+    pub stripped: StrippedDef,
 }
 
 impl GameDef {

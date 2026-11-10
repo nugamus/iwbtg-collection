@@ -17,6 +17,7 @@ use crate::rng::Rng;
 use crate::room::RoomRequest;
 use crate::save::SaveSlot;
 use crate::sound::SoundState;
+use crate::stripped::PlayMode;
 use crate::timing::TimingState;
 use crate::view::View;
 use crate::world::{EngineGlobals, Instance, SimStatus, Value, World};
@@ -50,6 +51,7 @@ pub struct HashView<'a> {
     sound: &'a SoundState,
     timing: &'a TimingState,
     status: &'a SimStatus,
+    mode: PlayMode,
     setup_applied: bool,
 }
 
@@ -76,6 +78,7 @@ impl<'a> HashView<'a> {
             sound: &w.sound,
             timing: &w.timing,
             status: &w.status,
+            mode: w.mode,
             setup_applied: w.setup_applied,
         }
     }

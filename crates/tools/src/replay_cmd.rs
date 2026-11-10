@@ -1,16 +1,20 @@
 //! `iwbtg replay run`: ticks, splits, final hash (docs/plans/sim-core.md 9.4, WP8b).
 //!
-//! Runs a package headless on a `.iwbr` replay or an action-named `.inputs` file and prints three
+//! Runs a package headless on a `.iwbr` replay or an action-named `.inputs` file and prints five
 //! lines:
 //!
 //! ```text
 //! ticks: 9000
 //! splits: 0@1 1@2210 2@9000
 //! hash: <64 hex digits>
+//! mode: stripped
+//! start: stage1
 //! ```
 //!
 //! A split is `<index>@<tick>` (`timing::Split`: 0 is the start, then the stages, then the end).
-//! `splits: none` when no trigger fired. The run stops early when the sim ends (`game_end`) and
+//! `splits: none` when no trigger fired. Two more lines follow: `mode: original` or
+//! `mode: stripped` (Play original or ranked, #561; a `.iwbr` replay's header says which, else
+//! `--mode`), and `start: <room id>`, the room the run started in. The run stops early when the sim ends (`game_end`) and
 //! fails with exit code 2 when it halts. With Sudden Death (`--mods SD`, or a replay header
 //! carrying it) the run also stops on the tick of the first death, and a replay with inputs past
 //! that tick is rejected (docs/architecture/replay.md, "Mods").
@@ -25,6 +29,7 @@ use iwbtg_sim::mods::ModSet;
 use iwbtg_sim::replay::{Replay, StartMode};
 use iwbtg_sim::room::StartPoint;
 use iwbtg_sim::sound::DllMode;
+use iwbtg_sim::stripped::PlayMode;
 use iwbtg_sim::timing::Split;
 use iwbtg_sim::world::SimStatus;
 use iwbtg_sim::{Sim, SimOptions};
@@ -50,6 +55,23 @@ pub struct ReplayRunArgs {
     /// Mod codes for an `.inputs` file (`SD`, `SD,NB`); a `.iwbr` replay carries its own.
     #[arg(long, value_parser = ModSet::parse, default_value = "")]
     pub mods: ModSet,
+    /// Play mode for an `.inputs` file: `original` or `stripped` (ranked, `[stripped]`); a
+    /// `.iwbr` replay carries its own.
+    #[arg(long, value_parser = PlayMode::parse, default_value = "original")]
+    pub mode: PlayMode,
+}
+
+/// What to run: the frames and the setup a replay header (or the `.inputs` flags) gives.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct RunInput {
+    /// One frame per tick.
+    pub frames: Vec<InputFrame>,
+    /// The RNG seed.
+    pub seed: u32,
+    /// The mods.
+    pub mods: ModSet,
+    /// Original or stripped.
+    pub mode: PlayMode,
 }
 
 /// What a headless run gives.
@@ -61,10 +83,14 @@ pub struct ReplaySummary {
     pub splits: Vec<Split>,
     /// The final state hash.
     pub hash: [u8; 32],
+    /// Original or stripped.
+    pub mode: PlayMode,
+    /// The room the run started in (after `Sim::new`), by id.
+    pub start_room: String,
 }
 
 impl ReplaySummary {
-    /// The three output lines.
+    /// The five output lines.
     pub fn lines(&self) -> String {
         let splits = if self.splits.is_empty() {
             "none".to_owned()
@@ -76,12 +102,17 @@ impl ReplaySummary {
                 .join(" ")
         };
         let hash: String = self.hash.iter().map(|b| format!("{b:02x}")).collect();
-        format!("ticks: {}\nsplits: {splits}\nhash: {hash}\n", self.ticks)
+        format!(
+            "ticks: {}\nsplits: {splits}\nhash: {hash}\nmode: {}\nstart: {}\n",
+            self.ticks,
+            self.mode.name(),
+            self.start_room
+        )
     }
 }
 
 /// `iwbtg replay run`: reads the package and the input, runs [`run`] and prints `ticks: N`,
-/// `splits: ...` and `hash: <hex>`.
+/// `splits: ...`, `hash: <hex>`, `mode: ...` and `start: <room>`.
 pub fn main(args: &ReplayRunArgs) -> Result<(), ToolError> {
     if args.start != "new-game" {
         return Err(ToolError::Message(format!(
@@ -90,21 +121,23 @@ pub fn main(args: &ReplayRunArgs) -> Result<(), ToolError> {
         )));
     }
     let pkg = load_package(&args.pkg)?;
-    let (frames, seed, mods) = read_input(&args.input, args.seed, args.mods)?;
+    let input = read_input(&args.input, args.seed, args.mods, args.mode)?;
     let options = SimOptions {
         start: StartPoint::NewGame {
             difficulty: args.difficulty,
         },
-        seed,
+        seed: input.seed,
         dll_mode: DllMode::Model,
+        mode: input.mode,
     };
-    let summary = run(&pkg, &frames, options, mods)?;
+    let summary = run(&pkg, &input.frames, options, input.mods)?;
     print!("{}", summary.lines());
     Ok(())
 }
 
-/// The frames, seed and mods of a `.iwbr` replay's bytes; `label` names the replay in errors.
-pub fn replay_input(bytes: &[u8], label: &str) -> Result<(Vec<InputFrame>, u32, ModSet), ToolError> {
+/// The frames, seed, mods and play mode of a `.iwbr` replay's bytes; `label` names the replay in
+/// errors.
+pub fn replay_input(bytes: &[u8], label: &str) -> Result<RunInput, ToolError> {
     let replay = Replay::decode(bytes).map_err(|e| ToolError::Message(format!("{label}: {e}")))?;
     if replay.header.start_mode != StartMode::NewGame {
         return Err(ToolError::Message(format!(
@@ -117,13 +150,17 @@ pub fn replay_input(bytes: &[u8], label: &str) -> Result<(Vec<InputFrame>, u32, 
             replay.header.rng_seed
         ))
     })?;
-    Ok((replay.inputs, seed, replay.header.mods))
+    Ok(RunInput {
+        frames: replay.inputs,
+        seed,
+        mods: replay.header.mods,
+        mode: replay.header.play_mode,
+    })
 }
 
-/// The frames to run, the seed and the mods: a `.iwbr` replay's inputs and header, or the frames
-/// of an `.inputs` file (frames 0 through its `end` frame, as the trace runner ticks them) with
-/// `seed` and `mods`.
-fn read_input(path: &Path, seed: u32, mods: ModSet) -> Result<(Vec<InputFrame>, u32, ModSet), ToolError> {
+/// What to run: a `.iwbr` replay's inputs and header, or the frames of an `.inputs` file (frames
+/// 0 through its `end` frame, as the trace runner ticks them) with `seed`, `mods` and `mode`.
+fn read_input(path: &Path, seed: u32, mods: ModSet, mode: PlayMode) -> Result<RunInput, ToolError> {
     let is_replay = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("iwbr"));
     if is_replay {
         let bytes =
@@ -135,7 +172,12 @@ fn read_input(path: &Path, seed: u32, mods: ModSet) -> Result<(Vec<InputFrame>, 
     let ticks = usize::try_from(parsed.end).map_or(usize::MAX, |e| e.saturating_add(1));
     let mut frames = parsed.frames;
     frames.truncate(ticks);
-    Ok((frames, seed, mods))
+    Ok(RunInput {
+        frames,
+        seed,
+        mods,
+        mode,
+    })
 }
 
 /// Runs a package headless on these input frames, one per tick, from `options`, with `mods`.
@@ -170,8 +212,10 @@ pub fn run_def(
     options: SimOptions,
     mods: ModSet,
 ) -> Result<ReplaySummary, ToolError> {
+    let mode = options.mode;
     let mut sim = Sim::new(Arc::new(def), options)
         .map_err(|e| ToolError::Message(format!("the sim did not start: {e}")))?;
+    let start_room = room_name(sim.def(), sim.world().room);
     let mut splits = Vec::new();
     for (index, frame) in frames.iter().enumerate() {
         let deaths = sim.world().engine.run.deaths;
@@ -202,7 +246,15 @@ pub fn run_def(
         ticks: sim.world().tick,
         splits,
         hash: sim.state_hash(),
+        mode,
+        start_room,
     })
+}
+
+/// A room's id from the package, or its number when the definition has no such room.
+fn room_name(def: &GameDef, room: iwbtg_sim::def::RoomId) -> String {
+    def.room(room)
+        .map_or_else(|| format!("#{}", room.0), |r| r.name.clone())
 }
 
 #[cfg(test)]
@@ -215,6 +267,8 @@ mod tests {
             ticks: 12,
             splits: vec![Split { index: 0, tick: 1 }, Split { index: 1, tick: 12 }],
             hash: [0xab; 32],
+            mode: PlayMode::Stripped,
+            start_room: "stage1".into(),
         };
         let text = s.lines();
         let mut lines = text.lines();
@@ -225,6 +279,8 @@ mod tests {
                 .next()
                 .is_some_and(|l| l.starts_with("hash: abab") && l.len() == 6 + 64)
         );
+        assert_eq!(lines.next(), Some("mode: stripped"));
+        assert_eq!(lines.next(), Some("start: stage1"));
         let none = ReplaySummary { splits: vec![], ..s };
         assert!(none.lines().contains("splits: none"));
     }
@@ -234,10 +290,12 @@ mod tests {
         let dir = std::env::temp_dir();
         let path = dir.join(format!("iwbtg-replay-test-{}.inputs", std::process::id()));
         std::fs::write(&path, "frame 2: hold jump\nframe 4: end\n").unwrap();
-        let (frames, seed, _) = read_input(&path, 9, ModSet::NONE).unwrap();
+        let input = read_input(&path, 9, ModSet::NONE, PlayMode::Stripped).unwrap();
         std::fs::remove_file(&path).ok();
+        let frames = input.frames;
         assert_eq!(frames.len(), 5);
-        assert_eq!(seed, 9);
+        assert_eq!(input.seed, 9);
+        assert_eq!(input.mode, PlayMode::Stripped);
         assert_eq!(frames[2].held, iwbtg_sim::input::Action::Jump.bit());
     }
 
@@ -285,6 +343,7 @@ mod tests {
             start: StartPoint::NewGame { difficulty: 0 },
             seed: 0,
             dll_mode: DllMode::Model,
+            mode: iwbtg_sim::stripped::PlayMode::Original,
         };
         let (def, frames) = suicide_kid();
         let plain = run_def(def.clone(), &frames, options.clone(), ModSet::NONE).unwrap();
@@ -312,11 +371,20 @@ mod tests {
     fn the_golden_one_room_package_runs_twice_to_one_hash() {
         let golden = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sim/tests/golden");
         let pkg = load_package(&golden.join("one_room.pkg")).unwrap();
-        let (frames, seed, mods) = read_input(&golden.join("one_room.inputs"), 0, ModSet::NONE).unwrap();
+        let RunInput {
+            frames, seed, mods, ..
+        } = read_input(
+            &golden.join("one_room.inputs"),
+            0,
+            ModSet::NONE,
+            PlayMode::Original,
+        )
+        .unwrap();
         let options = SimOptions {
             start: StartPoint::NewGame { difficulty: 0 },
             seed,
             dll_mode: DllMode::Model,
+            mode: iwbtg_sim::stripped::PlayMode::Original,
         };
         let attempt = std::panic::catch_unwind(|| {
             let a = run(&pkg, &frames, options.clone(), mods).unwrap();

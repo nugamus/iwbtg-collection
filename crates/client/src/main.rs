@@ -21,6 +21,7 @@ mod retry;
 mod savefile;
 mod screen;
 mod settings;
+mod storage;
 mod ui;
 mod view;
 
