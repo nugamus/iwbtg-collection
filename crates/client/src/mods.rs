@@ -1,7 +1,8 @@
 //! `--mods`: the run's mods (docs/product.md, Mods; the table is `iwbtg_sim::mods::MODS`).
 //!
 //! Sudden Death: the tick that raises the death counter is the run's last. The sim stops
-//! ticking there and a "Run over" banner shows; the window stays open on that frame. The other
+//! ticking there and a "Run over" banner shows; the window stays open on that frame until the
+//! quick-retry key, or at once with `--auto-retry` (`retry.rs`). The other
 //! mods are rejected until they are built (#550, #551, #39).
 
 use bevy::prelude::*;
@@ -65,6 +66,21 @@ impl Plugin for ModsPlugin {
         .configure_sets(FixedUpdate, SimTick.run_if(|run: Res<Run>| run.over.is_none()))
         .add_systems(FixedUpdate, watch.after(SimTick))
         .add_systems(Update, banner);
+    }
+}
+
+/// A retry (`retry.rs`) starts a fresh run: not over, no banner.
+pub(crate) fn reset(world: &mut World) {
+    if let Some(mut run) = world.get_resource_mut::<Run>() {
+        run.deaths = None;
+        run.over = None;
+    }
+    let banners: Vec<Entity> = world
+        .query_filtered::<Entity, With<Banner>>()
+        .iter(world)
+        .collect();
+    for banner in banners {
+        world.despawn(banner);
     }
 }
 

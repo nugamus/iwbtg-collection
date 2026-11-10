@@ -12,6 +12,7 @@ mod audio;
 mod input;
 mod mods;
 mod package;
+mod retry;
 mod savefile;
 mod screen;
 mod settings;
@@ -37,6 +38,8 @@ struct Args {
     mods: mods::ModsArgs,
     #[command(flatten)]
     save: savefile::SaveArgs,
+    #[command(flatten)]
+    retry: retry::RetryArgs,
 }
 
 fn main() -> ExitCode {
@@ -58,6 +61,7 @@ fn main() -> ExitCode {
     };
     let audio = args.audio;
     let run_mods = args.mods.mods;
+    let retry = args.retry;
     eprintln!("{}", mods::describe(run_mods));
     let result = view::run(pkg, args.view, |app, pkg| {
         app.add_plugins((
@@ -66,6 +70,7 @@ fn main() -> ExitCode {
             art::ArtPlugin(pkg.files.clone()),
             audio::AudioPlugin::new(&audio, &pkg.files),
             mods::ModsPlugin(run_mods),
+            retry::RetryPlugin(retry),
         ));
     });
     match result {
