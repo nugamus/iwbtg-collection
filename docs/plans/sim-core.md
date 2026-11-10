@@ -232,22 +232,22 @@ Spec: CLONE_SPEC "tick loop" (Confirmed order, Inferred per-tick algorithm, U1-U
 | # | Phase | Status | Isolation |
 |---|---|---|---|
 | 0 | Latch input: build held/pressed/released for the tick; `direct_latch |= pressed` per key | Inferred (sample once before Begin Step; same-tick reaction is Trace: djump/right row 10) | `InputState::latch` |
-| 1 | Capture `xprevious/yprevious` if `prev_capture = TickStart` | UNKNOWN U1 (R1) | `TickRules::prev_capture` |
+| 1 | Capture `xprevious/yprevious` if `prev_capture = TickStart` (default) | Confirmed (recorder) U1 (R1) | `TickRules::prev_capture` |
 | 2 | Begin Step | Confirmed order | |
-| 3 | Timelines advance, moments run | UNKNOWN U6 (R6) | `TickRules::timeline_slot = AfterBeginStep` (Design) |
-| 4 | Alarms: for each alarm the object handles, if value > 0 subtract 1, if now 0 fire | Confirmed order; rule Inferred (U3, R3); Trace t-alarm-1 consistent | `alarm::tick(&mut Real) -> bool` |
+| 3 | Timelines advance, moments run | Slot Confirmed (recorder) U6 (R6); moments for speed > 1 UNKNOWN | `TickRules::timeline_slot = AfterBeginStep` |
+| 4 | Alarms: for each alarm the object handles, a value > 0 loses 1 and fires when that leaves it at or below 0; a value of exactly 0 becomes -1 without firing | Confirmed order; rule Confirmed (recorder) (U3, R3) | `alarm::tick(&mut Real) -> bool` |
 | 5 | Keyboard events: held, then press, then release (per instance; keys in action-bit order) | Confirmed slot; inner order UNKNOWN U11 (R4) | `events::key_event_order()` |
 | 6 | Mouse events | Confirmed slot; no gameplay use in the 20 games | no-op phase kept for order; takes no client value of any kind (no `f32`, no cursor position) |
 | 7 | Step | Confirmed | |
 | 8 | Motion for every instance: (capture prev if `BeforeMotion`), friction, gravity vector, path, `x += hspeed`, `y += vspeed`, polar recompute | Slot Confirmed; inner order Inferred (U5 tick, U2 motion) | `motion::apply_auto_motion` (WP2) |
-| 8b | Animation if `anim_slot = AfterMotion` | Inferred, sprites section (Conflict with row 13, R7) | `anim::advance` |
-| 9 | Outside Room, Intersect Boundary | Inferred slot (U4, R5) | `TickRules::boundary_slot = AfterMotion`; alternative `AfterCollision` |
+| 8b | Animation if `anim_slot = AfterMotion` | Alternative; the recorder puts it at row 13 (R7) | `anim::advance` |
+| 9 | Outside Room, Intersect Boundary | Confirmed (recorder) slot (U4, R5): after motion and End of Path, Outside Room first | `TickRules::boundary_slot = AfterMotion`; alternative `AfterCollision` |
 | 10 | Collision events with the solid put-back rule | Confirmed (manual); pairing Inferred/UNKNOWN (C7, C7b, C8, C9, R12) | `events::collision_phase` + `collide::solid_resolve` |
 | 11 | End Step | Confirmed | |
 | 12 | Draw slot (`Late` handlers): instances in **draw order** (depth descending, then creation; 1.3), **visible instances only** | Confirmed (manual: Draw runs only for visible instances; draw order by depth); Draw changes state, so it runs headless too (R15) | `events::run_draw_phase` |
-| 13 | Animation if `anim_slot = AfterDraw`: `image_index += image_speed`, wrap, Animation End | Inferred tick item 13 (Conflict with row 8b, R7); wrap `>=` and subtract once: Trace t-anim-1 | `anim::advance(&mut Image, frames, &TickRules) -> bool` |
+| 13 | Animation if `anim_slot = AfterDraw` (default): `image_index += image_speed`, wrap, Animation End | Confirmed (recorder) (R7): slot, wrap `>=` and subtract once | `anim::advance(&mut Image, frames, &TickRules) -> bool` |
 | 14 | Destroy sweep | Design (manual: removed at end of step) | `World::sweep` |
-| 15 | Room change if requested (section 4.2) | Confirmed sequence; abort rule Inferred (R8) | `room::perform_change` (WP4a) |
+| 15 | Room change if requested (section 4.2) | Confirmed sequence; abort rule Confirmed (recorder) (R8) | `room::perform_change` (WP4a) |
 | 16 | `tick += 1` (checked), timing triggers (WP8b), checkpoint hash every 500 ticks | Design | `tick.rs`, `timing.rs`, `hash.rs` |
 
 The recorder samples after phase 13 and before phase 15 ("after End Step, drawing and the animation update", CLONE_SPEC tick Inferred 13). That README wording is also the only support for row 13, and the sprites section's own Inferred text puts the update in row 8b. t-anim-1 samples at end of tick, so it cannot tell the two apart; ANIM-SAVE-END decides (R7). `Sim` exposes the sample point to the probe (section 9).
@@ -258,7 +258,7 @@ The recorder samples after phase 13 and before phase 15 ("after End Step, drawin
 - **Deferral grain** (rooms UNKNOWN 1, R25). The manual says the change happens "after the current action". Whether that is the code action or the rest of the event's action list is UNKNOWN. Our handlers are one unit each, so we apply the request at the end of the handler (Design). A ported D&D event whose actions follow a room-change code action must be written so that order does not matter, or flagged.
 - **Instances created mid-phase** take part in every later phase of the same tick (Inferred; Trace t-alarm-1: the bullet created in the kid's Step moved 16 px on its creation tick, x 98 to 114). Whether they run the current phase: R9.
 - **Create runs inside `spawn`** before it returns (Inferred). Room Start for instances created during Room Start: R10, default no (snapshot).
-- **Alarm assignment of fractional values** (1.3, 1.5, kaenbyou, jun-g, little-runner): stored through `num::alarm_from_real` (R3b). Default round half to even (UNKNOWN; traces `kaenbyou/num-alarm-half*` and `go-the-jun-g-world/num-eps-alpha` are recorded).
+- **Alarm assignment of fractional values** (1.3, 1.5, kaenbyou, jun-g, little-runner): stored through `num::alarm_from_real` (R3b). Round half to even (Confirmed (recorder): `kaenbyou/num-alarm-half-b`, `go-the-jun-g-world/num-eps-alpha`).
 - **Alarm only ticks when the object handles that alarm** (Confirmed manual). Each kind declares `EventSet::alarms: u16`.
 - **Inactive instances** get no events, are not drawn and are ignored by queries (Confirmed manual 403_06).
 - **Direct key reads** (Inferred input: one latch bit per key, shared by every direct read, consumed by each read). Every built-in and kid action that ports a `keyboard_check_direct` calls `InputState::direct(&mut self, Action) -> bool`; nothing else reads or clears the latch. Ladder code that reads Up twice in one Step (little-trap, rainbow, rori, fairy-tale) makes two calls. The world built-in's dummy reads (kaenbyou, eat-the-lemon, xia) are `direct` calls from the world's Step, enabled by its `latch_cleared_by_world` param (WP6a), not a kid field.
@@ -508,7 +508,7 @@ pub fn perform_change(ctx: &mut Ctx, req: RoomRequest) -> Result<(), SimError>;
   | `ShowdownLoad` | `KeyPressEvent` | showdown | kid/A3.md showdown "Restart": clear frozen on both kid kinds, add a death and saveDeathTime and destroy each, loadGame (create kid at (0,0), reset jump values and the listed globals), write temp, saveExe, loadDeathTime; **no game_restart**. |
   | `RecreateInPlace` | `StepPressed { skip_while_paused: true }` | keep-celebrating-for-xia | Destroy kid, create kid at the saved spot in the current room, then `Goto(saved room)` (rooms Confirmed). |
 
-- **Conflict (R26).** The rooms table puts showdown in Group A ("loadGame ... then game_restart"), but `kid/A3.md` (showdown Restart, step 4) says "There is no game_restart". A3 read showdown's scripts in full, so the plan follows A3 and reports the conflict to research (section 16). The rooms section's "16 of the 20 games" therefore counts 15 here.
+- **R26 (settled).** Showdown's R has no game_restart (research PR #98; recorder `traces/showdown/a3-t18-a.csv` f41-43). The rooms section now counts 15 of the 20 games with a full game restart, matching this plan.
 - `boot_ticks` is the single number to change after TR-ROOM-01. Whether the boot tick exists at all is UNKNOWN (rooms: "whether a room change consumes a tick").
 - `room_restart` (kaenbyou warpStart, xia death in difficulty room) is `RoomRequest::Restart`.
 - `Reset` (F2): Groups A, B, C delete the save's temp marker and game_restart; kaenbyou/lemon gameReset resets globals and goes to the boot room (rooms Confirmed). `GameDef::reset: ResetModel` mirrors `RestartModel`.
@@ -1204,45 +1204,45 @@ Stub rule: a function from another WP that is not merged yet is called through i
 
 ## 15. UNKNOWN and Inferred register
 
-Every rule the sim needs that the spec marks UNKNOWN, Inferred or Conflict, or that the code took from OpenGMK, with the one place the code isolates it. "Default" is what engine_rev 0 does until the spec records the trace in the last column. Fields live in `RunnerRules` (`rules/`), selected by `RunnerRules::for_runner(runner, engine_rev)`; a changed default after a package was verified becomes a new `engine_rev` branch (architecture "Versions"). "(rec)" marks a trace that is recorded but not yet analyzed in the spec.
+Every rule the sim needs that the spec marks UNKNOWN, Inferred or Conflict, or that the code took from OpenGMK, with the one place the code isolates it. "Default" is what engine_rev 0 does until the spec records the trace in the last column. Fields live in `RunnerRules` (`rules/`), selected by `RunnerRules::for_runner(runner, engine_rev)`; a changed default after a package was verified becomes a new `engine_rev` branch (architecture "Versions"). "(rec)" marks a trace recorded with the OpenGMK recorder; its result is in CLONE_SPEC. "Confirmed (recorder)" is a recorder result not yet checked against the real runner (research#8). A row whose status is still UNKNOWN or Inferred names what is missing; its default stays the engine_rev 0 choice until a trace settles it (#143).
 
 ### Tick and events
 
 | Id | Item | Status | Isolation | Default | Settles it |
 |---|---|---|---|---|---|
-| R1 | When xprevious/yprevious are captured | UNKNOWN (tick U1) | `TickRules::prev_capture` | `BeforeMotion` | T-PREV-1, T-MOT-02 (machinary, showdown t-mot-02 rec) |
-| R2 | Instance order within a phase; whether depth matters | UNKNOWN U2 | `events::dispatch_order`, `TickRules::dispatch` | `RankThenCreation`; alternatives `Creation`, `DepthThenRankThenCreation` | t-ord-1 (rec) |
-| R3 | Alarm decrement/fire rule; set to 0; set in own event | Inferred / UNKNOWN U3 | `alarm::tick`, `alarm::set` | `> 0` subtract 1, fire at 0; 0 is idle | t-alarm-1 (consistent), t-alarm-2 (rec) |
-| R3b | Fractional alarm values | UNKNOWN | `NumRules::alarm_from_real` | round half even | num-alarm-half (rec), num-eps-alpha (rec) |
+| R1 | When xprevious/yprevious are captured | Confirmed (recorder) U1: at the start of the tick, before Begin Step | `TickRules::prev_capture` | `TickStart` | wanna t-prev-1 (rec), machinary t-mot-02-a rows 85-87 (rec), kaenbyou tr-room-08 rows 5-6 (rec) |
+| R2 | Instance order within a phase; whether depth matters | Confirmed (recorder) U2: object index, then creation; depth ignored | `events::dispatch_order`, `TickRules::dispatch` | `RankThenCreation`; alternatives `Creation`, `DepthThenRankThenCreation` | t-ord-1 (rec) |
+| R3 | Alarm decrement/fire rule; set to 0; set in own event | Confirmed (recorder) U3: only alarms the object handles count down; a value of 0 becomes -1 without firing; re-armed in its own event: no extra decrement; set by an earlier alarm of the same instance this tick: counted down that tick; set in Step: not counted that tick. An alarm assigned exactly 0 is not traced | `alarm::tick`, `alarm::set` | as the recorder | kaenbyou num-alarm-half-b (rec), jun-g num-eps-alpha rows 45-46 (rec), t-alarm-1, t-alarm-2 (rec) |
+| R3b | Fractional alarm values | Confirmed (recorder): round half even | `NumRules::alarm_from_real` | round half even | num-alarm-half (rec), num-eps-alpha (rec) |
 | R4 | Key event order | UNKNOWN U11 | `events::key_event_order` | held, press, release; action bit order | none planned |
-| R5 | Outside Room / Intersect Boundary slot | Inferred / UNKNOWN U4 | `TickRules::boundary_slot` | `AfterMotion` | t-evo-1 (rec), lr-boundary (rec) |
-| R6 | Timeline slot; moments passed when speed > 1 | UNKNOWN U6 | `TickRules::timeline_slot`, `timeline::advance` | after Begin Step | t-evo-1 (rec) |
+| R5 | Outside Room / Intersect Boundary slot | Confirmed (recorder) U4: after motion and End of Path, Outside Room first | `TickRules::boundary_slot` | `AfterMotion` | t-evo-1 (rec), t-evo-2 (rec), lr-boundary (rec) |
+| R6 | Timeline slot; moments passed when speed > 1 | Slot Confirmed (recorder) U6: after Begin Step, before alarms; moments for speed > 1 UNKNOWN (not traced) | `TickRules::timeline_slot`, `timeline::advance` | after Begin Step | t-evo-1 (rec) |
 | R6b | Moment N offset after Set Time Line at 0 (N or N+1 steps) | UNKNOWN (sound) | `timeline::start` | moment N runs N steps after the setting tick | audio-rori-sync (rec), audio-miku-sync-mute (rec) |
-| R7 | Animation slot; wrap compare; wrap count; negative speed | Conflict: tick Inferred 13 (after Draw) vs sprites Inferred (after Step, before Collision); wrap UNKNOWN | `TickRules::anim_slot = AfterDraw | AfterMotion`, `anim::advance` | `AfterDraw`; `>=`, subtract once | t-anim-1 (`>=` consistent; cannot tell slots apart), ANIM-SAVE-END |
-| R7b | Sprite-less instance animates | UNKNOWN; sprites Inferred step 1 says "every instance that has a sprite" | `anim::advance` (frames = 0) | no advance | anim-nosprite (rec) |
+| R7 | Animation slot; wrap compare; wrap count; negative speed | Confirmed (recorder): after Draw, `>=`, subtract once; negative speed below 0 not traced (sprites Inferred step 3) | `TickRules::anim_slot = AfterDraw | AfterMotion`, `anim::advance` | `AfterDraw`; `>=`, subtract once | t-anim-1, anim-save-end (rec), anim-switch-g (rec) |
+| R7b | Sprite-less instance animates | Confirmed (recorder): advances image_index and never wraps; what Draw shows at those indices is open | `anim::advance` (frames = 0), `TickRules::anim_nosprite` | `NoSpriteAnim::Advance` | little-trap anim-nosprite rows 2-61 (rec) |
 | R7c | Drawn and collision subimage after a sprite switch | Inferred | `Image::subimage()` | `floor(index) mod frames` | ANIM-SWITCH |
 | R7d | Default image state | Inferred (image_speed 1, scales 1, alpha 1) | `Image::default` | as Inferred | — |
-| R8 | What still runs after a room request in the tick | Inferred / UNKNOWN U8 | `TickRules::room_request` | `AbortTick` after the handler | t-room-1 (rec), TR-ROOM-02 |
-| R9 | New instance runs the current phase | Confirmed (recorder) U10, except an object whose turn already passed (not traced) | `TickRules::new_instances_join_phase: JoinPhase` (`Never`, `LaterInOrder`, `Always`) | `LaterInOrder` | tr-room-03-b-log, a3-t17-b, t-evo-1 (rec), BLOOD-COUNT |
-| R10 | Instances created during Room Start get Room Start | UNKNOWN U9 | same snapshot rule | no | t-room-1 (rec), TR-ROOM-14 |
+| R8 | What still runs after a room request in the tick | Confirmed (recorder) U8 for room_goto and game_restart: the rest of the tick is skipped; the old room is drawn once only when a transition is set | `TickRules::room_request` | `AbortTick` after the handler | t-room-1 (rec), tr-room-02-c (rec) |
+| R9 | New instance runs the current phase | Confirmed (recorder) U10: an instance of the creator's own object created during its turn gets no Step (t-evo-1 row 3) | `TickRules::new_instances_join_phase: JoinPhase` (`Never`, `LaterInOrder`, `Always`) | `LaterInOrder` | tr-room-03-b-log, a3-t17-b, t-evo-1 (rec), BLOOD-COUNT |
+| R10 | Instances created during Room Start get Room Start | Confirmed (recorder) U9: no | same snapshot rule | no | t-room-1 (rec), tr-room-14 (rec) |
 | R11 | GM 8.1 differences | UNKNOWN U12 | `RunnerRules::for_runner(Gm81)` | same as 8.0 | T-EVO-2 |
-| R12 | Order of one instance's collision pairs | Inferred (by the other's object order, then creation) / UNKNOWN | `CollideRules::pair_order` | `OtherRankThenId`; alternative `HandlerListOrder` | t-col-06 (rec), T-MOT-08, k-platform (rec) |
-| R12b | One other matching two handler classes (platform as BLOCK and PLATFORM) | UNKNOWN (C8) | `events::collision_phase` | both fire, handler-list order | t-col-06 (rec) |
-| R13 | One pending room request, last wins | Inferred / UNKNOWN | `World::pending` setter | last wins | tr-room-01-a (rec) |
-| R14 | room_speed equals the file speed until world Room Start | Inferred | `room::enter` | file speed | t-alarm-2 (rec), TR-ROOM-16 |
+| R12 | Order of one instance's collision pairs | Inferred (by the other's object order, then creation) / UNKNOWN: the platform part of T-COL-06 and T-MOT-08 are not run | `CollideRules::pair_order` | `OtherRankThenId`; alternative `HandlerListOrder` | T-COL-06 platform part, T-MOT-08 (research#7), k-platform (rec) |
+| R12b | One other matching two handler classes (platform as BLOCK and PLATFORM) | UNKNOWN (C8) | `events::collision_phase` | both fire, handler-list order | T-COL-06 platform part (research#7) |
+| R13 | One pending room request, last wins | Inferred / UNKNOWN; only game_restart after room_goto traced | `World::pending` setter | last wins | tr-room-01-a (rec); other pairs not traced |
+| R14 | room_speed equals the file speed until world Room Start | Confirmed (recorder): first interval 30, then 50 | `room::enter` | file speed | t-alarm-2 (rec), TR-ROOM-16 |
 | R15 | Draw-slot gameplay handlers run every tick | Confirmed need | `Phase::Late` | runs headless | — |
-| R16 | Globals survive game_restart; events on restart removal | UNKNOWN | `RoomRules::globals_survive_restart`, `restart_events` | cleared; no events | tr-room-04 (rec), TR-MECH-08 |
-| R17 | Room change spends a tick; boot tick on retry | UNKNOWN | `RestartModel::boot_ticks` | change between ticks; 1 boot tick | tr-room-01-a (rec) |
-| R17b | Transitions spend no ticks | Inferred | output only | no ticks | TR-ROOM-10 |
+| R16 | Globals survive game_restart; events on restart removal | Globals: Confirmed (recorder), cleared; events on removal UNKNOWN (not traced) | `RoomRules::globals_survive_restart`, `restart_events` | cleared; no events | little-runner tr-room-04 rows 33-34 (rec); TR-MECH-08 |
+| R17 | Room change spends a tick; boot tick on retry | Confirmed (recorder): R tick, 1 rInit tick, then the saved room; room changes spend no tick | `RestartModel::boot_ticks` | change between ticks; 1 boot tick | tr-room-01-a rows 42-44 (rec) |
+| R17b | Transitions spend no ticks | Confirmed (recorder) | output only | no ticks | tr-room-10-a (rec) |
 | R18 | Persistent room revisit: no Create, Room Start yes | Inferred | `room::perform_change` | as stated | TR-ROOM-14 |
-| R19 | View follow algorithm and phase | Inferred / UNKNOWN | `view::follow_update` | manual reading, before Draw slot | tr-room-09 (rec), tr-room-11 (rec) |
+| R19 | View follow algorithm and phase | Confirmed (recorder) horizontally: border `min(hborder, view/2)`, follows the same tick's post-move position; camera-object games lag 1 tick; vertical follow UNKNOWN | `view::follow_update` | as the recorder, before Draw slot | animus, eat-the-lemon tr-room-09 (rec), little-runner tr-room-11 rows 258-260 (rec) |
 | R20 | Inactive instances and pause (xia) | Confirmed manual; xia io_clear on unpause | `Instance::active`, `InputState::clear` | — | T9 |
-| R21 | Which instance is "first" (queries, the kid, view follow, saveGame) | UNKNOWN (manual: "the first is returned") | `World::first_of`, `TickRules::first_rule` | dispatch order; alternative lowest id | famB-multikid-restart (rec) |
+| R21 | Which instance is "first" (queries, the kid, view follow, saveGame) | Confirmed (recorder): the save reads the lowest-id kid; `object.variable` and saves read the first in instance order. For one object, lowest id and dispatch order agree | `World::first_of`, `TickRules::first_rule` | dispatch order; alternative lowest id | famB-multikid-restart-b rows 25-26 (rec) |
 | R22 | Destroyed-this-step instance seen by collisions and queries | Inferred only for `instance_exists` | `TickRules::dead_in_queries` | false | T-EVO-1 follow-up request |
-| R23 | room_goto during the room change (room creation code) | UNKNOWN (rooms) | `RoomRules::nested_request` | `ChainAfterSequence`, max 8 | tr-room-12 (rec) |
+| R23 | room_goto during the room change (room creation code) | Confirmed (recorder): 0 ticks in rLoad; Room Start and draw in rLoad not visible | `RoomRules::nested_request` | `ChainAfterSequence`, max 8 | kaenbyou tr-room-12 (rec) |
 | R24 | instance_destroy() in room creation code | UNKNOWN (rooms) | `RoomAction::DestroySelf` | `Unsupported` | request (section 16) |
 | R25 | Deferral grain: code action or event action list | UNKNOWN (rooms 1) | handler boundary | end of handler (Design) | request |
-| R26 | Showdown restart path | Conflict: rooms table (Group A, game_restart) vs kid/A3.md (no game_restart) | `GameDef::restart.kind` | `ShowdownLoad` per A3 | research fix (section 16) |
+| R26 | Showdown restart path | Confirmed (recorder): R has no game_restart; the R tick makes a new kid in the old room, the next tick is the reloaded room with the same kid | `GameDef::restart.kind` | `ShowdownLoad` | traces/showdown/a3-t18-a.csv f41-43 (rec) |
 | R27 | Restart trigger phase per engine | Confirmed per game (rooms, A3 I7) | `RestartModel::trigger` | per 4.3 table | tr-room-01-a (rec), sh-save-restart (rec) |
 | R28 | Runner real-time reads (`fps`, clocks) | Design | world built-in, script API | `fps = tick_rate`; clocks from ticks | — |
 
@@ -1250,30 +1250,30 @@ Every rule the sim needs that the spec marks UNKNOWN, Inferred or Conflict, or t
 
 | Id | Item | Status | Isolation | Default | Settles it |
 |---|---|---|---|---|---|
-| M1 | Friction before gravity; path position | Inferred / UNKNOWN | `motion::apply_auto_motion` | friction, gravity, path, move | t-mot-04 (rec), t-evo-1 (rec) |
-| M2 | Friction edge cases | UNKNOWN U3 | `motion::apply_friction` | reduce toward 0, clamp at 0; negative grows | t-mot-04 (rec) |
-| M3 | Negative speed representation | UNKNOWN U4 | `Motion::recompute_cartesian` | store speed as written | t-mot-05 (rec) |
-| M4 | Direction when h and v are both 0 | UNKNOWN U5 | `Motion::recompute_polar` | `atan2(-0.0, 0.0)` result | t-mot-06 (rec) |
+| M1 | Friction before gravity; path position | Friction slot Confirmed (recorder): before the move, also on the creation tick; friction vs gravity order UNKNOWN (not traced) | `motion::apply_auto_motion` | friction, gravity, path, move | kaenbyou t-mot-04 (rec), t-evo-1 (rec) |
+| M2 | Friction edge cases | Confirmed (recorder) U3: stops at exactly 0; negative friction grows | `motion::apply_friction` | reduce toward 0, clamp at 0; negative grows | kaenbyou t-mot-04 (rec) |
+| M3 | Negative speed representation | Confirmed (recorder) U4: speed kept as written, negative included | `Motion::recompute_cartesian` | store speed as written | eat-the-rori-girl t-mot-05 (rec) |
+| M4 | Direction when h and v are both 0 | Confirmed (recorder) U5: direction -0.0; a later speed write moves right | `Motion::recompute_polar` | `atan2(-0.0, 0.0)` result | kaenbyou t-mot-06-b (rec) |
 | M5 | Polar recompute formula and zero signs | Inferred, Trace-consistent | `Motion::recompute_polar` | `radtodeg(atan2(-v, h))`, +360 if `< 0` | stand, t-alarm-1 |
 | M6 | Trig bits for non-table angles: x87 vs libm | UNKNOWN numbers | `num::trig` | libm, table for 0/90/180/270; `atan2` correctly rounded (double-double refinement of libm), snapped to the double below pi/2 when `\|x\| / \|y\| < 1e-13` (cutoff OPEN, between 1.9e-14 and 6.8e-5, traces rely num-rng-b and kaenbyou t-mot-04) | num-trig, kaenbyou land-moving, vines |
-| M7 | Solid re-move uses current speeds; "kept at previous place" | Inferred / UNKNOWN motion U7 | `collide::solid_resolve`, `CollideRules::solid_recheck` | add speeds after event; recheck vs `b`; restore event position | T-MOT-07, t-col-04 (rec) |
+| M7 | Solid re-move uses current speeds; "kept at previous place" | Confirmed (recorder) motion U7: "kept at previous place" restores xprevious/yprevious from tick start, undoing the event's and Step's moves; the re-move starts where the event left the instance. C9 not separated | `collide::solid_resolve`, `CollideRules::solid_recheck`, `CollideRules::solid_keep` | add speeds after event; recheck vs `b`; `SolidKeep::Previous` | showdown t-mot-07-e rows 2-8 (rec), machinary kid-a4-long-fall row 96 (rec), t-col-04 (rec) |
 | M8 | Path following | UNKNOWN U9, U-MECH-4 | `path::advance` | linear segments by `speed / length`, closed loops wrap | TR-MECH-02 |
 
 ### Collision
 
 | Id | Item | Status | Isolation | Default | Settles it |
 |---|---|---|---|---|---|
-| C1 | bbox formula at unit scale | Inferred | `collide::bbox::instance_box` | `round(x) + (left - ox)` | t-col-01..03 (rec) |
-| C2 | Rounding mode; tested coordinate vs round-then-add | Inferred / UNKNOWN | `place_origin`, `CollideRules::place_round` | banker's; round the tested coordinate | t-col-08 (rec) |
-| C3 | bbox under scale, negative scale, angle | UNKNOWN | `collide::xform::map_box` | exact for ±1 and right angles; scale floors; other angles `Unsupported` | t-col-09 (rec), MASK-ROTATE |
-| C4 | Mirror rule `d -> -d` vs `d -> -d-1` | UNKNOWN | `collide::xform::map_box` | `d -> -d` | MASK-MIRROR, t-col-01 (rec), k-wall-align-left (rec) |
-| C5 | Precise alpha `>` vs `>=` | UNKNOWN | `format::masks::ALPHA_IN_MASK` | `>` | t-col-05 (rec) |
+| C1 | bbox formula at unit scale | Confirmed (recorder) | `collide::bbox::instance_box` | `round(x) + (left - ox)` | t-col-01..03 (rec) |
+| C2 | Rounding mode; tested coordinate vs round-then-add | Inferred / UNKNOWN at an exact .5 in x: the collision box is not the reported bbox | `place_origin`, `CollideRules::place_round`, `box_round` | banker's; round the tested coordinate | t-col-08 (rec), trick-wall-align run d (rec) |
+| C3 | bbox under scale, negative scale, angle | Reported box Confirmed (recorder): `bbox::reported_edges`; `prec = false` point, rectangle and line queries test the reported box, mirrored extra pixel included (t-col-09-e rows 4-8), which `collide/query.rs` already does. The collision mask under scale, mirror and rotation is UNKNOWN (precise and pixel collision not logged) | `collide::xform::map_box`, `bbox::reported_box` | exact for ±1 and right angles; scale floors; other angles `Unsupported` | poronkusema t-col-09-a..g (rec), MASK-ROTATE |
+| C4 | Mirror rule `d -> -d` vs `d -> -d-1` | Confirmed (recorder) for collisions: `d -> -d`, kid box x-5..x+5 in both facings; the reported bbox_left of a mirrored instance reads x-7 (`DistBoxes::Reported`) | `collide::xform::map_box` | `d -> -d` | MASK-MIRROR, t-col-01 (rec), k-wall-align-left (rec) |
+| C5 | Precise alpha `>` vs `>=` | UNKNOWN: t-col-05 cannot tell them apart | `format::masks::ALPHA_IN_MASK` | `>` | needs a new trace |
 | C6 | Subimage used for separate masks mid-tick | Inferred; depends on R7 | `Image::subimage()` | current `floor(index)` | cherry traces |
-| C7 | Per-pair re-check for solid pairs | Inferred (seams) | `events::collision_phase` | re-check | t-col-04 (rec), a1-land-two-blocks |
-| C7b | Per-pair re-check for non-solid pairs (killer before or after block event) | UNKNOWN (collision 5th bullet) | `CollideRules::recheck_nonsolid` | true (Design) | t-col-06 (rec), lr-killorder (rec) |
-| C8 | Inherited and direct events for the same pair | UNKNOWN | `EventSet::collisions` | both run (R12b) | t-col-06 (rec) |
-| C9 | Final "still colliding" check: vs `b` or any solid | UNKNOWN motion U7 | `CollideRules::solid_recheck` | vs `b` | T-MOT-07 |
-| C10 | move_contact_solid from an overlapping start | UNKNOWN (sources disagree) | `CollideRules::mcs_start` | manual: no move | t-col-07 (rec) |
+| C7 | Per-pair re-check for solid pairs | Confirmed (recorder) | `events::collision_phase` | re-check | machinary t-col-04 (rec), a1-land-two-blocks |
+| C7b | Per-pair re-check for non-solid pairs (killer before or after block event) | Confirmed (recorder): the killer sees the post-block position | `CollideRules::recheck_nonsolid` | true | help-the-fairy-tale t-col-06 (rec), lr-killorder (rec) |
+| C8 | Inherited and direct events for the same pair | UNKNOWN | `EventSet::collisions` | both run (R12b) | T-COL-06 platform part (research#7) |
+| C9 | Final "still colliding" check: vs `b` or any solid | UNKNOWN motion U7; t-mot-07-e does not separate the two | `CollideRules::solid_recheck` | vs `b` | T-MOT-07 |
+| C10 | move_contact_solid from an overlapping start | Confirmed (recorder): no move from an embedded start | `CollideRules::mcs_start` | manual: no move | little-runner t-col-07-d (rec) |
 | C11 | move_contact_solid step count, maxdist 0, non-axis | UNKNOWN | `collide::contact::mcs_step_limit` | `floor(maxdist)` steps, 0 = no move | a1-idle-settle, kaenbyou slope room |
 | C12 | collision_rectangle/line corners | UNKNOWN | `query::rect_cells`, `line_cells` | inclusive, rounded with C2 | wanna oSpike14a, spook platforms |
 | C13 | distance_to_object measure | Inferred ("gap between bounding boxes") / UNKNOWN ("+1 or not") | `CollideRules::{dist_boxes, dist_offset, dist_combine}` | rounded inclusive boxes; offset chosen by the flush-kid test; `sqrt` combine (Design) | T-COL-10, bug-right-vine-miss (rec), a-vine-right (rec), famb-vines (rec) |
@@ -1284,16 +1284,16 @@ Every rule the sim needs that the spec marks UNKNOWN, Inferred or Conflict, or t
 
 | Id | Item | Status | Isolation | Default | Settles it |
 |---|---|---|---|---|---|
-| N1 | `==`, `<` exact or epsilon | UNKNOWN; spec infers exact; code value from OpenGMK | `NumRules::compare` | `Epsilon(1e-13)` | num-eps-slip (rec), num-eps-alpha (rec) |
+| N1 | `==`, `<` exact or epsilon | Confirmed (recorder): tolerance t with 9e-14 < t <= 1e-13; real runner open (research#8); code value from OpenGMK | `NumRules::compare` | `Epsilon(1e-13)` | num-eps-slip-b/-c (rec), num-eps-alpha (rec) |
 | N2 | Truthiness `> 0.5` vs `>= 0.5` | Spec infers `> 0.5`; code value from OpenGMK | `NumRules::truth` | `GeHalf` | num-eps-* |
 | N3 | FPU precision (53, 64 or 24 bit) | UNKNOWN | `NumRules::float_model` from `[engine]` | f64 | num-fpu-jump |
 | N4 | round tie rule; round(−x) to −0 or +0 | Inferred ties-even; −0 rule from OpenGMK | `NumRules::round_neg_zero` | ties even, `+0` | num traces |
-| N5 | file_bin_write_byte of a fraction or out-of-range value | UNKNOWN | `NumRules::byte_from_real` | truncate toward 0, wrap mod 256 | num-byte-save, TR-ROOM-05 |
-| N6 | `string()` two-decimal rounding | UNKNOWN | `NumRules::string_decimals` | round half even on the decimal value | num-string-save (rec), tr-room-07-a (rec) |
-| N7 | ds_list_write keeps doubles exactly | UNKNOWN | `save::quantize(XyPrevious)` | exact | tr-room-08 (rec) |
-| N8 | div truncates (Confirmed, code fix); div/mod on fractional operands | Confirmed / Inferred | `num::gm_div`, `num::gm_mod` | `trunc(a/b)`; `a - (a div b)*b` on reals | num-divmod-save (rec) |
+| N5 | file_bin_write_byte of a fraction or out-of-range value | Fractions Confirmed (recorder): round to nearest, ties to even (48.5 to 48); out-of-range UNKNOWN (not traced) | `NumRules::byte_from_real` | `ByteConv::RoundWrap`: round half even, wrap mod 256 | num-byte-save (rec), tr-room-05-e (rec) |
+| N6 | `string()` two-decimal rounding | UNKNOWN: exact halves go to even, but half even on the decimal value does not fit every value (183.005 gives 183.00, 0.015 gives 0.01) | `NumRules::string_decimals` | round half even on the decimal value (kept until research#100 finds the rule) | num-string-save-b (rec), machinary tr-room-07-b/-c (rec), research#100 |
+| N7 | ds_list_write keeps doubles exactly | Confirmed (recorder) | `save::quantize(XyPrevious)` | exact | kaenbyou tr-room-08 rows 51-52 (rec) |
+| N8 | div truncates (Confirmed, code fix); div/mod on fractional operands | Confirmed; fractional positive operands Confirmed (recorder); negative operands not traced | `num::gm_div`, `num::gm_mod` | `trunc(a/b)`; `a - (a div b)*b` on reals | little-runner num-divmod-save (rec) |
 | N9 | RNG algorithm, scaling sign, start seed, draws per call | Inferred / UNKNOWN | `rng.rs` | Delphi LCG, unsigned, seed from replay, one draw | num-rng |
-| N10 | Who draws from the RNG (blood, playerface, particles) | Confirmed consumers; particles UNKNOWN | each built-in; `NumRules::particles_draw_rng` | draws as specs list; particles `false` (placeholder, no GM claim) | num-rng, BLOOD-COUNT |
+| N10 | Who draws from the RNG (blood, playerface, particles) | Confirmed consumers; particles partly answered (recorder): room emitters draw (2 draws on most rely room1 ticks, more on spawns); the draw count per emitter is not specified | each built-in; `NumRules::particles_draw_rng` | draws as specs list; particles `false` (placeholder until #556, research#102) | num-rng-a (rec), BLOOD-COUNT |
 | N11 | `sign` exact or with epsilon | OpenGMK provenance; slip creep depends on it | `NumRules::sign` | `Epsilon` (follows N1) | num-eps-slip (rec) |
 | N12 | `min`/`max` tie and signed-zero rules | OpenGMK provenance | `NumRules::min_max_ties` | current code | num traces |
 | N13 | `floor`/`ceil` keep signed zero | OpenGMK provenance (round.rs comments) | `NumRules::floor_ceil_zero` | keep sign | num traces |
@@ -1314,7 +1314,7 @@ Every rule the sim needs that the spec marks UNKNOWN, Inferred or Conflict, or t
 
 | Id | Item | Status | Isolation | Default | Settles it |
 |---|---|---|---|---|---|
-| I1 | keyboard_check_direct latch (pressed since last direct read, shared per key); recorder's probe reads consume it | Inferred | `InputState::direct`, probe `KeyRead::Direct` | latch on; probe consumes | t4-input-direct-tap (rec), t5-input-restart-latch (rec), trick-restart-glitch-b (rec) |
+| I1 | keyboard_check_direct latch (pressed since last direct read, shared per key); recorder's probe reads consume it | Inferred; the recorder has no direct-key latch, so its traces cannot settle it | `InputState::direct`, probe `KeyRead::Direct` | latch on; probe consumes | real runner (research#8); t4-input-direct-tap, t5-input-restart-latch, trick-restart-glitch-b (rec, cannot settle) |
 | I2 | Held value at the end of a tick with press and release | UNKNOWN | `InputFrame::held` | as built | T3 |
 | I3 | Second Shift press while one is held | UNKNOWN | `sim::input` per-key edges | press counts | T1, T2 |
 | I4 | Key repeat sets pressed | Inferred no | client collector | no | T8 |
@@ -1325,10 +1325,10 @@ Every rule the sim needs that the spec marks UNKNOWN, Inferred or Conflict, or t
 
 | Id | Item | Status | Isolation | Default | Settles it |
 |---|---|---|---|---|---|
-| K1 | Resting frac(y) .4 (depends on C11) | Inferred | emergent | — | famb-spawn-settle (567.0, 567.4, 567.4), k-spawn-idle (rec) |
+| K1 | Resting frac(y) .4 (depends on C11) | Inferred; consistent with t-col-03 and t-col-08 | emergent | — | famb-spawn-settle (567.0, 567.4, 567.4), k-spawn-idle (rec) |
 | K2 | RORI/FT boundary roomTo lookup with no instance | UNKNOWN | kid action `edge_lookup_point_first` | treat as no changer, kill | rori/fairy-tale edge trace |
 | K3 | niseblock second count test | UNKNOWN | `fake_block` param `second_test` | passes | — |
-| K4 | Bullet runs its own Step on its creation tick | follows R9 | R9 | per R9 `LaterInOrder`: yes when the bullet's object comes later in the order than the kid's | t-evo-1 (rec), k-bullets (rec) |
+| K4 | Bullet runs its own Step on its creation tick | follows R9 (Confirmed (recorder)) | R9 | per R9 `LaterInOrder`: yes when the bullet's object comes later in the order than the kid's | t-evo-1 (rec), k-bullets (rec) |
 | K5 | Water reads pressed/released during collisions | Inferred | input frame fixed for the tick | yes | a-water (rec) |
 | K6 | Shared-last trigger semantics | Inferred / UNKNOWN U-MECH-2 | `trigger` model `shared_last` | all instances written, first read | TR-MECH-01 |
 | K7 | Flag-array triggers across R | UNKNOWN U-MECH-3 | R16 | cleared on game_restart | TR-MECH-08 |
@@ -1351,9 +1351,9 @@ To the user (WP0 updates the documents):
 
 To research (WP7a files these with the converter requests of 8.4):
 
-- **Conflict R26:** the rooms table puts showdown in Group A with game_restart; `kid/A3.md` showdown Restart says there is no game_restart. Please settle and fix one of them.
+- R26 (showdown restart) is settled by research PR #98; nothing to request.
 - **Spec items requested:** R22 (destroyed instance in collisions and queries), R24 (instance_destroy in room creation code), R25 (deferral grain), N14 (literal parsing), C13 combination of x and y gaps.
-- **Recorded traces waiting for analysis** that settle defaults here: t-ord-1, t-evo-1, t-room-1, tr-room-01-a, tr-room-04, tr-room-08, tr-room-12, t-alarm-2, num-eps-slip, num-eps-alpha, num-alarm-half, num-divmod-save, num-string-save, t-col-01..09, t-mot-02/04/05/06, anim-nosprite, draw-bow-lag, famB-multikid-restart, t4/t5 input traces.
+- **Recorded traces analyzed** (research#4): every trace once listed here has its result in CLONE_SPEC, and section 15 follows them (#143). Still open there: R12/R12b/C8 and R22 (research#7), R13 (other request pairs), C2 at an exact .5 in x, C5, N6 (research#100), N10's draw count (research#102), and every recorder result against the real runner (research#8).
 - The `INVESTIGATION.md` provenance note lists the epsilon and truthiness; the plan also tracks sign, min/max, signed zeros and the UCRT trig claim as OpenGMK-derived (N11-N13, M6).
 
 ## 17. Changes from revision 1
