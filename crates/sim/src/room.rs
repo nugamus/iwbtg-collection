@@ -695,8 +695,15 @@ fn run_action<H: RoomHost + ?Sized>(
     action: &RoomAction,
 ) -> Result<(), SimError> {
     match action {
-        RoomAction::SetGlobal { var, value } => {
+        RoomAction::SetGlobal {
+            var,
+            value,
+            difficulty,
+        } => {
             ctx.w.globals.insert(*var, value.clone());
+            if let Some(d) = difficulty {
+                ctx.w.engine.run.difficulty = *d;
+            }
         }
         RoomAction::Spawn { kind, .. } if ctx.def.stripped.kind_cut(ctx.w.mode, *kind) => {}
         RoomAction::Spawn { kind, x, y, params } => {

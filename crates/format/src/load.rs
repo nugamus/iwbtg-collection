@@ -1725,8 +1725,27 @@ impl<'a> Loader<'a> {
                         return None;
                     }
                 };
+                let difficulty = if var == "difficulty" {
+                    let whole = whole_difficulty(&value);
+                    if whole.is_none() {
+                        self.error(
+                            path,
+                            text,
+                            span,
+                            "set_global `difficulty` sets the engine difficulty: a whole number from 0 to 255",
+                        );
+                        return None;
+                    }
+                    whole
+                } else {
+                    None
+                };
                 let var = *vars.get(var)?;
-                Some(RoomAction::SetGlobal { var, value })
+                Some(RoomAction::SetGlobal {
+                    var,
+                    value,
+                    difficulty,
+                })
             }
             ActionFile::Spawn { kind, x, y, params } => {
                 let Some(k) = self.kind_by_ref(kind).filter(|_| !self.dropped.contains(kind)) else {
@@ -2283,14 +2302,7 @@ impl<'a> Loader<'a> {
                 continue;
             };
             if name == "difficulty" {
-                let whole = match &v {
-                    iwbtg_sim::world::Value::Real(r) => {
-                        let n = r.get();
-                        (0u8..=255).find(|d| f64::from(*d).total_cmp(&n).is_eq())
-                    }
-                    _ => None,
-                };
-                match whole {
+                match whole_difficulty(&v) {
                     Some(d) => out.difficulty = Some(d),
                     None => self.manifest_error(
                         value.span(),
@@ -2689,5 +2701,16 @@ mod tests {
             pending_call(&mut p, || panic!("a real bug"))
         });
         assert!(other.is_err());
+    }
+}
+
+/// A `difficulty` global as the engine difficulty: a whole number from 0 to 255.
+fn whole_difficulty(v: &iwbtg_sim::world::Value) -> Option<u8> {
+    match v {
+        iwbtg_sim::world::Value::Real(r) => {
+            let n = r.get();
+            (0u8..=255).find(|d| f64::from(*d).total_cmp(&n).is_eq())
+        }
+        _ => None,
     }
 }
