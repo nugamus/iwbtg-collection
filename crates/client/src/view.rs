@@ -213,8 +213,6 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
     let room = def.room(sim.world().room).ok_or("the start room is missing")?;
     let (width, height) = (room.width as f32, room.height as f32);
     let images = sprite_images(&pkg.files);
-    // The first room's start runs inside `Sim::new`; `step` clears its output, so take it now.
-    let first_output = sim.world().output.clone();
     let mut app = App::new();
     app.add_plugins(
         DefaultPlugins
@@ -273,9 +271,6 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
     )
     .add_systems(Last, limit_frames);
     plugins(&mut app, &pkg);
-    if let Some(mut queue) = app.world_mut().get_resource_mut::<crate::audio::Queue>() {
-        queue.push(Instant::now(), &first_output);
-    }
     if let Some(path) = screenshot {
         app.insert_resource(ScreenshotTo(path))
             .add_systems(Update, take_screenshot);
