@@ -11,7 +11,9 @@
 //!
 //! A split is `<index>@<tick>` (`timing::Split`: 0 is the start, then the stages, then the end).
 //! `splits: none` when no trigger fired. The run stops early when the sim ends (`game_end`) and
-//! fails with exit code 2 when it halts.
+//! fails with exit code 2 when it halts. With Sudden Death (`--mods SD`, or a replay header
+//! carrying it) the run also stops on the tick of the first death, and a replay with inputs past
+//! that tick is rejected (docs/architecture/replay.md, "Mods").
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -19,6 +21,7 @@ use std::sync::Arc;
 use iwbtg_format::{LoadMode, PackageFiles, load_game};
 use iwbtg_sim::def::GameDef;
 use iwbtg_sim::input::{InputFrame, parse_action_inputs};
+use iwbtg_sim::mods::ModSet;
 use iwbtg_sim::replay::{Replay, StartMode};
 use iwbtg_sim::room::StartPoint;
 use iwbtg_sim::sound::DllMode;
@@ -44,6 +47,9 @@ pub struct ReplayRunArgs {
     /// RNG seed for an `.inputs` file; a `.iwbr` replay carries its own.
     #[arg(long, default_value_t = 0)]
     pub seed: u32,
+    /// Mod codes for an `.inputs` file (`SD`, `SD,NB`); a `.iwbr` replay carries its own.
+    #[arg(long, value_parser = ModSet::parse, default_value = "")]
+    pub mods: ModSet,
 }
 
 /// What a headless run gives.
@@ -84,7 +90,7 @@ pub fn main(args: &ReplayRunArgs) -> Result<(), ToolError> {
         )));
     }
     let pkg = load_package(&args.pkg)?;
-    let (frames, seed) = read_input(&args.input, args.seed)?;
+    let (frames, seed, mods) = read_input(&args.input, args.seed, args.mods)?;
     let options = SimOptions {
         start: StartPoint::NewGame {
             difficulty: args.difficulty,
@@ -92,13 +98,13 @@ pub fn main(args: &ReplayRunArgs) -> Result<(), ToolError> {
         seed,
         dll_mode: DllMode::Model,
     };
-    let summary = run(&pkg, &frames, options)?;
+    let summary = run(&pkg, &frames, options, mods)?;
     print!("{}", summary.lines());
     Ok(())
 }
 
-/// The frames and seed of a `.iwbr` replay's bytes; `label` names the replay in errors.
-pub fn replay_input(bytes: &[u8], label: &str) -> Result<(Vec<InputFrame>, u32), ToolError> {
+/// The frames, seed and mods of a `.iwbr` replay's bytes; `label` names the replay in errors.
+pub fn replay_input(bytes: &[u8], label: &str) -> Result<(Vec<InputFrame>, u32, ModSet), ToolError> {
     let replay = Replay::decode(bytes).map_err(|e| ToolError::Message(format!("{label}: {e}")))?;
     if replay.header.start_mode != StartMode::NewGame {
         return Err(ToolError::Message(format!(
@@ -111,12 +117,13 @@ pub fn replay_input(bytes: &[u8], label: &str) -> Result<(Vec<InputFrame>, u32),
             replay.header.rng_seed
         ))
     })?;
-    Ok((replay.inputs, seed))
+    Ok((replay.inputs, seed, replay.header.mods))
 }
 
-/// The frames to run and the seed: a `.iwbr` replay's inputs and header seed, or the frames of an
-/// `.inputs` file (frames 0 through its `end` frame, as the trace runner ticks them) with `seed`.
-fn read_input(path: &Path, seed: u32) -> Result<(Vec<InputFrame>, u32), ToolError> {
+/// The frames to run, the seed and the mods: a `.iwbr` replay's inputs and header, or the frames
+/// of an `.inputs` file (frames 0 through its `end` frame, as the trace runner ticks them) with
+/// `seed` and `mods`.
+fn read_input(path: &Path, seed: u32, mods: ModSet) -> Result<(Vec<InputFrame>, u32, ModSet), ToolError> {
     let is_replay = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("iwbr"));
     if is_replay {
         let bytes =
@@ -128,16 +135,17 @@ fn read_input(path: &Path, seed: u32) -> Result<(Vec<InputFrame>, u32), ToolErro
     let ticks = usize::try_from(parsed.end).map_or(usize::MAX, |e| e.saturating_add(1));
     let mut frames = parsed.frames;
     frames.truncate(ticks);
-    Ok((frames, seed))
+    Ok((frames, seed, mods))
 }
 
-/// Runs a package headless on these input frames, one per tick, from `options`.
+/// Runs a package headless on these input frames, one per tick, from `options`, with `mods`.
 pub fn run(
     pkg: &PackageFiles,
     frames: &[InputFrame],
     options: SimOptions,
+    mods: ModSet,
 ) -> Result<ReplaySummary, ToolError> {
-    run_def(load_strict(pkg, LoadMode::Strict)?, frames, options)
+    run_def(load_strict(pkg, LoadMode::Strict)?, frames, options, mods)
 }
 
 /// Loads a package, formatting the diagnostics as an error.
@@ -154,14 +162,31 @@ pub fn load_strict(pkg: &PackageFiles, mode: LoadMode) -> Result<GameDef, ToolEr
     })
 }
 
-/// Runs a loaded game headless on these input frames, one per tick, from `options`.
-pub fn run_def(def: GameDef, frames: &[InputFrame], options: SimOptions) -> Result<ReplaySummary, ToolError> {
+/// Runs a loaded game headless on these input frames, one per tick, from `options`. A run that
+/// `mods` end (Sudden Death) stops on that tick; frames left after it are an error.
+pub fn run_def(
+    def: GameDef,
+    frames: &[InputFrame],
+    options: SimOptions,
+    mods: ModSet,
+) -> Result<ReplaySummary, ToolError> {
     let mut sim = Sim::new(Arc::new(def), options)
         .map_err(|e| ToolError::Message(format!("the sim did not start: {e}")))?;
     let mut splits = Vec::new();
-    for frame in frames {
+    for (index, frame) in frames.iter().enumerate() {
+        let deaths = sim.world().engine.run.deaths;
         let step = sim.step(*frame);
         splits.extend(step.splits);
+        if step.status == SimStatus::Running && mods.ends_run(deaths, sim.world().engine.run.deaths) {
+            let left = frames.len() - index - 1;
+            if left > 0 {
+                return Err(ToolError::Message(format!(
+                    "Sudden Death ended the run at tick {}, but {left} more input ticks follow",
+                    step.tick
+                )));
+            }
+            break;
+        }
         match step.status {
             SimStatus::Running => {}
             SimStatus::Ended => break,
@@ -209,11 +234,75 @@ mod tests {
         let dir = std::env::temp_dir();
         let path = dir.join(format!("iwbtg-replay-test-{}.inputs", std::process::id()));
         std::fs::write(&path, "frame 2: hold jump\nframe 4: end\n").unwrap();
-        let (frames, seed) = read_input(&path, 9).unwrap();
+        let (frames, seed, _) = read_input(&path, 9, ModSet::NONE).unwrap();
         std::fs::remove_file(&path).ok();
         assert_eq!(frames.len(), 5);
         assert_eq!(seed, 9);
         assert_eq!(frames[2].held, iwbtg_sim::input::Action::Jump.bit());
+    }
+
+    /// A kid whose suicide press kills it, and frames that press it on tick 5.
+    fn suicide_kid() -> (GameDef, Vec<InputFrame>) {
+        use iwbtg_sim::def::physics::{DeathStep, KeyOn, KidKey};
+        use iwbtg_sim::def::testing::GameDefBuilder;
+        use iwbtg_sim::def::{Builtin, ClassMask, EngineKind, KindDef, PhysicsProfile, RoomDef};
+        use iwbtg_sim::input::Action;
+        use iwbtg_sim::kid::KidAction;
+        use iwbtg_sim::kid::actions::common::CommonAction;
+        let mut p = PhysicsProfile::default();
+        p.events.keys = vec![KidKey {
+            action: Action::Suicide,
+            on: KeyOn::Press,
+            run: vec![KidAction::Common(CommonAction::Kill)],
+        }];
+        p.death.order = vec![DeathStep::DestroyKid, DeathStep::DeathsPlusOne];
+        let mut b = GameDefBuilder::new("sudden-death");
+        let sprite = b.sprite_rect((11, 21), (5, 12));
+        let mut k = KindDef::new("kid", Builtin::Kid);
+        k.sprite = Some(sprite);
+        k.classes = ClassMask::KID;
+        // The loader gives a kid kind its events from the profile; the builder does not.
+        k.events = iwbtg_sim::kid::event_set(&p);
+        let kid = b.kind(k);
+        b.engine_kind(EngineKind::Kid, kid);
+        let room = b.room(RoomDef::new("a", 800, 608));
+        b.start_room(room);
+        b.place(room, kid, 100.0, 100.0).unwrap();
+        b.physics(p);
+        let mut frames = vec![InputFrame::default(); 200];
+        let bit = Action::Suicide.bit();
+        frames[5] = InputFrame {
+            held: bit,
+            pressed: bit,
+            released: 0,
+        };
+        (b.build().unwrap(), frames)
+    }
+
+    #[test]
+    fn sudden_death_stops_the_run_on_the_first_death() {
+        let options = SimOptions {
+            start: StartPoint::NewGame { difficulty: 0 },
+            seed: 0,
+            dll_mode: DllMode::Model,
+        };
+        let (def, frames) = suicide_kid();
+        let plain = run_def(def.clone(), &frames, options.clone(), ModSet::NONE).unwrap();
+        assert_eq!(plain.ticks, 200, "without Sudden Death the run goes on");
+        let sd = ModSet::parse("SD").unwrap();
+        let err = run_def(def.clone(), &frames, options.clone(), sd)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("Sudden Death ended the run at tick"), "{err}");
+        // A replay that ends on the death tick, as the recording client stops there, runs.
+        let tick: usize = err
+            .split("at tick ")
+            .nth(1)
+            .and_then(|t| t.split(',').next())
+            .and_then(|t| t.parse().ok())
+            .unwrap();
+        let ended = run_def(def, &frames[..tick], options, sd).unwrap();
+        assert_eq!(ended.ticks, tick as u64);
     }
 
     /// The golden one-room package on its `.inputs`: 61 ticks, the run starts at tick 1, and a
@@ -223,15 +312,15 @@ mod tests {
     fn the_golden_one_room_package_runs_twice_to_one_hash() {
         let golden = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sim/tests/golden");
         let pkg = load_package(&golden.join("one_room.pkg")).unwrap();
-        let (frames, seed) = read_input(&golden.join("one_room.inputs"), 0).unwrap();
+        let (frames, seed, mods) = read_input(&golden.join("one_room.inputs"), 0, ModSet::NONE).unwrap();
         let options = SimOptions {
             start: StartPoint::NewGame { difficulty: 0 },
             seed,
             dll_mode: DllMode::Model,
         };
         let attempt = std::panic::catch_unwind(|| {
-            let a = run(&pkg, &frames, options.clone()).unwrap();
-            let b = run(&pkg, &frames, options).unwrap();
+            let a = run(&pkg, &frames, options.clone(), mods).unwrap();
+            let b = run(&pkg, &frames, options, mods).unwrap();
             (a, b)
         });
         match attempt {

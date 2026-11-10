@@ -682,11 +682,9 @@ fn run_action<H: RoomHost + ?Sized>(
             load_slot(ctx, host, &slot)?;
             ctx.w.pending = Some(RoomRequest::Goto(slot.room));
         }
-        RoomAction::DestroySelf => {
-            return Err(SimError::unsupported(
-                "instance_destroy() in room creation code: which instance is self is UNKNOWN (R24)",
-            ));
-        }
+        // R24 (Confirmed, recorder): instance_destroy() in room creation code destroys nothing
+        // and the rest of the code runs (showdown a3-t18-a rows 42-43, a3-t20, tr-room-14).
+        RoomAction::DestroySelf => {}
     }
     Ok(())
 }

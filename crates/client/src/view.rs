@@ -24,6 +24,13 @@ pub(crate) struct Game {
     pub(crate) sim: Sim,
 }
 
+/// How the run started, so a retry can start it again the same way.
+#[derive(Resource)]
+struct RunStart {
+    def: Arc<iwbtg_sim::def::GameDef>,
+    options: SimOptions,
+}
+
 /// The Bevy image of each sprite strip, by `SpriteId`, with the strip size.
 #[derive(Resource)]
 struct Textures(Vec<Option<(Handle<Image>, UVec2)>>);
@@ -73,6 +80,11 @@ impl ViewRect {
         )
     }
 }
+
+/// The fixed-clock systems that advance the sim (the tick and the clock retune). Other modules
+/// gate them with a run condition, as Sudden Death does when the run is over (mods.rs).
+#[derive(SystemSet, Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub(crate) struct SimTick;
 
 /// Marks the camera that draws the game.
 #[derive(Component)]
@@ -196,12 +208,11 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
         seed: 0,
         dll_mode: DllMode::Model,
     };
-    let sim = Sim::new(Arc::clone(&def), options).map_err(|e| format!("the game did not start: {e}"))?;
+    let sim =
+        Sim::new(Arc::clone(&def), options.clone()).map_err(|e| format!("the game did not start: {e}"))?;
     let room = def.room(sim.world().room).ok_or("the start room is missing")?;
     let (width, height) = (room.width as f32, room.height as f32);
     let images = sprite_images(&pkg.files);
-    // The first room's start runs inside `Sim::new`; `step` clears its output, so take it now.
-    let first_output = sim.world().output.clone();
     let mut app = App::new();
     app.add_plugins(
         DefaultPlugins
@@ -223,6 +234,10 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
     .insert_resource(PendingImages(images))
     .init_resource::<Drawn>()
     .insert_non_send(Game { sim })
+    .insert_resource(RunStart {
+        def: Arc::clone(&def),
+        options,
+    })
     .insert_resource(Collector::new())
     .insert_resource(Cap(cap))
     .insert_resource(Previous {
@@ -244,7 +259,7 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
         RunFixedMainLoop,
         collect_input.in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
     )
-    .add_systems(FixedUpdate, (tick, follow_room_speed).chain())
+    .add_systems(FixedUpdate, (tick, follow_room_speed).chain().in_set(SimTick))
     .add_systems(
         Update,
         (
@@ -256,9 +271,6 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
     )
     .add_systems(Last, limit_frames);
     plugins(&mut app, &pkg);
-    if let Some(mut queue) = app.world_mut().get_resource_mut::<crate::audio::Queue>() {
-        queue.push(Instant::now(), &first_output);
-    }
     if let Some(path) = screenshot {
         app.insert_resource(ScreenshotTo(path))
             .add_systems(Update, take_screenshot);
@@ -391,6 +403,52 @@ fn collect_input(keys: Res<ButtonInput<KeyCode>>, mut collector: ResMut<Collecto
     for key in keys.get_just_released().filter_map(|k| key_code(*k)) {
         collector.release(key);
     }
+}
+
+/// Starts the run again from where it started (quick-retry and auto-retry, `retry.rs`): a new
+/// sim with the same options, every drawn sprite gone, no pending input edges, no sign. The new sim's
+/// room-start output stays in `output` for its first step (#466). The fixed clock keeps its rate until the next
+/// tick's `follow_room_speed`.
+pub(crate) fn restart_run(world: &mut World) -> Result<(), String> {
+    let start = world.resource::<RunStart>();
+    let sim = Sim::new(Arc::clone(&start.def), start.options.clone())
+        .map_err(|e| format!("the game did not start: {e}"))?;
+    world.non_send_mut::<Game>().sim = sim;
+    let drawn = std::mem::take(&mut world.resource_mut::<Drawn>().0);
+    for entity in drawn.into_values() {
+        world.despawn(entity);
+    }
+    {
+        let mut previous = world.resource_mut::<Previous>();
+        previous.room = None;
+        previous.pos.clear();
+    }
+    // Keys held through the retry stay held; edges from before it are dropped.
+    world.resource_mut::<Collector>().take_frame();
+    world.resource_mut::<hud::SignText>().0 = None;
+    Ok(())
+}
+
+/// The view's run resources without a window, for tests of the systems that use them.
+#[cfg(test)]
+pub(crate) fn test_world(pkg: &Package) -> World {
+    let options = SimOptions {
+        start: iwbtg_sim::room::StartPoint::NewGame { difficulty: 0 },
+        seed: 0,
+        dll_mode: DllMode::Model,
+    };
+    let sim = Sim::new(Arc::clone(&pkg.def), options.clone()).unwrap();
+    let mut world = World::new();
+    world.insert_non_send(Game { sim });
+    world.insert_resource(RunStart {
+        def: Arc::clone(&pkg.def),
+        options,
+    });
+    world.init_resource::<Drawn>();
+    world.init_resource::<Previous>();
+    world.insert_resource(Collector::new());
+    world.init_resource::<hud::SignText>();
+    world
 }
 
 /// One sim tick: runs on the fixed clock, as many times per frame as the clock is behind.

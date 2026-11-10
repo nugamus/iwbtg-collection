@@ -182,6 +182,6 @@ pub enum RoomAction {
     /// The engine's `loadGame` from room creation code (kaenbyou, eat-the-lemon rLoad; R23).
     LoadGame,
     /// `instance_destroy()` in room creation code: `SimError::Unsupported` until the spec says
-    /// which instance is "self" (R24).
+    /// a no-op (R24, Confirmed).
     DestroySelf,
 }
