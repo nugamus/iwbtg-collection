@@ -3,7 +3,8 @@
 //! one game pixel is on the monitor and what fills the rest.
 //!
 //! There is no settings screen yet (#53), so the choices are flags (`--fullscreen`, `--ratio`,
-//! `--window`) and keys: F11 fullscreen, F10 next ratio, F9 next windowed size.
+//! `--window`) and keys: F11 fullscreen, F10 next ratio, F9 next windowed size. Each choice is
+//! saved in the settings file (`settings.rs`), so the next start keeps it.
 
 use std::sync::OnceLock;
 
@@ -14,6 +15,7 @@ use iwbtg_sim::def::RoomId;
 
 use crate::art::{ArtFiles, parse_room_art};
 use crate::package::decode_png;
+use crate::settings::{self, Settings};
 use crate::view::{Game, GameCamera, RoomSize, ViewRect};
 
 /// The aspect ratios fullscreen offers; `None` is the monitor's own.
@@ -60,17 +62,33 @@ pub fn parse_size(s: &str) -> Result<(u32, u32), String> {
 /// The screen's command-line flags.
 #[derive(clap::Args, Debug)]
 pub struct ScreenArgs {
-    /// Start fullscreen (F11 toggles).
+    /// Start fullscreen (F11 toggles). Like `--ratio` and `--window`, saved in the settings file,
+    /// so the next start without the flag keeps it.
     #[arg(long)]
     pub fullscreen: bool,
     /// The shape of the area the game may use: native, 4:3, 16:9, 16:10, 21:9 or 32:9 (F10 cycles).
     /// The game is scaled by whole steps inside it; the rest is a blurred copy of the background.
-    #[arg(long, value_name = "RATIO", default_value = "native")]
-    pub ratio: String,
+    /// Default: the saved choice, else native.
+    #[arg(long, value_name = "RATIO")]
+    pub ratio: Option<String>,
     /// Windowed size, WIDTHxHEIGHT (F9 cycles the presets: 800x608, 1280x720, 1600x1216, 1920x1080,
     /// 2560x1440, 3200x2432).
     #[arg(long, value_name = "WxH", value_parser = parse_size)]
     pub window: Option<(u32, u32)>,
+}
+
+impl ScreenArgs {
+    /// Puts the flags given on the command line into the settings; the rest keep their saved value.
+    pub fn apply(&self, s: &mut Settings) -> Result<(), String> {
+        if let Some(r) = &self.ratio {
+            s.ratio = parse_ratio(r).map_err(|e| format!("--ratio {r}: {e}"))?;
+        }
+        s.fullscreen |= self.fullscreen;
+        if self.window.is_some() {
+            s.window = self.window;
+        }
+        Ok(())
+    }
 }
 
 /// What the command line asked for.
@@ -83,13 +101,16 @@ pub struct Options {
 
 static OPTIONS: OnceLock<Options> = OnceLock::new();
 
-/// Called by `main` before the window opens.
+/// Called by `main` after `settings::load` and before the window opens: saves the flags and
+/// starts from the saved choices.
 pub fn configure(args: &ScreenArgs) -> Result<(), String> {
-    let ratio = parse_ratio(&args.ratio).map_err(|e| format!("--ratio {}: {e}", args.ratio))?;
+    let mut s = settings::get();
+    args.apply(&mut s)?;
+    settings::update(|saved| *saved = s.clone());
     let _ = OPTIONS.set(Options {
-        fullscreen: args.fullscreen,
-        ratio,
-        window: args.window,
+        fullscreen: s.fullscreen,
+        ratio: s.ratio,
+        window: s.window,
     });
     Ok(())
 }
@@ -168,14 +189,17 @@ fn keys(
     }
     if keys.just_pressed(KeyCode::F11) {
         screen.fullscreen = !screen.fullscreen;
+        settings::update(|s| s.fullscreen = screen.fullscreen);
     }
     if keys.just_pressed(KeyCode::F10) {
         screen.ratio = (screen.ratio + 1) % RATIOS.len();
+        settings::update(|s| s.ratio = RATIOS[screen.ratio]);
     }
     if keys.just_pressed(KeyCode::F9) && !screen.fullscreen {
         screen.window = (screen.window + 1) % WINDOWS.len();
         let (w, h) = WINDOWS[screen.window];
         window.resolution.set_physical_resolution(w, h);
+        settings::update(|s| s.window = Some((w, h)));
     }
 }
 
@@ -437,6 +461,37 @@ mod tests {
         assert_eq!(layout((801, 608), None, ROOM).1, (true, false));
         assert_eq!(layout((802, 609), None, ROOM).1, (false, true));
         assert_eq!(layout((800, 608), None, ROOM).1, (false, false));
+    }
+
+    #[test]
+    fn flags_override_the_saved_choices_and_the_rest_stay() {
+        let saved = Settings {
+            ratio: Some((16, 9)),
+            window: Some((1280, 720)),
+            ..Settings::default()
+        };
+        let none = ScreenArgs {
+            fullscreen: false,
+            ratio: None,
+            window: None,
+        };
+        let mut s = saved.clone();
+        none.apply(&mut s).unwrap();
+        assert_eq!(s, saved, "no flag changes nothing");
+        let some = ScreenArgs {
+            fullscreen: true,
+            ratio: Some("native".into()),
+            window: Some((1600, 1216)),
+        };
+        some.apply(&mut s).unwrap();
+        assert!(s.fullscreen);
+        assert_eq!(s.ratio, None);
+        assert_eq!(s.window, Some((1600, 1216)));
+        let bad = ScreenArgs {
+            ratio: Some("5:4".into()),
+            ..none
+        };
+        assert!(bad.apply(&mut s).is_err());
     }
 
     #[test]

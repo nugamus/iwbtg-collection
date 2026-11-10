@@ -13,6 +13,7 @@ mod input;
 mod package;
 mod savefile;
 mod screen;
+mod settings;
 mod view;
 
 use std::process::ExitCode;
@@ -37,6 +38,9 @@ struct Args {
 
 fn main() -> ExitCode {
     let args = Args::parse();
+    // The settings file gives the defaults the flags override (settings.rs). A `--screenshot`
+    // check neither reads nor writes it, so it looks the same on every machine.
+    settings::load(args.view.screenshot.is_some());
     if let Err(e) = screen::configure(&args.screen) {
         eprintln!("{e}");
         return ExitCode::FAILURE;

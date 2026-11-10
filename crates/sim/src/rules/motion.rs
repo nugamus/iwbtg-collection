@@ -6,9 +6,10 @@
 /// Rules for `motion::apply_auto_motion`.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct MotionRules {
-    /// M1 (Inferred / UNKNOWN): order of the steps of automatic motion.
+    /// M1: order of the steps of automatic motion. Friction before the move, also on the
+    /// creation tick: Confirmed (recorder), kaenbyou t-mot-04; friction vs gravity: UNKNOWN.
     pub order: MotionOrder,
-    /// M2 (UNKNOWN U3): friction edge cases.
+    /// M2 (U3, answered by the recorder, kaenbyou t-mot-04): friction edge cases.
     pub friction: FrictionRule,
 }
 

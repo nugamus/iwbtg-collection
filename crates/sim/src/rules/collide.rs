@@ -8,11 +8,12 @@
 pub struct CollideRules {
     /// R12 (Inferred / UNKNOWN): order of one instance's collision pairs.
     pub pair_order: PairOrder,
-    /// C7b (UNKNOWN): re-check a non-solid pair's overlap right before its event. Default true
-    /// (Design: one rule for solid and non-solid pairs).
+    /// C7b: re-check a non-solid pair's overlap right before its event. Default true
+    /// (Confirmed (recorder): the killer sees the post-block position, help-the-fairy-tale
+    /// t-col-06).
     pub recheck_nonsolid: bool,
-    /// C9 / M7 (UNKNOWN motion U7): what the final "still colliding" check of a solid pair
-    /// tests.
+    /// C9 (UNKNOWN motion U7; showdown t-mot-07-e does not separate the two): what the final
+    /// "still colliding" check of a solid pair tests.
     pub solid_recheck: SolidRecheck,
     /// M7: where a solid pair leaves the instance when the final check still collides.
     pub solid_keep: SolidKeep,
@@ -21,7 +22,8 @@ pub struct CollideRules {
     /// C2 (UNKNOWN: CLONE_SPEC collision, "how the collision box rounds an exact .5 in x"):
     /// whether the collision box rounds the origin first or each edge after the mask offset.
     pub box_round: BoxRound,
-    /// C10 (UNKNOWN, sources disagree): `move_contact_solid` from an overlapping start.
+    /// C10 (answered by the recorder, little-runner t-col-07-d): `move_contact_solid` from an
+    /// overlapping start.
     pub mcs_start: McsStart,
     /// C13: which boxes `distance_to_object` measures.
     pub dist_boxes: DistBoxes,
