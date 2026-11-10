@@ -128,7 +128,9 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
             }
             let rules = &ctx.rules.num;
             if let Some(BuiltinState::GameOver(st)) = state_mut(ctx, me) {
-                st.overlay = num::gm_min(st.overlay + Real::new(0.015), Real::new(0.6), rules);
+                // 0.6 is a GML literal: the recorder reads it as 0.6000000000000001 (N14).
+                let cap = Real::new(0.600_000_000_000_000_1);
+                st.overlay = num::gm_min(st.overlay + Real::new(0.015), cap, rules);
                 st.phase += Real::new(std::f64::consts::PI / 100.0);
             }
             Ok(Flow::Continue)

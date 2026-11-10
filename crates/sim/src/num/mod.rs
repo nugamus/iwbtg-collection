@@ -29,7 +29,7 @@ use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAss
 use serde::{Deserialize, Serialize, Serializer};
 
 pub use compare::{gm_bool, gm_eq, gm_ge, gm_gt, gm_le, gm_lt, gm_ne};
-pub use conv::{alarm_from_real, byte_from_real, gm_string_real};
+pub use conv::{alarm_from_real, byte_from_real, gm_string_real, gml_literal};
 pub use math::{atan2, cos, exp, ln, pow, sin, sqrt, tan};
 pub use round::{
     abs, ceil, clamp, floor, frac, gm_div, gm_max, gm_min, gm_mod, gm_repeat_count, lerp, round, sign,
