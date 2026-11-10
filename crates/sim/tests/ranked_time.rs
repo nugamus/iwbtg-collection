@@ -249,6 +249,24 @@ fn a_real_press_resets_the_count_and_holding_does_not() {
 }
 
 #[test]
+fn the_derived_press_is_press_only() {
+    // #574: no text box in the 20 games advances on a release, so the tick after a derived
+    // press runs exactly as the player's frame says: no `released` edge, nothing held.
+    let mut f = fx(PlayMode::Stripped, TimingDef::default(), &[], Some(u64::MAX));
+    f.dialogue(5);
+    for tick in 0..12 {
+        f.tick(InputFrame::EMPTY);
+        let frame = f.w.input.frame;
+        assert!(!frame.was_released(Action::Shoot), "tick {tick}");
+        assert_eq!(
+            frame.is_held(Action::Shoot),
+            tick == 4 || tick == 9,
+            "tick {tick}"
+        );
+    }
+}
+
+#[test]
 fn a_dialogue_region_that_ends_resets_its_count() {
     // The scene goes in tick 2's End Step: ticks 0-2 count to 3, then it no longer holds.
     let mut f = fx(PlayMode::Stripped, TimingDef::default(), &[], Some(2));

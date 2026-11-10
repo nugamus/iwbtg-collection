@@ -162,6 +162,8 @@ impl StrippedDef {
 ///   resets it to 0 and the tick runs as the player gave it; otherwise the count goes up by one,
 ///   and when it reaches `timeout_ticks` the frame gets the press and the count goes back to 0.
 ///   So the first derived press comes in the region's `timeout_ticks`-th tick.
+/// - The derived press is press-only: no `released` edge follows on the next tick, because no
+///   text box in the 20 games advances on a release (docs/format/v0.md, Stripped mode; #574).
 pub fn begin_tick(w: &mut World, def: &GameDef, input: InputFrame) -> InputFrame {
     let stripped = w.mode == PlayMode::Stripped;
     let regions = &def.stripped;
