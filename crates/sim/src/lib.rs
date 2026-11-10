@@ -15,6 +15,7 @@
 
 // Existing modules.
 pub mod input;
+pub mod mods;
 pub mod num;
 pub mod replay;
 pub mod trace;

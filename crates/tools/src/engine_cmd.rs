@@ -91,6 +91,7 @@ fn run_replay(
     rev: u16,
     frames: &[iwbtg_sim::input::InputFrame],
     seed: u32,
+    mods: iwbtg_sim::mods::ModSet,
 ) -> Result<ReplaySummary, ToolError> {
     let mut def = load_strict(files, mode)?;
     def.engine_rev = rev;
@@ -99,7 +100,7 @@ fn run_replay(
         seed,
         dll_mode: DllMode::Model,
     };
-    run_def(def, frames, options)
+    run_def(def, frames, options, mods)
 }
 
 fn check_replay(
@@ -110,12 +111,12 @@ fn check_replay(
     from: u16,
     to: u16,
 ) -> (String, bool) {
-    let (frames, seed) = match replay_input(bytes, path) {
+    let (frames, seed, mods) = match replay_input(bytes, path) {
         Ok(x) => x,
         Err(e) => return (format!("replay {path}: DIFF cannot run: {e}"), true),
     };
-    let old = run_replay(files, mode, from, &frames, seed);
-    let new = run_replay(files, mode, to, &frames, seed);
+    let old = run_replay(files, mode, from, &frames, seed, mods);
+    let new = run_replay(files, mode, to, &frames, seed, mods);
     match (old, new) {
         (Ok(a), Ok(b)) if a == b => (format!("replay {path}: same ({})", short(&a)), false),
         (Ok(a), Ok(b)) => {
@@ -314,6 +315,7 @@ mod tests {
                 engine_rev: 0,
                 rng_seed: 0,
                 start_mode: StartMode::NewGame,
+                mods: iwbtg_sim::mods::ModSet::NONE,
                 client_build_id: String::new(),
             },
             trailer: Trailer {
