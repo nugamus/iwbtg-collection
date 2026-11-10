@@ -1,0 +1,7 @@
+#:schema ../../../../../../docs/format/schema/v0/room.schema.json
+size = [800, 608]
+instances = [
+  { kind = "@sign", x = 64, y = 512 },
+  { kind = "@textbox", x = 0, y = 0, name = "tutorial_text" },
+  { kind = "@cutscene", x = 0, y = 0 },
+]

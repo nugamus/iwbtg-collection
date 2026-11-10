@@ -124,11 +124,8 @@ Commercial music in fangames (Mega Man, Touhou and so on) is kept and removed on
 
 Changes [format v0](format/v0.md) needs before format 1:
 
-- **Maps.** Versions and categories inside one package, each with its own timing triggers. Done: `[[maps]]` ([v0](format/v0.md#maps)); how a map starts the original's difficulty is still open.
-- **Stripped mode.**
-  - Where the ranked run starts and ends.
-  - What it cuts.
-  - Cutscene and dialogue markers that freeze the timer and auto-advance.
+- **Maps.** Versions and categories inside one package, each with its own timing triggers. Done: `[[maps]]` ([v0](format/v0.md#maps)); a map starts the original's difficulty through `stripped_start`.
+- **Stripped mode.** Done: `[stripped]` ([v0](format/v0.md#stripped-mode)) with the ranked start point, the cut list and cutscene and dialogue regions. The sim side is #34, #43 and #561.
 - **Physics per room,** for medleys.
 - **Language packs.** Text that can be translated is kept apart from the rest.
 - **Unusual controls.** Fields for the control hints.
