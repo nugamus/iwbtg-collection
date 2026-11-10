@@ -754,6 +754,7 @@ mod tests {
             start: StartPoint::NewGame { difficulty: 0 },
             seed: 0,
             dll_mode: DllMode::Model,
+            mode: iwbtg_sim::stripped::PlayMode::Original,
         };
         let mut sim = Sim::new(pkg.def.clone(), options).unwrap();
         let mut mixer = Mixer::default();
