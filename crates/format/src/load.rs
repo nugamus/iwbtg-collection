@@ -22,10 +22,14 @@ use iwbtg_sim::def::{
     RestartModel, RoomAction, RoomDef, RoomId, RoomRole, ScriptDef, ScriptId, SoundDef, SpriteDef, SpriteId,
     VariantSel, ViewDef,
 };
+use iwbtg_sim::input::Action;
 use iwbtg_sim::num::Real;
 use iwbtg_sim::rules::RunnerRules;
 use iwbtg_sim::rules::num::FloatModel;
 use iwbtg_sim::script::ScriptRuntime;
+use iwbtg_sim::stripped::{
+    DialogueRegion, RankedStart as SimRankedStart, Region, RegionCondition, StrippedDef,
+};
 use iwbtg_sim::timing::{TimingDef, TimingTrigger};
 use toml::Spanned;
 
@@ -33,7 +37,9 @@ use crate::check::check;
 use crate::diag::{Diagnostic, Severity, has_errors};
 use crate::files::PackageFiles;
 use crate::ids::check_id;
-use crate::manifest::{DEFAULT_MAP_ID, ENGINE_ROLES, MANIFEST_PATH, Manifest, TIMING_TRIGGERS, global_value};
+use crate::manifest::{
+    DEFAULT_MAP_ID, ENGINE_ROLES, MANIFEST_PATH, Manifest, RankedStart, TIMING_TRIGGERS, global_value,
+};
 use crate::masks::{ALPHA_IN_MASK, AlphaRule};
 use crate::objects::{self, ObjectFile, kind_classes, legacy_role_classes, param_value};
 use crate::order::{OrderEntry, rank_of, resolve_ranks};
@@ -504,6 +510,7 @@ impl<'a> Loader<'a> {
         // Step 8: cross-references not already resolved above.
         self.warp_targets(&room_defs);
         self.stripped_refs(&rooms);
+        let stripped = self.stripped_def(&vars);
         if self.trace_mode() {
             self.inert_twins(&mut room_defs);
         }
@@ -551,6 +558,7 @@ impl<'a> Loader<'a> {
             paths,
             scripts: std::mem::take(&mut self.scripts),
             timing: timing?,
+            stripped,
         };
         self.merge_script_events(&mut def);
         // Step 7 (WP7b): params against the built-ins' specs, on the built definition.
@@ -1417,6 +1425,17 @@ impl<'a> Loader<'a> {
                 }
             }
         }
+        // Ranked start globals (`[stripped].start`, each map's `stripped_start`).
+        let m = self.m;
+        let starts = m
+            .stripped
+            .as_ref()
+            .and_then(|s| s.start.as_ref())
+            .into_iter()
+            .chain(m.maps.iter().filter_map(|map| map.stripped_start.as_ref()));
+        for start in starts {
+            names.extend(start.globals.keys().map(|k| k.get_ref().clone()));
+        }
         intern_vars(names.into_iter()).ids
     }
 
@@ -2169,6 +2188,137 @@ impl<'a> Loader<'a> {
                 self.room_ref(room.get_ref(), room.span());
             }
         }
+    }
+
+    /// `[stripped]` resolved to ids for the sim (#561). Rooms, kinds and names that do not resolve
+    /// were reported by [`Loader::stripped_refs`] and are left out here.
+    fn stripped_def(&mut self, vars: &BTreeMap<String, iwbtg_sim::def::VarId>) -> StrippedDef {
+        let m = self.m;
+        let section = m.stripped.as_ref();
+        let base = section.and_then(|s| s.start.as_ref());
+        let start = self.ranked_start(base, None, vars);
+        let mut map_starts = BTreeMap::new();
+        if m.maps.is_empty() {
+            map_starts.insert(DEFAULT_MAP_ID.to_owned(), start.clone());
+        }
+        for map in &m.maps {
+            let s = self.ranked_start(base, map.stripped_start.as_ref(), vars);
+            map_starts.insert(map.id.get_ref().clone(), s);
+        }
+        let mut def = StrippedDef {
+            start,
+            map_starts,
+            ..StrippedDef::default()
+        };
+        let Some(section) = section else {
+            return def;
+        };
+        if let Some(cut) = &section.cut {
+            for entry in &cut.rooms {
+                if let (Some(&from), Some(&to)) = (
+                    self.room_ids.get(entry.room.get_ref()),
+                    self.room_ids.get(entry.to.get_ref()),
+                ) {
+                    def.cut_rooms.insert(from, to);
+                }
+            }
+            def.cut_kinds = cut
+                .kinds
+                .iter()
+                .filter_map(|k| self.kind_ids.get(k.get_ref()).copied())
+                .collect();
+            for entry in &cut.instances {
+                let room = self.room_ids.get(entry.room.get_ref()).copied();
+                let name = self.names.iter().position(|n| n == entry.name.get_ref());
+                if let (Some(room), Some(name)) = (room, name.and_then(|n| u32::try_from(n).ok())) {
+                    def.cut_instances.insert((room, NameId(name)));
+                }
+            }
+        }
+        def.cutscenes = section
+            .cutscenes
+            .iter()
+            .filter_map(|c| self.region(&c.id, c.kind.as_ref(), c.room.as_ref()))
+            .collect();
+        def.dialogues = section
+            .dialogues
+            .iter()
+            .filter_map(|d| {
+                Some(DialogueRegion {
+                    region: self.region(&d.id, d.kind.as_ref(), d.room.as_ref())?,
+                    advance: Action::from_name(d.advance.get_ref())?,
+                    timeout_ticks: *d.timeout_ticks.get_ref(),
+                })
+            })
+            .collect();
+        def
+    }
+
+    /// A ranked start: `over`'s keys over `base`'s, globals merged by name (the map's value wins).
+    /// A global named `difficulty` also sets the engine's difficulty, so it must be a whole
+    /// number from 0 to 255.
+    fn ranked_start(
+        &mut self,
+        base: Option<&RankedStart>,
+        over: Option<&RankedStart>,
+        vars: &BTreeMap<String, iwbtg_sim::def::VarId>,
+    ) -> SimRankedStart {
+        let room = over
+            .and_then(|s| s.room.as_ref())
+            .or_else(|| base.and_then(|s| s.room.as_ref()))
+            .and_then(|r| self.room_ids.get(r.get_ref()).copied());
+        let mut merged: BTreeMap<&str, &Spanned<toml::Value>> = BTreeMap::new();
+        for s in base.into_iter().chain(over) {
+            for (name, value) in &s.globals {
+                merged.insert(name.get_ref().as_str(), value);
+            }
+        }
+        let mut out = SimRankedStart {
+            room,
+            ..SimRankedStart::default()
+        };
+        for (name, value) in merged {
+            // Bad values were reported by the manifest check.
+            let (Some(&var), Ok(v)) = (vars.get(name), global_value(value.get_ref())) else {
+                continue;
+            };
+            if name == "difficulty" {
+                let whole = match &v {
+                    iwbtg_sim::world::Value::Real(r) => {
+                        let n = r.get();
+                        (0u8..=255).find(|d| f64::from(*d).total_cmp(&n).is_eq())
+                    }
+                    _ => None,
+                };
+                match whole {
+                    Some(d) => out.difficulty = Some(d),
+                    None => self.manifest_error(
+                        value.span(),
+                        "the ranked start's `difficulty` sets the engine difficulty: a whole number from 0 to 255",
+                    ),
+                }
+            }
+            out.globals.push((var, v));
+        }
+        out
+    }
+
+    /// A cutscene or dialogue region, when its kind or room resolves.
+    fn region(
+        &self,
+        id: &Spanned<String>,
+        kind: Option<&Spanned<String>>,
+        room: Option<&Spanned<String>>,
+    ) -> Option<Region> {
+        let holds = match (kind, room) {
+            (Some(k), None) => RegionCondition::Kind(*self.kind_ids.get(k.get_ref())?),
+            (None, Some(r)) => RegionCondition::Room(*self.room_ids.get(r.get_ref())?),
+            _ => return None,
+        };
+        Some(Region {
+            id: id.get_ref().clone(),
+            holds,
+        })
     }
 
     /// CR5: warps whose creation code (`roomTo`) was not converted have no `room_to`.

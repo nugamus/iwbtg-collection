@@ -11,6 +11,7 @@ use crate::room::{self, StartPoint};
 use crate::rules::RunnerRules;
 use crate::script::ScriptRuntime;
 use crate::sound::DllMode;
+use crate::stripped::PlayMode;
 use crate::tick;
 use crate::timing::Split;
 use crate::world::{Ctx, SimStatus, World};
@@ -24,6 +25,9 @@ pub struct SimOptions {
     pub seed: u32,
     /// DLL adapters modeled, or stubbed like the recorder's `--stub-dlls`.
     pub dll_mode: DllMode,
+    /// Play original or ranked (stripped): what `GameDef::stripped` changes (#561). In the
+    /// replay header.
+    pub mode: PlayMode,
 }
 
 /// What one tick did.
@@ -62,6 +66,7 @@ impl Sim {
         rules.num.float_model = def.float_model;
         let scripts = ScriptRuntime::new(&def, &rules)?;
         let mut world = World::new(def.start_room, options.seed);
+        world.mode = options.mode;
         {
             let mut ctx = Ctx {
                 def: &def,

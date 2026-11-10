@@ -1511,6 +1511,7 @@ fn a_scripted_object_runs_in_a_room() {
             },
             seed: 1,
             dll_mode: iwbtg_sim::sound::DllMode::Stub,
+            mode: iwbtg_sim::stripped::PlayMode::Original,
         },
     )
     .expect("the sim starts");
@@ -1683,6 +1684,75 @@ fn every_stripped_field_loads() {
     let report = load_report(&files, STRICT);
     assert!(report.ok(), "{}", render(&report));
     assert!(report.diagnostics.is_empty(), "{}", render(&report));
+}
+
+#[test]
+fn stripped_resolves_into_the_game_def() {
+    use iwbtg_sim::stripped::RegionCondition;
+    let files = package(|f| set(f, "game.toml", manifest(ORDER, STRIPPED)));
+    let (def, _) = load_ok(&files, STRICT);
+    let room =
+        |name: &str| iwbtg_sim::def::RoomId(def.rooms.iter().position(|r| r.name == name).unwrap() as u32);
+    let s = &def.stripped;
+    assert_eq!(s.start.room, Some(room("stage1")));
+    assert_eq!(s.start.difficulty, Some(1));
+    let names: Vec<&str> = s
+        .start
+        .globals
+        .iter()
+        .map(|(v, _)| def.var_names.iter().find(|(_, id)| *id == v).unwrap().0.as_str())
+        .collect();
+    assert_eq!(
+        names,
+        ["clear", "difficulty", "exact", "file"],
+        "interned, in name order"
+    );
+    assert_eq!(s.map_starts.len(), 2);
+    assert_eq!(
+        s.map_starts["medium"], s.start,
+        "no stripped_start: the package's"
+    );
+    let hard = &s.map_starts["hard"];
+    assert_eq!(hard.difficulty, Some(2), "the map's global wins");
+    assert_eq!(
+        hard.room,
+        Some(room("stage1")),
+        "keys it leaves out come from [stripped].start"
+    );
+    assert_eq!(hard.globals.len(), 4);
+    assert_eq!(s.cut_rooms.get(&room("title")), Some(&room("stage1")));
+    let (kid_start, _) = kind_named(&def, "kid_start");
+    assert!(s.cut_kinds.contains(&kid_start));
+    assert_eq!(s.cut_instances.len(), 1);
+    let (stage, name) = *s.cut_instances.iter().next().unwrap();
+    assert_eq!(stage, room("stage1"));
+    assert_eq!(def.names[name.0 as usize], "boss_a");
+    assert_eq!(s.cutscenes.len(), 2);
+    assert_eq!(s.cutscenes[1].holds, RegionCondition::Room(room("title")));
+    assert_eq!(s.dialogues[0].advance, iwbtg_sim::input::Action::Jump);
+    assert_eq!(s.dialogues[0].timeout_ticks, 150);
+
+    // Without [stripped]: nothing cut, one `main` start that defaults to new_game_room.
+    let (plain, _) = load_ok(&package(|_| {}), STRICT);
+    assert_eq!(plain.stripped.start, iwbtg_sim::stripped::RankedStart::default());
+    assert_eq!(plain.stripped.map_starts.keys().collect::<Vec<_>>(), ["main"]);
+    assert!(plain.stripped.cut_rooms.is_empty() && plain.stripped.cut_kinds.is_empty());
+}
+
+#[test]
+fn a_ranked_start_difficulty_must_be_a_whole_number_from_0_to_255() {
+    for bad in [
+        "difficulty = 1.5",
+        "difficulty = 256",
+        "difficulty = -1",
+        "difficulty = \"hard\"",
+    ] {
+        let errs = stripped_errors(&STRIPPED.replace("difficulty = 2", bad));
+        assert!(
+            errs.iter().any(|e| e.contains("a whole number from 0 to 255")),
+            "{bad}: {errs:#?}"
+        );
+    }
 }
 
 #[test]

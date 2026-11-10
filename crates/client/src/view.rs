@@ -207,6 +207,7 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
         start: crate::savefile::start_point(&def),
         seed: 0,
         dll_mode: DllMode::Model,
+        mode: iwbtg_sim::stripped::PlayMode::Original,
     };
     let sim =
         Sim::new(Arc::clone(&def), options.clone()).map_err(|e| format!("the game did not start: {e}"))?;
@@ -436,6 +437,7 @@ pub(crate) fn test_world(pkg: &Package) -> World {
         start: iwbtg_sim::room::StartPoint::NewGame { difficulty: 0 },
         seed: 0,
         dll_mode: DllMode::Model,
+        mode: iwbtg_sim::stripped::PlayMode::Original,
     };
     let sim = Sim::new(Arc::clone(&pkg.def), options.clone()).unwrap();
     let mut world = World::new();

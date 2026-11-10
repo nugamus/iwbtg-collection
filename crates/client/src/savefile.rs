@@ -210,6 +210,7 @@ mod tests {
             start,
             seed: 0,
             dll_mode: DllMode::Model,
+            mode: iwbtg_sim::stripped::PlayMode::Original,
         };
         let mut sim = Sim::new(def.clone(), options(StartPoint::NewGame { difficulty: 0 })).unwrap();
         // A new game starts with the first-play slot; walking onto the save point changes it.

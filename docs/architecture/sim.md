@@ -34,6 +34,7 @@ crates/sim/src/
   kid/            Kid built-in: state, api for other built-ins, presets, actions, collision runs
   builtins/       One file per built-in kind (block.rs, spike.rs, save.rs, ...)
   sound.rs        Sound model (is a sound playing) and DLL adapters (sound/)
+  stripped.rs     Play mode (original or stripped) and the resolved [stripped] table (#561)
   script/         ScriptHost trait, the Rhai host, API registration, budget, validator
   timing.rs       Start, end and stage triggers, splits
   output.rs       Audio and visual event queue for the client
@@ -243,7 +244,7 @@ This is the starting surface. The generated reference is `docs/format/script-api
 
 ## State hash
 
-- `hash::state_hash(&World) -> [u8; 32]` is BLAKE3 over the **postcard** encoding of a canonical `HashView` struct borrowed from `World`: every field of `World` except `output` and `grid`, in declaration order: tick, room, `room_tick`, room speed, instances in id order with every field, `next_id`, run-time `var_names`, globals (both in `BTreeMap` order), engine globals, RNG state, `input` (this tick's frame and the direct-read latch, which changes outcomes per I1), views, pending request, persistent rooms, save slot, sound state, timing state, status, `setup_applied`. A field added to `World` is hashed unless it is a cache. `Real` serializes its canonical bits, so every NaN hashes the same.
+- `hash::state_hash(&World) -> [u8; 32]` is BLAKE3 over the **postcard** encoding of a canonical `HashView` struct borrowed from `World`: every field of `World` except `output` and `grid`, in declaration order: tick, room, `room_tick`, room speed, instances in id order with every field, `next_id`, run-time `var_names`, globals (both in `BTreeMap` order), engine globals, RNG state, `input` (this tick's frame and the direct-read latch, which changes outcomes per I1), views, pending request, persistent rooms, save slot, sound state, timing state, status, the play mode (`World::mode`, original or stripped, #561), `setup_applied`. A field added to `World` is hashed unless it is a cache. `Real` serializes its canonical bits, so every NaN hashes the same.
 - Postcard writes lengths as varints, so wasm32 and x86_64 give the same bytes. `std::hash::Hash` and its hashers are never used for state hashing: slices write their length with `write_usize` (4 bytes on wasm32, 8 on x86_64), and `DefaultHasher`/`RandomState` are unspecified across Rust versions (both are banned in the sim).
 - No `usize` in hashed state, no pointers, no hash-map order. The output queue and the broadphase grid are not hashed.
 - `setup_applied` is hashed, so a trace run that used setup actions can never match a clean verification.
