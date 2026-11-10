@@ -179,7 +179,11 @@ pub fn begin_tick(w: &mut World, def: &GameDef, input: InputFrame) -> InputFrame
     if !stripped || regions.dialogues.is_empty() {
         return input;
     }
-    let holds: Vec<bool> = regions.dialogues.iter().map(|d| d.region.holds.holds(w)).collect();
+    let holds: Vec<bool> = regions
+        .dialogues
+        .iter()
+        .map(|d| d.region.holds.holds(w))
+        .collect();
     let waits = &mut w.timing.dialogue_waits;
     waits.resize(regions.dialogues.len(), 0);
     let mut frame = input;

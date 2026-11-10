@@ -169,12 +169,7 @@ fn a_room_region_freezes_the_timer_and_ranked_plus_frozen_is_the_run() {
         end: TimingTrigger::EnterRoom(RoomId(2)),
         stages: vec![],
     };
-    let mut f = fx(
-        PlayMode::Stripped,
-        timing,
-        &[(10, 1), (20, 0), (30, 2)],
-        None,
-    );
+    let mut f = fx(PlayMode::Stripped, timing, &[(10, 1), (20, 0), (30, 2)], None);
     f.cutscene(RegionCondition::Room(RoomId(1)));
     let splits = f.run(40);
     let end = splits.last().expect("end split").tick;
@@ -225,7 +220,10 @@ fn a_dialogue_advances_itself_at_exactly_timeout_ticks() {
 
     let mut f = fx(PlayMode::Original, TimingDef::default(), &[], Some(u64::MAX));
     f.dialogue(5);
-    assert!(presses(&mut f, &[InputFrame::EMPTY; 20]).is_empty(), "Play original");
+    assert!(
+        presses(&mut f, &[InputFrame::EMPTY; 20]).is_empty(),
+        "Play original"
+    );
 
     let mut f = fx(PlayMode::Stripped, TimingDef::default(), &[], Some(u64::MAX));
     f.dialogue(1);
@@ -295,7 +293,10 @@ fn a_replay_never_stores_the_derived_press() {
     };
     let decoded = Replay::decode(&replay.encode().expect("encode")).expect("decode");
     assert!(
-        decoded.inputs.iter().all(|f| f.held & SHOOT == 0 && f.pressed & SHOOT == 0),
+        decoded
+            .inputs
+            .iter()
+            .all(|f| f.held & SHOOT == 0 && f.pressed & SHOOT == 0),
         "no stored frame has the derived press"
     );
     assert_eq!(decoded.trailer.ranked_ticks, 9, "ticks 31-39 after the dialogue");
