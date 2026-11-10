@@ -771,7 +771,7 @@ mod wp4a {
     }
 
     #[test]
-    fn wp4a_destroy_self_in_creation_code_is_unsupported() {
+    fn wp4a_destroy_self_in_creation_code_is_a_no_op() {
         let mut b = GameDefBuilder::new("destroy");
         let mut r = room("stage", 50);
         r.on_create = vec![RoomAction::DestroySelf];
@@ -788,9 +788,10 @@ mod wp4a {
                 difficulty: 0,
             },
         );
-        let err = r.unwrap_err();
-        assert!(matches!(&err, SimError::Unsupported { what } if what.contains("R24")));
-        assert_eq!(w.status, SimStatus::Halted(err));
+        // R24: nothing is destroyed and the start goes on.
+        r.expect("the start succeeds");
+        assert_eq!(w.status, SimStatus::Running);
+        assert_eq!(w.room, stage);
     }
 
     #[test]

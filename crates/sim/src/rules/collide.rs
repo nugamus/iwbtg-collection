@@ -152,11 +152,11 @@ pub enum DistOffset {
     PlusOne,
 }
 
-/// C13: how the x and y gaps combine. The spec does not say (requested from research); every
-/// traced case has one axis at 0, where both give the same value.
+/// C13: how the x and y gaps combine. Confirmed (recorder): `sqrt(dx*dx + dy*dy)`
+/// (trick-vine-kick-and-djump-d rows 108-110: sqrt(5), sqrt(26), sqrt(65)).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum DistCombine {
-    /// `sqrt(dx*dx + dy*dy)` (Design). Default.
+    /// `sqrt(dx*dx + dy*dy)`. Default.
     #[default]
     Euclid,
     /// `max(dx, dy)`.
