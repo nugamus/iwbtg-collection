@@ -113,7 +113,15 @@ fn v0_examples_validate() {
     let examples = v0_examples();
     // game, object (x2), room, tiles, timeline, sprite, and physics.
     for stem in [
-        "game", "object", "room", "tiles", "timeline", "sprite", "path", "sound",
+        "game",
+        "object",
+        "room",
+        "tiles",
+        "background",
+        "timeline",
+        "sprite",
+        "path",
+        "sound",
     ] {
         assert!(
             examples.iter().any(|(s, _)| s == stem),
@@ -131,7 +139,12 @@ fn valid_test_packages_validate() {
     let mut checked = 0;
     for pkg in fs::read_dir(&root).unwrap() {
         let pkg = pkg.unwrap().path();
-        for (dir, stem) in [("objects", "object"), ("rooms", "room"), ("sprites", "sprite")] {
+        for (dir, stem) in [
+            ("objects", "object"),
+            ("rooms", "room"),
+            ("sprites", "sprite"),
+            ("backgrounds", "background"),
+        ] {
             let Ok(entries) = fs::read_dir(pkg.join(dir)) else {
                 continue;
             };

@@ -13,7 +13,7 @@ use bevy::prelude::*;
 use bevy::window::{MonitorSelection, PrimaryWindow, WindowMode};
 use iwbtg_sim::def::RoomId;
 
-use crate::art::{ArtFiles, parse_room_art};
+use crate::art::ArtFiles;
 use crate::package::decode_png;
 use crate::settings::{self, Settings};
 use crate::view::{Game, GameCamera, RoomSize, ViewRect};
@@ -327,16 +327,12 @@ fn shrink(rgba: &[u8], w: usize, h: usize, max: usize) -> (Vec<u8>, usize, usize
 
 /// A dim, blurred copy of the room's background, or a flat colour when it has none.
 fn letterbox_image(files: &iwbtg_format::files::PackageFiles, room: &str) -> Image {
-    let text = |p: String| {
-        files
-            .get(&p)
-            .and_then(|b| std::str::from_utf8(b).ok().map(String::from))
-    };
-    let art = parse_room_art(&text(format!("rooms/{room}.toml")).unwrap_or_default(), None);
+    let art = iwbtg_format::art::load_room_art(files, room).unwrap_or_default();
     let decoded = art
-        .background
-        .as_deref()
-        .and_then(|id| files.get(&format!("backgrounds/{id}.png")))
+        .backgrounds
+        .iter()
+        .find(|b| !b.foreground)
+        .and_then(|b| files.get(&format!("backgrounds/{}.png", b.image)))
         .and_then(decode_png);
     let (rgba, w, h) = match decoded {
         Some(s) => {
@@ -344,8 +340,8 @@ fn letterbox_image(files: &iwbtg_format::files::PackageFiles, room: &str) -> Ima
             (blur(&small, w, h, 3, 3), w, h)
         }
         None => {
-            let [r, g, b] = art.color.unwrap_or([0.06, 0.06, 0.1]);
-            let px = [(r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8, 255];
+            let [r, g, b] = art.color.unwrap_or([15, 15, 25]);
+            let px = [r, g, b, 255];
             (px.repeat(4), 2, 2)
         }
     };
