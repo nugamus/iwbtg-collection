@@ -1,4 +1,5 @@
-//! `iwbtg-client <package>`: opens a game package in a window (docs/architecture.md, Crates).
+//! `iwbtg-client <package>`: opens a game package in a window (docs/architecture/client.md).
+//! `iwbtg-client --ui-gallery`: the UI kit's component gallery (docs/architecture/client.md, UI).
 //!
 //! The sim ticks at the game's rate on a fixed clock, whatever the frame rate; every visible
 //! instance with a sprite is drawn where the sim last put it.
@@ -6,6 +7,10 @@
 //! Each module owns its command-line flags (a clap `Args` group) and its systems (a Bevy
 //! `Plugin`). A new module adds one `mod` line, one flattened group and one plugin here and
 //! nothing else (#530), so parallel client work doesn't collide in this file.
+
+// The browser build opens only the gallery until the web client loads packages, so the game
+// path is compiled there but not called.
+#![cfg_attr(target_arch = "wasm32", allow(dead_code, unused_imports))]
 
 mod art;
 mod audio;
@@ -17,6 +22,7 @@ mod savefile;
 mod screen;
 mod settings;
 mod storage;
+mod ui;
 mod view;
 
 use std::process::ExitCode;
@@ -36,6 +42,8 @@ struct Args {
     #[command(flatten)]
     screen: screen::ScreenArgs,
     #[command(flatten)]
+    ui: ui::UiArgs,
+    #[command(flatten)]
     mods: mods::ModsArgs,
     #[command(flatten)]
     save: savefile::SaveArgs,
@@ -43,6 +51,7 @@ struct Args {
     retry: retry::RetryArgs,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn main() -> ExitCode {
     let args = Args::parse();
     // The settings file gives the defaults the flags override (settings.rs). A `--screenshot`
@@ -52,11 +61,30 @@ fn main() -> ExitCode {
         eprintln!("{e}");
         return ExitCode::FAILURE;
     }
+    if args.ui.ui_gallery {
+        // `configure` has checked the ratio.
+        let ratio = args
+            .screen
+            .ratio
+            .as_deref()
+            .and_then(|r| screen::parse_ratio(r).ok().flatten());
+        ui::gallery::run(
+            args.view.screenshot,
+            args.ui.reduced_motion,
+            args.screen.window,
+            ratio,
+        );
+        return ExitCode::SUCCESS;
+    }
+    // Clap requires the package unless `--ui-gallery` is given.
+    let Some(dir) = args.package.package else {
+        return ExitCode::FAILURE;
+    };
     savefile::configure(&args.save);
-    let pkg = match package::open(&args.package.package, args.package.trace_mode) {
+    let pkg = match package::open(&dir, args.package.trace_mode) {
         Ok(pkg) => pkg,
         Err(e) => {
-            eprintln!("{}: {e}", args.package.package.display());
+            eprintln!("{}: {e}", dir.display());
             return ExitCode::FAILURE;
         }
     };
@@ -81,6 +109,13 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// In a browser there is no command line and no package folder yet: the build opens the UI
+/// gallery (docs/dev-setup.md, UI gallery in a browser).
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    ui::gallery::run(None, false, None, None);
 }
 
 #[cfg(test)]
