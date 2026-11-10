@@ -22,6 +22,7 @@ use crate::num::Real;
 use crate::room::{self, RoomRequest};
 use crate::rules::tick::{AnimSlot, BoundarySlot, DirectLatch, PrevCapture};
 use crate::sound;
+use crate::stripped;
 use crate::timing::{self, Split};
 use crate::view;
 use crate::world::{Ctx, Flow, InstId, World};
@@ -134,9 +135,10 @@ pub fn run_tick_with(ctx: &mut Ctx, input: InputFrame, hooks: &Hooks) -> Result<
 /// instances; #450).
 pub fn run_rows(ctx: &mut Ctx, input: InputFrame, hooks: &Hooks) -> Option<()> {
     let rules = &ctx.rules.tick;
-    // Row 0.
+    // Row 0: the region step (ranked timer freeze, dialogue presses; #34), then the input.
     ctx.w.room_requests = 0;
     ctx.scripts.begin_tick();
+    let input = stripped::begin_tick(ctx.w, ctx.def, input);
     ctx.w
         .input
         .latch_with(input, rules.direct_latch == DirectLatch::Latch);
