@@ -86,7 +86,10 @@ impl Sim {
     }
 
     /// Runs one tick with this input. A halted or ended sim does nothing. `World::output` holds
-    /// the client events of this tick only (cleared first). Reaching `GameDef::max_ticks` halts
+    /// the client events of this tick only (cleared first), except that the first step (tick 0)
+    /// keeps what `Sim::new` produced: the first room's start (music, sounds, shake) is reported
+    /// with tick 0, so a client that reads `output` after every step never misses it and must
+    /// not also read it after `Sim::new`. Reaching `GameDef::max_ticks` halts
     /// with `SimError::Overflow`; any error halts (plan 2.2).
     pub fn step(&mut self, input: InputFrame) -> StepResult {
         self.step_rows(input);
@@ -99,7 +102,9 @@ impl Sim {
     pub fn step_rows(&mut self, input: InputFrame) -> bool {
         self.rows_done = false;
         if self.world.status == SimStatus::Running {
-            self.world.output.clear();
+            if self.world.tick > 0 {
+                self.world.output.clear();
+            }
             let mut ctx = Ctx {
                 def: &self.def,
                 rules: &self.rules,

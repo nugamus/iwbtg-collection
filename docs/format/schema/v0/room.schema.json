@@ -77,7 +77,7 @@
         },
         {
           "additionalProperties": false,
-          "description": "`instance_destroy()` (R24: `Unsupported` until the spec says which instance is self).",
+          "description": "`instance_destroy()` (R24, Confirmed: destroys nothing and the rest of the code runs).",
           "properties": {
             "do": {
               "const": "destroy_self",

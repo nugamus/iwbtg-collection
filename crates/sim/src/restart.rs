@@ -35,10 +35,8 @@ use crate::world::{Ctx, Flow, InstId};
 /// - `RoomGotoSaved` (kaenbyou, eat-the-lemon, go-the-spook-house): destroy the kid and the bow,
 ///   create the kid at the saved spot, request the saved room (skipped in a Title or Menu role,
 ///   spook's saveExe).
-/// - `ShowdownLoad`: the same without the bow, never a `game_restart`. R26: the rooms section
-///   lists showdown in Group A (loadGame then game_restart), but kid/A3.md read showdown's
-///   scripts in full and says "There is no game_restart"; this follows kid/A3.md. Reported to
-///   research.
+/// - `ShowdownLoad`: the same without the bow, never a `game_restart` (R26, settled: the
+///   recorder shows the R tick makes a new kid and the next tick is the reloaded room).
 /// - `RecreateInPlace` (keep-celebrating-for-xia): destroy the kid, create it at the saved spot
 ///   in the current room, then request the saved room.
 ///

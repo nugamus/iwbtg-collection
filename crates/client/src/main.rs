@@ -10,8 +10,12 @@
 mod art;
 mod audio;
 mod input;
+mod mods;
 mod package;
+mod retry;
+mod savefile;
 mod screen;
+mod settings;
 mod view;
 
 use std::process::ExitCode;
@@ -30,14 +34,24 @@ struct Args {
     audio: audio::AudioArgs,
     #[command(flatten)]
     screen: screen::ScreenArgs,
+    #[command(flatten)]
+    mods: mods::ModsArgs,
+    #[command(flatten)]
+    save: savefile::SaveArgs,
+    #[command(flatten)]
+    retry: retry::RetryArgs,
 }
 
 fn main() -> ExitCode {
     let args = Args::parse();
+    // The settings file gives the defaults the flags override (settings.rs). A `--screenshot`
+    // check neither reads nor writes it, so it looks the same on every machine.
+    settings::load(args.view.screenshot.is_some());
     if let Err(e) = screen::configure(&args.screen) {
         eprintln!("{e}");
         return ExitCode::FAILURE;
     }
+    savefile::configure(&args.save);
     let pkg = match package::open(&args.package.package, args.package.trace_mode) {
         Ok(pkg) => pkg,
         Err(e) => {
@@ -46,11 +60,17 @@ fn main() -> ExitCode {
         }
     };
     let audio = args.audio;
+    let run_mods = args.mods.mods;
+    let retry = args.retry;
+    eprintln!("{}", mods::describe(run_mods));
     let result = view::run(pkg, args.view, |app, pkg| {
         app.add_plugins((
             screen::ScreenPlugin,
+            savefile::SavePlugin,
             art::ArtPlugin(pkg.files.clone()),
             audio::AudioPlugin::new(&audio, &pkg.files),
+            mods::ModsPlugin(run_mods),
+            retry::RetryPlugin(retry),
         ));
     });
     match result {

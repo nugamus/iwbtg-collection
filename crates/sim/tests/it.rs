@@ -16,6 +16,8 @@ mod wp3_support;
 mod death_sound;
 #[path = "dll_sound_length.rs"]
 mod dll_sound_length;
+#[path = "first_step_output.rs"]
+mod first_step_output;
 #[path = "hash_vectors.rs"]
 mod hash_vectors;
 #[path = "kid_sounds.rs"]

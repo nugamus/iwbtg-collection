@@ -23,9 +23,16 @@ What stripped mode cuts is decided per game (see [Per-game questions](#per-game-
 
 osu!-style mods are chosen in the game list before starting. The full mod list is still open.
 
-- **Sudden Death.** One death ends the run.
-- **Visual mods.** For example hitboxes or hiding the background.
-- **Practice assists.** Save states, slow motion and frame advance. A run with these is never ranked.
+| Code | Mod | Kind | Ranked | What it does |
+|---|---|---|---|---|
+| SD | Sudden Death | Challenge | yes | One death ends the run. |
+| HB | Hitboxes | Visual | yes | Draw the kid's and every hazard's hitbox. |
+| NB | No background | Visual | yes | Plain backdrop behind the room. |
+| SS | Save states | Practice | never | Save and load anywhere. |
+| SL | Slow motion | Practice | never | Play at a lower speed (75% or 50%). |
+| FA | Frame advance | Practice | never | Step one tick at a time. |
+
+A run with a practice assist is never ranked; the loading card names the mod as the reason. The table lives in code (`iwbtg_sim::mods::MODS`), and the replay header stores the run's mods ([replay format](architecture/replay.md#mods)). The mod select mockup also shows Mirror and Flashlight; they are not in the list yet, and whether Hitboxes is ranked is open (#554).
 
 Difficulty is not a mod (decided 2026-11-04). A fangame is the parent entry in game select, and each built-in difficulty and each category (Any%, 100%, ...) is a child entry, a map in [content](content.md) terms, with its own leaderboard, like beatmap difficulties under a beatmap set. Every mod combination has its own leaderboard, and the leaderboard filters by mods. A bottom-bar toggle turns on auto-retry, which restarts the run from the start after a death (as in osu!). It is meant for Sudden Death and deathless attempts.
 
@@ -43,7 +50,8 @@ Difficulty is not a mod (decided 2026-11-04). A fangame is the parent entry in g
 ## Restart keys
 
 - `R` restarts from the last save, as in the originals.
-- A separate quick-retry key resets the whole run immediately.
+- A separate quick-retry key resets the whole run immediately: the key left of `1` (`` ` `` on a US layout), as in osu!. It is a client key, not a game action, so games and replays never see it; a retry is a new run. Rebinding it comes with the settings file (#559).
+- Auto-retry restarts the run from the start right after a death. Until the bottom-bar toggle exists (#558) it is the `--auto-retry` flag.
 
 ## Practice
 
