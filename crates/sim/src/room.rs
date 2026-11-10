@@ -20,6 +20,11 @@
 //! 7. Room Start for every instance in the room when this step begins (R10): the room's own
 //!    instances, then the carried persistent ones (Confirmed (recorder), [`RoomStartOrder`]).
 //!
+//! A stripped (ranked) run (`World::mode`, #561, `crate::stripped`) changes three things: every
+//! entry of a cut room (a request, `game_restart`'s first room, a start point, a save load)
+//! enters its `to` room instead; step 4 skips cut kinds and cut placed instances; step 6 skips
+//! `spawn` actions of cut kinds. `StartPoint::NewGame` starts at the ranked start point.
+//!
 //! `room_restart` and `room_goto` of the current room rebuild a non-persistent room (Inferred).
 //! For a persistent room both are UNKNOWN (unused by the 20 games) and give
 //! `SimError::Unsupported`.
@@ -62,6 +67,7 @@ use crate::output::OutputEvent;
 use crate::rules::TickRules;
 use crate::rules::room::{NestedRequest, RoomEndOrder, RoomStartOrder};
 use crate::save::{self, SaveSlot};
+use crate::stripped::PlayMode;
 use crate::view::{View, ViewPort};
 use crate::world::{Ctx, EngineGlobals, Flow, InstId, Instance, SimStatus, SpawnInit, World};
 
@@ -303,26 +309,49 @@ fn start_inner<H: RoomHost + ?Sized>(
         StartPoint::NewGame { difficulty } => {
             ctx.w.save = None;
             ctx.w.engine.run.difficulty = *difficulty;
-            ctx.def.new_game_room
+            match ctx.w.mode {
+                PlayMode::Original => ctx.def.new_game_room,
+                PlayMode::Stripped => ranked_start(ctx),
+            }
         }
         StartPoint::Room { room, difficulty } => {
             ctx.w.engine.run.difficulty = *difficulty;
-            *room
+            redirect(ctx, *room)
         }
         StartPoint::FromSave(slot) => {
             ctx.w.save = Some(slot.clone());
-            let room = room_def(ctx, slot.room)?;
-            set_room_state(ctx, slot.room, room);
+            let target = redirect(ctx, slot.room);
+            let room = room_def(ctx, target)?;
+            set_room_state(ctx, target, room);
             load_slot(ctx, host, slot)?;
             // The saved room is entered right below; a request the load made for it is that
             // same entry.
             ctx.w.pending = None;
-            slot.room
+            target
         }
     };
     room_def(ctx, target)?;
     enter(ctx, host, None, target)?;
     after_sequence(ctx, host)
+}
+
+/// A stripped run's start (#561): sets `[stripped].start`'s globals (and the engine difficulty
+/// from a `difficulty` global) after the boot instances, in place of what the cut menus set, and
+/// returns its room (default `GameDef::new_game_room`).
+fn ranked_start(ctx: &mut Ctx) -> RoomId {
+    let start = &ctx.def.stripped.start;
+    for (var, value) in &start.globals {
+        ctx.w.globals.insert(*var, value.clone());
+    }
+    if let Some(d) = start.difficulty {
+        ctx.w.engine.run.difficulty = d;
+    }
+    start.room.unwrap_or(ctx.def.new_game_room)
+}
+
+/// Where an entry of `room` goes: a stripped run's cut room goes to its `to` room (#561).
+fn redirect(ctx: &Ctx, room: RoomId) -> RoomId {
+    ctx.def.stripped.redirect(ctx.w.mode, room)
 }
 
 fn change_inner<H: RoomHost + ?Sized>(ctx: &mut Ctx, req: RoomRequest, host: &mut H) -> Result<(), SimError> {
@@ -410,6 +439,7 @@ fn resolve(ctx: &Ctx, req: RoomRequest) -> Result<RoomId, SimError> {
             return Err(SimError::invariant(format!("{req:?} is not a room change")));
         }
     };
+    let target = redirect(ctx, target);
     // room_restart and room_goto(current) rebuild a non-persistent room (Inferred); for a
     // persistent one both are UNKNOWN.
     if room_def(ctx, target)?.persistent && target == current {
@@ -497,7 +527,7 @@ fn game_restart<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H) -> Result<(),
     }
     emit(ctx, RoomOutput::GameRestarted);
     create_boot(ctx, host)?;
-    let first = RoomId(0);
+    let first = redirect(ctx, RoomId(0));
     room_def(ctx, first)?;
     enter(ctx, host, None, first)
 }
@@ -608,7 +638,11 @@ fn enter<H: RoomHost + ?Sized>(
 
     // Step 4: placed instances in file order, params before Create (inside spawn).
     if !restoring {
+        let stripped = &ctx.def.stripped;
         for p in &room.instances {
+            if stripped.kind_cut(ctx.w.mode, p.kind) || stripped.instance_cut(ctx.w.mode, to, p.name) {
+                continue;
+            }
             let init = SpawnInit {
                 params: p.params.clone(),
                 variant: None,
@@ -664,6 +698,7 @@ fn run_action<H: RoomHost + ?Sized>(
         RoomAction::SetGlobal { var, value } => {
             ctx.w.globals.insert(*var, value.clone());
         }
+        RoomAction::Spawn { kind, .. } if ctx.def.stripped.kind_cut(ctx.w.mode, *kind) => {}
         RoomAction::Spawn { kind, x, y, params } => {
             let init = SpawnInit {
                 params: params.clone(),
@@ -682,11 +717,9 @@ fn run_action<H: RoomHost + ?Sized>(
             load_slot(ctx, host, &slot)?;
             ctx.w.pending = Some(RoomRequest::Goto(slot.room));
         }
-        RoomAction::DestroySelf => {
-            return Err(SimError::unsupported(
-                "instance_destroy() in room creation code: which instance is self is UNKNOWN (R24)",
-            ));
-        }
+        // R24 (Confirmed, recorder): instance_destroy() in room creation code destroys nothing
+        // and the rest of the code runs (showdown a3-t18-a rows 42-43, a3-t20, tr-room-14).
+        RoomAction::DestroySelf => {}
     }
     Ok(())
 }

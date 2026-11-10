@@ -2,7 +2,7 @@
 
 Status: Accepted by Claude on the user's behalf, 2026-11-04 (user may revisit). Issue #490.
 
-Related: [architecture, UI](../architecture.md#ui), [product](../product.md) (UI decisions), the M4 mockups in [`docs/design/mockups/m4/`](../design/mockups/m4/README.md).
+Related: [architecture, UI](../architecture/client.md#ui), [product](../product.md) (UI decisions), the M4 mockups in [`docs/design/mockups/m4/`](../design/mockups/m4/README.md).
 
 ## Context
 
@@ -59,4 +59,3 @@ Also part of the kit:
 - A shadow drawn outside the node can overlap the node before it in the same row; the mockups' shadows are soft enough that this does not show.
 - Text inside a fading list fades per line, not per pixel.
 - Japanese and other CJK titles and names need a CJK fallback font, which is not bundled yet (the gallery shows missing glyphs for `れおちゅー`): #502.
-- Icons (the stat marks, search, back arrow) are not part of the kit yet: #503.

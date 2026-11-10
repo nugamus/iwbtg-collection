@@ -18,6 +18,7 @@ use super::timeline::TimelineDef;
 use crate::num::Real;
 use crate::rules::Runner;
 use crate::rules::num::FloatModel;
+use crate::stripped::StrippedDef;
 use crate::timing::TimingDef;
 
 /// Everything the sim needs to run one game.
@@ -79,6 +80,9 @@ pub struct GameDef {
     pub scripts: Vec<ScriptDef>,
     /// Timing triggers (`[timing]`).
     pub timing: TimingDef,
+    /// Ranked (stripped) mode: `[stripped]` resolved (`crate::stripped`). Used only by
+    /// `PlayMode::Stripped` runs.
+    pub stripped: StrippedDef,
 }
 
 impl GameDef {
@@ -222,7 +226,7 @@ pub enum RestartKind {
     GameRestartViaBoot,
     /// kaenbyou, eat-the-lemon, go-the-spook-house: recreate the kid, go to the saved room.
     RoomGotoSaved,
-    /// showdown: loadGame without game_restart (kid/A3.md; Conflict R26).
+    /// showdown: loadGame without game_restart (kid/A3.md; R26, settled).
     ShowdownLoad,
     /// keep-celebrating-for-xia: recreate the kid in place, then go to the saved room.
     RecreateInPlace,

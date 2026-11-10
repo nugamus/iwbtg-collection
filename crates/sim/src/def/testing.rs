@@ -95,6 +95,7 @@ impl GameDefBuilder {
                 paths: Vec::new(),
                 scripts: Vec::new(),
                 timing: TimingDef::default(),
+                stripped: Default::default(),
             },
             order: None,
         }

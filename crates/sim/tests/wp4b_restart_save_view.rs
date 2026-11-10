@@ -408,7 +408,7 @@ mod wp4b {
 
     #[test]
     fn showdown_load_never_restarts_the_game() {
-        // R26: kid/A3.md says no game_restart, the rooms table says there is one.
+        // R26 (settled): showdown's R has no game_restart.
         let g = game(|d| d.restart.kind = RestartKind::ShowdownLoad);
         let mut w = World::new(g.play, 1);
         w.save = Some(slot(g.play));

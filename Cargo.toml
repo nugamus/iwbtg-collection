@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/sim", "crates/format", "crates/tools", "crates/client"]
+members = ["crates/sim", "crates/format", "crates/tools", "crates/client", "crates/xtask"]
 
 [workspace.package]
 version = "0.1.0"
@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 rust-version = "1.99"
 repository = "https://github.com/nugamus/iwbtg-collection"
 
-# Exact pins: any change here can change simulation outcomes (docs/architecture.md, Versions).
+# Exact pins: any change here can change simulation outcomes (docs/architecture/replay.md, Versions).
 [workspace.dependencies]
 iwbtg-sim = { path = "crates/sim" }
 iwbtg-format = { path = "crates/format" }
@@ -48,8 +48,14 @@ unsafe_code = "forbid"
 [workspace.lints.clippy]
 float_cmp = "warn"
 
+# Local build speed (docs/dev-setup.md, Build speed): line tables only for our crates (backtraces
+# keep file and line), no debug info for dependencies. Faster links, a much smaller target/.
+[profile.dev]
+debug = "line-tables-only"
+
 [profile.dev.package."*"]
 opt-level = 2
+debug = false
 
 # Integer overflow panics in release too, so debug tests and release servers behave the same
 # (docs/plans/sim-core.md 10.3). Sim counters use checked_* and never rely on this.

@@ -167,6 +167,7 @@ pub fn resolve_case(
                 CaseDllMode::Model => DllMode::Model,
                 CaseDllMode::Stub => DllMode::Stub,
             },
+            mode: iwbtg_sim::stripped::PlayMode::Original,
         },
         object,
         columns,

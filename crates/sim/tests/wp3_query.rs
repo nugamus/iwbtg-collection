@@ -1,7 +1,7 @@
 //! WP3: queries, distance_to_object, contact moves and the solid put-back
 //! (docs/plans/sim-core.md 3.4, 12; CLONE_SPEC collision).
 
-mod wp3_support;
+use crate::wp3_support;
 
 mod wp3 {
     use iwbtg_sim::collide::contact::{contact_steps, mcs_step_limit, outside_steps};
@@ -89,6 +89,16 @@ mod wp3 {
         g.put(k, 100.5, 100.0); // reported right edge 105.5: dx 2.5, dy 4
         let d = distance_to_object(&g.ctx(), k, t).unwrap().unwrap();
         assert_eq!(d, iwbtg_sim::num::sqrt(r(2.5 * 2.5 + 16.0)));
+        g.rules.collide.dist_boxes = DistBoxes::Reported;
+        g.put(k, 100.0, 100.0);
+        // C13 (Confirmed, recorder): sqrt(dx*dx + dy*dy), e.g. sqrt(5) for gaps 1 and 2
+        // (deride-kotaro-from-aslant trick-vine-kick-and-djump-d rows 108-110).
+        g.add(g.vine, 106.0, 110.0, Img::sprite(vs)); // dx = 1, dy = 2 (the nearest vine now)
+        assert_eq!(
+            distance_to_object(&g.ctx(), k, t).unwrap(),
+            Some(iwbtg_sim::num::sqrt(r(5.0))),
+            "sqrt(5)"
+        );
     }
 
     #[test]

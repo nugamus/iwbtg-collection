@@ -71,6 +71,74 @@
         }
       ]
     },
+    "CutInstance": {
+      "additionalProperties": false,
+      "description": "`{ room = \"stage1\", name = \"tutorial_sign\" }`.",
+      "properties": {
+        "name": {
+          "description": "The instance's `name` in that room.",
+          "type": "string"
+        },
+        "room": {
+          "description": "The room the instance is placed in.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "room",
+        "name"
+      ],
+      "type": "object"
+    },
+    "CutRoom": {
+      "additionalProperties": false,
+      "description": "`{ room = \"intro\", to = \"stage1\" }`.",
+      "properties": {
+        "room": {
+          "description": "The room that is skipped.",
+          "type": "string"
+        },
+        "to": {
+          "description": "Where a room change to `room` goes instead.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "room",
+        "to"
+      ],
+      "type": "object"
+    },
+    "CutsceneRegion": {
+      "additionalProperties": false,
+      "description": "A cutscene: the ranked timer is frozen while it holds. Exactly one of `kind` and `room`.",
+      "properties": {
+        "id": {
+          "description": "Region id, unique among cutscenes and dialogues.",
+          "type": "string"
+        },
+        "kind": {
+          "default": null,
+          "description": "Holds while an instance of this kind exists.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "room": {
+          "default": null,
+          "description": "Holds while the kid's world is in this room.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
     "DeathName": {
       "description": "`death_on_restart` values.",
       "oneOf": [
@@ -90,6 +158,48 @@
           "type": "string"
         }
       ]
+    },
+    "DialogueRegion": {
+      "additionalProperties": false,
+      "description": "Dialogue that waits for a press: a cutscene region that also advances on its own.",
+      "properties": {
+        "advance": {
+          "description": "The action the original reads to advance the text (`jump`, `shoot`, `accept`, ...).",
+          "type": "string"
+        },
+        "id": {
+          "description": "Region id, unique among cutscenes and dialogues.",
+          "type": "string"
+        },
+        "kind": {
+          "default": null,
+          "description": "Holds while an instance of this kind exists.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "room": {
+          "default": null,
+          "description": "Holds while the kid's world is in this room.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "timeout_ticks": {
+          "description": "Ticks without a press of `advance` before the sim presses it; at least 1.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "advance",
+        "timeout_ticks"
+      ],
+      "type": "object"
     },
     "EngineSection": {
       "additionalProperties": false,
@@ -288,6 +398,92 @@
       },
       "type": "object"
     },
+    "MapEntry": {
+      "additionalProperties": false,
+      "description": "One `[[maps]]` entry (docs/format/v0.md, Maps). Timing keys it leaves out come from\n`[timing]`.",
+      "properties": {
+        "category": {
+          "default": null,
+          "description": "The run category (\"Any%\", \"100%\", \"True Ending\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "difficulty": {
+          "default": null,
+          "description": "The original's built-in difficulty this map plays, as the game names it (\"Medium\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "end": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TriggerRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The run ends at this trigger; default `[timing].end`."
+        },
+        "id": {
+          "description": "Map id, unique within the package. Stable forever; leaderboards key on it.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Display name in game select.",
+          "type": "string"
+        },
+        "stages": {
+          "description": "Stages in order; default `[timing].stages`. `[]` is a single-stage map.",
+          "items": {
+            "$ref": "#/$defs/Stage"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TriggerRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The run starts at this trigger; default `[timing].start`."
+        },
+        "stripped_start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RankedStart"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The map's ranked start point; keys it leaves out come from `[stripped].start`, globals\nmerged by name."
+        },
+        "version": {
+          "default": null,
+          "description": "The original's version this map plays; default `source_version`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "type": "object"
+    },
     "MusicSettings": {
       "additionalProperties": false,
       "description": "One `[music.<id>]` table.",
@@ -365,6 +561,27 @@
           "type": "string"
         }
       ]
+    },
+    "RankedStart": {
+      "additionalProperties": false,
+      "description": "`{ room = \"stage1\", globals = { difficulty = 1 } }`: the ranked start point.",
+      "properties": {
+        "globals": {
+          "additionalProperties": true,
+          "default": {},
+          "description": "Globals set before the first room, in place of the skipped menus (a number, string or\nboolean, as `set_global`).",
+          "type": "object"
+        },
+        "room": {
+          "default": null,
+          "description": "The room a ranked run starts in; default `[engine].new_game_room`, then `start_room`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
     },
     "ResetKindName": {
       "description": "Reset kinds.",
@@ -640,6 +857,78 @@
       ],
       "type": "object"
     },
+    "StrippedCut": {
+      "additionalProperties": false,
+      "description": "`[stripped.cut]`: what stripped mode leaves out.",
+      "properties": {
+        "instances": {
+          "description": "Single placed instances left out, by room and instance name.",
+          "items": {
+            "$ref": "#/$defs/CutInstance"
+          },
+          "type": "array"
+        },
+        "kinds": {
+          "default": [],
+          "description": "Kinds whose placed instances and room `spawn` actions are left out.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "rooms": {
+          "description": "Rooms skipped: going to `room` goes to `to` instead.",
+          "items": {
+            "$ref": "#/$defs/CutRoom"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "StrippedSection": {
+      "additionalProperties": false,
+      "description": "The `[stripped]` table: what ranked (stripped) mode changes (docs/format/v0.md, Stripped\nmode; docs/product.md, Two ways to play each game). Play original ignores it.",
+      "properties": {
+        "cut": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StrippedCut"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Rooms, kinds and placed instances stripped mode leaves out."
+        },
+        "cutscenes": {
+          "description": "Regions that freeze the ranked timer.",
+          "items": {
+            "$ref": "#/$defs/CutsceneRegion"
+          },
+          "type": "array"
+        },
+        "dialogues": {
+          "description": "Text that waits for a press: freezes the timer and advances on its own after a timeout.",
+          "items": {
+            "$ref": "#/$defs/DialogueRegion"
+          },
+          "type": "array"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RankedStart"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Where a ranked run starts; a map's `stripped_start` overrides it key by key."
+        }
+      },
+      "type": "object"
+    },
     "ThirdParty": {
       "additionalProperties": false,
       "description": "One `[[third_party]]` entry.",
@@ -864,6 +1153,13 @@
       ],
       "description": "Art for the background system and the game select list; absent: the first ranked\nroom's background ([`crate::key_art`])."
     },
+    "maps": {
+      "description": "Maps: each built-in difficulty, category and version, with its own timing and board.\nAbsent: one map, [`DEFAULT_MAP_ID`], timed by `[timing]`.",
+      "items": {
+        "$ref": "#/$defs/MapEntry"
+      },
+      "type": "array"
+    },
     "max_ticks": {
       "description": "Upper bound for a replay, in ticks. The server rejects longer replays.",
       "format": "uint64",
@@ -918,6 +1214,17 @@
     "start_room": {
       "description": "First room.",
       "type": "string"
+    },
+    "stripped": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StrippedSection"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Ranked (stripped) mode: start point, cuts, cutscene and dialogue regions. Absent: the\nrun starts at the new-game room and nothing is cut or frozen."
     },
     "third_party": {
       "description": "One entry per file that is not the creator's own work or ours.",

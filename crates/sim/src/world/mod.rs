@@ -25,12 +25,13 @@ use crate::rules::RunnerRules;
 use crate::save::SaveSlot;
 use crate::script::ScriptRuntime;
 use crate::sound::{DllMode, SoundState};
+use crate::stripped::PlayMode;
 use crate::timing::TimingState;
 use crate::view::View;
 use crate::{builtins, kid, run_globals};
 
 /// Everything that changes while a game runs. Every field is hashed by `hash::state_hash` except
-/// `output` and `grid` (docs/architecture.md, State hash).
+/// `output` and `grid` (docs/architecture/sim.md, State hash).
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct World {
     /// Ticks since the run started.
@@ -75,6 +76,10 @@ pub struct World {
     pub output: Vec<OutputEvent>,
     /// Running, halted or ended.
     pub status: SimStatus,
+    /// Original or stripped (ranked), from `SimOptions::mode` (#561). Hashed: the same world
+    /// goes on differently in the other mode (cut rooms, kinds, instances).
+    #[serde(default)]
+    pub mode: PlayMode,
     /// A trace setup action ran (plan 10.4). Hashed, so a run that used setup never matches a
     /// clean verification.
     pub setup_applied: bool,
@@ -113,6 +118,7 @@ impl World {
             timing: TimingState::default(),
             output: Vec::new(),
             status: SimStatus::Running,
+            mode: PlayMode::Original,
             setup_applied: false,
             grid: Grid::default(),
             room_requests: 0,
