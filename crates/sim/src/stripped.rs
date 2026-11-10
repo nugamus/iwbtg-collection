@@ -6,16 +6,20 @@
 //! cut kinds' placed instances and room `spawn` actions and cut placed instances (the room
 //! change sequence, `room.rs`). A [`PlayMode::Original`] run ignores all of it.
 //!
-//! The cutscene and dialogue regions are resolved here; what they do (the ranked timer freeze,
-//! the dialogue auto-advance) is #34.
+//! Cutscene and dialogue regions (#34): [`begin_tick`], at tick row 0 before the input is
+//! latched, looks at which regions hold in the world as the previous tick left it. A tick that
+//! starts with a region holding is frozen: it does not count as ranked time
+//! (`TimingState::ranked_ticks`). A dialogue region that has held for `timeout_ticks` ticks
+//! without a press of its `advance` action presses it in that tick's frame. That press is
+//! derived from the world, so the replay keeps the player's frame and never stores it.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::def::{KindId, NameId, RoomId, VarId};
-use crate::input::Action;
-use crate::world::Value;
+use crate::def::{GameDef, KindId, NameId, RoomId, VarId};
+use crate::input::{Action, InputFrame};
+use crate::world::{Value, World};
 
 /// How a run plays the game (docs/product.md, Two ways to play each game). Recorded in the
 /// replay header and hashed with the world, so a stripped and an original run never share a
@@ -64,9 +68,9 @@ pub struct StrippedDef {
     pub cut_kinds: BTreeSet<KindId>,
     /// Cut placed instances, by room and instance name.
     pub cut_instances: BTreeSet<(RoomId, NameId)>,
-    /// Cutscene regions (behavior: #34).
+    /// Cutscene regions: they freeze the ranked timer ([`begin_tick`]).
     pub cutscenes: Vec<Region>,
-    /// Dialogue regions (behavior: #34).
+    /// Dialogue regions: they freeze the ranked timer and press `advance` on a timeout.
     pub dialogues: Vec<DialogueRegion>,
 }
 
@@ -82,7 +86,7 @@ pub struct RankedStart {
     pub difficulty: Option<u8>,
 }
 
-/// A cutscene region: the ranked timer is frozen while it holds (#34).
+/// A cutscene region: the ranked timer is frozen while it holds ([`begin_tick`]).
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Region {
     /// The region id from `game.toml`.
@@ -100,7 +104,7 @@ pub enum RegionCondition {
     Room(RoomId),
 }
 
-/// A dialogue region: a cutscene region that advances on its own after a timeout (#34).
+/// A dialogue region: a cutscene region that advances on its own after a timeout ([`begin_tick`]).
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct DialogueRegion {
     /// The id and condition.
@@ -109,6 +113,17 @@ pub struct DialogueRegion {
     pub advance: Action,
     /// Ticks without a press of `advance` before the sim presses it (at least 1).
     pub timeout_ticks: u32,
+}
+
+impl RegionCondition {
+    /// Whether the region holds in `w`: an alive, active instance of the kind exists (what
+    /// `instance_exists` counts), or the world is in the room.
+    pub fn holds(self, w: &World) -> bool {
+        match self {
+            RegionCondition::Kind(kind) => w.iter_alive().any(|i| i.active && i.kind == kind),
+            RegionCondition::Room(room) => w.room == room,
+        }
+    }
 }
 
 impl StrippedDef {
@@ -130,4 +145,55 @@ impl StrippedDef {
     pub fn instance_cut(&self, mode: PlayMode, room: RoomId, name: Option<NameId>) -> bool {
         mode == PlayMode::Stripped && name.is_some_and(|n| self.cut_instances.contains(&(room, n)))
     }
+}
+
+/// Tick row 0, before `input` is latched: the region step of #34. Returns the frame the tick
+/// runs with: `input`, plus each dialogue's derived press of `advance` (held and pressed).
+///
+/// Regions are looked at in the world as the previous tick left it (the room after its room
+/// change, instances after its sweep), and only in a [`PlayMode::Stripped`] run.
+///
+/// - The ranked timer: while the timing chain has started and not ended, the tick counts as
+///   `TimingState::frozen_ticks` when any region holds, else as `ranked_ticks`. The tick `end`
+///   fires in still counts and the tick `start` fires in does not, so the two add up to
+///   `end.tick - start.tick` (`timing` module docs).
+/// - Each dialogue region counts the ticks it has held in `TimingState::dialogue_waits`: a
+///   region that does not hold resets its count to 0; a real press of `advance` in `input`
+///   resets it to 0 and the tick runs as the player gave it; otherwise the count goes up by one,
+///   and when it reaches `timeout_ticks` the frame gets the press and the count goes back to 0.
+///   So the first derived press comes in the region's `timeout_ticks`-th tick.
+pub fn begin_tick(w: &mut World, def: &GameDef, input: InputFrame) -> InputFrame {
+    let stripped = w.mode == PlayMode::Stripped;
+    let regions = &def.stripped;
+    let frozen = stripped
+        && (regions.cutscenes.iter().any(|r| r.holds.holds(w))
+            || regions.dialogues.iter().any(|d| d.region.holds.holds(w)));
+    let t = &mut w.timing;
+    if t.started && !t.ended {
+        if frozen {
+            t.frozen_ticks = t.frozen_ticks.saturating_add(1);
+        } else {
+            t.ranked_ticks = t.ranked_ticks.saturating_add(1);
+        }
+    }
+    if !stripped || regions.dialogues.is_empty() {
+        return input;
+    }
+    let holds: Vec<bool> = regions.dialogues.iter().map(|d| d.region.holds.holds(w)).collect();
+    let waits = &mut w.timing.dialogue_waits;
+    waits.resize(regions.dialogues.len(), 0);
+    let mut frame = input;
+    for ((d, wait), held) in regions.dialogues.iter().zip(waits.iter_mut()).zip(holds) {
+        if !held || input.was_pressed(d.advance) {
+            *wait = 0;
+            continue;
+        }
+        *wait = wait.saturating_add(1);
+        if *wait >= d.timeout_ticks {
+            *wait = 0;
+            frame.held |= d.advance.bit();
+            frame.pressed |= d.advance.bit();
+        }
+    }
+    frame
 }

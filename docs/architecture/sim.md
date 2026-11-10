@@ -34,7 +34,7 @@ crates/sim/src/
   kid/            Kid built-in: state, api for other built-ins, presets, actions, collision runs
   builtins/       One file per built-in kind (block.rs, spike.rs, save.rs, ...)
   sound.rs        Sound model (is a sound playing) and DLL adapters (sound/)
-  stripped.rs     Play mode (original or stripped) and the resolved [stripped] table (#561)
+  stripped.rs     Play mode (original or stripped), the resolved [stripped] table (#561), regions (#34)
   script/         ScriptHost trait, the Rhai host, API registration, budget, validator
   timing.rs       Start, end and stage triggers, splits
   output.rs       Audio and visual event queue for the client
@@ -115,7 +115,7 @@ The sketch above is the original idea. The declared types are in `crates/sim/src
 
 | # | Phase | Status | Isolation |
 |---|---|---|---|
-| 0 | Latch input: build held/pressed/released for the tick; `direct_latch |= pressed` per key | Inferred (sample once before Begin Step) | `InputState::latch` |
+| 0 | Region step (stripped runs: ranked or frozen tick, dialogue timeout presses added to the frame; #34), then latch input: build held/pressed/released for the tick; `direct_latch |= pressed` per key | Inferred (sample once before Begin Step); region step Design | `stripped::begin_tick`, `InputState::latch` |
 | 1 | Capture `xprevious/yprevious` if `prev_capture = TickStart` (default) | Confirmed (recorder) U1 (R1) | `TickRules::prev_capture` |
 | 2 | Begin Step | Confirmed order | |
 | 3 | Timelines advance, moments run | Slot Confirmed (recorder) U6 (R6); moments for speed > 1 UNKNOWN | `TickRules::timeline_slot = AfterBeginStep` |

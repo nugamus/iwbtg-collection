@@ -1,18 +1,21 @@
-//! `iwbtg replay run`: ticks, splits, final hash (docs/plans/sim-core.md 9.4, WP8b).
+//! `iwbtg replay run`: ticks, splits, ranked time, final hash (docs/plans/sim-core.md 9.4, WP8b).
 //!
-//! Runs a package headless on a `.iwbr` replay or an action-named `.inputs` file and prints five
+//! Runs a package headless on a `.iwbr` replay or an action-named `.inputs` file and prints six
 //! lines:
 //!
 //! ```text
 //! ticks: 9000
 //! splits: 0@1 1@2210 2@9000
+//! ranked: 8599 frozen: 400
 //! hash: <64 hex digits>
 //! mode: stripped
 //! start: stage1
 //! ```
 //!
 //! A split is `<index>@<tick>` (`timing::Split`: 0 is the start, then the stages, then the end).
-//! `splits: none` when no trigger fired. Two more lines follow: `mode: original` or
+//! `splits: none` when no trigger fired. `ranked` is ranked time in ticks, the timer's ticks
+//! outside every cutscene and dialogue region, and `frozen` the timer's ticks inside one
+//! (`Sim::ranked_ticks`, #34); in Play original nothing is frozen. Two more lines follow: `mode: original` or
 //! `mode: stripped` (Play original or ranked, #561; a `.iwbr` replay's header says which, else
 //! `--mode`), and `start: <room id>`, the room the run started in. The run stops early when the sim ends (`game_end`) and
 //! fails with exit code 2 when it halts. With Sudden Death (`--mods SD`, or a replay header
@@ -81,6 +84,10 @@ pub struct ReplaySummary {
     pub ticks: u64,
     /// Splits from the `[timing]` triggers.
     pub splits: Vec<Split>,
+    /// Ranked time in ticks (`Sim::ranked_ticks`).
+    pub ranked_ticks: u64,
+    /// The timer's ticks inside a region (`Sim::frozen_ticks`).
+    pub frozen_ticks: u64,
     /// The final state hash.
     pub hash: [u8; 32],
     /// Original or stripped.
@@ -90,7 +97,7 @@ pub struct ReplaySummary {
 }
 
 impl ReplaySummary {
-    /// The five output lines.
+    /// The six output lines.
     pub fn lines(&self) -> String {
         let splits = if self.splits.is_empty() {
             "none".to_owned()
@@ -103,8 +110,10 @@ impl ReplaySummary {
         };
         let hash: String = self.hash.iter().map(|b| format!("{b:02x}")).collect();
         format!(
-            "ticks: {}\nsplits: {splits}\nhash: {hash}\nmode: {}\nstart: {}\n",
+            "ticks: {}\nsplits: {splits}\nranked: {} frozen: {}\nhash: {hash}\nmode: {}\nstart: {}\n",
             self.ticks,
+            self.ranked_ticks,
+            self.frozen_ticks,
             self.mode.name(),
             self.start_room
         )
@@ -112,7 +121,7 @@ impl ReplaySummary {
 }
 
 /// `iwbtg replay run`: reads the package and the input, runs [`run`] and prints `ticks: N`,
-/// `splits: ...`, `hash: <hex>`, `mode: ...` and `start: <room>`.
+/// `splits: ...`, `ranked: N frozen: N`, `hash: <hex>`, `mode: ...` and `start: <room>`.
 pub fn main(args: &ReplayRunArgs) -> Result<(), ToolError> {
     if args.start != "new-game" {
         return Err(ToolError::Message(format!(
@@ -245,6 +254,8 @@ pub fn run_def(
     Ok(ReplaySummary {
         ticks: sim.world().tick,
         splits,
+        ranked_ticks: sim.ranked_ticks(),
+        frozen_ticks: sim.frozen_ticks(),
         hash: sim.state_hash(),
         mode,
         start_room,
@@ -266,6 +277,8 @@ mod tests {
         let s = ReplaySummary {
             ticks: 12,
             splits: vec![Split { index: 0, tick: 1 }, Split { index: 1, tick: 12 }],
+            ranked_ticks: 8,
+            frozen_ticks: 3,
             hash: [0xab; 32],
             mode: PlayMode::Stripped,
             start_room: "stage1".into(),
@@ -274,6 +287,7 @@ mod tests {
         let mut lines = text.lines();
         assert_eq!(lines.next(), Some("ticks: 12"));
         assert_eq!(lines.next(), Some("splits: 0@1 1@12"));
+        assert_eq!(lines.next(), Some("ranked: 8 frozen: 3"));
         assert!(
             lines
                 .next()
@@ -362,6 +376,25 @@ mod tests {
             .unwrap();
         let ended = run_def(def, &frames[..tick], options, sd).unwrap();
         assert_eq!(ended.ticks, tick as u64);
+    }
+
+    /// The `[stripped]` example package: its `@cutscene` lives 30 ticks in `stage1`, the ranked
+    /// start, so a ranked run's timer is frozen for it; Play original starts elsewhere.
+    #[test]
+    fn the_stripped_example_freezes_ranked_time_for_its_cutscene() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../format/tests/valid/stripped");
+        let pkg = load_package(&dir).unwrap();
+        let frames = vec![InputFrame::default(); 60];
+        let options = |mode| SimOptions {
+            start: StartPoint::NewGame { difficulty: 0 },
+            seed: 0,
+            dll_mode: DllMode::Model,
+            mode,
+        };
+        let ranked = run(&pkg, &frames, options(PlayMode::Stripped), ModSet::NONE).unwrap();
+        assert_eq!((ranked.ranked_ticks, ranked.frozen_ticks), (30, 29));
+        let original = run(&pkg, &frames, options(PlayMode::Original), ModSet::NONE).unwrap();
+        assert_eq!((original.ranked_ticks, original.frozen_ticks), (59, 0));
     }
 
     /// The golden one-room package on its `.inputs`: 61 ticks, the run starts at tick 1, and a
