@@ -16,7 +16,9 @@ mod art;
 mod audio;
 mod input;
 mod package;
+mod savefile;
 mod screen;
+mod settings;
 mod ui;
 mod view;
 
@@ -38,18 +40,27 @@ struct Args {
     screen: screen::ScreenArgs,
     #[command(flatten)]
     ui: ui::UiArgs,
+    #[command(flatten)]
+    save: savefile::SaveArgs,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> ExitCode {
     let args = Args::parse();
+    // The settings file gives the defaults the flags override (settings.rs). A `--screenshot`
+    // check neither reads nor writes it, so it looks the same on every machine.
+    settings::load(args.view.screenshot.is_some());
     if let Err(e) = screen::configure(&args.screen) {
         eprintln!("{e}");
         return ExitCode::FAILURE;
     }
     if args.ui.ui_gallery {
         // `configure` has checked the ratio.
-        let ratio = screen::parse_ratio(&args.screen.ratio).unwrap_or(None);
+        let ratio = args
+            .screen
+            .ratio
+            .as_deref()
+            .and_then(|r| screen::parse_ratio(r).ok().flatten());
         ui::gallery::run(
             args.view.screenshot,
             args.ui.reduced_motion,
@@ -62,6 +73,7 @@ fn main() -> ExitCode {
     let Some(dir) = args.package.package else {
         return ExitCode::FAILURE;
     };
+    savefile::configure(&args.save);
     let pkg = match package::open(&dir, args.package.trace_mode) {
         Ok(pkg) => pkg,
         Err(e) => {
@@ -73,6 +85,7 @@ fn main() -> ExitCode {
     let result = view::run(pkg, args.view, |app, pkg| {
         app.add_plugins((
             screen::ScreenPlugin,
+            savefile::SavePlugin,
             art::ArtPlugin(pkg.files.clone()),
             audio::AudioPlugin::new(&audio, &pkg.files),
         ));
