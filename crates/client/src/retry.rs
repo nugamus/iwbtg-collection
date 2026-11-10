@@ -6,8 +6,6 @@
 //! retry is a new run. `--auto-retry` does the same after every death, for Sudden Death and
 //! deathless attempts.
 
-use std::time::Instant;
-
 use bevy::prelude::*;
 
 use crate::view::{Game, SimTick};
@@ -95,11 +93,9 @@ fn apply(world: &mut World) {
         retry.pending.take()
     };
     match crate::view::restart_run(world) {
-        Ok(first_output) => {
+        Ok(()) => {
+            // The new sim's room start plays from its first step's output (#466).
             crate::audio::reset(world);
-            if let Some(mut queue) = world.get_resource_mut::<crate::audio::Queue>() {
-                queue.push(Instant::now(), &first_output);
-            }
             crate::mods::reset(world);
             let why = match why {
                 Some(Why::Death) => "auto-retry",

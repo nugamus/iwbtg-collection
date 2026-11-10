@@ -406,14 +406,13 @@ fn collect_input(keys: Res<ButtonInput<KeyCode>>, mut collector: ResMut<Collecto
 }
 
 /// Starts the run again from where it started (quick-retry and auto-retry, `retry.rs`): a new
-/// sim with the same options, every drawn sprite gone, no pending input edges, no sign. Returns the
-/// new sim's room-start output for the audio queue. The fixed clock keeps its rate until the next
+/// sim with the same options, every drawn sprite gone, no pending input edges, no sign. The new sim's
+/// room-start output stays in `output` for its first step (#466). The fixed clock keeps its rate until the next
 /// tick's `follow_room_speed`.
-pub(crate) fn restart_run(world: &mut World) -> Result<Vec<iwbtg_sim::output::OutputEvent>, String> {
+pub(crate) fn restart_run(world: &mut World) -> Result<(), String> {
     let start = world.resource::<RunStart>();
     let sim = Sim::new(Arc::clone(&start.def), start.options.clone())
         .map_err(|e| format!("the game did not start: {e}"))?;
-    let first_output = sim.world().output.clone();
     world.non_send_mut::<Game>().sim = sim;
     let drawn = std::mem::take(&mut world.resource_mut::<Drawn>().0);
     for entity in drawn.into_values() {
@@ -427,7 +426,7 @@ pub(crate) fn restart_run(world: &mut World) -> Result<Vec<iwbtg_sim::output::Ou
     // Keys held through the retry stay held; edges from before it are dropped.
     world.resource_mut::<Collector>().take_frame();
     world.resource_mut::<hud::SignText>().0 = None;
-    Ok(first_output)
+    Ok(())
 }
 
 /// The view's run resources without a window, for tests of the systems that use them.
