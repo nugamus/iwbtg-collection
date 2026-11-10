@@ -188,7 +188,10 @@ fn validate_ranked_start(v: &mut Validator<'_>, start: &RankedStart) {
         if !is_var_name(name.get_ref()) {
             v.error(
                 name.span(),
-                format!("`{}` is not a variable name (letters, digits and `_`, not starting with a digit)", name.get_ref()),
+                format!(
+                    "`{}` is not a variable name (letters, digits and `_`, not starting with a digit)",
+                    name.get_ref()
+                ),
             );
         }
         if let Err(e) = global_value(value.get_ref()) {
@@ -200,9 +203,7 @@ fn validate_ranked_start(v: &mut Validator<'_>, start: &RankedStart) {
 /// A GML variable name: ASCII letters, digits and `_`, not starting with a digit.
 fn is_var_name(name: &str) -> bool {
     let mut chars = name.chars();
-    chars
-        .next()
-        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+    chars.next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
         && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
@@ -1281,7 +1282,11 @@ impl Manifest {
                 if rooms.contains(entry.to.get_ref().as_str()) {
                     v.error(
                         entry.to.span(),
-                        format!("cut room `{}` goes to `{}`, which is cut too", entry.room.get_ref(), entry.to.get_ref()),
+                        format!(
+                            "cut room `{}` goes to `{}`, which is cut too",
+                            entry.room.get_ref(),
+                            entry.to.get_ref()
+                        ),
                     );
                 }
             }
@@ -1299,7 +1304,11 @@ impl Manifest {
                 {
                     v.error(
                         entry.name.span(),
-                        format!("instance `{}` in room `{}` is cut twice", entry.name.get_ref(), entry.room.get_ref()),
+                        format!(
+                            "instance `{}` in room `{}` is cut twice",
+                            entry.name.get_ref(),
+                            entry.room.get_ref()
+                        ),
                     );
                 }
             }

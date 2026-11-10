@@ -1687,21 +1687,85 @@ fn every_stripped_field_loads() {
 
 #[test]
 fn stripped_mode_rejects_bad_markers() {
-    let cases: [(&str, &str, &str); 14] = [
-        ("room = \"stage1\", globals", "room = \"nowhere\", globals", "room `nowhere` does not exist"),
+    let cases: [(&str, &str, &str); 18] = [
+        (
+            "globals = { difficulty = 2 } }",
+            "room = \"gone\", globals = { difficulty = 2 } }",
+            "room `gone` does not exist",
+        ),
+        (
+            "globals = { difficulty = 2 } }",
+            "room = \"title\", globals = { difficulty = 2 } }",
+            "ranked start room `title` is cut",
+        ),
+        (
+            "rooms = [{ room = \"title\", to = \"stage1\" }]",
+            "rooms = [{ room = \"title\", to = \"stage1\" }, { room = \"title\", to = \"stage1\" }]",
+            "room `title` is cut twice",
+        ),
+        (
+            "instances = [{ room = \"stage1\", name = \"boss_a\" }]",
+            "instances = [{ room = \"stage1\", name = \"boss_a\" }, { room = \"stage1\", name = \"boss_a\" }]",
+            "instance `boss_a` in room `stage1` is cut twice",
+        ),
+        (
+            "room = \"stage1\", globals",
+            "room = \"nowhere\", globals",
+            "room `nowhere` does not exist",
+        ),
         ("difficulty = 1,", "1difficulty = 1,", "is not a variable name"),
         ("clear = false", "clear = [1]", "global `clear`"),
         ("to = \"stage1\"", "to = \"lost\"", "room `lost` does not exist"),
-        ("rooms = [{ room = \"title\", to = \"stage1\" }]", "rooms = [{ room = \"title\", to = \"stage1\" }, { room = \"stage1\", to = \"title\" }]", "which is cut too"),
-        ("kinds = [\"kid_start\"]", "kinds = [\"@ghost\"]", "cut kind `@ghost` is not a kind"),
-        ("kinds = [\"kid_start\"]", "kinds = [\"kid_start\", \"kid_start\"]", "is cut twice"),
-        ("name = \"boss_a\"", "name = \"boss_b\"", "has no instance named `boss_b`"),
-        ("kind = \"@boss\" }", "kind = \"@boss\", room = \"title\" }", "has both `kind` and `room`"),
-        ("{ id = \"boss_intro\", kind = \"@boss\" }", "{ id = \"boss_intro\" }", "needs `kind` or `room`"),
-        ("id = \"npc\"", "id = \"boss_intro\"", "region id `boss_intro` is used twice"),
-        ("advance = \"jump\"", "advance = \"space\"", "`space` is not an action"),
-        ("timeout_ticks = 150", "timeout_ticks = 0", "timeout_ticks must be at least 1"),
-        ("kind = \"warp\", advance", "kind = \"@npc\", advance", "region kind `@npc` is not a kind"),
+        (
+            "rooms = [{ room = \"title\", to = \"stage1\" }]",
+            "rooms = [{ room = \"title\", to = \"stage1\" }, { room = \"stage1\", to = \"title\" }]",
+            "which is cut too",
+        ),
+        (
+            "kinds = [\"kid_start\"]",
+            "kinds = [\"@ghost\"]",
+            "cut kind `@ghost` is not a kind",
+        ),
+        (
+            "kinds = [\"kid_start\"]",
+            "kinds = [\"kid_start\", \"kid_start\"]",
+            "is cut twice",
+        ),
+        (
+            "name = \"boss_a\"",
+            "name = \"boss_b\"",
+            "has no instance named `boss_b`",
+        ),
+        (
+            "kind = \"@boss\" }",
+            "kind = \"@boss\", room = \"title\" }",
+            "has both `kind` and `room`",
+        ),
+        (
+            "{ id = \"boss_intro\", kind = \"@boss\" }",
+            "{ id = \"boss_intro\" }",
+            "needs `kind` or `room`",
+        ),
+        (
+            "id = \"npc\"",
+            "id = \"boss_intro\"",
+            "region id `boss_intro` is used twice",
+        ),
+        (
+            "advance = \"jump\"",
+            "advance = \"space\"",
+            "`space` is not an action",
+        ),
+        (
+            "timeout_ticks = 150",
+            "timeout_ticks = 0",
+            "timeout_ticks must be at least 1",
+        ),
+        (
+            "kind = \"warp\", advance",
+            "kind = \"@npc\", advance",
+            "region kind `@npc` is not a kind",
+        ),
     ];
     for (from, to, want) in cases {
         assert!(STRIPPED.contains(from), "case text `{from}` not in STRIPPED");
@@ -1716,12 +1780,34 @@ fn stripped_mode_rejects_bad_markers() {
 #[test]
 fn the_ranked_start_room_cannot_be_cut() {
     // Named start room.
-    let errs = stripped_errors(&STRIPPED.replace("{ room = \"title\", to = \"stage1\" }", "{ room = \"stage1\", to = \"title\" }"));
-    assert!(errs.iter().any(|e| e.contains("ranked start room `stage1` is cut")), "{errs:#?}");
+    let errs = stripped_errors(&STRIPPED.replace(
+        "{ room = \"title\", to = \"stage1\" }",
+        "{ room = \"stage1\", to = \"title\" }",
+    ));
+    assert!(
+        errs.iter()
+            .any(|e| e.contains("ranked start room `stage1` is cut")),
+        "{errs:#?}"
+    );
     // Default start room: `[engine].new_game_room` is `stage1`.
     let no_start = "\n[stripped.cut]\nrooms = [{ room = \"stage1\", to = \"title\" }]\n";
     let errs = stripped_errors(no_start);
-    assert!(errs.iter().any(|e| e.contains("ranked runs start in `stage1`")), "{errs:#?}");
+    assert!(
+        errs.iter().any(|e| e.contains("ranked runs start in `stage1`")),
+        "{errs:#?}"
+    );
+    // Every map names its own start room: the default start may be cut.
+    let all_maps = "
+[[maps]]
+id = \"a\"
+name = \"A\"
+stripped_start = { room = \"title\" }
+                    
+[stripped.cut]
+rooms = [{ room = \"stage1\", to = \"title\" }]
+";
+    let errs = stripped_errors(all_maps);
+    assert!(errs.is_empty(), "{errs:#?}");
 }
 
 #[test]
@@ -1731,6 +1817,9 @@ fn stripped_markers_count_for_the_gameplay_hash() {
         load_report(&files, STRICT).gameplay_hash.expect("loads")
     };
     let base = hash(STRIPPED);
-    assert_ne!(hash(&STRIPPED.replace("timeout_ticks = 150", "timeout_ticks = 100")), base);
+    assert_ne!(
+        hash(&STRIPPED.replace("timeout_ticks = 150", "timeout_ticks = 100")),
+        base
+    );
     assert_ne!(hash(&STRIPPED.replace("difficulty = 2", "difficulty = 3")), base);
 }

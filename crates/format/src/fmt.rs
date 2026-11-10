@@ -30,7 +30,8 @@ const ROW_LISTS: [(&str, &[&str]); 11] = [
     (
         "instances",
         &[
-            "room", "kind", "x", "y", "name", "group", "xscale", "yscale", "angle", "visible", "depth", "run", "step",
+            "room", "kind", "x", "y", "name", "group", "xscale", "yscale", "angle", "visible", "depth",
+            "run", "step",
         ],
     ),
     ("views", &["visible", "view", "port", "follow", "border", "speed"]),

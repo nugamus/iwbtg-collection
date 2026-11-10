@@ -2066,7 +2066,6 @@ impl<'a> Loader<'a> {
         }
     }
 
-    /// CR5: warps whose creation code (`roomTo`) was not converted have no `room_to`.
     /// `[stripped]` and each map's `stripped_start` (docs/format/v0.md, Stripped mode): rooms,
     /// kinds and instance names resolve; no ranked start room and no cut room's `to` is cut.
     fn stripped_refs(&mut self, rooms: &[ParsedRoom<'_>]) {
@@ -2097,8 +2096,10 @@ impl<'a> Loader<'a> {
             .as_ref()
             .and_then(|e| e.get_ref().new_game_room.as_ref())
             .unwrap_or(&m.start_room);
-        let start_defaults =
-            section.and_then(|s| s.start.as_ref()).and_then(|s| s.room.as_ref()).is_none();
+        let start_defaults = section
+            .and_then(|s| s.start.as_ref())
+            .and_then(|s| s.room.as_ref())
+            .is_none();
         let map_overrides = !m.maps.is_empty()
             && m.maps
                 .iter()
@@ -2133,11 +2134,11 @@ impl<'a> Loader<'a> {
                     self.room_ref(entry.room.get_ref(), entry.room.span());
                     continue;
                 };
-                let named = room
-                    .file
-                    .instances
-                    .iter()
-                    .any(|i| i.name.as_ref().is_some_and(|n| n.get_ref() == entry.name.get_ref()));
+                let named = room.file.instances.iter().any(|i| {
+                    i.name
+                        .as_ref()
+                        .is_some_and(|n| n.get_ref() == entry.name.get_ref())
+                });
                 if !named {
                     self.manifest_error(
                         entry.name.span(),
@@ -2170,6 +2171,7 @@ impl<'a> Loader<'a> {
         }
     }
 
+    /// CR5: warps whose creation code (`roomTo`) was not converted have no `room_to`.
     fn warp_targets(&mut self, rooms: &[RoomDef]) {
         for r in rooms {
             let missing = r

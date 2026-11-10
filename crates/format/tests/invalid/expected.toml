@@ -291,6 +291,18 @@ line = 5
 column = 17
 message = "invalid basic string, expected `\"`"
 
+[stripped_region_kind_and_room]
+file = "game.toml"
+line = 28
+column = 40
+message = "region `intro` has both `kind` and `room`"
+
+[stripped_timeout_zero]
+file = "game.toml"
+line = 28
+column = 69
+message = "timeout_ticks must be at least 1"
+
 [third_party_file_missing]
 file = "game.toml"
 line = 27
