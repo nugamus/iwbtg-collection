@@ -507,8 +507,8 @@ mod wp6a {
         assert_eq!(w.get(id).unwrap().img.alpha(), r(1.0));
         assert_eq!(
             game_over::overlay_alpha(&w, id),
-            r(0.6),
-            "the overlay stops at 0.6"
+            r(0.600_000_000_000_000_1),
+            "the overlay stops at the GML literal 0.6, read as 0.6000000000000001 (N14)"
         );
         // The bob is 32 * sin(phase), phase += pi/100: 210 ticks is 2.1 pi.
         let want = 32.0 * iwbtg_sim::num::sin(r(210.0 * std::f64::consts::PI / 100.0)).get();
