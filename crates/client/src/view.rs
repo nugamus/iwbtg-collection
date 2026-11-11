@@ -67,11 +67,6 @@ impl ViewRect {
         }
     }
 
-    /// Whether the view shows less than the room or is turned, so the camera must be clipped.
-    pub(crate) fn clips(&self, room: Vec2) -> bool {
-        (self.w - room.x).abs() > 0.5 || (self.h - room.y).abs() > 0.5 || self.angle.abs() > 1e-3
-    }
-
     /// The view's centre in the room-centred, y-up world the sprites are placed in.
     fn centre(&self, room: Vec2) -> Vec2 {
         Vec2::new(

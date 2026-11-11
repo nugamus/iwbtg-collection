@@ -28,8 +28,12 @@ pub struct Settings {
     pub window: Option<(u32, u32)>,
     /// Sound is held back by this many milliseconds, 0 to [`MAX_AUDIO_OFFSET_MS`].
     pub audio_offset_ms: u32,
+    /// Scale the game by whole steps instead of filling its room (F7, `--integer-scale`).
+    pub integer_scale: bool,
     /// The debug overlay (F3) is shown.
     pub overlay: bool,
+    /// HUD side panel scale in percent, 75 to 150 (`hud::layout::UI_SCALE_RANGE`).
+    pub ui_scale: u32,
     /// The `[bindings]` table, kept as written: the input layer (#27) owns its layout and checks
     /// it; this file only stores it.
     pub bindings: Table,
@@ -42,7 +46,9 @@ impl Default for Settings {
             ratio: None,
             window: None,
             audio_offset_ms: 0,
+            integer_scale: false,
             overlay: true,
+            ui_scale: 100,
             bindings: Table::new(),
         }
     }
@@ -98,7 +104,8 @@ impl Settings {
                     Ok(r) => self.window = Some(r),
                     Err(e) => w.push(format!("display.window `{r}`: {e}")),
                 },
-                ("fullscreen" | "ratio" | "window", _) => {
+                ("integer_scale", Value::Boolean(b)) => self.integer_scale = *b,
+                ("fullscreen" | "ratio" | "window" | "integer_scale", _) => {
                     w.push(format!("display.{key} has the wrong type, using the default"));
                 }
                 _ => w.push(format!("unknown entry `display.{key}`, ignored")),
@@ -126,6 +133,13 @@ impl Settings {
             match (key.as_str(), value) {
                 ("overlay", Value::Boolean(b)) => self.overlay = *b,
                 ("overlay", _) => w.push("hud.overlay must be true or false".into()),
+                ("ui_scale", Value::Integer(v)) => match u32::try_from(*v) {
+                    Ok(v) if crate::hud::layout::UI_SCALE_RANGE.contains(&v) => self.ui_scale = v,
+                    _ => w.push(format!(
+                        "hud.ui_scale {v} is outside 75 to 150, using the default"
+                    )),
+                },
+                ("ui_scale", _) => w.push("hud.ui_scale must be an integer".into()),
                 _ => w.push(format!("unknown entry `hud.{key}`, ignored")),
             }
         }
@@ -139,10 +153,12 @@ impl Settings {
         if let Some((w, h)) = self.window {
             display.insert("window".into(), format!("{w}x{h}").into());
         }
+        display.insert("integer_scale".into(), self.integer_scale.into());
         let mut audio = Table::new();
         audio.insert("offset_ms".into(), i64::from(self.audio_offset_ms).into());
         let mut hud = Table::new();
         hud.insert("overlay".into(), self.overlay.into());
+        hud.insert("ui_scale".into(), i64::from(self.ui_scale).into());
         let mut root = Table::new();
         root.insert("version".into(), VERSION.into());
         root.insert("display".into(), display.into());
@@ -252,7 +268,9 @@ mod tests {
             ratio: Some((16, 9)),
             window: Some((1280, 720)),
             audio_offset_ms: 120,
+            integer_scale: true,
             overlay: false,
+            ui_scale: 125,
             ..Settings::default()
         };
         s.bindings = "[keys]\njump = [\"ShiftLeft\"]\n".parse().unwrap();
@@ -268,7 +286,7 @@ mod tests {
              mystery = 1\n\
              [display]\nfullscreen = true\nratio = \"5:4\"\nwindow = 7\nextra = 1\n\
              [audio]\noffset_ms = 9000\n\
-             [hud]\noverlay = false\n\
+             [hud]\noverlay = false\nui_scale = 200\n\
              [bindings]\njump = \"Space\"\n",
         );
         assert!(s.fullscreen, "the good entry beside bad ones still counts");
@@ -276,8 +294,9 @@ mod tests {
         assert_eq!(s.window, None);
         assert_eq!(s.audio_offset_ms, 0);
         assert!(!s.overlay);
+        assert_eq!(s.ui_scale, 100);
         assert_eq!(s.bindings.get("jump").and_then(Value::as_str), Some("Space"));
-        assert_eq!(w.len(), 5, "{w:?}");
+        assert_eq!(w.len(), 6, "{w:?}");
     }
 
     #[test]

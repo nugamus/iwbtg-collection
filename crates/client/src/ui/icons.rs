@@ -36,11 +36,15 @@ pub enum Icon {
     Random,
     /// The four bars of the music preview.
     MusicBars,
+    /// The input display's arrow, pointing up (`RunInfo.dc.html`; turned for the other ways).
+    Arrow,
+    /// A player with no avatar (`Leaderboard.dc.html`).
+    Person,
 }
 
 impl Icon {
     /// Every icon, for the gallery.
-    pub const ALL: [Icon; 10] = [
+    pub const ALL: [Icon; 12] = [
         Icon::Flag,
         Icon::Clock,
         Icon::Check,
@@ -51,6 +55,8 @@ impl Icon {
         Icon::Back,
         Icon::Random,
         Icon::MusicBars,
+        Icon::Arrow,
+        Icon::Person,
     ];
 
     /// The size of the view box the shapes are drawn in.
@@ -59,6 +65,8 @@ impl Icon {
             Icon::Search => (18.0, 18.0),
             Icon::Random => (16.0, 16.0),
             Icon::MusicBars => (21.0, 18.0),
+            Icon::Arrow => (26.0, 26.0),
+            Icon::Person => (16.0, 16.0),
             _ => (14.0, 14.0),
         }
     }
@@ -116,6 +124,11 @@ impl Icon {
                 .into_iter()
                 .map(|(x, h)| Fill(bar(x, h)))
                 .collect(),
+            Icon::Arrow => vec![Fill("M13 4L22 14H16.5V22H9.5V14H4Z".into())],
+            Icon::Person => vec![
+                Dot(8.0, 5.5, 3.0),
+                Fill("M2.5 15c.6-3.4 2.8-5 5.5-5s4.9 1.6 5.5 5z".into()),
+            ],
         }
     }
 }

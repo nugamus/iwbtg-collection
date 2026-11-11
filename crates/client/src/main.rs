@@ -14,6 +14,7 @@
 
 mod art;
 mod audio;
+mod hud;
 mod input;
 mod mods;
 mod package;
@@ -45,6 +46,8 @@ struct Args {
     #[command(flatten)]
     ui: ui::UiArgs,
     #[command(flatten)]
+    hud: hud::HudArgs,
+    #[command(flatten)]
     mods: mods::ModsArgs,
     #[command(flatten)]
     save: savefile::SaveArgs,
@@ -62,6 +65,7 @@ fn main() -> ExitCode {
         eprintln!("{e}");
         return ExitCode::FAILURE;
     }
+    hud::configure(&args.hud);
     if args.ui.ui_gallery {
         // `configure` has checked the ratio.
         let ratio = args
@@ -98,6 +102,7 @@ fn main() -> ExitCode {
     let result = view::run(pkg, args.view, |app, pkg| {
         app.add_plugins((
             screen::ScreenPlugin,
+            hud::HudPlugin,
             savefile::SavePlugin,
             art::ArtPlugin(pkg.files.clone()),
             audio::AudioPlugin::new(&audio, &pkg.files),
