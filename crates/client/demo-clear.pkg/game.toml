@@ -18,8 +18,11 @@ new_game_room = "stage"
 float_model = "f64"
 
 [defaults.kid]
-sprite = "kid"
+sprite = "kid_idle"
 mask = "kid_mask"
+
+[defaults.kid_bullet]
+sprite = "kid_bullet"
 
 [defaults.block]
 sprite = "block"
@@ -37,10 +40,15 @@ sprite = "clear"
 name = "IWBTG Collection"
 role = "author"
 
+[[creators]]
+# The Kid sprites and bullet come from this game (CREDITS.md).
+name = "waka (I wanna Little Trap)"
+role = "other"
+
 [source]
 url = "https://github.com/nugamus/iwbtg-collection"
 permission = "granted"
-permission_note = "Original demo art made for this repository."
+permission_note = "Route, blocks, spike, warp and clear are original demo art made for this repository. The Kid sprites are from I wanna Little Trap by waka (CREDITS.md), included by user decision 2026-11-11 (nugamus/iwbtg-collection-games#34)."
 
 [timing]
 start = { trigger = "run_start" }
@@ -48,3 +56,38 @@ end = { trigger = "run_end" }
 stages = [
   { id = "goal", name = "Goal room", trigger = "enter_room", room = "goal" },
 ]
+
+[[third_party]]
+path = "sprites/kid_idle.png"
+what = "The Kid (idle), from I wanna Little Trap by waka"
+owner = "Kayin (I Wanna Be The Guy Kid sprite); via waka, I wanna Little Trap"
+license = "unknown"
+status = "to-clear"
+
+[[third_party]]
+path = "sprites/kid_run.png"
+what = "The Kid (run), from I wanna Little Trap by waka"
+owner = "Kayin (I Wanna Be The Guy Kid sprite); via waka, I wanna Little Trap"
+license = "unknown"
+status = "to-clear"
+
+[[third_party]]
+path = "sprites/kid_jump.png"
+what = "The Kid (jump), from I wanna Little Trap by waka"
+owner = "Kayin (I Wanna Be The Guy Kid sprite); via waka, I wanna Little Trap"
+license = "unknown"
+status = "to-clear"
+
+[[third_party]]
+path = "sprites/kid_fall.png"
+what = "The Kid (fall), from I wanna Little Trap by waka"
+owner = "Kayin (I Wanna Be The Guy Kid sprite); via waka, I wanna Little Trap"
+license = "unknown"
+status = "to-clear"
+
+[[third_party]]
+path = "sprites/kid_bullet.png"
+what = "The Kid (bullet), from I wanna Little Trap by waka"
+owner = "Kayin (I Wanna Be The Guy Kid sprite); via waka, I wanna Little Trap"
+license = "unknown"
+status = "to-clear"

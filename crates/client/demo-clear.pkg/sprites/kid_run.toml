@@ -1,0 +1,7 @@
+#:schema ../../../../../docs/format/schema/v0/sprite.schema.json
+frames = 5
+frame_size = [32, 32]
+origin = [17, 23]
+collision = "precise"
+bbox = [2, 11, 26, 31]
+alpha_tolerance = 0
