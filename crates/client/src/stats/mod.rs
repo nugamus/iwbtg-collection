@@ -11,6 +11,8 @@
 mod book;
 mod track;
 
+use std::collections::BTreeSet;
+
 use bevy::prelude::*;
 use iwbtg_sim::mods::ModSet;
 use iwbtg_sim::room::StartPoint;
@@ -24,7 +26,7 @@ use crate::storage::{self, Store};
 use crate::view::{Game, SimTick};
 
 /// The file in the data area.
-const FILE: &str = "stats.toml";
+pub(crate) const FILE: &str = "stats.toml";
 /// Where an unreadable file is moved, so a fresh book never overwrites it.
 const BROKEN: &str = "stats.broken.toml";
 /// Unsaved deaths and play time are written at least this often, in seconds of real time.
@@ -182,6 +184,20 @@ fn load(store: &Store) -> Book {
             Book::default()
         }
     }
+}
+
+/// The replays the boards in `store`'s `stats.toml` point at: the PBs' and the other top runs'
+/// ([`Book::board_replays`]). `None` when the file is there but cannot be read, so the caller
+/// removes nothing.
+pub(crate) fn board_replays(store: &Store) -> Option<(BTreeSet<String>, BTreeSet<String>)> {
+    let book = match store.read_text(FILE) {
+        Ok(None) => Book::default(),
+        Ok(Some(text)) => Book::parse(&text).ok()?,
+        Err(_) => return None,
+    };
+    let (pbs, top) = book.board_replays();
+    let owned = |s: BTreeSet<&str>| s.into_iter().map(str::to_owned).collect();
+    Some((owned(pbs), owned(top)))
 }
 
 /// Seconds since 1970, for a run's date.

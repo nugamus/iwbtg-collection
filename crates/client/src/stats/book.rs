@@ -1,7 +1,7 @@
 //! The stats book: everything `stats.toml` keeps, and the rules for adding a run to it
 //! (docs/architecture/client.md, Stats). Pure data: no Bevy, no storage, no clock.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -230,6 +230,26 @@ impl Book {
         m.game = game.to_owned();
         m.tick_rate = tick_rate;
         m
+    }
+
+    /// The replays the boards point at: each board's PB, and every other run in the top runs
+    /// (a name is in only one of the two, PB first). Web pruning keeps these (`replays.rs`).
+    pub fn board_replays(&self) -> (BTreeSet<&str>, BTreeSet<&str>) {
+        let mut pbs = BTreeSet::new();
+        let mut top = BTreeSet::new();
+        for board in self.maps.values().flat_map(|m| m.boards.values()) {
+            for (i, run) in board.runs.iter().enumerate() {
+                if let Some(r) = run.replay.as_deref() {
+                    if i == 0 {
+                        pbs.insert(r)
+                    } else {
+                        top.insert(r)
+                    };
+                }
+            }
+        }
+        top.retain(|r| !pbs.contains(r));
+        (pbs, top)
     }
 
     /// Totals over every map.
