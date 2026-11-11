@@ -42,7 +42,8 @@ const BUTTONS: [(Action, &str); 7] = [
     (Action::Extra3, "Extra 3"),
     (Action::Extra4, "Extra 4"),
 ];
-const EXTRAS: u32 = Action::Extra1 as u32 | Action::Extra2 as u32 | Action::Extra3 as u32 | Action::Extra4 as u32;
+const EXTRAS: u32 =
+    Action::Extra1 as u32 | Action::Extra2 as u32 | Action::Extra3 as u32 | Action::Extra4 as u32;
 /// `Paused · timer running`: `#ffb3bd`.
 const PAUSED_INK: Color = Color::srgb_u8(0xff, 0xb3, 0xbd);
 /// A held arrow or word: white (the artboard's glow is not drawn).
@@ -255,11 +256,7 @@ pub fn show(
             t.0 = want;
         }
     }
-    let display = if info.paused {
-        Display::Flex
-    } else {
-        Display::None
-    };
+    let display = if info.paused { Display::Flex } else { Display::None };
     for mut node in &mut paused {
         if node.display != display {
             node.display = display;
@@ -327,7 +324,10 @@ pub fn build(width: f32, density: Density, look: Look) -> impl Bundle {
                             ),
                             Field::Time,
                         ),
-                        (text(".00", Type::condensed(cs, 600), tokens::SOFT), Field::Hundredths),
+                        (
+                            text(".00", Type::condensed(cs, 600), tokens::SOFT),
+                            Field::Hundredths
+                        ),
                     ],
                 ));
             }
@@ -447,7 +447,10 @@ fn stats(show: HudShow, stack: bool, value: f32) -> impl Bundle {
         Node {
             display: Display::Grid,
             grid_template_columns: if stack {
-                vec![GridTrack::minmax(MinTrackSizingFunction::Px(0.0), MaxTrackSizingFunction::Fraction(1.0))]
+                vec![GridTrack::minmax(
+                    MinTrackSizingFunction::Px(0.0),
+                    MaxTrackSizingFunction::Fraction(1.0),
+                )]
             } else {
                 RepeatedGridTrack::minmax(
                     2,
@@ -520,7 +523,10 @@ fn input_display(width: f32, extras: u32) -> impl Bundle {
                     row_gap: Val::Px(6.0),
                     ..default()
                 },
-                children![(text(label, style, tokens::BUTTON_IDLE), Key(action)), bar(action)],
+                children![
+                    (text(label, style, tokens::BUTTON_IDLE), Key(action)),
+                    bar(action)
+                ],
             )
         })
         .collect();
@@ -600,6 +606,40 @@ mod tests {
         assert_eq!(s.observe(5, 0, 11), 1);
     }
 
+    /// The demo kid presses suicide: deaths and deaths this stage go up, the input display sees
+    /// the key, and Play original shows the Unranked pill.
+    #[test]
+    fn a_death_counts_in_the_panel_and_the_held_key_lights() {
+        use bevy::ecs::system::RunSystemOnce;
+        use iwbtg_sim::input::InputFrame;
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-clear.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let mut world = crate::view::test_world(&pkg);
+        world.insert_resource(RunMods(ModSet::NONE));
+        world.insert_resource(super::super::Shown::default());
+        world.init_resource::<Paused>();
+        world.init_resource::<Preview>();
+        world.init_resource::<StageDeaths>();
+        world.init_resource::<RunInfo>();
+        world.init_resource::<Look>();
+        world.run_system_once(read).unwrap();
+        assert_eq!(world.resource::<RunInfo>().stages, 2, "one stage split");
+        assert!(world.resource::<Look>().unranked);
+        for _ in 0..100 {
+            if world.resource::<RunInfo>().deaths > 0 {
+                break;
+            }
+            let mut c = world.resource_mut::<Collector>();
+            c.press(iwbtg_sim::input::vk::Q);
+            let frame: InputFrame = c.take_frame();
+            world.non_send_mut::<Game>().sim.step(frame);
+            world.run_system_once(read).unwrap();
+        }
+        let info = world.resource::<RunInfo>().clone();
+        assert_eq!((info.deaths, info.stage_deaths, info.stage), (1, 1, 1));
+        assert_ne!(info.held & Action::Suicide.bit(), 0);
+    }
+
     #[test]
     fn the_mod_row_shows_for_unranked_runs_and_mods_only() {
         let ranked = Look::default();
@@ -609,7 +649,13 @@ mod tests {
             ..ranked
         };
         assert!(sd.mod_row());
-        assert!(Look { unranked: true, ..ranked }.mod_row());
+        assert!(
+            Look {
+                unranked: true,
+                ..ranked
+            }
+            .mod_row()
+        );
         let off = Look {
             show: HudShow {
                 mods: false,

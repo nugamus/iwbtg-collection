@@ -21,7 +21,7 @@ use crate::ui::backdrop::BackdropCamera;
 use layout::{Density, Layout, Options, UI_SCALE_RANGE};
 
 /// `input,stage_deaths`: HUD element names ([`HudShow::NAMES`]).
-fn parse_elements(s: &str) -> Result<Vec<String>, String> {
+fn parse_elements(s: &str) -> Result<Elements, String> {
     s.split(',')
         .map(|n| n.trim().to_ascii_lowercase().replace('-', "_"))
         .filter(|n| !n.is_empty())
@@ -29,11 +29,19 @@ fn parse_elements(s: &str) -> Result<Vec<String>, String> {
             if HudShow::NAMES.contains(&n.as_str()) {
                 Ok(n)
             } else {
-                Err(format!("`{n}` is not a HUD element ({})", HudShow::NAMES.join(", ")))
+                Err(format!(
+                    "`{n}` is not a HUD element ({})",
+                    HudShow::NAMES.join(", ")
+                ))
             }
         })
-        .collect()
+        .collect::<Result<_, _>>()
+        .map(Elements)
 }
+
+/// A list of HUD element names.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Elements(pub Vec<String>);
 
 /// `right,jump`: actions the input display draws as held (screenshot checks).
 fn parse_actions(s: &str) -> Result<u32, String> {
@@ -61,10 +69,10 @@ pub struct HudArgs {
     /// Show these HUD elements (comma-separated): leaderboard, timer, deaths, stage,
     /// stage_deaths, input, mods.
     #[arg(long, value_name = "ELEMENTS", value_parser = parse_elements)]
-    pub hud_show: Option<Vec<String>>,
+    pub hud_show: Option<Elements>,
     /// Hide these HUD elements (the names of `--hud-show`).
     #[arg(long, value_name = "ELEMENTS", value_parser = parse_elements)]
-    pub hud_hide: Option<Vec<String>>,
+    pub hud_hide: Option<Elements>,
     /// Screenshot checks: draw these actions as held in the input display (`right,jump`).
     #[arg(long, hide = true, value_name = "ACTIONS", value_parser = parse_actions)]
     pub hud_preview_held: Option<u32>,
@@ -87,7 +95,7 @@ pub fn configure(args: &HudArgs) {
         }
         s.integer_scale |= args.integer_scale;
         for (names, on) in [(&args.hud_show, true), (&args.hud_hide, false)] {
-            for name in names.iter().flatten() {
+            for name in names.iter().flat_map(|e| &e.0) {
                 if let Some(slot) = s.hud_show.get_mut(name) {
                     *slot = on;
                 }
@@ -261,6 +269,7 @@ type ColumnParts = (
 
 /// Places the columns and the game's shadow from `HudLayout`, and rebuilds a panel when its
 /// density or width changed.
+#[allow(clippy::too_many_arguments, reason = "one pass over the columns")]
 fn place(
     mut commands: Commands,
     hud: Res<HudOptions>,
@@ -385,11 +394,14 @@ mod tests {
     fn element_and_action_lists_parse() {
         assert_eq!(
             parse_elements("input, Stage-Deaths"),
-            Ok(vec!["input".to_string(), "stage_deaths".to_string()])
+            Ok(Elements(vec!["input".to_string(), "stage_deaths".to_string()]))
         );
         assert!(parse_elements("splits").is_err());
         use iwbtg_sim::input::Action;
-        assert_eq!(parse_actions("right,jump"), Ok(Action::Right.bit() | Action::Jump.bit()));
+        assert_eq!(
+            parse_actions("right,jump"),
+            Ok(Action::Right.bit() | Action::Jump.bit())
+        );
         assert!(parse_actions("fly").is_err());
     }
 
