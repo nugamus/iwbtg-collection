@@ -6,7 +6,8 @@
                                             "Findings:" line (issues filed, or "none").
   python -I .claude/hooks/issues.py --test  Self-test of the stop check and the settings drift check.
 
-start also warns when the workspace-root .claude/settings.json differs from client/workspace/settings.json.
+start also warns when the workspace-root .claude/settings.json differs from client/workspace/settings.json,
+and reports the client repo's CI on main, with a loud first line when main is red (#595).
 
 The same file lives in all three repos; edit it in the client repo and copy it over.
 """
@@ -34,6 +35,43 @@ fragment R on Repository {
   prs: pullRequests(first: 30, states: OPEN) { nodes { number title headRefName isDraft mergeable
     autoMergeRequest { enabledAt } } }
 }"""
+
+# CI on the client repo's main (the other repos have no CI): the newest commits and their check runs.
+MAIN_CI = """main: repository(owner: "%s", name: "%s") { ref(qualifiedName: "refs/heads/main") { target {
+  ... on Commit { history(first: 10) { nodes { oid messageHeadline statusCheckRollup { contexts(first: 50) { nodes {
+    __typename ... on CheckRun { name conclusion detailsUrl } ... on StatusContext { context state targetUrl } } } } } } } } } }"""
+RED = {"FAILURE", "ERROR", "TIMED_OUT", "STARTUP_FAILURE", "ACTION_REQUIRED"}
+GREEN = {"SUCCESS", "SKIPPED", "NEUTRAL"}
+
+
+def main_ci(main):
+    """(top warning, status line) for CI on main. Walks main's newest commits to the first with a verdict:
+    a failed check makes it red; all checks passed makes it green; a commit whose run was cancelled (a newer
+    push supersedes it: `cancel-in-progress`) or is still running gives none. Bad data: ("", note), never raises."""
+    try:
+        running = None
+        for c in main["ref"]["target"]["history"]["nodes"]:
+            checks = ((c.get("statusCheckRollup") or {}).get("contexts") or {}).get("nodes") or []
+            if not checks:
+                continue
+            what = f"{c['oid'][:7]} \"{c['messageHeadline']}\""
+            states = [k.get("conclusion") or k.get("state") for k in checks]
+            failed = [k for k, st in zip(checks, states) if st in RED]
+            if failed:
+                url = re.sub(r"/job/\d+$", "", failed[0].get("detailsUrl") or failed[0].get("targetUrl") or "")
+                names = ", ".join(k.get("name") or k.get("context") or "?" for k in failed)
+                newer = f" A newer commit is still running: {running}." if running else ""
+                return (f"MAIN IS RED: CI failed on {what} (failed: {names}): {url}\n"
+                        "Fix main first: find or file the fix issue before merging more PRs; every branch that "
+                        f"merges main inherits the break.{newer} Check: `gh run list --branch main --limit 3`.\n\n",
+                        f"Main CI: RED on {what} (failed: {names}) {url}" + (f"; {running} still running" if running else ""))
+            if all(st in GREEN for st in states):
+                return "", f"Main CI: green on {what}" + (f"; {running} still running" if running else "")
+            if running is None and any(st in (None, "PENDING", "EXPECTED") for st in states):
+                running = what
+        return "", "Main CI: no finished run in main's last 10 commits" + (f"; {running} running" if running else "")
+    except Exception as e:  # never break the hook over CI data
+        return "", f"Main CI: unknown ({type(e).__name__})"
 
 
 def ms_key(title):
@@ -81,10 +119,12 @@ def worktrees(root=WORKSPACE):
 
 def start():
     warn = settings_drift()
-    q ="query {" + " ".join(f'{k}: repository(owner: "{OWNER}", name: "{v}") {{ ...R }}' for k, v in REPOS.items()) + "}" + FRAGMENT
+    q = ("query {" + " ".join(f'{k}: repository(owner: "{OWNER}", name: "{v}") {{ ...R }}' for k, v in REPOS.items())
+         + " " + MAIN_CI % (OWNER, REPOS["c"]) + "}" + FRAGMENT)
     try:
         r = subprocess.run(["gh", "api", "graphql", "-f", f"query={q}"], capture_output=True, text=True, encoding="utf-8", timeout=30)
         data = json.loads(r.stdout)["data"]
+        red, ci_line = main_ci(data.pop("main", None))
     except Exception as e:  # offline or gh missing: say so, never block the session
         return emit(warn + f"Issue harness: could not reach GitHub ({type(e).__name__}). Run `gh auth status`; work from the issues once it is back.")
 
@@ -113,7 +153,7 @@ def start():
                                      ("auto-merge on", p["autoMergeRequest"])) if on]
             prs.append(f"{name}#{p['number']} {p['title']} ({p['headRefName']}" + "".join(f"; {n}" for n in notes) + ")")
 
-    lines = ["# Project status (from GitHub issues)", "", "Milestones (closed/total across repos):"]
+    lines = ["# Project status (from GitHub issues)", "", ci_line, "", "Milestones (closed/total across repos):"]
     for t in sorted(ms, key=lambda t: (ms_key(t), t)):
         o, c = ms[t]
         lines.append(f"- {t}: {c}/{o + c} ({100 * c // max(o + c, 1)}%)")
@@ -131,7 +171,7 @@ def start():
     lines += ["", "Next unblocked agent-ready issues (unclaimed):"] + [f"- {r[3]}" for r in sorted(ready)[:10]]
     lines += ["", f"{waiting} needs-user issue(s) still wait for the user.",
               "Rules: CLAUDE.md, Issues. Unless the user names other work, offer to start the first issue above."]
-    emit(warn + "\n".join(lines))
+    emit(red + warn + "\n".join(lines))
 
 
 def emit(text):
@@ -216,6 +256,24 @@ def test():
         assert settings_drift(root) == ""  # same JSON, different formatting
         (root / ".claude" / "settings.json").write_text('{"a": 2}')
         assert settings_drift(root).startswith("WARNING")
+    # Main CI (#595): a failed check is red and loud; cancelled or running commits defer to older ones.
+    def commit(oid, *checks):
+        return {"oid": oid * 40, "messageHeadline": f"PR {oid}", "statusCheckRollup": {"contexts": {"nodes": list(checks)}}}
+
+    def run(name, conclusion):
+        return {"__typename": "CheckRun", "name": name, "conclusion": conclusion,
+                "detailsUrl": "https://github.com/o/r/actions/runs/7/job/1"}
+
+    def ci(*commits):
+        return main_ci({"ref": {"target": {"history": {"nodes": list(commits)}}}})
+    red, line = ci(commit("b", run("ci-ok", None)), commit("a", run("changes", "SUCCESS"), run("ubuntu-latest", "FAILURE")))
+    assert red.startswith('MAIN IS RED: CI failed on aaaaaaa "PR a" (failed: ubuntu-latest): https://github.com/o/r/actions/runs/7\n'), red
+    assert "bbbbbbb" in red and line.startswith("Main CI: RED on aaaaaaa"), (red, line)
+    assert ci(commit("b", run("x", "CANCELLED")), commit("a", run("x", "SUCCESS"), run("y", "SKIPPED"))) == ("", 'Main CI: green on aaaaaaa "PR a"')
+    assert ci(commit("a", run("x", "CANCELLED")))[1].startswith("Main CI: no finished run")
+    assert ci({"oid": "c" * 40, "messageHeadline": "no checks", "statusCheckRollup": None}, commit("a", run("x", "FAILURE")))[0].startswith("MAIN IS RED")
+    assert main_ci(None) == ("", "Main CI: unknown (TypeError)")  # query field missing
+    assert ci({"oid": 5, "messageHeadline": "x", "statusCheckRollup": {"contexts": {"nodes": [run("x", "SUCCESS")]}}}) == ("", "Main CI: unknown (TypeError)")
     print("ok")
 
 

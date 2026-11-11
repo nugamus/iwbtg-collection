@@ -125,7 +125,7 @@ python -I .claude/hooks/issues.py start
 python -I ../research/.claude/hooks/guard_archive.py --test
 ```
 
-Expected: the build ends with `Finished`. `issues.py start` prints JSON with milestone progress and the next issues. The guard prints `guard_archive self-test passed`.
+Expected: the build ends with `Finished`. `issues.py start` prints JSON with main's CI status (a first line `MAIN IS RED` when it failed), milestone progress and the next issues. The guard prints `guard_archive self-test passed`.
 
 ## CI
 
