@@ -21,18 +21,91 @@
       ],
       "description": "A number, or { bits = \"<16 hex digits of an IEEE double>\" } for a constant that must match bit for bit."
     },
-    "TileLayerShape": {
+    "SrcShape": {
+      "anyOf": [
+        {
+          "description": "`[x, y]`: a tile of the tileset's `tile_size`.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        {
+          "description": "`[x, y, w, h]`: a tile of its own size.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        }
+      ],
+      "description": "The two forms of a tile's `src`."
+    },
+    "TileFile": {
       "additionalProperties": false,
-      "description": "One tile layer.",
+      "description": "One tile or a run of identical tiles, as written.",
+      "properties": {
+        "run": {
+          "description": "`[columns, rows]`: a grid of the same tile; default `[1, 1]`.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "src": {
+          "$ref": "#/$defs/SrcShape",
+          "description": "Source in the tileset image: `[x, y]` for a tile of the tileset's `tile_size`, or\n`[x, y, w, h]` for a tile of its own size."
+        },
+        "step": {
+          "description": "Spacing of a `run`; default the tile's size.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "x": {
+          "$ref": "#/$defs/Number",
+          "description": "Position in the room (top-left)."
+        },
+        "y": {
+          "$ref": "#/$defs/Number",
+          "description": "Position in the room (top-left)."
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "src"
+      ],
+      "type": "object"
+    },
+    "TileLayerFile": {
+      "additionalProperties": false,
+      "description": "One tile layer, as written.",
       "properties": {
         "depth": {
           "$ref": "#/$defs/Number",
-          "description": "GM tile layer depth."
+          "description": "GM tile layer depth: a larger depth is farther back, in the same order as instances."
         },
         "tiles": {
           "description": "The tiles of the layer.",
           "items": {
-            "$ref": "#/$defs/TileShape"
+            "$ref": "#/$defs/TileFile"
           },
           "type": "array"
         },
@@ -47,59 +120,16 @@
         "tiles"
       ],
       "type": "object"
-    },
-    "TileShape": {
-      "additionalProperties": false,
-      "description": "One tile or a run of identical tiles.",
-      "properties": {
-        "run": {
-          "description": "`[columns, rows]`: a grid of the same tile.",
-          "items": {
-            "format": "uint32",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "maxItems": 2,
-          "minItems": 2,
-          "type": [
-            "array",
-            "null"
-          ]
-        },
-        "src": {
-          "description": "Source position in the tileset image.",
-          "items": {
-            "$ref": "#/$defs/Number"
-          },
-          "maxItems": 2,
-          "minItems": 2,
-          "type": "array"
-        },
-        "x": {
-          "$ref": "#/$defs/Number",
-          "description": "Position in the room."
-        },
-        "y": {
-          "$ref": "#/$defs/Number",
-          "description": "Position in the room."
-        }
-      },
-      "required": [
-        "x",
-        "y",
-        "src"
-      ],
-      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "A tile file (`rooms/<room_id>.tiles.toml`). Decorative only: tiles never affect the sim.",
+  "description": "A tile file `rooms/<room_id>.tiles.toml`, as written. Decorative only: tiles never affect\nthe sim.",
   "properties": {
     "layers": {
       "description": "Layers, back to front by their `depth`.",
       "items": {
-        "$ref": "#/$defs/TileLayerShape"
+        "$ref": "#/$defs/TileLayerFile"
       },
       "type": "array"
     }

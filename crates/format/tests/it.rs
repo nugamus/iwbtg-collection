@@ -8,6 +8,8 @@
 
 #[path = "fmt_files.rs"]
 mod fmt_files;
+#[path = "room_art.rs"]
+mod room_art;
 #[path = "wp5a_physics.rs"]
 mod wp5a_physics;
 #[path = "wp5a_restart_steps.rs"]
