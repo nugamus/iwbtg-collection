@@ -822,9 +822,12 @@ mod tests {
         assert!(verify(&replay));
         assert_eq!(
             pause_lines(&replay.trailer, s.ranked_ticks),
-            format!("pauses: 5+100 40+25
+            format!(
+                "pauses: 5+100 40+25
 time: {}
-", s.ranked_ticks + 125)
+",
+                s.ranked_ticks + 125
+            )
         );
         let mut tampered = replay.clone();
         tampered.trailer.final_hash[0] ^= 1;

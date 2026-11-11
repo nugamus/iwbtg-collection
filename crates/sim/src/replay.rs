@@ -961,9 +961,16 @@ mod tests {
         assert_eq!(decoded, r);
         assert_eq!(decoded.trailer.paused_ticks(), 47);
         assert_eq!(decoded.trailer.ranked_time(), 8 + 47);
-        assert_eq!(small().trailer.ranked_time(), 8, "no pauses: the sim's ranked time");
+        assert_eq!(
+            small().trailer.ranked_time(),
+            8,
+            "no pauses: the sim's ranked time"
+        );
         let text = decoded.dump();
-        assert!(text.contains("ranked_ticks 8\npause tick 3 for 40\npause tick 9 for 7\n"), "{text}");
+        assert!(
+            text.contains("ranked_ticks 8\npause tick 3 for 40\npause tick 9 for 7\n"),
+            "{text}"
+        );
     }
 
     #[test]
