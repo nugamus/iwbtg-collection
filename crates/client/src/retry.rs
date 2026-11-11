@@ -97,6 +97,7 @@ fn apply(world: &mut World) {
             // The new sim's room start plays from its first step's output (#466).
             crate::audio::reset(world);
             crate::mods::reset(world);
+            crate::stats::reset(world);
             let why = match why {
                 Some(Why::Death) => "auto-retry",
                 _ => "quick-retry",

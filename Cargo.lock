@@ -3422,6 +3422,7 @@ dependencies = [
  "iwbtg-sim",
  "png",
  "postcard",
+ "serde",
  "svgtypes",
  "thiserror 2.0.21",
  "tiny-skia 0.12.0",
