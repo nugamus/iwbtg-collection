@@ -650,6 +650,8 @@ fn enter<H: RoomHost + ?Sized>(
                 xscale: p.xscale,
                 yscale: p.yscale,
                 angle: p.angle,
+                visible: p.visible,
+                depth: p.depth,
                 name: p.name,
                 group: p.group,
                 run_create: true,

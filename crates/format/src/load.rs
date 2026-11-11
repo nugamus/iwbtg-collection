@@ -1733,6 +1733,8 @@ impl<'a> Loader<'a> {
                 xscale: Real::new(inst.xscale),
                 yscale: Real::new(inst.yscale),
                 angle: Real::new(inst.angle),
+                visible: inst.visible,
+                depth: inst.depth.map(Real::new),
                 params: resolved.clone(),
                 name,
                 group,

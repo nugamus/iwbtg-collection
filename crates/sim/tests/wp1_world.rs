@@ -91,6 +91,25 @@ fn wp1_spawn_runs_create_inside_the_call_and_applies_the_kind() {
         "instance params override"
     );
     assert_eq!(inst.rank, 9, "a room-file rank wins");
+    assert_eq!(
+        (inst.visible, inst.depth),
+        (false, Real::new(-5.0)),
+        "without room-file keys the kind's visible and depth stay"
+    );
+
+    let mut c = fx.ctx();
+    let init = SpawnInit {
+        visible: Some(true),
+        depth: Some(Real::new(7.0)),
+        ..SpawnInit::default()
+    };
+    let id = c.spawn(thing, Real::ZERO, Real::ZERO, init).unwrap();
+    let inst = fx.w.get(id).unwrap();
+    assert_eq!(
+        (inst.visible, inst.depth),
+        (true, Real::new(7.0)),
+        "room-file visible and depth override the kind's (#632)"
+    );
     let iwbtg_sim::world::KindState::Probe(state) = &inst.state else {
         panic!("probe state")
     };
