@@ -347,6 +347,121 @@ mod tests {
         assert_eq!(again.session, Session::default(), "a session starts at zero");
     }
 
+    /// Plays `demo-clear.pkg` once with scripted input: in each room `waits[i]` idle ticks, then
+    /// right held and one jump (over the block in the first room, over the spike in the goal
+    /// room). Returns the clear's record and its run.
+    fn play_demo_clear(world: &mut World, waits: [u32; 2]) -> (Recorded, Run) {
+        let (right, jump) = (Action::Right.bit(), Action::Jump.bit());
+        let mut rooms = Vec::new();
+        let (mut in_room, mut jumped, mut jump_left) = (0u32, false, 0u32);
+        for t in 0..2000u32 {
+            let game = world.non_send::<Game>();
+            let w = game.sim.world();
+            if w.timing.ended {
+                let stats = world.resource::<Stats>();
+                let rec = stats.last.clone().expect("a clear is recorded");
+                let cur = stats.current.as_ref().unwrap();
+                let board = &stats.book.map(&cur.map).unwrap().boards[&cur.board];
+                let run = board.runs[rec.place.unwrap() - 1].clone();
+                return (rec, run);
+            }
+            if rooms.last() != Some(&w.room) {
+                rooms.push(w.room);
+                (in_room, jumped) = (0, false);
+            }
+            let kid_x = w
+                .kid(&game.sim.rules().tick)
+                .and_then(|id| w.get(id))
+                .map(|k| k.m.x().get());
+            let wait = waits[rooms.len().min(2) - 1];
+            let mut frame = InputFrame::default();
+            if in_room >= wait {
+                frame.held |= right;
+                if in_room == wait {
+                    frame.pressed |= right;
+                }
+                // The block's left edge is at x 320 in the first room, the spike's at 352 in
+                // the goal room: jump a little before either.
+                if !jumped && kid_x.is_some_and(|x| x >= 300.0) {
+                    jumped = true;
+                    jump_left = 20;
+                    frame.pressed |= jump;
+                }
+            } else if in_room > 0 {
+                frame.released |= right;
+            }
+            if jump_left > 0 {
+                frame.held |= jump;
+                jump_left -= 1;
+                if jump_left == 0 {
+                    frame.released |= jump;
+                }
+            }
+            in_room += 1;
+            world.non_send_mut::<Game>().sim.step(frame);
+            world.run_system_once(watch).unwrap();
+            assert_eq!(
+                world.resource::<Stats>().session.deaths,
+                0,
+                "the scripted kid died at tick {t}"
+            );
+        }
+        panic!("no clear in 2000 ticks");
+    }
+
+    /// The clear demo (#589): two scripted clears give two clear lines, the first a first
+    /// clear, the second with the PB comparison and sum of best. A run has two segments: start
+    /// to the goal room (the stage split), then to the clear. The first run idles 10 ticks in
+    /// the goal room, the second 20 in the first room: the second is 0.20 s slower but golds
+    /// the goal room, so the sum of best drops below the PB.
+    #[test]
+    fn the_clear_demo_clears_twice_with_a_split() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-clear.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        assert_eq!(pkg.def.timing.stages.len(), 1);
+        let store = temp("clear");
+        let mut world = crate::view::test_world(&pkg);
+        world.insert_resource(Time::<Fixed>::from_hz(50.0));
+        world.insert_resource(Stats::open(Some(store.clone()), ModSet::NONE));
+        let mut runs = Vec::new();
+        for waits in [[0, 10], [20, 0]] {
+            let (rec, run) = play_demo_clear(&mut world, waits);
+            assert_eq!(
+                run.splits.len(),
+                2,
+                "one stage split and the end: {:?}",
+                run.splits
+            );
+            assert!(run.splits[0] < run.splits[1]);
+            runs.push((clear_line(run.ticks, run.deaths, 50, &rec), run));
+            crate::view::restart_run(&mut world).unwrap();
+            reset(&mut world);
+        }
+        let (first, second) = (&runs[0], &runs[1]);
+        assert_eq!(second.1.ticks, first.1.ticks + 10);
+        assert!(
+            first
+                .0
+                .contains("first clear, #1 of your runs, 2 gold segment(s)"),
+            "{}",
+            first.0
+        );
+        assert!(
+            second
+                .0
+                .contains("(+0:00.20), #2 of your runs, 1 gold segment(s), sum of best"),
+            "{}",
+            second.0
+        );
+        let id = map_key(&pkg.def.id, "main");
+        let again = Stats::open(Some(store), ModSet::NONE);
+        assert_eq!(
+            again.book.map(&id).unwrap().clears,
+            2,
+            "both clears are in the file"
+        );
+    }
+
     #[test]
     fn an_unreadable_file_is_kept_aside_not_overwritten() {
         let store = temp("broken");
