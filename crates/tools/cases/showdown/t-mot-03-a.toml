@@ -1,0 +1,23 @@
+# Imported from research trace showdown/t-mot-03-a by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room rStage010 --at 2 --from 2
+source = "showdown/t-mot-03-a"
+kind = "diff"
+open = "needs the converter showdown physics keys and slip block (research#114); passes bit for bit on a package with them applied by hand"
+start = { room = "stage010", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "model"
+seed = 0
+setup = []
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+
+[unprobed]
+"bbox_bottom" = "no probe field for `bbox_bottom` (OPEN)"
+"bbox_top" = "no probe field for `bbox_top` (OPEN)"
+
+[rooms]
+"stage010" = "rStage010"
