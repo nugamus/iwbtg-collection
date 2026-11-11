@@ -151,6 +151,11 @@ impl Bindings {
         self.pad[input.index()]
     }
 
+    /// Some key or controller input stands for `action`.
+    pub fn binds(&self, action: Action) -> bool {
+        self.keys.values().any(|a| *a == action) || self.pad.contains(&Some(action))
+    }
+
     /// The defaults with the file's changes applied. Each action the file names loses all its
     /// default keys (or all its default controller inputs) and gets the listed ones.
     pub fn from_config(config: &Config) -> Result<Bindings, String> {

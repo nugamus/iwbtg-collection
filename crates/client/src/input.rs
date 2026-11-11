@@ -50,6 +50,16 @@ impl Collector {
         format!("input: {}  pad: {}", actions.join(" "), pads.join(" "))
     }
 
+    /// The frame the last tick took (the HUD's input display).
+    pub fn last(&self) -> InputFrame {
+        self.last
+    }
+
+    /// The player's bindings.
+    pub fn bindings(&self) -> &Bindings {
+        &self.bindings
+    }
+
     /// A key went down.
     pub fn press(&mut self, key: u8) {
         self.down[usize::from(key)] = true;
