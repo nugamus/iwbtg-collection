@@ -91,6 +91,67 @@
         }
       ]
     },
+    "BackgroundFile": {
+      "additionalProperties": false,
+      "description": "One entry of a room's `backgrounds` list, as written.",
+      "properties": {
+        "foreground": {
+          "default": false,
+          "description": "Drawn in front of instances and tiles (GM \"foreground image\"); default false.",
+          "type": "boolean"
+        },
+        "image": {
+          "description": "Image id (`backgrounds/<id>.png`).",
+          "type": "string"
+        },
+        "offset": {
+          "description": "Where the image's top-left corner sits in the room, in pixels; default `[0, 0]`.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "speed": {
+          "description": "Scroll speed in pixels per tick, horizontal and vertical; default `[0, 0]`.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "stretch": {
+          "default": false,
+          "description": "Stretch the image to the room's size; default false.",
+          "type": "boolean"
+        },
+        "tile": {
+          "default": null,
+          "description": "Repeat the image horizontally and vertically; default `[true, true]`.",
+          "items": {
+            "type": "boolean"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "image"
+      ],
+      "type": "object"
+    },
     "InstanceShape": {
       "additionalProperties": true,
       "description": "One entry of `instances` in a room file. Keys other than the common ones are params of the\nkind, checked against the kind's own param list at load.",
@@ -313,6 +374,7 @@
   "properties": {
     "background": {
       "default": null,
+      "description": "Short for one background layer with every default: `backgrounds = [{ image = \"<id>\" }]`.",
       "type": [
         "string",
         "null"
@@ -320,14 +382,17 @@
     },
     "background_color": {
       "default": null,
+      "description": "`#rrggbb`: fills the room behind every background; absent, nothing does.",
       "type": [
         "string",
         "null"
       ]
     },
     "backgrounds": {
-      "default": [],
-      "items": true,
+      "description": "Up to 8 background layers in drawing order.",
+      "items": {
+        "$ref": "#/$defs/BackgroundFile"
+      },
       "type": "array"
     },
     "file_speed": {

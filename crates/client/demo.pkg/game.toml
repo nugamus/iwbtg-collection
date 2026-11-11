@@ -24,6 +24,9 @@ mask = "kid_mask"
 [defaults.block]
 sprite = "block"
 
+[defaults.kid_bullet]
+sprite = "bullet"
+
 [defaults.spike]
 sprite = "spike_up"
 

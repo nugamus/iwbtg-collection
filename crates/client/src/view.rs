@@ -15,7 +15,8 @@ use iwbtg_sim::world::{InstId, SimStatus};
 
 mod hud;
 
-use crate::input::{Collector, key_code};
+use crate::bindings::PadInput;
+use crate::input::{Collector, StickGate, key_code};
 use crate::package::{Package, SpriteImage, sprite_images};
 
 /// The running game. Not `Send` (the script host shares state by `Rc`), so it is a non-send
@@ -279,7 +280,6 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
         def: Arc::clone(&def),
         options,
     })
-    .insert_resource(Collector::new())
     .insert_resource(Cap(cap))
     .insert_resource(Previous {
         on: interpolate,
@@ -298,7 +298,7 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
     .add_systems(Startup, (setup, hud::setup))
     .add_systems(
         RunFixedMainLoop,
-        collect_input.in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
+        (collect_input, collect_pad).in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
     )
     .add_systems(FixedUpdate, (tick, follow_room_speed).chain().in_set(SimTick))
     .add_systems(
@@ -346,6 +346,11 @@ fn setup(
     commands.spawn((
         Camera2d,
         GameCamera,
+        // The backdrop's own camera draws first; this one draws the game over it.
+        Camera {
+            clear_color: ClearColorConfig::None,
+            ..default()
+        },
         Projection::from(OrthographicProjection {
             scaling_mode: ScalingMode::AutoMin {
                 min_width: room.0.x,
@@ -445,6 +450,63 @@ fn collect_input(keys: Res<ButtonInput<KeyCode>>, mut collector: ResMut<Collecto
     }
 }
 
+/// Feeds the controller's state to the collector. Only the active controller counts: the one that
+/// last had a button pressed. A DualSense over Bluetooth can show up as a second device (motion
+/// sensors) whose axes never rest at zero, and that must not walk the kid right. The stick goes
+/// through `StickGate`, so an axis that never rests at the centre is ignored.
+fn collect_pad(
+    pads: Query<(Entity, &Gamepad)>,
+    mut collector: ResMut<Collector>,
+    mut active: Local<Option<Entity>>,
+    mut gates: Local<[StickGate; 4]>,
+) {
+    use bevy::input::gamepad::{GamepadAxis as A, GamepadButton as B};
+    if let Some((entity, _)) = pads.iter().find(|(_, g)| g.get_pressed().next().is_some())
+        && *active != Some(entity)
+    {
+        *active = Some(entity);
+        *gates = Default::default();
+    }
+    let pad = active.and_then(|e| pads.get(e).ok()).map(|(_, g)| g);
+    let Some(g) = pad else {
+        for input in PadInput::ALL {
+            collector.set_pad(input, false);
+        }
+        return;
+    };
+    let axis = |a| g.get(a).unwrap_or(0.0);
+    let stick = [
+        gates[0].update(axis(A::LeftStickY)),
+        gates[1].update(-axis(A::LeftStickY)),
+        gates[2].update(-axis(A::LeftStickX)),
+        gates[3].update(axis(A::LeftStickX)),
+    ];
+    for input in PadInput::ALL {
+        let button = |b| g.pressed(b);
+        let down = match input {
+            PadInput::South => button(B::South),
+            PadInput::East => button(B::East),
+            PadInput::West => button(B::West),
+            PadInput::North => button(B::North),
+            PadInput::LeftBumper => button(B::LeftTrigger),
+            PadInput::RightBumper => button(B::RightTrigger),
+            PadInput::LeftTrigger => button(B::LeftTrigger2),
+            PadInput::RightTrigger => button(B::RightTrigger2),
+            PadInput::Select => button(B::Select),
+            PadInput::Start => button(B::Start),
+            PadInput::DPadUp => button(B::DPadUp),
+            PadInput::DPadDown => button(B::DPadDown),
+            PadInput::DPadLeft => button(B::DPadLeft),
+            PadInput::DPadRight => button(B::DPadRight),
+            PadInput::StickUp => stick[0],
+            PadInput::StickDown => stick[1],
+            PadInput::StickLeft => stick[2],
+            PadInput::StickRight => stick[3],
+        };
+        collector.set_pad(input, down);
+    }
+}
+
 /// Starts the run again from where it started (quick-retry and auto-retry, `retry.rs`): a new
 /// sim with the same options, every drawn sprite gone, no pending input edges, no sign. The new sim's
 /// room-start output stays in `output` for its first step (#466). The fixed clock keeps its rate until the next
@@ -488,7 +550,7 @@ pub(crate) fn test_world(pkg: &Package) -> World {
     });
     world.init_resource::<Drawn>();
     world.init_resource::<Previous>();
-    world.insert_resource(Collector::new());
+    world.insert_resource(Collector::new(crate::bindings::Bindings::default()));
     world.init_resource::<hud::SignText>();
     world
 }
@@ -559,6 +621,7 @@ fn overlay(
     keys: Res<ButtonInput<KeyCode>>,
     fixed: Res<Time<Fixed>>,
     mut stats: ResMut<Stats>,
+    collector: Res<Collector>,
     mut text: Single<(&mut Text2d, &mut Visibility), With<Overlay>>,
 ) {
     stats.frames += 1;
@@ -603,11 +666,13 @@ fn overlay(
     label.0 = format!(
         "ticks/s {:.1} (game {})  fps {:.0}  tick {}{status}  [F3 hides]
 room {room}
-{kid}",
+{kid}
+{input}",
         stats.ticks_per_second,
         fixed.timestep().as_secs_f64().recip().round(),
         stats.frames_per_second,
         world.tick,
+        input = collector.describe(),
     );
 }
 
