@@ -9,11 +9,13 @@ mod wp6b {
         RoomRole,
     };
     use iwbtg_sim::events::EventKind;
+    use iwbtg_sim::input::InputFrame;
     use iwbtg_sim::num::Real;
     use iwbtg_sim::rng::Rng;
     use iwbtg_sim::rules::RunnerRules;
     use iwbtg_sim::script::ScriptRuntime;
     use iwbtg_sim::sound::DllMode;
+    use iwbtg_sim::tick;
     use iwbtg_sim::world::{Ctx, Flow, InstId, SpawnInit, World};
 
     fn r(v: f64) -> Real {
@@ -172,6 +174,61 @@ mod wp6b {
         let mut k = KindDef::new("water", Builtin::Water);
         k.params = p;
         game(vec![k])
+    }
+
+    /// showdown hidariSuityuu02 (kid/A3.md, Spinning water): Create's `image_angle = 1` is the
+    /// instance angle, and each tick's Step adds `angle_step` with no wrap. The kind has no sprite
+    /// here: a sprite turned off the quarter turns is refused when its mask is placed (C3).
+    #[test]
+    fn water_angle_step_turns_the_sprite_every_step() {
+        for (step, sign) in [(1.0, 1.0), (-1.0, -1.0)] {
+            let mut g = water_game(params(&[("angle_step", real(step))]));
+            let k = kind_id(&g, "water");
+            g.def.kinds[k.0 as usize].sprite = None;
+            assert!(g.def.kinds[k.0 as usize].events.step);
+            let mut w = World::new(g.room, 1);
+            let id = with(&g, &mut w, |c| {
+                let init = SpawnInit {
+                    angle: r(1.0),
+                    ..SpawnInit::default()
+                };
+                c.spawn(k, r(100.0), r(100.0), init).unwrap()
+            });
+            for n in 1..=400 {
+                with(&g, &mut w, |c| tick::run_tick(c, InputFrame::EMPTY).unwrap());
+                assert_eq!(
+                    w.get(id).unwrap().img.angle(),
+                    r(1.0 + sign * f64::from(n)),
+                    "after {n} steps"
+                );
+            }
+        }
+        let g = water_game(Params::default());
+        assert!(
+            !g.def.kinds[kind_id(&g, "water").0 as usize].events.step,
+            "no Step without a turn"
+        );
+    }
+
+    /// showdown mizu01 Outside Room (kid/A3.md): a run-time copy with hspeed 2 is destroyed once its
+    /// box is completely outside the room (`bbox_left > room_width`), not before.
+    #[test]
+    fn water_destroy_outside_room_removes_drifting_water() {
+        let g = water_game(params(&[("destroy_outside_room", yes())]));
+        let k = kind_id(&g, "water");
+        assert!(g.def.kinds[k.0 as usize].events.outside_room);
+        let mut w = World::new(g.room, 1);
+        let id = spawn(&g, &mut w, k, 790.0, 100.0);
+        w.get_mut(id).unwrap().m.set_hspeed(r(2.0)).unwrap();
+        // The 32 x 32 mask has its origin at the top left, so bbox_left is x; the room is 800 wide.
+        for n in 1..=5 {
+            with(&g, &mut w, |c| tick::run_tick(c, InputFrame::EMPTY).unwrap());
+            assert!(w.exists(id), "bbox_left {} is not past 800", 790 + 2 * n);
+        }
+        with(&g, &mut w, |c| tick::run_tick(c, InputFrame::EMPTY).unwrap());
+        assert!(!w.exists(id), "bbox_left 802 is past 800");
+        let g = water_game(Params::default());
+        assert!(!g.def.kinds[kind_id(&g, "water").0 as usize].events.outside_room);
     }
 
     #[test]
