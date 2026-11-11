@@ -119,6 +119,11 @@ fn the_slope_examples_load_with_their_models() {
     );
     let p = presets::apply(&mut draft(PORONKUSEMA));
     assert_eq!(p.slope.downhill, Downhill::Por);
+    // playerJump: the single jump also counts a nanameblock 1 px below (kid/A1.md poronkusema).
+    assert_eq!(
+        p.jump.ground_classes,
+        ClassMask(ClassMask::BLOCK.0 | ClassMask::SLOPE.0)
+    );
     assert!(
         p.events
             .collisions

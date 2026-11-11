@@ -10,8 +10,8 @@ mod wp4a {
     use iwbtg_sim::collide::Target;
     use iwbtg_sim::def::testing::GameDefBuilder;
     use iwbtg_sim::def::{
-        Builtin, EngineKind, GameDef, KindDef, KindId, ParamValue, Params, RoomAction, RoomDef, RoomId,
-        RoomRole, VarId, ViewDef,
+        Builtin, EngineKind, GameDef, GlobalIndex, KindDef, KindId, ParamValue, Params, RoomAction, RoomDef,
+        RoomId, RoomRole, RoomWhen, VarId, ViewDef,
     };
     use iwbtg_sim::error::SimError;
     use iwbtg_sim::events::EventKind;
@@ -1362,5 +1362,229 @@ mod wp4a {
         let (w, r) = start_in(&o.def, PlayMode::Original, &mut host, at);
         r.unwrap();
         assert_eq!(ids_of(&w, &o.def, "ps").len(), 1);
+    }
+
+    // ---- #629: room creation code rows ----
+
+    /// A room with a kid (when `with_kid`) and two `junk` instances, whose creation code is
+    /// `rows`; sound 0 is `snd`.
+    fn rows_game(with_kid: bool, rows: impl FnOnce(KindId) -> Vec<RoomAction>) -> (GameDef, RoomId, KindId) {
+        use iwbtg_sim::def::{ClassMask, SoundDef, SoundKind};
+        let mut b = GameDefBuilder::new("rows");
+        let mut k = KindDef::new("kid", Builtin::Probe);
+        k.classes = ClassMask::KID;
+        let kid = b.kind(k);
+        // Inert: `destroy` runs the real Destroy dispatch, which the probe host does not stand in for.
+        let junk = b.kind(KindDef::new("junk", Builtin::Inert));
+        let mut r = room("stage", 50);
+        r.on_create = rows(junk);
+        let stage = b.room(r);
+        if with_kid {
+            b.place(stage, kid, 10.0, 20.0).unwrap();
+        }
+        b.place(stage, junk, 0.0, 0.0).unwrap();
+        b.place(stage, junk, 32.0, 0.0).unwrap();
+        let mut def = b.build().unwrap();
+        def.sounds = vec![SoundDef {
+            name: "snd".into(),
+            kind: SoundKind::Normal,
+            length_ticks: 100,
+            volume: Real::ONE,
+            pan: Real::ZERO,
+        }];
+        (def, stage, junk)
+    }
+
+    fn run_rows(def: &GameDef, stage: RoomId, difficulty: u8) -> World {
+        let rules = RunnerRules::default();
+        let mut host = Probe::default();
+        let (w, r) = start(
+            def,
+            &rules,
+            &mut host,
+            StartPoint::Room {
+                room: stage,
+                difficulty,
+            },
+        );
+        r.expect("the start succeeds");
+        w
+    }
+
+    fn when(w: RoomWhen, a: RoomAction) -> RoomAction {
+        RoomAction::When {
+            when: w,
+            action: Box::new(a),
+        }
+    }
+
+    fn below(n: f64) -> RoomWhen {
+        RoomWhen {
+            difficulty_below: Some(Real::new(n)),
+            ..RoomWhen::default()
+        }
+    }
+
+    fn kid_pos(w: &World, def: &GameDef) -> (Real, Real) {
+        let kid = w
+            .instances()
+            .iter()
+            .find(|i| def.kind(i.kind).unwrap().name == "kid")
+            .unwrap();
+        (kid.m.x(), kid.m.y())
+    }
+
+    /// showdown room028: the stage global, then below the threshold move the kid and save.
+    fn showdown_rows(_: KindId) -> Vec<RoomAction> {
+        vec![
+            RoomAction::SetGlobalIndexed {
+                var: "stage".into(),
+                index: GlobalIndex::Savenum,
+                value: Value::Real(Real::new(29.0)),
+            },
+            when(
+                below(3.0),
+                RoomAction::MoveKid {
+                    x: Real::new(241.0),
+                    y: Real::new(503.0),
+                },
+            ),
+            when(below(3.0), RoomAction::SaveGame),
+        ]
+    }
+
+    #[test]
+    fn rows_629_move_the_kid_and_save_below_the_threshold() {
+        let (def, stage, _) = rows_game(true, showdown_rows);
+        let w = run_rows(&def, stage, 2);
+        assert_eq!(kid_pos(&w, &def), (Real::new(241.0), Real::new(503.0)));
+        let save = w.save.clone().expect("saved");
+        assert_eq!(
+            (save.room, save.x, save.y),
+            (stage, Real::new(241.0), Real::new(503.0))
+        );
+        assert_eq!(save.difficulty, 2);
+        // global.stage[global.savenum]: the slot of a fresh world.
+        let name = format!("stage[{}]", w.engine.run.slot);
+        let id = w.var_names[&name];
+        assert_eq!(w.globals.get(&id), Some(&Value::Real(Real::new(29.0))));
+    }
+
+    #[test]
+    fn rows_629_at_or_above_the_threshold_do_nothing() {
+        let (def, stage, _) = rows_game(true, showdown_rows);
+        let w = run_rows(&def, stage, 3);
+        assert_eq!(kid_pos(&w, &def), (Real::new(10.0), Real::new(20.0)));
+        assert_eq!(w.save, None);
+    }
+
+    /// kid/A3.md "Saves", a3-t20-a: with no kid the move does nothing and the save holds 0, 0.
+    #[test]
+    fn rows_629_save_with_no_kid_is_at_zero() {
+        let (def, stage, _) = rows_game(false, showdown_rows);
+        let w = run_rows(&def, stage, 0);
+        let save = w.save.clone().expect("saved");
+        assert_eq!((save.room, save.x, save.y), (stage, Real::ZERO, Real::ZERO));
+        assert_eq!(save.facing, 1);
+        assert!(!save.flipped);
+    }
+
+    #[test]
+    fn rows_629_kid_exists_gates_the_save() {
+        let rows = |_| {
+            vec![when(
+                RoomWhen {
+                    kid_exists: Some(true),
+                    ..RoomWhen::default()
+                },
+                RoomAction::SaveGame,
+            )]
+        };
+        let (def, stage, _) = rows_game(false, rows);
+        assert_eq!(run_rows(&def, stage, 0).save, None);
+        let (def, stage, _) = rows_game(true, rows);
+        assert!(run_rows(&def, stage, 0).save.is_some());
+    }
+
+    #[test]
+    fn rows_629_destroy_then_spawn_when_absent() {
+        let rows = |junk| {
+            let spawn = RoomAction::Spawn {
+                kind: junk,
+                x: Real::new(64.0),
+                y: Real::ZERO,
+                params: Params::default(),
+            };
+            let absent = RoomWhen {
+                kind_absent: Some(junk),
+                ..RoomWhen::default()
+            };
+            vec![
+                // Two junk exist: nothing spawns.
+                when(absent, spawn.clone()),
+                RoomAction::Destroy { kind: junk },
+                when(absent, spawn),
+            ]
+        };
+        let (def, stage, _) = rows_game(true, rows);
+        let w = run_rows(&def, stage, 0);
+        let left: Vec<Real> = w
+            .instances()
+            .iter()
+            .filter(|i| i.alive && def.kind(i.kind).unwrap().name == "junk")
+            .map(|i| i.m.x())
+            .collect();
+        assert_eq!(left, [Real::new(64.0)]);
+    }
+
+    #[test]
+    fn rows_629_sounds() {
+        use iwbtg_sim::def::SoundId;
+        let snd = SoundId(0);
+        let (def, stage, _) = rows_game(true, |_| {
+            vec![
+                RoomAction::PlaySound {
+                    sound: snd,
+                    looping: false,
+                },
+                RoomAction::StopSound { sound: snd },
+                RoomAction::PlaySound {
+                    sound: snd,
+                    looping: true,
+                },
+            ]
+        });
+        let w = run_rows(&def, stage, 0);
+        let copies: Vec<(SoundId, bool)> = w.sound.copies.iter().map(|c| (c.sound, c.looping)).collect();
+        assert_eq!(copies, [(snd, true)]);
+    }
+
+    #[test]
+    fn rows_629_save_death_time_updates_the_counters_only() {
+        let (def, stage, _) = rows_game(true, |_| vec![RoomAction::SaveDeathTime]);
+        let rules = RunnerRules::default();
+        let mut host = Probe::default();
+        let mut w = World::new(def.start_room, 1);
+        w.save = Some(slot(stage));
+        w.engine.run.deaths = 12;
+        w.engine.run.time = 34;
+        with_ctx(&def, &rules, &mut w, |ctx| {
+            start_game_with(
+                ctx,
+                &StartPoint::Room {
+                    room: stage,
+                    difficulty: 0,
+                },
+                &mut host,
+            )
+        })
+        .unwrap();
+        let save = w.save.clone().unwrap();
+        assert_eq!((save.deaths, save.time), (w.engine.run.deaths, w.engine.run.time));
+        assert_eq!(
+            (save.x, save.y),
+            (Real::new(49.0), Real::new(119.0)),
+            "position kept"
+        );
     }
 }

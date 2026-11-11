@@ -2,7 +2,7 @@
 //!
 //! WP0 declares; WP7a owns afterwards.
 
-use super::ids::{GroupId, KindId, NameId, VarId};
+use super::ids::{GroupId, KindId, NameId, SoundId, VarId};
 use super::kind::Params;
 use crate::num::Real;
 use crate::world::Value;
@@ -193,7 +193,75 @@ pub enum RoomAction {
     },
     /// The engine's `loadGame` from room creation code (kaenbyou, eat-the-lemon rLoad; R23).
     LoadGame,
-    /// `instance_destroy()` in room creation code: `SimError::Unsupported` until the spec says
-    /// a no-op (R24, Confirmed).
+    /// `instance_destroy()` in room creation code: destroys nothing and the rest of the code
+    /// runs (R24, Confirmed).
     DestroySelf,
+    /// `global.<var>[index] = value` (#629, showdown `global.stage[global.savenum]`). The element
+    /// is the run-time variable `<var>[<index>]` (`World::var_names`).
+    SetGlobalIndexed {
+        /// The array's global name.
+        var: String,
+        /// Where the index comes from.
+        index: GlobalIndex,
+        /// The element's new value.
+        value: Value,
+    },
+    /// The game's save as its save point runs it (`[save]` position model); with no kid the
+    /// slot holds x 0, y 0 (kid/A3.md "Saves", showdown a3-t20-a; #629).
+    SaveGame,
+    /// The game's death and time save: the slot's counters only (`save::save_counters`).
+    SaveDeathTime,
+    /// `player.x = x; player.y = y`: moves the first kid; nothing with no kid (#629).
+    MoveKid {
+        /// Position.
+        x: Real,
+        /// Position.
+        y: Real,
+    },
+    /// `with (kind) instance_destroy()`: every instance of the kind, in event order (#629).
+    Destroy {
+        /// The kind.
+        kind: KindId,
+    },
+    /// `sound_play` (`looping` false) or `sound_loop` (true).
+    PlaySound {
+        /// The sound.
+        sound: SoundId,
+        /// `sound_loop`.
+        looping: bool,
+    },
+    /// `sound_stop`.
+    StopSound {
+        /// The sound.
+        sound: SoundId,
+    },
+    /// `action` runs only while `when` holds (a row's `when`, #629).
+    When {
+        /// The condition.
+        when: RoomWhen,
+        /// The row.
+        action: Box<RoomAction>,
+    },
+}
+
+/// The index of [`RoomAction::SetGlobalIndexed`].
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum GlobalIndex {
+    /// A whole number.
+    Const(u32),
+    /// `global.savenum`: the save slot (`RunGlobals::slot`).
+    Savenum,
+    /// A package global, read when the row runs; it must hold a whole number from 0.
+    Global(VarId),
+}
+
+/// A room action's condition; every part that is set must hold.
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
+pub struct RoomWhen {
+    /// `global.difficulty < n` (the engine difficulty).
+    pub difficulty_below: Option<Real>,
+    /// A kid exists (`Some(true)`) or none does (`Some(false)`).
+    pub kid_exists: Option<bool>,
+    /// No alive, active instance of the kind exists.
+    pub kind_absent: Option<KindId>,
 }

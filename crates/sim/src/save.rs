@@ -127,6 +127,29 @@ pub fn save_now(
     Ok(())
 }
 
+/// A save with no kid (room creation code `save_game`, #629): the current room at x 0, y 0,
+/// not flipped (by-flag games store `global.reverse`), facing 1, and the run counters, flags
+/// and difficulty as [`save_now`] stores them. Confirmed (recorder) for showdown, whose save
+/// stores no facing or gravity: kid/A3.md "Saves", a3-t20-a f3-4. The facing and flip of other
+/// games' kid-less save are Inferred (no game of the 20 saves without a kid otherwise).
+pub fn save_without_kid(ctx: &mut Ctx) {
+    let flipped = by_flag(ctx) && ctx.w.engine.kid.b.reverse;
+    let run = &ctx.w.engine.run;
+    ctx.w.save = Some(SaveSlot {
+        room: ctx.w.room,
+        x: Real::ZERO,
+        y: Real::ZERO,
+        flipped,
+        facing: 1,
+        difficulty: run.difficulty,
+        deaths: run.deaths,
+        time: run.time,
+        bosses: ctx.w.engine.mech.bosses,
+        items: ctx.w.engine.mech.items,
+        clear: run.clear,
+    });
+}
+
 /// True when the game flips gravity by a flag (`[flip] model = "yflag"`, family B): its save
 /// stores `global.reverse` in [`SaveSlot::flipped`].
 fn by_flag(ctx: &Ctx) -> bool {
