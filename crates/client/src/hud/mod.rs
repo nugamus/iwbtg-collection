@@ -19,8 +19,8 @@ use bevy::ui::IsDefaultUiCamera;
 
 use crate::settings::{self, HudShow};
 use crate::ui::UiKitPlugin;
-use crate::ui::notice;
 use crate::ui::backdrop::BackdropCamera;
+use crate::ui::notice;
 use layout::{Density, Layout, Options, UI_SCALE_RANGE};
 
 /// `input,stage_deaths`: HUD element names ([`HudShow::NAMES`]).
