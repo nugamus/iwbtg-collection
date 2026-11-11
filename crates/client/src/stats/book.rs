@@ -26,6 +26,10 @@ pub struct Run {
     pub segment_deaths: Vec<u32>,
     /// When it finished, in seconds since 1970 (UTC). Display only; never ranks anything.
     pub finished_at: u64,
+    /// Its replay in the data area (`replays/<game id>/<name>.iwbr`, `replays.rs`), for the
+    /// replay viewer and upload. Absent for runs from before replays were kept (#476).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replay: Option<String>,
 }
 
 impl Run {
@@ -269,6 +273,7 @@ mod tests {
             splits: splits.to_vec(),
             segment_deaths: vec![0; splits.len()],
             finished_at: 0,
+            replay: None,
         }
     }
 

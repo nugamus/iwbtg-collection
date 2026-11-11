@@ -30,6 +30,8 @@ pub(crate) struct Game {
 struct RunStart {
     def: Arc<iwbtg_sim::def::GameDef>,
     options: SimOptions,
+    /// Every run draws a new random seed (`replays::fresh_seed`); a `--screenshot` check keeps 0.
+    fresh_seed: bool,
 }
 
 /// The Bevy image of each sprite strip, by `SpriteId`, with the strip size.
@@ -230,6 +232,10 @@ pub struct ViewArgs {
     /// Save a screenshot of the window to this PNG after a few frames and exit (for checks).
     #[arg(long, value_name = "PNG")]
     pub screenshot: Option<std::path::PathBuf>,
+    /// Play the ranked (stripped) mode: always a new game, never the save file (docs/product.md,
+    /// Two ways to play each game). The default is Play original.
+    #[arg(long)]
+    pub ranked: bool,
 }
 
 /// Opens the window and runs until it closes. `plugins` adds the other modules' plugins (main.rs
@@ -239,15 +245,32 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
         fps: cap,
         interpolate,
         screenshot,
+        ranked,
     } = args;
     let def = Arc::clone(&pkg.def);
+    // Every run draws a random seed, as the originals do (docs/product.md; the replay keeps it).
+    // A `--screenshot` check keeps seed 0, so it looks the same every time.
+    let fresh_seed = screenshot.is_none();
     let options = SimOptions {
-        // Like a replay: a new game, in the game's `new_game_room`. The title and menus come with
-        // the rest of the client; until then the first thing on screen is the first room.
-        start: crate::savefile::start_point(&def),
-        seed: 0,
+        // A ranked run is always a new game; Play original resumes the save file when there is
+        // one, else a new game in the game's `new_game_room`. The title and menus come with the
+        // rest of the client; until then the first thing on screen is the first room.
+        start: if ranked {
+            iwbtg_sim::room::StartPoint::NewGame { difficulty: 0 }
+        } else {
+            crate::savefile::start_point(&def)
+        },
+        seed: if fresh_seed {
+            crate::replays::fresh_seed()
+        } else {
+            0
+        },
         dll_mode: DllMode::Model,
-        mode: iwbtg_sim::stripped::PlayMode::Original,
+        mode: if ranked {
+            iwbtg_sim::stripped::PlayMode::Stripped
+        } else {
+            iwbtg_sim::stripped::PlayMode::Original
+        },
         map: None,
     };
     let sim =
@@ -279,6 +302,7 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
     .insert_resource(RunStart {
         def: Arc::clone(&def),
         options,
+        fresh_seed,
     })
     .insert_resource(Cap(cap))
     .insert_resource(Previous {
@@ -508,13 +532,16 @@ fn collect_pad(
 }
 
 /// Starts the run again from where it started (quick-retry and auto-retry, `retry.rs`): a new
-/// sim with the same options, every drawn sprite gone, no pending input edges, no sign. The new sim's
+/// sim with the same options (and a new random seed), every drawn sprite gone, no pending input edges, no sign. The new sim's
 /// room-start output stays in `output` for its first step (#466). The fixed clock keeps its rate until the next
 /// tick's `follow_room_speed`.
 pub(crate) fn restart_run(world: &mut World) -> Result<(), String> {
     let start = world.resource::<RunStart>();
-    let sim = Sim::new(Arc::clone(&start.def), start.options.clone())
-        .map_err(|e| format!("the game did not start: {e}"))?;
+    let mut options = start.options.clone();
+    if start.fresh_seed {
+        options.seed = crate::replays::fresh_seed();
+    }
+    let sim = Sim::new(Arc::clone(&start.def), options).map_err(|e| format!("the game did not start: {e}"))?;
     world.non_send_mut::<Game>().sim = sim;
     let drawn = std::mem::take(&mut world.resource_mut::<Drawn>().0);
     for entity in drawn.into_values() {
@@ -547,6 +574,7 @@ pub(crate) fn test_world(pkg: &Package) -> World {
     world.insert_resource(RunStart {
         def: Arc::clone(&pkg.def),
         options,
+        fresh_seed: false,
     });
     world.init_resource::<Drawn>();
     world.init_resource::<Previous>();
@@ -564,6 +592,7 @@ fn tick(
     mut shake: ResMut<crate::audio::Shake>,
     mut previous: ResMut<Previous>,
     mut sign: ResMut<hud::SignText>,
+    mut replay: Option<ResMut<crate::replays::Recorder>>,
 ) {
     if previous.on {
         let world = game.sim.world();
@@ -581,7 +610,12 @@ fn tick(
             .collect();
     }
     let frame = collector.take_frame();
-    if game.sim.step(frame).status == SimStatus::Running {
+    let was_running = game.sim.world().status == SimStatus::Running;
+    let step = game.sim.step(frame);
+    if was_running && let Some(replay) = replay.as_deref_mut() {
+        replay.record(&game.sim, frame, &step.splits);
+    }
+    if step.status == SimStatus::Running {
         stats.ticks += 1;
         let output = &game.sim.world().output;
         hud::note_tick(&mut sign, output);
