@@ -21,7 +21,7 @@ One Cargo workspace in `client/`, `license = "MIT OR Apache-2.0"`, toolchain pin
 
 | Crate | What it does | Depends on |
 |---|---|---|
-| `crates/sim` | The deterministic simulation: world, built-ins, kid, collision, tick pipeline, script host, replays, state hash. No Bevy, no IO, no threads, no clock. `#![forbid(unsafe_code)]`. | `rhai` (exact pin), `libm` (exact pin, no default features), `blake3`, `smallvec`, `postcard`, `serde`. Optional later: `rustc_apfloat` (see [numbers](architecture/sim.md#number-handling)). |
+| `crates/sim` | The deterministic simulation: world, built-ins, kid, collision, tick pipeline, script host, replays, state hash. No Bevy, no IO, no threads, no clock. `#![forbid(unsafe_code)]`. | `rhai` (exact pin), `libm` (exact pin, no default features), `blake3`, `smallvec`, `postcard`, `serde`. Optional later: `rustc_apfloat` (see [numbers](architecture/sim/numbers.md#number-handling)). |
 | `crates/format` | Reads, validates, hashes and writes game packages. Turns TOML files into `sim::def::GameDef`. Parses from an in-memory map of path to bytes (`PackageFiles`), so the client, the server and WASM share one code path with no filesystem. | `sim`, `toml`, `toml_edit`, `serde`, `serde_spanned`, `schemars`, `png`, `blake3`, `sha2`. |
 | `crates/tools` | The `iwbtg` command-line tool (see below). Later also the music preview picker and the level editor. | `sim`, `format`. |
 | `crates/client` | The Bevy app: game select, rendering, input, audio, settings. Owns one `sim::Sim`, feeds it one input frame per tick and draws its snapshots. | `sim`, `format`, `bevy`. |

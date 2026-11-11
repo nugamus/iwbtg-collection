@@ -1,4 +1,4 @@
-//! Lint: GML comparisons go through `num::gm_*` (docs/architecture/sim.md, Sim purity).
+//! Lint: GML comparisons go through `num::gm_*` (docs/architecture/sim/layout.md, Sim purity).
 //!
 //! `Real`'s own `==` compares bits, and `a.get() < b.get()` or `x.get() == 0.0` compare plain
 //! doubles. GM8 compares with its own rule (an epsilon, `NumRules`), so wherever the original

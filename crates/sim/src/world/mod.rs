@@ -31,7 +31,7 @@ use crate::view::View;
 use crate::{builtins, kid, run_globals};
 
 /// Everything that changes while a game runs. Every field is hashed by `hash::state_hash` except
-/// `output` and `grid` (docs/architecture/sim.md, State hash).
+/// `output` and `grid` (docs/architecture/sim/hash.md, State hash).
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct World {
     /// Ticks since the run started.
