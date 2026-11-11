@@ -221,6 +221,9 @@ enum DeterminismCommand {
 enum ReplayCommand {
     /// Runs a replay or `.inputs` file headless and prints ticks, splits and the final hash.
     Run(replay_cmd::ReplayRunArgs),
+    /// Checks a replay as the server does: same package and sim, and a headless run reproduces
+    /// its ticks, splits, ranked time, checkpoints and final hash.
+    Verify(replay_cmd::ReplayVerifyArgs),
 }
 
 /// `--research`, else IWBTG_RESEARCH.
@@ -341,6 +344,7 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             replay_cmd::main(&args)?;
             Ok(true)
         }
+        Command::Replay(ReplayCommand::Verify(args)) => replay_cmd::verify_main(&args),
     }
 }
 

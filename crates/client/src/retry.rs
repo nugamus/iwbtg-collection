@@ -92,6 +92,8 @@ fn apply(world: &mut World) {
         retry.deaths = None;
         retry.pending.take()
     };
+    // The ended run's replay is written while its sim is still there.
+    crate::replays::reset(world);
     match crate::view::restart_run(world) {
         Ok(()) => {
             // The new sim's room start plays from its first step's output (#466).

@@ -19,6 +19,7 @@ mod hud;
 mod input;
 mod mods;
 mod package;
+mod replays;
 mod retry;
 mod savefile;
 mod screen;
@@ -100,7 +101,10 @@ fn main() -> ExitCode {
     let Some(dir) = args.package.package else {
         return ExitCode::SUCCESS;
     };
-    savefile::configure(&args.save);
+    // A ranked run always starts a new game and never touches the save file.
+    let mut save = args.save;
+    save.no_save_file |= args.view.ranked;
+    savefile::configure(&save);
     let pkg = match package::open(&dir, args.package.trace_mode) {
         Ok(pkg) => pkg,
         Err(e) => {
@@ -113,6 +117,7 @@ fn main() -> ExitCode {
     let retry = args.retry;
     // A `--screenshot` check keeps no stats, as it keeps no settings.
     let keep_stats = args.view.screenshot.is_none();
+    let gameplay_hash = pkg.gameplay_hash;
     eprintln!("{}", mods::describe(run_mods));
     let result = view::run(pkg, args.view, |app, pkg| {
         app.add_plugins((
@@ -126,6 +131,12 @@ fn main() -> ExitCode {
             retry::RetryPlugin(retry),
             stats::StatsPlugin {
                 keep: keep_stats,
+                mods: run_mods,
+            },
+            // A `--screenshot` check keeps no replays either.
+            replays::ReplaysPlugin {
+                keep: keep_stats,
+                gameplay_hash,
                 mods: run_mods,
             },
         ));

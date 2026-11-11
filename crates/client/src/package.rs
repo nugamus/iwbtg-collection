@@ -4,7 +4,8 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use iwbtg_format::{LoadMode, PackageFiles, load_game};
+use iwbtg_format::load::load_report;
+use iwbtg_format::{LoadMode, PackageFiles};
 use iwbtg_sim::def::GameDef;
 
 /// Why a package did not open.
@@ -24,6 +25,8 @@ pub struct Package {
     pub files: PackageFiles,
     /// The loaded game.
     pub def: Arc<GameDef>,
+    /// The package's `gameplay_hash`, for the replay header (`replays.rs`).
+    pub gameplay_hash: [u8; 32],
 }
 
 /// One decoded sprite strip.
@@ -60,11 +63,17 @@ pub fn open(dir: &Path, trace_mode: bool) -> Result<Package, OpenError> {
     } else {
         LoadMode::Strict
     };
-    let def = load_game(&files, mode)
-        .map_err(|diags| OpenError::Invalid(diags.iter().map(ToString::to_string).collect()))?;
+    // `load_game` plus the hash, which a load with an error does not have.
+    let report = load_report(&files, mode);
+    let (Some(def), Some(gameplay_hash)) = (report.def, report.gameplay_hash) else {
+        return Err(OpenError::Invalid(
+            report.diagnostics.iter().map(ToString::to_string).collect(),
+        ));
+    };
     Ok(Package {
         files,
         def: Arc::new(def),
+        gameplay_hash,
     })
 }
 

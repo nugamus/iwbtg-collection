@@ -103,7 +103,7 @@ impl Stats {
     }
 
     /// Applies one tick's events.
-    fn apply(&mut self, cur: &Current, events: Vec<Event>, tick_seconds: f64) {
+    fn apply(&mut self, cur: &Current, events: Vec<Event>, tick_seconds: f64, replay: Option<&str>) {
         for event in events {
             self.dirty = true;
             let map = self.book.map_mut(&cur.map, &cur.game, cur.tick_rate);
@@ -135,6 +135,7 @@ impl Stats {
                             splits,
                             segment_deaths,
                             finished_at: now_seconds(),
+                            replay: replay.map(str::to_owned),
                         };
                         let board = map.boards.entry(cur.board.clone()).or_default();
                         let rec = board.add(run);
@@ -184,7 +185,7 @@ fn load(store: &Store) -> Book {
 }
 
 /// Seconds since 1970, for a run's date.
-fn now_seconds() -> u64 {
+pub(crate) fn now_seconds() -> u64 {
     #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
     {
         (web_sys::js_sys::Date::now() / 1000.0) as u64
@@ -246,7 +247,12 @@ impl Plugin for StatsPlugin {
 }
 
 /// After each tick: deaths, play time and the clear go into the book.
-fn watch(game: NonSend<Game>, fixed: Res<Time<Fixed>>, mut stats: ResMut<Stats>) {
+fn watch(
+    game: NonSend<Game>,
+    fixed: Res<Time<Fixed>>,
+    mut stats: ResMut<Stats>,
+    replays: Option<Res<crate::replays::Recorder>>,
+) {
     let sim = &game.sim;
     let def = sim.def();
     let mut cur = stats.current.take().unwrap_or_else(|| {
@@ -269,7 +275,8 @@ fn watch(game: NonSend<Game>, fixed: Res<Time<Fixed>>, mut stats: ResMut<Stats>)
         ended: world.timing.ended,
         ranked_ticks: sim.ranked_ticks(),
     });
-    stats.apply(&cur, events, fixed.timestep().as_secs_f64());
+    let replay = replays.as_deref().and_then(|r| r.current_name());
+    stats.apply(&cur, events, fixed.timestep().as_secs_f64(), replay);
     stats.current = Some(cur);
 }
 
@@ -483,6 +490,7 @@ mod tests {
             segment_deaths: vec![0; s.len()],
             splits: s,
             finished_at: 0,
+            replay: None,
         };
         let first = b.add(mk(vec![100, 200]));
         assert_eq!(
