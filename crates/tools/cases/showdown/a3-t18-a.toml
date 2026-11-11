@@ -1,0 +1,24 @@
+# Imported from research trace showdown/a3-t18-a by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room room028 --at 2 --from 2 (2 --gml)
+source = "showdown/a3-t18-a"
+kind = "probe_read"
+open = "global.sv* are save1 byte dumps with no probe form yet (#587): map them to save.* columns in [vars], then drop this line"
+start = { room = "room_28", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "model"
+seed = 0
+setup = []
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+"instance_number(player)" = "instance_number(kid)"
+
+[unprobed]
+"global.death[1]" = "a global array or instance path"
+"var:room" = "an expression; the probe reads variables only (OPEN)"
+
+[rooms]
+"room_28" = "room028"

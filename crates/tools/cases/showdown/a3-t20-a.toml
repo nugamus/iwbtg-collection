@@ -1,0 +1,31 @@
+# Imported from research trace showdown/a3-t20-a by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room room001 --at 2 --from 0 --x 241 --y 111 (5 --gml)
+# Frames 0..1 ran before the room jump (boot rooms); they are not compared.
+source = "showdown/a3-t20-a"
+kind = "probe_read"
+open = "global.sv* are save1 byte dumps with no probe form yet (#587): map them to save.* columns in [vars], then drop this line"
+start = { room = "room_1", difficulty = 0 }
+at = 2
+first_frame = 0
+object = "kid"
+original_object = "player"
+dll_mode = "model"
+seed = 0
+setup = [
+  { frame = 2, target = "kid", set = { x = 241.0, xprevious = 241.0, y = 111.0, yprevious = 111.0 } },
+]
+ignore = ["id", "sprite_index", "sprite_name"]
+notes = [
+  "--x/--y: the recorder creates the object when none exists; setup only moves one",
+]
+
+[vars]
+"instance_number(player)" = "instance_number(kid)"
+
+[unprobed]
+"var:room" = "an expression; the probe reads variables only (OPEN)"
+"xstart" = "no probe field for `xstart` (OPEN)"
+"ystart" = "no probe field for `ystart` (OPEN)"
+
+[rooms]
+"room_1" = "room001"
