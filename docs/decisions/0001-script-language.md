@@ -103,7 +103,7 @@ One function, `sim::script::iws_engine()`, builds the engine for the client, the
 
 The sandbox has four layers:
 
-1. **By construction.** A script can only call functions we register. There is no IO, clock, OS, environment or randomness API to register by mistake: clippy and cargo-deny keep them out of `sim` (see [architecture](../architecture/sim.md#sim-purity)).
+1. **By construction.** A script can only call functions we register. There is no IO, clock, OS, environment or randomness API to register by mistake: clippy and cargo-deny keep them out of `sim` (see [architecture](../architecture/sim/layout.md#sim-purity)).
 2. **Limits.** Operation budget per call and per tick, Rhai size and depth limits, and host caps on instances and spawns.
 3. **Panic backstop.** Every `Sim::step` runs inside `catch_unwind` on native builds (`panic = "unwind"` in every profile). Rhai's "Don't Panic" goal is the first line; this is the second.
 4. **Server isolation.** The server verifies each replay in a child process with `env_clear()`, rlimit, a wall-clock timeout and no network (`docs/server.md` rule 2). Rhai is not formally audited as a security boundary, so this layer is required.
@@ -146,7 +146,7 @@ These are rules for the IWS engine, the script API and every Rust built-in.
 - Built-in variables are registered getters and setters on `Inst`: `x`, `y`, `xstart`, `ystart`, `xprevious`, `yprevious`, `hspeed`, `vspeed`, `speed`, `direction`, `gravity`, `gravity_direction`, `friction`, `sprite`, `image_index`, `image_speed`, `image_xscale`, `image_yscale`, `image_angle`, `image_alpha`, `visible`, `solid`, `depth`, `kind`. Speed setters apply the GM8 motion coupling.
 - Custom variables use Rhai's indexer property fallback: `this.hp = 20`. They live in the instance's variable map in the sim. Reading an unset variable is an error, as in GM8.
 - The kid is read-only to scripts, apart from `kill_kid()` and documented knobs such as flipping gravity. Scripts never replace the kid's physics.
-- The first API surface is listed in [architecture](../architecture/sim.md#script-api-first-version). The generated reference is `docs/format/script-api.md`.
+- The first API surface is listed in [architecture](../architecture/sim/scripts.md#script-api-first-version). The generated reference is `docs/format/script-api.md`.
 
 Example:
 

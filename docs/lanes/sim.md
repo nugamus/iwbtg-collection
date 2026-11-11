@@ -1,6 +1,6 @@
 # Lane: sim
 
-**Owns:** `crates/sim`, `crates/tools` (except `pkg_cmd.rs`), `.github/`, `docs/architecture/sim.md`, `replay.md`, `traces.md`.
+**Owns:** `crates/sim`, `crates/tools` (except `pkg_cmd.rs`), `.github/`, `docs/architecture/sim.md` and `docs/architecture/sim/`, `replay.md`, `traces.md`, `docs/plans/sim-core.md` and `docs/plans/sim-core/`.
 **Never edits:** `crates/client` except when an issue says so.
 
 ## Build and test
