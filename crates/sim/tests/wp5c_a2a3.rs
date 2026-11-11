@@ -64,6 +64,9 @@ fn game(family: KidFamily, tweak: impl FnOnce(&mut PhysicsProfile)) -> (GameDef,
     let mut select = RoomDef::new("select", 800, 608);
     select.role = RoomRole::Select;
     b.room(select);
+    let mut grants = RoomDef::new("room028", 800, 608); // RoomId(3)
+    grants.djump_grants_tjump = true;
+    b.room(grants);
     b.start_room(play);
     let mut p = presets::defaults(family);
     p.death.order = vec![DeathStep::DestroyAllKids];
@@ -404,6 +407,36 @@ fn jump_then_double_then_triple_then_nothing() {
         common(ctx, kid, CommonAction::Jump);
         assert_eq!(hv(ctx, kid).1, 1.0, "a fourth press does nothing");
     });
+}
+
+#[test]
+fn the_double_jump_grants_the_third_jump_only_in_a_flagged_room() {
+    with_kid(KidFamily::A3, showdown, |ctx, kid, _| {
+        kstate(ctx, kid).tjump = false;
+        input(ctx, &[Action::Jump], &[Action::Jump], &[]);
+        common(ctx, kid, CommonAction::Jump);
+        assert_eq!(hv(ctx, kid).1, -7.0);
+        assert!(!kstate(ctx, kid).tjump, "an unflagged room leaves tjump alone");
+        ctx.w.room = RoomId(3);
+        kstate(ctx, kid).djump = true;
+        common(ctx, kid, CommonAction::Jump);
+        assert!(
+            !kstate(ctx, kid).djump && kstate(ctx, kid).tjump,
+            "room028 (a3-t09 f47)"
+        );
+        common(ctx, kid, CommonAction::Jump);
+        assert_eq!(hv(ctx, kid).1, -6.0, "so the third jump follows");
+    });
+    with_kid(
+        KidFamily::A3,
+        |_| {},
+        |ctx, kid, _| {
+            ctx.w.room = RoomId(3);
+            input(ctx, &[Action::Jump], &[Action::Jump], &[]);
+            common(ctx, kid, CommonAction::Jump);
+            assert!(!kstate(ctx, kid).tjump, "only with air = djump_then_tjump");
+        },
+    );
 }
 
 #[test]

@@ -748,7 +748,15 @@ fn jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         play_sound(ctx, p.sounds.double_jump)?;
         let keeps = p.jump.water_air == WaterAir::Water3Keeps
             && place_meeting(ctx, me, x, below, Target::Class(ClassMask::WATER3))?;
-        state_mut(ctx, me)?.djump = keeps;
+        // showdown playerJump step 2: in room028 the double jump grants the third jump (the
+        // other condition, `global.tjump` 1, never holds: A3.md showdown).
+        let grants = p.jump.air == AirJump::DjumpThenTjump
+            && def.room(ctx.w.room).is_some_and(|r| r.djump_grants_tjump);
+        let s = state_mut(ctx, me)?;
+        s.djump = keeps;
+        if grants {
+            s.tjump = true;
+        }
         return Ok(());
     }
     // `djump_then_tjump` (showdown): the third jump, once.
