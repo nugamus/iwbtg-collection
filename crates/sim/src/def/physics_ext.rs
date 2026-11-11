@@ -24,7 +24,9 @@ pub struct IceRules {
     pub clamp: bool,
     /// `ice_temp_hspeed` (showdown): pixels probed for a `slip` block (2).
     pub temp_probe: Real,
-    /// `ice_temp_hspeed`: `tempHspeed` is multiplied by this each tick off a push (0.95).
+    /// `ice_temp_hspeed`: `tempHspeed` is multiplied by this each tick off a push: the GML literal
+    /// `0.95` under the recorder model, 0.9500000000000001 (N14; `traces/showdown/a3-t19-a.csv`
+    /// tempHspeed 3.0 -> 2.85, not 2.8499999999999996).
     pub temp_decay: Real,
     /// `ice_temp_hspeed`: `tempHspeed` becomes 0 once its size is below this (0.2).
     pub temp_zero_below: Real,
@@ -39,7 +41,7 @@ impl Default for IceRules {
             read: Real::new(10.0),
             clamp: false,
             temp_probe: Real::new(2.0),
-            temp_decay: Real::new(0.95),
+            temp_decay: Real::new(0.950_000_000_000_000_1),
             temp_zero_below: Real::new(0.2),
         }
     }

@@ -718,8 +718,8 @@
         },
         "temp_decay": {
           "$ref": "#/$defs/Real",
-          "default": 0.95,
-          "description": "`ice_temp_hspeed`: `tempHspeed` is multiplied by this each tick off a push (0.95)."
+          "default": 0.9500000000000001,
+          "description": "`ice_temp_hspeed`: `tempHspeed` is multiplied by this each tick off a push: the GML literal\n`0.95` under the recorder model, 0.9500000000000001 (N14; `traces/showdown/a3-t19-a.csv`\ntempHspeed 3.0 -> 2.85, not 2.8499999999999996)."
         },
         "temp_probe": {
           "$ref": "#/$defs/Real",

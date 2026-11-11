@@ -617,6 +617,7 @@ mod tests {
                 },
                 seed: 0,
                 dll_mode: DllMode::Model,
+                mode: crate::stripped::PlayMode::Original,
             },
             scripts: ScriptRuntime::default(),
             rows_done: false,

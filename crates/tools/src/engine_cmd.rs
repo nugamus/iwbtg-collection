@@ -22,7 +22,7 @@ use iwbtg_sim::rules::MAX_ENGINE_REV;
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::trace;
 
-use crate::replay_cmd::{ReplaySummary, load_strict, replay_input, run_def};
+use crate::replay_cmd::{ReplaySummary, RunInput, load_strict, replay_input, run_def};
 use crate::trace_cmd::{ToolError, package_id, read_case, run_case_rev};
 
 /// Where stored replays live in a package (docs/format/v0.md).
@@ -89,18 +89,17 @@ fn run_replay(
     files: &PackageFiles,
     mode: LoadMode,
     rev: u16,
-    frames: &[iwbtg_sim::input::InputFrame],
-    seed: u32,
-    mods: iwbtg_sim::mods::ModSet,
+    input: &RunInput,
 ) -> Result<ReplaySummary, ToolError> {
     let mut def = load_strict(files, mode)?;
     def.engine_rev = rev;
     let options = SimOptions {
         start: StartPoint::NewGame { difficulty: 0 },
-        seed,
+        seed: input.seed,
         dll_mode: DllMode::Model,
+        mode: input.mode,
     };
-    run_def(def, frames, options, mods)
+    run_def(def, &input.frames, options, input.mods)
 }
 
 fn check_replay(
@@ -111,12 +110,12 @@ fn check_replay(
     from: u16,
     to: u16,
 ) -> (String, bool) {
-    let (frames, seed, mods) = match replay_input(bytes, path) {
+    let input = match replay_input(bytes, path) {
         Ok(x) => x,
         Err(e) => return (format!("replay {path}: DIFF cannot run: {e}"), true),
     };
-    let old = run_replay(files, mode, from, &frames, seed, mods);
-    let new = run_replay(files, mode, to, &frames, seed, mods);
+    let old = run_replay(files, mode, from, &input);
+    let new = run_replay(files, mode, to, &input);
     match (old, new) {
         (Ok(a), Ok(b)) if a == b => (format!("replay {path}: same ({})", short(&a)), false),
         (Ok(a), Ok(b)) => {
@@ -315,6 +314,7 @@ mod tests {
                 engine_rev: 0,
                 rng_seed: 0,
                 start_mode: StartMode::NewGame,
+                play_mode: iwbtg_sim::stripped::PlayMode::Original,
                 mods: iwbtg_sim::mods::ModSet::NONE,
                 client_build_id: String::new(),
             },

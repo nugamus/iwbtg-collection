@@ -34,18 +34,19 @@ pub struct SpriteImage {
     pub rgba: Vec<u8>,
 }
 
-/// Opens the package folder `dir`: reads it, bundles its engine pack from `../_engines` and
-/// loads it. `trace_mode` is for research converter output.
 /// The package command-line arguments.
 #[derive(clap::Args, Debug)]
 pub struct PackageArgs {
-    /// Package folder (a folder with a game.toml).
-    pub package: std::path::PathBuf,
+    /// Package folder (a folder with a game.toml). Not needed with `--ui-gallery`.
+    #[arg(required_unless_present = "ui_gallery")]
+    pub package: Option<std::path::PathBuf>,
     /// Load converter output: unmapped script kinds become inert.
     #[arg(long)]
     pub trace_mode: bool,
 }
 
+/// Opens the package folder `dir`: reads it, bundles its engine pack from `../_engines` and
+/// loads it. `trace_mode` is for research converter output.
 pub fn open(dir: &Path, trace_mode: bool) -> Result<Package, OpenError> {
     let mut files =
         PackageFiles::load_dir(dir).map_err(|e| OpenError::Files(format!("{}: {e}", dir.display())))?;
