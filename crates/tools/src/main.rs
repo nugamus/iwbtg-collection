@@ -224,6 +224,8 @@ enum ReplayCommand {
     /// Checks a replay as the server does: same package and sim, and a headless run reproduces
     /// its ticks, splits, ranked time, checkpoints and final hash.
     Verify(replay_cmd::ReplayVerifyArgs),
+    /// Prints a replay as text: header, splits, checkpoints and the input runs.
+    Dump(replay_cmd::ReplayDumpArgs),
 }
 
 /// `--research`, else IWBTG_RESEARCH.
@@ -345,6 +347,10 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             Ok(true)
         }
         Command::Replay(ReplayCommand::Verify(args)) => replay_cmd::verify_main(&args),
+        Command::Replay(ReplayCommand::Dump(args)) => {
+            replay_cmd::dump_main(&args)?;
+            Ok(true)
+        }
     }
 }
 
