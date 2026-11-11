@@ -1,0 +1,33 @@
+# Imported from research trace showdown/a3-t16-c by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room room022 --at 2 --from 2 --x 620 --y 300
+source = "showdown/a3-t16-c"
+kind = "diff"
+open = "needs the converter showdown physics keys and slip block (research#114); passes bit for bit on a package with them applied by hand"
+start = { room = "room_22", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "model"
+seed = 0
+setup = [
+  { frame = 2, target = "kid", set = { x = 620.0, xprevious = 620.0, y = 300.0, yprevious = 300.0 } },
+]
+ignore = ["id", "sprite_index", "sprite_name"]
+notes = [
+  "--x/--y: the recorder creates the object when none exists; setup only moves one",
+]
+
+[vars]
+
+[unprobed]
+"bbox_bottom" = "no probe field for `bbox_bottom` (OPEN)"
+"bbox_left" = "no probe field for `bbox_left` (OPEN)"
+"bbox_right" = "no probe field for `bbox_right` (OPEN)"
+"bbox_top" = "no probe field for `bbox_top` (OPEN)"
+"distance_to_object(LvyR)" = "a function call; the probe reads variables only (OPEN)"
+"distance_to_object(LvyRkawattayatu)" = "a function call; the probe reads variables only (OPEN)"
+"distance_to_object(block)" = "a function call; the probe reads variables only (OPEN)"
+
+[rooms]
+"room_22" = "room022"
