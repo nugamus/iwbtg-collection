@@ -13,7 +13,7 @@ use bevy::ui_widgets::Button;
 use super::fonts::Type;
 use super::icons::{Icon, icon};
 use super::motion::{Ease, ReducedMotion, Scale, Tween};
-use super::shape::{Ink, Shape};
+use super::shape::{Ink, Shape, UiOpacity};
 use super::tokens::{self, star_color};
 
 pub(super) fn plugin(app: &mut App) {
@@ -270,8 +270,19 @@ pub struct ButtonLook {
 /// A button: `label` in the kind's style. Clicks, Enter and Space send `bevy::ui_widgets::Activate`
 /// to it; Tab moves the focus ring between buttons.
 pub fn button(label: &str, kind: ButtonKind) -> impl Bundle + use<> {
+    button_with(
+        kind,
+        kind.height(),
+        kind.pad(),
+        text(label, kind.style(), tokens::INK),
+    )
+}
+
+/// A button of `kind` at another size (`height`, `pad` px left and right) with `content` in it:
+/// the results footer's 48 and 38 px buttons, the Retry button's `hold R` beside its label.
+pub fn button_with<B: Bundle>(kind: ButtonKind, height: f32, pad: f32, content: B) -> impl Bundle + use<B> {
     (
-        sheared(kind.height(), kind.pad(), kind.rest_shape()),
+        sheared(height, pad, kind.rest_shape()),
         Button,
         Hovered::default(),
         TabIndex(0),
@@ -282,7 +293,20 @@ pub fn button(label: &str, kind: ButtonKind) -> impl Bundle + use<> {
         },
         UiTransform::default(),
         Tween::<Scale>::at_rest(1.0, tokens::motion::HOVER, Ease::OutQuint),
-        children![text(label, kind.style(), tokens::INK)],
+        Children::spawn(Spawn(content)),
+    )
+}
+
+/// How much of a button that cannot be used yet shows.
+pub const OFF_OPACITY: f32 = 0.4;
+
+/// A button that cannot be used yet (Upload replay until M7): the kind's rest fill and `content`
+/// faded to [`OFF_OPACITY`]; no hover, no press, no focus, no `Activate`.
+pub fn button_off<B: Bundle>(kind: ButtonKind, height: f32, pad: f32, content: B) -> impl Bundle + use<B> {
+    (
+        sheared(height, pad, Shape::fill(kind.rest())),
+        UiOpacity(OFF_OPACITY),
+        Children::spawn(Spawn(content)),
     )
 }
 

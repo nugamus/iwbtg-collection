@@ -22,6 +22,7 @@ mod mods;
 mod package;
 mod pause;
 mod replays;
+mod results;
 mod retry;
 mod savefile;
 mod screen;
@@ -63,6 +64,8 @@ struct Args {
     pause: pause::PauseArgs,
     #[command(flatten)]
     card: card::preview::CardArgs,
+    #[command(flatten)]
+    results: results::ResultsArgs,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -131,6 +134,7 @@ fn main() -> ExitCode {
     let run_mods = args.mods.mods;
     let retry = args.retry;
     let pause = args.pause;
+    let results = args.results;
     // A `--screenshot` check keeps no stats, as it keeps no settings.
     let keep_stats = args.view.screenshot.is_none();
     let gameplay_hash = pkg.gameplay_hash;
@@ -149,6 +153,7 @@ fn main() -> ExitCode {
                 args: pause,
                 files: pkg.files.clone(),
             },
+            results::ResultsPlugin(results),
             stats::StatsPlugin {
                 keep: keep_stats,
                 mods: run_mods,

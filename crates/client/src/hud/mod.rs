@@ -8,7 +8,7 @@
 //! settings file; the HUD always starts shown.
 
 pub mod layout;
-mod leaderboard;
+pub mod leaderboard;
 mod run_info;
 
 pub use run_info::Paused;
@@ -125,6 +125,11 @@ pub struct HudOptions(pub Options);
 #[derive(Resource, Clone, Copy, Debug, PartialEq, Default)]
 pub struct HudLayout(pub Layout);
 
+/// The results screen (#41) covers the HUD: while it shows, the columns and the game's shadow are
+/// hidden and the UI scale is the results' to set.
+#[derive(Resource, Clone, Copy, Debug, PartialEq, Default)]
+pub struct Suspended(pub bool);
+
 /// The HUD's camera: draws only UI, over the game.
 #[derive(Component)]
 struct HudCamera;
@@ -160,6 +165,7 @@ impl Plugin for HudPlugin {
         .insert_resource(Shown(s.hud_show))
         .insert_resource(PREVIEW.get().copied().unwrap_or_default())
         .init_resource::<HudLayout>()
+        .init_resource::<Suspended>()
         .init_resource::<Paused>()
         .init_resource::<run_info::Look>()
         .init_resource::<run_info::RunInfo>()
@@ -279,6 +285,7 @@ type ColumnParts = (
 fn place(
     mut commands: Commands,
     hud: Res<HudOptions>,
+    suspended: Res<Suspended>,
     layout: Res<HudLayout>,
     look: Res<run_info::Look>,
     live: Res<leaderboard::Live>,
@@ -287,6 +294,19 @@ fn place(
     mut columns: Query<ColumnParts, Without<GameShadow>>,
     mut shadow: Query<&mut Node, With<GameShadow>>,
 ) {
+    if suspended.0 {
+        for (_, _, _, mut visibility, _) in &mut columns {
+            if *visibility != Visibility::Hidden {
+                *visibility = Visibility::Hidden;
+            }
+        }
+        for mut node in &mut shadow {
+            if node.display != Display::None {
+                node.display = Display::None;
+            }
+        }
+        return;
+    }
     let l = layout.0;
     // UI px to physical px.
     let px = window.resolution.scale_factor() * l.content;
@@ -308,6 +328,9 @@ fn place(
         }
     };
     for mut node in &mut shadow {
+        if node.display != Display::Flex {
+            node.display = Display::Flex;
+        }
         set(&mut node, l.game);
     }
     for (entity, column, mut node, mut visibility, built) in &mut columns {

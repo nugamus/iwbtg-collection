@@ -40,11 +40,14 @@ pub enum Icon {
     Arrow,
     /// A player with no avatar (`Leaderboard.dc.html`).
     Person,
+    /// The `→` between a before and an after (the results' rank change): Barlow and the
+    /// bundled fallbacks have no arrow glyph.
+    To,
 }
 
 impl Icon {
     /// Every icon, for the gallery.
-    pub const ALL: [Icon; 12] = [
+    pub const ALL: [Icon; 13] = [
         Icon::Flag,
         Icon::Clock,
         Icon::Check,
@@ -57,6 +60,7 @@ impl Icon {
         Icon::MusicBars,
         Icon::Arrow,
         Icon::Person,
+        Icon::To,
     ];
 
     /// The size of the view box the shapes are drawn in.
@@ -125,6 +129,7 @@ impl Icon {
                 .map(|(x, h)| Fill(bar(x, h)))
                 .collect(),
             Icon::Arrow => vec![Fill("M13 4L22 14H16.5V22H9.5V14H4Z".into())],
+            Icon::To => vec![Stroke("M1.5 7h11M8.5 3l4 4-4 4", 1.6)],
             Icon::Person => vec![
                 Dot(8.0, 5.5, 3.0),
                 Fill("M2.5 15c.6-3.4 2.8-5 5.5-5s4.9 1.6 5.5 5z".into()),

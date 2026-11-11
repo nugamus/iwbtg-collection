@@ -35,7 +35,6 @@ pub enum Variant {
 
 impl Variant {
     /// The results variant for a window `aspect` (width / height) wide: compact below 16:10.
-    #[allow(dead_code, reason = "the results screen picks the variant (#41)")]
     pub fn for_results(aspect: f32) -> Variant {
         if aspect < 1.6 {
             Variant::ResultsCompact

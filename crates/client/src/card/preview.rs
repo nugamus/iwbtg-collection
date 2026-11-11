@@ -26,7 +26,7 @@ pub struct CardArgs {
 const MARGIN: f32 = 40.0;
 
 /// The artboard's sample (`ProfileCard.dc.html`, scenario `pb`).
-fn sample() -> Card {
+pub(crate) fn sample() -> Card {
     Card {
         name: "nugamus".to_owned(),
         games_cleared: 13,

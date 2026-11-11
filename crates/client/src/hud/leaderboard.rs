@@ -152,7 +152,7 @@ pub enum Sample {
 }
 
 /// The artboard's runs (seconds) and dates.
-const SAMPLE_RUNS: [(f64, &str); 9] = [
+pub const SAMPLE_RUNS: [(f64, &str); 9] = [
     (2292.46, "3 Nov 2026"),
     (2380.12, "29 Oct 2026"),
     (2465.30, "28 Oct 2026"),
@@ -223,8 +223,23 @@ pub struct Live {
     /// The run info stage last seen, to spot a stage clear.
     stage: u32,
     pub flash: Option<Flash>,
-    /// The panel is the results' frozen one (`--hud-preview-leaderboard frozen` until #41).
+    /// The panel is the results' frozen one (results, #41; `--hud-preview-leaderboard frozen`).
     pub frozen: bool,
+}
+
+impl Live {
+    /// The results' frozen board (#41): `entries` are the other runs, this run took `ticks` at
+    /// `rate` ticks per second and stands at its place among them.
+    pub fn frozen(entries: Vec<Entry>, rate: u32, ticks: u64) -> Live {
+        Live {
+            place: place(&entries, ticks),
+            entries: Arc::new(entries),
+            rate,
+            elapsed: ticks,
+            frozen: true,
+            ..Live::default()
+        }
+    }
 }
 
 #[cfg(test)]
@@ -316,7 +331,7 @@ pub fn track(
 }
 
 /// Your top runs as entries; splits are kept only when they match the game's segments.
-fn from_runs(runs: &[crate::stats::Run], segments: usize) -> Vec<Entry> {
+pub fn from_runs(runs: &[crate::stats::Run], segments: usize) -> Vec<Entry> {
     runs.iter()
         .map(|r| Entry {
             ticks: r.ticks,
@@ -387,7 +402,7 @@ const STYLES: Styles = Styles {
 const MINI_TIME: Type = Type::barlow(13.0, 600);
 
 /// The leaderboard `width` UI px wide, for `live`.
-pub fn build(width: f32, density: Density, live: &Live) -> impl Bundle {
+pub fn build(width: f32, density: Density, live: &Live) -> impl Bundle + use<> {
     let mini = density == Density::Small;
     let entries = Arc::clone(&live.entries);
     let place = live.place.max(1);
@@ -422,6 +437,8 @@ pub fn build(width: f32, density: Density, live: &Live) -> impl Bundle {
     };
     let empty = entries.is_empty();
     let rate = live.rate;
+    // Frozen, your time no longer runs: it is written once instead of following run info.
+    let fixed = frozen.then(|| fmt_ticks(live.elapsed, rate));
     (
         Node {
             width: Val::Px(width),
@@ -505,7 +522,7 @@ pub fn build(width: f32, density: Density, live: &Live) -> impl Bundle {
                     let row = Row(None);
                     let s = row.slot(place);
                     let node = row_node(&geometry, true, geometry.you_width);
-                    c.spawn((your_row(&geometry, place, frozen, node), row, slid(s)));
+                    c.spawn((your_row(&geometry, place, fixed.clone(), node), row, slid(s)));
                 });
             });
             if empty && !mini {
@@ -615,8 +632,10 @@ fn their_row(
     )
 }
 
-/// Your row: rank, avatar, `Now` (`This run` frozen) over your time, the pace flash over that.
-fn your_row(g: &Geometry, place: usize, frozen: bool, node: Node) -> impl Bundle + use<> {
+/// Your row: rank, avatar, `Now` over your time, the pace flash over that. Frozen (`fixed`, your
+/// final time): `This run` over that time, which run info no longer writes.
+fn your_row(g: &Geometry, place: usize, fixed: Option<String>, node: Node) -> impl Bundle + use<> {
+    let frozen = fixed.is_some();
     let mini = g.mini;
     let rank = g.rank;
     let width = g.you_width;
@@ -633,17 +652,20 @@ fn your_row(g: &Geometry, place: usize, frozen: bool, node: Node) -> impl Bundle
             let time = if mini { MINI_TIME } else { STYLES.time_you };
             let lines = move |c: &mut ChildSpawner| {
                 c.spawn(Node::default()).with_children(|c| {
-                    c.spawn((
+                    let mut line = c.spawn((
                         Node::default(),
                         TimeLine,
                         UiOpacity(1.0),
                         Tween::<Opacity>::at_rest(1.0, tokens::motion::QUICK, Ease::OutQuint),
-                        children![(
+                    ));
+                    match &fixed {
+                        Some(t) => line.with_child((text(t, time, tokens::INK), TextLayout::no_wrap())),
+                        None => line.with_child((
                             text("0:00.00", time, tokens::INK),
                             TextLayout::no_wrap(),
-                            Field::YourTime
-                        )],
-                    ));
+                            Field::YourTime,
+                        )),
+                    };
                     c.spawn((
                         Node {
                             position_type: PositionType::Absolute,

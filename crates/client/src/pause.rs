@@ -116,10 +116,10 @@ impl Menu {
 
 /// The selector's two frames, `FRUIT` px each.
 #[derive(Resource)]
-struct Fruit(Handle<Image>);
+pub(crate) struct Fruit(pub(crate) Handle<Image>);
 
 /// The selector's frame size in game pixels (the delicious fruit is 21 x 24).
-const FRUIT: UVec2 = UVec2::new(21, 24);
+pub(crate) const FRUIT: UVec2 = UVec2::new(21, 24);
 /// The selector shows each frame this long (`pb-cherry 640ms steps(2)`).
 const FRUIT_FRAME_SECONDS: f32 = 0.32;
 /// An item that is not selected: `#8d909e`.
@@ -155,7 +155,7 @@ impl Plugin for PausePlugin {
             .add_systems(
                 Update,
                 (
-                    keys,
+                    keys.run_if(crate::results::closed),
                     mouse,
                     act,
                     hold_audio,
