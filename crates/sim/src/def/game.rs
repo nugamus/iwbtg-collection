@@ -121,12 +121,16 @@ impl GameDef {
 
     /// The id of map `map`.
     pub fn map_id(&self, map: u16) -> &str {
-        self.maps.get(usize::from(map)).map_or(DEFAULT_MAP_ID, |m| m.id.as_str())
+        self.maps
+            .get(usize::from(map))
+            .map_or(DEFAULT_MAP_ID, |m| m.id.as_str())
     }
 
     /// The timing chain of map `map` ([`GameDef::timing`] without maps).
     pub fn map_timing(&self, map: u16) -> &TimingDef {
-        self.maps.get(usize::from(map)).map_or(&self.timing, |m| &m.timing)
+        self.maps
+            .get(usize::from(map))
+            .map_or(&self.timing, |m| &m.timing)
     }
 
     /// The ranked start of map `map` (`[stripped].start` without maps).

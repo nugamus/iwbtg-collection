@@ -23,8 +23,8 @@ pub mod timeline;
 pub use builtin::Builtin;
 pub use class::ClassMask;
 pub use game::{
-    DEFAULT_MAP_ID, DeathOnRestart, EngineKind, GameDef, MapDef, ResetKind, ResetModel, RestartKind, RestartModel, RestartTrigger,
-    RetryKidSteps,
+    DEFAULT_MAP_ID, DeathOnRestart, EngineKind, GameDef, MapDef, ResetKind, ResetModel, RestartKind,
+    RestartModel, RestartTrigger, RetryKidSteps,
 };
 pub use ids::{
     GroupId, KindId, MaskId, NameId, PathId, RoomId, ScriptId, SoundId, SpriteId, TimelineId, VarId,

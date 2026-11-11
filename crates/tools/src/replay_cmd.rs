@@ -467,7 +467,11 @@ mod tests {
             seen.push((s.start_room, s.splits, s.hash));
         }
         assert_eq!(seen[0].0, "stage1");
-        assert_eq!(seen[0].1, vec![Split { index: 0, tick: 1 }], "medium has not ended");
+        assert_eq!(
+            seen[0].1,
+            vec![Split { index: 0, tick: 1 }],
+            "medium has not ended"
+        );
         assert_eq!(seen[1].0, "title", "hard's stripped_start room");
         assert_eq!(
             seen[1].1,
