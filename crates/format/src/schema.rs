@@ -11,9 +11,11 @@
 //!   under it, through the sim crate's own `schema` feature. The action, collision-run and class
 //!   names come from the enums and tables the kid reads (`Action::ALL`, `ClassMask::NAMED`, the
 //!   per-file action enums), so there is no second list.
-//! - `object`, `tiles` and `timeline` come from the shape types below. The loader reads object
+//! - `tiles` and `background` (the tileset sidecar) come from the types `art` deserializes
+//!   ([`TilesFile`], [`TilesetFile`]).
+//! - `object` and `timeline` come from the shape types below. The loader reads object
 //!   files key by key (every key that is not reserved is a param of the base), so the shape lists
-//!   the reserved keys and leaves the rest open. `tiles`, `timeline`, `path` and `sound` are
+//!   the reserved keys and leaves the rest open. `timeline`, `path` and `sound` are
 //!   shape types here that mirror the private file structs of `timelines.rs`, `paths.rs` and
 //!   `sounds.rs` (`tests/schemas.rs` validates the loader's accepted files and rejects its
 //!   rejected ones, so they cannot drift unseen).
@@ -35,6 +37,7 @@ use serde_json::Value;
 
 use iwbtg_sim::def::physics::PhysicsProfileDraft;
 
+pub use crate::art::{TilesFile, TilesetFile};
 use crate::engine_pack::EnginePack;
 use crate::manifest::Manifest;
 use crate::number::Number;
@@ -112,40 +115,6 @@ pub struct ObjectShape {
     /// Every other key is a param of the base, checked against its param list at load.
     #[serde(flatten)]
     pub other_params: BTreeMap<String, Value>,
-}
-
-/// A tile file (`rooms/<room_id>.tiles.toml`). Decorative only: tiles never affect the sim.
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct TilesShape {
-    /// Layers, back to front by their `depth`.
-    pub layers: Vec<TileLayerShape>,
-}
-
-/// One tile layer.
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct TileLayerShape {
-    /// GM tile layer depth.
-    pub depth: Number,
-    /// Tileset id (`backgrounds/<id>.png`).
-    pub tileset: String,
-    /// The tiles of the layer.
-    pub tiles: Vec<TileShape>,
-}
-
-/// One tile or a run of identical tiles.
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct TileShape {
-    /// Position in the room.
-    pub x: Number,
-    /// Position in the room.
-    pub y: Number,
-    /// Source position in the tileset image.
-    pub src: [Number; 2],
-    /// `[columns, rows]`: a grid of the same tile.
-    pub run: Option<[u32; 2]>,
 }
 
 /// A timeline file (`timelines/<id>.toml`).
@@ -245,7 +214,11 @@ pub fn generate() -> Vec<(&'static str, String)> {
         ("room", text::<RawRoom>("IWBTG rooms/<id>.toml (format v0)")),
         (
             "tiles",
-            text::<TilesShape>("IWBTG rooms/<id>.tiles.toml (format v0)"),
+            text::<TilesFile>("IWBTG rooms/<id>.tiles.toml (format v0)"),
+        ),
+        (
+            "background",
+            text::<TilesetFile>("IWBTG backgrounds/<id>.toml tileset sidecar (format v0)"),
         ),
         (
             "sprite",

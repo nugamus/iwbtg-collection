@@ -16,6 +16,15 @@ use crate::ui::widgets::{sheared, text};
 /// Rows the leaderboard shows; yours is the middle one.
 const ROWS: usize = 7;
 const ROW_HEIGHT: f32 = 44.0;
+/// How far a sheared row reaches past its box on each side.
+const SHEAR_OVERHANG: f32 = tokens::SHEAR * ROW_HEIGHT / 2.0;
+/// The input display's arrows: 26 px each, 18 px apart when there is room.
+const ARROW: f32 = 26.0;
+/// The small leaderboard's rows start this far in (`HudSmall` places the list at -4 with a 10 px
+/// indent: 6 px), and its rank, gaps and padding are tighter than the artboard's so your row
+/// (rank, avatar, time) fits inside the 124 px column.
+const MINI_INDENT: f32 = 6.0;
+const ARROW_GAP: f32 = 18.0;
 
 /// The leaderboard `width` UI px wide.
 pub fn leaderboard(width: f32, density: Density) -> impl Bundle {
@@ -64,7 +73,9 @@ pub fn leaderboard(width: f32, density: Density) -> impl Bundle {
 fn row(width: f32, density: Density, you: bool) -> impl Bundle + use<> {
     let mini = density == Density::Small;
     let w = match (mini, you) {
-        (true, true) => width,
+        // `HudSmall` draws it the column's full width after the indent, which overhangs the game
+        // by 6 px plus the shear; here it stops at the column's edge, shear included.
+        (true, true) => width - MINI_INDENT - SHEAR_OVERHANG,
         (true, false) => 84.0,
         (false, true) => width - 10.0,
         (false, false) => width - 30.0,
@@ -76,14 +87,14 @@ fn row(width: f32, density: Density, you: bool) -> impl Bundle + use<> {
     };
     let (mut node, shape) = sheared(ROW_HEIGHT, 0.0, shape);
     node.width = Val::Px(w);
-    node.margin = UiRect::left(Val::Px(10.0));
+    node.margin = UiRect::left(Val::Px(if mini { MINI_INDENT } else { 10.0 }));
     node.justify_content = JustifyContent::FlexStart;
     node.padding = if mini {
-        UiRect::horizontal(Val::Px(8.0))
+        UiRect::new(Val::Px(8.0), Val::Px(4.0), Val::ZERO, Val::ZERO)
     } else {
         UiRect::new(Val::Px(10.0), Val::Px(12.0), Val::ZERO, Val::ZERO)
     };
-    node.column_gap = Val::Px(if mini { 6.0 } else { 10.0 });
+    node.column_gap = Val::Px(if mini { 4.0 } else { 10.0 });
     let rank_color = if you { tokens::INK } else { tokens::MUTED };
     (
         node,
@@ -91,7 +102,7 @@ fn row(width: f32, density: Density, you: bool) -> impl Bundle + use<> {
         Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
             c.spawn((
                 Node {
-                    width: Val::Px(if mini { 28.0 } else { 34.0 }),
+                    width: Val::Px(if mini { 22.0 } else { 34.0 }),
                     flex_shrink: 0.0,
                     ..default()
                 },
@@ -227,18 +238,20 @@ pub fn run_info(width: f32, density: Density) -> impl Bundle {
                     display: if stack { Display::None } else { Display::Flex },
                     ..default()
                 },
-                children![input_display()],
+                children![input_display(width)],
             ),
         ],
     )
 }
 
 /// The input display, nothing held yet: four arrows, then Jump, Shoot and Restart.
-fn input_display() -> impl Bundle {
+fn input_display(width: f32) -> impl Bundle {
+    // `Hud43`'s 152 px panel is narrower than four arrows 18 px apart (158 px): close the gaps.
+    let gap = ((width - 4.0 * ARROW) / 3.0).clamp(4.0, ARROW_GAP);
     let arrows = [-90.0f32, 0.0, 180.0, 90.0].map(|deg| {
         (
             Node {
-                width: Val::Px(26.0),
+                width: Val::Px(ARROW),
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::Center,
                 row_gap: Val::Px(6.0),
@@ -246,7 +259,7 @@ fn input_display() -> impl Bundle {
             },
             children![
                 (
-                    icon(Icon::Arrow, 26.0, tokens::KEY_IDLE),
+                    icon(Icon::Arrow, ARROW, tokens::KEY_IDLE),
                     UiTransform {
                         rotation: Rot2::degrees(deg),
                         ..default()
@@ -281,7 +294,7 @@ fn input_display() -> impl Bundle {
         children![
             (
                 Node {
-                    column_gap: Val::Px(18.0),
+                    column_gap: Val::Px(gap),
                     ..default()
                 },
                 Children::spawn(SpawnIter(arrows.into_iter())),

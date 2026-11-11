@@ -8,6 +8,7 @@
 //! `sounds`.
 #![forbid(unsafe_code)]
 
+pub mod art;
 pub mod check;
 pub mod diag;
 pub mod engine_pack;

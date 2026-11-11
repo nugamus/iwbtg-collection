@@ -1,6 +1,11 @@
-//! Room art that is not an instance: the background colour and image, and the decorative tile
-//! layers (`rooms/<id>.toml` keys `background` and `background_color`, `rooms/<id>.tiles.toml`;
-//! docs/format/v0.md). The sim never sees any of it.
+//! Room art that is not an instance: the background colour, the background layers and the
+//! decorative tile layers. `iwbtg_format::art` reads them (`rooms/<id>.toml`,
+//! `rooms/<id>.tiles.toml`, `backgrounds/<id>.toml`; docs/format/v0.md); this module draws them.
+//! The sim never sees any of it.
+//!
+//! Drawing order (research CLONE_SPEC, Rooms: drawing order): the colour, then the background
+//! layers that are not foregrounds in list order, then instances and tiles by depth, then the
+//! foreground layers in list order.
 
 use std::collections::HashMap;
 
@@ -8,130 +13,23 @@ use bevy::asset::RenderAssetUsages;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::sprite::{Anchor, SpriteImageMode};
+use iwbtg_format::art::{Background, RoomArt, TileLayer, load_room_art, load_tiles};
 use iwbtg_format::files::PackageFiles;
-use iwbtg_format::schema::TilesShape;
 use iwbtg_sim::def::RoomId;
 
 use crate::package::decode_png;
 use crate::view::{Game, RoomSize};
 
-/// Tile size when the tileset has no sidecar: the IWBTG standard.
-const DEFAULT_TILE: (u32, u32) = (32, 32);
-
-/// What a room draws besides its instances.
-#[derive(Debug, Default, PartialEq)]
-pub struct RoomArt {
-    /// Fill colour of the room.
-    pub color: Option<[f32; 3]>,
-    /// Background image id (`backgrounds/<id>.png`), repeated over the room.
-    pub background: Option<String>,
-    /// Tile layers.
-    pub layers: Vec<Layer>,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct Layer {
-    pub depth: f64,
-    pub tileset: String,
-    pub tiles: Vec<Tile>,
-}
-
-/// One tile; `run` repeats it over a grid of the tile size.
-#[derive(Debug, PartialEq)]
-pub struct Tile {
-    pub pos: (f64, f64),
-    pub src: (f64, f64),
-    pub run: (u32, u32),
-}
-
-/// A TOML number, or the format's `{ bits = "<16 hex digits>" }` double.
-fn number(v: &toml::Value) -> Option<f64> {
-    match v {
-        toml::Value::Float(f) => Some(*f),
-        toml::Value::Integer(i) => Some(*i as f64),
-        toml::Value::Table(t) => {
-            let bits = u64::from_str_radix(t.get("bits")?.as_str()?, 16).ok()?;
-            Some(f64::from_bits(bits))
-        }
-        _ => None,
-    }
-}
-
-fn pair(v: &toml::Value) -> Option<(f64, f64)> {
-    let a = v.as_array()?;
-    Some((number(a.first()?)?, number(a.get(1)?)?))
-}
-
-/// `#rrggbb` as sRGB components.
-fn hex_color(s: &str) -> Option<[f32; 3]> {
-    let s = s.strip_prefix('#')?;
-    if s.len() != 6 || !s.is_ascii() {
-        return None;
-    }
-    let c = |i: usize| {
-        u8::from_str_radix(&s[i..i + 2], 16)
-            .ok()
-            .map(|v| f32::from(v) / 255.0)
-    };
-    Some([c(0)?, c(2)?, c(4)?])
-}
-
-/// Reads the art keys of a room file and its optional tiles file. The tiles use the format's own
-/// `TilesShape`; the loader already checked both files, so a file unreadable here is skipped.
-pub fn parse_room_art(room: &str, tiles: Option<&str>) -> RoomArt {
-    let mut art = RoomArt::default();
-    // shortcut: the room's background keys are read by hand because the format crate throws them
-    // away; drop this when #462 lands.
-    if let Ok(t) = room.parse::<toml::Table>() {
-        art.color = t
-            .get("background_color")
-            .and_then(|v| v.as_str())
-            .and_then(hex_color);
-        art.background = t.get("background").and_then(|v| v.as_str()).map(String::from);
-    }
-    let Some(shape) = tiles.and_then(|s| toml::from_str::<TilesShape>(s).ok()) else {
-        return art;
-    };
-    art.layers = shape
-        .layers
-        .into_iter()
-        .map(|l| Layer {
-            depth: l.depth.0,
-            tileset: l.tileset,
-            tiles: l
-                .tiles
-                .into_iter()
-                .map(|t| Tile {
-                    pos: (t.x.0, t.y.0),
-                    src: (t.src[0].0, t.src[1].0),
-                    run: t.run.map_or((1, 1), |[c, r]| (c, r)),
-                })
-                .collect(),
-        })
-        .collect();
-    art
-}
-
-/// The size of one tile of a tileset: `tile_size = [w, h]` in `backgrounds/<id>.toml`.
-// shortcut: read by hand because no format type has the tileset sidecar; drop this when #462 lands.
-fn tile_size(files: &PackageFiles, tileset: &str) -> (u32, u32) {
-    files
-        .get(&format!("backgrounds/{tileset}.toml"))
-        .and_then(|b| std::str::from_utf8(b).ok())
-        .and_then(|s| s.parse::<toml::Table>().ok())
-        .and_then(|t| t.get("tile_size").and_then(pair))
-        .filter(|(w, h)| *w >= 1.0 && *h >= 1.0)
-        .map_or(DEFAULT_TILE, |(w, h)| (w as u32, h as u32))
-}
-
 /// Where tiles sit in depth: GM draws a deeper layer first. Clamped inside the camera's range;
-/// the background is behind every layer.
+/// the backgrounds are behind every layer and the foregrounds in front of all of them.
 fn layer_z(depth: f64) -> f32 {
     (-depth / 1000.0).clamp(-990.0, 990.0) as f32
 }
 
-const BACKGROUND_Z: f32 = -995.0;
 const COLOR_Z: f32 = -996.0;
+const BACKGROUND_Z: f32 = -995.0;
+/// In front of every instance and tile, behind the overlay (z 1000).
+const FOREGROUND_Z: f32 = 995.0;
 
 #[derive(Resource)]
 pub struct ArtFiles(pub PackageFiles);
@@ -144,19 +42,32 @@ impl Plugin for ArtPlugin {
         app.insert_resource(ArtFiles(self.0.clone()))
             .init_resource::<ArtImages>()
             .init_resource::<ShownArt>()
-            .add_systems(Update, sync_room_art.after(crate::view::follow_view));
+            .add_systems(
+                Update,
+                (sync_room_art, scroll_backgrounds)
+                    .chain()
+                    .after(crate::view::follow_view),
+            );
     }
 }
 
-/// Decoded background and tileset images, by id.
+/// Decoded background and tileset images, by id, with their size in pixels.
 #[derive(Resource, Default)]
-pub struct ArtImages(HashMap<String, Option<(Handle<Image>, UVec2)>>);
+pub struct ArtImages(HashMap<String, Option<(Handle<Image>, Vec2)>>);
 
 /// The room the art on screen belongs to, and its entities.
 #[derive(Resource, Default)]
 pub struct ShownArt {
     room: Option<RoomId>,
+    /// The sim's tick when the room's art was built: scrolling counts from here.
+    start_tick: u64,
+    /// The tick the backgrounds were last placed for.
+    placed_tick: u64,
+    art: RoomArt,
+    /// Colour and tiles.
     entities: Vec<Entity>,
+    /// The sprites of each background layer, in `art.backgrounds` order.
+    backgrounds: Vec<Vec<Entity>>,
 }
 
 fn image(
@@ -164,7 +75,7 @@ fn image(
     files: &PackageFiles,
     images: &mut Assets<Image>,
     id: &str,
-) -> Option<Handle<Image>> {
+) -> Option<(Handle<Image>, Vec2)> {
     cache
         .0
         .entry(id.to_string())
@@ -181,10 +92,128 @@ fn image(
                 TextureFormat::Rgba8UnormSrgb,
                 RenderAssetUsages::RENDER_WORLD,
             );
-            Some((images.add(image), UVec2::new(s.size.0, s.size.1)))
+            Some((images.add(image), Vec2::new(s.size.0 as f32, s.size.1 as f32)))
         })
-        .as_ref()
-        .map(|(h, _)| h.clone())
+        .clone()
+}
+
+/// One piece of a background along one axis: room pixels `at .. at + len` show image pixels
+/// `from .. to`, repeated when `repeat`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Segment {
+    at: f32,
+    len: f32,
+    from: f32,
+    to: f32,
+    repeat: bool,
+}
+
+/// Cuts one axis of a background into the pieces that cover exactly the room (`0 .. room`), so
+/// nothing is drawn beside it. `image` is the image's length, `cell` its length in the room
+/// (the room's length when stretched), `pos` where its first copy starts.
+fn axis(room: f32, image: f32, cell: f32, pos: f32, tile: bool) -> Vec<Segment> {
+    let scale = cell / image;
+    if !tile {
+        let (start, end) = (pos.max(0.0), (pos + cell).min(room));
+        if end <= start {
+            return Vec::new();
+        }
+        return vec![Segment {
+            at: start,
+            len: end - start,
+            from: (start - pos) / scale,
+            to: (end - pos) / scale,
+            repeat: false,
+        }];
+    }
+    // The copy that covers the room's edge starts `phase` pixels before it.
+    let phase = pos.rem_euclid(cell);
+    let mut out = Vec::new();
+    if phase > 0.0 {
+        let len = phase.min(room);
+        let from = image - phase / scale;
+        out.push(Segment {
+            at: 0.0,
+            len,
+            from,
+            to: from + len / scale,
+            repeat: false,
+        });
+    }
+    if room > phase {
+        out.push(Segment {
+            at: phase,
+            len: room - phase,
+            from: 0.0,
+            to: image,
+            repeat: true,
+        });
+    }
+    out
+}
+
+/// The sprites of one background layer `ticks` ticks after the room started, as
+/// `(sprite, top-left in the room, scale)`.
+fn background_sprites(
+    bg: &Background,
+    handle: &Handle<Image>,
+    image: Vec2,
+    room: Vec2,
+    ticks: u64,
+) -> Vec<(Sprite, Vec2, Vec2)> {
+    let (px, py) = bg.position(ticks);
+    let cell = if bg.stretch { room } else { image };
+    let scale = cell / image;
+    let xs = axis(room.x, image.x, cell.x, px as f32, bg.tile.0);
+    let ys = axis(room.y, image.y, cell.y, py as f32, bg.tile.1);
+    let mut out = Vec::new();
+    for x in &xs {
+        for y in &ys {
+            let mut sprite = Sprite::from_image(handle.clone());
+            sprite.rect = Some(Rect::new(x.from, y.from, x.to, y.to));
+            sprite.custom_size = Some(Vec2::new(x.len / scale.x, y.len / scale.y));
+            if x.repeat || y.repeat {
+                sprite.image_mode = SpriteImageMode::Tiled {
+                    tile_x: x.repeat,
+                    tile_y: y.repeat,
+                    stretch_value: 1.0,
+                };
+            }
+            out.push((sprite, Vec2::new(x.at, y.at), scale));
+        }
+    }
+    out
+}
+
+/// GM: y grows downward from the room corner. Bevy: y up from the centre.
+fn corner(room: Vec2, at: Vec2, z: f32) -> Transform {
+    Transform::from_xyz(at.x - room.x / 2.0, room.y / 2.0 - at.y, z)
+}
+
+fn background_z(bg: &Background, n: usize) -> f32 {
+    let base = if bg.foreground { FOREGROUND_Z } else { BACKGROUND_Z };
+    // Later layers draw on top.
+    base + n as f32 * 1e-3
+}
+
+fn spawn_background(
+    commands: &mut Commands,
+    bg: &Background,
+    n: usize,
+    img: Option<&(Handle<Image>, Vec2)>,
+    room: Vec2,
+    ticks: u64,
+) -> Vec<Entity> {
+    let Some((handle, size)) = img else {
+        return Vec::new();
+    };
+    background_sprites(bg, handle, *size, room, ticks)
+        .into_iter()
+        .map(|(sprite, at, scale)| {
+            let t = corner(room, at, background_z(bg, n)).with_scale(scale.extend(1.0));
+            commands.spawn((sprite, Anchor::TOP_LEFT, t)).id()
+        })
+        .collect()
 }
 
 /// Rebuilds the art when the sim's room changes.
@@ -198,83 +227,119 @@ pub fn sync_room_art(
     mut shown: ResMut<ShownArt>,
 ) {
     let room = game.sim.world().room;
-    if shown.room == Some(room) {
+    let tick = game.sim.world().tick;
+    // A retry starts a new sim in the same room with the tick back at its start.
+    if shown.room == Some(room) && tick >= shown.start_tick {
         return;
     }
     shown.room = Some(room);
-    for e in shown.entities.drain(..) {
+    shown.start_tick = tick;
+    shown.placed_tick = tick;
+    let mut old = std::mem::take(&mut shown.entities);
+    old.extend(shown.backgrounds.drain(..).flatten());
+    for e in old {
         commands.entity(e).despawn();
     }
+    shown.art = RoomArt::default();
     let Some(def) = game.sim.def().room(room) else {
         return;
     };
-    let text = |path: String| {
-        files
-            .0
-            .get(&path)
-            .and_then(|b| std::str::from_utf8(b).ok().map(String::from))
-    };
-    let art = parse_room_art(
-        &text(format!("rooms/{}.toml", def.name)).unwrap_or_default(),
-        text(format!("rooms/{}.tiles.toml", def.name)).as_deref(),
-    );
-    let (w, h) = (room_size.0.x, room_size.0.y);
-    // GM: y grows downward from the room corner. Bevy: y up from the centre.
-    let corner = |x: f32, y: f32, z: f32| Transform::from_xyz(x - w / 2.0, h / 2.0 - y, z);
+    // The loader checked both files; one that fails here draws nothing.
+    let art = load_room_art(&files.0, &def.name).unwrap_or_default();
+    let tiles = load_tiles(&files.0, &def.name).unwrap_or_default();
+    let size = room_size.0;
     let mut spawned = Vec::new();
     if let Some([r, g, b]) = art.color {
         spawned.push(
             commands
                 .spawn((
-                    Sprite::from_color(Color::srgb(r, g, b), Vec2::new(w, h)),
+                    Sprite::from_color(Color::srgb_u8(r, g, b), size),
                     Transform::from_xyz(0.0, 0.0, COLOR_Z),
                 ))
                 .id(),
         );
     }
-    if let Some(handle) = art
-        .background
-        .as_deref()
-        .and_then(|id| image(&mut cache, &files.0, &mut images, id))
-    {
-        let mut sprite = Sprite::from_image(handle);
-        sprite.custom_size = Some(Vec2::new(w, h));
-        sprite.image_mode = SpriteImageMode::Tiled {
-            tile_x: true,
-            tile_y: true,
-            stretch_value: 1.0,
-        };
-        spawned.push(
-            commands
-                .spawn((sprite, Anchor::TOP_LEFT, corner(0.0, 0.0, BACKGROUND_Z)))
-                .id(),
-        );
-    }
-    for (n, layer) in art.layers.iter().enumerate() {
-        let Some(handle) = image(&mut cache, &files.0, &mut images, &layer.tileset) else {
+    shown.backgrounds = art
+        .backgrounds
+        .iter()
+        .enumerate()
+        .map(|(n, bg)| {
+            let img = image(&mut cache, &files.0, &mut images, &bg.image);
+            spawn_background(&mut commands, bg, n, img.as_ref(), size, 0)
+        })
+        .collect();
+    spawn_tiles(
+        &mut commands,
+        &tiles,
+        size,
+        &files.0,
+        &mut images,
+        &mut cache,
+        &mut spawned,
+    );
+    shown.entities = spawned;
+    shown.art = art;
+}
+
+fn spawn_tiles(
+    commands: &mut Commands,
+    layers: &[TileLayer],
+    room: Vec2,
+    files: &PackageFiles,
+    images: &mut Assets<Image>,
+    cache: &mut ArtImages,
+    spawned: &mut Vec<Entity>,
+) {
+    for (n, layer) in layers.iter().enumerate() {
+        let Some((handle, _)) = image(cache, files, images, &layer.tileset) else {
             continue;
         };
-        let (tw, th) = tile_size(&files.0, &layer.tileset);
         // Later layers of the same depth draw on top.
         let z = layer_z(layer.depth) + n as f32 * 1e-4;
         for tile in &layer.tiles {
-            for row in 0..tile.run.1 {
-                for col in 0..tile.run.0 {
-                    let x = tile.pos.0 as f32 + (col * tw) as f32;
-                    let y = tile.pos.1 as f32 + (row * th) as f32;
-                    let mut sprite = Sprite::from_image(handle.clone());
-                    sprite.rect = Some(Rect::new(
-                        tile.src.0 as f32,
-                        tile.src.1 as f32,
-                        tile.src.0 as f32 + tw as f32,
-                        tile.src.1 as f32 + th as f32,
-                    ));
-                    spawned.push(commands.spawn((sprite, Anchor::TOP_LEFT, corner(x, y, z))).id());
-                }
+            let (sx, sy) = (tile.src.0 as f32, tile.src.1 as f32);
+            let (w, h) = (tile.size.0 as f32, tile.size.1 as f32);
+            for (x, y) in tile.positions() {
+                let mut sprite = Sprite::from_image(handle.clone());
+                sprite.rect = Some(Rect::new(sx, sy, sx + w, sy + h));
+                let at = Vec2::new(x as f32, y as f32);
+                spawned.push(
+                    commands
+                        .spawn((sprite, Anchor::TOP_LEFT, corner(room, at, z)))
+                        .id(),
+                );
             }
         }
     }
-    shown.entities = spawned;
+}
+
+/// Moves the scrolling background layers once per tick: each one is rebuilt where it is now.
+pub fn scroll_backgrounds(
+    mut commands: Commands,
+    game: NonSend<Game>,
+    files: Res<ArtFiles>,
+    room_size: Res<RoomSize>,
+    mut images: ResMut<Assets<Image>>,
+    mut cache: ResMut<ArtImages>,
+    mut shown: ResMut<ShownArt>,
+) {
+    let tick = game.sim.world().tick;
+    if tick == shown.placed_tick || shown.room.is_none() {
+        return;
+    }
+    shown.placed_tick = tick;
+    let ticks = tick.saturating_sub(shown.start_tick);
+    let shown = &mut *shown;
+    for (n, bg) in shown.art.backgrounds.iter().enumerate() {
+        if bg.speed == (0.0, 0.0) {
+            continue;
+        }
+        for e in shown.backgrounds[n].drain(..) {
+            commands.entity(e).despawn();
+        }
+        let img = image(&mut cache, &files.0, &mut images, &bg.image);
+        shown.backgrounds[n] = spawn_background(&mut commands, bg, n, img.as_ref(), room_size.0, ticks);
+    }
 }
 
 #[cfg(test)]
@@ -282,31 +347,84 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_art_keys_are_read() {
-        let art = parse_room_art(
-            "size = [800, 608]\nbackground = \"sky\"\nbackground_color = \"#ff8000\"\n",
-            Some(
-                "layers = [\n  { depth = 1000000, tileset = \"t\", tiles = [\n    { x = 0, y = 576, src = [32, 0], run = [25, 1] },\n    { x = 8, y = 8, src = [0, 0] },\n  ] },\n]\n",
-            ),
-        );
-        assert_eq!(art.background.as_deref(), Some("sky"));
-        assert_eq!(art.color, Some([1.0, 128.0 / 255.0, 0.0]));
-        assert_eq!(art.layers.len(), 1);
-        assert_eq!(art.layers[0].depth, 1_000_000.0);
-        assert_eq!(art.layers[0].tiles[0].run, (25, 1));
-        assert_eq!(art.layers[0].tiles[0].src, (32.0, 0.0));
-        assert_eq!(art.layers[0].tiles[1].run, (1, 1));
-    }
-
-    #[test]
-    fn a_room_without_art_draws_nothing_extra() {
-        assert_eq!(parse_room_art("size = [32, 32]\n", None), RoomArt::default());
-    }
-
-    #[test]
-    fn deeper_layers_are_farther_back_and_never_past_the_background() {
+    fn deeper_layers_are_farther_back_and_never_past_the_backgrounds() {
         assert!(layer_z(1_000_000.0) < layer_z(0.0));
         assert!(layer_z(-50.0) > layer_z(0.0));
-        assert!(layer_z(1e12) > BACKGROUND_Z);
+        assert!(layer_z(1e12) > BACKGROUND_Z + 8e-3);
+        assert!(layer_z(-1e12) < FOREGROUND_Z);
+    }
+
+    #[test]
+    fn a_tiled_axis_covers_the_room_exactly() {
+        // Image 64 px in a 100 px room, starting at 0: one repeated piece.
+        assert_eq!(
+            axis(100.0, 64.0, 64.0, 0.0, true),
+            [Segment {
+                at: 0.0,
+                len: 100.0,
+                from: 0.0,
+                to: 64.0,
+                repeat: true
+            }]
+        );
+        // Scrolled 10 px right: the last 10 px of the image first, then the repeat from 10.
+        assert_eq!(
+            axis(100.0, 64.0, 64.0, 10.0, true),
+            [
+                Segment {
+                    at: 0.0,
+                    len: 10.0,
+                    from: 54.0,
+                    to: 64.0,
+                    repeat: false
+                },
+                Segment {
+                    at: 10.0,
+                    len: 90.0,
+                    from: 0.0,
+                    to: 64.0,
+                    repeat: true
+                },
+            ]
+        );
+        // Scrolled 10 px left is the same as 54 px right.
+        assert_eq!(axis(100.0, 64.0, 64.0, -10.0, true)[0].from, 10.0);
+    }
+
+    #[test]
+    fn an_untiled_axis_is_one_copy_cut_at_the_room_edge() {
+        let s = axis(100.0, 64.0, 64.0, 60.0, false);
+        assert_eq!(
+            s,
+            [Segment {
+                at: 60.0,
+                len: 40.0,
+                from: 0.0,
+                to: 40.0,
+                repeat: false
+            }]
+        );
+        assert!(axis(100.0, 64.0, 64.0, 100.0, false).is_empty());
+        assert!(axis(100.0, 64.0, 64.0, -64.0, false).is_empty());
+        // Stretched to the room: the whole image over the whole room.
+        let s = axis(100.0, 50.0, 100.0, 0.0, false);
+        assert_eq!((s[0].len, s[0].from, s[0].to), (100.0, 0.0, 50.0));
+    }
+
+    #[test]
+    fn a_stretched_background_scales_its_sprite() {
+        let mut bg = Background::new("sky", 0..0);
+        bg.stretch = true;
+        bg.tile = (false, false);
+        let sprites = background_sprites(
+            &bg,
+            &Handle::default(),
+            Vec2::new(50.0, 40.0),
+            Vec2::new(800.0, 608.0),
+            0,
+        );
+        assert_eq!(sprites.len(), 1);
+        assert_eq!(sprites[0].2, Vec2::new(16.0, 15.2));
+        assert_eq!(sprites[0].0.custom_size, Some(Vec2::new(50.0, 40.0)));
     }
 }

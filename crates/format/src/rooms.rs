@@ -11,6 +11,7 @@ use std::ops::Range;
 use serde::Deserialize;
 use toml::Spanned;
 
+use crate::art::{BackgroundFile, RoomArt, room_art};
 use crate::diag::Diagnostic;
 use crate::manifest::{RoleName, toml_error};
 use crate::number::Number;
@@ -51,6 +52,8 @@ pub struct RoomFile {
     pub instances: Vec<InstanceFile>,
     /// Room creation code, as data.
     pub on_create: Vec<Spanned<ActionFile>>,
+    /// Background colour and layers; drawn by the client, never seen by the sim.
+    pub art: RoomArt,
 }
 
 /// One `[[views]]` entry.
@@ -176,13 +179,18 @@ pub(crate) struct RawRoom {
     persistent: bool,
     #[serde(default)]
     music: Option<String>,
+    /// Short for one background layer with every default: `backgrounds = [{ image = "<id>" }]`.
     #[serde(default)]
-    background: Option<String>,
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    background: Option<Spanned<String>>,
+    /// `#rrggbb`: fills the room behind every background; absent, nothing does.
     #[serde(default)]
-    background_color: Option<String>,
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    background_color: Option<Spanned<String>>,
+    /// Up to 8 background layers in drawing order.
     #[serde(default)]
-    #[cfg_attr(feature = "schema", schemars(with = "Vec<serde_json::Value>"))]
-    backgrounds: Vec<toml::Value>,
+    #[cfg_attr(feature = "schema", schemars(with = "Vec<BackgroundFile>"))]
+    backgrounds: Vec<Spanned<BackgroundFile>>,
     #[serde(default)]
     views_enabled: bool,
     #[serde(default)]
@@ -200,13 +208,14 @@ pub(crate) struct RawRoom {
 pub fn parse_room(id: &str, path: &str, text: &str) -> Result<RoomFile, Diagnostic> {
     let raw: RawRoom = toml::from_str(text).map_err(|e| toml_error(path, text, &e))?;
     let err = |span: Range<usize>, msg: String| Diagnostic::error_at(path, text, span.start, msg);
-    // Visual and audio keys: read so unknown keys stay errors, but not part of the sim.
-    let _ = (
-        &raw.music,
-        &raw.background,
-        &raw.background_color,
+    // Audio key: read so unknown keys stay errors, but not part of the sim.
+    let _ = &raw.music;
+    let art = room_art(
+        raw.background.as_ref(),
+        raw.background_color.as_ref(),
         &raw.backgrounds,
-    );
+        &err,
+    )?;
     let [w, h] = *raw.size.get_ref();
     if w == 0 || h == 0 {
         return Err(err(raw.size.span(), "size must be at least 1 x 1".to_owned()));
@@ -243,6 +252,7 @@ pub fn parse_room(id: &str, path: &str, text: &str) -> Result<RoomFile, Diagnost
         views: raw.views,
         instances,
         on_create: raw.on_create,
+        art,
     })
 }
 

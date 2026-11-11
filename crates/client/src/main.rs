@@ -14,6 +14,7 @@
 
 mod art;
 mod audio;
+mod bindings;
 mod hud;
 mod input;
 mod mods;
@@ -44,6 +45,8 @@ struct Args {
     #[command(flatten)]
     screen: screen::ScreenArgs,
     #[command(flatten)]
+    bindings: bindings::BindingsArgs,
+    #[command(flatten)]
     ui: ui::UiArgs,
     #[command(flatten)]
     hud: hud::HudArgs,
@@ -58,6 +61,17 @@ struct Args {
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> ExitCode {
     let args = Args::parse();
+    let bindings = match bindings::load(&args.bindings) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    if args.bindings.show_bindings {
+        print!("{}", bindings.describe());
+        return ExitCode::SUCCESS;
+    }
     // The settings file gives the defaults the flags override (settings.rs). A `--screenshot`
     // check neither reads nor writes it, so it looks the same on every machine.
     settings::load(args.view.screenshot.is_some());
@@ -81,9 +95,10 @@ fn main() -> ExitCode {
         );
         return ExitCode::SUCCESS;
     }
-    // Clap requires the package unless `--ui-gallery` is given.
+    // Clap requires the package unless `--ui-gallery`, `--bind` or `--show-bindings` is given;
+    // with only the bindings flags there is nothing to play.
     let Some(dir) = args.package.package else {
-        return ExitCode::FAILURE;
+        return ExitCode::SUCCESS;
     };
     savefile::configure(&args.save);
     let pkg = match package::open(&dir, args.package.trace_mode) {
@@ -103,6 +118,7 @@ fn main() -> ExitCode {
         app.add_plugins((
             screen::ScreenPlugin,
             hud::HudPlugin,
+            bindings::BindingsPlugin(bindings),
             savefile::SavePlugin,
             art::ArtPlugin(pkg.files.clone()),
             audio::AudioPlugin::new(&audio, &pkg.files),

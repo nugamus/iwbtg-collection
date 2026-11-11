@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A tileset sidecar `backgrounds/<id>.toml`, as written.",
+  "properties": {
+    "separation": {
+      "default": null,
+      "description": "Pixels between neighbouring tiles in the image, horizontal and vertical; default\n`[0, 0]`. Editors use it to cut the image into a palette; drawing never does, since every\ntile names its own source.",
+      "items": {
+        "format": "uint32",
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "tile_size": {
+      "default": null,
+      "description": "Width and height of one tile in pixels; default `[32, 32]`. A tile without its own size\n(`src = [x, y]`) is this big, and a `run` without `step` repeats at this spacing.",
+      "items": {
+        "format": "uint32",
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": [
+        "array",
+        "null"
+      ]
+    }
+  },
+  "title": "IWBTG backgrounds/<id>.toml tileset sidecar (format v0)",
+  "type": "object"
+}
