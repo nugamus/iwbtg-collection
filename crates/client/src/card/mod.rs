@@ -327,7 +327,8 @@ fn identity(card: &Card, variant: Variant, d: &Dims) -> impl Bundle + use<> {
     let cleared = if footer {
         format!("{} cleared", card.games_cleared)
     } else {
-        format!("{} games cleared", card.games_cleared)
+        let unit = if card.games_cleared == 1 { "game" } else { "games" };
+        format!("{} {unit} cleared", card.games_cleared)
     };
     let name = card.name.clone();
     let line = d.line;
