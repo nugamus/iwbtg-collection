@@ -65,7 +65,7 @@ Modelled on osu!lazer song select (decided 2026-11-04). The list of games is on 
 
 Three columns (decided 2026-11-04):
 
-- **Left: live leaderboard.** About 7 rows. You start at #1 at 0:00 and fall as your time passes other entries' final times; your row shows your elapsed time and stays centred. When you clear a stage, your row shows your split against the player directly above you for 3 s (the pace flash). Below the top 100 your rank keeps counting and the list shows the runs directly above you.
+- **Left: live leaderboard.** About 7 rows. You start at #1 at 0:00 and fall as your time passes other entries' final times; your row shows your elapsed time and stays centred. When you clear a stage, your row shows your split against the player directly above you for 3 s (the pace flash); at #1 it compares with the run directly below, since no one is above (2026-11-11, #494, revisit). Below the top 100 your rank keeps counting and the list shows the runs directly above you.
 - **Centre: the game.** Never stretched. At 16:9 it fills the window height; at 4:3 it shrinks so both panels keep their room; on ultrawide the panels stop at a maximum width and the rest is background art.
 - **Right: run info.** Timer, total deaths, stage of total, deaths this stage, an input display, and a row of active mod icons. An unranked run shows an Unranked pill for the whole run; a plain ranked run shows nothing there.
 
