@@ -3,6 +3,7 @@
 //! music each Step and plays the death sound one tick after its Create; the retry releases it.
 
 use iwbtg_sim::builtins;
+use iwbtg_sim::builtins::state::BuiltinState;
 use iwbtg_sim::def::physics::DeathStep;
 use iwbtg_sim::def::testing::GameDefBuilder;
 use iwbtg_sim::def::{
@@ -18,7 +19,7 @@ use iwbtg_sim::output::OutputEvent;
 use iwbtg_sim::rules::RunnerRules;
 use iwbtg_sim::script::ScriptRuntime;
 use iwbtg_sim::sound::{self, DllMode, SoundOutput, SoundTarget};
-use iwbtg_sim::world::{Ctx, InstId, SpawnInit, World};
+use iwbtg_sim::world::{Ctx, InstId, KindState, SpawnInit, World};
 
 const DEATH: SoundId = SoundId(0);
 const MUSIC: SoundId = SoundId(1);
@@ -55,6 +56,10 @@ fn game() -> (GameDef, KindId, KindId) {
 }
 
 fn run<T>(f: impl FnOnce(&mut Ctx, KindId, KindId) -> T) -> T {
+    run_in(DllMode::Model, f)
+}
+
+fn run_in<T>(dll_mode: DllMode, f: impl FnOnce(&mut Ctx, KindId, KindId) -> T) -> T {
     let (def, kid, ds) = game();
     let rules = RunnerRules::for_runner(def.runner, def.engine_rev).expect("rules");
     let mut w = World::new(def.start_room, 1);
@@ -64,7 +69,7 @@ fn run<T>(f: impl FnOnce(&mut Ctx, KindId, KindId) -> T) -> T {
         rules: &rules,
         w: &mut w,
         scripts: &scripts,
-        dll_mode: DllMode::Stub,
+        dll_mode,
     };
     f(&mut ctx, kid, ds)
 }
@@ -119,6 +124,52 @@ fn the_fade_sends_full_volume_first_then_drops_by_a_hundredth_of_full_each_tick(
         }
         assert_eq!(volumes(ctx), vec![1.0, 0.99, 0.98]);
     });
+}
+
+fn fade(ctx: &Ctx, id: InstId) -> (f64, f64) {
+    match &ctx.w.get(id).expect("alive").state {
+        KindState::Builtin(BuiltinState::DeathSound(s)) => (s.start.get(), s.now.get()),
+        _ => panic!("not a death sound"),
+    }
+}
+
+#[test]
+fn the_model_starts_the_fade_at_the_start_volume() {
+    run(|ctx, _, ds| {
+        let id = spawn_ds(ctx, ds);
+        assert_eq!(fade(ctx, id), (10000.0, 10000.0));
+        step(ctx, id);
+        assert_eq!(fade(ctx, id), (10000.0, 9900.0));
+    });
+}
+
+#[test]
+fn stubbed_dlls_start_the_fade_at_zero_and_it_never_moves() {
+    // kaenbyou audio-supersound-deathfade-a (--stub-dlls): start_vol = now_vol = 0 throughout.
+    run_in(DllMode::Stub, |ctx, _, ds| {
+        let id = spawn_ds(ctx, ds);
+        assert_eq!(fade(ctx, id), (0.0, 0.0));
+        for _ in 0..120 {
+            step(ctx, id);
+        }
+        assert_eq!(fade(ctx, id), (0.0, 0.0));
+        assert!(volumes(ctx).iter().all(|v| *v == 0.0));
+    });
+}
+
+#[test]
+fn the_probe_reads_start_vol_and_now_vol() {
+    let s = builtins::death_sound::DeathSoundState {
+        sound: None,
+        music: None,
+        start: r(10000.0),
+        now: r(9900.0),
+    };
+    let f = |n| builtins::death_sound::probe_field(&s, n).map(Real::get);
+    assert_eq!(
+        (f("start_vol"), f("now_vol"), f("other")),
+        (Some(10000.0), Some(9900.0), None)
+    );
 }
 
 #[test]
