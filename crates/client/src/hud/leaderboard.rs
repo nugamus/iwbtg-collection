@@ -50,6 +50,8 @@ pub struct Entry {
     /// Empty when the run's segments do not match the game's.
     pub splits: Vec<u64>,
     pub label: String,
+    /// The label on a compact panel, where the full one does not fit (`3 Nov`: no year).
+    pub short: String,
 }
 
 /// Your place, from 1, at `elapsed` ticks among `entries` (fastest first): every run that took
@@ -128,6 +130,11 @@ pub fn date(secs: u64) -> String {
     format!("{day} {} {year}", MONTHS[(month - 1) as usize])
 }
 
+/// `3 Nov` from `3 Nov 2026`: a compact panel has no room for the year.
+pub fn short_date(date: &str) -> &str {
+    date.rsplit_once(' ').map_or(date, |(day_month, _)| day_month)
+}
+
 /// Sample boards for screenshot checks (`--hud-preview-leaderboard`), from the artboards'
 /// sample data (`Leaderboard.dc.html`, scenario `local`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
@@ -185,6 +192,7 @@ impl Sample {
                 // One stage, cleared at a third of the run.
                 splits: vec![ticks(s / 3.0), ticks(s)],
                 label: label.to_owned(),
+                short: short_date(label).to_owned(),
             })
             .collect()
     }
@@ -318,6 +326,7 @@ fn from_runs(runs: &[crate::stats::Run], segments: usize) -> Vec<Entry> {
                 Vec::new()
             },
             label: date(r.finished_at),
+            short: short_date(&date(r.finished_at)).to_owned(),
         })
         .collect()
 }
@@ -406,6 +415,7 @@ pub fn build(width: f32, density: Density, live: &Live) -> impl Bundle {
             Density::Compact => 28.0,
             Density::Small => 22.0,
         },
+        short: density == Density::Compact,
         indent,
         you_width,
         their_width: if mini { 84.0 } else { width - 30.0 },
@@ -521,6 +531,8 @@ struct Geometry {
     /// The rank column: the artboard's 34 px; 28 when compact, so a time still fits at 4:3;
     /// 22 in the small leaderboard.
     rank: f32,
+    /// Compact: rows name runs by [`Entry::short`].
+    short: bool,
     indent: f32,
     you_width: f32,
     their_width: f32,
@@ -579,7 +591,11 @@ fn their_row(
 ) -> impl Bundle + use<> {
     let mini = g.mini;
     let rank = g.rank;
-    let label = entry.label.clone();
+    let label = if g.short {
+        entry.short.clone()
+    } else {
+        entry.label.clone()
+    };
     let time = fmt_ticks(entry.ticks, rate);
     (
         node,
@@ -843,6 +859,7 @@ mod tests {
                 ticks: t,
                 splits: vec![t / 2, t],
                 label: String::new(),
+                short: String::new(),
             })
             .collect()
     }
@@ -904,6 +921,7 @@ mod tests {
         assert_eq!(date(0), "1 Jan 1970");
         assert_eq!(date(951_782_400), "29 Feb 2000");
         assert_eq!(date(1_793_750_400 + 86_399), "4 Nov 2026");
+        assert_eq!(short_date("29 Oct 2026"), "29 Oct");
     }
 
     /// Passing a run slides it above you and you below it, sets both ranks and pops your row;
