@@ -1,0 +1,43 @@
+# Sim core plan: 15. register, Tick and events
+
+Part of [the sim core plan](../sim-core.md), section 15 (the intro and the column meanings are there).
+
+### Tick and events
+
+| Id | Item | Status | Isolation | Default | Settles it |
+|---|---|---|---|---|---|
+| R1 | When xprevious/yprevious are captured | Confirmed (recorder) U1: at the start of the tick, before Begin Step | `TickRules::prev_capture` | `TickStart` | wanna t-prev-1 (rec), machinary t-mot-02-a rows 85-87 (rec), kaenbyou tr-room-08 rows 5-6 (rec) |
+| R2 | Instance order within a phase; whether depth matters | Confirmed (recorder) U2: object index, then creation; depth ignored | `events::dispatch_order`, `TickRules::dispatch` | `RankThenCreation`; alternatives `Creation`, `DepthThenRankThenCreation` | t-ord-1 (rec) |
+| R3 | Alarm decrement/fire rule; set to 0; set in own event | Confirmed (recorder) U3: only alarms the object handles count down; a value of 0 becomes -1 without firing; re-armed in its own event: no extra decrement; set by an earlier alarm of the same instance this tick: counted down that tick; set in Step: not counted that tick. An alarm assigned exactly 0 is not traced | `alarm::tick`, `alarm::set` | as the recorder | kaenbyou num-alarm-half-b (rec), jun-g num-eps-alpha rows 45-46 (rec), t-alarm-1, t-alarm-2 (rec) |
+| R3b | Fractional alarm values | Confirmed (recorder): round half even | `NumRules::alarm_from_real` | round half even | num-alarm-half (rec), num-eps-alpha (rec) |
+| R4 | Key event order | UNKNOWN U11 | `events::key_event_order` | held, press, release; action bit order | none planned |
+| R5 | Outside Room / Intersect Boundary slot | Confirmed (recorder) U4: after motion and End of Path, Outside Room first | `TickRules::boundary_slot` | `AfterMotion` | t-evo-1 (rec), t-evo-2 (rec), lr-boundary (rec) |
+| R6 | Timeline slot; moments passed when speed > 1 | Slot Confirmed (recorder) U6: after Begin Step, before alarms; moments for speed > 1 UNKNOWN (not traced) | `TickRules::timeline_slot`, `timeline::advance` | after Begin Step | t-evo-1 (rec) |
+| R6b | Moment N offset after Set Time Line at 0 (N or N+1 steps) | UNKNOWN (sound) | `timeline::start` | moment N runs N steps after the setting tick | audio-rori-sync (rec), audio-miku-sync-mute (rec) |
+| R7 | Animation slot; wrap compare; wrap count; negative speed | Confirmed (recorder): after Draw, `>=`, subtract once; negative speed below 0 not traced (sprites Inferred step 3) | `TickRules::anim_slot = AfterDraw | AfterMotion`, `anim::advance` | `AfterDraw`; `>=`, subtract once | t-anim-1, anim-save-end (rec), anim-switch-g (rec) |
+| R7b | Sprite-less instance animates | Confirmed (recorder): advances image_index and never wraps; what Draw shows at those indices is open | `anim::advance` (frames = 0), `TickRules::anim_nosprite` | `NoSpriteAnim::Advance` | little-trap anim-nosprite rows 2-61 (rec) |
+| R7c | Drawn and collision subimage after a sprite switch | Inferred | `Image::subimage()` | `floor(index) mod frames` | ANIM-SWITCH |
+| R7d | Default image state | Inferred (image_speed 1, scales 1, alpha 1) | `Image::default` | as Inferred | — |
+| R8 | What still runs after a room request in the tick | Confirmed (recorder) U8 for room_goto and game_restart: the rest of the tick is skipped; the old room is drawn once only when a transition is set | `TickRules::room_request` | `AbortTick` after the handler | t-room-1 (rec), tr-room-02-c (rec) |
+| R9 | New instance runs the current phase | Confirmed (recorder) U10: an instance of the creator's own object created during its turn gets no Step (t-evo-1 row 3) | `TickRules::new_instances_join_phase: JoinPhase` (`Never`, `LaterInOrder`, `Always`) | `LaterInOrder` | tr-room-03-b-log, a3-t17-b, t-evo-1 (rec), BLOOD-COUNT |
+| R10 | Instances created during Room Start get Room Start | Confirmed (recorder) U9: no | same snapshot rule | no | t-room-1 (rec), tr-room-14 (rec) |
+| R11 | GM 8.1 differences | UNKNOWN U12 | `RunnerRules::for_runner(Gm81)` | same as 8.0 | T-EVO-2 |
+| R12 | Order of one instance's collision pairs | Inferred (by the other's object order, then creation) / UNKNOWN: the platform part of T-COL-06 and T-MOT-08 are not run | `CollideRules::pair_order` | `OtherRankThenId`; alternative `HandlerListOrder` | T-COL-06 platform part, T-MOT-08 (research#7), k-platform (rec) |
+| R12b | One other matching two handler classes (platform as BLOCK and PLATFORM) | UNKNOWN (C8) | `events::collision_phase` | both fire, handler-list order | T-COL-06 platform part (research#7) |
+| R13 | One pending room request, last wins | Inferred / UNKNOWN; only game_restart after room_goto traced | `World::pending` setter | last wins | tr-room-01-a (rec); other pairs not traced |
+| R14 | room_speed equals the file speed until world Room Start | Confirmed (recorder): first interval 30, then 50 | `room::enter` | file speed | t-alarm-2 (rec), TR-ROOM-16 |
+| R15 | Draw-slot gameplay handlers run every tick | Confirmed need | `Phase::Late` | runs headless | — |
+| R16 | Globals survive game_restart; events on restart removal | Globals: Confirmed (recorder), cleared; events on removal UNKNOWN (not traced) | `RoomRules::globals_survive_restart`, `restart_events` | cleared; no events | little-runner tr-room-04 rows 33-34 (rec); TR-MECH-08 |
+| R17 | Room change spends a tick; boot tick on retry | Confirmed (recorder): R tick, 1 rInit tick, then the saved room; room changes spend no tick | `RestartModel::boot_ticks` | change between ticks; 1 boot tick | tr-room-01-a rows 42-44 (rec) |
+| R17b | Transitions spend no ticks | Confirmed (recorder) | output only | no ticks | tr-room-10-a (rec) |
+| R18 | Persistent room revisit: no Create, Room Start yes | Inferred | `room::perform_change` | as stated | TR-ROOM-14 |
+| R19 | View follow algorithm and phase | Confirmed (recorder) horizontally: border `min(hborder, view/2)`, follows the same tick's post-move position; camera-object games lag 1 tick; vertical follow UNKNOWN | `view::follow_update` | as the recorder, before Draw slot | animus, eat-the-lemon tr-room-09 (rec), little-runner tr-room-11 rows 258-260 (rec) |
+| R20 | Inactive instances and pause (xia) | Confirmed manual; xia io_clear on unpause | `Instance::active`, `InputState::clear` | — | T9 |
+| R21 | Which instance is "first" (queries, the kid, view follow, saveGame) | Confirmed (recorder): the save reads the lowest-id kid; `object.variable` and saves read the first in instance order. For one object, lowest id and dispatch order agree | `World::first_of`, `TickRules::first_rule` | dispatch order; alternative lowest id | famB-multikid-restart-b rows 25-26 (rec) |
+| R22 | Destroyed-this-step instance seen by collisions and queries | Partly answered: `instance_exists` and `object.variable` skip it (Confirmed (recorder), a3-t18-b row 42); collisions and queries UNKNOWN | `TickRules::dead_in_queries` | false | T-DEAD-1 (research#7) |
+| R23 | room_goto during the room change (room creation code) | Confirmed (recorder): 0 ticks in rLoad; Room Start and draw in rLoad not visible | `RoomRules::nested_request` | `ChainAfterSequence`, max 8 | kaenbyou tr-room-12 (rec) |
+| R24 | instance_destroy() in room creation code | Confirmed (recorder): destroys nothing, the rest of the code runs | `RoomAction::DestroySelf` | no-op | showdown a3-t18-a rows 42-43 (rec), a3-t20, tr-room-14 |
+| R25 | Deferral grain: code action or event action list | Confirmed (recorder): the code action; D&D Go to Room untraced | handler boundary | end of handler (Design) | tr-room-02-c row 13 (rec) |
+| R26 | Showdown restart path | Confirmed (recorder): R has no game_restart; the R tick makes a new kid in the old room, the next tick is the reloaded room with the same kid | `GameDef::restart.kind` | `ShowdownLoad` | traces/showdown/a3-t18-a.csv f41-43 (rec) |
+| R27 | Restart trigger phase per engine | Confirmed per game (rooms, A3 I7) | `RestartModel::trigger` | per 4.3 table | tr-room-01-a (rec), sh-save-restart (rec) |
+| R28 | Runner real-time reads (`fps`, clocks) | Design | world built-in, script API | `fps = tick_rate`; clocks from ticks | — |

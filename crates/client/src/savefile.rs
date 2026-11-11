@@ -1,4 +1,4 @@
-//! The save slot between sessions (docs/architecture/sim.md, Globals and save slot), kept through
+//! The save slot between sessions (docs/architecture/sim/world.md, Globals and save slot), kept through
 //! `storage.rs`: a file natively, browser storage on the web. The sim keeps the slot in
 //! its state and never touches files; the client writes it whenever it changes and reads it when
 //! the game starts, so closing the window keeps the save like the originals' save file.

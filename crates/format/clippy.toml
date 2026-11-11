@@ -1,4 +1,4 @@
-# Load-time purity (docs/architecture/sim.md, Sim purity): crates/format computes gameplay data the
+# Load-time purity (docs/architecture/sim/layout.md, Sim purity): crates/format computes gameplay data the
 # sim then runs on every target (mask rasterization, sorted var ids, ranks, gameplay_hash), on
 # the client (WASM) and the server (native). So the platform-dependent float math and unordered
 # maps banned in crates/sim/clippy.toml are banned here too. IO stays allowed: this crate reads
