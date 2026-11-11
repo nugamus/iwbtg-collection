@@ -127,10 +127,12 @@ impl StageDeaths {
     }
 }
 
-/// For screenshot checks (`--hud-preview-held`): keys drawn as held, as a run would show them.
+/// For screenshot checks: keys drawn as held, as a run would show them (`--hud-preview-held`),
+/// and a sample leaderboard with its time on the timer (`--hud-preview-leaderboard`).
 #[derive(Resource, Clone, Copy, Debug, Default)]
 pub struct Preview {
     pub held: u32,
+    pub leaderboard: Option<super::leaderboard::Sample>,
 }
 
 /// `1,284`.
@@ -191,7 +193,11 @@ pub fn read(
     let stages = sim.def().timing.stages.len() as u32 + 1;
     let deaths = world.engine.run.deaths;
     let now = RunInfo {
-        ticks: sim.ranked_ticks() + paused.ticks,
+        ticks: preview
+            .leaderboard
+            .map_or(sim.ranked_ticks() + paused.ticks, |s| {
+                s.ticks(sim.def().tick_rate)
+            }),
         rate: sim.def().tick_rate,
         deaths,
         stage: (u32::from(world.timing.stages_done) + 1).min(stages),

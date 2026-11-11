@@ -8,7 +8,7 @@
 //! settings file; the HUD always starts shown.
 
 pub mod layout;
-mod panels;
+mod leaderboard;
 mod run_info;
 
 pub use run_info::Paused;
@@ -78,6 +78,9 @@ pub struct HudArgs {
     /// Screenshot checks: draw these actions as held in the input display (`right,jump`).
     #[arg(long, hide = true, value_name = "ACTIONS", value_parser = parse_actions)]
     pub hud_preview_held: Option<u32>,
+    /// Screenshot checks: a sample leaderboard (local, pace, top, empty, frozen) with its time.
+    #[arg(long, hide = true, value_name = "SAMPLE")]
+    pub hud_preview_leaderboard: Option<leaderboard::Sample>,
     /// Scale the side panels (never the game), 75 to 150 percent (Ctrl+= and Ctrl+- step by 5).
     #[arg(long, value_name = "PERCENT", value_parser = parse_ui_scale)]
     pub ui_scale: Option<u32>,
@@ -103,6 +106,7 @@ pub fn configure(args: &HudArgs) {
     });
     let _ = PREVIEW.set(run_info::Preview {
         held: args.hud_preview_held.unwrap_or(0),
+        leaderboard: args.hud_preview_leaderboard,
     });
 }
 
@@ -135,9 +139,10 @@ struct Column {
 #[derive(Component)]
 struct GameShadow;
 
-/// What the panels were built for, so they are rebuilt only when it changes.
+/// What the panels were built for, so they are rebuilt only when it changes: density, width,
+/// run info's look and the leaderboard's runs (`Live::generation`).
 #[derive(Component, PartialEq, Clone, Copy)]
-struct Built(Density, u32, run_info::Look);
+struct Built(Density, u32, run_info::Look, u32);
 
 pub struct HudPlugin;
 
@@ -159,6 +164,7 @@ impl Plugin for HudPlugin {
         .init_resource::<run_info::Look>()
         .init_resource::<run_info::RunInfo>()
         .init_resource::<run_info::StageDeaths>()
+        .init_resource::<leaderboard::Live>()
         .add_systems(Startup, spawn)
         .add_systems(
             Update,
@@ -166,8 +172,10 @@ impl Plugin for HudPlugin {
                 keys,
                 shadow,
                 run_info::read,
+                leaderboard::track,
                 place.after(crate::screen::apply),
                 run_info::show,
+                leaderboard::animate,
             )
                 .chain(),
         );
@@ -273,6 +281,7 @@ fn place(
     hud: Res<HudOptions>,
     layout: Res<HudLayout>,
     look: Res<run_info::Look>,
+    live: Res<leaderboard::Live>,
     window: Single<&Window, With<bevy::window::PrimaryWindow>>,
     mut ui_scale: ResMut<UiScale>,
     mut columns: Query<ColumnParts, Without<GameShadow>>,
@@ -324,7 +333,8 @@ fn place(
             (true, false) => (col * 0.92, col * 0.07),
             (false, _) => (col * 0.84, col * 0.09),
         };
-        let want = Built(l.density, width.round() as u32, *look);
+        let runs = if column.left { live.generation } else { 0 };
+        let want = Built(l.density, width.round() as u32, *look, runs);
         if built == Some(&want) {
             continue;
         }
@@ -338,7 +348,7 @@ fn place(
         let wrap = Node { margin, ..default() };
         if column.left {
             if look.show.leaderboard {
-                e.with_child((wrap, children![panels::leaderboard(width, l.density)]));
+                e.with_child((wrap, children![leaderboard::build(width, l.density, &live)]));
             }
         } else {
             e.with_child((wrap, children![run_info::build(width, l.density, *look)]));
