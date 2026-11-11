@@ -9,10 +9,11 @@ use bevy::camera::ScalingMode;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::sprite::Anchor;
-use iwbtg_sim::room::StartPoint;
 use iwbtg_sim::sim::{Sim, SimOptions};
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::world::{InstId, SimStatus};
+
+mod hud;
 
 use crate::input::{Collector, key_code};
 use crate::package::{Package, SpriteImage, sprite_images};
@@ -23,6 +24,13 @@ pub(crate) struct Game {
     pub(crate) sim: Sim,
 }
 
+/// How the run started, so a retry can start it again the same way.
+#[derive(Resource)]
+struct RunStart {
+    def: Arc<iwbtg_sim::def::GameDef>,
+    options: SimOptions,
+}
+
 /// The Bevy image of each sprite strip, by `SpriteId`, with the strip size.
 #[derive(Resource)]
 struct Textures(Vec<Option<(Handle<Image>, UVec2)>>);
@@ -31,9 +39,56 @@ struct Textures(Vec<Option<(Handle<Image>, UVec2)>>);
 #[derive(Resource, Default)]
 struct Drawn(BTreeMap<InstId, Entity>);
 
-/// The room size in pixels.
+/// The size in pixels of the room the sim is in (kept in step with the sim's room).
 #[derive(Resource)]
 pub(crate) struct RoomSize(pub(crate) Vec2);
+
+/// What the screen shows of the room: view 0's rectangle in room pixels (GM coordinates, y down)
+/// and its angle in degrees, or the whole room when the room has no enabled, visible view 0.
+/// `w` and `h` are the size the game is scaled to fit in the window.
+#[derive(Resource, Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ViewRect {
+    pub(crate) x: f32,
+    pub(crate) y: f32,
+    pub(crate) w: f32,
+    pub(crate) h: f32,
+    pub(crate) angle: f32,
+}
+
+impl ViewRect {
+    /// The whole room.
+    pub(crate) fn whole(room: Vec2) -> ViewRect {
+        ViewRect {
+            x: 0.0,
+            y: 0.0,
+            w: room.x,
+            h: room.y,
+            angle: 0.0,
+        }
+    }
+
+    /// Whether the view shows less than the room or is turned, so the camera must be clipped.
+    pub(crate) fn clips(&self, room: Vec2) -> bool {
+        (self.w - room.x).abs() > 0.5 || (self.h - room.y).abs() > 0.5 || self.angle.abs() > 1e-3
+    }
+
+    /// The view's centre in the room-centred, y-up world the sprites are placed in.
+    fn centre(&self, room: Vec2) -> Vec2 {
+        Vec2::new(
+            self.x + self.w / 2.0 - room.x / 2.0,
+            room.y / 2.0 - (self.y + self.h / 2.0),
+        )
+    }
+}
+
+/// The fixed-clock systems that advance the sim (the tick and the clock retune). Other modules
+/// gate them with a run condition, as Sudden Death does when the run is over (mods.rs).
+#[derive(SystemSet, Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub(crate) struct SimTick;
+
+/// Marks the camera that draws the game.
+#[derive(Component)]
+pub(crate) struct GameCamera;
 
 /// Decoded sprite strips, waiting for the Startup system to upload them.
 #[derive(Resource)]
@@ -69,12 +124,14 @@ impl std::str::FromStr for FrameCap {
 /// draw every step, so a blended frame shows positions the game never had. `pos` is where each
 /// instance was before the last tick.
 #[derive(Resource, Default)]
-struct Previous {
+pub(crate) struct Previous {
     on: bool,
     /// How far the fixed clock is into the next tick, 0 to 1.
     alpha: f64,
     room: Option<iwbtg_sim::def::RoomId>,
     pos: BTreeMap<InstId, (f64, f64)>,
+    /// View 0 before the last tick.
+    view: Option<ViewRect>,
 }
 
 /// An instance that moves farther than this in one tick (a warp, a teleport) is drawn at its
@@ -91,6 +148,43 @@ fn blend(prev: Option<(f64, f64)>, cur: (f64, f64), alpha: f64) -> (f64, f64) {
             (px + (cur.0 - px) * alpha, py + (cur.1 - py) * alpha)
         }
         _ => cur,
+    }
+}
+
+/// Blends the view `alpha` of the way from where it was before the last tick to where it is.
+/// No blend without a previous view, when the size changed, or after a jump (a room change, a
+/// snap to the kid, a turn of more than 45 degrees in one tick).
+fn blend_view(prev: Option<ViewRect>, cur: ViewRect, alpha: f64) -> ViewRect {
+    let Some(p) = prev else { return cur };
+    let near = |a: f32, b: f32, max: f64| f64::from((a - b).abs()) <= max;
+    let same_size = near(p.w, cur.w, 0.0) && near(p.h, cur.h, 0.0);
+    if !same_size
+        || !near(p.x, cur.x, MAX_BLEND_DISTANCE)
+        || !near(p.y, cur.y, MAX_BLEND_DISTANCE)
+        || !near(p.angle, cur.angle, 45.0)
+    {
+        return cur;
+    }
+    let mix = |a: f32, b: f32| a + (b - a) * alpha as f32;
+    ViewRect {
+        x: mix(p.x, cur.x),
+        y: mix(p.y, cur.y),
+        angle: mix(p.angle, cur.angle),
+        ..cur
+    }
+}
+
+/// View 0 of the sim's current room as drawn: enabled and visible, else the whole room.
+fn view_of(world: &iwbtg_sim::world::World, size: Vec2) -> ViewRect {
+    match world.views.first() {
+        Some(v) if v.enabled && v.visible && v.w.get() >= 1.0 && v.h.get() >= 1.0 => ViewRect {
+            x: v.x.get() as f32,
+            y: v.y.get() as f32,
+            w: v.w.get() as f32,
+            h: v.h.get() as f32,
+            angle: v.angle.get() as f32,
+        },
+        _ => ViewRect::whole(size),
     }
 }
 
@@ -119,24 +213,43 @@ struct Stats {
 
 /// The overlay text entity.
 #[derive(Component)]
-struct Overlay;
+pub(crate) struct Overlay;
 
-/// Opens the window and runs until it closes.
-pub fn run(
-    pkg: Package,
-    cap: FrameCap,
-    interpolate: bool,
-    screenshot: Option<std::path::PathBuf>,
-) -> Result<(), String> {
+/// The view's command-line flags (main.rs flattens each module's group, #530).
+#[derive(clap::Args, Debug)]
+pub struct ViewArgs {
+    /// Frame cap: a number of frames per second, or `unlimited`. The sim ticks at the game's
+    /// rate either way.
+    #[arg(long, value_name = "FPS", default_value = "60")]
+    pub fps: FrameCap,
+    /// Blend frames between the last two ticks for smoother motion on fast displays. Off by
+    /// default: the originals draw every step, so a blended frame shows positions the game never had.
+    #[arg(long)]
+    pub interpolate: bool,
+    /// Save a screenshot of the window to this PNG after a few frames and exit (for checks).
+    #[arg(long, value_name = "PNG")]
+    pub screenshot: Option<std::path::PathBuf>,
+}
+
+/// Opens the window and runs until it closes. `plugins` adds the other modules' plugins (main.rs
+/// lists them), after the window and the view's own resources are in place.
+pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package)) -> Result<(), String> {
+    let ViewArgs {
+        fps: cap,
+        interpolate,
+        screenshot,
+    } = args;
     let def = Arc::clone(&pkg.def);
     let options = SimOptions {
         // Like a replay: a new game, in the game's `new_game_room`. The title and menus come with
         // the rest of the client; until then the first thing on screen is the first room.
-        start: StartPoint::NewGame { difficulty: 0 },
+        start: crate::savefile::start_point(&def),
         seed: 0,
         dll_mode: DllMode::Model,
+        mode: iwbtg_sim::stripped::PlayMode::Original,
     };
-    let sim = Sim::new(Arc::clone(&def), options).map_err(|e| format!("the game did not start: {e}"))?;
+    let sim =
+        Sim::new(Arc::clone(&def), options.clone()).map_err(|e| format!("the game did not start: {e}"))?;
     let room = def.room(sim.world().room).ok_or("the start room is missing")?;
     let (width, height) = (room.width as f32, room.height as f32);
     let images = sprite_images(&pkg.files);
@@ -155,15 +268,16 @@ pub fn run(
                 ..default()
             }),
     )
-    .add_plugins(crate::screen::ScreenPlugin)
     .insert_resource(ClearColor(Color::BLACK))
     .insert_resource(RoomSize(Vec2::new(width, height)))
+    .insert_resource(ViewRect::whole(Vec2::new(width, height)))
     .insert_resource(PendingImages(images))
-    .insert_resource(crate::art::ArtFiles(pkg.files.clone()))
-    .init_resource::<crate::art::ArtImages>()
-    .init_resource::<crate::art::ShownArt>()
     .init_resource::<Drawn>()
     .insert_non_send(Game { sim })
+    .insert_resource(RunStart {
+        def: Arc::clone(&def),
+        options,
+    })
     .insert_resource(Collector::new())
     .insert_resource(Cap(cap))
     .insert_resource(Previous {
@@ -179,20 +293,24 @@ pub fn run(
     })
     // The sim ticks at the game's rate on a fixed clock; frames only draw what the last tick left.
     .insert_resource(Time::<Fixed>::from_hz(f64::from(def.tick_rate.max(1))))
-    .add_systems(Startup, setup)
+    .init_resource::<hud::SignText>()
+    .add_systems(Startup, (setup, hud::setup))
     .add_systems(
         RunFixedMainLoop,
         collect_input.in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
     )
-    .add_systems(FixedUpdate, tick)
+    .add_systems(FixedUpdate, (tick, follow_room_speed).chain().in_set(SimTick))
     .add_systems(
         Update,
         (
-            crate::art::sync_room_art,
-            (set_alpha, sync_instances, overlay).chain(),
+            follow_view,
+            (set_alpha, sync_instances, overlay).chain().after(follow_view),
+            hud::show_sign,
+            hud::show_countdown,
         ),
     )
     .add_systems(Last, limit_frames);
+    plugins(&mut app, &pkg);
     if let Some(path) = screenshot {
         app.insert_resource(ScreenshotTo(path))
             .add_systems(Update, take_screenshot);
@@ -217,10 +335,16 @@ fn setup(
         TextColor(Color::srgb(1.0, 1.0, 0.4)),
         Anchor::TOP_LEFT,
         Transform::from_xyz(-room.0.x / 2.0 + 4.0, room.0.y / 2.0 - 4.0, 1000.0),
+        if crate::settings::get().overlay {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        },
         Overlay,
     ));
     commands.spawn((
         Camera2d,
+        GameCamera,
         // The backdrop's own camera draws first; this one draws the game over it.
         Camera {
             clear_color: ClearColorConfig::None,
@@ -257,6 +381,53 @@ fn setup(
     commands.insert_resource(Textures(textures));
 }
 
+/// Points the camera at view 0 of the sim's room (the runner's view follow already moved it this
+/// tick): the camera centres on the view and turns with its angle, and the overlay stays at the
+/// view's top-left corner. Rooms without an enabled, visible view 0 show the whole room. Also keeps
+/// `RoomSize` equal to the current room, so rooms of different sizes place their sprites right.
+///
+/// With `--interpolate` the view is blended between its place before the last tick and its place
+/// now, like the instances, so a scrolling room does not jitter against moving sprites.
+///
+/// OPEN: the direction of `view_angle` is taken as counter-clockwise on screen, as the room's
+/// angle column in the gravity-flip trace only logs the value
+/// (nugamus/iwbtg-collection-research#94).
+pub(crate) fn follow_view(
+    game: NonSend<Game>,
+    previous: Res<Previous>,
+    fixed: Res<Time<Fixed>>,
+    mut room: ResMut<RoomSize>,
+    mut rect: ResMut<ViewRect>,
+    mut camera: Single<&mut Transform, (With<GameCamera>, Without<Overlay>)>,
+    mut overlay: Single<&mut Transform, (With<Overlay>, Without<GameCamera>)>,
+) {
+    let world = game.sim.world();
+    let Some(def) = game.sim.def().room(world.room) else {
+        return;
+    };
+    let size = Vec2::new(def.width as f32, def.height as f32);
+    if room.0 != size {
+        room.0 = size;
+    }
+    let mut next = view_of(world, size);
+    if previous.on && previous.room == Some(world.room) {
+        next = blend_view(previous.view, next, f64::from(fixed.overstep_fraction()));
+    }
+    if *rect != next {
+        *rect = next;
+    }
+    let turn = Quat::from_rotation_z(next.angle.to_radians());
+    let centre = next.centre(size);
+    camera.translation.x = centre.x;
+    camera.translation.y = centre.y;
+    camera.rotation = turn;
+    // The overlay sits 4 px inside the view's top-left corner and stays upright on screen.
+    let corner = turn * Vec3::new(-next.w / 2.0 + 4.0, next.h / 2.0 - 4.0, 0.0);
+    overlay.translation.x = centre.x + corner.x;
+    overlay.translation.y = centre.y + corner.y;
+    overlay.rotation = turn;
+}
+
 /// Remembers how far the fixed clock is into the next tick, for `--interpolate`.
 fn set_alpha(fixed: Res<Time<Fixed>>, mut previous: ResMut<Previous>) {
     previous.alpha = f64::from(fixed.overstep_fraction());
@@ -278,16 +449,71 @@ fn collect_input(keys: Res<ButtonInput<KeyCode>>, mut collector: ResMut<Collecto
     }
 }
 
+/// Starts the run again from where it started (quick-retry and auto-retry, `retry.rs`): a new
+/// sim with the same options, every drawn sprite gone, no pending input edges, no sign. The new sim's
+/// room-start output stays in `output` for its first step (#466). The fixed clock keeps its rate until the next
+/// tick's `follow_room_speed`.
+pub(crate) fn restart_run(world: &mut World) -> Result<(), String> {
+    let start = world.resource::<RunStart>();
+    let sim = Sim::new(Arc::clone(&start.def), start.options.clone())
+        .map_err(|e| format!("the game did not start: {e}"))?;
+    world.non_send_mut::<Game>().sim = sim;
+    let drawn = std::mem::take(&mut world.resource_mut::<Drawn>().0);
+    for entity in drawn.into_values() {
+        world.despawn(entity);
+    }
+    {
+        let mut previous = world.resource_mut::<Previous>();
+        previous.room = None;
+        previous.pos.clear();
+    }
+    // Keys held through the retry stay held; edges from before it are dropped.
+    world.resource_mut::<Collector>().take_frame();
+    world.resource_mut::<hud::SignText>().0 = None;
+    Ok(())
+}
+
+/// The view's run resources without a window, for tests of the systems that use them.
+#[cfg(test)]
+pub(crate) fn test_world(pkg: &Package) -> World {
+    let options = SimOptions {
+        start: iwbtg_sim::room::StartPoint::NewGame { difficulty: 0 },
+        seed: 0,
+        dll_mode: DllMode::Model,
+        mode: iwbtg_sim::stripped::PlayMode::Original,
+    };
+    let sim = Sim::new(Arc::clone(&pkg.def), options.clone()).unwrap();
+    let mut world = World::new();
+    world.insert_non_send(Game { sim });
+    world.insert_resource(RunStart {
+        def: Arc::clone(&pkg.def),
+        options,
+    });
+    world.init_resource::<Drawn>();
+    world.init_resource::<Previous>();
+    world.insert_resource(Collector::new());
+    world.init_resource::<hud::SignText>();
+    world
+}
+
 /// One sim tick: runs on the fixed clock, as many times per frame as the clock is behind.
 fn tick(
     mut game: NonSendMut<Game>,
     mut collector: ResMut<Collector>,
     mut stats: ResMut<Stats>,
+    mut audio: ResMut<crate::audio::Queue>,
+    mut shake: ResMut<crate::audio::Shake>,
     mut previous: ResMut<Previous>,
+    mut sign: ResMut<hud::SignText>,
 ) {
     if previous.on {
         let world = game.sim.world();
         previous.room = Some(world.room);
+        previous.view = game
+            .sim
+            .def()
+            .room(world.room)
+            .map(|d| view_of(world, Vec2::new(d.width as f32, d.height as f32)));
         previous.pos = world
             .instances()
             .iter()
@@ -298,13 +524,43 @@ fn tick(
     let frame = collector.take_frame();
     if game.sim.step(frame).status == SimStatus::Running {
         stats.ticks += 1;
+        let output = &game.sim.world().output;
+        hud::note_tick(&mut sign, output);
+        audio.push(Instant::now(), output);
+        shake.tick(output);
     }
+}
+
+/// The ticks per second the sim's current room speed asks for: `room_speed` as the room file or
+/// the game set it, at least 1 (a game that sets 0 or less would stop the clock) and at most 1000.
+fn room_hz(room_speed: f64) -> f64 {
+    if room_speed.is_finite() {
+        room_speed.clamp(1.0, 1000.0)
+    } else {
+        1.0
+    }
+}
+
+/// Sets the fixed clock to the rate `room_speed` asks for, when it is not already that.
+fn retune(fixed: &mut Time<Fixed>, room_speed: f64) {
+    let hz = room_hz(room_speed);
+    if (fixed.timestep().as_secs_f64().recip() - hz).abs() > 1e-6 {
+        fixed.set_timestep_hz(hz);
+    }
+}
+
+/// Retunes the fixed clock when the sim's `room_speed` changes (a room's file speed on entry, or a
+/// game setting it), so the game ticks at the rate it asks for. Runs after the sim's tick, so the
+/// next tick already uses the new rate.
+fn follow_room_speed(game: NonSend<Game>, mut fixed: ResMut<Time<Fixed>>) {
+    retune(&mut fixed, game.sim.world().room_speed.get());
 }
 
 /// F3 shows or hides the overlay; once a second it recounts ticks and frames per second.
 fn overlay(
     game: NonSend<Game>,
     keys: Res<ButtonInput<KeyCode>>,
+    fixed: Res<Time<Fixed>>,
     mut stats: ResMut<Stats>,
     mut text: Single<(&mut Text2d, &mut Visibility), With<Overlay>>,
 ) {
@@ -325,6 +581,7 @@ fn overlay(
         } else {
             Visibility::Hidden
         };
+        crate::settings::update(|s| s.overlay = **visibility != Visibility::Hidden);
     }
     let status = match &game.sim.world().status {
         SimStatus::Running => String::new(),
@@ -351,7 +608,7 @@ fn overlay(
 room {room}
 {kid}",
         stats.ticks_per_second,
-        game.sim.def().tick_rate,
+        fixed.timestep().as_secs_f64().recip().round(),
         stats.frames_per_second,
         world.tick,
     );
@@ -534,5 +791,105 @@ mod tests {
         assert_eq!(two(-0.000_001), "0.00");
         assert_eq!(two(-1.5), "-1.50");
         assert_eq!(two(567.4), "567.40");
+    }
+
+    #[test]
+    fn the_clock_follows_room_speed_within_sane_bounds() {
+        assert_eq!(room_hz(50.0), 50.0);
+        assert_eq!(room_hz(25.0), 25.0);
+        // A game that sets 0 or a negative speed must not stop or reverse the clock.
+        assert_eq!(room_hz(0.0), 1.0);
+        assert_eq!(room_hz(-30.0), 1.0);
+        assert_eq!(room_hz(1e9), 1000.0);
+        assert_eq!(room_hz(f64::NAN), 1.0);
+    }
+
+    #[test]
+    fn the_fixed_clock_is_retuned_when_room_speed_changes_and_left_alone_otherwise() {
+        let mut fixed = Time::<Fixed>::from_hz(50.0);
+        retune(&mut fixed, 50.0);
+        assert_eq!(fixed.timestep(), Duration::from_millis(20));
+        // A room at 25 steps per second: 40 ms per tick.
+        retune(&mut fixed, 25.0);
+        assert_eq!(fixed.timestep(), Duration::from_millis(40));
+        // Back to the game's rate on the next room.
+        retune(&mut fixed, 50.0);
+        assert_eq!(fixed.timestep(), Duration::from_millis(20));
+        // A game that sets a silly speed gets the clamped one.
+        retune(&mut fixed, 0.0);
+        assert_eq!(fixed.timestep(), Duration::from_secs(1));
+    }
+
+    #[test]
+    fn a_view_centres_the_camera_in_the_room_centred_world() {
+        let room = Vec2::new(2400.0, 608.0);
+        // The whole room: the world's origin.
+        assert_eq!(ViewRect::whole(room).centre(room), Vec2::ZERO);
+        // An 800 x 608 view at the room's left edge is 800 px left of the room's centre.
+        let v = ViewRect {
+            x: 0.0,
+            y: 0.0,
+            w: 800.0,
+            h: 608.0,
+            angle: 0.0,
+        };
+        assert_eq!(v.centre(room), Vec2::new(-800.0, 0.0));
+        // Scrolled 100 px right and 50 px down: right and down in GM, so +x and -y here.
+        let v = ViewRect {
+            x: 100.0,
+            y: 50.0,
+            ..v
+        };
+        assert_eq!(v.centre(room), Vec2::new(-700.0, -50.0));
+    }
+
+    fn view(x: f32, y: f32) -> ViewRect {
+        ViewRect {
+            x,
+            y,
+            w: 800.0,
+            h: 608.0,
+            angle: 0.0,
+        }
+    }
+
+    #[test]
+    fn the_view_moves_part_of_the_way_between_ticks() {
+        let mid = blend_view(Some(view(100.0, 0.0)), view(108.0, 4.0), 0.5);
+        assert_eq!((mid.x, mid.y), (104.0, 2.0));
+        assert_eq!(
+            blend_view(Some(view(100.0, 0.0)), view(108.0, 4.0), 1.0),
+            view(108.0, 4.0)
+        );
+        assert_eq!(
+            blend_view(Some(view(100.0, 0.0)), view(108.0, 4.0), 0.0),
+            view(100.0, 0.0)
+        );
+        // The turn is blended too.
+        let turned = ViewRect {
+            angle: 12.0,
+            ..view(0.0, 0.0)
+        };
+        assert_eq!(blend_view(Some(view(0.0, 0.0)), turned, 0.5).angle, 6.0);
+    }
+
+    #[test]
+    fn the_view_never_slides_across_a_jump_or_a_resize() {
+        // No previous view, a snap of the view, a resize and a half turn all land at once.
+        assert_eq!(blend_view(None, view(500.0, 0.0), 0.5), view(500.0, 0.0));
+        assert_eq!(
+            blend_view(Some(view(0.0, 0.0)), view(500.0, 0.0), 0.5),
+            view(500.0, 0.0)
+        );
+        let small = ViewRect {
+            w: 400.0,
+            ..view(0.0, 0.0)
+        };
+        assert_eq!(blend_view(Some(view(0.0, 0.0)), small, 0.5), small);
+        let flipped = ViewRect {
+            angle: 180.0,
+            ..view(0.0, 0.0)
+        };
+        assert_eq!(blend_view(Some(view(0.0, 0.0)), flipped, 0.5), flipped);
     }
 }

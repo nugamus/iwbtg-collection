@@ -11,10 +11,10 @@ pub struct RoomRules {
     /// that was requested first does not count; the 9th change raised during the sequences
     /// halts the sim.
     pub max_chained_changes: u8,
-    /// R16 (UNKNOWN): globals survive game_restart. Default false (cleared). Confirmed
+    /// R16: globals survive game_restart. Default false (cleared). Confirmed
     /// (recorder) that they are cleared: little-runner tr-room-04 rows 33-34.
     pub globals_survive_restart: bool,
-    /// R16 (UNKNOWN): instances removed by game_restart run events. Default false. When true,
+    /// R16 (UNKNOWN, not traced): instances removed by game_restart run events. Default false. When true,
     /// they get Room End (in [`RoomRules::room_end_order`]) before they are removed (Design: the
     /// spec does not say which events, if any).
     pub restart_events: bool,

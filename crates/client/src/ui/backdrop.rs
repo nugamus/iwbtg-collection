@@ -36,7 +36,7 @@ pub mod dim {
 }
 
 /// The blur the player starts with in the game (0 to 1; the setting itself lives in the settings
-/// file, #477).
+/// file once #509 adds it).
 pub const DEFAULT_BLUR: f32 = 0.6;
 
 /// How long the art takes to cross-fade, seconds.
@@ -128,7 +128,11 @@ struct Fade {
     t: Option<f32>,
 }
 
-fn spawn(mut commands: Commands, mut materials: ResMut<Assets<BackdropMaterial>>, mut images: ResMut<Assets<Image>>) {
+fn spawn(
+    mut commands: Commands,
+    mut materials: ResMut<Assets<BackdropMaterial>>,
+    mut images: ResMut<Assets<Image>>,
+) {
     let camera = commands
         .spawn((
             Camera2d,
@@ -221,7 +225,12 @@ fn drive(
             continue;
         };
         let u = BackdropUniform {
-            p: Vec4::new(backdrop.blur.clamp(0.0, 1.0), backdrop.dim.clamp(0.0, 1.0), opacity, top),
+            p: Vec4::new(
+                backdrop.blur.clamp(0.0, 1.0),
+                backdrop.dim.clamp(0.0, 1.0),
+                opacity,
+                top,
+            ),
         };
         if mat.u != u {
             mat.u = u;
@@ -297,7 +306,11 @@ pub fn scene_image(hue: f32) -> Image {
     let (w, h) = (480u32, 270u32);
     let rgb = |s: f32, l: f32| {
         let c = Color::hsl(hue, s, l).to_srgba();
-        [(c.red * 255.0) as u8, (c.green * 255.0) as u8, (c.blue * 255.0) as u8]
+        [
+            (c.red * 255.0) as u8,
+            (c.green * 255.0) as u8,
+            (c.blue * 255.0) as u8,
+        ]
     };
     let (far_c, near_c) = (rgb(0.30, 0.11), rgb(0.30, 0.055));
     let mut rgba = Vec::with_capacity((w * h * 4) as usize);
@@ -327,19 +340,39 @@ pub fn scene_image(hue: f32) -> Image {
 }
 
 /// The image to show for a game's key art ([`iwbtg_format::key_art::resolve`]): the package's PNG,
-/// the first ranked room's background image or colour, or the client's own fallback.
-pub fn key_art_image(files: &PackageFiles, art: &KeyArt, decode: impl Fn(&[u8]) -> Option<(Vec<u8>, u32, u32)>) -> Image {
-    let from_png = |path: &str| {
-        files
-            .get(path)
-            .and_then(&decode)
-            .map(|(rgba, w, h)| art_image(&rgba, w, h))
-    };
+/// the first ranked room's background image or colour, or the client's own fallback. A room
+/// background is tiled over `room` (its size in px) as the room shows it, so a small tile is not
+/// stretched into a few giant squares.
+pub fn key_art_image(
+    files: &PackageFiles,
+    art: &KeyArt,
+    room: (u32, u32),
+    decode: impl Fn(&[u8]) -> Option<(Vec<u8>, u32, u32)>,
+) -> Image {
+    let png = |path: &str| files.get(path).and_then(&decode);
     match art {
-        KeyArt::Image(path) | KeyArt::RoomBackground(path) => from_png(path).unwrap_or_else(fallback_image),
+        KeyArt::Image(path) => png(path).map_or_else(fallback_image, |(rgba, w, h)| art_image(&rgba, w, h)),
+        KeyArt::RoomBackground(path) => png(path).map_or_else(fallback_image, |(rgba, w, h)| {
+            let (cw, ch) = (room.0.max(1), room.1.max(1));
+            art_image(&tile(&rgba, w, h, cw, ch), cw, ch)
+        }),
         KeyArt::Colour(rgb) => colour_image(*rgb),
         KeyArt::None => fallback_image(),
     }
+}
+
+/// Repeats an RGBA8 image from the top-left corner over a `cw` x `ch` canvas.
+pub fn tile(rgba: &[u8], w: u32, h: u32, cw: u32, ch: u32) -> Vec<u8> {
+    let (w, h) = (w.max(1) as usize, h.max(1) as usize);
+    let mut out = Vec::with_capacity(cw as usize * ch as usize * 4);
+    for y in 0..ch as usize {
+        let row = (y % h) * w * 4;
+        for x in 0..cw as usize {
+            let at = row + (x % w) * 4;
+            out.extend_from_slice(&rgba[at..at + 4]);
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -370,6 +403,19 @@ mod tests {
     fn art_images_carry_every_level() {
         let img = art_image(&vec![0u8; 16 * 16 * 4], 16, 16);
         assert_eq!(img.texture_descriptor.mip_level_count, 5);
+    }
+
+    #[test]
+    fn a_room_background_tiles_from_the_corner() {
+        // 2x1: red, blue. Tiled over 3x2: red blue red on both rows.
+        let rgba = [255, 0, 0, 255, 0, 0, 255, 255];
+        let out = tile(&rgba, 2, 1, 3, 2);
+        let red = [255, 0, 0, 255];
+        assert_eq!(out.len(), 3 * 2 * 4);
+        assert_eq!(&out[0..4], &red);
+        assert_eq!(&out[4..8], &[0, 0, 255, 255]);
+        assert_eq!(&out[8..12], &red);
+        assert_eq!(&out[12..16], &red);
     }
 
     #[test]

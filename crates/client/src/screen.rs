@@ -3,7 +3,9 @@
 //! one game pixel is on the monitor and what fills the rest.
 //!
 //! There is no settings screen yet (#53), so the choices are flags (`--fullscreen`, `--ratio`,
-//! `--window`) and keys: F11 fullscreen, F10 next ratio, F9 next windowed size, [ and ] blur the backdrop less and more.
+//! `--window`) and keys: F11 fullscreen, F10 next ratio, F9 next windowed size. Each choice is
+//! saved in the settings file (`settings.rs`), so the next start keeps it. `[` and `]` blur the
+//! backdrop less and more (not saved yet: the settings file has no blur entry, #509).
 
 use std::sync::OnceLock;
 
@@ -16,8 +18,9 @@ use iwbtg_sim::def::RoomId;
 
 use crate::art::ArtFiles;
 use crate::package::decode_png;
-use crate::ui::backdrop::{self, Backdrop, BackdropCamera, BackdropPlugin};
-use crate::view::{Game, RoomSize};
+use crate::settings::{self, Settings};
+use crate::ui::backdrop::{self, Backdrop, BackdropPlugin};
+use crate::view::{Game, GameCamera, RoomSize, ViewRect};
 
 /// The aspect ratios fullscreen offers; `None` is the monitor's own.
 pub const RATIOS: [Option<(u32, u32)>; 6] = [
@@ -60,6 +63,38 @@ pub fn parse_size(s: &str) -> Result<(u32, u32), String> {
         .ok_or_else(|| "a window size is WIDTHxHEIGHT, at least 200 x 200".to_string())
 }
 
+/// The screen's command-line flags.
+#[derive(clap::Args, Debug)]
+pub struct ScreenArgs {
+    /// Start fullscreen (F11 toggles). Like `--ratio` and `--window`, saved in the settings file,
+    /// so the next start without the flag keeps it.
+    #[arg(long)]
+    pub fullscreen: bool,
+    /// The shape of the area the game may use: native, 4:3, 16:9, 16:10, 21:9 or 32:9 (F10 cycles).
+    /// The game is scaled by whole steps inside it; the rest is a blurred copy of the background.
+    /// Default: the saved choice, else native.
+    #[arg(long, value_name = "RATIO")]
+    pub ratio: Option<String>,
+    /// Windowed size, WIDTHxHEIGHT (F9 cycles the presets: 800x608, 1280x720, 1600x1216, 1920x1080,
+    /// 2560x1440, 3200x2432).
+    #[arg(long, value_name = "WxH", value_parser = parse_size)]
+    pub window: Option<(u32, u32)>,
+}
+
+impl ScreenArgs {
+    /// Puts the flags given on the command line into the settings; the rest keep their saved value.
+    pub fn apply(&self, s: &mut Settings) -> Result<(), String> {
+        if let Some(r) = &self.ratio {
+            s.ratio = parse_ratio(r).map_err(|e| format!("--ratio {r}: {e}"))?;
+        }
+        s.fullscreen |= self.fullscreen;
+        if self.window.is_some() {
+            s.window = self.window;
+        }
+        Ok(())
+    }
+}
+
 /// What the command line asked for.
 #[derive(Clone, Copy, Default)]
 pub struct Options {
@@ -70,9 +105,18 @@ pub struct Options {
 
 static OPTIONS: OnceLock<Options> = OnceLock::new();
 
-/// Called by `main` before the window opens.
-pub fn configure(options: Options) {
-    let _ = OPTIONS.set(options);
+/// Called by `main` after `settings::load` and before the window opens: saves the flags and
+/// starts from the saved choices.
+pub fn configure(args: &ScreenArgs) -> Result<(), String> {
+    let mut s = settings::get();
+    args.apply(&mut s)?;
+    settings::update(|saved| *saved = s.clone());
+    let _ = OPTIONS.set(Options {
+        fullscreen: s.fullscreen,
+        ratio: s.ratio,
+        window: s.window,
+    });
+    Ok(())
 }
 
 /// The scale of one game pixel in screen pixels, and whether the picture needs the half-pixel
@@ -127,7 +171,12 @@ impl Plugin for ScreenPlugin {
         })
         .insert_resource(StartSize(o.window))
         .init_resource::<Letterbox>()
-        .add_systems(Update, (keys, apply, room_panel, game_backdrop).chain());
+        .add_systems(
+            Update,
+            (keys, apply, room_panel, keep_panel, game_backdrop)
+                .chain()
+                .after(crate::view::follow_view),
+        );
     }
 }
 
@@ -145,7 +194,7 @@ fn keys(
     if let Some((w, h)) = start.0.take() {
         window.resolution.set_physical_resolution(w, h);
     }
-    // Stand-in for the blur slider until the settings file exists (#477).
+    // Stand-in for the blur slider of the settings screen (#53).
     if keys.just_pressed(KeyCode::BracketRight) {
         backdrop.blur = (backdrop.blur + 0.1).min(1.0);
     }
@@ -154,14 +203,17 @@ fn keys(
     }
     if keys.just_pressed(KeyCode::F11) {
         screen.fullscreen = !screen.fullscreen;
+        settings::update(|s| s.fullscreen = screen.fullscreen);
     }
     if keys.just_pressed(KeyCode::F10) {
         screen.ratio = (screen.ratio + 1) % RATIOS.len();
+        settings::update(|s| s.ratio = RATIOS[screen.ratio]);
     }
     if keys.just_pressed(KeyCode::F9) && !screen.fullscreen {
         screen.window = (screen.window + 1) % WINDOWS.len();
         let (w, h) = WINDOWS[screen.window];
         window.resolution.set_physical_resolution(w, h);
+        settings::update(|s| s.window = Some((w, h)));
     }
 }
 
@@ -169,12 +221,15 @@ fn ratio_name(r: Option<(u32, u32)>) -> String {
     r.map_or("native".to_string(), |(w, h)| format!("{w}:{h}"))
 }
 
-/// Sets the window mode and the camera: whole-pixel scale, centred.
+/// Sets the window mode and the camera: whole-pixel scale, centred. The game is scaled to fit the
+/// view (the whole room when it has none). When the view shows less than the room, or is turned,
+/// the camera is clipped to the view's rectangle so nothing of the room shows beside it.
 fn apply(
     mut screen: ResMut<Screen>,
     room: Res<RoomSize>,
+    view: Res<ViewRect>,
     mut window: Single<&mut Window, With<PrimaryWindow>>,
-    mut camera: Single<&mut Projection, (With<Camera2d>, Without<BackdropCamera>)>,
+    mut camera: Single<(&mut Projection, &mut Camera), With<GameCamera>>,
     backdrop: Res<Backdrop>,
 ) {
     let mode = if screen.fullscreen {
@@ -190,14 +245,32 @@ fn apply(
         window.resolution.physical_height(),
     );
     let ratio = RATIOS[screen.ratio];
-    let (scale, (odd_x, odd_y)) = layout(size, ratio, (room.0.x as u32, room.0.y as u32));
-    if let Projection::Orthographic(o) = &mut **camera {
+    let (scale, (odd_x, odd_y)) = layout(size, ratio, (view.w as u32, view.h as u32));
+    let clip = view.clips(room.0);
+    let (projection, cam) = &mut *camera;
+    cam.viewport = clip.then(|| {
+        let (w, h) = (
+            ((view.w * scale).round() as u32).max(1),
+            ((view.h * scale).round() as u32).max(1),
+        );
+        bevy::camera::Viewport {
+            physical_position: UVec2::new(size.0.saturating_sub(w) / 2, size.1.saturating_sub(h) / 2),
+            physical_size: UVec2::new(w.min(size.0), h.min(size.1)),
+            ..default()
+        }
+    });
+    if let Projection::Orthographic(o) = &mut **projection {
         // One world unit is `scale` physical pixels.
         o.scaling_mode = ScalingMode::WindowSize;
         o.scale = window.resolution.scale_factor() / scale;
         // Half a pixel when the leftover is odd, so game pixels sit on screen pixels.
         let shift = |odd: bool, px: u32| if odd { 0.5 / px.max(1) as f32 } else { 0.0 };
-        o.viewport_origin = Vec2::new(0.5 + shift(odd_x, size.0), 0.5 - shift(odd_y, size.1));
+        // A clipped camera already sits on whole pixels.
+        o.viewport_origin = if clip {
+            Vec2::splat(0.5)
+        } else {
+            Vec2::new(0.5 + shift(odd_x, size.0), 0.5 - shift(odd_y, size.1))
+        };
     }
     let base = screen.title.get_or_insert_with(|| window.title.clone()).clone();
     let title = format!(
@@ -219,11 +292,16 @@ fn apply(
 /// has black bars (docs/product.md, Look and screen).
 fn game_backdrop(
     files: Res<ArtFiles>,
+    room: Res<RoomSize>,
     mut images: ResMut<Assets<Image>>,
     mut backdrop: ResMut<Backdrop>,
     mut done: Local<bool>,
 ) {
     if *done {
+        return;
+    }
+    // The room size comes from the sim's first tick; until then there is nothing to size by.
+    if room.0.x < 1.0 {
         return;
     }
     *done = true;
@@ -233,7 +311,7 @@ fn game_backdrop(
         .and_then(|b| std::str::from_utf8(b).ok())
         .and_then(|t| Manifest::parse(t).ok())
         .map_or(KeyArt::None, |m| key_art::resolve(&files.0, &m, None));
-    let image = backdrop::key_art_image(&files.0, &art, |bytes| {
+    let image = backdrop::key_art_image(&files.0, &art, (room.0.x as u32, room.0.y as u32), |bytes| {
         decode_png(bytes).map(|s| (s.rgba, s.size.0, s.size.1))
     });
     backdrop.art = Some(images.add(image));
@@ -241,39 +319,44 @@ fn game_backdrop(
     backdrop.blur = backdrop::DEFAULT_BLUR;
 }
 
-/// Keeps a black panel the size of the room under the game, so the backdrop never shows through
-/// a room with no art of its own.
-fn room_panel(
-    mut commands: Commands,
-    game: NonSend<Game>,
-    mut state: ResMut<Letterbox>,
-    mut sprites: Query<&mut Sprite>,
-) {
+/// Spawns a black panel the size of the room under the game, so the backdrop never shows
+/// through a room with no art of its own.
+fn room_panel(mut commands: Commands, game: NonSend<Game>, mut state: ResMut<Letterbox>) {
     let room = game.sim.world().room;
     let Some(def) = game.sim.def().room(room) else {
         return;
     };
-    let room_size = Vec2::new(def.width as f32, def.height as f32);
-    match state.panel {
-        Some(e) if state.room == Some(room) => {
-            if let Ok(mut s) = sprites.get_mut(e) {
-                s.custom_size = Some(room_size);
-            }
+    if state.room != Some(room) {
+        state.room = Some(room);
+        if let Some(e) = state.panel.take() {
+            commands.entity(e).despawn();
         }
-        old => {
-            if let Some(e) = old {
-                commands.entity(e).despawn();
-            }
-            state.room = Some(room);
-            state.panel = Some(
-                commands
-                    .spawn((
-                        Sprite::from_color(Color::BLACK, room_size),
-                        Transform::from_xyz(0.0, 0.0, -998.0),
-                    ))
-                    .id(),
-            );
-        }
+        let room_size = Vec2::new(def.width as f32, def.height as f32);
+        state.panel = Some(
+            commands
+                .spawn((
+                    Sprite::from_color(Color::BLACK, room_size),
+                    Transform::from_xyz(0.0, 0.0, -998.0),
+                ))
+                .id(),
+        );
+    }
+}
+
+/// Keeps the panel at the view's size, with the camera.
+fn keep_panel(
+    state: Res<Letterbox>,
+    camera: Single<&Transform, With<GameCamera>>,
+    view: Res<ViewRect>,
+    mut sprites: Query<(&mut Sprite, &mut Transform), Without<GameCamera>>,
+) {
+    if let Some(e) = state.panel
+        && let Ok((mut s, mut t)) = sprites.get_mut(e)
+    {
+        s.custom_size = Some(Vec2::new(view.w, view.h));
+        t.translation.x = camera.translation.x;
+        t.translation.y = camera.translation.y;
+        t.rotation = camera.rotation;
     }
 }
 
@@ -306,6 +389,37 @@ mod tests {
         assert_eq!(layout((801, 608), None, ROOM).1, (true, false));
         assert_eq!(layout((802, 609), None, ROOM).1, (false, true));
         assert_eq!(layout((800, 608), None, ROOM).1, (false, false));
+    }
+
+    #[test]
+    fn flags_override_the_saved_choices_and_the_rest_stay() {
+        let saved = Settings {
+            ratio: Some((16, 9)),
+            window: Some((1280, 720)),
+            ..Settings::default()
+        };
+        let none = ScreenArgs {
+            fullscreen: false,
+            ratio: None,
+            window: None,
+        };
+        let mut s = saved.clone();
+        none.apply(&mut s).unwrap();
+        assert_eq!(s, saved, "no flag changes nothing");
+        let some = ScreenArgs {
+            fullscreen: true,
+            ratio: Some("native".into()),
+            window: Some((1600, 1216)),
+        };
+        some.apply(&mut s).unwrap();
+        assert!(s.fullscreen);
+        assert_eq!(s.ratio, None);
+        assert_eq!(s.window, Some((1600, 1216)));
+        let bad = ScreenArgs {
+            ratio: Some("5:4".into()),
+            ..none
+        };
+        assert!(bad.apply(&mut s).is_err());
     }
 
     #[test]

@@ -22,19 +22,24 @@ use iwbtg_sim::def::{
     RestartModel, RoomAction, RoomDef, RoomId, RoomRole, ScriptDef, ScriptId, SoundDef, SpriteDef, SpriteId,
     VariantSel, ViewDef,
 };
+use iwbtg_sim::input::Action;
 use iwbtg_sim::num::Real;
 use iwbtg_sim::rules::RunnerRules;
 use iwbtg_sim::rules::num::FloatModel;
 use iwbtg_sim::script::ScriptRuntime;
+use iwbtg_sim::stripped::{
+    DialogueRegion, RankedStart as SimRankedStart, Region, RegionCondition, StrippedDef,
+};
 use iwbtg_sim::timing::{TimingDef, TimingTrigger};
-use iwbtg_sim::world::Value;
 use toml::Spanned;
 
 use crate::check::check;
 use crate::diag::{Diagnostic, Severity, has_errors};
 use crate::files::PackageFiles;
 use crate::ids::check_id;
-use crate::manifest::{ENGINE_ROLES, MANIFEST_PATH, Manifest, TIMING_TRIGGERS};
+use crate::manifest::{
+    DEFAULT_MAP_ID, ENGINE_ROLES, MANIFEST_PATH, Manifest, RankedStart, TIMING_TRIGGERS, global_value,
+};
 use crate::masks::{ALPHA_IN_MASK, AlphaRule};
 use crate::objects::{self, ObjectFile, kind_classes, legacy_role_classes, param_value};
 use crate::order::{OrderEntry, rank_of, resolve_ranks};
@@ -73,6 +78,18 @@ pub struct LoadReport {
     pub diagnostics: Vec<Diagnostic>,
     /// BLAKE3 over the canonical parsed form ([`gameplay_hash`]).
     pub gameplay_hash: Option<[u8; 32]>,
+    /// Every map's timing chain, in `[[maps]]` order (one `main` map without `[[maps]]`); maps
+    /// whose triggers do not resolve are left out (their errors are in `diagnostics`).
+    pub maps: Vec<MapTiming>,
+}
+
+/// One map's resolved timing chain (docs/format/v0.md, Maps).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MapTiming {
+    /// Map id.
+    pub id: String,
+    /// Start, stages and end.
+    pub timing: TimingDef,
 }
 
 impl LoadReport {
@@ -102,6 +119,7 @@ pub fn load_report(files: &PackageFiles, mode: LoadMode) -> LoadReport {
                 def: None,
                 diagnostics: diags,
                 gameplay_hash: None,
+                maps: Vec::new(),
             };
         }
     };
@@ -118,6 +136,7 @@ pub fn load_report(files: &PackageFiles, mode: LoadMode) -> LoadReport {
         def,
         diagnostics: diags,
         gameplay_hash,
+        maps: std::mem::take(&mut l.maps),
     }
 }
 
@@ -292,6 +311,8 @@ struct Loader<'a> {
     /// `collides_with` per kind name: the classes its script's `collide(other)` listens to.
     collides: BTreeMap<String, Vec<ClassMask>>,
     groups: Vec<String>,
+    /// Resolved map timing chains.
+    maps: Vec<MapTiming>,
 }
 
 impl<'a> Loader<'a> {
@@ -324,6 +345,7 @@ impl<'a> Loader<'a> {
             package_classes: Vec::new(),
             collides: BTreeMap::new(),
             groups: Vec::new(),
+            maps: Vec::new(),
         }
     }
 
@@ -479,6 +501,7 @@ impl<'a> Loader<'a> {
         // Events per kind, now that the physics profile is known.
         self.event_sets(&physics);
         let timing = self.timing();
+        self.maps = self.map_timings(timing.as_ref());
         let mut d = Vec::new();
         let timelines =
             pending_call(&mut self.pending, || timelines::load(self.files, &mut d)).unwrap_or_default();
@@ -486,6 +509,8 @@ impl<'a> Loader<'a> {
         self.diags.append(&mut d);
         // Step 8: cross-references not already resolved above.
         self.warp_targets(&room_defs);
+        self.stripped_refs(&rooms);
+        let stripped = self.stripped_def(&vars);
         if self.trace_mode() {
             self.inert_twins(&mut room_defs);
         }
@@ -533,6 +558,7 @@ impl<'a> Loader<'a> {
             paths,
             scripts: std::mem::take(&mut self.scripts),
             timing: timing?,
+            stripped,
         };
         self.merge_script_events(&mut def);
         // Step 7 (WP7b): params against the built-ins' specs, on the built definition.
@@ -1399,6 +1425,17 @@ impl<'a> Loader<'a> {
                 }
             }
         }
+        // Ranked start globals (`[stripped].start`, each map's `stripped_start`).
+        let m = self.m;
+        let starts = m
+            .stripped
+            .as_ref()
+            .and_then(|s| s.start.as_ref())
+            .into_iter()
+            .chain(m.maps.iter().filter_map(|map| map.stripped_start.as_ref()));
+        for start in starts {
+            names.extend(start.globals.keys().map(|k| k.get_ref().clone()));
+        }
         intern_vars(names.into_iter()).ids
     }
 
@@ -1681,19 +1718,34 @@ impl<'a> Loader<'a> {
     ) -> Option<RoomAction> {
         match a {
             ActionFile::SetGlobal { var, value } => {
-                let value = match value {
-                    toml::Value::String(s) => Value::Str(s.clone()),
-                    toml::Value::Boolean(b) => Value::Real(if *b { Real::ONE } else { Real::ZERO }),
-                    other => match objects::number(other) {
-                        Ok(n) => Value::Real(Real::new(n)),
-                        Err(e) => {
-                            self.error(path, text, span, format!("set_global `{var}`: {e}"));
-                            return None;
-                        }
-                    },
+                let value = match global_value(value) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        self.error(path, text, span, format!("set_global `{var}`: {e}"));
+                        return None;
+                    }
+                };
+                let difficulty = if var == "difficulty" {
+                    let whole = whole_difficulty(&value);
+                    if whole.is_none() {
+                        self.error(
+                            path,
+                            text,
+                            span,
+                            "set_global `difficulty` sets the engine difficulty: a whole number from 0 to 255",
+                        );
+                        return None;
+                    }
+                    whole
+                } else {
+                    None
                 };
                 let var = *vars.get(var)?;
-                Some(RoomAction::SetGlobal { var, value })
+                Some(RoomAction::SetGlobal {
+                    var,
+                    value,
+                    difficulty,
+                })
             }
             ActionFile::Spawn { kind, x, y, params } => {
                 let Some(k) = self.kind_by_ref(kind).filter(|_| !self.dropped.contains(kind)) else {
@@ -1933,6 +1985,49 @@ impl<'a> Loader<'a> {
         })
     }
 
+    /// Each map's chain. Keys a map leaves out reuse `[timing]`'s result, so their errors are
+    /// reported once.
+    fn map_timings(&mut self, base: Option<&TimingDef>) -> Vec<MapTiming> {
+        let m = self.m;
+        if m.maps.is_empty() {
+            return base
+                .map(|b| MapTiming {
+                    id: DEFAULT_MAP_ID.to_owned(),
+                    timing: b.clone(),
+                })
+                .into_iter()
+                .collect();
+        }
+        let mut out = Vec::new();
+        for map in &m.maps {
+            let start = match &map.start {
+                Some(t) => self.trigger(&t.trigger, t.room.as_ref()),
+                None => base.map(|b| b.start),
+            };
+            let end = match &map.end {
+                Some(t) => self.trigger(&t.trigger, t.room.as_ref()),
+                None => base.map(|b| b.end),
+            };
+            let stages = match &map.stages {
+                Some(list) => {
+                    let all: Vec<_> = list
+                        .iter()
+                        .map(|s| self.trigger(&s.trigger, s.room.as_ref()))
+                        .collect();
+                    all.into_iter().collect::<Option<Vec<_>>>()
+                }
+                None => base.map(|b| b.stages.clone()),
+            };
+            if let (Some(start), Some(end), Some(stages)) = (start, end, stages) {
+                out.push(MapTiming {
+                    id: map.id.get_ref().clone(),
+                    timing: TimingDef { start, end, stages },
+                });
+            }
+        }
+        out
+    }
+
     fn trigger(&mut self, name: &Spanned<String>, room: Option<&Spanned<String>>) -> Option<TimingTrigger> {
         match (name.get_ref().as_str(), room) {
             ("run_start", None) => Some(TimingTrigger::RunStart),
@@ -2007,6 +2102,235 @@ impl<'a> Loader<'a> {
                 inst.params = Params::default();
             }
         }
+    }
+
+    /// `[stripped]` and each map's `stripped_start` (docs/format/v0.md, Stripped mode): rooms,
+    /// kinds and instance names resolve; no ranked start room and no cut room's `to` is cut.
+    fn stripped_refs(&mut self, rooms: &[ParsedRoom<'_>]) {
+        let m = self.m;
+        let section = m.stripped.as_ref();
+        let cut = section.and_then(|s| s.cut.as_ref());
+        let cut_rooms: BTreeSet<&str> = cut
+            .map(|c| c.rooms.iter().map(|r| r.room.get_ref().as_str()).collect())
+            .unwrap_or_default();
+        let starts = section
+            .and_then(|s| s.start.as_ref())
+            .into_iter()
+            .chain(m.maps.iter().filter_map(|map| map.stripped_start.as_ref()));
+        for start in starts {
+            if let Some(room) = &start.room {
+                self.room_ref(room.get_ref(), room.span());
+                if cut_rooms.contains(room.get_ref().as_str()) {
+                    self.manifest_error(
+                        room.span(),
+                        format!("ranked start room `{}` is cut", room.get_ref()),
+                    );
+                }
+            }
+        }
+        // The default start: `[engine].new_game_room`, else `start_room`.
+        let default_start = m
+            .engine
+            .as_ref()
+            .and_then(|e| e.get_ref().new_game_room.as_ref())
+            .unwrap_or(&m.start_room);
+        let start_defaults = section
+            .and_then(|s| s.start.as_ref())
+            .and_then(|s| s.room.as_ref())
+            .is_none();
+        let map_overrides = !m.maps.is_empty()
+            && m.maps
+                .iter()
+                .all(|map| map.stripped_start.as_ref().is_some_and(|s| s.room.is_some()));
+        if start_defaults && !map_overrides && cut_rooms.contains(default_start.get_ref().as_str()) {
+            self.manifest_error(
+                default_start.span(),
+                format!(
+                    "ranked runs start in `{}` (no `[stripped].start.room`), which is cut",
+                    default_start.get_ref()
+                ),
+            );
+        }
+        let Some(section) = section else {
+            return;
+        };
+        if let Some(cut) = cut {
+            for entry in &cut.rooms {
+                self.room_ref(entry.room.get_ref(), entry.room.span());
+                self.room_ref(entry.to.get_ref(), entry.to.span());
+            }
+            for kind in &cut.kinds {
+                if !self.kind_ids.contains_key(kind.get_ref().as_str()) {
+                    self.manifest_error(
+                        kind.span(),
+                        format!("cut kind `{}` is not a kind of this package", kind.get_ref()),
+                    );
+                }
+            }
+            for entry in &cut.instances {
+                let Some(room) = rooms.iter().find(|r| r.file.id == *entry.room.get_ref()) else {
+                    self.room_ref(entry.room.get_ref(), entry.room.span());
+                    continue;
+                };
+                let named = room.file.instances.iter().any(|i| {
+                    i.name
+                        .as_ref()
+                        .is_some_and(|n| n.get_ref() == entry.name.get_ref())
+                });
+                if !named {
+                    self.manifest_error(
+                        entry.name.span(),
+                        format!(
+                            "room `{}` has no instance named `{}`",
+                            entry.room.get_ref(),
+                            entry.name.get_ref()
+                        ),
+                    );
+                }
+            }
+        }
+        let regions = section
+            .cutscenes
+            .iter()
+            .map(|c| (&c.kind, &c.room))
+            .chain(section.dialogues.iter().map(|d| (&d.kind, &d.room)));
+        for (kind, room) in regions {
+            if let Some(kind) = kind
+                && !self.kind_ids.contains_key(kind.get_ref().as_str())
+            {
+                self.manifest_error(
+                    kind.span(),
+                    format!("region kind `{}` is not a kind of this package", kind.get_ref()),
+                );
+            }
+            if let Some(room) = room {
+                self.room_ref(room.get_ref(), room.span());
+            }
+        }
+    }
+
+    /// `[stripped]` resolved to ids for the sim (#561). Rooms, kinds and names that do not resolve
+    /// were reported by [`Loader::stripped_refs`] and are left out here.
+    fn stripped_def(&mut self, vars: &BTreeMap<String, iwbtg_sim::def::VarId>) -> StrippedDef {
+        let m = self.m;
+        let section = m.stripped.as_ref();
+        let base = section.and_then(|s| s.start.as_ref());
+        let start = self.ranked_start(base, None, vars);
+        let mut map_starts = BTreeMap::new();
+        if m.maps.is_empty() {
+            map_starts.insert(DEFAULT_MAP_ID.to_owned(), start.clone());
+        }
+        for map in &m.maps {
+            let s = self.ranked_start(base, map.stripped_start.as_ref(), vars);
+            map_starts.insert(map.id.get_ref().clone(), s);
+        }
+        let mut def = StrippedDef {
+            start,
+            map_starts,
+            ..StrippedDef::default()
+        };
+        let Some(section) = section else {
+            return def;
+        };
+        if let Some(cut) = &section.cut {
+            for entry in &cut.rooms {
+                if let (Some(&from), Some(&to)) = (
+                    self.room_ids.get(entry.room.get_ref()),
+                    self.room_ids.get(entry.to.get_ref()),
+                ) {
+                    def.cut_rooms.insert(from, to);
+                }
+            }
+            def.cut_kinds = cut
+                .kinds
+                .iter()
+                .filter_map(|k| self.kind_ids.get(k.get_ref()).copied())
+                .collect();
+            for entry in &cut.instances {
+                let room = self.room_ids.get(entry.room.get_ref()).copied();
+                let name = self.names.iter().position(|n| n == entry.name.get_ref());
+                if let (Some(room), Some(name)) = (room, name.and_then(|n| u32::try_from(n).ok())) {
+                    def.cut_instances.insert((room, NameId(name)));
+                }
+            }
+        }
+        def.cutscenes = section
+            .cutscenes
+            .iter()
+            .filter_map(|c| self.region(&c.id, c.kind.as_ref(), c.room.as_ref()))
+            .collect();
+        def.dialogues = section
+            .dialogues
+            .iter()
+            .filter_map(|d| {
+                Some(DialogueRegion {
+                    region: self.region(&d.id, d.kind.as_ref(), d.room.as_ref())?,
+                    advance: Action::from_name(d.advance.get_ref())?,
+                    timeout_ticks: *d.timeout_ticks.get_ref(),
+                })
+            })
+            .collect();
+        def
+    }
+
+    /// A ranked start: `over`'s keys over `base`'s, globals merged by name (the map's value wins).
+    /// A global named `difficulty` also sets the engine's difficulty, so it must be a whole
+    /// number from 0 to 255.
+    fn ranked_start(
+        &mut self,
+        base: Option<&RankedStart>,
+        over: Option<&RankedStart>,
+        vars: &BTreeMap<String, iwbtg_sim::def::VarId>,
+    ) -> SimRankedStart {
+        let room = over
+            .and_then(|s| s.room.as_ref())
+            .or_else(|| base.and_then(|s| s.room.as_ref()))
+            .and_then(|r| self.room_ids.get(r.get_ref()).copied());
+        let mut merged: BTreeMap<&str, &Spanned<toml::Value>> = BTreeMap::new();
+        for s in base.into_iter().chain(over) {
+            for (name, value) in &s.globals {
+                merged.insert(name.get_ref().as_str(), value);
+            }
+        }
+        let mut out = SimRankedStart {
+            room,
+            ..SimRankedStart::default()
+        };
+        for (name, value) in merged {
+            // Bad values were reported by the manifest check.
+            let (Some(&var), Ok(v)) = (vars.get(name), global_value(value.get_ref())) else {
+                continue;
+            };
+            if name == "difficulty" {
+                match whole_difficulty(&v) {
+                    Some(d) => out.difficulty = Some(d),
+                    None => self.manifest_error(
+                        value.span(),
+                        "the ranked start's `difficulty` sets the engine difficulty: a whole number from 0 to 255",
+                    ),
+                }
+            }
+            out.globals.push((var, v));
+        }
+        out
+    }
+
+    /// A cutscene or dialogue region, when its kind or room resolves.
+    fn region(
+        &self,
+        id: &Spanned<String>,
+        kind: Option<&Spanned<String>>,
+        room: Option<&Spanned<String>>,
+    ) -> Option<Region> {
+        let holds = match (kind, room) {
+            (Some(k), None) => RegionCondition::Kind(*self.kind_ids.get(k.get_ref())?),
+            (None, Some(r)) => RegionCondition::Room(*self.room_ids.get(r.get_ref())?),
+            _ => return None,
+        };
+        Some(Region {
+            id: id.get_ref().clone(),
+            holds,
+        })
     }
 
     /// CR5: warps whose creation code (`roomTo`) was not converted have no `room_to`.
@@ -2157,6 +2481,9 @@ const COSMETIC_MANIFEST_KEYS: [&str; 8] = [
     "key_art",
 ];
 
+/// `[[maps]]` keys that are only shown: renaming a map keeps its board.
+const COSMETIC_MAP_KEYS: [&str; 3] = ["name", "difficulty", "category"];
+
 /// BLAKE3 over the canonical parsed form of everything that can change the sim
 /// (docs/format/v0.md, Versioning; architecture "Versions"): the gameplay fields of `game.toml`,
 /// the physics profile, objects, rooms (not tiles), timelines, paths, sound and sprite sidecars,
@@ -2200,6 +2527,13 @@ pub fn gameplay_hash(files: &PackageFiles, manifest: &Manifest, def: &GameDef) -
             if path == MANIFEST_PATH {
                 for k in COSMETIC_MANIFEST_KEYS {
                     table.remove(k);
+                }
+                if let Some(toml::Value::Array(maps)) = table.get_mut("maps") {
+                    for map in maps.iter_mut().filter_map(toml::Value::as_table_mut) {
+                        for k in COSMETIC_MAP_KEYS {
+                            map.remove(k);
+                        }
+                    }
                 }
             }
             hash_bytes(&mut h, path.as_bytes());
@@ -2367,5 +2701,16 @@ mod tests {
             pending_call(&mut p, || panic!("a real bug"))
         });
         assert!(other.is_err());
+    }
+}
+
+/// A `difficulty` global as the engine difficulty: a whole number from 0 to 255.
+fn whole_difficulty(v: &iwbtg_sim::world::Value) -> Option<u8> {
+    match v {
+        iwbtg_sim::world::Value::Real(r) => {
+            let n = r.get();
+            (0u8..=255).find(|d| f64::from(*d).total_cmp(&n).is_eq())
+        }
+        _ => None,
     }
 }

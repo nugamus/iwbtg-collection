@@ -56,7 +56,16 @@ pub fn run(
     .insert_resource(ClearColor(tokens::GROUND))
     .insert_resource(ReducedMotion(reduced_motion))
     .add_systems(Startup, setup)
-    .add_systems(Update, (fit_to_window, slide_on_hover, drift_list, motion_switch, backdrop_keys))
+    .add_systems(
+        Update,
+        (
+            fit_to_window,
+            slide_on_hover,
+            drift_list,
+            motion_switch,
+            backdrop_keys,
+        ),
+    )
     .add_observer(on_activate);
     if let Some(path) = screenshot {
         app.insert_resource(crate::view::ScreenshotTo(path))
@@ -443,10 +452,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
                         text(&motion_label(reduced.0), Type::barlow(14.0, 500), tokens::MUTED),
                         MotionState,
                     ));
-                    c.spawn((
-                        text("", Type::barlow(14.0, 500), tokens::MUTED),
-                        BackdropState,
-                    ));
+                    c.spawn((text("", Type::barlow(14.0, 500), tokens::MUTED), BackdropState));
                 });
             c.spawn((
                 column(10.0),

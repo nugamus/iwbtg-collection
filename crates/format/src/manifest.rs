@@ -10,6 +10,7 @@ use std::ops::Range;
 use iwbtg_sim::def::{
     DeathOnRestart, ResetKind, ResetModel, RestartKind, RestartModel, RestartTrigger, RoleSet, RoomRole,
 };
+use iwbtg_sim::input::Action;
 use iwbtg_sim::num::Real;
 use serde::Deserialize;
 use toml::Spanned;
@@ -122,10 +123,124 @@ pub struct Manifest {
     #[serde(default)]
     #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, MusicSettings>"))]
     pub music: BTreeMap<Spanned<String>, MusicSettings>,
+    /// Maps: each built-in difficulty, category and version, with its own timing and board.
+    /// Absent: one map, [`DEFAULT_MAP_ID`], timed by `[timing]`.
+    #[serde(default)]
+    pub maps: Vec<MapEntry>,
     /// Art for the background system and the game select list; absent: the first ranked
     /// room's background ([`crate::key_art`]).
     #[serde(default)]
     pub key_art: Option<KeyArtSection>,
+    /// Ranked (stripped) mode: start point, cuts, cutscene and dialogue regions. Absent: the
+    /// run starts at the new-game room and nothing is cut or frozen.
+    #[serde(default)]
+    pub stripped: Option<StrippedSection>,
+}
+
+/// Id of the one map of a package without `[[maps]]`.
+pub const DEFAULT_MAP_ID: &str = "main";
+
+/// One `[[maps]]` entry (docs/format/v0.md, Maps). Timing keys it leaves out come from
+/// `[timing]`.
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct MapEntry {
+    /// Map id, unique within the package. Stable forever; leaderboards key on it.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub id: Spanned<String>,
+    /// Display name in game select.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub name: Spanned<String>,
+    /// The original's built-in difficulty this map plays, as the game names it ("Medium").
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub difficulty: Option<Spanned<String>>,
+    /// The run category ("Any%", "100%", "True Ending").
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub category: Option<Spanned<String>>,
+    /// The original's version this map plays; default `source_version`.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub version: Option<Spanned<String>>,
+    /// The run starts at this trigger; default `[timing].start`.
+    #[serde(default)]
+    pub start: Option<TriggerRef>,
+    /// The run ends at this trigger; default `[timing].end`.
+    #[serde(default)]
+    pub end: Option<TriggerRef>,
+    /// Stages in order; default `[timing].stages`. `[]` is a single-stage map.
+    #[serde(default)]
+    pub stages: Option<Vec<Stage>>,
+    /// The map's ranked start point; keys it leaves out come from `[stripped].start`, globals
+    /// merged by name.
+    #[serde(default)]
+    pub stripped_start: Option<RankedStart>,
+}
+
+/// Checks a ranked start's own fields; its room is resolved by the loader.
+fn validate_ranked_start(v: &mut Validator<'_>, start: &RankedStart) {
+    if let Some(room) = &start.room {
+        v.non_empty(room, "ranked start room");
+    }
+    for (name, value) in &start.globals {
+        if !is_var_name(name.get_ref()) {
+            v.error(
+                name.span(),
+                format!(
+                    "`{}` is not a variable name (letters, digits and `_`, not starting with a digit)",
+                    name.get_ref()
+                ),
+            );
+        }
+        if let Err(e) = global_value(value.get_ref()) {
+            v.error(value.span(), format!("global `{}`: {e}", name.get_ref()));
+        }
+    }
+}
+
+/// A GML variable name: ASCII letters, digits and `_`, not starting with a digit.
+fn is_var_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    chars.next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// A global's value as `set_global` takes it: a number (or `{ bits }`), a string or a boolean
+/// (true is 1).
+pub fn global_value(value: &toml::Value) -> Result<iwbtg_sim::world::Value, String> {
+    use iwbtg_sim::world::Value;
+    Ok(match value {
+        toml::Value::String(s) => Value::Str(s.clone()),
+        toml::Value::Boolean(b) => Value::Real(if *b { Real::ONE } else { Real::ZERO }),
+        other => Value::Real(Real::new(crate::objects::number(other)?)),
+    })
+}
+
+fn opt_str(s: &Option<Spanned<String>>) -> Option<&str> {
+    s.as_ref().map(|v| v.get_ref().as_str())
+}
+
+/// A map with its timing filled in from `[timing]` ([`Manifest::map_list`]).
+#[derive(Debug, Clone, Copy)]
+pub struct MapView<'a> {
+    /// Map id.
+    pub id: &'a str,
+    /// Display name.
+    pub name: &'a str,
+    /// Built-in difficulty, if any.
+    pub difficulty: Option<&'a str>,
+    /// Category, if any.
+    pub category: Option<&'a str>,
+    /// The original's version, if known.
+    pub version: Option<&'a str>,
+    /// Start trigger.
+    pub start: &'a TriggerRef,
+    /// End trigger.
+    pub end: &'a TriggerRef,
+    /// Stages in order.
+    pub stages: &'a [Stage],
 }
 
 /// The original GameMaker runner. One type with the sim, which selects rules by it
@@ -706,6 +821,127 @@ pub struct KeyArtSection {
     pub maps: BTreeMap<Spanned<String>, Spanned<String>>,
 }
 
+/// The `[stripped]` table: what ranked (stripped) mode changes (docs/format/v0.md, Stripped
+/// mode; docs/product.md, Two ways to play each game). Play original ignores it.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct StrippedSection {
+    /// Where a ranked run starts; a map's `stripped_start` overrides it key by key.
+    #[serde(default)]
+    pub start: Option<RankedStart>,
+    /// Rooms, kinds and placed instances stripped mode leaves out.
+    #[serde(default)]
+    pub cut: Option<StrippedCut>,
+    /// Regions that freeze the ranked timer.
+    #[serde(default)]
+    pub cutscenes: Vec<CutsceneRegion>,
+    /// Text that waits for a press: freezes the timer and advances on its own after a timeout.
+    #[serde(default)]
+    pub dialogues: Vec<DialogueRegion>,
+}
+
+/// `{ room = "stage1", globals = { difficulty = 1 } }`: the ranked start point.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct RankedStart {
+    /// The room a ranked run starts in; default `[engine].new_game_room`, then `start_room`.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub room: Option<Spanned<String>>,
+    /// Globals set before the first room, in place of the skipped menus (a number, string or
+    /// boolean, as `set_global`).
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, serde_json::Value>"))]
+    pub globals: BTreeMap<Spanned<String>, Spanned<toml::Value>>,
+}
+
+/// `[stripped.cut]`: what stripped mode leaves out.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct StrippedCut {
+    /// Rooms skipped: going to `room` goes to `to` instead.
+    #[serde(default)]
+    pub rooms: Vec<CutRoom>,
+    /// Kinds whose placed instances and room `spawn` actions are left out.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Vec<String>"))]
+    pub kinds: Vec<Spanned<String>>,
+    /// Single placed instances left out, by room and instance name.
+    #[serde(default)]
+    pub instances: Vec<CutInstance>,
+}
+
+/// `{ room = "intro", to = "stage1" }`.
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct CutRoom {
+    /// The room that is skipped.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub room: Spanned<String>,
+    /// Where a room change to `room` goes instead.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub to: Spanned<String>,
+}
+
+/// `{ room = "stage1", name = "tutorial_sign" }`.
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct CutInstance {
+    /// The room the instance is placed in.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub room: Spanned<String>,
+    /// The instance's `name` in that room.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub name: Spanned<String>,
+}
+
+/// A cutscene: the ranked timer is frozen while it holds. Exactly one of `kind` and `room`.
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct CutsceneRegion {
+    /// Region id, unique among cutscenes and dialogues.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub id: Spanned<String>,
+    /// Holds while an instance of this kind exists.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub kind: Option<Spanned<String>>,
+    /// Holds while the kid's world is in this room.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub room: Option<Spanned<String>>,
+}
+
+/// Dialogue that waits for a press: a cutscene region that also advances on its own.
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct DialogueRegion {
+    /// Region id, unique among cutscenes and dialogues.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub id: Spanned<String>,
+    /// Holds while an instance of this kind exists.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub kind: Option<Spanned<String>>,
+    /// Holds while the kid's world is in this room.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub room: Option<Spanned<String>>,
+    /// The action the original reads to advance the text (`jump`, `shoot`, `accept`, ...).
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub advance: Spanned<String>,
+    /// Ticks without a press of `advance` before the sim presses it; at least 1.
+    #[cfg_attr(feature = "schema", schemars(with = "u32"))]
+    pub timeout_ticks: Spanned<u32>,
+}
+
 /// Only the `format` key, read before the full parse so a newer package gets a clear
 /// "update the client" error instead of an unknown-key error.
 #[derive(Deserialize)]
@@ -747,6 +983,38 @@ impl Manifest {
         self.tick_rate
             .as_ref()
             .map_or(DEFAULT_TICK_RATE, |t| *t.get_ref())
+    }
+
+    /// Every map in order, with its timing filled in from `[timing]`. A package without
+    /// `[[maps]]` has one map, [`DEFAULT_MAP_ID`], named after the game.
+    pub fn map_list(&self) -> Vec<MapView<'_>> {
+        let timing = self.timing.get_ref();
+        let source_version = self.source_version.as_ref().map(|v| v.get_ref().as_str());
+        if self.maps.is_empty() {
+            return vec![MapView {
+                id: DEFAULT_MAP_ID,
+                name: self.title.get_ref(),
+                difficulty: None,
+                category: None,
+                version: source_version,
+                start: &timing.start,
+                end: &timing.end,
+                stages: &timing.stages,
+            }];
+        }
+        self.maps
+            .iter()
+            .map(|m| MapView {
+                id: m.id.get_ref(),
+                name: m.name.get_ref(),
+                difficulty: opt_str(&m.difficulty),
+                category: opt_str(&m.category),
+                version: opt_str(&m.version).or(source_version),
+                start: m.start.as_ref().unwrap_or(&timing.start),
+                end: m.end.as_ref().unwrap_or(&timing.end),
+                stages: m.stages.as_deref().unwrap_or(&timing.stages),
+            })
+            .collect()
     }
 
     /// Script budget units per tick.
@@ -813,6 +1081,8 @@ impl Manifest {
             );
         }
         self.validate_timing(&mut v);
+        self.validate_maps(&mut v);
+        self.validate_stripped(&mut v);
         for key in self.tricks.keys() {
             // TODO(OPEN: trick ids, from the research trick inventory): check `key` against the
             // known trick ids.
@@ -949,39 +1219,135 @@ impl Manifest {
         let timing = self.timing.get_ref();
         v.non_empty(&timing.start.trigger, "trigger name");
         v.non_empty(&timing.end.trigger, "trigger name");
-        let start = timing.start.trigger.get_ref();
+        validate_stages(v, &timing.start, &timing.stages);
+    }
+
+    fn validate_maps(&self, v: &mut Validator<'_>) {
+        let timing = self.timing.get_ref();
         let mut ids = BTreeSet::new();
-        let mut triggers = BTreeSet::new();
-        for stage in &timing.stages {
-            if v.id(&stage.id) && !ids.insert(stage.id.get_ref().as_str()) {
+        for map in &self.maps {
+            if v.id(&map.id) && !ids.insert(map.id.get_ref().as_str()) {
                 v.error(
-                    stage.id.span(),
-                    format!("stage id `{}` is used twice", stage.id.get_ref()),
+                    map.id.span(),
+                    format!("map id `{}` is used twice", map.id.get_ref()),
                 );
             }
-            v.non_empty(&stage.name, "stage name");
-            if !v.non_empty(&stage.trigger, "trigger name") {
-                continue;
+            v.non_empty(&map.name, "map name");
+            for (field, what) in [
+                (&map.difficulty, "difficulty"),
+                (&map.category, "category"),
+                (&map.version, "map version"),
+            ] {
+                if let Some(value) = field {
+                    v.non_empty(value, what);
+                }
             }
-            // Each stage ends at its trigger, so a shared trigger would close two stages on one
-            // tick, and the start trigger would close a stage as the run begins. The last stage
-            // may end at the run's `end` trigger.
-            let trigger = stage.trigger.get_ref();
-            let room = stage.room.as_ref().map(|r| r.get_ref().as_str());
-            let start_room = timing.start.room.as_ref().map(|r| r.get_ref().as_str());
-            if trigger == start && room == start_room {
+            for trigger in [&map.start, &map.end].into_iter().flatten() {
+                v.non_empty(&trigger.trigger, "trigger name");
+            }
+            // Stages inherited with an inherited start were checked under `[timing]`.
+            if map.start.is_some() || map.stages.is_some() {
+                let start = map.start.as_ref().unwrap_or(&timing.start);
+                let stages = map.stages.as_deref().unwrap_or(&timing.stages);
+                validate_stages(v, start, stages);
+            }
+        }
+    }
+
+    fn validate_stripped(&self, v: &mut Validator<'_>) {
+        for map in &self.maps {
+            if let Some(start) = &map.stripped_start {
+                validate_ranked_start(v, start);
+            }
+        }
+        let Some(section) = &self.stripped else {
+            return;
+        };
+        if let Some(start) = &section.start {
+            validate_ranked_start(v, start);
+        }
+        if let Some(cut) = &section.cut {
+            let mut rooms = BTreeSet::new();
+            for entry in &cut.rooms {
+                v.non_empty(&entry.room, "cut room");
+                v.non_empty(&entry.to, "cut room `to`");
+                if !rooms.insert(entry.room.get_ref().as_str()) {
+                    v.error(
+                        entry.room.span(),
+                        format!("room `{}` is cut twice", entry.room.get_ref()),
+                    );
+                }
+            }
+            for entry in &cut.rooms {
+                if rooms.contains(entry.to.get_ref().as_str()) {
+                    v.error(
+                        entry.to.span(),
+                        format!(
+                            "cut room `{}` goes to `{}`, which is cut too",
+                            entry.room.get_ref(),
+                            entry.to.get_ref()
+                        ),
+                    );
+                }
+            }
+            let mut kinds = BTreeSet::new();
+            for kind in &cut.kinds {
+                if v.non_empty(kind, "cut kind") && !kinds.insert(kind.get_ref().as_str()) {
+                    v.error(kind.span(), format!("kind `{}` is cut twice", kind.get_ref()));
+                }
+            }
+            let mut instances = BTreeSet::new();
+            for entry in &cut.instances {
+                v.non_empty(&entry.room, "cut instance room");
+                if v.non_empty(&entry.name, "cut instance name")
+                    && !instances.insert((entry.room.get_ref().as_str(), entry.name.get_ref().as_str()))
+                {
+                    v.error(
+                        entry.name.span(),
+                        format!(
+                            "instance `{}` in room `{}` is cut twice",
+                            entry.name.get_ref(),
+                            entry.room.get_ref()
+                        ),
+                    );
+                }
+            }
+        }
+        let mut ids = BTreeSet::new();
+        let regions = section
+            .cutscenes
+            .iter()
+            .map(|c| (&c.id, &c.kind, &c.room))
+            .chain(section.dialogues.iter().map(|d| (&d.id, &d.kind, &d.room)));
+        for (id, kind, room) in regions {
+            if v.id(id) && !ids.insert(id.get_ref().as_str()) {
+                v.error(id.span(), format!("region id `{}` is used twice", id.get_ref()));
+            }
+            match (kind, room) {
+                (Some(_), Some(room)) => v.error(
+                    room.span(),
+                    format!("region `{}` has both `kind` and `room`; give one", id.get_ref()),
+                ),
+                (None, None) => v.error(
+                    id.span(),
+                    format!("region `{}` needs `kind` or `room`", id.get_ref()),
+                ),
+                (Some(value), None) | (None, Some(value)) => {
+                    v.non_empty(value, "region kind or room");
+                }
+            }
+        }
+        for dialogue in &section.dialogues {
+            let advance = dialogue.advance.get_ref();
+            if !Action::ALL.iter().any(|a| a.name() == advance) {
+                let names: Vec<&str> = Action::ALL.iter().map(|a| a.name()).collect();
                 v.error(
-                    stage.trigger.span(),
-                    format!(
-                        "stage `{}` ends at trigger `{trigger}`, which is the run's start trigger",
-                        stage.id.get_ref()
-                    ),
+                    dialogue.advance.span(),
+                    format!("`{advance}` is not an action; one of {}", names.join(", ")),
                 );
-            } else if !triggers.insert((trigger.as_str(), room)) {
-                v.error(
-                    stage.trigger.span(),
-                    format!("stage trigger `{trigger}` is used by two stages"),
-                );
+            }
+            if *dialogue.timeout_ticks.get_ref() == 0 {
+                v.error(dialogue.timeout_ticks.span(), "timeout_ticks must be at least 1");
             }
         }
     }
@@ -994,8 +1360,13 @@ impl Manifest {
             v.key_art_image(image, "key_art image");
         }
         for (map, image) in &section.maps {
-            // TODO(OPEN: maps, #31): check `map` against the package's maps once they exist.
             v.id(map);
+            if !self.map_list().iter().any(|m| m.id == map.get_ref().as_str()) {
+                v.error(
+                    map.span(),
+                    format!("key_art map `{}` is not a map of this package", map.get_ref()),
+                );
+            }
             v.key_art_image(image, &format!("key_art map `{}`", map.get_ref()));
         }
     }
@@ -1028,6 +1399,46 @@ impl Manifest {
             v.non_empty(&entry.what, "what");
             v.non_empty(&entry.owner, "owner");
             v.non_empty(&entry.license, "license");
+        }
+    }
+}
+
+/// Stage ids are unique, stage names and triggers are not blank, and no two stages (nor a stage
+/// and the start) share a trigger.
+fn validate_stages(v: &mut Validator<'_>, start_ref: &TriggerRef, stages: &[Stage]) {
+    let start = start_ref.trigger.get_ref();
+    let mut ids = BTreeSet::new();
+    let mut triggers = BTreeSet::new();
+    for stage in stages {
+        if v.id(&stage.id) && !ids.insert(stage.id.get_ref().as_str()) {
+            v.error(
+                stage.id.span(),
+                format!("stage id `{}` is used twice", stage.id.get_ref()),
+            );
+        }
+        v.non_empty(&stage.name, "stage name");
+        if !v.non_empty(&stage.trigger, "trigger name") {
+            continue;
+        }
+        // Each stage ends at its trigger, so a shared trigger would close two stages on one
+        // tick, and the start trigger would close a stage as the run begins. The last stage
+        // may end at the run's `end` trigger.
+        let trigger = stage.trigger.get_ref();
+        let room = stage.room.as_ref().map(|r| r.get_ref().as_str());
+        let start_room = start_ref.room.as_ref().map(|r| r.get_ref().as_str());
+        if trigger == start && room == start_room {
+            v.error(
+                stage.trigger.span(),
+                format!(
+                    "stage `{}` ends at trigger `{trigger}`, which is the run's start trigger",
+                    stage.id.get_ref()
+                ),
+            );
+        } else if !triggers.insert((trigger.as_str(), room)) {
+            v.error(
+                stage.trigger.span(),
+                format!("stage trigger `{trigger}` is used by two stages"),
+            );
         }
     }
 }
@@ -1312,5 +1723,66 @@ stages = [{stages}]
         );
         let diags = run(&text, &[]);
         assert!(diags.is_empty(), "{diags:#?}");
+    }
+
+    /// The line (1-based) of the first line of `text` that contains `needle`.
+    fn line_of(text: &str, needle: &str) -> u32 {
+        1 + text.lines().position(|l| l.contains(needle)).unwrap() as u32
+    }
+
+    #[test]
+    fn map_ids_are_unique_and_names_not_blank() {
+        let text = manifest(&format!(
+            "{TIMING}
+[[maps]]
+id = \"any\"
+name = \"Any%\"
+
+[[maps]]
+id = \"any\"
+name = \"Again\"
+"
+        ));
+        let line = 1 + line_of(&text, "name = \"Any%\"") + 2;
+        assert_one(&run(&text, &[]), line, "map id `any` is used twice");
+        let text = manifest(&format!(
+            "{TIMING}
+[[maps]]
+id = \"any\"
+name = \" \"
+"
+        ));
+        assert_one(
+            &run(&text, &[]),
+            line_of(&text, "name = \" \""),
+            "map name must not be empty",
+        );
+    }
+
+    #[test]
+    fn map_stages_follow_the_stage_rules() {
+        let text = manifest(&format!(
+            "{TIMING}
+[[maps]]
+id = \"a\"
+name = \"A\"
+stages = [{{ id = \"s\", name = \"S\", trigger = \"run_start\" }}]
+"
+        ));
+        assert_one(
+            &run(&text, &[]),
+            line_of(&text, "stages = ["),
+            "which is the run's start trigger",
+        );
+        // A map that only sets `end` inherits stages already checked under `[timing]`.
+        let text = manifest(&format!(
+            "{TIMING}
+[[maps]]
+id = \"a\"
+name = \"A\"
+end = {{ trigger = \"run_end\" }}
+"
+        ));
+        assert!(run(&text, &[]).is_empty());
     }
 }

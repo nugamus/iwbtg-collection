@@ -106,7 +106,7 @@ pub enum ActionFile {
     },
     /// The engine's `loadGame` (R23).
     LoadGame,
-    /// `instance_destroy()` (R24: `Unsupported` until the spec says which instance is self).
+    /// `instance_destroy()` (R24, Confirmed: destroys nothing and the rest of the code runs).
     DestroySelf,
 }
 

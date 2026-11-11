@@ -1,6 +1,6 @@
 //! The golden corpus: small engine worlds we build ourselves (no creator content), each run for a
 //! fixed number of ticks on a fixed input, with one pinned state hash per case
-//! (docs/plans/sim-core.md 10.6, docs/architecture.md, Testing).
+//! (docs/plans/sim-core.md 10.6, docs/architecture/testing.md).
 //!
 //! Two programs include this file with `#[path]`, so it uses only `iwbtg_sim`'s public API and
 //! `std`:
