@@ -508,6 +508,10 @@ pub fn package_id(files: &PackageFiles) -> Result<String, ToolError> {
 
 /// Loads a package folder.
 pub fn load_package(dir: &Path) -> Result<PackageFiles, ToolError> {
+    // A built `.iwbz` already carries its engine pack (docs/format/iwbz.md).
+    if crate::pack_cmd::is_iwbz(dir) {
+        return crate::pack_cmd::read_iwbz(dir);
+    }
     let mut files =
         PackageFiles::load_dir(dir).map_err(|e| ToolError::Message(format!("{}: {e}", dir.display())))?;
     bundle_engine_pack(dir, &mut files)?;

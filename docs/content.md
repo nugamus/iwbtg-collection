@@ -131,4 +131,4 @@ Changes [format v0](format/v0.md) needs before format 1:
 - **Unusual controls.** Fields for the control hints.
 - **Creator locks.** Flags for asset reuse and skins.
 - **Script library references** (`lib:<name>@<version>`).
-- **The `.iwbz` container.**
+- **The `.iwbz` container.** Done: [iwbz.md](format/iwbz.md) (#36); the OS file association comes with the release installers (#647).

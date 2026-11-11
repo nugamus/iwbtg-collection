@@ -7,6 +7,9 @@ One binary for agents and CI:
 
 - `iwbtg pkg check <dir>`: full validation, one readable error list with file, line and column. A package that names an `engine_pack` gets it bundled from `../_engines/<pack>/` first ([engine packs](../format/engine.md)).
 - `iwbtg pkg fmt <dir> [--check]`: canonical formatting of every `.toml` file ([0002](../decisions/0002-data-syntax.md), [v0](../format/v0.md#common-rules-for-data-files)); `--check` lists what would change and exits 1.
+- `iwbtg pkg pack <dir> [-o <file>] [--trace-mode]`: checks the package (engine pack bundled, as `pkg check`) and writes it as one `.iwbz` file, `<id>.iwbz` in the current folder unless `-o` names one ([iwbz.md](../format/iwbz.md)). Prints `wrote <file> (<n> files, <n> bytes)`, then `gameplay_hash:` and `content_hash:`. A package with errors prints them, writes nothing and exits 1; a file the format does not allow is exit 2.
+- `iwbtg pkg unpack <file> <dir>`: unpacks an `.iwbz` into a new or empty folder after checking every name and limit, and prints `unpacked <n> files into <dir>` and `content_hash:`.
+- Every command that takes a package folder (`pkg check`, `pkg hash`, `replay run`, `trace run` and so on) also takes an `.iwbz` file, read in memory (`trace_cmd::load_package`).
 - `iwbtg pkg hash <dir> [--trace-mode]`: prints `gameplay_hash:` and `content_hash:` ([versioning](../format/v0.md#versioning)). A package with errors prints them and exits 1.
 - `iwbtg script api-docs [--docs <dir>] [--check]`: writes [script-api.md](../format/script-api.md) and the Rhai language-server stubs `docs/format/script/iws.d.rhai` from the functions registered on the IWS engine; `--check` exits 1 when a committed file is stale. `cargo test -p iwbtg-tools` fails on the same condition, so CI catches a stale file.
 - `iwbtg pkg upgrade <dir>`: migrates a package to the newest format version.

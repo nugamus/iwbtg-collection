@@ -8,6 +8,8 @@
 
 #[path = "fmt_files.rs"]
 mod fmt_files;
+#[path = "iwbz.rs"]
+mod iwbz;
 #[path = "room_art.rs"]
 mod room_art;
 #[path = "wp5a_physics.rs"]
