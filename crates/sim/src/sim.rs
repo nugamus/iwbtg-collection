@@ -152,6 +152,18 @@ impl Sim {
         }
     }
 
+    /// Ranked time so far, in ticks: the ticks the `[timing]` timer ran outside every cutscene
+    /// and dialogue region (`TimingState::ranked_ticks`, #34). In Play original nothing is
+    /// frozen, so it is the timer's ticks.
+    pub fn ranked_ticks(&self) -> u64 {
+        self.world.timing.ranked_ticks
+    }
+
+    /// Ticks the timer ran while a region held (`TimingState::frozen_ticks`, #34).
+    pub fn frozen_ticks(&self) -> u64 {
+        self.world.timing.frozen_ticks
+    }
+
     /// The world, read only.
     pub fn world(&self) -> &World {
         &self.world

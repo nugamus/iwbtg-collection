@@ -34,7 +34,7 @@ crates/sim/src/
   kid/            Kid built-in: state, api for other built-ins, presets, actions, collision runs
   builtins/       One file per built-in kind (block.rs, spike.rs, save.rs, ...)
   sound.rs        Sound model (is a sound playing) and DLL adapters (sound/)
-  stripped.rs     Play mode (original or stripped) and the resolved [stripped] table (#561)
+  stripped.rs     Play mode (original or stripped), the resolved [stripped] table (#561), regions (#34)
   script/         ScriptHost trait, the Rhai host, API registration, budget, validator
   timing.rs       Start, end and stage triggers, splits
   output.rs       Audio and visual event queue for the client
@@ -115,7 +115,7 @@ The sketch above is the original idea. The declared types are in `crates/sim/src
 
 | # | Phase | Status | Isolation |
 |---|---|---|---|
-| 0 | Latch input: build held/pressed/released for the tick; `direct_latch |= pressed` per key | Inferred (sample once before Begin Step) | `InputState::latch` |
+| 0 | Region step (stripped runs: ranked or frozen tick, dialogue timeout presses added to the frame; #34), then latch input: build held/pressed/released for the tick; `direct_latch |= pressed` per key | Inferred (sample once before Begin Step); region step Design | `stripped::begin_tick`, `InputState::latch` |
 | 1 | Capture `xprevious/yprevious` if `prev_capture = TickStart` (default) | Confirmed (recorder) U1 (R1) | `TickRules::prev_capture` |
 | 2 | Begin Step | Confirmed order | |
 | 3 | Timelines advance, moments run | Slot Confirmed (recorder) U6 (R6); moments for speed > 1 UNKNOWN | `TickRules::timeline_slot = AfterBeginStep` |
@@ -159,7 +159,7 @@ GM8 reals are IEEE binary64 doubles. Our sim uses f64 for every real.
   - Each table entry records where its value came from: an OpenGMK trace, or a measurement on the real GM8 runner.
   - **OPEN:** whether the real runner gives the same bits as OpenGMK. Settled by a Phase 2 cross-check through the research gate. Scripts use plain libm trig, because bullets do not need x87 parity.
 - **x87 fallback.** If traces show that GM8's extended-precision intermediates matter, the affected built-in formulas switch to `rustc_apfloat` X87DoubleExtended (pure Rust, the same on every platform) behind the same `Real` API, selected by `float_model = "x87_ext"` in the physics profile. Evidence so far says plain f64 is enough: OpenGMK dropped its x87 code in 2021 and still syncs TASes. **OPEN** until our own traces confirm it.
-- **Literals.** Constants in Rust are decimal literals, which Rust rounds correctly, or `from_bits` when a trace demands it. Data files may write `{ bits = "..." }` for the same reason (Delphi may parse GML literals through extended precision).
+- **Literals.** Constants in Rust are decimal literals, which Rust rounds correctly, or `from_bits` when a trace demands it. Data files may write `{ bits = "..." }` for the same reason. GML decimal literals are not always the nearest double: the recorder reads them as all digits as one integer times the double nearest 10^-k, so `0.95` is 0.9500000000000001 (N14, research#104; `num::gml_literal`). The converter applies that model and writes the resulting double in shortest round-trip form, so the sim and the script engine only ever parse decimals correctly rounded; a Rust constant that ports a GML literal holds the recorder value (ice `temp_decay`, the GAMEOVER overlay cap). Because the model lives in converted data rather than in `NumRules`, a real-runner answer that differs (research#8) means re-converting the affected literals and re-pinning, not a new `engine_rev`.
 - **Rules, not constants.** Every number rule with OpenGMK provenance or an open spec status (compare epsilon, truthiness, `sign`, `min`/`max` ties, signed zeros, alarm and byte conversions, `string()` rounding, float model) is a field of `NumRules` in `RunnerRules`, never a `const`, so a rule settled later becomes a new `engine_rev` (plan section 3.2).
 - **NaN and infinity** (plan 10.2, N15). `Real`'s `Eq` compares raw bits, and NaN payloads and signs differ between x86_64, wasmtime and browser engines. So every `Motion`, `Image`, alarm, view and variable setter, called from a built-in or a script, rejects a non-finite value with `SimError::NonFinite`, which halts the sim. Intermediate non-finite values inside one `num` function are allowed only if the function's result is finite. The state hash also maps every NaN to one bit pattern.
 - **Motion coupling.** As in GM8, setting `hspeed` or `vspeed` recomputes `speed` and `direction`, and setting `speed` or `direction` recomputes `hspeed` and `vspeed`. The trace shows this: `speed = 7.347880794884119e-17`, `direction = 180` once vspeed is 0. Details (the 0.0001 snap, direction wrap) come from the CLONE_SPEC.
