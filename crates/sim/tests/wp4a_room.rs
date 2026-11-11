@@ -231,6 +231,7 @@ mod wp4a {
             RoomAction::SetGlobal {
                 var: g,
                 value: Value::Real(Real::ONE),
+                difficulty: None,
             },
             RoomAction::Spawn {
                 kind: spawned,
@@ -625,6 +626,35 @@ mod wp4a {
         (b.build().unwrap(), select, load, saved)
     }
 
+    /// A room's `set_global difficulty` also sets the engine difficulty built-ins read (#568).
+    #[test]
+    fn set_global_difficulty_sets_the_engine_difficulty() {
+        let mut b = GameDefBuilder::new("difficulty");
+        let g = VarId(0);
+        let mut ra = room("a", 30);
+        ra.on_create = vec![RoomAction::SetGlobal {
+            var: g,
+            value: Value::Real(Real::new(7.0)),
+            difficulty: Some(7),
+        }];
+        let a = b.room(ra);
+        let def = b.build().unwrap();
+        let rules = RunnerRules::default();
+        let mut host = Probe::default();
+        let (w, r) = start(
+            &def,
+            &rules,
+            &mut host,
+            StartPoint::Room {
+                room: a,
+                difficulty: 2,
+            },
+        );
+        r.unwrap();
+        assert_eq!(w.engine.run.difficulty, 7);
+        assert_eq!(w.globals.get(&g), Some(&Value::Real(Real::new(7.0))));
+    }
+
     #[test]
     fn wp4a_nested_request_chains_after_the_sequence() {
         let (def, select, load, saved) = load_game();
@@ -771,7 +801,7 @@ mod wp4a {
     }
 
     #[test]
-    fn wp4a_destroy_self_in_creation_code_is_unsupported() {
+    fn wp4a_destroy_self_in_creation_code_is_a_no_op() {
         let mut b = GameDefBuilder::new("destroy");
         let mut r = room("stage", 50);
         r.on_create = vec![RoomAction::DestroySelf];
@@ -788,9 +818,10 @@ mod wp4a {
                 difficulty: 0,
             },
         );
-        let err = r.unwrap_err();
-        assert!(matches!(&err, SimError::Unsupported { what } if what.contains("R24")));
-        assert_eq!(w.status, SimStatus::Halted(err));
+        // R24: nothing is destroyed and the start goes on.
+        r.expect("the start succeeds");
+        assert_eq!(w.status, SimStatus::Running);
+        assert_eq!(w.room, stage);
     }
 
     #[test]
@@ -1143,5 +1174,193 @@ mod wp4a {
         assert!(w.pending.is_none(), "nothing left for tick 137");
         assert_eq!(def.room(w.room).unwrap().name, after_room, "row 137's room");
         assert_eq!(w.engine.run.difficulty, as_u8(after_diff), "row 137's difficulty");
+    }
+
+    // -- Ranked (stripped) mode (#561) ---------------------------------------------------------
+
+    use iwbtg_sim::def::NameId;
+    use iwbtg_sim::stripped::{PlayMode, RankedStart};
+
+    /// The order game with a third room `c`, the `ps` placed instance named `tut`.
+    fn stripped_game() -> (Order, RoomId) {
+        let mut o = order_game();
+        let c = RoomId(u32::try_from(o.def.rooms.len()).unwrap());
+        o.def.rooms.push(room("c", 50));
+        o.def.names.push("tut".into());
+        o.def.rooms[0].instances[0].name = Some(NameId(0));
+        (o, c)
+    }
+
+    fn start_in(
+        def: &GameDef,
+        mode: PlayMode,
+        host: &mut Probe,
+        at: StartPoint,
+    ) -> (World, Result<(), SimError>) {
+        let rules = RunnerRules::default();
+        let mut w = World::new(def.start_room, 1);
+        w.mode = mode;
+        let r = with_ctx(def, &rules, &mut w, |ctx| start_game_with(ctx, &at, host));
+        (w, r)
+    }
+
+    #[test]
+    fn stripped_new_game_starts_in_the_ranked_room_with_its_globals_set_first() {
+        let (mut o, _) = stripped_game();
+        o.def.stripped.start = RankedStart {
+            room: Some(o.b),
+            globals: vec![(o.g, Value::Real(Real::new(3.0)))],
+            difficulty: Some(2),
+        };
+        let mut host = Probe {
+            watch: Some(o.g),
+            ..Probe::default()
+        };
+        let at = StartPoint::NewGame { difficulty: 0 };
+        let (w, r) = start_in(&o.def, PlayMode::Stripped, &mut host, at.clone());
+        r.unwrap();
+        assert_eq!(w.room, o.b, "the ranked start room, not new_game_room");
+        assert_eq!(w.globals.get(&o.g), Some(&Value::Real(Real::new(3.0))));
+        assert_eq!(
+            w.engine.run.difficulty, 2,
+            "the `difficulty` global sets the engine's"
+        );
+        assert_eq!(
+            host.log,
+            [
+                "Create world",
+                "Create blk+g",
+                "GameStart blk+g",
+                "GameStart world+g",
+                "RoomStart blk+g",
+                "RoomStart world+g"
+            ],
+            "the globals are set after boot, before the start room's first Create"
+        );
+
+        // Play original ignores [stripped]: new_game_room, no globals.
+        let mut host = Probe::default();
+        let (w, r) = start_in(&o.def, PlayMode::Original, &mut host, at);
+        r.unwrap();
+        assert_eq!(w.room, o.def.new_game_room);
+        assert_eq!(w.engine.run.difficulty, 0);
+    }
+
+    #[test]
+    fn stripped_start_without_a_room_uses_new_game_room() {
+        let (mut o, _) = stripped_game();
+        o.def.new_game_room = o.b;
+        let mut host = Probe::default();
+        let (w, r) = start_in(
+            &o.def,
+            PlayMode::Stripped,
+            &mut host,
+            StartPoint::NewGame { difficulty: 1 },
+        );
+        r.unwrap();
+        assert_eq!(w.room, o.b);
+        assert_eq!(
+            w.engine.run.difficulty, 1,
+            "no `difficulty` global keeps the start's"
+        );
+    }
+
+    #[test]
+    fn stripped_cut_rooms_redirect_every_room_change() {
+        let (mut o, c) = stripped_game();
+        o.def.stripped.cut_rooms.insert(o.b, c);
+        let rules = RunnerRules::default();
+        let at = StartPoint::Room {
+            room: o.a,
+            difficulty: 0,
+        };
+        for (mode, want) in [(PlayMode::Stripped, c), (PlayMode::Original, o.b)] {
+            for req in [RoomRequest::Goto(o.b), RoomRequest::Next] {
+                let mut host = Probe::default();
+                let (mut w, r) = start_in(&o.def, mode, &mut host, at.clone());
+                r.unwrap();
+                change(&o.def, &rules, &mut w, &mut host, req).unwrap();
+                assert_eq!(w.room, want, "{mode:?} {req:?}");
+            }
+        }
+        // A start point and a save load into a cut room land in its `to` room too.
+        let mut host = Probe::default();
+        let (w, r) = start_in(
+            &o.def,
+            PlayMode::Stripped,
+            &mut host,
+            StartPoint::Room {
+                room: o.b,
+                difficulty: 0,
+            },
+        );
+        r.unwrap();
+        assert_eq!(w.room, c);
+        let mut host = Probe::default();
+        let (w, r) = start_in(
+            &o.def,
+            PlayMode::Stripped,
+            &mut host,
+            StartPoint::FromSave(slot(o.b)),
+        );
+        r.unwrap();
+        assert_eq!(w.room, c);
+    }
+
+    #[test]
+    fn stripped_cut_kinds_skip_placed_instances_and_spawn_actions() {
+        let (mut o, _) = stripped_game();
+        let blk = o.def.kinds.iter().position(|k| k.name == "blk").unwrap();
+        let spawned = o.def.kinds.iter().position(|k| k.name == "spawned").unwrap();
+        for k in [blk, spawned] {
+            o.def.stripped.cut_kinds.insert(KindId(u32::try_from(k).unwrap()));
+        }
+        let at = StartPoint::Room {
+            room: o.a,
+            difficulty: 0,
+        };
+        let mut host = Probe::default();
+        let (w, r) = start_in(&o.def, PlayMode::Stripped, &mut host, at.clone());
+        r.unwrap();
+        assert!(ids_of(&w, &o.def, "blk").is_empty(), "placed blk is cut");
+        assert!(
+            ids_of(&w, &o.def, "spawned").is_empty(),
+            "the spawn action is cut"
+        );
+        assert_eq!(ids_of(&w, &o.def, "ps").len(), 1, "other kinds stay");
+        assert_eq!(
+            w.globals.get(&o.g),
+            Some(&Value::Real(Real::ONE)),
+            "the room's other actions still run"
+        );
+        let mut host = Probe::default();
+        let (w, r) = start_in(&o.def, PlayMode::Original, &mut host, at);
+        r.unwrap();
+        assert_eq!(ids_of(&w, &o.def, "blk").len(), 1);
+        assert_eq!(ids_of(&w, &o.def, "spawned").len(), 1);
+    }
+
+    #[test]
+    fn stripped_cut_instances_skip_one_named_placed_instance() {
+        let (mut o, _) = stripped_game();
+        o.def.stripped.cut_instances.insert((o.a, NameId(0)));
+        // The same name in another room is not cut.
+        o.def.rooms[1].instances[0].name = Some(NameId(0));
+        let at = StartPoint::Room {
+            room: o.a,
+            difficulty: 0,
+        };
+        let rules = RunnerRules::default();
+        let mut host = Probe::default();
+        let (mut w, r) = start_in(&o.def, PlayMode::Stripped, &mut host, at.clone());
+        r.unwrap();
+        assert!(ids_of(&w, &o.def, "ps").is_empty(), "`tut` in room a is cut");
+        assert_eq!(ids_of(&w, &o.def, "blk").len(), 1);
+        change(&o.def, &rules, &mut w, &mut host, RoomRequest::Goto(o.b)).unwrap();
+        assert_eq!(ids_of(&w, &o.def, "blk").len(), 1, "`tut` in room b stays");
+        let mut host = Probe::default();
+        let (w, r) = start_in(&o.def, PlayMode::Original, &mut host, at);
+        r.unwrap();
+        assert_eq!(ids_of(&w, &o.def, "ps").len(), 1);
     }
 }

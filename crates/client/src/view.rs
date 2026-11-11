@@ -25,6 +25,13 @@ pub(crate) struct Game {
     pub(crate) sim: Sim,
 }
 
+/// How the run started, so a retry can start it again the same way.
+#[derive(Resource)]
+struct RunStart {
+    def: Arc<iwbtg_sim::def::GameDef>,
+    options: SimOptions,
+}
+
 /// The Bevy image of each sprite strip, by `SpriteId`, with the strip size.
 #[derive(Resource)]
 struct Textures(Vec<Option<(Handle<Image>, UVec2)>>);
@@ -75,6 +82,11 @@ impl ViewRect {
     }
 }
 
+/// The fixed-clock systems that advance the sim (the tick and the clock retune). Other modules
+/// gate them with a run condition, as Sudden Death does when the run is over (mods.rs).
+#[derive(SystemSet, Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub(crate) struct SimTick;
+
 /// Marks the camera that draws the game.
 #[derive(Component)]
 pub(crate) struct GameCamera;
@@ -113,12 +125,14 @@ impl std::str::FromStr for FrameCap {
 /// draw every step, so a blended frame shows positions the game never had. `pos` is where each
 /// instance was before the last tick.
 #[derive(Resource, Default)]
-struct Previous {
+pub(crate) struct Previous {
     on: bool,
     /// How far the fixed clock is into the next tick, 0 to 1.
     alpha: f64,
     room: Option<iwbtg_sim::def::RoomId>,
     pos: BTreeMap<InstId, (f64, f64)>,
+    /// View 0 before the last tick.
+    view: Option<ViewRect>,
 }
 
 /// An instance that moves farther than this in one tick (a warp, a teleport) is drawn at its
@@ -135,6 +149,43 @@ fn blend(prev: Option<(f64, f64)>, cur: (f64, f64), alpha: f64) -> (f64, f64) {
             (px + (cur.0 - px) * alpha, py + (cur.1 - py) * alpha)
         }
         _ => cur,
+    }
+}
+
+/// Blends the view `alpha` of the way from where it was before the last tick to where it is.
+/// No blend without a previous view, when the size changed, or after a jump (a room change, a
+/// snap to the kid, a turn of more than 45 degrees in one tick).
+fn blend_view(prev: Option<ViewRect>, cur: ViewRect, alpha: f64) -> ViewRect {
+    let Some(p) = prev else { return cur };
+    let near = |a: f32, b: f32, max: f64| f64::from((a - b).abs()) <= max;
+    let same_size = near(p.w, cur.w, 0.0) && near(p.h, cur.h, 0.0);
+    if !same_size
+        || !near(p.x, cur.x, MAX_BLEND_DISTANCE)
+        || !near(p.y, cur.y, MAX_BLEND_DISTANCE)
+        || !near(p.angle, cur.angle, 45.0)
+    {
+        return cur;
+    }
+    let mix = |a: f32, b: f32| a + (b - a) * alpha as f32;
+    ViewRect {
+        x: mix(p.x, cur.x),
+        y: mix(p.y, cur.y),
+        angle: mix(p.angle, cur.angle),
+        ..cur
+    }
+}
+
+/// View 0 of the sim's current room as drawn: enabled and visible, else the whole room.
+fn view_of(world: &iwbtg_sim::world::World, size: Vec2) -> ViewRect {
+    match world.views.first() {
+        Some(v) if v.enabled && v.visible && v.w.get() >= 1.0 && v.h.get() >= 1.0 => ViewRect {
+            x: v.x.get() as f32,
+            y: v.y.get() as f32,
+            w: v.w.get() as f32,
+            h: v.h.get() as f32,
+            angle: v.angle.get() as f32,
+        },
+        _ => ViewRect::whole(size),
     }
 }
 
@@ -196,13 +247,13 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
         start: crate::savefile::start_point(&def),
         seed: 0,
         dll_mode: DllMode::Model,
+        mode: iwbtg_sim::stripped::PlayMode::Original,
     };
-    let sim = Sim::new(Arc::clone(&def), options).map_err(|e| format!("the game did not start: {e}"))?;
+    let sim =
+        Sim::new(Arc::clone(&def), options.clone()).map_err(|e| format!("the game did not start: {e}"))?;
     let room = def.room(sim.world().room).ok_or("the start room is missing")?;
     let (width, height) = (room.width as f32, room.height as f32);
     let images = sprite_images(&pkg.files);
-    // The first room's start runs inside `Sim::new`; `step` clears its output, so take it now.
-    let first_output = sim.world().output.clone();
     let mut app = App::new();
     app.add_plugins(
         DefaultPlugins
@@ -224,6 +275,10 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
     .insert_resource(PendingImages(images))
     .init_resource::<Drawn>()
     .insert_non_send(Game { sim })
+    .insert_resource(RunStart {
+        def: Arc::clone(&def),
+        options,
+    })
     .insert_resource(Cap(cap))
     .insert_resource(Previous {
         on: interpolate,
@@ -244,7 +299,7 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
         RunFixedMainLoop,
         (collect_input, collect_pad).in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
     )
-    .add_systems(FixedUpdate, (tick, follow_room_speed).chain())
+    .add_systems(FixedUpdate, (tick, follow_room_speed).chain().in_set(SimTick))
     .add_systems(
         Update,
         (
@@ -256,9 +311,6 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
     )
     .add_systems(Last, limit_frames);
     plugins(&mut app, &pkg);
-    if let Some(mut queue) = app.world_mut().get_resource_mut::<crate::audio::Queue>() {
-        queue.push(Instant::now(), &first_output);
-    }
     if let Some(path) = screenshot {
         app.insert_resource(ScreenshotTo(path))
             .add_systems(Update, take_screenshot);
@@ -283,6 +335,11 @@ fn setup(
         TextColor(Color::srgb(1.0, 1.0, 0.4)),
         Anchor::TOP_LEFT,
         Transform::from_xyz(-room.0.x / 2.0 + 4.0, room.0.y / 2.0 - 4.0, 1000.0),
+        if crate::settings::get().overlay {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        },
         Overlay,
     ));
     commands.spawn((
@@ -324,11 +381,16 @@ fn setup(
 /// view's top-left corner. Rooms without an enabled, visible view 0 show the whole room. Also keeps
 /// `RoomSize` equal to the current room, so rooms of different sizes place their sprites right.
 ///
-/// OPEN: `--interpolate` does not smooth the view between ticks (the sim has no previous view);
-/// the direction of `view_angle` is taken as counter-clockwise on screen, as the room's angle
-/// column in the gravity-flip trace only logs the value.
+/// With `--interpolate` the view is blended between its place before the last tick and its place
+/// now, like the instances, so a scrolling room does not jitter against moving sprites.
+///
+/// OPEN: the direction of `view_angle` is taken as counter-clockwise on screen, as the room's
+/// angle column in the gravity-flip trace only logs the value
+/// (nugamus/iwbtg-collection-research#94).
 pub(crate) fn follow_view(
     game: NonSend<Game>,
+    previous: Res<Previous>,
+    fixed: Res<Time<Fixed>>,
     mut room: ResMut<RoomSize>,
     mut rect: ResMut<ViewRect>,
     mut camera: Single<&mut Transform, (With<GameCamera>, Without<Overlay>)>,
@@ -342,16 +404,10 @@ pub(crate) fn follow_view(
     if room.0 != size {
         room.0 = size;
     }
-    let next = match world.views.first() {
-        Some(v) if v.enabled && v.visible && v.w.get() >= 1.0 && v.h.get() >= 1.0 => ViewRect {
-            x: v.x.get() as f32,
-            y: v.y.get() as f32,
-            w: v.w.get() as f32,
-            h: v.h.get() as f32,
-            angle: v.angle.get() as f32,
-        },
-        _ => ViewRect::whole(size),
-    };
+    let mut next = view_of(world, size);
+    if previous.on && previous.room == Some(world.room) {
+        next = blend_view(previous.view, next, f64::from(fixed.overstep_fraction()));
+    }
     if *rect != next {
         *rect = next;
     }
@@ -445,6 +501,53 @@ fn collect_pad(
     }
 }
 
+/// Starts the run again from where it started (quick-retry and auto-retry, `retry.rs`): a new
+/// sim with the same options, every drawn sprite gone, no pending input edges, no sign. The new sim's
+/// room-start output stays in `output` for its first step (#466). The fixed clock keeps its rate until the next
+/// tick's `follow_room_speed`.
+pub(crate) fn restart_run(world: &mut World) -> Result<(), String> {
+    let start = world.resource::<RunStart>();
+    let sim = Sim::new(Arc::clone(&start.def), start.options.clone())
+        .map_err(|e| format!("the game did not start: {e}"))?;
+    world.non_send_mut::<Game>().sim = sim;
+    let drawn = std::mem::take(&mut world.resource_mut::<Drawn>().0);
+    for entity in drawn.into_values() {
+        world.despawn(entity);
+    }
+    {
+        let mut previous = world.resource_mut::<Previous>();
+        previous.room = None;
+        previous.pos.clear();
+    }
+    // Keys held through the retry stay held; edges from before it are dropped.
+    world.resource_mut::<Collector>().take_frame();
+    world.resource_mut::<hud::SignText>().0 = None;
+    Ok(())
+}
+
+/// The view's run resources without a window, for tests of the systems that use them.
+#[cfg(test)]
+pub(crate) fn test_world(pkg: &Package) -> World {
+    let options = SimOptions {
+        start: iwbtg_sim::room::StartPoint::NewGame { difficulty: 0 },
+        seed: 0,
+        dll_mode: DllMode::Model,
+        mode: iwbtg_sim::stripped::PlayMode::Original,
+    };
+    let sim = Sim::new(Arc::clone(&pkg.def), options.clone()).unwrap();
+    let mut world = World::new();
+    world.insert_non_send(Game { sim });
+    world.insert_resource(RunStart {
+        def: Arc::clone(&pkg.def),
+        options,
+    });
+    world.init_resource::<Drawn>();
+    world.init_resource::<Previous>();
+    world.insert_resource(Collector::new(crate::bindings::Bindings::default()));
+    world.init_resource::<hud::SignText>();
+    world
+}
+
 /// One sim tick: runs on the fixed clock, as many times per frame as the clock is behind.
 fn tick(
     mut game: NonSendMut<Game>,
@@ -458,6 +561,11 @@ fn tick(
     if previous.on {
         let world = game.sim.world();
         previous.room = Some(world.room);
+        previous.view = game
+            .sim
+            .def()
+            .room(world.room)
+            .map(|d| view_of(world, Vec2::new(d.width as f32, d.height as f32)));
         previous.pos = world
             .instances()
             .iter()
@@ -526,6 +634,7 @@ fn overlay(
         } else {
             Visibility::Hidden
         };
+        crate::settings::update(|s| s.overlay = **visibility != Visibility::Hidden);
     }
     let status = match &game.sim.world().status {
         SimStatus::Running => String::new(),
@@ -677,10 +786,10 @@ fn sync_instances(
 
 /// Where `--screenshot` writes.
 #[derive(Resource)]
-struct ScreenshotTo(std::path::PathBuf);
+pub(crate) struct ScreenshotTo(pub(crate) std::path::PathBuf);
 
 /// Frame 90 asks for a screenshot (the overlay has counted a second by then); frame 150 exits (the file is written by then).
-fn take_screenshot(
+pub(crate) fn take_screenshot(
     mut commands: Commands,
     to: Res<ScreenshotTo>,
     mut frame: Local<u32>,
@@ -787,5 +896,55 @@ mod tests {
             ..v
         };
         assert_eq!(v.centre(room), Vec2::new(-700.0, -50.0));
+    }
+
+    fn view(x: f32, y: f32) -> ViewRect {
+        ViewRect {
+            x,
+            y,
+            w: 800.0,
+            h: 608.0,
+            angle: 0.0,
+        }
+    }
+
+    #[test]
+    fn the_view_moves_part_of_the_way_between_ticks() {
+        let mid = blend_view(Some(view(100.0, 0.0)), view(108.0, 4.0), 0.5);
+        assert_eq!((mid.x, mid.y), (104.0, 2.0));
+        assert_eq!(
+            blend_view(Some(view(100.0, 0.0)), view(108.0, 4.0), 1.0),
+            view(108.0, 4.0)
+        );
+        assert_eq!(
+            blend_view(Some(view(100.0, 0.0)), view(108.0, 4.0), 0.0),
+            view(100.0, 0.0)
+        );
+        // The turn is blended too.
+        let turned = ViewRect {
+            angle: 12.0,
+            ..view(0.0, 0.0)
+        };
+        assert_eq!(blend_view(Some(view(0.0, 0.0)), turned, 0.5).angle, 6.0);
+    }
+
+    #[test]
+    fn the_view_never_slides_across_a_jump_or_a_resize() {
+        // No previous view, a snap of the view, a resize and a half turn all land at once.
+        assert_eq!(blend_view(None, view(500.0, 0.0), 0.5), view(500.0, 0.0));
+        assert_eq!(
+            blend_view(Some(view(0.0, 0.0)), view(500.0, 0.0), 0.5),
+            view(500.0, 0.0)
+        );
+        let small = ViewRect {
+            w: 400.0,
+            ..view(0.0, 0.0)
+        };
+        assert_eq!(blend_view(Some(view(0.0, 0.0)), small, 0.5), small);
+        let flipped = ViewRect {
+            angle: 180.0,
+            ..view(0.0, 0.0)
+        };
+        assert_eq!(blend_view(Some(view(0.0, 0.0)), flipped, 0.5), flipped);
     }
 }

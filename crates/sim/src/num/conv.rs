@@ -148,3 +148,27 @@ fn increment_decimal(text: &str) -> String {
     }
     out
 }
+
+/// The double the recorder reads for the GML decimal literal `text` (N14, research#104): all its
+/// digits as one integer, times the double nearest 10^-k, where k is the number of digits after
+/// the dot. `"0.95"` is 0.9500000000000001 and `"0.3"` is 0.30000000000000004 (one ulp above the
+/// nearest double); `"0.4"`, `"0.45"` and `"0.017"` are the nearest double. `None` unless `text`
+/// is digits with at most one dot (GM8 has no exponent syntax; a sign is an operator).
+///
+/// Packages store the result (the converter writes it in shortest round-trip form), so the sim
+/// never parses GML at run time. This function documents the rule, pins it in tests and gives
+/// built-in Rust constants that port a GML literal their value. The real runner's parser is
+/// OPEN (research#8).
+pub fn gml_literal(text: &str) -> Option<Real> {
+    let (int, frac) = text.split_once('.').unwrap_or((text, ""));
+    let digits = format!("{int}{frac}");
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let m = digits.parse::<f64>().ok()?;
+    if frac.is_empty() {
+        return Some(Real::new(m));
+    }
+    let scale = format!("1e-{}", frac.len()).parse::<f64>().ok()?;
+    Some(Real::new(m * scale))
+}

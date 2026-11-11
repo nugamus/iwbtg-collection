@@ -167,6 +167,8 @@ pub enum RoomAction {
         var: VarId,
         /// Its new value.
         value: Value,
+        /// Set for the global `difficulty` (#568): the engine difficulty built-ins read, set with it.
+        difficulty: Option<u8>,
     },
     /// `instance_create(x, y, kind)`.
     Spawn {
@@ -182,6 +184,6 @@ pub enum RoomAction {
     /// The engine's `loadGame` from room creation code (kaenbyou, eat-the-lemon rLoad; R23).
     LoadGame,
     /// `instance_destroy()` in room creation code: `SimError::Unsupported` until the spec says
-    /// which instance is "self" (R24).
+    /// a no-op (R24, Confirmed).
     DestroySelf,
 }

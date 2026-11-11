@@ -10,6 +10,7 @@ use std::ops::Range;
 use iwbtg_sim::def::{
     DeathOnRestart, ResetKind, ResetModel, RestartKind, RestartModel, RestartTrigger, RoleSet, RoomRole,
 };
+use iwbtg_sim::input::Action;
 use iwbtg_sim::num::Real;
 use serde::Deserialize;
 use toml::Spanned;
@@ -130,6 +131,10 @@ pub struct Manifest {
     /// room's background ([`crate::key_art`]).
     #[serde(default)]
     pub key_art: Option<KeyArtSection>,
+    /// Ranked (stripped) mode: start point, cuts, cutscene and dialogue regions. Absent: the
+    /// run starts at the new-game room and nothing is cut or frozen.
+    #[serde(default)]
+    pub stripped: Option<StrippedSection>,
 }
 
 /// Id of the one map of a package without `[[maps]]`.
@@ -168,6 +173,49 @@ pub struct MapEntry {
     /// Stages in order; default `[timing].stages`. `[]` is a single-stage map.
     #[serde(default)]
     pub stages: Option<Vec<Stage>>,
+    /// The map's ranked start point; keys it leaves out come from `[stripped].start`, globals
+    /// merged by name.
+    #[serde(default)]
+    pub stripped_start: Option<RankedStart>,
+}
+
+/// Checks a ranked start's own fields; its room is resolved by the loader.
+fn validate_ranked_start(v: &mut Validator<'_>, start: &RankedStart) {
+    if let Some(room) = &start.room {
+        v.non_empty(room, "ranked start room");
+    }
+    for (name, value) in &start.globals {
+        if !is_var_name(name.get_ref()) {
+            v.error(
+                name.span(),
+                format!(
+                    "`{}` is not a variable name (letters, digits and `_`, not starting with a digit)",
+                    name.get_ref()
+                ),
+            );
+        }
+        if let Err(e) = global_value(value.get_ref()) {
+            v.error(value.span(), format!("global `{}`: {e}", name.get_ref()));
+        }
+    }
+}
+
+/// A GML variable name: ASCII letters, digits and `_`, not starting with a digit.
+fn is_var_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    chars.next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// A global's value as `set_global` takes it: a number (or `{ bits }`), a string or a boolean
+/// (true is 1).
+pub fn global_value(value: &toml::Value) -> Result<iwbtg_sim::world::Value, String> {
+    use iwbtg_sim::world::Value;
+    Ok(match value {
+        toml::Value::String(s) => Value::Str(s.clone()),
+        toml::Value::Boolean(b) => Value::Real(if *b { Real::ONE } else { Real::ZERO }),
+        other => Value::Real(Real::new(crate::objects::number(other)?)),
+    })
 }
 
 fn opt_str(s: &Option<Spanned<String>>) -> Option<&str> {
@@ -773,6 +821,127 @@ pub struct KeyArtSection {
     pub maps: BTreeMap<Spanned<String>, Spanned<String>>,
 }
 
+/// The `[stripped]` table: what ranked (stripped) mode changes (docs/format/v0.md, Stripped
+/// mode; docs/product.md, Two ways to play each game). Play original ignores it.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct StrippedSection {
+    /// Where a ranked run starts; a map's `stripped_start` overrides it key by key.
+    #[serde(default)]
+    pub start: Option<RankedStart>,
+    /// Rooms, kinds and placed instances stripped mode leaves out.
+    #[serde(default)]
+    pub cut: Option<StrippedCut>,
+    /// Regions that freeze the ranked timer.
+    #[serde(default)]
+    pub cutscenes: Vec<CutsceneRegion>,
+    /// Text that waits for a press: freezes the timer and advances on its own after a timeout.
+    #[serde(default)]
+    pub dialogues: Vec<DialogueRegion>,
+}
+
+/// `{ room = "stage1", globals = { difficulty = 1 } }`: the ranked start point.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct RankedStart {
+    /// The room a ranked run starts in; default `[engine].new_game_room`, then `start_room`.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub room: Option<Spanned<String>>,
+    /// Globals set before the first room, in place of the skipped menus (a number, string or
+    /// boolean, as `set_global`).
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, serde_json::Value>"))]
+    pub globals: BTreeMap<Spanned<String>, Spanned<toml::Value>>,
+}
+
+/// `[stripped.cut]`: what stripped mode leaves out.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct StrippedCut {
+    /// Rooms skipped: going to `room` goes to `to` instead.
+    #[serde(default)]
+    pub rooms: Vec<CutRoom>,
+    /// Kinds whose placed instances and room `spawn` actions are left out.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Vec<String>"))]
+    pub kinds: Vec<Spanned<String>>,
+    /// Single placed instances left out, by room and instance name.
+    #[serde(default)]
+    pub instances: Vec<CutInstance>,
+}
+
+/// `{ room = "intro", to = "stage1" }`.
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct CutRoom {
+    /// The room that is skipped.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub room: Spanned<String>,
+    /// Where a room change to `room` goes instead.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub to: Spanned<String>,
+}
+
+/// `{ room = "stage1", name = "tutorial_sign" }`.
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct CutInstance {
+    /// The room the instance is placed in.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub room: Spanned<String>,
+    /// The instance's `name` in that room.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub name: Spanned<String>,
+}
+
+/// A cutscene: the ranked timer is frozen while it holds. Exactly one of `kind` and `room`.
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct CutsceneRegion {
+    /// Region id, unique among cutscenes and dialogues.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub id: Spanned<String>,
+    /// Holds while an instance of this kind exists.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub kind: Option<Spanned<String>>,
+    /// Holds while the kid's world is in this room.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub room: Option<Spanned<String>>,
+}
+
+/// Dialogue that waits for a press: a cutscene region that also advances on its own.
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct DialogueRegion {
+    /// Region id, unique among cutscenes and dialogues.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub id: Spanned<String>,
+    /// Holds while an instance of this kind exists.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub kind: Option<Spanned<String>>,
+    /// Holds while the kid's world is in this room.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub room: Option<Spanned<String>>,
+    /// The action the original reads to advance the text (`jump`, `shoot`, `accept`, ...).
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub advance: Spanned<String>,
+    /// Ticks without a press of `advance` before the sim presses it; at least 1.
+    #[cfg_attr(feature = "schema", schemars(with = "u32"))]
+    pub timeout_ticks: Spanned<u32>,
+}
+
 /// Only the `format` key, read before the full parse so a newer package gets a clear
 /// "update the client" error instead of an unknown-key error.
 #[derive(Deserialize)]
@@ -913,6 +1082,7 @@ impl Manifest {
         }
         self.validate_timing(&mut v);
         self.validate_maps(&mut v);
+        self.validate_stripped(&mut v);
         for key in self.tricks.keys() {
             // TODO(OPEN: trick ids, from the research trick inventory): check `key` against the
             // known trick ids.
@@ -1080,6 +1250,104 @@ impl Manifest {
                 let start = map.start.as_ref().unwrap_or(&timing.start);
                 let stages = map.stages.as_deref().unwrap_or(&timing.stages);
                 validate_stages(v, start, stages);
+            }
+        }
+    }
+
+    fn validate_stripped(&self, v: &mut Validator<'_>) {
+        for map in &self.maps {
+            if let Some(start) = &map.stripped_start {
+                validate_ranked_start(v, start);
+            }
+        }
+        let Some(section) = &self.stripped else {
+            return;
+        };
+        if let Some(start) = &section.start {
+            validate_ranked_start(v, start);
+        }
+        if let Some(cut) = &section.cut {
+            let mut rooms = BTreeSet::new();
+            for entry in &cut.rooms {
+                v.non_empty(&entry.room, "cut room");
+                v.non_empty(&entry.to, "cut room `to`");
+                if !rooms.insert(entry.room.get_ref().as_str()) {
+                    v.error(
+                        entry.room.span(),
+                        format!("room `{}` is cut twice", entry.room.get_ref()),
+                    );
+                }
+            }
+            for entry in &cut.rooms {
+                if rooms.contains(entry.to.get_ref().as_str()) {
+                    v.error(
+                        entry.to.span(),
+                        format!(
+                            "cut room `{}` goes to `{}`, which is cut too",
+                            entry.room.get_ref(),
+                            entry.to.get_ref()
+                        ),
+                    );
+                }
+            }
+            let mut kinds = BTreeSet::new();
+            for kind in &cut.kinds {
+                if v.non_empty(kind, "cut kind") && !kinds.insert(kind.get_ref().as_str()) {
+                    v.error(kind.span(), format!("kind `{}` is cut twice", kind.get_ref()));
+                }
+            }
+            let mut instances = BTreeSet::new();
+            for entry in &cut.instances {
+                v.non_empty(&entry.room, "cut instance room");
+                if v.non_empty(&entry.name, "cut instance name")
+                    && !instances.insert((entry.room.get_ref().as_str(), entry.name.get_ref().as_str()))
+                {
+                    v.error(
+                        entry.name.span(),
+                        format!(
+                            "instance `{}` in room `{}` is cut twice",
+                            entry.name.get_ref(),
+                            entry.room.get_ref()
+                        ),
+                    );
+                }
+            }
+        }
+        let mut ids = BTreeSet::new();
+        let regions = section
+            .cutscenes
+            .iter()
+            .map(|c| (&c.id, &c.kind, &c.room))
+            .chain(section.dialogues.iter().map(|d| (&d.id, &d.kind, &d.room)));
+        for (id, kind, room) in regions {
+            if v.id(id) && !ids.insert(id.get_ref().as_str()) {
+                v.error(id.span(), format!("region id `{}` is used twice", id.get_ref()));
+            }
+            match (kind, room) {
+                (Some(_), Some(room)) => v.error(
+                    room.span(),
+                    format!("region `{}` has both `kind` and `room`; give one", id.get_ref()),
+                ),
+                (None, None) => v.error(
+                    id.span(),
+                    format!("region `{}` needs `kind` or `room`", id.get_ref()),
+                ),
+                (Some(value), None) | (None, Some(value)) => {
+                    v.non_empty(value, "region kind or room");
+                }
+            }
+        }
+        for dialogue in &section.dialogues {
+            let advance = dialogue.advance.get_ref();
+            if !Action::ALL.iter().any(|a| a.name() == advance) {
+                let names: Vec<&str> = Action::ALL.iter().map(|a| a.name()).collect();
+                v.error(
+                    dialogue.advance.span(),
+                    format!("`{advance}` is not an action; one of {}", names.join(", ")),
+                );
+            }
+            if *dialogue.timeout_ticks.get_ref() == 0 {
+                v.error(dialogue.timeout_ticks.span(), "timeout_ticks must be at least 1");
             }
         }
     }

@@ -1117,6 +1117,7 @@ dependencies = [
  "bevy_math",
  "bevy_mesh",
  "bevy_pbr",
+ "bevy_picking",
  "bevy_platform",
  "bevy_post_process",
  "bevy_ptr",
@@ -1131,6 +1132,9 @@ dependencies = [
  "bevy_text",
  "bevy_time",
  "bevy_transform",
+ "bevy_ui",
+ "bevy_ui_render",
+ "bevy_ui_widgets",
  "bevy_utils",
  "bevy_window",
  "bevy_winit",
@@ -3492,6 +3496,7 @@ dependencies = [
  "serde",
  "thiserror 2.0.21",
  "toml",
+ "web-sys",
 ]
 
 [[package]]

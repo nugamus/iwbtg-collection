@@ -76,6 +76,19 @@ pub struct TimingState {
     pub stages_done: u16,
     /// The `end` trigger fired.
     pub ended: bool,
+    /// Ranked time: ticks run while the timer ran (after `start`, up to and including the tick
+    /// `end` fired in) and no cutscene or dialogue region held (`stripped::begin_tick`, #34).
+    /// With the frozen ticks it adds up to `end.tick - start.tick`.
+    #[serde(default)]
+    pub ranked_ticks: u64,
+    /// Ticks the timer ran while a region held: frozen, not ranked time (#34).
+    #[serde(default)]
+    pub frozen_ticks: u64,
+    /// Per dialogue region (`StrippedDef::dialogues`, same order): ticks it has held since it
+    /// began or since the last press of its `advance`. Empty until a stripped run's first tick,
+    /// and in Play original.
+    #[serde(default)]
+    pub dialogue_waits: Vec<u32>,
 }
 
 /// Raises the `run_end` trigger for this tick's row 16. The `game_clear` built-in (WP6b) calls

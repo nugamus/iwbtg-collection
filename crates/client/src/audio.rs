@@ -26,9 +26,10 @@ pub const MAX_OFFSET_MS: u32 = 500;
 #[derive(clap::Args, Debug)]
 pub struct AudioArgs {
     /// Hold the sound back by this many milliseconds (0 to 500) to line it up with the picture on
-    /// a slow audio device. It moves playback only, never the sim.
-    #[arg(long, value_name = "MS", default_value_t = 0, value_parser = clap::value_parser!(u32).range(0..=i64::from(MAX_OFFSET_MS)))]
-    pub audio_offset: u32,
+    /// a slow audio device. It moves playback only, never the sim. Saved in the settings file, so
+    /// the next start without the flag keeps it. Default: the saved value, else 0.
+    #[arg(long, value_name = "MS", value_parser = clap::value_parser!(u32).range(0..=i64::from(MAX_OFFSET_MS)))]
+    pub audio_offset: Option<u32>,
 }
 
 /// Sound, music and screen shake for one package.
@@ -38,9 +39,13 @@ pub struct AudioPlugin {
 }
 
 impl AudioPlugin {
+    /// `--audio-offset`, when given, is saved first; the plugin uses the saved offset.
     pub fn new(args: &AudioArgs, files: &PackageFiles) -> AudioPlugin {
+        if let Some(ms) = args.audio_offset {
+            crate::settings::update(|s| s.audio_offset_ms = ms);
+        }
         AudioPlugin {
-            offset_ms: args.audio_offset,
+            offset_ms: crate::settings::get().audio_offset_ms,
             files: files.clone(),
         }
     }
@@ -48,6 +53,9 @@ impl AudioPlugin {
 
 impl Plugin for AudioPlugin {
     fn build(&self, app: &mut App) {
+        if self.offset_ms > 0 {
+            info!("audio offset {} ms", self.offset_ms);
+        }
         app.insert_resource(Queue::new(self.offset_ms))
             .insert_resource(Sounds::new(&self.files))
             .init_resource::<Shake>()
@@ -287,6 +295,11 @@ impl Queue {
             .extend(cues(output).into_iter().map(|c| (now + self.offset, c)));
     }
 
+    /// Drops every waiting cue (a retry starts the run again).
+    pub fn clear(&mut self) {
+        self.pending.clear();
+    }
+
     /// The cues whose time has come.
     pub fn due(&mut self, now: Instant) -> Vec<Cue> {
         let mut out = Vec::new();
@@ -312,6 +325,27 @@ impl Sounds {
             handles: HashMap::new(),
             mixer: Mixer::default(),
         }
+    }
+}
+
+/// Silences the run for a retry: every voice stops, waiting cues and the mixer's memory go, and
+/// a running shake ends. The new run's room start then plays from a clean slate.
+pub fn reset(world: &mut World) {
+    let voices: Vec<Entity> = world
+        .query_filtered::<Entity, With<Voice>>()
+        .iter(world)
+        .collect();
+    for voice in voices {
+        world.despawn(voice);
+    }
+    if let Some(mut queue) = world.get_resource_mut::<Queue>() {
+        queue.clear();
+    }
+    if let Some(mut sounds) = world.get_resource_mut::<Sounds>() {
+        sounds.mixer = Mixer::default();
+    }
+    if let Some(mut shake) = world.get_resource_mut::<Shake>() {
+        *shake = Shake::default();
     }
 }
 
@@ -720,6 +754,7 @@ mod tests {
             start: StartPoint::NewGame { difficulty: 0 },
             seed: 0,
             dll_mode: DllMode::Model,
+            mode: iwbtg_sim::stripped::PlayMode::Original,
         };
         let mut sim = Sim::new(pkg.def.clone(), options).unwrap();
         let mut mixer = Mixer::default();

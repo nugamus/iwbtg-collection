@@ -540,6 +540,39 @@ fn gm_string_real_half_away_rule() {
     assert_eq!(gm_string_real(r(551.7), &away), "551.70");
 }
 
+// ---- GML literals (N14) ----
+
+#[test]
+fn gml_literal_uses_the_recorder_model() {
+    // One ulp above the nearest double (research#104 scan; CLONE_SPEC N14).
+    for (text, bits) in [
+        ("0.95", 0.950_000_000_000_000_1),
+        ("0.3", 0.300_000_000_000_000_04),
+        ("0.7", 0.700_000_000_000_000_1),
+        ("0.6", 0.600_000_000_000_000_1),
+        ("1.7", 1.700_000_000_000_000_2),
+        ("474.4", 474.400_000_000_000_03),
+    ] {
+        let v = gml_literal(text).expect("literal");
+        assert_eq!(v.get().to_bits(), f64::to_bits(bits), "{text}");
+        assert_ne!(
+            v.get().to_bits(),
+            parse(text).get().to_bits(),
+            "{text} differs from the nearest double"
+        );
+    }
+    // The nearest double (CLONE_SPEC N14 checked constants).
+    for text in [
+        "0.4", "0.45", "0.017", "0.2", "2.5001", "183.125", "3", "3.", ".5",
+    ] {
+        let v = gml_literal(text).expect("literal");
+        assert_eq!(v.get().to_bits(), parse(text).get().to_bits(), "{text}");
+    }
+    for text in ["", ".", "-0.3", "1e3", "1.2.3", "0x10"] {
+        assert!(gml_literal(text).is_none(), "{text:?}");
+    }
+}
+
 // ---- libm ----
 
 #[test]

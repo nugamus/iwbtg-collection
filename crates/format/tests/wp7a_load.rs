@@ -303,7 +303,8 @@ fn basic_package_loads_strict() {
         def.rooms[0].on_create,
         [RoomAction::SetGlobal {
             var: VarId(1),
-            value: Value::Real(Real::ONE)
+            value: Value::Real(Real::ONE),
+            difficulty: Some(1)
         }]
     );
 
@@ -1511,6 +1512,7 @@ fn a_scripted_object_runs_in_a_room() {
             },
             seed: 1,
             dll_mode: iwbtg_sim::sound::DllMode::Stub,
+            mode: iwbtg_sim::stripped::PlayMode::Original,
         },
     )
     .expect("the sim starts");
@@ -1642,4 +1644,271 @@ fn renaming_a_map_keeps_the_gameplay_hash() {
         hash(&TWO_MAPS.replace("room = \"title\"", "room = \"stage1\"")),
         base
     );
+}
+
+// ---- #32: stripped mode markers ---------------------------------------------------------------
+
+const STRIPPED: &str = r#"
+[[maps]]
+id = "medium"
+name = "Medium"
+
+[[maps]]
+id = "hard"
+name = "Hard"
+stripped_start = { globals = { difficulty = 2 } }
+
+[stripped]
+start = { room = "stage1", globals = { difficulty = 1, clear = false, file = "save1", exact = { bits = "3FB999999999999A" } } }
+cutscenes = [
+  { id = "boss_intro", kind = "@boss" },
+  { id = "title_scroll", room = "title" },
+]
+dialogues = [
+  { id = "npc", kind = "warp", advance = "jump", timeout_ticks = 150 },
+]
+
+[stripped.cut]
+rooms = [{ room = "title", to = "stage1" }]
+kinds = ["kid_start"]
+instances = [{ room = "stage1", name = "boss_a" }]
+"#;
+
+fn stripped_errors(text: &str) -> Vec<String> {
+    let files = package(|f| set(f, "game.toml", manifest(ORDER, text)));
+    errors(&load_report(&files, STRICT))
+}
+
+#[test]
+fn every_stripped_field_loads() {
+    let files = package(|f| set(f, "game.toml", manifest(ORDER, STRIPPED)));
+    let report = load_report(&files, STRICT);
+    assert!(report.ok(), "{}", render(&report));
+    assert!(report.diagnostics.is_empty(), "{}", render(&report));
+}
+
+#[test]
+fn stripped_resolves_into_the_game_def() {
+    use iwbtg_sim::stripped::RegionCondition;
+    let files = package(|f| set(f, "game.toml", manifest(ORDER, STRIPPED)));
+    let (def, _) = load_ok(&files, STRICT);
+    let room =
+        |name: &str| iwbtg_sim::def::RoomId(def.rooms.iter().position(|r| r.name == name).unwrap() as u32);
+    let s = &def.stripped;
+    assert_eq!(s.start.room, Some(room("stage1")));
+    assert_eq!(s.start.difficulty, Some(1));
+    let names: Vec<&str> = s
+        .start
+        .globals
+        .iter()
+        .map(|(v, _)| def.var_names.iter().find(|(_, id)| *id == v).unwrap().0.as_str())
+        .collect();
+    assert_eq!(
+        names,
+        ["clear", "difficulty", "exact", "file"],
+        "interned, in name order"
+    );
+    assert_eq!(s.map_starts.len(), 2);
+    assert_eq!(
+        s.map_starts["medium"], s.start,
+        "no stripped_start: the package's"
+    );
+    let hard = &s.map_starts["hard"];
+    assert_eq!(hard.difficulty, Some(2), "the map's global wins");
+    assert_eq!(
+        hard.room,
+        Some(room("stage1")),
+        "keys it leaves out come from [stripped].start"
+    );
+    assert_eq!(hard.globals.len(), 4);
+    assert_eq!(s.cut_rooms.get(&room("title")), Some(&room("stage1")));
+    let (kid_start, _) = kind_named(&def, "kid_start");
+    assert!(s.cut_kinds.contains(&kid_start));
+    assert_eq!(s.cut_instances.len(), 1);
+    let (stage, name) = *s.cut_instances.iter().next().unwrap();
+    assert_eq!(stage, room("stage1"));
+    assert_eq!(def.names[name.0 as usize], "boss_a");
+    assert_eq!(s.cutscenes.len(), 2);
+    assert_eq!(s.cutscenes[1].holds, RegionCondition::Room(room("title")));
+    assert_eq!(s.dialogues[0].advance, iwbtg_sim::input::Action::Jump);
+    assert_eq!(s.dialogues[0].timeout_ticks, 150);
+
+    // Without [stripped]: nothing cut, one `main` start that defaults to new_game_room.
+    let (plain, _) = load_ok(&package(|_| {}), STRICT);
+    assert_eq!(plain.stripped.start, iwbtg_sim::stripped::RankedStart::default());
+    assert_eq!(plain.stripped.map_starts.keys().collect::<Vec<_>>(), ["main"]);
+    assert!(plain.stripped.cut_rooms.is_empty() && plain.stripped.cut_kinds.is_empty());
+}
+
+#[test]
+fn a_ranked_start_difficulty_must_be_a_whole_number_from_0_to_255() {
+    for bad in [
+        "difficulty = 1.5",
+        "difficulty = 256",
+        "difficulty = -1",
+        "difficulty = \"hard\"",
+    ] {
+        let errs = stripped_errors(&STRIPPED.replace("difficulty = 2", bad));
+        assert!(
+            errs.iter().any(|e| e.contains("a whole number from 0 to 255")),
+            "{bad}: {errs:#?}"
+        );
+    }
+}
+
+#[test]
+fn stripped_mode_rejects_bad_markers() {
+    let cases: [(&str, &str, &str); 18] = [
+        (
+            "globals = { difficulty = 2 } }",
+            "room = \"gone\", globals = { difficulty = 2 } }",
+            "room `gone` does not exist",
+        ),
+        (
+            "globals = { difficulty = 2 } }",
+            "room = \"title\", globals = { difficulty = 2 } }",
+            "ranked start room `title` is cut",
+        ),
+        (
+            "rooms = [{ room = \"title\", to = \"stage1\" }]",
+            "rooms = [{ room = \"title\", to = \"stage1\" }, { room = \"title\", to = \"stage1\" }]",
+            "room `title` is cut twice",
+        ),
+        (
+            "instances = [{ room = \"stage1\", name = \"boss_a\" }]",
+            "instances = [{ room = \"stage1\", name = \"boss_a\" }, { room = \"stage1\", name = \"boss_a\" }]",
+            "instance `boss_a` in room `stage1` is cut twice",
+        ),
+        (
+            "room = \"stage1\", globals",
+            "room = \"nowhere\", globals",
+            "room `nowhere` does not exist",
+        ),
+        ("difficulty = 1,", "1difficulty = 1,", "is not a variable name"),
+        ("clear = false", "clear = [1]", "global `clear`"),
+        ("to = \"stage1\"", "to = \"lost\"", "room `lost` does not exist"),
+        (
+            "rooms = [{ room = \"title\", to = \"stage1\" }]",
+            "rooms = [{ room = \"title\", to = \"stage1\" }, { room = \"stage1\", to = \"title\" }]",
+            "which is cut too",
+        ),
+        (
+            "kinds = [\"kid_start\"]",
+            "kinds = [\"@ghost\"]",
+            "cut kind `@ghost` is not a kind",
+        ),
+        (
+            "kinds = [\"kid_start\"]",
+            "kinds = [\"kid_start\", \"kid_start\"]",
+            "is cut twice",
+        ),
+        (
+            "name = \"boss_a\"",
+            "name = \"boss_b\"",
+            "has no instance named `boss_b`",
+        ),
+        (
+            "kind = \"@boss\" }",
+            "kind = \"@boss\", room = \"title\" }",
+            "has both `kind` and `room`",
+        ),
+        (
+            "{ id = \"boss_intro\", kind = \"@boss\" }",
+            "{ id = \"boss_intro\" }",
+            "needs `kind` or `room`",
+        ),
+        (
+            "id = \"npc\"",
+            "id = \"boss_intro\"",
+            "region id `boss_intro` is used twice",
+        ),
+        (
+            "advance = \"jump\"",
+            "advance = \"space\"",
+            "`space` is not an action",
+        ),
+        (
+            "timeout_ticks = 150",
+            "timeout_ticks = 0",
+            "timeout_ticks must be at least 1",
+        ),
+        (
+            "kind = \"warp\", advance",
+            "kind = \"@npc\", advance",
+            "region kind `@npc` is not a kind",
+        ),
+    ];
+    for (from, to, want) in cases {
+        assert!(STRIPPED.contains(from), "case text `{from}` not in STRIPPED");
+        let errs = stripped_errors(&STRIPPED.replacen(from, to, 1));
+        assert!(
+            errs.iter().any(|e| e.contains(want)),
+            "`{to}` should give `{want}`, got {errs:#?}"
+        );
+    }
+}
+
+#[test]
+fn the_ranked_start_room_cannot_be_cut() {
+    // Named start room.
+    let errs = stripped_errors(&STRIPPED.replace(
+        "{ room = \"title\", to = \"stage1\" }",
+        "{ room = \"stage1\", to = \"title\" }",
+    ));
+    assert!(
+        errs.iter()
+            .any(|e| e.contains("ranked start room `stage1` is cut")),
+        "{errs:#?}"
+    );
+    // Default start room: `[engine].new_game_room` is `stage1`.
+    let no_start = "\n[stripped.cut]\nrooms = [{ room = \"stage1\", to = \"title\" }]\n";
+    let errs = stripped_errors(no_start);
+    assert!(
+        errs.iter().any(|e| e.contains("ranked runs start in `stage1`")),
+        "{errs:#?}"
+    );
+    // Every map names its own start room: the default start may be cut.
+    let all_maps = "
+[[maps]]
+id = \"a\"
+name = \"A\"
+stripped_start = { room = \"title\" }
+                    
+[stripped.cut]
+rooms = [{ room = \"stage1\", to = \"title\" }]
+";
+    let errs = stripped_errors(all_maps);
+    assert!(errs.is_empty(), "{errs:#?}");
+}
+
+#[test]
+fn stripped_markers_count_for_the_gameplay_hash() {
+    let hash = |text: &str| {
+        let files = package(|f| set(f, "game.toml", manifest(ORDER, text)));
+        load_report(&files, STRICT).gameplay_hash.expect("loads")
+    };
+    let base = hash(STRIPPED);
+    assert_ne!(
+        hash(&STRIPPED.replace("timeout_ticks = 150", "timeout_ticks = 100")),
+        base
+    );
+    assert_ne!(hash(&STRIPPED.replace("difficulty = 2", "difficulty = 3")), base);
+}
+
+#[test]
+fn a_set_global_difficulty_must_be_a_whole_number_from_0_to_255() {
+    for bad in ["1.5", "256", "-1", "\"hard\""] {
+        let files = package(|f| {
+            set(
+                f,
+                "rooms/title.toml",
+                TITLE.replace("value = 1 }", &format!("value = {bad} }}")),
+            )
+        });
+        let errs = errors(&load_report(&files, STRICT));
+        assert!(
+            errs.iter().any(|e| e.contains("a whole number from 0 to 255")),
+            "{bad}: {errs:#?}"
+        );
+    }
 }

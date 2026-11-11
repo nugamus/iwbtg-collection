@@ -16,12 +16,16 @@ mod wp3_support;
 mod death_sound;
 #[path = "dll_sound_length.rs"]
 mod dll_sound_length;
+#[path = "first_step_output.rs"]
+mod first_step_output;
 #[path = "hash_vectors.rs"]
 mod hash_vectors;
 #[path = "kid_sounds.rs"]
 mod kid_sounds;
 #[path = "lint_gm_compare.rs"]
 mod lint_gm_compare;
+#[path = "ranked_time.rs"]
+mod ranked_time;
 #[path = "save_reverse.rs"]
 mod save_reverse;
 #[path = "script_conformance/main.rs"]

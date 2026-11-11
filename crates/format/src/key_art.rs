@@ -72,11 +72,20 @@ pub fn resolve(files: &PackageFiles, manifest: &Manifest, map: Option<&str>) -> 
         .map_or(KeyArt::None, KeyArt::Colour)
 }
 
-/// The first room of a ranked run, for the key art fallback: the room of the `[timing].start`
-/// trigger when it is `enter_room`, else `[engine].new_game_room`, else `start_room`.
+/// The first room of a ranked run, for the key art fallback: `[stripped].start.room` (the ranked
+/// start point), else the room of the `[timing].start` trigger when it is `enter_room`, else
+/// `[engine].new_game_room`, else `start_room`.
 ///
-/// OPEN (#31, maps): with maps, each map's own start trigger decides its room.
+/// OPEN (#31, maps): with maps, each map's own start decides its room.
 pub fn first_ranked_room(manifest: &Manifest) -> &str {
+    if let Some(room) = manifest
+        .stripped
+        .as_ref()
+        .and_then(|s| s.start.as_ref())
+        .and_then(|s| s.room.as_ref())
+    {
+        return room.get_ref();
+    }
     let start = &manifest.timing.get_ref().start;
     if start.trigger.get_ref() == "enter_room"
         && let Some(room) = &start.room

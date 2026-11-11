@@ -13,7 +13,8 @@
 //! - Short arrays on one line as `[1, 2, 3]`. An array that is already spread over several lines
 //!   stays that way (it is somebody's layout), and an array with a comment inside is left alone.
 //! - Lists of inline tables that are data rows (room `instances`, `views`, `on_create`, tile
-//!   `layers` and `tiles`, timeline `moments`, `object_order`, `stages`) with one row per line,
+//!   `layers` and `tiles`, timeline `moments`, `object_order`, `stages`, and `[stripped]`'s
+//!   `cutscenes`, `dialogues` and cut `rooms` and `instances`) with one row per line,
 //!   indented two spaces, with a trailing comma, so a one-instance edit is a one-line diff. Within
 //!   a row the keys the format names come first in a fixed order (`kind, x, y, name, group,
 //!   xscale, yscale, angle, visible, depth, run, step` for instances); other keys follow in the
@@ -25,11 +26,12 @@
 use toml_edit::{Array, DocumentMut, Formatted, InlineTable, Item, Table, Value};
 
 /// Lists of inline tables laid out one row per line, with the key order of a row.
-const ROW_LISTS: [(&str, &[&str]); 8] = [
+const ROW_LISTS: [(&str, &[&str]); 11] = [
     (
         "instances",
         &[
-            "kind", "x", "y", "name", "group", "xscale", "yscale", "angle", "visible", "depth", "run", "step",
+            "room", "kind", "x", "y", "name", "group", "xscale", "yscale", "angle", "visible", "depth",
+            "run", "step",
         ],
     ),
     ("views", &["visible", "view", "port", "follow", "border", "speed"]),
@@ -39,6 +41,9 @@ const ROW_LISTS: [(&str, &[&str]); 8] = [
     ("moments", &["t", "call"]),
     ("object_order", &["kind"]),
     ("stages", &["id", "name", "trigger", "room"]),
+    ("rooms", &["room", "to"]),
+    ("cutscenes", &["id", "kind", "room"]),
+    ("dialogues", &["id", "kind", "room", "advance", "timeout_ticks"]),
 ];
 
 /// The canonical form of a data file, or why it is not TOML.

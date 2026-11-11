@@ -15,6 +15,7 @@
 
 // Existing modules.
 pub mod input;
+pub mod mods;
 pub mod num;
 pub mod replay;
 pub mod trace;
@@ -45,6 +46,7 @@ pub mod script;
 pub mod setup;
 pub mod sim;
 pub mod sound;
+pub mod stripped;
 pub mod tick;
 pub mod timeline;
 pub mod timing;

@@ -14,12 +14,29 @@ Part of [Architecture](../architecture.md).
 
 A postcard-encoded, versioned struct. Postcard is a small, documented, stable binary encoding, so we do not hand-write a codec.
 
-- **Header:** magic `IWBR`, `replay_format: u16`, `sim_version: u32`, package id, `gameplay_hash: [u8; 32]`, `engine_rev: u16`, rng seed `u64`, start mode (`NewGame` or `FromSave(bytes)`; only `NewGame` is ranked), client build id.
-- **Body:** run-length encoded input: a list of `(run_length: varint, InputFrame)`.
-- **Trailer:** total ticks, splits as `(stage index, tick)`, checkpoints as `(tick, [u8; 16])` (BLAKE3 state hash truncated to 16 bytes) every 500 ticks, and the final state hash.
+- **Header:** magic `IWBR`, `replay_format: u16`, `sim_version: u32`, package id, `gameplay_hash: [u8; 32]`, `engine_rev: u16`, rng seed `u64`, start mode (`NewGame` or `FromSave(bytes)`; only `NewGame` is ranked), play mode (`Original` or `Stripped`, `iwbtg_sim::stripped::PlayMode`; only `Stripped` is ranked; format 3, #561), mods (a `u32` bit set, see Mods below; format 2), client build id. The map id joins the header with #505.
+- **Body:** run-length encoded input: a list of `(run_length: varint, InputFrame)`. Frames are what the player gave; a dialogue's timeout press is derived by the sim on replay and never stored (#34).
+- **Trailer:** total ticks, splits as `(stage index, tick)`, ranked ticks (ranked time: the timer's ticks outside every cutscene and dialogue region, `TimingState::ranked_ticks`, at most total ticks; format 4, #34), checkpoints as `(tick, [u8; 16])` (BLAKE3 state hash truncated to 16 bytes) every 500 ticks, and the final state hash.
 - **Canonical.** The decoder re-encodes what it read and rejects the file if the bytes differ (for example two adjacent runs of the same frame). Identical inputs therefore always give identical bytes, which helps exact-copy detection.
 - **Size.** An hour at 50 ticks per second is 180,000 ticks. RLE keeps that to a few KB, far under the server's 1 MiB cap.
 - **Text form.** `iwbtg replay dump` prints one run per line for humans and diffs.
+
+### Mods
+
+`iwbtg_sim::mods` holds the mod table (`MODS`: code, name, one-line description, kind for the mod select sheet, ranked flag) that the client and the UI (#497, #495, #37) read, and `ModSet`, the header's `mods` field: bit `n` is the mod whose `Mod` discriminant is `n`. A bit, once given, keeps its meaning forever; `encode` and `decode` reject a bit no mod owns (`UnknownMods`).
+
+| Bit | Code | Mod | Kind | Ranked |
+|---|---|---|---|---|
+| 0 | `SD` | Sudden Death | Challenge | yes |
+| 1 | `HB` | Hitboxes | Visual | yes |
+| 2 | `NB` | No background | Visual | yes |
+| 3 | `SS` | Save states | Practice | never |
+| 4 | `SL` | Slow motion | Practice | never |
+| 5 | `FA` | Frame advance | Practice | never |
+
+- A run is ranked only when it starts a new game and every mod in it is ranked. `ModSet::unranked_by` gives the first mod that is not, for the Unranked pill's reason. Each combination has its own board, named by `ModSet::codes` (`SD+NB`, `NM` for none).
+- No mod changes what a tick computes, so replays need no mod-specific sim path. Sudden Death only fixes where a run ends: the tick that raises the death counter is the last one (`ModSet::ends_run`). The client stops there, so its replay ends on that tick, and the verifier (`iwbtg replay run`) rejects a Sudden Death replay with inputs after it.
+- Slow motion and frame advance change only the client's clock; save states break the input-only replay and are practice anyway.
 
 ### Text inputs for tests (`.inputs`)
 
