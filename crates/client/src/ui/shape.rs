@@ -162,7 +162,8 @@ pub struct FadeMask {
     pub bottom: f32,
 }
 
-/// The colour of a text node before opacity and fades. Text spawned through the kit has it.
+/// The colour of a text node before opacity and fades. Text spawned through the kit has it; an
+/// icon given one (its `ImageNode` tint) fades the same way.
 #[derive(Component, Clone, Copy, Debug, PartialEq)]
 pub struct Ink(pub Color);
 
@@ -303,6 +304,7 @@ fn sync_shapes(
     shapes: Query<(Entity, Ref<Shape>, &ComputedNode, Option<&Children>)>,
     mut layers: Query<(&mut Node, Option<&MaterialNode<ShapeMaterial>>), With<ShapeLayer>>,
     mut inks: Query<(Entity, &Ink, &mut TextColor, &UiGlobalTransform)>,
+    mut tints: Query<(Entity, &Ink, &mut ImageNode, &UiGlobalTransform), Without<TextColor>>,
     parents: Query<&ChildOf>,
     opacities: Query<&UiOpacity>,
     masks: Query<(&FadeMask, &ComputedNode, &UiGlobalTransform)>,
@@ -366,6 +368,15 @@ fn sync_shapes(
         let want = ink.0.with_alpha(alpha);
         if color.0 != want {
             color.0 = want;
+        }
+    }
+    for (entity, ink, mut image, at) in &mut tints {
+        let (opacity, band) = inherited(entity, &parents, &opacities, &masks);
+        let want = ink
+            .0
+            .with_alpha(ink.0.alpha() * opacity * fade_at(band, at.translation.y));
+        if image.color != want {
+            image.color = want;
         }
     }
 }
