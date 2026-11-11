@@ -14,8 +14,8 @@ mod wp6b {
     use iwbtg_sim::rng::Rng;
     use iwbtg_sim::rules::RunnerRules;
     use iwbtg_sim::script::ScriptRuntime;
-    use iwbtg_sim::tick;
     use iwbtg_sim::sound::DllMode;
+    use iwbtg_sim::tick;
     use iwbtg_sim::world::{Ctx, Flow, InstId, SpawnInit, World};
 
     fn r(v: f64) -> Real {
@@ -196,11 +196,18 @@ mod wp6b {
             });
             for n in 1..=400 {
                 with(&g, &mut w, |c| tick::run_tick(c, InputFrame::EMPTY).unwrap());
-                assert_eq!(w.get(id).unwrap().img.angle(), r(1.0 + sign * f64::from(n)), "after {n} steps");
+                assert_eq!(
+                    w.get(id).unwrap().img.angle(),
+                    r(1.0 + sign * f64::from(n)),
+                    "after {n} steps"
+                );
             }
         }
         let g = water_game(Params::default());
-        assert!(!g.def.kinds[kind_id(&g, "water").0 as usize].events.step, "no Step without a turn");
+        assert!(
+            !g.def.kinds[kind_id(&g, "water").0 as usize].events.step,
+            "no Step without a turn"
+        );
     }
 
     /// showdown mizu01 Outside Room (kid/A3.md): a run-time copy with hspeed 2 is destroyed once its
