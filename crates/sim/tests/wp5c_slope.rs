@@ -284,6 +284,91 @@ fn yane_m_mirrors_the_climb_and_h_has_no_leftward_move() {
 }
 
 #[test]
+fn yane_m_downhill_hit_contacts_toward_180() {
+    // kid/A4.md: yaneM with hspeed > 0 contacts toward direction 180 (left), although the kid
+    // moves right; nothing blocks on the left, so he moves the full abs(hspeed) left.
+    with_kid(
+        |_| {},
+        |ctx, kid, k| {
+            let s = put(ctx, k.mirror, 106.0, 80.0);
+            speeds(ctx, kid, 6.0, 0.0);
+            collide(ctx, kid, s, SlopeRun::SlopeYane);
+            assert_eq!(at(ctx, kid), (94.0, 100.0, 0.0));
+        },
+    );
+}
+
+#[test]
+fn yane_walks_down_its_own_slope_by_the_steps_h() {
+    // kid/A4.md step 4: H with h < 0 and a yaneH 1 px below moves 3 left and 3 down; M is the
+    // mirror (h > 0). The kid's bottom row is y 108, so a slope at y 109 is 1 px below.
+    let cases = [
+        // (mirror slope, h, expected)
+        (false, -1, (97.0, 103.0, 0.0)),
+        (false, 1, (100.0, 100.0, 0.0)),
+        (false, 0, (100.0, 100.0, 0.0)),
+        (true, 1, (103.0, 103.0, 0.0)),
+        (true, -1, (100.0, 100.0, 0.0)),
+    ];
+    for (mirror, h, want) in cases {
+        with_kid(
+            |_| {},
+            |ctx, kid, k| {
+                let s = put(ctx, if mirror { k.mirror } else { k.slope }, 90.0, 109.0);
+                kstate(ctx, kid).ext.walk_h = h;
+                collide(ctx, kid, s, SlopeRun::SlopeYane);
+                assert_eq!(at(ctx, kid), want, "mirror {mirror}, h {h}");
+            },
+        );
+    }
+    // Only a slope of the event's own object counts: the H event with a yaneM below does nothing.
+    with_kid(
+        |_| {},
+        |ctx, kid, k| {
+            let s = put(ctx, k.slope, 300.0, 300.0);
+            put(ctx, k.mirror, 90.0, 109.0);
+            kstate(ctx, kid).ext.walk_h = -1;
+            collide(ctx, kid, s, SlopeRun::SlopeYane);
+            assert_eq!(at(ctx, kid), (100.0, 100.0, 0.0));
+        },
+    );
+}
+
+#[test]
+fn walk_keeps_h_for_the_slope_event() {
+    for (held, want) in [(Action::Left, -1), (Action::Right, 1)] {
+        with_kid(
+            |_| {},
+            |ctx, kid, _| {
+                input(ctx, &[held], &[]);
+                kid::run_action(ctx, kid, &KidAction::Common(CommonAction::Walk)).unwrap();
+                assert_eq!(kstate(ctx, kid).ext.walk_h, want);
+            },
+        );
+    }
+}
+
+#[test]
+fn a_slope_in_ground_classes_gives_the_single_jump() {
+    // Poronkusema's playerJump also counts a nanameblock 1 px below (kid/A1.md).
+    for (classes, want) in [
+        (ClassMask(ClassMask::BLOCK.0 | ClassMask::SLOPE.0), -8.5),
+        (ClassMask::BLOCK, 0.0),
+    ] {
+        with_kid(
+            |p| p.jump.ground_classes = classes,
+            |ctx, kid, k| {
+                put(ctx, k.slope, 90.0, 109.0);
+                kstate(ctx, kid).djump = false;
+                input(ctx, &[Action::Jump], &[Action::Jump]);
+                kid::run_action(ctx, kid, &KidAction::Common(CommonAction::Jump)).unwrap();
+                assert_eq!(ctx.w.get(kid).unwrap().m.vspeed().get(), want);
+            },
+        );
+    }
+}
+
+#[test]
 fn slope_jump_forces_a_single_jump_within_the_probe() {
     with_kid(
         |p| p.slope.jump_probe = r(2.0),

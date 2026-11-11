@@ -11,6 +11,10 @@ pub struct KidStateExt {
     pub on_vine_l: bool,
     /// `onVineR` (family C).
     pub on_vine_r: bool,
+    /// `h`: the walking direction (-1, 0 or 1) the last `walk` action set. It keeps its value
+    /// until the next one, so the eat-the-new-year slope event (`slope_yane`, kid/A4.md) reads the
+    /// Step's value.
+    pub walk_h: i8,
 }
 
 /// Families A2-A5 and C kid globals that outlive the kid: the game-side latched vine-key flags

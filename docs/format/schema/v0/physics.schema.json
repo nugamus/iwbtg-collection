@@ -1750,7 +1750,7 @@
         },
         {
           "const": "slope_yane",
-          "description": "Eat-the-new-year, Collision with yaneH (`slope`) or yaneM (`slope_mirror`): when\n`place_free(x + hspeed, y)` is false and `hspeed >= 0` (H; `<= 0` for M, OPEN: mirrored) and\n`place_free(x, y + vspeed)` is false, the kid moves `step` up and sideways; `hspeed` 0.\nThen the vertical and diagonal block parts.",
+          "description": "Eat-the-new-year, Collision with yaneH (`slope`) or yaneM (`slope_mirror`), kid/A4.md:\n1. when `place_free(x + hspeed, y)` is false: uphill (H `hspeed >= 0`, M `<= 0`) with\n   `place_free(x, y + vspeed)` false, the kid moves `step` up and sideways; H downhill\n   (`hspeed < 0`) does nothing (the original's contact is commented out); M downhill\n   (`hspeed > 0`) contacts toward 180 (left). Then `hspeed` 0.\n2. and 3. the vertical and diagonal block parts.\n4. with a slope of the event's own class 1 px below and the Step's `h` pointing downhill\n   (H `h < 0`, M `h > 0`), the kid moves `step` down and sideways; `hspeed` 0.",
           "type": "string"
         }
       ]
