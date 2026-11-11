@@ -106,7 +106,7 @@ pub fn evaluate(w: &mut World, def: &GameDef) -> Result<Vec<Split>, SimError> {
     if w.timing.ended {
         return Ok(out);
     }
-    let timing = &def.timing;
+    let timing = def.map_timing(w.map);
     let fired = |t: TimingTrigger, w: &World| match t {
         TimingTrigger::RunStart => true,
         TimingTrigger::RunEnd => raised,

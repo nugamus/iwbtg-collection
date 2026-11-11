@@ -14,6 +14,8 @@ iwbtg-format = { workspace = true, features = ["schema"] }
 # gamepads (bevy_gilrs), no 3D yet (those pull system libraries); audio is Ogg Vorbis only.
 clap.workspace = true
 png.workspace = true
+svgtypes.workspace = true
+tiny-skia.workspace = true
 thiserror.workspace = true
 serde.workspace = true
 toml.workspace = true

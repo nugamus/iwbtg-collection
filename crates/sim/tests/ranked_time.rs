@@ -297,6 +297,7 @@ fn a_replay_never_stores_the_derived_press() {
             rng_seed: 1,
             start_mode: StartMode::NewGame,
             play_mode: PlayMode::Stripped,
+            map: "main".into(),
             mods: iwbtg_sim::mods::ModSet::NONE,
             client_build_id: String::new(),
         },
