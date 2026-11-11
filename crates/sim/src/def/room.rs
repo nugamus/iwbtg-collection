@@ -20,6 +20,9 @@ pub struct RoomDef {
     pub role: RoomRole,
     /// R does nothing here (animus room52: its world Key R event is off in that room, #445).
     pub no_restart: bool,
+    /// The double jump also sets `tjump` here (showdown room028: playerJump step 2, A3.md C4
+    /// showdown). Only read with `jump.air = "djump_then_tjump"`.
+    pub djump_grants_tjump: bool,
     /// `room_speed` on entry, before the world's Room Start (Inferred, R14).
     pub file_speed: u32,
     /// GM persistent room.
@@ -44,6 +47,7 @@ impl RoomDef {
             height,
             role: RoomRole::Play,
             no_restart: false,
+            djump_grants_tjump: false,
             file_speed: 50,
             persistent: false,
             views_enabled: false,

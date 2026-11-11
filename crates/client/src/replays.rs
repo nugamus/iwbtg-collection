@@ -15,7 +15,10 @@
 //!
 //! Names: `replays/<game id>/<unix seconds>-<n>.iwbr`, listed oldest first in
 //! `replays/index.txt` (the browser's storage cannot list its entries). On the web, where
-//! `localStorage` holds a few MB, only the newest [`WEB_KEEP`] are kept.
+//! `localStorage` holds a few MB, only the newest [`WEB_KEEP`] are kept, plus the replays the
+//! stats boards point at (#607, [`to_remove`]).
+
+use std::collections::BTreeSet;
 
 use bevy::prelude::*;
 use iwbtg_sim::input::InputFrame;
@@ -32,8 +35,8 @@ use crate::view::Game;
 /// The list of replays in the data area, one name per line, oldest first.
 pub const INDEX: &str = "replays/index.txt";
 
-/// Replays kept in a browser's `localStorage` (a 60-minute run is a few KB, stored as hex).
-/// Natively every replay is kept.
+/// Replays kept in a browser's `localStorage` (a 60-minute run is a few KB, stored as hex),
+/// more when the stats boards' PBs alone are more ([`to_remove`]). Natively every replay is kept.
 pub const WEB_KEEP: usize = 50;
 
 /// A new random RNG seed for a run (docs/product.md: ranked runs use a random seed per run, as
@@ -267,22 +270,46 @@ fn checkpoint(sim: &Sim) -> [u8; 16] {
     out
 }
 
-/// Adds `name` to the index; with `keep`, removes the oldest replays past that many.
+/// Adds `name` to the index; with `keep`, removes replays past that many ([`to_remove`]), never
+/// one a stats board points at unless the boards alone hold more than `keep`. When `stats.toml`
+/// cannot be read nothing is removed this time.
 fn list(store: &Store, name: &str, keep: Option<usize>) -> Result<(), String> {
     let text = store.read_text(INDEX)?.unwrap_or_default();
     let mut names: Vec<&str> = text.lines().filter(|l| !l.is_empty() && *l != name).collect();
     names.push(name);
     if let Some(keep) = keep
         && names.len() > keep
+        && let Some((pbs, top)) = crate::stats::board_replays(store)
     {
-        let old = names.len() - keep;
-        for gone in names.drain(..old) {
-            store.remove(gone)?;
+        let gone = to_remove(&names, keep, &pbs, &top);
+        for g in &gone {
+            store.remove(g)?;
         }
+        names.retain(|n| !gone.contains(n));
     }
     let mut out = names.join("\n");
     out.push('\n');
     store.write_text(INDEX, &out)
+}
+
+/// Which of `names` (the index, oldest first; the last was just written) to remove so that at
+/// most `keep` remain: first the oldest replays no board points at, then the oldest of the
+/// boards' top runs that are not a PB (`pbs`, `top`: `stats::board_replays`). A PB's replay and
+/// the one just written are never removed, so more than `keep` remain when the PBs alone are
+/// that many.
+fn to_remove<'a>(
+    names: &[&'a str],
+    keep: usize,
+    pbs: &BTreeSet<String>,
+    top: &BTreeSet<String>,
+) -> Vec<&'a str> {
+    let excess = names.len().saturating_sub(keep);
+    let Some((_, older)) = names.split_last() else {
+        return Vec::new();
+    };
+    let free = older.iter().filter(|n| !pbs.contains(**n) && !top.contains(**n));
+    let ranked = older.iter().filter(|n| top.contains(**n) && !pbs.contains(**n));
+    free.chain(ranked).take(excess).copied().collect()
 }
 
 /// Lowercase hex.
@@ -438,6 +465,88 @@ mod tests {
         assert_eq!(listed, names[2..].iter().map(String::as_str).collect::<Vec<_>>());
         assert_eq!(store.read(&names[0]).unwrap(), None, "the oldest is removed");
         assert!(store.read(&names[2]).unwrap().is_some());
+    }
+
+    /// The issue's check (#607): 60 runs on the web, the first is the PB and the second the
+    /// board's #2: both replays stay, the oldest of the others go.
+    #[test]
+    fn pruning_keeps_the_replays_a_board_points_at() {
+        use crate::stats::{Book, Run, board_key, map_key};
+        let pkg = demo();
+        let store = temp("board");
+        let options = SimOptions {
+            start: StartPoint::NewGame { difficulty: 0 },
+            seed: 1,
+            dll_mode: DllMode::Model,
+            mode: PlayMode::Stripped,
+            map: None,
+        };
+        let mut rec = Recorder::new(Some(store.clone()), pkg.gameplay_hash, ModSet::NONE);
+        rec.prune = true;
+        let mut names = Vec::new();
+        for i in 0..60 {
+            let mut sim = Sim::new(Arc::clone(&pkg.def), options.clone()).unwrap();
+            play(&mut sim, &mut rec, 3);
+            names.push(rec.current_name().unwrap().to_owned());
+            rec.finish(&sim);
+            if i == 1 {
+                let mut book = Book::default();
+                let board = book
+                    .map_mut(&map_key("demo", "main"), "demo", 50)
+                    .boards
+                    .entry(board_key(true, "NM"))
+                    .or_default();
+                for (ticks, replay) in [(100, &names[0]), (200, &names[1])] {
+                    board.add(Run {
+                        ticks,
+                        deaths: 0,
+                        splits: vec![ticks],
+                        segment_deaths: vec![0],
+                        finished_at: 0,
+                        replay: Some(replay.clone()),
+                    });
+                }
+                store.write_text(crate::stats::FILE, &book.to_text()).unwrap();
+            }
+        }
+        let index = store.read_text(INDEX).unwrap().unwrap();
+        let listed: Vec<&str> = index.lines().collect();
+        let mut want = vec![names[0].as_str(), names[1].as_str()];
+        want.extend(names[12..].iter().map(String::as_str));
+        assert_eq!(listed, want);
+        assert!(store.read(&names[0]).unwrap().is_some(), "the PB's replay stays");
+        assert!(store.read(&names[1]).unwrap().is_some(), "the #2's replay stays");
+        assert_eq!(store.read(&names[2]).unwrap(), None);
+        assert_eq!(store.read(&names[11]).unwrap(), None);
+
+        // An unreadable stats file removes nothing.
+        store.write_text(crate::stats::FILE, "not = [toml").unwrap();
+        let mut sim = Sim::new(Arc::clone(&pkg.def), options).unwrap();
+        play(&mut sim, &mut rec, 3);
+        rec.finish(&sim);
+        assert_eq!(
+            store.read_text(INDEX).unwrap().unwrap().lines().count(),
+            WEB_KEEP + 1
+        );
+    }
+
+    /// When the boards alone hold more than the cap: free replays go first, then the oldest
+    /// top runs; PBs and the replay just written never go.
+    #[test]
+    fn past_the_cap_top_runs_go_oldest_first_and_pbs_stay() {
+        let set = |v: &[&str]| v.iter().map(|s| (*s).to_owned()).collect::<BTreeSet<String>>();
+        let names = ["a", "b", "c", "d", "e", "f"];
+        let pbs = set(&["a"]);
+        let top = set(&["b", "c", "d", "e"]);
+        assert_eq!(to_remove(&names, 3, &pbs, &top), vec!["b", "c", "d"]);
+        assert_eq!(to_remove(&names, 5, &pbs, &top), vec!["b"]);
+        let names = ["a", "x", "b", "y"];
+        assert_eq!(to_remove(&names, 2, &pbs, &top), vec!["x", "b"]);
+        assert_eq!(
+            to_remove(&names, 0, &set(&["a", "b", "x"]), &top),
+            Vec::<&str>::new()
+        );
+        assert_eq!(to_remove(&names, 4, &pbs, &top), Vec::<&str>::new());
     }
 
     /// A run that resumes the save file records the slot, so it can be replayed.
