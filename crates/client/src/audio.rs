@@ -16,7 +16,7 @@ use iwbtg_sim::output::OutputEvent;
 use iwbtg_sim::script::ScriptOutput;
 use iwbtg_sim::sound::{SoundOutput, SoundTarget};
 
-use crate::view::Game;
+use crate::view::{Game, GameCamera};
 
 /// Longest audio offset: audio can only be held back, so this is how far behind the picture it
 /// may run.
@@ -619,7 +619,7 @@ impl Shake {
 }
 
 /// Moves the camera by the shake.
-pub fn apply_shake(shake: Res<Shake>, mut camera: Single<&mut Transform, With<Camera2d>>) {
+pub fn apply_shake(shake: Res<Shake>, mut camera: Single<&mut Transform, With<GameCamera>>) {
     let o = shake.offset();
     // Added to the centre `view::follow_view` sets every frame, so it never builds up.
     camera.translation.x += o.x;

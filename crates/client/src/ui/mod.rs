@@ -1,7 +1,9 @@
 //! The client's UI kit (docs/decisions/0003-ui-toolkit.md, docs/architecture/client.md, UI): design
-//! tokens, the bundled fonts, the icons, the sheared shape material, the shared components and motion.
+//! tokens, the bundled fonts, the icons, the backdrop, the sheared shape material, the shared
+//! components and motion.
 //! Every screen builds from these parts; none brings its own colours, sizes or shapes.
 
+pub mod backdrop;
 pub mod fonts;
 pub mod gallery;
 pub mod icons;
@@ -34,6 +36,7 @@ impl Plugin for UiKitPlugin {
             motion::plugin,
             widgets::plugin,
             icons::plugin,
-        ));
+        ))
+        .add_plugins(backdrop::BackdropPlugin);
     }
 }
