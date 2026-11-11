@@ -17,8 +17,9 @@ use crate::stripped::PlayMode;
 pub const MAGIC: [u8; 4] = *b"IWBR";
 
 /// The replay layout version this module reads and writes. Bump it on any layout change.
-/// 2: the header's `mods` (#35). 3: the header's `play_mode` (#561).
-pub const REPLAY_FORMAT: u16 = 3;
+/// 2: the header's `mods` (#35). 3: the header's `play_mode` (#561). 4: the trailer's
+/// `ranked_ticks` (#34).
+pub const REPLAY_FORMAT: u16 = 4;
 
 /// Hard ceiling on the ticks in one replay: 48 hours at 50 ticks per second. Bounds memory when
 /// runs are expanded (6 bytes per tick) before the game's own `max_ticks` is known.
@@ -71,6 +72,9 @@ pub struct Trailer {
     /// `(stage index, tick)` for each split, in tick order, none past `total_ticks`. Two splits
     /// may share a tick when several timing triggers fire in the same tick.
     pub splits: Vec<(u16, u64)>,
+    /// Ranked time in ticks: the timer's ticks outside every cutscene and dialogue region
+    /// (`TimingState::ranked_ticks`, #34). At most `total_ticks`.
+    pub ranked_ticks: u64,
     /// `(tick, state hash truncated to 16 bytes)` every [`CHECKPOINT_INTERVAL`] ticks, to locate
     /// desyncs. Ticks are strictly increasing multiples of the interval, none past `total_ticks`.
     pub checkpoints: Vec<(u64, [u8; 16])>,
@@ -124,6 +128,14 @@ pub enum ReplayError {
     /// A split past `total_ticks` or earlier than the split before it.
     #[error("split {0} is past the last tick or out of order")]
     BadSplit(u64),
+    /// `ranked_ticks` larger than `total_ticks`.
+    #[error("ranked time {ranked_ticks} is more than the {total_ticks} ticks run")]
+    BadRankedTicks {
+        /// `trailer.ranked_ticks`.
+        ranked_ticks: u64,
+        /// `trailer.total_ticks`.
+        total_ticks: u64,
+    },
     /// A checkpoint past `total_ticks`, not on a multiple of [`CHECKPOINT_INTERVAL`], or not later
     /// than the checkpoint before it.
     #[error("checkpoint {0} is past the last tick, off the interval grid or out of order")]
@@ -267,6 +279,7 @@ impl Replay {
         for (stage, tick) in &t.splits {
             let _ = writeln!(out, "split stage {stage} tick {tick}");
         }
+        let _ = writeln!(out, "ranked_ticks {}", t.ranked_ticks);
         for (tick, hash) in &t.checkpoints {
             let _ = writeln!(out, "checkpoint tick {tick} {}", hex(hash));
         }
@@ -290,6 +303,13 @@ fn check(header: &Header, ticks: u64, trailer: &Trailer) -> Result<(), ReplayErr
         return Err(ReplayError::TickCountMismatch {
             runs: ticks,
             total_ticks: trailer.total_ticks,
+        });
+    }
+
+    if trailer.ranked_ticks > ticks {
+        return Err(ReplayError::BadRankedTicks {
+            ranked_ticks: trailer.ranked_ticks,
+            total_ticks: ticks,
         });
     }
 
@@ -407,6 +427,7 @@ mod tests {
                     .into_iter()
                     .filter(|&(_, tick)| tick <= ticks)
                     .collect(),
+                ranked_ticks: ticks.saturating_sub(2),
                 checkpoints: (0..=ticks)
                     .step_by(usize::try_from(CHECKPOINT_INTERVAL).expect("small"))
                     .map(|tick| (tick, [(tick / CHECKPOINT_INTERVAL).to_le_bytes()[0]; 16]))
@@ -621,6 +642,20 @@ mod tests {
     }
 
     #[test]
+    fn rejects_more_ranked_ticks_than_ticks_run() {
+        let mut r = small();
+        r.trailer.ranked_ticks = 11;
+        let err = ReplayError::BadRankedTicks {
+            ranked_ticks: 11,
+            total_ticks: 10,
+        };
+        assert_eq!(r.encode(), Err(err.clone()));
+        assert_eq!(Replay::decode(&encode_unchecked(&r)), Err(err));
+        r.trailer.ranked_ticks = 10;
+        assert!(r.encode().is_ok(), "all ticks ranked is fine");
+    }
+
+    #[test]
     fn rejects_splits_out_of_order() {
         let mut r = small();
         r.trailer.splits = vec![(0, 7), (1, 3)];
@@ -724,12 +759,12 @@ mod tests {
 
     #[test]
     fn rejects_overlong_varint() {
-        // replay_format 3 is the single byte 0x03 right after the magic; 0x83 0x00 also reads
-        // as 3 but is not what encode writes.
+        // replay_format 4 is the single byte 0x04 right after the magic; 0x84 0x00 also reads
+        // as 4 but is not what encode writes.
         let bytes = small().encode().unwrap();
-        assert_eq!(bytes[4], 0x03);
+        assert_eq!(bytes[4], 0x04);
         let mut long = bytes[..4].to_vec();
-        long.extend([0x83, 0x00]);
+        long.extend([0x84, 0x00]);
         long.extend(&bytes[5..]);
         assert_eq!(Replay::decode(&long), Err(ReplayError::NotCanonical));
     }
@@ -752,7 +787,7 @@ mod tests {
                 0 => (0..rng.range(0, 256)).map(|_| rng.byte()).collect(),
                 // Valid prefix, noise after it.
                 1 => {
-                    let mut b = vec![b'I', b'W', b'B', b'R', 0x02];
+                    let mut b = vec![b'I', b'W', b'B', b'R', 0x04];
                     b.extend((0..rng.range(0, 256)).map(|_| rng.byte()));
                     b
                 }
@@ -795,6 +830,7 @@ mod tests {
         assert!(text.contains("play_mode stripped\n"));
         assert!(text.contains("total_ticks 10\n"));
         assert!(text.contains("split stage 1 tick 7\n"));
+        assert!(text.contains("ranked_ticks 8\n"));
         assert!(text.contains(&format!("final_hash {}\n", "03".repeat(32))));
     }
 }

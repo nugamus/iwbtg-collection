@@ -231,6 +231,7 @@ mod wp4a {
             RoomAction::SetGlobal {
                 var: g,
                 value: Value::Real(Real::ONE),
+                difficulty: None,
             },
             RoomAction::Spawn {
                 kind: spawned,
@@ -623,6 +624,35 @@ mod wp4a {
         b.place(load, marker, 0.0, 0.0).unwrap();
         b.place(saved, marker, 1.0, 1.0).unwrap();
         (b.build().unwrap(), select, load, saved)
+    }
+
+    /// A room's `set_global difficulty` also sets the engine difficulty built-ins read (#568).
+    #[test]
+    fn set_global_difficulty_sets_the_engine_difficulty() {
+        let mut b = GameDefBuilder::new("difficulty");
+        let g = VarId(0);
+        let mut ra = room("a", 30);
+        ra.on_create = vec![RoomAction::SetGlobal {
+            var: g,
+            value: Value::Real(Real::new(7.0)),
+            difficulty: Some(7),
+        }];
+        let a = b.room(ra);
+        let def = b.build().unwrap();
+        let rules = RunnerRules::default();
+        let mut host = Probe::default();
+        let (w, r) = start(
+            &def,
+            &rules,
+            &mut host,
+            StartPoint::Room {
+                room: a,
+                difficulty: 2,
+            },
+        );
+        r.unwrap();
+        assert_eq!(w.engine.run.difficulty, 7);
+        assert_eq!(w.globals.get(&g), Some(&Value::Real(Real::new(7.0))));
     }
 
     #[test]
