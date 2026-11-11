@@ -18,8 +18,8 @@ pub const MAGIC: [u8; 4] = *b"IWBR";
 
 /// The replay layout version this module reads and writes. Bump it on any layout change.
 /// 2: the header's `mods` (#35). 3: the header's `play_mode` (#561). 4: the trailer's
-/// `ranked_ticks` (#34).
-pub const REPLAY_FORMAT: u16 = 4;
+/// `ranked_ticks` (#34). 5: the header's `map` (#505).
+pub const REPLAY_FORMAT: u16 = 5;
 
 /// Hard ceiling on the ticks in one replay: 48 hours at 50 ticks per second. Bounds memory when
 /// runs are expanded (6 bytes per tick) before the game's own `max_ticks` is known.
@@ -58,6 +58,9 @@ pub struct Header {
     pub start_mode: StartMode,
     /// Ranked (stripped) or Play original (`crate::stripped`, #561). Only `Stripped` is ranked.
     pub play_mode: PlayMode,
+    /// The map the run played, by id (`SimOptions::map`, `Sim::map_id`; `main` for a package
+    /// without `[[maps]]`, #505): its timing chain and ranked start. Leaderboards key on it.
+    pub map: String,
     /// The mods the run was played with (`crate::mods`). Every bit must name a known mod.
     pub mods: ModSet,
     /// Client build that recorded the replay, for bug reports only.
@@ -259,6 +262,7 @@ impl Replay {
             }
         }
         let _ = writeln!(out, "play_mode {}", h.play_mode.name());
+        let _ = writeln!(out, "map {:?}", h.map);
         let _ = writeln!(out, "mods {}", h.mods.codes());
         let _ = writeln!(out, "client_build_id {:?}", h.client_build_id);
 
@@ -410,6 +414,7 @@ mod tests {
             rng_seed: 0x1234_5678_9abc_def0,
             start_mode: StartMode::NewGame,
             play_mode: PlayMode::Stripped,
+            map: "hard".to_string(),
             mods: ModSet::NONE,
             client_build_id: "test-build".to_string(),
         }
@@ -759,12 +764,12 @@ mod tests {
 
     #[test]
     fn rejects_overlong_varint() {
-        // replay_format 4 is the single byte 0x04 right after the magic; 0x84 0x00 also reads
-        // as 4 but is not what encode writes.
+        // replay_format 5 is the single byte 0x05 right after the magic; 0x85 0x00 also reads
+        // as 5 but is not what encode writes.
         let bytes = small().encode().unwrap();
-        assert_eq!(bytes[4], 0x04);
+        assert_eq!(bytes[4], 0x05);
         let mut long = bytes[..4].to_vec();
-        long.extend([0x84, 0x00]);
+        long.extend([0x85, 0x00]);
         long.extend(&bytes[5..]);
         assert_eq!(Replay::decode(&long), Err(ReplayError::NotCanonical));
     }
@@ -828,6 +833,7 @@ mod tests {
         assert!(text.contains("package_id \"rely_the_needle\"\n"));
         assert!(text.contains("start_mode new_game\n"));
         assert!(text.contains("play_mode stripped\n"));
+        assert!(text.contains("map \"hard\"\n"));
         assert!(text.contains("total_ticks 10\n"));
         assert!(text.contains("split stage 1 tick 7\n"));
         assert!(text.contains("ranked_ticks 8\n"));

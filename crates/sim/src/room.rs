@@ -339,7 +339,7 @@ fn start_inner<H: RoomHost + ?Sized>(
 /// from a `difficulty` global) after the boot instances, in place of what the cut menus set, and
 /// returns its room (default `GameDef::new_game_room`).
 fn ranked_start(ctx: &mut Ctx) -> RoomId {
-    let start = &ctx.def.stripped.start;
+    let start = ctx.def.map_start(ctx.w.map);
     for (var, value) in &start.globals {
         ctx.w.globals.insert(*var, value.clone());
     }

@@ -52,6 +52,7 @@ pub struct HashView<'a> {
     timing: &'a TimingState,
     status: &'a SimStatus,
     mode: PlayMode,
+    map: u16,
     setup_applied: bool,
 }
 
@@ -79,6 +80,7 @@ impl<'a> HashView<'a> {
             timing: &w.timing,
             status: &w.status,
             mode: w.mode,
+            map: w.map,
             setup_applied: w.setup_applied,
         }
     }
