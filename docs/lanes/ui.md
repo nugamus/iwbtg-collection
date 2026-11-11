@@ -1,6 +1,6 @@
 # Lane: ui
 
-**Owns:** `crates/client/src/ui/` (UI kit from #490: fonts, tokens, sheared shapes, widgets, motion, `--ui-gallery`), the screen modules, `crates/client/src/view/hud.rs`, bundled fonts, `docs/decisions/0003-ui-toolkit.md`, `docs/architecture/client.md` (your sections only).
+**Owns:** `crates/client/src/ui/` (UI kit from #490: fonts, tokens, sheared shapes, widgets, motion, `--ui-gallery`), the screen modules, `crates/client/src/view/hud.rs`, bundled fonts, `docs/decisions/0003-ui-toolkit.md`, `docs/architecture/client/ui.md` and `client/hud.md`.
 **Never edits:** `crates/sim`, `crates/format`, the settings and stats modules (data lane; you only read them).
 
 ## Build and test

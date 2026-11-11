@@ -1,5 +1,5 @@
 //! The settings file: one versioned TOML file that holds every player setting, kept through
-//! `storage.rs` (a file in the user's config folder natively, browser storage on the web) (docs/architecture/client.md, Settings). The client reads it at start and writes it
+//! `storage.rs` (a file in the user's config folder natively, browser storage on the web) (docs/architecture/client/settings.md). The client reads it at start and writes it
 //! when a setting changes; the settings screens of M6 only edit it.
 //!
 //! Reading is forgiving: an unknown key, a wrong type or an out-of-range value is a warning on

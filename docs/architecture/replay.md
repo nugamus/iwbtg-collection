@@ -20,7 +20,7 @@ A postcard-encoded, versioned struct. Postcard is a small, documented, stable bi
 - **Canonical.** The decoder re-encodes what it read and rejects the file if the bytes differ (for example two adjacent runs of the same frame). Identical inputs therefore always give identical bytes, which helps exact-copy detection.
 - **Size.** An hour at 50 ticks per second is 180,000 ticks. RLE keeps that to a few KB, far under the server's 1 MiB cap.
 - **Text form.** `iwbtg replay dump` prints the header and trailer as `name: value` lines, then one input run per line, for humans and diffs (docs/architecture/cli.md).
-- **Recording.** The client records every run (docs/architecture/client.md, Replays; #476); `iwbtg replay verify` checks a recorded file the way the server will.
+- **Recording.** The client records every run (docs/architecture/client/replays.md; #476); `iwbtg replay verify` checks a recorded file the way the server will.
 
 ### Mods
 
