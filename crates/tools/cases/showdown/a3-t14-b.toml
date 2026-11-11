@@ -2,7 +2,6 @@
 # Recorder: --object player --room room007 --at 2 --from 2 --x 303 --y 503
 source = "showdown/a3-t14-b"
 kind = "diff"
-open = "needs the converter showdown physics keys and the mizu01 water kind (research#114)"
 start = { room = "room_7", difficulty = 0 }
 at = 2
 first_frame = 2
