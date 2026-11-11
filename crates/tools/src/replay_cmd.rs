@@ -415,6 +415,95 @@ mod tests {
         assert_eq!(ended.ticks, tick as u64);
     }
 
+    /// A replay of the `[stripped]` example on `map`: 60 empty ticks, header only (#505).
+    fn stripped_replay(map: &str) -> Vec<u8> {
+        use iwbtg_sim::replay::{Header, MAGIC, REPLAY_FORMAT, Trailer};
+        Replay {
+            header: Header {
+                magic: MAGIC,
+                replay_format: REPLAY_FORMAT,
+                sim_version: iwbtg_sim::SIM_VERSION,
+                package_id: "stripped_example".into(),
+                gameplay_hash: [0; 32],
+                engine_rev: 0,
+                rng_seed: 0,
+                start_mode: StartMode::NewGame,
+                play_mode: PlayMode::Stripped,
+                map: map.into(),
+                mods: ModSet::NONE,
+                client_build_id: String::new(),
+            },
+            inputs: vec![InputFrame::default(); 60],
+            trailer: Trailer {
+                total_ticks: 60,
+                ..Trailer::default()
+            },
+        }
+        .encode()
+        .unwrap()
+    }
+
+    /// The `[stripped]` example has two maps: `medium` times `[timing]` from `[stripped].start`
+    /// (`stage1`), `hard` ends on entering `title` and starts there. One replay per map runs that
+    /// map's chain from that map's start, and prints its map.
+    #[test]
+    fn each_maps_replay_runs_its_own_chain_and_start() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../format/tests/valid/stripped");
+        let pkg = load_package(&dir).unwrap();
+        let mut seen = Vec::new();
+        for map in ["medium", "hard"] {
+            let input = replay_input(&stripped_replay(map), map).unwrap();
+            assert_eq!(input.map.as_deref(), Some(map), "the header's map");
+            let options = SimOptions {
+                start: StartPoint::NewGame { difficulty: 0 },
+                seed: input.seed,
+                dll_mode: DllMode::Model,
+                mode: input.mode,
+                map: input.map,
+            };
+            let s = run(&pkg, &input.frames, options, input.mods).unwrap();
+            assert_eq!(s.map, map);
+            assert!(s.lines().contains(&format!("map: {map}\n")));
+            seen.push((s.start_room, s.splits, s.hash));
+        }
+        assert_eq!(seen[0].0, "stage1");
+        assert_eq!(seen[0].1, vec![Split { index: 0, tick: 1 }], "medium has not ended");
+        assert_eq!(seen[1].0, "title", "hard's stripped_start room");
+        assert_eq!(
+            seen[1].1,
+            vec![Split { index: 0, tick: 1 }, Split { index: 1, tick: 1 }],
+            "hard's end fires in title"
+        );
+        assert_ne!(seen[0].2, seen[1].2);
+    }
+
+    #[test]
+    fn a_map_flag_must_match_the_replays_map() {
+        let path = std::env::temp_dir().join(format!("iwbtg-map-test-{}.iwbr", std::process::id()));
+        std::fs::write(&path, stripped_replay("hard")).unwrap();
+        let same = read_input(&path, 0, ModSet::NONE, PlayMode::Original, Some("hard".into()));
+        let other = read_input(&path, 0, ModSet::NONE, PlayMode::Original, Some("medium".into()));
+        std::fs::remove_file(&path).ok();
+        assert_eq!(same.unwrap().map.as_deref(), Some("hard"));
+        let err = other.unwrap_err().to_string();
+        assert!(err.contains("played map `hard`, not `medium`"), "{err}");
+    }
+
+    #[test]
+    fn an_unknown_map_does_not_start() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../format/tests/valid/stripped");
+        let pkg = load_package(&dir).unwrap();
+        let options = SimOptions {
+            start: StartPoint::NewGame { difficulty: 0 },
+            seed: 0,
+            dll_mode: DllMode::Model,
+            mode: PlayMode::Stripped,
+            map: Some("main".into()),
+        };
+        let err = run(&pkg, &[], options, ModSet::NONE).unwrap_err().to_string();
+        assert!(err.contains("map `main` is not in package"), "{err}");
+    }
+
     /// The `[stripped]` example package: its `@cutscene` lives 30 ticks in `stage1`, the ranked
     /// start, so a ranked run's timer is frozen for it; Play original starts elsewhere.
     #[test]

@@ -39,7 +39,10 @@ difficulty = "Medium"
 id = "hard"
 name = "Hard"
 difficulty = "Hard"
-stripped_start = { globals = { difficulty = 1 } }
+category = "Title only"
+# A map with its own end and ranked start: one replay per map shows both (#505).
+end = { trigger = "enter_room", room = "title" }
+stripped_start = { room = "title", globals = { difficulty = 1 } }
 
 [stripped]
 start = { room = "stage1", globals = { difficulty = 0, gameclear = false, savefile = "save1" } }
