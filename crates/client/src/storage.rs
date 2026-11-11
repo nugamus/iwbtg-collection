@@ -1,5 +1,5 @@
 //! Where the client keeps what it remembers between sessions: the settings file (`settings.rs`,
-//! with the bindings) and the save slots (`savefile.rs`). One small interface, two backends
+//! with the bindings), the save slots (`savefile.rs`) and the local stats (`stats/`). One small interface, two backends
 //! (docs/architecture/client.md, Storage):
 //!
 //! - native: files under the user's config or data folder, written beside the file and renamed
@@ -31,7 +31,7 @@ impl Store {
         Self::open(Area::Config)
     }
 
-    /// The save-slot area, or `None` when there is none.
+    /// The data area (save slots, stats), or `None` when there is none.
     pub fn data() -> Option<Store> {
         Self::open(Area::Data)
     }

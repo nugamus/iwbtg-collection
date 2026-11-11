@@ -353,6 +353,7 @@ mod tests {
                 seed: 0,
                 dll_mode: DllMode::Stub,
                 mode: crate::stripped::PlayMode::Original,
+                map: None,
             },
             scripts: ScriptRuntime::default(),
             rows_done: false,

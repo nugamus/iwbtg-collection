@@ -1513,6 +1513,7 @@ fn a_scripted_object_runs_in_a_room() {
             seed: 1,
             dll_mode: iwbtg_sim::sound::DllMode::Stub,
             mode: iwbtg_sim::stripped::PlayMode::Original,
+            map: None,
         },
     )
     .expect("the sim starts");
@@ -1600,6 +1601,10 @@ fn maps_get_their_own_timing_and_inherit_the_rest() {
     assert_eq!(hard.start, TimingTrigger::RunStart);
     assert!(hard.stages.is_empty());
     assert!(matches!(hard.end, TimingTrigger::EnterRoom(_)));
+    // The definition carries the same chains for the sim (#505).
+    let chains: Vec<_> = def.maps.iter().map(|m| (m.id.as_str(), &m.timing)).collect();
+    let want: Vec<_> = report.maps.iter().map(|m| (m.id.as_str(), &m.timing)).collect();
+    assert_eq!(chains, want);
 }
 
 #[test]
@@ -1708,12 +1713,10 @@ fn stripped_resolves_into_the_game_def() {
         ["clear", "difficulty", "exact", "file"],
         "interned, in name order"
     );
-    assert_eq!(s.map_starts.len(), 2);
-    assert_eq!(
-        s.map_starts["medium"], s.start,
-        "no stripped_start: the package's"
-    );
-    let hard = &s.map_starts["hard"];
+    let ids: Vec<&str> = def.maps.iter().map(|m| m.id.as_str()).collect();
+    assert_eq!(ids, ["medium", "hard"], "[[maps]] order");
+    assert_eq!(def.maps[0].start, s.start, "no stripped_start: the package's");
+    let hard = &def.maps[1].start;
     assert_eq!(hard.difficulty, Some(2), "the map's global wins");
     assert_eq!(
         hard.room,
@@ -1736,7 +1739,10 @@ fn stripped_resolves_into_the_game_def() {
     // Without [stripped]: nothing cut, one `main` start that defaults to new_game_room.
     let (plain, _) = load_ok(&package(|_| {}), STRICT);
     assert_eq!(plain.stripped.start, iwbtg_sim::stripped::RankedStart::default());
-    assert_eq!(plain.stripped.map_starts.keys().collect::<Vec<_>>(), ["main"]);
+    assert_eq!(plain.maps.len(), 1);
+    assert_eq!(plain.maps[0].id, "main");
+    assert_eq!(plain.maps[0].start, plain.stripped.start);
+    assert_eq!(plain.maps[0].timing, plain.timing);
     assert!(plain.stripped.cut_rooms.is_empty() && plain.stripped.cut_kinds.is_empty());
 }
 

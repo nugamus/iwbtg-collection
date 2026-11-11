@@ -9,10 +9,13 @@ use bevy::input_focus::tab_navigation::TabGroup;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use bevy::ui::IsDefaultUiCamera;
 use bevy::ui_widgets::Activate;
 
 use super::UiKitPlugin;
+use super::backdrop::{self, Backdrop, dim};
 use super::fonts::{Family, Type};
+use super::icons::{Icon, icon};
 use super::motion::{Ease, OffsetX, Opacity, ReducedMotion, Tween, Width};
 use super::shape::{Band, FadeMask, Shape, Side, UiOpacity, Veil};
 use super::tokens::{self, star_color};
@@ -54,7 +57,16 @@ pub fn run(
     .insert_resource(ClearColor(tokens::GROUND))
     .insert_resource(ReducedMotion(reduced_motion))
     .add_systems(Startup, setup)
-    .add_systems(Update, (fit_to_window, slide_on_hover, drift_list, motion_switch))
+    .add_systems(
+        Update,
+        (
+            fit_to_window,
+            slide_on_hover,
+            drift_list,
+            motion_switch,
+            backdrop_keys,
+        ),
+    )
     .add_observer(on_activate);
     if let Some(path) = screenshot {
         app.insert_resource(crate::view::ScreenshotTo(path))
@@ -152,6 +164,20 @@ fn row(gap: f32) -> Node {
         row_gap: Val::Px(gap),
         ..default()
     }
+}
+
+/// Every icon at the mockups' size and at 2.5 times that, the small ones muted, the big ones in ink.
+fn icon_row() -> impl Bundle + use<> {
+    let small = Icon::ALL.map(|kind| (kind, kind.default_height(), tokens::MUTED));
+    let big = Icon::ALL.map(|kind| (kind, kind.default_height() * 2.5, tokens::INK));
+    (
+        row(14.0),
+        Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
+            for (kind, height, color) in small.into_iter().chain(big) {
+                c.spawn(icon(kind, height, color));
+            }
+        })),
+    )
 }
 
 fn column(gap: f32) -> Node {
@@ -282,7 +308,20 @@ fn game_panel(
 }
 
 fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res<ReducedMotion>) {
-    commands.spawn(Camera2d);
+    // The backdrop has its own camera; this one draws over it and must not clear.
+    commands.spawn((
+        Camera2d,
+        Camera {
+            clear_color: ClearColorConfig::None,
+            ..default()
+        },
+        IsDefaultUiCamera,
+    ));
+    commands.insert_resource(BackdropArts(
+        [245.0, 140.0, 330.0, 190.0]
+            .map(|hue| images.add(backdrop::scene_image(hue)))
+            .to_vec(),
+    ));
     let castle = images.add(scenery(250.0));
     let forest = images.add(scenery(140.0));
     let city = images.add(scenery(300.0));
@@ -428,7 +467,9 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
                         text(&motion_label(reduced.0), Type::barlow(14.0, 500), tokens::MUTED),
                         MotionState,
                     ));
+                    c.spawn((text("", Type::barlow(14.0, 500), tokens::MUTED), BackdropState));
                 });
+            c.spawn((column(10.0), children![heading("Icons"), icon_row()]));
             c.spawn((
                 column(10.0),
                 children![
@@ -436,12 +477,12 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
                     (
                         row(36.0),
                         children![
-                            stat("Stages", "7", tokens::INK),
-                            stat("Avg clear", "54:20.36", tokens::INK),
-                            stat("Clear rate", "3.8%", tokens::INK),
-                            stat("Your PB", "38:12.46", tokens::INK),
-                            stat("Your deaths", "9,412", tokens::INK),
-                            stat("World record", "31:41.02", tokens::GOLD),
+                            stat(Some(Icon::Flag), "Stages", "7", tokens::INK),
+                            stat(Some(Icon::Clock), "Avg clear", "54:20.36", tokens::INK),
+                            stat(Some(Icon::Check), "Clear rate", "3.8%", tokens::INK),
+                            stat(Some(Icon::Bolt), "Your PB", "38:12.46", tokens::INK),
+                            stat(Some(Icon::Skull), "Your deaths", "9,412", tokens::INK),
+                            stat(Some(Icon::Crown), "World record", "31:41.02", tokens::GOLD),
                         ],
                     ),
                 ],
@@ -635,6 +676,57 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
             TabGroup::default(),
         ))
         .add_children(&[left, right]);
+}
+
+/// The stand-in art the A key cycles through.
+#[derive(Resource)]
+struct BackdropArts(Vec<Handle<Image>>);
+
+/// The line that reports the backdrop's state.
+#[derive(Component)]
+struct BackdropState;
+
+/// A cycles the art (it cross-fades), [ and ] move the blur, D cycles the dim of each screen.
+fn backdrop_keys(
+    keys: Res<ButtonInput<KeyCode>>,
+    arts: Res<BackdropArts>,
+    mut backdrop: ResMut<Backdrop>,
+    mut label: Query<&mut Text, With<BackdropState>>,
+    mut index: Local<(usize, usize)>,
+) {
+    const DIMS: [(&str, f32); 4] = [
+        ("select", dim::SELECT),
+        ("loading", dim::LOADING),
+        ("gameplay", dim::GAMEPLAY),
+        ("results", dim::RESULTS),
+    ];
+    let first = backdrop.art.is_none();
+    if keys.just_pressed(KeyCode::KeyA) || first {
+        if !first {
+            index.0 = (index.0 + 1) % arts.0.len();
+        }
+        backdrop.art = Some(arts.0[index.0].clone());
+    }
+    if keys.just_pressed(KeyCode::KeyD) {
+        index.1 = (index.1 + 1) % DIMS.len();
+    }
+    backdrop.dim = DIMS[index.1].1;
+    if keys.just_pressed(KeyCode::BracketRight) {
+        backdrop.blur = (backdrop.blur + 0.1).min(1.0);
+    }
+    if keys.just_pressed(KeyCode::BracketLeft) {
+        backdrop.blur = (backdrop.blur - 0.1).max(0.0);
+    }
+    for mut text in &mut label {
+        text.0 = format!(
+            "Backdrop: art {} of {} (A) · blur {:.0}% ([ ]) · dim {} {:.2} (D)",
+            index.0 + 1,
+            arts.0.len(),
+            backdrop.blur * 100.0,
+            DIMS[index.1].0,
+            backdrop.dim
+        );
+    }
 }
 
 fn motion_label(on: bool) -> String {

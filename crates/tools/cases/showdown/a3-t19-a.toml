@@ -1,0 +1,29 @@
+# Imported from research trace showdown/a3-t19-a by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room room026 --at 2 --from 2 --x 421 --y 311
+source = "showdown/a3-t19-a"
+kind = "diff"
+open = "needs the converter showdown physics keys and slip block (research#114); passes bit for bit on a package with them applied by hand"
+start = { room = "room_26", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "model"
+seed = 0
+setup = [
+  { frame = 2, target = "kid", set = { x = 421.0, xprevious = 421.0, y = 311.0, yprevious = 311.0 } },
+]
+ignore = ["id", "sprite_index", "sprite_name"]
+notes = [
+  "--x/--y: the recorder creates the object when none exists; setup only moves one",
+]
+
+[vars]
+
+[unprobed]
+"bbox_bottom" = "no probe field for `bbox_bottom` (OPEN)"
+"bbox_left" = "no probe field for `bbox_left` (OPEN)"
+"bbox_right" = "no probe field for `bbox_right` (OPEN)"
+
+[rooms]
+"room_26" = "room026"

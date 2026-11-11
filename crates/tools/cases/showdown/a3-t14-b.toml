@@ -1,0 +1,29 @@
+# Imported from research trace showdown/a3-t14-b by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room room007 --at 2 --from 2 --x 303 --y 503
+source = "showdown/a3-t14-b"
+kind = "diff"
+open = "needs the converter showdown physics keys and the mizu01 water kind (research#114)"
+start = { room = "room_7", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "model"
+seed = 0
+setup = [
+  { frame = 2, target = "kid", set = { x = 303.0, xprevious = 303.0, y = 503.0, yprevious = 503.0 } },
+]
+ignore = ["id", "sprite_index", "sprite_name"]
+notes = [
+  "--x/--y: the recorder creates the object when none exists; setup only moves one",
+]
+
+[vars]
+
+[unprobed]
+"bbox_bottom" = "no probe field for `bbox_bottom` (OPEN)"
+"bbox_top" = "no probe field for `bbox_top` (OPEN)"
+"sound_isplaying(sndDJump)" = "a function call; the probe reads variables only (OPEN)"
+
+[rooms]
+"room_7" = "room007"

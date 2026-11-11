@@ -1,21 +1,25 @@
-//! The screen: integer scale, fullscreen ratios, windowed presets and the blurred letterbox
+//! The screen: integer scale, fullscreen ratios, windowed presets and the backdrop behind the game
 //! (docs/product.md, Look and screen). The game keeps its native size; this only decides how big
 //! one game pixel is on the monitor and what fills the rest.
 //!
 //! There is no settings screen yet (#53), so the choices are flags (`--fullscreen`, `--ratio`,
 //! `--window`) and keys: F11 fullscreen, F10 next ratio, F9 next windowed size. Each choice is
-//! saved in the settings file (`settings.rs`), so the next start keeps it.
+//! saved in the settings file (`settings.rs`), so the next start keeps it. `[` and `]` blur the
+//! backdrop less and more (not saved yet: the settings file has no blur entry, #509).
 
 use std::sync::OnceLock;
 
 use bevy::camera::ScalingMode;
 use bevy::prelude::*;
 use bevy::window::{MonitorSelection, PrimaryWindow, WindowMode};
+use iwbtg_format::key_art::{self, KeyArt};
+use iwbtg_format::manifest::Manifest;
 use iwbtg_sim::def::RoomId;
 
 use crate::art::ArtFiles;
 use crate::package::decode_png;
 use crate::settings::{self, Settings};
+use crate::ui::backdrop::{self, Backdrop, BackdropPlugin};
 use crate::view::{Game, GameCamera, RoomSize, ViewRect};
 
 /// The aspect ratios fullscreen offers; `None` is the monitor's own.
@@ -141,11 +145,10 @@ pub struct Screen {
     title: Option<String>,
 }
 
-/// The blurred letterbox sprite and the room it shows the background of.
+/// The black panel under the game and the room it is sized for.
 #[derive(Resource, Default)]
 struct Letterbox {
     room: Option<RoomId>,
-    sprite: Option<Entity>,
     panel: Option<Entity>,
 }
 
@@ -153,6 +156,9 @@ pub struct ScreenPlugin;
 
 impl Plugin for ScreenPlugin {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<BackdropPlugin>() {
+            app.add_plugins(BackdropPlugin);
+        }
         let o = OPTIONS.get().copied().unwrap_or_default();
         app.insert_resource(Screen {
             fullscreen: o.fullscreen,
@@ -167,7 +173,7 @@ impl Plugin for ScreenPlugin {
         .init_resource::<Letterbox>()
         .add_systems(
             Update,
-            (keys, apply, letterbox, keep_letterbox)
+            (keys, apply, room_panel, keep_panel, game_backdrop)
                 .chain()
                 .after(crate::view::follow_view),
         );
@@ -182,10 +188,18 @@ fn keys(
     keys: Res<ButtonInput<KeyCode>>,
     mut screen: ResMut<Screen>,
     mut start: ResMut<StartSize>,
+    mut backdrop: ResMut<Backdrop>,
     mut window: Single<&mut Window, With<PrimaryWindow>>,
 ) {
     if let Some((w, h)) = start.0.take() {
         window.resolution.set_physical_resolution(w, h);
+    }
+    // Stand-in for the blur slider of the settings screen (#53).
+    if keys.just_pressed(KeyCode::BracketRight) {
+        backdrop.blur = (backdrop.blur + 0.1).min(1.0);
+    }
+    if keys.just_pressed(KeyCode::BracketLeft) {
+        backdrop.blur = (backdrop.blur - 0.1).max(0.0);
     }
     if keys.just_pressed(KeyCode::F11) {
         screen.fullscreen = !screen.fullscreen;
@@ -216,6 +230,7 @@ fn apply(
     view: Res<ViewRect>,
     mut window: Single<&mut Window, With<PrimaryWindow>>,
     mut camera: Single<(&mut Projection, &mut Camera), With<GameCamera>>,
+    backdrop: Res<Backdrop>,
 ) {
     let mode = if screen.fullscreen {
         WindowMode::BorderlessFullscreen(MonitorSelection::Current)
@@ -259,139 +274,64 @@ fn apply(
     }
     let base = screen.title.get_or_insert_with(|| window.title.clone()).clone();
     let title = format!(
-        "{base} [{}x{} px, x{scale}, {}{}]",
+        "{base} [{}x{} px, x{scale}, {}{}, blur {:.0}%]",
         size.0,
         size.1,
         ratio_name(ratio),
-        if screen.fullscreen { ", fullscreen" } else { "" }
+        if screen.fullscreen { ", fullscreen" } else { "" },
+        backdrop.blur * 100.0
     );
     if window.title != title {
         window.title = title;
     }
 }
 
-/// A box blur on RGBA8, `radius` pixels, run `passes` times (three approximate a Gaussian).
-fn blur(rgba: &[u8], w: usize, h: usize, radius: usize, passes: usize) -> Vec<u8> {
-    let mut cur = rgba.to_vec();
-    let mut tmp = vec![0u8; cur.len()];
-    for _ in 0..passes {
-        for horizontal in [true, false] {
-            let (len, lines) = if horizontal { (w, h) } else { (h, w) };
-            for line in 0..lines {
-                let at = |i: usize| {
-                    let i = i.min(len - 1);
-                    if horizontal {
-                        (line * w + i) * 4
-                    } else {
-                        (i * w + line) * 4
-                    }
-                };
-                for i in 0..len {
-                    let (lo, hi) = (i.saturating_sub(radius), (i + radius).min(len - 1));
-                    for c in 0..4 {
-                        let sum: u32 = (lo..=hi).map(|j| u32::from(cur[at(j) + c])).sum();
-                        tmp[at(i) + c] = (sum / (hi - lo + 1) as u32) as u8;
-                    }
-                }
-            }
-            std::mem::swap(&mut cur, &mut tmp);
-        }
-    }
-    cur
-}
-
-/// Downscales to at most `max` pixels wide by averaging, so the blur is cheap and wide.
-fn shrink(rgba: &[u8], w: usize, h: usize, max: usize) -> (Vec<u8>, usize, usize) {
-    let f = w.div_ceil(max).max(1);
-    let (nw, nh) = (w.div_ceil(f), h.div_ceil(f));
-    let mut out = vec![0u8; nw * nh * 4];
-    for y in 0..nh {
-        for x in 0..nw {
-            let mut sum = [0u32; 4];
-            let mut n = 0;
-            for sy in y * f..((y + 1) * f).min(h) {
-                for sx in x * f..((x + 1) * f).min(w) {
-                    for (c, s) in sum.iter_mut().enumerate() {
-                        *s += u32::from(rgba[(sy * w + sx) * 4 + c]);
-                    }
-                    n += 1;
-                }
-            }
-            for c in 0..4 {
-                out[(y * nw + x) * 4 + c] = (sum[c] / n.max(1)) as u8;
-            }
-        }
-    }
-    (out, nw, nh)
-}
-
-/// A dim, blurred copy of the room's background, or a flat colour when it has none.
-fn letterbox_image(files: &iwbtg_format::files::PackageFiles, room: &str) -> Image {
-    let art = iwbtg_format::art::load_room_art(files, room).unwrap_or_default();
-    let decoded = art
-        .backgrounds
-        .iter()
-        .find(|b| !b.foreground)
-        .and_then(|b| files.get(&format!("backgrounds/{}.png", b.image)))
-        .and_then(decode_png);
-    let (rgba, w, h) = match decoded {
-        Some(s) => {
-            let (small, w, h) = shrink(&s.rgba, s.size.0 as usize, s.size.1 as usize, 48);
-            (blur(&small, w, h, 3, 3), w, h)
-        }
-        None => {
-            let [r, g, b] = art.color.unwrap_or([15, 15, 25]);
-            let px = [r, g, b, 255];
-            (px.repeat(4), 2, 2)
-        }
-    };
-    // Dimmed, so the game stays the brightest thing on screen.
-    let rgba = rgba
-        .chunks(4)
-        .flat_map(|p| [p[0] / 2, p[1] / 2, p[2] / 2, 255])
-        .collect();
-    let mut image = Image::new(
-        bevy::render::render_resource::Extent3d {
-            width: w as u32,
-            height: h as u32,
-            depth_or_array_layers: 1,
-        },
-        bevy::render::render_resource::TextureDimension::D2,
-        rgba,
-        bevy::render::render_resource::TextureFormat::Rgba8UnormSrgb,
-        bevy::asset::RenderAssetUsages::RENDER_WORLD,
-    );
-    // Smooth when stretched: the blur is the point.
-    image.sampler = bevy::image::ImageSampler::linear();
-    image
-}
-
-/// Fills everything outside the game with the blurred background, and keeps a black panel the
-/// size of the view above it, so the blur never shows through a room with no art. Both follow
-/// the camera.
-fn letterbox(
-    mut commands: Commands,
-    game: NonSend<Game>,
+/// Sets the background once: the game's key art (`[key_art]`, else the first ranked room's
+/// background, else its colour, else the client's own), blurred by the player's setting and
+/// dimmed for gameplay. The backdrop system draws it over the whole window, so the game never
+/// has black bars (docs/product.md, Look and screen).
+fn game_backdrop(
     files: Res<ArtFiles>,
+    room: Res<RoomSize>,
     mut images: ResMut<Assets<Image>>,
-    mut state: ResMut<Letterbox>,
+    mut backdrop: ResMut<Backdrop>,
+    mut done: Local<bool>,
 ) {
+    if *done {
+        return;
+    }
+    // The room size comes from the sim's first tick; until then there is nothing to size by.
+    if room.0.x < 1.0 {
+        return;
+    }
+    *done = true;
+    let art = files
+        .0
+        .get("game.toml")
+        .and_then(|b| std::str::from_utf8(b).ok())
+        .and_then(|t| Manifest::parse(t).ok())
+        .map_or(KeyArt::None, |m| key_art::resolve(&files.0, &m, None));
+    let image = backdrop::key_art_image(&files.0, &art, (room.0.x as u32, room.0.y as u32), |bytes| {
+        decode_png(bytes).map(|s| (s.rgba, s.size.0, s.size.1))
+    });
+    backdrop.art = Some(images.add(image));
+    backdrop.dim = backdrop::dim::GAMEPLAY;
+    backdrop.blur = backdrop::DEFAULT_BLUR;
+}
+
+/// Spawns a black panel the size of the room under the game, so the backdrop never shows
+/// through a room with no art of its own.
+fn room_panel(mut commands: Commands, game: NonSend<Game>, mut state: ResMut<Letterbox>) {
     let room = game.sim.world().room;
     let Some(def) = game.sim.def().room(room) else {
         return;
     };
-    let room_size = Vec2::new(def.width as f32, def.height as f32);
     if state.room != Some(room) {
         state.room = Some(room);
-        for e in [state.sprite.take(), state.panel.take()].into_iter().flatten() {
+        if let Some(e) = state.panel.take() {
             commands.entity(e).despawn();
         }
-        let handle = images.add(letterbox_image(&files.0, &def.name));
-        state.sprite = Some(
-            commands
-                .spawn((Sprite::from_image(handle), Transform::from_xyz(0.0, 0.0, -999.0)))
-                .id(),
-        );
+        let room_size = Vec2::new(def.width as f32, def.height as f32);
         state.panel = Some(
             commands
                 .spawn((
@@ -403,28 +343,20 @@ fn letterbox(
     }
 }
 
-/// Keeps the letterbox sprite over the whole visible area, whatever its shape, and the panel at
-/// the view's size, both with the camera.
-fn keep_letterbox(
+/// Keeps the panel at the view's size, with the camera.
+fn keep_panel(
     state: Res<Letterbox>,
-    camera: Single<(&Projection, &Transform), With<GameCamera>>,
+    camera: Single<&Transform, With<GameCamera>>,
     view: Res<ViewRect>,
     mut sprites: Query<(&mut Sprite, &mut Transform), Without<GameCamera>>,
 ) {
-    let (projection, camera) = *camera;
-    let Projection::Orthographic(o) = projection else {
-        return;
-    };
-    let area = o.area.size().max(Vec2::new(view.w, view.h)) * 1.05;
-    for (entity, size) in [(state.sprite, area), (state.panel, Vec2::new(view.w, view.h))] {
-        if let Some(e) = entity
-            && let Ok((mut s, mut t)) = sprites.get_mut(e)
-        {
-            s.custom_size = Some(size);
-            t.translation.x = camera.translation.x;
-            t.translation.y = camera.translation.y;
-            t.rotation = camera.rotation;
-        }
+    if let Some(e) = state.panel
+        && let Ok((mut s, mut t)) = sprites.get_mut(e)
+    {
+        s.custom_size = Some(Vec2::new(view.w, view.h));
+        t.translation.x = camera.translation.x;
+        t.translation.y = camera.translation.y;
+        t.rotation = camera.rotation;
     }
 }
 
@@ -497,19 +429,5 @@ mod tests {
         assert!(parse_ratio("5:4").is_err());
         assert_eq!(parse_size("1600x1216"), Ok((1600, 1216)));
         assert!(parse_size("10x10").is_err());
-    }
-
-    #[test]
-    fn the_blur_spreads_a_bright_pixel_and_keeps_the_average() {
-        let mut img = vec![0u8; 9 * 9 * 4];
-        for p in img.chunks_mut(4) {
-            p[3] = 255;
-        }
-        let c = (4 * 9 + 4) * 4;
-        img[c] = 255;
-        let out = blur(&img, 9, 9, 1, 1);
-        assert!(out[c] < 255 && out[c] > 0);
-        assert!(out[(4 * 9 + 3) * 4] > 0);
-        assert_eq!(out[3], 255);
     }
 }

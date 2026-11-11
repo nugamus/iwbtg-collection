@@ -1,0 +1,30 @@
+# Imported from research trace showdown/a3-t15-b by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room room008 --at 2 --from 2 --x 560 --y 391 (1 --gml)
+source = "showdown/a3-t15-b"
+kind = "diff"
+open = "setup cannot set the kid field tjump yet (#586); also needs research#114"
+start = { room = "room_8", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "model"
+seed = 0
+setup = [
+  { frame = 2, target = "kid", set = { x = 560.0, xprevious = 560.0, y = 391.0, yprevious = 391.0 } },
+  { frame = 5, target = "kid", set = { tjump = 0.0 } },
+]
+ignore = ["id", "sprite_index", "sprite_name"]
+notes = [
+  "--x/--y: the recorder creates the object when none exists; setup only moves one",
+]
+
+[vars]
+"instance_number(player)" = "instance_number(kid)"
+
+[unprobed]
+"bbox_bottom" = "no probe field for `bbox_bottom` (OPEN)"
+"bbox_top" = "no probe field for `bbox_top` (OPEN)"
+
+[rooms]
+"room_8" = "room008"

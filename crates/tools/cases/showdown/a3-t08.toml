@@ -1,0 +1,25 @@
+# Imported from research trace showdown/a3-t08 by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room room028 --at 2 --from 2
+source = "showdown/a3-t08"
+kind = "diff"
+open = "room028 double jump grants tjump: game code the sim does not model (#585); also needs research#114"
+start = { room = "room_28", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "model"
+seed = 0
+setup = []
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+
+[unprobed]
+"bbox_bottom" = "no probe field for `bbox_bottom` (OPEN)"
+"bbox_left" = "no probe field for `bbox_left` (OPEN)"
+"bbox_right" = "no probe field for `bbox_right` (OPEN)"
+"bbox_top" = "no probe field for `bbox_top` (OPEN)"
+
+[rooms]
+"room_28" = "room028"

@@ -1,9 +1,12 @@
 //! The client's UI kit (docs/decisions/0003-ui-toolkit.md, docs/architecture/client.md, UI): design
-//! tokens, the bundled fonts, the sheared shape material, the shared components and motion.
+//! tokens, the bundled fonts, the icons, the backdrop, the sheared shape material, the shared
+//! components and motion.
 //! Every screen builds from these parts; none brings its own colours, sizes or shapes.
 
+pub mod backdrop;
 pub mod fonts;
 pub mod gallery;
+pub mod icons;
 pub mod motion;
 pub mod shape;
 pub mod tokens;
@@ -27,6 +30,13 @@ pub struct UiKitPlugin;
 
 impl Plugin for UiKitPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((fonts::plugin, shape::plugin, motion::plugin, widgets::plugin));
+        app.add_plugins((
+            fonts::plugin,
+            shape::plugin,
+            motion::plugin,
+            widgets::plugin,
+            icons::plugin,
+        ))
+        .add_plugins(backdrop::BackdropPlugin);
     }
 }

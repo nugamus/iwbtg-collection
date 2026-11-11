@@ -98,6 +98,7 @@ fn run_replay(
         seed: input.seed,
         dll_mode: DllMode::Model,
         mode: input.mode,
+        map: input.map.clone(),
     };
     run_def(def, &input.frames, options, input.mods)
 }
@@ -315,6 +316,7 @@ mod tests {
                 rng_seed: 0,
                 start_mode: StartMode::NewGame,
                 play_mode: iwbtg_sim::stripped::PlayMode::Original,
+                map: "main".into(),
                 mods: iwbtg_sim::mods::ModSet::NONE,
                 client_build_id: String::new(),
             },
