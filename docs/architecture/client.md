@@ -11,6 +11,7 @@ One page per module or area, so two PRs on different modules never edit the same
 - [Import](client/import.md): `.iwbz` files, the library, drag and drop (`import.rs`)
 - [Mods](client/mods.md): `mods.rs`
 - [Pause menu](client/pause.md): `pause.rs`
+- [Player card](client/card.md): `card/`
 - [Replays](client/replays.md): `replays.rs`
 - [Retry](client/retry.md): `retry.rs`
 - [Screen](client/screen.md): `screen.rs`

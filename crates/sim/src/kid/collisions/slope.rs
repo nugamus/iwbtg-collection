@@ -5,9 +5,11 @@
 use serde::Deserialize;
 
 use super::block;
+use crate::collide::move_contact_solid;
 use crate::collide::query::{Target, place_free, place_meeting};
 use crate::def::ClassMask;
 use crate::error::SimError;
+use crate::kid::actions::common::state;
 use crate::num::{Real, gm_ge, gm_gt, gm_le, gm_lt};
 use crate::world::{Ctx, Flow, InstId};
 
@@ -25,10 +27,14 @@ pub enum SlopeRun {
     /// found spot overlaps a block); then `x` moves `step` in the direction of `hspeed` (even with
     /// rise 0), `y` goes up by the rise, `hspeed` 0 and the diagonal check.
     SlopePorRise,
-    /// Eat-the-new-year, Collision with yaneH (`slope`) or yaneM (`slope_mirror`): when
-    /// `place_free(x + hspeed, y)` is false and `hspeed >= 0` (H; `<= 0` for M, OPEN: mirrored) and
-    /// `place_free(x, y + vspeed)` is false, the kid moves `step` up and sideways; `hspeed` 0.
-    /// Then the vertical and diagonal block parts.
+    /// Eat-the-new-year, Collision with yaneH (`slope`) or yaneM (`slope_mirror`), kid/A4.md:
+    /// 1. when `place_free(x + hspeed, y)` is false: uphill (H `hspeed >= 0`, M `<= 0`) with
+    ///    `place_free(x, y + vspeed)` false, the kid moves `step` up and sideways; H downhill
+    ///    (`hspeed < 0`) does nothing (the original's contact is commented out); M downhill
+    ///    (`hspeed > 0`) contacts toward 180 (left). Then `hspeed` 0.
+    /// 2. and 3. the vertical and diagonal block parts.
+    /// 4. with a slope of the event's own class 1 px below and the Step's `h` pointing downhill
+    ///    (H `h < 0`, M `h > 0`), the kid moves `step` down and sideways; `hspeed` 0.
     SlopeYane,
 }
 
@@ -86,22 +92,44 @@ fn yane(ctx: &mut Ctx, me: InstId, other: InstId) -> Result<(), SimError> {
         .w
         .get(other)
         .is_some_and(|o| o.classes.intersects(ClassMask::SLOPE_MIRROR));
+    // H rises to the right, M to the left: `side` is the uphill direction.
+    let (side, own) = if mirror {
+        (-step, ClassMask::SLOPE_MIRROR)
+    } else {
+        (step, ClassMask::SLOPE)
+    };
     let i = ctx.w.get(me).ok_or_else(missing)?;
     let (x, y, hs, vs) = (i.m.x(), i.m.y(), i.m.hspeed(), i.m.vspeed());
     if !place_free(ctx, me, x + hs, y)? {
-        let toward = if mirror {
+        let uphill = if mirror {
             gm_le(hs, Real::ZERO, n)
         } else {
             gm_ge(hs, Real::ZERO, n)
         };
-        if toward && !place_free(ctx, me, x, y + vs)? {
-            let dx = if mirror { -step } else { step };
-            let i = ctx.w.get_mut(me).ok_or_else(missing)?;
-            i.m.set_x(x + dx)?;
-            i.m.set_y(y - step)?;
+        if uphill {
+            if !place_free(ctx, me, x, y + vs)? {
+                let i = ctx.w.get_mut(me).ok_or_else(missing)?;
+                i.m.set_x(x + side)?;
+                i.m.set_y(y - step)?;
+            }
+        } else if mirror {
+            // yaneM's downhill hit contacts toward 180 although the kid moves right (kid/A4.md;
+            // yaneH's matching contact is commented out, so H does nothing here).
+            move_contact_solid(ctx, me, Real::new(180.0), Real::new(hs.get().abs()))?;
         }
         ctx.w.get_mut(me).ok_or_else(missing)?.m.set_hspeed(Real::ZERO)?;
     }
     block::vertical(ctx, me, true)?;
-    block::diagonal(ctx, me)
+    block::diagonal(ctx, me)?;
+    let h = state(ctx, me)?.ext.walk_h;
+    let downhill = if mirror { h > 0 } else { h < 0 };
+    let i = ctx.w.get(me).ok_or_else(missing)?;
+    let (x, y) = (i.m.x(), i.m.y());
+    if downhill && place_meeting(ctx, me, x, y + Real::ONE, Target::Class(own))? {
+        let i = ctx.w.get_mut(me).ok_or_else(missing)?;
+        i.m.set_x(x - side)?;
+        i.m.set_y(y + step)?;
+        i.m.set_hspeed(Real::ZERO)?;
+    }
+    Ok(())
 }

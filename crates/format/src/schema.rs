@@ -80,7 +80,11 @@ pub struct InstanceShape {
     pub run: Option<[u32; 2]>,
     /// `[dx, dy]` spacing of the grid; default `[32, 32]`.
     pub step: Option<[Number; 2]>,
-    /// Params of the kind (`dir`, `to`, `depth`, `visible`, ...).
+    /// Params named like an instance key (`params = { kind = 20 }`, GM creation code that sets
+    /// `kind`); every other param is a key of its own.
+    #[serde(rename = "params")]
+    pub key_params: Option<BTreeMap<String, Value>>,
+    /// Params of the kind (`dir`, `to`, ...).
     #[serde(flatten)]
     pub params: BTreeMap<String, Value>,
 }

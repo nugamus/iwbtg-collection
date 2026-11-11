@@ -17,10 +17,10 @@ use std::ops::Range;
 
 use iwbtg_sim::builtins::{self, ParamSpec, ParamType};
 use iwbtg_sim::def::{
-    Builtin, ClassMask, EngineKind, GameDef, GroupId, KindDef, KindId, Mask, MaskId, MaskSet, MaskShape,
-    NameId, ParamValue, Params, PhysicsProfile, PlacedInstance, RankEntry, RankTable, ResetModel,
-    RestartModel, RoomAction, RoomDef, RoomId, RoomRole, ScriptDef, ScriptId, SoundDef, SpriteDef, SpriteId,
-    VariantSel, ViewDef,
+    Builtin, ClassMask, EngineKind, GameDef, GlobalIndex, GroupId, KindDef, KindId, Mask, MaskId, MaskSet,
+    MaskShape, NameId, ParamValue, Params, PhysicsProfile, PlacedInstance, RankEntry, RankTable, ResetModel,
+    RestartModel, RoomAction, RoomDef, RoomId, RoomRole, RoomWhen, ScriptDef, ScriptId, SoundDef, SoundId,
+    SpriteDef, SpriteId, VariantSel, ViewDef,
 };
 use iwbtg_sim::input::Action;
 use iwbtg_sim::num::Real;
@@ -43,7 +43,7 @@ use crate::manifest::{
 use crate::masks::{ALPHA_IN_MASK, AlphaRule};
 use crate::objects::{self, ObjectFile, kind_classes, legacy_role_classes, param_value};
 use crate::order::{OrderEntry, rank_of, resolve_ranks};
-use crate::rooms::{ActionFile, InstanceFile, RoomFile, parse_room};
+use crate::rooms::{ActionFile, IndexFile, InstanceFile, RoomFile, WhenFile, parse_room};
 use crate::sprites::{MAX_IMAGE_SIDE, load_sprite_at, parse_sidecar};
 use crate::tracemap::{TRACE_MAP_PATH, TraceMap, TraceParam, TraceStatus, load_trace_map};
 use crate::vars::intern_vars;
@@ -1449,11 +1449,19 @@ impl<'a> Loader<'a> {
             }
             for a in &r.file.on_create {
                 match a.get_ref() {
-                    ActionFile::SetGlobal { var, .. } => {
+                    ActionFile::SetGlobal { var, index: None, .. } => {
                         names.insert(var.clone());
                     }
+                    // The element is a run-time name (`stage[1]`); only the index global is
+                    // known at load.
+                    ActionFile::SetGlobal {
+                        index: Some(IndexFile::Global { global }),
+                        ..
+                    } if !is_engine_index(global) => {
+                        names.insert(global.clone());
+                    }
                     ActionFile::Spawn { params, .. } => names.extend(params.keys().cloned()),
-                    ActionFile::LoadGame | ActionFile::DestroySelf => {}
+                    _ => {}
                 }
             }
         }
@@ -1751,8 +1759,136 @@ impl<'a> Loader<'a> {
         text: &str,
         span: Range<usize>,
     ) -> Option<RoomAction> {
+        let action = self.bare_action(a, vars, path, text, span.clone())?;
+        match a.when() {
+            None => Some(action),
+            Some(w) => {
+                let when = self.when(w, path, text, span)?;
+                Some(RoomAction::When {
+                    when,
+                    action: Box::new(action),
+                })
+            }
+        }
+    }
+
+    /// A row's `when` (#629).
+    fn when(&mut self, w: &WhenFile, path: &str, text: &str, span: Range<usize>) -> Option<RoomWhen> {
+        if w.difficulty_below.is_none() && w.kid_exists.is_none() && w.kind_absent.is_none() {
+            self.error(
+                path,
+                text,
+                span,
+                "`when` needs `difficulty_below`, `kid_exists` or `kind_absent`",
+            );
+            return None;
+        }
+        let kind_absent = match &w.kind_absent {
+            None => None,
+            Some(kind) => Some(self.action_kind("when.kind_absent", kind, path, text, span)?),
+        };
+        Some(RoomWhen {
+            difficulty_below: w.difficulty_below.map(|n| Real::new(n.0)),
+            kid_exists: w.kid_exists,
+            kind_absent,
+        })
+    }
+
+    /// A kind named by a room action, or an error.
+    fn action_kind(
+        &mut self,
+        what: &str,
+        kind: &str,
+        path: &str,
+        text: &str,
+        span: Range<usize>,
+    ) -> Option<KindId> {
+        let k = self.kind_by_ref(kind).filter(|_| !self.dropped.contains(kind));
+        if k.is_none() {
+            self.error(
+                path,
+                text,
+                span,
+                format!("{what}: `{kind}` is not a kind of this package"),
+            );
+        }
+        k
+    }
+
+    /// A sound named by a room action, or an error.
+    fn action_sound(
+        &mut self,
+        what: &str,
+        sound: &str,
+        path: &str,
+        text: &str,
+        span: Range<usize>,
+    ) -> Option<SoundId> {
+        let found = self
+            .sounds
+            .iter()
+            .position(|d| d.name == sound)
+            .and_then(|i| u32::try_from(i).ok())
+            .map(SoundId);
+        if found.is_none() {
+            self.error(
+                path,
+                text,
+                span,
+                format!("{what}: sound `{sound}` does not exist"),
+            );
+        }
+        found
+    }
+
+    fn bare_action(
+        &mut self,
+        a: &ActionFile,
+        vars: &BTreeMap<String, iwbtg_sim::def::VarId>,
+        path: &str,
+        text: &str,
+        span: Range<usize>,
+    ) -> Option<RoomAction> {
         match a {
-            ActionFile::SetGlobal { var, value } => {
+            ActionFile::SetGlobal {
+                var,
+                index: Some(index),
+                value,
+                ..
+            } => {
+                let value = match global_value(value) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        self.error(path, text, span, format!("set_global `{var}`: {e}"));
+                        return None;
+                    }
+                };
+                let index = match index {
+                    IndexFile::Number(n) => {
+                        let v = n.0;
+                        if v.fract() != 0.0 || !(0.0..=f64::from(u32::MAX)).contains(&v) {
+                            self.error(
+                                path,
+                                text,
+                                span,
+                                format!("set_global `{var}`: `index` must be a whole number from 0"),
+                            );
+                            return None;
+                        }
+                        // Checked just above: a whole number in 0..=u32::MAX.
+                        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                        GlobalIndex::Const(v as u32)
+                    }
+                    IndexFile::Global { global } if is_engine_index(global) => GlobalIndex::Savenum,
+                    IndexFile::Global { global } => GlobalIndex::Global(*vars.get(global)?),
+                };
+                Some(RoomAction::SetGlobalIndexed {
+                    var: var.clone(),
+                    index,
+                    value,
+                })
+            }
+            ActionFile::SetGlobal { var, value, .. } => {
                 let value = match global_value(value) {
                     Ok(v) => v,
                     Err(e) => {
@@ -1782,16 +1918,10 @@ impl<'a> Loader<'a> {
                     difficulty,
                 })
             }
-            ActionFile::Spawn { kind, x, y, params } => {
-                let Some(k) = self.kind_by_ref(kind).filter(|_| !self.dropped.contains(kind)) else {
-                    self.error(
-                        path,
-                        text,
-                        span,
-                        format!("spawn: `{kind}` is not a kind of this package"),
-                    );
-                    return None;
-                };
+            ActionFile::Spawn {
+                kind, x, y, params, ..
+            } => {
+                let k = self.action_kind("spawn", kind, path, text, span.clone())?;
                 let base = self.kinds.get(k.index()?)?.base;
                 let mut p = Params::default();
                 for (key, value) in params {
@@ -1810,8 +1940,28 @@ impl<'a> Loader<'a> {
                     params: p,
                 })
             }
-            ActionFile::LoadGame => Some(RoomAction::LoadGame),
-            ActionFile::DestroySelf => Some(RoomAction::DestroySelf),
+            ActionFile::LoadGame { .. } => Some(RoomAction::LoadGame),
+            ActionFile::DestroySelf { .. } => Some(RoomAction::DestroySelf),
+            ActionFile::SaveGame { .. } => Some(RoomAction::SaveGame),
+            ActionFile::SaveDeathTime { .. } => Some(RoomAction::SaveDeathTime),
+            ActionFile::MoveKid { x, y, .. } => Some(RoomAction::MoveKid {
+                x: Real::new(x.0),
+                y: Real::new(y.0),
+            }),
+            ActionFile::Destroy { kind, .. } => Some(RoomAction::Destroy {
+                kind: self.action_kind("destroy", kind, path, text, span)?,
+            }),
+            ActionFile::PlaySound { sound, .. } => Some(RoomAction::PlaySound {
+                sound: self.action_sound("play_sound", sound, path, text, span)?,
+                looping: false,
+            }),
+            ActionFile::LoopSound { sound, .. } => Some(RoomAction::PlaySound {
+                sound: self.action_sound("loop_sound", sound, path, text, span)?,
+                looping: true,
+            }),
+            ActionFile::StopSound { sound, .. } => Some(RoomAction::StopSound {
+                sound: self.action_sound("stop_sound", sound, path, text, span)?,
+            }),
         }
     }
 
@@ -1906,6 +2056,10 @@ impl<'a> Loader<'a> {
         let mut need: BTreeSet<KindId> = engine.values().copied().collect();
         for r in rooms {
             for a in &r.on_create {
+                let mut a = a;
+                while let RoomAction::When { action, .. } = a {
+                    a = action;
+                }
                 if let RoomAction::Spawn { kind, .. } = a {
                     need.insert(*kind);
                 }
@@ -2744,6 +2898,12 @@ mod tests {
 }
 
 /// A `difficulty` global as the engine difficulty: a whole number from 0 to 255.
+/// An indexed `set_global` whose index global is the engine's save slot (`global.savenum`),
+/// not a package global.
+fn is_engine_index(name: &str) -> bool {
+    name == "savenum"
+}
+
 fn whole_difficulty(v: &iwbtg_sim::world::Value) -> Option<u8> {
     match v {
         iwbtg_sim::world::Value::Real(r) => {

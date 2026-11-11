@@ -32,7 +32,7 @@ pub use ids::{
 pub use kind::{KindDef, ParamValue, Params, RankEntry, RankTable, VariantSel};
 pub use path::PathDef;
 pub use physics::{KidFamily, PhysicsProfile, PhysicsProfileDraft};
-pub use room::{PlacedInstance, RoleSet, RoomAction, RoomDef, RoomRole, ViewDef};
+pub use room::{GlobalIndex, PlacedInstance, RoleSet, RoomAction, RoomDef, RoomRole, RoomWhen, ViewDef};
 pub use script::ScriptDef;
 pub use sound::{SoundDef, SoundKind};
 pub use sprite::{BitMask, IRect, MAX_MASK_WORDS, Mask, MaskSet, MaskShape, MaskTooLarge, SpriteDef};

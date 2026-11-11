@@ -15,6 +15,7 @@
 mod art;
 mod audio;
 mod bindings;
+mod card;
 mod hud;
 mod import;
 mod input;
@@ -61,6 +62,8 @@ struct Args {
     retry: retry::RetryArgs,
     #[command(flatten)]
     pause: pause::PauseArgs,
+    #[command(flatten)]
+    card: card::preview::CardArgs,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -98,6 +101,15 @@ fn main() -> ExitCode {
             args.screen.window,
             ratio,
         );
+        return ExitCode::SUCCESS;
+    }
+    if let Some(variant) = args.card.card_preview {
+        let ratio = args
+            .screen
+            .ratio
+            .as_deref()
+            .and_then(|r| screen::parse_ratio(r).ok().flatten());
+        card::preview::run(variant, args.view.screenshot, args.screen.window, ratio);
         return ExitCode::SUCCESS;
     }
     // Clap requires the package unless `--ui-gallery`, `--bind` or `--show-bindings` is given;

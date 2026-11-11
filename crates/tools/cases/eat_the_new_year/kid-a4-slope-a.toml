@@ -1,0 +1,28 @@
+# Written by hand for #312: the recorder's --gml only appends logging actions (object_event_add),
+# which change no variable the game reads (traces/eat-the-new-year/kid-a4-slope.md).
+# Recorder: --object player --room room100 --x 262 --y 480 --at 2 --from 2
+source = "eat-the-new-year/kid-a4-slope-a"
+kind = "diff"
+open = "the converted physics.toml has no slope rows yet (research#127); with eat-the-new-year-physics.toml it diffs clean"
+start = { room = "room_1", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "model"
+seed = 0
+setup = [
+  { frame = 2, target = "kid", set = { x = 262.0, xprevious = 262.0, y = 480.0, yprevious = 480.0 } },
+]
+ignore = ["id", "sprite_index", "sprite_name", "global.evlog", "h"]
+notes = [
+  "--x/--y: the recorder creates the object when none exists; setup only moves one",
+  "global.evlog is the recorder's event log; h is the kid's walk direction, not probed yet",
+]
+
+[vars]
+
+[unprobed]
+
+[rooms]
+"room_1" = "room100"
