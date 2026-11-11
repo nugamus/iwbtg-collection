@@ -1493,6 +1493,7 @@ impl<'a> Loader<'a> {
                 }
             };
             def.no_restart = f.no_restart;
+            def.djump_grants_tjump = f.djump_grants_tjump;
             def.file_speed = match &f.file_speed {
                 Some(s) => *s.get_ref(),
                 None => match self
