@@ -25,6 +25,7 @@ fn sim() -> (Sim, RoomId) {
         seed: 1,
         dll_mode: DllMode::Stub,
         mode: iwbtg_sim::stripped::PlayMode::Original,
+        map: None,
     };
     (Sim::new(Arc::new(def), options).expect("sim starts"), room)
 }

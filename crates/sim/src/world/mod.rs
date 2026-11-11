@@ -80,6 +80,10 @@ pub struct World {
     /// goes on differently in the other mode (cut rooms, kinds, instances).
     #[serde(default)]
     pub mode: PlayMode,
+    /// The map the run plays, an index into `GameDef::maps` (`SimOptions::map`, #505): its
+    /// timing chain and ranked start. Hashed: two maps' runs never share a state hash.
+    #[serde(default)]
+    pub map: u16,
     /// A trace setup action ran (plan 10.4). Hashed, so a run that used setup never matches a
     /// clean verification.
     pub setup_applied: bool,
@@ -119,6 +123,7 @@ impl World {
             output: Vec::new(),
             status: SimStatus::Running,
             mode: PlayMode::Original,
+            map: 0,
             setup_applied: false,
             grid: Grid::default(),
             room_requests: 0,

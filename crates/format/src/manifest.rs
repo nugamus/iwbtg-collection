@@ -138,7 +138,7 @@ pub struct Manifest {
 }
 
 /// Id of the one map of a package without `[[maps]]`.
-pub const DEFAULT_MAP_ID: &str = "main";
+pub const DEFAULT_MAP_ID: &str = iwbtg_sim::def::DEFAULT_MAP_ID;
 
 /// One `[[maps]]` entry (docs/format/v0.md, Maps). Timing keys it leaves out come from
 /// `[timing]`.

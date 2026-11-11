@@ -1,7 +1,7 @@
 //! Ranked (stripped) mode: the run's play mode and the package's `[stripped]` table resolved to
 //! ids (docs/format/v0.md, Stripped mode; docs/product.md, Two ways to play each game; #561).
 //!
-//! A [`PlayMode::Stripped`] run starts at [`StrippedDef::start`] with its globals set
+//! A [`PlayMode::Stripped`] run starts at its map's start (`GameDef::map_start`) with its globals set
 //! (`room::start_game`), sends every room change to a cut room to its `to` room, and leaves out
 //! cut kinds' placed instances and room `spawn` actions and cut placed instances (the room
 //! change sequence, `room.rs`). A [`PlayMode::Original`] run ignores all of it.
@@ -56,12 +56,9 @@ impl PlayMode {
 /// a stripped run then starts in `GameDef::new_game_room` and nothing is cut.
 #[derive(Clone, PartialEq, Debug, Default)]
 pub struct StrippedDef {
-    /// `[stripped].start`: the ranked start point the sim uses.
+    /// `[stripped].start`. A run starts at its map's start (`MapDef::start`, this one merged
+    /// with the map's `stripped_start`); this one only when `GameDef::maps` is empty.
     pub start: RankedStart,
-    /// Each map's start, `stripped_start` merged over `[stripped].start` key by key (globals by
-    /// name), by map id; one entry `main` for a package without `[[maps]]`. The sim does not pick
-    /// a map yet (#505); until then it starts at [`StrippedDef::start`].
-    pub map_starts: BTreeMap<String, RankedStart>,
     /// Cut rooms: any room change to the key goes to the value instead.
     pub cut_rooms: BTreeMap<RoomId, RoomId>,
     /// Cut kinds: their placed instances and room `spawn` actions are left out.
