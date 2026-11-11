@@ -1,6 +1,7 @@
 #:schema ../schema/v0/physics.schema.json
 # poronkusema (family A1, kid/A1.md "poronkusema"): rely's kid plus nanameblock (class `slope`),
-# whose own collision event finds a rise and moves 3 px, and an End Step downhill snap.
+# whose own collision event finds a rise and moves 3 px, an End Step downhill snap, and a single
+# jump that also counts a slope 1 px below (playerJump).
 preset = "A1"
 
 [events]
@@ -12,6 +13,9 @@ collisions = [
   { with = "platform", run = "platform_standard" },
   { with = "killer", run = "kill" },
 ]
+
+[jump]
+ground_classes = ["block", "slope"]
 
 [slope]
 downhill = "por"

@@ -392,12 +392,6 @@ pub(crate) fn frozen2(ctx: &Ctx, s: &KidState) -> bool {
     s.frozen2 || ctx.w.engine.kid.frozen2
 }
 
-/// Step action 3, steps 1-4 (A1; slip blocks are `[ice]`, WP5c).
-///
-/// `h` is right, else minus left, both read (right first) the way `input.walk` says; frozen
-/// forces 0. Facing changes to `h` unless the right vine distance is exactly 1 or the left vine
-/// distance is 1 or less; `hspeed` is set only when the direction is not blocked by a vine
-/// (else it keeps its old value and the sprite stays).
 /// Plays a kid sound of the profile's `[sounds]` (nothing when the game has none for the role).
 pub(crate) fn play_sound(ctx: &mut Ctx, id: Option<crate::def::SoundId>) -> Result<(), SimError> {
     match id {
@@ -406,14 +400,11 @@ pub(crate) fn play_sound(ctx: &mut Ctx, id: Option<crate::def::SoundId>) -> Resu
     }
 }
 
-fn walk(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
-    let def = ctx.def;
-    let p = &def.physics;
-    let s = state(ctx, me)?;
-    if frozen2(ctx, &s) {
-        return Ok(());
-    }
-    let (right, left) = match p.input.walk {
+/// The Step's walking direction `h`: right, else minus left, both read (right first) the way
+/// `input.walk` says (keys swapped for a reversed family B kid); frozen forces 0. A direct read
+/// consumes its latch, so call it once per Step.
+fn walk_dir(ctx: &mut Ctx, s: &KidState) -> i8 {
+    let (right, left) = match ctx.def.physics.input.walk {
         WalkRead::DirectLatch => {
             let r = ctx.w.input.direct(Action::Right);
             let l = ctx.w.input.direct(Action::Left);
@@ -422,21 +413,38 @@ fn walk(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
         WalkRead::Sampled => (ctx.w.input.held(Action::Right), ctx.w.input.held(Action::Left)),
     };
     // Reversed (family B): the keys swap, "L reads the right key and R the left key".
-    let (right, left) = if keys_swapped(ctx, &s) {
+    let (right, left) = if keys_swapped(ctx, s) {
         (left, right)
     } else {
         (right, left)
     };
-    let mut h: i32 = if right {
+    if s.frozen || ctx.w.engine.kid.frozen {
+        0
+    } else if right {
         1
     } else if left {
         -1
     } else {
         0
-    };
-    if s.frozen || ctx.w.engine.kid.frozen {
-        h = 0;
     }
+}
+
+/// Step action 3, steps 1-4 (A1; slip blocks are `[ice]`, WP5c).
+///
+/// `h` is [`walk_dir`]. Facing changes to `h` unless the right vine distance is exactly 1 or the
+/// left vine distance is 1 or less; `hspeed` is set only when the direction is not blocked by a
+/// vine (else it keeps its old value and the sprite stays).
+fn walk(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
+    let def = ctx.def;
+    let p = &def.physics;
+    let s = state(ctx, me)?;
+    if frozen2(ctx, &s) {
+        return Ok(());
+    }
+    let h8 = walk_dir(ctx, &s);
+    // `h` stays an instance variable after the Step (eat-the-new-year's slope event reads it).
+    state_mut(ctx, me)?.ext.walk_h = h8;
+    let h = i32::from(h8);
     // A3 (`vine.walk_ignores_vines`): no vine rule in walking; far means "no vine".
     let (dr, dl) = if p.vine.walk_ignores_vines {
         (far(None), far(None))
