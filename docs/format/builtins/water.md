@@ -12,8 +12,11 @@ Collision with either kid (one event per kid). In this order: `fall_cap`, then `
 | `release_same_tick` | bool | false | When Jump was released this tick, runs the kid's variable-jump release now (`kid::api::run_jump_release`; WAN water, ANI mugenjump, RBF object945). |
 | `air_jump_speed` | `fixed_7`, `kid_jump2` | `fixed_7` | The air jump speed: 7, or the kid's second jump speed. |
 | `area_left`, `area_right`, `area_top`, `area_bottom` | real | none | NY water: all four, or none. The water has no collision event; each Step, every kid whose origin is strictly inside (`left < x < right`, `top < y < bottom`) gets the same effects. |
+| `angle_step` | real | 0 | Added to `image_angle` every Step, with no wrap (showdown hidariSuityuu02 `1`, migiSuityuu02 `-1`). A non-zero value gives the kind a Step event; the turn comes before the `area` test. Their Create `image_angle = 1` is written as the instance's `angle = 1`, not a param. |
+| `destroy_outside_room` | bool | false | Outside Room destroys the instance (showdown mizu01: its run-time copies from object879 and object924 drift out of the room). |
 | `ground_jump` | bool | false | Accepted. The full jump from 1 px above the water is the kid's: it tests the class (`water1` allows it, `water2` and `water3` do not), set by the loader. |
 
 OPEN, not done:
+- A water turned off the quarter turns can't collide yet: the sim refuses a mask at an angle that is not a multiple of 90 (C3; research#16, #630), so a spinning water with a sprite stops the run the first time its mask is placed. showdown room044 needs it.
 - NY's `area` edge handling is untested in the recorder (kid-a4-water stayed inside).
 - The double-jump sound is the client's.

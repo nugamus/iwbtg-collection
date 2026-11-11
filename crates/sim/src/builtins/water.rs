@@ -27,6 +27,18 @@
 //! - `cur_jumps = n` (kaenbyou objWater2: 2): `kid::api::set_cur_jumps`.
 //! - `release_same_tick = true` (WAN water, ANI mugenjump, RBF object945): when Jump was released
 //!   this tick the kid's variable-jump release runs now (`kid::api::run_jump_release`).
+//!
+//! Showdown's spinning and moving water (kid/A3.md, "Per-game differences: showdown", Water):
+//!
+//! - `angle_step` (hidariSuityuu02 `1`, migiSuityuu02 `-1`): each Step adds it to `image_angle`,
+//!   with no wrap. The Create `image_angle = 1` is the instance's `angle`, not a param. A kind
+//!   with `angle_step` gets a Step event; in it the angle turns before the `area` test.
+//! - `destroy_outside_room` (mizu01 Outside Room): the instance is destroyed once its box is
+//!   completely outside the room (the run-time copies from object879 and object924 drift out).
+//!
+//! The spinning water's collision needs its precise mask at any angle, which the sim rejects
+//! (C3, `collide/xform.rs`; research#16, #630): a turned water with a sprite stops the run with
+//! `Unsupported` the first time its mask is placed.
 
 use serde::{Deserialize, Serialize};
 
@@ -47,6 +59,16 @@ const AIR_SPEED: &[&str] = &["fixed_7", "kid_jump2"];
 const AREA: [&str; 4] = ["area_left", "area_right", "area_top", "area_bottom"];
 
 const SPECS: &[ParamSpec] = &[
+    ParamSpec {
+        name: "angle_step",
+        ty: ParamType::Real,
+        required: false,
+    },
+    ParamSpec {
+        name: "destroy_outside_room",
+        ty: ParamType::Bool,
+        required: false,
+    },
     ParamSpec {
         name: "cur_jumps",
         ty: ParamType::Real,
@@ -129,6 +151,10 @@ pub struct WaterState {
     pub cur_jumps: Option<u8>,
     /// A Jump release this tick cuts the jump now.
     pub release_same_tick: bool,
+    /// Added to `image_angle` every Step (0: none).
+    pub angle_step: Real,
+    /// Outside Room destroys the instance.
+    pub destroy_outside: bool,
 }
 
 /// The params this built-in accepts (`builtins::param_specs` routes here).
@@ -136,10 +162,17 @@ pub fn param_specs() -> &'static [ParamSpec] {
     SPECS
 }
 
-/// What a kind with this base handles: the kid touching it.
+/// What a kind with this base handles: the kid touching it (or Step with `area`), Step with a
+/// non-zero `angle_step`, Outside Room with `destroy_outside_room`.
 pub fn event_set(kind: &KindDef) -> EventSet {
-    let mut set = EventSet::default();
-    if AREA.iter().any(|n| kind.params.0.contains_key(*n)) {
+    let p = &kind.params.0;
+    let mut set = EventSet {
+        outside_room: matches!(p.get("destroy_outside_room"), Some(ParamValue::Bool(true))),
+        // gm-compare: ok (a param of 0 means no turn, not a GML test)
+        step: matches!(p.get("angle_step"), Some(ParamValue::Real(v)) if v.get() != 0.0),
+        ..EventSet::default()
+    };
+    if AREA.iter().any(|n| p.contains_key(*n)) {
         set.step = true;
     } else {
         set.collisions.push(KIDS);
@@ -187,6 +220,8 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
         cur_jumps,
         release_same_tick: param_bool(params, "release_same_tick")?.unwrap_or(false),
         kid_jump2: param_enum(params, "air_jump_speed", AIR_SPEED)? == Some("kid_jump2"),
+        angle_step: param_real(params, "angle_step")?.unwrap_or(Real::ZERO),
+        destroy_outside: param_bool(params, "destroy_outside_room")?.unwrap_or(false),
     }))
 }
 
@@ -218,7 +253,16 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
         return Ok(Flow::Continue);
     };
     let s = s.clone();
+    if matches!(ev, EventKind::Step)
+        // gm-compare: ok (a param of 0 means no turn, not a GML test)
+        && s.angle_step.get() != 0.0
+        && let Some(inst) = ctx.w.get_mut(me)
+    {
+        let a = inst.img.angle() + s.angle_step;
+        inst.img.set_angle(a)?;
+    }
     match (ev, s.area) {
+        (EventKind::OutsideRoom, _) if s.destroy_outside => Ok(ctx.destroy(me)),
         (EventKind::Collision { with, other }, None) if with.intersects(KIDS) => affect(ctx, &s, *other),
         (EventKind::Step, Some((left, right, top, bottom))) => {
             let kids: Vec<InstId> = ctx
