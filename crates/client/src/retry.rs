@@ -85,6 +85,13 @@ fn key(keys: Res<ButtonInput<KeyCode>>, mut retry: ResMut<Retry>) {
     }
 }
 
+/// Asks for a quick-retry on the next frame (the pause menu's Restart run).
+pub(crate) fn request(world: &mut World) {
+    if let Some(mut retry) = world.get_resource_mut::<Retry>() {
+        retry.pending = Some(Why::Key);
+    }
+}
+
 /// Starts the run again: the view's new sim, then silence, then the mods' run state.
 fn apply(world: &mut World) {
     let why = {
@@ -100,6 +107,7 @@ fn apply(world: &mut World) {
             crate::audio::reset(world);
             crate::mods::reset(world);
             crate::stats::reset(world);
+            crate::pause::reset(world);
             let why = match why {
                 Some(Why::Death) => "auto-retry",
                 _ => "quick-retry",

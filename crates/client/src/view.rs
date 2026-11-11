@@ -344,6 +344,7 @@ fn setup(
     mut images: ResMut<Assets<Image>>,
     pending: Res<PendingImages>,
     room: Res<RoomSize>,
+    screenshot: Option<Res<ScreenshotTo>>,
 ) {
     // The room always fits the window, whatever its size: letterboxed, never cropped.
     commands.spawn((
@@ -355,7 +356,8 @@ fn setup(
         TextColor(Color::srgb(1.0, 1.0, 0.4)),
         Anchor::TOP_LEFT,
         Transform::from_xyz(-room.0.x / 2.0 + 4.0, room.0.y / 2.0 - 4.0, 1000.0),
-        if crate::settings::get().overlay {
+        // A `--screenshot` check never draws the overlay, whatever the setting.
+        if crate::settings::get().overlay && screenshot.is_none() {
             Visibility::Inherited
         } else {
             Visibility::Hidden

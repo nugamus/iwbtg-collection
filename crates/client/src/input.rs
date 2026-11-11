@@ -68,6 +68,12 @@ impl Collector {
         }
     }
 
+    /// A press of `action` for the next frame, as if one of its keys went down and up again
+    /// before the tick (the pause menu's Retry from save presses Restart).
+    pub fn press_action(&mut self, action: Action) {
+        self.pressed |= action.bit();
+    }
+
     /// A key went up.
     pub fn release(&mut self, key: u8) {
         self.down[usize::from(key)] = false;
