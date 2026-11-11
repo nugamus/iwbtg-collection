@@ -764,12 +764,12 @@ mod tests {
 
     #[test]
     fn rejects_overlong_varint() {
-        // replay_format 4 is the single byte 0x04 right after the magic; 0x84 0x00 also reads
-        // as 4 but is not what encode writes.
+        // replay_format 5 is the single byte 0x05 right after the magic; 0x84 0x00 also reads
+        // as 5 but is not what encode writes.
         let bytes = small().encode().unwrap();
-        assert_eq!(bytes[4], 0x04);
+        assert_eq!(bytes[4], 0x05);
         let mut long = bytes[..4].to_vec();
-        long.extend([0x84, 0x00]);
+        long.extend([0x85, 0x00]);
         long.extend(&bytes[5..]);
         assert_eq!(Replay::decode(&long), Err(ReplayError::NotCanonical));
     }
