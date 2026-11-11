@@ -158,6 +158,12 @@ pub struct MapStats {
     pub boards: BTreeMap<String, Board>,
 }
 
+/// The key of a map in the book: `<game id>/<map id>` (`Sim::map_id`; `main` for a package
+/// without `[[maps]]`).
+pub fn map_key(game: &str, map: &str) -> String {
+    format!("{game}/{map}")
+}
+
 /// Account totals for the player card (#496).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Totals {
@@ -172,7 +178,7 @@ pub struct Totals {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Book {
     pub version: u32,
-    /// By map id. Until a game's maps get their own ids (#505) a map id is the game id.
+    /// By [`map_key`]: map ids are only unique within a game, so the key is `<game id>/<map id>`.
     #[serde(default)]
     pub maps: BTreeMap<String, MapStats>,
 }
@@ -328,25 +334,29 @@ mod tests {
     #[test]
     fn totals_count_games_not_maps() {
         let mut book = Book::default();
-        let a = book.map_mut("game-a/easy", "game-a", 50);
+        let a = book.map_mut(&map_key("game-a", "easy"), "game-a", 50);
         a.clears = 1;
         a.add_deaths(0, 4);
         a.play_seconds = 10.0;
-        let a2 = book.map_mut("game-a/hard", "game-a", 50);
+        let a2 = book.map_mut(&map_key("game-a", "hard"), "game-a", 50);
         a2.clears = 2;
         a2.add_deaths(2, 1);
-        book.map_mut("game-b", "game-b", 50).add_deaths(1, 7);
+        book.map_mut(&map_key("game-b", "main"), "game-b", 50)
+            .add_deaths(1, 7);
         let t = book.totals();
         assert_eq!(t.games_cleared, 1);
         assert_eq!(t.deaths, 12);
         assert_eq!(t.clears, 3);
-        assert_eq!(book.map("game-a/hard").unwrap().segment_deaths, vec![0, 0, 1]);
+        assert_eq!(
+            book.map(&map_key("game-a", "hard")).unwrap().segment_deaths,
+            vec![0, 0, 1]
+        );
     }
 
     #[test]
     fn the_file_round_trips_and_a_newer_one_is_refused() {
         let mut book = Book::default();
-        let m = book.map_mut("demo", "demo", 50);
+        let m = book.map_mut(&map_key("demo", "main"), "demo", 50);
         m.add_deaths(1, 2);
         m.boards
             .entry(board_key(false, "NM"))
@@ -354,7 +364,10 @@ mod tests {
             .add(run(&[10, 20], 2));
         let text = book.to_text();
         assert_eq!(Book::parse(&text).unwrap(), book);
-        assert!(text.contains("[maps.demo.boards.\"original/NM\"]"), "{text}");
+        assert!(
+            text.contains("[maps.\"demo/main\".boards.\"original/NM\"]"),
+            "{text}"
+        );
         let newer = text.replace("version = 1", "version = 2");
         assert!(Book::parse(&newer).unwrap_err().contains("version 2"));
         assert!(Book::parse("version = 1\n").unwrap().maps.is_empty());

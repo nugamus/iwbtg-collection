@@ -17,7 +17,7 @@ use iwbtg_sim::room::StartPoint;
 use iwbtg_sim::stripped::PlayMode;
 
 #[allow(unused_imports, reason = "the screens read these (#494, #496, #151)")]
-pub use book::{Board, Book, MapStats, Recorded, Run, TOP_RUNS, Totals, board_key};
+pub use book::{Board, Book, MapStats, Recorded, Run, TOP_RUNS, Totals, board_key, map_key};
 use track::{Event, Observation, Tracker};
 
 use crate::storage::{self, Store};
@@ -34,7 +34,7 @@ const FLUSH_SECONDS: f32 = 30.0;
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Session {
     pub deaths: u64,
-    /// Per map id, per segment.
+    /// Per [`map_key`], per segment.
     pub segment_deaths: std::collections::BTreeMap<String, Vec<u32>>,
 }
 
@@ -253,8 +253,7 @@ fn watch(game: NonSend<Game>, fixed: Res<Time<Fixed>>, mut stats: ResMut<Stats>)
         let opts = sim.options();
         let ranked = opts.mode == PlayMode::Stripped;
         Current {
-            // Until a game's maps have their own ids (#505) the map is the game.
-            map: def.id.clone(),
+            map: map_key(&def.id, sim.map_id()),
             game: def.id.clone(),
             tick_rate: def.tick_rate,
             board: board_key(ranked, &stats.mods.codes()),
@@ -334,7 +333,7 @@ mod tests {
             world.run_system_once(watch).unwrap();
             ticks += 1;
         }
-        let id = pkg.def.id.clone();
+        let id = map_key(&pkg.def.id, "main");
         let stats = world.resource::<Stats>();
         let map = stats.book.map(&id).unwrap();
         assert_eq!(map.deaths, 1);
