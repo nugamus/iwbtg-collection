@@ -3,7 +3,7 @@
 # Frames 0..1 ran before the room jump (boot rooms); they are not compared.
 source = "showdown/a3-t20-b"
 kind = "probe_read"
-open = "global.sv* are save1 byte dumps with no probe form yet (#587): map them to save.* columns in [vars], then drop this line"
+open = "the room-entry save runs before the kid exists and saves x 0, y 0; the package has no room creation code (#600). First difference: frame 3 global.sv.x, original 0.0, ours 241.0"
 start = { room = "room_2", difficulty = 0 }
 at = 2
 first_frame = 0
@@ -13,11 +13,20 @@ dll_mode = "model"
 seed = 0
 setup = []
 ignore = ["id", "sprite_index", "sprite_name"]
+notes = [
+  "global.sv*: save1 read back as bytes (A3.md saveGame: room, x, y as 3 base-100 bytes, difficulty, 8 item/bossitem pairs); split decodes x, y and difficulty, the 16 item bytes are skipped (all 0 here)",
+]
+latch = { "global.sv.x" = [3], "global.sv.y" = [3], "global.sv.difficulty" = [3] }
+split = { "global.sv" = ["room:3", "x:3", "y:3", "difficulty:1", "_:16"] }
 
 [vars]
+"global.sv.x" = "save.x"
+"global.sv.y" = "save.y"
+"global.sv.difficulty" = "save.difficulty"
 "instance_number(player)" = "instance_number(kid)"
 
 [unprobed]
+"global.sv.room" = "the original's room index; ours is a room id"
 "xstart" = "no probe field for `xstart` (OPEN)"
 "ystart" = "no probe field for `ystart` (OPEN)"
 

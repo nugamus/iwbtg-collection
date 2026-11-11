@@ -36,7 +36,10 @@ impl Plugin for UiKitPlugin {
             motion::plugin,
             widgets::plugin,
             icons::plugin,
-        ))
-        .add_plugins(backdrop::BackdropPlugin);
+        ));
+        // The game screen may have added it already.
+        if !app.is_plugin_added::<backdrop::BackdropPlugin>() {
+            app.add_plugins(backdrop::BackdropPlugin);
+        }
     }
 }

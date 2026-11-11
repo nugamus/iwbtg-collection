@@ -84,6 +84,13 @@ pub enum EngineVar {
     Paused,
     /// `room_speed`.
     RoomSpeed,
+    /// `global.key_left`: the latched Left vine-key flag (`KidGlobalsExt::key_left`; showdown
+    /// `global.button01`). 0 in games without `input.vine_keys = "latched_flags"`.
+    KeyLeft,
+    /// `global.key_right`: the latched Right flag (showdown `global.button02`).
+    KeyRight,
+    /// `global.key_jump`: the latched Jump flag (showdown `global.button03`).
+    KeyJump,
 }
 
 impl EngineVar {
@@ -100,6 +107,9 @@ impl EngineVar {
             "reverse" => EngineVar::Reverse,
             "grav" => EngineVar::Grav,
             "paused" => EngineVar::Paused,
+            "key_left" => EngineVar::KeyLeft,
+            "key_right" => EngineVar::KeyRight,
+            "key_jump" => EngineVar::KeyJump,
             _ => return None,
         })
     }
@@ -373,6 +383,9 @@ fn engine_value(w: &World, v: EngineVar) -> trace::Value {
         EngineVar::Grav => truth(g.kid.grav),
         EngineVar::Paused => truth(w.iter_alive().any(|i| crate::builtins::world::is_paused(w, i.id))),
         EngineVar::RoomSpeed => real(w.room_speed),
+        EngineVar::KeyLeft => truth(g.kid.ext.key_left),
+        EngineVar::KeyRight => truth(g.kid.ext.key_right),
+        EngineVar::KeyJump => truth(g.kid.ext.key_jump),
     }
 }
 

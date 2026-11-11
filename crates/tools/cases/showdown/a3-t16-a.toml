@@ -2,7 +2,6 @@
 # Recorder: --object player --room room022 --at 2 --from 2 --x 620 --y 340
 source = "showdown/a3-t16-a"
 kind = "diff"
-open = "needs the converter showdown physics keys and the LvyR vine kinds (research#114); first difference with the physics keys only: frame 5 y (no vine slide)"
 start = { room = "room_22", difficulty = 0 }
 at = 2
 first_frame = 2

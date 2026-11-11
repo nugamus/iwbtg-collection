@@ -1,6 +1,7 @@
-//! The screen: integer scale, fullscreen ratios, windowed presets and the backdrop behind the game
-//! (docs/product.md, Look and screen). The game keeps its native size; this only decides how big
-//! one game pixel is on the monitor and what fills the rest.
+//! The screen: fullscreen ratios, windowed presets, the game camera and the backdrop behind the
+//! game (docs/product.md, Look and screen). The game keeps its native size; this only decides how
+//! big one game pixel is on the monitor (`hud::layout`, which also places the HUD columns) and what
+//! fills the rest.
 //!
 //! There is no settings screen yet (#53), so the choices are flags (`--fullscreen`, `--ratio`,
 //! `--window`) and keys: F11 fullscreen, F10 next ratio, F9 next windowed size. Each choice is
@@ -17,6 +18,8 @@ use iwbtg_format::manifest::Manifest;
 use iwbtg_sim::def::RoomId;
 
 use crate::art::ArtFiles;
+use crate::hud::layout;
+use crate::hud::{HudLayout, HudOptions};
 use crate::package::decode_png;
 use crate::settings::{self, Settings};
 use crate::ui::backdrop::{self, Backdrop, BackdropPlugin};
@@ -71,7 +74,7 @@ pub struct ScreenArgs {
     #[arg(long)]
     pub fullscreen: bool,
     /// The shape of the area the game may use: native, 4:3, 16:9, 16:10, 21:9 or 32:9 (F10 cycles).
-    /// The game is scaled by whole steps inside it; the rest is a blurred copy of the background.
+    /// The game and the HUD are laid out inside it; the rest is the blurred backdrop.
     /// Default: the saved choice, else native.
     #[arg(long, value_name = "RATIO")]
     pub ratio: Option<String>,
@@ -119,21 +122,17 @@ pub fn configure(args: &ScreenArgs) -> Result<(), String> {
     Ok(())
 }
 
-/// The scale of one game pixel in screen pixels, and whether the picture needs the half-pixel
-/// shift that keeps it centred on a whole pixel. `ratio` limits the area the game may use to the
-/// largest rectangle of that ratio that fits the window. At least 1 when the window is big
-/// enough; a window smaller than the game shrinks it (not crisp, but not cut off).
-pub fn layout(window: (u32, u32), ratio: Option<(u32, u32)>, room: (u32, u32)) -> (f32, (bool, bool)) {
+/// The part of the window the game and the HUD may use, in physical px: the largest rectangle
+/// of `ratio` that fits, centred (the whole window for `None`).
+pub fn area(window: (u32, u32), ratio: Option<(u32, u32)>) -> Rect {
     let (ww, wh) = (window.0.max(1) as f32, window.1.max(1) as f32);
     let (sw, sh) = match ratio {
         Some((rw, rh)) if ww * rh as f32 >= wh * rw as f32 => (wh * rw as f32 / rh as f32, wh),
         Some((rw, rh)) => (ww, ww * rh as f32 / rw as f32),
         None => (ww, wh),
     };
-    let fit = (sw / room.0 as f32).min(sh / room.1 as f32);
-    let scale = if fit >= 1.0 { fit.floor() } else { fit };
-    let odd = |win: u32, size: u32| (win as f32 - scale * size as f32).rem_euclid(2.0) > 0.5;
-    (scale, (odd(window.0, room.0), odd(window.1, room.1)))
+    let min = Vec2::new(((ww - sw) / 2.0).floor(), ((wh - sh) / 2.0).floor());
+    Rect::from_corners(min, min + Vec2::new(sw.floor(), sh.floor()))
 }
 
 /// The current choices.
@@ -171,6 +170,8 @@ impl Plugin for ScreenPlugin {
         })
         .insert_resource(StartSize(o.window))
         .init_resource::<Letterbox>()
+        .init_resource::<HudOptions>()
+        .init_resource::<HudLayout>()
         .add_systems(
             Update,
             (keys, apply, room_panel, keep_panel, game_backdrop)
@@ -190,8 +191,14 @@ fn keys(
     mut start: ResMut<StartSize>,
     mut backdrop: ResMut<Backdrop>,
     mut window: Single<&mut Window, With<PrimaryWindow>>,
+    shot: Option<Res<crate::view::ScreenshotTo>>,
 ) {
     if let Some((w, h)) = start.0.take() {
+        // A `--screenshot` check lays out at one physical px per logical px, so the picture is
+        // the same on every machine whatever its display scaling (like the gallery).
+        if shot.is_some() {
+            window.resolution.set_scale_factor_override(Some(1.0));
+        }
         window.resolution.set_physical_resolution(w, h);
     }
     // Stand-in for the blur slider of the settings screen (#53).
@@ -221,16 +228,21 @@ fn ratio_name(r: Option<(u32, u32)>) -> String {
     r.map_or("native".to_string(), |(w, h)| format!("{w}:{h}"))
 }
 
-/// Sets the window mode and the camera: whole-pixel scale, centred. The game is scaled to fit the
-/// view (the whole room when it has none). When the view shows less than the room, or is turned,
-/// the camera is clipped to the view's rectangle so nothing of the room shows beside it.
-fn apply(
+/// Sets the window mode, lays out the game and the HUD columns (`hud::layout`) and puts the game
+/// camera on the game's rectangle: the camera is clipped to it (`Camera.viewport`) and scaled so
+/// the view fills it, so nothing of the room shows beside the view.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "one Bevy system reading what the layout needs"
+)]
+pub(crate) fn apply(
     mut screen: ResMut<Screen>,
-    room: Res<RoomSize>,
     view: Res<ViewRect>,
     mut window: Single<&mut Window, With<PrimaryWindow>>,
     mut camera: Single<(&mut Projection, &mut Camera), With<GameCamera>>,
     backdrop: Res<Backdrop>,
+    hud: Res<HudOptions>,
+    mut placed: ResMut<HudLayout>,
 ) {
     let mode = if screen.fullscreen {
         WindowMode::BorderlessFullscreen(MonitorSelection::Current)
@@ -245,40 +257,46 @@ fn apply(
         window.resolution.physical_height(),
     );
     let ratio = RATIOS[screen.ratio];
-    let (scale, (odd_x, odd_y)) = layout(size, ratio, (view.w as u32, view.h as u32));
-    let clip = view.clips(room.0);
+    let dpi = window.resolution.scale_factor();
+    let l = layout::compute(area(size, ratio), dpi, Vec2::new(view.w, view.h), hud.0);
+    if placed.0 != l {
+        placed.0 = l;
+    }
     let (projection, cam) = &mut *camera;
-    cam.viewport = clip.then(|| {
-        let (w, h) = (
-            ((view.w * scale).round() as u32).max(1),
-            ((view.h * scale).round() as u32).max(1),
-        );
-        bevy::camera::Viewport {
-            physical_position: UVec2::new(size.0.saturating_sub(w) / 2, size.1.saturating_sub(h) / 2),
-            physical_size: UVec2::new(w.min(size.0), h.min(size.1)),
-            ..default()
-        }
-    });
+    let (pos, along) = (l.game.min.max(Vec2::ZERO), l.game.size().max(Vec2::ONE));
+    let want = bevy::camera::Viewport {
+        physical_position: UVec2::new(pos.x as u32, pos.y as u32)
+            .min(UVec2::new(size.0, size.1).saturating_sub(UVec2::ONE)),
+        physical_size: UVec2::new(
+            (along.x as u32).min(size.0.saturating_sub(pos.x as u32)).max(1),
+            (along.y as u32).min(size.1.saturating_sub(pos.y as u32)).max(1),
+        ),
+        ..default()
+    };
+    if cam
+        .viewport
+        .as_ref()
+        .map(|v| (v.physical_position, v.physical_size))
+        != Some((want.physical_position, want.physical_size))
+    {
+        cam.viewport = Some(want);
+    }
     if let Projection::Orthographic(o) = &mut **projection {
         // One world unit is `scale` physical pixels.
         o.scaling_mode = ScalingMode::WindowSize;
-        o.scale = window.resolution.scale_factor() / scale;
-        // Half a pixel when the leftover is odd, so game pixels sit on screen pixels.
-        let shift = |odd: bool, px: u32| if odd { 0.5 / px.max(1) as f32 } else { 0.0 };
-        // A clipped camera already sits on whole pixels.
-        o.viewport_origin = if clip {
-            Vec2::splat(0.5)
-        } else {
-            Vec2::new(0.5 + shift(odd_x, size.0), 0.5 - shift(odd_y, size.1))
-        };
+        o.scale = dpi / l.scale;
+        o.viewport_origin = Vec2::splat(0.5);
     }
     let base = screen.title.get_or_insert_with(|| window.title.clone()).clone();
     let title = format!(
-        "{base} [{}x{} px, x{scale}, {}{}, blur {:.0}%]",
+        "{base} [{}x{} px, x{:.2}{}, {}{}, UI {:.0}%, blur {:.0}%]",
         size.0,
         size.1,
+        l.scale,
+        if hud.0.integer { " integer" } else { "" },
         ratio_name(ratio),
         if screen.fullscreen { ", fullscreen" } else { "" },
+        hud.0.ui_scale * 100.0,
         backdrop.blur * 100.0
     );
     if window.title != title {
@@ -364,31 +382,17 @@ fn keep_panel(
 mod tests {
     use super::*;
 
-    const ROOM: (u32, u32) = (800, 608);
-
     #[test]
-    fn the_game_scales_by_whole_steps_and_never_past_the_window() {
-        assert_eq!(layout((800, 608), None, ROOM).0, 1.0);
-        assert_eq!(layout((1600, 1216), None, ROOM).0, 2.0);
-        // 1080p: 608 * 1 fits, 608 * 2 does not.
-        assert_eq!(layout((1920, 1080), None, ROOM).0, 1.0);
-        assert_eq!(layout((2560, 1440), None, ROOM).0, 2.0);
-    }
-
-    #[test]
-    fn a_ratio_limits_the_area_the_game_may_use() {
-        // 32:9 on a 16:9 screen is a strip 1920 x 540, shorter than the game.
-        assert!(layout((1920, 1080), Some((32, 9)), ROOM).0 < 1.0);
-        // 4:3 on 2560 x 1440 is 1920 x 1440: two game widths do not fit (1600), one does.
-        assert_eq!(layout((2560, 1440), Some((4, 3)), ROOM).0, 2.0);
-        assert_eq!(layout((3840, 2160), Some((4, 3)), ROOM).0, 3.0);
-    }
-
-    #[test]
-    fn an_odd_leftover_asks_for_the_half_pixel_shift() {
-        assert_eq!(layout((801, 608), None, ROOM).1, (true, false));
-        assert_eq!(layout((802, 609), None, ROOM).1, (false, true));
-        assert_eq!(layout((800, 608), None, ROOM).1, (false, false));
+    fn a_ratio_limits_the_area_to_its_largest_centred_rectangle() {
+        assert_eq!(area((1920, 1080), None), Rect::new(0.0, 0.0, 1920.0, 1080.0));
+        assert_eq!(
+            area((1920, 1080), Some((4, 3))),
+            Rect::new(240.0, 0.0, 1680.0, 1080.0)
+        );
+        assert_eq!(
+            area((1920, 1080), Some((32, 9))),
+            Rect::new(0.0, 270.0, 1920.0, 810.0)
+        );
     }
 
     #[test]
