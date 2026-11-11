@@ -11,7 +11,7 @@ use super::state::KidState;
 use crate::def::{ParamValue, Params};
 use crate::error::SimError;
 use crate::num::Real;
-use crate::world::{Ctx, Flow, InstId, KindState, Value, World};
+use crate::world::{Ctx, Flow, InstId, Instance, KindState, Value, World};
 
 /// A kid parameter zone's settings (rainbow, showdown; `kid_param_zone` built-in).
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
@@ -127,6 +127,43 @@ pub fn run_jump_release(ctx: &mut Ctx, kid: InstId) -> Result<(), SimError> {
         return Ok(());
     }
     crate::kid::actions::common::cut_jump(ctx, kid)
+}
+
+/// A value trace setup writes to a kid field (plan 9.2).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum KidSetValue {
+    /// A flag (`tjump`, `djump`, `onPlatform`), already reduced to its GM truth.
+    Flag(bool),
+    /// The family B counter `curJumps`.
+    Count(u8),
+}
+
+/// Writes a kid field by its GM name, for trace setup (plan 9.2): the fields [`read_field`]
+/// reads that have a setter here, `tjump` ([`set_triple_jump`]), `djump` ([`set_air_jump`]),
+/// `onPlatform` ([`set_on_platform`]) as flags and `curJumps` ([`set_cur_jumps`]) as a count.
+/// Writes the field alone, like those setters. Errors for an instance that is not a kid, for any
+/// other name (no setter yet), and for a value of the wrong shape (a count for a flag).
+pub fn set_field(inst: &mut Instance, f: &KidField, v: KidSetValue) -> Result<(), SimError> {
+    let KindState::Kid(s) = &mut inst.state else {
+        return Err(SimError::unsupported(format!(
+            "setup of kid field `{}`: instance {} is not a kid",
+            f.name, inst.id.0
+        )));
+    };
+    match (f.name.as_str(), f.index, v) {
+        ("tjump", None, KidSetValue::Flag(b)) => s.tjump = b,
+        ("djump", None, KidSetValue::Flag(b)) => s.djump = b,
+        ("onPlatform", None, KidSetValue::Flag(b)) => s.on_platform = b,
+        ("curJumps", None, KidSetValue::Count(n)) => s.cur_jumps = n,
+        _ => {
+            return Err(SimError::unsupported(format!(
+                "setup of kid field `{}`{}: kid::api has no setter for it",
+                f.name,
+                f.index.map(|i| format!("[{i}]")).unwrap_or_default()
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// Sets the on-platform flag. Does nothing for an instance that is not a kid.

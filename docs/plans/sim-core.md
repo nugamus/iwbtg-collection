@@ -913,7 +913,7 @@ vars = { "alarm[0]" = "alarm0", "player.x" = "kid.x", "player.y" = "kid.y" }
 ignore = ["id", "sprite_index"]
 ```
 
-- `setup` is a fixed vocabulary (set a field of the kid, of the first instance of a kind (a kind names its loader-derived variants too, `save[min_difficulty_removed=2]` is a `save`, as in the probe's `kind.var` reads), or of a named instance; set a global; set a `SaveSlot` field). It replaces `--gml` assignments, `--x` and `--y`. Entries with `frame <= first_frame` run before `start_game` enters the room.
+- `setup` is a fixed vocabulary (set a field of the kid, of the first instance of a kind (a kind names its loader-derived variants too, `save[min_difficulty_removed=2]` is a `save`, as in the probe's `kind.var` reads), or of a named instance; set a global; set a `SaveSlot` field). It replaces `--gml` assignments, `--x` and `--y`. Entries with `frame <= first_frame` run before `start_game` enters the room. Kid fields go through `kid::api::set_field`, which writes the ones `kid::api` has a setter for: the flags `tjump`, `djump` and `onPlatform` (GM truth of the value) and the count `curJumps`; any other kid field is an error.
 - Frame mapping: the row at `first_frame` is the state after the first tick in the room (kaenbyou t-speed-1). Our run treats tick k as frame `first_frame + k`. Inputs come from the `.inputs` file by frame number through the engine key map (`KeyMap`).
 
 ### 9.3 Probe and field registry

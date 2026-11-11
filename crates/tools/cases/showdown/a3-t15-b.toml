@@ -2,7 +2,7 @@
 # Recorder: --object player --room room008 --at 2 --from 2 --x 560 --y 391 (1 --gml)
 source = "showdown/a3-t15-b"
 kind = "diff"
-open = "setup cannot set the kid field tjump yet (#586); also needs research#114"
+open = "needs the converter showdown physics keys (research#114); passes bit for bit on a package with them applied by hand"
 start = { room = "room_8", difficulty = 0 }
 at = 2
 first_frame = 2
