@@ -21,6 +21,7 @@ mod retry;
 mod savefile;
 mod screen;
 mod settings;
+mod stats;
 mod storage;
 mod ui;
 mod view;
@@ -91,6 +92,8 @@ fn main() -> ExitCode {
     let audio = args.audio;
     let run_mods = args.mods.mods;
     let retry = args.retry;
+    // A `--screenshot` check keeps no stats, as it keeps no settings.
+    let keep_stats = args.view.screenshot.is_none();
     eprintln!("{}", mods::describe(run_mods));
     let result = view::run(pkg, args.view, |app, pkg| {
         app.add_plugins((
@@ -100,6 +103,10 @@ fn main() -> ExitCode {
             audio::AudioPlugin::new(&audio, &pkg.files),
             mods::ModsPlugin(run_mods),
             retry::RetryPlugin(retry),
+            stats::StatsPlugin {
+                keep: keep_stats,
+                mods: run_mods,
+            },
         ));
     });
     match result {
