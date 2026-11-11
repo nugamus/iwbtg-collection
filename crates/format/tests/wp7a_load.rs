@@ -1946,3 +1946,182 @@ fn instance_depth_and_visible_are_typed() {
     let errs = tier2_errors(r#"{ kind = "slope", x = 0, y = 0, shape = "rise_left", depth = "deep" }"#);
     assert!(errs.iter().any(|e| e.contains("depth")), "{errs:?}");
 }
+
+// ---- #629: room creation code rows and instance `params`
+
+const ROWS_629: &str = r#"size = [800, 608]
+role = "title"
+on_create = [
+  { do = "set_global", var = "stage", index = { global = "savenum" }, value = 29 },
+  { do = "set_global", var = "stage", index = 2, value = 3 },
+  { do = "set_global", var = "stage", index = { global = "slot_var" }, value = 4 },
+  { do = "move_kid", x = 241, y = 503, when = { difficulty_below = 3 } },
+  { do = "save_game", when = { kid_exists = true } },
+  { do = "save_death_time" },
+  { do = "destroy", kind = "@boss" },
+  { do = "play_sound", sound = "theme" },
+  { do = "loop_sound", sound = "theme" },
+  { do = "stop_sound", sound = "theme" },
+  { do = "spawn", kind = "@boss", x = 0, y = 0, when = { kind_absent = "@boss" } },
+  { do = "load_game", when = { difficulty_below = 1, kid_exists = false } },
+]
+"#;
+
+fn rows_package(rows: &str) -> PackageFiles {
+    package(|f| {
+        set(f, "rooms/title.toml", rows.as_bytes().to_vec());
+        f.push(("sounds/theme.ogg".into(), b"ogg".to_vec()));
+    })
+}
+
+#[test]
+fn on_create_rows_629_load() {
+    use iwbtg_sim::def::{GlobalIndex, RoomWhen, SoundId};
+    let (def, _) = load_ok(&rows_package(ROWS_629), STRICT);
+    let title = def.rooms.iter().find(|r| r.name == "title").unwrap();
+    let (boss, _) = kind_named(&def, "@boss");
+    let slot_var = def.var_names["slot_var"];
+    assert!(
+        !def.var_names.contains_key("stage"),
+        "indexed globals are run-time names"
+    );
+    let theme = SoundId(def.sounds.iter().position(|s| s.name == "theme").unwrap() as u32);
+    let when = |w: RoomWhen, a: RoomAction| RoomAction::When {
+        when: w,
+        action: Box::new(a),
+    };
+    assert_eq!(
+        title.on_create,
+        [
+            RoomAction::SetGlobalIndexed {
+                var: "stage".into(),
+                index: GlobalIndex::Savenum,
+                value: Value::Real(Real::new(29.0)),
+            },
+            RoomAction::SetGlobalIndexed {
+                var: "stage".into(),
+                index: GlobalIndex::Const(2),
+                value: Value::Real(Real::new(3.0)),
+            },
+            RoomAction::SetGlobalIndexed {
+                var: "stage".into(),
+                index: GlobalIndex::Global(slot_var),
+                value: Value::Real(Real::new(4.0)),
+            },
+            when(
+                RoomWhen {
+                    difficulty_below: Some(Real::new(3.0)),
+                    ..RoomWhen::default()
+                },
+                RoomAction::MoveKid {
+                    x: Real::new(241.0),
+                    y: Real::new(503.0),
+                },
+            ),
+            when(
+                RoomWhen {
+                    kid_exists: Some(true),
+                    ..RoomWhen::default()
+                },
+                RoomAction::SaveGame,
+            ),
+            RoomAction::SaveDeathTime,
+            RoomAction::Destroy { kind: boss },
+            RoomAction::PlaySound {
+                sound: theme,
+                looping: false,
+            },
+            RoomAction::PlaySound {
+                sound: theme,
+                looping: true,
+            },
+            RoomAction::StopSound { sound: theme },
+            when(
+                RoomWhen {
+                    kind_absent: Some(boss),
+                    ..RoomWhen::default()
+                },
+                RoomAction::Spawn {
+                    kind: boss,
+                    x: Real::ZERO,
+                    y: Real::ZERO,
+                    params: Default::default(),
+                },
+            ),
+            when(
+                RoomWhen {
+                    difficulty_below: Some(Real::ONE),
+                    kid_exists: Some(false),
+                    kind_absent: None,
+                },
+                RoomAction::LoadGame,
+            ),
+        ]
+    );
+}
+
+#[test]
+fn on_create_rows_629_are_checked() {
+    let bad = |row: &str| {
+        let text = format!("size = [800, 608]\nrole = \"title\"\non_create = [\n  {row},\n]\n");
+        let r = load_report(&rows_package(&text), STRICT);
+        assert!(!r.ok(), "{row} loaded");
+        render(&r)
+    };
+    assert!(bad(r#"{ do = "destroy", kind = "@nobody" }"#).contains("destroy: `@nobody` is not a kind"));
+    assert!(bad(r#"{ do = "play_sound", sound = "nope" }"#).contains("sound `nope` does not exist"));
+    assert!(bad(r#"{ do = "save_game", when = {} }"#).contains("`when` needs"));
+    assert!(bad(r#"{ do = "save_game", when = { kind_absent = "@x" } }"#).contains("is not a kind"));
+    assert!(bad(r#"{ do = "set_global", var = "stage", index = 1.5, value = 1 }"#).contains("whole number"));
+    assert!(bad(r#"{ do = "set_global", var = "stage", index = -1, value = 1 }"#).contains("whole number"));
+    assert!(bad(r#"{ do = "move_kid", x = 1 }"#).contains("y"));
+    assert!(bad(r#"{ do = "save_game", when = { hp_below = 3 } }"#).contains("hp_below"));
+}
+
+/// The base package plus a script-only object `@yuno` placed in stage1 as `entry`.
+fn yuno_package(entry: &str) -> PackageFiles {
+    let order = ORDER.replace("\"playerface\",", "\"playerface\", \"@yuno\",");
+    let stage = STAGE1.replace(
+        r#"{ kind = "@boss", x = 400, y = 200, name = "boss_a" },"#,
+        &format!(
+            "{{ kind = \"@boss\", x = 400, y = 200, name = \"boss_a\" }},
+  {entry},"
+        ),
+    );
+    package(|f| {
+        set(f, "game.toml", manifest(&order, "").into_bytes());
+        set(f, "rooms/stage1.toml", stage.into_bytes());
+        f.push((
+            "objects/yuno.toml".into(),
+            b"script = \"boss\"
+sprite = \"boss\"
+"
+            .to_vec(),
+        ));
+    })
+}
+
+#[test]
+fn instance_params_table_629() {
+    let files = yuno_package(r#"{ kind = "@yuno", x = 0, y = 0, params = { kind = 20 } }"#);
+    let (def, _) = load_ok(&files, STRICT);
+    let (yuno, _) = kind_named(&def, "@yuno");
+    let stage1 = def.rooms.iter().find(|r| r.name == "stage1").unwrap();
+    let placed = stage1.instances.iter().find(|i| i.kind == yuno).unwrap();
+    assert_eq!(
+        placed.params.0.get("kind"),
+        Some(&ParamValue::Real(Real::new(20.0)))
+    );
+    assert!(!placed.params.0.contains_key("params"));
+
+    // `params` holds only names that are instance keys.
+    let r = load_report(
+        &yuno_package(r#"{ kind = "@yuno", x = 0, y = 0, params = { hp = 3 } }"#),
+        STRICT,
+    );
+    assert!(
+        render(&r).contains("write `hp` on the instance"),
+        "{}",
+        render(&r)
+    );
+}

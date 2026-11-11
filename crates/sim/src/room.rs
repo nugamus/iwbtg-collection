@@ -59,7 +59,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::collide::Target;
 use crate::collide::grid::Grid;
-use crate::def::{KindId, RoomAction, RoomDef, RoomId};
+use crate::def::{GlobalIndex, KindId, RoomAction, RoomDef, RoomId, RoomWhen, VarId};
 use crate::error::SimError;
 use crate::events::{self, EventKind, Phase};
 use crate::num::Real;
@@ -69,7 +69,7 @@ use crate::rules::room::{NestedRequest, RoomEndOrder, RoomStartOrder};
 use crate::save::{self, SaveSlot};
 use crate::stripped::PlayMode;
 use crate::view::{View, ViewPort};
-use crate::world::{Ctx, EngineGlobals, Flow, InstId, Instance, SimStatus, SpawnInit, World};
+use crate::world::{Ctx, EngineGlobals, Flow, InstId, Instance, SimStatus, SpawnInit, Value, World};
 
 /// A deferred room change (tick row 15).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -729,8 +729,126 @@ fn run_action<H: RoomHost + ?Sized>(
         // R24 (Confirmed, recorder): instance_destroy() in room creation code destroys nothing
         // and the rest of the code runs (showdown a3-t18-a rows 42-43, a3-t20, tr-room-14).
         RoomAction::DestroySelf => {}
+        RoomAction::SetGlobalIndexed { var, index, value } => {
+            let i = index_value(ctx, *index)?;
+            let id = run_time_var(ctx, &format!("{var}[{i}]"))?;
+            ctx.w.globals.insert(id, value.clone());
+        }
+        RoomAction::SaveGame => save_game(ctx)?,
+        RoomAction::SaveDeathTime => save::save_counters(ctx)?,
+        // Confirmed (recorder, creation-code.md): moves the kid when one exists (showdown
+        // a3-t18-a rows 42-43), no visible effect without one (a3-t20-a).
+        RoomAction::MoveKid { x, y } => {
+            if let Some(kid) = ctx.w.kid(&ctx.rules.tick)
+                && let Some(inst) = ctx.w.get_mut(kid)
+            {
+                inst.m.set_x(*x)?;
+                inst.m.set_y(*y)?;
+            }
+        }
+        RoomAction::Destroy { kind } => {
+            // Event order, as a snapshot (Inferred: the order of `with` is not in the spec; it
+            // only decides the order of the Destroy events).
+            let mut ids: Vec<(u16, InstId)> = ctx
+                .w
+                .iter_alive()
+                .filter(|i| i.active && i.kind == *kind)
+                .map(|i| (i.rank, i.id))
+                .collect();
+            ids.sort_unstable();
+            for (_, id) in ids {
+                if ctx.destroy(id).is_halt() {
+                    return Err(halted_error(ctx));
+                }
+            }
+        }
+        RoomAction::PlaySound { sound, looping } => crate::sound::play(ctx, *sound, *looping)?,
+        RoomAction::StopSound { sound } => crate::sound::stop(ctx, *sound),
+        RoomAction::When { when, action } => {
+            if holds(ctx, when) {
+                run_action(ctx, host, action)?;
+            }
+        }
     }
     Ok(())
+}
+
+/// Whether a row's `when` holds now (#629).
+fn holds(ctx: &Ctx, when: &RoomWhen) -> bool {
+    let below = when.difficulty_below.is_none_or(|n| {
+        crate::num::gm_lt(
+            Real::new(f64::from(ctx.w.engine.run.difficulty)),
+            n,
+            &ctx.rules.num,
+        )
+    });
+    let kid = when
+        .kid_exists
+        .is_none_or(|want| ctx.w.kid(&ctx.rules.tick).is_some() == want);
+    let absent = when
+        .kind_absent
+        .is_none_or(|k| !ctx.w.iter_alive().any(|i| i.active && i.kind == k));
+    below && kid && absent
+}
+
+/// The index of an indexed `set_global`: a whole number from 0 (OPEN: what GM does with a
+/// fractional or negative index is not in the spec, so the sim stops there).
+fn index_value(ctx: &Ctx, index: GlobalIndex) -> Result<u32, SimError> {
+    let v = match index {
+        GlobalIndex::Const(i) => return Ok(i),
+        GlobalIndex::Savenum => return Ok(u32::from(ctx.w.engine.run.slot)),
+        GlobalIndex::Global(var) => match ctx.w.globals.get(&var) {
+            Some(Value::Real(r)) => r.get(),
+            other => {
+                return Err(SimError::unsupported(format!(
+                    "set_global index: the index global holds {other:?}, not a number"
+                )));
+            }
+        },
+    };
+    if v.fract() == 0.0 && (0.0..=f64::from(u32::MAX)).contains(&v) {
+        // Checked just above: a whole number in 0..=u32::MAX.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        return Ok(v as u32);
+    }
+    Err(SimError::unsupported(format!(
+        "set_global index {v}: not a whole number from 0 (OPEN)"
+    )))
+}
+
+/// The id of a variable name first seen at run time (plan 1.1): the load-time id if the
+/// package has one, else the world's, else a new one after every id in use.
+fn run_time_var(ctx: &mut Ctx, name: &str) -> Result<VarId, SimError> {
+    if let Some(v) = ctx.def.var_names.get(name).or_else(|| ctx.w.var_names.get(name)) {
+        return Ok(*v);
+    }
+    let next = ctx
+        .def
+        .var_names
+        .values()
+        .chain(ctx.w.var_names.values())
+        .map(|v| v.0)
+        .max()
+        .map_or(Some(0), |m| m.checked_add(1))
+        .ok_or_else(|| SimError::invariant("run-time variable ids overflow"))?;
+    ctx.w.var_names.insert(name.to_owned(), VarId(next));
+    Ok(VarId(next))
+}
+
+/// `save_game` in room creation code: the save point's save from the first kid with the
+/// game's `[save]` model; with no kid, x 0 and y 0 and no error (Confirmed (recorder),
+/// kid/A3.md "Saves", showdown a3-t20-a f3-4).
+fn save_game(ctx: &mut Ctx) -> Result<(), SimError> {
+    let rules = &ctx.def.physics.save;
+    let model = rules.position.model();
+    let fixed = rules.fixed.map(|[x, y]| (x, y));
+    match ctx.w.kid(&ctx.rules.tick) {
+        Some(kid) => save::save_now(ctx, kid, model, fixed),
+        None => {
+            save::save_without_kid(ctx);
+            Ok(())
+        }
+    }
 }
 
 /// The views of a room as its file sets them.
