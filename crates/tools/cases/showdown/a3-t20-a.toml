@@ -3,7 +3,7 @@
 # Frames 0..1 ran before the room jump (boot rooms); they are not compared.
 source = "showdown/a3-t20-a"
 kind = "probe_read"
-open = "global.sv* are save1 byte dumps with no probe form yet (#587): map them to save.* columns in [vars], then drop this line"
+open = "room001's warp gets its destination from instance creation code, and the room-entry save runs before the kid exists (#600). First difference: frame 2, the original has no row (the warp destroyed the kid), ours has the kid in room001 at (241, 111.4)"
 start = { room = "room_1", difficulty = 0 }
 at = 2
 first_frame = 0
@@ -16,13 +16,32 @@ setup = [
 ]
 ignore = ["id", "sprite_index", "sprite_name"]
 notes = [
+  "global.sv*: save1 read back as bytes (A3.md saveGame: room, x, y as 3 base-100 bytes, difficulty, 8 item/bossitem pairs); split decodes x, y and difficulty, the 16 item bytes are skipped (all 0 here)",
   "--x/--y: the recorder creates the object when none exists; setup only moves one",
 ]
+latch = { "global.sv3.x" = [3], "global.sv3.y" = [3], "global.sv3.difficulty" = [3], "global.sv4.x" = [4], "global.sv4.y" = [4], "global.sv4.difficulty" = [4], "global.sv5.x" = [5], "global.sv5.y" = [5], "global.sv5.difficulty" = [5], "global.sv6.x" = [6], "global.sv6.y" = [6], "global.sv6.difficulty" = [6] }
+split = { "global.sv3" = ["room:3", "x:3", "y:3", "difficulty:1", "_:16"], "global.sv4" = ["room:3", "x:3", "y:3", "difficulty:1", "_:16"], "global.sv5" = ["room:3", "x:3", "y:3", "difficulty:1", "_:16"], "global.sv6" = ["room:3", "x:3", "y:3", "difficulty:1", "_:16"] }
 
 [vars]
+"global.sv3.x" = "save.x"
+"global.sv3.y" = "save.y"
+"global.sv3.difficulty" = "save.difficulty"
+"global.sv4.x" = "save.x"
+"global.sv4.y" = "save.y"
+"global.sv4.difficulty" = "save.difficulty"
+"global.sv5.x" = "save.x"
+"global.sv5.y" = "save.y"
+"global.sv5.difficulty" = "save.difficulty"
+"global.sv6.x" = "save.x"
+"global.sv6.y" = "save.y"
+"global.sv6.difficulty" = "save.difficulty"
 "instance_number(player)" = "instance_number(kid)"
 
 [unprobed]
+"global.sv3.room" = "the original's room index; ours is a room id"
+"global.sv4.room" = "the original's room index; ours is a room id"
+"global.sv5.room" = "the original's room index; ours is a room id"
+"global.sv6.room" = "the original's room index; ours is a room id"
 "var:room" = "an expression; the probe reads variables only (OPEN)"
 "xstart" = "no probe field for `xstart` (OPEN)"
 "ystart" = "no probe field for `ystart` (OPEN)"

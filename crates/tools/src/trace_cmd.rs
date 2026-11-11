@@ -26,7 +26,7 @@ use iwbtg_sim::trace::{self, DiffOptions, TraceDiff, TraceTable};
 use iwbtg_sim::world::Value;
 use iwbtg_sim::{Sim, SimOptions, SimStatus, StartPoint};
 
-use crate::case::{CaseDllMode, CaseValue, SetupWhat, TraceCase};
+use crate::case::{CaseDllMode, CaseValue, SetupWhat, SplitField, TraceCase};
 
 /// Why a tools command failed.
 #[derive(Debug, thiserror::Error)]
@@ -395,9 +395,70 @@ fn read_trace(case: &TraceCase, research: &Path) -> Result<(TraceTable, String),
     let base = traces_dir(research).join(&case.source);
     let csv_path = PathBuf::from(format!("{}.csv", base.display()));
     let inputs_path = PathBuf::from(format!("{}.inputs", base.display()));
-    let original = TraceTable::parse(&read_text(&csv_path)?)
+    let mut original = TraceTable::parse(&read_text(&csv_path)?)
+        .map_err(|e| ToolError::Message(format!("{}: {e}", csv_path.display())))?;
+    split_columns(case, &mut original)
         .map_err(|e| ToolError::Message(format!("{}: {e}", csv_path.display())))?;
     Ok((original, read_text(&inputs_path)?))
+}
+
+/// Replaces each of the case's `split` columns of the original with one column per named field,
+/// `<column>.<field>`, in place. A cell that holds a byte dump (`"0 1 41 0 ..."`, decimal bytes
+/// separated by spaces) gives each field the base-100 number of its bytes, most significant first;
+/// `"none"` (the recorder found no file) gives empty cells; any other cell (the `0` of a global
+/// not read yet) is copied to every field. A dump shorter than the fields is an error.
+fn split_columns(case: &TraceCase, table: &mut TraceTable) -> Result<(), String> {
+    for (name, fields) in &case.split {
+        let Some(col) = table.columns.iter().position(|c| &c.name == name) else {
+            return Err(format!("split column {name:?} is not in the trace"));
+        };
+        let named: Vec<&SplitField> = fields.iter().filter(|f| f.name != SplitField::SKIP).collect();
+        let quoted = table.columns[col].quoted;
+        let new_columns = named.iter().map(|f| trace::Column {
+            name: format!("{name}.{}", f.name),
+            quoted,
+        });
+        table.columns.splice(col..=col, new_columns);
+        for row in &mut table.rows {
+            let cell = row.get(col).cloned().unwrap_or(trace::Value::Empty);
+            let cells = split_cell(&cell, fields)
+                .map_err(|e| format!("split column {name:?}, frame {:?}: {e}", row.first()))?;
+            row.splice(col..=col, cells);
+        }
+    }
+    Ok(())
+}
+
+/// One split cell's field values (named fields only).
+fn split_cell(cell: &trace::Value, fields: &[SplitField]) -> Result<Vec<trace::Value>, String> {
+    let named = fields.iter().filter(|f| f.name != SplitField::SKIP).count();
+    let trace::Value::Str(text) = cell else {
+        return Ok(vec![cell.clone(); named]);
+    };
+    if text.trim() == "none" {
+        return Ok(vec![trace::Value::Empty; named]);
+    }
+    let bytes = text
+        .split_whitespace()
+        .map(|b| b.parse::<u8>().map_err(|_| format!("{b:?} is not a byte")))
+        .collect::<Result<Vec<u8>, String>>()?;
+    let mut out = Vec::with_capacity(named);
+    let mut at = 0usize;
+    for f in fields {
+        let end = at + usize::from(f.width);
+        let digits = bytes
+            .get(at..end)
+            .ok_or_else(|| format!("{} bytes, the fields need more", bytes.len()))?;
+        at = end;
+        if f.name == SplitField::SKIP {
+            continue;
+        }
+        // At most 8 digits of at most 255: below 2^53, so the sum is exact in f64.
+        let v = digits.iter().fold(0u64, |acc, d| acc * 100 + u64::from(*d));
+        #[allow(clippy::cast_precision_loss, reason = "v < 2^53 (8 base-100 digits)")]
+        out.push(trace::Value::Real(v as f64));
+    }
+    Ok(out)
 }
 
 /// The original rows a case compares: frames from `max(at, first_frame)` on.
@@ -803,6 +864,54 @@ mod tests {
 #[cfg(test)]
 mod bundle_tests {
     use super::*;
+
+    #[test]
+    fn split_reads_byte_dumps_into_fields() {
+        let fixed = trace::FIXED_COLUMNS.len();
+        let mut table = TraceTable::new(&["a", "global.sv", "b"]).unwrap();
+        for (f, sv) in [
+            (2_i64, trace::Value::Real(0.0)),
+            (3, trace::Value::Str("0 1 41 0 2 41 0 5 3 7 9 ".into())),
+            (4, trace::Value::Str("none".into())),
+        ] {
+            let mut row = vec![trace::Value::Empty; fixed + 3];
+            row[0] = trace::Value::Int(f);
+            row[fixed + 1] = sv;
+            row[fixed + 2] = trace::Value::Real(5.0);
+            table.push_row(row).unwrap();
+        }
+        let case = TraceCase::parse(
+            "source = \"g/t\"\nstart = { room = \"r\" }\nfirst_frame = 2\nobject = \"k\"\n\
+             split = { \"global.sv\" = [\"room:3\", \"x:3\", \"y:3\", \"_:1\", \"item:1\"] }\n",
+        )
+        .expect("case");
+        split_columns(&case, &mut table).expect("split");
+        let names: Vec<&str> = table.columns[fixed..].iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "a",
+                "global.sv.room",
+                "global.sv.x",
+                "global.sv.y",
+                "global.sv.item",
+                "b"
+            ]
+        );
+        let row = |i: usize| table.rows[i][fixed + 1..fixed + 5].to_vec();
+        let r = trace::Value::Real;
+        assert_eq!(row(0), vec![r(0.0); 4]);
+        assert_eq!(row(1), vec![r(141.0), r(241.0), r(503.0), r(9.0)]);
+        assert_eq!(row(2), vec![trace::Value::Empty; 4]);
+        assert_eq!(table.rows[1][fixed + 5], r(5.0));
+
+        let mut short = TraceTable::new(&["global.sv"]).unwrap();
+        let mut row = vec![trace::Value::Empty; fixed + 1];
+        row[0] = trace::Value::Int(2);
+        row[fixed] = trace::Value::Str("0 1".into());
+        short.push_row(row).unwrap();
+        assert!(split_columns(&case, &mut short).is_err());
+    }
 
     #[test]
     fn latch_holds_the_value_before_the_last_read() {

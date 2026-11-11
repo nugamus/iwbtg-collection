@@ -927,6 +927,7 @@ pub fn import_text(
         vars,
         ignore: DEFAULT_IGNORE.iter().map(|s| s.to_string()).collect(),
         latch: BTreeMap::new(),
+        split: BTreeMap::new(),
         unprobed,
         rooms,
         notes,
