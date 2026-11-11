@@ -41,7 +41,12 @@ fn tests_are_left_out_and_crlf_packs_like_lf() {
     other.insert("tests/inputs/a.inputs", b"x".to_vec()).unwrap();
     let packed = pack(&other).unwrap();
     assert_eq!(packed, pack(&files).unwrap());
-    assert!(!unpack(&packed).unwrap().iter().any(|(p, _)| p.starts_with("tests/")));
+    assert!(
+        !unpack(&packed)
+            .unwrap()
+            .iter()
+            .any(|(p, _)| p.starts_with("tests/"))
+    );
 }
 
 #[test]
@@ -204,7 +209,13 @@ fn a_hand_made_zip_with_folders_and_deflate_unpacks() {
 
 #[test]
 fn path_traversal_is_refused() {
-    for name in ["../evil.toml", "/evil.toml", "C:/evil.toml", "rooms\\..\\..\\evil.toml", "rooms/../../evil.toml"] {
+    for name in [
+        "../evil.toml",
+        "/evil.toml",
+        "C:/evil.toml",
+        "rooms\\..\\..\\evil.toml",
+        "rooms/../../evil.toml",
+    ] {
         let err = unpack(&zip(&[manifest(), raw(name, b"")], None)).unwrap_err();
         assert!(matches!(err, IwbzError::NotAllowed { .. }), "{name}: {err}");
     }
@@ -212,7 +223,12 @@ fn path_traversal_is_refused() {
 
 #[test]
 fn code_tests_and_unknown_files_are_refused() {
-    for name in ["scripts/a.dll", "game.exe", "tests/inputs/a.toml", "sprites/a.png"] {
+    for name in [
+        "scripts/a.dll",
+        "game.exe",
+        "tests/inputs/a.toml",
+        "sprites/a.png",
+    ] {
         let err = unpack(&zip(&[manifest(), raw(name, b"MZ")], None)).unwrap_err();
         assert!(matches!(err, IwbzError::NotAllowed { .. }), "{name}: {err}");
     }
@@ -245,7 +261,10 @@ fn a_file_that_inflates_past_its_stated_size_is_refused() {
     let mut bomb = deflated("rooms/a.toml", &vec![b' '; 10_000_000]);
     bomb.size = 100;
     let err = unpack(&zip(&[manifest(), bomb], None)).unwrap_err();
-    assert!(matches!(err, IwbzError::Corrupt(ref m) if m.contains("not the stated")), "{err}");
+    assert!(
+        matches!(err, IwbzError::Corrupt(ref m) if m.contains("not the stated")),
+        "{err}"
+    );
 }
 
 #[test]
@@ -259,7 +278,10 @@ fn overlapping_files_are_refused() {
 #[test]
 fn a_name_twice_is_refused() {
     let err = unpack(&zip(&[manifest(), manifest()], None)).unwrap_err();
-    assert!(matches!(err, IwbzError::Corrupt(ref m) if m.contains("twice")), "{err}");
+    assert!(
+        matches!(err, IwbzError::Corrupt(ref m) if m.contains("twice")),
+        "{err}"
+    );
 }
 
 #[test]
@@ -290,5 +312,8 @@ fn bad_archives_are_refused() {
         assert!(unpack(&good[..cut]).is_err(), "cut at {cut}");
     }
     assert!(unpack(b"not a zip at all").is_err());
-    assert_eq!(unpack(&zip(&[raw("rooms/a.toml", b"")], None)), Err(IwbzError::NoManifest));
+    assert_eq!(
+        unpack(&zip(&[raw("rooms/a.toml", b"")], None)),
+        Err(IwbzError::NoManifest)
+    );
 }

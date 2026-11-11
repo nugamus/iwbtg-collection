@@ -27,7 +27,12 @@ pub fn pack_main(dir: &Path, out: Option<&Path>, trace_mode: bool) -> Result<boo
         None => PathBuf::from(format!("{}.{}", package_id(&files)?, iwbz::EXTENSION)),
     };
     std::fs::write(&out, &bytes).map_err(|e| ToolError::Message(format!("{}: {e}", out.display())))?;
-    println!("wrote {} ({} files, {} bytes)", out.display(), files.iter().filter(|(p, _)| !p.starts_with("tests/")).count(), bytes.len());
+    println!(
+        "wrote {} ({} files, {} bytes)",
+        out.display(),
+        files.iter().filter(|(p, _)| !p.starts_with("tests/")).count(),
+        bytes.len()
+    );
     println!("gameplay_hash: {gameplay}");
     println!("content_hash: {content}");
     Ok(true)
@@ -90,7 +95,10 @@ mod tests {
         assert_eq!(a.content_hash(), b.content_hash());
         // `load_package` takes the file itself too.
         assert_eq!(load_package(&file).unwrap(), b);
-        assert!(unpack_main(&file, &out).is_err(), "never into a folder with files");
+        assert!(
+            unpack_main(&file, &out).is_err(),
+            "never into a folder with files"
+        );
         std::fs::remove_dir_all(&root).ok();
     }
 }

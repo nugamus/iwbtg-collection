@@ -63,8 +63,8 @@ fn corrupt(msg: impl Into<String>) -> IwbzError {
 /// File names Windows reserves in every folder, with or without an extension. A package with
 /// one could not be unpacked there.
 const WINDOWS_DEVICES: [&str; 22] = [
-    "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9", "lpt1",
-    "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+    "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9",
+    "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
 ];
 
 /// The file types each package folder may hold (docs/format/v0.md, Package layout).
@@ -117,7 +117,9 @@ pub fn check_entry(path: &str, bytes: &[u8]) -> Result<(), IwbzError> {
     }
     match parts.len() {
         1 => {
-            let text_name = stem.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-');
+            let text_name = stem
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-');
             match ext {
                 "md" if text_name => {}
                 "toml" if check_id(stem).is_ok() => {}
@@ -191,7 +193,10 @@ pub fn pack(files: &PackageFiles) -> Result<Vec<u8>, IwbzError> {
     let mut central = Vec::new();
     let mut count = 0usize;
     let mut total = 0u64;
-    for (path, bytes) in files.iter().filter(|(p, _)| !p.starts_with(crate::files::TESTS_DIR)) {
+    for (path, bytes) in files
+        .iter()
+        .filter(|(p, _)| !p.starts_with(crate::files::TESTS_DIR))
+    {
         check_entry(path, bytes)?;
         let data: std::borrow::Cow<[u8]> = if is_text(path) {
             lf_normalized(bytes).into()
@@ -253,7 +258,9 @@ pub fn pack(files: &PackageFiles) -> Result<Vec<u8>, IwbzError> {
     put32(&mut out, cd_offset as u32);
     put16(&mut out, 0);
     if out.len() as u64 > MAX_ARCHIVE_BYTES {
-        return Err(IwbzError::TooLarge(format!("the .iwbz would pass {MAX_ARCHIVE_BYTES} bytes")));
+        return Err(IwbzError::TooLarge(format!(
+            "the .iwbz would pass {MAX_ARCHIVE_BYTES} bytes"
+        )));
     }
     Ok(out)
 }
@@ -347,7 +354,10 @@ pub fn unpack(bytes: &[u8]) -> Result<PackageFiles, IwbzError> {
         let name_len = usize::from(c.u16()?);
         let extra_len = usize::from(c.u16()?);
         if c.take(name_len)? != e.name.as_bytes() {
-            return Err(corrupt(format!("`{}`: the two headers name different files", e.name)));
+            return Err(corrupt(format!(
+                "`{}`: the two headers name different files",
+                e.name
+            )));
         }
         c.take(extra_len)?;
         let packed = usize::try_from(e.packed).map_err(|_| corrupt("file too large"))?;
@@ -367,7 +377,12 @@ pub fn unpack(bytes: &[u8]) -> Result<PackageFiles, IwbzError> {
             STORED if e.packed == e.size => data.to_vec(),
             STORED => return Err(corrupt(format!("`{}`: stored sizes differ", e.name))),
             DEFLATE => inflate(data, e.size).map_err(|m| corrupt(format!("`{}`: {m}", e.name)))?,
-            m => return Err(corrupt(format!("`{}`: compression method {m}; only stored and deflate", e.name))),
+            m => {
+                return Err(corrupt(format!(
+                    "`{}`: compression method {m}; only stored and deflate",
+                    e.name
+                )));
+            }
         };
         if crc32fast::hash(&out) != e.crc {
             return Err(corrupt(format!("`{}`: CRC-32 does not match", e.name)));

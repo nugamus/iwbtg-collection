@@ -28,14 +28,18 @@ pub struct ImportPlugin {
 
 impl Plugin for ImportPlugin {
     fn build(&self, app: &mut App) {
-        if self.keep && package::is_iwbz(&self.opened) {
-            if let Some(store) = Store::data() {
-                let saved = std::fs::read(&self.opened)
-                    .map_err(|e| e.to_string())
-                    .and_then(|bytes| remember(&store, &self.id, &bytes));
-                if let Err(e) = saved {
-                    storage::warn(&format!("could not add {} to the library: {e}", self.opened.display()));
-                }
+        if self.keep
+            && package::is_iwbz(&self.opened)
+            && let Some(store) = Store::data()
+        {
+            let saved = std::fs::read(&self.opened)
+                .map_err(|e| e.to_string())
+                .and_then(|bytes| remember(&store, &self.id, &bytes));
+            if let Err(e) = saved {
+                storage::warn(&format!(
+                    "could not add {} to the library: {e}",
+                    self.opened.display()
+                ));
             }
         }
         app.add_systems(Update, open_dropped);
@@ -100,8 +104,16 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         let store = Store::at(dir.clone());
         assert_eq!(remember(&store, "demo", b"one"), Ok(true));
-        assert_eq!(remember(&store, "demo", b"one"), Ok(false), "same file: nothing written");
-        assert_eq!(remember(&store, "demo", b"two"), Ok(true), "a new version replaces it");
+        assert_eq!(
+            remember(&store, "demo", b"one"),
+            Ok(false),
+            "same file: nothing written"
+        );
+        assert_eq!(
+            remember(&store, "demo", b"two"),
+            Ok(true),
+            "a new version replaces it"
+        );
         assert_eq!(std::fs::read(dir.join("library/demo.iwbz")).unwrap(), b"two");
         std::fs::remove_dir_all(&dir).ok();
     }
