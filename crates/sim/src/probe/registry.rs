@@ -77,7 +77,8 @@ pub fn resolve(name: &str, def: &GameDef) -> Option<FieldRef> {
 /// - `<kind>.<field>`: a field of the first instance of that kind (R21);
 /// - `named(<instance name>).<field>`: a field of the instance with that room-file name;
 /// - `global.<name>`: a global the package declares, else engine state (`difficulty`, `death`, `time`,
-///   `savenum`, `clear`, `frozen`, `frozen2`, `reverse`, `grav`, `paused`); `room_speed` is engine state too;
+///   `savenum`, `clear`, `frozen`, `frozen2`, `reverse`, `grav`, `paused`, the latched vine-key flags
+///   `key_left`, `key_right`, `key_jump`); `room_speed` is engine state too;
 /// - `instance_number(<target>)`, where a target is a kind name or `class:<class name>`;
 /// - `keyboard_check(<action>)`, `keyboard_check_pressed(...)`, `keyboard_check_released(...)`,
 ///   `keyboard_check_direct(...)`, with an action name (`jump`, `right`);
@@ -355,6 +356,10 @@ mod tests {
         );
         assert_eq!(column("global.death", &d), Ok(Column::Engine(EngineVar::Death)));
         assert_eq!(column("global.paused", &d), Ok(Column::Engine(EngineVar::Paused)));
+        assert_eq!(
+            column("global.key_jump", &d),
+            Ok(Column::Engine(EngineVar::KeyJump))
+        );
         assert_eq!(column("room_speed", &d), Ok(Column::Engine(EngineVar::RoomSpeed)));
         assert_eq!(column("global.hp", &d), Ok(Column::Global(VarId(0))));
         assert_eq!(

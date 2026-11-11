@@ -24,6 +24,9 @@
 //! ignore = ["id", "sprite_index", "sprite_name"]
 //! latch = { "global.tr_x" = [3, 20] }  # recorder `--gml` reads: the column holds the `vars` value
 //!                                    # of the frame before the last read frame (0 before the first)
+//! split = { "global.sv" = ["room:3", "x:3", "_:1"] }  # a byte-dump column (`"0 1 41 0 ..."`) read
+//!                                    # as columns `global.sv.room`, `global.sv.x`, ...: each field is
+//!                                    # that many base-100 digit bytes (1-8); `_` bytes are dropped
 //! unprobed = { "bbox_left" = "no probe column (OPEN)" }   # not compared, reported by check
 //! rooms = { template = "rTemplate" }                     # our room id -> original room name
 //! open = "why the case cannot run yet"                   # optional; check skips it
@@ -82,12 +85,57 @@ pub struct TraceCase {
     /// into a global): the column keeps the `vars` value of the frame before the last read frame,
     /// 0 before the first.
     pub latch: BTreeMap<String, Vec<u32>>,
+    /// Byte-dump columns of the original (a recorder `--gml` that read a save file back as
+    /// space-separated decimal bytes), split into one column per field before anything else reads
+    /// the original. See [`SplitField`].
+    pub split: BTreeMap<String, Vec<SplitField>>,
     /// Columns not compared because no probe column exists for them yet, with the reason.
     pub unprobed: BTreeMap<String, String>,
     /// Our room id to the original room name, for the `room` column.
     pub rooms: BTreeMap<String, String>,
     /// Free text for the person finishing the case.
     pub notes: Vec<String>,
+}
+
+/// One field of a [`TraceCase::split`] column: `width` bytes, each a base-100 digit, most
+/// significant first (the Group A save layout, CLONE_SPEC "Group A layout"). The field becomes the
+/// column `<column>.<name>`; a field named `_` is skipped.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct SplitField {
+    /// The field name, or `_`.
+    pub name: String,
+    /// Bytes in the field: 1 to 8, or up to 255 for `_`.
+    pub width: u8,
+}
+
+impl SplitField {
+    /// The name of a skipped field.
+    pub const SKIP: &'static str = "_";
+
+    /// `name:width`.
+    fn parse(text: &str) -> Result<SplitField, String> {
+        let (name, width) = text
+            .split_once(':')
+            .ok_or_else(|| format!("field {text:?}: expected \"<name>:<bytes>\""))?;
+        let name = name.trim();
+        let max = if name == Self::SKIP { u8::MAX } else { 8 };
+        let width: u8 = width
+            .trim()
+            .parse()
+            .ok()
+            .filter(|w| (1..=max).contains(w))
+            .ok_or_else(|| format!("field {text:?}: the byte count must be 1 to {max}"))?;
+        let ok = !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+        if !ok {
+            return Err(format!(
+                "field {text:?}: the name must be letters, digits and `_`"
+            ));
+        }
+        Ok(SplitField {
+            name: name.to_string(),
+            width,
+        })
+    }
 }
 
 /// Which of the plan's trace kinds a case is.
@@ -222,6 +270,8 @@ struct RawCase {
     #[serde(default)]
     latch: BTreeMap<String, Vec<u32>>,
     #[serde(default)]
+    split: BTreeMap<String, Vec<String>>,
+    #[serde(default)]
     unprobed: BTreeMap<String, String>,
     #[serde(default)]
     rooms: BTreeMap<String, String>,
@@ -316,6 +366,18 @@ impl TraceCase {
             };
             setup.push(SetupEntry { frame: s.frame, what });
         }
+        let mut split = BTreeMap::new();
+        for (column, fields) in raw.split {
+            let fields = fields
+                .iter()
+                .map(|f| SplitField::parse(f))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| CaseError::Invalid(format!("split {column:?}: {e}")))?;
+            if fields.is_empty() {
+                return invalid(format!("split {column:?}: no fields"));
+            }
+            split.insert(column, fields);
+        }
         Ok(TraceCase {
             original_object: raw.original_object.unwrap_or_else(|| raw.object.clone()),
             source: raw.source,
@@ -337,6 +399,7 @@ impl TraceCase {
                 .ignore
                 .unwrap_or_else(|| DEFAULT_IGNORE.iter().map(|s| s.to_string()).collect()),
             latch: raw.latch,
+            split,
             unprobed: raw.unprobed,
             rooms: raw.rooms,
             notes: raw.notes,
@@ -417,6 +480,20 @@ impl TraceCase {
                 })
                 .collect();
             let _ = writeln!(out, "latch = {{ {} }}", rows.join(", "));
+        }
+        if !self.split.is_empty() {
+            let rows: Vec<String> = self
+                .split
+                .iter()
+                .map(|(k, v)| {
+                    let fields: Vec<String> = v
+                        .iter()
+                        .map(|f| quote(&format!("{}:{}", f.name, f.width)))
+                        .collect();
+                    format!("{} = [{}]", quote(k), fields.join(", "))
+                })
+                .collect();
+            let _ = writeln!(out, "split = {{ {} }}", rows.join(", "));
         }
         // Tables last: every key after a `[table]` header belongs to that table.
         write_table(&mut out, "vars", &self.vars);
@@ -538,6 +615,21 @@ mod tests {
                 .collect(),
             ignore: vec!["id".into()],
             latch: [("global.tr_x".to_string(), vec![3, 20])].into_iter().collect(),
+            split: [(
+                "global.sv".to_string(),
+                vec![
+                    SplitField {
+                        name: "x".into(),
+                        width: 3,
+                    },
+                    SplitField {
+                        name: "_".into(),
+                        width: 1,
+                    },
+                ],
+            )]
+            .into_iter()
+            .collect(),
             unprobed: [("bbox_left".to_string(), "no probe column".to_string())]
                 .into_iter()
                 .collect(),
@@ -615,6 +707,10 @@ mod tests {
             "source = \"g/t\"\nstart = { room = \"r\" }\nfirst_frame = 2\nobject = \"k\"\ndll_mode = \"real\"\n",
             "source = \"g/t\"\nstart = { room = \"r\" }\nfirst_frame = 2\nobject = \"k\"\nsetup = [{ frame = 1, global = \"g\" }]\n",
             "source = \"g/t\"\nstart = { room = \"r\" }\nfirst_frame = 2\nobject = \"k\"\nbogus = 1\n",
+            "source = \"g/t\"\nstart = { room = \"r\" }\nfirst_frame = 2\nobject = \"k\"\nsplit = { s = [\"x\"] }\n",
+            "source = \"g/t\"\nstart = { room = \"r\" }\nfirst_frame = 2\nobject = \"k\"\nsplit = { s = [\"x:9\"] }\n",
+            "source = \"g/t\"\nstart = { room = \"r\" }\nfirst_frame = 2\nobject = \"k\"\nsplit = { s = [\"a.b:1\"] }\n",
+            "source = \"g/t\"\nstart = { room = \"r\" }\nfirst_frame = 2\nobject = \"k\"\nsplit = { s = [] }\n",
         ] {
             assert!(TraceCase::parse(bad).is_err(), "{bad:?}");
         }
