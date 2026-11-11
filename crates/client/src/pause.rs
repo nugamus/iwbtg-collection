@@ -127,8 +127,10 @@ const IDLE_INK: Color = Color::srgb_u8(0x8d, 0x90, 0x9e);
 /// The selected item moves this far right (game px), OutQuint.
 const SHIFT: f32 = 4.0;
 const SHIFT_SECONDS: f32 = 0.3;
-/// The dim's alpha (see `draw`).
-const DIM: f32 = 0.78;
+/// The dim over the game: `rgba(0,0,0,.5)`.
+const DIM: f32 = 0.5;
+/// The box's fill: `rgba(0,0,0,.94)`.
+const BOX_FILL: f32 = 0.94;
 /// `--pause-preview` opens the menu at this sim tick, once the timer has run a little.
 const PREVIEW_TICK: u64 = 25;
 
@@ -401,14 +403,19 @@ fn draw(
             align_items: AlignItems::Center,
             ..default()
         },
-        // The game area darkens to 50% (`rgba(0,0,0,.5)`). The browser blends in sRGB, Bevy in
-        // linear light, where 0.5 would only take the game to about 73%: 0.78 keeps 0.5^2.2 of the
-        // light, which is half in sRGB.
-        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, DIM)),
+        // The game area darkens to 50%.
+        BackgroundColor(black_over(DIM)),
         GlobalZIndex(20),
         Root { k },
     ));
     root.with_child(pause_box(k, menu.selected, fruit.0.clone()));
+}
+
+/// Black at the artboard's alpha `a`. The browser blends in sRGB, Bevy in linear light, where `a`
+/// would leave `(1 - a)^(1/2.2)` of the sRGB value (0.5 keeps about 73%, 0.94 about 28%).
+/// Keeping `(1 - a)^2.2` of the light leaves `1 - a` in sRGB, as the browser does.
+fn black_over(a: f32) -> Color {
+    Color::srgba(0.0, 0.0, 0.0, 1.0 - (1.0 - a).powf(2.2))
 }
 
 /// The PAUSE box at `k` UI px per game px (`PauseBox.dc.html`): 300 px wide, padding 22/26/24,
@@ -435,7 +442,7 @@ fn pause_box(k: f32, selected: Item, fruit: Handle<Image>) -> impl Bundle {
             border: UiRect::all(px(2.0)),
             ..default()
         },
-        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.94)),
+        BackgroundColor(black_over(BOX_FILL)),
         BorderColor::all(Color::WHITE),
         Outline::new(px(2.0), px(3.0), Color::WHITE),
         Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
