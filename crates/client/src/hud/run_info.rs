@@ -49,9 +49,13 @@ const PAUSED_INK: Color = Color::srgb_u8(0xff, 0xb3, 0xbd);
 /// A held arrow or word: white (the artboard's glow is not drawn).
 const HELD: Color = Color::WHITE;
 
-/// The pause menu (#479) sets this while it is open; the timer keeps running.
+/// Written by the pause menu (`pause.rs`, #479): whether it is open, and the ranked ticks the
+/// run has spent paused, which the timer adds to `Sim::ranked_ticks` (the timer keeps running).
 #[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Paused(pub bool);
+pub struct Paused {
+    pub open: bool,
+    pub ticks: u64,
+}
 
 /// What gives the panel its shape. The panel is rebuilt when it changes.
 #[derive(Resource, Clone, Copy, Debug, PartialEq, Eq)]
@@ -85,7 +89,7 @@ impl Look {
 /// The run's numbers this frame.
 #[derive(Resource, Clone, Debug, Default, PartialEq, Eq)]
 pub struct RunInfo {
-    /// Ranked time (`Sim::ranked_ticks`) and the game's ticks per second.
+    /// Ranked time (`Sim::ranked_ticks` plus the paused ticks) and the game's ticks per second.
     pub ticks: u64,
     pub rate: u32,
     /// The death counter.
@@ -122,12 +126,10 @@ impl StageDeaths {
     }
 }
 
-/// For screenshot checks (`--hud-preview-held`, `--hud-preview-paused`): keys drawn as held and
-/// the paused line, as a run would show them.
+/// For screenshot checks (`--hud-preview-held`): keys drawn as held, as a run would show them.
 #[derive(Resource, Clone, Copy, Debug, Default)]
 pub struct Preview {
     pub held: u32,
-    pub paused: bool,
 }
 
 /// `1,284`.
@@ -188,14 +190,14 @@ pub fn read(
     let stages = sim.def().timing.stages.len() as u32 + 1;
     let deaths = world.engine.run.deaths;
     let now = RunInfo {
-        ticks: sim.ranked_ticks(),
+        ticks: sim.ranked_ticks() + paused.ticks,
         rate: sim.def().tick_rate,
         deaths,
         stage: (u32::from(world.timing.stages_done) + 1).min(stages),
         stages,
         stage_deaths: stage_deaths.observe(world.tick, world.timing.stages_done, deaths),
         held: held | preview.held,
-        paused: paused.0 || preview.paused,
+        paused: paused.open,
     };
     if *info != now {
         *info = now;

@@ -11,6 +11,8 @@ pub mod layout;
 mod panels;
 mod run_info;
 
+pub use run_info::Paused;
+
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
 use bevy::ui::IsDefaultUiCamera;
@@ -76,9 +78,6 @@ pub struct HudArgs {
     /// Screenshot checks: draw these actions as held in the input display (`right,jump`).
     #[arg(long, hide = true, value_name = "ACTIONS", value_parser = parse_actions)]
     pub hud_preview_held: Option<u32>,
-    /// Screenshot checks: show the paused line (the pause menu, #479, sets it in play).
-    #[arg(long, hide = true)]
-    pub hud_preview_paused: bool,
     /// Scale the side panels (never the game), 75 to 150 percent (Ctrl+= and Ctrl+- step by 5).
     #[arg(long, value_name = "PERCENT", value_parser = parse_ui_scale)]
     pub ui_scale: Option<u32>,
@@ -104,7 +103,6 @@ pub fn configure(args: &HudArgs) {
     });
     let _ = PREVIEW.set(run_info::Preview {
         held: args.hud_preview_held.unwrap_or(0),
-        paused: args.hud_preview_paused,
     });
 }
 
@@ -157,7 +155,7 @@ impl Plugin for HudPlugin {
         .insert_resource(Shown(s.hud_show))
         .insert_resource(PREVIEW.get().copied().unwrap_or_default())
         .init_resource::<HudLayout>()
-        .init_resource::<run_info::Paused>()
+        .init_resource::<Paused>()
         .init_resource::<run_info::Look>()
         .init_resource::<run_info::RunInfo>()
         .init_resource::<run_info::StageDeaths>()

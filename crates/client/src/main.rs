@@ -19,6 +19,7 @@ mod hud;
 mod input;
 mod mods;
 mod package;
+mod pause;
 mod replays;
 mod retry;
 mod savefile;
@@ -57,6 +58,8 @@ struct Args {
     save: savefile::SaveArgs,
     #[command(flatten)]
     retry: retry::RetryArgs,
+    #[command(flatten)]
+    pause: pause::PauseArgs,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -115,6 +118,7 @@ fn main() -> ExitCode {
     let audio = args.audio;
     let run_mods = args.mods.mods;
     let retry = args.retry;
+    let pause = args.pause;
     // A `--screenshot` check keeps no stats, as it keeps no settings.
     let keep_stats = args.view.screenshot.is_none();
     let gameplay_hash = pkg.gameplay_hash;
@@ -129,6 +133,10 @@ fn main() -> ExitCode {
             audio::AudioPlugin::new(&audio, &pkg.files),
             mods::ModsPlugin(run_mods),
             retry::RetryPlugin(retry),
+            pause::PausePlugin {
+                args: pause,
+                files: pkg.files.clone(),
+            },
             stats::StatsPlugin {
                 keep: keep_stats,
                 mods: run_mods,
