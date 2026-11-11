@@ -10,6 +10,7 @@ One page per module or area, so two PRs on different modules never edit the same
 - [Structure](client/main.md): how modules own their flags and plugins (`main.rs`)
 - [Mods](client/mods.md): `mods.rs`
 - [Pause menu](client/pause.md): `pause.rs`
+- [Player card](client/card.md): `card/`
 - [Replays](client/replays.md): `replays.rs`
 - [Retry](client/retry.md): `retry.rs`
 - [Screen](client/screen.md): `screen.rs`

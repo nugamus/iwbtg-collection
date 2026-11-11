@@ -1,0 +1,11 @@
+# The client: Player card
+
+Part of [the client](../client.md).
+
+The player card (`card/`, #496) is one component in three sizes from the artboard `ProfileCard.dc.html` (docs/design/mockups/m4): `footer` (420×108, bottom right of game select), `results` (620×280, results at 16:9 and wider) and `results-compact` (330×172, results at 4:3; `Variant::for_results` picks it below 16:10). Game select (#148) and results (#41) embed it with `card::card(&Card, Variant)`; it is built from the [UI](ui.md) kit's tokens and widgets.
+
+- **Data.** `Card::from_book` reads the [stats](stats.md) book's account totals (games with a cleared map, deaths, play time) and the collection out of `COLLECTION_GAMES` (20, the shortlist, until game select has a library). `RunChange::new` is what one run changed on results: its deaths, its ranked time as play time, and the game's maps with a clear out of the package's maps. The name is the local profile name, `profile_name()`: the system account's name until accounts exist (#60), `Player` when there is none (and in the browser).
+- **Shown.** Avatar (the name's initial on the artboard's gradient), name, games cleared, in the footer deaths and play time (`212h`), the collection bar (a notch per game). The results variants add this run's changes in the artboard's columns: total deaths (`+1,284 this run`), play time (`212h 14m`, `+38m 12s`) and the game's entries (`4 / 5 entries cleared`); the compact one shows the first two.
+- **Hidden until they exist.** Overall rank, its change and the big faint rank behind the card (#84), the flag (accounts), the 30-day rank sparkline (online) and the badges (#489).
+- **Translucency.** The card's glass and the bar's notches use the artboard's alphas turned into Bevy's, and the bar track is mixed in sRGB, so they look as dark as the artboard (#627).
+- **Preview.** `iwbtg-client --card-preview <footer|results|results-compact> [--window WxH] [--screenshot <png>]` (hidden from `--help`) shows the card alone on the backdrop, scaled to fit the window (by default a window twice the card's size). It reads your own `stats.toml` and takes your latest clear as the run (without its package, the game's entries are the ones you have played, and the game shows by its id). With `--screenshot` it shows the artboard's sample numbers instead.
