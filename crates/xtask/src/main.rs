@@ -97,14 +97,15 @@ fn output(root: &Path, program: &str, args: &[&str], env: &[(&str, &str)]) -> Re
     Ok((out.status.success(), text))
 }
 
-/// Files this branch changed against `origin/main`, committed or not.
-fn changed_files(root: &Path) -> Result<Vec<String>, String> {
+/// Files this branch changed against `origin/main`; with `uncommitted`, also working-tree changes.
+fn changed_files(root: &Path, uncommitted: bool) -> Result<Vec<String>, String> {
     let mut files = BTreeSet::new();
-    for args in [
-        &["diff", "--name-only", "origin/main...HEAD"][..],
-        &["diff", "--name-only", "HEAD"],
-        &["ls-files", "--others", "--exclude-standard"],
-    ] {
+    let mut commands = vec![&["diff", "--name-only", "origin/main...HEAD"][..]];
+    if uncommitted {
+        commands.push(&["diff", "--name-only", "HEAD"]);
+        commands.push(&["ls-files", "--others", "--exclude-standard"]);
+    }
+    for args in commands {
         let (ok, text) = output(root, "git", args, &[])?;
         if !ok {
             return Err(format!("git {}: {text}", args.join(" ")));
@@ -194,7 +195,7 @@ fn check(root: &Path, all: bool) -> Result<(), String> {
             )?;
             return step(root, "tests (workspace)", &["test", "--workspace"]);
         }
-        let files = changed_files(root)?;
+        let files = changed_files(root, true)?;
         let (test, compile) = affected(&files);
         if test.is_empty() {
             println!("no crate changed (docs or harness only): nothing to build");
@@ -386,8 +387,19 @@ fn pr_body(root: &Path, issue: Option<String>) -> Result<(), String> {
             .and_then(|r| r.split('-').next())
             .map(str::to_owned)
     });
-    let (_, log) = output(root, "git", &["log", "--format=- %s", "origin/main..HEAD"], &[])?;
-    let files = changed_files(root)?;
+    let (_, log) = output(
+        root,
+        "git",
+        &[
+            "log",
+            "--format=- %s",
+            "--first-parent",
+            "--no-merges",
+            "origin/main..HEAD",
+        ],
+        &[],
+    )?;
+    let files = changed_files(root, false)?;
     let docs: Vec<&String> = files
         .iter()
         .filter(|f| f.ends_with(".md") || f.starts_with("docs/"))
