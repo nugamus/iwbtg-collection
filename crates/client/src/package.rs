@@ -42,7 +42,7 @@ pub struct SpriteImage {
 pub struct PackageArgs {
     /// Package folder (a folder with a game.toml). Not needed with `--ui-gallery`, `--bind` or
     /// `--show-bindings`.
-    #[arg(required_unless_present_any = ["ui_gallery", "bind", "show_bindings"])]
+    #[arg(required_unless_present_any = ["ui_gallery", "card_preview", "bind", "show_bindings"])]
     pub package: Option<std::path::PathBuf>,
     /// Load converter output: unmapped script kinds become inert.
     #[arg(long)]

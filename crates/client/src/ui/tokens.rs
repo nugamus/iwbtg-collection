@@ -61,6 +61,24 @@ pub const KEY_IDLE: Color = Color::srgba(1.0, 1.0, 1.0, 0.22);
 /// An input display button label that is not held.
 pub const BUTTON_IDLE: Color = Color::srgba(1.0, 1.0, 1.0, 0.28);
 
+/// The player card (`ProfileCard.dc.html`): its glass from the left edge to 60 %
+/// (`rgba(14,16,24,.9)`, `.78`) and the warm right end (`rgba(40,14,22,.78)`). The alphas are
+/// the artboard's turned into Bevy's (`1 - (1 - a)^2.2`): Bevy blends in linear light, which
+/// would let the art through about twice as much (#627).
+pub const CARD: Color = Color::srgba(14.0 / 255.0, 16.0 / 255.0, 24.0 / 255.0, 0.994);
+pub const CARD_MID: Color = Color::srgba(14.0 / 255.0, 16.0 / 255.0, 24.0 / 255.0, 0.964);
+pub const CARD_WARM: Color = Color::srgba(40.0 / 255.0, 14.0 / 255.0, 22.0 / 255.0, 0.964);
+/// The card's avatar gradient, top left to bottom right (`hsl(352 62% 52%)`, `hsl(330 55% 30%)`).
+pub const AVATAR_FROM: Color = Color::hsl(352.0, 0.62, 0.52);
+pub const AVATAR_TO: Color = Color::hsl(330.0, 0.55, 0.30);
+/// A progress bar's empty track on the card: the artboard's `rgba(255,255,255,.12)` over the card
+/// glass, mixed in sRGB as the browser does (white over dark has no single Bevy alpha, #627).
+pub const TRACK: Color = Color::srgb_u8(0x2b, 0x2d, 0x34);
+/// The light end of the accent gradient on a progress bar (`#ffb3bd`).
+pub const ACCENT_LIGHT: Color = Color::srgb_u8(0xff, 0xb3, 0xbd);
+/// The notches that cut a progress bar into steps: `rgba(8,9,14,.55)`, alpha as for [`CARD`].
+pub const NOTCH: Color = Color::srgba(8.0 / 255.0, 9.0 / 255.0, 14.0 / 255.0, 0.828);
+
 /// The star colour ramp (`Main.dc.html`, `ramp`): from each star count up, its colour.
 pub const STAR_RAMP: [(f32, Color); 8] = [
     (0.0, Color::srgb_u8(0x7f, 0xc8, 0xff)),

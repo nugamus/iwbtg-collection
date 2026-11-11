@@ -36,6 +36,28 @@ pub fn text(content: &str, style: Type, color: Color) -> impl Bundle + use<> {
     )
 }
 
+/// One line of text in several styles and colours (`Deaths <b>48,213</b>`): the first part is the
+/// text node, the rest are spans of it. Unlike [`text`], the spans do not follow `UiOpacity` or
+/// `FadeMask`, so keep it out of fading lists.
+pub fn rich(parts: Vec<(String, Type, Color)>) -> impl Bundle {
+    let mut parts = parts.into_iter();
+    let (first, style, color) = parts
+        .next()
+        .unwrap_or_else(|| (String::new(), Type::BODY, tokens::INK));
+    (
+        text(&first, style, color),
+        TextLayout::no_wrap(),
+        Children::spawn(SpawnIter(parts.map(|(s, style, color)| {
+            (
+                TextSpan::new(style.set(&s)),
+                style.font(),
+                style.spacing(),
+                TextColor(color),
+            )
+        }))),
+    )
+}
+
 /// A sheared node `height` px tall, `pad` px of padding left and right, its children centred
 /// on one row. Panels, pills and buttons are all this with a different shape and content.
 pub fn sheared(height: f32, pad: f32, shape: Shape) -> (Node, Shape) {
