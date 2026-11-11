@@ -666,7 +666,7 @@ roles = { world = \"@my_world\" }
     })
 }
 
-const MY_WORLD: &str = "base = \"world\"\nlatch_cleared_by_world = true\npause = \"deactivate\"\npause_delay = 5\nmute = true\ntimer_per_tick = 2\ntimer_on_restart = 2\nclear_triggers_to = 10\nclear_switches_on_room_end = true\n";
+const MY_WORLD: &str = "base = \"world\"\nlatch_cleared_by_world = true\npause = \"deactivate\"\npause_delay = 5\nmute = true\ntimer_per_tick = 2\ntimer_play_rooms_only = true\ntimer_needs_fps = true\ntimer_stops_on_clear = true\nclear_triggers_to = 10\nclear_switches_on_room_end = true\n";
 
 #[test]
 fn wp6b2_params_load() {
@@ -711,12 +711,18 @@ fn wp6b2_params_load() {
     for (k, v) in [
         ("pause_delay", 5.0),
         ("timer_per_tick", 2.0),
-        ("timer_on_restart", 2.0),
         ("clear_triggers_to", 10.0),
     ] {
         assert_eq!(w.params.0.get(k), Some(&real(v)), "{k}");
     }
-    for k in ["latch_cleared_by_world", "mute", "clear_switches_on_room_end"] {
+    for k in [
+        "latch_cleared_by_world",
+        "mute",
+        "clear_switches_on_room_end",
+        "timer_play_rooms_only",
+        "timer_needs_fps",
+        "timer_stops_on_clear",
+    ] {
         assert_eq!(w.params.0.get(k), Some(&yes), "{k}");
     }
     assert_eq!(

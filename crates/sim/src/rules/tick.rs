@@ -40,6 +40,12 @@ pub struct TickRules {
     /// I1 (Inferred for the real runner; the recorder has no latch): the
     /// `keyboard_check_direct` "pressed since the last direct read" latch.
     pub direct_latch: DirectLatch,
+    /// R28 (fps warm-up): GML `fps` reads 0 while `World::tick` is below this, then the tick
+    /// rate. Default 0: normal play reads the tick rate from the first tick (Design; the real
+    /// GM8 runner's first non-zero frame is UNKNOWN, research kid/B.md "Play timer", and real
+    /// play passes the menus for over a second). The trace runner sets it from the recorder's
+    /// first non-zero frame (51), as the recorder's runs skip the menus.
+    pub fps_zero_ticks: u64,
     /// `instance_change` (not in the spec): which kind properties the instance takes.
     pub change_kind: ChangeKindProps,
 }
