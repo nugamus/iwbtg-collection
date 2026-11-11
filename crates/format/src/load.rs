@@ -144,6 +144,21 @@ pub fn load_report(files: &PackageFiles, mode: LoadMode) -> LoadReport {
 // Converter requests named by Trace-mode warnings (docs/format/v0.md, "Converter requests").
 
 /// What each converter request asks for, as printed in its warning.
+/// Each map with its chain and its ranked start, in `[[maps]]` order (#505). A map whose chain
+/// did not resolve is left out (its errors are diagnostics, so no `GameDef` is returned anyway).
+fn map_defs(
+    maps: &[MapTiming],
+    mut starts: BTreeMap<String, iwbtg_sim::stripped::RankedStart>,
+) -> Vec<iwbtg_sim::def::MapDef> {
+    maps.iter()
+        .map(|m| iwbtg_sim::def::MapDef {
+            id: m.id.clone(),
+            timing: m.timing.clone(),
+            start: starts.remove(&m.id).unwrap_or_default(),
+        })
+        .collect()
+}
+
 fn request_text(cr: &str) -> &'static str {
     match cr {
         "CR1, CR2" => {
@@ -510,7 +525,8 @@ impl<'a> Loader<'a> {
         // Step 8: cross-references not already resolved above.
         self.warp_targets(&room_defs);
         self.stripped_refs(&rooms);
-        let stripped = self.stripped_def(&vars);
+        let (stripped, map_starts) = self.stripped_def(&vars);
+        let maps = map_defs(&self.maps, map_starts);
         if self.trace_mode() {
             self.inert_twins(&mut room_defs);
         }
@@ -558,6 +574,7 @@ impl<'a> Loader<'a> {
             paths,
             scripts: std::mem::take(&mut self.scripts),
             timing: timing?,
+            maps,
             stripped,
         };
         self.merge_script_events(&mut def);
@@ -2190,9 +2207,14 @@ impl<'a> Loader<'a> {
         }
     }
 
-    /// `[stripped]` resolved to ids for the sim (#561). Rooms, kinds and names that do not resolve
-    /// were reported by [`Loader::stripped_refs`] and are left out here.
-    fn stripped_def(&mut self, vars: &BTreeMap<String, iwbtg_sim::def::VarId>) -> StrippedDef {
+    /// `[stripped]` resolved to ids for the sim (#561), and each map's ranked start by map id
+    /// (`stripped_start` merged over `[stripped].start`; one `main` entry without `[[maps]]`).
+    /// Rooms, kinds and names that do not resolve were reported by [`Loader::stripped_refs`] and
+    /// are left out here.
+    fn stripped_def(
+        &mut self,
+        vars: &BTreeMap<String, iwbtg_sim::def::VarId>,
+    ) -> (StrippedDef, BTreeMap<String, iwbtg_sim::stripped::RankedStart>) {
         let m = self.m;
         let section = m.stripped.as_ref();
         let base = section.and_then(|s| s.start.as_ref());
@@ -2207,11 +2229,10 @@ impl<'a> Loader<'a> {
         }
         let mut def = StrippedDef {
             start,
-            map_starts,
             ..StrippedDef::default()
         };
         let Some(section) = section else {
-            return def;
+            return (def, map_starts);
         };
         if let Some(cut) = &section.cut {
             for entry in &cut.rooms {
@@ -2251,7 +2272,7 @@ impl<'a> Loader<'a> {
                 })
             })
             .collect();
-        def
+        (def, map_starts)
     }
 
     /// A ranked start: `over`'s keys over `base`'s, globals merged by name (the map's value wins).

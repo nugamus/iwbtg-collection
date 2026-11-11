@@ -1,6 +1,6 @@
 //! `iwbtg replay run`: ticks, splits, ranked time, final hash (docs/plans/sim-core.md 9.4, WP8b).
 //!
-//! Runs a package headless on a `.iwbr` replay or an action-named `.inputs` file and prints six
+//! Runs a package headless on a `.iwbr` replay or an action-named `.inputs` file and prints seven
 //! lines:
 //!
 //! ```text
@@ -9,15 +9,18 @@
 //! ranked: 8599 frozen: 400
 //! hash: <64 hex digits>
 //! mode: stripped
+//! map: hard
 //! start: stage1
 //! ```
 //!
 //! A split is `<index>@<tick>` (`timing::Split`: 0 is the start, then the stages, then the end).
 //! `splits: none` when no trigger fired. `ranked` is ranked time in ticks, the timer's ticks
 //! outside every cutscene and dialogue region, and `frozen` the timer's ticks inside one
-//! (`Sim::ranked_ticks`, #34); in Play original nothing is frozen. Two more lines follow: `mode: original` or
+//! (`Sim::ranked_ticks`, #34); in Play original nothing is frozen. Three more lines follow: `mode: original` or
 //! `mode: stripped` (Play original or ranked, #561; a `.iwbr` replay's header says which, else
-//! `--mode`), and `start: <room id>`, the room the run started in. The run stops early when the sim ends (`game_end`) and
+//! `--mode`), `map: <id>`, the map whose timing chain (and in a stripped run, ranked start) the
+//! run used (#505; the header's, else `--map`, else the package's first map), and
+//! `start: <room id>`, the room the run started in. The run stops early when the sim ends (`game_end`) and
 //! fails with exit code 2 when it halts. With Sudden Death (`--mods SD`, or a replay header
 //! carrying it) the run also stops on the tick of the first death, and a replay with inputs past
 //! that tick is rejected (docs/architecture/replay.md, "Mods").
@@ -62,6 +65,10 @@ pub struct ReplayRunArgs {
     /// `.iwbr` replay carries its own.
     #[arg(long, value_parser = PlayMode::parse, default_value = "original")]
     pub mode: PlayMode,
+    /// Map id for an `.inputs` file (default: the package's first map, `main` without
+    /// `[[maps]]`); a `.iwbr` replay carries its own, and a different `--map` is an error.
+    #[arg(long)]
+    pub map: Option<String>,
 }
 
 /// What to run: the frames and the setup a replay header (or the `.inputs` flags) gives.
@@ -75,6 +82,8 @@ pub struct RunInput {
     pub mods: ModSet,
     /// Original or stripped.
     pub mode: PlayMode,
+    /// The map id; `None` is the package's first map.
+    pub map: Option<String>,
 }
 
 /// What a headless run gives.
@@ -92,12 +101,14 @@ pub struct ReplaySummary {
     pub hash: [u8; 32],
     /// Original or stripped.
     pub mode: PlayMode,
+    /// The map the run played (`Sim::map_id`).
+    pub map: String,
     /// The room the run started in (after `Sim::new`), by id.
     pub start_room: String,
 }
 
 impl ReplaySummary {
-    /// The six output lines.
+    /// The seven output lines.
     pub fn lines(&self) -> String {
         let splits = if self.splits.is_empty() {
             "none".to_owned()
@@ -110,18 +121,20 @@ impl ReplaySummary {
         };
         let hash: String = self.hash.iter().map(|b| format!("{b:02x}")).collect();
         format!(
-            "ticks: {}\nsplits: {splits}\nranked: {} frozen: {}\nhash: {hash}\nmode: {}\nstart: {}\n",
+            "ticks: {}\nsplits: {splits}\nranked: {} frozen: {}\nhash: {hash}\nmode: {}\nmap: {}\nstart: {}\n",
             self.ticks,
             self.ranked_ticks,
             self.frozen_ticks,
             self.mode.name(),
+            self.map,
             self.start_room
         )
     }
 }
 
 /// `iwbtg replay run`: reads the package and the input, runs [`run`] and prints `ticks: N`,
-/// `splits: ...`, `ranked: N frozen: N`, `hash: <hex>`, `mode: ...` and `start: <room>`.
+/// `splits: ...`, `ranked: N frozen: N`, `hash: <hex>`, `mode: ...`, `map: <id>` and
+/// `start: <room>`.
 pub fn main(args: &ReplayRunArgs) -> Result<(), ToolError> {
     if args.start != "new-game" {
         return Err(ToolError::Message(format!(
@@ -130,7 +143,7 @@ pub fn main(args: &ReplayRunArgs) -> Result<(), ToolError> {
         )));
     }
     let pkg = load_package(&args.pkg)?;
-    let input = read_input(&args.input, args.seed, args.mods, args.mode)?;
+    let input = read_input(&args.input, args.seed, args.mods, args.mode, args.map.clone())?;
     let options = SimOptions {
         start: StartPoint::NewGame {
             difficulty: args.difficulty,
@@ -138,6 +151,7 @@ pub fn main(args: &ReplayRunArgs) -> Result<(), ToolError> {
         seed: input.seed,
         dll_mode: DllMode::Model,
         mode: input.mode,
+        map: input.map,
     };
     let summary = run(&pkg, &input.frames, options, input.mods)?;
     print!("{}", summary.lines());
@@ -164,17 +178,34 @@ pub fn replay_input(bytes: &[u8], label: &str) -> Result<RunInput, ToolError> {
         seed,
         mods: replay.header.mods,
         mode: replay.header.play_mode,
+        map: Some(replay.header.map),
     })
 }
 
 /// What to run: a `.iwbr` replay's inputs and header, or the frames of an `.inputs` file (frames
-/// 0 through its `end` frame, as the trace runner ticks them) with `seed`, `mods` and `mode`.
-fn read_input(path: &Path, seed: u32, mods: ModSet, mode: PlayMode) -> Result<RunInput, ToolError> {
+/// 0 through its `end` frame, as the trace runner ticks them) with `seed`, `mods`, `mode` and
+/// `map`. A `map` that differs from a replay header's is an error.
+fn read_input(
+    path: &Path,
+    seed: u32,
+    mods: ModSet,
+    mode: PlayMode,
+    map: Option<String>,
+) -> Result<RunInput, ToolError> {
     let is_replay = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("iwbr"));
     if is_replay {
         let bytes =
             std::fs::read(path).map_err(|e| ToolError::Message(format!("{}: {e}", path.display())))?;
-        return replay_input(&bytes, &path.display().to_string());
+        let input = replay_input(&bytes, &path.display().to_string())?;
+        if let (Some(want), Some(have)) = (&map, &input.map)
+            && want != have
+        {
+            return Err(ToolError::Message(format!(
+                "{}: the replay played map `{have}`, not `{want}`",
+                path.display()
+            )));
+        }
+        return Ok(input);
     }
     let parsed = parse_action_inputs(&read_text(path)?)
         .map_err(|e| ToolError::Message(format!("{}: {e}", path.display())))?;
@@ -186,6 +217,7 @@ fn read_input(path: &Path, seed: u32, mods: ModSet, mode: PlayMode) -> Result<Ru
         seed,
         mods,
         mode,
+        map,
     })
 }
 
@@ -225,6 +257,7 @@ pub fn run_def(
     let mut sim = Sim::new(Arc::new(def), options)
         .map_err(|e| ToolError::Message(format!("the sim did not start: {e}")))?;
     let start_room = room_name(sim.def(), sim.world().room);
+    let map = sim.map_id().to_owned();
     let mut splits = Vec::new();
     for (index, frame) in frames.iter().enumerate() {
         let deaths = sim.world().engine.run.deaths;
@@ -258,6 +291,7 @@ pub fn run_def(
         frozen_ticks: sim.frozen_ticks(),
         hash: sim.state_hash(),
         mode,
+        map,
         start_room,
     })
 }
@@ -281,6 +315,7 @@ mod tests {
             frozen_ticks: 3,
             hash: [0xab; 32],
             mode: PlayMode::Stripped,
+            map: "hard".into(),
             start_room: "stage1".into(),
         };
         let text = s.lines();
@@ -294,6 +329,7 @@ mod tests {
                 .is_some_and(|l| l.starts_with("hash: abab") && l.len() == 6 + 64)
         );
         assert_eq!(lines.next(), Some("mode: stripped"));
+        assert_eq!(lines.next(), Some("map: hard"));
         assert_eq!(lines.next(), Some("start: stage1"));
         let none = ReplaySummary { splits: vec![], ..s };
         assert!(none.lines().contains("splits: none"));
@@ -304,7 +340,7 @@ mod tests {
         let dir = std::env::temp_dir();
         let path = dir.join(format!("iwbtg-replay-test-{}.inputs", std::process::id()));
         std::fs::write(&path, "frame 2: hold jump\nframe 4: end\n").unwrap();
-        let input = read_input(&path, 9, ModSet::NONE, PlayMode::Stripped).unwrap();
+        let input = read_input(&path, 9, ModSet::NONE, PlayMode::Stripped, None).unwrap();
         std::fs::remove_file(&path).ok();
         let frames = input.frames;
         assert_eq!(frames.len(), 5);
@@ -358,6 +394,7 @@ mod tests {
             seed: 0,
             dll_mode: DllMode::Model,
             mode: iwbtg_sim::stripped::PlayMode::Original,
+            map: None,
         };
         let (def, frames) = suicide_kid();
         let plain = run_def(def.clone(), &frames, options.clone(), ModSet::NONE).unwrap();
@@ -390,6 +427,7 @@ mod tests {
             seed: 0,
             dll_mode: DllMode::Model,
             mode,
+            map: None,
         };
         let ranked = run(&pkg, &frames, options(PlayMode::Stripped), ModSet::NONE).unwrap();
         assert_eq!((ranked.ranked_ticks, ranked.frozen_ticks), (30, 29));
@@ -411,6 +449,7 @@ mod tests {
             0,
             ModSet::NONE,
             PlayMode::Original,
+            None,
         )
         .unwrap();
         let options = SimOptions {
@@ -418,6 +457,7 @@ mod tests {
             seed,
             dll_mode: DllMode::Model,
             mode: iwbtg_sim::stripped::PlayMode::Original,
+            map: None,
         };
         let attempt = std::panic::catch_unwind(|| {
             let a = run(&pkg, &frames, options.clone(), mods).unwrap();

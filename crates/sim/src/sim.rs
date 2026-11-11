@@ -28,6 +28,10 @@ pub struct SimOptions {
     /// Play original or ranked (stripped): what `GameDef::stripped` changes (#561). In the
     /// replay header.
     pub mode: PlayMode,
+    /// The map the run plays, by id (`GameDef::maps`, #505): its timing chain, and in a
+    /// stripped run its ranked start. `None` is the package's first map (`main` without
+    /// `[[maps]]`). The replay header records the resolved id ([`Sim::map_id`]).
+    pub map: Option<String>,
 }
 
 /// What one tick did.
@@ -60,13 +64,21 @@ impl Sim {
     /// (`room::start_game`). Every `Ctx` it builds carries `options.dll_mode`.
     ///
     /// The world starts in `GameDef::start_room` at tick 0 before `start_game` moves it. A
-    /// start that halts is returned as the error.
+    /// start that halts is returned as the error, and so is a map the package does not have.
     pub fn new(def: Arc<GameDef>, options: SimOptions) -> Result<Sim, SimError> {
+        let map = def.map_index(options.map.as_deref()).ok_or_else(|| {
+            SimError::unsupported(format!(
+                "map `{}` is not in package `{}`",
+                options.map.as_deref().unwrap_or_default(),
+                def.id
+            ))
+        })?;
         let mut rules = RunnerRules::for_runner(def.runner, def.engine_rev)?;
         rules.num.float_model = def.float_model;
         let scripts = ScriptRuntime::new(&def, &rules)?;
         let mut world = World::new(def.start_room, options.seed);
         world.mode = options.mode;
+        world.map = map;
         {
             let mut ctx = Ctx {
                 def: &def,
@@ -152,7 +164,7 @@ impl Sim {
         }
     }
 
-    /// Ranked time so far, in ticks: the ticks the `[timing]` timer ran outside every cutscene
+    /// Ranked time so far, in ticks: the ticks the map's timer ran outside every cutscene
     /// and dialogue region (`TimingState::ranked_ticks`, #34). In Play original nothing is
     /// frozen, so it is the timer's ticks.
     pub fn ranked_ticks(&self) -> u64 {
@@ -183,6 +195,11 @@ impl Sim {
     /// The rules of this run.
     pub fn rules(&self) -> &RunnerRules {
         &self.rules
+    }
+
+    /// The id of the map the run plays (`SimOptions::map` resolved; `GameDef::map_id`).
+    pub fn map_id(&self) -> &str {
+        self.def.map_id(self.world.map)
     }
 
     /// The options the run started with.

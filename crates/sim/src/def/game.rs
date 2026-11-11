@@ -18,7 +18,7 @@ use super::timeline::TimelineDef;
 use crate::num::Real;
 use crate::rules::Runner;
 use crate::rules::num::FloatModel;
-use crate::stripped::StrippedDef;
+use crate::stripped::{RankedStart, StrippedDef};
 use crate::timing::TimingDef;
 
 /// Everything the sim needs to run one game.
@@ -78,14 +78,64 @@ pub struct GameDef {
     /// Script sources, indexed by `ScriptId` (`KindDef::script`). Compiled by the script host
     /// (WP9) when the `Sim` is built.
     pub scripts: Vec<ScriptDef>,
-    /// Timing triggers (`[timing]`).
+    /// Timing triggers (`[timing]`). A run on a map uses that map's chain ([`GameDef::maps`]);
+    /// this one only when `maps` is empty (a definition built by hand).
     pub timing: TimingDef,
+    /// The package's maps in `[[maps]]` order, one [`DEFAULT_MAP_ID`] map without `[[maps]]`
+    /// (docs/format/v0.md, Maps). A run picks one (`SimOptions::map`, #505).
+    pub maps: Vec<MapDef>,
     /// Ranked (stripped) mode: `[stripped]` resolved (`crate::stripped`). Used only by
     /// `PlayMode::Stripped` runs.
     pub stripped: StrippedDef,
 }
 
+/// The id of a package's only map when it has no `[[maps]]`.
+pub const DEFAULT_MAP_ID: &str = "main";
+
+/// One map of a package, resolved (docs/format/v0.md, Maps): what a run on it times and where
+/// a ranked run on it starts.
+#[derive(Clone, PartialEq, Debug)]
+pub struct MapDef {
+    /// The map id, unique in the package.
+    pub id: String,
+    /// The map's chain: its `start`, `end` and `stages` over `[timing]`'s.
+    pub timing: TimingDef,
+    /// The map's ranked start: its `stripped_start` merged over `[stripped].start`.
+    pub start: RankedStart,
+}
+
 impl GameDef {
+    /// The index of the map a run on `id` plays; `None` is the first map. `None` when the
+    /// package has no such map. Without [`GameDef::maps`] the only map is [`DEFAULT_MAP_ID`].
+    pub fn map_index(&self, id: Option<&str>) -> Option<u16> {
+        match id {
+            None => Some(0),
+            Some(id) if self.maps.is_empty() => (id == DEFAULT_MAP_ID).then_some(0),
+            Some(id) => self
+                .maps
+                .iter()
+                .position(|m| m.id == id)
+                .and_then(|i| u16::try_from(i).ok()),
+        }
+    }
+
+    /// The id of map `map`.
+    pub fn map_id(&self, map: u16) -> &str {
+        self.maps.get(usize::from(map)).map_or(DEFAULT_MAP_ID, |m| m.id.as_str())
+    }
+
+    /// The timing chain of map `map` ([`GameDef::timing`] without maps).
+    pub fn map_timing(&self, map: u16) -> &TimingDef {
+        self.maps.get(usize::from(map)).map_or(&self.timing, |m| &m.timing)
+    }
+
+    /// The ranked start of map `map` (`[stripped].start` without maps).
+    pub fn map_start(&self, map: u16) -> &RankedStart {
+        self.maps
+            .get(usize::from(map))
+            .map_or(&self.stripped.start, |m| &m.start)
+    }
+
     /// The kind with this id.
     pub fn kind(&self, id: KindId) -> Option<&KindDef> {
         self.kinds.get(id.index()?)
