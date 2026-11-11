@@ -1,5 +1,5 @@
 //! The in-run HUD: three columns, live leaderboard left, game centre, run info right
-//! (docs/product.md, In-game display; docs/architecture/client.md, HUD).
+//! (docs/product.md, In-game display; docs/architecture/client/hud.md).
 //!
 //! `layout` decides where the game and the columns go; `screen.rs` puts the game camera there and
 //! this module places the panels. Keys (no settings screen yet, #53): Shift+Tab hides and shows the

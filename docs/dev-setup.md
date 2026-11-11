@@ -52,6 +52,7 @@ Teammates share the lead's working folder, so the CLAUDE.md files require:
 - **One worktree per lane:** `IWBTG Collection/worktrees/<repo>-<lane>` (`client-ui`, `client-data`, `client-sim`), created once with `git worktree add ../worktrees/<repo>-<lane> -b issue-<n>-<name> origin/main` from inside the repo. Each next issue is a new branch in the same worktree (`git switch -c issue-<n>-<name> origin/main`), so its `target/` stays warm. The main checkouts stay on `main`. `worktrees/` is in no repo.
 - **Claims:** the `in-progress` label, in all three repos. The session-start hook lists claimed issues separately and leaves them out of the next-issues list.
 - **Merging:** teammates open PRs and send the link to the lead. The lead merges one at a time with `gh pr merge --squash`. Lane worktrees are kept between issues, so never `--delete-branch`: gh then also removes a local worktree checked out on that branch (seen 2026-11-05). All three repos have GitHub's `delete_branch_on_merge` on (set 2026-11-05), which deletes the merged branch and retargets PRs based on it to `main`.
+- **Doc pages per module** (#562): on 2026-11-10 five of seven open client PRs conflicted with `main` only in docs, `docs/architecture/client.md` most (21 commits touched it from 2026-11-01 to 2026-11-11). Every client PR edited that one page, so each merge made the waiting PRs conflict again. The client's notes are now one page per module in `docs/architecture/client/` (`client.md` is the index), so PRs on different modules never touch the same file. A PR adds its note to its module's page; a new module adds a new page and one line, in alphabetical order, in the index. `merge=union` in `.gitattributes` would not help: GitHub ignores repository merge drivers in its mergeability check and its merge buttons (GitHub Support, quoted in community discussion 9288; the feature request there is still open in 2026-10), so it would only help local merges.
 - **Research data work** (crawls, downloads, extraction, traces, the converter) needs `archive/`, `extracted/`, `db/` and `tools/`. Those exist only in the main research checkout, so that work runs there, one agent at a time.
 
 Each client worktree builds its own `target/` folder: the first build there takes about 5 minutes alone and over 10 when three teammates start at once. That is why worktrees are per lane and never removed between issues (see Build speed). Teams use several times the tokens of one session. The docs advise 3 to 5 teammates, Sonnet for teammates, and checking in on the team often. `/resume` does not bring back in-process teammates.
@@ -104,7 +105,7 @@ What follows from it:
 
 ## UI gallery in a browser
 
-The client's wasm32 build opens the UI gallery (`--ui-gallery` on native; [client architecture, UI](architecture/client.md#ui)). To run it in a browser, from `client/`:
+The client's wasm32 build opens the UI gallery (`--ui-gallery` on native; [client architecture, UI](architecture/client/ui.md)). To run it in a browser, from `client/`:
 
 ```
 cargo build -p iwbtg-client --release --target wasm32-unknown-unknown
@@ -125,7 +126,7 @@ python -I .claude/hooks/issues.py start
 python -I ../research/.claude/hooks/guard_archive.py --test
 ```
 
-Expected: the build ends with `Finished`. `issues.py start` prints JSON with milestone progress and the next issues. The guard prints `guard_archive self-test passed`.
+Expected: the build ends with `Finished`. `issues.py start` prints JSON with main's CI status (a first line `MAIN IS RED` when it failed), milestone progress and the next issues. The guard prints `guard_archive self-test passed`.
 
 ## CI
 
@@ -136,7 +137,7 @@ Expected: the build ends with `Finished`. `issues.py start` prints JSON with mil
 The checks:
 
 - Windows and Linux: `cargo clippy --workspace --tests -- -D warnings`, `cargo test --workspace` (all `--locked`, warnings are errors), and `cargo fmt --check` on Linux.
-- wasm32: `cargo test -p iwbtg-sim` and `cargo test -p iwbtg-format --lib --test fixtures` on wasm32-wasip1 under wasmtime, and wasm32-unknown-unknown builds of the sim, the format crate and the client (the client's browser build opens the UI gallery). The package-loading `wp7a_*` tests run on native targets only, because wasm32-wasip1 aborts on the panics of unmerged WP0 stubs. On wasm32-unknown-unknown, `wp1_determinism` runs under node through `wasm-bindgen-test` (`.cargo/config.toml` sets the runner): `cargo test -p iwbtg-sim --test wp1_determinism --target wasm32-unknown-unknown`. The runner is the wasm-bindgen CLI, and its version must equal `wasm-bindgen` in Cargo.lock: `cargo install wasm-bindgen-cli --version <lock version> --locked`. Other sim tests still need the same `#[wasm_bindgen_test]` switch to run there.
+- wasm32: `cargo test -p iwbtg-sim` and `cargo test -p iwbtg-format --lib --test fixtures` on wasm32-wasip1 under wasmtime, a wasm32-unknown-unknown build of the sim and the format crate, and `cargo clippy -p iwbtg-client --target wasm32-unknown-unknown --locked -- -D warnings` for the client (its browser build opens the UI gallery; this also lints the web-only code such as the `localStorage` backend). The package-loading `wp7a_*` tests run on native targets only, because wasm32-wasip1 aborts on the panics of unmerged WP0 stubs. On wasm32-unknown-unknown, `wp1_determinism` runs under node through `wasm-bindgen-test` (`.cargo/config.toml` sets the runner): `cargo test -p iwbtg-sim --test wp1_determinism --target wasm32-unknown-unknown`. The runner is the wasm-bindgen CLI, and its version must equal `wasm-bindgen` in Cargo.lock: `cargo install wasm-bindgen-cli --version <lock version> --locked`. Other sim tests still need the same `#[wasm_bindgen_test]` switch to run there.
 - `cargo deny check licenses`, and the sim's dependency ban: `cargo deny --manifest-path crates/sim/Cargo.toml --config crates/sim/deny.toml check bans` (docs/architecture/sim.md, Sim purity).
 
 The same checks locally, from `client/`:

@@ -49,8 +49,9 @@ const PAUSED_INK: Color = Color::srgb_u8(0xff, 0xb3, 0xbd);
 /// A held arrow or word: white (the artboard's glow is not drawn).
 const HELD: Color = Color::WHITE;
 
-/// Written by the pause menu (`pause.rs`, #479): whether it is open, and the ranked ticks the
-/// run has spent paused, which the timer adds to `Sim::ranked_ticks` (the timer keeps running).
+/// Written by the pause menu (`pause.rs`, #479): whether it is open, and the ticks the run has
+/// spent paused while its timer ran, which the timer adds to `Sim::ranked_ticks` (the timer keeps
+/// running).
 #[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Paused {
     pub open: bool,

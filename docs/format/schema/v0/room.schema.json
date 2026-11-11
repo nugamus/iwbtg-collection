@@ -395,6 +395,10 @@
       },
       "type": "array"
     },
+    "djump_grants_tjump": {
+      "default": false,
+      "type": "boolean"
+    },
     "file_speed": {
       "default": null,
       "format": "uint32",

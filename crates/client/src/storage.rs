@@ -1,6 +1,6 @@
 //! Where the client keeps what it remembers between sessions: the settings file (`settings.rs`,
 //! with the bindings), the save slots (`savefile.rs`) and the local stats (`stats/`). One small interface, two backends
-//! (docs/architecture/client.md, Storage):
+//! (docs/architecture/client/storage.md):
 //!
 //! - native: files under the user's config or data folder, written beside the file and renamed
 //!   so a crash never leaves half a file;

@@ -1,5 +1,5 @@
-//! `iwbtg-client <package>`: opens a game package in a window (docs/architecture/client.md).
-//! `iwbtg-client --ui-gallery`: the UI kit's component gallery (docs/architecture/client.md, UI).
+//! `iwbtg-client <package>`: opens a game package in a window (docs/architecture/client/view.md).
+//! `iwbtg-client --ui-gallery`: the UI kit's component gallery (docs/architecture/client/ui.md).
 //!
 //! The sim ticks at the game's rate on a fixed clock, whatever the frame rate; every visible
 //! instance with a sprite is drawn where the sim last put it.
@@ -122,7 +122,7 @@ fn main() -> ExitCode {
     // A `--screenshot` check keeps no stats, as it keeps no settings.
     let keep_stats = args.view.screenshot.is_none();
     let gameplay_hash = pkg.gameplay_hash;
-    eprintln!("{}", mods::describe(run_mods));
+    eprintln!("{}", mods::describe(run_mods, args.view.ranked));
     let result = view::run(pkg, args.view, |app, pkg| {
         app.add_plugins((
             screen::ScreenPlugin,
