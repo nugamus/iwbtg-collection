@@ -241,10 +241,8 @@ fn basic_package_loads_strict() {
     assert_eq!((left.kind, left.rank), (spike, 8));
     assert_ne!(spike_def.sprite, down_def.sprite);
     assert_eq!(def.rank_for(spike_down, None), Some(7));
-    assert_eq!(
-        left.params.0.get("depth"),
-        Some(&ParamValue::Real(Real::new(5.0)))
-    );
+    assert_eq!(left.depth, Some(Real::new(5.0)));
+    assert!(!left.params.0.contains_key("depth"));
     assert_eq!(spike_def.classes, ClassMask::KILLER);
 
     // Names and groups.
@@ -292,17 +290,12 @@ fn basic_package_loads_strict() {
     let names: Vec<(&str, VarId)> = def.var_names.iter().map(|(k, v)| (k.as_str(), *v)).collect();
     assert_eq!(
         names,
-        [
-            ("depth", VarId(0)),
-            ("difficulty", VarId(1)),
-            ("dir", VarId(2)),
-            ("room_to", VarId(3))
-        ]
+        [("difficulty", VarId(0)), ("dir", VarId(1)), ("room_to", VarId(2))]
     );
     assert_eq!(
         def.rooms[0].on_create,
         [RoomAction::SetGlobal {
-            var: VarId(1),
+            var: VarId(0),
             value: Value::Real(Real::ONE),
             difficulty: Some(1)
         }]
@@ -1917,4 +1910,39 @@ fn a_set_global_difficulty_must_be_a_whole_number_from_0_to_255() {
             "{bad}: {errs:#?}"
         );
     }
+}
+
+// ---- #632: instance `depth` and `visible` are common keys, not params
+
+#[test]
+fn instance_depth_and_visible_are_common_keys_on_built_ins() {
+    let files = tier2_package(
+        concat!(
+            "  { kind = \"slope\", x = 260, y = 100, shape = \"rise_left\", depth = 3 },\n",
+            "  { kind = \"gravity_flip\", x = 140, y = 100, direction = \"up\", visible = false },\n",
+            "  { kind = \"warp\", x = 20, y = 20, room_to = \"title\", depth = -2, visible = true },\n",
+        ),
+        |_| {},
+    );
+    let (def, report) = load_ok(&files, STRICT);
+    assert!(report.ok(), "{}", render(&report));
+    let slope = placed(&def, "stage1", "slope")[0];
+    assert_eq!(slope.depth, Some(Real::new(3.0)));
+    assert_eq!(slope.visible, None);
+    assert!(!slope.params.0.contains_key("depth"));
+    let flip = placed(&def, "stage1", "gravity_flip")[0];
+    assert_eq!(flip.visible, Some(false));
+    assert_eq!(flip.depth, None);
+    assert!(!flip.params.0.contains_key("visible"));
+    let warps = placed(&def, "stage1", "warp");
+    let w = warps.iter().find(|w| w.depth.is_some()).expect("warp with depth");
+    assert_eq!((w.depth, w.visible), (Some(Real::new(-2.0)), Some(true)));
+}
+
+#[test]
+fn instance_depth_and_visible_are_typed() {
+    let errs = tier2_errors(r#"{ kind = "slope", x = 0, y = 0, shape = "rise_left", visible = 1 }"#);
+    assert!(errs.iter().any(|e| e.contains("visible")), "{errs:?}");
+    let errs = tier2_errors(r#"{ kind = "slope", x = 0, y = 0, shape = "rise_left", depth = "deep" }"#);
+    assert!(errs.iter().any(|e| e.contains("depth")), "{errs:?}");
 }

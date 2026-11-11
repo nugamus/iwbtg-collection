@@ -136,6 +136,10 @@ pub struct PlacedInstance {
     pub yscale: Real,
     /// `image_angle`.
     pub angle: Real,
+    /// `visible` from the room file; `None` keeps the kind's.
+    pub visible: Option<bool>,
+    /// `depth` from the room file; `None` keeps the kind's.
+    pub depth: Option<Real>,
     /// Instance creation code, as params.
     pub params: Params,
     /// Instance name, for triggers and scripts.
@@ -155,6 +159,8 @@ impl PlacedInstance {
             xscale: Real::ONE,
             yscale: Real::ONE,
             angle: Real::ZERO,
+            visible: None,
+            depth: None,
             params: Params::default(),
             name: None,
             group: None,

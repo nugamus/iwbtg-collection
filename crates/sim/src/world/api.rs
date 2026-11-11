@@ -74,6 +74,10 @@ pub struct SpawnInit {
     pub yscale: Real,
     /// `image_angle` from the room file.
     pub angle: Real,
+    /// `visible` from the room file; `None` keeps the kind's.
+    pub visible: Option<bool>,
+    /// `depth` from the room file; `None` keeps the kind's.
+    pub depth: Option<Real>,
     /// Instance name from the room file (triggers, scripts, probe `Named` targets).
     pub name: Option<NameId>,
     /// Instance group from the room file.
@@ -92,6 +96,8 @@ impl Default for SpawnInit {
             xscale: Real::ONE,
             yscale: Real::ONE,
             angle: Real::ZERO,
+            visible: None,
+            depth: None,
             name: None,
             group: None,
             run_create: true,
@@ -251,8 +257,8 @@ impl Ctx<'_> {
         inst.group = init.group;
         inst.classes = kd.classes;
         inst.solid = kd.solid;
-        inst.visible = kd.visible;
-        inst.depth = kd.depth;
+        inst.visible = init.visible.unwrap_or(kd.visible);
+        inst.depth = init.depth.unwrap_or(kd.depth);
         inst.persistent = kd.persistent;
         inst.img.set_sprite(kd.sprite);
         inst.img.set_mask(kd.mask);

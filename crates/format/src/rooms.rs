@@ -23,10 +23,10 @@ pub const MAX_INSTANCES_PER_ROOM: usize = 50_000;
 /// Default `run` spacing (docs/format/v0.md; spacing default is still OPEN there).
 pub const DEFAULT_STEP: (f64, f64) = (32.0, 32.0);
 
-/// Keys of an instance that are not params. `depth` and `visible` are params: instance creation
-/// code sets them like any other variable, so they travel with the other creation-code params.
-pub const INSTANCE_KEYS: [&str; 10] = [
-    "kind", "x", "y", "name", "group", "xscale", "yscale", "angle", "run", "step",
+/// Keys of an instance that are not params (docs/format/v0.md, Rooms: common instance keys).
+/// `depth` and `visible` override the kind's for every kind, like `xscale`, `yscale` and `angle`.
+pub const INSTANCE_KEYS: [&str; 12] = [
+    "kind", "x", "y", "name", "group", "xscale", "yscale", "angle", "visible", "depth", "run", "step",
 ];
 
 /// One parsed room file.
@@ -136,6 +136,10 @@ pub struct InstanceFile {
     pub yscale: f64,
     /// `image_angle`.
     pub angle: f64,
+    /// GM `visible`; `None` keeps the kind's.
+    pub visible: Option<bool>,
+    /// GM `depth`; `None` keeps the kind's.
+    pub depth: Option<f64>,
     /// Grid size: columns, rows.
     pub run: (u32, u32),
     /// Grid spacing.
@@ -282,6 +286,15 @@ fn parse_instance(
             },
         }
     };
+    let flag = |k: &str| -> Result<Option<bool>, Diagnostic> {
+        match get(k) {
+            None => Ok(None),
+            Some(v) => match v.get_ref() {
+                toml::Value::Boolean(b) => Ok(Some(*b)),
+                _ => Err(err(v.span(), format!("`{k}` must be true or false"))),
+            },
+        }
+    };
     let pair = |k: &str| -> Result<Option<(f64, f64)>, Diagnostic> {
         match get(k) {
             None => Ok(None),
@@ -329,6 +342,8 @@ fn parse_instance(
         xscale: num("xscale", Some(1.0))?,
         yscale: num("yscale", Some(1.0))?,
         angle: num("angle", Some(0.0))?,
+        visible: flag("visible")?,
+        depth: get("depth").map(|_| num("depth", None)).transpose()?,
         run,
         step: pair("step")?.unwrap_or(DEFAULT_STEP),
         params,
@@ -360,7 +375,9 @@ instances = [
                 (64.0, 544.0)
             ]
         );
-        assert_eq!(r.instances[1].params.keys().collect::<Vec<_>>(), ["depth", "dir"]);
+        assert_eq!(r.instances[1].params.keys().collect::<Vec<_>>(), ["dir"]);
+        assert_eq!(r.instances[1].depth, Some(5.0));
+        assert_eq!(r.instances[1].visible, None);
         assert_eq!(r.instances[1].count(), 1);
     }
 
