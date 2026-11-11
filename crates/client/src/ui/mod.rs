@@ -28,6 +28,12 @@ pub struct UiKitPlugin;
 
 impl Plugin for UiKitPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((fonts::plugin, shape::plugin, motion::plugin, widgets::plugin, icons::plugin));
+        app.add_plugins((
+            fonts::plugin,
+            shape::plugin,
+            motion::plugin,
+            widgets::plugin,
+            icons::plugin,
+        ));
     }
 }

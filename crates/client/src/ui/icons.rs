@@ -183,7 +183,13 @@ pub fn render(icon: Icon, w: u32, h: u32) -> Option<Image> {
             }
             Op::Fill(d) => pixmap.fill_path(&parse(&d)?, &paint, FillRule::Winding, t, None),
             Op::Dot(x, y, r) => {
-                pixmap.fill_path(&PathBuilder::from_circle(x, y, r)?, &paint, FillRule::Winding, t, None);
+                pixmap.fill_path(
+                    &PathBuilder::from_circle(x, y, r)?,
+                    &paint,
+                    FillRule::Winding,
+                    t,
+                    None,
+                );
             }
         }
     }
