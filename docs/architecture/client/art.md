@@ -1,0 +1,5 @@
+# The client: Room art
+
+Part of [the client](../client.md).
+
+Room art (`art.rs`): when the sim's room changes (or a retry starts the sim again) the client rebuilds the room's background colour, background layers and tile layers from `iwbtg_format::art` (`load_room_art`, `load_tiles`; the format crate reads and checks the keys, the client parses no TOML of its own; how they are drawn: docs/format/v0.md, Rooms). Each background layer is cut along each axis into at most two pieces (the part of the copy that hangs over the room's top or left edge, then a repeating part), so it covers exactly the room and nothing beside it; a stretched layer is one sprite scaled to the room. The colour sits at z -996, the layers behind instances from z -995 and the foreground layers from z 995 (under the overlay at 1000), each later layer 0.001 in front. `scroll_backgrounds` rebuilds a layer with a `speed` once per tick at its new place. `crates/client/demo-art.pkg` shows a tiled background and two tile layers; `demo-layers.pkg` a sky scrolling one pixel per tick, a stretched haze, a foreground stone strip tiled only horizontally, and tiles of their own size with a `step`.

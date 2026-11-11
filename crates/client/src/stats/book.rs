@@ -1,5 +1,5 @@
 //! The stats book: everything `stats.toml` keeps, and the rules for adding a run to it
-//! (docs/architecture/client.md, Stats). Pure data: no Bevy, no storage, no clock.
+//! (docs/architecture/client/stats.md). Pure data: no Bevy, no storage, no clock.
 
 use std::collections::{BTreeMap, BTreeSet};
 
