@@ -32,8 +32,9 @@ use iwbtg_format::{LoadMode, PackageFiles, load_game};
 use iwbtg_sim::def::GameDef;
 use iwbtg_sim::input::{InputFrame, parse_action_inputs};
 use iwbtg_sim::mods::ModSet;
-use iwbtg_sim::replay::{Replay, StartMode};
+use iwbtg_sim::replay::{CHECKPOINT_INTERVAL, Replay, StartMode};
 use iwbtg_sim::room::StartPoint;
+use iwbtg_sim::save::SaveSlot;
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::stripped::PlayMode;
 use iwbtg_sim::timing::Split;
@@ -84,6 +85,19 @@ pub struct RunInput {
     pub mode: PlayMode,
     /// The map id; `None` is the package's first map.
     pub map: Option<String>,
+    /// The save slot a `FromSave` replay starts from (a client's Play original run that resumed
+    /// the save file, #476); `None` is a new game.
+    pub save: Option<SaveSlot>,
+}
+
+impl RunInput {
+    /// Where the run starts: the replay's save slot, else a new game on `difficulty`.
+    pub fn start(&self, difficulty: u8) -> StartPoint {
+        match &self.save {
+            Some(slot) => StartPoint::FromSave(slot.clone()),
+            None => StartPoint::NewGame { difficulty },
+        }
+    }
 }
 
 /// What a headless run gives.
@@ -105,6 +119,9 @@ pub struct ReplaySummary {
     pub map: String,
     /// The room the run started in (after `Sim::new`), by id.
     pub start_room: String,
+    /// `(tick, state hash truncated to 16 bytes)` after every tick that is a multiple of
+    /// `replay::CHECKPOINT_INTERVAL`, as a replay's trailer keeps them.
+    pub checkpoints: Vec<(u64, [u8; 16])>,
 }
 
 impl ReplaySummary {
@@ -145,9 +162,7 @@ pub fn main(args: &ReplayRunArgs) -> Result<(), ToolError> {
     let pkg = load_package(&args.pkg)?;
     let input = read_input(&args.input, args.seed, args.mods, args.mode, args.map.clone())?;
     let options = SimOptions {
-        start: StartPoint::NewGame {
-            difficulty: args.difficulty,
-        },
+        start: input.start(args.difficulty),
         seed: input.seed,
         dll_mode: DllMode::Model,
         mode: input.mode,
@@ -158,15 +173,120 @@ pub fn main(args: &ReplayRunArgs) -> Result<(), ToolError> {
     Ok(())
 }
 
+/// Arguments of `iwbtg replay verify <pkg> <replay>`.
+#[derive(Clone, PartialEq, Eq, Debug, clap::Args)]
+pub struct ReplayVerifyArgs {
+    /// Package folder.
+    pub pkg: PathBuf,
+    /// A `.iwbr` replay.
+    pub replay: PathBuf,
+}
+
+/// `iwbtg replay verify`: what the server checks of a replay (docs/architecture/replay.md,
+/// Verification), offline. The replay must be for this package (id and `gameplay_hash`) and this
+/// sim (`SIM_VERSION`); a headless run on its header and inputs must reproduce every claim of its
+/// trailer: tick count, splits, ranked time, checkpoints and final hash. Prints the
+/// [`ReplaySummary`] lines, then `verified`, or one `mismatch: ...` line each and `Ok(false)`.
+pub fn verify_main(args: &ReplayVerifyArgs) -> Result<bool, ToolError> {
+    let files = load_package(&args.pkg)?;
+    let bytes = std::fs::read(&args.replay)
+        .map_err(|e| ToolError::Message(format!("{}: {e}", args.replay.display())))?;
+    let label = args.replay.display().to_string();
+    let replay = Replay::decode(&bytes).map_err(|e| ToolError::Message(format!("{label}: {e}")))?;
+    let report = iwbtg_format::load::load_report(&files, LoadMode::Strict);
+    let (Some(def), Some(gameplay_hash)) = (report.def, report.gameplay_hash) else {
+        return Err(load_strict(&files, LoadMode::Strict)
+            .err()
+            .unwrap_or_else(|| ToolError::Message("the package does not load".to_owned())));
+    };
+    let input = replay_input(&bytes, &label)?;
+    let options = SimOptions {
+        start: input.start(0),
+        seed: input.seed,
+        dll_mode: DllMode::Model,
+        mode: input.mode,
+        map: input.map.clone(),
+    };
+    let h = &replay.header;
+    let mut bad = Vec::new();
+    if h.package_id != def.id {
+        bad.push(format!("package `{}`, not `{}`", h.package_id, def.id));
+    }
+    if h.gameplay_hash != gameplay_hash {
+        bad.push(format!(
+            "gameplay_hash {} is not this package's {}",
+            hex(&h.gameplay_hash),
+            hex(&gameplay_hash)
+        ));
+    }
+    if h.sim_version != iwbtg_sim::SIM_VERSION {
+        bad.push(format!(
+            "recorded on sim version {}, this build is {}",
+            h.sim_version,
+            iwbtg_sim::SIM_VERSION
+        ));
+    }
+    let s = run_def(def, &input.frames, options, input.mods)?;
+    print!("{}", s.lines());
+    let t = &replay.trailer;
+    if s.ticks != t.total_ticks {
+        bad.push(format!(
+            "ran {} ticks, the replay claims {}",
+            s.ticks, t.total_ticks
+        ));
+    }
+    let splits: Vec<(u16, u64)> = s.splits.iter().map(|x| (x.index, x.tick)).collect();
+    if splits != t.splits {
+        bad.push(format!("splits {splits:?}, the replay claims {:?}", t.splits));
+    }
+    if s.ranked_ticks != t.ranked_ticks {
+        bad.push(format!(
+            "ranked time {}, the replay claims {}",
+            s.ranked_ticks, t.ranked_ticks
+        ));
+    }
+    if let Some((ours, theirs)) = s.checkpoints.iter().zip(&t.checkpoints).find(|(a, b)| a != b) {
+        bad.push(format!(
+            "checkpoint at tick {} differs (first desync before tick {})",
+            theirs.0, ours.0
+        ));
+    } else if s.checkpoints.len() != t.checkpoints.len() {
+        bad.push(format!(
+            "{} checkpoints, the replay claims {}",
+            s.checkpoints.len(),
+            t.checkpoints.len()
+        ));
+    }
+    if s.hash != t.final_hash {
+        bad.push(format!(
+            "final hash differs: the replay claims {}",
+            hex(&t.final_hash)
+        ));
+    }
+    for b in &bad {
+        println!("mismatch: {b}");
+    }
+    if bad.is_empty() {
+        println!("verified");
+    }
+    Ok(bad.is_empty())
+}
+
+/// Lowercase hex.
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
 /// The frames, seed, mods and play mode of a `.iwbr` replay's bytes; `label` names the replay in
 /// errors.
 pub fn replay_input(bytes: &[u8], label: &str) -> Result<RunInput, ToolError> {
     let replay = Replay::decode(bytes).map_err(|e| ToolError::Message(format!("{label}: {e}")))?;
-    if replay.header.start_mode != StartMode::NewGame {
-        return Err(ToolError::Message(format!(
-            "{label}: only replays that start a new game can run here"
-        )));
-    }
+    let save = match &replay.header.start_mode {
+        StartMode::NewGame => None,
+        StartMode::FromSave(bytes) => Some(postcard::from_bytes::<SaveSlot>(bytes).map_err(|e| {
+            ToolError::Message(format!("{label}: the replay's save slot does not decode: {e}"))
+        })?),
+    };
     let seed = u32::try_from(replay.header.rng_seed).map_err(|_| {
         ToolError::Message(format!(
             "{label}: the replay's seed {} does not fit the sim's 32-bit seed",
@@ -179,6 +299,7 @@ pub fn replay_input(bytes: &[u8], label: &str) -> Result<RunInput, ToolError> {
         mods: replay.header.mods,
         mode: replay.header.play_mode,
         map: Some(replay.header.map),
+        save,
     })
 }
 
@@ -218,6 +339,7 @@ fn read_input(
         mods,
         mode,
         map,
+        save: None,
     })
 }
 
@@ -259,10 +381,20 @@ pub fn run_def(
     let start_room = room_name(sim.def(), sim.world().room);
     let map = sim.map_id().to_owned();
     let mut splits = Vec::new();
+    let mut checkpoints = Vec::new();
     for (index, frame) in frames.iter().enumerate() {
         let deaths = sim.world().engine.run.deaths;
         let step = sim.step(*frame);
         splits.extend(step.splits);
+        // After every tick that reaches a multiple of the interval (a halted step adds no tick).
+        if step.tick > 0
+            && step.tick.is_multiple_of(CHECKPOINT_INTERVAL)
+            && checkpoints.last().map(|c: &(u64, [u8; 16])| c.0) != Some(step.tick)
+        {
+            let mut c = [0; 16];
+            c.copy_from_slice(&sim.state_hash()[..16]);
+            checkpoints.push((step.tick, c));
+        }
         if step.status == SimStatus::Running && mods.ends_run(deaths, sim.world().engine.run.deaths) {
             let left = frames.len() - index - 1;
             if left > 0 {
@@ -293,6 +425,7 @@ pub fn run_def(
         mode,
         map,
         start_room,
+        checkpoints,
     })
 }
 
@@ -317,6 +450,7 @@ mod tests {
             mode: PlayMode::Stripped,
             map: "hard".into(),
             start_room: "stage1".into(),
+            checkpoints: Vec::new(),
         };
         let text = s.lines();
         let mut lines = text.lines();
@@ -479,6 +613,53 @@ mod tests {
             "hard's end fires in title"
         );
         assert_ne!(seen[0].2, seen[1].2);
+    }
+
+    /// A replay whose trailer is what a run of it gives verifies; a changed final hash, or a
+    /// replay of another package version, does not (#476).
+    #[test]
+    fn verify_accepts_a_true_trailer_and_rejects_a_changed_one() {
+        use iwbtg_sim::replay::Trailer;
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../format/tests/valid/stripped");
+        let files = load_package(&dir).unwrap();
+        let hash = iwbtg_format::load::load_report(&files, LoadMode::Strict)
+            .gameplay_hash
+            .unwrap();
+        let mut replay = Replay::decode(&stripped_replay("hard")).unwrap();
+        replay.header.gameplay_hash = hash;
+        let input = replay_input(&replay.encode().unwrap(), "x").unwrap();
+        let options = SimOptions {
+            start: input.start(0),
+            seed: input.seed,
+            dll_mode: DllMode::Model,
+            mode: input.mode,
+            map: input.map.clone(),
+        };
+        let s = run(&files, &input.frames, options, input.mods).unwrap();
+        replay.trailer = Trailer {
+            total_ticks: s.ticks,
+            splits: s.splits.iter().map(|x| (x.index, x.tick)).collect(),
+            ranked_ticks: s.ranked_ticks,
+            checkpoints: s.checkpoints.clone(),
+            final_hash: s.hash,
+        };
+        let path = std::env::temp_dir().join(format!("iwbtg-verify-test-{}.iwbr", std::process::id()));
+        let verify = |r: &Replay| {
+            std::fs::write(&path, r.encode().unwrap()).unwrap();
+            verify_main(&ReplayVerifyArgs {
+                pkg: dir.clone(),
+                replay: path.clone(),
+            })
+            .unwrap()
+        };
+        assert!(verify(&replay));
+        let mut tampered = replay.clone();
+        tampered.trailer.final_hash[0] ^= 1;
+        assert!(!verify(&tampered));
+        let mut other = replay.clone();
+        other.header.gameplay_hash = [7; 32];
+        assert!(!verify(&other));
+        std::fs::remove_file(&path).ok();
     }
 
     #[test]

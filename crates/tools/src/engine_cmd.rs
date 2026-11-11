@@ -17,7 +17,6 @@ use std::path::{Path, PathBuf};
 
 use iwbtg_format::{LoadMode, PackageFiles};
 use iwbtg_sim::SimOptions;
-use iwbtg_sim::room::StartPoint;
 use iwbtg_sim::rules::MAX_ENGINE_REV;
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::trace;
@@ -94,7 +93,7 @@ fn run_replay(
     let mut def = load_strict(files, mode)?;
     def.engine_rev = rev;
     let options = SimOptions {
-        start: StartPoint::NewGame { difficulty: 0 },
+        start: input.start(0),
         seed: input.seed,
         dll_mode: DllMode::Model,
         mode: input.mode,
