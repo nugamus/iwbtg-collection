@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 use crate::def::{GameDef, RoomId, SpriteId, VarId};
 use crate::error::SimError;
+use crate::kid::api::{self as kid_api, KidSetValue};
 use crate::num::{self, Real};
 use crate::probe::{FieldRef, FixedColumn, ImageField, ProbeTarget, SaveField, first_of_target};
 use crate::room;
@@ -57,8 +58,10 @@ impl Sim {
     /// value is `SimError::NonFinite`; alarms store `num::alarm_from_real` of the value (R3b) and
     /// `visible`/`solid` take `num::gm_bool` of it. `ProbeTarget::Row` names no instance here and
     /// is an error, as is a target with no instance (setup never creates one) and a field setup
-    /// cannot write (`id`, `room`, kid fields: `kid::api` has no setter). `SetSave` on a missing
-    /// slot first creates one with every field zero (facing 1, room 0).
+    /// cannot write (`id`, `room`, a kid field `kid::api::set_field` has no setter for). Kid flags
+    /// (`tjump`, `djump`, `onPlatform`) take `num::gm_bool` of the value; `curJumps` takes a whole
+    /// number 0 to 255. `SetSave` on a missing slot first creates one with every field zero
+    /// (facing 1, room 0).
     pub fn apply_setup(&mut self, s: &SetupAction) -> Result<(), SimError> {
         self.world.setup_applied = true;
         apply(&self.def, &self.rules, &mut self.world, s)
@@ -269,10 +272,15 @@ fn set_field(
             inst.vars.insert(*v, value.clone());
             Ok(())
         }
-        FieldRef::Kid(f) => Err(SimError::unsupported(format!(
-            "setup of kid field `{}`: kid::api has no setter (OPEN, WP5a)",
-            f.name
-        ))),
+        FieldRef::Kid(f) => {
+            let what = f.name.as_str();
+            let v = if what == "curJumps" {
+                KidSetValue::Count(int_as::<u8>(value, what)?)
+            } else {
+                KidSetValue::Flag(num::gm_bool(real(value, what)?, &rules.num))
+            };
+            kid_api::set_field(inst, f, v)
+        }
     }
 }
 
@@ -452,6 +460,58 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn kid_flags_and_count_are_writable() {
+        let s = sim();
+        let mut inst = Instance::new(InstId(1), crate::def::KindId(0), 0, Real::ZERO, Real::ZERO);
+        inst.state = crate::world::KindState::Kid(Box::default());
+        let kf = |name: &str| {
+            FieldRef::Kid(kid_api::KidField {
+                name: name.into(),
+                index: None,
+            })
+        };
+        let kid = |inst: &Instance| match &inst.state {
+            crate::world::KindState::Kid(k) => k.clone(),
+            _ => unreachable!("kid state"),
+        };
+        for (name, v) in [
+            ("tjump", 1.0),
+            ("djump", 0.6),
+            ("onPlatform", 1.0),
+            ("curJumps", 2.0),
+        ] {
+            set_field(&mut inst, &kf(name), &Value::Real(Real::new(v)), &s.rules).expect(name);
+        }
+        let k = kid(&inst);
+        assert_eq!(
+            (k.tjump, k.djump, k.on_platform, k.cur_jumps),
+            (true, true, true, 2)
+        );
+        // GM truth (N2): 0.4 is false under either `Truth` rule, like `visible`.
+        for (name, v) in [("tjump", 0.0), ("djump", 0.4), ("onPlatform", 0.0)] {
+            set_field(&mut inst, &kf(name), &Value::Real(Real::new(v)), &s.rules).expect(name);
+        }
+        let k = kid(&inst);
+        assert_eq!((k.tjump, k.djump, k.on_platform), (false, false, false));
+        for (name, v) in [
+            ("curJumps", 1.5),
+            ("curJumps", 256.0),
+            ("tjump", f64::NAN),
+            ("frozen", 1.0),
+        ] {
+            assert!(
+                set_field(&mut inst, &kf(name), &Value::Real(Real::new(v)), &s.rules).is_err(),
+                "{name} = {v}"
+            );
+        }
+        let indexed = FieldRef::Kid(kid_api::KidField {
+            name: "tjump".into(),
+            index: Some(1),
+        });
+        assert!(set_field(&mut inst, &indexed, &Value::Real(Real::ONE), &s.rules).is_err());
     }
 
     #[test]
