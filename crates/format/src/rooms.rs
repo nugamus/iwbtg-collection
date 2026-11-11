@@ -29,6 +29,10 @@ pub const INSTANCE_KEYS: [&str; 12] = [
     "kind", "x", "y", "name", "group", "xscale", "yscale", "angle", "visible", "depth", "run", "step",
 ];
 
+/// The instance key that holds params named like an instance key (`params = { kind = 20 }`,
+/// #629: GM creation code that sets a variable called `kind`).
+pub const PARAMS_KEY: &str = "params";
+
 /// One parsed room file.
 #[derive(Clone, Debug)]
 pub struct RoomFile {
@@ -83,18 +87,25 @@ pub struct ViewFile {
     pub speed: Option<[Number; 2]>,
 }
 
-/// One room creation action (plan 4.2 step 6), `{ do = "...", ... }`.
+/// One room creation action (plan 4.2 step 6), `{ do = "...", ... }`. Every row takes an
+/// optional `when` (#629): the row runs only while its condition holds.
 #[derive(Clone, Debug, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "do", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ActionFile {
-    /// `global.<var> = value`.
+    /// `global.<var> = value`, or `global.<var>[index] = value` with `index`.
     SetGlobal {
         /// Global name.
         var: String,
+        /// Array index: a whole number, or `{ global = "<name>" }` read when the row runs.
+        #[serde(default)]
+        index: Option<IndexFile>,
         /// A number, string or boolean (true is 1).
         #[cfg_attr(feature = "schema", schemars(with = "serde_json::Value"))]
         value: toml::Value,
+        /// Runs only while this holds.
+        #[serde(default)]
+        when: Option<WhenFile>,
     },
     /// `instance_create(x, y, kind)`.
     Spawn {
@@ -108,11 +119,125 @@ pub enum ActionFile {
         #[serde(default)]
         #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, serde_json::Value>"))]
         params: BTreeMap<String, toml::Value>,
+        /// Runs only while this holds.
+        #[serde(default)]
+        when: Option<WhenFile>,
     },
     /// The engine's `loadGame` (R23).
-    LoadGame,
+    LoadGame {
+        /// Runs only while this holds.
+        #[serde(default)]
+        when: Option<WhenFile>,
+    },
     /// `instance_destroy()` (R24, Confirmed: destroys nothing and the rest of the code runs).
-    DestroySelf,
+    DestroySelf {
+        /// Runs only while this holds.
+        #[serde(default)]
+        when: Option<WhenFile>,
+    },
+    /// The game's save, as its save point does; with no kid the position is x 0, y 0.
+    SaveGame {
+        /// Runs only while this holds.
+        #[serde(default)]
+        when: Option<WhenFile>,
+    },
+    /// The game's death and time save (counters only).
+    SaveDeathTime {
+        /// Runs only while this holds.
+        #[serde(default)]
+        when: Option<WhenFile>,
+    },
+    /// `player.x = x; player.y = y`: moves the first kid; nothing when no kid exists.
+    MoveKid {
+        /// Position.
+        x: Number,
+        /// Position.
+        y: Number,
+        /// Runs only while this holds.
+        #[serde(default)]
+        when: Option<WhenFile>,
+    },
+    /// `with (kind) instance_destroy()`: destroys every instance of the kind.
+    Destroy {
+        /// Kind.
+        kind: String,
+        /// Runs only while this holds.
+        #[serde(default)]
+        when: Option<WhenFile>,
+    },
+    /// `sound_play(sound)`.
+    PlaySound {
+        /// Sound id.
+        sound: String,
+        /// Runs only while this holds.
+        #[serde(default)]
+        when: Option<WhenFile>,
+    },
+    /// `sound_loop(sound)`.
+    LoopSound {
+        /// Sound id.
+        sound: String,
+        /// Runs only while this holds.
+        #[serde(default)]
+        when: Option<WhenFile>,
+    },
+    /// `sound_stop(sound)`.
+    StopSound {
+        /// Sound id.
+        sound: String,
+        /// Runs only while this holds.
+        #[serde(default)]
+        when: Option<WhenFile>,
+    },
+}
+
+impl ActionFile {
+    /// The row's `when`, if any.
+    pub fn when(&self) -> Option<&WhenFile> {
+        match self {
+            ActionFile::SetGlobal { when, .. }
+            | ActionFile::Spawn { when, .. }
+            | ActionFile::LoadGame { when }
+            | ActionFile::DestroySelf { when }
+            | ActionFile::SaveGame { when }
+            | ActionFile::SaveDeathTime { when }
+            | ActionFile::MoveKid { when, .. }
+            | ActionFile::Destroy { when, .. }
+            | ActionFile::PlaySound { when, .. }
+            | ActionFile::LoopSound { when, .. }
+            | ActionFile::StopSound { when, .. } => when.as_ref(),
+        }
+    }
+}
+
+/// The index of an indexed `set_global`.
+#[derive(Clone, Debug, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(untagged)]
+pub enum IndexFile {
+    /// A whole number from 0.
+    Number(Number),
+    /// `{ global = "<name>" }`: the global's value when the row runs (`savenum` is the save slot).
+    Global {
+        /// Global name.
+        global: String,
+    },
+}
+
+/// A row's condition, `when = { ... }`. Every key written must hold.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct WhenFile {
+    /// Runs only while `global.difficulty < n`.
+    #[serde(default)]
+    pub difficulty_below: Option<Number>,
+    /// `true`: runs only while a kid exists; `false`: only while none does.
+    #[serde(default)]
+    pub kid_exists: Option<bool>,
+    /// Runs only while no instance of this kind exists.
+    #[serde(default)]
+    pub kind_absent: Option<String>,
 }
 
 /// One instance entry as written.
@@ -328,8 +453,27 @@ fn parse_instance(
     };
     let mut params = BTreeMap::new();
     for (key, value) in map {
-        if !INSTANCE_KEYS.contains(&key.get_ref().as_str()) {
+        let k = key.get_ref().as_str();
+        if !INSTANCE_KEYS.contains(&k) && k != PARAMS_KEY {
             params.insert(key.get_ref().clone(), value.clone());
+        }
+    }
+    // `params = { kind = 20 }`: params whose names are instance keys (#629). Any other name is
+    // written as a key of its own, so each param has one place.
+    if let Some(v) = get(PARAMS_KEY) {
+        let toml::Value::Table(t) = v.get_ref() else {
+            return Err(err(v.span(), format!("`{PARAMS_KEY}` must be a table")));
+        };
+        for (key, value) in t {
+            if !INSTANCE_KEYS.contains(&key.as_str()) && key != PARAMS_KEY {
+                return Err(err(
+                    v.span(),
+                    format!(
+                        "`{PARAMS_KEY}.{key}`: `{PARAMS_KEY}` holds only params named like an instance key; write `{key}` on the instance"
+                    ),
+                ));
+            }
+            params.insert(key.clone(), Spanned::new(v.span(), value.clone()));
         }
     }
     Ok(InstanceFile {
@@ -407,7 +551,10 @@ follow = "kid"
         assert!(r.djump_grants_tjump);
         assert_eq!(r.views.len(), 1);
         assert_eq!(r.on_create.len(), 3);
-        assert!(matches!(r.on_create[2].get_ref(), ActionFile::LoadGame));
+        assert!(matches!(
+            r.on_create[2].get_ref(),
+            ActionFile::LoadGame { when: None }
+        ));
     }
 
     #[test]

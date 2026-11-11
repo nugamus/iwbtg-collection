@@ -1,15 +1,26 @@
 {
   "$defs": {
     "ActionFile": {
-      "description": "One room creation action (plan 4.2 step 6), `{ do = \"...\", ... }`.",
+      "description": "One room creation action (plan 4.2 step 6), `{ do = \"...\", ... }`. Every row takes an\noptional `when` (#629): the row runs only while its condition holds.",
       "oneOf": [
         {
           "additionalProperties": false,
-          "description": "`global.<var> = value`.",
+          "description": "`global.<var> = value`, or `global.<var>[index] = value` with `index`.",
           "properties": {
             "do": {
               "const": "set_global",
               "type": "string"
+            },
+            "index": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/IndexFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Array index: a whole number, or `{ global = \"<name>\" }` read when the row runs."
             },
             "value": {
               "description": "A number, string or boolean (true is 1)."
@@ -17,6 +28,17 @@
             "var": {
               "description": "Global name.",
               "type": "string"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WhenFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Runs only while this holds."
             }
           },
           "required": [
@@ -44,6 +66,17 @@
               "description": "Params of the new instance.",
               "type": "object"
             },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WhenFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Runs only while this holds."
+            },
             "x": {
               "$ref": "#/$defs/Number",
               "description": "Position."
@@ -68,6 +101,17 @@
             "do": {
               "const": "load_game",
               "type": "string"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WhenFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Runs only while this holds."
             }
           },
           "required": [
@@ -82,10 +126,226 @@
             "do": {
               "const": "destroy_self",
               "type": "string"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WhenFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Runs only while this holds."
             }
           },
           "required": [
             "do"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "The game's save, as its save point does; with no kid the position is x 0, y 0.",
+          "properties": {
+            "do": {
+              "const": "save_game",
+              "type": "string"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WhenFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Runs only while this holds."
+            }
+          },
+          "required": [
+            "do"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "The game's death and time save (counters only).",
+          "properties": {
+            "do": {
+              "const": "save_death_time",
+              "type": "string"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WhenFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Runs only while this holds."
+            }
+          },
+          "required": [
+            "do"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "`player.x = x; player.y = y`: moves the first kid; nothing when no kid exists.",
+          "properties": {
+            "do": {
+              "const": "move_kid",
+              "type": "string"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WhenFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Runs only while this holds."
+            },
+            "x": {
+              "$ref": "#/$defs/Number",
+              "description": "Position."
+            },
+            "y": {
+              "$ref": "#/$defs/Number",
+              "description": "Position."
+            }
+          },
+          "required": [
+            "do",
+            "x",
+            "y"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "`with (kind) instance_destroy()`: destroys every instance of the kind.",
+          "properties": {
+            "do": {
+              "const": "destroy",
+              "type": "string"
+            },
+            "kind": {
+              "description": "Kind.",
+              "type": "string"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WhenFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Runs only while this holds."
+            }
+          },
+          "required": [
+            "do",
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "`sound_play(sound)`.",
+          "properties": {
+            "do": {
+              "const": "play_sound",
+              "type": "string"
+            },
+            "sound": {
+              "description": "Sound id.",
+              "type": "string"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WhenFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Runs only while this holds."
+            }
+          },
+          "required": [
+            "do",
+            "sound"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "`sound_loop(sound)`.",
+          "properties": {
+            "do": {
+              "const": "loop_sound",
+              "type": "string"
+            },
+            "sound": {
+              "description": "Sound id.",
+              "type": "string"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WhenFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Runs only while this holds."
+            }
+          },
+          "required": [
+            "do",
+            "sound"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "`sound_stop(sound)`.",
+          "properties": {
+            "do": {
+              "const": "stop_sound",
+              "type": "string"
+            },
+            "sound": {
+              "description": "Sound id.",
+              "type": "string"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WhenFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Runs only while this holds."
+            }
+          },
+          "required": [
+            "do",
+            "sound"
           ],
           "type": "object"
         }
@@ -152,6 +412,28 @@
       ],
       "type": "object"
     },
+    "IndexFile": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Number",
+          "description": "A whole number from 0."
+        },
+        {
+          "description": "`{ global = \"<name>\" }`: the global's value when the row runs (`savenum` is the save slot).",
+          "properties": {
+            "global": {
+              "description": "Global name.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "global"
+          ],
+          "type": "object"
+        }
+      ],
+      "description": "The index of an indexed `set_global`."
+    },
     "InstanceShape": {
       "additionalProperties": true,
       "description": "One entry of `instances` in a room file. Keys other than the common ones are params of the\nkind, checked against the kind's own param list at load.",
@@ -182,6 +464,14 @@
           "description": "Instance name, for warps and scripts.",
           "type": [
             "string",
+            "null"
+          ]
+        },
+        "params": {
+          "additionalProperties": true,
+          "description": "Params named like an instance key (`params = { kind = 20 }`, GM creation code that sets\n`kind`); every other param is a key of its own.",
+          "type": [
+            "object",
             "null"
           ]
         },
@@ -366,6 +656,40 @@
       "required": [
         "view"
       ],
+      "type": "object"
+    },
+    "WhenFile": {
+      "additionalProperties": false,
+      "description": "A row's condition, `when = { ... }`. Every key written must hold.",
+      "properties": {
+        "difficulty_below": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Runs only while `global.difficulty < n`."
+        },
+        "kid_exists": {
+          "default": null,
+          "description": "`true`: runs only while a kid exists; `false`: only while none does.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "kind_absent": {
+          "default": null,
+          "description": "Runs only while no instance of this kind exists.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
       "type": "object"
     }
   },
