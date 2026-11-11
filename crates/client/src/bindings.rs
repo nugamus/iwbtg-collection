@@ -1,16 +1,16 @@
 //! The global input bindings: which keys and controller inputs stand for which client action
 //! (docs/content.md, Controls). One set for every game, defaulting to the fangame standard. The
-//! player's changes live in a small TOML file; only the actions it names differ from the defaults.
+//! player's changes live in the `[bindings]` table of the settings file (settings.rs); only the
+//! actions it names differ from the defaults.
 //!
 //! ```toml
-//! [keys]
+//! [bindings.keys]
 //! jump = ["Shift", "Space"]
-//! [pad]
+//! [bindings.pad]
 //! jump = ["south"]
 //! ```
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
 use iwbtg_sim::input::{Action, IWBTG_DEFAULT_KEYS, key_code, vk};
@@ -289,7 +289,7 @@ pub fn key_name(code: u8) -> String {
     }
 }
 
-/// The player's changes, as stored in the bindings file: action name to input names.
+/// The player's changes, as stored in the settings' `[bindings]` table: action name to input names.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -331,33 +331,115 @@ impl Config {
     }
 }
 
-/// Where the global bindings file lives: the user's config folder, `iwbtg-collection/bindings.toml`.
-pub fn default_path() -> Option<PathBuf> {
-    let base = if cfg!(windows) {
-        std::env::var_os("APPDATA").map(PathBuf::from)
-    } else {
-        std::env::var_os("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
+impl Config {
+    /// Reads the settings file's `[bindings]` table. Each entry is checked on its own: a broken
+    /// one (unknown action, key or input, a wrong type, a double binding) is pushed to `warnings`
+    /// and that action keeps its defaults; the other entries still count.
+    pub fn from_table(table: &toml::Table, warnings: &mut Vec<String>) -> Config {
+        let mut config = Config::default();
+        for (kind, value) in table {
+            let is_keys = match kind.as_str() {
+                "keys" => true,
+                "pad" => false,
+                _ => {
+                    warnings.push(format!("unknown entry `bindings.{kind}`, ignored"));
+                    continue;
+                }
+            };
+            let Some(entries) = value.as_table() else {
+                warnings.push(format!("`[bindings.{kind}]` must be a table, using defaults"));
+                continue;
+            };
+            for (action, inputs) in entries {
+                let list: Option<Vec<String>> = inputs
+                    .as_array()
+                    .and_then(|a| a.iter().map(|v| v.as_str().map(String::from)).collect());
+                let Some(list) = list else {
+                    warnings.push(format!(
+                        "bindings.{kind}.{action} must be a list of names, using the default"
+                    ));
+                    continue;
+                };
+                let mut next = config.clone();
+                let map = if is_keys { &mut next.keys } else { &mut next.pad };
+                map.insert(action.clone(), list);
+                match Bindings::from_config(&next) {
+                    Ok(_) => config = next,
+                    Err(e) => warnings.push(format!("bindings.{kind}.{action}: {e}, using the default")),
+                }
+            }
+        }
+        config
+    }
+
+    /// The `[bindings]` table for the settings file.
+    pub fn to_table(&self) -> toml::Table {
+        toml::Table::try_from(self).unwrap_or_default()
+    }
+}
+
+/// The settings' bindings as a `Config`; problems are warnings (see `Config::from_table`).
+pub fn config_from_settings() -> Config {
+    let mut warnings = Vec::new();
+    let config = Config::from_table(&crate::settings::get().bindings, &mut warnings);
+    for w in warnings {
+        crate::storage::warn(&format!("settings: {w}"));
+    }
+    config
+}
+
+/// Saves `config` as the settings' `[bindings]` table (one write of `settings.toml`, which is
+/// browser storage on the web).
+pub fn save_config(config: &Config) {
+    let table = config.to_table();
+    crate::settings::update(|s| s.bindings = table);
+}
+
+/// The file earlier builds kept the bindings in, beside `settings.toml` (#541).
+const LEGACY_FILE: &str = "bindings.toml";
+
+/// The table of an old `bindings.toml`, when the settings have no bindings yet and the file
+/// reads. The caller removes the file once the table is saved.
+fn legacy_table(store: &crate::storage::Store, current: &toml::Table) -> Option<toml::Table> {
+    if !current.is_empty() {
+        return None;
+    }
+    let text = match store.read_text(LEGACY_FILE) {
+        Ok(Some(text)) => text,
+        Ok(None) => return None,
+        Err(e) => {
+            crate::storage::warn(&format!("bindings {e}, not moved into settings"));
+            return None;
+        }
     };
-    base.map(|b| b.join("iwbtg-collection").join("bindings.toml"))
-}
-
-/// Reads the bindings file. A missing file is the defaults; a broken one is an error.
-pub fn load_config(path: &Path) -> Result<Config, String> {
-    match std::fs::read_to_string(path) {
-        Ok(text) => toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display())),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Config::default()),
-        Err(e) => Err(format!("{}: {e}", path.display())),
+    match toml::from_str::<Config>(&text) {
+        Ok(c) => Some(c.to_table()),
+        Err(e) => {
+            crate::storage::warn(&format!(
+                "bindings {}: {e}, not moved into settings",
+                store.describe(LEGACY_FILE)
+            ));
+            None
+        }
     }
 }
 
-pub fn save_config(path: &Path, config: &Config) -> Result<(), String> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+/// Moves an old `bindings.toml` into the settings once, when `[bindings]` is empty.
+fn migrate_legacy() {
+    let Some(store) = crate::storage::Store::config() else {
+        return;
+    };
+    let Some(table) = legacy_table(&store, &crate::settings::get().bindings) else {
+        return;
+    };
+    crate::settings::update(|s| s.bindings = table);
+    match store.remove(LEGACY_FILE) {
+        Ok(()) => crate::storage::warn(&format!(
+            "bindings moved from {} into settings",
+            store.describe(LEGACY_FILE)
+        )),
+        Err(e) => crate::storage::warn(&format!("bindings {e}, old file left in place")),
     }
-    let text = toml::to_string(config).map_err(|e| e.to_string())?;
-    std::fs::write(path, text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 #[cfg(test)]
@@ -419,6 +501,86 @@ mod tests {
     }
 
     #[test]
+    fn the_settings_table_round_trips() {
+        let mut c = Config::default();
+        c.set("jump=LShift,Space").unwrap();
+        c.set("restart=pad:select").unwrap();
+        let table = c.to_table();
+        assert!(table.contains_key("keys") && table.contains_key("pad"));
+        let mut w = Vec::new();
+        assert_eq!(Config::from_table(&table, &mut w), c);
+        assert!(w.is_empty(), "{w:?}");
+        // Through the whole settings file text as well.
+        let s = crate::settings::Settings {
+            bindings: table,
+            ..Default::default()
+        };
+        let back = crate::settings::Settings::parse(&s.to_toml(), &mut w);
+        assert!(w.is_empty(), "{w:?}");
+        assert_eq!(Config::from_table(&back.bindings, &mut w), c);
+        assert!(w.is_empty(), "{w:?}");
+    }
+
+    #[test]
+    fn a_broken_entry_warns_and_keeps_its_default() {
+        let table: toml::Table = "[keys]\n\
+             jump = [\"Space\"]\nshoot = [\"Banana\"]\nfly = [\"X\"]\nrestart = 5\n\
+             [pad]\nsuicide = [\"nowhere\"]\n"
+            .parse()
+            .unwrap();
+        let mut w = Vec::new();
+        let c = Config::from_table(&table, &mut w);
+        assert_eq!(w.len(), 4, "{w:?}");
+        let b = Bindings::from_config(&c).unwrap();
+        assert_eq!(
+            b.key_action(vk::SPACE),
+            Some(Action::Jump),
+            "the good entry counts"
+        );
+        assert_eq!(
+            b.key_action(vk::Z),
+            Some(Action::Shoot),
+            "a broken one is the default"
+        );
+        assert_eq!(b.key_action(vk::R), Some(Action::Restart));
+        assert_eq!(b.pad_action(PadInput::East), Some(Action::Suicide));
+        let table: toml::Table = "[extra]\na = 1\n[pad]\n".parse().unwrap();
+        let mut w = Vec::new();
+        assert_eq!(Config::from_table(&table, &mut w), Config::default());
+        assert_eq!(w.len(), 1, "{w:?}");
+    }
+
+    #[test]
+    fn a_double_binding_entry_is_dropped() {
+        let table: toml::Table = "[keys]\njump = [\"Z\"]\n".parse().unwrap();
+        let mut w = Vec::new();
+        assert_eq!(Config::from_table(&table, &mut w), Config::default());
+        assert_eq!(w.len(), 1, "{w:?}");
+    }
+
+    #[test]
+    fn an_old_bindings_file_moves_into_empty_settings() {
+        let dir = std::env::temp_dir().join(format!("iwbtg-bindings-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = crate::storage::Store::at(dir.clone());
+        let none = toml::Table::new();
+        assert_eq!(legacy_table(&store, &none), None, "no old file");
+        store
+            .write_text(LEGACY_FILE, "[keys]\njump = [\"Space\"]\n")
+            .unwrap();
+        let table = legacy_table(&store, &none).expect("moves");
+        let mut w = Vec::new();
+        let c = Config::from_table(&table, &mut w);
+        assert_eq!(c.keys["jump"], vec!["Space".to_string()]);
+        // Settings that already have bindings win; the old file is left alone.
+        assert_eq!(legacy_table(&store, &table), None);
+        // A broken old file is not moved.
+        store.write_text(LEGACY_FILE, "[keys\n").unwrap();
+        assert_eq!(legacy_table(&store, &none), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn key_names_read_back() {
         for code in [vk::LEFT_SHIFT, vk::SPACE, vk::F1 + 4, b'Z', b'7', 20, vk::PAGE_UP] {
             assert_eq!(key_from_name(&key_name(code)), Some(code));
@@ -438,26 +600,23 @@ pub struct BindingsArgs {
     /// Print the global bindings and exit.
     #[arg(long)]
     pub show_bindings: bool,
-    /// Bindings file (default: the user's config folder, iwbtg-collection/bindings.toml).
-    #[arg(long, value_name = "FILE")]
-    pub bindings_file: Option<PathBuf>,
 }
 
-/// Loads the bindings file, applying and saving any `--bind` changes.
-pub fn load(args: &BindingsArgs) -> Result<Bindings, String> {
-    let path = match &args.bindings_file {
-        Some(p) => p.clone(),
-        None => default_path().ok_or("no config folder found; pass --bindings-file")?,
-    };
-    let mut config = load_config(&path)?;
+/// Reads the bindings from the settings (`settings::load` has run), applying and saving any
+/// `--bind` changes. `isolated` (a `--screenshot` check) also skips moving an old `bindings.toml`.
+pub fn load(args: &BindingsArgs, isolated: bool) -> Result<Bindings, String> {
+    if !isolated {
+        migrate_legacy();
+    }
+    let mut config = config_from_settings();
     if !args.bind.is_empty() {
         for spec in &args.bind {
             config.set(spec)?;
         }
-        save_config(&path, &config)?;
-        eprintln!("bindings saved to {}", path.display());
+        save_config(&config);
+        eprintln!("bindings saved in the settings file");
     }
-    Bindings::from_config(&config).map_err(|e| format!("{}: {e}", path.display()))
+    Bindings::from_config(&config)
 }
 
 /// Puts the input collector, built from the player's bindings, into the app.
