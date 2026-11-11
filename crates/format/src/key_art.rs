@@ -51,25 +51,16 @@ pub fn resolve(files: &PackageFiles, manifest: &Manifest, map: Option<&str>) -> 
             return KeyArt::Image(path.clone());
         }
     }
-    let room = format!("rooms/{}.toml", first_ranked_room(manifest));
-    let Some(table) = files
-        .get(&room)
-        .and_then(|b| std::str::from_utf8(b).ok())
-        .and_then(|t| t.parse::<toml::Table>().ok())
-    else {
+    let Ok(art) = crate::art::load_room_art(files, first_ranked_room(manifest)) else {
         return KeyArt::None;
     };
-    if let Some(id) = table.get("background").and_then(toml::Value::as_str) {
-        let path = format!("backgrounds/{id}.png");
+    if let Some(bg) = art.backgrounds.iter().find(|b| !b.foreground) {
+        let path = format!("backgrounds/{}.png", bg.image);
         if files.contains(&path) {
             return KeyArt::RoomBackground(path);
         }
     }
-    table
-        .get("background_color")
-        .and_then(toml::Value::as_str)
-        .and_then(hex_colour)
-        .map_or(KeyArt::None, KeyArt::Colour)
+    art.color.map_or(KeyArt::None, KeyArt::Colour)
 }
 
 /// The first room of a ranked run, for the key art fallback: `[stripped].start.room` (the ranked
@@ -101,12 +92,7 @@ pub fn first_ranked_room(manifest: &Manifest) -> &str {
 
 /// `#rrggbb` as sRGB bytes.
 pub fn hex_colour(s: &str) -> Option<[u8; 3]> {
-    let s = s.strip_prefix('#')?;
-    if s.len() != 6 || !s.is_ascii() {
-        return None;
-    }
-    let c = |i: usize| u8::from_str_radix(&s[i..i + 2], 16).ok();
-    Some([c(0)?, c(2)?, c(4)?])
+    crate::art::parse_color(s)
 }
 
 /// Width and height of a key art PNG. Images within [`MAX_IMAGE_SIDE`] are decoded in full, so

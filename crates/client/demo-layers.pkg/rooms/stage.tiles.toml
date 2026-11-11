@@ -1,0 +1,11 @@
+#:schema ../../../../../docs/format/schema/v0/tiles.schema.json
+layers = [
+  { depth = 1000000, tileset = "stone", tiles = [
+    { x = 96, y = 96, src = [0, 0], run = [6, 2] },
+    { x = 96, y = 160, src = [32, 0], run = [6, 1] },
+  ] },
+  { depth = -100, tileset = "stone", tiles = [
+    # A tile of its own size (16 x 16) repeated with a gap.
+    { x = 480, y = 400, src = [32, 0, 16, 16], run = [4, 1], step = [24, 0] },
+  ] },
+]
