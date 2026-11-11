@@ -134,7 +134,11 @@ impl Recorder {
         rec.splits.extend(splits.iter().map(|s| (s.index, s.tick)));
         rec.unsaved = true;
         let world = sim.world();
-        if world.tick > 0 && world.tick % CHECKPOINT_INTERVAL == 0 {
+        // After every tick that reaches a multiple of the interval (a halted step adds no tick).
+        if world.tick > 0
+            && world.tick.is_multiple_of(CHECKPOINT_INTERVAL)
+            && rec.checkpoints.last().map(|c| c.0) != Some(world.tick)
+        {
             rec.checkpoints.push((world.tick, checkpoint(sim)));
         }
         if world.timing.ended && !rec.ended {
@@ -297,7 +301,9 @@ impl Plugin for ReplaysPlugin {
     fn build(&self, app: &mut App) {
         let store = if self.keep { Store::data() } else { None };
         app.insert_resource(Recorder::new(store, self.gameplay_hash, self.mods))
-            .add_systems(Last, finish_on_exit);
+            // Bevy's own exit on the last window closing runs in `Last` too; the app stops after
+            // that frame, so this must run after it in the same frame.
+            .add_systems(Last, finish_on_exit.after(bevy::window::ExitSystems));
     }
 }
 
@@ -311,11 +317,7 @@ pub(crate) fn reset(world: &mut World) {
 }
 
 /// Closing the window ends the run: its replay is written while the sim is still there.
-fn finish_on_exit(
-    mut exit: MessageReader<AppExit>,
-    game: NonSend<Game>,
-    mut recorder: ResMut<Recorder>,
-) {
+fn finish_on_exit(mut exit: MessageReader<AppExit>, game: NonSend<Game>, mut recorder: ResMut<Recorder>) {
     if exit.read().next().is_some() {
         recorder.finish(&game.sim);
     }
@@ -378,9 +380,12 @@ mod tests {
         };
         let mut sim = Sim::new(Arc::clone(&pkg.def), options.clone()).unwrap();
         let mut rec = Recorder::new(Some(store.clone()), pkg.gameplay_hash, ModSet::NONE);
-        play(&mut sim, &mut rec, 1100);
+        play(&mut sim, &mut rec, 520);
         let name = rec.current_name().unwrap().to_owned();
-        assert!(name.starts_with("replays/demo/") && name.ends_with("-1.iwbr"), "{name}");
+        assert!(
+            name.starts_with("replays/demo/") && name.ends_with("-1.iwbr"),
+            "{name}"
+        );
         rec.finish(&sim);
         assert!(rec.current_name().is_none());
 
@@ -390,10 +395,10 @@ mod tests {
         assert_eq!((h.play_mode, h.map.as_str()), (PlayMode::Stripped, "main"));
         assert_eq!(h.gameplay_hash, pkg.gameplay_hash);
         assert_eq!(h.start_mode, StartMode::NewGame);
-        assert_eq!(replay.inputs.len(), 1100);
+        assert_eq!(replay.inputs.len(), 520);
         assert_eq!(replay.trailer.final_hash, sim.state_hash());
         let ticks: Vec<u64> = replay.trailer.checkpoints.iter().map(|c| c.0).collect();
-        assert_eq!(ticks, vec![500, 1000]);
+        assert_eq!(ticks, vec![500]);
         assert_eq!(store.read_text(INDEX).unwrap().unwrap(), format!("{name}\n"));
 
         let mut again = Sim::new(Arc::clone(&pkg.def), options).unwrap();

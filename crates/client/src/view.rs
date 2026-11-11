@@ -541,7 +541,8 @@ pub(crate) fn restart_run(world: &mut World) -> Result<(), String> {
     if start.fresh_seed {
         options.seed = crate::replays::fresh_seed();
     }
-    let sim = Sim::new(Arc::clone(&start.def), options).map_err(|e| format!("the game did not start: {e}"))?;
+    let sim =
+        Sim::new(Arc::clone(&start.def), options).map_err(|e| format!("the game did not start: {e}"))?;
     world.non_send_mut::<Game>().sim = sim;
     let drawn = std::mem::take(&mut world.resource_mut::<Drawn>().0);
     for entity in drawn.into_values() {
@@ -584,6 +585,10 @@ pub(crate) fn test_world(pkg: &Package) -> World {
 }
 
 /// One sim tick: runs on the fixed clock, as many times per frame as the clock is behind.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "a Bevy system: one parameter per resource"
+)]
 fn tick(
     mut game: NonSendMut<Game>,
     mut collector: ResMut<Collector>,
