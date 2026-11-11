@@ -2,6 +2,7 @@
 # Recorder: --object player --room rHub --at 2 --from 2 --stub-dlls (5 --gml)
 source = "kaenbyou/tr-room-08"
 kind = "probe_read"
+open = "the B play timer's per-tick +2 counts only after R in the trace, and no spec names the gate; the package has no world timer params (research#124)"
 start = { room = "hub", difficulty = 1 }
 at = 2
 first_frame = 2
