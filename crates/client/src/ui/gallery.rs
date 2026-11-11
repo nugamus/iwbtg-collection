@@ -15,6 +15,7 @@ use bevy::ui_widgets::Activate;
 use super::UiKitPlugin;
 use super::backdrop::{self, Backdrop, dim};
 use super::fonts::{Family, Type};
+use super::icons::{Icon, icon};
 use super::motion::{Ease, OffsetX, Opacity, ReducedMotion, Tween, Width};
 use super::shape::{Band, FadeMask, Shape, Side, UiOpacity, Veil};
 use super::tokens::{self, star_color};
@@ -163,6 +164,20 @@ fn row(gap: f32) -> Node {
         row_gap: Val::Px(gap),
         ..default()
     }
+}
+
+/// Every icon at the mockups' size and at 2.5 times that, the small ones muted, the big ones in ink.
+fn icon_row() -> impl Bundle + use<> {
+    let small = Icon::ALL.map(|kind| (kind, kind.default_height(), tokens::MUTED));
+    let big = Icon::ALL.map(|kind| (kind, kind.default_height() * 2.5, tokens::INK));
+    (
+        row(14.0),
+        Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
+            for (kind, height, color) in small.into_iter().chain(big) {
+                c.spawn(icon(kind, height, color));
+            }
+        })),
+    )
 }
 
 fn column(gap: f32) -> Node {
@@ -454,6 +469,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
                     ));
                     c.spawn((text("", Type::barlow(14.0, 500), tokens::MUTED), BackdropState));
                 });
+            c.spawn((column(10.0), children![heading("Icons"), icon_row()]));
             c.spawn((
                 column(10.0),
                 children![
@@ -461,12 +477,12 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
                     (
                         row(36.0),
                         children![
-                            stat("Stages", "7", tokens::INK),
-                            stat("Avg clear", "54:20.36", tokens::INK),
-                            stat("Clear rate", "3.8%", tokens::INK),
-                            stat("Your PB", "38:12.46", tokens::INK),
-                            stat("Your deaths", "9,412", tokens::INK),
-                            stat("World record", "31:41.02", tokens::GOLD),
+                            stat(Some(Icon::Flag), "Stages", "7", tokens::INK),
+                            stat(Some(Icon::Clock), "Avg clear", "54:20.36", tokens::INK),
+                            stat(Some(Icon::Check), "Clear rate", "3.8%", tokens::INK),
+                            stat(Some(Icon::Bolt), "Your PB", "38:12.46", tokens::INK),
+                            stat(Some(Icon::Skull), "Your deaths", "9,412", tokens::INK),
+                            stat(Some(Icon::Crown), "World record", "31:41.02", tokens::GOLD),
                         ],
                     ),
                 ],
