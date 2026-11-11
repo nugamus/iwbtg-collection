@@ -41,7 +41,7 @@ impl Store {
     }
 
     /// A store in a folder of the caller's choice (tests).
-    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    #[cfg(all(test, not(all(target_arch = "wasm32", target_os = "unknown"))))]
     pub fn at(root: std::path::PathBuf) -> Store {
         Store {
             inner: backend::Backend { root },
