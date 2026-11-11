@@ -34,6 +34,8 @@ pub struct Settings {
     pub overlay: bool,
     /// HUD side panel scale in percent, 75 to 150 (`hud::layout::UI_SCALE_RANGE`).
     pub ui_scale: u32,
+    /// Which HUD elements are shown (`[hud.show]`).
+    pub hud_show: HudShow,
     /// The `[bindings]` table, kept as written: the input layer (#27) owns its layout and checks
     /// it; this file only stores it.
     pub bindings: Table,
@@ -49,8 +51,71 @@ impl Default for Settings {
             integer_scale: false,
             overlay: true,
             ui_scale: 100,
+            hud_show: HudShow::default(),
             bindings: Table::new(),
         }
+    }
+}
+
+/// Each HUD element on or off (`[hud.show]`; docs/product.md, In-game display). All on by default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct HudShow {
+    pub leaderboard: bool,
+    pub timer: bool,
+    pub deaths: bool,
+    pub stage: bool,
+    pub stage_deaths: bool,
+    pub input: bool,
+    pub mods: bool,
+}
+
+impl Default for HudShow {
+    fn default() -> Self {
+        Self {
+            leaderboard: true,
+            timer: true,
+            deaths: true,
+            stage: true,
+            stage_deaths: true,
+            input: true,
+            mods: true,
+        }
+    }
+}
+
+impl HudShow {
+    /// The elements' names, as the file and `--hud-show`/`--hud-hide` write them.
+    pub const NAMES: [&'static str; 7] = [
+        "leaderboard",
+        "timer",
+        "deaths",
+        "stage",
+        "stage_deaths",
+        "input",
+        "mods",
+    ];
+
+    /// The switch for the element called `name`.
+    pub fn get_mut(&mut self, name: &str) -> Option<&mut bool> {
+        Some(match name {
+            "leaderboard" => &mut self.leaderboard,
+            "timer" => &mut self.timer,
+            "deaths" => &mut self.deaths,
+            "stage" => &mut self.stage,
+            "stage_deaths" => &mut self.stage_deaths,
+            "input" => &mut self.input,
+            "mods" => &mut self.mods,
+            _ => return None,
+        })
+    }
+
+    fn to_table(mut self) -> Table {
+        let mut t = Table::new();
+        for name in Self::NAMES {
+            let on = *self.get_mut(name).expect("a known name");
+            t.insert(name.into(), on.into());
+        }
+        t
     }
 }
 
@@ -140,6 +205,16 @@ impl Settings {
                     )),
                 },
                 ("ui_scale", _) => w.push("hud.ui_scale must be an integer".into()),
+                ("show", Value::Table(t)) => {
+                    for (name, value) in t {
+                        match (self.hud_show.get_mut(name), value) {
+                            (Some(slot), Value::Boolean(b)) => *slot = *b,
+                            (Some(_), _) => w.push(format!("hud.show.{name} must be true or false")),
+                            (None, _) => w.push(format!("unknown entry `hud.show.{name}`, ignored")),
+                        }
+                    }
+                }
+                ("show", _) => w.push("`[hud.show]` must be a table, using defaults".into()),
                 _ => w.push(format!("unknown entry `hud.{key}`, ignored")),
             }
         }
@@ -159,6 +234,7 @@ impl Settings {
         let mut hud = Table::new();
         hud.insert("overlay".into(), self.overlay.into());
         hud.insert("ui_scale".into(), i64::from(self.ui_scale).into());
+        hud.insert("show".into(), self.hud_show.to_table().into());
         let mut root = Table::new();
         root.insert("version".into(), VERSION.into());
         root.insert("display".into(), display.into());
@@ -271,6 +347,11 @@ mod tests {
             integer_scale: true,
             overlay: false,
             ui_scale: 125,
+            hud_show: HudShow {
+                input: false,
+                leaderboard: false,
+                ..HudShow::default()
+            },
             ..Settings::default()
         };
         s.bindings = "[keys]\njump = [\"ShiftLeft\"]\n".parse().unwrap();
@@ -287,6 +368,7 @@ mod tests {
              [display]\nfullscreen = true\nratio = \"5:4\"\nwindow = 7\nextra = 1\n\
              [audio]\noffset_ms = 9000\n\
              [hud]\noverlay = false\nui_scale = 200\n\
+             [hud.show]\ninput = false\ntimer = 1\nsplits = false\n\
              [bindings]\njump = \"Space\"\n",
         );
         assert!(s.fullscreen, "the good entry beside bad ones still counts");
@@ -295,8 +377,9 @@ mod tests {
         assert_eq!(s.audio_offset_ms, 0);
         assert!(!s.overlay);
         assert_eq!(s.ui_scale, 100);
+        assert!(!s.hud_show.input && s.hud_show.timer);
         assert_eq!(s.bindings.get("jump").and_then(Value::as_str), Some("Space"));
-        assert_eq!(w.len(), 6, "{w:?}");
+        assert_eq!(w.len(), 8, "{w:?}");
     }
 
     #[test]

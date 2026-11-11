@@ -1,12 +1,13 @@
 //! The two HUD panels as the artboards draw them: the live leaderboard (`Leaderboard.dc.html`)
 //! on the left and run info (`RunInfo.dc.html`) on the right, at each `Density`.
 //!
-//! Only the frames and placeholders: the leaderboard's rows and the run's numbers come with
-//! their own issues (#37 and the live leaderboard). Sizes are UI px, before `Layout::content`.
+//! The leaderboard is a frame with placeholders until the live leaderboard lands; your row shows
+//! the run's time. Run info is `run_info.rs`. Sizes are UI px, before `Layout::content`.
 
 use bevy::prelude::*;
 
 use super::layout::Density;
+use super::run_info::Field;
 use crate::ui::fonts::Type;
 use crate::ui::icons::{Icon, icon};
 use crate::ui::shape::{FadeMask, Shape};
@@ -18,13 +19,10 @@ const ROWS: usize = 7;
 const ROW_HEIGHT: f32 = 44.0;
 /// How far a sheared row reaches past its box on each side.
 const SHEAR_OVERHANG: f32 = tokens::SHEAR * ROW_HEIGHT / 2.0;
-/// The input display's arrows: 26 px each, 18 px apart when there is room.
-const ARROW: f32 = 26.0;
 /// The small leaderboard's rows start this far in (`HudSmall` places the list at -4 with a 10 px
 /// indent: 6 px), and its rank, gaps and padding are tighter than the artboard's so your row
 /// (rank, avatar, time) fits inside the 124 px column.
 const MINI_INDENT: f32 = 6.0;
-const ARROW_GAP: f32 = 18.0;
 
 /// The leaderboard `width` UI px wide.
 pub fn leaderboard(width: f32, density: Density) -> impl Bundle {
@@ -115,7 +113,10 @@ fn row(width: f32, density: Density, you: bool) -> impl Bundle + use<> {
             c.spawn(avatar());
             if mini {
                 if you {
-                    c.spawn(text("0:00.00", Type::barlow(13.0, 600), tokens::INK));
+                    c.spawn((
+                        text("0:00.00", Type::barlow(13.0, 600), tokens::INK),
+                        Field::YourTime,
+                    ));
                 }
                 return;
             }
@@ -129,7 +130,10 @@ fn row(width: f32, density: Density, you: bool) -> impl Bundle + use<> {
             if you {
                 col.with_children(|c| {
                     c.spawn(text("You", Type::barlow(15.0, 700), tokens::INK));
-                    c.spawn(text("0:00.00", Type::barlow(14.0, 700), tokens::INK));
+                    c.spawn((
+                        text("0:00.00", Type::barlow(14.0, 700), tokens::INK),
+                        Field::YourTime,
+                    ));
                 });
             } else {
                 col.with_children(|c| {
@@ -168,159 +172,5 @@ fn skeleton(width: Val, height: f32) -> impl Bundle {
             ..default()
         },
         BackgroundColor(tokens::SKELETON),
-    )
-}
-
-/// Run info `width` UI px wide: timer, stats and (unless small) the input display.
-pub fn run_info(width: f32, density: Density) -> impl Bundle {
-    let (timer, cs, value, gap) = match density {
-        Density::Full => (58.0, 36.0, 24.0, 18.0),
-        Density::Compact => (44.0, 28.0, 20.0, 18.0),
-        Density::Small => (30.0, 19.0, 16.0, 10.0),
-    };
-    let stack = density == Density::Small;
-    let label = Type {
-        tracking: 0.14,
-        caps: true,
-        ..Type::barlow(11.0, 700)
-    };
-    let stat = move |name: &str, shown: &str| {
-        (
-            Node {
-                flex_direction: FlexDirection::Column,
-                row_gap: Val::Px(2.0),
-                ..default()
-            },
-            children![
-                text(name, label, tokens::MUTED),
-                text(shown, Type::barlow(value, 600), tokens::INK),
-            ],
-        )
-    };
-    (
-        Node {
-            width: Val::Px(width),
-            flex_direction: FlexDirection::Column,
-            row_gap: Val::Px(gap),
-            ..default()
-        },
-        children![
-            (
-                Node {
-                    align_items: AlignItems::Baseline,
-                    ..default()
-                },
-                children![
-                    text("0:00", Type::condensed(timer, 600), tokens::INK),
-                    text(".00", Type::condensed(cs, 600), tokens::SOFT),
-                ],
-            ),
-            (
-                Node {
-                    display: Display::Grid,
-                    grid_template_columns: if stack {
-                        vec![RepeatedGridTrack::flex(1, 1.0)]
-                    } else {
-                        vec![RepeatedGridTrack::flex(2, 1.0)]
-                    },
-                    row_gap: Val::Px(if stack { 6.0 } else { 14.0 }),
-                    column_gap: Val::Px(16.0),
-                    ..default()
-                },
-                children![
-                    stat("Deaths", "–"),
-                    stat("Stage", "– / –"),
-                    stat("This stage", "–"),
-                ],
-            ),
-            (
-                Node {
-                    display: if stack { Display::None } else { Display::Flex },
-                    ..default()
-                },
-                children![input_display(width)],
-            ),
-        ],
-    )
-}
-
-/// The input display, nothing held yet: four arrows, then Jump, Shoot and Restart.
-fn input_display(width: f32) -> impl Bundle {
-    // `Hud43`'s 152 px panel is narrower than four arrows 18 px apart (158 px): close the gaps.
-    let gap = ((width - 4.0 * ARROW) / 3.0).clamp(4.0, ARROW_GAP);
-    let arrows = [-90.0f32, 0.0, 180.0, 90.0].map(|deg| {
-        (
-            Node {
-                width: Val::Px(ARROW),
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Center,
-                row_gap: Val::Px(6.0),
-                ..default()
-            },
-            children![
-                (
-                    icon(Icon::Arrow, ARROW, tokens::KEY_IDLE),
-                    UiTransform {
-                        rotation: Rot2::degrees(deg),
-                        ..default()
-                    },
-                ),
-                bar(),
-            ],
-        )
-    });
-    let style = Type {
-        tracking: 0.08,
-        caps: true,
-        ..Type::barlow(13.0, 700)
-    };
-    let buttons = ["Jump", "Shoot", "Restart"].map(|label| {
-        (
-            Node {
-                flex_direction: FlexDirection::Column,
-                row_gap: Val::Px(6.0),
-                ..default()
-            },
-            children![text(label, style, tokens::BUTTON_IDLE), bar()],
-        )
-    });
-    (
-        Node {
-            flex_direction: FlexDirection::Column,
-            row_gap: Val::Px(14.0),
-            padding: UiRect::top(Val::Px(10.0)),
-            ..default()
-        },
-        children![
-            (
-                Node {
-                    column_gap: Val::Px(gap),
-                    ..default()
-                },
-                Children::spawn(SpawnIter(arrows.into_iter())),
-            ),
-            (
-                Node {
-                    flex_wrap: FlexWrap::Wrap,
-                    row_gap: Val::Px(10.0),
-                    column_gap: Val::Px(14.0),
-                    ..default()
-                },
-                Children::spawn(SpawnIter(buttons.into_iter())),
-            ),
-        ],
-    )
-}
-
-/// The 18x2 bar under a key; the accent while it is held (transparent until #37 wires input).
-fn bar() -> impl Bundle {
-    (
-        Node {
-            width: Val::Px(18.0),
-            height: Val::Px(2.0),
-            border_radius: BorderRadius::all(Val::Px(1.0)),
-            ..default()
-        },
-        BackgroundColor(Color::NONE),
     )
 }
