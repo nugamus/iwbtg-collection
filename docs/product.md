@@ -71,6 +71,8 @@ Three columns (decided 2026-11-04):
 
 Splits, PB comparison and death graphs are not on the HUD; they belong on the results screen. Every HUD element can be turned on or off, Shift+Tab hides the whole HUD, and a UI scale setting (75–150%) scales the side panels only. Small windows collapse the leaderboard to rank and avatar first, then stack the run info and hide the input display.
 
+Layout at each shape (artboards `Hud169`, `Hud43`, `Hud219`, `HudSmall`): at 16:9 the game fills the window height (1080p: 1.78x, panels about 249 px each side). When filling the height would leave the panels less than their room (204 px left, 180 px right; 4:3, 16:10), the game shrinks instead (1024x768: 0.8x). At 21:9 and wider each panel stops at 360 px and the rest is background art. Windows of 960x540 or less give each panel 124 px and use the collapsed panels, so the game stays as big as it can. Hiding the HUD with Shift+Tab gives the game the whole window. An "Integer scale" display option (off by default) uses the largest whole scale that fits instead; otherwise the game is scaled to fill its room with sharp (nearest) pixels. The UI scale never changes the game's size; on a narrow panel it grows only as far as the panel allows.
+
 ## Pause
 
 The pause menu is the game's own PAUSE box (decided 2026-11-04): black box, double white border, pixel type, the delicious fruit as the selector, drawn in game pixels over the frozen, darkened game. Options: Continue, Retry from save, Restart run, Quit. The ranked timer keeps running while paused. Quit discards the run.
@@ -97,7 +99,7 @@ Ahead and behind always use + and − signs as well as colour; gold best segment
 The approved screen designs (game select, mod select, loading, HUD, pause, results, player card) are in [design/mockups/m4](design/mockups/m4/README.md). Build from them.
 
 - Modernise IWBTG without losing its identity: structure, motion and behaviour from osu!lazer and modern rhythm games, look from IWBTG and real fangame art. No pixel font for UI text and no bordered box around every element; pixel type stays in game-space parts such as the pause box. Shared language: 0.2 horizontal shear on rows, panels and pills with upright text, 10 px corner radius, OutQuint easing for most transitions. (2026-11-04)
-- Games keep their aspect ratio and are never stretched; integer scale where it fits. GM8 games are 800x608, about 4:3.
+- Games keep their aspect ratio and are never stretched; they fill the room the HUD leaves them, or use integer scale when the player turns that option on (In-game display). GM8 games are 800x608, about 4:3.
 - Fullscreen supports 4:3, 16:9, 16:10, 21:9 and 32:9. Windowed mode offers a set of predefined resolutions. The UI adapts to the chosen aspect ratio.
 - One background system serves every screen (select, loading, gameplay, pause, results): the selected game's art, a user blur slider, and a dim that keeps text readable. It fills the space beside the game, so there are no black bars.
 

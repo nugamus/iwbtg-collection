@@ -42,6 +42,20 @@ pub const SECONDARY: Color = Color::srgba(1.0, 1.0, 1.0, 0.12);
 /// Tags and mod pills: `rgba(255,255,255,.16)`.
 pub const CHIP: Color = Color::srgba(1.0, 1.0, 1.0, 0.16);
 
+/// A leaderboard row (`Leaderboard.dc.html`): `rgba(12,14,22,.62)`.
+pub const ROW: Color = Color::srgba(12.0 / 255.0, 14.0 / 255.0, 22.0 / 255.0, 0.62);
+/// Your own leaderboard row: `rgba(255,255,255,.22)`.
+pub const ROW_YOU: Color = Color::srgba(1.0, 1.0, 1.0, 0.22);
+/// A player with no avatar: the square and the mark on it.
+pub const AVATAR_EMPTY: Color = Color::srgb_u8(0x2a, 0x2e, 0x3d);
+pub const AVATAR_MARK: Color = Color::srgb_u8(0x5d, 0x63, 0x78);
+/// An input display arrow that is not held (`RunInfo.dc.html`).
+pub const KEY_IDLE: Color = Color::srgba(1.0, 1.0, 1.0, 0.22);
+/// An input display button label that is not held.
+pub const BUTTON_IDLE: Color = Color::srgba(1.0, 1.0, 1.0, 0.28);
+/// Text-shaped placeholders while the data is not there yet.
+pub const SKELETON: Color = Color::srgba(1.0, 1.0, 1.0, 0.12);
+
 /// The star colour ramp (`Main.dc.html`, `ramp`): from each star count up, its colour.
 pub const STAR_RAMP: [(f32, Color); 8] = [
     (0.0, Color::srgb_u8(0x7f, 0xc8, 0xff)),
