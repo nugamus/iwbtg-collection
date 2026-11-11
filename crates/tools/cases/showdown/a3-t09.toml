@@ -2,7 +2,7 @@
 # Recorder: --object player --room room028 --at 2 --from 2
 source = "showdown/a3-t09"
 kind = "diff"
-open = "room028 double jump grants tjump: game code the sim does not model (#585); also needs research#114"
+open = "room028 double jump grants tjump: game code the sim does not model (#585)"
 start = { room = "room_28", difficulty = 0 }
 at = 2
 first_frame = 2

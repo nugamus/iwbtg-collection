@@ -2,7 +2,6 @@
 # Recorder: --object player --room rStage06 --at 2 --from 2
 source = "showdown/t-mot-01"
 kind = "diff"
-open = "needs the converter showdown physics keys and slip block (research#114); passes bit for bit on a package with them applied by hand"
 start = { room = "stage06", difficulty = 0 }
 at = 2
 first_frame = 2
