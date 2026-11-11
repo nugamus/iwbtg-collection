@@ -118,7 +118,7 @@ fn main() -> ExitCode {
     // A `--screenshot` check keeps no stats, as it keeps no settings.
     let keep_stats = args.view.screenshot.is_none();
     let gameplay_hash = pkg.gameplay_hash;
-    eprintln!("{}", mods::describe(run_mods));
+    eprintln!("{}", mods::describe(run_mods, args.view.ranked));
     let result = view::run(pkg, args.view, |app, pkg| {
         app.add_plugins((
             screen::ScreenPlugin,

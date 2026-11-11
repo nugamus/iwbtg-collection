@@ -31,11 +31,15 @@ fn parse_built(text: &str) -> Result<ModSet, String> {
     }
 }
 
-/// One line for the terminal: the set and whether it can be ranked.
-pub fn describe(set: ModSet) -> String {
+/// One line for the terminal: the play mode, the set, and whether the run can be ranked.
+/// Play original (no `--ranked`) is never ranked, whatever the mods.
+pub fn describe(set: ModSet, ranked: bool) -> String {
+    if !ranked {
+        return format!("Play original (unranked), mods: {}", set.codes());
+    }
     match set.unranked_by() {
-        None => format!("mods: {} (ranked)", set.codes()),
-        Some(d) => format!("mods: {} (unranked: {})", set.codes(), d.name),
+        None => format!("Play ranked, mods: {} (ranked)", set.codes()),
+        Some(d) => format!("Play ranked, mods: {} (unranked: {})", set.codes(), d.name),
     }
 }
 
@@ -129,6 +133,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn start_line_names_the_play_mode() {
+        let sd = ModSet::parse("SD").unwrap();
+        assert_eq!(
+            describe(ModSet::NONE, false),
+            "Play original (unranked), mods: NM"
+        );
+        assert_eq!(describe(sd, false), "Play original (unranked), mods: SD");
+        assert_eq!(describe(ModSet::NONE, true), "Play ranked, mods: NM (ranked)");
+        assert!(describe(sd, true).starts_with("Play ranked, mods: SD ("));
+    }
+
+    #[test]
     fn only_built_mods_are_accepted() {
         assert_eq!(parse_built("sd").unwrap().codes(), "SD");
         assert_eq!(parse_built("").unwrap(), ModSet::NONE);
@@ -142,10 +158,13 @@ mod tests {
 
     #[test]
     fn the_line_says_ranked_or_why_not() {
-        assert_eq!(describe(ModSet::parse("SD").unwrap()), "mods: SD (ranked)");
         assert_eq!(
-            describe(ModSet::parse("SD,SL").unwrap()),
-            "mods: SD+SL (unranked: Slow motion)"
+            describe(ModSet::parse("SD").unwrap(), true),
+            "Play ranked, mods: SD (ranked)"
+        );
+        assert_eq!(
+            describe(ModSet::parse("SD,SL").unwrap(), true),
+            "Play ranked, mods: SD+SL (unranked: Slow motion)"
         );
     }
 }
