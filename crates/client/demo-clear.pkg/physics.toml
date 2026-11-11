@@ -1,2 +1,9 @@
 #:schema ../../../../docs/format/schema/v0/physics.schema.json
+# Kid physics and sprites of I wanna Little Trap (engine family A1; CREDITS.md).
 preset = "A1"
+
+[sprites]
+idle = "kid_idle"
+running = "kid_run"
+jump = "kid_jump"
+fall = "kid_fall"

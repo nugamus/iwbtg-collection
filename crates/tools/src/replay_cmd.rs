@@ -30,7 +30,7 @@ use std::sync::Arc;
 
 use iwbtg_format::{LoadMode, PackageFiles, load_game};
 use iwbtg_sim::def::GameDef;
-use iwbtg_sim::input::{InputFrame, parse_action_inputs};
+use iwbtg_sim::input::{Action, InputFrame, parse_action_inputs};
 use iwbtg_sim::mods::ModSet;
 use iwbtg_sim::replay::{CHECKPOINT_INTERVAL, Replay, StartMode};
 use iwbtg_sim::room::StartPoint;
@@ -270,6 +270,96 @@ pub fn verify_main(args: &ReplayVerifyArgs) -> Result<bool, ToolError> {
         println!("verified");
     }
     Ok(bad.is_empty())
+}
+
+/// Arguments of `iwbtg replay dump <replay>`.
+#[derive(Clone, PartialEq, Eq, Debug, clap::Args)]
+pub struct ReplayDumpArgs {
+    /// A `.iwbr` replay.
+    pub replay: PathBuf,
+}
+
+/// `iwbtg replay dump`: prints a replay as text ([`dump_text`]). Needs no package.
+pub fn dump_main(args: &ReplayDumpArgs) -> Result<(), ToolError> {
+    let bytes = std::fs::read(&args.replay)
+        .map_err(|e| ToolError::Message(format!("{}: {e}", args.replay.display())))?;
+    let label = args.replay.display().to_string();
+    let replay = Replay::decode(&bytes).map_err(|e| ToolError::Message(format!("{label}: {e}")))?;
+    print!("{}", dump_text(&replay));
+    Ok(())
+}
+
+/// A replay as text: header fields (`name: value`), the trailer (ticks, ranked, splits,
+/// checkpoints, final hash), then `inputs:` and one line per run of equal frames,
+/// `<first tick> x<length> held=<actions> pressed=<actions> released=<actions>`, where an empty
+/// set is `-` and actions are joined by `+`.
+pub fn dump_text(replay: &Replay) -> String {
+    use std::fmt::Write;
+    let h = &replay.header;
+    let t = &replay.trailer;
+    let start = match &h.start_mode {
+        StartMode::NewGame => "new game".to_owned(),
+        StartMode::FromSave(b) => format!("save slot ({} bytes)", b.len()),
+    };
+    let mut out = String::new();
+    let _ = writeln!(out, "format: {}", h.replay_format);
+    let _ = writeln!(out, "sim_version: {}", h.sim_version);
+    let _ = writeln!(out, "engine_rev: {}", h.engine_rev);
+    let _ = writeln!(out, "package: {}", h.package_id);
+    let _ = writeln!(out, "gameplay_hash: {}", hex(&h.gameplay_hash));
+    let _ = writeln!(out, "seed: {}", h.rng_seed);
+    let _ = writeln!(out, "start: {start}");
+    let _ = writeln!(out, "mode: {}", h.play_mode.name());
+    let _ = writeln!(out, "map: {}", h.map);
+    let _ = writeln!(out, "mods: {}", h.mods.codes());
+    let _ = writeln!(out, "client: {}", h.client_build_id);
+    let _ = writeln!(out, "ticks: {}", t.total_ticks);
+    let _ = writeln!(out, "ranked: {}", t.ranked_ticks);
+    let splits = if t.splits.is_empty() {
+        "none".to_owned()
+    } else {
+        t.splits
+            .iter()
+            .map(|(i, tick)| format!("{i}@{tick}"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    let _ = writeln!(out, "splits: {splits}");
+    let _ = writeln!(out, "checkpoints: {}", t.checkpoints.len());
+    for (tick, hash) in &t.checkpoints {
+        let _ = writeln!(out, "  {tick} {}", hex(hash));
+    }
+    let _ = writeln!(out, "final_hash: {}", hex(&t.final_hash));
+    let set = |bits: u32| {
+        let names: Vec<&str> = Action::ALL
+            .into_iter()
+            .filter(|a| bits & *a as u32 != 0)
+            .map(|a| a.name())
+            .collect();
+        if names.is_empty() {
+            "-".to_owned()
+        } else {
+            names.join("+")
+        }
+    };
+    let _ = writeln!(out, "inputs:");
+    let mut tick = 0u64;
+    let mut frames = replay.inputs.iter().peekable();
+    while let Some(f) = frames.next() {
+        let mut len = 1u64;
+        while frames.next_if(|n| *n == f).is_some() {
+            len += 1;
+        }
+        let _ = writeln!(
+            out,
+            "  {tick} x{len} held={} pressed={} released={}",
+            set(f.held),
+            set(f.pressed),
+            set(f.released)
+        );
+        tick += len;
+    }
+    out
 }
 
 /// Lowercase hex.
@@ -617,6 +707,48 @@ mod tests {
 
     /// A replay whose trailer is what a run of it gives verifies; a changed final hash, or a
     /// replay of another package version, does not (#476).
+    #[test]
+    fn dump_prints_header_trailer_and_runs() {
+        let mut replay = Replay::decode(&stripped_replay("hard")).unwrap();
+        let jump = Action::Jump as u32;
+        replay.inputs[10] = InputFrame {
+            held: jump,
+            pressed: jump,
+            released: 0,
+        };
+        replay.inputs[11] = InputFrame {
+            held: jump,
+            pressed: 0,
+            released: 0,
+        };
+        replay.inputs[12] = InputFrame {
+            held: jump,
+            pressed: 0,
+            released: 0,
+        };
+        replay.trailer.splits = vec![(1, 5), (2, 40)];
+        let text = dump_text(&Replay::decode(&replay.encode().unwrap()).unwrap());
+        for line in [
+            "package: stripped_example",
+            "mode: stripped",
+            "map: hard",
+            "mods: NM",
+            "ticks: 60",
+            "splits: 1@5 2@40",
+            "checkpoints: 0",
+            "  0 x10 held=- pressed=- released=-",
+            "  10 x1 held=jump pressed=jump released=-",
+            "  11 x2 held=jump pressed=- released=-",
+            "  13 x47 held=- pressed=- released=-",
+        ] {
+            assert!(
+                text.lines().any(|l| l == line),
+                "missing `{line}` in:
+{text}"
+            );
+        }
+    }
+
     #[test]
     fn verify_accepts_a_true_trailer_and_rejects_a_changed_one() {
         use iwbtg_sim::replay::Trailer;
