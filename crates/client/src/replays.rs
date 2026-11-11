@@ -1,5 +1,5 @@
 //! Every run is recorded as a replay (`.iwbr`, docs/architecture/replay.md) and kept in the data
-//! area of `storage.rs` (docs/architecture/client.md, Replays; #476), for the replay viewer and
+//! area of `storage.rs` (docs/architecture/client/replays.md; #476), for the replay viewer and
 //! upload (M7) to use later.
 //!
 //! A run is one sim: the client's start, and each quick-retry or auto-retry after it. The

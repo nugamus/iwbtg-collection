@@ -2,7 +2,7 @@
 
 Status: Accepted by Claude on the user's behalf, 2026-11-04 (user may revisit). Issue #490.
 
-Related: [architecture, UI](../architecture/client.md#ui), [product](../product.md) (UI decisions), the M4 mockups in [`docs/design/mockups/m4/`](../design/mockups/m4/README.md).
+Related: [architecture, UI](../architecture/client/ui.md), [product](../product.md) (UI decisions), the M4 mockups in [`docs/design/mockups/m4/`](../design/mockups/m4/README.md).
 
 ## Context
 
