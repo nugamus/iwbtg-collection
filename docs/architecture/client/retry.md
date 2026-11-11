@@ -1,0 +1,5 @@
+# The client: Retry
+
+Part of [the client](../client.md).
+
+Retry (`retry.rs`, `RetryPlugin`, #38): the quick-retry key (`KeyCode::Backquote`, the key left of 1; read straight from Bevy, not through the input collector, so it never becomes a sim `Action` or reaches a replay) and, with `--auto-retry`, any tick that raises the death counter set a pending retry. While one is pending the `SimTick` set does not run, so no tick follows the death. In `Update` the exclusive `apply` system calls `view::restart_run`, which builds a new `Sim` from the `RunStart` resource (the definition and `SimOptions` the window opened with, so a run started from a save restarts from that save), despawns every drawn sprite, clears interpolation history, pending input edges (held keys stay held) and the sign; then `audio::reset` stops every voice and clears the cue queue, mixer memory and shake (the new room start plays from the first step's output), and `mods::reset` clears Sudden Death's run-over state and banner. The terminal prints `retry: run restarted (quick-retry)` or `(auto-retry)`. The bottom-bar toggle is #558; settings and rebinding are #559.

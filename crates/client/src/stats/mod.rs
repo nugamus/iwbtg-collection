@@ -1,4 +1,4 @@
-//! Local stats (#40; docs/architecture/client.md, Stats): PBs, your top runs, gold segments and
+//! Local stats (#40; docs/architecture/client/stats.md): PBs, your top runs, gold segments and
 //! sum of best per map, mode and mod combination; deaths per segment for all time and for this
 //! session; account totals for the player card. Kept in `stats.toml` in the data area of
 //! `storage.rs`. Play original records here too, on its own `original/...` boards: personal
