@@ -490,6 +490,10 @@ fn read_field(def: &GameDef, w: &World, id: InstId, field: &FieldRef, frame: i64
             KindState::Builtin(BuiltinState::Save(ref s)) if f.name == "saveTimer" && f.index.is_none() => {
                 real(s.timer)
             }
+            // A death sound's fade, the original's `start_vol` and `now_vol`.
+            KindState::Builtin(BuiltinState::DeathSound(ref s)) if f.index.is_none() => {
+                crate::builtins::death_sound::probe_field(s, &f.name).map_or(trace::Value::Empty, real)
+            }
             _ => trace::Value::Empty,
         },
     }

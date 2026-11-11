@@ -9,9 +9,10 @@ Family B's `objDeathSound` (kid/B.md "Death (killPlayer)", kaenbyou traces famb-
 | `start_volume` | real | 10000 | The fade's start, on the original's SuperSound scale (10000 is full). |
 
 - **Position**: the death step creates it at (0, 0), not at the kid (killPlayer: `instance_create(0,0,objDeathSound)`; kaenbyou audio-supersound-deathfade-a reads x 0).
-- **Create**: arms Alarm 0 for the next tick.
+- **Create**: arms Alarm 0 for the next tick. Under `dll_mode = Stub` (trace cases recorded with `--stub-dlls`) the start and current volume are 0, not `start_volume`: the stubbed SuperSound handle check fails and the death code uses 0, so the fade never moves (kaenbyou audio-supersound-deathfade-a: `start_vol` = `now_vol` = 0 throughout).
+- **Probe**: trace columns `start_vol` and `now_vol` (the original's names) read the start and current fade volume.
 - **Step**, while music is not muted (`global.music`): sends the music volume `now / start_volume` (a linear 0 to 1 stand-in for the original's dB scale; the client maps it), then `now` drops by 100 while it is at least 2000. The first Step sends full volume, the 82nd and later send 0.19 (kaenbyou: 2000 on frame 181, 1900 from 182). The original would pause a non-streamed music at the floor; kaenbyou streams, so that is not built.
 - **Alarm 0**: plays the death sound unless it is already playing. It is first heard one tick after the death (the kid is gone from that tick, kaenbyou f13).
 - **Retry** (`[engine.restart] kid_steps.release_death_sound`): stops the death sound, restores the music volume to full and destroys the object (kid/B.md Restart 2).
 
-OPEN: the "sound is not muted" flag of the original's check is not modelled (there is no sound-mute global yet); the real SuperSound start volume (the DLL value) comes from the package's `start_volume`.
+OPEN: the "sound is not muted" flag of the original's check is not modelled (there is no sound-mute global yet); the real SuperSound start volume (the DLL value) comes from the package's `start_volume` in `dll_mode = Model` (#340).

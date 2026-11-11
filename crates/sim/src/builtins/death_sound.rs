@@ -7,7 +7,9 @@
 //!
 //! - Create: without a `music` param the music playing now is the one to fade (`sound::current_music`).
 //! - Create: `now_vol` = `start_volume` (10000 = full, the original's SuperSound scale, hundredths
-//!   of a dB); an alarm of 1 tick for the sound.
+//!   of a dB); an alarm of 1 tick for the sound. Under [`DllMode::Stub`] the start is 0 instead:
+//!   the stubbed SuperSound handle check fails and the death code uses 0 (kaenbyou
+//!   audio-supersound-deathfade-a: `start_vol` = `now_vol` = 0 throughout), so the fade never moves.
 //! - Step, while music is not muted (`MechGlobals::music_muted`): the music volume is set from
 //!   `now_vol` (sent before the decrement: the first Step sends full volume), then `now_vol`
 //!   drops by 100 while it is at least 2000. Below that it stays (the original would pause a
@@ -17,6 +19,8 @@
 //!
 //! The volume is output only: `now_vol / start_volume` goes to `sound::volume` on the `music`
 //! sound (a linear stand-in for the original's dB scale, which the client maps).
+//!
+//! The probe reads `start_vol` and `now_vol` (the original's names) through [`probe_field`].
 
 use serde::{Deserialize, Serialize};
 
@@ -26,7 +30,7 @@ use crate::def::{KindDef, ParamValue, Params, SoundId};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
 use crate::num::{self, Real};
-use crate::sound;
+use crate::sound::{self, DllMode};
 use crate::world::{Ctx, Flow, InstId, KindState};
 
 const SPECS: &[ParamSpec] = &[
@@ -97,6 +101,15 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
     }))
 }
 
+/// A probe column of a death sound by the original's variable name: `start_vol` and `now_vol`.
+pub fn probe_field(s: &DeathSoundState, name: &str) -> Option<Real> {
+    match name {
+        "start_vol" => Some(s.start),
+        "now_vol" => Some(s.now),
+        _ => None,
+    }
+}
+
 /// The music volume as the client gets it: 0 to 1.
 fn fraction(s: &DeathSoundState) -> Real {
     // gm-compare: ok (guards the division below against a zero or negative param; not a GML comparison)
@@ -116,10 +129,18 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
     match ev {
         EventKind::Create => {
             // No `music` param: fade the music playing now (the original's `curMusic`).
-            if s.music.is_none() {
-                let current = sound::current_music(ctx.w);
-                if let Some(BuiltinState::DeathSound(st)) = state_mut(ctx, me) {
-                    st.music = current;
+            let current = if s.music.is_none() {
+                sound::current_music(ctx.w)
+            } else {
+                s.music
+            };
+            let stub = ctx.dll_mode == DllMode::Stub;
+            if let Some(BuiltinState::DeathSound(st)) = state_mut(ctx, me) {
+                st.music = current;
+                // The stubbed DLL answers 0, so the start volume is 0 (deathfade-a).
+                if stub {
+                    st.start = Real::ZERO;
+                    st.now = Real::ZERO;
                 }
             }
             let rules = &ctx.rules.num;
