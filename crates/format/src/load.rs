@@ -473,6 +473,8 @@ impl<'a> Loader<'a> {
         }
         // Step 2.
         self.load_sprites();
+        // Room art the sim never sees: tile files and tileset sidecars.
+        crate::art::check(self.files, &mut self.diags);
         // Step 4, first half: parse rooms and fix their ids, so params can name rooms.
         let rooms = self.parse_rooms();
         // Step 7 (WP7b): sounds before kinds, so params can name sounds.
@@ -1364,11 +1366,24 @@ impl<'a> Loader<'a> {
                 continue;
             }
             match parse_room(stem, p, text) {
-                Ok(file) => rooms.push(ParsedRoom {
-                    path: p.to_owned(),
-                    text,
-                    file,
-                }),
+                Ok(file) => {
+                    for bg in &file.art.backgrounds {
+                        let png = format!("backgrounds/{}.png", bg.image);
+                        if !files.contains(&png) {
+                            self.diags.push(Diagnostic::error_at(
+                                p,
+                                text,
+                                bg.span.start,
+                                format!("background `{}` has no image `{png}`", bg.image),
+                            ));
+                        }
+                    }
+                    rooms.push(ParsedRoom {
+                        path: p.to_owned(),
+                        text,
+                        file,
+                    });
+                }
                 Err(d) => self.diags.push(d),
             }
         }
