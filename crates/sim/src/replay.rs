@@ -18,8 +18,13 @@ pub const MAGIC: [u8; 4] = *b"IWBR";
 
 /// The replay layout version this module reads and writes. Bump it on any layout change.
 /// 2: the header's `mods` (#35). 3: the header's `play_mode` (#561). 4: the trailer's
-/// `ranked_ticks` (#34). 5: the header's `map` (#505).
-pub const REPLAY_FORMAT: u16 = 5;
+/// `ranked_ticks` (#34). 5: the header's `map` (#505). 6: the trailer's `pauses` (#623).
+pub const REPLAY_FORMAT: u16 = 6;
+
+/// The older layout `decode` still reads: format 5, the trailer without `pauses`. Such a replay
+/// decodes with no pauses and keeps `replay_format` 5 in its header; `encode` writes only
+/// [`REPLAY_FORMAT`].
+pub const LEGACY_FORMAT: u16 = 5;
 
 /// Hard ceiling on the ticks in one replay: 48 hours at 50 ticks per second. Bounds memory when
 /// runs are expanded (6 bytes per tick) before the game's own `max_ticks` is known.
@@ -78,11 +83,29 @@ pub struct Trailer {
     /// Ranked time in ticks: the timer's ticks outside every cutscene and dialogue region
     /// (`TimingState::ranked_ticks`, #34). At most `total_ticks`.
     pub ranked_ticks: u64,
+    /// The client's pause menu while the run's timer ran (#479, #623): `(sim tick the pause began
+    /// at, fixed-clock ticks it lasted)`. The sim never sees a pause; the timer keeps running, so
+    /// the run's time is [`Trailer::ranked_time`]. Ticks strictly increasing, none past
+    /// `total_ticks`, every length at least 1. Empty in a format 5 replay.
+    pub pauses: Vec<(u64, u64)>,
     /// `(tick, state hash truncated to 16 bytes)` every [`CHECKPOINT_INTERVAL`] ticks, to locate
     /// desyncs. Ticks are strictly increasing multiples of the interval, none past `total_ticks`.
     pub checkpoints: Vec<(u64, [u8; 16])>,
     /// State hash after the last tick.
     pub final_hash: [u8; 32],
+}
+
+impl Trailer {
+    /// Ticks spent in the pause menu while the timer ran: the sum of `pauses` (saturating).
+    pub fn paused_ticks(&self) -> u64 {
+        self.pauses.iter().fold(0u64, |sum, p| sum.saturating_add(p.1))
+    }
+
+    /// The run's time in ticks, as the HUD showed it: `ranked_ticks` plus [`Self::paused_ticks`].
+    /// What a ranked time is compared by (docs/product.md, Pause).
+    pub fn ranked_time(&self) -> u64 {
+        self.ranked_ticks.saturating_add(self.paused_ticks())
+    }
 }
 
 /// A decoded replay with one input frame per tick.
@@ -146,9 +169,66 @@ pub enum ReplayError {
     /// A mods bit that names no mod in `crate::mods::MODS`.
     #[error("unknown mods bits {0:#x}")]
     UnknownMods(u32),
+    /// A pause past `total_ticks`, not later than the pause before it, or of length zero.
+    #[error("pause {0} is past the last tick, out of order or empty")]
+    BadPause(u64),
     /// The bytes decode but are not what `encode` writes (for example an overlong varint).
     #[error("replay is not in canonical form")]
     NotCanonical,
+}
+
+/// The trailer of format 5 ([`LEGACY_FORMAT`]): no `pauses`.
+#[derive(Serialize, Deserialize)]
+struct TrailerV5 {
+    total_ticks: u64,
+    splits: Vec<(u16, u64)>,
+    ranked_ticks: u64,
+    checkpoints: Vec<(u64, [u8; 16])>,
+    final_hash: [u8; 32],
+}
+
+/// The file layout of format 5. Field order and types must match what format 5 wrote.
+#[derive(Serialize, Deserialize)]
+struct FileV5 {
+    header: Header,
+    runs: Vec<(u32, InputFrame)>,
+    trailer: TrailerV5,
+}
+
+impl FileV5 {
+    /// The format 5 form of a decoded file (its pauses are empty), to re-encode it.
+    fn of(file: &FileOwned) -> FileV5 {
+        let t = &file.trailer;
+        FileV5 {
+            header: file.header.clone(),
+            runs: file.runs.clone(),
+            trailer: TrailerV5 {
+                total_ticks: t.total_ticks,
+                splits: t.splits.clone(),
+                ranked_ticks: t.ranked_ticks,
+                checkpoints: t.checkpoints.clone(),
+                final_hash: t.final_hash,
+            },
+        }
+    }
+}
+
+impl From<FileV5> for FileOwned {
+    fn from(f: FileV5) -> FileOwned {
+        let t = f.trailer;
+        FileOwned {
+            header: f.header,
+            runs: f.runs,
+            trailer: Trailer {
+                total_ticks: t.total_ticks,
+                splits: t.splits,
+                ranked_ticks: t.ranked_ticks,
+                pauses: Vec::new(),
+                checkpoints: t.checkpoints,
+                final_hash: t.final_hash,
+            },
+        }
+    }
 }
 
 /// The file layout, borrowed for encoding.
@@ -178,6 +258,10 @@ impl Replay {
         if ticks > MAX_REPLAY_TICKS {
             return Err(ReplayError::TooManyTicks);
         }
+        // Only the current layout is written; a decoded format 5 replay must be moved to it first.
+        if self.header.replay_format != REPLAY_FORMAT {
+            return Err(ReplayError::UnknownFormat(self.header.replay_format));
+        }
         check(&self.header, ticks, &self.trailer)?;
 
         let file = FileRef {
@@ -189,18 +273,23 @@ impl Replay {
         Ok(postcard::to_allocvec(&file).expect("postcard encoding into a Vec is infallible"))
     }
 
-    /// Reads a replay file, accepting only the canonical bytes `encode` would write.
+    /// Reads a replay file, accepting only the canonical bytes `encode` would write. A format 5
+    /// file ([`LEGACY_FORMAT`]) reads too, with no pauses, when it is the canonical bytes
+    /// format 5 wrote.
     pub fn decode(bytes: &[u8]) -> Result<Replay, ReplayError> {
         if bytes.get(..MAGIC.len()) != Some(&MAGIC[..]) {
             return Err(ReplayError::BadMagic);
         }
-        // Check the version before decoding the rest: other versions may use another layout.
+        // Check the version before decoding the rest: other versions use another layout.
         let ((_, replay_format), _) = postcard::take_from_bytes::<([u8; 4], u16)>(bytes)?;
-        if replay_format != REPLAY_FORMAT {
-            return Err(ReplayError::UnknownFormat(replay_format));
-        }
-
-        let (file, rest) = postcard::take_from_bytes::<FileOwned>(bytes)?;
+        let (file, rest) = match replay_format {
+            REPLAY_FORMAT => postcard::take_from_bytes::<FileOwned>(bytes)?,
+            LEGACY_FORMAT => {
+                let (old, rest) = postcard::take_from_bytes::<FileV5>(bytes)?;
+                (FileOwned::from(old), rest)
+            }
+            other => return Err(ReplayError::UnknownFormat(other)),
+        };
         if !rest.is_empty() {
             return Err(ReplayError::TrailingBytes(rest.len() as u64));
         }
@@ -222,7 +311,12 @@ impl Replay {
         }
         check(&file.header, total, &file.trailer)?;
 
-        if postcard::to_allocvec(&file)? != bytes {
+        let again = if replay_format == LEGACY_FORMAT {
+            postcard::to_allocvec(&FileV5::of(&file))?
+        } else {
+            postcard::to_allocvec(&file)?
+        };
+        if again != bytes {
             return Err(ReplayError::NotCanonical);
         }
 
@@ -284,6 +378,9 @@ impl Replay {
             let _ = writeln!(out, "split stage {stage} tick {tick}");
         }
         let _ = writeln!(out, "ranked_ticks {}", t.ranked_ticks);
+        for (tick, len) in &t.pauses {
+            let _ = writeln!(out, "pause tick {tick} for {len}");
+        }
         for (tick, hash) in &t.checkpoints {
             let _ = writeln!(out, "checkpoint tick {tick} {}", hex(hash));
         }
@@ -293,11 +390,12 @@ impl Replay {
 }
 
 /// The rules shared by `encode` and `decode`, given the real tick count (inputs or run lengths).
+/// [`LEGACY_FORMAT`] passes here (`decode` reads it, with no pauses); `encode` rejects it first.
 fn check(header: &Header, ticks: u64, trailer: &Trailer) -> Result<(), ReplayError> {
     if header.magic != MAGIC {
         return Err(ReplayError::BadMagic);
     }
-    if header.replay_format != REPLAY_FORMAT {
+    if header.replay_format != REPLAY_FORMAT && header.replay_format != LEGACY_FORMAT {
         return Err(ReplayError::UnknownFormat(header.replay_format));
     }
     if !header.mods.is_known() {
@@ -321,6 +419,14 @@ fn check(header: &Header, ticks: u64, trailer: &Trailer) -> Result<(), ReplayErr
     for (index, &(_, tick)) in (0u64..).zip(&trailer.splits) {
         if tick > ticks || previous.is_some_and(|p| tick < p) {
             return Err(ReplayError::BadSplit(index));
+        }
+        previous = Some(tick);
+    }
+
+    let mut previous: Option<u64> = None;
+    for (index, &(tick, len)) in (0u64..).zip(&trailer.pauses) {
+        if tick > ticks || len == 0 || previous.is_some_and(|p| tick <= p) {
+            return Err(ReplayError::BadPause(index));
         }
         previous = Some(tick);
     }
@@ -433,6 +539,7 @@ mod tests {
                     .filter(|&(_, tick)| tick <= ticks)
                     .collect(),
                 ranked_ticks: ticks.saturating_sub(2),
+                pauses: Vec::new(),
                 checkpoints: (0..=ticks)
                     .step_by(usize::try_from(CHECKPOINT_INTERVAL).expect("small"))
                     .map(|tick| (tick, [(tick / CHECKPOINT_INTERVAL).to_le_bytes()[0]; 16]))
@@ -764,12 +871,12 @@ mod tests {
 
     #[test]
     fn rejects_overlong_varint() {
-        // replay_format 5 is the single byte 0x05 right after the magic; 0x85 0x00 also reads
-        // as 5 but is not what encode writes.
+        // replay_format 6 is the single byte 0x06 right after the magic; 0x86 0x00 also reads
+        // as 6 but is not what encode writes.
         let bytes = small().encode().unwrap();
-        assert_eq!(bytes[4], 0x05);
+        assert_eq!(bytes[4], 0x06);
         let mut long = bytes[..4].to_vec();
-        long.extend([0x85, 0x00]);
+        long.extend([0x86, 0x00]);
         long.extend(&bytes[5..]);
         assert_eq!(Replay::decode(&long), Err(ReplayError::NotCanonical));
     }
@@ -838,5 +945,96 @@ mod tests {
         assert!(text.contains("split stage 1 tick 7\n"));
         assert!(text.contains("ranked_ticks 8\n"));
         assert!(text.contains(&format!("final_hash {}\n", "03".repeat(32))));
+    }
+
+    /// `small()` with two pauses: 40 ticks after tick 3, 7 after tick 9.
+    fn paused() -> Replay {
+        let mut r = small();
+        r.trailer.pauses = vec![(3, 40), (9, 7)];
+        r
+    }
+
+    #[test]
+    fn round_trip_keeps_pauses_and_ranked_time_adds_them() {
+        let r = paused();
+        let decoded = Replay::decode(&r.encode().unwrap()).unwrap();
+        assert_eq!(decoded, r);
+        assert_eq!(decoded.trailer.paused_ticks(), 47);
+        assert_eq!(decoded.trailer.ranked_time(), 8 + 47);
+        assert_eq!(small().trailer.ranked_time(), 8, "no pauses: the sim's ranked time");
+        let text = decoded.dump();
+        assert!(text.contains("ranked_ticks 8\npause tick 3 for 40\npause tick 9 for 7\n"), "{text}");
+    }
+
+    #[test]
+    fn a_pause_on_the_last_tick_is_fine() {
+        let mut r = small();
+        r.trailer.pauses = vec![(10, 1)];
+        assert_eq!(Replay::decode(&r.encode().unwrap()), Ok(r));
+    }
+
+    #[test]
+    fn rejects_bad_pauses() {
+        for (pauses, index) in [
+            (vec![(3, 40), (11, 1)], 1),
+            (vec![(3, 0)], 0),
+            (vec![(3, 40), (3, 1)], 1),
+            (vec![(5, 1), (2, 1)], 1),
+        ] {
+            let mut r = small();
+            r.trailer.pauses = pauses;
+            let err = ReplayError::BadPause(index);
+            assert_eq!(r.encode(), Err(err.clone()));
+            assert_eq!(Replay::decode(&encode_unchecked(&r)), Err(err));
+        }
+    }
+
+    /// `small()` as format 5 wrote it: the layout before `pauses` (#623).
+    fn format5_bytes() -> Vec<u8> {
+        let mut r = small();
+        r.header.replay_format = LEGACY_FORMAT;
+        let file = FileOwned {
+            header: r.header,
+            runs: runs(&r.inputs),
+            trailer: r.trailer,
+        };
+        postcard::to_allocvec(&FileV5::of(&file)).unwrap()
+    }
+
+    /// The bytes of [`format5_bytes`], pinned: `iwbtg replay dump` of the format 5 build (main
+    /// before #623) reads this file. A change here means format 5 files no longer read.
+    const FORMAT5_HEX: &str = concat!(
+        "4957425205010f72656c795f7468655f6e6565646c65abababababababababababababababab",
+        "abababababababababababababababab01f0bdf3d589cf959a1200010468617264000a746573",
+        "742d6275696c640503000000011010000410000001000010010010100a020003010708010000",
+        "0000000000000000000000000000000303030303030303030303030303030303030303030303",
+        "030303030303030303",
+    );
+
+    #[test]
+    fn a_format_5_replay_still_reads_with_no_pauses() {
+        let bytes = format5_bytes();
+        assert_eq!(hex(&bytes), FORMAT5_HEX);
+        let old = Replay::decode(&bytes).unwrap();
+        assert_eq!(old.header.replay_format, 5);
+        assert!(old.trailer.pauses.is_empty());
+        assert_eq!(old.trailer.ranked_time(), old.trailer.ranked_ticks);
+        let mut now = small();
+        now.header.replay_format = 5;
+        assert_eq!(old, now, "everything else as recorded");
+        // Only the current layout is written.
+        assert_eq!(old.encode(), Err(ReplayError::UnknownFormat(5)));
+        // Format 5 bytes are held to format 5's canonical form, and its checks.
+        let mut long = bytes[..4].to_vec();
+        long.extend([0x85, 0x00]);
+        long.extend(&bytes[5..]);
+        assert_eq!(Replay::decode(&long), Err(ReplayError::NotCanonical));
+        let mut trailing = bytes.clone();
+        trailing.push(0);
+        assert_eq!(Replay::decode(&trailing), Err(ReplayError::TrailingBytes(1)));
+        // Formats before 5 stay unknown.
+        let mut four = bytes;
+        four[4] = 4;
+        assert_eq!(Replay::decode(&four), Err(ReplayError::UnknownFormat(4)));
     }
 }

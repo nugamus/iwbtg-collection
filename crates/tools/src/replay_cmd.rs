@@ -32,7 +32,7 @@ use iwbtg_format::{LoadMode, PackageFiles, load_game};
 use iwbtg_sim::def::GameDef;
 use iwbtg_sim::input::{Action, InputFrame, parse_action_inputs};
 use iwbtg_sim::mods::ModSet;
-use iwbtg_sim::replay::{CHECKPOINT_INTERVAL, Replay, StartMode};
+use iwbtg_sim::replay::{CHECKPOINT_INTERVAL, Replay, StartMode, Trailer};
 use iwbtg_sim::room::StartPoint;
 use iwbtg_sim::save::SaveSlot;
 use iwbtg_sim::sound::DllMode;
@@ -186,7 +186,8 @@ pub struct ReplayVerifyArgs {
 /// Verification), offline. The replay must be for this package (id and `gameplay_hash`) and this
 /// sim (`SIM_VERSION`); a headless run on its header and inputs must reproduce every claim of its
 /// trailer: tick count, splits, ranked time, checkpoints and final hash. Prints the
-/// [`ReplaySummary`] lines, then `verified`, or one `mismatch: ...` line each and `Ok(false)`.
+/// [`ReplaySummary`] lines, the replay's pauses and the run's time (ranked ticks plus the ticks
+/// paused, #623), then `verified`, or one `mismatch: ...` line each and `Ok(false)`.
 pub fn verify_main(args: &ReplayVerifyArgs) -> Result<bool, ToolError> {
     let files = load_package(&args.pkg)?;
     let bytes = std::fs::read(&args.replay)
@@ -227,8 +228,8 @@ pub fn verify_main(args: &ReplayVerifyArgs) -> Result<bool, ToolError> {
         ));
     }
     let s = run_def(def, &input.frames, options, input.mods)?;
-    print!("{}", s.lines());
     let t = &replay.trailer;
+    print!("{}{}", s.lines(), pause_lines(t, s.ranked_ticks));
     if s.ticks != t.total_ticks {
         bad.push(format!(
             "ran {} ticks, the replay claims {}",
@@ -289,8 +290,9 @@ pub fn dump_main(args: &ReplayDumpArgs) -> Result<(), ToolError> {
     Ok(())
 }
 
-/// A replay as text: header fields (`name: value`), the trailer (ticks, ranked, splits,
-/// checkpoints, final hash), then `inputs:` and one line per run of equal frames,
+/// A replay as text: header fields (`name: value`), the trailer (ticks, ranked, pauses as
+/// `<tick>+<ticks paused>` or `none`, time as ranked plus paused, splits, checkpoints, final
+/// hash), then `inputs:` and one line per run of equal frames,
 /// `<first tick> x<length> held=<actions> pressed=<actions> released=<actions>`, where an empty
 /// set is `-` and actions are joined by `+`.
 pub fn dump_text(replay: &Replay) -> String {
@@ -315,6 +317,8 @@ pub fn dump_text(replay: &Replay) -> String {
     let _ = writeln!(out, "client: {}", h.client_build_id);
     let _ = writeln!(out, "ticks: {}", t.total_ticks);
     let _ = writeln!(out, "ranked: {}", t.ranked_ticks);
+    let _ = writeln!(out, "pauses: {}", pauses_text(&t.pauses));
+    let _ = writeln!(out, "time: {}", t.ranked_time());
     let splits = if t.splits.is_empty() {
         "none".to_owned()
     } else {
@@ -360,6 +364,31 @@ pub fn dump_text(replay: &Replay) -> String {
         tick += len;
     }
     out
+}
+
+/// A trailer's pauses as `<tick>+<ticks paused>` joined by spaces, or `none`.
+fn pauses_text(pauses: &[(u64, u64)]) -> String {
+    if pauses.is_empty() {
+        return "none".to_owned();
+    }
+    pauses
+        .iter()
+        .map(|(tick, len)| format!("{tick}+{len}"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The two lines `replay verify` prints after the run's: the replay's pauses and the run's
+/// time, the run's ranked ticks plus the ticks paused (`Trailer::ranked_time`; the sim never
+/// sees a pause, so the pauses are the client's claim).
+fn pause_lines(t: &Trailer, ranked_ticks: u64) -> String {
+    format!(
+        "pauses: {}
+time: {}
+",
+        pauses_text(&t.pauses),
+        ranked_ticks.saturating_add(t.paused_ticks())
+    )
 }
 
 /// Lowercase hex.
@@ -727,6 +756,8 @@ mod tests {
             released: 0,
         };
         replay.trailer.splits = vec![(1, 5), (2, 40)];
+        replay.trailer.ranked_ticks = 30;
+        replay.trailer.pauses = vec![(12, 250), (30, 4)];
         let text = dump_text(&Replay::decode(&replay.encode().unwrap()).unwrap());
         for line in [
             "package: stripped_example",
@@ -734,6 +765,9 @@ mod tests {
             "map: hard",
             "mods: NM",
             "ticks: 60",
+            "ranked: 30",
+            "pauses: 12+250 30+4",
+            "time: 284",
             "splits: 1@5 2@40",
             "checkpoints: 0",
             "  0 x10 held=- pressed=- released=-",
@@ -772,6 +806,7 @@ mod tests {
             total_ticks: s.ticks,
             splits: s.splits.iter().map(|x| (x.index, x.tick)).collect(),
             ranked_ticks: s.ranked_ticks,
+            pauses: vec![(5, 100), (40, 25)],
             checkpoints: s.checkpoints.clone(),
             final_hash: s.hash,
         };
@@ -785,6 +820,12 @@ mod tests {
             .unwrap()
         };
         assert!(verify(&replay));
+        assert_eq!(
+            pause_lines(&replay.trailer, s.ranked_ticks),
+            format!("pauses: 5+100 40+25
+time: {}
+", s.ranked_ticks + 125)
+        );
         let mut tampered = replay.clone();
         tampered.trailer.final_hash[0] ^= 1;
         assert!(!verify(&tampered));
