@@ -102,6 +102,18 @@ What follows from it:
 - Locally, run the tests of what you changed; run `cargo xtask check` once before the PR (only the changed crates and their dependents; `--all` for everything) and let CI do the rest.
 - `python -I client/.claude/stats.py [--days N]` from the workspace root reads the Claude Code transcripts and prints, per session and teammate, wall time, turns, average context, time inside cargo, idle time (waiting for a message), slow cargo calls, merges of `main`, conflicts and PRs.
 
+## UI gallery in a browser
+
+The client's wasm32 build opens the UI gallery (`--ui-gallery` on native; [client architecture, UI](architecture/client.md#ui)). To run it in a browser, from `client/`:
+
+```
+cargo build -p iwbtg-client --release --target wasm32-unknown-unknown
+wasm-bindgen --target web --no-typescript --out-dir crates/client/web/pkg target/wasm32-unknown-unknown/release/iwbtg-client.wasm
+python -m http.server 8765 --bind 127.0.0.1 --directory crates/client/web
+```
+
+Then open http://127.0.0.1:8765/. `wasm-bindgen` must be the version in Cargo.lock (see CI below); `crates/client/web/pkg/` is not committed. It needs WebGL2. Browser automation that fakes a device pixel ratio different from the screen's (Playwright's default on a 125% display) puts the pointer in the wrong place; give the context the screen's `deviceScaleFactor`.
+
 ## Check a machine
 
 From the workspace root:
@@ -124,7 +136,7 @@ Expected: the build ends with `Finished`. `issues.py start` prints JSON with mil
 The checks:
 
 - Windows and Linux: `cargo clippy --workspace --tests -- -D warnings`, `cargo test --workspace` (all `--locked`, warnings are errors), and `cargo fmt --check` on Linux.
-- wasm32: `cargo test -p iwbtg-sim` and `cargo test -p iwbtg-format --lib --test fixtures` on wasm32-wasip1 under wasmtime, and a wasm32-unknown-unknown build. The package-loading `wp7a_*` tests run on native targets only, because wasm32-wasip1 aborts on the panics of unmerged WP0 stubs. On wasm32-unknown-unknown, `wp1_determinism` runs under node through `wasm-bindgen-test` (`.cargo/config.toml` sets the runner): `cargo test -p iwbtg-sim --test wp1_determinism --target wasm32-unknown-unknown`. The runner is the wasm-bindgen CLI, and its version must equal `wasm-bindgen` in Cargo.lock: `cargo install wasm-bindgen-cli --version <lock version> --locked`. Other sim tests still need the same `#[wasm_bindgen_test]` switch to run there.
+- wasm32: `cargo test -p iwbtg-sim` and `cargo test -p iwbtg-format --lib --test fixtures` on wasm32-wasip1 under wasmtime, and wasm32-unknown-unknown builds of the sim, the format crate and the client (the client's browser build opens the UI gallery). The package-loading `wp7a_*` tests run on native targets only, because wasm32-wasip1 aborts on the panics of unmerged WP0 stubs. On wasm32-unknown-unknown, `wp1_determinism` runs under node through `wasm-bindgen-test` (`.cargo/config.toml` sets the runner): `cargo test -p iwbtg-sim --test wp1_determinism --target wasm32-unknown-unknown`. The runner is the wasm-bindgen CLI, and its version must equal `wasm-bindgen` in Cargo.lock: `cargo install wasm-bindgen-cli --version <lock version> --locked`. Other sim tests still need the same `#[wasm_bindgen_test]` switch to run there.
 - `cargo deny check licenses`, and the sim's dependency ban: `cargo deny --manifest-path crates/sim/Cargo.toml --config crates/sim/deny.toml check bans` (docs/architecture/sim.md, Sim purity).
 
 The same checks locally, from `client/`:

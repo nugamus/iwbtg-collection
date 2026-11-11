@@ -728,10 +728,10 @@ fn sync_instances(
 
 /// Where `--screenshot` writes.
 #[derive(Resource)]
-struct ScreenshotTo(std::path::PathBuf);
+pub(crate) struct ScreenshotTo(pub(crate) std::path::PathBuf);
 
 /// Frame 90 asks for a screenshot (the overlay has counted a second by then); frame 150 exits (the file is written by then).
-fn take_screenshot(
+pub(crate) fn take_screenshot(
     mut commands: Commands,
     to: Res<ScreenshotTo>,
     mut frame: Local<u32>,

@@ -84,6 +84,8 @@ jobs:
       - run: cargo test -p iwbtg-sim --target wasm32-wasip1 --locked
       - run: cargo test -p iwbtg-format --lib --test fixtures --target wasm32-wasip1 --locked
       - run: cargo build -p iwbtg-sim -p iwbtg-format --target wasm32-unknown-unknown --locked
+      # The client's browser build (it opens the UI gallery; docs/dev-setup.md, UI gallery in a browser).
+      - run: cargo build -p iwbtg-client --target wasm32-unknown-unknown --locked
       # The runner (.cargo/config.toml) is the wasm-bindgen CLI, which must match the lock file.
       - name: Install wasm-bindgen CLI at the locked version
         run: |

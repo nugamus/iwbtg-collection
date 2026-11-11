@@ -303,7 +303,8 @@ fn basic_package_loads_strict() {
         def.rooms[0].on_create,
         [RoomAction::SetGlobal {
             var: VarId(1),
-            value: Value::Real(Real::ONE)
+            value: Value::Real(Real::ONE),
+            difficulty: Some(1)
         }]
     );
 
@@ -1898,4 +1899,22 @@ fn stripped_markers_count_for_the_gameplay_hash() {
         base
     );
     assert_ne!(hash(&STRIPPED.replace("difficulty = 2", "difficulty = 3")), base);
+}
+
+#[test]
+fn a_set_global_difficulty_must_be_a_whole_number_from_0_to_255() {
+    for bad in ["1.5", "256", "-1", "\"hard\""] {
+        let files = package(|f| {
+            set(
+                f,
+                "rooms/title.toml",
+                TITLE.replace("value = 1 }", &format!("value = {bad} }}")),
+            )
+        });
+        let errs = errors(&load_report(&files, STRICT));
+        assert!(
+            errs.iter().any(|e| e.contains("a whole number from 0 to 255")),
+            "{bad}: {errs:#?}"
+        );
+    }
 }
