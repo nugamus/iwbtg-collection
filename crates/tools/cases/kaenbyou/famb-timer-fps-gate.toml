@@ -1,0 +1,24 @@
+# Imported from research trace kaenbyou/famb-timer-fps-gate by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room rHub --at 2 --from 0 --stub-dlls (1 --gml)
+# Frames 0..1 ran before the room jump (boot rooms); they are not compared.
+source = "kaenbyou/famb-timer-fps-gate"
+kind = "diff"
+start = { room = "hub", difficulty = 1 }
+at = 2
+first_frame = 0
+object = "kid"
+original_object = "player"
+dll_mode = "stub"
+seed = 0
+# The --gml global.savenum = 1 is the save slot, which the start point sets (as tr-room-08).
+setup = []
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+"global.timestep" = "global.time"
+"world.pauseon" = "global.paused"
+
+[unprobed]
+
+[rooms]
+"hub" = "rHub"

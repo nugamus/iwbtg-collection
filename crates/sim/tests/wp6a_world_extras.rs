@@ -252,7 +252,10 @@ mod wp6a {
         warm.tick.fps_zero_ticks = 3;
         let plain = RunnerRules::default();
         // fps reads 0 while World::tick < 3.
-        for (p, counts_during_warmup) in [(gated.clone(), false), (params(&[("timer_per_tick", real(2.0))]), true)] {
+        for (p, counts_during_warmup) in [
+            (gated.clone(), false),
+            (params(&[("timer_per_tick", real(2.0))]), true),
+        ] {
             let g = game(p, |_| {});
             let mut w = World::new(g.room, 1);
             let world = spawn(&g, &mut w, g.world);
@@ -265,13 +268,23 @@ mod wp6a {
             assert_eq!(w.engine.run.time, if counts_during_warmup { 4 } else { 2 });
         }
         // Menu-type rooms: no add; play rooms: +2.
-        for role in [RoomRole::Boot, RoomRole::Title, RoomRole::Menu, RoomRole::Select, RoomRole::Play] {
+        for role in [
+            RoomRole::Boot,
+            RoomRole::Title,
+            RoomRole::Menu,
+            RoomRole::Select,
+            RoomRole::Play,
+        ] {
             let g = game(gated.clone(), |d| d.rooms[0].role = role);
             let mut w = World::new(g.room, 1);
             let world = spawn(&g, &mut w, g.world);
             frame(&mut w, &[], &[]);
             step(&g, &mut w, world, &plain);
-            assert_eq!(w.engine.run.time, if role == RoomRole::Play { 2 } else { 0 }, "{role:?}");
+            assert_eq!(
+                w.engine.run.time,
+                if role == RoomRole::Play { 2 } else { 0 },
+                "{role:?}"
+            );
         }
         // global.clear stops it.
         let g = game(gated.clone(), |_| {});
