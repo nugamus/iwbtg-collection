@@ -11,6 +11,7 @@ use bevy::ui::Pressed;
 use bevy::ui_widgets::Button;
 
 use super::fonts::Type;
+use super::icons::{Icon, icon};
 use super::motion::{Ease, ReducedMotion, Scale, Tween};
 use super::shape::{Ink, Shape};
 use super::tokens::{self, star_color};
@@ -129,8 +130,10 @@ pub fn tag_pill(label: &str) -> impl Bundle + use<> {
     )
 }
 
-/// A label over a value (`STAGES` / `7`).
-pub fn stat(label: &str, value: &str, color: Color) -> impl Bundle + use<> {
+/// A label over a value (`STAGES` / `7`). With an icon, a muted 14 px mark sits in front of the
+/// label (the stats row of `Main.dc.html`); the value takes `color`.
+pub fn stat(kind: Option<Icon>, label: &str, value: &str, color: Color) -> impl Bundle + use<> {
+    let label_owned = label.to_string();
     let label_style = Type {
         tracking: 0.12,
         ..Type::LABEL
@@ -142,7 +145,19 @@ pub fn stat(label: &str, value: &str, color: Color) -> impl Bundle + use<> {
             ..default()
         },
         children![
-            text(label, label_style, tokens::MUTED),
+            (
+                Node {
+                    align_items: AlignItems::Center,
+                    column_gap: Val::Px(6.0),
+                    ..default()
+                },
+                Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
+                    if let Some(kind) = kind {
+                        c.spawn(icon(kind, 14.0, tokens::MUTED));
+                    }
+                    c.spawn(text(&label_owned, label_style, tokens::MUTED));
+                })),
+            ),
             text(value, Type::STAT, color),
         ],
     )
