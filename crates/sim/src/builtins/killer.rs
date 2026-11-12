@@ -6,7 +6,7 @@
 //! (the cherry: `image_speed` 1/15, a move, a scale) and Outside Room destroys when
 //! `destroy_outside_room` (the cherry, default off for a plain killer). The bounce rule of the
 //! bouncing cherries (U-MECH-5) is tier 3 and not here. `kill_outside_view` (kaenbyou borderKiller)
-//! drops the `killer` class (`format::objects::param_classes`) and kills in its own kid collision.
+//! drops the `killer` class (`def::class::param_classes`) and kills in its own kid collision.
 
 use serde::{Deserialize, Serialize};
 

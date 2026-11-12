@@ -103,9 +103,9 @@ Spawn caps: `instance_create` also counts toward at most 256 instances per event
 - `gm_repeat(?) -> int` (can fail) (cost: 1): The iteration count GML's `repeat` gives for a real (rounded); a bad count is an error.
 - `index$get$(Instance, string) -> ?` (can fail) (cost: 1): Reads the package variable `name` of an instance (`i.hp`); an unknown name is an error, an unset one reads 0 when the game allows it.
 - `index$set$(Instance, string, ?) -> ()` (can fail) (cost: 1): Writes the package variable `name` of an instance (`i.hp = 5`); the name must be declared in the package.
-- `instance_create(string, ?, ?) -> Instance` (can fail) (cost: 1 + 50): Creates an instance of a kind at (`x`, `y`) and runs its Create event; an optional map sets its parameters. Returns the handle.
-- `instance_create(string, ?, ?, map) -> Instance` (can fail) (cost: 1 + 50): Creates an instance of a kind at (`x`, `y`) and runs its Create event; an optional map sets its parameters. Returns the handle.
-- `instances(string) -> Dynamic>` (can fail) (cost: 1 + 1 per instance returned): The live instances of a kind as an array, in event order, as a snapshot at call time.
+- `instance_create(string, ?, ?) -> Instance` (can fail) (cost: 1 + 50): Creates an instance of a kind at (`x`, `y`) and runs its Create event; an optional map sets its parameters. Params that pick a class (water `variant`, vine `side`, ...) take the kind the loader derived with those values; an error when there is none. Returns the handle.
+- `instance_create(string, ?, ?, map) -> Instance` (can fail) (cost: 1 + 50): Creates an instance of a kind at (`x`, `y`) and runs its Create event; an optional map sets its parameters. Params that pick a class (water `variant`, vine `side`, ...) take the kind the loader derived with those values; an error when there is none. Returns the handle.
+- `instances(string) -> Dynamic>` (can fail) (cost: 1 + 1 per instance returned): The live instances of a kind and of the kinds the loader derived from it (`water[variant=2]` is a `water`, as a GM object covers its children) as an array, in event order, as a snapshot at call time.
 - `irandom(?) -> float` (can fail) (cost: 1): An integer from 0 to `x` inclusive, from the run's one RNG.
 - `irandom_range(?, ?) -> float` (can fail) (cost: 1): An integer between `a` and `b` inclusive, from the run's one RNG.
 - `kid() -> ?` (can fail) (cost: 1): The kid's instance, or `()` when there is none.

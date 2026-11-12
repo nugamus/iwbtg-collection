@@ -3,7 +3,7 @@
 //!
 //! No events: a slope is solid with a precise mask, and the climb and snap rules belong to the
 //! kid (the `[slope]` model of the physics profile). `shape` and a negative `scale_x` pick the
-//! class (`slope` or `slope_mirror`) at load (`format::objects::param_classes`); the mask is the
+//! class (`slope` or `slope_mirror`) at load (`def::class::param_classes`); the mask is the
 //! sprite's. This file declares and checks the params.
 
 use super::{BuiltinState, ParamError, ParamSpec, ParamType, param_enum, param_real};
