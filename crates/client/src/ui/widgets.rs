@@ -145,7 +145,7 @@ pub fn tag_pill(label: &str) -> impl Bundle + use<> {
     pill(
         label,
         Type::barlow(14.0, 500),
-        Color::srgba(1.0, 1.0, 1.0, 0.14),
+        tokens::white(0.14),
         tokens::INK,
         26.0,
         12.0,
@@ -251,15 +251,19 @@ fn button_fill(kind: ButtonKind, hover: f32, press: f32) -> Color {
         lift(lift(rest.blue, 1.0, up), 0.0, down),
         rest.alpha,
     );
-    // Glass gets more opaque as it lights up, the way a lighter CSS rgba() would.
-    if rest.alpha < 1.0 {
+    // Glass gets more opaque as it lights up, the way a lighter CSS rgba() would. White glass
+    // takes its CSS alpha (.12 to .20) through `tokens::white`, as at rest (#692).
+    if kind == ButtonKind::Secondary && hover > 0.0 {
+        c.alpha = tokens::white(0.12 + 0.08 * hover).alpha();
+    } else if rest.alpha < 1.0 {
         c.alpha = (rest.alpha + 0.08 * hover).min(1.0);
     }
     c.into()
 }
 
 /// The focus ring: drawn only when focus came from the keyboard (CSS `:focus-visible`).
-pub const FOCUS_RING: (f32, Color) = (2.0, Color::srgba(1.0, 1.0, 1.0, 0.85));
+/// `rgba(255,255,255,.85)` as [`tokens::white`]`(0.85)` (#692).
+pub const FOCUS_RING: (f32, Color) = (2.0, Color::srgba(1.0, 1.0, 1.0, 0.7159));
 
 /// A button's state, eased.
 #[derive(Component, Debug)]
@@ -370,6 +374,15 @@ mod tests {
     use super::*;
 
     #[test]
+    fn white_glass_goes_through_the_backdrop_rule() {
+        assert!((FOCUS_RING.1.alpha() - tokens::white(0.85).alpha()).abs() < 0.0005);
+        let rest = button_fill(ButtonKind::Secondary, 0.0, 0.0);
+        assert!((rest.alpha() - tokens::SECONDARY.alpha()).abs() < 0.0005);
+        let lit = button_fill(ButtonKind::Secondary, 1.0, 0.0);
+        assert!((lit.alpha() - tokens::white(0.20).alpha()).abs() < 0.0005);
+    }
+
+    #[test]
     fn hover_lightens_and_press_darkens() {
         let rest = button_fill(ButtonKind::Primary, 0.0, 0.0).to_srgba();
         let hover = button_fill(ButtonKind::Primary, 1.0, 0.0).to_srgba();
@@ -377,8 +390,6 @@ mod tests {
         assert_eq!(rest.to_hex(), "#FF3D55");
         assert!(hover.green > rest.green && hover.blue > rest.blue);
         assert!(press.red < rest.red);
-        let glass = button_fill(ButtonKind::Secondary, 1.0, 0.0).to_srgba();
-        assert!((glass.alpha - 0.20).abs() < 1e-6);
     }
 
     #[test]
