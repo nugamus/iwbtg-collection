@@ -37,7 +37,7 @@ The reader is written for files from strangers. Before it inflates anything it c
 - at most 20,000 files (`MAX_FILES`; the largest converted game has under 2,000);
 - the files add up to at most 512 MiB unpacked, the [package size limit](v0.md#assets) (`MAX_PACKAGE_BYTES`).
 
-Then for each file: it inflates to exactly its stated size (reading stops one byte past it, so a file cannot claim to be small and fill memory), its CRC-32 matches, its data does not overlap another file's (the overlapping-files zip bomb) and ends before the directory, and its name appears once.
+Then for each file: it inflates to exactly its stated size (reading stops one byte past it, so a file cannot claim to be small and fill memory), its CRC-32 matches, its data does not overlap another file's (the overlapping-files zip bomb) and ends before the directory, and its name appears once, also ignoring ASCII case (`CREDITS.md` and `Credits.md` would be one file on Windows and macOS).
 
 ## The zip subset
 

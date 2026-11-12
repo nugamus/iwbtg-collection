@@ -82,8 +82,14 @@ impl Store {
 /// A warning the player can find: stderr natively, the browser console on the web, and once per
 /// session a notice on screen (`ui::notice`, #566).
 pub fn warn(message: &str) {
-    backend::warn(message);
+    console_warn(message);
     crate::ui::notice::post(crate::ui::notice::Kind::Storage, message);
+}
+
+/// A warning for the console only (stderr natively, the browser console on the web), for a
+/// caller that posts its own notice (a dropped file that does not open, `import.rs`).
+pub fn console_warn(message: &str) {
+    backend::warn(message);
 }
 
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]

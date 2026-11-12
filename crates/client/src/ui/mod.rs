@@ -24,18 +24,32 @@ pub struct UiArgs {
     /// Turn off slides, fades and pops: every UI transition lands at once.
     #[arg(long)]
     pub reduced_motion: bool,
-    /// Screenshot checks: post a sample storage notice at start.
-    #[arg(long, hide = true)]
-    pub notice_preview: bool,
+    /// Screenshot checks: post a sample notice at start (`storage` when no kind is given).
+    #[arg(long, hide = true, num_args = 0..=1, default_missing_value = "storage")]
+    pub notice_preview: Option<NoticePreview>,
+}
+
+/// The sample notices of `--notice-preview`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum NoticePreview {
+    /// Saves cannot be written.
+    Storage,
+    /// A dropped package with errors (the longest drop message, cut).
+    Drop,
 }
 
 /// Called by `main`: posts the preview notice.
 pub fn configure(args: &UiArgs) {
-    if args.notice_preview {
-        notice::post(
+    match args.notice_preview {
+        Some(NoticePreview::Storage) => notice::post(
             notice::Kind::Storage,
             "could not update the save file: C:/Users/player/AppData/Local/iwbtg-collection/saves/demo_art.save: Access is denied. (os error 5)",
-        );
+        ),
+        Some(NoticePreview::Drop) => notice::post(
+            notice::Kind::Drop,
+            "my-game.iwbz has 2 errors. The first: rooms/start.toml:3:5: unknown object kind \"spikee\"",
+        ),
+        None => {}
     }
 }
 

@@ -11,7 +11,8 @@
 //!
 //! The reader is written for files from strangers:
 //! - every name passes [`check_entry`] and [`crate::files::check_path`] (no `..`, no absolute
-//!   path, no backslash, no drive letter, no Windows device name), and appears once;
+//!   path, no backslash, no drive letter, no Windows device name), and appears once, also
+//!   ignoring ASCII case (Windows and macOS would unpack `a.md` and `A.md` to one file);
 //! - the archive is at most [`MAX_ARCHIVE_BYTES`], has at most [`MAX_FILES`] files and the files
 //!   add up to at most [`MAX_PACKAGE_BYTES`] unpacked, checked from the directory before
 //!   anything is inflated, and each file inflates to exactly its stated size (zip bombs);
@@ -390,7 +391,13 @@ pub fn unpack(bytes: &[u8]) -> Result<PackageFiles, IwbzError> {
         check_entry(&e.name, &out)?;
         if files
             .insert(e.name.clone(), out)
-            .map_err(|err| corrupt(err.to_string()))?
+            .map_err(|err| match err {
+                crate::files::LoadError::CaseClash { .. } => IwbzError::NotAllowed {
+                    path: e.name.clone(),
+                    reason: err.to_string(),
+                },
+                err => corrupt(err.to_string()),
+            })?
             .is_some()
         {
             return Err(corrupt(format!("`{}` is in the archive twice", e.name)));
