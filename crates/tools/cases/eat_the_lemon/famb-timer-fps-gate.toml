@@ -1,0 +1,29 @@
+# Imported from research trace eat-the-lemon/famb-timer-fps-gate by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room room12 --at 2 --from 0 --stub-dlls --x 144 --y 336
+# Frames 0..1 ran before the room jump (boot rooms); they are not compared.
+source = "eat-the-lemon/famb-timer-fps-gate"
+kind = "diff"
+start = { room = "room_11", difficulty = 0 }
+at = 2
+first_frame = 0
+object = "kid"
+original_object = "player"
+dll_mode = "stub"
+seed = 0
+setup = [
+  { frame = 2, target = "kid", set = { x = 144.0, xprevious = 144.0, y = 336.0, yprevious = 336.0 } },
+]
+ignore = ["id", "sprite_index", "sprite_name"]
+notes = [
+  "--x/--y: the recorder creates the object when none exists; setup only moves one",
+]
+
+[vars]
+"global.timestep" = "global.time"
+"world.pauseon" = "global.paused"
+
+[unprobed]
+
+[rooms]
+"room_11" = "room12"
+"room_12" = "room13"

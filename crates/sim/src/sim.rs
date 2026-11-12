@@ -192,6 +192,12 @@ impl Sim {
         self.rules.tick.direct_latch = latch;
     }
 
+    /// Makes GML `fps` read 0 for the first `ticks` ticks of this run (`TickRules::fps_zero_ticks`,
+    /// R28). The trace runner sets it to match the recorder, whose `fps` reads 0 up to frame 50.
+    pub fn set_fps_zero_ticks(&mut self, ticks: u64) {
+        self.rules.tick.fps_zero_ticks = ticks;
+    }
+
     /// The rules of this run.
     pub fn rules(&self) -> &RunnerRules {
         &self.rules

@@ -78,7 +78,7 @@ pub fn resolve(name: &str, def: &GameDef) -> Option<FieldRef> {
 /// - `named(<instance name>).<field>`: a field of the instance with that room-file name;
 /// - `global.<name>`: a global the package declares, else engine state (`difficulty`, `death`, `time`,
 ///   `savenum`, `clear`, `frozen`, `frozen2`, `reverse`, `grav`, `paused`, the latched vine-key flags
-///   `key_left`, `key_right`, `key_jump`); `room_speed` is engine state too;
+///   `key_left`, `key_right`, `key_jump`); `room_speed` and `fps` are engine state too;
 /// - `instance_number(<target>)`, where a target is a kind name or `class:<class name>`;
 /// - `keyboard_check(<action>)`, `keyboard_check_pressed(...)`, `keyboard_check_released(...)`,
 ///   `keyboard_check_direct(...)`, with an action name (`jump`, `right`);
@@ -148,6 +148,9 @@ pub fn column(expr: &str, def: &GameDef) -> Result<Column, String> {
     }
     if expr == "room_speed" {
         return Ok(Column::Engine(EngineVar::RoomSpeed));
+    }
+    if expr == "fps" {
+        return Ok(Column::Engine(EngineVar::Fps));
     }
     field_column(ProbeTarget::Row, expr, def, expr)
 }
@@ -361,6 +364,7 @@ mod tests {
             Ok(Column::Engine(EngineVar::KeyJump))
         );
         assert_eq!(column("room_speed", &d), Ok(Column::Engine(EngineVar::RoomSpeed)));
+        assert_eq!(column("fps", &d), Ok(Column::Engine(EngineVar::Fps)));
         assert_eq!(column("global.hp", &d), Ok(Column::Global(VarId(0))));
         assert_eq!(
             column("instance_number(@bullet)", &d),
