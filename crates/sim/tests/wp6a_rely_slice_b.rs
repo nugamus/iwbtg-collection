@@ -510,6 +510,42 @@ mod wp6a {
         assert!(set.collisions.is_empty());
     }
 
+    /// eat-the-lemon autosave (kid/B.md lemon item 7; traces/eat-the-lemon/famb-multikid-restart.md):
+    /// Create arms Alarm 0 for 1 tick, Alarm 0 saves the first kid's xprevious/yprevious, and the
+    /// point stays. With no kid there is no save.
+    #[test]
+    fn alarm_save_saves_the_first_kid_and_stays() {
+        let g = save_game(params(&[
+            ("on_touch", word("never")),
+            ("saved_position", word("xy_previous")),
+            ("alarm_save", real(1.0)),
+            ("blink", ParamValue::Bool(false)),
+        ]));
+        let (mut w, sp, kid) = save_world(&g);
+        let lower = spawn(&g, &mut w, g.kid, 48.0, 566.0);
+        fire(&g, &mut w, sp, &EventKind::Create);
+        assert_eq!(w.get(sp).unwrap().alarms[0], r(1.0));
+        w.get_mut(kid).unwrap().m.set_xprevious(r(48.0)).unwrap();
+        w.get_mut(kid).unwrap().m.set_yprevious(r(278.0)).unwrap();
+        w.get_mut(lower).unwrap().m.set_xprevious(r(60.0)).unwrap();
+        fire(&g, &mut w, sp, &EventKind::Alarm(0));
+        let s = w.save.clone().unwrap();
+        assert_eq!((s.x, s.y), (r(48.0), r(278.0)), "the lowest-id kid");
+        assert!(w.get(sp).unwrap().alive, "the autosave stays");
+        w.save = None;
+        w.get_mut(kid).unwrap().alive = false;
+        w.get_mut(lower).unwrap().alive = false;
+        fire(&g, &mut w, sp, &EventKind::Alarm(0));
+        assert!(w.save.is_none(), "no kid, no save");
+        assert!(
+            builtins::init_state(
+                Builtin::Save,
+                &params(&[("alarm_save", real(1.0)), ("self_destroy_alarm", real(5.0))])
+            )
+            .is_err()
+        );
+    }
+
     #[test]
     fn fixed_point_and_self_destroy_alarm() {
         let g = save_game(params(&[
