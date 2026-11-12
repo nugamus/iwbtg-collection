@@ -85,8 +85,9 @@ pub const NOTCH: Color = Color::srgba(8.0 / 255.0, 9.0 / 255.0, 14.0 / 255.0, 0.
 /// Bevy's alpha for a black overlay at the artboard's CSS alpha `a` (#627). The browser blends
 /// `rgba(...)` in sRGB, Bevy in linear light, where `a` would leave `(1 - a)^(1/2.2)` of the sRGB
 /// value under it (0.5 keeps about 73 %, 0.94 about 28 %). Keeping `(1 - a)^2.2` of the light
-/// leaves `1 - a` in sRGB, as the browser does: exact for black over anything, and for stacked
-/// black layers. Use it for shadows, dims and dark glass (dark colours are close to black).
+/// leaves `1 - a` in sRGB, as the browser does, for black over anything and for stacked black
+/// layers: a little darker than the browser, by up to about 8 of 255 steps where the result is near
+/// black, as the sRGB curve is not quite a 2.2 power. Use it for shadows, dims and dark glass (dark colours are close to black).
 pub fn artboard_alpha(a: f32) -> f32 {
     1.0 - (1.0 - a).powf(2.2)
 }
@@ -204,12 +205,13 @@ mod tests {
 
     #[test]
     fn black_keeps_one_minus_a_of_the_srgb_value() {
-        // The pause dim (#479): black at .5 over a mid tile halves its sRGB value.
+        // The pause dim (#479): black at .5 over a mid tile halves its sRGB value, up to about
+        // 8 of 255 steps darker, as the sRGB curve is not quite a 2.2 power.
         let tile = Color::srgb(0.9, 0.55, 0.12);
         for a in [0.35, 0.5, 0.6, 0.94] {
             let got = bevy_blend(black(a), tile);
-            assert!((got.red - 0.9 * (1.0 - a)).abs() < 0.01, "a {a}: {got:?}");
-            assert!((got.green - 0.55 * (1.0 - a)).abs() < 0.01, "a {a}: {got:?}");
+            assert!((got.red - 0.9 * (1.0 - a)).abs() < 0.035, "a {a}: {got:?}");
+            assert!((got.green - 0.55 * (1.0 - a)).abs() < 0.035, "a {a}: {got:?}");
         }
         assert!((artboard_alpha(0.5) - 0.782).abs() < 0.001);
     }
@@ -227,8 +229,8 @@ mod tests {
         let (top, ground) = (ACCENT.to_srgba(), GROUND.to_srgba());
         let want = top.red * 0.35 + ground.red * 0.65;
         assert!((got.red - want).abs() < 0.03, "{got:?} vs {want}");
-        // Black reduces to the black rule.
+        // Black comes close to the black rule (which is not exact over every ground either).
         let dark = over(Color::BLACK, 0.6, Color::srgb(0.5, 0.5, 0.5));
-        assert!((dark.alpha() - artboard_alpha(0.6)).abs() < 0.02);
+        assert!((dark.alpha() - artboard_alpha(0.6)).abs() < 0.03);
     }
 }
