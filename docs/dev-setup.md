@@ -67,6 +67,8 @@ So a teammate runs the status hook by hand at the start (from the workspace root
 
 The lead prompt is `TEAM_LEAD_PROMPT.md` in the workspace root.
 
+**Shutdown before the next teammate** (#677): the lead spawns a lane's next teammate only after the previous one's `shutdown_approved` arrived, and never sends a teammate new work in the same message batch as its shutdown request. A shutdown request is only read between steps, and a teammate with a pending message acts on that first: on 2026-11-12 the old sim teammate was still merging `main` in `worktrees/client-sim` when its successor ran `git switch -c` there, and the old one's `git push` ran on the wrong branch.
+
 **Background commands don't wake a teammate** (checked 2026-11-05 in the transcripts of the 2026-11-04 run): when a teammate ends its turn "waiting for" a background cargo run, the completion notice is queued and only delivered when the lead next messages it. Teammates sat idle 30 to 60 minutes per wait: the data and sim teammates were idle 2.3 of their 3.3 and 3.1 hours. Teammates run cargo in the foreground; the workspace settings raise the shell tool limit to 45 minutes (`BASH_MAX_TIMEOUT_MS`) and the default to 15 (`BASH_DEFAULT_TIMEOUT_MS`).
 
 ## Build speed
