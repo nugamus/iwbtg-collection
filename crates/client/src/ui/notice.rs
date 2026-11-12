@@ -4,8 +4,8 @@
 //! at hand (storage) still reaches the player.
 //!
 //! A kind that says [`Kind::once`] shows once per session: the second storage failure in a
-//! session only goes to the console. A new kind of notice (a dropped file that is not a package,
-//! #648) is one more [`Kind`] variant and one `post` call where it happens.
+//! session only goes to the console. A new kind of notice is one more [`Kind`] variant and one
+//! `post` call where it happens, as for a dropped file that does not open (`import.rs`, #648).
 
 use std::collections::HashSet;
 use std::sync::Mutex;
@@ -24,6 +24,9 @@ use super::widgets::text;
 pub enum Kind {
     /// Saves, settings, stats or replays could not be kept (`storage::warn`).
     Storage,
+    /// A file or folder dropped on the window did not open (`import.rs`, #648). The message is
+    /// the body as it stands: the file's name and why.
+    Drop,
 }
 
 impl Kind {
@@ -31,6 +34,7 @@ impl Kind {
     pub fn heading(self) -> &'static str {
         match self {
             Kind::Storage => "Not saved",
+            Kind::Drop => "Not opened",
         }
     }
 
@@ -42,6 +46,7 @@ impl Kind {
                 let _ = message;
                 "Saves and settings may not be kept this session.".to_string()
             }
+            Kind::Drop => message.to_string(),
         }
     }
 
@@ -49,6 +54,7 @@ impl Kind {
     pub fn once(self) -> bool {
         match self {
             Kind::Storage => true,
+            Kind::Drop => false,
         }
     }
 }
@@ -264,6 +270,17 @@ mod tests {
         let mut shown = Shown::default();
         assert!(shown.admit(Kind::Storage));
         assert!(!shown.admit(Kind::Storage));
+    }
+
+    #[test]
+    fn every_dropped_file_that_does_not_open_shows() {
+        let mut shown = Shown::default();
+        assert!(shown.admit(Kind::Drop));
+        assert!(shown.admit(Kind::Drop));
+        assert_eq!(
+            Kind::Drop.body("notes.txt is not a game package"),
+            "notes.txt is not a game package"
+        );
     }
 
     #[test]
