@@ -1,0 +1,10 @@
+# The client: Skip
+
+Part of [the client](../client.md).
+
+Skip (`skip.rs`, `SkipPlugin`, #573) runs a cutscene or dialogue region out at once in a ranked run ([product](../../product.md#two-ways-to-play-each-game); [format](../../format/v0.md#stripped-mode)).
+
+- **The key.** `skip-cutscene` is a client key (`bindings::ClientKey`), bound beside the actions and quick-retry: Backspace by default, no controller default, `--bind skip-cutscene=...` or `skip-cutscene` in the settings' bindings tables. No input is shared between two client keys or a client key and an action. It is not the game's own `skip` action (S), which games read (saves, for one). The collector sets a flag on its press (`Collector::take_skip`); it never enters an `InputFrame`.
+- **The system.** `skip` runs in `FixedUpdate`, in the `SimTick` set before `view::tick`, so whatever stops the sim (pause, a pending retry, Sudden Death, the results screen) stops it too. A press while `Sim::in_region` holds calls `run_skip`: the first tick takes the collector's frame (its edges included), the others the same held actions without edges, until no region holds, the sim stops running or `MAX_SKIP_SECONDS` (60) of game time have run (`revisit`). Each tick goes to the replay recorder as `view::tick` gives it, so the replay holds exactly the ticks run and re-simulates to the same world. A press outside a region (always in Play original) does nothing. A press while the sim is held (the pause menu) waits for the next tick that runs.
+- **What is not shown.** No frame is drawn for those ticks (the next frame draws the world after them), and their one-shot sounds and script `emit` cues are dropped. Every other sound event (music that starts, stops or loops, volume, pause, loads) is queued, so the music after the skip is what watching would have left playing. The sign, shake and overlay tick count take only the next normal tick.
+- **The timer.** Region ticks are never ranked time, so the HUD timer (`Sim::ranked_ticks` plus paused ticks, [HUD](hud.md)) stays where it was.

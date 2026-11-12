@@ -28,6 +28,7 @@ mod retry;
 mod savefile;
 mod screen;
 mod settings;
+mod skip;
 mod stats;
 mod storage;
 mod ui;
@@ -152,6 +153,7 @@ fn main() -> ExitCode {
             audio::AudioPlugin::new(&audio, &pkg.files),
             mods::ModsPlugin(run_mods),
             retry::RetryPlugin(retry),
+            skip::SkipPlugin,
             pause::PausePlugin {
                 args: pause,
                 files: pkg.files.clone(),
