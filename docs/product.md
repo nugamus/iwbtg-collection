@@ -94,6 +94,8 @@ Only cleared runs get a results screen; quit or abandoned runs do not. One page 
 
 Ahead and behind always use + and − signs as well as colour; gold best segments also get a marker.
 
+Until the Global scope exists, placement is Local: this run's place among your own runs (the PB is always #1 there, so a slower run shows its own place, not the PB's). Back returns to the game until game select exists; Escape is Back. Retry is a quick-retry (a new run). Save replay copies the run's replay to `exports/` in the data area, where pruning never removes it. A clear from a save (not on a board) gets no results page. (#41, 2026-11-11)
+
 ## Look and screen
 
 The approved screen designs (game select, mod select, loading, HUD, pause, results, player card) are in [design/mockups/m4](design/mockups/m4/README.md). Build from them.

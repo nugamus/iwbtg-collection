@@ -2,7 +2,6 @@
 # Recorder: --object player --room room12 --at 2 --from 2 --stub-dlls --x 144 --y 336
 source = "eat-the-lemon/famb-multikid-restart-c"
 kind = "diff"
-open = "the autosave needs research#137 (converter writes alarm_save); with it frames 3-20 match. Frame 21 row order needs the placed kids' gm_id and [engine].first_runtime_id from the converter (research#141); the sim side is #669"
 start = { room = "room_11", difficulty = 0 }
 at = 2
 first_frame = 2

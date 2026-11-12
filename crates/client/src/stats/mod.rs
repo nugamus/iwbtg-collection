@@ -58,7 +58,16 @@ struct Current {
     tracker: Tracker,
 }
 
-/// The local stats. The screens read `book`, `session` and `last`.
+/// The last cleared run on a board and where it went (the results screen, #41).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Cleared {
+    /// [`map_key`] and [`board_key`] of the board it went on.
+    pub map: String,
+    pub board: String,
+    pub run: Run,
+}
+
+/// The local stats. The screens read `book`, `session`, `last` and `cleared`.
 #[derive(Resource)]
 #[allow(
     dead_code,
@@ -69,6 +78,8 @@ pub struct Stats {
     pub session: Session,
     /// What the last cleared run changed (the results screen), `None` before one.
     pub last: Option<Recorded>,
+    /// The run `last` is about; set with it.
+    pub cleared: Option<Cleared>,
     store: Option<Store>,
     dirty: bool,
     since_flush: f32,
@@ -84,6 +95,7 @@ impl Stats {
             book,
             session: Session::default(),
             last: None,
+            cleared: None,
             store,
             dirty: false,
             since_flush: 0.0,
@@ -155,9 +167,14 @@ impl Stats {
                             death_log: log,
                         };
                         let board = map.boards.entry(cur.board.clone()).or_default();
-                        let rec = board.add(run);
+                        let rec = board.add(run.clone());
                         eprintln!("{}", clear_line(ticks, deaths, cur.tick_rate, &rec));
                         self.last = Some(rec);
+                        self.cleared = Some(Cleared {
+                            map: cur.map.clone(),
+                            board: cur.board.clone(),
+                            run,
+                        });
                     } else {
                         eprintln!(
                             "stats: cleared in {} (from a save: counted as a clear, not on a board)",
@@ -424,6 +441,11 @@ mod tests {
                 let cur = stats.current.as_ref().unwrap();
                 let board = &stats.book.map(&cur.map).unwrap().boards[&cur.board];
                 let run = board.runs[rec.place.unwrap() - 1].clone();
+                let cleared = stats.cleared.as_ref().expect("the cleared run is kept");
+                assert_eq!(
+                    (&cleared.map, &cleared.board, &cleared.run),
+                    (&cur.map, &cur.board, &run)
+                );
                 return (rec, run);
             }
             if rooms.last() != Some(&w.room) {

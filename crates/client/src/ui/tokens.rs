@@ -82,6 +82,16 @@ pub const ACCENT_LIGHT: Color = Color::srgb_u8(0xff, 0xb3, 0xbd);
 /// The notches that cut a progress bar into steps: `rgba(8,9,14,.55)`, alpha as for [`CARD`].
 pub const NOTCH: Color = Color::srgba(8.0 / 255.0, 9.0 / 255.0, 14.0 / 255.0, 0.828);
 
+/// Results (`Results169.dc.html`): the line between split rows (`rgba(255,255,255,.07)`), the one
+/// over the sum of best (`.22`), a chart's base line (`.18`) and the deaths-per-stage bars (`.38`,
+/// the stage with the most deaths `.85`). White over dark has no single Bevy alpha (#627), so
+/// these are the artboard's whites mixed over the ground in sRGB, as the browser blends them.
+pub const RULE: Color = Color::srgb_u8(0x1c, 0x1e, 0x24);
+pub const RULE_STRONG: Color = Color::srgb_u8(0x41, 0x42, 0x48);
+pub const AXIS: Color = Color::srgb_u8(0x37, 0x39, 0x3e);
+pub const BAR: Color = Color::srgb_u8(0x68, 0x69, 0x6d);
+pub const BAR_PEAK: Color = Color::srgb_u8(0xda, 0xdb, 0xdc);
+
 /// Bevy's alpha for a black overlay at the artboard's CSS alpha `a` (#627). The browser blends
 /// `rgba(...)` in sRGB, Bevy in linear light, where `a` would leave `(1 - a)^(1/2.2)` of the sRGB
 /// value under it (0.5 keeps about 73 %, 0.94 about 28 %). Keeping `(1 - a)^2.2` of the light

@@ -2,7 +2,7 @@
 # Recorder: --object player --room room12 --at 2 --from 2 --stub-dlls --x 144 --y 336 (43 --gml)
 source = "eat-the-lemon/famb-multikid-restart-b"
 kind = "diff"
-open = "the autosave needs research#137 (converter writes alarm_save); placed kids sort after the loaded kid, so kid#0 and kid#2 mark the wrong kids (#669)"
+open = "R while the placed kids are alive leaves 1 kid in the original, 3 here (frame 19 instance_number(player), #670, blocked by research#8); frames after 19, including the frame 25 setup, are not checked until #670 is fixed"
 start = { room = "room_11", difficulty = 0 }
 at = 2
 first_frame = 2

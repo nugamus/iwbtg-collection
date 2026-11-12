@@ -904,6 +904,95 @@ scale_x = -1
     assert_eq!(class("left_flipped"), ClassMask::SLOPE);
 }
 
+/// #659: params that pick a class (`objects::class_params`) on a placed instance give it those
+/// classes through a kind derived for them, ranked like its kind; params that pick the kind's
+/// own classes keep the kind.
+#[test]
+fn placed_class_params_derive_a_kind_with_those_classes() {
+    let order = ORDER.replace(
+        "\"playerface\",",
+        "\"playerface\", \"water\", \"vine\", \"killer\", \"slope\", \"@yane_m\",",
+    );
+    let instances = concat!(
+        "  { kind = \"water\", x = 100, y = 100, variant = 2 },
+",
+        "  { kind = \"water\", x = 132, y = 100, variant = 2 },
+",
+        "  { kind = \"water\", x = 164, y = 100, variant = 1 },
+",
+        "  { kind = \"vine\", x = 100, y = 140, side = \"left\" },
+",
+        "  { kind = \"block\", x = 100, y = 180, kid_collides = false },
+",
+        "  { kind = \"killer\", x = 100, y = 220, kill_outside_view = true },
+",
+        "  { kind = \"slope\", x = 100, y = 260, shape = \"rise_left\" },
+",
+        "  { kind = \"slope\", x = 132, y = 260, shape = \"rise_left\", scale_x = -1 },
+",
+        "  { kind = \"@yane_m\", x = 100, y = 300, scale_x = 1 },
+",
+    );
+    let files = package(|f| {
+        set(f, "game.toml", manifest(&order, "").into_bytes());
+        let stage = STAGE1.replace(
+            "  { kind = \"warp\", x = 768, y = 512, room_to = \"title\" },
+",
+            &format!(
+                "  {{ kind = \"warp\", x = 768, y = 512, room_to = \"title\" }},
+{instances}"
+            ),
+        );
+        set(f, "rooms/stage1.toml", stage.into_bytes());
+        f.push((
+            "objects/yane_m.toml".into(),
+            b"base = \"slope\"
+scale_x = -1
+counts_as = [\"slope_wall\"]
+"
+            .to_vec(),
+        ));
+    });
+    let (def, _) = load_ok(&files, STRICT);
+    let class = |name: &str| kind_named(&def, name).1.classes;
+
+    let water2 = placed(&def, "stage1", "water[variant=2]");
+    assert_eq!(water2.len(), 2, "both instances share one derived kind");
+    assert_eq!(class("water[variant=2]"), ClassMask::WATER2);
+    assert_eq!(
+        placed(&def, "stage1", "water").len(),
+        1,
+        "`variant = 1` picks the kind's own class and keeps the kind"
+    );
+    assert_eq!(class("vine[side=left]"), ClassMask::VINE_L);
+    assert_eq!(placed(&def, "stage1", "vine[side=left]").len(), 1);
+    assert_eq!(class("block[kid_collides=false]"), ClassMask::NONE);
+    assert_eq!(placed(&def, "stage1", "block[kid_collides=false]").len(), 1);
+    let (_, killer) = kind_named(&def, "killer[kill_outside_view=true]");
+    assert_eq!(killer.classes, ClassMask::NONE);
+    assert_eq!(
+        killer.params.0.get("kill_outside_view"),
+        Some(&ParamValue::Bool(true)),
+        "the derived kind carries the param, so its event set has the kid collision"
+    );
+    assert_eq!(class("slope[shape=rise_left]"), ClassMask::SLOPE_MIRROR);
+    assert_eq!(
+        placed(&def, "stage1", "slope").len(),
+        1,
+        "rise_left mirrored by scale_x -1 is the kind's own class"
+    );
+    assert_eq!(
+        class("@yane_m[scale_x=1]"),
+        ClassMask::SLOPE | ClassMask::SLOPE_WALL,
+        "a package kind's derived kind keeps its counts_as"
+    );
+    assert_eq!(class("@yane_m"), ClassMask::SLOPE_MIRROR | ClassMask::SLOPE_WALL);
+
+    let rank = |name: &str| placed(&def, "stage1", name)[0].rank;
+    assert_eq!(rank("water[variant=2]"), rank("water"));
+    assert_eq!(rank("@yane_m[scale_x=1]"), rank("slope") + 1);
+}
+
 #[test]
 fn wp6b3_params_load_on_kinds_and_per_instance() {
     let files = tier2_package(
@@ -1989,7 +2078,8 @@ fn instance_depth_and_visible_are_common_keys_on_built_ins() {
     );
     let (def, report) = load_ok(&files, STRICT);
     assert!(report.ok(), "{}", render(&report));
-    let slope = placed(&def, "stage1", "slope")[0];
+    // `rise_left` picks `slope_mirror`, so the instance has the derived kind (#659).
+    let slope = placed(&def, "stage1", "slope[shape=rise_left]")[0];
     assert_eq!(slope.depth, Some(Real::new(3.0)));
     assert_eq!(slope.visible, None);
     assert!(!slope.params.0.contains_key("depth"));
