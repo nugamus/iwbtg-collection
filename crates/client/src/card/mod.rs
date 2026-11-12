@@ -283,7 +283,7 @@ pub fn card(card: &Card, variant: Variant) -> impl Bundle + use<> {
                 color: tokens::ACCENT,
                 fade_to: 0.75,
             })
-            .with_shadow(12.0, 36.0, Color::srgba(0.0, 0.0, 0.0, 0.4)),
+            .with_shadow(12.0, 36.0, tokens::black(0.4)),
         Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
             c.spawn(identity(&card, variant, &d));
             c.spawn(collection(&card, &d));
@@ -320,7 +320,7 @@ fn identity(card: &Card, variant: Variant, d: &Dims) -> impl Bundle + use<> {
             ])
         }),
         BoxShadow::new(
-            Color::srgba(0.0, 0.0, 0.0, 0.35),
+            tokens::black(0.35),
             Val::Px(0.0),
             Val::Px(6.0),
             Val::Px(0.0),

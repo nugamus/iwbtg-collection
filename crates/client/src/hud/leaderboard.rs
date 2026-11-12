@@ -622,7 +622,7 @@ fn your_row(g: &Geometry, place: usize, frozen: bool, node: Node) -> impl Bundle
     let width = g.you_width;
     (
         node,
-        Shape::fill(tokens::ROW_YOU).with_shadow(6.0, 18.0, Color::srgba(0.0, 0.0, 0.0, 0.35)),
+        Shape::fill(tokens::ROW_YOU).with_shadow(6.0, 18.0, tokens::black(0.35)),
         Tween::<Width>::at_rest(width, tokens::motion::POP, Ease::OutElastic),
         // Over the rows it slides past.
         ZIndex(1),

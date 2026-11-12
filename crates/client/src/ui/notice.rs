@@ -198,7 +198,7 @@ fn notice(kind: Kind, message: &str) -> impl Bundle + use<> {
                 color: tokens::ACCENT,
                 fade_to: 0.0,
             })
-            .with_shadow(8.0, 24.0, Color::srgba(0.0, 0.0, 0.0, 0.5)),
+            .with_shadow(8.0, 24.0, tokens::black(0.5)),
         UiTransform::default(),
         UiOpacity(0.0),
         Tween::<Opacity>::new(0.0, 1.0, tokens::motion::STANDARD, Ease::OutQuint),
