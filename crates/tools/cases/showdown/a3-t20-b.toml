@@ -3,7 +3,6 @@
 # Frames 0..1 ran before the room jump (boot rooms); they are not compared.
 source = "showdown/a3-t20-b"
 kind = "probe_read"
-open = "the room-entry save runs before the kid exists and saves x 0, y 0; the package has no room creation code (#600). First difference: frame 3 global.sv.x, original 0.0, ours 241.0"
 start = { room = "room_2", difficulty = 0 }
 at = 2
 first_frame = 0
