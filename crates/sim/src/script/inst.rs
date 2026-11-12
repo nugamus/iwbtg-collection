@@ -201,7 +201,7 @@ fn spawn_kind(host: &super::host::Host, name: &str, params: &Params) -> Res<Kind
         .collect::<Vec<_>>()
         .join(", ");
     Err(runtime_error(format!(
-        "instance_create: `{name}` with {shown} picks other classes than the kind's, and no kind          derived from `{name}` has them (classes come from the kind; place such an instance in a          room or give the package an object with these params)"
+        "instance_create: `{name}` with {shown} picks other classes than the kind's, and no kind derived from `{name}` has them (classes come from the kind; place such an instance in a room or give the package an object with these params)"
     )))
 }
 

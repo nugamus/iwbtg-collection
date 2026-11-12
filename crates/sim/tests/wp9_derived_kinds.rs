@@ -140,6 +140,6 @@ fn a_spawn_whose_params_pick_a_class_no_kind_has_is_an_error() {
     };
     let _ = c.spawn(KindId(0), Real::new(0.0), Real::new(0.0), SpawnInit::default());
     let e = f.halted().expect("halted");
-    assert!(e.contains("`water` with variant = 3 picks other classes"), "{e}");
+    assert!(e.contains("`water` with variant = 3 picks other classes than the kind's, and no kind derived from `water` has them"), "{e}");
     assert!(f.kinds_of(ClassMask::WATER3).is_empty());
 }
