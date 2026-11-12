@@ -11,6 +11,7 @@ A save point (mechanics `save`; kid specs "Saving"). The save is `save::save_now
 | `min_difficulty_removed` | real (whole) | none | Destroyed in Create when the difficulty is above it (savePoint 1, Medium 0, VHard 2, Imp 3). |
 | `requires_gravity` | `any`, `normal`, `flipped` | `any` | The kid must match. Flipped means `global.grav` or the flipped kid kind (FT savePoint2, xia). |
 | `requires_kid_depth0` | bool | false | The kid's depth must be 0 (machinary). |
+| `requires_kid_in_room` | bool | false | The kid's origin must be inside the room: no save when `x < 0`, `x > room_width`, `y < 0` or `y > room_height` (the edges count as inside; the same test as the edge death, on the origin, not the hitbox). Every save from the point checks it, the `alarm_save` too (xia with edgeDeath on: save point User Event 0 and `objautosave`, kid/C.md). |
 | `saved_position` | `xy_base100`, `xy_base256`, `xy_text2dec`, `xy_previous`, `fixed_point`, `floor_nudge` | `xy_base100` | The game's save format (`save::SavedPosition`; sim plan 4.4). |
 | `fixed_x`, `fixed_y` | real | none | The point for `fixed_point`; both or neither. |
 | `self_destroy_alarm` | real | none | Alarm 0 at Create destroys the point after this many ticks (LR object799). |
