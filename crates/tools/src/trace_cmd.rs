@@ -244,6 +244,16 @@ pub fn execute(
     // The recorder's `fps` reads 0 up to frame 50 (research kid/B.md "Play timer"); tick k of our
     // run is frame `at + k`, so `fps` reads 0 for our first `51 - at` ticks.
     sim.set_fps_zero_ticks(u64::from(RECORDER_FIRST_FPS_FRAME.saturating_sub(case.at)));
+    // Each latch column's value at the end of every frame, rows or not (#671).
+    let latch_probes: Vec<(&String, &Column)> = case
+        .latch
+        .keys()
+        .filter_map(|name| {
+            let i = var_columns.iter().position(|c| c == name)?;
+            Some((name, resolved.columns.get(i)?.as_ref()?))
+        })
+        .collect();
+    let mut latch_series: BTreeMap<String, Vec<(i64, trace::Value)>> = BTreeMap::new();
     for frame in frame_range(case, inputs_end) {
         for s in resolved.per_frame.get(&frame).into_iter().flatten() {
             sim.apply_setup(s)
@@ -267,6 +277,14 @@ pub fn execute(
                 case.source
             )));
         }
+        for (name, column) in &latch_probes {
+            if let Some(v) = probe::read_unrowed(&mut sim, column, i64::from(frame)) {
+                latch_series
+                    .entry((*name).clone())
+                    .or_default()
+                    .push((i64::from(frame), v));
+            }
+        }
         if frame >= case.first_frame {
             if !room_change {
                 sampled = probe::sample(&mut sim, &probe, i64::from(frame));
@@ -281,25 +299,34 @@ pub fn execute(
             break;
         }
     }
-    latch_columns(case, &mut table);
+    latch_columns(case, &mut table, &latch_series);
     Ok(table)
 }
 
-/// The case's `latch` columns: a row shows the column's value as of the frame before the last
-/// read frame at or before it, 0 before the first read (the recorder's `--gml` copied it then).
-fn latch_columns(case: &TraceCase, table: &mut TraceTable) {
+/// The case's `latch` columns: a row shows the column's value as of the end of the frame before
+/// the last read frame at or before it, 0 before the first read (the recorder's `--gml` copied it
+/// then). The value comes from `series`, the column read at the end of every frame, so a frame
+/// with no row still has one (#671); a column with no series (one that needs the row's instance)
+/// falls back to the table's own rows.
+fn latch_columns(
+    case: &TraceCase,
+    table: &mut TraceTable,
+    series: &BTreeMap<String, Vec<(i64, trace::Value)>>,
+) {
     for (name, reads) in &case.latch {
         let Some(col) = table.columns.iter().position(|c| &c.name == name) else {
             continue;
         };
-        let series: Vec<(i64, trace::Value)> = table
-            .rows
-            .iter()
-            .filter_map(|r| match r.first() {
-                Some(trace::Value::Int(f)) => Some((*f, r[col].clone())),
-                _ => None,
-            })
-            .collect();
+        let series: Vec<(i64, trace::Value)> = series.get(name).cloned().unwrap_or_else(|| {
+            table
+                .rows
+                .iter()
+                .filter_map(|r| match r.first() {
+                    Some(trace::Value::Int(f)) => Some((*f, r[col].clone())),
+                    _ => None,
+                })
+                .collect()
+        });
         for row in &mut table.rows {
             let Some(trace::Value::Int(frame)) = row.first().cloned() else {
                 continue;
@@ -934,9 +961,38 @@ mod bundle_tests {
             latch: [("v".to_string(), vec![4, 6])].into_iter().collect(),
             ..TraceCase::default()
         };
-        latch_columns(&case, &mut table);
+        latch_columns(&case, &mut table, &BTreeMap::new());
         let got: Vec<f64> = table.rows.iter().map(|r| r[fixed].as_f64().unwrap()).collect();
         assert_eq!(got, vec![0.0, 0.0, 30.0, 30.0, 50.0, 50.0]);
+    }
+
+    #[test]
+    fn latch_reads_the_frame_series_when_the_frame_before_a_read_has_no_row() {
+        // Rows on frames 3..6 only; the read before frame 3 needs frame 2, which has no row
+        // (famb-multikid-restart: the warp removes the kid on that tick, #671).
+        let mut table = TraceTable::new(&["v"]).unwrap();
+        let fixed = trace::FIXED_COLUMNS.len();
+        for f in 3..7_i64 {
+            let mut row = vec![trace::Value::Empty; fixed + 1];
+            row[0] = trace::Value::Int(f);
+            row[fixed] = trace::Value::Real(f as f64 * 10.0);
+            table.push_row(row).unwrap();
+        }
+        let case = TraceCase {
+            latch: [("v".to_string(), vec![3, 5])].into_iter().collect(),
+            ..TraceCase::default()
+        };
+        let series: BTreeMap<String, Vec<(i64, trace::Value)>> = [(
+            "v".to_string(),
+            (1..7_i64)
+                .map(|f| (f, trace::Value::Real(f as f64 + 0.5)))
+                .collect(),
+        )]
+        .into_iter()
+        .collect();
+        latch_columns(&case, &mut table, &series);
+        let got: Vec<f64> = table.rows.iter().map(|r| r[fixed].as_f64().unwrap()).collect();
+        assert_eq!(got, vec![2.5, 2.5, 4.5, 4.5]);
     }
 
     #[test]
