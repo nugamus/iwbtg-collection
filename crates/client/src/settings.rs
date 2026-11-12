@@ -16,6 +16,8 @@ use crate::storage::{self, Store};
 pub const VERSION: i64 = 1;
 /// The largest audio offset, in milliseconds.
 pub const MAX_AUDIO_OFFSET_MS: u32 = crate::audio::MAX_OFFSET_MS;
+/// The largest volume, in percent.
+pub const MAX_VOLUME: u32 = 100;
 /// The longest profile name, in characters.
 pub const MAX_NAME_CHARS: usize = 32;
 /// The largest backdrop blur, in percent.
@@ -37,6 +39,12 @@ pub struct Settings {
     pub window: Option<(u32, u32)>,
     /// Sound is held back by this many milliseconds, 0 to [`MAX_AUDIO_OFFSET_MS`].
     pub audio_offset_ms: u32,
+    /// Overall loudness in percent, 0 to [`MAX_VOLUME`] (`[audio] master_volume`, `--volume`).
+    pub master_volume: u32,
+    /// Music loudness in percent, on top of the master volume (`[audio] music_volume`).
+    pub music_volume: u32,
+    /// Sound effect loudness in percent, on top of the master volume (`[audio] sound_volume`).
+    pub sound_volume: u32,
     /// Scale the game by whole steps instead of filling its room (F7, `--integer-scale`).
     pub integer_scale: bool,
     /// The debug overlay (F3) is shown.
@@ -66,6 +74,9 @@ impl Default for Settings {
             ratio: None,
             window: None,
             audio_offset_ms: 0,
+            master_volume: MAX_VOLUME,
+            music_volume: MAX_VOLUME,
+            sound_volume: MAX_VOLUME,
             integer_scale: false,
             overlay: true,
             ui_scale: 100,
@@ -228,8 +239,28 @@ impl Settings {
                     )),
                 },
                 ("offset_ms", _) => w.push("audio.offset_ms must be an integer".into()),
+                ("master_volume" | "music_volume" | "sound_volume", Value::Integer(v)) => {
+                    match u32::try_from(*v) {
+                        Ok(v) if v <= MAX_VOLUME => *self.volume_mut(key) = v,
+                        _ => w.push(format!(
+                            "audio.{key} {v} is outside 0 to {MAX_VOLUME}, using the default"
+                        )),
+                    }
+                }
+                ("master_volume" | "music_volume" | "sound_volume", _) => {
+                    w.push(format!("audio.{key} must be an integer"));
+                }
                 _ => w.push(format!("unknown entry `audio.{key}`, ignored")),
             }
+        }
+    }
+
+    /// The volume setting stored under `key` in `[audio]`.
+    fn volume_mut(&mut self, key: &str) -> &mut u32 {
+        match key {
+            "master_volume" => &mut self.master_volume,
+            "music_volume" => &mut self.music_volume,
+            _ => &mut self.sound_volume,
         }
     }
 
@@ -292,6 +323,9 @@ impl Settings {
         display.insert("backdrop_blur".into(), i64::from(self.backdrop_blur).into());
         let mut audio = Table::new();
         audio.insert("offset_ms".into(), i64::from(self.audio_offset_ms).into());
+        audio.insert("master_volume".into(), i64::from(self.master_volume).into());
+        audio.insert("music_volume".into(), i64::from(self.music_volume).into());
+        audio.insert("sound_volume".into(), i64::from(self.sound_volume).into());
         let mut hud = Table::new();
         hud.insert("overlay".into(), self.overlay.into());
         hud.insert("ui_scale".into(), i64::from(self.ui_scale).into());
@@ -373,6 +407,11 @@ pub fn get() -> Settings {
     store().as_ref().map(|s| s.current.clone()).unwrap_or_default()
 }
 
+/// This run neither reads nor writes the file (a `--screenshot` check, see [`load`]).
+pub fn isolated() -> bool {
+    store().as_ref().is_some_and(|s| s.store.is_none())
+}
+
 /// Changes the settings and writes the file when something changed.
 pub fn update(change: impl FnOnce(&mut Settings)) {
     let mut guard = store();
@@ -415,6 +454,9 @@ mod tests {
             ratio: Some((16, 9)),
             window: Some((1280, 720)),
             audio_offset_ms: 120,
+            master_volume: 80,
+            music_volume: 0,
+            sound_volume: 55,
             integer_scale: true,
             overlay: false,
             ui_scale: 125,
@@ -469,6 +511,30 @@ heatmap = \"yes\"
         );
         assert!(!s.results_heatmap);
         assert_eq!(w.len(), 1, "{w:?}");
+    }
+
+    #[test]
+    fn volumes_are_full_by_default_and_read_and_checked() {
+        let d = Settings::default();
+        assert_eq!((d.master_volume, d.music_volume, d.sound_volume), (100, 100, 100));
+        let (s, w) = parse(
+            "[audio]
+master_volume = 40
+music_volume = 0
+sound_volume = 100
+",
+        );
+        assert_eq!((s.master_volume, s.music_volume, s.sound_volume), (40, 0, 100));
+        assert!(w.is_empty(), "{w:?}");
+        let (s, w) = parse(
+            "[audio]
+master_volume = 101
+music_volume = -1
+sound_volume = \"loud\"
+",
+        );
+        assert_eq!((s.master_volume, s.music_volume, s.sound_volume), (100, 100, 100));
+        assert_eq!(w.len(), 3, "{w:?}");
     }
 
     #[test]
@@ -569,10 +635,19 @@ backdrop_blur = \"x\"
         );
         let s = Settings {
             audio_offset_ms: 75,
+            master_volume: 30,
+            music_volume: 20,
+            sound_volume: 10,
             ..Settings::default()
         };
         write_to(&store, &s).unwrap();
-        assert_eq!(read_from(&store).audio_offset_ms, 75);
+        let back = read_from(&store);
+        assert_eq!(back.audio_offset_ms, 75);
+        assert_eq!(
+            (back.master_volume, back.music_volume, back.sound_volume),
+            (30, 20, 10),
+            "the volumes are kept between starts"
+        );
         assert!(dir.join("nested").join("settings.toml").is_file());
         let _ = std::fs::remove_dir_all(&dir);
     }
