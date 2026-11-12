@@ -16,7 +16,7 @@ use crate::error::SimError;
 use crate::kid::api::{self as kid_api, KidSetValue};
 use crate::num::{self, Real};
 use crate::probe::{
-    FieldRef, FixedColumn, ImageField, ProbeTarget, SaveField, first_of_target, nth_of_target,
+    EngineVar, FieldRef, FixedColumn, ImageField, ProbeTarget, SaveField, first_of_target, nth_of_target,
 };
 use crate::room;
 use crate::rules::RunnerRules;
@@ -41,6 +41,14 @@ pub enum SetupAction {
     SetGlobal {
         /// The global.
         var: VarId,
+        /// The value.
+        value: Value,
+    },
+    /// Set run-wide engine state the original keeps in a global (`global.time`,
+    /// `global.death`): one of [`SETTABLE_ENGINE_VARS`] (#688).
+    SetEngine {
+        /// The engine variable.
+        var: EngineVar,
         /// The value.
         value: Value,
     },
@@ -92,6 +100,7 @@ impl Sim {
             room::StartPoint::FromSave(slot) => slot.room,
         };
         let mut world = World::new(first_room, options.seed);
+        world.next_id = World::first_runtime_id(&def);
         for s in pre_entry {
             world.setup_applied = true;
             apply(&def, &rules, &mut world, s)?;
@@ -117,6 +126,15 @@ impl Sim {
     }
 }
 
+/// The engine variables a [`SetupAction::SetEngine`] can write: the counters and flags of
+/// [`crate::run_globals::RunGlobals`] other than the difficulty, which is the start point's.
+pub const SETTABLE_ENGINE_VARS: [EngineVar; 4] = [
+    EngineVar::Death,
+    EngineVar::Time,
+    EngineVar::Savenum,
+    EngineVar::Clear,
+];
+
 /// Applies one action to a world.
 fn apply(def: &GameDef, rules: &RunnerRules, w: &mut World, s: &SetupAction) -> Result<(), SimError> {
     match s {
@@ -131,8 +149,27 @@ fn apply(def: &GameDef, rules: &RunnerRules, w: &mut World, s: &SetupAction) -> 
             w.globals.insert(*var, value.clone());
             Ok(())
         }
+        SetupAction::SetEngine { var, value } => set_engine(rules, w, *var, value),
         SetupAction::SetSave { field, value } => set_save(def, w, *field, value),
     }
+}
+
+/// Writes one engine variable: a whole number in range for the counters (`time` and `death` are
+/// `u32`, `savenum` is `u8`), `num::gm_bool` of the value for `clear`.
+fn set_engine(rules: &RunnerRules, w: &mut World, var: EngineVar, value: &Value) -> Result<(), SimError> {
+    let run = &mut w.engine.run;
+    match var {
+        EngineVar::Death => run.deaths = int_as::<u32>(value, "global.death")?,
+        EngineVar::Time => run.time = int_as::<u32>(value, "global.time")?,
+        EngineVar::Savenum => run.slot = int_as::<u8>(value, "global.savenum")?,
+        EngineVar::Clear => run.clear = num::gm_bool(real(value, "global.clear")?, &rules.num),
+        other => {
+            return Err(SimError::unsupported(format!(
+                "setup cannot write engine variable {other:?}"
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// The instance a `SetField` writes.
@@ -410,6 +447,34 @@ mod tests {
         })
         .expect("delete");
         assert!(s.world.save.is_none());
+    }
+
+    #[test]
+    fn engine_setup_writes_the_run_globals() {
+        let mut s = sim();
+        let set = |s: &mut Sim, var, v: f64| {
+            s.apply_setup(&SetupAction::SetEngine {
+                var,
+                value: Value::Real(Real::new(v)),
+            })
+        };
+        set(&mut s, EngineVar::Time, 777.0).expect("time");
+        set(&mut s, EngineVar::Death, 3.0).expect("death");
+        set(&mut s, EngineVar::Savenum, 2.0).expect("savenum");
+        set(&mut s, EngineVar::Clear, 1.0).expect("clear");
+        assert!(s.world.setup_applied);
+        let run = &s.world.engine.run;
+        assert_eq!((run.time, run.deaths, run.slot, run.clear), (777, 3, 2, true));
+        for (var, v) in [
+            (EngineVar::Time, -1.0),
+            (EngineVar::Death, 0.5),
+            (EngineVar::Savenum, 256.0),
+            (EngineVar::Difficulty, 1.0),
+            (EngineVar::Frozen, 1.0),
+        ] {
+            assert!(set(&mut s, var, v).is_err(), "{var:?} = {v}");
+        }
+        assert_eq!(s.world.engine.run.time, 777);
     }
 
     #[test]

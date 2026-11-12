@@ -32,6 +32,7 @@ use crate::input::{Collector, key_code};
 use crate::package::{SpriteImage, decode_png};
 use crate::ui::fonts::{Family, Type};
 use crate::ui::motion::{Ease, OffsetX, Tween};
+use crate::ui::tokens;
 use crate::ui::widgets::text;
 use crate::view::{Game, SimTick};
 
@@ -409,18 +410,11 @@ fn draw(
             ..default()
         },
         // The game area darkens to 50%.
-        BackgroundColor(black_over(DIM)),
+        BackgroundColor(tokens::black(DIM)),
         GlobalZIndex(20),
         Root { k },
     ));
     root.with_child(pause_box(k, menu.selected, fruit.0.clone()));
-}
-
-/// Black at the artboard's alpha `a`. The browser blends in sRGB, Bevy in linear light, where `a`
-/// would leave `(1 - a)^(1/2.2)` of the sRGB value (0.5 keeps about 73%, 0.94 about 28%).
-/// Keeping `(1 - a)^2.2` of the light leaves `1 - a` in sRGB, as the browser does.
-fn black_over(a: f32) -> Color {
-    Color::srgba(0.0, 0.0, 0.0, 1.0 - (1.0 - a).powf(2.2))
 }
 
 /// The PAUSE box at `k` UI px per game px (`PauseBox.dc.html`): 300 px wide, padding 22/26/24,
@@ -447,7 +441,7 @@ fn pause_box(k: f32, selected: Item, fruit: Handle<Image>) -> impl Bundle {
             border: UiRect::all(px(2.0)),
             ..default()
         },
-        BackgroundColor(black_over(BOX_FILL)),
+        BackgroundColor(tokens::black(BOX_FILL)),
         BorderColor::all(Color::WHITE),
         Outline::new(px(2.0), px(3.0), Color::WHITE),
         Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {

@@ -376,7 +376,7 @@ fn paused_line() -> impl Bundle {
                 },
                 BackgroundColor(tokens::ACCENT),
                 BoxShadow::new(
-                    tokens::ACCENT.with_alpha(0.25),
+                    tokens::over(tokens::ACCENT, 0.25, tokens::GROUND),
                     Val::ZERO,
                     Val::ZERO,
                     Val::Px(4.0),

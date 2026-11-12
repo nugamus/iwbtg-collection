@@ -285,6 +285,17 @@ fn a_name_twice_is_refused() {
 }
 
 #[test]
+fn names_equal_ignoring_case_are_refused() {
+    // Windows and macOS would unpack both to one file.
+    let entries = [manifest(), raw("CREDITS.md", b"a"), raw("Credits.md", b"b")];
+    let err = unpack(&zip(&entries, None)).unwrap_err();
+    assert!(
+        matches!(err, IwbzError::NotAllowed { ref reason, .. } if reason.contains("differ only in case")),
+        "{err}"
+    );
+}
+
+#[test]
 fn too_many_files_are_refused() {
     let names: Vec<&'static str> = (0..=MAX_FILES)
         .map(|i| &*Box::leak(format!("rooms/r{i}.toml").into_boxed_str()))

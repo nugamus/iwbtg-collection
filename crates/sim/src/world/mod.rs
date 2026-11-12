@@ -42,11 +42,13 @@ pub struct World {
     pub room_tick: u64,
     /// GM `room_speed`: the file speed on entry, 50 after the world's Room Start (R14).
     pub room_speed: Real,
-    /// Instances in creation order, so sorted by id (plan 1.2). Private to `world` so every
+    /// Instances sorted by id (plan 1.2): creation order, except that room-placed instances with
+    /// a GM8 id (#669) sort below every runtime id. Private to `world` so every
     /// mutable access goes through `World::get_mut`, which keeps the broadphase grid in step
     /// (plan 3.4); read them with `World::instances`.
     pub(in crate::world) instances: Vec<Instance>,
-    /// The next id to hand out (checked, plan 10.3).
+    /// The next runtime id to hand out (checked, plan 10.3); starts at
+    /// [`World::first_runtime_id`].
     pub next_id: u64,
     /// Variable names first seen at run time (scripts), plan 1.1.
     pub var_names: BTreeMap<String, VarId>,
@@ -100,7 +102,8 @@ pub struct World {
 
 impl World {
     /// An empty world in `room` at tick 0, before any room entry: no instances, next id
-    /// [`InstId::FIRST`], `room_speed` 0, RNG seeded with `seed`, no save.
+    /// [`InstId::FIRST`] (a game sets [`World::first_runtime_id`] before its first room),
+    /// `room_speed` 0, RNG seeded with `seed`, no save.
     pub fn new(room: RoomId, seed: u32) -> World {
         World {
             tick: 0,

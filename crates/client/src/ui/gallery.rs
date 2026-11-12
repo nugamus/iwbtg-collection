@@ -213,7 +213,7 @@ fn swatch(name: &str, color: Color) -> impl Bundle + use<> {
 
 /// A list entry (difficulty and category) as on game select: star band, star pill, name, PB.
 fn entry(name: &str, stars: f32, pb: &str, width: f32) -> impl Bundle + use<> {
-    let shape = Shape::fill(Color::srgba(14.0 / 255.0, 16.0 / 255.0, 24.0 / 255.0, 0.82)).with_band(Band {
+    let shape = Shape::fill(tokens::dark(tokens::CARD_SOLID, 0.82)).with_band(Band {
         side: Side::Left,
         width: 6.0,
         color: star_color(stars),
@@ -262,9 +262,9 @@ fn game_panel(
     shape = if selected {
         shape
             .with_ring(2.0, Color::srgba(1.0, 1.0, 1.0, 0.55))
-            .with_shadow(10.0, 30.0, Color::srgba(0.0, 0.0, 0.0, 0.5))
+            .with_shadow(10.0, 30.0, tokens::black(0.5))
     } else {
-        shape.with_shadow(4.0, 12.0, Color::srgba(0.0, 0.0, 0.0, 0.25))
+        shape.with_shadow(4.0, 12.0, tokens::black(0.25))
     };
     let dots: Vec<Color> = stars.iter().map(|s| star_color(*s)).collect();
     (
@@ -504,7 +504,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
             color: tokens::ACCENT,
             fade_to: 0.7,
         })
-        .with_shadow(24.0, 60.0, Color::srgba(0.0, 0.0, 0.0, 0.45));
+        .with_shadow(24.0, 60.0, tokens::black(0.45));
 
     let right = commands
         .spawn(column(26.0))
@@ -588,7 +588,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
                     Shape::fill(Color::srgba(1.0, 1.0, 1.0, 0.22)).with_shadow(
                         6.0,
                         18.0,
-                        Color::srgba(0.0, 0.0, 0.0, 0.35),
+                        tokens::black(0.35),
                     ),
                     Node {
                         width: Val::Px(600.0),
