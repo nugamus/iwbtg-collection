@@ -262,9 +262,9 @@ fn game_panel(
     shape = if selected {
         shape
             .with_ring(2.0, Color::srgba(1.0, 1.0, 1.0, 0.55))
-            .with_shadow(10.0, 30.0, Color::srgba(0.0, 0.0, 0.0, 0.5))
+            .with_shadow(10.0, 30.0, tokens::black(0.5))
     } else {
-        shape.with_shadow(4.0, 12.0, Color::srgba(0.0, 0.0, 0.0, 0.25))
+        shape.with_shadow(4.0, 12.0, tokens::black(0.25))
     };
     let dots: Vec<Color> = stars.iter().map(|s| star_color(*s)).collect();
     (
@@ -504,7 +504,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
             color: tokens::ACCENT,
             fade_to: 0.7,
         })
-        .with_shadow(24.0, 60.0, Color::srgba(0.0, 0.0, 0.0, 0.45));
+        .with_shadow(24.0, 60.0, tokens::black(0.45));
 
     let right = commands
         .spawn(column(26.0))
@@ -588,7 +588,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
                     Shape::fill(Color::srgba(1.0, 1.0, 1.0, 0.22)).with_shadow(
                         6.0,
                         18.0,
-                        Color::srgba(0.0, 0.0, 0.0, 0.35),
+                        tokens::black(0.35),
                     ),
                     Node {
                         width: Val::Px(600.0),

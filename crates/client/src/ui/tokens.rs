@@ -82,6 +82,48 @@ pub const ACCENT_LIGHT: Color = Color::srgb_u8(0xff, 0xb3, 0xbd);
 /// The notches that cut a progress bar into steps: `rgba(8,9,14,.55)`, alpha as for [`CARD`].
 pub const NOTCH: Color = Color::srgba(8.0 / 255.0, 9.0 / 255.0, 14.0 / 255.0, 0.828);
 
+/// Bevy's alpha for a black overlay at the artboard's CSS alpha `a` (#627). The browser blends
+/// `rgba(...)` in sRGB, Bevy in linear light, where `a` would leave `(1 - a)^(1/2.2)` of the sRGB
+/// value under it (0.5 keeps about 73 %, 0.94 about 28 %). Keeping `(1 - a)^2.2` of the light
+/// leaves `1 - a` in sRGB, as the browser does: exact for black over anything, and for stacked
+/// black layers. Use it for shadows, dims and dark glass (dark colours are close to black).
+pub fn artboard_alpha(a: f32) -> f32 {
+    1.0 - (1.0 - a).powf(2.2)
+}
+
+/// Black at the artboard's alpha `a`: `rgba(0,0,0,a)` as the browser draws it ([`artboard_alpha`]).
+pub fn black(a: f32) -> Color {
+    Color::srgba(0.0, 0.0, 0.0, artboard_alpha(a))
+}
+
+/// `color` at the artboard's alpha `a` over a ground of `under`, for coloured overlays such as
+/// the accent glow (#627). No single alpha matches the browser for a colour over every ground: a
+/// light colour over a dark ground needs a smaller alpha than the artboard's, a dark one over a
+/// light ground a larger one. This picks the alpha that gives the browser's luminance over
+/// `under` (pass what the overlay usually sits on, [`GROUND`] for the dark screens); over other
+/// grounds it is an approximation. For black it equals [`black`] up to the sRGB curve's toe.
+pub fn over(color: Color, a: f32, under: Color) -> Color {
+    let luminance = |c: LinearRgba| 0.2126 * c.red + 0.7152 * c.green + 0.0722 * c.blue;
+    let (top, ground) = (color.to_srgba(), under.to_srgba());
+    let mixed = Srgba::new(
+        top.red * a + ground.red * (1.0 - a),
+        top.green * a + ground.green * (1.0 - a),
+        top.blue * a + ground.blue * (1.0 - a),
+        1.0,
+    );
+    let (yt, yg, ym) = (
+        luminance(top.into()),
+        luminance(ground.into()),
+        luminance(mixed.into()),
+    );
+    let alpha = if (yt - yg).abs() < 1e-6 {
+        a
+    } else {
+        ((ym - yg) / (yt - yg)).clamp(0.0, 1.0)
+    };
+    color.with_alpha(alpha)
+}
+
 /// The star colour ramp (`Main.dc.html`, `ramp`): from each star count up, its colour.
 pub const STAR_RAMP: [(f32, Color); 8] = [
     (0.0, Color::srgb_u8(0x7f, 0xc8, 0xff)),
@@ -144,5 +186,42 @@ mod tests {
         assert_eq!(GROUND.to_srgba().to_hex(), "#0B0D14");
         assert_eq!(ACCENT.to_srgba().to_hex(), "#FF3D55");
         assert_eq!(STAR_RAMP[5].1.to_srgba().to_hex(), "#FF6070");
+    }
+
+    /// Blends `top` over `under` in linear light, as Bevy does, and returns the sRGB result.
+    fn bevy_blend(top: Color, under: Color) -> Srgba {
+        let (t, u) = (top.to_linear(), under.to_linear());
+        let mix = |a: f32, b: f32| a * t.alpha + b * (1.0 - t.alpha);
+        LinearRgba::rgb(mix(t.red, u.red), mix(t.green, u.green), mix(t.blue, u.blue)).into()
+    }
+
+    #[test]
+    fn black_keeps_one_minus_a_of_the_srgb_value() {
+        // The pause dim (#479): black at .5 over a mid tile halves its sRGB value.
+        let tile = Color::srgb(0.9, 0.55, 0.12);
+        for a in [0.35, 0.5, 0.6, 0.94] {
+            let got = bevy_blend(black(a), tile);
+            assert!((got.red - 0.9 * (1.0 - a)).abs() < 0.01, "a {a}: {got:?}");
+            assert!((got.green - 0.55 * (1.0 - a)).abs() < 0.01, "a {a}: {got:?}");
+        }
+        assert!((artboard_alpha(0.5) - 0.782).abs() < 0.001);
+    }
+
+    #[test]
+    fn a_coloured_overlay_matches_the_browser_over_its_ground() {
+        // The primary button's glow, `rgba(255,61,85,.35)` over the ground.
+        let glow = over(ACCENT, 0.35, GROUND);
+        assert!(
+            glow.alpha() < 0.35,
+            "light over dark takes less alpha: {}",
+            glow.alpha()
+        );
+        let got = bevy_blend(glow, GROUND);
+        let (top, ground) = (ACCENT.to_srgba(), GROUND.to_srgba());
+        let want = top.red * 0.35 + ground.red * 0.65;
+        assert!((got.red - want).abs() < 0.03, "{got:?} vs {want}");
+        // Black reduces to the black rule.
+        let dark = over(Color::BLACK, 0.6, Color::srgb(0.5, 0.5, 0.5));
+        assert!((dark.alpha() - artboard_alpha(0.6)).abs() < 0.02);
     }
 }

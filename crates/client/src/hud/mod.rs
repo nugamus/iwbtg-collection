@@ -20,7 +20,7 @@ use bevy::ui::IsDefaultUiCamera;
 use crate::settings::{self, HudShow};
 use crate::ui::UiKitPlugin;
 use crate::ui::backdrop::BackdropCamera;
-use crate::ui::notice;
+use crate::ui::{notice, tokens};
 use layout::{Density, Layout, Options, UI_SCALE_RANGE};
 
 /// `input,stage_deaths`: HUD element names ([`HudShow::NAMES`]).
@@ -226,13 +226,7 @@ fn shadow(mut commands: Commands, backdrop: Query<Entity, With<BackdropCamera>>,
             position_type: PositionType::Absolute,
             ..default()
         },
-        BoxShadow::new(
-            Color::srgba(0.0, 0.0, 0.0, 0.6),
-            Val::ZERO,
-            Val::ZERO,
-            Val::ZERO,
-            Val::Px(60.0),
-        ),
+        BoxShadow::new(tokens::black(0.6), Val::ZERO, Val::ZERO, Val::ZERO, Val::Px(60.0)),
         GameShadow,
         UiTargetCamera(camera),
         GlobalZIndex(10),

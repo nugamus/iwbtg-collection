@@ -231,7 +231,9 @@ impl ButtonKind {
     fn rest_shape(self) -> Shape {
         let shape = Shape::fill(self.rest());
         match self {
-            ButtonKind::Primary => shape.with_shadow(8.0, 24.0, tokens::ACCENT.with_alpha(0.35)),
+            ButtonKind::Primary => {
+                shape.with_shadow(8.0, 24.0, tokens::over(tokens::ACCENT, 0.35, tokens::GROUND))
+            }
             _ => shape,
         }
     }
