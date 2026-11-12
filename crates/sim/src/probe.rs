@@ -338,6 +338,22 @@ pub fn sample(sim: &mut Sim, probe: &Probe, frame: i64) -> Vec<Vec<trace::Value>
     rows
 }
 
+/// One column read without a row, as at the end of a frame with no instance of the traced object
+/// (the trace runner's `latch` series, #671). `None` for a column that needs the row's instance
+/// (a fixed column, a `Row` field) or that consumes state when read (`keyboard_check_direct`).
+pub fn read_unrowed(sim: &mut Sim, column: &Column, frame: i64) -> Option<trace::Value> {
+    match column {
+        Column::Fixed(_)
+        | Column::Field {
+            target: ProbeTarget::Row,
+            ..
+        }
+        | Column::Key(KeyRead::Direct(_)) => None,
+        // `row` is never read for the remaining columns.
+        _ => Some(read_column(sim, InstId(0), column, frame)),
+    }
+}
+
 /// One column for the row of instance `row`.
 fn read_column(sim: &mut Sim, row: InstId, column: &Column, frame: i64) -> trace::Value {
     if let Column::Key(KeyRead::Direct(a)) = column {
