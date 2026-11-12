@@ -18,9 +18,9 @@ use iwbtg_format::{LoadMode, PackageFiles, load_game};
 use iwbtg_sim::def::{ClassMask, GameDef, KindId, NameId, RoomId};
 use iwbtg_sim::input::{InputFrame, KeyMap, parse_key_inputs};
 use iwbtg_sim::num::Real;
-use iwbtg_sim::probe::{self, Column, Probe, ProbeTarget, registry};
+use iwbtg_sim::probe::{self, Column, EngineVar, Probe, ProbeTarget, registry};
 use iwbtg_sim::rules::tick::DirectLatch;
-use iwbtg_sim::setup::SetupAction;
+use iwbtg_sim::setup::{SETTABLE_ENGINE_VARS, SetupAction};
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::trace::{self, DiffOptions, TraceDiff, TraceTable};
 use iwbtg_sim::world::Value;
@@ -121,16 +121,9 @@ pub fn resolve_case(
                 }
                 Err(e) => errors.push(format!("setup {}: {e}", i + 1)),
             },
-            SetupWhat::Global { name, value: v } => match def.var_names.get(name) {
-                Some(var) => actions.push(SetupAction::SetGlobal {
-                    var: *var,
-                    value: value(v),
-                }),
-                None => errors.push(format!(
-                    "setup {}: the package declares no global {name:?} (engine state such as the difficulty \
-                     is the start point; others are OPEN)",
-                    i + 1
-                )),
+            SetupWhat::Global { name, value: v } => match setup_global(def, name, value(v)) {
+                Ok(a) => actions.push(a),
+                Err(e) => errors.push(format!("setup {}: {e}", i + 1)),
             },
             SetupWhat::Save { field, value: v } => match registry::save_field(field) {
                 Some(f) => actions.push(SetupAction::SetSave {
@@ -175,6 +168,26 @@ pub fn resolve_case(
         pre_entry,
         per_frame,
     })
+}
+
+/// A setup `global` entry: an engine variable first, as probe columns read `global.<name>`
+/// (`registry::column`), then a global the package declares. An engine variable setup cannot
+/// write (the difficulty, the kid flags) is an error, not the package global of that name, so
+/// the setup and the column always name the same state (#688).
+fn setup_global(def: &GameDef, name: &str, value: Value) -> Result<SetupAction, String> {
+    if let Some(var) = EngineVar::global(name) {
+        return if SETTABLE_ENGINE_VARS.contains(&var) {
+            Ok(SetupAction::SetEngine { var, value })
+        } else if var == EngineVar::Difficulty {
+            Err("the difficulty is the start point's (`start = { difficulty = ... }`)".into())
+        } else {
+            Err(format!("setup cannot write the engine global {name:?} (OPEN)"))
+        };
+    }
+    def.var_names
+        .get(name)
+        .map(|var| SetupAction::SetGlobal { var: *var, value })
+        .ok_or_else(|| format!("the package declares no global {name:?}"))
 }
 
 fn kind_named(def: &GameDef, name: &str) -> Option<KindId> {
@@ -727,7 +740,7 @@ mod tests {
         b.kind(KindDef::new("kid", Builtin::Kid));
         b.kind(KindDef::new("@bullet", Builtin::KidBullet));
         b.room(RoomDef::new("template", 800, 608));
-        b.def_mut().var_names.insert("grav".into(), VarId(0));
+        b.def_mut().var_names.insert("god_mode".into(), VarId(0));
         b.build().expect("def")
     }
 
@@ -749,7 +762,7 @@ mod tests {
                 SetupEntry {
                     frame: 1,
                     what: SetupWhat::Global {
-                        name: "grav".into(),
+                        name: "god_mode".into(),
                         value: CaseValue::real(0.0),
                     },
                 },
@@ -868,6 +881,38 @@ mod tests {
                 ..
             }]
         ));
+    }
+
+    #[test]
+    fn setup_globals_write_engine_state_first() {
+        let d = def();
+        let one = || Value::Real(Real::ONE);
+        // `time` and `death` are the engine's (the probe columns read them there), #688.
+        assert_eq!(
+            setup_global(&d, "time", one()),
+            Ok(SetupAction::SetEngine {
+                var: EngineVar::Time,
+                value: one()
+            })
+        );
+        assert_eq!(
+            setup_global(&d, "death", one()),
+            Ok(SetupAction::SetEngine {
+                var: EngineVar::Death,
+                value: one()
+            })
+        );
+        for bad in ["difficulty", "frozen", "nothing"] {
+            assert!(setup_global(&d, bad, one()).is_err(), "{bad}");
+        }
+        let (name, var) = d.var_names.iter().next().expect("a package global");
+        assert_eq!(
+            setup_global(&d, name, one()),
+            Ok(SetupAction::SetGlobal {
+                var: *var,
+                value: one()
+            })
+        );
     }
 
     #[test]

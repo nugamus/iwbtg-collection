@@ -16,7 +16,7 @@
 //! dll_mode = "stub"                 # recorder --stub-dlls
 //! seed = 0                          # recorder --seed (default 0)
 //! setup = [
-//!   { frame = 1, global = "grav", value = 0.0 },                  # frame < at: before room entry
+//!   { frame = 1, global = "god_mode", value = 1.0 },              # frame < at: before room entry
 //!   { frame = 3, target = "kid", set = { x = 96.0, y = 567.4 } }, # before the tick of frame 3
 //!   { frame = 3, save = "deaths", value = 2.0 },
 //! ]
@@ -36,7 +36,9 @@
 //! Setup targets are `kid`, a kind name (the first instance of that kind), `named:<name>` (a
 //! room-file instance name) or `kid#<n>` / `<kind>#<n>`: the instance at 0-based index `n` in
 //! instance order, GML `instance_find(obj, n)` (`kid#0` is `kid`). Field, global and save names resolve through
-//! `iwbtg_sim::probe::registry` when the case runs.
+//! `iwbtg_sim::probe::registry` when the case runs. A `global` names engine state first, like a
+//! `global.<name>` column (`time`, `death`, `savenum` and `clear` are settable, #688), then a
+//! global the package declares.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
