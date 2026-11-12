@@ -3,24 +3,29 @@
 //! `R` stays the game's own restart from the last save (the sim's `Restart` action). The
 //! quick-retry key starts the whole run again from where it started: a new sim with the same
 //! options. It is a client key, not a sim action, so it never reaches the game or a replay; a
-//! retry is a new run. `--auto-retry` does the same after every death, for Sudden Death and
-//! deathless attempts.
+//! retry is a new run. Auto-retry does the same after every death, for Sudden Death and
+//! deathless attempts. The key is bound with the other bindings (`bindings.rs`, `quick-retry`,
+//! Backquote by default); auto-retry is the settings file's `[retry] auto`, which `--auto-retry`
+//! overrides for one run.
 
 use bevy::prelude::*;
 
 use crate::view::{Game, SimTick};
 
-/// The quick-retry key: the key left of `1` (`` ` `` on a US layout), as in osu!. Not rebindable
-/// yet (#27 bindings cover sim actions only).
-pub const QUICK_RETRY_KEY: KeyCode = KeyCode::Backquote;
-
 /// The retry command-line flags (main.rs flattens each module's group, #530).
 #[derive(clap::Args, Debug, Clone, Copy, Default)]
 pub struct RetryArgs {
     /// Start the run again from the start after every death (meant for Sudden Death and
-    /// deathless attempts). The quick-retry key (the key left of 1) works either way.
-    #[arg(long)]
-    pub auto_retry: bool,
+    /// deathless attempts), for this run only; `--auto-retry=false` turns it off. Without the
+    /// flag the settings file decides (`[retry] auto`). The quick-retry key works either way.
+    #[arg(
+        long,
+        num_args = 0..=1,
+        require_equals = true,
+        default_missing_value = "true",
+        value_name = "BOOL"
+    )]
+    pub auto_retry: Option<bool>,
 }
 
 /// Retry state: whether auto-retry is on, the death counter after the last tick, and a retry
@@ -44,7 +49,7 @@ pub struct RetryPlugin(pub RetryArgs);
 impl Plugin for RetryPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Retry {
-            auto: self.0.auto_retry,
+            auto: auto_retry(self.0.auto_retry, crate::settings::get().auto_retry),
             deaths: None,
             pending: None,
         })
@@ -59,6 +64,11 @@ impl Plugin for RetryPlugin {
             (key, apply.run_if(|retry: Res<Retry>| retry.pending.is_some())).chain(),
         );
     }
+}
+
+/// Auto-retry for this run: the flag when given, else the settings value.
+fn auto_retry(flag: Option<bool>, setting: bool) -> bool {
+    flag.unwrap_or(setting)
 }
 
 /// Whether a tick that moved the death counter from `before` to `now` auto-retries.
@@ -78,9 +88,12 @@ fn watch(game: NonSend<Game>, mut retry: ResMut<Retry>) {
     retry.deaths = Some(now);
 }
 
-/// The quick-retry key asks for a retry.
-fn key(keys: Res<ButtonInput<KeyCode>>, mut retry: ResMut<Retry>) {
-    if keys.just_pressed(QUICK_RETRY_KEY) {
+/// The quick-retry key or controller input (the collector's client-key flag, never an input
+/// frame) asks for a retry.
+fn key(collector: Option<ResMut<crate::input::Collector>>, mut retry: ResMut<Retry>) {
+    if let Some(mut c) = collector
+        && c.take_quick_retry()
+    {
         retry.pending = Some(Why::Key);
     }
 }
@@ -122,6 +135,14 @@ fn apply(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_flag_overrides_the_setting_for_one_run() {
+        assert!(auto_retry(None, true));
+        assert!(!auto_retry(None, false));
+        assert!(auto_retry(Some(true), false));
+        assert!(!auto_retry(Some(false), true));
+    }
 
     #[test]
     fn only_a_new_death_with_auto_retry_on_retries() {

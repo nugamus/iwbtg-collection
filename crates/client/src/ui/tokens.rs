@@ -68,6 +68,9 @@ pub const BUTTON_IDLE: Color = Color::srgba(1.0, 1.0, 1.0, 0.28);
 pub const CARD: Color = Color::srgba(14.0 / 255.0, 16.0 / 255.0, 24.0 / 255.0, 0.994);
 pub const CARD_MID: Color = Color::srgba(14.0 / 255.0, 16.0 / 255.0, 24.0 / 255.0, 0.964);
 pub const CARD_WARM: Color = Color::srgba(40.0 / 255.0, 14.0 / 255.0, 22.0 / 255.0, 0.964);
+/// The card's colour with no glass: for a shape that floats over other UI (a notice), where even
+/// `CARD`'s 0.6 % lets white text under it show (#664). Glass is for shapes over art.
+pub const CARD_SOLID: Color = Color::srgb_u8(14, 16, 24);
 /// The card's avatar gradient, top left to bottom right (`hsl(352 62% 52%)`, `hsl(330 55% 30%)`).
 pub const AVATAR_FROM: Color = Color::hsl(352.0, 0.62, 0.52);
 pub const AVATAR_TO: Color = Color::hsl(330.0, 0.55, 0.30);

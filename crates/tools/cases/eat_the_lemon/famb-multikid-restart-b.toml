@@ -2,7 +2,7 @@
 # Recorder: --object player --room room12 --at 2 --from 2 --stub-dlls --x 144 --y 336 (43 --gml)
 source = "eat-the-lemon/famb-multikid-restart-b"
 kind = "diff"
-open = "the autosave object has no built-in or script, so no autosave runs on room entry (#662); the frame 25 marking of one of two kids has no setup target (#662)"
+open = "the autosave needs research#137 (converter writes alarm_save); the frame 25 marking of one of two kids has no setup target (#672); placed kids sort after the loaded kid (#669)"
 start = { room = "room_11", difficulty = 0 }
 at = 2
 first_frame = 2
