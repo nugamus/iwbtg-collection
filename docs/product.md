@@ -50,8 +50,8 @@ Difficulty is not a mod (decided 2026-11-04). A fangame is the parent entry in g
 ## Restart keys
 
 - `R` restarts from the last save, as in the originals.
-- A separate quick-retry key resets the whole run immediately: the key left of `1` (`` ` `` on a US layout), as in osu!. It is a client key, not a game action, so games and replays never see it; a retry is a new run. Rebinding it comes with the settings file (#559).
-- Auto-retry restarts the run from the start right after a death. Until the bottom-bar toggle exists (#558) it is the `--auto-retry` flag.
+- A separate quick-retry key resets the whole run immediately: the key left of `1` (`` ` `` on a US layout), as in osu!. It is a client key, not a game action, so games and replays never see it; a retry is a new run. It is rebindable with the other bindings (key and controller input, `quick-retry` in the bindings table of the settings file or `--bind quick-retry=...`).
+- Auto-retry restarts the run from the start right after a death. It is the `[retry] auto` setting; the `--auto-retry` flag overrides it for one run. The bottom-bar toggle is #558.
 
 ## Practice
 

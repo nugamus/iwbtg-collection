@@ -3,7 +3,7 @@
 
 use iwbtg_sim::input::{Action, InputFrame, vk};
 
-use crate::bindings::{Bindings, PadInput};
+use crate::bindings::{Bindings, PadInput, oem};
 
 /// Collects key and controller events between two ticks. Edges are per input, as the sim's input
 /// docs require: a press and a release inside one tick both show up, and a second input bound to
@@ -19,6 +19,9 @@ pub struct Collector {
     released: u32,
     /// The frame the last tick took, for the overlay.
     last: InputFrame,
+    /// A quick-retry input went down since `take_quick_retry`. A client key: never part of an
+    /// `InputFrame`.
+    quick_retry: bool,
 }
 
 impl Collector {
@@ -31,7 +34,13 @@ impl Collector {
             pressed: 0,
             released: 0,
             last: InputFrame::EMPTY,
+            quick_retry: false,
         }
+    }
+
+    /// Whether a quick-retry key or controller input went down since the last call.
+    pub fn take_quick_retry(&mut self) -> bool {
+        std::mem::take(&mut self.quick_retry)
     }
 
     /// What the last tick saw, for the overlay: the actions held or pressed, then the controller
@@ -63,6 +72,9 @@ impl Collector {
     /// A key went down.
     pub fn press(&mut self, key: u8) {
         self.down[usize::from(key)] = true;
+        if self.bindings.is_quick_retry_key(key) {
+            self.quick_retry = true;
+        }
         if let Some(action) = self.bindings.key_action(key) {
             self.pressed |= action.bit();
         }
@@ -89,6 +101,9 @@ impl Collector {
             return;
         }
         *slot = down;
+        if down && self.bindings.is_quick_retry_pad(input) {
+            self.quick_retry = true;
+        }
         if let Some(action) = self.bindings.pad_action(input) {
             if down {
                 self.pressed |= action.bit();
@@ -245,6 +260,17 @@ pub fn key_code(key: bevy::input::keyboard::KeyCode) -> Option<u8> {
         K::End => vk::END,
         K::Insert => vk::INSERT,
         K::Delete => vk::DELETE,
+        K::Semicolon => oem::SEMICOLON,
+        K::Equal => oem::EQUAL,
+        K::Comma => oem::COMMA,
+        K::Minus => oem::MINUS,
+        K::Period => oem::PERIOD,
+        K::Slash => oem::SLASH,
+        K::Backquote => oem::BACKQUOTE,
+        K::BracketLeft => oem::BRACKET_LEFT,
+        K::Backslash => oem::BACKSLASH,
+        K::BracketRight => oem::BRACKET_RIGHT,
+        K::Quote => oem::QUOTE,
         _ => return None,
     })
 }
@@ -310,6 +336,35 @@ mod tests {
         c.release(vk::LEFT_SHIFT);
         let f = c.take_frame();
         assert!(f.is_held(Action::Jump) && f.was_released(Action::Jump));
+    }
+
+    /// The quick-retry key (and a bound controller input) asks for a retry but leaves the frame
+    /// empty: it is a client key and never reaches the sim or a replay.
+    #[test]
+    fn the_quick_retry_key_never_reaches_an_input_frame() {
+        let mut config = crate::bindings::Config::default();
+        config.set("quick-retry=pad:select").unwrap();
+        let mut c = Collector::new(Bindings::from_config(&config).unwrap());
+        assert!(!c.take_quick_retry());
+        c.press(oem::BACKQUOTE);
+        c.set_pad(PadInput::Select, true);
+        assert_eq!(c.take_frame(), InputFrame::EMPTY);
+        c.release(oem::BACKQUOTE);
+        c.set_pad(PadInput::Select, false);
+        assert_eq!(c.take_frame(), InputFrame::EMPTY);
+        assert!(c.take_quick_retry());
+        assert!(!c.take_quick_retry(), "one request per press");
+        // A pad press alone counts too, and the sim's keys do not.
+        c.set_pad(PadInput::Select, true);
+        assert!(c.take_quick_retry());
+        c.press(vk::Z);
+        assert!(!c.take_quick_retry());
+    }
+
+    #[test]
+    fn the_quick_retry_key_has_a_virtual_key_code() {
+        use bevy::input::keyboard::KeyCode as K;
+        assert_eq!(key_code(K::Backquote), Some(oem::BACKQUOTE));
     }
 
     #[test]

@@ -181,7 +181,8 @@ fn notice(kind: Kind, message: &str) -> impl Bundle + use<> {
             margin: UiRect::horizontal(Val::Px(SHEAR_ROOM)),
             ..default()
         },
-        Shape::fill(tokens::CARD)
+        // Solid, not the card's glass: a notice can float over other UI text (#664).
+        Shape::fill(tokens::CARD_SOLID)
             .with_band(Band {
                 side: Side::Left,
                 width: 4.0,
@@ -274,6 +275,16 @@ mod tests {
         app.update();
         let mut q = app.world_mut().query::<&Notice>();
         assert_eq!(q.iter(app.world()).count(), 1);
+    }
+
+    /// Bevy blends in linear light, so even the card glass's 0.6 % lets white text under a
+    /// notice show at about 26/255 over its 14/255 fill (#664). A notice must be solid.
+    #[test]
+    fn a_notice_hides_the_ui_under_it() {
+        let mut world = World::new();
+        let id = world.spawn(notice(Kind::Storage, "x")).id();
+        let shape = world.get::<Shape>(id).expect("a notice has a shape");
+        assert_eq!(shape.fill.alpha(), 1.0);
     }
 
     #[test]

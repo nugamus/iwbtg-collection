@@ -42,6 +42,9 @@ pub struct Settings {
     pub backdrop_blur: u32,
     /// Which HUD elements are shown (`[hud.show]`).
     pub hud_show: HudShow,
+    /// Start the run again after every death (`[retry] auto`; `--auto-retry` overrides it for
+    /// one run).
+    pub auto_retry: bool,
     /// The `[bindings]` table, kept as written: the input layer (#27) owns its layout and checks
     /// it; this file only stores it.
     pub bindings: Table,
@@ -59,6 +62,7 @@ impl Default for Settings {
             ui_scale: 100,
             backdrop_blur: DEFAULT_BACKDROP_BLUR,
             hud_show: HudShow::default(),
+            auto_retry: false,
             bindings: Table::new(),
         }
     }
@@ -154,8 +158,9 @@ impl Settings {
                 ("display", Value::Table(t)) => s.read_display(t, warnings),
                 ("audio", Value::Table(t)) => s.read_audio(t, warnings),
                 ("hud", Value::Table(t)) => s.read_hud(t, warnings),
+                ("retry", Value::Table(t)) => s.read_retry(t, warnings),
                 ("bindings", Value::Table(t)) => s.bindings = t.clone(),
-                ("display" | "audio" | "hud" | "bindings", _) => {
+                ("display" | "audio" | "hud" | "retry" | "bindings", _) => {
                     warnings.push(format!("`[{key}]` must be a table, using defaults"));
                 }
                 _ => warnings.push(format!("unknown entry `{key}`, ignored")),
@@ -206,6 +211,16 @@ impl Settings {
         }
     }
 
+    fn read_retry(&mut self, t: &Table, w: &mut Vec<String>) {
+        for (key, value) in t {
+            match (key.as_str(), value) {
+                ("auto", Value::Boolean(b)) => self.auto_retry = *b,
+                ("auto", _) => w.push("retry.auto must be true or false".into()),
+                _ => w.push(format!("unknown entry `retry.{key}`, ignored")),
+            }
+        }
+    }
+
     fn read_hud(&mut self, t: &Table, w: &mut Vec<String>) {
         for (key, value) in t {
             match (key.as_str(), value) {
@@ -249,11 +264,14 @@ impl Settings {
         hud.insert("overlay".into(), self.overlay.into());
         hud.insert("ui_scale".into(), i64::from(self.ui_scale).into());
         hud.insert("show".into(), self.hud_show.to_table().into());
+        let mut retry = Table::new();
+        retry.insert("auto".into(), self.auto_retry.into());
         let mut root = Table::new();
         root.insert("version".into(), VERSION.into());
         root.insert("display".into(), display.into());
         root.insert("audio".into(), audio.into());
         root.insert("hud".into(), hud.into());
+        root.insert("retry".into(), retry.into());
         root.insert("bindings".into(), self.bindings.clone().into());
         toml::to_string(&root).unwrap_or_default()
     }
@@ -362,6 +380,7 @@ mod tests {
             overlay: false,
             ui_scale: 125,
             backdrop_blur: 30,
+            auto_retry: true,
             hud_show: HudShow {
                 input: false,
                 leaderboard: false,
@@ -373,6 +392,25 @@ mod tests {
         let (back, w) = parse(&s.to_toml());
         assert_eq!(back, s);
         assert!(w.is_empty(), "{w:?}");
+    }
+
+    #[test]
+    fn auto_retry_is_read_and_checked() {
+        let (s, w) = parse(
+            "[retry]
+auto = true
+",
+        );
+        assert!(s.auto_retry && w.is_empty(), "{w:?}");
+        let (s, w) = parse(
+            "[retry]
+auto = 3
+foo = 1
+",
+        );
+        assert!(!s.auto_retry);
+        assert_eq!(w.len(), 2, "{w:?}");
+        assert!(!parse("").0.auto_retry);
     }
 
     #[test]

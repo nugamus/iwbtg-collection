@@ -2,7 +2,7 @@
 
 Part of [the client](../client.md).
 
-Pause menu (`pause.rs`, `PausePlugin`, #479; docs/product.md, Pause; artboards `Pause169`, `Pause43`, `PauseBox`): Escape (`pause::PAUSE_KEY`, read straight from Bevy like the quick-retry key, so it never reaches the sim or a replay) opens and closes it.
+Pause menu (`pause.rs`, `PausePlugin`, #479; docs/product.md, Pause; artboards `Pause169`, `Pause43`, `PauseBox`): Escape (`pause::PAUSE_KEY`, read straight from Bevy, so it never reaches the sim or a replay) opens and closes it.
 
 While it is open the `SimTick` set does not run (a run condition, as for Sudden Death), every playing voice is paused and resumed on close (a voice the game paused stays paused), and the backdrop and HUD keep running. The timer keeps running: `count` runs on the fixed clock while the menu is open and counts each tick in which the map's timer runs (started, not ended, sim running), keyed by the sim tick the pause began at (`Menu::pauses`); `publish` writes the total to `hud::Paused`, which run info adds to `Sim::ranked_ticks` and uses for the paused line. A retry clears the pauses (`pause::reset`). The replay's trailer carries them (`replays::sync_pauses`; docs/architecture/replay.md, Trailer) and the stats add them to the clear and the splits (#623).
 
