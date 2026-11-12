@@ -335,6 +335,28 @@ fn basic_package_loads_strict() {
 }
 
 #[test]
+fn defaults_variants_get_kinds_whether_placed_or_not() {
+    // #701: a script spawn takes a `[defaults.<kind>]` variant's kind, so every variant has one,
+    // also when no room places it (here the `dir = "down"` spike is gone from stage1).
+    let stage = STAGE1.replace("  { kind = \"spike\", x = 352, y = 544, dir = \"down\" },\n", "");
+    for files in [package(|_| {}), package(|f| set(f, "rooms/stage1.toml", stage))] {
+        let (def, _) = load_ok(&files, STRICT);
+        let (spike, spike_def) = kind_named(&def, "spike");
+        let (down, down_def) = kind_named(&def, "spike[dir=down]");
+        assert_eq!(def.variants.len(), 1);
+        assert_eq!((def.variants[0].kind, def.variants[0].variant), (spike, down));
+        assert_ne!(spike_def.sprite, down_def.sprite);
+        assert_eq!(def.rank_for(down, None), Some(7));
+        let mut params = iwbtg_sim::def::Params::default();
+        assert_eq!(def.variant_kind(spike, &params), spike);
+        params.0.insert("dir".into(), ParamValue::Str("down".into()));
+        assert_eq!(def.variant_kind(spike, &params), down);
+        params.0.insert("dir".into(), ParamValue::Str("up".into()));
+        assert_eq!(def.variant_kind(spike, &params), spike);
+    }
+}
+
+#[test]
 fn placed_kind_without_rank_is_an_error() {
     let order = ORDER.replace("\"kid_start\", ", "");
     let files = package(|f| set(f, "game.toml", manifest(&order, "")));
