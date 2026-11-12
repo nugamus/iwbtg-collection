@@ -433,20 +433,9 @@ fn engine_value(w: &World, v: EngineVar) -> trace::Value {
 fn matches(def: &GameDef, inst: &Instance, t: Target) -> bool {
     match t {
         Target::Class(c) => inst.classes.intersects(c),
-        Target::Kind(k) => inst.kind == k || is_variant(def, inst.kind, k),
+        Target::Kind(k) => def.kind_covers(k, inst.kind),
         Target::Inst(id) => inst.id == id,
         Target::Any => true,
-    }
-}
-
-/// Whether `kind` is a variant the loader derived from `base` (`<base>[<params>]`).
-fn is_variant(def: &GameDef, kind: crate::def::KindId, base: crate::def::KindId) -> bool {
-    match (def.kind(kind), def.kind(base)) {
-        (Some(v), Some(b)) => v
-            .name
-            .strip_prefix(b.name.as_str())
-            .is_some_and(|rest| rest.starts_with('[')),
-        _ => false,
     }
 }
 

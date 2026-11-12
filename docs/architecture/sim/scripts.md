@@ -32,10 +32,10 @@ This is the starting surface. The generated reference is `docs/format/script-api
 
 | Function | Notes |
 |---|---|
-| `instance_create(kind, x, y)` and `instance_create(kind, x, y, #{ ... })` (`spawn` is a reserved word in Rhai) | Returns the new `Inst`. The map sets built-in variables and parameters. |
+| `instance_create(kind, x, y)` and `instance_create(kind, x, y, #{ ... })` (`spawn` is a reserved word in Rhai) | Returns the new `Inst`. The map sets built-in variables and parameters. Params that match a `[defaults.<kind>]` variant take the variant's kind first, with the loader's match (`GameDef::variant_kind`, `def::kind::variant_matches`; `spike` with `dir: "down"` is `spike[dir=down]`, #701); the loader makes a kind for every variant, placed or not (`GameDef::variants`). Then params that pick a class (`def::class::class_params`) take the kind the loader derived from `kind` with those values (`water[variant=2]`, #659), since classes come from the kind; a spawn that picks classes no such kind has is a script error, because no kind is made at run time (#694). |
 | `destroy(i)` | |
 | `exists(i)` | |
-| `instances(kind)` | Array in event order, snapshotted at call time. Replaces GML `with`. Groups are *planned*. |
+| `instances(kind)` | Array in event order, snapshotted at call time. Replaces GML `with`. Covers the kinds the loader derived from `kind` (`GameDef::kind_covers`, as probe kind targets do), as a GM object index covers its children (#694). Groups are *planned*. |
 | `count(kind_or_group)` | *Planned.* |
 | `nearest(kind, x, y)` | *Planned.* Ties broken by (rank, id). |
 | `find(name)` | *Planned.* The instance with that `name` in the current room. |

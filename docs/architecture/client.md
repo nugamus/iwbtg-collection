@@ -17,6 +17,7 @@ One page per module or area, so two PRs on different modules never edit the same
 - [Retry](client/retry.md): `retry.rs`
 - [Screen](client/screen.md): `screen.rs`
 - [Settings](client/settings.md): `settings.rs`
+- [Skip](client/skip.md): skipping a cutscene or dialogue region (`skip.rs`)
 - [Stats](client/stats.md): `stats/`
 - [Storage](client/storage.md): `storage.rs`
 - [UI](client/ui.md): the UI kit (`ui/`)

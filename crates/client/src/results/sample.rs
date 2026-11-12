@@ -2,11 +2,16 @@
 //! Kaenbyou run of seven segments, a new PB (`pb`) or slower than it (`slower`). It goes through
 //! the same path as a real clear: a stats board holding the leaderboard sample's runs
 //! (`hud/leaderboard`, `SAMPLE_RUNS`) takes the run, and [`Summary::new`] reads what that changed.
+//! Its death log is the artboard's: each death at a seeded random time in its segment (the
+//! script's generator and seed), and, for the heatmap, at the artboard's red spots in the room the
+//! package starts in.
+
+use bevy::math::Vec2;
 
 use super::{About, Scenario, Summary};
 use crate::card::RunChange;
 use crate::hud::leaderboard::SAMPLE_RUNS;
-use crate::stats::{Board, Run};
+use crate::stats::{Board, DeathLog, Run};
 
 /// Kaenbyou runs at 50 ticks per second.
 const RATE: u32 = 50;
@@ -28,6 +33,74 @@ const NOV_4: u64 = 1_793_750_400;
 const DAYS_BEFORE: [u64; 9] = [1, 6, 7, 14, 15, 21, 26, 33, 35];
 /// `Cleared 3 Nov 2026, 21:14`.
 const CLEARED_AT: u64 = NOV_4 - 86_400 + 21 * 3600 + 14 * 60;
+
+/// The artboard's heat spots as its script lists them (x, y, size and alpha), before it scales
+/// them by `.875` into its 224-px box over an 800×608 room at `.28`. Deaths are shared out by
+/// size times alpha.
+const HEAT_SPOTS: [(f64, f64, f64, f64); 8] = [
+    (150.0, 175.0, 46.0, 0.55),
+    (176.0, 176.0, 38.0, 0.5),
+    (124.0, 176.0, 30.0, 0.4),
+    (196.0, 104.0, 34.0, 0.45),
+    (140.0, 140.0, 26.0, 0.35),
+    (92.0, 150.0, 22.0, 0.3),
+    (210.0, 176.0, 26.0, 0.4),
+    (232.0, 90.0, 22.0, 0.3),
+];
+
+/// The artboard script's generator (`seed * 48271 % 2147483647`), from 0 to 1.
+struct Lehmer(u64);
+
+impl Lehmer {
+    fn next(&mut self) -> f64 {
+        self.0 = self.0 * 48_271 % 2_147_483_647;
+        self.0 as f64 / 2_147_483_647.0
+    }
+}
+
+/// The sample run's death log: per segment its deaths at `start + length * r^0.7` (the
+/// artboard's timeline; it draws a height from the generator after each), in time order; with a
+/// room, each at one of [`HEAT_SPOTS`] scaled to the room, spread over its size.
+fn death_log(segments: &[f64], deaths: &[u32], seed: u64, room: Option<&(String, Vec2)>) -> DeathLog {
+    let mut times = Lehmer(seed);
+    let mut places = Lehmer(seed + 1);
+    let weights: Vec<f64> = HEAT_SPOTS.iter().map(|s| s.2 * s.3).collect();
+    let sum: f64 = weights.iter().sum();
+    let mut log = DeathLog::default();
+    let mut start = 0;
+    for (&seconds, &n) in segments.iter().zip(deaths) {
+        let length = ticks(seconds);
+        let mut at: Vec<u64> = (0..n)
+            .map(|_| {
+                let t = start + (length as f64 * times.next().powf(0.7)).round() as u64;
+                times.next();
+                t
+            })
+            .collect();
+        at.sort_unstable();
+        for t in at {
+            let spot = room.map(|(name, size)| {
+                let mut pick = places.next() * sum;
+                let i = weights
+                    .iter()
+                    .position(|w| {
+                        pick -= w;
+                        pick < 0.0
+                    })
+                    .unwrap_or(HEAT_SPOTS.len() - 1);
+                let (x, y, r, _) = HEAT_SPOTS[i];
+                let to_room = 0.875 * f64::from(size.x) / 224.0;
+                let jitter = |u: f64| (u - 0.5) * r * 0.6 * to_room;
+                let px = x * to_room + jitter(places.next());
+                let py = y * to_room + jitter(places.next());
+                (name.as_str(), px.round() as i32, py.round() as i32)
+            });
+            log.push(t, spot);
+        }
+        start += length;
+    }
+    log
+}
 
 fn ticks(seconds: f64) -> u64 {
     (seconds * f64::from(RATE)).round() as u64
@@ -77,8 +150,8 @@ fn board(scenario: Scenario) -> Board {
     board
 }
 
-/// The sample's results.
-pub fn summary(scenario: Scenario) -> Summary {
+/// The sample's results; its deaths' places are in `room` (package room id and size), if given.
+pub fn summary(scenario: Scenario, room: Option<(String, Vec2)>) -> Summary {
     let pb = scenario == Scenario::Pb;
     let (segments, deaths) = if pb {
         (&NEW_PB, DEATHS_PB)
@@ -93,7 +166,7 @@ pub fn summary(scenario: Scenario) -> Summary {
         segment_deaths: deaths.to_vec(),
         finished_at: CLEARED_AT,
         replay: Some("replays/kaenbyou/sample.iwbr".to_owned()),
-        death_log: Default::default(),
+        death_log: death_log(segments, &deaths, if pb { 17 } else { 29 }, room.as_ref()),
     };
     let mut board = board(scenario);
     let rec = board.add(run.clone());
@@ -144,7 +217,7 @@ mod tests {
     /// 1,284 deaths; slower: 39:58.40, +1:45.94 behind the PB that stands.
     #[test]
     fn the_sample_reads_as_the_artboard() {
-        let pb = summary(Scenario::Pb);
+        let pb = summary(Scenario::Pb, None);
         assert_eq!(pb.hero(), ("38:12".to_owned(), ".46".to_owned()));
         assert!(pb.is_pb);
         assert_eq!(pb.changes()[1].value, "39:40.12 → 38:12.46");
@@ -156,12 +229,44 @@ mod tests {
         assert_eq!(fmt_ticks(pb.stages[0].segment, RATE), "3:25.84");
         assert_eq!(pb.place, 1);
 
-        let slow = summary(Scenario::Slower);
+        let slow = summary(Scenario::Slower, None);
         assert!(!slow.is_pb);
         assert_eq!(fmt_ticks(slow.ticks, RATE), "39:58.40");
         assert_eq!(slow.changes()[1].value, "38:12.46 stands");
         assert_eq!(slow.changes()[1].note, "+1:45.94 this run");
         assert_eq!(slow.place, 3, "behind the new PB and the old one");
         assert_eq!(slow.deaths, 1288);
+    }
+
+    /// The sample's timeline: every death logged in time order inside its own stage; with a room
+    /// the heatmap of the busiest stage has dots inside the room.
+    #[test]
+    fn the_sample_logs_every_death_in_its_stage() {
+        let pb = summary(Scenario::Pb, Some(("room_1".to_owned(), Vec2::new(800.0, 608.0))));
+        assert_eq!(pb.death_log.len(), 1284);
+        assert!(pb.death_log.windows(2).all(|w| w[0].ticks <= w[1].ticks));
+        for d in &pb.death_log {
+            let start = if d.segment == 0 {
+                0
+            } else {
+                pb.stages[d.segment - 1].split
+            };
+            assert!(d.ticks >= start && d.ticks <= pb.stages[d.segment].split);
+        }
+        let (ticks, bounds) = pb.timeline();
+        assert_eq!(bounds.len(), 6);
+        assert!(!ticks.is_empty() && ticks.len() <= crate::results::TIMELINE_SLOTS);
+        assert_eq!(pb.busiest_stage(), Some(6), "Boss, 444 deaths");
+        let heat = pb.heat(6).expect("a heatmap");
+        assert_eq!((heat.room.as_str(), heat.room_deaths), ("room_1", 444));
+        assert!(
+            heat.dots
+                .iter()
+                .all(|d| (0.0..800.0).contains(&d.x) && (0.0..608.0).contains(&d.y))
+        );
+        assert!(
+            summary(Scenario::Pb, None).heat(6).is_none(),
+            "no room, no places"
+        );
     }
 }

@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 
 use super::ids::{KindId, MaskId, RoomId, ScriptId, SpriteId, VarId};
-use super::kind::{KindDef, RankTable, VariantSel};
+use super::kind::{KindDef, KindVariant, Params, RankTable, VariantSel, variant_matches};
 use super::path::PathDef;
 use super::physics::PhysicsProfile;
 use super::room::{RoleSet, RoomDef};
@@ -49,6 +49,9 @@ pub struct GameDef {
     pub masks: Vec<Mask>,
     /// Kinds.
     pub kinds: Vec<KindDef>,
+    /// `[defaults.<kind>]` variants, each kind's in `game.toml` order, with the kinds derived
+    /// for them: all of them, placed or not, so a script spawn can take one (#701).
+    pub variants: Vec<KindVariant>,
     /// Rooms.
     pub rooms: Vec<RoomDef>,
     /// The game's first room as the package names it (title art for game select).
@@ -148,6 +151,35 @@ impl GameDef {
     /// The kind with this id.
     pub fn kind(&self, id: KindId) -> Option<&KindDef> {
         self.kinds.get(id.index()?)
+    }
+
+    /// Whether `kind` is `base` or a kind the loader derived from it, `<base>[<params>]` (a
+    /// `[defaults.<base>]` variant, or a placed instance whose params pick other classes, #659),
+    /// as a GM object index covers its children. Probe kind targets and the script `instances`
+    /// use it.
+    pub fn kind_covers(&self, base: KindId, kind: KindId) -> bool {
+        if kind == base {
+            return true;
+        }
+        match (self.kind(kind), self.kind(base)) {
+            (Some(k), Some(b)) => k
+                .name
+                .strip_prefix(b.name.as_str())
+                .is_some_and(|rest| rest.starts_with('[')),
+            _ => false,
+        }
+    }
+
+    /// The kind an instance of `kind` with `params` uses: the first `[defaults.<kind>]` variant
+    /// whose params it matches (the instance's params, else the kind's), else `kind` (#701).
+    pub fn variant_kind(&self, kind: KindId, params: &Params) -> KindId {
+        let Some(kd) = self.kind(kind) else {
+            return kind;
+        };
+        self.variants
+            .iter()
+            .find(|v| v.kind == kind && variant_matches(&v.when, params, &kd.params))
+            .map_or(kind, |v| v.variant)
     }
 
     /// The room with this id.

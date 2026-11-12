@@ -79,6 +79,7 @@ impl GameDefBuilder {
                 sprites: Vec::new(),
                 masks: Vec::new(),
                 kinds: Vec::new(),
+                variants: Vec::new(),
                 rooms: Vec::new(),
                 start_room: RoomId(0),
                 new_game_room: RoomId(0),

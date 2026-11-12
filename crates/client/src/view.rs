@@ -36,7 +36,7 @@ struct RunStart {
 
 /// The Bevy image of each sprite strip, by `SpriteId`, with the strip size.
 #[derive(Resource)]
-struct Textures(Vec<Option<(Handle<Image>, UVec2)>>);
+pub(crate) struct Textures(pub(crate) Vec<Option<(Handle<Image>, UVec2)>>);
 
 /// Which Bevy entity draws which instance.
 #[derive(Resource, Default)]
@@ -201,7 +201,7 @@ struct Cap(FrameCap);
 
 /// Ticks and frames counted over the last full second of wall time, for the overlay.
 #[derive(Resource)]
-struct Stats {
+pub(crate) struct Stats {
     window_start: Instant,
     ticks: u32,
     frames: u32,
@@ -582,11 +582,12 @@ pub(crate) fn test_world(pkg: &Package) -> World {
 }
 
 /// One sim tick: runs on the fixed clock, as many times per frame as the clock is behind.
+/// `pub(crate)` so other modules can order against it (skip.rs runs first).
 #[allow(
     clippy::too_many_arguments,
     reason = "a Bevy system: one parameter per resource"
 )]
-fn tick(
+pub(crate) fn tick(
     mut game: NonSendMut<Game>,
     mut collector: ResMut<Collector>,
     mut stats: ResMut<Stats>,
@@ -766,17 +767,6 @@ fn sync_instances(
         };
         let frames = f64::from(sprite_def.frames.max(1));
         let frame = inst.img.index().get().floor().rem_euclid(frames) as u32;
-        let (w, h) = (sprite_def.size.0 as f32, sprite_def.size.1 as f32);
-        let (sx, sy) = (inst.img.xscale().get() as f32, inst.img.yscale().get() as f32);
-        let angle = (inst.img.angle().get() as f32).to_radians();
-        // The sprite's centre relative to its origin, scaled and turned like the sprite.
-        let off = Vec2::new(
-            (w / 2.0 - sprite_def.origin.0 as f32) * sx,
-            (h / 2.0 - sprite_def.origin.1 as f32) * sy,
-        );
-        let (sin, cos) = angle.sin_cos();
-        let off = Vec2::new(off.x * cos + off.y * sin, -off.x * sin + off.y * cos);
-        // GM: y grows downward from the room corner. Bevy: y up from the centre.
         let cur = (inst.m.x().get(), inst.m.y().get());
         let (px, py) = if previous.on {
             blend(
@@ -787,13 +777,16 @@ fn sync_instances(
         } else {
             cur
         };
-        let x = px as f32 + off.x - room.0.x / 2.0;
-        let y = room.0.y / 2.0 - (py as f32 + off.y);
-        let z = -(inst.depth.get() as f32) / 1000.0 + (inst.id.0 % 1000) as f32 * 1e-6;
-        let rect = frame_rect(frame, (w, h), strip.as_vec2());
-        let transform = Transform::from_xyz(x, y, z)
-            .with_rotation(Quat::from_rotation_z(angle))
-            .with_scale(Vec3::new(sx, sy, 1.0));
+        let (rect, transform) = place_sprite(
+            sprite_def,
+            frame,
+            strip.as_vec2(),
+            Vec2::new(px as f32, py as f32),
+            Vec2::new(inst.img.xscale().get() as f32, inst.img.yscale().get() as f32),
+            inst.img.angle().get() as f32,
+            -(inst.depth.get() as f32) / 1000.0 + (inst.id.0 % 1000) as f32 * 1e-6,
+            room.0,
+        );
         let color = Color::srgba(1.0, 1.0, 1.0, inst.img.alpha().get() as f32);
         let entity = match drawn.0.get(&inst.id).copied() {
             Some(entity) => {
@@ -825,6 +818,41 @@ fn sync_instances(
         }
     }
     drawn.0 = alive;
+}
+
+/// Where frame `frame` of a sprite drawn at room position `at` (GM: y down from the room corner)
+/// with `scale`, `angle` (degrees, counter-clockwise) and `z` goes: the part of its image `strip`
+/// and the transform in the room-centred space the game camera sees.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "each is one of the sprite's draw values"
+)]
+pub(crate) fn place_sprite(
+    sprite_def: &iwbtg_sim::def::SpriteDef,
+    frame: u32,
+    strip: Vec2,
+    at: Vec2,
+    scale: Vec2,
+    angle: f32,
+    z: f32,
+    room: Vec2,
+) -> (Rect, Transform) {
+    let (w, h) = (sprite_def.size.0 as f32, sprite_def.size.1 as f32);
+    let angle = angle.to_radians();
+    // The sprite's centre relative to its origin, scaled and turned like the sprite.
+    let off = Vec2::new(
+        (w / 2.0 - sprite_def.origin.0 as f32) * scale.x,
+        (h / 2.0 - sprite_def.origin.1 as f32) * scale.y,
+    );
+    let (sin, cos) = angle.sin_cos();
+    let off = Vec2::new(off.x * cos + off.y * sin, -off.x * sin + off.y * cos);
+    // GM: y grows downward from the room corner. Bevy: y up from the centre.
+    let x = at.x + off.x - room.x / 2.0;
+    let y = room.y / 2.0 - (at.y + off.y);
+    let transform = Transform::from_xyz(x, y, z)
+        .with_rotation(Quat::from_rotation_z(angle))
+        .with_scale(scale.extend(1.0));
+    (frame_rect(frame, (w, h), strip), transform)
 }
 
 /// Where `--screenshot` writes.

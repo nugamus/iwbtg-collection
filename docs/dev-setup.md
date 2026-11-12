@@ -51,7 +51,7 @@ Teammates share the lead's working folder, so the CLAUDE.md files require:
 
 - **One worktree per lane:** `IWBTG Collection/worktrees/<repo>-<lane>` (`client-ui`, `client-data`, `client-sim`), created once with `git worktree add ../worktrees/<repo>-<lane> -b issue-<n>-<name> origin/main` from inside the repo. Each next issue is a new branch in the same worktree (`git switch -c issue-<n>-<name> origin/main`), so its `target/` stays warm. The main checkouts stay on `main`. `worktrees/` is in no repo.
 - **Claims:** the `in-progress` label, in all three repos. The session-start hook lists claimed issues separately and leaves them out of the next-issues list.
-- **Merging:** teammates open PRs and send the link to the lead. The lead merges one at a time with `gh pr merge --squash`. Lane worktrees are kept between issues, so never `--delete-branch`: gh then also removes a local worktree checked out on that branch (seen 2026-11-05). All three repos have GitHub's `delete_branch_on_merge` on (set 2026-11-05), which deletes the merged branch and retargets PRs based on it to `main`.
+- **Merging:** teammates open PRs and send the link to the lead. The lead merges one at a time with `gh pr merge --squash`. A PR whose CI sits queued is restarted by closing and reopening it, then auto-merge is turned on again (CI, Stuck runs). Lane worktrees are kept between issues, so never `--delete-branch`: gh then also removes a local worktree checked out on that branch (seen 2026-11-05). All three repos have GitHub's `delete_branch_on_merge` on (set 2026-11-05), which deletes the merged branch and retargets PRs based on it to `main`.
 - **Doc pages per module** (#562): on 2026-11-10 five of seven open client PRs conflicted with `main` only in docs, `docs/architecture/client.md` most (21 commits touched it from 2026-11-01 to 2026-11-11). Every client PR edited that one page, so each merge made the waiting PRs conflict again. The client's notes are now one page per module in `docs/architecture/client/` (`client.md` is the index), so PRs on different modules never touch the same file. A PR adds its note to its module's page; a new module adds a new page and one line, in alphabetical order, in the index. The sim follows the same rule (#619): a note goes on its area's page in `docs/architecture/sim/`, a register row on its area's page `docs/plans/sim-core/register-<area>.md`, a converter request on `docs/plans/sim-core/converter-requests.md`; `sim.md` and the plan's section 15 are indexes. `merge=union` in `.gitattributes` would not help: GitHub ignores repository merge drivers in its mergeability check and its merge buttons (GitHub Support, quoted in community discussion 9288; the feature request there is still open in 2026-10), so it would only help local merges.
 - **Research data work** (crawls, downloads, extraction, traces, the converter) needs `archive/`, `extracted/`, `db/` and `tools/`. Those exist only in the main research checkout, so that work runs there, one agent at a time.
 
@@ -66,6 +66,8 @@ Each client worktree builds its own `target/` folder: the first build there take
 So a teammate runs the status hook by hand at the start (from the workspace root: `python -I client/.claude/hooks/issues.py start`; the output is JSON, read `additionalContext`) and ends every turn that changed files with `Findings: <issue links>` or `Findings: none`, whether or not a hook asks. The lead's own session still gets both hooks.
 
 The lead prompt is `TEAM_LEAD_PROMPT.md` in the workspace root.
+
+**Shutdown before the next teammate** (#677): the lead spawns a lane's next teammate only after the previous one's `shutdown_approved` arrived, and never sends a teammate new work in the same message batch as its shutdown request. A shutdown request is only read between steps, and a teammate with a pending message acts on that first: on 2026-11-12 the old sim teammate was still merging `main` in `worktrees/client-sim` when its successor ran `git switch -c` there, and the old one's `git push` ran on the wrong branch.
 
 **Background commands don't wake a teammate** (checked 2026-11-05 in the transcripts of the 2026-11-04 run): when a teammate ends its turn "waiting for" a background cargo run, the completion notice is queued and only delivered when the lead next messages it. Teammates sat idle 30 to 60 minutes per wait: the data and sim teammates were idle 2.3 of their 3.3 and 3.1 hours. Teammates run cargo in the foreground; the workspace settings raise the shell tool limit to 45 minutes (`BASH_MAX_TIMEOUT_MS`) and the default to 15 (`BASH_DEFAULT_TIMEOUT_MS`).
 
@@ -98,6 +100,7 @@ What follows from it:
 
 - `.cargo/config.toml` links with `rust-lld` on Windows, and `Cargo.toml` keeps only line tables as debug info for our crates and none for dependencies: faster links and a smaller `target/`.
 - `.claude/hooks/build_guard.py` (PreToolUse, all sessions and teammates) blocks cargo commands that change the fingerprint or run in the background; `# build-guard: ok (<why>)` in the command overrides it. Self-test: `python -I client/.claude/hooks/build_guard.py --test`.
+- `.claude/hooks/conflict_guard.py` (PreToolUse, all sessions and teammates, #698) denies a `git commit` whose staged changes, or a `git push` whose unpushed commits, add a line starting with git's conflict markers (`<<<<<<< ` or `>>>>>>> `; a lone `=======` is a Markdown heading underline and passes). A resolve script and its commit in one command are checked before the script runs, so the push check is the one that catches what the script missed: fix the file, commit the fix, push again. `# conflict-guard: ok (<why>)` overrides it. Self-test: `python -I client/.claude/hooks/conflict_guard.py --test`.
 - Anything that changes the build fingerprint (`RUSTFLAGS`, `--config`, `CARGO_PROFILE_*`, a different linker) rebuilds all dependencies, about 5 minutes, and again on the way back. Don't copy CI's `RUSTFLAGS`/`CARGO_INCREMENTAL` into local commands.
 - Keep worktrees per lane and warm (above). A cold worktree costs 5 to 10 minutes and 10 to 20 GB.
 - Locally, run the tests of what you changed; run `cargo xtask check` once before the PR (only the changed crates and their dependents; `--all` for everything) and let CI do the rest.
@@ -124,15 +127,18 @@ cd client
 cargo build --workspace
 python -I .claude/hooks/issues.py start
 python -I ../research/.claude/hooks/guard_archive.py --test
+python -I .claude/hooks/conflict_guard.py --test
 ```
 
-Expected: the build ends with `Finished`. `issues.py start` prints JSON with main's CI status (a first line `MAIN IS RED` when it failed), milestone progress and the next issues. The guard prints `guard_archive self-test passed`.
+Expected: the build ends with `Finished`. `issues.py start` prints JSON with main's CI status (a first line `MAIN IS RED` when it failed), milestone progress and the next issues. The guards print `guard_archive self-test passed` and `conflict_guard self-test passed`.
 
 ## CI
 
 `.github/workflows/ci.yml` runs on every PR and every push to main. Its `changes` job skips the build jobs when a change touches only docs, Markdown, `workspace/` or `.claude/`; the `ci-ok` job then reports success, so the one required check always appears. Builds run without debug info or incremental state, to save time. Only runs on `main` write the Rust cache (`save-if`); PR runs restore it.
 
 **Auto-merge (#528).** A ruleset on `main` requires the `ci-ok` and `body` checks; the repository admin can bypass it. `gh pr merge <n> --squash --auto` turns on auto-merge, and GitHub merges the PR when both are green, so nobody polls CI. Branches don't have to be up to date with `main` (that would stall auto-merge, which doesn't update branches), so the push run on `main` is the check after each merge; a PR that changes pinned hashes is updated with `gh pr update-branch <n>` before its auto-merge. GitHub's merge queue would update and test each PR against `main` itself, but it is not offered for repositories owned by a personal account (the ruleset API refused it, 2026-11-05). The workflows keep their `merge_group` triggers in case the repo moves to an organization.
+
+**Stuck runs (#666).** Every PR run started on 2026-11-11 after about 20:20 UTC stayed `queued` with no jobs for 16 hours while GitHub status showed Actions operational, and auto-merge waited, because nobody polls CI. `gh run cancel`, `gh run rerun` and force-cancel all refuse such a run (409 "not queued yet" / "already running"), and `gh pr update-branch` does nothing when the branch is up to date. What works: `gh pr close <n> && gh pr reopen <n>`, which starts fresh runs. Reopening turns auto-merge off, so turn it on again with `gh pr merge <n> --squash --auto`. `issues.py start` marks an open PR `CI STUCK: queued <h>h` when the newest Actions run of one of its workflows on the head commit has been queued over an hour, and prints the restart command for each such PR (with the auto-merge step only where auto-merge was on). Suites of other GitHub apps (the Claude app leaves one queued on every commit) don't count.
 
 The checks:
 
