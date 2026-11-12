@@ -1,17 +1,20 @@
 //! Sound and music: plays the sim's `SoundOutput` events, and the script cues `emit` and `shake`.
 //! The sim decides what plays and for how long (its sound model); this only makes the noise.
 //! The audio offset delays playback only, never the sim (docs/content.md, Controls and audio).
+//! `--mute`, `IWBTG_MUTE=1` and every `--screenshot` run play nothing; the volumes come from the
+//! settings file.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use bevy::audio::{
-    AudioPlayer, AudioSink, AudioSinkPlayback, AudioSource, PlaybackMode, PlaybackSettings, Volume,
+    AudioPlayer, AudioSink, AudioSinkPlayback, AudioSource, GlobalVolume, PlaybackMode, PlaybackSettings,
+    Volume,
 };
 use bevy::prelude::*;
 use iwbtg_format::files::PackageFiles;
-use iwbtg_sim::def::{GameDef, SoundId};
+use iwbtg_sim::def::{GameDef, SoundId, SoundKind};
 use iwbtg_sim::output::OutputEvent;
 use iwbtg_sim::script::ScriptOutput;
 use iwbtg_sim::sound::{SoundOutput, SoundTarget};
@@ -30,22 +33,95 @@ pub struct AudioArgs {
     /// the next start without the flag keeps it. Default: the saved value, else 0.
     #[arg(long, value_name = "MS", value_parser = clap::value_parser!(u32).range(0..=i64::from(MAX_OFFSET_MS)))]
     pub audio_offset: Option<u32>,
+    /// Play no sound or music at all, for this run only (not saved). The `IWBTG_MUTE=1`
+    /// environment variable does the same, and a `--screenshot` run is always silent.
+    #[arg(long)]
+    pub mute: bool,
+    /// Overall volume in percent (0 to 100). Saved in the settings file (`[audio]
+    /// master_volume`, beside `music_volume` and `sound_volume`), so the next start keeps it.
+    /// Default: the saved value, else 100.
+    #[arg(long, value_name = "PERCENT", value_parser = clap::value_parser!(u32).range(0..=i64::from(crate::settings::MAX_VOLUME)))]
+    pub volume: Option<u32>,
+}
+
+/// The environment variable that mutes every run when set to anything but empty or `0`
+/// (agent sessions set it once).
+pub const MUTE_ENV: &str = "IWBTG_MUTE";
+
+/// Whether a run is silent: `--mute`, the [`MUTE_ENV`] variable (its value, if set), or an
+/// isolated `--screenshot` check.
+pub fn is_muted(flag: bool, env: Option<&str>, isolated: bool) -> bool {
+    flag || isolated || env.is_some_and(|v| !v.trim().is_empty() && v.trim() != "0")
+}
+
+/// How loud music and sound effects play: linear factors from the settings' percentages
+/// (master times music, master times sound), all zero when muted.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Levels {
+    pub music: f32,
+    pub sound: f32,
+}
+
+impl Levels {
+    pub fn new(s: &crate::settings::Settings, muted: bool) -> Levels {
+        if muted {
+            return Levels {
+                music: 0.0,
+                sound: 0.0,
+            };
+        }
+        let pct = |v: u32| v.min(crate::settings::MAX_VOLUME) as f32 / 100.0;
+        Levels {
+            music: pct(s.master_volume) * pct(s.music_volume),
+            sound: pct(s.master_volume) * pct(s.sound_volume),
+        }
+    }
+
+    /// The factor for a music voice or a sound effect voice.
+    pub fn gain(&self, music: bool) -> f32 {
+        if music { self.music } else { self.sound }
+    }
+
+    pub fn silent(&self) -> bool {
+        self.music == 0.0 && self.sound == 0.0
+    }
+}
+
+/// A voice counts as music when it loops or its package sound is a GM MULTIMEDIA (music) sound.
+fn is_music(def: &GameDef, sound: SoundId, looping: bool) -> bool {
+    looping
+        || def
+            .sounds
+            .get(sound.0 as usize)
+            .is_some_and(|d| d.kind == SoundKind::Multimedia)
 }
 
 /// Sound, music and screen shake for one package.
 pub struct AudioPlugin {
     offset_ms: u32,
+    levels: Levels,
     files: PackageFiles,
 }
 
 impl AudioPlugin {
-    /// `--audio-offset`, when given, is saved first; the plugin uses the saved offset.
+    /// `--audio-offset` and `--volume`, when given, are saved first; the plugin uses the saved
+    /// values. `--mute`, `IWBTG_MUTE` and a `--screenshot` run silence it.
     pub fn new(args: &AudioArgs, files: &PackageFiles) -> AudioPlugin {
         if let Some(ms) = args.audio_offset {
             crate::settings::update(|s| s.audio_offset_ms = ms);
         }
+        if let Some(v) = args.volume {
+            crate::settings::update(|s| s.master_volume = v);
+        }
+        let muted = is_muted(
+            args.mute,
+            std::env::var(MUTE_ENV).ok().as_deref(),
+            crate::settings::isolated(),
+        );
+        let settings = crate::settings::get();
         AudioPlugin {
-            offset_ms: crate::settings::get().audio_offset_ms,
+            offset_ms: settings.audio_offset_ms,
+            levels: Levels::new(&settings, muted),
             files: files.clone(),
         }
     }
@@ -56,8 +132,13 @@ impl Plugin for AudioPlugin {
         if self.offset_ms > 0 {
             info!("audio offset {} ms", self.offset_ms);
         }
+        if self.levels.silent() {
+            info!("audio muted");
+            // Belt and braces: nothing else may make a sound either.
+            app.insert_resource(GlobalVolume::from(Volume::SILENT));
+        }
         app.insert_resource(Queue::new(self.offset_ms))
-            .insert_resource(Sounds::new(&self.files))
+            .insert_resource(Sounds::new(&self.files, self.levels))
             .init_resource::<Shake>()
             .add_systems(
                 Update,
@@ -316,14 +397,16 @@ pub struct Sounds {
     bytes: HashMap<String, Arc<[u8]>>,
     handles: HashMap<SoundId, Handle<AudioSource>>,
     mixer: Mixer,
+    levels: Levels,
 }
 
 impl Sounds {
-    pub fn new(files: &PackageFiles) -> Sounds {
+    pub fn new(files: &PackageFiles, levels: Levels) -> Sounds {
         Sounds {
             bytes: sound_bytes(files),
             handles: HashMap::new(),
             mixer: Mixer::default(),
+            levels,
         }
     }
 }
@@ -349,9 +432,9 @@ pub fn reset(world: &mut World) {
     }
 }
 
-/// A playing copy, by what it plays.
+/// A playing copy, by what it plays, and the volume factor of its kind ([`Levels`]).
 #[derive(Component)]
-pub struct Voice(SoundTarget);
+pub struct Voice(SoundTarget, f32);
 
 /// Seeks a looping tune back when it drifts more than this many ticks from the tick clock
 /// (docs/product.md, Music sync).
@@ -467,6 +550,11 @@ pub fn play(
                     volume,
                     speed,
                 } => {
+                    let gain = sounds.levels.gain(is_music(def, sound, looping));
+                    if gain <= 0.0 {
+                        // Muted (or turned all the way down): no voice at all.
+                        continue;
+                    }
                     let handle = match sounds.handles.get(&sound) {
                         Some(h) => h.clone(),
                         None => {
@@ -495,11 +583,11 @@ pub fn play(
                             } else {
                                 PlaybackMode::Despawn
                             },
-                            volume: Volume::Linear(volume),
+                            volume: Volume::Linear(volume * gain),
                             speed,
                             ..default()
                         },
-                        Voice(target),
+                        Voice(target, gain),
                     ));
                     if looping && length > 0.0 {
                         voice.insert(MusicSync::new(now_tick, f64::from(speed), length));
@@ -537,7 +625,7 @@ pub fn play(
                 Cmd::Volume { target, volume } => {
                     for (_, v, sink, _) in &mut voices {
                         if let (true, Some(mut sink)) = (v.0 == target, sink) {
-                            sink.set_volume(Volume::Linear(volume));
+                            sink.set_volume(Volume::Linear(volume * v.1));
                         }
                     }
                 }
@@ -662,6 +750,40 @@ mod tests {
             Queue::new(9999).offset,
             Duration::from_millis(u64::from(MAX_OFFSET_MS))
         );
+    }
+
+    #[test]
+    fn mute_comes_from_the_flag_the_environment_or_a_screenshot_run() {
+        assert!(!is_muted(false, None, false));
+        assert!(is_muted(true, None, false));
+        assert!(is_muted(false, None, true), "a --screenshot run is silent");
+        assert!(is_muted(false, Some("1"), false));
+        assert!(is_muted(false, Some("yes"), false));
+        assert!(!is_muted(false, Some("0"), false));
+        assert!(!is_muted(false, Some(""), false));
+    }
+
+    #[test]
+    fn levels_multiply_master_and_channel_and_mute_silences_all() {
+        use crate::settings::Settings;
+        let full = Levels::new(&Settings::default(), false);
+        assert_eq!((full.music, full.sound), (1.0, 1.0));
+        assert!(!full.silent());
+        let s = Settings {
+            master_volume: 50,
+            music_volume: 40,
+            sound_volume: 100,
+            ..Settings::default()
+        };
+        let l = Levels::new(&s, false);
+        assert!((l.gain(true) - 0.2).abs() < 1e-6);
+        assert!((l.gain(false) - 0.5).abs() < 1e-6);
+        assert!(Levels::new(&s, true).silent());
+        let off = Settings {
+            master_volume: 0,
+            ..Settings::default()
+        };
+        assert!(Levels::new(&off, false).silent());
     }
 
     #[test]
