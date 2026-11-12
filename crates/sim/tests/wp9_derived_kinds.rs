@@ -4,8 +4,8 @@
 
 use iwbtg_sim::def::testing::GameDefBuilder;
 use iwbtg_sim::def::{
-    Builtin, ClassMask, GameDef, KindDef, KindId, ParamValue, Params, RoomDef, RoomId, ScriptDef,
-    ScriptId, VarId,
+    Builtin, ClassMask, GameDef, KindDef, KindId, ParamValue, Params, RoomDef, RoomId, ScriptDef, ScriptId,
+    VarId,
 };
 use iwbtg_sim::num::Real;
 use iwbtg_sim::rules::RunnerRules;
@@ -118,7 +118,11 @@ fn a_spawn_whose_params_pick_a_class_takes_the_derived_kind() {
     let mut f = fx(src);
     f.spawn(0);
     assert_eq!(f.halted(), None);
-    assert_eq!(f.kinds_of(ClassMask::WATER2), vec![2], "variant 2 is water[variant=2]");
+    assert_eq!(
+        f.kinds_of(ClassMask::WATER2),
+        vec![2],
+        "variant 2 is water[variant=2]"
+    );
     // Variant 1 picks the kind's own class, so it keeps the kind, as the loader does.
     assert_eq!(f.kinds_of(ClassMask::WATER1), vec![1, 1]);
 }
@@ -136,9 +140,6 @@ fn a_spawn_whose_params_pick_a_class_no_kind_has_is_an_error() {
     };
     let _ = c.spawn(KindId(0), Real::new(0.0), Real::new(0.0), SpawnInit::default());
     let e = f.halted().expect("halted");
-    assert!(
-        e.contains("`water` with variant = 3 picks other classes"),
-        "{e}"
-    );
+    assert!(e.contains("`water` with variant = 3 picks other classes"), "{e}");
     assert!(f.kinds_of(ClassMask::WATER3).is_empty());
 }
