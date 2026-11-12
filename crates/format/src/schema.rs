@@ -20,8 +20,8 @@
 //!   `sounds.rs` (`tests/schemas.rs` validates the loader's accepted files and rejects its
 //!   rejected ones, so they cannot drift unseen).
 //!
-//! `tests/schemas.rs` regenerates and diffs the files (`UPDATE_SCHEMAS=1 cargo test -p
-//! iwbtg-format --test schemas` rewrites them), validates the examples in v0.md and the valid
+//! `tests/schemas.rs` regenerates and diffs the files (`cargo xtask regen` rewrites them),
+//! validates the examples in v0.md and the valid
 //! test packages against them.
 
 #![allow(

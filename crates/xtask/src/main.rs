@@ -354,11 +354,29 @@ fn replace_const(path: &Path, prefix: &str, value: &str) -> Result<(), String> {
 }
 
 fn regen(root: &Path) -> Result<(), String> {
+    // Write the schemas with the writer test alone, then run the whole file against them. In one
+    // run the other tests read the schema files in parallel with the writer and can validate
+    // against the old ones, failing once and passing on the next regen (#703).
+    run(
+        root,
+        "cargo",
+        &[
+            "test",
+            "-p",
+            "iwbtg-format",
+            "--test",
+            "schemas",
+            "--",
+            "--exact",
+            "schema_files_are_not_stale",
+        ],
+        &[("UPDATE_SCHEMAS", "1")],
+    )?;
     run(
         root,
         "cargo",
         &["test", "-p", "iwbtg-format", "--test", "schemas"],
-        &[("UPDATE_SCHEMAS", "1")],
+        &[],
     )?;
     run(
         root,
