@@ -273,6 +273,19 @@ pub fn param_classes(b: Builtin, params: &Params) -> Option<ClassMask> {
     }
 }
 
+/// The params [`param_classes`] reads for a built-in. A placed instance that sets them to pick
+/// other classes than its kind's gets a derived kind with those classes (the loader, #659).
+pub fn class_params(b: Builtin) -> &'static [&'static str] {
+    match b {
+        Builtin::Block => &["kid_collides"],
+        Builtin::Water => &["variant"],
+        Builtin::Killer => &["kill_outside_view"],
+        Builtin::Slope => &["shape", "scale_x"],
+        Builtin::Vine => &["side"],
+        _ => &[],
+    }
+}
+
 /// A kind's classes: the param-picked class or the built-in default, plus `extra`.
 pub fn kind_classes(b: Builtin, params: &Params, extra: ClassMask) -> ClassMask {
     param_classes(b, params).unwrap_or_else(|| default_classes(b)) | extra

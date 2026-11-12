@@ -8,7 +8,7 @@ Solid wall (mechanics `block`). The block has no behavior of its own: the kid's 
 | `solid` | bool | kind default (true) | Create sets the instance's `solid`. |
 | `visible` | bool | kind default (false) | Create sets `visible`. |
 | `depth` | real | kind default | Create sets `depth`. |
-| `kid_collides` | bool | true | Loader choice: false drops the `BLOCK` class so the kid has no collision event with it. |
+| `kid_collides` | bool | true | Loader choice: false drops the `BLOCK` class so the kid has no collision event with it. On a placed instance it gives a derived kind (`block[kid_collides=false]`, v0.md Params that pick a class). |
 | `blood_sticks` | bool | true | `builtins::block::blood_sticks`; the `blood` built-in reads it. |
 | `slip` | real | 0 | Ice value (little-trap and rainbow 0.2, kotaro 0.4). The kid's ice action reads `builtins::block::slip_of`. |
 | `visual_spawns_collider` | bool | false | Create spawns the kind named by `collider` at the block's own position (rely objBLOCK, CR1). |
