@@ -2,7 +2,7 @@
 //!
 //! Sudden Death: the tick that raises the death counter is the run's last. The sim stops
 //! ticking there and a "Run over" banner shows; the window stays open on that frame until the
-//! quick-retry key, or at once with `--auto-retry` (`retry.rs`). The other
+//! quick-retry key, or at once with auto-retry (`retry.rs`). The other
 //! mods are rejected until they are built (#550, #551, #39).
 
 use bevy::prelude::*;
