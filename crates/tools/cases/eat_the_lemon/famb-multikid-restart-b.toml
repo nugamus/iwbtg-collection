@@ -1,0 +1,43 @@
+# Imported from research trace eat-the-lemon/famb-multikid-restart-b by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room room12 --at 2 --from 2 --stub-dlls --x 144 --y 336 (43 --gml)
+source = "eat-the-lemon/famb-multikid-restart-b"
+kind = "diff"
+open = "the autosave object has no built-in or script, so no autosave runs on room entry (#662); the frame 25 marking of one of two kids has no setup target (#662)"
+start = { room = "room_11", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "stub"
+seed = 0
+setup = [
+  { frame = 2, target = "kid", set = { x = 144.0, xprevious = 144.0, y = 336.0, yprevious = 336.0 } },
+]
+# Recorder reads of the decoded save file before every frame from 3 to 45 (famb-multikid-restart.md).
+latch = { "global.sv_x" = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45], "global.sv_y" = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45], "global.sv_xs" = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45], "global.sv_t" = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45] }
+ignore = ["id", "sprite_index", "sprite_name"]
+notes = [
+  "--x/--y: the recorder creates the object when none exists; setup only moves one",
+]
+
+[vars]
+"image_xscale" = "kid.image_xscale"
+"vspeed" = "kid.vspeed"
+"global.sv_x" = "save.x"
+"global.sv_y" = "save.y"
+"global.sv_xs" = "save.facing"
+"global.sv_t" = "save.time"
+"global.timestep" = "global.time"
+"global.death" = "save.deaths"
+"autosave.alarm[0]" = "@autosave.alarm[0]"
+"instance_number(autosave)" = "instance_number(@autosave)"
+"instance_number(player)" = "instance_number(kid)"
+
+[unprobed]
+"global.sv_room" = "the original's room index; ours is a room id"
+"room12" = "constant: the recorder's index of room12"
+"room13" = "constant: the recorder's index of room13"
+
+[rooms]
+"room_11" = "room12"
+"room_12" = "room13"

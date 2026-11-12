@@ -1,0 +1,31 @@
+# Imported from research trace eat-the-lemon/famb-multikid-restart-c by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room room12 --at 2 --from 2 --stub-dlls --x 144 --y 336
+source = "eat-the-lemon/famb-multikid-restart-c"
+kind = "diff"
+open = "the autosave object has no built-in or script, so no autosave runs on room entry (#662)"
+start = { room = "room_11", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "stub"
+seed = 0
+setup = [
+  { frame = 2, target = "kid", set = { x = 144.0, xprevious = 144.0, y = 336.0, yprevious = 336.0 } },
+]
+ignore = ["id", "sprite_index", "sprite_name"]
+notes = [
+  "--x/--y: the recorder creates the object when none exists; setup only moves one",
+]
+
+[vars]
+"autosave.alarm[0]" = "@autosave.alarm[0]"
+"global.death" = "save.deaths"
+"global.timestep" = "global.time"
+"instance_number(player)" = "instance_number(kid)"
+
+[unprobed]
+
+[rooms]
+"room_11" = "room12"
+"room_12" = "room13"

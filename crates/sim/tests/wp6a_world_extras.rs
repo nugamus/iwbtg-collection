@@ -5,7 +5,7 @@ mod wp6a {
     use iwbtg_sim::def::testing::GameDefBuilder;
     use iwbtg_sim::def::{
         Builtin, ClassMask, EngineKind, GameDef, KindDef, KindId, ParamValue, Params, RestartTrigger,
-        RoomDef, RoomId,
+        RoomDef, RoomId, RoomRole,
     };
     use iwbtg_sim::events::EventKind;
     use iwbtg_sim::input::{Action, InputFrame};
@@ -206,11 +206,8 @@ mod wp6a {
     // ---- play timer -------------------------------------------------------------------------
 
     #[test]
-    fn family_b_timer_counts_two_a_tick_and_two_on_retry() {
-        let g = game(
-            params(&[("timer_per_tick", real(2.0)), ("timer_on_restart", real(2.0))]),
-            |_| {},
-        );
+    fn family_b_timer_counts_two_a_tick_and_retry_adds_nothing_itself() {
+        let g = game(params(&[("timer_per_tick", real(2.0))]), |_| {});
         let mut w = World::new(g.room, 1);
         let world = spawn(&g, &mut w, g.world);
         frame(&mut w, &[], &[]);
@@ -218,8 +215,9 @@ mod wp6a {
             fire(&g, &mut w, world, &EventKind::Step);
         }
         assert_eq!(w.engine.run.time, 10);
+        // The R +2 is `[engine.restart] kid_steps.add_time`, not the world's (#641).
         fire(&g, &mut w, world, &EventKind::KeyPress(Action::Restart));
-        assert_eq!(w.engine.run.time, 12, "the retry adds 2 before the restart");
+        assert_eq!(w.engine.run.time, 10);
         // A game without the params leaves the counter alone.
         let g = game(Params::default(), |_| {});
         let mut w = World::new(g.room, 1);
@@ -227,6 +225,78 @@ mod wp6a {
         frame(&mut w, &[], &[]);
         fire(&g, &mut w, world, &EventKind::Step);
         assert_eq!(w.engine.run.time, 0);
+    }
+
+    /// Family B's gates (research kid/B.md "Play timer", #641): play rooms only, fps not 0,
+    /// not cleared. Without the flags each gate is open.
+    #[test]
+    fn family_b_timer_gates() {
+        let gated = params(&[
+            ("timer_per_tick", real(2.0)),
+            ("timer_play_rooms_only", yes()),
+            ("timer_needs_fps", yes()),
+            ("timer_stops_on_clear", yes()),
+        ]);
+        let step = |g: &G, w: &mut World, world: InstId, rules: &RunnerRules| {
+            let scripts = ScriptRuntime::default();
+            let mut ctx = Ctx {
+                def: &g.def,
+                rules,
+                w,
+                scripts: &scripts,
+                dll_mode: DllMode::Stub,
+            };
+            builtins::on_event(&mut ctx, world, &EventKind::Step).unwrap();
+        };
+        let mut warm = RunnerRules::default();
+        warm.tick.fps_zero_ticks = 3;
+        let plain = RunnerRules::default();
+        // fps reads 0 while World::tick < 3.
+        for (p, counts_during_warmup) in [
+            (gated.clone(), false),
+            (params(&[("timer_per_tick", real(2.0))]), true),
+        ] {
+            let g = game(p, |_| {});
+            let mut w = World::new(g.room, 1);
+            let world = spawn(&g, &mut w, g.world);
+            frame(&mut w, &[], &[]);
+            w.tick = 2;
+            step(&g, &mut w, world, &warm);
+            assert_eq!(w.engine.run.time, if counts_during_warmup { 2 } else { 0 });
+            w.tick = 3;
+            step(&g, &mut w, world, &warm);
+            assert_eq!(w.engine.run.time, if counts_during_warmup { 4 } else { 2 });
+        }
+        // Menu-type rooms: no add; play rooms: +2.
+        for role in [
+            RoomRole::Boot,
+            RoomRole::Title,
+            RoomRole::Menu,
+            RoomRole::Select,
+            RoomRole::Play,
+        ] {
+            let g = game(gated.clone(), |d| d.rooms[0].role = role);
+            let mut w = World::new(g.room, 1);
+            let world = spawn(&g, &mut w, g.world);
+            frame(&mut w, &[], &[]);
+            step(&g, &mut w, world, &plain);
+            assert_eq!(
+                w.engine.run.time,
+                if role == RoomRole::Play { 2 } else { 0 },
+                "{role:?}"
+            );
+        }
+        // global.clear stops it.
+        let g = game(gated.clone(), |_| {});
+        let mut w = World::new(g.room, 1);
+        let world = spawn(&g, &mut w, g.world);
+        frame(&mut w, &[], &[]);
+        w.engine.run.clear = true;
+        step(&g, &mut w, world, &plain);
+        assert_eq!(w.engine.run.time, 0);
+        w.engine.run.clear = false;
+        step(&g, &mut w, world, &plain);
+        assert_eq!(w.engine.run.time, 2);
     }
 
     #[test]
@@ -256,6 +326,9 @@ mod wp6a {
         assert!(bad(params(&[("pause", ParamValue::Str("freeze".into()))])));
         assert!(bad(params(&[("timer_per_tick", real(-1.0))])));
         assert!(bad(params(&[("mute", real(1.0))])));
+        assert!(bad(params(&[("timer_needs_fps", real(1.0))])));
+        assert!(bad(params(&[("timer_play_rooms_only", real(1.0))])));
+        assert!(bad(params(&[("timer_stops_on_clear", real(1.0))])));
     }
 }
 

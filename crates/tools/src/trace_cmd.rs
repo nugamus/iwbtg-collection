@@ -211,6 +211,10 @@ fn value(v: &CaseValue) -> Value {
     }
 }
 
+/// The first frame on which the recorder's GML `fps` is not 0 (Confirmed (recorder):
+/// traces/kaenbyou/famb-timer-fps-gate-r.phases.csv, phase `start` of frame 51).
+pub const RECORDER_FIRST_FPS_FRAME: u32 = 51;
+
 /// The frames our run ticks: `at` through the last frame of the inputs (or `end_frame`).
 pub fn frame_range(case: &TraceCase, inputs_end: u32) -> std::ops::RangeInclusive<u32> {
     let last = case.end_frame.map_or(inputs_end, |e| e.min(inputs_end));
@@ -237,6 +241,9 @@ pub fn execute(
         .map_err(|e| ToolError::Message(format!("{}: sim did not start: {e}", case.source)))?;
     // The recorder has no keyboard_check_direct latch (CLONE_SPEC input, Confirmed (recorder)).
     sim.set_direct_latch(DirectLatch::None);
+    // The recorder's `fps` reads 0 up to frame 50 (research kid/B.md "Play timer"); tick k of our
+    // run is frame `at + k`, so `fps` reads 0 for our first `51 - at` ticks.
+    sim.set_fps_zero_ticks(u64::from(RECORDER_FIRST_FPS_FRAME.saturating_sub(case.at)));
     for frame in frame_range(case, inputs_end) {
         for s in resolved.per_frame.get(&frame).into_iter().flatten() {
             sim.apply_setup(s)

@@ -20,6 +20,7 @@ use bevy::ui::IsDefaultUiCamera;
 use crate::settings::{self, HudShow};
 use crate::ui::UiKitPlugin;
 use crate::ui::backdrop::BackdropCamera;
+use crate::ui::notice;
 use layout::{Density, Layout, Options, UI_SCALE_RANGE};
 
 /// `input,stage_deaths`: HUD element names ([`HudShow::NAMES`]).
@@ -279,7 +280,7 @@ type ColumnParts = (
     Option<&'static Built>,
 );
 
-/// Places the columns and the game's shadow from `HudLayout`, and rebuilds a panel when its
+/// Places the columns, the game's shadow and the notices' area from `HudLayout`, and rebuilds a panel when its
 /// density or width changed.
 #[allow(clippy::too_many_arguments, reason = "one pass over the columns")]
 fn place(
@@ -293,6 +294,7 @@ fn place(
     mut ui_scale: ResMut<UiScale>,
     mut columns: Query<ColumnParts, Without<GameShadow>>,
     mut shadow: Query<&mut Node, With<GameShadow>>,
+    mut notices: ResMut<notice::Area>,
 ) {
     if suspended.0 {
         for (_, _, _, mut visibility, _) in &mut columns {
@@ -332,6 +334,14 @@ fn place(
             node.display = Display::Flex;
         }
         set(&mut node, l.game);
+    }
+    // Notices go in the leaderboard's column, never over the game.
+    let area = (l.left.width() > 0.0).then(|| Rect {
+        min: l.left.min / px,
+        max: l.left.max / px,
+    });
+    if notices.0 != area {
+        notices.0 = area;
     }
     for (entity, column, mut node, mut visibility, built) in &mut columns {
         let shown = if hud.0.shown {

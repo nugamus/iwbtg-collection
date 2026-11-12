@@ -20,7 +20,7 @@ use crate::input::InputFrame;
 use crate::motion::{self, MotionEvents};
 use crate::num::Real;
 use crate::room::{self, RoomRequest};
-use crate::rules::tick::{AnimSlot, BoundarySlot, DirectLatch, PrevCapture};
+use crate::rules::tick::{AnimSlot, BoundarySlot, DirectLatch, PrevCapture, TickRules};
 use crate::sound;
 use crate::stripped;
 use crate::timing::{self, Split};
@@ -228,9 +228,20 @@ fn rows(ctx: &mut Ctx, hooks: &Hooks) -> Option<()> {
     Some(())
 }
 
-/// GML `fps` (R28, Design): the game's tick rate, never a measured frame rate.
-pub fn real_time_fps(def: &GameDef) -> Real {
-    Real::new(f64::from(def.tick_rate))
+/// GML `fps` (R28, Design): the game's tick rate, never a measured frame rate; 0 during the
+/// warm-up `TickRules::fps_zero_ticks` (the recorder's first 51 frames; see [`fps_reads_zero`]).
+pub fn real_time_fps(def: &GameDef, rules: &TickRules, w: &World) -> Real {
+    if fps_reads_zero(rules, w) {
+        Real::new(0.0)
+    } else {
+        Real::new(f64::from(def.tick_rate))
+    }
+}
+
+/// Whether GML `fps` reads 0 on this tick: `World::tick` (the ticks run before this one) is
+/// below `TickRules::fps_zero_ticks`. Always false in normal play (the default 0).
+pub fn fps_reads_zero(rules: &TickRules, w: &World) -> bool {
+    w.tick < rules.fps_zero_ticks
 }
 
 /// GML `current_time` and other millisecond clocks (R28, Design): `tick * 1000 / tick_rate`,

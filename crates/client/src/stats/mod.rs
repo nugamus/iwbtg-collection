@@ -279,12 +279,15 @@ impl Plugin for StatsPlugin {
     }
 }
 
-/// After each tick: deaths, play time and the clear go into the book.
+/// After every tick: deaths, play time and the clear go into the book. A run's times are the
+/// HUD's: `Sim::ranked_ticks` plus the ticks the timer ran in the pause menu so far
+/// (`pause::Menu::paused_ticks`, #623), so a split counts the pauses before it.
 fn watch(
     game: NonSend<Game>,
     fixed: Res<Time<Fixed>>,
     mut stats: ResMut<Stats>,
     replays: Option<Res<crate::replays::Recorder>>,
+    menu: Option<Res<crate::pause::Menu>>,
 ) {
     let sim = &game.sim;
     let def = sim.def();
@@ -306,7 +309,9 @@ fn watch(
         deaths: world.engine.run.deaths,
         stages_done: world.timing.stages_done,
         ended: world.timing.ended,
-        ranked_ticks: sim.ranked_ticks(),
+        ranked_ticks: sim
+            .ranked_ticks()
+            .saturating_add(menu.map_or(0, |m| m.paused_ticks())),
     });
     let replay = replays.as_deref().and_then(|r| r.current_name());
     stats.apply(&cur, events, fixed.timestep().as_secs_f64(), replay);
@@ -391,6 +396,12 @@ mod tests {
     /// right held and one jump (over the block in the first room, over the spike in the goal
     /// room). Returns the clear's record and its run.
     fn play_demo_clear(world: &mut World, waits: [u32; 2]) -> (Recorded, Run) {
+        play_demo_clear_paused(world, waits, 0)
+    }
+
+    /// [`play_demo_clear`] with two pauses of `pause` ticks each (when not 0) in the pause menu:
+    /// after tick 5 and after the stage split, as `pause::count` records them.
+    fn play_demo_clear_paused(world: &mut World, waits: [u32; 2], pause: u64) -> (Recorded, Run) {
         let (right, jump) = (Action::Right.bit(), Action::Jump.bit());
         let mut rooms = Vec::new();
         let (mut in_room, mut jumped, mut jump_left) = (0u32, false, 0u32);
@@ -443,6 +454,14 @@ mod tests {
                 }
             }
             in_room += 1;
+            let (tick, stages) = (w.tick, w.timing.stages_done);
+            if pause > 0 {
+                let mut menu = world.resource_mut::<crate::pause::Menu>();
+                let n = menu.pauses.len();
+                if (n == 0 && tick == 5) || (n == 1 && stages == 1) {
+                    menu.pauses.push((tick, pause));
+                }
+            }
             world.non_send_mut::<Game>().sim.step(frame);
             world.run_system_once(watch).unwrap();
             assert_eq!(
@@ -504,6 +523,30 @@ mod tests {
             again.book.map(&id).unwrap().clears,
             2,
             "both clears are in the file"
+        );
+    }
+
+    /// #623: a run paused twice (before and after the stage split) records the HUD's times:
+    /// the clear and each split carry the paused ticks before them.
+    #[test]
+    fn paused_ticks_count_in_the_clear_and_the_splits() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-clear.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let mut world = crate::view::test_world(&pkg);
+        world.insert_resource(Time::<Fixed>::from_hz(50.0));
+        world.insert_resource(Stats::open(None, ModSet::NONE));
+        world.insert_resource(crate::pause::Menu::default());
+        let (_, plain) = play_demo_clear(&mut world, [0, 0]);
+        crate::view::restart_run(&mut world).unwrap();
+        reset(&mut world);
+        crate::pause::reset(&mut world);
+        let (_, paused) = play_demo_clear_paused(&mut world, [0, 0], 25);
+        assert_eq!(world.resource::<crate::pause::Menu>().paused_ticks(), 50);
+        assert_eq!(paused.ticks, plain.ticks + 50);
+        assert_eq!(
+            paused.splits,
+            vec![plain.splits[0] + 25, plain.splits[1] + 50],
+            "the first split has only the pause before it"
         );
     }
 

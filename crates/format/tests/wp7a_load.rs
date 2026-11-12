@@ -666,7 +666,7 @@ roles = { world = \"@my_world\" }
     })
 }
 
-const MY_WORLD: &str = "base = \"world\"\nlatch_cleared_by_world = true\npause = \"deactivate\"\npause_delay = 5\nmute = true\ntimer_per_tick = 2\ntimer_on_restart = 2\nclear_triggers_to = 10\nclear_switches_on_room_end = true\n";
+const MY_WORLD: &str = "base = \"world\"\nlatch_cleared_by_world = true\npause = \"deactivate\"\npause_delay = 5\nmute = true\ntimer_per_tick = 2\ntimer_play_rooms_only = true\ntimer_needs_fps = true\ntimer_stops_on_clear = true\nclear_triggers_to = 10\nclear_switches_on_room_end = true\n";
 
 #[test]
 fn wp6b2_params_load() {
@@ -711,12 +711,18 @@ fn wp6b2_params_load() {
     for (k, v) in [
         ("pause_delay", 5.0),
         ("timer_per_tick", 2.0),
-        ("timer_on_restart", 2.0),
         ("clear_triggers_to", 10.0),
     ] {
         assert_eq!(w.params.0.get(k), Some(&real(v)), "{k}");
     }
-    for k in ["latch_cleared_by_world", "mute", "clear_switches_on_room_end"] {
+    for k in [
+        "latch_cleared_by_world",
+        "mute",
+        "clear_switches_on_room_end",
+        "timer_play_rooms_only",
+        "timer_needs_fps",
+        "timer_stops_on_clear",
+    ] {
         assert_eq!(w.params.0.get(k), Some(&yes), "{k}");
     }
     assert_eq!(
@@ -839,6 +845,63 @@ fn placed<'d>(def: &'d GameDef, room: &str, kind: &str) -> Vec<&'d iwbtg_sim::de
     let (id, _) = kind_named(def, kind);
     let room = def.rooms.iter().find(|r| r.name == room).expect("room");
     room.instances.iter().filter(|i| i.kind == id).collect()
+}
+
+/// #324: a slope kind's `shape` and `scale_x` pick its class; rising left is `slope_mirror`
+/// (eat-the-new-year yaneM is `scale_x = -1`, CR10; kid/A4.md, kid/A1.md RBF).
+#[test]
+fn slope_shape_and_scale_x_pick_the_kind_class() {
+    let objects: [(&str, &[u8]); 6] = [
+        (
+            "plain",
+            b"base = \"slope\"
+",
+        ),
+        (
+            "right",
+            b"base = \"slope\"
+shape = \"rise_right\"
+",
+        ),
+        (
+            "left",
+            b"base = \"slope\"
+shape = \"rise_left\"
+",
+        ),
+        (
+            "sprite",
+            b"base = \"slope\"
+shape = \"precise_sprite\"
+",
+        ),
+        (
+            "yane_m",
+            b"base = \"slope\"
+scale_x = -1
+",
+        ),
+        (
+            "left_flipped",
+            b"base = \"slope\"
+shape = \"rise_left\"
+scale_x = -1
+",
+        ),
+    ];
+    let files = tier2_package("", |f| {
+        for (id, text) in objects {
+            f.push((format!("objects/{id}.toml"), text.to_vec()));
+        }
+    });
+    let (def, _) = load_ok(&files, STRICT);
+    let class = |id: &str| kind_named(&def, &format!("@{id}")).1.classes;
+    assert_eq!(class("plain"), ClassMask::SLOPE);
+    assert_eq!(class("right"), ClassMask::SLOPE);
+    assert_eq!(class("sprite"), ClassMask::SLOPE);
+    assert_eq!(class("left"), ClassMask::SLOPE_MIRROR);
+    assert_eq!(class("yane_m"), ClassMask::SLOPE_MIRROR);
+    assert_eq!(class("left_flipped"), ClassMask::SLOPE);
 }
 
 #[test]

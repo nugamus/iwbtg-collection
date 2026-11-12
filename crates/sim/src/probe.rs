@@ -84,6 +84,9 @@ pub enum EngineVar {
     Paused,
     /// `room_speed`.
     RoomSpeed,
+    /// GML `fps` as the sampled frame saw it: 0 during the trace runner's warm-up
+    /// (`TickRules::fps_zero_ticks`), then the tick rate (R28, `tick::real_time_fps`).
+    Fps,
     /// `global.key_left`: the latched Left vine-key flag (`KidGlobalsExt::key_left`; showdown
     /// `global.button01`). 0 in games without `input.vine_keys = "latched_flags"`.
     KeyLeft,
@@ -341,6 +344,20 @@ fn read_column(sim: &mut Sim, row: InstId, column: &Column, frame: i64) -> trace
         return truth(sim.world.input.direct(*a));
     }
     let (w, def, rules) = (&sim.world, &*sim.def, &sim.rules.tick);
+    if let Column::Engine(EngineVar::Fps) = column {
+        // The sampled frame's tick: still `World::tick` between `step_rows` and `finish_step`
+        // (a room-change row), one less after it.
+        let ran = if sim.rows_done {
+            w.tick
+        } else {
+            w.tick.saturating_sub(1)
+        };
+        return if ran < rules.fps_zero_ticks {
+            trace::Value::Real(0.0)
+        } else {
+            trace::Value::Real(f64::from(def.tick_rate))
+        };
+    }
     match column {
         Column::Fixed(c) => match w.get(row) {
             Some(inst) => fixed_value(def, w, inst, *c, frame),
@@ -383,6 +400,8 @@ fn engine_value(w: &World, v: EngineVar) -> trace::Value {
         EngineVar::Grav => truth(g.kid.grav),
         EngineVar::Paused => truth(w.iter_alive().any(|i| crate::builtins::world::is_paused(w, i.id))),
         EngineVar::RoomSpeed => real(w.room_speed),
+        // Read in `read_column`, which knows the sampled frame's tick.
+        EngineVar::Fps => trace::Value::Empty,
         EngineVar::KeyLeft => truth(g.kid.ext.key_left),
         EngineVar::KeyRight => truth(g.kid.ext.key_right),
         EngineVar::KeyJump => truth(g.kid.ext.key_jump),

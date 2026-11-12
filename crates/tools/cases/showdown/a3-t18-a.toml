@@ -2,7 +2,6 @@
 # Recorder: --object player --room room028 --at 2 --from 2 (2 --gml)
 source = "showdown/a3-t18-a"
 kind = "probe_read"
-open = "the room-entry save runs before the kid exists and saves x 0, y 0; the package has no room creation code (#600). First difference: frame 30 global.sv.x, original 0.0, ours 241.0"
 start = { room = "room_28", difficulty = 0 }
 at = 2
 first_frame = 2

@@ -23,29 +23,34 @@
 //! - **Mute** (`mute`): a Mute press flips `MechGlobals::music_muted` (the original's
 //!   `global.music`, 1 is muted); music objects read it. The Ctrl in Ctrl+M (wanna, xia) is the
 //!   client's binding of the action.
-//! - **Play timer** (family B): `timer_per_tick` (2: centiseconds at 50 ticks) is added to
-//!   `RunGlobals::time` every Step while not paused, `timer_on_restart` (2) on the retry.
+//! - **Play timer** (family B, research kid/B.md "Play timer"): `timer_per_tick` (2:
+//!   centiseconds at 50 ticks) is added to `RunGlobals::time` in Step while the gates hold: not
+//!   paused; with `timer_play_rooms_only`, the room's role is `play` (not boot, title, menu or
+//!   select); with `timer_needs_fps`, GML `fps` does not read 0 (`tick::fps_reads_zero`); with
+//!   `timer_stops_on_clear`, `RunGlobals::clear` is false. There is no kid check: it counts
+//!   while the kid is dead. The R +2 is `[engine.restart] kid_steps.add_time`; R's room change
+//!   ends the tick before this Step (AbortTick), so R adds 2, not 4.
 //! - **Real-time reads** (R28): the world reads no clock. `tick::real_time_fps` and
 //!   `real_time_ms` give the fixed values for the games that display them (kaenbyou and
-//!   eat-the-lemon world Step).
+//!   eat-the-lemon world Step); `fps` reads 0 only during the trace runner's warm-up.
 //!
 //! OPEN: what the pause-delay counter starts at and how it counts (the spec names a counter, not
 //! its values: `pause_delay` ticks after each toggle here); the effect of kaenbyou and
-//! eat-the-lemon's cheat-detection check (the spec gives the test, not what it does); whether
-//! the B timer counts in menu rooms and while dead (here: every Step); the sounds a mute or an
-//! unpause stops (`sound::stop_all`, WP10; the model exists, this built-in does not call it yet).
+//! eat-the-lemon's cheat-detection check (the spec gives the test, not what it does); the sounds
+//! a mute or an unpause stops (`sound::stop_all`, WP10; the model exists, this built-in does not call it yet).
 
 use serde::{Deserialize, Serialize};
 
 use super::{
     BuiltinState, ParamError, ParamSpec, ParamType, param_bool, param_enum, param_real, state_mut, state_of,
 };
-use crate::def::{KindDef, ParamValue, Params, RestartTrigger};
+use crate::def::{KindDef, ParamValue, Params, RestartTrigger, RoomRole};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
 use crate::input::Action;
 use crate::num::Real;
 use crate::restart;
+use crate::tick;
 use crate::world::{Ctx, Flow, InstId, KindState, World};
 
 const PAUSES: &[&str] = &["none", "deactivate"];
@@ -77,8 +82,18 @@ const SPECS: &[ParamSpec] = &[
         required: false,
     },
     ParamSpec {
-        name: "timer_on_restart",
-        ty: ParamType::Real,
+        name: "timer_play_rooms_only",
+        ty: ParamType::Bool,
+        required: false,
+    },
+    ParamSpec {
+        name: "timer_needs_fps",
+        ty: ParamType::Bool,
+        required: false,
+    },
+    ParamSpec {
+        name: "timer_stops_on_clear",
+        ty: ParamType::Bool,
         required: false,
     },
     ParamSpec {
@@ -106,8 +121,12 @@ pub struct WorldState {
     pub mute: bool,
     /// Added to the play time every Step (family B: 2).
     pub timer_per_tick: u32,
-    /// Added to the play time on the retry (family B: 2).
-    pub timer_on_restart: u32,
+    /// The per-tick add only in rooms with role `play` (family B).
+    pub timer_play_rooms_only: bool,
+    /// No per-tick add while GML `fps` reads 0 (family B).
+    pub timer_needs_fps: bool,
+    /// No per-tick add once the game is cleared, `RunGlobals::clear` (family B).
+    pub timer_stops_on_clear: bool,
     /// Room Start sets `global.trigger[0..=n]` false (poronkusema: 10).
     pub clear_triggers_to: Option<u32>,
     /// Room End clears the switch array (spook house).
@@ -159,7 +178,9 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
         pause_delay: count(params, "pause_delay")?,
         mute: param_bool(params, "mute")?.unwrap_or(false),
         timer_per_tick: count(params, "timer_per_tick")?,
-        timer_on_restart: count(params, "timer_on_restart")?,
+        timer_play_rooms_only: param_bool(params, "timer_play_rooms_only")?.unwrap_or(false),
+        timer_needs_fps: param_bool(params, "timer_needs_fps")?.unwrap_or(false),
+        timer_stops_on_clear: param_bool(params, "timer_stops_on_clear")?.unwrap_or(false),
         clear_triggers_to: match param_real(params, "clear_triggers_to")? {
             None => None,
             Some(v) => Some(super::warp::whole(v, "clear_triggers_to")?),
@@ -209,7 +230,7 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
             Ok(Flow::Continue)
         }
         EventKind::KeyPress(Action::Restart) if def.restart.trigger == RestartTrigger::KeyPressEvent => {
-            retry(ctx, me, &s)
+            restart::run_restart(ctx, me)
         }
         EventKind::KeyPress(Action::Reset) if def.reset.trigger == RestartTrigger::KeyPressEvent => {
             restart::run_reset(ctx, me)
@@ -222,14 +243,6 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
         EventKind::Step => step(ctx, me, &s),
         _ => Ok(Flow::Continue),
     }
-}
-
-/// The retry: the timer's +2 first (family B, kid/B.md "R"), then the model.
-fn retry(ctx: &mut Ctx, me: InstId, s: &WorldState) -> Result<Flow, SimError> {
-    if s.timer_on_restart > 0 {
-        ctx.w.engine.run.add_time(s.timer_on_restart)?;
-    }
-    restart::run_restart(ctx, me)
 }
 
 /// Whether a Step-phase trigger fires this tick for `key`.
@@ -250,11 +263,11 @@ fn step(ctx: &mut Ctx, me: InstId, s: &WorldState) -> Result<Flow, SimError> {
         toggle_pause(ctx, me)?;
     }
     let paused = is_paused(ctx.w, me);
-    if s.timer_per_tick > 0 && !paused {
+    if s.timer_per_tick > 0 && !paused && timer_gate_open(ctx, s) {
         ctx.w.engine.run.add_time(s.timer_per_tick)?;
     }
     if step_trigger(ctx, def.restart.trigger, Action::Restart, paused) {
-        flow = flow.combine(retry(ctx, me, s)?);
+        flow = flow.combine(restart::run_restart(ctx, me)?);
     }
     if step_trigger(ctx, def.reset.trigger, Action::Reset, paused) {
         flow = flow.combine(restart::run_reset(ctx, me)?);
@@ -265,6 +278,14 @@ fn step(ctx: &mut Ctx, me: InstId, s: &WorldState) -> Result<Flow, SimError> {
         let _ = ctx.w.input.direct(Action::Right);
     }
     Ok(flow)
+}
+
+/// The family B timer gates other than pause (kid/B.md "Play timer", conditions 1, 3 and 4).
+fn timer_gate_open(ctx: &Ctx, s: &WorldState) -> bool {
+    let play_room = ctx.def.room(ctx.w.room).is_none_or(|r| r.role == RoomRole::Play);
+    !(s.timer_play_rooms_only && !play_room)
+        && !(s.timer_needs_fps && tick::fps_reads_zero(&ctx.rules.tick, ctx.w))
+        && !(s.timer_stops_on_clear && ctx.w.engine.run.clear)
 }
 
 /// xia's pause: a Pause press, once the delay counter has run out, deactivates every other active

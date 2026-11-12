@@ -8,6 +8,7 @@ pub mod fonts;
 pub mod gallery;
 pub mod icons;
 pub mod motion;
+pub mod notice;
 pub mod shape;
 pub mod tokens;
 pub mod widgets;
@@ -23,6 +24,19 @@ pub struct UiArgs {
     /// Turn off slides, fades and pops: every UI transition lands at once.
     #[arg(long)]
     pub reduced_motion: bool,
+    /// Screenshot checks: post a sample storage notice at start.
+    #[arg(long, hide = true)]
+    pub notice_preview: bool,
+}
+
+/// Called by `main`: posts the preview notice.
+pub fn configure(args: &UiArgs) {
+    if args.notice_preview {
+        notice::post(
+            notice::Kind::Storage,
+            "could not update the save file: C:/Users/player/AppData/Local/iwbtg-collection/saves/demo_art.save: Access is denied. (os error 5)",
+        );
+    }
 }
 
 /// Adds the fonts, the shape material, the motion systems and the component behaviour.
@@ -36,6 +50,7 @@ impl Plugin for UiKitPlugin {
             motion::plugin,
             widgets::plugin,
             icons::plugin,
+            notice::plugin,
         ));
         // The game screen may have added it already.
         if !app.is_plugin_added::<backdrop::BackdropPlugin>() {
