@@ -8,6 +8,7 @@ One page per module or area, so two PRs on different modules never edit the same
 - [Audio](client/audio.md): `audio.rs`
 - [HUD](client/hud.md): `hud/`
 - [Structure](client/main.md): how modules own their flags and plugins (`main.rs`)
+- [Import](client/import.md): `.iwbz` files, the library, drag and drop (`import.rs`)
 - [Mods](client/mods.md): `mods.rs`
 - [Pause menu](client/pause.md): `pause.rs`
 - [Player card](client/card.md): `card/`

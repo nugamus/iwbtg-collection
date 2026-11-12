@@ -15,6 +15,14 @@
 //!
 //! OPEN, not done: the save sound and the particles (RBF) belong to the client and the sound
 //! model; `self_destroy_alarm` variants beyond the plain alarm.
+//!
+//! `requires_kid_in_room` (xia, edgeDeath on; kid/C.md save point User Event 0 and objautosave):
+//! every save from this point, the alarm save included, needs the kid's origin inside the room.
+//!
+//! `alarm_save` (the autosave object of eat-the-lemon and xia; kid/B.md eat-the-lemon item 7,
+//! kid/C.md objautosave): Create arms Alarm 0 for that many ticks and Alarm 0 saves from the first
+//! kid in instance order, if one exists. The point stays (traces/eat-the-lemon/famb-multikid-restart.md:
+//! `autosave.alarm[0]` reads 0 on the save tick and -1 after).
 
 use serde::{Deserialize, Serialize};
 
@@ -81,6 +89,11 @@ const SPECS: &[ParamSpec] = &[
         required: false,
     },
     ParamSpec {
+        name: "requires_kid_in_room",
+        ty: ParamType::Bool,
+        required: false,
+    },
+    ParamSpec {
         name: "saved_position",
         ty: ParamType::Enum(POSITION),
         required: false,
@@ -97,6 +110,11 @@ const SPECS: &[ParamSpec] = &[
     },
     ParamSpec {
         name: "self_destroy_alarm",
+        ty: ParamType::Real,
+        required: false,
+    },
+    ParamSpec {
+        name: "alarm_save",
         ty: ParamType::Real,
         required: false,
     },
@@ -152,12 +170,17 @@ pub struct SaveState {
     pub requires_gravity: Gravity,
     /// MAC: the kid's depth must be 0.
     pub requires_kid_depth0: bool,
+    /// xia edgeDeath: the kid's origin must be inside the room (`0 <= x <= room_width`,
+    /// `0 <= y <= room_height`).
+    pub requires_kid_in_room: bool,
     /// Position model (`SavedPosition` by name).
     pub position: String,
     /// The fixed point, for `fixed_point`.
     pub fixed: Option<(Real, Real)>,
     /// Alarm 0 at Create destroys the point after this many ticks.
     pub self_destroy: Option<Real>,
+    /// Alarm 0 at Create saves from the first kid after this many ticks (autosave).
+    pub alarm_save: Option<Real>,
     /// Show the save blink.
     pub blink: bool,
 }
@@ -225,6 +248,14 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
         })?),
         None => None,
     };
+    let self_destroy = param_real(params, "self_destroy_alarm")?;
+    let alarm_save = param_real(params, "alarm_save")?;
+    if self_destroy.is_some() && alarm_save.is_some() {
+        return Err(super::param_error(
+            "alarm_save",
+            "alarm_save and self_destroy_alarm both use Alarm 0; give one",
+        ));
+    }
     let requires_gravity = match param_enum(params, "requires_gravity", GRAVITY)? {
         Some("normal") => Gravity::Normal,
         Some("flipped") => Gravity::Flipped,
@@ -239,9 +270,11 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
         min_difficulty_removed,
         requires_gravity,
         requires_kid_depth0: param_bool(params, "requires_kid_depth0")?.unwrap_or(false),
+        requires_kid_in_room: param_bool(params, "requires_kid_in_room")?.unwrap_or(false),
         position: position.to_owned(),
         fixed,
-        self_destroy: param_real(params, "self_destroy_alarm")?,
+        self_destroy,
+        alarm_save,
         blink: param_bool(params, "blink")?.unwrap_or(true),
     }))
 }
@@ -277,7 +310,7 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
             {
                 return Ok(ctx.destroy(me));
             }
-            if let Some(n) = s.self_destroy {
+            if let Some(n) = s.self_destroy.or(s.alarm_save) {
                 let rules = &ctx.rules.num;
                 if let Some(inst) = ctx.w.get_mut(me) {
                     alarm::set(inst, 0, n, rules)?;
@@ -286,6 +319,15 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
             Ok(Flow::Continue)
         }
         EventKind::Alarm(0) if s.self_destroy.is_some() => Ok(ctx.destroy(me)),
+        // The autosave: the first kid in instance order, the lowest id (famb-multikid-restart-b.csv
+        // f25: the file holds kid 104180's marked x). No kid, no save (kid/C.md objautosave).
+        EventKind::Alarm(0) if s.alarm_save.is_some() => {
+            let rules = ctx.rules;
+            match ctx.w.kid(&rules.tick) {
+                Some(kid) => try_save(ctx, me, &s, kid),
+                None => Ok(Flow::Continue),
+            }
+        }
         // `skip_held` (kaenbyou "Key S", kid/B.md Saving): the timer counts only in the key event.
         EventKind::Step if s.on_touch != Touch::SkipHeld => {
             if let Some(BuiltinState::Save(st)) = state_mut(ctx, me) {
@@ -365,7 +407,27 @@ fn touch_fires(ctx: &Ctx, s: &SaveState) -> bool {
     }
 }
 
-/// Saves from `kid` when the cooldown, gravity and depth rules allow it.
+/// xia's edgeDeath test on the kid's origin (kid/C.md save point User Event 0 and objautosave;
+/// the same strict test as the End Step edge death in `kid::boundary`): outside is `x < 0`,
+/// `x > room_width`, `y < 0` or `y > room_height`, so the edges count as inside.
+fn origin_in_room(ctx: &Ctx, x: Real, y: Real) -> Result<bool, SimError> {
+    let n = &ctx.rules.num;
+    let room = ctx
+        .def
+        .room(ctx.w.room)
+        .ok_or_else(|| SimError::invariant("save: the current room does not exist"))?;
+    let (rw, rh) = (
+        Real::new(f64::from(room.width)),
+        Real::new(f64::from(room.height)),
+    );
+    let outside = num::gm_lt(x, Real::ZERO, n)
+        || num::gm_gt(x, rw, n)
+        || num::gm_lt(y, Real::ZERO, n)
+        || num::gm_gt(y, rh, n);
+    Ok(!outside)
+}
+
+/// Saves from `kid` when the cooldown, gravity, depth and room rules allow it.
 fn try_save(ctx: &mut Ctx, me: InstId, s: &SaveState, kid: InstId) -> Result<Flow, SimError> {
     let nr = &ctx.rules.num;
     let gated = if s.on_touch == Touch::SkipHeld {
@@ -386,6 +448,9 @@ fn try_save(ctx: &mut Ctx, me: InstId, s: &SaveState, kid: InstId) -> Result<Flo
         Gravity::Flipped => flipped,
     };
     if !gravity_ok || (s.requires_kid_depth0 && num::gm_ne(k.depth, Real::ZERO, nr)) {
+        return Ok(Flow::Continue);
+    }
+    if s.requires_kid_in_room && !origin_in_room(ctx, k.m.x(), k.m.y())? {
         return Ok(Flow::Continue);
     }
     save::save_now(ctx, kid, model_of(&s.position), s.fixed)?;

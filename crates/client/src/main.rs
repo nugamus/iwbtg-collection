@@ -17,6 +17,7 @@ mod audio;
 mod bindings;
 mod card;
 mod hud;
+mod import;
 mod input;
 mod mods;
 mod package;
@@ -160,6 +161,11 @@ fn main() -> ExitCode {
                 keep: keep_stats,
                 gameplay_hash,
                 mods: run_mods,
+            },
+            import::ImportPlugin {
+                opened: dir,
+                id: pkg.def.id.clone(),
+                keep: keep_stats,
             },
         ));
     });

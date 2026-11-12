@@ -3506,6 +3506,8 @@ name = "iwbtg-format"
 version = "0.1.0"
 dependencies = [
  "blake3",
+ "crc32fast",
+ "flate2",
  "iwbtg-format",
  "iwbtg-sim",
  "jsonschema",

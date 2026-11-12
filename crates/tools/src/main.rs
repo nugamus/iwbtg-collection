@@ -7,6 +7,7 @@ mod case;
 mod determinism_cmd;
 mod engine_cmd;
 mod import;
+mod pack_cmd;
 mod pkg_cmd;
 mod replay_cmd;
 mod room_cmd;
@@ -164,7 +165,7 @@ enum TraceCommand {
 enum PkgCommand {
     /// Validates and loads a package.
     Check {
-        /// Package folder.
+        /// Package folder or `.iwbz` file.
         pkg: PathBuf,
         /// Load converter output: unmapped script kinds become inert.
         #[arg(long)]
@@ -177,6 +178,24 @@ enum PkgCommand {
         /// Change nothing: list the files that would change and exit 1 if there are any.
         #[arg(long)]
         check: bool,
+    },
+    /// Checks a package and writes it as one `.iwbz` file (docs/format/iwbz.md).
+    Pack {
+        /// Package folder.
+        pkg: PathBuf,
+        /// The file to write; default `<id>.iwbz` in the current folder.
+        #[arg(short, long)]
+        out: Option<PathBuf>,
+        /// Load converter output: unmapped script kinds become inert.
+        #[arg(long)]
+        trace_mode: bool,
+    },
+    /// Unpacks an `.iwbz` file into a new or empty folder.
+    Unpack {
+        /// The `.iwbz` file.
+        file: PathBuf,
+        /// The folder to write.
+        dir: PathBuf,
     },
     /// Prints the gameplay hash (leaderboards key on it) and the content hash (downloads).
     Hash {
@@ -309,6 +328,10 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
         Command::Pkg(PkgCommand::Check { pkg, trace_mode }) => pkg_cmd::main(&pkg, trace_mode),
         Command::Pkg(PkgCommand::Fmt { pkg, check }) => pkg_cmd::fmt_main(&pkg, check),
         Command::Pkg(PkgCommand::Hash { pkg, trace_mode }) => pkg_cmd::hash_main(&pkg, trace_mode),
+        Command::Pkg(PkgCommand::Pack { pkg, out, trace_mode }) => {
+            pack_cmd::pack_main(&pkg, out.as_deref(), trace_mode)
+        }
+        Command::Pkg(PkgCommand::Unpack { file, dir }) => pack_cmd::unpack_main(&file, &dir),
         Command::Script(ScriptCommand::ApiDocs { docs, check }) => {
             let docs = docs.unwrap_or_else(script_cmd::default_docs_dir);
             script_cmd::main(&docs, check)

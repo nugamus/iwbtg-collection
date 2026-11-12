@@ -18,6 +18,10 @@ pub const VERSION: i64 = 1;
 pub const MAX_AUDIO_OFFSET_MS: u32 = crate::audio::MAX_OFFSET_MS;
 /// The longest profile name, in characters.
 pub const MAX_NAME_CHARS: usize = 32;
+/// The largest backdrop blur, in percent.
+pub const MAX_BACKDROP_BLUR: u32 = 100;
+/// The backdrop blur a fresh file has, in percent (`ui::backdrop::DEFAULT_BLUR`).
+pub const DEFAULT_BACKDROP_BLUR: u32 = 60;
 
 /// Every player setting.
 #[derive(Debug, Clone, PartialEq)]
@@ -39,8 +43,13 @@ pub struct Settings {
     pub overlay: bool,
     /// HUD side panel scale in percent, 75 to 150 (`hud::layout::UI_SCALE_RANGE`).
     pub ui_scale: u32,
+    /// Backdrop blur in percent, 0 to [`MAX_BACKDROP_BLUR`] (`[` and `]`, later the settings slider).
+    pub backdrop_blur: u32,
     /// Which HUD elements are shown (`[hud.show]`).
     pub hud_show: HudShow,
+    /// Start the run again after every death (`[retry] auto`; `--auto-retry` overrides it for
+    /// one run).
+    pub auto_retry: bool,
     /// The `[bindings]` table, kept as written: the input layer (#27) owns its layout and checks
     /// it; this file only stores it.
     pub bindings: Table,
@@ -57,7 +66,9 @@ impl Default for Settings {
             integer_scale: false,
             overlay: true,
             ui_scale: 100,
+            backdrop_blur: DEFAULT_BACKDROP_BLUR,
             hud_show: HudShow::default(),
+            auto_retry: false,
             bindings: Table::new(),
         }
     }
@@ -164,8 +175,9 @@ impl Settings {
                 ("display", Value::Table(t)) => s.read_display(t, warnings),
                 ("audio", Value::Table(t)) => s.read_audio(t, warnings),
                 ("hud", Value::Table(t)) => s.read_hud(t, warnings),
+                ("retry", Value::Table(t)) => s.read_retry(t, warnings),
                 ("bindings", Value::Table(t)) => s.bindings = t.clone(),
-                ("display" | "audio" | "hud" | "bindings", _) => {
+                ("display" | "audio" | "hud" | "retry" | "bindings", _) => {
                     warnings.push(format!("`[{key}]` must be a table, using defaults"));
                 }
                 _ => warnings.push(format!("unknown entry `{key}`, ignored")),
@@ -187,7 +199,13 @@ impl Settings {
                     Err(e) => w.push(format!("display.window `{r}`: {e}")),
                 },
                 ("integer_scale", Value::Boolean(b)) => self.integer_scale = *b,
-                ("fullscreen" | "ratio" | "window" | "integer_scale", _) => {
+                ("backdrop_blur", Value::Integer(v)) => match u32::try_from(*v) {
+                    Ok(v) if v <= MAX_BACKDROP_BLUR => self.backdrop_blur = v,
+                    _ => w.push(format!(
+                        "display.backdrop_blur {v} is outside 0 to {MAX_BACKDROP_BLUR}, using the default"
+                    )),
+                },
+                ("fullscreen" | "ratio" | "window" | "integer_scale" | "backdrop_blur", _) => {
                     w.push(format!("display.{key} has the wrong type, using the default"));
                 }
                 _ => w.push(format!("unknown entry `display.{key}`, ignored")),
@@ -206,6 +224,16 @@ impl Settings {
                 },
                 ("offset_ms", _) => w.push("audio.offset_ms must be an integer".into()),
                 _ => w.push(format!("unknown entry `audio.{key}`, ignored")),
+            }
+        }
+    }
+
+    fn read_retry(&mut self, t: &Table, w: &mut Vec<String>) {
+        for (key, value) in t {
+            match (key.as_str(), value) {
+                ("auto", Value::Boolean(b)) => self.auto_retry = *b,
+                ("auto", _) => w.push("retry.auto must be true or false".into()),
+                _ => w.push(format!("unknown entry `retry.{key}`, ignored")),
             }
         }
     }
@@ -246,12 +274,15 @@ impl Settings {
             display.insert("window".into(), format!("{w}x{h}").into());
         }
         display.insert("integer_scale".into(), self.integer_scale.into());
+        display.insert("backdrop_blur".into(), i64::from(self.backdrop_blur).into());
         let mut audio = Table::new();
         audio.insert("offset_ms".into(), i64::from(self.audio_offset_ms).into());
         let mut hud = Table::new();
         hud.insert("overlay".into(), self.overlay.into());
         hud.insert("ui_scale".into(), i64::from(self.ui_scale).into());
         hud.insert("show".into(), self.hud_show.to_table().into());
+        let mut retry = Table::new();
+        retry.insert("auto".into(), self.auto_retry.into());
         let mut root = Table::new();
         root.insert("version".into(), VERSION.into());
         if !self.name.is_empty() {
@@ -260,6 +291,7 @@ impl Settings {
         root.insert("display".into(), display.into());
         root.insert("audio".into(), audio.into());
         root.insert("hud".into(), hud.into());
+        root.insert("retry".into(), retry.into());
         root.insert("bindings".into(), self.bindings.clone().into());
         toml::to_string(&root).unwrap_or_default()
     }
@@ -368,6 +400,8 @@ mod tests {
             integer_scale: true,
             overlay: false,
             ui_scale: 125,
+            backdrop_blur: 30,
+            auto_retry: true,
             hud_show: HudShow {
                 input: false,
                 leaderboard: false,
@@ -382,11 +416,30 @@ mod tests {
     }
 
     #[test]
+    fn auto_retry_is_read_and_checked() {
+        let (s, w) = parse(
+            "[retry]
+auto = true
+",
+        );
+        assert!(s.auto_retry && w.is_empty(), "{w:?}");
+        let (s, w) = parse(
+            "[retry]
+auto = 3
+foo = 1
+",
+        );
+        assert!(!s.auto_retry);
+        assert_eq!(w.len(), 2, "{w:?}");
+        assert!(!parse("").0.auto_retry);
+    }
+
+    #[test]
     fn bad_entries_fall_back_one_by_one() {
         let (s, w) = parse(
             "version = 1\n\
              mystery = 1\n\
-             [display]\nfullscreen = true\nratio = \"5:4\"\nwindow = 7\nextra = 1\n\
+             [display]\nfullscreen = true\nratio = \"5:4\"\nwindow = 7\nextra = 1\nbackdrop_blur = 101\n\
              [audio]\noffset_ms = 9000\n\
              [hud]\noverlay = false\nui_scale = 200\n\
              [hud.show]\ninput = false\ntimer = 1\nsplits = false\n\
@@ -398,9 +451,35 @@ mod tests {
         assert_eq!(s.audio_offset_ms, 0);
         assert!(!s.overlay);
         assert_eq!(s.ui_scale, 100);
+        assert_eq!(s.backdrop_blur, 60);
         assert!(!s.hud_show.input && s.hud_show.timer);
         assert_eq!(s.bindings.get("jump").and_then(Value::as_str), Some("Space"));
-        assert_eq!(w.len(), 8, "{w:?}");
+        assert_eq!(w.len(), 9, "{w:?}");
+    }
+
+    #[test]
+    fn backdrop_blur_reads_the_whole_range() {
+        for v in [0, 60, 100] {
+            let (s, w) = parse(&format!(
+                "[display]
+backdrop_blur = {v}
+"
+            ));
+            assert_eq!(s.backdrop_blur, v);
+            assert!(w.is_empty(), "{w:?}");
+        }
+        let (s, w) = parse(
+            "[display]
+backdrop_blur = -5
+",
+        );
+        assert_eq!((s.backdrop_blur, w.len()), (60, 1));
+        let (s, w) = parse(
+            "[display]
+backdrop_blur = \"x\"
+",
+        );
+        assert_eq!((s.backdrop_blur, w.len()), (60, 1));
     }
 
     #[test]

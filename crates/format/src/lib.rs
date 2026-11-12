@@ -15,6 +15,7 @@ pub mod engine_pack;
 pub mod files;
 pub mod fmt;
 pub mod ids;
+pub mod iwbz;
 pub mod key_art;
 pub mod manifest;
 pub mod number;
