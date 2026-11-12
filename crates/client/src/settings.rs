@@ -381,14 +381,18 @@ mod tests {
 
     #[test]
     fn auto_retry_is_read_and_checked() {
-        let (s, w) = parse("[retry]
+        let (s, w) = parse(
+            "[retry]
 auto = true
-");
+",
+        );
         assert!(s.auto_retry && w.is_empty(), "{w:?}");
-        let (s, w) = parse("[retry]
+        let (s, w) = parse(
+            "[retry]
 auto = 3
 foo = 1
-");
+",
+        );
         assert!(!s.auto_retry);
         assert_eq!(w.len(), 2, "{w:?}");
         assert!(!parse("").0.auto_retry);
