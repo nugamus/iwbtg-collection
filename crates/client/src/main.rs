@@ -88,6 +88,7 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
     hud::configure(&args.hud);
+    ui::configure(&args.ui);
     if args.ui.ui_gallery {
         // `configure` has checked the ratio.
         let ratio = args
