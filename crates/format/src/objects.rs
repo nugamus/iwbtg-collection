@@ -219,6 +219,7 @@ pub fn legacy_role_classes(role: &str) -> Option<ClassMask> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use iwbtg_sim::def::Params;
 
     #[test]
     fn reserved_keys_and_params() {
