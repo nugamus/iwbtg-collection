@@ -81,6 +81,40 @@ pub enum ParamValue {
     Sound(SoundId),
 }
 
+/// One `[defaults.<kind>]` variant of a bare built-in (docs/format/v0.md, `[defaults.<kind>]`):
+/// an instance of `kind` whose params match `when` uses `variant`, the kind the loader derives
+/// from it (`spike[dir=down]`, with the variant's sprite and mask). A placed instance and a
+/// script `instance_create` take it alike (#701).
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct KindVariant {
+    /// The bare built-in kind.
+    pub kind: KindId,
+    /// The params the variant matches, in `game.toml` order.
+    pub when: Vec<(String, ParamValue)>,
+    /// The derived kind.
+    pub variant: KindId,
+}
+
+/// Whether an instance with `params` of a kind with `kind_params` matches a variant's `when`:
+/// every `when` param, the instance's or else the kind's, has that value. Reals compare by bits,
+/// so `2` and `2.0` match. The loader and script spawns share it (#701).
+pub fn variant_matches(when: &[(String, ParamValue)], params: &Params, kind_params: &Params) -> bool {
+    when.iter().all(|(k, v)| {
+        params
+            .0
+            .get(k)
+            .or_else(|| kind_params.0.get(k))
+            .is_some_and(|p| param_matches(p, v))
+    })
+}
+
+fn param_matches(a: &ParamValue, b: &ParamValue) -> bool {
+    match (a, b) {
+        (ParamValue::Real(x), ParamValue::Real(y)) => x.to_bits() == y.to_bits(),
+        _ => a == b,
+    }
+}
+
 /// An `object_order` selector on a kind's variant (`{ kind = "spike", dir = "up" }`,
 /// `{ kind = "kid", flipped = true }`), so collapsed original objects keep their original index
 /// order (converter OPEN 13).

@@ -157,14 +157,16 @@ fn kind_id(host: &super::host::Host, name: &str) -> Res<KindId> {
         .ok_or_else(|| runtime_error(format!("unknown kind `{name}`")))
 }
 
-/// The kind a script spawn of `name` with `params` creates (#694). Classes come from the kind, as
-/// a GM instance's come from its object, so when the params that pick a class
-/// (`def::class::class_params`: water `variant`, vine `side`, ...) pick other classes than the
-/// kind's, the spawn takes the kind the loader derived from it with those values (for a placed
-/// instance or a `[defaults.<kind>]` variant, #659). Without one the spawn is an error: a kind is
+/// The kind a script spawn of `name` with `params` creates, chosen as the loader chooses a placed
+/// instance's. First the `[defaults.<kind>]` variant the params match (`spike` with
+/// `dir: "down"` takes `spike[dir=down]` and its sprite and mask, `GameDef::variant_kind`, #701).
+/// Then classes (#694): they come from the kind, as a GM instance's come from its object, so
+/// when the params that pick a class (`def::class::class_params`: water `variant`, vine `side`,
+/// ...) pick other classes than that kind's, the spawn takes the kind the loader derived from it
+/// with those values for a placed instance (#659). Without one the spawn is an error: a kind is
 /// never made at run time.
 fn spawn_kind(host: &super::host::Host, name: &str, params: &Params) -> Res<KindId> {
-    let k = kind_id(host, name)?;
+    let k = host.def.variant_kind(kind_id(host, name)?, params);
     let Some(kd) = host.def.kind(k) else {
         return Ok(k);
     };
@@ -496,7 +498,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
             Ok(())
         });
         let s = Rc::clone(shared);
-        docs.add("instance_create", "Creates an instance of a kind at (`x`, `y`) and runs its Create event; an optional map sets its parameters. Params that pick a class (water `variant`, vine `side`, ...) take the kind the loader derived with those values; an error when there is none. Returns the handle.");
+        docs.add("instance_create", "Creates an instance of a kind at (`x`, `y`) and runs its Create event; an optional map sets its parameters. Params that match a `[defaults.<kind>]` variant (`spike` with `dir: \"down\"`) take the variant's kind, with its sprite and mask, as a placed instance does. Params that pick a class (water `variant`, vine `side`, ...) take the kind the loader derived with those values; an error when there is none. Returns the handle.");
         engine.register_fn(
             "instance_create",
             move |kind: ImmutableString, x: Dynamic, y: Dynamic| -> Res<Inst> {

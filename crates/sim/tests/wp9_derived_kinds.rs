@@ -1,11 +1,12 @@
 //! #694: scripts and the kinds the loader derives from a kind (`[defaults.<kind>]` variants and
 //! placed instances whose params pick other classes, #659). `instances(kind)` covers them, and
-//! `instance_create` with class-picking params takes the derived kind or fails.
+//! `instance_create` with class-picking params takes the derived kind or fails. #701: with params
+//! that match a `[defaults.<kind>]` variant it takes the variant's kind, as a placed instance does.
 
 use iwbtg_sim::def::testing::GameDefBuilder;
 use iwbtg_sim::def::{
-    Builtin, ClassMask, GameDef, KindDef, KindId, ParamValue, Params, RoomDef, RoomId, ScriptDef, ScriptId,
-    VarId,
+    Builtin, ClassMask, GameDef, KindDef, KindId, KindVariant, ParamValue, Params, RoomDef, RoomId,
+    ScriptDef, ScriptId, VarId,
 };
 use iwbtg_sim::num::Real;
 use iwbtg_sim::rules::RunnerRules;
@@ -26,8 +27,13 @@ fn variant(v: f64) -> Params {
     p
 }
 
+fn down() -> ParamValue {
+    ParamValue::Str("down".into())
+}
+
 /// Kinds as the loader makes them: 0 `runner` (script), 1 `water`, 2 `water[variant=2]` (derived
-/// for a placed instance), 3 `waterfall` (another kind whose name starts with `water`).
+/// for a placed instance), 3 `waterfall` (another kind whose name starts with `water`), 4 `spike`
+/// and 5 `spike[dir=down]`, its `[defaults.spike]` variant for `dir = "down"`.
 fn fx(source: &str) -> Fx {
     let mut b = GameDefBuilder::new("derived");
     let room = b.room(RoomDef::new("room", 320, 240));
@@ -44,8 +50,20 @@ fn fx(source: &str) -> Fx {
     let mut waterfall = KindDef::new("waterfall", Builtin::Water);
     waterfall.classes = ClassMask::WATER1;
     b.kind(waterfall);
+    let mut spike = KindDef::new("spike", Builtin::Killer);
+    spike.classes = ClassMask::KILLER;
+    b.kind(spike);
+    let mut spike_down = KindDef::new("spike[dir=down]", Builtin::Killer);
+    spike_down.classes = ClassMask::KILLER;
+    spike_down.params.0.insert("dir".into(), down());
+    b.kind(spike_down);
     b.start_room(room);
     let mut def = b.build().expect("def");
+    def.variants.push(KindVariant {
+        kind: KindId(4),
+        when: vec![("dir".into(), down())],
+        variant: KindId(5),
+    });
     def.scripts.push(ScriptDef {
         name: "scripts/runner.rhai".into(),
         source: source.into(),
@@ -142,4 +160,15 @@ fn a_spawn_whose_params_pick_a_class_no_kind_has_is_an_error() {
     let e = f.halted().expect("halted");
     assert!(e.contains("`water` with variant = 3 picks other classes than the kind's, and no kind derived from `water` has them"), "{e}");
     assert!(f.kinds_of(ClassMask::WATER3).is_empty());
+}
+
+#[test]
+fn a_spawn_whose_params_match_a_defaults_variant_takes_the_variant_kind() {
+    let src = r#"fn create() { instance_create("spike", 0, 0, #{ dir: "down" }); instance_create("spike", 0, 0, #{ dir: "up" }); instance_create("spike", 0, 0); }"#;
+    let mut f = fx(src);
+    f.spawn(0);
+    assert_eq!(f.halted(), None);
+    // `dir: "down"` matches the variant, so it gets `spike[dir=down]` (its sprite and mask); the
+    // others keep `spike`, as placed instances do.
+    assert_eq!(f.kinds_of(ClassMask::KILLER), vec![5, 4, 4]);
 }

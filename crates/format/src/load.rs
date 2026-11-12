@@ -17,10 +17,10 @@ use std::ops::Range;
 
 use iwbtg_sim::builtins::{self, ParamSpec, ParamType};
 use iwbtg_sim::def::{
-    Builtin, ClassMask, EngineKind, GameDef, GlobalIndex, GroupId, KindDef, KindId, Mask, MaskId, MaskSet,
-    MaskShape, NameId, ParamValue, Params, PhysicsProfile, PlacedInstance, RankEntry, RankTable, ResetModel,
-    RestartModel, RoomAction, RoomDef, RoomId, RoomRole, RoomWhen, ScriptDef, ScriptId, SoundDef, SoundId,
-    SpriteDef, SpriteId, VariantSel, ViewDef,
+    Builtin, ClassMask, EngineKind, GameDef, GlobalIndex, GroupId, KindDef, KindId, KindVariant, Mask,
+    MaskId, MaskSet, MaskShape, NameId, ParamValue, Params, PhysicsProfile, PlacedInstance, RankEntry,
+    RankTable, ResetModel, RestartModel, RoomAction, RoomDef, RoomId, RoomRole, RoomWhen, ScriptDef,
+    ScriptId, SoundDef, SoundId, SpriteDef, SpriteId, VariantSel, ViewDef, variant_matches,
 };
 use iwbtg_sim::input::Action;
 use iwbtg_sim::num::Real;
@@ -548,6 +548,8 @@ impl<'a> Loader<'a> {
         let vars = self.intern(&rooms);
         // Step 4, second half, and step 5 for placed instances.
         let mut room_defs = self.build_rooms(&rooms, &vars);
+        // `[defaults]` variants no room places get their kinds now, for script spawns (#701).
+        let variants = self.all_variants();
         // Engine kinds, boot and the spawnable-kind rank check (step 5, CR4).
         let engine_kinds = self.engine_kinds();
         let boot = self.boot(&engine_kinds);
@@ -593,6 +595,7 @@ impl<'a> Loader<'a> {
             sprites: self.sprites_in_order(),
             masks: std::mem::take(&mut self.masks),
             kinds: std::mem::take(&mut self.kinds),
+            variants,
             rooms: room_defs,
             start_room: start_room?,
             new_game_room: new_game_room?,
@@ -1700,30 +1703,24 @@ impl<'a> Loader<'a> {
             .get(kind.index().unwrap_or(usize::MAX))
             .map(|k| k.params.clone())
             .unwrap_or_default();
-        let matches = |when: &[(String, ParamValue)]| {
-            when.iter().all(|(k, v)| {
-                params
-                    .0
-                    .get(k)
-                    .or_else(|| kind_params.0.get(k))
-                    .is_some_and(|p| param_matches(p, v))
-            })
-        };
-        let Some((index, (when, sprite, mask))) = defaults
+        let Some(index) = defaults
             .variants
             .iter()
-            .enumerate()
-            .find(|(_, (w, _, _))| matches(w))
+            .position(|(w, _, _)| variant_matches(w, params, &kind_params))
         else {
             return Ok(kind);
         };
+        Ok(self.derive_variant(kind, index).unwrap_or(kind))
+    }
+
+    /// The kind derived for `kind`'s `[defaults]` variant `index`, made on first use: the kind
+    /// with the variant's params, sprite and mask, named `<kind>[<params>]`.
+    fn derive_variant(&mut self, kind: KindId, index: usize) -> Option<KindId> {
         if let Some(&d) = self.derived.get(&(kind, index)) {
-            return Ok(d);
+            return Some(d);
         }
-        let (when, sprite, mask) = (when.clone(), *sprite, *mask);
-        let Some(mut derived) = self.kinds.get(kind.index().unwrap_or(usize::MAX)).cloned() else {
-            return Ok(kind);
-        };
+        let (when, sprite, mask) = self.defaults.get(&kind)?.variants.get(index)?.clone();
+        let mut derived = self.kinds.get(kind.index()?).cloned()?;
         let tag: Vec<String> = when
             .iter()
             .map(|(k, v)| format!("{k}={}", show_param(v)))
@@ -1738,7 +1735,49 @@ impl<'a> Loader<'a> {
         let id = self.push_kind(derived);
         self.derived.insert((kind, index), id);
         self.rank_kind.insert(id, kind);
-        Ok(id)
+        Some(id)
+    }
+
+    /// Every `[defaults]` variant with its derived kind, for `GameDef::variants`. Runs after the
+    /// rooms, so the variants no room places get their kinds last and the placed kinds' ids do
+    /// not move. A script `instance_create` takes them (#701), ranked as the kind's
+    /// `object_order` entry for the variant's params, when it has one.
+    fn all_variants(&mut self) -> Vec<KindVariant> {
+        let wanted: Vec<(KindId, usize)> = self
+            .defaults
+            .iter()
+            .flat_map(|(k, d)| (0..d.variants.len()).map(move |i| (*k, i)))
+            .collect();
+        let mut out = Vec::new();
+        for (kind, index) in wanted {
+            let Some(variant) = self.derive_variant(kind, index) else {
+                continue;
+            };
+            let Some((when, _, _)) = self.defaults.get(&kind).and_then(|d| d.variants.get(index)) else {
+                continue;
+            };
+            out.push(KindVariant {
+                kind,
+                when: when.clone(),
+                variant,
+            });
+            if self.ranks.entries.iter().any(|e| e.kind == variant) {
+                continue;
+            }
+            let params = self
+                .kinds
+                .get(variant.index().unwrap_or(usize::MAX))
+                .map(|k| k.params.clone())
+                .unwrap_or_default();
+            if let Some(rank) = rank_of(&self.ranks, kind, &[&params]) {
+                self.ranks.entries.push(RankEntry {
+                    kind: variant,
+                    variant: None,
+                    rank,
+                });
+            }
+        }
+        out
     }
 
     fn placed(
@@ -2680,14 +2719,6 @@ fn kind_param(p: &ParamValue) -> Option<KindId> {
     match p {
         ParamValue::Kind(k) => Some(*k),
         _ => None,
-    }
-}
-
-/// Variant matching: reals by bits, so `2` and `2.0` match.
-fn param_matches(a: &ParamValue, b: &ParamValue) -> bool {
-    match (a, b) {
-        (ParamValue::Real(x), ParamValue::Real(y)) => x.to_bits() == y.to_bits(),
-        _ => a == b,
     }
 }
 

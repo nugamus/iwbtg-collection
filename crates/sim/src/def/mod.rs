@@ -29,7 +29,7 @@ pub use game::{
 pub use ids::{
     GroupId, KindId, MaskId, NameId, PathId, RoomId, ScriptId, SoundId, SpriteId, TimelineId, VarId,
 };
-pub use kind::{KindDef, ParamValue, Params, RankEntry, RankTable, VariantSel};
+pub use kind::{KindDef, KindVariant, ParamValue, Params, RankEntry, RankTable, VariantSel, variant_matches};
 pub use path::PathDef;
 pub use physics::{KidFamily, PhysicsProfile, PhysicsProfileDraft};
 pub use room::{GlobalIndex, PlacedInstance, RoleSet, RoomAction, RoomDef, RoomRole, RoomWhen, ViewDef};
