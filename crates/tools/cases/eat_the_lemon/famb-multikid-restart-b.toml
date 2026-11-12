@@ -2,7 +2,7 @@
 # Recorder: --object player --room room12 --at 2 --from 2 --stub-dlls --x 144 --y 336 (43 --gml)
 source = "eat-the-lemon/famb-multikid-restart-b"
 kind = "diff"
-open = "the autosave needs research#137 (converter writes alarm_save); placed kids sort after the loaded kid, so kid#0 and kid#2 mark the wrong kids (#669); setup cannot set the play timer to 777 at frame 25 (#688)"
+open = "the autosave needs research#137 (converter writes alarm_save); placed kids sort after the loaded kid, so kid#0 and kid#2 mark the wrong kids (#669)"
 start = { room = "room_11", difficulty = 0 }
 at = 2
 first_frame = 2
@@ -16,6 +16,8 @@ setup = [
   # instance order the kids are 104180, 104190 and the loaded 105165 (famb-multikid-restart.md).
   { frame = 25, target = "kid#0", set = { x = 52.0, xprevious = 52.0 } },
   { frame = 25, target = "kid#2", set = { x = 60.0, xprevious = 60.0 } },
+  # The same --gml sets `global.timestep=777`, our play timer: the frame 25 autosave stores 777.
+  { frame = 25, global = "time", value = 777.0 },
 ]
 # Recorder reads of the decoded save file before every frame from 3 to 45 (famb-multikid-restart.md).
 latch = { "global.sv_x" = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45], "global.sv_y" = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45], "global.sv_xs" = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45], "global.sv_t" = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45] }
