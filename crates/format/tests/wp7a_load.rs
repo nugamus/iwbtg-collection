@@ -2188,3 +2188,53 @@ fn instance_params_table_629() {
         render(&r)
     );
 }
+
+/// #680: `gm_id` per placed instance and `[engine].first_runtime_id` are optional; the loader keeps
+/// them on the definition (CLONE_SPEC, Instances, "Placed instance ids").
+#[test]
+fn gm_ids_and_first_runtime_id() {
+    // Without the fields the package loads and neither is set.
+    let (def, _) = load_ok(&package(|_| {}), STRICT);
+    assert_eq!(def.first_runtime_id, None);
+    assert!(
+        def.rooms
+            .iter()
+            .flat_map(|r| &r.instances)
+            .all(|i| i.gm_id.is_none())
+    );
+
+    let with_ids = |first: u32| {
+        package(|f| {
+            let m = manifest(ORDER, "").replace(
+                "float_model = \"f64\"\n",
+                &format!("float_model = \"f64\"\nfirst_runtime_id = {first}\n"),
+            );
+            set(f, "game.toml", m);
+            let room = STAGE1
+                .replace(
+                    "{ kind = \"kid_start\", x = 48, y = 552 }",
+                    "{ kind = \"kid_start\", x = 48, y = 552, gm_id = 104180 }",
+                )
+                .replace(
+                    "{ kind = \"@boss\", x = 400, y = 200, name = \"boss_a\" }",
+                    "{ kind = \"@boss\", x = 400, y = 200, name = \"boss_a\", gm_id = 104132 }",
+                );
+            set(f, "rooms/stage1.toml", room);
+        })
+    };
+    let (def, _) = load_ok(&with_ids(105_106), STRICT);
+    assert_eq!(def.first_runtime_id, Some(105_106));
+    assert_eq!(placed(&def, "stage1", "kid_start")[0].gm_id, Some(104_180));
+    assert_eq!(placed(&def, "stage1", "@boss")[0].gm_id, Some(104_132));
+    assert!(placed(&def, "stage1", "block").iter().all(|i| i.gm_id.is_none()));
+
+    // Runtime ids come after every placed id.
+    let e = errors(&load_report(&with_ids(104_180), STRICT));
+    assert!(
+        e.iter().any(|m| m.contains("game.toml")
+            && m.contains("must be above every placed `gm_id` (room `stage1` places 104180)")),
+        "{e:#?}"
+    );
+    let e = errors(&load_report(&with_ids(2_147_483_648), STRICT));
+    assert!(e.iter().any(|m| m.contains("at most 2147483647")), "{e:#?}");
+}

@@ -38,12 +38,13 @@ use crate::diag::{Diagnostic, Severity, has_errors};
 use crate::files::PackageFiles;
 use crate::ids::check_id;
 use crate::manifest::{
-    DEFAULT_MAP_ID, ENGINE_ROLES, MANIFEST_PATH, Manifest, RankedStart, TIMING_TRIGGERS, global_value,
+    DEFAULT_MAP_ID, ENGINE_ROLES, EngineSection, MANIFEST_PATH, Manifest, RankedStart, TIMING_TRIGGERS,
+    global_value,
 };
 use crate::masks::{ALPHA_IN_MASK, AlphaRule};
 use crate::objects::{self, ObjectFile, kind_classes, legacy_role_classes, param_value};
 use crate::order::{OrderEntry, rank_of, resolve_ranks};
-use crate::rooms::{ActionFile, IndexFile, InstanceFile, RoomFile, WhenFile, parse_room};
+use crate::rooms::{ActionFile, IndexFile, InstanceFile, MAX_GM_ID, RoomFile, WhenFile, parse_room};
 use crate::sprites::{MAX_IMAGE_SIDE, load_sprite_at, parse_sidecar};
 use crate::tracemap::{TRACE_MAP_PATH, TraceMap, TraceParam, TraceStatus, load_trace_map};
 use crate::vars::intern_vars;
@@ -377,6 +378,35 @@ impl<'a> Loader<'a> {
         self.error(MANIFEST_PATH, text, span, msg);
     }
 
+    /// `[engine].first_runtime_id` (#680), checked: at most [`MAX_GM_ID`] and above every
+    /// placed `gm_id`, since runtime ids follow the file's last-instance-id, which is never below
+    /// a placed id (CLONE_SPEC, Instances, "Placed instance ids").
+    fn first_runtime_id(&mut self, engine: Option<&EngineSection>, rooms: &[RoomDef]) -> Option<u32> {
+        let first = engine?.first_runtime_id.as_ref()?;
+        let (span, first) = (first.span(), *first.get_ref());
+        if first > MAX_GM_ID {
+            self.manifest_error(
+                span.clone(),
+                format!("`first_runtime_id` must be at most {MAX_GM_ID}"),
+            );
+        }
+        let highest = rooms
+            .iter()
+            .flat_map(|r| r.instances.iter().filter_map(|i| i.gm_id.map(|id| (id, &r.name))))
+            .max_by_key(|(id, _)| *id);
+        if let Some((id, room)) = highest
+            && id >= first
+        {
+            self.manifest_error(
+                span,
+                format!(
+                    "`first_runtime_id` {first} must be above every placed `gm_id` (room `{room}` places {id})"
+                ),
+            );
+        }
+        Some(first)
+    }
+
     /// Like [`Loader::note`], in `LoadMode::Trace` only: a hand-written package may rely on the
     /// default.
     fn trace_note(&mut self, cr: &'static str, item: String) {
@@ -552,6 +582,7 @@ impl<'a> Loader<'a> {
                 None | Some(crate::manifest::FloatModelName::F64) => FloatModel::F64,
             },
             uninit_reads_zero: engine.and_then(|e| e.uninit_reads_zero).unwrap_or(true),
+            first_runtime_id: self.first_runtime_id(engine, &room_defs),
             sprites: self.sprites_in_order(),
             masks: std::mem::take(&mut self.masks),
             kinds: std::mem::take(&mut self.kinds),
@@ -1746,6 +1777,7 @@ impl<'a> Loader<'a> {
                 params: resolved.clone(),
                 name,
                 group,
+                gm_id: inst.gm_id.as_ref().map(|i| *i.get_ref()),
             })
             .collect();
         Placed::Instances(list)
