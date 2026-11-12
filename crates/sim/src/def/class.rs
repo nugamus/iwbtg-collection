@@ -20,6 +20,9 @@ use core::ops::{BitAnd, BitOr, BitOrAssign};
 
 use serde::{Deserialize, Serialize};
 
+use super::builtin::Builtin;
+use super::kind::{ParamValue, Params};
+
 /// A set of collision classes, one bit each.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default, Serialize, Deserialize)]
 pub struct ClassMask(pub u64);
@@ -190,6 +193,95 @@ impl BitAnd for ClassMask {
     fn bitand(self, rhs: ClassMask) -> ClassMask {
         ClassMask(self.0 & rhs.0)
     }
+}
+
+/// Default collision classes of a built-in (Design; plan 1.1 and 6.1).
+pub fn default_classes(b: Builtin) -> ClassMask {
+    match b {
+        Builtin::Kid => ClassMask::KID,
+        Builtin::KidBullet => ClassMask::KID_BULLET,
+        Builtin::Blood => ClassMask::BLOOD,
+        Builtin::Bow => ClassMask::BOW,
+        Builtin::Block | Builtin::BreakableBlock => ClassMask::BLOCK,
+        Builtin::Spike | Builtin::Killer => ClassMask::KILLER,
+        Builtin::Save => ClassMask::SAVE,
+        // GM warps and warpStart are roomChanger children.
+        Builtin::Warp | Builtin::DifficultyWarp => ClassMask::ROOM_CHANGER,
+        // The platform's parent is block in 17 games (CLONE_SPEC collision); the other two
+        // games give their platform preset `counts_as = ["solidblock"]`.
+        Builtin::Platform | Builtin::MovingPlatform | Builtin::DropPlatform | Builtin::PathPlatform => {
+            ClassMask::PLATFORM | ClassMask::BLOCK
+        }
+        Builtin::Water => ClassMask::WATER1,
+        Builtin::FakeBlock => ClassMask::FAKE_BLOCK,
+        Builtin::Trigger => ClassMask::TRIGGER,
+        Builtin::EdgeWarp => ClassMask::EDGE_WARP,
+        Builtin::BulletBlocker => ClassMask::BULLET_BLOCKER,
+        Builtin::Slope => ClassMask::SLOPE,
+        Builtin::Conveyor => ClassMask::CONVEYOR,
+        Builtin::KidParamZone => ClassMask::PARAM_ZONE,
+        Builtin::TrapStopper => ClassMask::TRAP_STOPPER,
+        Builtin::Ladder => ClassMask::LADDER,
+        _ => ClassMask::NONE,
+    }
+}
+
+/// Classes that a kind's params pick (Design): water `variant` 2 and 3, vine `side`, slope
+/// `shape` and `scale_x`, a killer with `kill_outside_view` (no class: it kills in its own collision), and a
+/// block with `kid_collides = false`, which has no class at all so the kid has no collision
+/// event with it (docs/format/builtins/block.md).
+pub fn param_classes(b: Builtin, params: &Params) -> Option<ClassMask> {
+    let get = |k: &str| params.0.get(k);
+    match b {
+        Builtin::Block if matches!(get("kid_collides"), Some(ParamValue::Bool(false))) => {
+            Some(ClassMask::NONE)
+        }
+        Builtin::Water => match get("variant") {
+            Some(ParamValue::Real(v)) if v.to_bits() == 2.0f64.to_bits() => Some(ClassMask::WATER2),
+            Some(ParamValue::Real(v)) if v.to_bits() == 3.0f64.to_bits() => Some(ClassMask::WATER3),
+            _ => None,
+        },
+        Builtin::Killer if matches!(get("kill_outside_view"), Some(ParamValue::Bool(true))) => {
+            Some(ClassMask::NONE)
+        }
+        // `shape` names which way the sprite's mask rises and a negative `scale_x` mirrors that
+        // (docs/format/builtins/slope.md): rising left is the `slope_mirror` class, the kid's
+        // yaneM or nanameblockR event (kid/A4.md, kid/A1.md RBF). The mask stays the sprite's.
+        Builtin::Slope => {
+            let left = matches!(get("shape"), Some(ParamValue::Str(s)) if s == "rise_left");
+            let mirrored = matches!(get("scale_x"), Some(ParamValue::Real(v)) if v.get() < 0.0);
+            Some(if left != mirrored {
+                ClassMask::SLOPE_MIRROR
+            } else {
+                ClassMask::SLOPE
+            })
+        }
+        Builtin::Vine => match get("side") {
+            Some(ParamValue::Str(s)) if s == "left" => Some(ClassMask::VINE_L),
+            Some(ParamValue::Str(s)) if s == "right" => Some(ClassMask::VINE_R),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// The params [`param_classes`] reads for a built-in. A placed instance that sets them to pick
+/// other classes than its kind's gets a derived kind with those classes (the loader, #659); a
+/// script spawn that sets them uses that derived kind or fails (`script::inst`, #694).
+pub fn class_params(b: Builtin) -> &'static [&'static str] {
+    match b {
+        Builtin::Block => &["kid_collides"],
+        Builtin::Water => &["variant"],
+        Builtin::Killer => &["kill_outside_view"],
+        Builtin::Slope => &["shape", "scale_x"],
+        Builtin::Vine => &["side"],
+        _ => &[],
+    }
+}
+
+/// A kind's classes: the param-picked class or the built-in default, plus `extra`.
+pub fn kind_classes(b: Builtin, params: &Params, extra: ClassMask) -> ClassMask {
+    param_classes(b, params).unwrap_or_else(|| default_classes(b)) | extra
 }
 
 #[cfg(test)]

@@ -136,6 +136,8 @@ mod wp6c_tier3_kid_modifiers;
 mod wp6c_tier3_objects;
 #[path = "wp8b_timing.rs"]
 mod wp8b_timing;
+#[path = "wp9_derived_kinds.rs"]
+mod wp9_derived_kinds;
 #[path = "wp9_doc_examples.rs"]
 mod wp9_doc_examples;
 #[path = "wp9_engine.rs"]

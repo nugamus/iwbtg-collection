@@ -18,6 +18,7 @@ use super::budget::cost;
 use super::docs::Docs;
 use super::host::Shared;
 use crate::alarm;
+use crate::def::class::{class_params, kind_classes};
 use crate::def::{ClassMask, KindId, ParamValue, Params};
 use crate::error::SimError;
 use crate::kid::{self, api::KillCause};
@@ -154,6 +155,63 @@ fn kind_id(host: &super::host::Host, name: &str) -> Res<KindId> {
         .get(name)
         .copied()
         .ok_or_else(|| runtime_error(format!("unknown kind `{name}`")))
+}
+
+/// The kind a script spawn of `name` with `params` creates (#694). Classes come from the kind, as
+/// a GM instance's come from its object, so when the params that pick a class
+/// (`def::class::class_params`: water `variant`, vine `side`, ...) pick other classes than the
+/// kind's, the spawn takes the kind the loader derived from it with those values (for a placed
+/// instance or a `[defaults.<kind>]` variant, #659). Without one the spawn is an error: a kind is
+/// never made at run time.
+fn spawn_kind(host: &super::host::Host, name: &str, params: &Params) -> Res<KindId> {
+    let k = kind_id(host, name)?;
+    let Some(kd) = host.def.kind(k) else {
+        return Ok(k);
+    };
+    let picked: Vec<(&str, &ParamValue)> = class_params(kd.base)
+        .iter()
+        .filter_map(|key| params.0.get(*key).map(|v| (*key, v)))
+        .collect();
+    if picked.is_empty() {
+        return Ok(k);
+    }
+    let mut merged = kd.params.clone();
+    for (key, v) in &picked {
+        merged.0.insert((*key).to_owned(), (*v).clone());
+    }
+    // The loader's test (`class_kind`): the merged params' classes against the kind's, each with
+    // the kind's extra (`counts_as`) classes, which are the kind's classes the params do not give.
+    let own = kind_classes(kd.base, &kd.params, ClassMask::NONE);
+    let extra = ClassMask(kd.classes.0 & !own.0);
+    if kind_classes(kd.base, &merged, extra) == kd.classes {
+        return Ok(k);
+    }
+    let derived = host
+        .def
+        .kinds
+        .iter()
+        .zip(0u32..)
+        .find(|(d, i)| d.params == merged && host.def.kind_covers(k, KindId(*i)));
+    if let Some((_, i)) = derived {
+        return Ok(KindId(i));
+    }
+    let shown = picked
+        .iter()
+        .map(|(key, v)| format!("{key} = {}", show_param(v)))
+        .collect::<Vec<_>>()
+        .join(", ");
+    Err(runtime_error(format!(
+        "instance_create: `{name}` with {shown} picks other classes than the kind's, and no kind          derived from `{name}` has them (classes come from the kind; place such an instance in a          room or give the package an object with these params)"
+    )))
+}
+
+fn show_param(v: &ParamValue) -> String {
+    match v {
+        ParamValue::Real(r) => r.get().to_string(),
+        ParamValue::Bool(b) => b.to_string(),
+        ParamValue::Str(s) => format!("\"{s}\""),
+        other => format!("{other:?}"),
+    }
 }
 
 /// Registers the instance API on `engine`.
@@ -438,7 +496,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
             Ok(())
         });
         let s = Rc::clone(shared);
-        docs.add("instance_create", "Creates an instance of a kind at (`x`, `y`) and runs its Create event; an optional map sets its parameters. Returns the handle.");
+        docs.add("instance_create", "Creates an instance of a kind at (`x`, `y`) and runs its Create event; an optional map sets its parameters. Params that pick a class (water `variant`, vine `side`, ...) take the kind the loader derived with those values; an error when there is none. Returns the handle.");
         engine.register_fn(
             "instance_create",
             move |kind: ImmutableString, x: Dynamic, y: Dynamic| -> Res<Inst> {
@@ -461,14 +519,14 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
         let s = Rc::clone(shared);
         docs.add(
             "instances",
-            "The live instances of a kind as an array, in event order, as a snapshot at call time.",
+            "The live instances of a kind and of the kinds the loader derived from it (`water[variant=2]` is a `water`, as a GM object covers its children) as an array, in event order, as a snapshot at call time.",
         );
         engine.register_fn("instances", move |kind: ImmutableString| -> Res<Array> {
             s.with_world(|w, host| {
                 let k = kind_id(host, &kind)?;
                 let mut found: Vec<(u16, InstId)> = w
                     .iter_alive()
-                    .filter(|x| x.active && x.kind == k)
+                    .filter(|x| x.active && host.def.kind_covers(k, x.kind))
                     .map(|x| (x.rank, x.id))
                     .collect();
                 found.sort();
@@ -596,7 +654,7 @@ fn host_tick(host: &super::host::Host) -> crate::rules::TickRules {
 fn spawn(s: &Rc<Shared>, kind: &str, x: Real, y: Real, params: Params) -> Res<Inst> {
     s.budget.count_spawn().map_err(runtime_error)?;
     s.charge(cost("instance_create").0)?;
-    let k = s.with_world(|_, host| kind_id(host, kind))??;
+    let k = s.with_world(|_, host| spawn_kind(host, kind, &params))??;
     let init = SpawnInit {
         params,
         ..SpawnInit::default()

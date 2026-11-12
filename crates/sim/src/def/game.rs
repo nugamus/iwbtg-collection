@@ -150,6 +150,23 @@ impl GameDef {
         self.kinds.get(id.index()?)
     }
 
+    /// Whether `kind` is `base` or a kind the loader derived from it, `<base>[<params>]` (a
+    /// `[defaults.<base>]` variant, or a placed instance whose params pick other classes, #659),
+    /// as a GM object index covers its children. Probe kind targets and the script `instances`
+    /// use it.
+    pub fn kind_covers(&self, base: KindId, kind: KindId) -> bool {
+        if kind == base {
+            return true;
+        }
+        match (self.kind(kind), self.kind(base)) {
+            (Some(k), Some(b)) => k
+                .name
+                .strip_prefix(b.name.as_str())
+                .is_some_and(|rest| rest.starts_with('[')),
+            _ => false,
+        }
+    }
+
     /// The room with this id.
     pub fn room(&self, id: RoomId) -> Option<&RoomDef> {
         self.rooms.get(id.index()?)
