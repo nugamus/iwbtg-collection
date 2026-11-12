@@ -172,6 +172,12 @@ impl Sim {
         self.world.timing.ranked_ticks
     }
 
+    /// Whether a cutscene or dialogue region holds now, so the next tick is frozen
+    /// (`stripped::region_holds`). Always false in Play original.
+    pub fn in_region(&self) -> bool {
+        crate::stripped::region_holds(&self.world, &self.def)
+    }
+
     /// Ticks the timer ran while a region held (`TimingState::frozen_ticks`, #34).
     pub fn frozen_ticks(&self) -> u64 {
         self.world.timing.frozen_ticks

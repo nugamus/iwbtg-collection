@@ -3,7 +3,7 @@
 
 use iwbtg_sim::input::{Action, InputFrame, vk};
 
-use crate::bindings::{Bindings, PadInput, oem};
+use crate::bindings::{Bindings, ClientKey, PadInput, oem};
 
 /// Collects key and controller events between two ticks. Edges are per input, as the sim's input
 /// docs require: a press and a release inside one tick both show up, and a second input bound to
@@ -22,6 +22,8 @@ pub struct Collector {
     /// A quick-retry input went down since `take_quick_retry`. A client key: never part of an
     /// `InputFrame`.
     quick_retry: bool,
+    /// A skip-cutscene input went down since `take_skip` (skip.rs). A client key as well.
+    skip: bool,
 }
 
 impl Collector {
@@ -35,12 +37,27 @@ impl Collector {
             released: 0,
             last: InputFrame::EMPTY,
             quick_retry: false,
+            skip: false,
         }
     }
 
     /// Whether a quick-retry key or controller input went down since the last call.
     pub fn take_quick_retry(&mut self) -> bool {
         std::mem::take(&mut self.quick_retry)
+    }
+
+    /// Whether a skip-cutscene key or controller input went down since the last call.
+    pub fn take_skip(&mut self) -> bool {
+        std::mem::take(&mut self.skip)
+    }
+
+    /// Notes a client key's input going down.
+    fn client_press(&mut self, key: Option<ClientKey>) {
+        match key {
+            Some(ClientKey::QuickRetry) => self.quick_retry = true,
+            Some(ClientKey::SkipCutscene) => self.skip = true,
+            None => {}
+        }
     }
 
     /// What the last tick saw, for the overlay: the actions held or pressed, then the controller
@@ -72,9 +89,7 @@ impl Collector {
     /// A key went down.
     pub fn press(&mut self, key: u8) {
         self.down[usize::from(key)] = true;
-        if self.bindings.is_quick_retry_key(key) {
-            self.quick_retry = true;
-        }
+        self.client_press(self.bindings.client_key(key));
         if let Some(action) = self.bindings.key_action(key) {
             self.pressed |= action.bit();
         }
@@ -101,8 +116,8 @@ impl Collector {
             return;
         }
         *slot = down;
-        if down && self.bindings.is_quick_retry_pad(input) {
-            self.quick_retry = true;
+        if down {
+            self.client_press(self.bindings.client_pad(input));
         }
         if let Some(action) = self.bindings.pad_action(input) {
             if down {
@@ -359,6 +374,22 @@ mod tests {
         assert!(c.take_quick_retry());
         c.press(vk::Z);
         assert!(!c.take_quick_retry());
+    }
+
+    /// The skip-cutscene key asks for a skip and, like quick-retry, never reaches a frame.
+    #[test]
+    fn the_skip_cutscene_key_never_reaches_an_input_frame() {
+        let mut c = Collector::new(Bindings::default());
+        assert!(!c.take_skip());
+        c.press(vk::BACKSPACE);
+        assert_eq!(c.take_frame(), InputFrame::EMPTY);
+        assert!(c.take_skip());
+        assert!(!c.take_skip(), "one request per press");
+        assert!(!c.take_quick_retry(), "not a quick-retry");
+        assert_eq!(
+            key_code(bevy::input::keyboard::KeyCode::Backspace),
+            Some(vk::BACKSPACE)
+        );
     }
 
     #[test]

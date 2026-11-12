@@ -201,7 +201,7 @@ struct Cap(FrameCap);
 
 /// Ticks and frames counted over the last full second of wall time, for the overlay.
 #[derive(Resource)]
-struct Stats {
+pub(crate) struct Stats {
     window_start: Instant,
     ticks: u32,
     frames: u32,
@@ -582,11 +582,12 @@ pub(crate) fn test_world(pkg: &Package) -> World {
 }
 
 /// One sim tick: runs on the fixed clock, as many times per frame as the clock is behind.
+/// `pub(crate)` so other modules can order against it (skip.rs runs first).
 #[allow(
     clippy::too_many_arguments,
     reason = "a Bevy system: one parameter per resource"
 )]
-fn tick(
+pub(crate) fn tick(
     mut game: NonSendMut<Game>,
     mut collector: ResMut<Collector>,
     mut stats: ResMut<Stats>,

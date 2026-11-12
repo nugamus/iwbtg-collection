@@ -16,7 +16,7 @@ The game list offers two buttons per game:
 What stripped mode cuts is decided per game (see [Per-game questions](#per-game-questions)). The defaults:
 
 - Title, menus, file select and difficulty select are removed.
-- Cutscenes and dialogue can always be skipped. While one plays, the timer freezes. Dialogue that waits for a button press advances when the player presses, and advances on its own after a timeout. That way nobody gets free rest time by sitting in a text box.
+- Cutscenes and dialogue can always be skipped: the skip-cutscene key (Backspace by default, rebindable as `skip-cutscene`; a client key like quick-retry, not the game's own `skip` action on S) runs the rest of the scene at once, without drawing it or playing its one-shot sounds, as if the player had watched it holding what they held when they pressed. The replay holds every one of those ticks, so it plays back the same as watching. One press skips at most 60 seconds of game time (#573, `revisit`). While one plays, the timer freezes. Dialogue that waits for a button press advances when the player presses, and advances on its own after a timeout. That way nobody gets free rest time by sitting in a text box.
 - Secrets and side items stay in the game. If they allow a trick or a faster route, players may use them. If not, chasing them only costs time.
 
 ## Mods

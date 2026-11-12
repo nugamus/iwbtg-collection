@@ -144,6 +144,16 @@ impl StrippedDef {
     }
 }
 
+/// Whether a cutscene or dialogue region holds in `w`: always false outside a
+/// [`PlayMode::Stripped`] run. Between ticks it says whether the next tick is frozen
+/// ([`begin_tick`] looks at the same world); the client's skip runs ticks while it holds (#573).
+pub fn region_holds(w: &World, def: &GameDef) -> bool {
+    let regions = &def.stripped;
+    w.mode == PlayMode::Stripped
+        && (regions.cutscenes.iter().any(|r| r.holds.holds(w))
+            || regions.dialogues.iter().any(|d| d.region.holds.holds(w)))
+}
+
 /// Tick row 0, before `input` is latched: the region step of #34. Returns the frame the tick
 /// runs with: `input`, plus each dialogue's derived press of `advance` (held and pressed).
 ///
@@ -164,9 +174,7 @@ impl StrippedDef {
 pub fn begin_tick(w: &mut World, def: &GameDef, input: InputFrame) -> InputFrame {
     let stripped = w.mode == PlayMode::Stripped;
     let regions = &def.stripped;
-    let frozen = stripped
-        && (regions.cutscenes.iter().any(|r| r.holds.holds(w))
-            || regions.dialogues.iter().any(|d| d.region.holds.holds(w)));
+    let frozen = region_holds(w, def);
     let t = &mut w.timing;
     if t.started && !t.ended {
         if frozen {

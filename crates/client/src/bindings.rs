@@ -9,11 +9,13 @@
 //! [bindings.pad]
 //! jump = ["south"]
 //! quick-retry = ["select"]
+//! skip-cutscene = ["right-bumper"]
 //! ```
 //!
-//! `quick-retry` sits beside the sim actions in the same tables, but it is a client key
-//! (retry.rs), not an `Action`: it never enters an `InputFrame` or a replay. Its default is the
-//! key left of `1` (Backquote) and no controller input.
+//! `quick-retry` (retry.rs) and `skip-cutscene` (skip.rs) sit beside the sim actions in the same
+//! tables, but they are client keys ([`ClientKey`]), not `Action`s: they never enter an
+//! `InputFrame` or a replay. Quick-retry defaults to the key left of `1` (Backquote),
+//! skip-cutscene to Backspace; neither has a controller default.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -120,6 +122,55 @@ const DEFAULT_PAD: [(PadInput, Action); 11] = [
 /// The name of the quick-retry binding in the file and in `--bind`.
 pub const QUICK_RETRY: &str = "quick-retry";
 
+/// A key the client handles itself, never an `Action`: it does not enter an `InputFrame`, so a
+/// replay never sees it. Bound beside the actions, and never on an input an action has.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ClientKey {
+    /// Starts the run again (retry.rs).
+    QuickRetry,
+    /// Skips the cutscene or dialogue region that holds in a ranked run (skip.rs, #573). Not the
+    /// game's own `skip` action (S), which the sim reads.
+    SkipCutscene,
+}
+
+impl ClientKey {
+    pub const ALL: [ClientKey; 2] = [ClientKey::QuickRetry, ClientKey::SkipCutscene];
+
+    /// The name in the bindings file and in `--bind`.
+    pub const fn name(self) -> &'static str {
+        match self {
+            ClientKey::QuickRetry => QUICK_RETRY,
+            ClientKey::SkipCutscene => "skip-cutscene",
+        }
+    }
+
+    /// The client key with this file name, any case.
+    pub fn from_name(name: &str) -> Option<ClientKey> {
+        ClientKey::ALL
+            .into_iter()
+            .find(|k| k.name().eq_ignore_ascii_case(name))
+    }
+
+    const fn index(self) -> usize {
+        self as usize
+    }
+
+    /// The default key: Backquote (left of `1`) to quick-retry, Backspace to skip.
+    const fn default_key(self) -> u8 {
+        match self {
+            ClientKey::QuickRetry => oem::BACKQUOTE,
+            ClientKey::SkipCutscene => vk::BACKSPACE,
+        }
+    }
+}
+
+/// The keys and controller inputs of one client key.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct ClientInputs {
+    keys: BTreeSet<u8>,
+    pad: BTreeSet<PadInput>,
+}
+
 /// Virtual-key codes of the punctuation keys the sim has no names for (Windows `VK_OEM_*`).
 pub mod oem {
     pub const SEMICOLON: u8 = 0xBA;
@@ -156,9 +207,8 @@ const OEM_NAMES: [(&str, u8); 11] = [
 pub struct Bindings {
     keys: BTreeMap<u8, Action>,
     pad: [Option<Action>; PadInput::ALL.len()],
-    /// The keys and controller inputs that quick-retry the run (a client key, not an `Action`).
-    quick_keys: BTreeSet<u8>,
-    quick_pad: BTreeSet<PadInput>,
+    /// The keys and controller inputs of each client key, by `ClientKey::index`.
+    client: [ClientInputs; ClientKey::ALL.len()],
 }
 
 impl Default for Bindings {
@@ -166,8 +216,10 @@ impl Default for Bindings {
         let mut b = Bindings {
             keys: IWBTG_DEFAULT_KEYS.into_iter().collect(),
             pad: [None; PadInput::ALL.len()],
-            quick_keys: BTreeSet::from([oem::BACKQUOTE]),
-            quick_pad: BTreeSet::new(),
+            client: ClientKey::ALL.map(|k| ClientInputs {
+                keys: BTreeSet::from([k.default_key()]),
+                pad: BTreeSet::new(),
+            }),
         };
         for (input, action) in DEFAULT_PAD {
             b.pad[input.index()] = Some(action);
@@ -195,14 +247,29 @@ impl Bindings {
         self.pad[input.index()]
     }
 
+    /// The client key a key stands for.
+    pub fn client_key(&self, key: u8) -> Option<ClientKey> {
+        ClientKey::ALL
+            .into_iter()
+            .find(|k| self.client[k.index()].keys.contains(&key))
+    }
+
+    /// The client key a controller input stands for.
+    pub fn client_pad(&self, input: PadInput) -> Option<ClientKey> {
+        ClientKey::ALL
+            .into_iter()
+            .find(|k| self.client[k.index()].pad.contains(&input))
+    }
+
     /// The key quick-retries the run.
     pub fn is_quick_retry_key(&self, key: u8) -> bool {
-        self.quick_keys.contains(&key)
+        self.client_key(key) == Some(ClientKey::QuickRetry)
     }
 
     /// The controller input quick-retries the run.
+    #[cfg(test)]
     pub fn is_quick_retry_pad(&self, input: PadInput) -> bool {
-        self.quick_pad.contains(&input)
+        self.client_pad(input) == Some(ClientKey::QuickRetry)
     }
 
     /// Some key or controller input stands for `action`.
@@ -214,34 +281,60 @@ impl Bindings {
     /// default keys (or all its default controller inputs) and gets the listed ones.
     pub fn from_config(config: &Config) -> Result<Bindings, String> {
         let mut b = Bindings::default();
-        // Quick-retry first: the sim actions' entries are checked against what it ends up with.
-        if let Some(keys) = config.keys.get(QUICK_RETRY) {
-            b.quick_keys.clear();
-            for key in keys {
-                b.quick_keys
-                    .insert(key_from_name(key).ok_or_else(|| format!("unknown key `{key}`"))?);
+        // Client keys first: the sim actions' entries are checked against what they end up with.
+        for ck in ClientKey::ALL {
+            if let Some(keys) = config.keys.get(ck.name()) {
+                let mut set = BTreeSet::new();
+                for key in keys {
+                    set.insert(key_from_name(key).ok_or_else(|| format!("unknown key `{key}`"))?);
+                }
+                b.client[ck.index()].keys = set;
+            }
+            if let Some(inputs) = config.pad.get(ck.name()) {
+                let mut set = BTreeSet::new();
+                for input in inputs {
+                    set.insert(
+                        PadInput::from_name(input)
+                            .ok_or_else(|| format!("unknown controller input `{input}`"))?,
+                    );
+                }
+                b.client[ck.index()].pad = set;
             }
         }
-        if let Some(inputs) = config.pad.get(QUICK_RETRY) {
-            b.quick_pad.clear();
-            for input in inputs {
-                b.quick_pad.insert(
-                    PadInput::from_name(input)
-                        .ok_or_else(|| format!("unknown controller input `{input}`"))?,
-                );
+        // Two client keys never share an input.
+        for (i, a) in ClientKey::ALL.into_iter().enumerate() {
+            for other in &ClientKey::ALL[i + 1..] {
+                let (x, y) = (&b.client[a.index()], &b.client[other.index()]);
+                if let Some(key) = x.keys.intersection(&y.keys).next() {
+                    return Err(format!(
+                        "key `{}` is bound to both {} and {}",
+                        key_name(*key),
+                        a.name(),
+                        other.name()
+                    ));
+                }
+                if let Some(input) = x.pad.intersection(&y.pad).next() {
+                    return Err(format!(
+                        "controller input `{}` is bound to both {} and {}",
+                        input.name(),
+                        a.name(),
+                        other.name()
+                    ));
+                }
             }
         }
         for (name, keys) in &config.keys {
-            if name == QUICK_RETRY {
+            if ClientKey::from_name(name).is_some() {
                 continue;
             }
             let action = parse_action(name)?;
             b.keys.retain(|_, a| *a != action);
             for key in keys {
                 let code = key_from_name(key).ok_or_else(|| format!("unknown key `{key}`"))?;
-                if b.quick_keys.contains(&code) {
+                if let Some(ck) = b.client_key(code) {
                     return Err(format!(
-                        "key `{key}` is bound to both {QUICK_RETRY} and {}",
+                        "key `{key}` is bound to both {} and {}",
+                        ck.name(),
                         action.name()
                     ));
                 }
@@ -258,7 +351,7 @@ impl Bindings {
             }
         }
         for (name, inputs) in &config.pad {
-            if name == QUICK_RETRY {
+            if ClientKey::from_name(name).is_some() {
                 continue;
             }
             let action = parse_action(name)?;
@@ -270,9 +363,10 @@ impl Bindings {
             for input in inputs {
                 let p = PadInput::from_name(input)
                     .ok_or_else(|| format!("unknown controller input `{input}`"))?;
-                if b.quick_pad.contains(&p) {
+                if let Some(ck) = b.client_pad(p) {
                     return Err(format!(
-                        "controller input `{input}` is bound to both {QUICK_RETRY} and {}",
+                        "controller input `{input}` is bound to both {} and {}",
+                        ck.name(),
                         action.name()
                     ));
                 }
@@ -288,23 +382,27 @@ impl Bindings {
                 b.pad[p.index()] = Some(action);
             }
         }
-        // A quick-retry input the sim actions still hold (a default not moved off) clashes.
-        for key in &b.quick_keys {
-            if let Some(other) = b.keys.get(key) {
-                return Err(format!(
-                    "key `{}` is bound to both {QUICK_RETRY} and {}",
-                    key_name(*key),
-                    other.name()
-                ));
+        // A client key's input the sim actions still hold (a default not moved off) clashes.
+        for ck in ClientKey::ALL {
+            for key in &b.client[ck.index()].keys {
+                if let Some(other) = b.keys.get(key) {
+                    return Err(format!(
+                        "key `{}` is bound to both {} and {}",
+                        key_name(*key),
+                        ck.name(),
+                        other.name()
+                    ));
+                }
             }
-        }
-        for input in &b.quick_pad {
-            if let Some(other) = b.pad[input.index()] {
-                return Err(format!(
-                    "controller input `{}` is bound to both {QUICK_RETRY} and {}",
-                    input.name(),
-                    other.name()
-                ));
+            for input in &b.client[ck.index()].pad {
+                if let Some(other) = b.pad[input.index()] {
+                    return Err(format!(
+                        "controller input `{}` is bound to both {} and {}",
+                        input.name(),
+                        ck.name(),
+                        other.name()
+                    ));
+                }
             }
         }
         Ok(b)
@@ -339,20 +437,24 @@ impl Bindings {
                 or_dash(pads.into_iter().map(String::from).collect()),
             ));
         }
-        let keys: Vec<String> = self.quick_keys.iter().map(|k| key_name(*k)).collect();
-        let pads: Vec<String> = self.quick_pad.iter().map(|p| p.name().to_string()).collect();
-        let or_dash = |v: Vec<String>| {
-            if v.is_empty() {
-                "-".to_string()
-            } else {
-                v.join(", ")
-            }
-        };
-        out.push_str(&format!(
-            "{QUICK_RETRY:<11} keys: {:<18} pad: {}\n",
-            or_dash(keys),
-            or_dash(pads)
-        ));
+        for ck in ClientKey::ALL {
+            let inputs = &self.client[ck.index()];
+            let keys: Vec<String> = inputs.keys.iter().map(|k| key_name(*k)).collect();
+            let pads: Vec<String> = inputs.pad.iter().map(|p| p.name().to_string()).collect();
+            let or_dash = |v: Vec<String>| {
+                if v.is_empty() {
+                    "-".to_string()
+                } else {
+                    v.join(", ")
+                }
+            };
+            out.push_str(&format!(
+                "{:<13} keys: {:<18} pad: {}\n",
+                ck.name(),
+                or_dash(keys),
+                or_dash(pads)
+            ));
+        }
         out
     }
 }
@@ -438,8 +540,8 @@ impl Config {
             .split_once('=')
             .ok_or_else(|| format!("`{spec}`: expected ACTION=INPUT[,INPUT...]"))?;
         let action = action.trim();
-        let action = if action.eq_ignore_ascii_case(QUICK_RETRY) {
-            QUICK_RETRY.to_string()
+        let action = if let Some(ck) = ClientKey::from_name(action) {
+            ck.name().to_string()
         } else {
             parse_action(action)?.name().to_string()
         };
@@ -748,6 +850,35 @@ mod tests {
         c.set("quick-retry=F5").unwrap();
         c.set("jump=Backquote").unwrap();
         assert!(Bindings::from_config(&c).is_ok());
+    }
+
+    #[test]
+    fn skip_cutscene_defaults_to_backspace_and_is_not_an_action() {
+        let b = Bindings::default();
+        assert_eq!(b.client_key(vk::BACKSPACE), Some(ClientKey::SkipCutscene));
+        assert_eq!(b.key_action(vk::BACKSPACE), None);
+        // The game's own skip action (S) is a different thing: it stays a sim action.
+        assert_eq!(b.key_action(b'S'), Some(Action::Skip));
+        assert_eq!(b.client_key(b'S'), None);
+        assert!(PadInput::ALL.iter().all(|p| b.client_pad(*p).is_none()));
+    }
+
+    #[test]
+    fn skip_cutscene_is_rebound_and_never_shares_an_input() {
+        let mut c = Config::default();
+        c.set("skip-cutscene=Tab,pad:select").unwrap();
+        let b = Bindings::from_config(&c).unwrap();
+        assert_eq!(b.client_key(vk::TAB), Some(ClientKey::SkipCutscene));
+        assert_eq!(b.client_key(vk::BACKSPACE), None, "the default is replaced");
+        assert_eq!(b.client_pad(PadInput::Select), Some(ClientKey::SkipCutscene));
+        assert!(c.set("quick-retry=pad:select").is_err(), "two client keys");
+        assert!(c.set("quick-retry=Tab").is_err());
+        assert!(c.set("jump=Tab").is_err(), "a client key and an action");
+        assert!(c.set("skip-cutscene=S").is_err(), "S is the game's skip action");
+        let mut w = Vec::new();
+        assert_eq!(Config::from_table(&c.to_table(), &mut w), c);
+        assert!(w.is_empty(), "{w:?}");
+        assert!(Bindings::default().describe().contains("skip-cutscene"));
     }
 
     #[test]
