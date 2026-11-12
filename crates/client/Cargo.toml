@@ -17,6 +17,9 @@ png.workspace = true
 svgtypes.workspace = true
 tiny-skia.workspace = true
 thiserror.workspace = true
+# Local time zone for run dates (hud::leaderboard::local_offset, #637); `wasmbind` reads the
+# browser's offset through js-sys on wasm32.
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "wasmbind"] }
 serde.workspace = true
 toml.workspace = true
 postcard.workspace = true
