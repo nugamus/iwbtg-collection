@@ -7,11 +7,13 @@
   python -I .claude/hooks/issues.py --test  Self-test of the stop check and the settings drift check.
 
 start also warns when the workspace-root .claude/settings.json differs from client/workspace/settings.json,
-and reports the client repo's CI on main, with a loud first line when main is red (#595).
+and reports the client repo's CI on main, with a loud first line when main is red (#595), and flags open
+PRs whose newest Actions run has sat queued over an hour (#666).
 
 The same file lives in all three repos; edit it in the client repo and copy it over.
 """
 import json, os, re, subprocess, sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 WORKSPACE = Path(__file__).resolve().parents[3]  # <workspace>/<repo>/.claude/hooks/issues.py
@@ -33,7 +35,8 @@ fragment R on Repository {
     comments(last: 1) { nodes { body } } } }
   triage: issues(first: 20, states: OPEN, labels: ["triage"]) { totalCount nodes { number title } }
   prs: pullRequests(first: 30, states: OPEN) { nodes { number title headRefName isDraft mergeable
-    autoMergeRequest { enabledAt } } }
+    autoMergeRequest { enabledAt } commits(last: 1) { nodes { commit { checkSuites(last: 20) { nodes {
+    status createdAt workflowRun { workflow { name } } } } } } } } }
 }"""
 
 # CI on the client repo's main (the other repos have no CI): the newest commits and their check runs.
@@ -72,6 +75,28 @@ def main_ci(main):
         return "", "Main CI: no finished run in main's last 10 commits" + (f"; {running} running" if running else "")
     except Exception as e:  # never break the hook over CI data
         return "", f"Main CI: unknown ({type(e).__name__})"
+
+
+STUCK_AFTER = 3600  # seconds a run may sit queued before the hook calls it stuck
+
+
+def stuck_ci(pr, now):
+    """Whole hours the newest run of some workflow on the PR's head commit has sat QUEUED, if over STUCK_AFTER, else 0.
+    Runs started 2026-11-11 stayed queued with no jobs for 16 hours and auto-merge waited (#666). Only Actions
+    suites count (other apps' suites stay queued forever); a reopened PR's new run supersedes the stuck one.
+    Bad data: 0, never raises."""
+    try:
+        newest = {}
+        for s in pr["commits"]["nodes"][0]["commit"]["checkSuites"]["nodes"]:
+            if s.get("workflowRun"):
+                name = s["workflowRun"]["workflow"]["name"]
+                if name not in newest or s["createdAt"] > newest[name]["createdAt"]:
+                    newest[name] = s
+        ages = [(now - datetime.fromisoformat(s["createdAt"].replace("Z", "+00:00"))).total_seconds()
+                for s in newest.values() if s["status"] == "QUEUED"]
+        return max(1, int(max(ages) // 3600)) if ages and max(ages) > STUCK_AFTER else 0
+    except Exception:
+        return 0
 
 
 def ms_key(title):
@@ -128,7 +153,8 @@ def start():
     except Exception as e:  # offline or gh missing: say so, never block the session
         return emit(warn + f"Issue harness: could not reach GitHub ({type(e).__name__}). Run `gh auth status`; work from the issues once it is back.")
 
-    ms, ready, answered, waiting, triage, claimed, prs = {}, [], [], 0, [], [], []
+    ms, ready, answered, waiting, triage, claimed, prs, stuck = {}, [], [], 0, [], [], [], []
+    now = datetime.now(timezone.utc)
     for k, repo in data.items():
         name = REPOS[k]
         for m in repo["milestones"]["nodes"]:
@@ -149,8 +175,13 @@ def start():
         triage += [f"{name}#{i['number']} {i['title']}" for i in repo["triage"]["nodes"]]
         claimed += [f"{name}#{i['number']} {i['title']}" for i in repo["claimed"]["nodes"]]
         for p in repo["prs"]["nodes"]:
+            hours = stuck_ci(p, now)
+            if hours:
+                n, r = p["number"], f"{OWNER}/{name}"
+                again = f" && gh pr merge {n} -R {r} --squash --auto" if p["autoMergeRequest"] else ""
+                stuck.append(f"- `gh pr close {n} -R {r} && gh pr reopen {n} -R {r}{again}`")
             notes = [n for n, on in (("draft", p["isDraft"]), ("CONFLICTS with main", p["mergeable"] == "CONFLICTING"),
-                                     ("auto-merge on", p["autoMergeRequest"])) if on]
+                                     ("auto-merge on", p["autoMergeRequest"]), (f"CI STUCK: queued {hours}h", hours)) if on]
             prs.append(f"{name}#{p['number']} {p['title']} ({p['headRefName']}" + "".join(f"; {n}" for n in notes) + ")")
 
     lines = ["# Project status (from GitHub issues)", "", ci_line, "", "Milestones (closed/total across repos):"]
@@ -165,6 +196,9 @@ def start():
         lines += ["", "In progress (claimed by an agent; do not start these):"] + [f"- {c}" for c in claimed]
     if prs:
         lines += ["", "Open PRs:"] + [f"- {p}" for p in prs]
+    if stuck:
+        lines += ["", "CI STUCK PRs: close and reopen starts fresh runs; reopening turns auto-merge off, so the command turns "
+                  "it on again where it was on (cancel and rerun refuse such runs; client/docs/dev-setup.md, CI):"] + stuck
     wt = worktrees()
     if wt:
         lines += ["", "Worktrees (lanes keep theirs between issues):"] + wt
@@ -274,6 +308,26 @@ def test():
     assert ci({"oid": "c" * 40, "messageHeadline": "no checks", "statusCheckRollup": None}, commit("a", run("x", "FAILURE")))[0].startswith("MAIN IS RED")
     assert main_ci(None) == ("", "Main CI: unknown (TypeError)")  # query field missing
     assert ci({"oid": 5, "messageHeadline": "x", "statusCheckRollup": {"contexts": {"nodes": [run("x", "SUCCESS")]}}}) == ("", "Main CI: unknown (TypeError)")
+    # Stuck PR CI (#666): the newest Actions run per workflow, queued over an hour; other apps' suites don't count.
+    now = datetime(2026, 11, 12, 12, tzinfo=timezone.utc)
+
+    def pr(*suites):
+        return {"commits": {"nodes": [{"commit": {"checkSuites": {"nodes": list(suites)}}}]}}
+
+    def suite(status, at, wf="CI"):
+        return {"status": status, "createdAt": f"2026-11-12T{at}:00Z", "workflowRun": wf and {"workflow": {"name": wf}}}
+    assert stuck_ci(pr(suite("QUEUED", "02:30"), suite("COMPLETED", "02:30", "PR checks")), now) == 9
+    assert stuck_ci(pr(suite("QUEUED", "10:50")), now) == 1
+    assert stuck_ci(pr(suite("QUEUED", "11:30"), suite("IN_PROGRESS", "11:30", "PR checks")), now) == 0  # just queued
+    assert stuck_ci(pr(suite("QUEUED", "01:00", None)), now) == 0  # another app's suite, never runs
+    assert stuck_ci(pr(suite("QUEUED", "01:00"), suite("IN_PROGRESS", "11:00")), now) == 0  # reopened: a newer run
+    assert stuck_ci({"commits": {"nodes": []}}, now) == 0 and stuck_ci({}, now) == 0
+    # PR #665 as GitHub returned it: the claude app's suite has no workflowRun; runs queued 2026-11-11 20:40.
+    real = [{"status": "QUEUED", "createdAt": "2026-11-11T20:40:55Z", "workflowRun": None},
+            {"status": "QUEUED", "createdAt": "2026-11-11T20:40:59Z", "workflowRun": {"workflow": {"name": "PR checks"}}},
+            {"status": "QUEUED", "createdAt": "2026-11-11T20:40:59Z", "workflowRun": {"workflow": {"name": "CI"}}}]
+    assert stuck_ci(pr(*real), now) == 15
+    assert stuck_ci(pr(*real, suite("COMPLETED", "11:03", "PR checks"), suite("COMPLETED", "11:03")), now) == 0  # after close/reopen
     print("ok")
 
 
