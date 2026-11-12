@@ -98,6 +98,7 @@ What follows from it:
 
 - `.cargo/config.toml` links with `rust-lld` on Windows, and `Cargo.toml` keeps only line tables as debug info for our crates and none for dependencies: faster links and a smaller `target/`.
 - `.claude/hooks/build_guard.py` (PreToolUse, all sessions and teammates) blocks cargo commands that change the fingerprint or run in the background; `# build-guard: ok (<why>)` in the command overrides it. Self-test: `python -I client/.claude/hooks/build_guard.py --test`.
+- `.claude/hooks/conflict_guard.py` (PreToolUse, all sessions and teammates, #698) denies a `git commit` whose staged changes, or a `git push` whose unpushed commits, add a line starting with git's conflict markers (`<<<<<<< ` or `>>>>>>> `; a lone `=======` is a Markdown heading underline and passes). A resolve script and its commit in one command are checked before the script runs, so the push check is the one that catches what the script missed: fix the file, commit the fix, push again. `# conflict-guard: ok (<why>)` overrides it. Self-test: `python -I client/.claude/hooks/conflict_guard.py --test`.
 - Anything that changes the build fingerprint (`RUSTFLAGS`, `--config`, `CARGO_PROFILE_*`, a different linker) rebuilds all dependencies, about 5 minutes, and again on the way back. Don't copy CI's `RUSTFLAGS`/`CARGO_INCREMENTAL` into local commands.
 - Keep worktrees per lane and warm (above). A cold worktree costs 5 to 10 minutes and 10 to 20 GB.
 - Locally, run the tests of what you changed; run `cargo xtask check` once before the PR (only the changed crates and their dependents; `--all` for everything) and let CI do the rest.
@@ -124,9 +125,10 @@ cd client
 cargo build --workspace
 python -I .claude/hooks/issues.py start
 python -I ../research/.claude/hooks/guard_archive.py --test
+python -I .claude/hooks/conflict_guard.py --test
 ```
 
-Expected: the build ends with `Finished`. `issues.py start` prints JSON with main's CI status (a first line `MAIN IS RED` when it failed), milestone progress and the next issues. The guard prints `guard_archive self-test passed`.
+Expected: the build ends with `Finished`. `issues.py start` prints JSON with main's CI status (a first line `MAIN IS RED` when it failed), milestone progress and the next issues. The guards print `guard_archive self-test passed` and `conflict_guard self-test passed`.
 
 ## CI
 
