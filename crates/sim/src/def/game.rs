@@ -38,6 +38,10 @@ pub struct GameDef {
     pub float_model: FloatModel,
     /// GM "treat uninitialized variables as 0" (19 games on, keep-celebrating-for-xia off).
     pub uninit_reads_zero: bool,
+    /// The GM8 instance id of the first instance created at run time (`[engine]
+    /// first_runtime_id`, #680: the game file's last-instance-id + 1). `None` when the package
+    /// does not give one. Not used by the sim yet (#669).
+    pub first_runtime_id: Option<u32>,
     /// Sprites.
     pub sprites: Vec<SpriteDef>,
     /// Masks, referenced by sprites and kinds.

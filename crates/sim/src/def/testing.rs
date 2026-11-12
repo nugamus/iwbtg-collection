@@ -75,6 +75,7 @@ impl GameDefBuilder {
                 engine_rev: 0,
                 float_model: FloatModel::F64,
                 uninit_reads_zero: true,
+                first_runtime_id: None,
                 sprites: Vec::new(),
                 masks: Vec::new(),
                 kinds: Vec::new(),
