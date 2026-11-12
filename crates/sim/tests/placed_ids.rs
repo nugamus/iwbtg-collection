@@ -2,7 +2,7 @@
 //! `first_runtime_id`, and a placed id already in use is not created again (CLONE_SPEC,
 //! Instances, "Placed instance ids"; register R29).
 
-mod placed_ids {
+mod gm_ids {
     use iwbtg_sim::def::testing::GameDefBuilder;
     use iwbtg_sim::def::{Builtin, ClassMask, GameDef, KindDef, KindId, RoomDef, RoomId};
     use iwbtg_sim::num::Real;
@@ -79,11 +79,17 @@ mod placed_ids {
     }
 
     fn ids(w: &World, kind: KindId) -> Vec<u64> {
-        w.iter_alive().filter(|i| i.kind == kind).map(|i| i.id.0).collect()
+        w.iter_alive()
+            .filter(|i| i.kind == kind)
+            .map(|i| i.id.0)
+            .collect()
     }
 
     fn spawn(g: &G, w: &mut World, kind: KindId) -> InstId {
-        with(g, w, |c| c.spawn(kind, Real::new(48.0), Real::new(400.0), SpawnInit::default()).unwrap())
+        with(g, w, |c| {
+            c.spawn(kind, Real::new(48.0), Real::new(400.0), SpawnInit::default())
+                .unwrap()
+        })
     }
 
     #[test]
@@ -94,7 +100,11 @@ mod placed_ids {
         assert_eq!(ids(&w, g.block), [104_132, 104_194]);
         let kid_at_278 = w.get(InstId(104_180)).map(|i| i.m.y());
         assert_eq!(kid_at_278, Some(Real::new(278.0)));
-        assert_eq!(spawn(&g, &mut w, g.block), InstId(105_106), "runtime ids start at first_runtime_id");
+        assert_eq!(
+            spawn(&g, &mut w, g.block),
+            InstId(105_106),
+            "runtime ids start at first_runtime_id"
+        );
     }
 
     /// famb-multikid-restart-c: the placed kids are destroyed, the load makes a runtime kid,
@@ -110,8 +120,16 @@ mod placed_ids {
         let loaded = spawn(&g, &mut w, g.kid);
         with(&g, &mut w, |c| perform_change(c, RoomRequest::Restart).unwrap());
         assert_eq!(ids(&w, g.kid), [104_180, 104_190, loaded.0]);
-        assert_eq!(ids(&w, g.block), [104_132, 104_194], "the blocks come back with the same ids");
-        assert_eq!(spawn(&g, &mut w, g.block), InstId(loaded.0 + 1), "the counter only grows");
+        assert_eq!(
+            ids(&w, g.block),
+            [104_132, 104_194],
+            "the blocks come back with the same ids"
+        );
+        assert_eq!(
+            spawn(&g, &mut w, g.block),
+            InstId(loaded.0 + 1),
+            "the counter only grows"
+        );
     }
 
     /// placed-ids rows 6 and 11: persistent placed kids that are alive survive a restart and a
@@ -124,8 +142,14 @@ mod placed_ids {
         with(&g, &mut w, |c| perform_change(c, RoomRequest::Restart).unwrap());
         assert_eq!(ids(&w, g.kid), [104_180, 104_190]);
         assert_eq!(w.iter_alive().count(), count);
-        with(&g, &mut w, |c| perform_change(c, RoomRequest::Goto(g.other)).unwrap());
-        assert_eq!(ids(&w, g.kid), [104_180, 104_190], "room12 places 104180, which is carried in");
+        with(&g, &mut w, |c| {
+            perform_change(c, RoomRequest::Goto(g.other)).unwrap()
+        });
+        assert_eq!(
+            ids(&w, g.kid),
+            [104_180, 104_190],
+            "room12 places 104180, which is carried in"
+        );
         assert_eq!(w.get(InstId(104_180)).map(|i| i.m.y()), Some(Real::new(278.0)));
     }
 

@@ -62,7 +62,9 @@ impl World {
                 .instances
                 .binary_search_by_key(&inst.id, |i| i.id)
                 .err()
-                .ok_or_else(|| SimError::unsupported(format!("instance id {} is already in use", inst.id.0)))?,
+                .ok_or_else(|| {
+                    SimError::unsupported(format!("instance id {} is already in use", inst.id.0))
+                })?,
             _ => self.instances.len(),
         };
         self.grid.mark_moved(inst.id);
@@ -123,7 +125,11 @@ mod tests {
         let ids: Vec<u64> = w.instances.iter().map(|i| i.id.0).collect();
         assert_eq!(ids, [104_180, 104_190, 105_106]);
         assert_eq!(w.index_of(runtime), Some(2));
-        assert_eq!(spawn(&mut w, 0), InstId(105_107), "placed ids do not move the counter");
+        assert_eq!(
+            spawn(&mut w, 0),
+            InstId(105_107),
+            "placed ids do not move the counter"
+        );
         let again = Instance::new(InstId(104_180), KindId(1), 0, Real::ZERO, Real::ZERO);
         let err = w.insert(again).unwrap_err();
         assert!(err.to_string().contains("104180 is already in use"), "{err}");
