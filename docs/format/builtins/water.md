@@ -4,7 +4,7 @@ Collision with either kid (one event per kid). In this order: `fall_cap`, then `
 
 | Param | Type | Default | Meaning |
 |---|---|---|---|
-| `variant` | 1, 2, 3 | 1 | Picks the class `water1`, `water2` or `water3` (the loader, `objects.rs`). |
+| `variant` | 1, 2, 3 | 1 | Picks the class `water1`, `water2` or `water3` (the loader, `objects.rs`). On a placed instance, a variant other than its kind's gives it a derived kind (`water[variant=2]`, v0.md Params that pick a class). |
 | `fall_cap` | real | 2 | A downward speed above the cap is set to it. For the flipped kid "down" is up (speed times gravity sign). -1 is no cap (LR tipDJump, RBF object945). |
 | `refresh` | `none`, `on_touch` | `none` | `on_touch` refreshes the air jump (`kid::api::refresh_air_jump`). |
 | `air_jump` | `none`, `press_if_no_djump`, `djump_ignoring_flag` | `none` | `press_if_no_djump`: Jump pressed this tick and no double jump left sets `vspeed` to minus the jump speed (LR tipWater, SHO mizu01, ANI mugenjump). `djump_ignoring_flag`: the same jump whether or not `djump` is set, then `djump` is cleared (JUN objwater2). |

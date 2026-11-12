@@ -12,6 +12,6 @@ Solid with a precise mask. No events: the climb and snap rules are the kid's (th
 **Not covered.**
 - Poronkusema's nanameblock is one object whose instances get `image_xscale` -2, -1 or 2 from creation code (kid/A1.md POR); that is the instance's own scale (it does scale the mask, GM rule), its kid has one event for all of them, so all stay class `slope`. Write it as the room instance `xscale`, not `scale_x`.
 - Family B `obj_wall` (kid/B.md) is one class for both directions, `slope_wall`, read by the End Step `slope_b` code; `shape` does not pick it. A kind gets it with `counts_as = ["slope_wall"]` (it keeps class `slope` too, which no B row reads).
-- **OPEN:** `shape` and `scale_x` on a placed instance load and are checked, but the class is the kind's, like water `variant` (instance classes come from the kind; #659). Give the kind (object file) the param.
+- Placed instance: `shape` or `scale_x` that pick the other class give the instance a derived kind with it (`slope[shape=rise_left]`, `docs/format/v0.md` Params that pick a class, #659; test `wp7a_load::placed_class_params_derive_a_kind_with_those_classes`).
 
 **Loading.** Both params load on an object file or a placed instance and are checked (`params::check`; tests `wp6b3_params_*` in `crates/format/tests/wp7a_load.rs`). Converter request CR17.

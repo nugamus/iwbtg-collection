@@ -314,6 +314,11 @@ struct Loader<'a> {
     derived: BTreeMap<(KindId, usize), KindId>,
     /// For derived kinds: the bare kind whose `object_order` entries rank them.
     rank_kind: BTreeMap<KindId, KindId>,
+    /// Kinds derived for a placed instance whose params pick other classes (#659): (kind, the
+    /// class-picking params as `k=v,...`) to kind.
+    class_derived: BTreeMap<(KindId, String), KindId>,
+    /// A package object's `counts_as` (and legacy role) classes, which its derived kinds keep.
+    kind_extra: BTreeMap<KindId, ClassMask>,
     scripts: Vec<ScriptDef>,
     room_ids: BTreeMap<String, RoomId>,
     sounds: Vec<SoundDef>,
@@ -351,6 +356,8 @@ impl<'a> Loader<'a> {
             defaults: BTreeMap::new(),
             derived: BTreeMap::new(),
             rank_kind: BTreeMap::new(),
+            class_derived: BTreeMap::new(),
+            kind_extra: BTreeMap::new(),
             scripts: Vec::new(),
             room_ids: BTreeMap::new(),
             sounds: Vec::new(),
@@ -1188,7 +1195,10 @@ impl<'a> Loader<'a> {
             }
         }
         kind.classes = kind_classes(base, &kind.params, extra);
-        self.push_kind(kind);
+        let id = self.push_kind(kind);
+        if extra != ClassMask::NONE {
+            self.kind_extra.insert(id, extra);
+        }
     }
 
     /// A named class, or the next package class bit for a new name.
@@ -1623,8 +1633,59 @@ impl<'a> Loader<'a> {
     }
 
     /// The kind an instance uses: `@id`, a bare built-in or (bare built-in with matching variant
-    /// defaults) a derived variant kind. `Err(true)` when the kind was dropped (CR3).
+    /// defaults) a derived variant kind, then (params that pick other classes) a kind derived
+    /// with those classes. `Err(true)` when the kind was dropped (CR3).
     fn instance_kind(&mut self, name: &str, params: &Params) -> Result<KindId, bool> {
+        let kind = self.variant_kind(name, params)?;
+        Ok(self.class_kind(kind, params))
+    }
+
+    /// `kind`, or a kind derived from it when the instance's class-picking params
+    /// (`objects::class_params`) give other classes than the kind's (#659): `<kind>[k=v,...]` with
+    /// those params, ranked by the kind's `object_order` entries. Instance classes come from the
+    /// kind (`World::spawn`), as a GM instance's come from its object.
+    fn class_kind(&mut self, kind: KindId, params: &Params) -> KindId {
+        let Some(k) = self.kinds.get(kind.index().unwrap_or(usize::MAX)) else {
+            return kind;
+        };
+        let picked: Vec<(String, ParamValue)> = objects::class_params(k.base)
+            .iter()
+            .filter_map(|key| params.0.get(*key).map(|v| ((*key).to_owned(), v.clone())))
+            .collect();
+        if picked.is_empty() {
+            return kind;
+        }
+        let mut merged = k.params.clone();
+        merged.0.extend(picked.iter().cloned());
+        let extra = self.kind_extra.get(&kind).copied().unwrap_or(ClassMask::NONE);
+        let classes = kind_classes(k.base, &merged, extra);
+        if classes == k.classes {
+            return kind;
+        }
+        let tag = picked
+            .iter()
+            .map(|(key, v)| format!("{key}={}", show_param(v)))
+            .collect::<Vec<_>>()
+            .join(",");
+        if let Some(&d) = self.class_derived.get(&(kind, tag.clone())) {
+            return d;
+        }
+        let mut derived = k.clone();
+        derived.name = format!("{}[{tag}]", derived.name);
+        derived.params = merged;
+        derived.classes = classes;
+        let rank = self.rank_kind.get(&kind).copied().unwrap_or(kind);
+        let id = self.push_kind(derived);
+        if extra != ClassMask::NONE {
+            self.kind_extra.insert(id, extra);
+        }
+        self.class_derived.insert((kind, tag), id);
+        self.rank_kind.insert(id, rank);
+        id
+    }
+
+    /// `instance_kind` before the class-picking params: the named kind or its defaults variant.
+    fn variant_kind(&mut self, name: &str, params: &Params) -> Result<KindId, bool> {
         if self.dropped.contains(name) {
             return Err(true);
         }
