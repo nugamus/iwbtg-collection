@@ -197,6 +197,11 @@ fn bound(collector: Option<&Collector>, key: KeyCode) -> Option<Action> {
     collector.and_then(|c| key_code(key).and_then(|k| c.bindings().key_action(k)))
 }
 
+/// The key is bound to quick-retry.
+fn quick_retry(collector: Option<&Collector>, key: KeyCode) -> bool {
+    collector.is_some_and(|c| key_code(key).is_some_and(|k| c.bindings().is_quick_retry_key(k)))
+}
+
 /// Escape opens and closes; while open the arrows move and the pick keys pick.
 fn keys(
     keys: Res<ButtonInput<KeyCode>>,
@@ -224,7 +229,7 @@ fn keys(
         let action = bound(collector, key);
         let pick = match key {
             PAUSE_KEY => Some(Item::Continue),
-            crate::retry::QUICK_RETRY_KEY => Some(Item::RestartRun),
+            _ if quick_retry(collector, key) => Some(Item::RestartRun),
             KeyCode::Enter | KeyCode::NumpadEnter | KeyCode::Space => Some(menu.selected),
             KeyCode::ArrowUp => {
                 menu.selected = menu.selected.step(-1);
