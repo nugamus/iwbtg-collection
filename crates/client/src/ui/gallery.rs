@@ -204,7 +204,7 @@ fn swatch(name: &str, color: Color) -> impl Bundle + use<> {
                     height: Val::Px(34.0),
                     ..default()
                 },
-                Shape::fill(color).with_ring(1.0, Color::srgba(1.0, 1.0, 1.0, 0.18)),
+                Shape::fill(color).with_ring(1.0, tokens::white(0.18)),
             ),
             text(name, Type::barlow(12.0, 600), tokens::SOFT),
         ],
@@ -261,7 +261,7 @@ fn game_panel(
     let mut shape = Shape::fill(tokens::GROUND).with_image(art).with_veil(veil);
     shape = if selected {
         shape
-            .with_ring(2.0, Color::srgba(1.0, 1.0, 1.0, 0.55))
+            .with_ring(2.0, tokens::white(0.55))
             .with_shadow(10.0, 30.0, tokens::black(0.5))
     } else {
         shape.with_shadow(4.0, 12.0, tokens::black(0.25))
@@ -585,11 +585,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
             ))
             .with_children(|c| {
                 c.spawn((
-                    Shape::fill(Color::srgba(1.0, 1.0, 1.0, 0.22)).with_shadow(
-                        6.0,
-                        18.0,
-                        tokens::black(0.35),
-                    ),
+                    Shape::fill(tokens::ROW_YOU).with_shadow(6.0, 18.0, tokens::black(0.35)),
                     Node {
                         width: Val::Px(600.0),
                         height: Val::Px(50.0),
