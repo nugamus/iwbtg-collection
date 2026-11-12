@@ -16,6 +16,10 @@ use crate::storage::{self, Store};
 pub const VERSION: i64 = 1;
 /// The largest audio offset, in milliseconds.
 pub const MAX_AUDIO_OFFSET_MS: u32 = crate::audio::MAX_OFFSET_MS;
+/// The largest backdrop blur, in percent.
+pub const MAX_BACKDROP_BLUR: u32 = 100;
+/// The backdrop blur a fresh file has, in percent (`ui::backdrop::DEFAULT_BLUR`).
+pub const DEFAULT_BACKDROP_BLUR: u32 = 60;
 
 /// Every player setting.
 #[derive(Debug, Clone, PartialEq)]
@@ -34,6 +38,8 @@ pub struct Settings {
     pub overlay: bool,
     /// HUD side panel scale in percent, 75 to 150 (`hud::layout::UI_SCALE_RANGE`).
     pub ui_scale: u32,
+    /// Backdrop blur in percent, 0 to [`MAX_BACKDROP_BLUR`] (`[` and `]`, later the settings slider).
+    pub backdrop_blur: u32,
     /// Which HUD elements are shown (`[hud.show]`).
     pub hud_show: HudShow,
     /// Start the run again after every death (`[retry] auto`; `--auto-retry` overrides it for
@@ -54,6 +60,7 @@ impl Default for Settings {
             integer_scale: false,
             overlay: true,
             ui_scale: 100,
+            backdrop_blur: DEFAULT_BACKDROP_BLUR,
             hud_show: HudShow::default(),
             auto_retry: false,
             bindings: Table::new(),
@@ -175,7 +182,13 @@ impl Settings {
                     Err(e) => w.push(format!("display.window `{r}`: {e}")),
                 },
                 ("integer_scale", Value::Boolean(b)) => self.integer_scale = *b,
-                ("fullscreen" | "ratio" | "window" | "integer_scale", _) => {
+                ("backdrop_blur", Value::Integer(v)) => match u32::try_from(*v) {
+                    Ok(v) if v <= MAX_BACKDROP_BLUR => self.backdrop_blur = v,
+                    _ => w.push(format!(
+                        "display.backdrop_blur {v} is outside 0 to {MAX_BACKDROP_BLUR}, using the default"
+                    )),
+                },
+                ("fullscreen" | "ratio" | "window" | "integer_scale" | "backdrop_blur", _) => {
                     w.push(format!("display.{key} has the wrong type, using the default"));
                 }
                 _ => w.push(format!("unknown entry `display.{key}`, ignored")),
@@ -244,6 +257,7 @@ impl Settings {
             display.insert("window".into(), format!("{w}x{h}").into());
         }
         display.insert("integer_scale".into(), self.integer_scale.into());
+        display.insert("backdrop_blur".into(), i64::from(self.backdrop_blur).into());
         let mut audio = Table::new();
         audio.insert("offset_ms".into(), i64::from(self.audio_offset_ms).into());
         let mut hud = Table::new();
@@ -365,6 +379,7 @@ mod tests {
             integer_scale: true,
             overlay: false,
             ui_scale: 125,
+            backdrop_blur: 30,
             auto_retry: true,
             hud_show: HudShow {
                 input: false,
@@ -403,7 +418,7 @@ foo = 1
         let (s, w) = parse(
             "version = 1\n\
              mystery = 1\n\
-             [display]\nfullscreen = true\nratio = \"5:4\"\nwindow = 7\nextra = 1\n\
+             [display]\nfullscreen = true\nratio = \"5:4\"\nwindow = 7\nextra = 1\nbackdrop_blur = 101\n\
              [audio]\noffset_ms = 9000\n\
              [hud]\noverlay = false\nui_scale = 200\n\
              [hud.show]\ninput = false\ntimer = 1\nsplits = false\n\
@@ -415,9 +430,35 @@ foo = 1
         assert_eq!(s.audio_offset_ms, 0);
         assert!(!s.overlay);
         assert_eq!(s.ui_scale, 100);
+        assert_eq!(s.backdrop_blur, 60);
         assert!(!s.hud_show.input && s.hud_show.timer);
         assert_eq!(s.bindings.get("jump").and_then(Value::as_str), Some("Space"));
-        assert_eq!(w.len(), 8, "{w:?}");
+        assert_eq!(w.len(), 9, "{w:?}");
+    }
+
+    #[test]
+    fn backdrop_blur_reads_the_whole_range() {
+        for v in [0, 60, 100] {
+            let (s, w) = parse(&format!(
+                "[display]
+backdrop_blur = {v}
+"
+            ));
+            assert_eq!(s.backdrop_blur, v);
+            assert!(w.is_empty(), "{w:?}");
+        }
+        let (s, w) = parse(
+            "[display]
+backdrop_blur = -5
+",
+        );
+        assert_eq!((s.backdrop_blur, w.len()), (60, 1));
+        let (s, w) = parse(
+            "[display]
+backdrop_blur = \"x\"
+",
+        );
+        assert_eq!((s.backdrop_blur, w.len()), (60, 1));
     }
 
     #[test]
