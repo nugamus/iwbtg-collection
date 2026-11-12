@@ -561,7 +561,24 @@ fn wp1_end_of_path_runs_after_motion() {
 #[test]
 fn wp1_real_time_reads_are_tick_based() {
     let mut fx = Fx::new(builder().build().unwrap());
-    assert_eq!(tick::real_time_fps(&fx.def), Real::new(50.0));
+    assert_eq!(
+        tick::real_time_fps(&fx.def, &fx.rules.tick, &fx.w),
+        Real::new(50.0)
+    );
+    // The trace runner's warm-up (R28): fps reads 0 while fewer than `fps_zero_ticks` ticks ran.
+    fx.rules.tick.fps_zero_ticks = 49;
+    fx.w.tick = 48;
+    assert!(tick::fps_reads_zero(&fx.rules.tick, &fx.w));
+    assert_eq!(
+        tick::real_time_fps(&fx.def, &fx.rules.tick, &fx.w),
+        Real::new(0.0)
+    );
+    fx.w.tick = 49;
+    assert!(!tick::fps_reads_zero(&fx.rules.tick, &fx.w));
+    assert_eq!(
+        tick::real_time_fps(&fx.def, &fx.rules.tick, &fx.w),
+        Real::new(50.0)
+    );
     fx.w.tick = 125;
     assert_eq!(tick::real_time_ms(&fx.w, &fx.def).unwrap(), Real::new(2500.0));
     fx.w.tick = u64::MAX;

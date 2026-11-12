@@ -3,7 +3,6 @@
 # Frames 0..1 ran before the room jump (boot rooms); they are not compared.
 source = "showdown/a3-t20-a"
 kind = "probe_read"
-open = "room001's warp gets its destination from instance creation code, and the room-entry save runs before the kid exists (#600). First difference: frame 2, the original has no row (the warp destroyed the kid), ours has the kid in room001 at (241, 111.4)"
 start = { room = "room_1", difficulty = 0 }
 at = 2
 first_frame = 0
@@ -48,3 +47,4 @@ split = { "global.sv3" = ["room:3", "x:3", "y:3", "difficulty:1", "_:16"], "glob
 
 [rooms]
 "room_1" = "room001"
+"room_2" = "room002"

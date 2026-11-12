@@ -13,7 +13,8 @@ pub struct Observation {
     pub stages_done: u16,
     /// `TimingState::ended`.
     pub ended: bool,
-    /// `Sim::ranked_ticks`.
+    /// The run's time so far: `Sim::ranked_ticks` plus the ticks paused while the timer ran
+    /// (`pause::Menu::paused_ticks`), as the HUD shows it.
     pub ranked_ticks: u64,
 }
 

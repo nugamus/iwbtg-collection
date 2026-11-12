@@ -1,0 +1,25 @@
+# Imported from research trace kaenbyou/famb-timer-fps-gate-r by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object player --room rHub --at 2 --from 49 --stub-dlls (1 --gml)
+source = "kaenbyou/famb-timer-fps-gate-r"
+kind = "diff"
+start = { room = "hub", difficulty = 1 }
+at = 2
+first_frame = 49
+object = "kid"
+original_object = "player"
+dll_mode = "stub"
+seed = 0
+# The --gml global.savenum = 1 is the save slot, which the start point sets (as tr-room-08).
+setup = []
+ignore = ["id", "sprite_index", "sprite_name"]
+notes = [
+  "recorder --phases start,begin_step,keyboard,step,draw: logs only, the CSV is the same",
+]
+
+[vars]
+"global.timestep" = "global.time"
+
+[unprobed]
+
+[rooms]
+"hub" = "rHub"
