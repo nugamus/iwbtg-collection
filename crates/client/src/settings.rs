@@ -50,6 +50,9 @@ pub struct Settings {
     /// Start the run again after every death (`[retry] auto`; `--auto-retry` overrides it for
     /// one run).
     pub auto_retry: bool,
+    /// The results page shows where you died in a stage (`[results] heatmap`, #654; off by
+    /// default, `--results-heatmap` sets it).
+    pub results_heatmap: bool,
     /// The `[bindings]` table, kept as written: the input layer (#27) owns its layout and checks
     /// it; this file only stores it.
     pub bindings: Table,
@@ -69,6 +72,7 @@ impl Default for Settings {
             backdrop_blur: DEFAULT_BACKDROP_BLUR,
             hud_show: HudShow::default(),
             auto_retry: false,
+            results_heatmap: false,
             bindings: Table::new(),
         }
     }
@@ -176,8 +180,9 @@ impl Settings {
                 ("audio", Value::Table(t)) => s.read_audio(t, warnings),
                 ("hud", Value::Table(t)) => s.read_hud(t, warnings),
                 ("retry", Value::Table(t)) => s.read_retry(t, warnings),
+                ("results", Value::Table(t)) => s.read_results(t, warnings),
                 ("bindings", Value::Table(t)) => s.bindings = t.clone(),
-                ("display" | "audio" | "hud" | "retry" | "bindings", _) => {
+                ("display" | "audio" | "hud" | "retry" | "results" | "bindings", _) => {
                     warnings.push(format!("`[{key}]` must be a table, using defaults"));
                 }
                 _ => warnings.push(format!("unknown entry `{key}`, ignored")),
@@ -238,6 +243,16 @@ impl Settings {
         }
     }
 
+    fn read_results(&mut self, t: &Table, w: &mut Vec<String>) {
+        for (key, value) in t {
+            match (key.as_str(), value) {
+                ("heatmap", Value::Boolean(b)) => self.results_heatmap = *b,
+                ("heatmap", _) => w.push("results.heatmap must be true or false".into()),
+                _ => w.push(format!("unknown entry `results.{key}`, ignored")),
+            }
+        }
+    }
+
     fn read_hud(&mut self, t: &Table, w: &mut Vec<String>) {
         for (key, value) in t {
             match (key.as_str(), value) {
@@ -283,6 +298,8 @@ impl Settings {
         hud.insert("show".into(), self.hud_show.to_table().into());
         let mut retry = Table::new();
         retry.insert("auto".into(), self.auto_retry.into());
+        let mut results = Table::new();
+        results.insert("heatmap".into(), self.results_heatmap.into());
         let mut root = Table::new();
         root.insert("version".into(), VERSION.into());
         if !self.name.is_empty() {
@@ -292,6 +309,7 @@ impl Settings {
         root.insert("audio".into(), audio.into());
         root.insert("hud".into(), hud.into());
         root.insert("retry".into(), retry.into());
+        root.insert("results".into(), results.into());
         root.insert("bindings".into(), self.bindings.clone().into());
         toml::to_string(&root).unwrap_or_default()
     }
@@ -402,6 +420,7 @@ mod tests {
             ui_scale: 125,
             backdrop_blur: 30,
             auto_retry: true,
+            results_heatmap: true,
             hud_show: HudShow {
                 input: false,
                 leaderboard: false,
@@ -432,6 +451,24 @@ foo = 1
         assert!(!s.auto_retry);
         assert_eq!(w.len(), 2, "{w:?}");
         assert!(!parse("").0.auto_retry);
+    }
+
+    #[test]
+    fn the_results_heatmap_is_off_unless_the_file_turns_it_on() {
+        assert!(!parse("").0.results_heatmap);
+        let (s, w) = parse(
+            "[results]
+heatmap = true
+",
+        );
+        assert!(s.results_heatmap && w.is_empty(), "{w:?}");
+        let (s, w) = parse(
+            "[results]
+heatmap = \"yes\"
+",
+        );
+        assert!(!s.results_heatmap);
+        assert_eq!(w.len(), 1, "{w:?}");
     }
 
     #[test]

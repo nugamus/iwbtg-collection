@@ -10,13 +10,22 @@
 //! quick-retry key does; Save replay copies the run's replay to `exports/` in the data area.
 //! Watch replay waits for the replay viewer (#42), Upload replay for M7.
 //!
+//! Under the deaths per stage, the death timeline (each death a tick along the run) and, when
+//! the `[results] heatmap` setting is on, where you died in the stage hovered or clicked in the
+//! splits (`room.rs` draws the room; #654).
+//!
 //! [`Summary`] is everything the page shows, built from the stats book ([`Summary::new`]) or from
 //! the artboards' sample (`--results-preview`, [`sample`]); `page.rs` draws it.
 
 mod page;
+mod room;
 pub mod sample;
 
+use std::collections::BTreeMap;
+
 use bevy::camera::visibility::RenderLayers;
+use bevy::picking::events::PointerClick;
+use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::Pressed;
 use bevy::ui_widgets::Activate;
@@ -24,7 +33,7 @@ use bevy::window::PrimaryWindow;
 use iwbtg_format::manifest::Manifest;
 use iwbtg_sim::stripped::PlayMode;
 
-use crate::art::ArtFiles;
+use crate::art::{ArtFiles, ArtImages};
 use crate::card::{self, Card, RunChange};
 use crate::hud::Suspended;
 use crate::hud::leaderboard::{self, Entry};
@@ -32,7 +41,7 @@ use crate::stats::{Board, Cleared, Recorded, Run, Stats, fmt_ticks};
 use crate::storage::Store;
 use crate::ui::backdrop::{Backdrop, dim};
 use crate::ui::tokens;
-use crate::view::{Game, GameCamera, SimTick};
+use crate::view::{Game, GameCamera, SimTick, Textures};
 
 pub use page::Size;
 
@@ -56,6 +65,56 @@ pub struct ResultsArgs {
     /// Screenshot checks: open the results at once with the artboards' sample run (pb or slower).
     #[arg(long, hide = true, value_name = "SCENARIO")]
     pub results_preview: Option<Scenario>,
+    /// Show where you died in a stage on the results page (true or false; saved in the settings).
+    #[arg(long, value_name = "BOOL")]
+    pub results_heatmap: Option<bool>,
+}
+
+/// One death of the run: its time, the segment it counted in and, when known, the room (package
+/// room id) and the kid's position there.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Death {
+    pub ticks: u64,
+    pub segment: usize,
+    pub spot: Option<(String, i32, i32)>,
+}
+
+/// The timeline gathers deaths into this many slots along the run, so a run with thousands of
+/// deaths still draws at most this many ticks.
+pub const TIMELINE_SLOTS: usize = 480;
+
+/// One tick of the death timeline: where along the run (0 to 1) and its height as a share of the
+/// line's (one death 0.3, the busiest slot 0.8: the artboard's 12 to 32 of 40).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Tick {
+    pub at: f32,
+    pub height: f32,
+}
+
+/// The heatmap's cells, in room pixels: deaths in one cell make one dot.
+pub const HEAT_CELL: i32 = 32;
+/// The most dots drawn (the busiest cells).
+pub const HEAT_DOTS: usize = 48;
+
+/// Where you died in one stage: its busiest room and the dots in it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Heat {
+    pub stage: usize,
+    /// Package room id.
+    pub room: String,
+    /// Deaths in `room` with a known spot.
+    pub room_deaths: u32,
+    /// Quietest first, so the busiest draw on top.
+    pub dots: Vec<Dot>,
+}
+
+/// One dot of the heatmap: the mean position of a cell's deaths (room pixels) and its weight (0
+/// to 1, the busiest cell 1).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Dot {
+    pub x: f32,
+    pub y: f32,
+    pub weight: f32,
 }
 
 /// One segment of the run (a row of the splits table, a bar of the deaths chart).
@@ -104,6 +163,8 @@ pub struct Summary {
     pub card: Card,
     /// The run's replay in the data area.
     pub replay: Option<String>,
+    /// Each death in order (empty for a run without a death log).
+    pub death_log: Vec<Death>,
 }
 
 impl Summary {
@@ -147,7 +208,105 @@ impl Summary {
             others,
             card,
             replay: run.replay.clone(),
+            death_log: run
+                .death_marks()
+                .into_iter()
+                .map(|d| Death {
+                    ticks: d.ticks,
+                    segment: d.segment,
+                    spot: d.spot.map(|(room, x, y)| (room.to_owned(), x, y)),
+                })
+                .collect(),
         }
+    }
+
+    /// The death timeline: a tick per slot of the run that has deaths (taller where more died),
+    /// and the stage boundaries, each as a share of the run (0 to 1).
+    pub fn timeline(&self) -> (Vec<Tick>, Vec<f32>) {
+        let total = self.ticks.max(1) as f64;
+        let share = |t: u64| (t as f64 / total).clamp(0.0, 1.0);
+        let mut slots = vec![0u32; TIMELINE_SLOTS];
+        for d in &self.death_log {
+            let i = (share(d.ticks) * TIMELINE_SLOTS as f64) as usize;
+            slots[i.min(TIMELINE_SLOTS - 1)] += 1;
+        }
+        let most = slots.iter().copied().max().unwrap_or(0);
+        let ticks = slots
+            .iter()
+            .enumerate()
+            .filter(|(_, n)| **n > 0)
+            .map(|(i, &n)| Tick {
+                at: (i as f32 + 0.5) / TIMELINE_SLOTS as f32,
+                height: if most <= 1 {
+                    0.3
+                } else {
+                    0.3 + 0.5 * ((n - 1) as f32 / (most - 1) as f32).sqrt()
+                },
+            })
+            .collect();
+        let bounds = self
+            .stages
+            .iter()
+            .take(self.stages.len().saturating_sub(1))
+            .map(|s| share(s.split) as f32)
+            .collect();
+        (ticks, bounds)
+    }
+
+    /// The stage the heatmap shows before one is hovered or clicked: the one with the most deaths
+    /// (the brightest bar; the first of equals).
+    pub fn busiest_stage(&self) -> Option<usize> {
+        let most = self.stages.iter().map(|s| s.deaths).max()?;
+        self.stages.iter().position(|s| s.deaths == most)
+    }
+
+    /// Where you died in `stage`: the room with the most deaths there (the first of equals) and a
+    /// dot per [`HEAT_CELL`] with deaths. `None` when no death in the stage has a known spot.
+    pub fn heat(&self, stage: usize) -> Option<Heat> {
+        let spots = || {
+            self.death_log
+                .iter()
+                .filter(move |d| d.segment == stage)
+                .filter_map(|d| d.spot.as_ref())
+        };
+        let mut rooms: Vec<(&str, u32)> = Vec::new();
+        for (room, _, _) in spots() {
+            match rooms.iter_mut().find(|(r, _)| r == room) {
+                Some((_, n)) => *n += 1,
+                None => rooms.push((room, 1)),
+            }
+        }
+        let most = rooms.iter().map(|(_, n)| *n).max()?;
+        let room = rooms.iter().find(|(_, n)| *n == most)?.0;
+        let mut cells: BTreeMap<(i32, i32), (i64, i64, u32)> = BTreeMap::new();
+        for (_, x, y) in spots().filter(|(r, _, _)| r == room) {
+            let cell = cells
+                .entry((x.div_euclid(HEAT_CELL), y.div_euclid(HEAT_CELL)))
+                .or_default();
+            cell.0 += i64::from(*x);
+            cell.1 += i64::from(*y);
+            cell.2 += 1;
+        }
+        let mut cells: Vec<_> = cells.into_values().collect();
+        // Busiest first to keep the top ones (stable: equals stay in cell order), then quietest
+        // first to draw.
+        cells.sort_by_key(|c| std::cmp::Reverse(c.2));
+        cells.truncate(HEAT_DOTS);
+        cells.reverse();
+        let top = cells.last().map_or(1, |c| c.2) as f32;
+        Some(Heat {
+            stage,
+            room: room.to_owned(),
+            room_deaths: most,
+            dots: cells
+                .into_iter()
+                .map(|(sx, sy, n)| Dot {
+                    x: sx as f32 / n as f32,
+                    y: sy as f32 / n as f32,
+                    weight: (n as f32 / top).sqrt(),
+                })
+                .collect(),
+        })
     }
 
     /// The final time as the hero shows it: `38:12` and `.46`.
@@ -268,6 +427,17 @@ pub struct Results {
     picked: Option<Action>,
     /// The replay was saved (the button says so).
     saved: bool,
+    /// The splits row under the pointer and the one clicked, for the heatmap.
+    hovered: Option<usize>,
+    selected: Option<usize>,
+}
+
+impl Results {
+    /// The stage the heatmap shows: hovered, else clicked, else the one with the most deaths.
+    fn heat_stage(&self) -> Option<usize> {
+        let s = self.summary.as_ref()?;
+        self.hovered.or(self.selected).or_else(|| s.busiest_stage())
+    }
 }
 
 /// Whether the results page is closed (a run condition: the sim ticks, the pause key works).
@@ -288,15 +458,22 @@ pub struct ResultsPlugin(pub ResultsArgs);
 
 impl Plugin for ResultsPlugin {
     fn build(&self, app: &mut App) {
+        if let Some(on) = self.0.results_heatmap {
+            crate::settings::update(|s| s.results_heatmap = on);
+        }
         app.insert_resource(Results {
             preview: self.0.results_preview,
             ..default()
         })
         .configure_sets(FixedUpdate, SimTick.run_if(closed))
+        .init_resource::<room::Pictures>()
         .add_observer(on_activate)
+        .add_observer(on_row_click)
         .add_systems(
             Update,
-            (open, keys, act, show).chain().after(crate::screen::apply),
+            (open, keys, act, show, hover_rows, heat)
+                .chain()
+                .after(crate::screen::apply),
         );
     }
 }
@@ -324,7 +501,13 @@ fn open(
         return;
     }
     if let Some(s) = results.preview.take() {
-        show_summary(&mut results, sample::summary(s));
+        // The sample's deaths fall in the room the package starts in, so the heatmap has a room.
+        let sim = &game.sim;
+        let room = sim
+            .def()
+            .room(sim.world().room)
+            .map(|r| (r.name.clone(), Vec2::new(r.width as f32, r.height as f32)));
+        show_summary(&mut results, sample::summary(s, room));
         return;
     }
     let Some(stats) = stats else {
@@ -384,6 +567,27 @@ fn show_summary(results: &mut Results, summary: Summary) {
     results.generation = results.generation.wrapping_add(1);
     results.saved = false;
     results.held = 0.0;
+    results.hovered = None;
+    results.selected = None;
+}
+
+/// The pointer over a splits row shows that stage's heatmap; leaving it goes back to the clicked
+/// stage.
+fn hover_rows(rows: Query<(&page::StageRow, &Hovered), Changed<Hovered>>, mut results: ResMut<Results>) {
+    for (row, hovered) in &rows {
+        if hovered.get() {
+            results.hovered = Some(row.0);
+        } else if results.hovered == Some(row.0) {
+            results.hovered = None;
+        }
+    }
+}
+
+/// A click on a row keeps its heatmap after the pointer leaves.
+fn on_row_click(click: On<PointerClick>, rows: Query<&page::StageRow>, mut results: ResMut<Results>) {
+    if let Ok(row) = rows.get(click.entity) {
+        results.selected = Some(row.0);
+    }
 }
 
 /// A click (or Enter on a focused button) picks its action.
@@ -577,6 +781,7 @@ fn show(
         size,
         fruit: fruit.map(|f| f.0.clone()),
         saved: results.saved,
+        heatmap: crate::settings::get().results_heatmap,
     };
     commands.spawn((
         Node {
@@ -594,6 +799,56 @@ fn show(
         UiTargetCamera(camera),
         children![page::page(summary, &look)],
     ));
+}
+
+/// Fills the heatmap panel with the shown stage's room and dots whenever that stage changes, and
+/// drops the room pictures when the page closes.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the picture needs the package's art and sprites"
+)]
+fn heat(
+    mut commands: Commands,
+    results: Res<Results>,
+    game: NonSend<Game>,
+    files: Option<Res<ArtFiles>>,
+    textures: Option<Res<Textures>>,
+    mut cache: Option<ResMut<ArtImages>>,
+    mut images: ResMut<Assets<Image>>,
+    mut pictures: ResMut<room::Pictures>,
+    mut panels: Query<(Entity, &mut page::HeatPanel)>,
+) {
+    let Some(summary) = &results.summary else {
+        pictures.clear(&mut commands);
+        return;
+    };
+    let stage = results.heat_stage();
+    for (entity, mut panel) in &mut panels {
+        if panel.drawn == Some(stage) {
+            continue;
+        }
+        panel.drawn = Some(stage);
+        let heat = stage.and_then(|i| summary.heat(i));
+        let picture = match (&heat, &files, cache.as_deref_mut()) {
+            (Some(h), Some(files), Some(cache)) => pictures.get_or_build(
+                &mut commands,
+                &room::Sources {
+                    def: game.sim.def(),
+                    files: &files.0,
+                    textures: textures.as_deref(),
+                },
+                &mut images,
+                cache,
+                &h.room,
+            ),
+            _ => None,
+        };
+        let stage = stage.and_then(|i| summary.stages.get(i));
+        commands.entity(entity).despawn_children();
+        commands
+            .entity(entity)
+            .with_child(page::heat_contents(stage, heat.as_ref(), picture));
+    }
 }
 
 #[cfg(test)]
@@ -702,6 +957,50 @@ mod tests {
             export_name("replays/kaenbyou/1793740440-0.iwbr"),
             "exports/kaenbyou-1793740440-0.iwbr"
         );
+    }
+
+    /// A clear's death log reaches the page: the timeline puts each death where it fell in the
+    /// run with the stage boundaries at the splits, and the heatmap of a stage shows its busiest
+    /// room, deaths close together in one dot; hovering beats clicking beats the busiest stage.
+    #[test]
+    fn the_death_log_makes_the_timeline_and_the_heatmap() {
+        let mut r = run(&[100, 400], &[1, 3]);
+        r.death_log.push(50, Some(("room_1", 10, 10)));
+        r.death_log.push(150, Some(("room_2", 100, 200)));
+        r.death_log.push(160, Some(("room_2", 104, 206)));
+        r.death_log.push(399, Some(("room_3", 5, 5)));
+        let mut board = Board::default();
+        let s = summary_after(&mut board, &r, true);
+        assert_eq!(s.death_log.len(), 4);
+        assert_eq!(s.death_log[1].segment, 1);
+        let (ticks, bounds) = s.timeline();
+        assert_eq!(bounds, [0.25]);
+        assert_eq!(ticks.len(), 4, "four slots with a death");
+        assert!((ticks[0].at - 0.125).abs() < 0.01);
+        assert!(
+            ticks.iter().all(|t| (t.height - 0.3).abs() < 1e-6),
+            "one death each"
+        );
+        let heat = s.heat(1).unwrap();
+        assert_eq!((heat.room.as_str(), heat.room_deaths), ("room_2", 2));
+        assert_eq!(
+            heat.dots,
+            [Dot {
+                x: 102.0,
+                y: 203.0,
+                weight: 1.0
+            }]
+        );
+        assert_eq!(s.heat(0).unwrap().room, "room_1");
+        assert_eq!(s.busiest_stage(), Some(1));
+
+        let mut results = Results::default();
+        show_summary(&mut results, s);
+        assert_eq!(results.heat_stage(), Some(1), "the busiest stage first");
+        results.selected = Some(0);
+        assert_eq!(results.heat_stage(), Some(0));
+        results.hovered = Some(1);
+        assert_eq!(results.heat_stage(), Some(1));
     }
 
     /// Escape closes the page; holding R for the hold time retries, a short tap does not.

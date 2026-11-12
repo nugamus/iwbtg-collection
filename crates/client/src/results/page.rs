@@ -1,13 +1,15 @@
 //! The results page from its artboards (`Results169.dc.html` at 1920×1080, the same file's `43`
 //! layout at 1024×768): header; the frozen leaderboard on the left; the hero (time, placement,
-//! rank change) and the player card, then the splits table and the deaths per stage; the footer.
+//! rank change) and the player card, then the splits table and the deaths per stage, the death
+//! timeline and (a setting, 16:10 and wider) the heatmap; the footer.
 //! No bordered panels: spacing, type and quiet colour carry the hierarchy. Sizes are the
 //! artboard's CSS px; `results::show` scales the page to the window.
 
+use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::text::LineHeight;
 
-use super::{Action, Summary, bar_label};
+use super::{Action, Heat, Stage, Summary, bar_label};
 use crate::card::{self, Variant};
 use crate::hud::layout::Density;
 use crate::hud::leaderboard::{self, Live};
@@ -18,6 +20,21 @@ use crate::ui::icons::{Icon, icon};
 use crate::ui::shape::Shape;
 use crate::ui::tokens;
 use crate::ui::widgets::{ButtonKind, button_off, button_with, sheared, text, unranked_pill};
+
+/// A splits row: hovering or clicking it shows that stage's heatmap.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StageRow(pub usize);
+
+/// The heatmap's place on the page; `results::heat` fills it for the stage shown (`drawn`).
+#[derive(Component, Default)]
+pub struct HeatPanel {
+    pub drawn: Option<Option<usize>>,
+}
+
+/// The heatmap's room picture: the artboard's `224px` wide box (an 800×608 room at `.28`).
+const HEAT_W: f32 = 224.0;
+/// The tallest the picture gets, for rooms taller than they are wide.
+const HEAT_MAX_H: f32 = 224.0;
 
 /// The two layouts of the artboard.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -68,6 +85,7 @@ impl Size {
                 head: 26.0,
                 chart_gap: 30.0,
                 chart: 120.0,
+                timeline: 56.0,
                 button: 48.0,
                 button_text: 17.0,
                 card: Variant::Results,
@@ -93,6 +111,7 @@ impl Size {
                 head: 20.0,
                 chart_gap: 16.0,
                 chart: 92.0,
+                timeline: 40.0,
                 button: 38.0,
                 button_text: 14.0,
                 card: Variant::ResultsCompact,
@@ -125,17 +144,21 @@ struct Dims {
     head: f32,
     chart_gap: f32,
     chart: f32,
+    /// The death timeline's height (`tlH`).
+    timeline: f32,
     button: f32,
     button_text: f32,
     card: Variant,
 }
 
 /// How the page is drawn: its layout, the delicious fruit (the pause menu's: the package's
-/// `cherry`, else our placeholder) and whether the replay was saved.
+/// `cherry`, else our placeholder), whether the replay was saved and whether the heatmap setting
+/// is on (it shows only in the wide layout, as on the artboard).
 pub struct Look {
     pub size: Size,
     pub fruit: Option<Handle<Image>>,
     pub saved: bool,
+    pub heatmap: bool,
 }
 
 /// Small capitals over a value (`PERSONAL BEST`, `DEATHS PER STAGE`): the kit's label.
@@ -147,6 +170,7 @@ pub fn page(s: &Summary, look: &Look) -> impl Bundle + use<> {
     let s = s.clone();
     let fruit = look.fruit.clone();
     let saved = look.saved;
+    let heatmap = look.heatmap && look.size == Size::Wide;
     (
         Node {
             width: Val::Percent(100.0),
@@ -189,7 +213,7 @@ pub fn page(s: &Summary, look: &Look) -> impl Bundle + use<> {
                     })
                     .with_children(|c| {
                         splits(c, &s, &d);
-                        deaths(c, &s, &d);
+                        deaths(c, &s, &d, heatmap);
                     });
                 });
             });
@@ -431,11 +455,15 @@ fn table_row(
     c: &mut ChildSpawner,
     node: Node,
     rule: Option<Color>,
+    tag: Option<StageRow>,
     cells: [Option<(String, Type, Color)>; 4],
 ) {
     let mut row = c.spawn(node);
     if let Some(color) = rule {
         row.insert(BorderColor::all(color));
+    }
+    if let Some(tag) = tag {
+        row.insert((tag, Hovered::default()));
     }
     row.with_children(|c| {
         for (i, cell) in cells.into_iter().enumerate() {
@@ -495,6 +523,7 @@ fn splits(c: &mut ChildSpawner, s: &Summary, d: &Dims) {
                 ..default()
             },
             None,
+            None,
             [head("Stage"), head("Segment"), head("Split"), head("vs PB")],
         );
         // Many stages: the rows past the room are cut, the totals stay.
@@ -506,7 +535,7 @@ fn splits(c: &mut ChildSpawner, s: &Summary, d: &Dims) {
             ..default()
         })
         .with_children(|c| {
-            for stage in &s.stages {
+            for (i, stage) in s.stages.iter().enumerate() {
                 let segment = if stage.gold {
                     (
                         format!("★ {}", t(stage.segment)),
@@ -528,6 +557,7 @@ fn splits(c: &mut ChildSpawner, s: &Summary, d: &Dims) {
                     c,
                     row(d.row, true),
                     Some(tokens::RULE),
+                    Some(StageRow(i)),
                     [
                         Some((stage.name.clone(), Type::barlow(size, 600), tokens::INK)),
                         Some(segment),
@@ -549,11 +579,13 @@ fn splits(c: &mut ChildSpawner, s: &Summary, d: &Dims) {
             c,
             row(d.row, true),
             Some(tokens::RULE_STRONG),
+            None,
             [label("Sum of best"), None, total(s.sum_of_best), None],
         );
         table_row(
             c,
             row(d.row, false),
+            None,
             None,
             [label("Possible time save"), None, total(s.time_save()), None],
         );
@@ -575,8 +607,9 @@ fn splits(c: &mut ChildSpawner, s: &Summary, d: &Dims) {
     });
 }
 
-/// Deaths per stage: a bar per segment, the most deaths brightest, the count over each bar.
-fn deaths(c: &mut ChildSpawner, s: &Summary, d: &Dims) {
+/// Deaths per stage: a bar per segment, the most deaths brightest, the count over each bar. Under
+/// it the death timeline and, with `heatmap`, the heatmap's panel.
+fn deaths(c: &mut ChildSpawner, s: &Summary, d: &Dims, heatmap: bool) {
     let most = s.stages.iter().map(|st| st.deaths).max().unwrap_or(0);
     let total: u64 = s.stages.iter().map(|st| u64::from(st.deaths)).sum();
     let columns = |c: &mut ChildSpawner, height: Option<f32>, f: &dyn Fn(&mut ChildSpawner, usize)| {
@@ -693,7 +726,217 @@ fn deaths(c: &mut ChildSpawner, s: &Summary, d: &Dims) {
                 ));
             });
         });
+        timeline(c, s, d);
+        if heatmap {
+            c.spawn((
+                Node {
+                    flex_shrink: 0.0,
+                    ..default()
+                },
+                HeatPanel::default(),
+            ));
+        }
     });
+}
+
+/// `0:00 → 38:12.46` over a base line with a tick per death (taller where more died) and the
+/// stage boundaries taller and wider (the artboard's SVG, its 1000×40 box stretched to the width).
+fn timeline(c: &mut ChildSpawner, s: &Summary, d: &Dims) {
+    let (ticks, bounds) = s.timeline();
+    let end = fmt_ticks(s.ticks, s.about.rate);
+    let small = Type::barlow(12.0, 400);
+    let line = |c: &mut ChildSpawner, left: f32, top: f32, w: f32, h: f32, color: Color| {
+        c.spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                left: Val::Percent(left * 100.0),
+                top: Val::Percent(top * 100.0),
+                width: Val::Px(w),
+                height: Val::Percent(h * 100.0),
+                margin: UiRect::left(Val::Px(-w / 2.0)),
+                ..default()
+            },
+            BackgroundColor(color),
+        ));
+    };
+    c.spawn(Node {
+        flex_direction: FlexDirection::Column,
+        row_gap: Val::Px(8.0),
+        flex_shrink: 0.0,
+        ..default()
+    })
+    .with_children(|c| {
+        c.spawn(Node {
+            justify_content: JustifyContent::SpaceBetween,
+            align_items: AlignItems::Center,
+            ..default()
+        })
+        .with_children(|c| {
+            c.spawn((
+                text("Death timeline", LABEL, tokens::MUTED),
+                TextLayout::no_wrap(),
+            ));
+            c.spawn(Node {
+                align_items: AlignItems::Center,
+                column_gap: Val::Px(4.0),
+                ..default()
+            })
+            .with_children(|c| {
+                c.spawn((text("0:00", small, tokens::MUTED), TextLayout::no_wrap()));
+                c.spawn(icon(Icon::To, 9.0, tokens::MUTED));
+                c.spawn((text(&end, small, tokens::MUTED), TextLayout::no_wrap()));
+            });
+        });
+        c.spawn(Node {
+            height: Val::Px(d.timeline),
+            width: Val::Percent(100.0),
+            ..default()
+        })
+        .with_children(|c| {
+            // The base line: `y 19.5`, 1 of 40 high.
+            c.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(0.0),
+                    right: Val::Px(0.0),
+                    top: Val::Percent(48.75),
+                    height: Val::Px(1.0),
+                    ..default()
+                },
+                BackgroundColor(tokens::AXIS),
+            ));
+            // Boundaries: `M x 2 v36`, stroke 2.
+            for b in bounds {
+                line(c, b, 0.05, 2.0, 0.9, tokens::BAR_PEAK);
+            }
+            for t in ticks {
+                line(c, t.at, 0.5 - t.height / 2.0, 1.0, t.height, tokens::BAR);
+            }
+        });
+    });
+}
+
+/// The heatmap panel's contents for `stage`: the room picture, dimmed, with a soft red dot per
+/// spot where deaths gathered, and what it shows beside it.
+pub fn heat_contents(
+    stage: Option<&Stage>,
+    heat: Option<&Heat>,
+    picture: Option<(Handle<Image>, Vec2)>,
+) -> impl Bundle + use<> {
+    let label = match stage {
+        Some(st) => format!("Where you died · {}", st.name),
+        None => "Where you died".to_owned(),
+    };
+    let body = heat_note(stage.map_or(0, |s| s.deaths), heat.map(|h| h.room_deaths));
+    let heat = heat.cloned();
+    (
+        Node {
+            column_gap: Val::Px(20.0),
+            align_items: AlignItems::FlexStart,
+            ..default()
+        },
+        Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
+            heat_parts(c, &label, &body, heat.as_ref(), picture);
+        })),
+    )
+}
+
+fn heat_parts(
+    c: &mut ChildSpawner,
+    label: &str,
+    body: &str,
+    heat: Option<&Heat>,
+    picture: Option<(Handle<Image>, Vec2)>,
+) {
+    if let (Some(h), Some((image, room))) = (heat, picture) {
+        let scale = HEAT_W / room.x.max(1.0);
+        let height = (room.y * scale).min(HEAT_MAX_H);
+        c.spawn(Node {
+            width: Val::Px(HEAT_W),
+            height: Val::Px(height),
+            flex_shrink: 0.0,
+            overflow: Overflow::clip(),
+            border_radius: BorderRadius::all(Val::Px(6.0)),
+            ..default()
+        })
+        .with_children(|c| {
+            // `filter: saturate(.4) brightness(.7)`: the muted ink tints it darker and cooler.
+            c.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    width: Val::Px(room.x * scale),
+                    height: Val::Px(room.y * scale),
+                    ..default()
+                },
+                ImageNode {
+                    image,
+                    color: tokens::MUTED,
+                    ..default()
+                },
+            ));
+            for dot in &h.dots {
+                // The artboard's dots: 19 to 40 px across, alpha .3 to .55.
+                let r = 18.0 + 22.0 * dot.weight;
+                // Red over the dimmed room, blended as the browser does (#627).
+                let color = tokens::over(tokens::BEHIND, 0.3 + 0.25 * dot.weight, tokens::GROUND);
+                c.spawn((
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: Val::Px(dot.x * scale - r / 2.0),
+                        top: Val::Px(dot.y * scale - r / 2.0),
+                        width: Val::Px(r),
+                        height: Val::Px(r),
+                        ..default()
+                    },
+                    BackgroundGradient::from(RadialGradient::new(
+                        UiPosition::CENTER,
+                        RadialGradientShape::ClosestSide,
+                        vec![
+                            ColorStop::new(color, Val::Percent(0.0)),
+                            ColorStop::new(color.with_alpha(0.0), Val::Percent(100.0)),
+                        ],
+                    )),
+                ));
+            }
+        });
+    }
+    c.spawn(Node {
+        flex_direction: FlexDirection::Column,
+        row_gap: Val::Px(6.0),
+        padding: UiRect::top(Val::Px(2.0)),
+        min_width: Val::Px(0.0),
+        ..default()
+    })
+    .with_children(|c| {
+        c.spawn((text(label, LABEL, tokens::MUTED), TextLayout::no_wrap()));
+        c.spawn(Node {
+            max_width: Val::Px(240.0),
+            ..default()
+        })
+        .with_children(|c| {
+            c.spawn(text(body, Type::barlow(14.0, 400), tokens::SOFT))
+                .insert(LineHeight::RelativeToFont(1.4));
+        });
+    });
+}
+
+/// The heatmap's note: how to pick a stage, and how many deaths it shows.
+pub fn heat_note(stage_deaths: u32, room_deaths: Option<u32>) -> String {
+    let n = |k: u32| {
+        let unit = if k == 1 { "death" } else { "deaths" };
+        format!("{} {unit}", card::grouped(u64::from(k)))
+    };
+    let count = match room_deaths {
+        None if stage_deaths == 0 => "No deaths here.".to_owned(),
+        None => format!("{}, none with a known place.", n(stage_deaths)),
+        Some(r) if r == stage_deaths => format!("{}, all in this room.", n(stage_deaths)),
+        Some(r) => format!(
+            "{}, {} in this room.",
+            n(stage_deaths),
+            card::grouped(u64::from(r))
+        ),
+    };
+    format!("Hover or click a stage in the splits. {count}")
 }
 
 /// Back; Retry (hold R); Watch replay (the replay viewer, #42), Save replay, Upload replay (M7).
@@ -766,12 +1009,13 @@ mod tests {
     #[test]
     fn the_page_has_every_part() {
         let mut world = World::new();
-        let s = super::super::sample::summary(super::super::Scenario::Pb);
+        let s = super::super::sample::summary(super::super::Scenario::Pb, None);
         for size in [Size::Wide, Size::Compact] {
             let look = Look {
                 size,
                 fruit: None,
                 saved: false,
+                heatmap: true,
             };
             let root = world.spawn(page(&s, &look)).id();
             let mut texts = world.query::<&Text>();
@@ -787,12 +1031,41 @@ mod tests {
                 "1,284 total",
                 "Boss",
                 "Save replay",
+                "DEATH TIMELINE",
+                "0:00",
             ] {
                 assert!(all.iter().any(|t| t == want), "{want} missing from {all:?}");
             }
             let mut actions = world.query::<&Action>();
             assert_eq!(actions.iter(&world).count(), 3, "Back, Retry, Save replay");
+            let mut rows = world.query::<&StageRow>();
+            assert_eq!(rows.iter(&world).count(), 7, "a row per stage");
+            let mut panels = world.query::<&HeatPanel>();
+            let want = usize::from(size == Size::Wide);
+            assert_eq!(
+                panels.iter(&world).count(),
+                want,
+                "the heatmap only in the wide layout"
+            );
             world.entity_mut(root).despawn();
         }
+    }
+
+    #[test]
+    fn the_heatmap_note_counts_the_stage_and_the_room() {
+        let lead = "Hover or click a stage in the splits.";
+        assert_eq!(
+            heat_note(288, Some(240)),
+            format!("{lead} 288 deaths, 240 in this room.")
+        );
+        assert_eq!(
+            heat_note(1, Some(1)),
+            format!("{lead} 1 death, all in this room.")
+        );
+        assert_eq!(heat_note(0, None), format!("{lead} No deaths here."));
+        assert_eq!(
+            heat_note(1500, None),
+            format!("{lead} 1,500 deaths, none with a known place.")
+        );
     }
 }

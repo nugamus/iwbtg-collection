@@ -290,6 +290,20 @@ fn spawn_tiles(
     cache: &mut ArtImages,
     spawned: &mut Vec<Entity>,
 ) {
+    for (sprite, t) in tile_sprites(layers, room, files, images, cache) {
+        spawned.push(commands.spawn((sprite, Anchor::TOP_LEFT, t)).id());
+    }
+}
+
+/// Each tile as a sprite anchored at its top-left corner.
+fn tile_sprites(
+    layers: &[TileLayer],
+    room: Vec2,
+    files: &PackageFiles,
+    images: &mut Assets<Image>,
+    cache: &mut ArtImages,
+) -> Vec<(Sprite, Transform)> {
+    let mut out = Vec::new();
     for (n, layer) in layers.iter().enumerate() {
         let Some((handle, _)) = image(cache, files, images, &layer.tileset) else {
             continue;
@@ -303,14 +317,41 @@ fn spawn_tiles(
                 let mut sprite = Sprite::from_image(handle.clone());
                 sprite.rect = Some(Rect::new(sx, sy, sx + w, sy + h));
                 let at = Vec2::new(x as f32, y as f32);
-                spawned.push(
-                    commands
-                        .spawn((sprite, Anchor::TOP_LEFT, corner(room, at, z)))
-                        .id(),
-                );
+                out.push((sprite, corner(room, at, z)));
             }
         }
     }
+    out
+}
+
+/// A still of room `name`'s art as it starts (the colour, the background layers at tick 0, the
+/// tiles), for a picture of the room off screen (the results' heatmap, #654). Every sprite is
+/// anchored at its top-left corner, in the same room-centred space the game draws in.
+pub(crate) fn still(
+    files: &PackageFiles,
+    images: &mut Assets<Image>,
+    cache: &mut ArtImages,
+    name: &str,
+    room: Vec2,
+) -> Vec<(Sprite, Transform)> {
+    let art = load_room_art(files, name).unwrap_or_default();
+    let tiles = load_tiles(files, name).unwrap_or_default();
+    let mut out = Vec::new();
+    if let Some([r, g, b]) = art.color {
+        let t = corner(room, Vec2::ZERO, COLOR_Z);
+        out.push((Sprite::from_color(Color::srgb_u8(r, g, b), room), t));
+    }
+    for (n, bg) in art.backgrounds.iter().enumerate() {
+        let Some((handle, size)) = image(cache, files, images, &bg.image) else {
+            continue;
+        };
+        for (sprite, at, scale) in background_sprites(bg, &handle, size, room, 0) {
+            let t = corner(room, at, background_z(bg, n)).with_scale(scale.extend(1.0));
+            out.push((sprite, t));
+        }
+    }
+    out.extend(tile_sprites(&tiles, room, files, images, cache));
+    out
 }
 
 /// Moves the scrolling background layers once per tick: each one is rebuilt where it is now.
