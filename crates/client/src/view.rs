@@ -16,7 +16,7 @@ use iwbtg_sim::world::{InstId, SimStatus};
 mod hud;
 
 use crate::bindings::PadInput;
-use crate::input::{Collector, StickGate, key_code};
+use crate::input::{Collector, PadReader, key_code};
 use crate::package::{Package, SpriteImage, sprite_images};
 
 /// The running game. Not `Send` (the script host shares state by `Rc`), so it is a non-send
@@ -471,60 +471,16 @@ fn collect_input(keys: Res<ButtonInput<KeyCode>>, mut collector: ResMut<Collecto
     }
 }
 
-/// Feeds the controller's state to the collector. Only the active controller counts: the one that
-/// last had a button pressed. A DualSense over Bluetooth can show up as a second device (motion
-/// sensors) whose axes never rest at zero, and that must not walk the kid right. The stick goes
-/// through `StickGate`, so an axis that never rests at the centre is ignored.
+/// Feeds the active controller's state to the collector (`PadReader`, the same on native and web).
 fn collect_pad(
     pads: Query<(Entity, &Gamepad)>,
     mut collector: ResMut<Collector>,
-    mut active: Local<Option<Entity>>,
-    mut gates: Local<[StickGate; 4]>,
+    mut reader: Local<PadReader>,
 ) {
-    use bevy::input::gamepad::{GamepadAxis as A, GamepadButton as B};
-    if let Some((entity, _)) = pads.iter().find(|(_, g)| g.get_pressed().next().is_some())
-        && *active != Some(entity)
-    {
-        *active = Some(entity);
-        *gates = Default::default();
-    }
-    let pad = active.and_then(|e| pads.get(e).ok()).map(|(_, g)| g);
-    let Some(g) = pad else {
-        for input in PadInput::ALL {
-            collector.set_pad(input, false);
-        }
-        return;
-    };
-    let axis = |a| g.get(a).unwrap_or(0.0);
-    let stick = [
-        gates[0].update(axis(A::LeftStickY)),
-        gates[1].update(-axis(A::LeftStickY)),
-        gates[2].update(-axis(A::LeftStickX)),
-        gates[3].update(axis(A::LeftStickX)),
-    ];
+    let pads: Vec<(Entity, &Gamepad)> = pads.iter().collect();
+    let down = reader.read(&pads);
     for input in PadInput::ALL {
-        let button = |b| g.pressed(b);
-        let down = match input {
-            PadInput::South => button(B::South),
-            PadInput::East => button(B::East),
-            PadInput::West => button(B::West),
-            PadInput::North => button(B::North),
-            PadInput::LeftBumper => button(B::LeftTrigger),
-            PadInput::RightBumper => button(B::RightTrigger),
-            PadInput::LeftTrigger => button(B::LeftTrigger2),
-            PadInput::RightTrigger => button(B::RightTrigger2),
-            PadInput::Select => button(B::Select),
-            PadInput::Start => button(B::Start),
-            PadInput::DPadUp => button(B::DPadUp),
-            PadInput::DPadDown => button(B::DPadDown),
-            PadInput::DPadLeft => button(B::DPadLeft),
-            PadInput::DPadRight => button(B::DPadRight),
-            PadInput::StickUp => stick[0],
-            PadInput::StickDown => stick[1],
-            PadInput::StickLeft => stick[2],
-            PadInput::StickRight => stick[3],
-        };
-        collector.set_pad(input, down);
+        collector.set_pad(input, down[input as usize]);
     }
 }
 
