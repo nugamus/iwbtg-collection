@@ -213,7 +213,7 @@ fn swatch(name: &str, color: Color) -> impl Bundle + use<> {
 
 /// A list entry (difficulty and category) as on game select: star band, star pill, name, PB.
 fn entry(name: &str, stars: f32, pb: &str, width: f32) -> impl Bundle + use<> {
-    let shape = Shape::fill(Color::srgba(14.0 / 255.0, 16.0 / 255.0, 24.0 / 255.0, 0.82)).with_band(Band {
+    let shape = Shape::fill(tokens::dark(tokens::CARD_SOLID, 0.82)).with_band(Band {
         side: Side::Left,
         width: 6.0,
         color: star_color(stars),

@@ -93,7 +93,14 @@ pub fn artboard_alpha(a: f32) -> f32 {
 
 /// Black at the artboard's alpha `a`: `rgba(0,0,0,a)` as the browser draws it ([`artboard_alpha`]).
 pub fn black(a: f32) -> Color {
-    Color::srgba(0.0, 0.0, 0.0, artboard_alpha(a))
+    dark(Color::BLACK, a)
+}
+
+/// A dark glass colour at the artboard's alpha `a` (`rgba(14,16,24,.82)`): the black rule, which
+/// is within a few sRGB steps for colours this close to black. Light or saturated colours go
+/// through [`over`] instead. The `CARD` constants above are this, computed by hand.
+pub fn dark(color: Color, a: f32) -> Color {
+    color.with_alpha(artboard_alpha(a))
 }
 
 /// `color` at the artboard's alpha `a` over a ground of `under`, for coloured overlays such as
