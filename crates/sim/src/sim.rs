@@ -77,6 +77,7 @@ impl Sim {
         rules.num.float_model = def.float_model;
         let scripts = ScriptRuntime::new(&def, &rules)?;
         let mut world = World::new(def.start_room, options.seed);
+        world.next_id = World::first_runtime_id(&def);
         world.mode = options.mode;
         world.map = map;
         {
