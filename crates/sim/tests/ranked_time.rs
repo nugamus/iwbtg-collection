@@ -15,7 +15,7 @@ use iwbtg_sim::room::RoomRequest;
 use iwbtg_sim::rules::RunnerRules;
 use iwbtg_sim::script::ScriptRuntime;
 use iwbtg_sim::sound::DllMode;
-use iwbtg_sim::stripped::{DialogueRegion, PlayMode, Region, RegionCondition};
+use iwbtg_sim::stripped::{DialogueRegion, PlayMode, Region, RegionCondition, region_holds};
 use iwbtg_sim::tick::{self, Hooks};
 use iwbtg_sim::timing::{Split, TimingDef, TimingTrigger};
 use iwbtg_sim::world::{Ctx, KindState, SpawnInit, World};
@@ -178,6 +178,31 @@ fn a_room_region_freezes_the_timer_and_ranked_plus_frozen_is_the_run() {
     // In room 1 at the start of ticks 11-20: frozen. Nothing counts after the end.
     assert_eq!(f.time(), (20, 10));
     assert_eq!(f.time().0 + f.time().1, end - 1, "end.tick - start.tick");
+}
+
+#[test]
+fn region_holds_says_whether_the_next_tick_is_frozen() {
+    // #573: the client's skip steps while `region_holds`; each of those ticks is frozen, and the
+    // first tick after it is ranked.
+    for mode in [PlayMode::Stripped, PlayMode::Original] {
+        let mut f = fx(mode, TimingDef::default(), &[], Some(10));
+        let scene = f.scene;
+        f.cutscene(RegionCondition::Kind(scene));
+        f.run(1);
+        let mut skipped = 0;
+        while region_holds(&f.w, &f.def) {
+            f.tick(InputFrame::EMPTY);
+            skipped += 1;
+        }
+        if mode == PlayMode::Stripped {
+            // Ticks 1-10 start with the scene alive.
+            assert_eq!((skipped, f.time()), (10, (0, 10)));
+            f.tick(InputFrame::EMPTY);
+            assert_eq!(f.time(), (1, 10), "the next tick is ranked");
+        } else {
+            assert_eq!(skipped, 0, "Play original has no regions");
+        }
+    }
 }
 
 #[test]

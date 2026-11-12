@@ -37,18 +37,23 @@ pub const ON_AMBER: Color = Color::srgb_u8(0x2a, 0x1d, 0x05);
 
 /// Dark glass under controls over art: `rgba(12,14,22,.72)`.
 pub const GLASS: Color = Color::srgba(12.0 / 255.0, 14.0 / 255.0, 22.0 / 255.0, 0.72);
-/// Light glass of secondary buttons: `rgba(255,255,255,.12)`.
-pub const SECONDARY: Color = Color::srgba(1.0, 1.0, 1.0, 0.12);
-/// Tags and mod pills: `rgba(255,255,255,.16)`.
-pub const CHIP: Color = Color::srgba(1.0, 1.0, 1.0, 0.16);
+/// What white glass usually sits on: the blurred backdrop art under its dim (#692), measured from
+/// the screenshots (the demo art at the gameplay dim is about `#18204a`, the gallery art at the
+/// select dim `#110f21`). [`white`] picks its alphas against this.
+pub const BACKDROP: Color = Color::srgb_u8(0x14, 0x17, 0x34);
+
+/// Light glass of secondary buttons: `rgba(255,255,255,.12)`, as [`white`]`(0.12)`.
+pub const SECONDARY: Color = Color::srgba(1.0, 1.0, 1.0, 0.0253);
+/// Mod pills: `rgba(255,255,255,.16)`, as [`white`]`(0.16)`.
+pub const CHIP: Color = Color::srgba(1.0, 1.0, 1.0, 0.0381);
 
 /// A leaderboard row (`Leaderboard.dc.html`): `rgba(12,14,22,.62)`.
 #[allow(dead_code, reason = "other players' rows: the Global scope (#484)")]
 pub const ROW: Color = Color::srgba(12.0 / 255.0, 14.0 / 255.0, 22.0 / 255.0, 0.62);
-/// Your own leaderboard row: `rgba(255,255,255,.22)`.
-pub const ROW_YOU: Color = Color::srgba(1.0, 1.0, 1.0, 0.22);
-/// One of your past runs on the Local leaderboard: `rgba(255,255,255,.07)`.
-pub const ROW_PAST: Color = Color::srgba(1.0, 1.0, 1.0, 0.07);
+/// Your own leaderboard row: `rgba(255,255,255,.22)`, as [`white`]`(0.22)`.
+pub const ROW_YOU: Color = Color::srgba(1.0, 1.0, 1.0, 0.0618);
+/// One of your past runs on the Local leaderboard: `rgba(255,255,255,.07)`, as [`white`]`(0.07)`.
+pub const ROW_PAST: Color = Color::srgba(1.0, 1.0, 1.0, 0.0125);
 /// The name on someone else's leaderboard row.
 pub const ROW_NAME: Color = Color::srgb_u8(0xe3, 0xe5, 0xee);
 /// The three dots between a pinned leaderboard row and the rest.
@@ -56,10 +61,11 @@ pub const GAP_DOT: Color = Color::srgb_u8(0x6a, 0x70, 0x88);
 /// A player with no avatar: the square and the mark on it.
 pub const AVATAR_EMPTY: Color = Color::srgb_u8(0x2a, 0x2e, 0x3d);
 pub const AVATAR_MARK: Color = Color::srgb_u8(0x5d, 0x63, 0x78);
-/// An input display arrow that is not held (`RunInfo.dc.html`).
-pub const KEY_IDLE: Color = Color::srgba(1.0, 1.0, 1.0, 0.22);
-/// An input display button label that is not held.
-pub const BUTTON_IDLE: Color = Color::srgba(1.0, 1.0, 1.0, 0.28);
+/// An input display arrow that is not held (`RunInfo.dc.html`): `rgba(255,255,255,.22)`, as
+/// [`white`]`(0.22)`.
+pub const KEY_IDLE: Color = Color::srgba(1.0, 1.0, 1.0, 0.0618);
+/// An input display button label that is not held: `rgba(255,255,255,.28)`, as [`white`]`(0.28)`.
+pub const BUTTON_IDLE: Color = Color::srgba(1.0, 1.0, 1.0, 0.0913);
 
 /// The player card (`ProfileCard.dc.html`): its glass from the left edge to 60 %
 /// (`rgba(14,16,24,.9)`, `.78`) and the warm right end (`rgba(40,14,22,.78)`). The alphas are
@@ -140,6 +146,17 @@ pub fn over(color: Color, a: f32, under: Color) -> Color {
         ((ym - yg) / (yt - yg)).clamp(0.0, 1.0)
     };
     color.with_alpha(alpha)
+}
+
+/// White at the artboard's alpha `a` over the backdrop: `rgba(255,255,255,a)` as the browser draws
+/// it over [`BACKDROP`] (#692). The copied alpha would come out about twice as bright: white at
+/// 0.22 over the dimmed art needs about 0.06 in linear light. The backdrop's brightness varies
+/// with the art, so this is exact only over `BACKDROP`; over the measured backdrops it stays
+/// within about 10 of 255 sRGB steps of the browser (the copied alpha was off by up to 60).
+/// White glass over a known opaque ground is an sRGB mix by hand instead (`TRACK`, `RULE`).
+/// The white constants above are this, precomputed (a test keeps them equal).
+pub fn white(a: f32) -> Color {
+    over(Color::WHITE, a, BACKDROP)
 }
 
 /// The star colour ramp (`Main.dc.html`, `ramp`): from each star count up, its colour.
@@ -224,6 +241,39 @@ mod tests {
             assert!((got.green - 0.55 * (1.0 - a)).abs() < 0.035, "a {a}: {got:?}");
         }
         assert!((artboard_alpha(0.5) - 0.782).abs() < 0.001);
+    }
+
+    #[test]
+    fn white_glass_matches_the_browser_over_the_backdrop() {
+        for (token, a) in [
+            (SECONDARY, 0.12),
+            (CHIP, 0.16),
+            (ROW_YOU, 0.22),
+            (ROW_PAST, 0.07),
+            (KEY_IDLE, 0.22),
+            (BUTTON_IDLE, 0.28),
+        ] {
+            assert!(
+                (token.alpha() - white(a).alpha()).abs() < 0.0005,
+                "{a}: {} vs {}",
+                token.alpha(),
+                white(a).alpha()
+            );
+        }
+        // Over the backdrops measured in the screenshots (gameplay dim, select dim) and the
+        // ground, the row comes out within 10 sRGB steps of the browser in every channel's mean.
+        for ground in [
+            Color::srgb_u8(24, 32, 74),
+            Color::srgb_u8(17, 15, 33),
+            BACKDROP,
+            GROUND,
+        ] {
+            let got = bevy_blend(ROW_YOU, ground);
+            let g = ground.to_srgba();
+            let want = (0.22 * 3.0 + 0.78 * (g.red + g.green + g.blue)) / 3.0;
+            let mean = (got.red + got.green + got.blue) / 3.0;
+            assert!((mean - want).abs() < 10.0 / 255.0, "{ground:?}: {mean} vs {want}");
+        }
     }
 
     #[test]

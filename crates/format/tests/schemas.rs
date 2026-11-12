@@ -1,7 +1,9 @@
 //! The JSON Schemas in `docs/format/schema/v0/` (#212): not stale, and the examples in
 //! `docs/format/v0.md` and the valid test packages validate against them.
 //!
-//! `UPDATE_SCHEMAS=1 cargo test -p iwbtg-format --test schemas` rewrites the schema files.
+//! `cargo xtask regen` rewrites the schema files: it runs `schema_files_are_not_stale` alone with
+//! `UPDATE_SCHEMAS=1`, then this whole file. Setting `UPDATE_SCHEMAS=1` on the whole file instead
+//! lets the other tests read a schema while it is being rewritten (#703).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -61,22 +63,23 @@ fn schema_files_are_not_stale() {
     let mut stale = Vec::new();
     for (stem, text) in schema::generate() {
         let path = schema_dir().join(format!("{stem}.schema.json"));
-        if update {
-            fs::create_dir_all(schema_dir()).unwrap();
-            fs::write(&path, &text).unwrap();
-            continue;
-        }
         // Git may check the file out with CRLF line endings.
         let on_disk = fs::read_to_string(&path)
             .unwrap_or_default()
             .replace("\r\n", "\n");
-        if on_disk != text {
+        if on_disk == text {
+            continue; // never rewrite an unchanged file: a reader could see it half written
+        }
+        if update {
+            fs::create_dir_all(schema_dir()).unwrap();
+            fs::write(&path, &text).unwrap();
+        } else {
             stale.push(path.display().to_string());
         }
     }
     assert!(
         stale.is_empty(),
-        "stale or missing schemas: {stale:?}\nrun `UPDATE_SCHEMAS=1 cargo test -p iwbtg-format --test schemas` and commit the result"
+        "stale or missing schemas: {stale:?}\nrun `cargo xtask regen` and commit the result"
     );
 }
 
