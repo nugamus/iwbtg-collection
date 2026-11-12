@@ -333,7 +333,7 @@ impl Bindings {
                 }
             };
             out.push_str(&format!(
-                "{:<8} keys: {:<18} pad: {}\n",
+                "{:<11} keys: {:<18} pad: {}\n",
                 action.name(),
                 or_dash(keys),
                 or_dash(pads.into_iter().map(String::from).collect()),
@@ -349,7 +349,7 @@ impl Bindings {
             }
         };
         out.push_str(&format!(
-            "{QUICK_RETRY:<8} keys: {:<18} pad: {}\n",
+            "{QUICK_RETRY:<11} keys: {:<18} pad: {}\n",
             or_dash(keys),
             or_dash(pads)
         ));
