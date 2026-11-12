@@ -68,7 +68,11 @@ struct Args {
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> ExitCode {
     let args = Args::parse();
-    let bindings = match bindings::load(&args.bindings) {
+    // The settings file gives the defaults the flags override (settings.rs). A `--screenshot`
+    // check neither reads nor writes it, so it looks the same on every machine.
+    let isolated = args.view.screenshot.is_some();
+    settings::load(isolated);
+    let bindings = match bindings::load(&args.bindings, isolated) {
         Ok(b) => b,
         Err(e) => {
             eprintln!("{e}");
@@ -79,9 +83,6 @@ fn main() -> ExitCode {
         print!("{}", bindings.describe());
         return ExitCode::SUCCESS;
     }
-    // The settings file gives the defaults the flags override (settings.rs). A `--screenshot`
-    // check neither reads nor writes it, so it looks the same on every machine.
-    settings::load(args.view.screenshot.is_some());
     if let Err(e) = screen::configure(&args.screen) {
         eprintln!("{e}");
         return ExitCode::FAILURE;
