@@ -847,6 +847,63 @@ fn placed<'d>(def: &'d GameDef, room: &str, kind: &str) -> Vec<&'d iwbtg_sim::de
     room.instances.iter().filter(|i| i.kind == id).collect()
 }
 
+/// #324: a slope kind's `shape` and `scale_x` pick its class; rising left is `slope_mirror`
+/// (eat-the-new-year yaneM is `scale_x = -1`, CR10; kid/A4.md, kid/A1.md RBF).
+#[test]
+fn slope_shape_and_scale_x_pick_the_kind_class() {
+    let objects: [(&str, &[u8]); 6] = [
+        (
+            "plain",
+            b"base = \"slope\"
+",
+        ),
+        (
+            "right",
+            b"base = \"slope\"
+shape = \"rise_right\"
+",
+        ),
+        (
+            "left",
+            b"base = \"slope\"
+shape = \"rise_left\"
+",
+        ),
+        (
+            "sprite",
+            b"base = \"slope\"
+shape = \"precise_sprite\"
+",
+        ),
+        (
+            "yane_m",
+            b"base = \"slope\"
+scale_x = -1
+",
+        ),
+        (
+            "left_flipped",
+            b"base = \"slope\"
+shape = \"rise_left\"
+scale_x = -1
+",
+        ),
+    ];
+    let files = tier2_package("", |f| {
+        for (id, text) in objects {
+            f.push((format!("objects/{id}.toml"), text.to_vec()));
+        }
+    });
+    let (def, _) = load_ok(&files, STRICT);
+    let class = |id: &str| kind_named(&def, &format!("@{id}")).1.classes;
+    assert_eq!(class("plain"), ClassMask::SLOPE);
+    assert_eq!(class("right"), ClassMask::SLOPE);
+    assert_eq!(class("sprite"), ClassMask::SLOPE);
+    assert_eq!(class("left"), ClassMask::SLOPE_MIRROR);
+    assert_eq!(class("yane_m"), ClassMask::SLOPE_MIRROR);
+    assert_eq!(class("left_flipped"), ClassMask::SLOPE);
+}
+
 #[test]
 fn wp6b3_params_load_on_kinds_and_per_instance() {
     let files = tier2_package(

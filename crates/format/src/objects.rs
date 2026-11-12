@@ -234,7 +234,8 @@ pub fn default_solid(b: Builtin) -> bool {
     )
 }
 
-/// Classes that a kind's params pick (Design): water `variant` 2 and 3, vine `side`, a killer with `kill_outside_view` (no class: it kills in its own collision), and a
+/// Classes that a kind's params pick (Design): water `variant` 2 and 3, vine `side`, slope
+/// `shape` and `scale_x`, a killer with `kill_outside_view` (no class: it kills in its own collision), and a
 /// block with `kid_collides = false`, which has no class at all so the kid has no collision
 /// event with it (docs/format/builtins/block.md).
 pub fn param_classes(b: Builtin, params: &Params) -> Option<ClassMask> {
@@ -250,6 +251,18 @@ pub fn param_classes(b: Builtin, params: &Params) -> Option<ClassMask> {
         },
         Builtin::Killer if matches!(get("kill_outside_view"), Some(ParamValue::Bool(true))) => {
             Some(ClassMask::NONE)
+        }
+        // `shape` names which way the sprite's mask rises and a negative `scale_x` mirrors that
+        // (docs/format/builtins/slope.md): rising left is the `slope_mirror` class, the kid's
+        // yaneM or nanameblockR event (kid/A4.md, kid/A1.md RBF). The mask stays the sprite's.
+        Builtin::Slope => {
+            let left = matches!(get("shape"), Some(ParamValue::Str(s)) if s == "rise_left");
+            let mirrored = matches!(get("scale_x"), Some(ParamValue::Real(v)) if v.get() < 0.0);
+            Some(if left != mirrored {
+                ClassMask::SLOPE_MIRROR
+            } else {
+                ClassMask::SLOPE
+            })
         }
         Builtin::Vine => match get("side") {
             Some(ParamValue::Str(s)) if s == "left" => Some(ClassMask::VINE_L),
@@ -314,6 +327,29 @@ mod tests {
             number(&toml::Value::Table(bits)).unwrap().to_bits(),
             0x3FDC_CCCC_CCCC_CCCD
         );
+    }
+
+    #[test]
+    fn slope_shape_and_scale_x_pick_the_class() {
+        let class = |shape: Option<&str>, scale: Option<f64>| {
+            let mut p = Params::default();
+            if let Some(s) = shape {
+                p.0.insert("shape".into(), ParamValue::Str(s.into()));
+            }
+            if let Some(v) = scale {
+                p.0.insert("scale_x".into(), ParamValue::Real(Real::new(v)));
+            }
+            kind_classes(Builtin::Slope, &p, ClassMask::NONE)
+        };
+        assert_eq!(class(None, None), ClassMask::SLOPE);
+        assert_eq!(class(Some("rise_right"), None), ClassMask::SLOPE);
+        assert_eq!(class(Some("precise_sprite"), None), ClassMask::SLOPE);
+        assert_eq!(class(Some("rise_left"), None), ClassMask::SLOPE_MIRROR);
+        // eat-the-new-year yaneM: `scale_x = -1` (CR10).
+        assert_eq!(class(None, Some(-1.0)), ClassMask::SLOPE_MIRROR);
+        assert_eq!(class(None, Some(2.0)), ClassMask::SLOPE);
+        assert_eq!(class(Some("rise_left"), Some(-1.0)), ClassMask::SLOPE);
+        assert_eq!(class(Some("precise_sprite"), Some(-2.0)), ClassMask::SLOPE_MIRROR);
     }
 
     #[test]
