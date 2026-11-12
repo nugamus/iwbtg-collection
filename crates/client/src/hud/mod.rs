@@ -370,6 +370,14 @@ fn place(
 mod tests {
     use super::*;
 
+    /// A notice fits the narrowest leaderboard column outside a small window, so it stays off
+    /// the game at 16:9 and 4:3 (#668). The column is at least `MIN_LEFT` UI px: the UI scale
+    /// shrinks until it is.
+    #[test]
+    fn a_notice_fits_the_narrowest_leaderboard_column() {
+        const { assert!(layout::MIN_LEFT - 2.0 * notice::MARGIN >= notice::MIN_WIDTH) };
+    }
+
     fn press(app: &mut App, held: &[KeyCode], key: KeyCode) {
         {
             let mut input = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
