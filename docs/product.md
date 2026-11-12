@@ -75,7 +75,7 @@ Layout at each shape (artboards `Hud169`, `Hud43`, `Hud219`, `HudSmall`): at 16:
 
 ## Pause
 
-The pause menu is the game's own PAUSE box (decided 2026-11-04): black box, double white border, pixel type, the delicious fruit as the selector, drawn in game pixels over the frozen, darkened game. Options: Continue, Retry from save (what R does), Restart run (the quick-retry key), Quit. Escape opens and closes it. The ranked timer keeps running while paused: paused time counts as run time, and the HUD says `Paused · timer running`. Sound holds while paused. Quit discards the run: no results screen and no clear. The selector is the package's own `cherry` sprite when it has one, else our placeholder. The game's own P-key pause is separate: it is game input, part of the run and its replay.
+The pause menu is the game's own PAUSE box (decided 2026-11-04): black box, double white border, pixel type, the delicious fruit as the selector, drawn in game pixels over the frozen, darkened game. Options: Continue, Retry from save (what R does), Restart run (the quick-retry key), Quit. Escape opens and closes it. The ranked timer keeps running while paused: paused time counts as run time, and the HUD says `Paused · timer running`. The replay records each pause (when and how long), and the run's time on the stats and leaderboards includes it, as the HUD showed it. Sound holds while paused. Quit discards the run: no results screen and no clear. The selector is the package's own `cherry` sprite when it has one, else our placeholder. The game's own P-key pause is separate: it is game input, part of the run and its replay.
 
 ## Music sync
 

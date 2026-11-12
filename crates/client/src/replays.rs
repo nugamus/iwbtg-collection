@@ -13,6 +13,10 @@
 //! - when a retry starts a new run;
 //! - when the window closes.
 //!
+//! The pause menu's pauses (`pause::Menu::pauses`, the ticks the timer ran while paused) go into
+//! the trailer (#623): [`sync_pauses`] copies them before every sim tick, and a retry or the
+//! window closing copies them before the last write.
+//!
 //! Names: `replays/<game id>/<unix seconds>-<n>.iwbr`, listed oldest first in
 //! `replays/index.txt` (the browser's storage cannot list its entries). On the web, where
 //! `localStorage` holds a few MB, only the newest [`WEB_KEEP`] are kept, plus the replays the
@@ -29,8 +33,9 @@ use iwbtg_sim::sim::Sim;
 use iwbtg_sim::stripped::PlayMode;
 use iwbtg_sim::timing::Split;
 
+use crate::pause::Menu;
 use crate::storage::{self, Store};
-use crate::view::Game;
+use crate::view::{Game, SimTick};
 
 /// The list of replays in the data area, one name per line, oldest first.
 pub const INDEX: &str = "replays/index.txt";
@@ -94,6 +99,8 @@ pub struct Recorder {
     skip: bool,
     /// Whether old replays are pruned to [`WEB_KEEP`].
     prune: bool,
+    /// The run's pauses so far (`pause::Menu::pauses`), for the trailer.
+    pauses: Vec<(u64, u64)>,
 }
 
 impl Recorder {
@@ -107,6 +114,21 @@ impl Recorder {
             current: None,
             skip: false,
             prune: cfg!(all(target_arch = "wasm32", target_os = "unknown")),
+            pauses: Vec::new(),
+        }
+    }
+
+    /// The run's pauses so far: `(sim tick the pause began at, ticks the timer ran while
+    /// paused)`, as `pause::Menu::pauses` keeps them. The next write puts them in the trailer.
+    pub fn set_pauses(&mut self, pauses: &[(u64, u64)]) {
+        if self.pauses != pauses {
+            self.pauses.clear();
+            self.pauses.extend_from_slice(pauses);
+            if let Some(rec) = self.current.as_mut()
+                && !rec.closed
+            {
+                rec.unsaved = true;
+            }
         }
     }
 
@@ -157,6 +179,7 @@ impl Recorder {
         self.write(sim);
         self.current = None;
         self.skip = false;
+        self.pauses.clear();
     }
 
     /// The header and name of a new replay of `sim`'s run, or `None` when its start cannot be
@@ -230,6 +253,15 @@ impl Recorder {
                 total_ticks: rec.inputs.len() as u64,
                 splits: rec.splits.clone(),
                 ranked_ticks: sim.ranked_ticks(),
+                // A pause the menu counted after the last recorded tick (none can: the menu
+                // counts only while the sim runs, and the sim ticks after it) is dropped rather
+                // than making the file invalid.
+                pauses: self
+                    .pauses
+                    .iter()
+                    .copied()
+                    .filter(|p| p.0 <= rec.inputs.len() as u64)
+                    .collect(),
                 checkpoints: rec.checkpoints.clone(),
                 final_hash,
             },
@@ -330,22 +362,43 @@ impl Plugin for ReplaysPlugin {
         app.insert_resource(Recorder::new(store, self.gameplay_hash, self.mods))
             // Bevy's own exit on the last window closing runs in `Last` too; the app stops after
             // that frame, so this must run after it in the same frame.
-            .add_systems(Last, finish_on_exit.after(bevy::window::ExitSystems));
+            .add_systems(Last, finish_on_exit.after(bevy::window::ExitSystems))
+            .add_systems(FixedUpdate, sync_pauses.before(SimTick));
     }
 }
 
-/// A retry (`retry.rs`) ends the run: its replay is written before the new sim replaces it.
+/// Before each sim tick: the pause menu's pauses so far go to the recorder, so the write a tick
+/// makes (the clear) has them.
+fn sync_pauses(menu: Option<Res<Menu>>, mut recorder: ResMut<Recorder>) {
+    if let Some(menu) = menu {
+        recorder.set_pauses(&menu.pauses);
+    }
+}
+
+/// A retry (`retry.rs`) ends the run: its replay is written before the new sim replaces it. Runs
+/// before `pause::reset`, so the run's last pauses are still there.
 pub(crate) fn reset(world: &mut World) {
     let Some(mut recorder) = world.remove_resource::<Recorder>() else {
         return;
     };
+    if let Some(menu) = world.get_resource::<Menu>() {
+        recorder.set_pauses(&menu.pauses);
+    }
     recorder.finish(&world.non_send::<Game>().sim);
     world.insert_resource(recorder);
 }
 
 /// Closing the window ends the run: its replay is written while the sim is still there.
-fn finish_on_exit(mut exit: MessageReader<AppExit>, game: NonSend<Game>, mut recorder: ResMut<Recorder>) {
+fn finish_on_exit(
+    mut exit: MessageReader<AppExit>,
+    game: NonSend<Game>,
+    menu: Option<Res<Menu>>,
+    mut recorder: ResMut<Recorder>,
+) {
     if exit.read().next().is_some() {
+        if let Some(menu) = menu {
+            recorder.set_pauses(&menu.pauses);
+        }
         recorder.finish(&game.sim);
     }
 }
@@ -436,6 +489,38 @@ mod tests {
             }
         }
         assert_eq!(again.state_hash(), replay.trailer.final_hash);
+    }
+
+    /// #623: the pause menu's pauses go into the trailer; the next run starts with none.
+    #[test]
+    fn a_paused_run_keeps_its_pauses() {
+        let pkg = demo();
+        let store = temp("paused");
+        let options = SimOptions {
+            start: StartPoint::NewGame { difficulty: 0 },
+            seed: 3,
+            dll_mode: DllMode::Model,
+            mode: PlayMode::Stripped,
+            map: None,
+        };
+        let mut sim = Sim::new(Arc::clone(&pkg.def), options.clone()).unwrap();
+        let mut rec = Recorder::new(Some(store.clone()), pkg.gameplay_hash, ModSet::NONE);
+        play(&mut sim, &mut rec, 20);
+        rec.set_pauses(&[(20, 150)]);
+        play(&mut sim, &mut rec, 10);
+        rec.set_pauses(&[(20, 150), (30, 12)]);
+        let name = rec.current_name().unwrap().to_owned();
+        rec.finish(&sim);
+        let replay = Replay::decode(&store.read(&name).unwrap().unwrap()).unwrap();
+        assert_eq!(replay.trailer.pauses, vec![(20, 150), (30, 12)]);
+        assert_eq!(replay.trailer.ranked_time(), sim.ranked_ticks() + 162);
+
+        let mut sim = Sim::new(Arc::clone(&pkg.def), options).unwrap();
+        play(&mut sim, &mut rec, 5);
+        let name = rec.current_name().unwrap().to_owned();
+        rec.finish(&sim);
+        let replay = Replay::decode(&store.read(&name).unwrap().unwrap()).unwrap();
+        assert!(replay.trailer.pauses.is_empty(), "a new run has no pauses");
     }
 
     /// Nothing recorded since the last write writes nothing; the next run is a new file.

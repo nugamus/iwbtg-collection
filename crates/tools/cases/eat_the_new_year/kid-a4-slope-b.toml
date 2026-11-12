@@ -3,7 +3,6 @@
 # Recorder: --object player --room room100 --x 410 --y 480 --at 2 --from 2
 source = "eat-the-new-year/kid-a4-slope-b"
 kind = "diff"
-open = "the converted physics.toml has no slope rows yet (research#127), and yaneM loads as class slope until the slope scale_x param applies (#324)"
 start = { room = "room_1", difficulty = 0 }
 at = 2
 first_frame = 2

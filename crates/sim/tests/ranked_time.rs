@@ -306,6 +306,7 @@ fn a_replay_never_stores_the_derived_press() {
             total_ticks: 40,
             splits: vec![(0, 1)],
             ranked_ticks: live.w.timing.ranked_ticks,
+            pauses: vec![],
             checkpoints: vec![],
             final_hash: iwbtg_sim::hash::state_hash(&live.w),
         },

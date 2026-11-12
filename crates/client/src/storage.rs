@@ -79,9 +79,11 @@ impl Store {
     }
 }
 
-/// A warning the player can find: stderr natively, the browser console on the web.
+/// A warning the player can find: stderr natively, the browser console on the web, and once per
+/// session a notice on screen (`ui::notice`, #566).
 pub fn warn(message: &str) {
     backend::warn(message);
+    crate::ui::notice::post(crate::ui::notice::Kind::Storage, message);
 }
 
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
@@ -218,7 +220,7 @@ mod backend {
     impl Backend {
         pub fn open(area: Area) -> Option<Backend> {
             if let Err(e) = storage() {
-                warn(&format!("{e}; nothing will be kept after this page closes"));
+                super::warn(&format!("{e}; nothing will be kept after this page closes"));
                 return None;
             }
             let prefix = match area {
