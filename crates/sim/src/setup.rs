@@ -90,6 +90,7 @@ impl Sim {
             room::StartPoint::FromSave(slot) => slot.room,
         };
         let mut world = World::new(first_room, options.seed);
+        world.next_id = World::first_runtime_id(&def);
         for s in pre_entry {
             world.setup_applied = true;
             apply(&def, &rules, &mut world, s)?;

@@ -84,6 +84,9 @@ pub struct SpawnInit {
     pub group: Option<GroupId>,
     /// Run the Create event inside `spawn` (Inferred). False only for restored instances.
     pub run_create: bool,
+    /// The GM8 id of a room-placed instance (`PlacedInstance::gm_id`, #669): the instance gets
+    /// it instead of a runtime id. It must be below [`World::next_id`].
+    pub gm_id: Option<InstId>,
 }
 
 impl Default for SpawnInit {
@@ -101,12 +104,13 @@ impl Default for SpawnInit {
             name: None,
             group: None,
             run_create: true,
+            gm_id: None,
         }
     }
 }
 
 impl World {
-    /// Every stored instance, alive or destroyed this tick, in creation order (sorted by id).
+    /// Every stored instance, alive or destroyed this tick, in id order (creation order but for placed GM8 ids, #669).
     /// Read-only: mutable access goes through [`World::get_mut`], which keeps the broadphase
     /// grid in step.
     pub fn instances(&self) -> &[Instance] {
@@ -142,7 +146,7 @@ impl World {
         self.get(id).is_some_and(|i| i.alive && i.active)
     }
 
-    /// Alive instances (active or not) in creation order.
+    /// Alive instances (active or not) in id order.
     pub fn iter_alive(&self) -> impl Iterator<Item = &Instance> {
         self.instances.iter().filter(|i| i.alive)
     }
@@ -251,7 +255,16 @@ impl Ctx<'_> {
             .ok_or_else(|| SimError::invariant(format!("kind {} has no rank (CR4)", kd.name)))?;
         let params = merge_params(&kd.params, &init.params);
         let state = initial_state(def, kd, &params)?;
-        let id = self.w.alloc_id()?;
+        let id = match init.gm_id {
+            Some(id) if id.0 >= self.w.next_id => {
+                return Err(SimError::invariant(format!(
+                    "placed id {} is not below the first runtime id {} (CLONE_SPEC, Placed instance ids)",
+                    id.0, self.w.next_id
+                )));
+            }
+            Some(id) => id,
+            None => self.w.alloc_id()?,
+        };
         let mut inst = Instance::new(id, kind, rank, x, y);
         inst.name = init.name;
         inst.group = init.group;

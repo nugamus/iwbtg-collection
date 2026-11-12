@@ -1,7 +1,10 @@
-//! The minimal instance store: a `Vec` in creation order (docs/plans/sim-core.md 1.2).
+//! The minimal instance store: a `Vec` sorted by id (docs/plans/sim-core.md 1.2).
 //!
-//! No map: ids are handed out in increasing order and appended, so the `Vec` stays sorted by id
-//! and lookup is a binary search. WP0 ships this working version; WP1 owns it.
+//! No map: runtime ids are handed out in increasing order and appended, so the `Vec` stays
+//! sorted by id and lookup is a binary search. Room-placed instances with a GM8 id (`gm_id`,
+//! #669) are below every runtime id and go in at their sorted place, so for them id order is
+//! not creation order (CLONE_SPEC, Instances, "Placed instance ids"). WP0 ships this working
+//! version; WP1 owns it.
 
 use super::{InstId, Instance, World};
 use crate::def::GameDef;
@@ -18,6 +21,21 @@ impl World {
         self.instances.binary_search_by_key(&id, |i| i.id).ok()
     }
 
+    /// The id the runtime counter starts at for `def` (CLONE_SPEC, Instances, "Placed instance
+    /// ids"): `[engine].first_runtime_id` (the game file's last-instance-id + 1). A package that
+    /// places GM8 ids without it starts one above the highest placed id, so runtime ids stay
+    /// above every placed id; with neither, [`InstId::FIRST`].
+    pub fn first_runtime_id(def: &GameDef) -> u64 {
+        if let Some(first) = def.first_runtime_id {
+            return u64::from(first);
+        }
+        def.rooms
+            .iter()
+            .flat_map(|r| r.instances.iter().filter_map(|p| p.gm_id))
+            .max()
+            .map_or(InstId::FIRST.0, |id| InstId::FIRST.0.max(u64::from(id) + 1))
+    }
+
     /// Hands out the next instance id. Ids are never reused.
     pub fn alloc_id(&mut self) -> Result<InstId, SimError> {
         let id = InstId(self.next_id);
@@ -28,9 +46,10 @@ impl World {
         Ok(id)
     }
 
-    /// Appends an instance. Its id must be greater than every id already stored (ids from
-    /// [`World::alloc_id`] are), which keeps the store sorted; anything else is an error. Past
-    /// [`MAX_LIVE_INSTANCES`] live instances it is an error too.
+    /// Stores an instance at its place in id order. A runtime id (from [`World::alloc_id`]) is
+    /// above every stored id, so it is appended; a placed instance's GM8 id (#669) can go in
+    /// before others. An id that is already stored is an error, and so is going past
+    /// [`MAX_LIVE_INSTANCES`] live instances.
     pub fn insert(&mut self, inst: Instance) -> Result<(), SimError> {
         // `len` counts instances destroyed this tick, so the exact count runs only near the cap.
         if self.instances.len() >= MAX_LIVE_INSTANCES && self.iter_alive().count() >= MAX_LIVE_INSTANCES {
@@ -38,16 +57,16 @@ impl World {
                 "instance cap exceeded: a room holds at most {MAX_LIVE_INSTANCES} live instances"
             )));
         }
-        if let Some(last) = self.instances.last()
-            && last.id >= inst.id
-        {
-            return Err(SimError::unsupported(format!(
-                "instance id {} inserted after {}",
-                inst.id.0, last.id.0
-            )));
-        }
+        let at = match self.instances.last() {
+            Some(last) if last.id >= inst.id => self
+                .instances
+                .binary_search_by_key(&inst.id, |i| i.id)
+                .err()
+                .ok_or_else(|| SimError::unsupported(format!("instance id {} is already in use", inst.id.0)))?,
+            _ => self.instances.len(),
+        };
         self.grid.mark_moved(inst.id);
-        self.instances.push(inst);
+        self.instances.insert(at, inst);
         Ok(())
     }
 
@@ -89,7 +108,25 @@ mod tests {
         assert_eq!(w.get(a).map(|i| i.kind), Some(KindId(0)));
         assert!(w.get(InstId(5)).is_none());
         let stale = Instance::new(a, KindId(0), 0, Real::ZERO, Real::ZERO);
-        assert!(w.insert(stale).is_err(), "out-of-order insert is refused");
+        assert!(w.insert(stale).is_err(), "an id in use is refused");
+    }
+
+    #[test]
+    fn a_lower_id_goes_in_at_its_sorted_place() {
+        let mut w = World::new(RoomId(0), 1);
+        w.next_id = 105_106;
+        let runtime = spawn(&mut w, 0);
+        for id in [104_190, 104_180] {
+            w.insert(Instance::new(InstId(id), KindId(1), 0, Real::ZERO, Real::ZERO))
+                .unwrap();
+        }
+        let ids: Vec<u64> = w.instances.iter().map(|i| i.id.0).collect();
+        assert_eq!(ids, [104_180, 104_190, 105_106]);
+        assert_eq!(w.index_of(runtime), Some(2));
+        assert_eq!(spawn(&mut w, 0), InstId(105_107), "placed ids do not move the counter");
+        let again = Instance::new(InstId(104_180), KindId(1), 0, Real::ZERO, Real::ZERO);
+        let err = w.insert(again).unwrap_err();
+        assert!(err.to_string().contains("104180 is already in use"), "{err}");
     }
 
     #[test]

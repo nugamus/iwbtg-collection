@@ -24,6 +24,8 @@ mod hash_vectors;
 mod kid_sounds;
 #[path = "lint_gm_compare.rs"]
 mod lint_gm_compare;
+#[path = "placed_ids.rs"]
+mod placed_ids;
 #[path = "ranked_time.rs"]
 mod ranked_time;
 #[path = "save_reverse.rs"]

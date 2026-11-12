@@ -40,7 +40,8 @@ pub struct GameDef {
     pub uninit_reads_zero: bool,
     /// The GM8 instance id of the first instance created at run time (`[engine]
     /// first_runtime_id`, #680: the game file's last-instance-id + 1). `None` when the package
-    /// does not give one. Not used by the sim yet (#669).
+    /// does not give one; then the runtime counter starts above the highest placed `gm_id`
+    /// (`World::first_runtime_id`, #669).
     pub first_runtime_id: Option<u32>,
     /// Sprites.
     pub sprites: Vec<SpriteDef>,
