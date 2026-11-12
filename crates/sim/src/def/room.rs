@@ -147,7 +147,8 @@ pub struct PlacedInstance {
     /// Instance group.
     pub group: Option<GroupId>,
     /// GM8 instance id from the room file (`gm_id`, #680): unique in the room, may repeat in
-    /// other rooms. `None` when the package does not give one. Not used by the sim yet (#669).
+    /// other rooms. `None` when the package does not give one. The instance gets this id instead
+    /// of a runtime id and is not created when the id is in use (#669).
     pub gm_id: Option<u32>,
 }
 

@@ -11,7 +11,9 @@
 //!    the old room is persistent, everything that stays behind is stored with it.
 //! 3. Persistent instances move to the new room with their ids.
 //! 4. A new or non-persistent room creates its placed instances in file order, each with its
-//!    params (instance creation code) applied before its Create. A persistent room that was
+//!    params (instance creation code) applied before its Create. One with a GM8 id (`gm_id`)
+//!    gets that id, and is skipped when an instance with that id is already alive (a carried
+//!    persistent one; CLONE_SPEC, Instances, "Placed instance ids", #669). A persistent room that was
 //!    visited before gets its stored instances back, without Create (Inferred, R18).
 //! 5. First room of the game only: Game Start for every instance.
 //! 6. The room creation actions run, as data. On a persistent-room revisit only when
@@ -613,8 +615,8 @@ fn enter<H: RoomHost + ?Sized>(
     };
     let carried_ids: BTreeSet<InstId> = carried.iter().map(|i| i.id).collect();
 
-    // Rebuild the store: carried plus restored, sorted by id (both lists already are), so the
-    // store stays in creation order. Every instance is re-inserted, which marks it in the new,
+    // Rebuild the store: carried plus restored, sorted by id (both lists already are), as the
+    // store keeps them. Every instance is re-inserted, which marks it in the new,
     // empty grid.
     let ids: Vec<InstId> = ctx.w.instances().iter().map(|i| i.id).collect();
     for id in ids {
@@ -643,6 +645,14 @@ fn enter<H: RoomHost + ?Sized>(
             if stripped.kind_cut(ctx.w.mode, p.kind) || stripped.instance_cut(ctx.w.mode, to, p.name) {
                 continue;
             }
+            // A placed instance whose GM8 id is already in use (a persistent instance carried
+            // in, possibly from another room that shares ids) is not created again (CLONE_SPEC,
+            // Instances, "Placed instance ids"). Instances destroyed this step were swept above,
+            // so they do not count; whether GM8 counts them is client#670.
+            let gm_id = p.gm_id.map(|id| InstId(u64::from(id)));
+            if gm_id.is_some_and(|id| ctx.w.get(id).is_some()) {
+                continue;
+            }
             let init = SpawnInit {
                 params: p.params.clone(),
                 variant: None,
@@ -655,6 +665,7 @@ fn enter<H: RoomHost + ?Sized>(
                 name: p.name,
                 group: p.group,
                 run_create: true,
+                gm_id,
             };
             host.spawn(ctx, p.kind, p.x, p.y, init)?;
             stop_if_halted(ctx)?;
