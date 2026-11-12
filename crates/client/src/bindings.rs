@@ -431,7 +431,7 @@ impl Bindings {
                 }
             };
             out.push_str(&format!(
-                "{:<11} keys: {:<18} pad: {}\n",
+                "{:<13} keys: {:<18} pad: {}\n",
                 action.name(),
                 or_dash(keys),
                 or_dash(pads.into_iter().map(String::from).collect()),
