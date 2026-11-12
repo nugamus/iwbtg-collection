@@ -938,8 +938,10 @@ fn placed_class_params_derive_a_kind_with_those_classes() {
         let stage = STAGE1.replace(
             "  { kind = \"warp\", x = 768, y = 512, room_to = \"title\" },
 ",
-            &format!("  {{ kind = \"warp\", x = 768, y = 512, room_to = \"title\" }},
-{instances}"),
+            &format!(
+                "  {{ kind = \"warp\", x = 768, y = 512, room_to = \"title\" }},
+{instances}"
+            ),
         );
         set(f, "rooms/stage1.toml", stage.into_bytes());
         f.push((
@@ -947,7 +949,8 @@ fn placed_class_params_derive_a_kind_with_those_classes() {
             b"base = \"slope\"
 scale_x = -1
 counts_as = [\"slope_wall\"]
-".to_vec(),
+"
+            .to_vec(),
         ));
     });
     let (def, _) = load_ok(&files, STRICT);
