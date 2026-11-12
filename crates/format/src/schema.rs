@@ -80,6 +80,9 @@ pub struct InstanceShape {
     pub run: Option<[u32; 2]>,
     /// `[dx, dy]` spacing of the grid; default `[32, 32]`.
     pub step: Option<[Number; 2]>,
+    /// GM8 instance id from the room file; unique in the room, never with `run`.
+    #[schemars(range(max = 2_147_483_647))]
+    pub gm_id: Option<u32>,
     /// Params named like an instance key (`params = { kind = 20 }`, GM creation code that sets
     /// `kind`); every other param is a key of its own.
     #[serde(rename = "params")]

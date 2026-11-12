@@ -16,6 +16,26 @@ pub struct Observation {
     /// The run's time so far: `Sim::ranked_ticks` plus the ticks paused while the timer ran
     /// (`pause::Menu::paused_ticks`), as the HUD shows it.
     pub ranked_ticks: u64,
+    /// Where the kid is after the tick, `None` when there is none (dead, or a room without one).
+    pub kid: Option<Spot>,
+}
+
+/// A place in the game: a room (index into `GameDef::rooms`) and a kid position in whole pixels.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Spot {
+    pub room: u32,
+    pub x: i32,
+    pub y: i32,
+}
+
+/// One death of the run: when and where (#679).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Death {
+    /// The run's time (as [`Observation::ranked_ticks`]) on the last tick the kid was seen
+    /// alive before the death counted: the death itself, not the restart that counts it.
+    pub ticks: u64,
+    /// Where the kid was then; `None` when no kid was seen this run before the death.
+    pub spot: Option<Spot>,
 }
 
 /// What a tick did, for the stats.
@@ -31,6 +51,8 @@ pub enum Event {
         deaths: u32,
         splits: Vec<u64>,
         segment_deaths: Vec<u32>,
+        /// Every death in order: the first `segment_deaths[0]` in segment 0, and so on.
+        death_log: Vec<Death>,
     },
 }
 
@@ -42,6 +64,9 @@ pub struct Tracker {
     last: Option<Observation>,
     splits: Vec<u64>,
     segment_deaths: Vec<u32>,
+    death_log: Vec<Death>,
+    /// The kid's last sighting alive and the run's time then.
+    seen: Option<(u64, Spot)>,
     cleared: bool,
 }
 
@@ -53,6 +78,8 @@ impl Tracker {
             last: None,
             splits: Vec::new(),
             segment_deaths: vec![0; stages + 1],
+            death_log: Vec::new(),
+            seen: None,
             cleared: false,
         }
     }
@@ -69,6 +96,7 @@ impl Tracker {
         let Some(before) = self.last.replace(now) else {
             // The first look has nothing to compare with: a run from a save starts with that
             // save's deaths.
+            self.see(&now);
             return events;
         };
         if now.tick == before.tick {
@@ -79,8 +107,24 @@ impl Tracker {
             let segment = self.segment(before.stages_done);
             let n = now.deaths - before.deaths;
             self.segment_deaths[segment] = self.segment_deaths[segment].saturating_add(n);
+            // The sighting before this tick: a kid that died is gone by now, and a restart
+            // while alive has already made the new kid at the save.
+            let death = match self.seen {
+                Some((ticks, spot)) => Death {
+                    ticks,
+                    spot: Some(spot),
+                },
+                None => Death {
+                    ticks: before.ranked_ticks,
+                    spot: None,
+                },
+            };
+            for _ in 0..n {
+                self.death_log.push(death);
+            }
             events.push(Event::Died { segment, n });
         }
+        self.see(&now);
         for _ in before.stages_done..now.stages_done {
             self.splits.push(now.ranked_ticks);
         }
@@ -95,9 +139,17 @@ impl Tracker {
                 deaths: self.segment_deaths.iter().sum(),
                 splits: self.splits.clone(),
                 segment_deaths: self.segment_deaths.clone(),
+                death_log: self.death_log.clone(),
             });
         }
         events
+    }
+
+    /// Notes where the kid is, when there is one.
+    fn see(&mut self, now: &Observation) {
+        if let Some(spot) = now.kid {
+            self.seen = Some((now.ranked_ticks, spot));
+        }
     }
 }
 
@@ -112,7 +164,12 @@ mod tests {
             stages_done,
             ended,
             ranked_ticks: ranked,
+            kid: None,
         }
+    }
+
+    fn spot(room: u32, x: i32, y: i32) -> Option<Spot> {
+        Some(Spot { room, x, y })
     }
 
     #[test]
@@ -138,6 +195,8 @@ mod tests {
                 deaths: 3,
                 splits: vec![100, 250, 400],
                 segment_deaths: vec![1, 2, 0],
+                // No kid seen: the time of the tick before the counter went up.
+                death_log: [1, 100, 100].map(|ticks| Death { ticks, spot: None }).to_vec(),
             }
         );
         // The world stays ended; no second clear.
@@ -157,5 +216,41 @@ mod tests {
         t.observe(at(0, 0, 0, false, 0));
         let ev = t.observe(at(1, 0, 0, true, 50));
         assert!(matches!(&ev[1], Event::Cleared { splits, .. } if splits == &vec![50, 50, 50]));
+    }
+
+    /// A death is logged where and when the kid was last seen alive, once per counted death;
+    /// a restart while alive logs the spot before the restart, not the new kid at the save.
+    #[test]
+    fn deaths_are_logged_at_the_last_sighting() {
+        let mut t = Tracker::new(1);
+        let kid = |o: Observation, k| Observation { kid: k, ..o };
+        t.observe(kid(at(0, 0, 0, false, 0), spot(1, 10, 20)));
+        t.observe(kid(at(1, 0, 0, false, 1), spot(1, 12, 20)));
+        // Dies: the kid is gone; the death counts three ticks later (R).
+        t.observe(at(2, 0, 0, false, 2));
+        t.observe(at(3, 0, 0, false, 3));
+        t.observe(kid(at(4, 1, 0, false, 4), spot(0, 50, 60)));
+        // Split, then R while alive in room 2: the new kid stands at the save.
+        t.observe(kid(at(5, 1, 1, false, 5), spot(2, 100, 200)));
+        t.observe(kid(at(6, 3, 1, false, 6), spot(0, 50, 60)));
+        let ev = t.observe(kid(at(7, 3, 1, true, 7), spot(0, 50, 60)));
+        let Event::Cleared {
+            death_log,
+            segment_deaths,
+            ..
+        } = &ev[1]
+        else {
+            panic!("{ev:?}");
+        };
+        assert_eq!(segment_deaths, &vec![1, 2]);
+        let d = |ticks, spot| Death { ticks, spot };
+        assert_eq!(
+            death_log,
+            &vec![
+                d(1, spot(1, 12, 20)),
+                d(5, spot(2, 100, 200)),
+                d(5, spot(2, 100, 200)),
+            ]
+        );
     }
 }

@@ -15,7 +15,9 @@ use crate::def::{GameDef, RoomId, SpriteId, VarId};
 use crate::error::SimError;
 use crate::kid::api::{self as kid_api, KidSetValue};
 use crate::num::{self, Real};
-use crate::probe::{FieldRef, FixedColumn, ImageField, ProbeTarget, SaveField, first_of_target};
+use crate::probe::{
+    FieldRef, FixedColumn, ImageField, ProbeTarget, SaveField, first_of_target, nth_of_target,
+};
 use crate::room;
 use crate::rules::RunnerRules;
 use crate::save::SaveSlot;
@@ -151,6 +153,7 @@ fn target_instance(
             .iter_alive()
             .find(|i| i.active && i.name == Some(*n))
             .map(|i| i.id),
+        ProbeTarget::Nth(t, n) => nth_of_target(def, w, &rules.tick, *t, *n),
     };
     found
         .ok_or_else(|| SimError::unsupported(format!("setup target {t:?}: no instance (setup creates none)")))
@@ -460,6 +463,42 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn nth_target_takes_instance_order() {
+        let mut s = sim();
+        let mut ids = Vec::new();
+        for _ in 0..3 {
+            let id = s.world.alloc_id().expect("id");
+            s.world
+                .insert(Instance::new(
+                    id,
+                    crate::def::KindId(0),
+                    0,
+                    Real::ZERO,
+                    Real::ZERO,
+                ))
+                .expect("insert");
+            ids.push(id);
+        }
+        let block = crate::collide::Target::Kind(crate::def::KindId(0));
+        let set_x = |n: u32, x: f64| SetupAction::SetField {
+            target: ProbeTarget::Nth(block, n),
+            field: FieldRef::Fixed(FixedColumn::X),
+            value: Value::Real(Real::new(x)),
+        };
+        s.apply_setup(&set_x(2, 60.0)).expect("third");
+        s.apply_setup(&set_x(0, 52.0)).expect("first");
+        let xs: Vec<f64> = ids
+            .iter()
+            .map(|id| s.world.get(*id).expect("inst").m.x().get())
+            .collect();
+        assert_eq!(xs, [52.0, 0.0, 60.0]);
+        assert!(matches!(
+            s.apply_setup(&set_x(3, 1.0)),
+            Err(SimError::Unsupported { .. })
+        ));
     }
 
     #[test]

@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use iwbtg_format::{LoadMode, PackageFiles, load_game};
-use iwbtg_sim::def::{GameDef, KindId, NameId, RoomId};
+use iwbtg_sim::def::{ClassMask, GameDef, KindId, NameId, RoomId};
 use iwbtg_sim::input::{InputFrame, KeyMap, parse_key_inputs};
 use iwbtg_sim::num::Real;
 use iwbtg_sim::probe::{self, Column, Probe, ProbeTarget, registry};
@@ -185,11 +185,9 @@ fn kind_named(def: &GameDef, name: &str) -> Option<KindId> {
         .map(KindId)
 }
 
-/// `kid`, `named:<name>` or a kind name.
+/// `kid`, `named:<name>`, a kind name, or `kid#<n>` / `<kind>#<n>`: the `n`-th (0-based)
+/// instance in instance order, GML `instance_find(obj, n)` (#672).
 fn setup_target(def: &GameDef, target: &str) -> Result<ProbeTarget, String> {
-    if target == "kid" {
-        return Ok(ProbeTarget::Kid);
-    }
     if let Some(name) = target.strip_prefix("named:") {
         return def
             .names
@@ -199,9 +197,27 @@ fn setup_target(def: &GameDef, target: &str) -> Result<ProbeTarget, String> {
             .map(|i| ProbeTarget::Named(NameId(i)))
             .ok_or_else(|| format!("no instance named {name:?}"));
     }
-    kind_named(def, target)
-        .map(|k| ProbeTarget::First(iwbtg_sim::collide::Target::Kind(k)))
-        .ok_or_else(|| format!("no kind {target:?}"))
+    let (base, nth) = match target.rsplit_once('#') {
+        Some((base, n)) => {
+            let n = n
+                .parse::<u32>()
+                .map_err(|_| format!("target {target:?}: expected <kid or kind>#<index from 0>"))?;
+            (base, Some(n))
+        }
+        None => (target, None),
+    };
+    let query = if base == "kid" {
+        if nth.is_none() {
+            return Ok(ProbeTarget::Kid);
+        }
+        iwbtg_sim::collide::Target::Class(ClassMask::KID | ClassMask::KID_FLIPPED)
+    } else {
+        iwbtg_sim::collide::Target::Kind(kind_named(def, base).ok_or_else(|| format!("no kind {base:?}"))?)
+    };
+    Ok(match nth {
+        Some(n) => ProbeTarget::Nth(query, n),
+        None => ProbeTarget::First(query),
+    })
 }
 
 fn value(v: &CaseValue) -> Value {
@@ -769,6 +785,26 @@ mod tests {
                 .into_iter()
                 .collect(),
             ..TraceCase::default()
+        }
+    }
+
+    #[test]
+    fn setup_targets_pick_the_nth_instance() {
+        use iwbtg_sim::collide::Target;
+        let d = def();
+        let kids = Target::Class(ClassMask::KID | ClassMask::KID_FLIPPED);
+        assert_eq!(setup_target(&d, "kid"), Ok(ProbeTarget::Kid));
+        assert_eq!(setup_target(&d, "kid#2"), Ok(ProbeTarget::Nth(kids, 2)));
+        assert_eq!(
+            setup_target(&d, "@bullet"),
+            Ok(ProbeTarget::First(Target::Kind(KindId(1))))
+        );
+        assert_eq!(
+            setup_target(&d, "@bullet#0"),
+            Ok(ProbeTarget::Nth(Target::Kind(KindId(1)), 0))
+        );
+        for bad in ["kid#", "kid#-1", "kid#a", "nope#0", "nope"] {
+            assert!(setup_target(&d, bad).is_err(), "{bad}");
         }
     }
 

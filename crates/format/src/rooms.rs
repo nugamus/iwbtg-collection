@@ -25,9 +25,15 @@ pub const DEFAULT_STEP: (f64, f64) = (32.0, 32.0);
 
 /// Keys of an instance that are not params (docs/format/v0.md, Rooms: common instance keys).
 /// `depth` and `visible` override the kind's for every kind, like `xscale`, `yscale` and `angle`.
-pub const INSTANCE_KEYS: [&str; 12] = [
+/// `gm_id` is the GM8 instance id from the room file (#680).
+pub const INSTANCE_KEYS: [&str; 13] = [
     "kind", "x", "y", "name", "group", "xscale", "yscale", "angle", "visible", "depth", "run", "step",
+    "gm_id",
 ];
+
+/// Largest GM8 instance id (`gm_id`, `[engine].first_runtime_id`): GM8 keeps ids as 32-bit
+/// signed integers.
+pub const MAX_GM_ID: u32 = i32::MAX as u32;
 
 /// The instance key that holds params named like an instance key (`params = { kind = 20 }`,
 /// #629: GM creation code that sets a variable called `kind`).
@@ -269,6 +275,8 @@ pub struct InstanceFile {
     pub run: (u32, u32),
     /// Grid spacing.
     pub step: (f64, f64),
+    /// GM8 instance id from the room file (`gm_id`, #680); unique in the room, never with `run`.
+    pub gm_id: Option<Spanned<u32>>,
     /// Params (instance creation code as data), in key order.
     pub params: BTreeMap<String, Spanned<toml::Value>>,
 }
@@ -363,8 +371,18 @@ pub fn parse_room(id: &str, path: &str, text: &str) -> Result<RoomFile, Diagnost
     }
     let mut instances = Vec::with_capacity(raw.instances.len());
     let mut total: u64 = 0;
+    let mut gm_ids = std::collections::BTreeSet::new();
     for entry in &raw.instances {
         let inst = parse_instance(entry, &err)?;
+        // GM8 ids never repeat inside one room (CLONE_SPEC, Instances, "Placed instance ids").
+        if let Some(id) = &inst.gm_id
+            && !gm_ids.insert(*id.get_ref())
+        {
+            return Err(err(
+                id.span(),
+                format!("`gm_id` {} is used twice in this room", id.get_ref()),
+            ));
+        }
         total = total.saturating_add(inst.count());
         if total > MAX_INSTANCES_PER_ROOM as u64 {
             return Err(err(
@@ -451,6 +469,30 @@ fn parse_instance(
             run
         }
     };
+    let gm_id = match get("gm_id") {
+        None => None,
+        Some(v) => {
+            let n = number(v.get_ref())
+                .ok()
+                .filter(|n| (0.0..=f64::from(MAX_GM_ID)).contains(n) && n.fract() == 0.0);
+            let Some(n) = n else {
+                return Err(err(
+                    v.span(),
+                    format!("`gm_id` must be a whole number from 0 to {MAX_GM_ID}"),
+                ));
+            };
+            if run != (1, 1) {
+                return Err(err(
+                    v.span(),
+                    "an instance with `gm_id` cannot have `run`".to_owned(),
+                ));
+            }
+            // Checked just above: a whole number in 0..=MAX_GM_ID.
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let n = n as u32;
+            Some(Spanned::new(v.span(), n))
+        }
+    };
     let mut params = BTreeMap::new();
     for (key, value) in map {
         let k = key.get_ref().as_str();
@@ -490,6 +532,7 @@ fn parse_instance(
         depth: get("depth").map(|_| num("depth", None)).transpose()?,
         run,
         step: pair("step")?.unwrap_or(DEFAULT_STEP),
+        gm_id,
         params,
     })
 }
@@ -555,6 +598,49 @@ follow = "kid"
             r.on_create[2].get_ref(),
             ActionFile::LoadGame { when: None }
         ));
+    }
+
+    #[test]
+    fn gm_ids() {
+        let text = r#"size = [800, 608]
+instances = [
+  { kind = "kid", x = 48, y = 278, gm_id = 104180 },
+  { kind = "kid", x = 48, y = 566, gm_id = 104190 },
+  { kind = "block", x = 0, y = 0 },
+]
+"#;
+        let r = parse_room("r", "rooms/r.toml", text).unwrap();
+        let ids: Vec<_> = r
+            .instances
+            .iter()
+            .map(|i| i.gm_id.as_ref().map(|s| *s.get_ref()))
+            .collect();
+        assert_eq!(ids, [Some(104_180), Some(104_190), None]);
+        assert!(r.instances[0].params.is_empty());
+        let bad = |inst: &str| {
+            parse_room(
+                "r",
+                "p",
+                &format!(
+                    "size = [8, 8]
+instances = [
+{inst}
+]
+"
+                ),
+            )
+            .unwrap_err()
+            .message
+        };
+        let twice = bad("{ kind = \"kid\", x = 0, y = 0, gm_id = 7 },
+{ kind = \"kid\", x = 0, y = 0, gm_id = 7 },");
+        assert!(twice.contains("used twice"), "{twice}");
+        for v in ["-1", "1.5", "\"7\"", "2147483648"] {
+            let m = bad(&format!("{{ kind = \"kid\", x = 0, y = 0, gm_id = {v} }},"));
+            assert!(m.contains("whole number"), "{v}: {m}");
+        }
+        let m = bad("{ kind = \"block\", x = 0, y = 0, run = [2, 1], gm_id = 7 },");
+        assert!(m.contains("`run`"), "{m}");
     }
 
     #[test]

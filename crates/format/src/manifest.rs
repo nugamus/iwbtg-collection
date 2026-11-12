@@ -447,6 +447,14 @@ pub struct EngineSection {
     /// GM "treat uninitialized variables as 0"; default true.
     #[serde(default)]
     pub uninit_reads_zero: Option<bool>,
+    /// The GM8 instance id of the first instance created at run time: the game file's
+    /// last-instance-id + 1 (#680). Above every `gm_id` of the package.
+    #[serde(default)]
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "Option<u32>", range(max = 2_147_483_647))
+    )]
+    pub first_runtime_id: Option<Spanned<u32>>,
     /// Runner FPU model (N3); default `f64`.
     #[serde(default)]
     pub float_model: Option<FloatModelName>,
