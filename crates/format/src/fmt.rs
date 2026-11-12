@@ -17,7 +17,7 @@
 //!   `cutscenes`, `dialogues` and cut `rooms` and `instances`) with one row per line,
 //!   indented two spaces, with a trailing comma, so a one-instance edit is a one-line diff. Within
 //!   a row the keys the format names come first in a fixed order (`kind, x, y, name, group,
-//!   xscale, yscale, angle, visible, depth, run, step` for instances); other keys follow in the
+//!   xscale, yscale, angle, visible, depth, run, step, gm_id` for instances); other keys follow in the
 //!   order they were written.
 //!
 //! It never reorders a list and never merges or splits rows, because instance order is creation
@@ -31,7 +31,7 @@ const ROW_LISTS: [(&str, &[&str]); 11] = [
         "instances",
         &[
             "room", "kind", "x", "y", "name", "group", "xscale", "yscale", "angle", "visible", "depth",
-            "run", "step",
+            "run", "step", "gm_id",
         ],
     ),
     ("views", &["visible", "view", "port", "follow", "border", "speed"]),

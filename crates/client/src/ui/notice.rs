@@ -75,12 +75,15 @@ pub const HOLD: f32 = 6.0;
 /// Its widest, with the shear room, UI px.
 const MAX_WIDTH: f32 = 340.0;
 /// Its narrowest, UI px: in a small window it reaches over the game's edge rather than wrap
-/// word by word.
-const MIN_WIDTH: f32 = 200.0;
-/// Room left and right of a card for its shear, UI px (a card up to 120 px tall).
+/// word by word. No wider than the narrowest leaderboard column outside a small window, less
+/// the margins (`hud::layout::MIN_LEFT - 2 * MARGIN`), or it reaches over the game at 16:9
+/// and 4:3 too (#668).
+pub const MIN_WIDTH: f32 = 180.0;
+/// Room left and right of a card for its shear, UI px (a card up to 120 px tall). Its drop
+/// shadow fades out in the stack's margin.
 const SHEAR_ROOM: f32 = 12.0;
 /// Its distance from the corner of its area, UI px.
-const MARGIN: f32 = 12.0;
+pub const MARGIN: f32 = 12.0;
 /// The longest message shown; the rest is cut with `…` (the kit has no cut text yet, #636).
 const MAX_CHARS: usize = 100;
 
@@ -302,6 +305,34 @@ mod tests {
         let id = world.spawn(notice(Kind::Storage, "x")).id();
         let shape = world.get::<Shape>(id).expect("a notice has a shape");
         assert_eq!(shape.fill.alpha(), 1.0);
+    }
+
+    /// The stack is its area less the margins, so the card, its shear and its shadow stay in
+    /// the leaderboard's column (#668); only a column narrower than that takes [`MIN_WIDTH`].
+    #[test]
+    fn the_stack_fills_its_area_less_the_margins() {
+        let width = |area: f32| {
+            let mut app = App::new();
+            app.add_plugins(MinimalPlugins)
+                .init_resource::<UiScale>()
+                .insert_resource(Area(Some(Rect::new(0.0, 0.0, area, 900.0))))
+                .add_systems(Update, place);
+            app.world_mut().spawn((
+                Window {
+                    resolution: (1600, 900).into(),
+                    ..default()
+                },
+                bevy::window::PrimaryWindow,
+            ));
+            spawn_stack(&mut app.world_mut().commands());
+            app.update();
+            let mut q = app.world_mut().query_filtered::<&Node, With<Stack>>();
+            q.single(app.world()).unwrap().width
+        };
+        assert_eq!(width(204.0), Val::Px(180.0));
+        assert_eq!(width(208.0), Val::Px(184.0));
+        assert_eq!(width(124.0), Val::Px(MIN_WIDTH));
+        assert_eq!(width(1000.0), Val::Px(MAX_WIDTH));
     }
 
     #[test]

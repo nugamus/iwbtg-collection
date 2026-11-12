@@ -223,6 +223,10 @@ pub enum ProbeTarget {
     First(Target),
     /// The instance with this room-file name.
     Named(NameId),
+    /// The instance at this 0-based index among the alive, active instances of a target, in
+    /// the order [`TickRules::first_rule`] picks "the first" by (R21): GML
+    /// `instance_find(obj, n)`. `Nth(t, 0)` is `First(t)` for a kind.
+    Nth(Target, u32),
 }
 
 /// A field, resolved from its GM name by `registry::resolve`.
@@ -338,6 +342,22 @@ pub fn sample(sim: &mut Sim, probe: &Probe, frame: i64) -> Vec<Vec<trace::Value>
     rows
 }
 
+/// One column read without a row, as at the end of a frame with no instance of the traced object
+/// (the trace runner's `latch` series, #671). `None` for a column that needs the row's instance
+/// (a fixed column, a `Row` field) or that consumes state when read (`keyboard_check_direct`).
+pub fn read_unrowed(sim: &mut Sim, column: &Column, frame: i64) -> Option<trace::Value> {
+    match column {
+        Column::Fixed(_)
+        | Column::Field {
+            target: ProbeTarget::Row,
+            ..
+        }
+        | Column::Key(KeyRead::Direct(_)) => None,
+        // `row` is never read for the remaining columns.
+        _ => Some(read_column(sim, InstId(0), column, frame)),
+    }
+}
+
 /// One column for the row of instance `row`.
 fn read_column(sim: &mut Sim, row: InstId, column: &Column, frame: i64) -> trace::Value {
     if let Column::Key(KeyRead::Direct(a)) = column {
@@ -447,6 +467,7 @@ fn target_instance(
             .iter_alive()
             .find(|i| i.active && i.name == Some(*n))
             .map(|i| i.id),
+        ProbeTarget::Nth(t, n) => nth_of_target(def, w, rules, *t, *n),
     }
 }
 
@@ -464,6 +485,32 @@ pub(crate) fn first_of_target(def: &GameDef, w: &World, rules: &TickRules, t: Ta
             .filter(|i| i.active && matches(def, i, t))
             .map(|i| i.id)
             .min(),
+    }
+}
+
+/// The `n`-th (0-based) alive, active instance `t` names, in the order
+/// [`TickRules::first_rule`] picks "the first" by (R21): GML `instance_find(obj, n)`.
+pub(crate) fn nth_of_target(
+    def: &GameDef,
+    w: &World,
+    rules: &TickRules,
+    t: Target,
+    n: u32,
+) -> Option<InstId> {
+    let n = usize::try_from(n).ok()?;
+    match rules.first_rule {
+        FirstRule::DispatchOrder => events::dispatch_order(w, rules, |i| matches(def, i, t))
+            .get(n)
+            .copied(),
+        FirstRule::LowestId => {
+            let mut ids: Vec<InstId> = w
+                .iter_alive()
+                .filter(|i| i.active && matches(def, i, t))
+                .map(|i| i.id)
+                .collect();
+            ids.sort_unstable();
+            ids.get(n).copied()
+        }
     }
 }
 

@@ -589,6 +589,7 @@ mod tests {
                         segment_deaths: vec![0],
                         finished_at: 0,
                         replay: Some(replay.clone()),
+                        death_log: Default::default(),
                     });
                 }
                 store.write_text(crate::stats::FILE, &book.to_text()).unwrap();

@@ -546,6 +546,45 @@ mod wp6a {
         );
     }
 
+    /// xia edgeDeath (kid/C.md save point User Event 0 and objautosave): with
+    /// `requires_kid_in_room` a touch save and the alarm save both need the kid's origin inside
+    /// the 800 by 608 room; the edges (x 800, y 0) are inside, x 800.5 and y -0.5 are not.
+    #[test]
+    fn requires_kid_in_room_gates_on_the_origin() {
+        let g = save_game(params(&[
+            ("on_touch", word("always")),
+            ("requires_kid_in_room", yes()),
+        ]));
+        let (mut w, sp, kid) = save_world(&g);
+        for (x, y, saves) in [
+            (800.5, 10.0, false),
+            (10.0, -0.5, false),
+            (-0.5, 10.0, false),
+            (10.0, 608.5, false),
+            (800.0, 0.0, true),
+            (0.0, 608.0, true),
+        ] {
+            w.save = None;
+            w.get_mut(kid).unwrap().m.set_x(r(x)).unwrap();
+            w.get_mut(kid).unwrap().m.set_y(r(y)).unwrap();
+            fire(&g, &mut w, sp, &touch(kid));
+            assert_eq!(w.save.is_some(), saves, "kid at ({x}, {y})");
+        }
+        let g = save_game(params(&[
+            ("on_touch", word("never")),
+            ("alarm_save", real(1.0)),
+            ("requires_kid_in_room", yes()),
+            ("blink", ParamValue::Bool(false)),
+        ]));
+        let (mut w, sp, kid) = save_world(&g);
+        w.get_mut(kid).unwrap().m.set_y(r(-20.0)).unwrap();
+        fire(&g, &mut w, sp, &EventKind::Alarm(0));
+        assert!(w.save.is_none(), "the autosave skips a kid above the room");
+        w.get_mut(kid).unwrap().m.set_y(r(20.0)).unwrap();
+        fire(&g, &mut w, sp, &EventKind::Alarm(0));
+        assert!(w.save.is_some());
+    }
+
     #[test]
     fn fixed_point_and_self_destroy_alarm() {
         let g = save_game(params(&[

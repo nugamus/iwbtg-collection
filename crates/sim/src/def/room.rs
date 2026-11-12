@@ -146,6 +146,9 @@ pub struct PlacedInstance {
     pub name: Option<NameId>,
     /// Instance group.
     pub group: Option<GroupId>,
+    /// GM8 instance id from the room file (`gm_id`, #680): unique in the room, may repeat in
+    /// other rooms. `None` when the package does not give one. Not used by the sim yet (#669).
+    pub gm_id: Option<u32>,
 }
 
 impl PlacedInstance {
@@ -164,6 +167,7 @@ impl PlacedInstance {
             params: Params::default(),
             name: None,
             group: None,
+            gm_id: None,
         }
     }
 }
