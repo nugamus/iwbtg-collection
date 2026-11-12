@@ -8,9 +8,14 @@
 //! jump = ["Shift", "Space"]
 //! [bindings.pad]
 //! jump = ["south"]
+//! quick-retry = ["select"]
 //! ```
+//!
+//! `quick-retry` sits beside the sim actions in the same tables, but it is a client key
+//! (retry.rs), not an `Action`: it never enters an `InputFrame` or a replay. Its default is the
+//! key left of `1` (Backquote) and no controller input.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use bevy::prelude::*;
 use iwbtg_sim::input::{Action, IWBTG_DEFAULT_KEYS, key_code, vk};
@@ -112,11 +117,48 @@ const DEFAULT_PAD: [(PadInput, Action); 11] = [
     (PadInput::East, Action::Suicide),
 ];
 
+/// The name of the quick-retry binding in the file and in `--bind`.
+pub const QUICK_RETRY: &str = "quick-retry";
+
+/// Virtual-key codes of the punctuation keys the sim has no names for (Windows `VK_OEM_*`).
+pub mod oem {
+    pub const SEMICOLON: u8 = 0xBA;
+    pub const EQUAL: u8 = 0xBB;
+    pub const COMMA: u8 = 0xBC;
+    pub const MINUS: u8 = 0xBD;
+    pub const PERIOD: u8 = 0xBE;
+    pub const SLASH: u8 = 0xBF;
+    /// The key left of `1` on a US layout.
+    pub const BACKQUOTE: u8 = 0xC0;
+    pub const BRACKET_LEFT: u8 = 0xDB;
+    pub const BACKSLASH: u8 = 0xDC;
+    pub const BRACKET_RIGHT: u8 = 0xDD;
+    pub const QUOTE: u8 = 0xDE;
+}
+
+/// The punctuation keys by file name.
+const OEM_NAMES: [(&str, u8); 11] = [
+    ("Semicolon", oem::SEMICOLON),
+    ("Equal", oem::EQUAL),
+    ("Comma", oem::COMMA),
+    ("Minus", oem::MINUS),
+    ("Period", oem::PERIOD),
+    ("Slash", oem::SLASH),
+    ("Backquote", oem::BACKQUOTE),
+    ("BracketLeft", oem::BRACKET_LEFT),
+    ("Backslash", oem::BACKSLASH),
+    ("BracketRight", oem::BRACKET_RIGHT),
+    ("Quote", oem::QUOTE),
+];
+
 /// What every key and controller input does.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Bindings {
     keys: BTreeMap<u8, Action>,
     pad: [Option<Action>; PadInput::ALL.len()],
+    /// The keys and controller inputs that quick-retry the run (a client key, not an `Action`).
+    quick_keys: BTreeSet<u8>,
+    quick_pad: BTreeSet<PadInput>,
 }
 
 impl Default for Bindings {
@@ -124,6 +166,8 @@ impl Default for Bindings {
         let mut b = Bindings {
             keys: IWBTG_DEFAULT_KEYS.into_iter().collect(),
             pad: [None; PadInput::ALL.len()],
+            quick_keys: BTreeSet::from([oem::BACKQUOTE]),
+            quick_pad: BTreeSet::new(),
         };
         for (input, action) in DEFAULT_PAD {
             b.pad[input.index()] = Some(action);
@@ -151,6 +195,16 @@ impl Bindings {
         self.pad[input.index()]
     }
 
+    /// The key quick-retries the run.
+    pub fn is_quick_retry_key(&self, key: u8) -> bool {
+        self.quick_keys.contains(&key)
+    }
+
+    /// The controller input quick-retries the run.
+    pub fn is_quick_retry_pad(&self, input: PadInput) -> bool {
+        self.quick_pad.contains(&input)
+    }
+
     /// Some key or controller input stands for `action`.
     pub fn binds(&self, action: Action) -> bool {
         self.keys.values().any(|a| *a == action) || self.pad.contains(&Some(action))
@@ -160,11 +214,37 @@ impl Bindings {
     /// default keys (or all its default controller inputs) and gets the listed ones.
     pub fn from_config(config: &Config) -> Result<Bindings, String> {
         let mut b = Bindings::default();
+        // Quick-retry first: the sim actions' entries are checked against what it ends up with.
+        if let Some(keys) = config.keys.get(QUICK_RETRY) {
+            b.quick_keys.clear();
+            for key in keys {
+                b.quick_keys
+                    .insert(key_from_name(key).ok_or_else(|| format!("unknown key `{key}`"))?);
+            }
+        }
+        if let Some(inputs) = config.pad.get(QUICK_RETRY) {
+            b.quick_pad.clear();
+            for input in inputs {
+                b.quick_pad.insert(
+                    PadInput::from_name(input)
+                        .ok_or_else(|| format!("unknown controller input `{input}`"))?,
+                );
+            }
+        }
         for (name, keys) in &config.keys {
+            if name == QUICK_RETRY {
+                continue;
+            }
             let action = parse_action(name)?;
             b.keys.retain(|_, a| *a != action);
             for key in keys {
                 let code = key_from_name(key).ok_or_else(|| format!("unknown key `{key}`"))?;
+                if b.quick_keys.contains(&code) {
+                    return Err(format!(
+                        "key `{key}` is bound to both {QUICK_RETRY} and {}",
+                        action.name()
+                    ));
+                }
                 if let Some(other) = b.keys.get(&code)
                     && *other != action
                 {
@@ -178,6 +258,9 @@ impl Bindings {
             }
         }
         for (name, inputs) in &config.pad {
+            if name == QUICK_RETRY {
+                continue;
+            }
             let action = parse_action(name)?;
             for slot in &mut b.pad {
                 if *slot == Some(action) {
@@ -187,6 +270,12 @@ impl Bindings {
             for input in inputs {
                 let p = PadInput::from_name(input)
                     .ok_or_else(|| format!("unknown controller input `{input}`"))?;
+                if b.quick_pad.contains(&p) {
+                    return Err(format!(
+                        "controller input `{input}` is bound to both {QUICK_RETRY} and {}",
+                        action.name()
+                    ));
+                }
                 if let Some(other) = b.pad[p.index()]
                     && other != action
                 {
@@ -197,6 +286,25 @@ impl Bindings {
                     ));
                 }
                 b.pad[p.index()] = Some(action);
+            }
+        }
+        // A quick-retry input the sim actions still hold (a default not moved off) clashes.
+        for key in &b.quick_keys {
+            if let Some(other) = b.keys.get(key) {
+                return Err(format!(
+                    "key `{}` is bound to both {QUICK_RETRY} and {}",
+                    key_name(*key),
+                    other.name()
+                ));
+            }
+        }
+        for input in &b.quick_pad {
+            if let Some(other) = b.pad[input.index()] {
+                return Err(format!(
+                    "controller input `{}` is bound to both {QUICK_RETRY} and {}",
+                    input.name(),
+                    other.name()
+                ));
             }
         }
         Ok(b)
@@ -231,6 +339,20 @@ impl Bindings {
                 or_dash(pads.into_iter().map(String::from).collect()),
             ));
         }
+        let keys: Vec<String> = self.quick_keys.iter().map(|k| key_name(*k)).collect();
+        let pads: Vec<String> = self.quick_pad.iter().map(|p| p.name().to_string()).collect();
+        let or_dash = |v: Vec<String>| {
+            if v.is_empty() {
+                "-".to_string()
+            } else {
+                v.join(", ")
+            }
+        };
+        out.push_str(&format!(
+            "{QUICK_RETRY:<8} keys: {:<18} pad: {}\n",
+            or_dash(keys),
+            or_dash(pads)
+        ));
         out
     }
 }
@@ -252,7 +374,11 @@ pub fn key_from_name(name: &str) -> Option<u8> {
         "rctrl" => Some(vk::RIGHT_CTRL),
         "lalt" => Some(vk::LEFT_ALT),
         "ralt" => Some(vk::RIGHT_ALT),
-        _ => key_code(name),
+        lower => OEM_NAMES
+            .iter()
+            .find(|(n, _)| n.eq_ignore_ascii_case(lower))
+            .map(|(_, c)| *c)
+            .or_else(|| key_code(name)),
     }
 }
 
@@ -283,6 +409,10 @@ pub fn key_name(code: u8) -> String {
         vk::HOME => "Home".into(),
         vk::INSERT => "Insert".into(),
         vk::DELETE => "Delete".into(),
+        c if OEM_NAMES.iter().any(|(_, o)| *o == c) => OEM_NAMES
+            .iter()
+            .find(|(_, o)| *o == c)
+            .map_or_else(String::new, |(n, _)| (*n).to_string()),
         c @ vk::F1..=123 => format!("F{}", c - vk::F1 + 1),
         c if c.is_ascii_uppercase() || c.is_ascii_digit() => char::from(c).to_string(),
         c => format!("vk:{c}"),
@@ -307,7 +437,12 @@ impl Config {
         let (action, inputs) = spec
             .split_once('=')
             .ok_or_else(|| format!("`{spec}`: expected ACTION=INPUT[,INPUT...]"))?;
-        let action = parse_action(action.trim())?.name().to_string();
+        let action = action.trim();
+        let action = if action.eq_ignore_ascii_case(QUICK_RETRY) {
+            QUICK_RETRY.to_string()
+        } else {
+            parse_action(action)?.name().to_string()
+        };
         let (mut keys, mut pads) = (Vec::new(), Vec::new());
         for input in inputs.split(',').map(str::trim).filter(|s| !s.is_empty()) {
             match input.strip_prefix("pad:") {
@@ -581,8 +716,53 @@ mod tests {
     }
 
     #[test]
+    fn quick_retry_defaults_to_backquote_and_is_not_an_action() {
+        let b = Bindings::default();
+        assert!(b.is_quick_retry_key(oem::BACKQUOTE));
+        assert_eq!(b.key_action(oem::BACKQUOTE), None);
+        assert!(!b.is_quick_retry_key(vk::R));
+        assert!(PadInput::ALL.iter().all(|p| !b.is_quick_retry_pad(*p)));
+    }
+
+    #[test]
+    fn quick_retry_is_rebound_with_the_other_bindings() {
+        let mut c = Config::default();
+        c.set("quick-retry=F5,pad:select").unwrap();
+        let b = Bindings::from_config(&c).unwrap();
+        assert!(b.is_quick_retry_key(vk::F1 + 4));
+        assert!(!b.is_quick_retry_key(oem::BACKQUOTE), "the default is replaced");
+        assert!(b.is_quick_retry_pad(PadInput::Select));
+        let mut w = Vec::new();
+        assert_eq!(Config::from_table(&c.to_table(), &mut w), c);
+        assert!(w.is_empty(), "{w:?}");
+    }
+
+    #[test]
+    fn quick_retry_cannot_share_an_input_with_an_action() {
+        let mut c = Config::default();
+        assert!(c.set("quick-retry=Z").is_err(), "Z shoots");
+        assert!(c.set("quick-retry=pad:south").is_err(), "south jumps");
+        assert!(c.set("jump=Backquote").is_err(), "the default quick-retry key");
+        assert_eq!(c, Config::default());
+        // Moving quick-retry away frees the key for an action.
+        c.set("quick-retry=F5").unwrap();
+        c.set("jump=Backquote").unwrap();
+        assert!(Bindings::from_config(&c).is_ok());
+    }
+
+    #[test]
     fn key_names_read_back() {
-        for code in [vk::LEFT_SHIFT, vk::SPACE, vk::F1 + 4, b'Z', b'7', 20, vk::PAGE_UP] {
+        for code in [
+            vk::LEFT_SHIFT,
+            vk::SPACE,
+            vk::F1 + 4,
+            b'Z',
+            b'7',
+            20,
+            vk::PAGE_UP,
+            oem::BACKQUOTE,
+            oem::QUOTE,
+        ] {
             assert_eq!(key_from_name(&key_name(code)), Some(code));
         }
     }
