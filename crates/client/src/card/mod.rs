@@ -544,6 +544,7 @@ mod tests {
             segment_deaths: vec![12],
             finished_at: 0,
             replay: None,
+            death_log: Default::default(),
         };
         let r = RunChange::new(&book, "kaenbyou", "Kaenbyou", 5, &run, 50);
         assert_eq!((r.deaths, r.play_seconds), (12, 125.0));

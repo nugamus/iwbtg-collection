@@ -5,11 +5,90 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-/// The layout version this build writes.
-pub const VERSION: u32 = 1;
+/// The layout version this build writes. 2: runs keep their death log (#679).
+pub const VERSION: u32 = 2;
 
 /// Runs kept per board: the Local scope shows your top 100 (docs/product.md, Leaderboards).
 pub const TOP_RUNS: usize = 100;
+
+/// Runs per board that keep their [`DeathLog`]: the fastest ones. A run that falls below
+/// drops its log, so the file stays small; the clear just played keeps its own in memory.
+pub const DEATH_LOG_RUNS: usize = 10;
+
+/// Each death of a run, in order (#679): the results' death timeline and per-stage heatmap.
+/// Kept as parallel lists so `stats.toml` stays small: entry `i` of every list is death `i`.
+/// The first `Run::segment_deaths[0]` deaths are in segment 0, the next in segment 1, and so on.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeathLog {
+    /// The run's time at each death (the last tick the kid was seen alive), in the run's
+    /// ticks like [`Run::splits`].
+    pub ticks: Vec<u64>,
+    /// The rooms in this log, by package room id (`room_1`), each once.
+    pub room_names: Vec<String>,
+    /// Per death: its room, an index into `room_names`; [`DeathLog::NO_SPOT`] when no kid was
+    /// seen before it.
+    pub rooms: Vec<u32>,
+    /// Per death: the kid's position in whole pixels (0 without a spot).
+    pub x: Vec<i32>,
+    pub y: Vec<i32>,
+}
+
+/// One death of a run, for the results screen ([`Run::death_marks`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DeathMark<'a> {
+    /// The run's time at the death; segment boundaries are [`Run::splits`].
+    pub ticks: u64,
+    /// The segment it counted in (0: start to the first stage).
+    pub segment: usize,
+    /// The room (package room id) and the kid's position in it, `None` when unknown.
+    pub spot: Option<(&'a str, i32, i32)>,
+}
+
+impl DeathLog {
+    /// The room index of a death without a known spot.
+    pub const NO_SPOT: u32 = u32::MAX;
+
+    /// No deaths logged.
+    pub fn is_empty(&self) -> bool {
+        self.ticks.is_empty()
+    }
+
+    /// Deaths logged.
+    pub fn len(&self) -> usize {
+        self.ticks.len()
+    }
+
+    /// Adds a death at `ticks` in a room at a position, or at no known spot.
+    pub fn push(&mut self, ticks: u64, spot: Option<(&str, i32, i32)>) {
+        self.ticks.push(ticks);
+        let (room, x, y) = match spot {
+            Some((name, x, y)) => {
+                let i = match self.room_names.iter().position(|r| r == name) {
+                    Some(i) => i,
+                    None => {
+                        self.room_names.push(name.to_owned());
+                        self.room_names.len() - 1
+                    }
+                };
+                (u32::try_from(i).unwrap_or(Self::NO_SPOT), x, y)
+            }
+            None => (Self::NO_SPOT, 0, 0),
+        };
+        self.rooms.push(room);
+        self.x.push(x);
+        self.y.push(y);
+    }
+
+    /// Death `i`'s spot.
+    fn spot(&self, i: usize) -> Option<(&str, i32, i32)> {
+        let room = usize::try_from(*self.rooms.get(i)?).ok()?;
+        Some((
+            self.room_names.get(room)?.as_str(),
+            *self.x.get(i)?,
+            *self.y.get(i)?,
+        ))
+    }
+}
 
 /// One cleared run, in ranked ticks (`Sim::ranked_ticks`, #34).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -30,9 +109,33 @@ pub struct Run {
     /// replay viewer and upload. Absent for runs from before replays were kept (#476).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replay: Option<String>,
+    /// Each death, when and where (#679). Empty for runs from before it, and for runs outside
+    /// the board's first [`DEATH_LOG_RUNS`].
+    #[serde(default, skip_serializing_if = "DeathLog::is_empty")]
+    pub death_log: DeathLog,
 }
 
 impl Run {
+    /// Each logged death in order, with the segment it counted in (from `segment_deaths`; a
+    /// death past their sum counts in the last segment). Empty when the run has no log.
+    pub fn death_marks(&self) -> Vec<DeathMark<'_>> {
+        let last = self.segment_deaths.len().saturating_sub(1);
+        let (mut segment, mut ends) = (0, 0u64);
+        (0..self.death_log.len())
+            .map(|i| {
+                while segment < last && i as u64 >= ends + u64::from(self.segment_deaths[segment]) {
+                    ends += u64::from(self.segment_deaths[segment]);
+                    segment += 1;
+                }
+                DeathMark {
+                    ticks: self.death_log.ticks[i],
+                    segment,
+                    spot: self.death_log.spot(i),
+                }
+            })
+            .collect()
+    }
+
     /// Each segment's own length.
     pub fn segments(&self) -> Vec<u64> {
         let mut before = 0;
@@ -119,6 +222,9 @@ impl Board {
         if place.is_some() {
             self.runs.insert(at, run);
             self.runs.truncate(TOP_RUNS);
+            if let Some(out) = self.runs.get_mut(DEATH_LOG_RUNS) {
+                out.death_log = DeathLog::default();
+            }
         }
         Recorded {
             pb_before,
@@ -294,6 +400,7 @@ mod tests {
             segment_deaths: vec![0; splits.len()],
             finished_at: 0,
             replay: None,
+            death_log: DeathLog::default(),
         }
     }
 
@@ -393,8 +500,103 @@ mod tests {
             text.contains("[maps.\"demo/main\".boards.\"original/NM\"]"),
             "{text}"
         );
-        let newer = text.replace("version = 1", "version = 2");
-        assert!(Book::parse(&newer).unwrap_err().contains("version 2"));
+        let newer = text.replace("version = 2", "version = 3");
+        assert!(Book::parse(&newer).unwrap_err().contains("version 3"));
         assert!(Book::parse("version = 1\n").unwrap().maps.is_empty());
+    }
+
+    /// A run with `segment_deaths[i]` deaths in segment `i`, at ticks 1, 2, ...: segment 0 in
+    /// `room_1`, later ones in `room_2`; the second death of each segment has no spot.
+    fn logged(splits: &[u64], segment_deaths: &[u32]) -> Run {
+        let mut r = run(splits, segment_deaths.iter().sum());
+        r.segment_deaths = segment_deaths.to_vec();
+        let mut t = 0;
+        for (seg, &n) in segment_deaths.iter().enumerate() {
+            for k in 0..n {
+                t += 1;
+                let room = if seg == 0 { "room_1" } else { "room_2" };
+                let spot = (k != 1).then_some((room, 10 * t as i32, 300));
+                r.death_log.push(t, spot);
+            }
+        }
+        r
+    }
+
+    /// #679: a run's deaths survive a save and load, with their segments and spots, and
+    /// rooms are written once per run.
+    #[test]
+    fn the_death_log_round_trips_with_segments_and_spots() {
+        let mut book = Book::default();
+        let m = book.map_mut(&map_key("demo", "main"), "demo", 50);
+        m.boards
+            .entry(board_key(true, "NM"))
+            .or_default()
+            .add(logged(&[100, 200], &[3, 0]));
+        let text = book.to_text();
+        assert!(text.contains("room_names = [\"room_1\"]"), "{text}");
+        let back = Book::parse(&text).unwrap();
+        assert_eq!(back, book);
+        let run = back.board("demo/main", true, "NM").unwrap().pb().unwrap();
+        let marks = run.death_marks();
+        assert_eq!(marks.len(), 3);
+        assert_eq!(
+            marks[0],
+            DeathMark {
+                ticks: 1,
+                segment: 0,
+                spot: Some(("room_1", 10, 300))
+            }
+        );
+        assert_eq!(marks[1].spot, None, "a death without a seen kid");
+        assert_eq!(marks[2].ticks, 3);
+
+        let two = logged(&[100, 200, 300], &[1, 0, 2]);
+        let segs: Vec<usize> = two.death_marks().iter().map(|d| d.segment).collect();
+        assert_eq!(segs, vec![0, 2, 2], "an empty segment is skipped");
+        assert_eq!(two.death_marks()[1].spot.unwrap().0, "room_2");
+    }
+
+    /// #679: a version 1 file (runs without a death log) still loads; its runs have no marks.
+    #[test]
+    fn a_version_1_file_loads_without_death_logs() {
+        let old = r#"version = 1
+
+[maps."demo/main"]
+game = "demo"
+tick_rate = 50
+clears = 1
+deaths = 2
+segment_deaths = [2]
+played_ticks = 300
+play_seconds = 6.0
+
+[maps."demo/main".boards."ranked/NM"]
+clears = 1
+best_segments = [300]
+
+[[maps."demo/main".boards."ranked/NM".runs]]
+ticks = 300
+deaths = 2
+splits = [300]
+segment_deaths = [2]
+finished_at = 0
+"#;
+        let book = Book::parse(old).unwrap();
+        let run = book.board("demo/main", true, "NM").unwrap().pb().unwrap();
+        assert_eq!(run.ticks, 300);
+        assert!(run.death_log.is_empty());
+        assert!(run.death_marks().is_empty());
+    }
+
+    /// Only the fastest [`DEATH_LOG_RUNS`] runs keep their log.
+    #[test]
+    fn runs_below_the_first_ten_drop_their_death_log() {
+        let mut b = Board::default();
+        for t in 0..=DEATH_LOG_RUNS as u64 {
+            b.add(logged(&[1000 - t], &[1]));
+        }
+        assert_eq!(b.runs.len(), DEATH_LOG_RUNS + 1);
+        assert!(b.runs[..DEATH_LOG_RUNS].iter().all(|r| r.death_log.len() == 1));
+        assert!(b.runs[DEATH_LOG_RUNS].death_log.is_empty());
     }
 }

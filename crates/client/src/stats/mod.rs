@@ -19,8 +19,11 @@ use iwbtg_sim::room::StartPoint;
 use iwbtg_sim::stripped::PlayMode;
 
 #[allow(unused_imports, reason = "the screens read these (#494, #496, #151)")]
-pub use book::{Board, Book, MapStats, Recorded, Run, TOP_RUNS, Totals, board_key, map_key};
-use track::{Event, Observation, Tracker};
+pub use book::{
+    Board, Book, DEATH_LOG_RUNS, DeathLog, DeathMark, MapStats, Recorded, Run, TOP_RUNS, Totals, board_key,
+    map_key,
+};
+use track::{Event, Observation, Spot, Tracker};
 
 use crate::storage::{self, Store};
 use crate::view::{Game, SimTick};
@@ -50,6 +53,8 @@ struct Current {
     /// Only a run started as a new game goes on a board; a clear from a save still counts as
     /// a clear.
     on_board: bool,
+    /// The package room ids by `RoomId` index, to name the rooms of the death log.
+    rooms: Vec<String>,
     tracker: Tracker,
 }
 
@@ -128,9 +133,18 @@ impl Stats {
                     deaths,
                     splits,
                     segment_deaths,
+                    death_log,
                 } => {
                     map.clears = map.clears.saturating_add(1);
                     if cur.on_board {
+                        let mut log = DeathLog::default();
+                        for d in death_log {
+                            let spot = d.spot.and_then(|s| {
+                                let room = cur.rooms.get(usize::try_from(s.room).ok()?)?;
+                                Some((room.as_str(), s.x, s.y))
+                            });
+                            log.push(d.ticks, spot);
+                        }
                         let run = Run {
                             ticks,
                             deaths,
@@ -138,6 +152,7 @@ impl Stats {
                             segment_deaths,
                             finished_at: now_seconds(),
                             replay: replay.map(str::to_owned),
+                            death_log: log,
                         };
                         let board = map.boards.entry(cur.board.clone()).or_default();
                         let rec = board.add(run);
@@ -283,10 +298,20 @@ fn watch(
             tick_rate: def.tick_rate,
             board: board_key(ranked, &stats.mods.codes()),
             on_board: matches!(opts.start, StartPoint::NewGame { .. }),
+            rooms: def.rooms.iter().map(|r| r.name.clone()).collect(),
             tracker: Tracker::new(def.timing.stages.len()),
         }
     });
     let world = sim.world();
+    // Read only: the death log never touches the sim's state.
+    let kid = world
+        .kid(&sim.rules().tick)
+        .and_then(|id| world.get(id))
+        .map(|k| Spot {
+            room: world.room.0,
+            x: k.m.x().get().round() as i32,
+            y: k.m.y().get().round() as i32,
+        });
     let events = cur.tracker.observe(Observation {
         tick: world.tick,
         deaths: world.engine.run.deaths,
@@ -295,6 +320,7 @@ fn watch(
         ranked_ticks: sim
             .ranked_ticks()
             .saturating_add(menu.map_or(0, |m| m.paused_ticks())),
+        kid,
     });
     let replay = replays.as_deref().and_then(|r| r.current_name());
     stats.apply(&cur, events, fixed.timestep().as_secs_f64(), replay);
@@ -388,6 +414,7 @@ mod tests {
         let (right, jump) = (Action::Right.bit(), Action::Jump.bit());
         let mut rooms = Vec::new();
         let (mut in_room, mut jumped, mut jump_left) = (0u32, false, 0u32);
+        let deaths_before = world.resource::<Stats>().session.deaths;
         for t in 0..2000u32 {
             let game = world.non_send::<Game>();
             let w = game.sim.world();
@@ -444,11 +471,79 @@ mod tests {
             world.run_system_once(watch).unwrap();
             assert_eq!(
                 world.resource::<Stats>().session.deaths,
-                0,
+                deaths_before,
                 "the scripted kid died at tick {t}"
             );
         }
         panic!("no clear in 2000 ticks");
+    }
+
+    /// #679: a run with deaths logs them with their time, room and the kid's position; the clear
+    /// writes it to the file and the next start reads it back.
+    #[test]
+    fn a_cleared_run_keeps_its_deaths_after_a_save_and_load() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-clear.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let store = temp("death-log");
+        let mut world = crate::view::test_world(&pkg);
+        world.insert_resource(Time::<Fixed>::from_hz(50.0));
+        world.insert_resource(Stats::open(Some(store.clone()), ModSet::NONE));
+        world.run_system_once(watch).unwrap();
+        let (start_room, kid_x, kid_y) = {
+            let game = world.non_send::<Game>();
+            let w = game.sim.world();
+            let k = w.get(w.kid(&game.sim.rules().tick).unwrap()).unwrap();
+            (
+                pkg.def.rooms[w.room.index().unwrap()].name.clone(),
+                k.m.x().get().round() as i32,
+                k.m.y().get().round() as i32,
+            )
+        };
+        let suicide = InputFrame {
+            held: Action::Suicide.bit(),
+            pressed: Action::Suicide.bit(),
+            released: 0,
+        };
+        let mut ticks = 0;
+        while world.resource::<Stats>().session.deaths == 0 {
+            assert!(ticks < 100, "no death in 100 ticks");
+            world.non_send_mut::<Game>().sim.step(suicide);
+            world.run_system_once(watch).unwrap();
+            ticks += 1;
+        }
+        // R brings the kid back at the start.
+        let restart = InputFrame {
+            held: Action::Restart.bit(),
+            pressed: Action::Restart.bit(),
+            released: 0,
+        };
+        for frame in [restart, InputFrame::default()] {
+            world.non_send_mut::<Game>().sim.step(frame);
+            world.run_system_once(watch).unwrap();
+        }
+        let (_, run) = play_demo_clear(&mut world, [0, 0]);
+        assert_eq!(run.deaths, world.resource::<Stats>().session.deaths as u32);
+        // Every counted death is logged (the demo also counts the R after the suicide), each
+        // with a spot and in the segment its count went to.
+        let marks = run.death_marks();
+        assert!(run.deaths >= 1);
+        assert_eq!(marks.len(), run.deaths as usize, "{run:?}");
+        for (seg, &n) in run.segment_deaths.iter().enumerate() {
+            let in_seg = marks.iter().filter(|m| m.segment == seg).count();
+            assert_eq!(in_seg, n as usize, "{run:?}");
+        }
+        assert!(marks.iter().all(|m| m.spot.is_some()), "{run:?}");
+        // The suicide: the kid stood still at its start until it died.
+        let first = marks[0];
+        assert_eq!((first.segment, first.ticks), (0, 0), "{run:?}");
+        let (room, x, y) = first.spot.unwrap();
+        assert_eq!(room, start_room);
+        assert!((x - kid_x).abs() <= 1 && (y - kid_y).abs() <= 1, "{first:?}");
+        let board = world.resource::<Stats>().current.as_ref().unwrap().board.clone();
+        let again = Stats::open(Some(store), ModSet::NONE);
+        let id = map_key(&pkg.def.id, "main");
+        let pb = again.book.map(&id).unwrap().boards[&board].pb().unwrap();
+        assert_eq!(pb.death_log, run.death_log);
     }
 
     /// The clear demo (#589): two scripted clears give two clear lines, the first a first
@@ -550,6 +645,7 @@ mod tests {
             splits: s,
             finished_at: 0,
             replay: None,
+            death_log: DeathLog::default(),
         };
         let first = b.add(mk(vec![100, 200]));
         assert_eq!(
