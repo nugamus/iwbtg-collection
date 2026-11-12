@@ -608,6 +608,7 @@ mod tests {
             segment_deaths: deaths.to_vec(),
             finished_at: 1_793_740_440,
             replay: None,
+            death_log: Default::default(),
         }
     }
 

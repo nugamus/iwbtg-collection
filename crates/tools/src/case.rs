@@ -33,8 +33,9 @@
 //! notes = ["free text"]
 //! ```
 //!
-//! Setup targets are `kid`, a kind name (the first instance of that kind) or `named:<name>` (a
-//! room-file instance name). Field, global and save names resolve through
+//! Setup targets are `kid`, a kind name (the first instance of that kind), `named:<name>` (a
+//! room-file instance name) or `kid#<n>` / `<kind>#<n>`: the instance at 0-based index `n` in
+//! instance order, GML `instance_find(obj, n)` (`kid#0` is `kid`). Field, global and save names resolve through
 //! `iwbtg_sim::probe::registry` when the case runs.
 
 use std::collections::BTreeMap;
@@ -192,7 +193,7 @@ pub struct SetupEntry {
 pub enum SetupWhat {
     /// Fields of one instance, in name order.
     Fields {
-        /// `kid`, a kind name or `named:<name>`.
+        /// `kid`, a kind name, `named:<name>`, `kid#<n>` or `<kind>#<n>`.
         target: String,
         /// Field name to value.
         set: BTreeMap<String, CaseValue>,

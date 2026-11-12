@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use iwbtg_format::{LoadMode, PackageFiles, load_game};
-use iwbtg_sim::def::{GameDef, KindId, NameId, RoomId};
+use iwbtg_sim::def::{ClassMask, GameDef, KindId, NameId, RoomId};
 use iwbtg_sim::input::{InputFrame, KeyMap, parse_key_inputs};
 use iwbtg_sim::num::Real;
 use iwbtg_sim::probe::{self, Column, Probe, ProbeTarget, registry};
@@ -185,11 +185,9 @@ fn kind_named(def: &GameDef, name: &str) -> Option<KindId> {
         .map(KindId)
 }
 
-/// `kid`, `named:<name>` or a kind name.
+/// `kid`, `named:<name>`, a kind name, or `kid#<n>` / `<kind>#<n>`: the `n`-th (0-based)
+/// instance in instance order, GML `instance_find(obj, n)` (#672).
 fn setup_target(def: &GameDef, target: &str) -> Result<ProbeTarget, String> {
-    if target == "kid" {
-        return Ok(ProbeTarget::Kid);
-    }
     if let Some(name) = target.strip_prefix("named:") {
         return def
             .names
@@ -199,9 +197,27 @@ fn setup_target(def: &GameDef, target: &str) -> Result<ProbeTarget, String> {
             .map(|i| ProbeTarget::Named(NameId(i)))
             .ok_or_else(|| format!("no instance named {name:?}"));
     }
-    kind_named(def, target)
-        .map(|k| ProbeTarget::First(iwbtg_sim::collide::Target::Kind(k)))
-        .ok_or_else(|| format!("no kind {target:?}"))
+    let (base, nth) = match target.rsplit_once('#') {
+        Some((base, n)) => {
+            let n = n
+                .parse::<u32>()
+                .map_err(|_| format!("target {target:?}: expected <kid or kind>#<index from 0>"))?;
+            (base, Some(n))
+        }
+        None => (target, None),
+    };
+    let query = if base == "kid" {
+        if nth.is_none() {
+            return Ok(ProbeTarget::Kid);
+        }
+        iwbtg_sim::collide::Target::Class(ClassMask::KID | ClassMask::KID_FLIPPED)
+    } else {
+        iwbtg_sim::collide::Target::Kind(kind_named(def, base).ok_or_else(|| format!("no kind {base:?}"))?)
+    };
+    Ok(match nth {
+        Some(n) => ProbeTarget::Nth(query, n),
+        None => ProbeTarget::First(query),
+    })
 }
 
 fn value(v: &CaseValue) -> Value {
@@ -244,6 +260,16 @@ pub fn execute(
     // The recorder's `fps` reads 0 up to frame 50 (research kid/B.md "Play timer"); tick k of our
     // run is frame `at + k`, so `fps` reads 0 for our first `51 - at` ticks.
     sim.set_fps_zero_ticks(u64::from(RECORDER_FIRST_FPS_FRAME.saturating_sub(case.at)));
+    // Each latch column's value at the end of every frame, rows or not (#671).
+    let latch_probes: Vec<(&String, &Column)> = case
+        .latch
+        .keys()
+        .filter_map(|name| {
+            let i = var_columns.iter().position(|c| c == name)?;
+            Some((name, resolved.columns.get(i)?.as_ref()?))
+        })
+        .collect();
+    let mut latch_series: BTreeMap<String, Vec<(i64, trace::Value)>> = BTreeMap::new();
     for frame in frame_range(case, inputs_end) {
         for s in resolved.per_frame.get(&frame).into_iter().flatten() {
             sim.apply_setup(s)
@@ -267,6 +293,14 @@ pub fn execute(
                 case.source
             )));
         }
+        for (name, column) in &latch_probes {
+            if let Some(v) = probe::read_unrowed(&mut sim, column, i64::from(frame)) {
+                latch_series
+                    .entry((*name).clone())
+                    .or_default()
+                    .push((i64::from(frame), v));
+            }
+        }
         if frame >= case.first_frame {
             if !room_change {
                 sampled = probe::sample(&mut sim, &probe, i64::from(frame));
@@ -281,25 +315,34 @@ pub fn execute(
             break;
         }
     }
-    latch_columns(case, &mut table);
+    latch_columns(case, &mut table, &latch_series);
     Ok(table)
 }
 
-/// The case's `latch` columns: a row shows the column's value as of the frame before the last
-/// read frame at or before it, 0 before the first read (the recorder's `--gml` copied it then).
-fn latch_columns(case: &TraceCase, table: &mut TraceTable) {
+/// The case's `latch` columns: a row shows the column's value as of the end of the frame before
+/// the last read frame at or before it, 0 before the first read (the recorder's `--gml` copied it
+/// then). The value comes from `series`, the column read at the end of every frame, so a frame
+/// with no row still has one (#671); a column with no series (one that needs the row's instance)
+/// falls back to the table's own rows.
+fn latch_columns(
+    case: &TraceCase,
+    table: &mut TraceTable,
+    series: &BTreeMap<String, Vec<(i64, trace::Value)>>,
+) {
     for (name, reads) in &case.latch {
         let Some(col) = table.columns.iter().position(|c| &c.name == name) else {
             continue;
         };
-        let series: Vec<(i64, trace::Value)> = table
-            .rows
-            .iter()
-            .filter_map(|r| match r.first() {
-                Some(trace::Value::Int(f)) => Some((*f, r[col].clone())),
-                _ => None,
-            })
-            .collect();
+        let series: Vec<(i64, trace::Value)> = series.get(name).cloned().unwrap_or_else(|| {
+            table
+                .rows
+                .iter()
+                .filter_map(|r| match r.first() {
+                    Some(trace::Value::Int(f)) => Some((*f, r[col].clone())),
+                    _ => None,
+                })
+                .collect()
+        });
         for row in &mut table.rows {
             let Some(trace::Value::Int(frame)) = row.first().cloned() else {
                 continue;
@@ -515,6 +558,10 @@ pub fn package_id(files: &PackageFiles) -> Result<String, ToolError> {
 
 /// Loads a package folder.
 pub fn load_package(dir: &Path) -> Result<PackageFiles, ToolError> {
+    // A built `.iwbz` already carries its engine pack (docs/format/iwbz.md).
+    if crate::pack_cmd::is_iwbz(dir) {
+        return crate::pack_cmd::read_iwbz(dir);
+    }
     let mut files =
         PackageFiles::load_dir(dir).map_err(|e| ToolError::Message(format!("{}: {e}", dir.display())))?;
     bundle_engine_pack(dir, &mut files)?;
@@ -742,6 +789,26 @@ mod tests {
     }
 
     #[test]
+    fn setup_targets_pick_the_nth_instance() {
+        use iwbtg_sim::collide::Target;
+        let d = def();
+        let kids = Target::Class(ClassMask::KID | ClassMask::KID_FLIPPED);
+        assert_eq!(setup_target(&d, "kid"), Ok(ProbeTarget::Kid));
+        assert_eq!(setup_target(&d, "kid#2"), Ok(ProbeTarget::Nth(kids, 2)));
+        assert_eq!(
+            setup_target(&d, "@bullet"),
+            Ok(ProbeTarget::First(Target::Kind(KindId(1))))
+        );
+        assert_eq!(
+            setup_target(&d, "@bullet#0"),
+            Ok(ProbeTarget::Nth(Target::Kind(KindId(1)), 0))
+        );
+        for bad in ["kid#", "kid#-1", "kid#a", "nope#0", "nope"] {
+            assert!(setup_target(&d, bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
     fn resolves_columns_setup_and_start() {
         let vars: Vec<String> = [
             "alarm[0]",
@@ -934,9 +1001,38 @@ mod bundle_tests {
             latch: [("v".to_string(), vec![4, 6])].into_iter().collect(),
             ..TraceCase::default()
         };
-        latch_columns(&case, &mut table);
+        latch_columns(&case, &mut table, &BTreeMap::new());
         let got: Vec<f64> = table.rows.iter().map(|r| r[fixed].as_f64().unwrap()).collect();
         assert_eq!(got, vec![0.0, 0.0, 30.0, 30.0, 50.0, 50.0]);
+    }
+
+    #[test]
+    fn latch_reads_the_frame_series_when_the_frame_before_a_read_has_no_row() {
+        // Rows on frames 3..6 only; the read before frame 3 needs frame 2, which has no row
+        // (famb-multikid-restart: the warp removes the kid on that tick, #671).
+        let mut table = TraceTable::new(&["v"]).unwrap();
+        let fixed = trace::FIXED_COLUMNS.len();
+        for f in 3..7_i64 {
+            let mut row = vec![trace::Value::Empty; fixed + 1];
+            row[0] = trace::Value::Int(f);
+            row[fixed] = trace::Value::Real(f as f64 * 10.0);
+            table.push_row(row).unwrap();
+        }
+        let case = TraceCase {
+            latch: [("v".to_string(), vec![3, 5])].into_iter().collect(),
+            ..TraceCase::default()
+        };
+        let series: BTreeMap<String, Vec<(i64, trace::Value)>> = [(
+            "v".to_string(),
+            (1..7_i64)
+                .map(|f| (f, trace::Value::Real(f as f64 + 0.5)))
+                .collect(),
+        )]
+        .into_iter()
+        .collect();
+        latch_columns(&case, &mut table, &series);
+        let got: Vec<f64> = table.rows.iter().map(|r| r[fixed].as_f64().unwrap()).collect();
+        assert_eq!(got, vec![2.5, 2.5, 4.5, 4.5]);
     }
 
     #[test]

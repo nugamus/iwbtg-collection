@@ -170,6 +170,7 @@ mod tests {
             segment_deaths: vec![3],
             finished_at,
             replay: None,
+            death_log: Default::default(),
         };
         let mut book = Book::default();
         for (key, game, at) in [("a/main", "a", 10), ("b/easy", "b", 20)] {

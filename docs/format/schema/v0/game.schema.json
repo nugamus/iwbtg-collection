@@ -216,6 +216,17 @@
             "null"
           ]
         },
+        "first_runtime_id": {
+          "default": null,
+          "description": "The GM8 instance id of the first instance created at run time: the game file's\nlast-instance-id + 1 (#680). Above every `gm_id` of the package.",
+          "format": "uint32",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "float_model": {
           "anyOf": [
             {

@@ -6,7 +6,8 @@
 //! There is no settings screen yet (#53), so the choices are flags (`--fullscreen`, `--ratio`,
 //! `--window`) and keys: F11 fullscreen, F10 next ratio, F9 next windowed size. Each choice is
 //! saved in the settings file (`settings.rs`), so the next start keeps it. `[` and `]` blur the
-//! backdrop less and more (not saved yet: the settings file has no blur entry, #509).
+//! backdrop less and more by 10% and save it (`display.backdrop_blur`; the settings screen, #53,
+//! replaces the keys with a slider).
 
 use std::sync::OnceLock;
 
@@ -201,12 +202,16 @@ fn keys(
         }
         window.resolution.set_physical_resolution(w, h);
     }
-    // Stand-in for the blur slider of the settings screen (#53).
-    if keys.just_pressed(KeyCode::BracketRight) {
-        backdrop.blur = (backdrop.blur + 0.1).min(1.0);
-    }
-    if keys.just_pressed(KeyCode::BracketLeft) {
-        backdrop.blur = (backdrop.blur - 0.1).max(0.0);
+    // Stand-ins for the blur slider of the settings screen (#53), which replaces them.
+    let step = i32::from(keys.just_pressed(KeyCode::BracketRight))
+        - i32::from(keys.just_pressed(KeyCode::BracketLeft));
+    if step != 0 {
+        let pct = settings::get()
+            .backdrop_blur
+            .saturating_add_signed(step * 10)
+            .min(settings::MAX_BACKDROP_BLUR);
+        settings::update(|s| s.backdrop_blur = pct);
+        backdrop.blur = pct as f32 / 100.0;
     }
     if keys.just_pressed(KeyCode::F11) {
         screen.fullscreen = !screen.fullscreen;
@@ -334,7 +339,7 @@ fn game_backdrop(
     });
     backdrop.art = Some(images.add(image));
     backdrop.dim = backdrop::dim::GAMEPLAY;
-    backdrop.blur = backdrop::DEFAULT_BLUR;
+    backdrop.blur = settings::get().backdrop_blur as f32 / 100.0;
 }
 
 /// Spawns a black panel the size of the room under the game, so the backdrop never shows

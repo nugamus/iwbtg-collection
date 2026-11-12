@@ -16,6 +16,9 @@
 //! OPEN, not done: the save sound and the particles (RBF) belong to the client and the sound
 //! model; `self_destroy_alarm` variants beyond the plain alarm.
 //!
+//! `requires_kid_in_room` (xia, edgeDeath on; kid/C.md save point User Event 0 and objautosave):
+//! every save from this point, the alarm save included, needs the kid's origin inside the room.
+//!
 //! `alarm_save` (the autosave object of eat-the-lemon and xia; kid/B.md eat-the-lemon item 7,
 //! kid/C.md objautosave): Create arms Alarm 0 for that many ticks and Alarm 0 saves from the first
 //! kid in instance order, if one exists. The point stays (traces/eat-the-lemon/famb-multikid-restart.md:
@@ -82,6 +85,11 @@ const SPECS: &[ParamSpec] = &[
     },
     ParamSpec {
         name: "requires_kid_depth0",
+        ty: ParamType::Bool,
+        required: false,
+    },
+    ParamSpec {
+        name: "requires_kid_in_room",
         ty: ParamType::Bool,
         required: false,
     },
@@ -162,6 +170,9 @@ pub struct SaveState {
     pub requires_gravity: Gravity,
     /// MAC: the kid's depth must be 0.
     pub requires_kid_depth0: bool,
+    /// xia edgeDeath: the kid's origin must be inside the room (`0 <= x <= room_width`,
+    /// `0 <= y <= room_height`).
+    pub requires_kid_in_room: bool,
     /// Position model (`SavedPosition` by name).
     pub position: String,
     /// The fixed point, for `fixed_point`.
@@ -259,6 +270,7 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
         min_difficulty_removed,
         requires_gravity,
         requires_kid_depth0: param_bool(params, "requires_kid_depth0")?.unwrap_or(false),
+        requires_kid_in_room: param_bool(params, "requires_kid_in_room")?.unwrap_or(false),
         position: position.to_owned(),
         fixed,
         self_destroy,
@@ -395,7 +407,27 @@ fn touch_fires(ctx: &Ctx, s: &SaveState) -> bool {
     }
 }
 
-/// Saves from `kid` when the cooldown, gravity and depth rules allow it.
+/// xia's edgeDeath test on the kid's origin (kid/C.md save point User Event 0 and objautosave;
+/// the same strict test as the End Step edge death in `kid::boundary`): outside is `x < 0`,
+/// `x > room_width`, `y < 0` or `y > room_height`, so the edges count as inside.
+fn origin_in_room(ctx: &Ctx, x: Real, y: Real) -> Result<bool, SimError> {
+    let n = &ctx.rules.num;
+    let room = ctx
+        .def
+        .room(ctx.w.room)
+        .ok_or_else(|| SimError::invariant("save: the current room does not exist"))?;
+    let (rw, rh) = (
+        Real::new(f64::from(room.width)),
+        Real::new(f64::from(room.height)),
+    );
+    let outside = num::gm_lt(x, Real::ZERO, n)
+        || num::gm_gt(x, rw, n)
+        || num::gm_lt(y, Real::ZERO, n)
+        || num::gm_gt(y, rh, n);
+    Ok(!outside)
+}
+
+/// Saves from `kid` when the cooldown, gravity, depth and room rules allow it.
 fn try_save(ctx: &mut Ctx, me: InstId, s: &SaveState, kid: InstId) -> Result<Flow, SimError> {
     let nr = &ctx.rules.num;
     let gated = if s.on_touch == Touch::SkipHeld {
@@ -416,6 +448,9 @@ fn try_save(ctx: &mut Ctx, me: InstId, s: &SaveState, kid: InstId) -> Result<Flo
         Gravity::Flipped => flipped,
     };
     if !gravity_ok || (s.requires_kid_depth0 && num::gm_ne(k.depth, Real::ZERO, nr)) {
+        return Ok(Flow::Continue);
+    }
+    if s.requires_kid_in_room && !origin_in_room(ctx, k.m.x(), k.m.y())? {
         return Ok(Flow::Continue);
     }
     save::save_now(ctx, kid, model_of(&s.position), s.fixed)?;

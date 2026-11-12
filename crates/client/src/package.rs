@@ -1,5 +1,5 @@
-//! Loading a package folder for the client: files, engine pack, the game definition and the
-//! sprite images. No Bevy in here, so it is tested like any other code.
+//! Loading a package folder or `.iwbz` file for the client: files, engine pack, the game
+//! definition and the sprite images. No Bevy in here, so it is tested like any other code.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -40,8 +40,8 @@ pub struct SpriteImage {
 /// The package command-line arguments.
 #[derive(clap::Args, Debug)]
 pub struct PackageArgs {
-    /// Package folder (a folder with a game.toml). Not needed with `--ui-gallery`, `--bind` or
-    /// `--show-bindings`.
+    /// Package folder (a folder with a game.toml) or `.iwbz` file. Not needed with
+    /// `--ui-gallery`, `--bind` or `--show-bindings`.
     #[arg(required_unless_present_any = ["ui_gallery", "card_preview", "bind", "show_bindings"])]
     pub package: Option<std::path::PathBuf>,
     /// Load converter output: unmapped script kinds become inert.
@@ -49,13 +49,20 @@ pub struct PackageArgs {
     pub trace_mode: bool,
 }
 
-/// Opens the package folder `dir`: reads it, bundles its engine pack from `../_engines` and
-/// loads it. `trace_mode` is for research converter output.
+/// Opens the package at `dir` and loads it. A folder is read and gets its engine pack bundled
+/// from `../_engines`; an `.iwbz` file (docs/format/iwbz.md) is unpacked, refusing anything a
+/// package may not hold, and already carries its pack. `trace_mode` is for research converter
+/// output.
 pub fn open(dir: &Path, trace_mode: bool) -> Result<Package, OpenError> {
-    let mut files =
-        PackageFiles::load_dir(dir).map_err(|e| OpenError::Files(format!("{}: {e}", dir.display())))?;
-    iwbtg_format::engine_pack::bundle_sibling(dir, &mut files)
-        .map_err(|e| OpenError::Files(format!("{}: {e}", dir.display())))?;
+    let files = if is_iwbz(dir) {
+        read_iwbz(dir)?
+    } else {
+        let mut files =
+            PackageFiles::load_dir(dir).map_err(|e| OpenError::Files(format!("{}: {e}", dir.display())))?;
+        iwbtg_format::engine_pack::bundle_sibling(dir, &mut files)
+            .map_err(|e| OpenError::Files(format!("{}: {e}", dir.display())))?;
+        files
+    };
     let mode = if trace_mode {
         LoadMode::Trace {
             unmapped_kinds_inert: true,
@@ -75,6 +82,25 @@ pub fn open(dir: &Path, trace_mode: bool) -> Result<Package, OpenError> {
         def: Arc::new(def),
         gameplay_hash,
     })
+}
+
+/// True when `path` is an `.iwbz` file (by its extension) rather than a package folder.
+pub fn is_iwbz(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case(iwbtg_format::iwbz::EXTENSION))
+        && !path.is_dir()
+}
+
+/// Reads and unpacks an `.iwbz` file; one over the size limit is refused before it is read.
+pub fn read_iwbz(path: &Path) -> Result<PackageFiles, OpenError> {
+    use iwbtg_format::iwbz;
+    let err = |e: String| OpenError::Files(format!("{}: {e}", path.display()));
+    let len = std::fs::metadata(path).map_err(|e| err(e.to_string()))?.len();
+    if len > iwbz::MAX_ARCHIVE_BYTES {
+        return Err(err(format!("over {} bytes", iwbz::MAX_ARCHIVE_BYTES)));
+    }
+    let bytes = std::fs::read(path).map_err(|e| err(e.to_string()))?;
+    iwbz::unpack(&bytes).map_err(|e| err(e.to_string()))
 }
 
 /// The image of every sprite of the game, in `SpriteId` order. A sprite without a picture (no
@@ -138,6 +164,24 @@ mod tests {
         let images = sprite_images(&p.files);
         assert_eq!(images.len(), p.def.sprites.len());
         assert!(images.iter().all(Option::is_some));
+    }
+
+    #[test]
+    fn an_iwbz_opens_like_its_folder_and_a_bad_one_is_refused() {
+        let dir = std::env::temp_dir().join(format!("iwbtg-client-iwbz-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let demo = Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-clear.pkg");
+        let folder = open(&demo, false).unwrap();
+        let file = dir.join("demo.IWBZ");
+        std::fs::write(&file, iwbtg_format::iwbz::pack(&folder.files).unwrap()).unwrap();
+        let packed = open(&file, false).unwrap();
+        assert_eq!(packed.gameplay_hash, folder.gameplay_hash);
+        assert_eq!(packed.files.content_hash(), folder.files.content_hash());
+        let bad = dir.join("bad.iwbz");
+        std::fs::write(&bad, b"PK not really").unwrap();
+        assert!(matches!(open(&bad, false), Err(OpenError::Files(_))));
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

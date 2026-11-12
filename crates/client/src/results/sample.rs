@@ -65,6 +65,7 @@ fn board(scenario: Scenario) -> Board {
             splits,
             finished_at: NOV_4 - DAYS_BEFORE[i] * 86_400 + 20 * 3600,
             replay: None,
+            death_log: Default::default(),
         });
     }
     board.clears = board.runs.len() as u32;
@@ -92,6 +93,7 @@ pub fn summary(scenario: Scenario) -> Summary {
         segment_deaths: deaths.to_vec(),
         finished_at: CLEARED_AT,
         replay: Some("replays/kaenbyou/sample.iwbr".to_owned()),
+        death_log: Default::default(),
     };
     let mut board = board(scenario);
     let rec = board.add(run.clone());

@@ -449,6 +449,16 @@
           ],
           "description": "`image_angle`."
         },
+        "gm_id": {
+          "description": "GM8 instance id from the room file; unique in the room, never with `run`.",
+          "format": "uint32",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "group": {
           "description": "Group tag, for triggers and scripts.",
           "type": [
