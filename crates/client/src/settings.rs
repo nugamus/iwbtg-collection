@@ -16,10 +16,15 @@ use crate::storage::{self, Store};
 pub const VERSION: i64 = 1;
 /// The largest audio offset, in milliseconds.
 pub const MAX_AUDIO_OFFSET_MS: u32 = crate::audio::MAX_OFFSET_MS;
+/// The longest profile name, in characters.
+pub const MAX_NAME_CHARS: usize = 32;
 
 /// Every player setting.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
+    /// The local profile name for the player card (`name`); empty falls back to the system
+    /// account's name (`card::profile_name`).
+    pub name: String,
     /// Start fullscreen.
     pub fullscreen: bool,
     /// Fullscreen area shape (`None` is the monitor's own), as `screen::RATIOS`.
@@ -44,6 +49,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            name: String::new(),
             fullscreen: false,
             ratio: None,
             window: None,
@@ -144,6 +150,17 @@ impl Settings {
                     }
                 }
                 ("version", _) => warnings.push("`version` must be an integer".into()),
+                ("name", Value::String(n)) => {
+                    let n = n.trim();
+                    if n.chars().count() > MAX_NAME_CHARS || n.chars().any(char::is_control) {
+                        warnings.push(format!(
+                            "`name` must be at most {MAX_NAME_CHARS} characters without control characters, using the default"
+                        ));
+                    } else {
+                        s.name = n.to_owned();
+                    }
+                }
+                ("name", _) => warnings.push("`name` must be a string".into()),
                 ("display", Value::Table(t)) => s.read_display(t, warnings),
                 ("audio", Value::Table(t)) => s.read_audio(t, warnings),
                 ("hud", Value::Table(t)) => s.read_hud(t, warnings),
@@ -237,6 +254,9 @@ impl Settings {
         hud.insert("show".into(), self.hud_show.to_table().into());
         let mut root = Table::new();
         root.insert("version".into(), VERSION.into());
+        if !self.name.is_empty() {
+            root.insert("name".into(), self.name.clone().into());
+        }
         root.insert("display".into(), display.into());
         root.insert("audio".into(), audio.into());
         root.insert("hud".into(), hud.into());
@@ -340,6 +360,7 @@ mod tests {
     #[test]
     fn round_trips() {
         let mut s = Settings {
+            name: "Kid".into(),
             fullscreen: true,
             ratio: Some((16, 9)),
             window: Some((1280, 720)),
@@ -380,6 +401,30 @@ mod tests {
         assert!(!s.hud_show.input && s.hud_show.timer);
         assert_eq!(s.bindings.get("jump").and_then(Value::as_str), Some("Space"));
         assert_eq!(w.len(), 8, "{w:?}");
+    }
+
+    #[test]
+    fn name_is_trimmed_and_checked() {
+        let (s, w) = parse(
+            "name = \"  Kid \"
+",
+        );
+        assert_eq!(s.name, "Kid");
+        assert!(w.is_empty(), "{w:?}");
+        let (s, w) = parse(&format!(
+            "name = \"{}\"
+",
+            "x".repeat(33)
+        ));
+        assert_eq!(s.name, "");
+        assert_eq!(w.len(), 1);
+        let (s, w) = parse(
+            "name = 5
+",
+        );
+        assert_eq!(s.name, "");
+        assert_eq!(w.len(), 1);
+        assert!(!Settings::default().to_toml().contains("name"));
     }
 
     #[test]

@@ -172,8 +172,13 @@ impl RunChange {
     }
 }
 
-/// The local profile name: the system account's name until accounts exist (#60), else `Player`.
+/// The local profile name: the settings file's `name` when set, else the system account's name
+/// until accounts exist (#60), else `Player`.
 pub fn profile_name() -> String {
+    let set = crate::settings::get().name;
+    if !set.is_empty() {
+        return set;
+    }
     #[cfg(not(target_arch = "wasm32"))]
     for var in ["USERNAME", "USER"] {
         if let Ok(name) = std::env::var(var) {
