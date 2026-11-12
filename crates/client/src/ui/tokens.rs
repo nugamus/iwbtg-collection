@@ -35,8 +35,8 @@ pub const ON_RANKED: Color = Color::srgb_u8(0x0b, 0x1a, 0x2a);
 /// Text on the Unranked pill.
 pub const ON_AMBER: Color = Color::srgb_u8(0x2a, 0x1d, 0x05);
 
-/// Dark glass under controls over art: `rgba(12,14,22,.72)`.
-pub const GLASS: Color = Color::srgba(12.0 / 255.0, 14.0 / 255.0, 22.0 / 255.0, 0.72);
+/// Dark glass under controls over art: `rgba(12,14,22,.72)`, as [`dark`]`(.., 0.72)` (#713).
+pub const GLASS: Color = Color::srgba(12.0 / 255.0, 14.0 / 255.0, 22.0 / 255.0, 0.9392);
 /// What white glass usually sits on: the blurred backdrop art under its dim (#692), measured from
 /// the screenshots (the demo art at the gameplay dim is about `#18204a`, the gallery art at the
 /// select dim `#110f21`). [`white`] picks its alphas against this.
@@ -47,9 +47,9 @@ pub const SECONDARY: Color = Color::srgba(1.0, 1.0, 1.0, 0.0253);
 /// Mod pills: `rgba(255,255,255,.16)`, as [`white`]`(0.16)`.
 pub const CHIP: Color = Color::srgba(1.0, 1.0, 1.0, 0.0381);
 
-/// A leaderboard row (`Leaderboard.dc.html`): `rgba(12,14,22,.62)`.
+/// A leaderboard row (`Leaderboard.dc.html`): `rgba(12,14,22,.62)`, as [`dark`]`(.., 0.62)` (#713).
 #[allow(dead_code, reason = "other players' rows: the Global scope (#484)")]
-pub const ROW: Color = Color::srgba(12.0 / 255.0, 14.0 / 255.0, 22.0 / 255.0, 0.62);
+pub const ROW: Color = Color::srgba(12.0 / 255.0, 14.0 / 255.0, 22.0 / 255.0, 0.8811);
 /// Your own leaderboard row: `rgba(255,255,255,.22)`, as [`white`]`(0.22)`.
 pub const ROW_YOU: Color = Color::srgba(1.0, 1.0, 1.0, 0.0618);
 /// One of your past runs on the Local leaderboard: `rgba(255,255,255,.07)`, as [`white`]`(0.07)`.
@@ -274,6 +274,23 @@ mod tests {
             let mean = (got.red + got.green + got.blue) / 3.0;
             assert!((mean - want).abs() < 10.0 / 255.0, "{ground:?}: {mean} vs {want}");
         }
+    }
+
+    #[test]
+    fn dark_glass_holds_the_dark_alpha() {
+        for (token, a) in [(GLASS, 0.72), (ROW, 0.62)] {
+            let want = dark(token, a).alpha();
+            assert!(
+                (token.alpha() - want).abs() < 0.0005,
+                "{a}: {} vs {want}",
+                token.alpha()
+            );
+        }
+        // Over the backdrop the glass keeps about 1 - a of the sRGB value, as the browser does.
+        let got = bevy_blend(GLASS, BACKDROP);
+        let b = BACKDROP.to_srgba();
+        let want = 0.28 * b.blue + 0.72 * 22.0 / 255.0;
+        assert!((got.blue - want).abs() < 0.035, "{got:?} vs {want}");
     }
 
     #[test]
