@@ -22,6 +22,7 @@ mod input;
 mod mods;
 mod package;
 mod pause;
+mod render_fix;
 mod replays;
 mod results;
 mod retry;
