@@ -12,7 +12,8 @@
 //!
 //! Under the deaths per stage, the death timeline (each death a tick along the run) and, when
 //! the `[results] heatmap` setting is on, where you died in the stage hovered or clicked in the
-//! splits (`room.rs` draws the room; #654).
+//! splits (`room.rs` draws the room; #654). The row whose stage it shows is lit and the clicked
+//! row carries the accent's mark (#705).
 //!
 //! [`Summary`] is everything the page shows, built from the stats book ([`Summary::new`]) or from
 //! the artboards' sample (`--results-preview`, [`sample`]); `page.rs` draws it.
@@ -40,6 +41,7 @@ use crate::hud::leaderboard::{self, Entry};
 use crate::stats::{Board, Cleared, Recorded, Run, Stats, fmt_ticks};
 use crate::storage::Store;
 use crate::ui::backdrop::{Backdrop, dim};
+use crate::ui::filter::{self, FilterMaterial};
 use crate::ui::tokens;
 use crate::view::{Game, GameCamera, SimTick, Textures};
 
@@ -477,7 +479,7 @@ impl Plugin for ResultsPlugin {
         .add_observer(on_row_click)
         .add_systems(
             Update,
-            (open, keys, act, show, hover_rows, heat)
+            (open, keys, act, show, hover_rows, heat, light_rows)
                 .chain()
                 .after(crate::screen::apply),
         );
@@ -587,6 +589,42 @@ fn hover_rows(rows: Query<(&page::StageRow, &Hovered), Changed<Hovered>>, mut re
             results.hovered = None;
         }
     }
+}
+
+/// With the heatmap on, lights the splits row whose stage it shows and marks the clicked one
+/// (#705; the artboard has no design for this, so it is built from the kit's past-run row colour
+/// and the accent's selection mark).
+fn light_rows(
+    results: Res<Results>,
+    panels: Query<(), With<page::HeatPanel>>,
+    mut lights: Query<(&page::RowLight, &mut BackgroundColor), Without<page::RowMark>>,
+    mut marks: Query<(&page::RowMark, &mut BackgroundColor), Without<page::RowLight>>,
+) {
+    let on = !panels.is_empty();
+    let shown = results.heat_stage().filter(|_| on);
+    let selected = results.selected.filter(|_| on);
+    for (light, mut bg) in &mut lights {
+        let want = row_light(Some(light.0) == shown);
+        if bg.0 != want {
+            bg.0 = want;
+        }
+    }
+    for (mark, mut bg) in &mut marks {
+        let want = row_mark(Some(mark.0) == selected);
+        if bg.0 != want {
+            bg.0 = want;
+        }
+    }
+}
+
+/// The row light's colour: lit for the stage the heatmap shows.
+fn row_light(lit: bool) -> Color {
+    if lit { tokens::ROW_PAST } else { Color::NONE }
+}
+
+/// The selection mark's colour: the accent on the clicked row.
+fn row_mark(on: bool) -> Color {
+    if on { tokens::ACCENT } else { Color::NONE }
 }
 
 /// A click on a row keeps its heatmap after the pointer leaves.
@@ -821,6 +859,7 @@ fn heat(
     textures: Option<Res<Textures>>,
     mut cache: Option<ResMut<ArtImages>>,
     mut images: ResMut<Assets<Image>>,
+    mut filters: ResMut<Assets<FilterMaterial>>,
     mut pictures: ResMut<room::Pictures>,
     mut panels: Query<(Entity, &mut page::HeatPanel)>,
 ) {
@@ -849,6 +888,16 @@ fn heat(
             ),
             _ => None,
         };
+        // The artboard dims the room with `filter: saturate(.4) brightness(.7)`.
+        let picture = picture.map(|(image, size)| {
+            let node = filter::filtered(
+                &mut filters,
+                image,
+                tokens::HEAT_ROOM_SATURATE,
+                tokens::HEAT_ROOM_BRIGHTNESS,
+            );
+            (node, size)
+        });
         let stage = stage.and_then(|i| summary.stages.get(i));
         commands.entity(entity).despawn_children();
         commands
@@ -1009,6 +1058,54 @@ mod tests {
         assert_eq!(results.heat_stage(), Some(0));
         results.hovered = Some(1);
         assert_eq!(results.heat_stage(), Some(1));
+    }
+
+    /// With the heatmap on, the row it shows is lit and the clicked row marked; without it, no
+    /// row is (#705).
+    #[test]
+    fn the_rows_show_which_stage_the_heatmap_shows() {
+        let mut app = App::new();
+        app.insert_resource(Results::default())
+            .add_systems(Update, light_rows);
+        let mut board = Board::default();
+        let s = summary_after(&mut board, &run(&[100, 400], &[1, 3]), true);
+        show_summary(&mut app.world_mut().resource_mut::<Results>(), s);
+        let lights: Vec<Entity> = (0..2)
+            .map(|i| {
+                app.world_mut()
+                    .spawn((page::RowLight(i), BackgroundColor(Color::NONE)))
+                    .id()
+            })
+            .collect();
+        let marks: Vec<Entity> = (0..2)
+            .map(|i| {
+                app.world_mut()
+                    .spawn((page::RowMark(i), BackgroundColor(Color::NONE)))
+                    .id()
+            })
+            .collect();
+        let colours = |app: &App, of: &[Entity]| -> Vec<Color> {
+            of.iter()
+                .map(|e| app.world().get::<BackgroundColor>(*e).unwrap().0)
+                .collect()
+        };
+        app.update();
+        assert_eq!(colours(&app, &lights), [Color::NONE; 2], "heatmap off");
+
+        app.world_mut().spawn(page::HeatPanel::default());
+        app.update();
+        assert_eq!(
+            colours(&app, &lights),
+            [Color::NONE, tokens::ROW_PAST],
+            "the busiest stage"
+        );
+        assert_eq!(colours(&app, &marks), [Color::NONE; 2], "nothing clicked");
+
+        app.world_mut().resource_mut::<Results>().selected = Some(0);
+        app.world_mut().resource_mut::<Results>().hovered = Some(1);
+        app.update();
+        assert_eq!(colours(&app, &lights), [Color::NONE, tokens::ROW_PAST], "hovered");
+        assert_eq!(colours(&app, &marks), [tokens::ACCENT, Color::NONE], "clicked");
     }
 
     /// Escape closes the page; holding R for the hold time retries, a short tap does not.

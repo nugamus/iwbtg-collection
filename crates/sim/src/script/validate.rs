@@ -89,6 +89,10 @@ pub const STATE_FNS: &[&str] = &[
     "destroy",
     "emit",
     "kill_kid",
+    "room_goto",
+    "room_goto_next",
+    "room_goto_previous",
+    "room_restart",
     "play_sound",
     "play_music",
     "stop_music",
@@ -205,6 +209,7 @@ pub const NAME_ARGS: &[(&str, usize, Names)] = &[
     ("instances", 0, Names::Kind),
     ("play_sound", 0, Names::Sound),
     ("play_music", 0, Names::Sound),
+    ("room_goto", 0, Names::Room),
 ];
 
 /// Whether `name` is something `what` in the package.
@@ -242,6 +247,54 @@ pub fn validate(def: &GameDef) -> Vec<Issue> {
     issues.sort();
     issues.dedup();
     issues
+}
+
+/// The room changes one script can request (#731), read from its source without running it:
+/// the room literals it passes to `room_goto` and whether it calls `room_goto_next` or
+/// `room_goto_previous` anywhere in the file. The format loader's reachability check
+/// (`iwbtg_format::reach`) turns them into edges. A `room_goto` whose argument is not a string
+/// literal (`room_goto(this.roomTo)`) names no room here.
+#[derive(Clone, Default, PartialEq, Eq, Debug)]
+pub struct RoomCalls {
+    /// Room ids passed as literals to `room_goto`, as written (they may name no room).
+    pub goto: BTreeSet<String>,
+    /// Calls `room_goto_next`.
+    pub next: bool,
+    /// Calls `room_goto_previous`.
+    pub previous: bool,
+}
+
+/// [`RoomCalls`] of every script, by index into `GameDef::scripts`. A script that does not
+/// compile requests nothing ([`validate`] reports it).
+pub fn room_calls(def: &GameDef) -> Vec<RoomCalls> {
+    if def.scripts.is_empty() {
+        return Vec::new();
+    }
+    let iws = Iws::new(RunnerRules::default().num);
+    def.scripts
+        .iter()
+        .map(|script| {
+            let mut calls = RoomCalls::default();
+            if let Ok(ast) = iws.compile_ast(&script.source) {
+                ast.walk(&mut |path: &[ASTNode]| {
+                    if let Some((c, _, false)) = path.last().and_then(call_of) {
+                        match c.name.as_str() {
+                            "room_goto" => {
+                                if let Some(Expr::StringConstant(s, _)) = c.args.first() {
+                                    calls.goto.insert(s.to_string());
+                                }
+                            }
+                            "room_goto_next" => calls.next = true,
+                            "room_goto_previous" => calls.previous = true,
+                            _ => {}
+                        }
+                    }
+                    true
+                });
+            }
+            calls
+        })
+        .collect()
 }
 
 /// Registered functions as name to the argument counts they accept.

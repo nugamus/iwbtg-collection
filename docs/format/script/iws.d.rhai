@@ -198,6 +198,14 @@ fn random(_: ?) -> float;
 
 fn random_range(_: ?, _: ?) -> float;
 
+fn room_goto(_: string) -> ();
+
+fn room_goto_next() -> ();
+
+fn room_goto_previous() -> ();
+
+fn room_restart() -> ();
+
 fn room_tick() -> float;
 
 fn round(_: ?) -> float;

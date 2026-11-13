@@ -2410,7 +2410,7 @@ impl<'a> Loader<'a> {
                     self.manifest_text,
                     r.span().start,
                     format!(
-                        "timing room `{}` cannot be reached: no start, warp, room spawn or cut room leads there (docs/format/v0.md, Validation step 7)",
+                        "timing room `{}` cannot be reached: no start, warp, room spawn, script room call or cut room leads there (docs/format/v0.md, Validation step 7)",
                         r.get_ref()
                     ),
                 ));

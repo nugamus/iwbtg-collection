@@ -19,11 +19,12 @@ use super::docs::Docs;
 use super::host::Shared;
 use crate::alarm;
 use crate::def::class::{class_params, kind_classes};
-use crate::def::{ClassMask, KindId, ParamValue, Params};
+use crate::def::{ClassMask, KindId, ParamValue, Params, RoomId};
 use crate::error::SimError;
 use crate::kid::{self, api::KillCause};
 use crate::num::Real;
 use crate::output::OutputEvent;
+use crate::room::RoomRequest;
 use crate::script::ScriptOutput;
 use crate::world::{InstId, Instance, SpawnInit, Value, World};
 
@@ -564,6 +565,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
             })
         });
         register_audio(engine, shared, docs);
+        register_rooms(engine, shared, docs);
         let s = Rc::clone(shared);
         docs.add("kill_kid", "Kills the kid as a script death.");
         engine.register_fn("kill_kid", move || -> Res<()> {
@@ -576,6 +578,60 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
             r.map_err(sim_err)
         });
     }
+}
+
+/// `room_goto`, `room_goto_next`, `room_goto_previous` and `room_restart` (#731). Each sets the
+/// world's one pending room change (`Ctx::request_room`; the last request wins) and returns:
+/// the rest of the script still runs, then `events::dispatch` and the phase stop the tick as for
+/// a built-in's request (CLONE_SPEC "Room change requests"). The change itself runs at tick
+/// row 15 (`room::perform_change`), where next and previous resolve by room order.
+fn register_rooms(engine: &mut Engine, shared: &Rc<Shared>, docs: &mut Docs) {
+    let s = Rc::clone(shared);
+    docs.add(
+        "room_goto",
+        "Requests a change to the room with that id (`\"stage2\"`) once the current script returns; the rest of the tick does not run. An unknown room is an error.",
+    );
+    engine.register_fn("room_goto", move |name: ImmutableString| -> Res<()> {
+        s.with_ctx(|ctx| {
+            let room = room_id(ctx.def, &name)?;
+            ctx.request_room(RoomRequest::Goto(room));
+            Ok(())
+        })?
+    });
+    let simple: [(&str, RoomRequest, &str); 3] = [
+        (
+            "room_goto_next",
+            RoomRequest::Next,
+            "Requests a change to the next room in `room_order` once the current script returns; from the last room the change is an error.",
+        ),
+        (
+            "room_goto_previous",
+            RoomRequest::Previous,
+            "Requests a change to the previous room in `room_order` once the current script returns; from the first room the change is an error.",
+        ),
+        (
+            "room_restart",
+            RoomRequest::Restart,
+            "Requests the current room again (Room End, then the room rebuilt from its file) once the current script returns.",
+        ),
+    ];
+    for (name, req, doc) in simple {
+        let s = Rc::clone(shared);
+        docs.add(name, doc);
+        engine.register_fn(name, move || -> Res<()> {
+            s.with_ctx(|ctx| ctx.request_room(req))
+        });
+    }
+}
+
+/// A room of the package by id (its path stem, as room params name it).
+fn room_id(def: &crate::def::GameDef, name: &str) -> Res<RoomId> {
+    def.rooms
+        .iter()
+        .position(|r| r.name == name)
+        .and_then(|i| u32::try_from(i).ok())
+        .map(RoomId)
+        .ok_or_else(|| runtime_error(format!("unknown room `{name}`")))
 }
 
 /// A sound or music of the package (or a bundled engine pack) by name.

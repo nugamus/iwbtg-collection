@@ -10,6 +10,7 @@ One page per module or area, so two PRs on different modules never edit the same
 - [Structure](client/main.md): how modules own their flags and plugins (`main.rs`)
 - [Import](client/import.md): `.iwbz` files, the library, drag and drop (`import.rs`)
 - [Mods](client/mods.md): `mods.rs`
+- [Overlay](client/overlay.md): the F3 debug overlay (`overlay.rs`)
 - [Pause menu](client/pause.md): `pause.rs`
 - [Player card](client/card.md): `card/`
 - [Practice assists](client/practice.md): slow motion and frame advance (`practice.rs`)
@@ -24,4 +25,4 @@ One page per module or area, so two PRs on different modules never edit the same
 - [Storage](client/storage.md): `storage.rs`
 - [UI](client/ui.md): the UI kit (`ui/`)
 - [Visual mods](client/visual.md): hitboxes and no background (`visual.rs`)
-- [The window and the view](client/view.md): opening a package, drawing the sim, the fixed clock, input and bindings, interpolation, the overlay, the demo packages (`package.rs`, `view.rs`, `input.rs`, `bindings.rs`)
+- [The window and the view](client/view.md): opening a package, drawing the sim, the fixed clock, input and bindings, interpolation, the demo packages (`package.rs`, `view.rs`, `input.rs`, `bindings.rs`)

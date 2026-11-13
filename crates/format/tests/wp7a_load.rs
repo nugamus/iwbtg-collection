@@ -1880,6 +1880,39 @@ fn a_scripted_kind_naming_the_room_in_text_makes_it_reachable() {
     );
 }
 
+/// `reach_warnings` with a `@door` placed in stage1 whose script is `script` (#731).
+fn door_warnings(script: &str, place: bool) -> Vec<String> {
+    let order = ORDER.replace("\"@boss\",", "\"@boss\", \"@door\",");
+    let stage1 = STAGE1.replace(
+        "  { kind = \"warp\"",
+        "  { kind = \"@door\", x = 0, y = 0 },\n  { kind = \"warp\"",
+    );
+    reach_warnings(|f| {
+        set(f, "game.toml", manifest(&order, LOST_END));
+        if place {
+            set(f, "rooms/stage1.toml", stage1);
+        }
+        f.push(("objects/door.toml".into(), b"script = \"door\"\n".to_vec()));
+        f.push(("scripts/door.rhai".into(), script.as_bytes().to_vec()));
+    })
+}
+
+#[test]
+fn a_script_room_call_makes_the_room_reachable() {
+    // Only the script leads into `lost`: a room literal, or the next room in room order
+    // (title, stage1, then lost in path order).
+    assert!(door_warnings("fn step() { room_goto(\"lost\"); }\n", true).is_empty());
+    assert!(door_warnings("fn step() { room_goto_next(); }\n", true).is_empty());
+    // A kind no room places: its literal is a root, its next call leads nowhere known.
+    assert!(door_warnings("fn step() { room_goto(\"lost\"); }\n", false).is_empty());
+    assert_eq!(door_warnings("fn step() { room_goto_next(); }\n", false).len(), 1);
+    // Previous from stage1 is title, and a restart goes nowhere new.
+    assert_eq!(
+        door_warnings("fn step() { room_goto_previous(); room_restart(); }\n", true).len(),
+        1
+    );
+}
+
 #[test]
 fn a_ranked_start_or_cut_room_makes_it_reachable() {
     let start = format!("{LOST_END}\n[stripped]\nstart = {{ room = \"lost\" }}\n");

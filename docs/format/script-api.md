@@ -127,6 +127,10 @@ Spawn caps: `instance_create` also counts toward at most 256 instances per event
 - `radtodeg(?) -> float` (can fail) (cost: 1): Radians to degrees.
 - `random(?) -> float` (can fail) (cost: 1): A float from 0 up to `x`, from the run's one RNG.
 - `random_range(?, ?) -> float` (can fail) (cost: 1): A float between `a` and `b`, from the run's one RNG.
+- `room_goto(string) -> ()` (can fail) (cost: 1): Requests a change to the room with that id (`"stage2"`) once the current script returns; the rest of the tick does not run. An unknown room is an error.
+- `room_goto_next() -> ()` (can fail) (cost: 1): Requests a change to the next room in `room_order` once the current script returns; from the last room the change is an error.
+- `room_goto_previous() -> ()` (can fail) (cost: 1): Requests a change to the previous room in `room_order` once the current script returns; from the first room the change is an error.
+- `room_restart() -> ()` (can fail) (cost: 1): Requests the current room again (Room End, then the room rebuilt from its file) once the current script returns.
 - `room_tick() -> float` (cost: 1): Ticks since the current room started.
 - `round(?) -> float` (can fail) (cost: 1): GML `round`: the nearest integer under the run's rounding rule.
 - `set_alarm(Instance, ?, ?) -> ()` (can fail) (cost: 1): `i.set_alarm(n, steps)` sets alarm `n` (0 to 11) to `steps` ticks, rounded as GM does; -1 means not running; a non-finite value or another `n` is an error.
