@@ -202,7 +202,7 @@ impl StickGate {
 /// `StickGate`, so an axis that never rests at the centre is ignored.
 ///
 /// Native and web share this: on both, Bevy's gilrs backend fills the same `Gamepad` components
-/// (on wasm32 from the browser's Gamepad API, docs/architecture/client/input.md).
+/// (on wasm32 from the browser's Gamepad API, docs/architecture/client/view.md).
 #[derive(Default)]
 pub struct PadReader {
     active: Option<bevy::prelude::Entity>,
@@ -367,6 +367,39 @@ pub fn key_code(key: bevy::input::keyboard::KeyCode) -> Option<u8> {
         K::Quote => oem::QUOTE,
         _ => return None,
     })
+}
+
+/// Web only: tells the player when a controller the browser does not map connects (#717). The
+/// browser fires `gamepadconnected` when the page first sees a pad (after one of its buttons is
+/// pressed); `ui::notice::post` queues the notice even before the app exists, so this listener
+/// needs no Bevy system and covers every app the web build opens.
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+pub fn watch_unmapped_pads() {
+    use web_sys::wasm_bindgen::{JsCast, closure::Closure};
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let listener = Closure::<dyn FnMut(web_sys::GamepadEvent)>::new(|e: web_sys::GamepadEvent| {
+        let Some(pad) = e.gamepad() else {
+            return;
+        };
+        if pad.mapping() != web_sys::GamepadMappingType::Standard {
+            // gilrs's web backend reads the raw button indices as if they were standard ones.
+            crate::storage::console_warn(&format!(
+                "controller \"{}\" has no standard mapping in this browser, so its buttons may be \
+                 wrong; Chrome and Edge map most controllers",
+                pad.id()
+            ));
+            crate::ui::notice::post(crate::ui::notice::Kind::Pad, "");
+        }
+    });
+    if window
+        .add_event_listener_with_callback("gamepadconnected", listener.as_ref().unchecked_ref())
+        .is_ok()
+    {
+        // The listener lives as long as the page.
+        listener.forget();
+    }
 }
 
 #[cfg(test)]
