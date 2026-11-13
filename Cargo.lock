@@ -3529,6 +3529,7 @@ dependencies = [
  "clap",
  "iwbtg-format",
  "iwbtg-sim",
+ "js-sys",
  "png",
  "postcard",
  "serde",
