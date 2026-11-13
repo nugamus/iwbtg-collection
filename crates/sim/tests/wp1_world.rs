@@ -502,10 +502,10 @@ fn wp1_a_destroyed_other_is_skipped() {
 }
 
 /// R22 (Confirmed (recorder), research T-DEAD-1): a kid killed in his block event gets no later
-/// Collision event from a save point that overlaps him, because the pair has a dead instance as
-/// its other. The save point is created after the kid, so it is later in the phase under the
-/// current order; if the pair order changes (research T-ORD-2, #740) this must still hold, since
-/// the kid dies in his first pair and the save point's pair follows it.
+/// Collision event from a save point that overlaps him, because the pair has a dead instance in
+/// it. Under the pair order (R12, T-ORD-2) the kid (rank 0) meets the block, dies, and his pair
+/// with the save point (rank 2) comes later in his own turn. The second part kills an instance
+/// in the kid's turn whose pair belongs to a later outer instance's turn: that is skipped too.
 #[test]
 fn wp1_r22_a_pair_with_an_instance_killed_earlier_in_the_phase_is_skipped() {
     let mut b = builder();
@@ -556,6 +556,45 @@ fn wp1_r22_a_pair_with_an_instance_killed_earlier_in_the_phase_is_skipped() {
         "control: {}",
         fx.log()
     );
+    // A later outer instance's pair: the kid's block event destroys the killer X (rank 3); the
+    // save point (rank 2), which handles killers, meets X in its own turn, after the kid's.
+    let run = |kill: bool| {
+        let mut b = builder();
+        let kid = classed(&mut b, "kid", ClassMask::KID, &[ClassMask::BLOCK]);
+        let block = classed(&mut b, "block", ClassMask::BLOCK, &[]);
+        let save = classed(&mut b, "save", ClassMask::SAVE, &[ClassMask::KILLER]);
+        let killer = classed(&mut b, "killer", ClassMask::KILLER, &[]);
+        b.order(&[kid, block, save, killer]);
+        let mut fx = Fx::new(b.build().unwrap());
+        let x = fx.probe(killer, 0.0, 0.0, p("X").style(ProbeLog::Silent));
+        let sp = fx.probe(save, 0.0, 0.0, p("S"));
+        let bl = fx.probe(block, 0.0, 0.0, p("B").style(ProbeLog::Silent));
+        let state = if kill {
+            p("K").with(step(ProbeOn::Collision, ProbeAct::Destroy(x)).once())
+        } else {
+            p("K")
+        };
+        let k = fx.probe(kid, 0.0, 0.0, state);
+        for id in [k, bl, sp, x] {
+            fx.touch(id, true);
+        }
+        let mut c = fx.ctx();
+        assert_eq!(
+            iwbtg_sim::events::collision_phase_with(&mut c, &HOOKS),
+            Flow::Continue
+        );
+        let log = fx.log();
+        assert!(
+            log.contains(&format!("k{}K", bl.0)),
+            "the kid's block event ran: {log}"
+        );
+        log.contains(&format!("k{}S", x.0))
+    };
+    assert!(
+        !run(true),
+        "no save point Collision with the killer destroyed in the kid's turn"
+    );
+    assert!(run(false), "control: the save point meets the killer");
 }
 
 #[test]
