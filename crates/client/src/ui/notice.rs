@@ -27,6 +27,14 @@ pub enum Kind {
     /// A file or folder dropped on the window did not open (`import.rs`, #648). The message is
     /// the body as it stands: the file's name and why.
     Drop,
+    /// The browser does not map a controller to its standard layout, so its buttons may be wrong
+    /// (`input::watch_unmapped_pads`, web only, #717). The message is not shown: the console has
+    /// the controller's name.
+    #[cfg_attr(
+        not(all(target_arch = "wasm32", target_os = "unknown")),
+        allow(dead_code, reason = "only the web build posts it")
+    )]
+    Pad,
 }
 
 impl Kind {
@@ -35,6 +43,7 @@ impl Kind {
         match self {
             Kind::Storage => "Not saved",
             Kind::Drop => "Not opened",
+            Kind::Pad => "Controller",
         }
     }
 
@@ -47,13 +56,18 @@ impl Kind {
                 "Saves and settings may not be kept this session.".to_string()
             }
             Kind::Drop => message.to_string(),
+            Kind::Pad => {
+                let _ = message;
+                "This browser may mix up this controller's buttons. Chrome or Edge map most controllers."
+                    .to_string()
+            }
         }
     }
 
     /// Shows only the first time in a session.
     pub fn once(self) -> bool {
         match self {
-            Kind::Storage => true,
+            Kind::Storage | Kind::Pad => true,
             Kind::Drop => false,
         }
     }
@@ -281,6 +295,15 @@ mod tests {
             Kind::Drop.body("notes.txt is not a game package"),
             "notes.txt is not a game package"
         );
+    }
+
+    #[test]
+    fn an_unmapped_controller_shows_once_and_whole() {
+        let mut shown = Shown::default();
+        assert!(shown.admit(Kind::Pad));
+        assert!(!shown.admit(Kind::Pad));
+        let body = Kind::Pad.body("");
+        assert_eq!(clip(&body), body, "the notice is not cut");
     }
 
     #[test]
