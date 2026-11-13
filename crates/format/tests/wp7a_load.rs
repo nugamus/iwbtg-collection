@@ -1931,7 +1931,8 @@ fn two_handler_classes_of_one_kind_matching_one_other_warn() {
     assert_eq!(w.len(), 1, "{w:?}");
     assert!(w[0].starts_with("objects/boss.toml:"), "{w:?}");
     assert!(
-        w[0].contains("kind `@boss`") && w[0].contains("of `@mover`, `killer` and `boss_part`: only `killer` runs"),
+        w[0].contains("kind `@boss`")
+            && w[0].contains("of `@mover`, `killer` and `boss_part`: only `killer` runs"),
         "{w:?}"
     );
 }

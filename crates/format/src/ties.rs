@@ -44,10 +44,7 @@ pub fn ties(def: &GameDef) -> Vec<Tie> {
                 continue;
             };
             for &tied in handlers {
-                if tied != picked
-                    && ok.classes.intersects(tied)
-                    && tied.generality() == picked.generality()
-                {
+                if tied != picked && ok.classes.intersects(tied) && tied.generality() == picked.generality() {
                     out.insert(Tie {
                         handler: KindId(h),
                         other: KindId(o),
