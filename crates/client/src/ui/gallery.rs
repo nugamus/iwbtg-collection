@@ -53,7 +53,7 @@ pub fn run(
         }),
         ..default()
     }))
-    .add_plugins(UiKitPlugin)
+    .add_plugins((crate::render_fix::plugin, UiKitPlugin))
     .insert_resource(ClearColor(tokens::GROUND))
     .insert_resource(ReducedMotion(reduced_motion))
     .add_systems(Startup, setup)

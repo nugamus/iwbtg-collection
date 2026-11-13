@@ -300,6 +300,7 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
                 ..default()
             }),
     )
+    .add_plugins(crate::render_fix::plugin)
     .insert_resource(ClearColor(Color::BLACK))
     .insert_resource(RoomSize(Vec2::new(width, height)))
     .insert_resource(ViewRect::whole(Vec2::new(width, height)))
