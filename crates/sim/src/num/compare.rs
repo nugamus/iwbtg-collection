@@ -20,8 +20,9 @@
 //! The default fits every recorded trace (CLONE_SPEC numbers, Confirmed (recorder)): a tolerance
 //! `t` with `9e-14 < t <= 1e-13` (`traces/little-trap/num-eps-slip-b.csv` rows 50-51,
 //! `num-eps-slip-c.csv` rows 50-100), and "g equals 0.8" passes for `0.8000000000000004`
-//! (`traces/go-the-jun-g-world/num-eps-alpha.csv` rows 44-45). The real runner, the exact `t` and
-//! whether its edge is inclusive stay OPEN (N1).
+//! (`traces/go-the-jun-g-world/num-eps-alpha.csv` rows 44-45). The real runner uses a tolerance too
+//! (rely's kid alpha stays 0.9999999999999999, CLONE_SPEC, Number handling, Confirmed (real
+//! runner)); the exact `t` on either and whether its edge is inclusive stay OPEN (N1).
 //!
 //! Under `CompareMode::Exact` they are the IEEE comparisons. In both modes every comparison is
 //! false when an operand is NaN (or `d` is NaN, as for `inf - inf` in epsilon mode), `!=`

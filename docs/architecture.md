@@ -45,7 +45,7 @@ Every GM rule the sim needs that the spec marks UNKNOWN, Inferred or Conflict is
 
 - **OPEN:** exact GM8 event order, collision handling for solid instances, destroy timing, room-change timing and 8.0 versus 8.1 differences. Source: `research/specs/engines/gm8/CLONE_SPEC.md`.
 - **OPEN:** comparison epsilon, truthiness boundary, rounding and conversion rules, motion coupling details. Source: the same spec.
-- **OPEN:** whether the real GM8 runner's trig and precision match OpenGMK's plain f64. Source: Phase 2 cross-check.
+- Answered (real runner, research#8): arithmetic is binary64 (x87 at 53-bit precision), literals and the presence of the comparison tolerance match the recorder; cos/sin use x87 FCOS/FSIN and differ from libm in the last bits, and the client keeps the recorder's libm bits by decision. **OPEN:** `atan2` and non-axis trig on the real runner (research#154). Source: `research/specs/engines/gm8/CLONE_SPEC.md`, Number handling.
 - **OPEN:** the built-in kind list and each kind's parameters. Source: `research/specs/mechanics.md` (not written yet).
 - **OPEN:** whether any room really runs at a speed other than 50 (editor values 30, 60 and 5 exist, but all 20 games set 50 in code).
 - **OPEN:** spike mask type and rotated precise masks.
