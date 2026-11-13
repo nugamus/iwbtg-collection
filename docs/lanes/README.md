@@ -9,7 +9,7 @@ One page per agent-team lane: what the lane owns, how to build and test it fast,
 | sim | `worktrees/client-sim` | [sim.md](sim.md) |
 | research | main `research/` checkout (one agent) | [research.md](research.md) |
 
-Every lane: work in your worktree only, switch branches there per issue (`git switch -c issue-<n>-<name> origin/main`), run cargo in the foreground, test what you touched while working and `cargo xtask check` once before the PR; `cargo xtask pr-body` drafts the PR body (client `CLAUDE.md`, Builds). Update your page in the same PR when you learn something that would have saved you time.
+Every lane: launch the client only with `--mute` (or with `IWBTG_MUTE=1` set; a `--screenshot` run is silent anyway), so test runs never play sound on the user's speakers (#712). Work in your worktree only, switch branches there per issue (`git switch -c issue-<n>-<name> origin/main`), run cargo in the foreground, test what you touched while working and `cargo xtask check` once before the PR; `cargo xtask pr-body` drafts the PR body (client `CLAUDE.md`, Builds). Update your page in the same PR when you learn something that would have saved you time.
 
 ## Pitfalls for every lane
 

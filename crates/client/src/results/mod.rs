@@ -318,14 +318,20 @@ impl Summary {
         }
     }
 
-    /// `Cleared 3 Nov 2026, 21:14` (UTC, like the leaderboard's dates).
+    /// `Cleared 3 Nov 2026, 21:14` in the player's time zone, like the leaderboard's dates.
     pub fn cleared(&self) -> String {
+        self.cleared_at(leaderboard::local_offset(self.finished_at))
+    }
+
+    /// `cleared` for a zone `offset` seconds east of UTC.
+    fn cleared_at(&self, offset: i32) -> String {
         let s = self.finished_at;
+        let local = (s as i64 + i64::from(offset)).max(0) as u64;
         format!(
             "Cleared {}, {:02}:{:02}",
-            leaderboard::date(s),
-            s / 3600 % 24,
-            s / 60 % 60
+            leaderboard::date_at(s, offset),
+            local / 3600 % 24,
+            local / 60 % 60
         )
     }
 
@@ -950,7 +956,9 @@ mod tests {
         let mut board = Board::default();
         let s = summary_after(&mut board, &run(&[50 * 2292 + 23], &[0]), true);
         assert_eq!(s.hero(), ("38:12".to_owned(), ".46".to_owned()));
-        assert_eq!(s.cleared(), "Cleared 3 Nov 2026, 21:14");
+        assert_eq!(s.cleared_at(0), "Cleared 3 Nov 2026, 21:14");
+        assert_eq!(s.cleared_at(3 * 3600), "Cleared 4 Nov 2026, 00:14");
+        assert_eq!(s.cleared_at(-5 * 3600 - 1800), "Cleared 3 Nov 2026, 15:44");
         assert_eq!(bar_label("Stage 6"), "6");
         assert_eq!(bar_label("Boss"), "Boss");
         assert_eq!(

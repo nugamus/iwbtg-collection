@@ -11,6 +11,7 @@
 
 ## Pitfalls seen before
 
+- Launch the client only with `--mute` (`cargo run -p iwbtg-client -- <pkg> --mute`, or `IWBTG_MUTE=1`): an unmuted test run played music on the user's speakers for 20 minutes (#712).
 - `manifest.rs` and `docs/format/v0.md` are shared hot spots: merge `origin/main` just before opening the PR.
 - Every format change updates `docs/format/` and the schema in the same PR.
 - Loading code must stay pure (`crates/format/clippy.toml`): no clocks, no unordered maps in gameplay data.

@@ -187,6 +187,76 @@ impl StickGate {
     }
 }
 
+/// Reads the controllers as `PadInput`s. Only the active controller counts: the one that last had
+/// a button pressed. A DualSense over Bluetooth can show up as a second device (motion sensors)
+/// whose axes never rest at zero, and that must not walk the kid right. The stick goes through
+/// `StickGate`, so an axis that never rests at the centre is ignored.
+///
+/// Native and web share this: on both, Bevy's gilrs backend fills the same `Gamepad` components
+/// (on wasm32 from the browser's Gamepad API, docs/architecture/client/input.md).
+#[derive(Default)]
+pub struct PadReader {
+    active: Option<bevy::prelude::Entity>,
+    gates: [StickGate; 4],
+}
+
+impl PadReader {
+    /// Which inputs are down this frame, indexed by `PadInput as usize`. All up when no controller
+    /// has had a button pressed yet, or the active one went away.
+    pub fn read(
+        &mut self,
+        pads: &[(bevy::prelude::Entity, &bevy::input::gamepad::Gamepad)],
+    ) -> [bool; PadInput::ALL.len()] {
+        use bevy::input::gamepad::{GamepadAxis as A, GamepadButton as B};
+        let mut down = [false; PadInput::ALL.len()];
+        if let Some((entity, _)) = pads.iter().find(|(_, g)| g.get_pressed().next().is_some())
+            && self.active != Some(*entity)
+        {
+            self.active = Some(*entity);
+            self.gates = Default::default();
+        }
+        let Some(g) = self
+            .active
+            .and_then(|e| pads.iter().find(|(p, _)| *p == e))
+            .map(|(_, g)| g)
+        else {
+            return down;
+        };
+        let axis = |a| g.get(a).unwrap_or(0.0);
+        // Bevy's stick Y points up on every backend (gilrs flips the browser's down-positive Y).
+        let stick = [
+            self.gates[0].update(axis(A::LeftStickY)),
+            self.gates[1].update(-axis(A::LeftStickY)),
+            self.gates[2].update(-axis(A::LeftStickX)),
+            self.gates[3].update(axis(A::LeftStickX)),
+        ];
+        for input in PadInput::ALL {
+            let button = |b| g.pressed(b);
+            down[input as usize] = match input {
+                PadInput::South => button(B::South),
+                PadInput::East => button(B::East),
+                PadInput::West => button(B::West),
+                PadInput::North => button(B::North),
+                PadInput::LeftBumper => button(B::LeftTrigger),
+                PadInput::RightBumper => button(B::RightTrigger),
+                PadInput::LeftTrigger => button(B::LeftTrigger2),
+                PadInput::RightTrigger => button(B::RightTrigger2),
+                PadInput::Select => button(B::Select),
+                PadInput::Start => button(B::Start),
+                PadInput::DPadUp => button(B::DPadUp),
+                PadInput::DPadDown => button(B::DPadDown),
+                PadInput::DPadLeft => button(B::DPadLeft),
+                PadInput::DPadRight => button(B::DPadRight),
+                PadInput::StickUp => stick[0],
+                PadInput::StickDown => stick[1],
+                PadInput::StickLeft => stick[2],
+                PadInput::StickRight => stick[3],
+            };
+        }
+        down
+    }
+}
+
 /// The virtual-key code of a Bevy key. Keys with no code (media keys, IME keys) are ignored.
 pub fn key_code(key: bevy::input::keyboard::KeyCode) -> Option<u8> {
     use bevy::input::keyboard::KeyCode as K;
@@ -308,6 +378,91 @@ mod tests {
         assert!(!g.update(0.4));
         // A small drift never presses.
         assert!(!g.update(0.5));
+    }
+
+    use bevy::input::gamepad::{Gamepad, GamepadAxis as A, GamepadButton as B};
+    use bevy::prelude::Entity;
+
+    fn pad_down(down: &[bool; PadInput::ALL.len()]) -> Vec<&'static str> {
+        PadInput::ALL
+            .into_iter()
+            .filter(|p| down[*p as usize])
+            .map(PadInput::name)
+            .collect()
+    }
+
+    /// The default controller bindings through the shared reader, as both native and the web build
+    /// see a pad: the D-pad and the stick move, south jumps, west shoots, north restarts.
+    #[test]
+    fn a_pad_drives_move_jump_shoot_and_restart() {
+        let mut reader = PadReader::default();
+        let mut c = Collector::new(Bindings::default());
+        let mut g = Gamepad::default();
+        let e = Entity::from_raw_u32(1).unwrap();
+        g.digital_mut().press(B::South);
+        g.digital_mut().press(B::West);
+        g.digital_mut().press(B::DPadLeft);
+        let down = reader.read(&[(e, &g)]);
+        assert_eq!(pad_down(&down), ["south", "west", "dpad-left"]);
+        for input in PadInput::ALL {
+            c.set_pad(input, down[input as usize]);
+        }
+        let f = c.take_frame();
+        assert!(f.was_pressed(Action::Jump) && f.was_pressed(Action::Shoot) && f.is_held(Action::Left));
+
+        let mut g = Gamepad::default();
+        g.digital_mut().press(B::North);
+        g.analog_mut().set(A::LeftStickX, 1.0);
+        let down = reader.read(&[(e, &g)]);
+        for input in PadInput::ALL {
+            c.set_pad(input, down[input as usize]);
+        }
+        let f = c.take_frame();
+        assert!(f.was_pressed(Action::Restart) && f.was_released(Action::Jump));
+        assert!(
+            f.is_held(Action::Right),
+            "the stick rested at the centre before, so it counts"
+        );
+    }
+
+    /// Only the pad that last had a button pressed counts, and a stick resting off centre never
+    /// presses (a DualSense's motion-sensor device).
+    #[test]
+    fn only_the_active_pad_counts_and_a_stuck_axis_never_presses() {
+        let mut reader = PadReader::default();
+        let (a, b) = (Entity::from_raw_u32(1).unwrap(), Entity::from_raw_u32(2).unwrap());
+        let mut sensors = Gamepad::default();
+        sensors.analog_mut().set(A::LeftStickX, 1.0);
+        let idle = Gamepad::default();
+        // No button pressed yet: nothing is active.
+        assert!(pad_down(&reader.read(&[(a, &sensors), (b, &idle)])).is_empty());
+        let mut pressed = Gamepad::default();
+        pressed.digital_mut().press(B::South);
+        assert_eq!(pad_down(&reader.read(&[(a, &sensors), (b, &pressed)])), ["south"]);
+        // A button on the sensor device makes it active, but its stuck stick still does nothing.
+        let mut sensors_button = Gamepad::default();
+        sensors_button.analog_mut().set(A::LeftStickX, 1.0);
+        sensors_button.digital_mut().press(B::Start);
+        assert_eq!(
+            pad_down(&reader.read(&[(a, &sensors_button), (b, &idle)])),
+            ["start"]
+        );
+        // The active pad unplugged: all up.
+        assert!(pad_down(&reader.read(&[(b, &idle)])).is_empty());
+    }
+
+    /// Bevy's stick Y points up on every backend, the browser's included.
+    #[test]
+    fn stick_up_is_positive_y() {
+        let mut reader = PadReader::default();
+        let e = Entity::from_raw_u32(1).unwrap();
+        let mut g = Gamepad::default();
+        g.digital_mut().press(B::South);
+        reader.read(&[(e, &g)]);
+        g.analog_mut().set(A::LeftStickY, 0.9);
+        assert_eq!(pad_down(&reader.read(&[(e, &g)])), ["south", "stick-up"]);
+        g.analog_mut().set(A::LeftStickY, -0.9);
+        assert_eq!(pad_down(&reader.read(&[(e, &g)])), ["south", "stick-down"]);
     }
 
     #[test]
