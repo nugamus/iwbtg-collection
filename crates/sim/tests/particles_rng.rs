@@ -223,3 +223,116 @@ mod n10 {
         );
     }
 }
+
+/// The particle state in `World` and its tick slot (#764).
+mod world {
+    use crate::wp1_support::*;
+
+    use iwbtg_sim::def::RoomId;
+    use iwbtg_sim::events::{ProbeAct, ProbeOn, ProbeStep};
+    use iwbtg_sim::hash::state_hash;
+    use iwbtg_sim::input::InputFrame;
+    use iwbtg_sim::particles::{PartRange, PartType, Particles, Region, RegionDistr, RegionShape};
+    use iwbtg_sim::rng::Rng;
+    use iwbtg_sim::room::RoomRequest;
+
+    /// Two systems: a linear rectangle stream of 2 and an invgaussian ellipse stream of -3, of a
+    /// type with three random ranges.
+    fn particles() -> Particles {
+        let mut p = Particles::default();
+        let ty = p.add_type(PartType {
+            size: PartRange::new(1.0, 2.0),
+            speed: PartRange::new(1.0, 3.0),
+            direction: PartRange::new(0.0, 360.0),
+            life: PartRange::fixed(40.0),
+            ..PartType::default()
+        });
+        for (distr, shape, n) in [
+            (RegionDistr::Linear, RegionShape::Rectangle, 2),
+            (RegionDistr::InvGaussian, RegionShape::Ellipse, -3),
+        ] {
+            let s = p.add_system();
+            let e = p.add_emitter(s, Region { shape, distr }).unwrap();
+            p.stream(e, ty, n).unwrap();
+        }
+        p
+    }
+
+    /// A world with [`particles`] and one probe that logs the RNG seed in End Step and Draw
+    /// (and, with `request`, requests a room change in Step).
+    fn fixture(on: bool, request: bool) -> Fx {
+        let mut b = builder();
+        let k = probe_kind(&mut b, "a");
+        let mut fx = Fx::new(b.build().unwrap());
+        fx.rules.num.particles_draw_rng = on;
+        fx.w.particles = particles();
+        let mut st = p("A")
+            .with(ProbeStep::on(ProbeOn::EndStep, ProbeAct::LogSeed))
+            .with(ProbeStep::on(ProbeOn::Late, ProbeAct::LogSeed));
+        if request {
+            st = st.with(ProbeStep::on(
+                ProbeOn::Step,
+                ProbeAct::RequestRoom(RoomRequest::Goto(RoomId(1))),
+            ));
+        }
+        fx.probe(k, 0.0, 0.0, st);
+        fx
+    }
+
+    fn seeds(log: &str) -> Vec<u32> {
+        log.split(' ')
+            .filter_map(|t| t.strip_prefix('r'))
+            .map(|s| s.parse().expect("seed"))
+            .collect()
+    }
+
+    /// Stepping the world runs `Particles::update` once per tick, between End Step and Draw: the
+    /// seed logged in Draw is the End Step seed after the model's update, every tick.
+    #[test]
+    fn world_update_runs_after_end_step_and_matches_the_model() {
+        let mut fx = fixture(true, false);
+        let mut model = particles();
+        let mut rng = fx.w.rng.clone();
+        let mut expected = Vec::new();
+        for _ in 0..20 {
+            expected.push(rng.seed);
+            model.update(&mut rng).unwrap();
+            expected.push(rng.seed);
+        }
+        fx.idle(20);
+        assert_eq!(seeds(&fx.log()), expected);
+        assert_eq!(fx.w.rng, rng);
+        assert_eq!(fx.w.particles, model);
+        assert_ne!(expected[0], expected[1], "the update draws");
+    }
+
+    /// With `particles_draw_rng` off (engine_rev 0), nothing draws.
+    #[test]
+    fn switch_off_draws_nothing() {
+        let mut fx = fixture(false, false);
+        fx.idle(5);
+        assert_eq!(fx.w.rng, Rng::new(1));
+        assert_eq!(fx.w.particles, particles());
+    }
+
+    /// A room request in Step ends the tick before End Step, so the update does not run on that
+    /// tick (OPEN, research#170); the next tick's does.
+    #[test]
+    fn room_request_tick_skips_the_update() {
+        let mut fx = fixture(true, true);
+        fx.tick(InputFrame::EMPTY);
+        assert_eq!(fx.w.room, RoomId(1));
+        assert_eq!(fx.w.rng, Rng::new(1), "no draws on the request tick");
+        assert!(seeds(&fx.log()).is_empty());
+    }
+
+    /// The particle state is hashed.
+    #[test]
+    fn particle_state_is_hashed() {
+        let a = fixture(true, false);
+        let mut b = fixture(true, false);
+        assert_eq!(state_hash(&a.w), state_hash(&b.w));
+        b.w.particles.add_system();
+        assert_ne!(state_hash(&a.w), state_hash(&b.w));
+    }
+}

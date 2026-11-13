@@ -1095,6 +1095,8 @@ pub enum ProbeAct {
     Move(Real, Real),
     /// Set Time Line at a position.
     StartTimeline(TimelineId, Real),
+    /// Append `r<seed> ` (the gameplay RNG state) to the log global; draws nothing.
+    LogSeed,
 }
 
 /// One probe reaction: an event, an optional tick filter, an action.
@@ -1409,6 +1411,12 @@ fn probe_act(
             let def = ctx.def;
             if let Some(inst) = ctx.w.get_mut_unmoved(me) {
                 timeline::start_with_def(&mut inst.timeline, def, tl, pos)?;
+            }
+        }
+        ProbeAct::LogSeed => {
+            if let Some(var) = log {
+                let text = format!("r{} ", ctx.w.rng.seed);
+                append_log(ctx.w, var, &text);
             }
         }
     }
