@@ -89,6 +89,10 @@ pub const STATE_FNS: &[&str] = &[
     "destroy",
     "emit",
     "kill_kid",
+    "room_goto",
+    "room_goto_next",
+    "room_goto_previous",
+    "room_restart",
     "play_sound",
     "play_music",
     "stop_music",
@@ -205,6 +209,7 @@ pub const NAME_ARGS: &[(&str, usize, Names)] = &[
     ("instances", 0, Names::Kind),
     ("play_sound", 0, Names::Sound),
     ("play_music", 0, Names::Sound),
+    ("room_goto", 0, Names::Room),
 ];
 
 /// Whether `name` is something `what` in the package.
