@@ -24,6 +24,8 @@ pub struct Collector {
     quick_retry: bool,
     /// A skip-cutscene input went down since `take_skip` (skip.rs). A client key as well.
     skip: bool,
+    /// Frame-advance presses since `take_advance` (practice.rs). A client key as well.
+    advance: u32,
 }
 
 impl Collector {
@@ -38,6 +40,7 @@ impl Collector {
             last: InputFrame::EMPTY,
             quick_retry: false,
             skip: false,
+            advance: 0,
         }
     }
 
@@ -51,11 +54,17 @@ impl Collector {
         std::mem::take(&mut self.skip)
     }
 
+    /// How many frame-advance keys or controller inputs went down since the last call.
+    pub fn take_advance(&mut self) -> u32 {
+        std::mem::take(&mut self.advance)
+    }
+
     /// Notes a client key's input going down.
     fn client_press(&mut self, key: Option<ClientKey>) {
         match key {
             Some(ClientKey::QuickRetry) => self.quick_retry = true,
             Some(ClientKey::SkipCutscene) => self.skip = true,
+            Some(ClientKey::FrameAdvance) => self.advance = self.advance.saturating_add(1),
             None => {}
         }
     }
@@ -529,6 +538,20 @@ mod tests {
         assert!(c.take_quick_retry());
         c.press(vk::Z);
         assert!(!c.take_quick_retry());
+    }
+
+    /// The frame-advance key counts its presses and, like quick-retry, never reaches a frame.
+    #[test]
+    fn the_frame_advance_key_counts_presses_and_never_reaches_an_input_frame() {
+        let mut c = Collector::new(Bindings::default());
+        assert_eq!(c.take_advance(), 0);
+        c.press(b'F');
+        c.release(b'F');
+        c.press(b'F');
+        assert_eq!(c.take_frame(), InputFrame::EMPTY);
+        assert_eq!(c.take_advance(), 2, "one step per press");
+        assert_eq!(c.take_advance(), 0);
+        assert!(!c.take_skip() && !c.take_quick_retry());
     }
 
     /// The skip-cutscene key asks for a skip and, like quick-retry, never reaches a frame.
