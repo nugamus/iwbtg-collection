@@ -6,6 +6,9 @@
 //! Drawing order (research CLONE_SPEC, Rooms: drawing order): the colour, then the background
 //! layers that are not foregrounds in list order, then instances and tiles by depth, then the
 //! foreground layers in list order.
+//!
+//! No background (`--mods NB`, visual.rs) puts [`PlainBackdrop`]'s colour in place of the
+//! room's colour and leaves out the background layers that are not foregrounds.
 
 use std::collections::HashMap;
 
@@ -19,6 +22,7 @@ use iwbtg_sim::def::RoomId;
 
 use crate::package::decode_png;
 use crate::view::{Game, RoomSize};
+use crate::visual::PlainBackdrop;
 
 /// Where tiles sit in depth: GM draws a deeper layer first. Clamped inside the camera's range;
 /// the backgrounds are behind every layer and the foregrounds in front of all of them.
@@ -95,6 +99,11 @@ fn image(
             Some((images.add(image), Vec2::new(s.size.0 as f32, s.size.1 as f32)))
         })
         .clone()
+}
+
+/// Whether layer `bg` is drawn: No background leaves out every layer behind the room.
+fn shows(bg: &Background, plain: Option<&PlainBackdrop>) -> bool {
+    plain.is_none() || bg.foreground
 }
 
 /// One piece of a background along one axis: room pixels `at .. at + len` show image pixels
@@ -217,6 +226,10 @@ fn spawn_background(
 }
 
 /// Rebuilds the art when the sim's room changes.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "a Bevy system: each is one resource it reads"
+)]
 pub fn sync_room_art(
     mut commands: Commands,
     game: NonSend<Game>,
@@ -225,7 +238,9 @@ pub fn sync_room_art(
     mut images: ResMut<Assets<Image>>,
     mut cache: ResMut<ArtImages>,
     mut shown: ResMut<ShownArt>,
+    plain: Option<Res<PlainBackdrop>>,
 ) {
+    let plain = plain.as_deref();
     let room = game.sim.world().room;
     let tick = game.sim.world().tick;
     // A retry starts a new sim in the same room with the tick back at its start.
@@ -249,11 +264,15 @@ pub fn sync_room_art(
     let tiles = load_tiles(&files.0, &def.name).unwrap_or_default();
     let size = room_size.0;
     let mut spawned = Vec::new();
-    if let Some([r, g, b]) = art.color {
+    let color = match plain {
+        Some(p) => Some(p.0),
+        None => art.color.map(|[r, g, b]| Color::srgb_u8(r, g, b)),
+    };
+    if let Some(color) = color {
         spawned.push(
             commands
                 .spawn((
-                    Sprite::from_color(Color::srgb_u8(r, g, b), size),
+                    Sprite::from_color(color, size),
                     Transform::from_xyz(0.0, 0.0, COLOR_Z),
                 ))
                 .id(),
@@ -264,6 +283,9 @@ pub fn sync_room_art(
         .iter()
         .enumerate()
         .map(|(n, bg)| {
+            if !shows(bg, plain) {
+                return Vec::new();
+            }
             let img = image(&mut cache, &files.0, &mut images, &bg.image);
             spawn_background(&mut commands, bg, n, img.as_ref(), size, 0)
         })
@@ -355,6 +377,10 @@ pub(crate) fn still(
 }
 
 /// Moves the scrolling background layers once per tick: each one is rebuilt where it is now.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "a Bevy system: each is one resource it reads"
+)]
 pub fn scroll_backgrounds(
     mut commands: Commands,
     game: NonSend<Game>,
@@ -363,7 +389,9 @@ pub fn scroll_backgrounds(
     mut images: ResMut<Assets<Image>>,
     mut cache: ResMut<ArtImages>,
     mut shown: ResMut<ShownArt>,
+    plain: Option<Res<PlainBackdrop>>,
 ) {
+    let plain = plain.as_deref();
     let tick = game.sim.world().tick;
     if tick == shown.placed_tick || shown.room.is_none() {
         return;
@@ -372,7 +400,7 @@ pub fn scroll_backgrounds(
     let ticks = tick.saturating_sub(shown.start_tick);
     let shown = &mut *shown;
     for (n, bg) in shown.art.backgrounds.iter().enumerate() {
-        if bg.speed == (0.0, 0.0) {
+        if bg.speed == (0.0, 0.0) || !shows(bg, plain) {
             continue;
         }
         for e in shown.backgrounds[n].drain(..) {
@@ -386,6 +414,19 @@ pub fn scroll_backgrounds(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn no_background_keeps_only_the_foreground_layers() {
+        let behind = Background::new("sky", 0..3);
+        let front = Background {
+            foreground: true,
+            ..Background::new("stone", 0..5)
+        };
+        let plain = PlainBackdrop(crate::visual::PLAIN);
+        assert!(shows(&behind, None) && shows(&front, None));
+        assert!(!shows(&behind, Some(&plain)));
+        assert!(shows(&front, Some(&plain)));
+    }
 
     #[test]
     fn deeper_layers_are_farther_back_and_never_past_the_backgrounds() {
