@@ -8,8 +8,9 @@
 //!   spike shows its triangle. Invisible hazards are drawn too. A mask's picture is cached by
 //!   its shape, scale and angle, so a room of spikes builds one image.
 //! - No background draws a plain grey backdrop instead of the room's background colour and
-//!   background layers (art.rs reads [`PlainBackdrop`]). Tiles, instances and foreground layers
-//!   stay.
+//!   background layers (art.rs reads [`PlainBackdrop`]); the HUD backdrop around the game is that
+//!   grey too when it would show the room's background (screen.rs `plain_art`; package key art
+//!   stays). Tiles, instances and foreground layers stay.
 
 use std::collections::{BTreeMap, HashMap};
 
