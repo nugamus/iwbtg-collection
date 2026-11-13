@@ -11,6 +11,9 @@
 //! - `pr-body [--issue N]`: prints a PR body for this branch: Closes, the commits, the docs it
 //!   changed, and the User check from the last `check`.
 //!
+//! - `doctor`: checks the machine's tools against the repo; today the installed `wasm-bindgen` CLI
+//!   against the `wasm-bindgen` version in `Cargo.lock` (#723).
+//!
 //! Standard library only; it shells out to cargo and git.
 
 use std::collections::BTreeSet;
@@ -39,7 +42,10 @@ fn main() -> ExitCode {
         Some("repin") => repin(&root),
         Some("regen") => regen(&root),
         Some("pr-body") => pr_body(&root, flag_value(&args, "--issue")),
-        _ => Err("usage: cargo xtask <check [--all] | repin | regen | pr-body [--issue N]>".to_string()),
+        Some("doctor") => doctor(&root),
+        _ => Err(
+            "usage: cargo xtask <check [--all] | repin | regen | pr-body [--issue N] | doctor>".to_string(),
+        ),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -445,9 +451,88 @@ fn pr_body(root: &Path, issue: Option<String>) -> Result<(), String> {
     Ok(())
 }
 
+/// The version of the `[[package]]` named `name` in a `Cargo.lock`'s text.
+fn lock_version<'a>(lock: &'a str, name: &str) -> Option<&'a str> {
+    let wanted = format!("name = \"{name}\"");
+    let mut lines = lock.lines().map(str::trim);
+    while let Some(line) = lines.next() {
+        if line == wanted {
+            let version = lines.next()?.strip_prefix("version = \"")?;
+            return version.strip_suffix('"');
+        }
+    }
+    None
+}
+
+/// The version in the output of `wasm-bindgen --version` (`wasm-bindgen 0.2.120`).
+fn cli_version(output: &str) -> Option<&str> {
+    output.split_whitespace().nth(1)
+}
+
+/// What to tell the user about the CLI, or Ok when it matches the lock.
+fn wasm_bindgen_problem(lock: &str, installed: Option<&str>) -> Result<(), String> {
+    let want = lock_version(lock, "wasm-bindgen").ok_or("Cargo.lock has no wasm-bindgen package")?;
+    let fix = format!("cargo install -f wasm-bindgen-cli --version {want} --locked");
+    match installed.and_then(cli_version) {
+        Some(have) if have == want => Ok(()),
+        Some(have) => Err(format!(
+            "wasm-bindgen CLI is {have}, Cargo.lock has {want}; run: {fix}"
+        )),
+        None => Err(format!(
+            "wasm-bindgen CLI is missing or unreadable; Cargo.lock has {want}; run: {fix}"
+        )),
+    }
+}
+
+/// `doctor`: machine checks against the repo. Fails when one does.
+fn doctor(root: &Path) -> Result<(), String> {
+    let lock = std::fs::read_to_string(root.join("Cargo.lock")).map_err(|e| format!("Cargo.lock: {e}"))?;
+    let installed = output(root, "wasm-bindgen", &["--version"], &[])
+        .ok()
+        .filter(|(ok, _)| *ok)
+        .map(|(_, text)| text);
+    match wasm_bindgen_problem(&lock, installed.as_deref()) {
+        Ok(()) => {
+            println!("ok: wasm-bindgen CLI matches Cargo.lock");
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const LOCK: &str = "[[package]]
+name = \"wasm-bindgen-macro\"
+version = \"0.2.129\"
+
+[[package]]
+name = \"wasm-bindgen\"
+version = \"0.2.129\"
+source = \"x\"
+";
+
+    #[test]
+    fn the_lock_entry_is_found_by_exact_name() {
+        assert_eq!(lock_version(LOCK, "wasm-bindgen"), Some("0.2.129"));
+        assert_eq!(lock_version(LOCK, "nope"), None);
+        let only_macro = "[[package]]
+name = \"wasm-bindgen-macro\"
+version = \"1.0.0\"
+";
+        assert_eq!(lock_version(only_macro, "wasm-bindgen"), None);
+    }
+
+    #[test]
+    fn a_wasm_bindgen_mismatch_or_missing_cli_prints_the_install_command() {
+        assert_eq!(wasm_bindgen_problem(LOCK, Some("wasm-bindgen 0.2.129\n")), Ok(()));
+        let fix = "cargo install -f wasm-bindgen-cli --version 0.2.129 --locked";
+        let old = wasm_bindgen_problem(LOCK, Some("wasm-bindgen 0.2.120\n")).unwrap_err();
+        assert!(old.contains("0.2.120") && old.ends_with(fix), "{old}");
+        assert!(wasm_bindgen_problem(LOCK, None).unwrap_err().ends_with(fix));
+    }
 
     #[test]
     fn a_sim_change_tests_the_sim_and_checks_what_depends_on_it() {
