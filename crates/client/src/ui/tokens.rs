@@ -97,6 +97,11 @@ pub const RULE_STRONG: Color = Color::srgb_u8(0x41, 0x42, 0x48);
 pub const AXIS: Color = Color::srgb_u8(0x37, 0x39, 0x3e);
 pub const BAR: Color = Color::srgb_u8(0x68, 0x69, 0x6d);
 pub const BAR_PEAK: Color = Color::srgb_u8(0xda, 0xdb, 0xdc);
+/// The results heatmap's dots: `rgba(255,94,77,a)`, a warmer red than [`BEHIND`] (#705).
+pub const HEAT: Color = Color::srgb_u8(0xff, 0x5e, 0x4d);
+/// The heatmap's room picture: `filter: saturate(.4) brightness(.7)` (`ui::filter`).
+pub const HEAT_ROOM_SATURATE: f32 = 0.4;
+pub const HEAT_ROOM_BRIGHTNESS: f32 = 0.7;
 
 /// Bevy's alpha for a black overlay at the artboard's CSS alpha `a` (#627). The browser blends
 /// `rgba(...)` in sRGB, Bevy in linear light, where `a` would leave `(1 - a)^(1/2.2)` of the sRGB
@@ -221,6 +226,7 @@ mod tests {
         assert_eq!(GROUND.to_srgba().to_hex(), "#0B0D14");
         assert_eq!(ACCENT.to_srgba().to_hex(), "#FF3D55");
         assert_eq!(STAR_RAMP[5].1.to_srgba().to_hex(), "#FF6070");
+        assert_eq!(HEAT.to_srgba().to_hex(), "#FF5E4D");
     }
 
     /// Blends `top` over `under` in linear light, as Bevy does, and returns the sRGB result.

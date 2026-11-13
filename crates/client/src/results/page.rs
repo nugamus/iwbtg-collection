@@ -8,6 +8,7 @@
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::text::LineHeight;
+use bevy::ui_render::prelude::MaterialNode;
 
 use super::{Action, Heat, Stage, Summary, bar_label};
 use crate::card::{self, Variant};
@@ -15,6 +16,7 @@ use crate::hud::layout::Density;
 use crate::hud::leaderboard::{self, Live};
 use crate::pause::FRUIT;
 use crate::stats::fmt_ticks;
+use crate::ui::filter::FilterMaterial;
 use crate::ui::fonts::Type;
 use crate::ui::shape::Shape;
 use crate::ui::tokens;
@@ -23,6 +25,19 @@ use crate::ui::widgets::{ButtonKind, button_off, button_with, sheared, text, unr
 /// A splits row: hovering or clicking it shows that stage's heatmap.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StageRow(pub usize);
+
+/// Behind splits row `.0`: lit ([`tokens::ROW_PAST`]) while the heatmap shows that stage. Not in
+/// the artboard, which has no design for it (#705); ours, cheap to undo.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RowLight(pub usize);
+
+/// At the left of splits row `.0`: the accent's selection mark while that row is the clicked one
+/// (#705, ours as well).
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RowMark(pub usize);
+
+/// How far the row light reaches past the table on each side, so the text does not touch its edge.
+const ROW_LIGHT_PAD: f32 = 10.0;
 
 /// The heatmap's place on the page; `results::heat` fills it for the stage shown (`drawn`).
 #[derive(Component, Default)]
@@ -34,6 +49,8 @@ pub struct HeatPanel {
 const HEAT_W: f32 = 224.0;
 /// The tallest the picture gets, for rooms taller than they are wide.
 const HEAT_MAX_H: f32 = 224.0;
+/// The picture's corner radius (`6px`); the row light uses it too.
+const HEAT_RADIUS: f32 = 6.0;
 
 /// The two layouts of the artboard.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -447,6 +464,35 @@ fn table_row(
     }
     if let Some(tag) = tag {
         row.insert((tag, Hovered::default()));
+        // Behind the cells: the light and the mark `results::light_rows` turns on.
+        row.with_children(|c| {
+            c.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(-ROW_LIGHT_PAD),
+                    right: Val::Px(-ROW_LIGHT_PAD),
+                    top: Val::Px(0.0),
+                    bottom: Val::Px(0.0),
+                    border_radius: BorderRadius::all(Val::Px(HEAT_RADIUS)),
+                    ..default()
+                },
+                BackgroundColor(Color::NONE),
+                RowLight(tag.0),
+            ));
+            c.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(-ROW_LIGHT_PAD),
+                    top: Val::Percent(25.0),
+                    width: Val::Px(3.0),
+                    height: Val::Percent(50.0),
+                    border_radius: BorderRadius::all(Val::Px(1.5)),
+                    ..default()
+                },
+                BackgroundColor(Color::NONE),
+                RowMark(tag.0),
+            ));
+        });
     }
     row.with_children(|c| {
         for (i, cell) in cells.into_iter().enumerate() {
@@ -798,7 +844,7 @@ fn timeline(c: &mut ChildSpawner, s: &Summary, d: &Dims) {
 pub fn heat_contents(
     stage: Option<&Stage>,
     heat: Option<&Heat>,
-    picture: Option<(Handle<Image>, Vec2)>,
+    picture: Option<(MaterialNode<FilterMaterial>, Vec2)>,
 ) -> impl Bundle + use<> {
     let label = match stage {
         Some(st) => format!("Where you died · {}", st.name),
@@ -823,7 +869,7 @@ fn heat_parts(
     label: &str,
     body: &str,
     heat: Option<&Heat>,
-    picture: Option<(Handle<Image>, Vec2)>,
+    picture: Option<(MaterialNode<FilterMaterial>, Vec2)>,
 ) {
     if let (Some(h), Some((image, room))) = (heat, picture) {
         let scale = HEAT_W / room.x.max(1.0);
@@ -833,29 +879,27 @@ fn heat_parts(
             height: Val::Px(height),
             flex_shrink: 0.0,
             overflow: Overflow::clip(),
-            border_radius: BorderRadius::all(Val::Px(6.0)),
+            border_radius: BorderRadius::all(Val::Px(HEAT_RADIUS)),
             ..default()
         })
         .with_children(|c| {
-            // `filter: saturate(.4) brightness(.7)`: the muted ink tints it darker and cooler.
+            // `filter: saturate(.4) brightness(.7)`, drawn by the kit's filter (`results::heat`).
             c.spawn((
                 Node {
                     position_type: PositionType::Absolute,
                     width: Val::Px(room.x * scale),
                     height: Val::Px(room.y * scale),
+                    // The clip above is square; the filter rounds the picture itself.
+                    border_radius: BorderRadius::all(Val::Px(HEAT_RADIUS)),
                     ..default()
                 },
-                ImageNode {
-                    image,
-                    color: tokens::MUTED,
-                    ..default()
-                },
+                image,
             ));
             for dot in &h.dots {
                 // The artboard's dots: 19 to 40 px across, alpha .3 to .55.
                 let r = 18.0 + 22.0 * dot.weight;
                 // Red over the dimmed room, blended as the browser does (#627).
-                let color = tokens::over(tokens::BEHIND, 0.3 + 0.25 * dot.weight, tokens::GROUND);
+                let color = tokens::over(tokens::HEAT, 0.3 + 0.25 * dot.weight, tokens::GROUND);
                 c.spawn((
                     Node {
                         position_type: PositionType::Absolute,
