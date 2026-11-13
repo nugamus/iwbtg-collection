@@ -469,7 +469,7 @@ fn cli_version(output: &str) -> Option<&str> {
     output.split_whitespace().nth(1)
 }
 
-/// What to tell the user about the CLI, or None when it matches the lock.
+/// What to tell the user about the CLI, or Ok when it matches the lock.
 fn wasm_bindgen_problem(lock: &str, installed: Option<&str>) -> Result<(), String> {
     let want = lock_version(lock, "wasm-bindgen").ok_or("Cargo.lock has no wasm-bindgen package")?;
     let fix = format!("cargo install -f wasm-bindgen-cli --version {want} --locked");
@@ -527,25 +527,9 @@ version = \"1.0.0\"
 
     #[test]
     fn a_wasm_bindgen_mismatch_or_missing_cli_prints_the_install_command() {
-        assert_eq!(
-            wasm_bindgen_problem(
-                LOCK,
-                Some(
-                    "wasm-bindgen 0.2.129
-"
-                )
-            ),
-            Ok(())
-        );
+        assert_eq!(wasm_bindgen_problem(LOCK, Some("wasm-bindgen 0.2.129\n")), Ok(()));
         let fix = "cargo install -f wasm-bindgen-cli --version 0.2.129 --locked";
-        let old = wasm_bindgen_problem(
-            LOCK,
-            Some(
-                "wasm-bindgen 0.2.120
-",
-            ),
-        )
-        .unwrap_err();
+        let old = wasm_bindgen_problem(LOCK, Some("wasm-bindgen 0.2.120\n")).unwrap_err();
         assert!(old.contains("0.2.120") && old.ends_with(fix), "{old}");
         assert!(wasm_bindgen_problem(LOCK, None).unwrap_err().ends_with(fix));
     }
