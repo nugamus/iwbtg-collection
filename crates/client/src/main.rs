@@ -35,6 +35,7 @@ mod stats;
 mod storage;
 mod ui;
 mod view;
+mod visual;
 
 use std::process::ExitCode;
 
@@ -156,7 +157,7 @@ fn main() -> ExitCode {
             savefile::SavePlugin,
             art::ArtPlugin(pkg.files.clone()),
             audio::AudioPlugin::new(&audio, &pkg.files),
-            mods::ModsPlugin(run_mods),
+            (mods::ModsPlugin(run_mods), visual::VisualPlugin(run_mods)),
             practice::PracticePlugin {
                 mods: run_mods,
                 slow_speed,
