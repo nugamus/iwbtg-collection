@@ -1895,6 +1895,54 @@ fn a_room_only_another_unreachable_room_leads_to_still_warns() {
     assert_eq!(w.len(), 1, "{w:?}");
 }
 
+// ---- #737: kinds that tie for a collision handler ----------------------------------------------
+
+fn tie_warnings(collides_with: &str) -> Vec<String> {
+    let files = scripted_package();
+    let mut f: Vec<(String, Vec<u8>)> = files.iter().map(|(p, b)| (p.to_owned(), b.to_vec())).collect();
+    set(
+        &mut f,
+        "objects/mover.toml",
+        format!("script = \"mover\"\nsprite = \"block\"\ncollides_with = {collides_with}\n"),
+    );
+    let mut p = PackageFiles::new();
+    for (path, bytes) in f {
+        p.insert(path, bytes).unwrap();
+    }
+    let report = load_report(&p, STRICT);
+    assert!(report.ok(), "a warning, not an error:\n{}", render(&report));
+    report
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == Severity::Warning && d.message.contains("equally specific"))
+        .map(ToString::to_string)
+        .collect()
+}
+
+#[test]
+fn the_basic_package_has_no_handler_ties() {
+    assert!(tie_warnings("[\"kid_bullet\"]").is_empty());
+}
+
+#[test]
+fn two_handler_classes_of_one_kind_matching_one_other_warn() {
+    // `@boss` is `killer | boss_part | solidblock`: `killer` and `boss_part` both rank 0.
+    let w = tie_warnings("[\"killer\", \"boss_part\"]");
+    assert_eq!(w.len(), 1, "{w:?}");
+    assert!(w[0].starts_with("objects/boss.toml:"), "{w:?}");
+    assert!(
+        w[0].contains("kind `@boss`")
+            && w[0].contains("of `@mover`, `killer` and `boss_part`: only `killer` runs"),
+        "{w:?}"
+    );
+}
+
+#[test]
+fn a_block_parent_handler_is_less_specific_and_does_not_tie() {
+    // `solidblock` ranks after `killer` (ClassMask::generality), so `killer` wins outright.
+    assert!(tie_warnings("[\"solidblock\", \"killer\"]").is_empty());
+}
+
 // ---- #32: stripped mode markers ---------------------------------------------------------------
 
 const STRIPPED: &str = r#"
