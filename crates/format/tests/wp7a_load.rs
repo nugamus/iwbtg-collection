@@ -1818,6 +1818,83 @@ fn renaming_a_map_keeps_the_gameplay_hash() {
     );
 }
 
+// ---- #504: timing rooms are reachable ----------------------------------------------------------
+
+const LOST_END: &str = r#"
+[[maps]]
+id = "any"
+name = "Any%"
+
+[[maps]]
+id = "lost"
+name = "Lost"
+end = { trigger = "enter_room", room = "lost" }
+"#;
+
+fn reach_warnings(edit: impl FnOnce(&mut Vec<(String, Vec<u8>)>)) -> Vec<String> {
+    let files = package(|f| {
+        set(f, "game.toml", manifest(ORDER, LOST_END));
+        f.push(("rooms/lost.toml".into(), b"size = [800, 608]\n".to_vec()));
+        edit(f);
+    });
+    let report = load_report(&files, STRICT);
+    assert!(report.ok(), "a warning, not an error:\n{}", render(&report));
+    report
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == Severity::Warning && d.message.contains("cannot be reached"))
+        .map(ToString::to_string)
+        .collect()
+}
+
+#[test]
+fn a_map_end_room_with_no_way_in_warns() {
+    let w = reach_warnings(|_| {});
+    assert_eq!(w.len(), 1, "{w:?}");
+    assert!(w[0].starts_with("game.toml:"), "{w:?}");
+    assert!(w[0].contains("`lost`"), "{w:?}");
+}
+
+#[test]
+fn a_warp_into_the_room_makes_it_reachable() {
+    let stage1 = STAGE1.replace("room_to = \"title\"", "room_to = \"lost\"");
+    assert!(reach_warnings(|f| set(f, "rooms/stage1.toml", stage1)).is_empty());
+}
+
+#[test]
+fn a_scripted_kind_naming_the_room_in_text_makes_it_reachable() {
+    // A converter's `@warp_1` with the original's `roomTo`: script params are untyped.
+    let stage1 = STAGE1.replace(
+        "  { kind = \"warp\"",
+        "  { kind = \"@door\", x = 0, y = 0, roomTo = \"lost\" },\n  { kind = \"warp\"",
+    );
+    let order = ORDER.replace("\"@boss\",", "\"@boss\", \"@door\",");
+    assert!(
+        reach_warnings(|f| {
+            set(f, "game.toml", manifest(&order, LOST_END));
+            set(f, "rooms/stage1.toml", stage1);
+            f.push(("objects/door.toml".into(), b"script = \"door\"\n".to_vec()));
+            f.push(("scripts/door.rhai".into(), b"fn create() {}\n".to_vec()));
+        })
+        .is_empty()
+    );
+}
+
+#[test]
+fn a_ranked_start_or_cut_room_makes_it_reachable() {
+    let start = format!("{LOST_END}\n[stripped]\nstart = {{ room = \"lost\" }}\n");
+    assert!(reach_warnings(|f| set(f, "game.toml", manifest(ORDER, &start))).is_empty());
+    let cut = format!("{LOST_END}\n[stripped.cut]\nrooms = [{{ room = \"title\", to = \"lost\" }}]\n");
+    assert!(reach_warnings(|f| set(f, "game.toml", manifest(ORDER, &cut))).is_empty());
+}
+
+#[test]
+fn a_room_only_another_unreachable_room_leads_to_still_warns() {
+    let lost = "size = [800, 608]\ninstances = [{ kind = \"warp\", x = 0, y = 0, room_to = \"lost\" }]\n";
+    let w = reach_warnings(|f| f.push(("rooms/island.toml".into(), lost.as_bytes().to_vec())));
+    assert_eq!(w.len(), 1, "{w:?}");
+}
+
 // ---- #32: stripped mode markers ---------------------------------------------------------------
 
 const STRIPPED: &str = r#"
