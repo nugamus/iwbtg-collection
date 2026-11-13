@@ -87,7 +87,7 @@ mod tests {
         assert_eq!(r.tick.new_instances_join_phase, tick::JoinPhase::LaterInOrder);
         assert_eq!(r.num.compare, num::CompareMode::Epsilon(Real::new(1e-13)));
         assert_eq!(r.num.truth, num::Truth::GeHalf);
-        assert_eq!(r.collide.pair_order, collide::PairOrder::OtherRankThenId);
+        assert_eq!(r.collide.pair_order, collide::PairOrder::LowerRankFirst);
         assert!(r.collide.recheck_nonsolid);
         assert_eq!(r.room.max_chained_changes, 8);
         assert_eq!(r.sound.isplaying_latency, 0);
