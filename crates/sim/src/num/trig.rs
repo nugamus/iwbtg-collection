@@ -1,34 +1,41 @@
 //! Degree trigonometry for built-ins: GM8 motion, gravity and `lengthdir`.
 //!
-//! GM8 runs on the x87 FPU, whose FSIN and FCOS can differ from libm. The kid's gravity uses
+//! GM8 runs on the x87 FPU, whose FSIN and FCOS differ from libm in the last bits. The kid's gravity uses
 //! `gravity_direction` trig, and the drift this causes is a known trick. So [`dsin`] and
 //! [`dcos`] first look the angle up in [`TRIG_TABLE`], which holds exact bit patterns with a
 //! named source, and use libm for every other angle (docs/architecture.md, "Trig fidelity").
 //!
-//! M6 (UNKNOWN, CLONE_SPEC numbers and motion U6): x87 vs libm for the trig bits. Every table
+//! M6 (CLONE_SPEC numbers and motion U6): x87 vs libm for the trig bits. Every table
 //! entry equals libm on the radian value. The trace recorder is binary64 (Confirmed (recorder):
 //! `traces/little-runner/num-trig-a.csv`, ten aimed shots bit-identical to binary64 libm), and
 //! 180 and 270 degrees are not special-cased there (`traces/showdown/t-mot-03-a.csv`,
-//! `traces/kaenbyou/t-mot-04.csv`). What the x87 runner computes is OPEN; if it differs, only the
-//! table changes.
+//! `traces/kaenbyou/t-mot-04.csv`). The real runner uses x87 FCOS/FSIN at 53-bit precision: the
+//! standing kid's hspeed is -7.347638122934264e-17, not libm's -7.347880794884119e-17
+//! (`research/specs/engines/gm8/CLONE_SPEC.md`, Number handling, Confirmed (real runner);
+//! `research/docs/real-runner.md`). Decision (research#8): the table and libm keep the recorder's
+//! bits, because every golden is a recorder trace and the difference (about 2e-21) is far below
+//! the comparison tolerance. `atan2` and non-axis angles on the real runner are OPEN (research#154).
+//! If x87-exact bits are ever wanted, only the table and the `libm` calls change.
 //!
 //! M6 also covers a gap measured against the recorder's own traces: at about 3% of whole-degree
 //! angles our libm is one ulp off the recorded value (284 degrees in
 //! `traces/eat-the-rori-girl/t-mot-05-b.csv` frame 4027, 45 degrees in `t-mot-05-b.csv` frame
 //! 3802; the test `m6_recorder_gaps` pins them). Which bits to follow there is OPEN for the
-//! CLONE_SPEC; the sim keeps libm.
+//! CLONE_SPEC (the recorder; the real runner uses x87, see above); the sim keeps libm.
 
 use super::{Real, math};
 
 /// Degrees to radians factor, `PI / 180` rounded to f64. Rust's `f64::to_radians` uses the same
 /// constant. Multiplying by it differs from `x * PI / 180` for about a quarter of angles.
 ///
-/// OPEN (M6): confirm in CLONE_SPEC which form GM8 uses. The traced conversions fit this form.
+/// OPEN (M6): which form GM8 uses (the real runner's form is not measured). The traced
+/// conversions fit this form.
 pub const DEG_TO_RAD: f64 = core::f64::consts::PI / 180.0;
 
 /// Radians to degrees factor, `180 / PI` rounded to f64.
 ///
-/// OPEN (M6): confirm in CLONE_SPEC which form GM8 uses (`x * (180 / PI)` or `x * 180 / PI`).
+/// OPEN (M6): which form GM8 uses (`x * (180 / PI)` or `x * 180 / PI`; the real runner's form is
+/// not measured).
 /// `traces/little-runner/num-trig-a.csv` fits this form for all ten shots.
 pub const RAD_TO_DEG: f64 = 180.0 / core::f64::consts::PI;
 
@@ -124,7 +131,7 @@ pub fn darctan2(y: Real, x: Real) -> Real {
 ///
 /// The formula and the `< 0` normalization match the recorder's direction readback
 /// (`degrees(atan2(-v, h)) mod 360`, `traces/little-runner/num-trig-a.csv`); for the real runner
-/// they stay OPEN (M6).
+/// (x87 `atan2`) they stay OPEN (M6, research#154).
 pub fn point_direction(x1: Real, y1: Real, x2: Real, y2: Real) -> Real {
     let d = darctan2(y1 - y2, x2 - x1);
     if d.get() < 0.0 { d + Real::new(360.0) } else { d }
@@ -133,7 +140,7 @@ pub fn point_direction(x1: Real, y1: Real, x2: Real, y2: Real) -> Real {
 /// GML `point_distance`: `sqrt(dx * dx + dy * dy)`. Not `hypot`, which rounds differently.
 ///
 /// The recorder's speed readback uses this formula, not `hypot` (`traces/little-runner/num-trig-a.csv`
-/// shot 148718: `2.9999999999999996` where `hypot` gives `3.0`); the real runner is OPEN (M6).
+/// shot 148718: `2.9999999999999996` where `hypot` gives `3.0`); the real runner is OPEN (M6, research#154).
 pub fn point_distance(x1: Real, y1: Real, x2: Real, y2: Real) -> Real {
     let dx = x2 - x1;
     let dy = y2 - y1;

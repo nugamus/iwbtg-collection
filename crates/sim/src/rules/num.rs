@@ -13,7 +13,7 @@ use crate::num::Real;
 /// Rules for number handling.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct NumRules {
-    /// N1 (UNKNOWN for the real runner; code value from OpenGMK): `==`, `<` exact or with an
+    /// N1 (the real runner uses a tolerance too, its exact `t` is OPEN; code value from OpenGMK): `==`, `<` exact or with an
     /// epsilon. The recorder uses a tolerance `9e-14 < t <= 1e-13` (CLONE_SPEC numbers,
     /// `traces/little-trap/num-eps-slip-b.csv`, `-c.csv`; `traces/go-the-jun-g-world/num-eps-alpha.csv`),
     /// which the default `Epsilon(1e-13)` fits.
@@ -42,7 +42,8 @@ pub struct NumRules {
     /// `traces/machinary/tr-room-07-b.csv`, `-c.csv`). The default stays until research#100
     /// finds the rule.
     pub string_decimals: StrRound,
-    /// N3 (UNKNOWN): FPU precision; per game from `game.toml [engine]`.
+    /// N3 (Confirmed, real runner: x87 at 53-bit precision, so binary64; no fallback needed):
+    /// FPU precision; per game from `game.toml [engine]`.
     pub float_model: FloatModel,
     /// N10: particle systems draw from the gameplay RNG. Partly answered (recorder): rely room1's
     /// emitters draw 2 values most ticks (CLONE_SPEC numbers, num-rng-a.csv); the real runner is
