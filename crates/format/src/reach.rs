@@ -1,8 +1,8 @@
 //! Room reachability (docs/format/v0.md, Validation step 7; #504): which rooms a run can get to
 //! from where runs start, through the room references the package holds as data. The loader
 //! warns about a timing room outside this set. A warning, not an error: a room change the data
-//! does not show (a `room_goto` of a computed room, a script-created kind's next or previous)
-//! can still lead there.
+//! does not show (a `room_goto` of a computed room, the next or previous of a kind created only
+//! by a computed name or a spawner) can still lead there.
 //!
 //! **Roots**: `start_room`, `[engine].new_game_room`, the first room in room order and the boot
 //! room (`game_restart` and the reset go there), and every ranked start (`[stripped].start` and
@@ -18,9 +18,11 @@
 //! **Script room calls** (#731, `script::validate::room_calls`): a room placing or spawning a
 //! kind whose script passes a room literal to `room_goto` leads to that room; one whose kind's
 //! script calls `room_goto_next` or `room_goto_previous` leads to its neighbours in room order
-//! (room ids follow `room_order`). For a kind no room places or spawns, its `room_goto` literals
-//! are roots, while its next and previous calls add nothing: the room it runs in is not known
-//! from the data.
+//! (room ids follow `room_order`). A kind whose name a present kind's script passes as a literal
+//! to `instance_create` is present in that room too (#751), transitively, so its room calls
+//! count there as well. For a kind no room places or spawns, its `room_goto` literals are roots,
+//! while its next and previous calls add nothing past the rooms a creating kind is present in:
+//! the room it runs in is not known from the data.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -36,7 +38,18 @@ pub fn reachable(def: &GameDef) -> BTreeSet<RoomId> {
         .filter_map(|(i, r)| Some((r.name.as_str(), RoomId(u32::try_from(i).ok()?))))
         .collect();
     let calls = room_calls(def);
-    let rooms = Rooms { def, names, calls };
+    let kinds: BTreeMap<&str, KindId> = def
+        .kinds
+        .iter()
+        .enumerate()
+        .filter_map(|(i, k)| Some((k.name.as_str(), KindId(u32::try_from(i).ok()?))))
+        .collect();
+    let rooms = Rooms {
+        def,
+        names,
+        calls,
+        kinds,
+    };
     let mut edges: BTreeMap<RoomId, BTreeSet<RoomId>> = BTreeMap::new();
     let mut roots: BTreeSet<RoomId> = BTreeSet::new();
     roots.insert(def.start_room);
@@ -66,7 +79,7 @@ pub fn reachable(def: &GameDef) -> BTreeSet<RoomId> {
         for a in &r.on_create {
             rooms.spawns(a, out, &mut here);
         }
-        for &k in &here {
+        for k in rooms.created(&here) {
             if let Some(c) = rooms.script_calls(k) {
                 out.extend(c.goto.iter().filter_map(|n| rooms.names.get(n.as_str()).copied()));
                 if c.next {
@@ -105,11 +118,13 @@ pub fn reachable(def: &GameDef) -> BTreeSet<RoomId> {
     seen
 }
 
-/// The package's rooms by name, to read script kinds' params, and its scripts' room calls.
+/// The package's rooms by name, to read script kinds' params, its scripts' room calls, and its
+/// kinds by name, to follow `instance_create` literals.
 struct Rooms<'d> {
     def: &'d GameDef,
     names: BTreeMap<&'d str, RoomId>,
     calls: Vec<RoomCalls>,
+    kinds: BTreeMap<&'d str, KindId>,
 }
 
 impl Rooms<'_> {
@@ -117,6 +132,26 @@ impl Rooms<'_> {
     fn script_calls(&self, kind: KindId) -> Option<&RoomCalls> {
         let k = self.def.kinds.get(kind.index()?)?;
         self.calls.get(k.script?.index()?)
+    }
+
+    /// `here` and every kind their scripts create by a literal name, transitively (#751): those
+    /// run in the same room. The kind a spawn takes for its params (`spike[dir=down]`, a kind
+    /// derived for classes) is a copy of the named one, script included, so the named kind's
+    /// calls stand for it.
+    fn created(&self, here: &BTreeSet<KindId>) -> BTreeSet<KindId> {
+        let mut all = here.clone();
+        let mut todo: Vec<KindId> = here.iter().copied().collect();
+        while let Some(k) = todo.pop() {
+            let Some(c) = self.script_calls(k) else { continue };
+            for name in &c.creates {
+                if let Some(&made) = self.kinds.get(name.as_str())
+                    && all.insert(made)
+                {
+                    todo.push(made);
+                }
+            }
+        }
+        all
     }
 
     fn spawns(&self, a: &RoomAction, out: &mut BTreeSet<RoomId>, used: &mut BTreeSet<KindId>) {
