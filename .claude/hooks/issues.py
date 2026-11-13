@@ -59,6 +59,8 @@ def main_ci(main):
                 continue
             what = f"{c['oid'][:7]} \"{c['messageHeadline']}\""
             states = [k.get("conclusion") or k.get("state") for k in checks]
+            if "CANCELLED" in states:  # superseded run: its ci-ok job reports FAILURE, but the run has no verdict (#741)
+                continue
             failed = [k for k, st in zip(checks, states) if st in RED]
             if failed:
                 url = re.sub(r"/job/\d+$", "", failed[0].get("detailsUrl") or failed[0].get("targetUrl") or "")
@@ -305,6 +307,9 @@ def test():
     assert "bbbbbbb" in red and line.startswith("Main CI: RED on aaaaaaa"), (red, line)
     assert ci(commit("b", run("x", "CANCELLED")), commit("a", run("x", "SUCCESS"), run("y", "SKIPPED"))) == ("", 'Main CI: green on aaaaaaa "PR a"')
     assert ci(commit("a", run("x", "CANCELLED")))[1].startswith("Main CI: no finished run")
+    # #741: a cancelled run's ci-ok job reports FAILURE; the commit has no verdict, so the older one decides.
+    assert ci(commit("b", run("windows-latest", "CANCELLED"), run("ci-ok", "FAILURE"), run("x", "SUCCESS")), commit("a", run("x", "SUCCESS"))) == ("", 'Main CI: green on aaaaaaa "PR a"')
+    assert ci(commit("b", run("windows-latest", "CANCELLED"), run("ci-ok", "FAILURE")))[0] == ""
     assert ci({"oid": "c" * 40, "messageHeadline": "no checks", "statusCheckRollup": None}, commit("a", run("x", "FAILURE")))[0].startswith("MAIN IS RED")
     assert main_ci(None) == ("", "Main CI: unknown (TypeError)")  # query field missing
     assert ci({"oid": 5, "messageHeadline": "x", "statusCheckRollup": {"contexts": {"nodes": [run("x", "SUCCESS")]}}}) == ("", "Main CI: unknown (TypeError)")
