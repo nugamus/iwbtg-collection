@@ -63,9 +63,7 @@ impl Family {
     fn names(self) -> &'static str {
         match self {
             Family::Barlow => "Barlow, 'Noto Sans Symbols 2', Inter, 'Noto Sans JP'",
-            Family::Condensed => {
-                "'Barlow Condensed', 'Noto Sans Symbols 2', Inter, 'Noto Sans JP'"
-            }
+            Family::Condensed => "'Barlow Condensed', 'Noto Sans Symbols 2', Inter, 'Noto Sans JP'",
             Family::Pixel => "'Pixelify Sans', 'Noto Sans Symbols 2', Inter, 'Noto Sans JP'",
         }
     }
@@ -221,11 +219,7 @@ mod tests {
                 );
             }
             for ch in ['←', '↑', '→', '↓'] {
-                assert_eq!(
-                    family_for(family, ch).as_deref(),
-                    Some("Inter"),
-                    "{ch:?}"
-                );
+                assert_eq!(family_for(family, ch).as_deref(), Some("Inter"), "{ch:?}");
             }
             for ch in ['★', '☆', '▾', '▸', '✓'] {
                 assert_eq!(
