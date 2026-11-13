@@ -107,7 +107,8 @@ pub struct EventSet {
     pub key_press: u32,
     /// Bit per action: Key Release events.
     pub key_release: u32,
-    /// Collision handler classes, in handler order.
+    /// Collision handler classes, in handler order. One pair runs only one of them
+    /// ([`pair_handler`]).
     pub collisions: SmallVec<[ClassMask; 4]>,
     /// Outside Room.
     pub outside_room: bool,
@@ -689,9 +690,12 @@ pub fn collision_phase(ctx: &mut Ctx) -> Flow {
 /// [`collision_phase`] with explicit hooks.
 ///
 /// For each instance `a` with collision handlers, in dispatch order, when its turn comes:
-/// 1. pairs `(b, c)` for every other alive, active `b` that overlaps `a` and whose classes
-///    intersect handler class `c`; a `b` matching two handler classes gives two pairs, both run
-///    (C8, R12b);
+/// 1. one pair `(b, c)` for every other alive, active `b` that overlaps `a` and whose classes
+///    intersect a handler class of `a`: `c` is the matching handler class that is most specific
+///    for `b` (lowest [`ClassMask::generality`], then first in handler order), the nearest-ancestor
+///    rule (C8, R12b; Confirmed (recorder): a platform runs only the kid's platform event, and his
+///    block or solidblock event only when he has none, traces/showdown/t-mot-08-a/b,
+///    traces/help-the-fairy-tale/t-col-06-e/f);
 /// 2. sorted by `CollideRules::pair_order` (R12): the other's rank, then its id (default; partly
 ///    Confirmed (recorder): several solid instances of one object run in id order,
 ///    traces/showdown/t-mot-07-d.csv), then handler-list order; or handler-list order, then the
@@ -707,6 +711,18 @@ pub fn collision_phase_with(ctx: &mut Ctx, hooks: &Hooks) -> Flow {
         &|c: &Ctx, i: &Instance| !event_set(c.def, i.kind).collisions.is_empty(),
         |c, a, ctl| collide_one(c, hooks, a, ctl),
     )
+}
+
+/// The one handler of `handlers` that runs for an other with classes `classes`, with its index:
+/// the matching handler class most specific for it (lowest [`ClassMask::generality`]), then the
+/// first in handler order; `None` when none matches (C8, R12b).
+pub fn pair_handler(handlers: &[ClassMask], classes: ClassMask) -> Option<(usize, ClassMask)> {
+    handlers
+        .iter()
+        .enumerate()
+        .filter(|(_, with)| classes.intersects(**with))
+        .min_by_key(|(handler, with)| (with.generality(), *handler))
+        .map(|(handler, with)| (handler, *with))
 }
 
 /// One collision pair: the other instance, the handler class and its index in the handler list.
@@ -736,14 +752,12 @@ fn collide_one(ctx: &mut Ctx, hooks: &Hooks, a: InstId, ctl: &mut Ctl) -> Option
             Err(e) => return stop(ctx, e),
         }
         let classes = ctx.w.get(b).map_or(ClassMask::NONE, |i| i.classes);
-        for (handler, with) in handlers.iter().enumerate() {
-            if classes.intersects(*with) {
-                pairs.push(Pair {
-                    other: b,
-                    with: *with,
-                    handler,
-                });
-            }
+        if let Some((handler, with)) = pair_handler(&handlers, classes) {
+            pairs.push(Pair {
+                other: b,
+                with,
+                handler,
+            });
         }
     }
     let rules = &ctx.rules;

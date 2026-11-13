@@ -269,27 +269,59 @@ fn wp1_collision_pairs_follow_pair_order() {
     );
 }
 
-#[test]
-fn wp1_one_other_matching_two_handlers_fires_both_in_handler_order() {
+/// The kid probe with `handlers` touching one platform (`PLATFORM | BLOCK`): the kid's
+/// collision log for one collision phase.
+fn platform_hits(handlers: &[ClassMask]) -> (Vec<String>, InstId) {
     let mut b = builder();
-    let kid = classed(
-        &mut b,
-        "kid",
-        ClassMask::KID,
-        &[ClassMask::BLOCK, ClassMask::PLATFORM],
-    );
+    let kid = classed(&mut b, "kid", ClassMask::KID, handlers);
     let platform = classed(&mut b, "platform", ClassMask::PLATFORM | ClassMask::BLOCK, &[]);
     let mut fx = Fx::new(b.build().unwrap());
-    // The kid logs the handler class it ran for.
-    let k = fx.probe(kid, 0.0, 0.0, p("K"));
+    fx.probe(kid, 0.0, 0.0, p("K"));
     let pl = fx.probe(platform, 0.0, 0.0, p("P").style(ProbeLog::Silent));
     fx.touch(pl, true);
-    let _ = k;
     let mut c = fx.ctx();
     let flow = iwbtg_sim::events::collision_phase_with(&mut c, &HOOKS);
     assert_eq!(flow, Flow::Continue);
-    let hits: Vec<_> = kid_collisions(&fx.log());
-    assert_eq!(hits, vec![format!("k{}K", pl.0), format!("k{}K", pl.0)]);
+    (kid_collisions(&fx.log()), pl)
+}
+
+#[test]
+fn wp1_one_other_matching_two_handlers_runs_only_the_most_specific() {
+    // C8, R12b (Confirmed (recorder), showdown t-mot-08-a): a platform runs the kid's platform
+    // handler only, whatever the handler order.
+    let both = [ClassMask::BLOCK, ClassMask::PLATFORM];
+    let (hits, pl) = platform_hits(&both);
+    assert_eq!(hits, vec![format!("k{}K", pl.0)]);
+    let (hits, _) = platform_hits(&[ClassMask::PLATFORM, ClassMask::BLOCK]);
+    assert_eq!(hits.len(), 1);
+    let platform = ClassMask::PLATFORM | ClassMask::BLOCK;
+    assert_eq!(
+        iwbtg_sim::events::pair_handler(&both, platform),
+        Some((1, ClassMask::PLATFORM))
+    );
+    // help-the-fairy-tale's platform also counts as solidblock: still platform, then solidblock.
+    let three = [ClassMask::BLOCK, ClassMask::SOLIDBLOCK, ClassMask::PLATFORM];
+    let htft = platform | ClassMask::SOLIDBLOCK;
+    assert_eq!(
+        iwbtg_sim::events::pair_handler(&three, htft),
+        Some((2, ClassMask::PLATFORM))
+    );
+    assert_eq!(
+        iwbtg_sim::events::pair_handler(&three[..2], htft),
+        Some((1, ClassMask::SOLIDBLOCK))
+    );
+}
+
+#[test]
+fn wp1_with_only_a_block_handler_block_runs_for_a_platform() {
+    // t-mot-08-b: with the platform event cleared, the block event runs for the platform.
+    let (hits, pl) = platform_hits(&[ClassMask::BLOCK]);
+    assert_eq!(hits, vec![format!("k{}K", pl.0)]);
+    assert_eq!(
+        iwbtg_sim::events::pair_handler(&[ClassMask::BLOCK], ClassMask::PLATFORM | ClassMask::BLOCK),
+        Some((0, ClassMask::BLOCK))
+    );
+    assert_eq!(iwbtg_sim::events::pair_handler(&[ClassMask::KILLER], ClassMask::BLOCK), None);
 }
 
 #[test]
