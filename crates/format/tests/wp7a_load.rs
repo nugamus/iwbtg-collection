@@ -1913,6 +1913,62 @@ fn a_script_room_call_makes_the_room_reachable() {
     );
 }
 
+/// `reach_warnings` with a `@door` placed in stage1 whose script creates `@lever` by `create`,
+/// and `@lever`'s script `lever` (#751).
+fn lever_warnings(create: &str, lever: &str) -> Vec<String> {
+    let order = ORDER.replace("\"@boss\",", "\"@boss\", \"@door\", \"@lever\",");
+    let stage1 = STAGE1.replace(
+        "  { kind = \"warp\"",
+        "  { kind = \"@door\", x = 0, y = 0 },
+  { kind = \"warp\"",
+    );
+    let door = format!(
+        "fn create() {{ {create} }}
+"
+    );
+    reach_warnings(|f| {
+        set(f, "game.toml", manifest(&order, LOST_END));
+        set(f, "rooms/stage1.toml", stage1);
+        f.push((
+            "objects/door.toml".into(),
+            b"script = \"door\"
+"
+            .to_vec(),
+        ));
+        f.push(("scripts/door.rhai".into(), door.into_bytes()));
+        f.push((
+            "objects/lever.toml".into(),
+            b"script = \"lever\"
+"
+            .to_vec(),
+        ));
+        f.push(("scripts/lever.rhai".into(), lever.as_bytes().to_vec()));
+    })
+}
+
+#[test]
+fn a_script_created_kind_runs_its_room_calls_in_the_creating_room() {
+    // `@lever` is only created by `@door`'s script, placed in stage1: its next leads from stage1
+    // to lost, the only way in.
+    let next = "fn step() { room_goto_next(); }
+";
+    assert!(lever_warnings("instance_create(\"@lever\", 0, 0);", next).is_empty());
+    // A computed name says nothing about the room, and previous from stage1 is title.
+    assert_eq!(
+        lever_warnings("let k = \"@lever\"; instance_create(k, 0, 0);", next).len(),
+        1
+    );
+    assert_eq!(
+        lever_warnings(
+            "instance_create(\"@lever\", 0, 0);",
+            "fn step() { room_goto_previous(); }
+"
+        )
+        .len(),
+        1
+    );
+}
+
 #[test]
 fn a_ranked_start_or_cut_room_makes_it_reachable() {
     let start = format!("{LOST_END}\n[stripped]\nstart = {{ room = \"lost\" }}\n");
