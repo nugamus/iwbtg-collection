@@ -115,8 +115,26 @@ const MONTHS: [&str; 12] = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
-/// `3 Nov 2026` for seconds since 1970 (UTC).
+/// Seconds east of UTC that the player's time zone had at `secs` (seconds since 1970): their
+/// DST rule included. UTC (0) when the system gives no zone. The one place the client asks the
+/// machine for its time zone: `chrono` reads the OS natively and `js_sys::Date` on wasm32.
+pub fn local_offset(secs: u64) -> i32 {
+    use chrono::{Offset, TimeZone};
+    let secs = i64::try_from(secs).unwrap_or(i64::MAX);
+    chrono::Local
+        .timestamp_opt(secs, 0)
+        .single()
+        .map_or(0, |t| t.offset().fix().local_minus_utc())
+}
+
+/// `3 Nov 2026` for seconds since 1970, in the player's time zone.
 pub fn date(secs: u64) -> String {
+    date_at(secs, local_offset(secs))
+}
+
+/// `3 Nov 2026` for seconds since 1970 shifted by `offset` seconds east of UTC.
+pub fn date_at(secs: u64, offset: i32) -> String {
+    let secs = (secs as i64 + i64::from(offset)).max(0) as u64;
     // Days to a civil date (proleptic Gregorian), H. Hinnant's `civil_from_days`.
     let z = (secs / 86_400) as i64 + 719_468;
     let era = z.div_euclid(146_097);
@@ -940,10 +958,26 @@ mod tests {
 
     #[test]
     fn dates_read_day_month_year() {
-        assert_eq!(date(0), "1 Jan 1970");
-        assert_eq!(date(951_782_400), "29 Feb 2000");
-        assert_eq!(date(1_793_750_400 + 86_399), "4 Nov 2026");
+        assert_eq!(date_at(0, 0), "1 Jan 1970");
+        assert_eq!(date_at(951_782_400, 0), "29 Feb 2000");
+        assert_eq!(date_at(1_793_750_400 + 86_399, 0), "4 Nov 2026");
         assert_eq!(short_date("29 Oct 2026"), "29 Oct");
+    }
+
+    /// A run at 23:30 UTC on 3 Nov 2026 is already the 4th east of UTC and still the 3rd west of
+    /// it; a run at 00:30 UTC on the 4th is the 3rd in New York (UTC-5).
+    #[test]
+    fn dates_follow_the_offset() {
+        let late = 1_793_750_400 - 1_800; // 3 Nov 23:30 UTC
+        assert_eq!(date_at(late, 0), "3 Nov 2026");
+        assert_eq!(date_at(late, 3600), "4 Nov 2026"); // UTC+1
+        assert_eq!(date_at(late, 14 * 3600), "4 Nov 2026"); // UTC+14
+        assert_eq!(date_at(late, -5 * 3600), "3 Nov 2026");
+        let early = 1_793_750_400 + 1_800; // 4 Nov 00:30 UTC
+        assert_eq!(date_at(early, -5 * 3600), "3 Nov 2026");
+        assert_eq!(date_at(early, 5 * 3600 + 1800), "4 Nov 2026");
+        assert_eq!(date_at(0, -3600), "1 Jan 1970"); // clamps at the epoch
+        assert!(local_offset(early).abs() <= 14 * 3600);
     }
 
     /// Passing a run slides it above you and you below it, sets both ranks and pops your row;

@@ -203,13 +203,13 @@ pub fn summary(scenario: Scenario, room: Option<(String, Vec2)>) -> Summary {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::hud::leaderboard::date;
+    use crate::hud::leaderboard::date_at;
     use crate::stats::fmt_ticks;
 
     #[test]
     fn the_sample_dates_match_the_leaderboard_sample() {
         for (i, (_, label)) in SAMPLE_RUNS.iter().enumerate() {
-            assert_eq!(date(NOV_4 - DAYS_BEFORE[i] * 86_400), *label);
+            assert_eq!(date_at(NOV_4 - DAYS_BEFORE[i] * 86_400, 0), *label);
         }
     }
 
