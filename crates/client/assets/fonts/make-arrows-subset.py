@@ -6,10 +6,14 @@ font name) at its default optical size. Needs fonttools.
 
   python -I make-arrows-subset.py <path to Inter[opsz,wght].ttf>
 """
+import os
 import sys
 from fontTools.ttLib import TTFont
 from fontTools import subset
 from fontTools.varLib import instancer
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import fallback_metrics  # noqa: E402
 
 WEIGHTS = {400: 'Regular', 500: 'Medium', 600: 'SemiBold', 700: 'Bold'}
 
@@ -24,6 +28,7 @@ for weight, style in WEIGHTS.items():
     s = subset.Subsetter(opts)
     s.populate(unicodes=range(0x2190, 0x219A))
     s.subset(f)
+    fallback_metrics.apply(f)  # Barlow's ascent and descent (#546)
     out = f'InterArrows-{style}.ttf'
     f.save(out)
     names = f['name']

@@ -20,8 +20,8 @@ use super::motion::{Ease, OffsetX, Opacity, ReducedMotion, Tween, Width};
 use super::shape::{Band, FadeMask, Shape, Side, UiOpacity, Veil};
 use super::tokens::{self, star_color};
 use super::widgets::{
-    ButtonKind, button, ellipsis_text, mod_pill, panel, ranked_pill, star_pill, stat, tag_pill, text,
-    unranked_pill,
+    ButtonKind, button, control, ellipsis_text, mod_pill, panel, ranked_pill, star_pill, stat, tag_pill,
+    text, unranked_pill,
 };
 
 /// The size the mockups are drawn at.
@@ -85,9 +85,9 @@ fn fit_to_window(window: Single<&Window, Changed<Window>>, mut scale: ResMut<UiS
     }
 }
 
-/// Placeholder scenery for the panels: a sky in `hue`, two rows of hills, a tower. Drawn here,
-/// so the gallery needs no art files.
-fn scenery(hue: f32) -> Image {
+/// Placeholder scenery for the panels: a sky in `hue`, two rows of hills and, with `tower`, a
+/// tower. Drawn here, so the gallery needs no art files.
+fn scenery(hue: f32, tower: bool) -> Image {
     let (w, h) = (320u32, 96u32);
     let mut rgba = Vec::with_capacity((w * h * 4) as usize);
     for y in 0..h {
@@ -96,7 +96,7 @@ fn scenery(hue: f32) -> Image {
             let sky = Color::hsl(hue, 0.45, 0.42 - 0.22 * fy);
             let far = 0.55 + 0.08 * (fx * 9.0).sin() + 0.05 * (fx * 23.0).cos();
             let near = 0.75 + 0.07 * (fx * 5.0 + 1.0).sin();
-            let tower = (fx - 0.72).abs() < 0.035 && fy > 0.22;
+            let tower = tower && (fx - 0.72).abs() < 0.035 && fy > 0.22;
             let c = if fy > near {
                 Color::hsl(hue + 30.0, 0.35, 0.10)
             } else if tower || fy > far {
@@ -323,9 +323,11 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
             .map(|hue| images.add(backdrop::scene_image(hue)))
             .to_vec(),
     ));
-    let castle = images.add(scenery(250.0));
-    let forest = images.add(scenery(140.0));
-    let city = images.add(scenery(300.0));
+    let castle = images.add(scenery(250.0, true));
+    let forest = images.add(scenery(140.0, true));
+    let city = images.add(scenery(300.0, true));
+    // Under the controls: hills only, as a tower cut by the short strip reads as a stray block.
+    let hills = images.add(scenery(140.0, false));
 
     let left = commands
         .spawn(column(26.0))
@@ -466,20 +468,25 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
                         r.spawn(button("Random", ButtonKind::Secondary));
                         r.spawn(button("Mods", ButtonKind::Primary));
                     });
-                    // Controls sit on art in the screens, so they are shown on art here.
+                    // Controls sit on art in the screens, so they are shown on art here, as an
+                    // upright art shape: an `ImageNode` draws its image inside the padding, so the
+                    // padding never showed (#546). It keeps its size when the column overflows.
                     c.spawn((
                         Node {
                             align_self: AlignSelf::FlexStart,
                             padding: UiRect::all(Val::Px(14.0)),
                             column_gap: Val::Px(8.0),
                             align_items: AlignItems::Center,
-                            border_radius: BorderRadius::all(Val::Px(10.0)),
+                            flex_shrink: 0.0,
                             ..default()
                         },
-                        ImageNode::new(forest.clone()).with_mode(NodeImageMode::Stretch),
+                        Shape {
+                            shear: 0.0,
+                            ..Shape::fill(tokens::GROUND).with_image(hills)
+                        },
                     ))
                     .with_children(|r| {
-                        r.spawn(button("Sort  Stars ▾", ButtonKind::Control));
+                        r.spawn(control("Sort", "Stars ▾"));
                         r.spawn((button("Pop", ButtonKind::Control), Action::Pop));
                         r.spawn((button("Fade", ButtonKind::Control), Action::Fade));
                         r.spawn((

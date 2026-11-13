@@ -1,8 +1,10 @@
 """Rebuilds NotoSansJP-subset.ttf. Run from a folder holding the Noto Sans JP variable font as dl/NotoSansJP.ttf (github.com/google/fonts, ofl/notosansjp); needs fonttools. Widen the kanji lead-byte range (0x99..0xEA) for JIS level 2."""
-import sys
+import os, sys
 from fontTools.ttLib import TTFont
 from fontTools.varLib.instancer import instantiateVariableFont
 from fontTools import subset
+sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
+import fallback_metrics
 f=TTFont('dl/NotoSansJP.ttf')
 f=instantiateVariableFont(f,{'wght':500})
 chars=set()
@@ -25,5 +27,6 @@ for pid,eid,lid in [(3,1,0x409),(1,0,0)]:
     n.setName('Noto Sans JP',1,pid,eid,lid); n.setName('Regular',2,pid,eid,lid)
     n.setName('Noto Sans JP',4,pid,eid,lid); n.setName('NotoSansJP-Regular',6,pid,eid,lid)
 if 'STAT' in f: del f['STAT']
+fallback_metrics.apply(f)  # Barlow's ascent and descent (#546)
 f.save('NotoSansJP-subset.ttf')
 print(len(chars))
