@@ -33,6 +33,7 @@ pub mod input_state;
 pub mod kid;
 pub mod motion;
 pub mod output;
+pub mod particles;
 pub mod path;
 pub mod probe;
 pub mod restart;
