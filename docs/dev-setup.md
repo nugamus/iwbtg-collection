@@ -116,7 +116,7 @@ wasm-bindgen --target web --no-typescript --out-dir crates/client/web/pkg target
 python -m http.server 8765 --bind 127.0.0.1 --directory crates/client/web
 ```
 
-Then open http://127.0.0.1:8765/. `wasm-bindgen` must be the version in Cargo.lock (`cargo xtask doctor` checks it; see CI below); `crates/client/web/pkg/` is not committed. It needs WebGL2. Browser automation that fakes a device pixel ratio different from the screen's (Playwright's default on a 125% display) puts the pointer in the wrong place; give the context the screen's `deviceScaleFactor`.
+Then open http://127.0.0.1:8765/. `wasm-bindgen` must be the version in Cargo.lock (`cargo xtask doctor` checks it; see CI below); `crates/client/web/pkg/` is not committed. It needs WebGL2. The page's script before `init()` unlocks the audio on the first key press or click ([client architecture, Audio](architecture/client/audio.md)); keep it when changing `index.html`. Browser automation that fakes a device pixel ratio different from the screen's (Playwright's default on a 125% display) puts the pointer in the wrong place; give the context the screen's `deviceScaleFactor`.
 
 ## Check a machine
 

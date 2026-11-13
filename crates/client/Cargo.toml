@@ -37,6 +37,8 @@ bevy = { version = "0.20.1", default-features = false, features = ["web"] }
 # unmapped-controller notice (input::watch_unmapped_pads, #717).
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
 web-sys = { version = "0.3", features = ["Window", "Storage", "console", "Gamepad", "GamepadEvent", "GamepadMappingType"] }
+# Reads the page's audio-unlock flag (audio/unlock.rs, #472). Already in the tree through web-sys.
+js-sys = "0.3"
 
 # Tests read the bundled fonts' cmaps (ui/fonts.rs); bevy_text already builds skrifa through
 # parley, so this adds no crate.
