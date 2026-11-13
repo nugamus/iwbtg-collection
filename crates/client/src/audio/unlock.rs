@@ -250,8 +250,8 @@ fn spawn_note(mut commands: Commands) {
     commands.spawn(note());
 }
 
-/// Keeps the note in the top left of the notices' area (the leaderboard column in a game; the
-/// window without a HUD), clear of the notices that stack from the bottom.
+/// Keeps the note in the top left of the notices' area (the leaderboard column in a game), clear
+/// of the notices that stack from the bottom; without a HUD, in the top right of the window.
 fn place_note(
     area: Res<notice::Area>,
     ui_scale: Res<UiScale>,
@@ -262,12 +262,19 @@ fn place_note(
         return;
     };
     let size = window.size() / ui_scale.0.max(0.01);
-    let r = area.0.unwrap_or(Rect::from_corners(Vec2::ZERO, size));
-    let want = (
-        Val::Px(r.min.x + notice::MARGIN),
-        Val::Px(r.min.y + notice::MARGIN),
-        Val::Px((r.width() - 2.0 * notice::MARGIN).clamp(notice::MIN_WIDTH, NOTE_WIDTH)),
-    );
+    let want = match area.0 {
+        Some(r) => (
+            Val::Px(r.min.x + notice::MARGIN),
+            Val::Px(r.min.y + notice::MARGIN),
+            Val::Px((r.width() - 2.0 * notice::MARGIN).clamp(notice::MIN_WIDTH, NOTE_WIDTH)),
+        ),
+        // No HUD: the top right of the window, clear of the F3 overlay in the top left.
+        None => (
+            Val::Px((size.x - NOTE_WIDTH - notice::MARGIN).max(0.0)),
+            Val::Px(notice::MARGIN),
+            Val::Px(NOTE_WIDTH),
+        ),
+    };
     for mut node in &mut notes {
         if (node.left, node.top, node.width) != want {
             (node.left, node.top, node.width) = want;
