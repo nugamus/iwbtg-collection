@@ -342,3 +342,49 @@ fn scripts_play_sounds_and_music_and_shake() {
     f.run(1);
     assert!(f.halted().expect("halted").contains("unknown sound `nope`"));
 }
+
+/// `fx` with a second room `other` (#731).
+fn fx_two_rooms(source: &str) -> Fx {
+    let mut f = fx(source, true);
+    f.def.rooms.push(RoomDef::new("other", 320, 240));
+    f.scripts = ScriptRuntime::new(&f.def, &f.rules).expect("scripts compile");
+    f
+}
+
+#[test]
+fn scripts_request_room_changes() {
+    for (src, room) in [
+        ("fn step() { room_goto(\"other\"); }", 1),
+        ("fn step() { room_goto_next(); }", 1),
+        ("fn step() { room_restart(); }", 0),
+    ] {
+        let mut f = fx_two_rooms(src);
+        f.spawn(0, 0.0, 0.0);
+        f.run(1);
+        assert_eq!(f.halted(), None, "{src}");
+        assert_eq!(f.w.room, RoomId(room), "{src}");
+        assert!(f.w.pending.is_none(), "{src}: the change ran at row 15");
+    }
+    // From the second room, previous goes back to the first.
+    let mut f = fx_two_rooms("fn step() { room_goto_previous(); }");
+    f.w.room = RoomId(1);
+    f.spawn(0, 0.0, 0.0);
+    f.run(1);
+    assert_eq!(f.halted(), None);
+    assert_eq!(f.w.room, RoomId(0));
+    // The last request of the handler wins (R13).
+    let mut f = fx_two_rooms("fn step() { room_goto_next(); room_restart(); }");
+    f.spawn(0, 0.0, 0.0);
+    f.run(1);
+    assert_eq!(f.w.room, RoomId(0));
+    // No room before the first one fails the tick at row 15; an unknown room halts the sim.
+    let mut f = fx_two_rooms("fn step() { room_goto_previous(); }");
+    f.spawn(0, 0.0, 0.0);
+    let mut c = f.ctx();
+    let e = tick::run_tick(&mut c, InputFrame::default()).expect_err("no previous room");
+    assert!(e.to_string().contains("no room before room 0"), "{e}");
+    let mut f = fx_two_rooms("fn step() { room_goto(\"nope\"); }");
+    f.spawn(0, 0.0, 0.0);
+    f.run(1);
+    assert!(f.halted().expect("halted").contains("unknown room `nope`"));
+}

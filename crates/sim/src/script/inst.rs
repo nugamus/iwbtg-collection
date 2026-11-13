@@ -602,12 +602,12 @@ fn register_rooms(engine: &mut Engine, shared: &Rc<Shared>, docs: &mut Docs) {
         (
             "room_goto_next",
             RoomRequest::Next,
-            "Requests a change to the next room in `room_order` once the current script returns; from the last room the change halts the sim.",
+            "Requests a change to the next room in `room_order` once the current script returns; from the last room the change is an error.",
         ),
         (
             "room_goto_previous",
             RoomRequest::Previous,
-            "Requests a change to the previous room in `room_order` once the current script returns; from the first room the change halts the sim.",
+            "Requests a change to the previous room in `room_order` once the current script returns; from the first room the change is an error.",
         ),
         (
             "room_restart",
