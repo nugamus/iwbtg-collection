@@ -852,14 +852,21 @@ mod tests {
         frame(&mut world, &[PAUSE_PAD]);
         assert!(world.resource::<Menu>().open, "Start opens");
         frame(&mut world, &[PAUSE_PAD]);
-        assert!(world.resource::<Menu>().picked.is_none(), "held Start does nothing more");
+        assert!(
+            world.resource::<Menu>().picked.is_none(),
+            "held Start does nothing more"
+        );
         frame(&mut world, &[PadInput::DPadDown]);
         frame(&mut world, &[]);
         frame(&mut world, &[PadInput::StickDown]);
         assert_eq!(world.resource::<Menu>().selected, Item::RestartRun);
         frame(&mut world, &[PadInput::DPadUp]);
         frame(&mut world, &[PadInput::South]);
-        assert_eq!(world.resource::<Menu>().picked, Some(Item::RetryFromSave), "A picks");
+        assert_eq!(
+            world.resource::<Menu>().picked,
+            Some(Item::RetryFromSave),
+            "A picks"
+        );
         world.run_system_once(act).unwrap();
         assert!(!world.resource::<Menu>().open);
         let f = world.resource_mut::<Collector>().take_frame();
@@ -869,13 +876,21 @@ mod tests {
         frame(&mut world, &[PAUSE_PAD]);
         assert!(world.resource::<Menu>().open);
         frame(&mut world, &[PadInput::East]);
-        assert_eq!(world.resource::<Menu>().picked, Some(Item::Continue), "B continues");
+        assert_eq!(
+            world.resource::<Menu>().picked,
+            Some(Item::Continue),
+            "B continues"
+        );
         world.run_system_once(act).unwrap();
         frame(&mut world, &[]);
         frame(&mut world, &[PAUSE_PAD]);
         frame(&mut world, &[]);
         frame(&mut world, &[PAUSE_PAD]);
-        assert_eq!(world.resource::<Menu>().picked, Some(Item::Continue), "Start closes");
+        assert_eq!(
+            world.resource::<Menu>().picked,
+            Some(Item::Continue),
+            "Start closes"
+        );
         world.run_system_once(act).unwrap();
         assert!(!world.resource::<Menu>().open);
         assert_eq!(world.resource_mut::<Collector>().take_frame().pressed, 0);
