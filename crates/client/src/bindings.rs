@@ -224,7 +224,12 @@ pub struct Bindings {
 impl Default for Bindings {
     fn default() -> Bindings {
         let mut b = Bindings {
-            keys: IWBTG_DEFAULT_KEYS.into_iter().collect(),
+            // Escape is the client's pause key (`pause::PAUSE_KEY`), so the game's `menu` action
+            // has no keyboard default (#758), as Start has no controller one (#624).
+            keys: IWBTG_DEFAULT_KEYS
+                .into_iter()
+                .filter(|(key, _)| *key != vk::ESCAPE)
+                .collect(),
             pad: [None; PadInput::ALL.len()],
             client: ClientKey::ALL.map(|k| ClientInputs {
                 keys: BTreeSet::from([k.default_key()]),
@@ -701,6 +706,13 @@ mod tests {
         assert_eq!(b.key_action(vk::R), Some(Action::Restart));
         assert_eq!(b.pad_action(PadInput::South), Some(Action::Jump));
         assert_eq!(b.pad_action(PadInput::StickLeft), Some(Action::Left));
+        // Escape is the pause key: `menu` has no default (#758), but a player can bind one.
+        assert_eq!(b.key_action(vk::ESCAPE), None);
+        assert!(!b.binds(Action::Menu));
+        let mut c = Config::default();
+        c.set("menu=F1").unwrap();
+        let b = Bindings::from_config(&c).unwrap();
+        assert_eq!(b.key_action(vk::F1), Some(Action::Menu));
     }
 
     #[test]
