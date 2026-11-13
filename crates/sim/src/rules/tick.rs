@@ -35,7 +35,7 @@ pub struct TickRules {
     /// phase too.
     pub new_instances_join_phase: JoinPhase,
     /// R22: an instance destroyed this tick is still seen by collisions and queries. Default
-    /// false (Design; spec item requested).
+    /// false (Confirmed (recorder), research T-DEAD-1: nothing sees it); no game needs true.
     pub dead_in_queries: bool,
     /// I1 (Inferred for the real runner; the recorder has no latch): the
     /// `keyboard_check_direct` "pressed since the last direct read" latch.

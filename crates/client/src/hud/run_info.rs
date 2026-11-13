@@ -16,6 +16,7 @@ use crate::mods::RunMods;
 use crate::settings::HudShow;
 use crate::stats::fmt_ticks;
 use crate::ui::fonts::Type;
+use crate::ui::glow::{Glow, glowing};
 use crate::ui::icons::{Icon, icon};
 use crate::ui::shape::{Ink, Shape};
 use crate::ui::tokens;
@@ -46,7 +47,7 @@ const EXTRAS: u32 =
     Action::Extra1 as u32 | Action::Extra2 as u32 | Action::Extra3 as u32 | Action::Extra4 as u32;
 /// `Paused · timer running`: `#ffb3bd`.
 const PAUSED_INK: Color = Color::srgb_u8(0xff, 0xb3, 0xbd);
-/// A held arrow or word: white (the artboard's glow is not drawn).
+/// A held arrow or word: white, with a soft white glow under it (`tokens::KEY_GLOW`, `BUTTON_GLOW`).
 const HELD: Color = Color::WHITE;
 
 /// Written by the pause menu (`pause.rs`, #479): whether it is open, and the ticks the run has
@@ -233,6 +234,10 @@ pub struct PausedLine;
 #[derive(Component)]
 pub struct Key(pub Action);
 
+/// The glow around a key: the colour it takes while the key is held.
+#[derive(Component)]
+pub struct KeyGlow(pub Action, pub Color);
+
 /// The bar under a key: the accent while it is held.
 #[derive(Component)]
 pub struct KeyBar(pub Action);
@@ -244,6 +249,7 @@ pub fn show(
     mut texts: Query<(&Field, &mut Text)>,
     mut paused: Query<&mut Node, With<PausedLine>>,
     mut keys: Query<(&Key, Option<&mut ImageNode>, Option<&mut Ink>)>,
+    mut glows: Query<(&KeyGlow, &mut Glow)>,
     mut bars: Query<(&KeyBar, &mut BackgroundColor)>,
     added: Query<(), Added<Field>>,
 ) {
@@ -284,6 +290,12 @@ pub fn show(
             if ink.0 != want {
                 ink.0 = want;
             }
+        }
+    }
+    for (KeyGlow(a, lit), mut glow) in &mut glows {
+        let want = if on(*a) { *lit } else { Color::NONE };
+        if glow.color != want {
+            glow.color = want;
         }
     }
     for (KeyBar(a), mut bg) in &mut bars {
@@ -506,12 +518,15 @@ fn input_display(width: f32, extras: u32) -> impl Bundle {
             },
             children![
                 (
-                    icon(Icon::Arrow, ARROW, tokens::KEY_IDLE),
+                    glowing(
+                        Glow::new(tokens::KEY_GLOW_BLUR, Color::NONE),
+                        (icon(Icon::Arrow, ARROW, tokens::KEY_IDLE), Key(action)),
+                    ),
                     UiTransform {
                         rotation: Rot2::degrees(deg),
                         ..default()
                     },
-                    Key(action),
+                    KeyGlow(action, tokens::KEY_GLOW),
                 ),
                 bar(action),
             ],
@@ -533,7 +548,13 @@ fn input_display(width: f32, extras: u32) -> impl Bundle {
                     ..default()
                 },
                 children![
-                    (text(label, style, tokens::BUTTON_IDLE), Key(action)),
+                    (
+                        glowing(
+                            Glow::new(tokens::BUTTON_GLOW_BLUR, Color::NONE),
+                            (text(label, style, tokens::BUTTON_IDLE), Key(action)),
+                        ),
+                        KeyGlow(action, tokens::BUTTON_GLOW),
+                    ),
                     bar(action)
                 ],
             )

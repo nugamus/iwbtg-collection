@@ -25,6 +25,7 @@ use crate::package::decode_png;
 use crate::settings::{self, Settings};
 use crate::ui::backdrop::{self, Backdrop, BackdropPlugin};
 use crate::view::{Game, GameCamera, RoomSize, ViewRect};
+use crate::visual::PlainBackdrop;
 
 /// The aspect ratios fullscreen offers; `None` is the monitor's own.
 pub const RATIOS: [Option<(u32, u32)>; 6] = [
@@ -318,6 +319,7 @@ fn game_backdrop(
     room: Res<RoomSize>,
     mut images: ResMut<Assets<Image>>,
     mut backdrop: ResMut<Backdrop>,
+    plain: Option<Res<PlainBackdrop>>,
     mut done: Local<bool>,
 ) {
     if *done {
@@ -334,12 +336,26 @@ fn game_backdrop(
         .and_then(|b| std::str::from_utf8(b).ok())
         .and_then(|t| Manifest::parse(t).ok())
         .map_or(KeyArt::None, |m| key_art::resolve(&files.0, &m, None));
+    let art = plain_art(art, plain.as_deref());
     let image = backdrop::key_art_image(&files.0, &art, (room.0.x as u32, room.0.y as u32), |bytes| {
         decode_png(bytes).map(|s| (s.rgba, s.size.0, s.size.1))
     });
     backdrop.art = Some(images.add(image));
     backdrop.dim = backdrop::dim::GAMEPLAY;
     backdrop.blur = settings::get().backdrop_blur as f32 / 100.0;
+}
+
+/// No background (`--mods NB`, visual.rs): a backdrop that would show the room's own background
+/// (its image or its colour) is the plain grey instead. The package's key art and the client's
+/// own scene (no art at all) are not the room's background and stay.
+fn plain_art(art: KeyArt, plain: Option<&PlainBackdrop>) -> KeyArt {
+    match (art, plain) {
+        (KeyArt::RoomBackground(_) | KeyArt::Colour(_), Some(p)) => {
+            let c = p.0.to_srgba();
+            KeyArt::Colour([c.red, c.green, c.blue].map(|v| (v * 255.0).round() as u8))
+        }
+        (art, _) => art,
+    }
 }
 
 /// Spawns a black panel the size of the room under the game, so the backdrop never shows
@@ -386,6 +402,35 @@ fn keep_panel(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn no_background_makes_the_rooms_backdrop_plain_and_keeps_key_art() {
+        let plain = PlainBackdrop(crate::visual::PLAIN);
+        let grey = KeyArt::Colour([0x3a; 3]);
+        assert_eq!(
+            plain_art(
+                KeyArt::RoomBackground(iwbtg_format::key_art::RoomLayer {
+                    path: "a.png".into(),
+                    stretch: false,
+                    tile: (true, true),
+                    offset: (0, 0),
+                    color: None,
+                }),
+                Some(&plain)
+            ),
+            grey
+        );
+        assert_eq!(plain_art(KeyArt::Colour([1, 2, 3]), Some(&plain)), grey);
+        assert_eq!(
+            plain_art(KeyArt::Image("k.png".into()), Some(&plain)),
+            KeyArt::Image("k.png".into())
+        );
+        assert_eq!(plain_art(KeyArt::None, Some(&plain)), KeyArt::None);
+        assert_eq!(
+            plain_art(KeyArt::Colour([1, 2, 3]), None),
+            KeyArt::Colour([1, 2, 3])
+        );
+    }
 
     #[test]
     fn a_ratio_limits_the_area_to_its_largest_centred_rectangle() {

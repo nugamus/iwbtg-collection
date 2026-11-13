@@ -66,6 +66,13 @@ pub const AVATAR_MARK: Color = Color::srgb_u8(0x5d, 0x63, 0x78);
 pub const KEY_IDLE: Color = Color::srgba(1.0, 1.0, 1.0, 0.0618);
 /// An input display button label that is not held: `rgba(255,255,255,.28)`, as [`white`]`(0.28)`.
 pub const BUTTON_IDLE: Color = Color::srgba(1.0, 1.0, 1.0, 0.0913);
+/// The glow under a held arrow (`drop-shadow(0 0 6px rgba(255,255,255,.55))`) and a held word
+/// (`text-shadow: 0 0 8px rgba(255,255,255,.5)`): peak alphas as [`white`], the blur in CSS px
+/// (`ui::glow::Glow`).
+pub const KEY_GLOW: Color = Color::srgba(1.0, 1.0, 1.0, 0.3038);
+pub const KEY_GLOW_BLUR: f32 = 6.0;
+pub const BUTTON_GLOW: Color = Color::srgba(1.0, 1.0, 1.0, 0.2539);
+pub const BUTTON_GLOW_BLUR: f32 = 8.0;
 
 /// The player card (`ProfileCard.dc.html`): its glass from the left edge to 60 %
 /// (`rgba(14,16,24,.9)`, `.78`) and the warm right end (`rgba(40,14,22,.78)`). The alphas are
@@ -258,6 +265,8 @@ mod tests {
             (ROW_PAST, 0.07),
             (KEY_IDLE, 0.22),
             (BUTTON_IDLE, 0.28),
+            (KEY_GLOW, 0.55),
+            (BUTTON_GLOW, 0.5),
         ] {
             assert!(
                 (token.alpha() - white(a).alpha()).abs() < 0.0005,

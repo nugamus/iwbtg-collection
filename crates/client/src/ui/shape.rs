@@ -299,7 +299,7 @@ fn inherited(
 /// Adds missing shape layers, sizes them for their shape and keeps each material, text colour,
 /// opacity and fade in step. Writes only what changed, so a still screen costs no uploads.
 #[allow(clippy::too_many_arguments, reason = "one pass over shapes and text")]
-fn sync_shapes(
+pub(super) fn sync_shapes(
     mut commands: Commands,
     shapes: Query<(Entity, Ref<Shape>, &ComputedNode, Option<&Children>)>,
     mut layers: Query<(&mut Node, Option<&MaterialNode<ShapeMaterial>>), With<ShapeLayer>>,

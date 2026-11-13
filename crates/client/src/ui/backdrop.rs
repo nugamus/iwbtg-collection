@@ -20,10 +20,11 @@ use bevy::shader::ShaderRef;
 use bevy::ui::UiTargetCamera;
 use bevy::ui_render::prelude::{MaterialNode, UiMaterial, UiMaterialPlugin};
 use iwbtg_format::files::PackageFiles;
-use iwbtg_format::key_art::KeyArt;
+use iwbtg_format::key_art::{KeyArt, RoomLayer};
 
 use super::motion::{Ease, ReducedMotion};
 use super::tokens;
+use crate::art::{Segment, axis};
 
 const SHADER: Handle<Shader> = uuid_handle!("2d7e4c1a-6b0f-4a39-8e52-9c1d3f7a5b66");
 
@@ -341,8 +342,8 @@ pub fn scene_image(hue: f32) -> Image {
 
 /// The image to show for a game's key art ([`iwbtg_format::key_art::resolve`]): the package's PNG,
 /// the first ranked room's background image or colour, or the client's own fallback. A room
-/// background is tiled over `room` (its size in px) as the room shows it, so a small tile is not
-/// stretched into a few giant squares.
+/// background is composed over `room` (its size in px) as the room draws its first back layer
+/// ([`compose_layer`]), so a small tile is not stretched into a few giant squares.
 pub fn key_art_image(
     files: &PackageFiles,
     art: &KeyArt,
@@ -352,24 +353,51 @@ pub fn key_art_image(
     let png = |path: &str| files.get(path).and_then(&decode);
     match art {
         KeyArt::Image(path) => png(path).map_or_else(fallback_image, |(rgba, w, h)| art_image(&rgba, w, h)),
-        KeyArt::RoomBackground(path) => png(path).map_or_else(fallback_image, |(rgba, w, h)| {
+        KeyArt::RoomBackground(layer) => png(&layer.path).map_or_else(fallback_image, |(rgba, w, h)| {
             let (cw, ch) = (room.0.max(1), room.1.max(1));
-            art_image(&tile(&rgba, w, h, cw, ch), cw, ch)
+            art_image(&compose_layer(&rgba, w, h, layer, cw, ch), cw, ch)
         }),
         KeyArt::Colour(rgb) => colour_image(*rgb),
         KeyArt::None => fallback_image(),
     }
 }
 
-/// Repeats an RGBA8 image from the top-left corner over a `cw` x `ch` canvas.
-pub fn tile(rgba: &[u8], w: u32, h: u32, cw: u32, ch: u32) -> Vec<u8> {
-    let (w, h) = (w.max(1) as usize, h.max(1) as usize);
+/// Draws a back layer over a `cw` x `ch` room the way `art.rs` does ([`axis`] cuts each axis):
+/// stretched to the room or at its own size, repeated only on the tiled axes, from the layer's
+/// offset. Where the layer does not reach, the room colour shows (black without one).
+pub fn compose_layer(rgba: &[u8], w: u32, h: u32, layer: &RoomLayer, cw: u32, ch: u32) -> Vec<u8> {
+    let (iw, ih) = (w.max(1) as f32, h.max(1) as f32);
+    let (rw, rh) = (cw as f32, ch as f32);
+    let (cell_x, cell_y) = if layer.stretch { (rw, rh) } else { (iw, ih) };
+    let xs = axis(rw, iw, cell_x, layer.offset.0 as f32, layer.tile.0);
+    let ys = axis(rh, ih, cell_y, layer.offset.1 as f32, layer.tile.1);
+    // The image pixel under room pixel `p` on one axis; `None` outside every segment.
+    let lookup = |segs: &[Segment], p: u32, scale: f32, image: f32| {
+        let p = p as f32 + 0.5;
+        segs.iter().find(|s| p >= s.at && p < s.at + s.len).map(|s| {
+            let v = s.from + (p - s.at) / scale;
+            let v = if s.repeat { v.rem_euclid(image) } else { v };
+            (v as usize).min(image as usize - 1)
+        })
+    };
+    let (sx, sy) = (cell_x / iw, cell_y / ih);
+    let [r, g, b] = layer.color.unwrap_or([0; 3]);
     let mut out = Vec::with_capacity(cw as usize * ch as usize * 4);
-    for y in 0..ch as usize {
-        let row = (y % h) * w * 4;
-        for x in 0..cw as usize {
-            let at = row + (x % w) * 4;
-            out.extend_from_slice(&rgba[at..at + 4]);
+    for y in 0..ch {
+        let iy = lookup(&ys, y, sy, ih);
+        for x in 0..cw {
+            match (lookup(&xs, x, sx, iw), iy) {
+                (Some(ix), Some(iy)) => {
+                    let at = (iy * w as usize + ix) * 4;
+                    let px = &rgba[at..at + 4];
+                    // Over the room colour, like the room draws it.
+                    let a = u32::from(px[3]);
+                    let mix =
+                        |c: u8, bg: u8| ((u32::from(c) * a + u32::from(bg) * (255 - a) + 127) / 255) as u8;
+                    out.extend_from_slice(&[mix(px[0], r), mix(px[1], g), mix(px[2], b), 255]);
+                }
+                _ => out.extend_from_slice(&[r, g, b, 255]),
+            }
         }
     }
     out
@@ -405,17 +433,63 @@ mod tests {
         assert_eq!(img.texture_descriptor.mip_level_count, 5);
     }
 
+    fn layer(stretch: bool, tile: (bool, bool), offset: (i32, i32)) -> RoomLayer {
+        RoomLayer {
+            path: "backgrounds/a.png".into(),
+            stretch,
+            tile,
+            offset,
+            color: Some([9, 9, 9]),
+        }
+    }
+
+    const RED: [u8; 4] = [255, 0, 0, 255];
+    const BLUE: [u8; 4] = [0, 0, 255, 255];
+    const FLOOR: [u8; 4] = [9, 9, 9, 255];
+
+    fn row(out: &[u8], cw: u32, y: u32) -> Vec<[u8; 4]> {
+        (0..cw)
+            .map(|x| {
+                let i = ((y * cw + x) * 4) as usize;
+                out[i..i + 4].try_into().unwrap()
+            })
+            .collect()
+    }
+
     #[test]
-    fn a_room_background_tiles_from_the_corner() {
+    fn a_tiled_layer_repeats_from_the_corner() {
         // 2x1: red, blue. Tiled over 3x2: red blue red on both rows.
-        let rgba = [255, 0, 0, 255, 0, 0, 255, 255];
-        let out = tile(&rgba, 2, 1, 3, 2);
-        let red = [255, 0, 0, 255];
+        let rgba = [RED, BLUE].concat();
+        let out = compose_layer(&rgba, 2, 1, &layer(false, (true, true), (0, 0)), 3, 2);
         assert_eq!(out.len(), 3 * 2 * 4);
-        assert_eq!(&out[0..4], &red);
-        assert_eq!(&out[4..8], &[0, 0, 255, 255]);
-        assert_eq!(&out[8..12], &red);
-        assert_eq!(&out[12..16], &red);
+        assert_eq!(row(&out, 3, 0), [RED, BLUE, RED]);
+        assert_eq!(row(&out, 3, 1), [RED, BLUE, RED]);
+    }
+
+    #[test]
+    fn a_stretched_layer_fills_the_room() {
+        // 2x1 stretched to 4x2: left half red, right half blue, no repeat.
+        let rgba = [RED, BLUE].concat();
+        let out = compose_layer(&rgba, 2, 1, &layer(true, (false, false), (0, 0)), 4, 2);
+        assert_eq!(row(&out, 4, 0), [RED, RED, BLUE, BLUE]);
+        assert_eq!(row(&out, 4, 1), [RED, RED, BLUE, BLUE]);
+    }
+
+    #[test]
+    fn a_one_axis_tiled_layer_repeats_only_that_axis() {
+        // 2x1 tiled horizontally only, one down, over 4x3: only row 1 is covered.
+        let rgba = [RED, BLUE].concat();
+        let out = compose_layer(&rgba, 2, 1, &layer(false, (true, false), (0, 1)), 4, 3);
+        assert_eq!(row(&out, 4, 0), [FLOOR; 4]);
+        assert_eq!(row(&out, 4, 1), [RED, BLUE, RED, BLUE]);
+        assert_eq!(row(&out, 4, 2), [FLOOR; 4]);
+    }
+
+    #[test]
+    fn an_offset_shifts_the_tiling() {
+        let rgba = [RED, BLUE].concat();
+        let out = compose_layer(&rgba, 2, 1, &layer(false, (true, true), (1, 0)), 4, 1);
+        assert_eq!(row(&out, 4, 0), [BLUE, RED, BLUE, RED]);
     }
 
     #[test]
