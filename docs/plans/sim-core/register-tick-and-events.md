@@ -22,8 +22,8 @@ Part of [the sim core plan](../sim-core.md), section 15 (the intro and the colum
 | R9 | New instance runs the current phase | Confirmed (recorder) U10: an instance of the creator's own object created during its turn gets no Step (t-evo-1 row 3) | `TickRules::new_instances_join_phase: JoinPhase` (`Never`, `LaterInOrder`, `Always`) | `LaterInOrder` | tr-room-03-b-log, a3-t17-b, t-evo-1 (rec), BLOOD-COUNT |
 | R10 | Instances created during Room Start get Room Start | Confirmed (recorder) U9: no | same snapshot rule | no | t-room-1 (rec), tr-room-14 (rec) |
 | R11 | GM 8.1 differences | UNKNOWN U12 | `RunnerRules::for_runner(Gm81)` | same as 8.0 | T-EVO-2 |
-| R12 | Order of one instance's collision pairs | Inferred (by the other's object order, then creation) / UNKNOWN: the platform part of T-COL-06 and T-MOT-08 are not run | `CollideRules::pair_order` | `OtherRankThenId`; alternative `HandlerListOrder` | T-COL-06 platform part, T-MOT-08 (research#7), k-platform (rec) |
-| R12b | One other matching two handler classes (platform as BLOCK and PLATFORM) | UNKNOWN (C8) | `events::collision_phase` | both fire, handler-list order | T-COL-06 platform part (research#7) |
+| R12 | Order of one instance's collision pairs | Inferred (by the other's object order, then creation) | `CollideRules::pair_order` | `OtherRankThenId`; alternative `HandlerListOrder` | k-platform (rec), T-ORD-2 (research#160) |
+| R12b | One other matching two handler classes (platform as BLOCK and PLATFORM) | Confirmed (recorder) (C8): only the most specific handler runs | `events::pair_handler` | most specific handler only (C8) | showdown t-mot-08-a/b (rec), help-the-fairy-tale t-col-06-e/f (rec) |
 | R13 | One pending room request, last wins | Inferred / UNKNOWN; only game_restart after room_goto traced | `World::pending` setter | last wins | tr-room-01-a (rec); other pairs not traced |
 | R14 | room_speed equals the file speed until world Room Start | Confirmed (recorder): first interval 30, then 50 | `room::enter` | file speed | t-alarm-2 (rec), TR-ROOM-16 |
 | R15 | Draw-slot gameplay handlers run every tick | Confirmed need | `Phase::Late` | runs headless | — |

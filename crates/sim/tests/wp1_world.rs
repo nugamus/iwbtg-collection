@@ -321,7 +321,10 @@ fn wp1_with_only_a_block_handler_block_runs_for_a_platform() {
         iwbtg_sim::events::pair_handler(&[ClassMask::BLOCK], ClassMask::PLATFORM | ClassMask::BLOCK),
         Some((0, ClassMask::BLOCK))
     );
-    assert_eq!(iwbtg_sim::events::pair_handler(&[ClassMask::KILLER], ClassMask::BLOCK), None);
+    assert_eq!(
+        iwbtg_sim::events::pair_handler(&[ClassMask::KILLER], ClassMask::BLOCK),
+        None
+    );
 }
 
 #[test]
