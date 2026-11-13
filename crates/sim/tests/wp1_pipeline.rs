@@ -487,14 +487,16 @@ fn wp1_boundary_and_animation_slots_move() {
             .filter(|c| "iknde".contains(*c))
             .collect::<String>()
     };
-    assert_eq!(order_of(BoundarySlot::AfterMotion, AnimSlot::AfterDraw), "ikedn");
+    // `kk`: A and B are of one kind, so they meet twice in the collision phase, once from each
+    // side, and A's event with B runs both times (R12, T-ORD-2).
+    assert_eq!(order_of(BoundarySlot::AfterMotion, AnimSlot::AfterDraw), "ikkedn");
     assert_eq!(
         order_of(BoundarySlot::AfterCollision, AnimSlot::AfterDraw),
-        "kiedn"
+        "kkiedn"
     );
     assert_eq!(
         order_of(BoundarySlot::AfterMotion, AnimSlot::AfterMotion),
-        "niked"
+        "nikked"
     );
 }
 

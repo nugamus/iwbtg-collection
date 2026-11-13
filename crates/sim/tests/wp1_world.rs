@@ -375,6 +375,116 @@ fn wp1_pairs_are_rechecked_before_their_event() {
     );
 }
 
+/// One T-ORD-2 run (research, traces/rely-the-needle-4-2/t-ord-2.md) on probe kinds, all
+/// instances stacked and touching: the collision events of one collision phase as
+/// `(self tag, other tag)`.
+///
+/// Kinds in rank order: kid P (`KID`), block L (`BLOCK`), save point S (`SAVE`), probes A
+/// (`VINE_L`), B (`VINE_R`), C (`LADDER`) and, for run C, D (`VINE_L`, so it matches A's
+/// handlers as an instance of A's child does, with A's handlers, but its own rank after B).
+/// `kids` are the probe instances in creation order, by tag; `reverse` registers each kind's
+/// handlers in reverse order.
+fn t_ord_2(events: &[(&str, &[&str])], kids: &[&str], reverse: bool) -> Vec<(String, String)> {
+    let class = |k: &str| match k {
+        "P" => ClassMask::KID,
+        "L" => ClassMask::BLOCK,
+        "S" => ClassMask::SAVE,
+        "A" | "D" => ClassMask::VINE_L,
+        "B" => ClassMask::VINE_R,
+        "C" => ClassMask::LADDER,
+        _ => unreachable!("kind {k}"),
+    };
+    let mut b = builder();
+    let mut kinds = Vec::new();
+    for k in ["P", "L", "S", "A", "B", "C", "D"] {
+        let mut handlers: Vec<ClassMask> = events
+            .iter()
+            .filter(|(me, _)| *me == k)
+            .flat_map(|(_, with)| with.iter().map(|w| class(w)))
+            .collect();
+        if reverse {
+            handlers.reverse();
+        }
+        kinds.push((k, classed(&mut b, k, class(k), &handlers)));
+    }
+    let order: Vec<KindId> = kinds.iter().map(|(_, id)| *id).collect();
+    b.order(&order);
+    let kind = |tag: &str| {
+        let k = &tag[..1];
+        kinds.iter().find(|(n, _)| *n == k).expect("kind").1
+    };
+    let mut fx = Fx::new(b.build().unwrap());
+    let mut tags = Vec::new();
+    for tag in ["P", "L", "S"].iter().chain(kids) {
+        let id = fx.probe(kind(tag), 0.0, 0.0, p(tag));
+        fx.touch(id, true);
+        tags.push((id, *tag));
+    }
+    let mut c = fx.ctx();
+    assert_eq!(
+        iwbtg_sim::events::collision_phase_with(&mut c, &HOOKS),
+        Flow::Continue
+    );
+    let name = |id: &str| {
+        let id: u64 = id.parse().expect("id");
+        tags.iter().find(|(i, _)| i.0 == id).expect("tag").1.to_owned()
+    };
+    fx.log()
+        .split(' ')
+        .filter(|t| t.starts_with('k'))
+        .map(|t| {
+            let digits = t[1..].find(|ch: char| !ch.is_ascii_digit()).expect("tag") + 1;
+            (t[digits..].to_owned(), name(&t[1..digits]))
+        })
+        .collect()
+}
+
+fn pairs_of(s: &str) -> Vec<(String, String)> {
+    s.split_whitespace()
+        .map(|p| {
+            let (a, b) = p.split_once('-').expect("pair");
+            (a.to_owned(), b.to_owned())
+        })
+        .collect()
+}
+
+#[test]
+fn wp1_r12_collision_pairs_run_lower_kind_first_t_ord_2() {
+    // Run A: handlers registered scrambled; probes created c1, a1, b1, c2, a2.
+    let events: &[(&str, &[&str])] = &[
+        ("P", &["L", "B", "C"]),
+        ("S", &["P"]),
+        ("A", &["A", "P", "B", "C"]),
+        ("B", &["A", "C"]),
+        ("C", &["A", "P"]),
+    ];
+    // t-ord-2-a.events.txt frame 4, grouped by the outer instance: the kid's pairs (his event
+    // first, then the other's), a1's (a1-a2 and a2-a1 both ways), a2's (meeting a1 again), b1's.
+    let frame4 = pairs_of(
+        "P-L S-P A1-P A2-P P-B1 P-C1 C1-P P-C2 C2-P \
+         A1-A2 A2-A1 A1-B1 B1-A1 A1-C1 C1-A1 A1-C2 C2-A1 \
+         A2-A1 A1-A2 A2-B1 B1-A2 A2-C1 C1-A2 A2-C2 C2-A2 \
+         B1-C1 B1-C2",
+    );
+    assert_eq!(frame4.len(), 27, "27 collision events per tick in run A");
+    assert_eq!(t_ord_2(events, &["C1", "A1", "B1", "C2", "A2"], false), frame4);
+    // Run B: registration reversed, probes created a1, a2, b1, c1, c2: the same sequence.
+    assert_eq!(t_ord_2(events, &["A1", "A2", "B1", "C1", "C2"], true), frame4);
+    // Run C: D (A's child in the trace) has its own rank after B and comes after b1 although
+    // d1 is the oldest probe.
+    let events: &[(&str, &[&str])] = &[
+        ("P", &["L", "A"]),
+        ("S", &["P"]),
+        ("A", &["P", "B"]),
+        ("D", &["P", "B"]),
+        ("B", &["A"]),
+    ];
+    assert_eq!(
+        t_ord_2(events, &["D1", "A1", "B1"], false),
+        pairs_of("P-L S-P P-A1 A1-P P-D1 D1-P A1-B1 B1-A1 B1-D1 D1-B1")
+    );
+}
+
 #[test]
 fn wp1_a_destroyed_other_is_skipped() {
     let (mut fx, k, bl, x) = collision_fixture(
@@ -392,10 +502,10 @@ fn wp1_a_destroyed_other_is_skipped() {
 }
 
 /// R22 (Confirmed (recorder), research T-DEAD-1): a kid killed in his block event gets no later
-/// Collision event from a save point that overlaps him, because the pair has a dead instance as
-/// its other. The save point is created after the kid, so it is later in the phase under the
-/// current order; if the pair order changes (research T-ORD-2, #740) this must still hold, since
-/// the kid dies in his first pair and the save point's pair follows it.
+/// Collision event from a save point that overlaps him, because the pair has a dead instance in
+/// it. Under the pair order (R12, T-ORD-2) the kid (rank 0) meets the block, dies, and his pair
+/// with the save point (rank 2) comes later in his own turn. The second part kills an instance
+/// in the kid's turn whose pair belongs to a later outer instance's turn: that is skipped too.
 #[test]
 fn wp1_r22_a_pair_with_an_instance_killed_earlier_in_the_phase_is_skipped() {
     let mut b = builder();
@@ -446,6 +556,45 @@ fn wp1_r22_a_pair_with_an_instance_killed_earlier_in_the_phase_is_skipped() {
         "control: {}",
         fx.log()
     );
+    // A later outer instance's pair: the kid's block event destroys the killer X (rank 3); the
+    // save point (rank 2), which handles killers, meets X in its own turn, after the kid's.
+    let run = |kill: bool| {
+        let mut b = builder();
+        let kid = classed(&mut b, "kid", ClassMask::KID, &[ClassMask::BLOCK]);
+        let block = classed(&mut b, "block", ClassMask::BLOCK, &[]);
+        let save = classed(&mut b, "save", ClassMask::SAVE, &[ClassMask::KILLER]);
+        let killer = classed(&mut b, "killer", ClassMask::KILLER, &[]);
+        b.order(&[kid, block, save, killer]);
+        let mut fx = Fx::new(b.build().unwrap());
+        let x = fx.probe(killer, 0.0, 0.0, p("X").style(ProbeLog::Silent));
+        let sp = fx.probe(save, 0.0, 0.0, p("S"));
+        let bl = fx.probe(block, 0.0, 0.0, p("B").style(ProbeLog::Silent));
+        let state = if kill {
+            p("K").with(step(ProbeOn::Collision, ProbeAct::Destroy(x)).once())
+        } else {
+            p("K")
+        };
+        let k = fx.probe(kid, 0.0, 0.0, state);
+        for id in [k, bl, sp, x] {
+            fx.touch(id, true);
+        }
+        let mut c = fx.ctx();
+        assert_eq!(
+            iwbtg_sim::events::collision_phase_with(&mut c, &HOOKS),
+            Flow::Continue
+        );
+        let log = fx.log();
+        assert!(
+            log.contains(&format!("k{}K", bl.0)),
+            "the kid's block event ran: {log}"
+        );
+        log.contains(&format!("k{}S", x.0))
+    };
+    assert!(
+        !run(true),
+        "no save point Collision with the killer destroyed in the kid's turn"
+    );
+    assert!(run(false), "control: the save point meets the killer");
 }
 
 #[test]
