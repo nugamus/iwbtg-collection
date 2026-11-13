@@ -1,7 +1,7 @@
 //! The pause menu (#479; docs/product.md, Pause; artboards `Pause169`, `Pause43`, `PauseBox`):
 //! the game's own PAUSE box, drawn in game pixels over the frozen, darkened game.
 //!
-//! Escape opens it and closes it again. While it is open the sim does not tick (`SimTick` is
+//! Escape (or Start on a controller) opens it and closes it again. While it is open the sim does not tick (`SimTick` is
 //! gated, as Sudden Death gates it in `mods.rs`), the music and sounds hold, and the backdrop and
 //! HUD keep running. The run's timer does not stop: every fixed-clock tick spent paused while the
 //! map's timer runs (started, not ended) is counted and added to the HUD's time
@@ -11,8 +11,9 @@
 //! next tick); Restart run (the quick-retry key, `retry.rs`); Quit (closes the client without a
 //! results screen; the run is not cleared, so no clear goes into the stats). Up and Down (and the
 //! keys bound to up and down) move the selector, Enter, Space or the keys bound to jump or accept
-//! pick, the mouse hovers and clicks. While the menu is open R and the quick-retry key pick their
-//! item at once.
+//! pick, the mouse hovers and clicks. On a controller the D-pad or left stick moves, A (south)
+//! picks and B (east) or Start continues. While the menu is open R and the quick-retry key (and
+//! their controller inputs) pick their item at once.
 //!
 //! The selector is the delicious fruit: the package's sprite `cherry` (its first two frames) when
 //! it has one, else a placeholder drawn here. The game's own P-key pause is sim input and stays
@@ -27,6 +28,7 @@ use iwbtg_format::files::PackageFiles;
 use iwbtg_sim::input::Action;
 use iwbtg_sim::world::SimStatus;
 
+use crate::bindings::{Bindings, PadInput};
 use crate::hud::{HudLayout, Paused};
 use crate::input::{Collector, key_code};
 use crate::package::{SpriteImage, decode_png};
@@ -38,6 +40,9 @@ use crate::view::{Game, SimTick};
 
 /// The key that opens and closes the menu.
 pub const PAUSE_KEY: KeyCode = KeyCode::Escape;
+/// The controller button that opens and closes the menu (#624). The game's `menu` action has no
+/// controller default, so Start never reaches the sim unless the player binds it there.
+pub const PAUSE_PAD: PadInput = PadInput::Start;
 
 /// The menu's items, top to bottom.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -203,13 +208,58 @@ fn quick_retry(collector: Option<&Collector>, key: KeyCode) -> bool {
     collector.is_some_and(|c| key_code(key).is_some_and(|k| c.bindings().is_quick_retry_key(k)))
 }
 
-/// Escape opens and closes; while open the arrows move and the pick keys pick.
+/// What a controller input does in the open menu: pick an item, pick the selected one, or move.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PadCommand {
+    Pick(Item),
+    PickSelected,
+    Step(i32),
+}
+
+/// The open menu's controller layout: Start and B (east) continue, A (south) picks, the D-pad and
+/// the left stick move; then the inputs bound to quick-retry, `restart`, `jump`/`accept` and
+/// `up`/`down` do what their keys do.
+fn pad_command(bindings: &Bindings, input: PadInput) -> Option<PadCommand> {
+    use PadCommand::{Pick, PickSelected, Step};
+    match input {
+        PAUSE_PAD | PadInput::East => Some(Pick(Item::Continue)),
+        PadInput::South => Some(PickSelected),
+        PadInput::DPadUp | PadInput::StickUp => Some(Step(-1)),
+        PadInput::DPadDown | PadInput::StickDown => Some(Step(1)),
+        _ if bindings.client_pad(input) == Some(crate::bindings::ClientKey::QuickRetry) => {
+            Some(Pick(Item::RestartRun))
+        }
+        _ => match bindings.pad_action(input) {
+            Some(Action::Restart) => Some(Pick(Item::RetryFromSave)),
+            Some(Action::Jump | Action::Accept) => Some(PickSelected),
+            Some(Action::Up) => Some(Step(-1)),
+            Some(Action::Down) => Some(Step(1)),
+            _ => None,
+        },
+    }
+}
+
+/// Escape or Start opens and closes; while open the arrows (D-pad, stick) move and the pick keys
+/// (A) pick.
 fn keys(
     keys: Res<ButtonInput<KeyCode>>,
     collector: Option<Res<Collector>>,
     game: NonSend<Game>,
     mut menu: ResMut<Menu>,
+    mut pad_before: Local<[bool; PadInput::ALL.len()]>,
 ) {
+    // The controller inputs that went down since the last frame (the collector holds the active
+    // pad's state, read before the fixed clock).
+    let mut pad_pressed = Vec::new();
+    if let Some(c) = collector.as_deref() {
+        for input in PadInput::ALL {
+            let down = c.pad_down(input);
+            if down && !pad_before[input as usize] {
+                pad_pressed.push(input);
+            }
+            pad_before[input as usize] = down;
+        }
+    }
     if let Some(item) = menu.preview
         && game.sim.world().tick >= PREVIEW_TICK
     {
@@ -219,13 +269,31 @@ fn keys(
         return;
     }
     if !menu.open {
-        if keys.just_pressed(PAUSE_KEY) {
+        if keys.just_pressed(PAUSE_KEY) || pad_pressed.contains(&PAUSE_PAD) {
             menu.open = true;
             menu.selected = Item::Continue;
         }
         return;
     }
     let collector = collector.as_deref();
+    if let Some(c) = collector {
+        for &input in &pad_pressed {
+            let pick = match pad_command(c.bindings(), input) {
+                Some(PadCommand::Pick(item)) => Some(item),
+                Some(PadCommand::PickSelected) => Some(menu.selected),
+                Some(PadCommand::Step(by)) => {
+                    menu.selected = menu.selected.step(by);
+                    None
+                }
+                None => None,
+            };
+            if let Some(item) = pick {
+                menu.selected = item;
+                menu.picked = Some(item);
+                return;
+            }
+        }
+    }
     for &key in keys.get_just_pressed() {
         let action = bound(collector, key);
         let pick = match key {
@@ -754,6 +822,81 @@ mod tests {
         assert_eq!(world.resource::<Menu>().paused_ticks(), 251);
         reset(&mut world);
         assert_eq!(world.resource::<Menu>().paused_ticks(), 0);
+    }
+
+    /// A controller opens the menu with Start, moves with the D-pad and the stick, picks with A
+    /// and continues with B or Start; Start never reaches the game (#624).
+    #[test]
+    fn a_controller_opens_navigates_picks_and_closes_the_menu() {
+        use bevy::ecs::system::RunSystemOnce;
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-clear.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let mut world = crate::view::test_world(&pkg);
+        world.init_resource::<ButtonInput<KeyCode>>();
+        world.init_resource::<Menu>();
+        let mut system = IntoSystem::into_system(keys);
+        system.initialize(&mut world);
+        // One frame: set the pad as the collector would see it, then run the menu's keys.
+        let mut frame = |world: &mut World, down: &[PadInput]| {
+            let mut c = world.resource_mut::<Collector>();
+            for input in PadInput::ALL {
+                c.set_pad(input, down.contains(&input));
+            }
+            system.run((), world).unwrap();
+        };
+        assert_eq!(
+            world.resource::<Collector>().bindings().pad_action(PAUSE_PAD),
+            None,
+            "Start is not the game's"
+        );
+        frame(&mut world, &[PAUSE_PAD]);
+        assert!(world.resource::<Menu>().open, "Start opens");
+        frame(&mut world, &[PAUSE_PAD]);
+        assert!(world.resource::<Menu>().picked.is_none(), "held Start does nothing more");
+        frame(&mut world, &[PadInput::DPadDown]);
+        frame(&mut world, &[]);
+        frame(&mut world, &[PadInput::StickDown]);
+        assert_eq!(world.resource::<Menu>().selected, Item::RestartRun);
+        frame(&mut world, &[PadInput::DPadUp]);
+        frame(&mut world, &[PadInput::South]);
+        assert_eq!(world.resource::<Menu>().picked, Some(Item::RetryFromSave), "A picks");
+        world.run_system_once(act).unwrap();
+        assert!(!world.resource::<Menu>().open);
+        let f = world.resource_mut::<Collector>().take_frame();
+        assert_eq!(f.pressed, Action::Restart.bit(), "only Retry from save's restart");
+
+        frame(&mut world, &[]);
+        frame(&mut world, &[PAUSE_PAD]);
+        assert!(world.resource::<Menu>().open);
+        frame(&mut world, &[PadInput::East]);
+        assert_eq!(world.resource::<Menu>().picked, Some(Item::Continue), "B continues");
+        world.run_system_once(act).unwrap();
+        frame(&mut world, &[]);
+        frame(&mut world, &[PAUSE_PAD]);
+        frame(&mut world, &[]);
+        frame(&mut world, &[PAUSE_PAD]);
+        assert_eq!(world.resource::<Menu>().picked, Some(Item::Continue), "Start closes");
+        world.run_system_once(act).unwrap();
+        assert!(!world.resource::<Menu>().open);
+        assert_eq!(world.resource_mut::<Collector>().take_frame().pressed, 0);
+    }
+
+    /// Y (the default `restart` input) picks Retry from save, as R does; a pad input bound to
+    /// quick-retry picks Restart run.
+    #[test]
+    fn bound_controller_inputs_pick_their_items() {
+        let mut config = crate::bindings::Config::default();
+        config.set("quick-retry=pad:select").unwrap();
+        let b = Bindings::from_config(&config).unwrap();
+        assert_eq!(
+            pad_command(&b, PadInput::North),
+            Some(PadCommand::Pick(Item::RetryFromSave))
+        );
+        assert_eq!(
+            pad_command(&b, PadInput::Select),
+            Some(PadCommand::Pick(Item::RestartRun))
+        );
+        assert_eq!(pad_command(&b, PadInput::West), None, "shoot does nothing");
     }
 
     /// Retry from save closes the menu, drops what was pressed in it and presses Restart for the
