@@ -17,9 +17,9 @@ use bevy::asset::RenderAssetUsages;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::sprite::Anchor;
+use iwbtg_sim::collide::PlacedMask;
 use iwbtg_sim::collide::instance_box;
 use iwbtg_sim::collide::overlap::point_in;
-use iwbtg_sim::collide::PlacedMask;
 use iwbtg_sim::def::{Builtin, ClassMask, GameDef};
 use iwbtg_sim::mods::{Mod, ModSet};
 use iwbtg_sim::world::{InstId, Instance};
@@ -112,7 +112,10 @@ fn rasterize(placed: &PlacedMask) -> Option<(u32, u32, Vec<u8>)> {
         return None;
     }
     let solid = |x: i64, y: i64| point_in(placed, b.left + x, b.top + y).unwrap_or(false);
-    let inside: Vec<bool> = (0..h).flat_map(|y| (0..w).map(move |x| (x, y))).map(|(x, y)| solid(x, y)).collect();
+    let inside: Vec<bool> = (0..h)
+        .flat_map(|y| (0..w).map(move |x| (x, y)))
+        .map(|(x, y)| solid(x, y))
+        .collect();
     let at = |x: i64, y: i64| x >= 0 && y >= 0 && x < w && y < h && inside[(y * w + x) as usize];
     let mut rgba = Vec::with_capacity(inside.len() * 4);
     for y in 0..h {
