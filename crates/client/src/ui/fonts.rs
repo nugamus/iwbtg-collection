@@ -231,8 +231,18 @@ mod tests {
                 );
             }
             assert_eq!(family_for(family, 'ア').as_deref(), Some("Noto Sans JP"));
+            // The ellipsis that ends cut text (widgets::ellipsis_text, #636).
+            assert!(
+                family_for(family, '…').is_some(),
+                "{family:?} has no face for '…'"
+            );
         }
         assert_eq!(family_for(Family::Barlow, '3').as_deref(), Some("Barlow"));
+        assert_eq!(family_for(Family::Barlow, '…').as_deref(), Some("Barlow"));
+        assert_eq!(
+            family_for(Family::Condensed, '…').as_deref(),
+            Some("Barlow Condensed")
+        );
     }
 
     #[test]

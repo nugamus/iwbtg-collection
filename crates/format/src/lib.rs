@@ -34,6 +34,7 @@ pub mod reach;
 pub mod rooms;
 pub mod sounds;
 pub mod sprites;
+pub mod ties;
 pub mod timelines;
 pub mod tracemap;
 pub mod vars;

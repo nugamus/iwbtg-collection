@@ -696,7 +696,8 @@ const ATAN2_GAPS: [i128; 10] = [0; 10];
 
 /// M6: the ten num-trig shots reproduce bit for bit with our libm: `atan2` (except shot 3, see
 /// below), `cos`, `sin`, `sqrt(h*h + v*v)` (not `hypot`: shot 5 reads `2.9999999999999996`) and
-/// `radtodeg(atan2(-v, h))` plus 360. This says nothing about the x87 runner (M6 OPEN).
+/// `radtodeg(atan2(-v, h))` plus 360. This says nothing about the x87 runner (M6: its cos/sin differ in the last bits; atan2 OPEN,
+/// research#154).
 ///
 /// Shots 3 and 10 are M6 gaps: our `atan2` is one ulp below the recorded `agl` (shot 3:
 /// `0x3FC789462DE906C8` against `...C9`). The rest of each shot is checked from the recorded
@@ -722,7 +723,7 @@ fn m6_recorder_bits() {
 }
 
 /// M6: off-table angles where our libm is one ulp away from the recorder. Pinned so a libm or
-/// table change shows up; which bits are right for GM8 is OPEN (x87 vs libm). From
+/// table change shows up; which bits the real runner's x87 gives here is OPEN (research#154). From
 /// `traces/eat-the-rori-girl/t-mot-05-b.csv`: frame 4027 id 144489 has speed 16 at direction 284
 /// and hspeed `3.870750329594679`; frame 3802 id 144474 has speed -2.5 at direction 45 and vspeed
 /// `1.7677669529663689`.

@@ -157,8 +157,8 @@ fn increment_decimal(text: &str) -> String {
 ///
 /// Packages store the result (the converter writes it in shortest round-trip form), so the sim
 /// never parses GML at run time. This function documents the rule, pins it in tests and gives
-/// built-in Rust constants that port a GML literal their value. The real runner's parser is
-/// OPEN (research#8).
+/// built-in Rust constants that port a GML literal their value. The real runner parses literals the same
+/// way (CLONE_SPEC, Number handling, Confirmed (real runner), research#8).
 pub fn gml_literal(text: &str) -> Option<Real> {
     let (int, frac) = text.split_once('.').unwrap_or((text, ""));
     let digits = format!("{int}{frac}");

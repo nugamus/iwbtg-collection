@@ -1,11 +1,12 @@
 //! The client's UI kit (docs/decisions/0003-ui-toolkit.md, docs/architecture/client/ui.md): design
-//! tokens, the bundled fonts, the icons, the backdrop, the sheared shape material, the shared
+//! tokens, the bundled fonts, the icons, glows, the backdrop, the sheared shape material, the shared
 //! components and motion.
 //! Every screen builds from these parts; none brings its own colours, sizes or shapes.
 
 pub mod backdrop;
 pub mod fonts;
 pub mod gallery;
+pub mod glow;
 pub mod icons;
 pub mod motion;
 pub mod notice;
@@ -64,6 +65,7 @@ impl Plugin for UiKitPlugin {
             motion::plugin,
             widgets::plugin,
             icons::plugin,
+            glow::plugin,
             notice::plugin,
         ));
         // The game screen may have added it already.

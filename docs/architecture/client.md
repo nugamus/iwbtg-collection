@@ -23,4 +23,5 @@ One page per module or area, so two PRs on different modules never edit the same
 - [Stats](client/stats.md): `stats/`
 - [Storage](client/storage.md): `storage.rs`
 - [UI](client/ui.md): the UI kit (`ui/`)
+- [Visual mods](client/visual.md): hitboxes and no background (`visual.rs`)
 - [The window and the view](client/view.md): opening a package, drawing the sim, the fixed clock, input and bindings, interpolation, the overlay, the demo packages (`package.rs`, `view.rs`, `input.rs`, `bindings.rs`)

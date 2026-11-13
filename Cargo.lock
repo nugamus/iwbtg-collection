@@ -3530,6 +3530,7 @@ dependencies = [
  "iwbtg-format",
  "iwbtg-sim",
  "js-sys",
+ "parley",
  "png",
  "postcard",
  "serde",
