@@ -226,6 +226,10 @@ fn spawn_background(
 }
 
 /// Rebuilds the art when the sim's room changes.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "a Bevy system: each is one resource it reads"
+)]
 pub fn sync_room_art(
     mut commands: Commands,
     game: NonSend<Game>,
@@ -373,6 +377,10 @@ pub(crate) fn still(
 }
 
 /// Moves the scrolling background layers once per tick: each one is rebuilt where it is now.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "a Bevy system: each is one resource it reads"
+)]
 pub fn scroll_backgrounds(
     mut commands: Commands,
     game: NonSend<Game>,
