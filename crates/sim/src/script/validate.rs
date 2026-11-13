@@ -251,9 +251,10 @@ pub fn validate(def: &GameDef) -> Vec<Issue> {
 
 /// The room changes one script can request (#731), read from its source without running it:
 /// the room literals it passes to `room_goto` and whether it calls `room_goto_next` or
-/// `room_goto_previous` anywhere in the file. The format loader's reachability check
-/// (`iwbtg_format::reach`) turns them into edges. A `room_goto` whose argument is not a string
-/// literal (`room_goto(this.roomTo)`) names no room here.
+/// `room_goto_previous` anywhere in the file, and the kind literals it passes to
+/// `instance_create` (#751), whose own calls run in the same room. The format loader's
+/// reachability check (`iwbtg_format::reach`) turns them into edges. A call whose argument is
+/// not a string literal (`room_goto(this.roomTo)`) names nothing here.
 #[derive(Clone, Default, PartialEq, Eq, Debug)]
 pub struct RoomCalls {
     /// Room ids passed as literals to `room_goto`, as written (they may name no room).
@@ -262,6 +263,8 @@ pub struct RoomCalls {
     pub next: bool,
     /// Calls `room_goto_previous`.
     pub previous: bool,
+    /// Kind ids passed as literals to `instance_create`, as written (they may name no kind).
+    pub creates: BTreeSet<String>,
 }
 
 /// [`RoomCalls`] of every script, by index into `GameDef::scripts`. A script that does not
@@ -282,6 +285,11 @@ pub fn room_calls(def: &GameDef) -> Vec<RoomCalls> {
                             "room_goto" => {
                                 if let Some(Expr::StringConstant(s, _)) = c.args.first() {
                                     calls.goto.insert(s.to_string());
+                                }
+                            }
+                            "instance_create" => {
+                                if let Some(Expr::StringConstant(s, _)) = c.args.first() {
+                                    calls.creates.insert(s.to_string());
                                 }
                             }
                             "room_goto_next" => calls.next = true,

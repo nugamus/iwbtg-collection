@@ -410,7 +410,7 @@ fn hero(c: &mut ChildSpawner, s: &Summary, d: &Dims, fruit: Option<Handle<Image>
     });
 }
 
-/// A rank change value (`a → b` sets the arrow in text, from the Noto Sans Math fallback).
+/// A rank change value (`a → b` sets the arrow in text, from the Inter arrows fallback).
 fn value(c: &mut ChildSpawner, value: &str, style: Type) {
     c.spawn((text(value, style, tokens::INK), TextLayout::no_wrap()));
 }
