@@ -118,6 +118,12 @@ impl Collector {
         }
     }
 
+    /// Whether a controller input is down now (the pause menu reads the controller through this,
+    /// so it sees the active pad and the stick gate as the game does).
+    pub fn pad_down(&self, input: PadInput) -> bool {
+        self.pad_down[input as usize]
+    }
+
     /// The current state of a controller input; a change is a press or a release.
     pub fn set_pad(&mut self, input: PadInput, down: bool) {
         let slot = &mut self.pad_down[input as usize];

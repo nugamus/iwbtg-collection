@@ -105,12 +105,12 @@ impl PadInput {
 }
 
 /// The controller defaults: D-pad or left stick to move, A (south) jumps, X (west) shoots,
-/// Y (north) restarts, B (east) suicides, Start opens the menu.
-const DEFAULT_PAD: [(PadInput, Action); 11] = [
+/// Y (north) restarts, B (east) suicides. Start is the client's pause button (`pause::PAUSE_PAD`,
+/// #624), so the game's `menu` action has no controller default.
+const DEFAULT_PAD: [(PadInput, Action); 10] = [
     (PadInput::South, Action::Jump),
     (PadInput::West, Action::Shoot),
     (PadInput::North, Action::Restart),
-    (PadInput::Start, Action::Menu),
     (PadInput::DPadLeft, Action::Left),
     (PadInput::DPadRight, Action::Right),
     (PadInput::DPadUp, Action::Up),
