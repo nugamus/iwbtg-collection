@@ -8,7 +8,6 @@ use bevy::asset::RenderAssetUsages;
 use bevy::camera::ScalingMode;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
-use bevy::sprite::Anchor;
 use iwbtg_sim::sim::{Sim, SimOptions};
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::world::{InstId, SimStatus};
@@ -214,16 +213,12 @@ struct Cap(FrameCap);
 /// Ticks and frames counted over the last full second of wall time, for the overlay.
 #[derive(Resource)]
 pub(crate) struct Stats {
-    window_start: Instant,
-    ticks: u32,
-    frames: u32,
-    ticks_per_second: f64,
-    frames_per_second: f64,
+    pub(crate) window_start: Instant,
+    pub(crate) ticks: u32,
+    pub(crate) frames: u32,
+    pub(crate) ticks_per_second: f64,
+    pub(crate) frames_per_second: f64,
 }
-
-/// The overlay text entity.
-#[derive(Component)]
-pub(crate) struct Overlay;
 
 /// The view's command-line flags (main.rs flattens each module's group, #530).
 #[derive(clap::Args, Debug)]
@@ -337,7 +332,7 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
         Update,
         (
             follow_view,
-            (set_alpha, sync_instances, overlay).chain().after(follow_view),
+            (set_alpha, sync_instances).chain().after(follow_view),
             hud::show_sign,
             hud::show_countdown,
         ),
@@ -357,26 +352,8 @@ fn setup(
     mut images: ResMut<Assets<Image>>,
     pending: Res<PendingImages>,
     room: Res<RoomSize>,
-    screenshot: Option<Res<ScreenshotTo>>,
 ) {
     // The room always fits the window, whatever its size: letterboxed, never cropped.
-    commands.spawn((
-        Text2d::new(""),
-        TextFont {
-            font_size: bevy::text::FontSize::Px(14.0),
-            ..default()
-        },
-        TextColor(Color::srgb(1.0, 1.0, 0.4)),
-        Anchor::TOP_LEFT,
-        Transform::from_xyz(-room.0.x / 2.0 + 4.0, room.0.y / 2.0 - 4.0, 1000.0),
-        // A `--screenshot` check never draws the overlay, whatever the setting.
-        if crate::settings::get().overlay && screenshot.is_none() {
-            Visibility::Inherited
-        } else {
-            Visibility::Hidden
-        },
-        Overlay,
-    ));
     commands.spawn((
         Camera2d,
         GameCamera,
@@ -417,8 +394,7 @@ fn setup(
 }
 
 /// Points the camera at view 0 of the sim's room (the runner's view follow already moved it this
-/// tick): the camera centres on the view and turns with its angle, and the overlay stays at the
-/// view's top-left corner. Rooms without an enabled, visible view 0 show the whole room. Also keeps
+/// tick): the camera centres on the view and turns with its angle. Rooms without an enabled, visible view 0 show the whole room. Also keeps
 /// `RoomSize` equal to the current room, so rooms of different sizes place their sprites right.
 ///
 /// With `--interpolate` the view is blended between its place before the last tick and its place
@@ -433,8 +409,7 @@ pub(crate) fn follow_view(
     fixed: Res<Time<Fixed>>,
     mut room: ResMut<RoomSize>,
     mut rect: ResMut<ViewRect>,
-    mut camera: Single<&mut Transform, (With<GameCamera>, Without<Overlay>)>,
-    mut overlay: Single<&mut Transform, (With<Overlay>, Without<GameCamera>)>,
+    mut camera: Single<&mut Transform, With<GameCamera>>,
 ) {
     let world = game.sim.world();
     let Some(def) = game.sim.def().room(world.room) else {
@@ -456,22 +431,11 @@ pub(crate) fn follow_view(
     camera.translation.x = centre.x;
     camera.translation.y = centre.y;
     camera.rotation = turn;
-    // The overlay sits 4 px inside the view's top-left corner and stays upright on screen.
-    let corner = turn * Vec3::new(-next.w / 2.0 + 4.0, next.h / 2.0 - 4.0, 0.0);
-    overlay.translation.x = centre.x + corner.x;
-    overlay.translation.y = centre.y + corner.y;
-    overlay.rotation = turn;
 }
 
 /// Remembers how far the fixed clock is into the next tick, for `--interpolate`.
 fn set_alpha(fixed: Res<Time<Fixed>>, mut previous: ResMut<Previous>) {
     previous.alpha = f64::from(fixed.overstep_fraction());
-}
-
-/// A number with two decimals, without the sign of a tiny negative that rounds to zero.
-fn two(v: f64) -> String {
-    let text = format!("{v:.2}");
-    if text == "-0.00" { "0.00".to_string() } else { text }
 }
 
 /// Adds this frame's key events to the collector.
@@ -621,67 +585,6 @@ fn retune(fixed: &mut Time<Fixed>, room_speed: f64, speed: ClockSpeed) {
 fn follow_room_speed(game: NonSend<Game>, speed: Option<Res<ClockSpeed>>, mut fixed: ResMut<Time<Fixed>>) {
     let speed = speed.map_or_else(ClockSpeed::default, |s| *s);
     retune(&mut fixed, game.sim.world().room_speed.get(), speed);
-}
-
-/// F3 shows or hides the overlay; once a second it recounts ticks and frames per second.
-fn overlay(
-    game: NonSend<Game>,
-    keys: Res<ButtonInput<KeyCode>>,
-    fixed: Res<Time<Fixed>>,
-    mut stats: ResMut<Stats>,
-    collector: Res<Collector>,
-    mut text: Single<(&mut Text2d, &mut Visibility), With<Overlay>>,
-) {
-    stats.frames += 1;
-    let elapsed = stats.window_start.elapsed();
-    if elapsed >= Duration::from_secs(1) {
-        let secs = elapsed.as_secs_f64();
-        stats.ticks_per_second = f64::from(stats.ticks) / secs;
-        stats.frames_per_second = f64::from(stats.frames) / secs;
-        stats.ticks = 0;
-        stats.frames = 0;
-        stats.window_start = Instant::now();
-    }
-    let (label, visibility) = &mut *text;
-    if keys.just_pressed(KeyCode::F3) {
-        **visibility = if **visibility == Visibility::Hidden {
-            Visibility::Inherited
-        } else {
-            Visibility::Hidden
-        };
-        crate::settings::update(|s| s.overlay = **visibility != Visibility::Hidden);
-    }
-    let status = match &game.sim.world().status {
-        SimStatus::Running => String::new(),
-        SimStatus::Halted(e) => format!("  HALTED: {e}"),
-        SimStatus::Ended => "  ended".to_string(),
-    };
-    let world = game.sim.world();
-    let room = game.sim.def().room(world.room).map_or_else(
-        || "?".to_string(),
-        |r| format!("{} ({}x{})", r.name, r.width, r.height),
-    );
-    let kid = match world.kid(&game.sim.rules().tick).and_then(|id| world.get(id)) {
-        Some(k) => format!(
-            "kid x {}  y {}  hspeed {}  vspeed {}",
-            two(k.m.x().get()),
-            two(k.m.y().get()),
-            two(k.m.hspeed().get()),
-            two(k.m.vspeed().get()),
-        ),
-        None => "no kid".to_string(),
-    };
-    label.0 = format!(
-        "ticks/s {:.1} (game {})  fps {:.0}  tick {}{status}  [F3 hides]
-room {room}
-{kid}
-{input}",
-        stats.ticks_per_second,
-        fixed.timestep().as_secs_f64().recip().round(),
-        stats.frames_per_second,
-        world.tick,
-        input = collector.describe(),
-    );
 }
 
 /// Holds the frame back to the cap: sleeps most of the wait, spins the last stretch.
@@ -881,13 +784,6 @@ mod tests {
             frame_rect(4, (10.0, 10.0), grid),
             Rect::new(10.0, 10.0, 20.0, 20.0)
         );
-    }
-
-    #[test]
-    fn two_decimals_never_show_a_negative_zero() {
-        assert_eq!(two(-0.000_001), "0.00");
-        assert_eq!(two(-1.5), "-1.50");
-        assert_eq!(two(567.4), "567.40");
     }
 
     #[test]
