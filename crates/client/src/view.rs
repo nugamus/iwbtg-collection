@@ -394,8 +394,9 @@ fn setup(
 }
 
 /// Points the camera at view 0 of the sim's room (the runner's view follow already moved it this
-/// tick): the camera centres on the view and turns with its angle. Rooms without an enabled, visible view 0 show the whole room. Also keeps
-/// `RoomSize` equal to the current room, so rooms of different sizes place their sprites right.
+/// tick): the camera centres on the view and turns with its angle. Rooms without an enabled,
+/// visible view 0 show the whole room. Also keeps `RoomSize` equal to the current room, so rooms
+/// of different sizes place their sprites right.
 ///
 /// With `--interpolate` the view is blended between its place before the last tick and its place
 /// now, like the instances, so a scrolling room does not jitter against moving sprites.
