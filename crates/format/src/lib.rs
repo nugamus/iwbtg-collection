@@ -30,6 +30,7 @@ pub mod order;
 pub mod params;
 pub mod paths;
 pub mod physics;
+pub mod reach;
 pub mod rooms;
 pub mod sounds;
 pub mod sprites;
