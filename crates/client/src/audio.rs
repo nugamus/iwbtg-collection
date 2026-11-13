@@ -2,7 +2,9 @@
 //! The sim decides what plays and for how long (its sound model); this only makes the noise.
 //! The audio offset delays playback only, never the sim (docs/content.md, Controls and audio).
 //! `--mute`, `IWBTG_MUTE=1` and every `--screenshot` run play nothing; the volumes come from the
-//! settings file.
+//! settings file. In a browser the sound waits for the first key or click ([`unlock`]).
+
+pub mod unlock;
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
@@ -42,6 +44,10 @@ pub struct AudioArgs {
     /// Default: the saved value, else 100.
     #[arg(long, value_name = "PERCENT", value_parser = clap::value_parser!(u32).range(0..=i64::from(crate::settings::MAX_VOLUME)))]
     pub volume: Option<u32>,
+    /// Tests: start with the sound locked, as a browser page does before its first key press or
+    /// click; any key or mouse button opens it (audio/unlock.rs).
+    #[arg(long, hide = true)]
+    pub audio_locked: bool,
 }
 
 /// The environment variable that mutes every run when set to anything but empty or `0`
@@ -101,6 +107,9 @@ pub struct AudioPlugin {
     offset_ms: u32,
     levels: Levels,
     files: PackageFiles,
+    /// The sound waits for the first key or click: always in a browser (unless silent),
+    /// natively only under `--audio-locked`.
+    locked: bool,
 }
 
 impl AudioPlugin {
@@ -119,10 +128,13 @@ impl AudioPlugin {
             crate::settings::isolated(),
         );
         let settings = crate::settings::get();
+        let levels = Levels::new(&settings, muted);
+        let web = cfg!(all(target_arch = "wasm32", target_os = "unknown"));
         AudioPlugin {
             offset_ms: settings.audio_offset_ms,
-            levels: Levels::new(&settings, muted),
+            levels,
             files: files.clone(),
+            locked: args.audio_locked || (web && !levels.silent()),
         }
     }
 }
@@ -149,6 +161,7 @@ impl Plugin for AudioPlugin {
                     sync_music.after(play),
                 ),
             );
+        unlock::plugin(app, self.locked);
     }
 }
 
@@ -489,6 +502,11 @@ impl MusicSync {
         self.anchor_tick = tick;
     }
 
+    /// Leaves the tune alone for a moment from `tick` (it has just started playing).
+    pub fn settle(&mut self, tick: f64) {
+        self.settle_until = tick + SETTLE_TICKS;
+    }
+
     /// The pitch changed: later time counts at the new speed.
     pub fn set_speed(&mut self, tick: f64, tick_rate: f64, speed: f64) {
         self.reanchor(tick, tick_rate);
@@ -526,6 +544,16 @@ fn is_adapter(t: SoundTarget) -> bool {
     !matches!(t, SoundTarget::Builtin(_))
 }
 
+/// A voice as `play` changes it: its sound voice once Bevy has made one, its tune position, and
+/// its settings (all a held tune has, `unlock::Held`).
+type VoiceParts = (
+    Entity,
+    &'static Voice,
+    Option<&'static mut AudioSink>,
+    Option<&'static mut MusicSync>,
+    Option<&'static mut PlaybackSettings>,
+);
+
 /// Starts, stops and mixes what the cues ask for.
 #[allow(
     clippy::too_many_arguments,
@@ -537,9 +565,11 @@ pub fn play(
     mut queue: ResMut<Queue>,
     mut sounds: ResMut<Sounds>,
     mut assets: ResMut<Assets<AudioSource>>,
-    mut voices: Query<(Entity, &Voice, Option<&mut AudioSink>, Option<&mut MusicSync>)>,
+    mut voices: Query<VoiceParts>,
     fixed: Res<Time<Fixed>>,
     clock: Option<Res<crate::view::ClockSpeed>>,
+    lock: Option<Res<unlock::Lock>>,
+    held: Query<(), With<unlock::Held>>,
 ) {
     let def = game.sim.def();
     let tick_rate = f64::from(def.tick_rate.max(1));
@@ -563,6 +593,11 @@ pub fn play(
                         // Muted (or turned all the way down): no voice at all.
                         continue;
                     }
+                    let mode = unlock::start(lock.as_deref(), looping);
+                    if mode == unlock::Start::Drop {
+                        // The sound is locked: a one-shot sound is over by the time it opens.
+                        continue;
+                    }
                     let handle = match sounds.handles.get(&sound) {
                         Some(h) => h.clone(),
                         None => {
@@ -583,26 +618,33 @@ pub fn play(
                         .sounds
                         .get(sound.0 as usize)
                         .map_or(0.0, |d| f64::from(d.length_ticks) / tick_rate);
-                    let mut voice = commands.spawn((
-                        AudioPlayer::new(handle),
-                        PlaybackSettings {
-                            mode: if looping {
-                                PlaybackMode::Loop
-                            } else {
-                                PlaybackMode::Despawn
-                            },
-                            volume: Volume::Linear(volume * gain),
-                            speed: speed * clock,
-                            ..default()
+                    let settings = PlaybackSettings {
+                        mode: if looping {
+                            PlaybackMode::Loop
+                        } else {
+                            PlaybackMode::Despawn
                         },
-                        Voice(target, gain),
-                    ));
+                        volume: Volume::Linear(volume * gain),
+                        speed: speed * clock,
+                        ..default()
+                    };
+                    let mut voice = if mode == unlock::Start::Hold {
+                        // No sound voice yet: the game's pitch is kept and the clock speed
+                        // applied when the lock opens (`unlock::start_held`).
+                        commands.spawn((
+                            unlock::Held(handle),
+                            PlaybackSettings { speed, ..settings },
+                            Voice(target, gain),
+                        ))
+                    } else {
+                        commands.spawn((AudioPlayer::new(handle), settings, Voice(target, gain)))
+                    };
                     if looping && length > 0.0 {
                         voice.insert(MusicSync::new(now_tick, f64::from(speed), length));
                     }
                 }
                 Cmd::Stop(t) => {
-                    for (e, v, _, _) in &voices {
+                    for (e, v, _, _, _) in &voices {
                         if v.0 == t
                             || matches!((t, v.0), (SoundTarget::FmodSound(s), SoundTarget::FmodInstance { sound, .. }) if s == sound)
                         {
@@ -611,14 +653,14 @@ pub fn play(
                     }
                 }
                 Cmd::StopAll { adapter } => {
-                    for (e, v, _, _) in &voices {
+                    for (e, v, _, _, _) in &voices {
                         if is_adapter(v.0) == adapter {
                             commands.entity(e).despawn();
                         }
                     }
                 }
                 Cmd::Pause { target, paused } => {
-                    for (_, v, sink, sync) in &mut voices {
+                    for (_, v, sink, sync, settings) in &mut voices {
                         if v.0 != target {
                             continue;
                         }
@@ -627,18 +669,26 @@ pub fn play(
                         }
                         if let Some(sink) = sink {
                             if paused { sink.pause() } else { sink.play() }
+                        } else if let Some(mut settings) = settings {
+                            // Held (or not playing yet): it starts the way it was left.
+                            settings.paused = paused;
                         }
                     }
                 }
                 Cmd::Volume { target, volume } => {
-                    for (_, v, sink, _) in &mut voices {
-                        if let (true, Some(mut sink)) = (v.0 == target, sink) {
+                    for (_, v, sink, _, settings) in &mut voices {
+                        if v.0 != target {
+                            continue;
+                        }
+                        if let Some(mut sink) = sink {
                             sink.set_volume(Volume::Linear(volume * v.1));
+                        } else if let Some(mut settings) = settings {
+                            settings.volume = Volume::Linear(volume * v.1);
                         }
                     }
                 }
                 Cmd::Speed { target, speed } => {
-                    for (_, v, sink, sync) in &mut voices {
+                    for (entity, v, sink, sync, settings) in &mut voices {
                         if v.0 != target {
                             continue;
                         }
@@ -647,6 +697,14 @@ pub fn play(
                         }
                         if let Some(sink) = sink {
                             sink.set_speed(speed * clock);
+                        } else if let Some(mut settings) = settings {
+                            // A held tune keeps the game's pitch until the lock opens; one about
+                            // to play takes the clock's.
+                            settings.speed = if held.contains(entity) {
+                                speed
+                            } else {
+                                speed * clock
+                            };
                         }
                     }
                 }

@@ -5,7 +5,7 @@ Part of [Architecture](../architecture.md).
 One page per module or area, so two PRs on different modules never edit the same file. A new module gets its own page here and one line in this list (alphabetical).
 
 - [Room art](client/art.md): `art.rs`
-- [Audio](client/audio.md): `audio.rs`
+- [Audio](client/audio.md): `audio.rs`, `audio/unlock.rs`
 - [HUD](client/hud.md): `hud/`
 - [Structure](client/main.md): how modules own their flags and plugins (`main.rs`)
 - [Import](client/import.md): `.iwbz` files, the library, drag and drop (`import.rs`)

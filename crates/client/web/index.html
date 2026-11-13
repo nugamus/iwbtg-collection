@@ -11,6 +11,43 @@
 <body>
 <!-- The browser build of iwbtg-client (docs/dev-setup.md, UI gallery in a browser). `pkg/` is
      what wasm-bindgen writes; it is not committed. -->
+<!-- Audio unlock (docs/architecture/client/audio.md, Web audio unlock; #472). A browser keeps a
+     page's audio suspended until a key press, click or touch (a controller press does not
+     count). This keeps every AudioContext the page makes, resumes them on the first such input
+     and sets window.iwbtgAudioUnlocked once one runs; the client holds its music until then.
+     It must run before the client creates its context, so it comes before init(). -->
+<script>
+  (() => {
+    window.iwbtgAudioUnlocked = false;
+    const contexts = [];
+    const check = (ctx) => {
+      if (ctx.state === "running") window.iwbtgAudioUnlocked = true;
+    };
+    for (const name of ["AudioContext", "webkitAudioContext"]) {
+      const Base = window[name];
+      if (!Base) continue;
+      window[name] = class extends Base {
+        constructor(...args) {
+          super(...args);
+          contexts.push(this);
+          this.addEventListener("statechange", () => check(this));
+          check(this);
+        }
+      };
+    }
+    const events = ["keydown", "pointerdown", "touchend"];
+    const unlock = () => {
+      for (const ctx of contexts) {
+        if (ctx.state !== "running") ctx.resume().then(() => check(ctx), () => {});
+        check(ctx);
+      }
+      if (window.iwbtgAudioUnlocked) {
+        for (const e of events) window.removeEventListener(e, unlock, true);
+      }
+    };
+    for (const e of events) window.addEventListener(e, unlock, true);
+  })();
+</script>
 <script type="module">
   import init from "./pkg/iwbtg-client.js";
   init();

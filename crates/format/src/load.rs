@@ -621,6 +621,8 @@ impl<'a> Loader<'a> {
             stripped,
         };
         self.merge_script_events(&mut def);
+        // Step 7: timing rooms a run can reach (#504).
+        self.reachable_timing_rooms(&def);
         // Step 7 (WP7b): params against the built-ins' specs, on the built definition.
         let mut d = Vec::new();
         let trace = self.trace_mode();
@@ -2371,6 +2373,45 @@ impl<'a> Loader<'a> {
                     ),
                 );
                 None
+            }
+        }
+    }
+
+    /// A warning for each `enter_room` trigger of `[timing]` or a map whose room no warp, room
+    /// creation spawn, cut room or start leads to ([`crate::reach`]). Each spelling once: a map
+    /// key left out reuses `[timing]`'s.
+    fn reachable_timing_rooms(&mut self, def: &GameDef) {
+        let reached = crate::reach::reachable(def);
+        let m: &'a Manifest = self.m;
+        let t = m.timing.get_ref();
+        let mut rooms: Vec<&Spanned<String>> = Vec::new();
+        let mut take = |room: Option<&'a Spanned<String>>| rooms.extend(room);
+        take(t.start.room.as_ref());
+        for s in &t.stages {
+            take(s.room.as_ref());
+        }
+        take(t.end.room.as_ref());
+        for map in &m.maps {
+            take(map.start.as_ref().and_then(|t| t.room.as_ref()));
+            for s in map.stages.iter().flatten() {
+                take(s.room.as_ref());
+            }
+            take(map.end.as_ref().and_then(|t| t.room.as_ref()));
+        }
+        for r in rooms {
+            let Some(id) = self.room_ids.get(r.get_ref()) else {
+                continue;
+            };
+            if !reached.contains(id) {
+                self.diags.push(Diagnostic::warning_at(
+                    MANIFEST_PATH,
+                    self.manifest_text,
+                    r.span().start,
+                    format!(
+                        "timing room `{}` cannot be reached: no start, warp, room spawn or cut room leads there (docs/format/v0.md, Validation step 7)",
+                        r.get_ref()
+                    ),
+                ));
             }
         }
     }
