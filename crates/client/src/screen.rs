@@ -408,7 +408,16 @@ mod tests {
         let plain = PlainBackdrop(crate::visual::PLAIN);
         let grey = KeyArt::Colour([0x3a; 3]);
         assert_eq!(
-            plain_art(KeyArt::RoomBackground("a.png".into()), Some(&plain)),
+            plain_art(
+                KeyArt::RoomBackground(iwbtg_format::key_art::RoomLayer {
+                    path: "a.png".into(),
+                    stretch: false,
+                    tile: (true, true),
+                    offset: (0, 0),
+                    color: None,
+                }),
+                Some(&plain)
+            ),
             grey
         );
         assert_eq!(plain_art(KeyArt::Colour([1, 2, 3]), Some(&plain)), grey);
