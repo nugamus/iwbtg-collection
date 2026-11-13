@@ -12,10 +12,11 @@
 //! skip-cutscene = ["right-bumper"]
 //! ```
 //!
-//! `quick-retry` (retry.rs) and `skip-cutscene` (skip.rs) sit beside the sim actions in the same
-//! tables, but they are client keys ([`ClientKey`]), not `Action`s: they never enter an
-//! `InputFrame` or a replay. Quick-retry defaults to the key left of `1` (Backquote),
-//! skip-cutscene to Backspace; neither has a controller default.
+//! `quick-retry` (retry.rs), `skip-cutscene` (skip.rs) and `frame-advance` (practice.rs) sit
+//! beside the sim actions in the same tables, but they are client keys ([`ClientKey`]), not
+//! `Action`s: they never enter an `InputFrame` or a replay. Quick-retry defaults to the key left
+//! of `1` (Backquote), skip-cutscene to Backspace, frame-advance to F; none has a controller
+//! default.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -131,16 +132,23 @@ pub enum ClientKey {
     /// Skips the cutscene or dialogue region that holds in a ranked run (skip.rs, #573). Not the
     /// game's own `skip` action (S), which the sim reads.
     SkipCutscene,
+    /// Runs one tick while frame advance holds the clock (practice.rs, #551).
+    FrameAdvance,
 }
 
 impl ClientKey {
-    pub const ALL: [ClientKey; 2] = [ClientKey::QuickRetry, ClientKey::SkipCutscene];
+    pub const ALL: [ClientKey; 3] = [
+        ClientKey::QuickRetry,
+        ClientKey::SkipCutscene,
+        ClientKey::FrameAdvance,
+    ];
 
     /// The name in the bindings file and in `--bind`.
     pub const fn name(self) -> &'static str {
         match self {
             ClientKey::QuickRetry => QUICK_RETRY,
             ClientKey::SkipCutscene => "skip-cutscene",
+            ClientKey::FrameAdvance => "frame-advance",
         }
     }
 
@@ -155,11 +163,13 @@ impl ClientKey {
         self as usize
     }
 
-    /// The default key: Backquote (left of `1`) to quick-retry, Backspace to skip.
+    /// The default key: Backquote (left of `1`) to quick-retry, Backspace to skip, F to advance a
+    /// frame.
     const fn default_key(self) -> u8 {
         match self {
             ClientKey::QuickRetry => oem::BACKQUOTE,
             ClientKey::SkipCutscene => vk::BACKSPACE,
+            ClientKey::FrameAdvance => b'F',
         }
     }
 }

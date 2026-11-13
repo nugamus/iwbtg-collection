@@ -2,8 +2,8 @@
 //!
 //! Sudden Death: the tick that raises the death counter is the run's last. The sim stops
 //! ticking there and a "Run over" banner shows; the window stays open on that frame until the
-//! quick-retry key, or at once with auto-retry (`retry.rs`). The other
-//! mods are rejected until they are built (#550, #551, #39).
+//! quick-retry key, or at once with auto-retry (`retry.rs`). Slow motion and Frame advance act
+//! on the clock (practice.rs). The other mods are rejected until they are built (#550, #39).
 
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
@@ -12,12 +12,13 @@ use iwbtg_sim::mods::{Mod, ModSet};
 use crate::view::{Game, GameCamera, SimTick};
 
 /// The mods the client can play so far.
-const BUILT: [Mod; 1] = [Mod::SuddenDeath];
+const BUILT: [Mod; 3] = [Mod::SuddenDeath, Mod::SlowMotion, Mod::FrameAdvance];
 
 /// The mods' command-line flags (main.rs flattens each module's group, #530).
 #[derive(clap::Args, Debug)]
 pub struct ModsArgs {
-    /// Mods for this run, by code: `SD` (Sudden Death). Several join with `,` or `+`.
+    /// Mods for this run, by code: `SD` (Sudden Death), `SL` (Slow motion, see `--slow-speed`),
+    /// `FA` (Frame advance). Several join with `,` or `+`.
     #[arg(long, value_name = "CODES", value_parser = parse_built, default_value = "")]
     pub mods: ModSet,
 }
@@ -153,10 +154,11 @@ mod tests {
     fn only_built_mods_are_accepted() {
         assert_eq!(parse_built("sd").unwrap().codes(), "SD");
         assert_eq!(parse_built("").unwrap(), ModSet::NONE);
+        assert_eq!(parse_built("sl+fa").unwrap().codes(), "SL+FA");
         assert!(
-            parse_built("SD,SL")
+            parse_built("SD,SS")
                 .unwrap_err()
-                .contains("SL (Slow motion) is not built yet")
+                .contains("SS (Save states) is not built yet")
         );
         assert!(parse_built("ZZ").unwrap_err().contains("unknown mod"));
     }
