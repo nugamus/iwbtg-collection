@@ -501,6 +501,63 @@ fn wp1_a_destroyed_other_is_skipped() {
     );
 }
 
+/// R22 (Confirmed (recorder), research T-DEAD-1): a kid killed in his block event gets no later
+/// Collision event from a save point that overlaps him, because the pair has a dead instance as
+/// its other. The save point is created after the kid, so it is later in the phase under the
+/// current order; if the pair order changes (research T-ORD-2, #740) this must still hold, since
+/// the kid dies in his first pair and the save point's pair follows it.
+#[test]
+fn wp1_r22_a_pair_with_an_instance_killed_earlier_in_the_phase_is_skipped() {
+    let mut b = builder();
+    let kid = classed(&mut b, "kid", ClassMask::KID, &[ClassMask::BLOCK]);
+    let block = classed(&mut b, "block", ClassMask::BLOCK, &[]);
+    let save = classed(&mut b, "save", ClassMask::SAVE, &[ClassMask::KID]);
+    let mut fx = Fx::new(b.build().unwrap());
+    fx.rules.collide.recheck_nonsolid = true;
+    let k = fx.probe(
+        kid,
+        0.0,
+        0.0,
+        p("K").with(step(ProbeOn::Collision, ProbeAct::DestroySelf).once()),
+    );
+    let bl = fx.probe(block, 0.0, 0.0, p("B").style(ProbeLog::Silent));
+    let sp = fx.probe(save, 0.0, 0.0, p("S"));
+    for id in [k, bl, sp] {
+        fx.touch(id, true);
+    }
+    fx.tick(InputFrame::EMPTY);
+    let log = fx.log();
+    assert!(
+        log.contains(&format!("k{}K", bl.0)),
+        "the kid's block event ran: {log}"
+    );
+    assert!(
+        tokens_of(&log, "S").iter().all(|t| !t.starts_with('k')),
+        "no save point Collision after the kid died: {log}"
+    );
+    // Control: the same world without the kill runs the save point's event.
+    let mut b = builder();
+    let kid = classed(&mut b, "kid", ClassMask::KID, &[ClassMask::BLOCK]);
+    let block = classed(&mut b, "block", ClassMask::BLOCK, &[]);
+    let save = classed(&mut b, "save", ClassMask::SAVE, &[ClassMask::KID]);
+    let mut fx = Fx::new(b.build().unwrap());
+    fx.rules.collide.recheck_nonsolid = true;
+    let k = fx.probe(kid, 0.0, 0.0, p("K"));
+    let bl = fx.probe(block, 0.0, 0.0, p("B").style(ProbeLog::Silent));
+    let sp = fx.probe(save, 0.0, 0.0, p("S"));
+    for id in [k, bl, sp] {
+        fx.touch(id, true);
+    }
+    fx.tick(InputFrame::EMPTY);
+    assert!(
+        tokens_of(&fx.log(), "S")
+            .iter()
+            .any(|t| *t == format!("k{}S", k.0)),
+        "control: {}",
+        fx.log()
+    );
+}
+
 #[test]
 fn wp1_state_hash_covers_state_and_skips_caches() {
     let mut b = builder();

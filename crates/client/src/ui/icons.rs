@@ -178,8 +178,36 @@ fn parse(d: &str) -> Option<Path> {
 pub fn render(icon: Icon, w: u32, h: u32) -> Option<Image> {
     let (w, h) = (w.max(1), h.max(1));
     let mut pixmap = Pixmap::new(w, h)?;
+    draw(icon, &mut pixmap, Vec2::ZERO, Vec2::new(w as f32, h as f32))?;
+    // White shapes: the premultiplied alpha is every channel, so the straight pixel is white
+    // with that alpha.
+    let alpha: Vec<u8> = pixmap.pixels().iter().map(|p| p.alpha()).collect();
+    Some(white_image(w, h, &alpha))
+}
+
+/// A `w` x `h` white image with `alpha` (one byte per pixel, rows from the top) as its alpha,
+/// sampled linearly: what the icons and glows (`glow.rs`) are tinted from.
+pub(super) fn white_image(w: u32, h: u32, alpha: &[u8]) -> Image {
+    let rgba: Vec<u8> = alpha.iter().flat_map(|&a| [255, 255, 255, a]).collect();
+    let mut image = Image::new(
+        Extent3d {
+            width: w,
+            height: h,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        rgba,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::RENDER_WORLD,
+    );
+    image.sampler = ImageSampler::linear();
+    image
+}
+
+/// Draws `icon`'s shapes in white into `pixmap`, filling the box at `at` of `size` pixels.
+pub(super) fn draw(icon: Icon, pixmap: &mut Pixmap, at: Vec2, size: Vec2) -> Option<()> {
     let (vw, vh) = icon.view();
-    let t = Transform::from_scale(w as f32 / vw, h as f32 / vh);
+    let t = Transform::from_row(size.x / vw, 0.0, 0.0, size.y / vh, at.x, at.y);
     let mut paint = Paint::default();
     paint.set_color_rgba8(255, 255, 255, 255);
     paint.anti_alias = true;
@@ -206,26 +234,7 @@ pub fn render(icon: Icon, w: u32, h: u32) -> Option<Image> {
             }
         }
     }
-    // White shapes: the premultiplied alpha is every channel, so the straight pixel is white
-    // with that alpha.
-    let rgba: Vec<u8> = pixmap
-        .pixels()
-        .iter()
-        .flat_map(|p| [255, 255, 255, p.alpha()])
-        .collect();
-    let mut image = Image::new(
-        Extent3d {
-            width: w,
-            height: h,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        rgba,
-        TextureFormat::Rgba8UnormSrgb,
-        RenderAssetUsages::RENDER_WORLD,
-    );
-    image.sampler = ImageSampler::linear();
-    Some(image)
+    Some(())
 }
 
 /// Marks a node as an icon; `rasterize` keeps its `ImageNode` image at the node's pixel size.

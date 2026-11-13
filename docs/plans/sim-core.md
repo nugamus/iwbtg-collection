@@ -107,7 +107,7 @@ pub struct Instance {
 ### 1.2 Storage and ids
 
 - `World.instances: Vec<Instance>` in creation order, so sorted by `InstId`. Lookup is a binary search (`World::index_of`). No map.
-- Creation appends. Destroy runs the Destroy event at once, then sets `alive = false`; the instance runs no further events and `instance_exists` no longer counts it (Inferred, CLONE_SPEC rooms "After instance_destroy, instance_exists stops counting"). `instance_exists` and `object.variable` skip an instance destroyed earlier in the step (Confirmed (recorder), showdown `a3-t18-b.csv` row 42). Whether collision events and the query functions still see it is not in the spec yet (trace request T-DEAD-1, research#7): register R22, switch `TickRules::dead_in_queries` (default false, Design). The sweep at the end of the tick removes it with `retain`, which keeps order (Confirmed: destroyed instances stay in the instance list until the end of the step).
+- Creation appends. Destroy runs the Destroy event at once, then sets `alive = false`; the instance runs no further events and `instance_exists` no longer counts it (Inferred, CLONE_SPEC rooms "After instance_destroy, instance_exists stops counting"). `instance_exists` and `object.variable` skip an instance destroyed earlier in the step (Confirmed (recorder), showdown `a3-t18-b.csv` row 42). Neither the query functions nor later collision pairs see it (R22, Confirmed (recorder), CLONE_SPEC rooms "Nothing sees an instance destroyed earlier in the same step", traces/rely-the-needle-4-2/t-dead-1.md): switch `TickRules::dead_in_queries` stays false, nothing needs true. The sweep at the end of the tick removes it with `retain`, which keeps order (Confirmed: destroyed instances stay in the instance list until the end of the step).
 - Persistent instances keep their ids across rooms, so they stay "created earlier" than the new room's instances (Inferred, rooms "Persistent instances count as created before").
 - `world.next_id` is hashed state and uses `checked_add` (section 10.3). Our ids never match the original's (trace ids such as 115781); trace diff ignores the `id` column (section 9).
 
@@ -1206,8 +1206,8 @@ To the user (WP0 updates the documents):
 
 To research (WP7a files these with the converter requests of 8.4):
 
-- **Spec items answered** (research#3, PR research#99): R24, R25, N14, C13 are Confirmed (recorder); R22 is partly answered, collisions and queries wait for T-DEAD-1 (research#7). R26 (showdown restart) is settled by research PR #98 (recorder).
-- **Recorded traces analyzed** (research#4): every trace once listed here has its result in CLONE_SPEC, and section 15 follows them (#143). Still open there: R12b/C8 and R22 (research#7), R13 (other request pairs), C2 at an exact .5 in x, C5, N6 (research#100), N10's draw count (research#102), and every other recorder result against the real runner (research#8 answered arithmetic precision, literals, the presence of the comparison tolerance and cos/sin at 270 degrees only).
+- **Spec items answered** (research#3, PR research#99): R24, R25, N14, C13 are Confirmed (recorder); R22 is Confirmed (recorder) by T-DEAD-1 (research#7, #157). R26 (showdown restart) is settled by research PR #98 (recorder).
+- **Recorded traces analyzed** (research#4): every trace once listed here has its result in CLONE_SPEC, and section 15 follows them (#143). Still open there: R12b/C8 (R22 is answered by T-DEAD-1), R13 (other request pairs), C2 at an exact .5 in x, C5, N6 (research#100), N10's draw count (research#102), and every other recorder result against the real runner (research#8 answered arithmetic precision, literals, the presence of the comparison tolerance and cos/sin at 270 degrees only).
 - The `INVESTIGATION.md` provenance note lists the epsilon and truthiness; the plan also tracks sign, min/max, signed zeros and the UCRT trig claim as OpenGMK-derived (N11-N13, M6).
 
 ## 17. Changes from revision 1

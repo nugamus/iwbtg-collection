@@ -623,6 +623,8 @@ impl<'a> Loader<'a> {
         self.merge_script_events(&mut def);
         // Step 7: timing rooms a run can reach (#504).
         self.reachable_timing_rooms(&def);
+        // Step 7: kinds that tie for a collision handler (#737).
+        self.handler_ties(&def);
         // Step 7 (WP7b): params against the built-ins' specs, on the built definition.
         let mut d = Vec::new();
         let trace = self.trace_mode();
@@ -2414,6 +2416,54 @@ impl<'a> Loader<'a> {
                 ));
             }
         }
+    }
+
+    /// A warning for each kind whose classes match two equally specific collision handlers of a
+    /// kind ([`crate::ties`]): the sim runs the first in handler order, where GM would run the
+    /// nearest ancestor's. Kinds the loader derived (`name[...]`) report under their base name,
+    /// once, on the object file when there is one.
+    fn handler_ties(&mut self, def: &GameDef) {
+        let base = |id: KindId| {
+            def.kind(id)
+                .map_or("", |k| k.name.split('[').next().unwrap_or(&k.name))
+                .to_owned()
+        };
+        let mut seen: BTreeSet<(String, String, ClassMask, ClassMask)> = BTreeSet::new();
+        for t in crate::ties::ties(def) {
+            let (handler, other) = (base(t.handler), base(t.other));
+            if !seen.insert((handler.clone(), other.clone(), t.picked, t.tied)) {
+                continue;
+            }
+            let object = other.strip_prefix('@').map(|id| format!("objects/{id}.toml"));
+            let file = object
+                .as_deref()
+                .filter(|o| self.files.contains(o))
+                .unwrap_or(MANIFEST_PATH);
+            let (picked, tied) = (self.class_list(t.picked), self.class_list(t.tied));
+            self.diags.push(Diagnostic::file_warning(
+                file,
+                format!(
+                    "kind `{other}` matches two equally specific collision handlers of `{handler}`, `{picked}` and `{tied}`: only `{picked}` runs, by handler order, where GM runs the nearest parent's (docs/format/v0.md, Validation step 7; sim register C8)"
+                ),
+            ));
+        }
+    }
+
+    /// A class mask as its package-format names, `a | b`.
+    fn class_list(&self, mask: ClassMask) -> String {
+        let mut names: Vec<String> = ClassMask::NAMED
+            .iter()
+            .filter(|(c, _)| mask.intersects(*c))
+            .map(|(_, n)| (*n).to_owned())
+            .collect();
+        for (n, name) in self.package_classes.iter().enumerate() {
+            if let Some(c) = u32::try_from(n).ok().and_then(ClassMask::package)
+                && mask.intersects(c)
+            {
+                names.push(name.clone());
+            }
+        }
+        names.join(" | ")
     }
 
     // -- Step 8 ----------------------------------------------------------------------------------
