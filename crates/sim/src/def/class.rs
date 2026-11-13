@@ -155,6 +155,22 @@ impl ClassMask {
     pub const fn intersects(self, other: ClassMask) -> bool {
         self.0 & other.0 != 0
     }
+
+    /// How far up a GM parent chain this handler class sits, for picking one collision handler
+    /// per pair (C8, R12b): lower is more specific. Class sets have no parent tree, so the
+    /// engines' two block parents rank last: `block` (2) is the platform's parent in 17 games,
+    /// `solidblock` (1) in the other two, where the platform also keeps the `block` bit
+    /// (CLONE_SPEC collision, "One event per pair: the most specific ancestor"). Every other
+    /// class ranks 0. A handler mask with several bits takes its lowest rank.
+    pub const fn generality(self) -> u8 {
+        if self.intersects(ClassMask(!(ClassMask::BLOCK.0 | ClassMask::SOLIDBLOCK.0))) {
+            0
+        } else if self.intersects(ClassMask::SOLIDBLOCK) {
+            1
+        } else {
+            2
+        }
+    }
 }
 
 /// The schema of one class as written in a data file: its package name, from
@@ -307,5 +323,16 @@ mod tests {
         assert_eq!(ClassMask::from_name("platform"), Some(ClassMask::PLATFORM));
         assert_eq!(ClassMask::from_name("parent"), None);
         assert!((ClassMask::PLATFORM | ClassMask::BLOCK).contains(ClassMask::BLOCK));
+    }
+
+    #[test]
+    fn generality_puts_the_block_parents_last() {
+        assert_eq!(ClassMask::PLATFORM.generality(), 0);
+        assert_eq!(ClassMask::KILLER.generality(), 0);
+        assert_eq!(ClassMask::package(0).unwrap().generality(), 0);
+        assert_eq!(ClassMask::SOLIDBLOCK.generality(), 1);
+        assert_eq!(ClassMask::BLOCK.generality(), 2);
+        assert_eq!((ClassMask::BLOCK | ClassMask::SOLIDBLOCK).generality(), 1);
+        assert_eq!((ClassMask::BLOCK | ClassMask::KILLER).generality(), 0);
     }
 }

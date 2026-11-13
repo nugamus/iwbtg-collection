@@ -19,7 +19,7 @@ Part of [the simulation](../sim.md).
 | 8 | Motion for every instance: (capture prev if `BeforeMotion`), friction, gravity vector, path, `x += hspeed`, `y += vspeed`, polar recompute | Slot Confirmed; inner order Inferred | `motion::apply_auto_motion` |
 | 8b | Animation if `anim_slot = AfterMotion` | Alternative; the recorder puts it at row 13 (R7) | `anim::advance` |
 | 9 | Outside Room, Intersect Boundary | Confirmed (recorder) slot (U4, R5) | `TickRules::boundary_slot` |
-| 10 | Collision events with the solid put-back rule | Confirmed (manual); pairing Inferred/UNKNOWN (C7, C7b, C8, C9, R12) | `events::collision_phase`, `collide::solid_resolve` |
+| 10 | Collision events with the solid put-back rule | Confirmed (manual); pairing Inferred/UNKNOWN (C7, C7b, C9, R12); one handler per pair Confirmed (C8) | `events::collision_phase`, `collide::solid_resolve` |
 | 11 | End Step | Confirmed | |
 | 12 | Draw slot (`Late` handlers): instances in draw order (depth descending, then creation), visible instances only | Confirmed; Draw changes state, so it runs headless too (R15) | `events::run_draw_phase` |
 | 13 | Animation if `anim_slot = AfterDraw` (default): `image_index += image_speed`, wrap, Animation End | Confirmed (recorder) (R7): slot, wrap `>=` and subtract once | `anim::advance` |

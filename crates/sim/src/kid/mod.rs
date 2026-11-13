@@ -175,7 +175,8 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
     let def = ctx.def;
     let e = &def.physics.events;
     if let EventKind::Collision { with, other } = ev {
-        // Every row whose handler class matched, in handler order (C8, R12b).
+        // Every row of the one handler class the collision phase picked for this pair (C8,
+        // R12b), in row order: several rows with one class are one GM event's actions.
         for row in e.collisions.iter().filter(|c| c.with == *with) {
             let flow = run_collision(ctx, me, *other, &row.run)?;
             if flow != Flow::Continue {
