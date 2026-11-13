@@ -109,18 +109,18 @@ fn shows(bg: &Background, plain: Option<&PlainBackdrop>) -> bool {
 /// One piece of a background along one axis: room pixels `at .. at + len` show image pixels
 /// `from .. to`, repeated when `repeat`.
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct Segment {
-    at: f32,
-    len: f32,
-    from: f32,
-    to: f32,
-    repeat: bool,
+pub(crate) struct Segment {
+    pub(crate) at: f32,
+    pub(crate) len: f32,
+    pub(crate) from: f32,
+    pub(crate) to: f32,
+    pub(crate) repeat: bool,
 }
 
 /// Cuts one axis of a background into the pieces that cover exactly the room (`0 .. room`), so
 /// nothing is drawn beside it. `image` is the image's length, `cell` its length in the room
 /// (the room's length when stretched), `pos` where its first copy starts.
-fn axis(room: f32, image: f32, cell: f32, pos: f32, tile: bool) -> Vec<Segment> {
+pub(crate) fn axis(room: f32, image: f32, cell: f32, pos: f32, tile: bool) -> Vec<Segment> {
     let scale = cell / image;
     if !tile {
         let (start, end) = (pos.max(0.0), (pos + cell).min(room));

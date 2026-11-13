@@ -22,13 +22,29 @@ pub const MIN_SIZE: (u32, u32) = (1280, 720);
 pub enum KeyArt {
     /// The package's key art: a PNG path inside the package, drawn to cover the screen.
     Image(String),
-    /// No key art: the first ranked room's background image (`backgrounds/<id>.png`).
-    RoomBackground(String),
+    /// No key art: the first ranked room's first back layer, as the room draws it.
+    RoomBackground(RoomLayer),
     /// No key art and no room background image: the first ranked room's `background_color`
     /// (sRGB).
     Colour([u8; 3]),
     /// Nothing to go on: the client draws its own default backdrop.
     None,
+}
+
+/// A room's back layer as the backdrop shows it (at the room's start, before any scrolling):
+/// the image and how `art.rs` places it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomLayer {
+    /// `backgrounds/<id>.png`.
+    pub path: String,
+    /// Stretched to the room's size.
+    pub stretch: bool,
+    /// Repeats horizontally, vertically.
+    pub tile: (bool, bool),
+    /// Top-left corner in the room, in whole pixels.
+    pub offset: (i32, i32),
+    /// The room's `background_color` (sRGB), shown where the layer does not reach.
+    pub color: Option<[u8; 3]>,
 }
 
 /// The key art of `map` (a map id; `None` for the game itself): the map's override, else
@@ -57,7 +73,16 @@ pub fn resolve(files: &PackageFiles, manifest: &Manifest, map: Option<&str>) -> 
     if let Some(bg) = art.backgrounds.iter().find(|b| !b.foreground) {
         let path = format!("backgrounds/{}.png", bg.image);
         if files.contains(&path) {
-            return KeyArt::RoomBackground(path);
+            return KeyArt::RoomBackground(RoomLayer {
+                path,
+                stretch: bg.stretch,
+                tile: bg.tile,
+                offset: (
+                    (bg.offset.0 + 0.5).floor() as i32,
+                    (bg.offset.1 + 0.5).floor() as i32,
+                ),
+                color: art.color,
+            });
         }
     }
     art.color.map_or(KeyArt::None, KeyArt::Colour)
@@ -181,7 +206,13 @@ background_color = \"#102030\"
         assert_eq!(first_ranked_room(&m), "title");
         assert_eq!(
             resolve(&files, &m, None),
-            KeyArt::RoomBackground("backgrounds/sky.png".into())
+            KeyArt::RoomBackground(RoomLayer {
+                path: "backgrounds/sky.png".into(),
+                stretch: false,
+                tile: (true, true),
+                offset: (0, 0),
+                color: Some([0x10, 0x20, 0x30]),
+            })
         );
         // No background image: the colour.
         let (files, m) = package(TIMING, &[("rooms/title.toml", room)]);
