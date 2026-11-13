@@ -20,7 +20,8 @@ use super::motion::{Ease, OffsetX, Opacity, ReducedMotion, Tween, Width};
 use super::shape::{Band, FadeMask, Shape, Side, UiOpacity, Veil};
 use super::tokens::{self, star_color};
 use super::widgets::{
-    ButtonKind, button, mod_pill, panel, ranked_pill, star_pill, stat, tag_pill, text, unranked_pill,
+    ButtonKind, button, ellipsis_text, mod_pill, panel, ranked_pill, star_pill, stat, tag_pill, text,
+    unranked_pill,
 };
 
 /// The size the mockups are drawn at.
@@ -439,6 +440,24 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
                     ),
                 ],
             ));
+            c.spawn((
+                column(10.0),
+                children![heading("Ellipsis (one line cut at its box)")],
+            ))
+            .with_children(|c| {
+                for width in [320.0, 200.0, 120.0, 40.0] {
+                    c.spawn(Node {
+                        width: Val::Px(width),
+                        flex_direction: FlexDirection::Column,
+                        ..default()
+                    })
+                    .with_child(ellipsis_text(
+                        "I wanna be the Kaenbyou · ばけばけ",
+                        Type::barlow(15.0, 600),
+                        tokens::ROW_NAME,
+                    ));
+                }
+            });
             c.spawn((column(10.0), children![heading("Buttons")]))
                 .with_children(|c| {
                     c.spawn(row(12.0)).with_children(|r| {

@@ -27,6 +27,9 @@ bevy = { version = "0.20.1", default-features = false, features = [
   "2d_bevy_render", "default_app", "std", "bevy_winit", "default_font", "multi_threaded", "bevy_gilrs", "bevy_audio", "vorbis", "x11", "wayland", "webgl2",
   "ui_api", "ui_bevy_render", "bevy_ui_widgets", "ui_picking",
 ] }
+# The ellipsis helper (ui/widgets.rs, #636) reads cluster widths from the text layout Bevy keeps;
+# bevy_text builds parley with these features already, so this adds no crate and no rebuild.
+parley = { version = "0.11", default-features = false, features = ["std"] }
 
 # In a browser: Bevy's web support (canvas, timers, asset loading through fetch).
 [target.'cfg(target_arch = "wasm32")'.dependencies]

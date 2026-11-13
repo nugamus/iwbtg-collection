@@ -25,7 +25,7 @@ use crate::ui::icons::{Icon, icon};
 use crate::ui::motion::{Ease, OffsetY, Opacity, Tween, Width};
 use crate::ui::shape::{FadeMask, Ink, Shape, UiOpacity};
 use crate::ui::tokens;
-use crate::ui::widgets::{sheared, text};
+use crate::ui::widgets::{ellipsis_text, sheared, text};
 use crate::view::Game;
 
 /// Rows in view; yours is the middle one unless it is near an end.
@@ -643,7 +643,7 @@ fn their_row(
                 return;
             }
             c.spawn(text_column()).with_children(|c| {
-                c.spawn((text(&label, STYLES.name, tokens::ROW_NAME), TextLayout::no_wrap()));
+                c.spawn(ellipsis_text(&label, STYLES.name, tokens::ROW_NAME));
                 c.spawn((text(&time, STYLES.time, tokens::MUTED), TextLayout::no_wrap()));
             });
         })),
@@ -704,7 +704,7 @@ fn your_row(g: &Geometry, place: usize, fixed: Option<String>, node: Node) -> im
             }
             c.spawn(text_column()).with_children(|c| {
                 let name = if frozen { "This run" } else { "Now" };
-                c.spawn((text(name, STYLES.name_you, tokens::INK), TextLayout::no_wrap()));
+                c.spawn(ellipsis_text(name, STYLES.name_you, tokens::INK));
                 lines(c);
             });
         })),
@@ -728,7 +728,8 @@ fn text_column() -> Node {
         flex_grow: 1.0,
         min_width: Val::Px(0.0),
         row_gap: Val::Px(1.0),
-        // The artboard's `white-space: nowrap; overflow: hidden`: a long line is cut at the row.
+        // A long time is cut at the row (the artboard's `white-space: nowrap; overflow: hidden`);
+        // names end in an ellipsis (`ellipsis_text`).
         overflow: Overflow::clip_x(),
         ..default()
     }
