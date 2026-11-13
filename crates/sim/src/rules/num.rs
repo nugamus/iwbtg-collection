@@ -45,10 +45,10 @@ pub struct NumRules {
     /// N3 (Confirmed, real runner: x87 at 53-bit precision, so binary64; no fallback needed):
     /// FPU precision; per game from `game.toml [engine]`.
     pub float_model: FloatModel,
-    /// N10: particle systems draw from the gameplay RNG. Partly answered (recorder): rely room1's
-    /// emitters draw 2 values most ticks (CLONE_SPEC numbers, num-rng-a.csv); the real runner is
-    /// unchecked. Default false is an engine_rev 0 placeholder (Design): the draw count per emitter
-    /// is not specified (research#102); #556 switches it on.
+    /// N10: particle systems draw from the gameplay RNG. Confirmed (recorder): CLONE_SPEC numbers
+    /// "Particle draw rules" (research#158), modelled in [`crate::particles`]; the real runner is
+    /// unchecked (research#164). Default false until the model is wired into the world and the
+    /// built-ins (#760).
     pub particles_draw_rng: bool,
 }
 

@@ -15,4 +15,4 @@ Made by the kid's death. **Alarm plus Step**: Create sets alarm 0 to `life`, Ala
 
 - `random_dir`: per drop, the blood's Create (frame, gravity), then the emitter draws the direction `irandom(35) * 10` and the speed. Rely: 160 draws a Step.
 - `angle_sweep` (A2, A3): for each angle 0, 10, ..., 360, with `chance` (one draw), `per_angle` drops with speed `random(speed_max)`. OPEN: the draw order is not in the spec.
-- `particles` (family B): client output only (`BuiltinOutput::DeathParticles` each Step), no sim draws. Whether particle systems draw from the RNG is UNKNOWN (N10); with `NumRules::particles_draw_rng` it is `Unsupported`.
+- `particles` (family B): client output only (`BuiltinOutput::DeathParticles` each Step), no sim draws. Particle systems do draw from the RNG (N10, CLONE_SPEC numbers "Particle draw rules"), but this mode is not wired to the sim's particle model yet: with `NumRules::particles_draw_rng` it is `Unsupported` (#760).

@@ -19,6 +19,7 @@ use crate::error::SimError;
 use crate::input_state::InputState;
 use crate::num::Real;
 use crate::output::OutputEvent;
+use crate::particles::Particles;
 use crate::rng::Rng;
 use crate::room::RoomRequest;
 use crate::rules::RunnerRules;
@@ -73,6 +74,11 @@ pub struct World {
     /// Timing trigger state (WP8b): which splits fired, whether the run started, and the
     /// `run_end` flag `game_clear` raises. Hashed and saved, so a restored run splits the same.
     pub timing: TimingState,
+    /// Particle types, systems, emitters and the live particles that still draw (N10, #764):
+    /// `Particles::update` runs after End Step when `NumRules::particles_draw_rng` is set. Hashed,
+    /// because the update draws from `rng`.
+    #[serde(default)]
+    pub particles: Particles,
     /// Events for the client. Not hashed, not saved.
     #[serde(skip)]
     pub output: Vec<OutputEvent>,
@@ -123,6 +129,7 @@ impl World {
             save: None,
             sound: SoundState::default(),
             timing: TimingState::default(),
+            particles: Particles::default(),
             output: Vec::new(),
             status: SimStatus::Running,
             mode: PlayMode::Original,

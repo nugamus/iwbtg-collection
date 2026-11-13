@@ -224,8 +224,26 @@ fn rows(ctx: &mut Ctx, hooks: &Hooks) -> Option<()> {
             Flow::AbortTick => return Some(()),
             Flow::Halt => return None,
         }
+        if phase == Phase::EndStep
+            && let Err(e) = particle_update(ctx)
+        {
+            ctx.halt(e);
+            return None;
+        }
     }
     Some(())
+}
+
+/// Row 11b: the particle update, once per tick after End Step and before Draw (CLONE_SPEC
+/// numbers, Confirmed (recorder), "Particle draw rules" 1; N10). Only with
+/// `NumRules::particles_draw_rng`. A tick that a room request ended at an earlier row skips it
+/// with End Step and Draw (OPEN: not traced, research#170).
+fn particle_update(ctx: &mut Ctx) -> Result<(), SimError> {
+    if !ctx.rules.num.particles_draw_rng {
+        return Ok(());
+    }
+    let w = &mut *ctx.w;
+    w.particles.update(&mut w.rng)
 }
 
 /// GML `fps` (R28, Design): the game's tick rate, never a measured frame rate; 0 during the

@@ -13,6 +13,7 @@ use serde::Serialize;
 use crate::def::{RoomId, VarId};
 use crate::input_state::InputState;
 use crate::num::Real;
+use crate::particles::Particles;
 use crate::rng::Rng;
 use crate::room::RoomRequest;
 use crate::save::SaveSlot;
@@ -50,6 +51,7 @@ pub struct HashView<'a> {
     save: &'a Option<SaveSlot>,
     sound: &'a SoundState,
     timing: &'a TimingState,
+    particles: &'a Particles,
     status: &'a SimStatus,
     mode: PlayMode,
     map: u16,
@@ -78,6 +80,7 @@ impl<'a> HashView<'a> {
             save: &w.save,
             sound: &w.sound,
             timing: &w.timing,
+            particles: &w.particles,
             status: &w.status,
             mode: w.mode,
             map: w.map,

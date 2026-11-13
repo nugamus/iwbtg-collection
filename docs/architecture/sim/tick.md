@@ -21,6 +21,7 @@ Part of [the simulation](../sim.md).
 | 9 | Outside Room, Intersect Boundary | Confirmed (recorder) slot (U4, R5) | `TickRules::boundary_slot` |
 | 10 | Collision events with the solid put-back rule | Confirmed (manual); pairs of instances, lower kind first, both directions per pair Confirmed (recorder) (R12); re-checks Inferred/UNKNOWN (C7, C7b, C9); one handler per pair Confirmed (C8) | `events::collision_phase`, `collide::solid_resolve` |
 | 11 | End Step | Confirmed | |
+| 11b | Particle update: `World::particles` draws from the RNG (systems in creation order, live particles' step and death particles, then emitters), only with `NumRules::particles_draw_rng` | Confirmed (recorder) slot (CLONE_SPEC numbers "Particle draw rules" 1, N10); a tick a room request ended earlier skips it with End Step and Draw: OPEN (research#170) | `tick::particle_update`, `Particles::update` |
 | 12 | Draw slot (`Late` handlers): instances in draw order (depth descending, then creation), visible instances only | Confirmed; Draw changes state, so it runs headless too (R15) | `events::run_draw_phase` |
 | 13 | Animation if `anim_slot = AfterDraw` (default): `image_index += image_speed`, wrap, Animation End | Confirmed (recorder) (R7): slot, wrap `>=` and subtract once | `anim::advance` |
 | 14 | Destroy sweep | Design (manual: removed at end of step) | `World::sweep` |

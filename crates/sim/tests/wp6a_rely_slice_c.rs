@@ -386,7 +386,7 @@ mod wp6a {
         let em = spawn(&g, &mut w, g.emitter, 49.0, 519.1);
         fire(&g, &mut w, em, &EventKind::Step);
         assert!(alive(&w, g.blood).is_empty());
-        assert_eq!(w.rng, Rng::new(5), "no draws (N10 placeholder)");
+        assert_eq!(w.rng, Rng::new(5), "no draws (switch off, #760)");
         assert!(
             w.output
                 .contains(&OutputEvent::Builtin(BuiltinOutput::DeathParticles {
@@ -396,7 +396,7 @@ mod wp6a {
                     flipped: true
                 }))
         );
-        // With the switch on the draw count is UNKNOWN: an error, not a guess.
+        // With the switch on: an error until the mode uses sim::particles (#760).
         let mut rules = RunnerRules::default();
         rules.num.particles_draw_rng = true;
         let scripts = ScriptRuntime::default();

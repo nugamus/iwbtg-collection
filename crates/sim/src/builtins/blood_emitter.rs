@@ -20,8 +20,9 @@
 //!   the chance draw, the blood's Create and the speed draw are not in the spec; this draws the
 //!   chance first, then per blood the spawn and then the speed.
 //! - `particles` (family B, kaenbyou, eat-the-lemon): a particle stream. Client output only
-//!   (`BuiltinOutput::DeathParticles` each Step): whether particle systems draw from the gameplay
-//!   RNG is UNKNOWN (N10); with `NumRules::particles_draw_rng` set this is `Unsupported`.
+//!   (`BuiltinOutput::DeathParticles` each Step). Particle systems draw from the gameplay RNG
+//!   (N10, `crate::particles`), but this mode does not create one yet: with
+//!   `NumRules::particles_draw_rng` set it is `Unsupported` (#760).
 //!
 //! `destroyed_by_restart` (kaenbyou, eat-the-lemon): a Restart key press destroys the emitter.
 
@@ -194,7 +195,7 @@ fn step(ctx: &mut Ctx, me: InstId, s: &BloodEmitterState) -> Result<Flow, SimErr
         Mode::Particles => {
             if ctx.rules.num.particles_draw_rng {
                 return Err(SimError::unsupported(
-                    "blood_emitter particles with particles_draw_rng: the draw count is UNKNOWN (N10)",
+                    "blood_emitter particles with particles_draw_rng: not wired to sim::particles yet (N10, #760)",
                 ));
             }
             ctx.emit(OutputEvent::Builtin(BuiltinOutput::DeathParticles {
