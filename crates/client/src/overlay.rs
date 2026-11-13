@@ -42,10 +42,7 @@ impl Plugin for OverlayPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Forced(self.0.overlay))
             .add_systems(Startup, spawn)
-            .add_systems(
-                Update,
-                (toggle, place.after(crate::screen::apply), show).chain(),
-            );
+            .add_systems(Update, (toggle, place.after(crate::screen::apply), show).chain());
     }
 }
 
@@ -125,7 +122,11 @@ fn spot(l: &Layout, shown: bool, window: Vec2, px: f32) -> Spot {
         };
     }
     let beside = l.game.min.x / px;
-    let room = if beside >= MIN_BESIDE { beside } else { window.x / px };
+    let room = if beside >= MIN_BESIDE {
+        beside
+    } else {
+        window.x / px
+    };
     Spot {
         left: m,
         edge: m,
@@ -236,7 +237,12 @@ mod tests {
     #[test]
     fn the_panel_stays_off_the_game() {
         let view = Vec2::new(800.0, 608.0);
-        for (w, h) in [(1920.0, 1080.0), (1024.0, 768.0), (2560.0, 1080.0), (960.0, 540.0)] {
+        for (w, h) in [
+            (1920.0, 1080.0),
+            (1024.0, 768.0),
+            (2560.0, 1080.0),
+            (960.0, 540.0),
+        ] {
             let window = Vec2::new(w, h);
             let area = Rect::from_corners(Vec2::ZERO, window);
             for shown in [true, false] {
@@ -248,11 +254,18 @@ mod tests {
                 let px = l.content;
                 let s = spot(&l, shown, window, px);
                 assert!(s.width > 0.0 && s.edge >= 0.0, "{w}x{h} shown {shown}");
-                assert_eq!(s.bottom, shown, "{w}x{h}: bottom of run info, or top left without a HUD");
+                assert_eq!(
+                    s.bottom, shown,
+                    "{w}x{h}: bottom of run info, or top left without a HUD"
+                );
                 let (x0, x1) = (s.left * px, (s.left + s.width) * px);
                 let off = x1 <= l.game.min.x || x0 >= l.game.max.x;
                 let room_beside = l.game.min.x >= MIN_BESIDE;
-                assert!(off || (!shown && !room_beside), "{w}x{h} shown {shown}: {x0}..{x1} vs {:?}", l.game);
+                assert!(
+                    off || (!shown && !room_beside),
+                    "{w}x{h} shown {shown}: {x0}..{x1} vs {:?}",
+                    l.game
+                );
                 assert!(x1 <= w, "{w}x{h} shown {shown}: off the window");
             }
         }
