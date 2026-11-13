@@ -7,7 +7,7 @@ use bevy::text::{FontFeatureTag, FontFeatures, FontSize, FontSource, FontStyle, 
 
 /// Every face we ship. Bevy registers each under its embedded family name, so text asks for a
 /// family and a weight and the font database picks the face.
-const FACES: [&[u8]; 12] = [
+const FACES: [&[u8]; 13] = [
     include_bytes!("../../assets/fonts/Barlow-Regular.ttf"),
     include_bytes!("../../assets/fonts/Barlow-Medium.ttf"),
     include_bytes!("../../assets/fonts/Barlow-SemiBold.ttf"),
@@ -18,8 +18,12 @@ const FACES: [&[u8]; 12] = [
     include_bytes!("../../assets/fonts/BarlowCondensed-SemiBoldItalic.ttf"),
     include_bytes!("../../assets/fonts/BarlowCondensed-BoldItalic.ttf"),
     include_bytes!("../../assets/fonts/PixelifySans.ttf"),
-    // Symbols Barlow lacks (★ ☆ ▾ ✓, arrows, geometric shapes): a subset of Noto Sans Symbols 2.
+    // Symbols Barlow lacks (★ ☆ ▾ ▸ ✓, heavy arrows, geometric shapes): a subset of Noto Sans
+    // Symbols 2.
     include_bytes!("../../assets/fonts/NotoSansSymbols2-subset.ttf"),
+    // The basic arrows (U+2190..U+2199: ← ↑ → ↓ ↔ ↕ ↖ ↗ ↘ ↙), which Symbols 2 lacks: a subset of
+    // Noto Sans Math, 7 KB (`make-arrows-subset.py`).
+    include_bytes!("../../assets/fonts/NotoSansMath-subset.ttf"),
     // Japanese kana, punctuation, full-width forms and the 2965 JIS level 1 kanji, one weight
     // (Medium) for every weight: a subset of Noto Sans JP, about 1 MB.
     include_bytes!("../../assets/fonts/NotoSansJP-subset.ttf"),
@@ -51,12 +55,14 @@ pub enum Family {
 }
 
 impl Family {
-    /// The family list text asks for: the family, then the symbol and Japanese fallbacks.
+    /// The family list text asks for: the family, then the symbol, arrow and Japanese fallbacks.
     fn names(self) -> &'static str {
         match self {
-            Family::Barlow => "Barlow, 'Noto Sans Symbols 2', 'Noto Sans JP'",
-            Family::Condensed => "'Barlow Condensed', 'Noto Sans Symbols 2', 'Noto Sans JP'",
-            Family::Pixel => "'Pixelify Sans', 'Noto Sans Symbols 2', 'Noto Sans JP'",
+            Family::Barlow => "Barlow, 'Noto Sans Symbols 2', 'Noto Sans Math', 'Noto Sans JP'",
+            Family::Condensed => {
+                "'Barlow Condensed', 'Noto Sans Symbols 2', 'Noto Sans Math', 'Noto Sans JP'"
+            }
+            Family::Pixel => "'Pixelify Sans', 'Noto Sans Symbols 2', 'Noto Sans Math', 'Noto Sans JP'",
         }
     }
 }
@@ -170,6 +176,63 @@ mod tests {
         assert_eq!(Type::LABEL.set("Music preview"), "MUSIC PREVIEW");
         assert_eq!(Type::BODY.set("Hard · Any%"), "Hard · Any%");
         assert!(matches!(Type::LABEL.spacing(), LetterSpacing::Px(px) if (px - 1.54).abs() < 1e-4));
+    }
+
+    /// The family `ch` is drawn with when text asks for `family`: as the font database falls
+    /// back, the first family in the list that has a face mapping `ch`.
+    fn family_for(family: Family, ch: char) -> Option<String> {
+        use skrifa::{FontRef, MetadataProvider, string::StringId};
+        let faces: Vec<(String, FontRef)> = FACES
+            .iter()
+            .map(|bytes| {
+                let font = FontRef::new(bytes).expect("font file");
+                let name = [StringId::TYPOGRAPHIC_FAMILY_NAME, StringId::FAMILY_NAME]
+                    .into_iter()
+                    .find_map(|id| font.localized_strings(id).english_or_first())
+                    .expect("family name")
+                    .to_string();
+                (name, font)
+            })
+            .collect();
+        family
+            .names()
+            .split(',')
+            .map(|name| name.trim().trim_matches('\''))
+            .find_map(|name| {
+                faces
+                    .iter()
+                    .any(|(face, font)| face == name && font.charmap().map(ch).is_some())
+                    .then(|| name.to_string())
+            })
+    }
+
+    #[test]
+    fn arrows_and_symbols_fall_back_to_a_face_that_has_them() {
+        for family in [Family::Barlow, Family::Condensed, Family::Pixel] {
+            // The results death timeline label (#41) sets an arrow in running text.
+            for ch in "0:00 → 38:12.46".chars() {
+                assert!(
+                    family_for(family, ch).is_some(),
+                    "{family:?} has no face for {ch:?}"
+                );
+            }
+            for ch in ['←', '↑', '→', '↓'] {
+                assert_eq!(
+                    family_for(family, ch).as_deref(),
+                    Some("Noto Sans Math"),
+                    "{ch:?}"
+                );
+            }
+            for ch in ['★', '☆', '▾', '▸', '✓'] {
+                assert_eq!(
+                    family_for(family, ch).as_deref(),
+                    Some("Noto Sans Symbols 2"),
+                    "{ch:?}"
+                );
+            }
+            assert_eq!(family_for(family, 'ア').as_deref(), Some("Noto Sans JP"));
+        }
+        assert_eq!(family_for(Family::Barlow, '3').as_deref(), Some("Barlow"));
     }
 
     #[test]
