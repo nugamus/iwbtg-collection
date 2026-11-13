@@ -7,7 +7,7 @@ use bevy::text::{FontFeatureTag, FontFeatures, FontSize, FontSource, FontStyle, 
 
 /// Every face we ship. Bevy registers each under its embedded family name, so text asks for a
 /// family and a weight and the font database picks the face.
-const FACES: [&[u8]; 13] = [
+const FACES: [&[u8]; 16] = [
     include_bytes!("../../assets/fonts/Barlow-Regular.ttf"),
     include_bytes!("../../assets/fonts/Barlow-Medium.ttf"),
     include_bytes!("../../assets/fonts/Barlow-SemiBold.ttf"),
@@ -22,8 +22,12 @@ const FACES: [&[u8]; 13] = [
     // Symbols 2.
     include_bytes!("../../assets/fonts/NotoSansSymbols2-subset.ttf"),
     // The basic arrows (U+2190..U+2199: ← ↑ → ↓ ↔ ↕ ↖ ↗ ↘ ↙), which Symbols 2 lacks: a subset of
-    // Noto Sans Math, 7 KB (`make-arrows-subset.py`).
-    include_bytes!("../../assets/fonts/NotoSansMath-subset.ttf"),
+    // Inter in the four weights the UI sets, so an arrow in bold text is as heavy as the digits
+    // around it (#720); 3 KB each (`make-arrows-subset.py`).
+    include_bytes!("../../assets/fonts/InterArrows-Regular.ttf"),
+    include_bytes!("../../assets/fonts/InterArrows-Medium.ttf"),
+    include_bytes!("../../assets/fonts/InterArrows-SemiBold.ttf"),
+    include_bytes!("../../assets/fonts/InterArrows-Bold.ttf"),
     // Japanese kana, punctuation, full-width forms and the 2965 JIS level 1 kanji, one weight
     // (Medium) for every weight: a subset of Noto Sans JP, about 1 MB.
     include_bytes!("../../assets/fonts/NotoSansJP-subset.ttf"),
@@ -58,11 +62,9 @@ impl Family {
     /// The family list text asks for: the family, then the symbol, arrow and Japanese fallbacks.
     fn names(self) -> &'static str {
         match self {
-            Family::Barlow => "Barlow, 'Noto Sans Symbols 2', 'Noto Sans Math', 'Noto Sans JP'",
-            Family::Condensed => {
-                "'Barlow Condensed', 'Noto Sans Symbols 2', 'Noto Sans Math', 'Noto Sans JP'"
-            }
-            Family::Pixel => "'Pixelify Sans', 'Noto Sans Symbols 2', 'Noto Sans Math', 'Noto Sans JP'",
+            Family::Barlow => "Barlow, 'Noto Sans Symbols 2', Inter, 'Noto Sans JP'",
+            Family::Condensed => "'Barlow Condensed', 'Noto Sans Symbols 2', Inter, 'Noto Sans JP'",
+            Family::Pixel => "'Pixelify Sans', 'Noto Sans Symbols 2', Inter, 'Noto Sans JP'",
         }
     }
 }
@@ -217,11 +219,7 @@ mod tests {
                 );
             }
             for ch in ['←', '↑', '→', '↓'] {
-                assert_eq!(
-                    family_for(family, ch).as_deref(),
-                    Some("Noto Sans Math"),
-                    "{ch:?}"
-                );
+                assert_eq!(family_for(family, ch).as_deref(), Some("Inter"), "{ch:?}");
             }
             for ch in ['★', '☆', '▾', '▸', '✓'] {
                 assert_eq!(
@@ -243,6 +241,29 @@ mod tests {
             family_for(Family::Condensed, '…').as_deref(),
             Some("Barlow Condensed")
         );
+    }
+
+    /// Arrows come in every weight the UI sets, so `→` in 700 text is drawn bold (#720).
+    #[test]
+    fn arrows_come_in_each_ui_weight() {
+        use skrifa::{FontRef, MetadataProvider, string::StringId};
+        let mut weights: Vec<u16> = FACES
+            .iter()
+            .map(|bytes| FontRef::new(bytes).expect("font file"))
+            .filter(|font| {
+                font.localized_strings(StringId::FAMILY_NAME)
+                    .english_or_first()
+                    .is_some_and(|name| name.to_string().starts_with("Inter"))
+            })
+            .inspect(|font| {
+                for ch in ['←', '↑', '→', '↓', '↔', '↕', '↖', '↗', '↘', '↙'] {
+                    assert!(font.charmap().map(ch).is_some(), "{ch:?}");
+                }
+            })
+            .map(|font| font.attributes().weight.value() as u16)
+            .collect();
+        weights.sort_unstable();
+        assert_eq!(weights, [400, 500, 600, 700]);
     }
 
     #[test]
