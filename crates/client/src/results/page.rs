@@ -16,7 +16,6 @@ use crate::hud::leaderboard::{self, Live};
 use crate::pause::FRUIT;
 use crate::stats::fmt_ticks;
 use crate::ui::fonts::Type;
-use crate::ui::icons::{Icon, icon};
 use crate::ui::shape::Shape;
 use crate::ui::tokens;
 use crate::ui::widgets::{ButtonKind, button_off, button_with, sheared, text, unranked_pill};
@@ -394,25 +393,9 @@ fn hero(c: &mut ChildSpawner, s: &Summary, d: &Dims, fruit: Option<Handle<Image>
     });
 }
 
-/// A rank change value; `a → b` draws the arrow as the kit's icon (no bundled font has `→`).
+/// A rank change value (`a → b` sets the arrow in text, from the Noto Sans Math fallback).
 fn value(c: &mut ChildSpawner, value: &str, style: Type) {
-    match value.split_once(" → ") {
-        Some((before, after)) => {
-            c.spawn(Node {
-                align_items: AlignItems::Center,
-                column_gap: Val::Px(style.size * 0.3),
-                ..default()
-            })
-            .with_children(|c| {
-                c.spawn((text(before, style, tokens::INK), TextLayout::no_wrap()));
-                c.spawn(icon(Icon::To, style.size * 0.7, tokens::INK));
-                c.spawn((text(after, style, tokens::INK), TextLayout::no_wrap()));
-            });
-        }
-        None => {
-            c.spawn((text(value, style, tokens::INK), TextLayout::no_wrap()));
-        }
-    }
+    c.spawn((text(value, style, tokens::INK), TextLayout::no_wrap()));
 }
 
 /// The white `NEW PB` chip with the delicious fruit.
@@ -776,16 +759,10 @@ fn timeline(c: &mut ChildSpawner, s: &Summary, d: &Dims) {
                 text("Death timeline", LABEL, tokens::MUTED),
                 TextLayout::no_wrap(),
             ));
-            c.spawn(Node {
-                align_items: AlignItems::Center,
-                column_gap: Val::Px(4.0),
-                ..default()
-            })
-            .with_children(|c| {
-                c.spawn((text("0:00", small, tokens::MUTED), TextLayout::no_wrap()));
-                c.spawn(icon(Icon::To, 9.0, tokens::MUTED));
-                c.spawn((text(&end, small, tokens::MUTED), TextLayout::no_wrap()));
-            });
+            c.spawn((
+                text(&format!("0:00 → {end}"), small, tokens::MUTED),
+                TextLayout::no_wrap(),
+            ));
         });
         c.spawn(Node {
             height: Val::Px(d.timeline),
@@ -1032,7 +1009,8 @@ mod tests {
                 "Boss",
                 "Save replay",
                 "DEATH TIMELINE",
-                "0:00",
+                "0:00 → 38:12.46",
+                "39:40.12 → 38:12.46",
             ] {
                 assert!(all.iter().any(|t| t == want), "{want} missing from {all:?}");
             }

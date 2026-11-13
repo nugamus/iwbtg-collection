@@ -12,6 +12,7 @@ One page per module or area, so two PRs on different modules never edit the same
 - [Mods](client/mods.md): `mods.rs`
 - [Pause menu](client/pause.md): `pause.rs`
 - [Player card](client/card.md): `card/`
+- [Practice assists](client/practice.md): slow motion and frame advance (`practice.rs`)
 - [Render fixes](client/render_fix.md): workarounds for Bevy and wgpu backend bugs (`render_fix.rs`)
 - [Replays](client/replays.md): `replays.rs`
 - [Results](client/results.md): `results/`

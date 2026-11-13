@@ -527,6 +527,10 @@ fn is_adapter(t: SoundTarget) -> bool {
 }
 
 /// Starts, stops and mixes what the cues ask for.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "a Bevy system: one parameter per resource"
+)]
 pub fn play(
     mut commands: Commands,
     game: NonSend<Game>,
@@ -535,9 +539,13 @@ pub fn play(
     mut assets: ResMut<Assets<AudioSource>>,
     mut voices: Query<(Entity, &Voice, Option<&mut AudioSink>, Option<&mut MusicSync>)>,
     fixed: Res<Time<Fixed>>,
+    clock: Option<Res<crate::view::ClockSpeed>>,
 ) {
     let def = game.sim.def();
     let tick_rate = f64::from(def.tick_rate.max(1));
+    // Slow motion (practice.rs) slows every voice with the clock; the tune's tick-clock position
+    // (`MusicSync`) is in ticks, so it keeps the game's own speed.
+    let clock = clock.map_or(1.0, |c| c.0 as f32);
     // The tick count with the part of the next tick the fixed clock is already into.
     let now_tick = game.sim.world().tick as f64 + f64::from(fixed.overstep_fraction());
     for cue in queue.due(Instant::now()) {
@@ -584,7 +592,7 @@ pub fn play(
                                 PlaybackMode::Despawn
                             },
                             volume: Volume::Linear(volume * gain),
-                            speed,
+                            speed: speed * clock,
                             ..default()
                         },
                         Voice(target, gain),
@@ -638,7 +646,7 @@ pub fn play(
                             sync.set_speed(now_tick, tick_rate, f64::from(speed));
                         }
                         if let Some(sink) = sink {
-                            sink.set_speed(speed);
+                            sink.set_speed(speed * clock);
                         }
                     }
                 }

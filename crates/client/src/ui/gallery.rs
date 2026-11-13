@@ -412,6 +412,11 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
                                 tokens::MUTED
                             ),
                             text("−1.24  +0.80  ★", Type::barlow(18.0, 700), tokens::AHEAD,),
+                            text(
+                                "39:40.12 → 38:12.46  ← ↑ ↓ ▸",
+                                Type::barlow(18.0, 700),
+                                tokens::INK
+                            ),
                         ],
                     ),
                 ],

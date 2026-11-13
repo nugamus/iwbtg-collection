@@ -84,6 +84,18 @@ impl ViewRect {
 #[derive(SystemSet, Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub(crate) struct SimTick;
 
+/// How fast the fixed clock runs against the rate the game asks for: 1 normally, less under Slow
+/// motion (practice.rs). It changes only how often a tick runs, never what a tick computes, so
+/// it is not in the replay. Sounds play at the same factor (audio.rs) to stay on the tick clock.
+#[derive(Resource, Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ClockSpeed(pub f64);
+
+impl Default for ClockSpeed {
+    fn default() -> ClockSpeed {
+        ClockSpeed(1.0)
+    }
+}
+
 /// Marks the camera that draws the game.
 #[derive(Component)]
 pub(crate) struct GameCamera;
@@ -594,9 +606,10 @@ fn room_hz(room_speed: f64) -> f64 {
     }
 }
 
-/// Sets the fixed clock to the rate `room_speed` asks for, when it is not already that.
-fn retune(fixed: &mut Time<Fixed>, room_speed: f64) {
-    let hz = room_hz(room_speed);
+/// Sets the fixed clock to the rate `room_speed` asks for, times the clock speed, when it is not
+/// already that.
+fn retune(fixed: &mut Time<Fixed>, room_speed: f64, speed: ClockSpeed) {
+    let hz = room_hz(room_speed) * speed.0;
     if (fixed.timestep().as_secs_f64().recip() - hz).abs() > 1e-6 {
         fixed.set_timestep_hz(hz);
     }
@@ -605,8 +618,9 @@ fn retune(fixed: &mut Time<Fixed>, room_speed: f64) {
 /// Retunes the fixed clock when the sim's `room_speed` changes (a room's file speed on entry, or a
 /// game setting it), so the game ticks at the rate it asks for. Runs after the sim's tick, so the
 /// next tick already uses the new rate.
-fn follow_room_speed(game: NonSend<Game>, mut fixed: ResMut<Time<Fixed>>) {
-    retune(&mut fixed, game.sim.world().room_speed.get());
+fn follow_room_speed(game: NonSend<Game>, speed: Option<Res<ClockSpeed>>, mut fixed: ResMut<Time<Fixed>>) {
+    let speed = speed.map_or_else(ClockSpeed::default, |s| *s);
+    retune(&mut fixed, game.sim.world().room_speed.get(), speed);
 }
 
 /// F3 shows or hides the overlay; once a second it recounts ticks and frames per second.
@@ -890,17 +904,30 @@ mod tests {
     #[test]
     fn the_fixed_clock_is_retuned_when_room_speed_changes_and_left_alone_otherwise() {
         let mut fixed = Time::<Fixed>::from_hz(50.0);
-        retune(&mut fixed, 50.0);
+        let normal = ClockSpeed::default();
+        retune(&mut fixed, 50.0, normal);
         assert_eq!(fixed.timestep(), Duration::from_millis(20));
         // A room at 25 steps per second: 40 ms per tick.
-        retune(&mut fixed, 25.0);
+        retune(&mut fixed, 25.0, normal);
         assert_eq!(fixed.timestep(), Duration::from_millis(40));
         // Back to the game's rate on the next room.
-        retune(&mut fixed, 50.0);
+        retune(&mut fixed, 50.0, normal);
         assert_eq!(fixed.timestep(), Duration::from_millis(20));
         // A game that sets a silly speed gets the clamped one.
-        retune(&mut fixed, 0.0);
+        retune(&mut fixed, 0.0, normal);
         assert_eq!(fixed.timestep(), Duration::from_secs(1));
+    }
+
+    #[test]
+    fn slow_motion_stretches_every_tick() {
+        let mut fixed = Time::<Fixed>::from_hz(50.0);
+        retune(&mut fixed, 50.0, ClockSpeed(0.5));
+        assert_eq!(fixed.timestep(), Duration::from_millis(40));
+        retune(&mut fixed, 50.0, ClockSpeed(0.75));
+        assert!((fixed.timestep().as_secs_f64().recip() - 37.5).abs() < 1e-6);
+        // A room at 25 steps per second, at half speed: 80 ms per tick.
+        retune(&mut fixed, 25.0, ClockSpeed(0.5));
+        assert_eq!(fixed.timestep(), Duration::from_millis(80));
     }
 
     #[test]

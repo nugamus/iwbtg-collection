@@ -22,6 +22,7 @@ mod input;
 mod mods;
 mod package;
 mod pause;
+mod practice;
 mod render_fix;
 mod replays;
 mod results;
@@ -59,6 +60,8 @@ struct Args {
     hud: hud::HudArgs,
     #[command(flatten)]
     mods: mods::ModsArgs,
+    #[command(flatten)]
+    practice: practice::PracticeArgs,
     #[command(flatten)]
     save: savefile::SaveArgs,
     #[command(flatten)]
@@ -137,6 +140,7 @@ fn main() -> ExitCode {
     };
     let audio = args.audio;
     let run_mods = args.mods.mods;
+    let slow_speed = args.practice.slow_speed;
     let retry = args.retry;
     let pause = args.pause;
     let results = args.results;
@@ -153,6 +157,10 @@ fn main() -> ExitCode {
             art::ArtPlugin(pkg.files.clone()),
             audio::AudioPlugin::new(&audio, &pkg.files),
             mods::ModsPlugin(run_mods),
+            practice::PracticePlugin {
+                mods: run_mods,
+                slow_speed,
+            },
             retry::RetryPlugin(retry),
             skip::SkipPlugin,
             pause::PausePlugin {
@@ -190,6 +198,8 @@ fn main() -> ExitCode {
 /// gallery (docs/dev-setup.md, UI gallery in a browser).
 #[cfg(target_arch = "wasm32")]
 fn main() {
+    #[cfg(target_os = "unknown")]
+    input::watch_unmapped_pads();
     ui::gallery::run(None, false, None, None);
 }
 
