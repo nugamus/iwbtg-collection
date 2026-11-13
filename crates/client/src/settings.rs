@@ -47,7 +47,7 @@ pub struct Settings {
     pub sound_volume: u32,
     /// Scale the game by whole steps instead of filling its room (F7, `--integer-scale`).
     pub integer_scale: bool,
-    /// The debug overlay (F3) is shown.
+    /// The debug overlay (F3) is shown. Off by default.
     pub overlay: bool,
     /// HUD side panel scale in percent, 75 to 150 (`hud::layout::UI_SCALE_RANGE`).
     pub ui_scale: u32,
@@ -78,7 +78,7 @@ impl Default for Settings {
             music_volume: MAX_VOLUME,
             sound_volume: MAX_VOLUME,
             integer_scale: false,
-            overlay: true,
+            overlay: false,
             ui_scale: 100,
             backdrop_blur: DEFAULT_BACKDROP_BLUR,
             hud_show: HudShow::default(),
@@ -444,6 +444,7 @@ mod tests {
         let (s, w) = parse("");
         assert_eq!(s, Settings::default());
         assert!(w.is_empty());
+        assert!(!s.overlay, "the F3 overlay is off by default (#598)");
     }
 
     #[test]
@@ -458,7 +459,7 @@ mod tests {
             music_volume: 0,
             sound_volume: 55,
             integer_scale: true,
-            overlay: false,
+            overlay: true,
             ui_scale: 125,
             backdrop_blur: 30,
             auto_retry: true,
@@ -544,7 +545,7 @@ sound_volume = \"loud\"
              mystery = 1\n\
              [display]\nfullscreen = true\nratio = \"5:4\"\nwindow = 7\nextra = 1\nbackdrop_blur = 101\n\
              [audio]\noffset_ms = 9000\n\
-             [hud]\noverlay = false\nui_scale = 200\n\
+             [hud]\noverlay = true\nui_scale = 200\n\
              [hud.show]\ninput = false\ntimer = 1\nsplits = false\n\
              [bindings]\njump = \"Space\"\n",
         );
@@ -552,7 +553,7 @@ sound_volume = \"loud\"
         assert_eq!(s.ratio, None);
         assert_eq!(s.window, None);
         assert_eq!(s.audio_offset_ms, 0);
-        assert!(!s.overlay);
+        assert!(s.overlay, "an old file's `overlay = true` keeps the overlay on");
         assert_eq!(s.ui_scale, 100);
         assert_eq!(s.backdrop_blur, 60);
         assert!(!s.hud_show.input && s.hud_show.timer);
