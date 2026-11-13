@@ -59,9 +59,11 @@ def main_ci(main):
                 continue
             what = f"{c['oid'][:7]} \"{c['messageHeadline']}\""
             states = [k.get("conclusion") or k.get("state") for k in checks]
-            if "CANCELLED" in states:  # superseded run: its ci-ok job reports FAILURE, but the run has no verdict (#741)
-                continue
             failed = [k for k, st in zip(checks, states) if st in RED]
+            # A superseded run: only the aggregate ci-ok reports FAILURE (its needs were cancelled), so no verdict (#741).
+            # A real failure next to a cancelled job (fail-fast) stays red.
+            if failed and "CANCELLED" in states and all(k.get("name") == "ci-ok" for k in failed):
+                continue
             if failed:
                 url = re.sub(r"/job/\d+$", "", failed[0].get("detailsUrl") or failed[0].get("targetUrl") or "")
                 names = ", ".join(k.get("name") or k.get("context") or "?" for k in failed)
@@ -310,6 +312,8 @@ def test():
     # #741: a cancelled run's ci-ok job reports FAILURE; the commit has no verdict, so the older one decides.
     assert ci(commit("b", run("windows-latest", "CANCELLED"), run("ci-ok", "FAILURE"), run("x", "SUCCESS")), commit("a", run("x", "SUCCESS"))) == ("", 'Main CI: green on aaaaaaa "PR a"')
     assert ci(commit("b", run("windows-latest", "CANCELLED"), run("ci-ok", "FAILURE")))[0] == ""
+    red, _ = ci(commit("b", run("ubuntu-latest", "FAILURE"), run("windows-latest", "CANCELLED"), run("ci-ok", "FAILURE")), commit("a", run("x", "SUCCESS")))
+    assert red.startswith("MAIN IS RED: CI failed on bbbbbbb") and "ubuntu-latest" in red, red  # fail-fast cancel
     assert ci({"oid": "c" * 40, "messageHeadline": "no checks", "statusCheckRollup": None}, commit("a", run("x", "FAILURE")))[0].startswith("MAIN IS RED")
     assert main_ci(None) == ("", "Main CI: unknown (TypeError)")  # query field missing
     assert ci({"oid": 5, "messageHeadline": "x", "statusCheckRollup": {"contexts": {"nodes": [run("x", "SUCCESS")]}}}) == ("", "Main CI: unknown (TypeError)")
