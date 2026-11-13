@@ -33,9 +33,10 @@ bevy = { version = "0.20.1", default-features = false, features = [
 bevy = { version = "0.20.1", default-features = false, features = ["web"] }
 
 # Browser storage for settings and save slots on the web build (storage.rs, #473). Bevy's webgl2
-# already pulls web-sys; this only turns on the APIs storage.rs uses.
+# already pulls web-sys; this only turns on the APIs storage.rs uses, and the Gamepad API for the
+# unmapped-controller notice (input::watch_unmapped_pads, #717).
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
-web-sys = { version = "0.3", features = ["Window", "Storage", "console"] }
+web-sys = { version = "0.3", features = ["Window", "Storage", "console", "Gamepad", "GamepadEvent", "GamepadMappingType"] }
 
 [lints]
 workspace = true
