@@ -194,12 +194,16 @@ mod tests {
                 (name, font)
             })
             .collect();
-        family.names().split(',').map(|name| name.trim().trim_matches(''')).find_map(|name| {
-            faces
-                .iter()
-                .any(|(face, font)| face == name && font.charmap().map(ch).is_some())
-                .then(|| name.to_string())
-        })
+        family
+            .names()
+            .split(',')
+            .map(|name| name.trim().trim_matches('\''))
+            .find_map(|name| {
+                faces
+                    .iter()
+                    .any(|(face, font)| face == name && font.charmap().map(ch).is_some())
+                    .then(|| name.to_string())
+            })
     }
 
     #[test]
@@ -207,13 +211,24 @@ mod tests {
         for family in [Family::Barlow, Family::Condensed, Family::Pixel] {
             // The results death timeline label (#41) sets an arrow in running text.
             for ch in "0:00 → 38:12.46".chars() {
-                assert!(family_for(family, ch).is_some(), "{family:?} has no face for {ch:?}");
+                assert!(
+                    family_for(family, ch).is_some(),
+                    "{family:?} has no face for {ch:?}"
+                );
             }
             for ch in ['←', '↑', '→', '↓'] {
-                assert_eq!(family_for(family, ch).as_deref(), Some("Noto Sans Math"), "{ch:?}");
+                assert_eq!(
+                    family_for(family, ch).as_deref(),
+                    Some("Noto Sans Math"),
+                    "{ch:?}"
+                );
             }
             for ch in ['★', '☆', '▾', '▸', '✓'] {
-                assert_eq!(family_for(family, ch).as_deref(), Some("Noto Sans Symbols 2"), "{ch:?}");
+                assert_eq!(
+                    family_for(family, ch).as_deref(),
+                    Some("Noto Sans Symbols 2"),
+                    "{ch:?}"
+                );
             }
             assert_eq!(family_for(family, 'ア').as_deref(), Some("Noto Sans JP"));
         }
