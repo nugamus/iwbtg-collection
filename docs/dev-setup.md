@@ -116,7 +116,7 @@ wasm-bindgen --target web --no-typescript --out-dir crates/client/web/pkg target
 python -m http.server 8765 --bind 127.0.0.1 --directory crates/client/web
 ```
 
-Then open http://127.0.0.1:8765/. `wasm-bindgen` must be the version in Cargo.lock (see CI below); `crates/client/web/pkg/` is not committed. It needs WebGL2. Browser automation that fakes a device pixel ratio different from the screen's (Playwright's default on a 125% display) puts the pointer in the wrong place; give the context the screen's `deviceScaleFactor`.
+Then open http://127.0.0.1:8765/. `wasm-bindgen` must be the version in Cargo.lock (`cargo xtask doctor` checks it; see CI below); `crates/client/web/pkg/` is not committed. It needs WebGL2. Browser automation that fakes a device pixel ratio different from the screen's (Playwright's default on a 125% display) puts the pointer in the wrong place; give the context the screen's `deviceScaleFactor`.
 
 ## Check a machine
 
@@ -128,9 +128,10 @@ cargo build --workspace
 python -I .claude/hooks/issues.py start
 python -I ../research/.claude/hooks/guard_archive.py --test
 python -I .claude/hooks/conflict_guard.py --test
+cargo xtask doctor
 ```
 
-Expected: the build ends with `Finished`. `issues.py start` prints JSON with main's CI status (a first line `MAIN IS RED` when it failed), milestone progress and the next issues. The guards print `guard_archive self-test passed` and `conflict_guard self-test passed`.
+Expected: the build ends with `Finished`. `issues.py start` prints JSON with main's CI status (a first line `MAIN IS RED` when it failed), milestone progress and the next issues. The guards print `guard_archive self-test passed` and `conflict_guard self-test passed`. `cargo xtask doctor` compares the installed `wasm-bindgen --version` with `wasm-bindgen` in Cargo.lock (the web build and the wasm32 tests need them equal) and prints `ok`, or the exact `cargo install -f wasm-bindgen-cli --version <v> --locked` to run when they differ or the CLI is missing; run it again after Cargo.lock changes.
 
 ## CI
 
