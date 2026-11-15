@@ -790,4 +790,48 @@ mod tests {
             "keyboard focus shows the ring"
         );
     }
+
+    #[test]
+    fn a_switch_off_is_the_artboards_and_on_is_accent() {
+        assert_eq!(track_fill(false), tokens::white(0.2));
+        assert_eq!(knob_fill(false).to_srgba().to_hex(), "#C9CDE0");
+        assert_eq!(track_fill(true), tokens::ACCENT);
+        assert_eq!(knob_fill(true), tokens::INK);
+        assert_eq!(KNOB_TRAVEL, 16.0, "the knob ends 3 px from the track's right end");
+        assert_eq!(ButtonKind::Switch.rest().alpha(), tokens::white(0.06).alpha());
+        assert_eq!(ButtonKind::Switch.height(), 52.0);
+        assert_eq!(ButtonKind::Switch.pad(), 20.0);
+    }
+
+    #[test]
+    fn activating_a_switch_flips_it_and_moves_the_knob() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(ReducedMotion(true))
+            .init_resource::<InputFocus>()
+            .init_resource::<InputFocusVisible>()
+            .add_systems(Update, switch_looks)
+            .add_observer(flip_switch);
+        let s = app.world_mut().spawn(switch("Auto-retry", "hint", false)).id();
+        app.update();
+        let parts = |app: &mut App| {
+            let world = app.world_mut();
+            let mut track = world.query_filtered::<&Shape, With<SwitchTrack>>();
+            let track = track.single(world).unwrap().fill;
+            let mut knob = world.query_filtered::<&Tween<OffsetX>, With<SwitchKnob>>();
+            let knob = knob.single(world).unwrap().to;
+            (track, knob)
+        };
+        assert_eq!(parts(&mut app), (track_fill(false), 0.0));
+
+        app.world_mut().trigger(Activate { entity: s });
+        app.update();
+        assert!(app.world().get::<Switch>(s).unwrap().on);
+        assert_eq!(parts(&mut app), (track_fill(true), KNOB_TRAVEL));
+
+        // The setting's owner writes `on`; the switch follows.
+        app.world_mut().get_mut::<Switch>(s).unwrap().on = false;
+        app.update();
+        assert_eq!(parts(&mut app), (track_fill(false), 0.0));
+    }
 }
