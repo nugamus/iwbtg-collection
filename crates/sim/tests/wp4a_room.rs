@@ -1023,6 +1023,60 @@ mod wp4a {
         }
     }
 
+    /// The runner destroys no particle system on a room change or on game_restart; the games'
+    /// own Room End code does (CLONE_SPEC "Particle draw rules" item 9, Confirmed (recorder)).
+    #[test]
+    fn wp4a_particle_systems_survive_room_changes_and_game_restart() {
+        use iwbtg_sim::particles::{PartRange, PartType, Particles, Region, RegionDistr, RegionShape};
+
+        let mut b = GameDefBuilder::new("particles");
+        let world = probe_kind(&mut b, "world", true);
+        b.boot(world);
+        let title = b.room(room("title", 50));
+        let stage = b.room(room("stage", 30));
+        b.start_room(title);
+        let def = b.build().unwrap();
+        let rules = RunnerRules::default();
+        let mut host = Probe::default();
+        let (mut w, r) = start(
+            &def,
+            &rules,
+            &mut host,
+            StartPoint::Room {
+                room: title,
+                difficulty: 0,
+            },
+        );
+        r.unwrap();
+        let mut p = Particles::default();
+        let ty = p.add_type(PartType {
+            life: PartRange::fixed(40.0),
+            ..PartType::default()
+        });
+        let s = p.add_system();
+        let e = p
+            .add_emitter(
+                s,
+                Region {
+                    shape: RegionShape::Rectangle,
+                    distr: RegionDistr::Linear,
+                },
+            )
+            .unwrap();
+        p.stream(e, ty, 2).unwrap();
+        w.particles = p.clone();
+        for req in [
+            RoomRequest::Next,
+            RoomRequest::Restart,
+            RoomRequest::Previous,
+            RoomRequest::Goto(stage),
+            RoomRequest::GameRestart,
+        ] {
+            change(&def, &rules, &mut w, &mut host, req).unwrap();
+            assert_eq!(w.particles, p, "{req:?} keeps the particle systems");
+        }
+    }
+
     #[test]
     fn wp4a_game_restart_switches() {
         let o = order_game();

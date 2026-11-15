@@ -237,7 +237,8 @@ fn rows(ctx: &mut Ctx, hooks: &Hooks) -> Option<()> {
 /// Row 11b: the particle update, once per tick after End Step and before Draw (CLONE_SPEC
 /// numbers, Confirmed (recorder), "Particle draw rules" 1; N10). Only with
 /// `NumRules::particles_draw_rng`. A tick that a room request ended at an earlier row skips it
-/// with End Step and Draw (OPEN: not traced, research#170).
+/// with End Step and Draw, and live particles do not age that tick (Confirmed (recorder),
+/// CLONE_SPEC "Particle draw rules" item 9, research#181).
 fn particle_update(ctx: &mut Ctx) -> Result<(), SimError> {
     if !ctx.rules.num.particles_draw_rng {
         return Ok(());
