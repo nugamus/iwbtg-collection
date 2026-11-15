@@ -48,7 +48,7 @@ use crate::rooms::{ActionFile, IndexFile, InstanceFile, MAX_GM_ID, RoomFile, Whe
 use crate::sprites::{MAX_IMAGE_SIDE, load_sprite_at, parse_sidecar};
 use crate::tracemap::{TRACE_MAP_PATH, TraceMap, TraceParam, TraceStatus, load_trace_map};
 use crate::vars::intern_vars;
-use crate::{params, paths, physics, sounds, timelines};
+use crate::{params, particles, paths, physics, sounds, timelines};
 
 /// How strict loading is.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -301,6 +301,8 @@ struct Loader<'a> {
     pending: BTreeSet<String>,
     trace: Option<TraceMap>,
     sprite_ids: BTreeMap<String, SpriteEntry>,
+    /// `particles/<id>.toml`, loaded after sprites so kind params can name them.
+    particles: Vec<iwbtg_sim::def::PartSystemDef>,
     masks: Vec<Mask>,
     kinds: Vec<KindDef>,
     kind_ids: BTreeMap<String, KindId>,
@@ -348,6 +350,7 @@ impl<'a> Loader<'a> {
             pending: BTreeSet::new(),
             trace: None,
             sprite_ids: BTreeMap::new(),
+            particles: Vec::new(),
             masks: Vec::new(),
             kinds: Vec::new(),
             kind_ids: BTreeMap::new(),
@@ -510,6 +513,8 @@ impl<'a> Loader<'a> {
         }
         // Step 2.
         self.load_sprites();
+        // Particle systems (#765), before kinds so `particle_system` params can name them.
+        self.load_particles();
         // Room art the sim never sees: tile files and tileset sidecars.
         crate::art::check(self.files, &mut self.diags);
         // Step 4, first half: parse rooms and fix their ids, so params can name rooms.
@@ -615,6 +620,7 @@ impl<'a> Loader<'a> {
             sounds: std::mem::take(&mut self.sounds),
             timelines,
             paths,
+            particle_systems: std::mem::take(&mut self.particles),
             scripts: std::mem::take(&mut self.scripts),
             timing: timing?,
             maps,
@@ -1015,6 +1021,29 @@ impl<'a> Loader<'a> {
         self.note("CR8", format!("kid mask `{sprite}`"));
     }
 
+    /// Reads `particles/<id>.toml` (#765); sprite ids must be known.
+    fn load_particles(&mut self) {
+        let files = self.files;
+        let sprite_ids = &self.sprite_ids;
+        let mut sprite_diags = Vec::new();
+        let mut d = Vec::new();
+        let mut sprite = |name: &str, file: &str, text: &str, span: Range<usize>| match sprite_ids.get(name) {
+            Some(e) => Some(e.id),
+            None => {
+                let msg = if name.starts_with(crate::ids::ENGINE_PREFIX) {
+                    crate::engine_pack::unresolved(files, name, "sprite")
+                } else {
+                    format!("sprite `{name}` does not exist")
+                };
+                sprite_diags.push(Diagnostic::error_at(file, text, span.start, msg));
+                None
+            }
+        };
+        self.particles = particles::load(files, &mut sprite, &mut d);
+        self.diags.append(&mut sprite_diags);
+        self.diags.append(&mut d);
+    }
+
     fn load_objects(&mut self) {
         let paths: Vec<(String, String)> = self
             .files
@@ -1268,6 +1297,12 @@ impl<'a> Loader<'a> {
                 .position(|d| d.name == *s)
                 .and_then(|i| u32::try_from(i).ok())
                 .map(|i| ParamValue::Sound(iwbtg_sim::def::SoundId(i))),
+            Some(ParamType::Particles) => self
+                .particles
+                .iter()
+                .position(|d| d.name == *s)
+                .and_then(|i| u32::try_from(i).ok())
+                .map(|i| ParamValue::Particles(iwbtg_sim::def::PartSystemDefId(i))),
             _ => return value,
         };
         match found {
@@ -2821,6 +2856,7 @@ fn show_param(p: &ParamValue) -> String {
         ParamValue::Room(r) => format!("room#{}", r.0),
         ParamValue::Kind(k) => format!("kind#{}", k.0),
         ParamValue::Sound(s) => format!("sound#{}", s.0),
+        ParamValue::Particles(p) => format!("particles#{}", p.0),
     }
 }
 
@@ -2915,6 +2951,7 @@ pub fn gameplay_hash(files: &PackageFiles, manifest: &Manifest, def: &GameDef) -
                 "objects/",
                 "timelines/",
                 "paths/",
+                "particles/",
                 "sprites/",
                 "sounds/",
                 "music/",

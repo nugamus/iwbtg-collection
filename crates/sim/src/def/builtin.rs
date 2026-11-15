@@ -109,6 +109,8 @@ pub enum Builtin {
     Ladder,
     /// Decoration, no behavior.
     Decor,
+    /// Builds a `particles/<id>.toml` system (#765).
+    ParticleSystem,
     /// A kind whose behavior is a script (WP9).
     Scripted,
 
@@ -122,7 +124,7 @@ pub enum Builtin {
 
 impl Builtin {
     /// Every built-in, in declaration order.
-    pub const ALL: [Builtin; 51] = [
+    pub const ALL: [Builtin; 52] = [
         Builtin::World,
         Builtin::Kid,
         Builtin::KidBullet,
@@ -171,6 +173,7 @@ impl Builtin {
         Builtin::Sign,
         Builtin::Ladder,
         Builtin::Decor,
+        Builtin::ParticleSystem,
         Builtin::Scripted,
         Builtin::Probe,
         Builtin::Inert,
@@ -227,6 +230,7 @@ impl Builtin {
             Builtin::Sign => "sign",
             Builtin::Ladder => "ladder",
             Builtin::Decor => "decor",
+            Builtin::ParticleSystem => "particle_system",
             Builtin::Scripted => "scripted",
             Builtin::Probe => "probe",
             Builtin::Inert => "inert",

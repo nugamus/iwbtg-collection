@@ -20,8 +20,8 @@ use super::motion::{Ease, OffsetX, Opacity, ReducedMotion, Tween, Width};
 use super::shape::{Band, FadeMask, Shape, Side, UiOpacity, Veil};
 use super::tokens::{self, star_color};
 use super::widgets::{
-    ButtonKind, button, control, ellipsis_text, mod_pill, panel, ranked_pill, star_pill, stat, tag_pill,
-    text, unranked_pill,
+    ButtonKind, button, control, ellipsis_text, mod_pill, panel, ranked_pill, star_pill, stat, switch,
+    tag_pill, text, unranked_pill,
 };
 
 /// The size the mockups are drawn at.
@@ -467,6 +467,15 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
                         r.spawn(button("Options", ButtonKind::Secondary));
                         r.spawn(button("Random", ButtonKind::Secondary));
                         r.spawn(button("Mods", ButtonKind::Primary));
+                    });
+                    // The switch off (the artboard's state) and on; a click flips either.
+                    c.spawn(row(12.0)).with_children(|r| {
+                        r.spawn(switch(
+                            "Auto-retry",
+                            "Restart from the start after a death",
+                            false,
+                        ));
+                        r.spawn(switch("Auto-retry", "Restart from the start after a death", true));
                     });
                     // Controls sit on art in the screens, so they are shown on art here, as an
                     // upright art shape: an `ImageNode` draws its image inside the padding, so the

@@ -336,3 +336,151 @@ mod world {
         assert_ne!(state_hash(&a.w), state_hash(&b.w));
     }
 }
+
+/// The `particle_system` built-in (#765): Create builds its `particles/<id>.toml` system in
+/// `World::particles` as `Particles::build` does, the tick streams it, and the lifecycle params
+/// make their call.
+mod particle_system {
+    use crate::wp1_support::*;
+
+    use iwbtg_sim::builtins;
+    use iwbtg_sim::def::{
+        Builtin, KindDef, KindId, ParamValue, PartCreateDef, PartEmitterDef, PartSystemDef, PartSystemDefId,
+        PartTypeDef,
+    };
+    use iwbtg_sim::particles::{
+        PartChild, PartRange, PartType, PartTypeId, Particles, Region, RegionDistr, RegionShape,
+    };
+    use iwbtg_sim::rng::Rng;
+    use iwbtg_sim::world::{InstId, SpawnInit};
+
+    /// Two types (the second is the first's death type), one emitter with a stream of 2 and a
+    /// burst of 3, and one `part_particles_create` of 2.
+    fn system() -> PartSystemDef {
+        let spark = PartType {
+            size: PartRange::new(1.0, 2.0),
+            direction: PartRange::new(0.0, 360.0),
+            life: PartRange::fixed(5.0),
+            death: Some(PartChild {
+                ty: PartTypeId(1),
+                count: 2,
+            }),
+            ..PartType::default()
+        };
+        let dust = PartType {
+            speed: PartRange::new(0.5, 1.0),
+            life: PartRange::fixed(3.0),
+            ..PartType::default()
+        };
+        PartSystemDef {
+            name: "fx".into(),
+            types: vec![
+                PartTypeDef {
+                    name: "spark".into(),
+                    draws: spark,
+                    ..PartTypeDef::default()
+                },
+                PartTypeDef {
+                    name: "dust".into(),
+                    draws: dust,
+                    ..PartTypeDef::default()
+                },
+            ],
+            emitters: vec![PartEmitterDef {
+                region: Region {
+                    shape: RegionShape::Ellipse,
+                    distr: RegionDistr::Gaussian,
+                },
+                stream: Some((0, 2)),
+                burst: Some((0, 3)),
+                ..PartEmitterDef::default()
+            }],
+            creates: vec![PartCreateDef {
+                ty: 1,
+                number: 2,
+                ..PartCreateDef::default()
+            }],
+            ..PartSystemDef::default()
+        }
+    }
+
+    fn fixture(on: bool, on_destroy: &str) -> (Fx, KindId) {
+        let mut b = builder();
+        let mut k = KindDef::new("fx", Builtin::ParticleSystem);
+        k.params
+            .0
+            .insert("system".into(), ParamValue::Particles(PartSystemDefId(0)));
+        k.params
+            .0
+            .insert("on_destroy".into(), ParamValue::Str(on_destroy.into()));
+        k.events = builtins::event_set(Builtin::ParticleSystem, &k);
+        let kind = b.kind(k);
+        b.def_mut().particle_systems.push(system());
+        let mut fx = Fx::new(b.build().unwrap());
+        fx.rules.num.particles_draw_rng = on;
+        (fx, kind)
+    }
+
+    fn spawn(fx: &mut Fx, kind: KindId) -> InstId {
+        fx.ctx()
+            .spawn(kind, r(0.0), r(0.0), SpawnInit::default())
+            .expect("spawn")
+    }
+
+    /// The model: a fresh `Particles` with the system built from seed 1.
+    fn model() -> (Particles, Rng) {
+        let mut p = Particles::default();
+        let mut rng = Rng::new(1);
+        p.build(&mut rng, &system()).unwrap();
+        (p, rng)
+    }
+
+    /// Create builds the system at once (types, emitter with its stream, burst, create, which
+    /// draw), then each tick's update streams it, the same as the model.
+    #[test]
+    fn create_builds_the_system_and_the_tick_streams_it() {
+        let (mut fx, kind) = fixture(true, "none");
+        spawn(&mut fx, kind);
+        let (mut p, mut rng) = model();
+        assert_ne!(rng, Rng::new(1), "the burst and the create draw");
+        assert_eq!(fx.w.particles, p);
+        assert_eq!(fx.w.rng, rng);
+        fx.idle(8);
+        for _ in 0..8 {
+            p.update(&mut rng).unwrap();
+        }
+        assert_eq!(fx.w.particles, p);
+        assert_eq!(fx.w.rng, rng);
+    }
+
+    /// With `particles_draw_rng` off the built-in builds nothing and draws nothing.
+    #[test]
+    fn switch_off_builds_nothing() {
+        let (mut fx, kind) = fixture(false, "destroy");
+        let id = spawn(&mut fx, kind);
+        fx.idle(3);
+        fx.ctx().destroy(id);
+        assert_eq!(fx.w.particles, Particles::default());
+        assert_eq!(fx.w.rng, Rng::new(1));
+    }
+
+    /// `on_destroy` makes its call when the instance is destroyed; none of them draws.
+    #[test]
+    fn on_destroy_makes_its_call_without_drawing() {
+        for word in ["none", "clear", "destroy_emitters", "destroy"] {
+            let (mut fx, kind) = fixture(true, word);
+            let id = spawn(&mut fx, kind);
+            let (mut p, rng) = model();
+            fx.ctx().destroy(id);
+            let s = iwbtg_sim::particles::PartSystemId(0);
+            match word {
+                "clear" => p.clear(s).unwrap(),
+                "destroy_emitters" => p.destroy_all_emitters(s).unwrap(),
+                "destroy" => p.destroy_system(s).unwrap(),
+                _ => {}
+            }
+            assert_eq!(fx.w.particles, p, "{word}");
+            assert_eq!(fx.w.rng, rng, "{word}");
+        }
+    }
+}
