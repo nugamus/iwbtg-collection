@@ -232,7 +232,7 @@ mod world {
     use iwbtg_sim::events::{ProbeAct, ProbeOn, ProbeStep};
     use iwbtg_sim::hash::state_hash;
     use iwbtg_sim::input::InputFrame;
-    use iwbtg_sim::particles::{PartRange, PartType, Particles, Region, RegionDistr, RegionShape};
+    use iwbtg_sim::particles::{PartChild, PartRange, PartType, Particles, Region, RegionDistr, RegionShape};
     use iwbtg_sim::rng::Rng;
     use iwbtg_sim::room::RoomRequest;
 
@@ -320,8 +320,39 @@ mod world {
     #[test]
     fn room_request_tick_skips_the_update() {
         let mut fx = fixture(true, true);
+        // Live particles before the request tick: a type with a death particle is tracked, so a
+        // model update on a scratch generator leaves live particles (life 3) in the system.
+        let mut live = Particles::default();
+        let dust = live.add_type(PartType::default());
+        let spark = live.add_type(PartType {
+            life: PartRange::fixed(3.0),
+            death: Some(PartChild { ty: dust, count: 1 }),
+            ..PartType::default()
+        });
+        let sys = live.add_system();
+        let em = live
+            .add_emitter(
+                sys,
+                Region {
+                    shape: RegionShape::Rectangle,
+                    distr: RegionDistr::Linear,
+                },
+            )
+            .unwrap();
+        live.stream(em, spark, 2).unwrap();
+        let mut scratch = Rng::new(7);
+        live.update(&mut scratch).unwrap();
+        let before = live.clone();
+        live.update(&mut scratch).unwrap();
+        assert_ne!(live, before, "an update ages the live particles");
+        let live = before;
+        fx.w.particles = live.clone();
         fx.tick(InputFrame::EMPTY);
         assert_eq!(fx.w.room, RoomId(1));
+        assert_eq!(
+            fx.w.particles, live,
+            "no new particle and no ageing on the request tick"
+        );
         assert_eq!(fx.w.rng, Rng::new(1), "no draws on the request tick");
         assert!(seeds(&fx.log()).is_empty());
     }
