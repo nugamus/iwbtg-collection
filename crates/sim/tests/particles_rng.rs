@@ -4,8 +4,7 @@
 mod n10 {
     use iwbtg_sim::num::Real;
     use iwbtg_sim::particles::{
-        PartChild, PartColor, PartRange, PartType, PartTypeId, Particles, Region, RegionDistr,
-        RegionShape,
+        PartChild, PartColor, PartRange, PartType, PartTypeId, Particles, Region, RegionDistr, RegionShape,
     };
     use iwbtg_sim::rng::Rng;
 
@@ -230,7 +229,10 @@ mod n10 {
         step.step = Some(PartChild { count: -1, ty: t2 });
         let step = p.add_type(step);
         assert!(p.burst(&mut rng, e, step, 1).is_err(), "negative step count");
-        assert!(p.stream(e, PartTypeId(999), 1).is_err(), "stream of a missing type");
+        assert!(
+            p.stream(e, PartTypeId(999), 1).is_err(),
+            "stream of a missing type"
+        );
         assert!(
             p.create(&mut rng, s, PartTypeId(999), 1).is_err(),
             "create of a missing type"
