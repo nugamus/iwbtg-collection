@@ -564,4 +564,27 @@ version = \"1.0.0\"
         assert_eq!(left_value(&text).and_then(first_hash), Some(h));
         assert_eq!(first_hash(&format!("x{h}0")), None, "65 digits is not a hash");
     }
+
+    /// The `schema` feature (JSON Schema through `schemars`) is for docs and tests only: never in
+    /// the client, native or web (#794). `cargo test --workspace` runs this in CI.
+    #[test]
+    fn the_client_does_not_depend_on_schemars() {
+        for target in [None, Some("wasm32-unknown-unknown")] {
+            let mut args = vec!["tree", "-p", "iwbtg-client", "-i", "schemars", "--locked"];
+            if let Some(t) = target {
+                args.extend(["--target", t]);
+            }
+            let out = std::process::Command::new(env!("CARGO"))
+                .args(&args)
+                .current_dir(workspace_root())
+                .output()
+                .expect("cargo runs");
+            let err = String::from_utf8_lossy(&out.stderr);
+            assert!(
+                !out.status.success() && err.contains("did not match any packages"),
+                "schemars is in the client's graph (target {target:?}): {}{err}",
+                String::from_utf8_lossy(&out.stdout)
+            );
+        }
+    }
 }
