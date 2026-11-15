@@ -120,6 +120,28 @@ const DEFAULT_PAD: [(PadInput, Action); 10] = [
     (PadInput::East, Action::Suicide),
 ];
 
+/// Escape and Start open the pause menu (`pause::PAUSE_KEY`, `pause::PAUSE_PAD`). A game action
+/// on them would see the press or not depending on frame timing (#761), so they are refused.
+fn refuse_pause_key(code: u8, key: &str, what: &str) -> Result<(), String> {
+    if code == vk::ESCAPE {
+        return Err(format!(
+            "key `{key}` is the pause key and cannot be bound to {what}"
+        ));
+    }
+    Ok(())
+}
+
+/// See [`refuse_pause_key`].
+fn refuse_pause_pad(input: PadInput, what: &str) -> Result<(), String> {
+    if input == PadInput::Start {
+        return Err(format!(
+            "controller input `{}` is the pause button and cannot be bound to {what}",
+            input.name()
+        ));
+    }
+    Ok(())
+}
+
 /// The name of the quick-retry binding in the file and in `--bind`.
 pub const QUICK_RETRY: &str = "quick-retry";
 
@@ -301,17 +323,19 @@ impl Bindings {
             if let Some(keys) = config.keys.get(ck.name()) {
                 let mut set = BTreeSet::new();
                 for key in keys {
-                    set.insert(key_from_name(key).ok_or_else(|| format!("unknown key `{key}`"))?);
+                    let code = key_from_name(key).ok_or_else(|| format!("unknown key `{key}`"))?;
+                    refuse_pause_key(code, key, ck.name())?;
+                    set.insert(code);
                 }
                 b.client[ck.index()].keys = set;
             }
             if let Some(inputs) = config.pad.get(ck.name()) {
                 let mut set = BTreeSet::new();
                 for input in inputs {
-                    set.insert(
-                        PadInput::from_name(input)
-                            .ok_or_else(|| format!("unknown controller input `{input}`"))?,
-                    );
+                    let p = PadInput::from_name(input)
+                        .ok_or_else(|| format!("unknown controller input `{input}`"))?;
+                    refuse_pause_pad(p, ck.name())?;
+                    set.insert(p);
                 }
                 b.client[ck.index()].pad = set;
             }
@@ -346,6 +370,7 @@ impl Bindings {
             b.keys.retain(|_, a| *a != action);
             for key in keys {
                 let code = key_from_name(key).ok_or_else(|| format!("unknown key `{key}`"))?;
+                refuse_pause_key(code, key, action.name())?;
                 if let Some(ck) = b.client_key(code) {
                     return Err(format!(
                         "key `{key}` is bound to both {} and {}",
@@ -378,6 +403,7 @@ impl Bindings {
             for input in inputs {
                 let p = PadInput::from_name(input)
                     .ok_or_else(|| format!("unknown controller input `{input}`"))?;
+                refuse_pause_pad(p, action.name())?;
                 if let Some(ck) = b.client_pad(p) {
                     return Err(format!(
                         "controller input `{input}` is bound to both {} and {}",
@@ -901,6 +927,26 @@ mod tests {
         assert_eq!(Config::from_table(&c.to_table(), &mut w), c);
         assert!(w.is_empty(), "{w:?}");
         assert!(Bindings::default().describe().contains("skip-cutscene"));
+    }
+
+    #[test]
+    fn the_pause_key_and_button_are_refused() {
+        for spec in [
+            "menu=Escape",
+            "jump=Escape",
+            "quick-retry=Escape",
+            "skip-cutscene=Escape",
+        ] {
+            let mut c = Config::default();
+            let err = c.set(spec).unwrap_err();
+            assert!(err.contains("pause key"), "{spec}: {err}");
+        }
+        for spec in ["menu=pad:start", "shoot=pad:start", "skip-cutscene=pad:start"] {
+            let mut c = Config::default();
+            let err = c.set(spec).unwrap_err();
+            assert!(err.contains("pause button"), "{spec}: {err}");
+        }
+        assert!(Bindings::from_config(&Config::default()).is_ok());
     }
 
     #[test]
