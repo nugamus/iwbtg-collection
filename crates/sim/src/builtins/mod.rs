@@ -50,6 +50,7 @@ pub mod water;
 pub mod breakable_block;
 pub mod conveyor;
 pub mod decor;
+pub mod particle_system;
 pub mod jump_refresher;
 pub mod kid_param_zone;
 pub mod ladder;
@@ -189,6 +190,8 @@ pub enum ParamType {
     Sound,
     /// Free text (a sign's message).
     Text,
+    /// A particle system definition (`particles/<id>.toml`).
+    Particles,
 }
 
 /// A param set a built-in cannot use.
@@ -332,6 +335,7 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
         Builtin::Sign => sign::on_event(ctx, me, ev),
         Builtin::Ladder => ladder::on_event(ctx, me, ev),
         Builtin::Decor => decor::on_event(ctx, me, ev),
+        Builtin::ParticleSystem => particle_system::on_event(ctx, me, ev),
         Builtin::Scripted => scripted::on_event(ctx, me, ev),
         Builtin::Kid => crate::kid::on_event(ctx, me, ev),
         Builtin::Probe => crate::events::probe_on_event(ctx, me, ev),
@@ -391,6 +395,7 @@ pub fn event_set(b: Builtin, kind: &KindDef) -> EventSet {
         Builtin::Sign => sign::event_set(kind),
         Builtin::Ladder => ladder::event_set(kind),
         Builtin::Decor => decor::event_set(kind),
+        Builtin::ParticleSystem => particle_system::event_set(kind),
         Builtin::Scripted => scripted::event_set(kind),
         Builtin::Probe => crate::events::probe_event_set(),
         Builtin::Kid | Builtin::Inert => EventSet::default(),
@@ -447,6 +452,7 @@ pub fn param_specs(b: Builtin) -> &'static [ParamSpec] {
         Builtin::Sign => sign::param_specs(),
         Builtin::Ladder => ladder::param_specs(),
         Builtin::Decor => decor::param_specs(),
+        Builtin::ParticleSystem => particle_system::param_specs(),
         Builtin::Scripted => scripted::param_specs(),
         Builtin::Kid | Builtin::Probe | Builtin::Inert => &[],
     }
@@ -503,6 +509,7 @@ pub fn init_state(b: Builtin, params: &Params) -> Result<BuiltinState, ParamErro
         Builtin::Sign => sign::init_state(params),
         Builtin::Ladder => ladder::init_state(params),
         Builtin::Decor => decor::init_state(params),
+        Builtin::ParticleSystem => particle_system::init_state(params),
         Builtin::Scripted => scripted::init_state(params),
         Builtin::Kid | Builtin::Probe | Builtin::Inert => Ok(BuiltinState::Stateless),
     }

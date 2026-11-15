@@ -63,6 +63,10 @@ def_id!(
     PathId
 );
 def_id!(
+    /// A particle system definition. Index into `GameDef::particle_systems`.
+    PartSystemDefId
+);
+def_id!(
     /// A script file of a scripted kind. Index into `GameDef::scripts`; the script host (WP9)
     /// compiles the same table in the same order.
     ScriptId

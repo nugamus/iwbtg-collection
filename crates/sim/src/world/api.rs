@@ -216,6 +216,7 @@ fn param_value(v: &ParamValue) -> Value {
         ParamValue::Room(id) => Value::Real(Real::new(f64::from(id.0))),
         ParamValue::Kind(id) => Value::Real(Real::new(f64::from(id.0))),
         ParamValue::Sound(id) => Value::Real(Real::new(f64::from(id.0))),
+        ParamValue::Particles(id) => Value::Real(Real::new(f64::from(id.0))),
     }
 }
 

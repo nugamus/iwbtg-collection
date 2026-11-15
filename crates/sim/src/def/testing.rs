@@ -95,6 +95,7 @@ impl GameDefBuilder {
                 sounds: Vec::new(),
                 timelines: Vec::new(),
                 paths: Vec::new(),
+                particle_systems: Vec::new(),
                 scripts: Vec::new(),
                 timing: TimingDef::default(),
                 maps: Vec::new(),
