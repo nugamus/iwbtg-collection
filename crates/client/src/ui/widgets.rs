@@ -411,6 +411,38 @@ pub fn button(label: &str, kind: ButtonKind) -> impl Bundle + use<> {
     )
 }
 
+/// The muted key of a [`control`] (`Sort`): 14 px, 400, `#a2a8bc`.
+pub const CONTROL_KEY: Type = Type::barlow(14.0, 400);
+/// Space between a [`control`]'s key and value, as in `Main.dc.html`.
+pub const CONTROL_KEY_GAP: f32 = 6.0;
+
+/// A control over art with a key and a value (`Sort  Stars ▾`, `Scope  Global ▾` in
+/// `Main.dc.html`): the key muted in [`CONTROL_KEY`], the value in the Control style (14 px, 600,
+/// ink), 6 px apart. An empty `key` gives a value-only control (`Cleared`), as the mockup does.
+pub fn control(key: &str, value: &str) -> impl Bundle + use<> {
+    let kind = ButtonKind::Control;
+    let key = key.to_string();
+    let value = text(value, kind.style(), tokens::INK);
+    button_with(
+        kind,
+        kind.height(),
+        kind.pad(),
+        (
+            Node {
+                column_gap: Val::Px(CONTROL_KEY_GAP),
+                align_items: AlignItems::Baseline,
+                ..default()
+            },
+            Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
+                if !key.is_empty() {
+                    c.spawn(text(&key, CONTROL_KEY, tokens::MUTED));
+                }
+                c.spawn(value);
+            })),
+        ),
+    )
+}
+
 /// A button of `kind` at another size (`height`, `pad` px left and right) with `content` in it:
 /// the results footer's 48 and 38 px buttons, the Retry button's `hold R` beside its label.
 pub fn button_with<B: Bundle>(kind: ButtonKind, height: f32, pad: f32, content: B) -> impl Bundle + use<B> {
