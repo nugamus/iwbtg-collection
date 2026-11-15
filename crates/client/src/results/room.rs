@@ -78,10 +78,14 @@ impl Pictures {
                 ))
                 .id(),
         ];
-        for (sprite, t) in art::still(src.files, images, cache, name, size) {
+        let (still, ladder) = art::still(src.files, images, cache, name, size);
+        for (sprite, t) in still {
             entities.push(commands.spawn((sprite, Anchor::TOP_LEFT, t, layer.clone())).id());
         }
-        for (i, placed) in room.instances.iter().enumerate() {
+        // The room's instances as it starts, in draw order: depth descending, then placement
+        // (creation) order, among the tile layers (`view::order`, #789).
+        let mut shown = Vec::new();
+        for placed in &room.instances {
             let Some(kind) = src.def.kind(placed.kind) else {
                 continue;
             };
@@ -97,7 +101,18 @@ impl Pictures {
             ) else {
                 continue;
             };
-            let depth = placed.depth.unwrap_or(kind.depth).get() as f32;
+            shown.push((
+                placed.depth.unwrap_or(kind.depth).get(),
+                placed,
+                def,
+                handle,
+                strip,
+            ));
+        }
+        // Stable: equal depths keep placement order.
+        shown.sort_by(|a, b| b.0.total_cmp(&a.0));
+        let depths: Vec<f64> = shown.iter().map(|s| s.0).collect();
+        for ((_, placed, def, handle, strip), z) in shown.into_iter().zip(ladder.z_in_order(&depths)) {
             let (rect, t) = place_sprite(
                 def,
                 0,
@@ -105,7 +120,7 @@ impl Pictures {
                 Vec2::new(placed.x.get() as f32, placed.y.get() as f32),
                 Vec2::new(placed.xscale.get() as f32, placed.yscale.get() as f32),
                 placed.angle.get() as f32,
-                -depth / 1000.0 + i as f32 * 1e-6,
+                z,
                 size,
             );
             let sprite = Sprite {

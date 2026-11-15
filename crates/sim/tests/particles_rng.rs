@@ -4,7 +4,7 @@
 mod n10 {
     use iwbtg_sim::num::Real;
     use iwbtg_sim::particles::{
-        PartChild, PartColor, PartRange, PartType, Particles, Region, RegionDistr, RegionShape,
+        PartChild, PartColor, PartRange, PartType, PartTypeId, Particles, Region, RegionDistr, RegionShape,
     };
     use iwbtg_sim::rng::Rng;
 
@@ -216,11 +216,212 @@ mod n10 {
         let e = p.add_emitter(s, Region::default()).unwrap();
         let mut rng = Rng::new(1);
         assert!(p.stream(e, t2, 0).is_err(), "stream 0");
-        assert!(p.burst(&mut rng, e, t2, -3).is_err(), "negative burst");
+        assert!(p.burst(&mut rng, e, t2, 0).is_err(), "burst 0");
         assert!(
             p.create(&mut rng, s, t, 1).is_err(),
             "death particles and a random life"
         );
+        let mut zero = empty();
+        zero.death = Some(PartChild { count: 0, ty: t2 });
+        let zero = p.add_type(zero);
+        assert!(p.burst(&mut rng, e, zero, 1).is_err(), "death count 0");
+        let mut step = empty();
+        step.step = Some(PartChild { count: -1, ty: t2 });
+        let step = p.add_type(step);
+        assert!(p.burst(&mut rng, e, step, 1).is_err(), "negative step count");
+        assert!(
+            p.stream(e, PartTypeId(999), 1).is_err(),
+            "stream of a missing type"
+        );
+        assert!(
+            p.create(&mut rng, s, PartTypeId(999), 1).is_err(),
+            "create of a missing type"
+        );
+    }
+}
+
+/// CLONE_SPEC numbers "Particle draw rules" item 8 (#769) against the 23 runs of NUM-PART-RNG-2
+/// (research#167, `traces/rely-the-needle-4-2/num-part-rng-2.md`): system S with the point
+/// emitter E (rectangle linear), seeds replayed bit for bit on every frame from 3 to 302.
+mod n10_2 {
+    use iwbtg_sim::particles::{
+        EmitterId, PartChild, PartRange, PartSystemId, PartType, PartTypeId, Particles, Region,
+    };
+    use iwbtg_sim::rng::Rng;
+
+    /// run, frame, random_get_seed() and the particle count of each run, copied from the
+    /// research traces `num-part-rng-2-<run>.csv`.
+    const RUNS: &str = include_str!("fixtures/rely_num_part_rng_2.csv");
+
+    fn seed(signed: i64) -> u32 {
+        u32::try_from(signed.rem_euclid(1 << 32)).expect("fits")
+    }
+
+    /// `(frame, seed, count)` of one run, frames 2 to 302.
+    fn rows(run: &str) -> Vec<(u32, u32, i64)> {
+        let rows: Vec<_> = RUNS
+            .lines()
+            .filter(|l| !l.starts_with('#') && !l.starts_with("run,"))
+            .map(|l| l.split(',').collect::<Vec<_>>())
+            .filter(|f| f[0] == run)
+            .map(|f| {
+                let n = |i: usize| f[i].parse::<i64>().expect("number");
+                (u32::try_from(n(1)).expect("frame"), seed(n(2)), n(3))
+            })
+            .collect();
+        assert_eq!(rows.len(), 301, "{run}: frames 2 to 302");
+        rows
+    }
+
+    /// The empty-range type: 1 type draw, life 1000.
+    fn empty() -> PartType {
+        PartType {
+            life: PartRange::fixed(1000.0),
+            ..PartType::default()
+        }
+    }
+
+    /// eat-the-lemon's rocket death type: size, speed, direction and life ranges (5 type draws).
+    fn firework() -> PartType {
+        PartType {
+            size: PartRange::new(0.1, 0.2),
+            speed: PartRange::new(0.5, 4.0),
+            direction: PartRange::new(0.0, 360.0),
+            life: PartRange::new(20.0, 30.0),
+            ..PartType::default()
+        }
+    }
+
+    /// A type with a fixed life and death particles.
+    fn dying(life: f64, count: i32, ty: PartTypeId) -> PartType {
+        PartType {
+            life: PartRange::fixed(life),
+            death: Some(PartChild { count, ty }),
+            ..PartType::default()
+        }
+    }
+
+    const S: PartSystemId = PartSystemId(0);
+
+    /// Replays `run`: `before(frame, p, rng)` is the game code before that frame's update.
+    fn replay(
+        run: &str,
+        mut p: Particles,
+        mut before: impl FnMut(u32, &mut Particles, &mut Rng),
+    ) -> Particles {
+        let rows = rows(run);
+        let mut rng = Rng::new(rows[0].1);
+        for &(frame, want, _) in &rows[1..] {
+            before(frame, &mut p, &mut rng);
+            p.update(&mut rng).unwrap();
+            assert_eq!(rng.seed, want, "{run}: seed after frame {frame}");
+        }
+        p
+    }
+
+    /// System S with E: the point emitter (a rectangle, linear).
+    fn system(p: &mut Particles) -> EmitterId {
+        let s = p.add_system();
+        assert_eq!(s, S);
+        p.add_emitter(s, Region::default()).unwrap()
+    }
+
+    /// Runs a1-a7: a burst of 10 (life 20) before frame 3 whose type has part_type_death(T, k,
+    /// T2). k = 1, 2, 10, 150 with the firework (frame 22 draws 50, 100, 500, 7500: no cap), 150
+    /// with the empty type; k = -1, -5 a chance per dying particle.
+    #[test]
+    fn death_count_scales_and_negative_is_a_chance() {
+        for (run, k, fw) in [
+            ("a1", 1, true),
+            ("a2", 2, true),
+            ("a3", 10, true),
+            ("a4", 150, true),
+            ("a5", 150, false),
+            ("a6", -1, false),
+            ("a7", -5, false),
+        ] {
+            let mut p = Particles::default();
+            let t2 = p.add_type(if fw { firework() } else { empty() });
+            let t = p.add_type(dying(20.0, k, t2));
+            let e = system(&mut p);
+            replay(run, p, |frame, p, rng| {
+                if frame == 3 {
+                    p.burst(rng, e, t, 10).unwrap();
+                }
+            });
+        }
+    }
+
+    /// Runs b1-b9: a burst before every frame 4..301 of n = -1, -10, 1 with a real type (b1-b3),
+    /// type id 999 never created (b4-b6) and id 0 with no type at all (b7-b9). A missing type
+    /// costs the chance draw and the region's 2 draws per would-be particle, nothing else.
+    #[test]
+    fn negative_bursts_and_missing_types() {
+        for (run, n, ty) in [
+            ("b1", -1, Some(0)),
+            ("b2", -10, Some(0)),
+            ("b3", 1, Some(0)),
+            ("b4", -1, Some(999)),
+            ("b5", -10, Some(999)),
+            ("b6", 1, Some(999)),
+            ("b7", -1, None),
+            ("b8", -10, None),
+            ("b9", 1, None),
+        ] {
+            let mut p = Particles::default();
+            if ty.is_some() {
+                p.add_type(empty());
+            }
+            let t = PartTypeId(ty.unwrap_or(0));
+            let e = system(&mut p);
+            replay(run, p, |frame, p, rng| {
+                if (4..=301).contains(&frame) {
+                    p.burst(rng, e, t, n).unwrap();
+                }
+            });
+        }
+    }
+
+    /// Runs c1-c7: a burst of 10 on E before frame 3 (death 1 of the firework type); E2, made
+    /// after E, streams -1 of the empty type. Before frame 20: part_particles_clear,
+    /// part_system_destroy, part_emitter_destroy_all, part_emitter_destroy(E2), nothing (c1-c5),
+    /// and with a burst of life 40 part_emitter_destroy_all and part_emitter_destroy(E) (c6,
+    /// c7). None of the calls draws or fires death particles; the particles of a destroyed
+    /// emitter still fire theirs in frame 42.
+    #[test]
+    fn clearing_and_destroying() {
+        for (run, life) in [
+            ("c1", 1000.0),
+            ("c2", 1000.0),
+            ("c3", 1000.0),
+            ("c4", 1000.0),
+            ("c5", 1000.0),
+            ("c6", 40.0),
+            ("c7", 40.0),
+        ] {
+            let mut p = Particles::default();
+            let fw = p.add_type(firework());
+            let t = p.add_type(dying(life, 1, fw));
+            let dust = p.add_type(empty());
+            let e = system(&mut p);
+            let e2 = p.add_emitter(S, Region::default()).unwrap();
+            p.stream(e2, dust, -1).unwrap();
+            let p = replay(run, p, |frame, p, rng| match frame {
+                3 => p.burst(rng, e, t, 10).unwrap(),
+                20 => match run {
+                    "c1" => p.clear(S).unwrap(),
+                    "c2" => p.destroy_system(S).unwrap(),
+                    "c3" | "c6" => p.destroy_all_emitters(S).unwrap(),
+                    "c4" => p.destroy_emitter(e2).unwrap(),
+                    "c7" => p.destroy_emitter(e).unwrap(),
+                    _ => {}
+                },
+                _ => {}
+            });
+            // global.C is -1 once S no longer exists.
+            let gone = rows(run).last().unwrap().2 == -1;
+            assert_eq!(p.systems[0].destroyed, gone, "{run}: S destroyed");
+        }
     }
 }
 
@@ -232,7 +433,7 @@ mod world {
     use iwbtg_sim::events::{ProbeAct, ProbeOn, ProbeStep};
     use iwbtg_sim::hash::state_hash;
     use iwbtg_sim::input::InputFrame;
-    use iwbtg_sim::particles::{PartRange, PartType, Particles, Region, RegionDistr, RegionShape};
+    use iwbtg_sim::particles::{PartChild, PartRange, PartType, Particles, Region, RegionDistr, RegionShape};
     use iwbtg_sim::rng::Rng;
     use iwbtg_sim::room::RoomRequest;
 
@@ -316,12 +517,43 @@ mod world {
     }
 
     /// A room request in Step ends the tick before End Step, so the update does not run on that
-    /// tick (OPEN, research#170); the next tick's does.
+    /// tick (Confirmed (recorder), CLONE_SPEC "Particle draw rules" item 9); the next tick's does.
     #[test]
     fn room_request_tick_skips_the_update() {
         let mut fx = fixture(true, true);
+        // Live particles before the request tick: a type with a death particle is tracked, so a
+        // model update on a scratch generator leaves live particles (life 3) in the system.
+        let mut live = Particles::default();
+        let dust = live.add_type(PartType::default());
+        let spark = live.add_type(PartType {
+            life: PartRange::fixed(3.0),
+            death: Some(PartChild { ty: dust, count: 1 }),
+            ..PartType::default()
+        });
+        let sys = live.add_system();
+        let em = live
+            .add_emitter(
+                sys,
+                Region {
+                    shape: RegionShape::Rectangle,
+                    distr: RegionDistr::Linear,
+                },
+            )
+            .unwrap();
+        live.stream(em, spark, 2).unwrap();
+        let mut scratch = Rng::new(7);
+        live.update(&mut scratch).unwrap();
+        let before = live.clone();
+        live.update(&mut scratch).unwrap();
+        assert_ne!(live, before, "an update ages the live particles");
+        let live = before;
+        fx.w.particles = live.clone();
         fx.tick(InputFrame::EMPTY);
         assert_eq!(fx.w.room, RoomId(1));
+        assert_eq!(
+            fx.w.particles, live,
+            "no new particle and no ageing on the request tick"
+        );
         assert_eq!(fx.w.rng, Rng::new(1), "no draws on the request tick");
         assert!(seeds(&fx.log()).is_empty());
     }

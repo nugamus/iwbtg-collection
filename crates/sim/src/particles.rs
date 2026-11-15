@@ -16,13 +16,23 @@
 //! - **Regions:** see [`Region::draw_point`].
 //! - **Live particles** draw nothing themselves (wiggle included). A type with
 //!   `part_type_step(T, k, T2)` costs `k` times T2's type draws in every update the particle is
-//!   still alive after; `part_type_death(T, k, T2)` costs them in the update it dies.
+//!   still alive after; `part_type_death(T, k, T2)` costs them in the update it dies, with no cap
+//!   (150 costs 150 times). A negative death count is a chance per dying particle, as a stream:
+//!   one draw `u`, one death particle when `u < 1 / (|k| + 1)` (item 8, runs a1-a7 of
+//!   NUM-PART-RNG-2, research#167).
+//! - **Bursts** (`part_emitter_burst`): `n > 0` makes `n` particles; `n < 0` is a chance, as a
+//!   stream. A burst of a type that does not exist (an id not in [`Particles::types`]) still costs
+//!   the chance draw and the region's draws per would-be particle, but no type draws and no
+//!   particle (item 8, runs b1-b9).
+//! - **Clearing** (`part_particles_clear`, `part_system_destroy`, `part_emitter_destroy_all`,
+//!   `part_emitter_destroy`) draws nothing and fires no death particles (item 8, runs c1-c7).
 //!
 //! OPEN (each refused with `SimError::Unsupported`, never guessed): stream or burst number 0 and
-//! negative bursts (not traced); which of a type's draws gives the life (only needed for a type
-//! with step or death particles and a non-empty life range); step or death particles that
-//! themselves have step or death particles; `part_system_automatic_update` off and
-//! `part_system_update` (research#163); the real runner (research#164).
+//! death count 0 (not traced); step counts below 1 (Inferred only, research#168); a missing type
+//! anywhere but a burst; which of a type's draws gives the life (only needed for a type with step
+//! or death particles and a non-empty life range); step or death particles that themselves have
+//! step or death particles; `part_system_automatic_update` off and `part_system_update`
+//! (research#163); the real runner (research#164).
 
 use serde::{Deserialize, Serialize};
 
@@ -78,8 +88,9 @@ pub enum PartColor {
 /// Step or death particles of a type: `count` particles of type `ty`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct PartChild {
-    /// Particles per update (step) or at death.
-    pub count: u32,
+    /// Particles per update (step) or at death. A negative death count is a chance per dying
+    /// particle (`1 / (|count| + 1)`); 0 and step counts below 1 are refused (OPEN).
+    pub count: i32,
     /// Their type.
     pub ty: PartTypeId,
 }
@@ -399,8 +410,10 @@ impl Particles {
         Ok(())
     }
 
-    /// `part_emitter_burst` (game code, at once): `number` times the region's draws, then the
-    /// type's. A number below 1 is refused (not traced; OPEN).
+    /// `part_emitter_burst` (game code, at once): `number > 0` particles; `number < 0` one chance
+    /// draw `u` and one particle when `u < 1 / (|number| + 1)`. Each particle costs the region's
+    /// draws, then the type's. A type that does not exist costs the region's draws per would-be
+    /// particle and makes nothing (item 8, runs b1-b9). Number 0 is refused (not traced; OPEN).
     pub fn burst(
         &mut self,
         rng: &mut Rng,
@@ -409,11 +422,18 @@ impl Particles {
         number: i32,
     ) -> Result<(), SimError> {
         let region = self.emitter_mut(e)?.region;
-        let n = u32::try_from(number).ok().filter(|n| *n > 0).ok_or_else(|| {
-            SimError::unsupported(format!(
-                "part_emitter_burst of {number} (not traced; N10, research#158)"
-            ))
-        })?;
+        if number == 0 {
+            return Err(SimError::unsupported(
+                "part_emitter_burst of 0 (not traced; N10, research#167)",
+            ));
+        }
+        let n = particles_of(rng, number);
+        if self.ty(ty).is_err() {
+            for _ in 0..n {
+                region.draw_point(rng);
+            }
+            return Ok(());
+        }
         for _ in 0..n {
             self.spawn(rng, e.system, Some(region), ty)?;
         }
@@ -449,12 +469,7 @@ impl Particles {
                     continue;
                 };
                 let region = em.region;
-                let n = if stream.number > 0 {
-                    stream.number.unsigned_abs()
-                } else {
-                    let chance = 1.0 / (f64::from(stream.number.unsigned_abs()) + 1.0);
-                    u32::from(rng.next_unit().get() < chance)
-                };
+                let n = particles_of(rng, stream.number);
                 for _ in 0..n {
                     self.spawn(rng, PartSystemId(index_u32(s)), Some(region), stream.ty)?;
                 }
@@ -475,7 +490,7 @@ impl Particles {
             let child = if dies { t.death } else { t.step };
             if let Some(c) = child {
                 let draws = self.ty(c.ty)?.draws();
-                for _ in 0..c.count * draws {
+                for _ in 0..particles_of(rng, c.count).saturating_mul(draws) {
                     rng.next_unit();
                 }
             }
@@ -498,6 +513,11 @@ impl Particles {
         let t = self.ty(ty)?.clone();
         let tracked = t.step.is_some() || t.death.is_some();
         if tracked {
+            if t.step.is_some_and(|c| c.count < 1) || t.death.is_some_and(|c| c.count == 0) {
+                return Err(SimError::unsupported(
+                    "a step count below 1 or a death count of 0 (not traced; N10, research#167, research#168)",
+                ));
+            }
             for c in [t.step, t.death].into_iter().flatten() {
                 let ct = self.ty(c.ty)?;
                 if ct.step.is_some() || ct.death.is_some() {
@@ -546,6 +566,17 @@ impl Particles {
             .and_then(|i| self.system_mut(e.system).ok()?.emitters.get_mut(i))
             .filter(|em| !em.destroyed)
             .ok_or_else(|| SimError::unsupported(format!("particle emitter {} does not exist", e.index)))
+    }
+}
+
+/// How many particles a stream, burst or death count makes: `n > 0` makes `n` with no draw;
+/// `n < 0` draws `u` once and makes one when `u < 1 / (|n| + 1)` (spec rules 3 and 8).
+fn particles_of(rng: &mut Rng, n: i32) -> u32 {
+    if n > 0 {
+        n.unsigned_abs()
+    } else {
+        let chance = 1.0 / (f64::from(n.unsigned_abs()) + 1.0);
+        u32::from(rng.next_unit().get() < chance)
     }
 }
 
