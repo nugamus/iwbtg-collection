@@ -9,6 +9,7 @@ One page per module or area, so two PRs on different modules never edit the same
 - [HUD](client/hud.md): `hud/`
 - [Structure](client/main.md): how modules own their flags and plugins (`main.rs`)
 - [Import](client/import.md): `.iwbz` files, the library, drag and drop (`import.rs`)
+- [Loading card](client/loading.md): `loading/`
 - [Mods](client/mods.md): `mods.rs`
 - [Overlay](client/overlay.md): the F3 debug overlay (`overlay.rs`)
 - [Pause menu](client/pause.md): `pause.rs`
