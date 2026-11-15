@@ -9,7 +9,7 @@ publish = false
 
 [dependencies]
 iwbtg-sim.workspace = true
-iwbtg-format = { workspace = true, features = ["schema"] }
+iwbtg-format.workspace = true
 # Features picked by hand: 2D rendering, windowing and bevy_ui (docs/decisions/0003-ui-toolkit.md),
 # gamepads (bevy_gilrs), no 3D yet (those pull system libraries); audio is Ogg Vorbis only.
 clap.workspace = true
