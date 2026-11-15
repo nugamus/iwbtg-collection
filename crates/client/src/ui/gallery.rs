@@ -470,7 +470,11 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
                     });
                     // The switch off (the artboard's state) and on; a click flips either.
                     c.spawn(row(12.0)).with_children(|r| {
-                        r.spawn(switch("Auto-retry", "Restart from the start after a death", false));
+                        r.spawn(switch(
+                            "Auto-retry",
+                            "Restart from the start after a death",
+                            false,
+                        ));
                         r.spawn(switch("Auto-retry", "Restart from the start after a death", true));
                     });
                     // Controls sit on art in the screens, so they are shown on art here, as an
