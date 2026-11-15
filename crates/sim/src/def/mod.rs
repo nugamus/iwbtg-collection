@@ -10,6 +10,7 @@ pub mod class;
 pub mod game;
 pub mod ids;
 pub mod kind;
+pub mod particles;
 pub mod path;
 pub mod physics;
 pub mod physics_ext;
@@ -27,9 +28,11 @@ pub use game::{
     RestartModel, RestartTrigger, RetryKidSteps,
 };
 pub use ids::{
-    GroupId, KindId, MaskId, NameId, PathId, RoomId, ScriptId, SoundId, SpriteId, TimelineId, VarId,
+    GroupId, KindId, MaskId, NameId, PartSystemDefId, PathId, RoomId, ScriptId, SoundId, SpriteId,
+    TimelineId, VarId,
 };
 pub use kind::{KindDef, KindVariant, ParamValue, Params, RankEntry, RankTable, VariantSel, variant_matches};
+pub use particles::{PartCreateDef, PartEmitterDef, PartLook, PartSystemDef, PartTypeDef};
 pub use path::PathDef;
 pub use physics::{KidFamily, PhysicsProfile, PhysicsProfileDraft};
 pub use room::{GlobalIndex, PlacedInstance, RoleSet, RoomAction, RoomDef, RoomRole, RoomWhen, ViewDef};

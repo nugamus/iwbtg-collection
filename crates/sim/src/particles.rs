@@ -26,6 +26,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::def::PartSystemDef;
 use crate::error::SimError;
 use crate::num::{self, Real};
 use crate::rng::Rng;
@@ -315,6 +316,56 @@ impl Particles {
         sys.destroyed = true;
         sys.live.clear();
         Ok(())
+    }
+
+    /// `part_particles_clear`: removes the system's live particles, with no draws and no death
+    /// particles; its emitters keep streaming (CLONE_SPEC "Particle draw rules" 8, runs c1-c7).
+    pub fn clear(&mut self, s: PartSystemId) -> Result<(), SimError> {
+        self.system_mut(s)?.live.clear();
+        Ok(())
+    }
+
+    /// `part_emitter_destroy_all`: stops every emitter of the system; its live particles stay,
+    /// age and fire their death particles (rule 8, runs c6, c7).
+    pub fn destroy_all_emitters(&mut self, s: PartSystemId) -> Result<(), SimError> {
+        for em in &mut self.system_mut(s)?.emitters {
+            em.destroyed = true;
+        }
+        Ok(())
+    }
+
+    /// Builds one `particles/<id>.toml` system, as the original's code does in one go: its
+    /// types (`part_type_create`, in name order), a new system, its emitters in order with their
+    /// streams, then each emitter's burst in emitter order, then the `part_particles_create`
+    /// calls. Bursts and creates draw at once.
+    pub fn build(&mut self, rng: &mut Rng, def: &PartSystemDef) -> Result<PartSystemId, SimError> {
+        let base = index_u32(self.types.len());
+        let local = |ty: u32| PartTypeId(base.saturating_add(ty));
+        for t in &def.types {
+            let mut ty = t.draws.clone();
+            for c in [&mut ty.step, &mut ty.death].into_iter().flatten() {
+                c.ty = local(c.ty.0);
+            }
+            self.add_type(ty);
+        }
+        let s = self.add_system();
+        let mut emitters = Vec::with_capacity(def.emitters.len());
+        for em in &def.emitters {
+            let e = self.add_emitter(s, em.region)?;
+            if let Some((ty, n)) = em.stream {
+                self.stream(e, local(ty), n)?;
+            }
+            emitters.push(e);
+        }
+        for (em, e) in def.emitters.iter().zip(emitters) {
+            if let Some((ty, n)) = em.burst {
+                self.burst(rng, e, local(ty), n)?;
+            }
+        }
+        for c in &def.creates {
+            self.create(rng, s, local(c.ty), c.number)?;
+        }
+        Ok(s)
     }
 
     /// `part_emitter_create` plus `part_emitter_region`: adds an emitter after the system's others.

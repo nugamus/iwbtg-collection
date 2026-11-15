@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use super::builtin::Builtin;
 use super::class::ClassMask;
-use super::ids::{KindId, MaskId, RoomId, ScriptId, SoundId, SpriteId};
+use super::ids::{KindId, MaskId, PartSystemDefId, RoomId, ScriptId, SoundId, SpriteId};
 use crate::events::EventSet;
 use crate::num::Real;
 
@@ -79,6 +79,8 @@ pub enum ParamValue {
     Kind(KindId),
     /// A sound reference.
     Sound(SoundId),
+    /// A particle system definition (`particles/<id>.toml`).
+    Particles(PartSystemDefId),
 }
 
 /// One `[defaults.<kind>]` variant of a bare built-in (docs/format/v0.md, `[defaults.<kind>]`):

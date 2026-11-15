@@ -28,6 +28,7 @@ pub mod masks;
 pub mod objects;
 pub mod order;
 pub mod params;
+pub mod particles;
 pub mod paths;
 pub mod physics;
 pub mod reach;

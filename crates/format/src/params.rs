@@ -42,9 +42,12 @@ fn type_problem(spec: &ParamSpec, value: &ParamValue) -> Option<String> {
         | (ParamType::Room, ParamValue::Room(_))
         | (ParamType::Kind, ParamValue::Kind(_))
         | (ParamType::Sound, ParamValue::Sound(_))
+        | (ParamType::Particles, ParamValue::Particles(_))
         | (ParamType::Text, ParamValue::Str(_)) => None,
         // A reference the loader could not resolve is already an error of its own.
-        (ParamType::Room | ParamType::Kind | ParamType::Sound, ParamValue::Str(_)) => None,
+        (ParamType::Room | ParamType::Kind | ParamType::Sound | ParamType::Particles, ParamValue::Str(_)) => {
+            None
+        }
         (ParamType::Enum(words), ParamValue::Str(s)) => {
             if words.contains(&s.as_str()) {
                 None
@@ -63,6 +66,7 @@ fn type_problem(spec: &ParamSpec, value: &ParamValue) -> Option<String> {
         (ParamType::Kind, _) => wrong("a kind"),
         (ParamType::Sound, _) => wrong("a sound"),
         (ParamType::Text, _) => wrong("text"),
+        (ParamType::Particles, _) => wrong("a particles/<id> file"),
     }
 }
 

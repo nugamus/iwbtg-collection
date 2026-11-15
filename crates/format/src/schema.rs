@@ -11,6 +11,7 @@
 //!   under it, through the sim crate's own `schema` feature. The action, collision-run and class
 //!   names come from the enums and tables the kid reads (`Action::ALL`, `ClassMask::NAMED`, the
 //!   per-file action enums), so there is no second list.
+//! - `particles` comes from the type `particles` deserializes ([`ParticleFile`]).
 //! - `tiles` and `background` (the tileset sidecar) come from the types `art` deserializes
 //!   ([`TilesFile`], [`TilesetFile`]).
 //! - `object` and `timeline` come from the shape types below. The loader reads object
@@ -41,6 +42,7 @@ pub use crate::art::{TilesFile, TilesetFile};
 use crate::engine_pack::EnginePack;
 use crate::manifest::Manifest;
 use crate::number::Number;
+use crate::particles::ParticleFile;
 use crate::rooms::RawRoom;
 use crate::sprites::RawSidecar;
 
@@ -236,6 +238,10 @@ pub fn generate() -> Vec<(&'static str, String)> {
             text::<TimelineShape>("IWBTG timelines/<id>.toml (format v0)"),
         ),
         ("path", text::<PathShape>("IWBTG paths/<id>.toml (format v0)")),
+        (
+            "particles",
+            text::<ParticleFile>("IWBTG particles/<id>.toml (format v0)"),
+        ),
         (
             "sound",
             text::<SoundShape>("IWBTG sounds/<id>.toml and music/<id>.toml (format v0)"),

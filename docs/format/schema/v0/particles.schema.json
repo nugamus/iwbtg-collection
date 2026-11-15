@@ -1,0 +1,482 @@
+{
+  "$defs": {
+    "ChildFile": {
+      "additionalProperties": false,
+      "description": "`part_type_step` or `part_type_death`.",
+      "properties": {
+        "count": {
+          "description": "Particles per tick (step) or at death.",
+          "format": "int32",
+          "type": "integer"
+        },
+        "type": {
+          "description": "A type of this file.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "count"
+      ],
+      "type": "object"
+    },
+    "CountFile": {
+      "additionalProperties": false,
+      "description": "A type and a number (`stream`, `burst`).",
+      "properties": {
+        "number": {
+          "description": "Stream: `n > 0` particles per tick, `n < 0` one with chance `1 / (|n| + 1)`. Burst: `n`\nparticles.",
+          "format": "int32",
+          "type": "integer"
+        },
+        "type": {
+          "description": "A type of this file.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "number"
+      ],
+      "type": "object"
+    },
+    "CreateFile": {
+      "additionalProperties": false,
+      "description": "One `[[create]]`.",
+      "properties": {
+        "at": {
+          "description": "Where, in room coordinates.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "number": {
+          "description": "How many; below 1 makes nothing.",
+          "format": "int32",
+          "type": "integer"
+        },
+        "type": {
+          "description": "A type of this file.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "at",
+        "type",
+        "number"
+      ],
+      "type": "object"
+    },
+    "DistrName": {
+      "description": "`ps_distr_*`.",
+      "oneOf": [
+        {
+          "const": "linear",
+          "description": "Linear (default).",
+          "type": "string"
+        },
+        {
+          "const": "gaussian",
+          "description": "Gaussian: more particles in the middle.",
+          "type": "string"
+        },
+        {
+          "const": "invgaussian",
+          "description": "Inverse gaussian: more particles at the edges.",
+          "type": "string"
+        }
+      ]
+    },
+    "EmitterFile": {
+      "additionalProperties": false,
+      "description": "One `[[emitters]]`.",
+      "properties": {
+        "burst": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CountFile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`part_emitter_burst`, once, when the system is built."
+        },
+        "distr": {
+          "$ref": "#/$defs/DistrName",
+          "description": "Distribution; default `linear`."
+        },
+        "region": {
+          "description": "`part_emitter_region` xmin, xmax, ymin, ymax, in room coordinates.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        },
+        "shape": {
+          "$ref": "#/$defs/RegionShapeName",
+          "description": "Region shape; default `rectangle`."
+        },
+        "stream": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CountFile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`part_emitter_stream`."
+        }
+      },
+      "required": [
+        "region"
+      ],
+      "type": "object"
+    },
+    "Number": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "bits": {
+              "pattern": "^[0-9a-fA-F]{16}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "bits"
+          ],
+          "type": "object"
+        }
+      ],
+      "description": "A number, or { bits = \"<16 hex digits of an IEEE double>\" } for a constant that must match bit for bit."
+    },
+    "RegionShapeName": {
+      "description": "`ps_shape_*`.",
+      "oneOf": [
+        {
+          "const": "rectangle",
+          "description": "Rectangle (default).",
+          "type": "string"
+        },
+        {
+          "const": "ellipse",
+          "description": "Ellipse.",
+          "type": "string"
+        },
+        {
+          "const": "diamond",
+          "description": "Diamond.",
+          "type": "string"
+        },
+        {
+          "const": "line",
+          "description": "Line from the top-left to the bottom-right corner.",
+          "type": "string"
+        }
+      ]
+    },
+    "ShapeName": {
+      "description": "`pt_shape_*`.",
+      "enum": [
+        "pixel",
+        "disk",
+        "square",
+        "line",
+        "star",
+        "circle",
+        "ring",
+        "sphere",
+        "flare",
+        "spark",
+        "explosion",
+        "cloud",
+        "smoke",
+        "snow"
+      ],
+      "type": "string"
+    },
+    "SpriteFile": {
+      "additionalProperties": false,
+      "description": "`part_type_sprite`.",
+      "properties": {
+        "animate": {
+          "default": false,
+          "description": "Animate through the frames; default false.",
+          "type": "boolean"
+        },
+        "id": {
+          "description": "A `sprites/<id>` id.",
+          "type": "string"
+        },
+        "random": {
+          "default": false,
+          "description": "Start on a random frame (one draw); default false.",
+          "type": "boolean"
+        },
+        "stretch": {
+          "default": false,
+          "description": "Stretch the animation over the life; default false.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "TypeFile": {
+      "additionalProperties": false,
+      "description": "One `[types.<name>]`.",
+      "properties": {
+        "additive": {
+          "default": false,
+          "description": "`part_type_blend` additive; default false.",
+          "type": "boolean"
+        },
+        "alpha": {
+          "description": "`part_type_alpha1/2/3`: one to three values; default `[1]`.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "color": {
+          "default": null,
+          "description": "`part_type_color1/2/3`: one to three `\"#rrggbb\"`; default white.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "color_hsv": {
+          "description": "`part_type_color_hsv`: `[[hmin, hmax], [smin, smax], [vmin, vmax]]`.",
+          "items": {
+            "items": {
+              "$ref": "#/$defs/Number"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "color_mix": {
+          "default": null,
+          "description": "`part_type_color_mix`: two `\"#rrggbb\"`.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "color_rgb": {
+          "description": "`part_type_color_rgb`: `[[rmin, rmax], [gmin, gmax], [bmin, bmax]]`.",
+          "items": {
+            "items": {
+              "$ref": "#/$defs/Number"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "death": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChildFile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`part_type_death`: particles of another type when one dies."
+        },
+        "direction": {
+          "description": "`part_type_direction`: `[min, max]` or `[min, max, increment, wiggle]`; default `[0, 0]`.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "gravity": {
+          "description": "`part_type_gravity` amount and direction; default `[0, 270]`.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "life": {
+          "description": "`part_type_life` `[min, max]` in ticks; default `[100, 100]`.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "orientation": {
+          "description": "`part_type_orientation`: `[min, max]` or `[min, max, increment, wiggle]`; default `[0, 0]`.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "orientation_relative": {
+          "default": false,
+          "description": "`part_type_orientation` relative; default false.",
+          "type": "boolean"
+        },
+        "scale": {
+          "description": "`part_type_scale` x and y; default `[1, 1]`.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "shape": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ShapeName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`part_type_shape`; default `pixel`. Not with `sprite`."
+        },
+        "size": {
+          "description": "`part_type_size`: `[min, max]` or `[min, max, increment, wiggle]`; default `[1, 1]`.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "speed": {
+          "description": "`part_type_speed`: `[min, max]` or `[min, max, increment, wiggle]`; default `[0, 0]`.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "sprite": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpriteFile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`part_type_sprite`. Not with `shape`."
+        },
+        "step": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChildFile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`part_type_step`: particles of another type each tick."
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A particle file (`particles/<id>.toml`).",
+  "properties": {
+    "create": {
+      "description": "`part_particles_create` calls, run after every emitter's burst.",
+      "items": {
+        "$ref": "#/$defs/CreateFile"
+      },
+      "type": "array"
+    },
+    "depth": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`part_system_depth` (drawing only); default 0."
+    },
+    "emitters": {
+      "description": "Emitters in creation order.",
+      "items": {
+        "$ref": "#/$defs/EmitterFile"
+      },
+      "type": "array"
+    },
+    "types": {
+      "additionalProperties": {
+        "$ref": "#/$defs/TypeFile"
+      },
+      "description": "Particle types by name; created in name order.",
+      "type": "object"
+    }
+  },
+  "title": "IWBTG particles/<id>.toml (format v0)",
+  "type": "object"
+}

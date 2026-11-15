@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 
 use super::ids::{KindId, MaskId, RoomId, ScriptId, SpriteId, VarId};
 use super::kind::{KindDef, KindVariant, Params, RankTable, VariantSel, variant_matches};
+use super::particles::PartSystemDef;
 use super::path::PathDef;
 use super::physics::PhysicsProfile;
 use super::room::{RoleSet, RoomDef};
@@ -83,6 +84,8 @@ pub struct GameDef {
     pub timelines: Vec<TimelineDef>,
     /// Paths.
     pub paths: Vec<PathDef>,
+    /// Particle system definitions (`particles/<id>.toml`), in file path order.
+    pub particle_systems: Vec<PartSystemDef>,
     /// Script sources, indexed by `ScriptId` (`KindDef::script`). Compiled by the script host
     /// (WP9) when the `Sim` is built.
     pub scripts: Vec<ScriptDef>,
