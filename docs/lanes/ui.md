@@ -8,6 +8,7 @@
 - Rebuild after an edit: `cargo build -p iwbtg-client` (seconds when warm).
 - Tests: `cargo test -p iwbtg-client <module>::`.
 - See it: `cargo run -p iwbtg-client -- crates/client/demo-art.pkg --mute --screenshot <out.png>` (or `--ui-gallery --mute`). Always pass `--mute` when launching the client (#712). `--window WxH` and `--ratio` pick the size.
+- Screenshots come only from the client's `--screenshot` flag (`WGPU_BACKEND=dx12` when the display is locked). Never take OS or desktop screen captures or use a screen-capture tool: on 2026-11-15 two captures of the user's main screen were taken for #495 (#822). Key presses in a live window can't be done by an agent; tests cover them and the user checks on `main`.
 - Compare with the approved design: `python -I .claude/screenshot_diff.py <yours.png> <reference.png>` (#531).
 
 ## How a screen is built
