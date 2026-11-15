@@ -82,6 +82,9 @@ pub struct HudArgs {
     /// Screenshot checks: a sample leaderboard (local, pace, top, empty, frozen) with its time.
     #[arg(long, hide = true, value_name = "SAMPLE")]
     pub hud_preview_leaderboard: Option<leaderboard::Sample>,
+    /// Screenshot checks: start with the HUD hidden, as Shift+Tab leaves it.
+    #[arg(long, hide = true)]
+    pub hud_preview_hidden: bool,
     /// Scale the side panels (never the game), 75 to 150 percent (Ctrl+= and Ctrl+- step by 5).
     #[arg(long, value_name = "PERCENT", value_parser = parse_ui_scale)]
     pub ui_scale: Option<u32>,
@@ -109,10 +112,13 @@ pub fn configure(args: &HudArgs) {
         held: args.hud_preview_held.unwrap_or(0),
         leaderboard: args.hud_preview_leaderboard,
     });
+    let _ = START_HIDDEN.set(args.hud_preview_hidden);
 }
 
 /// The preview flags, set once by [`configure`].
 static PREVIEW: std::sync::OnceLock<run_info::Preview> = std::sync::OnceLock::new();
+/// `--hud-preview-hidden`, set once by [`configure`].
+static START_HIDDEN: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
 
 /// Which HUD elements show (`[hud.show]`).
 #[derive(Resource, Clone, Copy, Debug, PartialEq, Default)]
@@ -159,7 +165,7 @@ impl Plugin for HudPlugin {
         }
         let s = settings::get();
         app.insert_resource(HudOptions(Options {
-            shown: true,
+            shown: !START_HIDDEN.get().copied().unwrap_or(false),
             ui_scale: s.ui_scale as f32 / 100.0,
             integer: s.integer_scale,
         }))
