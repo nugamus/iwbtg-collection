@@ -91,6 +91,7 @@ mod tests {
         assert!(r.collide.recheck_nonsolid);
         assert_eq!(r.room.max_chained_changes, 8);
         assert_eq!(r.sound.isplaying_latency, 0);
+        assert!(r.num.particles_draw_rng);
     }
 
     #[test]

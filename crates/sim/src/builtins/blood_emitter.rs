@@ -20,7 +20,8 @@
 //!   the chance draw, the blood's Create and the speed draw are not in the spec; this draws the
 //!   chance first, then per blood the spawn and then the speed.
 //! - `particles` (family B, kaenbyou, eat-the-lemon): a particle stream. The client draws it
-//!   (`BuiltinOutput::DeathParticles` each Step). With `NumRules::particles_draw_rng` (N10, #766)
+//!   (`BuiltinOutput::DeathParticles` each Step). With `NumRules::particles_draw_rng` (N10, on in
+//!   engine_rev 0, #766)
 //!   Create also builds its system in `World::particles`, as the original's Create does: one type
 //!   (size, speed 1 to 5 and direction 0 to 360 ranges, life 50: 4 draws), one emitter on a
 //!   linear rectangle (2 draws) streaming `per_step` (15), so each tick's particle update draws
