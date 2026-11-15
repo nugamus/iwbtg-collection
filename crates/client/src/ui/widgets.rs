@@ -583,12 +583,15 @@ fn flip_switch(activate: On<Activate>, mut switches: Query<&mut Switch>) {
     }
 }
 
+/// What `switch_looks` writes on a switch's knob.
+type KnobParts = (&'static mut Shape, &'static mut Tween<OffsetX>);
+
 /// Moves each changed switch's knob and colours its track and knob.
 fn switch_looks(
     switches: Query<(Entity, &Switch), Changed<Switch>>,
     children: Query<&Children>,
     mut tracks: Query<&mut Shape, (With<SwitchTrack>, Without<SwitchKnob>)>,
-    mut knobs: Query<(&mut Shape, &mut Tween<OffsetX>), (With<SwitchKnob>, Without<SwitchTrack>)>,
+    mut knobs: Query<KnobParts, (With<SwitchKnob>, Without<SwitchTrack>)>,
 ) {
     for (entity, switch) in &switches {
         for part in children.iter_descendants(entity) {
