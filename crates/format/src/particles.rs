@@ -11,7 +11,9 @@ use std::collections::BTreeMap;
 
 use iwbtg_sim::def::{PartCreateDef, PartEmitterDef, PartLook, PartSystemDef, PartTypeDef, SpriteId};
 use iwbtg_sim::num::Real;
-use iwbtg_sim::particles::{PartChild, PartColor, PartRange, PartType, PartTypeId, Region, RegionDistr, RegionShape};
+use iwbtg_sim::particles::{
+    PartChild, PartColor, PartRange, PartType, PartTypeId, Region, RegionDistr, RegionShape,
+};
 use serde::Deserialize;
 use toml::Spanned;
 
@@ -21,6 +23,9 @@ use crate::number::Number;
 
 /// GM's default particle life (`part_type_life`), in ticks.
 const DEFAULT_LIFE: f64 = 100.0;
+
+/// Resolves a sprite id named at `span` of `text` in file `path` (`None` after reporting it).
+pub type SpriteLookup<'a> = dyn FnMut(&str, &str, &str, std::ops::Range<usize>) -> Option<SpriteId> + 'a;
 
 /// A particle file (`particles/<id>.toml`).
 #[derive(Deserialize)]
@@ -262,12 +267,15 @@ pub struct CreateFile {
 /// in path order. `sprite` resolves a sprite id (`None` after reporting it).
 pub fn load(
     files: &PackageFiles,
-    sprite: &mut dyn FnMut(&str, &str, &str, std::ops::Range<usize>) -> Option<SpriteId>,
+    sprite: &mut SpriteLookup<'_>,
     diags: &mut Vec<Diagnostic>,
 ) -> Vec<PartSystemDef> {
     let mut out = Vec::new();
     for (path, bytes) in files.iter() {
-        let Some(id) = path.strip_prefix("particles/").and_then(|p| p.strip_suffix(".toml")) else {
+        let Some(id) = path
+            .strip_prefix("particles/")
+            .and_then(|p| p.strip_suffix(".toml"))
+        else {
             continue;
         };
         if id.contains('/') {
@@ -312,7 +320,8 @@ struct Build<'a> {
 
 impl Build<'_> {
     fn error(&mut self, at: usize, msg: impl Into<String>) {
-        self.diags.push(Diagnostic::error_at(self.path, self.text, at, msg));
+        self.diags
+            .push(Diagnostic::error_at(self.path, self.text, at, msg));
         self.failed = true;
     }
 
@@ -328,18 +337,16 @@ impl Build<'_> {
         match names.iter().position(|n| *n == r.get_ref()) {
             Some(i) => u32::try_from(i).unwrap_or(u32::MAX),
             None => {
-                self.error(r.span().start, format!("particle type `{}` is not in this file", r.get_ref()));
+                self.error(
+                    r.span().start,
+                    format!("particle type `{}` is not in this file", r.get_ref()),
+                );
                 0
             }
         }
     }
 
-    fn system(
-        &mut self,
-        id: &str,
-        file: &ParticleFile,
-        sprite: &mut dyn FnMut(&str, &str, &str, std::ops::Range<usize>) -> Option<SpriteId>,
-    ) -> PartSystemDef {
+    fn system(&mut self, id: &str, file: &ParticleFile, sprite: &mut SpriteLookup<'_>) -> PartSystemDef {
         let names: Vec<&String> = file.types.keys().collect();
         let mut types = Vec::with_capacity(names.len());
         for (name, t) in &file.types {
@@ -412,31 +419,43 @@ impl Build<'_> {
         t: &TypeFile,
         at: usize,
         names: &[&String],
-        sprite: &mut dyn FnMut(&str, &str, &str, std::ops::Range<usize>) -> Option<SpriteId>,
+        sprite: &mut SpriteLookup<'_>,
     ) -> PartTypeDef {
         let who = format!("particle type `{name}`");
-        let range = |b: &mut Self, key: &str, v: &Option<Vec<Number>>, default: f64| -> (PartRange, [Real; 2]) {
-            match v.as_deref() {
-                None => (PartRange::fixed(default), [Real::ZERO; 2]),
-                Some([lo, hi]) => (PartRange::new(lo.0, hi.0), [Real::ZERO; 2]),
-                Some([lo, hi, inc, wig]) => (PartRange::new(lo.0, hi.0), [real(*inc), real(*wig)]),
-                Some(_) => {
-                    b.error(at, format!("{who}: `{key}` is [min, max] or [min, max, increment, wiggle]"));
-                    (PartRange::fixed(default), [Real::ZERO; 2])
+        let range =
+            |b: &mut Self, key: &str, v: &Option<Vec<Number>>, default: f64| -> (PartRange, [Real; 2]) {
+                match v.as_deref() {
+                    None => (PartRange::fixed(default), [Real::ZERO; 2]),
+                    Some([lo, hi]) => (PartRange::new(lo.0, hi.0), [Real::ZERO; 2]),
+                    Some([lo, hi, inc, wig]) => (PartRange::new(lo.0, hi.0), [real(*inc), real(*wig)]),
+                    Some(_) => {
+                        b.error(
+                            at,
+                            format!("{who}: `{key}` is [min, max] or [min, max, increment, wiggle]"),
+                        );
+                        (PartRange::fixed(default), [Real::ZERO; 2])
+                    }
                 }
-            }
-        };
+            };
         let (size, size_change) = range(self, "size", &t.size, 1.0);
         let (speed, speed_change) = range(self, "speed", &t.speed, 0.0);
         let (direction, direction_change) = range(self, "direction", &t.direction, 0.0);
         let (orientation, orientation_change) = range(self, "orientation", &t.orientation, 0.0);
-        let life = t
-            .life
-            .map_or(PartRange::fixed(DEFAULT_LIFE), |[lo, hi]| PartRange::new(lo.0, hi.0));
+        let life = t.life.map_or(PartRange::fixed(DEFAULT_LIFE), |[lo, hi]| {
+            PartRange::new(lo.0, hi.0)
+        });
 
-        let set = [t.color.is_some(), t.color_mix.is_some(), t.color_rgb.is_some(), t.color_hsv.is_some()];
+        let set = [
+            t.color.is_some(),
+            t.color_mix.is_some(),
+            t.color_rgb.is_some(),
+            t.color_hsv.is_some(),
+        ];
         if set.iter().filter(|s| **s).count() > 1 {
-            self.error(at, format!("{who}: set only one of `color`, `color_mix`, `color_rgb`, `color_hsv`"));
+            self.error(
+                at,
+                format!("{who}: set only one of `color`, `color_mix`, `color_rgb`, `color_hsv`"),
+            );
         }
         let mut colors = Vec::new();
         let color = if let Some(c) = &t.color {
@@ -556,7 +575,11 @@ impl Build<'_> {
     }
 
     fn hex(&mut self, at: usize, who: &str, s: &str) -> u32 {
-        match s.strip_prefix('#').filter(|h| h.len() == 6).and_then(|h| u32::from_str_radix(h, 16).ok()) {
+        match s
+            .strip_prefix('#')
+            .filter(|h| h.len() == 6)
+            .and_then(|h| u32::from_str_radix(h, 16).ok())
+        {
             Some(v) => v,
             None => {
                 self.error(at, format!("{who}: color `{s}` is not \"#rrggbb\""));

@@ -348,7 +348,9 @@ mod particle_system {
         Builtin, KindDef, KindId, ParamValue, PartCreateDef, PartEmitterDef, PartSystemDef, PartSystemDefId,
         PartTypeDef,
     };
-    use iwbtg_sim::particles::{PartChild, PartRange, PartType, PartTypeId, Particles, Region, RegionDistr, RegionShape};
+    use iwbtg_sim::particles::{
+        PartChild, PartRange, PartType, PartTypeId, Particles, Region, RegionDistr, RegionShape,
+    };
     use iwbtg_sim::rng::Rng;
     use iwbtg_sim::world::{InstId, SpawnInit};
 
@@ -405,8 +407,12 @@ mod particle_system {
     fn fixture(on: bool, on_destroy: &str) -> (Fx, KindId) {
         let mut b = builder();
         let mut k = KindDef::new("fx", Builtin::ParticleSystem);
-        k.params.0.insert("system".into(), ParamValue::Particles(PartSystemDefId(0)));
-        k.params.0.insert("on_destroy".into(), ParamValue::Str(on_destroy.into()));
+        k.params
+            .0
+            .insert("system".into(), ParamValue::Particles(PartSystemDefId(0)));
+        k.params
+            .0
+            .insert("on_destroy".into(), ParamValue::Str(on_destroy.into()));
         k.events = builtins::event_set(Builtin::ParticleSystem, &k);
         let kind = b.kind(k);
         b.def_mut().particle_systems.push(system());

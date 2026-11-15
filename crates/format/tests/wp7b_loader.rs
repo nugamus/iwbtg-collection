@@ -677,14 +677,23 @@ fn effect_package(files: &[(&str, &str)]) -> PackageFiles {
         .map(|(p, t)| ((*p).to_owned(), (*t).to_owned()))
         .collect();
     package("", move |f| {
-        let game = String::from_utf8(f[0].1.clone()).unwrap().replace("\"playerface\"]", "\"playerface\", \"@effect\"]");
+        let game = String::from_utf8(f[0].1.clone())
+            .unwrap()
+            .replace("\"playerface\"]", "\"playerface\", \"@effect\"]");
         put(f, "game.toml", &game);
-        put(f, "rooms/stage1.toml", &STAGE1.replace("
+        put(
+            f,
+            "rooms/stage1.toml",
+            &STAGE1.replace(
+                "
 ]
-", "
+",
+                "
   { kind = \"@effect\", x = 0, y = 0 },
 ]
-"));
+",
+            ),
+        );
         for (p, t) in &files {
             put(f, p, t);
         }
@@ -720,7 +729,10 @@ fn a_particle_file_loads_and_a_particle_system_names_it() {
     assert_eq!(spark.look.colors, [0xFF_FF_FF, 0xFF_00_00]);
     assert!(spark.look.additive);
     assert!(dust.draws.random_subimage && dust.look.shape.is_none());
-    assert_eq!(dust.look.sprite.map(|(_, animate, stretch)| (animate, stretch)), Some((true, false)));
+    assert_eq!(
+        dust.look.sprite.map(|(_, animate, stretch)| (animate, stretch)),
+        Some((true, false))
+    );
     assert_eq!(dust.draws.life, PartRange::new(10.0, 30.0));
     // Emitters in file order with their regions, streams and bursts.
     assert_eq!(s.emitters.len(), 2);
@@ -781,8 +793,14 @@ fn particle_mistakes_are_errors() {
             "a burst below 1",
         ),
         ("[types.b]\nsize = [1, 2, 3]\n", "`size` is [min, max]"),
-        ("[types.b]\nshape = \"disk\"\nsprite = { id = \"block\" }\n", "not both"),
-        ("[types.b]\nsprite = { id = \"nope\" }\n", "sprite `nope` does not exist"),
+        (
+            "[types.b]\nshape = \"disk\"\nsprite = { id = \"block\" }\n",
+            "not both",
+        ),
+        (
+            "[types.b]\nsprite = { id = \"nope\" }\n",
+            "sprite `nope` does not exist",
+        ),
         ("[types.b]\ncolor = [\"red\"]\n", "is not \"#rrggbb\""),
         (
             "[types.b]\ncolor = [\"#000000\"]\ncolor_mix = [\"#000000\", \"#ffffff\"]\n",
@@ -803,7 +821,8 @@ fn particle_mistakes_are_errors() {
         let r = load_report(&files, STRICT);
         let e = errors(&r);
         assert!(
-            e.iter().any(|m| m.starts_with("particles/p1.toml:") && m.contains(needle)),
+            e.iter()
+                .any(|m| m.starts_with("particles/p1.toml:") && m.contains(needle)),
             "{text}\nwanted `{needle}`:\n{}",
             render(&r)
         );

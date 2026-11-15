@@ -107,7 +107,12 @@ pub fn event_set(kind: &KindDef) -> EventSet {
 pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
     let def = match params.0.get("system") {
         Some(ParamValue::Particles(d)) => *d,
-        _ => return Err(param_error("system", "a particle_system needs `system` (a particles/<id> file)")),
+        _ => {
+            return Err(param_error(
+                "system",
+                "a particle_system needs `system` (a particles/<id> file)",
+            ));
+        }
     };
     Ok(BuiltinState::ParticleSystem(ParticleSystemState {
         def,
@@ -133,7 +138,9 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
                 .def
                 .index()
                 .and_then(|i| ctx.def.particle_systems.get(i))
-                .ok_or_else(|| SimError::invariant(format!("particle system definition {} does not exist", s.def.0)))?;
+                .ok_or_else(|| {
+                    SimError::invariant(format!("particle system definition {} does not exist", s.def.0))
+                })?;
             let w = &mut *ctx.w;
             let built = w.particles.build(&mut w.rng, def)?;
             if let Some(BuiltinState::ParticleSystem(st)) = state_mut(ctx, me) {

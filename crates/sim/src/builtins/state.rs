@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use super::{
     block, blood, blood_emitter, bow, breakable_block, camera, conveyor, death_sound, difficulty_warp,
     drop_platform, edge_warp, fake_block, game_clear, game_over, jump_refresher, kid_bullet, kid_param_zone,
-    kid_start, killer, moving_platform, music, orbit, particle_system, path_platform, save, sign, spike, spring, time_limit,
-    trap, trap_stopper, trigger, warp, water, world,
+    kid_start, killer, moving_platform, music, orbit, particle_system, path_platform, save, sign, spike,
+    spring, time_limit, trap, trap_stopper, trigger, warp, water, world,
 };
 
 /// A built-in instance's state.

@@ -45,7 +45,9 @@ fn type_problem(spec: &ParamSpec, value: &ParamValue) -> Option<String> {
         | (ParamType::Particles, ParamValue::Particles(_))
         | (ParamType::Text, ParamValue::Str(_)) => None,
         // A reference the loader could not resolve is already an error of its own.
-        (ParamType::Room | ParamType::Kind | ParamType::Sound | ParamType::Particles, ParamValue::Str(_)) => None,
+        (ParamType::Room | ParamType::Kind | ParamType::Sound | ParamType::Particles, ParamValue::Str(_)) => {
+            None
+        }
         (ParamType::Enum(words), ParamValue::Str(s)) => {
             if words.contains(&s.as_str()) {
                 None
