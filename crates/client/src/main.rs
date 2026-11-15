@@ -19,6 +19,7 @@ mod card;
 mod hud;
 mod import;
 mod input;
+mod loading;
 mod mods;
 mod overlay;
 mod package;
@@ -76,6 +77,8 @@ struct Args {
     results: results::ResultsArgs,
     #[command(flatten)]
     overlay: overlay::OverlayArgs,
+    #[command(flatten)]
+    loading: loading::LoadingArgs,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -149,6 +152,11 @@ fn main() -> ExitCode {
     let pause = args.pause;
     let results = args.results;
     let overlay = args.overlay;
+    let loading = loading::LoadingPlugin {
+        args: args.loading,
+        // A `--screenshot` check of another screen sees the game at once.
+        skip: args.view.screenshot.is_some(),
+    };
     // A `--screenshot` check keeps no stats, as it keeps no settings.
     let keep_stats = args.view.screenshot.is_none();
     let gameplay_hash = pkg.gameplay_hash;
@@ -190,7 +198,7 @@ fn main() -> ExitCode {
             },
         ));
         // Bevy takes at most 15 plugins in one tuple.
-        app.add_plugins(overlay::OverlayPlugin(overlay));
+        app.add_plugins((overlay::OverlayPlugin(overlay), loading));
     });
     match result {
         Ok(()) => ExitCode::SUCCESS,

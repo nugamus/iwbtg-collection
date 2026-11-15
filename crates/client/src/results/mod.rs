@@ -756,13 +756,14 @@ fn show(
     mut game_cameras: Query<&mut Camera, (With<GameCamera>, Without<ResultsCamera>)>,
     mut suspended: ResMut<Suspended>,
     mut backdrop: ResMut<Backdrop>,
+    mut was_open: Local<bool>,
 ) {
+    // Only on opening and closing, so the loading card (`loading.rs`) can cover the game too.
     let open = results.summary.is_some();
-    if suspended.0 != open {
+    if *was_open != open {
+        *was_open = open;
         suspended.0 = open;
-    }
-    for mut camera in &mut game_cameras {
-        if camera.is_active == open {
+        for mut camera in &mut game_cameras {
             camera.is_active = !open;
         }
     }
