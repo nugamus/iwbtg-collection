@@ -266,6 +266,88 @@ mod tests {
         assert_eq!(weights, [400, 500, 600, 700]);
     }
 
+    /// The fallback faces have Barlow's ascent and descent per em, so a `▾`, `★`, arrow or kana
+    /// in a Barlow line leaves its baseline where Barlow puts it (#546; the layout takes a line's
+    /// tallest ascent and descent). `assets/fonts/fallback_metrics.py` sets them.
+    #[test]
+    fn fallback_faces_keep_barlow_s_baseline() {
+        use skrifa::{
+            FontRef, MetadataProvider,
+            instance::{LocationRef, Size},
+            string::StringId,
+        };
+        let per_em = |font: &FontRef| {
+            let m = font.metrics(Size::unscaled(), LocationRef::default());
+            let em = f32::from(m.units_per_em);
+            (m.ascent / em, m.descent / em, m.leading / em)
+        };
+        let faces: Vec<(String, (f32, f32, f32))> = FACES
+            .iter()
+            .map(|bytes| {
+                let font = FontRef::new(bytes).expect("font file");
+                let name = font
+                    .localized_strings(StringId::FAMILY_NAME)
+                    .english_or_first()
+                    .expect("family name")
+                    .to_string();
+                (name, per_em(&font))
+            })
+            .collect();
+        let barlow = faces.iter().find(|(name, _)| name == "Barlow").expect("Barlow").1;
+        let mut fallbacks = 0;
+        for (name, metrics) in &faces {
+            if ["Noto Sans Symbols 2", "Inter", "Noto Sans JP"]
+                .iter()
+                .any(|family| name.starts_with(family))
+            {
+                fallbacks += 1;
+                let close = |a: f32, b: f32| (a - b).abs() < 1e-3;
+                assert!(
+                    close(metrics.0, barlow.0) && close(metrics.1, barlow.1) && close(metrics.2, 0.0),
+                    "{name}: {metrics:?}, Barlow {barlow:?}"
+                );
+            }
+        }
+        assert_eq!(fallbacks, 6, "Symbols 2, four Inter weights, JP");
+    }
+
+    /// The baseline of one line of Barlow 14/600 text, laid out with every bundled face as Bevy
+    /// lays out UI text (font size relative line height 1.15).
+    fn barlow_baseline(text: &str) -> f32 {
+        use parley::{FontContext, FontFamily, FontWeight, LayoutContext, LineHeight, StyleProperty};
+        let mut fonts = FontContext::new();
+        for bytes in FACES {
+            fonts.collection.register_fonts(
+                parley::fontique::Blob::new(std::sync::Arc::new(bytes.to_vec())),
+                None,
+            );
+        }
+        let mut layouts = LayoutContext::<[u8; 4]>::new();
+        let mut builder = layouts.ranged_builder(&mut fonts, text, 1.0, true);
+        builder.push_default(StyleProperty::FontFamily(FontFamily::Source(
+            Family::Barlow.names().into(),
+        )));
+        builder.push_default(StyleProperty::FontSize(14.0));
+        builder.push_default(StyleProperty::FontWeight(FontWeight::new(600.0)));
+        builder.push_default(StyleProperty::LineHeight(LineHeight::FontSizeRelative(1.15)));
+        let mut layout = builder.build(text);
+        layout.break_all_lines(None);
+        layout.lines().next().expect("one line").metrics().baseline
+    }
+
+    /// `Stars ▾`, `★ 6.84`, `→` and kana sit on the same baseline as plain Barlow (#546).
+    #[test]
+    fn a_fallback_glyph_does_not_move_the_baseline() {
+        let plain = barlow_baseline("Pop");
+        for text in ["Stars ▾", "★ 6.84", "39:40.12 → 38:12.46", "れおちゅー", "▸"] {
+            let baseline = barlow_baseline(text);
+            assert!(
+                (baseline - plain).abs() < 0.01,
+                "{text:?}: baseline {baseline}, Barlow {plain}"
+            );
+        }
+    }
+
     #[test]
     fn every_face_is_a_font_file() {
         for face in FACES {
