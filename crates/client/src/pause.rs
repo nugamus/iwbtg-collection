@@ -38,7 +38,9 @@ use crate::ui::tokens;
 use crate::ui::widgets::text;
 use crate::view::{Game, SimTick};
 
-/// The key that opens and closes the menu.
+/// The key that opens and closes the menu. The game's `menu` action has no keyboard default
+/// (`Bindings::default` drops Escape, #758), so Escape never reaches the sim unless the player
+/// binds it there.
 pub const PAUSE_KEY: KeyCode = KeyCode::Escape;
 /// The controller button that opens and closes the menu (#624). The game's `menu` action has no
 /// controller default, so Start never reaches the sim unless the player binds it there.
@@ -939,5 +941,64 @@ mod tests {
         world.resource_mut::<Menu>().picked = Some(Item::Quit);
         world.run_system_once(act).unwrap();
         assert!(!world.resource::<Messages<AppExit>>().is_empty());
+    }
+
+    /// Escape is the pause key only (#758): opening and closing the menu gives the game the same
+    /// (empty) input whether a tick runs on the frame Escape goes down, before the menu opens, or
+    /// not. `collect_input` runs before the fixed clock and `keys` in Update, so both happen.
+    #[test]
+    fn escape_sends_the_game_nothing_on_any_frame_timing() {
+        use bevy::ecs::system::RunSystemOnce;
+        use iwbtg_sim::input::{InputFrame, vk};
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-clear.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        assert_eq!(
+            Bindings::default().key_action(vk::ESCAPE),
+            None,
+            "`menu` has no keyboard default"
+        );
+        let mut runs = Vec::new();
+        for tick_on_open in [true, false] {
+            let mut world = crate::view::test_world(&pkg);
+            world.init_resource::<ButtonInput<KeyCode>>();
+            world.init_resource::<Menu>();
+            let mut system = IntoSystem::into_system(keys);
+            system.initialize(&mut world);
+            let mut ticks = Vec::new();
+            // One frame: the key edge as `collect_input` feeds it, maybe a tick, then the menu.
+            let mut frame = |world: &mut World, down: bool, tick: bool| {
+                let mut input = world.resource_mut::<ButtonInput<KeyCode>>();
+                input.clear();
+                if down {
+                    input.press(PAUSE_KEY);
+                } else {
+                    input.release(PAUSE_KEY);
+                }
+                let mut c = world.resource_mut::<Collector>();
+                if down {
+                    c.press(vk::ESCAPE);
+                } else {
+                    c.release(vk::ESCAPE);
+                }
+                if tick {
+                    ticks.push(c.take_frame());
+                }
+                system.run((), world).unwrap();
+                world.run_system_once(act).unwrap();
+            };
+            frame(&mut world, true, tick_on_open);
+            assert!(world.resource::<Menu>().open, "Escape opens");
+            frame(&mut world, false, false);
+            frame(&mut world, true, false);
+            assert!(!world.resource::<Menu>().open, "Escape closes");
+            frame(&mut world, false, true);
+            frame(&mut world, false, true);
+            assert!(
+                ticks.iter().all(|f| *f == InputFrame::EMPTY),
+                "tick on open {tick_on_open}: {ticks:?}"
+            );
+            runs.push(ticks.split_off(ticks.len() - 2));
+        }
+        assert_eq!(runs[0], runs[1], "the ticks after the menu are the same");
     }
 }

@@ -21,8 +21,9 @@ The order of work across all three repos: client, research and games. There are 
 | # | Milestone | Done when |
 |---|---|---|
 | 0 | Setup and research groundwork *(done)* | Repos, specs pipeline, scraper, 20-game shortlist, GM8 CLONE_SPEC, first traces, converter, sim contracts (WP0). |
-| M1 | Kid matches the original | The sim reproduces rely_the_needle's traces (stand, double jump) tick for tick on Windows, Linux and WASM. |
-| M2 | Sim covers the 20 games | All kid families, built-ins, scripts, sound and the replay runner are in. All 20 converter packages load and trace-check. The porting pipeline design is approved. |
+| M1 | Kid matches the original *(done)* | The sim reproduces rely_the_needle's traces (stand, double jump) tick for tick on Windows, Linux and WASM. |
+| M2 | Sim covers the 20 games | All kid families, built-ins, scripts, sound and the replay runner are in. All 20 converter packages load and trace-check. |
+| M2b | Porting pipeline | The census says how many scripts the 20 ports need; the script API covers what they use; Rhai is measured on native and WASM; port layering, clean-room authoring and the extension model are decided; one command checks the fidelity of every port; `docs/porting.md` is written (#23). |
 | M3 | First playable | The Bevy client plays rely_the_needle on native and web, and the user confirms the feel. |
 | M4 | Ranked-ready run | Stripped ranked mode works locally: timer and cutscene freeze, mods, retry keys, HUD, practice, results, local PBs, replays, `.iwbz` with maps. |
 | M5 | 20 games | All 20 games are in Beta, each with fidelity proof and a verified full clear. |
@@ -31,8 +32,17 @@ The order of work across all three repos: client, research and games. There are 
 | M8 | Ghosts and races | Ghosts of leaderboard runs and live race lobbies work. |
 | M9 | Public release | Name, takedown and privacy pages, licenses, release builds, contributor docs. |
 | — | Editor v1 | The in-client editor works. It starts once M4 is done and runs alongside the later milestones. |
+| M10 | Community games | Players make a game in the editor and upload it; it is validated, credited, playable as Beta, and can be curated to Ranked or removed. Format 1 is frozen, and new mechanics need no client release. |
+| M11 | GameMaker Studio games | A GameMaker Studio runner profile with its own CLONE_SPEC reproduces traces of 3 GMS fangames, and they are ported in Beta. |
 
-The order of M3 and M4 versus M5: M5 ports need the M2 sim and the porting pipeline, not the client. Ports can run in parallel with M3 and M4.
+The order of M3 and M4 versus M5: M5 ports need the M2 sim and the M2b pipeline, not the client. Ports can run in parallel with M3 and M4. M10 needs Editor v1 and M7; M11 needs M5.
+
+### Keeping milestones balanced
+
+Near milestones fill up with small issues while later ones hold a few large placeholders (review of 2026-11-14, #774). Two rules keep the board honest:
+
+- **A finding goes to the milestone of the work it blocks,** not to the milestone that is open now. A one-game fidelity question goes on that game's port issue (M5), a server idea to M7, and so on. Fidelity questions get an impact tier first (#784): only tier 1 blocks M2.
+- **A milestone is scoped before its predecessor closes.** Its large issues get sub-issues (each port follows the standard steps listed in its issue), so the board shows the real size of the work ahead.
 
 ## How work flows
 
