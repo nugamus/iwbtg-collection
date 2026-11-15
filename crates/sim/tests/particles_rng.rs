@@ -754,8 +754,12 @@ mod blood_emitter {
     fn fixture(on: bool) -> (Fx, KindId) {
         let mut b = builder();
         let mut k = KindDef::new("blood_emitter", Builtin::BloodEmitter);
-        k.params.0.insert("mode".into(), ParamValue::Str("particles".into()));
-        k.params.0.insert("destroyed_by_restart".into(), ParamValue::Bool(true));
+        k.params
+            .0
+            .insert("mode".into(), ParamValue::Str("particles".into()));
+        k.params
+            .0
+            .insert("destroyed_by_restart".into(), ParamValue::Bool(true));
         k.events = builtins::event_set(Builtin::BloodEmitter, &k);
         let kind = b.kind(k);
         let mut fx = Fx::new(b.build().unwrap());
@@ -826,7 +830,10 @@ mod blood_emitter {
             assert_eq!(fx.w.rng.seed, *seed, "frame {f}");
         }
         assert_eq!(frame, 90);
-        assert!(fx.w.particles.systems.iter().all(|s| s.destroyed), "R destroyed the system");
+        assert!(
+            fx.w.particles.systems.iter().all(|s| s.destroyed),
+            "R destroyed the system"
+        );
     }
 
     /// The stream runs in every update until alarm 0 (20) destroys the emitter and its system;
@@ -892,12 +899,15 @@ mod blood_emitter {
         let id = spawn(&mut fx, kind);
         let mut ctx = fx.ctx();
         builtins::on_event(&mut ctx, id, &EventKind::Step).unwrap();
-        assert!(fx.w.output.contains(&OutputEvent::Builtin(BuiltinOutput::DeathParticles {
-            x: r(49.0),
-            y: r(519.1),
-            count: 15,
-            flipped: false,
-        })));
+        assert!(
+            fx.w.output
+                .contains(&OutputEvent::Builtin(BuiltinOutput::DeathParticles {
+                    x: r(49.0),
+                    y: r(519.1),
+                    count: 15,
+                    flipped: false,
+                }))
+        );
         assert_eq!(fx.w.rng, Rng::new(1), "the Step draws nothing");
     }
 
@@ -905,7 +915,9 @@ mod blood_emitter {
     #[test]
     fn per_step_zero_is_refused() {
         let mut k = KindDef::new("e", Builtin::BloodEmitter);
-        k.params.0.insert("mode".into(), ParamValue::Str("particles".into()));
+        k.params
+            .0
+            .insert("mode".into(), ParamValue::Str("particles".into()));
         k.params.0.insert("per_step".into(), ParamValue::Real(r(0.0)));
         assert!(builtins::init_state(Builtin::BloodEmitter, &k.params).is_err());
     }
