@@ -396,7 +396,8 @@ mod wp6a {
                     flipped: true
                 }))
         );
-        // With the switch on: an error until the mode uses sim::particles (#760).
+        // With the switch on the Step still draws nothing: the stream draws in the tick's
+        // particle update (#766, tests `particles_rng::blood_emitter::*`).
         let mut rules = RunnerRules::default();
         rules.num.particles_draw_rng = true;
         let scripts = ScriptRuntime::default();
@@ -407,7 +408,8 @@ mod wp6a {
             scripts: &scripts,
             dll_mode: DllMode::Stub,
         };
-        assert!(builtins::on_event(&mut ctx, em, &EventKind::Step).is_err());
+        builtins::on_event(&mut ctx, em, &EventKind::Step).unwrap();
+        assert_eq!(ctx.w.rng, Rng::new(5));
     }
 
     #[test]

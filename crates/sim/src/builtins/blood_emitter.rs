@@ -19,18 +19,25 @@
 //!   (0.2), `per_angle` blood in that direction with speed `random(speed_max)`. OPEN: the order of
 //!   the chance draw, the blood's Create and the speed draw are not in the spec; this draws the
 //!   chance first, then per blood the spawn and then the speed.
-//! - `particles` (family B, kaenbyou, eat-the-lemon): a particle stream. Client output only
-//!   (`BuiltinOutput::DeathParticles` each Step). Particle systems draw from the gameplay RNG
-//!   (N10, `crate::particles`), but this mode does not create one yet: with
-//!   `NumRules::particles_draw_rng` set it is `Unsupported` (#760).
+//! - `particles` (family B, kaenbyou, eat-the-lemon): a particle stream. The client draws it
+//!   (`BuiltinOutput::DeathParticles` each Step). With `NumRules::particles_draw_rng` (N10, #766)
+//!   Create also builds its system in `World::particles`, as the original's Create does: one type
+//!   (size, speed 1 to 5 and direction 0 to 360 ranges, life 50: 4 draws), one emitter on a
+//!   linear rectangle (2 draws) streaming `per_step` (15), so each tick's particle update draws
+//!   `per_step` x 6 (90), from the creation tick on (kid/B.md Death; CLONE_SPEC numbers
+//!   "Particle draw rules"; Confirmed (recorder) kaenbyou `num-part-rng-3-k1.csv`, frames 45-50
+//!   replayed bit for bit). The original removes the emitter when alarm 0 fires and destroys the
+//!   system on Restart and Room End (item 8); here the instance goes at alarm 0 and its Destroy
+//!   destroys the system, which draws the same: the type has no step or death particles, so the
+//!   live particles left over draw nothing. Room End destroys it too. The Step draws nothing.
 //!
 //! `destroyed_by_restart` (kaenbyou, eat-the-lemon): a Restart key press destroys the emitter.
 
 use serde::{Deserialize, Serialize};
 
 use super::{
-    BuiltinOutput, BuiltinState, ParamError, ParamSpec, ParamType, param_bool, param_enum, param_real,
-    state_of,
+    BuiltinOutput, BuiltinState, ParamError, ParamSpec, ParamType, param_bool, param_enum, param_error,
+    param_real, state_mut, state_of,
 };
 use crate::alarm;
 use crate::def::{EngineKind, KindDef, ParamValue, Params};
@@ -39,6 +46,7 @@ use crate::events::{EventKind, EventSet};
 use crate::input::Action;
 use crate::num::{self, Real};
 use crate::output::OutputEvent;
+use crate::particles::{PartRange, PartSystemId, PartType, PartTypeId, Region, RegionDistr, RegionShape};
 use crate::world::{Ctx, Flow, InstId, SpawnInit};
 
 const MODES: &[&str] = &["random_dir", "angle_sweep", "particles"];
@@ -116,6 +124,9 @@ pub struct BloodEmitterState {
     pub flipped: bool,
     /// A Restart key press destroys it.
     pub destroyed_by_restart: bool,
+    /// `particles` with `NumRules::particles_draw_rng`: the system Create built, until Destroy or
+    /// Room End destroys it.
+    pub system: Option<PartSystemId>,
 }
 
 /// The params this built-in accepts (`builtins::param_specs` routes here).
@@ -123,11 +134,13 @@ pub fn param_specs() -> &'static [ParamSpec] {
     SPECS
 }
 
-/// What a kind with this base handles: alarm 0 and Step, plus the Restart key press when asked.
+/// What a kind with this base handles: alarm 0 and Step, plus the Restart key press when asked,
+/// plus Room End in `particles` mode (it destroys the system).
 pub fn event_set(kind: &KindDef) -> EventSet {
     let mut set = EventSet {
         step: true,
         alarms: 1,
+        room_end: matches!(kind.params.0.get("mode"), Some(ParamValue::Str(m)) if m == "particles"),
         ..EventSet::default()
     };
     if matches!(
@@ -153,15 +166,24 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
         Some("particles") => Mode::Particles,
         _ => Mode::RandomDir,
     };
+    let per_step = count(params, "per_step", if mode == Mode::Particles { 15 } else { 40 })?;
+    if mode == Mode::Particles && (per_step == 0 || i32::try_from(per_step).is_err()) {
+        // A stream of 0 is not traced (N10); the model refuses it, so the loader does too.
+        return Err(param_error(
+            "per_step",
+            "particles mode needs a per_step from 1 to 2147483647",
+        ));
+    }
     Ok(BuiltinState::BloodEmitter(BloodEmitterState {
         mode,
         life: param_real(params, "life")?.unwrap_or(Real::new(20.0)),
-        per_step: count(params, "per_step", if mode == Mode::Particles { 15 } else { 40 })?,
+        per_step,
         speed_max: param_real(params, "speed_max")?.unwrap_or(Real::new(6.0)),
         chance: param_real(params, "chance")?.unwrap_or(Real::new(0.2)),
         per_angle: count(params, "per_angle", 8)?,
         flipped: param_bool(params, "flipped")?.unwrap_or(false),
         destroyed_by_restart: param_bool(params, "destroyed_by_restart")?.unwrap_or(false),
+        system: None,
     }))
 }
 
@@ -177,10 +199,25 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
             if let Some(inst) = ctx.w.get_mut(me) {
                 alarm::set(inst, 0, s.life, rules)?;
             }
+            if s.mode == Mode::Particles && ctx.rules.num.particles_draw_rng {
+                let sys = build_system(ctx, s.per_step)?;
+                if let Some(BuiltinState::BloodEmitter(st)) = state_mut(ctx, me) {
+                    st.system = Some(sys);
+                }
+            }
             Ok(Flow::Continue)
         }
         EventKind::Alarm(0) => Ok(ctx.destroy(me)),
         EventKind::KeyPress(Action::Restart) if s.destroyed_by_restart => Ok(ctx.destroy(me)),
+        EventKind::Destroy | EventKind::RoomEnd => {
+            if let Some(sys) = s.system {
+                ctx.w.particles.destroy_system(sys)?;
+                if let Some(BuiltinState::BloodEmitter(st)) = state_mut(ctx, me) {
+                    st.system = None;
+                }
+            }
+            Ok(Flow::Continue)
+        }
         EventKind::Step => step(ctx, me, &s),
         _ => Ok(Flow::Continue),
     }
@@ -193,11 +230,7 @@ fn step(ctx: &mut Ctx, me: InstId, s: &BloodEmitterState) -> Result<Flow, SimErr
     let (x, y) = (inst.m.x(), inst.m.y());
     match s.mode {
         Mode::Particles => {
-            if ctx.rules.num.particles_draw_rng {
-                return Err(SimError::unsupported(
-                    "blood_emitter particles with particles_draw_rng: not wired to sim::particles yet (N10, #760)",
-                ));
-            }
+            // The stream draws in the tick's particle update (`World::particles`), not here.
             ctx.emit(OutputEvent::Builtin(BuiltinOutput::DeathParticles {
                 x,
                 y,
@@ -229,6 +262,41 @@ fn step(ctx: &mut Ctx, me: InstId, s: &BloodEmitterState) -> Result<Flow, SimErr
         }
     }
     Ok(Flow::Continue)
+}
+
+/// The blood particle type. The spec gives its draws, not every bound: size is a non-empty range
+/// (one draw; the sim draws no particles, so the bounds are not needed), speed 1 to 5, direction
+/// 0 to 360, life 50 (kid/B.md Death; NUM-PART-RNG-3: "size, speed and direction ranges: 6 draws
+/// a particle", 2 of them the region's).
+fn blood_type() -> PartType {
+    PartType {
+        size: PartRange::new(0.0, 1.0),
+        speed: PartRange::new(1.0, 5.0),
+        direction: PartRange::new(0.0, 360.0),
+        life: PartRange::fixed(50.0),
+        ..PartType::default()
+    }
+}
+
+/// Builds the emitter's system: the blood type (one type shared by every emitter, as type ids
+/// change no draws), a new system after the others, one emitter on a linear rectangle streaming
+/// `per_step`. Draws nothing.
+fn build_system(ctx: &mut Ctx, per_step: u32) -> Result<PartSystemId, SimError> {
+    let p = &mut ctx.w.particles;
+    let want = blood_type();
+    let ty = match p.types.iter().position(|t| *t == want) {
+        Some(i) => PartTypeId(u32::try_from(i).map_err(|_| SimError::invariant("too many particle types"))?),
+        None => p.add_type(want),
+    };
+    let sys = p.add_system();
+    let region = Region {
+        shape: RegionShape::Rectangle,
+        distr: RegionDistr::Linear,
+    };
+    let e = p.add_emitter(sys, region)?;
+    let n = i32::try_from(per_step).map_err(|_| SimError::invariant("blood_emitter: per_step too large"))?;
+    p.stream(e, ty, n)?;
+    Ok(sys)
 }
 
 /// Creates one blood drop; its Create makes its own draws.
