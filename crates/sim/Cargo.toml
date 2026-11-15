@@ -26,7 +26,7 @@ wasm-bindgen-test = "0.3"
 
 [features]
 # JSON Schema of `PhysicsProfileDraft` for docs/format/schema/v0/physics.schema.json (#255); the
-# format crate's `schema` feature turns it on. Never in the client or the server.
+# format crate's `schema` feature turns it on. Never in the client or the server; `cargo test -p xtask` fails when `schemars` is in the client's graph (#794).
 schema = ["dep:schemars"]
 # Trace setup actions (docs/plans/sim-core.md 9.4, 10.4). Never enabled in the server build.
 trace-setup = []
