@@ -163,7 +163,7 @@ impl Plugin for PausePlugin {
             .add_systems(
                 Update,
                 (
-                    keys.run_if(crate::results::closed),
+                    keys.run_if(crate::results::closed).run_if(crate::loading::closed),
                     mouse,
                     act,
                     hold_audio,
