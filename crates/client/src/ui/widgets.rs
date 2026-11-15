@@ -1,6 +1,6 @@
 //! The shared components of the M4 and M6 screens, each a function that returns a bundle:
 //! sheared panel, pill, button (rest, hover, pressed, focus-visible), label/value stat, star pill,
-//! mod pill, the Ranked/Unranked pills and one-line text cut with `…`. Sizes and colours are the mockups' (`Main.dc.html`,
+//! mod pill, the Ranked/Unranked pills, the on/off switch and one-line text cut with `…`. Sizes and colours are the mockups' (`Main.dc.html`,
 //! `Loading.dc.html`, `RunInfo.dc.html`, `ModSelect.dc.html`).
 
 use bevy::input_focus::tab_navigation::{TabIndex, TabNavigationPlugin};
@@ -8,11 +8,11 @@ use bevy::input_focus::{InputFocus, InputFocusVisible};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::Pressed;
-use bevy::ui_widgets::Button;
+use bevy::ui_widgets::{Activate, Button};
 
 use super::fonts::Type;
 use super::icons::{Icon, icon};
-use super::motion::{Ease, ReducedMotion, Scale, Tween};
+use super::motion::{Ease, OffsetX, ReducedMotion, Scale, Tween};
 use super::shape::{Ink, Shape, UiOpacity};
 use super::tokens::{self, star_color};
 
@@ -20,7 +20,8 @@ pub(super) fn plugin(app: &mut App) {
     if !app.is_plugin_added::<TabNavigationPlugin>() {
         app.add_plugins(TabNavigationPlugin);
     }
-    app.add_systems(Update, (button_looks, fit_ellipses));
+    app.add_systems(Update, (button_looks, fit_ellipses, switch_looks))
+        .add_observer(flip_switch);
 }
 
 /// The ellipsis that ends text cut at its box.
@@ -321,12 +322,14 @@ pub enum ButtonKind {
     Secondary,
     /// Controls over art (Group, Sort, Scope): dark glass, 34 px.
     Control,
+    /// The on/off switch button ([`switch`]): faint white glass, 52 px.
+    Switch,
 }
 
 impl ButtonKind {
     fn height(self) -> f32 {
         match self {
-            ButtonKind::Primary | ButtonKind::Secondary => 52.0,
+            ButtonKind::Primary | ButtonKind::Secondary | ButtonKind::Switch => 52.0,
             ButtonKind::Control => 34.0,
         }
     }
@@ -336,13 +339,14 @@ impl ButtonKind {
             ButtonKind::Primary => 28.0,
             ButtonKind::Secondary => 24.0,
             ButtonKind::Control => 14.0,
+            ButtonKind::Switch => 20.0,
         }
     }
 
     fn style(self) -> Type {
         match self {
             ButtonKind::Primary => Type::PRIMARY,
-            ButtonKind::Secondary => Type::BUTTON,
+            ButtonKind::Secondary | ButtonKind::Switch => Type::BUTTON,
             ButtonKind::Control => Type::barlow(14.0, 600),
         }
     }
@@ -352,6 +356,7 @@ impl ButtonKind {
             ButtonKind::Primary => tokens::ACCENT,
             ButtonKind::Secondary => tokens::SECONDARY,
             ButtonKind::Control => tokens::GLASS,
+            ButtonKind::Switch => tokens::white(0.06),
         }
     }
 
@@ -382,6 +387,8 @@ fn button_fill(kind: ButtonKind, hover: f32, press: f32) -> Color {
     // takes its CSS alpha (.12 to .20) through `tokens::white`, as at rest (#692).
     if kind == ButtonKind::Secondary && hover > 0.0 {
         c.alpha = tokens::white(0.12 + 0.08 * hover).alpha();
+    } else if kind == ButtonKind::Switch && hover > 0.0 {
+        c.alpha = tokens::white(0.06 + 0.08 * hover).alpha();
     } else if rest.alpha < 1.0 {
         c.alpha = (rest.alpha + 0.08 * hover).min(1.0);
     }
@@ -473,6 +480,129 @@ pub fn button_off<B: Bundle>(kind: ButtonKind, height: f32, pad: f32, content: B
         UiOpacity(OFF_OPACITY),
         Children::spawn(Spawn(content)),
     )
+}
+
+/// An on/off switch: a [`ButtonKind::Switch`] button holding the track and knob and a label over
+/// a hint (`ModSelect.dc.html`'s Auto-retry: 38 x 22 px track, 16 px knob, 15/700 over 12/400).
+/// Off is the artboard's: a `white(.2)` track, the knob left in the soft colour; on, the track
+/// is the accent and the knob slides right in ink. A click, Enter or Space flips [`Switch::on`];
+/// whoever owns the setting reads it on `Changed<Switch>`, and writing `on` moves the switch.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Switch {
+    pub on: bool,
+}
+
+/// The track of a [`switch`].
+#[derive(Component)]
+struct SwitchTrack;
+
+/// The knob of a [`switch`].
+#[derive(Component)]
+struct SwitchKnob;
+
+/// How far the knob slides: the track less the knob and its two 3 px insets.
+const KNOB_TRAVEL: f32 = 38.0 - 16.0 - 2.0 * 3.0;
+
+fn track_fill(on: bool) -> Color {
+    if on { tokens::ACCENT } else { tokens::white(0.2) }
+}
+
+fn knob_fill(on: bool) -> Color {
+    if on { tokens::INK } else { tokens::SOFT }
+}
+
+/// An upright rounded shape (the switch's track and knob are not sheared).
+fn round(fill: Color, radius: f32) -> Shape {
+    Shape {
+        shear: 0.0,
+        radius,
+        ..Shape::fill(fill)
+    }
+}
+
+/// The on/off switch button: `label` over `hint`, starting `on` (see [`Switch`]).
+pub fn switch(label: &str, hint: &str, on: bool) -> impl Bundle + use<> {
+    let knob_x = if on { KNOB_TRAVEL } else { 0.0 };
+    (
+        Switch { on },
+        button_with(
+            ButtonKind::Switch,
+            ButtonKind::Switch.height(),
+            ButtonKind::Switch.pad(),
+            (
+                Node {
+                    align_items: AlignItems::Center,
+                    column_gap: Val::Px(12.0),
+                    ..default()
+                },
+                children![
+                    (
+                        Node {
+                            width: Val::Px(38.0),
+                            height: Val::Px(22.0),
+                            flex_shrink: 0.0,
+                            ..default()
+                        },
+                        round(track_fill(on), 11.0),
+                        SwitchTrack,
+                        children![(
+                            Node {
+                                position_type: PositionType::Absolute,
+                                left: Val::Px(3.0),
+                                top: Val::Px(3.0),
+                                width: Val::Px(16.0),
+                                height: Val::Px(16.0),
+                                ..default()
+                            },
+                            round(knob_fill(on), 8.0),
+                            SwitchKnob,
+                            UiTransform::from_translation(Val2::px(knob_x, 0.0)),
+                            Tween::<OffsetX>::at_rest(knob_x, tokens::motion::QUICK, Ease::OutQuint),
+                        )],
+                    ),
+                    (
+                        Node {
+                            flex_direction: FlexDirection::Column,
+                            ..default()
+                        },
+                        children![
+                            text(label, Type::barlow(15.0, 700), tokens::INK),
+                            text(hint, Type::barlow(12.0, 400), tokens::MUTED),
+                        ],
+                    ),
+                ],
+            ),
+        ),
+    )
+}
+
+/// A click, Enter or Space on a switch flips it.
+fn flip_switch(activate: On<Activate>, mut switches: Query<&mut Switch>) {
+    if let Ok(mut switch) = switches.get_mut(activate.entity) {
+        switch.on = !switch.on;
+    }
+}
+
+/// What `switch_looks` writes on a switch's knob.
+type KnobParts = (&'static mut Shape, &'static mut Tween<OffsetX>);
+
+/// Moves each changed switch's knob and colours its track and knob.
+fn switch_looks(
+    switches: Query<(Entity, &Switch), Changed<Switch>>,
+    children: Query<&Children>,
+    mut tracks: Query<&mut Shape, (With<SwitchTrack>, Without<SwitchKnob>)>,
+    mut knobs: Query<KnobParts, (With<SwitchKnob>, Without<SwitchTrack>)>,
+) {
+    for (entity, switch) in &switches {
+        for part in children.iter_descendants(entity) {
+            if let Ok(mut shape) = tracks.get_mut(part) {
+                shape.fill = track_fill(switch.on);
+            } else if let Ok((mut shape, mut tween)) = knobs.get_mut(part) {
+                shape.fill = knob_fill(switch.on);
+                tween.retarget(if switch.on { KNOB_TRAVEL } else { 0.0 });
+            }
+        }
+    }
 }
 
 /// What `button_looks` reads and writes on each button.
@@ -662,5 +792,49 @@ mod tests {
             Some(FOCUS_RING),
             "keyboard focus shows the ring"
         );
+    }
+
+    #[test]
+    fn a_switch_off_is_the_artboards_and_on_is_accent() {
+        assert_eq!(track_fill(false), tokens::white(0.2));
+        assert_eq!(knob_fill(false).to_srgba().to_hex(), "#C9CDE0");
+        assert_eq!(track_fill(true), tokens::ACCENT);
+        assert_eq!(knob_fill(true), tokens::INK);
+        assert_eq!(KNOB_TRAVEL, 16.0, "the knob ends 3 px from the track's right end");
+        assert_eq!(ButtonKind::Switch.rest().alpha(), tokens::white(0.06).alpha());
+        assert_eq!(ButtonKind::Switch.height(), 52.0);
+        assert_eq!(ButtonKind::Switch.pad(), 20.0);
+    }
+
+    #[test]
+    fn activating_a_switch_flips_it_and_moves_the_knob() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(ReducedMotion(true))
+            .init_resource::<InputFocus>()
+            .init_resource::<InputFocusVisible>()
+            .add_systems(Update, switch_looks)
+            .add_observer(flip_switch);
+        let s = app.world_mut().spawn(switch("Auto-retry", "hint", false)).id();
+        app.update();
+        let parts = |app: &mut App| {
+            let world = app.world_mut();
+            let mut track = world.query_filtered::<&Shape, With<SwitchTrack>>();
+            let track = track.single(world).unwrap().fill;
+            let mut knob = world.query_filtered::<&Tween<OffsetX>, With<SwitchKnob>>();
+            let knob = knob.single(world).unwrap().to;
+            (track, knob)
+        };
+        assert_eq!(parts(&mut app), (track_fill(false), 0.0));
+
+        app.world_mut().trigger(Activate { entity: s });
+        app.update();
+        assert!(app.world().get::<Switch>(s).unwrap().on);
+        assert_eq!(parts(&mut app), (track_fill(true), KNOB_TRAVEL));
+
+        // The setting's owner writes `on`; the switch follows.
+        app.world_mut().get_mut::<Switch>(s).unwrap().on = false;
+        app.update();
+        assert_eq!(parts(&mut app), (track_fill(false), 0.0));
     }
 }
