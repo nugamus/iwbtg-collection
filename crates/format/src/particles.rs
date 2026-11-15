@@ -367,10 +367,10 @@ impl Build<'_> {
                 (self.type_ref(&names, &s.ty), *s.number.get_ref())
             });
             let burst = em.burst.as_ref().map(|s| {
-                if *s.number.get_ref() < 1 {
+                if *s.number.get_ref() == 0 {
                     self.error(
                         s.number.span().start,
-                        "a burst below 1 is not supported by the sim's particle model yet (#769)",
+                        "a burst of 0 is not traced (sim N10, research#167)",
                     );
                 }
                 (self.type_ref(&names, &s.ty), *s.number.get_ref())
@@ -496,14 +496,16 @@ impl Build<'_> {
         });
         let child = |b: &mut Self, c: &Option<ChildFile>, key: &str| {
             c.as_ref().map(|c| {
-                if c.count < 1 {
+                // A negative death count is a chance per dying particle (Confirmed (recorder),
+                // research#167); a negative step count is only Inferred (research#168).
+                if c.count == 0 || (key == "step" && c.count < 0) {
                     b.error(
                         c.ty.span().start,
-                        format!("{who}: a `{key}` count below 1 is not supported by the sim's particle model yet (#769)"),
+                        format!("{who}: a `{key}` count of {} is not traced (sim N10, research#167, research#168)", c.count),
                     );
                 }
                 PartChild {
-                    count: u32::try_from(c.count).unwrap_or(0),
+                    count: c.count,
                     ty: PartTypeId(b.type_ref(names, &c.ty)),
                 }
             })

@@ -776,6 +776,19 @@ fn a_loaded_particle_system_builds_in_the_model() {
     }
 }
 
+/// A negative burst and a negative death count are chances (#769; CLONE_SPEC numbers "Particle
+/// draw rules" 8, research#167), not load errors; they reach the sim as written.
+#[test]
+fn negative_burst_and_death_counts_load() {
+    let text = "[types.a]\nlife = [5, 5]\n[types.b]\nlife = [5, 5]\ndeath = { type = \"a\", count = -5 }\n\
+                [[emitters]]\nregion = [0, 1, 0, 1]\nburst = { type = \"b\", number = -10 }\n";
+    let files = package("", |f| put(f, "particles/p1.toml", text));
+    let (def, _) = load_ok(&files, STRICT);
+    let s = &def.particle_systems[0];
+    assert_eq!(s.emitters[0].burst, Some((1, -10)));
+    assert_eq!(s.types[1].draws.death.map(|c| c.count), Some(-5));
+}
+
 #[test]
 fn particle_mistakes_are_errors() {
     let base = "[types.a]\nlife = [5, 5]\n";
@@ -789,8 +802,16 @@ fn particle_mistakes_are_errors() {
             "a stream of 0",
         ),
         (
-            "[[emitters]]\nregion = [0, 1, 0, 1]\nburst = { type = \"a\", number = -2 }\n",
-            "a burst below 1",
+            "[[emitters]]\nregion = [0, 1, 0, 1]\nburst = { type = \"a\", number = 0 }\n",
+            "a burst of 0",
+        ),
+        (
+            "[types.b]\nlife = [5, 5]\ndeath = { type = \"a\", count = 0 }\n",
+            "a `death` count of 0",
+        ),
+        (
+            "[types.b]\nlife = [5, 5]\nstep = { type = \"a\", count = -1 }\n",
+            "a `step` count of -1",
         ),
         ("[types.b]\nsize = [1, 2, 3]\n", "`size` is [min, max]"),
         (
