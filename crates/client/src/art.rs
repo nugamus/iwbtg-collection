@@ -291,33 +291,11 @@ pub fn sync_room_art(
             spawn_background(&mut commands, bg, n, img.as_ref(), size, 0)
         })
         .collect();
-    spawn_tiles(
-        &mut commands,
-        &tiles,
-        &ladder,
-        size,
-        &files.0,
-        &mut images,
-        &mut cache,
-        &mut spawned,
-    );
-    shown.entities = spawned;
-    shown.art = art;
-}
-
-fn spawn_tiles(
-    commands: &mut Commands,
-    layers: &[TileLayer],
-    ladder: &Ladder,
-    room: Vec2,
-    files: &PackageFiles,
-    images: &mut Assets<Image>,
-    cache: &mut ArtImages,
-    spawned: &mut Vec<Entity>,
-) {
-    for (sprite, t) in tile_sprites(layers, ladder, room, files, images, cache) {
+    for (sprite, t) in tile_sprites(&tiles, &ladder, size, &files.0, &mut images, &mut cache) {
         spawned.push(commands.spawn((sprite, Anchor::TOP_LEFT, t)).id());
     }
+    shown.entities = spawned;
+    shown.art = art;
 }
 
 /// The draw order rungs of a room's tile layers.
