@@ -16,7 +16,8 @@ use super::ids::SpriteId;
 pub struct PartSystemDef {
     /// The file stem.
     pub name: String,
-    /// Types in file order. Step and death types in [`PartType`] are indexes into this list.
+    /// Types in name order (`part_type_create` order). Step and death types in [`PartType`] and
+    /// the emitters' and creates' types are indexes into this list.
     pub types: Vec<PartTypeDef>,
     /// Emitters in creation order.
     pub emitters: Vec<PartEmitterDef>,
@@ -69,8 +70,8 @@ pub struct PartLook {
 /// One emitter.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct PartEmitterDef {
-    /// `part_emitter_region` xmin, xmax, ymin, ymax (relative to the instance with the
-    /// built-in's `relative`).
+    /// `part_emitter_region` xmin, xmax, ymin, ymax in room coordinates (drawing only: the sim
+    /// draws points in unit coordinates, `Region::draw_point`).
     pub rect: [Real; 4],
     /// Shape and distribution.
     pub region: Region,
@@ -83,7 +84,7 @@ pub struct PartEmitterDef {
 /// One `part_particles_create`.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct PartCreateDef {
-    /// Where (relative to the instance with `relative`).
+    /// Where, in room coordinates (drawing only).
     pub at: [Real; 2],
     /// Local type index.
     pub ty: u32,

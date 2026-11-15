@@ -335,7 +335,7 @@ impl Particles {
     }
 
     /// Builds one `particles/<id>.toml` system, as the original's code does in one go: its
-    /// types (`part_type_create`, in file order), a new system, its emitters in order with their
+    /// types (`part_type_create`, in name order), a new system, its emitters in order with their
     /// streams, then each emitter's burst in emitter order, then the `part_particles_create`
     /// calls. Bursts and creates draw at once.
     pub fn build(&mut self, rng: &mut Rng, def: &PartSystemDef) -> Result<PartSystemId, SimError> {

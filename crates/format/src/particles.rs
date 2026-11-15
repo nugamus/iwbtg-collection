@@ -30,7 +30,7 @@ pub struct ParticleFile {
     /// `part_system_depth` (drawing only); default 0.
     #[serde(default)]
     pub depth: Option<Number>,
-    /// Particle types by name.
+    /// Particle types by name; created in name order.
     #[serde(default)]
     pub types: BTreeMap<String, TypeFile>,
     /// Emitters in creation order.
