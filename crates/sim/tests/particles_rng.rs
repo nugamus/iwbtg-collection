@@ -316,7 +316,7 @@ mod world {
     }
 
     /// A room request in Step ends the tick before End Step, so the update does not run on that
-    /// tick (OPEN, research#170); the next tick's does.
+    /// tick (Confirmed (recorder), CLONE_SPEC "Particle draw rules" item 9); the next tick's does.
     #[test]
     fn room_request_tick_skips_the_update() {
         let mut fx = fixture(true, true);
