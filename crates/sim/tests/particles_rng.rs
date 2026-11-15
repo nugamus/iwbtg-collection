@@ -716,3 +716,209 @@ mod particle_system {
         }
     }
 }
+
+/// `blood_emitter` mode `particles` (#766): with the switch on, Create builds the blood system
+/// (one type of 4 draws, one linear rectangle emitter streaming 15) and the tick streams it until
+/// the emitter goes; kaenbyou's NUM-PART-RNG-3 run k1 (research#170) replays bit for bit.
+mod blood_emitter {
+    use crate::wp1_support::*;
+
+    use iwbtg_sim::builtins::{self, BuiltinOutput};
+    use iwbtg_sim::def::{Builtin, KindDef, KindId, ParamValue};
+    use iwbtg_sim::events::EventKind;
+    use iwbtg_sim::input::{Action, InputFrame};
+    use iwbtg_sim::output::OutputEvent;
+    use iwbtg_sim::particles::{PartRange, PartType, Particles, Region, RegionDistr, RegionShape};
+    use iwbtg_sim::rng::Rng;
+    use iwbtg_sim::world::{InstId, SpawnInit};
+
+    /// kaenbyou num-part-rng-3-k1.csv: frame, seed, bloodEmitter count, systems, emitters and
+    /// live particles, copied from the research trace.
+    const K1: &str = include_str!("fixtures/kaenbyou_num_part_rng_3_k1.csv");
+
+    /// (frame, seed) rows of [`K1`].
+    fn k1() -> Vec<(u32, u32)> {
+        K1.lines()
+            .filter(|l| !l.starts_with('#') && !l.starts_with("frame"))
+            .map(|l| {
+                let f: Vec<&str> = l.split(',').collect();
+                let signed: i64 = f[1].parse().expect("seed");
+                (
+                    f[0].parse().expect("frame"),
+                    u32::try_from(signed.rem_euclid(1 << 32)).expect("fits"),
+                )
+            })
+            .collect()
+    }
+
+    fn fixture(on: bool) -> (Fx, KindId) {
+        let mut b = builder();
+        let mut k = KindDef::new("blood_emitter", Builtin::BloodEmitter);
+        k.params
+            .0
+            .insert("mode".into(), ParamValue::Str("particles".into()));
+        k.params
+            .0
+            .insert("destroyed_by_restart".into(), ParamValue::Bool(true));
+        k.events = builtins::event_set(Builtin::BloodEmitter, &k);
+        let kind = b.kind(k);
+        let mut fx = Fx::new(b.build().unwrap());
+        fx.rules.num.particles_draw_rng = on;
+        (fx, kind)
+    }
+
+    fn spawn(fx: &mut Fx, kind: KindId) -> InstId {
+        fx.ctx()
+            .spawn(kind, r(49.0), r(519.1), SpawnInit::default())
+            .expect("spawn")
+    }
+
+    /// The model of one emitter: the blood type's draws, a linear rectangle, a stream of 15.
+    fn model() -> Particles {
+        let mut p = Particles::default();
+        let ty = p.add_type(PartType {
+            size: PartRange::new(0.0, 1.0),
+            speed: PartRange::new(1.0, 5.0),
+            direction: PartRange::new(0.0, 360.0),
+            life: PartRange::fixed(50.0),
+            ..PartType::default()
+        });
+        assert_eq!(p.types[0].draws(), 4);
+        let s = p.add_system();
+        let e = p
+            .add_emitter(
+                s,
+                Region {
+                    shape: RegionShape::Rectangle,
+                    distr: RegionDistr::Linear,
+                },
+            )
+            .unwrap();
+        p.stream(e, ty, 15).unwrap();
+        p
+    }
+
+    /// k1: the bloodEmitter made before frame 45's events streams 15 particles of 6 draws in each
+    /// update from frame 45 to 50; R on frame 51 destroys it, and the seed stays put after that.
+    #[test]
+    fn k1_seed_column_replays_bit_for_bit() {
+        let rows = k1();
+        let (mut fx, kind) = fixture(true);
+        fx.w.rng = Rng::new(0);
+        let mut frame = 44;
+        for (f, seed) in &rows {
+            if *f <= 44 {
+                assert_eq!(*seed, 0, "frame {f}: nothing draws before the emitter");
+            }
+        }
+        spawn(&mut fx, kind);
+        assert_eq!(fx.w.rng, Rng::new(0), "Create draws nothing");
+        for (f, seed) in rows.iter().filter(|(f, _)| *f >= 45) {
+            frame += 1;
+            assert_eq!(*f, frame);
+            let input = if *f == 51 {
+                let bit = Action::Restart.bit();
+                InputFrame {
+                    held: bit,
+                    pressed: bit,
+                    released: 0,
+                }
+            } else {
+                InputFrame::EMPTY
+            };
+            fx.tick(input);
+            assert_eq!(fx.w.rng.seed, *seed, "frame {f}");
+        }
+        assert_eq!(frame, 90);
+        assert!(
+            fx.w.particles.systems.iter().all(|s| s.destroyed),
+            "R destroyed the system"
+        );
+    }
+
+    /// The stream runs in every update until alarm 0 (20) destroys the emitter and its system;
+    /// then nothing draws. Made before a tick's events (as k1's probe), alarm 0 fires in the 20th
+    /// tick's alarm phase, so 19 updates stream; a death in a collision or key press event (after
+    /// the alarm phase) streams in its own tick's update too, so 20 ("removed after 20 ticks",
+    /// kid/B.md Death).
+    #[test]
+    fn streams_until_alarm_zero_then_stops() {
+        let (mut fx, kind) = fixture(true);
+        let id = spawn(&mut fx, kind);
+        let mut p = model();
+        let mut rng = Rng::new(1);
+        assert_eq!(fx.w.particles, p);
+        for _ in 0..19 {
+            p.update(&mut rng).unwrap();
+        }
+        p.destroy_system(iwbtg_sim::particles::PartSystemId(0)).unwrap();
+        fx.idle(30);
+        assert!(!fx.w.exists(id));
+        assert_eq!(fx.w.rng, rng);
+        assert_eq!(fx.w.particles, p);
+    }
+
+    /// A second emitter shares the type and adds a system after the first.
+    #[test]
+    fn a_second_emitter_shares_the_type() {
+        let (mut fx, kind) = fixture(true);
+        spawn(&mut fx, kind);
+        spawn(&mut fx, kind);
+        assert_eq!(fx.w.particles.types.len(), 1);
+        assert_eq!(fx.w.particles.systems.len(), 2);
+    }
+
+    /// Room End destroys the system, without drawing.
+    #[test]
+    fn room_end_destroys_the_system() {
+        let (mut fx, kind) = fixture(true);
+        let id = spawn(&mut fx, kind);
+        let mut ctx = fx.ctx();
+        builtins::on_event(&mut ctx, id, &EventKind::RoomEnd).unwrap();
+        assert!(fx.w.particles.systems[0].destroyed);
+        assert_eq!(fx.w.rng, Rng::new(1));
+        fx.idle(3);
+        assert_eq!(fx.w.rng, Rng::new(1));
+    }
+
+    /// With the switch off nothing is built and nothing draws; the client still gets its
+    /// particles each Step.
+    #[test]
+    fn switch_off_builds_nothing() {
+        let (mut fx, kind) = fixture(false);
+        spawn(&mut fx, kind);
+        fx.idle(30);
+        assert_eq!(fx.w.particles, Particles::default());
+        assert_eq!(fx.w.rng, Rng::new(1));
+    }
+
+    /// The Step sends `DeathParticles` with the switch on too.
+    #[test]
+    fn step_still_sends_the_client_its_particles() {
+        let (mut fx, kind) = fixture(true);
+        let id = spawn(&mut fx, kind);
+        let mut ctx = fx.ctx();
+        builtins::on_event(&mut ctx, id, &EventKind::Step).unwrap();
+        assert!(
+            fx.w.output
+                .contains(&OutputEvent::Builtin(BuiltinOutput::DeathParticles {
+                    x: r(49.0),
+                    y: r(519.1),
+                    count: 15,
+                    flipped: false,
+                }))
+        );
+        assert_eq!(fx.w.rng, Rng::new(1), "the Step draws nothing");
+    }
+
+    /// A stream of 0 is not traced, so the loader refuses `per_step = 0` in particles mode.
+    #[test]
+    fn per_step_zero_is_refused() {
+        let mut k = KindDef::new("e", Builtin::BloodEmitter);
+        k.params
+            .0
+            .insert("mode".into(), ParamValue::Str("particles".into()));
+        k.params.0.insert("per_step".into(), ParamValue::Real(r(0.0)));
+        assert!(builtins::init_state(Builtin::BloodEmitter, &k.params).is_err());
+    }
+}
