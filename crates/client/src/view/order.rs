@@ -54,7 +54,10 @@ impl Ladder {
     /// depth, so a tile layer at the instance's own depth draws over it (OpenGMK's picture,
     /// CLONE_SPEC TR-ROOM-13, partial).
     fn gap_of(&self, depth: f64) -> usize {
-        self.depths.iter().filter(|&&d| d.total_cmp(&depth).is_gt()).count()
+        self.depths
+            .iter()
+            .filter(|&&d| d.total_cmp(&depth).is_gt())
+            .count()
     }
 
     /// The z of each instance, given in draw order (depth descending, then creation) as its

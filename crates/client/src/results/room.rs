@@ -101,7 +101,13 @@ impl Pictures {
             ) else {
                 continue;
             };
-            shown.push((placed.depth.unwrap_or(kind.depth).get(), placed, def, handle, strip));
+            shown.push((
+                placed.depth.unwrap_or(kind.depth).get(),
+                placed,
+                def,
+                handle,
+                strip,
+            ));
         }
         // Stable: equal depths keep placement order.
         shown.sort_by(|a, b| b.0.total_cmp(&a.0));
