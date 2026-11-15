@@ -21,18 +21,13 @@ use iwbtg_format::files::PackageFiles;
 use iwbtg_sim::def::RoomId;
 
 use crate::package::decode_png;
+use crate::view::order::Ladder;
 use crate::view::{Game, RoomSize};
 use crate::visual::PlainBackdrop;
 
-/// Where tiles sit in depth: GM draws a deeper layer first. Clamped inside the camera's range;
-/// the backgrounds are behind every layer and the foregrounds in front of all of them.
-fn layer_z(depth: f64) -> f32 {
-    (-depth / 1000.0).clamp(-990.0, 990.0) as f32
-}
-
 const COLOR_Z: f32 = -996.0;
 const BACKGROUND_Z: f32 = -995.0;
-/// In front of every instance and tile, behind the overlay (z 1000).
+/// In front of every instance and tile (`view::order::WORLD_Z`), behind the overlay (z 1000).
 const FOREGROUND_Z: f32 = 995.0;
 
 #[derive(Resource)]
@@ -45,12 +40,15 @@ impl Plugin for ArtPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(ArtFiles(self.0.clone()))
             .init_resource::<ArtImages>()
+            .init_resource::<Ladder>()
             .init_resource::<ShownArt>()
             .add_systems(
                 Update,
                 (sync_room_art, scroll_backgrounds)
                     .chain()
-                    .after(crate::view::follow_view),
+                    .after(crate::view::follow_view)
+                    // A new room's tile layers are in the ladder before its instances are placed.
+                    .before(crate::view::DrawInstances),
             );
     }
 }
@@ -238,6 +236,7 @@ pub fn sync_room_art(
     mut images: ResMut<Assets<Image>>,
     mut cache: ResMut<ArtImages>,
     mut shown: ResMut<ShownArt>,
+    mut ladder: ResMut<Ladder>,
     plain: Option<Res<PlainBackdrop>>,
 ) {
     let plain = plain.as_deref();
@@ -256,12 +255,14 @@ pub fn sync_room_art(
         commands.entity(e).despawn();
     }
     shown.art = RoomArt::default();
+    *ladder = Ladder::default();
     let Some(def) = game.sim.def().room(room) else {
         return;
     };
     // The loader checked both files; one that fails here draws nothing.
     let art = load_room_art(&files.0, &def.name).unwrap_or_default();
     let tiles = load_tiles(&files.0, &def.name).unwrap_or_default();
+    *ladder = ladder_of(&tiles);
     let size = room_size.0;
     let mut spawned = Vec::new();
     let color = match plain {
@@ -290,36 +291,22 @@ pub fn sync_room_art(
             spawn_background(&mut commands, bg, n, img.as_ref(), size, 0)
         })
         .collect();
-    spawn_tiles(
-        &mut commands,
-        &tiles,
-        size,
-        &files.0,
-        &mut images,
-        &mut cache,
-        &mut spawned,
-    );
+    for (sprite, t) in tile_sprites(&tiles, &ladder, size, &files.0, &mut images, &mut cache) {
+        spawned.push(commands.spawn((sprite, Anchor::TOP_LEFT, t)).id());
+    }
     shown.entities = spawned;
     shown.art = art;
 }
 
-fn spawn_tiles(
-    commands: &mut Commands,
-    layers: &[TileLayer],
-    room: Vec2,
-    files: &PackageFiles,
-    images: &mut Assets<Image>,
-    cache: &mut ArtImages,
-    spawned: &mut Vec<Entity>,
-) {
-    for (sprite, t) in tile_sprites(layers, room, files, images, cache) {
-        spawned.push(commands.spawn((sprite, Anchor::TOP_LEFT, t)).id());
-    }
+/// The draw order rungs of a room's tile layers.
+pub(crate) fn ladder_of(layers: &[TileLayer]) -> Ladder {
+    Ladder::new(layers.iter().map(|l| l.depth))
 }
 
-/// Each tile as a sprite anchored at its top-left corner.
+/// Each tile as a sprite anchored at its top-left corner, at its layer's z in `ladder`.
 fn tile_sprites(
     layers: &[TileLayer],
+    ladder: &Ladder,
     room: Vec2,
     files: &PackageFiles,
     images: &mut Assets<Image>,
@@ -330,8 +317,8 @@ fn tile_sprites(
         let Some((handle, _)) = image(cache, files, images, &layer.tileset) else {
             continue;
         };
-        // Later layers of the same depth draw on top.
-        let z = layer_z(layer.depth) + n as f32 * 1e-4;
+        // Later layers of the same depth draw on top (the ladder keeps file order).
+        let z = ladder.tile_z(n);
         for tile in &layer.tiles {
             let (sx, sy) = (tile.src.0 as f32, tile.src.1 as f32);
             let (w, h) = (tile.size.0 as f32, tile.size.1 as f32);
@@ -348,14 +335,15 @@ fn tile_sprites(
 
 /// A still of room `name`'s art as it starts (the colour, the background layers at tick 0, the
 /// tiles), for a picture of the room off screen (the results' heatmap, #654). Every sprite is
-/// anchored at its top-left corner, in the same room-centred space the game draws in.
+/// anchored at its top-left corner, in the same room-centred space the game draws in. Also the
+/// tile layers' ladder, to place the room's instances among them.
 pub(crate) fn still(
     files: &PackageFiles,
     images: &mut Assets<Image>,
     cache: &mut ArtImages,
     name: &str,
     room: Vec2,
-) -> Vec<(Sprite, Transform)> {
+) -> (Vec<(Sprite, Transform)>, Ladder) {
     let art = load_room_art(files, name).unwrap_or_default();
     let tiles = load_tiles(files, name).unwrap_or_default();
     let mut out = Vec::new();
@@ -372,8 +360,9 @@ pub(crate) fn still(
             out.push((sprite, t));
         }
     }
-    out.extend(tile_sprites(&tiles, room, files, images, cache));
-    out
+    let ladder = ladder_of(&tiles);
+    out.extend(tile_sprites(&tiles, &ladder, room, files, images, cache));
+    (out, ladder)
 }
 
 /// Moves the scrolling background layers once per tick: each one is rebuilt where it is now.
@@ -430,10 +419,12 @@ mod tests {
 
     #[test]
     fn deeper_layers_are_farther_back_and_never_past_the_backgrounds() {
-        assert!(layer_z(1_000_000.0) < layer_z(0.0));
-        assert!(layer_z(-50.0) > layer_z(0.0));
-        assert!(layer_z(1e12) > BACKGROUND_Z + 8e-3);
-        assert!(layer_z(-1e12) < FOREGROUND_Z);
+        let ladder = Ladder::new([0.0, 1_000_000.0, -50.0, 1e12, -1e12]);
+        assert!(ladder.tile_z(1) < ladder.tile_z(0));
+        assert!(ladder.tile_z(2) > ladder.tile_z(0));
+        // Eight background layers sit at BACKGROUND_Z + n * 1e-3.
+        assert!(ladder.tile_z(3) > BACKGROUND_Z + 8e-3);
+        assert!(ladder.tile_z(4) < FOREGROUND_Z);
     }
 
     #[test]

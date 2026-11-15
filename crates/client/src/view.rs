@@ -13,6 +13,7 @@ use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::world::{InstId, SimStatus};
 
 mod hud;
+pub(crate) mod order;
 
 use crate::bindings::PadInput;
 use crate::input::{Collector, PadReader, key_code};
@@ -82,6 +83,10 @@ impl ViewRect {
 /// gate them with a run condition, as Sudden Death does when the run is over (mods.rs).
 #[derive(SystemSet, Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub(crate) struct SimTick;
+
+/// The system that places the instances' sprites. The room art fills `order::Ladder` before it.
+#[derive(SystemSet, Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub(crate) struct DrawInstances;
 
 /// How fast the fixed clock runs against the rate the game asks for: 1 normally, less under Slow
 /// motion (practice.rs). It changes only how often a tick runs, never what a tick computes, so
@@ -332,7 +337,9 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
         Update,
         (
             follow_view,
-            (set_alpha, sync_instances).chain().after(follow_view),
+            (set_alpha, sync_instances.in_set(DrawInstances))
+                .chain()
+                .after(follow_view),
             hud::show_sign,
             hud::show_countdown,
         ),
@@ -612,7 +619,12 @@ fn limit_frames(cap: Res<Cap>, mut last: Local<Option<Instant>>) {
     *last = Some(Instant::now());
 }
 
-/// Makes the entities match the sim's instances: spawn, move, frame, remove.
+/// Makes the entities match the sim's instances: spawn, move, frame, remove. Each one's z is its
+/// place in the sim's draw order among the room's tile layers (`order`, #789).
+#[allow(
+    clippy::too_many_arguments,
+    reason = "a Bevy system: each is one resource it reads"
+)]
 fn sync_instances(
     mut commands: Commands,
     game: NonSend<Game>,
@@ -620,17 +632,19 @@ fn sync_instances(
     room: Res<RoomSize>,
     mut drawn: ResMut<Drawn>,
     previous: Res<Previous>,
+    ladder: Option<Res<order::Ladder>>,
     mut query: Query<(&mut Sprite, &mut Transform)>,
 ) {
     let Some(textures) = textures else { return };
     let def = game.sim.def();
+    let world = game.sim.world();
     let alpha = previous.alpha;
-    let same_room = previous.room == Some(game.sim.world().room);
+    let same_room = previous.room == Some(world.room);
     let mut alive = BTreeMap::new();
-    for inst in game.sim.world().instances() {
-        if !inst.alive || !inst.visible {
-            continue;
-        }
+    let none = order::Ladder::default();
+    let ladder = ladder.as_deref().unwrap_or(&none);
+    for (id, z) in order::instance_z(world, ladder, |i| i.img.sprite().is_some()) {
+        let Some(inst) = world.get(id) else { continue };
         let Some(sprite_id) = inst.img.sprite() else {
             continue;
         };
@@ -640,8 +654,7 @@ fn sync_instances(
         let Some(Some((handle, strip))) = textures.0.get(sprite_id.0 as usize) else {
             continue;
         };
-        let frames = f64::from(sprite_def.frames.max(1));
-        let frame = inst.img.index().get().floor().rem_euclid(frames) as u32;
+        let frame = u32::from(inst.img.subimage(sprite_def.frames).unwrap_or(0));
         let cur = (inst.m.x().get(), inst.m.y().get());
         let (px, py) = if previous.on {
             blend(
@@ -659,7 +672,7 @@ fn sync_instances(
             Vec2::new(px as f32, py as f32),
             Vec2::new(inst.img.xscale().get() as f32, inst.img.yscale().get() as f32),
             inst.img.angle().get() as f32,
-            -(inst.depth.get() as f32) / 1000.0 + (inst.id.0 % 1000) as f32 * 1e-6,
+            z,
             room.0,
         );
         let color = Color::srgba(1.0, 1.0, 1.0, inst.img.alpha().get() as f32);
