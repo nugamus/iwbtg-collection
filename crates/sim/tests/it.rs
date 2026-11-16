@@ -12,6 +12,8 @@ mod wp1_support;
 #[path = "wp3_support/mod.rs"]
 mod wp3_support;
 
+#[path = "bounce.rs"]
+mod bounce;
 #[path = "death_sound.rs"]
 mod death_sound;
 #[path = "dll_sound_length.rs"]

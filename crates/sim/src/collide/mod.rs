@@ -5,6 +5,7 @@
 //! by `World::first_of` order. WP0 declares; WP3 owns.
 
 pub mod bbox;
+pub mod bounce;
 pub mod contact;
 pub mod grid;
 pub mod overlap;
@@ -13,7 +14,8 @@ pub mod resolve;
 pub mod xform;
 
 pub use bbox::{PlacedMask, instance_box, place_at, place_origin, reported_box};
-pub use contact::{move_bounce_solid, move_contact_solid, move_outside_solid};
+pub use bounce::{move_bounce_all, move_bounce_solid};
+pub use contact::{move_contact_solid, move_outside_solid};
 pub use query::{
     Target, collision_line, collision_point, collision_rectangle, distance_to_object, instance_place,
     instance_position, place_empty, place_free, place_meeting,

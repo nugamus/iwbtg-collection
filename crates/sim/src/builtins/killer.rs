@@ -4,14 +4,17 @@
 //! A generic killer: class `killer` (set by the loader) with its own sprite and mask, so the
 //! kid's "Collision with killer" kills; no kill code here. Create applies the instance settings
 //! (the cherry: `image_speed` 1/15, a move, a scale) and Outside Room destroys when
-//! `destroy_outside_room` (the cherry, default off for a plain killer). The bounce rule of the
-//! bouncing cherries (U-MECH-5) is tier 3 and not here. `kill_outside_view` (kaenbyou borderKiller)
-//! drops the `killer` class (`def::class::param_classes`) and kills in its own kid collision.
+//! `destroy_outside_room` (the cherry, default off for a plain killer). `bounce` (ANI boundwhite,
+//! #835) runs the Bounce action, not precise, against solids in Step
+//! (`collide::move_bounce_solid`); it is read from the kind, as the Step event is the kind's.
+//! `kill_outside_view` (kaenbyou borderKiller) drops the `killer` class
+//! (`def::class::param_classes`) and kills in its own kid collision.
 
 use serde::{Deserialize, Serialize};
 
 use super::warp::KIDS;
 use super::{BuiltinState, ParamError, ParamSpec, ParamType, param_bool, param_real, state_of};
+use crate::collide::move_bounce_solid;
 use crate::def::{KindDef, ParamValue, Params};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
@@ -60,6 +63,11 @@ const SPECS: &[ParamSpec] = &[
         ty: ParamType::Bool,
         required: false,
     },
+    ParamSpec {
+        name: "bounce",
+        ty: ParamType::Bool,
+        required: false,
+    },
 ];
 
 /// A killer's per-instance settings.
@@ -84,10 +92,11 @@ pub fn param_specs() -> &'static [ParamSpec] {
     SPECS
 }
 
-/// What a kind with this base handles: Outside Room when `destroy_outside_room`, and the kid
-/// touching it when `kill_outside_view`.
+/// What a kind with this base handles: Step when `bounce`, Outside Room when
+/// `destroy_outside_room`, and the kid touching it when `kill_outside_view`.
 pub fn event_set(kind: &KindDef) -> EventSet {
     let mut set = EventSet {
+        step: bounces(kind),
         outside_room: matches!(
             kind.params.0.get("destroy_outside_room"),
             Some(ParamValue::Bool(true))
@@ -100,6 +109,11 @@ pub fn event_set(kind: &KindDef) -> EventSet {
     set
 }
 
+/// Whether the kind's `bounce` param is set.
+fn bounces(kind: &KindDef) -> bool {
+    matches!(kind.params.0.get("bounce"), Some(ParamValue::Bool(true)))
+}
+
 fn kill_outside_view(v: Option<&ParamValue>) -> bool {
     matches!(v, Some(ParamValue::Bool(true)))
 }
@@ -108,6 +122,7 @@ fn kill_outside_view(v: Option<&ParamValue>) -> bool {
 pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
     param_bool(params, "destroy_outside_room")?;
     param_bool(params, "kill_outside_view")?;
+    param_bool(params, "bounce")?;
     Ok(BuiltinState::Killer(KillerState {
         image_speed: param_real(params, "image_speed")?,
         hspeed: param_real(params, "hspeed")?.unwrap_or(Real::ZERO),
@@ -149,6 +164,15 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
             // gm-compare: ok (a speed param of 0 means not set, not a GML test)
             if s.vspeed.get().abs() > 0.0 {
                 inst.m.set_vspeed(s.vspeed)?;
+            }
+            Ok(Flow::Continue)
+        }
+        // `bounce`: the Bounce action (not precise, solid objects) in Step; the tick's motion
+        // then moves by the new speed (CLONE_SPEC, GM8 runner motion, "Bounce").
+        EventKind::Step => {
+            let kind = ctx.w.get(me).and_then(|i| ctx.def.kind(i.kind));
+            if kind.is_some_and(bounces) {
+                move_bounce_solid(ctx, me, false)?;
             }
             Ok(Flow::Continue)
         }

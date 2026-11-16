@@ -410,8 +410,9 @@ pub fn event_set(b: Builtin, kind: &KindDef) -> EventSet {
 pub fn event_set_params(b: Builtin) -> &'static [&'static str] {
     match b {
         Builtin::World => &["mute", "clear_switches_on_room_end"],
+        Builtin::Block => &["proximity_frame"],
         Builtin::Spike => &["destroys_bullets"],
-        Builtin::Killer => &["destroy_outside_room", "kill_outside_view"],
+        Builtin::Killer => &["bounce", "destroy_outside_room", "kill_outside_view"],
         Builtin::KidBullet => &["block_check"],
         Builtin::Blood => &["sticks"],
         Builtin::BloodEmitter => &["mode", "destroyed_by_restart"],

@@ -1,4 +1,5 @@
-//! Contact moves (docs/plans/sim-core.md 3.4, C10, C11, C14). WP0 declares; WP3 owns.
+//! Contact moves (docs/plans/sim-core.md 3.4, C10, C11; the bounce, C14, is `bounce.rs`).
+//! WP0 declares; WP3 owns.
 //!
 //! Both moves are computed on positions only ([`contact_steps`], [`outside_steps`]), with a
 //! closure that answers "does `me` placed here overlap a solid", and write `x` and `y` once at
@@ -56,13 +57,6 @@ pub fn move_outside_solid(ctx: &mut Ctx, me: InstId, dir: Real, maxdist: Real) -
         (start, outside_steps(start, dir, limit, hits, reach)?)
     };
     set_position(ctx, me, start, end)
-}
-
-/// GML `move_bounce_solid` (C14, UNKNOWN U-MECH-5): `Unsupported` until specified. Tier 3.
-pub fn move_bounce_solid(_ctx: &mut Ctx, _me: InstId, precise: bool) -> Result<(), SimError> {
-    Err(SimError::unsupported(format!(
-        "move_bounce_solid (precise {precise}): the algorithm is UNKNOWN (C14, U-MECH-5, TR-MECH-04)"
-    )))
 }
 
 /// C11: how many unit steps `move_contact_solid` may take for `maxdist`; `None` for no limit.

@@ -182,6 +182,10 @@ fn min(_: int, _: int) -> float;
 
 fn mod(_: ?, _: ?) -> float;
 
+fn move_bounce_all(_: Instance, _: bool) -> ();
+
+fn move_bounce_solid(_: Instance, _: bool) -> ();
+
 fn play_music(_: string) -> ();
 
 fn play_sound(_: string) -> ();
