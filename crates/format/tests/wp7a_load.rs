@@ -1090,6 +1090,42 @@ destroy_outside_room = true
     assert_eq!(rank("killer[destroy_outside_room=true]"), rank("killer"));
 }
 
+/// #837: a placed warp's gate lists load as lists (one number is a list of one) and give it a
+/// Step through a derived kind; the move params load too.
+#[test]
+fn placed_warp_gate_lists_load_and_add_step() {
+    let gated = concat!(
+        "  { kind = \"warp\", x = 700, y = 512, room_to = \"title\", gate_bosses = [1, 2], gate_closed = \"destroy\" },
+",
+        "  { kind = \"warp\", x = 640, y = 512, room_to = \"title\", gate_items = 3 },
+",
+        "  { kind = \"warp\", x = 580, y = 512, room_to = \"title\", warp_x = 40, zero_axis = \"keep\", screen_shift = 1, clear_rising = true },
+",
+    );
+    let files = package(|f| {
+        let stage = STAGE1.replace(
+            "  { kind = \"warp\", x = 768, y = 512, room_to = \"title\" },
+",
+            &format!("  {{ kind = \"warp\", x = 768, y = 512, room_to = \"title\" }},
+{gated}"),
+        );
+        set(f, "rooms/stage1.toml", stage.into_bytes());
+    });
+    let (def, _) = load_ok(&files, STRICT);
+    let warps: Vec<_> = def
+        .kinds
+        .iter()
+        .filter(|k| k.base == iwbtg_sim::def::Builtin::Warp)
+        .collect();
+    let stepping: Vec<_> = warps.iter().filter(|k| k.events.step).collect();
+    assert_eq!(stepping.len(), 2, "one derived kind per gate: {warps:#?}");
+    assert!(!kind_named(&def, "warp").1.events.step);
+    assert!(stepping.iter().any(|k| matches!(
+        k.params.0.get("gate_bosses"),
+        Some(iwbtg_sim::def::ParamValue::List(l)) if l.len() == 2
+    )));
+}
+
 #[test]
 fn wp6b3_params_load_on_kinds_and_per_instance() {
     let files = tier2_package(

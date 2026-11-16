@@ -357,11 +357,11 @@ fn gate_step(ctx: &mut Ctx, me: InstId, g: &WarpGate) -> Flow {
     let mech = &ctx.w.engine.mech;
     let set = (g.bosses & mech.bosses).count_ones() + (g.items & mech.items).count_ones();
     let open = set >= u32::from(g.need);
-    if g.destroy {
-        return if open { Flow::Continue } else { ctx.destroy(me) };
-    }
     if let Some(BuiltinState::Warp(WarpState { gate: Some(st), .. })) = super::state_mut(ctx, me) {
         st.open = open;
+    }
+    if g.destroy {
+        return if open { Flow::Continue } else { ctx.destroy(me) };
     }
     if let Some(inst) = ctx.w.get_mut(me) {
         inst.visible = open;
