@@ -349,21 +349,36 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// Records every run. `keep: false` (a `--screenshot` check) records nothing.
+/// Records every run, with the loaded package's gameplay hash. `keep: false` (a `--screenshot`
+/// check) records nothing.
 pub struct ReplaysPlugin {
     pub keep: bool,
-    pub gameplay_hash: [u8; 32],
     pub mods: ModSet,
 }
 
 impl Plugin for ReplaysPlugin {
     fn build(&self, app: &mut App) {
-        let store = if self.keep { Store::data() } else { None };
-        app.insert_resource(Recorder::new(store, self.gameplay_hash, self.mods))
+        let (keep, mods) = (self.keep, self.mods);
+        crate::shell::run_resource(app, move |w| {
+            let store = if keep { Store::data() } else { None };
+            let hash = w.resource::<crate::shell::LoadedPackage>().pkg.gameplay_hash;
+            Recorder::new(store, hash, mods)
+        });
+        app
             // Bevy's own exit on the last window closing runs in `Last` too; the app stops after
             // that frame, so this must run after it in the same frame.
-            .add_systems(Last, finish_on_exit.after(bevy::window::ExitSystems))
-            .add_systems(FixedUpdate, sync_pauses.before(SimTick));
+            .add_systems(
+                Last,
+                finish_on_exit
+                    .after(bevy::window::ExitSystems)
+                    .in_set(crate::shell::InRun),
+            )
+            .add_systems(FixedUpdate, sync_pauses.before(SimTick))
+            // Leaving the run (pause Quit, `shell::leave`) ends it as closing the window does.
+            .add_systems(
+                OnExit(crate::shell::AppScreen::Run),
+                reset.in_set(crate::shell::InRun),
+            );
     }
 }
 

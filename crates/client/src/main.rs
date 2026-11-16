@@ -1,4 +1,6 @@
 //! `iwbtg-client <package>`: opens a game package in a window (docs/architecture/client/view.md).
+//! `iwbtg-client --select <folder>`: a placeholder list of the packages in a folder; quitting a
+//! game goes back to it (docs/architecture/client/shell.md).
 //! `iwbtg-client --ui-gallery`: the UI kit's component gallery (docs/architecture/client/ui.md).
 //!
 //! The sim ticks at the game's rate on a fixed clock, whatever the frame rate; every visible
@@ -32,6 +34,7 @@ mod retry;
 mod savefile;
 mod screen;
 mod settings;
+mod shell;
 mod skip;
 mod stats;
 mod storage;
@@ -49,6 +52,8 @@ use clap::Parser;
 struct Args {
     #[command(flatten)]
     package: package::PackageArgs,
+    #[command(flatten)]
+    shell: shell::ShellArgs,
     #[command(flatten)]
     view: view::ViewArgs,
     #[command(flatten)]
@@ -129,29 +134,25 @@ fn main() -> ExitCode {
         card::preview::run(variant, args.view.screenshot, args.screen.window, ratio);
         return ExitCode::SUCCESS;
     }
-    // Clap requires the package unless `--ui-gallery`, `--bind` or `--show-bindings` is given;
-    // with only the bindings flags there is nothing to play.
-    let Some(dir) = args.package.package else {
+    // Clap requires the package unless `--select`, `--ui-gallery`, `--bind` or
+    // `--show-bindings` is given; with only the bindings flags there is nothing to play.
+    let first = args.package.package;
+    let library = args.shell.select;
+    if first.is_none() && library.is_none() {
         return ExitCode::SUCCESS;
-    };
+    }
     // A ranked run always starts a new game and never touches the save file.
     let mut save = args.save;
     save.no_save_file |= args.view.ranked;
     savefile::configure(&save);
-    let pkg = match package::open(&dir, args.package.trace_mode) {
-        Ok(pkg) => pkg,
-        Err(e) => {
-            eprintln!("{}: {e}", dir.display());
-            return ExitCode::FAILURE;
-        }
-    };
-    let audio = args.audio;
+    let audio = audio::AudioPlugin::new(&args.audio);
     let run_mods = args.mods.mods;
     let slow_speed = args.practice.slow_speed;
     let retry = args.retry;
     let pause = args.pause;
     let results = args.results;
     let overlay = args.overlay;
+    let trace_mode = args.package.trace_mode;
     let loading = loading::LoadingPlugin {
         args: args.loading,
         // A `--screenshot` check of another screen sees the game at once.
@@ -159,16 +160,23 @@ fn main() -> ExitCode {
     };
     // A `--screenshot` check keeps no stats, as it keeps no settings.
     let keep_stats = args.view.screenshot.is_none();
-    let gameplay_hash = pkg.gameplay_hash;
     eprintln!("{}", mods::describe(run_mods, args.view.ranked));
-    let result = view::run(pkg, args.view, |app, pkg| {
+    // The package on the command line opens before the window does: a broken one exits with its
+    // errors, as before game select existed.
+    let shell = shell::ShellPlugin {
+        library: library.clone(),
+        trace_mode,
+    };
+    let result = view::run(first.as_deref(), args.view, trace_mode, |app| {
         app.add_plugins((
+            shell,
+            shell::select::SelectPlugin(library),
             screen::ScreenPlugin,
             hud::HudPlugin,
             bindings::BindingsPlugin(bindings),
             savefile::SavePlugin,
-            art::ArtPlugin(pkg.files.clone()),
-            audio::AudioPlugin::new(&audio, &pkg.files),
+            art::ArtPlugin,
+            audio,
             (mods::ModsPlugin(run_mods), visual::VisualPlugin(run_mods)),
             practice::PracticePlugin {
                 mods: run_mods,
@@ -176,29 +184,24 @@ fn main() -> ExitCode {
             },
             retry::RetryPlugin(retry),
             skip::SkipPlugin,
-            pause::PausePlugin {
-                args: pause,
-                files: pkg.files.clone(),
-            },
+            pause::PausePlugin { args: pause },
             results::ResultsPlugin(results),
             stats::StatsPlugin {
                 keep: keep_stats,
                 mods: run_mods,
             },
+        ));
+        // Bevy takes at most 15 plugins in one tuple.
+        app.add_plugins((
             // A `--screenshot` check keeps no replays either.
             replays::ReplaysPlugin {
                 keep: keep_stats,
-                gameplay_hash,
                 mods: run_mods,
             },
-            import::ImportPlugin {
-                opened: dir,
-                id: pkg.def.id.clone(),
-                keep: keep_stats,
-            },
+            import::ImportPlugin { keep: keep_stats },
+            overlay::OverlayPlugin(overlay),
+            loading,
         ));
-        // Bevy takes at most 15 plugins in one tuple.
-        app.add_plugins((overlay::OverlayPlugin(overlay), loading));
     });
     match result {
         Ok(()) => ExitCode::SUCCESS,

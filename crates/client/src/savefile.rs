@@ -90,6 +90,8 @@ pub fn start_point(def: &GameDef) -> StartPoint {
 struct Written {
     slot: Option<SaveSlot>,
     store: Option<Store>,
+    /// The run's first frame has been seen.
+    started: bool,
 }
 
 impl Default for Written {
@@ -97,16 +99,17 @@ impl Default for Written {
         Written {
             slot: None,
             store: Store::data(),
+            started: false,
         }
     }
 }
 
 /// Writes the file when the sim's slot changes; a deleted slot (a new game) deletes the file.
-fn persist(game: NonSend<Game>, mut written: ResMut<Written>, mut started: Local<bool>) {
+fn persist(game: NonSend<Game>, mut written: ResMut<Written>) {
     let slot = &game.sim.world().save;
-    if !*started {
+    if !written.started {
         // The slot the game started with is already on disk (or was never saved).
-        *started = true;
+        written.started = true;
         written.slot.clone_from(slot);
         return;
     }
@@ -132,7 +135,9 @@ pub struct SavePlugin;
 impl Plugin for SavePlugin {
     fn build(&self, app: &mut App) {
         if enabled() {
-            app.init_resource::<Written>().add_systems(Update, persist);
+            // Each run starts from the slot its game opened with.
+            crate::shell::run_resource(app, |_| Written::default());
+            app.add_systems(Update, persist.in_set(crate::shell::InRun));
         }
     }
 }

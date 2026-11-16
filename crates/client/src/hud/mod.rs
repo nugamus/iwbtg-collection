@@ -18,6 +18,7 @@ use bevy::prelude::*;
 use bevy::ui::IsDefaultUiCamera;
 
 use crate::settings::{self, HudShow};
+use crate::shell::{self, AppScreen, InRun, RUN_ONLY};
 use crate::ui::UiKitPlugin;
 use crate::ui::backdrop::BackdropCamera;
 use crate::ui::{notice, tokens};
@@ -178,7 +179,7 @@ impl Plugin for HudPlugin {
         .init_resource::<run_info::RunInfo>()
         .init_resource::<run_info::StageDeaths>()
         .init_resource::<leaderboard::Live>()
-        .add_systems(Startup, spawn)
+        .add_systems(OnEnter(AppScreen::Run), spawn.in_set(InRun))
         .add_systems(
             Update,
             (
@@ -190,8 +191,16 @@ impl Plugin for HudPlugin {
                 run_info::show,
                 leaderboard::animate,
             )
-                .chain(),
+                .chain()
+                .in_set(InRun),
         );
+        // Each run starts with the run's own state, not the last run's.
+        shell::reset_on_enter::<Suspended>(app);
+        shell::reset_on_enter::<Paused>(app);
+        shell::reset_on_enter::<run_info::Look>(app);
+        shell::reset_on_enter::<run_info::RunInfo>(app);
+        shell::reset_on_enter::<run_info::StageDeaths>(app);
+        shell::reset_on_enter::<leaderboard::Live>(app);
     }
 }
 
@@ -207,6 +216,7 @@ fn spawn(mut commands: Commands) {
             },
             RenderLayers::none(),
             IsDefaultUiCamera,
+            RUN_ONLY,
         ))
         .id();
     for left in [true, false] {
@@ -219,20 +229,24 @@ fn spawn(mut commands: Commands) {
             },
             Column { left },
             UiTargetCamera(camera),
+            RUN_ONLY,
         ));
     }
 }
 
 /// Spawns the shadow around the game once the backdrop's camera is there. `Hud169`:
 /// `box-shadow: 0 0 60px rgba(0,0,0,.6)`, drawn over the backdrop and under the game.
-fn shadow(mut commands: Commands, backdrop: Query<Entity, With<BackdropCamera>>, mut done: Local<bool>) {
-    if *done {
+fn shadow(
+    mut commands: Commands,
+    backdrop: Query<Entity, With<BackdropCamera>>,
+    shown: Query<(), With<GameShadow>>,
+) {
+    if !shown.is_empty() {
         return;
     }
     let Some(camera) = backdrop.iter().next() else {
         return;
     };
-    *done = true;
     commands.spawn((
         Node {
             position_type: PositionType::Absolute,
@@ -241,6 +255,7 @@ fn shadow(mut commands: Commands, backdrop: Query<Entity, With<BackdropCamera>>,
         BoxShadow::new(tokens::black(0.6), Val::ZERO, Val::ZERO, Val::ZERO, Val::Px(60.0)),
         GameShadow,
         UiTargetCamera(camera),
+        RUN_ONLY,
         GlobalZIndex(10),
     ));
 }

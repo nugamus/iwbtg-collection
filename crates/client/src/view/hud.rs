@@ -53,6 +53,7 @@ pub fn setup(mut commands: Commands, room: Res<RoomSize>) {
         Transform::from_xyz(0.0, y, 900.0),
         Visibility::Hidden,
         SignBox,
+        crate::shell::RUN_ONLY,
         children![
             (
                 Sprite::from_color(Color::BLACK, Vec2::new(width, BOX_HEIGHT)),
@@ -83,6 +84,7 @@ pub fn setup(mut commands: Commands, room: Res<RoomSize>) {
         Transform::from_xyz(0.0, 0.0, 950.0),
         Visibility::Hidden,
         Countdown,
+        crate::shell::RUN_ONLY,
     ));
 }
 
