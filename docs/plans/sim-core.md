@@ -429,7 +429,7 @@ pub fn collision_line(ctx: &Ctx, x1: Real, y1: Real, x2: Real, y2: Real, t: Targ
 pub fn distance_to_object(ctx: &Ctx, me: InstId, t: Target) -> Result<Option<Real>, SimError>;          // C13
 pub fn move_contact_solid(ctx: &mut Ctx, me: InstId, dir: Real, maxdist: Real) -> Result<(), SimError>;   // C10, C11
 pub fn move_outside_solid(ctx: &mut Ctx, me: InstId, dir: Real, maxdist: Real) -> Result<(), SimError>;
-pub fn move_bounce_solid(ctx: &mut Ctx, me: InstId, precise: bool) -> Result<(), SimError>; // C14, tier 3
+pub fn move_bounce_solid(ctx: &mut Ctx, me: InstId, precise: bool) -> Result<(), SimError>; // C14 (collide::bounce, #835)
 pub fn solid_resolve(ctx: &mut Ctx, a: InstId, b: InstId, run: impl FnOnce(&mut Ctx) -> Flow) -> Result<Flow, SimError>;
 ```
 
@@ -762,7 +762,7 @@ Tiers: tier 1 is needed by M1, M1b, M2 and game 1 (WP6a); tier 2 by games 2-11 (
 | `warp` | 1 | 18, 486 | mechanics `warp` | `room_to`, `warp_xy` (0,0 = destroy kid and bow), transition. Calls `request_room`, then sets kid position in the same handler (Confirmed deferral). |
 | `difficulty_warp` | 1 | rely and others (warpStart) | rooms (warpStart), mechanics `warp` | Sets difficulty from param `dif`, deletes the save, goes to the new-game room; `StartPoint::NewGame` does the same (CR2). |
 | `camera` | 1 | 15, 193 | mechanics `camera`; rooms Views | `mode = screen_snap | snap_offset | smooth_follow | end_step_clamp`. Not placed in rely's play rooms. |
-| `killer` | 1 | most | mechanics `spike`, `cherry` | KILLER class with its own sprite; `cherry` adds image_speed 1/15, outside-room destroy, bounce (tier 3). |
+| `killer` | 1 | most | mechanics `spike`, `cherry` | KILLER class with its own sprite; `cherry` adds image_speed 1/15, outside-room destroy, `bounce` (#835). |
 | `platform` | 1 | 6, 109 | mechanics `platform` | No events; classes `PLATFORM | BLOCK` or `| SOLIDBLOCK`. Kid does the work. |
 | `playerface` | 2 | 11 | numbers hidden consumers | Create: `image_index = irandom(3)` (RNG draw even when never shown). |
 | `moving_platform` | 2 | 12, 341 | mechanics `moving_platform` | Yuuutu step algorithm; `carry_rule` variants. |

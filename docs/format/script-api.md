@@ -119,6 +119,8 @@ Spawn caps: `instance_create` also counts toward at most 256 instances per event
 - `min(?, ?) -> float` (can fail) (cost: 1): The smaller of two numbers (GML tie rules).
 - `min(int, int) -> float` (cost: 1): The smaller of two numbers (GML tie rules).
 - `mod(?, ?) -> float` (can fail) (cost: 1): GML `a mod b`: `a - (a div b) * b`; a zero divisor is an error.
+- `move_bounce_all(Instance, bool) -> ()` (can fail) (cost: 1): `i.move_bounce_all(precise)`: as `move_bounce_solid`, against every instance (`place_empty`).
+- `move_bounce_solid(Instance, bool) -> ()` (can fail) (cost: 1): `i.move_bounce_solid(precise)`: GML `move_bounce_solid`, the Bounce action against solid instances. Changes only `hspeed` and `vspeed`, never the position; the tick's motion then moves by the new speed. Not precise negates `hspeed` when (`x + hspeed`, `y`) is blocked, `vspeed` when (`x`, `y + vspeed`) is, both when only the diagonal is; precise picks a new direction (a multiple of 10) from 36 samples at radius `speed`.
 - `play_music(string) -> ()` (can fail) (cost: 1): Plays a music track of the package in a loop; another playing music track stops or blocks it by the run's MULTIMEDIA rule. An unknown name is an error.
 - `play_sound(string) -> ()` (can fail) (cost: 1): Plays a sound of the package once; `engine:<pack>/<id>` names a bundled pack sound. An unknown name is an error.
 - `point_direction(?, ?, ?, ?) -> float` (can fail) (cost: 1): Direction in degrees from (`x1`, `y1`) to (`x2`, `y2`), as GML.
