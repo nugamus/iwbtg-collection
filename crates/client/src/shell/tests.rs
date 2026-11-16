@@ -174,7 +174,7 @@ fn package_id(app: &App) -> String {
 }
 
 fn tick(app: &App) -> u64 {
-    app.world().non_send::<Game>().sim.world().tick as u64
+    app.world().non_send::<Game>().sim.world().tick
 }
 
 /// A package dropped during a run replaces it in the same app (#841): the old run closes, the new

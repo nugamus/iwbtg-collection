@@ -316,8 +316,15 @@ mod tests {
         app.update();
         post(Kind::Storage, "stats: disk full");
         app.update();
-        let mut q = app.world_mut().query::<&Notice>();
-        assert_eq!(q.iter(app.world()).count(), 1);
+        // Only the storage cards count: notice tests share the global queue with tests that post
+        // NOT OPENED notices in parallel (`shell::tests`, dropped files).
+        let mut q = app.world_mut().query::<&Text>();
+        let saved = Kind::Storage.heading().to_uppercase();
+        let storage = q
+            .iter(app.world())
+            .filter(|t| t.0.to_uppercase() == saved)
+            .count();
+        assert_eq!(storage, 1);
     }
 
     /// Bevy blends in linear light, so even the card glass's 0.6 % lets white text under a
