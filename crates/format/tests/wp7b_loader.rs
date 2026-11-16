@@ -845,7 +845,10 @@ fn particle_system_list_mistakes_are_errors() {
             "system = \"fx\"\non_room_start_except = []\n",
             "param `on_room_start_except` is an empty list",
         ),
-        ("system = \"fx\"\non_room_start = [\"clear\"]\n", "param `on_room_start` must be one of"),
+        (
+            "system = \"fx\"\non_room_start = [\"clear\"]\n",
+            "param `on_room_start` must be one of",
+        ),
     ] {
         let obj = format!("base = \"particle_system\"\n{obj}");
         let files = effect_package(&[("particles/fx.toml", PARTICLES), ("objects/effect.toml", &obj)]);

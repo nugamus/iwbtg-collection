@@ -167,8 +167,10 @@ impl Tracker {
                 }
             }
             for (id, x) in &self.watched {
-                let destroyed_by_room_start =
-                    !now.contains_key(id) && x.persistent && x.destroys_instance && x.room_start_runs_in(room);
+                let destroyed_by_room_start = !now.contains_key(id)
+                    && x.persistent
+                    && x.destroys_instance
+                    && x.room_start_runs_in(room);
                 if destroyed_by_room_start
                     && (x.on_room_start == Lifecycle::Clear || x.on_destroy == Lifecycle::Clear)
                 {

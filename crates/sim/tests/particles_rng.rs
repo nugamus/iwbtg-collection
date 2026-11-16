@@ -576,15 +576,15 @@ mod particle_system {
     use crate::wp1_support::*;
 
     use iwbtg_sim::builtins;
+    use iwbtg_sim::def::RoomId;
     use iwbtg_sim::def::{
         Builtin, KindDef, KindId, ParamValue, PartCreateDef, PartEmitterDef, PartSystemDef, PartSystemDefId,
         PartTypeDef,
     };
+    use iwbtg_sim::events::{EventKind, dispatch};
     use iwbtg_sim::particles::{
         PartChild, PartRange, PartType, PartTypeId, Particles, Region, RegionDistr, RegionShape,
     };
-    use iwbtg_sim::def::RoomId;
-    use iwbtg_sim::events::{EventKind, dispatch};
     use iwbtg_sim::rng::Rng;
     use iwbtg_sim::world::{InstId, SpawnInit};
 

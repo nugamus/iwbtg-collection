@@ -178,7 +178,11 @@ fn an_excepted_room_keeps_the_burst() {
     sim.step(InputFrame::EMPTY);
     t.follow(&def, sim.world());
     let (_, snow) = system(&def, &t, "snow");
-    assert_eq!(snow.particles.len(), 122, "the burst of 120 stays, plus one stream update");
+    assert_eq!(
+        snow.particles.len(),
+        122,
+        "the burst of 120 stays, plus one stream update"
+    );
 }
 
 #[test]
