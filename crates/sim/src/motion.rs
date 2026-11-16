@@ -76,9 +76,10 @@ fn polar_of(h: Real, v: Real) -> Result<(Real, Real), SimError> {
 /// `1.7677669529663722`, vspeed `-1.7677669529663653`,
 /// `traces/eat-the-rori-girl/t-mot-05-b.csv` row 3802).
 ///
-/// OPEN, reported to research: in `t-mot-05-a.csv` (frame 492) cherries at speed -4, direction
-/// 180 read vspeed `0.0`, where this formula gives `4.898587196589413e-16`
-/// (`-(-4 * dsin(180))`). Off-table angles can also differ from the recorder by one ulp (M6, see
+/// The callers decide the integer snap (`Snap`): a speed or direction write snaps (research#193).
+/// OPEN (research#199): in `t-mot-05-a.csv` (frame 492) cherries set by motion_set to speed -4,
+/// direction 180 read vspeed `0.0`, where this formula gives `4.898587196589413e-16`
+/// (`-(-4 * dsin(180))`); the snap would give `0.0`, so motion_set may snap too. Off-table angles can also differ from the recorder by one ulp (M6, see
 /// `num::trig`).
 fn cartesian_of(speed: Real, direction: Real) -> Result<(Real, Real), SimError> {
     let h = finite(num::lengthdir_x(speed, direction), "hspeed")?;
