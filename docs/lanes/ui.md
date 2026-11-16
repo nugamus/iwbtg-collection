@@ -9,6 +9,7 @@
 - Tests: `cargo test -p iwbtg-client <module>::`.
 - See it: `cargo run -p iwbtg-client -- crates/client/showcase.pkg --mute --screenshot <out.png>` (or `--ui-gallery --mute`). Always pass `--mute` when launching the client (#712). `--window WxH` and `--ratio` pick the size.
 - Screenshots come only from the client's `--screenshot` flag (`WGPU_BACKEND=dx12` when the display is locked). Never take OS or desktop screen captures or use a screen-capture tool: on 2026-11-15 two captures of the user's main screen were taken for #495 (#822). Key presses in a live window can't be done by an agent; tests cover them and the user checks on `main`.
+- Attach screenshots to a PR: copy the PNGs to folder `<issue>/` on the `pr-assets` branch (`git worktree add <temp>/assets origin/pr-assets`, commit, `git push origin HEAD:pr-assets`, remove the worktree) and link `https://raw.githubusercontent.com/nugamus/iwbtg-collection/pr-assets/<issue>/<name>.png` in the PR body. Keep scratch files in your own temp folder, not in the worktree.
 - Compare with the approved design: `python -I .claude/screenshot_diff.py <yours.png> <reference.png>` (#531).
 
 ## How a screen is built
