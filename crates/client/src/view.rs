@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 
 use bevy::asset::RenderAssetUsages;
 use bevy::camera::ScalingMode;
+use bevy::app::RunFixedMainLoopSystems;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use iwbtg_sim::sim::{Sim, SimOptions};
@@ -17,7 +18,8 @@ pub(crate) mod order;
 
 use crate::bindings::PadInput;
 use crate::input::{Collector, PadReader, key_code};
-use crate::package::{Package, SpriteImage, sprite_images};
+use crate::package::{Package, sprite_images};
+use crate::shell::{AppScreen, InRun, LoadedPackage, RUN_ONLY, RunSteps};
 
 /// The running game. Not `Send` (the script host shares state by `Rc`), so it is a non-send
 /// resource and only main-thread systems touch it.
@@ -103,10 +105,6 @@ impl Default for ClockSpeed {
 /// Marks the camera that draws the game.
 #[derive(Component)]
 pub(crate) struct GameCamera;
-
-/// Decoded sprite strips, waiting for the Startup system to upload them.
-#[derive(Resource)]
-struct PendingImages(Vec<Option<SpriteImage>>);
 
 /// How many frames per second the window draws at most. The sim ticks at the game's rate
 /// whatever this is.
@@ -245,35 +243,38 @@ pub struct ViewArgs {
     pub ranked: bool,
 }
 
-/// Opens the window and runs until it closes. `plugins` adds the other modules' plugins (main.rs
-/// lists them), after the window and the view's own resources are in place.
-pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package)) -> Result<(), String> {
-    let ViewArgs {
-        fps: cap,
-        interpolate,
-        screenshot,
-        ranked,
-    } = args;
+/// How runs start: from the view's flags, the same for every package opened.
+#[derive(Resource, Clone, Copy)]
+struct RunConfig {
+    ranked: bool,
+    /// Every run draws a new random seed (`replays::fresh_seed`); a `--screenshot` check keeps 0.
+    fresh_seed: bool,
+    interpolate: bool,
+}
+
+/// Builds the sim for `pkg` and puts it in `world` with how it started (`shell::load` calls this
+/// before the run opens, so a game that does not start never opens).
+pub(crate) fn new_run(world: &mut World, pkg: &Package) -> Result<(), String> {
+    let config = *world.resource::<RunConfig>();
     let def = Arc::clone(&pkg.def);
-    // Every run draws a random seed, as the originals do (docs/product.md; the replay keeps it).
-    // A `--screenshot` check keeps seed 0, so it looks the same every time.
-    let fresh_seed = screenshot.is_none();
     let options = SimOptions {
         // A ranked run is always a new game; Play original resumes the save file when there is
         // one, else a new game in the game's `new_game_room`. The title and menus come with the
         // rest of the client; until then the first thing on screen is the first room.
-        start: if ranked {
+        start: if config.ranked {
             iwbtg_sim::room::StartPoint::NewGame { difficulty: 0 }
         } else {
             crate::savefile::start_point(&def)
         },
-        seed: if fresh_seed {
+        // Every run draws a random seed, as the originals do (docs/product.md; the replay keeps
+        // it). A `--screenshot` check keeps seed 0, so it looks the same every time.
+        seed: if config.fresh_seed {
             crate::replays::fresh_seed()
         } else {
             0
         },
         dll_mode: DllMode::Model,
-        mode: if ranked {
+        mode: if config.ranked {
             iwbtg_sim::stripped::PlayMode::Stripped
         } else {
             iwbtg_sim::stripped::PlayMode::Original
@@ -282,17 +283,154 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
     };
     let sim =
         Sim::new(Arc::clone(&def), options.clone()).map_err(|e| format!("the game did not start: {e}"))?;
-    let room = def.room(sim.world().room).ok_or("the start room is missing")?;
-    let (width, height) = (room.width as f32, room.height as f32);
-    let images = sprite_images(&pkg.files);
+    def.room(sim.world().room).ok_or("the start room is missing")?;
+    world.insert_non_send(Game { sim });
+    world.insert_resource(RunStart {
+        def,
+        options,
+        fresh_seed: config.fresh_seed,
+    });
+    Ok(())
+}
+
+/// The size of the sim's room, in pixels.
+fn room_size(game: &Game) -> Vec2 {
+    let sim = &game.sim;
+    sim.def()
+        .room(sim.world().room)
+        .map_or(Vec2::new(800.0, 608.0), |r| Vec2::new(r.width as f32, r.height as f32))
+}
+
+/// The view's run: the resources and systems that draw and tick the sim while the shell is in
+/// `AppScreen::Run` (`shell`, #782). The window is `run`'s.
+pub(crate) struct ViewPlugin {
+    pub(crate) ranked: bool,
+    pub(crate) fresh_seed: bool,
+    pub(crate) interpolate: bool,
+}
+
+impl ViewPlugin {
+    fn config(&self) -> RunConfig {
+        RunConfig {
+            ranked: self.ranked,
+            fresh_seed: self.fresh_seed,
+            interpolate: self.interpolate,
+        }
+    }
+}
+
+impl Plugin for ViewPlugin {
+    fn build(&self, app: &mut App) {
+        app.insert_resource(self.config())
+        .insert_resource(Stats {
+            window_start: Instant::now(),
+            ticks: 0,
+            frames: 0,
+            ticks_per_second: 0.0,
+            frames_per_second: 0.0,
+        })
+        .add_systems(OnEnter(AppScreen::Run), enter.in_set(RunSteps::Core))
+        .add_systems(OnEnter(AppScreen::Run), (setup, hud::setup).in_set(InRun))
+        .add_systems(OnExit(AppScreen::Run), leave.in_set(RunSteps::Core))
+        .add_systems(
+            RunFixedMainLoop,
+            (collect_input, collect_pad)
+                .in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop)
+                .run_if(in_state(AppScreen::Run)),
+        )
+        .add_systems(FixedUpdate, (tick, follow_room_speed).chain().in_set(SimTick))
+        .add_systems(
+            Update,
+            (
+                follow_view,
+                (set_alpha, sync_instances.in_set(DrawInstances))
+                    .chain()
+                    .after(follow_view),
+                hud::show_sign,
+                hud::show_countdown,
+            )
+                .in_set(InRun),
+        );
+    }
+}
+
+/// Opens the run's view: the room size, the fixed clock at the game's rate, what is drawn, the
+/// window title. The sim is already there (`new_run`).
+fn enter(world: &mut World) {
+    let config = *world.resource::<RunConfig>();
+    let size = room_size(&world.non_send::<Game>());
+    let def = Arc::clone(&world.resource::<RunStart>().def);
+    let speed = world.get_resource::<ClockSpeed>().copied().unwrap_or_default();
+    world.insert_resource(RoomSize(size));
+    world.insert_resource(ViewRect::whole(size));
+    world.init_resource::<Drawn>();
+    world.insert_resource(Previous {
+        on: config.interpolate,
+        ..default()
+    });
+    world.init_resource::<hud::SignText>();
+    // The sim ticks at the game's rate on a fixed clock; frames only draw what the last tick
+    // left. Slow motion (practice.rs) runs the first tick slow already; `follow_room_speed`
+    // keeps it so after every tick.
+    world.insert_resource(Time::<Fixed>::from_hz(f64::from(def.tick_rate.max(1)) * speed.0));
+    let mut windows = world.query_filtered::<&mut Window, With<bevy::window::PrimaryWindow>>();
+    for mut window in windows.iter_mut(world) {
+        window.title = format!("IWBTG Collection: {}", def.id);
+    }
+}
+
+/// Closes the run's view; the sim goes last, after every module's own exit systems.
+fn leave(world: &mut World) {
+    world.remove_resource::<Textures>();
+    world.remove_resource::<Drawn>();
+    world.remove_resource::<RoomSize>();
+    world.remove_resource::<ViewRect>();
+    world.remove_resource::<Previous>();
+    world.remove_resource::<hud::SignText>();
+    world.remove_resource::<RunStart>();
+    world.remove_non_send::<Game>();
+}
+
+/// Opens the window and runs until it closes. `first` is the package from the command line,
+/// played at once (the window takes its first room's size); without it the shell starts on the
+/// select screen. `plugins` adds the other modules' plugins (main.rs lists them).
+pub fn run(
+    first: Option<&std::path::Path>,
+    args: ViewArgs,
+    trace_mode: bool,
+    plugins: impl FnOnce(&mut App),
+) -> Result<(), String> {
+    let ViewArgs {
+        fps: cap,
+        interpolate,
+        screenshot,
+        ranked,
+    } = args;
+    let view = ViewPlugin {
+        ranked,
+        fresh_seed: screenshot.is_none(),
+        interpolate,
+    };
     let mut app = App::new();
+    // `shell::load` builds the first sim with it, before the plugins are in.
+    app.insert_resource(view.config());
+    let (title, (width, height)) = match first {
+        Some(path) => {
+            crate::shell::load(app.world_mut(), path, trace_mode)?;
+            let world = app.world();
+            let size = room_size(&world.non_send::<Game>());
+            let id = world.resource::<RunStart>().def.id.clone();
+            (format!("IWBTG Collection: {id}"), (size.x as u32, size.y as u32))
+        }
+        None => (crate::shell::select::TITLE.to_owned(), (800, 608)),
+    };
     app.add_plugins(
         DefaultPlugins
             .set(ImagePlugin::default_nearest())
             .set(WindowPlugin {
                 primary_window: Some(Window {
-                    title: format!("IWBTG Collection: {}", def.id),
-                    resolution: (width as u32, height as u32).into(),
+                    title,
+                    resolution: (width, height).into(),
                     // The frame cap does the pacing; vsync would pin it to the monitor.
                     present_mode: bevy::window::PresentMode::AutoNoVsync,
                     ..default()
@@ -300,52 +438,11 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
                 ..default()
             }),
     )
-    .add_plugins(crate::render_fix::plugin)
+    .add_plugins((crate::render_fix::plugin, view))
     .insert_resource(ClearColor(Color::BLACK))
-    .insert_resource(RoomSize(Vec2::new(width, height)))
-    .insert_resource(ViewRect::whole(Vec2::new(width, height)))
-    .insert_resource(PendingImages(images))
-    .init_resource::<Drawn>()
-    .insert_non_send(Game { sim })
-    .insert_resource(RunStart {
-        def: Arc::clone(&def),
-        options,
-        fresh_seed,
-    })
     .insert_resource(Cap(cap))
-    .insert_resource(Previous {
-        on: interpolate,
-        ..default()
-    })
-    .insert_resource(Stats {
-        window_start: Instant::now(),
-        ticks: 0,
-        frames: 0,
-        ticks_per_second: 0.0,
-        frames_per_second: 0.0,
-    })
-    // The sim ticks at the game's rate on a fixed clock; frames only draw what the last tick left.
-    .insert_resource(Time::<Fixed>::from_hz(f64::from(def.tick_rate.max(1))))
-    .init_resource::<hud::SignText>()
-    .add_systems(Startup, (setup, hud::setup))
-    .add_systems(
-        RunFixedMainLoop,
-        (collect_input, collect_pad).in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
-    )
-    .add_systems(FixedUpdate, (tick, follow_room_speed).chain().in_set(SimTick))
-    .add_systems(
-        Update,
-        (
-            follow_view,
-            (set_alpha, sync_instances.in_set(DrawInstances))
-                .chain()
-                .after(follow_view),
-            hud::show_sign,
-            hud::show_countdown,
-        ),
-    )
     .add_systems(Last, limit_frames);
-    plugins(&mut app, &pkg);
+    plugins(&mut app);
     if let Some(path) = screenshot {
         app.insert_resource(ScreenshotTo(path))
             .add_systems(Update, take_screenshot);
@@ -354,10 +451,11 @@ pub fn run(pkg: Package, args: ViewArgs, plugins: impl FnOnce(&mut App, &Package
     Ok(())
 }
 
+/// The game camera and the sprite images.
 fn setup(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
-    pending: Res<PendingImages>,
+    loaded: Res<LoadedPackage>,
     room: Res<RoomSize>,
 ) {
     // The room always fits the window, whatever its size: letterboxed, never cropped.
@@ -376,12 +474,13 @@ fn setup(
             },
             ..OrthographicProjection::default_2d()
         }),
+        RUN_ONLY,
     ));
-    let textures = pending
-        .0
-        .iter()
+    let textures = sprite_images(&loaded.pkg.files)
+        .into_iter()
         .map(|s| {
-            s.as_ref().map(|s| {
+            s.map(|s| {
+                let size = UVec2::new(s.size.0, s.size.1);
                 let image = Image::new(
                     Extent3d {
                         width: s.size.0,
@@ -389,11 +488,11 @@ fn setup(
                         depth_or_array_layers: 1,
                     },
                     TextureDimension::D2,
-                    s.rgba.clone(),
+                    s.rgba,
                     TextureFormat::Rgba8UnormSrgb,
                     RenderAssetUsages::RENDER_WORLD,
                 );
-                (images.add(image), UVec2::new(s.size.0, s.size.1))
+                (images.add(image), size)
             })
         })
         .collect();
@@ -695,6 +794,7 @@ fn sync_instances(
                         ..default()
                     },
                     transform,
+                    RUN_ONLY,
                 ))
                 .id(),
         };

@@ -56,8 +56,13 @@ impl Plugin for VisualPlugin {
             app.insert_resource(PlainBackdrop(PLAIN));
         }
         if self.0.contains(Mod::Hitboxes) {
-            app.init_resource::<Hitboxes>()
-                .add_systems(Update, draw_hitboxes.after(crate::view::follow_view));
+            crate::shell::run_resource(app, |_| Hitboxes::default());
+            app.add_systems(
+                Update,
+                draw_hitboxes
+                    .after(crate::view::follow_view)
+                    .in_set(crate::shell::InRun),
+            );
         }
     }
 }
@@ -207,6 +212,7 @@ fn draw_hitboxes(
                     },
                     Anchor::TOP_LEFT,
                     t,
+                    crate::shell::RUN_ONLY,
                 ))
                 .id(),
         };

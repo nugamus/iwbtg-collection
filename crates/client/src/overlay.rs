@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 use crate::hud::layout::{Density, Layout};
 use crate::hud::{HudLayout, HudOptions};
 use crate::input::Collector;
+use crate::shell::{AppScreen, InRun, RUN_ONLY};
 use crate::ui::fonts::Type;
 use crate::ui::{notice, tokens, widgets};
 use crate::view::{Game, ScreenshotTo, Stats};
@@ -49,8 +50,13 @@ pub struct OverlayPlugin(pub OverlayArgs);
 impl Plugin for OverlayPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Forced(self.0.overlay))
-            .add_systems(Startup, spawn)
-            .add_systems(Update, (toggle, place.after(crate::screen::apply), show).chain());
+            .add_systems(OnEnter(AppScreen::Run), spawn.in_set(InRun))
+            .add_systems(
+                Update,
+                (toggle, place.after(crate::screen::apply), show)
+                    .chain()
+                    .in_set(InRun),
+            );
     }
 }
 
@@ -88,6 +94,7 @@ fn spawn(mut commands: Commands, forced: Res<Forced>, screenshot: Option<Res<Scr
             Visibility::Hidden
         },
         Panel::default(),
+        RUN_ONLY,
         children![(widgets::text("", TEXT, tokens::SOFT), Label)],
     ));
 }

@@ -48,20 +48,27 @@ pub struct RetryPlugin(pub RetryArgs);
 
 impl Plugin for RetryPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(Retry {
-            auto: auto_retry(self.0.auto_retry, crate::settings::get().auto_retry),
+        let auto = auto_retry(self.0.auto_retry, crate::settings::get().auto_retry);
+        crate::shell::run_resource(app, move |_| Retry {
+            auto,
             deaths: None,
             pending: None,
-        })
+        });
         // No tick runs between a death that auto-retries and the retry itself.
-        .configure_sets(
+        app.configure_sets(
             FixedUpdate,
             SimTick.run_if(|retry: Res<Retry>| retry.pending.is_none()),
         )
         .add_systems(FixedUpdate, watch.after(SimTick))
         .add_systems(
             Update,
-            (key, apply.run_if(|retry: Res<Retry>| retry.pending.is_some())).chain(),
+            (
+                key,
+                // A run condition is checked even when its set's is false: no `Retry` between runs.
+                apply.run_if(|retry: Option<Res<Retry>>| retry.is_some_and(|r| r.pending.is_some())),
+            )
+                .chain()
+                .in_set(crate::shell::InRun),
         );
     }
 }

@@ -290,7 +290,9 @@ impl Plugin for StatsPlugin {
         let store = if self.keep { Store::data() } else { None };
         app.insert_resource(Stats::open(store, self.mods))
             .add_systems(FixedUpdate, watch.after(SimTick))
-            .add_systems(Update, flush_now_and_then);
+            .add_systems(Update, flush_now_and_then)
+            // Leaving the run saves its deaths and play time; the next run starts a new tracker.
+            .add_systems(OnExit(crate::shell::AppScreen::Run), reset.in_set(crate::shell::InRun));
     }
 }
 

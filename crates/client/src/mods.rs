@@ -74,15 +74,16 @@ pub struct ModsPlugin(pub ModSet);
 
 impl Plugin for ModsPlugin {
     fn build(&self, app: &mut App) {
+        let mods = self.0;
+        crate::shell::run_resource(app, move |_| Run {
+            mods,
+            deaths: None,
+            over: None,
+        });
         app.insert_resource(RunMods(self.0))
-            .insert_resource(Run {
-                mods: self.0,
-                deaths: None,
-                over: None,
-            })
             .configure_sets(FixedUpdate, SimTick.run_if(|run: Res<Run>| run.over.is_none()))
             .add_systems(FixedUpdate, watch.after(SimTick))
-            .add_systems(Update, banner);
+            .add_systems(Update, banner.in_set(crate::shell::InRun));
     }
 }
 

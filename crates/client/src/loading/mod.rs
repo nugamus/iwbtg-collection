@@ -13,7 +13,6 @@
 
 mod page;
 
-use bevy::app::AppExit;
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -23,6 +22,7 @@ use iwbtg_sim::stripped::PlayMode;
 
 use crate::art::ArtFiles;
 use crate::hud::Suspended;
+use crate::shell::{self, InRun, RUN_ONLY};
 use crate::stats::{Book, Stats, fmt_ticks, map_key};
 use crate::ui::backdrop::{Backdrop, dim};
 use crate::ui::motion::ReducedMotion;
@@ -202,6 +202,8 @@ pub struct Loading {
     preview: bool,
     tip: usize,
     info: Option<Info>,
+    /// Whether the page was up last frame (`show` suspends the game on the change).
+    was_open: bool,
 }
 
 impl Loading {
@@ -212,6 +214,7 @@ impl Loading {
             preview,
             tip,
             info: None,
+            was_open: false,
         }
     }
 
@@ -240,21 +243,26 @@ pub struct LoadingPlugin {
 impl Plugin for LoadingPlugin {
     fn build(&self, app: &mut App) {
         let preview = self.args.loading_preview;
-        let open = preview || !self.skip;
-        let tip = if preview || self.skip {
-            0
-        } else {
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |d| d.as_secs() as usize % TIPS.len())
-        };
-        app.insert_resource(Loading::new(open, preview, tip))
-            .configure_sets(FixedUpdate, SimTick.run_if(closed))
+        let skip = self.skip;
+        // Every run opens with the card (and a new tip).
+        shell::run_resource(app, move |_| {
+            let open = preview || !skip;
+            let tip = if preview || skip {
+                0
+            } else {
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |d| d.as_secs() as usize % TIPS.len())
+            };
+            Loading::new(open, preview, tip)
+        });
+        app.configure_sets(FixedUpdate, SimTick.run_if(closed))
             .add_systems(
                 Update,
                 (prepare, keys, advance, show, animate)
                     .chain()
-                    .after(crate::screen::apply),
+                    .after(crate::screen::apply)
+                    .in_set(InRun),
             );
     }
 }
@@ -293,19 +301,20 @@ fn prepare(
     loading.info = Some(info);
 }
 
-/// Escape (or Start) quits: there is no game select to go back to yet (#148).
+/// Escape (or Start) leaves the run: back to the select screen, or quits when the client was
+/// started on one package (`shell::leave`).
 fn keys(
     keys: Res<ButtonInput<KeyCode>>,
     collector: Option<Res<crate::input::Collector>>,
     loading: Res<Loading>,
-    mut exit: MessageWriter<AppExit>,
+    mut commands: Commands,
     mut pad_before: Local<bool>,
 ) {
     let pad = collector.is_some_and(|c| c.pad_down(crate::pause::PAUSE_PAD));
     let pad_pressed = pad && !*pad_before;
     *pad_before = pad;
     if loading.open && (keys.just_pressed(crate::pause::PAUSE_KEY) || pad_pressed) {
-        exit.write(AppExit::Success);
+        commands.queue(crate::shell::leave);
     }
 }
 
@@ -348,7 +357,7 @@ struct LoadingCamera;
 #[allow(clippy::too_many_arguments, reason = "one pass over what the page covers")]
 fn show(
     mut commands: Commands,
-    loading: Res<Loading>,
+    mut loading: ResMut<Loading>,
     fruit: Option<Res<crate::pause::Fruit>>,
     window: Single<&Window, With<PrimaryWindow>>,
     mut ui_scale: ResMut<UiScale>,
@@ -357,11 +366,10 @@ fn show(
     mut game_cameras: Query<&mut Camera, (With<GameCamera>, Without<LoadingCamera>)>,
     mut suspended: ResMut<Suspended>,
     mut backdrop: ResMut<Backdrop>,
-    mut was_open: Local<bool>,
 ) {
     let open = loading.open && loading.info.is_some();
-    if *was_open != open {
-        *was_open = open;
+    if loading.was_open != open {
+        loading.was_open = open;
         suspended.0 = open;
         for mut camera in &mut game_cameras {
             camera.is_active = !open;
@@ -417,6 +425,7 @@ fn show(
                 },
                 RenderLayers::none(),
                 LoadingCamera,
+                RUN_ONLY,
             ))
             .id(),
     };
@@ -437,6 +446,7 @@ fn show(
             art: backdrop.art.clone(),
         },
         UiTargetCamera(camera),
+        RUN_ONLY,
         children![page::page(info, &TIPS[loading.tip % TIPS.len()], &look)],
     ));
 }

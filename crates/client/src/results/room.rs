@@ -15,6 +15,7 @@ use iwbtg_format::files::PackageFiles;
 use iwbtg_sim::def::GameDef;
 
 use crate::art::{self, ArtImages};
+use crate::shell::RUN_ONLY;
 use crate::view::{Textures, place_sprite};
 
 /// The first render layer the pictures use; each picture has its own, so no camera sees another
@@ -75,12 +76,13 @@ impl Pictures {
                     },
                     RenderTarget::Image(image.clone().into()),
                     layer.clone(),
+                    RUN_ONLY,
                 ))
                 .id(),
         ];
         let (still, ladder) = art::still(src.files, images, cache, name, size);
         for (sprite, t) in still {
-            entities.push(commands.spawn((sprite, Anchor::TOP_LEFT, t, layer.clone())).id());
+            entities.push(commands.spawn((sprite, Anchor::TOP_LEFT, t, layer.clone(), RUN_ONLY)).id());
         }
         // The room's instances as it starts, in draw order: depth descending, then placement
         // (creation) order, among the tile layers (`view::order`, #789).
@@ -128,7 +130,7 @@ impl Pictures {
                 rect: Some(rect),
                 ..default()
             };
-            entities.push(commands.spawn((sprite, t, layer.clone())).id());
+            entities.push(commands.spawn((sprite, t, layer.clone(), RUN_ONLY)).id());
         }
         self.rooms.insert(
             name.to_owned(),

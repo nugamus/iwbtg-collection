@@ -23,6 +23,7 @@ use crate::hud::layout;
 use crate::hud::{HudLayout, HudOptions};
 use crate::package::decode_png;
 use crate::settings::{self, Settings};
+use crate::shell::{self, AppScreen, InRun, RUN_ONLY};
 use crate::ui::backdrop::{self, Backdrop, BackdropPlugin};
 use crate::view::{Game, GameCamera, RoomSize, ViewRect};
 use crate::visual::PlainBackdrop;
@@ -151,6 +152,8 @@ pub struct Screen {
 struct Letterbox {
     room: Option<RoomId>,
     panel: Option<Entity>,
+    /// The run's key art is on the backdrop.
+    backdrop: bool,
 }
 
 pub struct ScreenPlugin;
@@ -176,10 +179,17 @@ impl Plugin for ScreenPlugin {
         .init_resource::<HudLayout>()
         .add_systems(
             Update,
-            (keys, apply, room_panel, keep_panel, game_backdrop)
-                .chain()
-                .after(crate::view::follow_view),
-        );
+            (
+                keys,
+                (apply, room_panel, keep_panel, game_backdrop)
+                    .chain()
+                    .after(crate::view::follow_view)
+                    .in_set(InRun),
+            )
+                .chain(),
+        )
+        .add_systems(OnExit(AppScreen::Run), leave.in_set(InRun));
+        shell::reset_on_enter::<Letterbox>(app);
     }
 }
 
@@ -320,16 +330,16 @@ fn game_backdrop(
     mut images: ResMut<Assets<Image>>,
     mut backdrop: ResMut<Backdrop>,
     plain: Option<Res<PlainBackdrop>>,
-    mut done: Local<bool>,
+    mut state: ResMut<Letterbox>,
 ) {
-    if *done {
+    if state.backdrop {
         return;
     }
     // The room size comes from the sim's first tick; until then there is nothing to size by.
     if room.0.x < 1.0 {
         return;
     }
-    *done = true;
+    state.backdrop = true;
     let art = files
         .0
         .get("game.toml")
@@ -343,6 +353,14 @@ fn game_backdrop(
     backdrop.art = Some(images.add(image));
     backdrop.dim = backdrop::dim::GAMEPLAY;
     backdrop.blur = settings::get().backdrop_blur as f32 / 100.0;
+}
+
+/// The run is over: the backdrop drops the game's key art (its image unloads) and the window title
+/// is the next screen's.
+fn leave(mut backdrop: ResMut<Backdrop>, mut screen: ResMut<Screen>) {
+    backdrop.art = None;
+    backdrop.dim = backdrop::dim::SELECT;
+    screen.title = None;
 }
 
 /// No background (`--mods NB`, visual.rs): a backdrop that would show the room's own background
@@ -376,6 +394,7 @@ fn room_panel(mut commands: Commands, game: NonSend<Game>, mut state: ResMut<Let
                 .spawn((
                     Sprite::from_color(Color::BLACK, room_size),
                     Transform::from_xyz(0.0, 0.0, -998.0),
+                    RUN_ONLY,
                 ))
                 .id(),
         );

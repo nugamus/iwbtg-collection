@@ -86,20 +86,15 @@ impl Plugin for PracticePlugin {
             eprintln!("{line}");
         }
         let speed = clock_speed(self.mods, self.slow_speed);
+        // The view sets each run's first clock rate with it (`view::enter`); `follow_room_speed`
+        // keeps it so after every tick.
         app.insert_resource(speed);
-        // The first tick already runs slow; `follow_room_speed` keeps it so after every tick.
-        if speed != ClockSpeed::default()
-            && let Some(mut fixed) = app.world_mut().get_resource_mut::<Time<Fixed>>()
-        {
-            let hz = fixed.timestep().as_secs_f64().recip() * speed.0;
-            fixed.set_timestep_hz(hz);
-        }
         if self.mods.contains(Mod::FrameAdvance) {
-            app.init_resource::<Advance>()
-                .configure_sets(FixedUpdate, SimTick.run_if(|a: Res<Advance>| a.steps > 0))
+            crate::shell::run_resource(app, |_| Advance::default());
+            app.configure_sets(FixedUpdate, SimTick.run_if(|a: Res<Advance>| a.steps > 0))
                 .add_systems(FixedUpdate, take.before(SimTick))
                 .add_systems(FixedUpdate, spend.in_set(SimTick).after(crate::view::tick))
-                .add_systems(Update, hold_music);
+                .add_systems(Update, hold_music.in_set(crate::shell::InRun));
         }
     }
 }
@@ -145,6 +140,8 @@ mod tests {
                 mods: ModSet::parse(mods).unwrap(),
                 slow_speed: 75,
             })
+            // The shell inserts it when a run opens.
+            .init_resource::<Advance>()
             .add_systems(FixedUpdate, count.in_set(SimTick));
         app
     }
