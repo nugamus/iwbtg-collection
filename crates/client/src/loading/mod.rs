@@ -528,7 +528,7 @@ mod tests {
         assert!(why.starts_with("Play original"), "{why}");
     }
 
-    /// The demo package: its title and author, the play mode for its one map, a stage, no PB
+    /// The clear fixture: its title and author, the play mode for its one map, a stage, no PB
     /// until a clear on this board, and the PB once there is one.
     #[test]
     fn the_card_reads_the_package_and_your_pb() {
@@ -537,7 +537,7 @@ mod tests {
         let manifest = Manifest::parse(&text).unwrap();
         let mut book = Book::default();
         let info = Info::new(Some(&manifest), "demo-clear", "main", run(false, "SD"), &book, 50);
-        assert_eq!(info.title, "Demo clear");
+        assert_eq!(info.title, "Clear fixture");
         assert_eq!(info.creator.as_deref(), Some("IWBTG Collection"), "authors only");
         assert_eq!(info.map, "Ranked mode");
         assert_eq!(info.stages, 2, "one stage split");
