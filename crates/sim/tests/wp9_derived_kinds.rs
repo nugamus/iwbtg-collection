@@ -1,7 +1,8 @@
 //! #694: scripts and the kinds the loader derives from a kind (`[defaults.<kind>]` variants and
-//! placed instances whose params pick other classes, #659). `instances(kind)` covers them, and
-//! `instance_create` with class-picking params takes the derived kind or fails. #701: with params
-//! that match a `[defaults.<kind>]` variant it takes the variant's kind, as a placed instance does.
+//! placed instances whose params pick other classes or events, #659, #853). `instances(kind)`
+//! covers them, and `instance_create` with class- or event-picking params takes the derived kind
+//! or fails. #701: with params that match a `[defaults.<kind>]` variant it takes the variant's
+//! kind, as a placed instance does.
 
 use iwbtg_sim::def::testing::GameDefBuilder;
 use iwbtg_sim::def::{
@@ -33,7 +34,8 @@ fn down() -> ParamValue {
 
 /// Kinds as the loader makes them: 0 `runner` (script), 1 `water`, 2 `water[variant=2]` (derived
 /// for a placed instance), 3 `waterfall` (another kind whose name starts with `water`), 4 `spike`
-/// and 5 `spike[dir=down]`, its `[defaults.spike]` variant for `dir = "down"`.
+/// and 5 `spike[dir=down]`, its `[defaults.spike]` variant for `dir = "down"`, 6
+/// `spike[destroy_outside_room=true]` (derived for a placed instance, #853).
 fn fx(source: &str) -> Fx {
     let mut b = GameDefBuilder::new("derived");
     let room = b.room(RoomDef::new("room", 320, 240));
@@ -57,6 +59,13 @@ fn fx(source: &str) -> Fx {
     spike_down.classes = ClassMask::KILLER;
     spike_down.params.0.insert("dir".into(), down());
     b.kind(spike_down);
+    let mut spike_out = KindDef::new("spike[destroy_outside_room=true]", Builtin::Killer);
+    spike_out.classes = ClassMask::KILLER;
+    spike_out
+        .params
+        .0
+        .insert("destroy_outside_room".into(), ParamValue::Bool(true));
+    b.kind(spike_out);
     b.start_room(room);
     let mut def = b.build().expect("def");
     def.variants.push(KindVariant {
@@ -158,7 +167,7 @@ fn a_spawn_whose_params_pick_a_class_no_kind_has_is_an_error() {
     };
     let _ = c.spawn(KindId(0), Real::new(0.0), Real::new(0.0), SpawnInit::default());
     let e = f.halted().expect("halted");
-    assert!(e.contains("`water` with variant = 3 picks other classes than the kind's, and no kind derived from `water` has them"), "{e}");
+    assert!(e.contains("`water` with variant = 3 picks other classes or events than the kind's, and no kind derived from `water` has them"), "{e}");
     assert!(f.kinds_of(ClassMask::WATER3).is_empty());
 }
 
@@ -171,4 +180,34 @@ fn a_spawn_whose_params_match_a_defaults_variant_takes_the_variant_kind() {
     // `dir: "down"` matches the variant, so it gets `spike[dir=down]` (its sprite and mask); the
     // others keep `spike`, as placed instances do.
     assert_eq!(f.kinds_of(ClassMask::KILLER), vec![5, 4, 4]);
+}
+
+/// #853: params that pick the event set work as the class-picking ones: the derived kind when the
+/// package has one, the kind when the value keeps its event set, else an error.
+#[test]
+fn a_spawn_whose_params_pick_an_event_set_takes_the_derived_kind() {
+    let src = r#"fn create() { instance_create("spike", 0, 0, #{ destroy_outside_room: true }); instance_create("spike", 0, 0, #{ destroy_outside_room: false }); }"#;
+    let mut f = fx(src);
+    f.spawn(0);
+    assert_eq!(f.halted(), None);
+    assert_eq!(f.kinds_of(ClassMask::KILLER), vec![6, 4]);
+}
+
+#[test]
+fn a_spawn_whose_params_pick_an_event_set_no_kind_has_is_an_error() {
+    let src = r#"fn create() { instance_create("water", 0, 0, #{ destroy_outside_room: true }); }"#;
+    let mut f = fx(src);
+    let mut c = Ctx {
+        def: &f.def,
+        rules: &f.rules,
+        w: &mut f.w,
+        scripts: &f.scripts,
+        dll_mode: DllMode::Stub,
+    };
+    let _ = c.spawn(KindId(0), Real::new(0.0), Real::new(0.0), SpawnInit::default());
+    let e = f.halted().expect("halted");
+    assert!(
+        e.contains("`water` with destroy_outside_room = true picks other classes or events"),
+        "{e}"
+    );
 }
