@@ -1,0 +1,2 @@
+#:schema ../../../../docs/format/schema/v0/background.schema.json
+tile_size = [32, 32]

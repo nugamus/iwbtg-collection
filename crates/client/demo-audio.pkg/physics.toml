@@ -1,7 +1,0 @@
-#:schema ../../../../docs/format/schema/v0/physics.schema.json
-preset = "A1"
-
-[sounds]
-jump = "jump"
-shoot = "shoot"
-death = "death"

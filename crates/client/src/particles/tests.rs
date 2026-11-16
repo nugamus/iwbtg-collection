@@ -13,7 +13,7 @@ use iwbtg_sim::sound::DllMode;
 use super::*;
 
 fn demo() -> Arc<GameDef> {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-particles.pkg");
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/particles.pkg");
     crate::package::open(&dir, false).unwrap().def
 }
 

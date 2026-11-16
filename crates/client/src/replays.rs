@@ -435,7 +435,7 @@ mod tests {
     }
 
     fn demo() -> crate::package::Package {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo.pkg");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/input.pkg");
         crate::package::open(&dir, false).unwrap()
     }
 

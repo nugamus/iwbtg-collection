@@ -390,7 +390,7 @@ mod tests {
     /// writes the file, and the next start reads it back.
     #[test]
     fn deaths_are_counted_saved_and_read_back() {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo.pkg");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/input.pkg");
         let pkg = crate::package::open(&dir, false).unwrap();
         let store = temp("deaths");
         let mut world = crate::view::test_world(&pkg);
@@ -423,9 +423,9 @@ mod tests {
         assert_eq!(again.session, Session::default(), "a session starts at zero");
     }
 
-    /// Plays `demo-clear.pkg` once with scripted input: in each room `waits[i]` idle ticks, then
-    /// right held and one jump (over the block in the first room, over the spike in the goal
-    /// room). Returns the clear's record and its run.
+    /// Plays the `tests/fixtures/clear.pkg` fixture once with scripted input: in each room
+    /// `waits[i]` idle ticks, then right held and one jump (over the block in the first room,
+    /// over the spike in the goal room). Returns the clear's record and its run.
     fn play_demo_clear(world: &mut World, waits: [u32; 2]) -> (Recorded, Run) {
         play_demo_clear_paused(world, waits, 0)
     }
@@ -509,7 +509,7 @@ mod tests {
     /// writes it to the file and the next start reads it back.
     #[test]
     fn a_cleared_run_keeps_its_deaths_after_a_save_and_load() {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-clear.pkg");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
         let pkg = crate::package::open(&dir, false).unwrap();
         let store = temp("death-log");
         let mut world = crate::view::test_world(&pkg);
@@ -580,7 +580,7 @@ mod tests {
     /// the goal room, so the sum of best drops below the PB.
     #[test]
     fn the_clear_demo_clears_twice_with_a_split() {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-clear.pkg");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
         let pkg = crate::package::open(&dir, false).unwrap();
         assert_eq!(pkg.def.timing.stages.len(), 1);
         let store = temp("clear");
@@ -630,7 +630,7 @@ mod tests {
     /// the clear and each split carry the paused ticks before them.
     #[test]
     fn paused_ticks_count_in_the_clear_and_the_splits() {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-clear.pkg");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
         let pkg = crate::package::open(&dir, false).unwrap();
         let mut world = crate::view::test_world(&pkg);
         world.insert_resource(Time::<Fixed>::from_hz(50.0));

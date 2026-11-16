@@ -1,0 +1,21 @@
+#:schema ../../../../docs/format/schema/v0/particles.schema.json
+# Snow over the summit, in front of everything.
+depth = -10
+
+[types.flake]
+shape = "snow"
+size = [0.08, 0.2, 0, 0.02]
+speed = [0.6, 1.4]
+direction = [250, 270, 0, 6]
+orientation = [0, 360, 2, 0]
+color = ["#ffffff", "#c8d8ff"]
+alpha = [0.9, 0.8, 0]
+life = [400, 500]
+
+[[emitters]]
+region = [0, 900, -16, -16]
+stream = { type = "flake", number = 2 }
+
+[[emitters]]
+region = [0, 800, 0, 608]
+burst = { type = "flake", number = 140 }

@@ -1,0 +1,25 @@
+#:schema ../../../../docs/format/schema/v0/room.schema.json
+size = [800, 608]
+file_speed = 50
+views_enabled = false
+background_color = "#090b1e"
+# Above the clouds: the sky with the moon and a sea of clouds drifting slowly.
+backgrounds = [
+  { image = "sky", tile = [false, false] },
+  { image = "cloud_sea", offset = [0, 420], speed = [-0.15, 0], tile = [true, false] },
+]
+instances = [
+  { kind = "kid_start", x = 64, y = 512 },
+  { kind = "block", x = 0, y = 448, run = [1, 5], visible = false },
+  { kind = "block", x = 768, y = 448, run = [1, 5], visible = false },
+  { kind = "block", x = 512, y = 480, run = [3, 4], visible = false },
+  { kind = "block", x = 32, y = 544, run = [15, 2], visible = false },
+  { kind = "block", x = 608, y = 544, run = [5, 2], visible = false },
+  { kind = "music", x = 0, y = 0, track = "night", mode = "every_step_if_not_playing" },
+  { kind = "@snowfall", x = 0, y = 0 },
+  { kind = "@firelight", x = 0, y = 0 },
+  { kind = "save", x = 128, y = 512, on_shot = true },
+  { kind = "sign", x = 224, y = 512, mode = "while_overlapping", text = "The summit. Touch the star to end the run. Started with --ranked, the results page follows with your time and splits." },
+  { kind = "spike", x = 320, y = 512, run = [2, 1], dir = "up" },
+  { kind = "game_clear", x = 544, y = 448, save_with_position = false },
+]
