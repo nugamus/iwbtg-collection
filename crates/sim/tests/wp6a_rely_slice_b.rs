@@ -9,13 +9,14 @@ mod wp6a {
     };
     use iwbtg_sim::events::EventKind;
     use iwbtg_sim::input::{Action, InputFrame};
+    use iwbtg_sim::kid::state::KidState;
     use iwbtg_sim::num::Real;
     use iwbtg_sim::output::OutputEvent;
     use iwbtg_sim::room::{RoomOutput, RoomRequest};
     use iwbtg_sim::rules::RunnerRules;
     use iwbtg_sim::script::ScriptRuntime;
     use iwbtg_sim::sound::DllMode;
-    use iwbtg_sim::world::{Ctx, Flow, InstId, SpawnInit, World};
+    use iwbtg_sim::world::{Ctx, Flow, InstId, KindState, SpawnInit, World};
 
     fn r(v: f64) -> Real {
         Real::new(v)
@@ -171,6 +172,109 @@ mod wp6a {
         assert_eq!(w.pending, Some(RoomRequest::Goto(g.room2)));
     }
 
+    /// A kid with speed (3, `vspeed`) and djump spent, at (`x`, `y`), touched by the warp.
+    fn warp_a_moving_kid(g: &G, x: f64, y: f64, vspeed: f64) -> (World, InstId) {
+        let mut w = World::new(g.room, 1);
+        let warp = spawn(g, &mut w, kind_id(g, "warp"), 0.0, 0.0);
+        let kid = spawn(g, &mut w, g.kid, x, y);
+        let k = w.get_mut(kid).unwrap();
+        k.m.set_hspeed(r(3.0)).unwrap();
+        k.m.set_vspeed(r(vspeed)).unwrap();
+        k.state = KindState::Kid(Box::new(KidState {
+            djump: false,
+            ..KidState::default()
+        }));
+        assert_eq!(fire(g, &mut w, warp, &touch(kid)), Flow::AbortTick);
+        assert_eq!(w.pending, Some(RoomRequest::Goto(g.room2)));
+        (w, kid)
+    }
+
+    fn pos_speed(w: &World, kid: InstId) -> (Real, Real, Real, Real) {
+        let k = w.get(kid).unwrap();
+        assert!(k.alive);
+        (k.m.x(), k.m.y(), k.m.hspeed(), k.m.vspeed())
+    }
+
+    fn djump(w: &World, kid: InstId) -> bool {
+        match &w.get(kid).unwrap().state {
+            KindState::Kid(s) => s.djump,
+            other => panic!("kid state {other:?}"),
+        }
+    }
+
+    #[test]
+    fn warp_zero_axis_set_writes_a_zero_target_too() {
+        // The default (LR, KOT, ANI roomChanger): x = warpX and y = warpY, a 0 included.
+        let g = warp_game(|_| params(&[("warp_x", real(40.0))]));
+        let (w, kid) = warp_a_moving_kid(&g, 5.0, 70.0, -4.0);
+        assert_eq!(pos_speed(&w, kid), (r(40.0), r(0.0), r(3.0), r(-4.0)));
+    }
+
+    #[test]
+    fn warp_zero_axis_keep_leaves_a_zero_axis_and_keeps_speed_and_djump() {
+        // NY roomChanger (KID-A4): x only if XX is nonzero, y only if YY is nonzero; the kid
+        // keeps his speed and djump.
+        let g = warp_game(|_| params(&[("warp_x", real(40.0)), ("zero_axis", word("keep"))]));
+        let (w, kid) = warp_a_moving_kid(&g, 5.0, 70.0, -4.0);
+        assert_eq!(pos_speed(&w, kid), (r(40.0), r(70.0), r(3.0), r(-4.0)));
+        assert!(!djump(&w, kid), "a spent djump stays spent");
+        let g = warp_game(|_| params(&[("warp_y", real(90.0)), ("zero_axis", word("keep"))]));
+        let (w, kid) = warp_a_moving_kid(&g, 5.0, 70.0, 2.0);
+        assert_eq!(pos_speed(&w, kid), (r(5.0), r(90.0), r(3.0), r(2.0)));
+    }
+
+    #[test]
+    fn warp_screen_shift_moves_a_zero_axis_by_screens() {
+        // KAE roomChanger (KID-B): x = warpX, or x + screens * 800 when warpX is 0; the same
+        // for y with 608.
+        let g = warp_game(|_| {
+            params(&[
+                ("warp_y", real(90.0)),
+                ("zero_axis", word("keep")),
+                ("screen_shift", real(-1.0)),
+            ])
+        });
+        let (w, kid) = warp_a_moving_kid(&g, 805.0, 70.0, 2.0);
+        assert_eq!(pos_speed(&w, kid), (r(5.0), r(90.0), r(3.0), r(2.0)));
+        let g = warp_game(|_| {
+            params(&[
+                ("warp_x", real(40.0)),
+                ("zero_axis", word("keep")),
+                ("screen_shift", real(1.0)),
+            ])
+        });
+        let (w, kid) = warp_a_moving_kid(&g, 5.0, 70.0, 2.0);
+        assert_eq!(pos_speed(&w, kid), (r(40.0), r(678.0), r(3.0), r(2.0)));
+    }
+
+    #[test]
+    fn warp_clear_rising_zeroes_only_a_negative_vspeed() {
+        // KAE (KID-B): a negative vspeed becomes 0, not adjusted for reversed gravity.
+        let p = |_| params(&[("warp_x", real(40.0)), ("warp_y", real(90.0)), ("clear_rising", yes())]);
+        let g = warp_game(p);
+        let (w, kid) = warp_a_moving_kid(&g, 5.0, 70.0, -4.0);
+        assert_eq!(pos_speed(&w, kid), (r(40.0), r(90.0), r(3.0), r(0.0)));
+        let g = warp_game(p);
+        let (w, kid) = warp_a_moving_kid(&g, 5.0, 70.0, 4.0);
+        assert_eq!(pos_speed(&w, kid), (r(40.0), r(90.0), r(3.0), r(4.0)));
+    }
+
+    #[test]
+    fn warp_to_zero_zero_destroys_the_kid_whatever_the_move_rule() {
+        let g = warp_game(|_| {
+            params(&[
+                ("zero_axis", word("keep")),
+                ("screen_shift", real(1.0)),
+                ("clear_rising", yes()),
+            ])
+        });
+        let mut w = World::new(g.room, 1);
+        let warp = spawn(&g, &mut w, kind_id(&g, "warp"), 0.0, 0.0);
+        let kid = spawn(&g, &mut w, g.kid, 5.0, 5.0);
+        fire(&g, &mut w, warp, &touch(kid));
+        assert!(alive(&w, g.kid).is_empty());
+    }
+
     #[test]
     fn warp_with_on_collide_off_does_nothing_and_a_flipped_kid_also_triggers_it() {
         let g = warp_game(|_| params(&[("on_collide", ParamValue::Bool(false))]));
@@ -227,6 +331,16 @@ mod wp6a {
             ("transition", real(300.0)),
         ]);
         assert!(builtins::init_state(Builtin::Warp, &p).is_err());
+        let room = ("room_to", ParamValue::Room(RoomId(1)));
+        let p = params(&[room.clone(), ("screen_shift", real(1.0))]);
+        assert!(
+            builtins::init_state(Builtin::Warp, &p).is_err(),
+            "screen_shift needs zero_axis = keep"
+        );
+        let p = params(&[room.clone(), ("zero_axis", word("both"))]);
+        assert!(builtins::init_state(Builtin::Warp, &p).is_err());
+        let p = params(&[room, ("zero_axis", word("set")), ("screen_shift", real(0.0))]);
+        assert!(builtins::init_state(Builtin::Warp, &p).is_ok());
     }
 
     // ---- difficulty_warp --------------------------------------------------------------------
