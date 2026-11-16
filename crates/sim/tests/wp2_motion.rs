@@ -126,7 +126,11 @@ mod wp2 {
         };
         // Threshold probes at direction 0.
         assert_eq!(at(5.0001, 0.0).0, r(5.0), "|5.0001 - 5| is 9.99999999998e-05");
-        assert_eq!(at(100.0001, 0.0).0, r(100.0001), "|100.0001 - 100| is 1.0000000000332e-4");
+        assert_eq!(
+            at(100.0001, 0.0).0,
+            r(100.0001),
+            "|100.0001 - 100| is 1.0000000000332e-4"
+        );
         assert_eq!(bits(at(0.000_09, 0.0).0), bits(r(0.0)));
         assert_eq!(at(0.0001, 0.0).0, r(0.0001), "1e-4 is not below 1e-4");
         assert_eq!(at(0.5 + 1e-10, 0.0).0, r(0.5 + 1e-10), "only integers attract");

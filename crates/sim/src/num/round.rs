@@ -88,7 +88,11 @@ pub fn ceil(x: Real, r: &NumRules) -> Real {
 pub fn snap_to_int(x: Real) -> Real {
     let v = x.get();
     let n = (v + 0.5).floor();
-    if v != n && (v - n).abs() < 0.000_1 { Real::new(n) } else { x }
+    if v != n && (v - n).abs() < 0.000_1 {
+        Real::new(n)
+    } else {
+        x
+    }
 }
 
 /// GML `frac`: `x` minus its integer part toward zero, as Delphi's `Frac`.
