@@ -1,5 +1,5 @@
-//! WP6a.3: rely slice, part 3: blood_emitter, blood, game_over, bow (docs/plans/sim-core.md 6.2,
-//! 12). Hand-built worlds; inert kinds stand in for the kid.
+//! WP6a.3: rely slice, part 3: blood_emitter, blood, game_over, bow, block `proximity_frame`
+//! (docs/plans/sim-core.md 6.2, 12; #849). Hand-built worlds; inert kinds stand in for the kid.
 
 mod wp6a {
     use iwbtg_sim::builtins::{self, BuiltinOutput, game_over};
@@ -599,5 +599,90 @@ mod wp6a {
             &g.def.kinds[usize::try_from(kind_id(&g, "bow").0).unwrap()],
         );
         assert!(set.begin_step && set.step && set.end_step);
+    }
+
+    // ---- block proximity_frame (LEM block02, #849) ------------------------------------------
+
+    fn block02_game() -> G {
+        game(Params::default(), || {
+            let mut k = KindDef::new("block02", Builtin::Block);
+            k.solid = true;
+            k.visible = true;
+            k.classes = ClassMask::BLOCK;
+            k.params = params(&[("proximity_frame", yes())]);
+            vec![k]
+        })
+    }
+
+    fn frame(w: &World, id: InstId) -> Real {
+        w.get(id).unwrap().img.index()
+    }
+
+    /// The block's frame after one Step with the kid's origin at (`kx`, `ky`); the block is at
+    /// (100, 200).
+    fn frame_with_kid_at(g: &G, kx: f64, ky: f64) -> Real {
+        let mut w = World::new(g.room, 1);
+        let blk = spawn(g, &mut w, kind_id(g, "block02"), 100.0, 200.0);
+        spawn(g, &mut w, g.kid, kx, ky);
+        fire(g, &mut w, blk, &EventKind::Step);
+        frame(&w, blk)
+    }
+
+    #[test]
+    fn proximity_frame_box_edges_are_strict() {
+        let g = block02_game();
+        // dx in (-8, 40), dy in (-16, 40), from the block's origin (100, 200).
+        assert_eq!(frame_with_kid_at(&g, 92.0, 210.0), r(0.0), "dx = -8");
+        assert_eq!(frame_with_kid_at(&g, 92.5, 210.0), r(1.0), "dx = -7.5");
+        assert_eq!(frame_with_kid_at(&g, 139.5, 210.0), r(1.0), "dx = 39.5");
+        assert_eq!(frame_with_kid_at(&g, 140.0, 210.0), r(0.0), "dx = 40");
+        assert_eq!(frame_with_kid_at(&g, 110.0, 184.0), r(0.0), "dy = -16");
+        assert_eq!(frame_with_kid_at(&g, 110.0, 184.5), r(1.0), "dy = -15.5");
+        assert_eq!(frame_with_kid_at(&g, 110.0, 239.5), r(1.0), "dy = 39.5");
+        assert_eq!(frame_with_kid_at(&g, 110.0, 240.0), r(0.0), "dy = 40");
+    }
+
+    #[test]
+    fn proximity_frame_follows_the_kid_and_is_zero_without_one() {
+        let g = block02_game();
+        let mut w = World::new(g.room, 1);
+        let blk = spawn(&g, &mut w, kind_id(&g, "block02"), 100.0, 200.0);
+        assert_eq!(
+            w.get(blk).unwrap().img.speed(),
+            r(0.0),
+            "Create sets image_speed 0"
+        );
+        fire(&g, &mut w, blk, &EventKind::Step);
+        assert_eq!(frame(&w, blk), r(0.0), "no kid");
+        let kid = spawn(&g, &mut w, g.kid, 110.0, 210.0);
+        fire(&g, &mut w, blk, &EventKind::Step);
+        assert_eq!(frame(&w, blk), r(1.0), "kid near");
+        w.get_mut(kid).unwrap().m.set_x(r(300.0)).unwrap();
+        fire(&g, &mut w, blk, &EventKind::Step);
+        assert_eq!(frame(&w, blk), r(0.0), "kid gone away");
+        w.get_mut(kid).unwrap().m.set_x(r(110.0)).unwrap();
+        fire(&g, &mut w, blk, &EventKind::Step);
+        assert_eq!(frame(&w, blk), r(1.0));
+        with(&g, &mut w, |c| c.destroy(kid));
+        fire(&g, &mut w, blk, &EventKind::Step);
+        assert_eq!(frame(&w, blk), r(0.0), "kid destroyed");
+    }
+
+    #[test]
+    fn proximity_frame_adds_step_only_when_set() {
+        let g = block02_game();
+        let on = builtins::event_set(
+            Builtin::Block,
+            &g.def.kinds[usize::try_from(kind_id(&g, "block02").0).unwrap()],
+        );
+        assert!(on.step);
+        let off = builtins::event_set(Builtin::Block, &g.def.kinds[usize::try_from(g.block.0).unwrap()]);
+        assert!(!off.step);
+        // A plain block keeps its frame.
+        let mut w = World::new(g.room, 1);
+        let blk = spawn(&g, &mut w, g.block, 100.0, 200.0);
+        spawn(&g, &mut w, g.kid, 110.0, 210.0);
+        fire(&g, &mut w, blk, &EventKind::Step);
+        assert_eq!(frame(&w, blk), r(0.0));
     }
 }
