@@ -15,8 +15,8 @@ In GM a system outlives the instance that made it and the room, until code clear
 - `destroy_emitters` (`part_emitter_destroy_all`): the streams stop; the live particles stay, age and still fire their death particles.
 - `destroy` (`part_system_destroy`): the system is gone and draws nothing again.
 
-A call after `destroy` does nothing. Each new instance builds a new system with new types, as the original's Create does each time it runs.
+A call after `destroy` does nothing. The client draws each system from its own copy, which follows these calls ([particles](../../architecture/client/particles.md)). Each new instance builds a new system with new types, as the original's Create does each time it runs.
 
-**Switch.** `NumRules::particles_draw_rng` is on in engine_rev 0 (#766); without it the built-in builds nothing and draws nothing, and the particles are the client's only. Whether a system's update runs on a tick a room request ends early, and whether systems survive the room change, are Confirmed (recorder), CLONE_SPEC "Particle draw rules" item 9: the update is skipped and the sim keeps systems across rooms and game_restart.
+**Switch.** `NumRules::particles_draw_rng` is on in engine_rev 0 (#766); without it the built-in builds nothing and draws nothing, and the client draws nothing either. Whether a system's update runs on a tick a room request ends early, and whether systems survive the room change, are Confirmed (recorder), CLONE_SPEC "Particle draw rules" item 9: the update is skipped and the sim keeps systems across rooms and game_restart.
 
 **State.** The definition, the three calls and the system Create built (hashed with the instance). Tests: `particles_rng::particle_system::*` (sim), `wp7b_loader::*particle*` (loading). Converter request CR23 (research#183).

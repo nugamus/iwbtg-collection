@@ -60,6 +60,27 @@ impl Ladder {
             .count()
     }
 
+    /// The z of something drawn at `depth` after every instance of the same depth (a particle
+    /// system, [particles](../../../docs/architecture/client/particles.md)): inside the depth's
+    /// gap between tile layers, between the instances `placed` there (each drawn instance's
+    /// depth and z) that draw before it and those that draw after it.
+    pub(crate) fn depth_z(&self, placed: &[(f64, f32)], depth: f64) -> f32 {
+        let g = self.gap_of(depth);
+        let mut lo = WORLD_Z.0 + g as f32 * self.gap();
+        let mut hi = lo + self.gap();
+        for &(d, z) in placed {
+            if self.gap_of(d) != g {
+                continue;
+            }
+            if d >= depth {
+                lo = lo.max(z);
+            } else {
+                hi = hi.min(z);
+            }
+        }
+        (lo + hi) / 2.0
+    }
+
     /// The z of each instance, given in draw order (depth descending, then creation) as its
     /// depth: z strictly rising along the list.
     pub(crate) fn z_in_order(&self, depths: &[f64]) -> Vec<f32> {
@@ -133,6 +154,22 @@ mod tests {
         let z = ladder.z_in_order(&depths);
         assert!(rising(&z));
         assert!(z.iter().all(|&z| z > WORLD_Z.0 && z < WORLD_Z.1));
+    }
+
+    #[test]
+    fn a_depth_lands_after_its_own_depth_and_before_smaller_ones() {
+        let ladder = Ladder::new([0.0]);
+        let depths = [10.0, 5.0, 5.0, 1.0, -3.0];
+        let z = ladder.z_in_order(&depths);
+        let placed: Vec<(f64, f32)> = depths.iter().copied().zip(z.iter().copied()).collect();
+        let at5 = ladder.depth_z(&placed, 5.0);
+        assert!(z[2] < at5 && at5 < z[3], "over both 5s, under the 1");
+        let back = ladder.depth_z(&placed, 100.0);
+        assert!(back > WORLD_Z.0 && back < z[0]);
+        // Behind the tile layer at 0 is the instance at 1; in front of it the one at -3.
+        let at0 = ladder.depth_z(&placed, 0.0);
+        assert!(z[3] < at0 && at0 < ladder.tile_z(0));
+        assert!(ladder.depth_z(&placed, -5.0) > z[4]);
     }
 
     #[test]
