@@ -37,7 +37,7 @@ pub fn run(
     reduced_motion: bool,
     window: Option<(u32, u32)>,
     ratio: Option<(u32, u32)>,
-) {
+) -> Result<(), String> {
     let size = window.or_else(|| ratio.map(|(w, h)| (1600, 1600 * h / w)));
     let resolution = match size {
         Some((w, h)) => bevy::window::WindowResolution::new(w, h).with_scale_factor_override(1.0),
@@ -70,10 +70,10 @@ pub fn run(
     )
     .add_observer(on_activate);
     if let Some(path) = screenshot {
-        app.insert_resource(crate::view::ScreenshotTo(path))
-            .add_systems(Update, crate::view::take_screenshot);
+        let size = size.map(|(w, h)| UVec2::new(w, h));
+        crate::view::add_screenshot(&mut app, path, size);
     }
-    app.run();
+    crate::view::shot_result(app.run())
 }
 
 /// Scales the 1920x1080 layout to fit the window.
