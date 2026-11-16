@@ -7,8 +7,8 @@ mod wp3 {
     use iwbtg_sim::collide::contact::{contact_steps, mcs_step_limit, outside_steps};
     use iwbtg_sim::collide::{
         Target, collision_line, collision_point, collision_rectangle, distance_to_object, instance_place,
-        instance_position, move_bounce_solid, move_contact_solid, move_outside_solid, place_empty,
-        place_free, place_meeting, solid_resolve,
+        instance_position, move_contact_solid, move_outside_solid, place_empty, place_free, place_meeting,
+        solid_resolve,
     };
     use iwbtg_sim::def::ClassMask;
     use iwbtg_sim::error::SimError;
@@ -409,16 +409,6 @@ mod wp3 {
         let hits = |x, y| place_free(&ctx, k, x, y).map(|f| !f);
         let none = outside_steps((r(30.0), r(567.4)), r(180.0), None, hits, || Ok(1000));
         assert_eq!(none.unwrap(), (r(30.0), r(567.4)), "no overlap: no move");
-    }
-
-    #[test]
-    fn move_bounce_solid_is_unsupported() {
-        let mut g = game(800, 608);
-        let k = g.add_kid(100.0, 100.0, 1.0);
-        assert!(matches!(
-            move_bounce_solid(&mut g.ctx(), k, true),
-            Err(SimError::Unsupported { .. })
-        ));
     }
 
     /// The `&mut Ctx` wrappers. They write `x`/`y` through `Motion::set_x`/`set_y` (WP2), so

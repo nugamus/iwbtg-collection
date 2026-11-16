@@ -25,6 +25,7 @@ mod loading;
 mod mods;
 mod overlay;
 mod package;
+mod particles;
 mod pause;
 mod practice;
 mod render_fix;
@@ -201,6 +202,7 @@ fn main() -> ExitCode {
             import::ImportPlugin { keep: keep_stats },
             overlay::OverlayPlugin(overlay),
             loading,
+            particles::ParticlesPlugin,
         ));
     });
     match result {

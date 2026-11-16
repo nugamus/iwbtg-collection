@@ -76,3 +76,88 @@ fn the_scripted_case_runs_every_event() {
         "ids {oldest}..{newest}: the alarm spawned sparks"
     );
 }
+
+/// Built-ins no golden case runs, each with the reason. Shrinks; never grows without one.
+const UNCOVERED_BUILTINS: &[(&str, &str)] = &[(
+    "inert",
+    "only `LoadMode::Trace` loads it: an unmapped kind with no events",
+)];
+
+/// Every `Builtin` and every `KidFamily` runs in some golden case (#786), so a new kind or
+/// family cannot skip the cross-platform byte compare: the report's coverage lines name a case
+/// for each, except the allow-listed built-ins. Every kid case must also still be running at
+/// its end (a halted course would cover nothing after the halt).
+#[test]
+fn every_builtin_and_kid_family_runs_in_a_golden_case() {
+    use iwbtg_sim::def::Builtin;
+    let report = golden::report();
+    let mut missing = Vec::new();
+    for b in Builtin::ALL {
+        let line = report
+            .lines()
+            .find(|l| l.split(' ').take(2).eq(["builtin", b.name()]))
+            .expect("a line per built-in");
+        let uncovered = line.ends_with(" -");
+        let allowed = UNCOVERED_BUILTINS.iter().any(|(n, _)| *n == b.name());
+        if uncovered != allowed {
+            missing.push(line.to_owned());
+        }
+    }
+    for f in golden::FAMILIES {
+        let line = report
+            .lines()
+            .find(|l| l.starts_with(&format!("family {f:?} ")))
+            .expect("a line per family");
+        if line.ends_with(" -") {
+            missing.push(line.to_owned());
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "add a golden case (tests/golden/courses.rs) or fix the allow-list: {missing:?}"
+    );
+    for case in golden::cases()
+        .iter()
+        .filter(|c| c.name.starts_with("kid_") || c.name == "script_api")
+    {
+        let out = golden::run(case);
+        assert_eq!(out.status, "running", "{}", out.line());
+        assert_eq!(out.ticks, case.ticks, "{}", out.line());
+    }
+}
+
+/// Every function and instance property of the script API (the generated
+/// `docs/format/script/iws.d.rhai`) is called in a golden script, so the byte compare covers
+/// each host function.
+#[test]
+fn golden_scripts_call_every_script_api_function() {
+    const STUBS: &str = include_str!("../../../docs/format/script/iws.d.rhai");
+    const SCRIPTS: &[&str] = &[
+        include_str!("golden/script_api.rhai"),
+        include_str!("golden/script_mover.rhai"),
+        include_str!("golden/scripted_walker.rhai"),
+        include_str!("golden/scripted_spark.rhai"),
+    ];
+    let text = SCRIPTS.concat();
+    let mut missing = std::collections::BTreeSet::new();
+    for line in STUBS.lines() {
+        let Some(sig) = line.strip_prefix("fn ") else {
+            continue;
+        };
+        let name = sig.split('(').next().unwrap_or_default().trim();
+        let found = if let Some(p) = name.strip_prefix("get ") {
+            text.contains(&format!(".{p}"))
+        } else if let Some(p) = name.strip_prefix("set ") {
+            text.contains(&format!(".{p} =")) || text.contains(&format!(".{p} -="))
+        } else if name.starts_with("index$") {
+            // `this.hp` reads and writes go through the indexers.
+            text.contains("this.hp =") && text.contains("this.hp +")
+        } else {
+            text.contains(&format!("{name}("))
+        };
+        if !found {
+            missing.insert(name.to_owned());
+        }
+    }
+    assert!(missing.is_empty(), "no golden script calls {missing:?}");
+}

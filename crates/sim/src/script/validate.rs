@@ -87,6 +87,8 @@ pub const STATE_FNS: &[&str] = &[
     "set_alarm",
     "instance_create",
     "destroy",
+    "move_bounce_solid",
+    "move_bounce_all",
     "emit",
     "kill_kid",
     "room_goto",

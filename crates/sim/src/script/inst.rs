@@ -18,6 +18,7 @@ use super::budget::cost;
 use super::docs::Docs;
 use super::host::Shared;
 use crate::alarm;
+use crate::collide::bounce::{Against, move_bounce};
 use crate::def::class::{class_params, kind_classes};
 use crate::def::{ClassMask, KindId, ParamValue, Params, RoomId};
 use crate::error::SimError;
@@ -498,6 +499,26 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
             }
             Ok(())
         });
+        for (name, against, doc) in [
+            (
+                "move_bounce_solid",
+                Against::Solid,
+                "`i.move_bounce_solid(precise)`: GML `move_bounce_solid`, the Bounce action against solid instances. Changes only `hspeed` and `vspeed`, never the position; the tick's motion then moves by the new speed. Not precise negates `hspeed` when (`x + hspeed`, `y`) is blocked, `vspeed` when (`x`, `y + vspeed`) is, both when only the diagonal is; precise picks a new direction (a multiple of 10) from 36 samples at radius `speed`.",
+            ),
+            (
+                "move_bounce_all",
+                Against::All,
+                "`i.move_bounce_all(precise)`: as `move_bounce_solid`, against every instance (`place_empty`).",
+            ),
+        ] {
+            let s = Rc::clone(shared);
+            docs.add(name, doc);
+            engine.register_fn(name, move |i: &mut Inst, precise: bool| -> Res<()> {
+                let i = *i;
+                s.with_ctx(|ctx| move_bounce(ctx, i.0, precise, against))?
+                    .map_err(sim_err)
+            });
+        }
         let s = Rc::clone(shared);
         docs.add("instance_create", "Creates an instance of a kind at (`x`, `y`) and runs its Create event; an optional map sets its parameters. Params that match a `[defaults.<kind>]` variant (`spike` with `dir: \"down\"`) take the variant's kind, with its sprite and mask, as a placed instance does. Params that pick a class (water `variant`, vine `side`, ...) take the kind the loader derived with those values; an error when there is none. Returns the handle.");
         engine.register_fn(

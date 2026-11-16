@@ -1,0 +1,146 @@
+//! The tracker on the particle demo: builds, lifecycle calls, retries, and the sim untouched.
+
+use std::path::Path;
+use std::sync::Arc;
+
+use iwbtg_sim::def::{GameDef, ParamValue};
+use iwbtg_sim::input::InputFrame;
+use iwbtg_sim::particles::PartSystemId;
+use iwbtg_sim::room::StartPoint;
+use iwbtg_sim::sim::{Sim, SimOptions};
+use iwbtg_sim::sound::DllMode;
+
+use super::*;
+
+fn demo() -> Arc<GameDef> {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-particles.pkg");
+    crate::package::open(&dir, false).unwrap().def
+}
+
+fn sim(def: Arc<GameDef>) -> Sim {
+    let options = SimOptions {
+        start: StartPoint::NewGame { difficulty: 0 },
+        seed: 0,
+        dll_mode: DllMode::Model,
+        mode: iwbtg_sim::stripped::PlayMode::Original,
+        map: None,
+    };
+    Sim::new(def, options).unwrap()
+}
+
+/// The sim system and drawing copy of the particle file `name`.
+fn system<'a>(def: &GameDef, t: &'a Tracker, name: &str) -> (u32, &'a DrawSystem) {
+    let d = def.particle_systems.iter().position(|p| p.name == name).unwrap();
+    let (s, sys) = t.systems.iter().find(|(_, s)| s.def == d).unwrap();
+    (*s, sys)
+}
+
+#[test]
+fn the_demo_builds_both_systems_and_they_flow_every_tick() {
+    let def = demo();
+    let mut sim = sim(Arc::clone(&def));
+    let mut t = Tracker::default();
+    sim.step(InputFrame::EMPTY);
+    t.follow(&def, sim.world());
+    assert_eq!(t.systems.len(), 2);
+    let (_, snow) = system(&def, &t, "snow");
+    // The burst of 120 and one update of the stream of 2.
+    assert_eq!(snow.particles.len(), 122);
+    let (_, fountain) = system(&def, &t, "fountain");
+    assert_eq!(
+        fountain.particles.len(),
+        12 + 3,
+        "the star burst and one stream update"
+    );
+    let g = t.generation;
+    for _ in 0..50 {
+        sim.step(InputFrame::EMPTY);
+        t.follow(&def, sim.world());
+    }
+    assert!(t.generation > g);
+    let (_, fountain) = system(&def, &t, "fountain");
+    let sparks = def.particle_systems[fountain.def]
+        .types
+        .iter()
+        .position(|ty| ty.name == "spark")
+        .unwrap();
+    let up = fountain
+        .particles
+        .iter()
+        .filter(|p| p.ty == sparks && p.y < 470.0)
+        .count();
+    assert!(up > 50, "the sparks rise over the block: {up}");
+}
+
+#[test]
+fn following_the_sim_never_changes_it() {
+    let def = demo();
+    let (mut watched, mut alone) = (sim(Arc::clone(&def)), sim(Arc::clone(&def)));
+    let mut t = Tracker::default();
+    for _ in 0..100 {
+        watched.step(InputFrame::EMPTY);
+        alone.step(InputFrame::EMPTY);
+        t.follow(&def, watched.world());
+    }
+    assert_eq!(watched.state_hash(), alone.state_hash());
+}
+
+#[test]
+fn destroy_and_destroy_emitters_come_from_the_sims_state() {
+    let def = demo();
+    let mut sim = sim(Arc::clone(&def));
+    let mut t = Tracker::default();
+    sim.step(InputFrame::EMPTY);
+    t.follow(&def, sim.world());
+    let (snow, _) = system(&def, &t, "snow");
+    let (fountain, _) = system(&def, &t, "fountain");
+    let mut w = sim.world().clone();
+    w.particles.destroy_all_emitters(PartSystemId(snow)).unwrap();
+    w.particles.destroy_system(PartSystemId(fountain)).unwrap();
+    w.tick += 1;
+    let before = system(&def, &t, "snow").1.particles.len();
+    t.follow(&def, &w);
+    assert!(!t.systems.contains_key(&fountain), "destroyed: gone");
+    let after = system(&def, &t, "snow").1.particles.len();
+    assert_eq!(after, before, "no stream any more, and no flake dies this early");
+}
+
+#[test]
+fn a_room_start_clear_takes_the_burst_away() {
+    let mut def = (*demo()).clone();
+    let k = def.kinds.iter_mut().find(|k| k.name == "@snowfall").unwrap();
+    k.params
+        .0
+        .insert("on_room_start".into(), ParamValue::Str("clear".into()));
+    k.events.room_start = true;
+    let def = Arc::new(def);
+    let mut sim = sim(Arc::clone(&def));
+    let mut t = Tracker::default();
+    sim.step(InputFrame::EMPTY);
+    t.follow(&def, sim.world());
+    let (_, snow) = system(&def, &t, "snow");
+    assert_eq!(
+        snow.particles.len(),
+        2,
+        "the burst was cleared; one stream update is left"
+    );
+}
+
+#[test]
+fn a_retry_starts_the_particles_over() {
+    let def = demo();
+    let mut first = sim(Arc::clone(&def));
+    let mut t = Tracker::default();
+    for _ in 0..30 {
+        first.step(InputFrame::EMPTY);
+        t.follow(&def, first.world());
+    }
+    let mut again = sim(Arc::clone(&def));
+    again.step(InputFrame::EMPTY);
+    t.follow(&def, again.world());
+    let mut fresh = Tracker::default();
+    fresh.follow(&def, again.world());
+    let (_, a) = system(&def, &t, "snow");
+    let (_, b) = system(&def, &fresh, "snow");
+    assert_eq!(a.particles, b.particles);
+}
