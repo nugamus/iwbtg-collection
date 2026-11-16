@@ -185,11 +185,7 @@ fn draw(
     if pictures.shown == Some(tracker.generation) {
         // Only the depth can move (instances come and go around it).
         for (&(s, _, _), (entity, _)) in &pictures.meshes {
-            let depth = tracker
-                .systems
-                .get(&s)
-                .and_then(|d| def.particle_systems.get(d.def))
-                .map_or(0.0, |d| d.depth.get());
+            let depth = tracker.depth(def, s);
             if let Ok(mut t) = transforms.get_mut(*entity) {
                 t.translation.z = z_of(depth);
             }
@@ -199,12 +195,10 @@ fn draw(
     pictures.shown = Some(tracker.generation);
     let half = room.0 / 2.0;
     let mut built: BTreeMap<Key, Quads> = BTreeMap::new();
-    let mut depth_of: BTreeMap<u32, f64> = BTreeMap::new();
     for (&s, sys) in &tracker.systems {
         let Some(pd) = def.particle_systems.get(sys.def) else {
             continue;
         };
-        depth_of.insert(s, pd.depth.get());
         for p in &sys.particles {
             let Some(t) = pd.types.get(p.ty) else { continue };
             let (picture, frames, frame_size, pivot, strip) = match t.look.sprite {
@@ -281,7 +275,7 @@ fn draw(
     }
     for (key, quads) in built {
         let (s, picture, additive) = key;
-        let z = z_of(depth_of.get(&s).copied().unwrap_or(0.0));
+        let z = z_of(tracker.depth(def, s));
         if let Some((entity, mesh)) = pictures.meshes.get(&key) {
             if let Some(mut m) = meshes.get_mut(mesh) {
                 *m = quads.mesh();

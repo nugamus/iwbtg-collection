@@ -1363,12 +1363,28 @@ impl<'a> Loader<'a> {
         specs?.iter().find(|s| s.name == key).map(|s| s.ty)
     }
 
-    /// Turns a text param into a room, kind or sound reference when the base's spec says so.
+    /// Turns a text param into a room, kind or sound reference when the base's spec says so; a
+    /// list param resolves each of its values by the list's inner type.
     fn resolve_param(&mut self, base: Builtin, key: &str, value: ParamValue, file: &str) -> ParamValue {
+        let ty = self.spec_type(base, key);
+        match (ty, value) {
+            (Some(ParamType::List(inner)), ParamValue::List(items)) => ParamValue::List(
+                items
+                    .into_iter()
+                    .map(|v| self.resolve_ref(Some(*inner), key, v, file))
+                    .collect(),
+            ),
+            (Some(ParamType::List(inner)), v) => self.resolve_ref(Some(*inner), key, v, file),
+            (ty, v) => self.resolve_ref(ty, key, v, file),
+        }
+    }
+
+    /// Turns text into a reference of type `ty` (a room, kind, sound or particles file).
+    fn resolve_ref(&mut self, ty: Option<ParamType>, key: &str, value: ParamValue, file: &str) -> ParamValue {
         let ParamValue::Str(s) = &value else {
             return value;
         };
-        let found = match self.spec_type(base, key) {
+        let found = match ty {
             Some(ParamType::Room) => self.room_ids.get(s).copied().map(ParamValue::Room),
             Some(ParamType::Kind) => self.kind_by_ref(s).map(ParamValue::Kind),
             Some(ParamType::Sound) => self
@@ -2940,6 +2956,7 @@ fn show_param(p: &ParamValue) -> String {
         ParamValue::Kind(k) => format!("kind#{}", k.0),
         ParamValue::Sound(s) => format!("sound#{}", s.0),
         ParamValue::Particles(p) => format!("particles#{}", p.0),
+        ParamValue::List(l) => format!("[{}]", l.iter().map(show_param).collect::<Vec<_>>().join(", ")),
     }
 }
 

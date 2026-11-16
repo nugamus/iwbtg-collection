@@ -192,6 +192,9 @@ pub enum ParamType {
     Text,
     /// A particle system definition (`particles/<id>.toml`).
     Particles,
+    /// A list of values of the inner type (`system = ["a", "b"]`); a single value is a list of
+    /// one, and an empty list is a load error.
+    List(&'static ParamType),
 }
 
 /// A param set a built-in cannot use.

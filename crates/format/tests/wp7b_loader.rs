@@ -789,6 +789,93 @@ fn negative_burst_and_death_counts_load() {
     assert_eq!(s.types[1].draws.death.map(|c| c.count), Some(-5));
 }
 
+/// `system` may list files (rely objEffect's two systems) and `on_room_start_except` lists
+/// rooms (go-the-spook-house oRainSys); both resolve each value, and a single value still works
+/// (client#826).
+#[test]
+fn particle_system_list_params_resolve() {
+    let files = with_objects(
+        &[
+            ("particles/fx.toml", PARTICLES),
+            ("particles/rain.toml", "depth = -100000\n"),
+            (
+                "objects/effect.toml",
+                "base = \"particle_system\"\nsystem = [\"rain\", \"fx\"]\non_room_start = \"clear\"\n\
+                 on_room_start_except = [\"stage1\"]\non_room_start_destroys_instance = true\n",
+            ),
+        ],
+        None,
+    );
+    let (def, _) = load_ok(&files, STRICT);
+    let effect = def
+        .kinds
+        .iter()
+        .find(|k| k.base == Builtin::ParticleSystem && k.name.contains("effect"))
+        .expect("effect kind");
+    let id = |name: &str| {
+        let i = def.particle_systems.iter().position(|s| s.name == name).unwrap();
+        ParamValue::Particles(PartSystemDefId(i as u32))
+    };
+    assert_eq!(
+        effect.params.0.get("system"),
+        Some(&ParamValue::List(vec![id("rain"), id("fx")]))
+    );
+    let stage1 = def.rooms.iter().position(|r| r.name == "stage1").unwrap();
+    assert_eq!(
+        effect.params.0.get("on_room_start_except"),
+        Some(&ParamValue::List(vec![ParamValue::Room(iwbtg_sim::def::RoomId(
+            stage1 as u32
+        ))]))
+    );
+    assert!(effect.events.room_start);
+}
+
+/// Unknown files and rooms in a list, an empty list, and a list on a param that takes one value
+/// are load errors (client#826).
+#[test]
+fn particle_system_list_mistakes_are_errors() {
+    for (obj, needle) in [
+        ("system = [\"fx\", \"nope\"]\n", "`nope` does not exist"),
+        ("system = []\n", "param `system` is an empty list"),
+        (
+            "system = \"fx\"\non_room_start_except = [\"stage1\", \"nowhere\"]\n",
+            "`nowhere` does not exist",
+        ),
+        (
+            "system = \"fx\"\non_room_start_except = []\n",
+            "param `on_room_start_except` is an empty list",
+        ),
+        ("system = \"fx\"\non_room_start = [\"clear\"]\n", "param `on_room_start` must be one of"),
+    ] {
+        let obj = format!("base = \"particle_system\"\n{obj}");
+        let files = effect_package(&[("particles/fx.toml", PARTICLES), ("objects/effect.toml", &obj)]);
+        let r = load_report(&files, STRICT);
+        assert!(
+            errors(&r).iter().any(|m| m.contains(needle)),
+            "{obj}\nwanted `{needle}`:\n{}",
+            render(&r)
+        );
+    }
+}
+
+/// A script kind's params are single values: a list is an error there (client#826).
+#[test]
+fn a_script_kind_param_list_is_an_error() {
+    let files = with_objects(
+        &[
+            ("objects/s.toml", "script = \"s\"\nxs = [1, 2]\n"),
+            ("scripts/s.rhai", "fn create() {}\n"),
+        ],
+        None,
+    );
+    let r = load_report(&files, STRICT);
+    assert!(
+        errors(&r).iter().any(|m| m.contains("param `xs` is a list")),
+        "{}",
+        render(&r)
+    );
+}
+
 /// An alpha value may be `{ random = [min, max] }` (go-the-spook-house's rain, client#826): a
 /// range in the def, drawing only, next to the fixed values.
 #[test]
