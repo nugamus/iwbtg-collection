@@ -159,11 +159,114 @@ mod tests {
 
     #[test]
     fn the_demo_package_opens_and_every_sprite_decodes() {
-        let demo = Path::new(env!("CARGO_MANIFEST_DIR")).join("demo.pkg");
+        let demo = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/input.pkg");
         let p = open(&demo, false).unwrap();
         let images = sprite_images(&p.files);
         assert_eq!(images.len(), p.def.sprites.len());
         assert!(images.iter().all(Option::is_some));
+    }
+
+    /// #852: the showcase opens, every sprite decodes, and a scripted route clears it without a
+    /// death: three rooms, two stage splits, then the star's `run_end`. Each jump is
+    /// `(x, hold, double_after, double_hold)`: once the kid's x reaches `x` in that room, jump
+    /// held for `hold` ticks, then (when `double_after` is not 0) a double jump that many ticks
+    /// after the first, held `double_hold` ticks. Right is held all the way.
+    #[test]
+    fn the_showcase_clears_with_a_scripted_route() {
+        use iwbtg_sim::input::{Action, InputFrame};
+        use iwbtg_sim::sim::{Sim, SimOptions};
+        use iwbtg_sim::sound::DllMode;
+
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("showcase.pkg");
+        let p = open(&dir, false).unwrap();
+        assert!(sprite_images(&p.files).iter().all(Option::is_some));
+        let route: [&[(f64, u32, u32, u32)]; 3] = [
+            &[(310.0, 20, 0, 0), (440.0, 16, 18, 20), (530.0, 20, 0, 0)],
+            &[
+                (215.0, 20, 0, 0),
+                (380.0, 20, 0, 0),
+                (445.0, 16, 20, 20),
+                (1180.0, 20, 0, 0),
+                (1296.0, 20, 0, 0),
+                (1424.0, 20, 0, 0),
+                (1640.0, 16, 18, 20),
+                (1905.0, 16, 20, 20),
+            ],
+            &[(280.0, 20, 0, 0), (470.0, 20, 0, 0)],
+        ];
+        let options = SimOptions {
+            start: iwbtg_sim::room::StartPoint::NewGame { difficulty: 0 },
+            seed: 0,
+            dll_mode: DllMode::Model,
+            mode: iwbtg_sim::stripped::PlayMode::Original,
+            map: None,
+        };
+        let mut sim = Sim::new(Arc::clone(&p.def), options).unwrap();
+        let (right, jump) = (Action::Right.bit(), Action::Jump.bit());
+        let (mut rooms, mut next, mut since_jump) = (Vec::new(), 0usize, None::<(u32, usize)>);
+        let mut prev_y = None;
+        for t in 0..4000u32 {
+            let w = sim.world();
+            if w.timing.ended {
+                assert_eq!(rooms.len(), 3, "the clear is in the third room");
+                assert_eq!(w.timing.stages_done, 2, "both stage splits fired");
+                return;
+            }
+            if rooms.last() != Some(&w.room) {
+                rooms.push(w.room);
+                (next, since_jump) = (0, None);
+            }
+            let kid = w.kid(&sim.rules().tick).and_then(|id| w.get(id));
+            let Some(kid) = kid else {
+                assert!(t < 2 || w.tick == 0, "no kid at tick {t} in room {}", rooms.len());
+                sim.step(InputFrame::default());
+                continue;
+            };
+            let (x, y) = (kid.m.x().get(), kid.m.y().get());
+            let jumps = route[rooms.len() - 1];
+            let mut frame = InputFrame {
+                held: right,
+                ..InputFrame::default()
+            };
+            if t == 0 {
+                frame.pressed |= right;
+            }
+            let grounded = prev_y == Some(y);
+            prev_y = Some(y);
+            if since_jump.is_none() && grounded && next < jumps.len() && x >= jumps[next].0 {
+                since_jump = Some((0, next));
+                next += 1;
+            }
+            if let Some((n, i)) = since_jump {
+                let (_, hold, double_after, double_hold) = jumps[i];
+                let first = n < hold;
+                let second = double_after > 0 && n >= double_after && n < double_after + double_hold;
+                if first || second {
+                    frame.held |= jump;
+                }
+                if n == 0 || (double_after > 0 && n == double_after) {
+                    frame.pressed |= jump;
+                }
+                if n + 1 == hold || (double_after > 0 && n + 1 == double_after + double_hold) {
+                    frame.released |= jump;
+                }
+                let end = if double_after > 0 {
+                    double_after + double_hold
+                } else {
+                    hold
+                };
+                since_jump = (n + 1 < end).then_some((n + 1, i));
+            }
+            let stages = sim.world().timing.stages_done;
+            sim.step(frame);
+            let w = sim.world();
+            assert!(
+                w.kid(&sim.rules().tick).is_some() || w.room != *rooms.last().unwrap(),
+                "the kid died at tick {t} in room {} near ({x}, {y}), stages {stages}",
+                rooms.len()
+            );
+        }
+        panic!("no clear in 4000 ticks; reached room {}", rooms.len());
     }
 
     #[test]
@@ -171,7 +274,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("iwbtg-client-iwbz-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let demo = Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-clear.pkg");
+        let demo = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
         let folder = open(&demo, false).unwrap();
         let file = dir.join("demo.IWBZ");
         std::fs::write(&file, iwbtg_format::iwbz::pack(&folder.files).unwrap()).unwrap();

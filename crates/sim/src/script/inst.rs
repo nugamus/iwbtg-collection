@@ -19,7 +19,7 @@ use super::docs::Docs;
 use super::host::Shared;
 use crate::alarm;
 use crate::collide::bounce::{Against, move_bounce};
-use crate::def::class::{class_params, kind_classes};
+use crate::def::class::{kind_classes, kind_params, picks_other_kind};
 use crate::def::{ClassMask, KindId, ParamValue, Params, RoomId};
 use crate::error::SimError;
 use crate::kid::{self, api::KillCause};
@@ -162,19 +162,19 @@ fn kind_id(host: &super::host::Host, name: &str) -> Res<KindId> {
 /// The kind a script spawn of `name` with `params` creates, chosen as the loader chooses a placed
 /// instance's. First the `[defaults.<kind>]` variant the params match (`spike` with
 /// `dir: "down"` takes `spike[dir=down]` and its sprite and mask, `GameDef::variant_kind`, #701).
-/// Then classes (#694): they come from the kind, as a GM instance's come from its object, so
-/// when the params that pick a class (`def::class::class_params`: water `variant`, vine `side`,
-/// ...) pick other classes than that kind's, the spawn takes the kind the loader derived from it
-/// with those values for a placed instance (#659). Without one the spawn is an error: a kind is
-/// never made at run time.
+/// Then classes and events (#694, #853): they come from the kind, as a GM instance's come from
+/// its object, so when the params that pick them (`def::class::kind_params`: water `variant`,
+/// vine `side`, killer `destroy_outside_room`, ...) pick other classes or another event set than
+/// that kind's, the spawn takes the kind the loader derived from it with those values for a
+/// placed instance (#659). Without one the spawn is an error: a kind is never made at run time.
 fn spawn_kind(host: &super::host::Host, name: &str, params: &Params) -> Res<KindId> {
     let k = host.def.variant_kind(kind_id(host, name)?, params);
     let Some(kd) = host.def.kind(k) else {
         return Ok(k);
     };
-    let picked: Vec<(&str, &ParamValue)> = class_params(kd.base)
-        .iter()
-        .filter_map(|key| params.0.get(*key).map(|v| (*key, v)))
+    let picked: Vec<(&str, &ParamValue)> = kind_params(kd.base)
+        .into_iter()
+        .filter_map(|key| params.0.get(key).map(|v| (key, v)))
         .collect();
     if picked.is_empty() {
         return Ok(k);
@@ -183,11 +183,12 @@ fn spawn_kind(host: &super::host::Host, name: &str, params: &Params) -> Res<Kind
     for (key, v) in &picked {
         merged.0.insert((*key).to_owned(), (*v).clone());
     }
-    // The loader's test (`class_kind`): the merged params' classes against the kind's, each with
-    // the kind's extra (`counts_as`) classes, which are the kind's classes the params do not give.
+    // The loader's test (`class_kind`): the merged params' classes and event set against the
+    // kind's, with the kind's extra (`counts_as`) classes, which are the kind's classes the params
+    // do not give.
     let own = kind_classes(kd.base, &kd.params, ClassMask::NONE);
     let extra = ClassMask(kd.classes.0 & !own.0);
-    if kind_classes(kd.base, &merged, extra) == kd.classes {
+    if !picks_other_kind(kd, &merged, extra) {
         return Ok(k);
     }
     let derived = host
@@ -205,7 +206,7 @@ fn spawn_kind(host: &super::host::Host, name: &str, params: &Params) -> Res<Kind
         .collect::<Vec<_>>()
         .join(", ");
     Err(runtime_error(format!(
-        "instance_create: `{name}` with {shown} picks other classes than the kind's, and no kind derived from `{name}` has them (classes come from the kind; place such an instance in a room or give the package an object with these params)"
+        "instance_create: `{name}` with {shown} picks other classes or events than the kind's, and no kind derived from `{name}` has them (classes and events come from the kind; place such an instance in a room or give the package an object with these params)"
     )))
 }
 
@@ -520,7 +521,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
             });
         }
         let s = Rc::clone(shared);
-        docs.add("instance_create", "Creates an instance of a kind at (`x`, `y`) and runs its Create event; an optional map sets its parameters. Params that match a `[defaults.<kind>]` variant (`spike` with `dir: \"down\"`) take the variant's kind, with its sprite and mask, as a placed instance does. Params that pick a class (water `variant`, vine `side`, ...) take the kind the loader derived with those values; an error when there is none. Returns the handle.");
+        docs.add("instance_create", "Creates an instance of a kind at (`x`, `y`) and runs its Create event; an optional map sets its parameters. Params that match a `[defaults.<kind>]` variant (`spike` with `dir: \"down\"`) take the variant's kind, with its sprite and mask, as a placed instance does. Params that pick a class or an event set (water `variant`, vine `side`, killer `bounce`, ...) take the kind the loader derived with those values; an error when there is none. Returns the handle.");
         engine.register_fn(
             "instance_create",
             move |kind: ImmutableString, x: Dynamic, y: Dynamic| -> Res<Inst> {

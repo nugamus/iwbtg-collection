@@ -15,7 +15,9 @@ use std::ops::Range;
 
 use iwbtg_sim::def::{Builtin, ClassMask, ParamValue};
 // The class rules live in the sim, which also applies them to a script spawn (#694).
-pub use iwbtg_sim::def::class::{class_params, default_classes, kind_classes, param_classes};
+pub use iwbtg_sim::def::class::{
+    class_params, default_classes, kind_classes, kind_params, param_classes, picks_other_kind,
+};
 use iwbtg_sim::num::Real;
 use toml::Spanned;
 

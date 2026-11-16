@@ -1,0 +1,110 @@
+#:schema ../../../docs/format/schema/v0/game.schema.json
+format = 0
+id = "showcase"
+title = "IWBTG Collection showcase"
+version = "0.1.0"
+engine_rev = 0
+runner = "gm80"
+physics = "physics.toml"
+start_room = "courtyard"
+max_ticks = 180_000
+object_order = [
+  "world", "kid", "block", { kind = "spike", dir = "up" }, { kind = "spike", dir = "down" }, "kid_start",
+  "save", "sign", "warp", "game_clear", "music", "@fireflies", "@snowfall", "@firelight", "kid_bullet",
+  "blood", "blood_emitter", "game_over", "bow", "playerface",
+]
+
+[engine]
+new_game_room = "courtyard"
+float_model = "f64"
+
+[defaults.kid]
+sprite = "kid_idle"
+mask = "kid_mask"
+
+[defaults.kid_bullet]
+sprite = "kid_bullet"
+
+[defaults.block]
+sprite = "block"
+
+[defaults.spike]
+sprite = "spike_up"
+variants = [{ dir = "down", sprite = "spike_down" }]
+
+[defaults.save]
+sprite = "save_stone"
+
+[defaults.sign]
+sprite = "signpost"
+
+[defaults.warp]
+sprite = "portal"
+
+[defaults.game_clear]
+sprite = "star"
+
+[defaults.blood]
+sprite = "blood"
+
+[defaults.game_over]
+sprite = "game_over"
+
+[[creators]]
+name = "IWBTG Collection"
+role = "author"
+
+[[creators]]
+# The Kid sprites and bullet come from this game (CREDITS.md).
+name = "waka (I wanna Little Trap)"
+role = "other"
+
+[source]
+url = "https://github.com/nugamus/iwbtg-collection"
+permission = "granted"
+permission_note = "Rooms, tiles, backgrounds, sprites, particles, music and sounds are original work made for this repository. The Kid sprites are from I wanna Little Trap by waka (CREDITS.md), included by user decision 2026-11-11 (nugamus/iwbtg-collection-games#34)."
+
+# Three stages: the courtyard ends on entering the hall, the hall on entering the summit, the
+# summit at the star (run_end).
+[timing]
+start = { trigger = "run_start" }
+end = { trigger = "run_end" }
+stages = [
+  { id = "courtyard", name = "Courtyard", trigger = "enter_room", room = "hall" },
+  { id = "hall", name = "Great hall", trigger = "enter_room", room = "summit" },
+]
+
+[[third_party]]
+path = "sprites/kid_idle.png"
+what = "The Kid (idle), from I wanna Little Trap by waka"
+owner = "Kayin (I Wanna Be The Guy Kid sprite); via waka, I wanna Little Trap"
+license = "unknown"
+status = "to-clear"
+
+[[third_party]]
+path = "sprites/kid_run.png"
+what = "The Kid (run), from I wanna Little Trap by waka"
+owner = "Kayin (I Wanna Be The Guy Kid sprite); via waka, I wanna Little Trap"
+license = "unknown"
+status = "to-clear"
+
+[[third_party]]
+path = "sprites/kid_jump.png"
+what = "The Kid (jump), from I wanna Little Trap by waka"
+owner = "Kayin (I Wanna Be The Guy Kid sprite); via waka, I wanna Little Trap"
+license = "unknown"
+status = "to-clear"
+
+[[third_party]]
+path = "sprites/kid_fall.png"
+what = "The Kid (fall), from I wanna Little Trap by waka"
+owner = "Kayin (I Wanna Be The Guy Kid sprite); via waka, I wanna Little Trap"
+license = "unknown"
+status = "to-clear"
+
+[[third_party]]
+path = "sprites/kid_bullet.png"
+what = "The Kid (bullet), from I wanna Little Trap by waka"
+owner = "Kayin (I Wanna Be The Guy Kid sprite); via waka, I wanna Little Trap"
+license = "unknown"
+status = "to-clear"

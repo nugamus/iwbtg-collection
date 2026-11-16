@@ -75,6 +75,26 @@ pub fn ceil(x: Real, r: &NumRules) -> Real {
     zero_sign(x.get().ceil(), r.floor_ceil_zero)
 }
 
+/// The runner's integer snap after it derives `hspeed` and `vspeed` from `speed` and
+/// `direction` (CLONE_SPEC "Snap to integers", research#193): with `n = floor(x + 0.5)`, when `x`
+/// is not already `n` and `|x - n| < 0.0001` (strict), `x` becomes `n`. So a tiny residue becomes
+/// `+0.0`, an exact `-0.0` stays `-0.0` (it equals its `n`), and only integers attract (`0.5 +
+/// 1e-10` stays). The threshold is absolute: `5.0001` snaps (`|x - 5|` is `9.99999999998e-05` in
+/// binary64), `100.0001` does not.
+///
+/// Confirmed (recorder): `traces/animus/bounce-snap.csv`, `bounce-snap-b.csv` and the h0/v0 of
+/// `bounce-bulk*.csv`, `bounce-thin.csv` (checker `traces/analysis/bounce_rule.py`).
+#[allow(clippy::float_cmp, reason = "the runner's own exact test")]
+pub fn snap_to_int(x: Real) -> Real {
+    let v = x.get();
+    let n = (v + 0.5).floor();
+    if v != n && (v - n).abs() < 0.000_1 {
+        Real::new(n)
+    } else {
+        x
+    }
+}
+
 /// GML `frac`: `x` minus its integer part toward zero, as Delphi's `Frac`.
 /// Keeps the sign of `x`: `frac(-1.25) = -0.25`. The subtraction is exact.
 pub fn frac(x: Real) -> Real {

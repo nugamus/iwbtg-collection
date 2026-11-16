@@ -8,7 +8,7 @@ use iwbtg_format::PackageFiles;
 use iwbtg_format::iwbz::{IwbzError, MAX_FILES, MAX_PACKAGE_BYTES, check_entry, pack, unpack};
 
 fn demo() -> PackageFiles {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../client/demo-clear.pkg");
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../client/tests/fixtures/clear.pkg");
     PackageFiles::load_dir(dir).unwrap()
 }
 

@@ -164,7 +164,7 @@ mod tests {
     }
 
     fn demo_def() -> std::sync::Arc<GameDef> {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo.pkg");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/input.pkg");
         crate::package::open(&dir, false).unwrap().def
     }
 
@@ -204,7 +204,7 @@ mod tests {
         use iwbtg_sim::sim::{Sim, SimOptions};
         use iwbtg_sim::sound::DllMode;
 
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-save.pkg");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/save.pkg");
         let def = crate::package::open(&dir, false).unwrap().def;
         let options = |start| SimOptions {
             start,
