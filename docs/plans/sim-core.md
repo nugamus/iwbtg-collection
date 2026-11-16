@@ -771,7 +771,7 @@ Tiers: tier 1 is needed by M1, M1b, M2 and game 1 (WP6a); tier 2 by games 2-11 (
 | `fake_block` | 2 | 11, 496 | mechanics `fake_block` | Solid when no kid, vanish on touch/approach, reverses moving platforms. |
 | `hidden_block` | 2 | 8, 445 | mechanics `hidden_block` | Reveal at distance < 2 (C13). |
 | `trigger` | 2 | 13, 666 | mechanics `trigger` | Five models; state in `MechGlobals`. |
-| `trap` | 2 | 13, 1,362 | mechanics `trap` | Launch forms velocity / angle / path / move_to; stop chains; depth reveal. |
+| `trap` | 2 | 13, 1,362 | mechanics `trap` | Launch forms velocity / angle / path / move_to / step_toward; stop chains; depth reveal. |
 | `drop_platform`, `gravity_flip`, `edge_warp`, `bullet_blocker`, `slope` | 2 | 4-6 each | mechanics | As mechanics.md. |
 | `music` | 2 | 14, 261 | mechanics `music`; sound Inferred | Calls the sound model (section 7); `every_step_if_not_playing` reads `sound_isplaying` from it. |
 | `boss_gate`, `boss_item`, `secret_item`, `item_viewer`, `game_clear` | 2 | 4-9 each | mechanics | Flags in `MechGlobals`; `game_clear` raises the `run_end` timing trigger. |

@@ -13,6 +13,10 @@
 //!   is 0 and `global.stop[trg]` is set. For each axis with a target it moves `hspd` (`vspd`)
 //!   toward it per tick, then within half a step snaps to the target, zeroes the step and
 //!   replaces the target with 1.
+//! - `step_toward` (go-the-spook-house playerKiller switch spikes): Create sets `to_x` (`to_y`)
+//!   to the instance's own x (y) when it is 0. End Step, while the trigger fires (SPK uses
+//!   `switch_array`), moves 1 px toward (`to_x`, `to_y`): x first, y only once x equals `to_x`,
+//!   never both in one tick. It has no launch flag and needs no idle test.
 //!
 //! Stop chain (`alm` and friends; animus rise01 family): launch sets flag 1, then arms Alarm 0
 //! (`alm`, only when above 0) and flag 2. Alarm 0 stops it and arms Alarm 1 (`alm2`). Alarm 1
@@ -28,7 +32,8 @@
 //!
 //! OPEN, not done (nugamus/iwbtg-collection-research#49): the kaenbyou pathFree End Step conversion of a running path to straight
 //! motion; U-MECH-4 (the path start tick) and U-MECH-8 (stop chain timing) follow the generic
-//! alarm and path rules until traces answer them.
+//! alarm and path rules until traces answer them. `step_toward` with a target less than 1 px
+//! away steps the full 1 px (the spec says "1 px per tick toward"; TR-MECH-11 is not run).
 
 use serde::{Deserialize, Serialize};
 
@@ -46,7 +51,7 @@ use crate::num::{self, Real};
 use crate::path::{self, PathEnd};
 use crate::world::{Ctx, Flow, InstId};
 
-const LAUNCH: &[&str] = &["velocity", "angle", "path", "move_to"];
+const LAUNCH: &[&str] = &["velocity", "angle", "path", "move_to", "step_toward"];
 const STOPPER: &[&str] = &["none", "zero_speed", "flush"];
 const PATH_END: &[&str] = &["stop", "restart", "continue", "reverse"];
 
@@ -110,6 +115,8 @@ const SPECS: &[ParamSpec] = &[
     real("endy"),
     real("hspd"),
     real("vspd"),
+    real("to_x"),
+    real("to_y"),
     real("alm"),
     real("alm2"),
     real("alm3"),
@@ -150,6 +157,8 @@ pub enum Launch {
     Path,
     /// Toward `endx`, `endy`.
     MoveTo,
+    /// 1 px per End Step toward `to_x`, `to_y`, x first.
+    StepToward,
 }
 
 /// What a trap stopper does to it.
@@ -205,7 +214,9 @@ pub struct TrapState {
     /// Path settings.
     pub path: Option<PathLaunch>,
     /// Move-to `(endx, endy, hspd, vspd)`; the targets and steps change as it moves.
-    pub move_to: (Real, Real, Real, Real),
+    /// Step-toward `(to_x, to_y, 0, 0)`; Create fills a 0 target with the own position. One
+    /// field for both forms, so the hashed encoding stays the same.
+    pub goal: (Real, Real, Real, Real),
     /// The stop chain.
     pub chain: Option<Chain>,
     /// Needs its own flag 0 to launch.
@@ -231,14 +242,17 @@ fn kind_real(k: &KindDef, name: &str) -> bool {
     matches!(k.params.0.get(name), Some(ParamValue::Real(_)))
 }
 
-/// What a kind with this base handles: Step, the chain and path alarms, Outside Room and the
-/// trap stopper.
+/// What a kind with this base handles: Step (End Step for `step_toward`), the chain and path
+/// alarms, Outside Room and the trap stopper.
 pub fn event_set(kind: &KindDef) -> EventSet {
+    let launch = |w: &str| matches!(kind.params.0.get("launch"), Some(ParamValue::Str(l)) if l == w);
+    let toward = launch("step_toward");
     let mut set = EventSet {
-        step: true,
+        step: !toward,
+        end_step: toward,
         ..EventSet::default()
     };
-    let path = matches!(kind.params.0.get("launch"), Some(ParamValue::Str(w)) if w == "path");
+    let path = launch("path");
     let chain = ["alm", "alm2", "alm3", "alm4"].iter().any(|n| kind_real(kind, n));
     if path || chain {
         set.alarms = 0b1111;
@@ -265,6 +279,7 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
         Some("angle") => Launch::Angle,
         Some("path") => Launch::Path,
         Some("move_to") => Launch::MoveTo,
+        Some("step_toward") => Launch::StepToward,
         _ => Launch::Velocity,
     };
     let first = if launch == Launch::Angle {
@@ -324,12 +339,16 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
         launch,
         first,
         path,
-        move_to: (
-            r0(params, "endx")?,
-            r0(params, "endy")?,
-            r0(params, "hspd")?,
-            r0(params, "vspd")?,
-        ),
+        goal: if launch == Launch::StepToward {
+            (r0(params, "to_x")?, r0(params, "to_y")?, Real::ZERO, Real::ZERO)
+        } else {
+            (
+                r0(params, "endx")?,
+                r0(params, "endy")?,
+                r0(params, "hspd")?,
+                r0(params, "vspd")?,
+            )
+        },
         chain,
         flag_guard: param_bool(params, "flag_guard")?.unwrap_or(false),
         stopper: match param_enum(params, "stop_on_stopper", STOPPER)? {
@@ -352,6 +371,9 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
     let s = s.clone();
     match ev {
         EventKind::Create => {
+            if s.launch == Launch::StepToward {
+                fill_goal(ctx, me, &s);
+            }
             if s.depth_reveal
                 && let Some(inst) = ctx.w.get_mut(me)
             {
@@ -359,6 +381,7 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
             }
         }
         EventKind::Step => step(ctx, me, &s)?,
+        EventKind::EndStep if s.launch == Launch::StepToward => step_toward(ctx, me, &s)?,
         EventKind::Alarm(n) => alarm_event(ctx, me, &s, *n)?,
         EventKind::OutsideRoom => {
             if s.destroy_outside {
@@ -424,7 +447,7 @@ fn step(ctx: &mut Ctx, me: InstId, s: &TrapState) -> Result<(), SimError> {
                 }
             }
             Launch::Path => arm(ctx, me, 0, Real::ONE)?,
-            Launch::MoveTo => {}
+            Launch::MoveTo | Launch::StepToward => {}
         }
         if s.launch != Launch::Path {
             if let Some(chain) = &s.chain {
@@ -520,7 +543,7 @@ fn alarm_event(ctx: &mut Ctx, me: InstId, s: &TrapState, n: u8) -> Result<(), Si
 }
 
 fn move_to(ctx: &mut Ctx, me: InstId, s: &TrapState) -> Result<(), SimError> {
-    let (mut ex, mut ey, mut hs, mut vs) = s.move_to;
+    let (mut ex, mut ey, mut hs, mut vs) = s.goal;
     let nr = &ctx.rules.num;
     if !(num::gm_eq(ex, Real::ZERO, nr) || num::gm_eq(ey, Real::ZERO, nr)) || !trigger::stop_set(ctx, s.trg)?
     {
@@ -550,7 +573,44 @@ fn move_to(ctx: &mut Ctx, me: InstId, s: &TrapState) -> Result<(), SimError> {
         }
     }
     if let Some(BuiltinState::Trap(t)) = state_mut(ctx, me) {
-        t.move_to = (ex, ey, hs, vs);
+        t.goal = (ex, ey, hs, vs);
+    }
+    Ok(())
+}
+
+/// Create: a target of 0 becomes the instance's own position (uninitialized `xTo` reads 0).
+fn fill_goal(ctx: &mut Ctx, me: InstId, s: &TrapState) {
+    let Some((x, y)) = ctx.w.get(me).map(|i| (i.m.x(), i.m.y())) else {
+        return;
+    };
+    let nr = &ctx.rules.num;
+    let (mut tx, mut ty, _, _) = s.goal;
+    if num::gm_eq(tx, Real::ZERO, nr) {
+        tx = x;
+    }
+    if num::gm_eq(ty, Real::ZERO, nr) {
+        ty = y;
+    }
+    if let Some(BuiltinState::Trap(t)) = state_mut(ctx, me) {
+        t.goal = (tx, ty, Real::ZERO, Real::ZERO);
+    }
+}
+
+/// End Step: while the trigger fires, 1 px toward the target, x first, never diagonally.
+fn step_toward(ctx: &mut Ctx, me: InstId, s: &TrapState) -> Result<(), SimError> {
+    if !trigger::fired(ctx, s.model, s.trg, &s.kinds)? {
+        return Ok(());
+    }
+    let (tx, ty, _, _) = s.goal;
+    let rules = ctx.rules;
+    let Some(inst) = ctx.w.get_mut(me) else {
+        return Ok(());
+    };
+    let (x, y) = (inst.m.x(), inst.m.y());
+    if num::gm_ne(x, tx, &rules.num) {
+        inst.m.set_x(x + num::sign(tx - x, &rules.num))?;
+    } else if num::gm_ne(y, ty, &rules.num) {
+        inst.m.set_y(y + num::sign(ty - y, &rules.num))?;
     }
     Ok(())
 }
