@@ -1,5 +1,6 @@
 // The golden corpus script API case: a mover the controller creates. It reads and writes
-// every instance property and bounces off blocks.
+// every instance property and bounces off blocks, by its collision event and by the bounce
+// built-ins.
 
 fn create() {
     this.gravity = 0.05;
@@ -35,6 +36,14 @@ fn step() {
         this.hspeed = 0.5;
     }
     this.y = this.y + 0.0;
+    // The bounce built-ins (#835), precise and not, alternating with the animation frame.
+    if gm_bool(this.image_index) {
+        this.move_bounce_solid(true);
+        this.move_bounce_all(false);
+    } else {
+        this.move_bounce_solid(false);
+        this.move_bounce_all(true);
+    }
     this.visible = this.solid == false && this.image_alpha > 0.5 && this.image_xscale > 0.0
         && this.image_yscale > 0.0 && this.depth < 0.0 && this.friction > 0.0
         && this.gravity > 0.0 && this.gravity_direction > 0.0 && this.image_speed > 0.0;
