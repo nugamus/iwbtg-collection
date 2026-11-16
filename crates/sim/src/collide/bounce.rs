@@ -10,9 +10,13 @@
 //! ([`plain_bounce`], [`precise_direction`]), so tests can check them against the trace tables
 //! without a world.
 //!
-//! Still OPEN (research#193, research#8): the last bits of `hspeed` and `vspeed` after a precise
-//! bounce (the sim recomputes them from `speed` and the new `direction` as a `direction` write
-//! does), the real runner, speed 0 and negative speeds (the rule is applied as written).
+//! After a precise bounce, `hspeed` and `vspeed` come from [`precise_speeds`]: libm
+//! `speed * cos` and `-speed * sin` of the new direction in radians, each snapped to the nearest
+//! integer when within 1e-4 of it (research#193, Confirmed (recorder): the rule fits all 3716
+//! changed precise-bounce rows, zero sign included). The sim's libm gives those bits on every
+//! row but direction 220, where its `cos` is one ulp from the recorder's (the M6 gap in
+//! `num/trig.rs`). Still OPEN (research#8): the real runner, speed 0
+//! and negative speeds (the rule is applied as written).
 
 use super::query::{place_empty, place_free};
 use crate::error::SimError;
@@ -59,8 +63,9 @@ pub fn move_bounce(ctx: &mut Ctx, me: InstId, precise: bool, against: Against) -
         let Some(dir) = precise_direction((x, y), speed, direction, &ctx.rules.num, blocked)? else {
             return Ok(());
         };
+        let (nh, nv) = precise_speeds(speed, dir);
         let inst = live_mut(ctx, me)?;
-        inst.m.set_direction(dir)
+        inst.m.set_bounced(dir, nh, nv)
     } else {
         let (flip_h, flip_v) = plain_bounce((x, y), (h, v), blocked)?;
         let inst = live_mut(ctx, me)?;
@@ -117,6 +122,32 @@ pub fn precise_direction(
         .map_err(|e| SimError::unsupported(format!("bounce direction: {e}")))?
         .rem_euclid(36);
     Ok(precise_pick(k0, &free).map(|d| Real::new(f64::from(d))))
+}
+
+/// `hspeed` and `vspeed` after a precise bounce to `direction` (research#193): `speed *
+/// cos(rad)` and `-(speed * sin(rad))` in binary64 with libm, `rad = direction * pi / 180`, each
+/// then [`snap`]ped.
+pub fn precise_speeds(speed: Real, direction: Real) -> (Real, Real) {
+    let rad = num::degtorad(direction);
+    (snap(speed * num::cos(rad)), snap(-(speed * num::sin(rad))))
+}
+
+/// The runner's snap of a computed speed (research#193): `n = floor(x + 0.5)`; when `x != n`
+/// and `|x - n| < 1e-4` (strict), `x` becomes `n`. A tiny residue becomes +0.0; an exact -0.0
+/// stays -0.0 (it equals its `n`).
+#[allow(
+    clippy::float_cmp,
+    clippy::disallowed_methods,
+    reason = "the runner's own exact test; floor is exact IEEE"
+)]
+pub fn snap(x: Real) -> Real {
+    let v = x.get();
+    let n = (v + 0.5).floor();
+    if v != n && (v - n).abs() < 1e-4 {
+        Real::new(n)
+    } else {
+        x
+    }
 }
 
 /// The precise rule on the samples: the new direction in degrees (a multiple of 10 in
