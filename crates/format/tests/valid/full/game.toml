@@ -46,7 +46,7 @@ stages = [
 ]
 
 [tricks]
-vine_check = "on"
+distance_vines = "on"
 
 [[third_party]]
 path = "music/stage1.ogg"

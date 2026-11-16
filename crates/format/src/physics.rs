@@ -149,11 +149,8 @@ fn legacy_or_error(
 /// the checker knows, so `required` cannot be wrong. `Some(false)`: the switch is off or does not
 /// exist yet (the second text says which).
 fn switch_state(id: &str, p: &PhysicsProfile) -> Option<(bool, &'static str)> {
-    // `game.toml` ids use only a-z, 0-9 and `_`: the plan's `trick.x` and `input.x` are `x`.
-    let id = id
-        .strip_prefix("trick.")
-        .or_else(|| id.strip_prefix("input."))
-        .unwrap_or(id);
+    // Keys are the research ids without `trick.`, `input.` or `bug.` (`crate::tricks`); every
+    // `switch` key of that table has a case here (tests::every_switch_key_has_a_case).
     match id {
         // Built into the input layer.
         "dual_shift" => Some((true, "")),
@@ -165,9 +162,14 @@ fn switch_state(id: &str, p: &PhysicsProfile) -> Option<(bool, &'static str)> {
         "ad_align" => Some((false, "has no switch in the profile yet (`misc.ad_nudge`)")),
         "disable_cancels" => Some((false, "has no switch in the profile yet (`jump.cancel`)")),
         "sub_frame_tap" => Some((false, "has no switch in the profile yet (`input.tap_fix`)")),
-        "cactus_phantom_release" | "numpad_cancel" | "coyote_time" | "jump_buffer" | "vdiet" => {
-            Some((false, "is never on in this client (plan 5.4)"))
-        }
+        "cactus_phantom_release"
+        | "numpad_cancel"
+        | "coyote_time"
+        | "jump_buffer"
+        | "vdiet"
+        | "water_full_jump_1f"
+        | "water1_low_check"
+        | "restart_f2_same_frame" => Some((false, "is never on in this client (plan 5.4)")),
         _ => None,
     }
 }
@@ -194,6 +196,23 @@ pub fn check_tricks(
                     id.get_ref()
                 ),
             ));
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tricks::{TRICKS, TrickType};
+
+    #[test]
+    fn every_switch_key_has_a_case() {
+        let mut draft: PhysicsProfileDraft =
+            toml::from_str("preset = \"A1\"\n").expect("preset A1 parses");
+        let profile = presets::apply(&mut draft);
+        for (key, ty) in TRICKS {
+            let has_case = switch_state(key, &profile).is_some();
+            assert_eq!(has_case, *ty == TrickType::Switch, "{key}");
         }
     }
 }

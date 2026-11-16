@@ -1060,21 +1060,21 @@
       "type": "object"
     },
     "TrickSetting": {
-      "description": "A trick switch.",
+      "description": "A `[tricks]` value. On an `emergent` key it is only a label, and `off` is an error.",
       "oneOf": [
         {
           "const": "on",
-          "description": "The trick works.",
+          "description": "The trick works (a switch is on; an emergent trick is used).",
           "type": "string"
         },
         {
           "const": "off",
-          "description": "The trick is disabled.",
+          "description": "The switch is off. Not allowed on an emergent trick.",
           "type": "string"
         },
         {
           "const": "required",
-          "description": "The trick works and the game needs it.",
+          "description": "The trick works and the game needs it; a switch must be on in the physics profile.",
           "type": "string"
         }
       ]
@@ -1316,7 +1316,7 @@
       "additionalProperties": {
         "$ref": "#/$defs/TrickSetting"
       },
-      "description": "Switches for tricks that are engine behaviors.",
+      "description": "Trick switches and labels; keys from `research/specs/tricks.md`, Format keys.",
       "type": "object"
     },
     "version": {

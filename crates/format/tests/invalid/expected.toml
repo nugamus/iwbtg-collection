@@ -362,3 +362,21 @@ file = "game.toml"
 line = 25
 column = 1
 message = "unknown field `finish`"
+
+[trick_unknown_key]
+file = "game.toml"
+line = 27
+column = 1
+message = "unknown trick `vine_check`"
+
+[trick_unknown_type]
+file = "game.toml"
+line = 27
+column = 1
+message = "trick `shift_buffering` has no type yet"
+
+[trick_emergent_off]
+file = "game.toml"
+line = 28
+column = 11
+message = "trick `h_align` follows from the physics and cannot be turned off"
