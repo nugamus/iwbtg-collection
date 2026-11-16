@@ -117,13 +117,13 @@ fn two_runs_leave_nothing_behind() {
         AppScreen::Select
     );
     let before = counts(&mut app);
-    play_and_leave(&mut app, "demo-audio.pkg");
+    play_and_leave(&mut app, "tests/fixtures/audio.pkg");
     assert_eq!(counts(&mut app), before, "after A: (entities, images, sounds)");
-    play_and_leave(&mut app, "demo-clear.pkg");
+    play_and_leave(&mut app, "tests/fixtures/clear.pkg");
     assert_eq!(counts(&mut app), before, "after B: (entities, images, sounds)");
     // The select screen gathers no fixed time: the next run starts from its first tick.
     frames(&mut app, 50);
-    start(app.world_mut(), &demo("demo-clear.pkg")).unwrap();
+    start(app.world_mut(), &demo("tests/fixtures/clear.pkg")).unwrap();
     frames(&mut app, 1);
     let tick = app.world().non_send::<Game>().sim.world().tick;
     assert!(tick <= 2, "the new run's first frame ran {tick} ticks");
@@ -135,7 +135,7 @@ fn a_run_holds_images_and_sounds() {
     let mut app = app();
     frames(&mut app, 3);
     let before = counts(&mut app);
-    start(app.world_mut(), &demo("demo-audio.pkg")).unwrap();
+    start(app.world_mut(), &demo("tests/fixtures/audio.pkg")).unwrap();
     frames(&mut app, 100);
     let during = counts(&mut app);
     assert!(during.0 > before.0, "entities {during:?} vs {before:?}");

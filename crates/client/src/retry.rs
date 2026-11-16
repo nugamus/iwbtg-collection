@@ -168,7 +168,7 @@ mod tests {
         use bevy::ecs::system::RunSystemOnce;
         use iwbtg_sim::input::{Action, InputFrame};
 
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo.pkg");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/input.pkg");
         let pkg = crate::package::open(&dir, false).unwrap();
         let mut world = crate::view::test_world(&pkg);
         world.insert_resource(Retry {

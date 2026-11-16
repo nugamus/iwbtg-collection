@@ -1,0 +1,4 @@
+#:schema ../../../../docs/format/schema/v0/object.schema.json
+base = "particle_system"
+system = "snow"
+on_room_end = "destroy"

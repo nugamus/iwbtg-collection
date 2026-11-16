@@ -1050,7 +1050,7 @@ mod tests {
     #[test]
     fn track_follows_the_time_and_flashes_a_stage_clear() {
         use bevy::ecs::system::RunSystemOnce;
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-clear.pkg");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
         let pkg = crate::package::open(&dir, false).unwrap();
         let mut world = crate::view::test_world(&pkg);
         world.insert_resource(Time::<()>::default());

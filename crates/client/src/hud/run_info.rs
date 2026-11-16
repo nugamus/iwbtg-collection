@@ -642,7 +642,7 @@ mod tests {
     fn a_death_counts_in_the_panel_and_the_held_key_lights() {
         use bevy::ecs::system::RunSystemOnce;
         use iwbtg_sim::input::InputFrame;
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-clear.pkg");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
         let pkg = crate::package::open(&dir, false).unwrap();
         let mut world = crate::view::test_world(&pkg);
         world.insert_resource(RunMods(ModSet::NONE));

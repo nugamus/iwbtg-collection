@@ -951,7 +951,7 @@ mod tests {
         use iwbtg_sim::sim::{Sim, SimOptions};
         use iwbtg_sim::sound::DllMode;
 
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-audio.pkg");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/audio.pkg");
         let pkg = crate::package::open(&dir, false).unwrap();
         let files = sound_bytes(&pkg.files);
         for s in &pkg.def.sounds {
