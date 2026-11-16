@@ -1,0 +1,81 @@
+// The golden corpus script API case (#786): a controller that calls every function and
+// property of the script API at least once (docs/format/script-api.md). The coverage test in
+// golden_corpus.rs fails when a registered name is missing from the corpus scripts.
+// It sits at x 400 in the course and at x 401 in the annex, so `xstart` says which room it is.
+
+fn create() {
+    this.hp = 3.0;
+    this.phase = 0.0;
+    this.set_alarm(0, 10);
+    this.set_alarm(1, 25.6);
+}
+
+fn room_start() {
+    play_music("theme");
+}
+
+fn room_end() {
+    stop_music();
+}
+
+fn begin_step() {
+    // Numbers: every math function, each result folded into `phase`.
+    let a = sin(0.5) + cos(0.25) + tan(0.125) + arctan2(1.0, 2.0) + exp(0.5) + ln(3.0);
+    let b = dsin(30.0) + dcos(60.0) + darctan2(1.0, 1.0) + degtorad(90.0) + radtodeg(1.0);
+    let c = sqrt(2.0) + sqr(1.5) + pow(2.0, 0.5) + abs(-1.25) + abs(-3) + sign(-2.0) + sign(4) + frac(-2.75);
+    let d = floor(2.5) + ceil(2.5) + round(2.5) + clamp(9.0, 0.0, 4.0) + lerp(0.0, 10.0, 0.3);
+    let e = max(1.0, 2.0) + min(1.0, 2.0) + max(3, 4) + min(3, 4) + div(7.0, 2.0) + mod(-7.0, 3.0);
+    let f = point_distance(0.0, 0.0, 3.0, 4.0) + point_direction(0.0, 0.0, 1.0, 1.0);
+    let g = lengthdir_x(10.0, 30.0) + lengthdir_y(10.0, 30.0) + to_float(to_int(2.9)) + 1 / 2;
+    this.phase = frac((a + b + c + d + e + f + g + this.phase) / 1000.0) * 1000.0;
+}
+
+fn step() {
+    let t = room_tick();
+    let course = gm_eq(this.xstart, 400.0);
+    if course {
+        if t == 100.0 && tick() < 200.0 { room_restart(); }
+        if t == 250.0 && gm_gt(tick(), 1200.0) { kill_kid(); }
+        if t == 300.0 { room_goto_next(); }
+    } else if t == 120.0 {
+        if gm_bool(irandom(1.0)) { room_goto_previous(); } else { room_goto("course"); }
+    }
+}
+
+fn end_step() {
+    // Comparisons with the run's epsilon.
+    let p = this.phase;
+    if gm_lt(p, 0.0) || gm_le(p, -1.0) || gm_ge(p, 1e9) || gm_ne(p, p) {
+        emit("phase_out_of_range");
+    }
+    for i in 0..gm_repeat(2.4) {
+        this.hp = this.hp + to_float(i) * 0.0;
+    }
+}
+
+fn alarm(n) {
+    if n == 0 {
+        // Instances: create, read back, steer, destroy the oldest beyond three.
+        let m = instance_create("mover", this.x + random_range(-64.0, 64.0), this.y);
+        m.direction = choose([0.0, 45.0, 135.0, 180.0]);
+        m.speed = 1.0 + random(2.0);
+        let s = instance_create("spike", 400.0, -64.0, #{ dir: "down" });
+        if exists(s) { destroy(s); }
+        let all = instances("mover");
+        if all.len() > 3 { destroy(all[0]); }
+        play_sound("blip");
+        this.set_alarm(0, 20 + irandom_range(0.0, 15.0));
+    } else {
+        let k = kid();
+        if k != () {
+            this.hp = this.hp - 1.0;
+            if gm_le(this.hp, 0.0) {
+                this.hp = 3.0;
+                shake(10.0, 2.0);
+                emit("api_tick");
+            }
+            this.x = clamp(k.x, 100.0, 700.0);
+        }
+        this.set_alarm(1, 30.0 + this.get_alarm(0) * 0.0);
+    }
+}
