@@ -67,12 +67,19 @@ pub struct ShellArgs {
 
 /// What the shell was started with.
 #[derive(Resource)]
-struct Shell {
+pub(crate) struct Shell {
     /// `--select`: the folder the list shows. `None`: the client plays one package and leaving it
     /// exits.
     library: Option<PathBuf>,
     /// `--trace-mode`, for every package opened.
     trace_mode: bool,
+}
+
+impl Shell {
+    /// Leaving a run goes back to the select screen (else it exits).
+    pub(crate) fn goes_back(&self) -> bool {
+        self.library.is_some()
+    }
 }
 
 /// Adds the state, the sets and the select screen's list. Starts in `Run` when a
