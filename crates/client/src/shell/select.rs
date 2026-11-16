@@ -1,36 +1,44 @@
-//! The placeholder select screen (`--select <folder>`): the packages in a folder, one per line.
-//! Up and Down pick, Enter opens, Escape quits. The designed game select is #148 and later.
+//! The select screen (`--select <folder>`): the packages in a folder as game select's list
+//! (#149, `select/list.rs`): a panel per game with its key art, its maps under the selected one.
+//! Up and Down pick a map, Left and Right a game, a click picks either; Enter (or a click on the
+//! selected map) plays, Escape quits. The left side is a placeholder until #148: the picked game
+//! and map, and the keys.
 
 use std::path::{Path, PathBuf};
 
 use bevy::camera::visibility::RenderLayers;
+use bevy::picking::events::PointerClick;
 use bevy::prelude::*;
 use bevy::ui::IsDefaultUiCamera;
 use bevy::window::PrimaryWindow;
+use iwbtg_sim::mods::ModSet;
 
 use super::AppScreen;
+use crate::stats::Book;
 use crate::ui::backdrop::{Backdrop, dim};
 use crate::ui::fonts::Type;
 use crate::ui::notice;
 use crate::ui::tokens;
 use crate::ui::widgets::text;
 
+pub mod library;
+pub mod list;
+
+use library::{Library, file_name};
+use list::{GamePanel, ListDim, MapPanel, Selection};
+
 /// The window's title on the select screen.
 pub const TITLE: &str = "IWBTG Collection";
-/// The layout is drawn for a window this tall, scaled to the real one.
-const DESIGN_HEIGHT: f32 = 720.0;
+/// The layout is drawn for a window this tall (the artboard's 1080), scaled to the real one.
+const DESIGN_HEIGHT: f32 = 1080.0;
 
-/// The folder's packages and the one picked.
-#[derive(Resource, Default)]
-struct List {
-    entries: Vec<PathBuf>,
-    selected: usize,
-    /// The rows' generation: rebuilt when it changes.
-    drawn: Option<usize>,
-}
-
+/// The left side's picked game title (placeholder until #148).
 #[derive(Component)]
-struct Row;
+struct PickedTitle;
+
+/// The left side's picked map and your PB on it (placeholder until #148).
+#[derive(Component)]
+struct PickedMap;
 
 /// The select screen: added by main.rs with the window (it needs the UI kit).
 pub struct SelectPlugin(pub Option<PathBuf>);
@@ -38,25 +46,57 @@ pub struct SelectPlugin(pub Option<PathBuf>);
 impl Plugin for SelectPlugin {
     fn build(&self, app: &mut App) {
         let folder = self.0.clone();
-        app.add_systems(
-            OnEnter(AppScreen::Select),
-            move |mut commands: Commands,
-                  mut backdrop: ResMut<Backdrop>,
-                  mut window: Query<&mut Window, With<PrimaryWindow>>| {
-                let entries = folder.as_deref().map(packages).unwrap_or_default();
-                spawn(&mut commands, folder.as_deref(), &entries);
-                commands.insert_resource(List { entries, ..default() });
-                backdrop.art = None;
-                backdrop.dim = dim::SELECT;
-                for mut w in &mut window {
-                    w.title = TITLE.to_owned();
-                }
-            },
-        )
-        .add_systems(
-            Update,
-            (keys, rows, scale).chain().run_if(in_state(AppScreen::Select)),
-        );
+        app.init_resource::<ListDim>()
+            .add_systems(
+                OnEnter(AppScreen::Select),
+                move |mut commands: Commands,
+                      mut images: ResMut<Assets<Image>>,
+                      lib: Option<ResMut<Library>>,
+                      sel: Option<Res<Selection>>,
+                      stats: Option<Res<crate::stats::Stats>>,
+                      mods: Option<Res<crate::mods::RunMods>>,
+                      mut backdrop: ResMut<Backdrop>,
+                      mut window: Query<&mut Window, With<PrimaryWindow>>| {
+                    let paths = folder.as_deref().map(packages).unwrap_or_default();
+                    let empty = Book::default();
+                    let book = stats.as_ref().map_or(&empty, |s| &s.book);
+                    let mods = mods.map_or(ModSet::NONE, |m| m.0);
+                    let camera = camera(&mut commands);
+                    let sel = sel.map(|s| *s).unwrap_or_default();
+                    let same = |l: &Library| {
+                        l.folder.as_deref() == folder.as_deref()
+                            && l.games.iter().map(|g| &g.path).eq(paths.iter())
+                    };
+                    let sel = match lib {
+                        // Back from a run: the art is kept, the PBs and clears are read again.
+                        Some(lib) if same(&lib) => {
+                            let lib = lib.into_inner();
+                            lib.refresh(book, mods);
+                            enter(&mut commands, camera, folder.as_deref(), lib, sel)
+                        }
+                        _ => {
+                            let mut lib = Library::load(folder.as_deref(), &paths, &mut images);
+                            lib.refresh(book, mods);
+                            let sel = enter(&mut commands, camera, folder.as_deref(), &lib, sel);
+                            commands.insert_resource(lib);
+                            sel
+                        }
+                    };
+                    commands.insert_resource(sel);
+                    backdrop.art = None;
+                    backdrop.dim = dim::SELECT;
+                    for mut w in &mut window {
+                        w.title = TITLE.to_owned();
+                    }
+                },
+            )
+            .add_observer(on_click)
+            .add_systems(
+                Update,
+                (keys, list::looks, list::dim, picked, scale)
+                    .chain()
+                    .run_if(in_state(AppScreen::Select)),
+            );
     }
 }
 
@@ -74,18 +114,8 @@ pub fn packages(folder: &Path) -> Vec<PathBuf> {
     out
 }
 
-fn name(path: &Path) -> String {
-    path.file_name().map_or_else(
-        || path.display().to_string(),
-        |n| n.to_string_lossy().into_owned(),
-    )
-}
-
-#[derive(Component)]
-struct Rows;
-
-fn spawn(commands: &mut Commands, folder: Option<&Path>, entries: &[PathBuf]) {
-    let camera = commands
+fn camera(commands: &mut Commands) -> Entity {
+    commands
         .spawn((
             Camera2d,
             Camera {
@@ -97,103 +127,157 @@ fn spawn(commands: &mut Commands, folder: Option<&Path>, entries: &[PathBuf]) {
             IsDefaultUiCamera,
             DespawnOnExit(AppScreen::Select),
         ))
-        .id();
+        .id()
+}
+
+/// Spawns the page for `lib` and returns the selection, kept inside the list.
+fn enter(
+    commands: &mut Commands,
+    camera: Entity,
+    folder: Option<&Path>,
+    lib: &Library,
+    sel: Selection,
+) -> Selection {
+    let game = sel.game.min(lib.games.len().saturating_sub(1));
+    let maps = lib.games.get(game).map_or(0, |g| g.maps.len());
+    let sel = Selection {
+        game,
+        map: sel.map.min(maps.saturating_sub(1)),
+    };
     let where_ = folder.map_or_else(String::new, |f| f.display().to_string());
-    let empty = entries.is_empty();
+    let hint = if lib.games.is_empty() {
+        "No packages here (folders with a game.toml, .iwbz files)."
+    } else {
+        "↑ ↓ map · ← → game · Enter plays · Esc quits"
+    };
+    // The left side: a placeholder until #148's title wedge, stats and tabs.
     commands.spawn((
         Node {
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
+            position_type: PositionType::Absolute,
+            left: Val::Px(64.0),
+            top: Val::Px(150.0),
+            width: Val::Px(860.0),
             flex_direction: FlexDirection::Column,
-            padding: UiRect::all(Val::Px(48.0)),
-            row_gap: Val::Px(8.0),
+            row_gap: Val::Px(12.0),
             ..default()
         },
         UiTargetCamera(camera),
         DespawnOnExit(AppScreen::Select),
         children![
-            text("Select a game", Type::condensed(40.0, 700), tokens::INK),
-            text(&format!("Placeholder list: {where_}"), Type::LABEL, tokens::MUTED),
+            text("Select a game", Type::LABEL, tokens::MUTED),
             (
-                Node {
-                    flex_direction: FlexDirection::Column,
-                    margin: UiRect::vertical(Val::Px(16.0)),
-                    row_gap: Val::Px(4.0),
-                    ..default()
-                },
-                Rows,
+                text("", Type::condensed(56.0, 700).italic(), tokens::INK),
+                PickedTitle
             ),
-            text(
-                if empty {
-                    "No packages here (folders with a game.toml, .iwbz files)."
-                } else {
-                    "Up / Down pick · Enter plays · Escape quits"
-                },
-                Type::BODY,
-                tokens::SOFT
-            ),
+            (text("", Type::barlow(18.0, 600), tokens::SOFT), PickedMap),
+            text(&where_, Type::barlow(14.0, 400), tokens::MUTED),
+            text(hint, Type::BODY, tokens::SOFT),
         ],
     ));
+    list::spawn(commands, camera, lib, sel);
+    sel
 }
 
-/// Up and Down move, Enter opens the picked package, Escape quits.
-fn keys(keys: Res<ButtonInput<KeyCode>>, mut list: ResMut<List>, mut commands: Commands) {
-    let n = list.entries.len();
-    if n > 0 {
-        if keys.just_pressed(KeyCode::ArrowDown) {
-            list.selected = (list.selected + 1) % n;
+/// Starts the package at `path`; one that does not open shows the NOT OPENED notice.
+fn play(commands: &mut Commands, path: PathBuf) {
+    commands.queue(move |world: &mut World| {
+        if let Err(e) = super::start(world, &path) {
+            eprintln!("{e}");
+            notice::post(notice::Kind::Drop, &e.to_string());
         }
-        if keys.just_pressed(KeyCode::ArrowUp) {
-            list.selected = (list.selected + n - 1) % n;
+    });
+}
+
+/// The arrows move the selection ([`list::step`]), Enter plays the selected game, Escape quits.
+fn keys(
+    keys: Res<ButtonInput<KeyCode>>,
+    lib: Res<Library>,
+    mut sel: ResMut<Selection>,
+    mut commands: Commands,
+) {
+    let maps: Vec<usize> = lib.games.iter().map(|g| g.maps.len()).collect();
+    for key in [
+        KeyCode::ArrowDown,
+        KeyCode::ArrowUp,
+        KeyCode::ArrowRight,
+        KeyCode::ArrowLeft,
+    ] {
+        if keys.just_pressed(key) {
+            let next = list::step(&maps, *sel, key);
+            if next != *sel {
+                *sel = next;
+            }
         }
-        if keys.any_just_pressed([KeyCode::Enter, KeyCode::NumpadEnter]) {
-            let path = list.entries[list.selected].clone();
-            commands.queue(move |world: &mut World| {
-                if let Err(e) = super::start(world, &path) {
-                    eprintln!("{e}");
-                    notice::post(notice::Kind::Drop, &e.to_string());
-                }
-            });
-        }
+    }
+    if keys.any_just_pressed([KeyCode::Enter, KeyCode::NumpadEnter])
+        && let Some(game) = lib.games.get(sel.game)
+    {
+        play(&mut commands, game.path.clone());
     }
     if keys.just_pressed(KeyCode::Escape) {
         commands.write_message(AppExit::Success);
     }
 }
 
-/// Draws the rows again when the pick changes.
-fn rows(
+/// A click on a game opens it on its first map; a click on a map selects it, and on the
+/// selected map plays the game.
+fn on_click(
+    click: On<PointerClick>,
+    games: Query<&GamePanel>,
+    maps: Query<&MapPanel>,
+    lib: Option<Res<Library>>,
+    sel: Option<ResMut<Selection>>,
     mut commands: Commands,
-    mut list: ResMut<List>,
-    holder: Query<Entity, With<Rows>>,
-    old: Query<Entity, With<Row>>,
 ) {
-    if list.drawn == Some(list.selected) {
+    let (Some(lib), Some(mut sel)) = (lib, sel) else {
+        return;
+    };
+    if let Ok(game) = games.get(click.entity) {
+        if game.0 != sel.game {
+            *sel = Selection { game: game.0, map: 0 };
+        }
+    } else if let Ok(map) = maps.get(click.entity) {
+        let picked = Selection {
+            game: map.0,
+            map: map.1,
+        };
+        if picked == *sel {
+            if let Some(game) = lib.games.get(map.0) {
+                play(&mut commands, game.path.clone());
+            }
+        } else {
+            *sel = picked;
+        }
+    }
+}
+
+/// The left side's title and map line follow the selection.
+fn picked(
+    sel: Res<Selection>,
+    lib: Res<Library>,
+    mut title: Query<&mut Text, (With<PickedTitle>, Without<PickedMap>)>,
+    mut map: Query<&mut Text, (With<PickedMap>, Without<PickedTitle>)>,
+) {
+    if !sel.is_changed() && !lib.is_changed() {
         return;
     }
-    let Ok(holder) = holder.single() else { return };
-    list.drawn = Some(list.selected);
-    for e in &old {
-        commands.entity(e).despawn();
+    let game = lib.games.get(sel.game);
+    let line = game.map_or_else(String::new, |g| {
+        let pb = lib
+            .records
+            .get(sel.game)
+            .and_then(|r| r.pbs.get(sel.map).cloned().flatten())
+            .map_or_else(|| "No PB".to_owned(), |t| format!("PB {t}"));
+        match g.maps.get(sel.map) {
+            Some(m) => format!("{} · {pb}", m.name),
+            None => format!("{}: its game.toml does not read", file_name(&g.path)),
+        }
+    });
+    for mut t in &mut title {
+        t.0 = game.map_or_else(String::new, |g| g.title.clone());
     }
-    for (i, path) in list.entries.iter().enumerate() {
-        let picked = i == list.selected;
-        let row = commands
-            .spawn((
-                Node {
-                    padding: UiRect::axes(Val::Px(14.0), Val::Px(8.0)),
-                    ..default()
-                },
-                BackgroundColor(if picked { tokens::ROW_YOU } else { tokens::ROW }),
-                Row,
-                children![text(
-                    &name(path),
-                    Type::BUTTON,
-                    if picked { tokens::INK } else { tokens::MUTED }
-                )],
-            ))
-            .id();
-        commands.entity(holder).add_child(row);
+    for mut t in &mut map {
+        t.0 = line.clone();
     }
 }
 
@@ -203,7 +287,7 @@ fn scale(window: Single<&Window, With<PrimaryWindow>>, mut ui_scale: ResMut<UiSc
     if h < 1.0 {
         return;
     }
-    let s = (h / DESIGN_HEIGHT).clamp(0.5, 3.0);
+    let s = (h / DESIGN_HEIGHT).clamp(0.25, 3.0);
     if (ui_scale.0 - s).abs() > 1e-4 {
         ui_scale.0 = s;
     }
@@ -222,7 +306,7 @@ mod tests {
         std::fs::create_dir_all(d.join("not-a-game")).unwrap();
         std::fs::write(d.join("a.iwbz"), "").unwrap();
         std::fs::write(d.join("notes.txt"), "").unwrap();
-        let names: Vec<String> = packages(&d).iter().map(|p| name(p)).collect();
+        let names: Vec<String> = packages(&d).iter().map(|p| file_name(p)).collect();
         assert_eq!(names, ["a.iwbz", "b-game"]);
         let _ = std::fs::remove_dir_all(&d);
     }

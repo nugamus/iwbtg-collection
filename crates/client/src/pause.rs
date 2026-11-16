@@ -650,7 +650,7 @@ fn looks(
 }
 
 /// The package's `cherry` sprite (its first two frames), else the placeholder.
-fn fruit_image(files: &PackageFiles) -> SpriteImage {
+pub(crate) fn fruit_image(files: &PackageFiles) -> SpriteImage {
     let path = iwbtg_format::sprites::sprite_pngs(files)
         .into_iter()
         .find(|(key, _)| key == "cherry" || key.ends_with("/cherry"))
@@ -662,7 +662,7 @@ fn fruit_image(files: &PackageFiles) -> SpriteImage {
 }
 
 /// The top-left `w` x `h` of `s`.
-fn crop(s: &SpriteImage, w: u32, h: u32) -> SpriteImage {
+pub(crate) fn crop(s: &SpriteImage, w: u32, h: u32) -> SpriteImage {
     let mut rgba = Vec::with_capacity((w * h * 4) as usize);
     for y in 0..h {
         let start = ((y * s.size.0) * 4) as usize;
@@ -728,7 +728,7 @@ fn placeholder() -> SpriteImage {
     SpriteImage { size: (w, h), rgba }
 }
 
-fn to_bevy(s: &SpriteImage) -> Image {
+pub(crate) fn to_bevy(s: &SpriteImage) -> Image {
     use bevy::asset::RenderAssetUsages;
     use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
     let mut image = Image::new(

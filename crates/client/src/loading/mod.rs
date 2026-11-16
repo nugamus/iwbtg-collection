@@ -162,7 +162,7 @@ impl Info {
 }
 
 /// The package's authors (`author` and `co-author`), joined with `, `.
-fn authors(m: &Manifest) -> Option<String> {
+pub(crate) fn authors(m: &Manifest) -> Option<String> {
     let names: Vec<&str> = m
         .creators
         .get_ref()

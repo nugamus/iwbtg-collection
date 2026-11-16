@@ -14,6 +14,8 @@ pub const GROUND: Color = Color::srgb_u8(0x0b, 0x0d, 0x14);
 pub const INK: Color = Color::srgb_u8(0xf3, 0xf4, 0xf8);
 /// Labels and secondary text.
 pub const MUTED: Color = Color::srgb_u8(0xa2, 0xa8, 0xbc);
+/// Secondary text over art: the creator on a game panel (`#dfe2ec`, `Main.dc.html`).
+pub const ON_ART: Color = Color::srgb_u8(0xdf, 0xe2, 0xec);
 /// Text between ink and muted (deaths, small units).
 pub const SOFT: Color = Color::srgb_u8(0xc9, 0xcd, 0xe0);
 /// Cherry red: the primary action and selection marks.
