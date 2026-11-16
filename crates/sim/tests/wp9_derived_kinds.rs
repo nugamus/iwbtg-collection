@@ -206,5 +206,8 @@ fn a_spawn_whose_params_pick_an_event_set_no_kind_has_is_an_error() {
     };
     let _ = c.spawn(KindId(0), Real::new(0.0), Real::new(0.0), SpawnInit::default());
     let e = f.halted().expect("halted");
-    assert!(e.contains("`water` with destroy_outside_room = true picks other classes or events"), "{e}");
+    assert!(
+        e.contains("`water` with destroy_outside_room = true picks other classes or events"),
+        "{e}"
+    );
 }

@@ -1040,15 +1040,18 @@ fn placed_event_set_params_derive_a_kind_with_that_event_set() {
         let stage = STAGE1.replace(
             "  { kind = \"warp\", x = 768, y = 512, room_to = \"title\" },
 ",
-            &format!("  {{ kind = \"warp\", x = 768, y = 512, room_to = \"title\" }},
-{instances}"),
+            &format!(
+                "  {{ kind = \"warp\", x = 768, y = 512, room_to = \"title\" }},
+{instances}"
+            ),
         );
         set(f, "rooms/stage1.toml", stage.into_bytes());
         f.push((
             "objects/outside.toml".into(),
             b"base = \"killer\"
 destroy_outside_room = true
-".to_vec(),
+"
+            .to_vec(),
         ));
     });
     let (def, _) = load_ok(&files, STRICT);
@@ -1056,7 +1059,10 @@ destroy_outside_room = true
 
     assert!(events("killer[destroy_outside_room=true]").outside_room);
     assert!(!events("killer").outside_room);
-    assert_eq!(placed(&def, "stage1", "killer[destroy_outside_room=true]").len(), 1);
+    assert_eq!(
+        placed(&def, "stage1", "killer[destroy_outside_room=true]").len(),
+        1
+    );
     assert_eq!(
         placed(&def, "stage1", "killer").len(),
         1,
@@ -1064,7 +1070,10 @@ destroy_outside_room = true
     );
     assert!(events("@outside").outside_room);
     assert!(!events("@outside[destroy_outside_room=false]").outside_room);
-    assert_eq!(placed(&def, "stage1", "@outside[destroy_outside_room=false]").len(), 1);
+    assert_eq!(
+        placed(&def, "stage1", "@outside[destroy_outside_room=false]").len(),
+        1
+    );
     assert_eq!(
         placed(&def, "stage1", "@outside").len(),
         1,

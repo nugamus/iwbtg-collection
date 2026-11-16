@@ -354,7 +354,10 @@ mod tests {
             let listed = event_set_params(b);
             let specs = param_specs(b);
             for name in listed {
-                assert!(specs.iter().any(|s| s.name == *name), "{b:?} lists `{name}`, not one of its params");
+                assert!(
+                    specs.iter().any(|s| s.name == *name),
+                    "{b:?} lists `{name}`, not one of its params"
+                );
             }
             let mut bases = vec![Params::default()];
             for s in specs.iter().filter(|s| listed.contains(&s.name)) {

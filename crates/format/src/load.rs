@@ -2365,7 +2365,9 @@ impl<'a> Loader<'a> {
                     .ok()
                     .and_then(|i| self.rank_kind.get(&KindId(i)))
                     .and_then(|r| r.index());
-                let name = root.and_then(|r| self.kinds.get(r)).map_or(&kind.name, |r| &r.name);
+                let name = root
+                    .and_then(|r| self.kinds.get(r))
+                    .map_or(&kind.name, |r| &r.name);
                 if let Some(masks) = self.collides.get(name) {
                     set.collisions.extend(masks.iter().copied());
                 }
