@@ -224,7 +224,8 @@ fn exit_code(result: Result<(), String>) -> ExitCode {
 fn main() {
     #[cfg(target_os = "unknown")]
     input::watch_unmapped_pads();
-    ui::gallery::run(None, false, None, None);
+    // Without --screenshot the gallery has no size check, so it cannot return an error here.
+    let _ = ui::gallery::run(None, false, None, None);
 }
 
 #[cfg(test)]
