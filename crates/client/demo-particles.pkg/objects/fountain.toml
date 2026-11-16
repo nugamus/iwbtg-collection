@@ -1,0 +1,3 @@
+base = "particle_system"
+system = "fountain"
+on_destroy = "destroy"
