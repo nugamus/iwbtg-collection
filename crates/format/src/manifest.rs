@@ -21,6 +21,7 @@ use crate::files::{CONTENT_DIRS, PackageFiles, TESTS_DIR, check_path};
 use crate::ids::{EngineRef, KindRef, check_id, check_semver};
 use crate::number::Number;
 use crate::sprites::MAX_IMAGE_SIDE;
+use crate::tricks::TrickType;
 
 /// Path of the manifest inside a package.
 pub const MANIFEST_PATH: &str = "game.toml";
@@ -112,7 +113,7 @@ pub struct Manifest {
     /// Run timing: start and end triggers and stages.
     #[cfg_attr(feature = "schema", schemars(with = "Timing"))]
     pub timing: Spanned<Timing>,
-    /// Switches for tricks that are engine behaviors.
+    /// Trick switches and labels; keys from `research/specs/tricks.md`, Format keys.
     #[serde(default)]
     #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, TrickSetting>"))]
     pub tricks: BTreeMap<Spanned<String>, Spanned<TrickSetting>>,
@@ -796,16 +797,16 @@ pub struct KindDefaults {
     pub variants: Vec<Spanned<BTreeMap<String, toml::Value>>>,
 }
 
-/// A trick switch.
+/// A `[tricks]` value. On an `emergent` key it is only a label, and `off` is an error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum TrickSetting {
-    /// The trick works.
+    /// The trick works (a switch is on; an emergent trick is used).
     On,
-    /// The trick is disabled.
+    /// The switch is off. Not allowed on an emergent trick.
     Off,
-    /// The trick works and the game needs it.
+    /// The trick works and the game needs it; a switch must be on in the physics profile.
     Required,
 }
 
@@ -1131,11 +1132,7 @@ impl Manifest {
         self.validate_timing(&mut v);
         self.validate_maps(&mut v);
         self.validate_stripped(&mut v);
-        for key in self.tricks.keys() {
-            // TODO(OPEN: trick ids, from the research trick inventory): check `key` against the
-            // known trick ids.
-            v.id(key);
-        }
+        self.validate_tricks(&mut v);
         self.validate_third_party(&mut v);
         self.validate_key_art(&mut v);
         self.validate_controls(&mut v);
@@ -1154,6 +1151,37 @@ impl Manifest {
                 if !value.is_finite() || value < 0.0 {
                     v.error(volume.span(), "volume must be a finite number of at least 0");
                 }
+            }
+        }
+    }
+
+    /// `[tricks]` keys come from `research/specs/tricks.md`, Format keys ([`crate::tricks`]).
+    fn validate_tricks(&self, v: &mut Validator<'_>) {
+        for (key, setting) in &self.tricks {
+            if !v.id(key) {
+                continue;
+            }
+            let name = key.get_ref();
+            match crate::tricks::trick_type(name) {
+                None => v.error(
+                    key.span(),
+                    format!(
+                        "unknown trick `{name}`: [tricks] keys are listed in \
+                         research specs/tricks.md, Format keys"
+                    ),
+                ),
+                Some(TrickType::Unknown) => v.error(
+                    key.span(),
+                    format!("trick `{name}` has no type yet (no source defines it), so it is not a key"),
+                ),
+                Some(TrickType::Emergent) if *setting.get_ref() == TrickSetting::Off => v.error(
+                    setting.span(),
+                    format!(
+                        "trick `{name}` follows from the physics and cannot be turned off; \
+                         use \"on\" or \"required\", or leave it out"
+                    ),
+                ),
+                Some(_) => {}
             }
         }
     }

@@ -38,6 +38,7 @@ pub mod sprites;
 pub mod ties;
 pub mod timelines;
 pub mod tracemap;
+pub mod tricks;
 pub mod vars;
 
 pub use check::check;
