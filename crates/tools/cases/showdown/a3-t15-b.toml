@@ -22,8 +22,6 @@ notes = [
 "instance_number(player)" = "instance_number(kid)"
 
 [unprobed]
-"bbox_bottom" = "no probe field for `bbox_bottom` (OPEN)"
-"bbox_top" = "no probe field for `bbox_top` (OPEN)"
 
 [rooms]
 "room_8" = "room008"

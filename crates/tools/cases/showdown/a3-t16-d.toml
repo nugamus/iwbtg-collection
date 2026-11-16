@@ -23,8 +23,6 @@ notes = [
 "global.button03" = "global.key_jump"
 
 [unprobed]
-"bbox_left" = "no probe field for `bbox_left` (OPEN)"
-"bbox_right" = "no probe field for `bbox_right` (OPEN)"
 "distance_to_object(LvyR)" = "a function call; the probe reads variables only (OPEN)"
 "distance_to_object(block)" = "a function call; the probe reads variables only (OPEN)"
 

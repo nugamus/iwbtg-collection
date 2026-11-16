@@ -27,7 +27,7 @@
 //! split = { "global.sv" = ["room:3", "x:3", "_:1"] }  # a byte-dump column (`"0 1 41 0 ..."`) read
 //!                                    # as columns `global.sv.room`, `global.sv.x`, ...: each field is
 //!                                    # that many base-100 digit bytes (1-8); `_` bytes are dropped
-//! unprobed = { "bbox_left" = "no probe column (OPEN)" }   # not compared, reported by check
+//! unprobed = { "xstart" = "no probe field (OPEN)" }       # not compared, reported by check
 //! rooms = { template = "rTemplate" }                     # our room id -> original room name
 //! open = "why the case cannot run yet"                   # optional; check skips it
 //! notes = ["free text"]

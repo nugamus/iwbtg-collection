@@ -19,13 +19,11 @@ notes = [
 
 [vars]
 "instance_number(player)" = "instance_number(kid)"
+"objWater.bbox_bottom" = "water.bbox_bottom"
+"objWater.bbox_left" = "water.bbox_left"
+"objWater.bbox_top" = "water.bbox_top"
 
 [unprobed]
-"bbox_bottom" = "no probe field for `bbox_bottom` (OPEN)"
-"bbox_top" = "no probe field for `bbox_top` (OPEN)"
-"objWater.bbox_bottom" = "no probe field for `bbox_bottom` (OPEN)"
-"objWater.bbox_left" = "no probe field for `bbox_left` (OPEN)"
-"objWater.bbox_top" = "no probe field for `bbox_top` (OPEN)"
 
 [rooms]
 "traps" = "rTraps"

@@ -15,10 +15,6 @@ ignore = ["id", "sprite_index", "sprite_name"]
 [vars]
 
 [unprobed]
-"bbox_bottom" = "no probe field for `bbox_bottom` (OPEN)"
-"bbox_left" = "no probe field for `bbox_left` (OPEN)"
-"bbox_right" = "no probe field for `bbox_right` (OPEN)"
-"bbox_top" = "no probe field for `bbox_top` (OPEN)"
 "distance_to_object(playerKiller)" = "a function call; the probe reads variables only (OPEN)"
 "execute_string(\"return place_meeting(x\"+chr(44)+\"y\"+chr(44)+\"playerKiller)\")" = "a function call; the probe reads variables only (OPEN)"
 

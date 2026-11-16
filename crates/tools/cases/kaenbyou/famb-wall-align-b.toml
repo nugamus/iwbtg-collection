@@ -20,8 +20,6 @@ notes = [
 [vars]
 
 [unprobed]
-"bbox_left" = "no probe field for `bbox_left` (OPEN)"
-"bbox_right" = "no probe field for `bbox_right` (OPEN)"
 
 [rooms]
 "room_1" = "room14"
