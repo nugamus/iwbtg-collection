@@ -360,7 +360,7 @@ impl Plugin for ViewPlugin {
 /// window title. The sim is already there (`new_run`).
 fn enter(world: &mut World) {
     let config = *world.resource::<RunConfig>();
-    let size = room_size(&world.non_send::<Game>());
+    let size = room_size(world.non_send::<Game>());
     let def = Arc::clone(&world.resource::<RunStart>().def);
     let speed = world.get_resource::<ClockSpeed>().copied().unwrap_or_default();
     world.insert_resource(RoomSize(size));
@@ -420,7 +420,7 @@ pub fn run(
         Some(path) => {
             crate::shell::load(app.world_mut(), path, trace_mode)?;
             let world = app.world();
-            let size = room_size(&world.non_send::<Game>());
+            let size = room_size(world.non_send::<Game>());
             let id = world.resource::<RunStart>().def.id.clone();
             (format!("IWBTG Collection: {id}"), (size.x as u32, size.y as u32))
         }
