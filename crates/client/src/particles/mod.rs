@@ -13,13 +13,11 @@ mod shapes;
 use std::collections::BTreeMap;
 
 use bevy::prelude::*;
-use iwbtg_sim::builtins::BuiltinState;
-use iwbtg_sim::builtins::particle_system::Lifecycle;
-use iwbtg_sim::def::{GameDef, RoomId};
+use iwbtg_sim::def::GameDef;
 use iwbtg_sim::output::OutputEvent;
 use iwbtg_sim::particles::PartSystemId;
 use iwbtg_sim::room::RoomOutput;
-use iwbtg_sim::world::{InstId, KindState, World as SimWorld};
+use iwbtg_sim::world::World as SimWorld;
 
 use model::DrawSystem;
 
@@ -37,28 +35,6 @@ impl Plugin for ParticlesPlugin {
     }
 }
 
-/// What a `particle_system` instance does on its later events.
-#[derive(Clone, Debug, PartialEq)]
-struct Watch {
-    /// The sim systems it built, in its `system` list order.
-    systems: Vec<u32>,
-    on_room_start: Lifecycle,
-    /// Rooms where its Room Start does nothing.
-    except: Vec<RoomId>,
-    /// Its Room Start destroys it after the call (so its Destroy runs too).
-    destroys_instance: bool,
-    on_room_end: Lifecycle,
-    on_destroy: Lifecycle,
-    /// A persistent instance gone after a room entry was destroyed by its own Room Start.
-    persistent: bool,
-}
-
-impl Watch {
-    fn room_start_runs_in(&self, room: RoomId) -> bool {
-        !self.except.contains(&room)
-    }
-}
-
 /// The drawing copies of the sim's particle systems, by the sim's `PartSystemId`.
 #[derive(Resource, Default, Debug)]
 pub(crate) struct Tracker {
@@ -67,8 +43,8 @@ pub(crate) struct Tracker {
     pub(crate) systems: BTreeMap<u32, DrawSystem>,
     /// How many sim systems have been looked at.
     seen: usize,
-    /// The `particle_system` instances alive after the last tick.
-    watched: BTreeMap<InstId, Watch>,
+    /// The sim's `clear` count (`World::particle_clears`) each drawing copy has followed.
+    clears: BTreeMap<u32, u32>,
     /// The sim's tick when last looked at.
     last_tick: u64,
     /// Bumped whenever a system changes, so the meshes are rebuilt only then.
@@ -97,13 +73,10 @@ impl Tracker {
     ///   and creates included).
     /// - **destroy and destroy_emitters** are read from the sim's state (`World::particles`:
     ///   the system's and each emitter's `destroyed`), so they are exact.
-    /// - **clear** leaves no trace in the sim's state, so it is inferred from the instance's
-    ///   params: `on_room_end` for the instances alive before a room entry, `on_room_start` for
-    ///   those alive after it (and after the first room's start, which `Sim::new` runs) unless
-    ///   the room is in `on_room_start_except`, `on_destroy` for an instance gone on a tick
-    ///   without a room entry. A persistent instance with `on_room_start_destroys_instance` gone
-    ///   after entering a room its Room Start runs in made its `on_room_start` and `on_destroy`
-    ///   calls. Every call reaches each system the instance built.
+    /// - **clear** is read from the sim's count of them (`World::particle_clears`, #883): a
+    ///   copy whose count moved since the last look is cleared, so it is exact too, also for an
+    ///   instance gone before the client saw it. Several clears in one tick are one clear here,
+    ///   as no particle is made between them.
     /// - **Update.** One particle update per tick, skipped on a tick that entered a room (the sim
     ///   skips it on a room request tick, CLONE_SPEC "Particle draw rules" 9).
     ///
@@ -115,8 +88,6 @@ impl Tracker {
                 ..Tracker::default()
             };
         }
-        // The first room's Room Start ran in `Sim::new`, before the first tick we see.
-        let first = self.last_tick == 0 && self.seen == 0;
         let ticked = w.tick != self.last_tick;
         self.last_tick = w.tick;
         // The sim's first step keeps `Sim::new`'s room-start output (#466): that entry is the
@@ -127,7 +98,6 @@ impl Tracker {
             .filter(|e| matches!(e, OutputEvent::Room(RoomOutput::Entered { .. })))
             .count();
         let entered = entries > usize::from(w.tick == 1);
-        let now = watched(w);
         let before_len = self.systems.len();
         let mut changed = false;
 
@@ -141,49 +111,13 @@ impl Tracker {
         }
         self.seen = w.particles.systems.len();
 
-        let mut clear = |systems: &mut BTreeMap<u32, DrawSystem>, x: &Watch| {
-            for s in &x.systems {
-                if let Some(d) = systems.get_mut(s) {
-                    d.clear();
-                    changed = true;
-                }
-            }
-        };
-        let room = w.room;
-        if first {
-            for x in now.values() {
-                if x.on_room_start == Lifecycle::Clear && x.room_start_runs_in(room) {
-                    clear(&mut self.systems, x);
-                }
-            }
-        }
-        if entered {
-            for x in self.watched.values() {
-                if x.on_room_end == Lifecycle::Clear {
-                    clear(&mut self.systems, x);
-                }
-            }
-            for x in now.values() {
-                if x.on_room_start == Lifecycle::Clear && x.room_start_runs_in(room) {
-                    clear(&mut self.systems, x);
-                }
-            }
-            for (id, x) in &self.watched {
-                let destroyed_by_room_start = !now.contains_key(id)
-                    && x.persistent
-                    && x.destroys_instance
-                    && x.room_start_runs_in(room);
-                if destroyed_by_room_start
-                    && (x.on_room_start == Lifecycle::Clear || x.on_destroy == Lifecycle::Clear)
-                {
-                    clear(&mut self.systems, x);
-                }
-            }
-        } else {
-            for (id, x) in &self.watched {
-                if !now.contains_key(id) && x.on_destroy == Lifecycle::Clear {
-                    clear(&mut self.systems, x);
-                }
+        for (&s, d) in &mut self.systems {
+            let n = w.particle_clears.get(&PartSystemId(s)).copied().unwrap_or(0);
+            // A new copy starts at 0, so a clear made on the tick that built it counts.
+            if self.clears.get(&s).copied().unwrap_or(0) != n {
+                d.clear();
+                self.clears.insert(s, n);
+                changed = true;
             }
         }
 
@@ -210,34 +144,11 @@ impl Tracker {
                 }
             }
         }
-        self.watched = now;
+        self.clears.retain(|s, _| self.systems.contains_key(s));
         if changed || self.systems.len() != before_len {
             self.generation += 1;
         }
     }
-}
-
-/// The `particle_system` instances alive in `w` that hold a system.
-fn watched(w: &SimWorld) -> BTreeMap<InstId, Watch> {
-    w.instances()
-        .iter()
-        .filter(|i| i.alive)
-        .filter_map(|i| match &i.state {
-            KindState::Builtin(BuiltinState::ParticleSystem(p)) if !p.systems.is_empty() => Some((
-                i.id,
-                Watch {
-                    systems: p.systems.iter().map(|s| s.0).collect(),
-                    on_room_start: p.on_room_start,
-                    except: p.on_room_start_except.clone(),
-                    destroys_instance: p.on_room_start_destroys_instance,
-                    on_room_end: p.on_room_end,
-                    on_destroy: p.on_destroy,
-                    persistent: i.persistent,
-                },
-            )),
-            _ => None,
-        })
-        .collect()
 }
 
 /// After each tick: the drawing copies follow the sim.

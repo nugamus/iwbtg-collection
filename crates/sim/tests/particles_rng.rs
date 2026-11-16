@@ -792,6 +792,24 @@ mod particle_system {
             "on_destroy destroyed both systems"
         );
     }
+
+    /// Each `clear` call is counted per system in `World::particle_clears` for the client
+    /// (#883); the other calls are not.
+    #[test]
+    fn each_clear_is_counted_per_system() {
+        let (mut fx, kind) = listed(&[
+            ("on_room_start", ParamValue::Str("clear".into())),
+            ("on_room_end", ParamValue::Str("clear".into())),
+            ("on_destroy", ParamValue::Str("destroy_emitters".into())),
+        ]);
+        let id = spawn(&mut fx, kind);
+        assert!(fx.w.particle_clears.is_empty(), "building clears nothing");
+        dispatch(&mut fx.ctx(), id, &EventKind::RoomStart);
+        dispatch(&mut fx.ctx(), id, &EventKind::RoomEnd);
+        fx.ctx().destroy(id);
+        let counts: Vec<_> = fx.w.particle_clears.iter().map(|(s, n)| (s.0, *n)).collect();
+        assert_eq!(counts, vec![(0, 2), (1, 2)]);
+    }
 }
 
 /// `blood_emitter` mode `particles` (#766): with the switch on, Create builds the blood system
