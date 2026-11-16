@@ -15,12 +15,12 @@ use crate::builtins::state::BuiltinState;
 use crate::collide::Target;
 use crate::collide::bbox::reported_box;
 use crate::collide::query::Q;
-use crate::rules::RunnerRules;
 use crate::def::{GameDef, NameId, VarId};
 use crate::events;
 use crate::input::Action;
 use crate::kid::api::{self, KidField};
 use crate::num::Real;
+use crate::rules::RunnerRules;
 use crate::rules::TickRules;
 use crate::rules::tick::FirstRule;
 use crate::sim::Sim;
@@ -1011,14 +1011,29 @@ mod tests {
             field: FieldRef::Bbox(e),
         };
         // 200.5 - 5 = 195.5 rounds to 196, 205.5 to 206.
-        assert_eq!(read_column(&mut sim, me, &edge(BboxEdge::Left), 1), trace::Value::Real(196.0));
-        assert_eq!(read_column(&mut sim, me, &edge(BboxEdge::Right), 1), trace::Value::Real(206.0));
-        assert_eq!(read_column(&mut sim, me, &edge(BboxEdge::Top), 1), trace::Value::Real(95.0));
-        assert_eq!(read_column(&mut sim, me, &edge(BboxEdge::Bottom), 1), trace::Value::Real(105.0));
+        assert_eq!(
+            read_column(&mut sim, me, &edge(BboxEdge::Left), 1),
+            trace::Value::Real(196.0)
+        );
+        assert_eq!(
+            read_column(&mut sim, me, &edge(BboxEdge::Right), 1),
+            trace::Value::Real(206.0)
+        );
+        assert_eq!(
+            read_column(&mut sim, me, &edge(BboxEdge::Top), 1),
+            trace::Value::Real(95.0)
+        );
+        assert_eq!(
+            read_column(&mut sim, me, &edge(BboxEdge::Bottom), 1),
+            trace::Value::Real(105.0)
+        );
         let d = sim.def.clone();
         let col = |e: &str| registry::column(e, &d).expect("column");
         let before = sim.world.clone();
-        assert_eq!(read_column(&mut sim, me, &col("place_free(x,y)"), 1), trace::Value::Real(1.0));
+        assert_eq!(
+            read_column(&mut sim, me, &col("place_free(x,y)"), 1),
+            trace::Value::Real(1.0)
+        );
         assert_eq!(
             read_column(&mut sim, me, &col("place_free(x+hspeed,y)"), 1),
             trace::Value::Real(0.0)

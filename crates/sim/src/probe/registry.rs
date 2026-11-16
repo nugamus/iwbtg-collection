@@ -459,7 +459,10 @@ mod tests {
             column("place_free(x+hspeed, -1.5+y-vspeed)", &d),
             Ok(Column::PlaceFree {
                 x: RowExpr {
-                    terms: vec![(false, fixed(FixedColumn::X)), (false, fixed(FixedColumn::Hspeed))]
+                    terms: vec![
+                        (false, fixed(FixedColumn::X)),
+                        (false, fixed(FixedColumn::Hspeed))
+                    ]
                 },
                 y: RowExpr {
                     terms: vec![
