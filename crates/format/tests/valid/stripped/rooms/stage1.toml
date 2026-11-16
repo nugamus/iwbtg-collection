@@ -5,4 +5,5 @@ instances = [
   { kind = "@sign", x = 64, y = 512 },
   { kind = "@textbox", x = 0, y = 0, name = "tutorial_text" },
   { kind = "@cutscene", x = 0, y = 0 },
+  { kind = "warp", x = 768, y = 512, room_to = "ending" },
 ]

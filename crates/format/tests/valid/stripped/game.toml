@@ -12,7 +12,7 @@ max_ticks = 180_000
 room_order = ["title", "intro", "stage1", "ending"]
 object_order = [
   "world", "kid", "kid_bullet", "bow", "blood", "blood_emitter", "game_over", "playerface",
-  "@sign", "@textbox", "@cutscene",
+  "warp", "@sign", "@textbox", "@cutscene",
 ]
 
 [engine]
