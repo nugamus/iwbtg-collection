@@ -5,7 +5,7 @@ kind = "diff"
 start = { room = "room_10", difficulty = 0 }
 at = 2
 first_frame = 2
-object = "@path_platform"
+object = "@path_platform_2"
 original_object = "pathPlatform"
 dll_mode = "stub"
 seed = 0

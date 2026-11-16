@@ -5,7 +5,7 @@ kind = "diff"
 start = { room = "hub", difficulty = 0 }
 at = 2
 first_frame = 2
-object = "@world"
+object = "@world_2"
 original_object = "world"
 dll_mode = "stub"
 seed = 0
