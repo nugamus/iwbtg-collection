@@ -1030,6 +1030,10 @@ fn placed_event_set_params_derive_a_kind_with_that_event_set() {
 ",
         "  { kind = \"@outside\", x = 132, y = 140, hspeed = 2 },
 ",
+        "  { kind = \"killer\", x = 100, y = 180, bounce = true },
+",
+        "  { kind = \"block\", x = 100, y = 220, proximity_frame = true },
+",
     );
     let files = package(|f| {
         set(f, "game.toml", manifest(&order, "").into_bytes());
@@ -1066,6 +1070,13 @@ destroy_outside_room = true
         1,
         "a param that picks no event set keeps the kind"
     );
+    // #835 and #849: the Step these params add belongs to the kind, so they take effect on a
+    // placed instance through its derived kind.
+    assert!(events("killer[bounce=true]").step);
+    assert!(!events("killer").step);
+    assert_eq!(placed(&def, "stage1", "killer[bounce=true]").len(), 1);
+    assert!(events("block[proximity_frame=true]").step);
+    assert_eq!(placed(&def, "stage1", "block[proximity_frame=true]").len(), 1);
     let rank = |name: &str| placed(&def, "stage1", name)[0].rank;
     assert_eq!(rank("killer[destroy_outside_room=true]"), rank("killer"));
 }

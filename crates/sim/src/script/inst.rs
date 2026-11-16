@@ -521,7 +521,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
             });
         }
         let s = Rc::clone(shared);
-        docs.add("instance_create", "Creates an instance of a kind at (`x`, `y`) and runs its Create event; an optional map sets its parameters. Params that match a `[defaults.<kind>]` variant (`spike` with `dir: \"down\"`) take the variant's kind, with its sprite and mask, as a placed instance does. Params that pick a class (water `variant`, vine `side`, ...) take the kind the loader derived with those values; an error when there is none. Returns the handle.");
+        docs.add("instance_create", "Creates an instance of a kind at (`x`, `y`) and runs its Create event; an optional map sets its parameters. Params that match a `[defaults.<kind>]` variant (`spike` with `dir: \"down\"`) take the variant's kind, with its sprite and mask, as a placed instance does. Params that pick a class or an event set (water `variant`, vine `side`, killer `bounce`, ...) take the kind the loader derived with those values; an error when there is none. Returns the handle.");
         engine.register_fn(
             "instance_create",
             move |kind: ImmutableString, x: Dynamic, y: Dynamic| -> Res<Inst> {
