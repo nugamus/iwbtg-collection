@@ -79,8 +79,8 @@ fn polar_of(h: Real, v: Real) -> Result<(Real, Real), SimError> {
 /// The callers decide the integer snap (`Snap`): a speed or direction write snaps (research#193).
 /// OPEN (research#199): in `t-mot-05-a.csv` (frame 492) cherries set by motion_set to speed -4,
 /// direction 180 read vspeed `0.0`, where this formula gives `4.898587196589413e-16`
-/// (`-(-4 * dsin(180))`); the snap would give `0.0`, so motion_set may snap too. Off-table angles can also differ from the recorder by one ulp (M6, see
-/// `num::trig`).
+/// (`-(-4 * dsin(180))`); the snap would give `0.0`, so motion_set may snap too. Off-table
+/// angles can also differ from the recorder by one ulp (M6, see `num::trig`).
 fn cartesian_of(speed: Real, direction: Real) -> Result<(Real, Real), SimError> {
     let h = finite(num::lengthdir_x(speed, direction), "hspeed")?;
     let v = finite(num::lengthdir_y(speed, direction), "vspeed")?;
@@ -244,15 +244,6 @@ impl Motion {
     pub fn set_direction(&mut self, deg: Real) -> Result<(), SimError> {
         let deg = finite(deg, "direction")?;
         self.recompute_cartesian(self.speed, deg, Snap::ToInt)
-    }
-
-    /// A precise bounce (`collide::bounce`): `direction` and the `hspeed` and `vspeed` the bounce
-    /// computed for it; `speed` is kept.
-    pub(crate) fn set_bounced(&mut self, direction: Real, h: Real, v: Real) -> Result<(), SimError> {
-        self.direction = finite(direction, "direction")?;
-        self.hspeed = finite(h, "hspeed")?;
-        self.vspeed = finite(v, "vspeed")?;
-        Ok(())
     }
 
     /// GML `motion_set(dir, speed)`: direction `dir` and speed `speed`, then one cartesian
