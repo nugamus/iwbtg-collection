@@ -180,6 +180,163 @@ mod wp2 {
         assert!(checked > 3000, "only {checked} rows");
     }
 
+    /// animus/bounce-snap.csv and bounce-snap-b.csv (research#193): every probe's hspeed and
+    /// vspeed after its speed and direction writes, in the recorded write order, bit for bit
+    /// (sign of zero included): the integer snap of `num::snap_to_int`.
+    #[test]
+    fn speed_and_direction_writes_snap_like_bounce_snap() {
+        for case in ["bounce-snap.csv", "bounce-snap-b.csv"] {
+            let Some(csv) = trace("animus", case) else {
+                return;
+            };
+            let (hs, vs, sp) = (csv.col("hspeed"), csv.col("vspeed"), csv.col("speed"));
+            let dd = csv.header.iter().position(|h| h == "dd");
+            let via = csv.header.iter().position(|h| h == "via");
+            for row in &csv.rows {
+                let speed = csv.real(row, sp);
+                let mut m = Motion::new_at(r(0.0), r(0.0));
+                match (dd, via) {
+                    (Some(dd), Some(via)) if row[via] == "1.0" => {
+                        m.set_direction(csv.real(row, dd)).unwrap();
+                        m.set_speed(speed).unwrap();
+                    }
+                    (Some(dd), _) => {
+                        m.set_speed(speed).unwrap();
+                        m.set_direction(csv.real(row, dd)).unwrap();
+                    }
+                    (None, _) => m.set_speed(speed).unwrap(),
+                }
+                let bits = |x: Real| x.get().to_bits();
+                assert_eq!(
+                    (bits(m.hspeed()), bits(m.vspeed())),
+                    (bits(csv.real(row, hs)), bits(csv.real(row, vs))),
+                    "{case} id {}: speed {speed:?}",
+                    row[3]
+                );
+            }
+            assert_eq!(csv.rows.len(), if dd.is_some() { 1024 } else { 800 }, "{case}");
+        }
+    }
+
+    /// animus/motion-snap-*.csv (research#199, CLONE_SPEC "Where the snap applies"): every probe's
+    /// hspeed, vspeed, speed and direction bit for bit, sign of zero included. Speed and direction
+    /// writes, motion_set (the D&D Move Free action is the same call) and friction snap; motion_add
+    /// and hspeed/vspeed writes do not; the direction read-back snaps. Allowed: the M6 libm gaps
+    /// (510 friction rows at direction 45 one or two ulps off in h or v, one atan2 read-back in
+    /// motion-snap-add one ulp off).
+    #[test]
+    fn motion_snap_probes_match() {
+        const COLS: [&str; 4] = ["hspeed", "vspeed", "speed", "direction"];
+        let bits = |x: Real| x.get().to_bits();
+        let state = |m: &Motion| [m.hspeed(), m.vspeed(), m.speed(), m.direction()].map(bits);
+        let mut misses: Vec<String> = Vec::new();
+        let (mut total, mut m6) = (0, 0);
+        let mut check = |csv: &Csv, row: &[String], m: &Motion| {
+            total += 1;
+            let got = state(m);
+            let exp = COLS.map(|c| bits(csv.real(row, csv.col(c))));
+            let ulps = [0, 1, 2, 3].map(|i| got[i].abs_diff(exp[i]));
+            // M6 (num/trig.rs, research#154): our libm is one ulp from the recorder's at sin 45,
+            // cos 220 and some atan2 values; times a speed that is up to two ulps in h or v.
+            let gap_dir = [45.0f64, 220.0].iter().any(|a| got[3] == a.to_bits());
+            if got == exp {
+            } else if (gap_dir && ulps[0] + ulps[1] <= 2 && ulps[2] + ulps[3] == 0)
+                || (ulps[0] + ulps[1] + ulps[2] == 0 && ulps[3] == 1)
+            {
+                m6 += 1;
+            } else {
+                misses.push(format!(
+                    "{} id {} frame {}: {:?} vs {:?}",
+                    csv.name,
+                    row[3],
+                    row[0],
+                    got.map(f64::from_bits),
+                    exp.map(f64::from_bits)
+                ));
+            }
+        };
+
+        let Some(set) = trace("animus", "motion-snap-set.csv") else {
+            return;
+        };
+        let (mc, sp, dd) = (set.col("m"), set.col("sp"), set.col("dd"));
+        for row in &set.rows {
+            let (s, d) = (set.real(row, sp), set.real(row, dd));
+            let mut m = Motion::new_at(r(0.0), r(0.0));
+            if row[mc] == "0.0" {
+                m.set_direction(d).unwrap();
+                m.set_speed(s).unwrap();
+            } else {
+                m.motion_set(d, s).unwrap();
+            }
+            check(&set, row, &m);
+        }
+
+        let Some(add) = trace("animus", "motion-snap-add.csv") else {
+            return;
+        };
+        let [st, sp, dd, h0, v0, s0, d0] = ["st", "sp", "dd", "h0", "v0", "s0", "d0"].map(|c| add.col(c));
+        for row in &add.rows {
+            let mut m = Motion::new_at(r(0.0), r(0.0));
+            match row[st].as_str() {
+                "0.0" => {}
+                // hspeed and vspeed writes; the recorded h0 and v0, because the recorder parses
+                // the GML literal -0.000002 one ulp from the nearest double (N14).
+                "1.0" | "2.0" => {
+                    m.set_hspeed(add.real(row, h0)).unwrap();
+                    m.set_vspeed(add.real(row, v0)).unwrap();
+                }
+                _ => {
+                    m.set_speed(r(8.0)).unwrap();
+                    m.set_direction(r(60.0)).unwrap();
+                }
+            }
+            let start = [h0, v0, s0, d0].map(|c| bits(add.real(row, c)));
+            assert_eq!(state(&m), start, "motion-snap-add id {}: start state", row[3]);
+            m.motion_add(add.real(row, dd), add.real(row, sp)).unwrap();
+            check(&add, row, &m);
+        }
+
+        let Some(hv) = trace("animus", "motion-snap-hv.csv") else {
+            return;
+        };
+        let (hw, vw) = (hv.col("hw"), hv.col("vw"));
+        for row in &hv.rows {
+            let mut m = Motion::new_at(r(0.0), r(0.0));
+            m.set_hspeed(hv.real(row, hw)).unwrap();
+            m.set_vspeed(hv.real(row, vw)).unwrap();
+            check(&hv, row, &m);
+        }
+
+        // Friction: two rows per probe (frames 3 and 4), one tick of automatic motion each.
+        let Some(fric) = trace("animus", "motion-snap-fric.csv") else {
+            return;
+        };
+        let [fc, sp, dd, id] = ["f", "sp", "dd", "id"].map(|c| fric.col(c));
+        let def = one_room_game();
+        let mut probes: BTreeMap<String, Motion> = BTreeMap::new();
+        for row in &fric.rows {
+            let m = probes.entry(row[id].clone()).or_insert_with(|| {
+                let mut m = Motion::new_at(r(0.0), r(0.0));
+                m.set_direction(fric.real(row, dd)).unwrap();
+                m.set_speed(fric.real(row, sp)).unwrap();
+                m.set_friction(fric.real(row, fc)).unwrap();
+                m
+            });
+            apply_auto_motion(m, None, &def, &MotionRules::default()).unwrap();
+            check(&fric, row, m);
+        }
+
+        eprintln!("motion-snap: {total} rows, {m6} at the M6 libm gaps");
+        assert_eq!(total, 3456 + 4608 + 512 + 4096);
+        assert!(
+            misses.is_empty(),
+            "{} rows differ:\n{}",
+            misses.len(),
+            misses.join("\n")
+        );
+    }
+
     /// num-rng-a.csv: every change of random_get_seed() between rows is a whole number of LCG
     /// steps (N9).
     #[test]
