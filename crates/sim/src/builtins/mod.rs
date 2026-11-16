@@ -447,7 +447,7 @@ pub fn event_set_params(b: Builtin) -> &'static [&'static str] {
         Builtin::BreakableBlock => &["break_on"],
         Builtin::Orbit => &["mode", "destroy_outside_room"],
         Builtin::PathPlatform => &["start_on_touch"],
-        Builtin::ParticleSystem => &["on_room_start", "on_room_end"],
+        Builtin::ParticleSystem => &["on_room_start", "on_room_start_destroys_instance", "on_room_end"],
         _ => &[],
     }
 }
