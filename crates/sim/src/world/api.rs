@@ -235,7 +235,12 @@ fn initial_state(def: &GameDef, kd: &KindDef, params: &Params) -> Result<KindSta
     })
 }
 
-impl Ctx<'_> {
+impl<'a> Ctx<'a> {
+    /// The kid's physics profile in the current room (`GameDef::physics_in`, #33).
+    pub fn physics(&self) -> &'a crate::def::physics::PhysicsProfile {
+        self.def.physics_in(self.w.room)
+    }
+
     /// GML `instance_create`: a new instance of `kind` at `(x, y)`. Runs Create now (Inferred;
     /// Confirmed (recorder)), so when this returns, Create has run.
     ///

@@ -44,7 +44,7 @@ fn missing() -> SimError {
 }
 
 fn slope_jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
-    let probe = ctx.def.physics.slope.jump_probe;
+    let probe = ctx.physics().slope.jump_probe;
     let s = state(ctx, me)?;
     if s.frozen || ctx.w.engine.kid.frozen || !ctx.w.input.pressed(Action::Jump) {
         return Ok(());
@@ -70,7 +70,7 @@ fn downhill_snap(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let n = &ctx.rules.num;
     let i = ctx.w.get(me).ok_or_else(missing)?;
     let (x, y, vs, xp) = (i.m.x(), i.m.y(), i.m.vspeed(), i.m.xprevious());
-    match def.physics.slope.downhill {
+    match def.physics_in(ctx.w.room).slope.downhill {
         Downhill::None => {}
         Downhill::Por => {
             if gm_ge(vs, Real::ZERO, n)
@@ -81,9 +81,9 @@ fn downhill_snap(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
                 snap(ctx, me, 12.0)?;
                 let moving = ctx.w.input.held(Action::Left) || ctx.w.input.held(Action::Right);
                 let spr = if moving {
-                    def.physics.sprites.running
+                    def.physics_in(ctx.w.room).sprites.running
                 } else {
-                    def.physics.sprites.idle
+                    def.physics_in(ctx.w.room).sprites.idle
                 };
                 if let Some(i) = ctx.w.get_mut(me) {
                     set_sprite(def, &mut i.img, spr);

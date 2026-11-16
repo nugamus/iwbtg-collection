@@ -37,7 +37,7 @@ pub fn run(ctx: &mut Ctx, me: InstId, action: &FlipAction) -> Result<Flow, SimEr
 
 /// `scrFlipGrav` on the kid `me`.
 pub(crate) fn flip_grav(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
-    let g = ctx.def.physics.numbers.gravity;
+    let g = ctx.physics().numbers.gravity;
     ctx.w.engine.kid.grav = !ctx.w.engine.kid.grav;
     let new = {
         let s = state_mut(ctx, me)?;

@@ -49,7 +49,7 @@ pub(crate) fn slip_below(ctx: &mut Ctx, me: InstId) -> Result<Real, SimError> {
         return Ok(Real::ZERO);
     };
     let (x, y) = (i.m.x(), i.m.y());
-    let dy = ctx.def.physics.ice.read * Real::new(f64::from(down(&s)));
+    let dy = ctx.physics().ice.read * Real::new(f64::from(down(&s)));
     let found = instance_position(ctx, x, y + dy, Target::Class(ClassMask::SLIP))?;
     Ok(found.map_or(Real::ZERO, |b| slip_of(ctx.w, b)))
 }
@@ -57,7 +57,7 @@ pub(crate) fn slip_below(ctx: &mut Ctx, me: InstId) -> Result<Real, SimError> {
 fn ice_temp_hspeed(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let def = ctx.def;
     let n = &ctx.rules.num;
-    let rules = &def.physics.ice;
+    let rules = &def.physics_in(ctx.w.room).ice;
     let ice = on_ice(ctx, me, rules.temp_probe)?;
     let temp = state(ctx, me)?.temp_hspeed;
     let hs = ctx.w.get(me).map_or(Real::ZERO, |i| i.m.hspeed());

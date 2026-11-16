@@ -38,7 +38,7 @@ use crate::world::{Ctx, Flow, InstId};
 
 /// Runs a boundary event on the kid `me`; `None` when the profile's model does not handle `ev`.
 pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Option<Flow>, SimError> {
-    let model = ctx.def.physics.events.boundary;
+    let model = ctx.physics().events.boundary;
     match (model, ev) {
         (BoundaryModel::IntersectOrigin, EventKind::IntersectBoundary) => {
             intersect_origin(ctx, me, false).map(Some)

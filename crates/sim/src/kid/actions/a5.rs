@@ -31,7 +31,7 @@ pub fn run(ctx: &mut Ctx, me: InstId, action: &A5Action) -> Result<Flow, SimErro
 }
 
 fn gravity_and_unstuck(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
-    let gravity = ctx.def.physics.numbers.gravity;
+    let gravity = ctx.physics().numbers.gravity;
     let missing = || SimError::invariant("gravity_and_unstuck: kid vanished");
     let (x, wy, yprev, wspeed) = {
         let i = ctx.w.get_mut(me).ok_or_else(missing)?;

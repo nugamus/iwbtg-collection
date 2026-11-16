@@ -83,7 +83,7 @@ pub fn save_now(
     fixed: Option<(Real, Real)>,
 ) -> Result<(), SimError> {
     // Family B stores the first kid whichever kid touched the save point (R21).
-    let kid = if ctx.def.physics.save.first_kid {
+    let kid = if ctx.physics().save.first_kid {
         ctx.w.kid(&ctx.rules.tick).unwrap_or(kid)
     } else {
         kid
@@ -153,7 +153,7 @@ pub fn save_without_kid(ctx: &mut Ctx) {
 /// True when the game flips gravity by a flag (`[flip] model = "yflag"`, family B): its save
 /// stores `global.reverse` in [`SaveSlot::flipped`].
 fn by_flag(ctx: &Ctx) -> bool {
-    ctx.def.physics.flip.model == crate::def::physics::FlipKind::Yflag
+    ctx.physics().flip.model == crate::def::physics::FlipKind::Yflag
 }
 
 /// True when [`SaveSlot::flipped`] means "the kid of the flipped kind, `flipped_load_dy` lower":

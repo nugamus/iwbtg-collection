@@ -90,6 +90,7 @@ impl GameDefBuilder {
                 names: Vec::new(),
                 groups: Vec::new(),
                 physics: PhysicsProfile::default(),
+                room_physics: Vec::new(),
                 restart: RestartModel::default(),
                 reset: ResetModel::default(),
                 sounds: Vec::new(),
@@ -237,6 +238,12 @@ impl GameDefBuilder {
     /// Sets the physics profile.
     pub fn physics(&mut self, physics: PhysicsProfile) {
         self.def.physics = physics;
+    }
+
+    /// Adds a room profile and returns its index for `RoomDef::physics` (#33).
+    pub fn room_physics(&mut self, physics: PhysicsProfile) -> u16 {
+        self.def.room_physics.push(physics);
+        u16::try_from(self.def.room_physics.len() - 1).unwrap_or(u16::MAX)
     }
 
     /// Finishes the definition: builds the rank table, fills placed ranks and checks every

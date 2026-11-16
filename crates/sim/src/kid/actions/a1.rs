@@ -35,7 +35,7 @@ pub fn run(ctx: &mut Ctx, me: InstId, action: &A1Action) -> Result<Flow, SimErro
             if let Some(i) = ctx.w.get_mut(me) {
                 let a = i.img.alpha();
                 if gm_lt(a, Real::ONE, n) {
-                    i.img.set_alpha(a + def.physics.misc.fade_step)?;
+                    i.img.set_alpha(a + def.physics_in(ctx.w.room).misc.fade_step)?;
                 }
             }
         }

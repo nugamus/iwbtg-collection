@@ -45,7 +45,7 @@ pub fn run(ctx: &mut Ctx, me: InstId, action: &LadderAction) -> Result<Flow, Sim
 
 fn ladder(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let def = ctx.def;
-    let p = &def.physics;
+    let p = &def.physics_in(ctx.w.room);
     state_mut(ctx, me)?.ladder_ud = false;
     let up = ctx.w.input.direct(Action::Up);
     let down = ctx.w.input.direct(Action::Down);
@@ -105,11 +105,11 @@ fn ladder_sprites(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let s = state(ctx, me)?;
     let Some(i) = ctx.w.get_mut(me) else { return Ok(()) };
     if s.ladder {
-        set_sprite(def, &mut i.img, def.physics.sprites.back);
+        set_sprite(def, &mut i.img, def.physics_in(ctx.w.room).sprites.back);
         i.img.set_speed(Real::new(0.1))?;
     }
     if s.ladder_ud {
-        set_sprite(def, &mut i.img, def.physics.sprites.ladder_up_down);
+        set_sprite(def, &mut i.img, def.physics_in(ctx.w.room).sprites.ladder_up_down);
         i.img.set_speed(Real::new(0.2))?;
     }
     Ok(())
