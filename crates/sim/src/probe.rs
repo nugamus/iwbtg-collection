@@ -539,7 +539,7 @@ fn read_field(def: &GameDef, w: &World, id: InstId, field: &FieldRef, frame: i64
         FieldRef::Var(v) => inst.vars.get(v).map_or(trace::Value::Empty, from_value),
         FieldRef::Kid(f) => match inst.state {
             KindState::Kid(_) => api::read_field(w, id, f)
-                .or_else(|| api::read_field_def(def, f))
+                .or_else(|| api::read_field_def(def, w.room, f))
                 .map_or(trace::Value::Empty, |v| from_value(&v)),
             // The save point's cooldown, the original's `saveTimer`.
             KindState::Builtin(BuiltinState::Save(ref s)) if f.name == "saveTimer" && f.index.is_none() => {

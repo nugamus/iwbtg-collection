@@ -241,8 +241,7 @@ pub(crate) fn keys_swapped(ctx: &Ctx, s: &KidState) -> bool {
 /// `image_alpha` 0 when the game fades the kid in, and facing left only when the previous kid
 /// handed over `global.image_xscale = -1`.
 fn create_defaults(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
-    let def = ctx.def;
-    let p = &def.physics_in(ctx.w.room);
+    let p = ctx.physics();
     let handed_over_left = ctx.w.engine.kid.image_xscale == -1;
     {
         let s = state_mut(ctx, me)?;
@@ -370,8 +369,8 @@ pub(crate) fn stop_if_frozen2(ctx: &mut Ctx, me: InstId) -> Result<bool, SimErro
 /// "step"`). Other models are other work packages.
 fn gravity(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     use crate::def::physics::GravityReapply;
-    let def = ctx.def;
-    if def.physics_in(ctx.w.room).gravity.reapply != GravityReapply::Step {
+    let phys = ctx.physics();
+    if phys.gravity.reapply != GravityReapply::Step {
         return Err(SimError::unsupported(
             "kid action gravity: gravity.reapply other than \"step\" (5.3 gravity row, WP5b/WP5c)",
         ));
@@ -379,7 +378,7 @@ fn gravity(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     if state(ctx, me)?.ladder {
         return Ok(());
     }
-    let g = def.physics_in(ctx.w.room).numbers.gravity * real_i(down(&state(ctx, me)?));
+    let g = phys.numbers.gravity * real_i(down(&state(ctx, me)?));
     match ctx.w.get_mut(me) {
         Some(i) => i.m.set_gravity(g),
         None => Ok(()),
@@ -436,7 +435,7 @@ fn walk_dir(ctx: &mut Ctx, s: &KidState) -> i8 {
 /// vine (else it keeps its old value and the sprite stays).
 fn walk(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let def = ctx.def;
-    let p = &def.physics_in(ctx.w.room);
+    let p = ctx.physics();
     let s = state(ctx, me)?;
     if frozen2(ctx, &s) {
         return Ok(());
@@ -558,7 +557,7 @@ pub(crate) fn vine_distances(ctx: &Ctx, me: InstId) -> Result<(Real, Real), SimE
 fn air_sprite(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let def = ctx.def;
     let n = &ctx.rules.num;
-    let p = &def.physics_in(ctx.w.room);
+    let p = ctx.physics();
     let s = state(ctx, me)?;
     if frozen2(ctx, &s) {
         return Ok(());
@@ -658,7 +657,7 @@ fn fall_cap(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
 /// fewer than `bullet.max` bullets exist, a bullet appears at the kid's position moving
 /// `bullet.speed * facing`. (The bullet's own Create, life and the sound are `kid_bullet`, WP6a.)
 fn shoot(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
-    let def = ctx.def;
+    let phys = ctx.physics();
     let s = state(ctx, me)?;
     if frozen2(ctx, &s) {
         return Ok(Flow::Continue);
@@ -666,22 +665,22 @@ fn shoot(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
     if s.frozen || ctx.w.engine.kid.frozen || !ctx.w.input.pressed(Action::Shoot) {
         return Ok(Flow::Continue);
     }
-    if ctx.w.count_of(ClassMask::KID_BULLET) >= def.physics_in(ctx.w.room).bullet.max {
+    if ctx.w.count_of(ClassMask::KID_BULLET) >= phys.bullet.max {
         return Ok(Flow::Continue);
     }
     let Some(i) = ctx.w.get(me) else {
         return Ok(Flow::Continue);
     };
-    let off = def.physics_in(ctx.w.room).bullet.offset;
+    let off = phys.bullet.offset;
     let x = i.m.x() + off[0] * real_i(i32::from(s.facing));
     let y = i.m.y() - off[1] * real_i(yflag(ctx, &s));
     let Some(b) = ctx.spawn_engine(EngineKind::KidBullet, x, y, SpawnInit::default())? else {
         return Err(SimError::invariant("shoot: the game has no kid_bullet kind"));
     };
     if let Some(bi) = ctx.w.get_mut(b) {
-        bi.m.set_hspeed(def.physics_in(ctx.w.room).bullet.speed * real_i(i32::from(s.facing)))?;
+        bi.m.set_hspeed(phys.bullet.speed * real_i(i32::from(s.facing)))?;
     }
-    play_sound(ctx, def.physics_in(ctx.w.room).sounds.shoot)?;
+    play_sound(ctx, phys.sounds.shoot)?;
     Ok(if ctx.w.status == crate::world::SimStatus::Running {
         Flow::Continue
     } else {
@@ -695,7 +694,7 @@ fn shoot(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
 /// the jump sprite and `djump` false; else nothing. Only the 1 px test matters, never `vspeed`.
 fn jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let def = ctx.def;
-    let p = &def.physics_in(ctx.w.room);
+    let p = ctx.physics();
     let s = state(ctx, me)?;
     if frozen2(ctx, &s) {
         return Ok(());
@@ -786,14 +785,14 @@ fn jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
 /// (against gravity) is multiplied by `release_mult`. It runs on every release, so a jump can be
 /// cut more than once.
 fn release(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
-    let def = ctx.def;
+    let phys = ctx.physics();
     let s = state(ctx, me)?;
     if frozen2(ctx, &s) {
         return Ok(());
     }
     if s.frozen
         || ctx.w.engine.kid.frozen
-        || def.physics_in(ctx.w.room).jump.cancel == JumpCancel::PollAlarm // `cancel_poll` cuts instead
+        || phys.jump.cancel == JumpCancel::PollAlarm // `cancel_poll` cuts instead
         || !ctx.w.input.released(Action::Jump)
     {
         return Ok(());
@@ -805,7 +804,7 @@ fn release(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
 /// multiplied by `release_mult` (and a second time while `tjump` in showdown). `kid::api::
 /// run_jump_release` calls it for water's same-tick release clause.
 pub(crate) fn cut_jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
-    let def = ctx.def;
+    let phys = ctx.physics();
     let n = &ctx.rules.num;
     let s = state(ctx, me)?;
     let sign = real_i(down(&s));
@@ -813,12 +812,12 @@ pub(crate) fn cut_jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let v = i.m.vspeed();
     let mut v = v;
     if gm_lt(sign * v, Real::ZERO, n) {
-        v *= def.physics_in(ctx.w.room).numbers.release_mult;
+        v *= phys.numbers.release_mult;
         i.m.set_vspeed(v)?;
     }
     // `playerTJump` (showdown): while `tjump` is set a release cuts a second time.
-    if def.physics_in(ctx.w.room).jump.release_twice_while_tjump && s.tjump && gm_lt(sign * v, Real::ZERO, n) {
-        i.m.set_vspeed(v * def.physics_in(ctx.w.room).numbers.release_mult)?;
+    if phys.jump.release_twice_while_tjump && s.tjump && gm_lt(sign * v, Real::ZERO, n) {
+        i.m.set_vspeed(v * phys.numbers.release_mult)?;
     }
     Ok(())
 }
@@ -831,7 +830,7 @@ pub(crate) fn cut_jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
 fn vines(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let def = ctx.def;
     let n = &ctx.rules.num;
-    let p = &def.physics_in(ctx.w.room);
+    let p = ctx.physics();
     match p.vine.model {
         VineModel::None => return Ok(()),
         VineModel::DistanceAsym => {}

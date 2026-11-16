@@ -112,14 +112,14 @@ fn missing() -> SimError {
 /// shifted kid overlaps the matching slope.
 pub(crate) fn horizontal(ctx: &mut Ctx, me: InstId, row: SlopeRow) -> Result<(), SimError> {
     let slope_step = row != SlopeRow::None;
-    let def = ctx.def;
+    let phys = ctx.physics();
     let n = &ctx.rules.num;
     let rev = yflag(ctx, &state(ctx, me)?) < 0;
     let (x, y, hs, _) = pos(ctx, me).ok_or_else(missing)?;
     if place_free(ctx, me, x + hs, y)? {
         return Ok(());
     }
-    let rules = &def.physics_in(ctx.w.room).slope;
+    let rules = &phys.slope;
     let step = rules.step;
     if slope_step && rules.block_step == BlockSlopeStep::Replace {
         let up = if gm_lt(hs, Real::ZERO, n) {
@@ -140,7 +140,7 @@ pub(crate) fn horizontal(ctx: &mut Ctx, me: InstId, row: SlopeRow) -> Result<(),
         }
     }
     // Family C's flipped kid reads `hspeed` 0 as right (`hspeed >= 0`), everyone else as left.
-    let mut right = if matches!(def.physics_in(ctx.w.room).flip.model, FlipKind::GravSign | FlipKind::SwapObject) && rev {
+    let mut right = if matches!(phys.flip.model, FlipKind::GravSign | FlipKind::SwapObject) && rev {
         gm_ge(hs, Real::ZERO, n)
     } else {
         gm_gt(hs, Real::ZERO, n)
@@ -191,7 +191,7 @@ fn refreshes(ctx: &Ctx, me: InstId, other: InstId) -> bool {
 }
 
 pub(crate) fn vertical(ctx: &mut Ctx, me: InstId, refresh: bool) -> Result<(), SimError> {
-    let def = ctx.def;
+    let phys = ctx.physics();
     let n = &ctx.rules.num;
     let rev = yflag(ctx, &state(ctx, me)?) < 0;
     let (x, y, _, vs) = pos(ctx, me).ok_or_else(missing)?;
@@ -206,13 +206,13 @@ pub(crate) fn vertical(ctx: &mut Ctx, me: InstId, refresh: bool) -> Result<(), S
         if up == rev && refresh {
             refresh_air_jump(ctx, me);
             // Showdown: a landing also spends the triple jump the Create granted.
-            if def.physics_in(ctx.w.room).jump.air == AirJump::DjumpThenTjump {
+            if phys.jump.air == AirJump::DjumpThenTjump {
                 crate::kid::actions::common::state_mut(ctx, me)?.tjump = false;
             }
         }
         let i = ctx.w.get_mut(me).ok_or_else(missing)?;
         i.m.set_vspeed(Real::ZERO)?;
-        if def.physics_in(ctx.w.room).gravity.block_landing_zeroes {
+        if phys.gravity.block_landing_zeroes {
             i.m.set_gravity(Real::ZERO)?;
         }
     }

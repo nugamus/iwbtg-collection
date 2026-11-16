@@ -336,6 +336,11 @@ struct Loader<'a> {
     groups: Vec<String>,
     /// Resolved map timing chains.
     maps: Vec<MapTiming>,
+    /// Room profiles, `physics/<id>.toml` (#33); `GameDef::room_physics`.
+    room_physics: Vec<PhysicsProfile>,
+    /// Room profile id to its index in `room_physics`; `None` for the file that is the game's
+    /// own profile (`game.toml` `physics`), which rooms naming it share.
+    room_physics_ids: BTreeMap<String, Option<u16>>,
 }
 
 impl<'a> Loader<'a> {
@@ -372,6 +377,8 @@ impl<'a> Loader<'a> {
             collides: BTreeMap::new(),
             groups: Vec::new(),
             maps: Vec::new(),
+            room_physics: Vec::new(),
+            room_physics_ids: BTreeMap::new(),
         }
     }
 
@@ -549,6 +556,7 @@ impl<'a> Loader<'a> {
         if self.trace_mode() {
             self.legacy_kid_mask();
         }
+        self.load_room_physics(&physics);
         // Step 6: variable ids, from every name the loader sees.
         let vars = self.intern(&rooms);
         // Step 4, second half, and step 5 for placed instances.
@@ -611,6 +619,7 @@ impl<'a> Loader<'a> {
             names: std::mem::take(&mut self.names),
             groups: std::mem::take(&mut self.groups),
             physics,
+            room_physics: std::mem::take(&mut self.room_physics),
             restart: engine
                 .and_then(|e| e.restart.as_ref())
                 .map_or_else(RestartModel::default, |r| r.model()),
@@ -985,6 +994,76 @@ impl<'a> Loader<'a> {
         p.sounds.vine_kick = snd(self, &names.vine_kick);
         p.sounds.death = snd(self, &names.death);
         p
+    }
+
+    /// Reads every room profile, `physics/<id>.toml` (#33), in path order. The kid kind's events
+    /// are fixed at load from the game's profile, so a room profile must handle the same events
+    /// (the same `[events]` rows' triggers: `kid::event_set`); its actions and values may differ.
+    /// The game's own profile file, when it lies in `physics/`, is not loaded twice: rooms that
+    /// name it use the game's profile.
+    fn load_room_physics(&mut self, game: &PhysicsProfile) {
+        let game_events = iwbtg_sim::kid::event_set(game);
+        let paths: Vec<String> = self
+            .files
+            .iter()
+            .map(|(p, _)| p)
+            .filter(|p| {
+                p.strip_prefix("physics/")
+                    .and_then(|r| r.strip_suffix(".toml"))
+                    .is_some_and(|id| !id.is_empty() && !id.contains('/'))
+            })
+            .map(str::to_owned)
+            .collect();
+        for path in paths {
+            let id = path["physics/".len()..path.len() - ".toml".len()].to_owned();
+            if path == *self.m.physics.get_ref() {
+                self.room_physics_ids.insert(id, None);
+                continue;
+            }
+            let mut d = Vec::new();
+            let loaded = physics::load(self.files, &path, self.trace_mode(), &mut d);
+            self.diags.append(&mut d);
+            let Some(l) = loaded else { continue };
+            let profile = self.finish_physics(l, &path);
+            if iwbtg_sim::kid::event_set(&profile) != game_events {
+                self.diags.push(Diagnostic::file_error(
+                    &path,
+                    format!(
+                        "room profile `{id}` handles other kid events than the game's profile `{}`;                          a room profile may change actions and values, not which events the kid has",
+                        self.m.physics.get_ref()
+                    ),
+                ));
+                continue;
+            }
+            let Ok(index) = u16::try_from(self.room_physics.len()) else {
+                self.diags
+                    .push(Diagnostic::file_error(&path, "more than 65535 room profiles"));
+                continue;
+            };
+            self.room_physics.push(profile);
+            self.room_physics_ids.insert(id, Some(index));
+        }
+    }
+
+    /// A room's `physics = "<id>"`: the index of `physics/<id>.toml` in the room profiles, or
+    /// `None` (the game's profile) when it is the game's own file or has an error.
+    fn room_physics_ref(&mut self, name: &Spanned<String>, path: &str, text: &str) -> Option<u16> {
+        let id = name.get_ref();
+        match self.room_physics_ids.get(id) {
+            Some(index) => *index,
+            None => {
+                let file = format!("physics/{id}.toml");
+                if !self.files.contains(&file) {
+                    self.error(
+                        path,
+                        text,
+                        name.span(),
+                        format!("physics profile `{id}` has no `{file}`"),
+                    );
+                }
+                None
+            }
+        }
     }
 
     fn legacy_kid_mask(&mut self) {
@@ -1585,6 +1664,9 @@ impl<'a> Loader<'a> {
             };
             def.no_restart = f.no_restart;
             def.djump_grants_tjump = f.djump_grants_tjump;
+            if let Some(name) = &f.physics {
+                def.physics = self.room_physics_ref(name, path, text);
+            }
             def.file_speed = match &f.file_speed {
                 Some(s) => *s.get_ref(),
                 None => match self
@@ -2914,7 +2996,7 @@ fn read_text<'f>(files: &'f PackageFiles, path: &str, out: &mut Vec<Diagnostic>)
 // Step 9: gameplay_hash.
 
 /// `game.toml` keys that cannot change the sim (docs/format/v0.md, Versioning).
-const COSMETIC_MANIFEST_KEYS: [&str; 8] = [
+const COSMETIC_MANIFEST_KEYS: [&str; 9] = [
     "title",
     "version",
     "source_version",
@@ -2923,6 +3005,7 @@ const COSMETIC_MANIFEST_KEYS: [&str; 8] = [
     "third_party",
     "music",
     "key_art",
+    "controls",
 ];
 
 /// `[[maps]]` keys that are only shown: renaming a map keeps its board.
@@ -2946,6 +3029,7 @@ pub fn gameplay_hash(files: &PackageFiles, manifest: &Manifest, def: &GameDef) -
     for (path, bytes) in files.iter() {
         let data = path == MANIFEST_PATH
             || path == physics
+            || path.starts_with("physics/")
             || crate::engine_pack::is_gameplay_file(path)
             || [
                 "objects/",

@@ -48,7 +48,8 @@ pub fn run(ctx: &mut Ctx, me: InstId, other: InstId, run: &DeathRun) -> Result<F
 /// a kid. A kid that no longer exists is left alone.
 pub fn kill(ctx: &mut Ctx, kid: InstId, _cause: KillCause) -> Result<Flow, SimError> {
     let def = ctx.def;
-    let rules = &def.physics_in(ctx.w.room).death;
+    let phys = ctx.physics();
+    let rules = &phys.death;
     let Some(inst) = ctx.w.get(kid).filter(|i| i.alive) else {
         return Ok(Flow::Continue);
     };

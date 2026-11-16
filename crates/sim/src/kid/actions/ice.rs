@@ -55,9 +55,9 @@ pub(crate) fn slip_below(ctx: &mut Ctx, me: InstId) -> Result<Real, SimError> {
 }
 
 fn ice_temp_hspeed(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
-    let def = ctx.def;
+    let phys = ctx.physics();
     let n = &ctx.rules.num;
-    let rules = &def.physics_in(ctx.w.room).ice;
+    let rules = &phys.ice;
     let ice = on_ice(ctx, me, rules.temp_probe)?;
     let temp = state(ctx, me)?.temp_hspeed;
     let hs = ctx.w.get(me).map_or(Real::ZERO, |i| i.m.hspeed());

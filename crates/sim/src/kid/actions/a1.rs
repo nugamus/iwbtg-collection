@@ -22,7 +22,7 @@ pub enum A1Action {
 
 /// Runs one action on the kid `me`. `kid::run_action` routes here.
 pub fn run(ctx: &mut Ctx, me: InstId, action: &A1Action) -> Result<Flow, SimError> {
-    let def = ctx.def;
+    let phys = ctx.physics();
     let n = &ctx.rules.num;
     match action {
         A1Action::PlatformGravityZero => {
@@ -35,7 +35,7 @@ pub fn run(ctx: &mut Ctx, me: InstId, action: &A1Action) -> Result<Flow, SimErro
             if let Some(i) = ctx.w.get_mut(me) {
                 let a = i.img.alpha();
                 if gm_lt(a, Real::ONE, n) {
-                    i.img.set_alpha(a + def.physics_in(ctx.w.room).misc.fade_step)?;
+                    i.img.set_alpha(a + phys.misc.fade_step)?;
                 }
             }
         }

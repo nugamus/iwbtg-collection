@@ -17,6 +17,45 @@
       },
       "type": "object"
     },
+    "Controls": {
+      "additionalProperties": false,
+      "description": "The `[controls]` table: a label for each extra action the game uses (docs/format/v0.md,\nManifest). Only the player-facing words; which key the player binds is the client's.",
+      "properties": {
+        "extra1": {
+          "default": null,
+          "description": "What `extra1` does in this game (\"Teleport\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "extra2": {
+          "default": null,
+          "description": "What `extra2` does.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "extra3": {
+          "default": null,
+          "description": "What `extra3` does.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "extra4": {
+          "default": null,
+          "description": "What `extra4` does.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
     "Creator": {
       "additionalProperties": false,
       "description": "One `[[creators]]` entry.",
@@ -1102,6 +1141,17 @@
         }
       ],
       "description": "Script budget."
+    },
+    "controls": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Controls"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "What the game's extra actions do (`[controls]`, #33): labels for `extra1` to `extra4`,\nshown where the player binds keys and in the HUD's input display. Absent: the game uses\nno extra action."
     },
     "creators": {
       "description": "At least one creator.",

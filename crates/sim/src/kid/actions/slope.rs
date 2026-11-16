@@ -67,10 +67,11 @@ fn snap(ctx: &mut Ctx, me: InstId, max: f64) -> Result<(), SimError> {
 
 fn downhill_snap(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let def = ctx.def;
+    let phys = ctx.physics();
     let n = &ctx.rules.num;
     let i = ctx.w.get(me).ok_or_else(missing)?;
     let (x, y, vs, xp) = (i.m.x(), i.m.y(), i.m.vspeed(), i.m.xprevious());
-    match def.physics_in(ctx.w.room).slope.downhill {
+    match phys.slope.downhill {
         Downhill::None => {}
         Downhill::Por => {
             if gm_ge(vs, Real::ZERO, n)
@@ -81,9 +82,9 @@ fn downhill_snap(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
                 snap(ctx, me, 12.0)?;
                 let moving = ctx.w.input.held(Action::Left) || ctx.w.input.held(Action::Right);
                 let spr = if moving {
-                    def.physics_in(ctx.w.room).sprites.running
+                    phys.sprites.running
                 } else {
-                    def.physics_in(ctx.w.room).sprites.idle
+                    phys.sprites.idle
                 };
                 if let Some(i) = ctx.w.get_mut(me) {
                     set_sprite(def, &mut i.img, spr);

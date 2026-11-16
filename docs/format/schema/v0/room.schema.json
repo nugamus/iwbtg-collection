@@ -770,6 +770,14 @@
       "default": false,
       "type": "boolean"
     },
+    "physics": {
+      "default": null,
+      "description": "The room's own physics profile: `physics/<id>.toml` (#33). Absent: the game's.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "role": {
       "anyOf": [
         {

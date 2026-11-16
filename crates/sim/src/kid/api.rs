@@ -309,13 +309,14 @@ pub fn read_field(w: &World, kid: InstId, f: &KidField) -> Option<Value> {
     }
 }
 
-/// Kid fields that come from the game's profile, not from the kid's state; `None` for any other
+/// Kid fields that come from the room's profile (`GameDef::physics_in`), not from the kid's state; `None` for any other
 /// name. `grav`: family B declares `grav` 0.4 in Create and never reads it (kid/B.md), so a game
 /// that flips by `yflag` reads its profile gravity. Other families use `grav` as a sign, which the
 /// kid state does not hold as a field.
-pub fn read_field_def(def: &crate::def::GameDef, f: &KidField) -> Option<Value> {
-    let by_flag = def.physics_in(ctx.w.room).flip.model == crate::def::physics::FlipKind::Yflag;
-    (f.name == "grav" && f.index.is_none() && by_flag).then_some(Value::Real(def.physics_in(ctx.w.room).numbers.gravity))
+pub fn read_field_def(def: &crate::def::GameDef, room: crate::def::RoomId, f: &KidField) -> Option<Value> {
+    let p = def.physics_in(room);
+    let by_flag = p.flip.model == crate::def::physics::FlipKind::Yflag;
+    (f.name == "grav" && f.index.is_none() && by_flag).then_some(Value::Real(p.numbers.gravity))
 }
 
 /// Whether the kid is the flipped one: the flipped kid's own state flag, or the flipped class
@@ -391,8 +392,8 @@ pub fn clear_frozen(ctx: &mut Ctx) {
 /// Resets the kid's jump values to the profile's, both speeds to 0 and the jump flags
 /// (`djump` true; `tjump` true when the game has a third jump): showdown's loadGame step.
 pub fn reset_jump_values(ctx: &mut Ctx, kid: InstId) -> Result<(), SimError> {
-    let def = ctx.def;
-    let triple = def.physics_in(ctx.w.room).jump.air == crate::def::physics::AirJump::DjumpThenTjump;
+    let phys = ctx.physics();
+    let triple = phys.jump.air == crate::def::physics::AirJump::DjumpThenTjump;
     let Some(i) = ctx.w.get_mut(kid) else {
         return Err(SimError::invariant(format!(
             "kid::api::reset_jump_values: no instance {}",
@@ -405,7 +406,7 @@ pub fn reset_jump_values(ctx: &mut Ctx, kid: InstId) -> Result<(), SimError> {
             kid.0
         )));
     };
-    s.jump_speeds.clone_from(&def.physics_in(ctx.w.room).numbers.jumps);
+    s.jump_speeds.clone_from(&phys.numbers.jumps);
     s.djump = true;
     s.tjump = triple;
     i.m.set_hspeed(Real::ZERO)?;

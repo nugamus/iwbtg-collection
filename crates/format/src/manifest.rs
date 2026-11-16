@@ -135,6 +135,46 @@ pub struct Manifest {
     /// run starts at the new-game room and nothing is cut or frozen.
     #[serde(default)]
     pub stripped: Option<StrippedSection>,
+    /// What the game's extra actions do (`[controls]`, #33): labels for `extra1` to `extra4`,
+    /// shown where the player binds keys and in the HUD's input display. Absent: the game uses
+    /// no extra action.
+    #[serde(default)]
+    pub controls: Option<Controls>,
+}
+
+/// Longest `[controls]` label, in characters: it has to fit a key binding row and the HUD.
+pub const MAX_CONTROL_LABEL: usize = 24;
+
+/// The `[controls]` table: a label for each extra action the game uses (docs/format/v0.md,
+/// Manifest). Only the player-facing words; which key the player binds is the client's.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct Controls {
+    /// What `extra1` does in this game ("Teleport").
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub extra1: Option<Spanned<String>>,
+    /// What `extra2` does.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub extra2: Option<Spanned<String>>,
+    /// What `extra3` does.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub extra3: Option<Spanned<String>>,
+    /// What `extra4` does.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub extra4: Option<Spanned<String>>,
+}
+
+impl Controls {
+    /// The labels of `extra1` to `extra4`, in order; `None` for an action the game does not use.
+    pub fn labels(&self) -> [Option<&str>; 4] {
+        [&self.extra1, &self.extra2, &self.extra3, &self.extra4]
+            .map(|l| l.as_ref().map(|s| s.get_ref().as_str()))
+    }
 }
 
 /// Id of the one map of a package without `[[maps]]`.
@@ -1098,6 +1138,7 @@ impl Manifest {
         }
         self.validate_third_party(&mut v);
         self.validate_key_art(&mut v);
+        self.validate_controls(&mut v);
         for (track, settings) in &self.music {
             if v.id(track) {
                 let file = format!("music/{}.ogg", track.get_ref());
@@ -1113,6 +1154,32 @@ impl Manifest {
                 if !value.is_finite() || value < 0.0 {
                     v.error(volume.span(), "volume must be a finite number of at least 0");
                 }
+            }
+        }
+    }
+
+    fn validate_controls(&self, v: &mut Validator<'_>) {
+        let Some(c) = &self.controls else { return };
+        for (n, label) in [&c.extra1, &c.extra2, &c.extra3, &c.extra4]
+            .into_iter()
+            .enumerate()
+        {
+            let Some(label) = label else { continue };
+            let what = format!("controls label extra{}", n + 1);
+            if !v.non_empty(label, &what) {
+                continue;
+            }
+            let text = label.get_ref();
+            if text.chars().any(char::is_control) {
+                v.error(
+                    label.span(),
+                    format!("{what} must be one line without control characters"),
+                );
+            } else if text.chars().count() > MAX_CONTROL_LABEL {
+                v.error(
+                    label.span(),
+                    format!("{what} must be at most {MAX_CONTROL_LABEL} characters"),
+                );
             }
         }
     }

@@ -321,6 +321,12 @@ line = 31
 column = 10
 message = "unknown variant `fine`"
 
+[controls_label_too_long]
+file = "game.toml"
+line = 27
+column = 10
+message = "controls label extra1 must be at most 24 characters"
+
 [tick_rate_zero]
 file = "game.toml"
 line = 11

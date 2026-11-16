@@ -54,6 +54,9 @@ pub struct RoomFile {
     pub no_restart: bool,
     /// The double jump also grants the third jump here (`djump_grants_tjump`, showdown room028).
     pub djump_grants_tjump: bool,
+    /// The room's own physics profile (`physics = "<id>"`, the file `physics/<id>.toml`, #33);
+    /// `None` uses the game's.
+    pub physics: Option<Spanned<String>>,
     /// GM persistent room.
     pub persistent: bool,
     /// GM "enable the use of views".
@@ -316,6 +319,10 @@ pub(crate) struct RawRoom {
     no_restart: bool,
     #[serde(default)]
     djump_grants_tjump: bool,
+    /// The room's own physics profile: `physics/<id>.toml` (#33). Absent: the game's.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    physics: Option<Spanned<String>>,
     #[serde(default)]
     persistent: bool,
     #[serde(default)]
@@ -399,6 +406,7 @@ pub fn parse_room(id: &str, path: &str, text: &str) -> Result<RoomFile, Diagnost
         role: raw.role,
         no_restart: raw.no_restart,
         djump_grants_tjump: raw.djump_grants_tjump,
+        physics: raw.physics,
         persistent: raw.persistent,
         views_enabled: raw.views_enabled,
         views: raw.views,
