@@ -820,8 +820,17 @@ mod blood_emitter {
         k1_replay(fixture_with(true, &[("outlives_stream", ParamValue::Bool(true))]));
     }
 
+    /// Replays k1's seed and `instance_number(bloodEmitter)` columns from frame 45 to 90.
     fn k1_replay((mut fx, kind): (Fx, KindId)) {
         let rows = k1();
+        let emitters: Vec<usize> = K1
+            .lines()
+            .filter(|l| !l.starts_with('#') && !l.starts_with("frame"))
+            .filter_map(|l| {
+                let f: Vec<&str> = l.split(',').collect();
+                (f[0].parse::<u32>().ok()? >= 45).then(|| f[2].parse().expect("blood_emitters"))
+            })
+            .collect();
         fx.w.rng = Rng::new(0);
         let mut frame = 44;
         for (f, seed) in &rows {
@@ -831,7 +840,7 @@ mod blood_emitter {
         }
         spawn(&mut fx, kind);
         assert_eq!(fx.w.rng, Rng::new(0), "Create draws nothing");
-        for (f, seed) in rows.iter().filter(|(f, _)| *f >= 45) {
+        for ((f, seed), want) in rows.iter().filter(|(f, _)| *f >= 45).zip(&emitters) {
             frame += 1;
             assert_eq!(*f, frame);
             let input = if *f == 51 {
@@ -846,6 +855,12 @@ mod blood_emitter {
             };
             fx.tick(input);
             assert_eq!(fx.w.rng.seed, *seed, "frame {f}");
+            // Row 51 still shows the emitter, as its systems, emitters and particles columns
+            // still show frame 50's: the trace records it before the R press is handled.
+            if *f != 51 {
+                let n = fx.w.instances().iter().filter(|i| i.kind == kind).count();
+                assert_eq!(n, *want, "frame {f}: blood emitters");
+            }
         }
         assert_eq!(frame, 90);
         assert!(
@@ -918,6 +933,41 @@ mod blood_emitter {
         assert!(!fx.w.exists(id), "Restart destroys it");
         assert!(fx.w.particles.systems[0].destroyed);
         assert_eq!(fx.w.rng, rng);
+    }
+
+    /// A placed (or spawned) instance that sets `outlives_stream` on a plain `particles` kind
+    /// outlives its stream: the instance's own params (the kind's, overridden by the placement's,
+    /// `Ctx::spawn`, which room placement uses too) build its state, so no derived kind is needed.
+    #[test]
+    fn a_placed_instance_param_outlives_its_stream() {
+        let (mut fx, kind) = fixture(true);
+        let mut params = iwbtg_sim::def::Params::default();
+        params.0.insert("outlives_stream".into(), ParamValue::Bool(true));
+        let id = fx
+            .ctx()
+            .spawn(
+                kind,
+                r(49.0),
+                r(519.1),
+                SpawnInit {
+                    params,
+                    ..SpawnInit::default()
+                },
+            )
+            .expect("spawn");
+        let mut p = model();
+        let mut rng = Rng::new(1);
+        for _ in 0..19 {
+            p.update(&mut rng).unwrap();
+        }
+        p.destroy_all_emitters(iwbtg_sim::particles::PartSystemId(0)).unwrap();
+        for _ in 0..49 {
+            p.update(&mut rng).unwrap();
+        }
+        fx.idle(68);
+        assert!(fx.w.exists(id));
+        assert_eq!(fx.w.rng, rng);
+        assert_eq!(fx.w.particles, p);
     }
 
     /// `life = -1` (GameMaker's "alarm off") is accepted and sets no alarm: the instance and its
