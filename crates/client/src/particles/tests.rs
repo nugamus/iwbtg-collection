@@ -185,6 +185,45 @@ fn an_excepted_room_keeps_the_burst() {
     );
 }
 
+/// An instance whose Room Start destroys it in the first room is gone before the client first
+/// looks, yet its systems still stream in the sim, so they are drawn (`World::particle_defs`,
+/// go-the-spook-house oRainSys outside its excepted rooms, #866).
+#[test]
+fn a_system_whose_instance_destroyed_itself_in_the_first_room_is_drawn() {
+    let mut def = (*demo()).clone();
+    let k = def.kinds.iter_mut().find(|k| k.name == "@snowfall").unwrap();
+    k.params
+        .0
+        .insert("on_room_start_destroys_instance".into(), ParamValue::Bool(true));
+    k.events.room_start = true;
+    let def = Arc::new(def);
+    let mut sim = sim(Arc::clone(&def));
+    let mut t = Tracker::default();
+    sim.step(InputFrame::EMPTY);
+    t.follow(&def, sim.world());
+    let snowfall = def.kinds.iter().position(|k| k.name == "@snowfall").unwrap();
+    assert!(
+        !sim.world()
+            .instances()
+            .iter()
+            .any(|i| i.alive && i.kind.index() == Some(snowfall)),
+        "the instance destroyed itself"
+    );
+    let (_, snow) = system(&def, &t, "snow");
+    assert_eq!(
+        snow.particles.len(),
+        122,
+        "the burst of 120 plus one stream update"
+    );
+    let before = snow.particles.len();
+    for _ in 0..5 {
+        sim.step(InputFrame::EMPTY);
+        t.follow(&def, sim.world());
+    }
+    let (_, snow) = system(&def, &t, "snow");
+    assert!(snow.particles.len() > before, "it keeps streaming");
+}
+
 #[test]
 fn a_retry_starts_the_particles_over() {
     let def = demo();

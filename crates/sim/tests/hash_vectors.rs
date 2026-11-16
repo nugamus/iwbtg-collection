@@ -142,3 +142,16 @@ fn hash_negative_zero_is_not_zero() {
     b.globals.insert(VarId(0), Value::Real(Real::new(0.0)));
     assert_ne!(state_hash(&a), state_hash(&b));
 }
+
+/// `World::particle_defs` is the client's record of which file built each particle system: the
+/// sim never reads it, so it is not hashed (#866).
+#[test]
+fn hash_ignores_the_particle_defs_table() {
+    let mut w = empty();
+    let before = state_hash(&w);
+    w.particle_defs.insert(
+        iwbtg_sim::particles::PartSystemId(0),
+        iwbtg_sim::def::PartSystemDefId(3),
+    );
+    assert_eq!(state_hash(&w), before);
+}

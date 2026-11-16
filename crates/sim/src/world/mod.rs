@@ -14,12 +14,12 @@ pub use api::{Flow, SpawnInit};
 pub use instance::{InstId, Instance, KindState, Value};
 
 use crate::collide::grid::Grid;
-use crate::def::{GameDef, RoomId, VarId};
+use crate::def::{GameDef, PartSystemDefId, RoomId, VarId};
 use crate::error::SimError;
 use crate::input_state::InputState;
 use crate::num::Real;
 use crate::output::OutputEvent;
-use crate::particles::Particles;
+use crate::particles::{PartSystemId, Particles};
 use crate::rng::Rng;
 use crate::room::RoomRequest;
 use crate::rules::RunnerRules;
@@ -32,7 +32,8 @@ use crate::view::View;
 use crate::{builtins, kid, run_globals};
 
 /// Everything that changes while a game runs. Every field is hashed by `hash::state_hash` except
-/// `output` and `grid` (docs/architecture/sim/hash.md, State hash).
+/// `output`, `grid`, `room_requests` and `particle_defs` (docs/architecture/sim/hash.md, State
+/// hash).
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct World {
     /// Ticks since the run started.
@@ -79,6 +80,12 @@ pub struct World {
     /// because the update draws from `rng`.
     #[serde(default)]
     pub particles: Particles,
+    /// The `particles/<id>.toml` definition each `particle_system` built-in's system was built
+    /// from, by its system in `particles` (#866). For the client's drawing only: the sim writes it
+    /// when it builds a system and never reads it, so it is not hashed. A system built otherwise
+    /// (a particles-mode `blood_emitter`) has no entry.
+    #[serde(default)]
+    pub particle_defs: BTreeMap<PartSystemId, PartSystemDefId>,
     /// Events for the client. Not hashed, not saved.
     #[serde(skip)]
     pub output: Vec<OutputEvent>,
@@ -130,6 +137,7 @@ impl World {
             sound: SoundState::default(),
             timing: TimingState::default(),
             particles: Particles::default(),
+            particle_defs: BTreeMap::new(),
             output: Vec::new(),
             status: SimStatus::Running,
             mode: PlayMode::Original,

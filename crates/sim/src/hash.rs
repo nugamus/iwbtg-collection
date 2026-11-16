@@ -1,8 +1,8 @@
 //! The state hash (docs/plans/sim-core.md 10.1).
 //!
 //! BLAKE3 over the postcard encoding of a canonical [`HashView`] borrowed from the `World`: every
-//! hashed field in a fixed order, `setup_applied` included, `output`, the grid and the per-tick
-//! `room_requests` counter excluded. Postcard writes lengths as varints and reals as their
+//! hashed field in a fixed order, `setup_applied` included, `output`, the grid, the per-tick
+//! `room_requests` counter and the client's `particle_defs` table (#866) excluded. Postcard writes lengths as varints and reals as their
 //! little-endian bits, so wasm32 and x86_64 give the same bytes. `std::hash` and its hashers are
 //! never used here. WP0 declared; WP1 owns.
 

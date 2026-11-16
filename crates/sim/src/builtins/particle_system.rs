@@ -2,7 +2,8 @@
 //!
 //! An object whose code builds a particle system (rely objEffect, keep-celebrating objcpart,
 //! go-the-spook-house oRainSys, eat-the-lemon docobj2, docobj3, object131, object132). Create
-//! builds its `particles/<id>.toml` system in `World::particles` (`Particles::build`); a list of
+//! builds its `particles/<id>.toml` system in `World::particles` (`Particles::build`) and notes
+//! the file in `World::particle_defs` for the client (not hashed, #866); a list of
 //! files (rely objEffect's two systems, client#826) builds each in list order, so the draw order
 //! is defined. In GM a system outlives the instance and the room until code clears or destroys
 //! it, so what happens later is explicit: `on_room_start`, `on_room_end` and `on_destroy` each
@@ -201,7 +202,10 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
                         SimError::invariant(format!("particle system definition {} does not exist", d.0))
                     })?;
                 let w = &mut *ctx.w;
-                built.push(w.particles.build(&mut w.rng, def)?);
+                let sys = w.particles.build(&mut w.rng, def)?;
+                // For the client only; never read here and not hashed (#866).
+                w.particle_defs.insert(sys, *d);
+                built.push(sys);
             }
             if let Some(BuiltinState::ParticleSystem(st)) = state_mut(ctx, me) {
                 st.systems = built;
