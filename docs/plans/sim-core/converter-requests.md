@@ -3,7 +3,7 @@
 Part of [the sim core plan](../sim-core.md), section 8.4.
 
 
-Checked against `research/build/packages/rely_the_needle/` on 2026-10-24. The client never edits converter output; it accepts the current output only through `LoadMode::Trace` and the legacy physics mapping.
+Checked against `research/build/packages/rely_the_needle/` on 2026-10-24. Done for rely as of 2026-11-16 (the package report no longer names them): CR4 (`object_order` lists the engine kinds) and CR5 (warps carry `room_to`). `tests/wp7a_research.rs` asserts only CR1 to CR3 for rely. The client never edits converter output; it accepts the current output only through `LoadMode::Trace` and the legacy physics mapping.
 
 | Id | Request | Evidence | Gate |
 |---|---|---|---|
