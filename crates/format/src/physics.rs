@@ -207,8 +207,7 @@ mod tests {
 
     #[test]
     fn every_switch_key_has_a_case() {
-        let mut draft: PhysicsProfileDraft =
-            toml::from_str("preset = \"A1\"\n").expect("preset A1 parses");
+        let mut draft: PhysicsProfileDraft = toml::from_str("preset = \"A1\"\n").expect("preset A1 parses");
         let profile = presets::apply(&mut draft);
         for (key, ty) in TRICKS {
             let has_case = switch_state(key, &profile).is_some();
