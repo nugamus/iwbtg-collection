@@ -8,7 +8,7 @@
     reason = "tests read the research path and trace files; the sim itself never does"
 )]
 
-mod bounce {
+mod bounce_835 {
     use std::cell::Cell;
     use std::path::PathBuf;
 
@@ -63,9 +63,17 @@ mod bounce {
             "cherry",
             Builtin::Killer,
             false,
-            &[("bounce", ParamValue::Bool(true)), ("vspeed", ParamValue::Real(r(8.0)))],
+            &[
+                ("bounce", ParamValue::Bool(true)),
+                ("vspeed", ParamValue::Real(r(8.0))),
+            ],
         );
-        let plain = kind("plain", Builtin::Killer, false, &[("vspeed", ParamValue::Real(r(8.0)))]);
+        let plain = kind(
+            "plain",
+            Builtin::Killer,
+            false,
+            &[("vspeed", ParamValue::Real(r(8.0)))],
+        );
         let probe = kind("probe", Builtin::Inert, false, &[]);
         let room = b.room(RoomDef::new("r", 800, 608));
         let mut def = b.build().unwrap();
@@ -201,7 +209,13 @@ mod bounce {
     #[test]
     fn precise_bounce_ignores_a_thin_obstacle_between_samples() {
         let g = game();
-        for (dir, want) in [(0.0, None), (3.0, None), (357.0, None), (6.0, Some(180.0)), (354.0, Some(180.0))] {
+        for (dir, want) in [
+            (0.0, None),
+            (3.0, None),
+            (357.0, None),
+            (6.0, Some(180.0)),
+            (354.0, Some(180.0)),
+        ] {
             let mut w = World::new(g.room, 1);
             spawn(&g, &mut w, g.block, 191.0, 100.0);
             let p = spawn(&g, &mut w, g.probe, 100.0, 100.0);
@@ -280,6 +294,19 @@ mod bounce {
         s.parse().unwrap_or_else(|e| panic!("not a number {s:?}: {e}"))
     }
 
+    /// A small integer the recorder writes as a real (`8.0`).
+    fn tag(s: &str) -> u32 {
+        s.split('.')
+            .next()
+            .and_then(|i| i.parse().ok())
+            .unwrap_or_else(|| panic!("not a tag {s:?}"))
+    }
+
+    /// A recorder boolean (`1.0` or `0.0`).
+    fn tag_true(s: &str) -> bool {
+        tag(s) == 1
+    }
+
     /// A "blocked" closure answering from a fixed list, in call order.
     fn answers(blocked: Vec<bool>) -> impl FnMut(Real, Real) -> Result<bool, iwbtg_sim::error::SimError> {
         let i = Cell::new(0);
@@ -296,32 +323,47 @@ mod bounce {
     #[test]
     fn bulk_tables_match_the_rule() {
         let nr = NumRules::default();
-        for case in ["bounce-bulk.csv", "bounce-bulk-dnd.csv", "bounce-bulk-all.csv", "bounce-thin.csv"] {
+        for case in [
+            "bounce-bulk.csv",
+            "bounce-bulk-dnd.csv",
+            "bounce-bulk-all.csv",
+            "bounce-thin.csv",
+        ] {
             let Some(t) = trace(case) else {
                 return;
             };
             let [mode, h0, v0, d0, speed, h1, v1, d1, nx, nh, nv, fm] = [
-                "mode", "h0", "v0", "d0", "speed", "hspeed", "vspeed", "direction", "nx", "nh", "nv", "fm",
+                "mode",
+                "h0",
+                "v0",
+                "d0",
+                "speed",
+                "hspeed",
+                "vspeed",
+                "direction",
+                "nx",
+                "nh",
+                "nv",
+                "fm",
             ]
             .map(|c| t.col(c));
             let (mut plain, mut precise, mut exact) = (0, 0, 0);
             for (i, row) in t.rows.iter().enumerate() {
                 let f = |c: usize| num(&row[c]);
-                let m = f(mode);
+                let m = tag(&row[mode]);
                 let at = format!("{case} row {}", i + 2);
-                // gm-compare: ok (mode is a small integer tag from our own recorder)
-                if m == 8.0 {
+                if m == 8 {
                     continue; // move_bounce_solid among non-solid obstacles: checked in the world test
                 }
-                // gm-compare: ok (mode is a small integer tag)
-                let is_precise = [1.0, 3.0, 5.0, 7.0].contains(&m);
+                let is_precise = [1, 3, 5, 7].contains(&m);
                 let (h, v) = (f(h0), f(v0));
                 if is_precise {
                     precise += 1;
                     let blocked: Vec<bool> = row[fm].chars().map(|c| c != '1').collect();
                     assert_eq!(blocked.len(), 36, "{at}");
-                    let got = precise_direction((r(0.0), r(0.0)), r(f(speed)), r(f(d0)), &nr, answers(blocked))
-                        .unwrap();
+                    let got =
+                        precise_direction((r(0.0), r(0.0)), r(f(speed)), r(f(d0)), &nr, answers(blocked))
+                            .unwrap();
                     match got {
                         None => assert_eq!((f(h1), f(v1)), (h, v), "{at}: no change"),
                         Some(d) => {
@@ -338,13 +380,14 @@ mod bounce {
                                 f(h1),
                                 f(v1)
                             );
-                            exact += usize::from(gh.to_bits() == f(h1).to_bits() && gv.to_bits() == f(v1).to_bits());
+                            exact += usize::from(
+                                gh.to_bits() == f(h1).to_bits() && gv.to_bits() == f(v1).to_bits(),
+                            );
                         }
                     }
                 } else {
                     plain += 1;
-                    // gm-compare: ok (recorder booleans are exactly 0 or 1)
-                    let blocked = vec![f(nh) != 1.0, f(nv) != 1.0, f(nx) != 1.0];
+                    let blocked = vec![!tag_true(&row[nh]), !tag_true(&row[nv]), !tag_true(&row[nx])];
                     let (fh, fv) = plain_bounce((r(0.0), r(0.0)), (r(h), r(v)), answers(blocked)).unwrap();
                     let want = (if fh { -h } else { h }, if fv { -v } else { v });
                     assert_eq!(
@@ -354,7 +397,9 @@ mod bounce {
                     );
                 }
             }
-            eprintln!("{case}: {plain} not-precise rows, {precise} precise rows ({exact} with bit-equal h/v)");
+            eprintln!(
+                "{case}: {plain} not-precise rows, {precise} precise rows ({exact} with bit-equal h/v)"
+            );
             assert!(plain + precise > 0, "{case} has rows");
         }
     }
@@ -375,8 +420,7 @@ mod bounce {
                 continue;
             };
             let f = |row: &Vec<String>, c: usize| num(&row[c]);
-            // gm-compare: ok (recorder booleans are exactly 0 or 1)
-            let blocked = vec![f(a, n - 3) != 1.0, f(a, n - 2) != 1.0, f(a, n - 1) != 1.0];
+            let blocked = vec![!tag_true(&a[n - 3]), !tag_true(&a[n - 2]), !tag_true(&a[n - 1])];
             let (h0, v0) = (f(a, h), f(a, v));
             let (fh, fv) = plain_bounce((r(f(a, x)), r(f(a, y))), (r(h0), r(v0)), answers(blocked)).unwrap();
             let (eh, ev) = (if fh { -h0 } else { h0 }, if fv { -v0 } else { v0 });

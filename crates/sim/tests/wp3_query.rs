@@ -7,8 +7,8 @@ mod wp3 {
     use iwbtg_sim::collide::contact::{contact_steps, mcs_step_limit, outside_steps};
     use iwbtg_sim::collide::{
         Target, collision_line, collision_point, collision_rectangle, distance_to_object, instance_place,
-        instance_position, move_contact_solid, move_outside_solid, place_empty,
-        place_free, place_meeting, solid_resolve,
+        instance_position, move_contact_solid, move_outside_solid, place_empty, place_free, place_meeting,
+        solid_resolve,
     };
     use iwbtg_sim::def::ClassMask;
     use iwbtg_sim::error::SimError;
