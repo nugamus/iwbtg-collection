@@ -12,13 +12,22 @@
 //! A deliberate change to the sim or to `HASH_LAYOUT` re-pins `expected.txt` in the same PR
 //! (`UPDATE_GOLDEN=1 cargo test -p iwbtg-sim --test golden_corpus`).
 //!
-//! Every case drives probe kinds (`Builtin::Probe`) through the real tick pipeline: real motion,
-//! collision, rooms and room changes.
+//! The first cases drive probe kinds (`Builtin::Probe`) through the real tick pipeline: real
+//! motion, collision, rooms and room changes. The kid courses and the script API case
+//! (`courses.rs`, #786) run one room per kid family with the engine kinds and every built-in,
+//! and a script that calls every script API function. After the case lines the report lists,
+//! per built-in and per kid family, the first case that ran it (`builtin <name> <case>`,
+//! `family <name> <case>`, `-` for none); `golden_corpus.rs` fails when one is missing.
 #![allow(
     dead_code,
     reason = "the two programs that include this file use different parts"
 )]
 
+mod courses;
+
+use std::collections::BTreeSet;
+
+use iwbtg_sim::def::KidFamily;
 use iwbtg_sim::def::testing::GameDefBuilder;
 use iwbtg_sim::def::{
     Builtin, ClassMask, GameDef, KindDef, KindId, RoomDef, RoomId, ScriptDef, ScriptId, VarId,
@@ -27,7 +36,7 @@ use iwbtg_sim::events::{ProbeAct, ProbeOn, ProbeState, ProbeStep, probe_event_se
 use iwbtg_sim::hash;
 use iwbtg_sim::input::{Action, InputFrame};
 use iwbtg_sim::num::Real;
-use iwbtg_sim::room::RoomRequest;
+use iwbtg_sim::room::{RoomRequest, StartPoint};
 use iwbtg_sim::rules::RunnerRules;
 use iwbtg_sim::script::ScriptRuntime;
 use iwbtg_sim::sound::DllMode;
@@ -77,6 +86,13 @@ pub struct Case {
 
 /// All cases, in report order.
 pub fn cases() -> Vec<Case> {
+    let mut all = probe_cases();
+    all.extend(courses::cases());
+    all
+}
+
+/// The probe cases (the corpus before #786).
+fn probe_cases() -> Vec<Case> {
     vec![
         Case {
             name: "spawn_alarms_rooms",
@@ -114,6 +130,10 @@ pub fn cases() -> Vec<Case> {
 /// Runs one case.
 pub fn run(case: &Case) -> Outcome {
     let (fx, ran) = run_fixture(case);
+    outcome(case, &fx, ran)
+}
+
+fn outcome(case: &Case, fx: &Fixture, ran: u64) -> Outcome {
     Outcome {
         name: case.name,
         ticks: ran,
@@ -128,7 +148,46 @@ pub fn run(case: &Case) -> Outcome {
 
 /// Runs one case and returns the finished fixture and the ticks it ran.
 pub fn run_fixture(case: &Case) -> (Fixture, u64) {
+    let (fx, ran, _) = run_covered(case);
+    (fx, ran)
+}
+
+/// What a case ran: the built-ins that had a live instance at the start or after some tick,
+/// and the kid family when a kid was alive.
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub struct Seen {
+    /// Indexes into `Builtin::ALL`.
+    pub builtins: BTreeSet<usize>,
+    /// The game's kid family, when a kid instance lived.
+    pub family: Option<KidFamily>,
+}
+
+impl Seen {
+    fn look(&mut self, fx: &Fixture) {
+        for inst in fx.w.iter_alive() {
+            let Some(base) = inst
+                .kind
+                .index()
+                .and_then(|i| fx.def.kinds.get(i))
+                .map(|k| k.base)
+            else {
+                continue;
+            };
+            if let Some(i) = Builtin::ALL.iter().position(|b| *b == base) {
+                self.builtins.insert(i);
+            }
+            if base == Builtin::Kid {
+                self.family = Some(fx.def.physics.preset);
+            }
+        }
+    }
+}
+
+/// [`run_fixture`] that also records what the case ran.
+pub fn run_covered(case: &Case) -> (Fixture, u64, Seen) {
     let mut fx = (case.build)();
+    let mut seen = Seen::default();
+    seen.look(&fx);
     let mut ran = 0;
     for t in 0..case.ticks {
         if fx.w.status != SimStatus::Running {
@@ -139,16 +198,44 @@ pub fn run_fixture(case: &Case) -> (Fixture, u64) {
         // A halting tick returns the error and leaves the world `Halted`; the status says so.
         let _ = tick::run_tick(&mut ctx, input);
         ran = fx.w.tick;
+        seen.look(&fx);
     }
-    (fx, ran)
+    (fx, ran, seen)
 }
 
-/// The report: one line per case.
+/// Every kid family, in declaration order.
+pub const FAMILIES: [KidFamily; 7] = [
+    KidFamily::A1,
+    KidFamily::A2,
+    KidFamily::A3,
+    KidFamily::A4,
+    KidFamily::A5,
+    KidFamily::B,
+    KidFamily::C,
+];
+
+/// The report: one line per case, then one coverage line per built-in and per kid family
+/// naming the first case that ran it (`-` for none).
 pub fn report() -> String {
     let mut out = String::new();
+    let mut builtin_case: Vec<Option<&'static str>> = vec![None; Builtin::ALL.len()];
+    let mut family_case: Vec<Option<&'static str>> = vec![None; FAMILIES.len()];
     for case in cases() {
-        out.push_str(&run(&case).line());
+        let (fx, ran, seen) = run_covered(&case);
+        out.push_str(&outcome(&case, &fx, ran).line());
         out.push('\n');
+        for i in seen.builtins {
+            builtin_case[i].get_or_insert(case.name);
+        }
+        if let Some(f) = seen.family.and_then(|f| FAMILIES.iter().position(|x| *x == f)) {
+            family_case[f].get_or_insert(case.name);
+        }
+    }
+    for (b, case) in Builtin::ALL.iter().zip(&builtin_case) {
+        out.push_str(&format!("builtin {} {}\n", b.name(), case.unwrap_or("-")));
+    }
+    for (f, case) in FAMILIES.iter().zip(&family_case) {
+        out.push_str(&format!("family {f:?} {}\n", case.unwrap_or("-")));
     }
     out
 }
@@ -178,6 +265,33 @@ impl Fixture {
             scripts: ScriptRuntime::default(),
             w: World::new(start, seed),
         }
+    }
+
+    /// A game started the way `Sim::new` starts it: the runner's rules, the compiled scripts,
+    /// boot instances, the start room (`room::start_game`).
+    fn started(def: GameDef, seed: u32) -> Fixture {
+        let mut rules = RunnerRules::for_runner(def.runner, def.engine_rev).expect("golden rules");
+        rules.num.float_model = def.float_model;
+        let scripts = ScriptRuntime::new(&def, &rules).expect("golden scripts compile");
+        let start = def.start_room;
+        let mut w = World::new(start, seed);
+        w.next_id = World::first_runtime_id(&def);
+        let mut fx = Fixture {
+            def,
+            rules,
+            scripts,
+            w,
+        };
+        let mut c = fx.ctx();
+        iwbtg_sim::room::start_game(
+            &mut c,
+            &StartPoint::Room {
+                room: start,
+                difficulty: 0,
+            },
+        )
+        .expect("golden start");
+        fx
     }
 
     fn ctx(&mut self) -> Ctx<'_> {
