@@ -386,7 +386,7 @@ mod wp6a {
         let em = spawn(&g, &mut w, g.emitter, 49.0, 519.1);
         fire(&g, &mut w, em, &EventKind::Step);
         assert!(alive(&w, g.blood).is_empty());
-        assert_eq!(w.rng, Rng::new(5), "no draws (switch off, #760)");
+        assert_eq!(w.rng, Rng::new(5), "the Step draws nothing");
         assert!(
             w.output
                 .contains(&OutputEvent::Builtin(BuiltinOutput::DeathParticles {
@@ -396,9 +396,11 @@ mod wp6a {
                     flipped: true
                 }))
         );
-        // With the switch on: an error until the mode uses sim::particles (#760).
+        // The stream draws in the tick's particle update (#766, tests
+        // `particles_rng::blood_emitter::*`), with the switch on (the default) or off; the Step
+        // never draws.
         let mut rules = RunnerRules::default();
-        rules.num.particles_draw_rng = true;
+        rules.num.particles_draw_rng = false;
         let scripts = ScriptRuntime::default();
         let mut ctx = Ctx {
             def: &g.def,
@@ -407,7 +409,8 @@ mod wp6a {
             scripts: &scripts,
             dll_mode: DllMode::Stub,
         };
-        assert!(builtins::on_event(&mut ctx, em, &EventKind::Step).is_err());
+        builtins::on_event(&mut ctx, em, &EventKind::Step).unwrap();
+        assert_eq!(ctx.w.rng, Rng::new(5));
     }
 
     #[test]

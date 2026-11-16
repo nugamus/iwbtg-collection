@@ -172,7 +172,7 @@ fn icon_row() -> impl Bundle + use<> {
     let small = Icon::ALL.map(|kind| (kind, kind.default_height(), tokens::MUTED));
     let big = Icon::ALL.map(|kind| (kind, kind.default_height() * 2.5, tokens::INK));
     (
-        row(14.0),
+        row(8.0),
         Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
             for (kind, height, color) in small.into_iter().chain(big) {
                 c.spawn(icon(kind, height, color));
@@ -364,14 +364,6 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
                     ),
                 ],
             ));
-            c.spawn((column(10.0), children![heading("Star ramp")]))
-                .with_children(|c| {
-                    c.spawn(row(8.0)).with_children(|r| {
-                        for s in [0.5, 2.4, 3.12, 4.87, 5.63, 6.84, 7.3, 8.21] {
-                            r.spawn(star_pill(s));
-                        }
-                    });
-                });
             c.spawn((
                 column(10.0),
                 children![
@@ -424,41 +416,59 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
                     ),
                 ],
             ));
-            c.spawn((
-                column(10.0),
-                children![
-                    heading("Pills"),
-                    (
-                        row(8.0),
-                        children![
-                            ranked_pill(),
-                            unranked_pill(),
-                            star_pill(6.84),
-                            mod_pill("SD"),
-                            mod_pill("SL"),
-                            tag_pill("Needle"),
-                            tag_pill("Avoidance"),
-                        ],
-                    ),
-                ],
-            ));
-            c.spawn((
-                column(10.0),
-                children![heading("Ellipsis (one line cut at its box)")],
-            ))
+            c.spawn((column(10.0), children![heading("Star ramp")]))
+                .with_children(|c| {
+                    c.spawn(row(8.0)).with_children(|r| {
+                        for s in [0.5, 2.4, 3.12, 4.87, 5.63, 6.84, 7.3, 8.21] {
+                            r.spawn(star_pill(s));
+                        }
+                    });
+                });
+            // Pills and the Ellipsis samples share a row: the left column has the width, and
+            // this keeps it inside 1080 px (#770).
+            c.spawn(Node {
+                column_gap: Val::Px(40.0),
+                flex_wrap: FlexWrap::NoWrap,
+                align_items: AlignItems::FlexStart,
+                ..row(0.0)
+            })
             .with_children(|c| {
-                for width in [320.0, 200.0, 120.0, 40.0] {
-                    c.spawn(Node {
-                        width: Val::Px(width),
-                        flex_direction: FlexDirection::Column,
-                        ..default()
-                    })
-                    .with_child(ellipsis_text(
-                        "I wanna be the Kaenbyou · ばけばけ",
-                        Type::barlow(15.0, 600),
-                        tokens::ROW_NAME,
-                    ));
-                }
+                c.spawn((
+                    column(10.0),
+                    children![
+                        heading("Pills"),
+                        (
+                            row(8.0),
+                            children![
+                                ranked_pill(),
+                                unranked_pill(),
+                                star_pill(6.84),
+                                mod_pill("SD"),
+                                mod_pill("SL"),
+                                tag_pill("Needle"),
+                                tag_pill("Avoidance"),
+                            ],
+                        ),
+                    ],
+                ));
+                c.spawn((
+                    column(10.0),
+                    children![heading("Ellipsis (one line cut at its box)")],
+                ))
+                .with_children(|c| {
+                    for width in [320.0, 200.0, 120.0, 40.0] {
+                        c.spawn(Node {
+                            width: Val::Px(width),
+                            flex_direction: FlexDirection::Column,
+                            ..default()
+                        })
+                        .with_child(ellipsis_text(
+                            "I wanna be the Kaenbyou · ばけばけ",
+                            Type::barlow(15.0, 600),
+                            tokens::ROW_NAME,
+                        ));
+                    }
+                });
             });
             c.spawn((column(10.0), children![heading("Buttons")]))
                 .with_children(|c| {
@@ -510,23 +520,6 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
                     c.spawn((text("", Type::barlow(14.0, 500), tokens::MUTED), BackdropState));
                 });
             c.spawn((column(10.0), children![heading("Icons"), icon_row()]));
-            c.spawn((
-                column(10.0),
-                children![
-                    heading("Stats"),
-                    (
-                        row(36.0),
-                        children![
-                            stat(Some(Icon::Flag), "Stages", "7", tokens::INK),
-                            stat(Some(Icon::Clock), "Avg clear", "54:20.36", tokens::INK),
-                            stat(Some(Icon::Check), "Clear rate", "3.8%", tokens::INK),
-                            stat(Some(Icon::Bolt), "Your PB", "38:12.46", tokens::INK),
-                            stat(Some(Icon::Skull), "Your deaths", "9,412", tokens::INK),
-                            stat(Some(Icon::Crown), "World record", "31:41.02", tokens::GOLD),
-                        ],
-                    ),
-                ],
-            ));
         })
         .id();
 
@@ -697,6 +690,23 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
                         });
                 });
             });
+            c.spawn((
+                column(10.0),
+                children![
+                    heading("Stats"),
+                    (
+                        row(36.0),
+                        children![
+                            stat(Some(Icon::Flag), "Stages", "7", tokens::INK),
+                            stat(Some(Icon::Clock), "Avg clear", "54:20.36", tokens::INK),
+                            stat(Some(Icon::Check), "Clear rate", "3.8%", tokens::INK),
+                            stat(Some(Icon::Bolt), "Your PB", "38:12.46", tokens::INK),
+                            stat(Some(Icon::Skull), "Your deaths", "9,412", tokens::INK),
+                            stat(Some(Icon::Crown), "World record", "31:41.02", tokens::GOLD),
+                        ],
+                    ),
+                ],
+            ));
         })
         .id();
 

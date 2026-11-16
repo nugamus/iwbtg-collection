@@ -2,16 +2,16 @@
 //! tick, the room, the kid's position and speed, and the input the last tick saw.
 //!
 //! A small UI panel on the HUD's camera, at a fixed size (the UI scale applies, the game's scale
-//! never does), at the bottom of the run info column, or in the window's top-left corner with the
-//! HUD hidden, so it stays off the game. Off by default; F3 shows and hides it and saves the
-//! choice (`hud.overlay`). `--overlay` shows it for one run without saving, also in a
-//! `--screenshot` check, which otherwise never draws it.
+//! never does): at the bottom of the run info column (narrow at its top in a small window), or
+//! in the window's top-left corner with the HUD hidden, so it stays off the game and run info.
+//! Off by default; F3 shows and hides it and saves the choice (`hud.overlay`). `--overlay` shows
+//! it for one run without saving, also in a `--screenshot` check, which otherwise never draws it.
 
 use bevy::prelude::*;
 use iwbtg_sim::world::SimStatus;
 use std::time::{Duration, Instant};
 
-use crate::hud::layout::Layout;
+use crate::hud::layout::{Density, Layout};
 use crate::hud::{HudLayout, HudOptions};
 use crate::input::Collector;
 use crate::ui::fonts::Type;
@@ -28,8 +28,16 @@ pub struct OverlayArgs {
 
 /// The panel's width at most, in UI px.
 const WIDTH: f32 = 260.0;
+/// Narrower than this, the panel is narrow: shorter lines, smaller margins and padding.
+const NARROW_BELOW: f32 = 140.0;
+/// The gap to the window or column edge, wide and narrow.
+const MARGIN: f32 = notice::MARGIN;
+const NARROW_MARGIN: f32 = 6.0;
+/// Inside the panel, wide and narrow.
+const PADDING: (f32, f32) = (10.0, 8.0);
+const NARROW_PADDING: (f32, f32) = (6.0, 6.0);
 /// The room the window's left edge must leave beside the game for the panel to go there with the
-/// HUD hidden; with less, it goes in the window's top-left corner, over the game.
+/// HUD hidden; with less, it goes narrow in the window's top-left corner, over the game.
 const MIN_BESIDE: f32 = 120.0;
 /// Over the HUD's columns (10), under the pause overlay (20) and the notices (30).
 const Z: i32 = 15;
@@ -50,9 +58,11 @@ impl Plugin for OverlayPlugin {
 #[derive(Resource)]
 struct Forced(bool);
 
-/// The overlay's panel.
-#[derive(Component)]
-struct Panel;
+/// The overlay's panel; `narrow` while it uses the short lines.
+#[derive(Component, Default)]
+struct Panel {
+    narrow: bool,
+}
 
 /// The overlay's text.
 #[derive(Component)]
@@ -65,7 +75,7 @@ fn spawn(mut commands: Commands, forced: Res<Forced>, screenshot: Option<Res<Scr
         Node {
             position_type: PositionType::Absolute,
             max_width: Val::Px(WIDTH),
-            padding: UiRect::axes(Val::Px(10.0), Val::Px(8.0)),
+            padding: UiRect::axes(Val::Px(PADDING.0), Val::Px(PADDING.1)),
             border_radius: BorderRadius::all(Val::Px(6.0)),
             ..default()
         },
@@ -77,7 +87,7 @@ fn spawn(mut commands: Commands, forced: Res<Forced>, screenshot: Option<Res<Scr
         } else {
             Visibility::Hidden
         },
-        Panel,
+        Panel::default(),
         children![(widgets::text("", TEXT, tokens::SOFT), Label)],
     ));
 }
@@ -105,33 +115,57 @@ struct Spot {
     bottom: bool,
     /// The panel's width at most.
     width: f32,
+    /// The short lines (`NARROW_BELOW`).
+    narrow: bool,
 }
 
-/// With the HUD shown, the bottom of the run info column: run info sits in the column's middle
-/// and a small window's runs past its top third, the leaderboard column's top holds the sound
-/// note and its bottom the notices. With the HUD hidden, the top left of the window (the sound
-/// note goes top right then), beside the game when there is room.
-fn spot(l: &Layout, shown: bool, window: Vec2, px: f32) -> Spot {
-    let m = notice::MARGIN;
+/// With the HUD shown, the bottom of the run info column: run info sits in the column's middle,
+/// the leaderboard column's top holds the sound note and its bottom the notices. In a small window
+/// (`Density::Small`) run info reaches below the column's middle, so the panel goes narrow at the
+/// column's top instead. With the HUD hidden, the top left of the window (the sound note goes top
+/// right then), beside the game when there is room; with less (4:3) it goes narrow over the
+/// game's corner, the one case that covers the game: the game fills the window, so there is
+/// nowhere else, and narrow it covers the least.
+fn spot(l: &Layout, shown: bool, px: f32) -> Spot {
     if shown && l.right.width() > 0.0 {
+        let small = l.density == Density::Small;
+        let col = l.right.width() / px;
+        let m = if small || col - 2.0 * MARGIN < NARROW_BELOW {
+            NARROW_MARGIN
+        } else {
+            MARGIN
+        };
+        let width = (col - 2.0 * m).clamp(0.0, WIDTH);
         return Spot {
             left: l.right.min.x / px + m,
             edge: m,
-            bottom: true,
-            width: (l.right.width() / px - 2.0 * m).clamp(0.0, WIDTH),
+            bottom: !small,
+            width,
+            narrow: small || width < NARROW_BELOW,
         };
     }
     let beside = l.game.min.x / px;
-    let room = if beside >= MIN_BESIDE {
-        beside
+    if beside < MIN_BESIDE {
+        return Spot {
+            left: NARROW_MARGIN,
+            edge: NARROW_MARGIN,
+            bottom: false,
+            width: NARROW_BELOW,
+            narrow: true,
+        };
+    }
+    let m = if beside - 2.0 * MARGIN < NARROW_BELOW {
+        NARROW_MARGIN
     } else {
-        window.x / px
+        MARGIN
     };
+    let width = (beside - 2.0 * m).clamp(0.0, WIDTH);
     Spot {
         left: m,
         edge: m,
         bottom: false,
-        width: (room - 2.0 * m).clamp(0.0, WIDTH),
+        width,
+        narrow: width < NARROW_BELOW,
     }
 }
 
@@ -140,22 +174,32 @@ fn place(
     layout: Res<HudLayout>,
     ui_scale: Res<UiScale>,
     window: Single<&Window, With<bevy::window::PrimaryWindow>>,
-    mut panel: Single<&mut Node, With<Panel>>,
+    panel: Single<(&mut Node, &mut Panel)>,
 ) {
+    let (mut node, mut panel) = panel.into_inner();
     let px = window.resolution.scale_factor() * ui_scale.0;
     if px <= 0.0 {
         return;
     }
-    let size = window.physical_size().as_vec2();
-    let s = spot(&layout.0, hud.0.shown, size, px);
+    let s = spot(&layout.0, hud.0.shown, px);
     let (top, bottom) = if s.bottom {
         (Val::Auto, Val::Px(s.edge))
     } else {
         (Val::Px(s.edge), Val::Auto)
     };
-    let want = (Val::Px(s.left), top, bottom, Val::Px(s.width));
-    if (panel.left, panel.top, panel.bottom, panel.max_width) != want {
-        (panel.left, panel.top, panel.bottom, panel.max_width) = want;
+    let (x, y) = if s.narrow { NARROW_PADDING } else { PADDING };
+    let want = (
+        Val::Px(s.left),
+        top,
+        bottom,
+        Val::Px(s.width),
+        UiRect::axes(Val::Px(x), Val::Px(y)),
+    );
+    if (node.left, node.top, node.bottom, node.max_width, node.padding) != want {
+        (node.left, node.top, node.bottom, node.max_width, node.padding) = want;
+    }
+    if panel.narrow != s.narrow {
+        panel.narrow = s.narrow;
     }
 }
 
@@ -165,7 +209,7 @@ fn show(
     fixed: Res<Time<Fixed>>,
     mut stats: ResMut<Stats>,
     collector: Res<Collector>,
-    panel: Single<&Visibility, With<Panel>>,
+    panel: Single<(&Visibility, &Panel)>,
     mut label: Single<&mut Text, With<Label>>,
 ) {
     stats.frames += 1;
@@ -178,7 +222,8 @@ fn show(
         stats.frames = 0;
         stats.window_start = Instant::now();
     }
-    if **panel == Visibility::Hidden {
+    let (visibility, panel) = *panel;
+    if *visibility == Visibility::Hidden {
         return;
     }
     let world = game.sim.world();
@@ -187,28 +232,56 @@ fn show(
         SimStatus::Halted(e) => format!("\nHALTED: {e}"),
         SimStatus::Ended => "\nended".to_string(),
     };
-    let room = game.sim.def().room(world.room).map_or_else(
-        || "?".to_string(),
-        |r| format!("{} ({}x{})", r.name, r.width, r.height),
-    );
-    let kid = match world.kid(&game.sim.rules().tick).and_then(|id| world.get(id)) {
-        Some(k) => format!(
-            "kid x {}  y {}\nhspeed {}  vspeed {}",
-            two(k.m.x().get()),
-            two(k.m.y().get()),
-            two(k.m.hspeed().get()),
-            two(k.m.vspeed().get()),
-        ),
-        None => "no kid".to_string(),
+    let room = game.sim.def().room(world.room);
+    let kid = world.kid(&game.sim.rules().tick).and_then(|id| world.get(id));
+    let kid = kid.map(|k| [k.m.x(), k.m.y(), k.m.hspeed(), k.m.vspeed()].map(|v| two(v.get())));
+    let tps = stats.ticks_per_second;
+    let rate = fixed.timestep().as_secs_f64().recip().round();
+    let fps = stats.frames_per_second;
+    let tick = world.tick;
+    let input = collector.describe();
+    let text = if panel.narrow {
+        // About 16 characters a line: the room's size, the `[F3 hides]` hint and the long
+        // labels go.
+        let room = room.map_or("?", |r| r.name.as_str());
+        let kid = kid.map_or_else(
+            || "no kid".to_string(),
+            |[x, y, h, v]| {
+                format!(
+                    "x {x}  y {y}
+hs {h}  vs {v}"
+                )
+            },
+        );
+        format!(
+            "tps {tps:.1} ({rate})
+fps {fps:.0}  tick {tick}{status}
+room {room}
+{kid}
+{input}"
+        )
+    } else {
+        let room = room.map_or_else(
+            || "?".to_string(),
+            |r| format!("{} ({}x{})", r.name, r.width, r.height),
+        );
+        let kid = kid.map_or_else(
+            || "no kid".to_string(),
+            |[x, y, h, v]| {
+                format!(
+                    "kid x {x}  y {y}
+hspeed {h}  vspeed {v}"
+                )
+            },
+        );
+        format!(
+            "ticks/s {tps:.1} (game {rate})  fps {fps:.0}
+tick {tick}  [F3 hides]{status}
+room {room}
+{kid}
+{input}"
+        )
     };
-    let text = format!(
-        "ticks/s {:.1} (game {})  fps {:.0}\ntick {}  [F3 hides]{status}\nroom {room}\n{kid}\n{input}",
-        stats.ticks_per_second,
-        fixed.timestep().as_secs_f64().recip().round(),
-        stats.frames_per_second,
-        world.tick,
-        input = collector.describe(),
-    );
     if label.0 != text {
         label.0 = text;
     }
@@ -232,8 +305,11 @@ mod tests {
         assert_eq!(two(567.4), "567.40");
     }
 
-    /// At 16:9, 4:3, 21:9 and a small window, HUD shown or hidden, the panel's left edge is never
-    /// inside the game, except with the HUD hidden and no room beside the game (4:3).
+    /// At 16:9, 4:3, 21:9 and a small window, HUD shown or hidden, the panel stays off the game,
+    /// except with the HUD hidden at 4:3, where the game fills the window: accepted there (#753),
+    /// narrow in the window's top-left corner. With the HUD shown it is in the run info
+    /// column; in the small window narrow at the column's top, clear of run info's rows below
+    /// the column's middle (#753).
     #[test]
     fn the_panel_stays_off_the_game() {
         let view = Vec2::new(800.0, 608.0);
@@ -252,21 +328,37 @@ mod tests {
                 };
                 let l = compute(area, 1.0, view, o);
                 let px = l.content;
-                let s = spot(&l, shown, window, px);
-                assert!(s.width > 0.0 && s.edge >= 0.0, "{w}x{h} shown {shown}");
-                assert_eq!(
-                    s.bottom, shown,
-                    "{w}x{h}: bottom of run info, or top left without a HUD"
-                );
+                let s = spot(&l, shown, px);
+                let case = format!("{w}x{h} shown {shown}");
+                assert!(s.width > 0.0 && s.edge >= 0.0, "{case}");
                 let (x0, x1) = (s.left * px, (s.left + s.width) * px);
+                assert!(x0 >= 0.0 && x1 <= w, "{case}: off the window");
                 let off = x1 <= l.game.min.x || x0 >= l.game.max.x;
-                let room_beside = l.game.min.x >= MIN_BESIDE;
-                assert!(
-                    off || (!shown && !room_beside),
-                    "{w}x{h} shown {shown}: {x0}..{x1} vs {:?}",
-                    l.game
-                );
-                assert!(x1 <= w, "{w}x{h} shown {shown}: off the window");
+                let small = l.density == Density::Small;
+                if shown {
+                    assert!(off, "{case}: {x0}..{x1} vs {:?}", l.game);
+                    assert!(
+                        x0 >= l.right.min.x && x1 <= l.right.max.x,
+                        "{case}: run info column"
+                    );
+                    // Bottom of the column, or the top of a small window's column, narrow.
+                    assert_eq!((s.bottom, s.narrow), (!small, small), "{case}");
+                } else if l.game.min.x >= MIN_BESIDE {
+                    assert!(off, "{case}: {x0}..{x1} vs {:?}", l.game);
+                    assert!(!s.bottom, "{case}: top left");
+                    assert_eq!(s.narrow, s.width < NARROW_BELOW, "{case}");
+                } else {
+                    // 4:3 without a HUD: narrow over the game's top-left corner, accepted.
+                    assert_eq!((w, h), (1024.0, 768.0), "{case}: only 4:3 has no room beside");
+                    let corner = Spot {
+                        left: NARROW_MARGIN,
+                        edge: NARROW_MARGIN,
+                        bottom: false,
+                        width: NARROW_BELOW,
+                        narrow: true,
+                    };
+                    assert_eq!(s, corner, "{case}");
+                }
             }
         }
     }

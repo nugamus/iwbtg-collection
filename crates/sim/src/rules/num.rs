@@ -47,8 +47,9 @@ pub struct NumRules {
     pub float_model: FloatModel,
     /// N10: particle systems draw from the gameplay RNG. Confirmed (recorder): CLONE_SPEC numbers
     /// "Particle draw rules" (research#158), modelled in [`crate::particles`]; the real runner is
-    /// unchecked (research#164). Default false until the model is wired into the world and the
-    /// built-ins (#760).
+    /// unchecked (research#164). engine_rev 0: true (#766). No package is verified yet, so the
+    /// default changed in place; it only matters to packages with `particle_system` instances or
+    /// a `blood_emitter` in `particles` mode.
     pub particles_draw_rng: bool,
 }
 
@@ -65,7 +66,7 @@ impl Default for NumRules {
             byte_from_real: ByteConv::RoundWrap,
             string_decimals: StrRound::HalfEven,
             float_model: FloatModel::F64,
-            particles_draw_rng: false,
+            particles_draw_rng: true,
         }
     }
 }
