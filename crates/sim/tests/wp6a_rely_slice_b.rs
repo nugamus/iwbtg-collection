@@ -9,13 +9,14 @@ mod wp6a {
     };
     use iwbtg_sim::events::EventKind;
     use iwbtg_sim::input::{Action, InputFrame};
+    use iwbtg_sim::kid::state::KidState;
     use iwbtg_sim::num::Real;
     use iwbtg_sim::output::OutputEvent;
     use iwbtg_sim::room::{RoomOutput, RoomRequest};
     use iwbtg_sim::rules::RunnerRules;
     use iwbtg_sim::script::ScriptRuntime;
     use iwbtg_sim::sound::DllMode;
-    use iwbtg_sim::world::{Ctx, Flow, InstId, SpawnInit, World};
+    use iwbtg_sim::world::{Ctx, Flow, InstId, KindState, SpawnInit, World};
 
     fn r(v: f64) -> Real {
         Real::new(v)
@@ -171,6 +172,229 @@ mod wp6a {
         assert_eq!(w.pending, Some(RoomRequest::Goto(g.room2)));
     }
 
+    /// A kid with speed (3, `vspeed`) and djump spent, at (`x`, `y`), touched by the warp.
+    fn warp_a_moving_kid(g: &G, x: f64, y: f64, vspeed: f64) -> (World, InstId) {
+        let mut w = World::new(g.room, 1);
+        let warp = spawn(g, &mut w, kind_id(g, "warp"), 0.0, 0.0);
+        let kid = spawn(g, &mut w, g.kid, x, y);
+        let k = w.get_mut(kid).unwrap();
+        k.m.set_hspeed(r(3.0)).unwrap();
+        k.m.set_vspeed(r(vspeed)).unwrap();
+        k.state = KindState::Kid(Box::new(KidState {
+            djump: false,
+            ..KidState::default()
+        }));
+        assert_eq!(fire(g, &mut w, warp, &touch(kid)), Flow::AbortTick);
+        assert_eq!(w.pending, Some(RoomRequest::Goto(g.room2)));
+        (w, kid)
+    }
+
+    fn pos_speed(w: &World, kid: InstId) -> (Real, Real, Real, Real) {
+        let k = w.get(kid).unwrap();
+        assert!(k.alive);
+        (k.m.x(), k.m.y(), k.m.hspeed(), k.m.vspeed())
+    }
+
+    fn djump(w: &World, kid: InstId) -> bool {
+        match &w.get(kid).unwrap().state {
+            KindState::Kid(s) => s.djump,
+            other => panic!("kid state {other:?}"),
+        }
+    }
+
+    #[test]
+    fn warp_zero_axis_set_writes_a_zero_target_too() {
+        // The default (LR, KOT, ANI roomChanger): x = warpX and y = warpY, a 0 included.
+        let g = warp_game(|_| params(&[("warp_x", real(40.0))]));
+        let (w, kid) = warp_a_moving_kid(&g, 5.0, 70.0, -4.0);
+        assert_eq!(pos_speed(&w, kid), (r(40.0), r(0.0), r(3.0), r(-4.0)));
+    }
+
+    #[test]
+    fn warp_zero_axis_keep_leaves_a_zero_axis_and_keeps_speed_and_djump() {
+        // NY roomChanger (KID-A4): x only if XX is nonzero, y only if YY is nonzero; the kid
+        // keeps his speed and djump.
+        let g = warp_game(|_| params(&[("warp_x", real(40.0)), ("zero_axis", word("keep"))]));
+        let (w, kid) = warp_a_moving_kid(&g, 5.0, 70.0, -4.0);
+        assert_eq!(pos_speed(&w, kid), (r(40.0), r(70.0), r(3.0), r(-4.0)));
+        assert!(!djump(&w, kid), "a spent djump stays spent");
+        let g = warp_game(|_| params(&[("warp_y", real(90.0)), ("zero_axis", word("keep"))]));
+        let (w, kid) = warp_a_moving_kid(&g, 5.0, 70.0, 2.0);
+        assert_eq!(pos_speed(&w, kid), (r(5.0), r(90.0), r(3.0), r(2.0)));
+    }
+
+    #[test]
+    fn warp_screen_shift_moves_a_zero_axis_by_screens() {
+        // KAE roomChanger (KID-B): x = warpX, or x + screens * 800 when warpX is 0; the same
+        // for y with 608.
+        let g = warp_game(|_| {
+            params(&[
+                ("warp_y", real(90.0)),
+                ("zero_axis", word("keep")),
+                ("screen_shift", real(-1.0)),
+            ])
+        });
+        let (w, kid) = warp_a_moving_kid(&g, 805.0, 70.0, 2.0);
+        assert_eq!(pos_speed(&w, kid), (r(5.0), r(90.0), r(3.0), r(2.0)));
+        let g = warp_game(|_| {
+            params(&[
+                ("warp_x", real(40.0)),
+                ("zero_axis", word("keep")),
+                ("screen_shift", real(1.0)),
+            ])
+        });
+        let (w, kid) = warp_a_moving_kid(&g, 5.0, 70.0, 2.0);
+        assert_eq!(pos_speed(&w, kid), (r(40.0), r(678.0), r(3.0), r(2.0)));
+    }
+
+    #[test]
+    fn warp_clear_rising_zeroes_only_a_negative_vspeed() {
+        // KAE (KID-B): a negative vspeed becomes 0, not adjusted for reversed gravity.
+        let p = |_| {
+            params(&[
+                ("warp_x", real(40.0)),
+                ("warp_y", real(90.0)),
+                ("clear_rising", yes()),
+            ])
+        };
+        let g = warp_game(p);
+        let (w, kid) = warp_a_moving_kid(&g, 5.0, 70.0, -4.0);
+        assert_eq!(pos_speed(&w, kid), (r(40.0), r(90.0), r(3.0), r(0.0)));
+        let g = warp_game(p);
+        let (w, kid) = warp_a_moving_kid(&g, 5.0, 70.0, 4.0);
+        assert_eq!(pos_speed(&w, kid), (r(40.0), r(90.0), r(3.0), r(4.0)));
+    }
+
+    #[test]
+    fn warp_to_zero_zero_destroys_the_kid_whatever_the_move_rule() {
+        let g = warp_game(|_| {
+            params(&[
+                ("zero_axis", word("keep")),
+                ("screen_shift", real(1.0)),
+                ("clear_rising", yes()),
+            ])
+        });
+        let mut w = World::new(g.room, 1);
+        let warp = spawn(&g, &mut w, kind_id(&g, "warp"), 0.0, 0.0);
+        let kid = spawn(&g, &mut w, g.kid, 5.0, 5.0);
+        fire(&g, &mut w, warp, &touch(kid));
+        assert!(alive(&w, g.kid).is_empty());
+    }
+
+    fn list(v: &[f64]) -> ParamValue {
+        ParamValue::List(v.iter().map(|x| real(*x)).collect())
+    }
+
+    /// A gated warp, created (Create run) in a fresh world, with a kid beside it.
+    fn gated(p: Vec<(&'static str, ParamValue)>) -> (G, World, InstId, InstId) {
+        let g = warp_game(move |_| params(&p));
+        let mut w = World::new(g.room, 1);
+        let warp = spawn(&g, &mut w, kind_id(&g, "warp"), 0.0, 0.0);
+        fire(&g, &mut w, warp, &EventKind::Create);
+        let kid = spawn(&g, &mut w, g.kid, 5.0, 5.0);
+        (g, w, warp, kid)
+    }
+
+    #[test]
+    fn warp_boss_gate_opens_at_the_step_after_the_flag() {
+        // LR warpToBoss: once global.boss[bossNumber] is set, Step turns on onCollide and
+        // visible. A single number is a list of one.
+        let (g, mut w, warp, kid) = gated(vec![("gate_bosses", real(3.0))]);
+        assert!(!w.get(warp).unwrap().visible, "starts closed and hidden");
+        fire(&g, &mut w, warp, &EventKind::Step);
+        assert_eq!(fire(&g, &mut w, warp, &touch(kid)), Flow::Continue);
+        assert_eq!(w.pending, None);
+        w.engine.mech.set_boss(3);
+        assert_eq!(
+            fire(&g, &mut w, warp, &touch(kid)),
+            Flow::Continue,
+            "a flag set this tick opens the gate at the next Step"
+        );
+        fire(&g, &mut w, warp, &EventKind::Step);
+        assert!(w.get(warp).unwrap().visible);
+        assert_eq!(fire(&g, &mut w, warp, &touch(kid)), Flow::AbortTick);
+        assert_eq!(w.pending, Some(RoomRequest::Goto(g.room2)));
+    }
+
+    #[test]
+    fn warp_count_gate_counts_listed_bosses_and_items() {
+        // KAE warpCount: countBoss and countItem, open (visible, usable) while the count reaches
+        // total.
+        let all = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0];
+        let (g, mut w, warp, kid) = gated(vec![
+            ("gate_bosses", list(&all)),
+            ("gate_items", list(&all)),
+            ("gate_need", real(3.0)),
+        ]);
+        w.engine.mech.set_boss(0);
+        w.engine.mech.set_boss(5);
+        w.engine.mech.set_boss(9); // not listed
+        fire(&g, &mut w, warp, &EventKind::Step);
+        assert!(!w.get(warp).unwrap().visible, "2 of 3");
+        assert_eq!(fire(&g, &mut w, warp, &touch(kid)), Flow::Continue);
+        w.engine.mech.set_item(7);
+        fire(&g, &mut w, warp, &EventKind::Step);
+        assert!(w.get(warp).unwrap().visible, "3 of 3");
+        assert_eq!(fire(&g, &mut w, warp, &touch(kid)), Flow::AbortTick);
+    }
+
+    #[test]
+    fn warp_destroy_gate_destroys_itself_unless_both_flags_are_set() {
+        // XIA objWarpfin: destroys itself in Step unless boss items 1 and 2 are both taken.
+        let p = || {
+            vec![
+                ("gate_bosses", list(&[1.0, 2.0])),
+                ("gate_closed", word("destroy")),
+                ("visible", yes()),
+            ]
+        };
+        let (g, mut w, warp, _) = gated(p());
+        assert!(
+            w.get(warp).unwrap().visible,
+            "a destroying gate keeps its own visible"
+        );
+        w.engine.mech.set_boss(1);
+        fire(&g, &mut w, warp, &EventKind::Step);
+        assert!(!w.get(warp).is_some_and(|i| i.alive));
+        let (g, mut w, warp, kid) = gated(p());
+        w.engine.mech.set_boss(1);
+        w.engine.mech.set_boss(2);
+        assert_eq!(fire(&g, &mut w, warp, &EventKind::Step), Flow::Continue);
+        assert!(w.get(warp).unwrap().alive);
+        assert_eq!(fire(&g, &mut w, warp, &touch(kid)), Flow::AbortTick);
+    }
+
+    #[test]
+    fn warp_gate_params_are_checked_and_add_step() {
+        let room = ("room_to", ParamValue::Room(RoomId(1)));
+        let bad: Vec<Vec<(&str, ParamValue)>> = vec![
+            vec![("gate_bosses", list(&[16.0]))],
+            vec![("gate_bosses", list(&[1.0, 1.0]))],
+            vec![("gate_items", list(&[0.5]))],
+            vec![("gate_bosses", list(&[1.0])), ("gate_need", real(2.0))],
+            vec![("gate_need", real(1.0))],
+            vec![("gate_closed", word("destroy"))],
+            vec![("gate_bosses", list(&[1.0])), ("visible", yes())],
+            vec![("gate_bosses", list(&[1.0])), ("gate_closed", word("vanish"))],
+        ];
+        for b in bad {
+            let mut p = params(&b);
+            p.0.insert(room.0.to_owned(), room.1.clone());
+            assert!(builtins::init_state(Builtin::Warp, &p).is_err(), "{b:?}");
+        }
+        let ok = params(&[
+            room.clone(),
+            ("gate_items", list(&[0.0, 15.0])),
+            ("gate_need", real(0.0)),
+        ]);
+        assert!(builtins::init_state(Builtin::Warp, &ok).is_ok());
+        let mut kind = KindDef::new("w", Builtin::Warp);
+        assert!(!builtins::event_set(Builtin::Warp, &kind).step);
+        kind.params = params(&[("gate_items", list(&[2.0]))]);
+        assert!(builtins::event_set(Builtin::Warp, &kind).step);
+        assert!(builtins::event_set_params(Builtin::Warp).contains(&"gate_bosses"));
+    }
+
     #[test]
     fn warp_with_on_collide_off_does_nothing_and_a_flipped_kid_also_triggers_it() {
         let g = warp_game(|_| params(&[("on_collide", ParamValue::Bool(false))]));
@@ -227,6 +451,16 @@ mod wp6a {
             ("transition", real(300.0)),
         ]);
         assert!(builtins::init_state(Builtin::Warp, &p).is_err());
+        let room = ("room_to", ParamValue::Room(RoomId(1)));
+        let p = params(&[room.clone(), ("screen_shift", real(1.0))]);
+        assert!(
+            builtins::init_state(Builtin::Warp, &p).is_err(),
+            "screen_shift needs zero_axis = keep"
+        );
+        let p = params(&[room.clone(), ("zero_axis", word("both"))]);
+        assert!(builtins::init_state(Builtin::Warp, &p).is_err());
+        let p = params(&[room, ("zero_axis", word("set")), ("screen_shift", real(0.0))]);
+        assert!(builtins::init_state(Builtin::Warp, &p).is_ok());
     }
 
     // ---- difficulty_warp --------------------------------------------------------------------

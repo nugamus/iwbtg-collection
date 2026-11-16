@@ -167,6 +167,8 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
             transition_steps: 0,
             on_collide: false,
             visible: None,
+            moves: super::warp::WarpMove::default(),
+            gate: None,
         })),
         (None, false) => Ok(BuiltinState::EdgeTable(table)),
         (None, true) => Err(param_error(
