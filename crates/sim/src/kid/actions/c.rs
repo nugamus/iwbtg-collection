@@ -91,7 +91,7 @@ fn suicide_press(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
 /// grav`, jump sprite) or lets go (`hspeed` +-3, fall sprite).
 pub(crate) fn vines(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let def = ctx.def;
-    let p = &def.physics;
+    let p = ctx.physics();
     let s = state(ctx, me)?;
     let (on_l, on_r) = (s.ext.on_vine_l, s.ext.on_vine_r);
     if !on_l && !on_r {

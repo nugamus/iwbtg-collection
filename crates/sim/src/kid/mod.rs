@@ -172,8 +172,8 @@ fn run_list(ctx: &mut Ctx, me: InstId, list: &[KidAction]) -> Result<Flow, SimEr
 /// [`run_action`]. Create, Room Start, Step and End Step are wired; keys, alarms, collisions and
 /// the boundary arrive with WP5a.3 and WP5a.4 and handle nothing until then.
 pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimError> {
-    let def = ctx.def;
-    let e = &def.physics.events;
+    let phys = ctx.physics();
+    let e = &phys.events;
     if let EventKind::Collision { with, other } = ev {
         // Every row of the one handler class the collision phase picked for this pair (C8,
         // R12b), in row order: several rows with one class are one GM event's actions.

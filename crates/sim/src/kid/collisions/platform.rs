@@ -36,9 +36,9 @@ pub fn run(ctx: &mut Ctx, me: InstId, other: InstId, run: &PlatformRun) -> Resul
 }
 
 fn platform_standard(ctx: &mut Ctx, me: InstId, other: InstId) -> Result<(), SimError> {
-    let def = ctx.def;
+    let phys = ctx.physics();
     let n = &ctx.rules.num;
-    let p = &def.physics.platform;
+    let p = &phys.platform;
     let PlatformRule::HalfVspeed = p.rule;
     if p.take == PlatformTake::YspeedFlipped {
         return yspeed_flipped(ctx, me, other);
@@ -86,8 +86,9 @@ fn platform_standard(ctx: &mut Ctx, me: InstId, other: InstId) -> Result<(), Sim
 /// the platform's `vspeed`, flipped gravity its `yspeed` (the moving platform's hand-applied speed).
 fn yspeed_flipped(ctx: &mut Ctx, me: InstId, other: InstId) -> Result<(), SimError> {
     let def = ctx.def;
+    let phys = ctx.physics();
     let n = &ctx.rules.num;
-    let p = &def.physics.platform;
+    let p = &phys.platform;
     let missing = || SimError::invariant("platform_standard: kid or platform vanished");
     let (ky, kvs) = ctx
         .w

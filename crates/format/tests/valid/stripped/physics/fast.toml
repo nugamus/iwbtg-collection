@@ -1,0 +1,6 @@
+#:schema ../../../../../../docs/format/schema/v0/physics.schema.json
+# Room profile (#33): stage1 uses it, the other rooms use physics.toml.
+preset = "A1"
+
+[numbers]
+run_speed = 4

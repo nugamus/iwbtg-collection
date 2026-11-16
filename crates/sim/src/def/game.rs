@@ -72,8 +72,12 @@ pub struct GameDef {
     pub names: Vec<String>,
     /// Instance groups (`GroupId` index).
     pub groups: Vec<String>,
-    /// The kid's physics profile.
+    /// The kid's physics profile: the game's (`game.toml` `physics`), used in every room that
+    /// names none of its own. Runtime code reads [`GameDef::physics_in`] instead.
     pub physics: PhysicsProfile,
+    /// Room profiles (`physics/<id>.toml`, the room key `physics`, #33), indexed by
+    /// [`RoomDef::physics`]: medleys switch physics per room.
+    pub room_physics: Vec<PhysicsProfile>,
     /// The retry path (R key).
     pub restart: RestartModel,
     /// The reset path (F2).
@@ -188,6 +192,15 @@ impl GameDef {
     /// The room with this id.
     pub fn room(&self, id: RoomId) -> Option<&RoomDef> {
         self.rooms.get(id.index()?)
+    }
+
+    /// The physics profile of `room`: the room's own (`RoomDef::physics`), else the game's. The
+    /// kid reads it each time, so its profile switches when the room changes (#33).
+    pub fn physics_in(&self, room: RoomId) -> &PhysicsProfile {
+        self.room(room)
+            .and_then(|r| r.physics)
+            .and_then(|i| self.room_physics.get(usize::from(i)))
+            .unwrap_or(&self.physics)
     }
 
     /// The sprite with this id.

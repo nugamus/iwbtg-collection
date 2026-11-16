@@ -865,3 +865,134 @@ fn a_particle_system_needs_a_known_system() {
         );
     }
 }
+
+// ---- room profiles and control labels (#33) ---------------------------------------------------
+
+const STAGE1_LIGHT: &str = r#"#:schema ../room.schema.json
+size = [800, 608]
+file_speed = 30
+physics = "light"
+instances = [
+  { kind = "kid_start", x = 48, y = 552 },
+  { kind = "block", x = 0, y = 576 },
+]
+"#;
+
+fn stage1(def: &GameDef) -> iwbtg_sim::def::RoomId {
+    let at = def.rooms.iter().position(|r| r.name == "stage1").unwrap();
+    iwbtg_sim::def::RoomId(u32::try_from(at).unwrap())
+}
+
+#[test]
+fn a_room_naming_a_profile_uses_it_and_others_use_the_game_profile() {
+    let files = package("", |f| {
+        put(f, "rooms/stage1.toml", STAGE1_LIGHT);
+        put(
+            f,
+            "physics/light.toml",
+            "preset = \"A1\"\n[numbers]\nrun_speed = 5\n",
+        );
+    });
+    let (def, _) = load_ok(&files, STRICT);
+    assert_eq!(def.physics, presets::defaults(KidFamily::A1), "the game's stays");
+    assert_eq!(def.room_physics.len(), 1);
+    assert_eq!(def.room(stage1(&def)).unwrap().physics, Some(0));
+    assert_eq!(def.physics_in(stage1(&def)).numbers.run_speed, Real::new(5.0));
+}
+
+#[test]
+fn a_room_naming_a_missing_profile_is_an_error_at_the_key() {
+    let files = package("", |f| put(f, "rooms/stage1.toml", STAGE1_LIGHT));
+    let r = load_report(&files, STRICT);
+    let e = errors(&r);
+    assert_eq!(e.len(), 1, "{}", render(&r));
+    assert!(e[0].contains("rooms/stage1.toml:4:"), "{}", e[0]);
+    assert!(
+        e[0].contains("physics profile `light` has no `physics/light.toml`"),
+        "{}",
+        e[0]
+    );
+}
+
+#[test]
+fn a_room_profile_with_other_kid_events_is_an_error() {
+    let files = package("", |f| {
+        put(f, "rooms/stage1.toml", STAGE1_LIGHT);
+        put(f, "physics/light.toml", "preset = \"B\"\n");
+    });
+    let r = load_report(&files, STRICT);
+    let e = errors(&r);
+    assert!(
+        e.iter()
+            .any(|m| m.contains("physics/light.toml") && m.contains("handles other kid events")),
+        "{}",
+        render(&r)
+    );
+    assert!(
+        e.iter().all(|m| !m.contains("  ")),
+        "no double space: {}",
+        render(&r)
+    );
+}
+
+#[test]
+fn the_game_profile_in_physics_folder_is_shared_not_loaded_twice() {
+    let files = package("", |f| {
+        let m = manifest("").replace("physics = \"physics.toml\"", "physics = \"physics/main.toml\"");
+        put(f, "game.toml", &m);
+        put(f, "physics/main.toml", "preset = \"A1\"\n");
+        put(
+            f,
+            "rooms/stage1.toml",
+            &STAGE1_LIGHT.replace("\"light\"", "\"main\""),
+        );
+    });
+    let (def, _) = load_ok(&files, STRICT);
+    assert!(def.room_physics.is_empty());
+    assert_eq!(def.room(stage1(&def)).unwrap().physics, None);
+}
+
+#[test]
+fn room_profiles_are_in_the_gameplay_hash_and_control_labels_are_not() {
+    let hash = |profile: &str, labels: &str| {
+        let files = package(labels, |f| {
+            put(f, "rooms/stage1.toml", STAGE1_LIGHT);
+            put(f, "physics/light.toml", profile);
+        });
+        let r = load_report(&files, STRICT);
+        assert!(r.ok(), "{}", render(&r));
+        r.gameplay_hash.unwrap()
+    };
+    let base = hash("preset = \"A1\"\n", "");
+    assert_ne!(base, hash("preset = \"A1\"\n[numbers]\nrun_speed = 5\n", ""));
+    assert_eq!(
+        base,
+        hash("preset = \"A1\"\n", "\n[controls]\nextra1 = \"Teleport\"\n")
+    );
+}
+
+#[test]
+fn control_labels_load_and_bad_ones_are_errors() {
+    let ok = package(
+        "\n[controls]\nextra1 = \"Teleport\"\nextra3 = \"Nudge right\"\n",
+        |_| {},
+    );
+    let r = load_report(&ok, STRICT);
+    assert!(r.ok(), "{}", render(&r));
+    let m = iwbtg_format::Manifest::parse(&manifest("\n[controls]\nextra1 = \"Teleport\"\n")).unwrap();
+    assert_eq!(m.controls.unwrap().labels(), [Some("Teleport"), None, None, None]);
+    for (labels, want) in [
+        ("extra2 = \"\"", "controls label extra2 must not be empty"),
+        (
+            "extra1 = \"A label far too long for the HUD\"",
+            "at most 24 characters",
+        ),
+        (r#"extra1 = "two\tcolumns""#, "one line"),
+        ("extra5 = \"Fly\"", "unknown field `extra5`"),
+    ] {
+        let files = package(&format!("\n[controls]\n{labels}\n"), |_| {});
+        let r = load_report(&files, STRICT);
+        let e = errors(&r);
+        assert!(e.iter().any(|m| m.contains(want)), "{labels}: {}", render(&r));
+    }
+}

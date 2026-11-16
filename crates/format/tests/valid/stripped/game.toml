@@ -62,3 +62,6 @@ kinds = ["@sign"]
 instances = [
   { room = "stage1", name = "tutorial_text" },
 ]
+
+[controls]
+extra1 = "Teleport"
