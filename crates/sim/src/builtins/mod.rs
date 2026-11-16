@@ -412,6 +412,7 @@ pub fn event_set_params(b: Builtin) -> &'static [&'static str] {
         Builtin::World => &["mute", "clear_switches_on_room_end"],
         Builtin::Block => &["proximity_frame"],
         Builtin::Spike => &["destroys_bullets"],
+        Builtin::Warp => warp::GATE_PARAMS,
         Builtin::Killer => &["bounce", "destroy_outside_room", "kill_outside_view"],
         Builtin::KidBullet => &["block_check"],
         Builtin::Blood => &["sticks"],
