@@ -7,10 +7,11 @@ use bevy::audio::AudioSource;
 use bevy::ecs::resource::IsResource;
 use bevy::state::app::StatesPlugin;
 use bevy::time::TimeUpdateStrategy;
+use bevy::window::FileDragAndDrop;
 use iwbtg_sim::mods::ModSet;
 
 use super::*;
-use crate::view::{Game, Textures};
+use crate::view::{Game, GameCamera, Textures};
 
 fn demo(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(name)
@@ -60,7 +61,10 @@ fn app() -> App {
                 args: crate::loading::LoadingArgs::default(),
                 skip: true,
             },
-        ));
+            crate::import::ImportPlugin { keep: false },
+        ))
+        // The window plugin adds it in the client.
+        .add_message::<FileDragAndDrop>();
     app.finish();
     app.cleanup();
     app
@@ -149,10 +153,77 @@ fn a_broken_package_does_not_open() {
     let mut app = app();
     frames(&mut app, 2);
     let err = start(app.world_mut(), &demo("Cargo.toml")).unwrap_err();
-    assert!(err.contains("Cargo.toml"), "{err}");
+    assert!(err.to_string().contains("Cargo.toml"), "{err}");
     frames(&mut app, 2);
     assert_eq!(
         *app.world().resource::<State<AppScreen>>().get(),
         AppScreen::Select
     );
+}
+
+/// Drops `name` on the window, as the OS does.
+fn drop_file(app: &mut App, name: &str) {
+    app.world_mut().write_message(FileDragAndDrop::DroppedFile {
+        window: Entity::PLACEHOLDER,
+        path_buf: demo(name),
+    });
+}
+
+fn package_id(app: &App) -> String {
+    app.world().resource::<LoadedPackage>().pkg.def.id.clone()
+}
+
+fn tick(app: &App) -> u64 {
+    app.world().non_send::<Game>().sim.world().tick as u64
+}
+
+/// A package dropped during a run replaces it in the same app (#841): the old run closes, the new
+/// one starts from its first tick with one game camera, and leaving it leaves nothing of either.
+#[test]
+fn a_drop_during_a_run_plays_the_dropped_package() {
+    let mut app = app();
+    frames(&mut app, 3);
+    let before = counts(&mut app);
+    start(app.world_mut(), &demo("tests/fixtures/audio.pkg")).unwrap();
+    frames(&mut app, 100);
+    assert_eq!(package_id(&app), "demo_audio");
+    assert!(tick(&app) > 50);
+    drop_file(&mut app, "tests/fixtures/clear.pkg");
+    frames(&mut app, 3);
+    assert_eq!(*app.world().resource::<State<AppScreen>>().get(), AppScreen::Run);
+    assert_eq!(package_id(&app), "demo_clear", "the dropped package plays");
+    assert!(tick(&app) <= 4, "a new sim, not the old one ({})", tick(&app));
+    let world = app.world_mut();
+    let cameras = world.query_filtered::<(), With<GameCamera>>().iter(world).count();
+    assert_eq!(cameras, 1, "the old run's camera is gone, the new one is there");
+    leave(app.world_mut());
+    frames(&mut app, 3);
+    assert_eq!(counts(&mut app), before, "after both: (entities, images, sounds)");
+}
+
+/// A drop that is not a package, or does not open, changes nothing: the run goes on.
+#[test]
+fn a_broken_drop_during_a_run_changes_nothing() {
+    let mut app = app();
+    frames(&mut app, 3);
+    start(app.world_mut(), &demo("tests/fixtures/audio.pkg")).unwrap();
+    frames(&mut app, 50);
+    let ticked = tick(&app);
+    drop_file(&mut app, "Cargo.toml");
+    drop_file(&mut app, "tests/fixtures");
+    frames(&mut app, 3);
+    assert_eq!(*app.world().resource::<State<AppScreen>>().get(), AppScreen::Run);
+    assert_eq!(package_id(&app), "demo_audio");
+    assert!(tick(&app) > ticked, "the same sim ticks on");
+}
+
+/// A drop on the select screen plays the package.
+#[test]
+fn a_drop_on_the_select_screen_plays_it() {
+    let mut app = app();
+    frames(&mut app, 3);
+    drop_file(&mut app, "tests/fixtures/clear.pkg");
+    frames(&mut app, 3);
+    assert_eq!(*app.world().resource::<State<AppScreen>>().get(), AppScreen::Run);
+    assert_eq!(package_id(&app), "demo_clear");
 }
