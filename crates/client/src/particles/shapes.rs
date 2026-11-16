@@ -12,8 +12,20 @@ pub(crate) const SIZE: u32 = 64;
 
 /// The shape words the format accepts, in the order of their images.
 pub(crate) const NAMES: [&str; 14] = [
-    "pixel", "disk", "square", "line", "star", "circle", "ring", "sphere", "flare", "spark",
-    "explosion", "cloud", "smoke", "snow",
+    "pixel",
+    "disk",
+    "square",
+    "line",
+    "star",
+    "circle",
+    "ring",
+    "sphere",
+    "flare",
+    "spark",
+    "explosion",
+    "cloud",
+    "smoke",
+    "snow",
 ];
 
 /// The image index of a shape word (`pixel` for an unknown one).
@@ -62,7 +74,9 @@ fn alpha(i: usize, dx: f32, dy: f32, px: f32, py: f32) -> f32 {
         }
         "star" => {
             // Five points: the radius swings between 0.4 and 1 around the circle.
-            let k = (a * 5.0 / 2.0 + std::f32::consts::FRAC_PI_2 * 5.0 / 2.0).cos().abs();
+            let k = (a * 5.0 / 2.0 + std::f32::consts::FRAC_PI_2 * 5.0 / 2.0)
+                .cos()
+                .abs();
             let reach = 0.4 + 0.6 * k.powf(6.0);
             if r <= reach { 1.0 } else { 0.0 }
         }

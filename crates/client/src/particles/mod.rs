@@ -31,9 +31,7 @@ impl Plugin for ParticlesPlugin {
         draw::plugin(app);
         app.add_systems(
             FixedUpdate,
-            follow_sim
-                .after(crate::view::tick)
-                .in_set(crate::view::SimTick),
+            follow_sim.after(crate::view::tick).in_set(crate::view::SimTick),
         );
     }
 }
@@ -204,12 +202,15 @@ fn watched(w: &SimWorld) -> BTreeMap<InstId, Watch> {
 /// is gone by the end of the tick that built it is not drawn (its `on_destroy` decides the
 /// rest, which the client cannot see then).
 fn def_of(w: &SimWorld, s: u32) -> Option<usize> {
-    w.instances().iter().filter(|i| i.alive).find_map(|i| match &i.state {
-        KindState::Builtin(BuiltinState::ParticleSystem(p)) if p.system.map(|x| x.0) == Some(s) => {
-            p.def.index()
-        }
-        _ => None,
-    })
+    w.instances()
+        .iter()
+        .filter(|i| i.alive)
+        .find_map(|i| match &i.state {
+            KindState::Builtin(BuiltinState::ParticleSystem(p)) if p.system.map(|x| x.0) == Some(s) => {
+                p.def.index()
+            }
+            _ => None,
+        })
 }
 
 /// After each tick: the drawing copies follow the sim.

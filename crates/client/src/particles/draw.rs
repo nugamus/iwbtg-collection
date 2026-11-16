@@ -6,13 +6,11 @@
 use std::collections::BTreeMap;
 
 use bevy::asset::RenderAssetUsages;
-use bevy::mesh::{Indices, MeshVertexBufferLayoutRef, PrimitiveTopology};
-use bevy::prelude::*;
-use bevy::render::render_resource::{
-    AsBindGroup, BlendComponent, BlendFactor, BlendOperation, BlendState,
-};
 use bevy::material::descriptor::RenderPipelineDescriptor;
 use bevy::material::specialize::SpecializedMeshPipelineError;
+use bevy::mesh::{Indices, MeshVertexBufferLayoutRef, PrimitiveTopology};
+use bevy::prelude::*;
+use bevy::render::render_resource::{AsBindGroup, BlendComponent, BlendFactor, BlendOperation, BlendState};
 use bevy::sprite_render::{
     ColorMaterial, ExtendedMaterial2d, Material2dKey, Material2dPipeline, Material2dPlugin,
     MaterialExtension2d,
@@ -121,9 +119,18 @@ impl Quads {
         // Corners from the pivot, y up: top-left, top-right, bottom-right, bottom-left.
         let corners = [
             (Vec2::new(-pivot.x, pivot.y), Vec2::new(uv.min.x, uv.min.y)),
-            (Vec2::new(size.x - pivot.x, pivot.y), Vec2::new(uv.max.x, uv.min.y)),
-            (Vec2::new(size.x - pivot.x, pivot.y - size.y), Vec2::new(uv.max.x, uv.max.y)),
-            (Vec2::new(-pivot.x, pivot.y - size.y), Vec2::new(uv.min.x, uv.max.y)),
+            (
+                Vec2::new(size.x - pivot.x, pivot.y),
+                Vec2::new(uv.max.x, uv.min.y),
+            ),
+            (
+                Vec2::new(size.x - pivot.x, pivot.y - size.y),
+                Vec2::new(uv.max.x, uv.max.y),
+            ),
+            (
+                Vec2::new(-pivot.x, pivot.y - size.y),
+                Vec2::new(uv.min.x, uv.max.y),
+            ),
         ];
         for (c, t) in corners {
             let p = at + rot.rotate(c);
@@ -194,7 +201,9 @@ fn draw(
     let mut built: BTreeMap<Key, Quads> = BTreeMap::new();
     let mut depth_of: BTreeMap<u32, f64> = BTreeMap::new();
     for (&s, sys) in &tracker.systems {
-        let Some(pd) = def.particle_systems.get(sys.def) else { continue };
+        let Some(pd) = def.particle_systems.get(sys.def) else {
+            continue;
+        };
         depth_of.insert(s, pd.depth.get());
         for p in &sys.particles {
             let Some(t) = pd.types.get(p.ty) else { continue };
@@ -242,15 +251,18 @@ fn draw(
                 (fx + frame_size.x) / strip.x,
                 (fy + frame_size.y) / strip.y,
             );
-            let scale = Vec2::new(t.look.scale[0].get() as f32, t.look.scale[1].get() as f32)
-                * look.size;
+            let scale = Vec2::new(t.look.scale[0].get() as f32, t.look.scale[1].get() as f32) * look.size;
             let at = Vec2::new(p.x as f32 - half.x, half.y - p.y as f32);
             let [r, g, b, a] = look.rgba;
             let lin = Color::srgba(r, g, b, a).to_linear().to_f32_array();
-            built
-                .entry((s, picture, t.look.additive))
-                .or_default()
-                .push(at, frame_size * scale, pivot * scale, look.angle, uv, lin);
+            built.entry((s, picture, t.look.additive)).or_default().push(
+                at,
+                frame_size * scale,
+                pivot * scale,
+                look.angle,
+                uv,
+                lin,
+            );
         }
     }
     // Meshes no longer drawn go.

@@ -47,7 +47,11 @@ fn the_demo_builds_both_systems_and_they_flow_every_tick() {
     // The burst of 120 and one update of the stream of 2.
     assert_eq!(snow.particles.len(), 122);
     let (_, fountain) = system(&def, &t, "fountain");
-    assert_eq!(fountain.particles.len(), 12 + 3, "the star burst and one stream update");
+    assert_eq!(
+        fountain.particles.len(),
+        12 + 3,
+        "the star burst and one stream update"
+    );
     let g = t.generation;
     for _ in 0..50 {
         sim.step(InputFrame::EMPTY);
@@ -115,7 +119,11 @@ fn a_room_start_clear_takes_the_burst_away() {
     sim.step(InputFrame::EMPTY);
     t.follow(&def, sim.world());
     let (_, snow) = system(&def, &t, "snow");
-    assert_eq!(snow.particles.len(), 2, "the burst was cleared; one stream update is left");
+    assert_eq!(
+        snow.particles.len(),
+        2,
+        "the burst was cleared; one stream update is left"
+    );
 }
 
 #[test]

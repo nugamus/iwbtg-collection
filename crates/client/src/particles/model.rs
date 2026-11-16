@@ -131,8 +131,7 @@ impl DrawSystem {
             }
         }
         for (i, em) in def.emitters.iter().enumerate() {
-            let (Some((ty, n)), true) = (em.stream, self.emitting.get(i).copied().unwrap_or(false))
-            else {
+            let (Some((ty, n)), true) = (em.stream, self.emitting.get(i).copied().unwrap_or(false)) else {
                 continue;
             };
             let count = self.count(n);
@@ -411,7 +410,10 @@ mod tests {
         let s = DrawSystem::build(0, &def, 1);
         assert_eq!(s.particles.len(), 43);
         for p in &s.particles[..40] {
-            assert!((100.0..=200.0).contains(&p.x) && (50.0..=60.0).contains(&p.y), "{p:?}");
+            assert!(
+                (100.0..=200.0).contains(&p.x) && (50.0..=60.0).contains(&p.y),
+                "{p:?}"
+            );
         }
         for p in &s.particles[40..] {
             assert_eq!((p.x, p.y), (7.0, 9.0));
@@ -480,7 +482,11 @@ mod tests {
         };
         let mut s = DrawSystem::build(0, &def, 1);
         s.update(&def);
-        assert_eq!((s.particles[0].x, s.particles[0].y), (11.0, 10.0), "speed 1 to the right");
+        assert_eq!(
+            (s.particles[0].x, s.particles[0].y),
+            (11.0, 10.0),
+            "speed 1 to the right"
+        );
         s.update(&def);
         assert_eq!(s.particles.len(), 3);
         assert!(s.particles.iter().all(|p| p.ty == 1 && p.x == 11.0));
