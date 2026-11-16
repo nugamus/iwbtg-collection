@@ -1029,7 +1029,8 @@ impl<'a> Loader<'a> {
                 self.diags.push(Diagnostic::file_error(
                     &path,
                     format!(
-                        "room profile `{id}` handles other kid events than the game's profile `{}`;                          a room profile may change actions and values, not which events the kid has",
+                        "room profile `{id}` handles other kid events than the game's profile `{}`; \
+                         a room profile may change actions and values, not which events the kid has",
                         self.m.physics.get_ref()
                     ),
                 ));

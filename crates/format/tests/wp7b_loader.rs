@@ -928,6 +928,11 @@ fn a_room_profile_with_other_kid_events_is_an_error() {
         "{}",
         render(&r)
     );
+    assert!(
+        e.iter().all(|m| !m.contains("  ")),
+        "no double space: {}",
+        render(&r)
+    );
 }
 
 #[test]
