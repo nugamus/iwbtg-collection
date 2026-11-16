@@ -13,6 +13,10 @@ object_order = [
   "blood_emitter", "game_over", "bow", "playerface",
 ]
 
+[controls]
+extra1 = "Teleport"
+extra3 = "Slow"
+
 [engine]
 new_game_room = "stage"
 float_model = "f64"
