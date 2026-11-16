@@ -48,7 +48,8 @@ pub fn run(ctx: &mut Ctx, me: InstId, other: InstId, run: &DeathRun) -> Result<F
 /// a kid. A kid that no longer exists is left alone.
 pub fn kill(ctx: &mut Ctx, kid: InstId, _cause: KillCause) -> Result<Flow, SimError> {
     let def = ctx.def;
-    let rules = &def.physics.death;
+    let phys = ctx.physics();
+    let rules = &phys.death;
     let Some(inst) = ctx.w.get(kid).filter(|i| i.alive) else {
         return Ok(Flow::Continue);
     };
@@ -92,7 +93,7 @@ pub fn kill(ctx: &mut Ctx, kid: InstId, _cause: KillCause) -> Result<Flow, SimEr
     for step in &rules.order {
         match step {
             DeathStep::Sound => {
-                super::actions::common::play_sound(ctx, ctx.def.physics.sounds.death)?;
+                super::actions::common::play_sound(ctx, ctx.physics().sounds.death)?;
             }
             DeathStep::DeathSound => {
                 // killPlayer: instance_create(0, 0, objDeathSound), not the kid's position (kid/B.md).

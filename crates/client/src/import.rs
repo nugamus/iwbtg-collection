@@ -9,42 +9,43 @@
 //!   replay is kept). A drop that does not open shows a notice with the file's name and why
 //!   (`ui::notice`, #648) and the game goes on.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use bevy::prelude::*;
 use bevy::window::FileDragAndDrop;
 
 use crate::package::{self, OpenError};
+use crate::shell::{AppScreen, InRun, LoadedPackage};
 use crate::storage::{self, Store};
 use crate::ui::notice;
 
-/// Keeps the opened `.iwbz` and opens dropped packages.
+/// Keeps each opened `.iwbz` and opens dropped packages.
 pub struct ImportPlugin {
-    /// What the client was started on: a folder or an `.iwbz` file.
-    pub opened: PathBuf,
-    /// The package id (`game.toml` `id`), the library file's name.
-    pub id: String,
     /// False for a `--screenshot` check, which leaves no trace on the machine.
     pub keep: bool,
 }
 
 impl Plugin for ImportPlugin {
     fn build(&self, app: &mut App) {
-        if self.keep
-            && package::is_iwbz(&self.opened)
-            && let Some(store) = Store::data()
-        {
-            let saved = std::fs::read(&self.opened)
-                .map_err(|e| e.to_string())
-                .and_then(|bytes| remember(&store, &self.id, &bytes));
-            if let Err(e) = saved {
-                storage::warn(&format!(
-                    "could not add {} to the library: {e}",
-                    self.opened.display()
-                ));
-            }
+        if self.keep {
+            app.add_systems(OnEnter(AppScreen::Run), keep_opened.in_set(InRun));
         }
         app.add_systems(Update, open_dropped);
+    }
+}
+
+/// A run opened from an `.iwbz` file: the file goes into the library.
+fn keep_opened(loaded: Res<LoadedPackage>) {
+    let opened = &loaded.path;
+    if !package::is_iwbz(opened) {
+        return;
+    }
+    let Some(store) = Store::data() else { return };
+    let saved = std::fs::read(opened)
+        .map_err(|e| e.to_string())
+        .and_then(|bytes| remember(&store, &loaded.pkg.def.id, &bytes));
+    if let Err(e) = saved {
+        storage::warn(&format!("could not add {} to the library: {e}", opened.display()));
     }
 }
 

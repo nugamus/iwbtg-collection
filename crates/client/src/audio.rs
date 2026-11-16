@@ -21,6 +21,7 @@ use iwbtg_sim::output::OutputEvent;
 use iwbtg_sim::script::ScriptOutput;
 use iwbtg_sim::sound::{SoundOutput, SoundTarget};
 
+use crate::shell::{self, InRun, LoadedPackage, RUN_ONLY};
 use crate::view::{Game, GameCamera};
 
 /// Longest audio offset: audio can only be held back, so this is how far behind the picture it
@@ -102,11 +103,10 @@ fn is_music(def: &GameDef, sound: SoundId, looping: bool) -> bool {
             .is_some_and(|d| d.kind == SoundKind::Multimedia)
 }
 
-/// Sound, music and screen shake for one package.
+/// Sound, music and screen shake for each run (the loaded package's sounds, `shell`).
 pub struct AudioPlugin {
     offset_ms: u32,
     levels: Levels,
-    files: PackageFiles,
     /// The sound waits for the first key or click: always in a browser (unless silent),
     /// natively only under `--audio-locked`.
     locked: bool,
@@ -115,7 +115,7 @@ pub struct AudioPlugin {
 impl AudioPlugin {
     /// `--audio-offset` and `--volume`, when given, are saved first; the plugin uses the saved
     /// values. `--mute`, `IWBTG_MUTE` and a `--screenshot` run silence it.
-    pub fn new(args: &AudioArgs, files: &PackageFiles) -> AudioPlugin {
+    pub fn new(args: &AudioArgs) -> AudioPlugin {
         if let Some(ms) = args.audio_offset {
             crate::settings::update(|s| s.audio_offset_ms = ms);
         }
@@ -133,8 +133,22 @@ impl AudioPlugin {
         AudioPlugin {
             offset_ms: settings.audio_offset_ms,
             levels,
-            files: files.clone(),
             locked: args.audio_locked || (web && !levels.silent()),
+        }
+    }
+}
+
+#[cfg(test)]
+impl AudioPlugin {
+    /// Full volume, no offset, no lock: for headless tests (`shell`).
+    pub(crate) fn audible() -> AudioPlugin {
+        AudioPlugin {
+            offset_ms: 0,
+            levels: Levels {
+                music: 1.0,
+                sound: 1.0,
+            },
+            locked: false,
         }
     }
 }
@@ -149,18 +163,22 @@ impl Plugin for AudioPlugin {
             // Belt and braces: nothing else may make a sound either.
             app.insert_resource(GlobalVolume::from(Volume::SILENT));
         }
-        app.insert_resource(Queue::new(self.offset_ms))
-            .insert_resource(Sounds::new(&self.files, self.levels))
-            .init_resource::<Shake>()
-            .add_systems(
-                Update,
-                (
-                    // Shake adds its offset on top of the view centre `follow_view` just set.
-                    apply_shake.after(crate::view::follow_view),
-                    play,
-                    sync_music.after(play),
-                ),
-            );
+        let (offset_ms, levels) = (self.offset_ms, self.levels);
+        shell::run_resource(app, move |_| Queue::new(offset_ms));
+        shell::run_resource(app, move |w| {
+            Sounds::new(&w.resource::<LoadedPackage>().pkg.files, levels)
+        });
+        shell::run_resource(app, |_| Shake::default());
+        app.add_systems(
+            Update,
+            (
+                // Shake adds its offset on top of the view centre `follow_view` just set.
+                apply_shake.after(crate::view::follow_view),
+                play,
+                sync_music.after(play),
+            )
+                .in_set(InRun),
+        );
         unlock::plugin(app, self.locked);
     }
 }
@@ -635,9 +653,10 @@ pub fn play(
                             unlock::Held(handle),
                             PlaybackSettings { speed, ..settings },
                             Voice(target, gain),
+                            RUN_ONLY,
                         ))
                     } else {
-                        commands.spawn((AudioPlayer::new(handle), settings, Voice(target, gain)))
+                        commands.spawn((AudioPlayer::new(handle), settings, Voice(target, gain), RUN_ONLY))
                     };
                     if looping && length > 0.0 {
                         voice.insert(MusicSync::new(now_tick, f64::from(speed), length));

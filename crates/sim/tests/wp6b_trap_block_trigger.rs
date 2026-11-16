@@ -421,6 +421,70 @@ mod wp6b {
         assert_eq!(w.get(t).unwrap().m.x(), r(111.0), "step is 0 now");
     }
 
+    fn toward_game(p: &[(&str, ParamValue)]) -> G {
+        let mut items = vec![
+            ("trigger_model", word("switch_array")),
+            ("trigger_id", real(1.0)),
+            ("launch", word("step_toward")),
+        ];
+        items.extend(p.iter().cloned());
+        game(vec![kind(Builtin::Trap, "trap", params(&items))])
+    }
+
+    fn pos(w: &World, id: InstId) -> (f64, f64) {
+        let i = w.get(id).unwrap();
+        (i.m.x().get(), i.m.y().get())
+    }
+
+    #[test]
+    fn trap_step_toward_moves_one_px_x_first_while_the_switch_is_on() {
+        let g = toward_game(&[("to_x", real(97.0)), ("to_y", real(103.0))]);
+        let kind = g.def.kinds.iter().find(|k| k.name == "trap").unwrap();
+        assert!(kind.events.end_step && !kind.events.step, "runs in End Step only");
+        let mut w = World::new(g.room, 1);
+        let t = spawn(&g, &mut w, kind_id(&g, "trap"), 100.0, 100.0);
+        fire(&g, &mut w, t, &EventKind::EndStep);
+        assert_eq!(pos(&w, t), (100.0, 100.0), "waits for the switch");
+        w.engine.mech.switches.insert(1);
+        let mut seen = Vec::new();
+        for _ in 0..8 {
+            fire(&g, &mut w, t, &EventKind::EndStep);
+            seen.push(pos(&w, t));
+        }
+        assert_eq!(
+            seen,
+            vec![
+                (99.0, 100.0),
+                (98.0, 100.0),
+                (97.0, 100.0),
+                (97.0, 101.0),
+                (97.0, 102.0),
+                (97.0, 103.0),
+                (97.0, 103.0),
+                (97.0, 103.0),
+            ],
+            "1 px per tick, x first, never diagonal, then it rests"
+        );
+        // The switch off (world Room End clears it): it stops where it is.
+        w.get_mut(t).unwrap().m.set_x(r(90.0)).unwrap();
+        w.engine.mech.clear_switches();
+        fire(&g, &mut w, t, &EventKind::EndStep);
+        assert_eq!(pos(&w, t), (90.0, 103.0));
+    }
+
+    #[test]
+    fn trap_step_toward_target_defaults_to_its_own_position() {
+        let g = toward_game(&[("to_y", real(98.0))]);
+        let mut w = World::new(g.room, 1);
+        let t = spawn(&g, &mut w, kind_id(&g, "trap"), 100.0, 100.0);
+        w.engine.mech.switches.insert(1);
+        fire(&g, &mut w, t, &EventKind::EndStep);
+        assert_eq!(pos(&w, t), (100.0, 99.0), "to_x 0 is its own x: y moves at once");
+        fire(&g, &mut w, t, &EventKind::EndStep);
+        fire(&g, &mut w, t, &EventKind::EndStep);
+        assert_eq!(pos(&w, t), (100.0, 98.0));
+    }
+
     #[test]
     fn trap_stopper_zero_speed_and_flush() {
         let g = trap_game(&[("vspeed", real(6.0)), ("stop_on_stopper", word("flush"))]);

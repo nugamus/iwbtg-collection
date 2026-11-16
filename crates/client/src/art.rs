@@ -21,6 +21,7 @@ use iwbtg_format::files::PackageFiles;
 use iwbtg_sim::def::RoomId;
 
 use crate::package::decode_png;
+use crate::shell::{self, InRun, LoadedPackage, RUN_ONLY};
 use crate::view::order::Ladder;
 use crate::view::{Game, RoomSize};
 use crate::visual::PlainBackdrop;
@@ -33,23 +34,24 @@ const FOREGROUND_Z: f32 = 995.0;
 #[derive(Resource)]
 pub struct ArtFiles(pub PackageFiles);
 
-/// Room backgrounds and tile layers for one package.
-pub struct ArtPlugin(pub PackageFiles);
+/// Room backgrounds and tile layers of the loaded package, for each run (`shell`).
+pub struct ArtPlugin;
 
 impl Plugin for ArtPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(ArtFiles(self.0.clone()))
-            .init_resource::<ArtImages>()
-            .init_resource::<Ladder>()
-            .init_resource::<ShownArt>()
-            .add_systems(
-                Update,
-                (sync_room_art, scroll_backgrounds)
-                    .chain()
-                    .after(crate::view::follow_view)
-                    // A new room's tile layers are in the ladder before its instances are placed.
-                    .before(crate::view::DrawInstances),
-            );
+        shell::run_resource(app, |w| ArtFiles(w.resource::<LoadedPackage>().pkg.files.clone()));
+        shell::run_resource(app, |_| ArtImages::default());
+        shell::run_resource(app, |_| Ladder::default());
+        shell::run_resource(app, |_| ShownArt::default());
+        app.add_systems(
+            Update,
+            (sync_room_art, scroll_backgrounds)
+                .chain()
+                .after(crate::view::follow_view)
+                // A new room's tile layers are in the ladder before its instances are placed.
+                .before(crate::view::DrawInstances)
+                .in_set(InRun),
+        );
     }
 }
 
@@ -218,7 +220,7 @@ fn spawn_background(
         .into_iter()
         .map(|(sprite, at, scale)| {
             let t = corner(room, at, background_z(bg, n)).with_scale(scale.extend(1.0));
-            commands.spawn((sprite, Anchor::TOP_LEFT, t)).id()
+            commands.spawn((sprite, Anchor::TOP_LEFT, t, RUN_ONLY)).id()
         })
         .collect()
 }
@@ -275,6 +277,7 @@ pub fn sync_room_art(
                 .spawn((
                     Sprite::from_color(color, size),
                     Transform::from_xyz(0.0, 0.0, COLOR_Z),
+                    RUN_ONLY,
                 ))
                 .id(),
         );
@@ -292,7 +295,7 @@ pub fn sync_room_art(
         })
         .collect();
     for (sprite, t) in tile_sprites(&tiles, &ladder, size, &files.0, &mut images, &mut cache) {
-        spawned.push(commands.spawn((sprite, Anchor::TOP_LEFT, t)).id());
+        spawned.push(commands.spawn((sprite, Anchor::TOP_LEFT, t, RUN_ONLY)).id());
     }
     shown.entities = spawned;
     shown.art = art;

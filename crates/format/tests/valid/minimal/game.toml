@@ -9,7 +9,10 @@ runner = "gm80"
 physics = "physics.toml"
 start_room = "title"
 max_ticks = 180_000
-object_order = ["kid", "block"]
+object_order = [
+  "world", "kid", "kid_bullet", "bow", "blood", "blood_emitter", "game_over", "playerface",
+  "block",
+]
 
 [[creators]]
 name = "IWBTG Collection"

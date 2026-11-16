@@ -21,6 +21,7 @@ use crate::files::{CONTENT_DIRS, PackageFiles, TESTS_DIR, check_path};
 use crate::ids::{EngineRef, KindRef, check_id, check_semver};
 use crate::number::Number;
 use crate::sprites::MAX_IMAGE_SIDE;
+use crate::tricks::TrickType;
 
 /// Path of the manifest inside a package.
 pub const MANIFEST_PATH: &str = "game.toml";
@@ -112,7 +113,7 @@ pub struct Manifest {
     /// Run timing: start and end triggers and stages.
     #[cfg_attr(feature = "schema", schemars(with = "Timing"))]
     pub timing: Spanned<Timing>,
-    /// Switches for tricks that are engine behaviors.
+    /// Trick switches and labels; keys from `research/specs/tricks.md`, Format keys.
     #[serde(default)]
     #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, TrickSetting>"))]
     pub tricks: BTreeMap<Spanned<String>, Spanned<TrickSetting>>,
@@ -135,6 +136,46 @@ pub struct Manifest {
     /// run starts at the new-game room and nothing is cut or frozen.
     #[serde(default)]
     pub stripped: Option<StrippedSection>,
+    /// What the game's extra actions do (`[controls]`, #33): labels for `extra1` to `extra4`,
+    /// shown where the player binds keys and in the HUD's input display. Absent: the game uses
+    /// no extra action.
+    #[serde(default)]
+    pub controls: Option<Controls>,
+}
+
+/// Longest `[controls]` label, in characters: it has to fit a key binding row and the HUD.
+pub const MAX_CONTROL_LABEL: usize = 24;
+
+/// The `[controls]` table: a label for each extra action the game uses (docs/format/v0.md,
+/// Manifest). Only the player-facing words; which key the player binds is the client's.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct Controls {
+    /// What `extra1` does in this game ("Teleport").
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub extra1: Option<Spanned<String>>,
+    /// What `extra2` does.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub extra2: Option<Spanned<String>>,
+    /// What `extra3` does.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub extra3: Option<Spanned<String>>,
+    /// What `extra4` does.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub extra4: Option<Spanned<String>>,
+}
+
+impl Controls {
+    /// The labels of `extra1` to `extra4`, in order; `None` for an action the game does not use.
+    pub fn labels(&self) -> [Option<&str>; 4] {
+        [&self.extra1, &self.extra2, &self.extra3, &self.extra4]
+            .map(|l| l.as_ref().map(|s| s.get_ref().as_str()))
+    }
 }
 
 /// Id of the one map of a package without `[[maps]]`.
@@ -756,16 +797,16 @@ pub struct KindDefaults {
     pub variants: Vec<Spanned<BTreeMap<String, toml::Value>>>,
 }
 
-/// A trick switch.
+/// A `[tricks]` value. On an `emergent` key it is only a label, and `off` is an error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum TrickSetting {
-    /// The trick works.
+    /// The trick works (a switch is on; an emergent trick is used).
     On,
-    /// The trick is disabled.
+    /// The switch is off. Not allowed on an emergent trick.
     Off,
-    /// The trick works and the game needs it.
+    /// The trick works and the game needs it; a switch must be on in the physics profile.
     Required,
 }
 
@@ -1091,13 +1132,10 @@ impl Manifest {
         self.validate_timing(&mut v);
         self.validate_maps(&mut v);
         self.validate_stripped(&mut v);
-        for key in self.tricks.keys() {
-            // TODO(OPEN: trick ids, from the research trick inventory): check `key` against the
-            // known trick ids.
-            v.id(key);
-        }
+        self.validate_tricks(&mut v);
         self.validate_third_party(&mut v);
         self.validate_key_art(&mut v);
+        self.validate_controls(&mut v);
         for (track, settings) in &self.music {
             if v.id(track) {
                 let file = format!("music/{}.ogg", track.get_ref());
@@ -1113,6 +1151,63 @@ impl Manifest {
                 if !value.is_finite() || value < 0.0 {
                     v.error(volume.span(), "volume must be a finite number of at least 0");
                 }
+            }
+        }
+    }
+
+    /// `[tricks]` keys come from `research/specs/tricks.md`, Format keys ([`crate::tricks`]).
+    fn validate_tricks(&self, v: &mut Validator<'_>) {
+        for (key, setting) in &self.tricks {
+            if !v.id(key) {
+                continue;
+            }
+            let name = key.get_ref();
+            match crate::tricks::trick_type(name) {
+                None => v.error(
+                    key.span(),
+                    format!(
+                        "unknown trick `{name}`: [tricks] keys are listed in \
+                         research specs/tricks.md, Format keys"
+                    ),
+                ),
+                Some(TrickType::Unknown) => v.error(
+                    key.span(),
+                    format!("trick `{name}` has no type yet (no source defines it), so it is not a key"),
+                ),
+                Some(TrickType::Emergent) if *setting.get_ref() == TrickSetting::Off => v.error(
+                    setting.span(),
+                    format!(
+                        "trick `{name}` follows from the physics and cannot be turned off; \
+                         use \"on\" or \"required\", or leave it out"
+                    ),
+                ),
+                Some(_) => {}
+            }
+        }
+    }
+
+    fn validate_controls(&self, v: &mut Validator<'_>) {
+        let Some(c) = &self.controls else { return };
+        for (n, label) in [&c.extra1, &c.extra2, &c.extra3, &c.extra4]
+            .into_iter()
+            .enumerate()
+        {
+            let Some(label) = label else { continue };
+            let what = format!("controls label extra{}", n + 1);
+            if !v.non_empty(label, &what) {
+                continue;
+            }
+            let text = label.get_ref();
+            if text.chars().any(char::is_control) {
+                v.error(
+                    label.span(),
+                    format!("{what} must be one line without control characters"),
+                );
+            } else if text.chars().count() > MAX_CONTROL_LABEL {
+                v.error(
+                    label.span(),
+                    format!("{what} must be at most {MAX_CONTROL_LABEL} characters"),
+                );
             }
         }
     }

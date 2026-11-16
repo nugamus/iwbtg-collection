@@ -8,9 +8,10 @@
 //! (`hud::Paused::ticks`); the paused line `Paused · timer running` shows in run info.
 //!
 //! The items: Continue; Retry from save (what R does: the game's own restart, pressed on the
-//! next tick); Restart run (the quick-retry key, `retry.rs`); Quit (closes the client without a
-//! results screen; the run is not cleared, so no clear goes into the stats). Up and Down (and the
-//! keys bound to up and down) move the selector, Enter, Space or the keys bound to jump or accept
+//! next tick); Restart run (the quick-retry key, `retry.rs`); Quit (leaves the run without a
+//! results screen, `shell::leave`: back to the `--select` list, else closes the client; the run
+//! is not cleared, so no clear goes into the stats). Up and Down (and the keys bound to up and
+//! down) move the selector, Enter, Space or the keys bound to jump or accept
 //! pick, the mouse hovers and clicks. On a controller the D-pad or left stick moves, A (south)
 //! picks and B (east) or Start continues. While the menu is open R and the quick-retry key (and
 //! their controller inputs) pick their item at once.
@@ -144,20 +145,18 @@ const PREVIEW_TICK: u64 = 25;
 
 pub struct PausePlugin {
     pub args: PauseArgs,
-    pub files: PackageFiles,
 }
 
 impl Plugin for PausePlugin {
     fn build(&self, app: &mut App) {
-        let image = fruit_image(&self.files);
-        let handle = app
-            .world_mut()
-            .resource_mut::<Assets<Image>>()
-            .add(to_bevy(&image));
         let preview = self.args.pause_preview;
-        app.insert_resource(Fruit(handle))
-            .insert_resource(Menu { preview, ..default() })
-            .configure_sets(FixedUpdate, SimTick.run_if(|menu: Res<Menu>| !menu.open))
+        // The selector is the loaded package's fruit, else the client's own.
+        crate::shell::run_resource(app, |w| {
+            let image = fruit_image(&w.resource::<crate::shell::LoadedPackage>().pkg.files);
+            Fruit(w.resource_mut::<Assets<Image>>().add(to_bevy(&image)))
+        });
+        crate::shell::run_resource(app, move |_| Menu { preview, ..default() });
+        app.configure_sets(FixedUpdate, SimTick.run_if(|menu: Res<Menu>| !menu.open))
             .add_systems(FixedUpdate, count.run_if(|menu: Res<Menu>| menu.open))
             .add_observer(on_activate)
             .add_systems(
@@ -171,7 +170,8 @@ impl Plugin for PausePlugin {
                     draw.after(crate::screen::apply),
                     looks,
                 )
-                    .chain(),
+                    .chain()
+                    .in_set(crate::shell::InRun),
             );
     }
 }
@@ -377,7 +377,7 @@ fn act(world: &mut World) {
         Item::RestartRun => crate::retry::request(world),
         Item::Quit => {
             eprintln!("pause: quit (the run is discarded)");
-            world.write_message(AppExit::Success);
+            crate::shell::leave(world);
         }
     }
 }
@@ -483,6 +483,7 @@ fn draw(
         BackgroundColor(tokens::black(DIM)),
         GlobalZIndex(20),
         Root { k },
+        crate::shell::RUN_ONLY,
     ));
     root.with_child(pause_box(k, menu.selected, fruit.0.clone()));
 }
@@ -917,7 +918,7 @@ mod tests {
     }
 
     /// Retry from save closes the menu, drops what was pressed in it and presses Restart for the
-    /// next tick; Quit asks the app to exit.
+    /// next tick; Quit leaves the run (without `--select`, the app exits).
     #[test]
     fn picks_close_the_menu_and_do_their_item() {
         use bevy::ecs::system::RunSystemOnce;

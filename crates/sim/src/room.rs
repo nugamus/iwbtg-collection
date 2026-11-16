@@ -850,7 +850,7 @@ fn run_time_var(ctx: &mut Ctx, name: &str) -> Result<VarId, SimError> {
 /// game's `[save]` model; with no kid, x 0 and y 0 and no error (Confirmed (recorder),
 /// kid/A3.md "Saves", showdown a3-t20-a f3-4).
 fn save_game(ctx: &mut Ctx) -> Result<(), SimError> {
-    let rules = &ctx.def.physics.save;
+    let rules = &ctx.physics().save;
     let model = rules.position.model();
     let fixed = rules.fixed.map(|[x, y]| (x, y));
     match ctx.w.kid(&ctx.rules.tick) {

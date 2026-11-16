@@ -7,6 +7,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use iwbtg_format::load::{LoadMode, load_report};
 use iwbtg_format::{Diagnostic, Manifest, PackageFiles, Severity, check};
 use serde::Deserialize;
 
@@ -51,6 +52,22 @@ fn valid_packages_have_no_diagnostics() {
     for (name, dir) in pkgs {
         let diags = check_dir(&dir);
         assert!(diags.is_empty(), "valid/{name}:\n{}", render(&diags));
+    }
+}
+
+/// The manifest check above is only step 1 of loading; `pkg check` runs the whole load. Every
+/// valid fixture must pass it too, with no warnings, so the fixtures cannot drift from the
+/// loader (#832).
+#[test]
+fn valid_packages_load_with_no_diagnostics() {
+    for (name, dir) in packages(&tests_dir().join("valid")) {
+        let files = PackageFiles::load_dir(&dir).expect("fixture loads");
+        let report = load_report(&files, LoadMode::Strict);
+        assert!(
+            report.ok() && report.diagnostics.is_empty(),
+            "valid/{name} fails the full load:\n{}",
+            render(&report.diagnostics)
+        );
     }
 }
 

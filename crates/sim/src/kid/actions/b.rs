@@ -71,7 +71,7 @@ pub fn run(ctx: &mut Ctx, me: InstId, action: &BAction) -> Result<Flow, SimError
 ///    jump[maxJumps]` and `curJumps = maxJumps + 1`.
 pub(crate) fn jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let def = ctx.def;
-    let p = &def.physics;
+    let p = ctx.physics();
     if p.jump.blocked_by_pause_press && ctx.w.input.pressed(Action::Pause) {
         return Ok(());
     }
@@ -139,7 +139,7 @@ pub(crate) fn jump(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
 
 /// Alarm 0 with jump cancelling off (kid/B.md Alarm 0).
 fn cancel_poll(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
-    let def = ctx.def;
+    let phys = ctx.physics();
     let n = &ctx.rules.num;
     let s = state(ctx, me)?;
     let held = ctx.w.input.held(Action::Jump);
@@ -147,7 +147,7 @@ fn cancel_poll(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     let Some(i) = ctx.w.get_mut(me) else { return Ok(()) };
     let against = gm_lt(Real::new(f64::from(down(&s))) * i.m.vspeed(), Real::ZERO, n);
     if !held && against {
-        i.m.set_vspeed(i.m.vspeed() * def.physics.numbers.release_mult)?;
+        i.m.set_vspeed(i.m.vspeed() * phys.numbers.release_mult)?;
         alarm::set(i, 0, Real::ZERO, &rules.num)?;
     } else {
         alarm::set(i, 0, Real::ONE, &rules.num)?;
@@ -211,7 +211,7 @@ fn ensure_bow(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
 
 /// `playerMisc` 1: `killPlayer` when the mask touches any killer.
 fn killer_check(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
-    if ctx.def.physics.death.killer_check_menu_rooms {
+    if ctx.physics().death.killer_check_menu_rooms {
         let role = ctx
             .w
             .room
@@ -251,14 +251,14 @@ fn killer_check(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
 ///    `numbers.gravity * f`, `vspeed = wSpeed`.
 /// 5. A wall 1 px in the gravity direction and `vspeed` 0: `curJumps` 1.
 fn slope_b(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
-    let def = ctx.def;
+    let phys = ctx.physics();
     let n = &ctx.rules.num;
     let wall = Target::Class(ClassMask::SLOPE_WALL);
     let missing = || SimError::invariant("slope_b: kid vanished");
     let s = state(ctx, me)?;
     let f = Real::new(f64::from(super::common::yflag(ctx, &s)));
     let gdir = Real::new(if gm_lt(f, Real::ZERO, n) { 90.0 } else { 270.0 });
-    let gravity = def.physics.numbers.gravity * f;
+    let gravity = phys.numbers.gravity * f;
     let (wx, wy, wxpre, wypre, wspeed, xscale) = {
         let i = ctx.w.get(me).ok_or_else(missing)?;
         (

@@ -1,4 +1,5 @@
 //! #232: the A1 preset's Step list gets gravity back after a landing without a ladder action.
+//! #33: a room profile's gravity applies while its room is current.
 
 use iwbtg_sim::def::testing::GameDefBuilder;
 use iwbtg_sim::def::{Builtin, ClassMask, KidFamily, KindDef, RoomDef};
@@ -75,4 +76,62 @@ fn a_landing_zeroes_gravity_and_the_next_step_restores_it() {
     ctx.w.get_mut(id).unwrap().m.set_gravity(Real::ZERO).unwrap();
     kid::on_event(&mut ctx, id, &EventKind::Step).unwrap();
     assert_eq!(ctx.w.get(id).unwrap().m.gravity(), Real::ZERO);
+}
+
+/// #33: a room with its own profile (`RoomDef::physics`) gives the kid that profile's gravity
+/// from its first Step there; a room without one uses the game's.
+#[test]
+fn a_room_profile_gives_its_gravity_while_that_room_is_current() {
+    let mut b = GameDefBuilder::new("room-physics");
+    let mut k = KindDef::new("kid", Builtin::Kid);
+    k.classes = ClassMask::KID;
+    let kid = b.kind(k);
+    let mut p = presets::defaults(KidFamily::A1);
+    p.events.create = vec![KidAction::Common(CommonAction::CreateDefaults)];
+    p.events.step = vec![KidAction::Common(CommonAction::Gravity)];
+    let mut light = p.clone();
+    light.numbers.gravity = Real::new(0.25);
+    let light = b.room_physics(light);
+    b.physics(p);
+    let plain = b.room(RoomDef::new("plain", 800, 608));
+    let mut r = RoomDef::new("light", 800, 608);
+    r.physics = Some(light);
+    let light_room = b.room(r);
+    b.start_room(plain);
+    let def = b.build().expect("game builds");
+    assert_eq!(def.physics_in(plain).numbers.gravity, Real::new(0.4));
+    assert_eq!(def.physics_in(light_room).numbers.gravity, Real::new(0.25));
+    let rules = RunnerRules::for_runner(def.runner, def.engine_rev).expect("rules");
+    let mut w = World::new(def.start_room, 1);
+    let scripts = ScriptRuntime::default();
+    let mut ctx = Ctx {
+        def: &def,
+        rules: &rules,
+        w: &mut w,
+        scripts: &scripts,
+        dll_mode: DllMode::Stub,
+    };
+    let id = ctx
+        .spawn(kid, Real::new(0.0), Real::new(0.0), SpawnInit::default())
+        .unwrap();
+    kid::on_event(&mut ctx, id, &EventKind::Step).unwrap();
+    assert_eq!(
+        ctx.w.get(id).unwrap().m.gravity(),
+        Real::new(0.4),
+        "the game's profile"
+    );
+    ctx.w.room = light_room;
+    kid::on_event(&mut ctx, id, &EventKind::Step).unwrap();
+    assert_eq!(
+        ctx.w.get(id).unwrap().m.gravity(),
+        Real::new(0.25),
+        "the room's profile"
+    );
+    ctx.w.room = plain;
+    kid::on_event(&mut ctx, id, &EventKind::Step).unwrap();
+    assert_eq!(
+        ctx.w.get(id).unwrap().m.gravity(),
+        Real::new(0.4),
+        "back to the game's"
+    );
 }

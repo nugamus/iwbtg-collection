@@ -17,6 +17,45 @@
       },
       "type": "object"
     },
+    "Controls": {
+      "additionalProperties": false,
+      "description": "The `[controls]` table: a label for each extra action the game uses (docs/format/v0.md,\nManifest). Only the player-facing words; which key the player binds is the client's.",
+      "properties": {
+        "extra1": {
+          "default": null,
+          "description": "What `extra1` does in this game (\"Teleport\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "extra2": {
+          "default": null,
+          "description": "What `extra2` does.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "extra3": {
+          "default": null,
+          "description": "What `extra3` does.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "extra4": {
+          "default": null,
+          "description": "What `extra4` does.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
     "Creator": {
       "additionalProperties": false,
       "description": "One `[[creators]]` entry.",
@@ -1021,21 +1060,21 @@
       "type": "object"
     },
     "TrickSetting": {
-      "description": "A trick switch.",
+      "description": "A `[tricks]` value. On an `emergent` key it is only a label, and `off` is an error.",
       "oneOf": [
         {
           "const": "on",
-          "description": "The trick works.",
+          "description": "The trick works (a switch is on; an emergent trick is used).",
           "type": "string"
         },
         {
           "const": "off",
-          "description": "The trick is disabled.",
+          "description": "The switch is off. Not allowed on an emergent trick.",
           "type": "string"
         },
         {
           "const": "required",
-          "description": "The trick works and the game needs it.",
+          "description": "The trick works and the game needs it; a switch must be on in the physics profile.",
           "type": "string"
         }
       ]
@@ -1102,6 +1141,17 @@
         }
       ],
       "description": "Script budget."
+    },
+    "controls": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Controls"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "What the game's extra actions do (`[controls]`, #33): labels for `extra1` to `extra4`,\nshown where the player binds keys and in the HUD's input display. Absent: the game uses\nno extra action."
     },
     "creators": {
       "description": "At least one creator.",
@@ -1266,7 +1316,7 @@
       "additionalProperties": {
         "$ref": "#/$defs/TrickSetting"
       },
-      "description": "Switches for tricks that are engine behaviors.",
+      "description": "Trick switches and labels; keys from `research/specs/tricks.md`, Format keys.",
       "type": "object"
     },
     "version": {

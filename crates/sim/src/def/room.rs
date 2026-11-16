@@ -23,6 +23,9 @@ pub struct RoomDef {
     /// The double jump also sets `tjump` here (showdown room028: playerJump step 2, A3.md C4
     /// showdown). Only read with `jump.air = "djump_then_tjump"`.
     pub djump_grants_tjump: bool,
+    /// The room's own physics profile, an index into `GameDef::room_physics`; `None` uses the
+    /// game's (`GameDef::physics_in`, #33).
+    pub physics: Option<u16>,
     /// `room_speed` on entry, before the world's Room Start (Inferred, R14).
     pub file_speed: u32,
     /// GM persistent room.
@@ -48,6 +51,7 @@ impl RoomDef {
             role: RoomRole::Play,
             no_restart: false,
             djump_grants_tjump: false,
+            physics: None,
             file_speed: 50,
             persistent: false,
             views_enabled: false,
