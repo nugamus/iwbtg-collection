@@ -154,7 +154,7 @@ struct GameShadow;
 
 /// What the panels were built for, so they are rebuilt only when it changes: density, width,
 /// run info's look and the leaderboard's runs (`Live::generation`).
-#[derive(Component, PartialEq, Clone, Copy)]
+#[derive(Component, PartialEq, Clone)]
 struct Built(Density, u32, run_info::Look, u32);
 
 pub struct HudPlugin;
@@ -382,7 +382,7 @@ fn place(
             (false, _) => (col * 0.84, col * 0.09),
         };
         let runs = if column.left { live.generation } else { 0 };
-        let want = Built(l.density, width.round() as u32, *look, runs);
+        let want = Built(l.density, width.round() as u32, look.clone(), runs);
         if built == Some(&want) {
             continue;
         }
@@ -399,7 +399,7 @@ fn place(
                 e.with_child((wrap, children![leaderboard::build(width, l.density, &live)]));
             }
         } else {
-            e.with_child((wrap, children![run_info::build(width, l.density, *look)]));
+            e.with_child((wrap, children![run_info::build(width, l.density, look.clone())]));
         }
     }
 }

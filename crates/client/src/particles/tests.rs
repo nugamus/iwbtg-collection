@@ -126,6 +126,65 @@ fn a_room_start_clear_takes_the_burst_away() {
     );
 }
 
+/// A `system` list builds one drawing copy per file from the one instance, and each draws at its
+/// own file's depth (rely objEffect's two systems, client#826).
+#[test]
+fn a_system_list_draws_each_system_at_its_own_depth() {
+    let mut def = (*demo()).clone();
+    let id = |name: &str| {
+        let i = def.particle_systems.iter().position(|p| p.name == name).unwrap();
+        ParamValue::Particles(iwbtg_sim::def::PartSystemDefId(i as u32))
+    };
+    let list = ParamValue::List(vec![id("snow"), id("fountain")]);
+    // Only the snowfall instance stays; it builds both files.
+    let fountain = def.kinds.iter().position(|k| k.name == "@fountain").unwrap();
+    for r in &mut def.rooms {
+        r.instances.retain(|i| i.kind.index() != Some(fountain));
+    }
+    let def = {
+        let mut def = def;
+        let k = def.kinds.iter_mut().find(|k| k.name == "@snowfall").unwrap();
+        k.params.0.insert("system".into(), list);
+        Arc::new(def)
+    };
+    let mut sim = sim(Arc::clone(&def));
+    let mut t = Tracker::default();
+    sim.step(InputFrame::EMPTY);
+    t.follow(&def, sim.world());
+    let (snow, _) = system(&def, &t, "snow");
+    let (fountain, _) = system(&def, &t, "fountain");
+    assert_eq!(t.depth(&def, snow), 10.0);
+    assert_eq!(t.depth(&def, fountain), -10.0);
+}
+
+/// In a room listed in `on_room_start_except` the Room Start clear does not happen
+/// (go-the-spook-house oRainSys, client#826).
+#[test]
+fn an_excepted_room_keeps_the_burst() {
+    let mut def = (*demo()).clone();
+    let stage = def.rooms.iter().position(|r| r.name == "stage").unwrap();
+    let k = def.kinds.iter_mut().find(|k| k.name == "@snowfall").unwrap();
+    k.params
+        .0
+        .insert("on_room_start".into(), ParamValue::Str("clear".into()));
+    k.params.0.insert(
+        "on_room_start_except".into(),
+        ParamValue::List(vec![ParamValue::Room(iwbtg_sim::def::RoomId(stage as u32))]),
+    );
+    k.events.room_start = true;
+    let def = Arc::new(def);
+    let mut sim = sim(Arc::clone(&def));
+    let mut t = Tracker::default();
+    sim.step(InputFrame::EMPTY);
+    t.follow(&def, sim.world());
+    let (_, snow) = system(&def, &t, "snow");
+    assert_eq!(
+        snow.particles.len(),
+        122,
+        "the burst of 120 stays, plus one stream update"
+    );
+}
+
 #[test]
 fn a_retry_starts_the_particles_over() {
     let def = demo();

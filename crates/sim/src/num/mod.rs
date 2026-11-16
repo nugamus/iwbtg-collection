@@ -7,7 +7,7 @@
 //!
 //! Submodules:
 //! - [`round`](mod@round): banker's rounding, integer conversion, `frac`, `sign`, `gm_min`/`gm_max`,
-//!   `repeat` counts, GML `mod`/`div`.
+//!   `repeat` counts, GML `mod`/`div`, the motion integer snap.
 //! - [`compare`]: GM8 comparisons and truthiness under `NumRules`.
 //! - [`conv`]: rule-dependent conversions (alarms, save bytes, `string()`).
 //! - [`math`]: software `sin`, `cos`, `tan`, `atan2`, `sqrt`, `pow`, `exp`, `ln`.
@@ -33,7 +33,7 @@ pub use conv::{alarm_from_real, byte_from_real, gm_string_real, gml_literal};
 pub use math::{atan2, cos, exp, ln, pow, sin, sqrt, tan};
 pub use round::{
     abs, ceil, clamp, floor, frac, gm_div, gm_max, gm_min, gm_mod, gm_repeat_count, lerp, round, sign,
-    to_int_round, to_int_trunc,
+    snap_to_int, to_int_round, to_int_trunc,
 };
 pub use trig::{
     darctan2, dcos, degtorad, dsin, lengthdir_x, lengthdir_y, point_direction, point_distance, radtodeg,

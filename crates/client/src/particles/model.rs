@@ -57,6 +57,9 @@ pub(crate) struct DrawSystem {
     /// Each emitter still streams (`destroy_emitters` stops them all).
     emitting: Vec<bool>,
     pub(crate) particles: Vec<Particle>,
+    /// Each type's alpha values, picked when the system is built (`{ random = [min, max] }` is
+    /// one value for the whole system, as the original's code passes one).
+    pub(crate) alpha: Vec<Vec<f32>>,
     rng: Rng,
 }
 
@@ -68,8 +71,14 @@ impl DrawSystem {
             def: def_index,
             emitting: vec![true; def.emitters.len()],
             particles: Vec::new(),
+            alpha: Vec::new(),
             rng: Rng::new(seed),
         };
+        s.alpha = def
+            .types
+            .iter()
+            .map(|t| t.look.alpha.iter().map(|&r| s.pick(r) as f32).collect())
+            .collect();
         for em in &def.emitters {
             if let Some((ty, n)) = em.burst {
                 let count = s.count(n);
@@ -320,10 +329,11 @@ pub(crate) struct Look {
 }
 
 impl Particle {
-    /// Its look for type `t`: colors and alpha over the life, size and angle with wiggle, the
-    /// sprite frame (`animate` steps one frame a tick; `stretch` spreads the frames over the
-    /// life; `frames` is the sprite's frame count).
-    pub(crate) fn look(&self, t: &PartTypeDef, frames: u32) -> Look {
+    /// Its look for type `t`: colors and `alpha` (the type's values as its system picked them,
+    /// `DrawSystem::alpha`) over the life, size and angle with wiggle, the sprite frame
+    /// (`animate` steps one frame a tick; `stretch` spreads the frames over the life; `frames`
+    /// is the sprite's frame count).
+    pub(crate) fn look(&self, t: &PartTypeDef, alpha: &[f32], frames: u32) -> Look {
         let k = if self.start_life > 0.0 {
             (f64::from(self.age) / self.start_life).clamp(0.0, 1.0) as f32
         } else {
@@ -340,7 +350,7 @@ impl Particle {
                 }
             })
             .unwrap_or([1.0; 3]);
-        let alphas: Vec<[f32; 1]> = t.look.alpha.iter().map(|a| [a.get() as f32]).collect();
+        let alphas: Vec<[f32; 1]> = alpha.iter().map(|&a| [a]).collect();
         let alpha = over_life(&alphas, k).map_or(1.0, |[a]| a.clamp(0.0, 1.0));
         let size = (self.size + wiggle(self, t.look.size_change[1].get())).max(0.0) as f32;
         let mut angle = self.orientation + wiggle(self, t.look.orientation_change[1].get());
@@ -497,7 +507,7 @@ mod tests {
         let mut t = ty(4.0);
         t.look.gravity = [Real::new(0.5), Real::new(270.0)];
         t.look.colors = vec![0xff_0000, 0x00_00ff];
-        t.look.alpha = vec![Real::new(1.0), Real::new(0.0)];
+        t.look.alpha = vec![PartRange::fixed(1.0), PartRange::fixed(0.0)];
         let def = PartSystemDef {
             types: vec![t],
             creates: vec![PartCreateDef {
@@ -508,14 +518,42 @@ mod tests {
             ..PartSystemDef::default()
         };
         let mut s = DrawSystem::build(0, &def, 1);
-        let start = s.particles[0].look(&def.types[0], 1);
+        let start = s.particles[0].look(&def.types[0], &s.alpha[0], 1);
         assert_eq!(start.rgba, [1.0, 0.0, 0.0, 1.0]);
         s.update(&def);
         s.update(&def);
         let p = &s.particles[0];
         assert!(p.y > 1.0 && p.x.abs() < 1e-9, "falls straight down: {p:?}");
-        let mid = p.look(&def.types[0], 1);
+        let mid = p.look(&def.types[0], &s.alpha[0], 1);
         assert_eq!(mid.rgba, [0.5, 0.0, 0.5, 0.5]);
+    }
+
+    /// `{ random = [min, max] }` alpha is one value for the whole system, in the range, from
+    /// the system's own generator; fixed values stay as written (client#826).
+    #[test]
+    fn a_random_alpha_is_one_value_per_system() {
+        let mut t = ty(10.0);
+        t.look.alpha = vec![PartRange::new(0.12, 0.32), PartRange::fixed(0.0)];
+        let def = PartSystemDef {
+            types: vec![t],
+            creates: vec![PartCreateDef {
+                at: [Real::ZERO, Real::ZERO],
+                ty: 0,
+                number: 3,
+            }],
+            ..PartSystemDef::default()
+        };
+        let s = DrawSystem::build(0, &def, 5);
+        let [a, end] = s.alpha[0][..] else {
+            panic!("two values: {:?}", s.alpha);
+        };
+        assert!((0.12..=0.32).contains(&a), "{a}");
+        assert_eq!(end, 0.0);
+        for p in &s.particles {
+            assert_eq!(p.look(&def.types[0], &s.alpha[0], 1).rgba[3], a);
+        }
+        let other = DrawSystem::build(0, &def, 6);
+        assert_ne!(other.alpha[0][0], a, "a new system picks again");
     }
 
     #[test]

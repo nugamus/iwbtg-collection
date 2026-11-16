@@ -90,9 +90,10 @@ pub struct TypeFile {
     /// `part_type_color_hsv`: `[[hmin, hmax], [smin, smax], [vmin, vmax]]`.
     #[serde(default)]
     pub color_hsv: Option<[[Number; 2]; 3]>,
-    /// `part_type_alpha1/2/3`: one to three values; default `[1]`.
+    /// `part_type_alpha1/2/3`: one to three values, each a number or `{ random = [min, max] }`;
+    /// default `[1]`.
     #[serde(default)]
-    pub alpha: Option<Vec<Number>>,
+    pub alpha: Option<Vec<AlphaValue>>,
     /// `part_type_blend` additive; default false.
     #[serde(default)]
     pub additive: bool,
@@ -105,6 +106,29 @@ pub struct TypeFile {
     /// `part_type_death`: particles of another type when one dies.
     #[serde(default)]
     pub death: Option<ChildFile>,
+}
+
+/// One `part_type_alpha1/2/3` value.
+#[derive(Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(untagged)]
+pub enum AlphaValue {
+    /// A fixed value.
+    Fixed(Number),
+    /// `{ random = [min, max] }`: the original's code passes a random value (go-the-spook-house
+    /// `random_range(0.12, 0.32)`, client#826). Drawing only: the client picks one value per
+    /// built system from its own generator; the original's RNG draw stays with the code that
+    /// makes it.
+    Random(RandomAlpha),
+}
+
+/// `{ random = [min, max] }`.
+#[derive(Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct RandomAlpha {
+    /// The range, `[min, max]`.
+    pub random: [Number; 2],
 }
 
 /// `part_type_sprite`.
@@ -475,13 +499,23 @@ impl Build<'_> {
             colors.push(0xFF_FF_FF);
             PartColor::Fixed
         };
-        let alpha: Vec<Real> = match &t.alpha {
-            None => vec![Real::ONE],
+        let alpha: Vec<PartRange> = match &t.alpha {
+            None => vec![PartRange::fixed(1.0)],
             Some(a) => {
                 if a.is_empty() || a.len() > 3 {
                     self.error(at, format!("{who}: `alpha` holds one to three values"));
                 }
-                a.iter().map(|n| real(*n)).collect()
+                a.iter()
+                    .map(|v| match v {
+                        AlphaValue::Fixed(n) => PartRange::fixed(n.0),
+                        AlphaValue::Random(RandomAlpha { random: [lo, hi] }) => {
+                            if hi.0 < lo.0 {
+                                self.error(at, format!("{who}: `alpha` random range has max below min"));
+                            }
+                            PartRange::new(lo.0, hi.0)
+                        }
+                    })
+                    .collect()
             }
         };
         if t.shape.is_some() && t.sprite.is_some() {

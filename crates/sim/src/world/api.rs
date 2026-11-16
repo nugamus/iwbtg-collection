@@ -207,7 +207,7 @@ fn merge_params(base: &Params, over: &Params) -> Params {
 }
 
 /// A param as a GML value: reals and text as they are, flags as 1 or 0, resource ids as their
-/// index (GML resource ids are reals).
+/// index (GML resource ids are reals), a list as its first value.
 fn param_value(v: &ParamValue) -> Value {
     match v {
         ParamValue::Real(r) => Value::Real(*r),
@@ -217,6 +217,8 @@ fn param_value(v: &ParamValue) -> Value {
         ParamValue::Kind(id) => Value::Real(Real::new(f64::from(id.0))),
         ParamValue::Sound(id) => Value::Real(Real::new(f64::from(id.0))),
         ParamValue::Particles(id) => Value::Real(Real::new(f64::from(id.0))),
+        // GML has no list value: a list reads as its first value, as a single value would.
+        ParamValue::List(l) => l.first().map_or(Value::Real(Real::ZERO), param_value),
     }
 }
 
