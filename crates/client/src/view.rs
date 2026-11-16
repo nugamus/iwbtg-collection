@@ -252,9 +252,23 @@ struct RunConfig {
     interpolate: bool,
 }
 
-/// Builds the sim for `pkg` and puts it in `world` with how it started (`shell::load` calls this
-/// before the run opens, so a game that does not start never opens).
-pub(crate) fn new_run(world: &mut World, pkg: &Package) -> Result<(), String> {
+/// A run's sim and how it started, built but not yet in the world.
+pub(crate) struct NewRun {
+    game: Game,
+    start: RunStart,
+}
+
+impl NewRun {
+    /// Puts the sim and how it started in `world`.
+    pub(crate) fn install(self, world: &mut World) {
+        world.insert_non_send(self.game);
+        world.insert_resource(self.start);
+    }
+}
+
+/// Builds the sim for `pkg` (`shell::load` calls this before the run opens, so a game that does
+/// not start never opens; nothing in `world` changes).
+pub(crate) fn new_run(world: &World, pkg: &Package) -> Result<NewRun, String> {
     let config = *world.resource::<RunConfig>();
     let def = Arc::clone(&pkg.def);
     let options = SimOptions {
@@ -284,13 +298,14 @@ pub(crate) fn new_run(world: &mut World, pkg: &Package) -> Result<(), String> {
     let sim =
         Sim::new(Arc::clone(&def), options.clone()).map_err(|e| format!("the game did not start: {e}"))?;
     def.room(sim.world().room).ok_or("the start room is missing")?;
-    world.insert_non_send(Game { sim });
-    world.insert_resource(RunStart {
-        def,
-        options,
-        fresh_seed: config.fresh_seed,
-    });
-    Ok(())
+    Ok(NewRun {
+        game: Game { sim },
+        start: RunStart {
+            def,
+            options,
+            fresh_seed: config.fresh_seed,
+        },
+    })
 }
 
 /// The size of the sim's room, in pixels.
@@ -418,7 +433,7 @@ pub fn run(
     app.insert_resource(view.config());
     let (title, (width, height)) = match first {
         Some(path) => {
-            crate::shell::load(app.world_mut(), path, trace_mode)?;
+            crate::shell::load(app.world_mut(), path, trace_mode).map_err(|e| e.to_string())?;
             let world = app.world();
             let size = room_size(world.non_send::<Game>());
             let id = world.resource::<RunStart>().def.id.clone();
