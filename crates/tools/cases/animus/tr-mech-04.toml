@@ -19,13 +19,6 @@ notes = [
 [vars]
 
 [unprobed]
-"bbox_bottom" = "no probe field for `bbox_bottom` (OPEN)"
-"bbox_left" = "no probe field for `bbox_left` (OPEN)"
-"bbox_right" = "no probe field for `bbox_right` (OPEN)"
-"bbox_top" = "no probe field for `bbox_top` (OPEN)"
-"place_free(x+hspeed,y)" = "a function call; the probe reads variables only (OPEN)"
-"place_free(x+hspeed,y+vspeed)" = "a function call; the probe reads variables only (OPEN)"
-"place_free(x,y+vspeed)" = "a function call; the probe reads variables only (OPEN)"
 
 [rooms]
 "room_18" = "room61"
