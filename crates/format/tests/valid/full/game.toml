@@ -6,14 +6,15 @@ title = "I Wanna Test Every Field"
 version = "1.0.0-rc.1+build.7"
 source_version = "4.2"
 engine_pack = "yuuutu"
-engine_rev = 1
+engine_rev = 0
 runner = "gm81"
 physics = "physics.toml"
 start_room = "title"
 tick_rate = 50
 max_ticks = 1_080_000
 object_order = [
-  "kid", "block", "spike", "save", "warp", "platform", "trigger", "@boss1",
+  "world", "kid", "kid_bullet", "bow", "blood", "blood_emitter", "game_over", "playerface",
+  "block", "spike", "save", "warp", "platform", "trigger", "@boss1",
 ]
 
 [[creators]]
@@ -41,8 +42,8 @@ ops_per_tick = 2_000_000
 start = { trigger = "run_start" }
 end = { trigger = "run_end" }
 stages = [
-  { id = "stage1", name = "Stage 1", trigger = "stage1_clear" },
-  { id = "boss", name = "Boss", trigger = "boss1_dead" },
+  { id = "stage1", name = "Stage 1", trigger = "enter_room", room = "stage1" },
+  { id = "boss", name = "Boss", trigger = "enter_room", room = "boss" },
 ]
 
 [tricks]
@@ -78,7 +79,9 @@ category = "Any%"
 version = "4.2"
 start = { trigger = "run_start" }
 end = { trigger = "run_end" }
-stages = [{ id = "boss", name = "Boss", trigger = "boss1_dead" }]
+stages = [
+  { id = "boss", name = "Boss", trigger = "enter_room", room = "boss" },
+]
 
 [key_art]
 image = "art/key.png"

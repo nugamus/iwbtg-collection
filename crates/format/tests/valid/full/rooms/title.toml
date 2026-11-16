@@ -1,3 +1,5 @@
 #:schema ../../../../../../docs/format/schema/v0/room.schema.json
 size = [800, 608]
-instances = []
+instances = [
+  { kind = "warp", x = 768, y = 512, room_to = "stage1" },
+]
