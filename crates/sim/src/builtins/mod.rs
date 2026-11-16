@@ -192,6 +192,9 @@ pub enum ParamType {
     Text,
     /// A particle system definition (`particles/<id>.toml`).
     Particles,
+    /// A list of values of the inner type (`system = ["a", "b"]`); a single value is a list of
+    /// one, and an empty list is a load error.
+    List(&'static ParamType),
 }
 
 /// A param set a built-in cannot use.
@@ -444,7 +447,7 @@ pub fn event_set_params(b: Builtin) -> &'static [&'static str] {
         Builtin::BreakableBlock => &["break_on"],
         Builtin::Orbit => &["mode", "destroy_outside_room"],
         Builtin::PathPlatform => &["start_on_touch"],
-        Builtin::ParticleSystem => &["on_room_start", "on_room_end"],
+        Builtin::ParticleSystem => &["on_room_start", "on_room_start_destroys_instance", "on_room_end"],
         _ => &[],
     }
 }

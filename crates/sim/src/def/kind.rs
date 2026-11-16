@@ -81,6 +81,9 @@ pub enum ParamValue {
     Sound(SoundId),
     /// A particle system definition (`particles/<id>.toml`).
     Particles(PartSystemDefId),
+    /// A list (a `ParamType::List` param written as a TOML array), each value resolved by the
+    /// list's inner type.
+    List(Vec<ParamValue>),
 }
 
 /// One `[defaults.<kind>]` variant of a bare built-in (docs/format/v0.md, `[defaults.<kind>]`):

@@ -576,10 +576,12 @@ mod particle_system {
     use crate::wp1_support::*;
 
     use iwbtg_sim::builtins;
+    use iwbtg_sim::def::RoomId;
     use iwbtg_sim::def::{
         Builtin, KindDef, KindId, ParamValue, PartCreateDef, PartEmitterDef, PartSystemDef, PartSystemDefId,
         PartTypeDef,
     };
+    use iwbtg_sim::events::{EventKind, dispatch};
     use iwbtg_sim::particles::{
         PartChild, PartRange, PartType, PartTypeId, Particles, Region, RegionDistr, RegionShape,
     };
@@ -714,6 +716,81 @@ mod particle_system {
             assert_eq!(fx.w.particles, p, "{word}");
             assert_eq!(fx.w.rng, rng, "{word}");
         }
+    }
+
+    /// A kind with `system` set to definitions 0 and 1 (`system()` and a copy at another depth)
+    /// and `extra` params.
+    fn listed(extra: &[(&str, ParamValue)]) -> (Fx, KindId) {
+        let mut b = builder();
+        let mut k = KindDef::new("fx", Builtin::ParticleSystem);
+        k.params.0.insert(
+            "system".into(),
+            ParamValue::List(vec![
+                ParamValue::Particles(PartSystemDefId(1)),
+                ParamValue::Particles(PartSystemDefId(0)),
+            ]),
+        );
+        for (name, v) in extra {
+            k.params.0.insert((*name).into(), v.clone());
+        }
+        k.events = builtins::event_set(Builtin::ParticleSystem, &k);
+        let kind = b.kind(k);
+        b.def_mut().particle_systems.push(system());
+        let mut second = system();
+        second.name = "fx2".into();
+        second.depth = r(-100000.0);
+        second.emitters[0].burst = Some((0, 7));
+        b.def_mut().particle_systems.push(second);
+        let mut fx = Fx::new(b.build().unwrap());
+        fx.rules.num.particles_draw_rng = true;
+        (fx, kind)
+    }
+
+    /// A list builds each system in list order, all of it before the next (client#826), so the
+    /// draws are those of building them one after the other; each tick updates both.
+    #[test]
+    fn a_list_builds_each_system_in_order() {
+        let (mut fx, kind) = listed(&[]);
+        spawn(&mut fx, kind);
+        let mut p = Particles::default();
+        let mut rng = Rng::new(1);
+        p.build(&mut rng, &fx.def.particle_systems[1]).unwrap();
+        p.build(&mut rng, &fx.def.particle_systems[0]).unwrap();
+        assert_eq!(fx.w.particles, p);
+        assert_eq!(fx.w.rng, rng);
+        fx.idle(4);
+        for _ in 0..4 {
+            p.update(&mut rng).unwrap();
+        }
+        assert_eq!(fx.w.particles, p);
+        assert_eq!(fx.w.rng, rng);
+    }
+
+    /// Room Start's call reaches every system; in an excepted room Room Start does nothing at
+    /// all, and elsewhere `on_room_start_destroys_instance` destroys the instance after the call,
+    /// so its `on_destroy` runs too (go-the-spook-house oRainSys, client#826).
+    #[test]
+    fn room_start_skips_excepted_rooms_and_may_destroy_the_instance() {
+        let except = ParamValue::List(vec![ParamValue::Room(RoomId(3))]);
+        let (mut fx, kind) = listed(&[
+            ("on_room_start", ParamValue::Str("destroy_emitters".into())),
+            ("on_room_start_except", except),
+            ("on_room_start_destroys_instance", ParamValue::Bool(true)),
+            ("on_destroy", ParamValue::Str("destroy".into())),
+        ]);
+        let id = spawn(&mut fx, kind);
+        let built = fx.w.particles.clone();
+        fx.w.room = RoomId(3);
+        dispatch(&mut fx.ctx(), id, &EventKind::RoomStart);
+        assert!(fx.w.exists(id), "an excepted room keeps the instance");
+        assert_eq!(fx.w.particles, built, "and makes no call");
+        fx.w.room = RoomId(4);
+        dispatch(&mut fx.ctx(), id, &EventKind::RoomStart);
+        assert!(!fx.w.exists(id), "destroyed after the call");
+        assert!(
+            fx.w.particles.systems.iter().all(|s| s.destroyed),
+            "on_destroy destroyed both systems"
+        );
     }
 }
 

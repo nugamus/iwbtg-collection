@@ -174,17 +174,26 @@ pub fn number(v: &toml::Value) -> Result<f64, String> {
     }
 }
 
-/// A param value by its TOML type: numbers are reals, booleans flags, strings text. Reference
-/// params (rooms, kinds, sounds) are resolved later from the built-in's `ParamSpec`.
+/// A param value by its TOML type: numbers are reals, booleans flags, strings text, arrays lists
+/// (of single values). Reference params (rooms, kinds, sounds) are resolved later from the
+/// built-in's `ParamSpec`.
 pub fn param_value(v: &toml::Value) -> Result<ParamValue, String> {
     match v {
+        toml::Value::Array(items) => items
+            .iter()
+            .map(|i| match i {
+                toml::Value::Array(_) => Err("a param list holds single values, not lists".to_owned()),
+                other => param_value(other),
+            })
+            .collect::<Result<_, _>>()
+            .map(ParamValue::List),
         toml::Value::Boolean(b) => Ok(ParamValue::Bool(*b)),
         toml::Value::String(s) => Ok(ParamValue::Str(s.clone())),
         toml::Value::Integer(_) | toml::Value::Float(_) | toml::Value::Table(_) => {
             number(v).map(|n| ParamValue::Real(Real::new(n)))
         }
         other => Err(format!(
-            "param values are numbers, booleans or strings, not a {}",
+            "param values are numbers, booleans, strings or lists of them, not a {}",
             other.type_str()
         )),
     }
@@ -249,7 +258,11 @@ mod tests {
             param_value(&toml::Value::Boolean(true)),
             Ok(ParamValue::Bool(true))
         );
-        assert!(param_value(&toml::Value::Array(vec![])).is_err());
+        assert_eq!(
+            param_value(&toml::Value::Array(vec![toml::Value::String("a".into())])),
+            Ok(ParamValue::List(vec![ParamValue::Str("a".into())]))
+        );
+        assert!(param_value(&toml::Value::Array(vec![toml::Value::Array(vec![])])).is_err());
         assert!(number(&toml::Value::Float(f64::INFINITY)).is_err());
         let mut bits = toml::map::Map::new();
         bits.insert("bits".into(), toml::Value::String("3FDCCCCCCCCCCCCD".into()));

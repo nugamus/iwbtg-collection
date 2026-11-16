@@ -64,7 +64,7 @@ fn every_converter_package_loads_in_trace_mode() {
         }
         if name == "rely_the_needle" {
             let all: String = report.diagnostics.iter().map(|d| format!("{d}\n")).collect();
-            for cr in ["CR1", "CR3", "CR4", "CR5"] {
+            for cr in ["CR1", "CR3"] {
                 assert!(
                     all.contains(&format!("converter request {cr}")),
                     "rely names {cr}:\n{all}"

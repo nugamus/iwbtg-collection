@@ -1,5 +1,18 @@
 {
   "$defs": {
+    "AlphaValue": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Number",
+          "description": "A fixed value."
+        },
+        {
+          "$ref": "#/$defs/RandomAlpha",
+          "description": "`{ random = [min, max] }`: the original's code passes a random value (go-the-spook-house\n`random_range(0.12, 0.32)`, client#826). Drawing only: the client picks one value per\nbuilt system from its own generator; the original's RNG draw stays with the code that\nmakes it."
+        }
+      ],
+      "description": "One `part_type_alpha1/2/3` value."
+    },
     "ChildFile": {
       "additionalProperties": false,
       "description": "`part_type_step` or `part_type_death`.",
@@ -160,6 +173,25 @@
       ],
       "description": "A number, or { bits = \"<16 hex digits of an IEEE double>\" } for a constant that must match bit for bit."
     },
+    "RandomAlpha": {
+      "additionalProperties": false,
+      "description": "`{ random = [min, max] }`.",
+      "properties": {
+        "random": {
+          "description": "The range, `[min, max]`.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "random"
+      ],
+      "type": "object"
+    },
     "RegionShapeName": {
       "description": "`ps_shape_*`.",
       "oneOf": [
@@ -244,9 +276,9 @@
           "type": "boolean"
         },
         "alpha": {
-          "description": "`part_type_alpha1/2/3`: one to three values; default `[1]`.",
+          "description": "`part_type_alpha1/2/3`: one to three values, each a number or `{ random = [min, max] }`;\ndefault `[1]`.",
           "items": {
-            "$ref": "#/$defs/Number"
+            "$ref": "#/$defs/AlphaValue"
           },
           "type": [
             "array",
