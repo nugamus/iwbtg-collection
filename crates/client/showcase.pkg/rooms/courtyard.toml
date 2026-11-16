@@ -1,0 +1,26 @@
+#:schema ../../../../docs/format/schema/v0/room.schema.json
+size = [800, 608]
+file_speed = 50
+views_enabled = false
+background_color = "#090b1e"
+# The night sky, clouds drifting left a quarter pixel per tick, and the hills in front of them.
+backgrounds = [
+  { image = "sky", tile = [false, false] },
+  { image = "clouds", offset = [0, 200], speed = [-0.25, 0], tile = [true, false] },
+  { image = "hills", offset = [0, 388], tile = [true, false] },
+]
+instances = [
+  { kind = "kid_start", x = 32, y = 512 },
+  { kind = "block", x = 0, y = 160, run = [1, 14], visible = false },
+  { kind = "block", x = 768, y = 160, run = [1, 14], visible = false },
+  { kind = "block", x = 480, y = 416, run = [2, 6], visible = false },
+  { kind = "block", x = 32, y = 544, run = [14, 2], visible = false },
+  { kind = "block", x = 544, y = 544, run = [7, 2], visible = false },
+  { kind = "music", x = 0, y = 0, track = "night", mode = "every_step_if_not_playing" },
+  { kind = "@fireflies", x = 0, y = 0 },
+  { kind = "sign", x = 128, y = 512, mode = "while_overlapping", text = "Welcome to the IWBTG Collection showcase! Arrows move, Shift jumps (press it again in the air for a double jump), Z shoots. Shoot the save stone or press S on it to save; R takes you back to your save." },
+  { kind = "save", x = 224, y = 512, on_shot = true },
+  { kind = "spike", x = 352, y = 512, run = [2, 1], dir = "up" },
+  { kind = "spike", x = 544, y = 512, run = [4, 1], dir = "up" },
+  { kind = "warp", x = 736, y = 512, room_to = "hall" },
+]

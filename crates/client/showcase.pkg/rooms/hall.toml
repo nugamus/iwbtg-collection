@@ -1,0 +1,45 @@
+#:schema ../../../../docs/format/schema/v0/room.schema.json
+size = [2400, 608]
+file_speed = 50
+views_enabled = true
+views = [
+  { visible = true, view = [0, 0, 800, 608], port = [0, 0, 800, 608], follow = "kid", border = [320, 64] },
+]
+background_color = "#090b1e"
+# Stars through the windows, the wall with its windows, and mist drifting over the floor in
+# front of everything (a foreground layer).
+backgrounds = [
+  { image = "night", tile = [true, false] },
+  { image = "hall_wall", tile = [true, false] },
+  { image = "mist", foreground = true, offset = [0, 500], speed = [0.5, 0], tile = [true, false] },
+]
+instances = [
+  { kind = "kid_start", x = 64, y = 512 },
+  { kind = "block", x = 0, y = 0, run = [75, 2], visible = false },
+  { kind = "block", x = 0, y = 64, run = [1, 17], visible = false },
+  { kind = "block", x = 2368, y = 64, run = [1, 17], visible = false },
+  { kind = "block", x = 896, y = 384, run = [6, 1], visible = false },
+  { kind = "block", x = 544, y = 448, visible = false },
+  { kind = "block", x = 1728, y = 448, run = [6, 5], visible = false },
+  { kind = "block", x = 416, y = 480, run = [2, 4], visible = false },
+  { kind = "block", x = 1696, y = 480, run = [1, 4], visible = false },
+  { kind = "block", x = 1280, y = 512, run = [1, 3], visible = false },
+  { kind = "block", x = 1408, y = 512, run = [1, 3], visible = false },
+  { kind = "block", x = 1664, y = 512, run = [1, 3], visible = false },
+  { kind = "block", x = 32, y = 544, run = [12, 2], visible = false },
+  { kind = "block", x = 480, y = 544, run = [25, 2], visible = false },
+  { kind = "block", x = 1312, y = 544, run = [3, 2], visible = false },
+  { kind = "block", x = 1440, y = 544, run = [7, 2], visible = false },
+  { kind = "block", x = 1920, y = 544, run = [14, 2], visible = false },
+  { kind = "music", x = 0, y = 0, track = "night", mode = "every_step_if_not_playing" },
+  { kind = "spike", x = 256, y = 512, run = [2, 1], dir = "up" },
+  { kind = "spike", x = 480, y = 512, run = [5, 1], dir = "up" },
+  { kind = "save", x = 736, y = 512, on_shot = true },
+  { kind = "spike", x = 896, y = 416, run = [6, 1], dir = "down" },
+  { kind = "spike", x = 1216, y = 512, run = [2, 1], dir = "up" },
+  { kind = "spike", x = 1312, y = 512, run = [3, 1], dir = "up" },
+  { kind = "spike", x = 1440, y = 512, run = [3, 1], dir = "up" },
+  { kind = "save", x = 1824, y = 416, on_shot = true },
+  { kind = "spike", x = 1920, y = 512, run = [4, 1], dir = "up" },
+  { kind = "warp", x = 2304, y = 512, room_to = "summit" },
+]

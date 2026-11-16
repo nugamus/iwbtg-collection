@@ -532,7 +532,7 @@ mod tests {
     /// until a clear on this board, and the PB once there is one.
     #[test]
     fn the_card_reads_the_package_and_your_pb() {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-clear.pkg");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
         let text = std::fs::read_to_string(dir.join("game.toml")).unwrap();
         let manifest = Manifest::parse(&text).unwrap();
         let mut book = Book::default();

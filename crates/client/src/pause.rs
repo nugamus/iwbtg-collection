@@ -787,7 +787,7 @@ mod tests {
     fn paused_ticks_count_while_the_timer_runs() {
         use bevy::ecs::system::RunSystemOnce;
         use iwbtg_sim::input::InputFrame;
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-clear.pkg");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
         let pkg = crate::package::open(&dir, false).unwrap();
         let mut world = crate::view::test_world(&pkg);
         world.insert_resource(Menu {
@@ -832,7 +832,7 @@ mod tests {
     #[test]
     fn a_controller_opens_navigates_picks_and_closes_the_menu() {
         use bevy::ecs::system::RunSystemOnce;
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-clear.pkg");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
         let pkg = crate::package::open(&dir, false).unwrap();
         let mut world = crate::view::test_world(&pkg);
         world.init_resource::<ButtonInput<KeyCode>>();
@@ -922,7 +922,7 @@ mod tests {
     #[test]
     fn picks_close_the_menu_and_do_their_item() {
         use bevy::ecs::system::RunSystemOnce;
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-clear.pkg");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
         let pkg = crate::package::open(&dir, false).unwrap();
         let mut world = crate::view::test_world(&pkg);
         world.init_resource::<Messages<AppExit>>();
@@ -951,7 +951,7 @@ mod tests {
     fn escape_sends_the_game_nothing_on_any_frame_timing() {
         use bevy::ecs::system::RunSystemOnce;
         use iwbtg_sim::input::{InputFrame, vk};
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-clear.pkg");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
         let pkg = crate::package::open(&dir, false).unwrap();
         assert_eq!(
             Bindings::default().key_action(vk::ESCAPE),

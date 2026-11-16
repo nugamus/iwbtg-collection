@@ -1,0 +1,5 @@
+#:schema ../../../../docs/format/schema/v0/sprite.schema.json
+frames = 1
+frame_size = [480, 160]
+origin = [240, 80]
+collision = "none"

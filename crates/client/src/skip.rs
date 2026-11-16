@@ -113,7 +113,7 @@ mod tests {
 
     /// The demo package with a cutscene that holds while a bullet exists.
     fn def() -> Arc<GameDef> {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo.pkg");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/input.pkg");
         let pkg = crate::package::open(&dir, false).unwrap();
         let mut def = (*pkg.def).clone();
         let bullet = def
@@ -221,7 +221,7 @@ mod tests {
     #[test]
     fn the_skip_key_runs_the_region_out() {
         use bevy::ecs::system::RunSystemOnce;
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demo.pkg");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/input.pkg");
         let mut world = crate::view::test_world(&crate::package::open(&dir, false).unwrap());
         world.insert_resource(crate::audio::Queue::new(0));
         let def = def();

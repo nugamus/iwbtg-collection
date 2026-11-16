@@ -1,3 +1,0 @@
-#:schema ../../../../../docs/format/schema/v0/background.schema.json
-tile_size = [32, 32]
-separation = [0, 0]
