@@ -13,12 +13,13 @@ mod bounce_835 {
     use std::path::PathBuf;
 
     use iwbtg_sim::builtins;
-    use iwbtg_sim::collide::bounce::{plain_bounce, precise_direction, precise_speeds, snap};
+    use iwbtg_sim::collide::bounce::{plain_bounce, precise_direction};
     use iwbtg_sim::collide::{move_bounce_all, move_bounce_solid};
     use iwbtg_sim::def::testing::GameDefBuilder;
     use iwbtg_sim::def::{Builtin, GameDef, KindDef, KindId, ParamValue, RoomDef, RoomId};
     use iwbtg_sim::input::InputFrame;
-    use iwbtg_sim::num::Real;
+    use iwbtg_sim::motion::Motion;
+    use iwbtg_sim::num::{Real, snap_to_int};
     use iwbtg_sim::rules::{NumRules, RunnerRules};
     use iwbtg_sim::script::ScriptRuntime;
     use iwbtg_sim::sound::DllMode;
@@ -237,7 +238,7 @@ mod bounce_835 {
     /// research#193: the snap to an integer within 1e-4 (strict); +0.0 for residues, -0.0 kept.
     #[test]
     fn snap_rounds_only_near_integers() {
-        let bits = |x: f64| snap(r(x)).get().to_bits();
+        let bits = |x: f64| snap_to_int(r(x)).get().to_bits();
         assert_eq!(bits(6.123_233_995_736_766e-17), 0.0f64.to_bits());
         assert_eq!(
             bits(-6.123_233_995_736_766e-17),
@@ -250,8 +251,26 @@ mod bounce_835 {
         assert_eq!(bits(0.000_1), 0.000_1f64.to_bits(), "1e-4 is not < 1e-4");
         assert_eq!(bits(1.5), 1.5f64.to_bits());
         // Direction 90 at speed 5: hspeed exactly +0.0, vspeed exactly -5.
-        let (h, v) = precise_speeds(r(5.0), r(90.0));
+        let (h, v) = speeds_at(r(5.0), r(90.0));
         assert_eq!((h.get().to_bits(), v.get()), (0.0f64.to_bits(), -5.0));
+    }
+
+    /// `hspeed` and `vspeed` after writing `speed`, then `direction` (what a precise bounce does
+    /// with the speed kept, and how each bulk probe got its h0 and v0).
+    fn speeds_at(speed: Real, direction: Real) -> (Real, Real) {
+        let mut m = Motion::new_at(r(0.0), r(0.0));
+        m.set_speed(speed).unwrap();
+        m.set_direction(direction).unwrap();
+        (m.hspeed(), m.vspeed())
+    }
+
+    /// One ulp apart in total over `(h, v)` at direction 45 or 220: the M6 gap (num/trig.rs,
+    /// research#154) where our libm `sin` of 45 and `cos` of 220 degrees are one ulp from the
+    /// recorder's. No other bulk direction (multiples of 5) has a gap.
+    fn m6_gap(d: Real, got: (Real, Real), want: (f64, f64)) -> bool {
+        let ulps = |g: Real, w: f64| g.get().to_bits().abs_diff(w.to_bits());
+        [45.0f64, 220.0].iter().any(|a| d.get().to_bits() == a.to_bits())
+            && ulps(got.0, want.0) + ulps(got.1, want.1) == 1
     }
 
     #[test]
@@ -339,7 +358,9 @@ mod bounce_835 {
     /// Every bulk row: the not-precise rule gives the recorded `hspeed` and `vspeed` exactly;
     /// the precise rule gives the recorded direction, and `hspeed` and `vspeed` bit for bit,
     /// zero sign included (libm and the snap, research#193), except a one-ulp `hspeed` at
-    /// direction 220, a known M6 gap of our libm against the recorder (num/trig.rs).
+    /// direction 220, a known M6 gap of our libm against the recorder (num/trig.rs). Every
+    /// row's `h0` and `v0` (the probe's speed and direction writes) match `Motion::set_speed`
+    /// and `set_direction` the same way.
     #[test]
     fn bulk_tables_match_the_rule() {
         let nr = NumRules::default();
@@ -368,6 +389,7 @@ mod bounce_835 {
             ]
             .map(|c| t.col(c));
             let (mut plain, mut precise, mut changed, mut off) = (0, 0, 0, 0);
+            let (mut setters, mut setter_off) = (0, 0);
             for (i, row) in t.rows.iter().enumerate() {
                 let f = |c: usize| num(&row[c]);
                 let m = tag(&row[mode]);
@@ -377,6 +399,22 @@ mod bounce_835 {
                 }
                 let is_precise = [1, 3, 5, 7].contains(&m);
                 let (h, v) = (f(h0), f(v0));
+                // h0, v0: the probe's speed and direction writes (research#193 snap). The `speed`
+                // column is read after the bounce, and a not-precise bounce recomputes it from
+                // the vector (one ulp off at times), so take the written speed it is nearest to.
+                let written = [1.5, 3.0, 5.0, 8.0, 60.0]
+                    .into_iter()
+                    .min_by(|a: &f64, b: &f64| (a - f(speed)).abs().total_cmp(&(b - f(speed)).abs()))
+                    .unwrap_or(0.0);
+                let got = speeds_at(r(written), r(f(d0)));
+                if (got.0.get().to_bits(), got.1.get().to_bits()) != (h.to_bits(), v.to_bits()) {
+                    assert!(
+                        m6_gap(r(f(d0)), got, (h, v)),
+                        "{at}: h0, v0 {got:?} vs ({h}, {v})"
+                    );
+                    setter_off += 1;
+                }
+                setters += 1;
                 if is_precise {
                     precise += 1;
                     let blocked: Vec<bool> = row[fm].chars().map(|c| c != '1').collect();
@@ -389,18 +427,16 @@ mod bounce_835 {
                         Some(d) => {
                             let diff = (f(d1) - d.get() + 540.0).rem_euclid(360.0) - 180.0;
                             assert!(diff.abs() < 1e-9, "{at}: direction {} vs {}", d.get(), f(d1));
-                            let (gh, gv) = precise_speeds(r(f(speed)), d);
-                            let ulps = |g: Real, want: f64| g.get().to_bits().abs_diff(want.to_bits());
-                            let (uh, uv) = (ulps(gh, f(h1)), ulps(gv, f(v1)));
-                            if uh + uv > 0 {
-                                // M6 (num/trig.rs, research#154): our libm `cos` of 220 degrees
-                                // is one ulp from the recorder's; the rule itself matches.
+                            let got = speeds_at(r(f(speed)), d);
+                            if (got.0.get().to_bits(), got.1.get().to_bits())
+                                != (f(h1).to_bits(), f(v1).to_bits())
+                            {
                                 assert!(
-                                    d.get().to_bits() == 220.0f64.to_bits() && uh + uv == 1,
+                                    m6_gap(d, got, (f(h1), f(v1))),
                                     "{at}: direction {} ({}, {}) vs ({}, {})",
                                     d.get(),
-                                    gh.get(),
-                                    gv.get(),
+                                    got.0.get(),
+                                    got.1.get(),
                                     f(h1),
                                     f(v1)
                                 );
@@ -422,7 +458,7 @@ mod bounce_835 {
                 }
             }
             eprintln!(
-                "{case}: {plain} not-precise rows, {precise} precise rows ({changed} changed, {off} off)"
+                "{case}: {plain} not-precise rows, {precise} precise rows ({changed} changed, {off} off); {setters} h0/v0 ({setter_off} off)"
             );
             assert!(plain + precise > 0, "{case} has rows");
         }

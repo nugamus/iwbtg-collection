@@ -35,8 +35,21 @@ fn report(diags: &mut Vec<Diagnostic>, severity: Severity, file: &str, message: 
 
 /// Why `value` does not fit `spec`, if it does not.
 fn type_problem(spec: &ParamSpec, value: &ParamValue) -> Option<String> {
-    let wrong = |want: &str| Some(format!("param `{}` must be {want}", spec.name));
-    match (spec.ty, value) {
+    problem(spec.name, spec.ty, value)
+}
+
+/// Why `value` does not fit type `ty` of param `name`, if it does not. A list param takes a list
+/// of at least one value of its inner type, or a single value.
+fn problem(name: &str, ty: ParamType, value: &ParamValue) -> Option<String> {
+    let wrong = |want: &str| Some(format!("param `{name}` must be {want}"));
+    match (ty, value) {
+        (ParamType::List(_), ParamValue::List(items)) if items.is_empty() => Some(format!(
+            "param `{name}` is an empty list; give at least one value or leave it out"
+        )),
+        (ParamType::List(inner), ParamValue::List(items)) => {
+            items.iter().find_map(|v| problem(name, *inner, v))
+        }
+        (ParamType::List(inner), v) => problem(name, *inner, v),
         (ParamType::Real, ParamValue::Real(_))
         | (ParamType::Bool, ParamValue::Bool(_))
         | (ParamType::Room, ParamValue::Room(_))
@@ -53,8 +66,7 @@ fn type_problem(spec: &ParamSpec, value: &ParamValue) -> Option<String> {
                 None
             } else {
                 Some(format!(
-                    "param `{}` is `{s}`; it must be one of: {}",
-                    spec.name,
+                    "param `{name}` is `{s}`; it must be one of: {}",
                     words.join(", ")
                 ))
             }
@@ -84,6 +96,17 @@ fn check_set(specs: &[ParamSpec], params: &Params, who: &str) -> Vec<String> {
         }
     }
     out
+}
+
+/// Lists in the params of a base without specs (a script kind's params are single values; only a
+/// built-in's list params take lists).
+fn untyped_lists(params: &Params, who: &str) -> Vec<String> {
+    params
+        .0
+        .iter()
+        .filter(|(_, v)| matches!(v, ParamValue::List(_)))
+        .map(|(k, _)| format!("{who}: param `{k}` is a list; only a built-in's list params take lists"))
+        .collect()
 }
 
 /// `kind` params with `over` on top.
@@ -121,6 +144,10 @@ pub fn check(def: &GameDef, trace: bool, diags: &mut Vec<Diagnostic>) {
     // The kind's own params.
     for (i, k) in def.kinds.iter().enumerate() {
         if skipped(k.base) {
+            let who = format!("`{}` ({})", k.name, k.base.name());
+            for msg in untyped_lists(&k.params, &who) {
+                report(diags, severity, &kind_file(k), msg);
+            }
             continue;
         }
         let Some(specs) = specs_of(k.base) else {
@@ -142,6 +169,10 @@ pub fn check(def: &GameDef, trace: bool, diags: &mut Vec<Diagnostic>) {
             }
             let Some(k) = def.kinds.get(idx) else { continue };
             if skipped(k.base) {
+                let who = format!("an instance of `{}` ({})", k.name, k.base.name());
+                for msg in untyped_lists(&inst.params, &who) {
+                    report(diags, severity, &file, msg);
+                }
                 continue;
             }
             let Some(specs) = specs_of(k.base) else {

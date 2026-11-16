@@ -316,8 +316,8 @@ struct Loader<'a> {
     derived: BTreeMap<(KindId, usize), KindId>,
     /// For derived kinds: the bare kind whose `object_order` entries rank them.
     rank_kind: BTreeMap<KindId, KindId>,
-    /// Kinds derived for a placed instance whose params pick other classes (#659): (kind, the
-    /// class-picking params as `k=v,...`) to kind.
+    /// Kinds derived for a placed instance whose params pick other classes or events (#659,
+    /// #853): (kind, the picking params as `k=v,...`) to kind.
     class_derived: BTreeMap<(KindId, String), KindId>,
     /// A package object's `counts_as` (and legacy role) classes, which its derived kinds keep.
     kind_extra: BTreeMap<KindId, ClassMask>,
@@ -1363,12 +1363,28 @@ impl<'a> Loader<'a> {
         specs?.iter().find(|s| s.name == key).map(|s| s.ty)
     }
 
-    /// Turns a text param into a room, kind or sound reference when the base's spec says so.
+    /// Turns a text param into a room, kind or sound reference when the base's spec says so; a
+    /// list param resolves each of its values by the list's inner type.
     fn resolve_param(&mut self, base: Builtin, key: &str, value: ParamValue, file: &str) -> ParamValue {
+        let ty = self.spec_type(base, key);
+        match (ty, value) {
+            (Some(ParamType::List(inner)), ParamValue::List(items)) => ParamValue::List(
+                items
+                    .into_iter()
+                    .map(|v| self.resolve_ref(Some(*inner), key, v, file))
+                    .collect(),
+            ),
+            (Some(ParamType::List(inner)), v) => self.resolve_ref(Some(*inner), key, v, file),
+            (ty, v) => self.resolve_ref(ty, key, v, file),
+        }
+    }
+
+    /// Turns text into a reference of type `ty` (a room, kind, sound or particles file).
+    fn resolve_ref(&mut self, ty: Option<ParamType>, key: &str, value: ParamValue, file: &str) -> ParamValue {
         let ParamValue::Str(s) = &value else {
             return value;
         };
-        let found = match self.spec_type(base, key) {
+        let found = match ty {
             Some(ParamType::Room) => self.room_ids.get(s).copied().map(ParamValue::Room),
             Some(ParamType::Kind) => self.kind_by_ref(s).map(ParamValue::Kind),
             Some(ParamType::Sound) => self
@@ -1765,17 +1781,18 @@ impl<'a> Loader<'a> {
         Ok(self.class_kind(kind, params))
     }
 
-    /// `kind`, or a kind derived from it when the instance's class-picking params
-    /// (`objects::class_params`) give other classes than the kind's (#659): `<kind>[k=v,...]` with
-    /// those params, ranked by the kind's `object_order` entries. Instance classes come from the
-    /// kind (`World::spawn`), as a GM instance's come from its object.
+    /// `kind`, or a kind derived from it when the instance's params that pick classes or events
+    /// (`objects::kind_params`) give other classes or another event set than the kind's (#659,
+    /// #853): `<kind>[k=v,...]` with those params, ranked by the kind's `object_order` entries.
+    /// Instance classes and events come from the kind (`World::spawn`, `KindDef::events`), as a
+    /// GM instance's come from its object.
     fn class_kind(&mut self, kind: KindId, params: &Params) -> KindId {
         let Some(k) = self.kinds.get(kind.index().unwrap_or(usize::MAX)) else {
             return kind;
         };
-        let picked: Vec<(String, ParamValue)> = objects::class_params(k.base)
-            .iter()
-            .filter_map(|key| params.0.get(*key).map(|v| ((*key).to_owned(), v.clone())))
+        let picked: Vec<(String, ParamValue)> = objects::kind_params(k.base)
+            .into_iter()
+            .filter_map(|key| params.0.get(key).map(|v| (key.to_owned(), v.clone())))
             .collect();
         if picked.is_empty() {
             return kind;
@@ -1783,10 +1800,10 @@ impl<'a> Loader<'a> {
         let mut merged = k.params.clone();
         merged.0.extend(picked.iter().cloned());
         let extra = self.kind_extra.get(&kind).copied().unwrap_or(ClassMask::NONE);
-        let classes = kind_classes(k.base, &merged, extra);
-        if classes == k.classes {
+        if !objects::picks_other_kind(k, &merged, extra) {
             return kind;
         }
+        let classes = kind_classes(k.base, &merged, extra);
         let tag = picked
             .iter()
             .map(|(key, v)| format!("{key}={}", show_param(v)))
@@ -2359,7 +2376,15 @@ impl<'a> Loader<'a> {
                 pending_call(&mut self.pending, || builtins::event_set(kind.base, &kind))
             };
             if let Some(mut set) = set {
-                if let Some(masks) = self.collides.get(&kind.name) {
+                // A derived kind (`<kind>[...]`) listens to what its kind's script does.
+                let root = u32::try_from(i)
+                    .ok()
+                    .and_then(|i| self.rank_kind.get(&KindId(i)))
+                    .and_then(|r| r.index());
+                let name = root
+                    .and_then(|r| self.kinds.get(r))
+                    .map_or(&kind.name, |r| &r.name);
+                if let Some(masks) = self.collides.get(name) {
                     set.collisions.extend(masks.iter().copied());
                 }
                 self.kinds[i].events = set;
@@ -2940,6 +2965,7 @@ fn show_param(p: &ParamValue) -> String {
         ParamValue::Kind(k) => format!("kind#{}", k.0),
         ParamValue::Sound(s) => format!("sound#{}", s.0),
         ParamValue::Particles(p) => format!("particles#{}", p.0),
+        ParamValue::List(l) => format!("[{}]", l.iter().map(show_param).collect::<Vec<_>>().join(", ")),
     }
 }
 

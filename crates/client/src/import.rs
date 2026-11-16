@@ -3,11 +3,11 @@
 //! - An `.iwbz` the client opens (from the command line, which is also what an OS file
 //!   association calls) is kept in the library, `library/<id>.iwbz` in the data folder, for game
 //!   select (M6) to list.
-//! - A package dropped on the window (an `.iwbz` file or a package folder) is checked, then the
-//!   client starts again on it and this one exits. Until game select can switch games in place,
-//!   that is the simplest way to open another game; a run in progress ends as on any exit (its
-//!   replay is kept). A drop that does not open shows a notice with the file's name and why
-//!   (`ui::notice`, #648) and the game goes on.
+//! - A package dropped on the window (an `.iwbz` file or a package folder) opens in the same
+//!   window, from the select screen or during a run (`shell::start`, #841): a run in progress
+//!   ends as when it is left (its replay and stats are finished on `OnExit(Run)`), and the
+//!   client keeps the flags it started with. A drop that does not open shows a notice with the
+//!   file's name and why (`ui::notice`, #648) and nothing changes.
 
 use std::path::Path;
 
@@ -15,7 +15,7 @@ use bevy::prelude::*;
 use bevy::window::FileDragAndDrop;
 
 use crate::package::{self, OpenError};
-use crate::shell::{AppScreen, InRun, LoadedPackage};
+use crate::shell::{self, AppScreen, InRun, LoadedPackage, StartError, StartFailure};
 use crate::storage::{self, Store};
 use crate::ui::notice;
 
@@ -65,22 +65,28 @@ pub fn remember(store: &Store, id: &str, bytes: &[u8]) -> Result<bool, String> {
     Ok(true)
 }
 
-fn open_dropped(mut drops: MessageReader<FileDragAndDrop>, mut exit: MessageWriter<AppExit>) {
+fn open_dropped(mut drops: MessageReader<FileDragAndDrop>, mut commands: Commands) {
     for drop in drops.read() {
         let FileDragAndDrop::DroppedFile { path_buf, .. } = drop else {
             continue;
         };
-        match restart_on(path_buf) {
-            Ok(()) => {
-                exit.write(AppExit::Success);
-                return;
-            }
-            Err(refused) => {
+        let path = path_buf.clone();
+        commands.queue(move |world: &mut World| {
+            if let Err(refused) = open_in_place(world, &path) {
                 storage::console_warn(&refused.log);
                 notice::post(notice::Kind::Drop, &refused.notice);
             }
-        }
+        });
     }
+}
+
+/// Checks that `path` is a package, then plays it in place of what is on screen
+/// (`shell::start`). On an error nothing changed.
+fn open_in_place(world: &mut World, path: &Path) -> Result<(), Refused> {
+    if !(package::is_iwbz(path) || path.join("game.toml").is_file()) {
+        return Err(Refused::not_a_package(path));
+    }
+    shell::start(world, path).map_err(|e| Refused::not_started(&e))
 }
 
 /// Why a dropped path did not open.
@@ -143,11 +149,13 @@ impl Refused {
         }
     }
 
-    fn no_restart(e: std::io::Error) -> Self {
-        let log = format!("cannot restart the client: {e}");
-        Self {
-            notice: format!("The client could not start again: {e}"),
-            log,
+    fn not_started(e: &StartError) -> Self {
+        match &e.why {
+            StartFailure::Open(open) => Self::not_opened(&e.path, open),
+            StartFailure::Run(why) => Self {
+                log: e.to_string(),
+                notice: format!("{} did not start: {why}", file_name(&e.path)),
+            },
         }
     }
 }
@@ -158,20 +166,6 @@ fn file_name(path: &Path) -> String {
         || path.display().to_string(),
         |n| n.to_string_lossy().into_owned(),
     )
-}
-
-/// Checks that `path` is a package that opens, then starts a new client on it.
-fn restart_on(path: &Path) -> Result<(), Refused> {
-    if !(package::is_iwbz(path) || path.join("game.toml").is_file()) {
-        return Err(Refused::not_a_package(path));
-    }
-    package::open(path, false).map_err(|e| Refused::not_opened(path, &e))?;
-    let exe = std::env::current_exe().map_err(Refused::no_restart)?;
-    std::process::Command::new(exe)
-        .arg(path)
-        .spawn()
-        .map_err(Refused::no_restart)?;
-    Ok(())
 }
 
 #[cfg(test)]
@@ -200,7 +194,11 @@ mod tests {
 
     #[test]
     fn a_drop_that_is_not_a_package_is_refused() {
-        let err = restart_on(Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml").as_path()).unwrap_err();
+        let err = open_in_place(
+            &mut World::new(),
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml"),
+        )
+        .unwrap_err();
         assert!(err.log.contains("not a package"), "{err:?}");
         assert!(
             err.notice.starts_with("Cargo.toml is not a game package"),

@@ -6,7 +6,7 @@
 //! the mods, with the amber Unranked pill and the reason when the run will not reach a board.
 //! While it shows the sim does not tick, the game and the HUD are hidden and the backdrop takes
 //! the loading dim. It stays at least [`MIN_SECONDS`] and then starts the run by itself; Escape
-//! (or Start) quits until game select exists (#148). The package is already loaded when the
+//! (or Start) goes back to the select list, else quits (the card says which). The package is already loaded when the
 //! window opens, so the progress line fills over the minimum time.
 //!
 //! [`Info`] is what the card shows ([`Info::new`]); `page.rs` draws it.
@@ -47,7 +47,15 @@ pub struct LoadingArgs {
     /// Screenshot checks: keep the loading card up with the artboard's sample PB.
     #[arg(long, hide = true)]
     pub loading_preview: bool,
+    /// With `--loading-preview`: draw the hint as when started with `--select` (`Esc back`), which
+    /// a screenshot check cannot start.
+    #[arg(long, hide = true, requires = "loading_preview")]
+    pub loading_preview_back: bool,
 }
+
+/// `--loading-preview-back`: the card says `Esc back` without a select screen.
+#[derive(Resource)]
+struct PreviewBack;
 
 /// One line of a tip: words, and whether they are a key (drawn bold).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -244,6 +252,9 @@ impl Plugin for LoadingPlugin {
     fn build(&self, app: &mut App) {
         let preview = self.args.loading_preview;
         let skip = self.skip;
+        if self.args.loading_preview_back {
+            app.insert_resource(PreviewBack);
+        }
         // Every run opens with the card (and a new tip).
         shell::run_resource(app, move |_| {
             let open = preview || !skip;
@@ -359,6 +370,8 @@ fn show(
     mut commands: Commands,
     mut loading: ResMut<Loading>,
     fruit: Option<Res<crate::pause::Fruit>>,
+    shell: Option<Res<shell::Shell>>,
+    preview_back: Option<Res<PreviewBack>>,
     window: Single<&Window, With<PrimaryWindow>>,
     mut ui_scale: ResMut<UiScale>,
     mut roots: Query<(Entity, &Root, &mut Node)>,
@@ -432,6 +445,7 @@ fn show(
     let look = page::Look {
         art: backdrop.art.clone(),
         fruit: fruit.map(|f| f.0.clone()),
+        back: preview_back.is_some() || shell.is_some_and(|s| s.goes_back()),
     };
     commands.spawn((
         Node {
@@ -568,6 +582,32 @@ mod tests {
             ("demo-clear", "Play original")
         );
         assert_eq!(bare.creator, None);
+    }
+
+    /// The key hint says `Esc back` when the client has a select screen, else `Esc quit`.
+    #[test]
+    fn the_key_hint_says_back_with_a_select_screen() {
+        let book = Book::default();
+        let info = Info::new(None, "demo", "main", run(true, ""), &book, 50);
+        for (back, word) in [(true, " back"), (false, " quit")] {
+            let mut app = App::new();
+            let look = page::Look {
+                art: None,
+                fruit: None,
+                back,
+            };
+            let tip = &TIPS[0];
+            app.world_mut().spawn(page::page(&info, tip, &look));
+            let spans: Vec<String> = app
+                .world_mut()
+                .query::<&TextSpan>()
+                .iter(app.world())
+                .map(|s| s.0.clone())
+                .collect();
+            assert!(spans.iter().any(|s| s == word), "{back}: {spans:?}");
+            let other = if back { " quit" } else { " back" };
+            assert!(!spans.iter().any(|s| s == other), "{back}: {spans:?}");
+        }
     }
 
     /// The card stays for the minimum time and then lets the sim tick; the preview never starts.

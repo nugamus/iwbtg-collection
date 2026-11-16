@@ -6,11 +6,13 @@
 //! toggles, extra actions) and [`show`] writes the numbers and lit keys into it.
 
 use bevy::prelude::*;
+use iwbtg_format::manifest::Manifest;
 use iwbtg_sim::input::Action;
 use iwbtg_sim::mods::ModSet;
 use iwbtg_sim::stripped::PlayMode;
 
 use super::layout::Density;
+use crate::art::ArtFiles;
 use crate::input::Collector;
 use crate::mods::RunMods;
 use crate::settings::HudShow;
@@ -33,18 +35,14 @@ const ARROWS: [(Action, f32); 4] = [
     (Action::Down, 180.0),
     (Action::Right, 90.0),
 ];
-/// The words under the arrows: the standard three, then the extra actions the player has bound.
-const BUTTONS: [(Action, &str); 7] = [
+/// The words under the arrows: the standard three, then the game's labelled extra actions.
+const BUTTONS: [(Action, &str); 3] = [
     (Action::Jump, "Jump"),
     (Action::Shoot, "Shoot"),
     (Action::Restart, "Restart"),
-    (Action::Extra1, "Extra 1"),
-    (Action::Extra2, "Extra 2"),
-    (Action::Extra3, "Extra 3"),
-    (Action::Extra4, "Extra 4"),
 ];
-const EXTRAS: u32 =
-    Action::Extra1 as u32 | Action::Extra2 as u32 | Action::Extra3 as u32 | Action::Extra4 as u32;
+/// The extra actions, in the order of `Controls::labels`.
+const EXTRAS: [Action; 4] = [Action::Extra1, Action::Extra2, Action::Extra3, Action::Extra4];
 /// `Paused · timer running`: `#ffb3bd`.
 const PAUSED_INK: Color = Color::srgb_u8(0xff, 0xb3, 0xbd);
 /// A held arrow or word: white, with a soft white glow under it (`tokens::KEY_GLOW`, `BUTTON_GLOW`).
@@ -60,14 +58,15 @@ pub struct Paused {
 }
 
 /// What gives the panel its shape. The panel is rebuilt when it changes.
-#[derive(Resource, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Resource, Clone, Debug, PartialEq, Eq)]
 pub struct Look {
     /// Play original, or a mod that keeps the run off the boards: the amber Unranked pill.
     pub unranked: bool,
     pub mods: ModSet,
     pub show: HudShow,
-    /// The extra actions the player has bound ([`Action`] bits).
-    pub extras: u32,
+    /// The game's `[controls]` labels for `extra1` to `extra4`; an action it does not label shows
+    /// nothing.
+    pub extras: [Option<String>; 4],
 }
 
 impl Default for Look {
@@ -76,7 +75,7 @@ impl Default for Look {
             unranked: false,
             mods: ModSet::NONE,
             show: HudShow::default(),
-            extras: 0,
+            extras: Default::default(),
         }
     }
 }
@@ -163,6 +162,8 @@ pub fn read(
     game: NonSend<Game>,
     mods: Option<Res<RunMods>>,
     collector: Option<Res<Collector>>,
+    files: Option<Res<ArtFiles>>,
+    mut labels: Local<[Option<String>; 4]>,
     paused: Res<Paused>,
     preview: Res<Preview>,
     shown: Res<super::Shown>,
@@ -174,19 +175,24 @@ pub fn read(
     let world = sim.world();
     let mods = mods.map_or(ModSet::NONE, |m| m.0);
     let unranked = sim.options().mode == PlayMode::Original || mods.unranked_by().is_some();
-    let (held, extras) = collector.map_or((0, 0), |c| {
+    let held = collector.map_or(0, |c| {
         let f = c.last();
-        let bound = BUTTONS
-            .iter()
-            .filter(|(a, _)| *a as u32 & EXTRAS != 0 && c.bindings().binds(*a))
-            .fold(0, |m, (a, _)| m | a.bit());
-        (f.held | f.pressed, bound)
+        f.held | f.pressed
     });
+    if files.as_ref().is_none_or(|f| f.is_changed()) {
+        *labels = files.as_ref().map_or_else(Default::default, |f| {
+            f.0.get("game.toml")
+                .and_then(|b| std::str::from_utf8(b).ok())
+                .and_then(|t| Manifest::parse(t).ok())
+                .and_then(|m| m.controls.map(|c| c.labels().map(|l| l.map(str::to_owned))))
+                .unwrap_or_default()
+        });
+    }
     let want = Look {
         unranked,
         mods,
         show: shown.0,
-        extras,
+        extras: labels.clone(),
     };
     if *look != want {
         *look = want;
@@ -325,7 +331,7 @@ pub fn build(width: f32, density: Density, look: Look) -> impl Bundle {
         Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
             c.spawn(paused_line());
             if look.mod_row() {
-                c.spawn(mod_row(look));
+                c.spawn(mod_row(look.unranked, look.mods));
             }
             if show.timer {
                 c.spawn((
@@ -356,7 +362,7 @@ pub fn build(width: f32, density: Density, look: Look) -> impl Bundle {
                 c.spawn(stats(look.show, stack, value));
             }
             if show.input && !stack {
-                c.spawn(input_display(width, look.extras));
+                c.spawn(input_display(width, &look.extras));
             }
         })),
     )
@@ -401,7 +407,7 @@ fn paused_line() -> impl Bundle {
 }
 
 /// The Unranked pill and the mods' codes: 24 px sheared pills, 6 px apart.
-fn mod_row(look: Look) -> impl Bundle {
+fn mod_row(unranked_pill: bool, mods: ModSet) -> impl Bundle {
     let unranked = Type {
         tracking: 0.1,
         ..Type::PILL_CAPS
@@ -421,13 +427,13 @@ fn mod_row(look: Look) -> impl Bundle {
             ..default()
         },
         Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
-            if look.unranked {
+            if unranked_pill {
                 c.spawn((
                     sheared(24.0, 12.0, Shape::fill(tokens::AMBER)),
                     children![text("Unranked", unranked, tokens::ON_AMBER)],
                 ));
             }
-            for m in look.mods.iter() {
+            for m in mods.iter() {
                 let mut pill = sheared(24.0, 8.0, Shape::fill(tokens::CHIP));
                 pill.0.min_width = Val::Px(38.0);
                 c.spawn((pill, children![text(m.code, code, tokens::INK)]));
@@ -503,8 +509,8 @@ fn stats(show: HudShow, stack: bool, value: f32) -> impl Bundle {
     )
 }
 
-/// The input display: four arrows, then Jump, Shoot, Restart and the bound extra actions.
-fn input_display(width: f32, extras: u32) -> impl Bundle {
+/// The input display: four arrows, then Jump, Shoot, Restart and the game's labelled extra actions.
+fn input_display(width: f32, extras: &[Option<String>; 4]) -> impl Bundle {
     // `Hud43`'s 152 px panel is narrower than four arrows 18 px apart (158 px): close the gaps.
     let gap = ((width - 4.0 * ARROW) / 3.0).clamp(4.0, ARROW_GAP);
     let arrows = ARROWS.map(|(action, deg)| {
@@ -537,9 +543,14 @@ fn input_display(width: f32, extras: u32) -> impl Bundle {
         caps: true,
         ..Type::barlow(13.0, 700)
     };
+    let labelled = EXTRAS
+        .into_iter()
+        .zip(extras)
+        .filter_map(|(a, l)| l.as_deref().map(|l| (a, l.to_owned())));
     let buttons: Vec<_> = BUTTONS
         .into_iter()
-        .filter(|(a, _)| *a as u32 & EXTRAS == 0 || extras & a.bit() != 0)
+        .map(|(a, l)| (a, l.to_owned()))
+        .chain(labelled)
         .map(|(action, label)| {
             (
                 Node {
@@ -551,7 +562,7 @@ fn input_display(width: f32, extras: u32) -> impl Bundle {
                     (
                         glowing(
                             Glow::new(tokens::BUTTON_GLOW_BLUR, Color::NONE),
-                            (text(label, style, tokens::BUTTON_IDLE), Key(action)),
+                            (text(&label, style, tokens::BUTTON_IDLE), Key(action)),
                         ),
                         KeyGlow(action, tokens::BUTTON_GLOW),
                     ),
@@ -670,19 +681,45 @@ mod tests {
         assert_ne!(info.held & Action::Suicide.bit(), 0);
     }
 
+    /// The panel lists the extra actions the game's `[controls]` label, and none without.
+    #[test]
+    fn extra_actions_show_by_the_games_labels() {
+        use bevy::ecs::system::RunSystemOnce;
+        let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        let looks = |name: &str| {
+            let pkg = crate::package::open(&fixtures.join(name), false).unwrap();
+            let mut world = crate::view::test_world(&pkg);
+            world.insert_resource(ArtFiles(pkg.files.clone()));
+            world.insert_resource(RunMods(ModSet::NONE));
+            world.insert_resource(super::super::Shown::default());
+            world.init_resource::<Paused>();
+            world.init_resource::<Preview>();
+            world.init_resource::<StageDeaths>();
+            world.init_resource::<RunInfo>();
+            world.init_resource::<Look>();
+            world.run_system_once(read).unwrap();
+            world.resource::<Look>().extras.clone()
+        };
+        assert_eq!(
+            looks("input.pkg"),
+            [Some("Teleport".into()), None, Some("Slow".into()), None]
+        );
+        assert_eq!(looks("clear.pkg"), [None, None, None, None]);
+    }
+
     #[test]
     fn the_mod_row_shows_for_unranked_runs_and_mods_only() {
         let ranked = Look::default();
         assert!(!ranked.mod_row(), "a plain ranked run shows nothing there");
         let sd = Look {
             mods: ModSet::parse("SD").unwrap(),
-            ..ranked
+            ..ranked.clone()
         };
         assert!(sd.mod_row());
         assert!(
             Look {
                 unranked: true,
-                ..ranked
+                ..ranked.clone()
             }
             .mod_row()
         );

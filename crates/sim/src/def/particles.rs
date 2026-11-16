@@ -7,7 +7,7 @@
 //! [`PartType`]; the rest ([`PartLook`]) is for the client's drawing.
 
 use crate::num::Real;
-use crate::particles::{PartType, Region};
+use crate::particles::{PartRange, PartType, Region};
 
 use super::ids::SpriteId;
 
@@ -61,8 +61,10 @@ pub struct PartLook {
     pub gravity: [Real; 2],
     /// Colors as `0xRRGGBB`: one to three for `part_type_color1/2/3`, two for `color_mix`.
     pub colors: Vec<u32>,
-    /// `part_type_alpha1/2/3`, one to three values.
-    pub alpha: Vec<Real>,
+    /// `part_type_alpha1/2/3`, one to three values. A range that draws (`max > min`, the
+    /// format's `{ random = [min, max] }`) is one value the client picks per built system from
+    /// its own generator (client#826); a fixed range is that value.
+    pub alpha: Vec<PartRange>,
     /// `part_type_blend` additive.
     pub additive: bool,
 }

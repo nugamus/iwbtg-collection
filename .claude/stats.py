@@ -14,6 +14,8 @@ Columns:
   confl    tool results that showed a merge conflict
   PRs      `gh pr create` calls
 
+--summary prints tokens and hours per merged PR, per lane (see summary()).
+
 --issues lists the issues that took longest instead. Time is attributed to the issue a session last
 named in a shell command (an `issue-<n>-...` branch, `gh issue edit <n> --add-label in-progress`), so
 it is an estimate: work before the first such command counts for no issue.
@@ -23,6 +25,7 @@ import argparse
 from collections import defaultdict
 import json
 import re
+import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -44,9 +47,10 @@ def ts(s):
 
 
 def scan(path):
-    r = dict(first=None, last=None, turns=0, ctx=0, cargo=0.0, idle=0.0, slow=0, merges=0, confl=0, prs=0,
-             issues=defaultdict(lambda: dict(wall=0.0, cargo=0.0, idle=0.0, turns=0)))
+    r = dict(first=None, last=None, turns=0, ctx=0, cargo=0.0, idle=0.0, slow=0, merges=0, confl=0, prs=0, fresh=0, cached=0, out=0,
+             issues=defaultdict(lambda: dict(wall=0.0, cargo=0.0, idle=0.0, turns=0, tokens=0)))
     pending = {}
+    seen = {}  # message id -> (fresh, cached, out) already counted: one message spans several lines
     current = None
     for line in path.open(encoding="utf-8", errors="replace"):
         try:
@@ -72,6 +76,15 @@ def scan(path):
             r["turns"] += 1
             if current:
                 r["issues"][current]["turns"] += 1
+            mine = (u.get("input_tokens", 0) or 0) + (u.get("cache_creation_input_tokens", 0) or 0),                 u.get("cache_read_input_tokens", 0) or 0, u.get("output_tokens", 0) or 0
+            old = seen.get(m.get("id"), (0, 0, 0))
+            seen[m.get("id")] = mine
+            d = [a - b for a, b in zip(mine, old)]
+            r["fresh"] += d[0]
+            r["cached"] += d[1]
+            r["out"] += d[2]
+            if current:
+                r["issues"][current]["tokens"] += d[0] + d[2]
             r["ctx"] += sum(u.get(k, 0) or 0 for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
         content = m.get("content")
         if not isinstance(content, list):
@@ -112,14 +125,86 @@ def row(name, r):
             f"{r['cargo'] / 3600:5.1f}h {share:3.0f}% {r['idle'] / 3600:5.1f}h {r['slow']:5d} {r['merges']:6d} {r['confl']:5d} {r['prs']:3d}")
 
 
+def lane_of(stem):
+    """Teammate transcripts are agent-a<name>-<id>; the name is a lane plus a counter (data2, res191)."""
+    m = re.match(r"agent-a([a-z]{2,})", stem)
+    return {"res": "research"}.get(m.group(1), m.group(1)) if m else "other"
+
+
+def merged_prs(since):
+    """(number, issue) of PRs merged since `since`, from gh; the issue comes from an issue-<n>- branch."""
+    try:
+        out = subprocess.run(["gh", "pr", "list", "--repo", "nugamus/iwbtg-collection", "--state", "merged", "--limit", "300",
+                              "--search", f"merged:>={since:%Y-%m-%d}", "--json", "number,headRefName"],
+                             capture_output=True, text=True, check=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    res = []
+    for p in json.loads(out):
+        m = re.match(r"issue-(\d+)-", p["headRefName"])
+        res.append((p["number"], int(m.group(1)) if m else None))
+    return res
+
+
+def summary(since):
+    """Tokens and hours per merged client PR, per lane.
+
+    Tokens: fresh = input plus cache writes, out = output; cache reads are listed apart (cheap, but they scale
+    with context). Hours: wall time minus idle (waiting for a message). A merged PR counts for the lane of the
+    session that spent most time on its issue; PRs with no issue-<n>- branch count for no lane. Spend with no
+    PR (research lane work lands in another repo, lead sessions) is in the lane's tokens but gives no PR."""
+    lanes = defaultdict(lambda: dict(fresh=0, cached=0, out=0, hours=0.0, sessions=0))
+    issue_lane = {}
+    best = defaultdict(float)
+    for lead in PROJECTS.glob("*.jsonl"):
+        for f, lane in [(lead, "lead")] + [(s, lane_of(s.stem))
+                                           for s in (PROJECTS / lead.stem / "subagents").glob("**/*.jsonl")]:
+            r = scan(f)
+            if not r["first"] or r["last"] < since or r["turns"] < 5:
+                continue
+            L = lanes[lane]
+            L["sessions"] += 1
+            for k in ("fresh", "cached", "out"):
+                L[k] += r[k]
+            L["hours"] += ((r["last"] - r["first"]).total_seconds() - r["idle"]) / 3600
+            for n, v in r["issues"].items():
+                if v["wall"] > best[n]:
+                    best[n], issue_lane[n] = v["wall"], lane
+    prs = merged_prs(since)
+    if prs is None:
+        print("gh failed: no merged PR counts")
+        prs = []
+    count = defaultdict(int)
+    for _, issue in prs:
+        if issue in issue_lane:
+            count[issue_lane[issue]] += 1
+    print(f"{'lane':10s} {'sessions':>8s} {'fresh M':>8s} {'cache M':>8s} {'out M':>7s} {'hours':>6s} {'PRs':>4s} {'fresh k/PR':>10s} {'out k/PR':>9s} {'h/PR':>6s}")
+    tot = dict(fresh=0, cached=0, out=0, hours=0.0, sessions=0)
+    for name, L in sorted(lanes.items()):
+        n = count[name]
+        per = (lambda x: f"{x / n:.0f}") if n else (lambda x: "-")
+        print(f"{name:10s} {L['sessions']:8d} {L['fresh'] / 1e6:8.1f} {L['cached'] / 1e6:8.1f} {L['out'] / 1e6:7.2f} {L['hours']:6.1f} {n:4d} "
+              f"{per(L['fresh'] / 1e3):>10s} {per(L['out'] / 1e3):>9s} {(L['hours'] / n if n else 0):6.1f}")
+        for k in tot:
+            tot[k] += L[k]
+    n = len(prs)
+    print(f"\nAll lanes: {len(prs)} PRs merged in {(datetime.now(timezone.utc) - since).days} days ({sum(count.values())} matched to a lane).")
+    if n:
+        print(f"Per merged PR: {tot['fresh'] / n / 1e3:.0f}k fresh input, {tot['out'] / n / 1e3:.0f}k output, "
+              f"{tot['cached'] / n / 1e6:.1f}M cache reads, {tot['hours'] / n:.2f} active hours.")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=float, default=3, help="sessions started in the last N days (default 3)")
     ap.add_argument("--issues", action="store_true", help="list the issues that took longest instead")
+    ap.add_argument("--summary", action="store_true", help="tokens and hours per merged PR, per lane (use with --days 7)")
     a = ap.parse_args()
     if not PROJECTS.is_dir():
         sys.exit(f"no transcripts at {PROJECTS}")
     since = datetime.now(timezone.utc) - timedelta(days=a.days)
+    if a.summary:
+        return summary(since)
     if a.issues:
         return by_issue(since)
     print(f"{'session / teammate':28s} {'start':11s} {'wall':>6s} {'turns':>5s} {'ctx':>6s} {'build':>6s} {'%':>4s} "

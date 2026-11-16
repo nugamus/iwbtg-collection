@@ -1015,6 +1015,81 @@ counts_as = [\"slope_wall\"]
     assert_eq!(rank("@yane_m[scale_x=1]"), rank("slope") + 1);
 }
 
+/// #853: params that pick the event set (`builtins::event_set_params`) on a placed instance give
+/// it that event set through a derived kind, as the class-picking params do; a value that keeps
+/// the kind's event set keeps the kind.
+#[test]
+fn placed_event_set_params_derive_a_kind_with_that_event_set() {
+    let order = ORDER.replace("\"playerface\",", "\"playerface\", \"killer\", \"@outside\",");
+    let instances = concat!(
+        "  { kind = \"killer\", x = 100, y = 100, destroy_outside_room = true },
+",
+        "  { kind = \"killer\", x = 132, y = 100, destroy_outside_room = false },
+",
+        "  { kind = \"@outside\", x = 100, y = 140, destroy_outside_room = false },
+",
+        "  { kind = \"@outside\", x = 132, y = 140, hspeed = 2 },
+",
+        "  { kind = \"killer\", x = 100, y = 180, bounce = true },
+",
+        "  { kind = \"block\", x = 100, y = 220, proximity_frame = true },
+",
+    );
+    let files = package(|f| {
+        set(f, "game.toml", manifest(&order, "").into_bytes());
+        let stage = STAGE1.replace(
+            "  { kind = \"warp\", x = 768, y = 512, room_to = \"title\" },
+",
+            &format!(
+                "  {{ kind = \"warp\", x = 768, y = 512, room_to = \"title\" }},
+{instances}"
+            ),
+        );
+        set(f, "rooms/stage1.toml", stage.into_bytes());
+        f.push((
+            "objects/outside.toml".into(),
+            b"base = \"killer\"
+destroy_outside_room = true
+"
+            .to_vec(),
+        ));
+    });
+    let (def, _) = load_ok(&files, STRICT);
+    let events = |name: &str| kind_named(&def, name).1.events.clone();
+
+    assert!(events("killer[destroy_outside_room=true]").outside_room);
+    assert!(!events("killer").outside_room);
+    assert_eq!(
+        placed(&def, "stage1", "killer[destroy_outside_room=true]").len(),
+        1
+    );
+    assert_eq!(
+        placed(&def, "stage1", "killer").len(),
+        1,
+        "`destroy_outside_room = false` is the kind's own event set and keeps the kind"
+    );
+    assert!(events("@outside").outside_room);
+    assert!(!events("@outside[destroy_outside_room=false]").outside_room);
+    assert_eq!(
+        placed(&def, "stage1", "@outside[destroy_outside_room=false]").len(),
+        1
+    );
+    assert_eq!(
+        placed(&def, "stage1", "@outside").len(),
+        1,
+        "a param that picks no event set keeps the kind"
+    );
+    // #835 and #849: the Step these params add belongs to the kind, so they take effect on a
+    // placed instance through its derived kind.
+    assert!(events("killer[bounce=true]").step);
+    assert!(!events("killer").step);
+    assert_eq!(placed(&def, "stage1", "killer[bounce=true]").len(), 1);
+    assert!(events("block[proximity_frame=true]").step);
+    assert_eq!(placed(&def, "stage1", "block[proximity_frame=true]").len(), 1);
+    let rank = |name: &str| placed(&def, "stage1", name)[0].rank;
+    assert_eq!(rank("killer[destroy_outside_room=true]"), rank("killer"));
+}
+
 #[test]
 fn wp6b3_params_load_on_kinds_and_per_instance() {
     let files = tier2_package(
@@ -1081,6 +1156,11 @@ fn wp6b3_params_load_on_kinds_and_per_instance() {
     let title = RoomId(def.rooms.iter().position(|r| r.name == "title").unwrap() as u32);
     let warps = placed(&def, "stage1", "edge_warp");
     assert_eq!(warps[0].params.0.get("left_room"), Some(&ParamValue::Room(title)));
+    // `mode = "room_assign"` picks another event set (a kid collision), so a derived kind (#853).
+    let warps: Vec<_> = warps
+        .into_iter()
+        .chain(placed(&def, "stage1", "edge_warp[mode=room_assign]"))
+        .collect();
     assert_eq!(warps[1].params.0.get("mode"), Some(&word("room_assign")));
     assert_eq!(
         warps[1].params.0.get("room_to"),

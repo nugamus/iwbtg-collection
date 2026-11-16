@@ -151,7 +151,7 @@ fn keys(keys: Res<ButtonInput<KeyCode>>, mut list: ResMut<List>, mut commands: C
             commands.queue(move |world: &mut World| {
                 if let Err(e) = super::start(world, &path) {
                     eprintln!("{e}");
-                    notice::post(notice::Kind::Drop, &e);
+                    notice::post(notice::Kind::Drop, &e.to_string());
                 }
             });
         }

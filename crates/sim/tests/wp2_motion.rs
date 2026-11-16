@@ -94,11 +94,11 @@ mod wp2 {
         m.motion_set(r(323.99999999999994), r(-4.0)).unwrap();
         assert_eq!(m.hspeed(), r(-3.236067977499787));
         assert_eq!(m.vspeed(), r(-2.351141009169896));
-        // Run a: speed -4 at direction 180 gives hspeed 4.0. The recorder reads vspeed 0.0 here;
-        // the formula gives the sine residue (OPEN, reported to research).
+        // Run a: speed -4 at direction 180 gives hspeed 4.0 and, with the integer snap
+        // (research#199), vspeed 0.0 as the recorder reads (not the sine residue).
         m.motion_set(r(180.0), r(-4.0)).unwrap();
         assert_eq!(m.hspeed(), r(4.0));
-        assert_eq!(m.vspeed(), r(4.898587196589413e-16));
+        assert_eq!(m.vspeed().get().to_bits(), 0.0f64.to_bits());
         // A speed write keeps the direction when the speed is 0 (U5): roll cherries read
         // hspeed -0.0 at direction 111.16511394266496.
         m.set_direction(r(111.16511394266496)).unwrap();
@@ -109,6 +109,60 @@ mod wp2 {
         m.set_speed(r(16.0)).unwrap();
         m.set_direction(r(284.0)).unwrap();
         assert_eq!(m.vspeed(), r(15.524731620415945));
+    }
+
+    /// research#193 (CLONE_SPEC "Snap to integers"): a speed or direction write snaps hspeed and
+    /// vspeed to an integer within 1e-4 (strict, absolute); threshold probes of
+    /// `traces/animus/bounce-snap-b.csv` and the spec's examples; motion_set, motion_add and the
+    /// direction read-back (research#199).
+    #[test]
+    fn speed_and_direction_writes_snap_to_integers() {
+        let bits = |x: Real| x.get().to_bits();
+        let at = |speed: f64, dir: f64| {
+            let mut m = Motion::new_at(r(0.0), r(0.0));
+            m.set_speed(r(speed)).unwrap();
+            m.set_direction(r(dir)).unwrap();
+            (m.hspeed(), m.vspeed())
+        };
+        // Threshold probes at direction 0.
+        assert_eq!(at(5.0001, 0.0).0, r(5.0), "|5.0001 - 5| is 9.99999999998e-05");
+        assert_eq!(
+            at(100.0001, 0.0).0,
+            r(100.0001),
+            "|100.0001 - 100| is 1.0000000000332e-4"
+        );
+        assert_eq!(bits(at(0.000_09, 0.0).0), bits(r(0.0)));
+        assert_eq!(at(0.0001, 0.0).0, r(0.0001), "1e-4 is not below 1e-4");
+        assert_eq!(at(0.5 + 1e-10, 0.0).0, r(0.5 + 1e-10), "only integers attract");
+        assert_eq!(at(10000.0001, 0.0).0, r(10000.0));
+        // The spec's examples: axis residues vanish, as +0.0; an exact -0.0 stays.
+        assert_eq!(bits(at(8.0, 90.0).0), bits(r(0.0)));
+        assert_eq!(at(8.0, 120.0).0, r(-4.0));
+        assert_eq!(at(8.0, 60.0).0, r(4.0));
+        assert_eq!(bits(at(1.5, 180.0).1), bits(r(0.0)));
+        assert_eq!(bits(at(3.0, 0.0).1), bits(r(-0.0)));
+        // Either write order gives the same bits.
+        let mut m = Motion::new_at(r(0.0), r(0.0));
+        m.set_direction(r(120.0)).unwrap();
+        m.set_speed(r(8.0)).unwrap();
+        assert_eq!((m.hspeed(), m.vspeed()), at(8.0, 120.0));
+        // motion_set snaps too (research#199); motion_add does not.
+        m.motion_set(r(120.0), r(8.0)).unwrap();
+        assert_eq!(m.hspeed(), r(-4.0));
+        let mut m = Motion::new_at(r(0.0), r(0.0));
+        m.motion_add(r(90.0), r(-4.9)).unwrap();
+        assert_eq!(m.hspeed(), r(-3.0003846579110154e-16));
+        // A motion_add that leaves (h, v) bit-identical keeps speed and direction.
+        m.motion_set(r(60.0), r(8.0)).unwrap();
+        m.motion_add(r(0.0), r(1e-16)).unwrap();
+        assert_eq!((m.speed(), m.direction()), (r(8.0), r(60.0)));
+        // The direction read-back snaps, after the +360: it can read 360.0.
+        m.set_hspeed(r(5.0)).unwrap();
+        m.set_vspeed(r(1e-6)).unwrap();
+        assert_eq!(m.direction(), r(360.0));
+        m.set_hspeed(r(9.2e-16)).unwrap();
+        m.set_vspeed(r(-4.9)).unwrap();
+        assert_eq!(m.direction(), r(90.0));
     }
 
     #[test]
