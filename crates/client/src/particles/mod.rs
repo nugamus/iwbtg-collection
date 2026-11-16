@@ -94,10 +94,14 @@ impl Tracker {
         let first = self.last_tick == 0 && self.seen == 0;
         let ticked = w.tick != self.last_tick;
         self.last_tick = w.tick;
-        let entered = w
+        // The sim's first step keeps `Sim::new`'s room-start output (#466): that entry is the
+        // first room's, not one made on this tick.
+        let entries = w
             .output
             .iter()
-            .any(|e| matches!(e, OutputEvent::Room(RoomOutput::Entered { .. })));
+            .filter(|e| matches!(e, OutputEvent::Room(RoomOutput::Entered { .. })))
+            .count();
+        let entered = entries > usize::from(w.tick == 1);
         let now = watched(w);
         let before_len = self.systems.len();
         let mut changed = false;
@@ -118,7 +122,7 @@ impl Tracker {
                 changed = true;
             }
         };
-        if first && !entered {
+        if first {
             for x in now.values() {
                 if x.on_room_start == Lifecycle::Clear {
                     clear(&mut self.systems, x.system);
