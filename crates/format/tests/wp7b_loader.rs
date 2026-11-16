@@ -789,6 +789,19 @@ fn negative_burst_and_death_counts_load() {
     assert_eq!(s.types[1].draws.death.map(|c| c.count), Some(-5));
 }
 
+/// An alpha value may be `{ random = [min, max] }` (go-the-spook-house's rain, client#826): a
+/// range in the def, drawing only, next to the fixed values.
+#[test]
+fn a_random_alpha_loads_as_a_range() {
+    let text = "[types.rain]\nalpha = [{ random = [0.12, 0.32] }, 0]\n";
+    let files = package("", |f| put(f, "particles/p1.toml", text));
+    let (def, _) = load_ok(&files, STRICT);
+    assert_eq!(
+        def.particle_systems[0].types[0].look.alpha,
+        [PartRange::new(0.12, 0.32), PartRange::fixed(0.0)]
+    );
+}
+
 #[test]
 fn particle_mistakes_are_errors() {
     let base = "[types.a]\nlife = [5, 5]\n";
@@ -834,6 +847,10 @@ fn particle_mistakes_are_errors() {
         (
             "[types.a2]\nlife = [5, 5]\ndeath = { type = \"a\", count = 1 }\n[types.b]\nlife = [5, 5]\nstep = { type = \"a2\", count = 1 }\n",
             "has step or death particles of its own",
+        ),
+        (
+            "[types.b]\nalpha = [{ random = [0.5, 0.2] }]\n",
+            "`alpha` random range has max below min",
         ),
         ("[types.b]\nwiggle = 1\n", "unknown field"),
     ] {

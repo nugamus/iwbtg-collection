@@ -236,7 +236,8 @@ fn draw(
                     )
                 }
             };
-            let look = p.look(t, frames);
+            let alpha = sys.alpha.get(p.ty).map_or(&[][..], Vec::as_slice);
+            let look = p.look(t, alpha, frames);
             if look.rgba[3] <= 0.0 || look.size <= 0.0 {
                 continue;
             }
