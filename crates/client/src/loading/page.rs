@@ -37,6 +37,8 @@ pub struct Progress;
 pub struct Look {
     pub art: Option<Handle<Image>>,
     pub fruit: Option<Handle<Image>>,
+    /// Escape goes back to game select (`Esc back`) rather than quitting (`Esc quit`).
+    pub back: bool,
 }
 
 /// The whole page, filling its parent: the card centred, `CARD_TOP` from the top.
@@ -45,6 +47,7 @@ pub fn page(info: &Info, tip: &Tip, look: &Look) -> impl Bundle + use<> {
     let tip = tip.clone();
     let art = look.art.clone();
     let fruit = look.fruit.clone();
+    let back = look.back;
     (
         Node {
             width: Val::Percent(100.0),
@@ -63,7 +66,7 @@ pub fn page(info: &Info, tip: &Tip, look: &Look) -> impl Bundle + use<> {
             })
             .with_children(|c| {
                 card(c, &info, art);
-                loader(c, fruit);
+                loader(c, fruit, back);
                 c.spawn((
                     Node {
                         padding: UiRect::horizontal(Val::Px(4.0)),
@@ -261,8 +264,8 @@ fn mods(c: &mut ChildSpawner, info: &Info) {
     });
 }
 
-/// The fruit, then `Loading · starts by itself` and `Esc quit` over the progress line.
-fn loader(c: &mut ChildSpawner, fruit: Option<Handle<Image>>) {
+/// The fruit, then `Loading · starts by itself` and `Esc back` or `Esc quit` over the progress line.
+fn loader(c: &mut ChildSpawner, fruit: Option<Handle<Image>>, back: bool) {
     c.spawn(Node {
         align_items: AlignItems::Center,
         column_gap: Val::Px(16.0),
@@ -305,10 +308,13 @@ fn loader(c: &mut ChildSpawner, fruit: Option<Handle<Image>>) {
                     ("Loading".to_owned(), bold, tokens::INK),
                     (" · starts by itself".to_owned(), plain, tokens::SOFT),
                 ]));
-                // Back to game select once there is one (#148).
                 c.spawn(rich(vec![
                     ("Esc".to_owned(), bold, tokens::INK),
-                    (" quit".to_owned(), plain, tokens::SOFT),
+                    (
+                        if back { " back" } else { " quit" }.to_owned(),
+                        plain,
+                        tokens::SOFT,
+                    ),
                 ]));
             });
             c.spawn((
