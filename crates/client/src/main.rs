@@ -118,13 +118,13 @@ fn main() -> ExitCode {
             .ratio
             .as_deref()
             .and_then(|r| screen::parse_ratio(r).ok().flatten());
-        ui::gallery::run(
+        let result = ui::gallery::run(
             args.view.screenshot,
             args.ui.reduced_motion,
             args.screen.window,
             ratio,
         );
-        return ExitCode::SUCCESS;
+        return exit_code(result);
     }
     if let Some(variant) = args.card.card_preview {
         let ratio = args
@@ -132,8 +132,8 @@ fn main() -> ExitCode {
             .ratio
             .as_deref()
             .and_then(|r| screen::parse_ratio(r).ok().flatten());
-        card::preview::run(variant, args.view.screenshot, args.screen.window, ratio);
-        return ExitCode::SUCCESS;
+        let result = card::preview::run(variant, args.view.screenshot, args.screen.window, ratio);
+        return exit_code(result);
     }
     // Clap requires the package unless `--select`, `--ui-gallery`, `--bind` or
     // `--show-bindings` is given; with only the bindings flags there is nothing to play.
@@ -205,6 +205,10 @@ fn main() -> ExitCode {
             particles::ParticlesPlugin,
         ));
     });
+    exit_code(result)
+}
+
+fn exit_code(result: Result<(), String>) -> ExitCode {
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
@@ -220,7 +224,8 @@ fn main() -> ExitCode {
 fn main() {
     #[cfg(target_os = "unknown")]
     input::watch_unmapped_pads();
-    ui::gallery::run(None, false, None, None);
+    // Without --screenshot the gallery has no size check, so it cannot return an error here.
+    let _ = ui::gallery::run(None, false, None, None);
 }
 
 #[cfg(test)]

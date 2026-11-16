@@ -198,6 +198,7 @@ impl Plugin for ScreenPlugin {
 struct StartSize(Option<(u32, u32)>);
 
 fn keys(
+    mut commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
     mut screen: ResMut<Screen>,
     mut start: ResMut<StartSize>,
@@ -208,8 +209,11 @@ fn keys(
     if let Some((w, h)) = start.0.take() {
         // A `--screenshot` check lays out at one physical px per logical px, so the picture is
         // the same on every machine whatever its display scaling (like the gallery).
+        // The window is then held at this size and a capture of another size is not saved
+        // (#861).
         if shot.is_some() {
             window.resolution.set_scale_factor_override(Some(1.0));
+            commands.insert_resource(crate::view::ShotSize(UVec2::new(w, h)));
         }
         window.resolution.set_physical_resolution(w, h);
     }

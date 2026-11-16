@@ -75,7 +75,7 @@ pub fn run(
     screenshot: Option<std::path::PathBuf>,
     window: Option<(u32, u32)>,
     ratio: Option<(u32, u32)>,
-) {
+) -> Result<(), String> {
     let data = if screenshot.is_some() {
         sample()
     } else {
@@ -114,10 +114,10 @@ pub fn run(
     .add_systems(Startup, setup)
     .add_systems(Update, fit_to_window);
     if let Some(path) = screenshot {
-        app.insert_resource(crate::view::ScreenshotTo(path))
-            .add_systems(Update, crate::view::take_screenshot);
+        let size = size.map(|(w, h)| UVec2::new(w, h));
+        crate::view::add_screenshot(&mut app, path, size);
     }
-    app.run();
+    crate::view::shot_result(app.run())
 }
 
 fn setup(mut commands: Commands, preview: Res<Preview>) {

@@ -461,11 +461,10 @@ pub fn run(
     .add_systems(Last, limit_frames);
     plugins(&mut app);
     if let Some(path) = screenshot {
-        app.insert_resource(ScreenshotTo(path))
-            .add_systems(Update, take_screenshot);
+        // `screen` pins the size when `--window` gives one (`ShotSize`).
+        add_screenshot(&mut app, path, None);
     }
-    app.run();
-    Ok(())
+    shot_result(app.run())
 }
 
 /// The game camera and the sprite images.
@@ -864,27 +863,135 @@ pub(crate) fn place_sprite(
 #[derive(Resource)]
 pub(crate) struct ScreenshotTo(pub(crate) std::path::PathBuf);
 
+/// The size in physical px a `--screenshot` picture must have (`--window`, or the gallery's
+/// `--ratio`). The window is held at it and a capture of another size is not saved (#861).
+#[derive(Resource, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ShotSize(pub(crate) UVec2);
+
+/// Why the capture was not saved; the run then exits with an error.
+#[derive(Resource, Default)]
+struct ShotFailed(Option<String>);
+
+/// Sets up a `--screenshot` run: the capture at frame 90, the exit at frame 150 and, with `size`,
+/// the window held at that size. Finish with [`shot_result`] on what `App::run` returns.
+pub(crate) fn add_screenshot(app: &mut App, path: std::path::PathBuf, size: Option<UVec2>) {
+    app.insert_resource(ScreenshotTo(path))
+        .init_resource::<ShotFailed>()
+        .add_systems(Update, (hold_shot_size, take_screenshot).chain());
+    if let Some(size) = size {
+        app.insert_resource(ShotSize(size));
+    }
+}
+
+/// The run's outcome: an error when the screenshot was not saved.
+pub(crate) fn shot_result(exit: AppExit) -> Result<(), String> {
+    match exit {
+        AppExit::Success => Ok(()),
+        AppExit::Error(_) => Err("error: the screenshot was not saved".to_string()),
+    }
+}
+
+/// Keeps a `--screenshot` window at the size asked for. The window cannot be resized or
+/// maximized, and a size change from outside (a maximize from the OS or the desktop, a snap) is
+/// undone: on 2026-11-16 a maximized 800x608 check saved a 7680x2071 picture (#861).
+fn hold_shot_size(
+    size: Option<Res<ShotSize>>,
+    mut window: Query<&mut Window, With<bevy::window::PrimaryWindow>>,
+) {
+    let (Some(size), Ok(mut window)) = (size, window.single_mut()) else {
+        return;
+    };
+    if window.resizable || window.enabled_buttons.maximize {
+        window.resizable = false;
+        window.enabled_buttons.maximize = false;
+    }
+    if window.physical_size() != size.0 {
+        window.set_maximized(false);
+        window.resolution.set_physical_resolution(size.0.x, size.0.y);
+    }
+}
+
+/// `None` when a capture of `got` px may be saved, else why not.
+fn shot_size_problem(got: UVec2, want: Option<UVec2>) -> Option<String> {
+    let want = want?;
+    (got != want).then(|| {
+        format!(
+            "error: screenshot is {}x{} px, not the {}x{} asked for (was the window resized or maximized?); not saved",
+            got.x, got.y, want.x, want.y
+        )
+    })
+}
+
 /// Frame 90 asks for a screenshot (the overlay has counted a second by then); frame 150 exits (the file is written by then).
-pub(crate) fn take_screenshot(
+fn take_screenshot(
     mut commands: Commands,
     to: Res<ScreenshotTo>,
+    size: Option<Res<ShotSize>>,
+    failed: Res<ShotFailed>,
     mut frame: Local<u32>,
     mut exit: MessageWriter<AppExit>,
 ) {
+    use bevy::render::view::screenshot::{Screenshot, ScreenshotCaptured, save_to_disk};
     *frame += 1;
     if *frame == 90 {
-        commands
-            .spawn(bevy::render::view::screenshot::Screenshot::primary_window())
-            .observe(bevy::render::view::screenshot::save_to_disk(to.0.clone()));
+        let want = size.map(|s| s.0);
+        let mut save = save_to_disk(to.0.clone());
+        commands.spawn(Screenshot::primary_window()).observe(
+            move |shot: On<ScreenshotCaptured>, mut failed: ResMut<ShotFailed>| {
+                let got = shot.image.size();
+                match shot_size_problem(got, want) {
+                    None => save(shot),
+                    Some(e) => {
+                        eprintln!("{e}");
+                        failed.0 = Some(e);
+                    }
+                }
+            },
+        );
     }
     if *frame == 150 {
-        exit.write(AppExit::Success);
+        exit.write(if failed.0.is_some() {
+            AppExit::error()
+        } else {
+            AppExit::Success
+        });
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_capture_of_another_size_is_not_saved() {
+        let want = Some(UVec2::new(800, 608));
+        assert_eq!(shot_size_problem(UVec2::new(800, 608), want), None);
+        let e = shot_size_problem(UVec2::new(7680, 2071), want).unwrap();
+        assert!(e.contains("7680x2071") && e.contains("800x608"), "{e}");
+        // Without a size asked for, any capture is saved.
+        assert_eq!(shot_size_problem(UVec2::new(7680, 2071), None), None);
+    }
+
+    #[test]
+    fn a_screenshot_window_is_held_at_its_size() {
+        let mut app = App::new();
+        app.insert_resource(ShotSize(UVec2::new(800, 608)))
+            .add_systems(Update, hold_shot_size);
+        // As a maximize on a 7680x2160 monitor at 125% leaves it (#861).
+        let mut window = Window::default();
+        window.resolution.set_physical_resolution(7680, 2071);
+        let id = app.world_mut().spawn((window, bevy::window::PrimaryWindow)).id();
+        app.update();
+        let window = app.world().get::<Window>(id).unwrap();
+        assert_eq!(window.physical_size(), UVec2::new(800, 608));
+        assert!(!window.resizable && !window.enabled_buttons.maximize);
+    }
+
+    #[test]
+    fn the_run_fails_when_the_screenshot_was_not_saved() {
+        assert_eq!(shot_result(AppExit::Success), Ok(()));
+        assert!(shot_result(AppExit::error()).is_err());
+    }
 
     #[test]
     fn the_frame_cap_parses() {
