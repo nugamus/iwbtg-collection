@@ -752,8 +752,16 @@ mod blood_emitter {
     }
 
     fn fixture(on: bool) -> (Fx, KindId) {
+        fixture_with(on, &[])
+    }
+
+    /// [`fixture`] with extra kind params.
+    fn fixture_with(on: bool, extra: &[(&str, ParamValue)]) -> (Fx, KindId) {
         let mut b = builder();
         let mut k = KindDef::new("blood_emitter", Builtin::BloodEmitter);
+        for (name, v) in extra {
+            k.params.0.insert((*name).into(), v.clone());
+        }
         k.params
             .0
             .insert("mode".into(), ParamValue::Str("particles".into()));
@@ -802,8 +810,18 @@ mod blood_emitter {
     /// update from frame 45 to 50; R on frame 51 destroys it, and the seed stays put after that.
     #[test]
     fn k1_seed_column_replays_bit_for_bit() {
+        k1_replay(fixture(true));
+    }
+
+    /// k1 with family B's `outlives_stream` (#877): the same seeds to frame 90, the system gone
+    /// with the R press.
+    #[test]
+    fn k1_replays_with_outlives_stream() {
+        k1_replay(fixture_with(true, &[("outlives_stream", ParamValue::Bool(true))]));
+    }
+
+    fn k1_replay((mut fx, kind): (Fx, KindId)) {
         let rows = k1();
-        let (mut fx, kind) = fixture(true);
         fx.w.rng = Rng::new(0);
         let mut frame = 44;
         for (f, seed) in &rows {
@@ -856,6 +874,78 @@ mod blood_emitter {
         assert!(!fx.w.exists(id));
         assert_eq!(fx.w.rng, rng);
         assert_eq!(fx.w.particles, p);
+    }
+
+    /// `outlives_stream` (family B, #877): alarm 0 destroys only the emitter, so the stream and
+    /// its 90 draws a tick stop after the same 19 updates as without it, while the instance
+    /// stays (kid/B.md Death step 2; famb-death-timing-b: the bloodEmitter made on frame 12 is
+    /// still there on frame 80, 68 ticks later). Its live particles age out with no draws; the
+    /// Step stops sending the client particles. Restart then destroys it and its system.
+    #[test]
+    fn outlives_stream_stops_the_stream_and_keeps_the_instance() {
+        let (mut fx, kind) = fixture_with(true, &[("outlives_stream", ParamValue::Bool(true))]);
+        let id = spawn(&mut fx, kind);
+        let mut p = model();
+        let mut rng = Rng::new(1);
+        for _ in 0..19 {
+            p.update(&mut rng).unwrap();
+        }
+        fx.idle(20);
+        assert!(fx.w.exists(id), "alarm 0 keeps the instance");
+        p.destroy_all_emitters(iwbtg_sim::particles::PartSystemId(0)).unwrap();
+        p.update(&mut rng).unwrap();
+        assert_eq!(fx.w.particles, p, "the emitter is gone, the system stays");
+        fx.w.output.clear();
+        for _ in 0..48 {
+            p.update(&mut rng).unwrap();
+        }
+        fx.idle(48);
+        assert!(fx.w.exists(id), "still there 68 ticks after Create");
+        assert_eq!(fx.w.rng, rng, "no draws after the stream ended");
+        assert_eq!(fx.w.particles, p);
+        assert!(
+            !fx.w.output
+                .iter()
+                .any(|o| matches!(o, OutputEvent::Builtin(BuiltinOutput::DeathParticles { .. }))),
+            "the client gets no new particles"
+        );
+        let bit = Action::Restart.bit();
+        fx.tick(InputFrame {
+            held: bit,
+            pressed: bit,
+            released: 0,
+        });
+        assert!(!fx.w.exists(id), "Restart destroys it");
+        assert!(fx.w.particles.systems[0].destroyed);
+        assert_eq!(fx.w.rng, rng);
+    }
+
+    /// `life = -1` (GameMaker's "alarm off") is accepted and sets no alarm: the instance and its
+    /// stream never end by themselves.
+    #[test]
+    fn life_minus_one_sets_no_alarm() {
+        let (mut fx, kind) = fixture_with(true, &[("life", ParamValue::Real(r(-1.0)))]);
+        let id = spawn(&mut fx, kind);
+        let mut p = model();
+        let mut rng = Rng::new(1);
+        for _ in 0..80 {
+            p.update(&mut rng).unwrap();
+        }
+        fx.idle(80);
+        assert!(fx.w.exists(id));
+        assert_eq!(fx.w.rng, rng, "the stream still draws on tick 80");
+    }
+
+    /// Only `particles` mode can outlive its stream; the loader refuses it in the other modes.
+    #[test]
+    fn outlives_stream_needs_particles_mode() {
+        let mut k = KindDef::new("e", Builtin::BloodEmitter);
+        k.params.0.insert("outlives_stream".into(), ParamValue::Bool(true));
+        assert!(builtins::init_state(Builtin::BloodEmitter, &k.params).is_err());
+        k.params
+            .0
+            .insert("mode".into(), ParamValue::Str("particles".into()));
+        assert!(builtins::init_state(Builtin::BloodEmitter, &k.params).is_ok());
     }
 
     /// A second emitter shares the type and adds a system after the first.

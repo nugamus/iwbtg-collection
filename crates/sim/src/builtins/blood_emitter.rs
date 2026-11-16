@@ -32,6 +32,13 @@
 //!   live particles left over draw nothing. Room End destroys it too. The Step draws nothing.
 //!
 //! `destroyed_by_restart` (kaenbyou, eat-the-lemon): a Restart key press destroys the emitter.
+//!
+//! `outlives_stream` (family B, `particles` mode only): Alarm 0 only ends the stream, as the
+//! original's Alarm 0 (`part_emitter_destroy`) does; the instance stays until Restart, Room End
+//! or a room change (kid/B.md Death step 2; trace famb-death-timing-b: `instance_number
+//! (bloodEmitter)` 1 from frame 12 to 80; #877). The emitter in `World::particles` is destroyed,
+//! so the 90 draws a tick stop; the system and its live particles stay until Destroy or Room End.
+//! The ended stream is kept as `per_step` 0 (refused at load in this mode).
 
 use serde::{Deserialize, Serialize};
 
@@ -92,6 +99,11 @@ const SPECS: &[ParamSpec] = &[
         ty: ParamType::Bool,
         required: false,
     },
+    ParamSpec {
+        name: "outlives_stream",
+        ty: ParamType::Bool,
+        required: false,
+    },
 ];
 
 /// How the emitter makes blood.
@@ -112,7 +124,8 @@ pub struct BloodEmitterState {
     pub mode: Mode,
     /// Alarm 0 at Create.
     pub life: Real,
-    /// Blood per Step (`random_dir`), particles per Step (`particles`).
+    /// Blood per Step (`random_dir`), particles per Step (`particles`). In `particles` mode 0
+    /// means alarm 0 ended the stream (`outlives_stream`); the loader refuses 0 there.
     pub per_step: u32,
     /// The speed is `random(speed_max)`.
     pub speed_max: Real,
@@ -124,6 +137,8 @@ pub struct BloodEmitterState {
     pub flipped: bool,
     /// A Restart key press destroys it.
     pub destroyed_by_restart: bool,
+    /// `particles`: alarm 0 ends the stream, not the instance.
+    pub outlives_stream: bool,
     /// `particles` with `NumRules::particles_draw_rng`: the system Create built, until Destroy or
     /// Room End destroys it.
     pub system: Option<PartSystemId>,
@@ -174,6 +189,15 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
             "particles mode needs a per_step from 1 to 2147483647",
         ));
     }
+    let outlives_stream = param_bool(params, "outlives_stream")?.unwrap_or(false);
+    if outlives_stream && mode != Mode::Particles {
+        // Only family B's particle stream outlives its alarm (kid/B.md Death); no traced game
+        // keeps a `random_dir` or `angle_sweep` emitter alive.
+        return Err(param_error(
+            "outlives_stream",
+            "only particles mode can outlive its stream",
+        ));
+    }
     Ok(BuiltinState::BloodEmitter(BloodEmitterState {
         mode,
         life: param_real(params, "life")?.unwrap_or(Real::new(20.0)),
@@ -183,6 +207,7 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
         per_angle: count(params, "per_angle", 8)?,
         flipped: param_bool(params, "flipped")?.unwrap_or(false),
         destroyed_by_restart: param_bool(params, "destroyed_by_restart")?.unwrap_or(false),
+        outlives_stream,
         system: None,
     }))
 }
@@ -207,6 +232,10 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
             }
             Ok(Flow::Continue)
         }
+        EventKind::Alarm(0) if s.outlives_stream => {
+            end_stream(ctx, me, &s)?;
+            Ok(Flow::Continue)
+        }
         EventKind::Alarm(0) => Ok(ctx.destroy(me)),
         EventKind::KeyPress(Action::Restart) if s.destroyed_by_restart => Ok(ctx.destroy(me)),
         EventKind::Destroy | EventKind::RoomEnd => {
@@ -223,12 +252,26 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
     }
 }
 
+/// Alarm 0 with `outlives_stream`: `part_emitter_destroy` on the one emitter (its system keeps
+/// its live particles, which draw nothing more), and the Step stops sending the client its
+/// particles. Draws nothing.
+fn end_stream(ctx: &mut Ctx, me: InstId, s: &BloodEmitterState) -> Result<(), SimError> {
+    if let Some(sys) = s.system {
+        ctx.w.particles.destroy_all_emitters(sys)?;
+    }
+    if let Some(BuiltinState::BloodEmitter(st)) = state_mut(ctx, me) {
+        st.per_step = 0;
+    }
+    Ok(())
+}
+
 fn step(ctx: &mut Ctx, me: InstId, s: &BloodEmitterState) -> Result<Flow, SimError> {
     let Some(inst) = ctx.w.get(me) else {
         return Ok(Flow::Continue);
     };
     let (x, y) = (inst.m.x(), inst.m.y());
     match s.mode {
+        Mode::Particles if s.per_step == 0 => {} // alarm 0 ended the stream (`outlives_stream`)
         Mode::Particles => {
             // The stream draws in the tick's particle update (`World::particles`), not here.
             ctx.emit(OutputEvent::Builtin(BuiltinOutput::DeathParticles {
