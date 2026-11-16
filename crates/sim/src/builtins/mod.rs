@@ -402,6 +402,53 @@ pub fn event_set(b: Builtin, kind: &KindDef) -> EventSet {
     }
 }
 
+/// The params [`event_set`] reads for a built-in. A kind's event set is fixed at load, so a
+/// placed instance that sets one of these to pick another event set than its kind's gets a
+/// derived kind with that set, as for the params that pick a class (`def::class::class_params`,
+/// the loader, #853); a script spawn that sets them uses that derived kind or fails
+/// (`script::inst`). The `event_set_params_cover_event_set` test checks the list.
+pub fn event_set_params(b: Builtin) -> &'static [&'static str] {
+    match b {
+        Builtin::World => &["mute", "clear_switches_on_room_end"],
+        Builtin::Block => &["proximity_frame"],
+        Builtin::Spike => &["destroys_bullets"],
+        Builtin::Killer => &["bounce", "destroy_outside_room", "kill_outside_view"],
+        Builtin::KidBullet => &["block_check"],
+        Builtin::Blood => &["sticks"],
+        Builtin::BloodEmitter => &["mode", "destroyed_by_restart"],
+        Builtin::Save => &["blink", "on_shot", "on_touch"],
+        Builtin::Camera => &["mode", "on_step", "on_room_start", "on_room_end"],
+        Builtin::MovingPlatform => &["carry_rule", "start_on_touch", "marker_reverse"],
+        Builtin::Water => &[
+            "destroy_outside_room",
+            "angle_step",
+            "area_left",
+            "area_right",
+            "area_top",
+            "area_bottom",
+        ],
+        Builtin::FakeBlock => &["vanish_on", "stops_bullets"],
+        Builtin::HiddenBlock => &["stops_bullets", "destroyed_by_bullet", "destroyed_by_blood"],
+        Builtin::Trap => &[
+            "launch",
+            "alm",
+            "alm2",
+            "alm3",
+            "alm4",
+            "destroy_outside_room",
+            "stop_on_stopper",
+        ],
+        Builtin::DropPlatform | Builtin::Conveyor | Builtin::EdgeWarp | Builtin::Music => &["mode"],
+        Builtin::TrapStopper => &["mode"],
+        Builtin::GravityFlip => &["transition"],
+        Builtin::BreakableBlock => &["break_on"],
+        Builtin::Orbit => &["mode", "destroy_outside_room"],
+        Builtin::PathPlatform => &["start_on_touch"],
+        Builtin::ParticleSystem => &["on_room_start", "on_room_end"],
+        _ => &[],
+    }
+}
+
 /// The params a built-in accepts. The kid takes none (its settings are the physics profile).
 pub fn param_specs(b: Builtin) -> &'static [ParamSpec] {
     match b {

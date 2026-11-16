@@ -21,7 +21,7 @@ use core::ops::{BitAnd, BitOr, BitOrAssign};
 use serde::{Deserialize, Serialize};
 
 use super::builtin::Builtin;
-use super::kind::{ParamValue, Params};
+use super::kind::{KindDef, ParamValue, Params};
 
 /// A set of collision classes, one bit each.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default, Serialize, Deserialize)]
@@ -283,7 +283,8 @@ pub fn param_classes(b: Builtin, params: &Params) -> Option<ClassMask> {
 
 /// The params [`param_classes`] reads for a built-in. A placed instance that sets them to pick
 /// other classes than its kind's gets a derived kind with those classes (the loader, #659); a
-/// script spawn that sets them uses that derived kind or fails (`script::inst`, #694).
+/// script spawn that sets them uses that derived kind or fails (`script::inst`, #694). The params
+/// that pick the event set work the same way ([`kind_params`]).
 pub fn class_params(b: Builtin) -> &'static [&'static str] {
     match b {
         Builtin::Block => &["kid_collides"],
@@ -295,6 +296,30 @@ pub fn class_params(b: Builtin) -> &'static [&'static str] {
     }
 }
 
+/// The params that pick a kind's classes ([`class_params`]) or its event set
+/// (`builtins::event_set_params`, #853), each once, in that order.
+pub fn kind_params(b: Builtin) -> Vec<&'static str> {
+    let mut out: Vec<&'static str> = class_params(b).to_vec();
+    for p in crate::builtins::event_set_params(b) {
+        if !out.contains(p) {
+            out.push(p);
+        }
+    }
+    out
+}
+
+/// Whether `merged` (`kind`'s params with an instance's [`kind_params`] values over them) picks
+/// other classes or another event set than `kind`'s own; `extra` is the kind's `counts_as`
+/// classes. Then the instance needs a kind derived for those values (#659, #853).
+pub fn picks_other_kind(kind: &KindDef, merged: &Params, extra: ClassMask) -> bool {
+    if kind_classes(kind.base, merged, extra) != kind.classes {
+        return true;
+    }
+    let mut with = kind.clone();
+    with.params = merged.clone();
+    crate::builtins::event_set(kind.base, &with) != crate::builtins::event_set(kind.base, kind)
+}
+
 /// A kind's classes: the param-picked class or the built-in default, plus `extra`.
 pub fn kind_classes(b: Builtin, params: &Params, extra: ClassMask) -> ClassMask {
     param_classes(b, params).unwrap_or_else(|| default_classes(b)) | extra
@@ -303,6 +328,65 @@ pub fn kind_classes(b: Builtin, params: &Params, extra: ClassMask) -> ClassMask 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn samples(ty: crate::builtins::ParamType) -> Vec<ParamValue> {
+        use crate::builtins::ParamType;
+        use crate::num::Real;
+        match ty {
+            ParamType::Real => [0.0, 1.0, -1.0, 2.5]
+                .iter()
+                .map(|v| ParamValue::Real(Real::new(*v)))
+                .collect(),
+            ParamType::Bool => vec![ParamValue::Bool(false), ParamValue::Bool(true)],
+            ParamType::Enum(words) => words.iter().map(|w| ParamValue::Str((*w).into())).collect(),
+            _ => vec![ParamValue::Str("x".into())],
+        }
+    }
+
+    /// #853: `builtins::event_set_params` lists every param `builtins::event_set` reads. Each
+    /// unlisted param, at each sample value, leaves the event set alone, on a kind with no params
+    /// and on one with any listed param at any sample value.
+    #[test]
+    fn event_set_params_cover_event_set() {
+        use crate::builtins::{event_set, event_set_params, param_specs};
+        let mut missing = std::collections::BTreeSet::new();
+        for b in Builtin::ALL {
+            let listed = event_set_params(b);
+            let specs = param_specs(b);
+            for name in listed {
+                assert!(
+                    specs.iter().any(|s| s.name == *name),
+                    "{b:?} lists `{name}`, not one of its params"
+                );
+            }
+            let mut bases = vec![Params::default()];
+            for s in specs.iter().filter(|s| listed.contains(&s.name)) {
+                for v in samples(s.ty) {
+                    let mut p = Params::default();
+                    p.0.insert(s.name.into(), v);
+                    bases.push(p);
+                }
+            }
+            for base in &bases {
+                let mut kind = KindDef::new("k", b);
+                kind.params = base.clone();
+                let own = event_set(b, &kind);
+                for s in specs.iter().filter(|s| !listed.contains(&s.name)) {
+                    for v in samples(s.ty) {
+                        let mut with = kind.clone();
+                        with.params.0.insert(s.name.into(), v.clone());
+                        if event_set(b, &with) != own {
+                            missing.insert(format!("{b:?} `{}`", s.name));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(
+            missing.is_empty(),
+            "these params change the event set; list them in builtins::event_set_params: {missing:#?}"
+        );
+    }
 
     #[test]
     fn named_bits_are_distinct_and_below_the_reserved_range() {
