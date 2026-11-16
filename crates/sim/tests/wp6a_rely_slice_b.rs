@@ -250,7 +250,13 @@ mod wp6a {
     #[test]
     fn warp_clear_rising_zeroes_only_a_negative_vspeed() {
         // KAE (KID-B): a negative vspeed becomes 0, not adjusted for reversed gravity.
-        let p = |_| params(&[("warp_x", real(40.0)), ("warp_y", real(90.0)), ("clear_rising", yes())]);
+        let p = |_| {
+            params(&[
+                ("warp_x", real(40.0)),
+                ("warp_y", real(90.0)),
+                ("clear_rising", yes()),
+            ])
+        };
         let g = warp_game(p);
         let (w, kid) = warp_a_moving_kid(&g, 5.0, 70.0, -4.0);
         assert_eq!(pos_speed(&w, kid), (r(40.0), r(90.0), r(3.0), r(0.0)));
@@ -343,7 +349,10 @@ mod wp6a {
             ]
         };
         let (g, mut w, warp, _) = gated(p());
-        assert!(w.get(warp).unwrap().visible, "a destroying gate keeps its own visible");
+        assert!(
+            w.get(warp).unwrap().visible,
+            "a destroying gate keeps its own visible"
+        );
         w.engine.mech.set_boss(1);
         fire(&g, &mut w, warp, &EventKind::Step);
         assert!(!w.get(warp).is_some_and(|i| i.alive));

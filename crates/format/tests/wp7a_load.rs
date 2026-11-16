@@ -1106,8 +1106,10 @@ fn placed_warp_gate_lists_load_and_add_step() {
         let stage = STAGE1.replace(
             "  { kind = \"warp\", x = 768, y = 512, room_to = \"title\" },
 ",
-            &format!("  {{ kind = \"warp\", x = 768, y = 512, room_to = \"title\" }},
-{gated}"),
+            &format!(
+                "  {{ kind = \"warp\", x = 768, y = 512, room_to = \"title\" }},
+{gated}"
+            ),
         );
         set(f, "rooms/stage1.toml", stage.into_bytes());
     });
