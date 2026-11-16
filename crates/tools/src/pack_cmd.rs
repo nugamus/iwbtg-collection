@@ -85,7 +85,7 @@ mod tests {
         let root = std::env::temp_dir().join(format!("iwbtg-pack-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
-        let demo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../client/demo-clear.pkg");
+        let demo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../client/tests/fixtures/clear.pkg");
         let file = root.join("demo.iwbz");
         assert!(pack_main(&demo, Some(&file), false).unwrap());
         let out = root.join("out");

@@ -1,4 +1,4 @@
-#:schema ../../../../docs/format/schema/v0/particles.schema.json
+#:schema ../../../../../../docs/format/schema/v0/particles.schema.json
 # Snow over the whole room, behind the blocks (they draw at depth 0).
 depth = 10
 

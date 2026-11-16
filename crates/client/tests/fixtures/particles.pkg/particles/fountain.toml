@@ -1,4 +1,4 @@
-#:schema ../../../../docs/format/schema/v0/particles.schema.json
+#:schema ../../../../../../docs/format/schema/v0/particles.schema.json
 # A fountain of glowing sparks over the block in the middle, with a star burst when built.
 depth = -10
 

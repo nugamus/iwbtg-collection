@@ -1,4 +1,4 @@
-#:schema ../../../../../docs/format/schema/v0/room.schema.json
+#:schema ../../../../../../docs/format/schema/v0/room.schema.json
 size = [800, 608]
 file_speed = 50
 views_enabled = false

@@ -1,4 +1,4 @@
-#:schema ../../../../docs/format/schema/v0/game.schema.json
+#:schema ../../../../../docs/format/schema/v0/game.schema.json
 format = 0
 id = "demo_particles"
 title = "Demo particles"
