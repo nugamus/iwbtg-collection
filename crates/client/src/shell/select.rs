@@ -24,7 +24,7 @@ use crate::ui::widgets::text;
 pub mod library;
 pub mod list;
 
-use library::{Library, file_name};
+use library::{GameInfo, Library, file_name};
 use list::{GamePanel, ListDim, MapPanel, Selection};
 
 /// The window's title on the select screen.
@@ -178,17 +178,22 @@ fn enter(
     sel
 }
 
-/// Starts the package at `path`; one that does not open shows the NOT OPENED notice.
-fn play(commands: &mut Commands, path: PathBuf) {
+/// The id of the game's `index`th map; `None` for a game without maps (one that did not read).
+fn map_id(game: &GameInfo, index: usize) -> Option<String> {
+    game.maps.get(index).map(|m| m.id.clone())
+}
+
+/// Starts the package at `path` on map `map` (`None`: its first); one that does not open shows the NOT OPENED notice.
+fn play(commands: &mut Commands, path: PathBuf, map: Option<String>) {
     commands.queue(move |world: &mut World| {
-        if let Err(e) = super::start(world, &path) {
+        if let Err(e) = super::start_map(world, &path, map.as_deref()) {
             eprintln!("{e}");
             notice::post(notice::Kind::Drop, &e.to_string());
         }
     });
 }
 
-/// The arrows move the selection ([`list::step`]), Enter plays the selected game, Escape quits.
+/// The arrows move the selection ([`list::step`]), Enter plays the selected map, Escape quits.
 fn keys(
     keys: Res<ButtonInput<KeyCode>>,
     lib: Res<Library>,
@@ -212,7 +217,7 @@ fn keys(
     if keys.any_just_pressed([KeyCode::Enter, KeyCode::NumpadEnter])
         && let Some(game) = lib.games.get(sel.game)
     {
-        play(&mut commands, game.path.clone());
+        play(&mut commands, game.path.clone(), map_id(game, sel.map));
     }
     if keys.just_pressed(KeyCode::Escape) {
         commands.write_message(AppExit::Success);
@@ -243,7 +248,7 @@ fn on_click(
         };
         if picked == *sel {
             if let Some(game) = lib.games.get(map.0) {
-                play(&mut commands, game.path.clone());
+                play(&mut commands, game.path.clone(), map_id(game, map.1));
             }
         } else {
             *sel = picked;
@@ -309,5 +314,15 @@ mod tests {
         let names: Vec<String> = packages(&d).iter().map(|p| file_name(p)).collect();
         assert_eq!(names, ["a.iwbz", "b-game"]);
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Enter and a click start the picked map's id; a game that did not read has none (#880).
+    #[test]
+    fn the_picked_map_is_started_by_its_id() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/maps.pkg");
+        let (info, _) = library::read(&path);
+        assert_eq!(map_id(&info, 0).as_deref(), Some("medium"));
+        assert_eq!(map_id(&info, 1).as_deref(), Some("hard"));
+        assert_eq!(map_id(&info, 9), None);
     }
 }

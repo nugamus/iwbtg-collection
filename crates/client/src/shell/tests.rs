@@ -227,3 +227,37 @@ fn a_drop_on_the_select_screen_plays_it() {
     assert_eq!(*app.world().resource::<State<AppScreen>>().get(), AppScreen::Run);
     assert_eq!(package_id(&app), "demo_clear");
 }
+
+fn map_id(app: &App) -> String {
+    app.world().non_send::<Game>().sim.map_id().to_owned()
+}
+
+/// Starting a map by id plays that map (#880); no id is the first map.
+#[test]
+fn start_map_plays_the_picked_map() {
+    let mut app = app();
+    frames(&mut app, 3);
+    let pkg = demo("tests/fixtures/maps.pkg");
+    start_map(app.world_mut(), &pkg, Some("hard")).unwrap();
+    frames(&mut app, 3);
+    assert_eq!(map_id(&app), "hard");
+    leave(app.world_mut());
+    frames(&mut app, 3);
+    start(app.world_mut(), &pkg).unwrap();
+    frames(&mut app, 3);
+    assert_eq!(map_id(&app), "medium", "no id: the first map");
+}
+
+/// A map the package does not have is an error and nothing changes.
+#[test]
+fn start_map_refuses_an_unknown_map() {
+    let mut app = app();
+    frames(&mut app, 3);
+    let err = start_map(app.world_mut(), &demo("tests/fixtures/maps.pkg"), Some("nope")).unwrap_err();
+    assert!(err.to_string().contains("nope"), "{err}");
+    frames(&mut app, 2);
+    assert_eq!(
+        *app.world().resource::<State<AppScreen>>().get(),
+        AppScreen::Select
+    );
+}

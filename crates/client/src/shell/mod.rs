@@ -200,13 +200,14 @@ impl NextRun {
 
 /// Opens the package at `path` and builds its sim. Nothing in `world` changes, so a package that
 /// does not open, or a game that does not start, is an error before anything else happens.
-fn prepare(world: &World, path: &Path, trace_mode: bool) -> Result<NextRun, StartError> {
+/// `map` is the map id to play (`None`: the package's first map).
+fn prepare(world: &World, path: &Path, trace_mode: bool, map: Option<&str>) -> Result<NextRun, StartError> {
     let fail = |why| StartError {
         path: path.to_owned(),
         why,
     };
     let pkg = package::open(path, trace_mode).map_err(|e| fail(StartFailure::Open(e)))?;
-    let run = crate::view::new_run(world, &pkg).map_err(|e| fail(StartFailure::Run(e)))?;
+    let run = crate::view::new_run(world, &pkg, map).map_err(|e| fail(StartFailure::Run(e)))?;
     Ok(NextRun {
         loaded: LoadedPackage {
             pkg,
@@ -219,7 +220,7 @@ fn prepare(world: &World, path: &Path, trace_mode: bool) -> Result<NextRun, Star
 /// Opens the package at `path` (`trace_mode`: research converter output) and makes it the loaded
 /// one, before the app runs (a package on the command line). The caller starts in `Run`.
 pub fn load(world: &mut World, path: &Path, trace_mode: bool) -> Result<(), StartError> {
-    prepare(world, path, trace_mode)?.install(world);
+    prepare(world, path, trace_mode, None)?.install(world);
     Ok(())
 }
 
@@ -229,8 +230,14 @@ pub fn load(world: &mut World, path: &Path, trace_mode: bool) -> Result<(), Star
 /// plays closes on `OnExit(Run)` (its replay and stats are finished there, its entities and
 /// assets dropped), then [`open_next`] puts the new one in place on `OnEnter(Run)`.
 pub fn start(world: &mut World, path: &Path) -> Result<(), StartError> {
+    start_map(world, path, None)
+}
+
+/// [`start`] on the map with id `map` (game select's pick, #880); `None` is the package's first
+/// map. A map the package does not have is a [`StartFailure::Run`] error.
+pub fn start_map(world: &mut World, path: &Path, map: Option<&str>) -> Result<(), StartError> {
     let trace_mode = world.get_resource::<Shell>().is_some_and(|s| s.trace_mode);
-    let next = prepare(world, path, trace_mode)?;
+    let next = prepare(world, path, trace_mode, map)?;
     world.insert_non_send(next);
     // `set`, not `set_if_different`: Run to Run closes the old run and opens the new one.
     world.resource_mut::<NextState<AppScreen>>().set(AppScreen::Run);
