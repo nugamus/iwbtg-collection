@@ -489,7 +489,7 @@ mod tests {
         );
         s.update(&def);
         assert_eq!(s.particles.len(), 3);
-        assert!(s.particles.iter().all(|p| p.ty == 1 && p.x == 11.0));
+        assert!(s.particles.iter().all(|p| p.ty == 1 && (p.x - 11.0).abs() < 1e-9));
     }
 
     #[test]
