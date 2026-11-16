@@ -37,8 +37,8 @@ use iwbtg_sim::stripped::PlayMode;
 use crate::art::{ArtFiles, ArtImages};
 use crate::card::{self, Card, RunChange};
 use crate::hud::Suspended;
-use crate::shell::{self, InRun, RUN_ONLY};
 use crate::hud::leaderboard::{self, Entry};
+use crate::shell::{self, InRun, RUN_ONLY};
 use crate::stats::{Board, Cleared, Recorded, Run, Stats, fmt_ticks};
 use crate::storage::Store;
 use crate::ui::backdrop::{Backdrop, dim};
@@ -471,21 +471,18 @@ impl Plugin for ResultsPlugin {
             crate::settings::update(|s| s.results_heatmap = on);
         }
         let preview = self.0.results_preview;
-        shell::run_resource(app, move |_| Results {
-            preview,
-            ..default()
-        });
+        shell::run_resource(app, move |_| Results { preview, ..default() });
         shell::run_resource(app, |_| room::Pictures::default());
         app.configure_sets(FixedUpdate, SimTick.run_if(closed))
-        .add_observer(on_activate)
-        .add_observer(on_row_click)
-        .add_systems(
-            Update,
-            (open, keys, act, show, hover_rows, heat, light_rows)
-                .chain()
-                .after(crate::screen::apply)
-                .in_set(InRun),
-        );
+            .add_observer(on_activate)
+            .add_observer(on_row_click)
+            .add_systems(
+                Update,
+                (open, keys, act, show, hover_rows, heat, light_rows)
+                    .chain()
+                    .after(crate::screen::apply)
+                    .in_set(InRun),
+            );
     }
 }
 

@@ -375,7 +375,10 @@ impl Plugin for ReplaysPlugin {
             )
             .add_systems(FixedUpdate, sync_pauses.before(SimTick))
             // Leaving the run (pause Quit, `shell::leave`) ends it as closing the window does.
-            .add_systems(OnExit(crate::shell::AppScreen::Run), reset.in_set(crate::shell::InRun));
+            .add_systems(
+                OnExit(crate::shell::AppScreen::Run),
+                reset.in_set(crate::shell::InRun),
+            );
     }
 }
 

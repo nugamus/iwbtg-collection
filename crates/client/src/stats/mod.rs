@@ -292,7 +292,10 @@ impl Plugin for StatsPlugin {
             .add_systems(FixedUpdate, watch.after(SimTick))
             .add_systems(Update, flush_now_and_then)
             // Leaving the run saves its deaths and play time; the next run starts a new tracker.
-            .add_systems(OnExit(crate::shell::AppScreen::Run), reset.in_set(crate::shell::InRun));
+            .add_systems(
+                OnExit(crate::shell::AppScreen::Run),
+                reset.in_set(crate::shell::InRun),
+            );
     }
 }
 

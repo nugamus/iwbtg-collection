@@ -4,9 +4,9 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use bevy::app::RunFixedMainLoopSystems;
 use bevy::asset::RenderAssetUsages;
 use bevy::camera::ScalingMode;
-use bevy::app::RunFixedMainLoopSystems;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use iwbtg_sim::sim::{Sim, SimOptions};
@@ -298,7 +298,9 @@ fn room_size(game: &Game) -> Vec2 {
     let sim = &game.sim;
     sim.def()
         .room(sim.world().room)
-        .map_or(Vec2::new(800.0, 608.0), |r| Vec2::new(r.width as f32, r.height as f32))
+        .map_or(Vec2::new(800.0, 608.0), |r| {
+            Vec2::new(r.width as f32, r.height as f32)
+        })
 }
 
 /// The view's run: the resources and systems that draw and tick the sim while the shell is in
@@ -322,35 +324,35 @@ impl ViewPlugin {
 impl Plugin for ViewPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(self.config())
-        .insert_resource(Stats {
-            window_start: Instant::now(),
-            ticks: 0,
-            frames: 0,
-            ticks_per_second: 0.0,
-            frames_per_second: 0.0,
-        })
-        .add_systems(OnEnter(AppScreen::Run), enter.in_set(RunSteps::Core))
-        .add_systems(OnEnter(AppScreen::Run), (setup, hud::setup).in_set(InRun))
-        .add_systems(OnExit(AppScreen::Run), leave.in_set(RunSteps::Core))
-        .add_systems(
-            RunFixedMainLoop,
-            (collect_input, collect_pad)
-                .in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop)
-                .run_if(in_state(AppScreen::Run)),
-        )
-        .add_systems(FixedUpdate, (tick, follow_room_speed).chain().in_set(SimTick))
-        .add_systems(
-            Update,
-            (
-                follow_view,
-                (set_alpha, sync_instances.in_set(DrawInstances))
-                    .chain()
-                    .after(follow_view),
-                hud::show_sign,
-                hud::show_countdown,
+            .insert_resource(Stats {
+                window_start: Instant::now(),
+                ticks: 0,
+                frames: 0,
+                ticks_per_second: 0.0,
+                frames_per_second: 0.0,
+            })
+            .add_systems(OnEnter(AppScreen::Run), enter.in_set(RunSteps::Core))
+            .add_systems(OnEnter(AppScreen::Run), (setup, hud::setup).in_set(InRun))
+            .add_systems(OnExit(AppScreen::Run), leave.in_set(RunSteps::Core))
+            .add_systems(
+                RunFixedMainLoop,
+                (collect_input, collect_pad)
+                    .in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop)
+                    .run_if(in_state(AppScreen::Run)),
             )
-                .in_set(InRun),
-        );
+            .add_systems(FixedUpdate, (tick, follow_room_speed).chain().in_set(SimTick))
+            .add_systems(
+                Update,
+                (
+                    follow_view,
+                    (set_alpha, sync_instances.in_set(DrawInstances))
+                        .chain()
+                        .after(follow_view),
+                    hud::show_sign,
+                    hud::show_countdown,
+                )
+                    .in_set(InRun),
+            );
     }
 }
 

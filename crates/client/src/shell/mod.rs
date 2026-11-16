@@ -167,9 +167,7 @@ pub fn load(world: &mut World, path: &Path, trace_mode: bool) -> Result<(), Stri
 pub fn start(world: &mut World, path: &Path) -> Result<(), String> {
     let trace_mode = world.get_resource::<Shell>().is_some_and(|s| s.trace_mode);
     load(world, path, trace_mode)?;
-    world
-        .resource_mut::<NextState<AppScreen>>()
-        .set(AppScreen::Run);
+    world.resource_mut::<NextState<AppScreen>>().set(AppScreen::Run);
     Ok(())
 }
 

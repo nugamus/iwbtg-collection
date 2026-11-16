@@ -82,7 +82,11 @@ impl Pictures {
         ];
         let (still, ladder) = art::still(src.files, images, cache, name, size);
         for (sprite, t) in still {
-            entities.push(commands.spawn((sprite, Anchor::TOP_LEFT, t, layer.clone(), RUN_ONLY)).id());
+            entities.push(
+                commands
+                    .spawn((sprite, Anchor::TOP_LEFT, t, layer.clone(), RUN_ONLY))
+                    .id(),
+            );
         }
         // The room's instances as it starts, in draw order: depth descending, then placement
         // (creation) order, among the tile layers (`view::order`, #789).

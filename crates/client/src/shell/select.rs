@@ -40,13 +40,12 @@ impl Plugin for SelectPlugin {
         let folder = self.0.clone();
         app.add_systems(
             OnEnter(AppScreen::Select),
-            move |mut commands: Commands, mut backdrop: ResMut<Backdrop>, mut window: Query<&mut Window, With<PrimaryWindow>>| {
+            move |mut commands: Commands,
+                  mut backdrop: ResMut<Backdrop>,
+                  mut window: Query<&mut Window, With<PrimaryWindow>>| {
                 let entries = folder.as_deref().map(packages).unwrap_or_default();
                 spawn(&mut commands, folder.as_deref(), &entries);
-                commands.insert_resource(List {
-                    entries,
-                    ..default()
-                });
+                commands.insert_resource(List { entries, ..default() });
                 backdrop.art = None;
                 backdrop.dim = dim::SELECT;
                 for mut w in &mut window {
@@ -76,8 +75,10 @@ pub fn packages(folder: &Path) -> Vec<PathBuf> {
 }
 
 fn name(path: &Path) -> String {
-    path.file_name()
-        .map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned())
+    path.file_name().map_or_else(
+        || path.display().to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    )
 }
 
 #[derive(Component)]
@@ -112,11 +113,7 @@ fn spawn(commands: &mut Commands, folder: Option<&Path>, entries: &[PathBuf]) {
         DespawnOnExit(AppScreen::Select),
         children![
             text("Select a game", Type::condensed(40.0, 700), tokens::INK),
-            text(
-                &format!("Placeholder list: {where_}"),
-                Type::LABEL,
-                tokens::MUTED
-            ),
+            text(&format!("Placeholder list: {where_}"), Type::LABEL, tokens::MUTED),
             (
                 Node {
                     flex_direction: FlexDirection::Column,
