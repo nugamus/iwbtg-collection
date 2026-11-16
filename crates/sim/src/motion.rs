@@ -232,6 +232,15 @@ impl Motion {
         self.recompute_cartesian(self.speed, deg)
     }
 
+    /// A precise bounce (`collide::bounce`): `direction` and the `hspeed` and `vspeed` the bounce
+    /// computed for it; `speed` is kept.
+    pub(crate) fn set_bounced(&mut self, direction: Real, h: Real, v: Real) -> Result<(), SimError> {
+        self.direction = finite(direction, "direction")?;
+        self.hspeed = finite(h, "hspeed")?;
+        self.vspeed = finite(v, "vspeed")?;
+        Ok(())
+    }
+
     /// GML `motion_set(dir, speed)`: direction `dir` and speed `speed`, then one cartesian
     /// recompute (Confirmed manual: "sets the motion").
     pub fn motion_set(&mut self, dir: Real, speed: Real) -> Result<(), SimError> {
