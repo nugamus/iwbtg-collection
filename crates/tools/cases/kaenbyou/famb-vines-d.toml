@@ -22,7 +22,6 @@ notes = [
 "instance_number(player)" = "instance_number(kid)"
 
 [unprobed]
-"bbox_left" = "no probe field for `bbox_left` (OPEN)"
 "distance_to_object(WalljumpL)" = "a function call; the probe reads variables only (OPEN)"
 "distance_to_object(WalljumpR)" = "a function call; the probe reads variables only (OPEN)"
 

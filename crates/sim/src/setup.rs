@@ -321,6 +321,11 @@ fn set_field(
             };
             kid_api::set_field(inst, f, v)
         }
+        // Read-only in GML (CLONE_SPEC, "bbox_left/right/top/bottom are read-only").
+        FieldRef::Bbox(e) => Err(SimError::unsupported(format!(
+            "setup cannot write `{}`: it is read-only",
+            e.name()
+        ))),
     }
 }
 

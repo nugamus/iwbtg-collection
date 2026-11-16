@@ -7,7 +7,10 @@
 //! or a save field. Original GameMaker names never reach the sim: `iwbtg trace import` translates
 //! them through the package's trace map first.
 
-use super::{Column, EngineVar, FieldRef, FixedColumn, ImageField, KeyRead, ProbeTarget, SaveField};
+use super::{
+    BboxEdge, Column, EngineVar, FieldRef, FixedColumn, ImageField, KeyRead, ProbeTarget, RowExpr, SaveField,
+    Term,
+};
 use crate::collide::Target;
 use crate::def::{ClassMask, GameDef, KindId, NameId};
 use crate::input::Action;
@@ -15,13 +18,9 @@ use crate::kid::api::KidField;
 
 /// GM built-in instance variables the probe cannot read yet (no `FieldRef` for them). They never
 /// resolve to a kid field or a custom variable.
-const UNSUPPORTED_BUILTINS: [&str; 24] = [
+const UNSUPPORTED_BUILTINS: [&str; 20] = [
     "xstart",
     "ystart",
-    "bbox_left",
-    "bbox_right",
-    "bbox_top",
-    "bbox_bottom",
     "mask_index",
     "image_number",
     "image_single",
@@ -46,17 +45,21 @@ const UNSUPPORTED_BUILTINS: [&str; 24] = [
 ///
 /// Built-in variables first: the fixed columns that are instance variables (`x` ...
 /// `image_index`, `sprite_index`, `id`), `alarm[0]` to `alarm[11]`, the image variables and
-/// `visible`, `solid`, `depth`. Then a custom variable the package declares
+/// `visible`, `solid`, `depth`, `bbox_left` ... `bbox_bottom`. Then a custom variable the package declares
 /// (`GameDef::var_names`, no index). Any other identifier, with or without one index
 /// (`djump`, `jump[1]`), is a kid field read through `kid::api::read_field`, which gives no value
-/// on an instance that is not a kid. Built-ins the probe cannot read yet (`xstart`, `bbox_left`,
+/// on an instance that is not a kid. Built-ins the probe cannot read yet (`xstart`, `mask_index`,
 /// `timeline_position`, ...) and anything that is not a plain name give `None`.
 pub fn resolve(name: &str, def: &GameDef) -> Option<FieldRef> {
     let (base, index) = split_index(name)?;
     if let Some(field) = builtin(base, index) {
         return Some(field);
     }
-    if UNSUPPORTED_BUILTINS.contains(&base) || FixedColumn::from_name(base).is_some() || is_image_name(base) {
+    if UNSUPPORTED_BUILTINS.contains(&base)
+        || FixedColumn::from_name(base).is_some()
+        || is_image_name(base)
+        || BboxEdge::from_name(base).is_some()
+    {
         return None;
     }
     if index.is_none()
@@ -79,6 +82,9 @@ pub fn resolve(name: &str, def: &GameDef) -> Option<FieldRef> {
 /// - `global.<name>`: a global the package declares, else engine state (`difficulty`, `death`, `time`,
 ///   `savenum`, `clear`, `frozen`, `frozen2`, `reverse`, `grav`, `paused`, the latched vine-key flags
 ///   `key_left`, `key_right`, `key_jump`); `room_speed` and `fps` are engine state too;
+/// - `place_free(<x>,<y>)`: the row's instance's place test (solids only), each argument numbers
+///   and the row instance's fields joined by `+` and `-` (`x+hspeed`, `y-1`), evaluated left to
+///   right in binary64 as GML does before the call;
 /// - `instance_number(<target>)`, where a target is a kind name or `class:<class name>`;
 /// - `keyboard_check(<action>)`, `keyboard_check_pressed(...)`, `keyboard_check_released(...)`,
 ///   `keyboard_check_direct(...)`, with an action name (`jump`, `right`);
@@ -88,6 +94,15 @@ pub fn resolve(name: &str, def: &GameDef) -> Option<FieldRef> {
 /// The error says what could not be read.
 pub fn column(expr: &str, def: &GameDef) -> Result<Column, String> {
     let expr = expr.trim();
+    if let Some(args) = call_arg(expr, "place_free") {
+        let (x, y) = args
+            .split_once(',')
+            .ok_or_else(|| format!("{expr:?}: expected place_free(<x>,<y>)"))?;
+        return Ok(Column::PlaceFree {
+            x: row_expr(x, def).map_err(|e| format!("{expr:?}: {e}"))?,
+            y: row_expr(y, def).map_err(|e| format!("{expr:?}: {e}"))?,
+        });
+    }
     if let Some(arg) = call_arg(expr, "instance_number") {
         return target(arg, def).map(Column::Count);
     }
@@ -153,6 +168,49 @@ pub fn column(expr: &str, def: &GameDef) -> Result<Column, String> {
         return Ok(Column::Engine(EngineVar::Fps));
     }
     field_column(ProbeTarget::Row, expr, def, expr)
+}
+
+/// A place test argument: numbers and fields of the row's instance joined by `+` and `-`.
+fn row_expr(text: &str, def: &GameDef) -> Result<RowExpr, String> {
+    let mut terms = Vec::new();
+    let mut push = |part: &str, neg: bool| -> Result<(), String> {
+        let part = part.trim();
+        if part.is_empty() {
+            return Err(format!("{text:?} has an empty term"));
+        }
+        let term = if part.starts_with(|c: char| c.is_ascii_digit() || c == '.') {
+            let n: f64 = part.parse().map_err(|_| format!("{part:?} is not a number"))?;
+            Term::Num(crate::num::Real::new(n))
+        } else {
+            Term::Field(resolve(part, def).ok_or_else(|| format!("no probe field {part:?}"))?)
+        };
+        terms.push((neg, term));
+        Ok(())
+    };
+    let bytes = text.as_bytes();
+    // A leading `-` negates the first term.
+    let mut i = text.len() - text.trim_start().len();
+    let neg_first = bytes.get(i) == Some(&b'-');
+    if neg_first {
+        i += 1;
+    }
+    let (mut neg, mut start) = (neg_first, i);
+    while i < bytes.len() {
+        let c = bytes[i];
+        // A sign right after an exponent marker belongs to the number (`1e-5`).
+        let exponent = i > start && matches!(bytes[i - 1], b'e' | b'E') && {
+            let t = text[start..i - 1].trim();
+            t.starts_with(|c: char| c.is_ascii_digit() || c == '.')
+        };
+        if (c == b'+' || c == b'-') && !exponent {
+            push(&text[start..i], neg)?;
+            neg = c == b'-';
+            start = i + 1;
+        }
+        i += 1;
+    }
+    push(&text[start..], neg)?;
+    Ok(RowExpr { terms })
 }
 
 /// A field column, or an error naming the expression.
@@ -225,6 +283,9 @@ fn builtin(base: &str, index: Option<u32>) -> Option<FieldRef> {
         )
     {
         return Some(FieldRef::Fixed(c));
+    }
+    if let Some(e) = BboxEdge::from_name(base) {
+        return Some(FieldRef::Bbox(e));
     }
     image_field(base).map(FieldRef::Image)
 }
@@ -311,8 +372,10 @@ mod tests {
         assert_eq!(resolve("djump", &d), kid("djump", None));
         assert_eq!(resolve("curJumps", &d), kid("curJumps", None));
         assert_eq!(resolve("jump[1]", &d), kid("jump", Some(1)));
+        assert_eq!(resolve("bbox_left", &d), Some(FieldRef::Bbox(BboxEdge::Left)));
+        assert_eq!(resolve("bbox_bottom", &d), Some(FieldRef::Bbox(BboxEdge::Bottom)));
         for bad in [
-            "bbox_left",
+            "bbox_left[0]",
             "xstart",
             "room",
             "frame",
@@ -387,11 +450,50 @@ mod tests {
             Ok(Column::Key(KeyRead::Pressed(Action::Shoot)))
         );
         assert_eq!(column("save.deaths", &d), Ok(Column::Save(SaveField::Deaths)));
+        assert_eq!(
+            column("kid.bbox_top", &d),
+            field(ProbeTarget::Kid, FieldRef::Bbox(BboxEdge::Top))
+        );
+        let fixed = |c| Term::Field(FieldRef::Fixed(c));
+        assert_eq!(
+            column("place_free(x+hspeed, -1.5+y-vspeed)", &d),
+            Ok(Column::PlaceFree {
+                x: RowExpr {
+                    terms: vec![(false, fixed(FixedColumn::X)), (false, fixed(FixedColumn::Hspeed))]
+                },
+                y: RowExpr {
+                    terms: vec![
+                        (true, Term::Num(crate::num::Real::new(1.5))),
+                        (false, fixed(FixedColumn::Y)),
+                        (true, fixed(FixedColumn::Vspeed)),
+                    ]
+                },
+            })
+        );
+        assert_eq!(
+            column("place_free(x,y+1e-3)", &d),
+            Ok(Column::PlaceFree {
+                x: RowExpr {
+                    terms: vec![(false, fixed(FixedColumn::X))]
+                },
+                y: RowExpr {
+                    terms: vec![
+                        (false, fixed(FixedColumn::Y)),
+                        (false, Term::Num(crate::num::Real::new(1e-3)))
+                    ]
+                },
+            })
+        );
         for bad in [
             "global.audio_music_volume",
             "global.a[1]",
             "player.x",
-            "kid.bbox_left",
+            "kid.mask_index",
+            "place_free(x)",
+            "place_free(x+,y)",
+            "place_free(x+xstart,y)",
+            "place_free(kid.x,y)",
+            "place_free(x*2,y)",
             "keyboard_check(vk_shift)",
             "instance_number(player)",
             "instance_number(class:nope)",
