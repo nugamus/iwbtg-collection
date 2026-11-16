@@ -111,6 +111,42 @@ mod wp2 {
         assert_eq!(m.vspeed(), r(15.524731620415945));
     }
 
+    /// research#193 (CLONE_SPEC "Snap to integers"): a speed or direction write snaps hspeed and
+    /// vspeed to an integer within 1e-4 (strict, absolute); threshold probes of
+    /// `traces/animus/bounce-snap-b.csv` and the spec's examples. motion_set does not snap
+    /// (research#199).
+    #[test]
+    fn speed_and_direction_writes_snap_to_integers() {
+        let bits = |x: Real| x.get().to_bits();
+        let at = |speed: f64, dir: f64| {
+            let mut m = Motion::new_at(r(0.0), r(0.0));
+            m.set_speed(r(speed)).unwrap();
+            m.set_direction(r(dir)).unwrap();
+            (m.hspeed(), m.vspeed())
+        };
+        // Threshold probes at direction 0.
+        assert_eq!(at(5.0001, 0.0).0, r(5.0), "|5.0001 - 5| is 9.99999999998e-05");
+        assert_eq!(at(100.0001, 0.0).0, r(100.0001), "|100.0001 - 100| is 1.0000000000332e-4");
+        assert_eq!(bits(at(0.000_09, 0.0).0), bits(r(0.0)));
+        assert_eq!(at(0.0001, 0.0).0, r(0.0001), "1e-4 is not below 1e-4");
+        assert_eq!(at(0.5 + 1e-10, 0.0).0, r(0.5 + 1e-10), "only integers attract");
+        assert_eq!(at(10000.0001, 0.0).0, r(10000.0));
+        // The spec's examples: axis residues vanish, as +0.0; an exact -0.0 stays.
+        assert_eq!(bits(at(8.0, 90.0).0), bits(r(0.0)));
+        assert_eq!(at(8.0, 120.0).0, r(-4.0));
+        assert_eq!(at(8.0, 60.0).0, r(4.0));
+        assert_eq!(bits(at(1.5, 180.0).1), bits(r(0.0)));
+        assert_eq!(bits(at(3.0, 0.0).1), bits(r(-0.0)));
+        // Either write order gives the same bits.
+        let mut m = Motion::new_at(r(0.0), r(0.0));
+        m.set_direction(r(120.0)).unwrap();
+        m.set_speed(r(8.0)).unwrap();
+        assert_eq!((m.hspeed(), m.vspeed()), at(8.0, 120.0));
+        // motion_set keeps the raw products until research#199.
+        m.motion_set(r(120.0), r(8.0)).unwrap();
+        assert_eq!(m.hspeed(), r(-3.9999999999999982));
+    }
+
     #[test]
     fn motion_add_adds_a_vector() {
         let mut m = Motion::new_at(r(0.0), r(0.0));

@@ -180,6 +180,44 @@ mod wp2 {
         assert!(checked > 3000, "only {checked} rows");
     }
 
+    /// animus/bounce-snap.csv and bounce-snap-b.csv (research#193): every probe's hspeed and
+    /// vspeed after its speed and direction writes, in the recorded write order, bit for bit
+    /// (sign of zero included): the integer snap of `num::snap_to_int`.
+    #[test]
+    fn speed_and_direction_writes_snap_like_bounce_snap() {
+        for case in ["bounce-snap.csv", "bounce-snap-b.csv"] {
+            let Some(csv) = trace("animus", case) else {
+                return;
+            };
+            let (hs, vs, sp) = (csv.col("hspeed"), csv.col("vspeed"), csv.col("speed"));
+            let dd = csv.header.iter().position(|h| h == "dd");
+            let via = csv.header.iter().position(|h| h == "via");
+            for row in &csv.rows {
+                let speed = csv.real(row, sp);
+                let mut m = Motion::new_at(r(0.0), r(0.0));
+                match (dd, via) {
+                    (Some(dd), Some(via)) if row[via] == "1.0" => {
+                        m.set_direction(csv.real(row, dd)).unwrap();
+                        m.set_speed(speed).unwrap();
+                    }
+                    (Some(dd), _) => {
+                        m.set_speed(speed).unwrap();
+                        m.set_direction(csv.real(row, dd)).unwrap();
+                    }
+                    (None, _) => m.set_speed(speed).unwrap(),
+                }
+                let bits = |x: Real| x.get().to_bits();
+                assert_eq!(
+                    (bits(m.hspeed()), bits(m.vspeed())),
+                    (bits(csv.real(row, hs)), bits(csv.real(row, vs))),
+                    "{case} id {}: speed {speed:?}",
+                    row[3]
+                );
+            }
+            assert_eq!(csv.rows.len(), if dd.is_some() { 1024 } else { 800 }, "{case}");
+        }
+    }
+
     /// num-rng-a.csv: every change of random_get_seed() between rows is a whole number of LCG
     /// steps (N9).
     #[test]

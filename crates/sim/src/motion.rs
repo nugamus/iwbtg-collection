@@ -86,6 +86,16 @@ fn cartesian_of(speed: Real, direction: Real) -> Result<(Real, Real), SimError> 
     Ok((h, v))
 }
 
+/// Whether a polar-to-cartesian recompute snaps hspeed and vspeed to integers.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Snap {
+    /// [`num::snap_to_int`] on each (CLONE_SPEC "Snap to integers", research#193): a `speed` or
+    /// `direction` write, Confirmed (recorder) for both write orders.
+    ToInt,
+    /// The plain products: `motion_set` and friction, until research#199 says whether they snap.
+    None,
+}
+
 impl Motion {
     /// At `(x, y)`, also the start and previous position; speed 0, direction 0, gravity 0,
     /// gravity_direction 270, friction 0 (Confirmed (recorder):
@@ -217,27 +227,31 @@ impl Motion {
     }
 
     /// Sets `speed` as written (a negative speed stays negative, M3); recomputes hspeed and
-    /// vspeed from it and the current direction.
+    /// vspeed from it and the current direction, with the integer snap ([`Snap::ToInt`]).
     pub fn set_speed(&mut self, v: Real) -> Result<(), SimError> {
         let v = finite(v, "speed")?;
-        self.recompute_cartesian(v, self.direction)
+        self.recompute_cartesian(v, self.direction, Snap::ToInt)
     }
 
     /// Sets `direction` in degrees as written (no wrap into `[0, 360)`); recomputes hspeed and
     /// vspeed. A negative speed keeps its sign and turns with the direction (Confirmed
     /// (recorder): direction += 30 gives speed -2.5, direction 254.9999999999999, hspeed
     /// `0.6470476127563058`, vspeed `-2.41481456572267`, `t-mot-05-c.csv` row 3805).
+    ///
+    /// hspeed and vspeed get the integer snap ([`Snap::ToInt`]): speed 8 at direction 120 gives
+    /// hspeed -4.0, not -3.9999999999999982.
     pub fn set_direction(&mut self, deg: Real) -> Result<(), SimError> {
         let deg = finite(deg, "direction")?;
-        self.recompute_cartesian(self.speed, deg)
+        self.recompute_cartesian(self.speed, deg, Snap::ToInt)
     }
 
     /// GML `motion_set(dir, speed)`: direction `dir` and speed `speed`, then one cartesian
-    /// recompute (Confirmed manual: "sets the motion").
+    /// recompute (Confirmed manual: "sets the motion"). No integer snap: whether motion_set snaps
+    /// like a speed or direction write is OPEN (research#199).
     pub fn motion_set(&mut self, dir: Real, speed: Real) -> Result<(), SimError> {
         let dir = finite(dir, "direction")?;
         let speed = finite(speed, "speed")?;
-        self.recompute_cartesian(speed, dir)
+        self.recompute_cartesian(speed, dir, Snap::None)
     }
 
     /// GML `motion_add(dir, speed)`: adds `(speed * dcos(dir), -(speed * dsin(dir)))` to the
@@ -287,9 +301,13 @@ impl Motion {
 
     /// Stores `speed` and `direction` as given and the hspeed and vspeed computed from them. The
     /// only place that turns the polar form into the cartesian one (M3; formula in
-    /// [`cartesian_of`]).
-    fn recompute_cartesian(&mut self, speed: Real, direction: Real) -> Result<(), SimError> {
+    /// [`cartesian_of`]), then `snap`.
+    fn recompute_cartesian(&mut self, speed: Real, direction: Real, snap: Snap) -> Result<(), SimError> {
         let (h, v) = cartesian_of(speed, direction)?;
+        let (h, v) = match snap {
+            Snap::ToInt => (num::snap_to_int(h), num::snap_to_int(v)),
+            Snap::None => (h, v),
+        };
         self.speed = speed;
         self.direction = direction;
         self.hspeed = h;
@@ -337,7 +355,8 @@ fn apply_friction(m: &mut Motion, rule: FrictionRule) -> Result<(), SimError> {
         }
     };
     let next = finite(next, "speed")?;
-    m.recompute_cartesian(next, m.direction)
+    // No integer snap: whether friction's speed change snaps is OPEN (research#199).
+    m.recompute_cartesian(next, m.direction, Snap::None)
 }
 
 /// Gravity for one tick: `hspeed += gravity * dcos(gravity_direction)`,
