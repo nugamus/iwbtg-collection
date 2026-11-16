@@ -984,7 +984,8 @@ mod blood_emitter {
         }
         fx.idle(20);
         assert!(fx.w.exists(id), "alarm 0 keeps the instance");
-        p.destroy_all_emitters(iwbtg_sim::particles::PartSystemId(0)).unwrap();
+        p.destroy_all_emitters(iwbtg_sim::particles::PartSystemId(0))
+            .unwrap();
         p.update(&mut rng).unwrap();
         assert_eq!(fx.w.particles, p, "the emitter is gone, the system stays");
         fx.w.output.clear();
@@ -996,7 +997,8 @@ mod blood_emitter {
         assert_eq!(fx.w.rng, rng, "no draws after the stream ended");
         assert_eq!(fx.w.particles, p);
         assert!(
-            !fx.w.output
+            !fx.w
+                .output
                 .iter()
                 .any(|o| matches!(o, OutputEvent::Builtin(BuiltinOutput::DeathParticles { .. }))),
             "the client gets no new particles"
@@ -1037,7 +1039,8 @@ mod blood_emitter {
         for _ in 0..19 {
             p.update(&mut rng).unwrap();
         }
-        p.destroy_all_emitters(iwbtg_sim::particles::PartSystemId(0)).unwrap();
+        p.destroy_all_emitters(iwbtg_sim::particles::PartSystemId(0))
+            .unwrap();
         for _ in 0..49 {
             p.update(&mut rng).unwrap();
         }
@@ -1067,7 +1070,9 @@ mod blood_emitter {
     #[test]
     fn outlives_stream_needs_particles_mode() {
         let mut k = KindDef::new("e", Builtin::BloodEmitter);
-        k.params.0.insert("outlives_stream".into(), ParamValue::Bool(true));
+        k.params
+            .0
+            .insert("outlives_stream".into(), ParamValue::Bool(true));
         assert!(builtins::init_state(Builtin::BloodEmitter, &k.params).is_err());
         k.params
             .0
