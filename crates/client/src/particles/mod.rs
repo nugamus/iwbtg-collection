@@ -17,6 +17,7 @@ use iwbtg_sim::builtins::BuiltinState;
 use iwbtg_sim::builtins::particle_system::Lifecycle;
 use iwbtg_sim::def::{GameDef, RoomId};
 use iwbtg_sim::output::OutputEvent;
+use iwbtg_sim::particles::PartSystemId;
 use iwbtg_sim::room::RoomOutput;
 use iwbtg_sim::world::{InstId, KindState, World as SimWorld};
 
@@ -91,8 +92,9 @@ impl Tracker {
 
     /// Brings the drawing copies up to the sim after a tick (or several).
     ///
-    /// - **Build.** A new sim system that a `particle_system` instance holds is built from its
-    ///   definition (bursts and creates included).
+    /// - **Build.** A new sim system that a `particle_system` instance built is built from its
+    ///   definition (`World::particle_defs`, so also when the instance is already gone; bursts
+    ///   and creates included).
     /// - **destroy and destroy_emitters** are read from the sim's state (`World::particles`:
     ///   the system's and each emitter's `destroyed`), so they are exact.
     /// - **clear** leaves no trace in the sim's state, so it is inferred from the instance's
@@ -131,7 +133,7 @@ impl Tracker {
 
         for s in self.seen..w.particles.systems.len() {
             let s = s as u32;
-            if let Some(d) = def_of(w, s)
+            if let Some(d) = w.particle_defs.get(&PartSystemId(s)).and_then(|d| d.index())
                 && let Some(pd) = def.particle_systems.get(d)
             {
                 self.systems.insert(s, DrawSystem::build(d, pd, seed(s)));
@@ -236,22 +238,6 @@ fn watched(w: &SimWorld) -> BTreeMap<InstId, Watch> {
             _ => None,
         })
         .collect()
-}
-
-/// The definition index of sim system `s`: the `system` list entry of the live instance that
-/// built it. A system whose instance is gone by the end of the tick that built it is not drawn
-/// (its `on_destroy` decides the rest, which the client cannot see then).
-fn def_of(w: &SimWorld, s: u32) -> Option<usize> {
-    w.instances()
-        .iter()
-        .filter(|i| i.alive)
-        .find_map(|i| match &i.state {
-            KindState::Builtin(BuiltinState::ParticleSystem(p)) => {
-                let k = p.systems.iter().position(|x| x.0 == s)?;
-                p.defs.get(k)?.index()
-            }
-            _ => None,
-        })
 }
 
 /// After each tick: the drawing copies follow the sim.
