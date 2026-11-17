@@ -34,6 +34,7 @@ mod results;
 mod retry;
 mod savefile;
 mod screen;
+mod script_error;
 mod settings;
 mod shell;
 mod skip;
@@ -85,6 +86,8 @@ struct Args {
     overlay: overlay::OverlayArgs,
     #[command(flatten)]
     loading: loading::LoadingArgs,
+    #[command(flatten)]
+    script_error: script_error::ScriptErrorArgs,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -154,6 +157,7 @@ fn main() -> ExitCode {
     let pause = args.pause;
     let results = args.results;
     let overlay = args.overlay;
+    let script_error = args.script_error;
     let trace_mode = args.package.trace_mode;
     let loading = loading::LoadingPlugin {
         args: args.loading,
@@ -196,6 +200,7 @@ fn main() -> ExitCode {
             overlay::OverlayPlugin(overlay),
             loading,
             particles::ParticlesPlugin,
+            script_error::ScriptErrorPlugin(script_error),
         ));
     });
     exit_code(result)

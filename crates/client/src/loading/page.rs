@@ -21,7 +21,7 @@ const STRIP_H: f32 = 240.0;
 const FRUIT_SCALE: f32 = 2.0;
 
 /// The card's glass: `rgba(12,14,22,.82)`.
-fn glass() -> Color {
+pub(crate) fn glass() -> Color {
     tokens::dark(Color::srgb_u8(12, 14, 22), 0.82)
 }
 
@@ -94,13 +94,14 @@ fn card(c: &mut ChildSpawner, info: &Info, art: Option<Handle<Image>>) {
         shape,
     ))
     .with_children(|c| {
-        strip(c, info, art);
+        strip(c, &info.title, info.creator.as_deref(), art);
         body(c, info);
     });
 }
 
-/// The key art, 240 px tall, darkened towards the bottom, with the title and creator over it.
-fn strip(c: &mut ChildSpawner, info: &Info, art: Option<Handle<Image>>) {
+/// The key art, 240 px tall, darkened towards the bottom, with the title and creator over it
+/// (also the script error card's head).
+pub(crate) fn strip(c: &mut ChildSpawner, title: &str, creator: Option<&str>, art: Option<Handle<Image>>) {
     // `Backdrop dim 0.1`, then `linear-gradient(0deg, rgba(12,14,22,.95) 0%, transparent 60%)`.
     let dim = tokens::black(0.1);
     let mut shape = Shape {
@@ -115,8 +116,8 @@ fn strip(c: &mut ChildSpawner, info: &Info, art: Option<Handle<Image>>) {
     if let Some(art) = art {
         shape = shape.with_image(art);
     }
-    let title = info.title.clone();
-    let creator = info.creator.clone();
+    let title = title.to_owned();
+    let creator = creator.map(str::to_owned);
     c.spawn((
         Node {
             height: Val::Px(STRIP_H),

@@ -130,6 +130,7 @@ fn apply(world: &mut World) {
             crate::stats::reset(world);
             crate::pause::reset(world);
             crate::results::reset(world);
+            crate::script_error::reset(world);
             let why = match why {
                 Some(Why::Death) => "auto-retry",
                 _ => "quick-retry",
