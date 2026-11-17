@@ -28,6 +28,11 @@
 //! the same quoting is an error. Where a name appears twice, [`TraceTable::column`] finds the bare
 //! column, and reports show the quoted one in quotes ([`TraceTable::label`]).
 //!
+//! A phases file (`NAME.phases.csv`, written with the recorder's `--phases`) has the same columns
+//! with a bare `phase` column (a quoted string such as `"begin_step"`) after `frame`, and one row
+//! per listed phase of each frame for each traced instance. The parser reads it like any trace;
+//! [`diff`] then matches rows on the phase too ([`PHASE_COLUMN`]).
+//!
 //! This module does no IO: callers pass and receive text.
 
 use std::collections::BTreeMap;
@@ -61,6 +66,11 @@ pub const FRAME_COLUMN: &str = "frame";
 
 /// Column that names the traced object. Rows are matched on it.
 pub const OBJECT_COLUMN: &str = "object";
+
+/// Column of a phases file (the recorder's `--phases`, `NAME.phases.csv`) that names the point in
+/// the frame where the row was sampled (`start`, `begin_step`, ..., `draw`). It sits right after
+/// `frame`. When a table has it, rows are matched on it too.
+pub const PHASE_COLUMN: &str = "phase";
 
 /// Frames of context shown on each side of a difference by default.
 pub const DEFAULT_CONTEXT: u32 = 5;
@@ -236,6 +246,12 @@ impl TraceTable {
             .iter()
             .position(|c| c.name == name && !c.quoted)
             .or_else(|| self.columns.iter().position(|c| c.name == name))
+    }
+
+    /// Index of the bare [`PHASE_COLUMN`], when this is a phases file. A game variable called
+    /// `phase` is quoted and does not count.
+    pub fn phase_column(&self) -> Option<usize> {
+        self.column_exact(PHASE_COLUMN, false)
     }
 
     /// Index of the column with this name and quoting.
@@ -604,11 +620,13 @@ pub enum Side {
     B,
 }
 
-/// Identifies one row: frame (in `a`'s numbering), object, and the instance's position among
-/// that object's rows in that frame (0 for the first).
+/// Identifies one row: frame (in `a`'s numbering), phase, object, and the instance's position
+/// among that object's rows in that frame and phase (0 for the first).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct RowKey {
     pub frame: i64,
+    /// The [`PHASE_COLUMN`] value in a phases file, empty in a plain trace.
+    pub phase: String,
     pub object: String,
     pub instance: u32,
 }
@@ -724,7 +742,8 @@ fn row_keys(table: &TraceTable, side: &str, frame_offset: i64) -> Result<Vec<Row
     let object_col = table
         .column(OBJECT_COLUMN)
         .ok_or_else(|| missing(OBJECT_COLUMN))?;
-    let mut seen: BTreeMap<(i64, String), u32> = BTreeMap::new();
+    let phase_col = table.phase_column();
+    let mut seen: BTreeMap<(i64, String, String), u32> = BTreeMap::new();
     let mut keys = Vec::with_capacity(table.rows.len());
     for (index, row) in table.rows.iter().enumerate() {
         let frame = match row.get(frame_col) {
@@ -739,9 +758,16 @@ fn row_keys(table: &TraceTable, side: &str, frame_offset: i64) -> Result<Vec<Row
             }
         };
         let object = row.get(object_col).map(Value::decimal).unwrap_or_default();
-        let count = seen.entry((frame, object.clone())).or_insert(0);
+        let phase = phase_col
+            .and_then(|col| row.get(col))
+            .map(Value::decimal)
+            .unwrap_or_default();
+        let count = seen
+            .entry((frame, phase.clone(), object.clone()))
+            .or_insert(0);
         keys.push(RowKey {
             frame,
+            phase,
             object,
             instance: *count,
         });
@@ -758,13 +784,24 @@ struct FieldPair {
     b: usize,
 }
 
-/// Compares two traces bit for bit. Rows match by (frame, object, instance order), fields by
-/// name through [`DiffOptions::rename`]. `frame` and `object` are the match key and are not
-/// compared again. Returns the first difference with its context, and in summary mode every
+/// Compares two traces bit for bit. Rows match by (frame, phase, object, instance order), fields
+/// by name through [`DiffOptions::rename`]. `frame`, `phase` and `object` are the match key and
+/// are not compared again. Both tables must be phases files or neither: a phases file has
+/// several rows per frame for one instance, so it cannot pair with a plain trace. Returns the first difference with its context, and in summary mode every
 /// differing field.
 pub fn diff(a: &TraceTable, b: &TraceTable, opts: &DiffOptions) -> Result<TraceDiff, TraceError> {
     a.check_shape("a")?;
     b.check_shape("b")?;
+    if a.phase_column().is_some() != b.phase_column().is_some() {
+        let (with, without) = if a.phase_column().is_some() {
+            ("a", "b")
+        } else {
+            ("b", "a")
+        };
+        return Err(TraceError::Invalid(format!(
+            "{with} is a phases file ({PHASE_COLUMN:?} column) and {without} is not"
+        )));
+    }
     let keys_a = row_keys(a, "a", 0)?;
     let keys_b = row_keys(b, "b", opts.frame_offset)?;
     let index_a: BTreeMap<&RowKey, usize> = keys_a.iter().enumerate().map(|(i, k)| (k, i)).collect();
@@ -775,7 +812,9 @@ pub fn diff(a: &TraceTable, b: &TraceTable, opts: &DiffOptions) -> Result<TraceD
     // Pair up fields by name and quoting: a quoted game variable named like a fixed column pairs
     // with the other side's quoted column, the fixed column with the fixed one. A column with no
     // counterpart of the same quoting pairs with any unpaired column of that name.
-    let is_key = |c: &Column| !c.quoted && (c.name == FRAME_COLUMN || c.name == OBJECT_COLUMN);
+    let is_key = |c: &Column| {
+        !c.quoted && (c.name == FRAME_COLUMN || c.name == OBJECT_COLUMN || c.name == PHASE_COLUMN)
+    };
     let mut pairs = Vec::new();
     let mut used_b = BTreeSet::new();
     for (ia, column) in a.columns.iter().enumerate() {
@@ -901,7 +940,7 @@ pub fn diff(a: &TraceTable, b: &TraceTable, opts: &DiffOptions) -> Result<TraceD
     Ok(result)
 }
 
-/// Keys of the same object and instance as `key`, from `context` frames before it to `context`
+/// Keys of the same phase, object and instance as `key`, from `context` frames before it to `context`
 /// frames after it.
 fn context_window(key: &RowKey, context: u32) -> Vec<RowKey> {
     let span = i64::from(context);
@@ -912,6 +951,7 @@ fn context_window(key: &RowKey, context: u32) -> Vec<RowKey> {
     loop {
         keys.push(RowKey {
             frame,
+            phase: key.phase.clone(),
             object: key.object.clone(),
             instance: key.instance,
         });
@@ -1004,11 +1044,7 @@ impl fmt::Display for FieldDiff {
         } else {
             format!("{} (b: {})", self.field, self.field_b)
         };
-        writeln!(
-            f,
-            "frame {}, {} #{}, field {}",
-            self.row.frame, self.row.object, self.row.instance, field
-        )?;
+        writeln!(f, "{}, field {}", self.row, field)?;
         for (label, value) in [("a", &self.a), ("b", &self.b)] {
             let bits = value.hex_bits().unwrap_or_else(|| "-".to_string());
             writeln!(f, "  {label}: {}  bits {bits}", show(&Some(value.clone())))?;
@@ -1023,6 +1059,17 @@ impl fmt::Display for FieldDiff {
             writeln!(f, "  {marker} {}: {} | {}", c.frame, show(&c.a), show(&c.b))?;
         }
         Ok(())
+    }
+}
+
+/// `frame 12, player #0`, or `frame 12 step, player #0` in a phases file.
+impl fmt::Display for RowKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "frame {}", self.frame)?;
+        if !self.phase.is_empty() {
+            write!(f, " {}", self.phase)?;
+        }
+        write!(f, ", {} #{}", self.object, self.instance)
     }
 }
 
@@ -1041,11 +1088,7 @@ impl fmt::Display for MissingRow {
             Side::A => "a",
             Side::B => "b",
         };
-        writeln!(
-            f,
-            "frame {}, {} #{}: row missing in {side}",
-            self.row.frame, self.row.object, self.row.instance
-        )?;
+        writeln!(f, "{}: row missing in {side}", self.row)?;
         let show_row = |values: &Option<Vec<Value>>| match values {
             Some(values) => values
                 .iter()
@@ -1255,6 +1298,7 @@ mod tests {
             Some(Difference::MissingRow(MissingRow {
                 row: RowKey {
                     frame: 3,
+                    phase: String::new(),
                     object: "p".into(),
                     instance: 0
                 },
@@ -1286,6 +1330,57 @@ mod tests {
         let d = diff(&a, &b, &opts).expect("diff");
         assert_eq!(d.only_in_a, vec!["v".to_string()]);
         assert_eq!(d.only_in_b, vec!["w".to_string()]);
+    }
+
+    /// A phases file (`--phases`, eat-the-lemon/num-part-rng-3-l1.phases.csv) has a bare `phase`
+    /// column after `frame` and one row per phase: rows match on the phase, context stays in the
+    /// same phase, reports name it, and a phases file never pairs with a plain trace.
+    #[test]
+    fn phases_rows_match_on_phase() {
+        let text = concat!(
+            "frame,phase,object,y,\"phase\"\n",
+            "1,\"begin_step\",\"p\",1.0,0.0\n",
+            "1,\"step\",\"p\",2.0,0.0\n",
+            "2,\"begin_step\",\"p\",3.0,0.0\n",
+            "2,\"step\",\"p\",4.0,0.0\n",
+        );
+        let a = TraceTable::parse(text).expect("parse");
+        assert_eq!(a.to_csv(), text);
+        assert_eq!(a.phase_column(), Some(1));
+        assert!(diff(&a, &a, &DiffOptions::default()).expect("diff").is_clean());
+
+        let mut b = a.clone();
+        b.rows[3][3] = Value::Real(5.0);
+        let d = diff(&a, &b, &DiffOptions::default()).expect("diff");
+        let Some(Difference::Field(first)) = &d.first else {
+            panic!("expected a field difference, got {d}");
+        };
+        assert_eq!(first.row.phase, "step");
+        assert_eq!(first.field, "y");
+        let frames: Vec<(i64, Option<Value>)> =
+            first.context.iter().map(|c| (c.frame, c.a.clone())).collect();
+        assert_eq!(
+            frames,
+            vec![(1, Some(Value::Real(2.0))), (2, Some(Value::Real(4.0)))]
+        );
+        assert!(d.to_string().contains("frame 2 step, p #0, field y"), "{d}");
+
+        // A phase missing on one side is a missing row in that phase.
+        let mut c = a.clone();
+        c.rows.remove(1);
+        let d = diff(&a, &c, &DiffOptions::default()).expect("diff");
+        let Some(Difference::MissingRow(m)) = &d.first else {
+            panic!("expected a missing row, got {d}");
+        };
+        assert_eq!((m.row.frame, m.row.phase.as_str()), (1, "step"));
+        assert!(d.to_string().contains("frame 1 step, p #0: row missing in b"), "{d}");
+
+        let plain = TraceTable::parse("frame,object,y
+1,\"p\",1.0
+").expect("plain");
+        assert_eq!(plain.phase_column(), None);
+        assert!(diff(&a, &plain, &DiffOptions::default()).is_err());
+        assert!(diff(&plain, &a, &DiffOptions::default()).is_err());
     }
 
     /// The recorder quotes a `--vars` column named like a fixed one (machinary/tr-room-13 logs
@@ -1360,19 +1455,26 @@ mod tests {
             .collect()
     }
 
-    /// Every research CSV parses and re-writes byte for byte. A header-only file is valid: the
-    /// traced object never existed in the frames run (rely-the-needle-4-2/tr-room-03-a).
+    /// Every research CSV parses and re-writes byte for byte, with the recorder's fixed columns
+    /// first (a phases file has `phase` after `frame`). A header-only file is valid: the traced
+    /// object never existed in the frames run (rely-the-needle-4-2/tr-room-03-a).
     #[test]
     fn research_traces_parse_and_rewrite_byte_identical() {
         let mut with_rows = 0usize;
         for (path, text) in research_csvs() {
             let table = TraceTable::parse(&text).unwrap_or_else(|e| panic!("{path:?}: {e}"));
             with_rows += usize::from(!table.rows.is_empty());
-            let fixed: Vec<&str> = table.columns[..FIXED_COLUMNS.len()]
+            let is_phases = path.to_string_lossy().ends_with(".phases.csv");
+            let mut expected: Vec<&str> = FIXED_COLUMNS.to_vec();
+            if is_phases {
+                expected.insert(1, PHASE_COLUMN);
+            }
+            let fixed: Vec<&str> = table.columns[..expected.len()]
                 .iter()
                 .map(|c| c.name.as_str())
                 .collect();
-            assert_eq!(fixed, FIXED_COLUMNS, "{path:?} header");
+            assert_eq!(fixed, expected, "{path:?} header");
+            assert_eq!(table.phase_column().is_some(), is_phases, "{path:?} phase column");
             assert!(table.to_csv() == text, "{path:?} does not re-write byte for byte");
         }
         if research_trace_dirs().is_some() {
@@ -1421,7 +1523,20 @@ mod tests {
             assert_eq!(first.row.frame, frame, "{path:?}");
             assert_eq!(first.field, "y", "{path:?}");
             assert_eq!(first.ulp, Some(1), "{path:?}");
-            assert!(first.context.len() <= 11 && first.context.len() > 1);
+            // One context frame per frame within 5 that has this row (same phase, object and
+            // instance). A one-frame trace (animus/bounce-bulk-all logs only frame 3) has just
+            // the frame itself.
+            let key = &row_keys(&original, "a", 0).expect("keys")[row];
+            let near = row_keys(&original, "a", 0)
+                .expect("keys")
+                .iter()
+                .filter(|k| {
+                    (k.frame - frame).abs() <= 5
+                        && (&k.phase, &k.object, k.instance) == (&key.phase, &key.object, key.instance)
+                })
+                .count();
+            assert_eq!(first.context.len(), near, "{path:?}: context frames");
+            assert!((1..=11).contains(&first.context.len()), "{path:?}");
             assert!(first.context.iter().all(|c| (c.frame - frame).abs() <= 5));
             assert_ne!(first.a.hex_bits(), first.b.hex_bits());
             let shown = d.to_string();
