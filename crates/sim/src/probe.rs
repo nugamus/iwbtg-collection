@@ -743,8 +743,9 @@ fn read_field(
     };
     match field {
         // `collide::bbox::bbox_read` (CLONE_SPEC collision): -100000 with no sprite and no mask,
-        // the point of a 1x1 mask for a no-frame sprite, maskNothing's normalized box. A box the
-        // spec has no rule for (other empty masks) stays an empty cell: UNKNOWN.
+        // the point of a 1x1 mask for a no-frame sprite, maskNothing's normalized box, another
+        // inverted rectangle's raw edges. A box the spec has no rule for (a rotated inverted
+        // rectangle, a fully transparent precise mask) stays an empty cell: UNKNOWN.
         FieldRef::Bbox(e) => match bbox_read(def, inst, (inst.m.x(), inst.m.y()), &rules.collide) {
             Ok(BboxRead::Box(b)) => {
                 let v = match e {
@@ -1128,7 +1129,7 @@ mod tests {
     }
 
     /// A no-frame sprite reads the point round(x), round(y); maskNothing its normalized 2x2 box;
-    /// another inverted rectangle stays an empty cell (research#224, bbox-empty-mask.md).
+    /// another inverted rectangle its raw, inverted edges (research#224, bbox-empty-mask.md).
     #[test]
     fn bbox_of_no_frame_sprite_and_empty_masks() {
         use crate::def::{IRect, Mask, MaskId, MaskSet, MaskShape, SpriteDef, SpriteId};
@@ -1200,7 +1201,7 @@ mod tests {
         let r = |v: f64| trace::Value::Real(v);
         assert_eq!(read(&mut sim, 0), [r(-3000.0), r(-999.0), r(-3000.0), r(-999.0)]);
         assert_eq!(read(&mut sim, 1), [r(-3000.0), r(-999.0), r(-2998.0), r(-998.0)]);
-        assert_eq!(read(&mut sim, 2), [const { trace::Value::Empty }; 4]);
+        assert_eq!(read(&mut sim, 2), [r(-2968.0), r(-968.0), r(-3000.0), r(-999.0)]);
     }
 
     /// `bbox_*` read the reported box (rounded after the offset, ties to even) and `place_free`
