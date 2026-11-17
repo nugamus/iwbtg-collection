@@ -10,8 +10,7 @@ original_object = "world"
 dll_mode = "stub"
 seed = 0
 setup = []
-# bloodEmitter columns stay ignored until the converter writes outlives_stream (research#213, client#877).
-ignore = ["id", "sprite_index", "sprite_name", "instance_number(bloodEmitter)", "bloodEmitter.x", "bloodEmitter.y"]
+ignore = ["id", "sprite_index", "sprite_name"]
 
 [vars]
 "instance_number(objDeathSound)" = "instance_number(@death_sound_2)"

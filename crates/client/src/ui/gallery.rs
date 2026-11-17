@@ -20,8 +20,8 @@ use super::motion::{Ease, OffsetX, Opacity, ReducedMotion, Tween, Width};
 use super::shape::{Band, FadeMask, Shape, Side, UiOpacity, Veil};
 use super::tokens::{self, star_color};
 use super::widgets::{
-    ButtonKind, button, control, ellipsis_text, mod_pill, panel, ranked_pill, star_pill, stat, switch,
-    tag_pill, text, unranked_pill,
+    ButtonKind, button, chip, control, control_off, ellipsis_text, mod_pill, panel, ranked_pill, star_pill,
+    stat, switch, tag_pill, text, unranked_pill,
 };
 
 /// The size the mockups are drawn at.
@@ -506,6 +506,8 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
                     ))
                     .with_children(|r| {
                         r.spawn(control("Sort", "Stars ▾"));
+                        r.spawn(chip("Cleared", true));
+                        r.spawn(control_off("Year", "Any ▾"));
                         r.spawn((button("Pop", ButtonKind::Control), Action::Pop));
                         r.spawn((button("Fade", ButtonKind::Control), Action::Fade));
                         r.spawn((

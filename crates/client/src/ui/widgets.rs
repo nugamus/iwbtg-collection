@@ -20,8 +20,17 @@ pub(super) fn plugin(app: &mut App) {
     if !app.is_plugin_added::<TabNavigationPlugin>() {
         app.add_plugins(TabNavigationPlugin);
     }
-    app.add_systems(Update, (button_looks, fit_ellipses, switch_looks))
-        .add_observer(flip_switch);
+    app.add_systems(
+        Update,
+        (
+            chip_looks.before(button_looks),
+            button_looks,
+            fit_ellipses,
+            switch_looks,
+            search_placeholders,
+        ),
+    )
+    .add_observer(flip_switch);
 }
 
 /// The ellipsis that ends text cut at its box.
@@ -322,6 +331,9 @@ pub enum ButtonKind {
     Secondary,
     /// Controls over art (Group, Sort, Scope): dark glass, 34 px.
     Control,
+    /// A control that is switched on (the Cleared chip, the picked option of a dropdown):
+    /// `white(.2)` glass, 34 px (`Main.dc.html`).
+    ControlOn,
     /// The on/off switch button ([`switch`]): faint white glass, 52 px.
     Switch,
 }
@@ -330,7 +342,7 @@ impl ButtonKind {
     fn height(self) -> f32 {
         match self {
             ButtonKind::Primary | ButtonKind::Secondary | ButtonKind::Switch => 52.0,
-            ButtonKind::Control => 34.0,
+            ButtonKind::Control | ButtonKind::ControlOn => 34.0,
         }
     }
 
@@ -338,7 +350,7 @@ impl ButtonKind {
         match self {
             ButtonKind::Primary => 28.0,
             ButtonKind::Secondary => 24.0,
-            ButtonKind::Control => 14.0,
+            ButtonKind::Control | ButtonKind::ControlOn => 14.0,
             ButtonKind::Switch => 20.0,
         }
     }
@@ -347,7 +359,7 @@ impl ButtonKind {
         match self {
             ButtonKind::Primary => Type::PRIMARY,
             ButtonKind::Secondary | ButtonKind::Switch => Type::BUTTON,
-            ButtonKind::Control => Type::barlow(14.0, 600),
+            ButtonKind::Control | ButtonKind::ControlOn => Type::barlow(14.0, 600),
         }
     }
 
@@ -356,6 +368,7 @@ impl ButtonKind {
             ButtonKind::Primary => tokens::ACCENT,
             ButtonKind::Secondary => tokens::SECONDARY,
             ButtonKind::Control => tokens::GLASS,
+            ButtonKind::ControlOn => tokens::white(0.2),
             ButtonKind::Switch => tokens::white(0.06),
         }
     }
@@ -426,28 +439,223 @@ pub const CONTROL_KEY_GAP: f32 = 6.0;
 /// A control over art with a key and a value (`Sort  Stars ▾`, `Scope  Global ▾` in
 /// `Main.dc.html`): the key muted in [`CONTROL_KEY`], the value in the Control style (14 px, 600,
 /// ink), 6 px apart. An empty `key` gives a value-only control (`Cleared`), as the mockup does.
+/// The value text carries [`ControlValue`], so a screen can write the picked value into it.
 pub fn control(key: &str, value: &str) -> impl Bundle + use<> {
     let kind = ButtonKind::Control;
+    button_with(kind, kind.height(), kind.pad(), control_content(key, value))
+}
+
+/// The value text of a [`control`] or [`control_off`].
+#[derive(Component)]
+pub struct ControlValue;
+
+fn control_content(key: &str, value: &str) -> impl Bundle + use<> {
     let key = key.to_string();
-    let value = text(value, kind.style(), tokens::INK);
-    button_with(
+    let value = (
+        text(value, ButtonKind::Control.style(), tokens::INK),
+        ControlValue,
+    );
+    (
+        Node {
+            column_gap: Val::Px(CONTROL_KEY_GAP),
+            align_items: AlignItems::Baseline,
+            ..default()
+        },
+        Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
+            if !key.is_empty() {
+                c.spawn(text(&key, CONTROL_KEY, tokens::MUTED));
+            }
+            c.spawn(value);
+        })),
+    )
+}
+
+/// A [`control`] that cannot be used yet (Status and Year until the game metadata exists):
+/// faded to [`OFF_OPACITY`], no hover, no press, no `Activate`.
+pub fn control_off(key: &str, value: &str) -> impl Bundle + use<> {
+    let kind = ButtonKind::Control;
+    button_off(kind, kind.height(), kind.pad(), control_content(key, value))
+}
+
+/// A value-only control that is on or off (the `Cleared` and `Uncleared` chips of
+/// `Main.dc.html`, a dropdown's options): off is dark glass with soft text, on is `white(.2)`
+/// glass with white text. Whoever owns the state writes [`Chip::on`]; the look follows.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Chip {
+    pub on: bool,
+}
+
+fn chip_kind(on: bool) -> ButtonKind {
+    if on {
+        ButtonKind::ControlOn
+    } else {
+        ButtonKind::Control
+    }
+}
+
+fn chip_ink(on: bool) -> Color {
+    if on { Color::WHITE } else { tokens::SOFT }
+}
+
+/// A [`Chip`] reading `label`, starting `on`.
+pub fn chip(label: &str, on: bool) -> impl Bundle + use<> {
+    let kind = chip_kind(on);
+    (
+        Chip { on },
+        button_with(
+            kind,
+            kind.height(),
+            kind.pad(),
+            text(label, kind.style(), chip_ink(on)),
+        ),
+    )
+}
+
+/// A chip that cannot be picked yet (a dropdown option whose data does not exist).
+pub fn chip_off(label: &str) -> impl Bundle + use<> {
+    let kind = ButtonKind::Control;
+    button_off(
         kind,
         kind.height(),
         kind.pad(),
-        (
-            Node {
-                column_gap: Val::Px(CONTROL_KEY_GAP),
-                align_items: AlignItems::Baseline,
-                ..default()
-            },
-            Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
-                if !key.is_empty() {
-                    c.spawn(text(&key, CONTROL_KEY, tokens::MUTED));
-                }
-                c.spawn(value);
-            })),
-        ),
+        text(label, kind.style(), tokens::SOFT),
     )
+}
+
+/// Turns each changed chip's fill and text on or off.
+fn chip_looks(
+    mut chips: Query<(Entity, &Chip, &mut ButtonLook), Changed<Chip>>,
+    children: Query<&Children>,
+    mut inks: Query<&mut Ink>,
+) {
+    for (entity, chip, mut look) in &mut chips {
+        let kind = chip_kind(chip.on);
+        if look.kind != kind {
+            look.kind = kind;
+        }
+        for part in children.iter_descendants(entity) {
+            if let Ok(mut ink) = inks.get_mut(part) {
+                ink.0 = chip_ink(chip.on);
+            }
+        }
+    }
+}
+
+/// The dropdown under a control: an upright column of [`chip`]s on dark glass, drawn over
+/// everything. Place it with `left`/`top` on its `Node`.
+pub fn menu_panel() -> impl Bundle {
+    (
+        Node {
+            position_type: PositionType::Absolute,
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::FlexStart,
+            row_gap: Val::Px(6.0),
+            padding: UiRect::all(Val::Px(12.0)),
+            ..default()
+        },
+        Shape {
+            shear: 0.0,
+            ..Shape::fill(tokens::CARD).with_shadow(10.0, 30.0, tokens::black(0.5))
+        },
+        GlobalZIndex(20),
+    )
+}
+
+/// The search field's height (`Main.dc.html`).
+pub const SEARCH_HEIGHT: f32 = 48.0;
+/// The search field's text: 16 px, 400.
+pub const SEARCH_TYPE: Type = Type::barlow(16.0, 400);
+
+/// The entity of a [`search_field`] that holds the text (`EditableText`).
+#[derive(Component)]
+pub struct SearchField;
+
+/// The placeholder of a [`search_field`], shown while it is empty.
+#[derive(Component)]
+struct SearchPlaceholder;
+
+/// The search field of `Main.dc.html`: 48 px of sheared dark glass, the search icon, then the
+/// text (16 px, ink) or `placeholder` (muted) while empty. It takes the keyboard focus when it
+/// spawns; read the text from the `EditableText` on the [`SearchField`] entity.
+pub fn search_field(placeholder: &str, initial: &str) -> impl Bundle + use<> {
+    use bevy::input_focus::AutoFocus;
+    use bevy::text::{EditableText, TextCursorStyle};
+    use bevy::ui_widgets::TextInput;
+    let mut outer = sheared(SEARCH_HEIGHT, 18.0, Shape::fill(tokens::GLASS));
+    outer.0.flex_grow = 1.0;
+    outer.0.justify_content = JustifyContent::FlexStart;
+    outer.0.column_gap = Val::Px(12.0);
+    let shown = if initial.is_empty() {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    };
+    (
+        outer,
+        children![
+            icon(Icon::Search, 18.0, tokens::MUTED),
+            (
+                Node {
+                    flex_grow: 1.0,
+                    min_width: Val::Px(0.0),
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                children![
+                    (
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: Val::Px(0.0),
+                            ..default()
+                        },
+                        text(placeholder, SEARCH_TYPE, tokens::MUTED),
+                        SearchPlaceholder,
+                        shown,
+                    ),
+                    (
+                        Node {
+                            width: Val::Percent(100.0),
+                            ..default()
+                        },
+                        TextInput,
+                        EditableText::new(initial),
+                        SEARCH_TYPE.font(),
+                        TextColor(tokens::INK),
+                        TextCursorStyle {
+                            color: tokens::INK,
+                            selection_color: tokens::white(0.25),
+                            ..default()
+                        },
+                        TabIndex(0),
+                        AutoFocus,
+                        SearchField,
+                    ),
+                ],
+            ),
+        ],
+    )
+}
+
+/// Shows a search field's placeholder only while its text is empty.
+fn search_placeholders(
+    fields: Query<(&bevy::text::EditableText, &ChildOf), With<SearchField>>,
+    children: Query<&Children>,
+    mut marks: Query<&mut Visibility, With<SearchPlaceholder>>,
+) {
+    for (field, parent) in &fields {
+        let want = if field.value().to_string().is_empty() {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+        for c in children.iter_descendants(parent.parent()) {
+            if let Ok(mut v) = marks.get_mut(c)
+                && *v != want
+            {
+                *v = want;
+            }
+        }
+    }
 }
 
 /// A button of `kind` at another size (`height`, `pad` px left and right) with `content` in it:
