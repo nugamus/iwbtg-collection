@@ -132,6 +132,12 @@ impl Recorder {
         }
     }
 
+    /// The mods every replay header of this run carries.
+    #[cfg(test)]
+    pub(crate) fn mods(&self) -> ModSet {
+        self.mods
+    }
+
     /// The data-area name of the run's replay, once its first tick is recorded. A cleared run
     /// on a stats board points at it (`stats::Run::replay`).
     pub fn current_name(&self) -> Option<&str> {
@@ -353,16 +359,16 @@ fn hex(bytes: &[u8]) -> String {
 /// check) records nothing.
 pub struct ReplaysPlugin {
     pub keep: bool,
-    pub mods: ModSet,
 }
 
 impl Plugin for ReplaysPlugin {
     fn build(&self, app: &mut App) {
-        let (keep, mods) = (self.keep, self.mods);
+        let keep = self.keep;
+        // The header's mods are the ones the run opened with (`mods::RunMods`).
         crate::shell::run_resource(app, move |w| {
             let store = if keep { Store::data() } else { None };
             let hash = w.resource::<crate::shell::LoadedPackage>().pkg.gameplay_hash;
-            Recorder::new(store, hash, mods)
+            Recorder::new(store, hash, crate::mods::RunMods::of(w))
         });
         app
             // Bevy's own exit on the last window closing runs in `Last` too; the app stops after

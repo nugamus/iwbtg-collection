@@ -1,4 +1,5 @@
-//! `--mods`: the run's mods (docs/product.md, Mods; the table is `iwbtg_sim::mods::MODS`).
+//! The run's mods: `--mods` seeds [`RunMods`], game select's mod select sheet changes it, and
+//! each run reads it when it opens (docs/product.md, Mods; the table is `iwbtg_sim::mods::MODS`).
 //!
 //! Sudden Death: the tick that raises the death counter is the run's last. The sim stops
 //! ticking there and a "Run over" banner shows; the window stays open on that frame until the
@@ -61,22 +62,38 @@ struct Run {
     over: Option<u64>,
 }
 
-/// The run's mods, for the screens that show them (the HUD's mod row).
+/// The mods the next run plays with: `--mods` at start, then the mod select sheet's picks
+/// (shell/select/mod_sheet.rs). Every run module reads it when a run opens
+/// (`OnEnter(AppScreen::Run)`), so a run keeps the set it started with; the screens that show
+/// the mods (the HUD's mod row, the loading card) read it too.
 #[derive(Resource, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RunMods(pub ModSet);
+
+impl RunMods {
+    /// The set in `world`, or no mods when there is none (a test without the plugin).
+    pub fn of(world: &World) -> ModSet {
+        world.get_resource::<RunMods>().map_or(ModSet::NONE, |m| m.0)
+    }
+}
+
+/// A run condition: the run being opened or played has `m` among its mods. Run modules gate their
+/// systems with it, so they are added once and act only in runs that pick the mod.
+pub(crate) fn run_has(m: Mod) -> impl FnMut(Option<Res<RunMods>>) -> bool + Clone {
+    move |mods: Option<Res<RunMods>>| mods.is_some_and(|s| s.0.contains(m))
+}
 
 /// The "Run over" banner.
 #[derive(Component)]
 struct Banner;
 
-/// Adds the run's mods: the sim ticks only while the run is not over.
+/// Adds the run's mods: the sim ticks only while the run is not over. The set is `--mods`, the
+/// first [`RunMods`]; each run plays with the [`RunMods`] it opened with.
 pub struct ModsPlugin(pub ModSet);
 
 impl Plugin for ModsPlugin {
     fn build(&self, app: &mut App) {
-        let mods = self.0;
-        crate::shell::run_resource(app, move |_| Run {
-            mods,
+        crate::shell::run_resource(app, |world| Run {
+            mods: RunMods::of(world),
             deaths: None,
             over: None,
         });

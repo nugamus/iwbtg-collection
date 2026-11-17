@@ -307,4 +307,179 @@ mod wp3 {
         eprintln!("checked {rows} trace rows");
         assert!(rows > 0, "no trace rows checked");
     }
+
+    /// One sprite of help-the-fairy-tale as the bbox-empty-mask traces use it
+    /// (bbox-empty-mask.md): GM name, frames, size, mask box, empty or not.
+    struct TraceSprite {
+        name: &'static str,
+        frames: u16,
+        size: (u32, u32),
+        bbox: IRect,
+        empty: bool,
+    }
+
+    /// `bbox_read` gives every pinned `bbox_*` row of bbox-empty-mask.csv and -b.csv (no-frame
+    /// sprites, a no-frame `mask_index`, maskNothing at scales and angles), and `Unknown` for the
+    /// two inverted rectangles the spec cannot explain (sprite520, temp) (CLONE_SPEC collision,
+    /// "bbox_* of an instance that has a sprite but no usable box", research#224).
+    #[test]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "trace bbox values and sprite ids are small integers"
+    )]
+    fn bbox_read_matches_empty_mask_traces() {
+        use iwbtg_sim::collide::bbox::{BboxRead, bbox_read};
+        use iwbtg_sim::def::testing::GameDefBuilder;
+        use iwbtg_sim::def::{
+            Builtin, KindDef, Mask, MaskId, MaskSet, MaskShape, RoomDef, SpriteDef, SpriteId,
+        };
+        use iwbtg_sim::num::Real;
+        use iwbtg_sim::world::{InstId, Instance};
+
+        let sprites = [
+            TraceSprite {
+                name: "sprSpikeUp",
+                frames: 1,
+                size: (32, 32),
+                bbox: rect(0, 0, 31, 31),
+                empty: false,
+            },
+            TraceSprite {
+                name: "sprite543",
+                frames: 0,
+                size: (1, 1),
+                bbox: rect(0, 0, -1, -1),
+                empty: true,
+            },
+            TraceSprite {
+                name: "sprite642",
+                frames: 0,
+                size: (1, 1),
+                bbox: rect(0, 0, -1, -1),
+                empty: true,
+            },
+            TraceSprite {
+                name: "maskNothing",
+                frames: 1,
+                size: (2, 2),
+                bbox: rect(1, 1, 0, 0),
+                empty: true,
+            },
+            TraceSprite {
+                name: "sprite520",
+                frames: 1,
+                size: (32, 32),
+                bbox: rect(31, 31, 0, 0),
+                empty: true,
+            },
+            TraceSprite {
+                name: "temp",
+                frames: 1,
+                size: (7, 8),
+                bbox: rect(6, 7, 0, 0),
+                empty: true,
+            },
+        ];
+        let unpinned = ["sprite520", "temp"];
+        let mut b = GameDefBuilder::new("bbox-empty-mask");
+        let probe = b.kind(KindDef::new("platform", Builtin::World));
+        b.room(RoomDef::new("rStage4", 800, 608));
+        for (i, s) in sprites.iter().enumerate() {
+            let d = b.def_mut();
+            d.masks.push(Mask {
+                bbox: s.bbox,
+                shape: if s.empty {
+                    MaskShape::Empty
+                } else {
+                    MaskShape::Rect
+                },
+            });
+            d.sprites.push(SpriteDef {
+                frames: s.frames,
+                size: s.size,
+                origin: (0, 0),
+                masks: MaskSet::Shared(MaskId(u32::try_from(i).unwrap())),
+            });
+        }
+        let def = b.build().expect("def");
+        let rules = iwbtg_sim::rules::CollideRules::default();
+        let mut rows = 0;
+        for f in [
+            "help-the-fairy-tale/bbox-empty-mask.csv",
+            "help-the-fairy-tale/bbox-empty-mask-b.csv",
+        ] {
+            let Some(t) = research_trace(f) else {
+                eprintln!("skipped {f}: IWBTG_RESEARCH unset or file missing");
+                continue;
+            };
+            let col = |n: &str| t.column(n).unwrap_or_else(|| panic!("{f}: no column {n}"));
+            let (co, cx, cy, cs, ca) = (
+                col("object"),
+                col("x"),
+                col("y"),
+                col("image_xscale"),
+                col("image_angle"),
+            );
+            let (csi, csn, cmask) = (col("sprite_index"), col("sprite_name"), t.column("mask_index"));
+            let (cl, ct, cr, cb) = (
+                col("bbox_left"),
+                col("bbox_top"),
+                col("bbox_right"),
+                col("bbox_bottom"),
+            );
+            // GM sprite ids by name, for mask_index.
+            let mut gm_ids = std::collections::BTreeMap::new();
+            for row in &t.rows {
+                if let (Some(id), iwbtg_sim::trace::Value::Str(n)) = (row[csi].as_f64(), &row[csn]) {
+                    gm_ids.insert(id as i64, n.clone());
+                }
+            }
+            let ours = |name: &str| sprites.iter().position(|s| s.name == name);
+            for row in t
+                .rows
+                .iter()
+                .filter(|r| r[co] == iwbtg_sim::trace::Value::Str("platform".into()))
+            {
+                let iwbtg_sim::trace::Value::Str(name) = &row[csn] else {
+                    panic!("{f}: sprite_name is not a string");
+                };
+                let si = ours(name).unwrap_or_else(|| panic!("{f}: unknown sprite {name}"));
+                let v = |c: usize| row[c].as_f64().unwrap();
+                let mut inst = Instance::new(InstId(100_001), probe, 0, Real::new(v(cx)), Real::new(v(cy)));
+                inst.img.set_sprite(Some(SpriteId(u32::try_from(si).unwrap())));
+                let mut mask_name = None;
+                if let Some(cm) = cmask
+                    && v(cm) >= 0.0
+                {
+                    let n = &gm_ids[&(v(cm) as i64)];
+                    let mi = ours(n).unwrap_or_else(|| panic!("{f}: unknown mask sprite {n}"));
+                    inst.img.set_mask(Some(MaskId(u32::try_from(mi).unwrap())));
+                    mask_name = Some(n.as_str());
+                }
+                // The .inputs set image_yscale with image_xscale except for xscale -1.
+                let xs = v(cs);
+                inst.img.set_xscale(Real::new(xs)).unwrap();
+                inst.img
+                    .set_yscale(Real::new(if xs > 0.0 { xs } else { 1.0 }))
+                    .unwrap();
+                inst.img.set_angle(Real::new(v(ca))).unwrap();
+                let got = bbox_read(&def, &inst, (inst.m.x(), inst.m.y()), &rules).unwrap();
+                let what = format!(
+                    "{f} frame {:?} {name} mask {mask_name:?} at ({}, {}) xscale {xs} angle {}",
+                    row[0].decimal(),
+                    v(cx),
+                    v(cy),
+                    v(ca)
+                );
+                if mask_name.is_none() && unpinned.contains(&name.as_str()) {
+                    assert_eq!(got, BboxRead::Unknown, "{what}");
+                } else {
+                    let want = rect(v(cl) as i64, v(ct) as i64, v(cr) as i64, v(cb) as i64);
+                    assert_eq!(got, BboxRead::Box(want), "{what}");
+                }
+                rows += 1;
+            }
+        }
+        eprintln!("checked {rows} trace rows");
+    }
 }
