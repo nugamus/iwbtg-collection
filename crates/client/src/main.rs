@@ -179,27 +179,19 @@ fn main() -> ExitCode {
             savefile::SavePlugin,
             art::ArtPlugin,
             audio,
-            (mods::ModsPlugin(run_mods), visual::VisualPlugin(run_mods)),
-            practice::PracticePlugin {
-                mods: run_mods,
-                slow_speed,
-            },
+            // `--mods` and `--slow-speed` seed the mod select's picks; each run reads those.
+            (mods::ModsPlugin(run_mods), visual::VisualPlugin),
+            practice::PracticePlugin { slow_speed },
             retry::RetryPlugin(retry),
             skip::SkipPlugin,
             pause::PausePlugin { args: pause },
             results::ResultsPlugin(results),
-            stats::StatsPlugin {
-                keep: keep_stats,
-                mods: run_mods,
-            },
+            stats::StatsPlugin { keep: keep_stats },
         ));
         // Bevy takes at most 15 plugins in one tuple.
         app.add_plugins((
             // A `--screenshot` check keeps no replays either.
-            replays::ReplaysPlugin {
-                keep: keep_stats,
-                mods: run_mods,
-            },
+            replays::ReplaysPlugin { keep: keep_stats },
             import::ImportPlugin { keep: keep_stats },
             overlay::OverlayPlugin(overlay),
             loading,
