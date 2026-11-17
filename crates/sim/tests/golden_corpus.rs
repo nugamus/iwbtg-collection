@@ -141,7 +141,9 @@ const UNTOUCHED_BUILTINS: &[(&str, &str)] = &[(
 /// Every built-in whose collision path with the kid can run is run by some golden case (#847):
 /// each `touched <name> <case>` line of the report names a case where the kid or a kid bullet met
 /// an instance of it in the collision phase, and each `touched <name>/<handler classes> <case>`
-/// line a case where that own handler of the built-in ran (#898), except the allow-listed
+/// line a case where that own handler of the built-in ran (#898), and each
+/// `touched <name>/<param>=<value> <case>` line a case where a handler that param value adds ran
+/// (#917), except the allow-listed
 /// built-ins. An allow-list
 /// entry whose built-in is touched, or has no `touched` line, fails too, so the list stays exact.
 /// Called by the coverage test, so the corpus runs once more per target, not twice.
@@ -154,7 +156,7 @@ fn every_builtin_with_a_kid_collision_is_touched(report: &str) {
     assert!(!touched.is_empty(), "the report has touched lines");
     let mut wrong = Vec::new();
     for (name, case) in &touched {
-        // An entry covers the built-in's line and its `<name>/<handler classes>` lines (#898).
+        // An entry covers the built-in's line and its `<name>/...` lines (#898, #917).
         let built_in = name.split('/').next().unwrap_or(name);
         let allowed = UNTOUCHED_BUILTINS.iter().any(|(n, _)| *n == built_in);
         if (*case == "-") != allowed {
