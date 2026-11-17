@@ -118,6 +118,7 @@ pub const HOOKS: Hooks = Hooks {
     auto_motion: motion,
     bbox,
     overlaps,
+    broadphase: false,
     solid_resolve: solid,
     view_follow: view,
     room_change: room,

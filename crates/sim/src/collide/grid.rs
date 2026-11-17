@@ -104,12 +104,11 @@ fn slot_for(inst: &Instance, def: &GameDef, rules: &CollideRules) -> Slot {
     let at = (inst.m.x(), inst.m.y());
     let collision = instance_box(def, inst, at, rules).map(|p| p.map(|p| p.bbox));
     let reported = reported_box(def, inst, at, rules);
+    // Either box failing goes to overflow: brute force would raise that error from any query
+    // or overlap test that reaches the instance, however far away it is.
     let boxes: Vec<IRect> = match (collision, reported) {
-        (Err(_), Err(_)) => return Slot::Overflow,
-        (c, r) => [c.ok().flatten(), r.ok().flatten()]
-            .into_iter()
-            .flatten()
-            .collect(),
+        (Ok(c), Ok(r)) => [c, r].into_iter().flatten().collect(),
+        _ => return Slot::Overflow,
     };
     let Some(first) = boxes.first() else {
         return Slot::Nowhere;
@@ -147,21 +146,25 @@ impl Grid {
 
     /// Buckets one instance that is not bucketed now.
     fn place(&mut self, inst: &Instance, def: &GameDef, rules: &CollideRules) {
-        let slot = slot_for(inst, def, rules);
+        self.place_in(inst.id, slot_for(inst, def, rules));
+    }
+
+    /// Buckets `id`, not bucketed now, in `slot`.
+    fn place_in(&mut self, id: InstId, slot: Slot) {
         match slot {
             Slot::Cells(c) => {
                 for cy in c.top..=c.bottom {
                     for cx in c.left..=c.right {
-                        self.cells.entry((cy, cx)).or_default().push(inst.id);
+                        self.cells.entry((cy, cx)).or_default().push(id);
                     }
                 }
             }
             Slot::Overflow => {
-                self.overflow.insert(inst.id);
+                self.overflow.insert(id);
             }
             Slot::Nowhere => {}
         }
-        self.placed.insert(inst.id, slot);
+        self.placed.insert(id, slot);
     }
 
     /// Removes one instance from its buckets.
@@ -222,6 +225,12 @@ impl Grid {
         Ok(out.into_iter().collect())
     }
 
+    /// Instances every query tests (module docs: boxes that cannot be computed, or too many
+    /// cells).
+    pub fn overflow(&self) -> &BTreeSet<InstId> {
+        &self.overflow
+    }
+
     /// Records that `id`'s box may have changed. Called by `World::get_mut` and `World::insert`.
     pub fn mark_moved(&mut self, id: InstId) {
         self.moved.insert(id);
@@ -253,9 +262,15 @@ impl Grid {
                 .and_then(|i| instances.get(i))
         };
         for id in moved {
-            self.unplace(id);
-            if let Some(inst) = find(id) {
-                self.place(inst, def, rules);
+            let Some(inst) = find(id) else {
+                self.unplace(id);
+                continue;
+            };
+            // Most moves stay inside the same cells: nothing to re-bucket then.
+            let slot = slot_for(inst, def, rules);
+            if self.placed.get(&id) != Some(&slot) {
+                self.unplace(id);
+                self.place_in(id, slot);
             }
         }
         let limit = instances.len().saturating_mul(2).saturating_add(64);

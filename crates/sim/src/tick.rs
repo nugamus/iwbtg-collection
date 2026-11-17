@@ -42,6 +42,12 @@ pub struct Hooks {
     pub bbox: fn(&Ctx, InstId) -> Result<Option<IRect>, SimError>,
     /// Whether two instances overlap at their positions (WP3 `overlap::overlaps`).
     pub overlaps: fn(&Ctx, InstId, InstId) -> Result<bool, SimError>,
+    /// True when `overlaps` is the engine's test (or answers like it): two instances overlap
+    /// only when their collision boxes (`bbox::instance_box`) intersect. The collision phase
+    /// then gathers pairs through the broadphase grid (#781); false makes it scan every
+    /// instance, for stand-in overlap tests and as the reference the differential test compares
+    /// against.
+    pub broadphase: bool,
     /// The solid put-back around one collision event (WP3 `resolve::solid_resolve`).
     pub solid_resolve: fn(&mut Ctx, InstId, InstId, EventRun) -> Result<Flow, SimError>,
     /// View follow, once per tick before the Draw slot (WP4b `view::follow_update`, R19).
@@ -102,6 +108,7 @@ impl Hooks {
         auto_motion: engine_auto_motion,
         bbox: engine_bbox,
         overlaps: engine_overlaps,
+        broadphase: true,
         solid_resolve: engine_solid_resolve,
         view_follow: view::follow_update,
         room_change: room::perform_change,

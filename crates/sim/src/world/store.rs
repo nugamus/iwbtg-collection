@@ -9,6 +9,7 @@
 use super::{InstId, Instance, World};
 use crate::def::GameDef;
 use crate::error::SimError;
+use crate::collide::grid::Grid;
 use crate::rules::CollideRules;
 
 /// Most live instances a world holds (decision 0001, host caps; the room format caps a room's
@@ -76,6 +77,17 @@ impl World {
     /// 3.4). Queries are correct without it; it only keeps them fast.
     pub fn flush_grid(&mut self, def: &GameDef, rules: &CollideRules) -> Result<(), SimError> {
         self.grid.flush(&self.instances, def, rules)
+    }
+
+    /// Builds the broadphase grid if it is not built (it starts unbuilt on room entry and after
+    /// a savestate restore), else re-buckets the moved instances. Either way the grid then
+    /// holds every instance at its current box and nothing is marked moved.
+    pub fn ensure_grid(&mut self, def: &GameDef, rules: &CollideRules) -> Result<(), SimError> {
+        if self.grid.is_built() {
+            return self.flush_grid(def, rules);
+        }
+        self.grid = Grid::rebuild(self, def, rules)?;
+        Ok(())
     }
 
     /// Removes dead instances, keeping the order of the rest (tick row 14).

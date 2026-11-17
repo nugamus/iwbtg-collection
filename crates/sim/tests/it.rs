@@ -62,6 +62,8 @@ mod wp2_traces;
 mod wp3_bbox;
 #[path = "wp3_grid.rs"]
 mod wp3_grid;
+#[path = "wp3_pair_gather.rs"]
+mod wp3_pair_gather;
 #[path = "wp3_query.rs"]
 mod wp3_query;
 #[path = "wp3_shapes.rs"]
