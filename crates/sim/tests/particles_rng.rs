@@ -831,9 +831,17 @@ mod blood_emitter {
     /// live particles, copied from the research trace.
     const K1: &str = include_str!("fixtures/kaenbyou_num_part_rng_3_k1.csv");
 
+    /// kaenbyou num-part-rng-3-k2.csv (research#214): the same columns, no R press, to frame 120.
+    const K2: &str = include_str!("fixtures/kaenbyou_num_part_rng_3_k2.csv");
+
     /// (frame, seed) rows of [`K1`].
     fn k1() -> Vec<(u32, u32)> {
-        K1.lines()
+        seeds(K1)
+    }
+
+    /// (frame, seed) rows of a trace fixture.
+    fn seeds(csv: &str) -> Vec<(u32, u32)> {
+        csv.lines()
             .filter(|l| !l.starts_with('#') && !l.starts_with("frame"))
             .map(|l| {
                 let f: Vec<&str> = l.split(',').collect();
@@ -913,6 +921,67 @@ mod blood_emitter {
     #[test]
     fn k1_replays_with_outlives_stream() {
         k1_replay(fixture_with(true, &[("outlives_stream", ParamValue::Bool(true))]));
+    }
+
+    /// k2 (research#214, `outlives_stream`): no R press, so the bloodEmitter lives on after alarm 0
+    /// and the stream ends after 19 updates, frames 45-63. The seed matches on every frame to
+    /// 120 (constant from frame 63), `instance_number(bloodEmitter)` stays 1, the emitters go
+    /// to 0 on frame 64 and the system stays.
+    #[test]
+    fn k2_replays_with_outlives_stream() {
+        let (mut fx, kind) = fixture_with(true, &[("outlives_stream", ParamValue::Bool(true))]);
+        let cols: Vec<Vec<u32>> = K2
+            .lines()
+            .filter(|l| !l.starts_with('#') && !l.starts_with("frame"))
+            .map(|l| {
+                l.split(',')
+                    .map(|v| v.parse::<i64>().expect("int"))
+                    .map(|v| u32::try_from(v.rem_euclid(1 << 32)).expect("fits"))
+                    .collect()
+            })
+            .collect();
+        let rows = seeds(K2);
+        assert_eq!(rows.last().map(|r| r.0), Some(120));
+        for r in cols.iter().filter(|c| c[0] <= 44) {
+            assert_eq!(r[1], 0, "frame {}: nothing draws before the emitter", r[0]);
+        }
+        fx.w.rng = Rng::new(0);
+        let id = spawn(&mut fx, kind);
+        assert_eq!(fx.w.rng, Rng::new(0), "Create draws nothing");
+        let mut frame = 44;
+        let mut updates = 0;
+        let mut last = 0;
+        for c in cols.iter().filter(|c| c[0] >= 45) {
+            frame += 1;
+            assert_eq!(c[0], frame);
+            fx.tick(InputFrame::EMPTY);
+            assert_eq!(fx.w.rng.seed, c[1], "frame {frame}: seed");
+            if fx.w.rng.seed != last {
+                updates += 1;
+                last = fx.w.rng.seed;
+            }
+            let n = fx.w.instances().iter().filter(|i| i.kind == kind).count();
+            assert_eq!(n, 1, "frame {frame}: blood emitters");
+            assert_eq!(n, usize::try_from(c[2]).expect("count"));
+            let live = fx.w.particles.systems[0]
+                .emitters
+                .iter()
+                .filter(|e| !e.destroyed && e.stream.is_some_and(|s| s.number != 0))
+                .count();
+            assert_eq!(
+                live,
+                usize::try_from(c[4]).expect("count"),
+                "frame {frame}: emitters"
+            );
+            assert_eq!(fx.w.particles.systems.len(), 1, "frame {frame}: the system stays");
+            assert!(
+                !fx.w.particles.systems[0].destroyed,
+                "frame {frame}: system alive"
+            );
+        }
+        assert_eq!(frame, 120);
+        assert_eq!(updates, 19, "19 drawing updates, frames 45-63");
+        assert!(fx.w.exists(id));
     }
 
     /// Replays k1's seed and `instance_number(bloodEmitter)` columns from frame 45 to 90.
