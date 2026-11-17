@@ -11,4 +11,4 @@ A touch by either kid sets `global.clear`, runs the save, then raises the `run_e
 
 OPEN: which of the two save forms each of the nine games uses; the converter sets `save_with_position` per game.
 
-**Loading.** Params load on an object file or a placed instance; a missing required param, an index above 15 and a wrong type are load errors (tests `wp6b4_params_*` in `crates/format/tests/wp7a_load.rs`). Converter request CR17.
+**Loading.** Params load on an object file or a placed instance; a missing required param, an index above 15 and a wrong type are load errors (tests `wp6b4_params_*` in `crates/format/tests/load_objects.rs`). Converter request CR17.

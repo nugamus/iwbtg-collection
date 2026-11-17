@@ -1,8 +1,31 @@
 # `physics.toml`: the kid's physics profile
 
-One file per game, next to `game.toml`, plus optional room profiles `physics/<id>.toml` in the same form for rooms that name one (medleys; [v0](v0.md#physics-profile-physicstoml), Room profiles). It says how the kid moves, jumps, shoots, dies and saves. The kid is one built-in (`kid`, [builtins/kid.md](builtins/kid.md)); every difference between games is a value in this file or a named action in an event list. Nothing in the sim branches on the family. Schema: [schema/v0/physics.schema.json](schema/v0/physics.schema.json). Complete examples: rely-the-needle-4-2 [examples/rely-physics.toml](examples/rely-physics.toml), kaenbyou (family B) [examples/kaenbyou-physics.toml](examples/kaenbyou-physics.toml), and eat-the-lemon as the B preset plus its differences [examples/eat-the-lemon-physics.toml](examples/eat-the-lemon-physics.toml).
+One file per game, next to `game.toml`, plus optional room profiles `physics/<id>.toml` in the same form for rooms that name one (medleys; [room profiles](#room-profiles)). It says how the kid moves, jumps, shoots, dies and saves. The kid is one built-in (`kid`, [builtins/kid.md](builtins/kid.md)); every difference between games is a value in this file or a named action in an event list. Nothing in the sim branches on the family. Schema: [schema/v0/physics.schema.json](schema/v0/physics.schema.json). Complete examples: rely-the-needle-4-2 [examples/rely-physics.toml](examples/rely-physics.toml), kaenbyou (family B) [examples/kaenbyou-physics.toml](examples/kaenbyou-physics.toml), and eat-the-lemon as the B preset plus its differences [examples/eat-the-lemon-physics.toml](examples/eat-the-lemon-physics.toml).
 
 Source: [sim core plan](../plans/sim-core.md) sections 5.1 to 5.3; `crates/sim/src/def/physics.rs`; `crates/sim/src/kid/presets.rs`.
+
+## Minimal form
+
+The kid is one built-in. The profile is a preset (the engine family whose defaults fill every missing key) plus overrides, and its event lists name the actions the kid runs. Minimal form:
+
+```toml
+#:schema ../../client/docs/format/schema/v0/physics.schema.json
+preset = "A1"                # A1 | A2 | A3 | A4 | A5 | B | C: the defaults
+
+[numbers]
+run_speed = 3.0              # any key overrides the preset's value
+jumps = [8.5, 7.0]           # ground jump, then each air jump
+
+[sprites]
+idle = "kid_idle"            # sprite names from the package
+running = "kid_run"
+```
+
+An empty file is `preset = "A1"`. Unknown keys, actions, classes and values are load errors.
+
+## Room profiles
+
+Medleys (#33). A package may add more profiles as `physics/<id>.toml`, in the same form. A room with `physics = "<id>"` uses that profile for as long as it is the current room; every other room uses the game's (`game.toml` `physics`). The kid reads its profile each time it acts, so a carried-over kid moves by the new room's numbers from its first step there. What the kid copies when it is created (its jump speeds and maximum fall speed) comes from the room it is created in and stays until it is created again. A room profile must handle the same kid events as the game's profile (the same triggers in `[events]`: Step, End Step, key rows, collision classes, alarms, boundary model), because the kid kind's events are fixed at load; its actions in those events and every value may differ, and a profile that adds or removes an event is a load error. A room naming a profile with no `physics/<id>.toml` is an error at the key. When the game's own profile lies in `physics/`, a room naming it simply uses the game's profile. `[tricks]` `required` checks read the game's profile only.
 
 ## Presets and overrides
 

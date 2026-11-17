@@ -19,7 +19,7 @@
     },
     "Controls": {
       "additionalProperties": false,
-      "description": "The `[controls]` table: a label for each extra action the game uses (docs/format/v0.md,\nManifest). Only the player-facing words; which key the player binds is the client's.",
+      "description": "The `[controls]` table: a label for each extra action the game uses (docs/format/game.md).\nOnly the player-facing words; which key the player binds is the client's.",
       "properties": {
         "extra1": {
           "default": null,
@@ -338,7 +338,7 @@
     },
     "KeyArtSection": {
       "additionalProperties": false,
-      "description": "The `[key_art]` table (docs/format/v0.md, Key art).",
+      "description": "The `[key_art]` table (docs/format/game.md, Key art).",
       "properties": {
         "image": {
           "default": null,
@@ -450,7 +450,7 @@
     },
     "MapEntry": {
       "additionalProperties": false,
-      "description": "One `[[maps]]` entry (docs/format/v0.md, Maps). Timing keys it leaves out come from\n`[timing]`.",
+      "description": "One `[[maps]]` entry (docs/format/game.md, Maps). Timing keys it leaves out come from\n`[timing]`.",
       "properties": {
         "category": {
           "default": null,
@@ -938,7 +938,7 @@
     },
     "StrippedSection": {
       "additionalProperties": false,
-      "description": "The `[stripped]` table: what ranked (stripped) mode changes (docs/format/v0.md, Stripped\nmode; docs/product.md, Two ways to play each game). Play original ignores it.",
+      "description": "The `[stripped]` table: what ranked (stripped) mode changes (docs/format/game.md, Stripped\nmode; docs/product.md, Two ways to play each game). Play original ignores it.",
       "properties": {
         "cut": {
           "anyOf": [

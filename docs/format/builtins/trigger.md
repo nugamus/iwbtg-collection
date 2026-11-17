@@ -21,7 +21,7 @@ Touch zone that fires a trap id. Source: `crates/sim/src/builtins/trigger.rs`. A
 | `one_shot_destroy`, `sets_frame` | bool | false | Destroy after touch; show frame 1 (SHO). |
 | `sound`, `size` | | | The client's and the loader's. |
 
-**Loading.** Every param loads on an object file or a placed instance; `group` names a kind and must exist; a wrong word or type is an error with file and line (`params::check`). Tests `wp6b2_params_load` and `wp6b2_params_are_checked` in `crates/format/tests/wp7a_load.rs`. Converter request CR17.
+**Loading.** Every param loads on an object file or a placed instance; `group` names a kind and must exist; a wrong word or type is an error with file and line (`params::check`). Tests `wp6b2_params_load` and `wp6b2_params_are_checked` in `crates/format/tests/load_objects.rs`. Converter request CR17.
 
 State: `MechGlobals` (`global_triggered`, `trigger_flags`, `stop_flags`, `switches`) and the instances' `triggered`. The sim hash covers it.
 

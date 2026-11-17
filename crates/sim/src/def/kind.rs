@@ -86,7 +86,7 @@ pub enum ParamValue {
     List(Vec<ParamValue>),
 }
 
-/// One `[defaults.<kind>]` variant of a bare built-in (docs/format/v0.md, `[defaults.<kind>]`):
+/// One `[defaults.<kind>]` variant of a bare built-in (docs/format/game.md, `[defaults.<kind>]`):
 /// an instance of `kind` whose params match `when` uses `variant`, the kind the loader derives
 /// from it (`spike[dir=down]`, with the variant's sprite and mask). A placed instance and a
 /// script `instance_create` take it alike (#701).

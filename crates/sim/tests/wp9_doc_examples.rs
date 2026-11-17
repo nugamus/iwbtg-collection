@@ -9,7 +9,10 @@ use iwbtg_sim::script::validate::{EVENT_FNS, validate};
 
 const ARCHITECTURE: &str = include_str!("../../../docs/architecture/sim/scripts.md");
 const DOCS: [(&str, &str); 3] = [
-    ("docs/format/v0.md", include_str!("../../../docs/format/v0.md")),
+    (
+        "docs/format/scripts.md",
+        include_str!("../../../docs/format/scripts.md"),
+    ),
     ("docs/architecture/sim/scripts.md", ARCHITECTURE),
     (
         "docs/decisions/0001-script-language.md",

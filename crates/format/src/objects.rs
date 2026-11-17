@@ -1,5 +1,5 @@
 //! Object files: base, params, sprite, mask, solid, visible, depth, persistent, classes
-//! (docs/plans/sim-core.md 8.2 step 3, 8.3; docs/format/v0.md, Objects).
+//! (docs/plans/sim-core.md 8.2 step 3, 8.3; docs/format/objects.md).
 //!
 //! `objects/<id>.toml` defines `@<id>`: a preset (`base` plus params) or a scripted object
 //! (`script`, with an optional `base`). Keys other than the reserved ones below are params of the
