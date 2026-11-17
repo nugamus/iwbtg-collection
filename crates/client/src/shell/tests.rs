@@ -41,9 +41,7 @@ fn app_on(skip_loading: bool, first: Option<&str>) -> App {
     if let Some(pkg) = first {
         load(app.world_mut(), &demo(pkg), false).unwrap();
     }
-    let library = first
-        .is_none()
-        .then(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")));
+    let library = first.is_none().then(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")));
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), StatesPlugin))
         .init_asset::<Image>()
         .init_asset::<AudioSource>()
@@ -585,4 +583,3 @@ fn a_first_tick_script_error_opens_the_error_screen_from_the_command_line() {
     frames(&mut app, 1);
     assert_eq!(app.should_exit(), Some(AppExit::Success));
 }
-
