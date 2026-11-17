@@ -36,7 +36,9 @@ enum Failure {
 }
 
 fn is_hash(s: &str) -> bool {
-    s.len() == 64 && s.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+    s.len() == 64
+        && s.bytes()
+            .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
 }
 
 /// The pins as the test files hold them now.
@@ -181,7 +183,11 @@ fn golden_pins_change_only_with_a_sim_version_bump() {
 #[test]
 fn no_pins_are_recorded_before_the_freeze_point() {
     if iwbtg_sim::SIM_VERSION_FREEZE.is_none() {
-        assert_eq!(parse(RECORD), None, "sim_version_pins.txt must hold no pins before the freeze");
+        assert_eq!(
+            parse(RECORD),
+            None,
+            "sim_version_pins.txt must hold no pins before the freeze"
+        );
     }
 }
 
@@ -229,7 +235,10 @@ fn a_changed_pin_without_a_bump_fails() {
 fn a_bump_asks_for_a_repin_and_the_repin_passes() {
     let rec = pins(2, &[("case x", A)]);
     let now = pins(3, &[("case x", B)]);
-    assert!(matches!(check(Some(2), 3, Some(&rec), &now.pins), Err(Failure::Stale(_))));
+    assert!(matches!(
+        check(Some(2), 3, Some(&rec), &now.pins),
+        Err(Failure::Stale(_))
+    ));
     let rewritten = parse(&render(&now)).expect("record parses");
     assert_eq!(rewritten, now);
     assert_eq!(check(Some(2), 3, Some(&rewritten), &now.pins), Ok(()));
@@ -239,14 +248,23 @@ fn a_bump_asks_for_a_repin_and_the_repin_passes() {
 fn a_new_case_needs_a_repin_but_no_bump() {
     let rec = pins(2, &[("case x", A)]);
     let now = pins(2, &[("case x", A), ("case new", B)]).pins;
-    assert!(matches!(check(Some(2), 2, Some(&rec), &now), Err(Failure::Stale(_))));
+    assert!(matches!(
+        check(Some(2), 2, Some(&rec), &now),
+        Err(Failure::Stale(_))
+    ));
 }
 
 #[test]
 fn versions_never_go_below_the_freeze_or_the_record() {
     let rec = pins(3, &[("case x", A)]);
     let now = rec.pins.clone();
-    assert!(matches!(check(Some(2), 1, Some(&rec), &now), Err(Failure::Version(_))));
-    assert!(matches!(check(Some(2), 2, Some(&rec), &now), Err(Failure::Version(_))));
+    assert!(matches!(
+        check(Some(2), 1, Some(&rec), &now),
+        Err(Failure::Version(_))
+    ));
+    assert!(matches!(
+        check(Some(2), 2, Some(&rec), &now),
+        Err(Failure::Version(_))
+    ));
     assert!(matches!(check(Some(2), 2, None, &now), Err(Failure::Stale(_))));
 }
