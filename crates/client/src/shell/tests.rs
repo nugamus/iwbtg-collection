@@ -53,7 +53,7 @@ fn app_with(skip_loading: bool) -> App {
             crate::audio::AudioPlugin::audible(),
             crate::mods::ModsPlugin(mods),
             crate::visual::VisualPlugin,
-            crate::practice::PracticePlugin { slow_speed: 75 },
+            crate::practice::PracticePlugin { slow_speed: Some(75) },
             crate::retry::RetryPlugin(crate::retry::RetryArgs::default()),
             crate::skip::SkipPlugin,
             crate::pause::PausePlugin {

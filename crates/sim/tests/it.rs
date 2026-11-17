@@ -60,6 +60,8 @@ mod wp2_slip;
 mod wp2_traces;
 #[path = "wp3_bbox.rs"]
 mod wp3_bbox;
+#[path = "wp3_empty_mask.rs"]
+mod wp3_empty_mask;
 #[path = "wp3_grid.rs"]
 mod wp3_grid;
 #[path = "wp3_query.rs"]

@@ -158,6 +158,14 @@ cargo test --workspace
 cargo fmt --all -- --check
 ```
 
+CI cannot see the research repo, so trace fidelity is checked locally after each merge wave (docs/architecture/testing.md, CI and the fidelity sweep):
+
+```
+IWBTG_RESEARCH=../research cargo xtask fidelity
+```
+
+It prints a game x OK/OPEN/FAIL matrix and exits 1 when a case got worse than `crates/tools/fidelity-baseline.txt`; `--bless` rewrites the baseline after a deliberate change.
+
 Without wasmtime, a wasm32-wasip1 test binary also runs under Node's WASI. Build it with `cargo test -p iwbtg-sim --target wasm32-wasip1 --no-run`, then run the printed `.wasm` with a small script using `node:wasi` (preview1).
 
 ## Home PC findings (2026-11-02)
