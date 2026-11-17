@@ -957,7 +957,11 @@ fn card_content(
             CardPart::Tile,
         ))
         .with_child((
-            text(&code, Type::condensed(20.0, 700), card_part(CardPart::Code, &card)),
+            text(
+                &code,
+                Type::condensed(20.0, 700),
+                card_part(CardPart::Code, &card),
+            ),
             CardPart::Code,
         ));
         c.spawn(Node {

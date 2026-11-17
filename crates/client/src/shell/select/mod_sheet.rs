@@ -332,7 +332,10 @@ fn spawn_card(c: &mut ChildSpawnerCommands, d: &ModDef, color: Color, on: bool, 
     } else {
         Vec::new()
     };
-    c.spawn((mod_card(d.code, d.name, d.description, color, on, &options), Card(d.id)));
+    c.spawn((
+        mod_card(d.code, d.name, d.description, color, on, &options),
+        Card(d.id),
+    ));
 }
 
 fn spawn_footer(p: &mut ChildSpawnerCommands, auto_retry: bool) {
@@ -532,10 +535,13 @@ pub(super) fn follow(
             o.on = on;
         }
     }
-    let map = lib.games.get(sel.game).map_or_else(String::new, |g| match g.maps.get(sel.map) {
-        Some(m) => m.name.clone(),
-        None => file_name(&g.path),
-    });
+    let map = lib
+        .games
+        .get(sel.game)
+        .map_or_else(String::new, |g| match g.maps.get(sel.map) {
+            Some(m) => m.name.clone(),
+            None => file_name(&g.path),
+        });
     let (ranked, line) = header(set, speed.0, &map);
     for e in &standing_box {
         let pill_style = Type {
@@ -543,39 +549,52 @@ pub(super) fn follow(
             ..Type::PILL_CAPS
         };
         let soft = Type::barlow(14.0, 400);
-        commands.entity(e).despawn_related::<Children>().with_children(|s| {
-            if ranked {
-                s.spawn(pill("Ranked", pill_style, tokens::RANKED, tokens::ON_RANKED, 30.0, 16.0));
-                s.spawn(rich(vec![
-                    ("Counts for ".to_owned(), soft, tokens::SOFT),
-                    (line.clone(), Type::barlow(14.0, 700), Color::WHITE),
-                ]));
-            } else {
-                s.spawn(pill(
-                    "Unranked",
-                    Type {
-                        tracking: 0.1,
-                        ..pill_style
-                    },
-                    tokens::AMBER,
-                    tokens::ON_AMBER,
-                    30.0,
-                    16.0,
-                ));
-                s.spawn(text(&line, soft, tokens::SOFT));
-            }
-        });
+        commands
+            .entity(e)
+            .despawn_related::<Children>()
+            .with_children(|s| {
+                if ranked {
+                    s.spawn(pill(
+                        "Ranked",
+                        pill_style,
+                        tokens::RANKED,
+                        tokens::ON_RANKED,
+                        30.0,
+                        16.0,
+                    ));
+                    s.spawn(rich(vec![
+                        ("Counts for ".to_owned(), soft, tokens::SOFT),
+                        (line.clone(), Type::barlow(14.0, 700), Color::WHITE),
+                    ]));
+                } else {
+                    s.spawn(pill(
+                        "Unranked",
+                        Type {
+                            tracking: 0.1,
+                            ..pill_style
+                        },
+                        tokens::AMBER,
+                        tokens::ON_AMBER,
+                        30.0,
+                        16.0,
+                    ));
+                    s.spawn(text(&line, soft, tokens::SOFT));
+                }
+            });
     }
     for e in &chosen {
-        commands.entity(e).despawn_related::<Children>().with_children(|c| {
-            c.spawn(text("Selected", CAPS, tokens::MUTED));
-            if set == ModSet::NONE {
-                c.spawn(text("None", Type::barlow(15.0, 600), tokens::MUTED));
-            }
-            for d in set.iter() {
-                c.spawn(selected_mod_pill(d.code, kind_color(d.kind)));
-            }
-        });
+        commands
+            .entity(e)
+            .despawn_related::<Children>()
+            .with_children(|c| {
+                c.spawn(text("Selected", CAPS, tokens::MUTED));
+                if set == ModSet::NONE {
+                    c.spawn(text("None", Type::barlow(15.0, 600), tokens::MUTED));
+                }
+                for d in set.iter() {
+                    c.spawn(selected_mod_pill(d.code, kind_color(d.kind)));
+                }
+            });
     }
     for mut t in &mut value_text {
         t.0 = button_value(set);
@@ -604,7 +623,10 @@ mod tests {
         assert!(!ranked);
         assert!(why.starts_with("Slow motion 50% is a practice assist"), "{why}");
         let (ranked, why) = header(set("FA"), 75, "Hard");
-        assert!(!ranked && why.starts_with("Frame advance is a practice assist"), "{why}");
+        assert!(
+            !ranked && why.starts_with("Frame advance is a practice assist"),
+            "{why}"
+        );
     }
 
     #[test]
@@ -622,6 +644,9 @@ mod tests {
         assert_eq!(sheet.before, sd, "opening again keeps the first set");
         set_open(&mut sheet, ModSet::NONE, false);
         assert!(!sheet.open);
-        assert_eq!(toggle(toggle(sd, Mod::NoBackground), Mod::SuddenDeath).codes(), "NB");
+        assert_eq!(
+            toggle(toggle(sd, Mod::NoBackground), Mod::SuddenDeath).codes(),
+            "NB"
+        );
     }
 }

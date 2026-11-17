@@ -532,7 +532,12 @@ mod tests {
         let mut texts: Vec<(Entity, String)> = world
             .query::<(Entity, AnyOf<(&Text, &TextSpan)>)>()
             .iter(world)
-            .map(|(e, (t, span))| (e, t.map_or_else(|| span.map_or_else(String::new, |s| s.0.clone()), |t| t.0.clone())))
+            .map(|(e, (t, span))| {
+                (
+                    e,
+                    t.map_or_else(|| span.map_or_else(String::new, |s| s.0.clone()), |t| t.0.clone()),
+                )
+            })
             .collect();
         texts.sort_by_key(|t| t.0);
         texts.into_iter().map(|t| t.1).collect::<Vec<_>>().join("|")
@@ -564,7 +569,11 @@ mod tests {
         assert!(words.contains("Slow motion 75% is a practice assist"), "{words}");
 
         activate::<SheetButton>(&mut app, |b| *b == SheetButton::Back);
-        assert_eq!(app.world().resource::<RunMods>().0, ModSet::NONE, "Back puts the set back");
+        assert_eq!(
+            app.world().resource::<RunMods>().0,
+            ModSet::NONE,
+            "Back puts the set back"
+        );
         assert!(!app.world().resource::<Sheet>().open);
 
         activate::<SheetButton>(&mut app, |b| *b == SheetButton::Mods);
@@ -572,7 +581,10 @@ mod tests {
         activate::<SheetButton>(&mut app, |b| *b == SheetButton::Done);
         app.update();
         assert_eq!(app.world().resource::<RunMods>().0.codes(), "SD");
-        assert!(header_words(&mut app).contains("|SD|"), "the Mods button shows SD");
+        assert!(
+            header_words(&mut app).contains("|SD|"),
+            "the Mods button shows SD"
+        );
     }
 
     /// Enter and a click start the picked map's id; a game that did not read has none (#880).

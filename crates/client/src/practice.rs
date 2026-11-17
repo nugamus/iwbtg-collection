@@ -92,7 +92,8 @@ impl Plugin for PracticePlugin {
         let speed = clock_speed(self.mods, self.slow_speed);
         // The view sets each run's first clock rate with it (`view::enter`); `follow_room_speed`
         // keeps it so after every tick.
-        app.insert_resource(speed).insert_resource(SlowSpeed(self.slow_speed));
+        app.insert_resource(speed)
+            .insert_resource(SlowSpeed(self.slow_speed));
         if self.mods.contains(Mod::FrameAdvance) {
             crate::shell::run_resource(app, |_| Advance::default());
             app.configure_sets(FixedUpdate, SimTick.run_if(|a: Res<Advance>| a.steps > 0))

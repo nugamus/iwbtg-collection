@@ -51,4 +51,3 @@ pub(super) fn spawn(commands: &mut Commands, camera: Entity, set: ModSet) {
         )],
     ));
 }
-
