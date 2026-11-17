@@ -12,6 +12,13 @@
 //! collision_point hits the mirrored tree's reported range, extra column included
 //! (CLONE_SPEC collision, Confirmed (recorder), poronkusema t-col-09-e.csv rows 4-8).
 //!
+//! **Empty masks** (a no-frame sprite, maskNothing, an inverted rectangle such as sprite520)
+//! have a reported box but no collision mask (CLONE_SPEC collision, "Collisions with these
+//! boxes", Confirmed (recorder), research#230, traces/help-the-fairy-tale/empty-mask-collide.md):
+//! place tests and collision events never see them, from either side; non-precise point,
+//! rectangle and line queries hit their reported box (an inverted box contains no point);
+//! precise queries and `instance_position` miss; `distance_to_object` measures the reported box.
+//!
 //! **Candidates.** The broadphase grid gives candidates near the query box plus every moved
 //! instance; an unbuilt grid gives every instance. Every hit is collected, then the result is
 //! picked by the R21 order, so the grid never changes an outcome.
@@ -20,7 +27,9 @@ use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 
-use super::bbox::{PlacedMask, instance_box, place_origin, real_of, reported_box, reported_edges};
+use super::bbox::{
+    PlacedMask, instance_box, instance_mask, place_origin, real_of, reported_box, reported_edges,
+};
 use super::overlap::{intersect, overlaps, point_in, rect_in};
 use crate::def::{ClassMask, GameDef, IRect, KindId, MaskShape};
 use crate::error::SimError;
@@ -114,7 +123,7 @@ impl<'a> Q<'a> {
     }
 
     /// True when `inst`'s reported box, widened, may touch `region` (or it has no reported box,
-    /// in which case it has no mask and touches nothing).
+    /// in which case it touches nothing: no mask, or an empty mask the spec has no box for).
     fn near(&self, inst: &Instance, region: &IRect) -> Result<bool, SimError> {
         let at = (inst.m.x(), inst.m.y());
         let Some(b) = reported_box(self.def, inst, at, &self.rules.collide)? else {
@@ -180,8 +189,17 @@ impl<'a> Q<'a> {
             }
             let at = (c.m.x(), c.m.y());
             let precise = if prec {
-                self.placed(c)?
-                    .filter(|p| matches!(p.mask.shape, MaskShape::Bits(_)))
+                // No collision mask (a no-frame sprite, an empty mask): a precise query misses,
+                // although the reported box exists (CLONE_SPEC collision, "Collisions with these
+                // boxes", research#230: maskNothing and sprite520 miss with prec 1 although
+                // their shape is a rectangle).
+                match instance_mask(self.def, c)? {
+                    None => continue,
+                    Some((m, _)) if matches!(m.shape, MaskShape::Empty) => continue,
+                    Some(_) => self
+                        .placed(c)?
+                        .filter(|p| matches!(p.mask.shape, MaskShape::Bits(_))),
+                }
             } else {
                 None
             };
@@ -431,11 +449,14 @@ fn dist_edges(q: &Q, inst: &Instance) -> Result<[Real; 4], SimError> {
     }
 }
 
-/// The gap on one axis between `[a1, a2]` and `[b1, b2]` (C13 `DistOffset`).
+/// The gap on one axis between `me`'s `[a1, a2]` and the other's `[b1, b2]` (C13
+/// `DistOffset`): `b1 - a2` if positive, else `a1 - b2` if positive, else 0 (CLONE_SPEC
+/// collision, "distance_to_object off-axis"). Both can be positive only for an inverted box
+/// (sprite520), whose edges go into the formula unchanged (research#230).
 fn axis_gap(a1: Real, a2: Real, b1: Real, b2: Real, offset: DistOffset) -> Real {
     let d1 = b1 - a2;
     let d2 = a1 - b2;
-    let diff = if d1.get() > d2.get() { d1 } else { d2 };
+    let diff = if d1.get() > 0.0 { d1 } else { d2 };
     if diff.get() <= 0.0 {
         return Real::ZERO;
     }

@@ -489,9 +489,10 @@ mod wp3 {
     }
 
     /// `bbox_read` gives every pinned `bbox_*` row of bbox-empty-mask.csv and -b.csv (no-frame
-    /// sprites, a no-frame `mask_index`, maskNothing at scales and angles), and `Unknown` for the
-    /// two inverted rectangles the spec cannot explain (sprite520, temp) (CLONE_SPEC collision,
-    /// "bbox_* of an instance that has a sprite but no usable box", research#224).
+    /// sprites, a no-frame `mask_index`, maskNothing at scales and angles, the inverted
+    /// rectangles sprite520 and temp with their raw edges at angle 0), and `Unknown` for temp at
+    /// angle 90, which no rule fits (CLONE_SPEC collision, "bbox_* of an instance that has a
+    /// sprite but no usable box", research#224).
     #[test]
     #[allow(
         clippy::cast_possible_truncation,
@@ -501,7 +502,8 @@ mod wp3 {
         use iwbtg_sim::collide::bbox::{BboxRead, bbox_read};
 
         let sprites = trace_sprites();
-        let unpinned = ["sprite520", "temp"];
+        // Inverted rectangles other than maskNothing read raw edges; rotated, no rule fits.
+        let inverted = ["sprite520", "temp"];
         let (def, probe) = trace_def(&sprites);
         let rules = iwbtg_sim::rules::CollideRules::default();
         let mut rows = 0;
@@ -527,7 +529,10 @@ mod wp3 {
                     inst.img.xscale(),
                     inst.img.angle()
                 );
-                if r.mask_name.is_none() && unpinned.contains(&r.name.as_str()) {
+                if r.mask_name.is_none()
+                    && inverted.contains(&r.name.as_str())
+                    && inst.img.angle().get() != 0.0
+                {
                     assert_eq!(got, BboxRead::Unknown, "{what}");
                 } else {
                     let want = rect(v(cl) as i64, v(ct) as i64, v(cr) as i64, v(cb) as i64);

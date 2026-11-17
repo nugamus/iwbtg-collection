@@ -113,11 +113,12 @@ fn slot_for(inst: &Instance, def: &GameDef, rules: &CollideRules) -> Slot {
     let Some(first) = boxes.first() else {
         return Slot::Nowhere;
     };
+    // min and max over all edges, so an inverted reported box (sprite520) still buckets.
     let union = boxes.iter().fold(*first, |u, b| IRect {
-        left: u.left.min(b.left),
-        top: u.top.min(b.top),
-        right: u.right.max(b.right),
-        bottom: u.bottom.max(b.bottom),
+        left: u.left.min(b.left).min(b.right),
+        top: u.top.min(b.top).min(b.bottom),
+        right: u.right.max(b.right).max(b.left),
+        bottom: u.bottom.max(b.bottom).max(b.top),
     });
     match cell_range(union) {
         Ok(c) if cell_count(c).is_some_and(|n| n <= MAX_CELLS) => Slot::Cells(c),

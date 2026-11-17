@@ -4,6 +4,8 @@
 //!   (against `origin/main`, committed or not) plus a compile check of the crates that depend on
 //!   them. `--all` runs the whole workspace, like CI. Writes the summary to
 //!   `target/xtask/last-check.txt` for `pr-body`.
+//! - `fidelity [--bless]`: the trace sweep over every converter package; records the run in
+//!   `target/xtask/last-fidelity.txt` (#935).
 //! - `repin`: after a deliberate change to hashed sim state, re-pins the state hash vectors
 //!   (`tests/hash_vectors.rs`), the `FINAL_HASH` of `tests/wp1_determinism.rs` and the golden
 //!   corpus, then runs them again. After the `SIM_VERSION` freeze point it also records the pins
@@ -12,6 +14,10 @@
 //! - `pr-body [--issue N]`: prints a PR body for this branch: Closes, the commits, the docs it
 //!   changed, and the User check from the last `check`.
 //!
+//! - `fidelity [--bless]`: every trace case on every converter package in
+//!   `$IWBTG_RESEARCH/build/packages` (`iwbtg trace sweep`), as a game x OK/OPEN/FAIL matrix;
+//!   exits 1 when a case got worse than `crates/tools/fidelity-baseline.txt` (#785). `--bless`
+//!   rewrites the baseline.
 //! - `doctor`: checks the machine's tools against the repo; today the installed `wasm-bindgen` CLI
 //!   against the `wasm-bindgen` version in `Cargo.lock` (#723).
 //!
@@ -44,8 +50,10 @@ fn main() -> ExitCode {
         Some("regen") => regen(&root),
         Some("pr-body") => pr_body(&root, flag_value(&args, "--issue")),
         Some("doctor") => doctor(&root),
+        Some("fidelity") => fidelity(&root, args.iter().any(|a| a == "--bless")),
         _ => Err(
-            "usage: cargo xtask <check [--all] | repin | regen | pr-body [--issue N] | doctor>".to_string(),
+            "usage: cargo xtask <check [--all] | repin | regen | pr-body [--issue N] | doctor | fidelity [--bless]>"
+                .to_string(),
         ),
     };
     match result {
@@ -495,6 +503,81 @@ fn wasm_bindgen_problem(lock: &str, installed: Option<&str>) -> Result<(), Strin
 }
 
 /// `doctor`: machine checks against the repo. Fails when one does.
+/// The committed fidelity baseline: `<game>/<case> <STATUS>` lines, no private data.
+const FIDELITY_BASELINE: &str = "crates/tools/fidelity-baseline.txt";
+
+/// `fidelity`: one `iwbtg trace sweep` run (all packages and cases in one process).
+fn fidelity(root: &Path, bless: bool) -> Result<(), String> {
+    let Some(research) = std::env::var_os("IWBTG_RESEARCH") else {
+        return Err("set IWBTG_RESEARCH to the research checkout (for example ../research)".into());
+    };
+    // Relative to the folder cargo xtask was started in, not the workspace root it runs in.
+    let research = Path::new(&research)
+        .canonicalize()
+        .map_err(|e| format!("IWBTG_RESEARCH {}: {e}", Path::new(&research).display()))?;
+    let research = research.to_string_lossy();
+    // Windows `canonicalize` returns a verbatim (`\\?\`) path; the plain form is easier to read.
+    let research = research.strip_prefix(r"\\?\").unwrap_or(&research).to_owned();
+    let mut args = vec![
+        "run",
+        "-q",
+        "-p",
+        "iwbtg-tools",
+        "--",
+        "trace",
+        "sweep",
+        "--cases",
+        "crates/tools/cases",
+        "--baseline",
+        FIDELITY_BASELINE,
+        "--research",
+        &research,
+    ];
+    if bless {
+        args.push("--bless");
+    }
+    // Build first: a failed build is no sweep and must not write the stamp (#935).
+    run(
+        root,
+        "cargo",
+        &["build", "-q", "-p", "iwbtg-tools", "--bin", "iwbtg"],
+        &[],
+    )?;
+    println!("$ cargo {}", args.join(" "));
+    let code = Command::new("cargo")
+        .args(&args)
+        .current_dir(root)
+        .status()
+        .map_err(|e| format!("cargo: {e}"))?
+        .code();
+    // The tool exits 0 when every case is as good as the baseline, 1 on a regression, 2 and 3 on an error or a
+    // panic: only 0 and 1 mean the sweep ran.
+    if matches!(code, Some(0 | 1)) {
+        record_fidelity_run(root);
+    }
+    if code == Some(0) {
+        Ok(())
+    } else {
+        Err(format!(
+            "fidelity: a case got worse than {FIDELITY_BASELINE} (or the sweep could not run); see above"
+        ))
+    }
+}
+
+/// `target/xtask/last-fidelity.txt`: `<origin/main commit> <unix seconds>`, written after every sweep that ran, clean or
+/// with a regression, so `issues.py start` can warn when sim or format commits landed since (#935). Best effort.
+fn record_fidelity_run(root: &Path) {
+    let Ok((true, sha)) = output(root, "git", &["rev-parse", "origin/main"], &[]) else {
+        return;
+    };
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let dir = root.join("target/xtask");
+    let _ = std::fs::create_dir_all(&dir);
+    let _ = std::fs::write(dir.join("last-fidelity.txt"), format!("{} {secs}\n", sha.trim()));
+}
+
 fn doctor(root: &Path) -> Result<(), String> {
     let lock = std::fs::read_to_string(root.join("Cargo.lock")).map_err(|e| format!("Cargo.lock: {e}"))?;
     let installed = output(root, "wasm-bindgen", &["--version"], &[])
