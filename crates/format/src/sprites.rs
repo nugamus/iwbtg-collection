@@ -1,5 +1,4 @@
-//! Sprite strips and their sidecars (docs/plans/sim-core.md 8.1, 8.2 step 2; docs/format/v0.md,
-//! Assets).
+//! Sprite strips and their sidecars (docs/plans/sim-core.md 8.1, 8.2 step 2; docs/format/assets.md).
 //!
 //! `sprites/<id>.png` is a horizontal strip of `frames` frames; `sprites/<id>.toml` is the
 //! sidecar. Image pixels never reach the sim: only the masks built here do.
@@ -20,7 +19,7 @@ use crate::manifest::toml_error;
 use crate::masks::{CollisionShape, build_union_mask, empty_mask};
 use crate::number::Number;
 
-/// Largest image side (docs/format/v0.md, Assets).
+/// Largest image side (docs/format/assets.md).
 pub const MAX_IMAGE_SIDE: u32 = 4096;
 
 /// Largest frame side the loader accepts at all, even in `LoadMode::Trace` (a mask of this size

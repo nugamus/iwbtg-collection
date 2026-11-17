@@ -84,7 +84,7 @@ pub struct LoadReport {
     pub maps: Vec<MapTiming>,
 }
 
-/// One map's resolved timing chain (docs/format/v0.md, Maps).
+/// One map's resolved timing chain (docs/format/game.md, Maps).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MapTiming {
     /// Map id.
@@ -2553,7 +2553,7 @@ impl<'a> Loader<'a> {
                     self.manifest_text,
                     r.span().start,
                     format!(
-                        "timing room `{}` cannot be reached: no start, warp, room spawn, script room call or cut room leads there (docs/format/v0.md, Validation step 7)",
+                        "timing room `{}` cannot be reached: no start, warp, room spawn, script room call or cut room leads there (docs/format/validation.md, step 7)",
                         r.get_ref()
                     ),
                 ));
@@ -2586,7 +2586,7 @@ impl<'a> Loader<'a> {
             self.diags.push(Diagnostic::file_warning(
                 file,
                 format!(
-                    "kind `{other}` matches two equally specific collision handlers of `{handler}`, `{picked}` and `{tied}`: only `{picked}` runs, by handler order, where GM runs the nearest parent's (docs/format/v0.md, Validation step 7; sim register C8)"
+                    "kind `{other}` matches two equally specific collision handlers of `{handler}`, `{picked}` and `{tied}`: only `{picked}` runs, by handler order, where GM runs the nearest parent's (docs/format/validation.md, step 7; sim register C8)"
                 ),
             ));
         }
@@ -2659,7 +2659,7 @@ impl<'a> Loader<'a> {
         }
     }
 
-    /// `[stripped]` and each map's `stripped_start` (docs/format/v0.md, Stripped mode): rooms,
+    /// `[stripped]` and each map's `stripped_start` (docs/format/game.md, Stripped mode): rooms,
     /// kinds and instance names resolve; no ranked start room and no cut room's `to` is cut.
     fn stripped_refs(&mut self, rooms: &[ParsedRoom<'_>]) {
         let m = self.m;
@@ -2915,7 +2915,7 @@ impl<'a> Loader<'a> {
     }
 }
 
-/// Script size limit (docs/format/v0.md, Scripts).
+/// Script size limit (docs/format/scripts.md).
 const MAX_SCRIPT_BYTES: usize = 256 * 1024;
 
 enum Placed {
@@ -3023,7 +3023,7 @@ fn read_text<'f>(files: &'f PackageFiles, path: &str, out: &mut Vec<Diagnostic>)
 // ---------------------------------------------------------------------------------------------
 // Step 9: gameplay_hash.
 
-/// `game.toml` keys that cannot change the sim (docs/format/v0.md, Versioning).
+/// `game.toml` keys that cannot change the sim (docs/format/versioning.md).
 const COSMETIC_MANIFEST_KEYS: [&str; 9] = [
     "title",
     "version",
@@ -3040,7 +3040,7 @@ const COSMETIC_MANIFEST_KEYS: [&str; 9] = [
 const COSMETIC_MAP_KEYS: [&str; 3] = ["name", "difficulty", "category"];
 
 /// BLAKE3 over the canonical parsed form of everything that can change the sim
-/// (docs/format/v0.md, Versioning; architecture "Versions"): the gameplay fields of `game.toml`,
+/// (docs/format/versioning.md; architecture "Versions"): the gameplay fields of `game.toml`,
 /// the physics profile, objects, rooms (not tiles), timelines, paths, sound and sprite sidecars,
 /// scripts, the built mask bits, and the mask rule ([`ALPHA_IN_MASK`]). Data files hash as their
 /// parsed values with sorted keys, so comments and formatting do not count; scripts hash as text

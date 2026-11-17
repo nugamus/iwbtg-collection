@@ -1,5 +1,5 @@
 //! Room files: `run` expansion in row-major order, params, views, file speed, role, `on_create`
-//! (docs/plans/sim-core.md 4.1, 8.2 step 4, 8.3; docs/format/v0.md, Rooms).
+//! (docs/plans/sim-core.md 4.1, 8.2 step 4, 8.3; docs/format/rooms.md).
 //!
 //! This module parses one `rooms/<id>.toml`; `load` resolves kinds, ranks and names. Instances
 //! stay in file order, which is creation order (Inferred, CLONE_SPEC rooms "created in the order
@@ -17,13 +17,13 @@ use crate::manifest::{RoleName, toml_error};
 use crate::number::Number;
 use crate::objects::number;
 
-/// Most instances in one room after `run` expansion (docs/format/v0.md, Assets).
+/// Most instances in one room after `run` expansion (docs/format/assets.md).
 pub const MAX_INSTANCES_PER_ROOM: usize = 50_000;
 
 /// Default `run` spacing (docs/format/v0.md; spacing default is still OPEN there).
 pub const DEFAULT_STEP: (f64, f64) = (32.0, 32.0);
 
-/// Keys of an instance that are not params (docs/format/v0.md, Rooms: common instance keys).
+/// Keys of an instance that are not params (docs/format/rooms.md, common instance keys).
 /// `depth` and `visible` override the kind's for every kind, like `xscale`, `yscale` and `angle`.
 /// `gm_id` is the GM8 instance id from the room file (#680).
 pub const INSTANCE_KEYS: [&str; 13] = [

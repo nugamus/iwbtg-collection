@@ -1,5 +1,5 @@
 //! Ranked (stripped) mode: the run's play mode and the package's `[stripped]` table resolved to
-//! ids (docs/format/v0.md, Stripped mode; docs/product.md, Two ways to play each game; #561).
+//! ids (docs/format/game.md, Stripped mode; docs/product.md, Two ways to play each game; #561).
 //!
 //! A [`PlayMode::Stripped`] run starts at its map's start (`GameDef::map_start`) with its globals set
 //! (`room::start_game`), sends every room change to a cut room to its `to` room, and leaves out
@@ -170,7 +170,7 @@ pub fn region_holds(w: &World, def: &GameDef) -> bool {
 ///   and when it reaches `timeout_ticks` the frame gets the press and the count goes back to 0.
 ///   So the first derived press comes in the region's `timeout_ticks`-th tick.
 /// - The derived press is press-only: no `released` edge follows on the next tick, because no
-///   text box in the 20 games advances on a release (docs/format/v0.md, Stripped mode; #574).
+///   text box in the 20 games advances on a release (docs/format/game.md, Stripped mode; #574).
 pub fn begin_tick(w: &mut World, def: &GameDef, input: InputFrame) -> InputFrame {
     let stripped = w.mode == PlayMode::Stripped;
     let regions = &def.stripped;

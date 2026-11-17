@@ -1,0 +1,32 @@
+# Assets
+
+Part of [format v0](v0.md).
+
+- **Images:** PNG only, straight alpha, at most 4096 px on a side (a sprite wraps its frames into rows with `columns`).
+- **Sprites:** `sprites/<id>.png` is a horizontal strip, or a grid of rows when the sidecar sets `columns`. Its sidecar:
+
+  ```toml
+  #:schema ../../../client/docs/format/schema/v0/sprite.schema.json
+  frames = 4
+  frame_size = [64, 64]
+  columns = 4                # optional; frames per row of the image, default all frames in one row
+  origin = [32, 32]
+  collision = "precise"      # precise | rect | disk | diamond | none, as in GM8 sprite settings
+  bbox = [0, 0, 63, 63]      # optional; computed from alpha if absent
+  alpha_tolerance = 0
+  separate_masks = false     # GM "separate collision masks": one mask per frame
+  mask = "boss1_mask"        # optional separate mask sprite
+  ```
+
+  `columns` wraps the frames into a grid read row by row: frame `i` is at column `i % columns`, row `i / columns`, so the image is `columns * frame_width` by `ceil(frames / columns) * frame_height` px (the last row may be partly empty). It is at least 1 and at most `frames`. A sprite whose strip would pass 4096 px sets it (converter request CR15); both image sides stay at most 4096.
+
+  `disk` and `diamond` are rasterized inside the box at load. `none` is GM's empty mask (an inverted box or a fully transparent sprite). `frames = 0` is a sprite without images: it needs no PNG and has an empty mask.
+
+  Collision masks are built from PNG alpha at load, so masks never drift from the art.
+
+  A sprite with the id `cherry` (at least two 21x24 frames) is also the client's pause menu selector, the delicious fruit (docs/product.md, Pause); without one the client draws its own.
+- **Backgrounds and tilesets:** `backgrounds/<id>.png`, with a sidecar for tile size and separation when used as a tileset (see Rooms).
+- **Audio:** Ogg Vorbis. Sound effects in `sounds/`, music in `music/`. Loop points and preview start in `music/<id>.toml`. FMOD and SuperSound calls in originals become plain sound and music ids. Audio never affects the sim.
+- **Fonts:** bitmap PNG plus sidecar.
+- **Package size:** at most 512 MB. At most 50,000 instances per room.
+- Every file that is not the creator's own work or ours is listed in `[[third_party]]`.

@@ -1,4 +1,4 @@
-//! Particle system definitions from `particles/<id>.toml` (docs/format/v0.md, Particles; #765).
+//! Particle system definitions from `particles/<id>.toml` (docs/format/particles.md; #765).
 //!
 //! One [`PartSystemDef`] is what the original's code builds in one go (rely objEffect Create):
 //! its types, its emitters with their regions, streams and bursts, and its

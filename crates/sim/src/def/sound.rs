@@ -36,7 +36,7 @@ impl GameDef {
     /// never report a length, so the package supplies it: the file name's stem (after the last
     /// `/` or `\`, without its extension, compared without regard to case, as Windows file names
     /// are) names a package sound or music id, and its sidecar `length_ticks` is the answer
-    /// (docs/format/v0.md, Sounds). A file that matches no sound gives 0, which the adapters
+    /// (docs/format/sounds.md). A file that matches no sound gives 0, which the adapters
     /// read as "unknown": a one-shot then plays until stopped.
     pub fn dll_sound_length(&self, file: &str) -> u32 {
         let name = file.rsplit(['/', '\\']).next().unwrap_or(file);

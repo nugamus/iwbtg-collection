@@ -1,5 +1,5 @@
 //! The JSON Schemas in `docs/format/schema/v0/` (#212): not stale, and the examples in
-//! `docs/format/v0.md` and the valid test packages validate against them.
+//! format pages (`docs/format/*.md`) and the valid test packages validate against them.
 //!
 //! `cargo xtask regen` rewrites the schema files: it runs `schema_files_are_not_stale` alone with
 //! `UPDATE_SCHEMAS=1`, then this whole file. Setting `UPDATE_SCHEMAS=1` on the whole file instead
@@ -83,9 +83,24 @@ fn schema_files_are_not_stale() {
     );
 }
 
-/// The ```toml blocks of v0.md that start with a `#:schema` line, as `(schema stem, text)`.
+/// The ```toml blocks of the format pages (`docs/format/*.md`, one page per file type since
+/// #792) that start with a `#:schema` line, as `(schema stem, text)`.
 fn v0_examples() -> Vec<(String, String)> {
-    let md = fs::read_to_string(client_root().join("docs/format/v0.md")).unwrap();
+    let mut pages: Vec<PathBuf> = fs::read_dir(client_root().join("docs/format"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|e| e == "md"))
+        .collect();
+    pages.sort();
+    let mut out = Vec::new();
+    for page in pages {
+        out.extend(toml_examples(&fs::read_to_string(page).unwrap()));
+    }
+    out
+}
+
+/// The ```toml blocks of one markdown text that start with a `#:schema` line.
+fn toml_examples(md: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
     let mut block: Option<Vec<String>> = None;
     for line in md.lines() {
@@ -128,11 +143,11 @@ fn v0_examples_validate() {
     ] {
         assert!(
             examples.iter().any(|(s, _)| s == stem),
-            "v0.md has no example for {stem}"
+            "the format pages have no example for {stem}"
         );
     }
     for (stem, text) in &examples {
-        assert_valid(stem, &format!("a v0.md example:\n{text}\n"), text);
+        assert_valid(stem, &format!("a format page example:\n{text}\n"), text);
     }
 }
 
