@@ -108,7 +108,10 @@ fn body(c: &mut ChildSpawner, report: &Report) {
                 ));
             }
         });
-        c.spawn((text(&report.message, Type::barlow(24.0, 500), tokens::INK), Message));
+        c.spawn((
+            text(&report.message, Type::barlow(24.0, 500), tokens::INK),
+            Message,
+        ));
         if let Some(context) = &report.context {
             c.spawn(rich(vec![
                 ("In ".to_owned(), Type::barlow(15.0, 400), tokens::MUTED),

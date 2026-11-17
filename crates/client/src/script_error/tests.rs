@@ -105,6 +105,10 @@ fn escape_and_enter_go_back() {
             .add_systems(Update, keys);
         app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(key);
         app.update();
-        assert_eq!(app.world().resource::<Stopped>().picked, Some(Action::Back), "{key:?}");
+        assert_eq!(
+            app.world().resource::<Stopped>().picked,
+            Some(Action::Back),
+            "{key:?}"
+        );
     }
 }

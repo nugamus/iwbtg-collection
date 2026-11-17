@@ -458,13 +458,19 @@ fn a_script_error_stops_the_game_and_goes_back_to_select() {
     assert_eq!(report.line, Some(9));
     assert!(report.message.contains("out of bounds"), "{report:?}");
     assert!(
-        report.context.as_deref().is_some_and(|c| c.contains("kind @boss")),
+        report
+            .context
+            .as_deref()
+            .is_some_and(|c| c.contains("kind @boss")),
         "{report:?}"
     );
     let stopped_at = tick(&app);
     frames(&mut app, 20);
     assert_eq!(tick(&app), stopped_at, "no tick on the error screen");
-    assert!(app.world().resource::<crate::hud::Suspended>().0, "the HUD is hidden");
+    assert!(
+        app.world().resource::<crate::hud::Suspended>().0,
+        "the HUD is hidden"
+    );
 
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()

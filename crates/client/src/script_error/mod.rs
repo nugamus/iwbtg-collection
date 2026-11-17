@@ -179,10 +179,7 @@ pub struct ScriptErrorPlugin(pub ScriptErrorArgs);
 impl Plugin for ScriptErrorPlugin {
     fn build(&self, app: &mut App) {
         let preview = self.0.script_error_preview;
-        shell::run_resource(app, move |_| Stopped {
-            preview,
-            ..default()
-        });
+        shell::run_resource(app, move |_| Stopped { preview, ..default() });
         let on_screen = in_state(RunScreen::Error);
         app.add_systems(OnEnter(RunScreen::Error), cover)
             .add_systems(OnExit(RunScreen::Error), uncover)
