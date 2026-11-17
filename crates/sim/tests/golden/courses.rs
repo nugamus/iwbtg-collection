@@ -1,8 +1,8 @@
 //! Kid courses (#786): one synthetic room per kid family, with the engine kinds, a floor, a
-//! kid start and a set of built-ins the kid runs into under a scripted input, plus the
-//! param variants course (#898) and the script API case. Every `Builtin` and every `KidFamily` appears in at least one case; the
-//! coverage lines of the report (`builtin <name> <case>`, `family <name> <case>`) and the
-//! `golden_corpus` coverage test keep it that way.
+//! kid start and a set of built-ins the kid runs into under a scripted input, plus the param
+//! variants course (#898) and the script API case. Every `Builtin` and every `KidFamily`
+//! appears in at least one case; the coverage lines of the report (`builtin <name> <case>`,
+//! `family <name> <case>`) and the `golden_corpus` coverage test keep it that way.
 //!
 //! Built in code from `iwbtg_sim`'s public API like the rest of the corpus: no package files,
 //! no game assets. Sprites are plain rectangles and one triangle.
@@ -800,7 +800,11 @@ fn variant_objects(c: &mut Course) {
     let t = ParamValue::Bool(true);
     // Bullets meet blocks in the collision phase (most A2/A3 games), not in their own Step,
     // so they reach the blocks that break or vanish when shot.
-    let bullet = c.def_mut().kinds.iter().position(|k| k.base == Builtin::KidBullet);
+    let bullet = c
+        .def_mut()
+        .kinds
+        .iter()
+        .position(|k| k.base == Builtin::KidBullet);
     let bullet = bullet.expect("the engine bullet kind");
     c.def_mut().kinds[bullet]
         .params
@@ -888,7 +892,11 @@ fn variant_objects(c: &mut Course) {
         528.0,
         "moving_touch",
         Builtin::MovingPlatform,
-        &[("hspeed", real(1.0)), ("bounce", t.clone()), ("start_on_touch", t.clone())],
+        &[
+            ("hspeed", real(1.0)),
+            ("bounce", t.clone()),
+            ("start_on_touch", t.clone()),
+        ],
     );
     c.def_mut().paths.push(PathDef {
         name: "hop".into(),
