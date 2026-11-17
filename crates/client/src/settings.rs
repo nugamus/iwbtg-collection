@@ -534,14 +534,18 @@ slow_speed = 50
         );
         assert!(s.slow_speed == 50 && w.is_empty(), "{w:?}");
         for bad in ["25", "-1", "\"50\"", "300"] {
-            let (s, w) = parse(&format!("[practice]
+            let (s, w) = parse(&format!(
+                "[practice]
 slow_speed = {bad}
-"));
+"
+            ));
             assert_eq!((s.slow_speed, w.len()), (75, 1), "{bad}: {w:?}");
         }
-        let (_, w) = parse("practice = 50
+        let (_, w) = parse(
+            "practice = 50
 [retry]
-");
+",
+        );
         assert_eq!(w.len(), 1, "{w:?}");
     }
 
