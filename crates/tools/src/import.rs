@@ -949,7 +949,7 @@ pub fn import_text(
 }
 
 /// A definition with no kinds and no variables, so `registry::resolve` tells built-in variables
-/// the probe cannot read (`bbox_left`) from names a package may define (`djump`).
+/// the probe cannot read (`xstart`) from names a package may define (`djump`).
 fn names_only_def() -> Option<iwbtg_sim::GameDef> {
     let mut b = iwbtg_sim::def::testing::GameDefBuilder::new("import");
     b.room(iwbtg_sim::def::RoomDef::new("room", 1, 1));
@@ -1015,6 +1015,16 @@ fn translate_column(
                 .ok_or_else(|| format!("key {arg} has no client action"))?;
             return Ok(format!("{func}({})", action.name()));
         }
+    }
+    if call_arg(name, "place_free").is_some() {
+        // The arguments are fields of the traced instance, which keep their GML names in ours
+        // (`x+hspeed`); a name the probe cannot read is the error.
+        let Some(def) = empty_def else {
+            return Err("no definition to check the place_free arguments".into());
+        };
+        return registry::column(name, def)
+            .map(|_| name.to_string())
+            .map_err(|e| format!("{e} (OPEN)"));
     }
     if name.contains('(') {
         return Err("a function call; the probe reads variables only (OPEN)".into());
@@ -1266,15 +1276,24 @@ mod tests {
         assert_eq!(t("alarm[0]"), Ok("alarm[0]".into()));
         assert_eq!(t("djump"), Ok("djump".into()));
         assert_eq!(t("global.grav"), Ok("global.grav".into()));
+        assert_eq!(t("bbox_left"), Ok("bbox_left".into()));
+        assert_eq!(t("player.bbox_bottom"), Ok("kid.bbox_bottom".into()));
+        assert_eq!(t("place_free(x+hspeed,y)"), Ok("place_free(x+hspeed,y)".into()));
+        assert_eq!(
+            t("place_free(x+hspeed,y+vspeed)"),
+            Ok("place_free(x+hspeed,y+vspeed)".into())
+        );
         for bad in [
-            "bbox_left",
+            "xstart",
+            "place_free(x+xstart,y)",
+            "place_free(player.x,y)",
             "keyboard_check_direct(vk_lshift)",
             "floor(image_index)",
             "global.pa.x",
             "global.death[1]",
             "execute_string(global.q1)",
             "global.b0 div 256",
-            "player.bbox_left",
+            "player.mask_index",
         ] {
             assert!(t(bad).is_err(), "{bad}");
         }
@@ -1284,7 +1303,7 @@ mod tests {
         # iwc trace --game 339 --inputs t-alarm-1.inputs --object bullet --vars 'alarm[0],player.x' --room rTemplate --from 2 \
         --gml '3:with(player){x=96;y=567.4;xprevious=96;yprevious=567.4}' --gml '1:global.difficulty=1;global.grav=0' --stub-dlls --out t-alarm-1\n\
         frame 20: press Z\nframe 21: release Z\nframe 80: end\n";
-    const T_ALARM_CSV: &str = "frame,room,object,id,x,y,xprevious,yprevious,hspeed,vspeed,speed,direction,gravity,gravity_direction,friction,image_index,sprite_index,sprite_name,\"alarm[0]\",\"player.x\",\"bbox_left\"\n";
+    const T_ALARM_CSV: &str = "frame,room,object,id,x,y,xprevious,yprevious,hspeed,vspeed,speed,direction,gravity,gravity_direction,friction,image_index,sprite_index,sprite_name,\"alarm[0]\",\"player.x\",\"xstart\"\n";
 
     #[test]
     fn imports_a_diff_target_with_setup() {
@@ -1303,7 +1322,7 @@ mod tests {
         assert_eq!(case.dll_mode, CaseDllMode::Stub);
         assert_eq!(case.vars.get("player.x").map(String::as_str), Some("kid.x"));
         assert!(!case.vars.contains_key("alarm[0]"), "same name needs no entry");
-        assert!(case.unprobed.contains_key("bbox_left"));
+        assert!(case.unprobed.contains_key("xstart"));
         assert_eq!(case.rooms.get("template").map(String::as_str), Some("rTemplate"));
         assert_eq!(case.setup.len(), 2);
         assert_eq!(

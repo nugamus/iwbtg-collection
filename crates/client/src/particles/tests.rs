@@ -224,6 +224,50 @@ fn a_system_whose_instance_destroyed_itself_in_the_first_room_is_drawn() {
     assert!(snow.particles.len() > before, "it keeps streaming");
 }
 
+/// An instance whose Room Start clears its system and then destroys it in the first room is
+/// never seen alive, yet the clear is followed from the sim's count (`World::particle_clears`,
+/// #883): no burst is drawn.
+#[test]
+fn a_clear_by_an_instance_gone_before_the_client_looks_is_followed() {
+    let mut def = (*demo()).clone();
+    let k = def.kinds.iter_mut().find(|k| k.name == "@snowfall").unwrap();
+    k.params
+        .0
+        .insert("on_room_start".into(), ParamValue::Str("clear".into()));
+    k.params
+        .0
+        .insert("on_room_start_destroys_instance".into(), ParamValue::Bool(true));
+    k.events.room_start = true;
+    let def = Arc::new(def);
+    let mut sim = sim(Arc::clone(&def));
+    let mut t = Tracker::default();
+    sim.step(InputFrame::EMPTY);
+    t.follow(&def, sim.world());
+    let snowfall = def.kinds.iter().position(|k| k.name == "@snowfall").unwrap();
+    assert!(
+        !sim.world()
+            .instances()
+            .iter()
+            .any(|i| i.alive && i.kind.index() == Some(snowfall)),
+        "the instance destroyed itself"
+    );
+    let (_, snow) = system(&def, &t, "snow");
+    assert_eq!(
+        snow.particles.len(),
+        2,
+        "the burst was cleared; one stream update is left"
+    );
+    for _ in 0..5 {
+        sim.step(InputFrame::EMPTY);
+        t.follow(&def, sim.world());
+    }
+    let (_, snow) = system(&def, &t, "snow");
+    assert!(
+        snow.particles.len() < 120,
+        "no clear is made twice and the burst never comes back"
+    );
+}
+
 #[test]
 fn a_retry_starts_the_particles_over() {
     let def = demo();

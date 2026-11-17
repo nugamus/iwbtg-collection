@@ -32,8 +32,8 @@ use crate::view::View;
 use crate::{builtins, kid, run_globals};
 
 /// Everything that changes while a game runs. Every field is hashed by `hash::state_hash` except
-/// `output`, `grid`, `room_requests` and `particle_defs` (docs/architecture/sim/hash.md, State
-/// hash).
+/// `output`, `grid`, `room_requests`, `particle_defs` and `particle_clears`
+/// (docs/architecture/sim/hash.md, State hash).
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct World {
     /// Ticks since the run started.
@@ -86,6 +86,13 @@ pub struct World {
     /// (a particles-mode `blood_emitter`) has no entry.
     #[serde(default)]
     pub particle_defs: BTreeMap<PartSystemId, PartSystemDefId>,
+    /// How many `clear` calls (`part_particles_clear`) each `particle_system` built-in's system
+    /// has had, by its system in `particles` (#883): `clear` leaves no other trace in the state,
+    /// so the client clears its drawing copy when the count moves. For the client only, like
+    /// `particle_defs`: the sim writes it and never reads it, so it is not hashed. A system never
+    /// cleared has no entry.
+    #[serde(default)]
+    pub particle_clears: BTreeMap<PartSystemId, u32>,
     /// Events for the client. Not hashed, not saved.
     #[serde(skip)]
     pub output: Vec<OutputEvent>,
@@ -138,6 +145,7 @@ impl World {
             timing: TimingState::default(),
             particles: Particles::default(),
             particle_defs: BTreeMap::new(),
+            particle_clears: BTreeMap::new(),
             output: Vec::new(),
             status: SimStatus::Running,
             mode: PlayMode::Original,

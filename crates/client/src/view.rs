@@ -267,8 +267,8 @@ impl NewRun {
 }
 
 /// Builds the sim for `pkg` (`shell::load` calls this before the run opens, so a game that does
-/// not start never opens; nothing in `world` changes).
-pub(crate) fn new_run(world: &World, pkg: &Package) -> Result<NewRun, String> {
+/// not start never opens; nothing in `world` changes). `map` is the map id, `None` the first.
+pub(crate) fn new_run(world: &World, pkg: &Package, map: Option<&str>) -> Result<NewRun, String> {
     let config = *world.resource::<RunConfig>();
     let def = Arc::clone(&pkg.def);
     let options = SimOptions {
@@ -293,7 +293,7 @@ pub(crate) fn new_run(world: &World, pkg: &Package) -> Result<NewRun, String> {
         } else {
             iwbtg_sim::stripped::PlayMode::Original
         },
-        map: None,
+        map: map.map(str::to_owned),
     };
     let sim =
         Sim::new(Arc::clone(&def), options.clone()).map_err(|e| format!("the game did not start: {e}"))?;

@@ -17,8 +17,6 @@ ignore = ["id", "sprite_index", "sprite_name"]
 
 [unprobed]
 "view_angle[0]" = "no probe field for `view_angle[0]` (OPEN)"
-"bbox_bottom" = "no probe field for `bbox_bottom` (OPEN)"
-"bbox_top" = "no probe field for `bbox_top` (OPEN)"
 
 [rooms]
 "hub" = "rHub"

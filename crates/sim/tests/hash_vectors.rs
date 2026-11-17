@@ -155,3 +155,13 @@ fn hash_ignores_the_particle_defs_table() {
     );
     assert_eq!(state_hash(&w), before);
 }
+
+/// `World::particle_clears` is the client's count of `clear` calls per particle system: the sim
+/// never reads it, so it is not hashed (#883).
+#[test]
+fn hash_ignores_the_particle_clears_table() {
+    let mut w = empty();
+    let before = state_hash(&w);
+    w.particle_clears.insert(iwbtg_sim::particles::PartSystemId(0), 2);
+    assert_eq!(state_hash(&w), before);
+}

@@ -15,8 +15,6 @@ ignore = ["id", "sprite_index", "sprite_name"]
 [vars]
 
 [unprobed]
-"bbox_bottom" = "no probe field for `bbox_bottom` (OPEN)"
-"bbox_top" = "no probe field for `bbox_top` (OPEN)"
 
 [rooms]
 "stage010" = "rStage010"

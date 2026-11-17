@@ -17,9 +17,6 @@ ignore = ["id", "sprite_index", "sprite_name"]
 "instance_number(player)" = "instance_number(kid)"
 
 [unprobed]
-"bbox_bottom" = "no probe field for `bbox_bottom` (OPEN)"
-"bbox_left" = "no probe field for `bbox_left` (OPEN)"
-"bbox_right" = "no probe field for `bbox_right` (OPEN)"
 
 [rooms]
 "template" = "rTemplate"

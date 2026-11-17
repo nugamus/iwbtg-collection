@@ -13,11 +13,14 @@ pub mod registry;
 
 use crate::builtins::state::BuiltinState;
 use crate::collide::Target;
+use crate::collide::bbox::reported_box;
+use crate::collide::query::Q;
 use crate::def::{GameDef, NameId, VarId};
 use crate::events;
 use crate::input::Action;
 use crate::kid::api::{self, KidField};
 use crate::num::Real;
+use crate::rules::RunnerRules;
 use crate::rules::TickRules;
 use crate::rules::tick::FirstRule;
 use crate::sim::Sim;
@@ -57,6 +60,15 @@ pub enum Column {
     /// Engine state the original keeps in a global or a built-in variable (`global.death`,
     /// `room_speed`), when the package declares no variable of that name.
     Engine(EngineVar),
+    /// GML `place_free(x, y)` called by the row's instance: no solid instance meets it placed at
+    /// the two evaluated coordinates (`collide::place_free`; CLONE_SPEC collision, "Place
+    /// functions test a temporary position"). Read-only: the instance never moves.
+    PlaceFree {
+        /// The tested x.
+        x: RowExpr,
+        /// The tested y.
+        y: RowExpr,
+    },
 }
 
 /// Engine state a probe column can read without the package declaring a variable for it.
@@ -242,6 +254,58 @@ pub enum FieldRef {
     Var(VarId),
     /// A kid field (`kid::api::read_field`), so the probe never depends on `KidState` layout.
     Kid(KidField),
+    /// `bbox_left`, `bbox_right`, `bbox_top`, `bbox_bottom`: the reported box
+    /// (`collide::bbox::reported_box`) at the instance's position after the tick.
+    Bbox(BboxEdge),
+}
+
+/// One edge of the reported bounding box (GML `bbox_*`, read-only).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum BboxEdge {
+    /// `bbox_left`.
+    Left,
+    /// `bbox_right`.
+    Right,
+    /// `bbox_top`.
+    Top,
+    /// `bbox_bottom`.
+    Bottom,
+}
+
+impl BboxEdge {
+    /// The GML variable name.
+    pub fn name(self) -> &'static str {
+        match self {
+            BboxEdge::Left => "bbox_left",
+            BboxEdge::Right => "bbox_right",
+            BboxEdge::Top => "bbox_top",
+            BboxEdge::Bottom => "bbox_bottom",
+        }
+    }
+
+    /// The edge with this GML name.
+    pub fn from_name(name: &str) -> Option<BboxEdge> {
+        [BboxEdge::Left, BboxEdge::Right, BboxEdge::Top, BboxEdge::Bottom]
+            .into_iter()
+            .find(|e| e.name() == name)
+    }
+}
+
+/// A coordinate argument of a place test column: terms added and subtracted left to right in
+/// binary64, as GML evaluates `x+hspeed` before the call.
+#[derive(Clone, PartialEq, Debug)]
+pub struct RowExpr {
+    /// `(negate, term)` pairs; the first term may be negated too (`-1+x`).
+    pub terms: Vec<(bool, Term)>,
+}
+
+/// One term of a [`RowExpr`].
+#[derive(Clone, PartialEq, Debug)]
+pub enum Term {
+    /// A number literal.
+    Num(Real),
+    /// A field of the row's instance.
+    Field(FieldRef),
 }
 
 /// Image variables a probe can read besides the fixed columns.
@@ -352,7 +416,8 @@ pub fn read_unrowed(sim: &mut Sim, column: &Column, frame: i64) -> Option<trace:
             target: ProbeTarget::Row,
             ..
         }
-        | Column::Key(KeyRead::Direct(_)) => None,
+        | Column::Key(KeyRead::Direct(_))
+        | Column::PlaceFree { .. } => None,
         // `row` is never read for the remaining columns.
         _ => Some(read_column(sim, InstId(0), column, frame)),
     }
@@ -363,7 +428,8 @@ fn read_column(sim: &mut Sim, row: InstId, column: &Column, frame: i64) -> trace
     if let Column::Key(KeyRead::Direct(a)) = column {
         return truth(sim.world.input.direct(*a));
     }
-    let (w, def, rules) = (&sim.world, &*sim.def, &sim.rules.tick);
+    let (w, def, all_rules) = (&sim.world, &*sim.def, &sim.rules);
+    let rules = &all_rules.tick;
     if let Column::Engine(EngineVar::Fps) = column {
         // The sampled frame's tick: still `World::tick` between `step_rows` and `finish_step`
         // (a room-change row), one less after it.
@@ -384,7 +450,7 @@ fn read_column(sim: &mut Sim, row: InstId, column: &Column, frame: i64) -> trace
             None => trace::Value::Empty,
         },
         Column::Field { target, field } => match target_instance(def, w, rules, row, target) {
-            Some(id) => read_field(def, w, id, field, frame),
+            Some(id) => read_field(def, w, all_rules, id, field, frame),
             // `player.x` with no player reads 0 under "treat uninitialized variables as 0"
             // (kaenbyou t5-input-restart-latch-b.csv f32-f34: id, x and hspeed all 0.0).
             None if def.uninit_reads_zero => trace::Value::Real(0.0),
@@ -402,7 +468,65 @@ fn read_column(sim: &mut Sim, row: InstId, column: &Column, frame: i64) -> trace
         },
         Column::Save(f) => save_value(def, w, *f),
         Column::Engine(v) => engine_value(w, *v),
+        Column::PlaceFree { x, y } => place_free_value(def, w, all_rules, row, x, y, frame),
     }
+}
+
+/// A [`Column::PlaceFree`] cell: 1 or 0, or empty when an argument is not a number or the query
+/// fails. Reads the world only: `collide::query` places a copy of the mask, never the instance,
+/// and draws no random numbers.
+fn place_free_value(
+    def: &GameDef,
+    w: &World,
+    rules: &RunnerRules,
+    row: InstId,
+    x: &RowExpr,
+    y: &RowExpr,
+    frame: i64,
+) -> trace::Value {
+    let (Some(x), Some(y)) = (
+        eval_expr(def, w, rules, row, x, frame),
+        eval_expr(def, w, rules, row, y, frame),
+    ) else {
+        return trace::Value::Empty;
+    };
+    if w.get(row).is_none() {
+        return trace::Value::Empty;
+    }
+    let q = Q { def, rules, w };
+    match q.place_hits(row, x, y, Target::Any, true) {
+        Ok(hits) => truth(hits.is_empty()),
+        Err(_) => trace::Value::Empty,
+    }
+}
+
+/// A [`RowExpr`] for the row's instance, left to right in binary64; `None` when a field has no
+/// real value.
+fn eval_expr(
+    def: &GameDef,
+    w: &World,
+    rules: &RunnerRules,
+    row: InstId,
+    e: &RowExpr,
+    frame: i64,
+) -> Option<Real> {
+    let mut acc: Option<Real> = None;
+    for (neg, term) in &e.terms {
+        let v = match term {
+            Term::Num(n) => *n,
+            Term::Field(f) => match read_field(def, w, rules, row, f, frame) {
+                trace::Value::Real(r) => Real::new(r),
+                _ => return None,
+            },
+        };
+        acc = Some(match (acc, *neg) {
+            (None, false) => v,
+            (None, true) => -v,
+            (Some(a), false) => a + v,
+            (Some(a), true) => a - v,
+        });
+    }
+    acc
 }
 
 /// An engine variable as a GML real.
@@ -516,11 +640,32 @@ fn count(def: &GameDef, w: &World, t: Target) -> trace::Value {
 }
 
 /// One field of instance `id`.
-fn read_field(def: &GameDef, w: &World, id: InstId, field: &FieldRef, frame: i64) -> trace::Value {
+fn read_field(
+    def: &GameDef,
+    w: &World,
+    rules: &RunnerRules,
+    id: InstId,
+    field: &FieldRef,
+    frame: i64,
+) -> trace::Value {
     let Some(inst) = w.get(id) else {
         return trace::Value::Empty;
     };
     match field {
+        // An instance with no mask has no box: an empty cell (what GML reads there is OPEN).
+        FieldRef::Bbox(e) => match reported_box(def, inst, (inst.m.x(), inst.m.y()), &rules.collide) {
+            Ok(Some(b)) => {
+                let v = match e {
+                    BboxEdge::Left => b.left,
+                    BboxEdge::Right => b.right,
+                    BboxEdge::Top => b.top,
+                    BboxEdge::Bottom => b.bottom,
+                };
+                #[allow(clippy::cast_precision_loss, reason = "room coordinates are far below 2^53")]
+                trace::Value::Real(v as f64)
+            }
+            Ok(None) | Err(_) => trace::Value::Empty,
+        },
         FieldRef::Fixed(c) => fixed_value(def, w, inst, *c, frame),
         FieldRef::Alarm(n) => inst
             .alarms
@@ -758,7 +903,7 @@ mod tests {
             save_value(sim.def(), sim.world(), SaveField::Room),
             trace::Value::Str("room_1".into())
         );
-        let field = |f: &FieldRef| read_field(sim.def(), sim.world(), ids[2], f, 7);
+        let field = |f: &FieldRef| read_field(sim.def(), sim.world(), &sim.rules, ids[2], f, 7);
         assert_eq!(field(&FieldRef::Alarm(0)), trace::Value::Real(-1.0));
         assert_eq!(
             field(&FieldRef::Image(ImageField::Visible)),
@@ -834,6 +979,75 @@ mod tests {
             read_column(&mut sim, ids[0], &pressed, 3),
             trace::Value::Real(0.0)
         );
+    }
+
+    /// `bbox_*` read the reported box (rounded after the offset, ties to even) and `place_free`
+    /// tests solids at the evaluated coordinates, without moving the instance.
+    #[test]
+    fn bbox_fields_and_place_free_columns() {
+        let mut b = GameDefBuilder::new("probe-place");
+        let cherry_sprite = b.sprite_rect((11, 11), (5, 5));
+        let block_sprite = b.sprite_rect((32, 32), (0, 0));
+        let cherry = b.kind(KindDef::new("cherry", Builtin::World));
+        let block = b.kind(KindDef::new("block", Builtin::Block));
+        b.room(RoomDef::new("room_1", 800, 608));
+        let def = b.build().expect("def");
+        let (mut sim, _) = sim_with_blocks();
+        sim.def = Arc::new(def);
+        sim.world = World::new(RoomId(0), 0);
+        let me = sim.world.alloc_id().expect("id");
+        let mut inst = Instance::new(me, cherry, 0, Real::new(200.5), Real::new(100.0));
+        inst.img.set_sprite(Some(cherry_sprite));
+        inst.m.set_hspeed(Real::new(8.0)).expect("hspeed");
+        inst.m.set_vspeed(Real::new(-3.0)).expect("vspeed");
+        sim.world.insert(inst).expect("insert");
+        let wall = sim.world.alloc_id().expect("id");
+        let mut inst = Instance::new(wall, block, 0, Real::new(212.0), Real::new(80.0));
+        inst.img.set_sprite(Some(block_sprite));
+        inst.solid = true;
+        sim.world.insert(inst).expect("insert");
+        let edge = |e| Column::Field {
+            target: ProbeTarget::Row,
+            field: FieldRef::Bbox(e),
+        };
+        // 200.5 - 5 = 195.5 rounds to 196, 205.5 to 206.
+        assert_eq!(
+            read_column(&mut sim, me, &edge(BboxEdge::Left), 1),
+            trace::Value::Real(196.0)
+        );
+        assert_eq!(
+            read_column(&mut sim, me, &edge(BboxEdge::Right), 1),
+            trace::Value::Real(206.0)
+        );
+        assert_eq!(
+            read_column(&mut sim, me, &edge(BboxEdge::Top), 1),
+            trace::Value::Real(95.0)
+        );
+        assert_eq!(
+            read_column(&mut sim, me, &edge(BboxEdge::Bottom), 1),
+            trace::Value::Real(105.0)
+        );
+        let d = sim.def.clone();
+        let col = |e: &str| registry::column(e, &d).expect("column");
+        let before = sim.world.clone();
+        assert_eq!(
+            read_column(&mut sim, me, &col("place_free(x,y)"), 1),
+            trace::Value::Real(1.0)
+        );
+        assert_eq!(
+            read_column(&mut sim, me, &col("place_free(x+hspeed,y)"), 1),
+            trace::Value::Real(0.0)
+        );
+        assert_eq!(
+            read_column(&mut sim, me, &col("place_free(x,y+vspeed)"), 1),
+            trace::Value::Real(1.0)
+        );
+        assert_eq!(
+            read_column(&mut sim, me, &col("place_free(x+hspeed,y+vspeed+200)"), 1),
+            trace::Value::Real(1.0)
+        );
+        assert_eq!(sim.world, before, "probe reads never change the world");
+        assert_eq!(read_unrowed(&mut sim, &col("place_free(x,y)"), 1), None);
     }
 
     /// A kind target covers the variants the loader derives from it (`save[min_difficulty_removed=2]`

@@ -15,8 +15,6 @@ ignore = ["id", "sprite_index", "sprite_name"]
 [vars]
 
 [unprobed]
-"bbox_bottom" = "no probe field for `bbox_bottom` (OPEN)"
-"bbox_top" = "no probe field for `bbox_top` (OPEN)"
 "sound_isplaying(sndDJump)" = "a function call; the probe reads variables only (OPEN)"
 
 [rooms]

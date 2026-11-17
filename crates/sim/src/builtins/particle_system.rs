@@ -11,7 +11,8 @@
 //! rules" 8, Confirmed (recorder)):
 //!
 //! - `none`: nothing.
-//! - `clear` (`part_particles_clear`): the live particles go; the emitters keep streaming.
+//! - `clear` (`part_particles_clear`): the live particles go; the emitters keep streaming. Each
+//!   clear is counted per system in `World::particle_clears` for the client (not hashed, #883).
 //! - `destroy_emitters` (`part_emitter_destroy_all`): the streams stop; live particles stay and
 //!   still fire their death particles.
 //! - `destroy` (`part_system_destroy`): the system is gone and draws nothing again.
@@ -231,11 +232,17 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
 
 /// Makes call `what` on each of `systems`, in order.
 fn call(ctx: &mut Ctx, me: InstId, systems: &[PartSystemId], what: Lifecycle) -> Result<(), SimError> {
-    let p = &mut ctx.w.particles;
+    let w = &mut *ctx.w;
+    let p = &mut w.particles;
     for &sys in systems {
         match what {
             Lifecycle::None => {}
-            Lifecycle::Clear => p.clear(sys)?,
+            Lifecycle::Clear => {
+                p.clear(sys)?;
+                // For the client only; never read here and not hashed (#883).
+                let n = w.particle_clears.entry(sys).or_default();
+                *n = n.wrapping_add(1);
+            }
             Lifecycle::DestroyEmitters => p.destroy_all_emitters(sys)?,
             Lifecycle::Destroy => p.destroy_system(sys)?,
         }
