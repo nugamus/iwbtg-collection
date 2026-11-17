@@ -12,7 +12,7 @@
 //!   non-precise point, rectangle and line queries use. Facing left it reads `x-7..x+5`.
 
 use super::xform::{self, Xform, add, sub};
-use crate::def::{GameDef, IRect, Mask, MaskId, MaskSet, MaskShape, SpriteDef};
+use crate::def::{GameDef, IRect, Mask, MaskId, MaskSet, MaskShape, SpriteDef, SpriteId};
 use crate::error::SimError;
 use crate::num::{NumError, Real, dcos, dsin, to_int_round};
 use crate::rules::CollideRules;
@@ -61,10 +61,20 @@ pub type MaskAt<'a> = (&'a Mask, (i32, i32));
 
 /// The sprite that owns `mask` (first in table order).
 fn owner(def: &GameDef, mask: MaskId) -> Option<&SpriteDef> {
-    def.sprites.iter().find(|s| match &s.masks {
-        MaskSet::Shared(m) => *m == mask,
-        MaskSet::PerFrame(v) => v.contains(&mask),
-    })
+    mask_sprite(def, mask).and_then(|s| def.sprite(s))
+}
+
+/// GML `mask_index` for a mask: the sprite that owns it (first in table order), `None` when no
+/// sprite does.
+pub fn mask_sprite(def: &GameDef, mask: MaskId) -> Option<SpriteId> {
+    def.sprites
+        .iter()
+        .position(|s| match &s.masks {
+            MaskSet::Shared(m) => *m == mask,
+            MaskSet::PerFrame(v) => v.contains(&mask),
+        })
+        .and_then(|i| u32::try_from(i).ok())
+        .map(SpriteId)
 }
 
 /// The origin of the sprite that owns `mask`, or (0, 0).

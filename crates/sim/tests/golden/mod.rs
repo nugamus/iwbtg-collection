@@ -31,6 +31,10 @@
 //! not say that handler ran. Each collision handler of a built-in's own event set that matches
 //! the kid, a kid bullet or blood gets a `touched <name>/<handler classes> <case>` line too,
 //! naming the first case where that handler's pair met.
+//! Two params can add the same handler (`hidden_block` `stops_bullets` and
+//! `destroyed_by_bullet`), so each `builtins::event_set_params` value that adds one gets a
+//! `touched <name>/<param>=<value> <case>` line too, naming the first case where a handler it
+//! adds ran on a kind with that value (#917).
 #![allow(
     dead_code,
     reason = "the two programs that include this file use different parts"
@@ -44,7 +48,7 @@ use std::collections::BTreeSet;
 use iwbtg_sim::def::KidFamily;
 use iwbtg_sim::def::testing::GameDefBuilder;
 use iwbtg_sim::def::{
-    Builtin, ClassMask, GameDef, KindDef, KindId, RoomDef, RoomId, ScriptDef, ScriptId, VarId,
+    Builtin, ClassMask, GameDef, KindDef, KindId, ParamValue, RoomDef, RoomId, ScriptDef, ScriptId, VarId,
 };
 use iwbtg_sim::error::SimError;
 use iwbtg_sim::events::{ProbeAct, ProbeOn, ProbeState, ProbeStep, probe_event_set};
@@ -186,6 +190,11 @@ pub struct Seen {
     pub handled_variants: BTreeSet<Variant>,
     /// Own handlers that ran: their pair overlapped in the collision phase.
     pub touched_variants: BTreeSet<Variant>,
+    /// Param values (built-in index, `<param>=<value>`) of a kind that had a live instance and
+    /// that add an own kid, kid bullet or blood handler ([`param_variants`], #917).
+    pub handled_params: BTreeSet<Variant>,
+    /// Param values whose added handler ran on a kind with that value.
+    pub touched_params: BTreeSet<Variant>,
     /// The kinds that had a live instance.
     kinds: BTreeSet<KindId>,
 }
@@ -254,6 +263,61 @@ fn kind_variants(def: &GameDef, kind: KindId) -> impl Iterator<Item = Variant> +
         .filter_map(move |p| variant(def, kind, p.classes))
 }
 
+/// The labels ([`handler_label`]) of the own handlers that a kid, kid bullet or blood kind of
+/// `def` runs on a kind shaped like `kd`.
+fn partner_labels(def: &GameDef, kd: &KindDef) -> BTreeSet<String> {
+    let set = iwbtg_sim::builtins::event_set(kd.base, kd);
+    def.kinds
+        .iter()
+        .filter(|p| is_partner(p.base))
+        .filter_map(|p| pair_handler(&set.collisions, p.classes))
+        .map(|(_, with)| handler_label(with))
+        .collect()
+}
+
+/// A param value as a report word: `true`, `group_fade`, `1.0`.
+fn value_text(v: &ParamValue) -> String {
+    match v {
+        ParamValue::Bool(b) => b.to_string(),
+        ParamValue::Str(s) => s.clone(),
+        ParamValue::Real(r) => r.to_string(),
+        other => format!("{other:?}"),
+    }
+}
+
+/// The values of `kind`'s `builtins::event_set_params` that add an own handler for a kid, kid
+/// bullet or blood kind of `def` (#917), as `(built-in index, "<param>=<value>")`, each with the
+/// handler labels it adds: those of the kind with only that param set, minus those of the kind
+/// with none of them set. Two params that add the same handler (`hidden_block`
+/// `stops_bullets` and `destroyed_by_bullet`) get one entry each.
+fn param_variants(def: &GameDef, kind: KindId) -> Vec<(Variant, BTreeSet<String>)> {
+    let Some(kd) = def.kind(kind).filter(|k| !is_partner(k.base)) else {
+        return Vec::new();
+    };
+    let Some(i) = builtin_index(kd.base) else {
+        return Vec::new();
+    };
+    let params = iwbtg_sim::builtins::event_set_params(kd.base);
+    let mut bare = kd.clone();
+    for p in params {
+        bare.params.0.remove(*p);
+    }
+    let without = partner_labels(def, &bare);
+    let mut out = Vec::new();
+    for p in params {
+        let Some(v) = kd.params.0.get(*p) else {
+            continue;
+        };
+        let mut one = bare.clone();
+        one.params.0.insert((*p).to_owned(), v.clone());
+        let added: BTreeSet<String> = partner_labels(def, &one).difference(&without).cloned().collect();
+        if !added.is_empty() {
+            out.push(((i, format!("{p}={}", value_text(v))), added));
+        }
+    }
+    out
+}
+
 impl Seen {
     fn look(&mut self, fx: &Fixture) {
         for inst in fx.w.iter_alive() {
@@ -276,6 +340,8 @@ thread_local! {
     static TOUCHED: RefCell<BTreeSet<usize>> = const { RefCell::new(BTreeSet::new()) };
     /// The own handlers [`observe_overlaps`] saw run against a kid, kid bullet or blood.
     static TOUCHED_VARIANTS: RefCell<BTreeSet<Variant>> = const { RefCell::new(BTreeSet::new()) };
+    /// The same per kind: (kind, handler label), for the param lines (#917).
+    static TOUCHED_KINDS: RefCell<BTreeSet<(KindId, String)>> = const { RefCell::new(BTreeSet::new()) };
 }
 
 /// The engine's `overlaps` with the same result, noting the built-in of a pair that met a kid
@@ -289,6 +355,7 @@ fn observe_overlaps(ctx: &Ctx, a: InstId, b: InstId) -> Result<bool, SimError> {
         for (me, other) in [(ia, ib), (ib, ia)] {
             let partner = base_of(ctx.def, other.kind).is_some_and(is_partner);
             if partner && let Some(v) = variant(ctx.def, me.kind, other.classes) {
+                TOUCHED_KINDS.with(|t| t.borrow_mut().insert((me.kind, v.1.clone())));
                 TOUCHED_VARIANTS.with(|t| t.borrow_mut().insert(v));
             }
         }
@@ -322,6 +389,7 @@ pub fn run_covered(case: &Case) -> (Fixture, u64, Seen) {
     seen.look(&fx);
     TOUCHED.with(|t| t.borrow_mut().clear());
     TOUCHED_VARIANTS.with(|t| t.borrow_mut().clear());
+    TOUCHED_KINDS.with(|t| t.borrow_mut().clear());
     let mut ran = 0;
     for t in 0..case.ticks {
         if fx.w.status != SimStatus::Running {
@@ -348,6 +416,15 @@ pub fn run_covered(case: &Case) -> (Fixture, u64, Seen) {
         .iter()
         .flat_map(|k| kind_variants(&fx.def, *k))
         .collect();
+    let touched_kinds = TOUCHED_KINDS.with(|t| std::mem::take(&mut *t.borrow_mut()));
+    for k in &seen.kinds {
+        for (pv, added) in param_variants(&fx.def, *k) {
+            if added.iter().any(|l| touched_kinds.contains(&(*k, l.clone()))) {
+                seen.touched_params.insert(pv.clone());
+            }
+            seen.handled_params.insert(pv);
+        }
+    }
     (fx, ran, seen)
 }
 
@@ -367,7 +444,9 @@ pub const FAMILIES: [KidFamily; 7] = [
 /// built-in with a kid or kid bullet collision handler in a case that ran it, naming the first
 /// case where the two met (`-` for none), then one `touched <name>/<handler classes> <case>`
 /// line per own handler of a built-in that matches a kid, kid bullet or blood kind in a case
-/// that ran it, naming the first case where that handler ran (`-` for none), in built-in order.
+/// that ran it, naming the first case where that handler ran (`-` for none), in built-in order,
+/// then one `touched <name>/<param>=<value> <case>` line per [`param_variants`] value in a case
+/// that ran it, naming the first case where a handler it adds ran (#917).
 pub fn report() -> String {
     let mut out = String::new();
     let mut builtin_case: Vec<Option<&'static str>> = vec![None; Builtin::ALL.len()];
@@ -375,6 +454,8 @@ pub fn report() -> String {
     let mut handled = vec![false; Builtin::ALL.len()];
     let mut touched_case: Vec<Option<&'static str>> = vec![None; Builtin::ALL.len()];
     let mut variant_case: std::collections::BTreeMap<Variant, Option<&'static str>> =
+        std::collections::BTreeMap::new();
+    let mut param_case: std::collections::BTreeMap<Variant, Option<&'static str>> =
         std::collections::BTreeMap::new();
     for case in cases() {
         let (fx, ran, seen) = run_covered(&case);
@@ -394,6 +475,12 @@ pub fn report() -> String {
         }
         for v in seen.touched_variants {
             variant_case.entry(v).or_insert(None).get_or_insert(case.name);
+        }
+        for v in seen.handled_params {
+            param_case.entry(v).or_insert(None);
+        }
+        for v in seen.touched_params {
+            param_case.entry(v).or_insert(None).get_or_insert(case.name);
         }
         if let Some(f) = seen.family.and_then(|f| FAMILIES.iter().position(|x| *x == f)) {
             family_case[f].get_or_insert(case.name);
@@ -415,6 +502,11 @@ pub fn report() -> String {
         let name = Builtin::ALL[*i].name();
         let case = case.unwrap_or("-");
         out.push_str(&format!("touched {name}/{label} {case}\n"));
+    }
+    for ((i, param), case) in &param_case {
+        let name = Builtin::ALL[*i].name();
+        let case = case.unwrap_or("-");
+        out.push_str(&format!("touched {name}/{param} {case}\n"));
     }
     out
 }

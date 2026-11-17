@@ -1293,7 +1293,7 @@ mod tests {
             "global.death[1]",
             "execute_string(global.q1)",
             "global.b0 div 256",
-            "player.mask_index",
+            "player.path_index",
         ] {
             assert!(t(bad).is_err(), "{bad}");
         }
