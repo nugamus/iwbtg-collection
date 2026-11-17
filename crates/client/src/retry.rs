@@ -48,9 +48,10 @@ pub struct RetryPlugin(pub RetryArgs);
 
 impl Plugin for RetryPlugin {
     fn build(&self, app: &mut App) {
-        let auto = auto_retry(self.0.auto_retry, crate::settings::get().auto_retry);
+        // Read when each run starts: the mod select sheet's Auto-retry switch writes the setting.
+        let flag = self.0.auto_retry;
         crate::shell::run_resource(app, move |_| Retry {
-            auto,
+            auto: auto_retry(flag, crate::settings::get().auto_retry),
             deaths: None,
             pending: None,
         });

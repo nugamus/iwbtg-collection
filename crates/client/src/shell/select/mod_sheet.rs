@@ -70,7 +70,7 @@ pub enum SheetButton {
 
 /// The Mods button's value (`none`, `SD+NB`).
 #[derive(Component)]
-struct ModsValue;
+pub(super) struct ModsValue;
 
 /// The Auto-retry switch.
 #[derive(Component)]
@@ -101,7 +101,7 @@ const CAPS: Type = Type {
 };
 
 /// The Mods button's value: `none` or the codes.
-fn button_value(set: ModSet) -> String {
+pub(super) fn button_value(set: ModSet) -> String {
     if set == ModSet::NONE {
         "none".to_owned()
     } else {
@@ -131,48 +131,6 @@ pub fn header(set: ModSet, slow_speed: u8, map: &str) -> (bool, String) {
             (true, board)
         }
     }
-}
-
-/// Game select's Mods button (`Main.dc.html`'s footer, left of the player card): `Mods` and the
-/// picked codes. The rest of the footer is #148.
-pub(super) fn spawn_button(commands: &mut Commands, camera: Entity, set: ModSet) {
-    commands.spawn((
-        Node {
-            position_type: PositionType::Absolute,
-            // The player card (420 px) and its 18 px margin sit right of it, 64 px in.
-            right: Val::Px(64.0 + 420.0 + 18.0),
-            bottom: Val::Px(26.0),
-            ..default()
-        },
-        UiTargetCamera(camera),
-        DespawnOnExit(AppScreen::Select),
-        children![(
-            button_with(
-                ButtonKind::Primary,
-                52.0,
-                28.0,
-                (
-                    Node {
-                        align_items: AlignItems::Baseline,
-                        column_gap: Val::Px(10.0),
-                        ..default()
-                    },
-                    children![
-                        text("Mods", Type::PRIMARY, tokens::INK),
-                        (
-                            text(
-                                &button_value(set),
-                                Type::barlow(13.0, 600),
-                                tokens::INK.with_alpha(0.85)
-                            ),
-                            ModsValue
-                        ),
-                    ],
-                ),
-            ),
-            SheetButton::Mods,
-        )],
-    ));
 }
 
 /// Spawns the sheet, closed.
