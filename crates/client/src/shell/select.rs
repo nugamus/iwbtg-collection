@@ -596,4 +596,121 @@ mod tests {
         assert_eq!(map_id(&info, 1).as_deref(), Some("hard"));
         assert_eq!(map_id(&info, 9), None);
     }
+
+    /// A press outside an open dropdown closes it and its click does nothing else; with no
+    /// menu open a click works as before (#899).
+    #[test]
+    fn a_click_outside_a_dropdown_only_closes_it() {
+        use bevy::camera::NormalizedRenderTarget;
+        use bevy::picking::backend::HitData;
+        use bevy::picking::events::{Pointer, PointerClick, PointerPress};
+        use bevy::picking::pointer::{Location, PointerButton, PointerId};
+        use bevy::window::WindowRef;
+
+        let mut app = screen();
+        let pointer = || {
+            Pointer::new(
+                PointerId::Mouse,
+                Location {
+                    target: NormalizedRenderTarget::Window(
+                        WindowRef::Entity(Entity::PLACEHOLDER)
+                            .normalize(None)
+                            .unwrap_or_else(|| unreachable!()),
+                    ),
+                    position: Vec2::ZERO,
+                },
+            )
+        };
+        let hit = || HitData::new(Entity::PLACEHOLDER, 0.0, None, None);
+        let press = |app: &mut App, entity: Entity| {
+            app.world_mut().trigger(PointerPress {
+                entity,
+                pointer: pointer(),
+                button: PointerButton::Primary,
+                hit: hit(),
+                count: 1,
+            });
+        };
+        let click = |app: &mut App, entity: Entity| {
+            app.world_mut().trigger(PointerClick {
+                entity,
+                pointer: pointer(),
+                button: PointerButton::Primary,
+                hit: hit(),
+                duration: std::time::Duration::ZERO,
+                count: 1,
+            });
+        };
+        let open_menus = |app: &mut App| {
+            let world = app.world_mut();
+            world.query::<&controls::Menu>().iter(world).count()
+        };
+        let (sort, game) = {
+            let world = app.world_mut();
+            let sort = world
+                .query::<(Entity, &controls::Control)>()
+                .iter(world)
+                .find(|(_, c)| **c == controls::Control::Sort)
+                .map(|(e, _)| e)
+                .unwrap();
+            let game = world
+                .query::<(Entity, &list::GamePanel)>()
+                .iter(world)
+                .find(|(_, g)| g.0 == 3)
+                .map(|(e, _)| e)
+                .unwrap();
+            (sort, game)
+        };
+        let before = *app.world().resource::<Selection>();
+        assert_ne!(before.game, 3);
+
+        app.world_mut()
+            .trigger(bevy::ui_widgets::Activate { entity: sort });
+        app.update();
+        assert_eq!(
+            open_menus(&mut app),
+            2,
+            "the control opens its menu and a catcher"
+        );
+
+        // The catcher is the pickable thing under the pointer on bare backdrop (and over the
+        // list), so a press there is a press on it.
+        let catcher = {
+            let world = app.world_mut();
+            world
+                .query_filtered::<Entity, With<controls::Catcher>>()
+                .single(world)
+                .expect("an open menu has a catcher")
+        };
+        press(&mut app, catcher);
+        app.update();
+        assert_eq!(
+            open_menus(&mut app),
+            0,
+            "a press on the backdrop closes the menu and its catcher"
+        );
+        // The press ended on the catcher, which is gone: no click reaches the game beneath.
+        assert_eq!(
+            *app.world().resource::<Selection>(),
+            before,
+            "and selects no game"
+        );
+
+        app.world_mut()
+            .trigger(bevy::ui_widgets::Activate { entity: sort });
+        app.update();
+        assert_eq!(open_menus(&mut app), 2, "the menu and its catcher");
+        app.world_mut()
+            .trigger(bevy::ui_widgets::Activate { entity: sort });
+        app.update();
+        assert_eq!(open_menus(&mut app), 0, "a second click on the control closes it");
+
+        press(&mut app, game);
+        click(&mut app, game);
+        assert_eq!(
+            app.world().resource::<Selection>().game,
+            3,
+            "the next click works as before"
+        );
+    }
 }

@@ -7,6 +7,7 @@
 //! Year, Tag and Status options, the Status and Year dropdowns (#805) and Collections (#105).
 
 use bevy::input_focus::{FocusCause, InputFocus};
+use bevy::picking::events::PointerPress;
 use bevy::prelude::*;
 use bevy::text::EditableText;
 use bevy::ui_widgets::Activate;
@@ -45,6 +46,18 @@ pub(super) struct Dropdown;
 /// An open dropdown menu.
 #[derive(Component)]
 pub(super) struct Menu;
+
+/// The full-screen click-catcher under an open menu: a press on it closes the menu and, as
+/// the press lands on it and not on what is beneath, that thing gets no click (#899).
+#[derive(Component)]
+pub(super) struct Catcher;
+
+/// Closes every open menu (and its catcher) on a press on the catcher.
+fn close_on_press(_: On<PointerPress>, menus: Query<Entity, With<Menu>>, mut commands: Commands) {
+    for menu in &menus {
+        commands.entity(menu).despawn();
+    }
+}
 
 /// What a menu option sets.
 #[derive(Component, Clone, Debug, PartialEq)]
@@ -169,6 +182,7 @@ pub(super) fn on_activate(
     controls: Query<(&Control, &ChildOf)>,
     picks: Query<&Pick>,
     menus: Query<Entity, With<Menu>>,
+    cameras: Query<&UiTargetCamera>,
     dropdowns: Query<Option<&Children>, With<Dropdown>>,
     search: Query<Entity, With<SearchField>>,
     lib: Option<Res<Library>>,
@@ -219,6 +233,23 @@ pub(super) fn on_activate(
                         })
                         .id();
                     commands.entity(parent.parent()).add_child(menu);
+                    if let Some(camera) = cameras.iter().next() {
+                        commands
+                            .spawn((
+                                Node {
+                                    position_type: PositionType::Absolute,
+                                    width: Val::Percent(100.0),
+                                    height: Val::Percent(100.0),
+                                    ..default()
+                                },
+                                // Over the controls (5), under the menu (20).
+                                GlobalZIndex(10),
+                                UiTargetCamera(camera.0),
+                                Menu,
+                                Catcher,
+                            ))
+                            .observe(close_on_press);
+                    }
                 }
             }
         }
