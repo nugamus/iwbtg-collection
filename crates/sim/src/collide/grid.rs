@@ -1,8 +1,9 @@
 //! Broadphase grid (docs/plans/sim-core.md 3.4, Design).
 //!
 //! Uniform 64 px cells per room, all cell math in `i64` with checked arithmetic (never an
-//! `as usize` cast: wasm32 has a 32-bit `usize`). A cache in `World`, rebuilt on room entry and
-//! savestate restore, never hashed or serialized; results are re-sorted by `World::first_of`
+//! `as usize` cast: wasm32 has a 32-bit `usize`). A cache in `World`, reset (unbuilt) on room
+//! entry and savestate restore and built by `World::ensure_grid` at the first collision phase
+//! that needs it (#781), never hashed or serialized; results are re-sorted by `World::first_of`
 //! order, so the grid never changes an outcome. WP0 declares; WP3 owns.
 //!
 //! **Staying in step without a hook in every setter.** Position and image setters live on

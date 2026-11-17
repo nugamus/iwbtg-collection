@@ -7,9 +7,9 @@
 //! version; WP1 owns it.
 
 use super::{InstId, Instance, World};
+use crate::collide::grid::Grid;
 use crate::def::GameDef;
 use crate::error::SimError;
-use crate::collide::grid::Grid;
 use crate::rules::CollideRules;
 
 /// Most live instances a world holds (decision 0001, host caps; the room format caps a room's

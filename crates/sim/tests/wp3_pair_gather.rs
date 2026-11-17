@@ -9,11 +9,11 @@
 //! `cargo test --release -p iwbtg-sim --test it wp3_pair_gather:: -- --ignored --nocapture`.
 
 use iwbtg_sim::def::{Builtin, ClassMask, KindDef, KindId};
+use iwbtg_sim::error::SimError;
 use iwbtg_sim::events::{ProbeAct, ProbeLog, ProbeOn, ProbeState, ProbeStep, probe_event_set};
 use iwbtg_sim::hash::state_hash;
 use iwbtg_sim::input::InputFrame;
 use iwbtg_sim::num::Real;
-use iwbtg_sim::error::SimError;
 use iwbtg_sim::tick::{self, EventRun, Hooks};
 use iwbtg_sim::world::{Ctx, Flow, InstId, SimStatus};
 
@@ -203,9 +203,15 @@ fn pair_gather_matches_the_full_scan_on_generated_worlds() {
         }
         assert_eq!(want.len(), got.len(), "seed {seed}: ticks run");
         assert_eq!(want_status, got_status, "seed {seed}: status");
-        collisions += want.iter().map(|(log, _)| log.matches(" k").count()).sum::<usize>();
+        collisions += want
+            .iter()
+            .map(|(log, _)| log.matches(" k").count())
+            .sum::<usize>();
     }
-    assert!(collisions > 1000, "the worlds collide enough to test: {collisions}");
+    assert!(
+        collisions > 1000,
+        "the worlds collide enough to test: {collisions}"
+    );
 }
 
 /// One kid that handles killers (so every bullet is an outer instance, #781) and `n` killer
