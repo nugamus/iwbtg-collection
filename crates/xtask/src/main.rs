@@ -536,15 +536,36 @@ fn fidelity(root: &Path, bless: bool) -> Result<(), String> {
     if bless {
         args.push("--bless");
     }
-    let result = run(root, "cargo", &args, &[]).map_err(|_| {
-        format!("fidelity: a case got worse than {FIDELITY_BASELINE} (or the sweep could not run); see above")
-    });
-    record_fidelity_run(root);
-    result
+    // Build first: a failed build is no sweep and must not write the stamp (#935).
+    run(
+        root,
+        "cargo",
+        &["build", "-q", "-p", "iwbtg-tools", "--bin", "iwbtg"],
+        &[],
+    )?;
+    println!("$ cargo {}", args.join(" "));
+    let code = Command::new("cargo")
+        .args(&args)
+        .current_dir(root)
+        .status()
+        .map_err(|e| format!("cargo: {e}"))?
+        .code();
+    // The tool exits 0 when every case is as good as the baseline, 1 on a regression, 2 and 3 on an error or a
+    // panic: only 0 and 1 mean the sweep ran.
+    if matches!(code, Some(0 | 1)) {
+        record_fidelity_run(root);
+    }
+    if code == Some(0) {
+        Ok(())
+    } else {
+        Err(format!(
+            "fidelity: a case got worse than {FIDELITY_BASELINE} (or the sweep could not run); see above"
+        ))
+    }
 }
 
-/// `target/xtask/last-fidelity.txt`: `<origin/main commit> <unix seconds>`, written after every sweep, pass or
-/// fail, so `issues.py start` can warn when sim or format commits landed since (#935). Best effort.
+/// `target/xtask/last-fidelity.txt`: `<origin/main commit> <unix seconds>`, written after every sweep that ran, clean or
+/// with a regression, so `issues.py start` can warn when sim or format commits landed since (#935). Best effort.
 fn record_fidelity_run(root: &Path) {
     let Ok((true, sha)) = output(root, "git", &["rev-parse", "origin/main"], &[]) else {
         return;
