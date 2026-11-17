@@ -18,6 +18,13 @@
 //! and a script that calls every script API function. After the case lines the report lists,
 //! per built-in and per kid family, the first case that ran it (`builtin <name> <case>`,
 //! `family <name> <case>`, `-` for none); `golden_corpus.rs` fails when one is missing.
+//!
+//! Running is not touching (#847): a built-in with a collision handler between it and the kid
+//! or a kid bullet (on either side) also gets a `touched <name> <case>` line naming the first
+//! case where such a pair overlapped in the collision phase, so its collision path ran. The
+//! harness sees that from outside: it runs each tick with [`Hooks::ENGINE`] except for an
+//! `overlaps` hook that calls the engine's and notes the pairs that met; sim state, hash and
+//! RNG are untouched.
 #![allow(
     dead_code,
     reason = "the two programs that include this file use different parts"
@@ -25,6 +32,7 @@
 
 mod courses;
 
+use std::cell::RefCell;
 use std::collections::BTreeSet;
 
 use iwbtg_sim::def::KidFamily;
@@ -33,6 +41,8 @@ use iwbtg_sim::def::{
     Builtin, ClassMask, GameDef, KindDef, KindId, RoomDef, RoomId, ScriptDef, ScriptId, VarId,
 };
 use iwbtg_sim::events::{ProbeAct, ProbeOn, ProbeState, ProbeStep, probe_event_set};
+use iwbtg_sim::error::SimError;
+use iwbtg_sim::events::{event_set, pair_handler};
 use iwbtg_sim::hash;
 use iwbtg_sim::input::{Action, InputFrame};
 use iwbtg_sim::num::Real;
@@ -40,7 +50,7 @@ use iwbtg_sim::room::{RoomRequest, StartPoint};
 use iwbtg_sim::rules::RunnerRules;
 use iwbtg_sim::script::ScriptRuntime;
 use iwbtg_sim::sound::DllMode;
-use iwbtg_sim::tick;
+use iwbtg_sim::tick::{self, Hooks};
 use iwbtg_sim::world::{Ctx, InstId, KindState, SimStatus, SpawnInit, Value, World};
 
 /// The file with the pinned lines, next to this module.
@@ -153,29 +163,57 @@ pub fn run_fixture(case: &Case) -> (Fixture, u64) {
 }
 
 /// What a case ran: the built-ins that had a live instance at the start or after some tick,
-/// and the kid family when a kid was alive.
+/// the kid family when a kid was alive, and the built-ins the kid or a kid bullet met.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct Seen {
     /// Indexes into `Builtin::ALL`.
     pub builtins: BTreeSet<usize>,
     /// The game's kid family, when a kid instance lived.
     pub family: Option<KidFamily>,
+    /// Built-ins (indexes into `Builtin::ALL`) that had a live instance whose kind has a
+    /// collision handler with a kid or kid bullet kind, on either side.
+    pub handled: BTreeSet<usize>,
+    /// Built-ins whose instance overlapped a kid or kid bullet in the collision phase.
+    pub touched: BTreeSet<usize>,
+    /// The kinds that had a live instance.
+    kinds: BTreeSet<KindId>,
+}
+
+fn builtin_index(b: Builtin) -> Option<usize> {
+    Builtin::ALL.iter().position(|x| *x == b)
+}
+
+fn base_of(def: &GameDef, kind: KindId) -> Option<Builtin> {
+    def.kind(kind).map(|k| k.base)
+}
+
+fn is_kid(b: Builtin) -> bool {
+    matches!(b, Builtin::Kid | Builtin::KidBullet)
+}
+
+/// Whether a collision event can run between `kind` and a kid or kid bullet kind of `def`: one
+/// of the two has a handler matching the other's classes.
+fn handles_kid(def: &GameDef, kind: KindId) -> bool {
+    let Some(k) = def.kind(kind) else {
+        return false;
+    };
+    let mine = &event_set(def, kind).collisions;
+    def.kinds.iter().filter(|kid| is_kid(kid.base)).any(|kid| {
+        pair_handler(mine, kid.classes).is_some()
+            || pair_handler(&kid.events.collisions, k.classes).is_some()
+    })
 }
 
 impl Seen {
     fn look(&mut self, fx: &Fixture) {
         for inst in fx.w.iter_alive() {
-            let Some(base) = inst
-                .kind
-                .index()
-                .and_then(|i| fx.def.kinds.get(i))
-                .map(|k| k.base)
-            else {
+            let Some(base) = base_of(&fx.def, inst.kind) else {
                 continue;
             };
-            if let Some(i) = Builtin::ALL.iter().position(|b| *b == base) {
+            if let Some(i) = builtin_index(base) {
                 self.builtins.insert(i);
             }
+            self.kinds.insert(inst.kind);
             if base == Builtin::Kid {
                 self.family = Some(fx.def.physics.preset);
             }
@@ -183,11 +221,44 @@ impl Seen {
     }
 }
 
+thread_local! {
+    /// The built-ins [`observe_overlaps`] saw meet a kid or kid bullet in the running case.
+    static TOUCHED: RefCell<BTreeSet<usize>> = const { RefCell::new(BTreeSet::new()) };
+}
+
+/// The engine's `overlaps` with the same result, noting the built-in of a pair that met a kid
+/// or kid bullet. The collision phase tests a pair only when one side has a handler for the
+/// other, so a noted pair is one whose collision event runs.
+fn observe_overlaps(ctx: &Ctx, a: InstId, b: InstId) -> Result<bool, SimError> {
+    let met = (Hooks::ENGINE.overlaps)(ctx, a, b)?;
+    if met {
+        let base = |id| ctx.w.get(id).and_then(|i| base_of(ctx.def, i.kind));
+        if let (Some(ba), Some(bb)) = (base(a), base(b)) {
+            TOUCHED.with(|t| {
+                let mut t = t.borrow_mut();
+                for (me, other) in [(ba, bb), (bb, ba)] {
+                    if is_kid(me) {
+                        t.extend(builtin_index(other));
+                    }
+                }
+            });
+        }
+    }
+    Ok(met)
+}
+
+/// [`Hooks::ENGINE`] with [`observe_overlaps`]: what the cases run with.
+const OBSERVE: Hooks = Hooks {
+    overlaps: observe_overlaps,
+    ..Hooks::ENGINE
+};
+
 /// [`run_fixture`] that also records what the case ran.
 pub fn run_covered(case: &Case) -> (Fixture, u64, Seen) {
     let mut fx = (case.build)();
     let mut seen = Seen::default();
     seen.look(&fx);
+    TOUCHED.with(|t| t.borrow_mut().clear());
     let mut ran = 0;
     for t in 0..case.ticks {
         if fx.w.status != SimStatus::Running {
@@ -196,10 +267,18 @@ pub fn run_covered(case: &Case) -> (Fixture, u64, Seen) {
         let input = (case.input)(t);
         let mut ctx = fx.ctx();
         // A halting tick returns the error and leaves the world `Halted`; the status says so.
-        let _ = tick::run_tick(&mut ctx, input);
+        let _ = tick::run_tick_with(&mut ctx, input, &OBSERVE);
         ran = fx.w.tick;
         seen.look(&fx);
     }
+    seen.touched = TOUCHED.with(|t| std::mem::take(&mut *t.borrow_mut()));
+    // Kinds do not change during a run, so the handlers are checked once per kind that lived.
+    seen.handled = seen
+        .kinds
+        .iter()
+        .filter(|k| handles_kid(&fx.def, **k))
+        .filter_map(|k| base_of(&fx.def, *k).and_then(builtin_index))
+        .collect();
     (fx, ran, seen)
 }
 
@@ -215,17 +294,27 @@ pub const FAMILIES: [KidFamily; 7] = [
 ];
 
 /// The report: one line per case, then one coverage line per built-in and per kid family
-/// naming the first case that ran it (`-` for none).
+/// naming the first case that ran it (`-` for none), then one `touched <name> <case>` line per
+/// built-in with a kid or kid bullet collision handler in a case that ran it, naming the first
+/// case where the two met (`-` for none).
 pub fn report() -> String {
     let mut out = String::new();
     let mut builtin_case: Vec<Option<&'static str>> = vec![None; Builtin::ALL.len()];
     let mut family_case: Vec<Option<&'static str>> = vec![None; FAMILIES.len()];
+    let mut handled = vec![false; Builtin::ALL.len()];
+    let mut touched_case: Vec<Option<&'static str>> = vec![None; Builtin::ALL.len()];
     for case in cases() {
         let (fx, ran, seen) = run_covered(&case);
         out.push_str(&outcome(&case, &fx, ran).line());
         out.push('\n');
         for i in seen.builtins {
             builtin_case[i].get_or_insert(case.name);
+        }
+        for i in seen.handled {
+            handled[i] = true;
+        }
+        for i in seen.touched {
+            touched_case[i].get_or_insert(case.name);
         }
         if let Some(f) = seen.family.and_then(|f| FAMILIES.iter().position(|x| *x == f)) {
             family_case[f].get_or_insert(case.name);
@@ -236,6 +325,12 @@ pub fn report() -> String {
     }
     for (f, case) in FAMILIES.iter().zip(&family_case) {
         out.push_str(&format!("family {f:?} {}\n", case.unwrap_or("-")));
+    }
+    for (i, b) in Builtin::ALL.iter().enumerate() {
+        if handled[i] || touched_case[i].is_some() {
+            let case = touched_case[i].unwrap_or("-");
+            out.push_str(&format!("touched {} {case}\n", b.name()));
+        }
     }
     out
 }
