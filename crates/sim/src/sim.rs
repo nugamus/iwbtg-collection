@@ -66,6 +66,18 @@ impl Sim {
     /// The world starts in `GameDef::start_room` at tick 0 before `start_game` moves it. A
     /// start that halts is returned as the error, and so is a map the package does not have.
     pub fn new(def: Arc<GameDef>, options: SimOptions) -> Result<Sim, SimError> {
+        let sim = Sim::new_or_halted(def, options)?;
+        if let SimStatus::Halted(e) = &sim.world.status {
+            return Err(e.clone());
+        }
+        Ok(sim)
+    }
+
+    /// [`Sim::new`], except that a start that halts (a script error in a start-room Create, #946)
+    /// is returned as the halted sim, `SimStatus::Halted` in its world, as a halt during play
+    /// leaves it. Only a sim that cannot be set up is an error: a map the package does not have,
+    /// a runner it does not support, scripts that do not compile.
+    pub fn new_or_halted(def: Arc<GameDef>, options: SimOptions) -> Result<Sim, SimError> {
         let map = def.map_index(options.map.as_deref()).ok_or_else(|| {
             SimError::unsupported(format!(
                 "map `{}` is not in package `{}`",
@@ -88,10 +100,8 @@ impl Sim {
                 scripts: &scripts,
                 dll_mode: options.dll_mode,
             };
-            room::start_game(&mut ctx, &options.start)?;
-        }
-        if let SimStatus::Halted(e) = &world.status {
-            return Err(e.clone());
+            // An error here has halted the world (`room::start_game`): it is in `world.status`.
+            let _ = room::start_game(&mut ctx, &options.start);
         }
         Ok(Sim {
             def,

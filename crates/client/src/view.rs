@@ -266,8 +266,9 @@ impl NewRun {
     }
 }
 
-/// Builds the sim for `pkg` (`shell::load` calls this before the run opens, so a game that does
-/// not start never opens; nothing in `world` changes). `map` is the map id, `None` the first.
+/// Builds the sim for `pkg` (`shell::load` calls this before the run opens, so a game that cannot
+/// be set up never opens; nothing in `world` changes). A start that halts is not an error here.
+/// `map` is the map id, `None` the first.
 pub(crate) fn new_run(world: &World, pkg: &Package, map: Option<&str>) -> Result<NewRun, String> {
     let config = *world.resource::<RunConfig>();
     let def = Arc::clone(&pkg.def);
@@ -295,8 +296,11 @@ pub(crate) fn new_run(world: &World, pkg: &Package, map: Option<&str>) -> Result
         },
         map: map.map(str::to_owned),
     };
-    let sim =
-        Sim::new(Arc::clone(&def), options.clone()).map_err(|e| format!("the game did not start: {e}"))?;
+    // A start that halts (a script error in a start-room Create, #946) is a run whose sim is
+    // halted from tick 0: it opens on the script error screen (`script_error/`), as a halt in
+    // play does. Only a sim that cannot be set up is an error.
+    let sim = Sim::new_or_halted(Arc::clone(&def), options.clone())
+        .map_err(|e| format!("the game did not start: {e}"))?;
     def.room(sim.world().room).ok_or("the start room is missing")?;
     Ok(NewRun {
         game: Game { sim },
@@ -594,8 +598,9 @@ pub(crate) fn restart_run(world: &mut World) -> Result<(), String> {
     if start.fresh_seed {
         options.seed = crate::replays::fresh_seed();
     }
-    let sim =
-        Sim::new(Arc::clone(&start.def), options).map_err(|e| format!("the game did not start: {e}"))?;
+    // A start that halts comes back halted, so the script error screen opens again (#946).
+    let sim = Sim::new_or_halted(Arc::clone(&start.def), options)
+        .map_err(|e| format!("the game did not start: {e}"))?;
     world.non_send_mut::<Game>().sim = sim;
     let drawn = std::mem::take(&mut world.resource_mut::<Drawn>().0);
     for entity in drawn.into_values() {

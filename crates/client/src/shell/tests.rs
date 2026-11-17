@@ -25,8 +25,25 @@ fn app() -> App {
 
 /// [`app`]; `skip_loading: false` opens every run on the loading card, as the client does.
 fn app_with(skip_loading: bool) -> App {
+    app_on(skip_loading, None)
+}
+
+/// [`app_with`]; `first: Some(pkg)` starts the client on that package, as a package on the
+/// command line does (`view::run`: `load` before the shell plugin, no game select to go back to).
+fn app_on(skip_loading: bool, first: Option<&str>) -> App {
     let mods = ModSet::parse("HB").unwrap();
     let mut app = App::new();
+    app.add_plugins(crate::view::ViewPlugin {
+        ranked: false,
+        fresh_seed: false,
+        interpolate: true,
+    });
+    if let Some(pkg) = first {
+        load(app.world_mut(), &demo(pkg), false).unwrap();
+    }
+    let library = first
+        .is_none()
+        .then(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")));
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), StatesPlugin))
         .init_asset::<Image>()
         .init_asset::<AudioSource>()
@@ -39,13 +56,8 @@ fn app_with(skip_loading: bool) -> App {
         .init_resource::<crate::hud::Paused>()
         .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(20)))
         .add_plugins((
-            crate::view::ViewPlugin {
-                ranked: false,
-                fresh_seed: false,
-                interpolate: true,
-            },
             ShellPlugin {
-                library: Some(PathBuf::from(env!("CARGO_MANIFEST_DIR"))),
+                library,
                 trace_mode: false,
             },
             crate::bindings::BindingsPlugin(crate::bindings::Bindings::default()),
@@ -507,3 +519,70 @@ fn retry_on_the_script_error_screen_plays_again() {
             .is_none()
     );
 }
+
+/// The `start_error.pkg` fixture's report: its boss's Create fails in the start room (#946).
+fn assert_start_error(app: &App) {
+    assert_eq!(run_screen(app.world()), Some(RunScreen::Error));
+    let report = app
+        .world()
+        .resource::<crate::script_error::Stopped>()
+        .report()
+        .cloned()
+        .expect("a report");
+    assert_eq!(report.heading, "Script error");
+    assert_eq!(report.file.as_deref(), Some("scripts/boss.rhai"));
+    assert_eq!(report.line, Some(5));
+    assert!(report.message.contains("out of bounds"), "{report:?}");
+    assert!(
+        report
+            .context
+            .as_deref()
+            .is_some_and(|c| c.contains("kind @boss") && c.contains("Create")),
+        "{report:?}"
+    );
+    assert_eq!(tick(app), 0, "the sim halted in its first tick");
+}
+
+/// A script error in the start room's Create (the first tick, run while the sim is built) opens
+/// the run on the script error screen from game select (#946), not the NOT OPENED notice. Retry
+/// shows it again; Escape goes back to game select, and another package then plays.
+#[test]
+fn a_first_tick_script_error_opens_the_error_screen_from_select() {
+    let mut app = app();
+    frames(&mut app, 3);
+    start(app.world_mut(), &demo("tests/fixtures/start_error.pkg")).expect("the run opens");
+    frames(&mut app, 3);
+    assert_start_error(&app);
+    frames(&mut app, 10);
+    assert_eq!(tick(&app), 0, "no tick on the error screen");
+
+    crate::retry::request(app.world_mut());
+    frames(&mut app, 3);
+    assert_start_error(&app);
+
+    press(&mut app, KeyCode::Escape);
+    frames(&mut app, 2);
+    assert_eq!(
+        *app.world().resource::<State<AppScreen>>().get(),
+        AppScreen::Select
+    );
+    play_and_leave(&mut app, "tests/fixtures/clear.pkg");
+}
+
+/// The same package on the command line (#946): the client opens, shows the loading card and then
+/// the script error screen instead of exiting with the message; its Back is Quit, and quits.
+#[test]
+fn a_first_tick_script_error_opens_the_error_screen_from_the_command_line() {
+    let mut app = app_on(false, Some("tests/fixtures/start_error.pkg"));
+    frames(&mut app, 3);
+    assert_eq!(screen(&app), RunScreen::Loading);
+    frames(&mut app, 80);
+    assert_start_error(&app);
+    assert!(!app.world().resource::<Shell>().goes_back(), "Back is Quit");
+    assert!(app.should_exit().is_none());
+
+    press(&mut app, KeyCode::Escape);
+    frames(&mut app, 1);
+    assert_eq!(app.should_exit(), Some(AppExit::Success));
+}
+
