@@ -1,8 +1,9 @@
 //! The select screen (`--select <folder>`): the packages in a folder as game select's list
 //! (#149, `select/list.rs`): a panel per game with its key art, its maps under the selected one.
 //! Up and Down pick a map, Left and Right a game, a click picks either; Enter (or a click on the
-//! selected map) plays, Escape quits. The left side is a placeholder until #148: the picked game
-//! and map, and the keys.
+//! selected map) plays, Escape quits. Above the list, search, group, sort and filters (#150,
+//! `select/controls.rs`, `select/filters.rs`) pick the rows it shows. The left side is a
+//! placeholder until #148: the picked game and map, and the keys.
 
 use std::path::{Path, PathBuf};
 
@@ -79,7 +80,15 @@ impl Plugin for SelectPlugin {
                         Some(lib) if same(&lib) => {
                             let lib = lib.into_inner();
                             lib.refresh(book, mods);
-                            enter(&mut commands, camera, folder.as_deref(), lib, sel, &filters, &mut shown)
+                            enter(
+                                &mut commands,
+                                camera,
+                                folder.as_deref(),
+                                lib,
+                                sel,
+                                &filters,
+                                &mut shown,
+                            )
                         }
                         _ => {
                             let mut lib = Library::load(folder.as_deref(), &paths, &mut images);
@@ -184,7 +193,7 @@ fn enter(
     let hint = if lib.games.is_empty() {
         "No packages here (folders with a game.toml, .iwbz files)."
     } else {
-        "Type to search · ↑ ↓ map · ← → game · Enter plays · Esc clears, then quits"
+        "Type to search · ↑ ↓ ← → pick · Enter plays · Esc clears, quits"
     };
     // The left side: a placeholder until #148's title wedge, stats and tabs.
     commands.spawn((
@@ -395,8 +404,8 @@ mod tests {
     /// Puts `text` in the search field, as typing does.
     fn type_in(app: &mut App, text: &str) {
         let world = app.world_mut();
-        let mut fields = world
-            .query_filtered::<&mut bevy::text::EditableText, With<crate::ui::widgets::SearchField>>();
+        let mut fields =
+            world.query_filtered::<&mut bevy::text::EditableText, With<crate::ui::widgets::SearchField>>();
         for mut field in fields.iter_mut(world) {
             *field = bevy::text::EditableText::new(text);
         }
@@ -423,7 +432,7 @@ mod tests {
         let shown = app.world().resource::<Shown>().order();
         assert_eq!(shown.len(), 6, "every fixture is listed");
         let before = targets(&mut app);
-        assert!(before.iter().all(|t| t.2 == 1.0));
+        assert!(before.iter().all(|t| (t.2 - 1.0).abs() < 1e-6));
 
         type_in(&mut app, "FIXTURE");
         app.update();

@@ -16,8 +16,8 @@ use super::library::Library;
 use crate::ui::fonts::Type;
 use crate::ui::tokens;
 use crate::ui::widgets::{
-    ButtonKind, Chip, ControlValue, SEARCH_HEIGHT, SearchField, button_off, chip, chip_off,
-    control, control_off, menu_panel, search_field, text,
+    ButtonKind, Chip, ControlValue, SEARCH_HEIGHT, SearchField, button_off, chip, chip_off, control,
+    control_off, menu_panel, search_field, text,
 };
 
 /// The controls' top and right edge, and their width (`Main.dc.html`: x 1040 to 1880 at 1920

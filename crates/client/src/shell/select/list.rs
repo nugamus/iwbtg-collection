@@ -527,10 +527,7 @@ pub(super) fn refilter(
     if !order.contains(&sel.game)
         && let Some(&first) = order.first()
     {
-        *sel = Selection {
-            game: first,
-            map: 0,
-        };
+        *sel = Selection { game: first, map: 0 };
     }
 }
 

@@ -173,10 +173,9 @@ fn group_of(field: Field, game: &GameInfo, cleared: bool) -> Option<String> {
     match field {
         Field::Creator => Some(creator(game).to_owned()),
         Field::Cleared => Some(if cleared { "Cleared" } else { "Not cleared" }.to_owned()),
-        Field::Stars => Some(stars(game).map_or_else(
-            || "No rating".to_owned(),
-            |s| format!("★ {}", s.floor() as i32),
-        )),
+        Field::Stars => {
+            Some(stars(game).map_or_else(|| "No rating".to_owned(), |s| format!("★ {}", s.floor() as i32)))
+        }
         _ => None,
     }
 }
@@ -204,7 +203,11 @@ fn by(field: Field, a: (&GameInfo, bool), b: (&GameInfo, bool)) -> Ordering {
 /// ([`Field::ready`]) groups and sorts like `Game` and `Title`.
 pub fn rows(games: &[GameInfo], records: &[Records], f: &Filters) -> Vec<Row> {
     let cleared = |i: usize| records.get(i).is_some_and(|r| r.cleared);
-    let group = if f.group.ready(games) { f.group } else { Field::Game };
+    let group = if f.group.ready(games) {
+        f.group
+    } else {
+        Field::Game
+    };
     let sort = if f.sort.ready(games) { f.sort } else { Field::Title };
     let mut shown: Vec<usize> = (0..games.len())
         .filter(|&i| matches(&games[i], cleared(i), f))
@@ -223,10 +226,7 @@ pub fn rows(games: &[GameInfo], records: &[Records], f: &Filters) -> Vec<Row> {
     let mut i = 0;
     while i < shown.len() {
         let name = key(shown[i]);
-        let len = shown[i..]
-            .iter()
-            .take_while(|&&g| key(g) == name)
-            .count();
+        let len = shown[i..].iter().take_while(|&&g| key(g) == name).count();
         if let Some(name) = name {
             out.push(Row::Header(name, len));
         }
@@ -300,7 +300,11 @@ mod tests {
         };
         assert_eq!(order(&rows(&games, &recs, &f("needle"))), [3, 0]);
         assert_eq!(order(&rows(&games, &recs, &f("NEEDLE kira"))), [3]);
-        assert_eq!(order(&rows(&games, &recs, &f("kale"))), [0], "the creator matches too");
+        assert_eq!(
+            order(&rows(&games, &recs, &f("kale"))),
+            [0],
+            "the creator matches too"
+        );
         assert_eq!(order(&rows(&games, &recs, &f("  "))).len(), 4, "blank keeps all");
         assert!(rows(&games, &recs, &f("zzz")).is_empty());
     }
@@ -327,7 +331,11 @@ mod tests {
         assert_eq!(only(Clears::Cleared, None), [3, 0]);
         assert_eq!(only(Clears::Uncleared, None), [2, 1]);
         assert_eq!(only(Clears::Any, Some("Kira")), [1, 3]);
-        assert_eq!(only(Clears::Any, Some("Unknown")), [2], "no creator reads Unknown");
+        assert_eq!(
+            only(Clears::Any, Some("Unknown")),
+            [2],
+            "no creator reads Unknown"
+        );
         assert_eq!(only(Clears::Cleared, Some("Kira")), [3]);
         assert_eq!(Clears::Cleared.toggle(Clears::Cleared), Clears::Any);
         assert_eq!(Clears::Cleared.toggle(Clears::Uncleared), Clears::Uncleared);
