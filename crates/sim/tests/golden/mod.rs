@@ -40,8 +40,8 @@ use iwbtg_sim::def::testing::GameDefBuilder;
 use iwbtg_sim::def::{
     Builtin, ClassMask, GameDef, KindDef, KindId, RoomDef, RoomId, ScriptDef, ScriptId, VarId,
 };
-use iwbtg_sim::events::{ProbeAct, ProbeOn, ProbeState, ProbeStep, probe_event_set};
 use iwbtg_sim::error::SimError;
+use iwbtg_sim::events::{ProbeAct, ProbeOn, ProbeState, ProbeStep, probe_event_set};
 use iwbtg_sim::events::{event_set, pair_handler};
 use iwbtg_sim::hash;
 use iwbtg_sim::input::{Action, InputFrame};
@@ -199,8 +199,7 @@ fn handles_kid(def: &GameDef, kind: KindId) -> bool {
     };
     let mine = &event_set(def, kind).collisions;
     def.kinds.iter().filter(|kid| is_kid(kid.base)).any(|kid| {
-        pair_handler(mine, kid.classes).is_some()
-            || pair_handler(&kid.events.collisions, k.classes).is_some()
+        pair_handler(mine, kid.classes).is_some() || pair_handler(&kid.events.collisions, k.classes).is_some()
     })
 }
 
