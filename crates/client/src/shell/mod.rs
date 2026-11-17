@@ -96,9 +96,7 @@ pub(crate) fn cover_game(
     if let Some(mut s) = suspended {
         s.0 = covered;
     }
-    if let (Some(mut b), Some(d)) = (backdrop, backdrop_dim)
-        && b.dim != d
-    {
+    if let (Some(mut b), Some(d)) = (backdrop, backdrop_dim) {
         b.dim = d;
     }
 }

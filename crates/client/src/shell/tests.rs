@@ -68,7 +68,9 @@ fn app_with(skip_loading: bool) -> App {
             crate::import::ImportPlugin { keep: false },
         ))
         // Bevy takes at most 15 plugins in one tuple.
-        .add_plugins(crate::results::ResultsPlugin(crate::results::ResultsArgs::default()))
+        .add_plugins(crate::results::ResultsPlugin(
+            crate::results::ResultsArgs::default(),
+        ))
         // The window plugin adds it in the client.
         .add_message::<FileDragAndDrop>();
     app.finish();
@@ -346,7 +348,10 @@ fn a_run_walks_loading_playing_paused_playing_results() {
     assert_eq!(screen(&app), RunScreen::Loading);
     leave(app.world_mut());
     frames(&mut app, 2);
-    assert!(app.world().get_resource::<State<RunScreen>>().is_none(), "no run, no run screen");
+    assert!(
+        app.world().get_resource::<State<RunScreen>>().is_none(),
+        "no run, no run screen"
+    );
 }
 
 /// With the card skipped (a `--screenshot` check of another screen) a run opens on the game.

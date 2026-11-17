@@ -23,7 +23,7 @@ use iwbtg_sim::stripped::PlayMode;
 
 use crate::art::ArtFiles;
 use crate::hud::Suspended;
-use crate::shell::{self, InRun, RUN_ONLY, RunScreen, FirstScreen};
+use crate::shell::{self, FirstScreen, InRun, RUN_ONLY, RunScreen};
 use crate::stats::{Book, Stats, fmt_ticks, map_key};
 use crate::ui::backdrop::{Backdrop, dim};
 use crate::ui::motion::ReducedMotion;

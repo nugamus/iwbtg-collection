@@ -328,9 +328,7 @@ pub(crate) fn apply(
 /// The game shows (`RunScreen::Playing`): the backdrop takes the gameplay dim. The loading card
 /// and the results set theirs on entering (#839).
 fn gameplay_dim(backdrop: Option<ResMut<Backdrop>>) {
-    if let Some(mut b) = backdrop
-        && b.dim != backdrop::dim::GAMEPLAY
-    {
+    if let Some(mut b) = backdrop {
         b.dim = backdrop::dim::GAMEPLAY;
     }
 }
