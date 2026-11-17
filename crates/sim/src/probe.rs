@@ -13,7 +13,7 @@ pub mod registry;
 
 use crate::builtins::state::BuiltinState;
 use crate::collide::Target;
-use crate::collide::bbox::{BboxRead, bbox_read};
+use crate::collide::bbox::{BboxRead, bbox_read, mask_sprite};
 use crate::collide::query::Q;
 use crate::def::{GameDef, NameId, VarId};
 use crate::events;
@@ -257,6 +257,93 @@ pub enum FieldRef {
     /// `bbox_left`, `bbox_right`, `bbox_top`, `bbox_bottom`: what GML reads
     /// (`collide::bbox::bbox_read`) at the instance's position after the tick.
     Bbox(BboxEdge),
+    /// `mask_index`, `image_number`, `sprite_width`, `sprite_height` ([`sprite_field`]).
+    Sprite(SpriteField),
+}
+
+/// Read-only sprite variables of an instance (and `mask_index`, which the probe only reads).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum SpriteField {
+    /// `mask_index`.
+    MaskIndex,
+    /// `image_number`.
+    ImageNumber,
+    /// `sprite_width`.
+    Width,
+    /// `sprite_height`.
+    Height,
+}
+
+impl SpriteField {
+    /// Every sprite field.
+    pub const ALL: [SpriteField; 4] = [
+        SpriteField::MaskIndex,
+        SpriteField::ImageNumber,
+        SpriteField::Width,
+        SpriteField::Height,
+    ];
+
+    /// The GML variable name.
+    pub fn name(self) -> &'static str {
+        match self {
+            SpriteField::MaskIndex => "mask_index",
+            SpriteField::ImageNumber => "image_number",
+            SpriteField::Width => "sprite_width",
+            SpriteField::Height => "sprite_height",
+        }
+    }
+
+    /// The field with this GML name.
+    pub fn from_name(name: &str) -> Option<SpriteField> {
+        SpriteField::ALL.into_iter().find(|f| f.name() == name)
+    }
+}
+
+/// What a sprite field of `inst` reads, as the recorder writes it (reals); an empty cell where
+/// the spec has no rule.
+///
+/// - `mask_index`: the sprite that owns the instance's mask (`collide::bbox::mask_sprite`), -1
+///   with no mask (CLONE_SPEC collision: "-1 means same as sprite_index"). Like `sprite_index` it
+///   is our sprite id, not the original's.
+/// - `image_number`: the sprite's frame count, 0 for a sprite with no frames (CLONE_SPEC
+///   collision, bbox-empty-mask.csv k1) and with no sprite (CLONE_SPEC sprites,
+///   traces/little-trap/anim-nosprite.csv).
+/// - `sprite_width`, `sprite_height`: 0 for a sprite with no frames (CLONE_SPEC collision); the
+///   frame size while `image_xscale` (`image_yscale`) is exactly 1 (kid/A4.md playerStart,
+///   bbox-empty-mask.csv k0, k3-k5). Under another scale (k12 reads 6 for a 2x2 sprite at scale
+///   3) and with no sprite, the spec gives no rule: UNKNOWN, an empty cell.
+pub fn sprite_field(def: &GameDef, inst: &Instance, f: SpriteField) -> trace::Value {
+    let count = |n: u32| trace::Value::Real(f64::from(n));
+    if f == SpriteField::MaskIndex {
+        return match inst.img.mask() {
+            None => trace::Value::Real(-1.0),
+            Some(m) => mask_sprite(def, m).map_or(trace::Value::Empty, |s| count(s.0)),
+        };
+    }
+    let Some(s) = inst.img.sprite() else {
+        return match f {
+            SpriteField::ImageNumber => count(0),
+            _ => trace::Value::Empty,
+        };
+    };
+    let Some(sprite) = def.sprite(s) else {
+        return trace::Value::Empty;
+    };
+    let size = |n: u32, scale: Real| {
+        if sprite.frames == 0 {
+            count(0)
+        } else if scale == Real::ONE {
+            count(n)
+        } else {
+            trace::Value::Empty
+        }
+    };
+    match f {
+        SpriteField::ImageNumber => count(u32::from(sprite.frames)),
+        SpriteField::Width => size(sprite.size.0, inst.img.xscale()),
+        SpriteField::Height => size(sprite.size.1, inst.img.yscale()),
+        SpriteField::MaskIndex => trace::Value::Empty,
+    }
 }
 
 /// What `bbox_*` reads for an instance with no sprite and no mask.
@@ -674,6 +761,7 @@ fn read_field(
             Ok(BboxRead::Unknown) | Err(_) => trace::Value::Empty,
         },
         FieldRef::Fixed(c) => fixed_value(def, w, inst, *c, frame),
+        FieldRef::Sprite(f) => sprite_field(def, inst, *f),
         FieldRef::Alarm(n) => inst
             .alarms
             .get(usize::from(*n))
@@ -1011,6 +1099,33 @@ mod tests {
             assert_eq!(read_column(&mut sim, me, &col, 1), trace::Value::Real(-100_000.0));
         }
         assert_eq!(sim.world, before);
+    }
+
+    /// Sprite fields without a sprite: `image_number` 0 (little-trap anim-nosprite), `mask_index`
+    /// -1, the sizes unknown; a mask no sprite owns reads an empty `mask_index`.
+    #[test]
+    fn sprite_fields_without_a_sprite() {
+        use crate::def::{IRect, Mask, MaskId, MaskShape};
+        let mut b = GameDefBuilder::new("probe-sprite-fields");
+        let ctl = b.kind(KindDef::new("ctl", Builtin::World));
+        b.room(RoomDef::new("room_1", 800, 608));
+        b.def_mut().masks.push(Mask {
+            bbox: IRect {
+                left: 0,
+                top: 0,
+                right: 3,
+                bottom: 3,
+            },
+            shape: MaskShape::Rect,
+        });
+        let def = b.build().expect("def");
+        let mut inst = Instance::new(InstId(1), ctl, 0, Real::ZERO, Real::ZERO);
+        let read = |inst: &Instance| SpriteField::ALL.map(|f| sprite_field(&def, inst, f));
+        let r = |v: f64| trace::Value::Real(v);
+        let e = trace::Value::Empty;
+        assert_eq!(read(&inst), [r(-1.0), r(0.0), e.clone(), e.clone()]);
+        inst.img.set_mask(Some(MaskId(0)));
+        assert_eq!(read(&inst), [e.clone(), r(0.0), e.clone(), e]);
     }
 
     /// A no-frame sprite reads the point round(x), round(y); maskNothing its normalized 2x2 box;

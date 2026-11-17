@@ -21,7 +21,7 @@ notes = [
 [vars]
 
 [unprobed]
-"image_number" = "no probe field for `image_number` (OPEN)"
+"image_number" = "the probe reads it (#919); compare after a check against the package (#924)"
 
 [rooms]
 "template" = "rTemplate"
