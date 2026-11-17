@@ -27,6 +27,7 @@ pub(super) fn plugin(app: &mut App) {
             button_looks,
             fit_ellipses,
             switch_looks,
+            mod_card_looks,
             search_placeholders,
         ),
     )
@@ -862,6 +863,313 @@ fn button_looks(
         }
         if *shape != want {
             *shape = want;
+        }
+    }
+}
+
+/// The ground the mod select sheet's cards sit on (the sheet's glass): card fills are the
+/// artboard's whites and column colours mixed over it ([`tokens::over`]).
+const MOD_GROUND: Color = tokens::CARD_SOLID;
+
+/// A mod card on the mod select sheet (`ModSelect.dc.html`): 70 px, sheared, a code tile, the
+/// name over a one-line description and optional option pills (Slow motion's 75% / 50%). Off it
+/// is `white(.05)` glass with a `white(.1)` tile; on, the column `color` at .22 with a 2 px ring
+/// and a solid tile. A click, Enter or Space sends `Activate`; the screen flips `on`.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct ModCard {
+    pub color: Color,
+    pub on: bool,
+    hover: f32,
+}
+
+/// An option pill on a [`mod_card`]: its place in the card's options and whether it is the one
+/// picked. The screen sets `on`; a click on it reaches the screen as a `PointerClick`.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ModOption {
+    pub index: usize,
+    pub on: bool,
+}
+
+/// The parts of a [`mod_card`] whose colour follows `on`.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+enum CardPart {
+    Tile,
+    Code,
+    Name,
+    Description,
+}
+
+fn card_fill(card: &ModCard) -> Color {
+    let lift = 0.05 * Ease::OutQuint.at(card.hover);
+    if card.on {
+        tokens::over(card.color, 0.22 + lift, MOD_GROUND)
+    } else {
+        tokens::over(Color::WHITE, 0.05 + lift, MOD_GROUND)
+    }
+}
+
+fn card_part(part: CardPart, card: &ModCard) -> Color {
+    match (part, card.on) {
+        (CardPart::Tile, true) => card.color,
+        (CardPart::Tile, false) => tokens::over(Color::WHITE, 0.1, MOD_GROUND),
+        (CardPart::Code, true) => tokens::ON_LIGHT,
+        (CardPart::Code, false) => tokens::SOFT,
+        (CardPart::Name, true) => Color::WHITE,
+        (CardPart::Name, false) => tokens::ROW_NAME,
+        (CardPart::Description, true) => tokens::ROW_NAME,
+        (CardPart::Description, false) => tokens::MUTED,
+    }
+}
+
+fn option_look(on: bool) -> (Color, Color) {
+    if on {
+        (tokens::over(Color::WHITE, 0.18, MOD_GROUND), tokens::INK)
+    } else {
+        (Color::NONE, tokens::MUTED)
+    }
+}
+
+/// The inside of a mod card: tile, name over description, options.
+fn card_content(
+    code: &str,
+    name: &str,
+    description: &str,
+    card: &ModCard,
+    options: &[(String, bool)],
+) -> impl Bundle + use<> {
+    let (code, name, description) = (code.to_owned(), name.to_owned(), description.to_owned());
+    let card = *card;
+    let options = options.to_vec();
+    Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
+        c.spawn((
+            Node {
+                width: Val::Px(48.0),
+                height: Val::Px(44.0),
+                flex_shrink: 0.0,
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                ..default()
+            },
+            Shape {
+                radius: 9.0,
+                ..Shape::fill(card_part(CardPart::Tile, &card))
+            },
+            CardPart::Tile,
+        ))
+        .with_child((
+            text(&code, Type::condensed(20.0, 700), card_part(CardPart::Code, &card)),
+            CardPart::Code,
+        ));
+        c.spawn(Node {
+            flex_direction: FlexDirection::Column,
+            row_gap: Val::Px(3.0),
+            flex_grow: 1.0,
+            min_width: Val::Px(0.0),
+            overflow: Overflow::clip_x(),
+            ..default()
+        })
+        .with_children(|t| {
+            t.spawn((
+                text(&name, Type::barlow(17.0, 700), card_part(CardPart::Name, &card)),
+                TextLayout::no_wrap(),
+                CardPart::Name,
+            ));
+            t.spawn((
+                text(
+                    &description,
+                    Type::barlow(13.0, 400),
+                    card_part(CardPart::Description, &card),
+                ),
+                TextLayout::no_wrap(),
+                CardPart::Description,
+            ));
+        });
+        if !options.is_empty() {
+            c.spawn(Node {
+                column_gap: Val::Px(4.0),
+                flex_shrink: 0.0,
+                ..default()
+            })
+            .with_children(|o| {
+                for (index, (label, on)) in options.iter().enumerate() {
+                    let (fill, ink) = option_look(*on);
+                    o.spawn((
+                        Node {
+                            height: Val::Px(24.0),
+                            padding: UiRect::horizontal(Val::Px(8.0)),
+                            align_items: AlignItems::Center,
+                            ..default()
+                        },
+                        round(fill, 6.0),
+                        ModOption { index, on: *on },
+                    ))
+                    .with_child(text(label, Type::barlow(13.0, 700), ink));
+                }
+            });
+        }
+    }))
+}
+
+/// The row a mod card lays out: 70 px, 14 px in on the left and 20 px on the right, 16 px gaps.
+fn card_node() -> Node {
+    Node {
+        height: Val::Px(70.0),
+        padding: UiRect {
+            left: Val::Px(14.0),
+            right: Val::Px(20.0),
+            ..default()
+        },
+        align_items: AlignItems::Center,
+        column_gap: Val::Px(16.0),
+        flex_shrink: 0.0,
+        ..default()
+    }
+}
+
+/// A mod card (see [`ModCard`]) in the column `color`, `on` or off, with `options` (label,
+/// picked) at its right end.
+pub fn mod_card(
+    code: &str,
+    name: &str,
+    description: &str,
+    color: Color,
+    on: bool,
+    options: &[(String, bool)],
+) -> impl Bundle + use<> {
+    let card = ModCard {
+        color,
+        on,
+        hover: 0.0,
+    };
+    let mut shape = Shape::fill(card_fill(&card));
+    if on {
+        shape.ring = Some((2.0, color));
+    }
+    (
+        card_node(),
+        shape,
+        card,
+        Button,
+        Hovered::default(),
+        TabIndex(0),
+        UiTransform::default(),
+        Tween::<Scale>::at_rest(1.0, tokens::motion::HOVER, Ease::OutQuint),
+        card_content(code, name, description, &card, options),
+    )
+}
+
+/// A mod card that cannot be picked yet (a mod the client does not play): off, faded to
+/// [`OFF_OPACITY`], no hover, focus or `Activate`.
+pub fn mod_card_off(code: &str, name: &str, description: &str) -> impl Bundle + use<> {
+    let card = ModCard {
+        color: tokens::MUTED,
+        on: false,
+        hover: 0.0,
+    };
+    (
+        card_node(),
+        Shape::fill(card_fill(&card)),
+        UiOpacity(OFF_OPACITY),
+        card_content(code, name, description, &card, &[]),
+    )
+}
+
+/// A picked mod's code in its column colour (the mod select footer): 32 px, at least 48 px wide,
+/// Barlow Condensed 17/700 in dark ink.
+pub fn selected_mod_pill(code: &str, color: Color) -> impl Bundle + use<> {
+    let mut node = sheared(32.0, 10.0, Shape::fill(color));
+    node.0.min_width = Val::Px(48.0);
+    (
+        node,
+        children![text(code, Type::condensed(17.0, 700), tokens::ON_LIGHT)],
+    )
+}
+
+/// What `mod_card_looks` reads and writes on each card.
+type CardParts = (
+    Entity,
+    &'static mut ModCard,
+    &'static Hovered,
+    Has<Pressed>,
+    &'static mut Shape,
+    &'static mut Tween<Scale>,
+);
+
+/// The mod cards' hover, press, focus ring and colours, and their option pills.
+#[allow(clippy::type_complexity, reason = "the card, its parts and its options")]
+fn mod_card_looks(
+    time: Res<Time>,
+    reduced: Res<ReducedMotion>,
+    focus: Res<InputFocus>,
+    focus_visible: Res<InputFocusVisible>,
+    mut cards: Query<CardParts, Without<CardPart>>,
+    children: Query<&Children>,
+    mut parts: Query<(&CardPart, Option<&mut Shape>, Option<&mut Ink>), Without<ModCard>>,
+    mut options: Query<
+        (&ModOption, &mut Shape, &Children),
+        (Changed<ModOption>, Without<ModCard>, Without<CardPart>),
+    >,
+    mut inks: Query<&mut Ink, (Without<CardPart>, Without<ModOption>)>,
+) {
+    let step = if reduced.0 {
+        1.0
+    } else {
+        time.delta_secs() / tokens::motion::HOVER
+    };
+    for (entity, mut card, hovered, pressed, mut shape, mut scale) in &mut cards {
+        let target = if hovered.get() { 1.0 } else { 0.0 };
+        let hover = if card.hover < target {
+            (card.hover + step).min(target)
+        } else {
+            (card.hover - step).max(target)
+        };
+        let recolour = card.is_changed();
+        if hover.to_bits() != card.hover.to_bits() {
+            card.hover = hover;
+        }
+        scale.retarget(if pressed { 0.96 } else { 1.0 });
+        let mut want = shape.clone();
+        want.fill = card_fill(&card);
+        want.ring = if focus_visible.0 && focus.get() == Some(entity) {
+            Some(FOCUS_RING)
+        } else if card.on {
+            Some((2.0, card.color))
+        } else {
+            None
+        };
+        if *shape != want {
+            *shape = want;
+        }
+        if !recolour {
+            continue;
+        }
+        for part in children.iter_descendants(entity) {
+            if let Ok((&kind, part_shape, ink)) = parts.get_mut(part) {
+                let color = card_part(kind, &card);
+                if let Some(mut s) = part_shape
+                    && s.fill != color
+                {
+                    s.fill = color;
+                }
+                if let Some(mut ink) = ink
+                    && ink.0 != color
+                {
+                    ink.0 = color;
+                }
+            }
+        }
+    }
+    for (option, mut shape, kids) in &mut options {
+        let (fill, ink) = option_look(option.on);
+        if shape.fill != fill {
+            shape.fill = fill;
+        }
+        for kid in kids.iter() {
+            if let Ok(mut i) = inks.get_mut(kid)
+                && i.0 != ink
+            {
+                i.0 = ink;
+            }
         }
     }
 }

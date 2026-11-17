@@ -24,8 +24,10 @@ use crate::ui::widgets::text;
 
 pub mod controls;
 pub mod filters;
+pub mod footer;
 pub mod library;
 pub mod list;
+pub mod mod_sheet;
 
 use filters::Filters;
 use library::{GameInfo, Library, file_name};
@@ -44,15 +46,18 @@ struct PickedTitle;
 #[derive(Component)]
 struct PickedMap;
 
-/// The select screen: added by main.rs with the window (it needs the UI kit).
-pub struct SelectPlugin(pub Option<PathBuf>);
+/// The select screen: added by main.rs with the window (it needs the UI kit). The flag is
+/// `--mod-select-preview`: the mod select sheet opens with the screen.
+pub struct SelectPlugin(pub Option<PathBuf>, pub bool);
 
 impl Plugin for SelectPlugin {
     fn build(&self, app: &mut App) {
         let folder = self.0.clone();
+        let preview = self.1;
         app.init_resource::<ListDim>()
             .init_resource::<Filters>()
             .init_resource::<Shown>()
+            .init_resource::<mod_sheet::Sheet>()
             .add_systems(
                 OnEnter(AppScreen::Select),
                 move |mut commands: Commands,
@@ -61,6 +66,8 @@ impl Plugin for SelectPlugin {
                       sel: Option<Res<Selection>>,
                       stats: Option<Res<crate::stats::Stats>>,
                       mods: Option<Res<crate::mods::RunMods>>,
+                      speed: Option<Res<crate::practice::SlowSpeed>>,
+                      mut sheet: ResMut<mod_sheet::Sheet>,
                       filters: Res<Filters>,
                       mut shown: ResMut<Shown>,
                       mut backdrop: ResMut<Backdrop>,
@@ -68,7 +75,20 @@ impl Plugin for SelectPlugin {
                     let paths = folder.as_deref().map(packages).unwrap_or_default();
                     let empty = Book::default();
                     let book = stats.as_ref().map_or(&empty, |s| &s.book);
+                    // The sheet's picks live in `RunMods` and `SlowSpeed`; a headless test has
+                    // neither until here.
+                    if mods.is_none() {
+                        commands.insert_resource(crate::mods::RunMods(ModSet::NONE));
+                    }
+                    if speed.is_none() {
+                        commands.insert_resource(crate::practice::SlowSpeed(crate::practice::SLOW_SPEEDS[0]));
+                    }
                     let mods = mods.map_or(ModSet::NONE, |m| m.0);
+                    let speed = speed.map_or(crate::practice::SLOW_SPEEDS[0], |s| s.0);
+                    sheet.open = false;
+                    if preview {
+                        sheet.open_with(mods);
+                    }
                     let camera = camera(&mut commands);
                     let sel = sel.map(|s| *s).unwrap_or_default();
                     let same = |l: &Library| {
@@ -107,6 +127,14 @@ impl Plugin for SelectPlugin {
                         }
                     };
                     commands.insert_resource(sel);
+                    footer::spawn(&mut commands, camera, mods);
+                    mod_sheet::spawn(
+                        &mut commands,
+                        camera,
+                        mods,
+                        speed,
+                        crate::settings::get().auto_retry,
+                    );
                     backdrop.art = None;
                     backdrop.dim = dim::SELECT;
                     for mut w in &mut window {
@@ -116,13 +144,20 @@ impl Plugin for SelectPlugin {
             )
             .add_observer(on_click)
             .add_observer(controls::on_activate)
+            .add_observer(mod_sheet::on_activate)
+            .add_observer(mod_sheet::on_option)
             .add_systems(
                 Update,
                 (
                     controls::search,
                     list::refilter,
                     controls::labels,
-                    keys,
+                    keys.run_if(mod_sheet::closed),
+                    mod_sheet::keys,
+                    mod_sheet::slide,
+                    mod_sheet::follow,
+                    mod_sheet::auto_retry,
+                    records,
                     list::looks,
                     list::arrange,
                     list::settle,
@@ -134,6 +169,19 @@ impl Plugin for SelectPlugin {
                     .run_if(in_state(AppScreen::Select)),
             );
     }
+}
+
+/// A new set of mods reads the list's PBs again (they are per board, and every set has its own).
+fn records(
+    mods: Res<crate::mods::RunMods>,
+    stats: Option<Res<crate::stats::Stats>>,
+    mut lib: ResMut<Library>,
+) {
+    if !mods.is_changed() || mods.is_added() {
+        return;
+    }
+    let empty = Book::default();
+    lib.refresh(stats.as_ref().map_or(&empty, |s| &s.book), mods.0);
 }
 
 /// The packages in `folder`: folders with a `game.toml` and `.iwbz` files, by name.
@@ -395,7 +443,7 @@ mod tests {
             .init_resource::<UiScale>()
             .init_resource::<Backdrop>()
             .init_state::<AppScreen>()
-            .add_plugins(SelectPlugin(Some(fixtures)));
+            .add_plugins(SelectPlugin(Some(fixtures), false));
         app.update();
         app.update();
         app
@@ -463,6 +511,68 @@ mod tests {
             grouped.iter().all(|t| t.1 >= list::HEADER_HEIGHT),
             "every game slides down under the header"
         );
+    }
+
+    /// Activates the first entity that has component `C` and passes `pick`.
+    fn activate<C: Component>(app: &mut App, pick: impl Fn(&C) -> bool) {
+        let world = app.world_mut();
+        let entity = world
+            .query::<(Entity, &C)>()
+            .iter(world)
+            .find(|(_, c)| pick(c))
+            .map(|(e, _)| e)
+            .expect("the entity is spawned");
+        world.trigger(bevy::ui_widgets::Activate { entity });
+        app.update();
+    }
+
+    /// Every text on the page, spans included.
+    fn header_words(app: &mut App) -> String {
+        let world = app.world_mut();
+        let mut texts: Vec<(Entity, String)> = world
+            .query::<(Entity, AnyOf<(&Text, &TextSpan)>)>()
+            .iter(world)
+            .map(|(e, (t, span))| (e, t.map_or_else(|| span.map_or_else(String::new, |s| s.0.clone()), |t| t.0.clone())))
+            .collect();
+        texts.sort_by_key(|t| t.0);
+        texts.into_iter().map(|t| t.1).collect::<Vec<_>>().join("|")
+    }
+
+    /// The Mods button opens the sheet; Sudden Death and Slow motion turn the header Unranked
+    /// with the reason; Back puts the set back; Done keeps the picks on the Mods button (#497).
+    #[test]
+    fn the_mod_sheet_picks_mods_and_says_where_the_run_counts() {
+        use crate::mods::RunMods;
+        use mod_sheet::{Sheet, SheetButton};
+        let mut app = screen();
+        assert!(!app.world().resource::<Sheet>().open);
+        activate::<SheetButton>(&mut app, |b| *b == SheetButton::Mods);
+        assert!(app.world().resource::<Sheet>().open);
+        app.update();
+        assert!(header_words(&mut app).contains("RANKED"), "ranked with no mods");
+
+        activate::<mod_sheet::Card>(&mut app, |c| c.0 == iwbtg_sim::mods::Mod::SuddenDeath);
+        app.update();
+        assert_eq!(app.world().resource::<RunMods>().0.codes(), "SD");
+        let words = header_words(&mut app);
+        assert!(words.contains("+ SD"), "{words}");
+
+        activate::<mod_sheet::Card>(&mut app, |c| c.0 == iwbtg_sim::mods::Mod::SlowMotion);
+        app.update();
+        let words = header_words(&mut app);
+        assert!(words.contains("UNRANKED"), "{words}");
+        assert!(words.contains("Slow motion 75% is a practice assist"), "{words}");
+
+        activate::<SheetButton>(&mut app, |b| *b == SheetButton::Back);
+        assert_eq!(app.world().resource::<RunMods>().0, ModSet::NONE, "Back puts the set back");
+        assert!(!app.world().resource::<Sheet>().open);
+
+        activate::<SheetButton>(&mut app, |b| *b == SheetButton::Mods);
+        activate::<mod_sheet::Card>(&mut app, |c| c.0 == iwbtg_sim::mods::Mod::SuddenDeath);
+        activate::<SheetButton>(&mut app, |b| *b == SheetButton::Done);
+        app.update();
+        assert_eq!(app.world().resource::<RunMods>().0.codes(), "SD");
+        assert!(header_words(&mut app).contains("|SD|"), "the Mods button shows SD");
     }
 
     /// Enter and a click start the picked map's id; a game that did not read has none (#880).

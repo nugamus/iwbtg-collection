@@ -8,7 +8,7 @@
 //! Auto-retry switch is the settings file's `[retry] auto` (#773).
 
 use bevy::input_focus::{FocusCause, InputFocus};
-use bevy::picking::events::{Click, Pointer};
+use bevy::picking::events::PointerClick;
 use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
 use iwbtg_sim::mods::{MODS, Mod, ModDef, ModKind, ModSet};
@@ -41,22 +41,29 @@ pub struct Sheet {
 
 /// The whole overlay: hidden while the sheet is closed and slid away.
 #[derive(Component)]
-struct Overlay;
+pub(super) struct Overlay;
 /// The dim over game select.
 #[derive(Component)]
-struct Dim;
+pub(super) struct Dim;
 /// The sheet itself, which slides.
 #[derive(Component)]
-struct Panel;
+pub(super) struct Panel;
 /// The header's right side: the Ranked or Unranked pill and the board line.
 #[derive(Component)]
-struct StandingBox;
+pub(super) struct StandingBox;
 /// The footer's selected mod pills.
 #[derive(Component)]
-struct Chosen;
+pub(super) struct Chosen;
 /// A card's mod.
 #[derive(Component, Clone, Copy)]
-struct Card(Mod);
+pub(super) struct Card(pub(super) Mod);
+
+impl Sheet {
+    /// Opens the sheet over `mods` (`--mod-select-preview`).
+    pub fn open_with(&mut self, mods: ModSet) {
+        set_open(self, mods, true);
+    }
+}
 
 /// The sheet's and the footer's buttons.
 #[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
@@ -74,7 +81,7 @@ pub(super) struct ModsValue;
 
 /// The Auto-retry switch.
 #[derive(Component)]
-struct AutoRetry;
+pub(super) struct AutoRetry;
 
 /// The column colour of a kind.
 pub fn kind_color(kind: ModKind) -> Color {
@@ -433,7 +440,7 @@ pub(super) fn on_activate(
 
 /// A click on a slow motion speed picks it (and does not flip the card under it).
 pub(super) fn on_option(
-    mut click: On<Pointer<Click>>,
+    mut click: On<PointerClick>,
     options: Query<&ModOption>,
     speed: Option<ResMut<SlowSpeed>>,
 ) {
