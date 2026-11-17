@@ -64,3 +64,9 @@ pub use world::{Ctx, SimStatus, World};
 /// Changes whenever a sim change could alter any outcome, including any Rhai upgrade
 /// (architecture "Versions").
 pub const SIM_VERSION: u32 = 1;
+
+/// The freeze point (docs/architecture/versioning.md): the first `SIM_VERSION` whose outcomes are
+/// kept. `None` until the freeze, and the bump check (`tests/sim_version_bump.rs`) is inert. Once
+/// set, a change to any pinned golden hash without a `SIM_VERSION` bump fails that test and
+/// `cargo xtask repin`.
+pub const SIM_VERSION_FREEZE: Option<u32> = None;

@@ -65,7 +65,7 @@ fn reals(nan_bits: u64) -> World {
     w
 }
 
-const VECTORS: [(&str, &str); 5] = [
+pub(crate) const VECTORS: [(&str, &str); 5] = [
     (
         "empty",
         "38f25bd28b6c80877388754e0dacdcd99058316c15adff89845e770a700791ef",
