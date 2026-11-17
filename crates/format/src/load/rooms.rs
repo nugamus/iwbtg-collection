@@ -230,7 +230,7 @@ impl<'a> Loader<'a> {
             None => None,
             Some(name) => {
                 let k = self.kind_by_ref(name.get_ref());
-                if k.is_none() {
+                if k.is_none() && !self.failed.contains(name.get_ref()) {
                     self.error(
                         path,
                         text,
@@ -418,7 +418,8 @@ impl<'a> Loader<'a> {
         span: Range<usize>,
     ) -> Option<KindId> {
         let k = self.kind_by_ref(kind).filter(|_| !self.dropped.contains(kind));
-        if k.is_none() {
+        // A kind whose own file failed to load was reported there already.
+        if k.is_none() && !self.failed.contains(kind) {
             self.error(
                 path,
                 text,

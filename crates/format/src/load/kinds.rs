@@ -157,7 +157,10 @@ impl<'a> Loader<'a> {
                         self.failed.insert(name);
                     }
                 }
-                Err(d) => self.diags.push(d),
+                Err(d) => {
+                    self.diags.push(d);
+                    self.failed.insert(format!("@{id}"));
+                }
             }
         }
     }

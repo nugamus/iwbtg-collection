@@ -125,7 +125,7 @@ impl<'a> Loader<'a> {
                     let k = self
                         .kind_by_ref(v.get_ref())
                         .filter(|_| !self.dropped.contains(v.get_ref()));
-                    if k.is_none() {
+                    if k.is_none() && !self.failed.contains(v.get_ref()) {
                         self.manifest_error(
                             v.span(),
                             format!("engine role `{role}`: `{}` is not a kind", v.get_ref()),

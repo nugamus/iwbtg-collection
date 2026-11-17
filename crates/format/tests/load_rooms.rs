@@ -273,3 +273,42 @@ fn gm_ids_and_first_runtime_id() {
     let e = errors(&load_report(&with_ids(2_147_483_648), STRICT));
     assert!(e.iter().any(|m| m.contains("at most 2147483647")), "{e:#?}");
 }
+
+// ---- #940: a kind whose script is missing is reported once, at the kind
+
+#[test]
+fn a_kind_with_a_missing_script_is_not_also_reported_as_not_a_kind() {
+    let text = "size = [800, 608]\nrole = \"title\"\non_create = [\n  { do = \"destroy\", kind = \"@ghost\" },\n]\n\n[[views]]\nview = [0, 0, 800, 608]\nfollow = \"@ghost\"\n";
+    let files = package(|f| {
+        set(f, "rooms/title.toml", text.as_bytes().to_vec());
+        f.push(("objects/ghost.toml".into(), b"script = \"ghost\"\n".to_vec()));
+    });
+    let r = load_report(&files, STRICT);
+    let errs = errors(&r);
+    assert_eq!(errs.len(), 1, "{errs:?}");
+    assert!(!errs.iter().any(|e| e.contains("not a kind")), "{errs:?}");
+    assert!(
+        errs[0].contains("`scripts/ghost.rhai` does not exist"),
+        "{errs:?}"
+    );
+    assert!(!errs.iter().any(|e| e.contains("not a kind")), "{errs:?}");
+    // A name that really is unknown is still reported.
+    let files = package(|f| {
+        set(
+            f,
+            "rooms/title.toml",
+            text.replace("@ghost", "@nobody").into_bytes(),
+        );
+    });
+    let errs = errors(&load_report(&files, STRICT));
+    assert!(
+        errs.iter()
+            .any(|e| e.contains("destroy: `@nobody` is not a kind")),
+        "{errs:?}"
+    );
+    assert!(
+        errs.iter()
+            .any(|e| e.contains("view follows `@nobody`, which is not a kind")),
+        "{errs:?}"
+    );
+}
