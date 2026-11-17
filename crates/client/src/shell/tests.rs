@@ -18,13 +18,20 @@ fn demo(name: &str) -> PathBuf {
 }
 
 /// The run modules that need no window or renderer, on a headless app started on the select
-/// screen. Each update is one 20 ms frame, one tick at 50 Hz.
+/// screen. Each update is one 20 ms frame, one tick at 50 Hz. Runs skip the loading card.
 fn app() -> App {
+    app_with(true)
+}
+
+/// [`app`]; `skip_loading: false` opens every run on the loading card, as the client does.
+fn app_with(skip_loading: bool) -> App {
     let mods = ModSet::parse("HB").unwrap();
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), StatesPlugin))
         .init_asset::<Image>()
         .init_asset::<AudioSource>()
+        // The results' heatmap draws the room through it (the UI plugin adds it in the client).
+        .init_asset::<crate::ui::filter::FilterMaterial>()
         .init_resource::<ButtonInput<KeyCode>>()
         .init_resource::<ButtonInput<MouseButton>>()
         .init_resource::<crate::hud::HudLayout>()
@@ -56,9 +63,13 @@ fn app() -> App {
             crate::replays::ReplaysPlugin { keep: false },
             crate::loading::LoadingPlugin {
                 args: crate::loading::LoadingArgs::default(),
-                skip: true,
+                skip: skip_loading,
             },
             crate::import::ImportPlugin { keep: false },
+        ))
+        // Bevy takes at most 15 plugins in one tuple.
+        .add_plugins(crate::results::ResultsPlugin(
+            crate::results::ResultsArgs::default(),
         ))
         // The window plugin adds it in the client.
         .add_message::<FileDragAndDrop>();
@@ -257,6 +268,101 @@ fn start_map_refuses_an_unknown_map() {
         *app.world().resource::<State<AppScreen>>().get(),
         AppScreen::Select
     );
+}
+
+fn screen(app: &App) -> RunScreen {
+    *app.world().resource::<State<RunScreen>>().get()
+}
+
+/// Whether the game shows: its camera is on and the HUD is not suspended.
+fn game_shows(app: &mut App) -> bool {
+    let world = app.world_mut();
+    let on = world
+        .query_filtered::<&Camera, With<GameCamera>>()
+        .iter(world)
+        .all(|c| c.is_active);
+    on && !world.resource::<crate::hud::Suspended>().0
+}
+
+fn press(app: &mut App, key: KeyCode) {
+    let mut input = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+    input.press(key);
+    app.update();
+    let mut input = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+    input.release(key);
+    input.clear();
+}
+
+/// A run walks its screens (#839): the loading card (no ticks, the game hidden), the game
+/// (ticking), the pause menu (no ticks, the game shown), the game again, the results (no ticks,
+/// the game hidden); each change takes one frame.
+#[test]
+fn a_run_walks_loading_playing_paused_playing_results() {
+    let mut app = app_with(false);
+    frames(&mut app, 3);
+    start(app.world_mut(), &demo("tests/fixtures/clear.pkg")).unwrap();
+    frames(&mut app, 10);
+    assert_eq!(screen(&app), RunScreen::Loading);
+    assert_eq!(tick(&app), 0, "no tick on the loading card");
+    assert!(!game_shows(&mut app), "the card covers the game");
+
+    // The card stays its minimum time (1.5 s), then the game plays.
+    frames(&mut app, 70);
+    assert_eq!(screen(&app), RunScreen::Playing);
+    assert!(game_shows(&mut app));
+    let at = tick(&app);
+    frames(&mut app, 10);
+    assert!(tick(&app) > at, "the game ticks");
+
+    press(&mut app, crate::pause::PAUSE_KEY);
+    frames(&mut app, 1);
+    assert_eq!(screen(&app), RunScreen::Paused);
+    assert!(app.world().resource::<crate::hud::Paused>().open);
+    assert!(game_shows(&mut app), "the menu shows over the game");
+    let at = tick(&app);
+    frames(&mut app, 10);
+    assert_eq!(tick(&app), at, "no tick in the pause menu");
+
+    press(&mut app, crate::pause::PAUSE_KEY);
+    frames(&mut app, 1);
+    assert_eq!(screen(&app), RunScreen::Playing);
+    assert!(!app.world().resource::<crate::hud::Paused>().open);
+    frames(&mut app, 10);
+    assert!(tick(&app) > at, "the game ticks again");
+
+    crate::results::preview_next(app.world_mut(), crate::results::Scenario::Pb);
+    frames(&mut app, 2);
+    assert_eq!(screen(&app), RunScreen::Results);
+    assert!(!game_shows(&mut app), "the results cover the game");
+    let at = tick(&app);
+    frames(&mut app, 10);
+    assert_eq!(tick(&app), at, "no tick on the results");
+    press(&mut app, crate::pause::PAUSE_KEY);
+    frames(&mut app, 1);
+    assert_eq!(screen(&app), RunScreen::Playing, "Escape goes back to the game");
+    assert!(game_shows(&mut app));
+
+    // A run that replaces this one opens on the card again.
+    start(app.world_mut(), &demo("tests/fixtures/clear.pkg")).unwrap();
+    frames(&mut app, 2);
+    assert_eq!(screen(&app), RunScreen::Loading);
+    leave(app.world_mut());
+    frames(&mut app, 2);
+    assert!(
+        app.world().get_resource::<State<RunScreen>>().is_none(),
+        "no run, no run screen"
+    );
+}
+
+/// With the card skipped (a `--screenshot` check of another screen) a run opens on the game.
+#[test]
+fn a_skipped_card_opens_on_the_game() {
+    let mut app = app();
+    frames(&mut app, 3);
+    start(app.world_mut(), &demo("tests/fixtures/clear.pkg")).unwrap();
+    frames(&mut app, 3);
+    assert_eq!(screen(&app), RunScreen::Playing);
+    assert!(tick(&app) > 0);
 }
 
 /// The mod select's picks play (#903): the app was built with `--mods HB`, the sheet then picked

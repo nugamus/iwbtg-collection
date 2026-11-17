@@ -1,9 +1,10 @@
 //! The pause menu (#479; docs/product.md, Pause; artboards `Pause169`, `Pause43`, `PauseBox`):
 //! the game's own PAUSE box, drawn in game pixels over the frozen, darkened game.
 //!
-//! Escape (or Start on a controller) opens it and closes it again. While it is open the sim does not tick (`SimTick` is
-//! gated, as Sudden Death gates it in `mods.rs`), the music and sounds hold, and the backdrop and
-//! HUD keep running. The run's timer does not stop: every fixed-clock tick spent paused while the
+//! Escape (or Start on a controller) opens it and closes it again: it is the run screen
+//! `RunScreen::Paused` (shell, #839), entered from and left to `RunScreen::Playing`. While it is
+//! open the sim does not tick (it ticks only in `Playing`), the music and sounds hold, and the
+//! backdrop and HUD keep running. The run's timer does not stop: every fixed-clock tick spent paused while the
 //! map's timer runs (started, not ended) is counted and added to the HUD's time
 //! (`hud::Paused::ticks`); the paused line `Paused · timer running` shows in run info.
 //!
@@ -33,11 +34,12 @@ use crate::bindings::{Bindings, PadInput};
 use crate::hud::{HudLayout, Paused};
 use crate::input::{Collector, key_code};
 use crate::package::{SpriteImage, decode_png};
+use crate::shell::RunScreen;
 use crate::ui::fonts::{Family, Type};
 use crate::ui::motion::{Ease, OffsetX, Tween};
 use crate::ui::tokens;
 use crate::ui::widgets::text;
-use crate::view::{Game, SimTick};
+use crate::view::Game;
 
 /// The key that opens and closes the menu. The game's `menu` action has no keyboard default
 /// (`Bindings::default` drops Escape, #758), so Escape never reaches the sim unless the player
@@ -100,10 +102,9 @@ pub struct PauseArgs {
     pub pause_preview: Option<Item>,
 }
 
-/// The menu's state.
+/// The menu's state; it is open in `RunScreen::Paused`.
 #[derive(Resource, Debug, Default)]
 pub struct Menu {
-    pub open: bool,
     pub selected: Item,
     /// An item picked this frame, done by [`act`].
     picked: Option<Item>,
@@ -114,6 +115,11 @@ pub struct Menu {
     held: Vec<Entity>,
     /// `--pause-preview`: open at [`PREVIEW_TICK`] with this item selected.
     preview: Option<Item>,
+}
+
+/// Whether the run screen is the pause menu.
+fn is_open(screen: Option<&State<RunScreen>>) -> bool {
+    screen.is_some_and(|s| *s.get() == RunScreen::Paused)
 }
 
 impl Menu {
@@ -156,13 +162,16 @@ impl Plugin for PausePlugin {
             Fruit(w.resource_mut::<Assets<Image>>().add(to_bevy(&image)))
         });
         crate::shell::run_resource(app, move |_| Menu { preview, ..default() });
-        app.configure_sets(FixedUpdate, SimTick.run_if(|menu: Res<Menu>| !menu.open))
-            .add_systems(FixedUpdate, count.run_if(|menu: Res<Menu>| menu.open))
+        app.add_systems(FixedUpdate, count.run_if(in_state(RunScreen::Paused)))
             .add_observer(on_activate)
             .add_systems(
                 Update,
                 (
-                    keys.run_if(crate::results::closed).run_if(crate::loading::closed),
+                    // The pause key works on the game and in the menu, not on the loading card or
+                    // the results.
+                    keys.run_if(|s: Option<Res<State<RunScreen>>>| {
+                        s.is_some_and(|s| matches!(s.get(), RunScreen::Playing | RunScreen::Paused))
+                    }),
                     mouse,
                     act,
                     hold_audio,
@@ -179,9 +188,11 @@ impl Plugin for PausePlugin {
 /// A retry (`retry.rs`) starts a fresh run: no pauses, menu closed.
 pub(crate) fn reset(world: &mut World) {
     if let Some(mut menu) = world.get_resource_mut::<Menu>() {
-        menu.open = false;
         menu.picked = None;
         menu.pauses.clear();
+    }
+    if crate::shell::run_screen(world) == Some(RunScreen::Paused) {
+        crate::shell::go(world, RunScreen::Playing);
     }
 }
 
@@ -241,13 +252,15 @@ fn pad_command(bindings: &Bindings, input: PadInput) -> Option<PadCommand> {
     }
 }
 
-/// Escape or Start opens and closes; while open the arrows (D-pad, stick) move and the pick keys
-/// (A) pick.
+/// Escape or Start opens (`RunScreen::Paused`) and closes; while open the arrows (D-pad, stick)
+/// move and the pick keys (A) pick.
 fn keys(
     keys: Res<ButtonInput<KeyCode>>,
     collector: Option<Res<Collector>>,
     game: NonSend<Game>,
     mut menu: ResMut<Menu>,
+    screen: Res<State<RunScreen>>,
+    mut next: ResMut<NextState<RunScreen>>,
     mut pad_before: Local<[bool; PadInput::ALL.len()]>,
 ) {
     // The controller inputs that went down since the last frame (the collector holds the active
@@ -262,18 +275,16 @@ fn keys(
             pad_before[input as usize] = down;
         }
     }
-    if let Some(item) = menu.preview
-        && game.sim.world().tick >= PREVIEW_TICK
-    {
-        menu.preview = None;
-        menu.open = true;
-        menu.selected = item;
-        return;
-    }
-    if !menu.open {
-        if keys.just_pressed(PAUSE_KEY) || pad_pressed.contains(&PAUSE_PAD) {
-            menu.open = true;
+    if *screen.get() != RunScreen::Paused {
+        if let Some(item) = menu.preview
+            && game.sim.world().tick >= PREVIEW_TICK
+        {
+            menu.preview = None;
+            menu.selected = item;
+            next.set(RunScreen::Paused);
+        } else if keys.just_pressed(PAUSE_KEY) || pad_pressed.contains(&PAUSE_PAD) {
             menu.selected = Item::Continue;
+            next.set(RunScreen::Paused);
         }
         return;
     }
@@ -336,8 +347,12 @@ fn keys(
 #[derive(Component)]
 struct Row(Item);
 
-fn mouse(rows: Query<(&Row, &Hovered), Changed<Hovered>>, mut menu: ResMut<Menu>) {
-    if !menu.open {
+fn mouse(
+    rows: Query<(&Row, &Hovered), Changed<Hovered>>,
+    screen: Option<Res<State<RunScreen>>>,
+    mut menu: ResMut<Menu>,
+) {
+    if !is_open(screen.as_deref()) {
         return;
     }
     for (row, hovered) in &rows {
@@ -348,22 +363,27 @@ fn mouse(rows: Query<(&Row, &Hovered), Changed<Hovered>>, mut menu: ResMut<Menu>
 }
 
 /// A click on an item picks it.
-fn on_activate(activate: On<Activate>, rows: Query<&Row>, mut menu: ResMut<Menu>) {
+fn on_activate(
+    activate: On<Activate>,
+    rows: Query<&Row>,
+    screen: Option<Res<State<RunScreen>>>,
+    mut menu: ResMut<Menu>,
+) {
     if let Ok(row) = rows.get(activate.entity)
-        && menu.open
+        && is_open(screen.as_deref())
     {
         menu.selected = row.0;
         menu.picked = Some(row.0);
     }
 }
 
-/// Does what was picked. Every item closes the menu; the key edges collected while it was open
-/// are dropped, so a key pressed in the menu never reaches the game.
+/// Does what was picked. Every item closes the menu (back to `RunScreen::Playing`); the key edges
+/// collected while it was open are dropped, so a key pressed in the menu never reaches the game.
 fn act(world: &mut World) {
     let Some(item) = world.resource_mut::<Menu>().picked.take() else {
         return;
     };
-    world.resource_mut::<Menu>().open = false;
+    crate::shell::go(world, RunScreen::Playing);
     if let Some(mut c) = world.get_resource_mut::<Collector>() {
         c.take_frame();
     }
@@ -384,8 +404,12 @@ fn act(world: &mut World) {
 
 /// Holds every playing voice while the menu is open and resumes those on close; a voice the game
 /// itself paused stays paused.
-fn hold_audio(mut menu: ResMut<Menu>, mut sinks: Query<(Entity, &mut AudioSink)>) {
-    if menu.open {
+fn hold_audio(
+    screen: Option<Res<State<RunScreen>>>,
+    mut menu: ResMut<Menu>,
+    mut sinks: Query<(Entity, &mut AudioSink)>,
+) {
+    if is_open(screen.as_deref()) {
         for (entity, sink) in &mut sinks {
             if !sink.is_paused() {
                 sink.pause();
@@ -402,9 +426,9 @@ fn hold_audio(mut menu: ResMut<Menu>, mut sinks: Query<(Entity, &mut AudioSink)>
 }
 
 /// Tells the HUD whether the menu is open and how long the run has been paused.
-fn publish(menu: Res<Menu>, mut paused: ResMut<Paused>) {
+fn publish(screen: Option<Res<State<RunScreen>>>, menu: Res<Menu>, mut paused: ResMut<Paused>) {
     let want = Paused {
-        open: menu.open,
+        open: is_open(screen.as_deref()),
         ticks: menu.paused_ticks(),
     };
     if *paused != want {
@@ -433,6 +457,7 @@ struct Label(Item);
 fn draw(
     mut commands: Commands,
     menu: Res<Menu>,
+    screen: Option<Res<State<RunScreen>>>,
     layout: Res<HudLayout>,
     fruit: Res<Fruit>,
     window: Single<&Window, With<PrimaryWindow>>,
@@ -440,7 +465,7 @@ fn draw(
 ) {
     let l = layout.0;
     let px = window.resolution.scale_factor() * l.content;
-    if !menu.open || px <= 0.0 || l.game.width() <= 0.0 {
+    if !is_open(screen.as_deref()) || px <= 0.0 || l.game.width() <= 0.0 {
         for (entity, ..) in &roots {
             commands.entity(entity).despawn();
         }
@@ -750,6 +775,23 @@ pub(crate) fn to_bevy(s: &SpriteImage) -> Image {
 mod tests {
     use super::*;
 
+    /// The run screen is `screen`, with nothing asked for.
+    fn on_screen(world: &mut World, screen: RunScreen) {
+        world.insert_resource(State::new(screen));
+        world.init_resource::<NextState<RunScreen>>();
+    }
+
+    /// What the state transition between two frames does: the screen asked for becomes the one.
+    fn apply_screen(world: &mut World) {
+        if let NextState::Pending(s) = std::mem::take(&mut *world.resource_mut::<NextState<RunScreen>>()) {
+            world.insert_resource(State::new(s));
+        }
+    }
+
+    fn screen(world: &World) -> RunScreen {
+        *world.resource::<State<RunScreen>>().get()
+    }
+
     #[test]
     fn the_selection_wraps_and_items_parse() {
         assert_eq!(Item::Continue.step(-1), Item::Quit);
@@ -790,10 +832,7 @@ mod tests {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
         let pkg = crate::package::open(&dir, false).unwrap();
         let mut world = crate::view::test_world(&pkg);
-        world.insert_resource(Menu {
-            open: true,
-            ..default()
-        });
+        world.init_resource::<Menu>();
         world.run_system_once(count).unwrap();
         let started = world.non_send::<Game>().sim.world().timing.started;
         if !started {
@@ -837,10 +876,13 @@ mod tests {
         let mut world = crate::view::test_world(&pkg);
         world.init_resource::<ButtonInput<KeyCode>>();
         world.init_resource::<Menu>();
+        on_screen(&mut world, RunScreen::Playing);
         let mut system = IntoSystem::into_system(keys);
         system.initialize(&mut world);
-        // One frame: set the pad as the collector would see it, then run the menu's keys.
+        // One frame: the screen asked for last frame, the pad as the collector would see it, then
+        // the menu's keys.
         let mut frame = |world: &mut World, down: &[PadInput]| {
+            apply_screen(world);
             let mut c = world.resource_mut::<Collector>();
             for input in PadInput::ALL {
                 c.set_pad(input, down.contains(&input));
@@ -853,7 +895,8 @@ mod tests {
             "Start is not the game's"
         );
         frame(&mut world, &[PAUSE_PAD]);
-        assert!(world.resource::<Menu>().open, "Start opens");
+        apply_screen(&mut world);
+        assert_eq!(screen(&world), RunScreen::Paused, "Start opens");
         frame(&mut world, &[PAUSE_PAD]);
         assert!(
             world.resource::<Menu>().picked.is_none(),
@@ -871,13 +914,15 @@ mod tests {
             "A picks"
         );
         world.run_system_once(act).unwrap();
-        assert!(!world.resource::<Menu>().open);
+        apply_screen(&mut world);
+        assert_eq!(screen(&world), RunScreen::Playing);
         let f = world.resource_mut::<Collector>().take_frame();
         assert_eq!(f.pressed, Action::Restart.bit(), "only Retry from save's restart");
 
         frame(&mut world, &[]);
         frame(&mut world, &[PAUSE_PAD]);
-        assert!(world.resource::<Menu>().open);
+        apply_screen(&mut world);
+        assert_eq!(screen(&world), RunScreen::Paused);
         frame(&mut world, &[PadInput::East]);
         assert_eq!(
             world.resource::<Menu>().picked,
@@ -895,7 +940,8 @@ mod tests {
             "Start closes"
         );
         world.run_system_once(act).unwrap();
-        assert!(!world.resource::<Menu>().open);
+        apply_screen(&mut world);
+        assert_eq!(screen(&world), RunScreen::Playing);
         assert_eq!(world.resource_mut::<Collector>().take_frame().pressed, 0);
     }
 
@@ -926,8 +972,8 @@ mod tests {
         let pkg = crate::package::open(&dir, false).unwrap();
         let mut world = crate::view::test_world(&pkg);
         world.init_resource::<Messages<AppExit>>();
+        on_screen(&mut world, RunScreen::Paused);
         world.insert_resource(Menu {
-            open: true,
             picked: Some(Item::RetryFromSave),
             ..default()
         });
@@ -936,7 +982,8 @@ mod tests {
             .resource_mut::<Collector>()
             .press(iwbtg_sim::input::vk::DOWN);
         world.run_system_once(act).unwrap();
-        assert!(!world.resource::<Menu>().open);
+        apply_screen(&mut world);
+        assert_eq!(screen(&world), RunScreen::Playing);
         let frame = world.resource_mut::<Collector>().take_frame();
         assert_eq!(frame.pressed, Action::Restart.bit());
         world.resource_mut::<Menu>().picked = Some(Item::Quit);
@@ -963,11 +1010,14 @@ mod tests {
             let mut world = crate::view::test_world(&pkg);
             world.init_resource::<ButtonInput<KeyCode>>();
             world.init_resource::<Menu>();
+            on_screen(&mut world, RunScreen::Playing);
             let mut system = IntoSystem::into_system(keys);
             system.initialize(&mut world);
             let mut ticks = Vec::new();
-            // One frame: the key edge as `collect_input` feeds it, maybe a tick, then the menu.
+            // One frame: the screen asked for last frame, the key edge as `collect_input` feeds
+            // it, maybe a tick (only while playing), then the menu.
             let mut frame = |world: &mut World, down: bool, tick: bool| {
+                apply_screen(world);
                 let mut input = world.resource_mut::<ButtonInput<KeyCode>>();
                 input.clear();
                 if down {
@@ -988,10 +1038,12 @@ mod tests {
                 world.run_system_once(act).unwrap();
             };
             frame(&mut world, true, tick_on_open);
-            assert!(world.resource::<Menu>().open, "Escape opens");
+            apply_screen(&mut world);
+            assert_eq!(screen(&world), RunScreen::Paused, "Escape opens");
             frame(&mut world, false, false);
             frame(&mut world, true, false);
-            assert!(!world.resource::<Menu>().open, "Escape closes");
+            apply_screen(&mut world);
+            assert_eq!(screen(&world), RunScreen::Playing, "Escape closes");
             frame(&mut world, false, true);
             frame(&mut world, false, true);
             assert!(
