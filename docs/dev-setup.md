@@ -164,7 +164,7 @@ CI cannot see the research repo, so trace fidelity is checked locally after each
 IWBTG_RESEARCH=../research cargo xtask fidelity
 ```
 
-It prints a game x OK/OPEN/FAIL matrix and exits 1 when a case got worse than `crates/tools/fidelity-baseline.txt`; `--bless` rewrites the baseline after a deliberate change.
+It prints a game x OK/OPEN/FAIL matrix and exits 1 when a case got worse than `crates/tools/fidelity-baseline.txt`; `--bless` rewrites the baseline after a deliberate change. The session-start hook (`.claude/hooks/issues.py start`) prints `FIDELITY STALE: ...` when commits touching `crates/sim` or `crates/format` landed on `origin/main` after the last sweep (recorded in `target/xtask/last-fidelity.txt`).
 
 Without wasmtime, a wasm32-wasip1 test binary also runs under Node's WASI. Build it with `cargo test -p iwbtg-sim --target wasm32-wasip1 --no-run`, then run the printed `.wasm` with a small script using `node:wasi` (preview1).
 
