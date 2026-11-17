@@ -59,6 +59,8 @@ The server decodes the replay, checks bounds (ticks at most the game's `max_tick
 
 ### Versions
 
+The full contract (what a board keys on, the freeze point, the bump check, old verifier builds) is [versioning](versioning.md).
+
 - `SIM_VERSION` changes whenever a sim change could alter any outcome, including any Rhai upgrade.
 - Fixes to a built-in that change outcomes keep the old path behind `engine_rev < N`, the way osu! keeps old scoring code. A package declares the `engine_rev` it was verified against. Each branch is covered by the corpus.
 - For Rhai upgrades and other changes that cannot be branched, the server keeps old verifier builds for replays made with an older `SIM_VERSION`.

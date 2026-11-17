@@ -38,6 +38,8 @@ mod save_reverse;
 mod script_conformance;
 #[path = "script_int_args.rs"]
 mod script_int_args;
+#[path = "sim_version_bump.rs"]
+mod sim_version_bump;
 #[path = "wp10_sound.rs"]
 mod wp10_sound;
 #[path = "wp1_pipeline.rs"]
