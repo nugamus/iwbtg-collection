@@ -259,6 +259,9 @@ pub enum FieldRef {
     Bbox(BboxEdge),
 }
 
+/// What `bbox_*` reads for an instance with no sprite and no mask.
+const BBOX_NO_MASK: f64 = -100_000.0;
+
 /// One edge of the reported bounding box (GML `bbox_*`, read-only).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum BboxEdge {
@@ -652,7 +655,12 @@ fn read_field(
         return trace::Value::Empty;
     };
     match field {
-        // An instance with no mask has no box: an empty cell (what GML reads there is OPEN).
+        // No sprite and no mask: GML reads -100000 for all four (CLONE_SPEC collision, Confirmed
+        // (recorder), traces/animus/bbox-nomask.csv). A sprite with no frames or an empty mask
+        // is not traced, so it stays an empty cell.
+        FieldRef::Bbox(_) if inst.img.sprite().is_none() && inst.img.mask().is_none() => {
+            trace::Value::Real(BBOX_NO_MASK)
+        }
         FieldRef::Bbox(e) => match reported_box(def, inst, (inst.m.x(), inst.m.y()), &rules.collide) {
             Ok(Some(b)) => {
                 let v = match e {
@@ -979,6 +987,31 @@ mod tests {
             read_column(&mut sim, ids[0], &pressed, 3),
             trace::Value::Real(0.0)
         );
+    }
+
+    /// An instance with no sprite and no mask reads -100000 for all four `bbox_*` at a fractional
+    /// position (research#219).
+    #[test]
+    fn bbox_without_sprite_or_mask_reads_minus_100000() {
+        let mut b = GameDefBuilder::new("probe-nobbox");
+        let ctl = b.kind(KindDef::new("ctl", Builtin::World));
+        b.room(RoomDef::new("room_1", 800, 608));
+        let def = b.build().expect("def");
+        let (mut sim, _) = sim_with_blocks();
+        sim.def = Arc::new(def);
+        sim.world = World::new(RoomId(0), 0);
+        let me = sim.world.alloc_id().expect("id");
+        let inst = Instance::new(me, ctl, 0, Real::new(10.5), Real::new(20.25));
+        sim.world.insert(inst).expect("insert");
+        let before = sim.world.clone();
+        for e in [BboxEdge::Left, BboxEdge::Right, BboxEdge::Top, BboxEdge::Bottom] {
+            let col = Column::Field {
+                target: ProbeTarget::Row,
+                field: FieldRef::Bbox(e),
+            };
+            assert_eq!(read_column(&mut sim, me, &col, 1), trace::Value::Real(-100_000.0));
+        }
+        assert_eq!(sim.world, before);
     }
 
     /// `bbox_*` read the reported box (rounded after the offset, ties to even) and `place_free`
