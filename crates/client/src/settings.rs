@@ -58,6 +58,10 @@ pub struct Settings {
     /// Start the run again after every death (`[retry] auto`; `--auto-retry` overrides it for
     /// one run).
     pub auto_retry: bool,
+    /// Slow motion's speed in percent, one of `practice::SLOW_SPEEDS` (`[practice] slow_speed`,
+    /// default 75; the mod select sheet's 75% / 50% pills write it, `--slow-speed` overrides it
+    /// for one run, #904).
+    pub slow_speed: u8,
     /// The results page shows where you died in a stage (`[results] heatmap`, #654; off by
     /// default, `--results-heatmap` sets it).
     pub results_heatmap: bool,
@@ -83,6 +87,7 @@ impl Default for Settings {
             backdrop_blur: DEFAULT_BACKDROP_BLUR,
             hud_show: HudShow::default(),
             auto_retry: false,
+            slow_speed: crate::practice::SLOW_SPEEDS[0],
             results_heatmap: false,
             bindings: Table::new(),
         }
@@ -191,9 +196,10 @@ impl Settings {
                 ("audio", Value::Table(t)) => s.read_audio(t, warnings),
                 ("hud", Value::Table(t)) => s.read_hud(t, warnings),
                 ("retry", Value::Table(t)) => s.read_retry(t, warnings),
+                ("practice", Value::Table(t)) => s.read_practice(t, warnings),
                 ("results", Value::Table(t)) => s.read_results(t, warnings),
                 ("bindings", Value::Table(t)) => s.bindings = t.clone(),
-                ("display" | "audio" | "hud" | "retry" | "results" | "bindings", _) => {
+                ("display" | "audio" | "hud" | "retry" | "practice" | "results" | "bindings", _) => {
                     warnings.push(format!("`[{key}]` must be a table, using defaults"));
                 }
                 _ => warnings.push(format!("unknown entry `{key}`, ignored")),
@@ -274,6 +280,24 @@ impl Settings {
         }
     }
 
+    fn read_practice(&mut self, t: &Table, w: &mut Vec<String>) {
+        let speeds = crate::practice::SLOW_SPEEDS;
+        for (key, value) in t {
+            match (key.as_str(), value) {
+                ("slow_speed", Value::Integer(v)) => {
+                    match u8::try_from(*v).ok().filter(|v| speeds.contains(v)) {
+                        Some(v) => self.slow_speed = v,
+                        None => w.push(format!(
+                            "practice.slow_speed {v} is not 75 or 50, using the default"
+                        )),
+                    }
+                }
+                ("slow_speed", _) => w.push("practice.slow_speed must be an integer".into()),
+                _ => w.push(format!("unknown entry `practice.{key}`, ignored")),
+            }
+        }
+    }
+
     fn read_results(&mut self, t: &Table, w: &mut Vec<String>) {
         for (key, value) in t {
             match (key.as_str(), value) {
@@ -332,6 +356,8 @@ impl Settings {
         hud.insert("show".into(), self.hud_show.to_table().into());
         let mut retry = Table::new();
         retry.insert("auto".into(), self.auto_retry.into());
+        let mut practice = Table::new();
+        practice.insert("slow_speed".into(), i64::from(self.slow_speed).into());
         let mut results = Table::new();
         results.insert("heatmap".into(), self.results_heatmap.into());
         let mut root = Table::new();
@@ -343,6 +369,7 @@ impl Settings {
         root.insert("audio".into(), audio.into());
         root.insert("hud".into(), hud.into());
         root.insert("retry".into(), retry.into());
+        root.insert("practice".into(), practice.into());
         root.insert("results".into(), results.into());
         root.insert("bindings".into(), self.bindings.clone().into());
         toml::to_string(&root).unwrap_or_default()
@@ -463,6 +490,7 @@ mod tests {
             ui_scale: 125,
             backdrop_blur: 30,
             auto_retry: true,
+            slow_speed: 50,
             results_heatmap: true,
             hud_show: HudShow {
                 input: false,
@@ -494,6 +522,27 @@ foo = 1
         assert!(!s.auto_retry);
         assert_eq!(w.len(), 2, "{w:?}");
         assert!(!parse("").0.auto_retry);
+    }
+
+    #[test]
+    fn slow_speed_is_75_unless_the_file_says_50() {
+        assert_eq!(parse("").0.slow_speed, 75);
+        let (s, w) = parse(
+            "[practice]
+slow_speed = 50
+",
+        );
+        assert!(s.slow_speed == 50 && w.is_empty(), "{w:?}");
+        for bad in ["25", "-1", "\"50\"", "300"] {
+            let (s, w) = parse(&format!("[practice]
+slow_speed = {bad}
+"));
+            assert_eq!((s.slow_speed, w.len()), (75, 1), "{bad}: {w:?}");
+        }
+        let (_, w) = parse("practice = 50
+[retry]
+");
+        assert_eq!(w.len(), 1, "{w:?}");
     }
 
     #[test]

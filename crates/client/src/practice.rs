@@ -28,9 +28,10 @@ pub const SLOW_SPEEDS: [u8; 2] = [75, 50];
 /// The clock assists' command-line flags (main.rs flattens each module's group, #530).
 #[derive(clap::Args, Debug)]
 pub struct PracticeArgs {
-    /// Slow motion's speed in percent of the game's rate, with `--mods SL`: 75 or 50.
-    #[arg(long, value_name = "PERCENT", default_value_t = 75, value_parser = parse_speed)]
-    pub slow_speed: u8,
+    /// Slow motion's speed in percent of the game's rate, with `--mods SL`: 75 or 50. Overrides
+    /// the settings file's `[practice] slow_speed` (default 75) for this run and is not saved.
+    #[arg(long, value_name = "PERCENT", value_parser = parse_speed)]
+    pub slow_speed: Option<u8>,
 }
 
 fn parse_speed(text: &str) -> Result<u8, String> {
@@ -42,9 +43,15 @@ fn parse_speed(text: &str) -> Result<u8, String> {
         .ok_or_else(|| format!("`{text}` is not a slow motion speed (75 or 50)"))
 }
 
-/// Slow motion's speed in percent (`--slow-speed`; the mod select sheet's 75% / 50%).
+/// Slow motion's speed in percent (`--slow-speed`, else `[practice] slow_speed`; the mod select
+/// sheet's 75% / 50% change it and write the setting).
 #[derive(Resource, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SlowSpeed(pub u8);
+
+/// The first [`SlowSpeed`]: the flag when given, else the setting.
+fn first_speed(flag: Option<u8>, setting: u8) -> u8 {
+    flag.unwrap_or(setting)
+}
 
 /// The clock speed a run with `mods` plays at.
 pub fn clock_speed(mods: ModSet, slow_speed: u8) -> ClockSpeed {
@@ -81,15 +88,17 @@ impl Default for Advance {
 }
 
 /// Adds the clock assists; each run plays with the ones in its [`RunMods`] and at the
-/// [`SlowSpeed`] it opened with. `slow_speed` is `--slow-speed`, the first [`SlowSpeed`].
+/// [`SlowSpeed`] it opened with. `slow_speed` is `--slow-speed`; without it the first
+/// [`SlowSpeed`] is the settings file's `[practice] slow_speed`.
 pub struct PracticePlugin {
-    pub slow_speed: u8,
+    pub slow_speed: Option<u8>,
 }
 
 impl Plugin for PracticePlugin {
     fn build(&self, app: &mut App) {
         let frame_advance = crate::mods::run_has(Mod::FrameAdvance);
-        app.insert_resource(SlowSpeed(self.slow_speed))
+        let first = first_speed(self.slow_speed, crate::settings::get().slow_speed);
+        app.insert_resource(SlowSpeed(first))
             .init_resource::<ClockSpeed>()
             // Before the view's core: `view::enter` sets the run's first clock rate with it, and
             // `follow_room_speed` keeps it so after every tick.
@@ -184,7 +193,7 @@ mod tests {
         app.insert_resource(Collector::new(crate::bindings::Bindings::default()))
             .insert_resource(RunMods(mods))
             .init_resource::<Ticks>()
-            .add_plugins(PracticePlugin { slow_speed: 75 })
+            .add_plugins(PracticePlugin { slow_speed: Some(75) })
             .add_systems(FixedUpdate, count.in_set(SimTick));
         // What opening a run does (there is no `AppScreen` here).
         start(app.world_mut());
@@ -231,6 +240,13 @@ mod tests {
         let sl = ModSet::parse("SL").unwrap();
         assert_eq!(clock_speed(sl, 50), ClockSpeed(0.5));
         assert_eq!(clock_speed(ModSet::parse("FA").unwrap(), 50), ClockSpeed(1.0));
+    }
+
+    #[test]
+    fn the_flag_overrides_the_setting() {
+        assert_eq!(first_speed(None, 50), 50);
+        assert_eq!(first_speed(Some(75), 50), 75);
+        assert_eq!(first_speed(Some(50), 75), 50);
     }
 
     #[test]

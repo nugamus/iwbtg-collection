@@ -441,7 +441,8 @@ pub(super) fn on_activate(
     }
 }
 
-/// A click on a slow motion speed picks it (and does not flip the card under it).
+/// A click on a slow motion speed picks it (and does not flip the card under it) and writes
+/// `[practice] slow_speed`, so the next start keeps it (#904).
 pub(super) fn on_option(
     mut click: On<PointerClick>,
     options: Query<&ModOption>,
@@ -453,6 +454,7 @@ pub(super) fn on_option(
     click.propagate(false);
     if let (Some(mut speed), Some(&s)) = (speed, SLOW_SPEEDS.get(option.index)) {
         speed.0 = s;
+        crate::settings::update(|settings| settings.slow_speed = s);
     }
 }
 
