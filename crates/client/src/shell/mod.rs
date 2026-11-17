@@ -63,6 +63,9 @@ pub struct ShellArgs {
     /// with a game.toml, and `.iwbz` files). Quitting a game goes back to the list.
     #[arg(long, value_name = "FOLDER", conflicts_with = "package")]
     pub select: Option<PathBuf>,
+    /// Screenshot checks: open game select's mod select sheet at start (#497).
+    #[arg(long, hide = true, requires = "select")]
+    pub mod_select_preview: bool,
 }
 
 /// What the shell was started with.

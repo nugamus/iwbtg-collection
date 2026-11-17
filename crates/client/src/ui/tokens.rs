@@ -97,6 +97,16 @@ pub const ACCENT_LIGHT: Color = Color::srgb_u8(0xff, 0xb3, 0xbd);
 /// The notches that cut a progress bar into steps: `rgba(8,9,14,.55)`, alpha as for [`CARD`].
 pub const NOTCH: Color = Color::srgba(8.0 / 255.0, 9.0 / 255.0, 14.0 / 255.0, 0.828);
 
+/// The mod select sheet (`ModSelect.dc.html`): the dim over game select (`rgba(5,6,10,.55)`), the
+/// sheet's glass from top (`rgba(14,16,24,.94)`) to bottom (`rgba(8,9,14,.99)`), as [`dark`].
+pub const SHEET_DIM: Color = Color::srgba(5.0 / 255.0, 6.0 / 255.0, 10.0 / 255.0, 0.8274);
+pub const SHEET_TOP: Color = Color::srgba(14.0 / 255.0, 16.0 / 255.0, 24.0 / 255.0, 0.9979);
+pub const SHEET_BOTTOM: Color = Color::srgba(8.0 / 255.0, 9.0 / 255.0, 14.0 / 255.0, 1.0);
+/// The mod select columns' colours: Challenge red, Visual blue (the Ranked pill's), Practice amber.
+pub const MOD_CHALLENGE: Color = Color::srgb_u8(0xff, 0x60, 0x70);
+pub const MOD_VISUAL: Color = RANKED;
+pub const MOD_PRACTICE: Color = AMBER;
+
 /// Results (`Results169.dc.html`): the line between split rows (`rgba(255,255,255,.07)`), the one
 /// over the sum of best (`.22`), a chart's base line (`.18`) and the deaths-per-stage bars (`.38`,
 /// the stage with the most deaths `.85`). White over dark has no single Bevy alpha (#627), so
@@ -295,7 +305,7 @@ mod tests {
 
     #[test]
     fn dark_glass_holds_the_dark_alpha() {
-        for (token, a) in [(GLASS, 0.72), (ROW, 0.62)] {
+        for (token, a) in [(GLASS, 0.72), (ROW, 0.62), (SHEET_DIM, 0.55), (SHEET_TOP, 0.94)] {
             let want = dark(token, a).alpha();
             assert!(
                 (token.alpha() - want).abs() < 0.0005,

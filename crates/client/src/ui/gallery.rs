@@ -20,8 +20,8 @@ use super::motion::{Ease, OffsetX, Opacity, ReducedMotion, Tween, Width};
 use super::shape::{Band, FadeMask, Shape, Side, UiOpacity, Veil};
 use super::tokens::{self, star_color};
 use super::widgets::{
-    ButtonKind, button, chip, control, control_off, ellipsis_text, mod_pill, panel, ranked_pill, star_pill,
-    stat, switch, tag_pill, text, unranked_pill,
+    ButtonKind, button, chip, control, control_off, ellipsis_text, mod_card, mod_pill, panel, ranked_pill,
+    selected_mod_pill, star_pill, stat, switch, tag_pill, text, unranked_pill,
 };
 
 /// The size the mockups are drawn at.
@@ -450,7 +450,28 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, reduced: Res
                             ],
                         ),
                     ],
-                ));
+                ))
+                // A mod card (`ModSelect.dc.html`), picked, with its options, and the footer's
+                // picked pill: in the room left under the pills.
+                .with_children(|c| {
+                    let speeds = [("75%".to_owned(), true), ("50%".to_owned(), false)];
+                    c.spawn(row(12.0)).with_children(|r| {
+                        r.spawn(Node {
+                            width: Val::Px(420.0),
+                            flex_direction: FlexDirection::Column,
+                            ..default()
+                        })
+                        .with_child(mod_card(
+                            "SL",
+                            "Slow motion",
+                            "Play at a lower speed.",
+                            tokens::MOD_PRACTICE,
+                            true,
+                            &speeds,
+                        ));
+                        r.spawn(selected_mod_pill("SL", tokens::MOD_PRACTICE));
+                    });
+                });
                 c.spawn((
                     column(10.0),
                     children![heading("Ellipsis (one line cut at its box)")],
