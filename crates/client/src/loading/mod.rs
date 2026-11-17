@@ -12,7 +12,7 @@
 //!
 //! [`Info`] is what the card shows ([`Info::new`]); `page.rs` draws it.
 
-mod page;
+pub(crate) mod page;
 
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;

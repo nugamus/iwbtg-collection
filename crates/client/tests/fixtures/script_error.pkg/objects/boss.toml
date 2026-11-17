@@ -1,0 +1,3 @@
+#:schema ../../../../../../docs/format/schema/v0/object.schema.json
+script = "boss"
+solid = false

@@ -68,8 +68,9 @@ fn app_with(skip_loading: bool) -> App {
             crate::import::ImportPlugin { keep: false },
         ))
         // Bevy takes at most 15 plugins in one tuple.
-        .add_plugins(crate::results::ResultsPlugin(
-            crate::results::ResultsArgs::default(),
+        .add_plugins((
+            crate::results::ResultsPlugin(crate::results::ResultsArgs::default()),
+            crate::script_error::ScriptErrorPlugin(crate::script_error::ScriptErrorArgs::default()),
         ))
         // The window plugin adds it in the client.
         .add_message::<FileDragAndDrop>();
@@ -433,4 +434,70 @@ fn a_run_plays_with_the_mods_picked_on_the_select_screen() {
     leave(app.world_mut());
     frames(&mut app, 3);
     assert!(!app.world().contains_resource::<crate::visual::PlainBackdrop>());
+}
+
+/// A script error stops the game, not the client (#101): the `script_error.pkg` fixture's boss
+/// reads past its array half a second in. The sim halts, the run goes to the script error screen
+/// with the file, line and message, the sim ticks no more, and Escape goes back to game select;
+/// another package then plays.
+#[test]
+fn a_script_error_stops_the_game_and_goes_back_to_select() {
+    let mut app = app();
+    frames(&mut app, 3);
+    start(app.world_mut(), &demo("tests/fixtures/script_error.pkg")).unwrap();
+    frames(&mut app, 60);
+    assert_eq!(run_screen(app.world()), Some(RunScreen::Error));
+    let report = app
+        .world()
+        .resource::<crate::script_error::Stopped>()
+        .report()
+        .cloned()
+        .expect("a report");
+    assert_eq!(report.heading, "Script error");
+    assert_eq!(report.file.as_deref(), Some("scripts/boss.rhai"));
+    assert_eq!(report.line, Some(9));
+    assert!(report.message.contains("out of bounds"), "{report:?}");
+    assert!(
+        report.context.as_deref().is_some_and(|c| c.contains("kind @boss")),
+        "{report:?}"
+    );
+    let stopped_at = tick(&app);
+    frames(&mut app, 20);
+    assert_eq!(tick(&app), stopped_at, "no tick on the error screen");
+    assert!(app.world().resource::<crate::hud::Suspended>().0, "the HUD is hidden");
+
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::Escape);
+    frames(&mut app, 1);
+    // No input plugin here clears the key's press edge: the next run would see it.
+    let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+    keys.release(KeyCode::Escape);
+    keys.clear();
+    frames(&mut app, 2);
+    assert_eq!(
+        *app.world().resource::<State<AppScreen>>().get(),
+        AppScreen::Select
+    );
+    play_and_leave(&mut app, "tests/fixtures/clear.pkg");
+}
+
+/// Retry on the script error screen starts the run again from its first tick, on the game.
+#[test]
+fn retry_on_the_script_error_screen_plays_again() {
+    let mut app = app();
+    frames(&mut app, 3);
+    start(app.world_mut(), &demo("tests/fixtures/script_error.pkg")).unwrap();
+    frames(&mut app, 60);
+    assert_eq!(run_screen(app.world()), Some(RunScreen::Error));
+    crate::retry::request(app.world_mut());
+    frames(&mut app, 3);
+    assert_eq!(run_screen(app.world()), Some(RunScreen::Playing));
+    assert!(tick(&app) < 10, "a new run: tick {}", tick(&app));
+    assert!(
+        app.world()
+            .resource::<crate::script_error::Stopped>()
+            .report()
+            .is_none()
+    );
 }
