@@ -21,6 +21,7 @@ gravity,gravity_direction,friction,image_index,sprite_index,sprite_name,<game va
 - One row per frame for each traced instance (usually the player).
 - The game variables after `sprite_name` are chosen per trace (`djump`, `jump`, `jump2`, `onPlatform`, `maxSpeed`, `maxVspeed`, `image_xscale` for Rely the Needle; `curJumps`, `maxJumps`, `jump[1]`, `jump[2]`, `grav` for Kaenbyou).
 - Numbers are shortest round-trip decimals (for example `-7.347880794884119e-17`). Rust parses these to the exact same double, so comparison is bit-exact after parsing.
+- A phases file (`<case>.phases.csv`, the recorder's `--phases P,...`, research `tooling/opengmk-trace/README.md`) has the same columns with a bare `phase` column after `frame` (`"begin_step"`, `"keyboard"`, `"step"`, ...) and one row per listed phase of each frame, in phase order. `iwbtg_sim::trace` parses and re-writes it like any trace (`TraceTable::phase_column` finds the column). `diff` matches its rows on (frame, phase, object, instance order), keeps context frames in the same phase, prints the phase after the frame (`frame 21 step, world #0`), and refuses to compare a phases file with a plain trace. `iwbtg trace run` writes no phases file yet, so phases files are read by spec work and the research-wide tests only (#865).
 - **OPEN:** the exact point in the frame where the recorder samples (after End Step, or after Draw). It must be documented in the CLONE_SPEC, and `iwbtg trace run` samples at the same point.
 
 ### Mapping and diff
