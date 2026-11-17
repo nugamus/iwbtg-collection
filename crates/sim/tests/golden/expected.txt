@@ -10,6 +10,7 @@ kid_a4_slopes 3000 running 1d247310fe9ee227450a455a96ab58d72f181063d52ceb17df994
 kid_a5_gravity 3000 running 46c36de5d2c9f68c9893f01eec9c3b3b123575d1c240fef667bbee034b24c576
 kid_b_items 3000 running 0854a863ab6903c950db7209909a5e288ad0b47069967e7cdf11795156612a75
 kid_c_particles 3000 running 3b4a73be971a02571435e9cf727c730edc6b2b69f60634096351bcdd5f400538
+kid_param_variants 3000 running 1aa386de74c2afd10eb452b21c0c9734440928fa49f0bec7b5cd262ab85afa6c
 script_api 2000 running cb07b4998f347956602fed483994ecb2fc02aac7ecdedfb267504b4e97daa78a
 builtin world kid_a1_basics
 builtin kid kid_a1_basics
@@ -79,9 +80,12 @@ touched difficulty_warp kid_b_items
 touched platform kid_a1_basics
 touched moving_platform kid_a2_water_vines
 touched water kid_a2_water_vines
+touched fake_block kid_param_variants
+touched hidden_block kid_param_variants
 touched trigger kid_a3_traps
 touched drop_platform kid_a3_traps
 touched gravity_flip kid_a5_gravity
+touched edge_warp kid_param_variants
 touched bullet_blocker kid_a2_water_vines
 touched boss_item kid_b_items
 touched secret_item kid_b_items
@@ -94,3 +98,31 @@ touched breakable_block kid_a3_traps
 touched path_platform kid_a5_gravity
 touched time_limit kid_a5_gravity
 touched sign kid_b_items
+touched spike/kid_bullet kid_param_variants
+touched killer/kid+kid_flipped kid_param_variants
+touched save/kid+kid_flipped kid_a1_basics
+touched save/kid_bullet kid_param_variants
+touched warp/kid+kid_flipped kid_a1_basics
+touched difficulty_warp/kid+kid_flipped kid_b_items
+touched moving_platform/kid+kid_flipped kid_param_variants
+touched water/kid+kid_flipped kid_a2_water_vines
+touched fake_block/kid+kid_flipped kid_param_variants
+touched fake_block/kid_bullet kid_param_variants
+touched hidden_block/blood kid_param_variants
+touched hidden_block/kid_bullet kid_param_variants
+touched trigger/kid+kid_flipped kid_a3_traps
+touched gravity_flip/kid kid_a5_gravity
+touched edge_warp/kid+kid_flipped kid_param_variants
+touched bullet_blocker/kid_bullet kid_a2_water_vines
+touched boss_item/kid+kid_flipped kid_b_items
+touched secret_item/kid+kid_flipped kid_b_items
+touched game_clear/kid+kid_flipped -
+touched jump_refresher/kid+kid_flipped kid_a3_traps
+touched spring/kid+kid_flipped kid_a4_slopes
+touched conveyor/kid+kid_flipped kid_a4_slopes
+touched kid_param_zone/kid+kid_flipped kid_a4_slopes
+touched breakable_block/kid+kid_flipped kid_param_variants
+touched breakable_block/kid_bullet kid_param_variants
+touched path_platform/kid+kid_flipped kid_param_variants
+touched time_limit/kid+kid_flipped kid_a5_gravity
+touched sign/kid+kid_flipped kid_b_items
