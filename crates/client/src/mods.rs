@@ -13,7 +13,7 @@ use iwbtg_sim::mods::{Mod, ModSet};
 use crate::view::{Game, GameCamera, SimTick};
 
 /// The mods the client can play so far.
-const BUILT: [Mod; 5] = [
+pub(crate) const BUILT: [Mod; 5] = [
     Mod::SuddenDeath,
     Mod::Hitboxes,
     Mod::NoBackground,

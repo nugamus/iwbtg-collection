@@ -139,6 +139,7 @@ fn main() -> ExitCode {
     // `--show-bindings` is given; with only the bindings flags there is nothing to play.
     let first = args.package.package;
     let library = args.shell.select;
+    let mod_select_preview = args.shell.mod_select_preview;
     if first.is_none() && library.is_none() {
         return ExitCode::SUCCESS;
     }
@@ -171,7 +172,7 @@ fn main() -> ExitCode {
     let result = view::run(first.as_deref(), args.view, trace_mode, |app| {
         app.add_plugins((
             shell,
-            shell::select::SelectPlugin(library),
+            shell::select::SelectPlugin(library, mod_select_preview),
             screen::ScreenPlugin,
             hud::HudPlugin,
             bindings::BindingsPlugin(bindings),
