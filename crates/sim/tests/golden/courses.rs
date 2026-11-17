@@ -386,7 +386,12 @@ fn a1_objects(c: &mut Course) {
         300.0,
         "cherry",
         Builtin::Killer,
-        &[("hspeed", real(1.5)), ("vspeed", real(0.5))],
+        // It bounces off the walls and floor (#835), so it crosses the kid's way (#847).
+        &[
+            ("hspeed", real(1.5)),
+            ("vspeed", real(0.5)),
+            ("bounce", ParamValue::Bool(true)),
+        ],
     );
     c.put(
         0,
@@ -618,18 +623,19 @@ fn a5_objects(c: &mut Course) {
     c.def_mut().paths.push(PathDef {
         name: "loop".into(),
         points: vec![
-            (r(400.0), r(400.0), r(100.0)),
-            (r(560.0), r(400.0), r(100.0)),
-            (r(560.0), r(320.0), r(100.0)),
+            (r(400.0), r(496.0), r(100.0)),
+            (r(560.0), r(496.0), r(100.0)),
+            (r(560.0), r(440.0), r(100.0)),
         ],
         closed: true,
         smooth: false,
         precision: 4,
     });
+    // Low enough that the kid jumps into it from the floor (#847).
     c.put(
         0,
         400.0,
-        400.0,
+        496.0,
         "path_platform",
         Builtin::PathPlatform,
         &[
@@ -645,6 +651,15 @@ fn a5_objects(c: &mut Course) {
         "time_limit",
         Builtin::TimeLimit,
         &[("seconds", real(25.0))],
+    );
+    // The zone the kid runs through starts the timer above (#847).
+    c.put(
+        0,
+        128.0,
+        544.0,
+        "time_limit_zone",
+        Builtin::TimeLimit,
+        &[("role", word("start_zone"))],
     );
 }
 

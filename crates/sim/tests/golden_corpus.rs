@@ -86,7 +86,8 @@ const UNCOVERED_BUILTINS: &[(&str, &str)] = &[(
 /// Every `Builtin` and every `KidFamily` runs in some golden case (#786), so a new kind or
 /// family cannot skip the cross-platform byte compare: the report's coverage lines name a case
 /// for each, except the allow-listed built-ins. Every kid case must also still be running at
-/// its end (a halted course would cover nothing after the halt).
+/// its end (a halted course would cover nothing after the halt). The same report also has to
+/// show every kid collision touched (#847).
 #[test]
 fn every_builtin_and_kid_family_runs_in_a_golden_case() {
     use iwbtg_sim::def::Builtin;
@@ -116,6 +117,7 @@ fn every_builtin_and_kid_family_runs_in_a_golden_case() {
         missing.is_empty(),
         "add a golden case (tests/golden/courses.rs) or fix the allow-list: {missing:?}"
     );
+    every_builtin_with_a_kid_collision_is_touched(&report);
     for case in golden::cases()
         .iter()
         .filter(|c| c.name.starts_with("kid_") || c.name == "script_api")
@@ -124,6 +126,46 @@ fn every_builtin_and_kid_family_runs_in_a_golden_case() {
         assert_eq!(out.status, "running", "{}", out.line());
         assert_eq!(out.ticks, case.ticks, "{}", out.line());
     }
+}
+
+/// Built-ins with a kid or kid bullet collision handler that no golden case lets the kid touch,
+/// each with the reason. Shrinks; never grows without one. Built-ins without such a handler in
+/// any case (engine-only kinds such as `world`, `camera` or `music`, and those the kid finds by
+/// query rather than by collision event, such as `vine` or `slope`) get no `touched` line and
+/// need no entry.
+const UNTOUCHED_BUILTINS: &[(&str, &str)] = &[(
+    "game_clear",
+    "touching it ends the run, and every case runs to its last tick (kid_b_items places it out of reach)",
+)];
+
+/// Every built-in whose collision path with the kid can run is run by some golden case (#847):
+/// each `touched <name> <case>` line of the report names a case where the kid or a kid bullet met
+/// an instance of it in the collision phase, except the allow-listed built-ins. An allow-list
+/// entry whose built-in is touched, or has no `touched` line, fails too, so the list stays exact.
+/// Called by the coverage test, so the corpus runs once more per target, not twice.
+fn every_builtin_with_a_kid_collision_is_touched(report: &str) {
+    let touched: Vec<(&str, &str)> = report
+        .lines()
+        .filter_map(|l| l.strip_prefix("touched "))
+        .filter_map(|l| l.split_once(' '))
+        .collect();
+    assert!(!touched.is_empty(), "the report has touched lines");
+    let mut wrong = Vec::new();
+    for (name, case) in &touched {
+        let allowed = UNTOUCHED_BUILTINS.iter().any(|(n, _)| n == name);
+        if (*case == "-") != allowed {
+            wrong.push(format!("touched {name} {case}"));
+        }
+    }
+    for (name, _) in UNTOUCHED_BUILTINS {
+        if !touched.iter().any(|(n, _)| n == name) {
+            wrong.push(format!("{name}: allow-listed but has no kid collision handler"));
+        }
+    }
+    assert!(
+        wrong.is_empty(),
+        "move the kid into it in a golden course (tests/golden/courses.rs) or fix the allow-list: {wrong:?}"
+    );
 }
 
 /// Every function and instance property of the script API (the generated
