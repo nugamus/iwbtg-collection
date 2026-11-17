@@ -1,6 +1,6 @@
 # Versioning: SIM_VERSION, engine_rev, gameplay_hash and format
 
-Part of [Architecture](../architecture.md). Status: proposed by Claude, 2026-11-17 (#783). Two points are the user's to decide and wait on #783 (`needs-user`): whether a board keys on `SIM_VERSION`, and when the freeze point is. This page states the defaults used until then.
+Part of [Architecture](../architecture.md). Status: proposed by Claude, 2026-11-17 (#783). Two points are the user's to decide and wait on #933 (`needs-user`): whether a board keys on `SIM_VERSION`, and when the freeze point is. This page states the defaults used until then.
 
 The goal: a replay recorded today still verifies, with the same time, years from now, and an engine fix never silently changes a board.
 
@@ -17,14 +17,14 @@ Four numbers, each with one job. A replay's header records all of them ([replay]
 
 ## What a board keys on
 
-**Default: (package id, map, mods, `gameplay_hash`), not `SIM_VERSION`** (needs-user on #783). Since `gameplay_hash` covers `engine_rev`, a board pins the package's content and its built-in revision. `SIM_VERSION` is a property of how a run was verified, not of the board: after the freeze point every build must reproduce every older build's outcomes for the revisions it already knew, and the bump check below enforces that for the golden corpus. Where a new build cannot (the rare `SIM_VERSION` bump), old replays are verified by the old build they were made with, and their place on the board stands.
+**Default: (package id, map, mods, `gameplay_hash`), not `SIM_VERSION`** (needs-user, #933). Since `gameplay_hash` covers `engine_rev`, a board pins the package's content and its built-in revision. `SIM_VERSION` is a property of how a run was verified, not of the board: after the freeze point every build must reproduce every older build's outcomes for the revisions it already knew, and the bump check below enforces that for the golden corpus. Where a new build cannot (the rare `SIM_VERSION` bump), old replays are verified by the old build they were made with, and their place on the board stands.
 
 Keying on `SIM_VERSION` as well would split every board at every Rhai or toolchain upgrade, which players would see as their records vanishing for a change that touched no game. The cost of the default is that the server must keep old verifier builds (below).
 
 ## When `SIM_VERSION` bumps
 
 - **Before the freeze point** it stays `1`. Outcome-changing PRs re-pin the golden hashes with `cargo xtask repin` and nothing else. Replays recorded before the freeze (local replays and PBs, #476) may stop verifying with a later build; their times stay in the local stats, and `iwbtg replay verify` reports `sim_version` mismatch for them.
-- **The freeze point** is when `SIM_VERSION_FREEZE` in `crates/sim/src/lib.rs` changes from `None` to `Some(SIM_VERSION)`. **Default: the first build whose runs reach a public board, the first public nightly of M7** (needs-user on #783). Until then, counting versions only creates history nobody needs.
+- **The freeze point** is when `SIM_VERSION_FREEZE` in `crates/sim/src/lib.rs` changes from `None` to `Some(SIM_VERSION)`. **Default: the first build whose runs reach a public board, the first public nightly of M7** (needs-user, #933). Until then, counting versions only creates history nobody needs.
 - **After the freeze point** every change that alters an outcome of an existing package on its current `engine_rev` bumps `SIM_VERSION`. A fix that should change outcomes goes under a new `engine_rev` instead (next section), so that old revisions, the golden corpus and `SIM_VERSION` all stay as they were. A bump is therefore rare and means "this build cannot verify older replays": Rhai, Rust or `libm` upgrades, a hash encoding change, a replay decoding change.
 
 ### The bump check
