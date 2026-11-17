@@ -319,9 +319,10 @@ mod wp3 {
     }
 
     /// `bbox_read` gives every pinned `bbox_*` row of bbox-empty-mask.csv and -b.csv (no-frame
-    /// sprites, a no-frame `mask_index`, maskNothing at scales and angles), and `Unknown` for the
-    /// two inverted rectangles the spec cannot explain (sprite520, temp) (CLONE_SPEC collision,
-    /// "bbox_* of an instance that has a sprite but no usable box", research#224).
+    /// sprites, a no-frame `mask_index`, maskNothing at scales and angles, the inverted
+    /// rectangles sprite520 and temp with their raw edges at angle 0), and `Unknown` for temp at
+    /// angle 90, which no rule fits (CLONE_SPEC collision, "bbox_* of an instance that has a
+    /// sprite but no usable box", research#224).
     #[test]
     #[allow(
         clippy::cast_possible_truncation,
@@ -380,7 +381,8 @@ mod wp3 {
                 empty: true,
             },
         ];
-        let unpinned = ["sprite520", "temp"];
+        // Inverted rectangles other than maskNothing read raw edges; rotated, no rule fits.
+        let inverted = ["sprite520", "temp"];
         let mut b = GameDefBuilder::new("bbox-empty-mask");
         let probe = b.kind(KindDef::new("platform", Builtin::World));
         b.room(RoomDef::new("rStage4", 800, 608));
@@ -471,7 +473,7 @@ mod wp3 {
                     v(cy),
                     v(ca)
                 );
-                if mask_name.is_none() && unpinned.contains(&name.as_str()) {
+                if mask_name.is_none() && inverted.contains(&name.as_str()) && v(ca) != 0.0 {
                     assert_eq!(got, BboxRead::Unknown, "{what}");
                 } else {
                     let want = rect(v(cl) as i64, v(ct) as i64, v(cr) as i64, v(cb) as i64);
