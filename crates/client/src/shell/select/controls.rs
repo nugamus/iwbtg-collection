@@ -7,6 +7,8 @@
 //! Year, Tag and Status options, the Status and Year dropdowns (#805) and Collections (#105).
 
 use bevy::input_focus::{FocusCause, InputFocus};
+use bevy::picking::events::PointerPress;
+use bevy::picking::pointer::PointerButton;
 use bevy::prelude::*;
 use bevy::text::EditableText;
 use bevy::ui_widgets::Activate;
@@ -45,6 +47,50 @@ pub(super) struct Dropdown;
 /// An open dropdown menu.
 #[derive(Component)]
 pub(super) struct Menu;
+
+/// The entity whose press closed a menu from outside: its click, if it comes, does nothing
+/// (#899).
+#[derive(Resource, Default)]
+pub(super) struct Swallow(Option<Entity>);
+
+impl Swallow {
+    /// True for the click that ends the press that closed a menu (a click bubbles, so this
+    /// does not clear; the next press does).
+    pub(super) fn holds(&self, entity: Entity) -> bool {
+        self.0 == Some(entity)
+    }
+
+    /// As [`Self::holds`], once: an activation fires on the control itself, not up the tree.
+    fn takes(&mut self, entity: Entity) -> bool {
+        self.0 == Some(entity) && self.0.take().is_some()
+    }
+}
+
+/// A press outside an open dropdown closes it and swallows the click that follows, so the
+/// click only closes: it picks no game and flips no chip. A press on a dropdown's control or
+/// menu is left to [`on_activate`].
+pub(super) fn on_press_outside(
+    press: On<PointerPress>,
+    parents: Query<&ChildOf>,
+    dropdowns: Query<(), With<Dropdown>>,
+    menus: Query<Entity, With<Menu>>,
+    mut swallow: ResMut<Swallow>,
+    mut commands: Commands,
+) {
+    let target = press.original_event_target();
+    if press.entity != target {
+        return;
+    }
+    swallow.0 = None;
+    if press.button != PointerButton::Primary || menus.is_empty() {
+        return;
+    }
+    let inside = dropdowns.contains(target) || parents.iter_ancestors(target).any(|a| dropdowns.contains(a));
+    if !inside {
+        close_menus(&mut commands, &menus);
+        swallow.0 = Some(target);
+    }
+}
 
 /// What a menu option sets.
 #[derive(Component, Clone, Debug, PartialEq)]
@@ -174,8 +220,12 @@ pub(super) fn on_activate(
     lib: Option<Res<Library>>,
     filters: Option<ResMut<Filters>>,
     mut focus: ResMut<InputFocus>,
+    mut swallow: ResMut<Swallow>,
     mut commands: Commands,
 ) {
+    if swallow.takes(activate.entity) {
+        return;
+    }
     let (Some(lib), Some(mut f)) = (lib, filters) else {
         return;
     };
