@@ -4,7 +4,7 @@
                                             answered needs-user questions and the triage queue.
   python -I .claude/hooks/issues.py stop    Stop: a turn that changed files must end with a
                                             "Findings:" line (issues filed, or "none").
-  python -I .claude/hooks/issues.py --test  Self-test of the stop check and the settings drift check.
+  python -I .claude/hooks/issues.py --test  Self-test of the stop check, settings drift and fidelity checks.
 
 start also warns when the workspace-root .claude/settings.json differs from client/workspace/settings.json,
 and reports the client repo's CI on main, with a loud first line when main is red (#595), and flags open
@@ -124,6 +124,27 @@ def settings_drift(root=WORKSPACE):
             "through a PR), then restart Claude Code. See client/docs/dev-setup.md.\n\n")
 
 
+BASELINE = "crates/tools/fidelity-baseline.txt"
+
+
+def fidelity_stale(repo=WORKSPACE / "client", ref="origin/main"):
+    """One line when commits touching crates/sim or crates/format landed on `ref` after the commit that last
+    changed the fidelity baseline (#935), else ''. Local git only (no fetch), so it can lag origin by a fetch.
+    A clean sweep without `--bless` leaves the baseline alone, so the line stays until the next bless."""
+    def git(*args):
+        return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True,
+                              encoding="utf-8", timeout=10).stdout.strip()
+    try:
+        base = git("log", "-1", "--format=%H", ref, "--", BASELINE)
+        if not base:
+            return ""  # no baseline on main yet, or no such ref
+        n = int(git("rev-list", "--count", f"{base}..{ref}", "--", "crates/sim", "crates/format") or 0)
+    except Exception:
+        return ""
+    return (f"FIDELITY STALE: {n} sim/format commit(s) on main since the baseline last changed. "
+            "Run `IWBTG_RESEARCH=../research cargo xtask fidelity` (lead, after a merge wave).\n\n") if n else ""
+
+
 def worktrees(root=WORKSPACE):
     """One line per extra git worktree of each repo: folder, branch, uncommitted files."""
     out = []
@@ -209,7 +230,7 @@ def start():
     lines += ["", "Next unblocked agent-ready issues (unclaimed):"] + [f"- {r[3]}" for r in sorted(ready)[:10]]
     lines += ["", f"{waiting} needs-user issue(s) still wait for the user.",
               "Rules: CLAUDE.md, Issues. Unless the user names other work, offer to start the first issue above."]
-    emit(red + warn + "\n".join(lines))
+    emit(red + fidelity_stale() + warn + "\n".join(lines))
 
 
 def emit(text):
@@ -337,6 +358,31 @@ def test():
             {"status": "QUEUED", "createdAt": "2026-11-11T20:40:59Z", "workflowRun": {"workflow": {"name": "CI"}}}]
     assert stuck_ci(pr(*real), now) == 15
     assert stuck_ci(pr(*real, suite("COMPLETED", "11:03", "PR checks"), suite("COMPLETED", "11:03")), now) == 0  # after close/reopen
+    # Fidelity baseline (#935): sim/format commits on main after the baseline's last change.
+    with tempfile.TemporaryDirectory() as d:
+        repo = Path(d)
+
+        def g(*args):
+            subprocess.run(["git", "-C", d, "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True, capture_output=True)
+
+        def commit(path):
+            f = repo / path
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(f.read_text() + "x" if f.exists() else "x")
+            g("add", "."); g("commit", "-m", path)
+        g("init", "-b", "main")
+        commit("crates/sim/a.rs")
+        assert fidelity_stale(repo, "main") == ""  # no baseline yet
+        commit(BASELINE)
+        assert fidelity_stale(repo, "main") == ""  # sweep is current
+        commit("crates/ui/b.rs")
+        assert fidelity_stale(repo, "main") == ""  # unrelated change
+        commit("crates/sim/a.rs"); commit("crates/format/c.rs")
+        out = fidelity_stale(repo, "main")
+        assert out.startswith("FIDELITY STALE: 2 sim/format") and "cargo xtask fidelity" in out, out
+        commit(BASELINE)
+        assert fidelity_stale(repo, "main") == ""  # re-blessed
+        assert fidelity_stale(repo, "nope") == ""  # bad ref
     print("ok")
 
 
