@@ -2976,6 +2976,7 @@ fn trace_param(p: &TraceParam) -> ParamValue {
         // Trace-map integers are small (variant numbers), so the conversion is exact.
         TraceParam::Int(i) => ParamValue::Real(Real::new(*i as f64)),
         TraceParam::Float(bits) => ParamValue::Real(Real::from_bits(*bits)),
+        TraceParam::List(items) => ParamValue::List(items.iter().map(trace_param).collect()),
     }
 }
 
