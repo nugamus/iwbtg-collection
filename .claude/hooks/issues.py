@@ -125,23 +125,30 @@ def settings_drift(root=WORKSPACE):
 
 
 BASELINE = "crates/tools/fidelity-baseline.txt"
+FIDELITY_STAMP = Path("target") / "xtask" / "last-fidelity.txt"  # `cargo xtask fidelity` writes "<origin/main sha> <unix secs>"
 
 
 def fidelity_stale(repo=WORKSPACE / "client", ref="origin/main"):
-    """One line when commits touching crates/sim or crates/format landed on `ref` after the commit that last
-    changed the fidelity baseline (#935), else ''. Local git only (no fetch), so it can lag origin by a fetch.
-    A clean sweep without `--bless` leaves the baseline alone, so the line stays until the next bless."""
+    """One line when commits touching crates/sim or crates/format landed on `ref` after the last fidelity sweep
+    (#935), else ''. The sweep is the commit in target/xtask/last-fidelity.txt; without it (or when that commit
+    is unknown here) the commit that last changed the baseline file stands in. Local git only (no fetch)."""
     def git(*args):
-        return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True,
-                              encoding="utf-8", timeout=10).stdout.strip()
+        r = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, encoding="utf-8", timeout=10)
+        return r.stdout.strip() if r.returncode == 0 else ""
     try:
-        base = git("log", "-1", "--format=%H", ref, "--", BASELINE)
-        if not base:
-            return ""  # no baseline on main yet, or no such ref
-        n = int(git("rev-list", "--count", f"{base}..{ref}", "--", "crates/sim", "crates/format") or 0)
+        since = ""
+        try:
+            since = (repo / FIDELITY_STAMP).read_text(encoding="utf-8").split()[0]
+        except (OSError, IndexError):
+            pass
+        if not since or not git("rev-parse", "--verify", "-q", since + "^{commit}"):
+            since = git("log", "-1", "--format=%H", ref, "--", BASELINE)
+        if not since:
+            return ""  # no sweep recorded and no baseline on main yet, or no such ref
+        n = int(git("rev-list", "--count", f"{since}..{ref}", "--", "crates/sim", "crates/format") or 0)
     except Exception:
         return ""
-    return (f"FIDELITY STALE: {n} sim/format commit(s) on main since the baseline last changed. "
+    return (f"FIDELITY STALE: {n} sim/format commit(s) on main since the last fidelity sweep. "
             "Run `IWBTG_RESEARCH=../research cargo xtask fidelity` (lead, after a merge wave).\n\n") if n else ""
 
 
@@ -382,6 +389,18 @@ def test():
         assert out.startswith("FIDELITY STALE: 2 sim/format") and "cargo xtask fidelity" in out, out
         commit(BASELINE)
         assert fidelity_stale(repo, "main") == ""  # re-blessed
+        # A recorded sweep (cargo xtask fidelity, pass or fail) replaces the baseline commit as the reference.
+        commit("crates/sim/a.rs")
+        assert fidelity_stale(repo, "main").startswith("FIDELITY STALE: 1 ")
+        (repo / "target" / "xtask").mkdir(parents=True)
+        stamp = repo / FIDELITY_STAMP
+        stamp.write_text(subprocess.run(["git", "-C", d, "rev-parse", "main"], capture_output=True, text=True).stdout.strip() + " 1\n")
+        assert fidelity_stale(repo, "main") == ""  # swept at main's tip, baseline unchanged
+        commit("crates/format/c.rs")
+        assert fidelity_stale(repo, "main").startswith("FIDELITY STALE: 1 ")
+        stamp.write_text("0" * 40 + " 1\n")
+        assert fidelity_stale(repo, "main").startswith("FIDELITY STALE: 2 ")  # unknown commit: the baseline commit stands in
+        stamp.unlink()
         assert fidelity_stale(repo, "nope") == ""  # bad ref
     print("ok")
 

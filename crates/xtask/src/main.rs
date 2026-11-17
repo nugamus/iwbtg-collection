@@ -4,6 +4,8 @@
 //!   (against `origin/main`, committed or not) plus a compile check of the crates that depend on
 //!   them. `--all` runs the whole workspace, like CI. Writes the summary to
 //!   `target/xtask/last-check.txt` for `pr-body`.
+//! - `fidelity [--bless]`: the trace sweep over every converter package; records the run in
+//!   `target/xtask/last-fidelity.txt` (#935).
 //! - `repin`: after a deliberate change to hashed sim state, re-pins the state hash vectors
 //!   (`tests/hash_vectors.rs`), the `FINAL_HASH` of `tests/wp1_determinism.rs` and the golden
 //!   corpus, then runs them again. After the `SIM_VERSION` freeze point it also records the pins
@@ -534,9 +536,25 @@ fn fidelity(root: &Path, bless: bool) -> Result<(), String> {
     if bless {
         args.push("--bless");
     }
-    run(root, "cargo", &args, &[]).map_err(|_| {
+    let result = run(root, "cargo", &args, &[]).map_err(|_| {
         format!("fidelity: a case got worse than {FIDELITY_BASELINE} (or the sweep could not run); see above")
-    })
+    });
+    record_fidelity_run(root);
+    result
+}
+
+/// `target/xtask/last-fidelity.txt`: `<origin/main commit> <unix seconds>`, written after every sweep, pass or
+/// fail, so `issues.py start` can warn when sim or format commits landed since (#935). Best effort.
+fn record_fidelity_run(root: &Path) {
+    let Ok((true, sha)) = output(root, "git", &["rev-parse", "origin/main"], &[]) else {
+        return;
+    };
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let dir = root.join("target/xtask");
+    let _ = std::fs::create_dir_all(&dir);
+    let _ = std::fs::write(dir.join("last-fidelity.txt"), format!("{} {secs}\n", sha.trim()));
 }
 
 fn doctor(root: &Path) -> Result<(), String> {
