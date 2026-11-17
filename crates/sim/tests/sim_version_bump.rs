@@ -53,10 +53,10 @@ fn current() -> BTreeMap<String, String> {
     // Case lines are `name ticks status hash`; coverage lines have three fields.
     for line in GOLDEN.lines() {
         let f: Vec<&str> = line.split_whitespace().collect();
-        if let [name, _, _, hash] = f[..] {
-            if is_hash(hash) {
-                pins.insert(format!("case {name}"), hash.to_owned());
-            }
+        if let [name, _, _, hash] = f[..]
+            && is_hash(hash)
+        {
+            pins.insert(format!("case {name}"), hash.to_owned());
         }
     }
     pins
@@ -156,16 +156,14 @@ fn golden_pins_change_only_with_a_sim_version_bump() {
         record.as_ref(),
         &current,
     );
-    if let Err(Failure::Stale(_)) = result {
-        if std::env::var_os("UPDATE_SIM_PINS").is_some() {
-            let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/sim_version_pins.txt");
-            let pins = Pins {
-                sim_version: iwbtg_sim::SIM_VERSION,
-                pins: current,
-            };
-            std::fs::write(path, render(&pins)).expect("write sim_version_pins.txt");
-            return;
-        }
+    if matches!(result, Err(Failure::Stale(_))) && std::env::var_os("UPDATE_SIM_PINS").is_some() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/sim_version_pins.txt");
+        let pins = Pins {
+            sim_version: iwbtg_sim::SIM_VERSION,
+            pins: current,
+        };
+        std::fs::write(path, render(&pins)).expect("write sim_version_pins.txt");
+        return;
     }
     match result {
         Ok(()) => {}
