@@ -11,6 +11,10 @@
 //! - `pr-body [--issue N]`: prints a PR body for this branch: Closes, the commits, the docs it
 //!   changed, and the User check from the last `check`.
 //!
+//! - `fidelity [--bless]`: every trace case on every converter package in
+//!   `$IWBTG_RESEARCH/build/packages` (`iwbtg trace sweep`), as a game x OK/OPEN/FAIL matrix;
+//!   exits 1 when a case got worse than `crates/tools/fidelity-baseline.txt` (#785). `--bless`
+//!   rewrites the baseline.
 //! - `doctor`: checks the machine's tools against the repo; today the installed `wasm-bindgen` CLI
 //!   against the `wasm-bindgen` version in `Cargo.lock` (#723).
 //!
@@ -43,8 +47,10 @@ fn main() -> ExitCode {
         Some("regen") => regen(&root),
         Some("pr-body") => pr_body(&root, flag_value(&args, "--issue")),
         Some("doctor") => doctor(&root),
+        Some("fidelity") => fidelity(&root, args.iter().any(|a| a == "--bless")),
         _ => Err(
-            "usage: cargo xtask <check [--all] | repin | regen | pr-body [--issue N] | doctor>".to_string(),
+            "usage: cargo xtask <check [--all] | repin | regen | pr-body [--issue N] | doctor | fidelity [--bless]>"
+                .to_string(),
         ),
     };
     match result {
@@ -485,6 +491,44 @@ fn wasm_bindgen_problem(lock: &str, installed: Option<&str>) -> Result<(), Strin
 }
 
 /// `doctor`: machine checks against the repo. Fails when one does.
+/// The committed fidelity baseline: `<game>/<case> <STATUS>` lines, no private data.
+const FIDELITY_BASELINE: &str = "crates/tools/fidelity-baseline.txt";
+
+/// `fidelity`: one `iwbtg trace sweep` run (all packages and cases in one process).
+fn fidelity(root: &Path, bless: bool) -> Result<(), String> {
+    let Some(research) = std::env::var_os("IWBTG_RESEARCH") else {
+        return Err("set IWBTG_RESEARCH to the research checkout (for example ../research)".into());
+    };
+    // Relative to the folder cargo xtask was started in, not the workspace root it runs in.
+    let research = Path::new(&research)
+        .canonicalize()
+        .map_err(|e| format!("IWBTG_RESEARCH {}: {e}", Path::new(&research).display()))?;
+    let research = research.to_string_lossy();
+    // Windows `canonicalize` returns a verbatim (`\\?\`) path; the plain form is easier to read.
+    let research = research.strip_prefix(r"\\?\").unwrap_or(&research).to_owned();
+    let mut args = vec![
+        "run",
+        "-q",
+        "-p",
+        "iwbtg-tools",
+        "--",
+        "trace",
+        "sweep",
+        "--cases",
+        "crates/tools/cases",
+        "--baseline",
+        FIDELITY_BASELINE,
+        "--research",
+        &research,
+    ];
+    if bless {
+        args.push("--bless");
+    }
+    run(root, "cargo", &args, &[]).map_err(|_| {
+        format!("fidelity: a case got worse than {FIDELITY_BASELINE} (or the sweep could not run); see above")
+    })
+}
+
 fn doctor(root: &Path) -> Result<(), String> {
     let lock = std::fs::read_to_string(root.join("Cargo.lock")).map_err(|e| format!("Cargo.lock: {e}"))?;
     let installed = output(root, "wasm-bindgen", &["--version"], &[])

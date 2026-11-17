@@ -12,6 +12,7 @@ mod pkg_cmd;
 mod replay_cmd;
 mod room_cmd;
 mod script_cmd;
+mod sweep_cmd;
 mod trace_cmd;
 
 use std::path::{Path, PathBuf};
@@ -142,6 +143,25 @@ enum TraceCommand {
         /// Cases folder (default: IWBTG_CASES, else `crates/tools/cases` of the checkout around the current folder).
         #[arg(long)]
         cases: Option<PathBuf>,
+    },
+    /// Runs every case on every package folder (default `<research>/build/packages`) and prints a
+    /// game x status matrix; with `--baseline`, exits 1 when a case got worse (#785).
+    Sweep {
+        /// Folder of package folders (default: `<research>/build/packages`).
+        #[arg(long)]
+        packages: Option<PathBuf>,
+        /// Research repo (default: IWBTG_RESEARCH).
+        #[arg(long)]
+        research: Option<PathBuf>,
+        /// Cases folder (default: IWBTG_CASES, else `crates/tools/cases` of the checkout around the current folder).
+        #[arg(long)]
+        cases: Option<PathBuf>,
+        /// Baseline file of `<game>/<case> <STATUS>` lines to compare with.
+        #[arg(long)]
+        baseline: Option<PathBuf>,
+        /// Rewrite the baseline with this run's statuses instead of comparing.
+        #[arg(long, requires = "baseline")]
+        bless: bool,
     },
     /// Writes a case skeleton for a research trace and prints its kind.
     Import {
@@ -312,6 +332,18 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             let research = research_dir(research)?;
             let cases = cases_dir(cases)?;
             trace_cmd::check_main(&pkg, &research, &cases)
+        }
+        Command::Trace(TraceCommand::Sweep {
+            packages,
+            research,
+            cases,
+            baseline,
+            bless,
+        }) => {
+            let research = research_dir(research)?;
+            let cases = cases_dir(cases)?;
+            let packages = packages.unwrap_or_else(|| research.join("build/packages"));
+            sweep_cmd::main(&packages, &research, &cases, baseline.as_deref(), bless)
         }
         Command::Trace(TraceCommand::Import {
             trace,
