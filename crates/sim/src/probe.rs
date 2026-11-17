@@ -13,7 +13,7 @@ pub mod registry;
 
 use crate::builtins::state::BuiltinState;
 use crate::collide::Target;
-use crate::collide::bbox::reported_box;
+use crate::collide::bbox::{BboxRead, bbox_read};
 use crate::collide::query::Q;
 use crate::def::{GameDef, NameId, VarId};
 use crate::events;
@@ -254,8 +254,8 @@ pub enum FieldRef {
     Var(VarId),
     /// A kid field (`kid::api::read_field`), so the probe never depends on `KidState` layout.
     Kid(KidField),
-    /// `bbox_left`, `bbox_right`, `bbox_top`, `bbox_bottom`: the reported box
-    /// (`collide::bbox::reported_box`) at the instance's position after the tick.
+    /// `bbox_left`, `bbox_right`, `bbox_top`, `bbox_bottom`: what GML reads
+    /// (`collide::bbox::bbox_read`) at the instance's position after the tick.
     Bbox(BboxEdge),
 }
 
@@ -655,14 +655,11 @@ fn read_field(
         return trace::Value::Empty;
     };
     match field {
-        // No sprite and no mask: GML reads -100000 for all four (CLONE_SPEC collision, Confirmed
-        // (recorder), traces/animus/bbox-nomask.csv). A sprite with no frames or an empty mask
-        // is not traced, so it stays an empty cell.
-        FieldRef::Bbox(_) if inst.img.sprite().is_none() && inst.img.mask().is_none() => {
-            trace::Value::Real(BBOX_NO_MASK)
-        }
-        FieldRef::Bbox(e) => match reported_box(def, inst, (inst.m.x(), inst.m.y()), &rules.collide) {
-            Ok(Some(b)) => {
+        // `collide::bbox::bbox_read` (CLONE_SPEC collision): -100000 with no sprite and no mask,
+        // the point of a 1x1 mask for a no-frame sprite, maskNothing's normalized box. A box the
+        // spec has no rule for (other empty masks) stays an empty cell: UNKNOWN.
+        FieldRef::Bbox(e) => match bbox_read(def, inst, (inst.m.x(), inst.m.y()), &rules.collide) {
+            Ok(BboxRead::Box(b)) => {
                 let v = match e {
                     BboxEdge::Left => b.left,
                     BboxEdge::Right => b.right,
@@ -672,7 +669,8 @@ fn read_field(
                 #[allow(clippy::cast_precision_loss, reason = "room coordinates are far below 2^53")]
                 trace::Value::Real(v as f64)
             }
-            Ok(None) | Err(_) => trace::Value::Empty,
+            Ok(BboxRead::NoMask) => trace::Value::Real(BBOX_NO_MASK),
+            Ok(BboxRead::Unknown) | Err(_) => trace::Value::Empty,
         },
         FieldRef::Fixed(c) => fixed_value(def, w, inst, *c, frame),
         FieldRef::Alarm(n) => inst
@@ -1012,6 +1010,82 @@ mod tests {
             assert_eq!(read_column(&mut sim, me, &col, 1), trace::Value::Real(-100_000.0));
         }
         assert_eq!(sim.world, before);
+    }
+
+    /// A no-frame sprite reads the point round(x), round(y); maskNothing its normalized 2x2 box;
+    /// another inverted rectangle stays an empty cell (research#224, bbox-empty-mask.md).
+    #[test]
+    fn bbox_of_no_frame_sprite_and_empty_masks() {
+        use crate::def::{IRect, Mask, MaskId, MaskSet, MaskShape, SpriteDef, SpriteId};
+        let mut b = GameDefBuilder::new("probe-emptymask");
+        let ctl = b.kind(KindDef::new("ctl", Builtin::World));
+        b.room(RoomDef::new("room_1", 800, 608));
+        let boxes = [
+            (
+                0,
+                (1, 1),
+                IRect {
+                    left: 0,
+                    top: 0,
+                    right: -1,
+                    bottom: -1,
+                },
+            ),
+            (
+                1,
+                (2, 2),
+                IRect {
+                    left: 1,
+                    top: 1,
+                    right: 0,
+                    bottom: 0,
+                },
+            ),
+            (
+                1,
+                (32, 32),
+                IRect {
+                    left: 31,
+                    top: 31,
+                    right: 0,
+                    bottom: 0,
+                },
+            ),
+        ];
+        for (i, (frames, size, bbox)) in boxes.into_iter().enumerate() {
+            let d = b.def_mut();
+            d.masks.push(Mask {
+                bbox,
+                shape: MaskShape::Empty,
+            });
+            d.sprites.push(SpriteDef {
+                frames,
+                size,
+                origin: (0, 0),
+                masks: MaskSet::Shared(MaskId(u32::try_from(i).expect("id"))),
+            });
+        }
+        let def = b.build().expect("def");
+        let (mut sim, _) = sim_with_blocks();
+        sim.def = Arc::new(def);
+        sim.world = World::new(RoomId(0), 0);
+        let read = |sim: &mut Sim, sprite: u32| {
+            let me = sim.world.alloc_id().expect("id");
+            let mut inst = Instance::new(me, ctl, 0, Real::new(-2999.5), Real::new(-999.4));
+            inst.img.set_sprite(Some(SpriteId(sprite)));
+            sim.world.insert(inst).expect("insert");
+            [BboxEdge::Left, BboxEdge::Top, BboxEdge::Right, BboxEdge::Bottom].map(|e| {
+                let col = Column::Field {
+                    target: ProbeTarget::Row,
+                    field: FieldRef::Bbox(e),
+                };
+                read_column(sim, me, &col, 1)
+            })
+        };
+        let r = |v: f64| trace::Value::Real(v);
+        assert_eq!(read(&mut sim, 0), [r(-3000.0), r(-999.0), r(-3000.0), r(-999.0)]);
+        assert_eq!(read(&mut sim, 1), [r(-3000.0), r(-999.0), r(-2998.0), r(-998.0)]);
+        assert_eq!(read(&mut sim, 2), [const { trace::Value::Empty }; 4]);
     }
 
     /// `bbox_*` read the reported box (rounded after the offset, ties to even) and `place_free`
