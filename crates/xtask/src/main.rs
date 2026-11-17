@@ -6,7 +6,8 @@
 //!   `target/xtask/last-check.txt` for `pr-body`.
 //! - `repin`: after a deliberate change to hashed sim state, re-pins the state hash vectors
 //!   (`tests/hash_vectors.rs`), the `FINAL_HASH` of `tests/wp1_determinism.rs` and the golden
-//!   corpus, then runs them again.
+//!   corpus, then runs them again. After the `SIM_VERSION` freeze point it also records the pins
+//!   under `SIM_VERSION` and fails when one changed without a bump (#783).
 //! - `regen`: regenerates the generated files: format schemas and the script API docs.
 //! - `pr-body [--issue N]`: prints a PR body for this branch: Closes, the commits, the docs it
 //!   changed, and the User check from the last `check`.
@@ -345,6 +346,15 @@ fn repin(root: &Path) -> Result<(), String> {
         &["test", "-p", "iwbtg-sim", "--test", "it", "hash_vectors::"],
         &[],
     )?;
+    // After the freeze point, record the pins under SIM_VERSION; fails when a pin changed without
+    // a SIM_VERSION bump (docs/architecture/versioning.md, #783). Inert before the freeze.
+    run(
+        root,
+        "cargo",
+        &["test", "-p", "iwbtg-sim", "--test", "it", "sim_version_bump::"],
+        &[("UPDATE_SIM_PINS", "1")],
+    )
+    .map_err(|e| format!("{e}: a pinned hash changed after the freeze point; bump SIM_VERSION and repin"))?;
     println!("Re-pinned. Review `git diff` and say in the PR why the hashes changed.");
     Ok(())
 }
