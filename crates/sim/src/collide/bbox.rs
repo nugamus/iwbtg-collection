@@ -12,7 +12,7 @@
 //!   non-precise point, rectangle and line queries use. Facing left it reads `x-7..x+5`.
 
 use super::xform::{self, Xform, add, sub};
-use crate::def::{GameDef, IRect, Mask, MaskId, MaskSet, MaskShape};
+use crate::def::{GameDef, IRect, Mask, MaskId, MaskSet, MaskShape, SpriteDef};
 use crate::error::SimError;
 use crate::num::{NumError, Real, dcos, dsin, to_int_round};
 use crate::rules::CollideRules;
@@ -59,15 +59,17 @@ pub(crate) fn real_of(v: i64) -> Real {
 /// A mask and the origin it is placed by.
 pub type MaskAt<'a> = (&'a Mask, (i32, i32));
 
-/// The sprite that owns `mask` (first in table order), for its origin.
+/// The sprite that owns `mask` (first in table order).
+fn owner(def: &GameDef, mask: MaskId) -> Option<&SpriteDef> {
+    def.sprites.iter().find(|s| match &s.masks {
+        MaskSet::Shared(m) => *m == mask,
+        MaskSet::PerFrame(v) => v.contains(&mask),
+    })
+}
+
+/// The origin of the sprite that owns `mask`, or (0, 0).
 fn owner_origin(def: &GameDef, mask: MaskId) -> (i32, i32) {
-    def.sprites
-        .iter()
-        .find(|s| match &s.masks {
-            MaskSet::Shared(m) => *m == mask,
-            MaskSet::PerFrame(v) => v.contains(&mask),
-        })
-        .map_or((0, 0), |s| s.origin)
+    owner(def, mask).map_or((0, 0), |s| s.origin)
 }
 
 /// The mask an instance collides with and the origin it is placed by, or `None` when it has
@@ -179,6 +181,18 @@ pub fn reported_edges(
     if matches!(mask.shape, MaskShape::Empty) {
         return Ok(None);
     }
+    general_edges(mask.bbox, origin, inst, at).map(Some)
+}
+
+/// The general bbox rule for a mask box `b` placed by `origin`: per axis
+/// `L = (b.left - origin_x) * xscale`, `R = (b.right + 1 - origin_x) * xscale - 1`, the four
+/// corners rotated by image_angle and moved to `at`, then min and max (left, top, right, bottom).
+fn general_edges(
+    b: IRect,
+    origin: (i32, i32),
+    inst: &Instance,
+    at: (Real, Real),
+) -> Result<[Real; 4], SimError> {
     let img = &inst.img;
     for (v, what) in [
         (img.xscale(), "image_xscale"),
@@ -191,7 +205,6 @@ pub fn reported_edges(
             return Err(SimError::non_finite(what));
         }
     }
-    let b = mask.bbox;
     let ox = i64::from(origin.0);
     let oy = i64::from(origin.1);
     let l = real_of(sub(b.left, ox)?) * img.xscale();
@@ -213,7 +226,7 @@ pub fn reported_edges(
             ],
         });
     }
-    Ok(out)
+    out.ok_or_else(|| SimError::invariant("a box has four corners"))
 }
 
 /// The reported box (GML `bbox_left`, `bbox_top`, `bbox_right`, `bbox_bottom`): the
@@ -234,6 +247,89 @@ pub fn reported_box(
         right: place_origin(r, rules)?,
         bottom: place_origin(b, rules)?,
     }))
+}
+
+/// What GML `bbox_*` reads for an instance (the trace probe's `bbox_*` columns).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum BboxRead {
+    /// A box: left, top, right, bottom.
+    Box(IRect),
+    /// No sprite and no mask: all four read -100000 (CLONE_SPEC collision, Confirmed (recorder),
+    /// traces/animus/bbox-nomask.csv).
+    NoMask,
+    /// Not known: an empty mask the spec has no rule for (an inverted rectangle other than
+    /// maskNothing's, a fully transparent precise mask, a sprite with no collision shape).
+    Unknown,
+}
+
+/// The 1x1 mask a sprite with no frames reads as (mask 0..0, origin 0).
+const POINT_MASK: IRect = IRect {
+    left: 0,
+    top: 0,
+    right: 0,
+    bottom: 0,
+};
+
+/// maskNothing, the GameMaker template empty mask: a 2x2 sprite whose manual rectangle has
+/// left 1, right 0, top 1, bottom 0.
+const MASK_NOTHING: IRect = IRect {
+    left: 1,
+    top: 1,
+    right: 0,
+    bottom: 0,
+};
+
+/// What `bbox_*` reads for `inst` standing at `at` (CLONE_SPEC collision, "bbox_* of an
+/// instance that has a sprite but no usable box", Confirmed (recorder) for the no-frame sprite
+/// and maskNothing: traces/help-the-fairy-tale/bbox-empty-mask.csv and -b.csv).
+///
+/// - No sprite and no mask: [`BboxRead::NoMask`].
+/// - A sprite with no frames, as `sprite_index` without a mask, or as `mask_index`: the general
+///   rule on a 1x1 mask at the origin (mask 0..0, origin 0), so `round(x)`, `round(y)` at unit
+///   scale. A `mask_index` with frames wins over a no-frame sprite.
+/// - maskNothing (2x2, bounds 1,0,1,0): the general rule on its inverted box, whose min and max
+///   over the corners normalize it.
+/// - Any other empty mask: [`BboxRead::Unknown`]. The 32x32 and 7x8 inverted rectangles read raw
+///   inverted offsets in the trace for no known reason; a fully transparent precise mask was
+///   never recorded.
+/// - Otherwise [`reported_box`].
+///
+/// The collision code keeps using [`reported_box`], which has no box for these masks: only
+/// `bbox_*` was traced, not collisions with them.
+pub fn bbox_read(
+    def: &GameDef,
+    inst: &Instance,
+    at: (Real, Real),
+    rules: &CollideRules,
+) -> Result<BboxRead, SimError> {
+    let source = match (inst.img.mask(), inst.img.sprite()) {
+        (None, None) => return Ok(BboxRead::NoMask),
+        (Some(m), _) => owner(def, m),
+        (None, Some(s)) => def.sprite(s),
+    };
+    let rounded = |[l, t, r, b]: [Real; 4]| -> Result<BboxRead, SimError> {
+        Ok(BboxRead::Box(IRect {
+            left: place_origin(l, rules)?,
+            top: place_origin(t, rules)?,
+            right: place_origin(r, rules)?,
+            bottom: place_origin(b, rules)?,
+        }))
+    };
+    if let Some(sprite) = source
+        && sprite.frames == 0
+    {
+        return rounded(general_edges(POINT_MASK, (0, 0), inst, at)?);
+    }
+    let Some((mask, origin)) = instance_mask(def, inst)? else {
+        return Ok(BboxRead::Unknown);
+    };
+    if !matches!(mask.shape, MaskShape::Empty) {
+        return Ok(reported_box(def, inst, at, rules)?.map_or(BboxRead::Unknown, BboxRead::Box));
+    }
+    if mask.bbox == MASK_NOTHING && source.is_some_and(|s| s.size == (2, 2)) {
+        return rounded(general_edges(mask.bbox, origin, inst, at)?);
+    }
+    Ok(BboxRead::Unknown)
 }
 
 #[cfg(test)]
