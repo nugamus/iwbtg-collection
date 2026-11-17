@@ -1,10 +1,11 @@
 //! The practice assists that act on the clock (#551; docs/product.md, Mods): Slow motion (`SL`)
-//! and Frame advance (`FA`), picked with `--mods` (mods.rs). Neither changes what a tick
+//! and Frame advance (`FA`), picked in the mod select sheet or with `--mods` (mods.rs) and read when
+//! a run opens. Neither changes what a tick
 //! computes, only when ticks run, so a run's replay plays back the same; a run with either is
 //! never ranked (`ModSet::unranked_by`, said at start by `mods::describe` and in the HUD's mod
 //! row).
 //!
-//! - Slow motion runs the fixed clock at `--slow-speed` percent of the game's rate (75 or 50, a
+//! - Slow motion runs the fixed clock at [`SlowSpeed`] percent of the game's rate (75 or 50, a
 //!   client setting, not in the replay) through `view::ClockSpeed`; sounds play at the same
 //!   factor (audio.rs), so the music stays on the tick clock.
 //! - Frame advance holds the clock after the run's first tick: the sim ticks only when the
@@ -18,6 +19,7 @@ use iwbtg_sim::mods::{Mod, ModSet};
 
 use crate::audio::MusicSync;
 use crate::input::Collector;
+use crate::mods::RunMods;
 use crate::view::{ClockSpeed, SimTick};
 
 /// The slow motion speeds the mod select offers, in percent.
@@ -78,30 +80,69 @@ impl Default for Advance {
     }
 }
 
-/// Adds the run's clock assists.
+/// Adds the clock assists; each run plays with the ones in its [`RunMods`] and at the
+/// [`SlowSpeed`] it opened with. `slow_speed` is `--slow-speed`, the first [`SlowSpeed`].
 pub struct PracticePlugin {
-    pub mods: ModSet,
     pub slow_speed: u8,
 }
 
 impl Plugin for PracticePlugin {
     fn build(&self, app: &mut App) {
-        if let Some(line) = describe(self.mods, self.slow_speed) {
-            eprintln!("{line}");
-        }
-        let speed = clock_speed(self.mods, self.slow_speed);
-        // The view sets each run's first clock rate with it (`view::enter`); `follow_room_speed`
-        // keeps it so after every tick.
-        app.insert_resource(speed)
-            .insert_resource(SlowSpeed(self.slow_speed));
-        if self.mods.contains(Mod::FrameAdvance) {
-            crate::shell::run_resource(app, |_| Advance::default());
-            app.configure_sets(FixedUpdate, SimTick.run_if(|a: Res<Advance>| a.steps > 0))
-                .add_systems(FixedUpdate, take.before(SimTick))
-                .add_systems(FixedUpdate, spend.in_set(SimTick).after(crate::view::tick))
-                .add_systems(Update, hold_music.in_set(crate::shell::InRun));
-        }
+        let frame_advance = crate::mods::run_has(Mod::FrameAdvance);
+        app.insert_resource(SlowSpeed(self.slow_speed))
+            .init_resource::<ClockSpeed>()
+            // Before the view's core: `view::enter` sets the run's first clock rate with it, and
+            // `follow_room_speed` keeps it so after every tick.
+            .add_systems(
+                OnEnter(crate::shell::AppScreen::Run),
+                start.before(crate::shell::RunSteps::Core),
+            )
+            .add_systems(
+                OnEnter(crate::shell::AppScreen::Run),
+                (|mut commands: Commands| commands.insert_resource(Advance::default()))
+                    .run_if(frame_advance.clone())
+                    .in_set(crate::shell::RunSteps::Resources),
+            )
+            .add_systems(
+                OnExit(crate::shell::AppScreen::Run),
+                (|world: &mut World| {
+                    world.remove_resource::<Advance>();
+                })
+                .in_set(crate::shell::RunSteps::Resources),
+            )
+            // Without Frame advance there is no `Advance` and every step ticks.
+            .configure_sets(
+                FixedUpdate,
+                SimTick.run_if(|a: Option<Res<Advance>>| a.is_none_or(|a| a.steps > 0)),
+            )
+            .add_systems(
+                FixedUpdate,
+                take.before(SimTick).run_if(resource_exists::<Advance>),
+            )
+            .add_systems(
+                FixedUpdate,
+                spend
+                    .in_set(SimTick)
+                    .after(crate::view::tick)
+                    .run_if(resource_exists::<Advance>),
+            )
+            .add_systems(
+                Update,
+                hold_music
+                    .run_if(resource_exists::<Advance>)
+                    .in_set(crate::shell::InRun),
+            );
     }
+}
+
+/// When a run opens: the clock speed of its mods, and the terminal line on how to play them.
+fn start(world: &mut World) {
+    let mods = RunMods::of(world);
+    let slow = world.get_resource::<SlowSpeed>().map_or(SLOW_SPEEDS[0], |s| s.0);
+    if let Some(line) = describe(mods, slow) {
+        eprintln!("{line}");
+    }
+    world.insert_resource(clock_speed(mods, slow));
 }
 
 /// Each fixed step: the frame-advance presses since the last one become pending steps.
@@ -138,16 +179,18 @@ mod tests {
 
     /// An app with only the plugin and a stand-in tick in `SimTick`.
     fn app(mods: &str) -> App {
+        let mods = ModSet::parse(mods).unwrap();
         let mut app = App::new();
         app.insert_resource(Collector::new(crate::bindings::Bindings::default()))
+            .insert_resource(RunMods(mods))
             .init_resource::<Ticks>()
-            .add_plugins(PracticePlugin {
-                mods: ModSet::parse(mods).unwrap(),
-                slow_speed: 75,
-            })
-            // The shell inserts it when a run opens.
-            .init_resource::<Advance>()
+            .add_plugins(PracticePlugin { slow_speed: 75 })
             .add_systems(FixedUpdate, count.in_set(SimTick));
+        // What opening a run does (there is no `AppScreen` here).
+        start(app.world_mut());
+        if mods.contains(Mod::FrameAdvance) {
+            app.init_resource::<Advance>();
+        }
         app
     }
 

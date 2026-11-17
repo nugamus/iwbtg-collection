@@ -1,5 +1,5 @@
 //! The visual mods (#550; docs/product.md, Mods): Hitboxes (`HB`) and No background (`NB`),
-//! picked with `--mods` (mods.rs). Both only change the picture: they read the sim's state and
+//! picked in the mod select sheet or with `--mods` (mods.rs) and read when a run opens. Both only change the picture: they read the sim's state and
 //! never write it, so the replay and every hash stay the same.
 //!
 //! - Hitboxes draws the collision mask of the kid (green) and of every hazard (red: the `killer`
@@ -22,7 +22,7 @@ use iwbtg_sim::collide::PlacedMask;
 use iwbtg_sim::collide::instance_box;
 use iwbtg_sim::collide::overlap::point_in;
 use iwbtg_sim::def::{Builtin, ClassMask, GameDef};
-use iwbtg_sim::mods::{Mod, ModSet};
+use iwbtg_sim::mods::Mod;
 use iwbtg_sim::world::{InstId, Instance};
 
 use crate::view::{Game, RoomSize};
@@ -47,23 +47,36 @@ const FILL_ALPHA: u8 = 0x60;
 /// for a box that covers the screen anyway).
 const MAX_PIXELS: i64 = 1 << 22;
 
-/// Adds the run's visual mods.
-pub struct VisualPlugin(pub ModSet);
+/// Adds the visual mods; each run shows the ones in its [`RunMods`](crate::mods::RunMods).
+pub struct VisualPlugin;
 
 impl Plugin for VisualPlugin {
     fn build(&self, app: &mut App) {
-        if self.0.contains(Mod::NoBackground) {
-            app.insert_resource(PlainBackdrop(PLAIN));
-        }
-        if self.0.contains(Mod::Hitboxes) {
-            crate::shell::run_resource(app, |_| Hitboxes::default());
-            app.add_systems(
-                Update,
-                draw_hitboxes
-                    .after(crate::view::follow_view)
-                    .in_set(crate::shell::InRun),
-            );
-        }
+        let has = crate::mods::run_has;
+        app.add_systems(
+            OnEnter(crate::shell::AppScreen::Run),
+            (
+                (|mut commands: Commands| commands.insert_resource(PlainBackdrop(PLAIN)))
+                    .run_if(has(Mod::NoBackground)),
+                (|mut commands: Commands| commands.init_resource::<Hitboxes>()).run_if(has(Mod::Hitboxes)),
+            )
+                .in_set(crate::shell::RunSteps::Resources),
+        )
+        .add_systems(
+            OnExit(crate::shell::AppScreen::Run),
+            (|world: &mut World| {
+                world.remove_resource::<PlainBackdrop>();
+                world.remove_resource::<Hitboxes>();
+            })
+            .in_set(crate::shell::RunSteps::Resources),
+        )
+        .add_systems(
+            Update,
+            draw_hitboxes
+                .after(crate::view::follow_view)
+                .run_if(resource_exists::<Hitboxes>)
+                .in_set(crate::shell::InRun),
+        );
     }
 }
 
@@ -141,7 +154,7 @@ fn rasterize(placed: &PlacedMask) -> Option<(u32, u32, Vec<u8>)> {
 
 /// The hitbox sprites on screen and the mask pictures built so far.
 #[derive(Resource, Default)]
-struct Hitboxes {
+pub(crate) struct Hitboxes {
     drawn: BTreeMap<InstId, Entity>,
     images: HashMap<Shape, Option<Handle<Image>>>,
 }

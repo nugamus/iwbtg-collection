@@ -84,12 +84,11 @@ pub struct Stats {
     dirty: bool,
     since_flush: f32,
     current: Option<Current>,
-    mods: ModSet,
 }
 
 impl Stats {
     /// The stats kept in `store` (`None`: this session keeps nothing).
-    fn open(store: Option<Store>, mods: ModSet) -> Stats {
+    fn open(store: Option<Store>) -> Stats {
         let book = store.as_ref().map(load).unwrap_or_default();
         Stats {
             book,
@@ -100,8 +99,13 @@ impl Stats {
             dirty: false,
             since_flush: 0.0,
             current: None,
-            mods,
         }
+    }
+
+    /// The board key the current run counts on (`None` before its first tick).
+    #[cfg(test)]
+    pub(crate) fn board(&self) -> Option<&str> {
+        self.current.as_ref().map(|c| c.board.as_str())
     }
 
     /// Writes the book when it changed. A failed write is a warning; the next change tries
@@ -282,13 +286,12 @@ fn clear_line(ticks: u64, deaths: u32, rate: u32, rec: &Recorded) -> String {
 /// Adds the local stats. `keep: false` (a `--screenshot` check) reads and writes nothing.
 pub struct StatsPlugin {
     pub keep: bool,
-    pub mods: ModSet,
 }
 
 impl Plugin for StatsPlugin {
     fn build(&self, app: &mut App) {
         let store = if self.keep { Store::data() } else { None };
-        app.insert_resource(Stats::open(store, self.mods))
+        app.insert_resource(Stats::open(store))
             .add_systems(FixedUpdate, watch.after(SimTick))
             .add_systems(Update, flush_now_and_then)
             // Leaving the run saves its deaths and play time; the next run starts a new tracker.
@@ -308,6 +311,7 @@ fn watch(
     mut stats: ResMut<Stats>,
     replays: Option<Res<crate::replays::Recorder>>,
     menu: Option<Res<crate::pause::Menu>>,
+    mods: Option<Res<crate::mods::RunMods>>,
 ) {
     let sim = &game.sim;
     let def = sim.def();
@@ -318,7 +322,8 @@ fn watch(
             map: map_key(&def.id, sim.map_id()),
             game: def.id.clone(),
             tick_rate: def.tick_rate,
-            board: board_key(ranked, &stats.mods.codes()),
+            // The board of the mods the run opened with (`mods::RunMods`).
+            board: board_key(ranked, &mods.map_or(ModSet::NONE, |m| m.0).codes()),
             on_board: matches!(opts.start, StartPoint::NewGame { .. }),
             rooms: def.rooms.iter().map(|r| r.name.clone()).collect(),
             tracker: Tracker::new(def.timing.stages.len()),
@@ -395,7 +400,7 @@ mod tests {
         let store = temp("deaths");
         let mut world = crate::view::test_world(&pkg);
         world.insert_resource(Time::<Fixed>::from_hz(50.0));
-        world.insert_resource(Stats::open(Some(store.clone()), ModSet::NONE));
+        world.insert_resource(Stats::open(Some(store.clone())));
         let suicide = InputFrame {
             held: Action::Suicide.bit(),
             pressed: Action::Suicide.bit(),
@@ -418,7 +423,7 @@ mod tests {
         assert_eq!(stats.session.segment_deaths[&id], vec![1]);
         assert_eq!(store.read_text(FILE).unwrap(), None, "not written before a flush");
         reset(&mut world);
-        let again = Stats::open(Some(store), ModSet::NONE);
+        let again = Stats::open(Some(store));
         assert_eq!(again.book.map(&id).unwrap().deaths, 1);
         assert_eq!(again.session, Session::default(), "a session starts at zero");
     }
@@ -514,7 +519,7 @@ mod tests {
         let store = temp("death-log");
         let mut world = crate::view::test_world(&pkg);
         world.insert_resource(Time::<Fixed>::from_hz(50.0));
-        world.insert_resource(Stats::open(Some(store.clone()), ModSet::NONE));
+        world.insert_resource(Stats::open(Some(store.clone())));
         world.run_system_once(watch).unwrap();
         let (start_room, kid_x, kid_y) = {
             let game = world.non_send::<Game>();
@@ -567,7 +572,7 @@ mod tests {
         assert_eq!(room, start_room);
         assert!((x - kid_x).abs() <= 1 && (y - kid_y).abs() <= 1, "{first:?}");
         let board = world.resource::<Stats>().current.as_ref().unwrap().board.clone();
-        let again = Stats::open(Some(store), ModSet::NONE);
+        let again = Stats::open(Some(store));
         let id = map_key(&pkg.def.id, "main");
         let pb = again.book.map(&id).unwrap().boards[&board].pb().unwrap();
         assert_eq!(pb.death_log, run.death_log);
@@ -586,7 +591,7 @@ mod tests {
         let store = temp("clear");
         let mut world = crate::view::test_world(&pkg);
         world.insert_resource(Time::<Fixed>::from_hz(50.0));
-        world.insert_resource(Stats::open(Some(store.clone()), ModSet::NONE));
+        world.insert_resource(Stats::open(Some(store.clone())));
         let mut runs = Vec::new();
         for waits in [[0, 10], [20, 0]] {
             let (rec, run) = play_demo_clear(&mut world, waits);
@@ -618,7 +623,7 @@ mod tests {
             second.0
         );
         let id = map_key(&pkg.def.id, "main");
-        let again = Stats::open(Some(store), ModSet::NONE);
+        let again = Stats::open(Some(store));
         assert_eq!(
             again.book.map(&id).unwrap().clears,
             2,
@@ -634,7 +639,7 @@ mod tests {
         let pkg = crate::package::open(&dir, false).unwrap();
         let mut world = crate::view::test_world(&pkg);
         world.insert_resource(Time::<Fixed>::from_hz(50.0));
-        world.insert_resource(Stats::open(None, ModSet::NONE));
+        world.insert_resource(Stats::open(None));
         world.insert_resource(crate::pause::Menu::default());
         let (_, plain) = play_demo_clear(&mut world, [0, 0]);
         crate::view::restart_run(&mut world).unwrap();
@@ -654,7 +659,7 @@ mod tests {
     fn an_unreadable_file_is_kept_aside_not_overwritten() {
         let store = temp("broken");
         store.write_text(FILE, "version = \"x\"").unwrap();
-        let stats = Stats::open(Some(store.clone()), ModSet::NONE);
+        let stats = Stats::open(Some(store.clone()));
         assert!(stats.book.maps.is_empty());
         assert_eq!(
             store.read_text(BROKEN).unwrap().as_deref(),
