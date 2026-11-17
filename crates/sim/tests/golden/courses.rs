@@ -1,6 +1,6 @@
 //! Kid courses (#786): one synthetic room per kid family, with the engine kinds, a floor, a
 //! kid start and a set of built-ins the kid runs into under a scripted input, plus the
-//! script API case. Every `Builtin` and every `KidFamily` appears in at least one case; the
+//! param variants course (#898) and the script API case. Every `Builtin` and every `KidFamily` appears in at least one case; the
 //! coverage lines of the report (`builtin <name> <case>`, `family <name> <case>`) and the
 //! `golden_corpus` coverage test keep it that way.
 //!
@@ -67,6 +67,12 @@ pub fn cases() -> Vec<Case> {
             name: "kid_c_particles",
             ticks: 3_000,
             build: || course(KidFamily::C, c_objects),
+            input: course_input,
+        },
+        Case {
+            name: "kid_param_variants",
+            ticks: 3_000,
+            build: || course(KidFamily::A1, variant_objects),
             input: course_input,
         },
         Case {
@@ -781,6 +787,162 @@ fn c_objects(c: &mut Course) {
     );
     // The death screen face is placed by packages, not spawned by the engine.
     c.put(0, 400.0, 240.0, "face", Builtin::Playerface, &[]);
+}
+
+/// The param variants that give a built-in its own kid, kid bullet or blood collision handler
+/// (#898), in one row the kid runs and shoots along: a save you shoot, fake blocks that vanish
+/// on touch or fade as a group and stop bullets, hidden blocks a bullet or blood destroys or
+/// that stop bullets, a breakable block the kid breaks by touch and one he shoots, platforms
+/// that start when touched, a spike that eats bullets, a killer that kills by its own
+/// collision, and a `room_assign` edge warp to the annex and a warp back. The bullet uses
+/// `block_check = "collision_destroy"` here.
+fn variant_objects(c: &mut Course) {
+    let t = ParamValue::Bool(true);
+    // Bullets meet blocks in the collision phase (most A2/A3 games), not in their own Step,
+    // so they reach the blocks that break or vanish when shot.
+    let bullet = c.def_mut().kinds.iter().position(|k| k.base == Builtin::KidBullet);
+    let bullet = bullet.expect("the engine bullet kind");
+    c.def_mut().kinds[bullet]
+        .params
+        .0
+        .insert("block_check".into(), word("collision_destroy"));
+    c.put(
+        0,
+        96.0,
+        544.0,
+        "save_shot",
+        Builtin::Save,
+        &[("on_shot", t.clone()), ("on_touch", word("never"))],
+    );
+    c.put(
+        0,
+        128.0,
+        544.0,
+        "fake_touch",
+        Builtin::FakeBlock,
+        &[("vanish_on", word("touch")), ("stops_bullets", t.clone())],
+    );
+    let fade = c.put(
+        0,
+        160.0,
+        544.0,
+        "fake_fade",
+        Builtin::FakeBlock,
+        &[("vanish_on", word("group_fade"))],
+    );
+    c.at(0, fade, 160.0, 512.0);
+    c.put(
+        0,
+        224.0,
+        544.0,
+        "hidden_shot",
+        Builtin::HiddenBlock,
+        &[("destroyed_by_bullet", t.clone())],
+    );
+    c.put(
+        0,
+        288.0,
+        544.0,
+        "breakable_shot",
+        Builtin::BreakableBlock,
+        &[("break_on", word("shot"))],
+    );
+    c.put(
+        0,
+        352.0,
+        544.0,
+        "breakable_touch",
+        Builtin::BreakableBlock,
+        &[("break_on", word("touch_delay"))],
+    );
+    let spike = c.put(
+        0,
+        416.0,
+        544.0,
+        "spike_eats",
+        Builtin::Spike,
+        &[("destroys_bullets", t.clone())],
+    );
+    // The solid blocks before it stop the bullets in this room; the annex has a clear run.
+    c.at(1, spike, 320.0, 544.0);
+    // Blood from the spike above reaches it while it is still hidden.
+    c.put(
+        0,
+        416.0,
+        480.0,
+        "hidden_blood",
+        Builtin::HiddenBlock,
+        &[("destroyed_by_blood", t.clone()), ("reveal_distance", real(1.0))],
+    );
+    c.put(
+        0,
+        480.0,
+        512.0,
+        "hidden_stops",
+        Builtin::HiddenBlock,
+        &[("stops_bullets", t.clone())],
+    );
+    c.put(
+        0,
+        512.0,
+        528.0,
+        "moving_touch",
+        Builtin::MovingPlatform,
+        &[("hspeed", real(1.0)), ("bounce", t.clone()), ("start_on_touch", t.clone())],
+    );
+    c.def_mut().paths.push(PathDef {
+        name: "hop".into(),
+        points: vec![(r(560.0), r(528.0), r(100.0)), (r(560.0), r(460.0), r(100.0))],
+        closed: true,
+        smooth: false,
+        precision: 4,
+    });
+    c.put(
+        0,
+        560.0,
+        528.0,
+        "path_touch",
+        Builtin::PathPlatform,
+        &[
+            ("path", real(0.0)),
+            ("speed", real(1.0)),
+            ("path_end", word("restart")),
+            ("start_on_touch", t.clone()),
+        ],
+    );
+    c.put(
+        0,
+        640.0,
+        544.0,
+        "border_killer",
+        Builtin::Killer,
+        &[("kill_outside_view", t)],
+    );
+    c.put(
+        0,
+        704.0,
+        544.0,
+        "room_switch",
+        Builtin::EdgeWarp,
+        &[
+            ("mode", word("room_assign")),
+            ("room_to", ParamValue::Room(c.rooms[1])),
+            ("warp_x", real(80.0)),
+            ("warp_y", real(540.0)),
+        ],
+    );
+    c.put(
+        1,
+        704.0,
+        544.0,
+        "warp_back",
+        Builtin::Warp,
+        &[
+            ("room_to", ParamValue::Room(c.rooms[0])),
+            ("warp_x", real(80.0)),
+            ("warp_y", real(540.0)),
+        ],
+    );
 }
 
 /// The script API case: a `scripted` controller that calls every function of the script API
