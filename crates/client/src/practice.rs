@@ -40,6 +40,10 @@ fn parse_speed(text: &str) -> Result<u8, String> {
         .ok_or_else(|| format!("`{text}` is not a slow motion speed (75 or 50)"))
 }
 
+/// Slow motion's speed in percent (`--slow-speed`; the mod select sheet's 75% / 50%).
+#[derive(Resource, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SlowSpeed(pub u8);
+
 /// The clock speed a run with `mods` plays at.
 pub fn clock_speed(mods: ModSet, slow_speed: u8) -> ClockSpeed {
     if mods.contains(Mod::SlowMotion) {
@@ -88,7 +92,7 @@ impl Plugin for PracticePlugin {
         let speed = clock_speed(self.mods, self.slow_speed);
         // The view sets each run's first clock rate with it (`view::enter`); `follow_room_speed`
         // keeps it so after every tick.
-        app.insert_resource(speed);
+        app.insert_resource(speed).insert_resource(SlowSpeed(self.slow_speed));
         if self.mods.contains(Mod::FrameAdvance) {
             crate::shell::run_resource(app, |_| Advance::default());
             app.configure_sets(FixedUpdate, SimTick.run_if(|a: Res<Advance>| a.steps > 0))
