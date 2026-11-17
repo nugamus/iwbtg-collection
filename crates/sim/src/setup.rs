@@ -326,6 +326,12 @@ fn set_field(
             "setup cannot write `{}`: it is read-only",
             e.name()
         ))),
+        // `image_number`, `sprite_width` and `sprite_height` are read-only in GML; writing
+        // `mask_index` (a GM sprite to one of our masks) is not supported.
+        FieldRef::Sprite(f) => Err(SimError::unsupported(format!(
+            "setup cannot write `{}`",
+            f.name()
+        ))),
     }
 }
 

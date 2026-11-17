@@ -9,7 +9,7 @@
 
 use super::{
     BboxEdge, Column, EngineVar, FieldRef, FixedColumn, ImageField, KeyRead, ProbeTarget, RowExpr, SaveField,
-    Term,
+    SpriteField, Term,
 };
 use crate::collide::Target;
 use crate::def::{ClassMask, GameDef, KindId, NameId};
@@ -18,15 +18,11 @@ use crate::kid::api::KidField;
 
 /// GM built-in instance variables the probe cannot read yet (no `FieldRef` for them). They never
 /// resolve to a kid field or a custom variable.
-const UNSUPPORTED_BUILTINS: [&str; 20] = [
+const UNSUPPORTED_BUILTINS: [&str; 16] = [
     "xstart",
     "ystart",
-    "mask_index",
-    "image_number",
     "image_single",
     "image_blend",
-    "sprite_width",
-    "sprite_height",
     "sprite_xoffset",
     "sprite_yoffset",
     "object_index",
@@ -45,10 +41,11 @@ const UNSUPPORTED_BUILTINS: [&str; 20] = [
 ///
 /// Built-in variables first: the fixed columns that are instance variables (`x` ...
 /// `image_index`, `sprite_index`, `id`), `alarm[0]` to `alarm[11]`, the image variables and
-/// `visible`, `solid`, `depth`, `bbox_left` ... `bbox_bottom`. Then a custom variable the package declares
+/// `visible`, `solid`, `depth`, `bbox_left` ... `bbox_bottom`, `mask_index`, `image_number`,
+/// `sprite_width`, `sprite_height`. Then a custom variable the package declares
 /// (`GameDef::var_names`, no index). Any other identifier, with or without one index
 /// (`djump`, `jump[1]`), is a kid field read through `kid::api::read_field`, which gives no value
-/// on an instance that is not a kid. Built-ins the probe cannot read yet (`xstart`, `mask_index`,
+/// on an instance that is not a kid. Built-ins the probe cannot read yet (`xstart`, `path_index`,
 /// `timeline_position`, ...) and anything that is not a plain name give `None`.
 pub fn resolve(name: &str, def: &GameDef) -> Option<FieldRef> {
     let (base, index) = split_index(name)?;
@@ -59,6 +56,7 @@ pub fn resolve(name: &str, def: &GameDef) -> Option<FieldRef> {
         || FixedColumn::from_name(base).is_some()
         || is_image_name(base)
         || BboxEdge::from_name(base).is_some()
+        || SpriteField::from_name(base).is_some()
     {
         return None;
     }
@@ -287,6 +285,9 @@ fn builtin(base: &str, index: Option<u32>) -> Option<FieldRef> {
     if let Some(e) = BboxEdge::from_name(base) {
         return Some(FieldRef::Bbox(e));
     }
+    if let Some(f) = SpriteField::from_name(base) {
+        return Some(FieldRef::Sprite(f));
+    }
     image_field(base).map(FieldRef::Image)
 }
 
@@ -374,8 +375,12 @@ mod tests {
         assert_eq!(resolve("jump[1]", &d), kid("jump", Some(1)));
         assert_eq!(resolve("bbox_left", &d), Some(FieldRef::Bbox(BboxEdge::Left)));
         assert_eq!(resolve("bbox_bottom", &d), Some(FieldRef::Bbox(BboxEdge::Bottom)));
+        for f in SpriteField::ALL {
+            assert_eq!(resolve(f.name(), &d), Some(FieldRef::Sprite(f)));
+        }
         for bad in [
             "bbox_left[0]",
+            "mask_index[0]",
             "xstart",
             "room",
             "frame",
@@ -491,7 +496,7 @@ mod tests {
             "global.audio_music_volume",
             "global.a[1]",
             "player.x",
-            "kid.mask_index",
+            "kid.path_index",
             "place_free(x)",
             "place_free(x+,y)",
             "place_free(x+xstart,y)",
