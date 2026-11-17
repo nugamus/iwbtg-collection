@@ -1100,7 +1100,11 @@ type CardParts = (
 );
 
 /// The mod cards' hover, press, focus ring and colours, and their option pills.
-#[allow(clippy::type_complexity, reason = "the card, its parts and its options")]
+#[allow(
+    clippy::type_complexity,
+    clippy::too_many_arguments,
+    reason = "the card, its parts and its options"
+)]
 fn mod_card_looks(
     time: Res<Time>,
     reduced: Res<ReducedMotion>,
