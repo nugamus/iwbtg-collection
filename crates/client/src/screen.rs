@@ -23,7 +23,7 @@ use crate::hud::layout;
 use crate::hud::{HudLayout, HudOptions};
 use crate::package::decode_png;
 use crate::settings::{self, Settings};
-use crate::shell::{self, AppScreen, InRun, RUN_ONLY};
+use crate::shell::{self, AppScreen, InRun, RUN_ONLY, RunScreen};
 use crate::ui::backdrop::{self, Backdrop, BackdropPlugin};
 use crate::view::{Game, GameCamera, RoomSize, ViewRect};
 use crate::visual::PlainBackdrop;
@@ -188,6 +188,7 @@ impl Plugin for ScreenPlugin {
             )
                 .chain(),
         )
+        .add_systems(OnEnter(RunScreen::Playing), gameplay_dim)
         .add_systems(OnExit(AppScreen::Run), leave.in_set(InRun));
         shell::reset_on_enter::<Letterbox>(app);
     }
@@ -324,9 +325,19 @@ pub(crate) fn apply(
     }
 }
 
+/// The game shows (`RunScreen::Playing`): the backdrop takes the gameplay dim. The loading card
+/// and the results set theirs on entering (#839).
+fn gameplay_dim(backdrop: Option<ResMut<Backdrop>>) {
+    if let Some(mut b) = backdrop
+        && b.dim != backdrop::dim::GAMEPLAY
+    {
+        b.dim = backdrop::dim::GAMEPLAY;
+    }
+}
+
 /// Sets the background once: the game's key art (`[key_art]`, else the first ranked room's
-/// background, else its colour, else the client's own), blurred by the player's setting and
-/// dimmed for gameplay. The backdrop system draws it over the whole window, so the game never
+/// background, else its colour, else the client's own), blurred by the player's setting. The
+/// dim is the run screen's (`gameplay_dim`, the loading card's, the results'). The backdrop system draws it over the whole window, so the game never
 /// has black bars (docs/product.md, Look and screen).
 fn game_backdrop(
     files: Res<ArtFiles>,
@@ -355,7 +366,6 @@ fn game_backdrop(
         decode_png(bytes).map(|s| (s.rgba, s.size.0, s.size.1))
     });
     backdrop.art = Some(images.add(image));
-    backdrop.dim = backdrop::dim::GAMEPLAY;
     backdrop.blur = settings::get().backdrop_blur as f32 / 100.0;
 }
 

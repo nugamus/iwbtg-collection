@@ -4,8 +4,9 @@
 //!
 //! A clear that goes on a stats board (`stats.rs`: a run started as a new game) opens it: the
 //! time, its local placement and what the run changed, the frozen leaderboard (`hud/leaderboard`),
-//! the player card (`card/`), the splits against the PB and the deaths per stage. While it shows
-//! the sim does not tick, the game and the HUD are hidden and the backdrop takes the results dim.
+//! the player card (`card/`), the splits against the PB and the deaths per stage. It is the run
+//! screen `RunScreen::Results` (shell, #839): the sim does not tick, and `OnEnter` hides the game
+//! and the HUD and gives the backdrop the results dim (`OnExit` undoes it and drops the page).
 //! Back (or Escape) returns to the game; Retry (click, or hold R) starts a new run as the
 //! quick-retry key does; Save replay copies the run's replay to `exports/` in the data area.
 //! Watch replay waits for the replay viewer (#42), Upload replay for M7.
@@ -38,13 +39,13 @@ use crate::art::{ArtFiles, ArtImages};
 use crate::card::{self, Card, RunChange};
 use crate::hud::Suspended;
 use crate::hud::leaderboard::{self, Entry};
-use crate::shell::{self, InRun, RUN_ONLY};
+use crate::shell::{self, InRun, RUN_ONLY, RunScreen};
 use crate::stats::{Board, Cleared, Recorded, Run, Stats, fmt_ticks};
 use crate::storage::Store;
 use crate::ui::backdrop::{Backdrop, dim};
 use crate::ui::filter::{self, FilterMaterial};
 use crate::ui::tokens;
-use crate::view::{Game, GameCamera, SimTick, Textures};
+use crate::view::{Game, GameCamera, Textures};
 
 pub use page::Size;
 
@@ -422,7 +423,7 @@ pub enum Action {
     SaveReplay,
 }
 
-/// The results' state. `summary` is `Some` while the page shows.
+/// The results' state. `summary` is `Some` while the page shows (`RunScreen::Results`).
 #[derive(Resource, Default)]
 pub struct Results {
     summary: Option<Summary>,
@@ -449,11 +450,6 @@ impl Results {
     }
 }
 
-/// Whether the results page is closed (a run condition: the sim ticks, the pause key works).
-pub fn closed(results: Option<Res<Results>>) -> bool {
-    results.is_none_or(|r| r.summary.is_none())
-}
-
 /// A retry (`retry.rs`) starts a new run: the page closes.
 pub(crate) fn reset(world: &mut World) {
     if let Some(mut r) = world.get_resource_mut::<Results>() {
@@ -461,6 +457,16 @@ pub(crate) fn reset(world: &mut World) {
         r.held = 0.0;
         r.picked = None;
     }
+    if shell::run_screen(world) == Some(RunScreen::Results) {
+        shell::go(world, RunScreen::Playing);
+    }
+}
+
+/// Opens the page with the artboards' sample on the next frame of play, as `--results-preview`
+/// does at once (a clear without playing one).
+#[cfg(test)]
+pub(crate) fn preview_next(world: &mut World, scenario: Scenario) {
+    world.resource_mut::<Results>().preview = Some(scenario);
 }
 
 pub struct ResultsPlugin(pub ResultsArgs);
@@ -473,12 +479,23 @@ impl Plugin for ResultsPlugin {
         let preview = self.0.results_preview;
         shell::run_resource(app, move |_| Results { preview, ..default() });
         shell::run_resource(app, |_| room::Pictures::default());
-        app.configure_sets(FixedUpdate, SimTick.run_if(closed))
+        let on_page = in_state(RunScreen::Results);
+        app.add_systems(OnEnter(RunScreen::Results), cover)
+            .add_systems(OnExit(RunScreen::Results), uncover)
             .add_observer(on_activate)
             .add_observer(on_row_click)
             .add_systems(
                 Update,
-                (open, keys, act, show, hover_rows, heat, light_rows)
+                (
+                    // A clear opens the page from the game.
+                    open.run_if(in_state(RunScreen::Playing)),
+                    keys.run_if(on_page.clone()),
+                    act.run_if(on_page.clone()),
+                    show.run_if(on_page),
+                    hover_rows,
+                    heat,
+                    light_rows,
+                )
                     .chain()
                     .after(crate::screen::apply)
                     .in_set(InRun),
@@ -497,13 +514,14 @@ fn game_title(files: Option<&ArtFiles>, id: &str) -> String {
         .unwrap_or_else(|| id.to_owned())
 }
 
-/// Opens the page for a new clear on a board (or the preview at once).
+/// Opens the page (`RunScreen::Results`) for a new clear on a board (or the preview at once).
 fn open(
     game: NonSend<Game>,
     stats: Option<Res<Stats>>,
     files: Option<Res<ArtFiles>>,
     mods: Option<Res<crate::mods::RunMods>>,
     mut results: ResMut<Results>,
+    mut next: ResMut<NextState<RunScreen>>,
 ) {
     if results.summary.is_some() {
         return;
@@ -516,6 +534,7 @@ fn open(
             .room(sim.world().room)
             .map(|r| (r.name.clone(), Vec2::new(r.width as f32, r.height as f32)));
         show_summary(&mut results, sample::summary(s, room));
+        next.set(RunScreen::Results);
         return;
     }
     let Some(stats) = stats else {
@@ -568,6 +587,7 @@ fn open(
     };
     let summary = Summary::new(about, run, rec, board, card);
     show_summary(&mut results, summary);
+    next.set(RunScreen::Results);
 }
 
 fn show_summary(results: &mut Results, summary: Summary) {
@@ -686,7 +706,7 @@ fn act(world: &mut World) {
     };
     match action {
         Action::Back => {
-            world.resource_mut::<Results>().summary = None;
+            shell::go(world, RunScreen::Playing);
             // Keys pressed on the page never reach the game.
             if let Some(mut c) = world.get_resource_mut::<crate::input::Collector>() {
                 c.take_frame();
@@ -741,10 +761,37 @@ struct ResultsCamera;
 
 type RootParts = (Entity, &'static Root, &'static mut Node);
 
-/// Shows or hides the page: the game camera, the HUD, the backdrop's dim, the UI scale (the
-/// page is laid out at its artboard's size and scaled to fit the window), and draws it again
-/// when its size class or content changed.
-#[allow(clippy::too_many_arguments, reason = "one pass over what the page covers")]
+/// Entering the page: the game camera off, the HUD suspended, the backdrop at the results dim.
+fn cover(
+    mut game_cameras: Query<&mut Camera, With<GameCamera>>,
+    suspended: Option<ResMut<Suspended>>,
+    backdrop: Option<ResMut<Backdrop>>,
+) {
+    shell::cover_game(true, Some(dim::RESULTS), &mut game_cameras, suspended, backdrop);
+}
+
+/// Leaving the page (Back, a retry, the run closing): the page and its camera go, the game and
+/// the HUD come back (`RunScreen::Playing` sets the gameplay dim).
+fn uncover(
+    mut commands: Commands,
+    roots: Query<Entity, With<Root>>,
+    cameras: Query<Entity, With<ResultsCamera>>,
+    mut game_cameras: Query<&mut Camera, With<GameCamera>>,
+    suspended: Option<ResMut<Suspended>>,
+    backdrop: Option<ResMut<Backdrop>>,
+    results: Option<ResMut<Results>>,
+) {
+    for entity in roots.iter().chain(&cameras) {
+        commands.entity(entity).despawn();
+    }
+    if let Some(mut r) = results {
+        r.summary = None;
+    }
+    shell::cover_game(false, None, &mut game_cameras, suspended, backdrop);
+}
+
+/// Draws the page at the window's UI scale (it is laid out at its artboard's size and scaled to
+/// fit the window), again when its size class or content changed.
 fn show(
     mut commands: Commands,
     results: Res<Results>,
@@ -753,35 +800,10 @@ fn show(
     mut ui_scale: ResMut<UiScale>,
     mut roots: Query<RootParts>,
     cameras: Query<Entity, With<ResultsCamera>>,
-    mut game_cameras: Query<&mut Camera, (With<GameCamera>, Without<ResultsCamera>)>,
-    mut suspended: ResMut<Suspended>,
-    mut backdrop: ResMut<Backdrop>,
-    mut was_open: Local<bool>,
 ) {
-    // Only on opening and closing, so the loading card (`loading.rs`) can cover the game too.
-    let open = results.summary.is_some();
-    if *was_open != open {
-        *was_open = open;
-        suspended.0 = open;
-        for mut camera in &mut game_cameras {
-            camera.is_active = !open;
-        }
-    }
     let Some(summary) = &results.summary else {
-        for (entity, _, _) in &roots {
-            commands.entity(entity).despawn();
-        }
-        for entity in &cameras {
-            commands.entity(entity).despawn();
-        }
-        if backdrop.dim == dim::RESULTS {
-            backdrop.dim = dim::GAMEPLAY;
-        }
         return;
     };
-    if backdrop.dim != dim::RESULTS {
-        backdrop.dim = dim::RESULTS;
-    }
     let win = window.size();
     if win.x < 1.0 || win.y < 1.0 {
         return;

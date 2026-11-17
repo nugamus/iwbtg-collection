@@ -4,8 +4,9 @@
 //!
 //! It shows when the client opens a package: title, creator, map, your PB, the stage count and
 //! the mods, with the amber Unranked pill and the reason when the run will not reach a board.
-//! While it shows the sim does not tick, the game and the HUD are hidden and the backdrop takes
-//! the loading dim. It stays at least [`MIN_SECONDS`] and then starts the run by itself; Escape
+//! It is the run's first screen, `RunScreen::Loading` (#839): the sim does not tick, and
+//! `OnEnter` hides the game and the HUD and gives the backdrop the loading dim (`OnExit` undoes
+//! it). It stays at least [`MIN_SECONDS`] and then starts the run by itself; Escape
 //! (or Start) goes back to the select list, else quits (the card says which). The package is already loaded when the
 //! window opens, so the progress line fills over the minimum time.
 //!
@@ -22,11 +23,11 @@ use iwbtg_sim::stripped::PlayMode;
 
 use crate::art::ArtFiles;
 use crate::hud::Suspended;
-use crate::shell::{self, InRun, RUN_ONLY};
+use crate::shell::{self, InRun, RUN_ONLY, RunScreen, FirstScreen};
 use crate::stats::{Book, Stats, fmt_ticks, map_key};
 use crate::ui::backdrop::{Backdrop, dim};
 use crate::ui::motion::ReducedMotion;
-use crate::view::{ClockSpeed, Game, GameCamera, SimTick};
+use crate::view::{ClockSpeed, Game, GameCamera};
 
 /// The card shows at least this long, seconds.
 pub const MIN_SECONDS: f32 = 1.5;
@@ -200,29 +201,24 @@ pub fn standing(run: RunKind) -> Standing {
     }
 }
 
-/// The card's state.
+/// The card's state (it shows in `RunScreen::Loading`).
 #[derive(Resource)]
 pub struct Loading {
-    open: bool,
     /// Seconds shown.
     shown: f32,
     /// `--loading-preview`: never starts the run, shows the sample PB.
     preview: bool,
     tip: usize,
     info: Option<Info>,
-    /// Whether the page was up last frame (`show` suspends the game on the change).
-    was_open: bool,
 }
 
 impl Loading {
-    fn new(open: bool, preview: bool, tip: usize) -> Loading {
+    fn new(preview: bool, tip: usize) -> Loading {
         Loading {
-            open,
             shown: 0.0,
             preview,
             tip,
             info: None,
-            was_open: false,
         }
     }
 
@@ -234,11 +230,6 @@ impl Loading {
             (self.shown / MIN_SECONDS).clamp(0.0, 1.0)
         }
     }
-}
-
-/// Whether the card is gone (a run condition: the sim ticks, the pause key works).
-pub fn closed(loading: Option<Res<Loading>>) -> bool {
-    loading.is_none_or(|l| !l.open)
 }
 
 /// Adds the card. `skip` (a `--screenshot` check without `--loading-preview`) starts the run at
@@ -255,9 +246,11 @@ impl Plugin for LoadingPlugin {
         if self.args.loading_preview_back {
             app.insert_resource(PreviewBack);
         }
-        // Every run opens with the card (and a new tip).
+        // Every run opens with the card (and a new tip), unless a screenshot check skips it.
+        if skip && !preview {
+            app.insert_resource(FirstScreen(RunScreen::Playing));
+        }
         shell::run_resource(app, move |_| {
-            let open = preview || !skip;
             let tip = if preview || skip {
                 0
             } else {
@@ -265,15 +258,17 @@ impl Plugin for LoadingPlugin {
                     .duration_since(std::time::UNIX_EPOCH)
                     .map_or(0, |d| d.as_secs() as usize % TIPS.len())
             };
-            Loading::new(open, preview, tip)
+            Loading::new(preview, tip)
         });
-        app.configure_sets(FixedUpdate, SimTick.run_if(closed))
+        app.add_systems(OnEnter(RunScreen::Loading), cover)
+            .add_systems(OnExit(RunScreen::Loading), uncover)
             .add_systems(
                 Update,
                 (prepare, keys, advance, show, animate)
                     .chain()
                     .after(crate::screen::apply)
-                    .in_set(InRun),
+                    .in_set(InRun)
+                    .run_if(in_state(RunScreen::Loading)),
             );
     }
 }
@@ -287,7 +282,7 @@ fn prepare(
     speed: Option<Res<ClockSpeed>>,
     mut loading: ResMut<Loading>,
 ) {
-    if !loading.open || loading.info.is_some() {
+    if loading.info.is_some() {
         return;
     }
     let sim = &game.sim;
@@ -317,14 +312,13 @@ fn prepare(
 fn keys(
     keys: Res<ButtonInput<KeyCode>>,
     collector: Option<Res<crate::input::Collector>>,
-    loading: Res<Loading>,
     mut commands: Commands,
     mut pad_before: Local<bool>,
 ) {
     let pad = collector.is_some_and(|c| c.pad_down(crate::pause::PAUSE_PAD));
     let pad_pressed = pad && !*pad_before;
     *pad_before = pad;
-    if loading.open && (keys.just_pressed(crate::pause::PAUSE_KEY) || pad_pressed) {
+    if keys.just_pressed(crate::pause::PAUSE_KEY) || pad_pressed {
         commands.queue(crate::shell::leave);
     }
 }
@@ -333,16 +327,14 @@ fn keys(
 fn advance(
     time: Res<Time>,
     mut loading: ResMut<Loading>,
+    mut next: ResMut<NextState<RunScreen>>,
     collector: Option<ResMut<crate::input::Collector>>,
 ) {
-    if !loading.open {
-        return;
-    }
     loading.shown += time.delta_secs();
     if loading.preview || loading.shown < MIN_SECONDS {
         return;
     }
-    loading.open = false;
+    next.set(RunScreen::Playing);
     eprintln!("loading: run started after {:.1} s", loading.shown);
     // Keys pressed on the card never reach the game.
     if let Some(mut c) = collector {
@@ -363,12 +355,36 @@ struct Root {
 #[derive(Component)]
 struct LoadingCamera;
 
-/// Shows or hides the page: the game camera, the HUD, the backdrop's dim and the UI scale, and
-/// draws it again when the key art arrives.
+/// Entering the card: the game camera off, the HUD suspended, the backdrop at the loading dim.
+fn cover(
+    mut game_cameras: Query<&mut Camera, With<GameCamera>>,
+    suspended: Option<ResMut<Suspended>>,
+    backdrop: Option<ResMut<Backdrop>>,
+) {
+    shell::cover_game(true, Some(dim::LOADING), &mut game_cameras, suspended, backdrop);
+}
+
+/// Leaving the card: the page and its camera go; the game and the HUD come back (the next
+/// screen sets the dim: `RunScreen::Playing`'s, or the select screen's).
+fn uncover(
+    mut commands: Commands,
+    roots: Query<Entity, With<Root>>,
+    cameras: Query<Entity, With<LoadingCamera>>,
+    mut game_cameras: Query<&mut Camera, With<GameCamera>>,
+    suspended: Option<ResMut<Suspended>>,
+    backdrop: Option<ResMut<Backdrop>>,
+) {
+    for entity in roots.iter().chain(&cameras) {
+        commands.entity(entity).despawn();
+    }
+    shell::cover_game(false, None, &mut game_cameras, suspended, backdrop);
+}
+
+/// Draws the page (again when the key art arrives) at the window's UI scale.
 #[allow(clippy::too_many_arguments, reason = "one pass over what the page covers")]
 fn show(
     mut commands: Commands,
-    mut loading: ResMut<Loading>,
+    loading: Res<Loading>,
     fruit: Option<Res<crate::pause::Fruit>>,
     shell: Option<Res<shell::Shell>>,
     preview_back: Option<Res<PreviewBack>>,
@@ -376,33 +392,11 @@ fn show(
     mut ui_scale: ResMut<UiScale>,
     mut roots: Query<(Entity, &Root, &mut Node)>,
     cameras: Query<Entity, With<LoadingCamera>>,
-    mut game_cameras: Query<&mut Camera, (With<GameCamera>, Without<LoadingCamera>)>,
-    mut suspended: ResMut<Suspended>,
-    mut backdrop: ResMut<Backdrop>,
+    backdrop: Res<Backdrop>,
 ) {
-    let open = loading.open && loading.info.is_some();
-    if loading.was_open != open {
-        loading.was_open = open;
-        suspended.0 = open;
-        for mut camera in &mut game_cameras {
-            camera.is_active = !open;
-        }
-    }
-    let Some(info) = loading.info.as_ref().filter(|_| open) else {
-        for (entity, _, _) in &roots {
-            commands.entity(entity).despawn();
-        }
-        for entity in &cameras {
-            commands.entity(entity).despawn();
-        }
-        if backdrop.dim == dim::LOADING {
-            backdrop.dim = dim::GAMEPLAY;
-        }
+    let Some(info) = loading.info.as_ref() else {
         return;
     };
-    if backdrop.dim != dim::LOADING {
-        backdrop.dim = dim::LOADING;
-    }
     let win = window.size();
     if win.x < 1.0 || win.y < 1.0 {
         return;
@@ -610,19 +604,24 @@ mod tests {
         }
     }
 
-    /// The card stays for the minimum time and then lets the sim tick; the preview never starts.
+    /// The card stays for the minimum time and then asks for `RunScreen::Playing`; the preview
+    /// never starts.
     #[test]
     fn the_card_starts_the_run_after_the_minimum_time() {
         let mut app = App::new();
         app.init_resource::<Time>()
-            .insert_resource(Loading::new(true, false, 0))
+            .init_resource::<NextState<RunScreen>>()
+            .insert_resource(Loading::new(false, 0))
             .add_systems(Update, advance);
         let step = |app: &mut App, secs: f32| {
             app.world_mut()
                 .resource_mut::<Time>()
                 .advance_by(Duration::from_secs_f32(secs));
             app.update();
-            app.world_mut().run_system_cached(closed).unwrap()
+            matches!(
+                *app.world().resource::<NextState<RunScreen>>(),
+                NextState::Pending(RunScreen::Playing)
+            )
         };
         assert!(!step(&mut app, 0.5));
         assert!(!step(&mut app, 0.9));
@@ -630,20 +629,25 @@ mod tests {
 
         let mut app = App::new();
         app.init_resource::<Time>()
-            .insert_resource(Loading::new(true, true, 0))
+            .init_resource::<NextState<RunScreen>>()
+            .insert_resource(Loading::new(true, 0))
             .add_systems(Update, advance);
         assert!(!step(&mut app, 5.0), "the preview holds");
         assert!((app.world().resource::<Loading>().progress() - PREVIEW_PROGRESS).abs() < 1e-6);
     }
 
-    /// Escape on the card quits; after it, Escape is the pause key's again.
+    /// Escape on the card quits; after it (another screen), Escape is the pause key's again.
     #[test]
     fn escape_on_the_card_quits() {
-        let mut app = App::new();
-        app.init_resource::<ButtonInput<KeyCode>>()
-            .add_message::<AppExit>()
-            .insert_resource(Loading::new(true, false, 0))
-            .add_systems(Update, keys);
+        let app_on = |screen: RunScreen| {
+            let mut app = App::new();
+            app.init_resource::<ButtonInput<KeyCode>>()
+                .add_message::<AppExit>()
+                .insert_resource(State::new(screen))
+                .add_systems(Update, keys.run_if(in_state(RunScreen::Loading)));
+            app
+        };
+        let mut app = app_on(RunScreen::Loading);
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
             .press(KeyCode::Escape);
@@ -651,11 +655,7 @@ mod tests {
         let exits = app.world().resource::<Messages<AppExit>>();
         assert_eq!(exits.len(), 1);
 
-        let mut app = App::new();
-        app.init_resource::<ButtonInput<KeyCode>>()
-            .add_message::<AppExit>()
-            .insert_resource(Loading::new(false, false, 0))
-            .add_systems(Update, keys);
+        let mut app = app_on(RunScreen::Playing);
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
             .press(KeyCode::Escape);
