@@ -97,6 +97,28 @@ pub enum TraceParam {
     Bool(bool),
     /// A decimal, as IEEE bits.
     Float(u64),
+    /// A list of single values (`gate_bosses = [1, 2]`).
+    List(Vec<TraceParam>),
+}
+
+/// A trace-map param by its TOML type; lists hold single values, as preset params do.
+fn trace_param_value(v: &toml::Value, nested: bool) -> Result<TraceParam, String> {
+    match v {
+        toml::Value::String(s) => Ok(TraceParam::Str(s.clone())),
+        toml::Value::Integer(i) => Ok(TraceParam::Int(*i)),
+        toml::Value::Boolean(b) => Ok(TraceParam::Bool(*b)),
+        toml::Value::Float(f) => Ok(TraceParam::Float(f.to_bits())),
+        toml::Value::Array(_) if nested => Err("a param list holds single values, not lists".to_owned()),
+        toml::Value::Array(items) => items
+            .iter()
+            .map(|i| trace_param_value(i, true))
+            .collect::<Result<_, _>>()
+            .map(TraceParam::List),
+        other => Err(format!(
+            "is a {}, not a string, number, boolean or list of them",
+            other.type_str()
+        )),
+    }
 }
 
 /// A non-object resource (sprite, sound, ...).
@@ -205,21 +227,9 @@ pub fn load_trace_map(text: &str) -> Result<TraceMap, Diagnostic> {
     for (name, o) in raw.objects {
         let mut params = BTreeMap::new();
         for (key, value) in o.params {
-            let param = match value {
-                toml::Value::String(s) => TraceParam::Str(s),
-                toml::Value::Integer(i) => TraceParam::Int(i),
-                toml::Value::Boolean(b) => TraceParam::Bool(b),
-                toml::Value::Float(f) => TraceParam::Float(f.to_bits()),
-                other => {
-                    return Err(Diagnostic::file_error(
-                        TRACE_MAP_PATH,
-                        format!(
-                            "object `{name}` param `{key}` is a {}, not a string, number or boolean",
-                            other.type_str()
-                        ),
-                    ));
-                }
-            };
+            let param = trace_param_value(&value, false).map_err(|why| {
+                Diagnostic::file_error(TRACE_MAP_PATH, format!("object `{name}` param `{key}`: {why}"))
+            })?;
             params.insert(key, param);
         }
         let status = match o.status.as_str() {
@@ -298,6 +308,29 @@ mod tests {
             Some("menuSelect")
         );
         assert_eq!(map.sprites["sprSpike"].id, "spike");
+    }
+
+    #[test]
+    fn list_params_load() {
+        let text = "[objects]
+\"warp\" = { index = 1, kind = \"@warp\", status = \"preset\", params = { gate_bosses = [1, 2], tags = [\"a\"] } }
+";
+        let map = load_trace_map(text).unwrap();
+        let p = &map.objects["warp"].params;
+        assert_eq!(
+            p["gate_bosses"],
+            TraceParam::List(vec![TraceParam::Int(1), TraceParam::Int(2)])
+        );
+        assert_eq!(p["tags"], TraceParam::List(vec![TraceParam::Str("a".into())]));
+        let nested = "[objects]
+\"w\" = { index = 1, params = { g = [[1]] } }
+";
+        assert!(
+            load_trace_map(nested)
+                .unwrap_err()
+                .message
+                .contains("single values")
+        );
     }
 
     #[test]
