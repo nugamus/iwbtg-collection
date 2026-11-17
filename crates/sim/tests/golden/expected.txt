@@ -126,3 +126,16 @@ touched breakable_block/kid_bullet kid_param_variants
 touched path_platform/kid+kid_flipped kid_param_variants
 touched time_limit/kid+kid_flipped kid_a5_gravity
 touched sign/kid+kid_flipped kid_b_items
+touched spike/destroys_bullets=true kid_param_variants
+touched killer/kill_outside_view=true kid_param_variants
+touched save/on_shot=true kid_param_variants
+touched moving_platform/start_on_touch=true kid_param_variants
+touched fake_block/stops_bullets=true kid_param_variants
+touched fake_block/vanish_on=group_fade kid_param_variants
+touched fake_block/vanish_on=touch kid_param_variants
+touched hidden_block/destroyed_by_blood=true kid_param_variants
+touched hidden_block/destroyed_by_bullet=true kid_param_variants
+touched hidden_block/stops_bullets=true kid_param_variants
+touched edge_warp/mode=room_assign kid_param_variants
+touched breakable_block/break_on=touch_delay kid_param_variants
+touched path_platform/start_on_touch=true kid_param_variants
