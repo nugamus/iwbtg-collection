@@ -762,9 +762,7 @@ fn row_keys(table: &TraceTable, side: &str, frame_offset: i64) -> Result<Vec<Row
             .and_then(|col| row.get(col))
             .map(Value::decimal)
             .unwrap_or_default();
-        let count = seen
-            .entry((frame, phase.clone(), object.clone()))
-            .or_insert(0);
+        let count = seen.entry((frame, phase.clone(), object.clone())).or_insert(0);
         keys.push(RowKey {
             frame,
             phase,
@@ -1373,11 +1371,17 @@ mod tests {
             panic!("expected a missing row, got {d}");
         };
         assert_eq!((m.row.frame, m.row.phase.as_str()), (1, "step"));
-        assert!(d.to_string().contains("frame 1 step, p #0: row missing in b"), "{d}");
+        assert!(
+            d.to_string().contains("frame 1 step, p #0: row missing in b"),
+            "{d}"
+        );
 
-        let plain = TraceTable::parse("frame,object,y
+        let plain = TraceTable::parse(
+            "frame,object,y
 1,\"p\",1.0
-").expect("plain");
+",
+        )
+        .expect("plain");
         assert_eq!(plain.phase_column(), None);
         assert!(diff(&a, &plain, &DiffOptions::default()).is_err());
         assert!(diff(&plain, &a, &DiffOptions::default()).is_err());
