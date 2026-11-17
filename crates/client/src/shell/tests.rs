@@ -45,18 +45,15 @@ fn app() -> App {
             crate::art::ArtPlugin,
             crate::audio::AudioPlugin::audible(),
             crate::mods::ModsPlugin(mods),
-            crate::visual::VisualPlugin(mods),
-            crate::practice::PracticePlugin {
-                mods,
-                slow_speed: 100,
-            },
+            crate::visual::VisualPlugin,
+            crate::practice::PracticePlugin { slow_speed: 75 },
             crate::retry::RetryPlugin(crate::retry::RetryArgs::default()),
             crate::skip::SkipPlugin,
             crate::pause::PausePlugin {
                 args: crate::pause::PauseArgs::default(),
             },
-            crate::stats::StatsPlugin { keep: false, mods },
-            crate::replays::ReplaysPlugin { keep: false, mods },
+            crate::stats::StatsPlugin { keep: false },
+            crate::replays::ReplaysPlugin { keep: false },
             crate::loading::LoadingPlugin {
                 args: crate::loading::LoadingArgs::default(),
                 skip: true,
@@ -260,4 +257,74 @@ fn start_map_refuses_an_unknown_map() {
         *app.world().resource::<State<AppScreen>>().get(),
         AppScreen::Select
     );
+}
+
+/// The mod select's picks play (#903): the app was built with `--mods HB`, the sheet then picked
+/// Sudden Death and Slow motion at 50%. The run plays at half speed without hitboxes, its replay
+/// header and stats board are `SD+SL`, and the first death ends it.
+#[test]
+fn a_run_plays_with_the_mods_picked_on_the_select_screen() {
+    use crate::mods::RunMods;
+    use crate::practice::SlowSpeed;
+    use crate::view::ClockSpeed;
+
+    let mut app = app();
+    frames(&mut app, 3);
+    let picked = ModSet::parse("SD+SL").unwrap();
+    // What the sheet's cards and its 50% option write.
+    app.world_mut().insert_resource(RunMods(picked));
+    app.world_mut().insert_resource(SlowSpeed(50));
+    start(app.world_mut(), &demo("tests/fixtures/input.pkg")).unwrap();
+    frames(&mut app, 20);
+    let world = app.world();
+    assert_eq!(*world.resource::<ClockSpeed>(), ClockSpeed(0.5));
+    assert_eq!(
+        world.resource::<Time<Fixed>>().timestep(),
+        Duration::from_millis(40),
+        "50 Hz at 50%"
+    );
+    let ticked = tick(&app);
+    assert!(
+        (8..=12).contains(&ticked),
+        "20 frames of 20 ms at 25 Hz ran {ticked} ticks"
+    );
+    assert!(
+        !app.world().contains_resource::<crate::visual::Hitboxes>(),
+        "the launch mods' Hitboxes are not picked"
+    );
+    assert_eq!(app.world().resource::<crate::replays::Recorder>().mods(), picked);
+    assert_eq!(
+        app.world().resource::<crate::stats::Stats>().board(),
+        Some("original/SD+SL")
+    );
+    // Hold Suicide (Q) until the death counter moves: Sudden Death stops the sim there.
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::KeyQ);
+    let mut n = 0;
+    while app.world().non_send::<Game>().sim.world().engine.run.deaths == 0 {
+        assert!(n < 400, "no death in 400 frames");
+        frames(&mut app, 1);
+        n += 1;
+    }
+    let over = tick(&app);
+    frames(&mut app, 20);
+    assert_eq!(tick(&app), over, "the run is over at the death");
+    leave(app.world_mut());
+    frames(&mut app, 3);
+    // The next run picks No background instead: a fresh run with its own mods, at full speed.
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .release(KeyCode::KeyQ);
+    app.world_mut()
+        .insert_resource(RunMods(ModSet::parse("NB").unwrap()));
+    start(app.world_mut(), &demo("tests/fixtures/input.pkg")).unwrap();
+    frames(&mut app, 20);
+    let world = app.world();
+    assert_eq!(*world.resource::<ClockSpeed>(), ClockSpeed(1.0));
+    assert!(world.contains_resource::<crate::visual::PlainBackdrop>());
+    assert!(tick(&app) >= 18, "full speed ({})", tick(&app));
+    leave(app.world_mut());
+    frames(&mut app, 3);
+    assert!(!app.world().contains_resource::<crate::visual::PlainBackdrop>());
 }

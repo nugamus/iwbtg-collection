@@ -25,6 +25,12 @@
 //! harness sees that from outside: it runs each tick with [`Hooks::ENGINE`] except for an
 //! `overlaps` hook that calls the engine's and notes the pairs that met; sim state, hash and
 //! RNG are untouched.
+//!
+//! Many built-ins get their own kid handler only under a param (a fake block that vanishes on
+//! touch, a save you shoot, a spike that destroys bullets, #898), so a built-in being touched does
+//! not say that handler ran. Each collision handler of a built-in's own event set that matches
+//! the kid, a kid bullet or blood gets a `touched <name>/<handler classes> <case>` line too,
+//! naming the first case where that handler's pair met.
 #![allow(
     dead_code,
     reason = "the two programs that include this file use different parts"
@@ -175,6 +181,11 @@ pub struct Seen {
     pub handled: BTreeSet<usize>,
     /// Built-ins whose instance overlapped a kid or kid bullet in the collision phase.
     pub touched: BTreeSet<usize>,
+    /// Own handlers (built-in index, [`handler_label`]) of a kind that had a live instance and
+    /// that match a kid, kid bullet or blood kind.
+    pub handled_variants: BTreeSet<Variant>,
+    /// Own handlers that ran: their pair overlapped in the collision phase.
+    pub touched_variants: BTreeSet<Variant>,
     /// The kinds that had a live instance.
     kinds: BTreeSet<KindId>,
 }
@@ -203,6 +214,46 @@ fn handles_kid(def: &GameDef, kind: KindId) -> bool {
     })
 }
 
+/// One collision handler of a built-in's own event set: the built-in (index into
+/// `Builtin::ALL`) and the handler's classes ([`handler_label`]).
+pub type Variant = (usize, String);
+
+/// What a handler of a variant line is run against: the kid, its bullets and its blood.
+fn is_partner(b: Builtin) -> bool {
+    matches!(b, Builtin::Kid | Builtin::KidBullet | Builtin::Blood)
+}
+
+/// A handler's classes by name, `+` between them (`kid+kid_flipped`); package classes are
+/// `package`.
+fn handler_label(mask: ClassMask) -> String {
+    let mut names: Vec<&str> = ClassMask::NAMED
+        .iter()
+        .filter(|(c, _)| mask.contains(*c))
+        .map(|(_, n)| *n)
+        .collect();
+    let named = ClassMask::NAMED.iter().fold(0, |m, (c, _)| m | c.0);
+    if mask.0 & !named != 0 {
+        names.push("package");
+    }
+    names.join("+")
+}
+
+/// The own handler of `kind` that runs for an other with `classes`, as a [`Variant`], when
+/// `kind` is not itself a kid, kid bullet or blood kind.
+fn variant(def: &GameDef, kind: KindId, classes: ClassMask) -> Option<Variant> {
+    let base = base_of(def, kind).filter(|b| !is_partner(*b))?;
+    let (_, with) = pair_handler(&event_set(def, kind).collisions, classes)?;
+    Some((builtin_index(base)?, handler_label(with)))
+}
+
+/// The own handlers of `kind` that a kid, kid bullet or blood kind of `def` can run.
+fn kind_variants(def: &GameDef, kind: KindId) -> impl Iterator<Item = Variant> + '_ {
+    def.kinds
+        .iter()
+        .filter(|p| is_partner(p.base))
+        .filter_map(move |p| variant(def, kind, p.classes))
+}
+
 impl Seen {
     fn look(&mut self, fx: &Fixture) {
         for inst in fx.w.iter_alive() {
@@ -223,13 +274,25 @@ impl Seen {
 thread_local! {
     /// The built-ins [`observe_overlaps`] saw meet a kid or kid bullet in the running case.
     static TOUCHED: RefCell<BTreeSet<usize>> = const { RefCell::new(BTreeSet::new()) };
+    /// The own handlers [`observe_overlaps`] saw run against a kid, kid bullet or blood.
+    static TOUCHED_VARIANTS: RefCell<BTreeSet<Variant>> = const { RefCell::new(BTreeSet::new()) };
 }
 
 /// The engine's `overlaps` with the same result, noting the built-in of a pair that met a kid
-/// or kid bullet. The collision phase tests a pair only when one side has a handler for the
-/// other, so a noted pair is one whose collision event runs.
+/// or kid bullet, and the own handler of a built-in that met a kid, kid bullet or blood. The
+/// collision phase tests a pair only when one side has a handler for the other, so a noted pair
+/// is one whose collision event runs. The handler is picked from the instances' classes as the
+/// collision phase picks it (`pair_handler`).
 fn observe_overlaps(ctx: &Ctx, a: InstId, b: InstId) -> Result<bool, SimError> {
     let met = (Hooks::ENGINE.overlaps)(ctx, a, b)?;
+    if met && let (Some(ia), Some(ib)) = (ctx.w.get(a), ctx.w.get(b)) {
+        for (me, other) in [(ia, ib), (ib, ia)] {
+            let partner = base_of(ctx.def, other.kind).is_some_and(is_partner);
+            if partner && let Some(v) = variant(ctx.def, me.kind, other.classes) {
+                TOUCHED_VARIANTS.with(|t| t.borrow_mut().insert(v));
+            }
+        }
+    }
     if met {
         let base = |id| ctx.w.get(id).and_then(|i| base_of(ctx.def, i.kind));
         if let (Some(ba), Some(bb)) = (base(a), base(b)) {
@@ -258,6 +321,7 @@ pub fn run_covered(case: &Case) -> (Fixture, u64, Seen) {
     let mut seen = Seen::default();
     seen.look(&fx);
     TOUCHED.with(|t| t.borrow_mut().clear());
+    TOUCHED_VARIANTS.with(|t| t.borrow_mut().clear());
     let mut ran = 0;
     for t in 0..case.ticks {
         if fx.w.status != SimStatus::Running {
@@ -278,6 +342,12 @@ pub fn run_covered(case: &Case) -> (Fixture, u64, Seen) {
         .filter(|k| handles_kid(&fx.def, **k))
         .filter_map(|k| base_of(&fx.def, *k).and_then(builtin_index))
         .collect();
+    seen.touched_variants = TOUCHED_VARIANTS.with(|t| std::mem::take(&mut *t.borrow_mut()));
+    seen.handled_variants = seen
+        .kinds
+        .iter()
+        .flat_map(|k| kind_variants(&fx.def, *k))
+        .collect();
     (fx, ran, seen)
 }
 
@@ -295,13 +365,17 @@ pub const FAMILIES: [KidFamily; 7] = [
 /// The report: one line per case, then one coverage line per built-in and per kid family
 /// naming the first case that ran it (`-` for none), then one `touched <name> <case>` line per
 /// built-in with a kid or kid bullet collision handler in a case that ran it, naming the first
-/// case where the two met (`-` for none).
+/// case where the two met (`-` for none), then one `touched <name>/<handler classes> <case>`
+/// line per own handler of a built-in that matches a kid, kid bullet or blood kind in a case
+/// that ran it, naming the first case where that handler ran (`-` for none), in built-in order.
 pub fn report() -> String {
     let mut out = String::new();
     let mut builtin_case: Vec<Option<&'static str>> = vec![None; Builtin::ALL.len()];
     let mut family_case: Vec<Option<&'static str>> = vec![None; FAMILIES.len()];
     let mut handled = vec![false; Builtin::ALL.len()];
     let mut touched_case: Vec<Option<&'static str>> = vec![None; Builtin::ALL.len()];
+    let mut variant_case: std::collections::BTreeMap<Variant, Option<&'static str>> =
+        std::collections::BTreeMap::new();
     for case in cases() {
         let (fx, ran, seen) = run_covered(&case);
         out.push_str(&outcome(&case, &fx, ran).line());
@@ -314,6 +388,12 @@ pub fn report() -> String {
         }
         for i in seen.touched {
             touched_case[i].get_or_insert(case.name);
+        }
+        for v in seen.handled_variants {
+            variant_case.entry(v).or_insert(None);
+        }
+        for v in seen.touched_variants {
+            variant_case.entry(v).or_insert(None).get_or_insert(case.name);
         }
         if let Some(f) = seen.family.and_then(|f| FAMILIES.iter().position(|x| *x == f)) {
             family_case[f].get_or_insert(case.name);
@@ -330,6 +410,11 @@ pub fn report() -> String {
             let case = touched_case[i].unwrap_or("-");
             out.push_str(&format!("touched {} {case}\n", b.name()));
         }
+    }
+    for ((i, label), case) in &variant_case {
+        let name = Builtin::ALL[*i].name();
+        let case = case.unwrap_or("-");
+        out.push_str(&format!("touched {name}/{label} {case}\n"));
     }
     out
 }

@@ -1,0 +1,2 @@
+# Golden pins recorded under one SIM_VERSION after the freeze point (#783).
+# Empty until SIM_VERSION_FREEZE is set; then written by `cargo xtask repin`. Never edit by hand.
