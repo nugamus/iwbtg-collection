@@ -1,8 +1,9 @@
 //! The select screen (`--select <folder>`): the packages in a folder as game select's list
 //! (#149, `select/list.rs`): a panel per game with its key art, its maps under the selected one.
 //! Up and Down pick a map, Left and Right a game, a click picks either; Enter (or a click on the
-//! selected map) plays, Escape quits. The left side is a placeholder until #148: the picked game
-//! and map, and the keys.
+//! selected map) plays, Escape quits. Above the list, search, group, sort and filters (#150,
+//! `select/controls.rs`, `select/filters.rs`) pick the rows it shows. The left side is a
+//! placeholder until #148: the picked game and map, and the keys.
 
 use std::path::{Path, PathBuf};
 
@@ -21,11 +22,14 @@ use crate::ui::notice;
 use crate::ui::tokens;
 use crate::ui::widgets::text;
 
+pub mod controls;
+pub mod filters;
 pub mod library;
 pub mod list;
 
+use filters::Filters;
 use library::{GameInfo, Library, file_name};
-use list::{GamePanel, ListDim, MapPanel, Selection};
+use list::{GamePanel, ListDim, MapPanel, Selection, Shown};
 
 /// The window's title on the select screen.
 pub const TITLE: &str = "IWBTG Collection";
@@ -47,6 +51,8 @@ impl Plugin for SelectPlugin {
     fn build(&self, app: &mut App) {
         let folder = self.0.clone();
         app.init_resource::<ListDim>()
+            .init_resource::<Filters>()
+            .init_resource::<Shown>()
             .add_systems(
                 OnEnter(AppScreen::Select),
                 move |mut commands: Commands,
@@ -55,6 +61,8 @@ impl Plugin for SelectPlugin {
                       sel: Option<Res<Selection>>,
                       stats: Option<Res<crate::stats::Stats>>,
                       mods: Option<Res<crate::mods::RunMods>>,
+                      filters: Res<Filters>,
+                      mut shown: ResMut<Shown>,
                       mut backdrop: ResMut<Backdrop>,
                       mut window: Query<&mut Window, With<PrimaryWindow>>| {
                     let paths = folder.as_deref().map(packages).unwrap_or_default();
@@ -72,12 +80,28 @@ impl Plugin for SelectPlugin {
                         Some(lib) if same(&lib) => {
                             let lib = lib.into_inner();
                             lib.refresh(book, mods);
-                            enter(&mut commands, camera, folder.as_deref(), lib, sel)
+                            enter(
+                                &mut commands,
+                                camera,
+                                folder.as_deref(),
+                                lib,
+                                sel,
+                                &filters,
+                                &mut shown,
+                            )
                         }
                         _ => {
                             let mut lib = Library::load(folder.as_deref(), &paths, &mut images);
                             lib.refresh(book, mods);
-                            let sel = enter(&mut commands, camera, folder.as_deref(), &lib, sel);
+                            let sel = enter(
+                                &mut commands,
+                                camera,
+                                folder.as_deref(),
+                                &lib,
+                                sel,
+                                &filters,
+                                &mut shown,
+                            );
                             commands.insert_resource(lib);
                             sel
                         }
@@ -91,9 +115,21 @@ impl Plugin for SelectPlugin {
                 },
             )
             .add_observer(on_click)
+            .add_observer(controls::on_activate)
             .add_systems(
                 Update,
-                (keys, list::looks, list::dim, picked, scale)
+                (
+                    controls::search,
+                    list::refilter,
+                    controls::labels,
+                    keys,
+                    list::looks,
+                    list::arrange,
+                    list::settle,
+                    list::dim,
+                    picked,
+                    scale,
+                )
                     .chain()
                     .run_if(in_state(AppScreen::Select)),
             );
@@ -130,15 +166,24 @@ fn camera(commands: &mut Commands) -> Entity {
         .id()
 }
 
-/// Spawns the page for `lib` and returns the selection, kept inside the list.
+/// Spawns the page for `lib` with the rows `filters` leave (into `shown`) and returns the
+/// selection, kept inside the rows.
 fn enter(
     commands: &mut Commands,
     camera: Entity,
     folder: Option<&Path>,
     lib: &Library,
     sel: Selection,
+    filters: &Filters,
+    shown: &mut Shown,
 ) -> Selection {
-    let game = sel.game.min(lib.games.len().saturating_sub(1));
+    shown.rows = filters::rows(&lib.games, &lib.records, filters);
+    let order = shown.order();
+    let game = if order.contains(&sel.game) {
+        sel.game
+    } else {
+        order.first().copied().unwrap_or(0)
+    };
     let maps = lib.games.get(game).map_or(0, |g| g.maps.len());
     let sel = Selection {
         game,
@@ -148,7 +193,7 @@ fn enter(
     let hint = if lib.games.is_empty() {
         "No packages here (folders with a game.toml, .iwbz files)."
     } else {
-        "↑ ↓ map · ← → game · Enter plays · Esc quits"
+        "Type to search · ↑ ↓ ← → pick · Enter plays · Esc clears, quits"
     };
     // The left side: a placeholder until #148's title wedge, stats and tabs.
     commands.spawn((
@@ -174,7 +219,8 @@ fn enter(
             text(hint, Type::BODY, tokens::SOFT),
         ],
     ));
-    list::spawn(commands, camera, lib, sel);
+    controls::spawn(commands, camera, lib, filters);
+    list::spawn(commands, camera, lib, sel, shown);
     sel
 }
 
@@ -193,34 +239,55 @@ fn play(commands: &mut Commands, path: PathBuf, map: Option<String>) {
     });
 }
 
-/// The arrows move the selection ([`list::step`]), Enter plays the selected map, Escape quits.
+/// The arrows move the selection among the games shown ([`list::step`]; Left and Right move
+/// the search field's cursor instead while it holds text), Enter plays the selected map.
+/// Escape closes an open dropdown, else clears the search, else quits.
+#[allow(clippy::too_many_arguments, reason = "the screen's keys")]
 fn keys(
     keys: Res<ButtonInput<KeyCode>>,
     lib: Res<Library>,
+    shown: Res<Shown>,
+    focus: Res<bevy::input_focus::InputFocus>,
+    buttons: Query<(), With<bevy::ui_widgets::Button>>,
+    menus: Query<Entity, With<controls::Menu>>,
+    mut search: Query<&mut bevy::text::EditableText, With<crate::ui::widgets::SearchField>>,
     mut sel: ResMut<Selection>,
     mut commands: Commands,
 ) {
     let maps: Vec<usize> = lib.games.iter().map(|g| g.maps.len()).collect();
+    let order = shown.order();
+    let typing = search.iter().any(|s| !s.value().to_string().is_empty());
     for key in [
         KeyCode::ArrowDown,
         KeyCode::ArrowUp,
         KeyCode::ArrowRight,
         KeyCode::ArrowLeft,
     ] {
-        if keys.just_pressed(key) {
-            let next = list::step(&maps, *sel, key);
+        let sideways = matches!(key, KeyCode::ArrowLeft | KeyCode::ArrowRight);
+        if keys.just_pressed(key) && !(sideways && typing) {
+            let next = list::step(&order, &maps, *sel, key);
             if next != *sel {
                 *sel = next;
             }
         }
     }
+    // Enter on a focused button activates the button, not the game.
+    let on_button = focus.get().is_some_and(|e| buttons.contains(e));
     if keys.any_just_pressed([KeyCode::Enter, KeyCode::NumpadEnter])
+        && !on_button
+        && order.contains(&sel.game)
         && let Some(game) = lib.games.get(sel.game)
     {
         play(&mut commands, game.path.clone(), map_id(game, sel.map));
     }
-    if keys.just_pressed(KeyCode::Escape) {
-        commands.write_message(AppExit::Success);
+    if keys.just_pressed(KeyCode::Escape) && !controls::close_menus(&mut commands, &menus) {
+        if typing {
+            for mut s in &mut search {
+                s.clear();
+            }
+        } else {
+            commands.write_message(AppExit::Success);
+        }
     }
 }
 
@@ -314,6 +381,88 @@ mod tests {
         let names: Vec<String> = packages(&d).iter().map(|p| file_name(p)).collect();
         assert_eq!(names, ["a.iwbz", "b-game"]);
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// The select screen on the test fixtures, without a window.
+    fn screen() -> App {
+        use bevy::state::app::StatesPlugin;
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default(), StatesPlugin))
+            .init_asset::<Image>()
+            .init_resource::<ButtonInput<KeyCode>>()
+            .init_resource::<bevy::input_focus::InputFocus>()
+            .init_resource::<UiScale>()
+            .init_resource::<Backdrop>()
+            .init_state::<AppScreen>()
+            .add_plugins(SelectPlugin(Some(fixtures)));
+        app.update();
+        app.update();
+        app
+    }
+
+    /// Puts `text` in the search field, as typing does.
+    fn type_in(app: &mut App, text: &str) {
+        let world = app.world_mut();
+        let mut fields =
+            world.query_filtered::<&mut bevy::text::EditableText, With<crate::ui::widgets::SearchField>>();
+        for mut field in fields.iter_mut(world) {
+            *field = bevy::text::EditableText::new(text);
+        }
+    }
+
+    /// Each game row's target place and opacity, by game.
+    fn targets(app: &mut App) -> Vec<(usize, f32, f32)> {
+        use crate::ui::motion::{OffsetY, Opacity, Tween};
+        let world = app.world_mut();
+        let mut out: Vec<(usize, f32, f32)> = world
+            .query::<(&list::GameRow, &Tween<OffsetY>, &Tween<Opacity>)>()
+            .iter(world)
+            .map(|(r, y, o)| (r.0, y.to, o.to))
+            .collect();
+        out.sort_by_key(|t| t.0);
+        out
+    }
+
+    /// Typing filters the list: the games that stay slide to their new places, the rest fade
+    /// out; the selection moves to a game that is shown. A new sort slides the rows (#150).
+    #[test]
+    fn a_search_fades_out_the_rest_and_a_sort_slides_the_rows() {
+        let mut app = screen();
+        let shown = app.world().resource::<Shown>().order();
+        assert_eq!(shown.len(), 6, "every fixture is listed");
+        let before = targets(&mut app);
+        assert!(before.iter().all(|t| (t.2 - 1.0).abs() < 1e-6));
+
+        type_in(&mut app, "FIXTURE");
+        app.update();
+        // clear.pkg is "Clear fixture" (1), maps.pkg "Maps fixture" (3).
+        assert_eq!(app.world().resource::<Shown>().order(), [1, 3]);
+        let after = targets(&mut app);
+        for (g, y, opacity) in &after {
+            let shown = [1, 3].contains(g);
+            assert_eq!(*opacity, if shown { 1.0 } else { 0.0 }, "game {g}");
+            if *g == 1 {
+                assert_eq!(*y, 0.0, "the first game shown moves to the top");
+            }
+        }
+        assert_eq!(app.world().resource::<Selection>().game, 1);
+
+        type_in(&mut app, "");
+        app.world_mut().resource_mut::<Filters>().group = filters::Field::Cleared;
+        app.update();
+        let rows = &app.world().resource::<Shown>().rows;
+        assert_eq!(rows[0], filters::Row::Header("Not cleared".into(), 6));
+        let headers = {
+            let world = app.world_mut();
+            world.query::<&list::HeaderRow>().iter(world).count()
+        };
+        assert_eq!(headers, 1, "a header row is spawned for the group");
+        let grouped = targets(&mut app);
+        assert!(
+            grouped.iter().all(|t| t.1 >= list::HEADER_HEIGHT),
+            "every game slides down under the header"
+        );
     }
 
     /// Enter and a click start the picked map's id; a game that did not read has none (#880).
