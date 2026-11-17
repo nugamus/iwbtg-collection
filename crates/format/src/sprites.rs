@@ -248,7 +248,7 @@ pub fn parse_sidecar(path: &str, text: &str) -> Result<(SpriteSidecar, SidecarSp
 
 /// The sprites of a package in the order of `GameDef::sprites` (by id, bundled engine pack
 /// sprites keyed `engine:<pack>/<id>` among them): `(key, path of its PNG strip)`. A viewer uses
-/// it to find the image of a `SpriteId`; `tests/wp7a_load.rs` pins the order against the loader.
+/// it to find the image of a `SpriteId`; `tests/load_objects.rs` pins the order against the loader.
 pub fn sprite_pngs(files: &crate::files::PackageFiles) -> Vec<(String, String)> {
     let mut out: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
     for (path, _) in files.iter() {
