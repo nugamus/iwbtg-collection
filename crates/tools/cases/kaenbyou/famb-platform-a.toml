@@ -20,7 +20,6 @@ ignore = ["id", "sprite_index", "sprite_name"]
 "instance_number(player)" = "instance_number(kid)"
 
 [unprobed]
-"bbox_bottom" = "no probe field for `bbox_bottom` (OPEN)"
 
 [rooms]
 "room_10" = "room23"

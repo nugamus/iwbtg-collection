@@ -899,7 +899,8 @@ ignore = ["id", "sprite_index"]
 // crates/sim/src/probe.rs (WP8a): read-only sampling, compiled into every build
 pub struct Probe { pub object: Target, pub columns: Vec<Column> }
 pub enum Column { Fixed(FixedColumn), Field { target: ProbeTarget, field: FieldRef }, Global(VarId),
-                  Count(Target), Key(KeyRead), Save(SaveField), Engine(EngineVar) }
+                  Count(Target), Key(KeyRead), Save(SaveField), Engine(EngineVar),
+                  PlaceFree { x: RowExpr, y: RowExpr } }
 pub enum KeyRead { Held(Action), Pressed(Action), Released(Action), Direct(Action) }
 pub fn sample(sim: &mut Sim, probe: &Probe, frame: i64) -> Vec<Vec<trace::Value>>;
 // crates/sim/src/probe/registry.rs (WP8a): GM name -> field
@@ -907,6 +908,7 @@ pub fn resolve(name: &str, def: &GameDef) -> Option<FieldRef>;   // "djump", "cu
 ```
 
 - `Engine(EngineVar)` reads engine state the package does not declare as a variable: `global.difficulty`, `death`, `time`, `savenum`, `clear`, `frozen`, `frozen2`, `reverse`, `grav`, `paused`, the latched vine-key flags `key_left`, `key_right`, `key_jump` (`KidGlobalsExt`; showdown's `global.button01` to `03`) and `room_speed`. These names win over a package variable of the same name (a save point's `difficulty` parameter interns one). Audio settings (`global.audio_*`, `stream_music`) are not sim state; cases list them in `[unprobed]`. `grav` on a family B kid reads the profile gravity (kid/B.md: declared, never read); `saveTimer` on a `save` instance reads its cooldown timer. `save.<name>` is a save slot field when it is one, else a field of the first `save` instance.
+- `bbox_left`, `bbox_right`, `bbox_top`, `bbox_bottom` (`FieldRef::Bbox`) read the reported box (`collide::bbox::reported_box`, CLONE_SPEC collision "General bbox rule": rounded after the offset, ties to even) at the instance's position; an instance with no mask gives an empty cell (what GML reads there is OPEN). `place_free(<x>,<y>)` (`Column::PlaceFree`, #888) runs the row instance's place test (solids only, `collide::query`) at its two arguments: numbers and fields of the row's instance joined by `+` and `-`, evaluated left to right in binary64 as GML evaluates them before the call; the query rounds the tested coordinate (CLONE_SPEC collision, t-col-08). It never moves the instance or draws random numbers. Other calls and operators stay `[unprobed]`.
 - Kid fields resolve through `kid::api::read_field` (1.6), so WP8a never depends on `KidState` layout; save fields through `SaveField`.
 - `KeyRead::Direct` **consumes** the latch, because the recorder's own `keyboard_check_direct` column read it at the sample point and so changed the original run the same way. `sample` therefore takes `&mut Sim`. Whether the recorder's read really consumed it is checked against `t4-input-direct-tap-*` and `t5-input-restart-latch-*` (I1).
 - Sample point: after phase 13, before the room change (2.1). One row per alive instance of the traced kind, in dispatch order. Rows only for frames the original has.

@@ -1,0 +1,24 @@
+# Imported from research trace animus/tr-mech-04 by `iwbtg trace import`; finish by hand (plan 9.2).
+# Recorder: --object boundwhite --room room61 --at 2 --from 2
+source = "animus/tr-mech-04"
+kind = "diff"
+start = { room = "room_18", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "@boundwhite"
+original_object = "boundwhite"
+dll_mode = "model"
+seed = 0
+setup = []
+ignore = ["id", "sprite_index", "sprite_name"]
+notes = [
+  "each boundwhite instance differs only in its vspeed instance param and the case follows every @boundwhite instance, so the converter's variant-of-kind note does not apply",
+  "recorder --log-calls action_bounce: logs only, the CSV is the same",
+]
+
+[vars]
+
+[unprobed]
+
+[rooms]
+"room_18" = "room61"
