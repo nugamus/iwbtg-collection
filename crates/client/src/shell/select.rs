@@ -115,9 +115,7 @@ impl Plugin for SelectPlugin {
                 },
             )
             .add_observer(on_click)
-            .init_resource::<controls::Swallow>()
             .add_observer(controls::on_activate)
-            .add_observer(controls::on_press_outside)
             .add_systems(
                 Update,
                 (
@@ -301,12 +299,8 @@ fn on_click(
     maps: Query<&MapPanel>,
     lib: Option<Res<Library>>,
     sel: Option<ResMut<Selection>>,
-    swallow: Res<controls::Swallow>,
     mut commands: Commands,
 ) {
-    if swallow.holds(click.original_event_target()) {
-        return;
-    }
     let (Some(lib), Some(mut sel)) = (lib, sel) else {
         return;
     };
@@ -482,8 +476,7 @@ mod tests {
     }
 
     /// A press outside an open dropdown closes it and its click does nothing else; with no
-    /// menu open a click works as before. A press on the control itself leaves it to the
-    /// control (#899).
+    /// menu open a click works as before (#899).
     #[test]
     fn a_click_outside_a_dropdown_only_closes_it() {
         use bevy::camera::NormalizedRenderTarget;
@@ -552,20 +545,43 @@ mod tests {
         app.world_mut()
             .trigger(bevy::ui_widgets::Activate { entity: sort });
         app.update();
-        assert_eq!(open_menus(&mut app), 1, "the control opens its menu");
+        assert_eq!(
+            open_menus(&mut app),
+            2,
+            "the control opens its menu and a catcher"
+        );
 
-        press(&mut app, sort);
-        assert_eq!(open_menus(&mut app), 1, "a press on the control is the control's");
-
-        press(&mut app, game);
-        click(&mut app, game);
+        // The catcher is the pickable thing under the pointer on bare backdrop (and over the
+        // list), so a press there is a press on it.
+        let catcher = {
+            let world = app.world_mut();
+            world
+                .query_filtered::<Entity, With<controls::Catcher>>()
+                .single(world)
+                .expect("an open menu has a catcher")
+        };
+        press(&mut app, catcher);
         app.update();
-        assert_eq!(open_menus(&mut app), 0, "a press outside closes the menu");
+        assert_eq!(
+            open_menus(&mut app),
+            0,
+            "a press on the backdrop closes the menu and its catcher"
+        );
+        // The press ended on the catcher, which is gone: no click reaches the game beneath.
         assert_eq!(
             *app.world().resource::<Selection>(),
             before,
-            "and its click selects no game"
+            "and selects no game"
         );
+
+        app.world_mut()
+            .trigger(bevy::ui_widgets::Activate { entity: sort });
+        app.update();
+        assert_eq!(open_menus(&mut app), 2, "the menu and its catcher");
+        app.world_mut()
+            .trigger(bevy::ui_widgets::Activate { entity: sort });
+        app.update();
+        assert_eq!(open_menus(&mut app), 0, "a second click on the control closes it");
 
         press(&mut app, game);
         click(&mut app, game);

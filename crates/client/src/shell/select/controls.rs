@@ -8,7 +8,6 @@
 
 use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::picking::events::PointerPress;
-use bevy::picking::pointer::PointerButton;
 use bevy::prelude::*;
 use bevy::text::EditableText;
 use bevy::ui_widgets::Activate;
@@ -48,47 +47,15 @@ pub(super) struct Dropdown;
 #[derive(Component)]
 pub(super) struct Menu;
 
-/// The entity whose press closed a menu from outside: its click, if it comes, does nothing
-/// (#899).
-#[derive(Resource, Default)]
-pub(super) struct Swallow(Option<Entity>);
+/// The full-screen click-catcher under an open menu: a press on it closes the menu and, as
+/// the press lands on it and not on what is beneath, that thing gets no click (#899).
+#[derive(Component)]
+pub(super) struct Catcher;
 
-impl Swallow {
-    /// True for the click that ends the press that closed a menu (a click bubbles, so this
-    /// does not clear; the next press does).
-    pub(super) fn holds(&self, entity: Entity) -> bool {
-        self.0 == Some(entity)
-    }
-
-    /// As [`Self::holds`], once: an activation fires on the control itself, not up the tree.
-    fn takes(&mut self, entity: Entity) -> bool {
-        self.0 == Some(entity) && self.0.take().is_some()
-    }
-}
-
-/// A press outside an open dropdown closes it and swallows the click that follows, so the
-/// click only closes: it picks no game and flips no chip. A press on a dropdown's control or
-/// menu is left to [`on_activate`].
-pub(super) fn on_press_outside(
-    press: On<PointerPress>,
-    parents: Query<&ChildOf>,
-    dropdowns: Query<(), With<Dropdown>>,
-    menus: Query<Entity, With<Menu>>,
-    mut swallow: ResMut<Swallow>,
-    mut commands: Commands,
-) {
-    let target = press.original_event_target();
-    if press.entity != target {
-        return;
-    }
-    swallow.0 = None;
-    if press.button != PointerButton::Primary || menus.is_empty() {
-        return;
-    }
-    let inside = dropdowns.contains(target) || parents.iter_ancestors(target).any(|a| dropdowns.contains(a));
-    if !inside {
-        close_menus(&mut commands, &menus);
-        swallow.0 = Some(target);
+/// Closes every open menu (and its catcher) on a press on the catcher.
+fn close_on_press(_: On<PointerPress>, menus: Query<Entity, With<Menu>>, mut commands: Commands) {
+    for menu in &menus {
+        commands.entity(menu).despawn();
     }
 }
 
@@ -215,17 +182,14 @@ pub(super) fn on_activate(
     controls: Query<(&Control, &ChildOf)>,
     picks: Query<&Pick>,
     menus: Query<Entity, With<Menu>>,
+    cameras: Query<&UiTargetCamera>,
     dropdowns: Query<Option<&Children>, With<Dropdown>>,
     search: Query<Entity, With<SearchField>>,
     lib: Option<Res<Library>>,
     filters: Option<ResMut<Filters>>,
     mut focus: ResMut<InputFocus>,
-    mut swallow: ResMut<Swallow>,
     mut commands: Commands,
 ) {
-    if swallow.takes(activate.entity) {
-        return;
-    }
     let (Some(lib), Some(mut f)) = (lib, filters) else {
         return;
     };
@@ -269,6 +233,23 @@ pub(super) fn on_activate(
                         })
                         .id();
                     commands.entity(parent.parent()).add_child(menu);
+                    if let Some(camera) = cameras.iter().next() {
+                        commands
+                            .spawn((
+                                Node {
+                                    position_type: PositionType::Absolute,
+                                    width: Val::Percent(100.0),
+                                    height: Val::Percent(100.0),
+                                    ..default()
+                                },
+                                // Over the controls (5), under the menu (20).
+                                GlobalZIndex(10),
+                                UiTargetCamera(camera.0),
+                                Menu,
+                                Catcher,
+                            ))
+                            .observe(close_on_press);
+                    }
                 }
             }
         }
