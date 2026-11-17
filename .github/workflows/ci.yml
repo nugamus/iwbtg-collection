@@ -154,10 +154,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: EmbarkStudios/cargo-deny-action@v2
+      - uses: ./.github/actions/cargo-deny
         with:
-          manifest-path: crates/sim/Cargo.toml
-          arguments: --config crates/sim/deny.toml
+          arguments: --manifest-path crates/sim/Cargo.toml --config crates/sim/deny.toml
           command: check bans
 
   licenses:
@@ -166,7 +165,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: EmbarkStudios/cargo-deny-action@v2
+      - uses: ./.github/actions/cargo-deny
         with:
           command: check licenses
 

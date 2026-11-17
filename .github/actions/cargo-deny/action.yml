@@ -1,0 +1,47 @@
+# Runs `cargo deny` with a pinned, checked download (#893). Replaces EmbarkStudios/cargo-deny-action,
+# whose Docker image fetched the binary with `curl --silent | tar` and broke on a transient bad body.
+name: cargo-deny
+description: Install the pinned cargo-deny release and run it
+inputs:
+  arguments:
+    description: Arguments placed before the command (manifest path, config)
+    required: false
+    default: --all-features
+  command:
+    description: The cargo-deny subcommand and its arguments
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        DENY_VERSION: 0.21.0
+        # From the release's own .sha256 file for the x86_64-unknown-linux-musl tarball.
+        DENY_SHA256: a2170b854ff697e79e39c4c538981c9c1bdd803addbae6719a4cb66b4585a903
+      run: |
+        set -euo pipefail
+        url="https://github.com/EmbarkStudios/cargo-deny/releases/download/${DENY_VERSION}/cargo-deny-${DENY_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+        dir="$RUNNER_TEMP/cargo-deny"
+        mkdir -p "$dir"
+        if ! curl --fail --silent --show-error --location --retry 5 --retry-all-errors --retry-delay 5 \
+            --output "$dir/deny.tar.gz" "$url"; then
+          echo "::error::could not download cargo-deny ${DENY_VERSION} from $url"
+          exit 1
+        fi
+        if ! echo "${DENY_SHA256}  $dir/deny.tar.gz" | sha256sum -c -; then
+          echo "::error::SHA-256 mismatch for the cargo-deny ${DENY_VERSION} download (expected ${DENY_SHA256}, got $(sha256sum "$dir/deny.tar.gz" | cut -d' ' -f1))"
+          exit 1
+        fi
+        if ! tar -xzf "$dir/deny.tar.gz" -C "$dir" --strip-components=1; then
+          echo "::error::the cargo-deny ${DENY_VERSION} download is not a valid gzip archive (see $url)"
+          exit 1
+        fi
+        "$dir/cargo-deny" --version
+        echo "$dir" >> "$GITHUB_PATH"
+    - shell: bash
+      env:
+        ARGS: ${{ inputs.arguments }}
+        COMMAND: ${{ inputs.command }}
+      run: |
+        # shellcheck disable=SC2086
+        cargo-deny $ARGS --log-level warn $COMMAND
