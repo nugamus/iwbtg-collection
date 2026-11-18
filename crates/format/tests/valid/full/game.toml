@@ -1,5 +1,5 @@
 #:schema ../../../../../docs/format/schema/v0/game.schema.json
-# Every manifest field from docs/format/v0.md, Manifest.
+# Every manifest field from docs/format/game.md.
 format = 0
 id = "full_example"
 title = "I Wanna Test Every Field"

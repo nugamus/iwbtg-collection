@@ -21,6 +21,7 @@ One page per module or area, so two PRs on different modules never edit the same
 - [Results](client/results.md): `results/`
 - [Retry](client/retry.md): `retry.rs`
 - [Screen](client/screen.md): `screen.rs`
+- [Script error screen](client/script_error.md): a halted game's error, file and line (`script_error/`)
 - [Settings](client/settings.md): `settings.rs`
 - [Shell](client/shell.md): screens as Bevy states, packages loaded and unloaded at run time, `--select` (`shell/`)
 - [Skip](client/skip.md): skipping a cutscene or dialogue region (`skip.rs`)

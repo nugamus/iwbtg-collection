@@ -1,4 +1,4 @@
-//! Collision handler ties (docs/format/v0.md, Validation step 7; #737): kinds whose classes
+//! Collision handler ties (docs/format/validation.md, step 7; #737): kinds whose classes
 //! match two equally specific collision handlers of some kind. The sim runs one handler per
 //! (instance, other) pair, picked by [`iwbtg_sim::events::pair_handler`]: the matching handler
 //! class with the lowest [`ClassMask::generality`], then the first in handler order (sim register

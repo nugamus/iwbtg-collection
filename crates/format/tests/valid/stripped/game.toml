@@ -1,5 +1,5 @@
 #:schema ../../../../../docs/format/schema/v0/game.schema.json
-# Every [stripped] field and a map's stripped_start (docs/format/v0.md, Stripped mode).
+# Every [stripped] field and a map's stripped_start (docs/format/game.md, Stripped mode).
 format = 0
 id = "stripped_example"
 title = "I Wanna Test Stripped Mode"

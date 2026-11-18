@@ -478,17 +478,18 @@ mod tests {
     fn a_search_fades_out_the_rest_and_a_sort_slides_the_rows() {
         let mut app = screen();
         let shown = app.world().resource::<Shown>().order();
-        assert_eq!(shown.len(), 6, "every fixture is listed");
+        assert_eq!(shown.len(), 7, "every fixture is listed");
         let before = targets(&mut app);
         assert!(before.iter().all(|t| (t.2 - 1.0).abs() < 1e-6));
 
         type_in(&mut app, "FIXTURE");
         app.update();
-        // clear.pkg is "Clear fixture" (1), maps.pkg "Maps fixture" (3).
-        assert_eq!(app.world().resource::<Shown>().order(), [1, 3]);
+        // clear.pkg is "Clear fixture" (1), maps.pkg "Maps fixture" (3), script_error.pkg
+        // "Script error fixture" (6).
+        assert_eq!(app.world().resource::<Shown>().order(), [1, 3, 6]);
         let after = targets(&mut app);
         for (g, y, opacity) in &after {
-            let shown = [1, 3].contains(g);
+            let shown = [1, 3, 6].contains(g);
             assert_eq!(*opacity, if shown { 1.0 } else { 0.0 }, "game {g}");
             if *g == 1 {
                 assert_eq!(*y, 0.0, "the first game shown moves to the top");
@@ -500,7 +501,7 @@ mod tests {
         app.world_mut().resource_mut::<Filters>().group = filters::Field::Cleared;
         app.update();
         let rows = &app.world().resource::<Shown>().rows;
-        assert_eq!(rows[0], filters::Row::Header("Not cleared".into(), 6));
+        assert_eq!(rows[0], filters::Row::Header("Not cleared".into(), 7));
         let headers = {
             let world = app.world_mut();
             world.query::<&list::HeaderRow>().iter(world).count()

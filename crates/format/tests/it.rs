@@ -10,6 +10,18 @@
 mod fmt_files;
 #[path = "iwbz.rs"]
 mod iwbz;
+#[path = "load_engine_packs.rs"]
+mod load_engine_packs;
+#[path = "load_game.rs"]
+mod load_game;
+#[path = "load_objects.rs"]
+mod load_objects;
+#[path = "load_particles.rs"]
+mod load_particles;
+#[path = "load_physics.rs"]
+mod load_physics;
+#[path = "load_rooms.rs"]
+mod load_rooms;
 #[path = "room_art.rs"]
 mod room_art;
 #[path = "wp5a_physics.rs"]

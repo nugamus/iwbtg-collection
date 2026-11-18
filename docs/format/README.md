@@ -8,7 +8,7 @@ The full spec is written in roadmap Phase 3. These rules come first and every ve
    - Scripts can only use the API we expose. They have no file, network, OS, clock or random-source access beyond what the simulation provides.
    - A budget of steps per tick, so a script can't hang the game or the server.
    - Deterministic: the same inputs give the same result on Windows, WASM and the Linux server. Replay verification depends on this.
-   - A script error stops that game cleanly. It never crashes the client or the server.
+   - A script error stops that game cleanly. It never crashes the client or the server. The client shows the file, line and message and goes back to game select (docs/architecture/client/script_error.md).
 4. **Validated before anything runs.** On load, the client and the server check the package against the schema and parse and check every script. An invalid package is rejected with a readable error.
 5. **Safe on the server too.** The leaderboard server runs the same scripts to verify replays, so the sandbox must hold there as well. The isolation in `docs/server.md` is a second layer, not the only one.
 6. **Grows from research.** Every mechanic found in a CLONE_SPEC either maps to an existing built-in or becomes a new one. Script patterns that repeat across games get promoted to built-ins.

@@ -1,4 +1,4 @@
-//! The `game.toml` `[tricks]` keys (docs/format/v0.md, Manifest). The table is
+//! The `game.toml` `[tricks]` keys (docs/format/game.md). The table is
 //! `research/specs/tricks.md`, section "Format keys (`[tricks]`)": a key is a trick id without
 //! its `trick.`, `input.` or `bug.` prefix.
 

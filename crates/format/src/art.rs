@@ -1,6 +1,6 @@
 //! Room art: the background colour and background layers of `rooms/<id>.toml`, the tile layers
 //! of `rooms/<id>.tiles.toml` and the tileset sidecars `backgrounds/<id>.toml`
-//! (docs/format/v0.md, Rooms and Backgrounds). None of it reaches the sim: the client draws it
+//! (docs/format/rooms.md, Rooms and Backgrounds). None of it reaches the sim: the client draws it
 //! and the loader only checks it.
 
 use std::ops::Range;

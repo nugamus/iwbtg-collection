@@ -1,4 +1,4 @@
-//! The package manifest `game.toml` (docs/format/v0.md, Manifest).
+//! The package manifest `game.toml` (docs/format/game.md).
 //!
 //! Field names, required fields and allowed values follow v0.md exactly. Every struct denies
 //! unknown keys, so a typo or a field from a newer format fails with file, line and column.
@@ -146,8 +146,8 @@ pub struct Manifest {
 /// Longest `[controls]` label, in characters: it has to fit a key binding row and the HUD.
 pub const MAX_CONTROL_LABEL: usize = 24;
 
-/// The `[controls]` table: a label for each extra action the game uses (docs/format/v0.md,
-/// Manifest). Only the player-facing words; which key the player binds is the client's.
+/// The `[controls]` table: a label for each extra action the game uses (docs/format/game.md).
+/// Only the player-facing words; which key the player binds is the client's.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
@@ -181,7 +181,7 @@ impl Controls {
 /// Id of the one map of a package without `[[maps]]`.
 pub const DEFAULT_MAP_ID: &str = iwbtg_sim::def::DEFAULT_MAP_ID;
 
-/// One `[[maps]]` entry (docs/format/v0.md, Maps). Timing keys it leaves out come from
+/// One `[[maps]]` entry (docs/format/game.md, Maps). Timing keys it leaves out come from
 /// `[timing]`.
 #[derive(Debug, Clone, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -855,7 +855,7 @@ pub struct MusicSettings {
     pub volume: Option<Spanned<Number>>,
 }
 
-/// The `[key_art]` table (docs/format/v0.md, Key art).
+/// The `[key_art]` table (docs/format/game.md, Key art).
 #[derive(Debug, Clone, Default, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
@@ -870,7 +870,7 @@ pub struct KeyArtSection {
     pub maps: BTreeMap<Spanned<String>, Spanned<String>>,
 }
 
-/// The `[stripped]` table: what ranked (stripped) mode changes (docs/format/v0.md, Stripped
+/// The `[stripped]` table: what ranked (stripped) mode changes (docs/format/game.md, Stripped
 /// mode; docs/product.md, Two ways to play each game). Play original ignores it.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1594,7 +1594,7 @@ impl Validator<'_> {
         }
     }
 
-    /// Checks a key art path and its image (docs/format/v0.md, Key art): a shipped PNG that
+    /// Checks a key art path and its image (docs/format/game.md, Key art): a shipped PNG that
     /// decodes and fits the image limit; a warning when it is not 16:9 or under 1280 x 720.
     fn key_art_image(&mut self, path: &Spanned<String>, what: &str) {
         if !self.path(path, what) {

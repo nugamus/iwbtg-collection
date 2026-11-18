@@ -6,7 +6,7 @@ Part of [format v0](v0.md). Decided in [content](../content.md#package-file): a 
 
 An `.iwbz` is a zip of one built package: the files of the [package layout](v0.md#package-layout) at their package paths (`game.toml`, `rooms/stage1_01.toml`, `engine/a1/sprites/kid.png`), with the engine pack already bundled ([engine.md](engine.md#bundling)). It is named `<id>.iwbz` after the `id` in `game.toml`.
 
-The `content_hash` ([versioning](v0.md#versioning)) of an unpacked `.iwbz` is the `content_hash` of the package folder it was packed from. The hash is over the files, not the zip bytes.
+The `content_hash` ([versioning](versioning.md)) of an unpacked `.iwbz` is the `content_hash` of the package folder it was packed from. The hash is over the files, not the zip bytes.
 
 ## Only what the format allows
 
@@ -35,7 +35,7 @@ The reader is written for files from strangers. Before it inflates anything it c
 
 - the file is at most 528 MiB (`MAX_ARCHIVE_BYTES`);
 - at most 20,000 files (`MAX_FILES`; the largest converted game has under 2,000);
-- the files add up to at most 512 MiB unpacked, the [package size limit](v0.md#assets) (`MAX_PACKAGE_BYTES`).
+- the files add up to at most 512 MiB unpacked, the [package size limit](assets.md) (`MAX_PACKAGE_BYTES`).
 
 Then for each file: it inflates to exactly its stated size (reading stops one byte past it, so a file cannot claim to be small and fill memory), its CRC-32 matches, its data does not overlap another file's (the overlapping-files zip bomb) and ends before the directory, and its name appears once, also ignoring ASCII case (`CREDITS.md` and `Credits.md` would be one file on Windows and macOS).
 

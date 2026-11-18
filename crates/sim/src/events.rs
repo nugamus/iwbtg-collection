@@ -22,6 +22,7 @@ use smallvec::SmallVec;
 
 use crate::alarm;
 use crate::anim;
+use crate::collide::pairs::{self, Members};
 use crate::def::{ClassMask, GameDef, KindId, ParamValue, Params, TimelineId, VarId};
 use crate::error::SimError;
 use crate::input::Action;
@@ -735,14 +736,17 @@ pub fn collision_phase_with(ctx: &mut Ctx, hooks: &Hooks) -> Flow {
         .kinds
         .iter()
         .fold(ClassMask::NONE, |m, k| m | handler_classes(&k.events));
-    walk(
-        ctx,
-        Order::Rank,
-        &|c: &Ctx, i: &Instance| {
-            i.classes.intersects(targeted) || !event_set(c.def, i.kind).collisions.is_empty()
-        },
-        |c, a, ctl| meet_all(c, hooks, a, ctl),
-    )
+    let ready = |c: &Ctx, i: &Instance| {
+        i.classes.intersects(targeted) || !event_set(c.def, i.kind).collisions.is_empty()
+    };
+    if !hooks.broadphase {
+        return walk(ctx, Order::Rank, &ready, |c, a, ctl| meet_all(c, hooks, a, ctl));
+    }
+    // Built at the first turn, so a phase in which nobody takes part costs nothing.
+    let mut members: Option<Members> = None;
+    walk(ctx, Order::Rank, &ready, |c, a, ctl| {
+        meet_near(c, hooks, a, ctl, &mut members)
+    })
 }
 
 /// Every handler class of an event set, as one mask.
@@ -798,6 +802,81 @@ fn meet_all(ctx: &mut Ctx, hooks: &Hooks, a: InstId, ctl: &mut Ctl) -> Option<Fl
         }
     }
     None
+}
+
+/// [`meet_all`] with the inner list gathered through the broadphase grid (#781,
+/// `collide::pairs`): the same pairs in the same order, without scanning every instance.
+/// `members` holds the inner-list facts as of the previous turn start (`None` before the
+/// phase's first turn).
+fn meet_near(
+    ctx: &mut Ctx,
+    hooks: &Hooks,
+    a: InstId,
+    ctl: &mut Ctl,
+    members: &mut Option<Members>,
+) -> Option<Flow> {
+    let def = ctx.def;
+    // Turn start: bring the facts up to date from what changed since the last turn, then
+    // re-bucket those instances, so the moved set holds only what this turn's handlers touch.
+    // The first turn builds the grid if it is not built yet (room entry, savestate restore).
+    // A grid that was reset since (it holds no moved set then) starts over like a first turn.
+    if !ctx.w.grid.is_built() {
+        *members = None;
+    }
+    let members = match members {
+        Some(m) => {
+            let changed: Vec<InstId> = ctx.w.grid.moved().iter().copied().collect();
+            m.update(ctx.w, def, changed);
+            if let Err(e) = ctx.w.flush_grid(def, &ctx.rules.collide) {
+                return stop(ctx, e);
+            }
+            m
+        }
+        None => {
+            if let Err(e) = ctx.w.ensure_grid(def, &ctx.rules.collide) {
+                return stop(ctx, e);
+            }
+            members.insert(Members::of(ctx.w, def))
+        }
+    };
+    let me = ctx.w.get(a)?;
+    let (rank, classes) = (me.rank, me.classes);
+    let mine = handler_classes(event_set(def, me.kind));
+    // The last inner instance reached: later gathers continue after it.
+    let mut after: Option<(u16, InstId)> = None;
+    'gather: loop {
+        let mut inner: Vec<(u16, InstId)> = pairs::near(ctx, a)
+            .into_iter()
+            .filter_map(|b| members.key(a, rank, classes, mine, b))
+            .filter(|k| after.is_none_or(|last| *k > last))
+            .collect();
+        inner.sort_unstable();
+        inner.dedup();
+        for key in inner {
+            let b = key.1;
+            if !ctx.w.exists(a) {
+                return None;
+            }
+            after = Some(key);
+            if !ctx.w.exists(b) {
+                continue;
+            }
+            match (hooks.overlaps)(ctx, a, b) {
+                Ok(true) => {}
+                Ok(false) => continue,
+                Err(e) => return stop(ctx, e),
+            }
+            if let Some(flow) = one_way(ctx, hooks, ctl, a, b, true) {
+                return Some(flow);
+            }
+            if let Some(flow) = one_way(ctx, hooks, ctl, b, a, false) {
+                return Some(flow);
+            }
+            // The handlers may have moved anything: gather again from `a`'s current box.
+            continue 'gather;
+        }
+        return None;
+    }
 }
 
 /// `me`'s handler for `other`, if it has one, when both are still alive and active. `tested`:

@@ -1,6 +1,6 @@
 //! Room art that is not an instance: the background colour, the background layers and the
 //! decorative tile layers. `iwbtg_format::art` reads them (`rooms/<id>.toml`,
-//! `rooms/<id>.tiles.toml`, `backgrounds/<id>.toml`; docs/format/v0.md); this module draws them.
+//! `rooms/<id>.tiles.toml`, `backgrounds/<id>.toml`; docs/format/rooms.md); this module draws them.
 //! The sim never sees any of it.
 //!
 //! Drawing order (research CLONE_SPEC, Rooms: drawing order): the colour, then the background

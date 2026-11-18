@@ -125,8 +125,8 @@ impl PackageFiles {
         self.files.is_empty()
     }
 
-    /// The download hash of the package: SHA-256 over every shipped file (docs/format/v0.md,
-    /// Versioning). `tests/` is not shipped and is left out. Files are taken in path order; each
+    /// The download hash of the package: SHA-256 over every shipped file (docs/format/versioning.md).
+    /// `tests/` is not shipped and is left out. Files are taken in path order; each
     /// contributes its path and its bytes, each as an 8-byte little-endian length and then the
     /// bytes, so moving bytes between files changes the hash. Text files (`.toml`, `.rhai`,
     /// `.md`, `.txt`, `.json`) have CRLF line ends turned into LF first, so a checkout with

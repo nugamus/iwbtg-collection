@@ -64,6 +64,8 @@ mod wp3_bbox;
 mod wp3_empty_mask;
 #[path = "wp3_grid.rs"]
 mod wp3_grid;
+#[path = "wp3_pair_gather.rs"]
+mod wp3_pair_gather;
 #[path = "wp3_query.rs"]
 mod wp3_query;
 #[path = "wp3_shapes.rs"]

@@ -8,7 +8,7 @@ A platform that falls or rises when the kid stands on it. Source: `crates/sim/sr
 | `speed` | real | 2 | LR names it `spd`. |
 | `solid` | bool | kind data | Applied in Create when given. |
 
-**Loading.** All three params load on an object file (`base = "drop_platform"`) or on a placed instance; a wrong word or type is an error with file and line (`params::check`; tests `wp6b3_params_*` in `crates/format/tests/wp7a_load.rs`). Converter request CR17.
+**Loading.** All three params load on an object file (`base = "drop_platform"`) or on a placed instance; a wrong word or type is an error with file and line (`params::check`; tests `wp6b3_params_*` in `crates/format/tests/load_objects.rs`). Converter request CR17.
 
 - `fall` (KOT blockFall): each Step, when the kid is met at `(x, y - kid.vspeed - 1)`, the platform's `vspeed` becomes `speed`.
 - `rise` (KOT blockRise): under the same test `yspeed = -speed` and the kid's `y` moves by `-speed`. Every Step `y += yspeed`, so it keeps rising after the kid leaves.

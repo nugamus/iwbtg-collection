@@ -8,7 +8,7 @@
 //! value (CLONE_SPEC numbers, "Particle draw rules" 6 and the note on research#158).
 //!
 //! The motion rules are GM's `part_type_*` arguments as the format describes them
-//! (docs/format/v0.md, Particles). What the spec does not cover is a choice of ours, marked
+//! (docs/format/particles.md). What the spec does not cover is a choice of ours, marked
 //! OPEN below and in the module page: wiggle as a sine of a fixed period, speed and size not going
 //! below 0, gravity added to the motion vector after the speed and direction increments, colors
 //! and alpha blended evenly over the life (two values: start to end; three: start, middle, end).

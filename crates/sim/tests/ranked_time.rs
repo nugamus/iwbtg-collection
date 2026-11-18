@@ -1,5 +1,5 @@
 //! #34: ranked time freezes in cutscene and dialogue regions; dialogue regions press `advance`
-//! on a timeout (docs/format/v0.md, Stripped mode).
+//! on a timeout (docs/format/game.md, Stripped mode).
 //!
 //! Hand-built worlds as in `wp8b_timing`: a persistent probe walker that changes rooms, and probe
 //! instances of region kinds. "Tick k" below is the tick that starts with `World::tick == k`;

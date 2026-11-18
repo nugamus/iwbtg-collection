@@ -1,4 +1,4 @@
-//! Room reachability (docs/format/v0.md, Validation step 7; #504): which rooms a run can get to
+//! Room reachability (docs/format/validation.md, step 7; #504): which rooms a run can get to
 //! from where runs start, through the room references the package holds as data. The loader
 //! warns about a timing room outside this set. A warning, not an error: a room change the data
 //! does not show (a `room_goto` of a computed room, the next or previous of a kind created only

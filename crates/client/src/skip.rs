@@ -1,5 +1,5 @@
 //! Skipping a cutscene or dialogue region in a ranked run (#573; docs/product.md, Two ways to play
-//! each game; docs/format/v0.md, Stripped mode).
+//! each game; docs/format/game.md, Stripped mode).
 //!
 //! While a region holds (`Sim::in_region`), the skip-cutscene key (a client key, Backspace by
 //! default, bindings.rs) runs the region's ticks at once inside one fixed step, before the normal

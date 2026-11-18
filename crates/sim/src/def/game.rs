@@ -97,7 +97,7 @@ pub struct GameDef {
     /// this one only when `maps` is empty (a definition built by hand).
     pub timing: TimingDef,
     /// The package's maps in `[[maps]]` order, one [`DEFAULT_MAP_ID`] map without `[[maps]]`
-    /// (docs/format/v0.md, Maps). A run picks one (`SimOptions::map`, #505).
+    /// (docs/format/game.md, Maps). A run picks one (`SimOptions::map`, #505).
     pub maps: Vec<MapDef>,
     /// Ranked (stripped) mode: `[stripped]` resolved (`crate::stripped`). Used only by
     /// `PlayMode::Stripped` runs.
@@ -107,7 +107,7 @@ pub struct GameDef {
 /// The id of a package's only map when it has no `[[maps]]`.
 pub const DEFAULT_MAP_ID: &str = "main";
 
-/// One map of a package, resolved (docs/format/v0.md, Maps): what a run on it times and where
+/// One map of a package, resolved (docs/format/game.md, Maps): what a run on it times and where
 /// a ranked run on it starts.
 #[derive(Clone, PartialEq, Debug)]
 pub struct MapDef {

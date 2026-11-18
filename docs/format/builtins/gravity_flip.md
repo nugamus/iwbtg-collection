@@ -8,7 +8,7 @@ Source: `crates/sim/src/builtins/gravity_flip.rs`.
 | `transition` | `swap_object`, `grav_sign`, `yflag_with_view_rotation` | `swap_object` | `swap_object` and `grav_sign` are the same write; the kid swaps object or flips on his next Step (kid code). `yflag_with_view_rotation` (KAE): see below. |
 | `sound` | sound | none | FT restarts sndBlockChange; the client's. |
 
-**Loading.** `direction` is required (an instance without it is an error), all params load on an object file or a placed instance, and Tests `wp6b3_params_*` and `a_gravity_flip_with_view_rotation_loads` in `crates/format/tests/wp7a_load.rs`. Converter request CR17.
+**Loading.** `direction` is required (an instance without it is an error), all params load on an object file or a placed instance, and Tests `wp6b3_params_*` and `a_gravity_flip_with_view_rotation_loads` in `crates/format/tests/load_objects.rs`. Converter request CR17.
 
 Destroyed outside the room.
 

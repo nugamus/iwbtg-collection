@@ -1,5 +1,5 @@
 //! Key art: the picture the background system and the game select list show for a game or one
-//! of its maps (docs/format/v0.md, Key art). `[key_art]` in `game.toml` names it; without it the
+//! of its maps (docs/format/game.md, Key art). `[key_art]` in `game.toml` names it; without it the
 //! art falls back to the first ranked room's background image or colour.
 //!
 //! The manifest check (`Manifest::validate`) validates the paths and images; [`resolve`] tells

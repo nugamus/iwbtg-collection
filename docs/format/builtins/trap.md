@@ -20,7 +20,7 @@ Trigger-launched mover. Source: `crates/sim/src/builtins/trap.rs`. It launches o
 | `destroy_outside_room` | bool | false | |
 | `kind`, `sound`, `sound_if_trigger` | | | The class the loader gives it; sound is the client's. |
 
-**Loading.** Every param loads on an object file or a placed instance. `trigger_kind`, `trigger_kind_b` and `trigger_kind_c` name kinds and must exist; `path` is a path index (the position of `paths/<id>.toml` in file path order), written as a number. Tests `wp6b2_params_load` and `wp6b2_params_are_checked` in `crates/format/tests/wp7a_load.rs`. Converter request CR17.
+**Loading.** Every param loads on an object file or a placed instance. `trigger_kind`, `trigger_kind_b` and `trigger_kind_c` name kinds and must exist; `path` is a path index (the position of `paths/<id>.toml` in file path order), written as a number. Tests `wp6b2_params_load` and `wp6b2_params_are_checked` in `crates/format/tests/load_objects.rs`. Converter request CR17.
 
 ## Stop chain
 

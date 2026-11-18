@@ -22,7 +22,7 @@
 //!   rejected ones, so they cannot drift unseen).
 //!
 //! `tests/schemas.rs` regenerates and diffs the files (`cargo xtask regen` rewrites them),
-//! validates the examples in v0.md and the valid
+//! validates the examples in the format pages and the valid
 //! test packages against them.
 
 #![allow(
