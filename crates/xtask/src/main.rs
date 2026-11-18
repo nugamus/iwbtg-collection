@@ -9,7 +9,8 @@
 //! - `repin`: after a deliberate change to hashed sim state, re-pins the state hash vectors
 //!   (`tests/hash_vectors.rs`), the `FINAL_HASH` of `tests/wp1_determinism.rs` and the golden
 //!   corpus, then runs them again. After the `SIM_VERSION` freeze point it also records the pins
-//!   under `SIM_VERSION` and fails when one changed without a bump (#783).
+//!   under `SIM_VERSION` and fails when one changed without a bump (#783). The files it rewrites are
+//!   listed in `crates/xtask/pin-files.txt`, which `.claude/hooks/conflict_guard.py` reads too (#949).
 //! - `regen`: regenerates the generated files: format schemas and the script API docs.
 //! - `pr-body [--issue N]`: prints a PR body for this branch: Closes, the commits, the docs it
 //!   changed, and the User check from the last `check`.
@@ -27,6 +28,25 @@ use std::collections::BTreeSet;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
+
+/// The hash-pin files `repin` rewrites, one repo-relative path per line (`#` starts a comment).
+/// `.claude/hooks/conflict_guard.py` reads the same file to spot pin-only merge conflicts (#949).
+const PIN_FILES: &str = include_str!("../pin-files.txt");
+
+fn pin_files() -> impl Iterator<Item = &'static str> {
+    PIN_FILES
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+}
+
+/// The listed pin file whose path ends with `name`.
+fn pin_file(root: &Path, name: &str) -> Result<PathBuf, String> {
+    pin_files()
+        .find(|p| p.ends_with(name))
+        .map(|p| root.join(p))
+        .ok_or_else(|| format!("{name} is not listed in crates/xtask/pin-files.txt"))
+}
 
 /// Workspace crates by folder, with the crates that depend on each.
 const CRATES: [(&str, &str, &[&str]); 5] = [
@@ -282,7 +302,7 @@ fn left_value(text: &str) -> Option<&str> {
 
 fn repin(root: &Path) -> Result<(), String> {
     // FINAL_HASH in wp1_determinism.rs.
-    let path = root.join("crates/sim/tests/wp1_determinism.rs");
+    let path = pin_file(root, "/wp1_determinism.rs")?;
     let (ok, text) = output(
         root,
         "cargo",
@@ -297,7 +317,7 @@ fn repin(root: &Path) -> Result<(), String> {
         println!("FINAL_HASH -> {got}");
     }
     // The state hash vectors.
-    let path = root.join("crates/sim/tests/hash_vectors.rs");
+    let path = pin_file(root, "/hash_vectors.rs")?;
     let (ok, text) = output(
         root,
         "cargo",
@@ -606,6 +626,18 @@ name = \"wasm-bindgen\"
 version = \"0.2.129\"
 source = \"x\"
 ";
+
+    #[test]
+    fn every_listed_pin_file_exists() {
+        let root = workspace_root();
+        let listed: Vec<_> = pin_files().collect();
+        assert!(listed.len() >= 4, "pin-files.txt lists {listed:?}");
+        for p in listed {
+            assert!(root.join(p).is_file(), "pin-files.txt lists {p}, which does not exist");
+        }
+        assert!(pin_file(&root, "/hash_vectors.rs").is_ok());
+        assert!(pin_file(&root, "/nope.rs").is_err());
+    }
 
     #[test]
     fn the_lock_entry_is_found_by_exact_name() {

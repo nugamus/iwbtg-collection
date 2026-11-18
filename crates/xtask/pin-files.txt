@@ -1,0 +1,7 @@
+# Hash-pin files: `cargo xtask repin` rewrites them, so never hand-merge them (#949).
+# On a merge conflict in these, take either side and run `cargo xtask repin`.
+# Read by crates/xtask (repin) and .claude/hooks/conflict_guard.py. One repo-relative path per line.
+crates/sim/tests/wp1_determinism.rs
+crates/sim/tests/hash_vectors.rs
+crates/sim/tests/golden/expected.txt
+crates/sim/tests/sim_version_pins.txt
