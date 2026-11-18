@@ -106,6 +106,9 @@ pub enum EngineVar {
     KeyRight,
     /// `global.key_jump`: the latched Jump flag (showdown `global.button03`).
     KeyJump,
+    /// GML `random_get_seed()`: the gameplay generator's state (`World::rng`) read as a signed
+    /// 32-bit integer, as the recorder prints it (`-669280590`, num-rng-a).
+    RandomSeed,
 }
 
 impl EngineVar {
@@ -639,6 +642,7 @@ fn engine_value(w: &World, v: EngineVar) -> trace::Value {
         EngineVar::KeyLeft => truth(g.kid.ext.key_left),
         EngineVar::KeyRight => truth(g.kid.ext.key_right),
         EngineVar::KeyJump => truth(g.kid.ext.key_jump),
+        EngineVar::RandomSeed => trace::Value::Real(f64::from(w.rng.seed.cast_signed())),
     }
 }
 
