@@ -125,9 +125,9 @@ def check_push(where):
 
 
 PIN_LIST = "crates/xtask/pin-files.txt"
-REPIN = ("take either side (`git checkout --theirs -- <file>`, then re-add any new vector or test the other side "
-         "added), `git add` it, and once nothing else conflicts run `cargo xtask repin`, `git add` what it changed "
-         "and commit")
+REPIN = ("take either side and mark it resolved (`git checkout --theirs -- <file>`, then `git add <file>`), then "
+         "re-add any new vector or test the other side brought as a normal edit, and once nothing else conflicts "
+         "run `cargo xtask repin`, `git add` what it changed and commit")
 
 
 def pin_files(where):
@@ -351,6 +351,10 @@ def self_test():
         run(pinrepo, "checkout", "--theirs", "--", pin)
         expect("pin-only, add a side", False, f"git add {pin}", pinrepo)
         expect("pin-only, add a side by folder", False, "cd crates && git add .", pinrepo)
+        run(pinrepo, "add", pin)
+        # The advised order: a side added (resolved), then the other side's new vector as a normal edit.
+        write(pin_path, 'const H: &str = "bbbb";\nconst NEW: &str = "dddd";\n')
+        expect("pin-only, edit after adding a side", False, f"git add {pin}", pinrepo)
         run(pinrepo, "add", pin)
         expect("pin-only, resolved commit", False, "git commit --no-edit", pinrepo)
         run(pinrepo, "commit", "-q", "--no-edit")
