@@ -12,6 +12,7 @@ Where things are kept (#107; `backend::root` picks the folder and the `native_fo
 | Games (library) | `library/<id>.iwbz` (data) | `%LOCALAPPDATA%\iwbtg-collection\` | `$XDG_DATA_HOME/iwbtg-collection/`, else `~/.local/share/iwbtg-collection/` | `localStorage["iwbtg-collection/data/library/<id>.iwbz"]` |
 | Save slots | `saves/<game id>.save` (data) | as above | as above | `iwbtg-collection/data/saves/...` |
 | Replays | `replays/...` (data) | as above | as above | `iwbtg-collection/data/replays/...` |
+| Saved replays (results page, Save replay) | `exports/<game>-<file>.iwbr` (data) | as above | as above | `iwbtg-collection/data/exports/...` |
 | Local stats | `stats.toml` (data) | as above | as above | `iwbtg-collection/data/stats.toml` |
 
 `$IWBTG_CONFIG_DIR` replaces the whole config folder (no `iwbtg-collection` is added); tests and checks use it. macOS uses the Linux folders rather than `~/Library/Application Support`, so one rule covers both. Settings survive a restart because every change is written through the config store at once (`settings::update`; `settings::tests::file_write_and_read` reads back what it wrote).
