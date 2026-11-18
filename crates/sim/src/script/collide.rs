@@ -20,8 +20,8 @@ use super::budget::cost;
 use super::docs::Docs;
 use super::host::{Host, Shared};
 use super::inst::Inst;
-use crate::collide::query::{self, Target};
 use crate::collide::place_origin;
+use crate::collide::query::{self, Target};
 use crate::def::{ClassMask, GameDef};
 use crate::error::SimError;
 use crate::num::Real;
@@ -82,10 +82,12 @@ fn notme(d: &Dynamic, f: &str) -> Res<Option<InstId>> {
     if d.is_unit() {
         return Ok(None);
     }
-    d.clone()
-        .try_cast::<Inst>()
-        .map(|i| Some(i.0))
-        .ok_or_else(|| runtime_error(format!("{f}: `notme` must be an instance or (), got {}", d.type_name())))
+    d.clone().try_cast::<Inst>().map(|i| Some(i.0)).ok_or_else(|| {
+        runtime_error(format!(
+            "{f}: `notme` must be an instance or (), got {}",
+            d.type_name()
+        ))
+    })
 }
 
 fn sim_err(e: SimError) -> Box<rhai::EvalAltResult> {
@@ -261,10 +263,14 @@ fn shape(s: &Shared, kind: Shape, c: [&Dynamic; 4], t: &Dynamic, prec: bool, nm:
     let t = s.with_world(|_, h| target(h, t, f))??;
     let nm = notme(nm, f)?;
     match kind {
-        Shape::Rect => query(s, None, |ctx| query::collision_rectangle(ctx, x1, y1, x2, y2, t, prec, nm)),
+        Shape::Rect => query(s, None, |ctx| {
+            query::collision_rectangle(ctx, x1, y1, x2, y2, t, prec, nm)
+        }),
         Shape::Line => {
             charge_line(s, x1, y1, x2, y2)?;
-            query(s, None, |ctx| query::collision_line(ctx, x1, y1, x2, y2, t, prec, nm))
+            query(s, None, |ctx| {
+                query::collision_line(ctx, x1, y1, x2, y2, t, prec, nm)
+            })
         }
     }
     .map(handle)

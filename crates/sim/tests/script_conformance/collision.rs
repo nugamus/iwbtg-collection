@@ -14,7 +14,9 @@ use iwbtg_sim::collide::{
     Target, collision_line, collision_point, collision_rectangle, instance_place, place_free, place_meeting,
 };
 use iwbtg_sim::def::testing::GameDefBuilder;
-use iwbtg_sim::def::{Builtin, ClassMask, GameDef, KindDef, KindId, RoomDef, RoomId, ScriptDef, ScriptId, VarId};
+use iwbtg_sim::def::{
+    Builtin, ClassMask, GameDef, KindDef, KindId, RoomDef, RoomId, ScriptDef, ScriptId, VarId,
+};
 use iwbtg_sim::events::EventKind;
 use iwbtg_sim::num::Real;
 use iwbtg_sim::rules::RunnerRules;
@@ -212,7 +214,8 @@ fn scripted(g: &mut World2, n: u8, a: [f64; 4], tgt: &Value) -> f64 {
     let me = g.probe;
     let inst = g.w.get_mut(me).expect("probe");
     for (i, v) in a.iter().enumerate() {
-        inst.vars.insert(VarId(u32::try_from(i).unwrap()), Value::Real(r(*v)));
+        inst.vars
+            .insert(VarId(u32::try_from(i).unwrap()), Value::Real(r(*v)));
     }
     inst.vars.insert(VarId(4), tgt.clone());
     g.scripts.begin_tick();
@@ -262,7 +265,7 @@ fn actual(g: &mut World2) -> String {
                     "{} {name} at {a:?}: script {got}, built-in {want}",
                     QUERIES[usize::from(n)]
                 );
-                hits += u32::from(got >= 0.0 && got != 0.0);
+                hits += u32::from(got > 0.0);
                 h.update(&got.to_le_bytes());
             }
             assert!(
@@ -272,7 +275,12 @@ fn actual(g: &mut World2) -> String {
                 pts.len()
             );
             let hex = h.finalize().to_hex();
-            let _ = writeln!(out, "{} hits={hits} {} {name}", &hex.as_str()[..32], QUERIES[usize::from(n)]);
+            let _ = writeln!(
+                out,
+                "{} hits={hits} {} {name}",
+                &hex.as_str()[..32],
+                QUERIES[usize::from(n)]
+            );
         }
     }
     out
@@ -288,7 +296,10 @@ fn script_collision_queries_match_the_builtin_queries() {
     let got = actual(&mut g);
     #[cfg(not(target_family = "wasm"))]
     if std::env::var_os("UPDATE_CONFORMANCE").is_some() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/script_conformance/collision.txt");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/script_conformance/collision.txt"
+        );
         std::fs::write(path, &got).expect("write collision.txt");
         return;
     }
@@ -313,8 +324,11 @@ fn the_world_exercises_r21_and_r22() {
     let first = collision_point(&ctx, r(37.5), r(25.5), Target::Any, true, None)
         .unwrap()
         .expect("gems overlap here");
-    assert_eq!(g.w.get(first).unwrap().kind, KindId(3), "R21: gem[v=1] ranks first");
-    let ctx = g.ctx();
+    assert_eq!(
+        g.w.get(first).unwrap().kind,
+        KindId(3),
+        "R21: gem[v=1] ranks first"
+    );
     let ctx = g.ctx();
     assert_eq!(
         collision_point(&ctx, r(60.0), r(50.0), Target::Any, true, None).unwrap(),
@@ -327,9 +341,18 @@ fn the_world_exercises_r21_and_r22() {
 fn bad_targets_and_dead_handles_are_script_errors() {
     let mut g = world();
     for (src, needle) in [
-        ("fn user(n) { collision_point(1.0, 1.0, \"nope\"); }", "neither a role nor a kind"),
-        ("fn user(n) { collision_point(1.0, 1.0, 3.0); }", "the target must be"),
-        ("fn user(n) { destroy(this); place_free(this, 0.0, 0.0); }", "no longer exists"),
+        (
+            "fn user(n) { collision_point(1.0, 1.0, \"nope\"); }",
+            "neither a role nor a kind",
+        ),
+        (
+            "fn user(n) { collision_point(1.0, 1.0, 3.0); }",
+            "the target must be",
+        ),
+        (
+            "fn user(n) { destroy(this); place_free(this, 0.0, 0.0); }",
+            "no longer exists",
+        ),
     ] {
         g.def.scripts[0].source = src.into();
         let scripts = ScriptRuntime::new(&g.def, &g.rules).expect("compiles");

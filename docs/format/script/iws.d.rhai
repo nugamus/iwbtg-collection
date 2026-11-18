@@ -56,6 +56,18 @@ fn choose(_: array) -> ?;
 
 fn clamp(_: ?, _: ?, _: ?) -> float;
 
+fn collision_line(_: ?, _: ?, _: ?, _: ?, _: ?) -> ?;
+
+fn collision_line(_: ?, _: ?, _: ?, _: ?, _: ?, _: bool, _: ?) -> ?;
+
+fn collision_point(_: ?, _: ?, _: ?) -> ?;
+
+fn collision_point(_: ?, _: ?, _: ?, _: bool, _: ?) -> ?;
+
+fn collision_rect(_: ?, _: ?, _: ?, _: ?, _: ?) -> ?;
+
+fn collision_rect(_: ?, _: ?, _: ?, _: ?, _: ?, _: bool, _: ?) -> ?;
+
 fn cos(_: ?) -> float;
 
 fn darctan2(_: ?, _: ?) -> float;
@@ -154,6 +166,8 @@ fn instance_create(_: string, _: ?, _: ?) -> Instance;
 
 fn instance_create(_: string, _: ?, _: ?, _: map) -> Instance;
 
+fn instance_place(_: Instance, _: ?, _: ?, _: ?) -> ?;
+
 fn instances(_: string) -> Dynamic>;
 
 fn irandom(_: ?) -> float;
@@ -185,6 +199,10 @@ fn mod(_: ?, _: ?) -> float;
 fn move_bounce_all(_: Instance, _: bool) -> ();
 
 fn move_bounce_solid(_: Instance, _: bool) -> ();
+
+fn place_free(_: Instance, _: ?, _: ?) -> bool;
+
+fn place_meeting(_: Instance, _: ?, _: ?, _: ?) -> bool;
 
 fn play_music(_: string) -> ();
 

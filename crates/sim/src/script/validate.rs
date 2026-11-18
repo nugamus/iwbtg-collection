@@ -733,7 +733,11 @@ fn check_call(cx: &mut Ctx, c: &FnCallExpr, pos: Position, method: bool) {
     }
     // A method call (`this.place_meeting(x, y, "block")`) has its first argument before the dot.
     for (f, index, what) in NAME_ARGS {
-        let at = if method { index.checked_sub(1) } else { Some(*index) };
+        let at = if method {
+            index.checked_sub(1)
+        } else {
+            Some(*index)
+        };
         if *f == name
             && let Some(Expr::StringConstant(s, p)) = at.and_then(|i| c.args.get(i))
             && !resolves(cx.def, *what, s)
