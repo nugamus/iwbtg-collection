@@ -13,6 +13,9 @@ use iwbtg_sim::rng::Rng;
 use iwbtg_sim::rules::RunnerRules;
 use iwbtg_sim::script::host::Iws;
 
+#[path = "collision.rs"]
+mod collision;
+
 const N: usize = 10_000;
 const EXPECTED: &str = include_str!("expected.txt");
 

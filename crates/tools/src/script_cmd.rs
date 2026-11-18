@@ -235,11 +235,12 @@ fn describe(docs: &Docs, name: &str, missing: &mut Vec<String>) -> String {
 
 /// ` (cost: 1 + 50)` for a function that charges extra, else ` (cost: 1)`.
 fn cost_note(name: &str) -> String {
-    match iwbtg_sim::script::budget::cost(name) {
+    use iwbtg_sim::script::budget;
+    match budget::cost(name) {
         (0, 0) => " (cost: 1)".to_owned(),
         (base, 0) => format!(" (cost: 1 + {base})"),
-        (0, item) => format!(" (cost: 1 + {item} per instance returned)"),
-        (base, item) => format!(" (cost: 1 + {base} + {item} per item)"),
+        (0, item) => format!(" (cost: 1 + {item} per {})", budget::cost_item(name)),
+        (base, item) => format!(" (cost: 1 + {base} + {item} per {})", budget::cost_item(name)),
     }
 }
 

@@ -647,7 +647,7 @@ fn engine_value(w: &World, v: EngineVar) -> trace::Value {
 fn matches(def: &GameDef, inst: &Instance, t: Target) -> bool {
     match t {
         Target::Class(c) => inst.classes.intersects(c),
-        Target::Kind(k) => def.kind_covers(k, inst.kind),
+        Target::Kind(k) | Target::KindTree(k) => def.kind_covers(k, inst.kind),
         Target::Inst(id) => inst.id == id,
         Target::Any => true,
     }

@@ -48,6 +48,19 @@ fn end_step() {
     if gm_lt(p, 0.0) || gm_le(p, -1.0) || gm_ge(p, 1e9) || gm_ne(p, p) {
         emit("phase_out_of_range");
     }
+    // Collision queries (#777): each result folded into `phase`.
+    let hits = 0.0;
+    if place_meeting(this, this.x, this.y + 32.0, "block") { hits += 1.0; }
+    if this.place_meeting(this.x, this.y, "mover") { hits += 2.0; }
+    if place_free(this, this.x, this.y - 32.0) { hits += 4.0; }
+    if instance_place(this, this.x, this.y, "all") != () { hits += 8.0; }
+    if collision_point(this.x, this.y + 40.0, "block") != () { hits += 16.0; }
+    if collision_point(this.x, this.y, "all", false, this) != () { hits += 32.0; }
+    if collision_rect(this.x - 64.0, this.y, this.x + 64.0, this.y + 64.0, "mover") != () { hits += 64.0; }
+    if collision_rect(0.0, 0.0, 800.0, 608.0, "all", true, this) != () { hits += 128.0; }
+    if collision_line(this.x, this.y, this.x, this.y + 200.0, "block") != () { hits += 256.0; }
+    if collision_line(this.x - 300.0, this.y, this.x + 300.0, this.y, "mover", false, ()) != () { hits += 512.0; }
+    this.phase = this.phase + hits / 4096.0;
     for i in 0..gm_repeat(2.4) {
         this.hp = this.hp + to_float(i) * 0.0;
     }

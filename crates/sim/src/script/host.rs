@@ -419,6 +419,7 @@ impl Iws {
         let mut docs = super::docs::Docs::default();
         super::api::register_numeric(&mut engine, &shared, &mut docs);
         super::inst::register_instance_api(&mut engine, &shared, &mut docs);
+        super::collide::register_collision_api(&mut engine, &shared, &mut docs);
 
         {
             // A top-level `const` is visible inside functions (#366).

@@ -23,17 +23,30 @@ pub const MAX_SPAWNS_PER_TICK: u32 = 4_096;
 
 /// Budget units a host function charges on top of the one unit every operation costs
 /// (decision 0001 "Step budget"; the generated `docs/format/script-api.md` lists them).
-/// Rows are (function, units per call, units per item it returns). A function not listed costs
-/// only its operation.
-pub const COSTS: &[(&str, u64, u64)] = &[("instance_create", 50, 0), ("instances", 0, 1)];
+/// Rows are (function, units per call, units per item, what an item is). A function not listed
+/// costs only its operation.
+pub const COSTS: &[(&str, u64, u64, &str)] = &[
+    ("instance_create", 50, 0, ""),
+    ("instances", 0, 1, "instance returned"),
+    ("collision_line", 0, 1, "pixel sampled"),
+];
 
 /// The extra units `name` charges: (per call, per item). `(0, 0)` for a function not listed.
 #[must_use]
 pub fn cost(name: &str) -> (u64, u64) {
     COSTS
         .iter()
-        .find(|(n, _, _)| *n == name)
-        .map_or((0, 0), |(_, base, item)| (*base, *item))
+        .find(|(n, ..)| *n == name)
+        .map_or((0, 0), |(_, base, item, _)| (*base, *item))
+}
+
+/// What one item of `name`'s per-item cost is (`"instance returned"`), or `""`.
+#[must_use]
+pub fn cost_item(name: &str) -> &'static str {
+    COSTS
+        .iter()
+        .find(|(n, ..)| *n == name)
+        .map_or("", |(.., what)| what)
 }
 
 /// The budget counters. Interior mutability is allowed here only (architecture "Scripts"): the
