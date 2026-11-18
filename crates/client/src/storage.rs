@@ -106,31 +106,11 @@ mod backend {
     impl Backend {
         /// Config: `$IWBTG_CONFIG_DIR`, else `%APPDATA%` on Windows, else `$XDG_CONFIG_HOME` or
         /// `~/.config`, then `iwbtg-collection`. Data: `%LOCALAPPDATA%` on Windows, else
-        /// `$XDG_DATA_HOME` or `~/.local/share`, then `iwbtg-collection`.
+        /// `$XDG_DATA_HOME` or `~/.local/share`, then `iwbtg-collection`. macOS follows the
+        /// non-Windows rule (docs/architecture/client/storage.md has the table).
         pub fn open(area: Area) -> Option<Backend> {
-            let env = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
-            let root = match area {
-                Area::Config => {
-                    if let Some(dir) = env("IWBTG_CONFIG_DIR") {
-                        return Some(Backend { root: dir });
-                    }
-                    if cfg!(windows) {
-                        env("APPDATA")
-                    } else {
-                        env("XDG_CONFIG_HOME").or_else(|| env("HOME").map(|h| h.join(".config")))
-                    }
-                }
-                Area::Data => {
-                    if cfg!(windows) {
-                        env("LOCALAPPDATA")
-                    } else {
-                        env("XDG_DATA_HOME").or_else(|| env("HOME").map(|h| h.join(".local/share")))
-                    }
-                }
-            }?;
-            Some(Backend {
-                root: root.join("iwbtg-collection"),
-            })
+            let env = |k: &str| std::env::var_os(k);
+            root(area, cfg!(windows), &env).map(|root| Backend { root })
         }
 
         fn path(&self, name: &str) -> PathBuf {
@@ -186,6 +166,36 @@ mod backend {
                 _ => Ok(()),
             }
         }
+    }
+
+    /// The folder of `area`, from the environment `env` on Windows or elsewhere. An empty
+    /// variable counts as unset.
+    pub fn root(
+        area: Area,
+        windows: bool,
+        env: &dyn Fn(&str) -> Option<std::ffi::OsString>,
+    ) -> Option<PathBuf> {
+        let env = |k: &str| env(k).filter(|v| !v.is_empty()).map(PathBuf::from);
+        let base = match area {
+            Area::Config => {
+                if let Some(dir) = env("IWBTG_CONFIG_DIR") {
+                    return Some(dir);
+                }
+                if windows {
+                    env("APPDATA")
+                } else {
+                    env("XDG_CONFIG_HOME").or_else(|| env("HOME").map(|h| h.join(".config")))
+                }
+            }
+            Area::Data => {
+                if windows {
+                    env("LOCALAPPDATA")
+                } else {
+                    env("XDG_DATA_HOME").or_else(|| env("HOME").map(|h| h.join(".local/share")))
+                }
+            }
+        }?;
+        Some(base.join("iwbtg-collection"))
     }
 
     pub fn warn(message: &str) {
@@ -338,6 +348,52 @@ mod tests {
         assert_eq!(hex::unhex("abc"), None, "odd length");
         assert_eq!(hex::unhex("zz"), None, "not hex");
         assert_eq!(hex::unhex("aéb"), None, "not ASCII");
+    }
+
+    /// The folders the docs list per OS (docs/architecture/client/storage.md, #107).
+    #[test]
+    fn native_folders_per_os() {
+        use std::path::PathBuf;
+        let root = |area, windows, vars: &[(&str, &str)]| {
+            let vars: Vec<(String, String)> =
+                vars.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+            let env = move |k: &str| vars.iter().find(|(n, _)| n == k).map(|(_, v)| v.into());
+            backend::root(area, windows, &env)
+        };
+        let p = |s: &str| Some(PathBuf::from(s).join("iwbtg-collection"));
+        let win = [
+            ("APPDATA", "C:/U/AppData/Roaming"),
+            ("LOCALAPPDATA", "C:/U/AppData/Local"),
+        ];
+        assert_eq!(root(Area::Config, true, &win), p("C:/U/AppData/Roaming"));
+        assert_eq!(root(Area::Data, true, &win), p("C:/U/AppData/Local"));
+        let home = [("HOME", "/home/u")];
+        assert_eq!(root(Area::Config, false, &home), p("/home/u/.config"));
+        assert_eq!(root(Area::Data, false, &home), p("/home/u/.local/share"));
+        let xdg = [
+            ("HOME", "/home/u"),
+            ("XDG_CONFIG_HOME", "/x/c"),
+            ("XDG_DATA_HOME", "/x/d"),
+        ];
+        assert_eq!(root(Area::Config, false, &xdg), p("/x/c"));
+        assert_eq!(root(Area::Data, false, &xdg), p("/x/d"));
+        let empty_xdg = [("HOME", "/home/u"), ("XDG_CONFIG_HOME", "")];
+        assert_eq!(
+            root(Area::Config, false, &empty_xdg),
+            p("/home/u/.config"),
+            "empty is unset"
+        );
+        let over = [("IWBTG_CONFIG_DIR", "/t/cfg"), ("APPDATA", "C:/A")];
+        assert_eq!(
+            root(Area::Config, true, &over),
+            Some(PathBuf::from("/t/cfg")),
+            "the override is the folder itself"
+        );
+        assert_eq!(
+            root(Area::Data, false, &[]),
+            None,
+            "no home: nowhere to keep things"
+        );
     }
 
     #[test]
