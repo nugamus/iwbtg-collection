@@ -13,6 +13,14 @@ is checked before the script runs, so its commit passes; the push check catches 
 
 The repository is the last `cd`/`Set-Location`/`pushd` before the git call (or `git -C <dir>`), else the
 session's cwd. Anything unreadable (not a repo, git missing, no upstream) lets the command through.
+Hash-pin files (the list in `crates/xtask/pin-files.txt`, which `cargo xtask repin` rewrites) are never
+merged by hand (#949). While the index still has unmerged files:
+
+  git add      denies adding an unmerged pin file whose content matches neither side (hand-merged, or markers)
+  git commit   denies, naming the unmerged pin files and their fix: take either side
+               (`git checkout --theirs -- <file>`), `git add`, then `cargo xtask repin`; a mixed conflict
+               also lists the other files to resolve by hand
+
 A command that really needs it adds `# conflict-guard: ok (<why>)`.
 
   python -I .claude/hooks/conflict_guard.py          hook mode: reads the PreToolUse JSON on stdin
@@ -72,7 +80,7 @@ def git_calls(command, cwd):
         sub, rest = tokens[i], [t.strip("\"'") for t in tokens[i + 1:]]
         if sub == "merge" and "--continue" in rest:
             sub = "commit"
-        if sub in ("commit", "push"):
+        if sub in ("commit", "push", "add"):
             found.append((where, sub, rest))
     return found
 
@@ -116,6 +124,83 @@ def check_push(where):
     return []
 
 
+PIN_LIST = "crates/xtask/pin-files.txt"
+REPIN = ("take either side and mark it resolved (`git checkout --theirs -- <file>`, then `git add <file>`), then "
+         "re-add any new vector or test the other side brought as a normal edit, and once nothing else conflicts "
+         "run `cargo xtask repin`, `git add` what it changed and commit")
+
+
+def pin_files(where):
+    """(repo top folder, set of repo-relative pin paths); no pins when the repo has no list."""
+    top = (git(where, "rev-parse", "--show-toplevel") or "").strip()
+    if not top:
+        return "", set()
+    try:
+        with open(os.path.join(top, PIN_LIST), encoding="utf-8") as f:
+            lines = [ln.strip() for ln in f]
+    except OSError:
+        return top, set()
+    return top, {ln for ln in lines if ln and not ln.startswith("#")}
+
+
+def unmerged(where):
+    """Repo-relative paths with unmerged index entries (a conflict not yet `git add`ed)."""
+    out = git(where, "diff", "--name-only", "--diff-filter=U")
+    return sorted(set(out.split("\n")) - {""}) if out else []
+
+
+def matches_a_side(where, top, path):
+    """True when the working file equals stage 2 or 3 (ours or theirs), or cannot be compared."""
+    mine = (git(where, "hash-object", "--", os.path.join(top, path)) or "").strip()
+    if not mine:
+        return True
+    sides = {(git(where, "rev-parse", "--verify", "--quiet", f":{n}:{path}") or "").strip() for n in (2, 3)}
+    sides.discard("")
+    return not sides or mine in sides
+
+
+def add_covers(args, where, top, path):
+    """Whether `git add <args>` run in `where` takes in the repo-relative `path`."""
+    if any(a in ("-A", "--all", "-u", "--update") for a in args):
+        return True
+    target = os.path.normcase(os.path.normpath(os.path.join(top, path)))
+    for a in args:
+        if a.startswith("-"):
+            continue
+        if any(c in a for c in "*?["):
+            return True
+        spec = os.path.normcase(native_path(a, where))
+        if target == spec or target.startswith(spec.rstrip(os.sep) + os.sep):
+            return True
+    return False
+
+
+def check_pins(where, sub, args):
+    """The reason to block a git add/commit that would hand-merge a pin file, or None."""
+    paths = unmerged(where)
+    if not paths:
+        return None
+    top, pins = pin_files(where)
+    pinned = [p for p in paths if p in pins]
+    if not pinned:
+        return None
+    if sub == "add":
+        hand = [p for p in pinned if add_covers(args, where, top, p) and not matches_a_side(where, top, p)]
+        if not hand:
+            return None
+        return (f"Blocked by conflict_guard: {', '.join(hand)} is a hash-pin file (crates/xtask/pin-files.txt) "
+                f"that matches neither side of the conflict: hand-merged or still holding markers. Never "
+                f"hand-merge pins: {REPIN}. Changed more than hashes on purpose: add `# conflict-guard: ok (<why>)`.")
+    if sub != "commit":
+        return None
+    others = [p for p in paths if p not in pins]
+    if not others:
+        return (f"Blocked by conflict_guard: a pin-only conflict, in {', '.join(pinned)} (hash pins that "
+                f"`cargo xtask repin` rewrites). Don't hand-merge them: {REPIN}.")
+    return (f"Blocked by conflict_guard: unmerged files. Resolve these by hand: {', '.join(others)}. "
+            f"The hash-pin files {', '.join(pinned)} are not merged by hand: {REPIN}.")
+
+
 def check(tool_input, cwd=""):
     """The reason to block this command, or None."""
     cmd = tool_input.get("command", "") or ""
@@ -124,11 +209,20 @@ def check(tool_input, cwd=""):
     for where, sub, args in git_calls(cmd, cwd):
         if not os.path.isdir(where):
             continue
+        if sub in ("add", "commit"):
+            reason = check_pins(where, sub, args)
+            if reason:
+                return reason
+            if sub == "add":
+                continue
         hits = check_commit(where, args) if sub == "commit" else check_push(where)
         if hits:
             shown = "\n".join(f"  {path}: {line}" for path, line in hits[:8])
             more = f"\n  ... {len(hits) - 8} more" if len(hits) > 8 else ""
             what = "staged changes" if sub == "commit" else "commits not yet pushed"
+            pins = pin_files(where)[1]
+            if pins and all(path in pins for path, _ in hits):
+                more += f"\nThese are hash-pin files only: {REPIN}."
             return (f"Blocked by conflict_guard: the {what} in {where} still have merge conflict markers:\n"
                     f"{shown}{more}\nResolve those blocks (search the files for the marker lines), `git add` "
                     "them and commit the fix, then retry. A false alarm: add `# conflict-guard: ok (<why>)`.")
@@ -212,6 +306,71 @@ def self_test():
         write(doc, "Title\n=======\nours\n")
         run(repo, "commit", "-q", "-am", "fix")
         expect("fixed before push", False, "git push", repo)
+
+        # Hash pins (#949): a repo with a pin list, a branch and main that both change the pin.
+        pinrepo = os.path.join(tmp, "pins")
+        pin, other = "crates/sim/tests/hash_vectors.rs", "notes.md"
+        pin_path, other_path = os.path.join(pinrepo, *pin.split("/")), os.path.join(pinrepo, other)
+        run(tmp, "init", "-q", "-b", "main", pinrepo)
+        os.makedirs(os.path.dirname(pin_path))
+        os.makedirs(os.path.join(pinrepo, "crates", "xtask"))
+        write(os.path.join(pinrepo, *PIN_LIST.split("/")), f"# pins\n{pin}\n")
+        write(pin_path, 'const H: &str = "aaaa";\n')
+        write(other_path, "base\n")
+        run(pinrepo, "add", "-A")
+        run(pinrepo, "commit", "-q", "-m", "base")
+
+        def conflict(touch_other):
+            run(pinrepo, "switch", "-q", "-C", "side", "main")
+            write(pin_path, 'const H: &str = "bbbb";\n')
+            if touch_other:
+                write(other_path, "side\n")
+            run(pinrepo, "commit", "-q", "-am", "side")
+            run(pinrepo, "switch", "-q", "-C", "work", "main")
+            write(pin_path, 'const H: &str = "cccc";\n')
+            if touch_other:
+                write(other_path, "work\n")
+            run(pinrepo, "commit", "-q", "-am", "work")
+            if subprocess.run(["git", "-C", pinrepo, "merge", "-q", "side"], capture_output=True, env=env).returncode == 0:
+                failures.append("fixture: merge did not conflict")
+
+        def expect_text(label, command, *needles):
+            got = check({"command": command}, pinrepo) or ""
+            missing = [n for n in needles if n not in got]
+            if missing:
+                failures.append(f"{label}: missing {missing} in {got!r}")
+
+        conflict(False)
+        expect_text("pin-only conflict, commit", "git commit --no-edit", "pin-only", "cargo xtask repin", pin)
+        expect_text("pin-only conflict, merge --continue", "git merge --continue", "pin-only", "cargo xtask repin")
+        expect("pin-only, add with markers", True, f"git add {pin}", pinrepo)
+        write(pin_path, 'const H: &str = "bbbb";\nconst H2: &str = "cccc";\n')
+        expect_text("pin-only, add hand-merged", "git add -A", "matches neither side", "cargo xtask repin")
+        expect("pin-only, add other path", False, f"git add {other}", pinrepo)
+        expect("pin-only, hand-merge override", False, "git add -A # conflict-guard: ok (fixture)", pinrepo)
+        run(pinrepo, "checkout", "--theirs", "--", pin)
+        expect("pin-only, add a side", False, f"git add {pin}", pinrepo)
+        expect("pin-only, add a side by folder", False, "cd crates && git add .", pinrepo)
+        run(pinrepo, "add", pin)
+        # The advised order: a side added (resolved), then the other side's new vector as a normal edit.
+        write(pin_path, 'const H: &str = "bbbb";\nconst NEW: &str = "dddd";\n')
+        expect("pin-only, edit after adding a side", False, f"git add {pin}", pinrepo)
+        run(pinrepo, "add", pin)
+        expect("pin-only, resolved commit", False, "git commit --no-edit", pinrepo)
+        run(pinrepo, "commit", "-q", "--no-edit")
+
+        conflict(True)
+        expect_text("mixed conflict, commit", "git commit --no-edit", "by hand: notes.md", pin, "cargo xtask repin")
+        write(other_path, f"{lt} HEAD\nwork\n=======\nside\n{gt} side\n")
+        expect("mixed, add the other file with markers", False, f"git add {other}", pinrepo)
+        run(pinrepo, "merge", "--abort")
+
+        # Markers committed only in a pin file point at repin too.
+        run(pinrepo, "switch", "-q", "main")
+        write(pin_path, f"{lt} HEAD\nx\n=======\ny\n{gt} side\n")
+        run(pinrepo, "add", pin)
+        expect_text("markers in a pin file", "git commit -m x", "conflict markers", "cargo xtask repin")
+        run(pinrepo, "reset", "-q", "--hard")
 
     expect("not a repo", False, "git commit -m x", tempfile.gettempdir())
     for f in failures:
