@@ -187,7 +187,9 @@ impl<'a> Loader<'a> {
                 self.room_ref(entry.to.get_ref(), entry.to.span());
             }
             for kind in &cut.kinds {
-                if !self.kind_ids.contains_key(kind.get_ref().as_str()) {
+                if !self.kind_ids.contains_key(kind.get_ref().as_str())
+                    && !self.failed.contains(kind.get_ref())
+                {
                     self.manifest_error(
                         kind.span(),
                         format!("cut kind `{}` is not a kind of this package", kind.get_ref()),
@@ -224,6 +226,7 @@ impl<'a> Loader<'a> {
         for (kind, room) in regions {
             if let Some(kind) = kind
                 && !self.kind_ids.contains_key(kind.get_ref().as_str())
+                && !self.failed.contains(kind.get_ref())
             {
                 self.manifest_error(
                     kind.span(),

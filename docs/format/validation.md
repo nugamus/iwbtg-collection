@@ -2,7 +2,7 @@
 
 Part of [format v0](v0.md).
 
-`iwbtg pkg check <dir>` runs these steps in order. The client and the server run the same checks on load and refuse a package that fails. Output is either OK or a list of readable errors with file, line and column.
+`iwbtg pkg check <dir>` runs these steps in order. The client and the server run the same checks on load and refuse a package that fails. Output is either OK or a list of readable errors with file, line and column. A file that fails to load (an object whose script is missing, say) is reported once, in its own file; references to it from rooms, the manifest or views do not add a "not a kind" error. A name that no file defines is still reported as not a kind.
 
 1. Every data file parses, with no unknown keys.
 2. Every reference resolves: rooms, kinds, sprites, sounds, music, timelines, scripts, trigger names, warp targets, engine pack assets.
