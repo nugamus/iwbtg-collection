@@ -1,4 +1,4 @@
-//! Package validation, the code behind `iwbtg pkg check` (docs/format/v0.md, Validation).
+//! Package validation, the code behind `iwbtg pkg check` (docs/format/validation.md).
 //!
 //! The client and the server run the same checks on load and refuse a package with any error.
 //! Each file type gets its own step function; this first slice checks the manifest and the
@@ -83,7 +83,7 @@ fn check_schema_line(path: &str, text: &str, out: &mut Vec<Diagnostic>) {
     }
 }
 
-/// Package-wide limits (docs/format/v0.md, Assets).
+/// Package-wide limits (docs/format/assets.md).
 fn check_limits(files: &PackageFiles, out: &mut Vec<Diagnostic>) {
     let total: u64 = files
         .iter()

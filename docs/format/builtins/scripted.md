@@ -8,6 +8,6 @@ The base of an object that has a `script` and no other `base` (1,712 placed inst
 
 Defaults of the object's `params` table are read by the script as `this.<name>`.
 
-**Loading.** Tests `a_scripted_kind_handles_what_its_script_defines_and_its_collides_with` and `a_scripted_object_runs_in_a_room` (a loaded package run through `Sim`, two runs hash alike) in `crates/format/tests/wp7a_load.rs`.
+**Loading.** Tests `a_scripted_kind_handles_what_its_script_defines_and_its_collides_with` and `a_scripted_object_runs_in_a_room` (a loaded package run through `Sim`, two runs hash alike) in `crates/format/tests/load_objects.rs`.
 
 OPEN (#371): the `trigger(name)` and `moment_<name>()` handlers are not part of the event set yet (timelines are WP8a).

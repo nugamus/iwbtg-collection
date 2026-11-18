@@ -1,5 +1,5 @@
-//! Timeline files to `TimelineDef` (docs/plans/sim-core.md 8.2 step 7; docs/format/v0.md,
-//! Timelines). WP0 creates the file; WP7b owns it.
+//! Timeline files to `TimelineDef` (docs/plans/sim-core.md 8.2 step 7; docs/format/timelines.md).
+//! WP0 creates the file; WP7b owns it.
 //!
 //! `timelines/<id>.toml` holds `moments = [{ t = 0, call = "intro" }, ...]` in tick order and an
 //! optional `loop`. The def keeps the ticks (`EventKind::Moment(step)` runs on the instance that

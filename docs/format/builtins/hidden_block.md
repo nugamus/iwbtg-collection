@@ -11,7 +11,7 @@ A solid block that is invisible until a kid comes near (KOT blockNotVis, WAN blo
 | `destroyed_by_blood` | bool | false | Blood touching it while it is still invisible destroys the block (XIA). |
 | `sound` | sound | none | Played on reveal; the client's. |
 
-**Loading.** Every param loads on an object file or a placed instance. Tests `wp6b2_params_load` and `wp6b2_params_are_checked` in `crates/format/tests/wp7a_load.rs`. Converter request CR17.
+**Loading.** Every param loads on an object file or a placed instance. Tests `wp6b2_params_load` and `wp6b2_params_are_checked` in `crates/format/tests/load_objects.rs`. Converter request CR17.
 
 Create makes it invisible. While invisible, each Step: `distance_to_object` to either kid below `reveal_distance` makes it visible; no kid at all destroys it (when `destroy_when_no_kid`). Solidity and the mask are kind data (the loader).
 

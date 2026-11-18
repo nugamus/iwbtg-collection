@@ -1,5 +1,5 @@
 //! Diagnostics: errors and warnings that name file, line and column
-//! (docs/format/v0.md, Validation).
+//! (docs/format/validation.md).
 
 use std::fmt;
 

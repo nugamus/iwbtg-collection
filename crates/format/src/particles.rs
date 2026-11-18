@@ -1,4 +1,4 @@
-//! Particle files to `PartSystemDef` (docs/format/v0.md, Particles; #765).
+//! Particle files to `PartSystemDef` (docs/format/particles.md; #765).
 //!
 //! `particles/<id>.toml` is one particle system as the original's code builds it: `[types.<name>]`
 //! (GM's `part_type_*` arguments), `[[emitters]]` in creation order (`part_emitter_region`,

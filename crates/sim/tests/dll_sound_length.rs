@@ -1,5 +1,5 @@
 //! #288: the package supplies the length of files a game loads through a DLL
-//! (`GameDef::dll_sound_length`; docs/format/v0.md, Sounds).
+//! (`GameDef::dll_sound_length`; docs/format/sounds.md).
 
 use iwbtg_sim::def::testing::GameDefBuilder;
 use iwbtg_sim::def::{GameDef, RoomDef, SoundDef, SoundKind};

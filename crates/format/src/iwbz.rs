@@ -28,7 +28,7 @@ use crate::ids::check_id;
 /// The file extension, without the dot.
 pub const EXTENSION: &str = "iwbz";
 
-/// Largest package, unpacked: the format's package size limit (docs/format/v0.md, Assets).
+/// Largest package, unpacked: the format's package size limit (docs/format/assets.md).
 pub const MAX_PACKAGE_BYTES: u64 = 512 * 1024 * 1024;
 /// Largest `.iwbz` file. Packed is never larger than unpacked plus the zip headers.
 pub const MAX_ARCHIVE_BYTES: u64 = MAX_PACKAGE_BYTES + 16 * 1024 * 1024;

@@ -163,8 +163,8 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// `iwbtg pkg hash <pkg>`: prints `gameplay_hash:` and `content_hash:` (docs/format/v0.md,
-/// Versioning). `Ok(false)` (exit 1) when the package has errors, which are printed instead.
+/// `iwbtg pkg hash <pkg>`: prints `gameplay_hash:` and `content_hash:` (docs/format/versioning.md).
+/// `Ok(false)` (exit 1) when the package has errors, which are printed instead.
 pub fn hash_main(dir: &Path, trace_mode: bool) -> Result<bool, ToolError> {
     let files = load_package(dir)?;
     match hashes(&files, trace_mode) {

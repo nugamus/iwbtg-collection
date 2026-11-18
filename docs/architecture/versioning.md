@@ -12,7 +12,7 @@ Four numbers, each with one job. A replay's header records all of them ([replay]
 |---|---|---|---|
 | `SIM_VERSION` | `crates/sim/src/lib.rs` | A sim build that could give a different outcome for some existing package on its own `engine_rev`: a Rhai or toolchain upgrade, a state hash encoding change (`HASH_LAYOUT`), a replay decoding change, or any bug in rev N's behavior fixed in place. | The verifier: a replay is verified by a build with its `SIM_VERSION`. |
 | `engine_rev` | the package's `game.toml` | The package moves to a newer revision of the built-ins (by the porter, or automatically when provably safe, [content](../content.md#engines)). | The sim: selects rule switches and code branches. Covered by `gameplay_hash`. |
-| `gameplay_hash` | computed by `iwbtg pkg hash` | Any gameplay edit to the package, or its `engine_rev` ([format v0](../format/v0.md#versioning)). | Boards. Cosmetic edits keep it. |
+| `gameplay_hash` | computed by `iwbtg pkg hash` | Any gameplay edit to the package, or its `engine_rev` ([format v0](../format/versioning.md)). | Boards. Cosmetic edits keep it. |
 | `format` | the package's `game.toml` (`FORMAT_VERSION` in `crates/format/src/manifest.rs`) | The package file layout or schema. | The loader only. It never changes an outcome: every format version loads into the same `GameDef`. |
 
 ## What a board keys on
