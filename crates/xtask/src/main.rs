@@ -633,7 +633,10 @@ source = \"x\"
         let listed: Vec<_> = pin_files().collect();
         assert!(listed.len() >= 4, "pin-files.txt lists {listed:?}");
         for p in listed {
-            assert!(root.join(p).is_file(), "pin-files.txt lists {p}, which does not exist");
+            assert!(
+                root.join(p).is_file(),
+                "pin-files.txt lists {p}, which does not exist"
+            );
         }
         assert!(pin_file(&root, "/hash_vectors.rs").is_ok());
         assert!(pin_file(&root, "/nope.rs").is_err());
