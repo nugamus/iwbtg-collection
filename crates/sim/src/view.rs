@@ -101,7 +101,7 @@ fn follow_target(ctx: &Ctx, t: Target) -> Option<InstId> {
         .w
         .instances()
         .iter()
-        .filter(|i| i.alive && i.active && t.matches(i))
+        .filter(|i| i.alive && i.active && t.matches(ctx.def, i))
         .map(|i| i.id);
     ctx.w.first_among(ids, &ctx.rules.tick)
 }

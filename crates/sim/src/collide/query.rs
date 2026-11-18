@@ -47,6 +47,10 @@ pub enum Target {
     Class(ClassMask),
     /// Instances of one kind.
     Kind(KindId),
+    /// Instances of one kind and of the kinds the loader derived from it (`water[variant=2]`
+    /// is a `water`, `GameDef::kind_covers`), as a GM object covers its children: what a
+    /// script names with a kind (#777).
+    KindTree(KindId),
     /// One instance.
     Inst(InstId),
     /// Any instance (`all`).
@@ -55,10 +59,11 @@ pub enum Target {
 
 impl Target {
     /// True when `inst` is one of the instances this target names.
-    pub fn matches(self, inst: &Instance) -> bool {
+    pub fn matches(self, def: &GameDef, inst: &Instance) -> bool {
         match self {
             Target::Class(c) => inst.classes.intersects(c),
             Target::Kind(k) => inst.kind == k,
+            Target::KindTree(k) => def.kind_covers(k, inst.kind),
             Target::Inst(id) => inst.id == id,
             Target::Any => true,
         }
@@ -104,7 +109,7 @@ impl<'a> Q<'a> {
         Some(inst.id) != notme
             && inst.active
             && (inst.alive || self.rules.tick.dead_in_queries)
-            && t.matches(inst)
+            && t.matches(self.def, inst)
     }
 
     /// Candidates that may touch `region`, sorted by id: grid hits plus moved instances, or

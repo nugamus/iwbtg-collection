@@ -23,9 +23,13 @@ pub const MAX_SPAWNS_PER_TICK: u32 = 4_096;
 
 /// Budget units a host function charges on top of the one unit every operation costs
 /// (decision 0001 "Step budget"; the generated `docs/format/script-api.md` lists them).
-/// Rows are (function, units per call, units per item it returns). A function not listed costs
-/// only its operation.
-pub const COSTS: &[(&str, u64, u64)] = &[("instance_create", 50, 0), ("instances", 0, 1)];
+/// Rows are (function, units per call, units per item it returns; for `collision_line`, per
+/// pixel it samples). A function not listed costs only its operation.
+pub const COSTS: &[(&str, u64, u64)] = &[
+    ("instance_create", 50, 0),
+    ("instances", 0, 1),
+    ("collision_line", 0, 1),
+];
 
 /// The extra units `name` charges: (per call, per item). `(0, 0)` for a function not listed.
 #[must_use]
