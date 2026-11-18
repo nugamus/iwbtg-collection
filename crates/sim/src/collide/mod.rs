@@ -9,6 +9,7 @@ pub mod bounce;
 pub mod contact;
 pub mod grid;
 pub mod overlap;
+pub(crate) mod pairs;
 pub mod query;
 pub mod resolve;
 pub mod xform;

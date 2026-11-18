@@ -60,8 +60,8 @@ rely_the_needle/djump OK
 rely_the_needle/right OK
 rely_the_needle/stand OK
 showdown/a3-t06 OK
-showdown/a3-t08 OPEN
-showdown/a3-t09 OPEN
+showdown/a3-t08 OK
+showdown/a3-t09 OK
 showdown/a3-t14-a OK
 showdown/a3-t14-b OK
 showdown/a3-t15-a OK

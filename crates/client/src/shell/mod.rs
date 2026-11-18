@@ -7,7 +7,7 @@
 //!   `OnExit(AppScreen::Run)`: resources through [`run_resource`], entities through
 //!   [`RUN_ONLY`] (`DespawnOnExit`).
 //! - Inside a run, [`RunScreen`] (a sub-state of `Run`) says what shows: the loading card, the
-//!   game, the pause menu or the results (#839). The sim ticks only in [`RunScreen::Playing`]
+//!   game, the pause menu, the results or the script error screen (#839, #101). The sim ticks only in [`RunScreen::Playing`]
 //!   (`SimTick` is gated here; Sudden Death, retry and frame advance add their own gates).
 //! - Run systems sit in [`InRun`], which runs only in `Run`; the whole fixed loop runs only in
 //!   `Run` too, so `FixedUpdate` systems need no condition and the fixed clock gathers no time on
@@ -48,6 +48,8 @@ pub enum RunScreen {
     Paused,
     /// The results page (`results/`).
     Results,
+    /// The sim halted (a script error): the script error screen (`script_error/`, #101).
+    Error,
 }
 
 /// The screen every run opens on: [`RunScreen::Loading`], or [`RunScreen::Playing`] when the
