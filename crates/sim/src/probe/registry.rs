@@ -437,7 +437,10 @@ mod tests {
         );
         assert_eq!(column("room_speed", &d), Ok(Column::Engine(EngineVar::RoomSpeed)));
         assert_eq!(column("fps", &d), Ok(Column::Engine(EngineVar::Fps)));
-        assert_eq!(column("random_get_seed()", &d), Ok(Column::Engine(EngineVar::RandomSeed)));
+        assert_eq!(
+            column("random_get_seed()", &d),
+            Ok(Column::Engine(EngineVar::RandomSeed))
+        );
         assert_eq!(column("global.hp", &d), Ok(Column::Global(VarId(0))));
         assert_eq!(
             column("instance_number(@bullet)", &d),
