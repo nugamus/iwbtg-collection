@@ -872,10 +872,18 @@ pub(crate) struct ShotSize(pub(crate) UVec2);
 #[derive(Resource, Default)]
 struct ShotFailed(Option<String>);
 
+/// The time one frame of a `--screenshot` run advances the clocks by (#942).
+pub(crate) const SHOT_FRAME: Duration = Duration::from_nanos(1_000_000_000 / 60);
+
 /// Sets up a `--screenshot` run: the capture at frame 90, the exit at frame 150 and, with `size`,
 /// the window held at that size. Finish with [`shot_result`] on what `App::run` returns.
+///
+/// Every frame advances time by [`SHOT_FRAME`], not by the real frame time, so the fixed clock
+/// (the sim, the HUD timer, the paused timer) and the real-time animations (the loading cherry,
+/// tweens) stand at the same point at frame 90 on any build and machine (#942).
 pub(crate) fn add_screenshot(app: &mut App, path: std::path::PathBuf, size: Option<UVec2>) {
-    app.insert_resource(ScreenshotTo(path))
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(SHOT_FRAME))
+        .insert_resource(ScreenshotTo(path))
         .init_resource::<ShotFailed>()
         .add_systems(Update, (hold_shot_size, take_screenshot).chain());
     if let Some(size) = size {
@@ -961,6 +969,28 @@ fn take_screenshot(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_screenshot_run_advances_time_by_frames_not_by_the_wall_clock() {
+        use bevy::time::{TimePlugin, TimeUpdateStrategy};
+        let mut app = App::new();
+        app.add_plugins(TimePlugin);
+        add_screenshot(&mut app, "unused.png".into(), None);
+        let strategy = app.world().resource::<TimeUpdateStrategy>();
+        assert!(matches!(strategy, TimeUpdateStrategy::ManualDuration(d) if *d == SHOT_FRAME));
+        // However long a frame really takes, the fixed clock gets the same ticks: the first frame
+        // starts the clock, the other 89 at 1/60 s each are 1.483 s, 74 ticks at 50 Hz (#942).
+        app.insert_resource(Time::<Fixed>::from_hz(50.0));
+        #[derive(Resource, Default)]
+        struct Ticks(u32);
+        app.init_resource::<Ticks>()
+            .add_systems(FixedUpdate, |mut t: ResMut<Ticks>| t.0 += 1);
+        for _ in 0..90 {
+            app.update();
+            std::thread::sleep(Duration::from_micros(200));
+        }
+        assert_eq!(app.world().resource::<Ticks>().0, 74);
+    }
 
     #[test]
     fn a_capture_of_another_size_is_not_saved() {
