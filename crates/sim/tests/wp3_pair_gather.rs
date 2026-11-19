@@ -14,6 +14,7 @@ use iwbtg_sim::events::{ProbeAct, ProbeLog, ProbeOn, ProbeState, ProbeStep, prob
 use iwbtg_sim::hash::state_hash;
 use iwbtg_sim::input::InputFrame;
 use iwbtg_sim::num::Real;
+use iwbtg_sim::rules::collide::PairOrder;
 use iwbtg_sim::tick::{self, EventRun, Hooks};
 use iwbtg_sim::world::{Ctx, Flow, InstId, SimStatus};
 
@@ -207,6 +208,50 @@ fn pair_gather_matches_the_full_scan_on_generated_worlds() {
             .iter()
             .map(|(log, _)| log.matches(" k").count())
             .sum::<usize>();
+    }
+    assert!(
+        collisions > 1000,
+        "the worlds collide enough to test: {collisions}"
+    );
+}
+
+/// #944: the non-default pair orders gather through the grid too (or scan with a stand-in
+/// overlap test). Their pair list is fixed before any handler of the turn runs, so the gather
+/// must give the same pairs in the same order as the scan: same handler log and state hash.
+#[test]
+fn pair_gather_matches_the_full_scan_for_the_other_pair_orders() {
+    let mut collisions = 0;
+    for seed in 1..=24_u64 {
+        let n = 20 + usize::try_from(seed * 7 % 120).unwrap();
+        let (scan_hooks, grid_hooks) = if seed % 2 == 0 {
+            (&SHOVE_SCAN, &SHOVE_GRID)
+        } else {
+            (&SCAN, &Hooks::ENGINE)
+        };
+        for order in [PairOrder::OtherRankThenId, PairOrder::HandlerListOrder] {
+            let mut scan = generated(seed, n);
+            let mut grid = generated(seed, n);
+            for fx in [&mut scan, &mut grid] {
+                fx.rules.collide.pair_order = order;
+                // C7b both ways: with it off the gather's overlap test is the only one.
+                fx.rules.collide.recheck_nonsolid = seed % 3 != 0;
+            }
+            let (want, want_status) = run(&mut scan, scan_hooks, 12);
+            let (got, got_status) = run(&mut grid, grid_hooks, 12);
+            for (t, (w, g)) in want.iter().zip(&got).enumerate() {
+                assert_eq!(
+                    w.0, g.0,
+                    "seed {seed}, order {order:?}, tick {t}: handler sequence"
+                );
+                assert_eq!(w.1, g.1, "seed {seed}, order {order:?}, tick {t}: state hash");
+            }
+            assert_eq!(want.len(), got.len(), "seed {seed}, order {order:?}: ticks run");
+            assert_eq!(want_status, got_status, "seed {seed}, order {order:?}: status");
+            collisions += want
+                .iter()
+                .map(|(log, _)| log.matches(" k").count())
+                .sum::<usize>();
+        }
     }
     assert!(
         collisions > 1000,

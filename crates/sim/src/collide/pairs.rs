@@ -21,6 +21,11 @@
 //! Errors surface where the full scan would raise them: an instance whose box cannot be
 //! computed sits in the grid's overflow set, which every gather returns, and an outer instance
 //! whose own box fails gathers every instance.
+//!
+//! The non-default `OtherRankThenId` and `HandlerListOrder` (`events::collide_one`, #944) fix
+//! their pair list before any handler of their turn runs, so they gather once at the turn start
+//! and need no [`Members`] snapshot: the live instances the gather returns are the turn-start
+//! ones, and the order is settled by the same sort the scan uses.
 
 use std::collections::BTreeSet;
 
