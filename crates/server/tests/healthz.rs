@@ -4,9 +4,11 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use tower::ServiceExt;
 
+use crate::support;
+
 #[tokio::test]
 async fn healthz_returns_ok() {
-    let response = iwbtg_server::app()
+    let response = iwbtg_server::app(support::memory_pool().await)
         .oneshot(Request::get("/healthz").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -17,7 +19,7 @@ async fn healthz_returns_ok() {
 
 #[tokio::test]
 async fn unknown_path_is_not_found() {
-    let response = iwbtg_server::app()
+    let response = iwbtg_server::app(support::memory_pool().await)
         .oneshot(Request::get("/nope").body(Body::empty()).unwrap())
         .await
         .unwrap();

@@ -19,6 +19,15 @@ axum = "0.8"
 tokio = { version = "1.54.1", features = ["macros", "net", "rt-multi-thread"] }
 # --bind; the `env` feature adds IWBTG_BIND.
 clap = { workspace = true, features = ["env"] }
+# SQLite (WAL, one file) with migrations at startup (docs/server.md, Database). No TLS runtime:
+# the driver is a local file. `macros` is only for `sqlx::migrate!`; no `query!` yet, so no
+# DATABASE_URL or `.sqlx` offline data is needed to build.
+sqlx = { version = "0.9", default-features = false, features = [
+  "runtime-tokio",
+  "sqlite",
+  "macros",
+  "migrate",
+] }
 # JSON logs to stdout (docs/server.md, Logs and monitoring).
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.23", features = ["json"] }

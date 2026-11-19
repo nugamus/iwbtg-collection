@@ -1,6 +1,9 @@
 /target/
 .claude/worktrees/
 
+# The server's default SQLite location (IWBTG_DB): runtime data, never committed.
+/data/
+
 __pycache__/
 *.pyc
 

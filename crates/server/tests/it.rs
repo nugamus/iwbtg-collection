@@ -5,5 +5,11 @@
 //! A new test file goes into this list (`autotests = false` in Cargo.toml, so cargo won't find it
 //! alone).
 
+#[path = "support.rs"]
+mod support;
+
+#[path = "db.rs"]
+mod db;
+
 #[path = "healthz.rs"]
 mod healthz;
