@@ -18,8 +18,9 @@ use iwbtg_sim::kid::presets;
 use toml::Spanned;
 
 use crate::diag::Diagnostic;
+use crate::engine_pack;
 use crate::files::PackageFiles;
-use crate::manifest::{MANIFEST_PATH, TrickSetting};
+use crate::manifest::{MANIFEST_PATH, Manifest, TrickSetting};
 
 /// Keys only a legacy draft has (the current form has tables, not these).
 const LEGACY_KEYS: [&str; 4] = ["rules", "jumps", "step_sets", "air_jump_restore"];
@@ -37,6 +38,210 @@ pub struct PhysicsLoad {
     /// A legacy draft: it names no sprites, so the loader looks for `player_idle`,
     /// `player_running`, `player_jump`, `player_fall` and `player_sliding` (CR8).
     pub legacy: bool,
+}
+
+/// How a package's resolved physics profile stands against its engine pack's family preset
+/// (#802; docs/content.md "Engines": a game whose physics differ from its pack's original is
+/// marked custom physics).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PhysicsStanding {
+    /// The engine pack `game.toml` names; `None` for a self-contained package.
+    pub pack: Option<String>,
+    /// The family preset the profile was compared with.
+    pub family: KidFamily,
+    /// The fields that differ, in profile order (`numbers.gravity`, `events.step`).
+    pub differs: Vec<String>,
+}
+
+impl PhysicsStanding {
+    /// True when the profile differs from the pack's family preset.
+    pub fn is_custom(&self) -> bool {
+        !self.differs.is_empty()
+    }
+
+    /// What a matching profile prints: the pack id, or `<family> preset` without a pack.
+    pub fn name(&self) -> String {
+        match &self.pack {
+            Some(pack) => pack.clone(),
+            None => format!("{:?} preset", self.family),
+        }
+    }
+}
+
+/// Compares the game's resolved profile with the family preset of the pack
+/// `manifest.engine_pack` names (`kid::presets::defaults`). Without a pack the profile's own
+/// `preset` is the family. `Real` equality is bitwise, so this compares exactly the numbers the
+/// sim runs. Room profiles (`physics/<id>.toml`) are not part of the game's profile and are not
+/// compared here.
+pub fn standing(files: &PackageFiles, manifest: &Manifest, profile: &PhysicsProfile) -> PhysicsStanding {
+    let pack = manifest.engine_pack.as_ref().map(|p| p.get_ref().clone());
+    let family = pack
+        .as_deref()
+        .and_then(|pack| engine_pack::family(files, pack))
+        .unwrap_or(profile.preset);
+    let base = presets::defaults(family);
+    PhysicsStanding {
+        pack,
+        family,
+        differs: differing_fields(profile, &base),
+    }
+}
+
+/// A section's fields compared one by one. A section that differs without a listed field
+/// differing (a field added later) still counts, as the section name.
+macro_rules! differ_section {
+    ($out:expr, $name:literal, $actual:expr, $base:expr, [$($field:ident),* $(,)?]) => {{
+        let mut listed = false;
+        $(
+            if $actual.$field != $base.$field {
+                $out.push(concat!($name, ".", stringify!($field)).to_owned());
+                listed = true;
+            }
+        )*
+        if !listed && $actual != $base {
+            $out.push($name.to_owned());
+        }
+    }};
+}
+
+/// The fields of `actual` that differ from `base`, in profile order. `preset`, `sprites` and
+/// `sounds` are not physics: the pack preset has no assets, and every package resolves its own.
+fn differing_fields(actual: &PhysicsProfile, base: &PhysicsProfile) -> Vec<String> {
+    let mut out = Vec::new();
+    differ_section!(
+        out,
+        "numbers",
+        actual.numbers,
+        base.numbers,
+        [
+            jumps,
+            gravity,
+            run_speed,
+            max_vspeed,
+            max_fall_speed,
+            release_mult,
+            sprite_threshold,
+            image_speed_idle,
+            image_speed_run,
+            air_wall_probe,
+        ]
+    );
+    differ_section!(out, "input", actual.input, base.input, [walk, vine_keys]);
+    differ_section!(
+        out,
+        "events",
+        actual.events,
+        base.events,
+        [
+            create, room_start, step, end_step, collisions, alarms, keys, boundary,
+        ]
+    );
+    differ_section!(
+        out,
+        "jump",
+        actual.jump,
+        base.jump,
+        [
+            ground_classes,
+            ground_also,
+            ground_sets_djump,
+            release_twice_while_tjump,
+            air,
+            water_air,
+            max_jumps,
+            inf_jump,
+            blocked_by_pause_press,
+            cancel,
+        ]
+    );
+    differ_section!(out, "fall_cap", actual.fall_cap, base.fall_cap, [rule]);
+    differ_section!(
+        out,
+        "gravity",
+        actual.gravity,
+        base.gravity,
+        [reapply, block_landing_zeroes]
+    );
+    differ_section!(
+        out,
+        "platform",
+        actual.platform,
+        base.platform,
+        [hold_probe, rule, snap, take, reversed_above, reversed_snap,]
+    );
+    differ_section!(
+        out,
+        "vine",
+        actual.vine,
+        base.vine,
+        [
+            walk_ignores_vines,
+            model,
+            left_below,
+            right_equal,
+            slide,
+            kick,
+            drop,
+            probe_down_fixed,
+        ]
+    );
+    // `[water]` has no fields yet; if it gains one, the section's own equality still catches it.
+    if actual.water != base.water {
+        out.push("water".to_owned());
+    }
+    differ_section!(
+        out,
+        "ice",
+        actual.ice,
+        base.ice,
+        [model, probe, read, clamp, temp_probe, temp_decay, temp_zero_below,]
+    );
+    differ_section!(
+        out,
+        "slope",
+        actual.slope,
+        base.slope,
+        [
+            block_step,
+            step,
+            mirror_contact,
+            downhill,
+            jump_probe,
+            air_sprite_probe,
+            keep_hspeed,
+        ]
+    );
+    differ_section!(out, "ladder", actual.ladder, base.ladder, [entry]);
+    differ_section!(
+        out,
+        "flip",
+        actual.flip,
+        base.flip,
+        [model, solidblock_no_refresh]
+    );
+    differ_section!(
+        out,
+        "death",
+        actual.death,
+        base.death,
+        [
+            order,
+            select_room_reset,
+            stop_music,
+            first_kid,
+            killer_check_menu_rooms,
+        ]
+    );
+    differ_section!(out, "bullet", actual.bullet, base.bullet, [max, speed, offset]);
+    differ_section!(out, "save", actual.save, base.save, [position, fixed, first_kid]);
+    differ_section!(
+        out,
+        "misc",
+        actual.misc,
+        base.misc,
+        [fade_in, fade_step, idle_needs_block]
+    );
+    out
 }
 
 /// Reads the profile file at `path` (step 7). `trace` is `LoadMode::Trace`: a legacy `rules` that

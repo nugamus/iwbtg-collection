@@ -97,6 +97,9 @@ pub struct LoadReport {
     /// Every map's timing chain, in `[[maps]]` order (one `main` map without `[[maps]]`); maps
     /// whose triggers do not resolve are left out (their errors are in `diagnostics`).
     pub maps: Vec<MapTiming>,
+    /// How the game's physics stands against its engine pack's family preset (#802). `None` when
+    /// no definition was built. A catalog or game page reads this for the custom-physics mark.
+    pub physics: Option<physics::PhysicsStanding>,
 }
 
 /// One map's resolved timing chain (docs/format/game.md, Maps).
@@ -136,6 +139,7 @@ pub fn load_report(files: &PackageFiles, mode: LoadMode) -> LoadReport {
                 diagnostics: diags,
                 gameplay_hash: None,
                 maps: Vec::new(),
+                physics: None,
             };
         }
     };
@@ -148,11 +152,15 @@ pub fn load_report(files: &PackageFiles, mode: LoadMode) -> LoadReport {
         Some(def) if !has_errors(&diags) => Some(gameplay_hash(files, &manifest, def)),
         _ => None,
     };
+    let physics_mark = def
+        .as_ref()
+        .map(|def| physics::standing(files, &manifest, &def.physics));
     LoadReport {
         def,
         diagnostics: diags,
         gameplay_hash,
         maps: std::mem::take(&mut l.maps),
+        physics: physics_mark,
     }
 }
 
