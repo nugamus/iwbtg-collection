@@ -49,7 +49,7 @@ fn pin_file(root: &Path, name: &str) -> Result<PathBuf, String> {
 }
 
 /// Workspace crates by folder, with the crates that depend on each.
-const CRATES: [(&str, &str, &[&str]); 5] = [
+const CRATES: [(&str, &str, &[&str]); 6] = [
     (
         "crates/sim/",
         "iwbtg-sim",
@@ -58,6 +58,9 @@ const CRATES: [(&str, &str, &[&str]); 5] = [
     ("crates/format/", "iwbtg-format", &["iwbtg-tools", "iwbtg-client"]),
     ("crates/tools/", "iwbtg-tools", &[]),
     ("crates/client/", "iwbtg-client", &[]),
+    // No dependents yet: the skeleton (#152) links neither sim nor format; it gains them when the
+    // verify worker lands, and this line and sim/format's lists change with it.
+    ("crates/server/", "iwbtg-server", &[]),
     ("crates/xtask/", "xtask", &[]),
 ];
 
