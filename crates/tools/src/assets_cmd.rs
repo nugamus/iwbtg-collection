@@ -104,19 +104,11 @@ pub fn index_main(games: &Path, out: Option<&Path>, check: bool) -> Result<bool,
                 Ok(true)
             }
             Ok(_) => {
-                println!(
-                    "stale: {} (run `iwbtg assets index {}`)",
-                    out.display(),
-                    games.display()
-                );
+                println!("stale: {} (run `{}`)", out.display(), rerun_hint(games, &out));
                 Ok(false)
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                println!(
-                    "missing: {} (run `iwbtg assets index {}`)",
-                    out.display(),
-                    games.display()
-                );
+                println!("missing: {} (run `{}`)", out.display(), rerun_hint(games, &out));
                 Ok(false)
             }
             Err(e) => Err(ToolError::Message(format!("{}: {e}", out.display()))),
@@ -126,6 +118,16 @@ pub fn index_main(games: &Path, out: Option<&Path>, check: bool) -> Result<bool,
     std::fs::write(&out, text.as_bytes())
         .map_err(|e| ToolError::Message(format!("{}: {e}", out.display())))?;
     Ok(true)
+}
+
+/// The command that rebuilds this index, for a `--check` message. `--out` is named only when the
+/// index is not at the default place, so the suggested command writes the file that was checked.
+fn rerun_hint(games: &Path, out: &Path) -> String {
+    if out == games.join(INDEX_FILE) {
+        format!("iwbtg assets index {}", games.display())
+    } else {
+        format!("iwbtg assets index {} --out {}", games.display(), out.display())
+    }
 }
 
 /// Reads the index already at `path`, so its tags survive a rebuild. A broken file is an error,
@@ -277,6 +279,19 @@ mod tests {
         assert_ne!(asset_hash(b"same"), asset_hash(b"other"));
         // The placeholder path has no text extension, so CRLF is hashed as it is.
         assert_ne!(asset_hash(b"a\r\nb"), asset_hash(b"a\nb"));
+    }
+
+    #[test]
+    fn the_check_hint_names_out_only_when_it_is_custom() {
+        let games = Path::new("games");
+        assert_eq!(
+            rerun_hint(games, &games.join(INDEX_FILE)),
+            "iwbtg assets index games"
+        );
+        assert_eq!(
+            rerun_hint(games, Path::new("elsewhere.toml")),
+            "iwbtg assets index games --out elsewhere.toml"
+        );
     }
 
     #[test]
