@@ -3,7 +3,8 @@
 //! - `check [--all]`: rustfmt check, then clippy and tests of the crates this branch changed
 //!   (against `origin/main`, committed or not) plus a compile check of the crates that depend on
 //!   them. `--all` runs the whole workspace, like CI. Writes the summary to
-//!   `target/xtask/last-check.txt` for `pr-body`.
+//!   `target/xtask/last-check.txt` for `pr-body`. Each step streams actionable lines and keeps a
+//!   complete log with its cwd, argv and exit status in `target/xtask/logs/` (#1032).
 //! - `fidelity [--bless]`: the trace sweep over every converter package; records the run in
 //!   `target/xtask/last-fidelity.txt` (#935).
 //! - `repin`: after a deliberate change to hashed sim state, re-pins the state hash vectors
@@ -25,10 +26,13 @@
 //!
 //! Standard library only; it shells out to cargo and git.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, VecDeque};
 use std::fmt::Write as _;
+use std::io::{BufRead, BufReader, Write as _};
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitCode};
+use std::process::{Command, ExitCode, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 /// The hash-pin files `repin` rewrites, one repo-relative path per line (`#` starts a comment).
 /// `.claude/hooks/conflict_guard.py` reads the same file to spot pin-only merge conflicts (#949).
@@ -195,11 +199,217 @@ fn affected(files: &[String]) -> (BTreeSet<&'static str>, BTreeSet<&'static str>
     (test, check)
 }
 
+/// How many trailing lines a failed step prints; the complete output is in its log.
+const LOG_TAIL: usize = 120;
+/// Print a progress line every this many output lines, so a silent build still shows life.
+const LOG_PROGRESS_EVERY: u64 = 50;
+
+struct StepReport {
+    ok: bool,
+    log: PathBuf,
+    tail: Vec<String>,
+    results: Vec<String>,
+    exit: String,
+}
+
+/// Hide obvious credential assignments and URL userinfo from the console and the retained log.
+fn redact(line: &str) -> String {
+    let mut out = line.to_owned();
+    for key in ["TOKEN=", "PASSWORD=", "SECRET=", "token=", "password=", "secret="] {
+        let mut search = 0;
+        while let Some(found) = out[search..].find(key) {
+            let start = search + found + key.len();
+            let end = out[start..]
+                .find(char::is_whitespace)
+                .map_or(out.len(), |i| start + i);
+            if end > start {
+                out.replace_range(start..end, "***");
+            }
+            search = start + 3;
+            if search >= out.len() {
+                break;
+            }
+        }
+    }
+    if let Some(scheme) = out.find("://") {
+        let start = scheme + 3;
+        if let Some(at) = out[start..].find('@') {
+            let at = start + at;
+            let slash = out[start..].find('/').map_or(out.len(), |i| start + i);
+            if at < slash {
+                out.replace_range(start..at, "***");
+            }
+        }
+    }
+    out
+}
+
+/// Lines worth showing live: compiler/test failures and progress, not hundreds of `test ... ok`.
+fn actionable(line: &str) -> bool {
+    let l = line.trim_start();
+    l.starts_with("error")
+        || l.starts_with("warning:")
+        || l.starts_with("FAILED")
+        || l.starts_with("failures:")
+        || l.starts_with("panicked")
+        || l.starts_with("test result:")
+        || l.starts_with("---- ")
+        || l.starts_with("--> ")
+        || l.starts_with("note:")
+        || (l.starts_with("thread ") && l.contains("panicked"))
+}
+
+/// A path-safe log name: `03-compile-check-of-dependents-a-b`.
+fn log_slug(index: usize, what: &str) -> String {
+    let mut s = format!("{index:02}-");
+    for c in what.chars().take(60) {
+        if c.is_ascii_alphanumeric() {
+            s.push(c.to_ascii_lowercase());
+        } else if !s.ends_with('-') {
+            s.push('-');
+        }
+    }
+    while s.ends_with('-') {
+        s.pop();
+    }
+    s
+}
+
+fn pump<R: std::io::Read + Send + 'static>(
+    reader: R,
+    log: Arc<Mutex<std::fs::File>>,
+    tail: Arc<Mutex<VecDeque<String>>>,
+    results: Arc<Mutex<Vec<String>>>,
+    failed: Arc<AtomicBool>,
+    what: String,
+    log_path: PathBuf,
+) -> std::thread::JoinHandle<()> {
+    std::thread::spawn(move || {
+        let mut reader = BufReader::new(reader);
+        let mut buf = Vec::new();
+        let mut count = 0u64;
+        loop {
+            buf.clear();
+            match reader.read_until(b'\n', &mut buf) {
+                Ok(0) => break,
+                Ok(_) => {}
+                Err(_) => {
+                    failed.store(true, Ordering::SeqCst);
+                    break;
+                }
+            }
+            // Lossy decoding keeps non-UTF-8 tool output from cutting the log short.
+            let line = redact(String::from_utf8_lossy(&buf).trim_end_matches(['\r', '\n']));
+            if let Ok(mut file) = log.lock() {
+                let _ = writeln!(file, "{line}");
+            }
+            if line.trim_start().starts_with("test result:")
+                && let Ok(mut results) = results.lock()
+            {
+                results.push(line.clone());
+            }
+            if let Ok(mut tail) = tail.lock() {
+                if tail.len() == LOG_TAIL {
+                    tail.pop_front();
+                }
+                tail.push_back(line.clone());
+            }
+            count += 1;
+            if actionable(&line) {
+                println!("{line}");
+            } else if count.is_multiple_of(LOG_PROGRESS_EVERY) {
+                println!("  ... {what}: {count} lines (log: {})", log_path.display());
+            }
+        }
+    })
+}
+
+/// Run a step with both pipes pumped by reader threads, a complete log and a bounded tail.
+fn run_logged(
+    root: &Path,
+    what: &str,
+    index: usize,
+    program: &str,
+    args: &[&str],
+) -> Result<StepReport, String> {
+    let dir = root.join("target/xtask/logs");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let log_path = dir.join(format!("{}.log", log_slug(index, what)));
+    let mut file = std::fs::File::create(&log_path).map_err(|e| format!("{}: {e}", log_path.display()))?;
+    let _ = writeln!(file, "cwd: {}", root.display());
+    let _ = writeln!(file, "$ {program} {}", args.join(" "));
+    let _ = file.flush();
+    let log = Arc::new(Mutex::new(file));
+    let tail = Arc::new(Mutex::new(VecDeque::new()));
+    let results = Arc::new(Mutex::new(Vec::new()));
+    let failed = Arc::new(AtomicBool::new(false));
+    let mut child = Command::new(program)
+        .args(args)
+        .current_dir(root)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("{program}: {e}"))?;
+    let mut handles = Vec::new();
+    if let Some(out) = child.stdout.take() {
+        handles.push(pump(
+            out,
+            log.clone(),
+            tail.clone(),
+            results.clone(),
+            failed.clone(),
+            what.to_owned(),
+            log_path.clone(),
+        ));
+    }
+    if let Some(err) = child.stderr.take() {
+        handles.push(pump(
+            err,
+            log.clone(),
+            tail.clone(),
+            results.clone(),
+            failed.clone(),
+            what.to_owned(),
+            log_path.clone(),
+        ));
+    }
+    let status = child.wait().map_err(|e| format!("{program}: {e}"))?;
+    let mut joined = true;
+    for handle in handles {
+        if handle.join().is_err() {
+            joined = false;
+        }
+    }
+    let reader_failed = failed.load(Ordering::SeqCst);
+    let exit = status.code().map_or_else(
+        || "terminated by signal".to_owned(),
+        |c| format!("exit status: {c}"),
+    );
+    if let Ok(mut file) = log.lock() {
+        let _ = writeln!(file, "{exit}");
+        let _ = file.flush();
+    }
+    let tail = tail
+        .lock()
+        .map(|t| t.iter().cloned().collect())
+        .unwrap_or_default();
+    let results = results.lock().map(|r| r.clone()).unwrap_or_default();
+    Ok(StepReport {
+        ok: status.success() && joined && !reader_failed,
+        log: log_path,
+        tail,
+        results,
+        exit,
+    })
+}
+
 fn check(root: &Path, all: bool) -> Result<(), String> {
     let mut summary = String::new();
+    let mut index = 0usize;
     let mut step = |root: &Path, what: &str, args: &[&str]| -> Result<(), String> {
-        let (ok, text) = output(root, "cargo", args, &[])?;
-        let results: Vec<&str> = text.lines().filter(|l| l.starts_with("test result:")).collect();
+        index += 1;
+        let report = run_logged(root, what, index, "cargo", args)?;
+        let results: Vec<&str> = report.results.iter().map(String::as_str).collect();
         let (passed, failed) = results.iter().fold((0u64, 0u64), |(p, f), l| {
             let n = |word: &str| {
                 l.split(';')
@@ -210,7 +420,7 @@ fn check(root: &Path, all: bool) -> Result<(), String> {
             (p + n("passed"), f + n("failed"))
         });
         let line = if results.is_empty() {
-            format!("{what}: {}", if ok { "ok" } else { "FAILED" })
+            format!("{what}: {}", if report.ok { "ok" } else { "FAILED" })
         } else {
             format!(
                 "{what}: {} test binaries, {passed} passed, {failed} failed",
@@ -218,22 +428,24 @@ fn check(root: &Path, all: bool) -> Result<(), String> {
             )
         };
         println!("{line}");
-        let _ = writeln!(summary, "cargo {} -> {line}", args.join(" "));
-        if ok {
+        let _ = writeln!(
+            summary,
+            "cargo {} -> {line} (log: {})",
+            args.join(" "),
+            report.log.display()
+        );
+        if report.ok {
             Ok(())
         } else {
-            let tail: Vec<&str> = text
-                .lines()
-                .filter(|l| {
-                    l.contains("error")
-                        || l.contains("FAILED")
-                        || l.contains("panicked")
-                        || l.starts_with("  -->")
-                        || l.starts_with("---- ")
-                })
-                .take(40)
-                .collect();
-            Err(format!("{what} failed:\n{}", tail.join("\n")))
+            // The complete output is on disk; show the unfiltered tail so a nested cause is visible
+            // without rerunning the command (#1032).
+            Err(format!(
+                "{what} failed ({}); full log: {}\n--- last {} lines ---\n{}",
+                report.exit,
+                report.log.display(),
+                report.tail.len(),
+                report.tail.join("\n")
+            ))
         }
     };
     let result = (|| {
@@ -1013,6 +1225,62 @@ version = \"1.0.0\"
         );
         assert_eq!(left_value(&text).and_then(first_hash), Some(h));
         assert_eq!(first_hash(&format!("x{h}0")), None, "65 digits is not a hash");
+    }
+
+    #[test]
+    fn actionability_and_redaction_are_bounded() {
+        assert!(actionable("error[E0308]: mismatched types"));
+        assert!(actionable("test result: FAILED. 1 passed; 1 failed"));
+        assert!(actionable("  --> src/main.rs:1:1"));
+        assert!(!actionable("test some_case ... ok"));
+        let red = redact("CARGO_REGISTRIES_TOKEN=abc123 https://user:pass@example.com/x");
+        assert!(!red.contains("abc123") && !red.contains("pass@"), "{red}");
+        assert!(red.contains("***"), "{red}");
+    }
+
+    #[test]
+    fn log_names_are_path_safe() {
+        assert_eq!(
+            log_slug(3, "compile check of dependents (a, b)"),
+            "03-compile-check-of-dependents-a-b"
+        );
+        assert!(!log_slug(1, "../../escape").contains('/'));
+    }
+
+    #[test]
+    fn a_failing_command_logs_its_nested_cause_without_a_rerun() {
+        let root = workspace_root();
+        let (program, args) = if cfg!(windows) {
+            (
+                "cmd",
+                vec![
+                    "/C".to_owned(),
+                    "echo outer-cause & echo inner-cause 1>&2 & exit 3".to_owned(),
+                ],
+            )
+        } else {
+            (
+                "sh",
+                vec![
+                    "-c".to_owned(),
+                    "echo outer-cause; echo inner-cause >&2; exit 3".to_owned(),
+                ],
+            )
+        };
+        let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        let report = run_logged(&root, "synthetic failure", 999, program, &refs).expect("runs");
+        assert!(!report.ok);
+        assert_eq!(report.exit, "exit status: 3");
+        let text = std::fs::read_to_string(&report.log).expect("log written");
+        assert!(
+            text.contains("inner-cause") && text.contains("outer-cause"),
+            "{text}"
+        );
+        assert!(
+            report.tail.iter().any(|l| l.contains("inner-cause")),
+            "{:?}",
+            report.tail
+        );
     }
 
     #[test]
