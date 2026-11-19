@@ -8,12 +8,14 @@
 //!
 //! The key is the format's content hash ([`PackageFiles::content_hash`]) over the asset file alone.
 //! That hash mixes in the file path, so the file is put under one fixed placeholder path here and
-//! the key depends only on the bytes; a format-level per-file helper would be cleaner (triage
-//! issue). Media files are hashed as they are: the placeholder has no extension, so the text
+//! the key depends only on the bytes; a format-level per-file helper would be cleaner (#1051).
+//! Media files are hashed as they are: the placeholder has no extension, so the text
 //! line-end normalization of the package hash does not apply.
 //!
 //! `tags` is the place for the AI tags the porting checklist fills later (#104). Rerunning the
-//! command keeps the tags already in the file, so tagging is not lost.
+//! command keeps the tags already in the file, so tagging is not lost. A duplicate group's first
+//! place, in package order, stands in for the origin until the manifest carries release dates
+//! (#1050).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
