@@ -192,7 +192,7 @@ cargo test --workspace
 cargo fmt --all -- --check
 ```
 
-Locally, run only what you changed: `cargo xtask check` selects changed crates, runs rustfmt, Clippy and their tests, then compile-checks dependents; `cargo xtask check --all` runs the whole native workspace. Cross-target tests, dependency bans and licenses remain in CI; private fidelity fixtures stay local to their authorized environment.
+Locally, run only what you changed: `cargo xtask check` selects changed crates, runs rustfmt, Clippy and their tests, then compile-checks dependents; `cargo xtask check --all` runs the whole native workspace. Each step streams actionable lines and writes a complete log with its cwd, argv and exit status under `target/xtask/logs/`; a failure names the log and prints the last 120 lines unfiltered, so a nested compiler, pkg-config or test cause is visible without rerunning. The logs are untracked and obvious credentials are redacted. Cross-target tests, dependency bans and licenses remain in CI; private fidelity fixtures stay local to their authorized environment.
 
 CI cannot see the research repo, so trace fidelity is checked locally after each merge wave (docs/architecture/testing.md, CI and the fidelity sweep):
 

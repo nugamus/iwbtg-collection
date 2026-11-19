@@ -5,7 +5,7 @@ Read this page when coordinating worktrees, triaging, or placing documentation. 
 ## Daily workflow (authoritative)
 
 1. Read the issue, its blockers/parent and `docs/lanes/<lane>.md`; claim it with `in-progress` and a comment.
-2. Work in your lane worktree. Run the narrow tests for what you touched, then `cargo xtask check` once before the PR.
+2. Work in your lane worktree. Run the narrow tests for what you touched, then `cargo xtask check` once before the PR. It streams actionable lines and keeps a complete per-step log under `target/xtask/logs/`; read that log instead of rerunning a failed step.
 3. Update affected docs; open the PR with `Closes #N`, Docs updated, Follow-up issues and the real User check output.
 4. The PR owner reviews the diff, runs the User check and requests `gh pr merge <N> --squash --auto`. Contract/cross-area changes seek domain review; routine fixes need no separate lead or reviewer chain.
 5. A lead only handles spawning and integration after merge waves; the user tests visible changes on `main` in batches.
