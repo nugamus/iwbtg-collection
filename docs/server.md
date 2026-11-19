@@ -2,7 +2,7 @@
 
 The leaderboard, accounts and game downloads run on the maintainer's home server. Chosen for few moving parts, strong defaults and easy operation by agents. Versions were checked on 2026-10-23; check them again when Phase 8 starts.
 
-Status: the skeleton exists: `crates/server` builds the `iwbtg-server` binary (axum 0.8 + tokio, `--bind`/`IWBTG_BIND`, default `127.0.0.1:8080`) and serves `GET /healthz` (#152). SQLite, accounts, submissions and the verify worker are later issues.
+Status: the skeleton exists: `crates/server` builds the `iwbtg-server` binary (axum 0.8 + tokio, `--bind`/`IWBTG_BIND`, default `127.0.0.1:8080`) and serves `GET /healthz` (#152). It opens the SQLite database (`--db`/`IWBTG_DB`, default `data/iwbtg.db`), sets WAL and runs the migrations at startup (#153, Schema below). Accounts, submissions and the verify worker are later issues.
 
 ## Components
 
@@ -19,6 +19,25 @@ Status: the skeleton exists: `crates/server` builds the `iwbtg-server` binary (a
 | Backups | restic to remote storage (Backblaze B2 or a Hetzner Storage Box) | Encrypted, deduplicated, retention built in. Replaces the earlier "push backups to a Git server" idea: Git would keep password hashes and emails forever, unencrypted, and could never forget a deleted account. |
 | Logs and monitoring | `tracing` JSON logs to stdout; `/healthz` pinged to healthchecks.io every 5 minutes | Alerts arrive even when the house loses power or internet. |
 | Dependency updates | Dependabot PRs for cargo and compose, `cargo audit` in CI | Updates arrive as reviewable PRs, never silently. |
+
+## Schema
+
+One SQLite file, opened once at startup by `crates/server/src/db.rs`. `IWBTG_DB` (or `--db`) names it; the folder is created if missing. Every connection sets `journal_mode = wal`, `foreign_keys = on`, `busy_timeout = 5000` and `synchronous = normal`. WAL is a property of the file, so a crash or a second process cannot leave it half-switched.
+
+Migrations live in `migrations/` at the workspace root (not in the crate), are compiled into the binary with `sqlx::migrate!`, and run before the listener binds. A failed migration is a startup error: the server logs it and exits 1 rather than serve a half-migrated file. sqlx records what ran in `_sqlx_migrations`; the startup log line `database ready (migrations applied)` carries the count. The list is append-only: sqlx stores a checksum per migration, so editing one that already ran also stops startup (version mismatch) instead of letting the file and the binary disagree.
+
+| Table | Keys and indexes | Holds |
+|---|---|---|
+| `accounts` | `username_canonical` unique; `email` unique where not null | Username as typed plus its canonical form, lowercased email and whether it is verified, `deleted_at` for a soft delete. |
+| `identities` | `(provider, subject)` unique; index on `account_id` | One row per sign-in method (Google, Discord, ...); a new provider is a new value, no schema change. |
+| `password_credentials` | `account_id` primary key | Argon2id PHC string. OIDC-only accounts have no row. |
+| `sessions` | `token_hash` unique; indexes on `account_id` and `expires_at` | Opaque session ID, SHA-256 of the bearer token, expiry. |
+| `runs` | `(package_id, map_id, mods, gameplay_hash, ticks, submitted_at)`; indexes on `replay_sha256` and `(account_id, ticks)` | The replay BLOB (at most 1 MiB), its SHA-256 for exact-copy detection, the board identity, and the verified tick count (`NULL` until the verifier has reproduced it). |
+| `verify_jobs` | index on `(state, id)` and `run_id` | Queue state per submitted run: `queued`, `running`, `done` or `failed`, with attempts, timings and the verifier's error. |
+
+Timestamps are UTC ISO-8601 text and hashes are raw 32-byte BLOBs. Boards sort on `ticks` with ties to the earlier `submitted_at`, keyed on the replay header's `(package_id, map_id, mods, gameplay_hash)` ([versioning](architecture/versioning.md#what-a-board-keys-on)); `gameplay_hash` therefore covers `engine_rev`, and no product columns beyond the replay header are stored.
+
+Queries that need compile-time checking use `sqlx::query!`; the `.sqlx` offline data is committed once the first such query lands (#162). Until then the only SQL in `crates/server` is the PRAGMA and schema probes in the tests, which use runtime `query_scalar`, so the build needs no live database and no `DATABASE_URL`.
 
 ## Security rules
 
