@@ -1,0 +1,60 @@
+name: Bug report
+description: Something is broken in the client, a game package or the docs.
+title: "[Bug]: "
+labels: ["triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Do not attach original game files, decompiled code or personal data.
+        For a security problem, use the private process in SECURITY.md instead of this form.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What went wrong, and where.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The exact steps, buttons or commands. A replay or the game's id helps for gameplay bugs.
+      placeholder: |
+        1. Open the client
+        2. Select ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs. actual
+      description: What you expected to happen, and what happened instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - Client on Windows, Linux or macOS
+        - Client on the web (WASM)
+        - A game package
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Commit or version
+      description: The commit you ran, if you built it yourself. The project has no releases yet.
+      placeholder: output of `git rev-parse --short HEAD`
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Paste the relevant log lines or drag in images. Redact anything private.
+    validations:
+      required: false

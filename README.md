@@ -2,7 +2,7 @@
 
 One client that plays I Wanna Be The Guy fangames, the way osu! plays beatmaps. Every supported game is rebuilt in our own documented format; the client never runs original games or their engines. Written in Rust with Bevy, for native and web (WASM).
 
-Status: planning. See `docs/roadmap.md`.
+Status: pre-release, in active development. There are no release builds yet; the public alpha is planned for M7 (Online). See `docs/roadmap.md` for the milestones and `docs/dev-setup.md` for building it yourself.
 
 ## Layout
 
@@ -31,7 +31,13 @@ Ported games live in the separate games repo (`iwbtg-collection-games`). Origina
 
 ## Games and assets
 
-Each ported game belongs to its creator. This project is non-commercial and will never be monetized. Creators can have their game removed from the project, its builds and its download server (the process is not published yet; it is tracked in [#68](https://github.com/nugamus/iwbtg-collection/issues/68)).
+Each ported game belongs to its creator. This project is a fan project: it is not affiliated with or endorsed by the creators of I Wanna Be The Guy or of any fangame. Game content, including characters, sprites, music and level design, belongs to its creators and is not covered by this repository's licenses.
+
+The project is non-commercial and will never be monetized. Creators can have their game removed from the project, its builds and its download server (the process is not published yet; it is tracked in [#68](https://github.com/nugamus/iwbtg-collection/issues/68)).
+
+## Contributing
+
+Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the licenses, the clean-room rule (no decompiled code or original game files) and what a PR must contain. Report security problems privately, never in a public issue; see [SECURITY.md](SECURITY.md).
 
 ## License
 
