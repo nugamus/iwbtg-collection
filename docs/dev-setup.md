@@ -42,6 +42,17 @@ That's expected. `iwc convert` (research) writes its packages to `research/build
 | Claude Code | 2.1.316 | |
 | OpenGMK tracer | `research/tools/opengmk/bin/gm8emulator.exe`, sha256 `d83371ba68900fa3…` | built from OpenGMK 9e4282e6 + `iwc-trace.patch`. The source checkout is also on disk in `tools/opengmk/src/`, only to rebuild the tracer: no agent opens, reads or greps it except to apply `iwc-trace.patch` and build, and never while writing specs or client code (research#28) |
 | REA | MCP server `rea`, available in sessions | `rea-linux` is blocked in settings |
+| cargo-about | 0.9.3 | generates `THIRD_PARTY_LICENSES`: `cargo install cargo-about --locked --features cli` |
+
+## Licences
+
+`REUSE.toml` gives every file its licence and copyright by path; source and asset files carry no SPDX headers. Check it with `uvx --from "reuse[charset-normalizer]" reuse lint` (REUSE 6.3.0; the `charset-normalizer` extra is needed on Windows), expected `Congratulations! Your project is compliant with version 3.3 of the REUSE Specification :-)`. A file without licence information, or a licence with no text in `LICENSES/`, breaks it.
+
+`THIRD_PARTY_LICENSES` lists the Rust crates the Windows and Linux builds include, generated from `Cargo.lock` by cargo-about (`about.toml` mirrors the licences `deny.toml` allows; workspace crates are left out). Regenerate it after a `Cargo.lock` change and for each release (#71):
+
+```
+cargo about generate --locked --output-file THIRD_PARTY_LICENSES about.hbs
+```
 
 ## Agent teams
 
