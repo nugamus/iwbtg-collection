@@ -52,7 +52,14 @@ SPDX-License-Identifier = "MIT OR Apache-2.0"
 
 # ---------------------------------------------------------------- documentation
 [[annotations]]
-path = ["docs/**", "README.md", "CLAUDE.md", "Potential Features.md"]
+path = [
+  "docs/**",
+  "README.md",
+  "CLAUDE.md",
+  "CONTRIBUTING.md",
+  "SECURITY.md",
+  "Potential Features.md",
+]
 SPDX-FileCopyrightText = "2026 IWBTG Collection contributors"
 SPDX-License-Identifier = "CC-BY-4.0"
 
