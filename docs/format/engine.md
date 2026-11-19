@@ -48,3 +48,13 @@ A pack sprite loads like a package sprite, with its files under `engine/<pack>/s
 ## Bundling
 
 `iwbtg pkg check <dir>` (and every other command that takes a package folder) bundles for you: when `game.toml` names an `engine_pack` and the folder has no `engine/<pack>/`, it reads `../_engines/<pack>/` and copies in `engine.toml` and the files named by `engine:<pack>/<id>` references in the package's `.toml` and `.rhai` files. Nothing is written to the package folder. `iwbtg pkg fmt` leaves bundled files alone. The package builder will do the same copy.
+
+## Custom physics
+
+[docs/content.md](../content.md#engines) marks a game **custom physics** when its physics differ from its pack's original. `iwbtg pkg check` computes it (#802): it compares the game's resolved profile (the `family` preset with `physics.toml`'s overrides applied, `kid::presets::defaults`) with the `family` its bundled pack declares, field by field. Numbers compare with the sim's bitwise `Real` equality, so this is exactly what the sim runs.
+
+- A profile that matches prints `physics: <pack>`.
+- One that differs prints `physics: custom (<n> fields differ)` and then `physics fields: <fields>`, the differing fields in profile order (`numbers.gravity`, `events.step`).
+- A package without an `engine_pack` is compared with the preset its `physics.toml` names and prints `<family> preset` when they match.
+
+`LoadReport::physics` carries the same value, for a catalog or a game page. Room profiles (`physics/<id>.toml`) are not the game's profile and are not part of this comparison.

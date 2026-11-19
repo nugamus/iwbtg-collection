@@ -13,6 +13,8 @@ use std::collections::BTreeSet;
 use serde::Deserialize;
 use toml::Spanned;
 
+use iwbtg_sim::def::KidFamily;
+
 use crate::diag::Diagnostic;
 use crate::files::PackageFiles;
 use crate::ids::{ENGINE_PREFIX, EngineRef, check_id};
@@ -30,6 +32,25 @@ pub const FAMILIES: [&str; 7] = ["A1", "A2", "A3", "A4", "A5", "B", "C"];
 /// `engine/<pack>/`, the folder of a bundled pack.
 pub fn pack_dir(pack: &str) -> String {
     format!("{ENGINE_DIR}{pack}/")
+}
+
+/// The family preset a bundled pack declares (`engine/<pack>/engine.toml` `family`), when the
+/// file is there and names one of [`FAMILIES`] (#802).
+pub fn family(files: &PackageFiles, pack: &str) -> Option<KidFamily> {
+    let path = format!("{}engine.toml", pack_dir(pack));
+    let text = std::str::from_utf8(files.get(&path)?).ok()?;
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    let parsed = toml::from_str::<EnginePack>(text).ok()?;
+    match parsed.family.get_ref().as_str() {
+        "A1" => Some(KidFamily::A1),
+        "A2" => Some(KidFamily::A2),
+        "A3" => Some(KidFamily::A3),
+        "A4" => Some(KidFamily::A4),
+        "A5" => Some(KidFamily::A5),
+        "B" => Some(KidFamily::B),
+        "C" => Some(KidFamily::C),
+        _ => None,
+    }
 }
 
 /// For `engine/<pack>/sprites/<id>.toml`: `(pack, id)`.
