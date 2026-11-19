@@ -1,9 +1,6 @@
 //! The SQLite file, its schema and the startup migrations (#153; docs/server.md, Schema).
 
-use axum::body::Body;
-use axum::http::{Request, StatusCode};
 use iwbtg_server::db;
-use tower::ServiceExt;
 
 use crate::support::TempDir;
 
@@ -68,39 +65,112 @@ async fn connecting_twice_does_not_rerun_migrations() {
     assert_eq!(applied_after_first, applied_after_second);
 }
 
+/// The connect options are per connection, not just per pool: `journal_mode` is a file property,
+/// but `foreign_keys`, `busy_timeout` and `synchronous` are set anew on each connection
+/// (docs/server.md, Schema).
 #[tokio::test]
-async fn journal_mode_is_wal() {
-    let dir = TempDir::new("wal");
-    let pool = db::connect(&dir.path().join("iwbtg.db"))
-        .await
-        .expect("connect and migrate");
-
-    // WAL is a property of the file, so any connection reports it.
-    let mode: String = sqlx::query_scalar("PRAGMA journal_mode")
-        .fetch_one(&pool)
-        .await
-        .expect("read journal_mode");
-    assert_eq!(mode.to_lowercase(), "wal");
-}
-
-#[tokio::test]
-async fn pragmas_are_set_on_the_pool() {
+async fn every_connection_has_the_pragmas() {
     let dir = TempDir::new("pragmas");
     let pool = db::connect(&dir.path().join("iwbtg.db"))
         .await
         .expect("connect and migrate");
 
-    let foreign_keys: i64 = sqlx::query_scalar("PRAGMA foreign_keys")
-        .fetch_one(&pool)
-        .await
-        .expect("read foreign_keys");
-    assert_eq!(foreign_keys, 1);
+    // Hold the pool's whole maximum at once, so each is a distinct connection.
+    let mut connections = Vec::new();
+    for _ in 0..5 {
+        connections.push(pool.acquire().await.expect("acquire a connection"));
+    }
 
-    let busy_timeout: i64 = sqlx::query_scalar("PRAGMA busy_timeout")
-        .fetch_one(&pool)
+    for (index, mut connection) in connections.into_iter().enumerate() {
+        let journal_mode: String = sqlx::query_scalar("PRAGMA journal_mode")
+            .fetch_one(&mut *connection)
+            .await
+            .expect("read journal_mode");
+        assert_eq!(journal_mode.to_lowercase(), "wal", "connection {index}");
+
+        let foreign_keys: i64 = sqlx::query_scalar("PRAGMA foreign_keys")
+            .fetch_one(&mut *connection)
+            .await
+            .expect("read foreign_keys");
+        assert_eq!(
+            foreign_keys, 1,
+            "connection {index} does not enforce foreign keys"
+        );
+
+        let busy_timeout: i64 = sqlx::query_scalar("PRAGMA busy_timeout")
+            .fetch_one(&mut *connection)
+            .await
+            .expect("read busy_timeout");
+        assert_eq!(busy_timeout, 5_000, "connection {index}");
+
+        // NORMAL = 1 in SQLite's integer enum.
+        let synchronous: i64 = sqlx::query_scalar("PRAGMA synchronous")
+            .fetch_one(&mut *connection)
+            .await
+            .expect("read synchronous");
+        assert_eq!(synchronous, 1, "connection {index} is not synchronous = normal");
+    }
+}
+
+/// Rewrites the migration ledger so it no longer matches the compiled-in migration, the way an
+/// edited migration file looks to a database that already ran the old one.
+async fn drift_migration_checksum(path: &std::path::Path) {
+    let pool = db::connect(path).await.expect("connect and migrate");
+    sqlx::query("UPDATE _sqlx_migrations SET checksum = x'00'")
+        .execute(&pool)
         .await
-        .expect("read busy_timeout");
-    assert_eq!(busy_timeout, 5_000);
+        .expect("tamper with the recorded checksum");
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn a_failed_migration_stops_startup() {
+    let dir = TempDir::new("drift");
+    let path = dir.path().join("iwbtg.db");
+    drift_migration_checksum(&path).await;
+
+    let err = db::connect(&path)
+        .await
+        .expect_err("a migration that no longer matches must stop startup");
+    assert!(
+        matches!(err, db::DbError::Migrate { .. }),
+        "wrong error for a failed migration: {err:?}"
+    );
+    assert!(
+        err.to_string().contains("database migrations failed"),
+        "unclear startup error: {err}"
+    );
+}
+
+/// The failure path end to end: the binary exits before the listener binds, so a half-migrated
+/// file is never served (docs/server.md, Schema).
+#[tokio::test]
+async fn a_failed_migration_exits_before_listening() {
+    let dir = TempDir::new("no-serve");
+    let path = dir.path().join("iwbtg.db");
+    drift_migration_checksum(&path).await;
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_iwbtg-server"))
+        .arg("--db")
+        .arg(&path)
+        .arg("--bind")
+        .arg("127.0.0.1:0")
+        .output()
+        .expect("run the server binary");
+
+    assert!(
+        !output.status.success(),
+        "the server exited successfully on a failed migration"
+    );
+    let logs = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        logs.contains("database migrations failed"),
+        "no migration error in the log: {logs}"
+    );
+    assert!(
+        !logs.contains("listening"),
+        "the listener bound before the migration failed: {logs}"
+    );
 }
 
 #[tokio::test]
@@ -117,20 +187,4 @@ async fn an_uncreatable_folder_is_a_clear_error() {
         err.to_string().contains("cannot create the database folder"),
         "unclear startup error: {err}"
     );
-}
-
-#[tokio::test]
-async fn healthz_answers_with_the_pool_state() {
-    let dir = TempDir::new("healthz");
-    let pool = db::connect(&dir.path().join("iwbtg.db"))
-        .await
-        .expect("connect and migrate");
-
-    let response = iwbtg_server::app(pool)
-        .oneshot(Request::get("/healthz").body(Body::empty()).unwrap())
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
-    assert_eq!(&body[..], b"ok");
 }

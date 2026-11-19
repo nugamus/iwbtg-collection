@@ -24,7 +24,7 @@ Status: the skeleton exists: `crates/server` builds the `iwbtg-server` binary (a
 
 One SQLite file, opened once at startup by `crates/server/src/db.rs`. `IWBTG_DB` (or `--db`) names it; the folder is created if missing. Every connection sets `journal_mode = wal`, `foreign_keys = on`, `busy_timeout = 5000` and `synchronous = normal`. WAL is a property of the file, so a crash or a second process cannot leave it half-switched.
 
-Migrations live in `migrations/` at the workspace root (not in the crate), are compiled into the binary with `sqlx::migrate!`, and run before the listener binds. A failed migration is a startup error: the server logs it and exits 1 rather than serve a half-migrated file. sqlx records what ran in `_sqlx_migrations`; the startup log line `database ready (migrations applied)` carries the count.
+Migrations live in `migrations/` at the workspace root (not in the crate), are compiled into the binary with `sqlx::migrate!`, and run before the listener binds. A failed migration is a startup error: the server logs it and exits 1 rather than serve a half-migrated file. sqlx records what ran in `_sqlx_migrations`; the startup log line `database ready (migrations applied)` carries the count. The list is append-only: sqlx stores a checksum per migration, so editing one that already ran also stops startup (version mismatch) instead of letting the file and the binary disagree.
 
 | Table | Keys and indexes | Holds |
 |---|---|---|
