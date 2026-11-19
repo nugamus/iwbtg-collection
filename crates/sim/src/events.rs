@@ -706,7 +706,7 @@ pub fn collision_phase(ctx: &mut Ctx) -> Flow {
 ///
 /// The alternatives `OtherRankThenId` and `HandlerListOrder` go instance by instance in
 /// dispatch order, each instance with its own pairs, sorted by the other's rank and id, or by
-/// handler list.
+/// handler list; under [`Hooks::broadphase`] their candidates also come from the grid (#944).
 ///
 /// Either way, one direction of a pair (`me` with handlers, `other`):
 /// - runs one handler: the matching handler class most specific for `other` (lowest
@@ -939,26 +939,38 @@ struct Pair {
 }
 
 /// Collision events of one instance `a` under `OtherRankThenId` or `HandlerListOrder` (see
-/// [`collision_phase_with`]).
+/// [`collision_phase_with`]). The candidates are gathered through the broadphase grid (#944)
+/// under the engine's overlap test, like `LowerRankFirst`, else scanned: the pair list is fixed
+/// before any handler of this turn runs (the overlap tests and the sort read the turn-start
+/// state), so one gather at turn start gives the same pairs in the same order as the scan.
 fn collide_one(ctx: &mut Ctx, hooks: &Hooks, a: InstId, ctl: &mut Ctl) -> Option<Flow> {
     let me = ctx.w.get(a)?;
     let handlers = event_set(ctx.def, me.kind).collisions.clone();
     let any = handlers.iter().fold(ClassMask::NONE, |m, c| m | *c);
-    let candidates: Vec<InstId> = ctx
-        .w
-        .instances()
-        .iter()
-        .filter(|b| b.id != a && b.alive && b.active && b.classes.intersects(any))
-        .map(|b| b.id)
-        .collect();
+    // `near` returns the grid's cells under `a`'s box plus the moved and overflow sets: a
+    // superset of the members whose boxes can touch it, and every instance whose overlap test
+    // with it could fail. The grid is flushed first so it holds the turn-start state.
+    let candidates: Vec<InstId> = if hooks.broadphase {
+        if let Err(e) = ctx.w.ensure_grid(ctx.def, &ctx.rules.collide) {
+            return stop(ctx, e);
+        }
+        pairs::near(ctx, a)
+    } else {
+        ctx.w.instances().iter().map(|i| i.id).collect()
+    };
     let mut pairs = Vec::new();
     for b in candidates {
+        let Some(classes) = ctx.w.get(b).filter(|i| i.alive && i.active).map(|i| i.classes) else {
+            continue;
+        };
+        if b == a || !classes.intersects(any) {
+            continue;
+        }
         match (hooks.overlaps)(ctx, a, b) {
             Ok(true) => {}
             Ok(false) => continue,
             Err(e) => return stop(ctx, e),
         }
-        let classes = ctx.w.get(b).map_or(ClassMask::NONE, |i| i.classes);
         if let Some((handler, with)) = pair_handler(&handlers, classes) {
             pairs.push(Pair {
                 other: b,
