@@ -6,11 +6,16 @@ use serde::{Deserialize, Serialize};
 
 use crate::anim::Image;
 use crate::def::{ClassMask, GroupId, KindId, NameId, VarId};
+use crate::error::SimError;
 use crate::motion::Motion;
 use crate::num::Real;
 use crate::path::PathRun;
 use crate::timeline::TimelineRun;
 use crate::{builtins, events, kid, script};
+
+/// Most elements a GML array holds (decision 0001 limits). The script host sets the same cap with
+/// `set_max_array_size(10_000)` (`script/host.rs`), so a script array and a stored array agree.
+pub const MAX_ARRAY_SIZE: usize = 10_000;
 
 /// An instance id: a counter starting at [`InstId::FIRST`], never reused (manual: ids >= 100000).
 /// Our ids never match the original's; trace diffs ignore the `id` column.
@@ -23,6 +28,10 @@ impl InstId {
 }
 
 /// A GML value: a custom variable, a global, a param read by scripts.
+///
+/// Assignment copies the value (the GML 8 rule): an array belongs to its variable, so writing one
+/// variable never changes another. `Clone` already copies the vector; [`Value::assigned`] names
+/// the rule at the callers that assign one stored value to another.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub enum Value {
     /// A real.
@@ -35,6 +44,62 @@ pub enum Value {
     /// `GameDef::uninit_reads_zero`).
     #[default]
     None,
+    /// A dense GML array; nested arrays are allowed. At most [`MAX_ARRAY_SIZE`] elements: build
+    /// and grow one through [`Value::array`] and [`Value::array_push`], which check the cap.
+    ///
+    /// The variant is last so the postcard encoding of the other four does not change.
+    Array(Vec<Value>),
+}
+
+impl Value {
+    /// An array value holding `items`; `Err` past [`MAX_ARRAY_SIZE`].
+    pub fn array(items: Vec<Value>) -> Result<Value, SimError> {
+        if items.len() > MAX_ARRAY_SIZE {
+            return Err(array_cap_error());
+        }
+        Ok(Value::Array(items))
+    }
+
+    /// Appends `item` to this array; `Err` past [`MAX_ARRAY_SIZE`] or when `self` is not an array.
+    pub fn array_push(&mut self, item: Value) -> Result<(), SimError> {
+        let Value::Array(items) = self else {
+            return Err(SimError::invariant("array_push on a value that is not an array"));
+        };
+        if items.len() >= MAX_ARRAY_SIZE {
+            return Err(array_cap_error());
+        }
+        items.push(item);
+        Ok(())
+    }
+
+    /// The elements, when this is an array.
+    pub fn as_array(&self) -> Option<&[Value]> {
+        match self {
+            Value::Array(items) => Some(items),
+            _ => None,
+        }
+    }
+
+    /// The elements for changing them, when this is an array.
+    pub fn as_array_mut(&mut self) -> Option<&mut Vec<Value>> {
+        match self {
+            Value::Array(items) => Some(items),
+            _ => None,
+        }
+    }
+
+    /// The value a variable gets when another is assigned to it: the GML 8 rule, an array is
+    /// copied, never shared. Equal to `clone`, and named here so assignment sites say why.
+    pub fn assigned(&self) -> Value {
+        self.clone()
+    }
+}
+
+/// The one error for an array past its cap, so the message and its wording stay in one place.
+fn array_cap_error() -> SimError {
+    SimError::unsupported(format!(
+        "array cap exceeded: an array holds at most {MAX_ARRAY_SIZE} elements"
+    ))
 }
 
 /// One instance.
@@ -125,4 +190,82 @@ pub enum KindState {
     Script(script::ScriptState),
     /// The test probe's state (WP1, `events::ProbeState`).
     Probe(events::ProbeState),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::def::RoomId;
+    use crate::world::World;
+
+    fn real(v: f64) -> Value {
+        Value::Real(Real::new(v))
+    }
+
+    #[test]
+    fn assignment_copies_an_array() {
+        let mut w = World::new(RoomId(0), 1);
+        let nested = Value::array(vec![real(7.0)]).expect("nested");
+        w.globals
+            .insert(VarId(0), Value::array(vec![real(1.0), nested]).expect("array"));
+        let copy = w.globals[&VarId(0)].assigned();
+        w.globals.insert(VarId(1), copy);
+
+        // Change the first array, top level and nested: the assignment's copy stays as it was.
+        let first = w
+            .globals
+            .get_mut(&VarId(0))
+            .expect("global 0")
+            .as_array_mut()
+            .expect("array");
+        first.push(real(2.0));
+        first[1].as_array_mut().expect("nested").push(real(8.0));
+
+        let second = w.globals[&VarId(1)].as_array().expect("global 1 is an array");
+        assert_eq!(second.len(), 2, "no element was added to the copy");
+        assert_eq!(second[0], real(1.0));
+        assert_eq!(second[1].as_array().expect("nested").len(), 1);
+    }
+
+    #[test]
+    fn arrays_nest() {
+        let inner = Value::array(vec![real(1.0), Value::Str("x".into())]).expect("inner");
+        let outer =
+            Value::array(vec![inner.clone(), Value::array(Vec::new()).expect("empty")]).expect("outer");
+        let items = outer.as_array().expect("outer");
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].as_array().expect("inner")[0], real(1.0));
+        assert_eq!(items[0].as_array().expect("inner")[1], Value::Str("x".into()));
+        assert!(items[1].as_array().expect("empty").is_empty());
+        assert_eq!(
+            inner.as_array().expect("inner").len(),
+            2,
+            "the clone is independent"
+        );
+    }
+
+    #[test]
+    fn the_array_cap_rejects_the_10001st_element() {
+        let full = Value::array(vec![Value::None; MAX_ARRAY_SIZE]).expect("at the cap");
+        let mut growing = full.clone();
+        let err = growing.array_push(real(1.0)).unwrap_err();
+        assert!(err.to_string().contains("at most 10000 elements"), "{err}");
+        let err = Value::array(vec![Value::None; MAX_ARRAY_SIZE + 1]).unwrap_err();
+        assert!(err.to_string().contains("array cap exceeded"), "{err}");
+        let mut not_an_array = real(1.0);
+        assert!(not_an_array.array_push(real(2.0)).is_err());
+    }
+
+    #[test]
+    fn arrays_round_trip_through_postcard() {
+        let v = Value::array(vec![
+            real(1.5),
+            Value::array(vec![Value::Str("x".into())]).expect("nested"),
+            Value::None,
+        ])
+        .expect("array");
+        let bytes = postcard::to_allocvec(&v).expect("serializes");
+        let back: Value = postcard::from_bytes(&bytes).expect("deserializes");
+        assert_eq!(back, v);
+    }
 }

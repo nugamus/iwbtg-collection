@@ -146,7 +146,8 @@ fn apply(def: &GameDef, rules: &RunnerRules, w: &mut World, s: &SetupAction) -> 
             set_field(inst, field, value, rules)
         }
         SetupAction::SetGlobal { var, value } => {
-            w.globals.insert(*var, value.clone());
+            // A global gets its own value: an array is copied (GML 8 rule).
+            w.globals.insert(*var, value.assigned());
             Ok(())
         }
         SetupAction::SetEngine { var, value } => set_engine(rules, w, *var, value),
@@ -309,7 +310,8 @@ fn set_field(
             {
                 return Err(SimError::non_finite("custom variable"));
             }
-            inst.vars.insert(*v, value.clone());
+            // A variable gets its own value: an array is copied (GML 8 rule).
+            inst.vars.insert(*v, value.assigned());
             Ok(())
         }
         FieldRef::Kid(f) => {

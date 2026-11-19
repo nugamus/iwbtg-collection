@@ -343,7 +343,8 @@ fn start_inner<H: RoomHost + ?Sized>(
 fn ranked_start(ctx: &mut Ctx) -> RoomId {
     let start = ctx.def.map_start(ctx.w.map);
     for (var, value) in &start.globals {
-        ctx.w.globals.insert(*var, value.clone());
+        // A global gets its own value: an array is copied (GML 8 rule).
+        ctx.w.globals.insert(*var, value.assigned());
     }
     if let Some(d) = start.difficulty {
         ctx.w.engine.run.difficulty = d;
@@ -713,7 +714,7 @@ fn run_action<H: RoomHost + ?Sized>(
             value,
             difficulty,
         } => {
-            ctx.w.globals.insert(*var, value.clone());
+            ctx.w.globals.insert(*var, value.assigned());
             if let Some(d) = difficulty {
                 ctx.w.engine.run.difficulty = *d;
             }
@@ -743,7 +744,7 @@ fn run_action<H: RoomHost + ?Sized>(
         RoomAction::SetGlobalIndexed { var, index, value } => {
             let i = index_value(ctx, *index)?;
             let id = run_time_var(ctx, &format!("{var}[{i}]"))?;
-            ctx.w.globals.insert(id, value.clone());
+            ctx.w.globals.insert(id, value.assigned());
         }
         RoomAction::SaveGame => save_game(ctx)?,
         RoomAction::SaveDeathTime => save::save_counters(ctx)?,

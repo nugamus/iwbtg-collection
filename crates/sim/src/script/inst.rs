@@ -94,6 +94,10 @@ fn value_to_dynamic(v: Option<&Value>, zero: bool, name: &str) -> Res<Dynamic> {
         Some(Value::Inst(i)) => Ok(Dynamic::from(Inst(*i))),
         Some(Value::None) | None if zero => Ok(Dynamic::from_float(0.0)),
         Some(Value::None) | None => Err(runtime_error(format!("variable `{name}` is not set"))),
+        // The value model stores arrays (#984); script access to them is #997.
+        Some(Value::Array(_)) => Err(runtime_error(format!(
+            "variable `{name}` holds an array: scripts cannot read arrays yet"
+        ))),
     }
 }
 
