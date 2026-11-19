@@ -6,6 +6,8 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 publish = false
+# Integration tests are listed below; tests/it.rs holds them (#517).
+autotests = false
 
 [[bin]]
 name = "iwbtg"
@@ -26,3 +28,7 @@ rhai = { workspace = true, features = ["metadata"] }
 
 [lints]
 workspace = true
+
+[[test]]
+name = "it"
+path = "tests/it.rs"

@@ -3,6 +3,7 @@
 //! Commands are planned in docs/plans/sim-core.md 9.4: WP8a owns `trace` and `pkg`, WP8b
 //! `replay`.
 
+mod assets_cmd;
 mod case;
 mod determinism_cmd;
 mod engine_cmd;
@@ -60,6 +61,24 @@ enum Command {
     /// The script language.
     #[command(subcommand)]
     Script(ScriptCommand),
+    /// Assets across the games repo.
+    #[command(subcommand)]
+    Assets(AssetsCommand),
+}
+
+#[derive(Subcommand)]
+enum AssetsCommand {
+    /// Writes the global asset index keyed by content hash (docs/content.md, Assets).
+    Index {
+        /// Games repo folder: one package folder per game, each with game.toml.
+        dir: PathBuf,
+        /// Write the index here instead of `<dir>/assets-index.toml`.
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Change nothing: exit 1 when the index is missing or would change.
+        #[arg(long)]
+        check: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -367,6 +386,9 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
         Command::Script(ScriptCommand::ApiDocs { docs, check }) => {
             let docs = docs.unwrap_or_else(script_cmd::default_docs_dir);
             script_cmd::main(&docs, check)
+        }
+        Command::Assets(AssetsCommand::Index { dir, out, check }) => {
+            assets_cmd::index_main(&dir, out.as_deref(), check)
         }
         Command::Determinism(DeterminismCommand::Report { corpus, check }) => {
             determinism_cmd::main(&corpus, check)
