@@ -14,4 +14,5 @@ Every lane: launch the client only with `--mute` (or with `IWBTG_MUTE=1` set; a 
 
 ## Pitfalls for every lane
 
+- Git has no `user.name`/`user.email` in any checkout (client, research, games and their worktrees), so a plain `git commit` stops with `Author identity unknown`. Commit as the author of the existing history: `git -c user.name="Jonas Dahl" -c user.email="jonas.dahl01@gmail.com" commit -F <file>`. Never set it in shared or global git config (#980).
 - In PowerShell, never read or write files with .NET calls (`[IO.File]::...`) and relative paths: .NET resolves them against the process's start folder (the main checkout), not the `cd` location; on 2026-11-12 that wrote a teammate's edits into the main client checkout. Use the Edit tool with absolute worktree paths.
