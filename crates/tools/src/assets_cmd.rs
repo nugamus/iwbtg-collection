@@ -6,11 +6,10 @@
 //! (docs/content.md, Assets). The file is `<games dir>/assets-index.toml`, readable TOML and
 //! deterministic: packages sort by folder name, files by package path.
 //!
-//! The key is the format's content hash ([`PackageFiles::content_hash`]) over the asset file alone.
-//! That hash mixes in the file path, so the file is put under one fixed placeholder path here and
-//! the key depends only on the bytes; a format-level per-file helper would be cleaner (#1051).
-//! Media files are hashed as they are: the placeholder has no extension, so the text
-//! line-end normalization of the package hash does not apply.
+//! The key is the format's per-file content hash ([`iwbtg_format::content_hash_asset`]) over the
+//! asset file alone: the package hash's domain separation and line-end rule, with no fabricated
+//! package path (#1051). Media files are hashed as they are: the helper's fixed asset path has no
+//! extension, so the text line-end normalization of the package hash does not apply.
 //!
 //! `tags` is the place for the AI tags the porting checklist fills later (#104). Rerunning the
 //! command keeps the tags already in the file, so tagging is not lost. A duplicate group's first
@@ -20,16 +19,10 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use iwbtg_format::PackageFiles;
-
 use crate::trace_cmd::{ToolError, load_package};
 
 /// The index file inside the games folder.
 pub const INDEX_FILE: &str = "assets-index.toml";
-
-/// The single-file package path used when hashing one asset. Constant, so the hash covers only
-/// the bytes; no extension, so no text line-end normalization.
-const HASH_PATH: &str = "asset";
 
 /// Media file extensions that are assets (docs/format/assets.md): images and audio.
 const ASSET_EXTENSIONS: [&str; 2] = ["png", "ogg"];
@@ -219,10 +212,7 @@ fn is_asset(path: &str) -> bool {
 
 /// The content-hash key of one asset file, lowercase hex.
 fn asset_hash(bytes: &[u8]) -> String {
-    let mut one = PackageFiles::new();
-    one.insert(HASH_PATH, bytes.to_vec())
-        .expect("`asset` is a valid package path");
-    hex(&one.content_hash())
+    hex(&iwbtg_format::content_hash_asset(bytes))
 }
 
 fn hex(bytes: &[u8]) -> String {

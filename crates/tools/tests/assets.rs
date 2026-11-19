@@ -41,11 +41,20 @@ fn iwbtg(args: &[&str]) -> Output {
     output
 }
 
-/// The format's content hash over one file, as the index documents it: lowercase hex.
+/// The key the index produced before #1051: a one-file package at the placeholder path `asset`,
+/// lowercase hex. Keeping the old formula here proves the helper move did not change any key.
 fn expected_hash(bytes: &[u8]) -> String {
     let mut one = PackageFiles::new();
     one.insert("asset", bytes.to_vec()).unwrap();
     one.content_hash().iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// The helper the command uses now, in the same lowercase hex.
+fn helper_hash(bytes: &[u8]) -> String {
+    iwbtg_format::content_hash_asset(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 /// Two packages sharing one asset and each with a unique one.
@@ -195,6 +204,23 @@ fn check_reports_a_stale_or_missing_index() {
         "{stdout}"
     );
     std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn the_helper_reproduces_the_legacy_index_keys() {
+    // Bytes only, so the key does not depend on any asset path: equal content in two games still
+    // lands in one entry. The helper must equal the placeholder formula for every input, so the
+    // index keys of an existing package do not move (#1051).
+    for bytes in [
+        b"".as_slice(),
+        b"shared",
+        b"only a",
+        b"a\r\nb",
+        b"a\nb",
+        &[0x00, 0xff, 0x10],
+    ] {
+        assert_eq!(helper_hash(bytes), expected_hash(bytes), "{bytes:?}");
+    }
 }
 
 #[test]

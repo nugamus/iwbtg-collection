@@ -43,6 +43,6 @@ pub mod vars;
 
 pub use check::check;
 pub use diag::{Diagnostic, Severity, has_errors};
-pub use files::{LoadError, PackageFiles};
+pub use files::{LoadError, PackageFiles, content_hash_asset, content_hash_file};
 pub use load::{LoadMode, load_game};
 pub use manifest::{FORMAT_VERSION, Manifest};
