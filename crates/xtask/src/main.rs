@@ -19,8 +19,9 @@
 //!   `$IWBTG_RESEARCH/build/packages` (`iwbtg trace sweep`), as a game x OK/OPEN/FAIL matrix;
 //!   exits 1 when a case got worse than `crates/tools/fidelity-baseline.txt` (#785). `--bless`
 //!   rewrites the baseline.
-//! - `doctor`: checks the machine's tools against the repo; today the installed `wasm-bindgen` CLI
-//!   against the `wasm-bindgen` version in `Cargo.lock` (#723).
+//! - `doctor [--scope native|browser|wasi|all] [--warm]`: preflight for the selected work. It
+//!   reports every missing pinned tool/target, system library, runner and fixture together with a
+//!   repair command, and `--warm` runs `cargo fetch --locked` at the default fingerprint (#1030).
 //!
 //! Standard library only; it shells out to cargo and git.
 
@@ -72,10 +73,16 @@ fn main() -> ExitCode {
         Some("repin") => repin(&root),
         Some("regen") => regen(&root),
         Some("pr-body") => pr_body(&root, flag_value(&args, "--issue")),
-        Some("doctor") => doctor(&root),
+        Some("doctor") => {
+            let warm = args.iter().any(|a| a == "--warm");
+            match flag_value(&args, "--scope") {
+                Some(s) => Scope::parse(&s).and_then(|scope| doctor(&root, scope, warm)),
+                None => doctor(&root, Scope::All, warm),
+            }
+        }
         Some("fidelity") => fidelity(&root, args.iter().any(|a| a == "--bless")),
         _ => Err(
-            "usage: cargo xtask <check [--all] | repin | regen | pr-body [--issue N] | doctor | fidelity [--bless]>"
+            "usage: cargo xtask <check [--all] | repin | regen | pr-body [--issue N] | doctor [--scope native|browser|wasi|all] [--warm] | fidelity [--bless]>"
                 .to_string(),
         ),
     };
@@ -607,19 +614,308 @@ fn record_fidelity_run(root: &Path) {
     let _ = std::fs::write(dir.join("last-fidelity.txt"), format!("{} {secs}\n", sha.trim()));
 }
 
-fn doctor(root: &Path) -> Result<(), String> {
-    let lock = std::fs::read_to_string(root.join("Cargo.lock")).map_err(|e| format!("Cargo.lock: {e}"))?;
-    let installed = output(root, "wasm-bindgen", &["--version"], &[])
+/// What a preflight run needs: only the selected scope's tools are required (#1030).
+#[derive(Clone, Copy, PartialEq)]
+enum Scope {
+    Native,
+    Browser,
+    Wasi,
+    All,
+}
+
+impl Scope {
+    fn parse(s: &str) -> Result<Self, String> {
+        match s {
+            "native" => Ok(Self::Native),
+            "browser" => Ok(Self::Browser),
+            "wasi" => Ok(Self::Wasi),
+            "all" => Ok(Self::All),
+            _ => Err(format!(
+                "unknown doctor scope `{s}`; use native, browser, wasi or all"
+            )),
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Native => "native",
+            Self::Browser => "browser",
+            Self::Wasi => "wasi",
+            Self::All => "all",
+        }
+    }
+
+    fn needs_native(self) -> bool {
+        matches!(self, Self::Native | Self::All)
+    }
+
+    fn needs_browser(self) -> bool {
+        matches!(self, Self::Browser | Self::All)
+    }
+
+    fn needs_wasi(self) -> bool {
+        matches!(self, Self::Wasi | Self::All)
+    }
+}
+
+struct Prerequisite {
+    name: &'static str,
+    ok: bool,
+    detail: String,
+    fix: Option<String>,
+}
+
+fn ready(name: &'static str, detail: impl Into<String>) -> Prerequisite {
+    Prerequisite {
+        name,
+        ok: true,
+        detail: detail.into(),
+        fix: None,
+    }
+}
+
+fn missing(name: &'static str, detail: impl Into<String>, fix: impl Into<String>) -> Prerequisite {
+    Prerequisite {
+        name,
+        ok: false,
+        detail: detail.into(),
+        fix: Some(fix.into()),
+    }
+}
+
+fn tool_line(root: &Path, program: &str, args: &[&str]) -> Option<String> {
+    output(root, program, args, &[])
         .ok()
         .filter(|(ok, _)| *ok)
-        .map(|(_, text)| text);
-    match wasm_bindgen_problem(&lock, installed.as_deref()) {
-        Ok(()) => {
-            println!("ok: wasm-bindgen CLI matches Cargo.lock");
-            Ok(())
+        .map(|(_, text)| text.trim().to_owned())
+}
+
+/// The `channel` in a `rust-toolchain.toml` (the pinned version `rustup` installs).
+fn toolchain_channel(text: &str) -> Option<&str> {
+    text.lines().find_map(|l| {
+        l.trim()
+            .strip_prefix("channel = \"")
+            .and_then(|rest| rest.strip_suffix('"'))
+    })
+}
+
+/// `rustc 1.99.1 (hash date)` matches the pinned channel `1.99.1`.
+fn tool_version_matches(line: &str, want: &str) -> bool {
+    line.split_whitespace().nth(1) == Some(want)
+}
+
+fn list_has(list: &str, wanted: &str) -> bool {
+    list.lines().any(|l| l.trim() == wanted)
+}
+
+fn native_prerequisites(root: &Path) -> Vec<Prerequisite> {
+    let mut checks = Vec::new();
+    let want = std::fs::read_to_string(root.join("rust-toolchain.toml")).ok();
+    let channel = want.as_deref().and_then(toolchain_channel).unwrap_or("pinned");
+    match tool_line(root, "rustc", &["--version"]) {
+        Some(line)
+            if want
+                .as_deref()
+                .and_then(toolchain_channel)
+                .is_none_or(|w| tool_version_matches(&line, w)) =>
+        {
+            checks.push(ready("rustc", line))
         }
-        Err(e) => Err(e),
+        Some(line) => checks.push(missing(
+            "rustc",
+            format!("{line}; rust-toolchain.toml pins {channel}"),
+            "rustup show (from the repo root) or rustup toolchain install <channel>",
+        )),
+        None => checks.push(missing(
+            "rustc",
+            "not found",
+            "install rustup, then run `rustup show` in the repo root",
+        )),
     }
+    match tool_line(root, "cargo", &["--version"]) {
+        Some(line) => checks.push(ready("cargo", line)),
+        None => checks.push(missing(
+            "cargo",
+            "not found",
+            "install rustup (it provides cargo)",
+        )),
+    }
+    for (name, args) in [("rustfmt", &["--version"][..]), ("clippy", &["--version"][..])] {
+        let program = if name == "clippy" { "cargo" } else { name };
+        let args = if name == "clippy" {
+            &["clippy", "--version"][..]
+        } else {
+            args
+        };
+        match tool_line(root, program, args) {
+            Some(line) => checks.push(ready(name, line)),
+            None => checks.push(missing(name, "not found", format!("rustup component add {name}"))),
+        }
+    }
+    let probe_dir = root.join("target/xtask");
+    let writable = std::fs::create_dir_all(&probe_dir)
+        .and_then(|()| std::fs::write(probe_dir.join("doctor-write-test"), b"ok"))
+        .and_then(|()| std::fs::remove_file(probe_dir.join("doctor-write-test")));
+    match writable {
+        Ok(()) => checks.push(ready("target/", "writable")),
+        Err(e) => checks.push(missing(
+            "target/",
+            format!("{e}"),
+            "fix the permissions or free disk space under target/",
+        )),
+    }
+    for fixture in [
+        "crates/sim/tests/golden/one_room.pkg",
+        "crates/client/showcase.pkg",
+    ] {
+        if root.join(fixture).is_dir() {
+            checks.push(ready("fixture", fixture));
+        } else {
+            checks.push(missing(
+                "fixture",
+                format!("{fixture} is missing"),
+                "git restore the fixture (a partial checkout omits it)",
+            ));
+        }
+    }
+    if cfg!(target_os = "linux") {
+        let libs = [
+            "wayland-client",
+            "xkbcommon",
+            "x11",
+            "xcursor",
+            "xi",
+            "xrandr",
+            "libudev",
+            "alsa",
+        ];
+        let mut args = vec!["--exists", "--print-errors"];
+        args.extend(libs);
+        match output(root, "pkg-config", &args, &[]) {
+            Ok((true, _)) => checks.push(ready("system libraries", "pkg-config found all client libraries")),
+            Ok((false, text)) => checks.push(missing(
+                "system libraries",
+                text.trim().lines().next().unwrap_or("pkg-config reported missing libraries"),
+                "sudo apt-get update && sudo apt-get install -y --no-install-recommends pkg-config libwayland-dev libxkbcommon-dev libx11-dev libxcursor-dev libxi-dev libxrandr-dev libudev-dev libasound2-dev",
+            )),
+            Err(e) => checks.push(missing(
+                "system libraries",
+                e,
+                "install pkg-config and the client's Linux development packages (docs/dev-setup.md)",
+            )),
+        }
+    }
+    checks
+}
+
+fn browser_prerequisites(root: &Path, targets: Option<&str>) -> Vec<Prerequisite> {
+    let mut checks = Vec::new();
+    match targets {
+        Some(list) if list_has(list, "wasm32-unknown-unknown") => {
+            checks.push(ready("wasm32-unknown-unknown", "target installed"))
+        }
+        Some(_) => checks.push(missing(
+            "wasm32-unknown-unknown",
+            "target not installed",
+            "rustup target add wasm32-unknown-unknown",
+        )),
+        None => checks.push(missing(
+            "wasm32-unknown-unknown",
+            "rustup target list unavailable",
+            "rustup target add wasm32-unknown-unknown",
+        )),
+    }
+    let lock = std::fs::read_to_string(root.join("Cargo.lock")).unwrap_or_default();
+    let installed = tool_line(root, "wasm-bindgen", &["--version"]);
+    let want = lock_version(&lock, "wasm-bindgen").unwrap_or("in Cargo.lock");
+    let fix = format!("cargo install -f wasm-bindgen-cli --version {want} --locked");
+    match wasm_bindgen_problem(&lock, installed.as_deref()) {
+        Ok(()) => checks.push(ready("wasm-bindgen", format!("CLI {want} matches Cargo.lock"))),
+        Err(e) => checks.push(missing("wasm-bindgen", e, fix)),
+    }
+    match tool_line(root, "node", &["--version"]) {
+        Some(line) => checks.push(ready("node", line)),
+        None => checks.push(missing(
+            "node",
+            "not found (the browser golden-corpus runner uses node)",
+            "install Node.js 18 or newer",
+        )),
+    }
+    checks
+}
+
+fn wasi_prerequisites(root: &Path, targets: Option<&str>) -> Vec<Prerequisite> {
+    let mut checks = Vec::new();
+    match targets {
+        Some(list) if list_has(list, "wasm32-wasip1") => {
+            checks.push(ready("wasm32-wasip1", "target installed"))
+        }
+        Some(_) => checks.push(missing(
+            "wasm32-wasip1",
+            "target not installed",
+            "rustup target add wasm32-wasip1",
+        )),
+        None => checks.push(missing(
+            "wasm32-wasip1",
+            "rustup target list unavailable",
+            "rustup target add wasm32-wasip1",
+        )),
+    }
+    let wasmtime = tool_line(root, "wasmtime", &["--version"]);
+    let node = tool_line(root, "node", &["--version"]);
+    match (wasmtime, node) {
+        (Some(line), _) => checks.push(ready("wasi runner", format!("wasmtime {line}"))),
+        (None, Some(line)) => checks.push(ready("wasi runner", format!("node {line} (WASI fallback)"))),
+        (None, None) => checks.push(missing(
+            "wasi runner",
+            "neither wasmtime nor node found",
+            "install wasmtime (docs/dev-setup.md) or Node.js 18 or newer",
+        )),
+    }
+    checks
+}
+
+/// `doctor [--scope native|browser|wasi|all] [--warm]`: required tools and fixtures for the
+/// selected work, all reported together; `--warm` runs `cargo fetch --locked` at default settings.
+fn doctor(root: &Path, scope: Scope, warm: bool) -> Result<(), String> {
+    let targets = tool_line(root, "rustup", &["target", "list", "--installed"]);
+    let mut checks = Vec::new();
+    if scope.needs_native() {
+        checks.extend(native_prerequisites(root));
+    }
+    if scope.needs_browser() {
+        checks.extend(browser_prerequisites(root, targets.as_deref()));
+    }
+    if scope.needs_wasi() {
+        checks.extend(wasi_prerequisites(root, targets.as_deref()));
+    }
+    let missing_count = checks.iter().filter(|c| !c.ok).count();
+    for check in &checks {
+        if check.ok {
+            println!("ok: {} ({})", check.name, check.detail);
+        } else {
+            println!("MISSING: {}: {}", check.name, check.detail);
+            if let Some(fix) = &check.fix {
+                println!("  fix: {fix}");
+            }
+        }
+    }
+    println!(
+        "doctor ({}): {} checks, {missing_count} missing",
+        scope.label(),
+        checks.len()
+    );
+    if missing_count > 0 {
+        return Err(format!(
+            "{missing_count} missing prerequisite(s) for scope `{}`; run the fixes above",
+            scope.label()
+        ));
+    }
+    if warm {
+        run(root, "cargo", &["fetch", "--locked"], &[])?;
+        println!("ok: cargo fetch --locked warmed the registry cache at the default fingerprint");
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -717,6 +1013,45 @@ version = \"1.0.0\"
         );
         assert_eq!(left_value(&text).and_then(first_hash), Some(h));
         assert_eq!(first_hash(&format!("x{h}0")), None, "65 digits is not a hash");
+    }
+
+    #[test]
+    fn doctor_scopes_select_only_their_prerequisites() {
+        assert!(Scope::Native.needs_native());
+        assert!(!Scope::Native.needs_browser() && !Scope::Native.needs_wasi());
+        assert!(Scope::Browser.needs_browser());
+        assert!(!Scope::Browser.needs_native() && !Scope::Browser.needs_wasi());
+        assert!(Scope::Wasi.needs_wasi());
+        assert!(!Scope::Wasi.needs_native() && !Scope::Wasi.needs_browser());
+        assert!(Scope::All.needs_native() && Scope::All.needs_browser() && Scope::All.needs_wasi());
+        assert_eq!(Scope::parse("wasi").unwrap().label(), "wasi");
+        assert!(Scope::parse("everything").is_err());
+    }
+
+    #[test]
+    fn pinned_toolchain_versions_and_installed_targets_are_read() {
+        let text = "[toolchain]\nchannel = \"1.99.1\"\ncomponents = [\"rustfmt\"]\n";
+        assert_eq!(toolchain_channel(text), Some("1.99.1"));
+        assert_eq!(toolchain_channel("profile = \"minimal\""), None);
+        assert!(tool_version_matches(
+            "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+            "1.99.1"
+        ));
+        assert!(!tool_version_matches("rustc 1.98.0 (x)", "1.99.1"));
+        assert!(list_has(
+            "x86_64-pc-windows-msvc\nwasm32-wasip1\n",
+            "wasm32-wasip1"
+        ));
+        assert!(!list_has("wasm32-wasip1\n", "wasm32-unknown-unknown"));
+    }
+
+    #[test]
+    fn missing_prerequisites_carry_a_repair_command() {
+        let absent = missing("target", "not installed", "rustup target add wasm32-wasip1");
+        assert!(!absent.ok);
+        assert_eq!(absent.fix.as_deref(), Some("rustup target add wasm32-wasip1"));
+        let present = ready("target", "installed");
+        assert!(present.ok && present.fix.is_none());
     }
 
     /// The `schema` feature (JSON Schema through `schemars`) is for docs and tests only: never in
