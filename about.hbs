@@ -1,0 +1,31 @@
+IWBTG Collection: third-party licenses
+======================================
+
+IWBTG Collection is licensed under MIT OR Apache-2.0 (LICENSE-MIT, LICENSE-APACHE).
+It is built on the Rust crates listed below. This file is generated from Cargo.lock by
+cargo-about; regenerate it with
+
+    cargo about generate --locked --output-file THIRD_PARTY_LICENSES about.hbs
+
+Bundled fonts and game content are not Rust crates and are covered by NOTICE and
+REUSE.toml, not by this file.
+
+
+Overview
+--------
+{{#each overview}}
+* {{{name}}} ({{{id}}}): {{{count}}} crate(s)
+{{/each}}
+
+{{#each licenses}}
+
+================================================================================
+{{{name}}} ({{{id}}})
+================================================================================
+Used by:
+{{#each used_by}}
+  - {{{crate.name}}} {{{crate.version}}}{{#if crate.repository}} <{{{crate.repository}}}>{{/if}}
+{{/each}}
+
+{{{text}}}
+{{/each}}
