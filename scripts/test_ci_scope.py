@@ -1,6 +1,6 @@
 """Regression boundaries for CI and local selection: losing a consumer drops required checks."""
 import unittest
-from ci_scope import ROOT, packages, plan, render_lines, scope
+from ci_scope import ROOT, identity_digest, packages, plan, render_lines, scope
 
 
 class ScopeTests(unittest.TestCase):
@@ -101,6 +101,45 @@ class ScopeTests(unittest.TestCase):
         self.assertIn('compile=iwbtg-client,iwbtg-format,iwbtg-tools', text)
         self.assertIn('wasip1=true', text)
         self.assertIn('packages=-p iwbtg-client -p iwbtg-format -p iwbtg-sim -p iwbtg-tools', text)
+        self.assertIn('identity=', text)
+        self.assertIn('step-identity=test:iwbtg-sim=', text)
+
+    def test_step_identity_tracks_dependencies_not_consumers(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'Cargo.toml').write_text('[workspace]\nmembers = ["a", "b"]\n')
+            (root / 'a/src').mkdir(parents=True)
+            (root / 'a/Cargo.toml').write_text('[package]\nname = "a"\n')
+            (root / 'a/src/lib.rs').write_text('a1')
+            (root / 'b/src').mkdir(parents=True)
+            (root / 'b/Cargo.toml').write_text('[package]\nname = "b"\n[dependencies]\na = { path = "../a" }\n')
+            (root / 'b/src/lib.rs').write_text('b1')
+            graph = packages(root)
+            changed_a = ['a/src/lib.rs']
+            ia = identity_digest(root, graph, 'test', ['a'], changed_a)
+            ib = identity_digest(root, graph, 'test', ['b'], changed_a)
+            # A consumer change does not invalidate the dependency's tests.
+            (root / 'b/src/lib.rs').write_text('b2')
+            both = ['a/src/lib.rs', 'b/src/lib.rs']
+            self.assertEqual(identity_digest(root, graph, 'test', ['a'], both), ia)
+            # A dependency change invalidates both the dependency and its consumer.
+            (root / 'a/src/lib.rs').write_text('a2')
+            self.assertNotEqual(identity_digest(root, graph, 'test', ['a'], both), ia)
+            self.assertNotEqual(identity_digest(root, graph, 'test', ['b'], both), ib)
+            # Shared lock/config/toolchain inputs invalidate every step.
+            (root / 'Cargo.lock').write_text('lock1')
+            before = identity_digest(root, graph, 'test', ['a'], both)
+            (root / 'Cargo.lock').write_text('lock2')
+            self.assertNotEqual(identity_digest(root, graph, 'test', ['a'], both), before)
+            # Fingerprint environment variables are part of the identity.
+            with patch.dict('os.environ', {'RUSTFLAGS': '-D warnings'}):
+                flags_a = identity_digest(root, graph, 'test', ['a'], both)
+            with patch.dict('os.environ', {'RUSTFLAGS': '--cfg changed'}):
+                flags_b = identity_digest(root, graph, 'test', ['a'], both)
+            self.assertNotEqual(flags_a, flags_b)
 
     def test_local_and_ci_union_never_drifts(self):
         for paths in ([], ['README.md'], ['crates/sim/src/world.rs'], ['crates/client/src/view.rs'],

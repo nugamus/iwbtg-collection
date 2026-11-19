@@ -7,7 +7,9 @@ compile check. Unknown, policy, workflow, script, lockfile, toolchain or manifes
 closed to full coverage, so an unknown crate can never select zero tests.
 """
 import argparse
+import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -17,6 +19,11 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[1]
 TEST_DOCS = tuple(line.strip() for line in (ROOT / 'crates/xtask/test-docs.txt').read_text().splitlines()
                   if line.strip() and not line.lstrip().startswith('#'))
+# Inputs that change every crate's result or the build fingerprint. Never include secrets here.
+SHARED_INPUTS = ('Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', '.cargo/config.toml',
+                 'crates/xtask/test-docs.txt')
+FINGERPRINT_ENV = ('RUSTFLAGS', 'CARGO_INCREMENTAL', 'CARGO_PROFILE_DEV_DEBUG',
+                   'CARGO_PROFILE_TEST_DEBUG', 'CARGO_TARGET_DIR', 'RUSTC_WRAPPER')
 
 
 def packages(root):
@@ -49,7 +56,69 @@ def closure(seed, graph):
         affected.update(consumers)
 
 
-def plan(paths, graph, full=False):
+def upstream(name, graph):
+    """Transitive dependencies of `name`, the inputs a test or lint of it must see."""
+    seen = set()
+    stack = list(graph[name][1])
+    while stack:
+        dep = stack.pop()
+        if dep in graph and dep not in seen:
+            seen.add(dep)
+            stack.extend(graph[dep][1])
+    return seen
+
+
+def digest_file(root, path):
+    digest = hashlib.sha256()
+    file = root / path
+    if file.is_file():
+        digest.update(b'file\0')
+        digest.update(file.read_bytes())
+    else:
+        digest.update(b'absent\0')
+    return digest.digest()
+
+
+def identity_digest(root, graph, kind, packages, changed, everything=False):
+    """Stable identity for one step: its command kind, crate inputs and shared/environment inputs.
+
+    A changed consumer of a crate does not invalidate that crate's tests; a changed dependency
+    does. `everything` is for workspace-wide steps such as rustfmt.
+    """
+    digest = hashlib.sha256()
+    digest.update(b'receipt-v1\0')
+    digest.update(kind.encode())
+    digest.update(b'\0')
+    digest.update(','.join(sorted(packages)).encode())
+    digest.update(b'\0')
+    for path in SHARED_INPUTS:
+        digest.update(path.encode())
+        digest.update(b'\0')
+        digest.update(digest_file(root, path))
+    for key in FINGERPRINT_ENV:
+        digest.update(key.encode())
+        digest.update(b'\0')
+        digest.update(os.environ.get(key, '').encode())
+        digest.update(b'\0')
+    if everything:
+        relevant = sorted(set(changed))
+    else:
+        dirs = {graph[name][0] for name in packages}
+        for dep in set().union(*(upstream(name, graph) for name in packages)) if packages else set():
+            dirs.add(graph[dep][0])
+        relevant = {path for path in changed if any(path.startswith(d) for d in dirs)}
+        if set(packages) & {'iwbtg-sim', 'iwbtg-format'}:
+            relevant |= {path for path in changed if path.startswith(TEST_DOCS)}
+        relevant = sorted(relevant)
+    for path in relevant:
+        digest.update(b'path\0')
+        digest.update(path.encode())
+        digest.update(b'\0')
+        digest.update(digest_file(root, path))
+    return digest.hexdigest()
+
+
+def plan(paths, graph, full=False, root=ROOT):
     """Explain the plan for explicit paths. `full` forces every crate."""
     selected = set()
     inputs = []
@@ -109,6 +178,10 @@ def plan(paths, graph, full=False):
         {'kind': 'sim-deps', 'selected': code, 'reason': 'dependency ban applies to every code change'},
         {'kind': 'licenses', 'selected': code, 'reason': 'license check applies to every code change'},
     ]
+    for step in local_steps:
+        step['identity'] = identity_digest(
+            root, graph, step['kind'], step.get('packages', []), paths,
+            everything=step['kind'] == 'rustfmt')
     return {
         'full': force_full,
         'code': code,
@@ -122,6 +195,7 @@ def plan(paths, graph, full=False):
         'inputs': inputs,
         'local_steps': local_steps,
         'ci_steps': ci_steps,
+        'identity': identity_digest(root, graph, 'plan', selected_all, paths, everything=True),
     }
 
 
@@ -135,7 +209,7 @@ def scope(paths, graph, full=False):
 def render_lines(result):
     def names(key):
         return ','.join(result[key])
-    return '\n'.join([
+    lines = [
         f"full={str(result['full']).lower()}",
         f"code={str(result['code']).lower()}",
         f"test={names('test')}",
@@ -144,7 +218,12 @@ def render_lines(result):
         f"wasip1={str(result['wasip1']).lower()}",
         f"browser={str(result['browser']).lower()}",
         f"determinism={str(result['determinism']).lower()}",
-    ]) + '\n'
+        f"identity={result['identity']}",
+    ]
+    for step in result['local_steps']:
+        key = step['kind'] + ':' + ','.join(step.get('packages', []))
+        lines.append(f"step-identity={key}={step['identity']}")
+    return '\n'.join(lines) + '\n'
 
 
 def main():

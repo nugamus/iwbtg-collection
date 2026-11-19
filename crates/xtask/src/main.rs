@@ -29,13 +29,16 @@
 //!
 //! Standard library only; it shells out to cargo and git.
 
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::hash_map::DefaultHasher;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt::Write as _;
+use std::hash::{Hash, Hasher};
 use std::io::{BufRead, BufReader, Write as _};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 /// The hash-pin files `repin` rewrites, one repo-relative path per line (`#` starts a comment).
 /// `.claude/hooks/conflict_guard.py` reads the same file to spot pin-only merge conflicts (#949).
@@ -159,6 +162,8 @@ struct Plan {
     code: bool,
     test: Vec<String>,
     compile: Vec<String>,
+    identity: String,
+    step_identities: BTreeMap<String, String>,
 }
 
 fn python_command(root: &Path) -> Result<&'static str, String> {
@@ -216,6 +221,8 @@ fn shared_plan(root: &Path, files: &[String], full: bool) -> Result<Plan, String
         code: false,
         test: Vec::new(),
         compile: Vec::new(),
+        identity: String::new(),
+        step_identities: BTreeMap::new(),
     };
     let mut saw_code = false;
     for line in text.lines() {
@@ -230,11 +237,17 @@ fn shared_plan(root: &Path, files: &[String], full: bool) -> Result<Plan, String
             }
             "test" => plan.test = names(value),
             "compile" => plan.compile = names(value),
+            "identity" => plan.identity = value.to_owned(),
+            "step-identity" => {
+                if let Some((step, identity)) = value.split_once('=') {
+                    plan.step_identities.insert(step.to_owned(), identity.to_owned());
+                }
+            }
             _ => {}
         }
     }
-    if !saw_code {
-        return Err("shared plan: missing code field".into());
+    if !saw_code || plan.identity.is_empty() {
+        return Err("shared plan: missing code or identity field".into());
     }
     Ok(plan)
 }
@@ -244,6 +257,96 @@ fn explain_plan(root: &Path, full: bool) -> Result<(), String> {
     let files = changed_files(root, true)?;
     print!("{}", plan_text(root, &files, full, "json")?);
     Ok(())
+}
+
+/// A successful or failed step. Only an `ok` receipt whose identity, argv and cwd still match is
+/// reused (#1026). The checksum detects damaged or hand-edited receipts, not a hostile writer.
+struct Receipt {
+    identity: String,
+    argv: String,
+    cwd: String,
+    status: String,
+    exit: String,
+    log: String,
+    duration_ms: u128,
+}
+
+fn receipt_path(root: &Path, what: &str) -> PathBuf {
+    root.join("target/xtask/receipts")
+        .join(format!("{}.txt", log_slug(0, what)))
+}
+
+fn receipt_checksum<'a>(lines: impl Iterator<Item = &'a str>) -> String {
+    let mut hasher = DefaultHasher::new();
+    for line in lines {
+        line.hash(&mut hasher);
+    }
+    format!("{:016x}", hasher.finish())
+}
+
+fn write_receipt(root: &Path, what: &str, receipt: &Receipt) -> Result<(), String> {
+    let path = receipt_path(root, what);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+    }
+    let body = format!(
+        "version=1\nidentity={}\nargv={}\ncwd={}\nstatus={}\nexit={}\nlog={}\nduration_ms={}\n",
+        receipt.identity,
+        receipt.argv,
+        receipt.cwd,
+        receipt.status,
+        receipt.exit,
+        receipt.log,
+        receipt.duration_ms
+    );
+    let checksum = receipt_checksum(body.lines());
+    let temp = path.with_extension(format!("tmp{}", std::process::id()));
+    std::fs::write(&temp, format!("{body}checksum={checksum}\n"))
+        .map_err(|e| format!("{}: {e}", temp.display()))?;
+    std::fs::rename(&temp, &path).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(())
+}
+
+fn read_receipt(root: &Path, what: &str) -> Option<Receipt> {
+    let text = std::fs::read_to_string(receipt_path(root, what)).ok()?;
+    let mut lines: Vec<&str> = text.lines().collect();
+    let stored = lines.pop()?.strip_prefix("checksum=")?;
+    if receipt_checksum(lines.iter().copied()) != stored {
+        return None;
+    }
+    let mut fields = BTreeMap::new();
+    for line in lines {
+        let (key, value) = line.split_once('=')?;
+        fields.insert(key.to_owned(), value.to_owned());
+    }
+    if fields.get("version").map(String::as_str) != Some("1") {
+        return None;
+    }
+    Some(Receipt {
+        identity: fields.get("identity")?.clone(),
+        argv: fields.get("argv")?.clone(),
+        cwd: fields.get("cwd")?.clone(),
+        status: fields.get("status")?.clone(),
+        exit: fields.get("exit")?.clone(),
+        log: fields.get("log")?.clone(),
+        duration_ms: fields.get("duration_ms")?.parse().ok()?,
+    })
+}
+
+fn receipt_usable(receipt: &Receipt, identity: &str, argv: &str, cwd: &str) -> bool {
+    receipt.status == "ok" && receipt.identity == identity && receipt.argv == argv && receipt.cwd == cwd
+}
+
+/// The `pr-body` marker when its stored plan identity is missing or no longer current.
+fn stale_marker(stored: Option<&str>, current: Option<&str>) -> &'static str {
+    match (stored, current) {
+        (Some(a), Some(b)) if a == b => "",
+        _ => "STALE: inputs changed or this check has no plan identity; rerun `cargo xtask check`.\n",
+    }
+}
+
+fn plan_identity_from_check(check: &str) -> Option<&str> {
+    check.lines().find_map(|line| line.strip_prefix("plan="))
 }
 
 /// How many trailing lines a failed step prints; the complete output is in its log.
@@ -451,11 +554,50 @@ fn run_logged(
 }
 
 fn check(root: &Path, all: bool) -> Result<(), String> {
+    let files = changed_files(root, true)?;
+    let plan = shared_plan(root, &files, all)?;
+    if plan.full {
+        println!("selection: full workspace (shared, config or unknown input)");
+    }
     let mut summary = String::new();
     let mut index = 0usize;
-    let mut step = |root: &Path, what: &str, args: &[&str]| -> Result<(), String> {
+    let mut step = |root: &Path, what: &str, kind: &str, packages: &[String], args: &[&str]| {
+        let key = format!("{kind}:{}", packages.join(","));
+        let identity = plan
+            .step_identities
+            .get(&key)
+            .ok_or_else(|| format!("shared plan: missing identity for step `{key}`"))?;
+        let argv = format!("cargo {}", args.join(" "));
+        let cwd = root.display().to_string();
+        if let Some(receipt) = read_receipt(root, what) {
+            if receipt_usable(&receipt, identity, &argv, &cwd) {
+                println!("{what}: reused (inputs unchanged; log: {})", receipt.log);
+                let _ = writeln!(
+                    summary,
+                    "cargo {} -> reused (inputs unchanged) (log: {})",
+                    args.join(" "),
+                    receipt.log
+                );
+                return Ok(());
+            }
+            println!("{what}: invalidated (inputs or command changed)");
+        }
         index += 1;
+        let started = Instant::now();
         let report = run_logged(root, what, index, "cargo", args)?;
+        write_receipt(
+            root,
+            what,
+            &Receipt {
+                identity: identity.clone(),
+                argv,
+                cwd,
+                status: if report.ok { "ok" } else { "failed" }.to_owned(),
+                exit: report.exit.clone(),
+                log: report.log.display().to_string(),
+                duration_ms: started.elapsed().as_millis(),
+            },
+        )?;
         let results: Vec<&str> = report.results.iter().map(String::as_str).collect();
         let (passed, failed) = results.iter().fold((0u64, 0u64), |(p, f), l| {
             let n = |word: &str| {
@@ -496,12 +638,13 @@ fn check(root: &Path, all: bool) -> Result<(), String> {
         }
     };
     let result = (|| {
-        step(root, "rustfmt", &["fmt", "--all", "--", "--check"])?;
-        let files = changed_files(root, true)?;
-        let plan = shared_plan(root, &files, all)?;
-        if plan.full {
-            println!("selection: full workspace (shared, config or unknown input)");
-        }
+        step(
+            root,
+            "rustfmt",
+            "rustfmt",
+            &[],
+            &["fmt", "--all", "--", "--check"],
+        )?;
         if !plan.code {
             println!("no crate changed (docs or harness only): nothing to build");
             return Ok(());
@@ -513,10 +656,22 @@ fn check(root: &Path, all: bool) -> Result<(), String> {
         let mut clippy = vec!["clippy"];
         clippy.extend(&pkgs);
         clippy.extend(["--tests", "--", "-D", "warnings"]);
-        step(root, &format!("clippy ({})", plan.test.join(", ")), &clippy)?;
+        step(
+            root,
+            &format!("clippy ({})", plan.test.join(", ")),
+            "clippy",
+            &plan.test,
+            &clippy,
+        )?;
         let mut t = vec!["test"];
         t.extend(&pkgs);
-        step(root, &format!("tests ({})", plan.test.join(", ")), &t)?;
+        step(
+            root,
+            &format!("tests ({})", plan.test.join(", ")),
+            "test",
+            &plan.test,
+            &t,
+        )?;
         if !plan.compile.is_empty() {
             let mut c = vec!["check", "--tests"];
             for p in &plan.compile {
@@ -525,6 +680,8 @@ fn check(root: &Path, all: bool) -> Result<(), String> {
             step(
                 root,
                 &format!("compile check of dependents ({})", plan.compile.join(", ")),
+                "compile-check",
+                &plan.compile,
                 &c,
             )?;
         }
@@ -535,7 +692,10 @@ fn check(root: &Path, all: bool) -> Result<(), String> {
     let status = if result.is_ok() { "PASSED" } else { "FAILED" };
     let _ = std::fs::write(
         dir.join("last-check.txt"),
-        format!("{summary}xtask check: {status}\n"),
+        format!(
+            "plan={}\nfull={}\n{summary}xtask check: {status}\n",
+            plan.identity, plan.full
+        ),
     );
     result
 }
@@ -727,6 +887,16 @@ fn pr_body(root: &Path, issue: Option<String>) -> Result<(), String> {
         .collect();
     let check = std::fs::read_to_string(root.join("target/xtask/last-check.txt"))
         .unwrap_or_else(|_| "(run `cargo xtask check` first)\n".into());
+    let was_full = check
+        .lines()
+        .find_map(|line| line.strip_prefix("full="))
+        .map(|value| value == "true")
+        .unwrap_or(false);
+    let current_identity = changed_files(root, true)
+        .ok()
+        .and_then(|files| shared_plan(root, &files, was_full).ok())
+        .map(|plan| plan.identity);
+    let stale = stale_marker(plan_identity_from_check(&check), current_identity.as_deref());
     let mut body = String::new();
     let _ = writeln!(body, "Closes #{}\n", issue.as_deref().unwrap_or("<issue>"));
     let _ = writeln!(body, "## What changed\n\n{}", log.trim_end());
@@ -742,8 +912,11 @@ fn pr_body(root: &Path, issue: Option<String>) -> Result<(), String> {
                 .join("\n")
         }
     );
-    let _ = writeln!(body, "\n## Follow-up issues\n\nnone\n");
-    let _ = writeln!(body, "## User check\n\n```\n{}```\n", check);
+    let _ = writeln!(
+        body,
+        "\n## Follow-up issues\n\nNone, or the issues filed for findings (link them here).\n"
+    );
+    let _ = writeln!(body, "## User check\n\n```\n{}{}```\n", stale, check);
     print!("{body}");
     Ok(())
 }
@@ -1332,6 +1505,68 @@ version = \"1.0.0\"
             "{:?}",
             report.tail
         );
+    }
+
+    #[test]
+    fn receipts_round_trip_and_reject_tampering() {
+        let root = workspace_root();
+        let what = "receipt self-test";
+        let path = receipt_path(&root, what);
+        let _ = std::fs::remove_file(&path);
+        let receipt = Receipt {
+            identity: "abc".into(),
+            argv: "cargo test -p x".into(),
+            cwd: "/w".into(),
+            status: "ok".into(),
+            exit: "exit status: 0".into(),
+            log: "target/x.log".into(),
+            duration_ms: 12,
+        };
+        write_receipt(&root, what, &receipt).expect("write");
+        let read = read_receipt(&root, what).expect("read");
+        assert_eq!(read.identity, "abc");
+        assert_eq!(read.argv, "cargo test -p x");
+        assert_eq!(read.status, "ok");
+        assert_eq!(read.duration_ms, 12);
+        assert!(receipt_usable(&read, "abc", "cargo test -p x", "/w"));
+        assert!(!receipt_usable(&read, "other", "cargo test -p x", "/w"));
+        let text = std::fs::read_to_string(&path).expect("receipt");
+        std::fs::write(&path, text.replace("status=ok", "status=failed")).expect("tamper");
+        assert!(
+            read_receipt(&root, what).is_none(),
+            "a tampered receipt must not be reused"
+        );
+        std::fs::write(&path, "not a receipt").expect("malformed");
+        assert!(read_receipt(&root, what).is_none());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn the_shared_plan_provides_every_local_step_identity() {
+        let plan = planned(&["crates/sim/src/lib.rs"], false);
+        for key in [
+            "rustfmt:",
+            "clippy:iwbtg-sim",
+            "test:iwbtg-sim",
+            "compile-check:iwbtg-client,iwbtg-format,iwbtg-tools",
+        ] {
+            assert!(
+                plan.step_identities.contains_key(key),
+                "{key}: {:?}",
+                plan.step_identities
+            );
+        }
+        assert!(!plan.identity.is_empty());
+    }
+
+    #[test]
+    fn stale_marker_flags_missing_or_changed_inputs() {
+        assert_eq!(stale_marker(Some("a"), Some("a")), "");
+        assert!(stale_marker(Some("a"), Some("b")).starts_with("STALE"));
+        assert!(stale_marker(None, Some("b")).starts_with("STALE"));
+        assert!(stale_marker(Some("a"), None).starts_with("STALE"));
+        assert_eq!(plan_identity_from_check("plan=abc\nrest\n"), Some("abc"));
+        assert_eq!(plan_identity_from_check("rest\n"), None);
     }
 
     #[test]
