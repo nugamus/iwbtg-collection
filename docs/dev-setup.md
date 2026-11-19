@@ -101,6 +101,24 @@ Measured on the home PC (Ryzen 7 7800X3D, 64 GB, NVMe) on 2026-11-05:
 | Touch `crates/sim/src/lib.rs`, rebuild every test binary | 33 s (82 binaries) | 7 s (12 binaries, #517) |
 | Run `cargo test --workspace` once built | 20 s (7 s of tests, the rest starting 82 executables) | 10 s |
 | `target/` of one worktree | 8 to 21 GB | 6 GB |
+
+Concurrency measured on the development laptop on 2026-11-19 (Intel Core Ultra 5 225H, 14 cores, 31 GB RAM, NVMe):
+
+| `cargo check -p …` | one alone | two at once | three at once | warm (deps built) |
+|---|---|---|---|---|
+| `iwbtg-client`, cold | 119.6 s | 341.8 s | 665.0 s | about 6 s at one, two or three |
+| `iwbtg-sim`, cold | 26.5 s | 40.3 s | 57.1 s | about 7 s at one, two or three |
+
+Cold client targets used about 945 MB each; sim targets about 187 MB each. Three concurrent cold client builds take 11.1 minutes, against 6.0 minutes if the same three run one after another, so heavy client builds are serialized by the machine-wide slot below. Warm checks show no contention and stay concurrent; CI runners are isolated per job, so this applies to a development host only.
+
+**Heavy build slot (#1029).** A cold or heavy client build goes through one slot shared by every worktree of this checkout:
+
+```
+python -I scripts/heavy_build.py -- cargo build -p iwbtg-client --locked
+python -I scripts/heavy_build.py --status
+```
+
+The holder records pid, host, command and worktree and refreshes the lock every 5 s in the system temp folder. Waiters print progress while editing, searches, narrow tests and warm checks continue. A holder with no heartbeat for 90 s is reclaimed, and a waiter gives up after 15 minutes (exit 3) instead of queueing forever. The lock never enters a repository.
 | CI, whole matrix on the shared runners | 24 min (measured 2026-11-18, #961) | 5 to 9 min warm, 9 to 15 min cold (CI section) |
 
 **Windows Defender** scans every executable the build writes (82 test executables per run before #517). Excluding the build output folders, and only those, speeds builds and test runs up. It needs an administrator PowerShell, so the user runs it once:
