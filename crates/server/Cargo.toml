@@ -1,0 +1,35 @@
+[package]
+name = "iwbtg-server"
+description = "IWBTG Collection leaderboard server: submissions, replay verification, review queue (docs/server.md)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+# Tests live in one executable (#517): a new test file is listed in tests/it.rs.
+autotests = false
+
+[[bin]]
+name = "iwbtg-server"
+path = "src/main.rs"
+
+[dependencies]
+# The HTTP surface (docs/server.md, Components): axum 0.8 on tokio.
+axum = "0.8"
+tokio = { version = "1.54.1", features = ["macros", "net", "rt-multi-thread"] }
+# --bind; the `env` feature adds IWBTG_BIND.
+clap = { workspace = true, features = ["env"] }
+# JSON logs to stdout (docs/server.md, Logs and monitoring).
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.23", features = ["json"] }
+
+[dev-dependencies]
+# `ServiceExt::oneshot`: the tests drive the router in-process, no port to pick.
+tower = { version = "0.5", features = ["util"] }
+
+[[test]]
+name = "it"
+path = "tests/it.rs"
+
+[lints]
+workspace = true
