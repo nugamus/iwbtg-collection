@@ -22,7 +22,7 @@ The order of work across all three repos: client, research and games. There are 
 |---|---|---|
 | 0 | Setup and research groundwork *(done)* | Repos, specs pipeline, scraper, 20-game shortlist, GM8 CLONE_SPEC, first traces, converter, sim contracts (WP0). |
 | M1 | Kid matches the original *(done)* | The sim reproduces rely_the_needle's traces (stand, double jump) tick for tick on Windows, Linux and WASM. |
-| M2 | Sim covers the 20 games | All kid families, built-ins, scripts, sound and the replay runner are in. All 20 converter packages load and trace-check. |
+| M2 | Sim covers the 20 games | All kid families, built-ins, scripts, sound and the replay runner are in. All 20 converter packages load and trace-check. Fidelity questions count only at tier T1 ([fidelity tiers](plans/fidelity-tiers.md)); T2 and T3 items move to the affected game's port issue or M5. |
 | M2b | Porting pipeline | The census says how many scripts the 20 ports need; the script API covers what they use; Rhai is measured on native and WASM; port layering, clean-room authoring and the extension model are decided; one command checks the fidelity of every port; `docs/porting.md` is written (#23). |
 | M3 | First playable | The Bevy client plays rely_the_needle on native and web, and the user confirms the feel. |
 | M4 | Ranked-ready run | Stripped ranked mode works locally: timer and cutscene freeze, mods, retry keys, HUD, practice, results, local PBs, replays, `.iwbz` with maps. |
@@ -41,7 +41,7 @@ The order of M3 and M4 versus M5: M5 ports need the M2 sim and the M2b pipeline,
 
 Near milestones fill up with small issues while later ones hold a few large placeholders (review of 2026-11-14, #774). Two rules keep the board honest:
 
-- **A finding goes to the milestone of the work it blocks,** not to the milestone that is open now. A one-game fidelity question goes on that game's port issue (M5), a server idea to M7, and so on. Fidelity questions get an impact tier first (#784): only tier 1 blocks M2.
+- **A finding goes to the milestone of the work it blocks,** not to the milestone that is open now. A one-game fidelity question goes on that game's port issue (M5), a server idea to M7, and so on. Fidelity questions get an impact tier first (#784, [fidelity tiers](plans/fidelity-tiers.md)): only T1 blocks M2.
 - **A milestone is scoped before its predecessor closes.** Its large issues get sub-issues (each port follows the standard steps listed in its issue), so the board shows the real size of the work ahead.
 
 ## How work flows
