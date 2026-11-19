@@ -2,8 +2,8 @@
 
 ## Contracts
 
-- Clean room: GameMaker behavior comes only from `research/specs/` and its traces. Never read another runner/tool's source or decompiled games. An unanswered behavior question stays OPEN and gets a spec/trace issue.
-- Never commit original binaries, decompiled code or extracted assets. Original material stays in `../research`; clean-room ports in `../games`. Keep the existing credited Kid sprites in `crates/client/showcase.pkg` (user exception, games#34); add no more.
+- Clean room: GameMaker behavior comes only from `../iwbtg-collection-research/specs/` and its traces. Never read another runner/tool's source or decompiled games. An unanswered behavior question stays OPEN and gets a spec/trace issue.
+- Never commit original binaries, decompiled code or extracted assets. Original material stays in `../iwbtg-collection-research`; clean-room ports in `../iwbtg-collection-games`. Keep the existing credited Kid sprites in `crates/client/showcase.pkg` (user exception, games#34); add no more.
 - `sim` is deterministic, fixed tick, and independent of Bevy, IO, clocks and threads. Timing, splits and leaderboards count ticks. Preserve each game's physics and player-relied-on quirks.
 - Packages are readable text with sandboxed scripts, never compiled code. Input uses client actions, never raw keys.
 - Product/ranked/UI decisions: `docs/product.md`. Porting/assets/format/editor: `docs/content.md`. Read the relevant section when working in that area. Per-game questions belong in `docs/games/<id>.md`; never guess. Follow approved IWBTG artboards; visible rendering changes need matching `--screenshot` evidence.
@@ -22,7 +22,7 @@
 - Keep lane worktrees/targets warm between issues; never share one active worktree. See [workflow details](docs/agent-workflow.md) when coordinating lanes.
 - Keep the normal build fingerprint: no ad hoc RUSTFLAGS, profiles, feature flags, linker or target-directory overrides. Run cargo in the foreground; do not end a turn waiting for an unattended build. Follow the existing build/conflict guards.
 - `cargo xtask repin` regenerates hash pins after an intentional sim change; take either side of pin conflicts then repin, never hand-merge. `cargo xtask regen` regenerates schemas/API docs; `cargo xtask pr-body` drafts the body from check output.
-- After merge waves, check main CI; repair red main before further merges. Run `IWBTG_RESEARCH=../research cargo xtask fidelity` after sim/format changes (private fixtures required). Never bless an unexplained regression. Only T1 fidelity questions gate M2 (`docs/plans/fidelity-tiers.md`).
+- After merge waves, check main CI; repair red main before further merges. Run `IWBTG_RESEARCH=../iwbtg-collection-research cargo xtask fidelity` after sim/format changes (private fixtures required). Never bless an unexplained regression. Only T1 fidelity questions gate M2 (`docs/plans/fidelity-tiers.md`).
 
 ## Findings — mandatory
 
