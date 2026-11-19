@@ -1,6 +1,6 @@
 # Lane: sim
 
-**Owns:** `crates/sim`, `crates/tools` (except `pkg_cmd.rs`), `.github/`, `docs/architecture/sim.md` and `docs/architecture/sim/`, `replay.md`, `traces.md`, `docs/plans/sim-core.md` and `docs/plans/sim-core/`.
+**Owns:** `crates/sim`, `crates/tools` (except `pkg_cmd.rs`), `docs/architecture/sim.md` and `docs/architecture/sim/`, `replay.md`, `traces.md`, `docs/plans/sim-core.md` and `docs/plans/sim-core/`. The infra lane owns `.github/` and `.claude/`; touch them here only when the issue assigns it and the infra lane agrees.
 **Never edits:** `crates/client` except when an issue says so.
 
 ## Build and test

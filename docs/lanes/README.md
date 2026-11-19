@@ -1,6 +1,8 @@
 # Lane briefs
 
-One page per agent-team lane: what the lane owns, how to build and test it fast, and the mistakes that cost time before. A teammate reads its lane's page right after the issue, instead of exploring the repo. The lead prompt (`TEAM_LEAD_PROMPT.md`, workspace root) assigns the lanes.
+One page per agent-team lane: what the lane owns, how to build and test it fast, and the mistakes that cost time before. A teammate reads its lane's page right after the issue, instead of exploring the repo. When a team lead runs lanes, its prompt assigns them; a lane page never grants or withholds merge authority.
+
+The daily handoff contract is authoritative in [`CLAUDE.md`](../../CLAUDE.md) and [agent workflow](../agent-workflow.md): the PR owner reviews the diff, runs the User check and requests auto-merge. A lead handles spawning and integration after merge waves, not routine merges.
 
 | Lane | Worktree | Page |
 |---|---|---|

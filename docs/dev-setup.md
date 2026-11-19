@@ -82,7 +82,7 @@ So a teammate runs the status hook by hand at the start (from the workspace root
 
 **Screenshots come only from the client** (#822): on 2026-11-15 the ui teammate on #495, wanting to see the loading card live, took two OS screen captures of the user's main screen; they showed the desktop, not the game window. A teammate takes screenshots only with the client's own `--screenshot` flag (`WGPU_BACKEND=dx12` when the display is locked), never with an OS or desktop capture or a screen-capture tool. An agent cannot press keys in a live window either, so that behavior is covered by tests and by the user's check on `main`.
 
-The lead prompt is `TEAM_LEAD_PROMPT.md` in the workspace root.
+The lead prompt is `TEAM_LEAD_PROMPT.md` in the workspace root. It assigns lanes and spawns teammates; the tracked `CLAUDE.md` and `docs/agent-workflow.md` contract is authoritative for routine merges. If the external copy still says the lead merges routine PRs, synchronize it through #1025.
 
 **Shutdown before the next teammate** (#677): the lead spawns a lane's next teammate only after the previous one's `shutdown_approved` arrived, and never sends a teammate new work in the same message batch as its shutdown request. A shutdown request is only read between steps, and a teammate with a pending message acts on that first: on 2026-11-12 the old sim teammate was still merging `main` in `worktrees/client-sim` when its successor ran `git switch -c` there, and the old one's `git push` ran on the wrong branch.
 
