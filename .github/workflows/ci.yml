@@ -14,7 +14,11 @@ on:
     branches: [main]
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # PR and merge-group runs still cancel superseded work. A push to main does not cancel the
+  # active run: that trusted generation finishes and publishes its caches, and GitHub keeps the
+  # newest push as the single pending run for the group (#1027). This bounds main to one running
+  # plus one pending run instead of starving cache saves during a burst of merges.
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
