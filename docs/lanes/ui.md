@@ -1,6 +1,6 @@
 # Lane: ui
 
-**Owns:** `crates/client/src/ui/` (UI kit from #490: fonts, tokens, sheared shapes, widgets, motion, `--ui-gallery`), the screen modules, `crates/client/src/view/hud.rs`, bundled fonts, `docs/decisions/0003-ui-toolkit.md`, `docs/architecture/client/ui.md` and `client/hud.md`.
+**Owns:** `crates/client/src/ui/` (UI kit from #490: fonts, tokens, sheared shapes, widgets, motion, `--ui-gallery`), the screen modules, the HUD module directory `crates/client/src/hud/` and its sign/countdown rendering in `crates/client/src/view/hud.rs`, bundled fonts, `docs/decisions/0003-ui-toolkit.md`, `docs/architecture/client/ui.md` and `docs/architecture/client/hud.md`.
 **Never edits:** `crates/sim`, `crates/format`, the settings and stats modules (data lane; you only read them).
 
 ## Build and test
@@ -16,7 +16,7 @@
 
 1. Read `docs/design/mockups/m4/README.md`, then the `.dc.html` artboard the issue names: its markup holds sizes and colours, its script the sample data.
 2. Use the #490 kit and tokens, never one-off styles.
-3. The PR attaches `--screenshot` images at the ratios the issue lists. The lead merges when they match; the user tests `main` in batches.
+3. The PR attaches `--screenshot` images at the ratios the issue lists. The PR owner checks that they match the approved artboard, runs the User check and requests `gh pr merge <N> --squash --auto`; the user tests `main` in batches. A design or cross-area contract question still seeks the user or a domain review.
 
 ## Pitfalls seen before
 

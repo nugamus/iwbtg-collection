@@ -2,6 +2,14 @@
 
 Read this page when coordinating worktrees, triaging, or placing documentation. The short daily contract is in `CLAUDE.md`.
 
+## Daily workflow (authoritative)
+
+1. Read the issue, its blockers/parent and `docs/lanes/<lane>.md`; claim it with `in-progress` and a comment.
+2. Work in your lane worktree. Run the narrow tests for what you touched, then `cargo xtask check` once before the PR.
+3. Update affected docs; open the PR with `Closes #N`, Docs updated, Follow-up issues and the real User check output.
+4. The PR owner reviews the diff, runs the User check and requests `gh pr merge <N> --squash --auto`. Contract/cross-area changes seek domain review; routine fixes need no separate lead or reviewer chain.
+5. A lead only handles spawning and integration after merge waves; the user tests visible changes on `main` in batches.
+
 ## Worktrees and coordination
 
 Keep one warm worktree per lane: `../worktrees/<repo>-<lane>`. Create it once with `git worktree add ../worktrees/<repo>-<lane> -b issue-<N>-<name> origin/main`; reuse it for the next branch after committing and fetching. Use the lane's absolute working directory for every edit/command. Do not remove a worktree between issues or change its branch while another agent owns it. Wait for the previous owner to shut down before reassigning the lane. Never let two agents edit the same files/worktree.
