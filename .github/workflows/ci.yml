@@ -3,8 +3,10 @@ name: CI
 # PRs select changed crates and transitive consumers; main/merge groups retain the full matrix.
 # Test-consumed docs select sim/format; ordinary documentation skips builds.
 # Every job sets `timeout-minutes` (#967): a wedged step fails and reports after minutes instead of
-# holding `ci-ok` and auto-merge for GitHub's 6 hour default. The values are about twice the slowest
-# measured run from #961 (wasm 9 to 12 minutes, native 15 on a cold cache, everything else under 3).
+# holding `ci-ok` and auto-merge for GitHub's 6 hour default. The native cap is 45 minutes: a full
+# Windows run measured 28m36s on a cold-ish cache (#1041, run 44531896479), and main also runs the
+# Rust-cache save there; the warm path is about 5.5 minutes. Both WASM caps stay 25 (slowest cold
+# measurement 11m33s, #961); everything else is 5 to 15.
 on:
   pull_request:
   merge_group:
@@ -66,8 +68,10 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
-    # Slowest measured 15m00s (Linux, cold cache, #961): about twice that.
-    timeout-minutes: 30
+    # A full-coverage Windows run measured 28m36s on a cold-ish cache (#1041); the warm path is
+    # about 5m30s. 45 minutes leaves room for the main-only cache save without keeping a wedged
+    # job for GitHub's default.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - run: rustup show   # installs the toolchain from rust-toolchain.toml
