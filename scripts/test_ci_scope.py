@@ -1,6 +1,6 @@
-"""Regression boundaries for CI selection: losing a consumer silently drops required checks."""
+"""Regression boundaries for CI and local selection: losing a consumer drops required checks."""
 import unittest
-from ci_scope import ROOT, packages, scope
+from ci_scope import ROOT, packages, plan, render_lines, scope
 
 
 class ScopeTests(unittest.TestCase):
@@ -56,6 +56,60 @@ class ScopeTests(unittest.TestCase):
         self.assertEqual(result['packages'], '-p iwbtg-client -p iwbtg-server')
         graph = {'a': ('crates/a/', set()), 'b': ('crates/b/', {'a'}), 'c': ('crates/c/', {'b'})}
         self.assertEqual(scope(['crates/a/deleted.rs'], graph)['packages'], '-p a -p b -p c')
+
+    def test_plan_splits_changed_crates_from_transitive_consumers(self):
+        cases = {
+            'crates/sim/src/world.rs': (['iwbtg-sim'], ['iwbtg-client', 'iwbtg-format', 'iwbtg-tools']),
+            'crates/format/src/lib.rs': (['iwbtg-format'], ['iwbtg-client', 'iwbtg-tools']),
+            'crates/client/src/view.rs': (['iwbtg-client'], []),
+            'crates/tools/src/main.rs': (['iwbtg-tools'], []),
+            'crates/server/src/main.rs': (['iwbtg-server'], []),
+            'crates/xtask/src/main.rs': (['xtask'], []),
+        }
+        for path, (test, compile_) in cases.items():
+            with self.subTest(path=path):
+                result = plan([path], self.graph)
+                self.assertEqual(result['test'], test)
+                self.assertEqual(result['compile'], compile_)
+                self.assertEqual(set(result['test']) | set(result['compile']),
+                                 set(result['packages_list']))
+                self.assertFalse(result['full'])
+                for step in result['local_steps'] + result['ci_steps']:
+                    self.assertTrue(step['reason'], step)
+
+    def test_plan_docs_and_full_selection(self):
+        docs = plan(['docs/architecture/client/shell.md', 'README.md'], self.graph)
+        self.assertFalse(docs['code'])
+        self.assertEqual(docs['test'], [])
+        self.assertEqual(docs['compile'], [])
+        fixture = plan(['docs/format/game.md'], self.graph)
+        self.assertEqual(fixture['test'], ['iwbtg-format', 'iwbtg-sim'])
+        self.assertEqual(fixture['compile'], ['iwbtg-client', 'iwbtg-tools'])
+        full = plan(['some-new-input'], self.graph)
+        self.assertTrue(full['full'])
+        self.assertEqual(set(full['test']), set(self.graph))
+        self.assertEqual(full['compile'], [])
+        self.assertTrue(full['wasip1'] and full['browser'] and full['determinism'])
+        for item in full['inputs']:
+            self.assertTrue(item['reason'])
+
+    def test_plan_render_lines_is_a_stable_interface(self):
+        text = render_lines(plan(['crates/sim/src/world.rs'], self.graph))
+        self.assertIn('full=false', text)
+        self.assertIn('code=true', text)
+        self.assertIn('test=iwbtg-sim', text)
+        self.assertIn('compile=iwbtg-client,iwbtg-format,iwbtg-tools', text)
+        self.assertIn('wasip1=true', text)
+        self.assertIn('packages=-p iwbtg-client -p iwbtg-format -p iwbtg-sim -p iwbtg-tools', text)
+
+    def test_local_and_ci_union_never_drifts(self):
+        for paths in ([], ['README.md'], ['crates/sim/src/world.rs'], ['crates/client/src/view.rs'],
+                      ['crates/format/src/lib.rs'], ['Cargo.lock'], ['docs/format/game.md']):
+            with self.subTest(paths=paths):
+                result = plan(paths, self.graph)
+                self.assertEqual(set(result['test']) | set(result['compile']),
+                                 set(result['packages_list']))
+                self.assertEqual(result['code'], bool(result['packages_list']))
 
 
 if __name__ == '__main__':

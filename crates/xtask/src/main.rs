@@ -5,6 +5,9 @@
 //!   them. `--all` runs the whole workspace, like CI. Writes the summary to
 //!   `target/xtask/last-check.txt` for `pr-body`. Each step streams actionable lines and keeps a
 //!   complete log with its cwd, argv and exit status in `target/xtask/logs/` (#1032).
+//! - `plan [--all]`: prints the machine-readable selection plan shared with CI
+//!   (`scripts/ci_scope.py`): test crates, consumer compile checks, gates, inputs and reasons,
+//!   without building anything (#1028).
 //! - `fidelity [--bless]`: the trace sweep over every converter package; records the run in
 //!   `target/xtask/last-fidelity.txt` (#935).
 //! - `repin`: after a deliberate change to hashed sim state, re-pins the state hash vectors
@@ -53,27 +56,12 @@ fn pin_file(root: &Path, name: &str) -> Result<PathBuf, String> {
         .ok_or_else(|| format!("{name} is not listed in crates/xtask/pin-files.txt"))
 }
 
-/// Workspace crates by folder, with the crates that depend on each.
-const CRATES: [(&str, &str, &[&str]); 6] = [
-    (
-        "crates/sim/",
-        "iwbtg-sim",
-        &["iwbtg-format", "iwbtg-tools", "iwbtg-client"],
-    ),
-    ("crates/format/", "iwbtg-format", &["iwbtg-tools", "iwbtg-client"]),
-    ("crates/tools/", "iwbtg-tools", &[]),
-    ("crates/client/", "iwbtg-client", &[]),
-    // No dependents yet: the skeleton (#152) links neither sim nor format; it gains them when the
-    // verify worker lands, and this line and sim/format's lists change with it.
-    ("crates/server/", "iwbtg-server", &[]),
-    ("crates/xtask/", "xtask", &[]),
-];
-
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let root = workspace_root();
     let result = match args.first().map(String::as_str) {
         Some("check") => check(&root, args.iter().any(|a| a == "--all")),
+        Some("plan") => explain_plan(&root, args.iter().any(|a| a == "--all")),
         Some("repin") => repin(&root),
         Some("regen") => regen(&root),
         Some("pr-body") => pr_body(&root, flag_value(&args, "--issue")),
@@ -86,7 +74,7 @@ fn main() -> ExitCode {
         }
         Some("fidelity") => fidelity(&root, args.iter().any(|a| a == "--bless")),
         _ => Err(
-            "usage: cargo xtask <check [--all] | repin | regen | pr-body [--issue N] | doctor [--scope native|browser|wasi|all] [--warm] | fidelity [--bless]>"
+            "usage: cargo xtask <check [--all] | plan [--all] | repin | regen | pr-body [--issue N] | doctor [--scope native|browser|wasi|all] [--warm] | fidelity [--bless]>"
                 .to_string(),
         ),
     };
@@ -164,39 +152,98 @@ fn changed_files(root: &Path, uncommitted: bool) -> Result<Vec<String>, String> 
     Ok(files.into_iter().collect())
 }
 
-/// (crates to test, crates to compile-check) for a list of changed files.
-fn affected(files: &[String]) -> (BTreeSet<&'static str>, BTreeSet<&'static str>) {
-    let mut test = BTreeSet::new();
-    let mut check = BTreeSet::new();
-    let workspace_wide = files.iter().any(|f| {
-        matches!(
-            f.as_str(),
-            "Cargo.toml"
-                | "Cargo.lock"
-                | "rust-toolchain.toml"
-                | ".cargo/config.toml"
-                | "crates/xtask/test-docs.txt"
-        )
-    });
-    for (dir, name, dependents) in CRATES {
-        if workspace_wide || files.iter().any(|f| f.starts_with(dir)) {
-            test.insert(name);
-            check.extend(dependents.iter().copied());
+/// The shared selection plan from `scripts/ci_scope.py`: changed crates to test, transitive
+/// consumers to compile-check locally (CI tests both).
+struct Plan {
+    full: bool,
+    code: bool,
+    test: Vec<String>,
+    compile: Vec<String>,
+}
+
+fn python_command(root: &Path) -> Result<&'static str, String> {
+    for candidate in ["python3", "python"] {
+        if let Ok((true, _)) = output(root, candidate, &["-I", "-c", "import tomllib"], &[]) {
+            return Ok(candidate);
         }
     }
-    // Docs the sim tests read (doc examples, script API, format examples) count as sim/format input.
-    if files.iter().any(|f| {
-        include_str!("../test-docs.txt")
-            .lines()
-            .map(str::trim)
-            .filter(|p| !p.is_empty() && !p.starts_with('#'))
-            .any(|prefix| f.starts_with(prefix))
-    }) {
-        test.insert("iwbtg-sim");
-        test.insert("iwbtg-format");
+    Err("python3 or python (3.11+, for tomllib) not found; the shared plan is scripts/ci_scope.py (docs/dev-setup.md)".into())
+}
+
+fn plan_text(root: &Path, files: &[String], full: bool, format: &str) -> Result<String, String> {
+    let python = python_command(root)?;
+    let mut command = Command::new(python);
+    command
+        .args(["-I", "scripts/ci_scope.py", "--paths-stdin", "--format", format])
+        .current_dir(root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if full {
+        command.arg("--full");
     }
-    let check = check.difference(&test).copied().collect();
-    (test, check)
+    let mut child = command.spawn().map_err(|e| format!("shared plan: {e}"))?;
+    {
+        let mut stdin = child.stdin.take().ok_or("shared plan: no stdin")?;
+        for file in files {
+            writeln!(stdin, "{file}").map_err(|e| format!("shared plan: {e}"))?;
+        }
+    }
+    let out = child
+        .wait_with_output()
+        .map_err(|e| format!("shared plan: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "shared plan failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+fn names(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+fn shared_plan(root: &Path, files: &[String], full: bool) -> Result<Plan, String> {
+    let text = plan_text(root, files, full, "lines")?;
+    let mut plan = Plan {
+        full: false,
+        code: false,
+        test: Vec::new(),
+        compile: Vec::new(),
+    };
+    let mut saw_code = false;
+    for line in text.lines() {
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        match key {
+            "full" => plan.full = value == "true",
+            "code" => {
+                plan.code = value == "true";
+                saw_code = true;
+            }
+            "test" => plan.test = names(value),
+            "compile" => plan.compile = names(value),
+            _ => {}
+        }
+    }
+    if !saw_code {
+        return Err("shared plan: missing code field".into());
+    }
+    Ok(plan)
+}
+
+/// `plan [--all]`: print the machine-readable selection plan without building anything.
+fn explain_plan(root: &Path, full: bool) -> Result<(), String> {
+    let files = changed_files(root, true)?;
+    print!("{}", plan_text(root, &files, full, "json")?);
+    Ok(())
 }
 
 /// How many trailing lines a failed step prints; the complete output is in its log.
@@ -450,50 +497,34 @@ fn check(root: &Path, all: bool) -> Result<(), String> {
     };
     let result = (|| {
         step(root, "rustfmt", &["fmt", "--all", "--", "--check"])?;
-        if all {
-            step(
-                root,
-                "clippy (workspace)",
-                &["clippy", "--workspace", "--tests", "--", "-D", "warnings"],
-            )?;
-            return step(root, "tests (workspace)", &["test", "--workspace"]);
-        }
         let files = changed_files(root, true)?;
-        let (test, compile) = affected(&files);
-        if test.is_empty() {
+        let plan = shared_plan(root, &files, all)?;
+        if plan.full {
+            println!("selection: full workspace (shared, config or unknown input)");
+        }
+        if !plan.code {
             println!("no crate changed (docs or harness only): nothing to build");
             return Ok(());
         }
         let mut pkgs = Vec::new();
-        for c in &test {
+        for c in &plan.test {
             pkgs.extend(["-p", c]);
         }
         let mut clippy = vec!["clippy"];
         clippy.extend(&pkgs);
         clippy.extend(["--tests", "--", "-D", "warnings"]);
-        step(
-            root,
-            &format!("clippy ({})", test.iter().copied().collect::<Vec<_>>().join(", ")),
-            &clippy,
-        )?;
+        step(root, &format!("clippy ({})", plan.test.join(", ")), &clippy)?;
         let mut t = vec!["test"];
         t.extend(&pkgs);
-        step(
-            root,
-            &format!("tests ({})", test.iter().copied().collect::<Vec<_>>().join(", ")),
-            &t,
-        )?;
-        if !compile.is_empty() {
+        step(root, &format!("tests ({})", plan.test.join(", ")), &t)?;
+        if !plan.compile.is_empty() {
             let mut c = vec!["check", "--tests"];
-            for p in &compile {
+            for p in &plan.compile {
                 c.extend(["-p", p]);
             }
             step(
                 root,
-                &format!(
-                    "compile check of dependents ({})",
-                    compile.iter().copied().collect::<Vec<_>>().join(", ")
-                ),
+                &format!("compile check of dependents ({})", plan.compile.join(", ")),
                 &c,
             )?;
         }
@@ -1179,40 +1210,60 @@ version = \"1.0.0\"
         assert!(wasm_bindgen_problem(LOCK, None).unwrap_err().ends_with(fix));
     }
 
-    #[test]
-    fn a_sim_change_tests_the_sim_and_checks_what_depends_on_it() {
-        let (test, check) = affected(&["crates/sim/src/lib.rs".to_string()]);
-        assert_eq!(test.into_iter().collect::<Vec<_>>(), ["iwbtg-sim"]);
-        assert_eq!(
-            check.into_iter().collect::<Vec<_>>(),
-            ["iwbtg-client", "iwbtg-format", "iwbtg-tools"]
-        );
+    fn planned(paths: &[&str], full: bool) -> Plan {
+        let files: Vec<String> = paths.iter().map(|p| p.to_string()).collect();
+        shared_plan(&workspace_root(), &files, full).expect("shared plan")
     }
 
     #[test]
-    fn docs_only_builds_nothing_and_cargo_toml_builds_everything() {
-        assert!(
-            affected(&["README.md".to_string(), ".claude/stats.py".to_string()])
-                .0
-                .is_empty()
+    fn a_sim_change_tests_the_sim_and_checks_what_depends_on_it() {
+        let plan = planned(&["crates/sim/src/lib.rs"], false);
+        assert_eq!(plan.test, vec!["iwbtg-sim".to_string()]);
+        assert_eq!(
+            plan.compile,
+            vec![
+                "iwbtg-client".to_string(),
+                "iwbtg-format".to_string(),
+                "iwbtg-tools".to_string()
+            ]
         );
-        assert_eq!(affected(&["Cargo.lock".to_string()]).0.len(), CRATES.len());
+        assert!(plan.code && !plan.full);
+    }
+
+    #[test]
+    fn docs_only_builds_nothing_and_manifests_build_everything() {
+        let docs = planned(&["README.md", ".claude/stats.py"], false);
+        assert!(!docs.code && docs.test.is_empty() && docs.compile.is_empty());
+        let full = planned(&["Cargo.lock"], false);
+        assert!(full.full && full.code);
+        assert_eq!(full.test.len(), 6);
+        assert!(full.compile.is_empty());
     }
 
     #[test]
     fn prose_docs_do_not_rebuild_sim_but_test_fixtures_do() {
-        assert!(
-            affected(&["docs/architecture/client/shell.md".to_string()])
-                .0
-                .is_empty()
-        );
+        assert!(!planned(&["docs/architecture/client/shell.md"], false).code);
         for path in include_str!("../test-docs.txt")
             .lines()
             .map(str::trim)
             .filter(|p| !p.is_empty() && !p.starts_with('#'))
         {
-            let (test, _) = affected(&[path.to_string()]);
-            assert!(test.contains("iwbtg-sim") && test.contains("iwbtg-format"));
+            let plan = planned(&[path], false);
+            assert!(
+                plan.test.contains(&"iwbtg-sim".to_string()),
+                "{path}: {:?}",
+                plan.test
+            );
+            assert!(
+                plan.test.contains(&"iwbtg-format".to_string()),
+                "{path}: {:?}",
+                plan.test
+            );
+            assert!(
+                plan.compile.contains(&"iwbtg-client".to_string()),
+                "{path}: {:?}",
+                plan.compile
+            );
         }
     }
 
