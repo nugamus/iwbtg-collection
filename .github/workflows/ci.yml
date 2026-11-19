@@ -63,7 +63,11 @@ jobs:
       - if: runner.os == 'Linux'
         run: cargo run -p iwbtg-tools --locked -- pkg fmt crates/sim/tests/golden/one_room.pkg --check
 
-  wasm32:
+  # The two wasm targets build and test the same crates but share no build artifacts, so they run as
+  # two jobs in parallel (#961). Sequential, the golden corpus alone took 8 min under wasmtime plus
+  # 5 min under node on a cold cache, and every auto-merge waited for both. Each job still runs
+  # every command the single `wasm32` job ran; none of them was dropped or moved to main/nightly.
+  wasm32-wasip1:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
@@ -81,18 +85,48 @@ jobs:
       # wasm32-wasip1 aborts on panic, and the WP0 stubs that are not merged yet panic. The format
       # integration tests that load whole packages (wp7a_*) go through them, so they run on
       # native targets only until WP11 removes the stubs.
+      # `cargo test -p iwbtg-sim` runs the golden corpus here too (tests/golden_corpus.rs): it is
+      # ~4 min under wasmtime on a warm cache and is most of this job's wall time.
       - run: cargo test -p iwbtg-sim --target wasm32-wasip1 --locked
       - run: cargo test -p iwbtg-format --lib --test fixtures --target wasm32-wasip1 --locked
+
+  wasm32-unknown-unknown:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Only main writes the cache: PR runs restore it and skip the slow save (Windows: minutes).
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo build -p iwbtg-sim -p iwbtg-format --target wasm32-unknown-unknown --locked
       # The client's browser build (it opens the UI gallery; docs/dev-setup.md, UI gallery in a browser).
       # Clippy compiles the whole crate, including the web-only code (storage.rs localStorage backend),
       # and replaces a plain `cargo build` of the client: same errors, no codegen, plus the lints.
       - run: cargo clippy -p iwbtg-client --target wasm32-unknown-unknown --locked -- -D warnings
       # The runner (.cargo/config.toml) is the wasm-bindgen CLI, which must match the lock file.
+      # The release tarball holds the same two binaries `cargo install wasm-bindgen-cli --locked`
+      # builds, but downloads in seconds instead of compiling for 1m38s on a cache miss (#961).
       - name: Install wasm-bindgen CLI at the locked version
         run: |
+          set -euo pipefail
           v=$(cargo metadata --locked --format-version 1 | jq -r '.packages[] | select(.name == "wasm-bindgen") | .version')
-          cargo install wasm-bindgen-cli --version "$v" --locked
+          name="wasm-bindgen-$v-x86_64-unknown-linux-musl"
+          base="https://github.com/wasm-bindgen/wasm-bindgen/releases/download/$v"
+          curl --fail --retry 3 --silent --show-error --location --output "$RUNNER_TEMP/$name.tar.gz" "$base/$name.tar.gz"
+          curl --fail --retry 3 --silent --show-error --location --output "$RUNNER_TEMP/$name.sha256sum" "$base/$name.tar.gz.sha256sum"
+          # The .sha256sum asset names the file with a `gh-release/` path prefix, so compare the
+          # digests rather than letting `sha256sum --check` look for that path here.
+          want=$(cut -d' ' -f1 "$RUNNER_TEMP/$name.sha256sum")
+          got=$(sha256sum "$RUNNER_TEMP/$name.tar.gz" | cut -d' ' -f1)
+          [ "$want" = "$got" ] || { echo "::error::checksum mismatch for $name.tar.gz"; exit 1; }
+          tar --extract --gzip --file "$RUNNER_TEMP/$name.tar.gz" --directory "$RUNNER_TEMP"
+          install --mode 755 "$RUNNER_TEMP/$name/wasm-bindgen" "$RUNNER_TEMP/$name/wasm-bindgen-test-runner" "$HOME/.cargo/bin/"
+          wasm-bindgen --version
+          wasm-bindgen-test-runner --version
+      # The golden corpus again, this time linked for wasm32-unknown-unknown and run under node.
       - run: cargo test -p iwbtg-sim --test wp1_determinism --test golden_corpus --target wasm32-unknown-unknown --locked
 
   # `iwbtg determinism report` on every target that can run the CLI; the next job requires the
@@ -171,7 +205,7 @@ jobs:
 
   # The one required check: green when every job above passed or was skipped for a docs-only change.
   ci-ok:
-    needs: [changes, native, wasm32, determinism-report, determinism-compare, sim-deps, licenses]
+    needs: [changes, native, wasm32-wasip1, wasm32-unknown-unknown, determinism-report, determinism-compare, sim-deps, licenses]
     if: always()
     runs-on: ubuntu-latest
     steps:
