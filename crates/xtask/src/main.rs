@@ -160,7 +160,11 @@ fn affected(files: &[String]) -> (BTreeSet<&'static str>, BTreeSet<&'static str>
     let workspace_wide = files.iter().any(|f| {
         matches!(
             f.as_str(),
-            "Cargo.toml" | "Cargo.lock" | "rust-toolchain.toml" | ".cargo/config.toml"
+            "Cargo.toml"
+                | "Cargo.lock"
+                | "rust-toolchain.toml"
+                | ".cargo/config.toml"
+                | "crates/xtask/test-docs.txt"
         )
     });
     for (dir, name, dependents) in CRATES {
@@ -171,9 +175,11 @@ fn affected(files: &[String]) -> (BTreeSet<&'static str>, BTreeSet<&'static str>
     }
     // Docs the sim tests read (doc examples, script API, format examples) count as sim/format input.
     if files.iter().any(|f| {
-        f.starts_with("docs/format/")
-            || f.starts_with("docs/architecture/")
-            || f.starts_with("docs/decisions/")
+        include_str!("../test-docs.txt")
+            .lines()
+            .map(str::trim)
+            .filter(|p| !p.is_empty() && !p.starts_with('#'))
+            .any(|prefix| f.starts_with(prefix))
     }) {
         test.insert("iwbtg-sim");
         test.insert("iwbtg-format");
@@ -683,6 +689,23 @@ version = \"1.0.0\"
                 .is_empty()
         );
         assert_eq!(affected(&["Cargo.lock".to_string()]).0.len(), CRATES.len());
+    }
+
+    #[test]
+    fn prose_docs_do_not_rebuild_sim_but_test_fixtures_do() {
+        assert!(
+            affected(&["docs/architecture/client/shell.md".to_string()])
+                .0
+                .is_empty()
+        );
+        for path in include_str!("../test-docs.txt")
+            .lines()
+            .map(str::trim)
+            .filter(|p| !p.is_empty() && !p.starts_with('#'))
+        {
+            let (test, _) = affected(&[path.to_string()]);
+            assert!(test.contains("iwbtg-sim") && test.contains("iwbtg-format"));
+        }
     }
 
     #[test]
