@@ -26,7 +26,7 @@
 
 ## Builds
 
-A cold build of the workspace is about 7 minutes, a warm incremental one seconds. CI runs the full check matrix in about 5 to 9 minutes on the shared runners (9 with a cold cache; the golden corpus on the two wasm targets is most of it, client/docs/dev-setup.md CI). So:
+A cold build of the workspace is about 7 minutes, a warm incremental one seconds. CI runs the full check matrix in about 5 to 9 minutes on the shared runners (9 to 15 with cold caches; the golden corpus on the two wasm targets is most of it, client/docs/dev-setup.md CI). So:
 
 - While working, build and test only what you touched: `cargo test -p <crate> --test it <file>::` (each crate's integration tests are one `it` executable, #517; a new test file must be listed in `tests/it.rs`). Before the PR run `cargo xtask check` once: rustfmt, clippy and tests of the crates the branch changed plus a compile check of their dependents (`--all` for the whole workspace). CI runs the rest. `cargo xtask repin` re-pins the hashes after a deliberate sim state change (a merge conflict in a pin file, `crates/xtask/pin-files.txt`: take either side, then repin; never hand-merge), `cargo xtask regen` regenerates schemas and script API docs, and `cargo xtask pr-body` drafts the PR body with the check's real output (#529).
 - Never change the build fingerprint: no `RUSTFLAGS`, `--config`, `CARGO_PROFILE_*` or feature flags that differ from the defaults. Each change rebuilds every dependency (about 5 minutes) and again when you switch back.
