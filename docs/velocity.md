@@ -2,7 +2,7 @@
 
 Tokens and hours per merged PR, one line per week. Numbers only: no transcript content, prompts or file contents belong here.
 
-Source: `python -I client/.claude/stats.py --summary --days 7` from the workspace root (it needs `gh` for the merged-PR count). The lead runs it once a week (lead routine) and appends one line to the table.
+Source: `python -I iwbtg-collection/.claude/stats.py --summary --days 7` from the workspace root (it needs `gh` for the merged-PR count). The lead runs it once a week (lead routine) and appends one line to the table.
 
 - **fresh** = input tokens plus cache writes, **out** = output tokens, **cache reads** are listed apart (cheap, but they grow with context). All in thousands per merged PR, summed over every lane and the lead.
 - **hours** = wall time minus time spent waiting for a message, per merged PR.

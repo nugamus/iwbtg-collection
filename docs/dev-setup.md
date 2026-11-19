@@ -4,43 +4,43 @@ How a dev machine is laid out, which tools it needs, and how to check it works. 
 
 ## Folder layout
 
-All three repos sit side by side in one workspace folder. CLAUDE.md files refer to each other with these relative paths (`../research`, `../games`), so keep the folder names exactly as below.
+All three repos sit side by side in one workspace folder. Runnable commands and CLAUDE.md use these checkout names. Some prose and architecture citations use the role names `client/`, `research/` and `games/`; they refer to the checkouts below. If your checkouts use the short names, substitute them consistently in commands and relative paths.
 
 ```
 IWBTG Collection/            workspace root, not a repo
   CLAUDE.md                  points to the three repos
   TEAM_LEAD_PROMPT.md        prompt that starts an agent-team lead (in no repo)
   worktrees/                 one git worktree per working agent (in no repo)
-  .claude/settings.json      plugins, MCP denylist, deny rules, archive guard, issue hooks (in no repo; copy of client/workspace/settings.json)
-  client/                    nugamus/iwbtg-collection: Bevy client, format spec, server, docs
-  games/                     nugamus/iwbtg-collection-games (private): ported packages, games/<game_id>/
-  research/                  nugamus/iwbtg-collection-research (private)
+  .claude/settings.json      plugins, MCP denylist, deny rules, archive guard, issue hooks (in no repo; copy of iwbtg-collection/workspace/settings.json)
+  iwbtg-collection/          nugamus/iwbtg-collection: Bevy client, format spec, server, docs
+  iwbtg-collection-games/    nugamus/iwbtg-collection-games (private): ported packages, games/<game_id>/
+  iwbtg-collection-research/ nugamus/iwbtg-collection-research (private)
     archive/  extracted/     original downloads and extraction output: gitignored, never committed or opened
     db/catalog.sqlite        catalog database: gitignored
     tools/                   gitignored research tools: gm8decompiler, gmksplitter, utmt-cli, opengmk
     build/packages/          converter output (format v0 research builds): gitignored
 ```
 
-Start Claude Code sessions from the workspace root. Its `.claude/settings.json` loads the archive guard (`research/.claude/hooks/guard_archive.py`) and the issue hooks (`client/.claude/hooks/issues.py`, the same file is in all three repos). Hooks load when a session starts, so restart Claude Code after changing them.
+Start Claude Code sessions from the workspace root. Its `.claude/settings.json` loads the archive guard (`iwbtg-collection-research/.claude/hooks/guard_archive.py`) and the issue hooks (`iwbtg-collection/.claude/hooks/issues.py`, the same file is in all three repos). Hooks load when a session starts, so restart Claude Code after changing them.
 
-The root settings file is in no repo. Its tracked copy is `client/workspace/settings.json`. On a new machine, copy it to `.claude/settings.json` in the workspace root. To change the settings, change the tracked copy through a PR, then copy it over. The session-start hook warns when the two differ.
+The root settings file is in no repo. Its tracked copy is `iwbtg-collection/workspace/settings.json`. On a new machine, copy it to `.claude/settings.json` in the workspace root. To change the settings, change the tracked copy through a PR, then copy it over. The session-start hook warns when the two differ.
 
-## Why `games/` has no packages yet
+## Why `iwbtg-collection-games/` has no packages yet
 
-That's expected. `iwc convert` (research) writes its packages to `research/build/packages/`, which is gitignored. They are research builds from extracted originals. A package only moves into `games/<game_id>/` when its port issue runs (games repo, milestones M3 and M5). On 2026-11-02, `research/build/packages/` held 20 packages.
+That's expected. `iwc convert` (research) writes its packages to `iwbtg-collection-research/build/packages/`, which is gitignored. They are research builds from extracted originals. A package only moves into `iwbtg-collection-games/<game_id>/` when its port issue runs (games repo, milestones M3 and M5). On 2026-11-02, `iwbtg-collection-research/build/packages/` held 20 packages.
 
 ## Toolchain
 
 | Tool | Version on the home PC | Notes |
 |---|---|---|
-| rustup | 1.29.2 | toolchain pinned by `client/rust-toolchain.toml` |
+| rustup | 1.29.2 | toolchain pinned by `iwbtg-collection/rust-toolchain.toml` |
 | rustc / cargo | 1.99.1 / 1.99.1 | targets installed: x86_64-pc-windows-msvc, wasm32-unknown-unknown. `wasm32-wasip1` is in rust-toolchain.toml; rustup adds it on first use |
-| Python | 3.12.9 | research venv at `research/.venv` |
+| Python | 3.12.9 | research venv at `iwbtg-collection-research/.venv` |
 | uv | 0.12.18 | |
 | gh | 2.102.0 | logged in as nugamus |
 | git | 2.52.0.windows.1 | |
 | Claude Code | 2.1.316 | |
-| OpenGMK tracer | `research/tools/opengmk/bin/gm8emulator.exe`, sha256 `d83371ba68900fa3…` | built from OpenGMK 9e4282e6 + `iwc-trace.patch`. The source checkout is also on disk in `tools/opengmk/src/`, only to rebuild the tracer: no agent opens, reads or greps it except to apply `iwc-trace.patch` and build, and never while writing specs or client code (research#28) |
+| OpenGMK tracer | `../iwbtg-collection-research/tools/opengmk/bin/gm8emulator.exe`, sha256 `d83371ba68900fa3…` | built from OpenGMK 9e4282e6 + `iwc-trace.patch`. The source checkout is also on disk in `tools/opengmk/src/`, only to rebuild the tracer: no agent opens, reads or greps it except to apply `iwc-trace.patch` and build, and never while writing specs or client code (research#28) |
 | REA | MCP server `rea`, available in sessions | `rea-linux` is blocked in settings |
 | cargo-about | 0.9.3 | generates `THIRD_PARTY_LICENSES`: `cargo install cargo-about --locked --features cli` |
 
@@ -76,9 +76,9 @@ Each client worktree builds its own `target/` folder: the first build there take
 - `SessionStart` (`issues.py start`): **does not fire.** None of the three teammates got the project status at startup.
 - `Stop` (`issues.py stop`): **not seen.** No teammate was held to a Findings line. Treat it as not firing.
 
-So a teammate runs the status hook by hand at the start (from the workspace root: `python -I client/.claude/hooks/issues.py start`; the output is JSON, read `additionalContext`) and ends every turn that changed files with `Findings: <issue links>` or `Findings: none`, whether or not a hook asks. The lead's own session still gets both hooks.
+So a teammate runs the status hook by hand at the start (from the workspace root: `python -I iwbtg-collection/.claude/hooks/issues.py start`; the output is JSON, read `additionalContext`) and ends every turn that changed files with `Findings: <issue links>` or `Findings: none`, whether or not a hook asks. The lead's own session still gets both hooks.
 
-**Archive guard timeout (#755).** The archive guard is registered with `onFailure: "block"`, so a timeout blocks the tool call instead of failing open. Measured on 2026-11-19 on a laptop (Intel Core Ultra 5 225H, 31 GB RAM, Python 3.14.7, Defender real-time protection on; not the home PC above): a bare `python -I -c pass` takes a median 25 ms, `guard_archive.py --test` 48 ms and a real hook payload 51 ms (max 60 ms) over 20 runs; four concurrent hook invocations median 46 ms, max 54 ms; twelve concurrent invocations max 210 ms; a never-seen copy of the hook, first run, 100 to 495 ms. The guard's own code is about 24 ms of that (importing `json` and `re`); interpreter startup and Defender scanning dominate. The 2026-11-13 team-run timeouts were therefore transient stalls, not steady-state cost: that day Defender updated its signatures at 08:39 and 10:58 (Defender Operational log), which can invalidate cached scan results, while several cargo builds wrote gigabytes and Defender scanned every produced executable (Build speed), so a cold `python.exe` start could take seconds. The timeout is now 30 s in the tracked copy and in `research/.claude/settings.json`: still bounded, still blocking on failure, and over 60x the worst measured start. The workspace-root `.claude/settings.json` is in no repo, so copy `client/workspace/settings.json` over it and restart Claude Code for the new value to load; until then `issues.py start` prints the drift warning.
+**Archive guard timeout (#755).** The archive guard is registered with `onFailure: "block"`, so a timeout blocks the tool call instead of failing open. Measured on 2026-11-19 on a laptop (Intel Core Ultra 5 225H, 31 GB RAM, Python 3.14.7, Defender real-time protection on; not the home PC above): a bare `python -I -c pass` takes a median 25 ms, `guard_archive.py --test` 48 ms and a real hook payload 51 ms (max 60 ms) over 20 runs; four concurrent hook invocations median 46 ms, max 54 ms; twelve concurrent invocations max 210 ms; a never-seen copy of the hook, first run, 100 to 495 ms. The guard's own code is about 24 ms of that (importing `json` and `re`); interpreter startup and Defender scanning dominate. The 2026-11-13 team-run timeouts were therefore transient stalls, not steady-state cost: that day Defender updated its signatures at 08:39 and 10:58 (Defender Operational log), which can invalidate cached scan results, while several cargo builds wrote gigabytes and Defender scanned every produced executable (Build speed), so a cold `python.exe` start could take seconds. The timeout is now 30 s in the tracked copy and in `iwbtg-collection-research/.claude/settings.json`: still bounded, still blocking on failure, and over 60x the worst measured start. The workspace-root `.claude/settings.json` is in no repo, so copy `iwbtg-collection/workspace/settings.json` over it and restart Claude Code for the new value to load; until then `issues.py start` prints the drift warning.
 
 **Screenshots come only from the client** (#822): on 2026-11-15 the ui teammate on #495, wanting to see the loading card live, took two OS screen captures of the user's main screen; they showed the desktop, not the game window. A teammate takes screenshots only with the client's own `--screenshot` flag (`WGPU_BACKEND=dx12` when the display is locked), never with an OS or desktop capture or a screen-capture tool. An agent cannot press keys in a live window either, so that behavior is covered by tests and by the user's check on `main`.
 
@@ -109,23 +109,23 @@ Measured on the home PC (Ryzen 7 7800X3D, 64 GB, NVMe) on 2026-11-05:
 Add-MpPreference -ExclusionPath "C:\Users\Nugamus\Desktop\Code Projects\IWBTG Collection\client\target","C:\Users\Nugamus\Desktop\Code Projects\IWBTG Collection\worktrees\*\target"
 ```
 
-Never exclude the whole workspace: `research/archive/` and `research/extracted/` hold untrusted downloads that Defender must keep scanning. A Windows Dev Drive (ReFS, Defender's performance mode) would help more, but means moving the workspace, which also moves every Claude Code transcript and memory path; not done.
+Never exclude the whole workspace: `../iwbtg-collection-research/archive/` and `../iwbtg-collection-research/extracted/` hold untrusted downloads that Defender must keep scanning. A Windows Dev Drive (ReFS, Defender's performance mode) would help more, but means moving the workspace, which also moves every Claude Code transcript and memory path; not done.
 
 Tried and not adopted (#532, 2026-11-05): Bevy's `dynamic_linking` feature cut a client rebuild after touching `view.rs` from 3.5 s to 2.4 s, but it is a second feature set, so every worktree would build Bevy twice (minutes and gigabytes) and tests and clippy would need the feature too. Splitting `iwbtg-client` into a library and a thin binary saves at most the binary's own compile (about 2 s of the 3.5 s) while the crate is about 4,000 lines. Look again when the client crate passes about 15,000 lines or a rebuild passes 15 s.
 
 What follows from it:
 
 - `.cargo/config.toml` links with `rust-lld` on Windows, and `Cargo.toml` keeps only line tables as debug info for our crates and none for dependencies: faster links and a smaller `target/`.
-- `.claude/hooks/build_guard.py` (PreToolUse, all sessions and teammates) blocks cargo commands that change the fingerprint or run in the background; `# build-guard: ok (<why>)` in the command overrides it. Self-test: `python -I client/.claude/hooks/build_guard.py --test`.
-- `.claude/hooks/conflict_guard.py` (PreToolUse, all sessions and teammates, #698) denies a `git commit` whose staged changes, or a `git push` whose unpushed commits, add a line starting with git's conflict markers (`<<<<<<< ` or `>>>>>>> `; a lone `=======` is a Markdown heading underline and passes). A resolve script and its commit in one command are checked before the script runs, so the push check is the one that catches what the script missed: fix the file, commit the fix, push again. While a conflict is unresolved it also guards the hash-pin files of `crates/xtask/pin-files.txt` (#949): `git add` of a pin file that matches neither side (hand-merged, or still with markers) is denied, and `git commit` or `git merge --continue` with unmerged pin files is denied with the fix, `cargo xtask repin` after taking either side; on a mixed conflict it also lists the other files to resolve by hand. `# conflict-guard: ok (<why>)` overrides it. Self-test: `python -I client/.claude/hooks/conflict_guard.py --test`.
+- `.claude/hooks/build_guard.py` (PreToolUse, all sessions and teammates) blocks cargo commands that change the fingerprint or run in the background; `# build-guard: ok (<why>)` in the command overrides it. Self-test: `python -I iwbtg-collection/.claude/hooks/build_guard.py --test`.
+- `.claude/hooks/conflict_guard.py` (PreToolUse, all sessions and teammates, #698) denies a `git commit` whose staged changes, or a `git push` whose unpushed commits, add a line starting with git's conflict markers (`<<<<<<< ` or `>>>>>>> `; a lone `=======` is a Markdown heading underline and passes). A resolve script and its commit in one command are checked before the script runs, so the push check is the one that catches what the script missed: fix the file, commit the fix, push again. While a conflict is unresolved it also guards the hash-pin files of `crates/xtask/pin-files.txt` (#949): `git add` of a pin file that matches neither side (hand-merged, or still with markers) is denied, and `git commit` or `git merge --continue` with unmerged pin files is denied with the fix, `cargo xtask repin` after taking either side; on a mixed conflict it also lists the other files to resolve by hand. `# conflict-guard: ok (<why>)` overrides it. Self-test: `python -I iwbtg-collection/.claude/hooks/conflict_guard.py --test`.
 - Anything that changes the build fingerprint (`RUSTFLAGS`, `--config`, `CARGO_PROFILE_*`, a different linker) rebuilds all dependencies, about 5 minutes, and again on the way back. Don't copy CI's `RUSTFLAGS`/`CARGO_INCREMENTAL` into local commands.
 - Keep worktrees per lane and warm (above). A cold worktree costs 5 to 10 minutes and 10 to 20 GB.
 - Locally, run the tests of what you changed; run `cargo xtask check` once before the PR (only the changed crates and their dependents; `--all` for everything) and let CI do the rest.
-- `python -I client/.claude/stats.py [--days N]` from the workspace root reads the Claude Code transcripts and prints, per session and teammate, in-window wall time, logical model calls (message fragments counted once), average context per call, cargo time as both an elapsed union and a sum across overlapping commands (the percentage uses the union), idle time (waiting for a message), slow cargo calls, unclosed tool calls, merges of `main`, conflicts, PRs and timestamp-unknown events. `--issues` lists the issues that took longest; `--summary --days 7` prints tokens and hours per merged PR per lane; `--test` runs synthetic accounting fixtures, not real transcripts. `--days` clips events and tool intervals to the window instead of counting whole sessions. The lead appends its totals once a week to `docs/velocity.md` (numbers only).
+- `python -I iwbtg-collection/.claude/stats.py [--days N]` from the workspace root reads the Claude Code transcripts and prints, per session and teammate, in-window wall time, logical model calls (message fragments counted once), average context per call, cargo time as both an elapsed union and a sum across overlapping commands (the percentage uses the union), idle time (waiting for a message), slow cargo calls, unclosed tool calls, merges of `main`, conflicts, PRs and timestamp-unknown events. `--issues` lists the issues that took longest; `--summary --days 7` prints tokens and hours per merged PR per lane; `--test` runs synthetic accounting fixtures, not real transcripts. `--days` clips events and tool intervals to the window instead of counting whole sessions. The lead appends its totals once a week to `docs/velocity.md` (numbers only).
 
 ## UI gallery in a browser
 
-The client's wasm32 build opens the UI gallery (`--ui-gallery` on native; [client architecture, UI](architecture/client/ui.md)). To run it in a browser, from `client/`:
+The client's wasm32 build opens the UI gallery (`--ui-gallery` on native; [client architecture, UI](architecture/client/ui.md)). To run it in a browser, from `iwbtg-collection/`:
 
 ```
 cargo build -p iwbtg-client --release --target wasm32-unknown-unknown
@@ -140,10 +140,10 @@ Then open http://127.0.0.1:8765/. `wasm-bindgen` must be the version in Cargo.lo
 From the workspace root:
 
 ```
-cd client
+cd iwbtg-collection
 cargo build --workspace
 python -I .claude/hooks/issues.py start
-python -I ../research/.claude/hooks/guard_archive.py --test
+python -I ../iwbtg-collection-research/.claude/hooks/guard_archive.py --test
 python -I .claude/hooks/conflict_guard.py --test
 cargo xtask doctor --scope all
 ```
@@ -184,7 +184,7 @@ The selected jobs run:
 
 **Measurements (2026-11-19).** A recent full-matrix run (44504103250) took 8m46s end to end; browser WASM was 509s, including 246s for determinism/golden tests. The server scaffold PR (#978 implementing #152, run 44501556236) spent 1,926s in Windows native checks (1,370s tests); it also changed shared workspace/lock inputs, so it still selects full coverage, while later server-code-only edits can use the smaller scope. The last 60 merged PRs had median 12.43 min open-to-merge, p90 50.78 min, median 154.5 changed lines and 5 files. These are baseline observations, not promises of post-change speed; measure the new critical path from fresh Actions results.
 
-The same checks locally, from `client/`:
+The same checks locally, from `iwbtg-collection/`:
 
 ```
 cargo clippy --workspace --tests -- -D warnings
@@ -197,7 +197,7 @@ Locally, run only what you changed: `cargo xtask check` selects changed crates, 
 CI cannot see the research repo, so trace fidelity is checked locally after each merge wave (docs/architecture/testing.md, CI and the fidelity sweep):
 
 ```
-IWBTG_RESEARCH=../research cargo xtask fidelity
+IWBTG_RESEARCH=../iwbtg-collection-research cargo xtask fidelity
 ```
 
 It prints a game x OK/OPEN/FAIL matrix and exits 1 when a case got worse than `crates/tools/fidelity-baseline.txt`; `--bless` rewrites the baseline after a deliberate change. The session-start hook (`.claude/hooks/issues.py start`) prints `FIDELITY STALE: ...` when commits touching `crates/sim` or `crates/format` landed on `origin/main` after the last sweep (recorded in `target/xtask/last-fidelity.txt`).
@@ -208,7 +208,7 @@ Without wasmtime, a wasm32-wasip1 test binary also runs under Node's WASI. Build
 
 - All three repos were behind GitHub; each now fast-forwards cleanly to `main`.
 - research had uncommitted trace tool work. It is saved as `backup/home-pc-2026-11-02-local-trace-work`; research#27 lands it.
-- `client/.claude/worktrees/` held six workflow worktrees with unpushed WP1, WP2, WP3, WP4a, WP7a and WP8a work. Each is saved as `backup/home-pc-2026-11-02-<wp>`, and its issue (#1, #2, #3, #4, #8, #10) points to it. #203 removes the worktrees.
+- `iwbtg-collection/.claude/worktrees/` held six workflow worktrees with unpushed WP1, WP2, WP3, WP4a, WP7a and WP8a work. Each is saved as `backup/home-pc-2026-11-02-<wp>`, and its issue (#1, #2, #3, #4, #8, #10) points to it. #203 removes the worktrees.
 - The root `.claude/settings.json` lacked the issue hooks, and they are now added. #202 added the tracked copy and the drift warning.
-- `research/tools/opengmk/src/` is kept only to rebuild the tracer; research/CLAUDE.md now says so (research#28).
+- `iwbtg-collection-research/tools/opengmk/src/` is kept only to rebuild the tracer; iwbtg-collection-research/CLAUDE.md now says so (research#28).
 - No originals, extraction output or database are tracked in any repo. `git status --ignored` shows them ignored in research.

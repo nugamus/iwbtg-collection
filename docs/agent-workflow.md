@@ -34,4 +34,4 @@ Do not preload the roadmap, all specs, every lane or historical plans for a boun
 
 The status hook reuses successful snapshots for at most 120 seconds; `python -I .claude/hooks/issues.py start --refresh` forces a live read. Re-read a specific issue/PR before claiming or merging; a cached dashboard is not an ownership decision. Cache failure never disables issue creation or the findings Stop check.
 
-Measure session costs with `python -I client/.claude/stats.py --summary --days 7` from the multi-repo workspace. Append aggregate numbers (no transcript content) to `docs/velocity.md`. CI scope and preserved gates are described in `docs/dev-setup.md`.
+Measure session costs with `python -I iwbtg-collection/.claude/stats.py --summary --days 7` from the multi-repo workspace. Append aggregate numbers (no transcript content) to `docs/velocity.md`. CI scope and preserved gates are described in `docs/dev-setup.md`.
