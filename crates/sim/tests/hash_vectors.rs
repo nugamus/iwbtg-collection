@@ -65,7 +65,29 @@ fn reals(nan_bits: u64) -> World {
     w
 }
 
-pub(crate) const VECTORS: [(&str, &str); 5] = [
+/// Vector 6: arrays (#984) in a global and an instance variable: flat, nested, empty and holding
+/// `None`, so an array hashes by its elements, not by a single tag.
+fn arrays() -> World {
+    let mut w = World::new(RoomId(0), 1);
+    add(&mut w, 0, 0.0, 0.0);
+    let flat = Value::array(vec![Value::Real(Real::new(1.0)), Value::Str("a".into())]).expect("flat array");
+    let nested = Value::array(vec![
+        Value::array(vec![Value::Real(Real::new(2.0))]).expect("inner array"),
+        Value::None,
+    ])
+    .expect("nested array");
+    let outer = Value::array(vec![flat, nested, Value::array(Vec::new()).expect("empty array")])
+        .expect("outer array");
+    w.globals.insert(VarId(0), outer);
+    let id = w.instances()[0].id;
+    w.get_mut(id).expect("instance").vars.insert(
+        VarId(1),
+        Value::array(vec![Value::Real(Real::new(3.5))]).expect("var array"),
+    );
+    w
+}
+
+pub(crate) const VECTORS: [(&str, &str); 6] = [
     (
         "empty",
         "38f25bd28b6c80877388754e0dacdcd99058316c15adff89845e770a700791ef",
@@ -86,6 +108,10 @@ pub(crate) const VECTORS: [(&str, &str); 5] = [
         "reals",
         "6b7c478a26c9afb5477ba65b703627667296fdd8c9ad277915d285318b10fb9d",
     ),
+    (
+        "arrays",
+        "39d090f46244377f7a5dfb684071877e41da11ccb5e5f27095a5d1e815fda7c0",
+    ),
 ];
 
 fn world(name: &str) -> World {
@@ -95,6 +121,7 @@ fn world(name: &str) -> World {
         "globals" => globals(),
         "rng" => rng(),
         "reals" => reals(f64::NAN.to_bits()),
+        "arrays" => arrays(),
         _ => unreachable!(),
     }
 }

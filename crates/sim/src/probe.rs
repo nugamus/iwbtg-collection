@@ -872,6 +872,8 @@ fn from_value(v: &Value) -> trace::Value {
         Value::Str(s) => trace::Value::Str(s.clone()),
         Value::Inst(id) => trace::Value::Int(i64::try_from(id.0).unwrap_or(i64::MAX)),
         Value::None => trace::Value::Empty,
+        // A trace cell holds one value and the recorder has no array column.
+        Value::Array(_) => trace::Value::Empty,
     }
 }
 

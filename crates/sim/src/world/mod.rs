@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 pub use api::{Flow, SpawnInit};
-pub use instance::{InstId, Instance, KindState, Value};
+pub use instance::{InstId, Instance, KindState, MAX_ARRAY_SIZE, Value};
 
 use crate::collide::grid::Grid;
 use crate::def::{GameDef, PartSystemDefId, RoomId, VarId};

@@ -439,7 +439,8 @@ impl Iws {
         engine.set_max_call_levels(32);
         engine.set_max_expr_depths(64, 32);
         engine.set_max_string_size(4096);
-        engine.set_max_array_size(10_000);
+        // One cap for stored and script arrays (#984).
+        engine.set_max_array_size(crate::world::MAX_ARRAY_SIZE);
         engine.set_max_map_size(1024);
         engine.set_max_variables(256);
         engine.set_max_functions(512);
