@@ -21,7 +21,7 @@
 //!   { frame = 3, save = "deaths", value = 2.0 },
 //! ]
 //! vars = { "player.x" = "kid.x" }   # original column -> probe expression in our names
-//! ignore = ["id", "sprite_index", "sprite_name"]
+//! ignore = ["id", "sprite_index", "sprite_name", "mask_index"]
 //! latch = { "global.tr_x" = [3, 20] }  # recorder `--gml` reads: the column holds the `vars` value
 //!                                    # of the frame before the last read frame (0 before the first)
 //! split = { "global.sv" = ["room:3", "x:3", "_:1"] }  # a byte-dump column (`"0 1 41 0 ..."`) read
@@ -50,7 +50,13 @@ pub const DEFAULT_AT: u32 = 2;
 
 /// Columns no case compares by default: ids and sprite indices never match the original's, and
 /// `GameDef` has no sprite names.
-pub const DEFAULT_IGNORE: [&str; 3] = ["id", "sprite_index", "sprite_name"];
+///
+/// `mask_index` is one of them (#925): since #919 the probe reads it as our sprite id (the sprite
+/// that owns the instance's mask), exactly like `sprite_index`, while the recorder logs the
+/// original's GM sprite id. Those ids never equal ours, so comparing the column would fail on
+/// every row. Mapping the GM ids to ours needs a sprite-id table the trace map does not carry (it
+/// maps sprite names), added for this one column; skipping it loses only the -1-versus-set signal.
+pub const DEFAULT_IGNORE: [&str; 4] = ["id", "sprite_index", "sprite_name", "mask_index"];
 
 /// One trace case: source trace, start point, first frame, traced object, DLL mode, setup,
 /// variable map, ignored columns.
@@ -679,6 +685,22 @@ mod tests {
                 "{r:?} -> {v}"
             );
         }
+    }
+
+    #[test]
+    fn default_ignore_skips_sprite_columns() {
+        let text = "source = \"g/t\"\nstart = { room = \"r\" }\nfirst_frame = 2\nobject = \"kid\"\n";
+        let case = TraceCase::parse(text).expect("parse");
+        for column in ["mask_index", "sprite_index", "sprite_name"] {
+            assert!(
+                case.ignore.iter().any(|i| i == column),
+                "{column} not skipped: {:?}",
+                case.ignore
+            );
+        }
+        // An explicit list replaces the default; it is not merged with it.
+        let case = TraceCase::parse(&format!("{text}ignore = [\"id\"]\n")).expect("parse");
+        assert_eq!(case.ignore, vec!["id".to_string()]);
     }
 
     #[test]
