@@ -1,6 +1,9 @@
 name: CI
 # Every PR runs this workflow so the required `ci-ok` check always reports (auto-merge, #528).
 # A change that touches only docs, Markdown, workspace/ or .claude/ skips the build jobs.
+# Every job sets `timeout-minutes` (#967): a wedged step fails and reports after minutes instead of
+# holding `ci-ok` and auto-merge for GitHub's 6 hour default. The values are about twice the slowest
+# measured run from #961 (wasm 9 to 12 minutes, native 15 on a cold cache, everything else under 3).
 on:
   pull_request:
   merge_group:
@@ -19,6 +22,7 @@ env:
 jobs:
   changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       code: ${{ steps.diff.outputs.code }}
     steps:
@@ -45,6 +49,8 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
+    # Slowest measured 15m00s (Linux, cold cache, #961): about twice that.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
       - run: rustup show   # installs the toolchain from rust-toolchain.toml
@@ -71,6 +77,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    # Slowest measured 9m12s (cold cache, #961); the golden corpus alone can take 8 min.
+    timeout-minutes: 25
     env:
       # Tests read fixtures through absolute paths, so the whole file system is visible to them.
       CARGO_TARGET_WASM32_WASIP1_RUNNER: wasmtime run --dir=/
@@ -94,6 +102,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    # Slowest measured 11m33s (cold cache, #961).
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
       - run: rustup show
@@ -144,6 +154,8 @@ jobs:
           - {target: x86_64-unknown-linux-gnu, os: ubuntu-latest}
           - {target: wasm32-wasip1, os: ubuntu-latest}
     runs-on: ${{ matrix.os }}
+    # Slowest measured 2m39s (wasm32-wasip1), with room for a cold build.
+    timeout-minutes: 15
     env:
       CARGO_TARGET_WASM32_WASIP1_RUNNER: wasmtime run --dir=/
     steps:
@@ -166,6 +178,7 @@ jobs:
   determinism-compare:
     needs: determinism-report
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -186,6 +199,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/cargo-deny
@@ -197,6 +211,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/cargo-deny
@@ -208,6 +223,7 @@ jobs:
     needs: [changes, native, wasm32-wasip1, wasm32-unknown-unknown, determinism-report, determinism-compare, sim-deps, licenses]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - env:
           RESULTS: ${{ join(needs.*.result, ' ') }}
