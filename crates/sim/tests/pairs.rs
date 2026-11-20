@@ -27,7 +27,7 @@ use iwbtg_sim::rules::collide::PairOrder;
 use iwbtg_sim::tick::{self, EventRun, Hooks};
 use iwbtg_sim::world::{Ctx, Flow, InstId, SimStatus};
 
-use crate::wp1_support::{Fx, builder, p, tokens_of};
+use crate::support::{Fx, builder, p, tokens_of};
 
 /// The full scan: the reference.
 const SCAN: Hooks = Hooks {

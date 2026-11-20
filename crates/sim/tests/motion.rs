@@ -1,6 +1,6 @@
 //! WP2 motion tests (docs/plans/sim-core.md 3.1, 12): coupling bits, friction, gravity vector,
 //! the fall table, non-finite setters. Values come from the CLONE_SPEC motion section and the
-//! recorder traces it cites; trace-reading checks are in `wp2_traces.rs`.
+//! recorder traces it cites; trace-reading checks are in `motion_traces.rs`.
 
 mod wp2 {
     use iwbtg_sim::SimError;

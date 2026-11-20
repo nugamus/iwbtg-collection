@@ -9,4 +9,4 @@ A sign that raises a text box (JUN, LT, ANI, FT, XIA). Source: `crates/sim/src/b
 
 The sim emits `BuiltinOutput::TextBox { text }` on every tick the sign speaks; showing, wrapping and closing the box is the client's. Nothing reads it back.
 
-**Loading.** Both params load on an object file or a placed instance (`text` is free text). Tests in `crates/sim/tests/wp6c_misc_objects.rs`.
+**Loading.** Both params load on an object file or a placed instance (`text` is free text). Tests in `crates/sim/tests/builtins_misc.rs`.

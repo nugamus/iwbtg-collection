@@ -9,4 +9,4 @@ Part of [the simulation](../sim.md).
 - No `usize` in hashed state, no pointers, no hash-map order. The output queue and the broadphase grid are not hashed.
 - `setup_applied` is hashed, so a trace run that used setup actions can never match a clean verification.
 - Checkpoints store the first 16 bytes.
-- `hash::HASH_LAYOUT` versions the encoding. Adding fields to a state struct (for example `KidGlobals`) changes the hash but not the layout: re-pin the vectors in `tests/hash_vectors.rs` and the final hash in `tests/wp1_determinism.rs`. Bump `HASH_LAYOUT` only when the encoding itself changes.
+- `hash::HASH_LAYOUT` versions the encoding. Adding fields to a state struct (for example `KidGlobals`) changes the hash but not the layout: re-pin the vectors in `tests/hash_vectors.rs` and the final hash in `tests/determinism.rs`. Bump `HASH_LAYOUT` only when the encoding itself changes.

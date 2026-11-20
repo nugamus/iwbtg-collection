@@ -5,9 +5,9 @@
 
 ## Build and test
 
-- One former test file: `cargo test -p iwbtg-sim --test it <file>::`; unit tests: `--lib <module>::`.
-- Determinism: `--test wp1_determinism`, `--test golden_corpus`.
-- A deliberate change to hashed state re-pins three things (and only then) with `cargo xtask repin`: `tests/hash_vectors.rs`, the `FINAL_HASH` in `tests/wp1_determinism.rs` and the golden corpus. `HASH_LAYOUT` changes only with the encoding. A merge conflict in a pin file (`crates/xtask/pin-files.txt`): take either side and repin, never hand-merge.
+- One test file is one module of the `it` binary: `cargo test -p iwbtg-sim --test it <file>::`; unit tests: `--lib <module>::`. Files are named after the module they test (`room.rs`, `kid_b_core.rs`, `builtins_drop_flip_edge.rs`); the shared fixtures are `support.rs` and `collide_support/`.
+- Determinism: `--test wp1_determinism` (the target keeps that name for CI; its file is `tests/determinism.rs`), `--test golden_corpus`.
+- A deliberate change to hashed state re-pins three things (and only then) with `cargo xtask repin`: `tests/hash_vectors.rs`, the `FINAL_HASH` in `tests/determinism.rs` and the golden corpus. `HASH_LAYOUT` changes only with the encoding. A merge conflict in a pin file (`crates/xtask/pin-files.txt`): take either side and repin, never hand-merge.
 - Script conformance: `UPDATE_CONFORMANCE=1 cargo test -p iwbtg-sim --test it script_conformance::`.
 
 ## Pitfalls seen before
