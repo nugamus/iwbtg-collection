@@ -25,7 +25,8 @@ use iwbtg_sim::def::{
     Builtin, ClassMask, EngineKind, GameDef, GlobalIndex, GroupId, KindDef, KindId, KindVariant, Mask,
     MaskId, MaskSet, MaskShape, NameId, ParamValue, Params, PhysicsProfile, PlacedInstance, RankEntry,
     RankTable, ResetModel, RestartModel, RoomAction, RoomDef, RoomId, RoomRole, RoomWhen, ScriptDef,
-    ScriptId, SoundDef, SoundId, SpriteDef, SpriteId, VariantSel, ViewDef, variant_matches,
+    ScriptId, SoundDef, SoundId, SpriteDef, SpriteId, TimelineDef, TimelineId, VariantSel, ViewDef,
+    variant_matches,
 };
 use iwbtg_sim::input::Action;
 use iwbtg_sim::num::Real;
@@ -354,6 +355,10 @@ struct Loader<'a> {
     scripts: Vec<ScriptDef>,
     room_ids: BTreeMap<String, RoomId>,
     sounds: Vec<SoundDef>,
+    /// `timelines/<id>.toml`, loaded before kinds so the object `timeline` key resolves.
+    timelines: Vec<TimelineDef>,
+    /// Timeline name to its index in `timelines`.
+    timeline_ids: BTreeMap<String, TimelineId>,
     spec_cache: BTreeMap<Builtin, Option<&'static [ParamSpec]>>,
     ranks: RankTable,
     /// Kinds that got a rank after the listed entries (Trace, CR4).
@@ -399,6 +404,8 @@ impl<'a> Loader<'a> {
             scripts: Vec::new(),
             room_ids: BTreeMap::new(),
             sounds: Vec::new(),
+            timelines: Vec::new(),
+            timeline_ids: BTreeMap::new(),
             spec_cache: BTreeMap::new(),
             ranks: RankTable::default(),
             appended: BTreeSet::new(),
@@ -565,6 +572,17 @@ impl<'a> Loader<'a> {
         }
         self.diags.append(&mut d);
         self.sounds = sounds;
+        // Step 7 (WP7b): timelines before kinds, so the object `timeline` key resolves.
+        let mut d = Vec::new();
+        let timelines =
+            pending_call(&mut self.pending, || timelines::load(self.files, &mut d)).unwrap_or_default();
+        self.diags.append(&mut d);
+        self.timeline_ids = timelines
+            .iter()
+            .enumerate()
+            .filter_map(|(i, t)| Some((t.name.clone(), TimelineId(u32::try_from(i).ok()?))))
+            .collect();
+        self.timelines = timelines;
         // Step 3.
         self.builtin_kinds();
         self.load_objects();
@@ -602,8 +620,6 @@ impl<'a> Loader<'a> {
         let timing = self.timing();
         self.maps = self.map_timings(timing.as_ref());
         let mut d = Vec::new();
-        let timelines =
-            pending_call(&mut self.pending, || timelines::load(self.files, &mut d)).unwrap_or_default();
         let paths = pending_call(&mut self.pending, || paths::load(self.files, &mut d)).unwrap_or_default();
         self.diags.append(&mut d);
         // Step 8: cross-references not already resolved above.
@@ -657,7 +673,7 @@ impl<'a> Loader<'a> {
                 .and_then(|e| e.reset.as_ref())
                 .map_or_else(ResetModel::default, |r| r.model()),
             sounds: std::mem::take(&mut self.sounds),
-            timelines,
+            timelines: std::mem::take(&mut self.timelines),
             paths,
             particle_systems: std::mem::take(&mut self.particles),
             scripts: std::mem::take(&mut self.scripts),

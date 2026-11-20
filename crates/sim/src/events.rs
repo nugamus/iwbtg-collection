@@ -15,6 +15,7 @@
 //! go through [`Hooks`], so the pipeline can be tested with the `Probe` built-in before those
 //! WPs merge. [`Hooks::ENGINE`] is the real set.
 
+use std::collections::BTreeSet;
 use std::sync::LazyLock;
 
 use serde::{Deserialize, Serialize};
@@ -123,6 +124,9 @@ pub struct EventSet {
     pub room_end: bool,
     /// Bit `n`: user event `n`.
     pub user: u16,
+    /// Moment call names the kind's script handles (`moment_<name>`); the timeline supplies the
+    /// name at dispatch.
+    pub moments: BTreeSet<String>,
 }
 
 /// The rows of the tick pipeline (docs/architecture/sim/tick.md), for `run_phase` and `--stages` probe records.
@@ -1339,6 +1343,8 @@ pub fn probe_event_set() -> EventSet {
         room_start: true,
         room_end: true,
         user: 0xffff,
+        // The probe handles every event in its own handler; it does not consult the name set.
+        moments: BTreeSet::new(),
     }
 }
 

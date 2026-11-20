@@ -8,6 +8,7 @@
 //! builds a `Ctx` for the call and puts the world back, so a nested script (a spawned
 //! instance Create) parks it again. The world is always restored, also on errors.
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::inst::Inst;
@@ -17,7 +18,7 @@ use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
 use crate::rules::RunnerRules;
 use crate::sound::DllMode;
-use crate::world::{Ctx, Flow, InstId, World};
+use crate::world::{Ctx, Flow, InstId, Instance, World};
 
 /// Deepest nesting of script events (a Create that spawns an instance whose Create spawns...).
 const MAX_DEPTH: u32 = 8;
@@ -71,6 +72,15 @@ pub(crate) fn event_call(ev: &EventKind) -> Option<(&'static str, Option<Dynamic
         EventKind::EndOfPath => ("end_of_path", None),
         _ => return None,
     })
+}
+
+/// The script function a moment calls: the running timeline's `call` for `step` becomes
+/// `moment_<call>`. Moments are not in [`event_call`] because the name lives in the timeline.
+fn moment_call(def: &GameDef, inst: &Instance, step: u32) -> Option<String> {
+    let run = inst.timeline.as_ref()?;
+    let timeline = def.timelines.get(run.timeline.index()?)?;
+    let index = timeline.moments.iter().position(|m| *m == step)?;
+    timeline.calls.get(index).map(|call| format!("moment_{call}"))
 }
 
 impl ScriptRuntime {
@@ -151,6 +161,16 @@ impl ScriptRuntime {
         set.animation_end = has("animation_end", 0);
         set.room_start = has("room_start", 0);
         set.room_end = has("room_end", 0);
+        set.moments = script
+            .fns
+            .iter()
+            .filter_map(|(name, arity)| {
+                (*arity == 0)
+                    .then_some(name.as_str())
+                    .and_then(|n| n.strip_prefix("moment_"))
+                    .map(str::to_owned)
+            })
+            .collect();
         set
     }
 }
@@ -176,11 +196,22 @@ impl ScriptHost for ScriptRuntime {
         let Some(script) = sid.index().and_then(|n| inner.scripts.get(n)) else {
             return Err(plain(format!("kind has unknown script {}", sid.0)));
         };
-        let Some((fname, arg)) = event_call(ev) else {
-            return Ok(Flow::Continue);
+        let (fname, arg): (Cow<'_, str>, Option<Dynamic>) = match ev {
+            EventKind::Moment(step) => {
+                let Some(name) = moment_call(ctx.def, inst, *step) else {
+                    return Ok(Flow::Continue);
+                };
+                (Cow::Owned(name), None)
+            }
+            _ => {
+                let Some((name, arg)) = event_call(ev) else {
+                    return Ok(Flow::Continue);
+                };
+                (Cow::Borrowed(name), arg)
+            }
         };
         let arity = usize::from(arg.is_some());
-        if !script.fns.contains(&(fname.to_owned(), arity)) {
+        if !script.fns.contains(&(fname.to_string(), arity)) {
             return Ok(Flow::Continue);
         }
         let shared = &inner.iws.shared;
@@ -208,7 +239,7 @@ impl ScriptHost for ScriptRuntime {
             inner
                 .iws
                 .engine
-                .call_fn_with_options::<Dynamic>(opts, &mut scope, &script.ast, fname, args)
+                .call_fn_with_options::<Dynamic>(opts, &mut scope, &script.ast, fname.as_ref(), args)
                 .map(|_| Flow::Continue)
                 .map_err(|e| {
                     let mut d = script_error(&e);

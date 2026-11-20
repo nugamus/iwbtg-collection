@@ -1100,6 +1100,96 @@ fn a_scripted_object_runs_in_a_room() {
     assert_eq!(again.state_hash(), hash, "two runs hash the same");
 }
 
+/// A scripted `@mover` with the object `timeline` key and two moment handlers.
+pub(crate) fn timeline_package(timeline: &str) -> PackageFiles {
+    let order = ORDER.replace("\"playerface\",", "\"playerface\", \"@mover\",");
+    package(|f| {
+        set(f, "game.toml", manifest(&order, "").into_bytes());
+        let stage = STAGE1.replace(
+            "  { kind = \"warp\", x = 768, y = 512, room_to = \"title\" },\n",
+            "  { kind = \"warp\", x = 768, y = 512, room_to = \"title\" },\n  { kind = \"@mover\", x = 100, y = 100 },\n",
+        );
+        set(f, "rooms/stage1.toml", stage.into_bytes());
+        f.push((
+            "objects/mover.toml".into(),
+            format!("script = \"mover\"\nsprite = \"block\"\ntimeline = \"{timeline}\"\n").into_bytes(),
+        ));
+        f.push((
+            "timelines/phases.toml".into(),
+            b"moments = [{ t = 0, call = \"intro\" }, { t = 2, call = \"wave\" }]\n".to_vec(),
+        ));
+        f.push((
+            "scripts/mover.rhai".into(),
+            b"fn create() { this.x = 100.0; }\nfn moment_intro() { this.y = 42.0; }\nfn moment_wave() { this.y = 24.0; }\n"
+                .to_vec(),
+        ));
+    })
+}
+
+#[test]
+fn an_object_timeline_key_loads_into_the_kind_and_its_moments_reach_the_script() {
+    use iwbtg_sim::input::InputFrame;
+
+    let (def, _) = load_ok(&timeline_package("phases"), STRICT);
+    let (mover_kind, mover) = kind_named(&def, "@mover");
+    let timeline = mover.timeline.expect("@mover starts a timeline");
+    assert_eq!(def.timelines[timeline.index().unwrap()].name, "phases");
+    assert!(!mover.params.0.contains_key("timeline"), "the key is not a param");
+    assert_eq!(
+        mover
+            .events
+            .moments
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        ["intro", "wave"],
+        "the script's moment handlers are in the kind's event set"
+    );
+
+    let stage = RoomId(def.rooms.iter().position(|r| r.name == "stage1").unwrap() as u32);
+    let mut sim = iwbtg_sim::Sim::new(
+        std::sync::Arc::new(def),
+        iwbtg_sim::SimOptions {
+            start: iwbtg_sim::StartPoint::Room {
+                room: stage,
+                difficulty: 0,
+            },
+            seed: 1,
+            dll_mode: iwbtg_sim::sound::DllMode::Stub,
+            mode: iwbtg_sim::stripped::PlayMode::Original,
+            map: None,
+        },
+    )
+    .expect("the sim starts");
+    let y = |sim: &iwbtg_sim::Sim| {
+        sim.world()
+            .instances()
+            .iter()
+            .find(|i| i.kind == mover_kind)
+            .expect("mover")
+            .m
+            .y()
+            .get()
+    };
+    assert_eq!(y(&sim), 100.0, "created at y 100, no moment yet");
+    sim.step(InputFrame::EMPTY);
+    assert_eq!(y(&sim), 42.0, "moment_intro runs on the first tick");
+    sim.step(InputFrame::EMPTY);
+    sim.step(InputFrame::EMPTY);
+    assert_eq!(y(&sim), 24.0, "moment_wave runs at t = 2");
+}
+
+#[test]
+fn an_unknown_object_timeline_is_an_error() {
+    let r = load_report(&timeline_package("missing"), STRICT);
+    assert!(!r.ok());
+    assert!(
+        render(&r).contains("unknown timeline `missing`"),
+        "{}",
+        render(&r)
+    );
+}
+
 #[test]
 fn sprite_pngs_follow_the_order_of_the_loaded_sprites() {
     let files = with_pack(|_| {});
