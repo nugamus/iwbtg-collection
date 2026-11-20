@@ -595,6 +595,9 @@ fn enter<H: RoomHost + ?Sized>(
     to: RoomId,
 ) -> Result<(), SimError> {
     let room = room_def(ctx, to)?;
+    // The previous room's GM instance list order: the carried persistent instances keep it after
+    // the new room's placed ones (research#142).
+    let previous = ctx.w.take_room_entry();
 
     // Steps 2 and 3: split into carried (persistent and active) and left behind.
     let (carried, left): (Vec<Instance>, Vec<Instance>) = ctx
@@ -640,6 +643,7 @@ fn enter<H: RoomHost + ?Sized>(
     emit(ctx, RoomOutput::Entered { from, to });
 
     // Step 4: placed instances in file order, params before Create (inside spawn).
+    let mut placed = Vec::new();
     if !restoring {
         let stripped = &ctx.def.stripped;
         for p in &room.instances {
@@ -668,10 +672,13 @@ fn enter<H: RoomHost + ?Sized>(
                 run_create: true,
                 gm_id,
             };
-            host.spawn(ctx, p.kind, p.x, p.y, init)?;
+            placed.push(host.spawn(ctx, p.kind, p.x, p.y, init)?);
             stop_if_halted(ctx)?;
         }
     }
+    // The GM instance list order (research#142): this room's placed instances in file order, then
+    // the carried persistent ones in their previous order, then everything created during entry.
+    ctx.w.set_room_entry(&placed, &previous);
 
     // Step 5: Game Start, first room only. No kind declares it (no game in the 20 uses it),
     // so every instance gets it.

@@ -6,6 +6,8 @@
 //! not creation order (CLONE_SPEC, Instances, "Placed instance ids"). WP0 ships this working
 //! version; WP1 owns it.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use super::{InstId, Instance, World};
 use crate::collide::grid::Grid;
 use crate::def::GameDef;
@@ -68,9 +70,73 @@ impl World {
                 })?,
             _ => self.instances.len(),
         };
-        self.grid.mark_moved(inst.id);
+        // The GM instance list's room-entry sequence: every instance is appended when it enters
+        // the room (research#142). The room change re-ranks the carried and placed instances
+        // (World::set_room_entry); later creations keep this creation order.
+        let id = inst.id;
+        let rank = self.next_entry;
+        self.next_entry = self
+            .next_entry
+            .checked_add(1)
+            .ok_or_else(|| SimError::overflow("next_entry"))?;
+        self.room_entry.insert(id, rank);
+        self.grid.mark_moved(id);
         self.instances.insert(at, inst);
         Ok(())
+    }
+
+    /// The place of `id` in the room-entry sequence (research#142). `u64::MAX` when the id has no
+    /// place, which only a world built before the sequence existed could have; it then sorts
+    /// after every ranked instance, by id.
+    pub(crate) fn entry_rank(&self, id: InstId) -> u64 {
+        self.room_entry.get(&id).copied().unwrap_or(u64::MAX)
+    }
+
+    /// Starts a room entry: returns the previous room's entry sequence, which
+    /// [`World::set_room_entry`] uses to keep the carried persistent instances in their old list
+    /// order (research#142). The new room's instances are ranked from 0 as they are inserted.
+    pub(crate) fn take_room_entry(&mut self) -> BTreeMap<InstId, u64> {
+        self.next_entry = 0;
+        std::mem::take(&mut self.room_entry)
+    }
+
+    /// Fixes the room entry sequence after the new room's placed instances exist (room change
+    /// step 4): `placed` in room-file order, then the ids `previous` still stores — the carried
+    /// persistent instances — in their old list order, then everything created during entry in
+    /// creation order (research#142).
+    pub(crate) fn set_room_entry(&mut self, placed: &[InstId], previous: &BTreeMap<InstId, u64>) {
+        let mut entry = BTreeMap::new();
+        let mut rank = 0u64;
+        let push = |entry: &mut BTreeMap<InstId, u64>, rank: &mut u64, id: InstId| {
+            entry.insert(id, *rank);
+            *rank += 1;
+        };
+        for id in placed {
+            if self.get(*id).is_some() {
+                push(&mut entry, &mut rank, *id);
+            }
+        }
+        let mut carried: Vec<(u64, InstId)> = previous
+            .iter()
+            .filter(|(id, _)| !entry.contains_key(id) && self.get(**id).is_some())
+            .map(|(id, r)| (*r, *id))
+            .collect();
+        carried.sort_unstable();
+        for (_, id) in carried {
+            push(&mut entry, &mut rank, id);
+        }
+        let mut created: Vec<(u64, InstId)> = self
+            .room_entry
+            .iter()
+            .filter(|(id, _)| !entry.contains_key(id))
+            .map(|(id, r)| (*r, *id))
+            .collect();
+        created.sort_unstable();
+        for (_, id) in created {
+            push(&mut entry, &mut rank, id);
+        }
+        self.room_entry = entry;
+        self.next_entry = rank;
     }
 
     /// Re-buckets the instances `get_mut` and `insert` marked as moved (`Grid::flush`, plan
@@ -90,9 +156,12 @@ impl World {
         Ok(())
     }
 
-    /// Removes dead instances, keeping the order of the rest (tick row 14).
+    /// Removes dead instances, keeping the order of the rest (tick row 14), and forgets their
+    /// room-entry rank.
     pub fn sweep(&mut self) {
         self.instances.retain(|i| i.alive);
+        let alive: BTreeSet<InstId> = self.instances.iter().map(|i| i.id).collect();
+        self.room_entry.retain(|id, _| alive.contains(id));
     }
 }
 
@@ -123,6 +192,63 @@ mod tests {
         assert!(w.get(InstId(5)).is_none());
         let stale = Instance::new(a, KindId(0), 0, Real::ZERO, Real::ZERO);
         assert!(w.insert(stale).is_err(), "an id in use is refused");
+    }
+
+    /// The GM instance list order (research#142): depth largest first, then room entry — the
+    /// room's placed instances in file order, the carried persistent ones in their old order,
+    /// then the instances created during the room.
+    #[test]
+    fn the_instance_list_is_depth_then_room_entry() {
+        use std::collections::BTreeMap;
+
+        use crate::def::ClassMask;
+        use crate::rules::TickRules;
+
+        let mut w = World::new(RoomId(0), 1);
+        // The first room: a persistent instance created at boot, then the room's placed one.
+        let carried = w.alloc_id().unwrap();
+        let mut boot = Instance::new(carried, KindId(0), 0, Real::ZERO, Real::ZERO);
+        boot.persistent = true;
+        w.insert(boot).unwrap();
+        let first_placed = w.alloc_id().unwrap();
+        w.insert(Instance::new(first_placed, KindId(1), 0, Real::ZERO, Real::ZERO))
+            .unwrap();
+        w.set_room_entry(&[first_placed], &BTreeMap::new());
+        assert_eq!(w.instance_list(), [first_placed, carried]);
+
+        // Room change: everything is marked dead and swept, the persistent instance is carried
+        // into the new room and re-inserted (before the placed ones, as room.rs does), then the
+        // room places one instance at another depth and one at the first one's, and creates one.
+        let previous = w.take_room_entry();
+        let carried_inst = w.get(carried).unwrap().clone();
+        w.get_mut(first_placed).unwrap().alive = false;
+        w.get_mut(carried).unwrap().alive = false;
+        w.sweep();
+        w.insert(carried_inst.clone()).unwrap();
+        let placed_deep = w.alloc_id().unwrap();
+        let mut deep = Instance::new(placed_deep, KindId(2), 0, Real::ZERO, Real::ZERO);
+        deep.depth = Real::new(5.0);
+        w.insert(deep).unwrap();
+        let placed_flat = w.alloc_id().unwrap();
+        let mut flat = Instance::new(placed_flat, KindId(3), 0, Real::ZERO, Real::ZERO);
+        flat.classes = ClassMask::BLOCK;
+        w.insert(flat).unwrap();
+        let created = w.alloc_id().unwrap();
+        w.insert(Instance::new(created, KindId(4), 0, Real::ZERO, Real::ZERO))
+            .unwrap();
+        w.set_room_entry(&[placed_deep, placed_flat], &previous);
+
+        assert_eq!(
+            w.instance_list(),
+            [placed_deep, placed_flat, carried, created],
+            "depth first, then placed in file order, the carried persistent one, then creations"
+        );
+
+        // `first_of` follows the list: the placed instance, although the carried one has the
+        // lowest id and the dispatch order may rank it first.
+        w.get_mut(carried).unwrap().classes = ClassMask::BLOCK;
+        let rules = TickRules::default();
+        assert_eq!(w.first_of(ClassMask::BLOCK, &rules), Some(placed_flat));
     }
 
     #[test]

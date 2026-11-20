@@ -151,16 +151,40 @@ impl World {
         self.instances.iter().filter(|i| i.alive)
     }
 
+    /// The GM instance list order (research#142): every stored instance, alive or destroyed this
+    /// tick, depth largest first, then the order the instances entered the room — the room's
+    /// placed instances in file order, the carried persistent ones in their previous list order,
+    /// then the instances created during the room. `with (all)`, `instance_id[]`,
+    /// `instance_count` and the first-instance queries all use this one order, not the event
+    /// dispatch order (R2) and not id order.
+    pub fn instance_list(&self) -> Vec<InstId> {
+        let mut keyed: Vec<(u64, u64, InstId)> = self
+            .instances
+            .iter()
+            .map(|i| (events::depth_desc(i.depth), self.entry_rank(i.id), i.id))
+            .collect();
+        keyed.sort_unstable();
+        keyed.into_iter().map(|(_, _, id)| id).collect()
+    }
+
     /// "The first" active instance whose classes intersect `class`, by
     /// [`TickRules::first_rule`] (R21). Instances destroyed this tick count only under
     /// `TickRules::dead_in_queries` (R22).
     pub fn first_of(&self, class: ClassMask, rules: &TickRules) -> Option<InstId> {
-        let ids = self
-            .instances
-            .iter()
-            .filter(|i| i.active && (i.alive || rules.dead_in_queries) && i.classes.intersects(class))
-            .map(|i| i.id);
-        self.first_among(ids, rules)
+        let accepts =
+            |i: &Instance| i.active && (i.alive || rules.dead_in_queries) && i.classes.intersects(class);
+        match rules.first_rule {
+            FirstRule::InstanceList => self
+                .instances
+                .iter()
+                .filter(|i| accepts(i))
+                .min_by_key(|i| (events::depth_desc(i.depth), self.entry_rank(i.id), i.id))
+                .map(|i| i.id),
+            FirstRule::LowestId | FirstRule::DispatchOrder => {
+                let ids = self.instances.iter().filter(|i| accepts(i)).map(|i| i.id);
+                self.first_among(ids, rules)
+            }
+        }
     }
 
     /// The first of `ids` by [`TickRules::first_rule`] (R21), for queries that found several
@@ -169,6 +193,9 @@ impl World {
     pub fn first_among(&self, ids: impl IntoIterator<Item = InstId>, rules: &TickRules) -> Option<InstId> {
         let found = ids.into_iter().filter_map(|id| self.get(id));
         match rules.first_rule {
+            FirstRule::InstanceList => found
+                .min_by_key(|i| (events::depth_desc(i.depth), self.entry_rank(i.id), i.id))
+                .map(|i| i.id),
             FirstRule::LowestId => found.map(|i| i.id).min(),
             FirstRule::DispatchOrder => found
                 .min_by_key(|i| events::order_key(i, rules.dispatch, events::Order::Dispatch))

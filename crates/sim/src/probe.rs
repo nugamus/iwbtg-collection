@@ -685,6 +685,10 @@ fn target_instance(
 /// `World::first_of` picks one for a class.
 pub(crate) fn first_of_target(def: &GameDef, w: &World, rules: &TickRules, t: Target) -> Option<InstId> {
     match rules.first_rule {
+        FirstRule::InstanceList => w.instance_list().into_iter().find(|id| {
+            w.get(*id)
+                .is_some_and(|i| i.alive && i.active && matches(def, i, t))
+        }),
         FirstRule::DispatchOrder => {
             events::dispatch_order(w, rules, |i| i.alive && i.active && matches(def, i, t))
                 .first()
@@ -709,6 +713,14 @@ pub(crate) fn nth_of_target(
 ) -> Option<InstId> {
     let n = usize::try_from(n).ok()?;
     match rules.first_rule {
+        FirstRule::InstanceList => w
+            .instance_list()
+            .into_iter()
+            .filter(|id| {
+                w.get(*id)
+                    .is_some_and(|i| i.alive && i.active && matches(def, i, t))
+            })
+            .nth(n),
         FirstRule::DispatchOrder => events::dispatch_order(w, rules, |i| matches(def, i, t))
             .get(n)
             .copied(),

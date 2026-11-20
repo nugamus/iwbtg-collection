@@ -227,6 +227,10 @@ impl<'a> Q<'a> {
         let tick = &self.rules.tick;
         let by = |key: fn(&Instance) -> (u16, InstId)| hits.iter().map(|i| key(i)).min().map(|k| k.1);
         match (tick.first_rule, tick.dispatch) {
+            (FirstRule::InstanceList, _) => hits
+                .iter()
+                .min_by_key(|i| (events::depth_desc(i.depth), self.w.entry_rank(i.id), i.id))
+                .map(|i| i.id),
             (FirstRule::LowestId, _) | (FirstRule::DispatchOrder, DispatchOrder::Creation) => {
                 by(|i| (0, i.id))
             }

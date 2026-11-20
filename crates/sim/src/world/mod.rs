@@ -49,6 +49,14 @@ pub struct World {
     /// mutable access goes through `World::get_mut`, which keeps the broadphase grid in step
     /// (docs/architecture/sim/collision.md); read them with `World::instances`.
     pub(in crate::world) instances: Vec<Instance>,
+    /// The GM instance list order (`World::instance_list`): each stored id's place in the room's
+    /// entry sequence — the placed instances in file order, then the carried persistent ones in
+    /// their previous list order, then the instances created during the room (research#142).
+    /// Depth sorts over it at query time. Not hashed (the state hash's [`crate::hash::HashView`]
+    /// leaves it out) and not part of the public model: the list itself is the order.
+    pub(in crate::world) room_entry: BTreeMap<InstId, u64>,
+    /// The next free value in `room_entry`; reset when a room change starts.
+    pub(in crate::world) next_entry: u64,
     /// The next runtime id to hand out (checked, docs/architecture/sim/determinism.md); starts at
     /// [`World::first_runtime_id`].
     pub next_id: u64,
@@ -131,6 +139,8 @@ impl World {
             room_tick: 0,
             room_speed: Real::ZERO,
             instances: Vec::new(),
+            room_entry: BTreeMap::new(),
+            next_entry: 0,
             next_id: InstId::FIRST.0,
             var_names: BTreeMap::new(),
             globals: BTreeMap::new(),

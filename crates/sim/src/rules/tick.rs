@@ -77,8 +77,12 @@ pub enum DispatchOrder {
 /// R21: which instance is "the first" (`World::first_of`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum FirstRule {
-    /// The first in [`TickRules::dispatch`] order. Default.
+    /// The first in the GM instance list (`World::instance_list`): depth largest first, then the
+    /// order the instances entered the room (research#142). Default.
     #[default]
+    InstanceList,
+    /// The first in [`TickRules::dispatch`] order (R2): object index (rank), then creation.
+    /// Alternative, kept for rule experiments.
     DispatchOrder,
     /// The lowest instance id.
     LowestId,

@@ -202,8 +202,9 @@ pub(crate) struct OrderKey {
     id: InstId,
 }
 
-/// `depth` as a key that sorts higher depths first. -0 and +0 are one depth.
-fn depth_desc(depth: Real) -> u64 {
+/// `depth` as a key that sorts higher depths first. -0 and +0 are one depth. The GM instance
+/// list order (`World::instance_list`, research#142) sorts on it too.
+pub(crate) fn depth_desc(depth: Real) -> u64 {
     let d = depth.get();
     let bits = if d == 0.0 { 0.0f64.to_bits() } else { d.to_bits() };
     let ascending = if bits >> 63 == 1 { !bits } else { bits | 1 << 63 };
