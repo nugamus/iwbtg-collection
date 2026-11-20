@@ -743,7 +743,13 @@ fn run_action<H: RoomHost + ?Sized>(
         RoomAction::DestroySelf => {}
         RoomAction::SetGlobalIndexed { var, index, value } => {
             let i = index_value(ctx, *index)?;
-            let id = run_time_var(ctx, &format!("{var}[{i}]"))?;
+            // GM8 aliases a global and its element 0 (research#130): `global.a[0] = v` writes
+            // `global.a`, not a separate `a[0]` variable; elements 1 and up are their own.
+            let id = if i == 0 {
+                run_time_var(ctx, var)?
+            } else {
+                run_time_var(ctx, &format!("{var}[{i}]"))?
+            };
             ctx.w.globals.insert(id, value.assigned());
         }
         RoomAction::SaveGame => save_game(ctx)?,
@@ -890,4 +896,78 @@ fn views_of(room: &RoomDef) -> [View; 8] {
 /// Queues a room output for the client (what `Ctx::emit` does).
 fn emit(ctx: &mut Ctx, out: RoomOutput) {
     ctx.w.output.push(OutputEvent::Room(out));
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::Sim;
+    use crate::SimOptions;
+    use crate::def::testing::GameDefBuilder;
+    use crate::sound::DllMode;
+
+    /// A one-room game whose creation code is `rows`, with `stage` interned at load as id 0.
+    fn alias_sim(rows: Vec<RoomAction>) -> Sim {
+        let mut b = GameDefBuilder::new("alias");
+        let mut room = RoomDef::new("stage", 800, 608);
+        room.on_create = rows;
+        let stage = b.room(room);
+        b.start_room(stage);
+        let mut def = b.build().unwrap();
+        def.var_names.insert("stage".to_owned(), VarId(0));
+        Sim::new(
+            Arc::new(def),
+            SimOptions {
+                start: StartPoint::Room {
+                    room: stage,
+                    difficulty: 0,
+                },
+                seed: 0,
+                dll_mode: DllMode::Model,
+                mode: PlayMode::Original,
+                map: None,
+            },
+        )
+        .unwrap()
+    }
+
+    fn indexed(index: u32, value: f64) -> RoomAction {
+        RoomAction::SetGlobalIndexed {
+            var: "stage".to_owned(),
+            index: GlobalIndex::Const(index),
+            value: Value::Real(Real::new(value)),
+        }
+    }
+
+    fn bare(value: f64) -> RoomAction {
+        RoomAction::SetGlobal {
+            var: VarId(0),
+            value: Value::Real(Real::new(value)),
+            difficulty: None,
+        }
+    }
+
+    /// GM8 aliases a global and its element 0 (research#130): `global.stage[0] = 7` is
+    /// `global.stage = 7`, and no `stage[0]` variable appears.
+    #[test]
+    fn writing_index_zero_writes_the_global() {
+        let sim = alias_sim(vec![indexed(0, 7.0)]);
+        let w = sim.world();
+        assert_eq!(w.globals.get(&VarId(0)), Some(&Value::Real(Real::new(7.0))));
+        assert!(!w.var_names.contains_key("stage[0]"), "{:?}", w.var_names);
+    }
+
+    /// The reverse holds too: a bare write is the element 0 that index 0 overwrites, while
+    /// element 1 stays its own run-time variable.
+    #[test]
+    fn writing_the_global_is_writing_index_zero() {
+        let sim = alias_sim(vec![bare(5.0), indexed(0, 9.0), indexed(1, 8.0)]);
+        let w = sim.world();
+        assert_eq!(w.globals.get(&VarId(0)), Some(&Value::Real(Real::new(9.0))));
+        let one = *w.var_names.get("stage[1]").expect("element 1 is a variable");
+        assert_eq!(w.globals.get(&one), Some(&Value::Real(Real::new(8.0))));
+        assert!(!w.var_names.contains_key("stage[0]"), "{:?}", w.var_names);
+    }
 }
