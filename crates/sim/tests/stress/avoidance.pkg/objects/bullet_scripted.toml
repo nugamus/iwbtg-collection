@@ -1,0 +1,4 @@
+#:schema ../../../../../../docs/format/schema/v0/object.schema.json
+# Variant B: the worst case. Every bullet runs its own Step script on every tick.
+script = "bullet_scripted"
+counts_as = ["killer"]
