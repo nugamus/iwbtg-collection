@@ -20,7 +20,9 @@
 //! `mode: stripped` (Play original or ranked, #561; a `.iwbr` replay's header says which, else
 //! `--mode`), `map: <id>`, the map whose timing chain (and in a stripped run, ranked start) the
 //! run used (#505; the header's, else `--map`, else the package's first map), and
-//! `start: <room id>`, the room the run started in. The run stops early when the sim ends (`game_end`) and
+//! `start: <room id>`, the room the run started in. `--room` starts an `.inputs` run in that room
+//! instead of the new-game room or the map's ranked start; a `.iwbr` replay carries its own
+//! start. The run stops early when the sim ends (`game_end`) and
 //! fails with exit code 2 when it halts. With Sudden Death (`--mods SD`, or a replay header
 //! carrying it) the run also stops on the tick of the first death, and a replay with inputs past
 //! that tick is rejected (docs/architecture/replay.md, "Mods").
@@ -29,7 +31,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use iwbtg_format::{LoadMode, PackageFiles, load_game};
-use iwbtg_sim::def::GameDef;
+use iwbtg_sim::def::{GameDef, RoomId};
 use iwbtg_sim::input::{Action, InputFrame, parse_action_inputs};
 use iwbtg_sim::mods::ModSet;
 use iwbtg_sim::replay::{CHECKPOINT_INTERVAL, Replay, StartMode, Trailer};
@@ -70,6 +72,10 @@ pub struct ReplayRunArgs {
     /// `[[maps]]`); a `.iwbr` replay carries its own, and a different `--map` is an error.
     #[arg(long)]
     pub map: Option<String>,
+    /// Start an `.inputs` run in this room; overrides the new-game room and the map's ranked
+    /// start in either play mode. An `.iwbr` replay carries its own start.
+    #[arg(long)]
+    pub room: Option<String>,
 }
 
 /// What to run: the frames and the setup a replay header (or the `.inputs` flags) gives.
@@ -159,10 +165,20 @@ pub fn main(args: &ReplayRunArgs) -> Result<(), ToolError> {
             args.start
         )));
     }
+    if args.room.is_some() && is_replay(&args.input) {
+        return Err(ToolError::Message(format!(
+            "{}: an .iwbr replay carries its own start; --room needs an .inputs file",
+            args.input.display()
+        )));
+    }
     let pkg = load_package(&args.pkg)?;
     let input = read_input(&args.input, args.seed, args.mods, args.mode, args.map.clone())?;
+    let start = match &args.room {
+        Some(room) => room_start(&pkg, room, args.difficulty)?,
+        None => input.start(args.difficulty),
+    };
     let options = SimOptions {
-        start: input.start(args.difficulty),
+        start,
         seed: input.seed,
         dll_mode: DllMode::Model,
         mode: input.mode,
@@ -171,6 +187,26 @@ pub fn main(args: &ReplayRunArgs) -> Result<(), ToolError> {
     let summary = run(&pkg, &input.frames, options, input.mods)?;
     print!("{}", summary.lines());
     Ok(())
+}
+
+/// `--room`: a start in that room. [`StartPoint::Room`] already overrides the new-game room and
+/// a stripped run's ranked start; cut rooms still redirect.
+fn room_start(pkg: &PackageFiles, room: &str, difficulty: u8) -> Result<StartPoint, ToolError> {
+    let def = load_strict(pkg, LoadMode::Strict)?;
+    let id = def
+        .rooms
+        .iter()
+        .enumerate()
+        .find(|(_, r)| r.name == room)
+        .and_then(|(index, _)| u32::try_from(index).ok())
+        .map(RoomId)
+        .ok_or_else(|| ToolError::Message(format!("no room `{room}` in package `{}`", def.id)))?;
+    Ok(StartPoint::Room { room: id, difficulty })
+}
+
+/// Whether a replay argument is a recorded `.iwbr` file (as opposed to an `.inputs` file).
+fn is_replay(path: &Path) -> bool {
+    path.extension().is_some_and(|e| e.eq_ignore_ascii_case("iwbr"))
 }
 
 /// Arguments of `iwbtg replay verify <pkg> <replay>`.
@@ -432,8 +468,7 @@ fn read_input(
     mode: PlayMode,
     map: Option<String>,
 ) -> Result<RunInput, ToolError> {
-    let is_replay = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("iwbr"));
-    if is_replay {
+    if is_replay(path) {
         let bytes =
             std::fs::read(path).map_err(|e| ToolError::Message(format!("{}: {e}", path.display())))?;
         let input = replay_input(&bytes, &path.display().to_string())?;
@@ -600,6 +635,66 @@ mod tests {
         assert_eq!(input.seed, 9);
         assert_eq!(input.mode, PlayMode::Stripped);
         assert_eq!(frames[2].held, iwbtg_sim::input::Action::Jump.bit());
+    }
+
+    /// The `stripped_example` fixture starts original runs in `intro` (`new_game_room`) and
+    /// stripped runs at `stage1` (`[stripped].start`); `--room title` beats both.
+    #[test]
+    fn a_room_start_overrides_the_new_game_and_ranked_starts() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../format/tests/valid/stripped");
+        let pkg = load_package(&dir).unwrap();
+        let frames = vec![InputFrame::default(); 3];
+        for mode in [PlayMode::Original, PlayMode::Stripped] {
+            let options = SimOptions {
+                start: room_start(&pkg, "title", 1).unwrap(),
+                seed: 0,
+                dll_mode: DllMode::Model,
+                mode,
+                map: None,
+            };
+            let s = run(&pkg, &frames, options, ModSet::NONE).unwrap();
+            assert_eq!(s.start_room, "title", "{mode:?}");
+        }
+        for (mode, want) in [(PlayMode::Original, "intro"), (PlayMode::Stripped, "stage1")] {
+            let options = SimOptions {
+                start: StartPoint::NewGame { difficulty: 0 },
+                seed: 0,
+                dll_mode: DllMode::Model,
+                mode,
+                map: None,
+            };
+            let s = run(&pkg, &frames, options, ModSet::NONE).unwrap();
+            assert_eq!(s.start_room, want, "without --room, {mode:?}");
+        }
+    }
+
+    #[test]
+    fn an_unknown_room_names_the_room_and_package() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../format/tests/valid/stripped");
+        let pkg = load_package(&dir).unwrap();
+        let err = room_start(&pkg, "no_such_room", 0).unwrap_err().to_string();
+        assert!(err.contains("no_such_room"), "{err}");
+        assert!(err.contains("stripped_example"), "{err}");
+    }
+
+    #[test]
+    fn a_room_option_needs_an_inputs_file() {
+        let path = std::env::temp_dir().join(format!("iwbtg-room-test-{}.iwbr", std::process::id()));
+        std::fs::write(&path, stripped_replay("medium")).unwrap();
+        let args = ReplayRunArgs {
+            pkg: Path::new(env!("CARGO_MANIFEST_DIR")).join("../format/tests/valid/stripped"),
+            input: path.clone(),
+            start: "new-game".into(),
+            difficulty: 0,
+            seed: 0,
+            mods: ModSet::NONE,
+            mode: PlayMode::Original,
+            map: None,
+            room: Some("title".into()),
+        };
+        let err = main(&args).unwrap_err().to_string();
+        std::fs::remove_file(&path).ok();
+        assert!(err.contains("--room"), "{err}");
     }
 
     /// A kid whose suicide press kills it, and frames that press it on tick 5.
