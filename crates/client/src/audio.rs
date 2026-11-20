@@ -51,6 +51,29 @@ pub struct AudioArgs {
     pub audio_locked: bool,
 }
 
+/// The audio's place in the module list (main.rs): its flags and plugin. The plugin is built in
+/// `prepare`, so `--audio-offset` and `--volume` are saved even when the package then fails to open.
+pub struct Registration;
+
+static AUDIO: std::sync::OnceLock<AudioPlugin> = std::sync::OnceLock::new();
+
+impl crate::registration::ClientModule for Registration {
+    type Args = AudioArgs;
+
+    fn prepare(args: &mut AudioArgs, _startup: &crate::registration::Startup) -> Result<(), String> {
+        let _ = AUDIO.set(AudioPlugin::new(args));
+        Ok(())
+    }
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: AudioArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(AUDIO.get().expect("audio prepare ran").clone());
+    }
+}
+
 /// The environment variable that mutes every run when set to anything but empty or `0`
 /// (agent sessions set it once).
 pub const MUTE_ENV: &str = "IWBTG_MUTE";
@@ -104,6 +127,7 @@ fn is_music(def: &GameDef, sound: SoundId, looping: bool) -> bool {
 }
 
 /// Sound, music and screen shake for each run (the loaded package's sounds, `shell`).
+#[derive(Clone)]
 pub struct AudioPlugin {
     offset_ms: u32,
     levels: Levels,

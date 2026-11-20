@@ -22,6 +22,6 @@
 
 - Testers play `crates/client/showcase.pkg` (#852); unit tests open the single-feature packages in `crates/client/tests/fixtures/`. A new client feature that a tester should see goes into the showcase (original art only; the Kid there is the one exception), its test into a fixture.
 - Game art (delicious fruit, key art) comes from the loaded package at run time; never commit extracted art here.
-- A new CLI flag or plugin goes in your own module (an `Args` group and a `Plugin`), not into `main.rs` and `view::run` arguments (#530), so lanes don't conflict there.
+- A new CLI flag or plugin goes in your own module (a `Registration`: its `Args` group and `Plugin`) plus one line in the module list in `main.rs`, not into `main.rs` itself or `view::run` arguments (#530, #948), so lanes don't conflict there.
 - CJK text needs the fallback font (#502); check a Japanese title in a screenshot.
 - Game select screenshots: copy `showcase.pkg` and the fixtures into a temp folder and pass it to `--select`; the first name in sort order is the one selected (`maps.pkg` has maps and key art, so copy it as `0-maps.pkg`). A `--screenshot` run keeps no stats, so no PB or Cleared mark shows (#149). In Git Bash give the client `cygpath -m` paths: a `cygpath -w` path with `\` joined on lost its separator and the screenshot did not save.

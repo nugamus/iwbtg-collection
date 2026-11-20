@@ -25,6 +25,23 @@ pub struct ImportPlugin {
     pub keep: bool,
 }
 
+/// The import's place in the module list (main.rs): its plugin. A `--screenshot` check keeps nothing.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = crate::registration::NoArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: crate::registration::NoArgs,
+        startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(ImportPlugin {
+            keep: startup.keep(),
+        });
+    }
+}
+
 impl Plugin for ImportPlugin {
     fn build(&self, app: &mut App) {
         if self.keep {

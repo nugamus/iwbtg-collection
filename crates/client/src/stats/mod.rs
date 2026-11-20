@@ -288,6 +288,23 @@ pub struct StatsPlugin {
     pub keep: bool,
 }
 
+/// The stats' place in the module list (main.rs): their plugin. A `--screenshot` check keeps none.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = crate::registration::NoArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: crate::registration::NoArgs,
+        startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(StatsPlugin {
+            keep: startup.keep(),
+        });
+    }
+}
+
 impl Plugin for StatsPlugin {
     fn build(&self, app: &mut App) {
         let store = if self.keep { Store::data() } else { None };

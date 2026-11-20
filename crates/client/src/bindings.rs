@@ -981,6 +981,43 @@ pub struct BindingsArgs {
     pub show_bindings: bool,
 }
 
+/// The bindings' place in the module list (main.rs): its flags, its loaded bindings and its plugin.
+pub struct Registration;
+
+static LOADED: std::sync::OnceLock<Bindings> = std::sync::OnceLock::new();
+
+impl crate::registration::ClientModule for Registration {
+    type Args = BindingsArgs;
+
+    fn prepare(
+        args: &mut BindingsArgs,
+        startup: &crate::registration::Startup,
+    ) -> Result<(), String> {
+        let _ = LOADED.set(load(args, startup.isolated)?);
+        Ok(())
+    }
+
+    fn standalone(
+        args: &BindingsArgs,
+        _startup: &crate::registration::Startup,
+    ) -> Option<Result<(), String>> {
+        args.show_bindings.then(|| {
+            print!("{}", LOADED.get().expect("bindings prepare ran").describe());
+            Ok(())
+        })
+    }
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: BindingsArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(BindingsPlugin(
+            LOADED.get().expect("bindings prepare ran").clone(),
+        ));
+    }
+}
+
 /// Reads the bindings from the settings (`settings::load` has run), applying and saving any
 /// `--bind` changes. `isolated` (a `--screenshot` check) also skips moving an old `bindings.toml`.
 pub fn load(args: &BindingsArgs, isolated: bool) -> Result<Bindings, String> {

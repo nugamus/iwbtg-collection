@@ -41,6 +41,21 @@ pub struct ScriptErrorArgs {
     pub script_error_preview: bool,
 }
 
+/// The script error screen's place in the module list (main.rs): its flags and plugin.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = ScriptErrorArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        args: ScriptErrorArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(ScriptErrorPlugin(args));
+    }
+}
+
 /// What stopped the game, ready to show.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Report {

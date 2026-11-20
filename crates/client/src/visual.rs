@@ -50,6 +50,21 @@ const MAX_PIXELS: i64 = 1 << 22;
 /// Adds the visual mods; each run shows the ones in its [`RunMods`](crate::mods::RunMods).
 pub struct VisualPlugin;
 
+/// The visual mods' place in the module list (main.rs): their plugin.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = crate::registration::NoArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: crate::registration::NoArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(VisualPlugin);
+    }
+}
+
 impl Plugin for VisualPlugin {
     fn build(&self, app: &mut App) {
         let has = crate::mods::run_has;

@@ -224,7 +224,7 @@ pub(crate) struct Stats {
 }
 
 /// The view's command-line flags (main.rs flattens each module's group, #530).
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Clone)]
 pub struct ViewArgs {
     /// Frame cap: a number of frames per second, or `unlimited`. The sim ticks at the game's
     /// rate either way.
@@ -241,6 +241,13 @@ pub struct ViewArgs {
     /// Two ways to play each game). The default is Play original.
     #[arg(long)]
     pub ranked: bool,
+}
+
+/// The view's place in the module list (main.rs): its flags. `view::run` builds the app itself.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = ViewArgs;
 }
 
 /// How runs start: from the view's flags, the same for every package opened.

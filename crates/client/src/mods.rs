@@ -31,6 +31,26 @@ pub struct ModsArgs {
     pub mods: ModSet,
 }
 
+/// The mods' place in the module list (main.rs): its flags, the run's play-mode line and its plugin.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = ModsArgs;
+
+    fn prepare(args: &mut ModsArgs, startup: &crate::registration::Startup) -> Result<(), String> {
+        eprintln!("{}", describe(args.mods, startup.ranked));
+        Ok(())
+    }
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        args: ModsArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(ModsPlugin(args.mods));
+    }
+}
+
 /// [`ModSet::parse`], then refuses a mod the client does not play yet.
 fn parse_built(text: &str) -> Result<ModSet, String> {
     let set = ModSet::parse(text)?;

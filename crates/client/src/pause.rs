@@ -102,6 +102,21 @@ pub struct PauseArgs {
     pub pause_preview: Option<Item>,
 }
 
+/// The pause menu's place in the module list (main.rs): its flags and plugin.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = PauseArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        args: PauseArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(PausePlugin { args });
+    }
+}
+
 /// The menu's state; it is open in `RunScreen::Paused`.
 #[derive(Resource, Debug, Default)]
 pub struct Menu {

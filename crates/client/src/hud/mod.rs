@@ -94,6 +94,26 @@ pub struct HudArgs {
     pub integer_scale: bool,
 }
 
+/// The HUD's place in the module list (main.rs): its flags and plugin.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = HudArgs;
+
+    fn prepare(args: &mut HudArgs, _startup: &crate::registration::Startup) -> Result<(), String> {
+        configure(args);
+        Ok(())
+    }
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: HudArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(HudPlugin);
+    }
+}
+
 /// Called by `main` after `settings::load`: puts the flags into the settings.
 pub fn configure(args: &HudArgs) {
     settings::update(|s| {

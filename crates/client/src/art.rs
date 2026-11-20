@@ -37,6 +37,21 @@ pub struct ArtFiles(pub PackageFiles);
 /// Room backgrounds and tile layers of the loaded package, for each run (`shell`).
 pub struct ArtPlugin;
 
+/// The room art's place in the module list (main.rs): its plugin.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = crate::registration::NoArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: crate::registration::NoArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(ArtPlugin);
+    }
+}
+
 impl Plugin for ArtPlugin {
     fn build(&self, app: &mut App) {
         shell::run_resource(app, |w| ArtFiles(w.resource::<LoadedPackage>().pkg.files.clone()));
