@@ -650,7 +650,7 @@ pub struct KidStepsSection {
     pub clear_triggers: Option<bool>,
 }
 
-/// Restart kinds (plan 4.3).
+/// Restart kinds (docs/architecture/sim/rooms.md).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]

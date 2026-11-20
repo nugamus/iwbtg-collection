@@ -394,7 +394,7 @@ fn switch_state(id: &str, p: &PhysicsProfile) -> Option<(bool, &'static str)> {
             p.input.walk == WalkRead::DirectLatch,
             "needs `[input] walk = \"direct_latch\"`",
         )),
-        // No switch in the profile, or the client has no such layer (plan 5.4).
+        // No switch in the profile, or the client has no such layer (docs/architecture/sim/kid.md).
         "ad_align" => Some((false, "has no switch in the profile yet (`misc.ad_nudge`)")),
         "disable_cancels" => Some((false, "has no switch in the profile yet (`jump.cancel`)")),
         "sub_frame_tap" => Some((false, "has no switch in the profile yet (`input.tap_fix`)")),
@@ -405,13 +405,15 @@ fn switch_state(id: &str, p: &PhysicsProfile) -> Option<(bool, &'static str)> {
         | "vdiet"
         | "water_full_jump_1f"
         | "water1_low_check"
-        | "restart_f2_same_frame" => Some((false, "is never on in this client (plan 5.4)")),
+        | "restart_f2_same_frame" => {
+            Some((false, "is never on in this client (docs/architecture/sim/kid.md)"))
+        }
         _ => None,
     }
 }
 
-/// The `required` trick validator (plan 5.4): a trick marked `required` needs its switch on.
-/// `manifest_text` is the text of `game.toml`, for positions.
+/// The `required` trick validator (docs/architecture/sim/kid.md): a trick marked `required` needs its
+/// switch on. `manifest_text` is the text of `game.toml`, for positions.
 pub fn check_tricks(
     tricks: &BTreeMap<Spanned<String>, Spanned<TrickSetting>>,
     profile: &PhysicsProfile,
