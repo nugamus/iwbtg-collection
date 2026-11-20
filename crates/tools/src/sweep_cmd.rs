@@ -5,8 +5,10 @@
 //! package folder under `<research>/build/packages` in one process, prints one row per game
 //! (OK / OPEN / FAIL counts) and one line per case that is not OK, and compares every case
 //! status with a committed baseline: names and statuses only, no private data. A case whose
-//! status got worse (OK to OPEN or FAIL, OPEN to FAIL) or a new case that fails is a
-//! regression; `--bless` rewrites the baseline with the current statuses.
+//! status got worse (OK to OPEN or FAIL, OPEN to FAIL), a new case that fails, or a baseline case
+//! that disappeared is a regression; `--bless` rewrites the baseline with the current statuses
+//! and is the only way to acknowledge a removed case. A missing or unreadable packages/cases
+//! tree, and an unreadable baseline, are errors rather than an empty comparison (#1016).
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -62,18 +64,42 @@ pub struct GameRow {
 /// `<pkg id>/<case name>` to status.
 pub type Statuses = BTreeMap<String, Status>;
 
-/// The case files of one package id, sorted.
-fn case_paths(cases: &Path, id: &str) -> Vec<PathBuf> {
-    let mut paths: Vec<PathBuf> = std::fs::read_dir(cases.join(id))
-        .map(|entries| {
-            entries
-                .filter_map(|e| e.ok().map(|e| e.path()))
-                .filter(|p| p.extension().is_some_and(|e| e == "toml"))
-                .collect()
+/// The paths of every entry of `dir`; a read or entry failure names the folder.
+fn read_dir_paths(dir: &Path) -> Result<Vec<PathBuf>, ToolError> {
+    std::fs::read_dir(dir)
+        .map_err(|e| ToolError::Message(format!("{}: {e}", dir.display())))?
+        .map(|entry| {
+            entry
+                .map(|entry| entry.path())
+                .map_err(|e| ToolError::Message(format!("{}: {e}", dir.display())))
         })
-        .unwrap_or_default();
+        .collect()
+}
+
+/// The case files of one package id, sorted.
+///
+/// A missing `cases/<id>` folder is an empty list: the package has no cases yet. Any other read
+/// failure is an error, not an empty list (#1016): a folder that exists but cannot be enumerated
+/// would otherwise drop every case it holds and the baseline comparison would never see them.
+/// Baseline cases of a genuinely removed folder show up as gone in `compare` and fail the gate
+/// until `--bless` acknowledges the removal.
+fn case_paths(cases: &Path, id: &str) -> Result<Vec<PathBuf>, ToolError> {
+    let dir = cases.join(id);
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(ToolError::Message(format!("{}: {e}", dir.display()))),
+    };
+    let mut paths = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| ToolError::Message(format!("{}: {e}", dir.display())))?;
+        let path = entry.path();
+        if path.extension().is_some_and(|e| e == "toml") {
+            paths.push(path);
+        }
+    }
     paths.sort();
-    paths
+    Ok(paths)
 }
 
 fn stem(path: &Path) -> String {
@@ -131,7 +157,7 @@ fn run_one(files: &iwbtg_format::PackageFiles, path: &Path, research: &Path) -> 
 }
 
 /// One package folder: its row key (package id, else folder name) and row.
-fn sweep_package(dir: &Path, research: &Path, cases: &Path) -> (String, GameRow) {
+fn sweep_package(dir: &Path, research: &Path, cases: &Path) -> Result<(String, GameRow), ToolError> {
     let folder = dir
         .file_name()
         .map(|s| s.to_string_lossy().into_owned())
@@ -145,25 +171,29 @@ fn sweep_package(dir: &Path, research: &Path, cases: &Path) -> (String, GameRow)
                 note: Some(reason.clone()),
                 ..GameRow::default()
             };
-            for path in case_paths(cases, &folder) {
+            for path in case_paths(cases, &folder)? {
                 row.cases.insert(stem(&path), fail(reason.clone()));
             }
-            return (folder, row);
+            return Ok((folder, row));
         }
     };
     let mut row = GameRow::default();
-    for path in case_paths(cases, &id) {
+    for path in case_paths(cases, &id)? {
         row.cases.insert(stem(&path), run_one(&files, &path, research));
     }
-    (id, row)
+    Ok((id, row))
 }
 
 /// Every package folder under `packages`, in parallel (one thread per package), plus a row for
 /// each cases folder whose package is missing.
+///
+/// Both trees must be enumerable: a missing or unreadable `cases` root is an error, not an empty
+/// sweep (#1016). Otherwise every baseline case would look gone (and, before [`Change`] treated
+/// removals as regressions, the gate would pass with no case actually run).
 pub fn sweep(packages: &Path, research: &Path, cases: &Path) -> Result<BTreeMap<String, GameRow>, ToolError> {
-    let mut dirs: Vec<PathBuf> = std::fs::read_dir(packages)
-        .map_err(|e| ToolError::Message(format!("{}: {e}", packages.display())))?
-        .filter_map(|e| e.ok().map(|e| e.path()))
+    let case_dirs: Vec<PathBuf> = read_dir_paths(cases)?;
+    let mut dirs: Vec<PathBuf> = read_dir_paths(packages)?
+        .into_iter()
         .filter(|p| p.is_dir())
         .collect();
     dirs.sort();
@@ -172,25 +202,23 @@ pub fn sweep(packages: &Path, research: &Path, cases: &Path) -> Result<BTreeMap<
             .iter()
             .map(|d| s.spawn(move || sweep_package(d, research, cases)))
             .collect();
-        handles
+        let rows: Result<Vec<_>, ToolError> = handles
             .into_iter()
             .map(|h| h.join().expect("sweep thread"))
-            .collect()
-    });
-    if let Ok(entries) = std::fs::read_dir(cases) {
-        for e in entries.flatten() {
-            let p = e.path();
-            let id = stem(&p);
-            if p.is_dir() && !rows.contains_key(&id) {
-                let mut row = GameRow {
-                    note: Some("no package with this id".into()),
-                    ..GameRow::default()
-                };
-                for path in case_paths(cases, &id) {
-                    row.cases.insert(stem(&path), fail("no package with this id"));
-                }
-                rows.insert(id, row);
+            .collect();
+        rows.map(|pairs| pairs.into_iter().collect())
+    })?;
+    for p in case_dirs {
+        let id = stem(&p);
+        if p.is_dir() && !rows.contains_key(&id) {
+            let mut row = GameRow {
+                note: Some("no package with this id".into()),
+                ..GameRow::default()
+            };
+            for path in case_paths(cases, &id)? {
+                row.cases.insert(stem(&path), fail("no package with this id"));
             }
+            rows.insert(id, row);
         }
     }
     Ok(rows)
@@ -246,12 +274,18 @@ pub struct Change {
 }
 
 impl Change {
-    /// Worse than before, or new and failing.
+    /// Worse than before, new and failing, or gone from the run.
+    ///
+    /// A baseline case that disappeared is a regression too (#1016): it can mean a removed case
+    /// file, or a cases tree that could not be enumerated, and either way the gate must not keep
+    /// passing on the cases that are left. Retiring a case is deliberate, so it also requires
+    /// rewriting the baseline with `--bless`, never a silent drop from the sweep.
     pub fn is_regression(&self) -> bool {
         match (self.was, self.now) {
             (Some(was), Some(now)) => now < was,
             (None, Some(now)) => now == Status::Fail,
-            _ => false,
+            (Some(_), None) => true,
+            (None, None) => false,
         }
     }
 }
@@ -345,14 +379,16 @@ pub fn main(
                 .map_err(|e| ToolError::Message(format!("{}: {e}", path.display())))?;
             summary.push_str("; baseline rewritten");
         } else {
-            let Ok(text) = std::fs::read_to_string(path) else {
-                println!(
-                    "
-{summary}; no baseline at {} (write one with --bless)",
-                    path.display()
-                );
-                return Ok(n(Status::Fail) == 0);
-            };
+            // `--baseline` is explicit: a read failure must fail the sweep, not fall back to a
+            // run without a baseline (#1016).
+            let text = std::fs::read_to_string(path).map_err(|e| {
+                let hint = if e.kind() == std::io::ErrorKind::NotFound {
+                    " (write one with --bless)"
+                } else {
+                    ""
+                };
+                ToolError::Message(format!("{}: {e}{hint}", path.display()))
+            })?;
             let base =
                 parse_baseline(&text).map_err(|e| ToolError::Message(format!("{}: {e}", path.display())))?;
             let changes = compare(&base, &now);
@@ -384,6 +420,14 @@ mod tests {
         pairs.iter().map(|(k, s)| ((*k).to_owned(), *s)).collect()
     }
 
+    /// A scratch tree under the system temp dir, empty and removed first.
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("iwbtg-sweep-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
     #[test]
     fn the_baseline_round_trips() {
         let s = st(&[("a/x", Status::Ok), ("a/y", Status::Open), ("b/z", Status::Fail)]);
@@ -412,8 +456,116 @@ mod tests {
             .filter(Change::is_regression)
             .map(|c| c.key)
             .collect();
-        assert_eq!(regressions, ["a/new_fail", "a/ok_to_open", "a/open_to_fail"]);
+        assert_eq!(
+            regressions,
+            ["a/gone", "a/new_fail", "a/ok_to_open", "a/open_to_fail"]
+        );
         assert_eq!(compare(&base, &base), []);
+    }
+
+    #[test]
+    fn a_baseline_case_that_disappeared_is_a_regression() {
+        for was in [Status::Ok, Status::Open, Status::Fail] {
+            let gone = Change {
+                key: "a/x".into(),
+                was: Some(was),
+                now: None,
+            };
+            assert!(gone.is_regression(), "{was:?} -> gone");
+        }
+        assert!(
+            !Change {
+                key: "a/x".into(),
+                was: None,
+                now: None
+            }
+            .is_regression()
+        );
+    }
+
+    #[test]
+    fn a_missing_cases_root_is_an_error() {
+        let root = scratch("missing-cases");
+        let packages = root.join("packages");
+        std::fs::create_dir_all(&packages).unwrap();
+        let err = sweep(&packages, &root, &root.join("cases")).unwrap_err();
+        assert!(err.to_string().contains("cases"), "{err}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn an_unreadable_cases_root_is_an_error() {
+        let root = scratch("cases-root-file");
+        let packages = root.join("packages");
+        std::fs::create_dir_all(&packages).unwrap();
+        let cases = root.join("cases");
+        std::fs::write(&cases, "not a folder").unwrap();
+        let err = sweep(&packages, &root, &cases).unwrap_err();
+        assert!(err.to_string().contains("cases"), "{err}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn an_unreadable_case_folder_is_an_error() {
+        let root = scratch("case-folder-file");
+        let packages = root.join("packages");
+        std::fs::create_dir_all(packages.join("game_a")).unwrap();
+        let cases = root.join("cases");
+        std::fs::create_dir_all(&cases).unwrap();
+        std::fs::write(cases.join("game_a"), "not a folder").unwrap();
+        let err = sweep(&packages, &root, &cases).unwrap_err();
+        assert!(err.to_string().contains("game_a"), "{err}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_missing_case_folder_fails_the_gate_until_blessed() {
+        let root = scratch("missing-case-folder");
+        let packages = root.join("packages");
+        // An empty folder does not load as a package, but it still gets a row keyed `game_a`.
+        std::fs::create_dir_all(packages.join("game_a")).unwrap();
+        let cases = root.join("cases");
+        std::fs::create_dir_all(&cases).unwrap();
+        let baseline = root.join("baseline.txt");
+        std::fs::write(&baseline, "game_a/case OK\n").unwrap();
+        assert!(!main(&packages, &root, &cases, Some(&baseline), false).unwrap());
+        // `--bless` is the deliberate acknowledgment: the case is retired, and the next run passes.
+        assert!(main(&packages, &root, &cases, Some(&baseline), true).unwrap());
+        assert!(
+            !std::fs::read_to_string(&baseline)
+                .unwrap()
+                .contains("game_a/case")
+        );
+        assert!(main(&packages, &root, &cases, Some(&baseline), false).unwrap());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_missing_case_file_fails_the_gate() {
+        let root = scratch("missing-case-file");
+        let packages = root.join("packages");
+        std::fs::create_dir_all(packages.join("game_a")).unwrap();
+        let cases = root.join("cases");
+        // The folder enumerates, it just no longer holds the baseline's case file.
+        std::fs::create_dir_all(cases.join("game_a")).unwrap();
+        let baseline = root.join("baseline.txt");
+        std::fs::write(&baseline, "game_a/case OK\n").unwrap();
+        assert!(!main(&packages, &root, &cases, Some(&baseline), false).unwrap());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn an_unreadable_baseline_is_an_error() {
+        let root = scratch("baseline-dir");
+        let packages = root.join("packages");
+        std::fs::create_dir_all(&packages).unwrap();
+        let cases = root.join("cases");
+        std::fs::create_dir_all(&cases).unwrap();
+        let baseline = root.join("baseline");
+        std::fs::create_dir_all(&baseline).unwrap();
+        let err = main(&packages, &root, &cases, Some(&baseline), false).unwrap_err();
+        assert!(err.to_string().contains("baseline"), "{err}");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
