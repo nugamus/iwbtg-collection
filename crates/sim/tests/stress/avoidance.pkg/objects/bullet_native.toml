@@ -1,0 +1,4 @@
+#:schema ../../../../../../docs/format/schema/v0/object.schema.json
+# Variant A: a killer moved only by native `speed`/`direction`. No script, so no Step event.
+base = "killer"
+counts_as = ["killer"]
