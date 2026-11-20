@@ -3,16 +3,35 @@
 //! its state and never touches files; the client writes it whenever it changes and reads it when
 //! the game starts, so closing the window keeps the save like the originals' save file.
 //!
-//! One entry per game, `saves/<game id>.save` in the data area (postcard bytes of the sim's
-//! `SaveSlot`). `--no-save-file` never reads or writes it: ranked runs and checks always
-//! start from a new game.
+//! One entry per game, `saves/<game id>.save` in the data area: postcard bytes of [`SaveFile`],
+//! the sim's `SaveSlot` plus a format version and the saved room's package name. The name is
+//! resolved to the package's current [`RoomId`] on load, so adding or reordering rooms does not
+//! move a save into another room (adding the showcase's boot room did exactly that, #1144), and
+//! a save in a room that is not gameplay is refused. A file that does not parse as this format
+//! (an older build's raw slot) is a warning and a new game. `--no-save-file` never reads or
+//! writes it: ranked runs and checks always start from a new game.
 
 use std::sync::OnceLock;
 
 use bevy::prelude::*;
-use iwbtg_sim::def::GameDef;
+use iwbtg_sim::def::{GameDef, RoomId, RoomRole};
 use iwbtg_sim::room::StartPoint;
 use iwbtg_sim::save::SaveSlot;
+use serde::{Deserialize, Serialize};
+
+/// The only save format this build reads and writes.
+const VERSION: u8 = 1;
+
+/// What a save file holds: the sim's slot and the saved room's package name.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+struct SaveFile {
+    /// This format's version, [`VERSION`].
+    version: u8,
+    /// `RoomDef::name`, resolved to the package's current room on load.
+    room: String,
+    /// The sim's saved slot, whose own `room` is resolved from `room` when read.
+    slot: SaveSlot,
+}
 
 use crate::storage::{self, Store};
 use crate::view::Game;
@@ -70,18 +89,42 @@ pub fn read(store: &Store, name: &str, def: &GameDef) -> Result<Option<SaveSlot>
         return Ok(None);
     };
     let place = store.describe(name);
-    let slot: SaveSlot =
+    let file: SaveFile =
         postcard::from_bytes(&bytes).map_err(|e| format!("{place}: not a save file ({e})"))?;
-    if def.room(slot.room).is_none() {
+    if file.version != VERSION {
         return Err(format!(
-            "{place}: the saved room does not exist in this version of the game"
+            "{place}: save format version {}, this build reads {VERSION}",
+            file.version
         ));
     }
+    let Some(at) = def.rooms.iter().position(|r| r.name == file.room) else {
+        return Err(format!(
+            "{place}: the saved room `{}` is not in this version of the game",
+            file.room
+        ));
+    };
+    if def.rooms[at].role != RoomRole::Play {
+        return Err(format!(
+            "{place}: the saved room `{}` is not gameplay",
+            file.room
+        ));
+    }
+    let room = u32::try_from(at).map_err(|_| format!("{place}: too many rooms"))?;
+    let mut slot = file.slot;
+    slot.room = RoomId(room);
     Ok(Some(slot))
 }
 
-fn write(store: &Store, name: &str, slot: &SaveSlot) -> Result<(), String> {
-    let bytes = postcard::to_stdvec(slot).map_err(|e| e.to_string())?;
+fn write(store: &Store, name: &str, def: &GameDef, slot: &SaveSlot) -> Result<(), String> {
+    let room = def
+        .room(slot.room)
+        .ok_or_else(|| "the saved room is not in this version of the game".to_owned())?;
+    let file = SaveFile {
+        version: VERSION,
+        room: room.name.clone(),
+        slot: slot.clone(),
+    };
+    let bytes = postcard::to_stdvec(&file).map_err(|e| e.to_string())?;
     // Natively written beside the file and renamed, so a crash never leaves half a save.
     store.write(name, &bytes)
 }
@@ -141,7 +184,7 @@ fn persist(game: NonSend<Game>, mut written: ResMut<Written>) {
     if let Some(store) = &written.store {
         let name = name_for(&game.sim.def().id);
         let result = match slot {
-            Some(s) => write(store, &name, s),
+            Some(s) => write(store, &name, game.sim.def(), s),
             None => store.remove(&name),
         };
         if let Err(e) = result {
@@ -202,7 +245,7 @@ mod tests {
     fn a_save_round_trips_through_the_file() {
         let def = demo_def();
         let store = temp("round");
-        write(&store, NAME, &slot()).unwrap();
+        write(&store, NAME, &def, &slot()).unwrap();
         assert_eq!(read(&store, NAME, &def).unwrap(), Some(slot()));
     }
 
@@ -214,10 +257,54 @@ mod tests {
         store.write(NAME, b"junk").unwrap();
         assert!(read(&store, NAME, &def).unwrap_err().contains("not a save file"));
         // A room the game does not have.
-        let mut bad = slot();
-        bad.room = RoomId(9999);
-        write(&store, NAME, &bad).unwrap();
-        assert!(read(&store, NAME, &def).unwrap_err().contains("does not exist"));
+        let file = SaveFile {
+            version: VERSION,
+            room: "nowhere".into(),
+            slot: slot(),
+        };
+        store.write(NAME, &postcard::to_stdvec(&file).unwrap()).unwrap();
+        assert!(
+            read(&store, NAME, &def)
+                .unwrap_err()
+                .contains("is not in this version")
+        );
+        // A format this build does not read.
+        let file = SaveFile {
+            version: VERSION + 1,
+            room: "room_1".into(),
+            slot: slot(),
+        };
+        store.write(NAME, &postcard::to_stdvec(&file).unwrap()).unwrap();
+        assert!(read(&store, NAME, &def).unwrap_err().contains("save format version"));
+    }
+
+    /// #1144: the save names its room, so a save in a play room resolves to that room now; a
+    /// save in the showcase's boot room (an older build's courtyard index) is refused instead
+    /// of resuming into an empty room.
+    #[test]
+    fn a_save_resolves_its_room_by_name_and_refuses_a_non_play_room() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("showcase.pkg");
+        let def = crate::package::open(&dir, false).unwrap().def;
+        let store = temp("room-name");
+        let hall = def
+            .rooms
+            .iter()
+            .position(|r| r.name == "hall")
+            .and_then(|at| u32::try_from(at).ok())
+            .expect("the showcase has a hall");
+        let mut saved = slot();
+        saved.room = RoomId(hall);
+        write(&store, NAME, &def, &saved).unwrap();
+        assert_eq!(read(&store, NAME, &def).unwrap(), Some(saved.clone()));
+
+        // Room 0 is the boot room now; a save that names it cannot be resumed.
+        let boot = SaveFile {
+            version: VERSION,
+            room: "boot".into(),
+            slot: saved,
+        };
+        store.write(NAME, &postcard::to_stdvec(&boot).unwrap()).unwrap();
+        assert!(read(&store, NAME, &def).unwrap_err().contains("is not gameplay"));
     }
 
     #[test]
@@ -255,7 +342,7 @@ mod tests {
             .clone()
             .expect("walking onto the save point saves");
         let store = temp("resume");
-        write(&store, NAME, &slot).unwrap();
+        write(&store, NAME, &def, &slot).unwrap();
         let loaded = read(&store, NAME, &def).unwrap().unwrap();
         let again = Sim::new(def.clone(), options(StartPoint::FromSave(loaded))).unwrap();
         let world = again.world();
