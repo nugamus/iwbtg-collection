@@ -10,6 +10,7 @@ mod engine_cmd;
 mod import;
 mod pack_cmd;
 mod pkg_cmd;
+mod profile_cmd;
 mod replay_cmd;
 mod room_cmd;
 mod script_cmd;
@@ -49,6 +50,8 @@ enum Command {
     /// Headless replays.
     #[command(subcommand)]
     Replay(ReplayCommand),
+    /// Profiles a replay: script budget, instances and ms per tick.
+    Profile(profile_cmd::ProfileArgs),
     /// Rooms of a package.
     #[command(subcommand)]
     Room(RoomCommand),
@@ -418,6 +421,10 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
                 cases: &cases,
             };
             engine_cmd::main(&pkg, to, trace_mode, Some(traces))
+        }
+        Command::Profile(args) => {
+            profile_cmd::main(&args)?;
+            Ok(true)
         }
         Command::Replay(ReplayCommand::Run(args)) => {
             replay_cmd::main(&args)?;

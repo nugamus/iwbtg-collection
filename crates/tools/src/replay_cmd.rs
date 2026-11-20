@@ -461,7 +461,7 @@ pub fn replay_input(bytes: &[u8], label: &str) -> Result<RunInput, ToolError> {
 /// What to run: a `.iwbr` replay's inputs and header, or the frames of an `.inputs` file (frames
 /// 0 through its `end` frame, as the trace runner ticks them) with `seed`, `mods`, `mode` and
 /// `map`. A `map` that differs from a replay header's is an error.
-fn read_input(
+pub(crate) fn read_input(
     path: &Path,
     seed: u32,
     mods: ModSet,
