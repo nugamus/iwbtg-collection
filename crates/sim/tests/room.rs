@@ -1518,10 +1518,12 @@ mod wp4a {
             (stage, Real::new(241.0), Real::new(503.0))
         );
         assert_eq!(save.difficulty, 2);
-        // global.stage[global.savenum]: the slot of a fresh world.
-        let name = format!("stage[{}]", w.engine.run.slot);
-        let id = w.var_names[&name];
+        // global.stage[global.savenum]: a fresh world's slot is 0, and GM8 aliases a global
+        // with its element 0 (research#130), so this writes `stage` itself.
+        assert_eq!(w.engine.run.slot, 0);
+        let id = w.var_names["stage"];
         assert_eq!(w.globals.get(&id), Some(&Value::Real(Real::new(29.0))));
+        assert!(!w.var_names.contains_key("stage[0]"));
     }
 
     #[test]
