@@ -18,6 +18,28 @@ use crate::ui::shape::{Band, Shape, Side, Veil};
 use crate::ui::tokens;
 use crate::ui::widgets::{rich, text};
 
+/// The card's place in the module list (main.rs): the `--card-preview` mode (the card itself is a
+/// UI piece the screens embed).
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = preview::CardArgs;
+
+    fn standalone(
+        args: &preview::CardArgs,
+        startup: &crate::registration::Startup,
+    ) -> Option<Result<(), String>> {
+        args.card_preview.map(|variant| {
+            preview::run(
+                variant,
+                startup.screenshot.clone(),
+                startup.window,
+                startup.ratio,
+            )
+        })
+    }
+}
+
 /// Games in the collection until game select has a library (#148): the 20-game shortlist
 /// (docs/roadmap.md, M5).
 pub const COLLECTION_GAMES: usize = 20;

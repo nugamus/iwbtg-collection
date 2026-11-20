@@ -27,6 +27,21 @@ pub struct OverlayArgs {
     pub overlay: bool,
 }
 
+/// The overlay's place in the module list (main.rs): its flag and plugin.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = OverlayArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        args: OverlayArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(OverlayPlugin(args));
+    }
+}
+
 /// The panel's width at most, in UI px.
 const WIDTH: f32 = 260.0;
 /// Narrower than this, the panel is narrow: shorter lines, smaller margins and padding.

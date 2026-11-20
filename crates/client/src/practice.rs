@@ -34,6 +34,23 @@ pub struct PracticeArgs {
     pub slow_speed: Option<u8>,
 }
 
+/// The practice assists' place in the module list (main.rs): its flags and plugin.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = PracticeArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        args: PracticeArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(PracticePlugin {
+            slow_speed: args.slow_speed,
+        });
+    }
+}
+
 fn parse_speed(text: &str) -> Result<u8, String> {
     text.trim()
         .trim_end_matches('%')

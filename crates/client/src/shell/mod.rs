@@ -141,6 +141,28 @@ pub struct ShellArgs {
     pub mod_select_preview: bool,
 }
 
+/// The shell's place in the module list (main.rs): its flags and both its plugins.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = ShellArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        args: ShellArgs,
+        startup: &crate::registration::Startup,
+    ) {
+        let library = args.select.clone();
+        app.add_plugins((
+            ShellPlugin {
+                library: args.select,
+                trace_mode: startup.trace_mode,
+            },
+            select::SelectPlugin(library, args.mod_select_preview),
+        ));
+    }
+}
+
 /// What the shell was started with.
 #[derive(Resource)]
 pub(crate) struct Shell {

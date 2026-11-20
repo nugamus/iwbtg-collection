@@ -31,6 +31,33 @@ pub struct UiArgs {
     pub notice_preview: Option<NoticePreview>,
 }
 
+/// The UI's place in the module list (main.rs): its flags and the `--ui-gallery` mode. The UI kit
+/// plugin itself is added by the screens that use it (the HUD, the gallery).
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = UiArgs;
+
+    fn prepare(args: &mut UiArgs, _startup: &crate::registration::Startup) -> Result<(), String> {
+        configure(args);
+        Ok(())
+    }
+
+    fn standalone(
+        args: &UiArgs,
+        startup: &crate::registration::Startup,
+    ) -> Option<Result<(), String>> {
+        args.ui_gallery.then(|| {
+            gallery::run(
+                startup.screenshot.clone(),
+                args.reduced_motion,
+                startup.window,
+                startup.ratio,
+            )
+        })
+    }
+}
+
 /// The sample notices of `--notice-preview`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
 pub enum NoticePreview {

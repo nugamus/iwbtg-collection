@@ -87,6 +87,28 @@ pub struct ScreenArgs {
     pub window: Option<(u32, u32)>,
 }
 
+/// The screen's place in the module list (main.rs): its flags (checked in `prepare`) and plugin.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = ScreenArgs;
+
+    fn prepare(
+        args: &mut ScreenArgs,
+        _startup: &crate::registration::Startup,
+    ) -> Result<(), String> {
+        configure(args)
+    }
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: ScreenArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(ScreenPlugin);
+    }
+}
+
 impl ScreenArgs {
     /// Puts the flags given on the command line into the settings; the rest keep their saved value.
     pub fn apply(&self, s: &mut Settings) -> Result<(), String> {

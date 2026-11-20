@@ -49,6 +49,23 @@ pub struct PackageArgs {
     pub trace_mode: bool,
 }
 
+/// The package's place in the module list (main.rs): its flags, and the "nothing to play" check
+/// once the standalone modes have had their turn.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = PackageArgs;
+
+    fn standalone(
+        _args: &PackageArgs,
+        startup: &crate::registration::Startup,
+    ) -> Option<Result<(), String>> {
+        // Clap requires the package unless `--select`, `--ui-gallery`, `--bind` or
+        // `--show-bindings` is given; with only the bindings flags there is nothing to play.
+        (startup.package.is_none() && startup.library.is_none()).then_some(Ok(()))
+    }
+}
+
 /// Opens the package at `dir` and loads it. A folder is read and gets its engine pack bundled
 /// from `../_engines`; an `.iwbz` file (docs/format/iwbz.md) is unpacked, refusing anything a
 /// package may not hold, and already carries its pack. `trace_mode` is for research converter

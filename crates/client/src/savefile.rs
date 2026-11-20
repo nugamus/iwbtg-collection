@@ -25,6 +25,28 @@ pub struct SaveArgs {
     pub no_save_file: bool,
 }
 
+/// The save file's place in the module list (main.rs): its flags and plugin. A ranked run always
+/// turns the file off, so `prepare` folds that into the flags before the plugin reads them.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = SaveArgs;
+
+    fn prepare(args: &mut SaveArgs, startup: &crate::registration::Startup) -> Result<(), String> {
+        args.no_save_file |= startup.ranked;
+        configure(args);
+        Ok(())
+    }
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: SaveArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(SavePlugin);
+    }
+}
+
 static OPTIONS: OnceLock<SaveArgs> = OnceLock::new();
 
 /// Called by `main` before the game starts.

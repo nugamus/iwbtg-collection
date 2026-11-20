@@ -29,6 +29,21 @@ pub const MAX_SKIP_SECONDS: u64 = 60;
 /// Runs the skip key's requests.
 pub struct SkipPlugin;
 
+/// The skip's place in the module list (main.rs): its plugin.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = crate::registration::NoArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: crate::registration::NoArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(SkipPlugin);
+    }
+}
+
 impl Plugin for SkipPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(FixedUpdate, skip.in_set(SimTick).before(crate::view::tick));

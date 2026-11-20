@@ -361,6 +361,23 @@ pub struct ReplaysPlugin {
     pub keep: bool,
 }
 
+/// The replays' place in the module list (main.rs): their plugin. A `--screenshot` check records none.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = crate::registration::NoArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: crate::registration::NoArgs,
+        startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(ReplaysPlugin {
+            keep: startup.keep(),
+        });
+    }
+}
+
 impl Plugin for ReplaysPlugin {
     fn build(&self, app: &mut App) {
         let keep = self.keep;

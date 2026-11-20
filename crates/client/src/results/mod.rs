@@ -74,6 +74,21 @@ pub struct ResultsArgs {
     pub results_heatmap: Option<bool>,
 }
 
+/// The results screen's place in the module list (main.rs): its flags and plugin.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = ResultsArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        args: ResultsArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(ResultsPlugin(args));
+    }
+}
+
 /// One death of the run: its time, the segment it counted in and, when known, the room (package
 /// room id) and the kid's position there.
 #[derive(Clone, Debug, PartialEq, Eq)]
