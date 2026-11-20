@@ -210,6 +210,9 @@ mod script_host;
 #[path = "script_int_args.rs"]
 mod script_int_args;
 
+#[path = "script_retry.rs"]
+mod script_retry;
+
 #[path = "script_validate.rs"]
 mod script_validate;
 

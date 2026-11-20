@@ -24,6 +24,11 @@ schemars = { workspace = true, optional = true }
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dev-dependencies]
 wasm-bindgen-test = "0.3"
 
+[dev-dependencies]
+# Allocation counting for the #1021 measurement harness (`tests/script_prep.rs`). Test-only;
+# `crates/sim/deny.toml` excludes dev dependencies from the sim's runtime graph.
+stats_alloc = "0.1"
+
 [features]
 # JSON Schema of `PhysicsProfileDraft` for docs/format/schema/v0/physics.schema.json (#255); the
 # format crate's `schema` feature turns it on. Never in the client or the server; `cargo test -p xtask` fails when `schemars` is in the client's graph (#794).
@@ -45,3 +50,9 @@ path = "tests/determinism.rs"
 [[test]]
 name = "golden_corpus"
 path = "tests/golden_corpus.rs"
+
+# The #1021 measurement harness: needs its own binary for a counting global allocator. Ignored
+# by default, so the normal test run and the wasm jobs do not pay for it.
+[[test]]
+name = "script_prep"
+path = "tests/script_prep.rs"
