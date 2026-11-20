@@ -5,6 +5,8 @@ Part of [Architecture](../architecture.md).
 
 Ground truth comes from the research repo. The Phase 2 recorder runs the original under OpenGMK with `iwc-trace.patch` and writes one CSV per case, next to its `.inputs` file, in `research/specs/engines/<engine>/traces/<game>/<case>.csv`. Selected frames are cross-checked against the real GM8 runner through the research gate.
 
+**A trace is evidence, not the design.** A diff proves what the original did on the traced path. It is the strongest evidence for an F1 mechanic; a probe-only F3 column is recorded, not cloned. A deliberate deviation declares its F tier, names the feel contract that covers it and is logged in the game's deviation log; the case then has a documented tolerance or a named ignored/unprobed column, never a silent skip ([0005](../decisions/0005-standard-mechanics.md), [fidelity tiers](../plans/fidelity-tiers.md), [feel contracts](feel-contracts.md)).
+
 This page is the live text of sections 9.1-9.3 of [the sim core plan](../plans/sim-core.md), which stays only as history; this page is the authority. Replay files are on [Input and replay format](replay.md), and the commands are on [The `iwbtg` CLI](cli.md).
 
 ### Trace cases

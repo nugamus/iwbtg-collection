@@ -14,6 +14,7 @@
 
 ## Pitfalls seen before
 
+- Preserve feel, not implementation. An F3 detail (boot room, temp file, internal id, probe-only value) is free to redesign; an F1 change needs a feel contract and, where irreversible, the user. Standard ruleset plus data-only compatibility profiles; one-game behavior goes to data, a script or a profile, never a shared-code switch ([0005](../decisions/0005-standard-mechanics.md)).
 - Launch the client only with `--mute` (`cargo run -p iwbtg-client -- <pkg> --mute`, or `IWBTG_MUTE=1`): an unmuted test run played music on the user's speakers for 20 minutes (#712).
 - Clean room: behavior comes only from `../iwbtg-collection-research/specs/` and its traces. If the spec doesn't say, mark it OPEN and ask for a spec item.
 - Raw `.get()` or `Real` comparisons in `src/kid` and `src/builtins` fail the gm-compare lint unless they use `num::gm_*` or carry `gm-compare: ok (<why>)`.

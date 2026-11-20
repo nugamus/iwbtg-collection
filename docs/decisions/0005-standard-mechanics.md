@@ -171,6 +171,27 @@ engine_pack = "a1"
 
 The loader validates the names against the ruleset's known profiles; an unknown profile is an error. `ruleset`, `profile`, `[deviations]` and every field that changes behavior enter `gameplay_hash`, so a behavior change is a new board entry, never a silent edit. A profile that only names existing behavior is normalized to the same hash as the absent field during format 0.
 
+### Workstreams
+
+The umbrella is [#1146](https://github.com/nugamus/iwbtg-collection/issues/1146); the proposal issue is [#1147](https://github.com/nugamus/iwbtg-collection/issues/1147).
+
+| Area | Issue | First move |
+|---|---|---|
+| A lifecycle | [#1149](https://github.com/nugamus/iwbtg-collection/issues/1149) | Direct retry; the delay is a number, not a boot room. |
+| B checkpoint | [#1150](https://github.com/nugamus/iwbtg-collection/issues/1150) | Versioned checkpoint with a stable room name. |
+| C physics | [#1151](https://github.com/nugamus/iwbtg-collection/issues/1151) | Standard parameter schema over the family presets. |
+| D collision | [#1152](https://github.com/nugamus/iwbtg-collection/issues/1152) | One walk with data-driven order keys. |
+| E identity | [#1153](https://github.com/nugamus/iwbtg-collection/issues/1153) | Stable room/entity identity; runtime ids stay runtime. |
+| F numbers | [#1154](https://github.com/nugamus/iwbtg-collection/issues/1154) | One tolerance policy as profile data. |
+| G input | [#1155](https://github.com/nugamus/iwbtg-collection/issues/1155) | One edge contract; per-engine rules as profiles. |
+| H scheduling | [#1156](https://github.com/nugamus/iwbtg-collection/issues/1156) | Ticks are the clock; `room_speed` is legacy data. |
+| I RNG | [#1157](https://github.com/nugamus/iwbtg-collection/issues/1157) | Named streams; effects separate in `standard`. |
+| J sound | [#1158](https://github.com/nugamus/iwbtg-collection/issues/1158) | Event model; DLL adapters as profiles. |
+| K built-ins | [#1159](https://github.com/nugamus/iwbtg-collection/issues/1159) | Standard behaviours plus presets/scripts. |
+| L package | [#1160](https://github.com/nugamus/iwbtg-collection/issues/1160) | `ruleset`, `profile`, `[deviations]`. |
+| M harness | [#1161](https://github.com/nugamus/iwbtg-collection/issues/1161) | Feel-contract runner and feel tiers. |
+| N guidance | [#1162](https://github.com/nugamus/iwbtg-collection/issues/1162) | Deviation log, templates and review checklist. |
+
 ## Migration phases
 
 1. **Phase 0 — decision and evidence (this proposal).** Decision record, guidance, feel-tier mapping, harness specification, issues. No behavior change.
@@ -213,3 +234,4 @@ Checked 2026-11-20 against `origin/main`:
 - RNG/sound: `crates/sim/src/rng.rs`, `crates/sim/src/particles.rs`, `crates/sim/src/sound.rs`, `docs/architecture/sim/rng.md`, `docs/architecture/sim/sound.md`.
 - Harness: `crates/xtask/src/main.rs` (`fidelity`, `repin`), `crates/sim/tests/golden_corpus.rs`, `crates/sim/tests/determinism.rs`, `crates/tools/fidelity-baseline.txt`, `docs/plans/fidelity-tiers.md`.
 - [0004 extension model](0004-extension-model.md), #778; versioning #783/#933; save bug #1144/#1145.
+- Issues: umbrella #1146, proposal #1147, workstreams #1149–#1162. Prior art: #1076 (built-in survey), #1074 (kid script slots), #1093 (script retry prep), #1024 (client perf budgets), #1142 (debug/release tester build), #1140/#1141/#1144/#1145 (boot room and saves).

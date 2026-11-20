@@ -6,18 +6,22 @@ The goal: a replay recorded today still verifies, with the same time, years from
 
 ## What identifies a run's behavior
 
-Four numbers, each with one job. A replay's header records all of them ([replay](replay.md#replay-file-iwbr)).
+Four identifiers, each with one job, plus the proposed ruleset and profile ([0005](../decisions/0005-standard-mechanics.md)). A replay's header records all of them ([replay](replay.md#replay-file-iwbr)).
 
 | Identifier | Where | What changes it | Who reads it |
 |---|---|---|---|
 | `SIM_VERSION` | `crates/sim/src/lib.rs` | A sim build that could give a different outcome for some existing package on its own `engine_rev`: a Rhai or toolchain upgrade, a state hash encoding change (`HASH_LAYOUT`), a replay decoding change, or any bug in rev N's behavior fixed in place. | The verifier: a replay is verified by a build with its `SIM_VERSION`. |
 | `engine_rev` | the package's `game.toml` | The package moves to a newer revision of the built-ins (by the porter, or automatically when provably safe, [content](../content.md#engines)). | The sim: selects rule switches and code branches. Covered by `gameplay_hash`. |
-| `gameplay_hash` | computed by `iwbtg pkg hash` | Any gameplay edit to the package, or its `engine_rev` ([format v0](../format/versioning.md)). | Boards. Cosmetic edits keep it. |
+| `ruleset` | the package's `game.toml` (proposed, 0005) | The package selects a named runner semantic: `gm8` (compatibility) or `standard` (new games). | The sim: selects the runner implementation. Covered by `gameplay_hash`. |
+| `profile` | the package's `game.toml` (proposed, 0005) | The package selects a data bundle inside its ruleset: retry, save precision, ordering, RNG streams, sound adapters, declared deviations. | The sim and the board (through `gameplay_hash`). |
+| `gameplay_hash` | computed by `iwbtg pkg hash` | Any gameplay edit to the package, or its `engine_rev`, `ruleset` or `profile` ([format v0](../format/versioning.md)). | Boards. Cosmetic edits keep it. |
 | `format` | the package's `game.toml` (`FORMAT_VERSION` in `crates/format/src/manifest.rs`) | The package file layout or schema. | The loader only. It never changes an outcome: every format version loads into the same `GameDef`. |
+
+**Ruleset and profile are content, not builds.** A profile can only set values the ruleset exposes; a new value is a ruleset change and a client release. An absent `ruleset`/`profile` in a format-0 package means `gm8` and the profile inferred from the physics preset, so no existing `gameplay_hash` moves. A package that opts into `standard` or changes its profile gets a new `gameplay_hash` and therefore a new board; the old board and its replays stay on the old ruleset/build. `SIM_VERSION` remains build-level and is not part of the board key.
 
 ## What a board keys on
 
-**Default: (package id, map, mods, `gameplay_hash`), not `SIM_VERSION`** (needs-user, #933). Since `gameplay_hash` covers `engine_rev`, a board pins the package's content and its built-in revision. `SIM_VERSION` is a property of how a run was verified, not of the board: after the freeze point every build must reproduce every older build's outcomes for the revisions it already knew, and the bump check below enforces that for the golden corpus. Where a new build cannot (the rare `SIM_VERSION` bump), old replays are verified by the old build they were made with, and their place on the board stands.
+**Default: (package id, map, mods, `gameplay_hash`), not `SIM_VERSION`** (needs-user, #933). Since `gameplay_hash` covers `engine_rev`, `ruleset` and `profile`, a board pins the package's content, its ruleset/profile and its built-in revision. `SIM_VERSION` is a property of how a run was verified, not of the board: after the freeze point every build must reproduce every older build's outcomes for the revisions it already knew, and the bump check below enforces that for the golden corpus. Where a new build cannot (the rare `SIM_VERSION` bump), old replays are verified by the old build they were made with, and their place on the board stands.
 
 Keying on `SIM_VERSION` as well would split every board at every Rhai or toolchain upgrade, which players would see as their records vanishing for a change that touched no game. The cost of the default is that the server must keep old verifier builds (below).
 
@@ -47,6 +51,10 @@ The golden corpus runs on `engine_rev` 0. A package on a newer revision is prote
 | Not branchable: the interpreter, the compiler, a dependency, the hash encoding | A `SIM_VERSION` bump; older replays go to the old verifier build | a Rhai upgrade, a Rust toolchain upgrade that changes float codegen |
 
 Every new `engine_rev` adds a golden corpus case that runs on it, so both sides of each branch are pinned. A package moves to the new revision through `iwbtg engine check` ([cli](cli.md)) and the upgrade rule in [content](../content.md#engines): automatically when every stored replay and trace reproduces (`SAFE`), else on the porter's opt-in.
+
+### A ruleset or profile move
+
+A port stays on `gm8` and its profile until each F1 move is proved by a feel contract and the existing traces ([0005](../decisions/0005-standard-mechanics.md), [feel contracts](feel-contracts.md)). Moving to `standard` or changing the profile is a package change: a new `gameplay_hash`, a new board, and the old board kept with its replays verified on the old build. It is not an `engine_rev` move; `engine_rev` stays inside a ruleset. A profile edit that changes feel is the same kind of change; a profile edit that does not change behavior must normalize to the same hash, or it is treated as a new board. The automatic engine-upgrade rule runs within a ruleset only; a ruleset move is explicit and carries the user's decision where a ranked outcome could change.
 
 ### Old verifier builds
 
