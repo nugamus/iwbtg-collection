@@ -1,5 +1,5 @@
 //! `physics.toml` to `PhysicsProfileDraft`, then `kid::presets::apply`; legacy drafts map to
-//! their family preset with a warning (docs/plans/sim-core.md 8.2 step 7, 5.4). WP0 creates the
+//! their family preset with a warning (docs/format/physics.md). WP0 creates the
 //! file; WP7b owns it.
 //!
 //! A file in the form of `docs/format/physics.md` is read strictly (unknown keys are errors with

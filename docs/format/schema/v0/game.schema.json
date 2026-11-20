@@ -418,7 +418,7 @@
     },
     "KindDefaults": {
       "additionalProperties": false,
-      "description": "`[defaults.<builtin>]`: the sprite and mask a bare built-in kind uses, per variant\n(docs/plans/sim-core.md 8.3, \"Kind default sprites per variant\").",
+      "description": "`[defaults.<builtin>]`: the sprite and mask a bare built-in kind uses, per variant\n(docs/format/game.md).",
       "properties": {
         "mask": {
           "default": null,
@@ -1176,7 +1176,7 @@
           "type": "null"
         }
       ],
-      "description": "Engine settings: restart and reset models, boot kinds, number model, new-game room, engine\nroles (docs/plans/sim-core.md 8.3)."
+      "description": "Engine settings: restart and reset models, boot kinds, number model, new-game room, engine\nroles (docs/format/game.md)."
     },
     "engine_pack": {
       "default": null,

@@ -93,7 +93,7 @@ pub struct Manifest {
     #[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
     pub room_order: Option<Spanned<Vec<Spanned<String>>>>,
     /// Engine settings: restart and reset models, boot kinds, number model, new-game room, engine
-    /// roles (docs/plans/sim-core.md 8.3).
+    /// roles (docs/format/game.md).
     #[serde(default)]
     #[cfg_attr(feature = "schema", schemars(with = "Option<EngineSection>"))]
     pub engine: Option<Spanned<EngineSection>>,
@@ -774,7 +774,7 @@ impl ResetSection {
 }
 
 /// `[defaults.<builtin>]`: the sprite and mask a bare built-in kind uses, per variant
-/// (docs/plans/sim-core.md 8.3, "Kind default sprites per variant").
+/// (docs/format/game.md).
 #[derive(Debug, Clone, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
