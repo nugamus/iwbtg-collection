@@ -4,6 +4,8 @@ Part of [the simulation](../sim.md).
 
 ## Random numbers
 
+This is the live text moved from section 3.3 of [the sim core plan](../../plans/sim-core.md), which stays only as history; this page is the authority.
+
 - One gameplay generator in `sim::rng`, compatible with GM8's Delphi-style 32-bit LCG, so rooms that use `random()` can match the original's traces. Constants and the float derivation come from the CLONE_SPEC (OpenGMK uses multiplier 0x08088405, increment 1, step 2^-32; **OPEN** until confirmed).
 - The seed is in the replay header. It is the only randomness in the sim.
 - Each built-in documents how many random draws it consumes, so the stream stays aligned with the original.
