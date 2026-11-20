@@ -4,7 +4,7 @@ How games get into the collection: porting, the shared asset library, engines, t
 
 ## Porting
 
-- **Fidelity.** Quirks that players rely on are never fixed. Bugs that nobody wants (crashes, softlocks, broken graphics, typos) are fixed when a trace shows that positions do not change. Every kept quirk and every fix gets an impact tier ([fidelity tiers](plans/fidelity-tiers.md)), and every fix is logged in `docs/games/<game-id>.md`, which carries the deviation log's four sections ([games](games/README.md#deviation-log)).
+- **Fidelity is feel.** What players rely on is the feel: position, death, timing, RNG on a played path, input response, respawn control, and the feedback that teaches those. Those are never changed silently. Bugs nobody wants (crashes, softlocks, broken graphics, typos) are fixed when a feel contract and, where positions could move, a trace show the player-observable result is unchanged. Incidental engine implementation — boot rooms, temp files, internal ids, probe-only values — is ours to redesign, because no player can observe it. Every kept quirk, fix and deliberate deviation gets a feel-impact tier (F1/F2/F3, [fidelity tiers](plans/fidelity-tiers.md)) and a feel contract, and is logged in `docs/games/<game-id>.md`, which carries the deviation log's four sections ([games](games/README.md#deviation-log)).
 - **Which version.** We port the best version of a game. When a game is submitted, its creator (or the porter) picks the version. Keeping the same version is preferred, so records stay historical. If a better version turns up, it replaces the old one, and the old board is frozen as a viewable legacy board.
 - **Other runners.** GameMaker 8 comes first and GameMaker Studio later, each with its own CLONE_SPEC and runner rules.
 - **Odd sizes.** A game keeps its native resolution and room speed. It is integer-scaled, and the letterbox adapts.
@@ -61,6 +61,7 @@ Commercial music in fangames (Mega Man, Touhou and so on) is kept and removed on
 
 ## Engines
 
+- **Standard ruleset and compatibility profiles.** New games use the standard ruleset. A port selects a data-only compatibility profile that preserves the feel it must keep; the profile sets only the policies the ruleset exposes (retry, save precision, dispatch and collision order, RNG streams, sound adapters, tick rate) and declares every deviation. A profile is package data and cannot add code; a new value is a ruleset change. Decided in [0005](decisions/0005-standard-mechanics.md).
 - **Engine packs.** Each pack matches a real fangame engine (for example YoYoYo, Seph or Kayin classic). A pack bundles the physics profile, kid sprites and sounds, default built-ins and menus. Creators pick a pack when starting a new game.
 - **Custom engines.** Creators may change physics or build their own engine. Any game whose physics differ from its pack's original is marked **custom physics** on its game page. A custom engine can be published as a pack for others to use, with credit.
 - **Medleys.** Each room may name its own physics profile. First check how the original medley actually does it. If it mixes several engines, mark it custom physics.

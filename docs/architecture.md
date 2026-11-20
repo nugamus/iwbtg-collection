@@ -37,6 +37,7 @@ Each lane edits its own page, so parallel PRs don't collide here (#518).
 - [The simulation](architecture/sim.md): sim module layout, sim purity, world model, tick pipeline, number handling, collision, scripts and the script API, random numbers, state hash, sound model.
 - [Input and replay format](architecture/replay.md): actions and input frames, the `.iwbr` replay file, `.inputs` test files, verification, versions.
 - [Comparing traces with the original](architecture/traces.md): recorder behavior, CSV columns, mapping and diff.
+- [Feel contracts](architecture/feel-contracts.md): scenario + assertions as evidence, the runner, and how they relate to traces, golden hashes, replays and boards.
 - [Testing strategy](architecture/testing.md).
 - [Versioning](architecture/versioning.md): `SIM_VERSION`, `engine_rev`, `gameplay_hash` and format; what a board keys on, the freeze point and the bump check.
 
