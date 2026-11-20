@@ -23,7 +23,7 @@ use smallvec::SmallVec;
 
 use crate::alarm;
 use crate::anim;
-use crate::collide::pairs::{self, Members};
+use crate::collide::pairs::{self, Members, Reach};
 use crate::def::{ClassMask, GameDef, KindId, ParamValue, Params, TimelineId, VarId};
 use crate::error::SimError;
 use crate::input::Action;
@@ -748,8 +748,11 @@ pub fn collision_phase_with(ctx: &mut Ctx, hooks: &Hooks) -> Flow {
     }
     // Built at the first turn, so a phase in which nobody takes part costs nothing.
     let mut members: Option<Members> = None;
+    // Static kind facts: a turn whose rank, classes and handlers can meet no kind's is skipped
+    // before its (possibly huge) candidate cell is gathered (#1139).
+    let reach = pairs::Reach::of(ctx.def);
     walk(ctx, Order::Rank, &ready, |c, a, ctl| {
-        meet_near(c, hooks, a, ctl, &mut members)
+        meet_near(c, hooks, a, ctl, &mut members, &reach)
     })
 }
 
@@ -818,6 +821,7 @@ fn meet_near(
     a: InstId,
     ctl: &mut Ctl,
     members: &mut Option<Members>,
+    reach: &Reach,
 ) -> Option<Flow> {
     let def = ctx.def;
     // Turn start: bring the facts up to date from what changed since the last turn, then
@@ -846,6 +850,14 @@ fn meet_near(
     let me = ctx.w.get(a)?;
     let (rank, classes) = (me.rank, me.classes);
     let mine = handler_classes(event_set(def, me.kind));
+    // Every inner that `Members::key` would accept has a rank at or above this outer's and a
+    // class or handler that meets it. Kinds are static, so when none can, this turn can run no
+    // handler and its candidate cell is not gathered (#1139: a death's 800 stuck blood drops
+    // all share one cell, and every blood's turn would scan it for nothing). The members and
+    // grid stay in step: their update and flush above already ran.
+    if !reach.may_meet(rank, classes, mine) {
+        return None;
+    }
     // The last inner instance reached: later gathers continue after it.
     let mut after: Option<(u16, InstId)> = None;
     'gather: loop {
@@ -876,8 +888,14 @@ fn meet_near(
             if let Some(flow) = one_way(ctx, hooks, ctl, b, a, false) {
                 return Some(flow);
             }
-            // The handlers may have moved anything: gather again from `a`'s current box.
-            continue 'gather;
+            // The handlers may have moved anything (or spawned an instance, which is marked
+            // moved too): only then can a gather differ from this one. A turn whose handlers
+            // leave every box where it was has already walked the candidates this gather
+            // returned, so a pile of instances that stay put does not re-gather its whole cell
+            // for every pair (#1139).
+            if !ctx.w.grid.moved().is_empty() {
+                continue 'gather;
+            }
         }
         return None;
     }
