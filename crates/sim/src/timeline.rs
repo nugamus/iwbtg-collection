@@ -1,4 +1,4 @@
-//! Running timelines (docs/plans/sim-core.md 2.1 row 3, R6, R6b). WP0 declared; WP1 owns.
+//! Running timelines (docs/architecture/sim/tick.md row 3, R6, R6b). WP0 declared; WP1 owns.
 //!
 //! CLONE_SPEC sound section, Confirmed (recorder): a timeline set at position 0 during room
 //! entry runs moment 0 on the room's first tick, and moment N runs N ticks later;

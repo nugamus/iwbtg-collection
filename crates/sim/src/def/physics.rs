@@ -1,4 +1,4 @@
-//! The kid's physics profile, `physics.toml` (docs/plans/sim-core.md 5.1, 5.2).
+//! The kid's physics profile, `physics.toml` (docs/architecture/sim/kid.md).
 //!
 //! WP0 declares the skeleton: every section is an empty struct. WP5a owns the file and adds the
 //! fields of 5.2 and 5.3 (WP5b asks WP5a for its fields in WP5a's sections). The `[ice]`,
@@ -185,7 +185,7 @@ pub struct KidInput {
     pub vine_keys: VineKeys,
 }
 
-/// `[events]`: ordered action lists per event (plan 5.2). Collisions, keys, alarms and the
+/// `[events]`: ordered action lists per event (docs/architecture/sim/kid.md). Collisions, keys, alarms and the
 /// boundary arrive with the collision runs and death (WP5a.3, WP5a.4).
 #[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields, default)]
@@ -208,7 +208,7 @@ pub struct KidEvents {
     pub boundary: BoundaryModel,
 }
 
-/// `events.boundary`: how the kid handles the room edge (plan 5.3 edge row).
+/// `events.boundary`: how the kid handles the room edge (docs/architecture/sim/kid.md edge row).
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]

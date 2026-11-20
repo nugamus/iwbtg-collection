@@ -1,4 +1,4 @@
-//! Number rule switches (docs/plans/sim-core.md 3.2, 3.3, register N1-N6, N10-N13, R3b).
+//! Number rule switches (docs/architecture/sim/numbers.md, rng.md, register N1-N6, N10-N13, R3b).
 //!
 //! Every rule with OpenGMK provenance or an open spec status is a field here, never a `const`,
 //! so a rule settled later becomes a new `engine_rev`. The engine_rev 0 defaults keep the

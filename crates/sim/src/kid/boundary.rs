@@ -1,4 +1,4 @@
-//! The kid at the room edge (`events.boundary`, docs/plans/sim-core.md 5.3 edge row). WP5a owns
+//! The kid at the room edge (`events.boundary`, docs/architecture/sim/kid.md edge row). WP5a owns
 //! it.
 //!
 //! Spec: kid/A1.md "Intersect Boundary". With `events.boundary = "intersect_origin"` the kid's

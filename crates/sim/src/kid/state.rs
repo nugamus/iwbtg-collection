@@ -1,9 +1,9 @@
-//! Kid state (docs/plans/sim-core.md 5.1).
+//! Kid state (docs/architecture/sim/kid.md).
 //!
 //! WP5a owns this file: the core fields every family uses. Family B fields live in `KidStateB`
 //! (WP5b), the rest in `KidStateExt` (WP5c), so no WP edits another's struct. Fields are plain
 //! data; the actions (`kid/actions/`) and `kid::api` are the only code that reads or writes
-//! them, and other WPs go through `kid::api` (plan 1.6).
+//! them, and other WPs go through `kid::api` (docs/architecture/sim/world.md).
 //!
 //! The image alpha, scales and sprite are the instance's own `Image`, not kid fields: the fade-in
 //! (A1 Step 7) and the bow snapshot read `Instance::img`. Numbers such as `run_speed` are copied

@@ -1,5 +1,5 @@
 //! The `block_standard` collision run: horizontal contact, vertical contact with the landing
-//! refresh, diagonal case (docs/plans/sim-core.md 5.3). WP5a owns it.
+//! refresh, diagonal case (docs/architecture/sim/kid.md). WP5a owns it.
 //!
 //! Spec: kid/A1.md "Collision with block (block is solid)". The pipeline has already put the kid
 //! back at its previous position (the solid put-back, `events::collision_phase`) and moves it by

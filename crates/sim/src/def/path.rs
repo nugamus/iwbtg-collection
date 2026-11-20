@@ -1,4 +1,4 @@
-//! Paths (docs/plans/sim-core.md 3.1, M8). WP2 owns; `crates/format` (WP7b) fills it.
+//! Paths (docs/architecture/sim/motion.md, M8). WP2 owns; `crates/format` (WP7b) fills it.
 
 use crate::num::Real;
 

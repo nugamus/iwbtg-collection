@@ -1,4 +1,4 @@
-//! Collision switches (docs/plans/sim-core.md 2.3, 3.4, register C2, C7b, C9, C10, C13, M7, R12).
+//! Collision switches (docs/architecture/sim/tick.md, collision.md, register C2, C7b, C9, C10, C13, M7, R12).
 //!
 //! C1, C3, C4, C11, C12 and C14 live in their `collide` functions; C5 in `format::masks`.
 //! WP0 declares; WP3 owns.

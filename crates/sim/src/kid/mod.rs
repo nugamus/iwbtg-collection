@@ -1,4 +1,4 @@
-//! The kid built-in (docs/plans/sim-core.md 5).
+//! The kid built-in (docs/architecture/sim/kid.md).
 //!
 //! The kid's events run ordered lists of named actions read from `physics.toml`; every spec rule
 //! is a field value or a named action in `actions/`. Nothing family-specific hides in an
@@ -55,7 +55,7 @@ use crate::world::{Ctx, Flow, InstId};
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub struct KidOutput {}
 
-/// One named action in a `physics.toml` event list (`step = ["walk", "jump", ...]`, plan 5.2).
+/// One named action in a `physics.toml` event list (`step = ["walk", "jump", ...]`, docs/architecture/sim/kid.md).
 ///
 /// Split by owner like `KindState`: each part is the enum of one file under `actions/`, and the
 /// name in the file picks the part whose enum has that name (`untagged`). Names must be unique
@@ -109,7 +109,7 @@ pub fn run_action(ctx: &mut Ctx, me: InstId, action: &KidAction) -> Result<Flow,
 }
 
 /// One named collision run in `events.collisions` (`{ with = "block", run = "block_standard" }`,
-/// plan 5.2). Split by owner like [`KidAction`].
+/// docs/architecture/sim/kid.md). Split by owner like [`KidAction`].
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
 #[serde(untagged)]

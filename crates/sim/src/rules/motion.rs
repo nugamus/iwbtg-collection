@@ -1,4 +1,4 @@
-//! Automatic motion switches (docs/plans/sim-core.md 3.1, register M1, M2).
+//! Automatic motion switches (docs/architecture/sim/motion.md, register M1, M2).
 //!
 //! M3-M5 live in `Motion::recompute_polar` and `recompute_cartesian`, M7 in
 //! [`CollideRules`](super::CollideRules), M8 in `path::advance`. WP0 declares; WP2 owns.

@@ -1,4 +1,4 @@
-//! The minimal instance store: a `Vec` sorted by id (docs/plans/sim-core.md 1.2).
+//! The minimal instance store: a `Vec` sorted by id (docs/architecture/sim/world.md).
 //!
 //! No map: runtime ids are handed out in increasing order and appended, so the `Vec` stays
 //! sorted by id and lookup is a binary search. Room-placed instances with a GM8 id (`gm_id`,

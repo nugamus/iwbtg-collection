@@ -1,4 +1,4 @@
-//! Room change switches (docs/plans/sim-core.md 4, register R16, R23).
+//! Room change switches (docs/architecture/sim/rooms.md, register R16, R23).
 //!
 //! WP0 declares; WP4a owns.
 
@@ -75,7 +75,7 @@ pub enum RoomStartOrder {
 /// The order of Room End when a room is left (room change step 1). Open in the spec.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum RoomEndOrder {
-    /// The ordinary dispatch order (`events::dispatch_order`, R2). Default (plan 4.2).
+    /// The ordinary dispatch order (`events::dispatch_order`, R2). Default (docs/architecture/sim/rooms.md).
     #[default]
     Dispatch,
     /// Draw order: depth descending, then creation order. Built after the spec's Inferred

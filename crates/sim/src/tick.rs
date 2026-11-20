@@ -1,6 +1,6 @@
-//! The tick pipeline (docs/plans/sim-core.md 2.1, 2.2).
+//! The tick pipeline (docs/architecture/sim/tick.md).
 //!
-//! One function per row of the table in plan 2.1 (`events::run_phase_with`). Phase placement
+//! One function per row of the table in docs/architecture/sim/tick.md (`events::run_phase_with`). Phase placement
 //! that the spec marks Inferred or UNKNOWN is a `TickRules` field, never an `if` in built-ins.
 //! WP0 declared; WP1 owns.
 //!

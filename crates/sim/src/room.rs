@@ -1,4 +1,4 @@
-//! Room entry and the room change sequence (docs/plans/sim-core.md 4.2).
+//! Room entry and the room change sequence (docs/architecture/sim/rooms.md).
 //!
 //! WP0 declares; WP4a owns.
 //!
@@ -828,7 +828,7 @@ fn index_value(ctx: &Ctx, index: GlobalIndex) -> Result<u32, SimError> {
     )))
 }
 
-/// The id of a variable name first seen at run time (plan 1.1): the load-time id if the
+/// The id of a variable name first seen at run time (docs/architecture/sim/world.md): the load-time id if the
 /// package has one, else the world's, else a new one after every id in use.
 fn run_time_var(ctx: &mut Ctx, name: &str) -> Result<VarId, SimError> {
     if let Some(v) = ctx.def.var_names.get(name).or_else(|| ctx.w.var_names.get(name)) {

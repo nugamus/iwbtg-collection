@@ -1,4 +1,4 @@
-//! Contact moves (docs/plans/sim-core.md 3.4, C10, C11; the bounce, C14, is `bounce.rs`).
+//! Contact moves (docs/architecture/sim/collision.md, C10, C11; the bounce, C14, is `bounce.rs`).
 //! WP0 declares; WP3 owns.
 //!
 //! Both moves are computed on positions only ([`contact_steps`], [`outside_steps`]), with a

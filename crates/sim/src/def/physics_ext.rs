@@ -1,5 +1,5 @@
 //! The `physics.toml` sections that only families A2-A5, B and C use: `[ice]`, `[slope]`,
-//! `[ladder]`, `[flip]` (docs/plans/sim-core.md 5.2, 5.3).
+//! `[ladder]`, `[flip]` (docs/architecture/sim/kid.md).
 //!
 //! Split out of `physics.rs` (WP5a) so WP5b and WP5c add their fields without editing WP5a's
 //! file. WP0 declares; WP5c owns this file. WP5b's only field here is the `yflag` flip model,
@@ -171,7 +171,7 @@ pub enum LadderEntry {
     UpOnly,
 }
 
-/// `[flip]`: how gravity flips (plan 5.3 flip rows). WP5c adds the other fields
+/// `[flip]`: how gravity flips (docs/architecture/sim/kid.md flip rows). WP5c adds the other fields
 /// (`mask_flipped`, ...).
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Debug, Default, Deserialize)]
@@ -184,7 +184,7 @@ pub struct FlipModel {
     pub solidblock_no_refresh: bool,
 }
 
-/// The flip models of plan 5.3, by their `physics.toml` names.
+/// The flip models (docs/architecture/sim/kid.md), by their `physics.toml` names.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]

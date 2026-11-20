@@ -1,4 +1,4 @@
-//! Path following (docs/plans/sim-core.md 3.1, M8; UNKNOWN U9, U-MECH-4). Tier 2.
+//! Path following (docs/architecture/sim/motion.md, M8; UNKNOWN U9, U-MECH-4). Tier 2.
 //!
 //! [`advance`] is the only path rule. What the spec has (CLONE_SPEC motion U9, Confirmed
 //! (recorder) by `traces/rely-the-needle-4-2/t-evo-1.csv`): a probe on a 40 px path at path speed

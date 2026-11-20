@@ -1,4 +1,4 @@
-//! GM motion variables and automatic motion (docs/plans/sim-core.md 3.1, register M1-M7).
+//! GM motion variables and automatic motion (docs/architecture/sim/motion.md, register M1-M7).
 //!
 //! An instance's motion is stored in both forms: `hspeed`/`vspeed` (cartesian) and
 //! `speed`/`direction` (polar). Writing one form recomputes the other, in exactly one place each:

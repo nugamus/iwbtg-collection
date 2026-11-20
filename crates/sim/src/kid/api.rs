@@ -1,4 +1,4 @@
-//! Kid access for other WPs (docs/plans/sim-core.md 1.6).
+//! Kid access for other WPs (docs/architecture/sim/world.md).
 //!
 //! Built-ins never touch `KidState` fields directly; they call these. WP0 declared the
 //! signatures; WP5a owns the bodies.

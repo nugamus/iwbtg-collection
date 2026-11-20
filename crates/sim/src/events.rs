@@ -1,4 +1,4 @@
-//! Events and dispatch (docs/plans/sim-core.md 1.3, 2.1, 2.3).
+//! Events and dispatch (docs/architecture/sim/world.md, tick.md).
 //!
 //! WP0 declared the enums, `EventSet` and `ProbeState`; WP1 owns the file: dispatch, the phase
 //! walker every row of the tick table uses, the collision phase, the Draw slot and the `Probe`
@@ -125,7 +125,7 @@ pub struct EventSet {
     pub user: u16,
 }
 
-/// The rows of the tick pipeline (plan 2.1), for `run_phase` and `--stages` probe records.
+/// The rows of the tick pipeline (docs/architecture/sim/tick.md), for `run_phase` and `--stages` probe records.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Phase {
     /// Row 0: latch input.
@@ -436,7 +436,7 @@ pub fn run_phase(ctx: &mut Ctx, phase: Phase) -> Flow {
     run_phase_with(ctx, phase, &Hooks::ENGINE)
 }
 
-/// [`run_phase`] with explicit hooks. Every row of plan 2.1 except row 0 (it needs the input
+/// [`run_phase`] with explicit hooks. Every row of docs/architecture/sim/tick.md except row 0 (it needs the input
 /// frame) and row 16 (`tick::run_tick_with` does both). `Draw` runs the Draw slot only; the view
 /// follow before it is `tick`'s. `RoomStart` here uses the dispatch order; room entry uses
 /// [`dispatch_each`] (see there).
@@ -686,7 +686,7 @@ fn animation_phase(ctx: &mut Ctx) -> Flow {
     )
 }
 
-/// Row 10: collision events with the solid put-back rule (plan 2.3). Uses
+/// Row 10: collision events with the solid put-back rule (docs/architecture/sim/tick.md). Uses
 /// [`Hooks::ENGINE`]; see [`collision_phase_with`].
 pub fn collision_phase(ctx: &mut Ctx) -> Flow {
     collision_phase_with(ctx, &Hooks::ENGINE)

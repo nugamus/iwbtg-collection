@@ -1,4 +1,4 @@
-//! Collision classes: the sim's stand-in for GM parent objects (docs/plans/sim-core.md 1.1).
+//! Collision classes: the sim's stand-in for GM parent objects (docs/architecture/sim/world.md).
 //!
 //! A collision event or query "with object X" becomes "with class X". Each built-in declares its
 //! default classes; a package object may add classes (`counts_as`). A collision event with a
@@ -211,7 +211,7 @@ impl BitAnd for ClassMask {
     }
 }
 
-/// Default collision classes of a built-in (Design; plan 1.1 and 6.1).
+/// Default collision classes of a built-in (Design; docs/architecture/sim/world.md and docs/plans/sim-core.md 6.1).
 pub fn default_classes(b: Builtin) -> ClassMask {
     match b {
         Builtin::Kid => ClassMask::KID,

@@ -1,4 +1,4 @@
-//! GML collision queries (docs/plans/sim-core.md 3.4, C12, C13, R21, R22).
+//! GML collision queries (docs/architecture/sim/collision.md, C12, C13, R21, R22).
 //!
 //! Each excludes `me`, skips inactive instances, skips dead ones unless
 //! `TickRules::dead_in_queries` (R22), and returns `World::first_of` order (R21).

@@ -1,4 +1,4 @@
-//! Rule-dependent conversions: alarms, save bytes, `string()` (docs/plans/sim-core.md 3.2, R3b,
+//! Rule-dependent conversions: alarms, save bytes, `string()` (docs/architecture/sim/numbers.md, R3b,
 //! N5, N6).
 //!
 //! Each conversion reads its rule from [`NumRules`]. The engine_rev 0 defaults follow the

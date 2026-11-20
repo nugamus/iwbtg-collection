@@ -1,5 +1,5 @@
 //! Run-wide engine globals: difficulty, deaths, time, save slot number, clear flag
-//! (docs/plans/sim-core.md 1.5). WP0 declared `difficulty`, which `room::start_game` (WP4a)
+//! (docs/architecture/sim/world.md). WP0 declared `difficulty`, which `room::start_game` (WP4a)
 //! sets from the `StartPoint`; WP4b owns the file and adds the other fields.
 
 use serde::{Deserialize, Serialize};
@@ -25,7 +25,7 @@ pub struct RunGlobals {
     pub boot_load: Option<BootLoad>,
 }
 
-/// A `GameRestartViaBoot` retry that has not finished loading (plan 4.3).
+/// A `GameRestartViaBoot` retry that has not finished loading (docs/architecture/sim/rooms.md).
 ///
 /// In the original the temp file holds the slot number, and the init object in rInit loads
 /// from it in its Step. The sim has no temp file, so this marker is it: `restart::run_restart`

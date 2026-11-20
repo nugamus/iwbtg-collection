@@ -1,4 +1,4 @@
-//! Rooms as loaded from a package (docs/plans/sim-core.md 4.1).
+//! Rooms as loaded from a package (docs/architecture/sim/rooms.md).
 //!
 //! WP0 declares; WP7a owns afterwards.
 
@@ -177,7 +177,7 @@ impl PlacedInstance {
     }
 }
 
-/// One room creation code action, as data (plan 4.2 step 6).
+/// One room creation code action, as data (docs/architecture/sim/rooms.md step 6).
 #[derive(Clone, PartialEq, Debug)]
 pub enum RoomAction {
     /// `global.<var> = value`.
