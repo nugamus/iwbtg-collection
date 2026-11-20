@@ -22,7 +22,7 @@ fn step(on: ProbeOn, act: ProbeAct) -> ProbeStep {
 }
 
 #[test]
-fn wp1_one_tick_runs_every_phase_in_the_recorded_order() {
+fn one_tick_runs_every_phase_in_the_recorded_order() {
     let mut b = builder();
     let sprite = b.sprite_rect((16, 16), (8, 8));
     let mut ka = KindDef::new("a", Builtin::Probe);
@@ -67,7 +67,7 @@ fn wp1_one_tick_runs_every_phase_in_the_recorded_order() {
 }
 
 #[test]
-fn wp1_dispatch_orders_follow_the_rule() {
+fn dispatch_orders_follow_the_rule() {
     // t-ord-1 shape: world (rank 4) created first, player (rank 0), two blocks (rank 1), the
     // second with the lower depth.
     let mut b = builder();
@@ -102,7 +102,7 @@ fn wp1_dispatch_orders_follow_the_rule() {
 }
 
 #[test]
-fn wp1_new_instances_join_the_phase_per_r9() {
+fn new_instances_join_the_phase_per_r9() {
     let mut b = builder();
     let k0 = probe_kind(&mut b, "early");
     let k1 = probe_kind(&mut b, "creator");
@@ -180,7 +180,7 @@ fn room_request_fixture(rule: RoomRequestRule, nested: bool) -> Fx {
 }
 
 #[test]
-fn wp1_room_request_rules() {
+fn room_request_rules() {
     for nested in [false, true] {
         let mut fx = room_request_fixture(RoomRequestRule::AbortTick, nested);
         fx.tick(InputFrame::EMPTY);
@@ -209,7 +209,7 @@ fn wp1_room_request_rules() {
 }
 
 #[test]
-fn wp1_rows_stop_before_the_room_change() {
+fn rows_stop_before_the_room_change() {
     // #450: the recorder samples the tick of a room change before the change.
     let mut fx = room_request_fixture(RoomRequestRule::AbortTick, false);
     let mut c = fx.ctx();
@@ -221,7 +221,7 @@ fn wp1_rows_stop_before_the_room_change() {
 }
 
 #[test]
-fn wp1_last_room_request_wins() {
+fn last_room_request_wins() {
     let mut fx = Fx::new(builder().build().unwrap());
     let mut c = fx.ctx();
     c.request_room(RoomRequest::Goto(RoomId(1)));
@@ -231,7 +231,7 @@ fn wp1_last_room_request_wins() {
 }
 
 #[test]
-fn wp1_halt_freezes_the_tick() {
+fn halt_freezes_the_tick() {
     let mut b = builder();
     let ka = probe_kind(&mut b, "a");
     let kb = probe_kind(&mut b, "b");
@@ -264,7 +264,7 @@ fn wp1_halt_freezes_the_tick() {
 }
 
 #[test]
-fn wp1_destroy_runs_destroy_now_and_the_rest_of_the_event() {
+fn destroy_runs_destroy_now_and_the_rest_of_the_event() {
     let mut b = builder();
     let ka = probe_kind(&mut b, "a");
     let kb = probe_kind(&mut b, "b");
@@ -290,7 +290,7 @@ fn wp1_destroy_runs_destroy_now_and_the_rest_of_the_event() {
 }
 
 #[test]
-fn wp1_draw_slot_uses_depth_then_creation_and_skips_invisible() {
+fn draw_slot_uses_depth_then_creation_and_skips_invisible() {
     let mut b = builder();
     let k = probe_kind(&mut b, "p");
     let mut fx = Fx::new(b.build().unwrap());
@@ -316,7 +316,7 @@ fn wp1_draw_slot_uses_depth_then_creation_and_skips_invisible() {
 }
 
 #[test]
-fn wp1_alarms_count_fire_rearm_and_idle() {
+fn alarms_count_fire_rearm_and_idle() {
     let mut b = builder();
     let k = probe_kind(&mut b, "p");
     let mut only0 = KindDef::new("only0", Builtin::Probe);
@@ -374,7 +374,7 @@ fn wp1_alarms_count_fire_rearm_and_idle() {
 }
 
 #[test]
-fn wp1_key_events_held_then_press_then_release_in_bit_order() {
+fn key_events_held_then_press_then_release_in_bit_order() {
     let mut b = builder();
     let k = probe_kind(&mut b, "p");
     let mut jump_only = KindDef::new("jump_only", Builtin::Probe);
@@ -400,7 +400,7 @@ fn wp1_key_events_held_then_press_then_release_in_bit_order() {
 }
 
 #[test]
-fn wp1_direct_read_latch_follows_the_rule() {
+fn direct_read_latch_follows_the_rule() {
     let mut b = builder();
     let k = probe_kind(&mut b, "p");
     let def = b.build().unwrap();
@@ -429,7 +429,7 @@ fn wp1_direct_read_latch_follows_the_rule() {
 }
 
 #[test]
-fn wp1_boundary_events_match_the_recorded_edge_rule() {
+fn boundary_events_match_the_recorded_edge_rule() {
     let mut b = builder();
     let sprite = b.sprite_rect((16, 16), (8, 8));
     let mut k = KindDef::new("p", Builtin::Probe);
@@ -462,7 +462,7 @@ fn wp1_boundary_events_match_the_recorded_edge_rule() {
 }
 
 #[test]
-fn wp1_boundary_and_animation_slots_move() {
+fn boundary_and_animation_slots_move() {
     let mut b = builder();
     let sprite = b.sprite_rect((16, 16), (8, 8));
     let mut k = KindDef::new("p", Builtin::Probe);
@@ -501,7 +501,7 @@ fn wp1_boundary_and_animation_slots_move() {
 }
 
 #[test]
-fn wp1_timeline_runs_moments_from_the_position_then_advances() {
+fn timeline_runs_moments_from_the_position_then_advances() {
     let mut b = builder();
     let k = probe_kind(&mut b, "p");
     b.def_mut().timelines.push(TimelineDef {
@@ -550,7 +550,7 @@ fn wp1_timeline_runs_moments_from_the_position_then_advances() {
 }
 
 #[test]
-fn wp1_end_of_path_runs_after_motion() {
+fn end_of_path_runs_after_motion() {
     let mut b = builder();
     let k = probe_kind(&mut b, "p");
     let mut fx = Fx::new(b.build().unwrap());
@@ -561,7 +561,7 @@ fn wp1_end_of_path_runs_after_motion() {
 }
 
 #[test]
-fn wp1_real_time_reads_are_tick_based() {
+fn real_time_reads_are_tick_based() {
     let mut fx = Fx::new(builder().build().unwrap());
     assert_eq!(
         tick::real_time_fps(&fx.def, &fx.rules.tick, &fx.w),
@@ -588,7 +588,7 @@ fn wp1_real_time_reads_are_tick_based() {
 }
 
 #[test]
-fn wp1_tick_counter_overflow_halts_through_the_error() {
+fn tick_counter_overflow_halts_through_the_error() {
     let mut fx = Fx::new(builder().build().unwrap());
     fx.w.tick = u64::MAX;
     let mut c = fx.ctx();

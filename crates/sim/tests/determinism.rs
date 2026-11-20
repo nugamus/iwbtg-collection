@@ -111,7 +111,7 @@ fn hex(bytes: &[u8]) -> String {
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
 #[test]
-fn wp1_probe_world_10000_ticks_hashes_are_identical() {
+fn probe_world_10000_ticks_hashes_are_identical() {
     let (a_points, a_final) = run();
     let (b_points, b_final) = run();
     assert_eq!(
