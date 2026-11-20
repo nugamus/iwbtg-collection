@@ -1,8 +1,8 @@
-# Sim core plan: 15. register, Collision
+# Sim register: Collision
 
-Part of [the sim core plan](../sim-core.md), section 15 (the intro and the column meanings are there).
+Part of the [sim register](../sim.md#register).
 
-The **Impact** column is the fidelity tier ([fidelity impact tiers](../fidelity-tiers.md)): T1 can change a ranked run, T2 only off-ranked paths or visuals and sound, T3 only a probe column, T? is not judged. T1 blocks M2; T2 and T3 move to the port (rule on the tier page).
+The **Impact** column is the fidelity tier ([fidelity impact tiers](../../plans/fidelity-tiers.md)): T1 can change a ranked run, T2 only off-ranked paths or visuals and sound, T3 only a probe column, T? is not judged. T1 blocks M2; T2 and T3 move to the port (rule on the tier page).
 
 ### Collision
 

@@ -26,7 +26,7 @@ For user questions, start comments with `<!-- agent -->`, add `needs-user` and p
 
 ## Documentation placement
 
-Update behavior docs in the same PR. Put architecture notes on the affected area's page under `docs/architecture/`, never append them to the architecture index. Client and sim modules have individual pages in `docs/architecture/client/` and `docs/architecture/sim/`; a new page gets one alphabetical index entry. Sim UNKNOWN rows belong in `docs/plans/sim-core/register-<area>.md`; converter requests in `converter-requests.md`. Game-specific choices go in `docs/games/<id>.md`.
+Update behavior docs in the same PR. Put architecture notes on the affected area's page under `docs/architecture/`, never append them to the architecture index. Client and sim modules have individual pages in `docs/architecture/client/` and `docs/architecture/sim/`; a new page gets one alphabetical index entry. Sim UNKNOWN rows belong in `docs/architecture/sim/register-<area>.md`; converter requests in `docs/format/converter-requests.md`. Game-specific choices go in `docs/games/<id>.md`.
 
 ## Context and measurements
 
