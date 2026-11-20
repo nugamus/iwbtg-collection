@@ -15,7 +15,7 @@ A package holds readable text and media, never code ([principle 1](README.md)). 
 | Where | Allowed |
 | --- | --- |
 | top | `<id>.toml` (`game.toml`, `physics.toml`) and Markdown (`CREDITS.md`) |
-| `objects/`, `timelines/`, `paths/`, `rooms/` | `.toml` (also `rooms/<id>.tiles.toml`) |
+| `objects/`, `timelines/`, `paths/`, `rooms/`, `particles/` | `.toml` (also `rooms/<id>.tiles.toml`) |
 | `scripts/` | `.rhai` |
 | `sprites/`, `backgrounds/`, `fonts/`, `art/` | `.png` and `.toml` |
 | `sounds/`, `music/` | `.ogg` and `.toml` |
