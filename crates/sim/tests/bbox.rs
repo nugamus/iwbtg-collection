@@ -1,7 +1,7 @@
 //! WP3: placement, bounding boxes, standing heights, mirror and spike masks
 //! (docs/plans/sim-core.md 3.4, 12; CLONE_SPEC collision).
 
-use crate::wp3_support;
+use crate::collide_support;
 
 mod wp3 {
     use iwbtg_sim::collide::bbox::reported_box;
@@ -11,7 +11,7 @@ mod wp3 {
     use iwbtg_sim::rules::collide::{BoxRound, McsStart, PlaceRound};
     use iwbtg_sim::trace::TraceTable;
 
-    use super::wp3_support::{Game, Img, game, r};
+    use super::collide_support::{Game, Img, game, r};
 
     fn rect(l: i64, t: i64, rr: i64, b: i64) -> IRect {
         IRect {

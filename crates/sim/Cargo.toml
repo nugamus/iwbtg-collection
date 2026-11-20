@@ -40,7 +40,7 @@ path = "tests/it.rs"
 
 [[test]]
 name = "wp1_determinism"
-path = "tests/wp1_determinism.rs"
+path = "tests/determinism.rs"
 
 [[test]]
 name = "golden_corpus"

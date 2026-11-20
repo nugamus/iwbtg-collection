@@ -1,161 +1,235 @@
 //! Every integration test of iwbtg-sim in one executable (#517): one test binary links and
-//! starts much faster than one per file. Each former `tests/<file>.rs` is a module here, so its
+//! starts much faster than one per file. Each `tests/<file>.rs` is a module here, so its
 //! tests are named `<file>::...`; run one file with `cargo test -p iwbtg-sim --test it <file>::`.
-//! Kept as their own targets (Cargo.toml): `wp1_determinism`, `golden_corpus`, which CI runs on wasm targets or
-//! which regenerate pinned files.
+//! Files are named after the module they test (#985); the shared fixtures are `support.rs`
+//! and `collide_support/mod.rs`. Kept as their own targets (Cargo.toml): `wp1_determinism`
+//! (file `determinism.rs`, the target name CI runs) and `golden_corpus`, which CI runs on
+//! wasm targets or which regenerate pinned files.
 //!
 //! A new test file goes into this list (`autotests = false` in Cargo.toml, so cargo won't find it alone).
 
 // Shared helpers, loaded once here and used by the modules below.
-#[path = "wp1_support.rs"]
-mod wp1_support;
-#[path = "wp3_support/mod.rs"]
-mod wp3_support;
+#[path = "support.rs"]
+mod support;
+
+#[path = "collide_support/mod.rs"]
+mod collide_support;
+
+#[path = "bbox.rs"]
+mod bbox;
 
 #[path = "bounce.rs"]
 mod bounce;
+
+#[path = "builtins_boss_item.rs"]
+mod builtins_boss_item;
+
+#[path = "builtins_drop_flip_edge.rs"]
+mod builtins_drop_flip_edge;
+
+#[path = "builtins_kid_modifiers.rs"]
+mod builtins_kid_modifiers;
+
+#[path = "builtins_misc.rs"]
+mod builtins_misc;
+
+#[path = "builtins_music.rs"]
+mod builtins_music;
+
+#[path = "builtins_playerface_water.rs"]
+mod builtins_playerface_water;
+
+#[path = "builtins_rely_a.rs"]
+mod builtins_rely_a;
+
+#[path = "builtins_rely_b.rs"]
+mod builtins_rely_b;
+
+#[path = "builtins_rely_c.rs"]
+mod builtins_rely_c;
+
+#[path = "builtins_tier1.rs"]
+mod builtins_tier1;
+
+#[path = "builtins_tier3.rs"]
+mod builtins_tier3;
+
+#[path = "builtins_trap_block.rs"]
+mod builtins_trap_block;
+
+#[path = "builtins_world.rs"]
+mod builtins_world;
+
 #[path = "death_sound.rs"]
 mod death_sound;
+
 #[path = "dll_sound_length.rs"]
 mod dll_sound_length;
+
+#[path = "empty_mask.rs"]
+mod empty_mask;
+
 #[path = "first_step_output.rs"]
 mod first_step_output;
+
+#[path = "grid.rs"]
+mod grid;
+
 #[path = "hash_vectors.rs"]
 mod hash_vectors;
+
+#[path = "kid_a1_actions.rs"]
+mod kid_a1_actions;
+
+#[path = "kid_a1_boundary.rs"]
+mod kid_a1_boundary;
+
+#[path = "kid_a1_collisions.rs"]
+mod kid_a1_collisions;
+
+#[path = "kid_a1_death.rs"]
+mod kid_a1_death;
+
+#[path = "kid_a1_gravity.rs"]
+mod kid_a1_gravity;
+
+#[path = "kid_a2_a3.rs"]
+mod kid_a2_a3;
+
+#[path = "kid_a4_a5.rs"]
+mod kid_a4_a5;
+
+#[path = "kid_api.rs"]
+mod kid_api;
+
+#[path = "kid_b_collisions.rs"]
+mod kid_b_collisions;
+
+#[path = "kid_b_core.rs"]
+mod kid_b_core;
+
+#[path = "kid_b_death.rs"]
+mod kid_b_death;
+
+#[path = "kid_b_flip.rs"]
+mod kid_b_flip;
+
+#[path = "kid_b_preset.rs"]
+mod kid_b_preset;
+
+#[path = "kid_b_slope.rs"]
+mod kid_b_slope;
+
+#[path = "kid_c.rs"]
+mod kid_c;
+
+#[path = "kid_c_key.rs"]
+mod kid_c_key;
+
+#[path = "kid_flip_swap.rs"]
+mod kid_flip_swap;
+
+#[path = "kid_ice_ladder.rs"]
+mod kid_ice_ladder;
+
+#[path = "kid_moving_block.rs"]
+mod kid_moving_block;
+
+#[path = "kid_restart.rs"]
+mod kid_restart;
+
+#[path = "kid_slope.rs"]
+mod kid_slope;
+
 #[path = "kid_sounds.rs"]
 mod kid_sounds;
+
+#[path = "kid_water_setters.rs"]
+mod kid_water_setters;
+
 #[path = "lint_gm_compare.rs"]
 mod lint_gm_compare;
+
+#[path = "motion.rs"]
+mod motion;
+
+#[path = "motion_traces.rs"]
+mod motion_traces;
+
+#[path = "num.rs"]
+mod num;
+
+#[path = "pairs.rs"]
+mod pairs;
+
 #[path = "particles_rng.rs"]
 mod particles_rng;
+
+#[path = "path.rs"]
+mod path;
+
+#[path = "pipeline.rs"]
+mod pipeline;
+
 #[path = "placed_ids.rs"]
 mod placed_ids;
+
+#[path = "query.rs"]
+mod query;
+
 #[path = "ranked_time.rs"]
 mod ranked_time;
+
+#[path = "restart_save_view.rs"]
+mod restart_save_view;
+
+#[path = "rng.rs"]
+mod rng;
+
+#[path = "room.rs"]
+mod room;
+
 #[path = "save_reverse.rs"]
 mod save_reverse;
+
 #[path = "script_conformance/main.rs"]
 mod script_conformance;
+
+#[path = "script_derived_kinds.rs"]
+mod script_derived_kinds;
+
+#[path = "script_doc_examples.rs"]
+mod script_doc_examples;
+
+#[path = "script_engine.rs"]
+mod script_engine;
+
+#[path = "script_host.rs"]
+mod script_host;
+
 #[path = "script_int_args.rs"]
 mod script_int_args;
+
+#[path = "script_validate.rs"]
+mod script_validate;
+
+#[path = "shapes.rs"]
+mod shapes;
+
 #[path = "sim_version_bump.rs"]
 mod sim_version_bump;
-#[path = "wp10_sound.rs"]
-mod wp10_sound;
-#[path = "wp1_pipeline.rs"]
-mod wp1_pipeline;
-#[path = "wp1_world.rs"]
-mod wp1_world;
-#[path = "wp2_motion.rs"]
-mod wp2_motion;
-#[path = "wp2_numbers.rs"]
-mod wp2_numbers;
-#[path = "wp2_path.rs"]
-mod wp2_path;
-#[path = "wp2_rng.rs"]
-mod wp2_rng;
-#[path = "wp2_slip.rs"]
-mod wp2_slip;
-#[path = "wp2_traces.rs"]
-mod wp2_traces;
-#[path = "wp3_bbox.rs"]
-mod wp3_bbox;
-#[path = "wp3_empty_mask.rs"]
-mod wp3_empty_mask;
-#[path = "wp3_grid.rs"]
-mod wp3_grid;
-#[path = "wp3_pair_gather.rs"]
-mod wp3_pair_gather;
-#[path = "wp3_query.rs"]
-mod wp3_query;
-#[path = "wp3_shapes.rs"]
-mod wp3_shapes;
-#[path = "wp4a_room.rs"]
-mod wp4a_room;
-#[path = "wp4b_restart_save_view.rs"]
-mod wp4b_restart_save_view;
-#[path = "wp5a_actions.rs"]
-mod wp5a_actions;
-#[path = "wp5a_api.rs"]
-mod wp5a_api;
-#[path = "wp5a_boundary.rs"]
-mod wp5a_boundary;
-#[path = "wp5a_collisions.rs"]
-mod wp5a_collisions;
-#[path = "wp5a_death.rs"]
-mod wp5a_death;
-#[path = "wp5a_gravity.rs"]
-mod wp5a_gravity;
-#[path = "wp5a_restart.rs"]
-mod wp5a_restart;
-#[path = "wp5b_collisions.rs"]
-mod wp5b_collisions;
-#[path = "wp5b_core.rs"]
-mod wp5b_core;
-#[path = "wp5b_death.rs"]
-mod wp5b_death;
-#[path = "wp5b_flip.rs"]
-mod wp5b_flip;
-#[path = "wp5b_preset.rs"]
-mod wp5b_preset;
-#[path = "wp5b_slope.rs"]
-mod wp5b_slope;
-#[path = "wp5c_a2a3.rs"]
-mod wp5c_a2a3;
-#[path = "wp5c_a4a5.rs"]
-mod wp5c_a4a5;
-#[path = "wp5c_c.rs"]
-mod wp5c_c;
-#[path = "wp5c_c_key.rs"]
-mod wp5c_c_key;
-#[path = "wp5c_flip_swap.rs"]
-mod wp5c_flip_swap;
-#[path = "wp5c_ice_ladder.rs"]
-mod wp5c_ice_ladder;
-#[path = "wp5c_moving_block.rs"]
-mod wp5c_moving_block;
-#[path = "wp5c_slope.rs"]
-mod wp5c_slope;
-#[path = "wp5c_water_setters.rs"]
-mod wp5c_water_setters;
-#[path = "wp6a_rely_slice_a.rs"]
-mod wp6a_rely_slice_a;
-#[path = "wp6a_rely_slice_b.rs"]
-mod wp6a_rely_slice_b;
-#[path = "wp6a_rely_slice_c.rs"]
-mod wp6a_rely_slice_c;
-#[path = "wp6a_tier1_rest.rs"]
-mod wp6a_tier1_rest;
-#[path = "wp6a_world_extras.rs"]
-mod wp6a_world_extras;
-#[path = "wp6b_boss_item_clear_music.rs"]
-mod wp6b_boss_item_clear_music;
-#[path = "wp6b_drop_flip_edge_blocker_slope.rs"]
-mod wp6b_drop_flip_edge_blocker_slope;
-#[path = "wp6b_music_sound.rs"]
-mod wp6b_music_sound;
-#[path = "wp6b_playerface_platform_water_vine.rs"]
-mod wp6b_playerface_platform_water_vine;
-#[path = "wp6b_trap_block_trigger.rs"]
-mod wp6b_trap_block_trigger;
-#[path = "wp6c_misc_objects.rs"]
-mod wp6c_misc_objects;
-#[path = "wp6c_tier3_kid_modifiers.rs"]
-mod wp6c_tier3_kid_modifiers;
-#[path = "wp6c_tier3_objects.rs"]
-mod wp6c_tier3_objects;
-#[path = "wp8b_timing.rs"]
-mod wp8b_timing;
-#[path = "wp9_derived_kinds.rs"]
-mod wp9_derived_kinds;
-#[path = "wp9_doc_examples.rs"]
-mod wp9_doc_examples;
-#[path = "wp9_engine.rs"]
-mod wp9_engine;
-#[path = "wp9_host.rs"]
-mod wp9_host;
-#[path = "wp9_validate.rs"]
-mod wp9_validate;
+
+#[path = "slip.rs"]
+mod slip;
+
+#[path = "sound.rs"]
+mod sound;
+
+#[path = "timing.rs"]
+mod timing;
+
+#[path = "world.rs"]
+mod world;
 
 /// `autotests = false` means a new `tests/*.rs` file runs only once it is listed here or in Cargo.toml.
 #[cfg(not(target_arch = "wasm32"))]
