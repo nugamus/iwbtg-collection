@@ -23,7 +23,7 @@ pub(crate) const BUILT: [Mod; 5] = [
 ];
 
 /// The mods' command-line flags (main.rs flattens each module's group, #530).
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Default)]
 pub struct ModsArgs {
     /// Mods for this run, by code: `SD` (Sudden Death), `HB` (Hitboxes), `NB` (No background),
     /// `SL` (Slow motion, see `--slow-speed`), `FA` (Frame advance). Several join with `,` or `+`.

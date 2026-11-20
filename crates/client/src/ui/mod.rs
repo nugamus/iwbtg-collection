@@ -18,7 +18,7 @@ pub mod widgets;
 use bevy::prelude::*;
 
 /// The UI's command-line flags.
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Default)]
 pub struct UiArgs {
     /// Open the UI gallery (every UI component, for design review) instead of a game.
     #[arg(long)]

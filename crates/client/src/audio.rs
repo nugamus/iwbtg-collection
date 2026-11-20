@@ -8,7 +8,7 @@ pub mod unlock;
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use crate::time::{Duration, Instant};
 
 use bevy::audio::{
     AudioPlayer, AudioSink, AudioSinkPlayback, AudioSource, GlobalVolume, PlaybackMode, PlaybackSettings,
@@ -29,7 +29,7 @@ use crate::view::{Game, GameCamera};
 pub const MAX_OFFSET_MS: u32 = 500;
 
 /// The audio command-line flags.
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Default)]
 pub struct AudioArgs {
     /// Hold the sound back by this many milliseconds (0 to 500) to line it up with the picture on
     /// a slow audio device. It moves playback only, never the sim. Saved in the settings file, so

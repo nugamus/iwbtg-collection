@@ -968,7 +968,7 @@ mod tests {
 }
 
 /// The bindings' command-line flags (main.rs flattens each module's group, #530).
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Default)]
 pub struct BindingsArgs {
     /// Change a global binding and save it: `ACTION=INPUT[,INPUT...]`, an input being a key name
     /// (`Space`, `LShift`, `F5`) or `pad:<button>` (`pad:south`, `pad:dpad-left`, `pad:stick-up`).

@@ -35,13 +35,22 @@ parley = { version = "0.11", default-features = false, features = ["std"] }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 bevy = { version = "0.20.1", default-features = false, features = ["web"] }
 
-# Browser storage for settings and save slots on the web build (storage.rs, #473). Bevy's webgl2
-# already pulls web-sys; this only turns on the APIs storage.rs uses, and the Gamepad API for the
-# unmapped-controller notice (input::watch_unmapped_pads, #717).
+# Browser storage for settings and save slots on the web build (storage.rs, #473), and the page's
+# fetch and status line for the package (web.rs, #29). Bevy's webgl2 already pulls web-sys; this
+# only turns on the APIs the client uses, and the Gamepad API for the unmapped-controller notice
+# (input::watch_unmapped_pads, #717).
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
-web-sys = { version = "0.3", features = ["Window", "Storage", "console", "Gamepad", "GamepadEvent", "GamepadMappingType"] }
+web-sys = { version = "0.3", features = [
+  "Window", "Storage", "console", "Gamepad", "GamepadEvent", "GamepadMappingType",
+  "Location", "Response", "Document", "Element", "Node",
+] }
 # Reads the page's audio-unlock flag (audio/unlock.rs, #472). Already in the tree through web-sys.
 js-sys = "0.3"
+# Drives the fetch's promise; already in the tree through Bevy's web support.
+wasm-bindgen-futures = "0.4"
+# The browser's clock: `std::time::Instant::now` and `SystemTime::now` panic on wasm32-unknown-unknown
+# (time.rs). Already in the tree through Bevy.
+web-time = "1"
 
 # Tests read the bundled fonts' cmaps (ui/fonts.rs); bevy_text already builds skrifa through
 # parley, so this adds no crate.

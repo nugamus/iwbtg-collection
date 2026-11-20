@@ -130,7 +130,7 @@ pub struct LoadedPackage {
 }
 
 /// The shell's command-line flags (main.rs flattens each module's group, #530).
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Default)]
 pub struct ShellArgs {
     /// Start on a placeholder game select listing the packages in this folder (package folders
     /// with a game.toml, and `.iwbz` files). Quitting a game goes back to the list.
@@ -333,6 +333,26 @@ fn prepare(world: &World, path: &Path, trace_mode: bool, map: Option<&str>) -> R
 /// one, before the app runs (a package on the command line). The caller starts in `Run`.
 pub fn load(world: &mut World, path: &Path, trace_mode: bool) -> Result<(), StartError> {
     prepare(world, path, trace_mode, None)?.install(world);
+    Ok(())
+}
+
+/// Makes a package already in memory the loaded one, instead of opening a path ([`load`]): the
+/// browser fetches it (docs/architecture/client/web.md). `source` names it in messages, its URL.
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+pub fn load_package(
+    world: &mut World,
+    pkg: package::Package,
+    source: PathBuf,
+) -> Result<(), StartError> {
+    let run = crate::view::new_run(world, &pkg, None).map_err(|why| StartError {
+        path: source.clone(),
+        why: StartFailure::Run(why),
+    })?;
+    NextRun {
+        loaded: LoadedPackage { pkg, path: source },
+        run,
+    }
+    .install(world);
     Ok(())
 }
 

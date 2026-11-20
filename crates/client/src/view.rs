@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use crate::time::{Duration, Instant};
 
 use bevy::app::RunFixedMainLoopSystems;
 use bevy::asset::RenderAssetUsages;
@@ -116,6 +116,13 @@ pub enum FrameCap {
     Unlimited,
 }
 
+impl Default for FrameCap {
+    /// The browser build's frame cap, the value clap gives when `--fps` is absent.
+    fn default() -> FrameCap {
+        FrameCap::Fps(60)
+    }
+}
+
 impl std::str::FromStr for FrameCap {
     type Err = String;
 
@@ -224,7 +231,7 @@ pub(crate) struct Stats {
 }
 
 /// The view's command-line flags (main.rs flattens each module's group, #530).
-#[derive(clap::Args, Debug, Clone)]
+#[derive(clap::Args, Debug, Clone, Default)]
 pub struct ViewArgs {
     /// Frame cap: a number of frames per second, or `unlimited`. The sim ticks at the game's
     /// rate either way.
@@ -419,11 +426,43 @@ fn leave(world: &mut World) {
     world.remove_non_send::<Game>();
 }
 
+/// The first package a client starts with: a path natively, or the browser's fetched files.
+enum First<'a> {
+    Path(&'a std::path::Path),
+    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+    Package(crate::package::Package, std::path::PathBuf),
+}
+
 /// Opens the window and runs until it closes. `first` is the package from the command line,
 /// played at once (the window takes its first room's size); without it the shell starts on the
 /// select screen. `plugins` adds the other modules' plugins (main.rs lists them).
 pub fn run(
     first: Option<&std::path::Path>,
+    args: ViewArgs,
+    trace_mode: bool,
+    plugins: impl FnOnce(&mut App),
+) -> Result<(), String> {
+    run_inner(first.map(First::Path), args, trace_mode, plugins)
+}
+
+/// [`run`] with the first package already in memory: the browser fetched an `.iwbz`
+/// (docs/architecture/client/web.md, #29). `source` names it in messages, its URL.
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+pub fn run_package(
+    first: Option<(crate::package::Package, std::path::PathBuf)>,
+    args: ViewArgs,
+    plugins: impl FnOnce(&mut App),
+) -> Result<(), String> {
+    run_inner(
+        first.map(|(pkg, source)| First::Package(pkg, source)),
+        args,
+        false,
+        plugins,
+    )
+}
+
+fn run_inner(
+    first: Option<First>,
     args: ViewArgs,
     trace_mode: bool,
     plugins: impl FnOnce(&mut App),
@@ -443,12 +482,14 @@ pub fn run(
     // `shell::load` builds the first sim with it, before the plugins are in.
     app.insert_resource(view.config());
     let (title, (width, height)) = match first {
-        Some(path) => {
+        Some(First::Path(path)) => {
             crate::shell::load(app.world_mut(), path, trace_mode).map_err(|e| e.to_string())?;
-            let world = app.world();
-            let size = room_size(world.non_send::<Game>());
-            let id = world.resource::<RunStart>().def.id.clone();
-            (format!("IWBTG Collection: {id}"), (size.x as u32, size.y as u32))
+            first_title(app.world())
+        }
+        #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+        Some(First::Package(pkg, source)) => {
+            crate::shell::load_package(app.world_mut(), pkg, source).map_err(|e| e.to_string())?;
+            first_title(app.world())
         }
         None => (crate::shell::select::TITLE.to_owned(), (800, 608)),
     };
@@ -476,6 +517,13 @@ pub fn run(
         add_screenshot(&mut app, path, None);
     }
     shot_result(app.run())
+}
+
+/// The window title and size of the first package, which is already the loaded one.
+fn first_title(world: &World) -> (String, (u32, u32)) {
+    let size = room_size(world.non_send::<Game>());
+    let id = world.resource::<RunStart>().def.id.clone();
+    (format!("IWBTG Collection: {id}"), (size.x as u32, size.y as u32))
 }
 
 /// The game camera and the sprite images.
@@ -723,27 +771,37 @@ fn follow_room_speed(game: NonSend<Game>, speed: Option<Res<ClockSpeed>>, mut fi
 }
 
 /// Holds the frame back to the cap: sleeps most of the wait, spins the last stretch.
-fn limit_frames(cap: Res<Cap>, mut last: Local<Option<Instant>>) {
-    let FrameCap::Fps(fps) = cap.0 else {
-        *last = None;
-        return;
-    };
-    let target = Duration::from_secs_f64(1.0 / f64::from(fps));
-    let start = *last.get_or_insert_with(Instant::now);
-    let spin = Duration::from_micros(1500);
-    loop {
-        let spent = start.elapsed();
-        if spent >= target {
-            break;
-        }
-        let left = target - spent;
-        if left > spin {
-            std::thread::sleep(left - spin);
-        } else {
-            std::hint::spin_loop();
-        }
+fn limit_frames(cap: Res<Cap>, last: Local<Option<Instant>>) {
+    // A browser paces the window with animation frames, and `std::thread::sleep` panics on
+    // wasm32-unknown-unknown; the sim's fixed clock does not depend on the frame rate anyway.
+    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+    {
+        let _ = (cap, last);
     }
-    *last = Some(Instant::now());
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    {
+        let mut last = last;
+        let FrameCap::Fps(fps) = cap.0 else {
+            *last = None;
+            return;
+        };
+        let target = Duration::from_secs_f64(1.0 / f64::from(fps));
+        let start = *last.get_or_insert_with(Instant::now);
+        let spin = Duration::from_micros(1500);
+        loop {
+            let spent = start.elapsed();
+            if spent >= target {
+                break;
+            }
+            let left = target - spent;
+            if left > spin {
+                std::thread::sleep(left - spin);
+            } else {
+                std::hint::spin_loop();
+            }
+        }
+        *last = Some(Instant::now());
+    }
 }
 
 /// Makes the entities match the sim's instances: spawn, move, frame, remove. Each one's z is its

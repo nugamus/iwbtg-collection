@@ -70,7 +70,7 @@ pub fn parse_size(s: &str) -> Result<(u32, u32), String> {
 }
 
 /// The screen's command-line flags.
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Default)]
 pub struct ScreenArgs {
     /// Start fullscreen (F11 toggles). Like `--ratio` and `--window`, saved in the settings file,
     /// so the next start without the flag keeps it.

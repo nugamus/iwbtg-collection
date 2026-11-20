@@ -79,7 +79,7 @@ macro_rules! client_modules {
         $(mod $module;)*
 
         /// Plays a game package.
-        #[derive(::clap::Parser)]
+        #[derive(::clap::Parser, Default)]
         #[command(name = "iwbtg-client", version, about = "IWBTG Collection client")]
         struct Args {
             $(

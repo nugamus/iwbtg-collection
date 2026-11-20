@@ -9,7 +9,7 @@
 
 use bevy::prelude::*;
 use iwbtg_sim::world::SimStatus;
-use std::time::{Duration, Instant};
+use crate::time::{Duration, Instant};
 
 use crate::hud::layout::{Density, Layout};
 use crate::hud::{HudLayout, HudOptions};
@@ -20,7 +20,7 @@ use crate::ui::{notice, tokens, widgets};
 use crate::view::{Game, ScreenshotTo, Stats};
 
 /// The overlay's command-line flag.
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Default)]
 pub struct OverlayArgs {
     /// Show the F3 debug overlay for this run (not saved), also in a `--screenshot` check.
     #[arg(long)]
