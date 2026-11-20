@@ -23,7 +23,7 @@
 - Keep the normal build fingerprint: no ad hoc RUSTFLAGS, profiles, feature flags, linker or target-directory overrides. Run cargo in the foreground; do not end a turn waiting for an unattended build. Follow the existing build/conflict guards. A cold or heavy client build takes the machine-wide slot: `python -I scripts/heavy_build.py -- cargo build -p iwbtg-client`; editing, searches and light or warm checks stay concurrent.
 - `cargo xtask check` and CI share one manifest-derived plan in `scripts/ci_scope.py`; `cargo xtask plan` explains the selection without building. Unknown or shared inputs select full coverage.
 - `cargo xtask repin` regenerates hash pins after an intentional sim change; take either side of pin conflicts then repin, never hand-merge. `cargo xtask regen` regenerates schemas/API docs; `cargo xtask pr-body` drafts the body from check output.
-- After merge waves, check main CI; repair red main before further merges. Run `IWBTG_RESEARCH=../iwbtg-collection-research cargo xtask fidelity` after sim/format changes (private fixtures required). Never bless an unexplained regression. Only T1 fidelity questions gate M2 (`docs/plans/fidelity-tiers.md`).
+- After merge waves, check main CI; repair red main before further merges. Run `IWBTG_RESEARCH=../iwbtg-collection-research cargo xtask fidelity` after sim/format changes (private fixtures required). Never bless an unexplained regression. Every fidelity issue gets an impact tier when it is filed: only T1 gates M2; T2 and T3 move to the affected game's port issue or M5 (`docs/plans/fidelity-tiers.md`).
 
 ## Findings — mandatory
 
