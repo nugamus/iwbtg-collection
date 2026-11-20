@@ -3,6 +3,8 @@
 **Owns:** `crates/sim`, `crates/tools` (except `pkg_cmd.rs`), `docs/architecture/sim.md` and `docs/architecture/sim/`, `replay.md`, `traces.md`, `docs/plans/sim-core.md` and `docs/plans/sim-core/`. The infra lane owns `.github/` and `.claude/`; touch them here only when the issue assigns it and the infra lane agrees.
 **Never edits:** `crates/client` except when an issue says so.
 
+**Live text:** `docs/architecture/sim.md` and `docs/architecture/sim/`. `docs/plans/sim-core.md` is historical; its section 15 and the register pages under `docs/plans/sim-core/` remain live.
+
 ## Build and test
 
 - One test file is one module of the `it` binary: `cargo test -p iwbtg-sim --test it <file>::`; unit tests: `--lib <module>::`. Files are named after the module they test (`room.rs`, `kid_b_core.rs`, `builtins_drop_flip_edge.rs`); the shared fixtures are `support.rs` and `collide_support/`.

@@ -1,6 +1,8 @@
 # Plan: simulation core for the 20 prototype games
 
-Status: plan, revision 2, 2026-10-24. Written by Claude for parallel implementation by agents. Nothing here is code yet. Revision 2 applies the clean-room, determinism and coverage reviews: each critique was re-checked against the spec text before it went in (section 17 lists what changed).
+> **Historical.** The live design text lives in `docs/architecture/` ([simulation](../architecture/sim.md) and its area pages), which is the authority where this plan differs. Section 15 and the [register pages](sim-core/) remain live. The rest of this page is history.
+
+Status: historical plan, revision 2, 2026-10-24. Written by Claude for parallel implementation by agents. Revision 2 applies the clean-room, determinism and coverage reviews: each critique was re-checked against the spec text before it went in (section 17 lists what changed).
 
 Goal: `crates/sim` runs any of the 20 prototype games (`research/shortlist.md`) from a v0 package and reproduces the research traces tick for tick, bit for bit. `crates/format` turns a package into a `GameDef`. `crates/tools` runs a package against a `.inputs` file and diffs the result against a recorded CSV, and runs replays headless.
 
