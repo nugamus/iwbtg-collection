@@ -1125,3 +1125,48 @@ fn the_golden_walker_script_loads_clean_through_the_loader() {
     assert!(r.ok(), "{}", render(&r));
     assert!(!render(&r).contains("scripts/boss.rhai"), "{}", render(&r));
 }
+
+// ---- #1075: 96 package classes -------------------------------------------------------------
+
+/// Kinds that each declare a distinct package class through `counts_as`, listed in
+/// `object_order`.
+fn package_class_kinds(n: u32) -> Vec<(String, String)> {
+    (0..n)
+        .map(|i| {
+            (
+                format!("class_kind_{i}"),
+                format!("base = \"killer\"\ncounts_as = [\"class_{i}\"]\n"),
+            )
+        })
+        .collect()
+}
+
+fn load_package_classes(n: u32) -> iwbtg_format::load::LoadReport {
+    let objects = package_class_kinds(n);
+    let refs: Vec<(&str, &str)> = objects.iter().map(|(s, t)| (s.as_str(), t.as_str())).collect();
+    load_report(&wp6b2_package(&refs, false), STRICT)
+}
+
+/// Decision 0004: the 17th package class (bit 48) is no longer a load error.
+#[test]
+fn seventeen_package_classes_load() {
+    let r = load_package_classes(17);
+    assert!(
+        !errors(&r).iter().any(|e| e.contains("too many package classes")),
+        "{}",
+        render(&r)
+    );
+}
+
+/// The 97th distinct package class is the new error, and it names the new cap.
+#[test]
+fn the_97th_package_class_is_an_error() {
+    let r = load_package_classes(97);
+    assert!(
+        errors(&r)
+            .iter()
+            .any(|e| e.contains("too many package classes") && e.contains("at most 96")),
+        "{}",
+        render(&r)
+    );
+}

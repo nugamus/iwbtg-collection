@@ -5,16 +5,17 @@
 //! parent also fires for its children (Confirmed, manual 205_00), which class sets reproduce
 //! without a parent tree.
 //!
-//! Bit layout, fixed by WP0 (no later appends):
+//! Bit layout (decision 0004; WP0 fixed the named range):
 //!
 //! | Bits | Use |
 //! |---|---|
-//! | 0-28 | the named classes below (28, `slope_mirror`, added by WP5c.4c) |
-//! | 29-31 | reserved for WP11 (a WP that needs a new named bit asks the integrator) |
-//! | 32-47 | 16 package-defined classes ([`ClassMask::package`]) |
-//! | 48-63 | reserved |
+//! | 0-28 | the named classes below (bit 28, `slope_mirror`, added by WP5c.4c) |
+//! | 29-31 | reserved (a new named bit asks the integrator) |
+//! | 32-127 | package-defined classes ([`ClassMask::package`], 96) |
 //!
-//! WP0 declares; WP11 owns afterwards.
+//! The first 16 package bits (32-47) keep the positions WP0 gave them, so every package that
+//! fits in the old 16 classes hashes to the same bytes (postcard writes `u64` and `u128` with the
+//! same LEB128 varint). Decision 0004 raised the cap from 16 to 96.
 
 use core::ops::{BitAnd, BitOr, BitOrAssign};
 
@@ -24,8 +25,12 @@ use super::builtin::Builtin;
 use super::kind::{KindDef, ParamValue, Params};
 
 /// A set of collision classes, one bit each.
+///
+/// A `u128` since decision 0004 so a package can define up to 96 classes. Values below 2^64
+/// serialize exactly as the old `u64` did (postcard's LEB128 varint), so existing state hashes
+/// and replays do not move.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default, Serialize, Deserialize)]
-pub struct ClassMask(pub u64);
+pub struct ClassMask(pub u128);
 
 impl ClassMask {
     /// No class.
@@ -124,13 +129,13 @@ impl ClassMask {
 
     /// First bit of the package-defined classes.
     pub const PACKAGE_FIRST_BIT: u32 = 32;
-    /// Number of package-defined classes.
-    pub const PACKAGE_COUNT: u32 = 16;
+    /// Number of package-defined classes (decision 0004 raised this from 16).
+    pub const PACKAGE_COUNT: u32 = 96;
 
-    /// Package-defined class `n` (`0..16`), or `None` when `n` is out of range.
+    /// Package-defined class `n` (`0..96`), or `None` when `n` is out of range.
     pub const fn package(n: u32) -> Option<ClassMask> {
         if n < ClassMask::PACKAGE_COUNT {
-            Some(ClassMask(1 << (ClassMask::PACKAGE_FIRST_BIT + n)))
+            Some(ClassMask(1u128 << (ClassMask::PACKAGE_FIRST_BIT + n)))
         } else {
             None
         }
@@ -403,10 +408,36 @@ mod tests {
     fn package_bits() {
         assert_eq!(ClassMask::package(0), Some(ClassMask(1 << 32)));
         assert_eq!(ClassMask::package(15), Some(ClassMask(1 << 47)));
-        assert_eq!(ClassMask::package(16), None);
+        // Decision 0004: bits 48-127 are now package classes too.
+        assert_eq!(ClassMask::package(16), Some(ClassMask(1 << 48)));
+        assert_eq!(ClassMask::package(95), Some(ClassMask(1u128 << 127)));
+        assert_eq!(ClassMask::package(96), None);
         assert_eq!(ClassMask::from_name("platform"), Some(ClassMask::PLATFORM));
         assert_eq!(ClassMask::from_name("parent"), None);
         assert!((ClassMask::PLATFORM | ClassMask::BLOCK).contains(ClassMask::BLOCK));
+    }
+
+    /// #1075: the first 16 package bits keep their positions and postcard's LEB128 varint encodes
+    /// a `u128` below 2^64 exactly as the old `u64`, so existing state hashes and replays do not
+    /// move. The named bits are checked the same way.
+    #[test]
+    fn low_bits_encode_as_the_old_u64() {
+        let encoded = |mask: ClassMask| postcard::to_allocvec(&mask).expect("serializes");
+        let encoded_u64 = |bits: u64| postcard::to_allocvec(&bits).expect("serializes");
+        for n in 0..16 {
+            let mask = ClassMask::package(n).expect("package class");
+            let bits = u64::try_from(mask.0).expect("fits below 2^64");
+            assert_eq!(encoded(mask), encoded_u64(bits), "package class {n}");
+        }
+        for (mask, name) in ClassMask::NAMED {
+            let bits = u64::try_from(mask.0).expect("fits below 2^64");
+            assert_eq!(encoded(mask), encoded_u64(bits), "named class {name}");
+        }
+        // The first 32 package classes (bits 32-63) still fit the old `u64` bytes; a class at bit
+        // 64 or above needs the wider varint, as a new package may.
+        let high = ClassMask::package(32).expect("33rd class");
+        assert_eq!(high.0, 1u128 << 64);
+        assert_ne!(encoded(high), encoded_u64(0));
     }
 
     #[test]

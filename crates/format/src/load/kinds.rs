@@ -286,7 +286,11 @@ impl<'a> Loader<'a> {
                     path,
                     text,
                     c.span(),
-                    format!("too many package classes for `{}` (at most 16)", c.get_ref()),
+                    format!(
+                        "too many package classes for `{}` (at most {})",
+                        c.get_ref(),
+                        ClassMask::PACKAGE_COUNT
+                    ),
                 ),
             }
         }
@@ -298,7 +302,11 @@ impl<'a> Loader<'a> {
                     path,
                     text,
                     c.span(),
-                    format!("too many package classes for `{}` (at most 16)", c.get_ref()),
+                    format!(
+                        "too many package classes for `{}` (at most {})",
+                        c.get_ref(),
+                        ClassMask::PACKAGE_COUNT
+                    ),
                 ),
             }
         }
