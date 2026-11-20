@@ -111,7 +111,7 @@ The standard order is one deterministic walk:
 - draw order is depth descending, then creation, in its own explicit layer order;
 - classes are collision data; layers are draw data; both are declared, not inferred from numeric ids.
 
-The current `PairOrder`, `RoomStartOrder`, `RoomEndOrder`, `JoinPhase`, `NewInstancesJoinPhase` and related switches remain as profile values while a port needs them. A variant is removed when a feel contract shows it produces the same player-observable result, or when the port moves to `standard`.
+The current `PairOrder`, `RoomStartOrder`, `RoomEndOrder`, `JoinPhase`, `NewInstancesJoinPhase` and related switches remain as named compatibility-profile values while a port needs them. A variant is removed when a feel contract shows it produces the same player-observable result, or when the port moves to `standard`.
 
 ### One numeric policy
 
@@ -182,8 +182,8 @@ The umbrella is [#1146](https://github.com/nugamus/iwbtg-collection/issues/1146)
 | C physics | [#1151](https://github.com/nugamus/iwbtg-collection/issues/1151) | Standard parameter schema over the family presets. |
 | D collision | [#1152](https://github.com/nugamus/iwbtg-collection/issues/1152) | One walk with data-driven order keys. |
 | E identity | [#1153](https://github.com/nugamus/iwbtg-collection/issues/1153) | Stable room/entity identity; runtime ids stay runtime. |
-| F numbers | [#1154](https://github.com/nugamus/iwbtg-collection/issues/1154) | One tolerance policy as profile data. |
-| G input | [#1155](https://github.com/nugamus/iwbtg-collection/issues/1155) | One edge contract; per-engine rules as profiles. |
+| F numbers | [#1154](https://github.com/nugamus/iwbtg-collection/issues/1154) | One tolerance policy as a ruleset value. |
+| G input | [#1155](https://github.com/nugamus/iwbtg-collection/issues/1155) | One edge contract; per-engine rules as named profiles. |
 | H scheduling | [#1156](https://github.com/nugamus/iwbtg-collection/issues/1156) | Ticks are the clock; `room_speed` is legacy data. |
 | I RNG | [#1157](https://github.com/nugamus/iwbtg-collection/issues/1157) | Named streams; effects separate in `standard`. |
 | J sound | [#1158](https://github.com/nugamus/iwbtg-collection/issues/1158) | Event model; DLL adapters as profiles. |
