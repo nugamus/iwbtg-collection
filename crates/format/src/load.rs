@@ -1,9 +1,9 @@
-//! Package to `GameDef` (docs/plans/sim-core.md 8.1, 8.2). WP7a owns this file, including the
+//! Package to `GameDef` (docs/format/v0.md). WP7a owns this file, including the
 //! calls to the WP7b steps (`physics::load`, `sounds::load`, `paths::load`, `timelines::load`,
 //! `params::check`), whose signatures WP0 fixed; WP7b owns only their bodies. The manifest's
 //! `[engine]` and `[timing]` sections are WP7a's too (`manifest.rs`).
 //!
-//! Steps (plan 8.2): 1 manifest and `[engine]`; 2 sprites and masks; 3 kinds; 4 rooms; 5 ranks;
+//! Steps (docs/format/v0.md): 1 manifest and `[engine]`; 2 sprites and masks; 3 kinds; 4 rooms; 5 ranks;
 //! 6 variable ids; 7 (WP7b) physics, params, timelines, paths, sounds; 8 cross-references;
 //! 9 `gameplay_hash`.
 //!

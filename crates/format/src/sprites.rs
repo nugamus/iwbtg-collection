@@ -1,4 +1,4 @@
-//! Sprite strips and their sidecars (docs/plans/sim-core.md 8.1, 8.2 step 2; docs/format/assets.md).
+//! Sprite strips and their sidecars (docs/format/assets.md).
 //!
 //! `sprites/<id>.png` is a horizontal strip of `frames` frames; `sprites/<id>.toml` is the
 //! sidecar. Image pixels never reach the sim: only the masks built here do.

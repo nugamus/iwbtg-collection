@@ -1,4 +1,4 @@
-//! Path files to `PathDef` (docs/plans/sim-core.md 8.2 step 7, 8.3; docs/format/paths.md).
+//! Path files to `PathDef` (docs/format/paths.md).
 //! WP0 creates the file; WP7b owns it.
 //!
 //! `paths/<id>.toml`: `points = [[x, y], [x, y, speed], ...]` (the speed factor defaults to
