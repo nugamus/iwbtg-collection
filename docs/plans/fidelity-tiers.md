@@ -41,12 +41,12 @@ A tier is a judgement, not a verdict on quality: T2 and T3 items are still fidel
 
 | Place | Form |
 |---|---|
-| Register page (`docs/plans/sim-core/register-*.md`) | The **Impact** column on the row. |
+| Register page (`docs/architecture/sim/register-*.md`) | The **Impact** column on the row. |
 | Issue | The first line of the triage comment: `Impact: T1 — <one line>`. |
 | Deviation log (`docs/games/<game-id>.md`) | Tier on every entry in Kept quirks, Fixed bugs, Known differences and Open (see [games/README.md](../games/README.md)). |
 | This page | The definitions and the rule, so a later tier change has one home. |
 
-**Trace case names use the same prefix.** The register's "Settles it" column can name trace cases such as `T1`, `T2`, `T8` (for example [register-input.md](sim-core/register-input.md)). That `T` is a trace name, not a tier. The **Impact** column is the tier; read the column header, not the letter.
+**Trace case names use the same prefix.** The register's "Settles it" column can name trace cases such as `T1`, `T2`, `T8` (for example [register-input.md](../architecture/sim/register-input.md)). That `T` is a trace name, not a tier. The **Impact** column is the tier; read the column header, not the letter.
 
 ## Changing a tier
 

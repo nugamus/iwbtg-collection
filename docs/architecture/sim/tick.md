@@ -4,7 +4,7 @@ Part of [the simulation](../sim.md).
 
 ## Tick pipeline
 
-`Sim::step(InputFrame) -> StepResult` runs one tick (`tick::run_tick`). The order follows `research/specs/engines/gm8/CLONE_SPEC.md` ("tick loop", "motion", "sprites and animation", "input"); this table is the live text moved from [the sim core plan](../../plans/sim-core.md) section 2.1, which is history. Phase placement that the spec marks Inferred or UNKNOWN is a field of `TickRules` (register ids in plan section 15), never an `if` scattered in built-ins. If the spec changes, the rule changes in that one field.
+`Sim::step(InputFrame) -> StepResult` runs one tick (`tick::run_tick`). The order follows `research/specs/engines/gm8/CLONE_SPEC.md` ("tick loop", "motion", "sprites and animation", "input"); this table is the live text moved from [the sim core plan](../../plans/sim-core.md) section 2.1, which is history. Phase placement that the spec marks Inferred or UNKNOWN is a field of `TickRules` (register ids on [Tick and events](register-tick-and-events.md)), never an `if` scattered in built-ins. If the spec changes, the rule changes in that one field.
 
 | # | Phase | Status | Isolation |
 |---|---|---|---|

@@ -1,6 +1,6 @@
 # Plan: simulation core for the 20 prototype games
 
-> **Historical.** The live design text lives in `docs/architecture/` ([simulation](../architecture/sim.md) and its area pages), which is the authority where this plan differs. Section 15 and the [register pages](sim-core/) remain live. The rest of this page is history.
+> **Historical.** The live design text lives in `docs/architecture/` ([simulation](../architecture/sim.md) and its area pages), which is the authority where this plan differs. The live register moved to `docs/architecture/sim/register-*.md`, and the converter-request table to `docs/format/converter-requests.md`; section 15 below keeps the original register intro as history. The rest of this page is history.
 
 Status: historical plan, revision 2, 2026-10-24. Written by Claude for parallel implementation by agents. Revision 2 applies the clean-room, determinism and coverage reviews: each critique was re-checked against the spec text before it went in (section 17 lists what changed).
 
@@ -858,7 +858,7 @@ WP7a (rooms, objects, order) and WP7b (physics, params, paths, sounds) propose t
 
 ### 8.4 Converter requests (gates for milestones)
 
-Moved to [its own page](sim-core/converter-requests.md) (CR1 and on), so PRs that add or settle a request do not conflict with edits elsewhere in this plan.
+Moved to [its own page](../format/converter-requests.md) (CR1 and on), so PRs that add or settle a request do not conflict with edits elsewhere in this plan.
 
 ## 9. Trace comparison and replay (`crates/tools`, WP8a, WP8b)
 
@@ -1192,13 +1192,13 @@ Every rule the sim needs that the spec marks UNKNOWN, Inferred or Conflict, or t
 
 The **Impact** column is the fidelity tier ([fidelity tiers](fidelity-tiers.md)): T1 can change a ranked run, T2 only off-ranked paths or visuals and sound, T3 only a probe column, T? is not judged. Only T1 blocks M2; T2 and T3 move to the port issue or M5.
 
-- [Tick and events](sim-core/register-tick-and-events.md)
-- [Motion](sim-core/register-motion.md)
-- [Collision](sim-core/register-collision.md)
-- [Numbers](sim-core/register-numbers.md)
-- [Sound](sim-core/register-sound.md)
-- [Input](sim-core/register-input.md)
-- [Kid and mechanics](sim-core/register-kid-and-mechanics.md)
+- [Tick and events](../architecture/sim/register-tick-and-events.md)
+- [Motion](../architecture/sim/register-motion.md)
+- [Collision](../architecture/sim/register-collision.md)
+- [Numbers](../architecture/sim/register-numbers.md)
+- [Sound](../architecture/sim/register-sound.md)
+- [Input](../architecture/sim/register-input.md)
+- [Kid and mechanics](../architecture/sim/register-kid-and-mechanics.md)
 
 ## 16. Things to tell the user and research
 
