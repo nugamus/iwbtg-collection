@@ -21,7 +21,7 @@ use crate::collide::query::place_meeting;
 use crate::def::{ClassMask, KindDef, ParamValue, Params};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
-use crate::num::Real;
+use crate::num::{self, Real};
 use crate::world::{Ctx, Flow, InstId};
 
 const SPECS: &[ParamSpec] = &[
@@ -116,6 +116,21 @@ fn stick(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
             x += sx;
             y += sy;
             left -= 1.0;
+        }
+    }
+    if let Some(inst) = ctx.w.get(me) {
+        // The writes below set every value it already has: the drop is at rest at `(x, y)`.
+        // Writing them would mark the grid moved and make the pair walk re-gather this drop's
+        // whole cell after every pair, which turns a death's pile of ~800 stuck drops into
+        // near-quadratic work (#1139).
+        let r = &ctx.rules.num;
+        if num::gm_eq(inst.m.hspeed(), Real::ZERO, r)
+            && num::gm_eq(inst.m.vspeed(), Real::ZERO, r)
+            && num::gm_eq(inst.m.gravity(), Real::ZERO, r)
+            && num::gm_eq(inst.m.x(), x, r)
+            && num::gm_eq(inst.m.y(), y, r)
+        {
+            return Ok(());
         }
     }
     if let Some(inst) = ctx.w.get_mut(me) {

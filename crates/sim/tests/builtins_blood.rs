@@ -1,4 +1,5 @@
-//! blood: the Create frame and gravity, the outside-room destroy and the block stick.
+//! blood: the Create frame and gravity, the outside-room destroy, the block stick and the
+//! no-op write of an at-rest stick (#1139).
 
 /// The engine hooks without the sound model (WP10) and timing triggers (WP8b), which are
 /// not implemented yet.
@@ -93,4 +94,35 @@ fn blood_sticks_to_a_block_at_contact() {
         },
     );
     assert_eq!(w.get(id).unwrap().m.hspeed(), r(6.0));
+}
+
+/// #1139: a drop already at rest at its stuck place is not written again, so the grid is not
+/// marked moved and the pair walk need not re-gather the cell after its pair.
+#[test]
+fn a_resting_stick_does_not_mark_the_drop_moved() {
+    let g = game(Params::default(), Vec::new);
+    let mut w = World::new(g.room, 1);
+    let blk = spawn(&g, &mut w, g.block, 100.0, 0.0);
+    // Contact, as in `blood_sticks_to_a_block_at_contact`.
+    let id = spawn(&g, &mut w, g.blood, 90.0, 10.0);
+    let ev = EventKind::Collision {
+        with: ClassMask::BLOCK,
+        other: blk,
+    };
+    {
+        let i = w.get_mut(id).unwrap();
+        i.m.motion_set(r(0.0), r(6.0)).unwrap();
+        i.m.capture_previous();
+        i.m.set_x(r(96.0)).unwrap();
+    }
+    fire(&g, &mut w, id, &ev);
+    // A later tick at rest: capture_previous, then the same collision. Nothing changes, so
+    // nothing is marked moved (the grid starts clean).
+    w.get_mut(id).unwrap().m.capture_previous();
+    w.grid = iwbtg_sim::collide::grid::Grid::default();
+    fire(&g, &mut w, id, &ev);
+    assert!(
+        !w.grid.moved().contains(&id),
+        "an at-rest stick writes nothing, so the grid is not marked moved"
+    );
 }
