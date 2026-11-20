@@ -11,6 +11,8 @@ Where things are kept (#107; `backend::root` picks the folder and the `native_fo
 | Settings and bindings | `settings.toml` (config) | `%APPDATA%\iwbtg-collection\` | `$XDG_CONFIG_HOME/iwbtg-collection/`, else `~/.config/iwbtg-collection/` | `localStorage["iwbtg-collection/config/settings.toml"]` |
 | Games (library) | `library/<id>.iwbz` (data) | `%LOCALAPPDATA%\iwbtg-collection\` | `$XDG_DATA_HOME/iwbtg-collection/`, else `~/.local/share/iwbtg-collection/` | `localStorage["iwbtg-collection/data/library/<id>.iwbz"]` |
 | Save slots | `saves/<game id>.save` (data) | as above | as above | `iwbtg-collection/data/saves/...` |
+
+A save file holds a format version, the saved room's **package name** and the sim's `SaveSlot` (`savefile.rs`). The name is resolved to the package's current `RoomId` on load, so adding or reordering rooms does not move a save into another room (adding the showcase's boot room did, #1140/#1144), and a save in a room that is not `role = "play"` (the boot room) is refused. A file that does not parse as this format, such as an older build's raw slot, is one warning and a new game.
 | Replays | `replays/...` (data) | as above | as above | `iwbtg-collection/data/replays/...` |
 | Saved replays (results page, Save replay) | `exports/<game>-<file>.iwbr` (data) | as above | as above | `iwbtg-collection/data/exports/...` |
 | Local stats | `stats.toml` (data) | as above | as above | `iwbtg-collection/data/stats.toml` |

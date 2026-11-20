@@ -4,6 +4,7 @@
 # instances, so the kid_start in a play room cannot make a second kid beside the
 # loaded one (#1140).
 size = [800, 608]
+role = "boot"
 file_speed = 50
 views_enabled = false
 background_color = "#090b1e"
