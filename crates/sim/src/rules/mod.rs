@@ -58,9 +58,11 @@ pub struct RunnerRules {
 }
 
 impl RunnerRules {
-    /// The rules for a runner at an engine revision. GM 8.1 gets the 8.0 rules until T-EVO-2
-    /// shows a difference (U12, R11); any difference becomes a field, never a branch on the
-    /// runner inside built-ins.
+    /// The rules for a runner at an engine revision. GM 8.1 keeps the 8.0 rules: research#15
+    /// found no simulation-visible difference (the 8.1 games differ only in renderer/content;
+    /// U12, R11). `runner` records the build for provenance; only the real 8.1 event-order and
+    /// input check remains OPEN (research#175). Any difference found later becomes a field, never
+    /// a branch on the runner inside built-ins.
     pub fn for_runner(runner: Runner, engine_rev: u16) -> Result<RunnerRules, SimError> {
         if engine_rev > MAX_ENGINE_REV {
             return Err(SimError::Unsupported {
