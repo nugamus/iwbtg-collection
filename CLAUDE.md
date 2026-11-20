@@ -2,12 +2,12 @@
 
 ## Contracts
 
-- Clean room: GameMaker behavior comes only from `../iwbtg-collection-research/specs/` and its traces. Never read another runner/tool's source or decompiled games. An unanswered behavior question stays OPEN and gets a spec/trace issue.
+- Clean room: GameMaker behavior comes only from `../iwbtg-collection-research/specs/` and its traces. Never read another runner/tool's source or decompiled games. The clean room governs where evidence comes from, not what our design must be: do not assert original behavior you cannot evidence, but do choose the standard default. An unanswered question that can change feel (F1) gets `needs-user` with a proposed default; an F2/F3 question proceeds on the standard model and is filed.
 - Never commit original binaries, decompiled code or extracted assets. Original material stays in `../iwbtg-collection-research`; clean-room ports in `../iwbtg-collection-games`. Keep the existing credited Kid sprites in `crates/client/showcase.pkg` (user exception, games#34); add no more.
 - `sim` is deterministic, fixed tick, and independent of Bevy, IO, clocks and threads. Timing, splits and leaderboards count ticks. Preserve what a player feels — position, death, timing, RNG on a played path, input response, respawn control — not incidental engine implementation. An invisible implementation detail is free to redesign; an F1 change needs a feel contract and, where irreversible, the user ([0005](docs/decisions/0005-standard-mechanics.md)).
 - Packages are readable text with sandboxed scripts, never compiled code. Input uses client actions, never raw keys.
-- Standardize by default. New games use the standard ruleset; ports choose a data-only compatibility profile that preserves their feel. One-game behavior goes to data, a script or a profile, never a shared-code quirk ([0004](docs/decisions/0004-extension-model.md), [0005](docs/decisions/0005-standard-mechanics.md)). Every deliberate deviation gets a deviation-log entry and a feel contract.
-- Product/ranked/UI decisions: `docs/product.md`. Porting/assets/format/editor: `docs/content.md`. Read the relevant section when working in that area. Per-game questions belong in `docs/games/<id>.md`; never guess. Follow approved IWBTG artboards; visible rendering changes need matching `--screenshot` evidence.
+- Standardize by default. New games use the standard ruleset; ports select a named ruleset and `[compat]` profile that preserve their feel. One-game behavior goes to data, a script or a profile, never a shared-code quirk ([0004](docs/decisions/0004-extension-model.md), [0005](docs/decisions/0005-standard-mechanics.md)). Every deliberate deviation gets a deviation-log entry and a feel contract.
+- Product/ranked/UI decisions: `docs/product.md`. Porting/assets/format/editor: `docs/content.md`. Read the relevant section when working in that area. Per-game questions belong in `docs/games/<id>.md`; never guess what the original did — pick the standard default and mark it. Follow approved IWBTG artboards; visible rendering changes need matching `--screenshot` evidence.
 
 ## Work loop
 

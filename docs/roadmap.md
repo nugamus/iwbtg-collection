@@ -41,7 +41,7 @@ The order of M3 and M4 versus M5: M5 ports need the M2 sim and the M2b pipeline,
 
 Near milestones fill up with small issues while later ones hold a few large placeholders (review of 2026-11-14, #774). Two rules keep the board honest:
 
-- **A finding goes to the milestone of the work it blocks,** not to the milestone that is open now. A one-game fidelity question goes on that game's port issue (M5), a server idea to M7, and so on. Fidelity questions get an impact tier first (#784, [fidelity tiers](plans/fidelity-tiers.md)): only T1 blocks M2.
+- **A finding goes to the milestone of the work it blocks,** not to the milestone that is open now. A one-game fidelity question goes on that game's port issue (M5), a server idea to M7, and so on. Fidelity questions get a feel tier first (#784, [fidelity tiers](plans/fidelity-tiers.md)): only F1 (the T1 alias) blocks M2.
 - **A milestone is scoped before its predecessor closes.** Its large issues get sub-issues (each port follows the standard steps listed in its issue), so the board shows the real size of the work ahead.
 
 ## How work flows

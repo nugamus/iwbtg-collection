@@ -6,13 +6,13 @@ This page describes how the client repo is built: the crates, the simulation, ho
 
 Related: [0001 script language](decisions/0001-script-language.md), [0002 data syntax](decisions/0002-data-syntax.md), [format v0](format/v0.md), [format principles](format/README.md), [server](server.md), [roadmap](roadmap.md).
 
-Facts about GameMaker 8 behavior come from the engine spec, `research/specs/engines/gm8/CLONE_SPEC.md` (not written yet). Where this page names a GM8 rule, the spec is the authority. Anything marked **OPEN** waits for it.
+Facts about GameMaker 8 behavior come from the engine spec, `research/specs/engines/gm8/CLONE_SPEC.md` (not written yet). Where this page names a GM8 rule, the spec is the authority. An evidence gap is F1 if it can change feel: it waits for a user/spec answer. F2/F3 gaps use the standard model and are logged.
 
 ## Goals
 
 - One simulation, `crates/sim`, runs the game on the client, the leaderboard server and the CLI.
 - The simulation is deterministic: the same package and inputs give bit-identical state on x86_64 Windows (MSVC), WASM and x86_64 Linux (the server).
-- A port reproduces the original's positions tick for tick. Traces of the original prove it.
+- A port reproduces what a player can feel — positions, timing and outcomes on a played path — not the original's internal structure. A feel contract proves it; traces are evidence where they exist.
 - Agents write and maintain all code. Clarity, tooling and guardrails come before cleverness.
 
 ## Crates

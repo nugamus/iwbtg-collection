@@ -67,7 +67,7 @@ A mechanic goes in the **lowest** tier that can express it. The tiers, from most
 | **Shared built-ins** | `crates/sim/src/builtins/`, documented once in `docs/format/builtins/<kind>.md`; params and presets | Maintainer, by promotion | Client release | `engine_rev` for behavior fixes; `gameplay_hash` for params |
 | **Runner rules** | `RunnerRules` (tick pipeline, motion, collision resolution, numbers, rooms, sound) and `engine_rev` branches | Maintainer only | Client release | `engine_rev`, `SIM_VERSION` |
 
-These are the **extension tiers**. They are not the `Tier 1`/`Tier 2`/`Tier 3` work-package labels in `crates/sim/src/def/builtin.rs`, and not the fidelity tiers T1-T4 in [fidelity-tiers](../plans/fidelity-tiers.md). This record does not change either.
+These are the **extension tiers**. They are not the `Tier 1`/`Tier 2`/`Tier 3` work-package labels in `crates/sim/src/def/builtin.rs`, and not the feel classes F1-F3 (formerly T1-T3; there is no T4) in [fidelity-tiers](../plans/fidelity-tiers.md). This record does not change either.
 
 Three consequences of the table:
 
