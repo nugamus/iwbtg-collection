@@ -11,7 +11,7 @@ version = "1.0.0"                # version of our port (semver)
 source_version = "4.2"           # version of the original we ported
 engine_pack = "yuuutu"           # engine pack in games/_engines/, optional
 engine_rev = 0                   # built-in behavior revision this package was verified against
-runner = "gm80"                  # gm80 | gm81: original runner, selects event-order differences
+runner = "gm80"                  # gm80 | gm81: the original's runner, provenance (same simulation rules)
 physics = "physics.toml"
 start_room = "title"
 tick_rate = 50                   # default room speed; rooms may override
@@ -131,7 +131,7 @@ Field rules:
 | `source_version` | no | Version of the original. |
 | `engine_pack` | no | Engine pack id ([engine packs](engine.md)); the pack must be bundled. |
 | `engine_rev` | yes | Built-in behavior revision ([architecture](../architecture/replay.md#versions)). |
-| `runner` | yes | `gm80` or `gm81`. **OPEN:** which differences it switches, from the CLONE_SPEC. |
+| `runner` | yes | `gm80` or `gm81`. Records the original's runner for provenance: both use the same simulation rules (research#15). A difference found later becomes a `RunnerRules` field. |
 | `physics` | yes | Path to the physics profile. |
 | `start_room` | yes | First room. |
 | `tick_rate` | no | Default room speed, 50 if absent. |
