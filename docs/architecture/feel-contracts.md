@@ -95,6 +95,14 @@ The input script uses the `.inputs` grammar ([replay](replay.md#text-inputs-for-
 
 A contract may assert the **absence** of a difference: `retry_delay` zero movement, `kid_count` one, no extra draw on the gameplay stream.
 
+### Units and identity
+
+- **Tick vs frame.** `tick` is the sim tick after that input has stepped; a `frame` in the input script is relative to the scenario's first tick (frame 0 = tick 0). The runner maps them one-to-one, so a contract never needs a separate frame offset.
+- **The Kid.** `kid_count` counts alive, active kids. A bare `kid` field (for example `control.action = "jump"`) means the `World::first_of` kid, the same first instance a query or save uses (R21); more than one kid needs an explicit `kid#<n>`.
+- **Exact floats.** A position `exact` compares the f64 bits. Use it only for a checkpoint or a placed coordinate whose value is a contract; a moving Kid uses an envelope or a window.
+- **Names.** `room` is the package room name; `reset_scope` names a counter/global as the probe registry resolves it; `sound.id` is the package sound name. A name that does not resolve is a contract load error, not a silent skip.
+- **Status.** `running` is the normal state; `cleared` is the run's end trigger; `halted` is a `SimError`, which a contract may assert only in a test of the error path.
+
 ### Tolerances
 
 - **Exact** is the default for counters, rooms, deaths, state hashes and the standard ruleset's saves.

@@ -84,7 +84,7 @@ The sim has one lifecycle with explicit events:
 | `retry` | The player presses R (or F2/reset). | Reset scope (`room`/`save`/`run`); spawn `checkpoint`; control delay in ticks; music/effects; checkpoint write. |
 | `quit` | The client leaves the run. | Client-only; no sim state. |
 
-The standard retry contract: **on retry the player controls a Kid at the checkpoint after `retry_delay_ticks` ticks; the room's placed instances are rebuilt; the declared counters persist.** The delay is an engine-owned init phase, not a package-authored room: there is no boot room and no temp marker, and the checkpoint does not load through an init room. The N/N+1/N+2 tick sequence is preserved because it is observed on the R tick (CLONE_SPEC 1174); the room is F3 and disappears from content. Existing games keep their felt sequence through a named profile: the death counter, save write, delay, spawn position and music behavior are the same.
+The standard retry contract: **on retry the player controls a Kid at the checkpoint after `retry_delay_ticks` ticks; the room's placed instances are rebuilt; the declared counters persist.** The delay is an engine-owned init phase, not a package-authored room: there is no package-authored boot room and no temp marker, and the checkpoint does not load through an init room. The N/N+1/N+2 tick sequence is preserved because it is observed on the R tick (CLONE_SPEC 1174); the room is F3 and disappears from content. Existing games keep their felt sequence through a named profile: the death counter, save write, delay, spawn position and music behavior are the same.
 
 ### One checkpoint
 
@@ -218,7 +218,7 @@ Each phase has child issues with size, dependencies and a feel contract.
 3. **Format 1 shape.** `ruleset` + `profile` + `[deviations]` as above, required at format 1, absent = `gm8` in format 0. Irreversible once format 1 freezes. Proposed default: accept.
 4. **Checkpoint v2.** Versioned, room-name based, exact position for `standard`, profile quantization for `gm8`; atomic write; migrate old saves. Proposed default: accept.
 5. **Which F1 redesigns may change feel.** Proposed default: none without evidence; every port keeps a `gm8` profile until each move is proved.
-6. **Modern defaults for new games.** Exact f64 checkpoints, separate effects RNG, no boot room, tick-based scheduling. Proposed default: yes.
+6. **Modern defaults for new games.** Exact f64 checkpoints, separate effects RNG, no package-authored boot room, tick-based scheduling. Proposed default: yes.
 7. **Promotion threshold interaction.** [0004](0004-extension-model.md)'s three-game rule stays; a standard behaviour promoted from a profile needs three ports or a committed creator demand. Proposed default: keep 0004.
 
 ## Evidence
