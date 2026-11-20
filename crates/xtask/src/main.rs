@@ -1,6 +1,7 @@
 //! `cargo xtask <command>`: the repetitive steps of a PR as one command each (#529).
 //!
-//! - `check [--all]`: rustfmt check, then clippy and tests of the crates this branch changed
+//! - `check [--all]`: rejects free-text `TODO(OPEN` markers that name no issue or URL (#1119),
+//!   then rustfmt check, then clippy and tests of the crates this branch changed
 //!   (against `origin/main`, committed or not) plus a compile check of the crates that depend on
 //!   them. `--all` runs the whole workspace, like CI. Writes the summary to
 //!   `target/xtask/last-check.txt` for `pr-body`. Each step streams actionable lines and keeps a
@@ -553,6 +554,70 @@ fn run_logged(
     })
 }
 
+/// Free-text `TODO(OPEN` markers held by files another agent is editing (#1119). Remove an entry
+/// when its marker is converted or deleted; the guard never requires an allowlisted line to exist.
+const OPEN_TODO_ALLOW: &[&str] = &[
+    "// TODO(OPEN: runner differences between GM 8.0 and 8.1, from the CLONE_SPEC): nothing to",
+    "// TODO(OPEN: built-in kind list, from research/specs/mechanics.md): check",
+];
+
+/// Whether a line is a free-text `TODO(OPEN` marker: no issue (`#123`) and no URL on the marker line.
+/// An allowlisted line is not an offence.
+fn open_todo_offends(line: &str) -> bool {
+    let line = line.trim();
+    if !line.contains("TODO(OPEN") || OPEN_TODO_ALLOW.contains(&line) {
+        return false;
+    }
+    let bytes = line.as_bytes();
+    let issue = (0..bytes.len().saturating_sub(1)).any(|i| bytes[i] == b'#' && bytes[i + 1].is_ascii_digit());
+    !issue && !line.contains("http://") && !line.contains("https://")
+}
+
+/// `crates/*/src/**/*.rs`: every `TODO(OPEN` names an issue or a URL (#1119). Cheap and offline.
+/// The xtask crate is skipped: it holds the pattern, the allowlist and this function's tests.
+fn check_open_todos(root: &Path) -> Result<(), String> {
+    let crates = root.join("crates");
+    let mut bad = Vec::new();
+    let entries = std::fs::read_dir(&crates).map_err(|e| format!("{}: {e}", crates.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        if entry.file_type().map_err(|e| e.to_string())?.is_dir() && entry.file_name() != "xtask" {
+            scan_open_todos(&entry.path().join("src"), &mut bad)?;
+        }
+    }
+    if bad.is_empty() {
+        return Ok(());
+    }
+    for (path, line, text) in &bad {
+        println!("{}:{line}: {text}", path.display());
+    }
+    Err(format!(
+        "{} free-text `TODO(OPEN` marker(s): name an issue (`TODO(#123)`) or a URL, or delete the marker (#1119)",
+        bad.len()
+    ))
+}
+
+fn scan_open_todos(dir: &Path, bad: &mut Vec<(PathBuf, usize, String)>) -> Result<(), String> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Ok(()); // a crate without src/ has nothing to scan
+    };
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if entry.file_type().map_err(|e| e.to_string())?.is_dir() {
+            scan_open_todos(&path, bad)?;
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+            for (n, line) in text.lines().enumerate() {
+                if open_todo_offends(line) {
+                    bad.push((path.clone(), n + 1, line.trim().to_owned()));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 fn check(root: &Path, all: bool) -> Result<(), String> {
     let files = changed_files(root, true)?;
     let plan = shared_plan(root, &files, all)?;
@@ -561,6 +626,17 @@ fn check(root: &Path, all: bool) -> Result<(), String> {
     }
     let mut summary = String::new();
     let mut index = 0usize;
+    // Runs before the cargo steps: it is cheap and offline, and it must also run on a docs-only branch.
+    let open_todos = check_open_todos(root);
+    match &open_todos {
+        Ok(()) => {
+            println!("TODO(OPEN markers: every one names an issue or URL");
+            let _ = writeln!(summary, "TODO(OPEN markers -> ok");
+        }
+        Err(e) => {
+            let _ = writeln!(summary, "TODO(OPEN markers -> {e}");
+        }
+    }
     let mut step = |root: &Path, what: &str, kind: &str, packages: &[String], args: &[&str]| {
         let key = format!("{kind}:{}", packages.join(","));
         let identity = plan
@@ -638,6 +714,7 @@ fn check(root: &Path, all: bool) -> Result<(), String> {
         }
     };
     let result = (|| {
+        open_todos?;
         step(
             root,
             "rustfmt",
@@ -1606,6 +1683,33 @@ version = \"1.0.0\"
         assert_eq!(absent.fix.as_deref(), Some("rustup target add wasm32-wasip1"));
         let present = ready("target", "installed");
         assert!(present.ok && present.fix.is_none());
+    }
+
+    #[test]
+    fn the_todo_guard_scans_crate_sources() {
+        let root = std::env::temp_dir().join(format!("xtask-todo-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("crates/a/src")).unwrap();
+        let file = root.join("crates/a/src/lib.rs");
+        std::fs::write(&file, "// TODO(OPEN: a free-text marker\n").unwrap();
+        assert!(check_open_todos(&root).is_err());
+        std::fs::write(&file, "// TODO(OPEN: see #1119\n").unwrap();
+        assert!(check_open_todos(&root).is_ok());
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn open_todo_markers_must_name_an_issue_or_url() {
+        assert!(open_todo_offends(
+            "// TODO(OPEN: runner differences between GM 8.0 and 8.1, from the CLONE_SPEC"
+        ));
+        assert!(!open_todo_offends("// TODO(OPEN: runner differences, see #1099"));
+        assert!(!open_todo_offends(
+            "// TODO(OPEN: kind list, https://example.com/spec)"
+        ));
+        assert!(!open_todo_offends("// TODO(#1119): link every open question"));
+        assert!(!open_todo_offends("// an ordinary comment"));
+        assert!(!open_todo_offends(OPEN_TODO_ALLOW[0]));
     }
 
     /// The `schema` feature (JSON Schema through `schemars`) is for docs and tests only: never in
