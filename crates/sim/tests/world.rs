@@ -33,7 +33,7 @@ fn classed(
 }
 
 #[test]
-fn wp1_spawn_runs_create_inside_the_call_and_applies_the_kind() {
+fn spawn_runs_create_inside_the_call_and_applies_the_kind() {
     let mut b = builder();
     let sprite = b.sprite_rect((4, 4), (0, 0));
     let creator = probe_kind(&mut b, "creator");
@@ -137,7 +137,7 @@ fn wp1_spawn_runs_create_inside_the_call_and_applies_the_kind() {
 }
 
 #[test]
-fn wp1_ids_are_monotonic_and_never_reused() {
+fn ids_are_monotonic_and_never_reused() {
     let mut b = builder();
     let k = probe_kind(&mut b, "p");
     let mut fx = Fx::new(b.build().unwrap());
@@ -155,7 +155,7 @@ fn wp1_ids_are_monotonic_and_never_reused() {
 }
 
 #[test]
-fn wp1_first_of_kid_and_count_of() {
+fn first_of_kid_and_count_of() {
     let mut b = builder();
     let kid = classed(&mut b, "kid", ClassMask::KID, &[]);
     let flipped = classed(&mut b, "kid2", ClassMask::KID_FLIPPED, &[]);
@@ -185,7 +185,7 @@ fn wp1_first_of_kid_and_count_of() {
 }
 
 #[test]
-fn wp1_change_kind_runs_destroy_and_create_and_takes_the_kind() {
+fn change_kind_runs_destroy_and_create_and_takes_the_kind() {
     let mut b = builder();
     let sprite = b.sprite_rect((4, 4), (0, 0));
     let from = classed(&mut b, "from", ClassMask::BLOCK, &[]);
@@ -214,7 +214,7 @@ fn wp1_change_kind_runs_destroy_and_create_and_takes_the_kind() {
 }
 
 #[test]
-fn wp1_emit_queues_output() {
+fn emit_queues_output() {
     let mut fx = Fx::new(builder().build().unwrap());
     fx.ctx().emit(OutputEvent::Room(RoomOutput::GameRestarted));
     assert_eq!(fx.w.output.len(), 1);
@@ -251,7 +251,7 @@ fn kid_collisions(log: &str) -> Vec<String> {
 }
 
 #[test]
-fn wp1_collision_pairs_follow_pair_order() {
+fn collision_pairs_follow_pair_order() {
     let handlers = [ClassMask::KILLER, ClassMask::BLOCK];
     let (mut fx, _, bl, x) = collision_fixture(&handlers, PairOrder::OtherRankThenId, true);
     fx.tick(InputFrame::EMPTY);
@@ -286,7 +286,7 @@ fn platform_hits(handlers: &[ClassMask]) -> (Vec<String>, InstId) {
 }
 
 #[test]
-fn wp1_one_other_matching_two_handlers_runs_only_the_most_specific() {
+fn one_other_matching_two_handlers_runs_only_the_most_specific() {
     // C8, R12b (Confirmed (recorder), showdown t-mot-08-a): a platform runs the kid's platform
     // handler only, whatever the handler order.
     let both = [ClassMask::BLOCK, ClassMask::PLATFORM];
@@ -313,7 +313,7 @@ fn wp1_one_other_matching_two_handlers_runs_only_the_most_specific() {
 }
 
 #[test]
-fn wp1_with_only_a_block_handler_block_runs_for_a_platform() {
+fn with_only_a_block_handler_block_runs_for_a_platform() {
     // t-mot-08-b: with the platform event cleared, the block event runs for the platform.
     let (hits, pl) = platform_hits(&[ClassMask::BLOCK]);
     assert_eq!(hits, vec![format!("k{}K", pl.0)]);
@@ -328,7 +328,7 @@ fn wp1_with_only_a_block_handler_block_runs_for_a_platform() {
 }
 
 #[test]
-fn wp1_pairs_are_rechecked_before_their_event() {
+fn pairs_are_rechecked_before_their_event() {
     // The kid's block event moves him off the killer (clears the killer's touch flag).
     let run = |recheck: bool| {
         let (mut fx, k, bl, x) = collision_fixture(
@@ -449,7 +449,7 @@ fn pairs_of(s: &str) -> Vec<(String, String)> {
 }
 
 #[test]
-fn wp1_r12_collision_pairs_run_lower_kind_first_t_ord_2() {
+fn r12_collision_pairs_run_lower_kind_first_t_ord_2() {
     // Run A: handlers registered scrambled; probes created c1, a1, b1, c2, a2.
     let events: &[(&str, &[&str])] = &[
         ("P", &["L", "B", "C"]),
@@ -486,7 +486,7 @@ fn wp1_r12_collision_pairs_run_lower_kind_first_t_ord_2() {
 }
 
 #[test]
-fn wp1_a_destroyed_other_is_skipped() {
+fn a_destroyed_other_is_skipped() {
     let (mut fx, k, bl, x) = collision_fixture(
         &[ClassMask::BLOCK, ClassMask::KILLER],
         PairOrder::OtherRankThenId,
@@ -507,7 +507,7 @@ fn wp1_a_destroyed_other_is_skipped() {
 /// with the save point (rank 2) comes later in his own turn. The second part kills an instance
 /// in the kid's turn whose pair belongs to a later outer instance's turn: that is skipped too.
 #[test]
-fn wp1_r22_a_pair_with_an_instance_killed_earlier_in_the_phase_is_skipped() {
+fn r22_a_pair_with_an_instance_killed_earlier_in_the_phase_is_skipped() {
     let mut b = builder();
     let kid = classed(&mut b, "kid", ClassMask::KID, &[ClassMask::BLOCK]);
     let block = classed(&mut b, "block", ClassMask::BLOCK, &[]);
@@ -598,7 +598,7 @@ fn wp1_r22_a_pair_with_an_instance_killed_earlier_in_the_phase_is_skipped() {
 }
 
 #[test]
-fn wp1_state_hash_covers_state_and_skips_caches() {
+fn state_hash_covers_state_and_skips_caches() {
     let mut b = builder();
     let k = probe_kind(&mut b, "p");
     let mut fx = Fx::new(b.build().unwrap());
@@ -635,7 +635,7 @@ fn wp1_state_hash_covers_state_and_skips_caches() {
 }
 
 #[test]
-fn wp1_unknown_kind_in_dispatch_halts() {
+fn unknown_kind_in_dispatch_halts() {
     let mut b = builder();
     let k = probe_kind(&mut b, "p");
     let mut fx = Fx::new(b.build().unwrap());
