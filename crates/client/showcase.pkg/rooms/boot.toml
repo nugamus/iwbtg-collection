@@ -1,0 +1,10 @@
+#:schema ../../../../docs/format/schema/v0/room.schema.json
+# The first room in room order: game_restart enters it before the retry's boot tick
+# loads the save (docs/architecture/sim/rooms.md, R16/R17). It holds no gameplay
+# instances, so the kid_start in a play room cannot make a second kid beside the
+# loaded one (#1140).
+size = [800, 608]
+file_speed = 50
+views_enabled = false
+background_color = "#090b1e"
+instances = []

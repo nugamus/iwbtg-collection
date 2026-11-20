@@ -317,6 +317,82 @@ mod tests {
         panic!("no clear in 4000 ticks; reached room {}", rooms.len());
     }
 
+    /// #1140: R after a death goes through the empty boot room before the boot tick loads the
+    /// save, so the retry leaves one kid at the saved spot. With no boot room, the courtyard's
+    /// `kid_start` made a kid during `game_restart` and the load made a second one beside it.
+    #[test]
+    fn a_showcase_retry_leaves_one_kid() {
+        use iwbtg_sim::input::{Action, InputFrame};
+        use iwbtg_sim::sim::{Sim, SimOptions};
+        use iwbtg_sim::sound::DllMode;
+        use iwbtg_sim::world::KindState;
+
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("showcase.pkg");
+        let p = open(&dir, false).unwrap();
+        let options = SimOptions {
+            start: iwbtg_sim::room::StartPoint::NewGame { difficulty: 0 },
+            seed: 0,
+            dll_mode: DllMode::Model,
+            mode: iwbtg_sim::stripped::PlayMode::Original,
+            map: None,
+        };
+        let mut sim = Sim::new(Arc::clone(&p.def), options).unwrap();
+        // The first tick runs the start room and the kid's first-play save.
+        sim.step(InputFrame::default());
+        assert!(sim.world().kid(&sim.rules().tick).is_some());
+
+        let suicide = Action::Suicide.bit();
+        sim.step(InputFrame {
+            held: suicide,
+            pressed: suicide,
+            released: 0,
+        });
+        sim.step(InputFrame {
+            held: 0,
+            pressed: 0,
+            released: suicide,
+        });
+        assert_eq!(sim.world().engine.run.deaths, 1);
+        assert!(sim.world().kid(&sim.rules().tick).is_none());
+        for _ in 0..4 {
+            sim.step(InputFrame::default());
+        }
+
+        // R: the key press event starts the retry; the next tick's boot load enters the saved
+        // room.
+        let restart = Action::Restart.bit();
+        sim.step(InputFrame {
+            held: restart,
+            pressed: restart,
+            released: 0,
+        });
+        sim.step(InputFrame {
+            held: 0,
+            pressed: 0,
+            released: restart,
+        });
+        for _ in 0..3 {
+            sim.step(InputFrame::default());
+        }
+
+        let kids: Vec<_> = sim
+            .world()
+            .iter_alive()
+            .filter(|i| matches!(i.state, KindState::Kid(_)))
+            .collect();
+        assert_eq!(kids.len(), 1, "R leaves one kid, not the start kid and the loaded one");
+        let slot = sim.world().save.clone().expect("the start room's save");
+        assert_eq!(sim.world().room, slot.room);
+        // The kid is made at the saved spot (quantized) and falls under gravity for the ticks
+        // since; x does not move.
+        let (kx, ky) = (kids[0].m.x().get(), kids[0].m.y().get());
+        let (sx, sy) = (slot.x.get(), slot.y.get());
+        assert!(
+            (kx - sx).abs() <= 1.0 && (ky - sy).abs() <= 8.0,
+            "the loaded kid at ({kx}, {ky}) is not at the save ({sx}, {sy})"
+        );
+    }
+
     #[test]
     fn an_iwbz_opens_like_its_folder_and_a_bad_one_is_refused() {
         let dir = std::env::temp_dir().join(format!("iwbtg-client-iwbz-{}", std::process::id()));
