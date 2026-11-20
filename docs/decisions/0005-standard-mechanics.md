@@ -10,7 +10,7 @@ The collection ports games from several GameMaker engines. The engine has reprod
 
 That was the right default while the goal was "reproduce the trace". It stops being the right default as the collection grows:
 
-- **The implementation leaks into places players and creators pay for.** #1141 added an empty boot room to the showcase because A1's retry is `GameRestartViaBoot`. The player-visible behavior is "R returns to the save with the room reset"; the boot room, boot tick and temp-file load are engine implementation. Adding the room shifted numeric room ids and broke user saves (#1144/#1145).
+- **The implementation leaks into places players and creators pay for.** #1141 added an empty boot room to the showcase because A1's retry is `GameRestartViaBoot`. The player-visible behavior is "R returns to the save with the room reset"; the boot **room**, the temp file and the package plumbing are implementation, but the N/N+1/N+2 tick sequence on the R tick is a feel contract (CLONE_SPEC 1174). The defect is that a **package** room encodes the delay: adding it shifted numeric room ids and broke user saves (#1144/#1145).
 - **The variants cost more than they explain.** The collision pair walk needed a second optimization pass (#1139/#1143) because one engine's ordering was cloned into the hot path, while the ordering is already a `RunnerRules`/`CollideRules` switch. `def/physics.rs` has ~175 public items across seven families; `physics_ext.rs` carries one-game switches.
 - **The extension model already rejects the endpoint.** [0004](0004-extension-model.md) says a shared built-in must be general, and a one-game quirk is data or a script. The same argument applies to mechanics themselves: shared code should be one model with data, not the union of every engine.
 - **The ports are not all equal witnesses.** A trace proves positions on the traced path. It does not prove that every probe column, boot tick, internal id or visual particle draw is a rule a player relies on. Treating all of it as sacred blocks redesigns that no player would notice.
@@ -42,8 +42,8 @@ The user's direction (2026-11-20):
 
 | Option | Verdict | Reason |
 |---|---|---|
-| Keep the boot room/boot tick/temp file. | Rejected | F3 implementation that leaks into room ids, saves and content authoring (#1141/#1144). |
-| One lifecycle with direct retry and a tick delay policy. | **Chosen** | The player sees "R → death counted, N-tick pause, spawn at the checkpoint, music as before". The delay is a number, not a room. |
+| Keep the package-owned boot room and temp file. | Rejected | The room is F3 implementation that leaks into room ids, saves and content authoring (#1141/#1144). |
+| An engine-owned lifecycle with the same N-tick init phase; no package boot room. | **Chosen** | The player sees the same "R → death counted, N-tick pause, spawn at the checkpoint, music as before". The N/N+1/N+2 timing is F1 evidence; the room is F3 and disappears from content. |
 | A scripted lifecycle per game. | Rejected | Per-tick lifecycle code is ranked-critical and repeats across 15 games. |
 
 ## Decision
@@ -56,16 +56,16 @@ Every mechanic gets one tier, recorded on its issue, deviation log and register 
 |---|---|---|
 | **F1 feel-critical** | Can change what a skilled player can do: position, death, timing, RNG on a played path, input response, respawn control. | Needs a feel contract and, for a redesign, evidence and the user where irreversible. Blocks Ranked and the milestone's F1 done-when. |
 | **F2 feedback** | Only visual or audio, but affects learning or clarity. | Needs a contract and screenshot/audio evidence. A visible difference blocks Beta. |
-| **F3 invisible** | A player cannot observe it: boot rooms, temp files, instance ids, numeric quantization, internal event order. | Free to redesign. Determinism, hashes and existing replays still apply. |
+| **F3 invisible** | A player cannot observe it: a package-authored boot room, a temp file, an instance id, numeric quantization, an internal event order. | Free to redesign. Determinism, hashes and existing replays still apply. |
 
 This is the same question the fidelity tiers ask, asked of every mechanic rather than only of an open spec question. The mapping and legacy aliases are in [fidelity tiers](../plans/fidelity-tiers.md).
 
 ### The ruleset and profile
 
-- **Ruleset** is the named, versioned definition of what the runner computes: tick pipeline, lifecycle, motion, collision, numbers, input, scheduling, RNG and sound. The code implements each ruleset.
+- **Ruleset** is the named, versioned definition of what the runner computes: tick pipeline, lifecycle, motion, collision, numbers, input, scheduling, RNG and sound. The code implements each ruleset; a package selects one, it does not supply one (0004).
   - `gm8` — the compatibility ruleset. It keeps every current behavior, including every existing branch and default.
-  - `standard` — the ruleset for new games and the target for ports that have proved each move. It is the modern default: direct retry, exact checkpoint positions, separate effects RNG, tick-based scheduling, one dispatch/collision order.
-- **Profile** is package data inside a ruleset. It selects policy values the ruleset exposes: retry policy, save precision, collision order keys, RNG stream layout, sound adapter, numeric tolerances, and declared deviations. A profile cannot introduce code.
+  - `standard` — the ruleset for new games and the target for ports that have proved each move. It is the modern default: an engine-owned retry without a package boot room, exact checkpoint positions, separate effects RNG, tick-based scheduling, one dispatch/collision order.
+- **Profile** is package data that names one of the engine's **pre-defined** compatibility bundles inside a ruleset (for example `gm8-a1`), plus the physics preset and the declared deviations. It cannot supply arbitrary runner-rule values: numeric tolerances, dispatch order, stream layout and the other `RunnerRules` fields belong to the ruleset/`engine_rev`, not to package data. A value the engine does not already implement is a ruleset change and a client release.
 - **`engine_rev`** remains the shared built-in behavior revision. It composes with the ruleset.
 - **`engine_pack`** remains the shared asset bundle and a suggested physics preset.
 - **`physics.toml`** remains the per-game movement tuning and event/action data.
@@ -84,14 +84,14 @@ The sim has one lifecycle with explicit events:
 | `retry` | The player presses R (or F2/reset). | Reset scope (`room`/`save`/`run`); spawn `checkpoint`; control delay in ticks; music/effects; checkpoint write. |
 | `quit` | The client leaves the run. | Client-only; no sim state. |
 
-The standard retry contract: **on retry the player controls a Kid at the checkpoint after `retry_delay_ticks` ticks; the room's placed instances are rebuilt; the declared counters persist.** There is no boot room, no temp marker and no save load through an init room. Existing games keep their felt sequence through a profile: the death counter, save write, delay, spawn position and music behavior are the same; the boot room disappears.
+The standard retry contract: **on retry the player controls a Kid at the checkpoint after `retry_delay_ticks` ticks; the room's placed instances are rebuilt; the declared counters persist.** The delay is an engine-owned init phase, not a package-authored room: there is no boot room and no temp marker, and the checkpoint does not load through an init room. The N/N+1/N+2 tick sequence is preserved because it is observed on the R tick (CLONE_SPEC 1174); the room is F3 and disappears from content. Existing games keep their felt sequence through a named profile: the death counter, save write, delay, spawn position and music behavior are the same.
 
 ### One checkpoint
 
 One versioned checkpoint replaces `SaveSlot` on disk and in `StartPoint::FromSave`:
 
 - stable **room name** and optional checkpoint name, never a numeric `RoomId`;
-- position as exact `f64` plus a declared `save_precision` policy (`exact` for standard; the family quantization modes become profile values where they change the respawn alignment);
+- position as exact `f64` plus a declared `save_precision` policy (`exact` for `standard`; the family quantization modes are selected by the named `gm8` compatibility profile where they change the respawn alignment);
 - facing, flip state, difficulty, deaths, time, bosses/items/clear flags and the ruleset/profile id;
 - atomic write (temp + rename) and a format version; old files migrate or are refused with one warning and a new game;
 - the replay header stores the same checkpoint bytes; the server parses them for verification and never trusts client hashes.
@@ -115,7 +115,7 @@ The current `PairOrder`, `RoomStartOrder`, `RoomEndOrder`, `JoinPhase`, `NewInst
 
 ### One numeric policy
 
-IEEE binary64 everywhere. Exact operations stay exact. A tolerance exists only where a feel contract needs it (collision edges, triggers, save alignment). The standard ruleset uses one explicit tolerance mechanism, with each value declared at its use; `gm8` keeps `NumRules` as it is. Serialization uses shortest round-trip; save precision is a checkpoint policy, not a comparison mode. No engine-specific comparison mode is added to shared code.
+IEEE binary64 everywhere. Exact operations stay exact. A tolerance exists only where a feel contract needs it (collision edges, triggers, save alignment). The standard ruleset uses one explicit tolerance mechanism, with each value declared at its use; `gm8` keeps `NumRules` as it is. A package selects the ruleset; it does not supply a tolerance. Serialization uses shortest round-trip; save precision is a checkpoint policy, not a comparison mode. No engine-specific comparison mode is added to shared code.
 
 ### One input contract
 
@@ -177,7 +177,7 @@ The umbrella is [#1146](https://github.com/nugamus/iwbtg-collection/issues/1146)
 
 | Area | Issue | First move |
 |---|---|---|
-| A lifecycle | [#1149](https://github.com/nugamus/iwbtg-collection/issues/1149) | Direct retry; the delay is a number, not a boot room. |
+| A lifecycle | [#1149](https://github.com/nugamus/iwbtg-collection/issues/1149) | Engine-owned init phase; no package boot room; the N-tick delay stays. |
 | B checkpoint | [#1150](https://github.com/nugamus/iwbtg-collection/issues/1150) | Versioned checkpoint with a stable room name. |
 | C physics | [#1151](https://github.com/nugamus/iwbtg-collection/issues/1151) | Standard parameter schema over the family presets. |
 | D collision | [#1152](https://github.com/nugamus/iwbtg-collection/issues/1152) | One walk with data-driven order keys. |
@@ -195,7 +195,7 @@ The umbrella is [#1146](https://github.com/nugamus/iwbtg-collection/issues/1146)
 ## Migration phases
 
 1. **Phase 0 — decision and evidence (this proposal).** Decision record, guidance, feel-tier mapping, harness specification, issues. No behavior change.
-2. **Phase 1 — F3 quick wins.** Direct retry without a boot room (keep the tick delay and spawn outcome), stable room/entity identity in saves, internal ordering, dead-code and duplicate removal. Every step is proven by unchanged golden pins and a feel contract.
+2. **Phase 1 — F3 quick wins.** Engine-owned init phase without a package-authored boot room (keep the N-tick delay and spawn outcome), stable room/entity identity in saves, internal ordering, dead-code and duplicate removal. Every step is proven by unchanged golden pins and a feel contract.
 3. **Phase 2 — feel-neutral standardization.** Standard parameter names and a compositional movement model; one dispatch/collision core with data-driven order; ruleset/profile parsing; checkpoint v2; input/tick/RNG/sound models behind profiles. Existing packages keep their exact behavior and hashes.
 4. **Phase 3 — F1 redesigns.** Only with evidence and a new ruleset/profile. Each ships with a board/replay migration: old rulesets remain verifiable, old boards remain, new runs get a new `gameplay_hash`.
 
@@ -203,7 +203,7 @@ Each phase has child issues with size, dependencies and a feel contract.
 
 ## Consequences
 
-- **New games get the simple model.** No boot room, no per-engine action list, no numeric ids in saves.
+- **New games get the simple model.** No package-authored boot room, no per-engine action list, no numeric ids in saves.
 - **Ports keep their feel without code forks.** A profile is data, hashed and reviewable; a deviation names its reason, impact and test.
 - **Ranked integrity is unchanged.** A behavior change is a new ruleset/profile and a new `gameplay_hash`; old replays verify with the build/ruleset they were made on.
 - **The evidence standard becomes clearer.** A trace column that no player can observe is no longer a design mandate; an F1 outcome still needs the strongest evidence available.

@@ -11,7 +11,7 @@
 
 ## Pitfalls seen before
 
-- A package declares a `ruleset` and a `profile`; the profile is data and can only set values the ruleset exposes. A new value is a ruleset change and a client release. A behavior change is a new `gameplay_hash` and board, never a silent edit ([0005](../decisions/0005-standard-mechanics.md)).
+- A package declares a `ruleset` and names an engine-defined `profile`; it cannot supply runner-rule values or code. A new value is a ruleset change and a client release. A behavior change is a new `gameplay_hash` and board, never a silent edit ([0005](../decisions/0005-standard-mechanics.md)).
 - Launch the client only with `--mute` (`cargo run -p iwbtg-client -- <pkg> --mute`, or `IWBTG_MUTE=1`): an unmuted test run played music on the user's speakers for 20 minutes (#712).
 - `manifest.rs` and `docs/format/game.md` are shared hot spots: merge `origin/main` just before opening the PR.
 - Every format change updates `docs/format/` and the schema in the same PR.

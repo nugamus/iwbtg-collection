@@ -1,6 +1,6 @@
 # 0004: Extension model for unknown mechanics
 
-Status: Proposed for the user's approval, 2026-11-20. Issue [#778](https://github.com/nugamus/iwbtg-collection/issues/778). The PR that closes #778 is the approval; until it merges this is a draft.
+Status: Accepted, 2026-11-20. Issue [#778](https://github.com/nugamus/iwbtg-collection/issues/778); [PR #1085](https://github.com/nugamus/iwbtg-collection/pull/1085).
 
 Related: [0001 script language](0001-script-language.md), [0002 data syntax](0002-data-syntax.md), [format principles](../format/README.md), [world model](../architecture/sim/world.md), [physics profile](../format/physics.md), [scripts](../architecture/sim/scripts.md), [collision](../architecture/sim/collision.md), [versioning](../architecture/versioning.md), [content: engines](../content.md#engines).
 

@@ -14,7 +14,7 @@ The tier is the same judgement as the fidelity tiers below, named for what it pr
 |---|---|---|
 | **F1 feel-critical** | T1 | Can change what a skilled player can do: position, death, timing, RNG on a played path, input response, respawn control. |
 | **F2 feedback** | T2, visible | Only visual or audio, but affects learning or clarity; a player can see or hear the difference. |
-| **F3 invisible** | T2, invisible; T3 | No player can observe it: a boot room, a temp file, an internal id, a probe-only value, an internal event order. |
+| **F3 invisible** | T2, invisible; T3 | No player can observe it: a package-authored boot room, a temp file, an internal id, a probe-only value, an internal event order. |
 
 F3 is free to redesign, provided determinism and the pinned hashes still hold. F2 needs a contract and screenshot/audio evidence. F1 needs a feel contract and, for a redesign, the strongest trace or playtest evidence available; an irreversible F1 change also needs the user.
 
