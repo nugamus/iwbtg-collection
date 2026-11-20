@@ -17,6 +17,10 @@ Part of [Architecture](../architecture.md).
 | Budget and speed | Peak script units under 25% of the budget; benchmarks of the Rori Girl and Easy Miku 2 avoidances and a 28,900-instance load, native and WASM | `iwbtg profile`, `cargo bench` | CI, early in Phase 3 |
 | Lints | `cargo clippy -D warnings` with the sim bans, `cargo deny check`, `cargo fmt --check` | CI | every PR |
 
+## Naming tests
+
+Tests are named after the module or subject they test (`rooms.rs`, `determinism.rs`), not after the work package that added them. A test module's docs describe the behavior it covers; ownership belongs in the lane docs. A WP-era id (a `WP` followed by a number) stays only where it explains history a reader needs (the historical `docs/plans/sim-core.md`, or a comment naming the work a later change replaced); new files, tests and docs carry none. `cargo test -p xtask no_new_wp_era_identifiers` is a per-area ceiling on the remaining ids: it fails when an area gains one, and a sweep that removes them lowers the ceiling in the same PR.
+
 ## CI and the fidelity sweep
 
 CI is public and sees only this repo: everything in the table above except the trace tests and the replay corpus, which need the private research and games repos (`motion_traces.rs` skips without `IWBTG_RESEARCH`, and CI never sets it). So CI proves the sim is deterministic and matches its own pinned hashes, not that it still matches the original games.
