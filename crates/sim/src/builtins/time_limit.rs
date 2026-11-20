@@ -1,4 +1,4 @@
-//! Built-in `time_limit` (mechanics `builtin.time_limit`; docs/plans/sim-core.md 6.1;
+//! Built-in `time_limit` (mechanics `builtin.time_limit`; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/time_limit.md). Tier 3.
 //!
 //! Two roles, one per object in the original (KOT, LT, MIKU, ANI, RBF):

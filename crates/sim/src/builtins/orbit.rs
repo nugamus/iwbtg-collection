@@ -1,4 +1,4 @@
-//! Built-in `orbit` (mechanics `orbit`; docs/plans/sim-core.md 6.1, K9;
+//! Built-in `orbit` (mechanics `orbit`; docs/architecture/sim/builtins.md, K9;
 //! docs/format/builtins/orbit.md). Tier 3.
 //!
 //! Killers that move on a circle. Each Step an orbiting instance is placed at

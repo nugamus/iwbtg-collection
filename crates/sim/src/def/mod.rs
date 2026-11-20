@@ -1,5 +1,5 @@
 //! The immutable game definition the sim runs (docs/architecture/sim/world.md,
-//! collision.md, rooms.md; docs/plans/sim-core.md 8).
+//! collision.md, rooms.md; docs/format/v0.md).
 //!
 //! `crates/format` parses a package into a [`GameDef`]. The sim never reads files and never
 //! changes a `GameDef`. File owners after WP0 (plan 13, "File overlap check"): `physics.rs`

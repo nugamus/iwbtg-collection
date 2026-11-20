@@ -1,4 +1,4 @@
-//! `iwbtg replay run`: ticks, splits, ranked time, final hash (docs/plans/sim-core.md 9.4, WP8b).
+//! `iwbtg replay run`: ticks, splits, ranked time, final hash (docs/architecture/cli.md, WP8b).
 //!
 //! Runs a package headless on a `.iwbr` replay or an action-named `.inputs` file and prints seven
 //! lines:

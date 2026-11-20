@@ -1,4 +1,5 @@
-//! Trace setup actions, behind the `trace-setup` feature (docs/plans/sim-core.md 9.2, 9.4, 10.4).
+//! Trace setup actions, behind the `trace-setup` feature (docs/architecture/traces.md,
+//! docs/architecture/cli.md, docs/architecture/sim/determinism.md).
 //!
 //! A fixed vocabulary that replaces the recorder's `--gml` assignments, `--x` and `--y`.
 //! Applying one sets `World::setup_applied`, which is hashed, so a run that used setup can never
@@ -80,8 +81,8 @@ impl Sim {
     /// Like [`Sim::new`], but applies `pre_entry` to the world after the rules, the script host
     /// and the empty world exist and before `room::start_game` creates the boot instances and
     /// enters the first room: the recorder's `--gml` code that ran before its `--room` jump
-    /// (plan 9.2). Only globals and the save slot exist at that point, so a `SetField` here fails
-    /// with "no instance".
+    /// (docs/architecture/traces.md). Only globals and the save slot exist at that point, so a
+    /// `SetField` here fails with "no instance".
     ///
     /// The steps are the ones `Sim::new` documents (rules from the game's runner and engine_rev,
     /// `ScriptRuntime::new`, `World::new` in the start room with the seed, a `Ctx` carrying

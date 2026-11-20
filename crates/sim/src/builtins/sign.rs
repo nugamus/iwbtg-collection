@@ -1,4 +1,4 @@
-//! Built-in `sign` (mechanics `builtin.sign`; docs/plans/sim-core.md 6.1;
+//! Built-in `sign` (mechanics `builtin.sign`; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/sign.md). Tier 3.
 //!
 //! Raises a client text box. `mode`:

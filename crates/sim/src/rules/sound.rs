@@ -1,4 +1,4 @@
-//! Sound model switches (docs/plans/sim-core.md 7, register S1-S4).
+//! Sound model switches (docs/architecture/sim/sound.md, register S1-S4).
 //!
 //! S5 lives in the DLL adapters. WP0 declares; WP10 owns.
 

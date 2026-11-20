@@ -1,4 +1,4 @@
-//! Built-in `conveyor` (mechanics `conveyor`; docs/plans/sim-core.md 6.1;
+//! Built-in `conveyor` (mechanics `conveyor`; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/conveyor.md). Tier 3.
 //!
 //! A solid block child (the loader gives it the `conveyor` class and the block solidity).

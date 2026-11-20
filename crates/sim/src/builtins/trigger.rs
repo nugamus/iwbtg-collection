@@ -1,4 +1,4 @@
-//! Built-in `trigger` (mechanics `trigger`; docs/plans/sim-core.md 6.1; docs/format/builtins/
+//! Built-in `trigger` (mechanics `trigger`; docs/architecture/sim/builtins.md; docs/format/builtins/
 //! trigger.md): five models, state in `MechGlobals` or in the trigger instances. Tier 2. WP0
 //! creates the file; WP6b owns it.
 //!

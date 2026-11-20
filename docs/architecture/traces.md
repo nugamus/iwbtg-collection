@@ -5,6 +5,37 @@ Part of [Architecture](../architecture.md).
 
 Ground truth comes from the research repo. The Phase 2 recorder runs the original under OpenGMK with `iwc-trace.patch` and writes one CSV per case, next to its `.inputs` file, in `research/specs/engines/<engine>/traces/<game>/<case>.csv`. Selected frames are cross-checked against the real GM8 runner through the research gate.
 
+This page is the live text of sections 9.1-9.3 of [the sim core plan](../plans/sim-core.md), which stays only as history; this page is the authority. Replay files are on [Input and replay format](replay.md), and the commands are on [The `iwbtg` CLI](cli.md).
+
+### Trace cases
+
+About 250 CSVs exist (2026-10-24), more arriving: kaenbyou 56, deride-kotaro-from-aslant 32, little-runner 29, machinary 27, animus 20, rely-the-needle-4-2 17, little-trap 11, go-the-spook-house 10, eat-the-lemon 9, help-the-fairy-tale 9, go-the-jun-g-world 8, poronkusema 7, clear-the-easy-miku-2 6, eat-the-rori-girl 6, eat-the-new-year 5, get-the-rainbow-feather 3, showdown 1, keep-celebrating-for-xia 0. Kaenbyou traces carry `.dllcalls.txt` and use `--stub-dlls`.
+
+`iwbtg trace import` sorts each case into one of three kinds from the header command line:
+
+1. **Diff targets.** `--room`, `--from`, `--x/--y`, and `--gml` that only assigns variables (`--gml 1:global.difficulty=1`, before room entry, or at a frame). Columns are GM variables, `instance_number(...)`, `keyboard_check*(...)`. These become case files and must diff clean.
+2. **Probe traces that settle spec items.** `--gml` with `object_event_add` or log strings (`t-ord-1`, `t-evo-1`, `t-room-1`, `tr-room-01-a`, `zz-*`). Our sim cannot run injected GML. Research reads these and updates the spec; a golden test with the `Probe` built-in then reproduces the spec's stated result.
+3. **Probe-read traces.** `--gml` that reads and decodes files into globals (`famb-save-restart-*` decrypts the save into `global.tr_*`). These map to probe columns on `SaveSlot` fields, not to setup.
+
+Case files live in the client repo at `crates/tools/cases/<package-id>/<case>.toml` (they hold package ids and research trace names, no creator content), written by `iwbtg trace import` and finished by hand.
+
+```toml
+source = "kaenbyou/t-alarm-1"          # research/specs/engines/gm8/traces/<source>.{csv,inputs}
+start = { room = "template", difficulty = 0 }   # StartPoint::Room, mapped from rTemplate by trace-map
+first_frame = 2                         # recorder --from
+object = "kid_bullet"                   # our kind for the traced original object
+dll_mode = "stub"                       # recorder --stub-dlls
+setup = [
+  { frame = 0, global = "difficulty", value = 1.0 },   # frame <= first_frame: applied before room entry
+  { frame = 3, target = "kid", set = { x = 96.0, y = 567.4, xprevious = 96.0, yprevious = 567.4 } },
+]
+vars = { "alarm[0]" = "alarm0", "player.x" = "kid.x", "player.y" = "kid.y" }
+ignore = ["id", "sprite_index"]
+```
+
+- `setup` is the fixed vocabulary described under Mapping and diff below: a kid field, the first instance of a kind, a named instance, the `n`-th instance in instance order, a global or a `SaveSlot` field. Entries with `frame <= first_frame` run before `start_game` enters the room.
+- Frame mapping: the row at `first_frame` is the state after the first tick in the room (kaenbyou t-speed-1). Our run treats tick k as frame `first_frame + k`. Inputs come from the `.inputs` file by frame number through the engine key map (`KeyMap`).
+
 ### Recorder behavior the trace runner copies
 
 The runner sets `DirectLatch::None` (the recorder has no `keyboard_check_direct` latch) and `TickRules::fps_zero_ticks = 51 - at` (`RECORDER_FIRST_FPS_FRAME`: the recorder's GML `fps` reads 0 up to frame 50, research kid/B.md "Play timer"; normal play never reads 0, see docs/format/builtins/world.md). Probe reads follow the recorder's row timing: `keyboard_check_pressed` and `keyboard_check_released` read 0 (rows are written after the frame), and `player.x` with no player instance reads 0 (uninitialized variables as 0, `[engine] uninit_reads_zero`).

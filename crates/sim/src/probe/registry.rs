@@ -1,4 +1,4 @@
-//! GM variable names to probe fields (docs/plans/sim-core.md 9.3): `djump`, `curJumps`,
+//! GM variable names to probe fields (docs/architecture/traces.md): `djump`, `curJumps`,
 //! `jump[1]`, `alarm[0]`, `image_index`, ... WP0 declares; WP8a owns.
 //!
 //! [`resolve`] maps one variable name to a [`FieldRef`]. [`column`] reads a whole probe column

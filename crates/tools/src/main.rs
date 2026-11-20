@@ -1,6 +1,6 @@
 //! `iwbtg`: the command-line tool for agents and CI (docs/architecture/cli.md, The iwbtg CLI).
 //!
-//! Commands are planned in docs/plans/sim-core.md 9.4: WP8a owns `trace` and `pkg`, WP8b
+//! Commands are described in docs/architecture/cli.md: WP8a owns `trace` and `pkg`, WP8b
 //! `replay`.
 
 mod assets_cmd;

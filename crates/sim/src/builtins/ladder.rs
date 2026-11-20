@@ -1,4 +1,4 @@
-//! Built-in `ladder` (docs/plans/sim-core.md 6.1; docs/format/builtins/ladder.md). Tier 3.
+//! Built-in `ladder` (docs/architecture/sim/builtins.md; docs/format/builtins/ladder.md). Tier 3.
 //! A marker (mechanics `builtin.ladder`): the climbing is the kid's `ladder` action (A1 Step action 2).
 //!
 //! The loader gives the kind the `ladder` class (`def/class.rs` LADDER), which the kid's `ladder`

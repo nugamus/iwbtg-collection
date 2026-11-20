@@ -47,8 +47,8 @@ pub use trig::{
 ///
 /// `Hash` and `Serialize` use [`Real::canonical_bits`], so every NaN hashes and serializes as
 /// [`Real::CANONICAL_NAN_BITS`] whatever payload the platform produced. The state hash is BLAKE3
-/// over the postcard encoding (plan 10.1); `Hash` is only for test maps. Deserializing keeps the
-/// bits it reads.
+/// over the postcard encoding (docs/architecture/sim/hash.md); `Hash` is only for test maps.
+/// Deserializing keeps the bits it reads.
 #[derive(Clone, Copy, Default, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(transparent)]

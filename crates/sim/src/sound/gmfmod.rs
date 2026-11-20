@@ -1,5 +1,5 @@
-//! GMFMODSimple DLL adapter (go-the-spook-house, keep-celebrating-for-xia; docs/plans/sim-core.md
-//! 7, S5).
+//! GMFMODSimple DLL adapter (go-the-spook-house, keep-celebrating-for-xia;
+//! docs/architecture/sim/sound.md; S5).
 //!
 //! Sound ids and instance ids are numbers; 0 means error. Groups are 1 to 4, 0 is master. A
 //! one-shot instance becomes invalid when it ends; a looped one stays until stopped. A new

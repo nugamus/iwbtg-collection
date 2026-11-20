@@ -1,4 +1,4 @@
-//! The built-in kinds (docs/plans/sim-core.md 6.1). WP0 lists every variant so the loader can
+//! The built-in kinds (docs/architecture/sim/builtins.md). WP0 lists every variant so the loader can
 //! parse kinds; WP6a owns the file afterwards. Dispatch lives in `builtins/mod.rs`, where WP0
 //! routed every variant to its own file, so WP6b and WP6c edit neither file.
 

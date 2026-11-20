@@ -1,4 +1,4 @@
-//! Built-in `slope` (mechanics `slope`; docs/plans/sim-core.md 6.1; docs/format/builtins/
+//! Built-in `slope` (mechanics `slope`; docs/architecture/sim/builtins.md; docs/format/builtins/
 //! slope.md). Tier 2. WP0 creates the file; WP6b owns it.
 //!
 //! No events: a slope is solid with a precise mask, and the climb and snap rules belong to the

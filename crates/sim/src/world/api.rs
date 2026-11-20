@@ -394,8 +394,8 @@ impl<'a> Ctx<'a> {
 
     /// Halts the sim: sets `World::status` to `Halted(e)` (the first error wins if it is
     /// already halted) and returns [`Flow::Halt`]. The one way a handler that returns `Flow`
-    /// stops the sim (docs/architecture/sim/tick.md; plan 10.2); handlers that return `Result` just return the error and
-    /// `events::dispatch` calls this.
+    /// stops the sim (docs/architecture/sim/tick.md, docs/architecture/sim/determinism.md);
+    /// handlers that return `Result` just return the error and `events::dispatch` calls this.
     pub fn halt(&mut self, e: SimError) -> Flow {
         if self.w.status == SimStatus::Running {
             self.w.status = SimStatus::Halted(e);

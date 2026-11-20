@@ -1,4 +1,4 @@
-//! Built-in kinds other than the kid (docs/plans/sim-core.md 6).
+//! Built-in kinds other than the kid (docs/architecture/sim/builtins.md).
 //!
 //! One file per built-in, documented in `docs/format/builtins/<kind>.md`. Each file has the same
 //! four entry points (`param_specs`, `event_set`, `init_state`, `on_event`), and WP0 wrote the

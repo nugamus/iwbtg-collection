@@ -1,5 +1,5 @@
 //! Built-in `camera` (mechanics `camera`; CLONE_SPEC rooms "Views";
-//! docs/architecture/sim/rooms.md (views); docs/plans/sim-core.md 6.1;
+//! docs/architecture/sim/rooms.md (views); docs/architecture/sim/builtins.md;
 //! docs/format/builtins/camera.md). Tier 1. WP0 creates the file; WP6a owns it.
 //!
 //! Camera objects write view 0. Their Step placement gives the 1-tick lag the spec infers: the

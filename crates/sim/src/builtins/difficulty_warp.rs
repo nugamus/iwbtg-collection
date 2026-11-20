@@ -1,4 +1,4 @@
-//! Built-in `difficulty_warp` (warpStart, objWarpStart; rooms; docs/plans/sim-core.md 6.1;
+//! Built-in `difficulty_warp` (warpStart, objWarpStart; rooms; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/difficulty_warp.md). Tier 1. WP0 creates the file; WP6a owns it.
 //!
 //! Collision with the kid: set the difficulty from `dif`, delete the save, zero the death and

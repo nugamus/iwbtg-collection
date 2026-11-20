@@ -49,7 +49,7 @@ pub struct World {
     /// mutable access goes through `World::get_mut`, which keeps the broadphase grid in step
     /// (docs/architecture/sim/collision.md); read them with `World::instances`.
     pub(in crate::world) instances: Vec<Instance>,
-    /// The next runtime id to hand out (checked, plan 10.3); starts at
+    /// The next runtime id to hand out (checked, docs/architecture/sim/determinism.md); starts at
     /// [`World::first_runtime_id`].
     pub next_id: u64,
     /// Variable names first seen at run time (scripts; docs/architecture/sim/world.md).
@@ -106,8 +106,8 @@ pub struct World {
     /// timing chain and ranked start. Hashed: two maps' runs never share a state hash.
     #[serde(default)]
     pub map: u16,
-    /// A trace setup action ran (plan 10.4). Hashed, so a run that used setup never matches a
-    /// clean verification.
+    /// A trace setup action ran (docs/architecture/sim/determinism.md). Hashed, so a run that
+    /// used setup never matches a clean verification.
     pub setup_applied: bool,
     /// Broadphase cache (WP3). Rebuilt on room entry and savestate restore; never hashed, and
     /// never makes two worlds unequal (`Grid`'s `PartialEq` is always true).

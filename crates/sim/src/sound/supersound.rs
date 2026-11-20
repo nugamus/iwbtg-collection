@@ -1,4 +1,4 @@
-//! SuperSound DLL adapter (kaenbyou, eat-the-lemon; docs/plans/sim-core.md 7, S5).
+//! SuperSound DLL adapter (kaenbyou, eat-the-lemon; docs/architecture/sim/sound.md, S5).
 //!
 //! Handles are strings (the handle of the n-th load is `"n"`; `"0"` is a failed load). Every
 //! call returns a string, as the DLL does. Volume is DirectSound attenuation in hundredths of
