@@ -38,7 +38,7 @@ Each port keeps:
 - **Trace reports:** stored in the package's `tests/` folder.
 - **A changelog per version:** shown on the game page.
 
-**OPEN:** the user wants the porting pipeline to be efficient and well made, not slow. A deeper design pass on the pipeline is needed: converter automation, which steps agents own, and where humans are needed.
+**Pipeline.** The step-by-step pipeline from download to Beta, with what the converter automates, what an agent does, where a human records or playtests, and a time target per step, is [porting](porting.md).
 
 ### Language
 
