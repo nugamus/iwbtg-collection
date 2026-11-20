@@ -211,7 +211,8 @@ impl BitAnd for ClassMask {
     }
 }
 
-/// Default collision classes of a built-in (Design; docs/architecture/sim/world.md and docs/plans/sim-core.md 6.1).
+/// Default collision classes of a built-in (Design; docs/architecture/sim/world.md and
+/// docs/architecture/sim/builtins.md).
 pub fn default_classes(b: Builtin) -> ClassMask {
     match b {
         Builtin::Kid => ClassMask::KID,

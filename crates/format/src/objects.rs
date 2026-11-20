@@ -5,10 +5,10 @@
 //! (`script`, with an optional `base`). Keys other than the reserved ones below are params of the
 //! base built-in, checked against `builtins::param_specs` by `params::check` (WP7b).
 //!
-//! Collision classes stand in for GM parents (plan 1.1): each built-in has default classes
-//! ([`default_classes`]), some params pick a class ([`param_classes`]), and `counts_as` adds
-//! more. The defaults are Design, read off the class names and the plan 6.1 table; a built-in
-//! owner who needs another default changes it here.
+//! Collision classes stand in for GM parents (docs/architecture/sim/world.md): each built-in has
+//! default classes ([`default_classes`]), some params pick a class ([`param_classes`]), and
+//! `counts_as` adds more. The defaults are Design, read off the class names and the plan 6.1
+//! table; a built-in owner who needs another default changes it here.
 
 use std::collections::BTreeMap;
 use std::ops::Range;
@@ -62,7 +62,7 @@ pub struct ObjectFile {
     pub depth: Option<Spanned<f64>>,
     /// GM `persistent`; default false.
     pub persistent: Option<bool>,
-    /// Extra collision classes (plan 1.1): named classes or package class names.
+    /// Extra collision classes (docs/architecture/sim/world.md): named classes or package class names.
     pub counts_as: Vec<Spanned<String>>,
     /// Classes whose touch runs the script's `collide(other)`: named classes or package class names.
     pub collides_with: Vec<Spanned<String>>,

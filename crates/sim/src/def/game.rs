@@ -1,4 +1,4 @@
-//! The immutable game definition (docs/architecture/sim/world.md, rooms.md; docs/plans/sim-core.md 8.1).
+//! The immutable game definition (docs/architecture/sim/world.md, rooms.md; docs/format/game.md).
 //!
 //! `crates/format` builds a [`GameDef`] from a package; tests build one with
 //! [`GameDefBuilder`](super::testing::GameDefBuilder). The sim never changes it. WP0 declares;

@@ -1,4 +1,5 @@
-//! Shared helpers for the WP3 collision tests (`tests/wp3_*.rs`).
+//! Shared helpers for the collision tests (`bbox.rs`, `empty_mask.rs`, `grid.rs`, `pairs.rs`,
+//! `query.rs`, `shapes.rs`).
 //!
 //! Instances get their sprite, mask, scale and angle through [`image`], which builds an
 //! `Image` by deserializing a mirror of its fields: the `Image` setters are WP1 stubs until WP1
@@ -83,14 +84,14 @@ pub fn image(i: Img) -> Image {
     };
     let bytes = postcard::to_allocvec(&m).expect("mirror serializes");
     let img: Image =
-        postcard::from_bytes(&bytes).expect("Image layout changed: update wp3_support::ImageMirror");
+        postcard::from_bytes(&bytes).expect("Image layout changed: update collide_support::ImageMirror");
     let ok = img.sprite() == i.sprite
         && img.mask() == i.mask
         && img.xscale() == Real::new(i.xscale)
         && img.yscale() == Real::new(i.yscale)
         && img.angle() == Real::new(i.angle)
         && img.alpha() == Real::ONE;
-    assert!(ok, "Image layout changed: update wp3_support::ImageMirror");
+    assert!(ok, "Image layout changed: update collide_support::ImageMirror");
     img
 }
 
@@ -132,14 +133,14 @@ pub fn motion(pos: (f64, f64), prev: (f64, f64), speed: (f64, f64)) -> Motion {
     };
     let bytes = postcard::to_allocvec(&m).expect("mirror serializes");
     let mo: Motion =
-        postcard::from_bytes(&bytes).expect("Motion layout changed: update wp3_support::MotionMirror");
+        postcard::from_bytes(&bytes).expect("Motion layout changed: update collide_support::MotionMirror");
     let ok = mo.x() == Real::new(pos.0)
         && mo.y() == Real::new(pos.1)
         && mo.xprevious() == Real::new(prev.0)
         && mo.yprevious() == Real::new(prev.1)
         && mo.hspeed() == Real::new(speed.0)
         && mo.vspeed() == Real::new(speed.1);
-    assert!(ok, "Motion layout changed: update wp3_support::MotionMirror");
+    assert!(ok, "Motion layout changed: update collide_support::MotionMirror");
     mo
 }
 

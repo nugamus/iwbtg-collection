@@ -32,7 +32,7 @@ Keying on `SIM_VERSION` as well would split every board at every Rhai or toolcha
 `crates/sim/tests/sim_version_bump.rs` (`cargo test -p iwbtg-sim --test it sim_version_bump::`), also run by `cargo xtask repin`:
 
 - Before the freeze point it is inert: `sim_version_pins.txt` holds no pins and nothing is enforced.
-- After it, `sim_version_pins.txt` records every golden pin (the `FINAL_HASH` of `wp1_determinism.rs`, the state hash vectors, each golden corpus case's state hash) with the `SIM_VERSION` it was pinned under. A pin that differs while `SIM_VERSION` is unchanged fails the test with the names of the changed pins: bump `SIM_VERSION`, then run `cargo xtask repin`, which records the pins under the new version. `repin` refuses to record over a changed pin without a bump.
+- After it, `sim_version_pins.txt` records every golden pin (the `FINAL_HASH` of `determinism.rs`, the state hash vectors, each golden corpus case's state hash) with the `SIM_VERSION` it was pinned under. A pin that differs while `SIM_VERSION` is unchanged fails the test with the names of the changed pins: bump `SIM_VERSION`, then run `cargo xtask repin`, which records the pins under the new version. `repin` refuses to record over a changed pin without a bump.
 - A new golden case or vector needs a `repin` (it is recorded) but no bump. `SIM_VERSION` never goes below the freeze point or the recorded version.
 - At the freeze: set `SIM_VERSION_FREEZE = Some(SIM_VERSION)` and run `cargo xtask repin` in the same PR.
 

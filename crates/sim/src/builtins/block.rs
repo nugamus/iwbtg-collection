@@ -1,4 +1,4 @@
-//! Built-in `block` (mechanics `block`; docs/plans/sim-core.md 6.1; docs/format/builtins/block.md).
+//! Built-in `block` (mechanics `block`; docs/architecture/sim/builtins.md; docs/format/builtins/block.md).
 //! Tier 1. WP0 creates the file; WP6a owns it.
 //!
 //! A block has no behavior: the kid's collision handlers do the work. Create applies the

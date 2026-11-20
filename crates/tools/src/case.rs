@@ -1,4 +1,4 @@
-//! Trace case files `crates/tools/cases/<package-id>/<case>.toml` (docs/plans/sim-core.md 9.2).
+//! Trace case files `crates/tools/cases/<package-id>/<case>.toml` (docs/architecture/traces.md).
 //! WP0 creates the file; WP8a owns it (the format and the importer; case contents are WP11's).
 //!
 //! A case says how to run one research trace on our sim and how to compare the result. It holds
@@ -64,7 +64,7 @@ pub const DEFAULT_IGNORE: [&str; 4] = ["id", "sprite_index", "sprite_name", "mas
 pub struct TraceCase {
     /// `<game>/<trace>` under the research traces folder.
     pub source: String,
-    /// How the case is compared (plan 9.1 kinds 1 and 3).
+    /// How the case is compared (docs/architecture/traces.md kinds 1 and 3).
     pub kind: CaseKind,
     /// Why the case cannot run yet; `trace check` reports it as OPEN instead of running it.
     pub open: Option<String>,

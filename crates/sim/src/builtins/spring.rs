@@ -1,4 +1,4 @@
-//! Built-in `spring` (mechanics `spring`; docs/plans/sim-core.md 6.1;
+//! Built-in `spring` (mechanics `spring`; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/spring.md). Tier 3.
 //!
 //! Showdown JumpBlockD and JumpBlockS: on touch the kid motion is set to direction 90 at

@@ -1,4 +1,4 @@
-//! Typed indices into [`GameDef`](super::GameDef) tables (docs/architecture/sim/world.md; docs/plans/sim-core.md 8.2).
+//! Typed indices into [`GameDef`](super::GameDef) tables (docs/architecture/sim/world.md; docs/format/v0.md).
 //!
 //! Each id is a `u32` index assigned by `crates/format` at load. Ids never hold a `usize`, so
 //! they serialize and hash the same on wasm32 and x86_64. WP0 declares; WP7a owns afterwards.

@@ -1,5 +1,6 @@
-//! Built-in `moving_platform` (mechanics `moving_platform`; kid/A1, A3, C; docs/plans/sim-core.md
-//! 6.1; docs/format/builtins/moving_platform.md). Tier 2. WP0 creates the file; WP6b owns it.
+//! Built-in `moving_platform` (mechanics `moving_platform`; kid/A1, A3, C;
+//! docs/architecture/sim/builtins.md; docs/format/builtins/moving_platform.md). Tier 2. WP0
+//! creates the file; WP6b owns it.
 //!
 //! The platform is non-solid and moves by hand in Step plus the runner's automatic motion:
 //! upward motion is applied through `yspeed` in Step, downward motion through `vspeed` by

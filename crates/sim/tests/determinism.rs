@@ -6,7 +6,7 @@
 //! match `FINAL_HASH`, which pins the result so the same test checks identity across the four
 //! targets of 10.6 when CI runs it on each one (#12).
 
-#[path = "wp1_support.rs"]
+#[path = "support.rs"]
 mod support;
 
 use iwbtg_sim::def::{RoomId, VarId};

@@ -1,0 +1,5 @@
+# Variant A: native bullets, no per-step script; `start_room` is native_5000.
+#   cargo run -p iwbtg-tools -- replay run crates/sim/tests/stress/avoidance.pkg #       crates/sim/tests/stress/avoidance_native.inputs
+frame 2: hold right
+frame 5: release right
+frame 30: end

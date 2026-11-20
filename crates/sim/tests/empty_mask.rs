@@ -2,7 +2,7 @@
 //! rectangle sprite520), CLONE_SPEC collision, "Collisions with these boxes" (research#230,
 //! iwbtg-collection#926).
 
-use crate::wp3_support;
+use crate::collide_support;
 
 mod wp3 {
     use iwbtg_sim::collide::{
@@ -12,7 +12,7 @@ mod wp3 {
     use iwbtg_sim::def::{IRect, Mask, MaskId, MaskSet, MaskShape, SpriteDef, SpriteId};
     use iwbtg_sim::world::InstId;
 
-    use super::wp3_support::{Game, Img, game, r};
+    use super::collide_support::{Game, Img, game, r};
 
     /// The sprites of help-the-fairy-tale the trace uses (empty-mask-collide.md).
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]

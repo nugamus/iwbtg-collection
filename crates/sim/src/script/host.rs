@@ -1,5 +1,5 @@
 //! The Rhai host (`Engine::new_raw()`, our packages only, `eval`, `**`, `**=` disabled;
-//! docs/plans/sim-core.md 11, decision 0001). [`Iws`] is the engine; [`ScriptRuntime`] is the
+//! docs/architecture/sim/scripts.md, decision 0001). [`Iws`] is the engine; [`ScriptRuntime`] is the
 //! game's compiled scripts on top of it, and runs the script part of an event (WP9.2).
 //!
 //! World access without unsafe code: while a script runs, `on_event` parks the live `World` in

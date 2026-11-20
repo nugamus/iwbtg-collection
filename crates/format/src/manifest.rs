@@ -650,7 +650,7 @@ pub struct KidStepsSection {
     pub clear_triggers: Option<bool>,
 }
 
-/// Restart kinds (plan 4.3).
+/// Restart kinds (docs/architecture/sim/rooms.md).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
@@ -1658,7 +1658,7 @@ format = 0
 id = "minimal"
 title = "Minimal"
 version = "0.1.0"
-engine_rev = 1
+engine_rev = 0
 runner = "gm80"
 physics = "physics.toml"
 start_room = "title"
@@ -1887,5 +1887,25 @@ end = {{ trigger = \"run_end\" }}
 "
         ));
         assert!(run(&text, &[]).is_empty());
+    }
+
+    /// The `game.md` manifest example names the revision this build knows (#1077), so a package
+    /// copied from the docs loads and runs instead of failing at `Sim::new`. (`tests/schemas.rs`
+    /// checks the same block against the schema; this pins the one value a schema cannot.)
+    #[test]
+    fn the_game_md_example_uses_the_current_engine_rev() {
+        let doc = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/format/game.md"))
+            .expect("docs/format/game.md");
+        let block = doc
+            .split("```toml")
+            .nth(1)
+            .and_then(|rest| rest.split("```").next())
+            .expect("the manifest example TOML block");
+        let example: toml::Value = toml::from_str(block).expect("the example is TOML");
+        assert_eq!(
+            example["engine_rev"].as_integer(),
+            Some(i64::from(iwbtg_sim::rules::MAX_ENGINE_REV)),
+            "the game.md example must use the revision the build knows"
+        );
     }
 }

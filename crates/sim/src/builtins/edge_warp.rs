@@ -1,5 +1,5 @@
 //! Built-in `edge_warp` (outsideroomChanger, roomout, oRoomSwitch; mechanics `edge_warp`;
-//! docs/plans/sim-core.md 6.1, K10; docs/format/builtins/edge_warp.md). Tier 2. WP0 creates the
+//! docs/architecture/sim/builtins.md, K10; docs/format/builtins/edge_warp.md). Tier 2. WP0 creates the
 //! file; WP6b owns it.
 //!
 //! The kid code reads an edge warp when he crosses the room boundary (Intersect Boundary, class

@@ -1,7 +1,7 @@
 //! WP3: queries, distance_to_object, contact moves and the solid put-back
 //! (docs/plans/sim-core.md 3.4, 12; CLONE_SPEC collision).
 
-use crate::wp3_support;
+use crate::collide_support;
 
 mod wp3 {
     use iwbtg_sim::collide::contact::{contact_steps, mcs_step_limit, outside_steps};
@@ -15,7 +15,7 @@ mod wp3 {
     use iwbtg_sim::rules::collide::{DistBoxes, DistCombine, DistOffset, McsStart, SolidKeep};
     use iwbtg_sim::world::Flow;
 
-    use super::wp3_support::{Img, game, motion, r, unless_stubbed};
+    use super::collide_support::{Img, game, motion, r, unless_stubbed};
 
     /// Plan 12 and C13: the flush-kid test picks the offset. A kid flush against a vine (his
     /// bbox_right 767, the vine's bbox_left 768) is at distance 1 (kid A1 Inferred; Confirmed

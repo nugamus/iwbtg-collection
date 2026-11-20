@@ -4,7 +4,7 @@ How games get into the collection: porting, the shared asset library, engines, t
 
 ## Porting
 
-- **Fidelity.** Quirks that players rely on are never fixed. Bugs that nobody wants (crashes, softlocks, broken graphics, typos) are fixed when a trace shows that positions do not change. Every fix is logged in `docs/games/<game-id>.md`.
+- **Fidelity.** Quirks that players rely on are never fixed. Bugs that nobody wants (crashes, softlocks, broken graphics, typos) are fixed when a trace shows that positions do not change. Every kept quirk and every fix gets an impact tier ([fidelity tiers](plans/fidelity-tiers.md)), and every fix is logged in `docs/games/<game-id>.md`, which carries the deviation log's four sections ([games](games/README.md#deviation-log)).
 - **Which version.** We port the best version of a game. When a game is submitted, its creator (or the porter) picks the version. Keeping the same version is preferred, so records stay historical. If a better version turns up, it replaces the old one, and the old board is frozen as a viewable legacy board.
 - **Other runners.** GameMaker 8 comes first and GameMaker Studio later, each with its own CLONE_SPEC and runner rules.
 - **Odd sizes.** A game keeps its native resolution and room speed. It is integer-scaled, and the letterbox adapts.
@@ -34,11 +34,11 @@ If a physics bug is found in a Ranked port, the bug is fixed and the server re-r
 
 Each port keeps:
 
-- **`docs/games/<game-id>.md`:** open questions, fixes made and known differences from the original.
+- **`docs/games/<game-id>.md`:** open questions, fixes made and known differences from the original. Its deviation log uses four sections ([games](games/README.md#deviation-log)); the Known differences section is what the game page shows.
 - **Trace reports:** stored in the package's `tests/` folder.
 - **A changelog per version:** shown on the game page.
 
-**OPEN:** the user wants the porting pipeline to be efficient and well made, not slow. A deeper design pass on the pipeline is needed: converter automation, which steps agents own, and where humans are needed.
+**Pipeline.** The step-by-step pipeline from download to Beta, with what the converter automates, what an agent does, where a human records or playtests, and a time target per step, is [porting](porting.md).
 
 ### Language
 
@@ -106,7 +106,7 @@ Commercial music in fangames (Mega Man, Touhou and so on) is kept and removed on
   - Creators and history (release date, version, port notes).
   - The trick list.
   - Previews of each stage.
-  - Port status (Beta, Ranked or Loved, the fidelity proof and known differences).
+  - Port status (Beta, Ranked or Loved, the fidelity proof and known differences). The known differences are generated from the deviation log.
 - **Music preview.** The porter picks the track and start point with the picker tool.
 - **Creators.** Original creators can claim their game with a verified account. Once claimed, they can edit the page text, set the asset-reuse opt-out, approve versions and request takedown.
 

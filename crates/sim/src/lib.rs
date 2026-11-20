@@ -1,7 +1,8 @@
 //! Deterministic simulation for IWBTG Collection.
 //!
 //! No Bevy, no IO, no threads, no clock. The same package and inputs give bit-identical state on
-//! Windows, WASM and Linux. See `docs/architecture.md` and `docs/plans/sim-core.md`.
+//! Windows, WASM and Linux. See `docs/architecture/sim.md` and the open-question registers in
+//! `docs/plans/sim-core/`.
 //!
 //! Module owners after WP0 are listed in each module's docs and in plan section 13. Only WP0
 //! edits this file.

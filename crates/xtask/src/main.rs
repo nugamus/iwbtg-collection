@@ -11,7 +11,7 @@
 //! - `fidelity [--bless]`: the trace sweep over every converter package; records the run in
 //!   `target/xtask/last-fidelity.txt` (#935).
 //! - `repin`: after a deliberate change to hashed sim state, re-pins the state hash vectors
-//!   (`tests/hash_vectors.rs`), the `FINAL_HASH` of `tests/wp1_determinism.rs` and the golden
+//!   (`tests/hash_vectors.rs`), the `FINAL_HASH` of `tests/determinism.rs` and the golden
 //!   corpus, then runs them again. After the `SIM_VERSION` freeze point it also records the pins
 //!   under `SIM_VERSION` and fails when one changed without a bump (#783). The files it rewrites are
 //!   listed in `crates/xtask/pin-files.txt`, which `.claude/hooks/conflict_guard.py` reads too (#949).
@@ -720,8 +720,8 @@ fn left_value(text: &str) -> Option<&str> {
 }
 
 fn repin(root: &Path) -> Result<(), String> {
-    // FINAL_HASH in wp1_determinism.rs.
-    let path = pin_file(root, "/wp1_determinism.rs")?;
+    // FINAL_HASH in determinism.rs.
+    let path = pin_file(root, "/determinism.rs")?;
     let (ok, text) = output(
         root,
         "cargo",
@@ -1002,8 +1002,8 @@ fn fidelity(root: &Path, bless: bool) -> Result<(), String> {
         .status()
         .map_err(|e| format!("cargo: {e}"))?
         .code();
-    // The tool exits 0 when every case is as good as the baseline, 1 on a regression, 2 and 3 on an error or a
-    // panic: only 0 and 1 mean the sweep ran.
+    // The tool exits 0 when every case is as good as the baseline, 1 on a regression, 2 on a tool error and
+    // 101 on a panic: only 0 and 1 mean the sweep ran.
     if matches!(code, Some(0 | 1)) {
         record_fidelity_run(root);
     }

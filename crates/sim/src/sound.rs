@@ -1,4 +1,4 @@
-//! The sound model (docs/plans/sim-core.md 7, register S1-S5; docs/format/builtins/sound.md).
+//! The sound model (docs/architecture/sim/sound.md, register S1-S5; docs/format/sounds.md).
 //!
 //! Audio output is the client's job; whether a sound **is playing** is sim state, because
 //! `sound_isplaying` changes game state in 15 games. This module answers from a deterministic

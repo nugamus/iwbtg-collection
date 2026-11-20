@@ -1,5 +1,5 @@
 //! Built-in `blood` (a blood drop; CLONE_SPEC numbers "Hidden RNG consumers", kid/A1.md Death,
-//! kid/A3.md blood; docs/plans/sim-core.md 6.1; docs/format/builtins/blood.md). Tier 1. WP0
+//! kid/A3.md blood; docs/architecture/sim/builtins.md; docs/format/builtins/blood.md). Tier 1. WP0
 //! creates the file; WP6a owns it.
 //!
 //! Create draws from the gameplay RNG, in this order (Confirmed (recorder) rely `num-rng-b.csv`,

@@ -1,6 +1,8 @@
 # Plan: simulation core for the 20 prototype games
 
-Status: plan, revision 2, 2026-10-24. Written by Claude for parallel implementation by agents. Nothing here is code yet. Revision 2 applies the clean-room, determinism and coverage reviews: each critique was re-checked against the spec text before it went in (section 17 lists what changed).
+> **Historical.** The live design text lives in `docs/architecture/` ([simulation](../architecture/sim.md) and its area pages), which is the authority where this plan differs. Section 15 and the [register pages](sim-core/) remain live. The rest of this page is history.
+
+Status: historical plan, revision 2, 2026-10-24. Written by Claude for parallel implementation by agents. Revision 2 applies the clean-room, determinism and coverage reviews: each critique was re-checked against the spec text before it went in (section 17 lists what changed).
 
 Goal: `crates/sim` runs any of the 20 prototype games (`research/shortlist.md`) from a v0 package and reproduces the research traces tick for tick, bit for bit. `crates/format` turns a package into a `GameDef`. `crates/tools` runs a package against a `.inputs` file and diffs the result against a recorded CSV, and runs replays headless.
 
@@ -1187,6 +1189,8 @@ Stub rule: a function from another WP that is not merged yet is called through i
 ## 15. UNKNOWN and Inferred register
 
 Every rule the sim needs that the spec marks UNKNOWN, Inferred or Conflict, or that the code took from OpenGMK, with the one place the code isolates it. "Default" is what engine_rev 0 does until the spec records the trace in the last column. Fields live in `RunnerRules` (`rules/`), selected by `RunnerRules::for_runner(runner, engine_rev)`; a changed default after a package was verified becomes a new `engine_rev` branch (architecture "Versions"). "(rec)" marks a trace recorded with the OpenGMK recorder; its result is in CLONE_SPEC. "Confirmed (recorder)" is a recorder result not yet checked against the real runner (research#8 has checked N3, N14, the presence of N1's tolerance and M6's cos/sin; see CLONE_SPEC, Number handling, Confirmed (real runner)). A row whose status is still UNKNOWN or Inferred names what is missing; its default stays the engine_rev 0 choice until a trace settles it (#143).
+
+The **Impact** column is the fidelity tier ([fidelity tiers](fidelity-tiers.md)): T1 can change a ranked run, T2 only off-ranked paths or visuals and sound, T3 only a probe column, T? is not judged. Only T1 blocks M2; T2 and T3 move to the port issue or M5.
 
 - [Tick and events](sim-core/register-tick-and-events.md)
 - [Motion](sim-core/register-motion.md)

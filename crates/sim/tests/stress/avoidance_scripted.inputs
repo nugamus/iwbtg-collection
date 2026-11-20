@@ -1,0 +1,6 @@
+# Variant B: every bullet runs a step() script. `--mode stripped` starts in [stripped].start,
+# scripted_5000, because `replay run` has no room option.
+#   cargo run -p iwbtg-tools -- replay run crates/sim/tests/stress/avoidance.pkg #       crates/sim/tests/stress/avoidance_scripted.inputs --mode stripped
+frame 2: hold right
+frame 5: release right
+frame 30: end

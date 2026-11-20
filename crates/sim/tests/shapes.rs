@@ -11,7 +11,7 @@
 //! rectangle, line, position and place queries must all agree on one solid pixel and one empty
 //! box pixel.
 
-use crate::wp3_support;
+use crate::collide_support;
 
 mod wp3 {
     use std::collections::BTreeSet;
@@ -23,7 +23,7 @@ mod wp3 {
     use iwbtg_sim::def::SpriteId;
     use iwbtg_sim::world::InstId;
 
-    use super::wp3_support::{Game, Img, diamond_rows, disk_rows, game, r, spike_rows};
+    use super::collide_support::{Game, Img, diamond_rows, disk_rows, game, r, spike_rows};
 
     const X: i64 = 200;
     const Y: i64 = 200;

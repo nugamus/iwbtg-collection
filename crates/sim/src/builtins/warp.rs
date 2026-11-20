@@ -1,4 +1,4 @@
-//! Built-in `warp` (mechanics `warp`, roomChanger; docs/plans/sim-core.md 6.1;
+//! Built-in `warp` (mechanics `warp`, roomChanger; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/warp.md). Tier 1. WP0 creates the file; WP6a owns it.
 //!
 //! Collision with the kid, when `on_collide`: set the transition for the client, request the

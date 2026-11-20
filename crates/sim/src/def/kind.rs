@@ -1,4 +1,4 @@
-//! Kinds, parameters and dispatch ranks (docs/architecture/sim/world.md; docs/plans/sim-core.md 8.2).
+//! Kinds, parameters and dispatch ranks (docs/architecture/sim/world.md; docs/format/objects.md).
 //!
 //! WP0 declares; WP7a owns afterwards.
 

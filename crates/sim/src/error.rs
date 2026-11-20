@@ -1,4 +1,4 @@
-//! Why the sim halted (docs/architecture/sim/tick.md; docs/plans/sim-core.md 10.2, 10.3).
+//! Why the sim halted (docs/architecture/sim/tick.md; docs/architecture/sim/tick.md, determinism.md).
 //!
 //! The sim never panics on any input. A script error, a non-finite value, an overflow, a broken
 //! invariant or an unsupported case sets `SimStatus::Halted(SimError)` and freezes the world

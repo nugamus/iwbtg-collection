@@ -1,6 +1,6 @@
 //! `iwbtg`: the command-line tool for agents and CI (docs/architecture/cli.md, The iwbtg CLI).
 //!
-//! Commands are planned in docs/plans/sim-core.md 9.4: WP8a owns `trace` and `pkg`, WP8b
+//! Commands are described in docs/architecture/cli.md: WP8a owns `trace` and `pkg`, WP8b
 //! `replay`.
 
 mod assets_cmd;
@@ -10,6 +10,7 @@ mod engine_cmd;
 mod import;
 mod pack_cmd;
 mod pkg_cmd;
+mod profile_cmd;
 mod replay_cmd;
 mod room_cmd;
 mod script_cmd;
@@ -49,6 +50,8 @@ enum Command {
     /// Headless replays.
     #[command(subcommand)]
     Replay(ReplayCommand),
+    /// Profiles a replay: script budget, instances and ms per tick.
+    Profile(profile_cmd::ProfileArgs),
     /// Rooms of a package.
     #[command(subcommand)]
     Room(RoomCommand),
@@ -419,6 +422,10 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             };
             engine_cmd::main(&pkg, to, trace_mode, Some(traces))
         }
+        Command::Profile(args) => {
+            profile_cmd::main(&args)?;
+            Ok(true)
+        }
         Command::Replay(ReplayCommand::Run(args)) => {
             replay_cmd::main(&args)?;
             Ok(true)
@@ -431,35 +438,14 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
     }
 }
 
-/// The work package named by a WP0 stub panic (`not implemented: WP6a: world::init_state`).
-fn unmerged_stub(payload: &(dyn std::any::Any + Send)) -> Option<String> {
-    let msg = payload
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| payload.downcast_ref::<&str>().copied())?;
-    msg.strip_prefix("not implemented: ")
-        .filter(|rest| rest.starts_with("WP"))
-        .map(str::to_owned)
-}
-
 fn main() -> ExitCode {
-    let cli = Cli::parse();
-    // Until every work package has merged, running the sim can reach a WP0 stub. Say so plainly
-    // instead of ending with a bare panic.
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run(cli))) {
-        Ok(Ok(true)) => ExitCode::SUCCESS,
-        Ok(Ok(false)) => ExitCode::from(1),
-        Ok(Err(e)) => {
+    match run(Cli::parse()) {
+        Ok(true) => ExitCode::SUCCESS,
+        Ok(false) => ExitCode::from(1),
+        Err(e) => {
             eprintln!("error: {e}");
             ExitCode::from(2)
         }
-        Err(payload) => match unmerged_stub(payload.as_ref()) {
-            Some(stub) => {
-                eprintln!("error: this needs {stub}, which is not merged yet");
-                ExitCode::from(3)
-            }
-            None => std::panic::resume_unwind(payload),
-        },
     }
 }
 

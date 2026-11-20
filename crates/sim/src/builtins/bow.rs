@@ -1,4 +1,4 @@
-//! Built-in `bow` (the Medium-mode ribbon; CLONE_SPEC sprites "Bow"; docs/plans/sim-core.md 6.1;
+//! Built-in `bow` (the Medium-mode ribbon; CLONE_SPEC sprites "Bow"; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/bow.md). Tier 1. WP0 creates the file; WP6a owns it.
 //!
 //! Persistent, cosmetic. In the phases it handles it destroys itself unless the difficulty is 0

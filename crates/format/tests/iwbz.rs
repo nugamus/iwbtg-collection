@@ -23,6 +23,18 @@ fn a_package_round_trips_with_the_same_content_hash() {
 }
 
 #[test]
+fn a_particles_folder_round_trips() {
+    let mut files = demo();
+    files
+        .insert("particles/fire.toml", b"life = [10, 10]\n".to_vec())
+        .unwrap();
+    let packed = pack(&files).unwrap();
+    let back = unpack(&packed).unwrap();
+    assert_eq!(back.content_hash(), files.content_hash());
+    assert!(back.contains("particles/fire.toml"), "the system survives unpack");
+}
+
+#[test]
 fn tests_are_left_out_and_crlf_packs_like_lf() {
     let files = demo();
     let mut other = PackageFiles::new();
@@ -68,6 +80,7 @@ fn the_allow_list() {
         ("CREDITS.md", b""),
         ("rooms/stage1_01.toml", b""),
         ("rooms/stage1_01.tiles.toml", b""),
+        ("particles/fire.toml", b""),
         ("scripts/boss1.rhai", b""),
         ("sprites/kid.png", PNG),
         ("sprites/kid.toml", b""),
@@ -90,6 +103,8 @@ fn the_allow_list() {
         ("scripts/a.lua", b""),
         ("rooms/a.rhai", b""),
         ("rooms/sub/a.toml", b""),
+        ("particles/fire.rhai", b""),
+        ("particles/sub/fire.toml", b""),
         ("sprites/kid.png", b"MZ not a png"),
         ("sounds/a.ogg", b"RIFF"),
         ("sprites/Kid.png", PNG),

@@ -119,7 +119,7 @@ mod wp2 {
     }
 
     /// little-trap/num-eps-slip.csv: every row's x and hspeed under the default rules (the same
-    /// model as wp2_slip.rs, checked on all 200 rows).
+    /// model as slip.rs, checked on all 200 rows).
     #[test]
     fn slip_run_matches_num_eps_slip() {
         let Some(csv) = trace("little-trap", "num-eps-slip.csv") else {
@@ -405,7 +405,7 @@ mod wp2 {
     }
 
     /// go-the-jun-g-world/num-eps-alpha.csv: g peaks at 0.8000000000000004 and ends at
-    /// -6.245004513516506e-17 (the sequence itself is in wp2_numbers.rs).
+    /// -6.245004513516506e-17 (the sequence itself is in num.rs).
     #[test]
     fn eps_alpha_values_are_in_the_trace() {
         let Some(csv) = trace("go-the-jun-g-world", "num-eps-alpha.csv") else {

@@ -1,4 +1,4 @@
-//! The script host (docs/plans/sim-core.md 11, decision 0001).
+//! The script host (docs/architecture/sim/scripts.md, decision 0001).
 //!
 //! The sim talks to scripts only through [`ScriptHost`], implemented by [`ScriptRuntime`], so
 //! the sim core never names Rhai types. `Sim` owns one `ScriptRuntime`, built from

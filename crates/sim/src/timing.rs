@@ -1,4 +1,4 @@
-//! Timing triggers and splits (docs/architecture/sim/tick.md row 16; docs/plans/sim-core.md 9.4).
+//! Timing triggers and splits (docs/architecture/sim/tick.md row 16; docs/architecture/cli.md).
 //!
 //! Timing counts ticks, never rendered frames. Evaluated at tick row 16 (WP8b).
 //!

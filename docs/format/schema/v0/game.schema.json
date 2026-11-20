@@ -688,7 +688,7 @@
       "type": "object"
     },
     "RestartKindName": {
-      "description": "Restart kinds (plan 4.3).",
+      "description": "Restart kinds (docs/architecture/sim/rooms.md).",
       "oneOf": [
         {
           "const": "game_restart_via_boot",

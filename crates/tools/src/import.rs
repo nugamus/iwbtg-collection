@@ -1,5 +1,5 @@
 //! `iwbtg trace import`: case skeletons, sorting traces into the three kinds of
-//! docs/plans/sim-core.md 9.1. WP0 creates the file; WP8a owns it.
+//! docs/architecture/traces.md. WP0 creates the file; WP8a owns it.
 //!
 //! The importer reads the recorder command line from the `.inputs` header
 //! (`iwbtg_sim::input::trace_command`; the tracer's version string is not used) and sorts the
@@ -31,7 +31,7 @@ use crate::case::{
 };
 use crate::trace_cmd::ToolError;
 
-/// The three kinds of plan 9.1.
+/// The three kinds of trace (docs/architecture/traces.md).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum TraceKind {
     /// Kind 1: a case that must diff clean.
@@ -662,7 +662,9 @@ pub fn import_text(
     let trace_name = source.rsplit('/').next().unwrap_or(source);
 
     let mut header = vec![
-        format!("Imported from research trace {source} by `iwbtg trace import`; finish by hand (plan 9.2)."),
+        format!(
+            "Imported from research trace {source} by `iwbtg trace import`; finish by hand (docs/architecture/traces.md)."
+        ),
         format!(
             "Recorder: --object {} --room {} --at {} --from {}{}{}{}",
             args.objects.join(","),
