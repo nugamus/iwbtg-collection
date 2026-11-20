@@ -26,7 +26,7 @@ use crate::view::{ClockSpeed, SimTick};
 pub const SLOW_SPEEDS: [u8; 2] = [75, 50];
 
 /// The clock assists' command-line flags (main.rs flattens each module's group, #530).
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Default)]
 pub struct PracticeArgs {
     /// Slow motion's speed in percent of the game's rate, with `--mods SL`: 75 or 50. Overrides
     /// the settings file's `[practice] slow_speed` (default 75) for this run and is not saved.

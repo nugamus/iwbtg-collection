@@ -273,8 +273,8 @@ impl Plugin for LoadingPlugin {
             let tip = if preview || skip {
                 0
             } else {
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
+                crate::time::SystemTime::now()
+                    .duration_since(crate::time::UNIX_EPOCH)
                     .map_or(0, |d| d.as_secs() as usize % TIPS.len())
             };
             Loading::new(preview, tip)

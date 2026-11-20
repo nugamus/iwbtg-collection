@@ -8,7 +8,7 @@
 //! the replay records every one of them, so it re-simulates to the same world as watching the
 //! cutscene would. Regions never hold in Play original, so the key does nothing there.
 
-use std::time::Instant;
+use crate::time::Instant;
 
 use bevy::prelude::*;
 use iwbtg_sim::input::InputFrame;

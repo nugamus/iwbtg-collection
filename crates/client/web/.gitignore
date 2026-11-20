@@ -1,1 +1,3 @@
 pkg/
+# `iwbtg pkg pack` writes the page's packages here; neither they nor the bundle are committed.
+*.iwbz

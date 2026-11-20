@@ -141,17 +141,18 @@ What follows from it:
 - Locally, run the tests of what you changed; run `cargo xtask check` once before the PR (only the changed crates and their dependents; `--all` for everything) and let CI do the rest.
 - `python -I iwbtg-collection/.claude/stats.py [--days N]` from the workspace root reads the Claude Code transcripts and prints, per session and teammate, in-window wall time, logical model calls (message fragments counted once), average context per call, cargo time as both an elapsed union and a sum across overlapping commands (the percentage uses the union), idle time (waiting for a message), slow cargo calls, unclosed tool calls, merges of `main`, conflicts, PRs and timestamp-unknown events. `--issues` lists the issues that took longest; `--summary --days 7` prints tokens and hours per merged PR per lane; `--test` runs synthetic accounting fixtures, not real transcripts. `--days` clips events and tool intervals to the window instead of counting whole sessions. The lead appends its totals once a week to `docs/velocity.md` (numbers only).
 
-## UI gallery in a browser
+## The client in a browser
 
-The client's wasm32 build opens the UI gallery (`--ui-gallery` on native; [client architecture, UI](architecture/client/ui.md)). To run it in a browser, from `iwbtg-collection/`:
+The wasm32-unknown-unknown build plays a package over HTTP ([client architecture, Web](architecture/client/web.md), #29). To run it in a browser, from `iwbtg-collection/`:
 
 ```
+cargo run -p iwbtg-tools --bin iwbtg -- pkg pack crates/client/showcase.pkg -o crates/client/web/showcase.iwbz
 cargo build -p iwbtg-client --release --target wasm32-unknown-unknown
 wasm-bindgen --target web --no-typescript --out-dir crates/client/web/pkg target/wasm32-unknown-unknown/release/iwbtg-client.wasm
 python -m http.server 8765 --bind 127.0.0.1 --directory crates/client/web
 ```
 
-Then open http://127.0.0.1:8765/. `wasm-bindgen` must be the version in Cargo.lock (`cargo xtask doctor --scope browser` checks it; see CI below); `crates/client/web/pkg/` is not committed. It needs WebGL2. The page's script before `init()` unlocks the audio on the first key press or click ([client architecture, Audio](architecture/client/audio.md)); keep it when changing `index.html`. Browser automation that fakes a device pixel ratio different from the screen's (Playwright's default on a 125% display) puts the pointer in the wrong place; give the context the screen's `deviceScaleFactor`.
+Then open http://127.0.0.1:8765/: the page fetches `showcase.iwbz` from the same folder and starts the game. `?package=<url>` plays another `.iwbz` (pack it into `crates/client/web/`, or give any URL whose server sends CORS headers), and `?ui-gallery` opens the UI gallery ([client architecture, UI](architecture/client/ui.md)). `iwbtg pkg pack` prints the package's gameplay hash, and the page logs the same hash after loading, so the terminal and the browser console can be compared. `wasm-bindgen` must be the version in Cargo.lock (`cargo xtask doctor --scope browser` checks it; see CI below); `crates/client/web/pkg/` and `crates/client/web/*.iwbz` are not committed. It needs WebGL2. The page's script before `init()` unlocks the audio on the first key press or click ([client architecture, Audio](architecture/client/audio.md)); keep it when changing `index.html`. Browser automation that fakes a device pixel ratio different from the screen's (Playwright's default on a 125% display) puts the pointer in the wrong place; give the context the screen's `deviceScaleFactor`.
 
 ## Check a machine
 

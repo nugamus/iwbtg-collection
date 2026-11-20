@@ -30,3 +30,4 @@ One page per module or area, so two PRs on different modules never edit the same
 - [UI](client/ui.md): the UI kit (`ui/`)
 - [Visual mods](client/visual.md): hitboxes and no background (`visual.rs`)
 - [The window and the view](client/view.md): opening a package, drawing the sim, the fixed clock, input and bindings, interpolation, the demo packages (`package.rs`, `view.rs`, `input.rs`, `bindings.rs`)
+- [Web build](client/web.md): the browser entry, fetching an `.iwbz` and running the same client (`web.rs`; `crates/client/web/`)

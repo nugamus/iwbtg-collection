@@ -13,8 +13,8 @@
 //! line here and a `Registration` in its own file, so parallel client work doesn't collide in
 //! this file (#530, docs/architecture/client/main.md).
 
-// The browser build opens only the gallery until the web client loads packages, so the game
-// path is compiled there but not called.
+// The browser build has no command line: `web.rs` fetches a package and runs the same module list
+// with every group's default, so the CLI path is compiled there but not called.
 #![cfg_attr(target_arch = "wasm32", allow(dead_code, unused_imports))]
 
 mod input;
@@ -22,6 +22,9 @@ mod registration;
 mod render_fix;
 mod settings;
 mod storage;
+mod time;
+#[cfg(any(test, all(target_arch = "wasm32", target_os = "unknown")))]
+mod web;
 
 use std::process::ExitCode;
 
@@ -103,14 +106,15 @@ fn exit_code(result: Result<(), String>) -> ExitCode {
     }
 }
 
-/// In a browser there is no command line and no package folder yet: the build opens the UI
-/// gallery (docs/dev-setup.md, UI gallery in a browser).
+/// In a browser there is no command line: `web.rs` opens the UI gallery or fetches a package over
+/// HTTP and runs the client (docs/architecture/client/web.md).
 #[cfg(target_arch = "wasm32")]
 fn main() {
     #[cfg(target_os = "unknown")]
-    input::watch_unmapped_pads();
-    // Without --screenshot the gallery has no size check, so it cannot return an error here.
-    let _ = ui::gallery::run(None, false, None, None);
+    {
+        input::watch_unmapped_pads();
+        web::start();
+    }
 }
 
 #[cfg(test)]

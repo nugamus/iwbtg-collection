@@ -44,6 +44,9 @@ impl crate::registration::ClientModule for Registration {
 
 impl Plugin for ImportPlugin {
     fn build(&self, app: &mut App) {
+        // A package file on disk can be copied into the library; the browser fetched its package
+        // and has no file to copy (web.rs, #29).
+        #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
         if self.keep {
             app.add_systems(OnEnter(AppScreen::Run), keep_opened.in_set(InRun));
         }

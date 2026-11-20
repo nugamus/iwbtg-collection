@@ -68,7 +68,7 @@ fn parse_ui_scale(s: &str) -> Result<u32, String> {
 }
 
 /// The HUD's command-line flags. All but the preview flags are saved in the settings file.
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Default)]
 pub struct HudArgs {
     /// Show these HUD elements (comma-separated): leaderboard, timer, deaths, stage,
     /// stage_deaths, input, mods.

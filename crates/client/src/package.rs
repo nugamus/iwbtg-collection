@@ -38,7 +38,7 @@ pub struct SpriteImage {
 }
 
 /// The package command-line arguments.
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Default)]
 pub struct PackageArgs {
     /// Package folder (a folder with a game.toml) or `.iwbz` file. Not needed with `--select`,
     /// `--ui-gallery`, `--bind` or `--show-bindings`.
@@ -71,15 +71,46 @@ impl crate::registration::ClientModule for Registration {
 /// package may not hold, and already carries its pack. `trace_mode` is for research converter
 /// output.
 pub fn open(dir: &Path, trace_mode: bool) -> Result<Package, OpenError> {
-    let files = if is_iwbz(dir) {
-        read_iwbz(dir)?
-    } else {
-        let mut files =
-            PackageFiles::load_dir(dir).map_err(|e| OpenError::Files(format!("{}: {e}", dir.display())))?;
-        iwbtg_format::engine_pack::bundle_sibling(dir, &mut files)
-            .map_err(|e| OpenError::Files(format!("{}: {e}", dir.display())))?;
-        files
-    };
+    if is_iwbz(dir) {
+        let err = |e: String| OpenError::Files(format!("{}: {e}", dir.display()));
+        // Refuse an over-limit file before reading it; `from_iwbz_bytes` checks bytes that are
+        // already in memory (the browser's fetch) too.
+        let len = std::fs::metadata(dir).map_err(|e| err(e.to_string()))?.len();
+        if len > iwbtg_format::iwbz::MAX_ARCHIVE_BYTES {
+            return Err(err(format!(
+                "over {} bytes",
+                iwbtg_format::iwbz::MAX_ARCHIVE_BYTES
+            )));
+        }
+        let bytes = std::fs::read(dir).map_err(|e| err(e.to_string()))?;
+        return from_iwbz_bytes(&bytes, trace_mode, &dir.display());
+    }
+    let mut files =
+        PackageFiles::load_dir(dir).map_err(|e| OpenError::Files(format!("{}: {e}", dir.display())))?;
+    iwbtg_format::engine_pack::bundle_sibling(dir, &mut files)
+        .map_err(|e| OpenError::Files(format!("{}: {e}", dir.display())))?;
+    from_files(files, trace_mode)
+}
+
+/// Loads a package from an `.iwbz` already in memory: the browser fetches one over HTTP
+/// (docs/architecture/client/web.md). `source` names it in messages, a path or the page's URL.
+pub fn from_iwbz_bytes(
+    bytes: &[u8],
+    trace_mode: bool,
+    source: &dyn std::fmt::Display,
+) -> Result<Package, OpenError> {
+    use iwbtg_format::iwbz;
+    let err = |e: String| OpenError::Files(format!("{source}: {e}"));
+    if bytes.len() as u64 > iwbz::MAX_ARCHIVE_BYTES {
+        return Err(err(format!("over {} bytes", iwbz::MAX_ARCHIVE_BYTES)));
+    }
+    let files = iwbz::unpack(bytes).map_err(|e| err(e.to_string()))?;
+    from_files(files, trace_mode)
+}
+
+/// Builds a package from files already in memory: the game definition and its `gameplay_hash`.
+/// [`open`] reads them from a folder or `.iwbz`; the browser from its `fetch`.
+pub fn from_files(files: PackageFiles, trace_mode: bool) -> Result<Package, OpenError> {
     let mode = if trace_mode {
         LoadMode::Trace {
             unmapped_kinds_inert: true,
@@ -302,6 +333,20 @@ mod tests {
         std::fs::write(&bad, b"PK not really").unwrap();
         assert!(matches!(open(&bad, false), Err(OpenError::Files(_))));
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn fetched_iwbz_bytes_load_like_the_file() {
+        let demo = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
+        let folder = open(&demo, false).unwrap();
+        let bytes = iwbtg_format::iwbz::pack(&folder.files).unwrap();
+        let fetched = from_iwbz_bytes(&bytes, false, &"demo.iwbz").unwrap();
+        assert_eq!(fetched.gameplay_hash, folder.gameplay_hash);
+        assert_eq!(fetched.files.content_hash(), folder.files.content_hash());
+        assert!(matches!(
+            from_iwbz_bytes(b"PK not really", false, &"bad.iwbz"),
+            Err(OpenError::Files(_))
+        ));
     }
 
     #[test]
