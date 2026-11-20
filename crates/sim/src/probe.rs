@@ -1,4 +1,4 @@
-//! Read-only trace sampling, compiled into every build (docs/plans/sim-core.md 9.3).
+//! Read-only trace sampling, compiled into every build (docs/architecture/traces.md).
 //!
 //! Sample point: after tick row 13, before the room change, which is where `Sim::step` returns
 //! (the recorder writes its rows "after End Step, drawing and the animation update, before a
@@ -55,7 +55,7 @@ pub enum Column {
     Count(Target),
     /// `keyboard_check*(...)`.
     Key(KeyRead),
-    /// A save slot field (decoded save files, plan 9.1 kind 3).
+    /// A save slot field (decoded save files, docs/architecture/traces.md kind 3).
     Save(SaveField),
     /// Engine state the original keeps in a global or a built-in variable (`global.death`,
     /// `room_speed`), when the package declares no variable of that name.

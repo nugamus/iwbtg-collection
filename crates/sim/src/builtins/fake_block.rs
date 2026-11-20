@@ -1,4 +1,4 @@
-//! Built-in `fake_block` (mechanics `fake_block`; docs/plans/sim-core.md 6.1;
+//! Built-in `fake_block` (mechanics `fake_block`; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/fake_block.md). Tier 2. WP0 creates the file; WP6b owns it.
 //!
 //! Looks like a block but is not solid, or vanishes. Create applies `solid` (default the

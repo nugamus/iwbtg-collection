@@ -4,7 +4,9 @@ Part of [the simulation](../sim.md).
 
 ## Sound model
 
-Audio output is the client's job, but whether a sound **is playing** is sim state. 15 of the 20 games call `sound_isplaying` (CLONE_SPEC sound, Confirmed), and its result can change game state, not only audio: machinary's playMusic2 sets an instance flag from it, and Step-based music objects call `sound_stop_all` when it returns false (Inferred). The DLL getters matter too: the GMFMODSimple getters give the start value, and so the lifetime, of the fader objects in go-the-spook-house and keep-celebrating-for-xia, and the SuperSound volume getter gives the start of kaenbyou's and eat-the-lemon's death fade. So `sim::sound` keeps a model ([plan](../../plans/sim-core.md) section 7):
+This is the live text of section 7 of [the sim core plan](../../plans/sim-core.md), which stays only as history; this page is the authority.
+
+Audio output is the client's job, but whether a sound **is playing** is sim state. 15 of the 20 games call `sound_isplaying` (CLONE_SPEC sound, Confirmed), and its result can change game state, not only audio: machinary's playMusic2 sets an instance flag from it, and Step-based music objects call `sound_stop_all` when it returns false (Inferred). The DLL getters matter too: the GMFMODSimple getters give the start value, and so the lifetime, of the fader objects in go-the-spook-house and keep-celebrating-for-xia, and the SuperSound volume getter gives the start of kaenbyou's and eat-the-lemon's death fade. So `sim::sound` keeps a model:
 
 - Playing copies start at the call's tick and end after the sound's `length_ticks` (song length times tick rate, from the package). At most one MULTIMEDIA copy. `sound_isplaying` latency and the second MULTIMEDIA start are UNKNOWN switches in `SoundRules` (S1-S3); game_restart keeps sounds (Inferred, S4).
 - SuperSound (kaenbyou, eat-the-lemon) and GMFMODSimple (go-the-spook-house, xia) are adapters whose getters return the last value set (S5). `SimOptions::dll_mode = Stub` reproduces the recorder's `--stub-dlls` traces; `Model` is for play and replays.

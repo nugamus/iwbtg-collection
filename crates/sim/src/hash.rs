@@ -1,4 +1,4 @@
-//! The state hash (docs/plans/sim-core.md 10.1).
+//! The state hash (docs/architecture/sim/hash.md).
 //!
 //! BLAKE3 over the postcard encoding of a canonical [`HashView`] borrowed from the `World`: every
 //! hashed field in a fixed order, `setup_applied` included, `output`, the grid, the per-tick

@@ -1,4 +1,4 @@
-//! The IWS validator (docs/plans/sim-core.md 11, decision 0001 "Validation before running"; WP9.3).
+//! The IWS validator (docs/architecture/sim/scripts.md, decision 0001 "Validation before running"; WP9.3).
 //!
 //! [`validate`] checks every script of a [`GameDef`] without running it and returns issues with
 //! file, line and column. The format loader turns them into diagnostics, so the client, the

@@ -1,4 +1,4 @@
-//! Built-in `playerface` (numbers hidden RNG consumers; docs/plans/sim-core.md 6.1;
+//! Built-in `playerface` (numbers hidden RNG consumers; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/playerface.md). Tier 2. WP0 creates the file; WP6b owns it.
 //!
 //! The face on the death screen. Create sets `image_index = irandom(3)`: one draw from the

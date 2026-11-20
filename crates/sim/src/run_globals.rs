@@ -13,7 +13,8 @@ pub struct RunGlobals {
     /// `StartPoint::NewGame` or `StartPoint::Room`, by the `difficulty_warp` built-in, and by a
     /// save load.
     pub difficulty: u8,
-    /// The death counter (`global.death`). Checked: an overflow halts the sim (plan 10.3).
+    /// The death counter (`global.death`). Checked: an overflow halts the sim
+    /// (docs/architecture/sim/determinism.md).
     pub deaths: u32,
     /// The play time counter, in the unit the game counts (`global.time`). Checked.
     pub time: u32,

@@ -1,4 +1,4 @@
-//! Built-in `killer` (mechanics `spike` and `cherry`; docs/plans/sim-core.md 6.1;
+//! Built-in `killer` (mechanics `spike` and `cherry`; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/killer.md). Tier 1. WP0 creates the file; WP6a owns it.
 //!
 //! A generic killer: class `killer` (set by the loader) with its own sprite and mask, so the

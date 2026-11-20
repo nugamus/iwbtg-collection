@@ -4,8 +4,11 @@ Part of [the simulation](../sim.md).
 
 ## Scripts
 
-Scripts are Rhai under the IWS profile ([0001](../../decisions/0001-script-language.md)). The sim talks to them only through the `ScriptHost` trait, so the sim core never names Rhai types.
+Scripts are Rhai under the IWS profile ([0001](../../decisions/0001-script-language.md)). The sim talks to them only through the `ScriptHost` trait, so the sim core never names Rhai types. This is the live text of section 11 of [the sim core plan](../../plans/sim-core.md), which stays only as history; this page is the authority.
 
+- **Rhai profile and pin.** Features `std`, `only_i64`, `no_time`, `no_module`, `no_custom_syntax`, `no_closure`, `compact_str` and `internals` on `=1.27.0` (pinned by #90; 1.27.0 was 14 days old on 2026-11-04). The root `Cargo.toml` carries the pin. `Engine::new_raw()` starts with only our packages; `eval`, `**` and `**=` are disabled.
+- **Both operands always evaluated** (Confirmed for `&&`, `||`, `^^`). Rhai short-circuits `&&`/`||`, so the validator rejects any call that can draw from the RNG or change state inside a right operand and suggests Rhai's non-short-circuit `&`/`|` on bools, or evaluating first into a variable.
+- **Conditions and repeats on reals.** Ported `if` and `repeat` code calls `gm_bool(x)` and `gm_repeat_count(x)` (rounded, Confirmed), which read `NumRules`. Comparisons of reals go through `gm_eq`..`gm_ge`, as 0001 requires. A single `=` inside a GML expression is a comparison (Inferred); Rhai treats it as a parse error, so porters write `gm_eq`.
 - A scripted object's events run in the same pipeline slots as built-in events, in the same (rank, id) order.
 - During a script call the world is lent to the Rhai host: `on_event` swaps a placeholder into `ctx.w` and parks the live world in the host (`RefCell<Option<World>>`). Each API function borrows it briefly; a function that needs a whole `Ctx` (spawn, destroy, kill) takes the world out, builds a `Ctx` and puts it back, so a spawned instance's Create can run its own script. The world is restored also on errors. Single thread, no `unsafe`, no `sync` feature.
 - Built-ins call scripts only through defined events: `collide`, `trigger`, `animation_end`, timeline moments, and the `call` trigger action.

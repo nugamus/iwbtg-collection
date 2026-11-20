@@ -1,4 +1,4 @@
-//! Built-in `music` (mechanics `music`, sound Inferred; docs/plans/sim-core.md 6.1, 7;
+//! Built-in `music` (mechanics `music`, sound Inferred; docs/architecture/sim/builtins.md, sound.md;
 //! docs/format/builtins/music.md). Tier 2. WP0 creates the file; WP6b owns it.
 //!
 //! Plays a track through the sound model (`sound::play`, WP10). `mode`:

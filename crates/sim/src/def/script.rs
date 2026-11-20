@@ -1,4 +1,5 @@
-//! Script sources as loaded from a package (docs/plans/sim-core.md 8.2, 11; decision 0001).
+//! Script sources as loaded from a package (docs/format/scripts.md;
+//! docs/architecture/sim/scripts.md; decision 0001).
 //!
 //! `KindDef::script` is a [`ScriptId`](super::ScriptId) into `GameDef::scripts`. The sim keeps
 //! the source text only; the script host (`script::ScriptRuntime`, WP9) compiles it when the

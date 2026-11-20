@@ -1,4 +1,4 @@
-//! CleanMem DLL calls: no-ops (docs/plans/sim-core.md 7). CleanMem only trims the process
+//! CleanMem DLL calls: no-ops (docs/architecture/sim/sound.md). CleanMem only trims the process
 //! working set; it has no effect on game state or audio (CLONE_SPEC sound, CleanMem).
 
 use super::DllMode;

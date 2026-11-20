@@ -1,4 +1,4 @@
-//! Built-in `scripted` (mechanics "Scripts that stay hand-written"; docs/plans/sim-core.md 6.1;
+//! Built-in `scripted` (mechanics "Scripts that stay hand-written"; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/scripted.md). Tier 3.
 //!
 //! The base of an object that has a `script` and no other base. It has no native behavior, no

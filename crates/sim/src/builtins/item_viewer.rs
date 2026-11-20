@@ -1,4 +1,4 @@
-//! Built-in `item_viewer` (mechanics `item_viewer`; docs/plans/sim-core.md 6.1;
+//! Built-in `item_viewer` (mechanics `item_viewer`; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/item_viewer.md). Tier 2. WP0 creates the file; WP6b owns it.
 //!
 //! Shows a collected boss reward or item: visible only while `global.boss[index]`
