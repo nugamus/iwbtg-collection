@@ -109,6 +109,11 @@ jobs:
     env:
       # Tests read fixtures through absolute paths, so the whole file system is visible to them.
       CARGO_TARGET_WASM32_WASIP1_RUNNER: wasmtime run --dir=/
+      # The golden corpus is nearly all of this job's wall time, and the default `test` profile is
+      # unoptimized (#966). One level of optimization cuts the wasm run many-fold for seconds more
+      # compile. Only the opt-level changes: debug assertions and overflow checks stay on, and no
+      # local profile or `.cargo/config.toml` is touched.
+      CARGO_PROFILE_TEST_OPT_LEVEL: "1"
     steps:
       - uses: actions/checkout@v5
       - run: rustup show
@@ -131,6 +136,10 @@ jobs:
     runs-on: ubuntu-latest
     # Slowest measured 11m33s (cold cache, #961).
     timeout-minutes: 25
+    env:
+      # The same optimized test profile as wasm32-wasip1 (#966). `cargo build` and Clippy use the
+      # dev profile, so only the test binaries below change.
+      CARGO_PROFILE_TEST_OPT_LEVEL: "1"
     steps:
       - uses: actions/checkout@v5
       - run: rustup show
