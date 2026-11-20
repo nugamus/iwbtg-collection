@@ -872,8 +872,47 @@ fn from_value(v: &Value) -> trace::Value {
         Value::Str(s) => trace::Value::Str(s.clone()),
         Value::Inst(id) => trace::Value::Int(i64::try_from(id.0).unwrap_or(i64::MAX)),
         Value::None => trace::Value::Empty,
-        // A trace cell holds one value and the recorder has no array column.
-        Value::Array(_) => trace::Value::Empty,
+        // One cell holds one value and the recorder has no array column. An empty cell would
+        // make an array indistinguishable from an unset variable, so the whole array goes in
+        // one string cell as its compact text form (`[1.0, [2.0], "x"]`, #1055) and `diff`
+        // compares that text bit for bit.
+        Value::Array(_) => trace::Value::Str(value_text(v)),
+    }
+}
+
+/// The compact text form of a value inside an array cell (#1055).
+///
+/// Elements follow the cell rules: a real as the trace's shortest round-trip decimal
+/// ([`trace::Value::decimal`]), an instance id as a decimal integer, a string quoted with `"`
+/// doubled. `Value::None` (Rhai's unit, no GML value) is `undefined`. Nested arrays recurse,
+/// separated by `, `. The form is deterministic: the same value always gives the same text,
+/// and a changed element changes it.
+fn value_text(v: &Value) -> String {
+    let mut out = String::new();
+    write_value_text(v, &mut out);
+    out
+}
+
+fn write_value_text(v: &Value, out: &mut String) {
+    match v {
+        Value::Real(r) => out.push_str(&trace::Value::Real(r.get()).decimal()),
+        Value::Str(s) => {
+            out.push('"');
+            out.push_str(&s.replace('"', "\"\""));
+            out.push('"');
+        }
+        Value::Inst(id) => out.push_str(&i64::try_from(id.0).unwrap_or(i64::MAX).to_string()),
+        Value::None => out.push_str("undefined"),
+        Value::Array(items) => {
+            out.push('[');
+            for (i, item) in items.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(", ");
+                }
+                write_value_text(item, out);
+            }
+            out.push(']');
+        }
     }
 }
 
@@ -1018,6 +1057,63 @@ mod tests {
             })),
             trace::Value::Empty,
             "a kid field of a non-kid instance is empty"
+        );
+    }
+
+    /// An array variable records as one compact string cell, not an empty one (#1055): reals use
+    /// the trace's shortest-decimal form, strings quote with `"` doubled, nested arrays recurse.
+    /// The text is deterministic, so `diff` compares it bit for bit like any string cell.
+    #[test]
+    fn array_values_record_as_compact_text() {
+        let (mut sim, ids) = sim_with_blocks();
+        let nested = Value::array(vec![Value::Real(Real::new(2.0))]).expect("nested");
+        let array = Value::array(vec![
+            Value::Real(Real::ONE),
+            nested,
+            Value::Str("x".into()),
+            Value::Inst(InstId(100_005)),
+            Value::None,
+            Value::Str("a\"b".into()),
+            Value::array(Vec::new()).expect("empty"),
+        ])
+        .expect("array");
+        sim.world
+            .get_mut(ids[1])
+            .expect("block")
+            .vars
+            .insert(VarId(0), array);
+        let field = FieldRef::Var(VarId(0));
+        let cell = read_field(sim.def(), sim.world(), &sim.rules, ids[1], &field, 1);
+        let text = "[1.0, [2.0], \"x\", 100005, undefined, \"a\"\"b\", []]";
+        assert_eq!(cell, trace::Value::Str(text.into()));
+        assert!(
+            !cell.same(&trace::Value::Empty),
+            "an array no longer reads like an unset variable"
+        );
+        assert_eq!(
+            value_text(&Value::Real(Real::new(1.5))),
+            trace::Value::Real(1.5).decimal(),
+            "an element real uses the trace's own decimal form"
+        );
+        assert_eq!(
+            read_field(sim.def(), sim.world(), &sim.rules, ids[1], &field, 1),
+            cell,
+            "the same array always records the same text"
+        );
+        let items = sim
+            .world
+            .get_mut(ids[1])
+            .expect("block")
+            .vars
+            .get_mut(&VarId(0))
+            .expect("var")
+            .as_array_mut()
+            .expect("array");
+        items[0] = Value::Real(Real::new(1.5));
+        assert_ne!(
+            read_field(sim.def(), sim.world(), &sim.rules, ids[1], &field, 1),
+            cell,
+            "a changed element changes the cell"
         );
     }
 
