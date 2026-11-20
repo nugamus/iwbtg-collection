@@ -1002,8 +1002,8 @@ fn fidelity(root: &Path, bless: bool) -> Result<(), String> {
         .status()
         .map_err(|e| format!("cargo: {e}"))?
         .code();
-    // The tool exits 0 when every case is as good as the baseline, 1 on a regression, 2 and 3 on an error or a
-    // panic: only 0 and 1 mean the sweep ran.
+    // The tool exits 0 when every case is as good as the baseline, 1 on a regression, 2 on a tool error and
+    // 101 on a panic: only 0 and 1 mean the sweep ran.
     if matches!(code, Some(0 | 1)) {
         record_fidelity_run(root);
     }

@@ -982,7 +982,7 @@ time: {}
 
     /// The golden one-room package on its `.inputs`: 61 ticks, the run starts at tick 1, and a
     /// second run gives the same hash. Until WP10's `sound::tick` lands the sim reaches a WP0
-    /// stub; then the test says so and passes (the CLI exits 3 in that case).
+    /// stub; then the test says so and passes (a stub panic aborts the CLI).
     #[test]
     fn the_golden_one_room_package_runs_twice_to_one_hash() {
         let golden = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sim/tests/golden");
