@@ -1,4 +1,4 @@
-//! Broadphase grid (docs/plans/sim-core.md 3.4, Design).
+//! Broadphase grid (docs/architecture/sim/collision.md, Design).
 //!
 //! Uniform 64 px cells per room, all cell math in `i64` with checked arithmetic (never an
 //! `as usize` cast: wasm32 has a 32-bit `usize`). A cache in `World`, reset (unbuilt) on room

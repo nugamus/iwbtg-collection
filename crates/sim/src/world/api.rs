@@ -1,4 +1,4 @@
-//! World and context API (docs/plans/sim-core.md 1.4).
+//! World and context API (docs/architecture/sim/world.md).
 //!
 //! WP0 fixed the signatures; WP1 owns the file. CLONE_SPEC rooms and tick loop, Confirmed
 //! (recorder): `instance_create` runs Create at once, inside the call
@@ -35,7 +35,7 @@ pub enum Flow {
     AbortTick,
     /// The sim halted (`World::status` is `Halted`, set by [`Ctx::halt`]). Stop at once: no
     /// further events, no destroy sweep, no room change, no `tick += 1`; the world stays frozen
-    /// where it stopped (plan 2.2). `tick::run_tick` returns as soon as a phase gives `Halt`.
+    /// where it stopped (docs/architecture/sim/tick.md). `tick::run_tick` returns as soon as a phase gives `Halt`.
     Halt,
 }
 
@@ -127,7 +127,7 @@ impl World {
     /// Marks the instance as moved in the broadphase grid (`Grid::mark_moved`), because the
     /// caller may change its position, mask, sprite, image index, scale or angle through `m` or
     /// `img`. Queries treat moved instances as candidates everywhere until the grid re-buckets
-    /// them, so a stale grid never hides an instance (plan 3.4).
+    /// them, so a stale grid never hides an instance (docs/architecture/sim/collision.md).
     pub fn get_mut(&mut self, id: InstId) -> Option<&mut Instance> {
         let i = self.index_of(id)?;
         self.grid.mark_moved(id);
@@ -222,7 +222,7 @@ fn param_value(v: &ParamValue) -> Value {
     }
 }
 
-/// The per-owner state a new instance of `kd` starts with (plan 1.5).
+/// The per-owner state a new instance of `kd` starts with (docs/architecture/sim/world.md).
 fn initial_state(def: &GameDef, kd: &KindDef, params: &Params) -> Result<KindState, SimError> {
     Ok(match kd.base {
         Builtin::Kid => KindState::Kid(Box::default()),
@@ -394,7 +394,7 @@ impl<'a> Ctx<'a> {
 
     /// Halts the sim: sets `World::status` to `Halted(e)` (the first error wins if it is
     /// already halted) and returns [`Flow::Halt`]. The one way a handler that returns `Flow`
-    /// stops the sim (plan 2.2, 10.2); handlers that return `Result` just return the error and
+    /// stops the sim (docs/architecture/sim/tick.md; plan 10.2); handlers that return `Result` just return the error and
     /// `events::dispatch` calls this.
     pub fn halt(&mut self, e: SimError) -> Flow {
         if self.w.status == SimStatus::Running {

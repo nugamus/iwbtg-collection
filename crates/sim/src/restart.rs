@@ -1,4 +1,4 @@
-//! Restart and reset models (docs/plans/sim-core.md 4.3, R16, R17, R26, R27).
+//! Restart and reset models (docs/architecture/sim/rooms.md, R16, R17, R26, R27).
 //!
 //! The engines' init rooms and world objects are not ported as GM code. The `world` built-in
 //! (WP6a) calls these at the world's rank, in the phase `RestartModel::trigger` names; this

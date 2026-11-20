@@ -1,4 +1,4 @@
-//! Per-instance built-in state (docs/plans/sim-core.md 1.5).
+//! Per-instance built-in state (docs/architecture/sim/world.md).
 //!
 //! WP6a owns this file. Each built-in with state adds one variant here that wraps a struct from
 //! its own `builtins/<kind>.rs`; WP6b and WP6c add one line each, merged in wave order.

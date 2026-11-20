@@ -1,4 +1,4 @@
-//! The gameplay random generator (docs/plans/sim-core.md 3.3, N9, N10).
+//! The gameplay random generator (docs/architecture/sim/rng.md, N9, N10).
 //!
 //! The only randomness in the sim. Hidden consumers (blood, playerface) draw from it too
 //! (Confirmed). Delphi LCG: `seed = seed * 134775813 + 1 mod 2^32` with wrapping arithmetic,

@@ -1,4 +1,4 @@
-//! Tick pipeline switches (docs/plans/sim-core.md 2, register R1-R10, R21, R22, I1).
+//! Tick pipeline switches (docs/architecture/sim/tick.md, register R1-R10, R21, R22, I1).
 //!
 //! WP0 declared every field with its engine_rev 0 default; WP1 owns the file. Where the
 //! CLONE_SPEC now records a recorder result (Confirmed (recorder), research a822655), the default

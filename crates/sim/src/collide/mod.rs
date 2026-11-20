@@ -1,5 +1,5 @@
 //! Collision: placed masks, overlap, queries, contact moves, the solid put-back, the broadphase
-//! grid (docs/plans/sim-core.md 3.4, register C1-C15).
+//! grid (docs/architecture/sim/collision.md, register C1-C15).
 //!
 //! `bbox.rs` is the only place that rounds. The grid never decides order: results are re-sorted
 //! by `World::first_of` order. WP0 declares; WP3 owns.

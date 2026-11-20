@@ -1,4 +1,4 @@
-//! The save slot (docs/plans/sim-core.md 4.4, N5-N8).
+//! The save slot (docs/architecture/sim/rooms.md, N5-N8).
 //!
 //! The sim never touches files: the save is sim state, the client stores its bytes (postcard).
 //! WP0 declares; WP4b owns.

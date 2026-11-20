@@ -2,8 +2,7 @@
 //!
 //! Built-ins use these functions wherever the original compared reals in GML, and scripts call
 //! them by name, because plain `==` in scripts stays exact. Every function takes the rules, so a
-//! rule settled later becomes a new `engine_rev`, not a new signature (docs/plans/sim-core.md
-//! 3.2).
+//! rule settled later becomes a new `engine_rev`, not a new signature (docs/architecture/sim/numbers.md).
 //!
 //! Under `CompareMode::Epsilon(e)` (N1, the engine_rev 0 default with `e = 1e-13`), the
 //! comparisons test the difference `d = a - b`, and a difference of exactly `e` is not equal:

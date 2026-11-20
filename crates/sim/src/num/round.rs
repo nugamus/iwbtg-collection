@@ -1,7 +1,7 @@
 //! Rounding, integer conversion and the small GML helpers built on exact operations.
 //!
 //! Everything here is exact IEEE (no transcendental math), so hardware f64 is safe. Functions
-//! whose result depends on an open rule take the run's [`NumRules`] (docs/plans/sim-core.md 3.2).
+//! whose result depends on an open rule take the run's [`NumRules`] (docs/architecture/sim/numbers.md).
 
 use super::compare::epsilon;
 use super::{NumError, Real};
@@ -113,7 +113,7 @@ pub fn frac(x: Real) -> Real {
 /// The default fits the recorder (CLONE_SPEC numbers, Confirmed (recorder)): an hspeed from
 /// `-1.4e-14` to `-9e-14` has sign 0 and `-1e-13` has sign -1
 /// (`traces/little-trap/num-eps-slip-b.csv` rows 50-51, `num-eps-slip-c.csv` rows 50-100).
-/// Slip blocks subtract `slip * sign(hspeed)`, so N11 must follow N1 (plan 3.2).
+/// Slip blocks subtract `slip * sign(hspeed)`, so N11 must follow N1 (docs/architecture/sim/numbers.md).
 pub fn sign(x: Real, r: &NumRules) -> Real {
     let v = x.get();
     let e = match r.sign {

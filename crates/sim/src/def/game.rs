@@ -1,4 +1,4 @@
-//! The immutable game definition (docs/plans/sim-core.md 1.4, 4.3, 8.1).
+//! The immutable game definition (docs/architecture/sim/world.md, rooms.md; docs/plans/sim-core.md 8.1).
 //!
 //! `crates/format` builds a [`GameDef`] from a package; tests build one with
 //! [`GameDefBuilder`](super::testing::GameDefBuilder). The sim never changes it. WP0 declares;
@@ -66,7 +66,7 @@ pub struct GameDef {
     pub ranks: RankTable,
     /// Kinds the sim spawns by role.
     pub engine_kinds: BTreeMap<EngineKind, KindId>,
-    /// Variable names known at load, ids assigned from the sorted list (plan 1.1).
+    /// Variable names known at load, ids assigned from the sorted list (docs/architecture/sim/world.md).
     pub var_names: BTreeMap<String, VarId>,
     /// Instance names (`NameId` index).
     pub names: Vec<String>,
@@ -218,7 +218,7 @@ impl GameDef {
         self.scripts.get(id.index()?)
     }
 
-    /// Dispatch rank for an instance of `kind` spawned at run time (plan 1.3).
+    /// Dispatch rank for an instance of `kind` spawned at run time (docs/architecture/sim/world.md).
     pub fn rank_for(&self, kind: KindId, variant: Option<&VariantSel>) -> Option<u16> {
         self.ranks.rank_for(kind, variant)
     }
@@ -254,7 +254,7 @@ pub enum EngineKind {
     DeathSound,
 }
 
-/// How the game retries after R (plan 4.3). Behavior in `restart.rs` (WP4b); the `world`
+/// How the game retries after R (docs/architecture/sim/rooms.md). Behavior in `restart.rs` (WP4b); the `world`
 /// built-in runs it at the world's rank, in the phase `trigger` names.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RestartModel {
@@ -326,7 +326,7 @@ pub enum RestartTrigger {
     },
 }
 
-/// What the retry does (plan 4.3 table).
+/// What the retry does (docs/architecture/sim/rooms.md table).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum RestartKind {
     /// Groups A (minus showdown), B, C: game_restart through the boot room.
@@ -353,7 +353,7 @@ pub enum DeathOnRestart {
     SaveCountersPerKid,
 }
 
-/// How the game resets after F2 (plan 4.3). Mirrors [`RestartModel`]: the `world` built-in runs
+/// How the game resets after F2 (docs/architecture/sim/rooms.md). Mirrors [`RestartModel`]: the `world` built-in runs
 /// it at the world's rank, in the phase `trigger` names. Behavior in `restart.rs` (WP4b).
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ResetModel {

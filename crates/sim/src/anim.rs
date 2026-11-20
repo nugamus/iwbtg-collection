@@ -1,4 +1,4 @@
-//! Sprite and image variables and the per-tick animation update (docs/plans/sim-core.md 2.1
+//! Sprite and image variables and the per-tick animation update (docs/architecture/sim/tick.md
 //! rows 8b and 13, R7, R7b-R7d).
 //!
 //! WP0 declared; WP1 owns. CLONE_SPEC "sprites and animation", Confirmed (recorder): once per

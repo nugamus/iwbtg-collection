@@ -1,4 +1,4 @@
-//! This tick's input and the `keyboard_check_direct` latch (docs/plans/sim-core.md 2.1 row 0,
+//! This tick's input and the `keyboard_check_direct` latch (docs/architecture/sim/tick.md row 0,
 //! 2.2 "Direct key reads", I1).
 //!
 //! Every built-in and kid action that ports a `keyboard_check_direct` calls

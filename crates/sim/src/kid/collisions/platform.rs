@@ -1,4 +1,4 @@
-//! The `platform_standard` collision run (docs/plans/sim-core.md 5.3, `[platform]`). WP5a owns
+//! The `platform_standard` collision run (docs/architecture/sim/kid.md, `[platform]`). WP5a owns
 //! it.
 //!
 //! Spec: kid/A1.md "Collision with platform (platform is not solid)". With

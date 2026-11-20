@@ -1,5 +1,5 @@
 //! Overlap tests: inclusive boxes, then a pixel test over the intersection when either shape is
-//! precise (Inferred; docs/plans/sim-core.md 3.4). WP0 declares; WP3 owns.
+//! precise (Inferred; docs/architecture/sim/collision.md). WP0 declares; WP3 owns.
 //!
 //! A `Rect` mask is solid on its whole placed box. A `Bits` mask (precise, and the rasterized
 //! disk and diamond shapes) is solid where the room pixel samples a set bit inside the mask's

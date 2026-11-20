@@ -1,4 +1,4 @@
-//! The simulation handle the client, server and CLI drive (docs/plans/sim-core.md 2.1, 13 WP0).
+//! The simulation handle the client, server and CLI drive (docs/architecture/sim/tick.md).
 //!
 //! WP0 declared; WP1 owns the method bodies.
 
@@ -118,7 +118,7 @@ impl Sim {
     /// keeps what `Sim::new` produced: the first room's start (music, sounds, shake) is reported
     /// with tick 0, so a client that reads `output` after every step never misses it and must
     /// not also read it after `Sim::new`. Reaching `GameDef::max_ticks` halts
-    /// with `SimError::Overflow`; any error halts (plan 2.2).
+    /// with `SimError::Overflow`; any error halts (docs/architecture/sim/tick.md).
     pub fn step(&mut self, input: InputFrame) -> StepResult {
         self.step_rows(input);
         self.finish_step()

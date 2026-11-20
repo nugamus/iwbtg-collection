@@ -1,4 +1,4 @@
-//! Instances (docs/plans/sim-core.md 1.1, 1.5). WP0 declares; WP1 owns.
+//! Instances (docs/architecture/sim/world.md). WP0 declares; WP1 owns.
 
 use std::collections::BTreeMap;
 
@@ -140,7 +140,7 @@ pub struct Instance {
     pub timeline: Option<TimelineRun>,
     /// The path being followed, if any.
     pub path: Option<PathRun>,
-    /// Per-owner state (plan 1.5).
+    /// Per-owner state (docs/architecture/sim/world.md).
     pub state: KindState,
     /// Custom variables (scripts, creation-code params).
     pub vars: BTreeMap<VarId, Value>,
@@ -175,7 +175,7 @@ impl Instance {
     }
 }
 
-/// Per-owner instance state (plan 1.5). Each part's type lives in its owner's module and only
+/// Per-owner instance state (docs/architecture/sim/world.md). Each part's type lives in its owner's module and only
 /// its owner adds fields.
 #[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
 pub enum KindState {

@@ -1,6 +1,6 @@
 //! Kid actions shared by every family: `create_defaults`, `gravity`, `walk`, `air_sprite`,
-//! `fall_cap`, `shoot`, `jump`, `release`, `vines` and the other rows of docs/plans/sim-core.md
-//! 5.3 marked 5a. WP5a owns the file.
+//! `fall_cap`, `shoot`, `jump`, `release`, `vines` and the other rows of
+//! docs/architecture/sim/kid.md (rows marked 5a). WP5a owns the file.
 //!
 //! Spec: kid/A1.md "Create", "Step" (actions 2-4), "playerJump", "playerVJump", "playerShoot".
 //! A named action whose behavior belongs to another work package returns

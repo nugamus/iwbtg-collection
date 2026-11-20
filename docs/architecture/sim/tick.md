@@ -4,7 +4,7 @@ Part of [the simulation](../sim.md).
 
 ## Tick pipeline
 
-`Sim::step(InputFrame) -> StepResult` runs one tick (`tick::run_tick`). The order follows `research/specs/engines/gm8/CLONE_SPEC.md` ("tick loop", "motion", "sprites and animation", "input"); the [sim core plan](../../plans/sim-core.md) section 2.1 is the detailed version. Phase placement that the spec marks Inferred or UNKNOWN is a field of `TickRules` (register ids in plan section 15), never an `if` scattered in built-ins. If the spec changes, the rule changes in that one field.
+`Sim::step(InputFrame) -> StepResult` runs one tick (`tick::run_tick`). The order follows `research/specs/engines/gm8/CLONE_SPEC.md` ("tick loop", "motion", "sprites and animation", "input"); this table is the live text moved from [the sim core plan](../../plans/sim-core.md) section 2.1, which is history. Phase placement that the spec marks Inferred or UNKNOWN is a field of `TickRules` (register ids in plan section 15), never an `if` scattered in built-ins. If the spec changes, the rule changes in that one field.
 
 | # | Phase | Status | Isolation |
 |---|---|---|---|
@@ -38,3 +38,53 @@ Rules that apply to every step:
 - **Room speed.** `room_speed` is sim state: the room file's speed on entry, 50 after the world's Room Start (R14). The client runs steps on Bevy's `FixedUpdate` clock (`Time<Fixed>`) and retunes it to that rate after every tick (`view::retune`, [view](../client/view.md)). Timing counts ticks. Displayed real time is the sum of `1 / room_speed` over the ticks.
 - **GM 8.0 and 8.1.** `RunnerRules::for_runner(runner, engine_rev)` returns the same rules for both until a trace shows a difference (U12, R11); any difference becomes a field, never a branch in built-ins.
 - **Halting.** A script error, a non-finite value, an overflow, a broken invariant or an unsupported case sets `SimStatus::Halted(SimError)` and freezes the world where it stopped. Handlers return `Result<Flow, SimError>`; `events::dispatch` turns an error into `Ctx::halt`, which sets the status and returns `Flow::Halt`. A phase that gets `Halt` stops at once, and `tick::run_tick` returns without the sweep, the room change or `tick += 1`. A halt while the sim is built (Game Start: a script error in a start-room Create) is `Sim::new`'s error; `Sim::new_or_halted` returns that sim halted at tick 0 instead, as a halt in play leaves it, and errs only when the sim cannot be set up (a missing map, an unsupported runner, scripts that do not compile). The client uses it so a first-tick script error shows the script error screen (#946). The sim never panics on any input (wasm32-unknown-unknown aborts on panic).
+
+## Pipeline rules reference
+
+The live text of plan sections 2.2-2.4. The [sim core plan](../../plans/sim-core.md) keeps the same text as history; this page is the authority.
+
+- **Deferral grain** (rooms UNKNOWN 1, R25). The manual says the change happens "after the current action". The grain is the code action: the rest of the requesting code action runs and later actions of the same event do not (Confirmed (recorder), `tr-room-02-c.csv` row 13). A D&D Go to Room followed by more actions is untraced. Our handlers are one unit each, so we apply the request at the end of the handler (Design); a ported event whose actions follow a room-change code action must be written so that order does not matter, or flagged.
+- **Create runs inside `spawn`** before it returns (Inferred). Room Start for instances created during Room Start: R10, default no (snapshot).
+- **Alarm assignment of fractional values** (kaenbyou, jun-g, little-runner): stored through `num::alarm_from_real` (R3b). Round half to even (Confirmed (recorder): `kaenbyou/num-alarm-half-b`, `go-the-jun-g-world/num-eps-alpha`).
+- **Alarm only ticks when the object handles that alarm** (Confirmed manual). Each kind declares `EventSet::alarms: u16`.
+- **Inactive instances** get no events, are not drawn and are ignored by queries (Confirmed manual 403_06).
+- **Direct key reads** (Inferred input: one latch bit per key, shared by every direct read, consumed by each read). Every built-in and kid action that ports a `keyboard_check_direct` calls `InputState::direct(&mut self, Action) -> bool`; nothing else reads or clears the latch. Ladder code that reads Up twice in one Step (little-trap, rainbow, rori, fairy-tale) makes two calls. The world built-in's dummy reads (kaenbyou, eat-the-lemon, xia) are `direct` calls from the world's Step, enabled by its `latch_cleared_by_world` param, not a kid field.
+- **Real-time variables** (R28, Design). GML reads of `fps`, `current_time`, `time_span`-style clocks (kaenbyou and eat-the-lemon world Step cheat check, numbers "round, frac and real") return fixed values derived from ticks: `fps = tick_rate` (0 during the trace runner's warm-up, `TickRules::fps_zero_ticks`, #641), clocks = `tick * 1000 / tick_rate` ms. Documented per built-in that reads them.
+
+## Events and dispatch
+
+```rust
+// events.rs
+pub enum EventKind {
+    Create, Destroy, BeginStep, Alarm(u8), KeyHeld(Action), KeyPress(Action), KeyRelease(Action),
+    Step, OutsideRoom, IntersectBoundary, Collision { with: ClassMask, other: InstId }, EndStep,
+    Late, AnimationEnd, RoomStart, RoomEnd, GameStart, User(u8), Moment(u32), EndOfPath,
+}
+pub struct EventSet {           // what a kind handles; built once per kind at load
+    pub begin_step: bool, pub step: bool, pub end_step: bool, pub late: bool,
+    pub alarms: u16, pub key_held: u16, pub key_press: u16, pub key_release: u16,
+    pub collisions: SmallVec<[ClassMask; 4]>,   // handler classes, in handler order
+    pub outside_room: bool, pub intersect_boundary: bool, pub animation_end: bool,
+    pub room_start: bool, pub room_end: bool, pub user: u16,
+}
+pub fn event_set(def: &GameDef, kind: KindId) -> &EventSet;            // cached in GameDef
+pub fn dispatch(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Flow;    // match kind.builtin -> handler
+pub fn run_phase(ctx: &mut Ctx, phase: Phase) -> Flow;                 // snapshot + dispatch
+pub fn run_draw_phase(ctx: &mut Ctx) -> Flow;                          // draw order, visible only
+pub fn collision_phase(ctx: &mut Ctx) -> Flow;
+```
+
+`dispatch` matches on `Builtin`: `Builtin::Kid => kid::on_event`, other built-ins `=> builtins::on_event`, and any kind with a script `=> script::on_event` after the base handler. Keys are actions: the GM "Key Q pressed" kid event is `KeyPress(Suicide)`, "Key R pressed" on world is `KeyPress(Restart)`, P is `KeyPress(Pause)` (CLONE_SPEC input, Inferred mapping; Pause, Mute and Reset are new actions, below).
+
+**Collision phase** (Confirmed rule; pair order Confirmed (recorder), OpenGMK only; all in `events::collision_phase`):
+
+1. Walk the outer instance `a` by its own rank, then id (`CollideRules::pair_order`, R12, default `LowerRankFirst`; Confirmed (recorder), CLONE_SPEC collision "Order of collision events: pairs of instances, lower object first", traces/rely-the-needle-4-2/t-ord-2.md). The rank is the instance's own kind's, never a parent's (t-ord-2 run C). Instances that handle no collision and match no kind's handler class are left out: they could take part in no event. New instances join per R9.
+2. When `a`'s turn comes, take every other alive, active `b` whose rank is greater than or equal to `a`'s, by rank then id; lower ranks are not met again. For each `b` that overlaps `a` there and then: `a`'s handler for `b` runs, then `b`'s handler for `a`, right away (each only if that instance has a handler matching the other, step 3). Two instances of one rank meet twice (`a1`-`a2` in `a1`'s turn, `a2`-`a1` in `a2`'s), and each meeting runs both directions, so a handler for its own class runs twice per pair per tick (t-ord-2-a frame 4). Event registration and creation order play no part beyond the ids (t-ord-2-b). For the kid, rank 0 in these games, his pairs come first, by the other's rank then id, his event before the other's: a save point's Collision with player runs right after his block pair and before his killer pair. Test: `wp1_r12_collision_pairs_run_lower_kind_first_t_ord_2`. The alternatives go instance by instance in dispatch order, each instance's own pairs sorted by the other's rank then id (`OtherRankThenId`, the earlier Inferred reading) or by `a`'s handler list, then `b` in dispatch order (`HandlerListOrder`).
+3. One `b` matching several handler classes of `a` (a platform is `PLATFORM | BLOCK`, and the kid handles both) gives one pair: only the handler most specific for `b` runs (C8, R12b, Confirmed (recorder): showdown t-mot-08-a/b, help-the-fairy-tale t-col-06-e/f). The sim has no parent tree, so `events::pair_handler` takes the lowest `ClassMask::generality` (`block` last, `solidblock` next, other classes first; the nearest-ancestor default), then handler order. With no platform handler, the block (or solidblock) handler runs for the platform. Step 2 changes which pairs run when, not which handler a pair runs.
+4. If `b.solid`: before the pair, re-check that `a` at its current position still overlaps `b`; skip it if not (Inferred, "Overlap is re-checked before each pair's event", C7). Then `collide::solid_resolve`: put `a` at `(xprevious, yprevious)`, run the event, then `x += hspeed; y += vspeed` from wherever the event left it; if `a` overlaps `b` again (or any solid, C9 switch), put it back where the event left it (Inferred "What previous place and new position mean"). Here `a` is the instance whose handler runs, so in the second direction of a step-2 pair the roles swap. The first direction runs right after step 2's overlap test, which serves as its re-check.
+5. If `b` is not solid: run the event at the current position, no put-back (Confirmed manual). Whether the pair is re-checked first (does a killer see the kid before or after a block event moved him) is UNKNOWN (collision UNKNOWN, 5th bullet): switch `CollideRules::recheck_nonsolid` (C7b), default `true` (Design: one rule for both cases), settled by T-COL-06.
+6. Skip a pair whose `a` or `b` died earlier in the phase, including pairs of instances later in the phase (R22, Confirmed (recorder): a kid killed in his block event gets no save point Collision afterwards; test `wp1_r22_a_pair_with_an_instance_killed_earlier_in_the_phase_is_skipped`).
+
+## Input actions
+
+`sim::input::Action` has `Pause` (P: kaenbyou `jump.blocked_by_pause_press`, B and xia pause, showdown keyboard_wait), `Mute` (Ctrl+M: sets the game's music flag, which changes `sound_stop_all` calls and so sim state) and `Reset` (F2: game reset; Groups A, B, C delete temp and game_restart, kaenbyou/lemon gameReset). They take bits 12-14. Escape and Alt+F4 stay client-only (quit), never sim input. `.inputs` and `.iwbr` accept the new bits; `replay.rs` and the `.inputs` parser round-trip them.

@@ -777,7 +777,7 @@ pub fn import_text(
     let room_orig = args.room.clone().unwrap_or_default();
     if args.room.is_none() {
         open.push(
-            "no --room: the trace starts from the game's boot rooms, which are client UI (plan 4.2)".into(),
+            "no --room: the trace starts from the game's boot rooms, which are client UI (docs/architecture/sim/rooms.md)".into(),
         );
     }
     let start_room = room_of(&room_orig);

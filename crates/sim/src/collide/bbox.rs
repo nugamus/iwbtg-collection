@@ -1,5 +1,5 @@
-//! Placement and bounding boxes: the only place collision code rounds (docs/plans/sim-core.md
-//! 3.4, C1, C2). WP0 declares; WP3 owns.
+//! Placement and bounding boxes: the only place collision code rounds
+//! (docs/architecture/sim/collision.md, C1, C2). WP0 declares; WP3 owns.
 //!
 //! Two boxes, kept apart because the spec shows they differ (CLONE_SPEC collision, Confirmed
 //! (recorder)):

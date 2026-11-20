@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 
 /// One client action. Each is one bit of a `u32`; bits above `Extra4` are reserved.
 ///
-/// `Pause`, `Mute` and `Reset` are the engines' P, M and F2 (docs/plans/sim-core.md 2.4):
+/// `Pause`, `Mute` and `Reset` are the engines' P, M and F2 (docs/architecture/sim/tick.md):
 /// they change sim state in the originals, so they are sim input. Quitting (Escape, Alt+F4) is
 /// client-only and never an action.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

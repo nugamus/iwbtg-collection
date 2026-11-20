@@ -1,4 +1,4 @@
-//! Views and runner view follow (docs/plans/sim-core.md 4.5, R19).
+//! Views and runner view follow (docs/architecture/sim/rooms.md, R19).
 //!
 //! Views affect gameplay through `view_xview` reads, so they are hashed sim state. WP0
 //! declares; WP4b owns.

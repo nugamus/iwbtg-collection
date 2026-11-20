@@ -174,7 +174,7 @@
       ]
     },
     "BoundaryModel": {
-      "description": "`events.boundary`: how the kid handles the room edge (plan 5.3 edge row).",
+      "description": "`events.boundary`: how the kid handles the room edge (docs/architecture/sim/kid.md edge row).",
       "oneOf": [
         {
           "const": "none",
@@ -569,7 +569,7 @@
       ]
     },
     "FlipKind": {
-      "description": "The flip models of plan 5.3, by their `physics.toml` names.",
+      "description": "The flip models (docs/architecture/sim/kid.md), by their `physics.toml` names.",
       "oneOf": [
         {
           "const": "none",
@@ -595,7 +595,7 @@
     },
     "FlipModel": {
       "additionalProperties": false,
-      "description": "`[flip]`: how gravity flips (plan 5.3 flip rows). WP5c adds the other fields\n(`mask_flipped`, ...).",
+      "description": "`[flip]`: how gravity flips (docs/architecture/sim/kid.md flip rows). WP5c adds the other fields\n(`mask_flipped`, ...).",
       "properties": {
         "model": {
           "$ref": "#/$defs/FlipKind",
@@ -911,7 +911,7 @@
           "description": "Slopes (WP5c)."
         }
       ],
-      "description": "One named action in a `physics.toml` event list (`step = [\"walk\", \"jump\", ...]`, plan 5.2).\n\nSplit by owner like `KindState`: each part is the enum of one file under `actions/`, and the\nname in the file picks the part whose enum has that name (`untagged`). Names must be unique\nacross parts."
+      "description": "One named action in a `physics.toml` event list (`step = [\"walk\", \"jump\", ...]`, docs/architecture/sim/kid.md).\n\nSplit by owner like `KindState`: each part is the enum of one file under `actions/`, and the\nname in the file picks the part whose enum has that name (`untagged`). Names must be unique\nacross parts."
     },
     "KidAlarm": {
       "additionalProperties": false,
@@ -984,7 +984,7 @@
           "description": "poronkusema `moving_block_por` (WP5c)."
         }
       ],
-      "description": "One named collision run in `events.collisions` (`{ with = \"block\", run = \"block_standard\" }`,\nplan 5.2). Split by owner like [`KidAction`]."
+      "description": "One named collision run in `events.collisions` (`{ with = \"block\", run = \"block_standard\" }`,\ndocs/architecture/sim/kid.md). Split by owner like [`KidAction`]."
     },
     "KidEventsDraft": {
       "additionalProperties": false,

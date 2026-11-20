@@ -16,3 +16,58 @@ Part of [the simulation](../sim.md).
 - **Bounce** (`collide/bounce.rs`, C14, #835). `move_bounce_solid` and `move_bounce_all` (the Bounce action; `place_free` or `place_empty` as "blocked") change only `hspeed` and `vspeed`: the tick's motion then moves by the new speed, so a bounce never moves to contact. The two rules are pure functions over a "blocked here" closure (`plain_bounce`, `precise_direction`), which `tests/bounce.rs` checks row by row against the recorder tables. A precise bounce writes the new `direction` through `Motion::set_direction` (speed kept), so `hspeed` and `vspeed` come from the one polar-to-cartesian conversion with its integer snap (research#193, #855; [numbers](numbers.md), Motion coupling). `tests/bounce.rs` checks those bits on every precise row and the `h0`/`v0` of every probe, except one ulp at directions 45 and 220 (the M6 libm gap).
 - **Scale.** 1,288 water tiles in one room (Fairy tale) and 28,900 instances over 116 rooms (qoqoqo) are well within this design. A benchmark covers both.
 - **OPEN:** spike masks (precise triangle or bounding box) per engine.
+
+## Collision reference
+
+The live text of plan section 3.4's types and rules not already covered above (this page is the authority; the [sim core plan](../../plans/sim-core.md) keeps the same text as history).
+
+**Masks** (built by `crates/format`, consumed here):
+
+```rust
+// def/sprite.rs
+pub struct SpriteDef { pub frames: u16, pub size: (u32, u32), pub origin: (i32, i32), pub masks: MaskSet }
+pub enum MaskSet { Shared(MaskId), PerFrame(Vec<MaskId>) }   // "separate collision masks" (Confirmed)
+pub struct Mask { pub bbox: IRect /* sprite space, inclusive */, pub shape: MaskShape }
+pub enum MaskShape { Rect, Bits(BitMask) /* rows of u64 words, bbox-relative */, Empty }
+```
+
+- Pixel in mask: alpha compared to tolerance, `>` by default (C5, UNKNOWN; one const in `format::masks`). Only pixels inside the bbox count; a manual bbox is shared by all frames (Confirmed). Disk and diamond are rasterized into `Bits` inside the bbox (Inferred). `left > right` boxes (sprBow) give `Empty` (Inferred).
+- Which frame's mask: `floor(image_index) mod frames` at the time of the check (Inferred, C6). Where the animation update sits (R7) changes which frame a cherry uses during Collision.
+
+**Placement and bbox** (all in `collide/bbox.rs`, the only place that rounds):
+
+```rust
+pub fn place_origin(v: Real, rules: &CollideRules) -> i64;               // banker's round (Inferred), C2
+pub fn instance_box(def: &GameDef, inst: &Instance, at: (Real, Real), rules: &CollideRules) -> Result<Option<PlacedMask<'_>>, SimError>;
+pub struct PlacedMask<'a> { pub bbox: IRect /* room space, inclusive, i64 */, pub mask: &'a Mask, pub xf: Xform }
+```
+
+- Unit scale, angle 0: `bbox_left = round(x) + (mask.left - origin.x)` and so on (Inferred). The kid gives `round(x)-5 .. round(x)+5`, `round(y)-12 .. round(y)+8`.
+- Scale, mirror and rotation: `collide::xform::map_box` and `map_pixel` (C3, C4 UNKNOWN). Default: offsets relative to the origin are mirrored `d -> -d` and rotated by multiples of 90 degrees exactly; fractional scale (mini spikes 0.5) scales offsets and floors; other angles return `SimError::Unsupported` in engine_rev 0, so a package that needs them waits for MASK-ROTATE traces or routes the object to a script. Kaenbyou and eat-the-lemon need the 90/180/270 case for every engine spike (`kaenbyou/famb-spike-mask-*` recorded).
+- Place tests round the tested coordinate (`round(y + 1)`), not `round(y) + 1` (Inferred "Standing heights"; C2 switch `PlaceRound::TestedCoord | RoundThenAdd`).
+
+**Overlap**: inclusive boxes, then a pixel test over the intersection when either shape is `Bits` (Inferred). `collide/overlap.rs`.
+
+**Queries** (`collide/query.rs`), each excluding `me`, skipping inactive instances, skipping dead ones unless `TickRules::dead_in_queries` (R22), and returning `World::first_of` order (R21):
+
+```rust
+pub enum Target { Class(ClassMask), Kind(KindId), Inst(InstId), Any }
+pub fn place_free(ctx: &Ctx, me: InstId, x: Real, y: Real) -> Result<bool, SimError>;   // solids only (Confirmed)
+pub fn place_empty(ctx: &Ctx, me: InstId, x: Real, y: Real) -> Result<bool, SimError>;
+pub fn place_meeting(ctx: &Ctx, me: InstId, x: Real, y: Real, t: Target) -> Result<bool, SimError>;
+pub fn instance_place(ctx: &Ctx, me: InstId, x: Real, y: Real, t: Target) -> Result<Option<InstId>, SimError>;
+pub fn instance_position(ctx: &Ctx, x: Real, y: Real, t: Target) -> Result<Option<InstId>, SimError>;
+pub fn collision_point(ctx: &Ctx, x: Real, y: Real, t: Target, prec: bool, notme: Option<InstId>) -> Result<Option<InstId>, SimError>;
+pub fn collision_rectangle(ctx: &Ctx, x1: Real, y1: Real, x2: Real, y2: Real, t: Target, prec: bool, notme: Option<InstId>) -> Result<Option<InstId>, SimError>;
+pub fn collision_line(ctx: &Ctx, x1: Real, y1: Real, x2: Real, y2: Real, t: Target, prec: bool, notme: Option<InstId>) -> Result<Option<InstId>, SimError>;
+pub fn distance_to_object(ctx: &Ctx, me: InstId, t: Target) -> Result<Option<Real>, SimError>;          // C13
+pub fn move_contact_solid(ctx: &mut Ctx, me: InstId, dir: Real, maxdist: Real) -> Result<(), SimError>;   // C10, C11
+pub fn move_outside_solid(ctx: &mut Ctx, me: InstId, dir: Real, maxdist: Real) -> Result<(), SimError>;
+pub fn move_bounce_solid(ctx: &mut Ctx, me: InstId, precise: bool) -> Result<(), SimError>; // C14 (collide::bounce, #835)
+pub fn solid_resolve(ctx: &mut Ctx, a: InstId, b: InstId, run: impl FnOnce(&mut Ctx) -> Flow) -> Result<Flow, SimError>;
+```
+
+- `move_contact_solid` (Inferred): unit step `(dcos d, -dsin d)`; repeat up to `maxdist` times (no limit when negative): if one step further hits a solid, stop, else step. Fractional `maxdist` and `maxdist == 0` are C11 (`collide::contact::mcs_step_limit`). Start already overlapping: the manual says do not move, OpenGMK docs say the start is not checked (C10, `CollideRules::mcs_start = ManualNoMove` default; `little-runner/t-col-07-*` recorded). Non-axis directions (kaenbyou playerSlope) use the same loop; their sub-pixel result is UNKNOWN. A negative `maxdist` loop is bounded by the room size plus the mask size (Design), then `SimError::Unsupported`.
+- `distance_to_object`: Confirmed (recorder): `distance_to_object` = sqrt(dx*dx + dy*dy) where dx and dy are the edge gaps of the rounded reported bboxes (dx = other.left - self.right if > 0, else self.left - other.right if > 0, else 0); touching boxes give 1 because the edges are inclusive (`traces/deride-kotaro-from-aslant/trick-vine-kick-and-djump-d.csv` rows 108-110 give sqrt(5), sqrt(26), sqrt(65); `traces/showdown/a3-t16-c.csv` row 13; `bug-right-vine-miss-f.csv`). The switches stay, with these defaults. `kid/B.md` and `kid/A3.md` note that diagonal or sub-pixel positions give fractional distances, which integer boxes cannot. So C13 has two switches: `DistBoxes::RoundedInclusive | Unrounded` (boxes from C1 rounding, or from unrounded `x + offset`) and `DistOffset::None | PlusOne`. The x and y gaps are combined as `sqrt(dx*dx + dy*dy)` (Confirmed; alternative `Max`). Defaults: the reported boxes (`DistBoxes::Reported`, each edge rounded; a left-facing kid's mirrored box x-7 is the box used), `PlusOne` and `Euclid`. Evidence also in T-COL-10 and the recorded `deride-kotaro-from-aslant/bug-right-vine-miss-*`, `animus/a-vine-right-*`, `kaenbyou/famb-vines-*`. `None` when no instance exists (A3 U4: what GM returns is UNKNOWN; callers treat `None` as a large value).
+- `collision_rectangle/line` corner inclusivity and fractional corners: C12, one function each.
+- **Broadphase** (Design): uniform 64 px grid per room. All cell math in `i64` with `i64::try_from` and checked arithmetic; a value that does not fit is `SimError`, never an `as usize` cast (wasm32 has a 32-bit `usize`). Static instances are bucketed at room start, moving ones re-bucketed when their box changes, out-of-room instances go in an overflow list. Results are re-sorted by `first_of` order before use, so the grid never changes outcomes. A grid-equals-brute-force test runs on every CI target including wasm32. Rooms up to 16800 x 8512 and 12,805 instances per game fit.

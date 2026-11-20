@@ -1,5 +1,6 @@
-//! Family presets: fill a draft profile's defaults from its `preset` (docs/plans/sim-core.md
-//! 5.1). WP5a owns it (WP5b and WP5c add their family's defaults here by asking WP5a).
+//! Family presets: fill a draft profile's defaults from its `preset`
+//! (docs/architecture/sim/kid.md). WP5a owns it (WP5b and WP5c add their family's defaults
+//! here by asking WP5a).
 //!
 //! The A1 preset is the reference game, rely-the-needle-4-2 (kid/A1.md): rely's numbers, event
 //! lists and classes. Games of the same family override what differs (little-trap has no
@@ -397,7 +398,7 @@ fn b() -> PhysicsProfile {
     p
 }
 
-/// Family A1, reference game rely-the-needle-4-2 (kid/A1.md; plan 5.2 example).
+/// Family A1, reference game rely-the-needle-4-2 (kid/A1.md; docs/architecture/sim/kid.md example).
 fn a1() -> PhysicsProfile {
     let mut p = PhysicsProfile {
         preset: KidFamily::A1,
