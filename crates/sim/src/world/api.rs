@@ -17,7 +17,7 @@ use crate::output::OutputEvent;
 use crate::room::RoomRequest;
 use crate::rules::TickRules;
 use crate::rules::tick::{ChangeKindProps, FirstRule};
-use crate::{builtins, script};
+use crate::{builtins, script, timeline};
 
 /// What a handler tells the dispatcher.
 ///
@@ -291,6 +291,10 @@ impl<'a> Ctx<'a> {
             if let Some(var) = def.var_names.get(name) {
                 inst.vars.insert(*var, param_value(v));
             }
+        }
+        // The object's `timeline` key starts before Create, so a script's Create can replace it.
+        if let Some(tl) = kd.timeline {
+            timeline::start_with_def(&mut inst.timeline, def, tl, Real::ZERO)?;
         }
         self.w.insert(inst)?;
         if init.run_create && events::dispatch(self, id, &EventKind::Create).is_halt() {
