@@ -115,7 +115,7 @@ The current `PairOrder`, `RoomStartOrder`, `RoomEndOrder`, `JoinPhase`, `NewInst
 
 ### One numeric policy
 
-IEEE binary64 everywhere. Exact operations stay exact. A tolerance exists only where a feel contract needs it (collision edges, triggers, save alignment). The standard ruleset uses one explicit tolerance policy; `gm8` keeps `NumRules` as it is. Serialization uses shortest round-trip; save precision is a checkpoint policy, not a comparison mode. No engine-specific comparison mode is added to shared code.
+IEEE binary64 everywhere. Exact operations stay exact. A tolerance exists only where a feel contract needs it (collision edges, triggers, save alignment). The standard ruleset uses one explicit tolerance mechanism, with each value declared at its use; `gm8` keeps `NumRules` as it is. Serialization uses shortest round-trip; save precision is a checkpoint policy, not a comparison mode. No engine-specific comparison mode is added to shared code.
 
 ### One input contract
 

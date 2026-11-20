@@ -22,6 +22,8 @@ A trace diff is evidence for an F1 mechanic. It is not a mandate to clone every 
 
 ## The tiers
 
+The T names are the historical aliases of F1–F3; the definitions are the same. A register row or an old issue may use either.
+
 | Tier | Meaning |
 |---|---|
 | **T1** | Can change position, death, timing or RNG on a path ranked play reaches. |
