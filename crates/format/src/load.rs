@@ -152,9 +152,16 @@ pub fn load_report(files: &PackageFiles, mode: LoadMode) -> LoadReport {
         Some(def) if !has_errors(&diags) => Some(gameplay_hash(files, &manifest, def)),
         _ => None,
     };
-    let physics_mark = def
-        .as_ref()
-        .map(|def| physics::standing(files, &manifest, &def.physics));
+    let physics_mark = def.as_ref().map(|def| {
+        // Room profiles in id order, with the game's own file left out (`None`): rooms naming it
+        // share the game's profile (#970).
+        let rooms: Vec<(&str, &PhysicsProfile)> = l
+            .room_physics_ids
+            .iter()
+            .filter_map(|(id, index)| Some((id.as_str(), &def.room_physics[usize::from((*index)?)])))
+            .collect();
+        physics::standing(files, &manifest, &def.physics, &rooms)
+    });
     LoadReport {
         def,
         diagnostics: diags,

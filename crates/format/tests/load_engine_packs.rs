@@ -228,3 +228,53 @@ fn a_pack_family_other_than_the_profile_preset_is_custom() {
         p.differs
     );
 }
+
+#[test]
+fn a_room_profile_that_differs_is_custom_and_named() {
+    let files = with_pack(|f| {
+        f.push((
+            "physics/fast.toml".into(),
+            b"preset = \"A1\"\n[numbers]\nrun_speed = 4\n".to_vec(),
+        ));
+    });
+    let (_, report) = load_ok(&files, STRICT);
+    let p = report.physics.expect("a comparison");
+    assert!(
+        p.is_custom(),
+        "a medley is custom physics even when the game profile matches"
+    );
+    assert!(p.differs.is_empty(), "{:?}", p.differs);
+    assert_eq!(
+        p.rooms,
+        vec![iwbtg_format::physics::RoomPhysicsStanding {
+            id: "fast".to_owned(),
+            differs: vec!["numbers.run_speed".to_owned()],
+        }]
+    );
+}
+
+#[test]
+fn a_room_profile_that_matches_the_game_profile_is_not_custom() {
+    let files = with_pack(|f| {
+        f.push(("physics/same.toml".into(), b"preset = \"A1\"\n".to_vec()));
+    });
+    let (_, report) = load_ok(&files, STRICT);
+    let p = report.physics.expect("a comparison");
+    assert!(!p.is_custom());
+    assert!(p.rooms.is_empty());
+}
+
+#[test]
+fn a_room_profile_that_reverts_to_the_preset_is_a_medley() {
+    // The game's profile is custom and a room goes back to stock A1: two engines in one package.
+    let files = with_pack(|f| {
+        set(f, "physics.toml", "preset = \"A1\"\n[numbers]\nrun_speed = 5\n");
+        f.push(("physics/stock.toml".into(), b"preset = \"A1\"\n".to_vec()));
+    });
+    let (_, report) = load_ok(&files, STRICT);
+    let p = report.physics.expect("a comparison");
+    assert_eq!(p.differs, vec!["numbers.run_speed".to_owned()]);
+    assert_eq!(p.rooms.len(), 1);
+    assert_eq!(p.rooms[0].id, "stock");
+    assert_eq!(p.rooms[0].differs, vec!["numbers.run_speed".to_owned()]);
+}
