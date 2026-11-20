@@ -1,7 +1,7 @@
 {
   "$defs": {
     "ActionFile": {
-      "description": "One room creation action (plan 4.2 step 6), `{ do = \"...\", ... }`. Every row takes an\noptional `when` (#629): the row runs only while its condition holds.",
+      "description": "One room creation action (docs/architecture/sim/rooms.md step 6), `{ do = \"...\", ... }`. Every row\ntakes an optional `when` (#629): the row runs only while its condition holds.",
       "oneOf": [
         {
           "additionalProperties": false,

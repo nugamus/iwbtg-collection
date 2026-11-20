@@ -93,7 +93,7 @@ impl<'a> Loader<'a> {
         r
     }
 
-    /// Step 6: every variable name the loader can see, sorted (plan 1.1).
+    /// Step 6: every variable name the loader can see, sorted (docs/architecture/sim/world.md).
     pub(super) fn intern(&self, rooms: &[ParsedRoom<'_>]) -> BTreeMap<String, iwbtg_sim::def::VarId> {
         let mut names: BTreeSet<String> = BTreeSet::new();
         for k in &self.kinds {

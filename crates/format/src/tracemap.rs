@@ -56,7 +56,7 @@ pub struct TraceRoom {
 /// One original object.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct TraceObject {
-    /// GameMaker object index (the object order source, plan 1.3).
+    /// GameMaker object index (the object order source, docs/architecture/sim/world.md).
     pub index: Option<u32>,
     /// Our kind (`block`, `@spike_up`); empty for engine objects with no package kind.
     pub kind: String,
