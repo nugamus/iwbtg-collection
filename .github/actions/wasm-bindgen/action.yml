@@ -1,0 +1,27 @@
+# Installs the wasm-bindgen CLI at the version in Cargo.lock for the browser build and the
+# wasm32-unknown-unknown test runner (#1078). The release tarball holds the same two binaries
+# `cargo install wasm-bindgen-cli --locked` builds, but downloads in seconds instead of
+# compiling for 1m38s on a cache miss (#961); the checksum is checked against the release asset.
+name: wasm-bindgen CLI
+description: Install wasm-bindgen and wasm-bindgen-test-runner at the Cargo.lock version
+runs:
+  using: composite
+  steps:
+    - name: Install wasm-bindgen CLI at the locked version
+      shell: bash
+      run: |
+        set -euo pipefail
+        v=$(cargo metadata --locked --format-version 1 | jq -r '.packages[] | select(.name == "wasm-bindgen") | .version')
+        name="wasm-bindgen-$v-x86_64-unknown-linux-musl"
+        base="https://github.com/wasm-bindgen/wasm-bindgen/releases/download/$v"
+        curl --fail --retry 3 --silent --show-error --location --output "$RUNNER_TEMP/$name.tar.gz" "$base/$name.tar.gz"
+        curl --fail --retry 3 --silent --show-error --location --output "$RUNNER_TEMP/$name.sha256sum" "$base/$name.tar.gz.sha256sum"
+        # The .sha256sum asset names the file with a `gh-release/` path prefix, so compare the
+        # digests rather than letting `sha256sum --check` look for that path here.
+        want=$(cut -d' ' -f1 "$RUNNER_TEMP/$name.sha256sum")
+        got=$(sha256sum "$RUNNER_TEMP/$name.tar.gz" | cut -d' ' -f1)
+        [ "$want" = "$got" ] || { echo "::error::checksum mismatch for $name.tar.gz"; exit 1; }
+        tar --extract --gzip --file "$RUNNER_TEMP/$name.tar.gz" --directory "$RUNNER_TEMP"
+        install --mode 755 "$RUNNER_TEMP/$name/wasm-bindgen" "$RUNNER_TEMP/$name/wasm-bindgen-test-runner" "$HOME/.cargo/bin/"
+        wasm-bindgen --version
+        wasm-bindgen-test-runner --version

@@ -43,4 +43,4 @@ See [dev setup](../../dev-setup.md), The client in a browser. The page needs Web
 - There is no game select in the browser yet: the page plays the one package it is given ([shell](shell.md); the select screen is native-only until [#148](https://github.com/nugamus/iwbtg-collection/issues/148)).
 - `--select`, `--bind`, `--show-bindings` and the screenshot flags are native-only; the browser has no command line. Bindings, settings, save slots and stats still come from browser storage ([storage](storage.md)).
 - Drag-and-drop of a package ([import](import.md)) does not start a run in the browser; the page loads one URL.
-- CI lints the client for `wasm32-unknown-unknown` but does not build the page's bundle or run a browser; that is [#1078](https://github.com/nugamus/iwbtg-collection/issues/1078).
+- CI builds the page bundle, fails over the compressed-size budget, keeps the bundle as the `web-bundle` artifact for 7 days and runs a headless-browser hash smoke test (the `web` job in `.github/workflows/ci.yml`; [dev setup](../../dev-setup.md), CI).
