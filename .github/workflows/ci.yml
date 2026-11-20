@@ -122,9 +122,8 @@ jobs:
           # Only main writes the cache: PR runs restore it and skip the slow save (Windows: minutes).
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: bytecodealliance/actions/wasmtime/setup@v1
-      # wasm32-wasip1 aborts on panic, and the WP0 stubs that are not merged yet panic. The format
-      # integration tests that load whole packages (wp7a_*) go through them, so they run on
-      # native targets only until WP11 removes the stubs.
+      # wasm32-wasip1 aborts on panic. This job runs the library tests and the `fixtures` target;
+      # the package-loading modules (`load_*` in `tests/it.rs`) run on the native jobs.
       # `cargo test -p iwbtg-sim` runs the golden corpus here too (tests/golden_corpus.rs): it is
       # ~4 min under wasmtime on a warm cache and is most of this job's wall time.
       - run: cargo test -p iwbtg-sim --target wasm32-wasip1 --locked
@@ -176,7 +175,7 @@ jobs:
           wasm-bindgen-test-runner --version
       # The golden corpus again, this time linked for wasm32-unknown-unknown and run under node.
       - if: needs.changes.outputs.wasip1 == 'true'
-        run: cargo test -p iwbtg-sim --test wp1_determinism --test golden_corpus --target wasm32-unknown-unknown --locked
+        run: cargo test -p iwbtg-sim --test determinism --test golden_corpus --target wasm32-unknown-unknown --locked
 
   # `iwbtg determinism report` on every target that can run the CLI; the next job requires the
   # three outputs to be byte-identical (docs/plans/sim-core.md 10.6). wasm32-unknown-unknown
