@@ -10,7 +10,6 @@ use iwbtg_sim::input::InputFrame;
 use iwbtg_sim::num::Real;
 use iwbtg_sim::output::OutputEvent;
 use iwbtg_sim::room::RoomOutput;
-use iwbtg_sim::rules::collide::PairOrder;
 use iwbtg_sim::rules::tick::{ChangeKindProps, FirstRule};
 use iwbtg_sim::world::{Flow, InstId, SpawnInit};
 use support::*;
@@ -221,17 +220,12 @@ fn emit_queues_output() {
 }
 
 /// The kid probe K with handlers `handlers`, and others as given (kind, solid, touching).
-fn collision_fixture(
-    handlers: &[ClassMask],
-    pair_order: PairOrder,
-    recheck_nonsolid: bool,
-) -> (Fx, InstId, InstId, InstId) {
+fn collision_fixture(handlers: &[ClassMask], recheck_nonsolid: bool) -> (Fx, InstId, InstId, InstId) {
     let mut b = builder();
     let kid = classed(&mut b, "kid", ClassMask::KID, handlers);
     let block = classed(&mut b, "block", ClassMask::BLOCK, &[]);
     let killer = classed(&mut b, "killer", ClassMask::KILLER, &[]);
     let mut fx = Fx::new(b.build().unwrap());
-    fx.rules.collide.pair_order = pair_order;
     fx.rules.collide.recheck_nonsolid = recheck_nonsolid;
     let k = fx.probe(kid, 0.0, 0.0, p("K"));
     // The killer is created first, so id order alone would put it first.
@@ -251,21 +245,15 @@ fn kid_collisions(log: &str) -> Vec<String> {
 }
 
 #[test]
-fn collision_pairs_follow_pair_order() {
+fn collision_pairs_follow_rank_then_id() {
     let handlers = [ClassMask::KILLER, ClassMask::BLOCK];
-    let (mut fx, _, bl, x) = collision_fixture(&handlers, PairOrder::OtherRankThenId, true);
+    let (mut fx, _, bl, x) = collision_fixture(&handlers, true);
     fx.tick(InputFrame::EMPTY);
-    // By the other's rank: block (rank 1) before killer (rank 2); the solid pair goes through
-    // the put-back.
+    // The kid is the outer instance (rank 0); his inner list is block (rank 1) before killer
+    // (rank 2), by rank then id. The solid pair goes through the put-back.
     assert_eq!(
         kid_collisions(&fx.log()),
         vec!["put".to_owned(), format!("k{}K", bl.0), format!("k{}K", x.0)]
-    );
-    let (mut fx, _, bl, x) = collision_fixture(&handlers, PairOrder::HandlerListOrder, true);
-    fx.tick(InputFrame::EMPTY);
-    assert_eq!(
-        kid_collisions(&fx.log()),
-        vec![format!("k{}K", x.0), "put".to_owned(), format!("k{}K", bl.0)]
     );
 }
 
@@ -329,29 +317,45 @@ fn with_only_a_block_handler_block_runs_for_a_platform() {
 
 #[test]
 fn pairs_are_rechecked_before_their_event() {
-    // The kid's block event moves him off the killer (clears the killer's touch flag).
+    // C7b: the first direction's event clears the pair's touch flag (as a move off the killer
+    // would); the killer's own direction of that pair is the second one, and re-checks the
+    // overlap only when C7b is on. Both instances have a handler, so both directions would log
+    // an event without the re-check.
     let run = |recheck: bool| {
-        let (mut fx, k, bl, x) = collision_fixture(
-            &[ClassMask::BLOCK, ClassMask::KILLER],
-            PairOrder::OtherRankThenId,
-            recheck,
+        let mut b = builder();
+        let kid = classed(&mut b, "kid", ClassMask::KID, &[ClassMask::KILLER]);
+        let killer = classed(&mut b, "killer", ClassMask::KILLER, &[ClassMask::KID]);
+        let mut fx = Fx::new(b.build().unwrap());
+        fx.rules.collide.recheck_nonsolid = recheck;
+        let x = fx.probe(killer, 0.0, 0.0, p("X"));
+        let k = fx.probe(
+            kid,
+            0.0,
+            0.0,
+            p("K").with(step(ProbeOn::Collision, ProbeAct::SetGlobal(touch_var(x), vr(0.0))).once()),
         );
-        let state = p("K").with(step(ProbeOn::Collision, ProbeAct::SetGlobal(touch_var(x), vr(0.0))).once());
-        fx.w.get_mut(k).unwrap().state = iwbtg_sim::world::KindState::Probe(state);
+        fx.touch(x, true);
         fx.tick(InputFrame::EMPTY);
-        (kid_collisions(&fx.log()), bl, x)
+        let log = fx.log();
+        let xhits: Vec<String> = tokens_of(&log, "X")
+            .into_iter()
+            .filter(|t| t.starts_with('k'))
+            .map(str::to_owned)
+            .collect();
+        (kid_collisions(&log), xhits, k, x)
     };
-    let (hits, bl, _) = run(true);
-    assert_eq!(
-        hits,
-        vec!["put".to_owned(), format!("k{}K", bl.0)],
-        "C7b on: the killer pair is skipped"
+    let (hits, xhits, _k, x) = run(true);
+    assert_eq!(hits, vec![format!("k{}K", x.0)], "C7b on: the kid's event runs");
+    assert!(
+        xhits.is_empty(),
+        "C7b on: the killer's direction is skipped after the move: {xhits:?}"
     );
-    let (hits, bl, x) = run(false);
+    let (hits, xhits, k, x) = run(false);
+    assert_eq!(hits, vec![format!("k{}K", x.0)], "C7b off: the kid's event runs");
     assert_eq!(
-        hits,
-        vec!["put".to_owned(), format!("k{}K", bl.0), format!("k{}K", x.0)],
-        "C7b off"
+        xhits,
+        vec![format!("k{}X", k.0)],
+        "C7b off: the killer's direction runs without re-checking"
     );
     // A solid pair is always re-checked (C7): two blocks, the first event clears the second.
     let mut b = builder();
@@ -487,11 +491,7 @@ fn r12_collision_pairs_run_lower_kind_first_t_ord_2() {
 
 #[test]
 fn a_destroyed_other_is_skipped() {
-    let (mut fx, k, bl, x) = collision_fixture(
-        &[ClassMask::BLOCK, ClassMask::KILLER],
-        PairOrder::OtherRankThenId,
-        false,
-    );
+    let (mut fx, k, bl, x) = collision_fixture(&[ClassMask::BLOCK, ClassMask::KILLER], false);
     let state = p("K").with(step(ProbeOn::Collision, ProbeAct::Destroy(x)).once());
     fx.w.get_mut(k).unwrap().state = iwbtg_sim::world::KindState::Probe(state);
     fx.tick(InputFrame::EMPTY);

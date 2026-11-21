@@ -89,6 +89,42 @@ fn fall_cap_tolerance() {
     assert!(num::gm_gt(r(9.000000000000005), r(9.0), &exact));
 }
 
+/// The standard ruleset (decision 0005) compares exactly: the fade the 1e-13 epsilon starts never
+/// starts, and `sign` is exact. The other values keep the gm8 rules until a standard contract
+/// settles them, so truthiness still treats exactly 0.5 as true.
+#[test]
+fn standard_ruleset_compares_exactly() {
+    let standard = NumRules::standard();
+    let (top, faded, _, alpha) = object1048(&standard);
+    assert_eq!(top, r(0.8000000000000004));
+    assert!(
+        !faded,
+        "exact comparison does not accept 0.8000000000000004 as 0.8"
+    );
+    assert_eq!(alpha, r(0.7800000000000004));
+    assert!(num::gm_ne(r(-1e-13), r(0.0), &standard));
+    assert_eq!(num::sign(r(-7.347880794884119e-17), &standard), r(-1.0));
+    assert!(num::gm_bool(r(0.5), &standard), "the user kept >= 0.5");
+    assert_eq!(num::alarm_from_real(r(1.5), &standard), r(2.0));
+    assert_eq!(num::byte_from_real(r(48.5), &standard), 48);
+    assert_eq!(num::gm_string_real(r(0.125), &standard), "0.12");
+}
+
+/// Where a standard call site needs the recorder's tolerance, it declares a `Tolerance`; the
+/// value is not a `NumRules` field, so the standard comparison stays exact.
+#[test]
+fn standard_tolerance_is_declared_at_the_use() {
+    let t = num::Tolerance::new(r(1e-13));
+    assert!(t.is_usable());
+    assert!(t.eq(r(-9e-14), r(0.0)));
+    assert!(
+        !t.eq(r(-1e-13), r(0.0)),
+        "the edge is the recorder's exclusive one"
+    );
+    let standard = NumRules::standard();
+    assert!(!num::gm_eq(r(-9e-14), r(0.0), &standard));
+}
+
 /// The alarm and byte conversions the recorder showed (num-alarm-half-b, num-byte-save).
 #[test]
 fn integer_conversions_round_half_even() {

@@ -23,7 +23,6 @@ use iwbtg_sim::events::{ProbeAct, ProbeLog, ProbeOn, ProbeState, ProbeStep, prob
 use iwbtg_sim::hash::state_hash;
 use iwbtg_sim::input::InputFrame;
 use iwbtg_sim::num::Real;
-use iwbtg_sim::rules::collide::PairOrder;
 use iwbtg_sim::tick::{self, EventRun, Hooks};
 use iwbtg_sim::world::{Ctx, Flow, InstId, SimStatus};
 
@@ -291,13 +290,6 @@ fn count_kind(fx: &Fx, name: &str) -> usize {
         .count()
 }
 
-/// The instance id a collision log token names, `k<id><tag>`, if the token is one.
-fn token_other(token: &str) -> Option<u64> {
-    let rest = token.strip_prefix('k')?;
-    let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
-    digits.parse().ok()
-}
-
 /// Builds `fx`'s broadphase grid now, as the first collision phase would, and returns the ids in
 /// its overflow set.
 fn overflow_ids(fx: &mut Fx) -> Vec<InstId> {
@@ -358,11 +350,11 @@ fn pair_gather_matches_the_full_scan_on_generated_worlds() {
     );
 }
 
-/// #944: the non-default pair orders gather through the grid too (or scan with a stand-in
-/// overlap test). Their pair list is fixed before any handler of the turn runs, so the gather
-/// must give the same pairs in the same order as the scan: same handler log and state hash.
+/// C7b both ways: with the recheck off, the gather's overlap test is the only one before a
+/// non-solid pair's event. The gather must still give the same pairs in the same order as the
+/// scan: same handler log and state hash.
 #[test]
-fn pair_gather_matches_the_full_scan_for_the_other_pair_orders() {
+fn pair_gather_matches_the_full_scan_with_the_nonsolid_recheck_off() {
     let mut collisions = 0;
     for seed in 1..=24_u64 {
         let n = 20 + usize::try_from(seed * 7 % 120).unwrap();
@@ -371,30 +363,23 @@ fn pair_gather_matches_the_full_scan_for_the_other_pair_orders() {
         } else {
             (&SCAN, &Hooks::ENGINE)
         };
-        for order in [PairOrder::OtherRankThenId, PairOrder::HandlerListOrder] {
-            let mut scan = generated(seed, n);
-            let mut grid = generated(seed, n);
-            for fx in [&mut scan, &mut grid] {
-                fx.rules.collide.pair_order = order;
-                // C7b both ways: with it off the gather's overlap test is the only one.
-                fx.rules.collide.recheck_nonsolid = seed % 3 != 0;
-            }
-            let (want, want_status) = run(&mut scan, scan_hooks, 12);
-            let (got, got_status) = run(&mut grid, grid_hooks, 12);
-            for (t, (w, g)) in want.iter().zip(&got).enumerate() {
-                assert_eq!(
-                    w.0, g.0,
-                    "seed {seed}, order {order:?}, tick {t}: handler sequence"
-                );
-                assert_eq!(w.1, g.1, "seed {seed}, order {order:?}, tick {t}: state hash");
-            }
-            assert_eq!(want.len(), got.len(), "seed {seed}, order {order:?}: ticks run");
-            assert_eq!(want_status, got_status, "seed {seed}, order {order:?}: status");
-            collisions += want
-                .iter()
-                .map(|(log, _)| log.matches(" k").count())
-                .sum::<usize>();
+        let mut scan = generated(seed, n);
+        let mut grid = generated(seed, n);
+        for fx in [&mut scan, &mut grid] {
+            fx.rules.collide.recheck_nonsolid = seed % 3 != 0;
         }
+        let (want, want_status) = run(&mut scan, scan_hooks, 12);
+        let (got, got_status) = run(&mut grid, grid_hooks, 12);
+        for (t, (w, g)) in want.iter().zip(&got).enumerate() {
+            assert_eq!(w.0, g.0, "seed {seed}, tick {t}: handler sequence");
+            assert_eq!(w.1, g.1, "seed {seed}, tick {t}: state hash");
+        }
+        assert_eq!(want.len(), got.len(), "seed {seed}: ticks run");
+        assert_eq!(want_status, got_status, "seed {seed}: status");
+        collisions += want
+            .iter()
+            .map(|(log, _)| log.matches(" k").count())
+            .sum::<usize>();
     }
     assert!(
         collisions > 1000,
@@ -445,74 +430,46 @@ fn pair_gather_matches_the_full_scan_for_an_unsupported_angle() {
 
 /// #971: a box larger than `grid::MAX_CELLS` cannot be bucketed, so the grid keeps the instance
 /// in its overflow set, which every gather returns and tests against the outer instance. The
-/// world keeps running: the same pairs must fire, in the same order, on both sides, under every
-/// pair order.
+/// world keeps running: the same pairs must fire, in the same order, on both sides.
 #[test]
 fn pair_gather_gathers_an_instance_over_max_cells() {
     let mut collisions = 0;
     for seed in 1..=4_u64 {
         let n = 20 + usize::try_from(seed * 4).unwrap();
-        for order in [
-            PairOrder::LowerRankFirst,
-            PairOrder::OtherRankThenId,
-            PairOrder::HandlerListOrder,
-        ] {
-            let (mut scan, _) = generated_with(seed, n, Overflow::TooBig);
-            let (mut grid, maybe_ovf) = generated_with(seed, n, Overflow::TooBig);
-            let ovf = maybe_ovf.expect("the fixture has its overflow instance");
-            for fx in [&mut scan, &mut grid] {
-                fx.rules.collide.pair_order = order;
-            }
-            assert_eq!(
-                overflow_ids(&mut grid),
-                vec![ovf],
-                "seed {seed}, order {order:?}: the huge instance is the grid's overflow set"
-            );
+        let (mut scan, _) = generated_with(seed, n, Overflow::TooBig);
+        let (mut grid, maybe_ovf) = generated_with(seed, n, Overflow::TooBig);
+        let ovf = maybe_ovf.expect("the fixture has its overflow instance");
+        assert_eq!(
+            overflow_ids(&mut grid),
+            vec![ovf],
+            "seed {seed}: the huge instance is the grid's overflow set"
+        );
 
-            let (want, want_status) = run(&mut scan, &SCAN, 12);
-            let (got, got_status) = run(&mut grid, &Hooks::ENGINE, 12);
-            for (t, (w, g)) in want.iter().zip(&got).enumerate() {
-                assert_eq!(
-                    w.0, g.0,
-                    "seed {seed}, order {order:?}, tick {t}: handler sequence"
-                );
-                assert_eq!(w.1, g.1, "seed {seed}, order {order:?}, tick {t}: state hash");
-            }
-            assert_eq!(want.len(), got.len(), "seed {seed}, order {order:?}: ticks run");
-            assert_eq!(want_status, got_status, "seed {seed}, order {order:?}: status");
-            assert_eq!(
-                want_status,
-                SimStatus::Running,
-                "seed {seed}, order {order:?}: a box over MAX_CELLS is not an error"
-            );
-
-            // Its pairs actually ran: the overflow instance's own collision log entries.
-            let hits = want
-                .iter()
-                .flat_map(|(log, _)| tokens_of(log, "ovf"))
-                .filter(|token| token.starts_with('k'))
-                .count();
-            assert!(
-                hits > 0,
-                "seed {seed}, order {order:?}: the overflow instance took part in a collision"
-            );
-            collisions += hits;
-            // The per-instance orders pair every instance with it, and its box is in no cell
-            // bucket, so an entry that names it as the other instance proves the gather
-            // returned it from the overflow set. (`LowerRankFirst` runs those pairs in its own
-            // turn, at rank 0, so it cannot show this direction.)
-            if order != PairOrder::LowerRankFirst {
-                let as_other = want
-                    .iter()
-                    .flat_map(|(log, _)| log.split(' '))
-                    .filter(|token| token_other(token) == Some(ovf.0))
-                    .count();
-                assert!(
-                    as_other > 0,
-                    "seed {seed}, order {order:?}: the gather returned the overflow instance"
-                );
-            }
+        let (want, want_status) = run(&mut scan, &SCAN, 12);
+        let (got, got_status) = run(&mut grid, &Hooks::ENGINE, 12);
+        for (t, (w, g)) in want.iter().zip(&got).enumerate() {
+            assert_eq!(w.0, g.0, "seed {seed}, tick {t}: handler sequence");
+            assert_eq!(w.1, g.1, "seed {seed}, tick {t}: state hash");
         }
+        assert_eq!(want.len(), got.len(), "seed {seed}: ticks run");
+        assert_eq!(want_status, got_status, "seed {seed}: status");
+        assert_eq!(
+            want_status,
+            SimStatus::Running,
+            "seed {seed}: a box over MAX_CELLS is not an error"
+        );
+
+        // Its pairs actually ran: the overflow instance's own collision log entries.
+        let hits = want
+            .iter()
+            .flat_map(|(log, _)| tokens_of(log, "ovf"))
+            .filter(|token| token.starts_with('k'))
+            .count();
+        assert!(
+            hits > 0,
+            "seed {seed}: the overflow instance took part in a collision"
+        );
+        collisions += hits;
     }
     assert!(
         collisions > 20,

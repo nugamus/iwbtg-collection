@@ -1,6 +1,6 @@
 # Feel contracts
 
-Part of [Architecture](../architecture.md). Status: proposed by [decision 0005](../decisions/0005-standard-mechanics.md), 2026-11-20. The runner and the file format are specified here; the implementation is the harness issue linked from umbrella #1146. Until it lands, trace diffs and golden hashes remain the only automated evidence.
+Part of [Architecture](../architecture.md). Status: specified by [decision 0005](../decisions/0005-standard-mechanics.md), accepted 2026-11-21. The runner and the file format are specified here; the implementation is the harness issue [#1161](https://github.com/nugamus/iwbtg-collection/issues/1161). Until it lands, trace diffs and golden hashes remain the only automated evidence.
 
 A **feel contract** is data: a scenario plus assertions over what a player can observe. It is the evidence that a mechanic still feels the same after a redesign, and the gate for an F1 change ([fidelity and feel tiers](../plans/fidelity-tiers.md)).
 

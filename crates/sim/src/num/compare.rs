@@ -23,9 +23,15 @@
 //! (rely's kid alpha stays 0.9999999999999999, CLONE_SPEC, Number handling, Confirmed (real
 //! runner)); the exact `t` on either and whether its edge is inclusive stay OPEN (N1).
 //!
-//! Under `CompareMode::Exact` they are the IEEE comparisons. In both modes every comparison is
-//! false when an operand is NaN (or `d` is NaN, as for `inf - inf` in epsilon mode), `!=`
-//! included, so `gm_ne` is not quite `!gm_eq`. How the real runner compares NaN is OPEN.
+//! Under `CompareMode::Exact` (the `standard` ruleset's value) they are the IEEE comparisons. In
+//! both modes every comparison is false when an operand is NaN (or `d` is NaN, as for
+//! `inf - inf` in epsilon mode), `!=` included, so `gm_ne` is not quite `!gm_eq`. How the real
+//! runner compares NaN is OPEN.
+//!
+//! Exact is not a mode with a hidden tolerance: where the `standard` ruleset needs a forgiving
+//! boundary (a collision contact, a trigger boundary, a save alignment), the call site declares
+//! the bound explicitly as a [`crate::num::Tolerance`]. `gm8` keeps the epsilon above; a package
+//! selects a ruleset and cannot supply a tolerance (decision 0005).
 
 use super::Real;
 use crate::rules::NumRules;
