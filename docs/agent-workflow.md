@@ -22,6 +22,8 @@ Issue creation is mandatory for unfinished findings; `CLAUDE.md` and the Stop ho
 
 During triage, assign the milestone of the work blocked (not whichever is open), a `size:` and an `area:` label. Add `blocked by` relationships through the GitHub issue dependency API. Remove `triage`; add `agent-ready` only when fully specified. Split size L work into bounded sub-issues. Close a milestone when all its issues close. Follow `docs/roadmap.md` and fidelity tiers when placing work.
 
+Every mechanic and every fidelity issue gets an F1/F2/F3 feel-impact tier in its triage comment ([fidelity tiers](plans/fidelity-tiers.md)). An F3 detail is free to redesign; an F2 change needs a screenshot or audio check; an F1 change needs a feel contract and, where irreversible, the user. A redesign opportunity is filed as an issue, never quietly cloned into shared code: one-game behavior goes to data, a script or a profile ([0004](decisions/0004-extension-model.md), [0005](decisions/0005-standard-mechanics.md)). Every deliberate deviation gets a deviation-log entry and a feel contract; the shared mechanics stay general.
+
 For user questions, start comments with `<!-- agent -->`, add `needs-user` and propose a default. Cheap reversible choices may proceed with `revisit`; irreversible format, ranked, design, people or asset decisions wait. Act on an answer and remove `needs-user`.
 
 ## Documentation placement

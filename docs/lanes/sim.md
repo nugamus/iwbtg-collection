@@ -14,8 +14,9 @@
 
 ## Pitfalls seen before
 
+- Preserve feel, not implementation. An F3 detail (a package-authored boot room, temp file, internal id, probe-only value) is free to redesign; an F1 change needs a feel contract and, where irreversible, the user. Standard ruleset plus named `[compat]` profiles; one-game behavior goes to data, a script or a profile, never a shared-code switch ([0005](../decisions/0005-standard-mechanics.md)).
 - Launch the client only with `--mute` (`cargo run -p iwbtg-client -- <pkg> --mute`, or `IWBTG_MUTE=1`): an unmuted test run played music on the user's speakers for 20 minutes (#712).
-- Clean room: behavior comes only from `../iwbtg-collection-research/specs/` and its traces. If the spec doesn't say, mark it OPEN and ask for a spec item.
+- Clean room: behavior comes only from `../iwbtg-collection-research/specs/` and its traces. The original's implementation is evidence, not the design. If the spec does not say: F1 → file `needs-user` with a default; F2/F3 → use the standard model and file the deviation. Never clone a quirk just because a probe column exposes it.
 - Raw `.get()` or `Real` comparisons in `src/kid` and `src/builtins` fail the gm-compare lint unless they use `num::gm_*` or carry `gm-compare: ok (<why>)`.
 - `builtins/state.rs`'s `BuiltinState` enum is append-only (its variant order is in the hash): on a merge conflict keep both new variants, in merge order.
 - No floats from `std` math, clocks, IO, threads or `HashMap` in the sim (`crates/sim/clippy.toml`).
