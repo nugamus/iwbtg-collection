@@ -889,6 +889,7 @@ frame 3: end",
                 released: e1
             }
         );
+        assert!(p.frames.iter().all(|f| f.is_contract()));
     }
 
     #[test]
@@ -947,6 +948,14 @@ frame 3: end",
         assert_eq!(valid.masked(), valid);
         assert!(valid.is_contract());
         assert!(InputFrame::EMPTY.is_contract());
+        // The whole valid domain (every action in every field) is unchanged.
+        let all = InputFrame {
+            held: Action::MASK,
+            pressed: Action::MASK,
+            released: Action::MASK,
+        };
+        assert_eq!(all.masked(), all);
+        assert!(all.is_contract());
         // Reserved bits (above Extra4) and anything a caller might pack are cleared.
         let dirty = InputFrame {
             held: J | 1 << 31,
@@ -1366,6 +1375,13 @@ frame 3: end",
             assert!(
                 trace_command(&text).is_some(),
                 "{}: no recorder command",
+                f.display()
+            );
+            // Every frame a trace file compiles to is action-bits-only, so replaying it through
+            // the masking latch is a no-op.
+            assert!(
+                k.inputs.frames.iter().all(|f| f.is_contract()),
+                "{}: a frame carries a reserved bit",
                 f.display()
             );
             if !k.unmapped.is_empty() {
