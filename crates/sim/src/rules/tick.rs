@@ -1,4 +1,4 @@
-//! Tick pipeline switches (docs/architecture/sim/tick.md, register R1-R10, R21, R22, I1).
+//! Tick pipeline switches (docs/architecture/sim/tick.md, register R1-R10, R21, R22, R30, I1).
 //!
 //! WP0 declared every field with its engine_rev 0 default; WP1 owns the file. Where the
 //! CLONE_SPEC now records a recorder result (Confirmed (recorder), research a822655), the default
@@ -8,6 +8,9 @@
 /// Rules for the tick pipeline and event dispatch.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct TickRules {
+    /// R30 (decision 0005): the run's clock and the unit of every timed system. Default: the
+    /// legacy `gm8` policy, so every current package keeps its `room_speed` behavior.
+    pub timing: TimingRules,
     /// R1 (U1, answered by the recorder): when `xprevious`/`yprevious` are captured.
     pub prev_capture: PrevCapture,
     /// R2 (U2, answered by the recorder): instance order within a phase.
@@ -48,6 +51,67 @@ pub struct TickRules {
     pub fps_zero_ticks: u64,
     /// `instance_change` (not in the spec): which kind properties the instance takes.
     pub change_kind: ChangeKindProps,
+}
+
+/// R30 (decision 0005, "One scheduler": ticks are the truth): how the sim's one clock is paced.
+///
+/// The tick pipeline advances every timed system exactly once per tick. The policy decides what
+/// "one second" means when a legacy value asks for it; it never changes how often a tick runs.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum ClockPolicy {
+    /// The `gm8` rule, the default for every current package: one second is the current room's
+    /// `room_speed` (R14: the room file's speed on entry, the game's `tick_rate` after the
+    /// world's Room Start). `room_speed` is legacy per-room data, still hashed.
+    #[default]
+    RoomSpeed,
+    /// The `standard` rule: one rate per run,
+    /// [`GameDef::tick_rate`](crate::def::GameDef::tick_rate). Seconds exist only at the UI and
+    /// audio boundary; no sim value is read as a clock.
+    Fixed,
+}
+
+/// The unit a timed system's value is expressed in (decision 0005). The sim runs in ticks; a
+/// package may author a duration in seconds or frames and the loader converts it (the format
+/// follow-up). Every value here is [`TimeUnit::Ticks`] at run time.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum TimeUnit {
+    /// Simulation ticks: the standard unit and the only one the sim advances in.
+    #[default]
+    Ticks,
+    /// Real seconds, converted to ticks at load.
+    Seconds,
+    /// GM frames: one frame is one tick at the profile's rate.
+    Frames,
+}
+
+/// R30: the clock and the unit of every timed system (decision 0005, "One scheduler").
+///
+/// Alarms (R3), timelines (R6), paths (M8) and animation (R7) each advance exactly once per
+/// tick, so their values are tick counts. The units are declared here rather than inferred so
+/// the loader has one table to validate against and a `standard` package can state its units.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct TimingRules {
+    /// How the run's clock is paced.
+    pub clock: ClockPolicy,
+    /// R3: `alarm[n]` is a count of ticks; `alarm::tick` decrements it once per tick.
+    pub alarms: TimeUnit,
+    /// R6: a timeline moment is a tick offset; `timeline::advance` runs `[pos, pos + speed)`.
+    pub timelines: TimeUnit,
+    /// M8: `path_position` advances once per tick; `path::advance` moves by `speed / length`.
+    pub paths: TimeUnit,
+    /// R7: `image_index` advances by `image_speed` once per tick; `anim::advance` wraps it.
+    pub animation: TimeUnit,
+}
+
+impl TimingRules {
+    /// Whether every timed system counts ticks, as the sim requires at run time. A rules value
+    /// that names seconds or frames is a loader bug: those are data units, converted before the
+    /// sim sees them.
+    pub fn all_ticks(&self) -> bool {
+        [self.alarms, self.timelines, self.paths, self.animation]
+            .into_iter()
+            .all(|unit| unit == TimeUnit::Ticks)
+    }
 }
 
 /// R1: when `xprevious`/`yprevious` are captured.
@@ -189,4 +253,48 @@ pub enum ChangeKindProps {
     KindDefaults,
     /// Keep the instance's own sprite, mask, solid, visible, depth and persistent.
     KeepInstance,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_default_clock_is_the_legacy_room_speed_and_every_system_counts_ticks() {
+        let rules = TickRules::default();
+        assert_eq!(rules.timing.clock, ClockPolicy::RoomSpeed);
+        assert_eq!(rules.timing.alarms, TimeUnit::Ticks);
+        assert_eq!(rules.timing.timelines, TimeUnit::Ticks);
+        assert_eq!(rules.timing.paths, TimeUnit::Ticks);
+        assert_eq!(rules.timing.animation, TimeUnit::Ticks);
+        assert!(rules.timing.all_ticks());
+    }
+
+    #[test]
+    fn the_standard_ruleset_can_select_the_fixed_clock_without_changing_units() {
+        let mut rules = TickRules::default();
+        rules.timing.clock = ClockPolicy::Fixed;
+        assert_ne!(rules, TickRules::default());
+        assert_eq!(
+            TickRules {
+                timing: TimingRules {
+                    clock: ClockPolicy::RoomSpeed,
+                    ..TimingRules::default()
+                },
+                ..TickRules::default()
+            },
+            TickRules::default(),
+            "only the clock differs"
+        );
+        assert!(rules.timing.all_ticks());
+    }
+
+    #[test]
+    fn a_data_unit_is_not_a_runtime_unit() {
+        let timing = TimingRules {
+            animation: TimeUnit::Seconds,
+            ..TimingRules::default()
+        };
+        assert!(!timing.all_ticks());
+    }
 }

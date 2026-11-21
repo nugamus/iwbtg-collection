@@ -13,7 +13,7 @@ Room data, the room change sequence, restart and reset, saves and views. This is
 pub struct RoomDef {
     pub name: String, pub width: u32, pub height: u32,
     pub role: RoomRole,                     // Boot | Title | Menu | Select | Play
-    pub file_speed: u32,                    // room_speed on entry, before world Room Start (Inferred, R14)
+    pub file_speed: u32,                    // room_speed on entry, before world Room Start (Inferred, R14); legacy clock data under ClockPolicy::RoomSpeed (R30)
     pub persistent: bool,
     pub views_enabled: bool, pub views: [ViewDef; 8],
     pub instances: Vec<PlacedInstance>,     // file order = creation order (Inferred, rooms: "created in the order they are listed")
