@@ -10,6 +10,7 @@
 //! `sound` WP10, this file WP11.
 
 pub mod collide;
+pub mod draw;
 pub mod motion;
 pub mod num;
 pub mod room;
@@ -19,6 +20,7 @@ pub mod tick;
 use serde::{Deserialize, Serialize};
 
 pub use collide::CollideRules;
+pub use draw::DrawRules;
 pub use motion::MotionRules;
 pub use num::NumRules;
 pub use room::RoomRules;
@@ -55,6 +57,8 @@ pub struct RunnerRules {
     pub num: NumRules,
     /// Sound model (S1-S4).
     pub sound: SoundRules,
+    /// Draw slot (R15): whether Draw may mutate.
+    pub draw: DrawRules,
 }
 
 impl RunnerRules {
@@ -95,6 +99,7 @@ mod tests {
         assert_eq!(r.room.max_chained_changes, 8);
         assert_eq!(r.sound.isplaying_latency, 0);
         assert!(r.num.particles_draw_rng);
+        assert_eq!(r.draw.purity, draw::DrawPurity::Ambient);
     }
 
     #[test]

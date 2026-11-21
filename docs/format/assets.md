@@ -22,6 +22,8 @@ Part of [format v0](v0.md).
 
   `disk` and `diamond` are rasterized inside the box at load. `none` is GM's empty mask (an inverted box or a fully transparent sprite). `frames = 0` is a sprite without images: it needs no PNG and has an empty mask.
 
+  `mask` names another sprite whose masks this sprite uses. A chain (`a` -> `b` -> `c`) resolves to the last sprite's own masks, so the result does not depend on the sidecar order; a sprite that names itself, or a chain that returns to a sprite, is a load error.
+
   Collision masks are built from PNG alpha at load, so masks never drift from the art.
 
   A sidecar may carry an optional `[collider]` table: the canonical collider baked from the same alpha data. It is a typed form — `none`, `rect` (the whole box) or `bits` (one hex row per pixel row, the most significant bit first, `ceil(width / 4)` digits, and padding bits clear) — so a degenerate mask is an explicit `none`, never an inverted rectangle. The table declares its own required `alpha_tolerance`, which must equal the sidecar's, and holds either the shared `shape`/`bbox`/`bits` keys or one `frames` entry per frame when `separate_masks` builds separate masks. The loader re-derives the mask from the PNG and rejects a collider that differs, so a stale or hand-edited bake cannot change geometry; a package without the table loads exactly as before.
