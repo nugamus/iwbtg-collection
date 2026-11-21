@@ -6,8 +6,6 @@
 /// Rules for collision events and queries.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct CollideRules {
-    /// R12 (Confirmed (recorder), T-ORD-2): the order the collision phase runs its pairs in.
-    pub pair_order: PairOrder,
     /// C7b: re-check a non-solid pair's overlap right before its event. Default true
     /// (Confirmed (recorder): the killer sees the post-block position, help-the-fairy-tale
     /// t-col-06).
@@ -36,7 +34,6 @@ pub struct CollideRules {
 impl Default for CollideRules {
     fn default() -> CollideRules {
         CollideRules {
-            pair_order: PairOrder::default(),
             recheck_nonsolid: true,
             solid_recheck: SolidRecheck::default(),
             solid_keep: SolidKeep::default(),
@@ -48,25 +45,6 @@ impl Default for CollideRules {
             dist_combine: DistCombine::default(),
         }
     }
-}
-
-/// R12: the order the collision phase runs its pairs in.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
-pub enum PairOrder {
-    /// Pairs of instances, lower kind first. Default; Confirmed (recorder), OpenGMK only
-    /// (CLONE_SPEC collision "Order of collision events: pairs of instances, lower object
-    /// first"; traces/rely-the-needle-4-2/t-ord-2.md). The outer instance `a` goes by its own
-    /// rank, then id; the inner `b` is every other instance of rank greater than or equal to
-    /// `a`'s, by rank then id; per overlapping pair `a`'s handler for `b` runs, then `b`'s
-    /// handler for `a`. Two instances of one rank meet twice, both directions each time.
-    #[default]
-    LowerRankFirst,
-    /// Instance by instance in dispatch order; one instance's pairs by the other's rank, then
-    /// the other's id (the earlier Inferred reading, ruled out by T-ORD-2).
-    OtherRankThenId,
-    /// Instance by instance in dispatch order; one instance's pairs by its handler list, then
-    /// the other in dispatch order.
-    HandlerListOrder,
 }
 
 /// C9: what the final check after a solid pair's event tests.
