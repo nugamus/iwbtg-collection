@@ -8,7 +8,7 @@
 use serde::{Deserialize, Deserializer};
 
 use super::class::ClassMask;
-use super::ids::{SoundId, SpriteId};
+use super::ids::{ScriptId, SoundId, SpriteId};
 use crate::input::Action;
 use crate::kid::{KidAction, KidCollisionRun};
 use crate::num::Real;
@@ -84,6 +84,21 @@ pub struct PhysicsProfile {
     pub sprites: KidSprites,
     /// `[sounds]`: the kid's sounds by role (resolved from names at load).
     pub sounds: KidSounds,
+    /// `[script]`: the script file whose functions the event lists may run at a slot, with the
+    /// custom variable names that script may read and write (decision 0004).
+    pub script: KidScript,
+}
+
+/// `[script]`: the kid profile's script file and the variables it may use (decision 0004).
+#[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct KidScript {
+    /// `file`: `scripts/<id>.rhai`, resolved by the loader to the script's index. `None` when the
+    /// profile names no script, in which case no event list may have a script slot.
+    pub file: Option<ScriptId>,
+    /// `vars`: names the script may read and write as `this.<name>`. Names are package content and
+    /// enter `gameplay_hash`; a name not listed here is an undeclared-variable error.
+    pub vars: Vec<String>,
 }
 
 macro_rules! profile_section {
@@ -272,6 +287,31 @@ pub struct KidKey {
 fn action_name<'de, D: Deserializer<'de>>(d: D) -> Result<Action, D::Error> {
     let n = String::deserialize(d)?;
     Action::from_name(&n).ok_or_else(|| serde::de::Error::custom(format!("unknown action `{n}`")))
+}
+
+/// One script slot in a kid event list (`{ do = "script", fn = "dash" }`, decision 0004). The
+/// function is looked up in the profile's `[script] file`: no argument in a list event, `other`
+/// in a collision slot, with `this` bound to the kid.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct KidScriptSlot {
+    /// Must be `"script"`.
+    #[serde(rename = "do")]
+    pub action: ScriptSlotDo,
+    /// The function of the profile's `[script] file`.
+    #[serde(rename = "fn")]
+    pub function: String,
+}
+
+/// The only value of a kid slot's `do`: `"script"`. A named table keeps a typo from being read as
+/// some other action.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScriptSlotDo {
+    /// A script function.
+    Script,
 }
 
 /// One `events.collisions` row: the kid runs `run` when it collides with an instance of class
@@ -767,6 +807,17 @@ draft_section! {
     KidMiscDraft => KidMisc { fade_in: bool, fade_step: Real, idle_needs_block: bool }
 }
 
+/// `[script]` as written: the loader resolves `file` to a [`ScriptId`] and interns `vars`.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct KidScriptDraft {
+    /// `file = "<id>"`: `scripts/<id>.rhai`.
+    pub file: Option<String>,
+    /// `vars = ["dash_dir"]`.
+    pub vars: Option<Vec<String>>,
+}
+
 /// A profile as written, before the preset fills its defaults. `toml::from_str` target of
 /// `crates/format` (WP7b); `kid::presets::apply` turns it into a [`PhysicsProfile`]: the
 /// preset's profile with every field written here put over it. The sections of families that
@@ -816,6 +867,8 @@ pub struct PhysicsProfileDraft {
     pub sprites: Option<KidSpriteNames>,
     /// `[sounds]`: sound names; the loader resolves them to ids like the sprite names.
     pub sounds: Option<KidSoundNames>,
+    /// `[script]`: the slot script file and its custom variables (decision 0004).
+    pub script: Option<KidScriptDraft>,
 }
 
 /// `[sounds]` as written in a package: sound names by role, resolved to [`KidSounds`] ids by the

@@ -47,6 +47,12 @@ An empty file is the same as `preset = "A1"`. The loader rejects unknown keys, s
 
 An event is an ordered list of action names. The kid runs them top to bottom; a list stops early when an action asks to abort the tick (a room change). An action that belongs to a family that has not landed returns `Unsupported` and halts the sim with its name, so a profile never silently skips one.
 
+### Script slots
+
+An entry may also be a script slot: a table `{ do = "script", fn = "dash" }`. It calls the named function of the profile's `[script] file`, with `this` bound to the kid's instance (decision [0004](../decisions/0004-extension-model.md#kid-script-slots)). The slot runs where it sits, in list order, with the same script host, tick and call budget, spawn caps and error handling as any other script. It composes with the native actions around it instead of replacing them. A room request from a slot stops the rest of the event list, like a built-in's request. A collision row takes the same table as its `run`, and the function is called with `other`.
+
+A profile may name a slot in any event list (`create`, `room_start`, `step`, `end_step`, alarm rows, key rows) and in a collision row. The function must exist in the profile's script with the slot's argument count (none for a list event, one, `other`, for a collision slot); a missing function or wrong arity is a load error. A profile with a slot but no `[script] file` is also a load error. A room profile may name its own file and slots; the kid kind's event set is unchanged.
+
 `[events]` keys:
 
 | Key | Runs |
@@ -110,6 +116,7 @@ Not yet in `[events]`: the outside-room events of the other models.
 | `fade_in` | Step action 7 (rely): while alpha is below 1 add `misc.fade_step`; no clamp. |
 | `play_timer` | Alarm 0: `global.time` + 1 unless the room is a Boot, Title, Menu or Select room, then `alarm[0] = room_speed`. |
 | `kill` | The death sequence (`[death]`), as a key or alarm action. |
+| `{ do = "script", fn = "..." }` | A script slot: calls the named function of `[script] file` with `this` bound to the kid (decision 0004). In an event list it takes no arguments; in a collision row it takes `other`. |
 
 All real comparisons use the GM epsilon (`NumRules::compare`), so for example the rely fade-in takes 10 steps.
 
@@ -124,6 +131,7 @@ All real comparisons use the GM epsilon (`NumRules::compare`), so for example th
 | `moving_block_por` | Poronkusema, Collision with movingBlock (class `moving_block`, 64 x 64, not solid; kid/A1.md), in order: ride from above (`y <= other.y + vspeed + 2`, `vspeed > other.vspeed`, `other.y - yprevious >= 8`: `y = other.y - 9`, `vspeed` the block's, `onPlatform` and `djump` set); bump from below (`yprevious - other.y >= height + 10`: `y = other.y + height + 12`, `vspeed` the block's if it is 0 or more, else 0); else pushed out sideways to `other.x - 6` or `other.x + width + 5` by which half the kid is in. OPEN: the spec gives the numbers but not each test; the relative-motion test, the "within vspeed + 2" reading and the side choice are guesses (#314). The game places no moving block. |
 | `platform_standard` | kid/A1.md "Collision with platform": lands when `y - vspeed / 2 <= platform.y`; one-way from below. A reversed `yflag` kid lands when `y - vspeed / 2 >= platform.y + reversed_above` and is put at `platform.y + reversed_snap`. |
 | `kill` | The other instance kills the kid (`[death]`). |
+| `{ do = "script", fn = "dash_touch" }` | Calls the profile's slot function with `other` (decision 0004). A native run and a script run may share one `with`; the rows run in row order. |
 
 ## Sections
 
@@ -156,6 +164,8 @@ Every key below is optional. Defaults are the `A1` preset's.
 `[misc]`: `fade_in`, `fade_step` (0.1), `idle_needs_block` (spook house: `walk` shows the idle sprite only with a ground-class instance 1 px below).
 
 `[sprites]`: sprite names from the package's sprite table, by role: `idle`, `running`, `jump`, `fall`, `sliding`, `back`, `ladder_up_down`. A role left out leaves the sprite alone.
+
+`[script]`: `file` is a script id (`scripts/<id>.rhai`, compiled as a package script), and `vars` lists the custom variable names the script may read and write as `this.<name>`; both are package content and enter `gameplay_hash`. A slot function the file lacks, or one with the slot's arity, is a load error, as is a slot with no `file`. A name not in `vars` is an undeclared-variable error, as for any script. See [Script slots](#script-slots) and decision [0004](../decisions/0004-extension-model.md#kid-fields-a-script-may-read-and-write) for the fields the script may touch.
 
 ## Converter note (CR8)
 

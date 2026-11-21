@@ -42,7 +42,9 @@ pub struct World {
     pub room: RoomId,
     /// Ticks since the current room was entered.
     pub room_tick: u64,
-    /// GM `room_speed`: the file speed on entry, 50 after the world's Room Start (R14).
+    /// GM `room_speed`: legacy per-room clock data (R14, R30). The file speed on entry, the
+    /// package tick rate after the world's Room Start. `ClockPolicy::Fixed` (standard) never
+    /// reads it as a clock; it stays hashed either way.
     pub room_speed: Real,
     /// Instances sorted by id (docs/architecture/sim/world.md): creation order, except that room-placed instances with
     /// a GM8 id (#669) sort below every runtime id. Private to `world` so every

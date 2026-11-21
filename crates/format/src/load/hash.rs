@@ -64,6 +64,11 @@ pub fn gameplay_hash(files: &PackageFiles, manifest: &Manifest, def: &GameDef) -
                 for k in COSMETIC_MANIFEST_KEYS {
                     table.remove(k);
                 }
+                // `ruleset` and `[compat]` are declarations whose format-0 values must equal
+                // what the package already resolves to (the loader checks this), so writing
+                // them changes no behavior and must not change the hash (decision 0005).
+                table.remove("ruleset");
+                table.remove("compat");
                 if let Some(toml::Value::Array(maps)) = table.get_mut("maps") {
                     for map in maps.iter_mut().filter_map(toml::Value::as_table_mut) {
                         for k in COSMETIC_MAP_KEYS {

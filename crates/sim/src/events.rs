@@ -26,6 +26,7 @@ use crate::anim;
 use crate::collide::pairs::{self, Members, Reach};
 use crate::def::{ClassMask, GameDef, KindId, ParamValue, Params, TimelineId, VarId};
 use crate::error::SimError;
+use crate::hash;
 use crate::input::Action;
 use crate::num::{Real, to_int_trunc};
 use crate::room::RoomRequest;
@@ -654,13 +655,33 @@ fn boundary_phase(ctx: &mut Ctx, hooks: &Hooks) -> Flow {
 
 /// Row 12: `Late` handlers in draw order (depth descending, then creation), visible only
 /// (Confirmed manual: Draw runs only for visible instances).
+///
+/// Under `DrawPurity::Pure` (the `standard` ruleset, decision 0005) the slot is a projection:
+/// it may emit output, but any write to hashed sim state stops the run. The check compares the
+/// state hash before and after the walk, so it covers globals, instance creation/destruction,
+/// input latching, RNG draws and room requests without a write guard on every setter. It is an
+/// `O(world)` check per tick; `standard` is package-unreachable until #1160, and the guard can
+/// become a write check if that cost ever matters. `gm8` keeps the recorder's mutable Draw and
+/// pays nothing.
 pub fn run_draw_phase(ctx: &mut Ctx) -> Flow {
-    walk(
+    let before = ctx.rules.draw.is_pure().then(|| hash::state_hash(ctx.w));
+    let flow = walk(
         ctx,
         Order::Draw,
         &|c: &Ctx, i: &Instance| i.visible && event_set(c.def, i.kind).late,
         |c, id, ctl| fire(c, ctl, id, &EventKind::Late),
-    )
+    );
+    if flow.is_halt() {
+        return flow;
+    }
+    if let Some(before) = before
+        && hash::state_hash(ctx.w) != before
+    {
+        return ctx.halt(SimError::draw_mutation(
+            "hashed state changed across the slot (globals, instances, input or RNG); Draw may only emit output",
+        ));
+    }
+    flow
 }
 
 /// Rows 8b and 13: the animation update for every alive, active instance, visible or not, and

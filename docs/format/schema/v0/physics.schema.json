@@ -322,7 +322,7 @@
         },
         {
           "const": "arm_play_timer",
-          "description": "Create step 5: alarm 0 = `room_speed`.",
+          "description": "Create step 5: alarm 0 = one clock second (`room_speed` under the legacy policy, R30).",
           "type": "string"
         },
         {
@@ -377,7 +377,7 @@
         },
         {
           "const": "play_timer",
-          "description": "Alarm 0: outside the menu roles `global.time` + 1, then alarm 0 = `room_speed` again.",
+          "description": "Alarm 0: outside the menu roles `global.time` + 1, then alarm 0 = one clock second again.",
           "type": "string"
         },
         {
@@ -909,6 +909,10 @@
         {
           "$ref": "#/$defs/SlopeAction",
           "description": "Slopes (WP5c)."
+        },
+        {
+          "$ref": "#/$defs/KidScriptSlot",
+          "description": "A script slot (`{ do = \"script\", fn = \"dash\" }`, decision 0004)."
         }
       ],
       "description": "One named action in a `physics.toml` event list (`step = [\"walk\", \"jump\", ...]`, docs/architecture/sim/kid.md).\n\nSplit by owner like `KindState`: each part is the enum of one file under `actions/`, and the\nname in the file picks the part whose enum has that name (`untagged`). Names must be unique\nacross parts."
@@ -982,6 +986,10 @@
         {
           "$ref": "#/$defs/MovingBlockRun",
           "description": "poronkusema `moving_block_por` (WP5c)."
+        },
+        {
+          "$ref": "#/$defs/KidScriptSlot",
+          "description": "A script collision slot (`{ do = \"script\", fn = \"dash_touch\" }`), called with `other`\n(decision 0004)."
         }
       ],
       "description": "One named collision run in `events.collisions` (`{ with = \"block\", run = \"block_standard\" }`,\ndocs/architecture/sim/kid.md). Split by owner like [`KidAction`]."
@@ -1306,6 +1314,51 @@
           "default": null
         }
       },
+      "type": "object"
+    },
+    "KidScriptDraft": {
+      "additionalProperties": false,
+      "description": "`[script]` as written: the loader resolves `file` to a [`ScriptId`] and interns `vars`.",
+      "properties": {
+        "file": {
+          "default": null,
+          "description": "`file = \"<id>\"`: `scripts/<id>.rhai`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "vars": {
+          "default": null,
+          "description": "`vars = [\"dash_dir\"]`.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "KidScriptSlot": {
+      "additionalProperties": false,
+      "description": "One script slot in a kid event list (`{ do = \"script\", fn = \"dash\" }`, decision 0004). The\nfunction is looked up in the profile's `[script] file`: no argument in a list event, `other`\nin a collision slot, with `this` bound to the kid.",
+      "properties": {
+        "do": {
+          "$ref": "#/$defs/ScriptSlotDo",
+          "description": "Must be `\"script\"`."
+        },
+        "fn": {
+          "description": "The function of the profile's `[script] file`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "do",
+        "fn"
+      ],
       "type": "object"
     },
     "KidSoundNames": {
@@ -1680,6 +1733,16 @@
         }
       },
       "type": "object"
+    },
+    "ScriptSlotDo": {
+      "description": "The only value of a kid slot's `do`: `\"script\"`. A named table keeps a typo from being read as\nsome other action.",
+      "oneOf": [
+        {
+          "const": "script",
+          "description": "A script function.",
+          "type": "string"
+        }
+      ]
     },
     "SlopeAction": {
       "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`.",
@@ -2091,6 +2154,17 @@
         }
       ],
       "description": "`[save]`."
+    },
+    "script": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/KidScriptDraft"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[script]`: the slot script file and its custom variables (decision 0004)."
     },
     "slope": {
       "anyOf": [

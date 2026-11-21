@@ -99,6 +99,9 @@ fn bare_number_condition_is_rejected() {
         "{i:#?}"
     );
     clean("fn step() { if gm_bool(this.hspeed) { destroy(this); } }");
+    // A variable is not statically known to be a number: a bool-typed variable is the standard
+    // way to write a condition (decision 0005), and a real one fails at run time instead.
+    clean("fn step() { if this.flag { destroy(this); } }");
 }
 
 #[test]

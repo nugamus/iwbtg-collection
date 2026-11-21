@@ -1,29 +1,21 @@
-# F2 (feedback) contract for #1158 (decision 0005, one sound model): the sim emits the play
-# event with a sound id and a tick, and the client mixer plays from that event.
-#
-# The gating executable copy is
-# `crates/sim/tests/builtins_music.rs::every_step_music_emits_stop_all_then_a_play_with_the_tick_and_length`;
-# the client-side copy is `crates/client/src/audio.rs::the_showcase_starts_its_night_loop_on_the_first_tick`.
-# The runner and the `sound_events` fixture land with #1167; until then this file is the
-# reviewable statement of the outcome and those tests are the gate.
+# The music feedback the sound model promises (#1158, #270): a playMusic object in
+# `every_step_if_not_playing` mode stops all sounds and starts its track on the first Step while
+# it is not playing. The player hears it on the tick the game starts, so the event belongs to
+# sim tick 0 and the first step ends at World::tick 1.
 id = "sound/event_model"
 impact = "F2"
 package = "fixture:sound_events"
-ruleset = "gm8@0"
 start = { new_game = true, difficulty = 0 }
 play_mode = "original"
-seed = 7
+seed = 0
 mods = []
-evidence = [
-  "#1158",
-  "tests/builtins_music.rs::every_step_music_emits_stop_all_then_a_play_with_the_tick_and_length",
-  "tests/sound.rs::play_events_carry_the_call_tick_and_the_sound_length",
-  "audio: the fixture's track is heard from the first frame, once, with no gap",
-]
+evidence = ["audio:builtins_music::music_every_step_starts_it_once_and_cuts_effects_only_then", "#270"]
 
-# The fixture's music object runs `every_step_if_not_playing`: on the room's first Step (sim tick
-# 0, the step that ends at World::tick == 1) it stops every built-in sound and starts the loop.
-# The play event names the package sound and carries the tick the client mixer schedules from.
+inputs = """
+frame 0: end
+"""
+
 [[assert]]
 tick = 1
+kid_count = 1
 sound = { event = "play", sound = "track", tick = 0 }

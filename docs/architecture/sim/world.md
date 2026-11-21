@@ -110,7 +110,7 @@ pub struct World {
     pub tick: u64,
     pub room: RoomId,
     pub room_tick: u64,
-    pub room_speed: Real,                 // GM variable; file speed on entry, 50 after world Room Start
+    pub room_speed: Real,                 // GM variable; legacy per-room clock data (R14, R30): file speed on entry, 50 after world Room Start
     pub instances: Vec<Instance>,
     pub next_id: u64,
     pub var_names: BTreeMap<String, VarId>, // run-time names only (variable ids)
@@ -194,3 +194,5 @@ pub fn bow_snapshot(w: &World, kid: InstId) -> BowSnapshot;      // x, y, xscale
 pub fn kill(ctx: &mut Ctx, kid: InstId, cause: KillCause) -> Flow;
 pub fn read_field(w: &World, kid: InstId, f: KidField) -> Option<Value>; // probe registry
 ```
+
+A kid script slot (decision [0004](../../decisions/0004-extension-model.md#kid-script-slots)) runs a function of the current room profile's `[script] file` at a fixed position in an event list, through [`kid::run_action`]/[`kid::run_collision`] and the same script host as any other script, with `this` bound to the kid's `Inst`. The fields a script may read and write are the decision's table: the generic instance fields plus the kid-only set in `KidState` (`djump`, `curJumps`, `tjump`, `onPlatform`, `ladder`, `frozen`, `frozen2`, `muteki`, `tempHspeed`, `maxSpeed`, `maxVspeed`, `maxFallSpeed`, `scale`), with `ladderud`, `ladderjump`, `yflag`, `flipped`, `facing`, `jump`/`jump2`/`jump3`, `on_slope_last`, `walk_h` and `onVineL`/`onVineR` read only. `facing` follows a write to `image_xscale`; `yflag` and `flipped` stay behind the gravity knobs so the mask and gravity cannot disagree. The kid's own actions still own the per-tick physics: a slot composes with them and does not replace them.

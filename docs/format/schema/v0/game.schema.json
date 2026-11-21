@@ -17,6 +17,69 @@
       },
       "type": "object"
     },
+    "CompatDeviation": {
+      "additionalProperties": false,
+      "description": "One `[[compat.deviation]]` entry. Every field is provenance: a deviation says what it selects,\nwhy, its feel tier, its evidence and the issue that tracks it.",
+      "properties": {
+        "evidence": {
+          "description": "The trace, feel contract or test that proves it.",
+          "type": "string"
+        },
+        "id": {
+          "description": "A catalogue id (`save.position`).",
+          "type": "string"
+        },
+        "impact": {
+          "description": "The feel tier, `F1`, `F2` or `F3`.",
+          "type": "string"
+        },
+        "issue": {
+          "description": "The issue that tracks the deviation.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "$ref": "#/$defs/DeviationValue",
+          "description": "The value the deviation selects, with the catalogue entry's type."
+        },
+        "why": {
+          "description": "Why the package keeps this behavior.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "value",
+        "why",
+        "impact",
+        "evidence",
+        "issue"
+      ],
+      "type": "object"
+    },
+    "CompatSection": {
+      "additionalProperties": false,
+      "description": "`[compat]`: the ruleset's compatibility profile and the deviations the package declares\n(decision 0005, docs/format/game.md).",
+      "properties": {
+        "deviation": {
+          "description": "`[[compat.deviation]]` entries. Each names one id of the ruleset's closed catalogue.",
+          "items": {
+            "$ref": "#/$defs/CompatDeviation"
+          },
+          "type": "array"
+        },
+        "profile": {
+          "default": null,
+          "description": "`profile = \"<ruleset>/<family>@<n>\"` (`gm8/a1@1`). Absent: inferred from the physics\npreset.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
     "Controls": {
       "additionalProperties": false,
       "description": "The `[controls]` table: a label for each extra action the game uses (docs/format/game.md).\nOnly the player-facing words; which key the player binds is the client's.",
@@ -197,6 +260,29 @@
           "type": "string"
         }
       ]
+    },
+    "DeviationValue": {
+      "anyOf": [
+        {
+          "description": "A flag.",
+          "type": "boolean"
+        },
+        {
+          "description": "An integer.",
+          "format": "int64",
+          "type": "integer"
+        },
+        {
+          "description": "A real.",
+          "format": "double",
+          "type": "number"
+        },
+        {
+          "description": "An enum value, by its package name.",
+          "type": "string"
+        }
+      ],
+      "description": "A deviation's value, as written in `game.toml`. The catalogue decides which shape is allowed."
     },
     "DialogueRegion": {
       "additionalProperties": false,
@@ -1142,6 +1228,17 @@
       ],
       "description": "Script budget."
     },
+    "compat": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CompatSection"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The compatibility profile and its declared deviations (decision 0005)."
+    },
     "controls": {
       "anyOf": [
         {
@@ -1253,6 +1350,14 @@
       },
       "type": [
         "array",
+        "null"
+      ]
+    },
+    "ruleset": {
+      "default": null,
+      "description": "Named, versioned semantic contract (`gm8@<rev>`); absent means `gm8` at `engine_rev`\n(decision 0005, docs/format/game.md).",
+      "type": [
+        "string",
         "null"
       ]
     },

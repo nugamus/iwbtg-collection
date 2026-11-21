@@ -2,6 +2,8 @@
 //! (docs/format/physics.md).
 
 use super::*;
+use iwbtg_sim::def::physics::KidScriptSlot;
+use iwbtg_sim::kid::{KidAction, KidCollisionRun};
 
 impl<'a> Loader<'a> {
     /// Resolves the `[sprites]` names of a loaded profile to sprite ids.
@@ -53,7 +55,110 @@ impl<'a> Loader<'a> {
         p.sounds.shoot = snd(self, &names.shoot);
         p.sounds.vine_kick = snd(self, &names.vine_kick);
         p.sounds.death = snd(self, &names.death);
+        // `[script]` (decision 0004): resolve the file name to a script id, intern the vars and
+        // check every slot function against the file. The loader has the profile's text here, so
+        // a bad name, a missing file and a missing function get a position.
+        let script = l.script.unwrap_or_default();
+        let mut vars: Vec<String> = Vec::new();
+        for var in script.vars.unwrap_or_default() {
+            if !vars.contains(&var) {
+                vars.push(var);
+            }
+        }
+        let at = |name: &str| {
+            let start = text.find(name).unwrap_or(0);
+            start..start + name.len()
+        };
+        for var in &vars {
+            if var.is_empty() {
+                self.error(path, text, 0..0, "a `[script] vars` name cannot be empty");
+            }
+        }
+        self.kid_script_vars.extend(vars.iter().cloned());
+        p.script.vars = vars;
+        match script.file {
+            Some(name) => {
+                let script_path = format!("scripts/{name}.rhai");
+                if let Err(e) = check_id(&name) {
+                    self.error(path, text, at(&name), format!("script {e}"));
+                } else {
+                    match read_text(self.files, &script_path, &mut Vec::new()) {
+                        Some(source) if source.len() > MAX_SCRIPT_BYTES => {
+                            self.error(path, text, at(&name), format!("`{script_path}` is over 256 KB"))
+                        }
+                        Some(source) => {
+                            let sid = iwbtg_sim::def::ScriptId(
+                                u32::try_from(self.scripts.len()).unwrap_or(u32::MAX),
+                            );
+                            self.scripts.push(iwbtg_sim::def::ScriptDef {
+                                name: script_path.clone(),
+                                source: source.to_owned(),
+                            });
+                            p.script.file = Some(sid);
+                            // A compile error is the script validator's report; only a file that
+                            // compiles is checked for the slot functions.
+                            if let Some(fns) = iwbtg_sim::script::validate::function_arities(source) {
+                                self.check_kid_slots(&p, path, text, &script_path, &fns);
+                            }
+                        }
+                        None => self.error(path, text, at(&name), format!("`{script_path}` does not exist")),
+                    }
+                }
+            }
+            None => {
+                if let Some(slot) = first_kid_slot(&p) {
+                    self.error(
+                        path,
+                        text,
+                        at(&slot.function),
+                        format!(
+                            "kid slot `{}` runs but the profile names no `[script] file`",
+                            slot.function
+                        ),
+                    );
+                }
+            }
+        }
         p
+    }
+
+    /// Checks the functions a profile's script slots name against the functions its script
+    /// defines (decision 0004): the name must exist, and its argument count must match the slot
+    /// (0 in a list event, 1 in a collision row).
+    fn check_kid_slots(
+        &mut self,
+        p: &PhysicsProfile,
+        path: &str,
+        text: &str,
+        script_path: &str,
+        fns: &BTreeSet<(String, usize)>,
+    ) {
+        for (slot, arity) in kid_slot_uses(p) {
+            let name = &slot.function;
+            let start = text.find(name.as_str()).unwrap_or(0);
+            let span = start..start + name.len();
+            let defined: Vec<usize> = fns.iter().filter(|(n, _)| n == name).map(|(_, a)| *a).collect();
+            if defined.is_empty() {
+                self.error(
+                    path,
+                    text,
+                    span,
+                    format!("`{script_path}` has no function `{name}`"),
+                );
+            } else if !defined.contains(&arity) {
+                let have: Vec<String> = defined.iter().map(ToString::to_string).collect();
+                self.error(
+                    path,
+                    text,
+                    span,
+                    format!(
+                        "the kid slot function `{name}` takes {} argument{}, not {arity}",
+                        have.join(" or "),
+                        if defined == [1] { "" } else { "s" }
+                    ),
+                );
+            }
+        }
     }
 
     /// Reads every room profile, `physics/<id>.toml` (#33), in path order. The kid kind's events
@@ -161,4 +266,38 @@ impl<'a> Loader<'a> {
         }
         self.note("CR8", format!("kid mask `{sprite}`"));
     }
+}
+
+/// Every script slot a profile's event lists name, with the argument count the slot calls it
+/// with (0 in a list event, 1 in a collision row; decision 0004).
+fn kid_slot_uses(profile: &PhysicsProfile) -> Vec<(&KidScriptSlot, usize)> {
+    fn walk<'a>(list: &'a [KidAction], out: &mut Vec<(&'a KidScriptSlot, usize)>) {
+        for action in list {
+            if let KidAction::Script(slot) = action {
+                out.push((slot, 0));
+            }
+        }
+    }
+    let e = &profile.events;
+    let mut out = Vec::new();
+    for list in [&e.create, &e.room_start, &e.step, &e.end_step] {
+        walk(list, &mut out);
+    }
+    for row in &e.alarms {
+        walk(&row.run, &mut out);
+    }
+    for row in &e.keys {
+        walk(&row.run, &mut out);
+    }
+    for row in &e.collisions {
+        if let KidCollisionRun::Script(slot) = &row.run {
+            out.push((slot, 1));
+        }
+    }
+    out
+}
+
+/// The first script slot of a profile, for the "no `[script] file`" error.
+fn first_kid_slot(profile: &PhysicsProfile) -> Option<&KidScriptSlot> {
+    kid_slot_uses(profile).first().map(|(slot, _)| *slot)
 }
