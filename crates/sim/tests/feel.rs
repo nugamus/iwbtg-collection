@@ -29,6 +29,10 @@ const CONTRACTS: &[(&str, &str)] = &[
         include_str!("feel/collision/overlapping_hazards.toml"),
     ),
     ("sound/event_model", include_str!("feel/sound/event_model.toml")),
+    (
+        "checkpoint/respawn_alignment",
+        include_str!("feel/checkpoint/respawn_alignment.toml"),
+    ),
 ];
 
 /// Parses, validates and runs one contract against its public fixture.
@@ -69,6 +73,7 @@ fn the_public_contract_ids_are_unique() {
         "physics/jump_apex",
         "collision/overlapping_hazards",
         "sound/event_model",
+        "checkpoint/respawn_alignment",
     ] {
         assert!(ids.contains(&want), "missing public contract {want}");
     }

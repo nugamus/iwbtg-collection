@@ -1,66 +1,55 @@
-# The save/respawn path (#1150): the spot a save point writes is the spot a retry resumes, and
-# the Kid can jump from it. The runner and the `fixture:` builder land with #1161; until then
-# this is the reviewable contract.
-#
-# Fixture `checkpoint` (one room `room_1`, 800x608): kid_start at (96, 567.4), a save point on the
-# floor at x 160 (base-100 save model), a wall at x 160 so holding Right stops the Kid on the
-# point, and a clear jump arc above it. A1 physics, gm8 rules.
+# The save/respawn path (#1150): R returns the Kid to the checkpoint at the exact saved spot,
+# the first jump from the respawn responds, and the checkpoint's counters persist. The
+# `lifecycle_retry` fixture starts from a supplied checkpoint with the engine-owned retry phase
+# (#1149/#1167).
 id = "checkpoint/respawn_alignment"
 impact = "F1"
-package = "fixture:checkpoint"
+package = "fixture:lifecycle_retry"
 ruleset = "gm8@0"
 profile = "gm8/a1@1"
-start = { new_game = true, difficulty = 0 }
+start = { room = "play", difficulty = 0 }
+save = { room = "play", x = 200.0, y = 500.0, deaths = 0, time = 3 }
 play_mode = "original"
 seed = 0
 mods = []
-evidence = ["research:little-runner/tr-room-06", "#1150", "#670"]
+evidence = ["golden:kid_a1_basics", "#1150", "#670"]
 
-# Frame f is the step that ends at World::tick == f + 1.
+# `.inputs` frame f is the step that ends at World::tick == f + 1.
 inputs = """
-frame 0: hold right
-frame 80: release right
-frame 81: press restart
-frame 82: release restart
-frame 120: hold jump
-frame 130: release jump
-frame 140: press suicide
-frame 141: release suicide
-frame 160: press restart
-frame 161: release restart
-frame 220: end
+frame 0: end
+frame 1: press suicide
+frame 2: release suicide
+frame 4: press restart
+frame 5: release restart
+frame 6: press jump
+frame 7: release jump
+frame 8: end
 """
 
-# The walk onto the save point stores the spot under the stable room name. The ranges are wide
-# because the Kid stops against the point and the save mask decides the exact overlap; base-100
-# keeps the stored value in the same pixel. `matches_save` is the exact assertion.
+# The death counts once and the Kid is gone; the death-only save records it.
 [[assert]]
-tick = 80
-save.room = "room_1"
-save.x = { min = 150.0, max = 170.0 }
-save.y = { min = 550.0, max = 580.0 }
-matches_save = true
-
-# R returns one Kid at the checkpoint after the gm8 delay, not at the room's kid_start.
-[[assert]]
-tick = 130
-room = "room_1"
-kid_count = 1
-matches_save = true
-
-# The first jump from the respawn responds within two ticks: the saved alignment is a spot the
-# player can jump from (the trick's `respawn_valign`).
-[[assert]]
-tick = 130
-control = { action = "jump", metric = "kid.y", latency_max = 2 }
-
-# Counters persist: one death is counted, the death-only save writes it, and the next retry
-# loads it and still returns to the saved spot. The time lower bound is the walk plus the first
-# retry; the exact tick is the run's, so the counter is checked as persisting rather than fixed.
-[[assert]]
-tick = 220
-room = "room_1"
+tick = 2
 death = 1
-time = { min = 80 }
-matches_save = true
+kid_count = 0
+room = "play"
+save.room = "play"
+
+# N+1: the init phase loads the checkpoint. The Kid is at the exact saved spot, the room keeps
+# its stable name, and the death counter came back with it.
+[[assert]]
+tick = 6
+room = "play"
 kid_count = 1
+kid.x = { exact = 200.0 }
+kid.y = { exact = 500.0 }
+matches_save = true
+death = 1
+time = 3
+
+# N+2: the first controllable tick. A jump press on frame 6 responds within one frame, so the
+# respawn alignment is a spot the player can jump from (the trick's `respawn_valign`).
+[[assert]]
+tick = 7
+kid_count = 1
+death = 1
+control = { action = "jump", metric = "kid.y", latency_max = 1, why = "the first jump from the respawn responds within one frame, so the checkpoint is a jumpable spot" }
