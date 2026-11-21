@@ -5,8 +5,9 @@
 use iwbtg_sim::SimError;
 use iwbtg_sim::def::RoomDef;
 use iwbtg_sim::def::testing::GameDefBuilder;
-use iwbtg_sim::motion::{Motion, apply_auto_motion};
+use iwbtg_sim::motion::{Body, Motion, apply_auto_motion};
 use iwbtg_sim::num::{self, Real};
+use iwbtg_sim::rules::motion::MotionModel;
 use iwbtg_sim::rules::{MotionRules, NumRules};
 
 fn r(x: f64) -> Real {
@@ -365,4 +366,223 @@ fn capture_previous_copies_position() {
     assert_eq!((m.xprevious(), m.x()), (r(1.0), r(4.0)));
     m.capture_previous();
     assert_eq!((m.xprevious(), m.yprevious()), (r(4.0), r(2.0)));
+}
+
+// ---- B5: the standard representation (position + velocity + gravity-as-acceleration) ----
+
+/// The standard ruleset value; no package can select it until #1160.
+fn standard_rules() -> MotionRules {
+    MotionRules {
+        model: MotionModel::VelocityAcceleration,
+        ..MotionRules::default()
+    }
+}
+
+/// One tick of the standard representation with no path.
+fn tick_body(b: &mut Body) {
+    let events = b.apply_auto_motion(&standard_rules()).expect("motion");
+    assert!(!events.end_of_path);
+}
+
+/// The format-0 default is the gm8 representation, so no existing run changes.
+#[test]
+fn motion_model_default_is_gm8_coupled() {
+    assert_eq!(MotionRules::default().model, MotionModel::Gm8Coupled);
+    assert_eq!(standard_rules().model, MotionModel::VelocityAcceleration);
+}
+
+/// Each representation rejects the other's rules value instead of silently running the wrong
+/// coupling.
+#[test]
+fn representations_gate_on_the_model() {
+    let mut m = Motion::new_at(r(0.0), r(0.0));
+    let err = apply_auto_motion(&mut m, None, &def(), &standard_rules())
+        .expect_err("Motion rejects the standard model");
+    assert!(matches!(err, SimError::Unsupported { .. }), "{err:?}");
+
+    let mut b = Body::new_at(r(0.0), r(0.0));
+    let err = b
+        .apply_auto_motion(&MotionRules::default())
+        .expect_err("Body rejects the gm8 model");
+    assert!(matches!(err, SimError::Unsupported { .. }), "{err:?}");
+}
+
+/// `speed` and `direction` are views of the velocity: writing one component does not need a
+/// recompute, and the direction view has no integer snap.
+#[test]
+fn body_views_follow_the_velocity() {
+    let mut b = Body::new_at(r(0.0), r(0.0));
+    b.set_hspeed(r(16.0)).unwrap();
+    assert_eq!(b.speed().unwrap(), r(16.0));
+    // atan2(-0.0, 16) is -0.0, which is not below 0 and so does not wrap (t-alarm-1).
+    assert_eq!(b.direction().unwrap(), r(-0.0));
+
+    b.set_hspeed(RESIDUE).unwrap();
+    assert_eq!(b.direction().unwrap(), r(180.0));
+    assert_eq!(b.speed().unwrap(), r(7.347880794884119e-17));
+
+    // An ordinary vector: the raw angle is the gm8 value here because the snap is a no-op far
+    // from an integer (kaenbyou land-moving frame 10).
+    b.set_hspeed(r(3.0)).unwrap();
+    b.set_vspeed(r(-8.1)).unwrap();
+    assert_eq!(b.direction().unwrap().to_bits(), 0x4051_6B51_B9E7_1DBC);
+
+    // A zero velocity has no direction; writing a direction at rest keeps the body at rest.
+    b.set_hspeed(r(0.0)).unwrap();
+    b.set_vspeed(r(0.0)).unwrap();
+    assert_eq!(b.direction().unwrap(), r(0.0));
+    b.set_direction(r(90.0)).unwrap();
+    assert_eq!(b.hspeed().get(), 0.0);
+    assert_eq!(b.vspeed().get(), 0.0);
+    assert_eq!(b.direction().unwrap(), r(0.0));
+
+    // motion_set writes both forms and the views follow. dcos(90) is the libm residue
+    // 6.12e-17, so the raw h is 2.45e-16; gm8 would snap it to 0 (research#193).
+    b.motion_set(r(90.0), r(4.0)).unwrap();
+    assert_eq!(b.hspeed(), num::lengthdir_x(r(4.0), r(90.0)));
+    assert_eq!(b.vspeed(), num::lengthdir_y(r(4.0), r(90.0)));
+    assert_eq!(b.speed().unwrap(), r(4.0));
+    assert_eq!(b.direction().unwrap(), r(90.0));
+}
+
+/// research#193: the snap is a gm8 rule; the standard path keeps the raw cartesian value.
+#[test]
+fn body_has_no_integer_snap() {
+    let mut gm8 = Motion::new_at(r(0.0), r(0.0));
+    gm8.motion_set(r(120.0), r(8.0)).unwrap();
+    assert_eq!(gm8.hspeed(), r(-4.0), "gm8 snaps -3.9999999999999982");
+
+    let mut b = Body::new_at(r(0.0), r(0.0));
+    b.motion_set(r(120.0), r(8.0)).unwrap();
+    assert_eq!(b.hspeed(), r(-3.9999999999999982));
+    assert_eq!(b.vspeed(), gm8.vspeed(), "the far component is unchanged");
+    // The view is the raw angle of the unsnapped vector, not the written 120 exactly.
+    let direction = b.direction().unwrap().get();
+    assert!(direction > 119.999_999 && direction < 120.000_001, "{direction}");
+}
+
+/// Friction acts on the speed view and writes the velocity without the snap. The gm8 path snaps
+/// the same write (motion-snap-fric, research#199).
+#[test]
+fn body_friction_does_not_snap() {
+    let mut b = Body::new_at(r(0.0), r(0.0));
+    b.set_speed(r(8.099999)).unwrap();
+    b.set_direction(r(60.0)).unwrap();
+    b.set_friction(r(0.1)).unwrap();
+    let next = r(8.099999) - r(0.1);
+    let direction = b.direction().unwrap();
+    tick_body(&mut b);
+    assert_eq!(b.hspeed(), num::lengthdir_x(next, direction));
+    assert_eq!(b.vspeed(), num::lengthdir_y(next, direction));
+
+    let mut gm8 = Motion::new_at(r(0.0), r(0.0));
+    gm8.set_speed(r(8.099999)).unwrap();
+    gm8.set_direction(r(60.0)).unwrap();
+    gm8.set_friction(r(0.1)).unwrap();
+    apply_auto_motion(&mut gm8, None, &def(), &MotionRules::default()).unwrap();
+    assert_eq!(gm8.hspeed(), r(4.0), "gm8 snaps 3.9999995 to 4.0");
+}
+
+/// Gravity is an acceleration on the velocity; the position moves by the updated velocity, with no
+/// polar recompute and no snap.
+#[test]
+fn body_gravity_is_an_acceleration() {
+    let mut b = Body::new_at(r(0.0), r(0.0));
+    let (ax, ay) = b.acceleration();
+    assert_eq!((ax.get(), ay.get()), (0.0, 0.0));
+    b.set_gravity(r(0.4)).unwrap();
+    b.set_gravity_direction(r(270.0)).unwrap();
+    let (ax, ay) = b.acceleration();
+    assert_eq!(ax, RESIDUE);
+    assert_eq!(ay, r(0.4), "gravity at 270 pulls down");
+    tick_body(&mut b);
+    assert_eq!((b.hspeed(), b.vspeed()), (RESIDUE, r(0.4)));
+    assert_eq!(b.direction().unwrap(), r(270.0));
+    assert_eq!(b.speed().unwrap(), r(0.4));
+    assert_eq!((b.x(), b.y()), (RESIDUE, r(0.4)));
+}
+
+/// The two representations agree on the velocity and the position where gm8 does not snap. The
+/// declared difference is the direction view: gm8 stores the snapped angle, the standard view
+/// keeps the raw one, and the speed is computed from the same vector in both.
+#[test]
+fn representations_agree_where_gm8_does_not_snap() {
+    let (direction, speed) = (r(284.0), r(16.0));
+    let mut m = Motion::new_at(r(0.0), r(0.0));
+    m.motion_set(direction, speed).unwrap();
+    let mut b = Body::new_at(r(0.0), r(0.0));
+    b.motion_set(direction, speed).unwrap();
+    assert_eq!((b.hspeed(), b.vspeed()), (m.hspeed(), m.vspeed()));
+
+    m.set_gravity(r(0.4)).unwrap();
+    b.set_gravity(r(0.4)).unwrap();
+    apply_auto_motion(&mut m, None, &def(), &MotionRules::default()).unwrap();
+    tick_body(&mut b);
+    assert_eq!((b.hspeed(), b.vspeed()), (m.hspeed(), m.vspeed()));
+    assert_eq!((b.x(), b.y()), (m.x(), m.y()));
+    // Gravity bends the angle away from the written 284; both representations now derive it
+    // from the same velocity, and the gm8 snap is a no-op far from an integer.
+    assert_ne!(m.direction(), r(284.0), "gravity bent the path");
+    assert_eq!(b.speed().unwrap(), m.speed());
+    assert_eq!(b.direction().unwrap(), m.direction());
+}
+
+/// Every setter rejects a non-finite value and leaves the state unchanged; a finite velocity
+/// whose speed view overflows is rejected when read, and automatic motion halts if the move
+/// leaves the finite range.
+#[test]
+fn body_non_finite_setters_error_and_keep_state() {
+    let mut b = Body::new_at(r(1.0), r(2.0));
+    b.set_hspeed(r(3.0)).unwrap();
+    let before = b.clone();
+    for v in [r(f64::NAN), r(f64::INFINITY), r(f64::NEG_INFINITY)] {
+        type Setter = fn(&mut Body, Real) -> Result<(), SimError>;
+        let setters: [(&str, Setter); 13] = [
+            ("x", Body::set_x),
+            ("y", Body::set_y),
+            ("xstart", Body::set_xstart),
+            ("ystart", Body::set_ystart),
+            ("xprevious", Body::set_xprevious),
+            ("yprevious", Body::set_yprevious),
+            ("hspeed", Body::set_hspeed),
+            ("vspeed", Body::set_vspeed),
+            ("speed", Body::set_speed),
+            ("direction", Body::set_direction),
+            ("gravity", Body::set_gravity),
+            ("gravity_direction", Body::set_gravity_direction),
+            ("friction", Body::set_friction),
+        ];
+        for (name, set) in setters {
+            let err = set(&mut b, v).expect_err(name);
+            assert!(matches!(err, SimError::NonFinite { .. }), "{name}: {err:?}");
+            assert_eq!(b, before, "{name} changed state");
+        }
+        assert!(matches!(b.motion_set(v, r(1.0)), Err(SimError::NonFinite { .. })));
+        assert!(matches!(b.motion_set(r(1.0), v), Err(SimError::NonFinite { .. })));
+        assert!(matches!(b.motion_add(v, r(1.0)), Err(SimError::NonFinite { .. })));
+        assert_eq!(b, before);
+    }
+
+    // A huge finite velocity is state; its speed view overflows and reports it.
+    let mut huge = Body::new_at(r(0.0), r(0.0));
+    huge.set_hspeed(r(1e300)).unwrap();
+    assert!(matches!(huge.speed(), Err(SimError::NonFinite { .. })));
+
+    // Automatic motion that would leave the finite range halts.
+    let mut edge = Body::new_at(r(f64::MAX), r(0.0));
+    edge.set_hspeed(r(f64::MAX)).unwrap();
+    assert!(matches!(
+        edge.apply_auto_motion(&standard_rules()),
+        Err(SimError::NonFinite { .. })
+    ));
+}
+
+#[test]
+fn body_capture_previous_copies_position() {
+    let mut b = Body::new_at(r(1.0), r(2.0));
+    b.set_hspeed(r(3.0)).unwrap();
+    tick_body(&mut b);
+    assert_eq!((b.xprevious(), b.x()), (r(1.0), r(4.0)));
+    b.capture_previous();
+    assert_eq!((b.xprevious(), b.yprevious()), (r(4.0), r(2.0)));
 }
