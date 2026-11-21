@@ -181,6 +181,92 @@ fn plain(message: impl Into<String>) -> ScriptError {
     }
 }
 
+impl ScriptRuntime {
+    /// Runs the script function `fname` of script `sid` on `me`, with `this` bound to `me` and
+    /// `arg` as the one argument if there is one. `where_` names the call in an error.
+    fn invoke(
+        &self,
+        ctx: &mut Ctx,
+        sid: ScriptId,
+        me: InstId,
+        fname: &str,
+        arg: Option<Dynamic>,
+        where_: &str,
+    ) -> Result<Flow, ScriptError> {
+        let Some(inner) = &self.inner else {
+            return Err(plain("a scripted kind ran but the game has no script host"));
+        };
+        let Some(script) = sid.index().and_then(|n| inner.scripts.get(n)) else {
+            return Err(plain(format!("kind has unknown script {}", sid.0)));
+        };
+        let arity = usize::from(arg.is_some());
+        if !script.fns.contains(&(fname.to_owned(), arity)) {
+            return Err(plain(format!(
+                "script `{}` has no function `{fname}` taking {arity} argument{}",
+                script.name,
+                if arity == 1 { "" } else { "s" }
+            )));
+        }
+        let shared = &inner.iws.shared;
+        if shared.depth.get() >= MAX_DEPTH {
+            return Err(plain(
+                "scripts nest too deeply (spawn inside Create inside spawn ...)",
+            ));
+        }
+        if shared.depth.get() == 0 {
+            shared.budget.begin_call();
+        }
+        shared.depth.set(shared.depth.get() + 1);
+        shared.dll_mode.set(ctx.dll_mode);
+        let live = std::mem::replace(ctx.w, World::new(crate::def::RoomId(0), 0));
+        let prev = shared.world.borrow_mut().replace(live);
+        let result = if prev.is_some() {
+            Err(plain("script events re-entered with the world already lent"))
+        } else {
+            let mut this = Dynamic::from(Inst(me));
+            let opts = CallFnOptions::new().bind_this_ptr(&mut this).eval_ast(false);
+            let mut scope = Scope::new();
+            let args: Vec<Dynamic> = arg.into_iter().collect();
+            inner
+                .iws
+                .engine
+                .call_fn_with_options::<Dynamic>(opts, &mut scope, &script.ast, fname, args)
+                .map(|_| Flow::Continue)
+                .map_err(|e| {
+                    let mut d = script_error(&e);
+                    d.message = format!("{}: {} [{where_}]", script.name, d.message);
+                    d
+                })
+        };
+        let back = shared.world.borrow_mut().take();
+        shared.depth.set(shared.depth.get() - 1);
+        match back {
+            Some(w) => *ctx.w = w,
+            None => return Err(plain("the lent world was lost during a script event")),
+        }
+        result
+    }
+
+    /// Runs the kid slot function `fname` of script `sid` for the kid `me` (decision 0004):
+    /// `this` is bound to the kid and `other`, for a collision slot, is the one argument. The
+    /// caller (`kid::run_script_slot`) checks the room request. A missing function is an error
+    /// here even though the loader checks it, so a definition built by hand cannot skip it.
+    pub fn call_slot(
+        &self,
+        ctx: &mut Ctx,
+        sid: ScriptId,
+        me: InstId,
+        fname: &str,
+        other: Option<InstId>,
+    ) -> Result<Flow, SimError> {
+        let tick = ctx.w.tick;
+        let where_ = format!("kid slot `{fname}`, instance {}, tick {tick}", me.0);
+        let arg = other.map(|o| Dynamic::from(Inst(o)));
+        self.invoke(ctx, sid, me, fname, arg, &where_)
+            .map_err(SimError::from)
+    }
+}
+
 impl ScriptHost for ScriptRuntime {
     fn on_event(&self, ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, ScriptError> {
         let Some(inst) = ctx.w.get(me) else {
@@ -214,49 +300,10 @@ impl ScriptHost for ScriptRuntime {
         if !script.fns.contains(&(fname.to_string(), arity)) {
             return Ok(Flow::Continue);
         }
-        let shared = &inner.iws.shared;
-        if shared.depth.get() >= MAX_DEPTH {
-            return Err(plain(
-                "scripts nest too deeply (spawn inside Create inside spawn ...)",
-            ));
-        }
         let kind_name = ctx.def.kind(kind).map_or("?", |k| k.name.as_str()).to_owned();
         let tick = ctx.w.tick;
-        if shared.depth.get() == 0 {
-            shared.budget.begin_call();
-        }
-        shared.depth.set(shared.depth.get() + 1);
-        shared.dll_mode.set(ctx.dll_mode);
-        let live = std::mem::replace(ctx.w, World::new(crate::def::RoomId(0), 0));
-        let prev = shared.world.borrow_mut().replace(live);
-        let result = if prev.is_some() {
-            Err(plain("script events re-entered with the world already lent"))
-        } else {
-            let mut this = Dynamic::from(Inst(me));
-            let opts = CallFnOptions::new().bind_this_ptr(&mut this).eval_ast(false);
-            let mut scope = Scope::new();
-            let args: Vec<Dynamic> = arg.into_iter().collect();
-            inner
-                .iws
-                .engine
-                .call_fn_with_options::<Dynamic>(opts, &mut scope, &script.ast, fname.as_ref(), args)
-                .map(|_| Flow::Continue)
-                .map_err(|e| {
-                    let mut d = script_error(&e);
-                    d.message = format!(
-                        "{}: {} [kind {kind_name}, instance {}, {ev:?}, tick {tick}]",
-                        script.name, d.message, me.0
-                    );
-                    d
-                })
-        };
-        let back = shared.world.borrow_mut().take();
-        shared.depth.set(shared.depth.get() - 1);
-        match back {
-            Some(w) => *ctx.w = w,
-            None => return Err(plain("the lent world was lost during a script event")),
-        }
-        result
+        let where_ = format!("kind {kind_name}, instance {}, {ev:?}, tick {tick}", me.0);
+        self.invoke(ctx, sid, me, fname.as_ref(), arg, &where_)
     }
 }
 
@@ -450,6 +497,7 @@ impl Iws {
         let mut docs = super::docs::Docs::default();
         super::api::register_numeric(&mut engine, &shared, &mut docs);
         super::inst::register_instance_api(&mut engine, &shared, &mut docs);
+        super::inst::register_kid_api(&mut engine, &shared, &mut docs);
         super::collide::register_collision_api(&mut engine, &shared, &mut docs);
 
         {

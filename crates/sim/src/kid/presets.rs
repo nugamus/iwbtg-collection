@@ -559,6 +559,10 @@ pub fn apply(p: &mut PhysicsProfileDraft) -> PhysicsProfile {
     if let Some(s) = d.misc {
         out.misc = s.over(out.misc);
     }
+    if let Some(s) = d.script {
+        // The vars are profile content; `file` is a name, and the loader resolves it to an id.
+        out.script.vars = s.vars.unwrap_or_default();
+    }
     // `d.sprites` holds names; the loader resolves them to ids.
     out
 }

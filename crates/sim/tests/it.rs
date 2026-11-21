@@ -301,6 +301,9 @@ mod kid_moving_block;
 #[path = "kid_restart.rs"]
 mod kid_restart;
 
+#[path = "kid_script_slots.rs"]
+mod kid_script_slots;
+
 #[path = "kid_slope.rs"]
 mod kid_slope;
 

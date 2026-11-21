@@ -12,7 +12,7 @@
 use std::collections::BTreeMap;
 
 use iwbtg_sim::def::physics::WalkRead;
-use iwbtg_sim::def::physics::{KidSoundNames, KidSpriteNames, PhysicsProfileDraft};
+use iwbtg_sim::def::physics::{KidScriptDraft, KidSoundNames, KidSpriteNames, PhysicsProfileDraft};
 use iwbtg_sim::def::{KidFamily, PhysicsProfile};
 use iwbtg_sim::kid::presets;
 use toml::Spanned;
@@ -35,6 +35,8 @@ pub struct PhysicsLoad {
     pub sprites: KidSpriteNames,
     /// `[sounds]` as written.
     pub sounds: KidSoundNames,
+    /// `[script]` as written: `file` and `vars` (decision 0004). `None` for a legacy draft.
+    pub script: Option<KidScriptDraft>,
     /// A legacy draft: it names no sprites, so the loader looks for `player_idle`,
     /// `player_running`, `player_jump`, `player_fall` and `player_sliding` (CR8).
     pub legacy: bool,
@@ -272,6 +274,8 @@ fn differing_fields(actual: &PhysicsProfile, base: &PhysicsProfile) -> Vec<Strin
         base.misc,
         [fade_in, fade_step, idle_needs_block]
     );
+    // A profile with slots or vars differs from the pack preset, which has neither.
+    differ_section!(out, "script", actual.script, base.script, [file, vars]);
     out
 }
 
@@ -306,11 +310,14 @@ pub fn load(
     };
     let sprites = draft.sprites.clone().unwrap_or_default();
     let sounds = draft.sounds.clone().unwrap_or_default();
+    // The loader resolves the script file name to an id after `apply`; keep the name here.
+    let script = draft.script.clone();
     let profile = presets::apply(&mut draft);
     Some(PhysicsLoad {
         profile,
         sprites,
         sounds,
+        script,
         legacy: false,
     })
 }
@@ -377,6 +384,7 @@ fn legacy_or_error(
         profile,
         sprites: KidSpriteNames::default(),
         sounds: KidSoundNames::default(),
+        script: None,
         legacy: true,
     })
 }

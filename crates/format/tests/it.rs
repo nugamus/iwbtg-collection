@@ -10,6 +10,8 @@
 mod fmt_files;
 #[path = "iwbz.rs"]
 mod iwbz;
+#[path = "kid_script_slots.rs"]
+mod kid_script_slots;
 #[path = "load_engine_packs.rs"]
 mod load_engine_packs;
 #[path = "load_game.rs"]
