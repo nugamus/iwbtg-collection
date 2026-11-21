@@ -21,6 +21,106 @@
       ],
       "description": "A number, or { bits = \"<16 hex digits of an IEEE double>\" } for a constant that must match bit for bit."
     },
+    "RawCollider": {
+      "additionalProperties": false,
+      "description": "The `[collider]` table: a canonical collider baked from the art.\n\nIt has either the shared keys (`shape` with `bbox`/`bits`) or one `frames` entry per frame,\nnever both. `alpha_tolerance` is required so the bake cannot silently use a different rule\nfrom the sidecar's.",
+      "properties": {
+        "alpha_tolerance": {
+          "$ref": "#/$defs/Number"
+        },
+        "bbox": {
+          "default": null,
+          "items": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "bits": {
+          "default": null,
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "frames": {
+          "items": {
+            "$ref": "#/$defs/RawColliderFrame"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "shape": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RawColliderShape"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "alpha_tolerance"
+      ],
+      "type": "object"
+    },
+    "RawColliderFrame": {
+      "additionalProperties": false,
+      "description": "One frame of a per-frame `[collider]` table.",
+      "properties": {
+        "bbox": {
+          "default": null,
+          "items": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "bits": {
+          "default": null,
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "shape": {
+          "$ref": "#/$defs/RawColliderShape"
+        }
+      },
+      "required": [
+        "shape"
+      ],
+      "type": "object"
+    },
+    "RawColliderShape": {
+      "description": "The baked shape: `none` (nothing collides), `rect` (the whole box) or `bits` (per pixel).",
+      "enum": [
+        "none",
+        "rect",
+        "bits"
+      ],
+      "type": "string"
+    },
     "RawCollision": {
       "enum": [
         "precise",
@@ -56,6 +156,16 @@
       "type": [
         "array",
         "null"
+      ]
+    },
+    "collider": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RawCollider"
+        },
+        {
+          "type": "null"
+        }
       ]
     },
     "collision": {

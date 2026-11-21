@@ -24,6 +24,23 @@ Part of [format v0](v0.md).
 
   Collision masks are built from PNG alpha at load, so masks never drift from the art.
 
+  A sidecar may carry an optional `[collider]` table: the canonical collider baked from the same alpha data. It is a typed form — `none`, `rect` (the whole box) or `bits` (one hex row per pixel row, the most significant bit first, `ceil(width / 4)` digits, and padding bits clear) — so a degenerate mask is an explicit `none`, never an inverted rectangle. The table declares its own required `alpha_tolerance`, which must equal the sidecar's, and holds either the shared `shape`/`bbox`/`bits` keys or one `frames` entry per frame when `separate_masks` builds separate masks. The loader re-derives the mask from the PNG and rejects a collider that differs, so a stale or hand-edited bake cannot change geometry; a package without the table loads exactly as before.
+
+  ```toml
+  #:schema ../../../client/docs/format/schema/v0/sprite.schema.json
+  frames = 2
+  frame_size = [2, 1]
+  origin = [0, 0]
+  separate_masks = true
+
+  [collider]
+  alpha_tolerance = 0
+  frames = [
+    { shape = "bits", bbox = [0, 0, 0, 0], bits = ["8"] },
+    { shape = "none" },
+  ]
+  ```
+
   A sprite with the id `cherry` (at least two 21x24 frames) is also the client's pause menu selector, the delicious fruit (docs/product.md, Pause); without one the client draws its own.
 - **Backgrounds and tilesets:** `backgrounds/<id>.png`, with a sidecar for tile size and separation when used as a tileset (see Rooms).
 - **Audio:** Ogg Vorbis. Sound effects in `sounds/`, music in `music/`. Loop points and preview start in `music/<id>.toml`. FMOD and SuperSound calls in originals become plain sound and music ids. Audio never affects the sim.

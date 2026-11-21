@@ -724,6 +724,37 @@ fn migrate_legacy() {
 mod tests {
     use super::*;
 
+    /// #1155: the sim, the trace `.inputs` compiler and the client device map read one action
+    /// table. The client differs only in the *mapping* (Escape/Start open the pause menu, #758),
+    /// never in the actions themselves. Client-only inputs are not actions.
+    #[test]
+    fn the_client_and_the_sim_share_one_action_table() {
+        use iwbtg_sim::input::KeyMap;
+
+        let sim_map = KeyMap::iwbtg();
+        let client = Bindings::default();
+        for (key, action) in IWBTG_DEFAULT_KEYS {
+            assert_eq!(Action::from_name(action.name()), Some(action));
+            assert!(Action::ALL.contains(&action), "{action:?} is in Action::ALL");
+            if key == vk::ESCAPE {
+                // The only device-map divergence: Escape is the client pause key (#758).
+                assert_eq!(sim_map.action(key), Some(Action::Menu));
+                assert_eq!(client.key_action(key), None);
+            } else {
+                assert_eq!(sim_map.action(key), Some(action));
+                assert_eq!(client.key_action(key), Some(action), "{key}");
+            }
+        }
+        for (input, action) in DEFAULT_PAD {
+            assert!(Action::ALL.contains(&action));
+            assert_eq!(client.pad_action(input), Some(action));
+        }
+        // The client's own keys never name an action, so they can never enter a frame.
+        for key in ClientKey::ALL {
+            assert_eq!(Action::from_name(key.name()), None, "{}", key.name());
+        }
+    }
+
     #[test]
     fn defaults_are_the_fangame_standard() {
         let b = Bindings::default();

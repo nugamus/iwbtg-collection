@@ -1,8 +1,11 @@
-//! Restart and reset models (docs/architecture/sim/rooms.md, R16, R17, R26, R27).
+//! The retry and reset lifecycle events (docs/architecture/sim/rooms.md, R16, R17, R26, R27;
+//! decision 0005, #1149).
 //!
-//! The engines' init rooms and world objects are not ported as GM code. The `world` built-in
-//! (WP6a) calls these at the world's rank, in the phase `RestartModel::trigger` names; this
-//! module does not look at the trigger. WP0 declared; WP4b owns.
+//! The policies are [`crate::def::game::Lifecycle`] values. The engines' init rooms and world
+//! objects are not ported as GM code: the retry's delay is the engine-owned [`InitPhase`]. The
+//! `world` built-in (WP6a) calls these at the world's rank, in the phase
+//! [`crate::def::game::RetryPolicy::trigger`] names; this module does not look at the trigger.
+//! WP0 declared; WP4b owns.
 //!
 //! Spec: CLONE_SPEC rooms, "game_restart" and "Retry timeline"; kid/A3.md showdown "Restart".
 //!
@@ -15,6 +18,7 @@
 
 use crate::def::{ClassMask, DeathOnRestart, EngineKind, ResetKind, RestartKind, RoomId, RoomRole};
 use crate::error::SimError;
+use crate::num::Real;
 use crate::room::RoomRequest;
 use crate::run_globals::{BootLoad, RunGlobals};
 use crate::save::{self, SaveSlot};
@@ -28,10 +32,11 @@ use crate::world::{Ctx, Flow, InstId};
 ///   `death_on_restart` says so; the kid, if one lives, is moved to the saved spot (on the R tick
 ///   the old kid already stands there, Confirmed (recorder) rows 42-44), else one is created
 ///   there; then `game_restart` is requested (it wins over any earlier request, R13) and the
-///   boot marker is set. The game then sits in the boot room for `boot_ticks` ticks;
-///   [`boot_step`] on the last one creates the kid at the saved spot and requests the saved
-///   room. With no save it is a plain `game_restart`. `boot_ticks == 0` is `Unsupported` (the
-///   spec does not say whether the boot tick exists at all, R17).
+///   engine-owned [`InitPhase`] starts with the retry policy's delay. The game then sits in the
+///   Boot-role room (the gm8 profile's shape) for `delay_ticks()` ticks; [`boot_step`] on the
+///   last one creates the kid at the saved spot and requests the saved room. With no save it is
+///   a plain `game_restart`. A delay of 0 is `Unsupported` (the spec does not say whether the
+///   init tick exists at all, R17).
 /// - `RoomGotoSaved` (kaenbyou, eat-the-lemon, go-the-spook-house): destroy the kid and the bow,
 ///   create the kid at the saved spot, request the saved room (skipped in a Title or Menu role,
 ///   spook's saveExe).
@@ -42,7 +47,8 @@ use crate::world::{Ctx, Flow, InstId};
 ///
 /// `Ok(Flow::AbortTick)` when a room change was requested (R8), else `Continue`.
 pub fn run_restart(ctx: &mut Ctx, world: InstId) -> Result<Flow, SimError> {
-    let model = ctx.def.restart.clone();
+    let lifecycle = ctx.def.lifecycle();
+    let model = lifecycle.retry.clone();
     if excluded(ctx, model.excluded_roles)? || ctx.def.room(ctx.w.room).is_some_and(|r| r.no_restart) {
         return Ok(Flow::Continue);
     }
@@ -74,15 +80,13 @@ pub fn run_restart(ctx: &mut Ctx, world: InstId) -> Result<Flow, SimError> {
                 ctx.request_room(RoomRequest::GameRestart);
                 return Ok(Flow::AbortTick);
             };
-            if model.boot_ticks == 0 {
+            if model.delay_ticks() == 0 {
                 return Err(SimError::unsupported(
-                    "restart with boot_ticks = 0: whether the boot tick exists is UNKNOWN (R17)",
+                    "restart with retry_delay_ticks = 0: whether the init tick exists is UNKNOWN (R17)",
                 ));
             }
-            place_or_create_kid(ctx, &slot)?;
-            ctx.w.engine.run.boot_load = Some(BootLoad {
-                ticks_left: model.boot_ticks,
-            });
+            place_or_create_kid(ctx, &slot, model.flipped_load_dy)?;
+            InitPhase::begin(model.delay_ticks()).store(ctx);
             ctx.request_room(RoomRequest::GameRestart);
         }
         RestartKind::RoomGotoSaved | RestartKind::ShowdownLoad | RestartKind::RecreateInPlace => {
@@ -111,15 +115,16 @@ pub fn run_restart(ctx: &mut Ctx, world: InstId) -> Result<Flow, SimError> {
     Ok(Flow::AbortTick)
 }
 
-/// Runs `GameDef::reset` (F2), called by the world instance `world`.
+/// Runs the lifecycle's reset policy (F2), called by the world instance `world`.
 ///
 /// `DeleteTempAndRestart` (groups A, B, C): delete the temp marker and request `game_restart`
 /// (the save is kept; the globals are cleared by the restart). `GameReset` (kaenbyou,
-/// eat-the-lemon gameReset): reset the run globals and go to the boot room (the first room with
-/// the `Boot` role, else room 0). OPEN for `GameReset`: which other globals the original
+/// eat-the-lemon gameReset): reset the run globals and go to the Boot-role room
+/// (`crate::room::restart_room`). OPEN for `GameReset`: which other globals the original
 /// resets (the script-level globals stay).
 pub fn run_reset(ctx: &mut Ctx, world: InstId) -> Result<Flow, SimError> {
-    let model = ctx.def.reset.clone();
+    let lifecycle = ctx.def.lifecycle();
+    let model = lifecycle.reset.clone();
     if excluded(ctx, model.excluded_roles)? {
         return Ok(Flow::Continue);
     }
@@ -129,33 +134,88 @@ pub fn run_reset(ctx: &mut Ctx, world: InstId) -> Result<Flow, SimError> {
         ResetKind::DeleteTempAndRestart => ctx.request_room(RoomRequest::GameRestart),
         ResetKind::GameReset => {
             ctx.w.engine.run = RunGlobals::default();
-            let boot = ctx
-                .def
-                .rooms
-                .iter()
-                .position(|r| r.role == RoomRole::Boot)
-                .and_then(|i| u32::try_from(i).ok())
-                .unwrap_or(0);
-            ctx.request_room(RoomRequest::Goto(RoomId(boot)));
+            ctx.request_room(RoomRequest::Goto(crate::room::restart_room(ctx.def)));
         }
     }
     Ok(Flow::AbortTick)
 }
 
-/// One boot-room tick of a retry, called by the `world` built-in's Step (the init object's Step
-/// in the original, which checks for the temp file there, not in its Create). Does nothing
-/// unless a `GameRestartViaBoot` retry is waiting. The last boot tick loads the save (kid at
-/// the saved spot, no motion) and requests the saved room. Returns `AbortTick` when it did.
+/// The engine-owned init phase of a retry (decision 0005; #1149).
+///
+/// The retry's delay is a lifecycle state, not a package room: [`run_restart`] enters the phase
+/// on the R tick, [`boot_step`] counts it down one tick at a time, and the tick that reaches
+/// zero loads the checkpoint and returns control. The original's temp file is why the phase
+/// survives `game_restart`; the sim has no file, so the phase is the engine's stand-in.
+///
+/// The gm8 compatibility profile still enters the package's Boot room while the phase runs
+/// ([`crate::room`] enters the Boot-role room on `game_restart`), because an old replay's state
+/// hash observes that room. The phase is not tied to that room: `standard` runs the same phase
+/// without a package-authored room once the stable room key lands (#1153).
+///
+/// The original's temp file also holds the slot number; the sim's slot is
+/// [`crate::run_globals::RunGlobals::slot`], which `game_restart` resets. Carrying the slot in
+/// the phase needs the run-globals field and its hash entry, which the identity-save seat owns
+/// (follow-up of #1149).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum InitPhase {
+    /// No retry is waiting.
+    Idle,
+    /// `ticks_left` init ticks remain, counting the tick that loads.
+    Waiting {
+        /// Init ticks left.
+        ticks_left: u8,
+    },
+}
+
+impl InitPhase {
+    /// The phase a retry with `ticks` leaves behind.
+    pub fn begin(ticks: u8) -> InitPhase {
+        InitPhase::Waiting { ticks_left: ticks }
+    }
+
+    /// The phase the world is in.
+    pub fn current(ctx: &Ctx) -> InitPhase {
+        ctx.w
+            .engine
+            .run
+            .boot_load
+            .map_or(InitPhase::Idle, |boot| InitPhase::Waiting {
+                ticks_left: boot.ticks_left,
+            })
+    }
+
+    /// Stores the phase in the world (the hash observes `RunGlobals::boot_load`).
+    pub fn store(self, ctx: &mut Ctx) {
+        ctx.w.engine.run.boot_load = match self {
+            InitPhase::Idle => None,
+            InitPhase::Waiting { ticks_left } => Some(BootLoad { ticks_left }),
+        };
+    }
+
+    /// Counts one tick: the next phase, and whether this tick is the one that loads. The phase
+    /// becomes [`InitPhase::Idle`] on the loading tick, so a retry loads exactly once.
+    pub fn advance(self) -> (InitPhase, bool) {
+        match self {
+            InitPhase::Idle => (InitPhase::Idle, false),
+            InitPhase::Waiting { ticks_left } => match ticks_left.saturating_sub(1) {
+                0 => (InitPhase::Idle, true),
+                left => (InitPhase::Waiting { ticks_left: left }, false),
+            },
+        }
+    }
+}
+
+/// One tick of the engine-owned init phase, called by the `world` built-in's Step (the init
+/// object's Step in the original, which checks for the temp file there, not in its Create).
+/// Does nothing unless a `GameRestartViaBoot` retry is waiting. The last init tick loads the
+/// checkpoint (kid at the saved spot, no motion) and requests the saved room. Returns
+/// `AbortTick` when it did.
 pub fn boot_step(ctx: &mut Ctx) -> Result<Flow, SimError> {
-    let Some(mut boot) = ctx.w.engine.run.boot_load else {
-        return Ok(Flow::Continue);
-    };
-    boot.ticks_left = boot.ticks_left.saturating_sub(1);
-    if boot.ticks_left > 0 {
-        ctx.w.engine.run.boot_load = Some(boot);
+    let (next, load) = InitPhase::current(ctx).advance();
+    next.store(ctx);
+    if !load {
         return Ok(Flow::Continue);
     }
-    ctx.w.engine.run.boot_load = None;
     let Some(slot) = ctx.w.save.clone() else {
         return Ok(Flow::Continue);
     };
@@ -195,12 +255,12 @@ fn room_role(ctx: &Ctx, room: RoomId) -> Option<RoomRole> {
 
 /// On the R tick the live kid stands at the saved spot already; with no kid one is created
 /// there (loadGame creates one at (0, 0) and saveExe moves it).
-fn place_or_create_kid(ctx: &mut Ctx, slot: &SaveSlot) -> Result<(), SimError> {
+fn place_or_create_kid(ctx: &mut Ctx, slot: &SaveSlot, flipped_load_dy: Real) -> Result<(), SimError> {
     let rules = ctx.rules;
     match ctx.w.kid(&rules.tick) {
         Some(kid) => {
             let dy = if save::flip_by_kind(ctx, slot) {
-                ctx.def.restart.flipped_load_dy
+                flipped_load_dy
             } else {
                 crate::num::Real::ZERO
             };
