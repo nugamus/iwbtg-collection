@@ -13,7 +13,7 @@ use iwbtg_sim::kid::{self, presets};
 use iwbtg_sim::room::StartPoint;
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::stripped::PlayMode;
-use iwbtg_sim::world::KindState;
+use iwbtg_sim::world::{KindState, SimStatus};
 use iwbtg_sim::{Sim, SimOptions};
 
 fn bits(actions: &[Action]) -> u32 {
@@ -35,9 +35,9 @@ fn kids(sim: &Sim) -> usize {
         .count()
 }
 
-/// Room13's two placed kids, with the room-file ids the trace records (104180 upper, 104190
-/// lower). The first kid's first-play save is the checkpoint a retry returns to.
-fn sim() -> Sim {
+/// A room with `placed` kids (room-file id and position). The first kid's first-play save is the
+/// checkpoint a retry returns to.
+fn sim_with_placed(placed: &[(u32, f64, f64)]) -> Sim {
     let mut b = GameDefBuilder::new("multikid-restart");
     let mut kid = KindDef::new("kid", Builtin::Kid);
     kid.classes = ClassMask::KID;
@@ -49,8 +49,9 @@ fn sim() -> Sim {
     b.boot(world_id);
     let play = b.room(RoomDef::new("room13", 800, 608));
     b.start_room(play);
-    b.place(play, kid_id, 48.0, 278.0).unwrap().gm_id = Some(104_180);
-    b.place(play, kid_id, 48.0, 566.0).unwrap().gm_id = Some(104_190);
+    for &(id, x, y) in placed {
+        b.place(play, kid_id, x, y).unwrap().gm_id = Some(id);
+    }
     let physics = presets::defaults(KidFamily::B);
     b.physics(physics.clone());
     let mut def = b.build().expect("game builds");
@@ -74,6 +75,12 @@ fn sim() -> Sim {
         },
     )
     .expect("sim starts")
+}
+
+/// Room13's two placed kids, with the room-file ids the trace records (104180 upper, 104190
+/// lower).
+fn sim() -> Sim {
+    sim_with_placed(&[(104_180, 48.0, 278.0), (104_190, 48.0, 566.0)])
 }
 
 #[test]
@@ -105,4 +112,21 @@ fn r_while_the_placed_kids_are_alive_leaves_one_kid() {
     sim.step(frame(&[], &[Action::Restart], &[]));
     sim.step(frame(&[], &[], &[Action::Restart]));
     assert_eq!(kids(&sim), 3, "placed + 1 after a retry with no placed kid alive");
+}
+
+/// More destroyed instances than the request can carry is a checked halt, not a truncation that
+/// would leave some placed kids behind.
+#[test]
+fn more_than_the_removal_limit_halts_instead_of_leaving_kids_behind() {
+    let placed: Vec<(u32, f64, f64)> = (0..17)
+        .map(|i| (104_180 + u32::try_from(i).unwrap(), 48.0, 278.0))
+        .collect();
+    let mut sim = sim_with_placed(&placed);
+    sim.step(InputFrame::default());
+    assert_eq!(kids(&sim), 17);
+    sim.step(frame(&[], &[Action::Restart], &[]));
+    let SimStatus::Halted(e) = &sim.world().status else {
+        panic!("expected a halt, got {:?}", sim.world().status);
+    };
+    assert!(e.to_string().contains("at most 16"), "{e}");
 }

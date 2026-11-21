@@ -96,7 +96,7 @@ pub fn run_restart(ctx: &mut Ctx, world: InstId) -> Result<Flow, SimError> {
                 let room = ctx.w.room;
                 ctx.request_room(RoomRequest::GotoAfterRemovals {
                     room,
-                    removed: RemovedInstances::new(&removed),
+                    removed: RemovedInstances::new(&removed)?,
                 });
                 return Ok(Flow::AbortTick);
             };
@@ -116,7 +116,7 @@ pub fn run_restart(ctx: &mut Ctx, world: InstId) -> Result<Flow, SimError> {
             if !skip {
                 ctx.request_room(RoomRequest::GotoAfterRemovals {
                     room: slot.room,
-                    removed: RemovedInstances::new(&removed),
+                    removed: RemovedInstances::new(&removed)?,
                 });
             }
         }

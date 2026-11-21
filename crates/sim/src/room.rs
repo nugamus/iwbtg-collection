@@ -78,11 +78,15 @@ use crate::view::{View, ViewPort};
 use crate::world::{Ctx, EngineGlobals, Flow, InstId, Instance, SimStatus, SpawnInit, Value, World};
 
 /// How many destroyed instance ids a [`RoomRequest::GotoAfterRemovals`] carries (#670).
+///
+/// 16 keeps the request a small `Copy` value with no allocation. It is not a claim about the
+/// content: [`RemovedInstances::new`] refuses more, and the retry halts with an explicit
+/// `Unsupported` error rather than truncating (which would re-create the dropped placed
+/// instances and leave extra kids behind).
 pub const MAX_REMOVED: usize = 16;
 
 /// The instance ids destroyed earlier in a tick, for the room build's pending-removal check
-/// (#670). Fixed-size so [`RoomRequest`] stays `Copy`; 16 is above every room's placed-kid
-/// count in the 20 games.
+/// (#670). Fixed-size so [`RoomRequest`] stays `Copy`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct RemovedInstances {
     ids: [InstId; MAX_REMOVED],
@@ -99,13 +103,22 @@ impl Default for RemovedInstances {
 }
 
 impl RemovedInstances {
-    /// The ids, keeping the first [`MAX_REMOVED`].
-    pub fn new(ids: &[InstId]) -> RemovedInstances {
+    /// The ids. More than [`MAX_REMOVED`] is a checked error, not a silent truncation: the room
+    /// build would otherwise re-create the dropped placed instances and leave extra kids
+    /// behind (#670).
+    pub fn new(ids: &[InstId]) -> Result<RemovedInstances, SimError> {
+        if ids.len() > MAX_REMOVED {
+            return Err(SimError::unsupported(format!(
+                "a retry destroyed {} instances in one tick; at most {MAX_REMOVED} can be kept \
+                 as pending removal (#670)",
+                ids.len()
+            )));
+        }
         let mut out = RemovedInstances::default();
-        let n = ids.len().min(MAX_REMOVED);
+        let n = ids.len();
         out.ids[..n].copy_from_slice(&ids[..n]);
         out.len = u8::try_from(n).unwrap_or(u8::try_from(MAX_REMOVED).unwrap_or(u8::MAX));
-        out
+        Ok(out)
     }
 
     /// Whether `id` was destroyed earlier this tick.
