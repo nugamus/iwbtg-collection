@@ -398,6 +398,83 @@ fn gm_comparisons_exact_mode() {
     assert!(!gm_lt(nan, r(0.0), x) && !gm_ge(nan, r(0.0), x));
 }
 
+// ---- Tolerance (the standard ruleset's one mechanism) ----
+
+/// The declared tolerance uses the edge rule the recorder proves: a value inside the bound is
+/// equal, and a difference of exactly the bound is not (the same table as `gm_eq`..`gm_ge` under
+/// `CompareMode::Epsilon`, without a mode).
+#[test]
+fn tolerance_bound_matches_the_recorder_edge() {
+    let t = Tolerance::new(r(EPSILON));
+    let zero = r(0.0);
+    for v in [-1.4e-14, -5e-14, -9e-14] {
+        assert!(t.eq(r(v), zero), "|{v}| is inside the bound");
+        assert!(!t.ne(r(v), zero), "|{v}| is inside the bound");
+        assert!(!t.lt(r(v), zero) && t.le(r(v), zero));
+        assert!(!t.gt(r(v), zero) && t.ge(r(v), zero));
+    }
+    // d = -bound: equality, `<=` and `>=` all fail; `<` and `!=` hold.
+    let neg = zero - r(EPSILON);
+    assert!(!t.eq(neg, zero) && t.ne(neg, zero));
+    assert!(t.lt(neg, zero) && t.le(neg, zero));
+    assert!(!t.gt(neg, zero) && !t.ge(neg, zero));
+    // d = +bound: the mirror.
+    let pos = zero + r(EPSILON);
+    assert!(!t.eq(pos, zero) && t.ne(pos, zero));
+    assert!(!t.lt(pos, zero) && !t.le(pos, zero));
+    assert!(t.gt(pos, zero) && t.ge(pos, zero));
+    // A value just inside the bound agrees.
+    let inside = r(0.99 * EPSILON);
+    assert!(t.eq(inside, zero) && !t.ne(inside, zero));
+    assert!(!t.lt(inside, zero) && t.le(inside, zero));
+    assert!(!t.gt(inside, zero) && t.ge(inside, zero));
+}
+
+#[test]
+fn tolerance_ordering_helpers() {
+    let t = Tolerance::new(r(0.25));
+    assert!(t.lt(r(0.0), r(0.5)));
+    assert!(!t.lt(r(0.3), r(0.5)), "inside the bound is not below");
+    assert!(t.le(r(0.3), r(0.5)));
+    assert!(!t.le(r(0.75), r(0.5)), "exactly the bound is not `<=`");
+    assert!(t.gt(r(0.75), r(0.5)), "exactly the bound is `>`");
+    assert!(!t.ge(r(0.25), r(0.5)), "exactly -bound is not `>=`");
+    assert!(t.ge(r(0.26), r(0.5)));
+}
+
+/// As in `gm8`, a NaN operand makes every check false, `ne` included.
+#[test]
+fn tolerance_checks_are_false_for_nan() {
+    type Check = fn(Tolerance, Real, Real) -> bool;
+    let t = Tolerance::new(r(1.0));
+    let nan = r(f64::NAN);
+    for (name, check) in [
+        ("eq", Tolerance::eq as Check),
+        ("ne", Tolerance::ne as Check),
+        ("lt", Tolerance::lt as Check),
+        ("le", Tolerance::le as Check),
+        ("gt", Tolerance::gt as Check),
+        ("ge", Tolerance::ge as Check),
+    ] {
+        assert!(!check(t, nan, r(0.0)), "{name}(NaN, 0)");
+        assert!(!check(t, r(0.0), nan), "{name}(0, NaN)");
+        assert!(!check(t, nan, nan), "{name}(NaN, NaN)");
+    }
+}
+
+#[test]
+fn tolerance_usable_bound() {
+    assert!(Tolerance::new(r(1.0)).is_usable());
+    assert!(
+        !Tolerance::new(r(0.0)).is_usable(),
+        "a zero bound accepts nothing"
+    );
+    assert!(!Tolerance::new(r(-1.0)).is_usable());
+    assert!(!Tolerance::new(r(f64::NAN)).is_usable());
+    assert!(!Tolerance::new(r(f64::INFINITY)).is_usable());
+    assert_eq!(Tolerance::new(r(0.125)).bound(), r(0.125));
+}
+
 #[test]
 fn gm_bool_threshold() {
     let d = &d();

@@ -30,7 +30,6 @@ use crate::input::Action;
 use crate::num::{Real, to_int_trunc};
 use crate::room::RoomRequest;
 use crate::rules::TickRules;
-use crate::rules::collide::PairOrder;
 use crate::rules::tick::{JoinPhase, PrevCapture, RoomRequestRule};
 use crate::tick::Hooks;
 use crate::timeline;
@@ -698,9 +697,9 @@ pub fn collision_phase(ctx: &mut Ctx) -> Flow {
 
 /// [`collision_phase`] with explicit hooks.
 ///
-/// Under the default `CollideRules::pair_order`, `LowerRankFirst` (R12, Confirmed (recorder),
-/// OpenGMK only: CLONE_SPEC collision "Order of collision events: pairs of instances, lower
-/// object first", traces/rely-the-needle-4-2/t-ord-2.md), the phase walks pairs of instances:
+/// R12 (Confirmed (recorder), OpenGMK only: CLONE_SPEC collision "Order of collision events:
+/// pairs of instances, lower object first", traces/rely-the-needle-4-2/t-ord-2.md): the phase
+/// walks pairs of instances:
 /// 1. the outer instance `a` goes by its own rank, then id (new instances join per R9);
 /// 2. when `a`'s turn comes, the inner instance `b` is every other alive, active instance whose
 ///    rank is greater than or equal to `a`'s, by rank then id (lower ranks are not met again);
@@ -708,11 +707,8 @@ pub fn collision_phase(ctx: &mut Ctx) -> Flow {
 ///    for `a`, right there; two instances of one rank meet twice (`a1`-`a2` in `a1`'s turn,
 ///    `a2`-`a1` in `a2`'s), both directions each time.
 ///
-/// The alternatives `OtherRankThenId` and `HandlerListOrder` go instance by instance in
-/// dispatch order, each instance with its own pairs, sorted by the other's rank and id, or by
-/// handler list; under [`Hooks::broadphase`] their candidates also come from the grid (#944).
-///
-/// Either way, one direction of a pair (`me` with handlers, `other`):
+/// This is the one production order (decision 0005). One direction of a pair (`me` with
+/// handlers, `other`):
 /// - runs one handler: the matching handler class most specific for `other` (lowest
 ///   [`ClassMask::generality`], then first in handler order), the nearest-ancestor rule (C8,
 ///   R12b; Confirmed (recorder): a platform runs only the kid's platform event, and his block or
@@ -722,17 +718,9 @@ pub fn collision_phase(ctx: &mut Ctx) -> Flow {
 /// - with a solid `other`, is re-checked for overlap first (C7, Confirmed (recorder),
 ///   traces/showdown/t-mot-07-a.csv) and runs inside `collide::solid_resolve` (WP3); with a
 ///   non-solid `other`, is re-checked under `CollideRules::recheck_nonsolid` (C7b) and runs at
-///   the current position. The first direction of a `LowerRankFirst` pair follows its overlap
-///   test directly, so it is not tested twice.
+///   the current position. The first direction of a pair follows its overlap test directly, so
+///   it is not tested twice.
 pub fn collision_phase_with(ctx: &mut Ctx, hooks: &Hooks) -> Flow {
-    if ctx.rules.collide.pair_order != PairOrder::LowerRankFirst {
-        return walk(
-            ctx,
-            Order::Dispatch,
-            &|c: &Ctx, i: &Instance| !event_set(c.def, i.kind).collisions.is_empty(),
-            |c, a, ctl| collide_one(c, hooks, a, ctl),
-        );
-    }
     // Instances that neither handle a collision nor match anyone's handler take part in no
     // event, so the walk leaves them out.
     let targeted = ctx
@@ -773,8 +761,8 @@ pub fn pair_handler(handlers: &[ClassMask], classes: ClassMask) -> Option<(usize
         .map(|(handler, with)| (handler, *with))
 }
 
-/// `a`'s turn as the outer instance under `PairOrder::LowerRankFirst` (see
-/// [`collision_phase_with`]). The inner list is taken when the turn starts.
+/// `a`'s turn as the outer instance (see [`collision_phase_with`]). The inner list is taken when
+/// the turn starts.
 fn meet_all(ctx: &mut Ctx, hooks: &Hooks, a: InstId, ctl: &mut Ctl) -> Option<Flow> {
     let def = ctx.def;
     let me = ctx.w.get(a)?;
@@ -951,93 +939,6 @@ fn run_pair(
         Ok(flow) => ctl.after(ctx, flow, before),
         Err(e) => stop(ctx, e),
     }
-}
-
-/// One collision pair: the other instance, the handler class and its index in the handler list.
-struct Pair {
-    other: InstId,
-    with: ClassMask,
-    handler: usize,
-}
-
-/// Collision events of one instance `a` under `OtherRankThenId` or `HandlerListOrder` (see
-/// [`collision_phase_with`]). The candidates are gathered through the broadphase grid (#944)
-/// under the engine's overlap test, like `LowerRankFirst`, else scanned: the pair list is fixed
-/// before any handler of this turn runs (the overlap tests and the sort read the turn-start
-/// state), so one gather at turn start gives the same pairs in the same order as the scan.
-fn collide_one(ctx: &mut Ctx, hooks: &Hooks, a: InstId, ctl: &mut Ctl) -> Option<Flow> {
-    let me = ctx.w.get(a)?;
-    let handlers = event_set(ctx.def, me.kind).collisions.clone();
-    let any = handlers.iter().fold(ClassMask::NONE, |m, c| m | *c);
-    // `near` returns the grid's cells under `a`'s box plus the moved and overflow sets: a
-    // superset of the members whose boxes can touch it, and every instance whose overlap test
-    // with it could fail. The grid is flushed first so it holds the turn-start state.
-    let candidates: Vec<InstId> = if hooks.broadphase {
-        if let Err(e) = ctx.w.ensure_grid(ctx.def, &ctx.rules.collide) {
-            return stop(ctx, e);
-        }
-        pairs::near(ctx, a)
-    } else {
-        ctx.w.instances().iter().map(|i| i.id).collect()
-    };
-    let mut pairs = Vec::new();
-    for b in candidates {
-        let Some(classes) = ctx.w.get(b).filter(|i| i.alive && i.active).map(|i| i.classes) else {
-            continue;
-        };
-        if b == a || !classes.intersects(any) {
-            continue;
-        }
-        match (hooks.overlaps)(ctx, a, b) {
-            Ok(true) => {}
-            Ok(false) => continue,
-            Err(e) => return stop(ctx, e),
-        }
-        if let Some((handler, with)) = pair_handler(&handlers, classes) {
-            pairs.push(Pair {
-                other: b,
-                with,
-                handler,
-            });
-        }
-    }
-    let rules = &ctx.rules;
-    let w = &*ctx.w;
-    let rank_id = |id: InstId| w.get(id).map_or((u16::MAX, id), |i| (i.rank, i.id));
-    let dispatch_key = |id: InstId| {
-        w.get(id)
-            .map(|i| order_key(i, rules.tick.dispatch, Order::Dispatch))
-    };
-    match rules.collide.pair_order {
-        PairOrder::HandlerListOrder => pairs.sort_by_key(|p| (p.handler, dispatch_key(p.other))),
-        PairOrder::OtherRankThenId | PairOrder::LowerRankFirst => {
-            pairs.sort_by_key(|p| (rank_id(p.other), p.handler))
-        }
-    }
-    for p in pairs {
-        if !ctx.w.exists(a) {
-            return None;
-        }
-        let Some(solid) = ctx
-            .w
-            .get(p.other)
-            .filter(|b| b.alive && b.active)
-            .map(|b| b.solid)
-        else {
-            continue;
-        };
-        if solid || ctx.rules.collide.recheck_nonsolid {
-            match (hooks.overlaps)(ctx, a, p.other) {
-                Ok(true) => {}
-                Ok(false) => continue,
-                Err(e) => return stop(ctx, e),
-            }
-        }
-        if let Some(flow) = run_pair(ctx, hooks, ctl, a, p.other, p.with, solid) {
-            return Some(flow);
-        }
-    }
-    None
 }
 
 // ---- Probe built-in ----

@@ -223,6 +223,9 @@ mod grid;
 #[path = "hash_vectors.rs"]
 mod hash_vectors;
 
+#[path = "input.rs"]
+mod input;
+
 #[path = "kid_a1_actions.rs"]
 mod kid_a1_actions;
 
@@ -315,6 +318,9 @@ mod kid_temp;
 
 #[path = "kid_water_setters.rs"]
 mod kid_water_setters;
+
+#[path = "lifecycle.rs"]
+mod lifecycle;
 
 #[path = "lint_gm_compare.rs"]
 mod lint_gm_compare;
