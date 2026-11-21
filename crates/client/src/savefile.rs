@@ -614,6 +614,35 @@ mod tests {
         assert_eq!(read(&store, NAME, &reordered).unwrap(), Some(want));
     }
 
+    /// A checkpoint whose room is gone or not gameplay starts a new game, keeps the bytes, and
+    /// is never resumed: the same refusal path as any other incompatible save (#1019).
+    #[test]
+    fn an_unresolvable_room_starts_a_new_game_and_keeps_the_file() {
+        let def = showcase();
+        for room in ["gone", "boot"] {
+            let store = temp(&format!("unresolvable-{room}"));
+            let name = name_for(&def.id);
+            let mut saved = slot();
+            saved.room = RoomId(room_index(&def, "hall"));
+            let mut checkpoint = Checkpoint::from_slot(&def, &saved).unwrap();
+            checkpoint.room = RoomKey(room.into());
+            let file = SaveFile {
+                version: VERSION,
+                package: def.id.clone(),
+                engine_rev: def.engine_rev,
+                checkpoint,
+            };
+            store
+                .write(&name, &postcard::to_stdvec(&file).unwrap())
+                .unwrap();
+            assert!(matches!(
+                start_from(&store, &def),
+                StartPoint::NewGame { difficulty: 0 }
+            ));
+            assert!(store.read(&format!("{name}.old")).unwrap().is_some());
+        }
+    }
+
     /// A raw `SaveSlot` (the format before #1145) has no room identity to trust: it starts a
     /// new game, and its bytes are kept beside the save so they can be recovered.
     #[test]

@@ -24,7 +24,11 @@ frame 81: press restart
 frame 82: release restart
 frame 120: hold jump
 frame 130: release jump
-frame 160: end
+frame 140: press suicide
+frame 141: release suicide
+frame 160: press restart
+frame 161: release restart
+frame 220: end
 """
 
 # The walk onto the save point stores the spot under the stable room name. The ranges are wide
@@ -49,3 +53,14 @@ matches_save = true
 [[assert]]
 tick = 130
 control = { action = "jump", metric = "kid.y", latency_max = 2 }
+
+# Counters persist: one death is counted, the death-only save writes it, and the next retry
+# loads it and still returns to the saved spot. The time lower bound is the walk plus the first
+# retry; the exact tick is the run's, so the counter is checked as persisting rather than fixed.
+[[assert]]
+tick = 220
+room = "room_1"
+death = 1
+time = { min = 80 }
+matches_save = true
+kid_count = 1
