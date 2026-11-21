@@ -8,7 +8,7 @@ Part of [the simulation](../sim.md).
 
 | # | Phase | Status | Isolation |
 |---|---|---|---|
-| 0 | Region step (stripped runs: ranked or frozen tick, dialogue timeout presses added to the frame; #34), then latch input: build held/pressed/released for the tick; `direct_latch |= pressed` per key | Inferred (sample once before Begin Step); region step Design | `stripped::begin_tick`, `InputState::latch` |
+| 0 | Region step (stripped runs: ranked or frozen tick, dialogue timeout presses added to the frame; #34), then latch the client's `InputFrame`, masked to action bits; `direct_latch |= pressed` per key | Inferred (sample once before Begin Step); region step Design | `stripped::begin_tick`, `InputState::latch` |
 | 1 | Capture `xprevious/yprevious` if `prev_capture = TickStart` (default) | Confirmed (recorder) U1 (R1) | `TickRules::prev_capture` |
 | 2 | Begin Step | Confirmed order | |
 | 3 | Timelines advance, moments run | Slot Confirmed (recorder) U6 (R6); moments for speed > 1 UNKNOWN | `TickRules::timeline_slot = AfterBeginStep` |
