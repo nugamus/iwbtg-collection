@@ -130,6 +130,52 @@
         "none"
       ],
       "type": "string"
+    },
+    "RawRenderBounds": {
+      "additionalProperties": false,
+      "description": "The `[render_bounds]` table: the rectangle the client draws and culls with.\n\n`shape` says what the bounds describe: the whole frame, every frame's solid collider, or an\nexplicit box. Only `custom` takes a `bbox`.",
+      "properties": {
+        "bbox": {
+          "default": null,
+          "items": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "shape": {
+          "$ref": "#/$defs/RawRenderBoundsShape"
+        }
+      },
+      "required": [
+        "shape"
+      ],
+      "type": "object"
+    },
+    "RawRenderBoundsShape": {
+      "description": "What `[render_bounds]` describes.",
+      "oneOf": [
+        {
+          "const": "frame",
+          "description": "The whole frame.",
+          "type": "string"
+        },
+        {
+          "const": "collider",
+          "description": "Every frame's solid collider.",
+          "type": "string"
+        },
+        {
+          "const": "custom",
+          "description": "An explicit box.",
+          "type": "string"
+        }
+      ]
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -219,6 +265,16 @@
       "maxItems": 2,
       "minItems": 2,
       "type": "array"
+    },
+    "render_bounds": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RawRenderBounds"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "separate_masks": {
       "default": null,

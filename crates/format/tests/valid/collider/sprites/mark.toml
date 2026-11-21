@@ -9,3 +9,6 @@ alpha_tolerance = 0
 shape = "bits"
 bbox = [0, 0, 1, 1]
 bits = ["c", "c"]
+
+[render_bounds]
+shape = "collider"

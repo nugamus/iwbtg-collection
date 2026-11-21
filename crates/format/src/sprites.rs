@@ -82,18 +82,35 @@ pub struct SpriteSidecar {
     pub mask: Option<String>,
     /// A baked collider, when the sidecar has a `[collider]` table.
     pub collider: Option<BakedCollider>,
+    /// The rectangle the client draws and culls with, when the sidecar has a `[render_bounds]`
+    /// table. `None` means the whole frame.
+    pub render_bounds: Option<RenderBounds>,
 }
 
 /// A sprite sidecar's baked collider and the alpha tolerance it was baked with.
 ///
 /// The loader validates the table against the masks it builds from the PNG alpha data and keeps
-/// using those masks; making the baked collider the runtime shape is #1182 (D2).
+/// using those masks; making the baked collider the runtime shape is #1265 (D2b).
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BakedCollider {
     /// The alpha tolerance the bake used. The table declares it explicitly.
     pub alpha_tolerance: u8,
     /// One collider for all frames, or one per frame.
     pub set: ColliderSet,
+}
+
+/// The rectangle the client draws and culls with (`[render_bounds]` in the sidecar).
+///
+/// Presentation data: the sim never reads it. Absent means [`RenderBounds::Frame`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RenderBounds {
+    /// The whole frame.
+    Frame,
+    /// The tight box around every frame's solid collider pixels; the sprite needs a solid
+    /// collider.
+    Collider,
+    /// An explicit inclusive box, inside the frame and covering every solid collider pixel.
+    Custom(IRect),
 }
 
 impl SpriteSidecar {
@@ -148,6 +165,37 @@ pub(crate) struct RawSidecar {
     #[serde(default)]
     #[cfg_attr(feature = "schema", schemars(with = "Option<RawCollider>"))]
     collider: Option<Spanned<RawCollider>>,
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<RawRenderBounds>"))]
+    render_bounds: Option<Spanned<RawRenderBounds>>,
+}
+
+/// The `[render_bounds]` table: the rectangle the client draws and culls with.
+///
+/// `shape` says what the bounds describe: the whole frame, every frame's solid collider, or an
+/// explicit box. Only `custom` takes a `bbox`.
+#[derive(Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RawRenderBounds {
+    #[cfg_attr(feature = "schema", schemars(with = "RawRenderBoundsShape"))]
+    shape: Spanned<RawRenderBoundsShape>,
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<[i64; 4]>"))]
+    bbox: Option<Spanned<[i64; 4]>>,
+}
+
+/// What `[render_bounds]` describes.
+#[derive(Deserialize, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+enum RawRenderBoundsShape {
+    /// The whole frame.
+    Frame,
+    /// Every frame's solid collider.
+    Collider,
+    /// An explicit box.
+    Custom,
 }
 
 #[derive(Deserialize, Clone, Copy)]
@@ -291,6 +339,10 @@ pub fn parse_sidecar(path: &str, text: &str) -> Result<(SpriteSidecar, SidecarSp
             (fw, fh),
         )?),
     };
+    let render_bounds = match &raw.render_bounds {
+        None => None,
+        Some(b) => Some(parse_render_bounds(path, text, b.get_ref(), (fw, fh))?),
+    };
     let spans = SidecarSpans {
         frames: raw.frames.span(),
         bbox: raw.bbox.as_ref().map_or(raw.frames.span(), Spanned::span),
@@ -309,6 +361,7 @@ pub fn parse_sidecar(path: &str, text: &str) -> Result<(SpriteSidecar, SidecarSp
             separate_masks: raw.separate_masks.unwrap_or(false),
             mask: raw.mask.map(Spanned::into_inner),
             collider,
+            render_bounds,
         },
         spans,
     ))
@@ -524,6 +577,114 @@ fn parse_collider_entry(
     }
 }
 
+/// Parses a `[render_bounds]` table. The rules that need the collider are checked at load.
+fn parse_render_bounds(
+    path: &str,
+    text: &str,
+    raw: &RawRenderBounds,
+    frame_size: (u32, u32),
+) -> Result<RenderBounds, Diagnostic> {
+    let err = |span: &Range<usize>, msg: String| Diagnostic::error_at(path, text, span.start, msg);
+    match *raw.shape.get_ref() {
+        RawRenderBoundsShape::Frame => {
+            if let Some(b) = &raw.bbox {
+                return Err(err(
+                    &b.span(),
+                    "render_bounds shape = \"frame\" takes no `bbox`".to_owned(),
+                ));
+            }
+            Ok(RenderBounds::Frame)
+        }
+        RawRenderBoundsShape::Collider => {
+            if let Some(b) = &raw.bbox {
+                return Err(err(
+                    &b.span(),
+                    "render_bounds shape = \"collider\" takes no `bbox`".to_owned(),
+                ));
+            }
+            Ok(RenderBounds::Collider)
+        }
+        RawRenderBoundsShape::Custom => {
+            let Some(b) = &raw.bbox else {
+                return Err(err(
+                    &raw.shape.span(),
+                    "render_bounds shape = \"custom\" needs a `bbox`".to_owned(),
+                ));
+            };
+            let [left, top, right, bottom] = *b.get_ref();
+            if left > right || top > bottom {
+                return Err(err(
+                    &b.span(),
+                    "render_bounds bbox is inverted; render bounds need a non-empty box".to_owned(),
+                ));
+            }
+            if left < 0 || top < 0 || right >= i64::from(frame_size.0) || bottom >= i64::from(frame_size.1) {
+                return Err(err(
+                    &b.span(),
+                    format!(
+                        "render_bounds bbox [{left}, {top}, {right}, {bottom}] must lie inside the {} x {} frame",
+                        frame_size.0, frame_size.1
+                    ),
+                ));
+            }
+            Ok(RenderBounds::Custom(IRect {
+                left,
+                top,
+                right,
+                bottom,
+            }))
+        }
+    }
+}
+
+/// Checks a sidecar's render bounds against the collider geometry the loader built.
+fn check_render_bounds(stem: &str, bounds: RenderBounds, colliders: &ColliderSet) -> Result<(), Diagnostic> {
+    let file = format!("{stem}.toml");
+    match bounds {
+        RenderBounds::Frame => Ok(()),
+        RenderBounds::Collider => {
+            let any_solid =
+                (0..colliders.frames()).any(|i| colliders.get(i).is_some_and(|c| c.solid_bbox().is_some()));
+            if any_solid {
+                Ok(())
+            } else {
+                Err(Diagnostic::file_error(
+                    &file,
+                    "render_bounds shape = \"collider\" needs a solid collider, but the sprite's mask is empty",
+                ))
+            }
+        }
+        RenderBounds::Custom(bounds) => {
+            for i in 0..colliders.frames() {
+                let Some(solid) = colliders.get(i).and_then(Collider::solid_bbox) else {
+                    continue;
+                };
+                if bounds.left > solid.left
+                    || bounds.top > solid.top
+                    || bounds.right < solid.right
+                    || bounds.bottom < solid.bottom
+                {
+                    return Err(Diagnostic::file_error(
+                        &file,
+                        format!(
+                            "render_bounds bbox [{}, {}, {}, {}] does not cover the solid mask of frame {i} [{}, {}, {}, {}]",
+                            bounds.left,
+                            bounds.top,
+                            bounds.right,
+                            bounds.bottom,
+                            solid.left,
+                            solid.top,
+                            solid.right,
+                            solid.bottom
+                        ),
+                    ));
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
 /// Checks a baked collider's solidity against the masks the loader sampled from the art.
 fn check_baked(stem: &str, baked: &BakedCollider, sampled: &ColliderSet) -> Result<(), Diagnostic> {
     let file = format!("{stem}.toml");
@@ -631,8 +792,12 @@ pub fn load_sprite_at(
         ));
     }
     if sidecar.frames == 0 || sidecar.collision.shape().is_none() {
+        let colliders = ColliderSet::Shared(Collider::None);
         if let Some(baked) = &sidecar.collider {
-            check_baked(stem, baked, &ColliderSet::Shared(Collider::None))?;
+            check_baked(stem, baked, &colliders)?;
+        }
+        if let Some(bounds) = sidecar.render_bounds {
+            check_render_bounds(stem, bounds, &colliders)?;
         }
         return Ok((def(MaskSet::Shared(MaskId(0))), vec![empty_mask()]));
     }
@@ -672,9 +837,12 @@ pub fn load_sprite_at(
         let mask = build_union_mask(&all, fw, fh, shape, sidecar.bbox, tol);
         (def(MaskSet::Shared(MaskId(0))), vec![mask])
     };
+    let colliders = ColliderSet::from_masks(per_frame, &masks);
     if let Some(baked) = &sidecar.collider {
-        let sampled = ColliderSet::from_masks(per_frame, &masks);
-        check_baked(stem, baked, &sampled)?;
+        check_baked(stem, baked, &colliders)?;
+    }
+    if let Some(bounds) = sidecar.render_bounds {
+        check_render_bounds(stem, bounds, &colliders)?;
     }
     Ok((def, masks))
 }
@@ -788,6 +956,7 @@ mod tests {
             separate_masks: separate,
             mask: None,
             collider: None,
+            render_bounds: None,
         }
     }
 
@@ -1063,5 +1232,94 @@ shape = \"none\"
 
         let outside = with("alpha_tolerance = 0\nshape = \"rect\"\nbbox = [0, 0, 2, 0]");
         assert!(parse_sidecar("sprites/a.toml", &outside).is_err());
+    }
+
+    #[test]
+    fn render_bounds_parse_checks() {
+        let base = "frames = 2\nframe_size = [4, 4]\norigin = [0, 0]\n";
+        let with = |rb: &str| format!("{base}\n[render_bounds]\n{rb}\n");
+        let (s, _) = parse_sidecar("sprites/a.toml", &with("shape = \"frame\"")).unwrap();
+        assert_eq!(s.render_bounds, Some(RenderBounds::Frame));
+        let (s, _) = parse_sidecar("sprites/a.toml", &with("shape = \"collider\"")).unwrap();
+        assert_eq!(s.render_bounds, Some(RenderBounds::Collider));
+        let (s, _) =
+            parse_sidecar("sprites/a.toml", &with("shape = \"custom\"\nbbox = [0, 0, 3, 3]")).unwrap();
+        assert_eq!(
+            s.render_bounds,
+            Some(RenderBounds::Custom(IRect {
+                left: 0,
+                top: 0,
+                right: 3,
+                bottom: 3
+            }))
+        );
+        // Absent means the frame, exactly today.
+        let (s, _) = parse_sidecar("sprites/a.toml", base).unwrap();
+        assert_eq!(s.render_bounds, None);
+
+        for bad in [
+            "shape = \"frame\"\nbbox = [0, 0, 3, 3]",
+            "shape = \"collider\"\nbbox = [0, 0, 3, 3]",
+            "shape = \"custom\"",
+            "shape = \"custom\"\nbbox = [0, 0, 4, 3]",
+            "shape = \"custom\"\nbbox = [3, 3, 0, 0]",
+            "shape = \"bogus\"",
+        ] {
+            assert!(parse_sidecar("sprites/a.toml", &with(bad)).is_err(), "{bad}");
+        }
+        let missing_shape = format!("{base}\n[render_bounds]\nbbox = [0, 0, 3, 3]\n");
+        assert!(parse_sidecar("sprites/a.toml", &missing_shape).is_err());
+    }
+
+    #[test]
+    fn render_bounds_validate_against_the_collider() {
+        // The shared union of both frames has solid pixels at (0, 0) and (1, 0).
+        let png = two_frames();
+        let load = |rb: &str| {
+            let text = format!("frames = 2\nframe_size = [2, 1]\norigin = [0, 0]\n\n[render_bounds]\n{rb}\n");
+            let (s, _) = parse_sidecar("sprites/s.toml", &text).unwrap();
+            load_sprite("s", &png, &s)
+        };
+        assert!(load("shape = \"frame\"").is_ok());
+        assert!(load("shape = \"collider\"").is_ok());
+        assert!(load("shape = \"custom\"\nbbox = [0, 0, 1, 0]").is_ok());
+        let d = load("shape = \"custom\"\nbbox = [0, 0, 0, 0]").unwrap_err();
+        assert!(d.message.contains("does not cover"), "{}", d.message);
+    }
+
+    #[test]
+    fn render_bounds_collider_needs_a_solid_mask() {
+        let transparent = png_rgba(4, 1, &[0; 16]);
+        let collider =
+            "frames = 2\nframe_size = [2, 1]\norigin = [0, 0]\n\n[render_bounds]\nshape = \"collider\"\n";
+        let (s, _) = parse_sidecar("sprites/s.toml", collider).unwrap();
+        let d = load_sprite("s", &transparent, &s).unwrap_err();
+        assert!(d.message.contains("needs a solid collider"), "{}", d.message);
+        // Custom bounds are fine when nothing is solid: there is nothing to cover.
+        let custom = "frames = 2\nframe_size = [2, 1]\norigin = [0, 0]\n\n[render_bounds]\nshape = \"custom\"\nbbox = [0, 0, 1, 0]\n";
+        let (s, _) = parse_sidecar("sprites/s.toml", custom).unwrap();
+        assert!(load_sprite("s", &transparent, &s).is_ok());
+        // A zero-frame sprite has no collider either.
+        let zero =
+            "frames = 0\nframe_size = [2, 1]\norigin = [0, 0]\n\n[render_bounds]\nshape = \"collider\"\n";
+        let (s, _) = parse_sidecar("sprites/s.toml", zero).unwrap();
+        assert!(load_sprite("s", &[], &s).is_err());
+    }
+
+    #[test]
+    fn render_bounds_cover_every_frame() {
+        // Frame 0 is solid at (0, 0) and frame 1 at (1, 0).
+        let png = two_frames();
+        let with = |rb: &str| {
+            let text = format!(
+                "frames = 2\nframe_size = [2, 1]\norigin = [0, 0]\nseparate_masks = true\n\n[render_bounds]\n{rb}\n"
+            );
+            let (s, _) = parse_sidecar("sprites/s.toml", &text).unwrap();
+            load_sprite("s", &png, &s)
+        };
+        assert!(with("shape = \"collider\"").is_ok());
+        let d = with("shape = \"custom\"\nbbox = [0, 0, 0, 0]").unwrap_err();
+        assert!(d.message.contains("frame 1"), "{}", d.message);
+        assert!(with("shape = \"custom\"\nbbox = [0, 0, 1, 0]").is_ok());
     }
 }
