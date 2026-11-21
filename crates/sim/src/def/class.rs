@@ -246,33 +246,8 @@ impl BitAnd for ClassMask {
 /// Default collision classes of a built-in (Design; docs/architecture/sim/world.md and
 /// docs/architecture/sim/builtins.md).
 pub fn default_classes(b: Builtin) -> ClassMask {
-    match b {
-        Builtin::Kid => ClassMask::KID,
-        Builtin::KidBullet => ClassMask::KID_BULLET,
-        Builtin::Blood => ClassMask::BLOOD,
-        Builtin::Bow => ClassMask::BOW,
-        Builtin::Block | Builtin::BreakableBlock => ClassMask::BLOCK,
-        Builtin::Spike | Builtin::Killer => ClassMask::KILLER,
-        Builtin::Save => ClassMask::SAVE,
-        // GM warps and warpStart are roomChanger children.
-        Builtin::Warp | Builtin::DifficultyWarp => ClassMask::ROOM_CHANGER,
-        // The platform's parent is block in 17 games (CLONE_SPEC collision); the other two
-        // games give their platform preset `counts_as = ["solidblock"]`.
-        Builtin::Platform | Builtin::MovingPlatform | Builtin::DropPlatform | Builtin::PathPlatform => {
-            ClassMask::PLATFORM | ClassMask::BLOCK
-        }
-        Builtin::Water => ClassMask::WATER1,
-        Builtin::FakeBlock => ClassMask::FAKE_BLOCK,
-        Builtin::Trigger => ClassMask::TRIGGER,
-        Builtin::EdgeWarp => ClassMask::EDGE_WARP,
-        Builtin::BulletBlocker => ClassMask::BULLET_BLOCKER,
-        Builtin::Slope => ClassMask::SLOPE,
-        Builtin::Conveyor => ClassMask::CONVEYOR,
-        Builtin::KidParamZone => ClassMask::PARAM_ZONE,
-        Builtin::TrapStopper => ClassMask::TRAP_STOPPER,
-        Builtin::Ladder => ClassMask::LADDER,
-        _ => ClassMask::NONE,
-    }
+    // The one trait table (`def::traits`) owns the classes; this is the view the loader reads.
+    crate::def::traits::traits(b).classes
 }
 
 /// Classes that a kind's params pick (Design): water `variant` 2 and 3, vine `side`, slope
@@ -319,14 +294,8 @@ pub fn param_classes(b: Builtin, params: &Params) -> Option<ClassMask> {
 /// script spawn that sets them uses that derived kind or fails (`script::inst`, #694). The params
 /// that pick the event set work the same way ([`kind_params`]).
 pub fn class_params(b: Builtin) -> &'static [&'static str] {
-    match b {
-        Builtin::Block => &["kid_collides"],
-        Builtin::Water => &["variant"],
-        Builtin::Killer => &["kill_outside_view"],
-        Builtin::Slope => &["shape", "scale_x"],
-        Builtin::Vine => &["side"],
-        _ => &[],
-    }
+    // The one trait table (`def::traits`) owns the selection params.
+    crate::def::traits::traits(b).class_params
 }
 
 /// The params that pick a kind's classes ([`class_params`]) or its event set
