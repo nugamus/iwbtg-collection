@@ -43,6 +43,20 @@ Part of [format v0](v0.md).
   ]
   ```
 
+  A sidecar may also carry an optional `[render_bounds]` table: the rectangle the client draws and culls with. `shape` is required and says what the bounds describe: `frame` is the whole frame (the default when the table is absent), `collider` is the tight box around every frame's solid collider pixels (an error when the mask is empty), and `custom` takes an inclusive `bbox` that must lie inside the frame and cover every solid collider pixel. The table is presentation data; the sim never reads it.
+
+  ```toml
+  #:schema ../../../client/docs/format/schema/v0/sprite.schema.json
+  frames = 1
+  frame_size = [16, 16]
+  origin = [8, 8]
+  collision = "precise"
+
+  [render_bounds]
+  shape = "custom"
+  bbox = [1, 1, 14, 14]
+  ```
+
   A sprite with the id `cherry` (at least two 21x24 frames) is also the client's pause menu selector, the delicious fruit (docs/product.md, Pause); without one the client draws its own.
 - **Backgrounds and tilesets:** `backgrounds/<id>.png`, with a sidecar for tile size and separation when used as a tileset (see Rooms).
 - **Audio:** Ogg Vorbis. Sound effects in `sounds/`, music in `music/`. Loop points and preview start in `music/<id>.toml`. FMOD and SuperSound calls in originals become plain sound and music ids. Audio never affects the sim.
