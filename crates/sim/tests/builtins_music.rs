@@ -7,9 +7,10 @@ use iwbtg_sim::def::{
 };
 use iwbtg_sim::events::EventKind;
 use iwbtg_sim::num::Real;
+use iwbtg_sim::output::OutputEvent;
 use iwbtg_sim::rules::RunnerRules;
 use iwbtg_sim::script::ScriptRuntime;
-use iwbtg_sim::sound::{self, DllMode};
+use iwbtg_sim::sound::{self, DllMode, SoundOutput, SoundTarget};
 use iwbtg_sim::world::{Ctx, InstId, SpawnInit, World};
 
 const TRACK: SoundId = SoundId(0);
@@ -103,6 +104,38 @@ fn music_on_create_plays_the_track_looping() {
     g.spawn();
     assert!(g.playing(TRACK));
     assert!(g.world.sound.copies[0].looping);
+}
+
+#[test]
+fn every_step_music_emits_stop_all_then_a_play_with_the_tick_and_length() {
+    // The feel contract `sound/event_model` reads this shape: the courtyard's music object runs
+    // at sim tick 0, stops every built-in sound, then starts its track with the package length.
+    let mut g = game("every_step_if_not_playing", false);
+    let id = g.spawn();
+    g.world.output.clear();
+    g.step(id);
+    let events: Vec<SoundOutput> = std::mem::take(&mut g.world.output)
+        .into_iter()
+        .filter_map(|e| match e {
+            OutputEvent::Sound(s) => Some(s),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        events,
+        vec![
+            SoundOutput::StopAll {
+                adapter: false,
+                tick: 0,
+            },
+            SoundOutput::Play {
+                target: SoundTarget::Builtin(TRACK),
+                looping: true,
+                length_ticks: 100,
+                tick: 0,
+            },
+        ]
+    );
 }
 
 #[test]

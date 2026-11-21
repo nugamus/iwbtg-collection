@@ -1,0 +1,25 @@
+# The showcase's courtyard music object runs in `every_step_if_not_playing`: on the room's first
+# Step it stops every built-in sound and starts the night loop. The event stream is what the client
+# mixer plays; this contract pins that the play exists, names the package sound, and carries the
+# sim tick (tick 0, the step that ends at World::tick == 1).
+#
+# F2 (feedback): audio only, no sim state. The listening check is the showcase's night loop coming
+# in on the first frame with no gap or double start; the automated evidence is the event model in
+# `crates/sim/tests/sound.rs`.
+id = "sound/event_model"
+impact = "F2"
+package = "showcase"
+start = { new_game = true, difficulty = 0 }
+play_mode = "original"
+seed = 7
+mods = []
+evidence = [
+  "#1158",
+  "tests/sound.rs::play_events_carry_the_call_tick_and_the_sound_length",
+  "tests/builtins_music.rs::every_step_music_emits_stop_all_then_a_play_with_the_tick_and_length",
+  "audio: showcase courtyard, the night loop starts on the first tick",
+]
+
+[[assert]]
+tick = 1
+sound = { event = "play", sound = "night", tick = 0 }
