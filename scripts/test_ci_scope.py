@@ -12,6 +12,7 @@ class ScopeTests(unittest.TestCase):
         result = scope(['crates/client/src/view.rs'], self.graph)
         self.assertEqual(result['packages'], '-p iwbtg-client')
         self.assertTrue(result['browser'])
+        self.assertTrue(result['web'], "a client change rebuilds the browser bundle")
         self.assertFalse(result['wasip1'])
         self.assertFalse(result['determinism'])
 
@@ -20,11 +21,17 @@ class ScopeTests(unittest.TestCase):
         for name in ('iwbtg-sim', 'iwbtg-format', 'iwbtg-tools', 'iwbtg-client'):
             self.assertIn('-p ' + name, result['packages'])
         self.assertTrue(result['wasip1'] and result['browser'] and result['determinism'])
+        self.assertFalse(result['web'], "a sim change does not rebuild the browser bundle")
+
+    def test_web_assets_select_the_bundle(self):
+        result = scope(['crates/client/web/index.html'], self.graph)
+        self.assertTrue(result['web'], 'the page is part of the client bundle')
+        self.assertEqual(result['packages'], '-p iwbtg-client')
 
     def test_server_does_not_build_bevy_or_wasm(self):
         result = scope(['crates/server/src/main.rs'], self.graph)
         self.assertEqual(result['packages'], '-p iwbtg-server')
-        self.assertFalse(result['browser'] or result['wasip1'] or result['determinism'])
+        self.assertFalse(result['browser'] or result['wasip1'] or result['determinism'] or result['web'])
 
     def test_shared_unknown_deleted_and_ci_inputs_are_full(self):
         for path in ('Cargo.lock', 'Cargo.toml', 'crates/server/Cargo.toml', 'rust-toolchain.toml', '.cargo/config.toml',
@@ -89,7 +96,7 @@ class ScopeTests(unittest.TestCase):
         self.assertTrue(full['full'])
         self.assertEqual(set(full['test']), set(self.graph))
         self.assertEqual(full['compile'], [])
-        self.assertTrue(full['wasip1'] and full['browser'] and full['determinism'])
+        self.assertTrue(full['wasip1'] and full['browser'] and full['web'] and full['determinism'])
         for item in full['inputs']:
             self.assertTrue(item['reason'])
 
@@ -100,6 +107,7 @@ class ScopeTests(unittest.TestCase):
         self.assertIn('test=iwbtg-sim', text)
         self.assertIn('compile=iwbtg-client,iwbtg-format,iwbtg-tools', text)
         self.assertIn('wasip1=true', text)
+        self.assertIn('web=false', text)
         self.assertIn('packages=-p iwbtg-client -p iwbtg-format -p iwbtg-sim -p iwbtg-tools', text)
         self.assertIn('identity=', text)
         self.assertIn('step-identity=test:iwbtg-sim=', text)
