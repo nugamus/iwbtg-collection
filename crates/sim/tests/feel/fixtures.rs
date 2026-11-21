@@ -9,9 +9,11 @@ use iwbtg_sim::builtins;
 use iwbtg_sim::def::class::{default_classes, param_classes};
 use iwbtg_sim::def::testing::GameDefBuilder;
 use iwbtg_sim::def::{
-    Builtin, EngineKind, GameDef, KidFamily, KindDef, ParamValue, RoomDef, RoomId, SpriteId,
+    Builtin, ClassMask, EngineKind, GameDef, KidFamily, KindDef, ParamValue, Params, RoomDef, RoomId,
+    RoomRole, SoundDef, SoundId, SoundKind, SpriteId,
 };
 use iwbtg_sim::kid::{self, presets};
+use iwbtg_sim::num::Real;
 
 /// The public fixtures a contract may name as `fixture:<name>`.
 ///
@@ -19,15 +21,66 @@ use iwbtg_sim::kid::{self, presets};
 /// - `retry`: the same room with a save point under the kid (a retry restores it).
 /// - `collision`: the same room with a spike and a killer overlapping on the floor, so a kid
 ///   walking right meets both on one tick.
+/// - `lifecycle_retry`: the #1149 retry fixture: an engine Boot room, one play room with its
+///   music object, and a checkpoint the contract supplies (`StartPoint::FromSave`).
 pub fn fixture(name: &str) -> Result<GameDef, String> {
     match name {
         "jump" => Ok(build("feel-jump", false, false)),
         "retry" => Ok(build("feel-retry", true, false)),
         "collision" => Ok(build("feel-collision", true, true)),
+        "lifecycle_retry" => Ok(lifecycle_retry()),
         other => Err(format!(
-            "no public fixture named {other:?} (known: jump, retry, collision)"
+            "no public fixture named {other:?} (known: jump, retry, collision, lifecycle_retry)"
         )),
     }
+}
+
+/// The lifecycle retry fixture from `crates/sim/tests/lifecycle.rs` (#1149): the world boot
+/// instance, an engine Boot room, a play room whose music object plays one track, and the A1
+/// Kid. The contract's `save` supplies the checkpoint the run starts from.
+fn lifecycle_retry() -> GameDef {
+    let mut b = GameDefBuilder::new("lifecycle-retry");
+    let mut kid = KindDef::new("kid", Builtin::Kid);
+    kid.classes = ClassMask::KID;
+    let kid_id = b.kind(kid);
+    b.engine_kind(EngineKind::Kid, kid_id);
+    let mut world = KindDef::new("world", Builtin::World);
+    world.persistent = true;
+    let world_id = b.kind(world);
+    b.boot(world_id);
+    let mut boot = RoomDef::new("init", 800, 608);
+    boot.role = RoomRole::Boot;
+    b.room(boot);
+    let play = b.room(RoomDef::new("play", 800, 608));
+    b.start_room(play);
+    // The play room's music object: its Create plays the track on every entry, so a retry that
+    // keeps the music behavior plays the same event when it re-enters the checkpoint's room.
+    let music = b.kind({
+        let mut k = KindDef::new("music", Builtin::Music);
+        let mut p = Params::default();
+        p.0.insert("track".into(), ParamValue::Sound(SoundId(0)));
+        k.params = p;
+        k
+    });
+    b.place(play, music, 0.0, 0.0).expect("feel fixture place");
+    let physics = presets::defaults(KidFamily::A1);
+    b.physics(physics.clone());
+    let mut def = b.build().expect("lifecycle feel fixture builds");
+    for k in &mut def.kinds {
+        k.events = if k.base == Builtin::Kid {
+            kid::event_set(&physics)
+        } else {
+            builtins::event_set(k.base, k)
+        };
+    }
+    def.sounds = vec![SoundDef {
+        name: "music".into(),
+        kind: SoundKind::Multimedia,
+        length_ticks: 1_000,
+        volume: Real::ONE,
+        pan: Real::ZERO,
+    }];
+    def
 }
 
 /// The name of the fixture's only room.

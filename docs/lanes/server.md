@@ -16,3 +16,4 @@
 - The server has no `iwbtg-sim` or `iwbtg-format` dependency yet, so editing those crates neither rebuilds nor tests it. When the verify worker links them, the manifest edges add the server as a consumer automatically.
 - No SQLite, accounts, submissions or verify worker yet: stack decisions live in `docs/server.md`, and SQLite waits for #153.
 - `cargo deny` (licenses; sim bans) runs in CI, not locally, so a new dependency's license shows up as a red CI job, not a local error.
+- Preserve feel, not implementation: a change that can alter a verified outcome or a board key is F1 and needs a replay/board migration and the user where the outcome is irreversible; an internal refactor is F3 ([0005](../decisions/0005-standard-mechanics.md), [versioning](../architecture/versioning.md)).

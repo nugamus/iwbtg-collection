@@ -36,8 +36,10 @@ use std::sync::Arc;
 use iwbtg_sim::def::ids::SoundId;
 use iwbtg_sim::def::{ClassMask, GameDef, RoomId};
 use iwbtg_sim::input::{Action, ParsedInputs, parse_action_inputs};
+use iwbtg_sim::num::Real;
 use iwbtg_sim::output::OutputEvent;
 use iwbtg_sim::probe::{self, Column, ProbeTarget, registry};
+use iwbtg_sim::save::SaveSlot;
 use iwbtg_sim::sound::{SoundOutput, SoundTarget};
 use iwbtg_sim::stripped::PlayMode;
 use iwbtg_sim::trace::Value;
@@ -108,6 +110,8 @@ pub struct Contract {
     pub profile: Option<String>,
     /// Where the run starts.
     pub start: Start,
+    /// A starting checkpoint (`save = { ... }`); the run starts from it (`StartPoint::FromSave`).
+    pub save: Option<SaveSlot>,
     /// Play original or stripped (ranked).
     pub play_mode: PlayMode,
     /// The RNG seed.
@@ -457,6 +461,9 @@ pub struct RawContract {
     pub profile: Option<String>,
     /// The start point.
     pub start: RawStart,
+    /// A starting checkpoint; the run starts from it (`StartPoint::FromSave`).
+    #[serde(default)]
+    pub save: Option<RawSave>,
     /// `original` (default) or `stripped`.
     #[serde(default)]
     pub play_mode: Option<String>,
@@ -492,6 +499,43 @@ pub struct RawStart {
     /// Difficulty index (default 0).
     #[serde(default)]
     pub difficulty: Option<u8>,
+}
+
+/// The raw `save` table: a checkpoint the run starts from.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RawSave {
+    /// The saved room; defaults to the start room.
+    #[serde(default)]
+    pub room: Option<String>,
+    /// The saved x.
+    pub x: f64,
+    /// The saved y.
+    pub y: f64,
+    /// Saved difficulty (default: the start difficulty).
+    #[serde(default)]
+    pub difficulty: Option<u8>,
+    /// Saved facing, -1 or 1 (default 1).
+    #[serde(default)]
+    pub facing: Option<i8>,
+    /// Saved flip flag (default false).
+    #[serde(default)]
+    pub flipped: Option<bool>,
+    /// Saved death counter (default 0).
+    #[serde(default)]
+    pub deaths: Option<u32>,
+    /// Saved play time (default 0).
+    #[serde(default)]
+    pub time: Option<u32>,
+    /// Saved boss flags (default 0).
+    #[serde(default)]
+    pub bosses: Option<u16>,
+    /// Saved item flags (default 0).
+    #[serde(default)]
+    pub items: Option<u16>,
+    /// Saved clear flag (default false).
+    #[serde(default)]
+    pub clear: Option<bool>,
 }
 
 /// One raw `[[window]]`.
@@ -572,6 +616,10 @@ pub fn validate(raw: RawContract, def: &GameDef, expected_id: &str) -> Result<Co
         errors.push("mods are not supported by feel v1; the run is unmodded".into());
     }
     let start = validate_start(&raw.start, def, &mut errors);
+    let save = raw
+        .save
+        .as_ref()
+        .and_then(|save| validate_save(save, &start, def, &mut errors));
     let inputs = match parse_action_inputs(&raw.inputs) {
         Ok(inputs) => Some(inputs),
         Err(e) => {
@@ -604,6 +652,7 @@ pub fn validate(raw: RawContract, def: &GameDef, expected_id: &str) -> Result<Co
         ruleset: raw.ruleset,
         profile: raw.profile,
         start,
+        save,
         play_mode,
         seed,
         mods: raw.mods,
@@ -611,6 +660,51 @@ pub fn validate(raw: RawContract, def: &GameDef, expected_id: &str) -> Result<Co
         inputs: inputs.expect("checked above"),
         asserts,
         windows,
+    })
+}
+
+/// Resolves a starting checkpoint. A `save` scenario starts the run from it
+/// (`StartPoint::FromSave`), so the `start` must name a room; `start.room` and `save.room` must
+/// agree when both are given.
+fn validate_save(raw: &RawSave, start: &Start, def: &GameDef, errors: &mut Vec<String>) -> Option<SaveSlot> {
+    let (start_room, difficulty) = match *start {
+        Start::Room { room, difficulty } => (Some(room), difficulty),
+        Start::NewGame { difficulty } => (None, difficulty),
+    };
+    if start_room.is_none() {
+        errors.push("save needs a room start; a new game has no checkpoint".into());
+        return None;
+    }
+    let room = match &raw.room {
+        Some(name) => match def.rooms.iter().position(|r| &r.name == name) {
+            Some(i) => RoomId(u32::try_from(i).expect("room count fits")),
+            None => {
+                errors.push(format!("save room {name:?} is not in the package"));
+                return None;
+            }
+        },
+        None => start_room.expect("checked above"),
+    };
+    if let (Some(name), Some(start_room)) = (&raw.room, start_room)
+        && def.room(start_room).map(|r| r.name.as_str()) != Some(name.as_str())
+    {
+        errors.push(format!(
+            "save room {name:?} does not match the start room {:?}",
+            def.room(start_room).map(|r| r.name.as_str()).unwrap_or("?")
+        ));
+    }
+    Some(SaveSlot {
+        room,
+        x: Real::new(raw.x),
+        y: Real::new(raw.y),
+        flipped: raw.flipped.unwrap_or(false),
+        facing: raw.facing.unwrap_or(1),
+        difficulty: raw.difficulty.unwrap_or(difficulty),
+        deaths: raw.deaths.unwrap_or(0),
+        time: raw.time.unwrap_or(0),
+        bosses: raw.bosses.unwrap_or(0),
+        items: raw.items.unwrap_or(0),
+        clear: raw.clear.unwrap_or(false),
     })
 }
 
@@ -780,7 +874,12 @@ fn flatten_metric(
             }
             Ok(out)
         }
-        _ => Ok(vec![(name, BTreeMap::new())]),
+        // A bare scalar is the exact value, the convenience form the lifecycle contract uses
+        // (`save.room = "play"`). It is still an exact assertion, so it needs no `why`.
+        _ => Ok(vec![(
+            name,
+            BTreeMap::from([("exact".to_owned(), value.clone())]),
+        )]),
     }
 }
 
@@ -1292,9 +1391,12 @@ fn snapshot(sim: &mut Sim, metrics: &BTreeMap<String, Column>) -> Snapshot {
 /// resolved by the caller; this function reads the sim and changes no sim state.
 pub fn run(contract: &Contract, def: GameDef) -> Verdict {
     let options = SimOptions {
-        start: match contract.start {
-            Start::NewGame { difficulty } => StartPoint::NewGame { difficulty },
-            Start::Room { room, difficulty } => StartPoint::Room { room, difficulty },
+        start: match &contract.save {
+            Some(save) => StartPoint::FromSave(save.clone()),
+            None => match contract.start {
+                Start::NewGame { difficulty } => StartPoint::NewGame { difficulty },
+                Start::Room { room, difficulty } => StartPoint::Room { room, difficulty },
+            },
         },
         seed: contract.seed,
         dll_mode: iwbtg_sim::sound::DllMode::Model,

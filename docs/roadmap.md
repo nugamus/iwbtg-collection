@@ -22,8 +22,8 @@ The order of work across all three repos: client, research and games. There are 
 |---|---|---|
 | 0 | Setup and research groundwork *(done)* | Repos, specs pipeline, scraper, 20-game shortlist, GM8 CLONE_SPEC, first traces, converter, sim contracts (WP0). |
 | M1 | Kid matches the original *(done)* | The sim reproduces rely_the_needle's traces (stand, double jump) tick for tick on Windows, Linux and WASM. |
-| M2 | Sim covers the 20 games | All kid families, built-ins, scripts, sound and the replay runner are in. All 20 converter packages load and trace-check. Fidelity questions count only at tier T1 ([fidelity tiers](plans/fidelity-tiers.md)); T2 and T3 items move to the affected game's port issue or M5. |
-| M2b | Porting pipeline | The census says how many scripts the 20 ports need; the script API covers what they use; Rhai is measured on native and WASM; port layering, clean-room authoring and the extension model are decided; one command checks the fidelity of every port; `docs/porting.md` is written (#23). |
+| M2 | Sim covers the 20 games | All kid families, built-ins, scripts, sound and the replay runner are in. All 20 converter packages load and trace-check. Fidelity questions count only at F1 (the T1 alias) ([fidelity tiers](plans/fidelity-tiers.md)); F2 and F3 items move to the affected game's port issue or M5. |
+| M2b | Porting pipeline | The census says how many scripts the 20 ports need; the script API covers what they use; Rhai is measured on native and WASM; port layering, clean-room authoring, the extension model and the standard ruleset/profile model are decided; one command checks the fidelity and feel contracts of every port; `docs/porting.md` is written (#23, [0005](decisions/0005-standard-mechanics.md)). |
 | M3 | First playable | The Bevy client plays rely_the_needle on native and web, and the user confirms the feel. |
 | M4 | Ranked-ready run | Stripped ranked mode works locally: timer and cutscene freeze, mods, retry keys, HUD, practice, results, local PBs, replays, `.iwbz` with maps. |
 | M5 | 20 games | All 20 games are in Beta, each with fidelity proof and a verified full clear. |
@@ -41,8 +41,25 @@ The order of M3 and M4 versus M5: M5 ports need the M2 sim and the M2b pipeline,
 
 Near milestones fill up with small issues while later ones hold a few large placeholders (review of 2026-11-14, #774). Two rules keep the board honest:
 
-- **A finding goes to the milestone of the work it blocks,** not to the milestone that is open now. A one-game fidelity question goes on that game's port issue (M5), a server idea to M7, and so on. Fidelity questions get an impact tier first (#784, [fidelity tiers](plans/fidelity-tiers.md)): only T1 blocks M2.
+- **A finding goes to the milestone of the work it blocks,** not to the milestone that is open now. A one-game fidelity question goes on that game's port issue (M5), a server idea to M7, and so on. Fidelity questions get a feel tier first (#784, [fidelity tiers](plans/fidelity-tiers.md)): only F1 (the T1 alias) blocks M2.
 - **A milestone is scoped before its predecessor closes.** Its large issues get sub-issues (each port follows the standard steps listed in its issue), so the board shows the real size of the work ahead.
+
+## Modernization program
+
+The engine models that still reproduce GameMaker 8 implementation details, tracked by [#1180](https://github.com/nugamus/iwbtg-collection/issues/1180) now that [0005](decisions/0005-standard-mechanics.md) is accepted (2026-11-21). `gm8` keeps its exact behavior behind its compatibility profile and `standard` gets the modern model; an F1 slice needs a feel contract, an F2 slice a screenshot or audio check, and an F3 slice is free to redesign ([fidelity tiers](plans/fidelity-tiers.md)). The program is parked for M4: an implementation slice does not start while an M2b seat owns the same files, and every child is size L and splits into bounded sub-issues first. The umbrella holds the detail; this table places the work.
+
+| Workstream | Issue | Tier | `standard` gets | `gm8` keeps | Waits on |
+|---|---|---|---|---|---|
+| A. World transaction | [#1174](https://github.com/nugamus/iwbtg-collection/issues/1174) | F3 mechanism; F1 where spawn or event order is observed | Immediate, final destroy; generation handles; snapshot `with`; one room transaction and commit point | The old sequence behind its profile | #1149, #1152, #1153 |
+| B. Entity and reference | [#1175](https://github.com/nugamus/iwbtg-collection/issues/1175) | F1 where a missing reference or pause changes an outcome; F3 otherwise | Explicit `enabled` and `keep_on_room_change`, pause as a state, typed references validated at build | Zero maps to the old sentinel | #1153, #1159 |
+| C. Script semantics | [#1176](https://github.com/nugamus/iwbtg-collection/issues/1176) | F1 for ports relying on 0-defaults or save semantics; F3 (robustness) otherwise | Explicit initialization, typed values, data-only validated saves | Its semantics behind the profile | None for C1; C2 needs #1150 |
+| D. Collision geometry | [#1177](https://github.com/nugamus/iwbtg-collection/issues/1177) | F1, adopted port by port with a feel contract | Baked typed colliders, one authoritative shape, analytic resolution | Exact sampling | None for D1; D2–D4 need #1151, #1152 |
+| E. Presentation | [#1178](https://github.com/nugamus/iwbtg-collection/issues/1178) | F2; camera response can be F1 | Pure Draw projection, camera component, render layers, explicit transitions | Current behavior; a visible change needs the user's sign-off | None for E2–E5; E1 needs #1152 |
+| F. Time service | [#1179](https://github.com/nugamus/iwbtg-collection/issues/1179) | F1 for bullet, boss and avoidance timing; F2 for ordinary animation | Dated timelines, path/tween components, one animation phase, its own ruleset value and `gameplay_hash` | Exact timeline moments, path clock and animation phase; hashes and pins unchanged | #1165 |
+
+**Status (2026-11-21).** Three slices are under way on disjoint files: #1176 C1 (the script module), #1178 E2/E3 (camera and render layers) and #1177 D1 (the build-time collider asset). #1174, #1175 and #1179 are queued behind the lanes their rows name.
+
+**Sequencing.** The queued three wait on the lanes that own their files: #1174 behind lifecycle and dispatch (#1149, #1152) and identity (#1153); #1175 behind the identity-save and builtins lanes (#1153, #1159); #1179 behind the one scheduler (#1165). A slice that shares `room.rs`, `world/*`, `events.rs` or `def/physics.rs` starts only when the lane that owns those files is done.
 
 ## How work flows
 
