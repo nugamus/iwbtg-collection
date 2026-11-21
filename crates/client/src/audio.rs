@@ -234,6 +234,8 @@ pub enum Cmd {
         target: SoundTarget,
         sound: SoundId,
         looping: bool,
+        /// The sound's length in ticks from the sim event (0 = unknown), for music sync.
+        length_ticks: u32,
         volume: f32,
         speed: f32,
     },
@@ -326,6 +328,8 @@ impl Mixer {
                     target: SoundTarget::Builtin(SoundId(i as u32)),
                     sound: SoundId(i as u32),
                     looping: false,
+                    // A script `emit` is a one-shot; it never carries music sync.
+                    length_ticks: 0,
                     volume: 1.0,
                     speed: 1.0,
                 })
@@ -343,7 +347,12 @@ impl Mixer {
                 }
                 vec![]
             }
-            SoundOutput::Play { target, looping } => {
+            SoundOutput::Play {
+                target,
+                looping,
+                length_ticks,
+                ..
+            } => {
                 let sound = match target {
                     SoundTarget::Builtin(id) => Some(*id),
                     SoundTarget::FmodGroup(_) => None,
@@ -354,6 +363,9 @@ impl Mixer {
                     target: *target,
                     sound,
                     looping: *looping,
+                    // The sim sends the duration with the event; the client never reads it back
+                    // out of the package's sound table.
+                    length_ticks: *length_ticks,
                     volume: self.volume.get(target).unwrap_or_else(|| {
                         // A built-in sound starts at the volume its package gives it.
                         def.sounds
@@ -363,13 +375,15 @@ impl Mixer {
                     speed: self.speed.get(target).unwrap_or(1.0),
                 }]
             }
-            SoundOutput::Stop { target } => vec![Cmd::Stop(*target)],
-            SoundOutput::StopAll { adapter } => vec![Cmd::StopAll { adapter: *adapter }],
-            SoundOutput::Pause { target, paused } => vec![Cmd::Pause {
+            SoundOutput::Stop { target, .. } => vec![Cmd::Stop(*target)],
+            SoundOutput::StopAll { adapter, .. } => vec![Cmd::StopAll { adapter: *adapter }],
+            SoundOutput::Pause {
+                target, paused, ..
+            } => vec![Cmd::Pause {
                 target: *target,
                 paused: *paused,
             }],
-            SoundOutput::Volume { target, value } => {
+            SoundOutput::Volume { target, value, .. } => {
                 let volume = linear(*target, value.get());
                 self.volume.insert(*target, volume);
                 vec![Cmd::Volume {
@@ -377,7 +391,7 @@ impl Mixer {
                     volume,
                 }]
             }
-            SoundOutput::Pitch { target, value } => {
+            SoundOutput::Pitch { target, value, .. } => {
                 let speed = value.get().max(0.01) as f32;
                 self.speed.insert(*target, speed);
                 vec![Cmd::Speed {
@@ -627,6 +641,7 @@ pub fn play(
                     target,
                     sound,
                     looping,
+                    length_ticks,
                     volume,
                     speed,
                 } => {
@@ -655,11 +670,9 @@ pub fn play(
                             h
                         }
                     };
-                    // A looping tune with a known length follows the tick clock.
-                    let length = def
-                        .sounds
-                        .get(sound.0 as usize)
-                        .map_or(0.0, |d| f64::from(d.length_ticks) / tick_rate);
+                    // A looping tune with a known length follows the tick clock. The length comes
+                    // with the sim's event, not from the package's sound table.
+                    let length = f64::from(length_ticks) / tick_rate;
                     let settings = PlaybackSettings {
                         mode: if looping {
                             PlaybackMode::Loop
@@ -834,7 +847,10 @@ mod tests {
 
     #[test]
     fn only_sound_and_emit_events_are_cues() {
-        let mut o = out(SoundOutput::StopAll { adapter: false });
+        let mut o = out(SoundOutput::StopAll {
+            adapter: false,
+            tick: 0,
+        });
         o.push(OutputEvent::Script(ScriptOutput::Emit { name: "ding".into() }));
         o.push(OutputEvent::Script(ScriptOutput::Shake {
             ticks: 3,
@@ -847,10 +863,19 @@ mod tests {
     fn the_offset_holds_cues_back_and_keeps_their_order() {
         let mut q = Queue::new(100);
         let t0 = Instant::now();
-        q.push(t0, &out(SoundOutput::StopAll { adapter: false }));
+        q.push(
+            t0,
+            &out(SoundOutput::StopAll {
+                adapter: false,
+                tick: 0,
+            }),
+        );
         q.push(
             t0 + Duration::from_millis(20),
-            &out(SoundOutput::StopAll { adapter: true }),
+            &out(SoundOutput::StopAll {
+                adapter: true,
+                tick: 0,
+            }),
         );
         assert!(q.due(t0 + Duration::from_millis(99)).is_empty());
         assert_eq!(q.due(t0 + Duration::from_millis(100)).len(), 1);
@@ -901,6 +926,30 @@ mod tests {
         assert!((linear(SoundTarget::Super(1), -2000.0) - 0.1).abs() < 1e-6);
         assert_eq!(linear(SoundTarget::Builtin(SoundId(0)), 0.5), 0.5);
         assert_eq!(linear(SoundTarget::FmodGroup(1), -1.0), 0.0);
+    }
+
+    #[test]
+    fn a_play_takes_its_duration_from_the_sim_event() {
+        use iwbtg_sim::def::RoomDef;
+        use iwbtg_sim::def::testing::GameDefBuilder;
+        let mut b = GameDefBuilder::new("audio-duration");
+        let room = b.room(RoomDef::new("r", 800, 608));
+        b.start_room(room);
+        let def = b.build().expect("a def");
+        let mut mixer = Mixer::default();
+        let cmds = mixer.handle(
+            &def,
+            &Cue::Sound(SoundOutput::Play {
+                target: SoundTarget::Builtin(SoundId(0)),
+                looping: true,
+                length_ticks: 250,
+                tick: 9,
+            }),
+        );
+        assert!(
+            matches!(cmds.as_slice(), [Cmd::Start { length_ticks: 250, .. }]),
+            "{cmds:?}"
+        );
     }
 
     const RATE: f64 = 50.0;
@@ -969,6 +1018,61 @@ mod tests {
     }
 
     #[test]
+    fn the_showcase_starts_its_night_loop_on_the_first_tick() {
+        // The F2 contract `sound/event_model` asserts exactly this shape.
+        use iwbtg_sim::def::SoundId;
+        use iwbtg_sim::input::InputFrame;
+        use iwbtg_sim::room::StartPoint;
+        use iwbtg_sim::sim::{Sim, SimOptions};
+        use iwbtg_sim::sound::DllMode;
+
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("showcase.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let night = pkg
+            .def
+            .sounds
+            .iter()
+            .position(|s| s.name == "night")
+            .expect("showcase has the night track");
+        let night = SoundId(night as u32);
+        let mut sim = Sim::new(
+            pkg.def.clone(),
+            SimOptions {
+                start: StartPoint::NewGame { difficulty: 0 },
+                seed: 7,
+                dll_mode: DllMode::Model,
+                mode: iwbtg_sim::stripped::PlayMode::Original,
+                map: None,
+            },
+        )
+        .unwrap();
+        // The courtyard's music object runs `every_step_if_not_playing`, so its first Step
+        // (sim tick 0) stops every built-in sound and starts the loop.
+        sim.step(InputFrame::EMPTY);
+        let plays: Vec<SoundOutput> = sim
+            .world()
+            .output
+            .iter()
+            .filter_map(|e| match e {
+                OutputEvent::Sound(s @ SoundOutput::Play { .. }) => Some(s.clone()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            plays.iter().any(|e| matches!(
+                e,
+                SoundOutput::Play {
+                    target: SoundTarget::Builtin(s),
+                    looping: true,
+                    tick: 0,
+                    ..
+                } if *s == night
+            )),
+            "the night loop starts at tick 0: {plays:?}"
+        );
+    }
+
+    #[test]
     fn the_demo_package_starts_its_music_and_has_every_sound_file() {
         use iwbtg_sim::input::InputFrame;
         use iwbtg_sim::room::StartPoint;
@@ -1002,9 +1106,14 @@ mod tests {
             }
         }
         let theme = pkg.def.sounds.iter().position(|s| s.name == "theme").unwrap();
+        let theme_length = pkg.def.sounds[theme].length_ticks;
         assert!(
-            cmds.iter()
-                .any(|c| matches!(c, Cmd::Start { sound, looping: true, .. } if sound.0 as usize == theme))
+            cmds.iter().any(|c| matches!(
+                c,
+                Cmd::Start { sound, looping: true, length_ticks, .. }
+                    if sound.0 as usize == theme && *length_ticks == theme_length
+            )),
+            "the music start carries the sim event's duration: {cmds:?}"
         );
     }
 }

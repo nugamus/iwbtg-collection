@@ -1820,7 +1820,7 @@ fn tolerance_holds(tolerance: &Tolerance, actual: &Value) -> bool {
 fn sound_matches(event: &SoundOutput, want: SoundEvent, sound: Option<SoundId>) -> bool {
     match (want, event) {
         (SoundEvent::Play, SoundOutput::Play { target, .. })
-        | (SoundEvent::Stop, SoundOutput::Stop { target })
+        | (SoundEvent::Stop, SoundOutput::Stop { target, .. })
         | (SoundEvent::Volume, SoundOutput::Volume { target, .. })
         | (SoundEvent::Pitch, SoundOutput::Pitch { target, .. }) => {
             sound.is_some_and(|id| matches!(target, SoundTarget::Builtin(t) if *t == id))

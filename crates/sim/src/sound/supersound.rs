@@ -6,8 +6,9 @@
 //! exactly the last value set** (S5, UNKNOWN for the real DLL; it decides the death fade start
 //! value and so how many fader steps run). A Real is returned through `string()` rules.
 //!
-//! In [`DllMode::Stub`] every call changes nothing and returns `""`, like the recorder
-//! `--stub-dlls` (the kaenbyou traces read a start volume of 0).
+//! When the run's named model does not provide SuperSound (the `event`, `gmfmod` and `stub`
+//! profiles, and a recorder `--stub-dlls` run) every call changes nothing and returns `""`, like
+//! the recorder (the kaenbyou traces read a start volume of 0).
 //!
 //! Inferred, OPEN: a paused sound reports playing `"0"` and paused `"1"`; a failed call returns
 //! `"0"`; the DLL does not know a sound length, so the script host passes `length_ticks` at
@@ -15,7 +16,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{DllMode, SoundOutput, SoundTarget, active, emit};
+use super::{SoundOutput, SoundTarget, active, emit};
 use crate::num::{Real, gm_string_real};
 use crate::world::Ctx;
 
@@ -54,7 +55,7 @@ pub struct SuperSoundState {
 }
 
 fn stub(ctx: &Ctx) -> bool {
-    ctx.dll_mode == DllMode::Stub
+    !ctx.sound_model().models_supersound()
 }
 
 fn ok(b: bool) -> String {
@@ -113,12 +114,15 @@ pub fn load(ctx: &mut Ctx, file: &str, stream: bool, length_ticks: u32) -> Strin
         volume: Real::ZERO,
         pan: Real::ZERO,
     });
+    let tick = ctx.w.tick;
     emit(
         ctx,
         SoundOutput::Load {
             target: SoundTarget::Super(n),
             file: file.to_owned(),
             stream,
+            length_ticks,
+            tick,
         },
     );
     n.to_string()
@@ -132,6 +136,7 @@ fn start(ctx: &mut Ctx, h: &str, looping: bool) -> String {
     let Some((n, s)) = slot(&mut ctx.w.sound.supersound, h) else {
         return "0".to_owned();
     };
+    let length_ticks = s.length_ticks;
     s.started = true;
     s.looping = looping;
     s.start_tick = now;
@@ -141,6 +146,8 @@ fn start(ctx: &mut Ctx, h: &str, looping: bool) -> String {
         SoundOutput::Play {
             target: SoundTarget::Super(n),
             looping,
+            length_ticks,
+            tick: now,
         },
     );
     "1".to_owned()
@@ -161,6 +168,7 @@ pub fn stop(ctx: &mut Ctx, h: &str) -> String {
     if stub(ctx) {
         return String::new();
     }
+    let tick = ctx.w.tick;
     let Some((n, s)) = slot(&mut ctx.w.sound.supersound, h) else {
         return "0".to_owned();
     };
@@ -170,6 +178,7 @@ pub fn stop(ctx: &mut Ctx, h: &str) -> String {
         ctx,
         SoundOutput::Stop {
             target: SoundTarget::Super(n),
+            tick,
         },
     );
     "1".to_owned()
@@ -192,6 +201,7 @@ pub fn pause(ctx: &mut Ctx, h: &str) -> String {
             SoundOutput::Pause {
                 target: SoundTarget::Super(n),
                 paused: true,
+                tick: now,
             },
         );
     }
@@ -216,6 +226,7 @@ pub fn resume(ctx: &mut Ctx, h: &str) -> String {
         SoundOutput::Pause {
             target: SoundTarget::Super(n),
             paused: false,
+            tick: now,
         },
     );
     "1".to_owned()
@@ -226,6 +237,7 @@ pub fn free(ctx: &mut Ctx, h: &str) -> String {
     if stub(ctx) {
         return String::new();
     }
+    let tick = ctx.w.tick;
     let Some((n, s)) = slot(&mut ctx.w.sound.supersound, h) else {
         return "0".to_owned();
     };
@@ -236,6 +248,7 @@ pub fn free(ctx: &mut Ctx, h: &str) -> String {
         ctx,
         SoundOutput::Stop {
             target: SoundTarget::Super(n),
+            tick,
         },
     );
     "1".to_owned()
@@ -253,11 +266,13 @@ pub fn set_volume(ctx: &mut Ctx, h: &str, value: Real) -> String {
         return "0".to_owned();
     };
     s.volume = value;
+    let tick = ctx.w.tick;
     emit(
         ctx,
         SoundOutput::Volume {
             target: SoundTarget::Super(n),
             value,
+            tick,
         },
     );
     "1".to_owned()

@@ -164,7 +164,8 @@ fn music_stops(sim: &Sim) -> usize {
                 e,
                 OutputEvent::Sound(
                     SoundOutput::Stop {
-                        target: SoundTarget::Builtin(MUSIC)
+                        target: SoundTarget::Builtin(MUSIC),
+                        ..
                     } | SoundOutput::StopAll { .. }
                 )
             )

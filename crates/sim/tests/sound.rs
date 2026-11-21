@@ -6,7 +6,7 @@ use iwbtg_sim::hash::state_hash;
 use iwbtg_sim::num::Real;
 use iwbtg_sim::output::OutputEvent;
 use iwbtg_sim::rules::RunnerRules;
-use iwbtg_sim::rules::sound::{LoopPlaying, MultimediaSecond};
+use iwbtg_sim::rules::sound::{LoopPlaying, MultimediaSecond, SoundModel};
 use iwbtg_sim::script::ScriptRuntime;
 use iwbtg_sim::sound::{self, DllMode, SoundOutput, SoundTarget, cleanmem, gmfmod, supersound};
 use iwbtg_sim::world::{Ctx, World};
@@ -146,12 +146,19 @@ fn stop_ends_every_copy_and_stop_all_ends_all() {
     assert_eq!(
         g.sound_events(),
         vec![SoundOutput::Stop {
-            target: SoundTarget::Builtin(FX)
+            target: SoundTarget::Builtin(FX),
+            tick: 0,
         }]
     );
     g.with(sound::stop_all);
     assert!(!g.playing(BGM));
-    assert_eq!(g.sound_events(), vec![SoundOutput::StopAll { adapter: false }]);
+    assert_eq!(
+        g.sound_events(),
+        vec![SoundOutput::StopAll {
+            adapter: false,
+            tick: 0,
+        }]
+    );
     // A stop of a sound that is not playing emits nothing.
     g.with(|c| sound::stop(c, FX));
     assert!(g.sound_events().is_empty());
@@ -229,7 +236,8 @@ fn sound_volume_is_output_only_and_skips_multimedia() {
         g.sound_events(),
         vec![SoundOutput::Volume {
             target: SoundTarget::Builtin(FX),
-            value: r(0.5)
+            value: r(0.5),
+            tick: 0,
         }]
     );
     assert!(g.with(|c| sound::volume(c, FX, r(f64::NAN))).is_err());
@@ -251,6 +259,73 @@ fn builtin_model_runs_in_stub_mode_too() {
     let mut g = rig(DllMode::Stub);
     g.play(FX, false);
     assert!(g.playing(FX));
+}
+
+#[test]
+fn play_events_carry_the_call_tick_and_the_sound_length() {
+    let mut g = rig(DllMode::Model);
+    g.w.tick = 7;
+    g.play(FX, false);
+    assert_eq!(
+        g.sound_events(),
+        vec![SoundOutput::Play {
+            target: SoundTarget::Builtin(FX),
+            looping: false,
+            length_ticks: 10,
+            tick: 7,
+        }]
+    );
+    // A looping MULTIMEDIA start reports its package length too (0 = unknown).
+    g.w.tick = 12;
+    g.play(BGM, true);
+    assert_eq!(
+        g.sound_events(),
+        vec![SoundOutput::Play {
+            target: SoundTarget::Builtin(BGM),
+            looping: true,
+            length_ticks: 100,
+            tick: 12,
+        }]
+    );
+}
+
+#[test]
+fn the_named_sound_models_select_the_adapters() {
+    let mut g = rig(DllMode::Model);
+    g.rules.sound.model = SoundModel::SuperSound;
+    assert_eq!(g.with(supersound::init), "Yes");
+    assert_eq!(
+        g.with(|c| gmfmod::init(c, r(100.0), r(0.0))),
+        Real::ZERO,
+        "the GMFMOD adapter is absent"
+    );
+    g.rules.sound.model = SoundModel::Gmfmod;
+    assert_eq!(g.with(supersound::init), "", "the SuperSound adapter is absent");
+    assert_eq!(g.with(|c| gmfmod::init(c, r(100.0), r(0.0))), Real::ONE);
+    g.rules.sound.model = SoundModel::Event;
+    assert_eq!(g.with(supersound::init), "");
+    assert_eq!(g.with(|c| gmfmod::init(c, r(100.0), r(0.0))), Real::ZERO);
+    // The format-0 default models both adapters, as before the named profiles.
+    g.rules.sound.model = SoundModel::Gm8;
+    assert_eq!(g.with(supersound::init), "Yes");
+    assert_eq!(g.with(|c| gmfmod::init(c, r(100.0), r(0.0))), Real::ONE);
+    // A recorder --stub-dlls run overrides the profile with `stub`.
+    g.rules.sound.model = SoundModel::SuperSound;
+    g.mode = DllMode::Stub;
+    assert_eq!(g.with(supersound::init), "");
+    assert_eq!(g.with(|c| gmfmod::init(c, r(100.0), r(0.0))), Real::ZERO);
+}
+
+#[test]
+fn the_event_model_keeps_the_builtin_events() {
+    let mut g = rig(DllMode::Model);
+    g.rules.sound.model = SoundModel::Event;
+    g.play(FX, false);
+    assert!(g.playing(FX), "the built-in copy model runs in every profile");
+    assert!(matches!(
+        g.sound_events().as_slice(),
+        [SoundOutput::Play { length_ticks: 10, .. }]
+    ));
 }
 
 // ---- SuperSound ----------------------------------------------------------------------------
