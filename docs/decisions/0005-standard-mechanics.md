@@ -1,6 +1,6 @@
 # 0005: Standard mechanics and feel-based fidelity
 
-Status: Proposed for the user's approval, 2026-11-20. Umbrella #1146; the proposal issue is #1147. The PR that closes #1147 is the proposal; until the user answers the open decisions this is a draft and no behavior changes.
+Status: Accepted, 2026-11-21. Umbrella #1146; the proposal issue is #1147, closed by [PR #1148](https://github.com/nugamus/iwbtg-collection/pull/1148). The user answered all seven open decisions on 2026-11-21 (see [Decision log](#decision-log)); this record is normative from that date, and no behavior changes until each child ships behind a ruleset/profile with evidence.
 
 Related: [0004 extension model](0004-extension-model.md), [product](../product.md) (Look and screen, Restart keys), [content](../content.md#porting) (Porting, Fidelity), [fidelity tiers](../plans/fidelity-tiers.md), [versioning](../architecture/versioning.md), [replay](../architecture/replay.md), [traces](../architecture/traces.md), [sim core](../architecture/sim.md).
 
@@ -221,15 +221,17 @@ Each phase has child issues with size, dependencies and a feel contract.
 - **Risk: "feel" becomes an excuse.** The defense is the taxonomy, the contract, and the user for anything irreversible.
 - **Risk: profiles become the new code forks.** A profile may only set values the ruleset exposes. A new value is a ruleset change, reviewed as such.
 
-## Open items and user decisions
+## Decision log
 
-1. **Approve the principle and the F1/F2/F3 taxonomy**, with T1–T3 kept as aliases. Proposed default: yes.
-2. **Board key.** Include `ruleset`/`profile` in `gameplay_hash`; keep `SIM_VERSION` for build-level changes (#933). Proposed default: yes.
-3. **Format 1 shape.** `ruleset@N` + `[compat] profile` + deviations as above; `engine_rev` stays accepted as the format-0 alias. Required at format 1, absent = `gm8` in format 0. Irreversible once format 1 freezes. Proposed default: accept.
-4. **Checkpoint v2.** Versioned, room-name based, exact position for `standard`, profile quantization for `gm8`; atomic write; migrate old saves. Proposed default: accept.
-5. **Which F1 redesigns may change feel.** Proposed default: none without evidence; every port keeps a `gm8` profile until each move is proved.
-6. **Modern defaults for new games.** Exact f64 checkpoints, separate effects RNG, no package-authored boot room, tick-based scheduling. Proposed default: yes.
-7. **Promotion threshold interaction.** [0004](0004-extension-model.md)'s three-game rule stays; a standard behaviour promoted from a profile needs three ports or a committed creator demand. Proposed default: keep 0004.
+**2026-11-21 — the user answered all seven open items and accepted every proposed default.** The answers are binding for the program; a later change to any of them is a new record, not an edit here.
+
+1. **Principle and taxonomy.** Answered: approve the principle and the F1/F2/F3 taxonomy. Accepted: the feel-first principle and the three tiers above are normative, with T1–T3 kept as aliases ([fidelity tiers](../plans/fidelity-tiers.md)).
+2. **Board key.** Answered: include the ruleset and profile in the board identity. Accepted: `ruleset` and `[compat]`/`profile` (and every behavior-changing field) enter `gameplay_hash`, so a behavior change is a new board entry; `SIM_VERSION` stays for build-level changes (#933).
+3. **Format 1 shape.** Answered: accept the format-1 package shape. Accepted: `ruleset@N` + `[compat] profile` + declared deviations as in [Package shape](#package-shape), required at format 1; `engine_rev` remains the accepted format-0 alias, and absent means `gm8` at its `engine_rev` in format 0. Irreversible once format 1 freezes.
+4. **Checkpoint v2.** Answered: accept checkpoint v2. Accepted: versioned and room-name based, exact `f64` position for `standard`, profile quantization for `gm8`, atomic write, and old saves migrate (or are refused with one warning and a new game).
+5. **Which F1 redesigns may change feel.** Answered: evidence first. Accepted: no F1 redesign changes feel without a feel contract; every port keeps its `gm8` profile until each modern move is proved.
+6. **Modern defaults for new games.** Answered: yes. Accepted: exact `f64` checkpoints, a separate effects RNG stream, no package-authored boot room, and tick-based scheduling are the `standard` defaults.
+7. **Promotion threshold interaction.** Answered: keep [0004](0004-extension-model.md). Accepted: the three-game promotion rule stands; a standard behaviour promoted out of a profile needs three ports or a committed creator demand.
 
 ## Evidence
 
