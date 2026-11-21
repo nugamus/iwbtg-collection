@@ -4,8 +4,8 @@ use iwbtg_sim::def::{ClassMask, EngineKind};
 use iwbtg_sim::num::Real;
 use iwbtg_sim::rules::NumRules;
 use iwbtg_sim::save::{
-    Checkpoint, CheckpointError, RoomKey, SavePrecision, SavedPosition, load_into, quantize, save_counters,
-    save_now,
+    Checkpoint, CheckpointError, RoomKey, SavePrecision, SaveSlot, SaveSlotError, SavedPosition, load_into,
+    quantize, save_counters, save_now,
 };
 use iwbtg_sim::world::World;
 
@@ -255,4 +255,39 @@ fn a_checkpoint_format_is_checked() {
         Checkpoint::decode(&bytes),
         Err(CheckpointError::Format(Checkpoint::FORMAT + 1))
     );
+}
+
+/// #1325: the checkpoint payload is a closed field set. Bytes after it are refused rather than
+/// ignored, so an appended unknown field cannot be silently accepted.
+#[test]
+fn a_checkpoint_rejects_trailing_bytes() {
+    let g = game(|_| {});
+    let checkpoint = Checkpoint::from_slot(&g.def, &slot(g.play)).unwrap();
+    let mut bytes = checkpoint.encode().unwrap();
+    bytes.push(0);
+    assert_eq!(Checkpoint::decode(&bytes), Err(CheckpointError::TrailingBytes(1)));
+}
+
+/// #1325: the format check is `Checkpoint::validate`, which `to_slot` runs, so a checkpoint that
+/// reached `to_slot` without `decode` (the client's envelope path) is refused too.
+#[test]
+fn to_slot_refuses_a_foreign_format() {
+    let g = game(|_| {});
+    let mut checkpoint = Checkpoint::from_slot(&g.def, &slot(g.play)).unwrap();
+    checkpoint.format = Checkpoint::FORMAT + 1;
+    assert_eq!(
+        checkpoint.to_slot(&g.def),
+        Err(CheckpointError::Format(Checkpoint::FORMAT + 1))
+    );
+}
+
+/// #1325: a legacy raw slot is also a closed payload; a trailing byte is refused.
+#[test]
+fn a_raw_slot_rejects_trailing_bytes() {
+    let g = game(|_| {});
+    let saved = slot(g.play);
+    let mut bytes = postcard::to_allocvec(&saved).unwrap();
+    assert_eq!(SaveSlot::decode(&bytes).unwrap(), saved);
+    bytes.push(0);
+    assert_eq!(SaveSlot::decode(&bytes), Err(SaveSlotError::TrailingBytes(1)));
 }

@@ -111,6 +111,32 @@ pub struct SaveSlot {
     pub clear: bool,
 }
 
+/// Why a legacy raw [`SaveSlot`] payload could not be decoded.
+#[derive(Clone, PartialEq, Eq, Debug, thiserror::Error)]
+pub enum SaveSlotError {
+    /// The bytes do not decode.
+    #[error("the save slot does not decode ({0})")]
+    Corrupt(String),
+    /// Bytes remain after the slot.
+    #[error("{0} trailing bytes after the save slot")]
+    TrailingBytes(u64),
+}
+
+impl SaveSlot {
+    /// Decodes the raw slot a pre-#1145 client save and a replay format 5/6's `FromSave` kept
+    /// (the format before the versioned checkpoint). The payload must be the whole byte range:
+    /// trailing bytes are refused, so an envelope's version field or an appended field is never
+    /// read as a slot (#1325).
+    pub fn decode(bytes: &[u8]) -> Result<SaveSlot, SaveSlotError> {
+        let (slot, rest) = postcard::take_from_bytes::<SaveSlot>(bytes)
+            .map_err(|e| SaveSlotError::Corrupt(e.to_string()))?;
+        if !rest.is_empty() {
+            return Err(SaveSlotError::TrailingBytes(rest.len() as u64));
+        }
+        Ok(slot)
+    }
+}
+
 /// What the original's save format does to a position (rooms Confirmed group table).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SavedPosition {
@@ -460,6 +486,9 @@ pub enum CheckpointError {
     /// The bytes do not decode.
     #[error("the checkpoint does not decode ({0})")]
     Corrupt(String),
+    /// Bytes remain after the checkpoint.
+    #[error("{0} trailing bytes after the checkpoint")]
+    TrailingBytes(u64),
 }
 
 impl Checkpoint {
@@ -503,7 +532,12 @@ impl Checkpoint {
     /// gameplay, and the save point — when the checkpoint recorded one — must still resolve to
     /// the same placed instance. `ruleset`, `profile` and `precision` are provenance and do not
     /// change the stored position.
+    ///
+    /// Runs [`Checkpoint::validate`] first: the client reads the checkpoint inside its envelope
+    /// (never through [`Checkpoint::decode`]), so this is where its disk path and the replay's
+    /// `FromSave` path agree on the format (#1325).
     pub fn to_slot(&self, def: &GameDef) -> Result<SaveSlot, CheckpointError> {
+        self.validate()?;
         let room = resolve_room(def, &self.room)?;
         if let Some(point) = &self.point {
             resolve_point(def, room, point)?;
@@ -530,14 +564,27 @@ impl Checkpoint {
         postcard::to_allocvec(self).map_err(|e| CheckpointError::Corrupt(e.to_string()))
     }
 
-    /// Decodes and checks the format. The bytes a v0 replay kept are a raw [`SaveSlot`], not a
-    /// checkpoint: use [`Checkpoint::from_slot`] for those.
-    pub fn decode(bytes: &[u8]) -> Result<Checkpoint, CheckpointError> {
-        let checkpoint: Checkpoint =
-            postcard::from_bytes(bytes).map_err(|e| CheckpointError::Corrupt(e.to_string()))?;
-        if checkpoint.format != Self::FORMAT {
-            return Err(CheckpointError::Format(checkpoint.format));
+    /// Checks the parts every reader must agree on before using a checkpoint: the format. Shared
+    /// by [`Checkpoint::decode`] and [`Checkpoint::to_slot`], so a foreign format is refused
+    /// identically whether it arrived as a replay payload or inside the client's envelope.
+    pub fn validate(&self) -> Result<(), CheckpointError> {
+        if self.format != Self::FORMAT {
+            return Err(CheckpointError::Format(self.format));
         }
+        Ok(())
+    }
+
+    /// Decodes the payload exactly: trailing bytes are refused, so an appended or unknown field
+    /// is never silently ignored (#1325), and then checks the format with
+    /// [`Checkpoint::validate`]. The bytes a v0 replay kept are a raw [`SaveSlot`], not a
+    /// checkpoint: use [`SaveSlot::decode`] for those.
+    pub fn decode(bytes: &[u8]) -> Result<Checkpoint, CheckpointError> {
+        let (checkpoint, rest) = postcard::take_from_bytes::<Checkpoint>(bytes)
+            .map_err(|e| CheckpointError::Corrupt(e.to_string()))?;
+        if !rest.is_empty() {
+            return Err(CheckpointError::TrailingBytes(rest.len() as u64));
+        }
+        checkpoint.validate()?;
         Ok(checkpoint)
     }
 }

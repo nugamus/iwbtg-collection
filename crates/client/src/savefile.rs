@@ -143,29 +143,38 @@ pub fn read(store: &Store, name: &str, def: &GameDef) -> Result<Option<SaveSlot>
 fn decode(bytes: &[u8], def: &GameDef, place: &str) -> Result<SaveSlot, String> {
     let version = postcard::take_from_bytes::<u8>(bytes)
         .map(|(version, _)| version)
-        .map_err(|e| not_a_save(place, def, bytes, &e))?;
+        .map_err(|e| not_a_save(place, def, bytes, &e.to_string()))?;
     match version {
         VERSION => {
-            let file: SaveFile =
-                postcard::from_bytes(bytes).map_err(|e| not_a_save(place, def, bytes, &e))?;
+            let file: SaveFile = exact(bytes).map_err(|e| not_a_save(place, def, bytes, &e))?;
             check_provenance(&file.package, file.engine_rev, def, place)?;
+            // `to_slot` runs `Checkpoint::validate`, the same entry point the replay's
+            // `FromSave` uses, so a foreign checkpoint format is refused identically (#1325).
             resolve(place, file.checkpoint.to_slot(def))
         }
         VERSION_SAVE_SLOT => {
-            let file: SaveFileV2 =
-                postcard::from_bytes(bytes).map_err(|e| not_a_save(place, def, bytes, &e))?;
+            let file: SaveFileV2 = exact(bytes).map_err(|e| not_a_save(place, def, bytes, &e))?;
             check_provenance(&file.package, file.engine_rev, def, place)?;
             migrate(place, def, file.room, file.slot)
         }
         VERSION_NAMED_ROOM => {
-            let file: SaveFileV1 =
-                postcard::from_bytes(bytes).map_err(|e| not_a_save(place, def, bytes, &e))?;
+            let file: SaveFileV1 = exact(bytes).map_err(|e| not_a_save(place, def, bytes, &e))?;
             // No provenance to compare: the room name is the whole identity a version 1 save
             // carries, and the migration still refuses it if the room is gone or not gameplay.
             migrate(place, def, file.room, file.slot)
         }
         other => Err(unknown_version(place, def, bytes, other)),
     }
+}
+
+/// Decodes `bytes` as exactly one `T`. Postcard reads the struct and ignores anything after it,
+/// so without this check an appended or unknown field would be silently accepted (#1325).
+fn exact<T: for<'de> Deserialize<'de>>(bytes: &[u8]) -> Result<T, String> {
+    let (value, rest) = postcard::take_from_bytes::<T>(bytes).map_err(|e| e.to_string())?;
+    if !rest.is_empty() {
+        return Err(format!("{} trailing bytes", rest.len()));
+    }
+    Ok(value)
 }
 
 fn check_provenance(
@@ -212,12 +221,13 @@ fn resolve(place: &str, slot: Result<SaveSlot, CheckpointError>) -> Result<SaveS
 /// byte is the room index, not a version. Requiring the index to fit this package's rooms keeps
 /// a newer envelope from being mistaken for one.
 fn raw_slot(def: &GameDef, bytes: &[u8]) -> bool {
-    postcard::from_bytes::<SaveSlot>(bytes).is_ok_and(|slot| {
+    // The shared exact decode: a raw slot with bytes after it is not a raw slot (#1325).
+    SaveSlot::decode(bytes).is_ok_and(|slot| {
         usize::try_from(slot.room.0).is_ok_and(|room| room < def.rooms.len())
     })
 }
 
-fn not_a_save(place: &str, def: &GameDef, bytes: &[u8], e: &postcard::Error) -> String {
+fn not_a_save(place: &str, def: &GameDef, bytes: &[u8], e: &str) -> String {
     if raw_slot(def, bytes) {
         format!(
             "{place}: an older build's save (a raw save slot); this build reads version {VERSION}"
@@ -448,6 +458,49 @@ mod tests {
         file.version = VERSION + 1;
         store.write(NAME, &postcard::to_stdvec(&file).unwrap()).unwrap();
         assert!(read(&store, NAME, &def).unwrap_err().contains("format version"));
+    }
+
+    /// #1325: the envelope is a closed field set. Bytes after any envelope version are refused
+    /// rather than ignored, so an appended unknown field is never silently accepted.
+    #[test]
+    fn a_save_with_trailing_bytes_is_refused() {
+        let def = demo_def();
+        let store = temp("trailing");
+        let v3 = postcard::to_stdvec(&envelope(&def, "stage", slot())).unwrap();
+        let v2 = postcard::to_stdvec(&SaveFileV2 {
+            version: VERSION_SAVE_SLOT,
+            package: def.id.clone(),
+            engine_rev: def.engine_rev,
+            room: "stage".into(),
+            slot: slot(),
+        })
+        .unwrap();
+        let v1 = postcard::to_stdvec(&SaveFileV1 {
+            version: VERSION_NAMED_ROOM,
+            room: "stage".into(),
+            slot: slot(),
+        })
+        .unwrap();
+        for (envelope, mut bytes) in [("v3", v3), ("v2", v2), ("v1", v1)] {
+            bytes.push(0);
+            store.write(NAME, &bytes).unwrap();
+            let error = read(&store, NAME, &def).unwrap_err();
+            assert!(error.contains("trailing bytes"), "{envelope}: {error}");
+        }
+    }
+
+    /// #1325: the client reads the checkpoint inside its envelope, so `to_slot` must run the
+    /// same format validator the replay's `FromSave` path uses. A v3 save with a foreign
+    /// checkpoint format is refused instead of resumed.
+    #[test]
+    fn a_save_with_a_foreign_checkpoint_format_is_refused() {
+        let def = demo_def();
+        let store = temp("foreign-format");
+        let mut file = envelope(&def, "stage", slot());
+        file.checkpoint.format = Checkpoint::FORMAT + 1;
+        store.write(NAME, &postcard::to_stdvec(&file).unwrap()).unwrap();
+        let error = read(&store, NAME, &def).unwrap_err();
+        assert!(error.contains("checkpoint format 2"), "{error}");
     }
 
     /// #1144: the save names its room, so a save in a play room resolves to that room now; a
