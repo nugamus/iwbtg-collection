@@ -236,6 +236,18 @@ pub struct ReplayVerifyArgs {
     pub replay: PathBuf,
 }
 
+/// The line that tells a verifier a replay came from another sim build, or `None` when the
+/// versions match. A run of another build cannot reproduce the recorded hashes, so
+/// [`verify_main`] reports this instead of a hash difference (a verifier cannot tell "wrong
+/// build" from "wrong run" otherwise; docs/architecture/versioning.md).
+fn sim_version_mismatch(recorded: u32, current: u32) -> Option<String> {
+    (recorded != current).then(|| {
+        format!(
+            "sim_version {recorded}, this build is {current}: a replay is verified by a build with its own SIM_VERSION"
+        )
+    })
+}
+
 /// `iwbtg replay verify`: what the server checks of a replay (docs/architecture/replay.md,
 /// Verification), offline. The replay must be for this package (id and `gameplay_hash`) and this
 /// sim (`SIM_VERSION`); a headless run on its header and inputs must reproduce every claim of its
@@ -274,12 +286,14 @@ pub fn verify_main(args: &ReplayVerifyArgs) -> Result<bool, ToolError> {
             hex(&gameplay_hash)
         ));
     }
-    if h.sim_version != iwbtg_sim::SIM_VERSION {
-        bad.push(format!(
-            "recorded on sim version {}, this build is {}",
-            h.sim_version,
-            iwbtg_sim::SIM_VERSION
-        ));
+    if let Some(line) = sim_version_mismatch(h.sim_version, iwbtg_sim::SIM_VERSION) {
+        // The recorded hashes are a different build's; do not run or report a hash difference
+        // that would hide the real cause.
+        for b in &bad {
+            println!("mismatch: {b}");
+        }
+        println!("mismatch: {line}");
+        return Ok(false);
     }
     let s = run_def(def, &input.frames, options, input.mods)?;
     let t = &replay.trailer;
@@ -1010,6 +1024,9 @@ mod tests {
             .unwrap()
         };
         assert!(verify(&replay));
+        let mut old = replay.clone();
+        old.header.sim_version = iwbtg_sim::SIM_VERSION - 1;
+        assert!(!verify(&old), "another build's replay does not verify");
         assert_eq!(
             pause_lines(&replay.trailer, s.ranked_ticks),
             format!(
@@ -1026,6 +1043,16 @@ time: {}
         other.header.gameplay_hash = [7; 32];
         assert!(!verify(&other));
         std::fs::remove_file(&path).ok();
+    }
+
+    /// A replay from another build is reported as a sim-version mismatch, not as a hash
+    /// mismatch: the other build's hashes mean nothing here (#1303).
+    #[test]
+    fn a_sim_version_mismatch_names_the_versions_and_not_a_hash() {
+        assert_eq!(sim_version_mismatch(2, 2), None);
+        let line = sim_version_mismatch(1, 2).expect("a mismatch");
+        assert!(line.contains("sim_version 1, this build is 2"), "{line}");
+        assert!(!line.contains("hash"), "{line}");
     }
 
     #[test]
