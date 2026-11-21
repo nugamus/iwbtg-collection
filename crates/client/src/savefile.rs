@@ -370,6 +370,7 @@ mod tests {
             x: iwbtg_sim::num::Real::new(96.0),
             y: iwbtg_sim::num::Real::new(544.0),
             precision: Default::default(),
+            point: None,
             flipped: false,
             facing: 1,
             difficulty: 2,
@@ -641,6 +642,31 @@ mod tests {
             ));
             assert!(store.read(&format!("{name}.old")).unwrap().is_some());
         }
+    }
+
+    /// A checkpoint whose save point moved, was removed or was renamed starts a new game and
+    /// keeps the bytes: the identity refusal is the room refusal's path, never a fallback.
+    #[test]
+    fn a_stale_save_point_starts_a_new_game_and_keeps_the_file() {
+        let def = demo_def();
+        let store = temp("stale-point");
+        let name = name_for(&def.id);
+        let mut checkpoint = Checkpoint::from_slot(&def, &slot()).unwrap();
+        checkpoint.point = Some("name:gone".into());
+        let file = SaveFile {
+            version: VERSION,
+            package: def.id.clone(),
+            engine_rev: def.engine_rev,
+            checkpoint,
+        };
+        store
+            .write(&name, &postcard::to_stdvec(&file).unwrap())
+            .unwrap();
+        assert!(matches!(
+            start_from(&store, &def),
+            StartPoint::NewGame { difficulty: 0 }
+        ));
+        assert!(store.read(&format!("{name}.old")).unwrap().is_some());
     }
 
     /// A raw `SaveSlot` (the format before #1145) has no room identity to trust: it starts a

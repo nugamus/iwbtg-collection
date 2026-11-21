@@ -211,6 +211,9 @@ mod death_sound;
 #[path = "dll_sound_length.rs"]
 mod dll_sound_length;
 
+#[path = "entity_identity.rs"]
+mod entity_identity;
+
 #[path = "empty_mask.rs"]
 mod empty_mask;
 

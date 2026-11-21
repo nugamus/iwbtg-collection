@@ -114,6 +114,11 @@ pub struct Instance {
     /// Instance name from the room file (`PlacedInstance::name`): triggers find instances by
     /// it, scripts read it, the probe resolves `ProbeTarget::Named` through it.
     pub name: Option<NameId>,
+    /// A room-file `save` object's stable checkpoint key (#1153 E1): `name:<name>` when the
+    /// instance is named, else `at:<room>/<kind>@<xbits>,<ybits>` from its exact spawn position.
+    /// Not serialized or hashed; it is provenance for [`Checkpoint::point`](crate::save::Checkpoint).
+    #[serde(skip)]
+    pub point: Option<String>,
     /// Instance group from the room file (`PlacedInstance::group`).
     pub group: Option<GroupId>,
     /// GM parent emulation: what collision targets and queries see.
@@ -156,6 +161,7 @@ impl Instance {
             kind,
             rank,
             name: None,
+            point: None,
             group: None,
             classes: ClassMask::NONE,
             alive: true,

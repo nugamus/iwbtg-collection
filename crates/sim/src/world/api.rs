@@ -8,7 +8,8 @@
 
 use super::{Ctx, InstId, Instance, KindState, SimStatus, Value, World};
 use crate::def::{
-    Builtin, ClassMask, EngineKind, GameDef, GroupId, KindDef, KindId, NameId, ParamValue, Params, VariantSel,
+    Builtin, ClassMask, EngineKind, GameDef, GroupId, KindDef, KindId, NameId, ParamValue, Params, RoomId,
+    VariantSel,
 };
 use crate::error::SimError;
 use crate::events::{self, EventKind, ProbeState};
@@ -218,6 +219,30 @@ fn kind_def(def: &GameDef, kind: KindId) -> Result<&KindDef, SimError> {
         .ok_or_else(|| SimError::invariant(format!("unknown kind {}", kind.0)))
 }
 
+/// The stable key a room-file `save` object's checkpoint records (#1153 E1): the declared name
+/// when it has one, else the exact spawn position. No placement ordinal (it shifts when an
+/// instance is inserted or reordered), no runtime id and no `gm_id`; two save objects of one
+/// kind at one exact spawn position are interchangeable, so one key is honest for both.
+fn save_point_key(
+    def: &GameDef,
+    room: RoomId,
+    kind: KindId,
+    x: Real,
+    y: Real,
+    name: Option<NameId>,
+) -> Option<String> {
+    if let Some(name) = name.and_then(|n| def.names.get(n.index()?)) {
+        return Some(format!("name:{name}"));
+    }
+    let room = def.room(room)?.name.clone();
+    let kind = def.kind(kind)?.name.clone();
+    Some(format!(
+        "at:{room}/{kind}@{:016x},{:016x}",
+        x.get().to_bits(),
+        y.get().to_bits()
+    ))
+}
+
 /// `base` params overridden by `over` (a placed instance's params override the kind's).
 fn merge_params(base: &Params, over: &Params) -> Params {
     let mut merged = base.clone();
@@ -296,6 +321,12 @@ impl<'a> Ctx<'a> {
         };
         let mut inst = Instance::new(id, kind, rank, x, y);
         inst.name = init.name;
+        // A room-file `save` object gets the stable key its checkpoint persists (#1153 E1).
+        // `rank: Some` marks a placed instance: room creation code and scripts pass
+        // `SpawnInit::default()`.
+        if kd.base == Builtin::Save && init.rank.is_some() {
+            inst.point = save_point_key(def, self.w.room, kind, x, y, init.name);
+        }
         inst.group = init.group;
         inst.classes = kd.classes;
         inst.solid = kd.solid;

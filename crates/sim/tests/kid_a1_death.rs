@@ -140,6 +140,7 @@ fn slot(deaths: u32, time: u32) -> SaveSlot {
         x: r(1.0),
         y: r(2.0),
         precision: Default::default(),
+        point: None,
         flipped: false,
         facing: 1,
         difficulty: 0,

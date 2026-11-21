@@ -82,6 +82,12 @@ pub struct SaveSlot {
     /// decoded from an older file takes the default until the checkpoint supplies the real one.
     #[serde(skip)]
     pub precision: SavePrecision,
+    /// The save object's stable key (#1153 E1): `name:<declared name>` or
+    /// `at:<room>/<kind>@<xbits>,<ybits>` from its exact spawn position. Not serialized or
+    /// hashed; the persisted [`Checkpoint`] carries it and `set_point` fills it after
+    /// [`save_now`]. A first-play or creation-code save leaves it `None`.
+    #[serde(skip)]
+    pub point: Option<String>,
     /// Gravity flipped, as the game stores it. A game that flips by swapping to a second kid kind
     /// or by a flag on the kid (families A and C) stores whether the kid was flipped. A game that
     /// flips by the `yflag` model (family B, `[flip] model = "yflag"`) stores `global.reverse`
@@ -169,6 +175,7 @@ pub fn save_now(
         x: qx,
         y: qy,
         precision: SavePrecision::of_model(model),
+        point: None,
         flipped,
         facing,
         difficulty: run.difficulty,
@@ -180,6 +187,16 @@ pub fn save_now(
     };
     ctx.w.save = Some(slot);
     Ok(())
+}
+
+/// Records the save object's stable key on the slot [`save_now`] just wrote (#1153 E1). A
+/// room-file `save` instance carries the key from `Ctx::spawn`; a script-spawned save object,
+/// the first-play save and `save_game` have none. Called by the save built-in after `save_now`.
+pub fn set_point(ctx: &mut Ctx, me: InstId) {
+    let point = ctx.w.get(me).and_then(|i| i.point.clone());
+    if let Some(slot) = ctx.w.save.as_mut() {
+        slot.point = point;
+    }
 }
 
 /// A save with no kid (room creation code `save_game`, #629): the current room at x 0, y 0,
@@ -196,6 +213,7 @@ pub fn save_without_kid(ctx: &mut Ctx) {
         x: Real::ZERO,
         y: Real::ZERO,
         precision,
+        point: None,
         flipped,
         facing: 1,
         difficulty: run.difficulty,
@@ -392,9 +410,10 @@ pub struct Checkpoint {
     pub profile: ProfileId,
     /// The saved room's stable name.
     pub room: RoomKey,
-    /// The save object's package name, when one wrote it. Reserved: the sim does not yet track
-    /// which save object wrote the slot (the entity identity of #1153); a checkpoint written by
-    /// this build leaves it `None`.
+    /// The save object's stable key (#1153 E1): `name:<declared name>` for a named placed
+    /// instance, else `at:<room>/<kind>@<xbits>,<ybits>` from its exact spawn position. `None`
+    /// for a first-play or creation-code save, and for a script-spawned save object that has no
+    /// stable placed identity. [`Checkpoint::to_slot`] resolves it or refuses.
     pub point: Option<String>,
     /// The stored position, already written at [`precision`](Self::precision).
     pub x: Real,
@@ -432,6 +451,9 @@ pub enum CheckpointError {
     /// The room exists but is not gameplay.
     #[error("the saved room `{0}` is not gameplay")]
     NotPlay(String),
+    /// The saved save object moved, was removed, was renamed, or the key does not parse.
+    #[error("the saved point `{0}` is not in this version of the game")]
+    NoPoint(String),
     /// More rooms than a `RoomId` can index.
     #[error("too many rooms")]
     TooManyRooms,
@@ -462,7 +484,7 @@ impl Checkpoint {
             ruleset: RulesetId::of(def),
             profile: ProfileId::for_room(def, at),
             room,
-            point: None,
+            point: slot.point.clone(),
             x: slot.x,
             y: slot.y,
             precision: slot.precision,
@@ -478,15 +500,20 @@ impl Checkpoint {
     }
 
     /// Resolves the checkpoint to the runtime slot. The named room must still exist and be
-    /// gameplay; `ruleset`, `profile` and `precision` are provenance and do not change the
-    /// stored position.
+    /// gameplay, and the save point — when the checkpoint recorded one — must still resolve to
+    /// the same placed instance. `ruleset`, `profile` and `precision` are provenance and do not
+    /// change the stored position.
     pub fn to_slot(&self, def: &GameDef) -> Result<SaveSlot, CheckpointError> {
         let room = resolve_room(def, &self.room)?;
+        if let Some(point) = &self.point {
+            resolve_point(def, room, point)?;
+        }
         Ok(SaveSlot {
             room,
             x: self.x,
             y: self.y,
             precision: self.precision,
+            point: self.point.clone(),
             flipped: self.flipped,
             facing: self.facing,
             difficulty: self.difficulty,
@@ -528,4 +555,51 @@ fn resolve_room(def: &GameDef, room: &RoomKey) -> Result<RoomId, CheckpointError
     u32::try_from(at)
         .map(RoomId)
         .map_err(|_| CheckpointError::TooManyRooms)
+}
+
+/// Resolves a persisted save-point key against the package data (#1153 E1). A key that no longer
+/// names a placed instance — moved, removed, renamed, or malformed — is refused, so the load
+/// warns once and starts a new game instead of resuming at a different instance.
+fn resolve_point(def: &GameDef, room: RoomId, key: &str) -> Result<(), CheckpointError> {
+    let no = || CheckpointError::NoPoint(key.to_owned());
+    if let Some(name) = key.strip_prefix("name:") {
+        let found = def
+            .room(room)
+            .is_some_and(|r| r.instances.iter().any(|p| point_name(def, p) == Some(name)));
+        return if found { Ok(()) } else { Err(no()) };
+    }
+    let Some(place) = key.strip_prefix("at:") else {
+        return Err(no());
+    };
+    let Some((place, position)) = place.split_once('@') else {
+        return Err(no());
+    };
+    let Some((room_name, kind_name)) = place.split_once('/') else {
+        return Err(no());
+    };
+    let Some((x, y)) = position.split_once(',') else {
+        return Err(no());
+    };
+    let Ok(x) = u64::from_str_radix(x, 16) else {
+        return Err(no());
+    };
+    let Ok(y) = u64::from_str_radix(y, 16) else {
+        return Err(no());
+    };
+    let found = def.rooms.iter().find(|r| r.name == room_name).is_some_and(|r| {
+        r.instances.iter().any(|p| {
+            def.kind(p.kind).is_some_and(|k| k.name == kind_name)
+                && p.x.get().to_bits() == x
+                && p.y.get().to_bits() == y
+        })
+    });
+    if found { Ok(()) } else { Err(no()) }
+}
+
+/// The declared name of a placed instance, resolved through the package's name table.
+fn point_name<'a>(def: &'a GameDef, p: &crate::def::room::PlacedInstance) -> Option<&'a str> {
+    p.name
+        .and_then(|n| n.index())
+        .and_then(|i| def.names.get(i))
+        .map(String::as_str)
 }

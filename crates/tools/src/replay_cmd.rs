@@ -845,6 +845,7 @@ mod tests {
             x: iwbtg_sim::num::Real::new(96.0),
             y: iwbtg_sim::num::Real::new(500.0),
             precision: Default::default(),
+            point: None,
             flipped: false,
             facing: 1,
             difficulty: 0,
