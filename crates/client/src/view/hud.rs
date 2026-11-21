@@ -11,10 +11,54 @@ use iwbtg_sim::world::KindState;
 use super::order::Hud;
 use super::{Game, RoomSize};
 
-/// The text a sign showed in the latest tick. The sim sends it on every tick the sign speaks, so
-/// the box is up exactly while a tick keeps raising it.
+/// How long the sign box stays up after the last tick that raised it, in sim ticks. The original's
+/// message box is a GM8 `show_message`, which is modal: it stays until the player dismisses it.
+/// The research spec says the FT sign shows a box but not how it closes or how long it stays, and
+/// freezing the sim to wait for a click is not something this client does (#459). The box
+/// therefore stays for a declared client-side duration: 150 ticks is 3 s at the 50 Hz the IWBTG
+/// games tick at, long enough to read a line or two and short enough to clear itself as the player
+/// moves on. Counting sim ticks rather than wall time keeps a paused game's box up and makes two
+/// screenshot builds draw the same frame.
+const SIGN_BOX_TICKS: u32 = 150;
+
+/// What the sign box shows. A tick that raises `BuiltinOutput::TextBox` starts (or restarts) the
+/// latch, so an `on_up_press` sign stays readable after its single Up tick; a tick without one
+/// counts the latch down. A `while_overlapping` sign raises on every tick it is touched, so it
+/// keeps the box up while the kid stands on it and lets it fade out after.
 #[derive(Resource, Default)]
-pub struct SignText(pub Option<String>);
+pub struct SignText {
+    /// The text the box shows, if any.
+    text: Option<String>,
+    /// Sim ticks left before the box hides.
+    left: u32,
+}
+
+impl SignText {
+    /// Shows `text` and restarts the latch.
+    pub(super) fn raise(&mut self, text: String) {
+        self.text = Some(text);
+        self.left = SIGN_BOX_TICKS;
+    }
+
+    /// Hides the box at once (a retry).
+    pub(super) fn clear(&mut self) {
+        self.text = None;
+        self.left = 0;
+    }
+
+    /// The text to draw, if the box is up.
+    fn text(&self) -> Option<&String> {
+        self.text.as_ref()
+    }
+
+    /// One sim tick without a raise: counts the latch down, hiding the box when it ends.
+    fn tick(&mut self) {
+        self.left = self.left.saturating_sub(1);
+        if self.left == 0 {
+            self.text = None;
+        }
+    }
+}
 
 #[derive(Component)]
 pub struct SignBox;
@@ -40,12 +84,16 @@ const PAD_Y: f32 = 6.0;
 /// three lines at the box's text width, which fit in `BOX_HEIGHT - 2 * PAD_Y`.
 const TEXT_SIZE: f32 = 16.0;
 
-/// Remembers the sign text of the tick that just ran (none when no sign spoke).
+/// Takes the sign text a tick raised, if any, into the latch ([`SignText`]); a tick without one
+/// counts the latch down.
 pub fn note_tick(sign: &mut SignText, output: &[OutputEvent]) {
-    sign.0 = output.iter().rev().find_map(|e| match e {
-        OutputEvent::Builtin(BuiltinOutput::TextBox { text }) => Some(text.clone()),
+    match output.iter().rev().find_map(|e| match e {
+        OutputEvent::Builtin(BuiltinOutput::TextBox { text }) => Some(text),
         _ => None,
-    });
+    }) {
+        Some(text) => sign.raise(text.clone()),
+        None => sign.tick(),
+    }
 }
 
 /// `H:MM:SS`. The seconds read below 0 for one Step before the timer borrows; show 0.
@@ -106,7 +154,7 @@ pub fn show_sign(
     mut panel: Single<&mut Visibility, With<SignBox>>,
     mut label: Single<&mut Text2d, With<SignLabel>>,
 ) {
-    match &sign.0 {
+    match sign.text() {
         Some(text) => {
             **panel = Visibility::Inherited;
             if label.0 != *text {
@@ -189,12 +237,56 @@ mod tests {
     }
 
     #[test]
-    fn the_sign_text_lasts_only_while_a_tick_raises_it() {
+    fn the_sign_box_lasts_the_latch_after_the_tick_that_raises_it() {
         let mut sign = SignText::default();
         let said = [OutputEvent::Builtin(BuiltinOutput::TextBox { text: "hi".into() })];
         note_tick(&mut sign, &said);
-        assert_eq!(sign.0.as_deref(), Some("hi"));
+        assert_eq!(sign.text().map(String::as_str), Some("hi"));
+        // The tick that raised it does not count down, then every silent tick does.
+        for _ in 0..SIGN_BOX_TICKS - 1 {
+            note_tick(&mut sign, &[]);
+        }
+        assert_eq!(
+            sign.text().map(String::as_str),
+            Some("hi"),
+            "the box stays up for the declared duration"
+        );
         note_tick(&mut sign, &[]);
-        assert_eq!(sign.0, None);
+        assert_eq!(sign.text(), None, "and hides when the latch ends");
+    }
+
+    #[test]
+    fn a_new_raise_restarts_the_latch() {
+        let mut sign = SignText::default();
+        let said = [OutputEvent::Builtin(BuiltinOutput::TextBox { text: "hi".into() })];
+        note_tick(&mut sign, &said);
+        for _ in 0..SIGN_BOX_TICKS - 1 {
+            note_tick(&mut sign, &[]);
+        }
+        note_tick(&mut sign, &said);
+        assert_eq!(sign.text().map(String::as_str), Some("hi"));
+        for _ in 0..SIGN_BOX_TICKS - 1 {
+            note_tick(&mut sign, &[]);
+        }
+        assert_eq!(
+            sign.text().map(String::as_str),
+            Some("hi"),
+            "a second speak gets the whole duration again"
+        );
+    }
+
+    #[test]
+    fn a_retry_clears_the_box_at_once() {
+        let mut sign = SignText::default();
+        note_tick(
+            &mut sign,
+            &[OutputEvent::Builtin(BuiltinOutput::TextBox {
+                text: "hi".into(),
+            })],
+        );
+        sign.clear();
+        assert_eq!(sign.text(), None);
+        note_tick(&mut sign, &[]);
+        assert_eq!(sign.text(), None);
     }
 }

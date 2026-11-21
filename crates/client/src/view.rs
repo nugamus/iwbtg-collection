@@ -428,6 +428,11 @@ fn enter(world: &mut World) {
         ..default()
     });
     world.init_resource::<hud::SignText>();
+    // A `--hud-preview-sign` check raises the box at the run's start, as a sign that has just
+    // spoken leaves it, so the screenshot shows the latch rather than needing a real Up press.
+    if let Some(text) = crate::hud::sign_preview() {
+        world.resource_mut::<hud::SignText>().raise(text.to_owned());
+    }
     world.init_resource::<transition::Transition>();
     // The sim ticks at the game's rate on a fixed clock; frames only draw what the last tick
     // left. Slow motion (practice.rs) runs the first tick slow already; `follow_room_speed`
@@ -697,7 +702,7 @@ pub(crate) fn restart_run(world: &mut World) -> Result<(), String> {
     }
     // Keys held through the retry stay held; edges from before it are dropped.
     world.resource_mut::<Collector>().take_frame();
-    world.resource_mut::<hud::SignText>().0 = None;
+    world.resource_mut::<hud::SignText>().clear();
     Ok(())
 }
 
