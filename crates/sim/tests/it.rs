@@ -421,6 +421,9 @@ mod script_prep;
 #[path = "script_retry.rs"]
 mod script_retry;
 
+#[path = "script_save.rs"]
+mod script_save;
+
 #[path = "script_validate.rs"]
 mod script_validate;
 
