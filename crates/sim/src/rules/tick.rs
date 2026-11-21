@@ -92,6 +92,8 @@ pub struct TimingRules {
     pub animation: TimeUnit,
     /// R6 (U6, answered by the recorder): where timeline moments advance.
     pub timeline_slot: TimelineSlot,
+    /// R6 (decision 0005): how a timeline's moments are ordered.
+    pub timeline_model: TimelineModel,
     /// R7 (U7, answered by the recorder): where the animation update runs.
     pub anim_slot: AnimSlot,
     /// R7b (answered by the recorder): whether an instance without a sprite (or with a sprite
@@ -103,6 +105,42 @@ pub struct TimingRules {
 }
 
 impl TimingRules {
+    /// The `gm8` ruleset: the legacy clock, `[position, position + speed)` moments and the
+    /// recorded slots. Also [`Default`], so an absent ruleset keeps every existing outcome and
+    /// hash.
+    pub const fn gm8() -> TimingRules {
+        TimingRules {
+            clock: ClockPolicy::RoomSpeed,
+            alarms: TimeUnit::Ticks,
+            timelines: TimeUnit::Ticks,
+            paths: TimeUnit::Ticks,
+            animation: TimeUnit::Ticks,
+            timeline_slot: TimelineSlot::AfterBeginStep,
+            timeline_model: TimelineModel::Moments,
+            anim_slot: AnimSlot::AfterDraw,
+            anim_nosprite: NoSpriteAnim::Advance,
+            anim_below_zero: BelowZeroWrap::AddFramesAndFire,
+        }
+    }
+
+    /// The `standard` ruleset's timing values: one fixed clock per run and dated timeline
+    /// callbacks. A package cannot select it until the ruleset selection (#1160); until then
+    /// every run uses [`TimingRules::gm8`].
+    pub const fn standard() -> TimingRules {
+        TimingRules {
+            clock: ClockPolicy::Fixed,
+            alarms: TimeUnit::Ticks,
+            timelines: TimeUnit::Ticks,
+            paths: TimeUnit::Ticks,
+            animation: TimeUnit::Ticks,
+            timeline_slot: TimelineSlot::AfterBeginStep,
+            timeline_model: TimelineModel::DatedCallbacks,
+            anim_slot: AnimSlot::AfterDraw,
+            anim_nosprite: NoSpriteAnim::Advance,
+            anim_below_zero: BelowZeroWrap::AddFramesAndFire,
+        }
+    }
+
     /// Whether every timed system counts ticks, as the sim requires at run time. A rules value
     /// that names seconds or frames is a loader bug: those are data units, converted before the
     /// sim sees them.
@@ -111,6 +149,18 @@ impl TimingRules {
             .into_iter()
             .all(|unit| unit == TimeUnit::Ticks)
     }
+}
+
+/// R6 (decision 0005): how the moments due in one tick are ordered.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum TimelineModel {
+    /// `gm8`: the recorded `[position, position + speed)` set in declaration order, descending
+    /// for a negative speed (Design). Default for every current package.
+    #[default]
+    Moments,
+    /// `standard`: moments are dated callbacks; a tick's due callbacks run by deadline, then
+    /// declaration index, whatever the position's direction.
+    DatedCallbacks,
 }
 
 /// R1: when `xprevious`/`yprevious` are captured.
@@ -238,9 +288,24 @@ mod tests {
         assert_eq!(rules.timing.animation, TimeUnit::Ticks);
         assert!(rules.timing.all_ticks());
         assert_eq!(rules.timing.timeline_slot, TimelineSlot::AfterBeginStep);
+        assert_eq!(rules.timing.timeline_model, TimelineModel::Moments);
         assert_eq!(rules.timing.anim_slot, AnimSlot::AfterDraw);
         assert_eq!(rules.timing.anim_nosprite, NoSpriteAnim::Advance);
         assert_eq!(rules.timing.anim_below_zero, BelowZeroWrap::AddFramesAndFire);
+    }
+
+    #[test]
+    fn the_standard_timing_values_are_the_fixed_clock_and_dated_callbacks() {
+        assert_eq!(TimingRules::default(), TimingRules::gm8());
+        let standard = TimingRules::standard();
+        assert_eq!(standard.clock, ClockPolicy::Fixed);
+        assert_eq!(standard.timeline_model, TimelineModel::DatedCallbacks);
+        assert!(standard.all_ticks());
+        assert_eq!(
+            standard.anim_slot,
+            TimingRules::gm8().anim_slot,
+            "the standard timing value does not change the animation slot"
+        );
     }
 
     #[test]

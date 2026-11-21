@@ -9,7 +9,9 @@ use iwbtg_sim::events::{EventSet, ProbeAct, ProbeOn, ProbeState, ProbeStep, disp
 use iwbtg_sim::input::{Action, InputFrame};
 use iwbtg_sim::num::Real;
 use iwbtg_sim::room::RoomRequest;
-use iwbtg_sim::rules::tick::{AnimSlot, BoundarySlot, ClockPolicy, DirectLatch, RoomRequestRule};
+use iwbtg_sim::rules::tick::{
+    AnimSlot, BoundarySlot, ClockPolicy, DirectLatch, RoomRequestRule, TimelineModel,
+};
 use iwbtg_sim::timeline;
 use iwbtg_sim::world::{SimStatus, Value};
 use iwbtg_sim::{SimError, tick};
@@ -496,8 +498,9 @@ fn timeline_runs_moments_from_the_position_then_advances() {
         ..TimelineDef::default()
     });
     let def = b.build().unwrap();
-    let moments_per_tick = |speed: f64, looping: bool, ticks: u32| {
+    let moments_per_tick = |model: TimelineModel, speed: f64, looping: bool, ticks: u32| {
         let mut fx = Fx::new(def.clone());
+        fx.rules.tick.timing.timeline_model = model;
         let a = fx.probe(k, 0.0, 0.0, p("A"));
         {
             let inst = fx.w.get_mut(a).unwrap();
@@ -525,14 +528,105 @@ fn timeline_runs_moments_from_the_position_then_advances() {
         )
     };
     // Moment N on the (N+1)th tick after setting position 0 between ticks; position reads 1
-    // after the first tick (audio-rori-sync-b.csv).
-    let (out, pos) = moments_per_tick(1.0, false, 5);
-    assert_eq!(out, vec!["t0", "", "t2", "t3", ""]);
-    assert_eq!(pos, 5.0);
-    let (out, _) = moments_per_tick(2.0, false, 3);
-    assert_eq!(out, vec!["t0", "t2,t3", ""]);
-    let (out, _) = moments_per_tick(1.0, true, 6);
-    assert_eq!(out, vec!["t0", "", "t2", "t3", "t0", ""]);
+    // after the first tick (audio-rori-sync-b.csv). `DatedCallbacks` reorders a tick's due set,
+    // not which moments are due or when the position moves, so both models agree on ascending
+    // moments at speed 1, speed > 1 and looping. The negative-speed order is pinned by the
+    // `timeline::due_moments` unit tests.
+    for model in [TimelineModel::Moments, TimelineModel::DatedCallbacks] {
+        let (out, pos) = moments_per_tick(model, 1.0, false, 5);
+        assert_eq!(out, vec!["t0", "", "t2", "t3", ""], "{model:?}");
+        assert_eq!(pos, 5.0, "{model:?}");
+        let (out, _) = moments_per_tick(model, 2.0, false, 3);
+        assert_eq!(out, vec!["t0", "t2,t3", ""], "{model:?}");
+        let (out, _) = moments_per_tick(model, 1.0, true, 6);
+        assert_eq!(out, vec!["t0", "", "t2", "t3", "t0", ""], "{model:?}");
+    }
+}
+
+#[test]
+fn the_standard_timeline_model_orders_a_ticks_callbacks_by_deadline() {
+    // The loader requires ascending moments, but the ordering rule is defined for any
+    // declaration order; this makes the two models visible in one tick.
+    let mut b = builder();
+    let k = probe_kind(&mut b, "p");
+    b.def_mut().timelines.push(TimelineDef {
+        name: "tl".into(),
+        moments: vec![3, 0, 2, 1],
+        ..TimelineDef::default()
+    });
+    let def = b.build().unwrap();
+    let moments = |model: TimelineModel| {
+        let mut fx = Fx::new(def.clone());
+        fx.rules.tick.timing.timeline_model = model;
+        let a = fx.probe(k, 0.0, 0.0, p("A"));
+        {
+            let inst = fx.w.get_mut(a).unwrap();
+            timeline::start(&mut inst.timeline, TimelineId(0), Real::ZERO).unwrap();
+            inst.timeline.as_mut().unwrap().speed = Real::new(4.0);
+        }
+        fx.tick(InputFrame::EMPTY);
+        tokens_of(&fx.take_log(), "A")
+            .into_iter()
+            .filter(|t| t.starts_with('t'))
+            .map(|t| t.trim_end_matches('A').to_owned())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        moments(TimelineModel::Moments),
+        vec!["t3", "t0", "t2", "t1"],
+        "gm8 keeps declaration order"
+    );
+    assert_eq!(
+        moments(TimelineModel::DatedCallbacks),
+        vec!["t0", "t1", "t2", "t3"],
+        "standard orders by deadline"
+    );
+}
+
+#[test]
+fn a_callback_that_destroys_its_instance_stops_the_rest_of_the_tick() {
+    // Several due moments run in one tick, but a callback that destroys the instance stops the
+    // ones after it under both models (R6); the position does not advance either.
+    let mut b = builder();
+    let k = probe_kind(&mut b, "p");
+    b.def_mut().timelines.push(TimelineDef {
+        name: "tl".into(),
+        moments: vec![0, 1, 2],
+        ..TimelineDef::default()
+    });
+    let def = b.build().unwrap();
+    let run = |model: TimelineModel| {
+        let mut fx = Fx::new(def.clone());
+        fx.rules.tick.timing.timeline_model = model;
+        let a = fx.probe(
+            k,
+            0.0,
+            0.0,
+            p("A").with(step(ProbeOn::Moment(0), ProbeAct::DestroySelf)),
+        );
+        {
+            let inst = fx.w.get_mut(a).unwrap();
+            timeline::start(&mut inst.timeline, TimelineId(0), Real::ZERO).unwrap();
+            inst.timeline.as_mut().unwrap().speed = Real::new(3.0);
+        }
+        fx.tick(InputFrame::EMPTY);
+        let moments = tokens_of(&fx.take_log(), "A")
+            .into_iter()
+            .filter(|t| t.starts_with('t'))
+            .map(|t| t.trim_end_matches('A').to_owned())
+            .collect::<Vec<_>>();
+        let gone = fx.w.get(a).is_none_or(|i| !i.alive);
+        (moments, gone)
+    };
+    for model in [TimelineModel::Moments, TimelineModel::DatedCallbacks] {
+        let (moments, gone) = run(model);
+        assert_eq!(
+            moments,
+            vec!["t0"],
+            "only the destroying callback ran ({model:?})"
+        );
+        assert!(gone, "the instance is destroyed ({model:?})");
+    }
 }
 
 #[test]
