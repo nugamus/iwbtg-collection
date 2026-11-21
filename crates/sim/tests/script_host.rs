@@ -2,6 +2,7 @@
 //! Create, Step, Alarm and Collision handlers, custom variables, spawn and destroy, errors with
 //! a position, the nesting and budget limits, and determinism.
 
+use iwbtg_sim::def::script::ScriptRules;
 use iwbtg_sim::def::testing::GameDefBuilder;
 use iwbtg_sim::def::{
     Builtin, ClassMask, GameDef, KindDef, KindId, RoomDef, RoomId, ScriptDef, ScriptId, VarId,
@@ -26,6 +27,11 @@ struct Fx {
 
 /// Kinds: 0 `walker` (script), 1 `target` (script, class package 0), 2 `plain`.
 fn fx(source: &str, walker_events: bool) -> Fx {
+    fx_rules(source, walker_events, ScriptRules::gm8(true))
+}
+
+/// The same fixture under `script_rules` (decision 0005).
+fn fx_rules(source: &str, walker_events: bool, script_rules: ScriptRules) -> Fx {
     let mut b = GameDefBuilder::new("wp9");
     let room = b.room(RoomDef::new("room", 320, 240));
     let spr = b.sprite_rect((16, 16), (0, 0));
@@ -47,8 +53,10 @@ fn fx(source: &str, walker_events: bool) -> Fx {
         source: source.into(),
     });
     def.var_names.insert("hp".into(), VarId(0));
+    // Declared but never assigned, so an unset read is not an unknown-name error.
+    def.var_names.insert("missing".into(), VarId(1));
     let rules = RunnerRules::default();
-    let scripts = ScriptRuntime::new(&def, &rules).expect("scripts compile");
+    let scripts = ScriptRuntime::new_with_script_rules(&def, &rules, script_rules).expect("scripts compile");
     if walker_events {
         let mut set: EventSet = scripts.event_set(ScriptId(0));
         set.collisions.push(ClassMask::package(0).expect("class"));
@@ -179,6 +187,84 @@ fn a_script_error_halts_with_file_line_and_column() {
     assert!(e.contains("line 3"), "{e}");
     assert!(e.contains("walker"), "{e}");
     assert!(e.contains("tick"), "{e}");
+}
+
+#[test]
+fn gm8_reads_an_unset_variable_as_zero() {
+    let src = "fn create() { this.hp = this.missing + 4.0; }";
+    let mut f = fx(src, false);
+    let a = f.spawn(0, 0.0, 0.0);
+    assert_eq!(f.halted(), None);
+    assert_eq!(
+        f.w.get(a).expect("a").vars.get(&VarId(0)),
+        Some(&iwbtg_sim::world::Value::Real(Real::new(4.0)))
+    );
+}
+
+#[test]
+fn standard_unset_read_halts_with_the_source_span() {
+    let src = "fn create() {\n    this.hp = this.missing + 4.0;\n}\n";
+    let mut f = fx_rules(src, false, ScriptRules::standard());
+    let mut c = f.ctx();
+    let r = c.spawn(KindId(0), Real::new(0.0), Real::new(0.0), SpawnInit::default());
+    assert!(r.is_err(), "Create must fail");
+    let e = f.halted().expect("halted");
+    assert!(e.contains("variable `missing` is not set"), "{e}");
+    assert!(e.contains("scripts/walker.rhai"), "{e}");
+    assert!(e.contains("line 2"), "{e}");
+    assert!(e.contains("position"), "{e}");
+}
+
+#[test]
+fn the_xia_switch_keeps_the_error_without_the_typed_model() {
+    // `gm8` with `uninit_reads_zero = false` (xia) errors, as it did, and does not become
+    // the standard model by accident.
+    let mut f = fx_rules(
+        "fn create() {\n    this.hp = this.missing + 4.0;\n}\n",
+        false,
+        ScriptRules::gm8(false),
+    );
+    let mut c = f.ctx();
+    let r = c.spawn(KindId(0), Real::new(0.0), Real::new(0.0), SpawnInit::default());
+    assert!(r.is_err(), "Create must fail");
+    let e = f.halted().expect("halted");
+    assert!(e.contains("variable `missing` is not set"), "{e}");
+}
+
+#[test]
+fn gm8_stores_a_bool_as_a_real() {
+    let src = "fn create() { this.hp = true; }";
+    let mut f = fx(src, false);
+    let a = f.spawn(0, 0.0, 0.0);
+    assert_eq!(f.halted(), None);
+    assert_eq!(
+        f.w.get(a).expect("a").vars.get(&VarId(0)),
+        Some(&iwbtg_sim::world::Value::Real(Real::ONE))
+    );
+}
+
+#[test]
+fn standard_refuses_to_silently_erase_a_bool_into_a_real() {
+    let src = "fn create() { this.hp = true; }";
+    let mut f = fx_rules(src, false, ScriptRules::standard());
+    let mut c = f.ctx();
+    let r = c.spawn(KindId(0), Real::new(0.0), Real::new(0.0), SpawnInit::default());
+    assert!(r.is_err(), "Create must fail");
+    let e = f.halted().expect("halted");
+    assert!(e.contains("cannot hold a bool"), "{e}");
+    assert!(e.contains("scripts/walker.rhai"), "{e}");
+}
+
+#[test]
+fn a_real_is_not_a_condition_at_run_time() {
+    // The validator cannot type a variable statically (a bool variable is a valid condition),
+    // so the no-truthiness rule is enforced by the engine: a stored real is not a bool.
+    let src = "fn create() { this.hp = 1.0; }\nfn step() { if this.hp { this.x = 5.0; } }";
+    let mut f = fx_rules(src, true, ScriptRules::standard());
+    f.spawn(0, 0.0, 0.0);
+    f.run(1);
+    let e = f.halted().expect("halted");
+    assert!(e.contains("bool"), "{e}");
 }
 
 #[test]
