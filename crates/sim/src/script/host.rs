@@ -10,6 +10,7 @@
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 use super::inst::Inst;
 use super::{ScriptError, ScriptHost};
@@ -33,7 +34,9 @@ struct Compiled {
 
 pub(crate) struct Inner {
     iws: Iws,
-    scripts: Vec<Compiled>,
+    /// Shared with the [`PreparedScripts`] this run came from (#1093). `Rc`: the compiled ASTs
+    /// are not `Send` under the sim's no-`sync` Rhai profile and never leave this thread.
+    scripts: Rc<Vec<Compiled>>,
 }
 
 /// The game's compiled scripts and the engine that runs them. Built once per `Sim` from
@@ -106,25 +109,45 @@ fn trigger_name(
     def.names.get(inst.name?.index()?).cloned()
 }
 
-impl ScriptRuntime {
-    /// Compiles `def.scripts` (index = `ScriptId`) under the compatibility script model that
-    /// `def` already selects. A compile error is a load-time `SimError`.
-    pub fn new(def: &GameDef, rules: &RunnerRules) -> Result<ScriptRuntime, SimError> {
-        ScriptRuntime::new_with_script_rules(def, rules, ScriptRules::gm8(def.uninit_reads_zero))
-    }
+/// The package's compiled scripts and kind-name map, prepared once and reused across runs
+/// (#1021, #1093).
+///
+/// It holds only immutable data. Each run builds its own [`Iws`] and per-run `Shared` state, so
+/// two runs from the same artifact share no RNG, budget, log or parked world. The Rhai types
+/// stay inside this module: `GameDef` never holds one.
+#[derive(Clone)]
+pub struct PreparedScripts {
+    /// The package the scripts were compiled from; an artifact is not interchangeable.
+    package: String,
+    /// Compiled scripts, indexed by `ScriptId`. `Rc`: the ASTs are not `Send` and stay on the
+    /// sim's thread (the client cache is a `NonSend` resource, #1093B).
+    scripts: Rc<Vec<Compiled>>,
+    /// Kind names for the API's kind arguments.
+    kinds: Arc<BTreeMap<String, KindId>>,
+}
 
-    /// Compiles `def.scripts` under `script_rules` (decision 0005). `new` is this with the
-    /// package's compatibility pair; a `standard` ruleset passes [`ScriptRules::standard`].
-    pub fn new_with_script_rules(
-        def: &GameDef,
-        rules: &RunnerRules,
-        script_rules: ScriptRules,
-    ) -> Result<ScriptRuntime, SimError> {
+impl std::fmt::Debug for PreparedScripts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PreparedScripts")
+            .field("package", &self.package)
+            .field("scripts", &self.scripts.len())
+            .finish_non_exhaustive()
+    }
+}
+
+impl PreparedScripts {
+    /// Compiles every script of `def` under `rules`. A compile error is a load-time
+    /// `SimError::Script` with the file and position, as before.
+    pub fn new(def: &GameDef, rules: &RunnerRules) -> Result<PreparedScripts, SimError> {
         if def.scripts.is_empty() {
-            return Ok(ScriptRuntime::default());
+            return Ok(PreparedScripts {
+                package: def.id.clone(),
+                scripts: Rc::new(Vec::new()),
+                kinds: Arc::new(BTreeMap::new()),
+            });
         }
         let iws = Iws::new(rules.num.clone());
-        let mut scripts = Vec::new();
+        let mut scripts = Vec::with_capacity(def.scripts.len());
         for s in &def.scripts {
             let ast = iws.compile(&s.source).map_err(|e| SimError::Script {
                 message: format!("{}: {}", s.name, e.message),
@@ -145,9 +168,71 @@ impl ScriptRuntime {
             .zip(0u32..)
             .map(|(k, i)| (k.name.clone(), KindId(i)))
             .collect();
+        Ok(PreparedScripts {
+            package: def.id.clone(),
+            scripts: Rc::new(scripts),
+            kinds: Arc::new(kinds),
+        })
+    }
+
+    /// How many scripts the artifact holds.
+    pub fn script_count(&self) -> usize {
+        self.scripts.len()
+    }
+}
+
+impl ScriptRuntime {
+    /// Compiles `def.scripts` (index = `ScriptId`) under the compatibility script model that
+    /// `def` already selects. A compile error is a load-time `SimError`.
+    pub fn new(def: &GameDef, rules: &RunnerRules) -> Result<ScriptRuntime, SimError> {
+        ScriptRuntime::new_with_script_rules(def, rules, ScriptRules::gm8(def.uninit_reads_zero))
+    }
+
+    /// Compiles `def.scripts` under `script_rules` (decision 0005). `new` is this with the
+    /// package's compatibility pair; a `standard` ruleset passes [`ScriptRules::standard`].
+    pub fn new_with_script_rules(
+        def: &GameDef,
+        rules: &RunnerRules,
+        script_rules: ScriptRules,
+    ) -> Result<ScriptRuntime, SimError> {
+        let prepared = PreparedScripts::new(def, rules)?;
+        ScriptRuntime::new_run_with_script_rules(Arc::new(def.clone()), rules, script_rules, &prepared)
+    }
+
+    /// A run from a prepared artifact: a fresh [`Iws`] and per-run state, reusing only the
+    /// compiled scripts (#1093). `new` is prepare-plus-run for callers without a cache.
+    pub fn new_run(
+        def: Arc<GameDef>,
+        rules: &RunnerRules,
+        prepared: &PreparedScripts,
+    ) -> Result<ScriptRuntime, SimError> {
+        let script_rules = ScriptRules::gm8(def.uninit_reads_zero);
+        ScriptRuntime::new_run_with_script_rules(def, rules, script_rules, prepared)
+    }
+
+    /// [`ScriptRuntime::new_run`] under an explicit script model (decision 0005).
+    pub fn new_run_with_script_rules(
+        def: Arc<GameDef>,
+        rules: &RunnerRules,
+        script_rules: ScriptRules,
+        prepared: &PreparedScripts,
+    ) -> Result<ScriptRuntime, SimError> {
+        if prepared.scripts.is_empty() {
+            // No scripts means no kind has one, so there is no host to lend.
+            return Ok(ScriptRuntime::default());
+        }
+        if prepared.package != def.id || prepared.scripts.len() != def.scripts.len() {
+            return Err(SimError::invariant(format!(
+                "prepared scripts for package `{}` cannot run package `{}`",
+                prepared.package, def.id
+            )));
+        }
+        let iws = Iws::new(rules.num.clone());
+        let scripts = Rc::clone(&prepared.scripts);
+        let kinds = Arc::clone(&prepared.kinds);
         let inner = Rc::new_cyclic(|weak| {
             let host = Host {
-                def: def.clone(),
+                def,
                 rules: rules.clone(),
                 script_rules,
                 inner: weak.clone(),
@@ -393,12 +478,14 @@ pub struct Shared {
 /// What the registered functions need beyond the world: the game, the rules, the way back to
 /// the runtime and the kind names.
 pub(crate) struct Host {
-    pub(crate) def: GameDef,
+    /// Shared with the `Sim`, not deep-copied per run (#1093).
+    pub(crate) def: Arc<GameDef>,
     pub(crate) rules: RunnerRules,
     /// The script-semantics pair this run selected (decision 0005).
     pub(crate) script_rules: ScriptRules,
     pub(crate) inner: Weak<Inner>,
-    pub(crate) kinds: BTreeMap<String, KindId>,
+    /// Shared with the prepared artifact (#1093).
+    pub(crate) kinds: Arc<BTreeMap<String, KindId>>,
 }
 
 impl std::fmt::Debug for Host {
@@ -470,7 +557,7 @@ impl Shared {
             .ok_or_else(|| super::api::runtime_error("no world: the call is outside a tick"))?;
         let r = {
             let mut ctx = Ctx {
-                def: &host.def,
+                def: host.def.as_ref(),
                 rules: &host.rules,
                 w: &mut w,
                 scripts: &rt,

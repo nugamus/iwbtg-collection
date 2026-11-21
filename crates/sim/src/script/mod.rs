@@ -15,7 +15,7 @@ pub mod validate;
 
 use serde::{Deserialize, Serialize};
 
-pub use host::ScriptRuntime;
+pub use host::{PreparedScripts, ScriptRuntime};
 
 use crate::error::SimError;
 use crate::events::EventKind;
