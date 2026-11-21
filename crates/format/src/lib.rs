@@ -10,6 +10,7 @@
 
 pub mod art;
 pub mod check;
+pub mod compat;
 pub mod diag;
 pub mod engine_pack;
 pub mod files;
