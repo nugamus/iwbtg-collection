@@ -301,6 +301,9 @@ mod kid_moving_block;
 #[path = "kid_restart.rs"]
 mod kid_restart;
 
+#[path = "lifecycle.rs"]
+mod lifecycle;
+
 #[path = "kid_slope.rs"]
 mod kid_slope;
 

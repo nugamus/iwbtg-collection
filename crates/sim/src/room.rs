@@ -61,7 +61,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::collide::Target;
 use crate::collide::grid::Grid;
-use crate::def::{GlobalIndex, KindId, RoomAction, RoomDef, RoomId, RoomWhen, VarId};
+use crate::def::{GlobalIndex, KindId, RoomAction, RoomDef, RoomId, RoomRole, RoomWhen, VarId};
 use crate::error::SimError;
 use crate::events::{self, EventKind, Phase};
 use crate::num::Real;
@@ -309,7 +309,12 @@ fn start_inner<H: RoomHost + ?Sized>(
     }
     let target = match start {
         StartPoint::NewGame { difficulty } => {
-            ctx.w.save = None;
+            // `new_game` (0005, #1149): reset scope `run` drops the save and the run counters;
+            // the spawn policy is `room_start`, and the definition names that room.
+            let new_game = ctx.def.lifecycle().new_game;
+            if new_game.reset_scope == crate::def::game::ResetScope::Run {
+                ctx.w.save = None;
+            }
             ctx.w.engine.run.difficulty = *difficulty;
             match ctx.w.mode {
                 PlayMode::Original => ctx.def.new_game_room,
@@ -421,22 +426,8 @@ fn resolve(ctx: &Ctx, req: RoomRequest) -> Result<RoomId, SimError> {
     let current = ctx.w.room;
     let target = match req {
         RoomRequest::Goto(room) => room,
-        RoomRequest::Next => current
-            .0
-            .checked_add(1)
-            .map(RoomId)
-            .filter(|r| ctx.def.room(*r).is_some())
-            .ok_or_else(|| SimError::Script {
-                message: format!("room_goto_next: no room after room {}", current.0),
-            })?,
-        RoomRequest::Previous => current
-            .0
-            .checked_sub(1)
-            .map(RoomId)
-            .filter(|r| ctx.def.room(*r).is_some())
-            .ok_or_else(|| SimError::Script {
-                message: format!("room_goto_previous: no room before room {}", current.0),
-            })?,
+        RoomRequest::Next => neighbour(ctx, current, true)?,
+        RoomRequest::Previous => neighbour(ctx, current, false)?,
         RoomRequest::Restart => current,
         RoomRequest::GameRestart | RoomRequest::GameEnd => {
             return Err(SimError::invariant(format!("{req:?} is not a room change")));
@@ -452,6 +443,34 @@ fn resolve(ctx: &Ctx, req: RoomRequest) -> Result<RoomId, SimError> {
         )));
     }
     Ok(target)
+}
+
+/// The next or previous room in room order. Skips the Boot-role room when the lifecycle's
+/// enter-room policy says so (#1149): the Boot room is engine init, not a stage, so
+/// `room_goto_next` and `room_goto_previous` never land on it.
+fn neighbour(ctx: &Ctx, current: RoomId, forward: bool) -> Result<RoomId, SimError> {
+    let skip_boot = ctx.def.lifecycle().enter_room.skip_boot_rooms;
+    let step = if forward { 1 } else { -1 };
+    let mut next = i64::from(current.0) + step;
+    while let Ok(raw) = u32::try_from(next) {
+        let Ok(index) = usize::try_from(raw) else {
+            break;
+        };
+        let Some(room) = ctx.def.rooms.get(index) else {
+            break;
+        };
+        if !(skip_boot && room.role == RoomRole::Boot) {
+            return Ok(RoomId(raw));
+        }
+        next += step;
+    }
+    Err(SimError::Script {
+        message: if forward {
+            format!("room_goto_next: no room after room {}", current.0)
+        } else {
+            format!("room_goto_previous: no room before room {}", current.0)
+        },
+    })
 }
 
 /// The definition of `room`; an unknown id is an invariant break (the loader checks rooms).
@@ -499,11 +518,24 @@ fn create_boot<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H) -> Result<(), 
     Ok(())
 }
 
+/// The room `game_restart` enters: the Boot-role room (engine init), else room order index 0.
+///
+/// The loader marks the engine init room with `RoomRole::Boot`; packages that predate that role
+/// keep the gm8 shape where rInit is the first room, so index 0 is the fallback (#1149). The id
+/// is an implementation detail of the profile, never a save or replay identity.
+pub(crate) fn restart_room(def: &crate::def::GameDef) -> RoomId {
+    def.rooms
+        .iter()
+        .position(|r| r.role == RoomRole::Boot)
+        .and_then(|i| u32::try_from(i).ok())
+        .map_or(RoomId(0), RoomId)
+}
+
 /// game_restart (Inferred; R16): optionally Room End, remove every instance (persistent ones
 /// too) without events, forget the persistent rooms, clear the globals unless
-/// `globals_survive_restart`, then boot again and enter `room_first` (room order index 0, the
-/// order `room_goto_next` follows; rInit in 19 of the 20 games) as the first room. The save (a
-/// file) and the sounds (Inferred, S4: `SoundRules::keep_on_restart`) are kept.
+/// `globals_survive_restart`, then boot again and enter the Boot-role room ([`restart_room`];
+/// rInit in 19 of the 20 games) as the first room. The save (a file) and the sounds (Inferred,
+/// S4: `SoundRules::keep_on_restart`) are kept.
 fn game_restart<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H) -> Result<(), SimError> {
     if ctx.rules.room.restart_events {
         room_end(ctx, host)?;
@@ -530,7 +562,7 @@ fn game_restart<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H) -> Result<(),
     }
     emit(ctx, RoomOutput::GameRestarted);
     create_boot(ctx, host)?;
-    let first = redirect(ctx, RoomId(0));
+    let first = redirect(ctx, restart_room(ctx.def));
     room_def(ctx, first)?;
     enter(ctx, host, None, first)
 }
