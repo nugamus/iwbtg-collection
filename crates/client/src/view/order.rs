@@ -13,7 +13,9 @@
 //! - tile layers of the same depth keep file order, so a later layer draws on top;
 //! - a tile layer at an instance's own depth draws over it (OpenGMK's picture, CLONE_SPEC
 //!   TR-ROOM-13, partial);
-//! - instances draw in the sim's order, and z strictly rises along it.
+//! - instances draw in the sim's order, and z strictly rises along it;
+//! - the HUD slots ([`Hud`]: the sign box and the countdown) sit above every room layer,
+//!   including the foregrounds, and below the hitboxes, so a room's art cannot cover them.
 //!
 //! The world band's tile layers are fixed rungs, spread evenly over the range; the instances
 //! between two rungs (by depth) share the gap between them, evenly by their place in the draw
@@ -31,8 +33,8 @@ pub(crate) const BACKGROUND_Z: f32 = -995.0;
 pub(crate) const FOREGROUND_Z: f32 = 995.0;
 
 /// The z range instances and tiles use: in front of the room colour and backgrounds
-/// (`BACKGROUND_Z`, -995), behind the foregrounds (`FOREGROUND_Z`, 995), hitboxes, HUD and
-/// overlay.
+/// (`BACKGROUND_Z`, -995), behind the foregrounds (`FOREGROUND_Z`, 995), the HUD ([`Hud`]),
+/// hitboxes and overlay.
 pub(crate) const WORLD_Z: (f32, f32) = (-990.0, 990.0);
 
 /// The gap between two background or foreground layers, so their file order is a stable tie
@@ -77,6 +79,31 @@ impl Layer {
     /// [`band`]: Layer::band
     pub(crate) fn z(self) -> f32 {
         self.band().0
+    }
+}
+
+/// The HUD slots on the game camera: above every room layer, including the foregrounds (GM
+/// allows at most 8 background slots, so the top foreground is below `HUD_Z.0`), and below the
+/// hitboxes (`visual::HITBOX_Z`, 998) and the overlay.
+pub(crate) const HUD_Z: (f32, f32) = (FOREGROUND_Z + 1.0, FOREGROUND_Z + 2.0);
+
+/// A HUD element drawn over the game, back to front. The slots are declared here with the room
+/// layers so a room's art can never cover them.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Hud {
+    /// The sign text box at the bottom of the room.
+    Sign,
+    /// The `time_limit` countdown at the timer's own place.
+    Countdown,
+}
+
+impl Hud {
+    /// The slot's z.
+    pub(crate) fn z(self) -> f32 {
+        match self {
+            Hud::Sign => HUD_Z.0,
+            Hud::Countdown => HUD_Z.1,
+        }
     }
 }
 
@@ -212,7 +239,25 @@ mod tests {
             Layer::Foreground(0).z() < Layer::Foreground(1).z(),
             "a later foreground draws on top"
         );
-        assert!(Layer::Foreground(7).z() < 1000.0, "under the overlay");
+        // Above every room layer, including the top foreground, is the HUD, then the hitboxes.
+        assert!(Layer::Foreground(7).z() < Hud::Sign.z());
+        assert!(Hud::Sign.z() < Hud::Countdown.z());
+        assert!(Hud::Countdown.z() < crate::visual::HITBOX_Z);
+        // The hitboxes sit under the overlay (z 1000).
+        const { assert!(crate::visual::HITBOX_Z < 1000.0) };
+    }
+
+    #[test]
+    fn the_hud_stays_above_a_dense_world_band() {
+        // The frontmost tile rung of a 25-layer room and the frontmost instance stay under the
+        // sign box, so room art cannot cover the HUD.
+        let depths: Vec<f64> = (0..25).map(|i| -f64::from(i)).collect();
+        let ladder = Ladder::new(depths);
+        let frontmost_tile = ladder.tile_z(24);
+        assert!(frontmost_tile < Hud::Sign.z(), "tile at {frontmost_tile}");
+        for z in ladder.z_in_order(&[0.0, -1.0, -24.0]) {
+            assert!(z < Hud::Sign.z(), "instance at {z}");
+        }
     }
 
     #[test]

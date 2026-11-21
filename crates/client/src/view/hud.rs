@@ -8,6 +8,7 @@ use iwbtg_sim::builtins::{BuiltinOutput, BuiltinState};
 use iwbtg_sim::output::OutputEvent;
 use iwbtg_sim::world::KindState;
 
+use super::order::Hud;
 use super::{Game, RoomSize};
 
 /// The text a sign showed in the latest tick. The sim sends it on every tick the sign speaks, so
@@ -50,7 +51,7 @@ pub fn setup(mut commands: Commands, room: Res<RoomSize>) {
             Color::WHITE,
             Vec2::new(width + 2.0 * BORDER, BOX_HEIGHT + 2.0 * BORDER),
         ),
-        Transform::from_xyz(0.0, y, 900.0),
+        Transform::from_xyz(0.0, y, Hud::Sign.z()),
         Visibility::Hidden,
         SignBox,
         crate::shell::RUN_ONLY,
@@ -81,7 +82,7 @@ pub fn setup(mut commands: Commands, room: Res<RoomSize>) {
         },
         TextColor(Color::WHITE),
         Anchor::TOP_LEFT,
-        Transform::from_xyz(0.0, 0.0, 950.0),
+        Transform::from_xyz(0.0, 0.0, Hud::Countdown.z()),
         Visibility::Hidden,
         Countdown,
         crate::shell::RUN_ONLY,
