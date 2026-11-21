@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 pub use api::{Flow, SpawnInit};
-pub use instance::{InstId, Instance, KindState, MAX_ARRAY_SIZE, Value};
+pub use instance::{InstId, Instance, KindState, MAX_ARRAY_SIZE, Persistence, Value};
 
 use crate::collide::grid::Grid;
 use crate::def::{GameDef, PartSystemDefId, RoomId, VarId};
@@ -72,7 +72,9 @@ pub struct World {
     pub views: [View; 8],
     /// One pending room request; the last request wins (Inferred, R13).
     pub pending: Option<RoomRequest>,
-    /// Saved instances of persistent rooms (WP4a).
+    /// Instances a **persistent room** keeps while the player is away, restored on return
+    /// (WP4a). Distinct from [`Persistence::Run`] instances, which follow the room change, and
+    /// from [`Persistence::Save`] save objects, which write the checkpoint.
     pub persistent_rooms: BTreeMap<RoomId, Vec<Instance>>,
     /// The save slot; `None` means "save file missing" (WP4b).
     pub save: Option<SaveSlot>,

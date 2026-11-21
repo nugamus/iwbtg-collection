@@ -25,3 +25,5 @@ A room-file `save` instance records its stable key in `Checkpoint.point` (its de
 With `blink` on, Create sets `image_speed` to 0 first, so an idle save rests on frame 0 (kid/B.md Saving; traces/kaenbyou/famb-save-restart-b.csv). OPEN: kaenbyou counts `saveTimer` only while S is held (#410).
 
 Handlers are declared from the kind's params. The Step, Collision and Key held handlers all run the same save code: games that save in Step or End Step (WAN, LEM, SPK) are OPEN until a trace shows a difference. The save sound and the particles (RBF) are the client's and the sound model's.
+
+A save kind's persistence scope is `Save` (E2 of #1153): the instance writes the checkpoint and is rebuilt with its room, not carried across a room change. This is distinct from a GM `persistent` kind (`Run`) and from a persistent room, whose own placed instances are restored when the player returns.

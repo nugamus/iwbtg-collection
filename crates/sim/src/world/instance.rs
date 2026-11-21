@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::anim::Image;
-use crate::def::{ClassMask, GroupId, KindId, NameId, VarId};
+use crate::def::{Builtin, ClassMask, GroupId, KindDef, KindId, NameId, VarId};
 use crate::error::SimError;
 use crate::motion::Motion;
 use crate::num::Real;
@@ -102,6 +102,43 @@ fn array_cap_error() -> SimError {
     ))
 }
 
+/// What a kind's instances do across a room change (decision 0005; E2 of #1153).
+///
+/// This is per instance/kind, and it is not the room's [`RoomDef::persistent`](crate::def::RoomDef::persistent)
+/// flag: a persistent **room** keeps its own placed instances while the player is away and
+/// restores them on return, while a `Run` instance follows the kid into any room. A `Save`
+/// instance is a checkpoint writer; it is rebuilt with its room, not carried.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Persistence {
+    /// Rebuilt by the room on entry; not carried. The default.
+    #[default]
+    Room,
+    /// GM `persistent`: carried into the new room (`Instance::persistent`).
+    Run,
+    /// The `save` built-in: writes the checkpoint; not carried.
+    Save,
+}
+
+impl Persistence {
+    /// The scope a kind's instances start with. The `save` built-in wins over a GM persistent
+    /// flag (a save object writes the checkpoint; it is not a carried instance).
+    pub fn of(kind: &KindDef) -> Persistence {
+        Persistence::from_flags(kind.base, kind.persistent)
+    }
+
+    /// The scope from a kind's base and the instance's effective persistent flag. Used by
+    /// `change_kind`, where the kind may keep the old instance's persistent flag.
+    pub(crate) fn from_flags(base: Builtin, persistent: bool) -> Persistence {
+        if base == Builtin::Save {
+            Persistence::Save
+        } else if persistent {
+            Persistence::Run
+        } else {
+            Persistence::Room
+        }
+    }
+}
+
 /// One instance.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Instance {
@@ -127,8 +164,12 @@ pub struct Instance {
     pub alive: bool,
     /// False while deactivated (xia pause, machinary).
     pub active: bool,
-    /// GM `persistent`.
+    /// GM `persistent`: the carry flag the room change reads.
     pub persistent: bool,
+    /// The kind's persistence scope (E2 of #1153). Not serialized or hashed; `persistent` stays
+    /// the behavior the carry reads. Derived at spawn and on `change_kind`.
+    #[serde(skip)]
+    pub persistence: Persistence,
     /// GM `solid`, per instance; may change at run time (Confirmed).
     pub solid: bool,
     /// GM `visible`.
@@ -167,6 +208,7 @@ impl Instance {
             alive: true,
             active: true,
             persistent: false,
+            persistence: Persistence::Room,
             solid: false,
             visible: true,
             depth: Real::ZERO,
