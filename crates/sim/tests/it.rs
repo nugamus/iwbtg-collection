@@ -322,6 +322,9 @@ mod kid_water_setters;
 #[path = "lifecycle.rs"]
 mod lifecycle;
 
+#[path = "multikid_restart.rs"]
+mod multikid_restart;
+
 #[path = "lint_gm_compare.rs"]
 mod lint_gm_compare;
 

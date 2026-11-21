@@ -108,9 +108,17 @@ fn room_goto_saved_recreates_the_kid_and_drops_the_bow() {
     let mut w = World::new(g.play, 1);
     w.save = Some(slot(g.boot));
     let old = spawn(&g, &mut w, g.kid, 300.0, 300.0);
-    spawn(&g, &mut w, g.bow, 300.0, 300.0);
+    let bow = spawn(&g, &mut w, g.bow, 300.0, 300.0);
     with(&g, &mut w, |c| run_restart(c, old).unwrap());
-    assert_eq!(w.pending, Some(RoomRequest::Goto(g.boot)));
+    // The ids destroyed this tick travel with the change: the restart does not create placed
+    // instances with them again (#670).
+    match w.pending {
+        Some(RoomRequest::GotoAfterRemovals { room, removed }) => {
+            assert_eq!(room, g.boot);
+            assert!(removed.contains(old) && removed.contains(bow), "{removed:?}");
+        }
+        ref other => panic!("expected GotoAfterRemovals, got {other:?}"),
+    }
     assert!(alive(&w, g.bow).is_empty());
     let kids = alive(&w, g.kid);
     assert_eq!(kids.len(), 1);
@@ -137,7 +145,13 @@ fn showdown_load_never_restarts_the_game() {
     w.save = Some(slot(g.play));
     let old = spawn(&g, &mut w, g.kid, 5.0, 5.0);
     with(&g, &mut w, |c| run_restart(c, old).unwrap());
-    assert_eq!(w.pending, Some(RoomRequest::Goto(g.play)));
+    match w.pending {
+        Some(RoomRequest::GotoAfterRemovals { room, removed }) => {
+            assert_eq!(room, g.play);
+            assert!(removed.contains(old), "{removed:?}");
+        }
+        ref other => panic!("expected GotoAfterRemovals, got {other:?}"),
+    }
     assert_eq!(w.engine.run.boot_load, None);
     assert_eq!(alive(&w, g.kid).len(), 1);
     assert_ne!(alive(&w, g.kid)[0], old);
@@ -154,7 +168,13 @@ fn recreate_in_place_puts_the_kid_at_the_saved_spot_now() {
     assert_eq!(kids.len(), 1);
     assert_eq!(w.room, g.play, "still in the current room");
     assert_eq!(w.get(kids[0]).unwrap().m.x(), r(49.0));
-    assert_eq!(w.pending, Some(RoomRequest::Goto(g.boot)));
+    match w.pending {
+        Some(RoomRequest::GotoAfterRemovals { room, removed }) => {
+            assert_eq!(room, g.boot);
+            assert!(removed.contains(old), "{removed:?}");
+        }
+        ref other => panic!("expected GotoAfterRemovals, got {other:?}"),
+    }
 }
 
 #[test]

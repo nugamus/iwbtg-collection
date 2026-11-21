@@ -19,7 +19,7 @@
 use crate::def::{ClassMask, DeathOnRestart, EngineKind, ResetKind, RestartKind, RoomId, RoomRole};
 use crate::error::SimError;
 use crate::num::Real;
-use crate::room::RoomRequest;
+use crate::room::{RemovedInstances, RoomRequest};
 use crate::run_globals::{BootLoad, RunGlobals};
 use crate::save::{self, SaveSlot};
 use crate::world::{Ctx, Flow, InstId};
@@ -92,11 +92,17 @@ pub fn run_restart(ctx: &mut Ctx, world: InstId) -> Result<Flow, SimError> {
         RestartKind::RoomGotoSaved | RestartKind::ShowdownLoad | RestartKind::RecreateInPlace => {
             let Some(slot) = slot else {
                 // kaenbyou and eat-the-lemon with no save: destroy the kid, restart the room.
-                destroy_kids(ctx, model.kind == RestartKind::RoomGotoSaved)?;
-                ctx.request_room(RoomRequest::Restart);
+                let removed = destroy_kids(ctx, model.kind == RestartKind::RoomGotoSaved)?;
+                let room = ctx.w.room;
+                ctx.request_room(RoomRequest::GotoAfterRemovals {
+                    room,
+                    removed: RemovedInstances::new(&removed)?,
+                });
                 return Ok(Flow::AbortTick);
             };
-            destroy_kids(ctx, model.kind == RestartKind::RoomGotoSaved)?;
+            // The destroyed kids are pending removal in the original, so the room restart does
+            // not create its placed instances with their ids again (#670).
+            let removed = destroy_kids(ctx, model.kind == RestartKind::RoomGotoSaved)?;
             let kid = save::load_into(ctx, &slot)?;
             if model.kid_steps.reset_jump_values {
                 crate::kid::api::reset_jump_values(ctx, kid)?;
@@ -108,7 +114,10 @@ pub fn run_restart(ctx: &mut Ctx, world: InstId) -> Result<Flow, SimError> {
             let skip = model.kind == RestartKind::RoomGotoSaved
                 && matches!(role, Some(RoomRole::Title | RoomRole::Menu));
             if !skip {
-                ctx.request_room(RoomRequest::Goto(slot.room));
+                ctx.request_room(RoomRequest::GotoAfterRemovals {
+                    room: slot.room,
+                    removed: RemovedInstances::new(&removed)?,
+                });
             }
         }
     }
@@ -276,8 +285,9 @@ fn place_or_create_kid(ctx: &mut Ctx, slot: &SaveSlot, flipped_load_dy: Real) ->
     Ok(())
 }
 
-/// Destroys every kid (both kinds) and, when `with_bow`, the bow.
-fn destroy_kids(ctx: &mut Ctx, with_bow: bool) -> Result<(), SimError> {
+/// Destroys every kid (both kinds) and, when `with_bow`, the bow. Returns the destroyed ids:
+/// the room change in the same tick must not create placed instances with those ids (#670).
+fn destroy_kids(ctx: &mut Ctx, with_bow: bool) -> Result<Vec<InstId>, SimError> {
     let bow = ctx.def.engine_kind(EngineKind::Bow);
     let ids: Vec<InstId> = ctx
         .w
@@ -289,10 +299,10 @@ fn destroy_kids(ctx: &mut Ctx, with_bow: bool) -> Result<(), SimError> {
         })
         .map(|i| i.id)
         .collect();
-    for id in ids {
+    for &id in &ids {
         if ctx.destroy(id).is_halt() {
             return Err(ctx.halted_error());
         }
     }
-    Ok(())
+    Ok(ids)
 }
