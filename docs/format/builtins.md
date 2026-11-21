@@ -8,7 +8,26 @@ The parameter survey ([builtins-survey.md](builtins-survey.md)) lists every para
 
 ## Standard behaviours
 
-Decision [0005](../decisions/0005-standard-mechanics.md) groups the kinds into twelve native behaviours: **spawn** (`kid_start`), **checkpoint** (`save`), **portal** (`warp`, `edge_warp`, `difficulty_warp`), **trigger** (`trigger`), **hazard** (`spike`, `killer`, `orbit`), **pickup** (`boss_item`, `secret_item`, `item_viewer`), **overlay** (`game_over`, `playerface`, `bow`, `sign`, `music`, `death_sound`, `camera`), **emitter** (`blood`, `blood_emitter`, `particle_system`), **solid/surface** (`block`, `platform`, `slope`, `ladder`, `vine`, `fake_block`, `hidden_block`, `breakable_block`, `conveyor`, `bullet_blocker`, `trap_stopper`, `boss_gate`), **mover/projectile** (`moving_platform`, `drop_platform`, `path_platform`, `trap`, `kid_bullet`), **kid zone** (`water`, `gravity_flip`, `kid_param_zone`, `jump_refresher`, `spring`) and **goal** (`game_clear`, `time_limit`), plus the controller (`world`), the kid and the data bases (`decor`, `scripted`). The 50 kind names above stay the creator vocabulary; `base = "<behaviour>"` is additive and lands in T2 (#1277). The architecture page describes the trait table that backs both ([builtins](../architecture/sim/builtins.md#behaviours-and-the-trait-table)).
+Decision [0005](../decisions/0005-standard-mechanics.md) groups the kinds into twelve native behaviours: **spawn** (`kid_start`), **checkpoint** (`save`), **portal** (`warp`, `edge_warp`, `difficulty_warp`), **trigger** (`trigger`), **hazard** (`spike`, `killer`, `orbit`), **pickup** (`boss_item`, `secret_item`, `item_viewer`), **overlay** (`game_over`, `playerface`, `bow`, `sign`, `music`, `death_sound`, `camera`), **emitter** (`blood`, `blood_emitter`, `particle_system`), **solid/surface** (`block`, `platform`, `slope`, `ladder`, `vine`, `fake_block`, `hidden_block`, `breakable_block`, `conveyor`, `bullet_blocker`, `trap_stopper`, `boss_gate`), **mover/projectile** (`moving_platform`, `drop_platform`, `path_platform`, `trap`, `kid_bullet`), **kid zone** (`water`, `gravity_flip`, `kid_param_zone`, `jump_refresher`, `spring`) and **goal** (`game_clear`, `time_limit`), plus the controller (`world`), the kid and the data bases (`decor`, `scripted`). The architecture page describes the trait table that backs them ([builtins](../architecture/sim/builtins.md#behaviours-and-the-trait-table)).
+
+A package may write a behaviour base instead of a concrete kind. It is an additive alias for the behaviour's **reference kind**:
+
+| Base | Reference kind |
+|---|---|
+| `spawn` | `kid_start` |
+| `checkpoint` | `save` |
+| `portal` | `warp` |
+| `trigger` | `trigger` |
+| `hazard` | `killer` |
+| `pickup` | `boss_item` |
+| `overlay` | `game_over` |
+| `emitter` | `blood_emitter` |
+| `solid` | `block` |
+| `mover` | `moving_platform` |
+| `kid_zone` | `water` |
+| `goal` | `game_clear` |
+
+`base = "hazard"` parses exactly as `base = "killer"`, with the same params, classes and events. The other kinds of a behaviour keep their own names (`spike`, `edge_warp`, `particle_system`, `kid_bullet`, ...); the reference choice is documented and additive, and changing it would be a format change. Family differences stay in presets and scripts, not in new base names: the one-game parameters are the move slices of #1076 (#1267-#1270).
 
 **Engine kinds (spawned by the sim or placed once per game).**
 

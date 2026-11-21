@@ -176,6 +176,44 @@ pub fn behaviour(b: Builtin) -> Behaviour {
     traits(b).behaviour
 }
 
+/// The reference concrete kind of each standard behaviour: what `base = "<behaviour>"` resolves
+/// to. The other kinds of the same behaviour keep their own names: a creator who needs an
+/// `edge_warp` writes `edge_warp`, not `portal`, and a spike writes `spike`, not `hazard`.
+pub const BEHAVIOUR_BASES: [(&str, Behaviour, Builtin); 12] = [
+    ("spawn", Behaviour::Spawn, Builtin::KidStart),
+    ("checkpoint", Behaviour::Checkpoint, Builtin::Save),
+    ("portal", Behaviour::Portal, Builtin::Warp),
+    ("trigger", Behaviour::Trigger, Builtin::Trigger),
+    ("hazard", Behaviour::Hazard, Builtin::Killer),
+    ("pickup", Behaviour::Pickup, Builtin::BossItem),
+    ("overlay", Behaviour::Overlay, Builtin::GameOver),
+    ("emitter", Behaviour::Emitter, Builtin::BloodEmitter),
+    ("solid", Behaviour::Solid, Builtin::Block),
+    ("mover", Behaviour::Mover, Builtin::MovingPlatform),
+    ("kid_zone", Behaviour::KidZone, Builtin::Water),
+    ("goal", Behaviour::Goal, Builtin::GameClear),
+];
+
+/// The reference kind of a behaviour, or `None` for the controller, the kid and the data bases,
+/// which are not package bases.
+#[must_use]
+pub fn base_kind(behaviour: Behaviour) -> Option<Builtin> {
+    BEHAVIOUR_BASES
+        .iter()
+        .find(|(_, b, _)| *b == behaviour)
+        .map(|(_, _, kind)| *kind)
+}
+
+/// The kind a behaviour base name resolves to (`base = "hazard"`), if `name` is one. The
+/// behaviour names are additive aliases; the 50 kind names and their behavior do not change.
+#[must_use]
+pub fn base_from_name(name: &str) -> Option<Builtin> {
+    BEHAVIOUR_BASES
+        .iter()
+        .find(|(n, _, _)| *n == name)
+        .map(|(_, _, kind)| *kind)
+}
+
 #[cfg(test)]
 mod tests {
     use super::Behaviour::*;
@@ -389,6 +427,36 @@ mod tests {
             assert_eq!(t.classes, ClassMask::NONE, "{b:?} classes");
             assert!(t.class_params.is_empty(), "{b:?} class params");
             assert!(t.event_params.is_empty(), "{b:?} event params");
+        }
+    }
+
+    #[test]
+    fn the_behaviour_bases_are_additive_aliases() {
+        for (name, expected, kind) in BEHAVIOUR_BASES {
+            assert_eq!(base_from_name(name), Some(kind), "{name}");
+            assert_eq!(base_kind(expected), Some(kind), "{name}");
+            assert_eq!(behaviour(kind), expected, "{name}");
+            assert_eq!(Builtin::from_name(name), Some(kind), "{name}");
+            // A behaviour base is not also a kind name, except `trigger`, where the behaviour
+            // and the kind share the word.
+            if name != "trigger" {
+                assert!(
+                    Builtin::ALL.iter().all(|b| b.name() != name),
+                    "`{name}` is already a kind name"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_native_behaviour_has_a_reference_kind() {
+        for expected in [
+            Spawn, Checkpoint, Portal, Trigger, Hazard, Pickup, Overlay, Emitter, Solid, Mover, KidZone, Goal,
+        ] {
+            assert!(base_kind(expected).is_some(), "{expected:?}");
+        }
+        for expected in [Controller, Kid, Data] {
+            assert_eq!(base_kind(expected), None, "{expected:?}");
         }
     }
 

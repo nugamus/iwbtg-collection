@@ -27,7 +27,9 @@ Decision [0005](../../decisions/0005-standard-mechanics.md) reduces the shared s
 
 The **trait table** (`def/traits.rs`) is the single place that says, per kind, its behaviour, the params that pick its classes (`class_params`), the params that pick its event set (`event_params`), the classes it carries by default, and the builder for its event set. `def::class` (`class_params`, `default_classes`) and `builtins` (`event_set`, `event_set_params`) delegate to it, so the two hand-written selector tables are gone. The existing derived-kind mechanism (`killer[bounce=true]`, `water[variant=2]`) is unchanged and reads the table through those views.
 
-The 50 kind names remain the creator vocabulary. `base = "<behaviour>"` is additive and lands in T2 (#1277), not here. This table is a pure refactor (F3): every entry is the value the old tables gave, so a resolved `KindDef`, `EventSet` and initial `BuiltinState` is field-identical; the golden corpus and the valid fixtures pin it.
+The 50 kind names remain the creator vocabulary. A package may also write a behaviour base (`base = "hazard"`), an additive alias for the behaviour's reference kind in [`BEHAVIOUR_BASES`](../../../crates/sim/src/def/traits.rs): `hazard` is `killer`, `solid` is `block`, `mover` is `moving_platform`, and so on. The alias resolves to the same `KindDef`; the other kinds of a behaviour keep their own names. T2 is #1277.
+
+This table is a pure refactor (F3): every entry is the value the old tables gave, so a resolved `KindDef`, `EventSet` and initial `BuiltinState` is field-identical; the golden corpus and the valid fixtures pin it.
 
 ### Tiers and the table
 
