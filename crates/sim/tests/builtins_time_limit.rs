@@ -2,6 +2,9 @@
 
 use iwbtg_sim::builtins;
 use iwbtg_sim::def::{Builtin, ClassMask, ParamValue};
+use iwbtg_sim::events::EventKind;
+use iwbtg_sim::rules::RunnerRules;
+use iwbtg_sim::rules::tick::ClockPolicy;
 
 use crate::builtins_misc_support::*;
 
@@ -56,6 +59,35 @@ fn the_clock_waits_while_no_kid_exists() {
     second(&mut g, t);
     assert_eq!(left(&g, t), (0, 0, 5));
     assert_eq!(g.w.get(t).unwrap().alarms[0].get(), 50.0);
+}
+
+#[test]
+fn one_second_follows_the_clock_policy() {
+    // R30: the legacy clock reads the room's `room_speed`; `ClockPolicy::Fixed` reads the
+    // package tick rate. The fixture's tick rate is 50 and its room speed is set below.
+    let mut g = timer_game(&[("seconds", real(5.0))]);
+    let t = spawn(&mut g, "timer", 100.0, 100.0);
+    g.w.room_speed = r(30.0);
+    second(&mut g, t);
+    assert_eq!(
+        g.w.get(t).unwrap().alarms[0].get(),
+        30.0,
+        "legacy: room_speed is one second"
+    );
+
+    let mut g = timer_game(&[("seconds", real(5.0))]);
+    let t = spawn(&mut g, "timer", 100.0, 100.0);
+    g.w.room_speed = r(30.0);
+    let mut rules = RunnerRules::default();
+    rules.tick.timing.clock = ClockPolicy::Fixed;
+    with_rules(&mut g, &rules, |ctx| {
+        builtins::on_event(ctx, t, &EventKind::Alarm(0)).expect("alarm");
+    });
+    assert_eq!(
+        g.w.get(t).unwrap().alarms[0].get(),
+        50.0,
+        "fixed: the tick rate is one second"
+    );
 }
 
 #[test]

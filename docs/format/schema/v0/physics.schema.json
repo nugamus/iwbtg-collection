@@ -322,7 +322,7 @@
         },
         {
           "const": "arm_play_timer",
-          "description": "Create step 5: alarm 0 = `room_speed`.",
+          "description": "Create step 5: alarm 0 = one clock second (`room_speed` under the legacy policy, R30).",
           "type": "string"
         },
         {
@@ -377,7 +377,7 @@
         },
         {
           "const": "play_timer",
-          "description": "Alarm 0: outside the menu roles `global.time` + 1, then alarm 0 = `room_speed` again.",
+          "description": "Alarm 0: outside the menu roles `global.time` + 1, then alarm 0 = one clock second again.",
           "type": "string"
         },
         {

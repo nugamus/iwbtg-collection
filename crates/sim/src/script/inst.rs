@@ -20,6 +20,7 @@ use super::host::Shared;
 use crate::alarm;
 use crate::collide::bounce::{Against, move_bounce};
 use crate::def::class::{kind_classes, kind_params, picks_other_kind};
+use crate::def::script::{InitPolicy, ScriptRules, ValueModel};
 use crate::def::{ClassMask, KindId, ParamValue, Params, RoomId};
 use crate::error::SimError;
 use crate::kid::{self, KidState, api::KillCause};
@@ -87,13 +88,15 @@ fn real_prop(engine: &mut Engine, s: &Rc<Shared>, name: &'static str, get: Get, 
     }
 }
 
-fn value_to_dynamic(v: Option<&Value>, zero: bool, name: &str) -> Res<Dynamic> {
+fn value_to_dynamic(v: Option<&Value>, rules: ScriptRules, name: &str) -> Res<Dynamic> {
     match v {
         Some(Value::Real(r)) => Ok(Dynamic::from_float(r.get())),
         Some(Value::Str(s)) => Ok(Dynamic::from(ImmutableString::from(s.as_str()))),
         Some(Value::Inst(i)) => Ok(Dynamic::from(Inst(*i))),
-        Some(Value::None) | None if zero => Ok(Dynamic::from_float(0.0)),
-        Some(Value::None) | None => Err(runtime_error(format!("variable `{name}` is not set"))),
+        Some(Value::None) | None => match rules.init {
+            InitPolicy::Zero => Ok(Dynamic::from_float(0.0)),
+            InitPolicy::Error => Err(runtime_error(format!("variable `{name}` is not set"))),
+        },
         // The value model stores arrays (#984); script access to them is #997.
         Some(Value::Array(_)) => Err(runtime_error(format!(
             "variable `{name}` holds an array: scripts cannot read arrays yet"
@@ -101,12 +104,22 @@ fn value_to_dynamic(v: Option<&Value>, zero: bool, name: &str) -> Res<Dynamic> {
     }
 }
 
-fn dynamic_to_value(d: &Dynamic, name: &str) -> Res<Value> {
+fn dynamic_to_value(d: &Dynamic, rules: ScriptRules, name: &str) -> Res<Value> {
     if d.is_unit() {
         return Ok(Value::None);
     }
     if let Ok(b) = d.as_bool() {
-        return Ok(Value::Real(if b { Real::ONE } else { Real::ZERO }));
+        return match rules.values {
+            // GM8 has no bool value: a bool is the real 1.0/0.0 (Confirmed).
+            ValueModel::Gm8 => Ok(Value::Real(if b { Real::ONE } else { Real::ZERO })),
+            // The standard model keeps the bool as a bool. The value model cannot carry it
+            // yet (world instance state is the entity-model seat's, #1175), so `standard`
+            // refuses the silent erasure instead of turning the value into a real.
+            ValueModel::Typed => Err(runtime_error(format!(
+                "variable `{name}` cannot hold a bool yet under `standard`; \
+                 write 1.0/0.0 and test it with gm_bool until the typed value model lands"
+            ))),
+        };
     }
     if let Ok(f) = num(d, name) {
         let r = Real::new(f);
@@ -452,7 +465,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
     // ---- The package's custom variables: `this.hp` ----
     {
         let s = Rc::clone(shared);
-        docs.add("index$get$", "Reads the package variable `name` of an instance (`i.hp`); an unknown name is an error, an unset one reads 0 when the game allows it.");
+        docs.add("index$get$", "Reads the package variable `name` of an instance (`i.hp`); an unknown name is an error, and an unset one follows the run's script init policy (0 under `gm8`, a script error under `standard`).");
         engine.register_indexer_get(move |i: &mut Inst, name: ImmutableString| -> Res<Dynamic> {
             let i = *i;
             s.with_world(|w, host| {
@@ -462,19 +475,19 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
                     .get(name.as_str())
                     .ok_or_else(|| runtime_error(format!("unknown variable `{name}`")))?;
                 let x = live(w, i)?;
-                value_to_dynamic(x.vars.get(id), host.def.uninit_reads_zero, &name)
+                value_to_dynamic(x.vars.get(id), host.script_rules, &name)
             })?
         });
         let s = Rc::clone(shared);
-        docs.add("index$set$", "Writes the package variable `name` of an instance (`i.hp = 5`); the name must be declared in the package.");
+        docs.add("index$set$", "Writes the package variable `name` of an instance (`i.hp = 5`); the name must be declared in the package. `gm8` stores a bool as 1.0/0.0; `standard` refuses that erasure until the typed value model stores a bool.");
         engine.register_indexer_set(
             move |i: &mut Inst, name: ImmutableString, v: Dynamic| -> Res<()> {
                 let i = *i;
-                let value = dynamic_to_value(&v, &name)?;
                 s.with_world(|w, host| {
                     if READ_ONLY_KID_FIELDS.contains(&name.as_str()) {
                         return Err(runtime_error(format!("`{name}` is a read-only kid field")));
                     }
+                    let value = dynamic_to_value(&v, host.script_rules, &name)?;
                     let id = *host
                         .def
                         .var_names

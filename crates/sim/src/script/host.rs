@@ -13,6 +13,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::inst::Inst;
 use super::{ScriptError, ScriptHost};
+use crate::def::script::ScriptRules;
 use crate::def::{GameDef, KindId, ScriptId};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
@@ -84,8 +85,19 @@ fn moment_call(def: &GameDef, inst: &Instance, step: u32) -> Option<String> {
 }
 
 impl ScriptRuntime {
-    /// Compiles `def.scripts` (index = `ScriptId`). A compile error is a load-time `SimError`.
+    /// Compiles `def.scripts` (index = `ScriptId`) under the compatibility script model that
+    /// `def` already selects. A compile error is a load-time `SimError`.
     pub fn new(def: &GameDef, rules: &RunnerRules) -> Result<ScriptRuntime, SimError> {
+        ScriptRuntime::new_with_script_rules(def, rules, ScriptRules::gm8(def.uninit_reads_zero))
+    }
+
+    /// Compiles `def.scripts` under `script_rules` (decision 0005). `new` is this with the
+    /// package's compatibility pair; a `standard` ruleset passes [`ScriptRules::standard`].
+    pub fn new_with_script_rules(
+        def: &GameDef,
+        rules: &RunnerRules,
+        script_rules: ScriptRules,
+    ) -> Result<ScriptRuntime, SimError> {
         if def.scripts.is_empty() {
             return Ok(ScriptRuntime::default());
         }
@@ -115,6 +127,7 @@ impl ScriptRuntime {
             let host = Host {
                 def: def.clone(),
                 rules: rules.clone(),
+                script_rules,
                 inner: weak.clone(),
                 kinds,
             };
@@ -350,6 +363,8 @@ pub struct Shared {
 pub(crate) struct Host {
     pub(crate) def: GameDef,
     pub(crate) rules: RunnerRules,
+    /// The script-semantics pair this run selected (decision 0005).
+    pub(crate) script_rules: ScriptRules,
     pub(crate) inner: Weak<Inner>,
     pub(crate) kinds: BTreeMap<String, KindId>,
 }

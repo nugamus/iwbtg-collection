@@ -10,7 +10,7 @@ use iwbtg_sim::input::{Action, InputFrame};
 use iwbtg_sim::num::Real;
 use iwbtg_sim::room::RoomRequest;
 use iwbtg_sim::rules::tick::{
-    AnimSlot, BoundarySlot, DirectLatch, DispatchOrder, JoinPhase, RoomRequestRule,
+    AnimSlot, BoundarySlot, ClockPolicy, DirectLatch, DispatchOrder, JoinPhase, RoomRequestRule,
 };
 use iwbtg_sim::timeline;
 use iwbtg_sim::world::{SimStatus, Value};
@@ -594,6 +594,25 @@ fn tick_counter_overflow_halts_through_the_error() {
     let mut c = fx.ctx();
     let r = tick::run_tick_with(&mut c, InputFrame::EMPTY, &HOOKS);
     assert!(matches!(r, Err(SimError::Overflow { .. })));
+}
+
+#[test]
+fn one_second_is_the_room_speed_under_the_legacy_clock_and_the_tick_rate_under_fixed() {
+    let mut b = builder();
+    b.def_mut().tick_rate = 60;
+    let mut fx = Fx::new(b.build().unwrap());
+    fx.w.room_speed = Real::new(30.0);
+    assert_eq!(
+        tick::second_ticks(&fx.def, &fx.rules.tick, &fx.w),
+        Real::new(30.0),
+        "the default is the legacy gm8 clock"
+    );
+    fx.rules.tick.timing.clock = ClockPolicy::Fixed;
+    assert_eq!(
+        tick::second_ticks(&fx.def, &fx.rules.tick, &fx.w),
+        Real::new(60.0),
+        "a fixed clock reads the package tick rate"
+    );
 }
 
 /// `timeline::start_with_def` begins a run with `timeline_loop` set when the def says `loop`.
