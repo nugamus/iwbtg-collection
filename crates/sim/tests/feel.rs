@@ -4,36 +4,18 @@
 //!
 //! `tests/feel/mod.rs` holds the loader, validator and evaluator; `crates/tools/src/feel_cmd.rs`
 //! includes the same module for the CLI, and `cargo xtask feel` discovers files in
-//! `crates/sim/tests/feel/**`. The contracts here are the public set: the examples from the
-//! issue plus the #1149 lifecycle contract and the #1158 sound contract. A new contract is added
-//! to `CONTRACTS` because a target without a filesystem cannot enumerate the folder.
+//! `crates/sim/tests/feel/**`. The contract list is generated into `feel/contracts.rs` from the
+//! folder by `cargo xtask feel`; `the_contract_list_matches_the_folder` fails on a filesystem
+//! target when it is stale, so a new contract cannot be silently skipped (#1241).
 
 #[path = "feel/mod.rs"]
 mod contract;
 
 use contract::Verdict;
 
-/// Every public contract, by its id (the path below the contracts root) and its text.
-const CONTRACTS: &[(&str, &str)] = &[
-    (
-        "lifecycle/retry_after_death",
-        include_str!("feel/lifecycle/retry_after_death.toml"),
-    ),
-    (
-        "lifecycle/reset_scope",
-        include_str!("feel/lifecycle/reset_scope.toml"),
-    ),
-    ("physics/jump_apex", include_str!("feel/physics/jump_apex.toml")),
-    (
-        "collision/overlapping_hazards",
-        include_str!("feel/collision/overlapping_hazards.toml"),
-    ),
-    ("sound/event_model", include_str!("feel/sound/event_model.toml")),
-    (
-        "checkpoint/respawn_alignment",
-        include_str!("feel/checkpoint/respawn_alignment.toml"),
-    ),
-];
+// Every public contract, by its id (the path below the contracts root) and its text. Generated;
+// do not edit `feel/contracts.rs` by hand.
+include!("feel/contracts.rs");
 
 /// Parses, validates and runs one contract against its public fixture.
 fn run_contract(id: &str, text: &str) -> Verdict {
@@ -52,6 +34,7 @@ fn run_contract(id: &str, text: &str) -> Verdict {
 /// context, like `trace diff`.
 #[test]
 fn the_public_contracts_pass() {
+    assert!(!CONTRACTS.is_empty(), "the public contract set is empty");
     for (id, text) in CONTRACTS {
         if let Verdict::Fail(mismatches) = run_contract(id, text) {
             let detail: String = mismatches.iter().map(ToString::to_string).collect();
@@ -60,23 +43,54 @@ fn the_public_contracts_pass() {
     }
 }
 
-/// The public set is exactly the example set from the issue and every file is named once.
+/// The compiled list names each contract once (the staleness test below checks the folder).
 #[test]
 fn the_public_contract_ids_are_unique() {
     let mut ids: Vec<&str> = CONTRACTS.iter().map(|(id, _)| *id).collect();
     ids.sort_unstable();
+    let n = ids.len();
     ids.dedup();
-    assert_eq!(ids.len(), CONTRACTS.len(), "{ids:?}");
-    for want in [
-        "lifecycle/retry_after_death",
-        "lifecycle/reset_scope",
-        "physics/jump_apex",
-        "collision/overlapping_hazards",
-        "sound/event_model",
-        "checkpoint/respawn_alignment",
-    ] {
-        assert!(ids.contains(&want), "missing public contract {want}");
+    assert_eq!(ids.len(), n, "{ids:?}");
+}
+
+/// The generated list follows `crates/sim/tests/feel/`: a new contract file that `cargo xtask
+/// feel` has not seen fails here instead of being silently skipped (#1241). A target without a
+/// filesystem cannot enumerate, so this check is native/wasip1 only.
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+#[test]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the test, not the sim, enumerates the folder to catch a stale generated list"
+)]
+fn the_contract_list_matches_the_folder() {
+    use std::path::Path;
+
+    fn walk(dir: &Path, root: &Path, out: &mut Vec<String>) {
+        for entry in std::fs::read_dir(dir).expect("the feel folder reads") {
+            let path = entry.expect("a feel entry").path();
+            if path.is_dir() {
+                walk(&path, root, out);
+            } else if path.extension().is_some_and(|e| e == "toml") {
+                out.push(
+                    path.strip_prefix(root)
+                        .expect("below the feel root")
+                        .with_extension("")
+                        .to_string_lossy()
+                        .replace('\\', "/"),
+                );
+            }
+        }
     }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/feel");
+    let mut found = Vec::new();
+    walk(&root, &root, &mut found);
+    found.sort();
+    let mut listed: Vec<String> = CONTRACTS.iter().map(|(id, _)| (*id).to_owned()).collect();
+    listed.sort();
+    assert_eq!(
+        listed, found,
+        "the compiled contract list is stale; run `cargo xtask feel` (or `cargo xtask regen`)"
+    );
 }
 
 /// `feel/self/pass`: a contract that must pass.
