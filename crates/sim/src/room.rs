@@ -3,7 +3,7 @@
 //! WP0 declares; WP4a owns.
 //!
 //! The sequence follows the manual's 7 steps (CLONE_SPEC rooms, "Room start sequence",
-//! Confirmed):
+//! Confirmed), run as one [`RoomTransaction`] with a declared stage order (#1174 A2):
 //!
 //! 1. Room End for every instance of the old room.
 //! 2. Non-persistent instances are removed, with no Destroy event. Deactivated persistent
@@ -61,6 +61,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::collide::Target;
 use crate::collide::grid::Grid;
+use crate::def::game::RoomStage;
 use crate::def::{GlobalIndex, KindId, RoomAction, RoomDef, RoomId, RoomRole, RoomWhen, VarId};
 use crate::error::SimError;
 use crate::events::{self, EventKind, Phase};
@@ -407,7 +408,6 @@ fn run_request<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H, req: RoomReque
         RoomRequest::Goto(_) | RoomRequest::Next | RoomRequest::Previous | RoomRequest::Restart => {
             let target = resolve(ctx, req)?;
             let from = ctx.w.room;
-            room_end(ctx, host)?;
             enter(ctx, host, Some(from), target)
         }
     }
@@ -618,64 +618,160 @@ fn set_room_state(ctx: &mut Ctx, to: RoomId, room: &RoomDef) {
     ctx.w.views = views_of(room);
 }
 
-/// Steps 2 to 7: leave `from` (if any) and enter `to`. `from = None` is the first room of the
-/// game, which gets Game Start.
+/// Steps 2 to 7: leave `from` (if any) and enter `to` as one room transaction. `from = None` is
+/// the first room of the game, which gets Game Start.
 fn enter<H: RoomHost + ?Sized>(
     ctx: &mut Ctx,
     host: &mut H,
     from: Option<RoomId>,
     to: RoomId,
 ) -> Result<(), SimError> {
-    let room = room_def(ctx, to)?;
+    RoomTransaction::new(ctx, from, to)?.run(ctx, host)
+}
 
-    // Steps 2 and 3: split into carried (persistent and active) and left behind.
-    let (carried, left): (Vec<Instance>, Vec<Instance>) = ctx
-        .w
-        .instances()
-        .iter()
-        .filter(|i| i.alive)
-        .cloned()
-        .partition(|i| i.persistent && i.active);
-    if let Some(old) = from
-        && ctx.def.room(old).is_some_and(|r| r.persistent)
-    {
-        ctx.w.persistent_rooms.insert(old, left);
+/// One engine-owned room transaction (decision 0005; #1174 A2).
+///
+/// A room change is prepared, committed once and then built in the order
+/// [`EnterRoomPolicy::stages`](crate::def::game::EnterRoomPolicy::stages) declares. `prepare`
+/// only reads (the two rooms and the carried instance set); `commit` is the single point that
+/// changes the instance store and the room state and reports the entry; the build stages then
+/// create and start the new room. A nested request raised in any stage still goes to
+/// `World::pending` and is chained or deferred by [`after_sequence`] (R23), so the transaction
+/// always finishes before the next change is resolved.
+struct RoomTransaction {
+    /// The room left, or `None` for the first room of the game.
+    from: Option<RoomId>,
+    /// The room entered.
+    to: RoomId,
+    /// The declared stage order ([`RoomStage`]).
+    stages: [RoomStage; 7],
+    /// Persistent, active instances that move to the new room; staged by `Prepare`.
+    carried: Vec<Instance>,
+    /// Instances the old persistent room keeps; staged by `Prepare`.
+    left: Vec<Instance>,
+    /// The carried ids, for the Room Start order.
+    carried_ids: BTreeSet<InstId>,
+    /// The target room had stored instances: the build restores them instead of creating
+    /// placed ones.
+    restoring: bool,
+    /// `Prepare` ran.
+    prepared: bool,
+}
+
+impl RoomTransaction {
+    fn new(ctx: &Ctx, from: Option<RoomId>, to: RoomId) -> Result<RoomTransaction, SimError> {
+        room_def(ctx, to)?;
+        Ok(RoomTransaction {
+            from,
+            to,
+            stages: ctx.def.lifecycle().enter_room.stages,
+            carried: Vec::new(),
+            left: Vec::new(),
+            carried_ids: BTreeSet::new(),
+            restoring: false,
+            prepared: false,
+        })
     }
-    let restored = if room.persistent {
-        ctx.w.persistent_rooms.remove(&to)
-    } else {
-        None
-    };
-    let carried_ids: BTreeSet<InstId> = carried.iter().map(|i| i.id).collect();
 
-    // Rebuild the store: carried plus restored, sorted by id (both lists already are), as the
-    // store keeps them. Every instance is re-inserted, which marks it in the new,
-    // empty grid.
-    let ids: Vec<InstId> = ctx.w.instances().iter().map(|i| i.id).collect();
-    for id in ids {
-        if let Some(inst) = ctx.w.get_mut(id) {
-            inst.alive = false;
+    fn run<H: RoomHost + ?Sized>(mut self, ctx: &mut Ctx, host: &mut H) -> Result<(), SimError> {
+        for stage in self.stages {
+            match stage {
+                RoomStage::RoomEnd => {
+                    if self.from.is_some() {
+                        room_end(ctx, host)?;
+                    }
+                }
+                RoomStage::Prepare => self.prepare(ctx)?,
+                RoomStage::Commit => self.commit(ctx)?,
+                RoomStage::Placed => self.build_placed(ctx, host)?,
+                RoomStage::GameStart => self.game_start(ctx, host)?,
+                RoomStage::CreationCode => self.creation_code(ctx, host)?,
+                RoomStage::RoomStart => self.room_start(ctx, host)?,
+            }
         }
-    }
-    ctx.w.sweep();
-    ctx.w.grid = Grid::default();
-    let restoring = restored.is_some();
-    let mut merged = carried;
-    merged.extend(restored.unwrap_or_default());
-    merged.sort_by_key(|i| i.id);
-    for inst in merged {
-        ctx.w.insert(inst)?;
+        Ok(())
     }
 
-    // Room state on entry (R14, views, output).
-    set_room_state(ctx, to, room);
-    emit(ctx, RoomOutput::Entered { from, to });
+    /// Steps 2 and 3, read-only: split the old room's instances into carried (persistent and
+    /// active) and left behind, and note whether the target room has stored instances to
+    /// restore. No world state changes here.
+    fn prepare(&mut self, ctx: &Ctx) -> Result<(), SimError> {
+        let room = room_def(ctx, self.to)?;
+        let (carried, left): (Vec<Instance>, Vec<Instance>) = ctx
+            .w
+            .instances()
+            .iter()
+            .filter(|i| i.alive)
+            .cloned()
+            .partition(|i| i.persistent && i.active);
+        self.carried_ids = carried.iter().map(|i| i.id).collect();
+        self.restoring = room.persistent && ctx.w.persistent_rooms.contains_key(&self.to);
+        self.carried = carried;
+        self.left = left;
+        self.prepared = true;
+        Ok(())
+    }
 
-    // Step 4: placed instances in file order, params before Create (inside spawn).
-    if !restoring {
+    /// The transaction's single commit point: store the old persistent room's instances,
+    /// take the target room's stored ones, rebuild the instance store (carried plus restored,
+    /// sorted by id), set the room state and report the entry.
+    fn commit(&mut self, ctx: &mut Ctx) -> Result<(), SimError> {
+        if !self.prepared {
+            return Err(SimError::invariant(
+                "room transaction committed before it was prepared",
+            ));
+        }
+        let room = room_def(ctx, self.to)?;
+        if let Some(old) = self.from
+            && ctx.def.room(old).is_some_and(|r| r.persistent)
+        {
+            ctx.w.persistent_rooms.insert(old, std::mem::take(&mut self.left));
+        }
+        let restored = if room.persistent {
+            ctx.w.persistent_rooms.remove(&self.to)
+        } else {
+            None
+        };
+        // Rebuild the store: carried plus restored, sorted by id (both lists already are), as
+        // the store keeps them. Every instance is re-inserted, which marks it in the new,
+        // empty grid.
+        let ids: Vec<InstId> = ctx.w.instances().iter().map(|i| i.id).collect();
+        for id in ids {
+            if let Some(inst) = ctx.w.get_mut(id) {
+                inst.alive = false;
+            }
+        }
+        ctx.w.sweep();
+        ctx.w.grid = Grid::default();
+        let mut merged = std::mem::take(&mut self.carried);
+        merged.extend(restored.unwrap_or_default());
+        merged.sort_by_key(|i| i.id);
+        for inst in merged {
+            ctx.w.insert(inst)?;
+        }
+
+        // Room state on entry (R14, views, output).
+        set_room_state(ctx, self.to, room);
+        emit(
+            ctx,
+            RoomOutput::Entered {
+                from: self.from,
+                to: self.to,
+            },
+        );
+        Ok(())
+    }
+
+    /// Step 4: placed instances in file order, params before Create (inside spawn).
+    fn build_placed<H: RoomHost + ?Sized>(&self, ctx: &mut Ctx, host: &mut H) -> Result<(), SimError> {
+        let policy = ctx.def.lifecycle().enter_room;
+        if self.restoring || !policy.rebuild_placed {
+            return Ok(());
+        }
+        let room = room_def(ctx, self.to)?;
         let stripped = &ctx.def.stripped;
         for p in &room.instances {
-            if stripped.kind_cut(ctx.w.mode, p.kind) || stripped.instance_cut(ctx.w.mode, to, p.name) {
+            if stripped.kind_cut(ctx.w.mode, p.kind) || stripped.instance_cut(ctx.w.mode, self.to, p.name) {
                 continue;
             }
             // A placed instance whose GM8 id is already in use (a persistent instance carried
@@ -703,35 +799,48 @@ fn enter<H: RoomHost + ?Sized>(
             host.spawn(ctx, p.kind, p.x, p.y, init)?;
             stop_if_halted(ctx)?;
         }
+        Ok(())
     }
 
-    // Step 5: Game Start, first room only. No kind declares it (no game in the 20 uses it),
-    // so every instance gets it.
-    if from.is_none() {
+    /// Step 5: Game Start, first room only. No kind declares it (no game in the 20 uses it),
+    /// so every instance gets it.
+    fn game_start<H: RoomHost + ?Sized>(&self, ctx: &mut Ctx, host: &mut H) -> Result<(), SimError> {
+        if self.from.is_some() {
+            return Ok(());
+        }
         let order = host.dispatch_order(ctx.w, &ctx.rules.tick, &|i: &Instance| i.alive && i.active);
-        run_room_phase(ctx, host, Phase::GameStart, &order)?;
+        run_room_phase(ctx, host, Phase::GameStart, &order)
     }
 
-    // Step 6: room creation actions; on a revisit per the switch (rooms UNKNOWN).
-    if !restoring || ctx.rules.room.creation_code_on_revisit {
+    /// Step 6: room creation actions; on a revisit per the switch (rooms UNKNOWN).
+    fn creation_code<H: RoomHost + ?Sized>(&self, ctx: &mut Ctx, host: &mut H) -> Result<(), SimError> {
+        let room = room_def(ctx, self.to)?;
+        if self.restoring && !ctx.rules.room.creation_code_on_revisit {
+            return Ok(());
+        }
         for action in &room.on_create {
             run_action(ctx, host, action)?;
         }
+        Ok(())
     }
 
-    // Step 7: Room Start, snapshot taken now (R10).
-    let def = ctx.def;
-    let handles = |i: &Instance| i.alive && i.active && def.kind(i.kind).is_some_and(|k| k.events.room_start);
-    let order: Vec<InstId> = match ctx.rules.room.room_start_order {
-        RoomStartOrder::RoomThenCarried => {
-            let in_room = ctx.w.instances().iter().filter(|i| handles(i));
-            let (carried, own): (Vec<InstId>, Vec<InstId>) =
-                in_room.map(|i| i.id).partition(|id| carried_ids.contains(id));
-            own.into_iter().chain(carried).collect()
-        }
-        RoomStartOrder::Dispatch => host.dispatch_order(ctx.w, &ctx.rules.tick, &handles),
-    };
-    run_room_phase(ctx, host, Phase::RoomStart, &order)
+    /// Step 7: Room Start, snapshot taken now (R10).
+    fn room_start<H: RoomHost + ?Sized>(&self, ctx: &mut Ctx, host: &mut H) -> Result<(), SimError> {
+        let def = ctx.def;
+        let handles =
+            |i: &Instance| i.alive && i.active && def.kind(i.kind).is_some_and(|k| k.events.room_start);
+        let order: Vec<InstId> = match ctx.rules.room.room_start_order {
+            RoomStartOrder::RoomThenCarried => {
+                let in_room = ctx.w.instances().iter().filter(|i| handles(i));
+                let (carried, own): (Vec<InstId>, Vec<InstId>) = in_room
+                    .map(|i| i.id)
+                    .partition(|id| self.carried_ids.contains(id));
+                own.into_iter().chain(carried).collect()
+            }
+            RoomStartOrder::Dispatch => host.dispatch_order(ctx.w, &ctx.rules.tick, &handles),
+        };
+        run_room_phase(ctx, host, Phase::RoomStart, &order)
+    }
 }
 
 /// One room creation action (step 6).

@@ -367,6 +367,9 @@ mod room_requests;
 #[path = "room_restart.rs"]
 mod room_restart;
 
+#[path = "room_transaction.rs"]
+mod room_transaction;
+
 #[path = "room_rows.rs"]
 mod room_rows;
 
