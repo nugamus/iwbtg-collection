@@ -49,6 +49,59 @@ fn a_slot_resolves_the_file_and_interns_its_vars() {
 }
 
 #[test]
+fn a_script_var_name_must_be_an_identifier() {
+    let valid = profile("", "[script]\nfile = \"kid\"\nvars = [\"dash_dir\", \"_hp2\"]");
+    let (def, _) = load_ok(&valid, STRICT);
+    assert_eq!(def.physics.script.vars, ["dash_dir", "_hp2"]);
+    assert!(
+        def.var_names.contains_key("dash_dir") && def.var_names.contains_key("_hp2"),
+        "valid names are interned"
+    );
+
+    for bad in ["dash dir", "1dash", "_1", "dash$"] {
+        let files = profile("", &format!("[script]\nfile = \"kid\"\nvars = [\"{bad}\"]"));
+        let r = load_report(&files, STRICT);
+        let e = errors(&r);
+        assert!(
+            e.iter().any(|m| m.starts_with("physics.toml:4:")
+                && m.contains("is not a Rhai identifier")
+                && m.contains(bad)),
+            "{bad}: {}",
+            render(&r)
+        );
+        assert!(!r.ok(), "{bad} must fail the load");
+    }
+}
+
+#[test]
+fn a_script_var_name_cannot_shadow_an_instance_property() {
+    // `yflag` and `frozen2` are kid fields of decision 0004; `x` and `kind` are generic
+    // instance properties. None can be reached as a custom variable.
+    for name in ["yflag", "frozen2", "x", "kind"] {
+        let files = profile("", &format!("[script]\nfile = \"kid\"\nvars = [\"{name}\"]"));
+        let r = load_report(&files, STRICT);
+        let e = errors(&r);
+        assert!(
+            e.iter().any(|m| m.starts_with("physics.toml:4:")
+                && m.contains("reserved instance property")
+                && m.contains(&format!("`{name}`"))),
+            "{name}: {}",
+            render(&r)
+        );
+        assert!(!r.ok(), "{name} must fail the load");
+    }
+}
+
+#[test]
+fn a_repeated_script_var_name_reports_once() {
+    let files = profile("", "[script]\nfile = \"kid\"\nvars = [\"1dash\", \"1dash\"]");
+    let r = load_report(&files, STRICT);
+    let e = errors(&r);
+    assert_eq!(e.len(), 1, "{}", render(&r));
+    assert!(e[0].contains("is not a Rhai identifier"), "{}", e[0]);
+}
+
+#[test]
 fn a_slot_naming_a_function_the_script_lacks_is_an_error() {
     let files = profile(
         "step = [{ do = \"script\", fn = \"missing\" }]",
