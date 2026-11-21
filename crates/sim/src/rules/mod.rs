@@ -11,6 +11,7 @@
 
 pub mod collide;
 pub mod draw;
+pub mod lifetime;
 pub mod motion;
 pub mod num;
 pub mod room;
@@ -21,6 +22,7 @@ use serde::{Deserialize, Serialize};
 
 pub use collide::CollideRules;
 pub use draw::DrawRules;
+pub use lifetime::{DestroyedVisibility, LifetimeRules};
 pub use motion::MotionRules;
 pub use num::NumRules;
 pub use room::RoomRules;
@@ -59,6 +61,8 @@ pub struct RunnerRules {
     pub sound: SoundRules,
     /// Draw slot (R15): whether Draw may mutate.
     pub draw: DrawRules,
+    /// Instance lifetime (A1a of #1174): how long a destroyed instance stays stored.
+    pub lifetime: LifetimeRules,
 }
 
 impl RunnerRules {

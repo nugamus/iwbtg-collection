@@ -141,14 +141,35 @@ impl World {
         self.instances.get_mut(i)
     }
 
-    /// GML `instance_exists` on one id: alive and active.
+    /// The visibility conditions, shared by [`World::visible`] (by id) and the iterators and
+    /// walks (by instance): an instance is visible to queries, `with`/`instances`, event
+    /// dispatch, draw and collision when it is active and alive. A destroyed instance is gone
+    /// from the store under `standard` and dead-but-stored under `gm8`; either way this is
+    /// false. `dead_in_queries` is the gm8 R22 opt-in that no package uses.
+    pub(crate) fn visible_instance(inst: &Instance, dead_in_queries: bool) -> bool {
+        inst.active && (inst.alive || dead_in_queries)
+    }
+
+    /// The one visibility predicate for a stored id: [`World::visible_instance`] after the
+    /// lookup. An id that is not stored (already removed under `standard`) is not visible.
+    pub fn visible(&self, id: InstId, dead_in_queries: bool) -> bool {
+        self.get(id)
+            .is_some_and(|i| Self::visible_instance(i, dead_in_queries))
+    }
+
+    /// GML `instance_exists` on one id: visible (alive and active).
     pub fn exists(&self, id: InstId) -> bool {
-        self.get(id).is_some_and(|i| i.alive && i.active)
+        self.visible(id, false)
     }
 
     /// Alive instances (active or not) in id order.
     pub fn iter_alive(&self) -> impl Iterator<Item = &Instance> {
         self.instances.iter().filter(|i| i.alive)
+    }
+
+    /// Visible instances (active and alive) in id order.
+    pub fn iter_visible(&self) -> impl Iterator<Item = &Instance> {
+        self.instances.iter().filter(|i| Self::visible_instance(i, false))
     }
 
     /// "The first" active instance whose classes intersect `class`, by
@@ -158,7 +179,7 @@ impl World {
         let ids = self
             .instances
             .iter()
-            .filter(|i| i.active && (i.alive || rules.dead_in_queries) && i.classes.intersects(class))
+            .filter(|i| Self::visible_instance(i, rules.dead_in_queries) && i.classes.intersects(class))
             .map(|i| i.id);
         self.first_among(ids, rules)
     }
@@ -176,11 +197,11 @@ impl World {
         }
     }
 
-    /// GML `instance_number` on a class: alive, active instances whose classes intersect it.
+    /// GML `instance_number` on a class: visible instances whose classes intersect it.
     pub fn count_of(&self, class: ClassMask) -> u32 {
         let n = self
-            .iter_alive()
-            .filter(|i| i.active && i.classes.intersects(class))
+            .iter_visible()
+            .filter(|i| i.classes.intersects(class))
             .count();
         u32::try_from(n).unwrap_or(u32::MAX)
     }
@@ -318,9 +339,11 @@ impl<'a> Ctx<'a> {
     }
 
     /// GML `instance_destroy`: runs Destroy now (the instance still exists during it), then
-    /// marks the instance dead; it runs no further events and the sweep at the end of the tick
-    /// removes it. An instance that is already destroyed, deactivated or unknown is left alone
-    /// (`Continue`). Returns the Destroy handler's flow; `Flow::Halt` when it halted the sim.
+    /// applies [`LifetimeRules`](crate::rules::LifetimeRules). `gm8` marks the instance dead and
+    /// the end-of-tick sweep removes it; `standard` removes it from the store at once, so no
+    /// lookup or walk finds it afterwards. An instance that is already destroyed, deactivated
+    /// or unknown is left alone (`Continue`). Returns the Destroy handler's flow; `Flow::Halt`
+    /// when it halted the sim.
     pub fn destroy(&mut self, id: InstId) -> Flow {
         if !self.w.exists(id) {
             return Flow::Continue;
@@ -329,7 +352,9 @@ impl<'a> Ctx<'a> {
         if flow.is_halt() {
             return flow;
         }
-        if let Some(inst) = self.w.get_mut(id) {
+        if self.rules.lifetime.is_immediate() {
+            self.w.remove(id);
+        } else if let Some(inst) = self.w.get_mut(id) {
             inst.alive = false;
         }
         flow
