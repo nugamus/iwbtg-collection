@@ -3,9 +3,9 @@
 
 use iwbtg_sim::collide::contact::{contact_steps, mcs_step_limit, outside_steps};
 use iwbtg_sim::collide::{
-    Target, collision_line, collision_point, collision_rectangle, distance_to_object, instance_place,
-    instance_position, move_contact_solid, move_outside_solid, place_empty, place_free, place_meeting,
-    solid_resolve,
+    ContactFace, ContactStop, Target, collision_line, collision_point, collision_rectangle,
+    distance_to_object, instance_place, instance_position, move_contact_solid, move_outside_solid,
+    place_empty, place_free, place_meeting, resolve_contact_move, solid_resolve,
 };
 use iwbtg_sim::def::ClassMask;
 use iwbtg_sim::error::SimError;
@@ -421,6 +421,77 @@ fn contact_wrappers_move_the_instance() {
         g.put(k, 70.0, 567.4);
         move_outside_solid(&mut g.ctx(), k, r(180.0), r(-1.0)).unwrap();
         assert_eq!(g.w.get(k).unwrap().m.x(), r(58.0));
+    });
+    let _ = done;
+}
+
+/// D3 seam (#1183): the one contact resolver delegates exactly to `move_contact_solid`'s
+/// position loop, so both agree on the resolved position, and it reports why the move stopped
+/// and the contact face. Covers a contact, a limit (no contact), a zero maxdist, a non-solid
+/// obstacle and a negative maxdist.
+#[test]
+fn resolve_contact_move_delegates_to_move_contact_solid() {
+    let done = unless_stubbed("resolve_contact_move", || {
+        let run = |solid: bool, x: f64, y: f64, dir: f64, maxdist: f64| {
+            let mut moved = game(800, 608);
+            let b = moved.add_block(64.0, 544.0);
+            if !solid {
+                moved.w.get_mut(b).unwrap().solid = false;
+            }
+            let k = moved.add_kid(x, y, 1.0);
+            move_contact_solid(&mut moved.ctx(), k, r(dir), r(maxdist)).unwrap();
+            let want = (moved.w.get(k).unwrap().m.x(), moved.w.get(k).unwrap().m.y());
+
+            let mut resolved = game(800, 608);
+            let b = resolved.add_block(64.0, 544.0);
+            if !solid {
+                resolved.w.get_mut(b).unwrap().solid = false;
+            }
+            let k = resolved.add_kid(x, y, 1.0);
+            let got = resolve_contact_move(&mut resolved.ctx(), k, r(dir), r(maxdist)).unwrap();
+            assert_eq!(
+                got.pos, want,
+                "same resolved position (solid={solid}, dir={dir}, maxdist={maxdist})"
+            );
+            got
+        };
+        // Contact moving right into the block: rests flush at 58.5, face Left.
+        let got = run(true, 55.5, 567.4, 0.0, 10.0);
+        assert_eq!(got.stop, ContactStop::Contact);
+        assert_eq!(got.normal, Some(ContactFace::Left));
+        // The limit runs out before the block: no contact.
+        let got = run(true, 39.0, 567.4, 0.0, 2.0);
+        assert_eq!(got.stop, ContactStop::Limit);
+        assert_eq!(got.normal, None);
+        // Zero maxdist does not move and does not report a contact.
+        let got = run(true, 55.5, 567.4, 0.0, 0.0);
+        assert_eq!(got.stop, ContactStop::Limit);
+        assert_eq!(got.normal, None);
+        // A non-solid block in the path does not stop the move.
+        let got = run(false, 39.0, 567.4, 0.0, 2.0);
+        assert_eq!(got.stop, ContactStop::Limit);
+        assert_eq!(got.normal, None);
+        // Negative maxdist landing on the floor: contact, face Up.
+        let mut moved = game(800, 608);
+        moved.add_block(0.0, 576.0);
+        let k = moved.add_kid(16.0, 560.0, 1.0);
+        move_contact_solid(&mut moved.ctx(), k, r(270.0), r(-1.0)).unwrap();
+        let want = (moved.w.get(k).unwrap().m.x(), moved.w.get(k).unwrap().m.y());
+        let mut resolved = game(800, 608);
+        resolved.add_block(0.0, 576.0);
+        let k = resolved.add_kid(16.0, 560.0, 1.0);
+        let got = resolve_contact_move(&mut resolved.ctx(), k, r(270.0), r(-1.0))
+            .expect("negative maxdist with a floor");
+        assert_eq!(got.pos, want);
+        assert_eq!(got.stop, ContactStop::Contact);
+        assert_eq!(got.normal, Some(ContactFace::Up));
+        // A negative maxdist with nothing in the way is the same `Unsupported` as today.
+        let mut empty = game(800, 608);
+        let k = empty.add_kid(30.0, 100.0, 1.0);
+        assert!(matches!(
+            resolve_contact_move(&mut empty.ctx(), k, r(90.0), r(-1.0)),
+            Err(SimError::Unsupported { .. })
+        ));
     });
     let _ = done;
 }
