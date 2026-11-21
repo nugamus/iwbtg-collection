@@ -7,6 +7,7 @@ use std::sync::Arc;
 use crate::def::GameDef;
 use crate::error::SimError;
 use crate::input::InputFrame;
+use crate::rng::RngStreams;
 use crate::room::{self, StartPoint};
 use crate::rules::RunnerRules;
 use crate::script::ScriptRuntime;
@@ -89,6 +90,8 @@ impl Sim {
         rules.num.float_model = def.float_model;
         let scripts = ScriptRuntime::new(&def, &rules)?;
         let mut world = World::new(def.start_room, options.seed);
+        // The ruleset selects the stream layout; the state it observes is hashed.
+        world.streams = RngStreams::seeded(options.seed, rules.rng.layout);
         world.next_id = World::first_runtime_id(&def);
         world.mode = options.mode;
         world.map = map;

@@ -6,5 +6,6 @@ pub const CONTRACTS: &[(&str, &str)] = &[
     ("lifecycle/reset_scope", include_str!("lifecycle/reset_scope.toml")),
     ("lifecycle/retry_after_death", include_str!("lifecycle/retry_after_death.toml")),
     ("physics/jump_apex", include_str!("physics/jump_apex.toml")),
+    ("rng/effects_shared_gm8", include_str!("rng/effects_shared_gm8.toml")),
     ("sound/event_model", include_str!("sound/event_model.toml")),
 ];

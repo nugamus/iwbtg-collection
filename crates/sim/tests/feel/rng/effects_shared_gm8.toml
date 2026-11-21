@@ -1,0 +1,32 @@
+# F1 (RNG on a played path) contract for #1157: under `gm8` there is one shared generator, and a
+# visual effect's draws advance the gameplay seed exactly as the recorder does. The fixture's
+# one-Step blood emitter draws the drop's frame and gravity, then its direction and speed: four
+# draws from seed 7, so `random_get_seed()` is that seed advanced by four LCG steps.
+#
+# The `standard` half of #1157 (effects never touch `gameplay`) is a rules value the harness v1
+# cannot select yet; its gating executable copy is
+# `crates/sim/tests/rng.rs::a_split_layout_keeps_effects_and_script_draws_out_of_gameplay`.
+# Under `gm8` the values and order are the recorded ones (evidence: the seed columns replayed by
+# `tests/rng.rs`, `tests/particles_rng.rs` and the golden corpus).
+id = "rng/effects_shared_gm8"
+impact = "F1"
+package = "fixture:rng_effects"
+ruleset = "gm8@0"
+start = { new_game = true, difficulty = 0 }
+play_mode = "original"
+seed = 7
+mods = []
+evidence = [
+  "#1157",
+  "tests/rng.rs::a_shared_layout_routes_every_stream_to_the_gameplay_generator",
+  "tests/rng.rs::blood_draws_match_the_trace",
+  "CLONE_SPEC numbers: hidden RNG consumers (blood frame/gravity, emitter direction/speed)",
+]
+
+inputs = """
+frame 0: end
+"""
+
+[[assert]]
+tick = 1
+"random_get_seed()" = { exact = -1310123597.0 }

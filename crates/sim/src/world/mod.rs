@@ -20,7 +20,7 @@ use crate::input_state::InputState;
 use crate::num::Real;
 use crate::output::OutputEvent;
 use crate::particles::{PartSystemId, Particles};
-use crate::rng::Rng;
+use crate::rng::{Rng, RngStreams};
 use crate::room::RoomRequest;
 use crate::rules::RunnerRules;
 use crate::save::SaveSlot;
@@ -60,8 +60,12 @@ pub struct World {
     pub globals: BTreeMap<VarId, Value>,
     /// Engine state that is not per instance, split by owner (docs/architecture/sim/world.md).
     pub engine: EngineGlobals,
-    /// The gameplay random generator (WP2).
+    /// The gameplay random generator (WP2); the shared stream under `gm8`.
     pub rng: Rng,
+    /// The named streams a split layout adds (decision 0005, N10). Hashed: a replay observes the
+    /// layout and each stream's state. Under `Shared` they are seeded but never read.
+    #[serde(default)]
+    pub streams: RngStreams,
     /// This tick's input and the direct-read latch (WP1).
     pub input: InputState,
     /// The eight views (WP4b).
@@ -138,6 +142,7 @@ impl World {
             globals: BTreeMap::new(),
             engine: EngineGlobals::default(),
             rng: Rng::new(seed),
+            streams: RngStreams::seeded(seed, crate::rules::rng::StreamLayout::Shared),
             input: InputState::default(),
             views: Default::default(),
             pending: None,
