@@ -35,9 +35,9 @@ Three repo rules shape every step:
 | 2.1 | Per-game questions for the user | Agent writes, human answers | 20 min agent, 15-30 min human | Answers in `docs/games/<id>.md` ([games](games/README.md)) |
 | 2.2 | Behavior specs for the unique objects | Agent (research, clean room) | 30-60 min per object | Spec cites evidence and claim ids |
 | 2.3 | Scripts written from the specs | Agent (sim lane) | 1-2 h per object | `pkg check` OK for each script |
-| 2.4 | One trace case per mechanic | Agent | 30-45 min per case | `trace check` OK; in the fidelity baseline |
+| 2.4 | One feel contract per F1 mechanic, plus a trace case where the recorder has one | Agent | 30-45 min per case | Contract passes; `trace check` OK and in the fidelity baseline where a trace exists |
 | 2.5 | Human recordings on the original | Human records, agent prepares | 10-20 min per recording, 1-3 per game | `.inputs` and `.csv` committed; replay check passed |
-| 2.6 | Diff our run and fix the difference | Agent | 2-4 h on a proven family; 1-3 days on a new rule | Every column matches, or an issue with a tier |
+| 2.6 | Diff our run and fix the difference | Agent | 2-4 h on a proven family; 1-3 days on a new rule | Every F1 column matches within the declared tolerance, or a filed deviation with a feel test |
 | 3.1 | Stripped-mode tables and the deviation log | Agent, with the answers | 1 h | Four sections filled ([games](games/README.md#deviation-log)) |
 | 3.2 | Full clear recorded in our port | Human plays, agent verifies | 30-90 min human, 15 min agent | `iwbtg replay verify` prints `verified` |
 | 3.3 | Playtest and feel | Human | 45-90 min human, 30-60 min agent triage | Every difference fixed, filed or accepted (#30) |
@@ -80,7 +80,7 @@ Start from the shortlist entry, not from a download. The shortlist already carri
 
 **Step 1.3 Keep the base and the hand work apart.** The base is regenerable and never hand-edited; scripts, overrides, docs and tests are the overlay the converter never touches. The layout, override form and location are decided in nugamus/iwbtg-collection#779; until it lands, keep hand work outside the package folder and re-apply it after a re-convert. The package the client loads is base plus overlay.
 
-**Step 1.4 Take the census slice.** The census (research#172) classifies every unmapped object across the 20 games: covered by a built-in, coverable by a new preset or built-in, menu-only, or a unique script. Use its slice for this game to set the script budget before writing anything. A cluster that appears in two or more games is a built-in candidate, not a per-game script ([content](content.md#engines)).
+**Step 1.4 Take the census slice.** The census (research#172) classifies every unmapped object across the 20 games: covered by a built-in, coverable by a new preset or built-in, menu-only, or a unique script. Use its slice for this game to set the script budget before writing anything. A cluster that appears in three or more games is a built-in candidate under 0004; two games use a versioned shared script, not a per-game copy ([content](content.md#engines), [0004](decisions/0004-extension-model.md)).
 
 **Step 1.5 Choose the engine pack.** A game whose physics match its family uses the shared pack for the Kid, blood, saves and sounds, so those assets are not copied into the package. The skeletons exist but their assets are still pending (games#27); until they are filled, the game carries its own copies and its `[[third_party]]` entries. Choosing the pack is 15 minutes; filling the pack is a one-time job outside the per-game path.
 
@@ -94,11 +94,11 @@ Start from the shortlist entry, not from a download. The shortlist already carri
 
 **Step 2.3 Write the scripts.** The script cites the spec, not the original. Run `pkg check` after each script so a missing API function surfaces immediately. When a planned script API function blocks a script, file it against Script API v1 (#776) instead of working around it inside the script; a workaround is a rule the sim later has to undo ([scripts](architecture/sim/scripts.md)).
 
-**Step 2.4 Add one trace case per mechanic.** A trace case is short scripted input, run in our port and diffed against the original's recorder trace. Rely's four cases (`stand`, `djump`, `right`, `num-rng-a`) are the baseline-needle set; a game with a boss, avoidance, vines, water or a moving platform needs more. Cases live in `crates/tools/cases/<package id>/` and enter `crates/tools/fidelity-baseline.txt`; `cargo xtask fidelity` runs them all after a sim or converter change, with `IWBTG_RESEARCH` set ([traces](architecture/traces.md), [testing](architecture/testing.md)).
+**Step 2.4 Add one trace case and one feel contract per F1 mechanic.** A trace case is short scripted input, run in our port and diffed against the original's recorder trace. Rely's four cases (`stand`, `djump`, `right`, `num-rng-a`) are the baseline-needle set; a game with a boss, avoidance, vines, water or a moving platform needs more. Cases live in `crates/tools/cases/<package id>/` and enter `crates/tools/fidelity-baseline.txt`; `cargo xtask fidelity` runs them all after a sim or converter change, with `IWBTG_RESEARCH` set ([traces](architecture/traces.md), [testing](architecture/testing.md)). The feel contract states the player-observable outcome for the same mechanic (a jump envelope, retry timing, reset scope, collision outcome) and names the trace as evidence; it lives in `crates/tools/feel/<area>/<name>.toml` and runs with `cargo xtask feel` against the games repo (`IWBTG_GAMES`), because that is where the hand-worked package lives ([feel contracts](architecture/feel-contracts.md)). F2 mechanics need a screenshot or audio check instead; F3 details need only the pinned hash.
 
 **Step 2.5 Get the human recording.** Agents never play whole games. The user plays a short segment of the original in the research recorder, with the exact command prepared by the agent (room, variables, output name); the agent commits the `.inputs` and `.csv` and imports the case. The recorder checks its own replay before writing anything. The guide is `docs/recording-inputs.md` in the research repo. Schedule this early: it is the first hard human dependency, and one 15-minute recording can unblock a day of diff work.
 
-**Step 2.6 Diff and fix.** Run the trace case, read the first differing frame and field, and fix the sim, the package or the converter — never the trace. If the difference is a new engine rule, it becomes a spec/trace issue and stays OPEN; do not invent the answer. On a proven family this is usually a few hours. When a game exposes a rule the family never needed, it costs 1-3 days and benefits every later game on that family.
+**Step 2.6 Diff, contract and fix.** Run the trace case, read the first differing frame and field, and fix the sim, the package or the converter — never the trace. Then run the feel contract: if the player-observable outcome still holds, the difference is F3 and is recorded; if the outcome moved, it is F1 and the trace stays the evidence. If the difference is a new engine rule, it becomes a spec/trace issue and stays OPEN; do not invent the answer. On a proven family this is usually a few hours. When a game exposes a rule the family never needed, it costs 1-3 days and benefits every later game on that family. Do not clone an implementation detail to make a probe column match: file the redesign (data, script, profile or standard ruleset) and mark its F tier.
 
 **Target for Stage 2:** 4-5 agent-days for a baseline needle game like rely (10 objects: about 2.5-3 days of specs and scripts, half a day of trace cases, up to a day of diffing), and about 2 weeks for a game with a boss or avoidance and 25 or more unique objects. One 20-40 minute human recording session is part of this stage.
 
@@ -108,7 +108,7 @@ Start from the shortlist entry, not from a download. The shortlist already carri
 
 **Step 3.2 Record a full clear.** Clearability is proven by a human recording a full clear in our port, as a replay the headless CLI verifies; during Beta, player clears count as proof too ([content](content.md#proving-a-port)). `iwbtg replay verify <dir> <replay>` reproduces the seven `replay run` lines and prints `verified` or one `mismatch:` line per difference ([cli](architecture/cli.md)). A clear the user cannot produce is a port problem, not a paperwork problem.
 
-**Step 3.3 Playtest and feel.** A human playtest checks the feel, and for rely also compares rooms side by side with the original: backgrounds, tiles and depth order (#30). Native was the first target; the web playtest follows the web build (#29). Every difference the user sees becomes an issue with a tier or is accepted in the deviation log. Visible T2 differences block Beta; T1 blocks Ranked ([fidelity tiers](plans/fidelity-tiers.md)).
+**Step 3.3 Playtest and feel.** A human playtest checks the feel, and for rely also compares rooms side by side with the original: backgrounds, tiles and depth order (#30). Native was the first target; the web playtest follows the web build (#29). Every difference the user sees becomes an issue with an F tier or is accepted in the deviation log. Visible F2 differences block Beta; F1 blocks Ranked ([fidelity tiers](plans/fidelity-tiers.md)). A playtest can add a feel contract or narrow a tolerance; a deliberate deviation is recorded in the game's deviation log with the contract that proves its impact.
 
 **Target for Stage 3:** 2-3 agent-hours plus 45-90 minutes of human play, and the full clear.
 
@@ -118,7 +118,7 @@ Start from the shortlist entry, not from a download. The shortlist already carri
 
 **Step 4.2 Open the package PR.** From the games repo, run the local check the repo requires for every touched package: `cargo run -q --release --manifest-path ../client/Cargo.toml -p iwbtg-tools -- pkg check <package>`. `iwbtg pkg pack` must produce the `.iwbz` with a `gameplay_hash` and a `content_hash` ([cli](architecture/cli.md)). The PR body records the trace result, the verified replay, the deviation log and the playtest. A port PR waits for the user's playtest before it merges (games repo rules).
 
-**Step 4.3 Mark Beta.** Status is Beta when the fidelity proof, the verified clear, the deviation log and the playtest exist. Ranked is a later gate: every T1 item answered and proven ([fidelity tiers](plans/fidelity-tiers.md)).
+**Step 4.3 Mark Beta.** Status is Beta when the fidelity proof, the verified clear, the deviation log and the playtest exist. Ranked is a later gate: every F1 item answered and proven ([fidelity tiers](plans/fidelity-tiers.md)).
 
 **Target for Stage 4:** 2-3 agent-hours plus the merge wait.
 
@@ -142,7 +142,7 @@ The 19 remaining games at 1.5-2 lane-weeks each is about 29-38 lane-weeks: rough
 Rely exposed the converter's structural gaps one at a time, each found after a package had already been built:
 
 - The first `pkg check` on the rely package failed on a warp without its target room (research#93, found 2026-11-04). The same class of error existed across most games: 20 warp errors, 14 music objects without a track and a missing `game.toml` (research#120).
-- Rely's `objEffect` turned out to be a particle system that the original creates from the world's Room Start in every room; the converted package never spawned it, so its RNG draws were missing (research#186). That is a T1 difference hidden in what looked like visual effects. It took a converter change (CR23/CR24) and re-conversion.
+- Rely's `objEffect` turned out to be a particle system that the original creates from the world's Room Start in every room; the converted package never spawned it, so its RNG draws were missing (research#186). That is an F1 difference hidden in what looked like visual effects. It took a converter change (CR23/CR24) and re-conversion.
 - The converter keeps improving: about 40 converter PRs landed between 2026-11-03 and the audit, so every improvement means re-converting (nugamus/iwbtg-collection#779).
 
 **What the pipeline does about it:** convert all 20 in one run, read the report before editing, and file every non-script gap as a CR plus a research issue before starting per-game work. Fix the converter once. Keep the base and hand work apart (#779) so a re-convert does not overwrite scripts, and run `cargo xtask fidelity` after the converter changes.
@@ -153,7 +153,7 @@ Rely's package passed `pkg check` except for 10 objects with `script =` and no f
 
 The clean-room rule makes each object two passes today: a research session writes the spec, a sim session writes the script. The census (#172) is meant to show how many of the 3,042 are near-duplicates, preset variants, shared built-ins or menu-only, and Script API v1 (#776) must cover what the remainder uses. Until those land, the 3,042 is the only known number and it dominates the schedule.
 
-**What the pipeline does about it:** census first, built-in or preset before script, spec and script batched per object, and short trace cases instead of hand play. Do not write menu behavior for ranked mode; it is Play original work (#100) and T2 by scope.
+**What the pipeline does about it:** census first, built-in or preset before script, spec and script batched per object, and short trace cases instead of hand play. Do not write menu behavior for ranked mode; it is Play original work (#100) and F2 by scope.
 
 ### Assets and credits
 
