@@ -5,7 +5,7 @@
 use iwbtg_sim::def::script::ScriptRules;
 use iwbtg_sim::def::testing::GameDefBuilder;
 use iwbtg_sim::def::{
-    Builtin, ClassMask, GameDef, KindDef, KindId, RoomDef, RoomId, ScriptDef, ScriptId, VarId,
+    Builtin, ClassMask, GameDef, KindDef, KindId, NameId, RoomDef, RoomId, ScriptDef, ScriptId, VarId,
 };
 use iwbtg_sim::events::EventSet;
 use iwbtg_sim::hash::state_hash;
@@ -16,7 +16,7 @@ use iwbtg_sim::rules::RunnerRules;
 use iwbtg_sim::script::{ScriptOutput, ScriptRuntime};
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::tick;
-use iwbtg_sim::world::{Ctx, InstId, SimStatus, SpawnInit, World};
+use iwbtg_sim::world::{Ctx, InstId, SimStatus, SpawnInit, Value, World};
 
 struct Fx {
     def: GameDef,
@@ -68,6 +68,63 @@ fn fx_rules(source: &str, walker_events: bool, script_rules: ScriptRules) -> Fx 
         rules,
         scripts,
         w: World::new(RoomId(0), 42),
+    }
+}
+
+/// Kinds: 0 `zone` (base `trigger`, script), 1 `kidlike` (inert, class `KID`).
+///
+/// The trigger built-in's own event set is the kid collision, so that is the event the script's
+/// `trigger(name)` runs from. The room-file name table holds `"zone_a"` at [`NameId(0)`].
+fn trigger_fx(source: &str) -> Fx {
+    let mut b = GameDefBuilder::new("wp9-trigger");
+    let room = b.room(RoomDef::new("room", 320, 240));
+    let spr = b.sprite_rect((16, 16), (0, 0));
+    let mut zone = KindDef::new("zone", Builtin::Trigger);
+    zone.script = Some(ScriptId(0));
+    zone.sprite = Some(spr);
+    zone.events = iwbtg_sim::builtins::event_set(Builtin::Trigger, &zone);
+    let mut kidlike = KindDef::new("kidlike", Builtin::Inert);
+    kidlike.sprite = Some(spr);
+    kidlike.classes = ClassMask::KID;
+    b.kind(zone);
+    b.kind(kidlike);
+    b.start_room(room);
+    let mut def = b.build().expect("def");
+    def.scripts.push(ScriptDef {
+        name: "scripts/zone.rhai".into(),
+        source: source.into(),
+    });
+    def.var_names.insert("hp".into(), VarId(0));
+    def.names.push("zone_a".into());
+    let rules = RunnerRules::default();
+    let scripts = ScriptRuntime::new(&def, &rules).expect("scripts compile");
+    Fx {
+        def,
+        rules,
+        scripts,
+        w: World::new(RoomId(0), 42),
+    }
+}
+
+fn spawn_named(f: &mut Fx, kind: u32, name: Option<NameId>) -> InstId {
+    let mut c = f.ctx();
+    c.spawn(
+        KindId(kind),
+        Real::new(0.0),
+        Real::new(0.0),
+        SpawnInit {
+            name,
+            ..Default::default()
+        },
+    )
+    .expect("spawn")
+}
+
+fn hp(f: &Fx, id: InstId) -> Option<Real> {
+    match f.w.get(id).expect("inst").vars.get(&VarId(0)) {
+        Some(Value::Real(r)) => Some(*r),
+        None => None,
+        other => panic!("hp is {other:?}"),
     }
 }
 
@@ -174,6 +231,39 @@ fn step() { if this.kind != "walker" { throw "kind"; } }
     f.run(2);
     assert_eq!(f.halted(), None);
     assert!(f.w.exists(a));
+}
+
+#[test]
+fn a_named_trigger_runs_its_trigger_handler_with_the_name() {
+    let src = "fn trigger(name) {\n    if name == \"zone_a\" { this.hp = 7.0; }\n}\n";
+    let mut f = trigger_fx(src);
+    let zone = spawn_named(&mut f, 0, Some(NameId(0)));
+    let _kid = spawn_named(&mut f, 1, None);
+    f.run(1);
+    assert_eq!(f.halted(), None);
+    assert_eq!(hp(&f, zone), Some(Real::new(7.0)));
+}
+
+#[test]
+fn an_unnamed_trigger_has_no_name_to_pass() {
+    let src = "fn trigger(name) { this.hp = 7.0; }";
+    let mut f = trigger_fx(src);
+    let zone = spawn_named(&mut f, 0, None);
+    let _kid = spawn_named(&mut f, 1, None);
+    f.run(1);
+    assert_eq!(f.halted(), None);
+    assert_eq!(hp(&f, zone), None);
+}
+
+#[test]
+fn a_trigger_kid_collision_maps_to_trigger_not_collide() {
+    let src = "fn trigger(name) { this.hp = 7.0; }\nfn collide(other) { this.hp = 99.0; }";
+    let mut f = trigger_fx(src);
+    let zone = spawn_named(&mut f, 0, Some(NameId(0)));
+    let _kid = spawn_named(&mut f, 1, None);
+    f.run(1);
+    assert_eq!(f.halted(), None);
+    assert_eq!(hp(&f, zone), Some(Real::new(7.0)));
 }
 
 #[test]
