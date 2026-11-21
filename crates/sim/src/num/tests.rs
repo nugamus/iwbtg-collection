@@ -4,7 +4,7 @@
 use super::trig::{DEG_TO_RAD, TRIG_TABLE};
 use super::*;
 use crate::rules::NumRules;
-use crate::rules::num::{AlarmConv, ByteConv, CompareMode, MinMaxTies, NegZero, SignMode, StrRound, Truth};
+use crate::rules::num::{ByteConv, CompareMode, NegZero, SignMode};
 
 fn r(x: f64) -> Real {
     Real::new(x)
@@ -252,18 +252,6 @@ fn min_max_clamp_lerp() {
 }
 
 #[test]
-fn min_max_ties_rule() {
-    let ge = NumRules {
-        min_max_ties: MinMaxTies::GreaterOrEqual,
-        ..d()
-    };
-    assert_eq!(gm_min(r(0.0), r(-0.0), &ge), r(-0.0));
-    assert_eq!(gm_max(r(0.0), r(-0.0), &ge), r(0.0));
-    assert_eq!(gm_min(r(1.0), r(2.0), &ge), r(1.0));
-    assert_eq!(gm_max(r(1.0), r(2.0), &ge), r(2.0));
-}
-
-#[test]
 fn repeat_count_rounds_and_stops_at_zero() {
     let d = &d();
     assert_eq!(gm_repeat_count(r(2.5), d), Ok(2));
@@ -484,12 +472,6 @@ fn gm_bool_threshold() {
     assert!(gm_bool(r(0.5), d));
     assert!(gm_bool(r(1.0), d));
     assert!(!gm_bool(r(f64::NAN), d));
-    let gt = NumRules {
-        truth: Truth::GtHalf,
-        ..NumRules::default()
-    };
-    assert!(!gm_bool(r(0.5), &gt));
-    assert!(gm_bool(r(0.5000000000000001), &gt));
 }
 
 // ---- Conversions (R3b, N5, N6) ----
@@ -511,21 +493,6 @@ fn alarm_from_real_rounds_half_even() {
         assert_eq!(alarm_from_real(r(v), d), r(a), "alarm {v}");
     }
     assert!(alarm_from_real(r(f64::NAN), d).is_nan());
-}
-
-#[test]
-fn alarm_from_real_other_rules() {
-    let trunc = NumRules {
-        alarm_from_real: AlarmConv::Truncate,
-        ..d()
-    };
-    let keep = NumRules {
-        alarm_from_real: AlarmConv::Keep,
-        ..d()
-    };
-    assert_eq!(alarm_from_real(r(1.5), &trunc), r(1.0));
-    assert_eq!(alarm_from_real(r(-0.5), &trunc), r(0.0));
-    assert_eq!(alarm_from_real(r(1.3), &keep), r(1.3));
 }
 
 /// N5 default: round half to even, then wrap (rounding Confirmed (recorder): num-byte-save-a..d,
@@ -558,19 +525,6 @@ fn byte_from_real_rounds_half_even() {
     assert_eq!(byte_from_real(r(1e300), d), 0);
 }
 
-#[test]
-fn byte_from_real_trunc_rule() {
-    let t = NumRules {
-        byte_from_real: ByteConv::TruncWrap,
-        ..d()
-    };
-    assert_eq!(byte_from_real(r(51.59999999999991), &t), 51);
-    assert_eq!(byte_from_real(r(67.4), &t), 67);
-    assert_eq!(byte_from_real(r(48.5), &t), 48);
-    assert_eq!(byte_from_real(r(-1.5), &t), 255);
-    assert_eq!(byte_from_real(r(257.9), &t), 1);
-}
-
 /// N6: integers get no decimals, everything else two. Recorder values the default matches
 /// (num-string-save-a/b, tr-room-07-b/c), plus the two it does not (N6 OPEN).
 #[test]
@@ -601,20 +555,6 @@ fn gm_string_real_table() {
     // N6 OPEN: the recorder writes 2.68 and 1.01 for these.
     assert_eq!(gm_string_real(r(2.675), d), "2.67");
     assert_eq!(gm_string_real(r(1.005), d), "1.00");
-}
-
-#[test]
-fn gm_string_real_half_away_rule() {
-    let away = NumRules {
-        string_decimals: StrRound::HalfAway,
-        ..d()
-    };
-    assert_eq!(gm_string_real(r(0.125), &away), "0.13");
-    assert_eq!(gm_string_real(r(0.375), &away), "0.38");
-    assert_eq!(gm_string_real(r(-0.125), &away), "-0.13");
-    assert_eq!(gm_string_real(r(9.875), &away), "9.88");
-    assert_eq!(gm_string_real(r(99.995), &away), gm_string_real(r(99.995), &d()));
-    assert_eq!(gm_string_real(r(551.7), &away), "551.70");
 }
 
 // ---- GML literals (N14) ----

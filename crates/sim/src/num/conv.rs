@@ -11,11 +11,10 @@ use crate::rules::num::{AlarmConv, ByteConv, StrRound};
 
 /// The value an alarm stores when GML assigns `v` (R3b, `NumRules::alarm_from_real`).
 ///
-/// `AlarmConv::RoundHalfEven` (engine_rev 0 default): round to nearest, ties to even, so 1.5 is
-/// 2, 2.5 is 2, 0.5 is 0 and 3.5 is 4 (Confirmed (recorder):
-/// `traces/kaenbyou/num-alarm-half-b.csv` rows 10-31; 1.3 fires every tick in
-/// `traces/go-the-jun-g-world/num-eps-alpha.csv`). A zero result is `+0.0`. `Truncate` rounds
-/// toward zero; `Keep` stores `v` as it is.
+/// `AlarmConv::RoundHalfEven` (engine_rev 0 default, the only value in this ruleset revision):
+/// round to nearest, ties to even, so 1.5 is 2, 2.5 is 2, 0.5 is 0 and 3.5 is 4 (Confirmed
+/// (recorder): `traces/kaenbyou/num-alarm-half-b.csv` rows 10-31; 1.3 fires every tick in
+/// `traces/go-the-jun-g-world/num-eps-alpha.csv`). A zero result is `+0.0`.
 ///
 /// A non-finite `v` comes back unchanged; the alarm setter rejects it (N15).
 pub fn alarm_from_real(v: Real, r: &NumRules) -> Real {
@@ -25,8 +24,6 @@ pub fn alarm_from_real(v: Real, r: &NumRules) -> Real {
     let x = v.get();
     match r.alarm_from_real {
         AlarmConv::RoundHalfEven => positive_zero(x.round_ties_even()),
-        AlarmConv::Truncate => positive_zero(x.trunc()),
-        AlarmConv::Keep => v,
     }
 }
 
@@ -38,12 +35,12 @@ fn positive_zero(v: f64) -> Real {
 
 /// The byte `file_bin_write_byte(v)` writes (N5, `NumRules::byte_from_real`).
 ///
-/// `ByteConv::RoundWrap` (engine_rev 0 default): round to nearest, ties to even, then wrap mod
-/// 256. The rounding is Confirmed (recorder): 51.59999999999991 is written as 52, 67.4 as 67, and
-/// the tie 48.5 as 48 (`traces/rely-the-needle-4-2/num-byte-save-a..d.csv`, `tr-room-05-e.csv`
-/// row 63; `traces/go-the-spook-house/sh-save-restart-a.csv` row 190: 455.1 as 55). The wrap for
-/// values outside 0..255 is OPEN (not traced). `ByteConv::TruncWrap` truncates toward zero
-/// instead.
+/// `ByteConv::RoundWrap` (engine_rev 0 default, the only value in this ruleset revision): round
+/// to nearest, ties to even, then wrap mod 256. The rounding is Confirmed (recorder):
+/// 51.59999999999991 is written as 52, 67.4 as 67, and the tie 48.5 as 48
+/// (`traces/rely-the-needle-4-2/num-byte-save-a..d.csv`, `tr-room-05-e.csv` row 63;
+/// `traces/go-the-spook-house/sh-save-restart-a.csv` row 190: 455.1 as 55). The wrap for values
+/// outside 0..255 is OPEN (not traced).
 ///
 /// A non-finite `v` gives 0 (OPEN; built-ins reject non-finite values before they get here).
 pub fn byte_from_real(v: Real, r: &NumRules) -> u8 {
@@ -52,7 +49,6 @@ pub fn byte_from_real(v: Real, r: &NumRules) -> u8 {
     }
     let integral = match r.byte_from_real {
         ByteConv::RoundWrap => v.get().round_ties_even(),
-        ByteConv::TruncWrap => v.get().trunc(),
     };
     // Exact for every finite integral value: the remainder is an integer in [0, 256).
     let wrapped = integral.rem_euclid(256.0);
@@ -66,13 +62,13 @@ pub fn byte_from_real(v: Real, r: &NumRules) -> u8 {
 /// Confirmed (recorder): `551.70`, `traces/eat-the-new-year/num-string-save-a.csv` row 40). The
 /// rounding of the second decimal is N6, `NumRules::string_decimals`:
 ///
-/// - `StrRound::HalfEven` (engine_rev 0 default): the exact decimal value of the double, rounded
-///   to two decimals, ties to even. Matches the recorder for exact binary halves (0.125 gives
-///   0.12, 0.375 gives 0.38, 0.625 gives 0.62, 183.125 gives 183.12) and for 183.005 (183.00) and
-///   0.015 (0.01) (`num-string-save-b.csv` row 2, `traces/machinary/tr-room-07-b.csv` and `-c.csv`
-///   row 55). It does not match 2.675 (recorder 2.68) or 1.005 (recorder 1.01); the spec says no
-///   simple rule fits all of them, so N6 stays OPEN.
-/// - `StrRound::HalfAway`: the same, with ties away from zero.
+/// `StrRound::HalfEven` (engine_rev 0 default, the only value in this ruleset revision): the
+/// exact decimal value of the double, rounded to two decimals, ties to even. Matches the recorder
+/// for exact binary halves (0.125 gives 0.12, 0.375 gives 0.38, 0.625 gives 0.62, 183.125 gives
+/// 183.12) and for 183.005 (183.00) and 0.015 (0.01) (`num-string-save-b.csv` row 2,
+/// `traces/machinary/tr-room-07-b.csv` and `-c.csv` row 55). It does not match 2.675 (recorder
+/// 2.68) or 1.005 (recorder 1.01); the spec says no simple rule fits all of them, so N6 stays
+/// OPEN and a settled rule adds its value then.
 ///
 /// Only `x.125`, `x.375`, `x.625` and `x.875` are exact ties, because a two-decimal half must be
 /// a multiple of 1/8 to be a double. OPEN as well: negative zero (written `0` here), values that
@@ -102,7 +98,6 @@ pub fn gm_string_real(v: Real, r: &NumRules) -> String {
         .is_some_and(|d| d.is_ascii_digit() && (d - b'0') % 2 == 1);
     let round_up = match r.string_decimals {
         StrRound::HalfEven => last_odd,
-        StrRound::HalfAway => true,
     };
     if round_up {
         increment_decimal(kept)

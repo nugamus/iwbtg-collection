@@ -109,15 +109,15 @@ pub fn gm_ge(a: Real, b: Real, r: &NumRules) -> bool {
     }
 }
 
-/// GML truthiness of a real, for `if x` in ported code (N2): `x > 0.5` under `Truth::GtHalf`,
-/// `x >= 0.5` under `Truth::GeHalf` (the engine_rev 0 default). NaN is false.
+/// GML truthiness of a real, for `if x` in ported code (N2): `x >= 0.5` (`Truth::GeHalf`, the
+/// engine_rev 0 default and the only value in this ruleset revision). NaN is false.
 ///
 /// The spec infers `> 0.5` from the manual's "rounded value 0 or less is false" with
-/// ties-to-even rounding; no trace has a fractional condition yet, so the engine_rev 0 default
-/// keeps the earlier `>= 0.5` until one does (N2).
+/// ties-to-even rounding; no trace has a fractional condition yet, so the default keeps the
+/// earlier `>= 0.5` until one does (N2). A trace that settles it adds the other value in a
+/// ruleset revision, not a spare variant.
 pub fn gm_bool(x: Real, r: &NumRules) -> bool {
     match r.truth {
-        Truth::GtHalf => x.get() > HALF,
         Truth::GeHalf => x.get() >= HALF,
     }
 }

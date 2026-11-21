@@ -119,12 +119,12 @@ pub enum CompareMode {
     Epsilon(Real),
 }
 
-/// N2: truthiness of a real.
+/// N2: truthiness of a real. One value in this ruleset revision; a trace that settles the
+/// boundary adds the other one then (0005: the ruleset revision is the seam, not a spare value).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Truth {
-    /// True when `x > 0.5` (what the spec infers).
-    GtHalf,
-    /// True when `x >= 0.5` (engine_rev 0 default).
+    /// True when `x >= 0.5` (engine_rev 0 default, and the user's decision to keep it until a
+    /// trace settles the boundary).
     GeHalf,
 }
 
@@ -137,14 +137,13 @@ pub enum SignMode {
     Epsilon,
 }
 
-/// N12: `min`/`max` on ties and signed zeros.
+/// N12: `min`/`max` on ties and signed zeros. One value in this ruleset revision; a settled rule
+/// adds another then (0005).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum MinMaxTies {
     /// Both compare with a strict `a > b`: `min` keeps `a` and `max` takes `b` on ties
     /// (engine_rev 0 default, the current `num` code).
     StrictGreater,
-    /// Both compare with `a >= b`: `min` takes `b` and `max` keeps `a` on ties.
-    GreaterOrEqual,
 }
 
 /// N4, N13: what happens to a zero result's sign.
@@ -156,35 +155,30 @@ pub enum NegZero {
     Keep,
 }
 
-/// R3b: fractional alarm values.
+/// R3b: fractional alarm values. One value in this ruleset revision; the real runner is unchecked,
+/// so a later answer adds another then (0005).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum AlarmConv {
     /// Round half to even (engine_rev 0 default; Confirmed (recorder)).
     RoundHalfEven,
-    /// Truncate toward zero.
-    Truncate,
-    /// Keep the fraction.
-    Keep,
 }
 
-/// N5: `file_bin_write_byte` of a fraction or an out-of-range value.
+/// N5: `file_bin_write_byte` of a fraction or an out-of-range value. One value in this ruleset
+/// revision; a settled wrap rule adds another then (0005).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ByteConv {
-    /// Truncate toward 0, then wrap mod 256.
-    TruncWrap,
     /// Round half to even, then wrap mod 256 (engine_rev 0 default; the rounding is Confirmed
     /// (recorder), the wrap is UNKNOWN).
     RoundWrap,
 }
 
-/// N6: `string()` two-decimal rounding.
+/// N6: `string()` two-decimal rounding. One value in this ruleset revision; research#100 can add
+/// the rule it finds then (0005).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum StrRound {
     /// Round the exact decimal value, ties to even (engine_rev 0 default; matches the recorder's
     /// exact binary halves, not all of its other values).
     HalfEven,
-    /// Round half away from zero.
-    HalfAway,
 }
 
 /// N3: the runner's float model.
