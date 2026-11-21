@@ -1,10 +1,11 @@
 //! The retry and reset lifecycle events (docs/architecture/sim/rooms.md, R16, R17, R26, R27;
 //! decision 0005, #1149).
 //!
-//! The policies are [`crate::def::Lifecycle`] values. The engines' init rooms and world objects
-//! are not ported as GM code: the retry's delay is the engine-owned [`InitPhase`]. The `world`
-//! built-in (WP6a) calls these at the world's rank, in the phase `RetryPolicy::trigger` names;
-//! this module does not look at the trigger. WP0 declared; WP4b owns.
+//! The policies are [`crate::def::game::Lifecycle`] values. The engines' init rooms and world
+//! objects are not ported as GM code: the retry's delay is the engine-owned [`InitPhase`]. The
+//! `world` built-in (WP6a) calls these at the world's rank, in the phase
+//! [`crate::def::game::RetryPolicy::trigger`] names; this module does not look at the trigger.
+//! WP0 declared; WP4b owns.
 //!
 //! Spec: CLONE_SPEC rooms, "game_restart" and "Retry timeline"; kid/A3.md showdown "Restart".
 //!
@@ -119,7 +120,7 @@ pub fn run_restart(ctx: &mut Ctx, world: InstId) -> Result<Flow, SimError> {
 /// `DeleteTempAndRestart` (groups A, B, C): delete the temp marker and request `game_restart`
 /// (the save is kept; the globals are cleared by the restart). `GameReset` (kaenbyou,
 /// eat-the-lemon gameReset): reset the run globals and go to the Boot-role room
-/// ([`crate::room::restart_room`]). OPEN for `GameReset`: which other globals the original
+/// (`crate::room::restart_room`). OPEN for `GameReset`: which other globals the original
 /// resets (the script-level globals stay).
 pub fn run_reset(ctx: &mut Ctx, world: InstId) -> Result<Flow, SimError> {
     let lifecycle = ctx.def.lifecycle();
