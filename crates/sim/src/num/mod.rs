@@ -9,6 +9,7 @@
 //! - [`round`](mod@round): banker's rounding, integer conversion, `frac`, `sign`, `gm_min`/`gm_max`,
 //!   `repeat` counts, GML `mod`/`div`, the motion integer snap.
 //! - [`compare`]: GM8 comparisons and truthiness under `NumRules`.
+//! - [`tolerance`]: the `standard` ruleset's one explicit tolerance mechanism.
 //! - [`conv`]: rule-dependent conversions (alarms, save bytes, `string()`).
 //! - [`math`]: software `sin`, `cos`, `tan`, `atan2`, `sqrt`, `pow`, `exp`, `ln`.
 //! - [`trig`]: degree helpers, the exact-bits trig table, `point_direction` and friends.
@@ -17,6 +18,7 @@ pub mod compare;
 pub mod conv;
 pub mod math;
 pub mod round;
+pub mod tolerance;
 pub mod trig;
 
 #[cfg(test)]
@@ -35,6 +37,7 @@ pub use round::{
     abs, ceil, clamp, floor, frac, gm_div, gm_max, gm_min, gm_mod, gm_repeat_count, lerp, round, sign,
     snap_to_int, to_int_round, to_int_trunc,
 };
+pub use tolerance::Tolerance;
 pub use trig::{
     darctan2, dcos, degtorad, dsin, lengthdir_x, lengthdir_y, point_direction, point_distance, radtodeg,
 };
