@@ -4,7 +4,9 @@
 //!
 //! `tests/feel/mod.rs` holds the loader, validator and evaluator; `crates/tools/src/feel_cmd.rs`
 //! includes the same module for the CLI, and `cargo xtask feel` discovers files in
-//! `crates/sim/tests/feel/**`. The four contracts here are the example set from the issue.
+//! `crates/sim/tests/feel/**`. The contracts here are the public set: the examples from the
+//! issue plus the #1149 lifecycle contract and the #1158 sound contract. A new contract is added
+//! to `CONTRACTS` because a target without a filesystem cannot enumerate the folder.
 
 #[path = "feel/mod.rs"]
 mod contract;
@@ -26,6 +28,7 @@ const CONTRACTS: &[(&str, &str)] = &[
         "collision/overlapping_hazards",
         include_str!("feel/collision/overlapping_hazards.toml"),
     ),
+    ("sound/event_model", include_str!("feel/sound/event_model.toml")),
 ];
 
 /// Parses, validates and runs one contract against its public fixture.
@@ -65,6 +68,7 @@ fn the_public_contract_ids_are_unique() {
         "lifecycle/reset_scope",
         "physics/jump_apex",
         "collision/overlapping_hazards",
+        "sound/event_model",
     ] {
         assert!(ids.contains(&want), "missing public contract {want}");
     }

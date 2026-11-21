@@ -16,6 +16,8 @@
 //!   0 meaning the pressed step itself moved the metric.
 //! - `reset_scope` compares the named metrics at `before` and `after`: `persists` are equal,
 //!   `resets` differ.
+//! - `sound.tick` is the tick the emitting step began at: the step that starts at tick N emits
+//!   tick-N events and ends at N+1; `Sim::new`'s first-room output is tick 0.
 //! - An F1 contract with no `evidence` loads but is `OPEN`. `--bless` (the tool) rewrites the
 //!   baseline's statuses only; assertion values are never rewritten.
 //!
@@ -1093,9 +1095,12 @@ fn validate_sound(
     let event = SoundEvent::parse(&event_name)
         .ok_or_else(|| format!("sound event {event_name:?} is not play, stop, stop_all, volume or pitch"))?;
     let tick = sound_tick.unwrap_or(tick);
-    if tick > last_tick {
+    // A sound event belongs to the tick its step began at; the last step begins at `last_tick - 1`
+    // and ends at `last_tick`.
+    let last_events_tick = last_tick.saturating_sub(1);
+    if tick > last_events_tick {
         return Err(format!(
-            "sound tick {tick} is past the inputs' last tick {last_tick}"
+            "sound tick {tick} is past the last Step's tick {last_events_tick}"
         ));
     }
     let (sound, sound_name) = match (event, sound) {
@@ -1312,7 +1317,6 @@ struct Snapshot {
     kid: Option<(f64, f64)>,
     save: Option<(Option<String>, f64, f64)>,
     metrics: BTreeMap<String, Value>,
-    sounds: Vec<SoundOutput>,
     rng: i64,
 }
 
@@ -1361,15 +1365,6 @@ fn snapshot(sim: &mut Sim, metrics: &BTreeMap<String, Column>) -> Snapshot {
             s.y.get(),
         )
     });
-    let sounds = sim
-        .world()
-        .output
-        .iter()
-        .filter_map(|e| match e {
-            OutputEvent::Sound(s) => Some(s.clone()),
-            _ => None,
-        })
-        .collect();
     let w = sim.world();
     Snapshot {
         status: w.status.clone(),
@@ -1382,9 +1377,21 @@ fn snapshot(sim: &mut Sim, metrics: &BTreeMap<String, Column>) -> Snapshot {
         kid,
         save,
         metrics: values,
-        sounds,
         rng: i64::from(w.rng.seed.cast_signed()),
     }
+}
+
+/// The `SoundOutput` events one step produced. The step that begins at tick N emits tick-N
+/// events and ends at tick N+1; `Sim::new`'s first-room output is tick 0 (the first step keeps it).
+fn step_sounds(sim: &Sim) -> Vec<SoundOutput> {
+    sim.world()
+        .output
+        .iter()
+        .filter_map(|e| match e {
+            OutputEvent::Sound(s) => Some(s.clone()),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Runs a validated contract against a game definition. The fixture or package has already been
@@ -1418,6 +1425,7 @@ pub fn run(contract: &Contract, def: GameDef) -> Verdict {
     let metrics = contract_metrics(contract);
     let mut snapshots = BTreeMap::new();
     snapshots.insert(0, snapshot(&mut sim, &metrics));
+    let mut sounds = BTreeMap::new();
     let last = u64::from(contract.inputs.end) + 1;
     for tick in 1..=last {
         if !matches!(sim.world().status, SimStatus::Running) {
@@ -1429,13 +1437,18 @@ pub fn run(contract: &Contract, def: GameDef) -> Verdict {
             .get(usize::try_from(tick - 1).expect("tick fits"))
             .copied()
             .unwrap_or_default();
+        // The events belong to the tick the step began at (the pre-step tick), not the tick the
+        // step ends at: the av sound contract asserts tick 0 for a Step on the first tick.
+        let events_tick = sim.world().tick;
         sim.step(frame);
+        sounds.insert(events_tick, step_sounds(&sim));
         // Normally `World::tick == tick`; a halting step leaves the tick where it stopped, and the
         // snapshot still belongs to the step that just ran.
         snapshots.insert(tick, snapshot(&mut sim, &metrics));
     }
     let run = Run {
         snapshots,
+        sounds,
         seed: contract.seed,
     };
     let mut mismatches = Vec::new();
@@ -1462,6 +1475,8 @@ pub fn run(contract: &Contract, def: GameDef) -> Verdict {
 
 struct Run {
     snapshots: BTreeMap<u64, Snapshot>,
+    /// Events by the tick the emitting step began at.
+    sounds: BTreeMap<u64, Vec<SoundOutput>>,
     seed: u32,
 }
 
@@ -1611,16 +1626,16 @@ impl Run {
                 sound_name,
                 tick: sound_tick,
             } => {
-                let Some(sound_snap) = self.at(*sound_tick) else {
+                let Some(events) = self.sounds.get(sound_tick) else {
                     return Some(Mismatch {
                         tick: *sound_tick,
                         metric: format!("sound.{}", event.name()),
-                        expected: "the tick to run".into(),
-                        got: format!("the run stopped before tick {sound_tick}"),
+                        expected: "the step to run".into(),
+                        got: format!("the run has no Step at tick {sound_tick}"),
                         context: Vec::new(),
                     });
                 };
-                let found = sound_snap.sounds.iter().any(|s| sound_matches(s, *event, *sound));
+                let found = events.iter().any(|s| sound_matches(s, *event, *sound));
                 if found {
                     return None;
                 }

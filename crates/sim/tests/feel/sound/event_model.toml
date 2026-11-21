@@ -1,0 +1,21 @@
+# The music feedback the sound model promises (#1158, #270): a playMusic object in
+# `every_step_if_not_playing` mode stops all sounds and starts its track on the first Step while
+# it is not playing. The player hears it on the tick the game starts, so the event belongs to
+# sim tick 0 and the first step ends at World::tick 1.
+id = "sound/event_model"
+impact = "F2"
+package = "fixture:sound_events"
+start = { new_game = true, difficulty = 0 }
+play_mode = "original"
+seed = 0
+mods = []
+evidence = ["audio:builtins_music::music_every_step_starts_it_once_and_cuts_effects_only_then", "#270"]
+
+inputs = """
+frame 0: end
+"""
+
+[[assert]]
+tick = 1
+kid_count = 1
+sound = { event = "play", sound = "track", tick = 0 }

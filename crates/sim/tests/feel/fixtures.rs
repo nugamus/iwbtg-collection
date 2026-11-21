@@ -25,12 +25,13 @@ use iwbtg_sim::num::Real;
 ///   music object, and a checkpoint the contract supplies (`StartPoint::FromSave`).
 pub fn fixture(name: &str) -> Result<GameDef, String> {
     match name {
-        "jump" => Ok(build("feel-jump", false, false)),
-        "retry" => Ok(build("feel-retry", true, false)),
-        "collision" => Ok(build("feel-collision", true, true)),
+        "jump" => Ok(build("feel-jump", false, false, false)),
+        "retry" => Ok(build("feel-retry", true, false, false)),
+        "collision" => Ok(build("feel-collision", true, true, false)),
+        "sound_events" => Ok(build("feel-sound", false, false, true)),
         "lifecycle_retry" => Ok(lifecycle_retry()),
         other => Err(format!(
-            "no public fixture named {other:?} (known: jump, retry, collision, lifecycle_retry)"
+            "no public fixture named {other:?} (known: jump, retry, collision, sound_events, lifecycle_retry)"
         )),
     }
 }
@@ -86,7 +87,7 @@ fn lifecycle_retry() -> GameDef {
 /// The name of the fixture's only room.
 pub const ROOM: &str = "room_0";
 
-fn build(id: &str, save: bool, overlap: bool) -> GameDef {
+fn build(id: &str, save: bool, overlap: bool, sound: bool) -> GameDef {
     let mut b = GameDefBuilder::new(id);
     let tile = b.sprite_rect((32, 32), (0, 0));
     let small = b.sprite_rect((16, 16), (8, 8));
@@ -139,6 +140,20 @@ fn build(id: &str, save: bool, overlap: bool) -> GameDef {
         place(&mut b, room, spike, 320.0, 544.0);
         place(&mut b, room, killer, 320.0, 544.0);
     }
+    if sound {
+        // The track plays on the first Step while it is not playing (SHO playMusic001-005).
+        let music = kind(
+            &mut b,
+            "music",
+            Builtin::Music,
+            &[
+                ("track", ParamValue::Sound(SoundId(0))),
+                ("mode", ParamValue::Str("every_step_if_not_playing".into())),
+            ],
+            small,
+        );
+        place(&mut b, room, music, 0.0, 0.0);
+    }
 
     let mut physics = presets::defaults(KidFamily::A1);
     physics.sprites.idle = Some(kid_sprite);
@@ -172,7 +187,17 @@ fn build(id: &str, save: bool, overlap: bool) -> GameDef {
             builtins::event_set(k.base, k)
         };
     }
-    b.build().expect("feel fixture builds")
+    let mut def = b.build().expect("feel fixture builds");
+    if sound {
+        def.sounds = vec![SoundDef {
+            name: "track".into(),
+            kind: SoundKind::Multimedia,
+            length_ticks: 90,
+            volume: Real::ONE,
+            pan: Real::ZERO,
+        }];
+    }
+    def
 }
 
 /// A kind with the loader's classes: param-derived first, else the built-in's defaults.
