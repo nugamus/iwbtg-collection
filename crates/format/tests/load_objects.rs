@@ -1260,3 +1260,52 @@ fn the_97th_package_class_is_an_error() {
         render(&r)
     );
 }
+
+// ---- #1153 E3: classes and the draw key are declared data --------------------------------
+
+/// #1153 E3: a class is a collision set from declared data and a draw layer is the declared
+/// depth; neither is an instance's numeric id. Both live in package data, so a change to either
+/// is visible in `gameplay_hash`.
+#[test]
+fn class_and_draw_data_changes_move_the_gameplay_hash() {
+    let hash = |files: &PackageFiles| load_report(files, STRICT).gameplay_hash.expect("loads");
+    let base = package(|_| {});
+
+    // The object's `depth` is the draw-order key.
+    let deeper = package(|f| {
+        let boss = f.iter_mut().find(|(p, _)| p == "objects/boss.toml").unwrap();
+        boss.1 = b"base = \"killer\"\nscript = \"boss\"\nsprite = \"boss\"\ndepth = -6\ncounts_as = [\"boss_part\", \"solidblock\"]\n".to_vec();
+    });
+    assert_ne!(hash(&base), hash(&deeper), "declared depth is in the hash");
+    let (def, _) = load_ok(&deeper, STRICT);
+    assert_eq!(kind_named(&def, "@boss").1.depth, Real::new(-6.0));
+
+    // The object's `counts_as` is its declared collision class set.
+    let other_class = package(|f| {
+        let boss = f.iter_mut().find(|(p, _)| p == "objects/boss.toml").unwrap();
+        boss.1 = b"base = \"killer\"\nscript = \"boss\"\nsprite = \"boss\"\ndepth = -5\ncounts_as = [\"boss_part\"]\n".to_vec();
+    });
+    assert_ne!(
+        hash(&base),
+        hash(&other_class),
+        "declared classes are in the hash"
+    );
+    let (def, _) = load_ok(&other_class, STRICT);
+    let boss = kind_named(&def, "@boss").1;
+    assert!(boss.classes.contains(ClassMask::KILLER));
+    assert!(!boss.classes.contains(ClassMask::SOLIDBLOCK));
+
+    // A room-file instance `depth` override is declared data too.
+    let moved = package(|f| {
+        let room = f.iter_mut().find(|(p, _)| p == "rooms/stage1.toml").unwrap();
+        let text = String::from_utf8(room.1.clone())
+            .unwrap()
+            .replace("depth = 5", "depth = 6");
+        room.1 = text.into_bytes();
+    });
+    assert_ne!(
+        hash(&base),
+        hash(&moved),
+        "an instance depth override is in the hash"
+    );
+}
