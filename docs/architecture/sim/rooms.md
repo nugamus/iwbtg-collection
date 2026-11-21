@@ -44,7 +44,7 @@ pub fn perform_change(ctx: &mut Ctx, req: RoomRequest) -> Result<(), SimError>;
   1. Room End for every instance (dispatch order).
   2. Remove non-persistent instances, no Destroy event. Deactivated persistent instances count as non-persistent here: they do not move to the next room (Confirmed, manual 403_06). If the old room is persistent, store its instances in `persistent_rooms[old]` first.
   3. Keep persistent instances (ids unchanged).
-  4. If the new room is not persistent or not visited: create placed instances in file order; for each, apply its params (instance creation code) then run Create. If it is a restored persistent room, put its saved instances back without Create (Inferred, R18).
+  4. If the new room is not persistent or not visited: create placed instances in file order; for each, apply its params (instance creation code) then run Create. A placed instance whose GM8 id is already alive (a carried persistent one, R29) is skipped, and so is one destroyed earlier in the same tick, which is still pending removal (#670): the retry records the ids it destroyed on the R tick (`RoomRequest::GotoAfterRemovals`) so the room it re-enters does not create those placed kids again. If it is a restored persistent room, put its saved instances back without Create (Inferred, R18).
   5. First room only: Game Start for every instance (no game in the 20 uses it, Confirmed).
   6. Room creation actions (`on_create`).
   7. Room Start for every instance in dispatch order (snapshot; R10).

@@ -13,7 +13,8 @@
 //! 4. A new or non-persistent room creates its placed instances in file order, each with its
 //!    params (instance creation code) applied before its Create. One with a GM8 id (`gm_id`)
 //!    gets that id, and is skipped when an instance with that id is already alive (a carried
-//!    persistent one; CLONE_SPEC, Instances, "Placed instance ids", #669). A persistent room that was
+//!    persistent one; CLONE_SPEC, Instances, "Placed instance ids", #669) or was destroyed
+//!    earlier in the same tick and is still pending removal (#670). A persistent room that was
 //!    visited before gets its stored instances back, without Create (Inferred, R18).
 //! 5. First room of the game only: Game Start for every instance.
 //! 6. The room creation actions run, as data. On a persistent-room revisit only when
@@ -76,6 +77,48 @@ use crate::stripped::PlayMode;
 use crate::view::{View, ViewPort};
 use crate::world::{Ctx, EngineGlobals, Flow, InstId, Instance, SimStatus, SpawnInit, Value, World};
 
+/// How many destroyed instance ids a [`RoomRequest::GotoAfterRemovals`] carries (#670).
+pub const MAX_REMOVED: usize = 16;
+
+/// The instance ids destroyed earlier in a tick, for the room build's pending-removal check
+/// (#670). Fixed-size so [`RoomRequest`] stays `Copy`; 16 is above every room's placed-kid
+/// count in the 20 games.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct RemovedInstances {
+    ids: [InstId; MAX_REMOVED],
+    len: u8,
+}
+
+impl Default for RemovedInstances {
+    fn default() -> RemovedInstances {
+        RemovedInstances {
+            ids: [InstId(0); MAX_REMOVED],
+            len: 0,
+        }
+    }
+}
+
+impl RemovedInstances {
+    /// The ids, keeping the first [`MAX_REMOVED`].
+    pub fn new(ids: &[InstId]) -> RemovedInstances {
+        let mut out = RemovedInstances::default();
+        let n = ids.len().min(MAX_REMOVED);
+        out.ids[..n].copy_from_slice(&ids[..n]);
+        out.len = u8::try_from(n).unwrap_or(u8::try_from(MAX_REMOVED).unwrap_or(u8::MAX));
+        out
+    }
+
+    /// Whether `id` was destroyed earlier this tick.
+    pub fn contains(&self, id: InstId) -> bool {
+        self.ids[..usize::from(self.len)].contains(&id)
+    }
+
+    /// No instance was destroyed.
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+}
+
 /// A deferred room change (tick row 15).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum RoomRequest {
@@ -91,6 +134,18 @@ pub enum RoomRequest {
     GameRestart,
     /// `game_end`.
     GameEnd,
+    /// A room change requested in the same tick that `removed` instances were destroyed (#670).
+    ///
+    /// In the original, an instance destroyed earlier in the frame is still pending removal when
+    /// the room starts, so a placed instance with the same room-file id is not created again.
+    /// The retry that destroys the room's placed kids records their ids here; the new room's
+    /// build skips those placed instances. An ordinary request carries no removals.
+    GotoAfterRemovals {
+        /// The room to enter.
+        room: RoomId,
+        /// The instance ids destroyed earlier this tick.
+        removed: RemovedInstances,
+    },
 }
 
 /// Where a run starts.
@@ -346,7 +401,7 @@ fn start_inner<H: RoomHost + ?Sized>(
         }
     };
     room_def(ctx, target)?;
-    enter(ctx, host, None, target, &mut queue)?;
+    enter(ctx, host, None, target, &mut queue, RemovedInstances::default())?;
     after_sequence(ctx, host, &mut queue)
 }
 
@@ -483,10 +538,18 @@ fn run_request<H: RoomHost + ?Sized>(
             Ok(())
         }
         RoomRequest::GameRestart => game_restart(ctx, host, queue),
-        RoomRequest::Goto(_) | RoomRequest::Next | RoomRequest::Previous | RoomRequest::Restart => {
+        RoomRequest::Goto(_)
+        | RoomRequest::Next
+        | RoomRequest::Previous
+        | RoomRequest::Restart
+        | RoomRequest::GotoAfterRemovals { .. } => {
+            let removed = match &req {
+                RoomRequest::GotoAfterRemovals { removed, .. } => *removed,
+                _ => RemovedInstances::default(),
+            };
             let target = resolve(ctx, req)?;
             let from = ctx.w.room;
-            enter(ctx, host, Some(from), target, queue)
+            enter(ctx, host, Some(from), target, queue, removed)
         }
     }
 }
@@ -503,7 +566,7 @@ fn load_slot<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H, slot: &SaveSlot)
 fn resolve(ctx: &Ctx, req: RoomRequest) -> Result<RoomId, SimError> {
     let current = ctx.w.room;
     let target = match req {
-        RoomRequest::Goto(room) => room,
+        RoomRequest::Goto(room) | RoomRequest::GotoAfterRemovals { room, .. } => room,
         RoomRequest::Next => neighbour(ctx, current, true)?,
         RoomRequest::Previous => neighbour(ctx, current, false)?,
         RoomRequest::Restart => current,
@@ -651,7 +714,7 @@ fn game_restart<H: RoomHost + ?Sized>(
     create_boot(ctx, host, queue)?;
     let first = redirect(ctx, restart_room(ctx.def));
     room_def(ctx, first)?;
-    enter(ctx, host, None, first, queue)
+    enter(ctx, host, None, first, queue, RemovedInstances::default())
 }
 
 /// Step 1: Room End for every alive, active instance that handles it.
@@ -736,8 +799,9 @@ fn enter<H: RoomHost + ?Sized>(
     from: Option<RoomId>,
     to: RoomId,
     queue: &mut RoomQueue,
+    removed: RemovedInstances,
 ) -> Result<(), SimError> {
-    RoomTransaction::new(ctx, from, to)?.run(ctx, host, queue)
+    RoomTransaction::new(ctx, from, to, removed)?.run(ctx, host, queue)
 }
 
 /// One engine-owned room transaction (decision 0005; #1174 A2).
@@ -768,12 +832,21 @@ struct RoomTransaction {
     /// The placed instances this transaction created, in file order. The creation code's
     /// `DestroySelf` names it explicitly (there is no calling instance; R24, #1256).
     built: Vec<InstId>,
+    /// Instances destroyed earlier this tick, from a [`RoomRequest::GotoAfterRemovals`]: their
+    /// room-file ids are still pending removal, so a placed instance with one is not created
+    /// again (#670).
+    removed: RemovedInstances,
     /// `Prepare` ran.
     prepared: bool,
 }
 
 impl RoomTransaction {
-    fn new(ctx: &Ctx, from: Option<RoomId>, to: RoomId) -> Result<RoomTransaction, SimError> {
+    fn new(
+        ctx: &Ctx,
+        from: Option<RoomId>,
+        to: RoomId,
+        removed: RemovedInstances,
+    ) -> Result<RoomTransaction, SimError> {
         room_def(ctx, to)?;
         Ok(RoomTransaction {
             from,
@@ -784,6 +857,7 @@ impl RoomTransaction {
             carried_ids: BTreeSet::new(),
             restoring: false,
             built: Vec::new(),
+            removed,
             prepared: false,
         })
     }
@@ -902,10 +976,11 @@ impl RoomTransaction {
             }
             // A placed instance whose GM8 id is already in use (a persistent instance carried
             // in, possibly from another room that shares ids) is not created again (CLONE_SPEC,
-            // Instances, "Placed instance ids"). Instances destroyed this step were swept above,
-            // so they do not count; whether GM8 counts them is client#670.
+            // Instances, "Placed instance ids"). An instance destroyed earlier this tick is still
+            // pending removal in the original, so its id counts too (#670; the retry records
+            // those ids in `removed`).
             let gm_id = p.gm_id.map(|id| InstId(u64::from(id)));
-            if gm_id.is_some_and(|id| ctx.w.get(id).is_some()) {
+            if gm_id.is_some_and(|id| ctx.w.get(id).is_some() || self.removed.contains(id)) {
                 continue;
             }
             let init = SpawnInit {
