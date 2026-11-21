@@ -104,6 +104,7 @@ A contract may assert the **absence** of a difference: `retry_delay` zero moveme
 
 - **Tick vs frame.** `tick = N` is `World::tick == N`, sampled after `Sim::step`. A `.inputs` frame `f` is the step that ends at `tick == f + 1`: `frame 20: press suicide` is observed at tick 21. Without this rule every trace-derived number is off by one. `tick = 0` is the state `Sim::new` produced, before any step.
 - **Save scenario.** A `save` table starts the run from that checkpoint (`StartPoint::FromSave`), which is how a practice run and a retry fixture start. `start.room` and `save.room` must agree.
+- **DLLs.** A contract runs with the modeled DLL adapters (`DllMode::Model`), like play, not the recorder's `--stub-dlls` mode. A contract asserts player behavior, not replayer behavior.
 - **The Kid.** `kid_count` counts alive, active kids. A bare `kid` in `control` means the `World::first_of` kid (R21); more than one kid needs an explicit `kid#<n>`.
 - **Exact floats.** A position `exact` compares the f64 bits. Use it only for a checkpoint or a placed coordinate whose value is a contract; a moving Kid uses an envelope or a window.
 - **Names.** `room` is the package room name; `reset_scope` names a counter/global as the probe registry resolves it; `sound.sound` is the package sound name. A name that does not resolve is a contract load error, not a silent skip.
