@@ -22,7 +22,7 @@ Part of [format v0](v0.md).
 
   `disk` and `diamond` are rasterized inside the box at load. `none` is GM's empty mask (an inverted box or a fully transparent sprite). `frames = 0` is a sprite without images: it needs no PNG and has an empty mask.
 
-  `mask` names another sprite whose masks this sprite uses. A chain (`a` -> `b` -> `c`) resolves to the last sprite's own masks, so the result does not depend on the sidecar order; a sprite that names itself, or a chain that returns to a sprite, is a load error.
+  `mask` names another sprite whose masks this sprite uses. A chain (`a` -> `b` -> `c`) resolves to the last sprite's own masks, so the result does not depend on the sidecar order; a sprite that names itself, or a chain that returns to a sprite, is a load error. The target covers every frame of the sprite that uses it: a shared mask covers any frame count, and a per-frame target needs at least as many masks as the sprite has frames.
 
   Collision masks are built from PNG alpha at load, so masks never drift from the art.
 
