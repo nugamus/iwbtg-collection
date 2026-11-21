@@ -11,6 +11,9 @@
 //!   without building anything (#1028).
 //! - `fidelity [--bless]`: the trace sweep over every converter package; records the run in
 //!   `target/xtask/last-fidelity.txt` (#935).
+//! - `feel [--bless]`: the public feel contracts (`crates/sim/tests/feel`), plus the port set
+//!   (`crates/tools/feel`) when `IWBTG_GAMES` names the games repo; exit 0 for OK/OPEN, 1 for a
+//!   failure or regression, 2 for a tool error (#1167).
 //! - `repin`: after a deliberate change to hashed sim state, re-pins the state hash vectors
 //!   (`tests/hash_vectors.rs`), the `FINAL_HASH` of `tests/determinism.rs` and the golden
 //!   corpus, then runs them again. After the `SIM_VERSION` freeze point it also records the pins
@@ -77,8 +80,9 @@ fn main() -> ExitCode {
             }
         }
         Some("fidelity") => fidelity(&root, args.iter().any(|a| a == "--bless")),
+        Some("feel") => feel(&root, args.iter().any(|a| a == "--bless")),
         _ => Err(
-            "usage: cargo xtask <check [--all] | plan [--all] | repin | regen | pr-body [--issue N] | doctor [--scope native|browser|wasi|all] [--warm] | fidelity [--bless]>"
+            "usage: cargo xtask <check [--all] | plan [--all] | repin | regen | pr-body [--issue N] | doctor [--scope native|browser|wasi|all] [--warm] | fidelity [--bless] | feel [--bless]>"
                 .to_string(),
         ),
     };
@@ -1034,6 +1038,79 @@ fn wasm_bindgen_problem(lock: &str, installed: Option<&str>) -> Result<(), Strin
 /// `doctor`: machine checks against the repo. Fails when one does.
 /// The committed fidelity baseline: `<game>/<case> <STATUS>` lines, no private data.
 const FIDELITY_BASELINE: &str = "crates/tools/fidelity-baseline.txt";
+
+/// The public feel contracts: fixtures only, so every CI target can run them.
+const FEEL_PUBLIC: &str = "crates/sim/tests/feel";
+
+/// The port feel contracts and their baseline (the games repo, #1168).
+const FEEL_PORT: &str = "crates/tools/feel";
+const FEEL_BASELINE: &str = "crates/tools/feel-baseline.txt";
+
+/// `feel`: the public contract set, then the port set when `IWBTG_GAMES` names the games repo.
+///
+/// The tool exits 0 when every contract is OK/OPEN, 1 on a failure or a regression against the
+/// baseline, and 2 on a tool error; this wrapper keeps those codes so CI can tell them apart.
+fn feel(root: &Path, bless: bool) -> Result<(), String> {
+    run(
+        root,
+        "cargo",
+        &["build", "-q", "-p", "iwbtg-tools", "--bin", "iwbtg"],
+        &[],
+    )?;
+    let mut failed = feel_sweep(root, &["--contracts", FEEL_PUBLIC])? != 0;
+    let games = std::env::var_os("IWBTG_GAMES").map(PathBuf::from);
+    match (games.as_deref(), root.join(FEEL_PORT).is_dir()) {
+        (Some(games), true) => {
+            let games = games
+                .canonicalize()
+                .map_err(|e| format!("IWBTG_GAMES {}: {e}", games.display()))?;
+            let games = games.to_string_lossy().into_owned();
+            // Windows `canonicalize` returns a verbatim (`\\?\`) path; the plain form reads better.
+            let games = games.strip_prefix(r"\\?\").unwrap_or(&games).to_owned();
+            let mut args = vec![
+                "--contracts",
+                FEEL_PORT,
+                "--packages",
+                &games,
+                "--baseline",
+                FEEL_BASELINE,
+            ];
+            if bless {
+                args.push("--bless");
+            }
+            failed |= feel_sweep(root, &args)? != 0;
+        }
+        (_, false) if bless => {
+            println!("feel: no port contract set ({FEEL_PORT}) to bless");
+        }
+        _ => {}
+    }
+    if failed {
+        Err("feel: a contract failed (or the sweep could not run); see above".into())
+    } else {
+        Ok(())
+    }
+}
+
+/// One `iwbtg feel sweep` run; returns the tool's exit code (0 OK/OPEN, 1 failure, 2 tool error)
+/// and stops the wrapper with 2 on a tool error.
+fn feel_sweep(root: &Path, extra: &[&str]) -> Result<i32, String> {
+    let mut args = vec!["run", "-q", "-p", "iwbtg-tools", "--", "feel", "sweep"];
+    args.extend_from_slice(extra);
+    println!("$ cargo {}", args.join(" "));
+    let status = Command::new("cargo")
+        .args(&args)
+        .current_dir(root)
+        .status()
+        .map_err(|e| format!("cargo: {e}"))?;
+    let code = status.code().unwrap_or(2);
+    if code == 2 {
+        // The tool could not read the contracts root or the baseline: a tool error, not a
+        // contract failure.
+        std::process::exit(2);
+    }
+    Ok(code)
+}
 
 /// `fidelity`: one `iwbtg trace sweep` run (all packages and cases in one process).
 fn fidelity(root: &Path, bless: bool) -> Result<(), String> {

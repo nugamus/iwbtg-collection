@@ -1,0 +1,62 @@
+# A full jump's arc (kid/A1.md, jump heights): the player perceives the rise, the apex and the
+# fall as one shape, so the contract pins the y trajectory as a half-pixel envelope rather than a
+# single exact tick. The half pixel is a declared player-visible window, not float epsilon.
+id = "physics/jump_apex"
+impact = "F1"
+package = "fixture:jump"
+start = { new_game = true, difficulty = 0 }
+play_mode = "original"
+seed = 0
+mods = []
+evidence = ["golden:kid_a1_basics", "register:jump"]
+
+inputs = """
+frame 1: press jump
+frame 12: release jump
+frame 40: end
+"""
+
+[[assert]]
+tick = 0
+room = "room_0"
+kid_count = 1
+kid.x = { exact = 96.0 }
+kid.y = { exact = 567.0 }
+
+# The apex is the clearest single number a player judges a jump by.
+[[assert]]
+tick = 16
+kid.y = { within = 0.5, of = 496.92, why = "the A1 jump apex sits at y = 496.92; half a pixel is the visible window" }
+
+# The rise, apex and fall, one half-pixel envelope entry per tick.
+[[window]]
+ticks = [1, 20]
+metric = "kid.y"
+envelope = [
+  [566.9, 567.9],
+  [558.8, 559.8],
+  [551.1, 552.1],
+  [543.8, 544.8],
+  [536.9, 537.9],
+  [530.4, 531.4],
+  [524.3, 525.3],
+  [518.6, 519.6],
+  [513.3, 514.3],
+  [508.4, 509.4],
+  [503.9, 504.9],
+  [499.8, 500.8],
+  [498.3, 499.4],
+  [497.3, 498.3],
+  [496.6, 497.7],
+  [496.4, 497.4],
+  [496.5, 497.6],
+  [497.1, 498.1],
+  [498.0, 499.1],
+  [499.4, 500.5],
+]
+why = "the rise, apex and fall are one perceived arc; each entry is the A1 value plus or minus half a pixel"
+
+[[assert]]
+tick = 40
+status = "running"
+kid_count = 1

@@ -1,0 +1,40 @@
+# Two hazards in one place (C8, R12b): a spike and a killer overlap the kid on one tick. The
+# player sees one death, not one per hazard.
+id = "collision/overlapping_hazards"
+impact = "F1"
+package = "fixture:collision"
+start = { new_game = true, difficulty = 0 }
+play_mode = "original"
+seed = 3
+mods = []
+evidence = ["golden:kid_a1_basics", "#847"]
+
+inputs = """
+frames 1-100: hold right
+frame 100: end
+"""
+
+[[assert]]
+tick = 0
+kid_count = 1
+room = "room_0"
+
+# The kid walks right at the A1 walk speed of 3 pixels per tick.
+[[assert]]
+tick = 40
+death = 0
+kid_count = 1
+kid.x = { within = 0.5, of = 213.0, why = "walking right takes 3 pixels per tick" }
+
+# The killer and the spike share a position; the first one that meets the kid kills it and the
+# other finds no kid, so the death count moves once, not twice.
+[[assert]]
+tick = 74
+death = 1
+kid_count = 0
+status = "running"
+
+[[assert]]
+tick = 100
+death = 1
+status = "running"
