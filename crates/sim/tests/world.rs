@@ -4,12 +4,13 @@
 use crate::support;
 
 use iwbtg_sim::def::{Builtin, ClassMask, EngineKind, KindDef, KindId, ParamValue, Params, RoomId, VarId};
-use iwbtg_sim::events::{ProbeAct, ProbeLog, ProbeOn, ProbeStep, probe_event_set};
+use iwbtg_sim::events::{Phase, ProbeAct, ProbeLog, ProbeOn, ProbeState, ProbeStep, probe_event_set};
 use iwbtg_sim::hash::{self, CHECKPOINT_INTERVAL};
 use iwbtg_sim::input::InputFrame;
 use iwbtg_sim::num::Real;
 use iwbtg_sim::output::OutputEvent;
 use iwbtg_sim::room::RoomOutput;
+use iwbtg_sim::rules::DrawRules;
 use iwbtg_sim::rules::tick::{ChangeKindProps, FirstRule};
 use iwbtg_sim::world::{Flow, InstId, SpawnInit};
 use support::*;
@@ -632,6 +633,68 @@ fn state_hash_covers_state_and_skips_caches() {
     assert!(hash::checkpoint(&fx.w).is_none());
     fx.w.tick = CHECKPOINT_INTERVAL * 3;
     assert!(hash::checkpoint(&fx.w).is_some());
+}
+
+/// E1 (#1188): under `standard`, Draw is a pure projection of sim state, so a handler that
+/// writes a global halts the run. `gm8` keeps the recorder's mutable Draw. The probe is silent:
+/// its own event log would be a global write and would itself be a mutation.
+#[test]
+fn draw_is_pure_under_standard_and_mutable_under_gm8() {
+    let run = |rules: DrawRules| {
+        let mut b = builder();
+        let kind = probe_kind(&mut b, "p");
+        let mut fx = Fx::new(b.build().unwrap());
+        fx.rules.draw = rules;
+        fx.probe(
+            kind,
+            0.0,
+            0.0,
+            ProbeState::new("P", None).with(step(ProbeOn::Late, ProbeAct::SetGlobal(VarId(0), vr(1.0)))),
+        );
+        let mut c = fx.ctx();
+        let flow = iwbtg_sim::events::run_phase_with(&mut c, Phase::Draw, &HOOKS);
+        (flow, fx.w.globals.get(&VarId(0)).cloned(), fx.w.status.clone())
+    };
+    let (flow, value, status) = run(DrawRules::gm8());
+    assert_eq!(flow, Flow::Continue);
+    assert_eq!(value, Some(vr(1.0)), "gm8 Draw may mutate");
+    assert_eq!(status, iwbtg_sim::SimStatus::Running);
+    let (flow, _, status) = run(DrawRules::standard());
+    assert_eq!(flow, Flow::Halt, "standard Draw cannot mutate");
+    assert!(matches!(
+        status,
+        iwbtg_sim::SimStatus::Halted(iwbtg_sim::SimError::DrawMutation { .. })
+    ));
+}
+
+/// E1 (#1188): creating an instance is a Draw mutation under `standard` too.
+#[test]
+fn draw_cannot_spawn_under_standard() {
+    let mut b = builder();
+    let kind = probe_kind(&mut b, "p");
+    let mut fx = Fx::new(b.build().unwrap());
+    fx.rules.draw = DrawRules::standard();
+    fx.probe(
+        kind,
+        0.0,
+        0.0,
+        ProbeState::new("P", None).with(step(
+            ProbeOn::Late,
+            ProbeAct::Spawn {
+                kind,
+                x: Real::new(10.0),
+                y: Real::new(10.0),
+                child: None,
+            },
+        )),
+    );
+    let mut c = fx.ctx();
+    let flow = iwbtg_sim::events::run_phase_with(&mut c, Phase::Draw, &HOOKS);
+    assert_eq!(flow, Flow::Halt);
+    assert!(matches!(
+        fx.w.status,
+        iwbtg_sim::SimStatus::Halted(iwbtg_sim::SimError::DrawMutation { .. })
+    ));
 }
 
 #[test]
