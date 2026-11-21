@@ -4,6 +4,15 @@
 use super::*;
 use iwbtg_sim::def::physics::KidScriptSlot;
 use iwbtg_sim::kid::{KidAction, KidCollisionRun};
+use iwbtg_sim::script::validate::{BOOL_PROPS, REAL_PROPS};
+
+/// True when `name` is an instance property a script resolves before the custom-variable
+/// indexer: the numeric and flag property tables of `script::validate` (which include every kid
+/// field of decision 0004) plus the string getter `kind`. A `[script] vars` name here is
+/// unreachable as `this.<name>`.
+fn is_reserved_instance_field(name: &str) -> bool {
+    name == "kind" || REAL_PROPS.contains(&name) || BOOL_PROPS.contains(&name)
+}
 
 impl<'a> Loader<'a> {
     /// Resolves the `[sprites]` names of a loaded profile to sprite ids.
@@ -60,19 +69,42 @@ impl<'a> Loader<'a> {
         // a bad name, a missing file and a missing function get a position.
         let script = l.script.unwrap_or_default();
         let mut vars: Vec<String> = Vec::new();
-        for var in script.vars.unwrap_or_default() {
-            if !vars.contains(&var) {
-                vars.push(var);
-            }
-        }
+        let mut seen = BTreeSet::new();
         let at = |name: &str| {
             let start = text.find(name).unwrap_or(0);
             start..start + name.len()
         };
-        for var in &vars {
+        for var in script.vars.unwrap_or_default() {
+            if !seen.insert(var.clone()) {
+                continue;
+            }
             if var.is_empty() {
                 self.error(path, text, 0..0, "a `[script] vars` name cannot be empty");
+                continue;
             }
+            if !rhai::is_valid_identifier(&var) {
+                self.error(
+                    path,
+                    text,
+                    at(&var),
+                    format!(
+                        "`[script] vars` name `{var}` is not a Rhai identifier; a script cannot write `this.{var}`"
+                    ),
+                );
+                continue;
+            }
+            if is_reserved_instance_field(&var) {
+                self.error(
+                    path,
+                    text,
+                    at(&var),
+                    format!(
+                        "`[script] vars` name `{var}` is a reserved instance property; `this.{var}` reads the field, not a custom variable"
+                    ),
+                );
+                continue;
+            }
+            vars.push(var);
         }
         self.kid_script_vars.extend(vars.iter().cloned());
         p.script.vars = vars;
