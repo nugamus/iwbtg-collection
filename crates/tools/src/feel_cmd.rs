@@ -1,9 +1,11 @@
 //! `iwbtg feel`: run and sweep feel contracts (docs/architecture/feel-contracts.md, #1167).
 //!
 //! A contract is data: a scenario plus assertions over what a player can observe. The loader,
-//! validator and evaluator live in the sim test module (`crates/sim/tests/feel/mod.rs`) so the sim
-//! integration test and this CLI run the same code (the golden-corpus pattern); `crates/sim/src`
-//! is owned by another seat while this lands (#1172).
+//! validator and evaluator live in the shared test module (`crates/sim/tests/feel/mod.rs`),
+//! included here with `#[path]` so the sim integration test and this CLI run the same code (the
+//! golden-corpus pattern). That is the design, not a staging step: the TOML parser stays out of
+//! `crates/sim/src`, so `toml` remains a sim dev-dependency and there is no sim↔tools dependency
+//! knot (#1172, closed as not planned).
 //!
 //! A contract names its package as a package id (a folder under `--packages`, the games repo) or
 //! as `fixture:<name>`, one of the public fixture worlds built in code. A missing package, a
