@@ -439,7 +439,7 @@ fn dist_edges(q: &Q, inst: &Instance) -> Result<[Real; 4], SimError> {
     let edges = match rules.dist_boxes {
         DistBoxes::Reported => reported_box(q.def, inst, at, rules)?.map(from_rect),
         DistBoxes::RoundedInclusive => instance_box(q.def, inst, at, rules)?.map(|p| from_rect(p.bbox)),
-        DistBoxes::Unrounded => reported_edges(q.def, inst, at)?,
+        DistBoxes::Unrounded => reported_edges(q.def, inst, at, rules)?,
     };
     match (edges, rules.dist_boxes) {
         (Some(e), _) => Ok(e),
