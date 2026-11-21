@@ -106,6 +106,8 @@ drop = 3.0
 # [water], [ice], [slope], [ladder], [flip], [death], [bullet], [save], [misc]: see the rule table below
 ```
 
+The standard names for the shared concerns are accepted alongside the current spellings (`docs/format/physics.md` "Standard names and aliases"): `[vines]`/`[vine]`, `[ladders]`/`[ladder]`, `[slopes]`/`[slope]`, `[platforms]`/`[platform]`, `max_fall`/`max_fall_speed`, and the `model =` selectors `[gravity] model` (`constant`, `step`, `end_step_slope`, `create_only`), `[vines] model` (`latched_keys`, `symmetric_early`), `[slopes] model` (`poronkusema`, `rainbow`, `fairy_tale`) and `[water] model` (`jump_refresh`, `full_jump`, `water3_keeps`). Each selector maps onto an existing field (`[gravity] reapply`, `[input] vine_keys`, `[jump] water_air`, `[slope] downhill`) in `presets::apply`; a field written explicitly wins. The aliases change no preset value and no `gameplay_hash` of an unchanged file.
+
 Event lists name actions; a family's lists come from its spec's event sections in order. The `create` list must cover the spec's Create steps including the first-play save (`first_play_save`: when `World.save` is `None`, call `save::save_now`; rely Create step 4, B Create step 4) and "create world if missing" (`ensure_world`, via `EngineKind::World`).
 
 ### Spec rule to field or code path
