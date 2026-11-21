@@ -54,6 +54,7 @@ use crate::input::Action;
 use crate::num::{self, Real};
 use crate::output::OutputEvent;
 use crate::particles::{PartRange, PartSystemId, PartType, PartTypeId, Region, RegionDistr, RegionShape};
+use crate::rng::Stream;
 use crate::world::{Ctx, Flow, InstId, SpawnInit};
 
 const MODES: &[&str] = &["random_dir", "angle_sweep", "particles"];
@@ -284,21 +285,21 @@ fn step(ctx: &mut Ctx, me: InstId, s: &BloodEmitterState) -> Result<Flow, SimErr
         Mode::RandomDir => {
             for _ in 0..s.per_step {
                 let id = spawn_blood(ctx, x, y, s.flipped)?;
-                let dir = ctx.w.rng.irandom(Real::new(35.0))? * Real::new(10.0);
-                let speed = ctx.w.rng.random(s.speed_max);
+                let dir = ctx.w.stream_mut(Stream::Effects).irandom(Real::new(35.0))? * Real::new(10.0);
+                let speed = ctx.w.stream_mut(Stream::Effects).random(s.speed_max);
                 launch(ctx, id, dir, speed)?;
             }
         }
         Mode::AngleSweep => {
             for step in 0..=36u32 {
-                let roll = ctx.w.rng.random(Real::ONE);
+                let roll = ctx.w.stream_mut(Stream::Effects).random(Real::ONE);
                 if num::gm_ge(roll, s.chance, &ctx.rules.num) {
                     continue;
                 }
                 let dir = Real::new(f64::from(step) * 10.0);
                 for _ in 0..s.per_angle {
                     let id = spawn_blood(ctx, x, y, s.flipped)?;
-                    let speed = ctx.w.rng.random(s.speed_max);
+                    let speed = ctx.w.stream_mut(Stream::Effects).random(s.speed_max);
                     launch(ctx, id, dir, speed)?;
                 }
             }

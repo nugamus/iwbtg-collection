@@ -5,7 +5,8 @@
 //! `tests/feel/mod.rs` holds the loader, validator and evaluator; `crates/tools/src/feel_cmd.rs`
 //! includes the same module for the CLI, and `cargo xtask feel` discovers files in
 //! `crates/sim/tests/feel/**`. The contracts here are the public set: the examples from the
-//! issue plus the #1149 lifecycle contract and the #1158 sound contract. A new contract is added
+//! issue plus the #1149 lifecycle contract, the #1158 sound contract and the #1157 RNG contract.
+//! A new contract is added
 //! to `CONTRACTS` because a target without a filesystem cannot enumerate the folder.
 
 #[path = "feel/mod.rs"]
@@ -32,6 +33,10 @@ const CONTRACTS: &[(&str, &str)] = &[
     (
         "checkpoint/respawn_alignment",
         include_str!("feel/checkpoint/respawn_alignment.toml"),
+    ),
+    (
+        "rng/effects_shared_gm8",
+        include_str!("feel/rng/effects_shared_gm8.toml"),
     ),
 ];
 

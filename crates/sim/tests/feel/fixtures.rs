@@ -23,15 +23,18 @@ use iwbtg_sim::num::Real;
 ///   walking right meets both on one tick.
 /// - `lifecycle_retry`: the #1149 retry fixture: an engine Boot room, one play room with its
 ///   music object, and a checkpoint the contract supplies (`StartPoint::FromSave`).
+/// - `rng_effects`: the same room with a one-Step blood emitter, so its Step draws the blood's
+///   frame/gravity and the emitter's direction/speed (four draws on the shared `gm8` stream).
 pub fn fixture(name: &str) -> Result<GameDef, String> {
     match name {
-        "jump" => Ok(build("feel-jump", false, false, false)),
-        "retry" => Ok(build("feel-retry", true, false, false)),
-        "collision" => Ok(build("feel-collision", true, true, false)),
-        "sound_events" => Ok(build("feel-sound", false, false, true)),
+        "jump" => Ok(build("feel-jump", false, false, false, false)),
+        "retry" => Ok(build("feel-retry", true, false, false, false)),
+        "collision" => Ok(build("feel-collision", true, true, false, false)),
+        "sound_events" => Ok(build("feel-sound", false, false, true, false)),
+        "rng_effects" => Ok(build("feel-rng-effects", false, false, false, true)),
         "lifecycle_retry" => Ok(lifecycle_retry()),
         other => Err(format!(
-            "no public fixture named {other:?} (known: jump, retry, collision, sound_events, lifecycle_retry)"
+            "no public fixture named {other:?} (known: jump, retry, collision, sound_events, rng_effects, lifecycle_retry)"
         )),
     }
 }
@@ -87,7 +90,7 @@ fn lifecycle_retry() -> GameDef {
 /// The name of the fixture's only room.
 pub const ROOM: &str = "room_0";
 
-fn build(id: &str, save: bool, overlap: bool, sound: bool) -> GameDef {
+fn build(id: &str, save: bool, overlap: bool, sound: bool, rng: bool) -> GameDef {
     let mut b = GameDefBuilder::new(id);
     let tile = b.sprite_rect((32, 32), (0, 0));
     let small = b.sprite_rect((16, 16), (8, 8));
@@ -153,6 +156,21 @@ fn build(id: &str, save: bool, overlap: bool, sound: bool) -> GameDef {
             small,
         );
         place(&mut b, room, music, 0.0, 0.0);
+    }
+    if rng {
+        // One Step of `random_dir`: each drop's Create draws the frame and gravity, then the
+        // emitter draws the direction and speed (four draws with `per_step` 1).
+        let blood = kind(&mut b, "blood", Builtin::Blood, &[], small);
+        let emitter = kind(
+            &mut b,
+            "blood_emitter",
+            Builtin::BloodEmitter,
+            &[("per_step", ParamValue::Real(Real::new(1.0)))],
+            small,
+        );
+        b.engine_kind(EngineKind::Blood, blood);
+        b.engine_kind(EngineKind::BloodEmitter, emitter);
+        place(&mut b, room, emitter, 200.0, 400.0);
     }
 
     let mut physics = presets::defaults(KidFamily::A1);

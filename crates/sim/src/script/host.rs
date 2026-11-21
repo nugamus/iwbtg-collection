@@ -364,7 +364,7 @@ use rhai::packages::{
 use rhai::{AST, CallFnOptions, Dynamic, Engine, EvalAltResult, FuncArgs, OptimizationLevel, Scope};
 
 use super::budget::Budget;
-use crate::rng::Rng;
+use crate::rng::{Rng, Stream};
 use crate::rules::num::NumRules;
 
 /// The most lines the script log keeps (the log is not part of the state hash).
@@ -410,12 +410,13 @@ impl std::fmt::Debug for Host {
 type Res<T> = Result<T, Box<EvalAltResult>>;
 
 impl Shared {
-    /// Runs `f` on the RNG: the live world's when a script runs inside a tick, else the lent one.
+    /// Runs `f` on the script's RNG: the live world's `script` stream when a script runs inside a
+    /// tick (the shared gameplay generator under `gm8`), else the lent one.
     pub(crate) fn with_rng<R>(&self, f: impl FnOnce(&mut Rng) -> R) -> R {
         if let Ok(mut w) = self.world.try_borrow_mut()
             && let Some(w) = w.as_mut()
         {
-            return f(&mut w.rng);
+            return f(w.stream_mut(Stream::Script));
         }
         f(&mut self.rng.borrow_mut())
     }

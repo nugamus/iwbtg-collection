@@ -6,13 +6,14 @@
 //! [`RunnerRules::for_runner`], so replays verified under the old rule still verify
 //! (architecture "Versions"). Rules are values, never `const`s.
 //!
-//! File owners after WP0: `tick` WP1, `num` and `motion` WP2, `collide` WP3, `room` WP4a,
+//! File owners after WP0: `tick` WP1, `num`, `rng` and `motion` WP2, `collide` WP3, `room` WP4a,
 //! `sound` WP10, this file WP11.
 
 pub mod collide;
 pub mod draw;
 pub mod motion;
 pub mod num;
+pub mod rng;
 pub mod room;
 pub mod sound;
 pub mod tick;
@@ -23,6 +24,7 @@ pub use collide::CollideRules;
 pub use draw::DrawRules;
 pub use motion::MotionRules;
 pub use num::NumRules;
+pub use rng::RngRules;
 pub use room::RoomRules;
 pub use sound::SoundRules;
 pub use tick::TickRules;
@@ -55,6 +57,8 @@ pub struct RunnerRules {
     pub room: RoomRules,
     /// Numbers (N1-N6, N10-N13, R3b).
     pub num: NumRules,
+    /// Random-number streams (N10).
+    pub rng: RngRules,
     /// Sound model (S1-S4).
     pub sound: SoundRules,
     /// Draw slot (R15): whether Draw may mutate.
@@ -99,6 +103,7 @@ mod tests {
         assert_eq!(r.room.max_chained_changes, 8);
         assert_eq!(r.sound.isplaying_latency, 0);
         assert!(r.num.particles_draw_rng);
+        assert_eq!(r.rng.layout, rng::StreamLayout::Shared);
         assert_eq!(r.draw.purity, draw::DrawPurity::Ambient);
     }
 

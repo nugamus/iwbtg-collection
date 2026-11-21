@@ -6,7 +6,8 @@
 use crate::builtins_rely_c_support::*;
 use iwbtg_sim::def::{ClassMask, ParamValue, Params};
 use iwbtg_sim::events::EventKind;
-use iwbtg_sim::rng::Rng;
+use iwbtg_sim::rng::{Rng, RngStreams};
+use iwbtg_sim::rules::rng::StreamLayout;
 use iwbtg_sim::world::World;
 
 #[test]
@@ -22,6 +23,23 @@ fn blood_create_draws_the_frame_then_the_gravity() {
     assert_eq!(i.img.speed(), r(0.0), "blood never animates");
     assert_eq!(i.m.gravity(), gravity);
     assert_eq!(w.rng, mirror, "exactly two draws");
+}
+
+#[test]
+fn blood_create_draws_the_effects_stream_in_a_split_layout() {
+    let g = game(Params::default(), Vec::new);
+    let mut w = World::new(g.room, 7);
+    w.streams = RngStreams::seeded(7, StreamLayout::Split);
+    let gameplay = w.rng.clone();
+    let mut effects = w.streams.effects.clone();
+    let _ = spawn(&g, &mut w, g.blood, 10.0, 10.0);
+    assert_eq!(w.rng, gameplay, "the gameplay stream is untouched");
+    effects.choose(3).unwrap();
+    effects.random(r(0.2));
+    assert_eq!(
+        w.streams.effects, effects,
+        "the frame then the gravity, from the effects stream"
+    );
 }
 
 #[test]

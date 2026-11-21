@@ -2,8 +2,11 @@
 //! `traces/rely-the-needle-4-2/num-rng.md` (Confirmed (recorder), CLONE_SPEC numbers "RNG").
 
 use iwbtg_sim::SimError;
+use iwbtg_sim::def::RoomId;
 use iwbtg_sim::num::Real;
-use iwbtg_sim::rng::Rng;
+use iwbtg_sim::rng::{Rng, RngStreams, Stream};
+use iwbtg_sim::rules::rng::{RngRules, StreamLayout};
+use iwbtg_sim::world::World;
 
 fn r(x: f64) -> Real {
     Real::new(x)
@@ -49,6 +52,75 @@ fn lcg_wraps_at_2_pow_32() {
         let u = rng.next_unit().get();
         assert!((0.0..1.0).contains(&u));
     }
+}
+
+#[test]
+fn named_streams_derive_deterministically_from_the_replay_seed() {
+    let a = RngStreams::seeded(7, StreamLayout::Split);
+    let b = RngStreams::seeded(7, StreamLayout::Split);
+    assert_eq!(a, b, "the derivation is deterministic");
+    assert_ne!(a.effects, a.draw);
+    assert_ne!(a.effects, a.script);
+    assert_ne!(a.draw, a.script);
+    assert_ne!(
+        a.effects,
+        RngStreams::seeded(8, StreamLayout::Split).effects,
+        "the seed reaches every stream"
+    );
+    // The gameplay stream is the raw replay seed in both layouts.
+    let w = World::new(RoomId(0), 7);
+    assert_eq!(w.rng, Rng::new(7));
+}
+
+#[test]
+fn a_shared_layout_routes_every_stream_to_the_gameplay_generator() {
+    let mut w = World::new(RoomId(0), 7);
+    w.streams = RngStreams::seeded(7, StreamLayout::Shared);
+    let effects = w.streams.effects.clone();
+    let script = w.streams.script.clone();
+    let mut gameplay = w.rng.clone();
+    w.stream_mut(Stream::Effects).choose(3).unwrap();
+    w.stream_mut(Stream::Script).next_unit();
+    gameplay.choose(3).unwrap();
+    gameplay.next_unit();
+    assert_eq!(w.rng, gameplay, "one stream: the recorder's order");
+    assert_eq!(w.streams.effects, effects, "the named streams stay unused");
+    assert_eq!(w.streams.script, script);
+}
+
+#[test]
+fn a_split_layout_keeps_effects_and_script_draws_out_of_gameplay() {
+    let mut w = World::new(RoomId(0), 7);
+    w.streams = RngStreams::seeded(7, StreamLayout::Split);
+    let gameplay = w.rng.clone();
+    let (effects, draw, script) = (
+        w.streams.effects.clone(),
+        w.streams.draw.clone(),
+        w.streams.script.clone(),
+    );
+    w.stream_mut(Stream::Effects).choose(3).unwrap();
+    w.stream_mut(Stream::Effects).random(Real::new(0.2));
+    assert_eq!(w.rng, gameplay, "an effect cannot perturb gameplay");
+    assert_ne!(w.streams.effects, effects, "the effect stream drew twice");
+    w.stream_mut(Stream::Script).next_unit();
+    assert_eq!(w.rng, gameplay);
+    assert_ne!(w.streams.script, script);
+    w.stream_mut(Stream::Draw).next_unit();
+    assert_eq!(w.rng, gameplay);
+    assert_ne!(w.streams.draw, draw);
+    // Gameplay still draws from its own stream.
+    let mut gameplay = gameplay;
+    gameplay.next_unit();
+
+    w.stream_mut(Stream::Gameplay).next_unit();
+    assert_eq!(w.rng, gameplay);
+}
+
+#[test]
+fn the_rules_select_the_layout() {
+    assert_eq!(RngRules::default(), RngRules::gm8());
+    assert_eq!(RngRules::default().layout, StreamLayout::Shared);
+    assert_eq!(RngRules::standard().layout, StreamLayout::Split);
 }
 
 /// The recorded seeds (num-rng-a.csv, random_get_seed()) are whole LCG steps apart: 9 draws
