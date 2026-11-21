@@ -20,6 +20,9 @@ pub struct CollideRules {
     /// C2 (UNKNOWN: CLONE_SPEC collision, "how the collision box rounds an exact .5 in x"):
     /// whether the collision box rounds the origin first or each edge after the mask offset.
     pub box_round: BoxRound,
+    /// C1/C3 (decision 0005, D2): which box `bbox_*`, `distance_to_object` and the non-precise
+    /// point, rectangle and line queries read.
+    pub reported_box: ReportedBox,
     /// C10 (answered by the recorder, little-runner t-col-07-d): `move_contact_solid` from an
     /// overlapping start.
     pub mcs_start: McsStart,
@@ -39,6 +42,7 @@ impl Default for CollideRules {
             solid_keep: SolidKeep::default(),
             place_round: PlaceRound::default(),
             box_round: BoxRound::default(),
+            reported_box: ReportedBox::default(),
             mcs_start: McsStart::default(),
             dist_boxes: DistBoxes::default(),
             dist_offset: DistOffset::default(),
@@ -78,6 +82,20 @@ pub enum PlaceRound {
     TestedCoord,
     /// Round, then add: `round(y) + 1`.
     RoundThenAdd,
+}
+
+/// C1/C3 (decision 0005, D2): which box `bbox_*`, `distance_to_object` and the non-precise
+/// point, rectangle and line queries read.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum ReportedBox {
+    /// The measured GM8 rule: a second, mirrored box, including the 1x1 no-frame point box,
+    /// maskNothing's normalized box and the raw edges of other inverted rectangles (C3, C15).
+    /// Default, byte-identical to the pre-D2 behavior.
+    #[default]
+    Measured,
+    /// The `standard` ruleset: the one authoritative collider's box, the same box place tests
+    /// and contacts use. No collider means no reported box, and no empty-mask special case.
+    Collider,
 }
 
 /// C2: how the collision box rounds a fractional position (ties to even either way).

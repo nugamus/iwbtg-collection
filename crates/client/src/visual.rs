@@ -35,8 +35,8 @@ pub(crate) struct PlainBackdrop(pub Color);
 /// stand out on.
 pub(crate) const PLAIN: Color = Color::srgb_u8(0x3a, 0x3a, 0x3a);
 
-/// In front of every instance, tile and foreground layer (995 and up), behind the overlay (1000).
-const HITBOX_Z: f32 = 998.0;
+/// In front of every room layer and the HUD (`view::order::Hud`), behind the overlay (1000).
+pub(crate) const HITBOX_Z: f32 = 998.0;
 /// The kid's hitbox.
 const KID: Color = Color::srgb_u8(0x45, 0xd4, 0x83);
 /// A hazard's hitbox.

@@ -3879,6 +3879,7 @@ dependencies = [
  "iwbtg-sim",
  "jsonschema",
  "png",
+ "rhai",
  "schemars",
  "serde",
  "serde_json",

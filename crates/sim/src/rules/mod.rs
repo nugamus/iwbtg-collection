@@ -96,6 +96,7 @@ mod tests {
         assert_eq!(r.num.compare, num::CompareMode::Epsilon(Real::new(1e-13)));
         assert_eq!(r.num.truth, num::Truth::GeHalf);
         assert!(r.collide.recheck_nonsolid);
+        assert_eq!(r.collide.reported_box, collide::ReportedBox::Measured);
         assert_eq!(r.room.max_chained_changes, 8);
         assert_eq!(r.sound.isplaying_latency, 0);
         assert!(r.num.particles_draw_rng);

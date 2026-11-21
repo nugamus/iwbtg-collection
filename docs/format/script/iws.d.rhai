@@ -114,6 +114,8 @@ fn get gravity(_: Instance) -> float;
 
 fn get gravity_direction(_: Instance) -> float;
 
+fn get group(_: Instance) -> ?;
+
 fn get hspeed(_: Instance) -> float;
 
 fn get id(_: Instance) -> float;
@@ -151,6 +153,8 @@ fn get maxSpeed(_: Instance) -> float;
 fn get maxVspeed(_: Instance) -> float;
 
 fn get muteki(_: Instance) -> bool;
+
+fn get name(_: Instance) -> ?;
 
 fn get onPlatform(_: Instance) -> bool;
 
