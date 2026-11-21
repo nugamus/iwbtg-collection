@@ -1,12 +1,15 @@
 //! Number rule switches (docs/architecture/sim/numbers.md, rng.md, register N1-N6, N10-N13, R3b).
 //!
 //! Every rule with OpenGMK provenance or an open spec status is a field here, never a `const`,
-//! so a rule settled later becomes a new `engine_rev`. The engine_rev 0 defaults keep the
-//! earlier `num` behavior where the spec has no answer yet, and follow the recorder where the
-//! CLONE_SPEC numbers section records a trace result (Confirmed (recorder)): compare and sign
-//! (num-eps-slip, num-eps-alpha), alarms (num-alarm-half) and save bytes (num-byte-save, which
-//! moved N5 from truncation to round-half-even). The real GM8 runner is unchecked for all of
-//! them. WP2 owns this file.
+//! so a rule settled later becomes a new `engine_rev`. [`NumRules`] is a **ruleset value**: the
+//! two values are [`NumRules::gm8`] (the recorder's rules, the engine_rev 0 defaults) and
+//! [`NumRules::standard`] (exact IEEE comparisons, the modern default). A package selects the
+//! ruleset; it cannot supply a tolerance or any other field (decision 0005). The engine_rev 0
+//! defaults keep the earlier `num` behavior where the spec has no answer yet, and follow the
+//! recorder where the CLONE_SPEC numbers section records a trace result (Confirmed (recorder)):
+//! compare and sign (num-eps-slip, num-eps-alpha), alarms (num-alarm-half) and save bytes
+//! (num-byte-save, which moved N5 from truncation to round-half-even). The real GM8 runner is
+//! unchecked for all of them. WP2 owns this file.
 
 use crate::num::Real;
 
@@ -53,8 +56,13 @@ pub struct NumRules {
     pub particles_draw_rng: bool,
 }
 
-impl Default for NumRules {
-    fn default() -> NumRules {
+impl NumRules {
+    /// The `gm8` ruleset: the recorder's rules and the engine_rev 0 defaults.
+    ///
+    /// This is also [`Default`], so a package that selects no ruleset keeps every existing
+    /// outcome and hash. A package selects a ruleset; it cannot supply a tolerance or any other
+    /// value here (decision 0005).
+    pub const fn gm8() -> NumRules {
         NumRules {
             compare: CompareMode::Epsilon(Real::new(1e-13)),
             truth: Truth::GeHalf,
@@ -68,6 +76,37 @@ impl Default for NumRules {
             float_model: FloatModel::F64,
             particles_draw_rng: true,
         }
+    }
+
+    /// The `standard` ruleset: exact IEEE comparisons (N1) and exact `sign` (N11).
+    ///
+    /// The standard ruleset has no comparison epsilon and no comparison mode. The values that
+    /// decision 0005 does not settle stay the `gm8` ones: truthiness keeps `>= 0.5` until a trace
+    /// settles the boundary, and the conversions, the `min`/`max` tie rule, the signed-zero rules
+    /// and the float model have no standard contract yet. Where a feel contract needs a forgiving
+    /// boundary, the call site declares a [`crate::num::Tolerance`]; it is not a field here and a
+    /// package cannot set it.
+    pub const fn standard() -> NumRules {
+        NumRules {
+            compare: CompareMode::Exact,
+            truth: Truth::GeHalf,
+            sign: SignMode::Exact,
+            min_max_ties: MinMaxTies::StrictGreater,
+            round_neg_zero: NegZero::Positive,
+            floor_ceil_zero: NegZero::Keep,
+            alarm_from_real: AlarmConv::RoundHalfEven,
+            byte_from_real: ByteConv::RoundWrap,
+            string_decimals: StrRound::HalfEven,
+            float_model: FloatModel::F64,
+            particles_draw_rng: true,
+        }
+    }
+}
+
+impl Default for NumRules {
+    /// The absent ruleset is `gm8` (decision 0005, migration).
+    fn default() -> NumRules {
+        NumRules::gm8()
     }
 }
 
@@ -154,4 +193,48 @@ pub enum FloatModel {
     /// IEEE binary64, the only model for now.
     #[default]
     F64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A package with no ruleset gets exactly the pre-ruleset rules, so every existing outcome
+    /// and hash is unchanged (decision 0005, migration).
+    #[test]
+    fn gm8_is_the_default_ruleset() {
+        assert_eq!(NumRules::default(), NumRules::gm8());
+        let gm8 = NumRules::gm8();
+        assert_eq!(gm8.compare, CompareMode::Epsilon(Real::new(1e-13)));
+        assert_eq!(gm8.truth, Truth::GeHalf);
+        assert_eq!(gm8.sign, SignMode::Epsilon);
+        assert_eq!(gm8.min_max_ties, MinMaxTies::StrictGreater);
+        assert_eq!(gm8.round_neg_zero, NegZero::Positive);
+        assert_eq!(gm8.floor_ceil_zero, NegZero::Keep);
+        assert_eq!(gm8.alarm_from_real, AlarmConv::RoundHalfEven);
+        assert_eq!(gm8.byte_from_real, ByteConv::RoundWrap);
+        assert_eq!(gm8.string_decimals, StrRound::HalfEven);
+        assert_eq!(gm8.float_model, FloatModel::F64);
+        assert!(gm8.particles_draw_rng);
+    }
+
+    /// The standard ruleset changes the comparison policy only. Every other rule has no standard
+    /// contract yet, so it stays the gm8 value (decision 0005; the user kept `>= 0.5`).
+    #[test]
+    fn standard_is_exact_and_keeps_the_unsettled_rules() {
+        let standard = NumRules::standard();
+        let gm8 = NumRules::gm8();
+        assert_eq!(standard.compare, CompareMode::Exact);
+        assert_eq!(standard.sign, SignMode::Exact);
+        assert_eq!(standard.truth, gm8.truth);
+        assert_eq!(standard.min_max_ties, gm8.min_max_ties);
+        assert_eq!(standard.round_neg_zero, gm8.round_neg_zero);
+        assert_eq!(standard.floor_ceil_zero, gm8.floor_ceil_zero);
+        assert_eq!(standard.alarm_from_real, gm8.alarm_from_real);
+        assert_eq!(standard.byte_from_real, gm8.byte_from_real);
+        assert_eq!(standard.string_decimals, gm8.string_decimals);
+        assert_eq!(standard.float_model, gm8.float_model);
+        assert_eq!(standard.particles_draw_rng, gm8.particles_draw_rng);
+        assert_ne!(standard, gm8);
+    }
 }
