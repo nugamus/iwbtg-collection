@@ -100,6 +100,10 @@ The input script uses the `.inputs` grammar ([replay](replay.md#text-inputs-for-
 
 A contract may assert the **absence** of a difference: `retry_delay` zero movement, `kid_count` one, no extra draw on the gameplay stream.
 
+### Trace links
+
+An assertion's `trace = "<game>/<trace>"` names its primary evidence: the trace case whose `source` is that string under `crates/tools/cases/`. The feel loader enforces the F1 rule in [traces](traces.md): every metric the contract asserts must appear in the linked case's `required` list, and the case must be OK or OPEN with a reason. `required` is the case's promise that those columns are exact and compared; an ignored, unprobed or split-away column, or a name that does not resolve, is a load error. Without the private packages the case's status comes from `crates/tools/fidelity-baseline.txt` (or its own `open` reason); running the trace is the end-to-end proof.
+
 ### Units and identity
 
 - **Tick vs frame.** `tick = N` is `World::tick == N`, sampled after `Sim::step`. A `.inputs` frame `f` is the step that ends at `tick == f + 1`: `frame 20: press suicide` is observed at tick 21. Without this rule every trace-derived number is off by one. `tick = 0` is the state `Sim::new` produced, before any step.

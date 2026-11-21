@@ -187,16 +187,29 @@ impl<'a> Loader<'a> {
         }
         // Copy only after every chain is resolved: a copy never feeds another alias.
         for (id, base, path, span) in resolved {
-            match self.sprite_ids.get(&base).map(|e| e.def.masks.clone()) {
-                Some(masks) => {
-                    if let Some(entry) = self.sprite_ids.get_mut(&id) {
-                        entry.def.masks = masks;
-                    }
-                }
-                None => {
-                    let text = read_text(self.files, &path, &mut Vec::new()).unwrap_or("");
-                    self.error(&path, text, span, format!("mask sprite `{base}` does not exist"));
-                }
+            let Some(masks) = self.sprite_ids.get(&base).map(|e| e.def.masks.clone()) else {
+                let text = read_text(self.files, &path, &mut Vec::new()).unwrap_or("");
+                self.error(&path, text, span, format!("mask sprite `{base}` does not exist"));
+                continue;
+            };
+            let frames = self.sprite_ids.get(&id).map_or(0, |e| e.def.frames);
+            if let MaskSet::PerFrame(per_frame) = &masks
+                && per_frame.len() < usize::from(frames)
+            {
+                let text = read_text(self.files, &path, &mut Vec::new()).unwrap_or("");
+                self.error(
+                    &path,
+                    text,
+                    span,
+                    format!(
+                        "sprite `{id}` has {frames} frame(s), but its mask `{base}` provides only {} separate mask(s); give `{id}` at most that many frames or use a shared mask",
+                        per_frame.len()
+                    ),
+                );
+                continue;
+            }
+            if let Some(entry) = self.sprite_ids.get_mut(&id) {
+                entry.def.masks = masks;
             }
         }
     }
