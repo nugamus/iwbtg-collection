@@ -54,17 +54,25 @@ pub fn perform_change(ctx: &mut Ctx, req: RoomRequest) -> Result<(), SimError>;
 
 ### Restart and game_restart
 
-- `GameRestart` (Inferred): remove all instances (persistent too), forget persistent room states, reset globals per `RoomRules::globals_survive_restart` (UNKNOWN, R16; `little-runner/tr-room-04` recorded), start the first room again. Sounds keep playing (Inferred; S4).
-- The engines' init rooms and world objects are not ported as GM code. `GameDef::restart: RestartModel` describes the retry path; the `world` built-in runs it **at the world's rank**, in the phase its trigger names:
+- `GameRestart` (Inferred): remove all instances (persistent too), forget persistent room states, reset globals per `RoomRules::globals_survive_restart` (UNKNOWN, R16; `little-runner/tr-room-04` recorded), start again. The room it enters is the **Boot-role room** (`room::restart_room`), the loader's engine-init marker; a profile with no Boot room keeps the gm8 shape where that is room order index 0. The destination is never a save identity, and `room_goto_next`/`previous` skip the Boot room. Sounds keep playing (Inferred; S4).
+- **One lifecycle.** The sim has one lifecycle (decision 0005): `new_game`, `enter_room`, `death`, `retry` and `quit`, plus the F2 `reset` policy. `GameDef::lifecycle()` is the engine's view; the retry and reset policies are the stored profile data (`[engine] restart`/`[engine] reset`; `RestartModel`/`ResetModel` remain their format names, aliases of `RetryPolicy`/`ResetPolicy`). The `world` built-in runs the retry and reset **at the world's rank**, in the phase the policy's trigger names:
 
   ```rust
-  // def/game.rs, behavior in room.rs
-  pub struct RestartModel { pub trigger: RestartTrigger, pub kind: RestartKind, pub excluded_roles: RoleSet,
-      pub boot_ticks: u8, pub flipped_load_dy: Real /* +4 */, pub death_on_restart: DeathOnRestart,
-      pub kid_steps: RetryKidSteps /* B: add_time 2, save_death_time, clear_frozen; showdown: clear_frozen, reset_jump_values (#224) */ }
+  // def/game.rs
+  pub struct Lifecycle { pub new_game: NewGamePolicy, pub enter_room: EnterRoomPolicy,
+      pub death: DeathPolicy, pub retry: RetryPolicy, pub quit: QuitPolicy, pub reset: ResetPolicy }
+  pub struct RetryPolicy { pub trigger: RestartTrigger, pub kind: RestartKind, pub excluded_roles: RoleSet,
+      pub boot_ticks: u8 /* retry_delay_ticks */, pub flipped_load_dy: Real /* +4 */,
+      pub death_on_restart: DeathOnRestart,
+      pub kid_steps: RetryKidSteps /* B: add_time 2, save_death_time, clear_frozen; showdown: clear_frozen, reset_jump_values (#224) */,
+      pub music: Persistence, pub effects: Persistence }
   pub enum RestartTrigger { KeyPressEvent, StepHeld, StepPressed { skip_while_paused: bool } }
   pub enum RestartKind { GameRestartViaBoot, RoomGotoSaved, ShowdownLoad, RecreateInPlace }
+  pub enum Spawn { RoomStart, Checkpoint, KidStart }
+  pub enum ResetScope { Room, Save, Run }
   ```
+
+  A retry's player-observable policy is: reset scope `save` (return to the checkpoint's room, position and counters), spawn `checkpoint` when a checkpoint exists (else `room_start`), control after `retry_delay_ticks`, music and effects kept, and the checkpoint write `death_on_restart` declares. A new game resets scope `run`, spawns `room_start` and deletes the save. Death sets the dead state and counts; it is not a transition. `quit` is client-only and has no sim state.
 
   | Kind | Trigger | Games | Steps (spec source) |
   |---|---|---|---|
@@ -74,9 +82,9 @@ pub fn perform_change(ctx: &mut Ctx, req: RoomRequest) -> Result<(), SimError>;
   | `RecreateInPlace` | `StepPressed { skip_while_paused: true }` | keep-celebrating-for-xia | Destroy kid, create kid at the saved spot in the current room, then `Goto(saved room)` (rooms Confirmed). |
 
 - **R26 (settled).** Showdown's R has no game_restart (research PR #98; recorder `traces/showdown/a3-t18-a.csv` f41-43). The rooms section counts 15 of the 20 games with a full game restart.
-- `boot_ticks` is the single number to change after TR-ROOM-01. Whether the boot tick exists at all is UNKNOWN (rooms: "whether a room change consumes a tick").
+- **The init phase is engine state.** A retry's delay is `RetryPolicy::boot_ticks` (the serialized format-0 name; `retry_delay_ticks` in decision 0005) and is run by `restart::InitPhase`: the R tick begins it, `boot_step` counts it down, and the tick that reaches zero loads the checkpoint. It is not a package-authored room and not a temp file. The gm8 compatibility profile still enters the package Boot room while the phase runs because an old replay's state hash observes that room; the phase itself does not depend on it. `standard` removes the package room once the stable room key lands (#1153, follow-up of #1149). A delay of 0 is UNKNOWN (R17). Whether the boot tick exists at all is UNKNOWN (rooms: "whether a room change consumes a tick").
 - `room_restart` (kaenbyou warpStart, xia death in difficulty room) is `RoomRequest::Restart`.
-- `Reset` (F2): Groups A, B, C delete the save's temp marker and game_restart; kaenbyou/lemon gameReset resets globals and goes to the boot room (rooms Confirmed). `GameDef::reset: ResetModel` mirrors `RestartModel`.
+- `Reset` (F2): Groups A, B, C delete the save's temp marker and game_restart; kaenbyou/lemon gameReset resets globals and goes to the Boot-role room (rooms Confirmed). The policy is `Lifecycle::reset` (`ResetPolicy`, format name `ResetModel`); its reset scope is `room` for the temp-marker restart and `run` for gameReset.
 
 ### Saves
 

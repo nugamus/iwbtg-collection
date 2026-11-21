@@ -70,8 +70,8 @@ fn game_end_and_game_restart() {
     change(&def, &rules, &mut w, &mut host, RoomRequest::GameRestart).unwrap();
     assert_eq!(host.log, ["Create world", "GameStart world", "RoomStart world"]);
     assert_eq!(
-        w.room, title,
-        "room_first (index 0), not the first Boot-role room or start_room"
+        w.room, init,
+        "the Boot-role room (engine init), not room order index 0 or start_room (#1149)"
     );
     assert!(
         ids_of(&w, &def, "kid").is_empty(),
@@ -89,10 +89,41 @@ fn game_end_and_game_restart() {
 
     change(&def, &rules, &mut w, &mut host, RoomRequest::GameEnd).unwrap();
     assert_eq!(w.status, SimStatus::Ended);
-    assert_eq!(w.room, title);
+    assert_eq!(w.room, init);
     // An ended sim changes nothing.
+    change(&def, &rules, &mut w, &mut host, RoomRequest::Goto(title)).unwrap();
+    assert_eq!(w.room, init);
+}
+
+/// The Boot-role room is engine init, not a stage: next and previous step over it (#1149).
+/// `game_restart` still enters it (`restart_room`), and an explicit `Goto` may name it.
+#[test]
+fn goto_next_and_previous_skip_the_boot_room() {
+    let mut b = GameDefBuilder::new("skip-boot");
+    let a = b.room(room("a", 50));
+    let mut boot = room("init", 50);
+    boot.role = RoomRole::Boot;
+    let init = b.room(boot);
+    let c = b.room(room("c", 50));
+    let def = b.build().unwrap();
+    let rules = RunnerRules::default();
+    let mut host = Probe::default();
+    let (mut w, r) = start(
+        &def,
+        &rules,
+        &mut host,
+        StartPoint::Room {
+            room: a,
+            difficulty: 0,
+        },
+    );
+    r.unwrap();
+    change(&def, &rules, &mut w, &mut host, RoomRequest::Next).unwrap();
+    assert_eq!(w.room, c, "next skips the Boot room");
+    change(&def, &rules, &mut w, &mut host, RoomRequest::Previous).unwrap();
+    assert_eq!(w.room, a, "previous skips the Boot room");
     change(&def, &rules, &mut w, &mut host, RoomRequest::Goto(init)).unwrap();
-    assert_eq!(w.room, title);
+    assert_eq!(w.room, init, "an explicit Goto may name the Boot room");
 }
 
 #[test]
