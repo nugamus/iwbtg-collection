@@ -1,25 +1,29 @@
-# The showcase's courtyard music object runs in `every_step_if_not_playing`: on the room's first
-# Step it stops every built-in sound and starts the night loop. The event stream is what the client
-# mixer plays; this contract pins that the play exists, names the package sound, and carries the
-# sim tick (tick 0, the step that ends at World::tick == 1).
+# F2 (feedback) contract for #1158 (decision 0005, one sound model): the sim emits the play
+# event with a sound id and a tick, and the client mixer plays from that event.
 #
-# F2 (feedback): audio only, no sim state. The listening check is the showcase's night loop coming
-# in on the first frame with no gap or double start; the automated evidence is the event model in
-# `crates/sim/tests/sound.rs`.
+# The gating executable copy is
+# `crates/sim/tests/builtins_music.rs::every_step_music_emits_stop_all_then_a_play_with_the_tick_and_length`;
+# the client-side copy is `crates/client/src/audio.rs::the_showcase_starts_its_night_loop_on_the_first_tick`.
+# The runner and the `sound_events` fixture land with #1167; until then this file is the
+# reviewable statement of the outcome and those tests are the gate.
 id = "sound/event_model"
 impact = "F2"
-package = "showcase"
+package = "fixture:sound_events"
+ruleset = "gm8@0"
 start = { new_game = true, difficulty = 0 }
 play_mode = "original"
 seed = 7
 mods = []
 evidence = [
   "#1158",
-  "tests/sound.rs::play_events_carry_the_call_tick_and_the_sound_length",
   "tests/builtins_music.rs::every_step_music_emits_stop_all_then_a_play_with_the_tick_and_length",
-  "audio: showcase courtyard, the night loop starts on the first tick",
+  "tests/sound.rs::play_events_carry_the_call_tick_and_the_sound_length",
+  "audio: the fixture's track is heard from the first frame, once, with no gap",
 ]
 
+# The fixture's music object runs `every_step_if_not_playing`: on the room's first Step (sim tick
+# 0, the step that ends at World::tick == 1) it stops every built-in sound and starts the loop.
+# The play event names the package sound and carries the tick the client mixer schedules from.
 [[assert]]
 tick = 1
-sound = { event = "play", sound = "night", tick = 0 }
+sound = { event = "play", sound = "track", tick = 0 }
