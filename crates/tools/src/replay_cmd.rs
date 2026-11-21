@@ -476,7 +476,8 @@ pub fn replay_input(bytes: &[u8], label: &str) -> Result<RunInput, ToolError> {
             })?))
         }
         StartMode::FromSave(bytes) => Some(StartSave::LegacySlot(
-            postcard::from_bytes::<SaveSlot>(bytes).map_err(|e| {
+            // The shared exact decode: a legacy slot with bytes after it is refused (#1325).
+            SaveSlot::decode(bytes).map_err(|e| {
                 ToolError::Message(format!("{label}: the replay's save slot does not decode: {e}"))
             })?,
         )),
@@ -882,7 +883,7 @@ mod tests {
             .encode()
             .unwrap();
         let input = replay_input(&bytes, "checkpoint").unwrap();
-        assert_eq!(input.save, Some(StartSave::Checkpoint(checkpoint)));
+        assert_eq!(input.save, Some(StartSave::Checkpoint(checkpoint.clone())));
         assert!(matches!(
             input.start(&def, 0).unwrap(),
             StartPoint::FromSave(s) if s == slot
@@ -898,6 +899,67 @@ mod tests {
             input.start(&def, 0).unwrap(),
             StartPoint::FromSave(s) if s == slot
         ));
+
+        // #1325: the checkpoint payload is decoded exactly, so a byte appended after it is
+        // refused instead of ignored.
+        let mut trailing = checkpoint.encode().unwrap();
+        trailing.push(0);
+        let bytes = replay(StartMode::FromSave(trailing)).encode().unwrap();
+        let error = replay_input(&bytes, "trailing").unwrap_err();
+        assert!(error.to_string().contains("trailing bytes"), "{error}");
+    }
+
+    /// #1325: the replay's `FromSave` runs the shared `Checkpoint::validate`; a foreign
+    /// checkpoint format is refused exactly as the client's envelope path refuses it.
+    #[test]
+    fn a_from_save_checkpoint_with_a_foreign_format_is_refused() {
+        use iwbtg_sim::replay::{Header, MAGIC, REPLAY_FORMAT, Trailer};
+
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../format/tests/valid/stripped");
+        let files = load_package(&dir).unwrap();
+        let def = load_strict(&files, LoadMode::Strict).unwrap();
+        let slot = iwbtg_sim::save::SaveSlot {
+            room: def.start_room,
+            x: iwbtg_sim::num::Real::new(96.0),
+            y: iwbtg_sim::num::Real::new(500.0),
+            precision: Default::default(),
+            point: None,
+            flipped: false,
+            facing: 1,
+            difficulty: 0,
+            deaths: 7,
+            time: 1234,
+            bosses: 0,
+            items: 0,
+            clear: false,
+        };
+        let mut checkpoint = Checkpoint::from_slot(&def, &slot).unwrap();
+        checkpoint.format = Checkpoint::FORMAT + 1;
+        let bytes = Replay {
+            header: Header {
+                magic: MAGIC,
+                replay_format: REPLAY_FORMAT,
+                sim_version: iwbtg_sim::SIM_VERSION,
+                package_id: def.id.clone(),
+                gameplay_hash: [0; 32],
+                engine_rev: 0,
+                rng_seed: 0,
+                start_mode: StartMode::FromSave(checkpoint.encode().unwrap()),
+                play_mode: PlayMode::Original,
+                map: "medium".into(),
+                mods: ModSet::NONE,
+                client_build_id: String::new(),
+            },
+            inputs: vec![InputFrame::default(); 4],
+            trailer: Trailer {
+                total_ticks: 4,
+                ..Trailer::default()
+            },
+        }
+        .encode()
+        .unwrap();
+        let error = replay_input(&bytes, "foreign format").unwrap_err();
+        assert!(error.to_string().contains("checkpoint format 2"), "{error}");
     }
 
     /// The `[stripped]` example has two maps: `medium` times `[timing]` from `[stripped].start`

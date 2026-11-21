@@ -106,6 +106,7 @@ pub fn load_into(ctx: &mut Ctx, slot: &SaveSlot) -> Result<InstId, SimError>;
 - Death-only saves update counters only. `deaths` and `time` use `checked_add` (10.3).
 - `World.save = None` means "save file missing"; the kid Create's first-play save (rely Create step 4, B Create step 4) tests it.
 - The client persists the slot inside its versioned envelope (package id, built-in revision, saved room name; [client storage](../client/storage.md)); `StartPoint::FromSave` restores it.
+- A persisted save is a `Checkpoint`: `from_slot`/`from_parts` build it and `to_slot` resolves the stable room name and save-point key. The format check is `Checkpoint::validate`, run by both `Checkpoint::decode` and `to_slot`, so the replay's `FromSave` and the client's disk path refuse a foreign format identically. Both decoders are exact — bytes after the payload are refused — and the legacy raw slot has its own exact `SaveSlot::decode`, so an appended or unknown field fails closed (#1325).
 
 ### Views and camera
 
