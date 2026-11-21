@@ -2,6 +2,51 @@
 
 use super::*;
 
+/// A sprite's `mask` alias and where its key is written, for diagnostics.
+struct MaskAlias {
+    /// The sprite key the alias names (an engine pack sprite is prefixed with its pack).
+    target: String,
+    /// The sidecar path, for a diagnostic that points at the `mask` key.
+    path: String,
+    /// The `mask` key's byte span in that sidecar.
+    span: Range<usize>,
+}
+
+/// Why a `mask` chain does not end at a sprite's own masks.
+enum AliasFault<'a> {
+    /// A sprite in the chain names itself.
+    SelfAlias(&'a str),
+    /// The chain returns to a sprite it already passed through.
+    Cycle(Vec<String>),
+}
+
+/// Follows `start`'s `mask` chain to the sprite whose own masks it names.
+///
+/// A chain is resolved transitively (`a -> b -> c` gives `a` and `b` the masks of `c`), so the
+/// result does not depend on the order the sidecars were visited. A self reference or a cycle has
+/// no terminal sprite and is a load error.
+fn resolve_alias<'a>(
+    start: &'a str,
+    aliases: &'a BTreeMap<String, MaskAlias>,
+) -> Result<&'a str, AliasFault<'a>> {
+    let mut chain = vec![start];
+    let mut seen = BTreeSet::new();
+    let mut key = start;
+    loop {
+        if !seen.insert(key) {
+            return Err(AliasFault::Cycle(chain.iter().map(|k| (*k).to_owned()).collect()));
+        }
+        let Some(alias) = aliases.get(key) else {
+            return Ok(key);
+        };
+        if alias.target == key {
+            return Err(AliasFault::SelfAlias(key));
+        }
+        key = alias.target.as_str();
+        chain.push(key);
+    }
+}
+
 impl<'a> Loader<'a> {
     pub(super) fn load_sprites(&mut self) {
         // A package sprite is keyed by its id; a bundled engine pack sprite
@@ -23,7 +68,7 @@ impl<'a> Loader<'a> {
                 ))
             })
             .collect();
-        let mut aliases = Vec::new();
+        let mut aliases: BTreeMap<String, MaskAlias> = BTreeMap::new();
         let mut oversized = Vec::new();
         for (key, id, path, pack) in sidecars {
             let Some(text) = read_text(self.files, &path, &mut self.diags) else {
@@ -79,16 +124,18 @@ impl<'a> Loader<'a> {
                     let sid = SpriteId(u32::try_from(self.sprite_ids.len()).unwrap_or(u32::MAX));
                     if let Some(alias) = sidecar.mask.clone() {
                         // A pack sprite's mask alias names a sprite of the same pack.
-                        let alias = match &pack {
+                        let target = match &pack {
                             Some(pack) => format!("{}{pack}/{alias}", crate::ids::ENGINE_PREFIX),
                             None => alias,
                         };
-                        aliases.push((
+                        aliases.insert(
                             key.clone(),
-                            alias,
-                            path.clone(),
-                            spans.mask.clone().unwrap_or(0..0),
-                        ));
+                            MaskAlias {
+                                target,
+                                path: path.clone(),
+                                span: spans.mask.clone().unwrap_or(0..0),
+                            },
+                        );
                     }
                     self.sprite_ids.insert(key.clone(), SpriteEntry { id: sid, def });
                 }
@@ -99,21 +146,58 @@ impl<'a> Loader<'a> {
         for (n, entry) in self.sprite_ids.values_mut().enumerate() {
             entry.id = SpriteId(u32::try_from(n).unwrap_or(u32::MAX));
         }
-        for (id, alias, path, span) in aliases {
-            match self.sprite_ids.get(&alias).map(|e| e.def.masks.clone()) {
+        self.resolve_mask_aliases(&aliases);
+        for id in oversized {
+            self.note("CR15", id);
+        }
+    }
+
+    /// Applies every `mask` alias after all chains are resolved, so the masks a sprite gets do not
+    /// depend on sidecar order. See [`resolve_alias`].
+    fn resolve_mask_aliases(&mut self, aliases: &BTreeMap<String, MaskAlias>) {
+        let mut resolved = Vec::with_capacity(aliases.len());
+        for (id, alias) in aliases {
+            let text = read_text(self.files, &alias.path, &mut Vec::new()).unwrap_or("");
+            match resolve_alias(id, aliases) {
+                Ok(base) => resolved.push((
+                    id.clone(),
+                    base.to_owned(),
+                    alias.path.clone(),
+                    alias.span.clone(),
+                )),
+                Err(AliasFault::SelfAlias(key)) if key == id => self.error(
+                    &alias.path,
+                    text,
+                    alias.span.clone(),
+                    format!("sprite `{id}` uses itself as its mask"),
+                ),
+                Err(AliasFault::SelfAlias(key)) => self.error(
+                    &alias.path,
+                    text,
+                    alias.span.clone(),
+                    format!("sprite `{id}`'s mask chain reaches `{key}`, which uses itself as its mask"),
+                ),
+                Err(AliasFault::Cycle(chain)) => self.error(
+                    &alias.path,
+                    text,
+                    alias.span.clone(),
+                    format!("sprite `{id}`'s mask chain {} is a cycle", chain.join(" -> ")),
+                ),
+            }
+        }
+        // Copy only after every chain is resolved: a copy never feeds another alias.
+        for (id, base, path, span) in resolved {
+            match self.sprite_ids.get(&base).map(|e| e.def.masks.clone()) {
                 Some(masks) => {
-                    if let Some(e) = self.sprite_ids.get_mut(&id) {
-                        e.def.masks = masks;
+                    if let Some(entry) = self.sprite_ids.get_mut(&id) {
+                        entry.def.masks = masks;
                     }
                 }
                 None => {
                     let text = read_text(self.files, &path, &mut Vec::new()).unwrap_or("");
-                    self.error(&path, text, span, format!("mask sprite `{alias}` does not exist"));
+                    self.error(&path, text, span, format!("mask sprite `{base}` does not exist"));
                 }
             }
-        }
-        for id in oversized {
-            self.note("CR15", id);
         }
     }
 
