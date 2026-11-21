@@ -25,9 +25,20 @@ pub struct SignLabel;
 #[derive(Component)]
 pub struct Countdown;
 
-const BOX_HEIGHT: f32 = 96.0;
-const MARGIN: f32 = 16.0;
+/// The message box is a full-width bottom overlay. Its height, margin and text size keep its top
+/// edge below the Kid at the showcase signs' row (y 512, the Kid's 32 px frame ends at 521): the
+/// white frame's top is at 525 on a 608 px room. The box may still cover world art at the very
+/// bottom (the sign itself, the save stone); it never draws under a sprite (z 996, `Hud::Sign`).
+const BOX_HEIGHT: f32 = 72.0;
+const MARGIN: f32 = 8.0;
 const BORDER: f32 = 3.0;
+/// Horizontal padding from the inner panel's edge to the text.
+const PAD_X: f32 = 12.0;
+/// Vertical padding above and below the text.
+const PAD_Y: f32 = 6.0;
+/// The sign text's size in room pixels. The long showcase message (252 characters) wraps to
+/// three lines at the box's text width, which fit in `BOX_HEIGHT - 2 * PAD_Y`.
+const TEXT_SIZE: f32 = 16.0;
 
 /// Remembers the sign text of the tick that just ran (none when no sign spoke).
 pub fn note_tick(sign: &mut SignText, output: &[OutputEvent]) {
@@ -63,13 +74,13 @@ pub fn setup(mut commands: Commands, room: Res<RoomSize>) {
             (
                 Text2d::new(""),
                 TextFont {
-                    font_size: bevy::text::FontSize::Px(18.0),
+                    font_size: bevy::text::FontSize::Px(TEXT_SIZE),
                     ..default()
                 },
                 TextColor(Color::WHITE),
-                TextBounds::new(width - 24.0, BOX_HEIGHT - 16.0),
+                TextBounds::new(width - 2.0 * PAD_X, BOX_HEIGHT - 2.0 * PAD_Y),
                 Anchor::TOP_LEFT,
-                Transform::from_xyz(-width / 2.0 + 12.0, BOX_HEIGHT / 2.0 - 8.0, 2.0),
+                Transform::from_xyz(-width / 2.0 + PAD_X, BOX_HEIGHT / 2.0 - PAD_Y, 2.0),
                 SignLabel,
             ),
         ],
@@ -148,6 +159,33 @@ mod tests {
         assert_eq!(format_time(0, 2, 56), "0:02:56");
         assert_eq!(format_time(1, 0, 5), "1:00:05");
         assert_eq!(format_time(0, 0, -1), "0:00:00");
+    }
+
+    /// The box's white frame top edge in GM coordinates (y down from the room's top).
+    fn box_top(room_h: f32) -> f32 {
+        room_h - MARGIN - BOX_HEIGHT - BORDER
+    }
+
+    #[test]
+    fn the_sign_box_sits_below_the_kid_at_the_showcase_signs() {
+        // The Kid's 32x32 frame with origin y 23 at the showcase signs' row (512) ends at 521.
+        let kid_bottom = 512.0 + 32.0 - 23.0;
+        assert!(
+            box_top(608.0) > kid_bottom,
+            "box top {} is not below the Kid's {kid_bottom}",
+            box_top(608.0)
+        );
+    }
+
+    #[test]
+    fn the_long_showcase_message_fits_in_three_lines() {
+        // The 252-character courtyard message wraps to three lines at the box's text width (the
+        // screenshot records the wrap); 1.2 is the font's line height.
+        let text_height = 3.0 * TEXT_SIZE * 1.2;
+        assert!(
+            text_height <= BOX_HEIGHT - 2.0 * PAD_Y,
+            "three lines at {TEXT_SIZE} px ({text_height}) do not fit the text area"
+        );
     }
 
     #[test]
