@@ -442,6 +442,9 @@ mod view;
 #[path = "world.rs"]
 mod world;
 
+#[path = "world_lifetime.rs"]
+mod world_lifetime;
+
 /// `autotests = false` means a new `tests/*.rs` file runs only once it is listed here or in Cargo.toml.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
