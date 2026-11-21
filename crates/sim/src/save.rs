@@ -13,11 +13,59 @@
 use serde::{Deserialize, Serialize};
 
 use crate::collide::query::place_free;
-use crate::def::{EngineKind, RoomId};
+use crate::def::{EngineKind, GameDef, KidFamily, RoomId, RoomRole};
 use crate::error::SimError;
 use crate::num::{self, Real};
 use crate::rules::NumRules;
 use crate::world::{Ctx, InstId, SpawnInit};
+
+/// How a save wrote its position: the exact `f64` (`standard@1`), or one of the original
+/// formats' quantizations (`gm8`, selected by the save point or the game's `[save]` model).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum SavePrecision {
+    /// The exact `f64` (`standard@1`).
+    Exact,
+    /// Base-100 bytes (13 games; last byte through `byte_from_real`, N5).
+    #[default]
+    XyBase100Bytes,
+    /// Base-256 div/mod bytes (little-runner, N8).
+    XyBase256Bytes,
+    /// `string()` with two decimals (machinary, eat-the-new-year, N6).
+    XyText2Dec,
+    /// `xprevious`/`yprevious` exactly (kaenbyou, eat-the-lemon, N7).
+    XyPrevious,
+    /// A fixed point (poronkusema).
+    FixedPoint,
+    /// Floor with the three-step +1 nudge using `place_free` (xia).
+    FloorNudge,
+}
+
+impl SavePrecision {
+    /// The precision a saved position with `model` was written at.
+    pub fn of_model(model: SavedPosition) -> SavePrecision {
+        match model {
+            SavedPosition::XyBase100Bytes => SavePrecision::XyBase100Bytes,
+            SavedPosition::XyBase256Bytes => SavePrecision::XyBase256Bytes,
+            SavedPosition::XyText2Dec => SavePrecision::XyText2Dec,
+            SavedPosition::XyPrevious => SavePrecision::XyPrevious,
+            SavedPosition::FixedPoint => SavePrecision::FixedPoint,
+            SavedPosition::FloorNudge => SavePrecision::FloorNudge,
+        }
+    }
+
+    /// The quantization model, or `None` for [`SavePrecision::Exact`].
+    pub fn model(self) -> Option<SavedPosition> {
+        match self {
+            SavePrecision::Exact => None,
+            SavePrecision::XyBase100Bytes => Some(SavedPosition::XyBase100Bytes),
+            SavePrecision::XyBase256Bytes => Some(SavedPosition::XyBase256Bytes),
+            SavePrecision::XyText2Dec => Some(SavedPosition::XyText2Dec),
+            SavePrecision::XyPrevious => Some(SavedPosition::XyPrevious),
+            SavePrecision::FixedPoint => Some(SavedPosition::FixedPoint),
+            SavePrecision::FloorNudge => Some(SavedPosition::FloorNudge),
+        }
+    }
+}
 
 /// What the game's save file holds.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -28,6 +76,12 @@ pub struct SaveSlot {
     pub x: Real,
     /// Saved position, after [`quantize`].
     pub y: Real,
+    /// How [`x`](Self::x)/[`y`](Self::y) were written: the save point's model, or the game's
+    /// `[save]` model for the first-play save. Not serialized or hashed: the persisted
+    /// [`Checkpoint`] carries it, and the runtime value is exactly what `save_now` used. A slot
+    /// decoded from an older file takes the default until the checkpoint supplies the real one.
+    #[serde(skip)]
+    pub precision: SavePrecision,
     /// Gravity flipped, as the game stores it. A game that flips by swapping to a second kid kind
     /// or by a flag on the kid (families A and C) stores whether the kid was flipped. A game that
     /// flips by the `yflag` model (family B, `[flip] model = "yflag"`) stores `global.reverse`
@@ -114,6 +168,7 @@ pub fn save_now(
         room: ctx.w.room,
         x: qx,
         y: qy,
+        precision: SavePrecision::of_model(model),
         flipped,
         facing,
         difficulty: run.difficulty,
@@ -135,10 +190,12 @@ pub fn save_now(
 pub fn save_without_kid(ctx: &mut Ctx) {
     let flipped = by_flag(ctx) && ctx.w.engine.kid.b.reverse;
     let run = &ctx.w.engine.run;
+    let precision = SavePrecision::of_model(ctx.physics().save.position.model());
     ctx.w.save = Some(SaveSlot {
         room: ctx.w.room,
         x: Real::ZERO,
         y: Real::ZERO,
+        precision,
         flipped,
         facing: 1,
         difficulty: run.difficulty,
@@ -275,4 +332,200 @@ pub fn load_into(ctx: &mut Ctx, slot: &SaveSlot) -> Result<InstId, SimError> {
     }
     crate::kid::api::restore_orientation(ctx, id, slot.flipped, slot.facing)?;
     Ok(id)
+}
+
+// ---- The checkpoint: the persisted save ----
+
+/// A room's stable identity in a save, replay or board: its package name (`RoomDef::name`),
+/// never the runtime [`RoomId`] index. A reorder or insert cannot change the room a checkpoint
+/// names.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
+pub struct RoomKey(pub String);
+
+/// The ruleset a checkpoint was written under. Format 0 maps it to the runner and built-in
+/// revision (`gm80@0`); format 1 makes `ruleset@N` explicit (#1160).
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct RulesetId(pub String);
+
+impl RulesetId {
+    /// The ruleset this build reads `def` as. Through format 0 every package is `gm8` at its
+    /// `engine_rev` (decision 0005); format 1 writes `ruleset@N` explicitly (#1160).
+    pub fn of(def: &GameDef) -> RulesetId {
+        RulesetId(format!("gm8@{}", def.engine_rev))
+    }
+}
+
+/// The compatibility profile a checkpoint was written under. Until format 1 names one
+/// (`[compat] profile`, #1160), the physics family it starts from names it (`gm8/a1@1`).
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct ProfileId(pub String);
+
+impl ProfileId {
+    /// The profile of `room`: its physics family at version 1.
+    pub fn for_room(def: &GameDef, room: RoomId) -> ProfileId {
+        ProfileId(format!("gm8/{}@1", family_name(def.physics_in(room).preset)))
+    }
+}
+
+fn family_name(family: KidFamily) -> &'static str {
+    match family {
+        KidFamily::A1 => "a1",
+        KidFamily::A2 => "a2",
+        KidFamily::A3 => "a3",
+        KidFamily::A4 => "a4",
+        KidFamily::A5 => "a5",
+        KidFamily::B => "b",
+        KidFamily::C => "c",
+    }
+}
+
+/// One versioned checkpoint: the payload of the client save file and of a replay's
+/// `StartMode::FromSave` (replay format 7 and later). The runtime keeps the numeric [`SaveSlot`];
+/// the checkpoint names the room by [`RoomKey`] and is resolved when it is loaded.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct Checkpoint {
+    /// [`Checkpoint::FORMAT`].
+    pub format: u16,
+    /// The ruleset it was written under.
+    pub ruleset: RulesetId,
+    /// The compatibility profile it was written under.
+    pub profile: ProfileId,
+    /// The saved room's stable name.
+    pub room: RoomKey,
+    /// The save object's package name, when one wrote it. Reserved: the sim does not yet track
+    /// which save object wrote the slot (the entity identity of #1153); a checkpoint written by
+    /// this build leaves it `None`.
+    pub point: Option<String>,
+    /// The stored position, already written at [`precision`](Self::precision).
+    pub x: Real,
+    /// The stored position, already written at [`precision`](Self::precision).
+    pub y: Real,
+    /// How the position was written.
+    pub precision: SavePrecision,
+    /// Gravity flipped, as the game stores it (`SaveSlot::flipped`).
+    pub flipped: bool,
+    /// Kid facing, -1 or 1.
+    pub facing: i8,
+    /// Difficulty index.
+    pub difficulty: u8,
+    /// Death counter.
+    pub deaths: u32,
+    /// Play time counter.
+    pub time: u32,
+    /// Boss flags.
+    pub bosses: u16,
+    /// Item flags.
+    pub items: u16,
+    /// Game cleared.
+    pub clear: bool,
+}
+
+/// Why a checkpoint could not be built, decoded or resolved.
+#[derive(Clone, PartialEq, Eq, Debug, thiserror::Error)]
+pub enum CheckpointError {
+    /// A format this build does not read.
+    #[error("checkpoint format {0}, this build reads {current}", current = Checkpoint::FORMAT)]
+    Format(u16),
+    /// The room name is not in this package.
+    #[error("the saved room `{0}` is not in this version of the game")]
+    NoRoom(String),
+    /// The room exists but is not gameplay.
+    #[error("the saved room `{0}` is not gameplay")]
+    NotPlay(String),
+    /// More rooms than a `RoomId` can index.
+    #[error("too many rooms")]
+    TooManyRooms,
+    /// The bytes do not decode.
+    #[error("the checkpoint does not decode ({0})")]
+    Corrupt(String),
+}
+
+impl Checkpoint {
+    /// The only checkpoint format this build writes.
+    pub const FORMAT: u16 = 1;
+
+    /// The checkpoint for `slot`, naming the room [`GameDef::room`] gives it. Reads the
+    /// precision `save_now` recorded on the slot.
+    pub fn from_slot(def: &GameDef, slot: &SaveSlot) -> Result<Checkpoint, CheckpointError> {
+        let room = def
+            .room(slot.room)
+            .ok_or_else(|| CheckpointError::NoRoom(format!("room index {}", slot.room.0)))?;
+        Self::from_parts(def, RoomKey(room.name.clone()), slot)
+    }
+
+    /// The checkpoint for `slot` under the stable `room` name: a version 1 or 2 save kept the
+    /// name even when the numeric index moved (#1019).
+    pub fn from_parts(def: &GameDef, room: RoomKey, slot: &SaveSlot) -> Result<Checkpoint, CheckpointError> {
+        let at = resolve_room(def, &room)?;
+        Ok(Checkpoint {
+            format: Self::FORMAT,
+            ruleset: RulesetId::of(def),
+            profile: ProfileId::for_room(def, at),
+            room,
+            point: None,
+            x: slot.x,
+            y: slot.y,
+            precision: slot.precision,
+            flipped: slot.flipped,
+            facing: slot.facing,
+            difficulty: slot.difficulty,
+            deaths: slot.deaths,
+            time: slot.time,
+            bosses: slot.bosses,
+            items: slot.items,
+            clear: slot.clear,
+        })
+    }
+
+    /// Resolves the checkpoint to the runtime slot. The named room must still exist and be
+    /// gameplay; `ruleset`, `profile` and `precision` are provenance and do not change the
+    /// stored position.
+    pub fn to_slot(&self, def: &GameDef) -> Result<SaveSlot, CheckpointError> {
+        let room = resolve_room(def, &self.room)?;
+        Ok(SaveSlot {
+            room,
+            x: self.x,
+            y: self.y,
+            precision: self.precision,
+            flipped: self.flipped,
+            facing: self.facing,
+            difficulty: self.difficulty,
+            deaths: self.deaths,
+            time: self.time,
+            bosses: self.bosses,
+            items: self.items,
+            clear: self.clear,
+        })
+    }
+
+    /// The canonical bytes: the replay's `FromSave` payload and the client save's payload.
+    pub fn encode(&self) -> Result<Vec<u8>, CheckpointError> {
+        postcard::to_allocvec(self).map_err(|e| CheckpointError::Corrupt(e.to_string()))
+    }
+
+    /// Decodes and checks the format. The bytes a v0 replay kept are a raw [`SaveSlot`], not a
+    /// checkpoint: use [`Checkpoint::from_slot`] for those.
+    pub fn decode(bytes: &[u8]) -> Result<Checkpoint, CheckpointError> {
+        let checkpoint: Checkpoint =
+            postcard::from_bytes(bytes).map_err(|e| CheckpointError::Corrupt(e.to_string()))?;
+        if checkpoint.format != Self::FORMAT {
+            return Err(CheckpointError::Format(checkpoint.format));
+        }
+        Ok(checkpoint)
+    }
+}
+
+/// The runtime index of a stable room key, or the error when it is gone or not gameplay.
+fn resolve_room(def: &GameDef, room: &RoomKey) -> Result<RoomId, CheckpointError> {
+    let at = def
+        .rooms
+        .iter()
+        .position(|r| r.name == room.0)
+        .ok_or_else(|| CheckpointError::NoRoom(room.0.clone()))?;
+    if def.rooms[at].role != RoomRole::Play {
+        return Err(CheckpointError::NotPlay(room.0.clone()));
+    }
+    u32::try_from(at)
+        .map(RoomId)
+        .map_err(|_| CheckpointError::TooManyRooms)
 }

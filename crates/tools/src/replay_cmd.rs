@@ -34,9 +34,9 @@ use iwbtg_format::{LoadMode, PackageFiles, load_game};
 use iwbtg_sim::def::{GameDef, RoomId};
 use iwbtg_sim::input::{Action, InputFrame, parse_action_inputs};
 use iwbtg_sim::mods::ModSet;
-use iwbtg_sim::replay::{CHECKPOINT_INTERVAL, Replay, StartMode, Trailer};
+use iwbtg_sim::replay::{CHECKPOINT_INTERVAL, Replay, SAVE_SLOT_FORMAT, StartMode, Trailer};
 use iwbtg_sim::room::StartPoint;
-use iwbtg_sim::save::SaveSlot;
+use iwbtg_sim::save::{Checkpoint, SaveSlot};
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::stripped::PlayMode;
 use iwbtg_sim::timing::Split;
@@ -91,17 +91,34 @@ pub struct RunInput {
     pub mode: PlayMode,
     /// The map id; `None` is the package's first map.
     pub map: Option<String>,
-    /// The save slot a `FromSave` replay starts from (a client's Play original run that resumed
-    /// the save file, #476); `None` is a new game.
-    pub save: Option<SaveSlot>,
+    /// The save a `FromSave` replay starts from (a client's Play original run that resumed the
+    /// save file, #476); `None` is a new game.
+    pub save: Option<StartSave>,
+}
+
+/// The payload of a replay's `FromSave`: a checkpoint (format 7 and later) or the raw slot a
+/// format 5 or 6 replay kept.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum StartSave {
+    /// A versioned checkpoint; resolves its stable room name against the package.
+    Checkpoint(Checkpoint),
+    /// A pre-checkpoint replay's raw slot; its numeric room is bound to the replay's package by
+    /// the header's `gameplay_hash`.
+    LegacySlot(SaveSlot),
 }
 
 impl RunInput {
-    /// Where the run starts: the replay's save slot, else a new game on `difficulty`.
-    pub fn start(&self, difficulty: u8) -> StartPoint {
+    /// Where the run starts: the replay's save, else a new game on `difficulty`.
+    pub fn start(&self, def: &GameDef, difficulty: u8) -> Result<StartPoint, ToolError> {
         match &self.save {
-            Some(slot) => StartPoint::FromSave(slot.clone()),
-            None => StartPoint::NewGame { difficulty },
+            Some(StartSave::Checkpoint(checkpoint)) => {
+                let slot = checkpoint.to_slot(def).map_err(|e| {
+                    ToolError::Message(format!("the replay's checkpoint does not resolve: {e}"))
+                })?;
+                Ok(StartPoint::FromSave(slot))
+            }
+            Some(StartSave::LegacySlot(slot)) => Ok(StartPoint::FromSave(slot.clone())),
+            None => Ok(StartPoint::NewGame { difficulty }),
         }
     }
 }
@@ -173,9 +190,10 @@ pub fn main(args: &ReplayRunArgs) -> Result<(), ToolError> {
     }
     let pkg = load_package(&args.pkg)?;
     let input = read_input(&args.input, args.seed, args.mods, args.mode, args.map.clone())?;
+    let def = load_strict(&pkg, LoadMode::Strict)?;
     let start = match &args.room {
         Some(room) => room_start(&pkg, room, args.difficulty)?,
-        None => input.start(args.difficulty),
+        None => input.start(&def, args.difficulty)?,
     };
     let options = SimOptions {
         start,
@@ -238,7 +256,7 @@ pub fn verify_main(args: &ReplayVerifyArgs) -> Result<bool, ToolError> {
     };
     let input = replay_input(&bytes, &label)?;
     let options = SimOptions {
-        start: input.start(0),
+        start: input.start(&def, 0)?,
         seed: input.seed,
         dll_mode: DllMode::Model,
         mode: input.mode,
@@ -438,9 +456,16 @@ pub fn replay_input(bytes: &[u8], label: &str) -> Result<RunInput, ToolError> {
     let replay = Replay::decode(bytes).map_err(|e| ToolError::Message(format!("{label}: {e}")))?;
     let save = match &replay.header.start_mode {
         StartMode::NewGame => None,
-        StartMode::FromSave(bytes) => Some(postcard::from_bytes::<SaveSlot>(bytes).map_err(|e| {
-            ToolError::Message(format!("{label}: the replay's save slot does not decode: {e}"))
-        })?),
+        StartMode::FromSave(bytes) if replay.header.replay_format > SAVE_SLOT_FORMAT => {
+            Some(StartSave::Checkpoint(Checkpoint::decode(bytes).map_err(|e| {
+                ToolError::Message(format!("{label}: the replay's checkpoint does not decode: {e}"))
+            })?))
+        }
+        StartMode::FromSave(bytes) => Some(StartSave::LegacySlot(
+            postcard::from_bytes::<SaveSlot>(bytes).map_err(|e| {
+                ToolError::Message(format!("{label}: the replay's save slot does not decode: {e}"))
+            })?,
+        )),
     };
     let seed = u32::try_from(replay.header.rng_seed).map_err(|_| {
         ToolError::Message(format!(
@@ -791,6 +816,75 @@ mod tests {
         .unwrap()
     }
 
+    /// A format-7 replay's `FromSave` carries a checkpoint; a format-6 replay's carries a raw
+    /// slot. Both decode, and each starts from its save. The two layouts are identical apart
+    /// from the opaque payload, so a format-6 file is the format-7 bytes with the version byte.
+    #[test]
+    fn a_from_save_replay_reads_both_payload_versions() {
+        use iwbtg_sim::replay::{Header, MAGIC, REPLAY_FORMAT, SAVE_SLOT_FORMAT, Trailer};
+
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../format/tests/valid/stripped");
+        let files = load_package(&dir).unwrap();
+        let def = load_strict(&files, LoadMode::Strict).unwrap();
+        let slot = iwbtg_sim::save::SaveSlot {
+            room: def.start_room,
+            x: iwbtg_sim::num::Real::new(96.0),
+            y: iwbtg_sim::num::Real::new(500.0),
+            precision: Default::default(),
+            flipped: false,
+            facing: 1,
+            difficulty: 0,
+            deaths: 7,
+            time: 1234,
+            bosses: 0,
+            items: 0,
+            clear: false,
+        };
+        let checkpoint = Checkpoint::from_slot(&def, &slot).unwrap();
+        let replay = |start_mode| Replay {
+            header: Header {
+                magic: MAGIC,
+                replay_format: REPLAY_FORMAT,
+                sim_version: iwbtg_sim::SIM_VERSION,
+                package_id: def.id.clone(),
+                gameplay_hash: [0; 32],
+                engine_rev: 0,
+                rng_seed: 0,
+                start_mode,
+                play_mode: PlayMode::Original,
+                map: "medium".into(),
+                mods: ModSet::NONE,
+                client_build_id: String::new(),
+            },
+            inputs: vec![InputFrame::default(); 4],
+            trailer: Trailer {
+                total_ticks: 4,
+                ..Trailer::default()
+            },
+        };
+
+        let bytes = replay(StartMode::FromSave(checkpoint.encode().unwrap()))
+            .encode()
+            .unwrap();
+        let input = replay_input(&bytes, "checkpoint").unwrap();
+        assert_eq!(input.save, Some(StartSave::Checkpoint(checkpoint)));
+        assert!(matches!(
+            input.start(&def, 0).unwrap(),
+            StartPoint::FromSave(s) if s == slot
+        ));
+
+        let mut bytes = replay(StartMode::FromSave(postcard::to_stdvec(&slot).unwrap()))
+            .encode()
+            .unwrap();
+        bytes[4] = u8::try_from(SAVE_SLOT_FORMAT).unwrap();
+        let input = replay_input(&bytes, "legacy slot").unwrap();
+        assert_eq!(input.save, Some(StartSave::LegacySlot(slot.clone())));
+        assert!(matches!(
+            input.start(&def, 0).unwrap(),
+            StartPoint::FromSave(s) if s == slot
+        ));
+    }
+
     /// The `[stripped]` example has two maps: `medium` times `[timing]` from `[stripped].start`
     /// (`stage1`), `hard` ends on entering `title` and starts there. One replay per map runs that
     /// map's chain from that map's start, and prints its map.
@@ -889,8 +983,9 @@ mod tests {
         let mut replay = Replay::decode(&stripped_replay("hard")).unwrap();
         replay.header.gameplay_hash = hash;
         let input = replay_input(&replay.encode().unwrap(), "x").unwrap();
+        let def = load_strict(&files, LoadMode::Strict).unwrap();
         let options = SimOptions {
-            start: input.start(0),
+            start: input.start(&def, 0).unwrap(),
             seed: input.seed,
             dll_mode: DllMode::Model,
             mode: input.mode,

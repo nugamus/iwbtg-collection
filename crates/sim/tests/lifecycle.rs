@@ -82,6 +82,7 @@ fn fixture() -> Fixture {
         room: play,
         x: Real::new(200.0),
         y: Real::new(500.0),
+        precision: Default::default(),
         flipped: false,
         facing: 1,
         difficulty: 0,

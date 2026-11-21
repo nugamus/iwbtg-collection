@@ -3,7 +3,10 @@
 use iwbtg_sim::def::{ClassMask, EngineKind};
 use iwbtg_sim::num::Real;
 use iwbtg_sim::rules::NumRules;
-use iwbtg_sim::save::{SavedPosition, load_into, quantize, save_counters, save_now};
+use iwbtg_sim::save::{
+    Checkpoint, CheckpointError, RoomKey, SavePrecision, SavedPosition, load_into, quantize, save_counters,
+    save_now,
+};
 use iwbtg_sim::world::World;
 
 use crate::state_support::*;
@@ -175,3 +178,81 @@ fn load_into_creates_a_persistent_kid_and_restores_globals() {
 }
 
 // ---- restart and reset ------------------------------------------------------------------
+
+// ---- checkpoint --------------------------------------------------------------------------
+
+#[test]
+fn save_now_records_the_precision() {
+    let g = game(|_| {});
+    let mut w = World::new(g.play, 1);
+    let kid = spawn(&g, &mut w, g.kid, 100.0, 200.0);
+    with(&g, &mut w, |c| {
+        save_now(c, kid, SavedPosition::XyBase256Bytes, None).unwrap()
+    });
+    let slot = w.save.clone().unwrap();
+    assert_eq!(slot.precision, SavePrecision::XyBase256Bytes);
+
+    // The precision is runtime provenance, not part of the serialized slot (and so not of the
+    // state hash): two slots that differ only in it encode the same.
+    let mut other = slot;
+    other.precision = SavePrecision::XyBase100Bytes;
+    assert_eq!(
+        postcard::to_allocvec(&w.save).unwrap(),
+        postcard::to_allocvec(&Some(other)).unwrap()
+    );
+}
+
+#[test]
+fn a_checkpoint_round_trips_and_names_the_room() {
+    let g = game(|_| {});
+    let saved = slot(g.play);
+    let checkpoint = Checkpoint::from_slot(&g.def, &saved).unwrap();
+    assert_eq!(checkpoint.format, Checkpoint::FORMAT);
+    assert_eq!(checkpoint.room, RoomKey("play".into()));
+    assert_eq!(checkpoint.precision, SavePrecision::XyBase100Bytes);
+    assert!(checkpoint.ruleset.0.starts_with("gm8@"));
+    assert!(checkpoint.profile.0.starts_with("gm8/"));
+
+    let bytes = checkpoint.encode().unwrap();
+    let decoded = Checkpoint::decode(&bytes).unwrap();
+    assert_eq!(decoded, checkpoint);
+    assert_eq!(decoded.to_slot(&g.def).unwrap(), saved);
+}
+
+#[test]
+fn a_checkpoint_resolves_by_name_after_reordering() {
+    let g = game(|_| {});
+    let saved = slot(g.play);
+    let checkpoint = Checkpoint::from_slot(&g.def, &saved).unwrap();
+
+    let mut reordered = g.def.clone();
+    let play = reordered.rooms.iter().position(|r| r.name == "play").unwrap();
+    reordered.rooms.swap(0, play);
+    let resolved = checkpoint.to_slot(&reordered).unwrap();
+    assert_eq!(reordered.room(resolved.room).unwrap().name, "play");
+    assert_ne!(resolved.room, saved.room, "the numeric room index moved");
+
+    let mut removed = g.def.clone();
+    removed.rooms.retain(|r| r.name != "play");
+    assert_eq!(
+        checkpoint.to_slot(&removed),
+        Err(CheckpointError::NoRoom("play".into()))
+    );
+
+    assert_eq!(
+        Checkpoint::from_slot(&g.def, &slot(g.boot)),
+        Err(CheckpointError::NotPlay("boot".into()))
+    );
+}
+
+#[test]
+fn a_checkpoint_format_is_checked() {
+    let g = game(|_| {});
+    let mut checkpoint = Checkpoint::from_slot(&g.def, &slot(g.play)).unwrap();
+    checkpoint.format = Checkpoint::FORMAT + 1;
+    let bytes = checkpoint.encode().unwrap();
+    assert_eq!(
+        Checkpoint::decode(&bytes),
+        Err(CheckpointError::Format(Checkpoint::FORMAT + 1))
+    );
+}
