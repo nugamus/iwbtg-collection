@@ -140,26 +140,25 @@ pub fn abs(x: Real) -> Real {
 
 /// GML `min` of two values; ties and signed zeros per N12 (`NumRules::min_max_ties`).
 ///
-/// `MinMaxTies::StrictGreater` (engine_rev 0 default): `b` when `a > b`, else `a`. Ties and a
-/// NaN `b` keep `a`; a NaN `a` stays. `MinMaxTies::GreaterOrEqual`: `b` when `a >= b`, else `a`.
-/// The test is exact in both; whether GM8 uses the compare epsilon here is part of N12.
+/// `MinMaxTies::StrictGreater` (engine_rev 0 default, the only value in this ruleset revision):
+/// `b` when `a > b`, else `a`. Ties and a NaN `b` keep `a`; a NaN `a` stays. The test is exact;
+/// whether GM8 uses the compare epsilon here is part of N12, and a settled answer adds its value
+/// then.
 pub fn gm_min(a: Real, b: Real, r: &NumRules) -> Real {
     let take_b = match r.min_max_ties {
         MinMaxTies::StrictGreater => a.get() > b.get(),
-        MinMaxTies::GreaterOrEqual => a.get() >= b.get(),
     };
     if take_b { b } else { a }
 }
 
 /// GML `max` of two values; ties and signed zeros per N12 (`NumRules::min_max_ties`).
 ///
-/// `MinMaxTies::StrictGreater` (engine_rev 0 default): `a` when `a > b`, else `b`. Ties and a
-/// NaN on either side give `b` (`max(-0.0, 0.0) = 0.0`, `max(NaN, 1) = 1`).
-/// `MinMaxTies::GreaterOrEqual`: `a` when `a >= b`, else `b`.
+/// `MinMaxTies::StrictGreater` (engine_rev 0 default, the only value in this ruleset revision):
+/// `a` when `a > b`, else `b`. Ties and a NaN on either side give `b` (`max(-0.0, 0.0) = 0.0`,
+/// `max(NaN, 1) = 1`). A settled answer adds its value then.
 pub fn gm_max(a: Real, b: Real, r: &NumRules) -> Real {
     let take_a = match r.min_max_ties {
         MinMaxTies::StrictGreater => a.get() > b.get(),
-        MinMaxTies::GreaterOrEqual => a.get() >= b.get(),
     };
     if take_a { a } else { b }
 }

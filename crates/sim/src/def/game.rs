@@ -377,7 +377,44 @@ impl Default for NewGamePolicy {
     }
 }
 
-/// What `enter_room` does: the manual's 7-step room sequence (docs/architecture/sim/rooms.md).
+/// One stage of the engine's room transaction, in the order [`EnterRoomPolicy::stages`] names
+/// (decision 0005; #1174 A2).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RoomStage {
+    /// Room End for the old room's instances. Skipped when the transaction is the first room
+    /// of the game (`from` is `None`).
+    RoomEnd,
+    /// Read the old and new room and stage the carried instance set. The stage changes no
+    /// world state.
+    Prepare,
+    /// The transaction's single commit point: install the carried and restored instances,
+    /// set the new room's state and report the entry.
+    Commit,
+    /// Create the new room's placed instances, in room-file order on `gm8`.
+    Placed,
+    /// Game Start for the first room of the game.
+    GameStart,
+    /// The room's creation actions.
+    CreationCode,
+    /// Room Start for the new room's instances.
+    RoomStart,
+}
+
+/// The `gm8` room transaction order (CLONE_SPEC rooms, Confirmed): Room End, prepare, one
+/// commit, then the new room's build. `prepare` and `commit` split the old steps 2-3 so the
+/// instance store changes at exactly one point; the events still run in the recorded order.
+pub const GM8_ROOM_STAGES: [RoomStage; 7] = [
+    RoomStage::RoomEnd,
+    RoomStage::Prepare,
+    RoomStage::Commit,
+    RoomStage::Placed,
+    RoomStage::GameStart,
+    RoomStage::CreationCode,
+    RoomStage::RoomStart,
+];
+
+/// What `enter_room` does: the manual's 7-step room sequence (docs/architecture/sim/rooms.md),
+/// run as one transaction.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct EnterRoomPolicy {
     /// `room_goto_next` and `room_goto_previous` skip a Boot-role room: that room is engine
@@ -387,6 +424,9 @@ pub struct EnterRoomPolicy {
     pub rebuild_placed: bool,
     /// The event rebuilds the room.
     pub reset_scope: ResetScope,
+    /// The declared stage order the transaction runs. `gm8` uses [`GM8_ROOM_STAGES`]; a
+    /// `standard` profile can name another order when the profile layer lands (#1160).
+    pub stages: [RoomStage; 7],
 }
 
 impl Default for EnterRoomPolicy {
@@ -395,6 +435,7 @@ impl Default for EnterRoomPolicy {
             skip_boot_rooms: true,
             rebuild_placed: true,
             reset_scope: ResetScope::Room,
+            stages: GM8_ROOM_STAGES,
         }
     }
 }

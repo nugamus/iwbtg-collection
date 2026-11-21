@@ -699,6 +699,7 @@ fn validate_save(raw: &RawSave, start: &Start, def: &GameDef, errors: &mut Vec<S
         room,
         x: Real::new(raw.x),
         y: Real::new(raw.y),
+        precision: Default::default(),
         flipped: raw.flipped.unwrap_or(false),
         facing: raw.facing.unwrap_or(1),
         difficulty: raw.difficulty.unwrap_or(difficulty),

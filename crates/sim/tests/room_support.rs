@@ -190,6 +190,7 @@ pub(crate) fn slot(room: RoomId) -> SaveSlot {
         room,
         x: Real::new(49.0),
         y: Real::new(119.0),
+        precision: Default::default(),
         flipped: false,
         facing: 1,
         difficulty: 0,

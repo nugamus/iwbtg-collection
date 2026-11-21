@@ -1021,6 +1021,7 @@ mod tests {
             room: RoomId(0),
             x: Real::new(96.0),
             y: Real::new(567.4),
+            precision: Default::default(),
             flipped: false,
             facing: -1,
             difficulty: 2,

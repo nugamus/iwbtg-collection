@@ -378,6 +378,7 @@ fn empty_slot() -> SaveSlot {
         room: RoomId(0),
         x: Real::ZERO,
         y: Real::ZERO,
+        precision: Default::default(),
         flipped: false,
         facing: 1,
         difficulty: 0,

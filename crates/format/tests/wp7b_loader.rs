@@ -267,6 +267,97 @@ fn a_mask_alias_cycle_is_an_error_at_each_sprite() {
     );
 }
 
+/// A precise 2 x 2 sidecar with `frames` frames, optional separate masks and an optional alias.
+fn frames_sidecar(frames: u32, separate: bool, mask: Option<&str>) -> String {
+    format!(
+        "#:schema ../sprite.schema.json\nframes = {frames}\nframe_size = [2, 2]\norigin = [0, 0]\ncollision = \"precise\"\nseparate_masks = {separate}\n{}",
+        mask.map_or_else(String::new, |m| format!("mask = \"{m}\"\n"))
+    )
+}
+
+/// A horizontal strip of `frames` 2 x 2 frames.
+fn strip(frames: u32) -> Vec<u8> {
+    let row = "#.".repeat(usize::try_from(frames).unwrap());
+    png(&[row.as_str(), row.as_str()])
+}
+
+#[test]
+fn a_mask_alias_with_too_few_per_frame_masks_is_an_error() {
+    // `t` has 2 separate masks; `a` has 3 frames and aliases it.
+    let files = package("", |f| {
+        put(f, "sprites/t.toml", &frames_sidecar(2, true, None));
+        f.push(("sprites/t.png".into(), strip(2)));
+        put(f, "sprites/a.toml", &frames_sidecar(3, true, Some("t")));
+        f.push(("sprites/a.png".into(), strip(3)));
+    });
+    let r = load_report(&files, STRICT);
+    let e = errors(&r);
+    assert!(!r.ok());
+    assert!(
+        e.iter().any(|m| m.starts_with("sprites/a.toml:")
+            && m.contains("`a`")
+            && m.contains("`t`")
+            && m.contains("3 frame")
+            && m.contains("2 separate mask")),
+        "{}",
+        render(&r)
+    );
+}
+
+#[test]
+fn a_mask_chain_checks_the_terminal_coverage_for_each_sprite() {
+    // `r -> m -> t`: `t` has 2 separate masks, `m` has 2 frames (valid), `r` has 3 (invalid).
+    let files = package("", |f| {
+        put(f, "sprites/t.toml", &frames_sidecar(2, true, None));
+        f.push(("sprites/t.png".into(), strip(2)));
+        put(f, "sprites/m.toml", &frames_sidecar(2, true, Some("t")));
+        f.push(("sprites/m.png".into(), strip(2)));
+        put(f, "sprites/r.toml", &frames_sidecar(3, true, Some("m")));
+        f.push(("sprites/r.png".into(), strip(3)));
+    });
+    let r = load_report(&files, STRICT);
+    let e = errors(&r);
+    assert!(
+        e.iter()
+            .any(|m| m.starts_with("sprites/r.toml:") && m.contains("`r`") && m.contains("`t`")),
+        "{}",
+        render(&r)
+    );
+    assert!(
+        !e.iter().any(|m| m.starts_with("sprites/m.toml:")),
+        "{}",
+        render(&r)
+    );
+}
+
+#[test]
+fn a_mask_alias_with_enough_frames_loads() {
+    // Equal and larger coverage, and a shared target, all cover the sprite.
+    for (target_frames, alias_frames, separate) in [(2, 2, true), (3, 2, true), (1, 3, false)] {
+        let files = package("", |f| {
+            put(
+                f,
+                "sprites/t.toml",
+                &frames_sidecar(target_frames, separate, None),
+            );
+            f.push(("sprites/t.png".into(), strip(target_frames)));
+            put(
+                f,
+                "sprites/a.toml",
+                &frames_sidecar(alias_frames, separate, Some("t")),
+            );
+            f.push(("sprites/a.png".into(), strip(alias_frames)));
+        });
+        let (def, _) = load_ok(&files, STRICT);
+        let t = alias_sprite_index(&files, "t");
+        let a = alias_sprite_index(&files, "a");
+        assert_eq!(
+            def.sprites[a].masks, def.sprites[t].masks,
+            "target {target_frames}, alias {alias_frames}, separate {separate}"
+        );
+    }
+}
+
 // ---- tricks -----------------------------------------------------------------------------------
 
 #[test]
