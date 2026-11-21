@@ -5,7 +5,8 @@
 use iwbtg_sim::def::script::ScriptRules;
 use iwbtg_sim::def::testing::GameDefBuilder;
 use iwbtg_sim::def::{
-    Builtin, ClassMask, GameDef, KindDef, KindId, NameId, RoomDef, RoomId, ScriptDef, ScriptId, VarId,
+    Builtin, ClassMask, GameDef, GroupId, KindDef, KindId, NameId, RoomDef, RoomId, ScriptDef, ScriptId,
+    VarId,
 };
 use iwbtg_sim::events::EventSet;
 use iwbtg_sim::hash::state_hash;
@@ -55,6 +56,9 @@ fn fx_rules(source: &str, walker_events: bool, script_rules: ScriptRules) -> Fx 
     def.var_names.insert("hp".into(), VarId(0));
     // Declared but never assigned, so an unset read is not an unknown-name error.
     def.var_names.insert("missing".into(), VarId(1));
+    // Room-file instance name and group tables (the read-only `name`/`group` properties).
+    def.names.push("walker_a".into());
+    def.groups.push("wave_1".into());
     let rules = RunnerRules::default();
     let scripts = ScriptRuntime::new_with_script_rules(&def, &rules, script_rules).expect("scripts compile");
     if walker_events {
@@ -107,6 +111,10 @@ fn trigger_fx(source: &str) -> Fx {
 }
 
 fn spawn_named(f: &mut Fx, kind: u32, name: Option<NameId>) -> InstId {
+    spawn_with(f, kind, name, None)
+}
+
+fn spawn_with(f: &mut Fx, kind: u32, name: Option<NameId>, group: Option<GroupId>) -> InstId {
     let mut c = f.ctx();
     c.spawn(
         KindId(kind),
@@ -114,6 +122,7 @@ fn spawn_named(f: &mut Fx, kind: u32, name: Option<NameId>) -> InstId {
         Real::new(0.0),
         SpawnInit {
             name,
+            group,
             ..Default::default()
         },
     )
@@ -231,6 +240,32 @@ fn step() { if this.kind != "walker" { throw "kind"; } }
     f.run(2);
     assert_eq!(f.halted(), None);
     assert!(f.w.exists(a));
+}
+
+#[test]
+fn a_script_reads_the_room_file_name_and_group() {
+    let src = r#"
+fn create() {
+    if this.name == "walker_a" && this.group == "wave_1" { this.hp = 5.0; }
+}
+"#;
+    let mut f = fx(src, false);
+    let id = spawn_with(&mut f, 0, Some(NameId(0)), Some(GroupId(0)));
+    assert_eq!(f.halted(), None);
+    assert_eq!(hp(&f, id), Some(Real::new(5.0)));
+}
+
+#[test]
+fn an_instance_without_a_name_or_group_reads_unit() {
+    let src = r#"
+fn create() {
+    if this.name == () && this.group == () { this.hp = 3.0; }
+}
+"#;
+    let mut f = fx(src, false);
+    let id = spawn_with(&mut f, 0, None, None);
+    assert_eq!(f.halted(), None);
+    assert_eq!(hp(&f, id), Some(Real::new(3.0)));
 }
 
 #[test]

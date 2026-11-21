@@ -6,6 +6,9 @@
 fn create() {
     this.hp = 3.0;
     this.phase = 0.0;
+    // The read-only room-file name and group: strings, or `()` when the room file gives none.
+    // `&` evaluates both operands (this controller is unnamed, so the body does not run).
+    if (this.name == ()) & (this.group == ()) { this.phase = 0.0; }
     this.set_alarm(0, 10);
     this.set_alarm(1, 25.6);
 }

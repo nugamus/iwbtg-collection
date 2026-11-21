@@ -224,6 +224,9 @@ pub const BOOL_PROPS: &[&str] = &[
     "onVineR",
 ];
 
+/// Instance properties that read as a string (the room-file name and group).
+pub const STR_PROPS: &[&str] = &["name", "group"];
+
 /// Functions Rhai itself handles (function pointers); they cannot be checked statically.
 const ENGINE_FNS: &[&str] = &["Fn", "call", "curry", "is_def_fn", "is_def_var"];
 
@@ -951,8 +954,8 @@ fn g() { let t = S + OFF + B; t + N }
         for g in &getters {
             if g != "kind" && !BOOL_PROPS.contains(&g.as_str()) {
                 assert!(
-                    REAL_PROPS.contains(&g.as_str()),
-                    "getter `{g}` is not in REAL_PROPS or BOOL_PROPS"
+                    REAL_PROPS.contains(&g.as_str()) || STR_PROPS.contains(&g.as_str()),
+                    "getter `{g}` is not in REAL_PROPS, BOOL_PROPS or STR_PROPS"
                 );
             }
         }

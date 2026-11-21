@@ -30,6 +30,7 @@ Read with `i.name`, write with `i.name = v` where listed read and write.
 | `frozen2` | bool | read, write | The movement action is skipped. |
 | `gravity` | float | read, write | Gravity added each tick. |
 | `gravity_direction` | float | read, write | Direction of `gravity` in degrees. |
+| `group` | ? | read only | The instance's room-file group as a string, or `()` when the room file gives none. |
 | `hspeed` | float | read, write | Horizontal speed; setting it updates `speed` and `direction`. |
 | `id` | float | read only | The instance id (never reused). |
 | `image_alpha` | float | read, write | Sprite opacity, 0 to 1. |
@@ -49,6 +50,7 @@ Read with `i.name`, write with `i.name = v` where listed read and write.
 | `maxSpeed` | float | read, write | The run speed (`maxSpeed`). |
 | `maxVspeed` | float | read, write | The vertical speed clamp (`maxVspeed`). |
 | `muteki` | bool | read, write | Kills are ignored while set. |
+| `name` | ? | read only | The instance's room-file name as a string, or `()` when the room file gives none. |
 | `onPlatform` | bool | read, write | The kid is on a platform. |
 | `onVineL` | bool | read only | A left vine is within reach (family C). |
 | `onVineR` | bool | read only | A right vine is within reach (family C). |
