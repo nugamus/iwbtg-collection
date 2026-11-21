@@ -332,7 +332,7 @@ fn research_dir(arg: Option<PathBuf>) -> Result<PathBuf, ToolError> {
 /// The cases folder: `--cases`, else IWBTG_CASES, else `crates/tools/cases` in the current folder
 /// or the nearest folder above it. Decided at run time, never from the build machine's paths, so
 /// a moved checkout and a wasm32 build (with the folder preopened) work.
-fn cases_dir(arg: Option<PathBuf>) -> Result<PathBuf, ToolError> {
+pub(crate) fn cases_dir(arg: Option<PathBuf>) -> Result<PathBuf, ToolError> {
     let env = std::env::var_os("IWBTG_CASES").map(PathBuf::from);
     let cwd = std::env::current_dir().ok();
     resolve_cases(arg, env, cwd.as_deref())

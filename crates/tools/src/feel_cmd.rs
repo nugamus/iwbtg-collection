@@ -13,7 +13,7 @@
 #[path = "../../sim/tests/feel/mod.rs"]
 mod contract;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -21,7 +21,7 @@ use iwbtg_format::LoadMode;
 use iwbtg_sim::def::GameDef;
 
 use crate::baseline::{Status, Statuses, compare, format_baseline_with, one_line, parse_baseline, word};
-use crate::trace_cmd::{ToolError, load_package};
+use crate::trace_cmd::{ToolError, find_case_by_source, load_package};
 
 /// The feel baseline's header (the file itself is written by `cargo xtask feel --bless`).
 const FEEL_HEADER: &str = "# Feel baseline (#1167): every contract's status on its packages.\n\
@@ -59,11 +59,13 @@ fn resolve_package(package: &str, packages: Option<&Path>) -> Result<GameDef, To
 }
 
 /// Loads, validates and runs one contract. `expected_id` is the path below the contracts root;
-/// `feel run` passes `None` and accepts the contract's own id.
+/// `feel run` passes `None` and accepts the contract's own id. `cases` overrides the trace-case
+/// root for the F1 link check; the CLI resolves the checkout's `crates/tools/cases` when needed.
 fn run_one(
     path: &Path,
     packages: Option<&Path>,
     expected_id: Option<&str>,
+    cases: Option<&Path>,
 ) -> Result<(String, contract::Verdict), ToolError> {
     let text =
         std::fs::read_to_string(path).map_err(|e| ToolError::Message(format!("{}: {e}", path.display())))?;
@@ -73,12 +75,103 @@ fn run_one(
         .map_err(|e| ToolError::Message(format!("{id}: {e}")))?;
     let loaded = contract::validate(raw, &def, &id)
         .map_err(|e| ToolError::Message(format!("{}: {e}", path.display())))?;
+    if has_trace(&loaded) {
+        let root = match cases {
+            Some(root) => root.to_path_buf(),
+            None => crate::cases_dir(None)?,
+        };
+        check_trace_links(&loaded, &root).map_err(|e| ToolError::Message(format!("{id}: {e}")))?;
+    }
     Ok((id, contract::run(&loaded, def)))
+}
+
+/// Whether any assertion names a trace case.
+fn has_trace(contract: &contract::Contract) -> bool {
+    contract
+        .asserts
+        .iter()
+        .flat_map(|a| &a.checks)
+        .any(|c| matches!(c, contract::Check::Trace(_)))
+}
+
+/// Checks a contract's `trace` links against `cases`: each names a case by its `source`, the case
+/// is OK or OPEN with a reason, and every metric the contract asserts is in the linked cases'
+/// `required` set (the F1 rule in docs/architecture/feel-contracts.md).
+fn check_trace_links(contract: &contract::Contract, cases: &Path) -> Result<(), String> {
+    let mut sources = Vec::new();
+    let mut required: BTreeSet<String> = BTreeSet::new();
+    for assert in &contract.asserts {
+        for check in &assert.checks {
+            let contract::Check::Trace(source) = check else {
+                continue;
+            };
+            sources.push(source.clone());
+            let found = find_case_by_source(cases, source).map_err(|e| format!("trace {source:?}: {e}"))?;
+            let Some((path, case)) = found else {
+                return Err(format!(
+                    "trace {source:?}: no case under {} has that source",
+                    cases.display()
+                ));
+            };
+            // An `open` case is OPEN with its reason. Otherwise the fidelity baseline is the last
+            // word on the case's status; running the trace needs the private packages.
+            if case.open.is_none() {
+                let baseline = cases
+                    .parent()
+                    .map(|p| p.join("fidelity-baseline.txt"))
+                    .ok_or("the cases root has no parent for fidelity-baseline.txt")?;
+                let text =
+                    std::fs::read_to_string(&baseline).map_err(|e| format!("{}: {e}", baseline.display()))?;
+                let statuses = parse_baseline(&text).map_err(|e| format!("{}: {e}", baseline.display()))?;
+                let package = path
+                    .parent()
+                    .and_then(|p| p.file_name())
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .ok_or("the case has no package folder")?;
+                let stem = path
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .ok_or("the case has no file stem")?;
+                let key = format!("{package}/{stem}");
+                let status = statuses.get(&key).ok_or_else(|| {
+                    format!("trace {source:?}: {key} has no status in {}", baseline.display())
+                })?;
+                if *status == Status::Fail {
+                    return Err(format!(
+                        "trace {source:?}: {key} is FAIL in the fidelity baseline, not OK or OPEN"
+                    ));
+                }
+            }
+            required.extend(case.required.iter().cloned());
+        }
+    }
+    if sources.is_empty() {
+        return Ok(());
+    }
+    let mut missing: Vec<String> = contract
+        .asserts
+        .iter()
+        .flat_map(|a| &a.checks)
+        .filter_map(|c| match c {
+            contract::Check::Metric { name, .. } if !required.contains(name) => Some(name.clone()),
+            _ => None,
+        })
+        .collect();
+    missing.sort();
+    missing.dedup();
+    if !missing.is_empty() {
+        return Err(format!(
+            "the linked trace case(s) {} do not have these contract metrics in `required`: {}",
+            sources.join(", "),
+            missing.join(", ")
+        ));
+    }
+    Ok(())
 }
 
 /// `iwbtg feel run <contract>`: prints the verdict and every mismatch; `Ok(false)` on FAIL.
 pub fn run_main(path: &Path, packages: Option<&Path>) -> Result<bool, ToolError> {
-    let (id, verdict) = run_one(path, packages, None)?;
+    let (id, verdict) = run_one(path, packages, None, None)?;
     match &verdict {
         contract::Verdict::Fail(mismatches) => {
             println!("{id} FAIL");
@@ -134,7 +227,7 @@ fn contract_id(root: &Path, path: &Path) -> String {
 fn sweep_one(root: &Path, path: &Path, packages: Option<&Path>) -> (String, Status, String) {
     let id = contract_id(root, path);
     let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        run_one(path, packages, Some(&id))
+        run_one(path, packages, Some(&id), None)
     }));
     match ran {
         Ok(Ok((_, verdict))) => {
@@ -304,6 +397,66 @@ kid_count = 1
             assert_eq!(got, id);
             assert_eq!(status, Status::Ok, "{id}: {reason}");
         }
+    }
+
+    /// A contract's `trace` link must name a case by `source`, the case must be OK or OPEN, and
+    /// every metric the contract asserts must be in the linked case's `required` list.
+    #[test]
+    fn a_trace_link_must_require_every_contract_metric() {
+        let root = scratch("trace-link");
+        let cases = root.join("cases");
+        std::fs::create_dir_all(cases.join("g")).unwrap();
+        std::fs::write(
+            cases.join("g/case.toml"),
+            "source = \"g/t\"\nstart = { room = \"room_0\" }\nfirst_frame = 2\nobject = \"kid\"\nrequired = [\"kid.x\"]\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("fidelity-baseline.txt"), "g/case OK\n").unwrap();
+        let def = contract::fixtures::fixture("jump").unwrap();
+        let text = r#"
+id = "self/trace"
+impact = "F1"
+package = "fixture:jump"
+start = { room = "room_0" }
+seed = 0
+evidence = ["trace:g/t"]
+inputs = "frame 0: end"
+[[assert]]
+tick = 0
+trace = "g/t"
+kid.x = { exact = 96.0 }
+"#;
+        let contract = contract::validate(contract::parse(text).unwrap(), &def, "self/trace").unwrap();
+        assert_eq!(check_trace_links(&contract, &cases), Ok(()));
+
+        // A metric the trace does not require is a load error, never a silent pass.
+        let wrong = text.replace("kid.x = { exact = 96.0 }", "kid.y = { exact = 567.0 }");
+        let wrong = contract::validate(contract::parse(&wrong).unwrap(), &def, "self/trace").unwrap();
+        let err = check_trace_links(&wrong, &cases).unwrap_err();
+        assert!(err.contains("kid.y"), "{err}");
+
+        // A FAIL in the fidelity baseline is not OK or OPEN.
+        std::fs::write(root.join("fidelity-baseline.txt"), "g/case FAIL\n").unwrap();
+        let err = check_trace_links(&contract, &cases).unwrap_err();
+        assert!(err.contains("FAIL"), "{err}");
+
+        // An `open` case is OPEN with its reason even when the baseline says FAIL.
+        std::fs::write(
+            cases.join("g/case.toml"),
+            "source = \"g/t\"\nstart = { room = \"room_0\" }\nfirst_frame = 2\nobject = \"kid\"\nrequired = [\"kid.x\"]\nopen = \"needs a package\"\n",
+        )
+        .unwrap();
+        assert_eq!(check_trace_links(&contract, &cases), Ok(()));
+
+        // A source no case names is a load error.
+        std::fs::write(
+            cases.join("g/case.toml"),
+            "source = \"g/other\"\nstart = { room = \"room_0\" }\nfirst_frame = 2\nobject = \"kid\"\nrequired = [\"kid.x\"]\n",
+        )
+        .unwrap();
+        let err = check_trace_links(&contract, &cases).unwrap_err();
+        assert!(err.contains("no case"), "{err}");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
