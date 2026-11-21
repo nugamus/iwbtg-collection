@@ -128,6 +128,7 @@ fn slot(deaths: u32, time: u32) -> SaveSlot {
         room: RoomId(0),
         x: r(1.0),
         y: r(2.0),
+        precision: Default::default(),
         flipped: false,
         facing: 1,
         difficulty: 0,

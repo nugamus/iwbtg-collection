@@ -1,0 +1,51 @@
+# The save/respawn path (#1150): the spot a save point writes is the spot a retry resumes, and
+# the Kid can jump from it. The runner and the `fixture:` builder land with #1161; until then
+# this is the reviewable contract.
+#
+# Fixture `checkpoint` (one room `room_1`, 800x608): kid_start at (96, 567.4), a save point on the
+# floor at x 160 (base-100 save model), a wall at x 160 so holding Right stops the Kid on the
+# point, and a clear jump arc above it. A1 physics, gm8 rules.
+id = "checkpoint/respawn_alignment"
+impact = "F1"
+package = "fixture:checkpoint"
+ruleset = "gm8@0"
+profile = "gm8/a1@1"
+start = { new_game = true, difficulty = 0 }
+play_mode = "original"
+seed = 0
+mods = []
+evidence = ["research:little-runner/tr-room-06", "#1150", "#670"]
+
+# Frame f is the step that ends at World::tick == f + 1.
+inputs = """
+frame 0: hold right
+frame 80: release right
+frame 81: press restart
+frame 82: release restart
+frame 120: hold jump
+frame 130: release jump
+frame 160: end
+"""
+
+# The walk onto the save point stores the spot under the stable room name. The ranges are wide
+# because the Kid stops against the point and the save mask decides the exact overlap; base-100
+# keeps the stored value in the same pixel. `matches_save` is the exact assertion.
+[[assert]]
+tick = 80
+save.room = "room_1"
+save.x = { min = 150.0, max = 170.0 }
+save.y = { min = 550.0, max = 580.0 }
+matches_save = true
+
+# R returns one Kid at the checkpoint after the gm8 delay, not at the room's kid_start.
+[[assert]]
+tick = 130
+room = "room_1"
+kid_count = 1
+matches_save = true
+
+# The first jump from the respawn responds within two ticks: the saved alignment is a spot the
+# player can jump from (the trick's `respawn_valign`).
+[[assert]]
+tick = 130
+control = { action = "jump", metric = "kid.y", latency_max = 2 }

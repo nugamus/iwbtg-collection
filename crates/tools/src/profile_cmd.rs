@@ -107,7 +107,7 @@ pub fn main(args: &ProfileArgs) -> Result<(), ToolError> {
 pub fn profile(pkg: &PackageFiles, input: &RunInput, difficulty: u8) -> Result<Profile, ToolError> {
     let def = replay_cmd::load_strict(pkg, LoadMode::Strict)?;
     let options = SimOptions {
-        start: input.start(difficulty),
+        start: input.start(&def, difficulty)?,
         seed: input.seed,
         dll_mode: DllMode::Model,
         mode: input.mode,

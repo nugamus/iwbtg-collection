@@ -86,6 +86,7 @@ fn world_step_counts_down_the_boot_load() {
         room: g.room,
         x: r(49.0),
         y: r(567.0),
+        precision: Default::default(),
         flipped: false,
         facing: 1,
         difficulty: 0,
