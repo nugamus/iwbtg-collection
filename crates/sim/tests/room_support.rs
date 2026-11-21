@@ -12,7 +12,7 @@ use iwbtg_sim::error::SimError;
 use iwbtg_sim::events::EventKind;
 use iwbtg_sim::num::Real;
 use iwbtg_sim::room::{RoomHost, RoomRequest, StartPoint, perform_change_with, start_game_with};
-use iwbtg_sim::rules::{RunnerRules, TickRules};
+use iwbtg_sim::rules::RunnerRules;
 use iwbtg_sim::save::SaveSlot;
 use iwbtg_sim::script::ScriptRuntime;
 use iwbtg_sim::sound::DllMode;
@@ -43,12 +43,7 @@ pub(crate) fn event_name(ev: &EventKind) -> &'static str {
 }
 
 impl RoomHost for Probe {
-    fn dispatch_order(
-        &mut self,
-        w: &World,
-        _rules: &TickRules,
-        filter: &dyn Fn(&Instance) -> bool,
-    ) -> Vec<InstId> {
+    fn dispatch_order(&mut self, w: &World, filter: &dyn Fn(&Instance) -> bool) -> Vec<InstId> {
         let mut v: Vec<(u16, InstId)> = w
             .instances()
             .iter()

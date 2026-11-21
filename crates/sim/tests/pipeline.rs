@@ -9,9 +9,7 @@ use iwbtg_sim::events::{EventSet, ProbeAct, ProbeOn, ProbeState, ProbeStep, disp
 use iwbtg_sim::input::{Action, InputFrame};
 use iwbtg_sim::num::Real;
 use iwbtg_sim::room::RoomRequest;
-use iwbtg_sim::rules::tick::{
-    AnimSlot, BoundarySlot, ClockPolicy, DirectLatch, DispatchOrder, JoinPhase, RoomRequestRule,
-};
+use iwbtg_sim::rules::tick::{AnimSlot, BoundarySlot, ClockPolicy, DirectLatch, RoomRequestRule};
 use iwbtg_sim::timeline;
 use iwbtg_sim::world::{SimStatus, Value};
 use iwbtg_sim::{SimError, tick};
@@ -67,7 +65,7 @@ fn one_tick_runs_every_phase_in_the_recorded_order() {
 }
 
 #[test]
-fn dispatch_orders_follow_the_rule() {
+fn dispatch_order_is_rank_then_id() {
     // t-ord-1 shape: world (rank 4) created first, player (rank 0), two blocks (rank 1), the
     // second with the lower depth.
     let mut b = builder();
@@ -76,74 +74,62 @@ fn dispatch_orders_follow_the_rule() {
     let kw = probe_kind(&mut b, "world");
     b.order(&[kp, kblock, kw]);
     let def = b.build().unwrap();
-    for (mode, want) in [
-        (DispatchOrder::RankThenCreation, "sP sB1 sB2 sW "),
-        (DispatchOrder::Creation, "sW sP sB1 sB2 "),
-        (DispatchOrder::DepthThenRankThenCreation, "sB1 sB2 sP sW "),
-    ] {
-        let mut fx = Fx::new(def.clone());
-        fx.rules.tick.dispatch = mode;
-        let only_step = |tag: &str| {
-            p(tag)
-                .style(iwbtg_sim::events::ProbeLog::Silent)
-                .with(step(ProbeOn::Step, ProbeAct::Log(format!("s{tag} "))))
-        };
-        fx.probe(kw, 0.0, 0.0, only_step("W"));
-        fx.probe(kp, 0.0, 0.0, only_step("P"));
-        let b1 = fx.probe(kblock, 0.0, 0.0, only_step("B1"));
-        let b2 = fx.probe(kblock, 0.0, 0.0, only_step("B2"));
-        fx.w.get_mut(b1).unwrap().depth = Real::new(100.0);
-        fx.w.get_mut(b2).unwrap().depth = Real::new(50.0);
-        fx.tick(InputFrame::EMPTY);
-        assert_eq!(fx.log(), want, "{mode:?}");
-        let order = dispatch_order(&fx.w, &fx.rules.tick, |_| true);
-        assert_eq!(order.len(), 4);
-    }
+    let mut fx = Fx::new(def.clone());
+    let only_step = |tag: &str| {
+        p(tag)
+            .style(iwbtg_sim::events::ProbeLog::Silent)
+            .with(step(ProbeOn::Step, ProbeAct::Log(format!("s{tag} "))))
+    };
+    fx.probe(kw, 0.0, 0.0, only_step("W"));
+    fx.probe(kp, 0.0, 0.0, only_step("P"));
+    let b1 = fx.probe(kblock, 0.0, 0.0, only_step("B1"));
+    let b2 = fx.probe(kblock, 0.0, 0.0, only_step("B2"));
+    fx.w.get_mut(b1).unwrap().depth = Real::new(100.0);
+    fx.w.get_mut(b2).unwrap().depth = Real::new(50.0);
+    fx.tick(InputFrame::EMPTY);
+    // Rank, then instance id; depth plays no part (t-ord-1).
+    assert_eq!(fx.log(), "sP sB1 sB2 sW ");
+    let order = dispatch_order(&fx.w, |_| true);
+    assert_eq!(order.len(), 4);
 }
 
 #[test]
-fn new_instances_join_the_phase_per_r9() {
+fn new_instances_join_when_later_in_order() {
     let mut b = builder();
     let k0 = probe_kind(&mut b, "early");
     let k1 = probe_kind(&mut b, "creator");
     let k2 = probe_kind(&mut b, "late");
     let def = b.build().unwrap();
     let child = |tag: &str| Some(Box::new(p(tag)));
-    for (join, steps_seen) in [
-        (JoinPhase::Never, vec!["sX"]),
-        (JoinPhase::LaterInOrder, vec!["sX", "sL"]),
-        (JoinPhase::Always, vec!["sX", "sE", "sS", "sL"]),
-    ] {
-        let mut fx = Fx::new(def.clone());
-        fx.rules.tick.new_instances_join_phase = join;
-        let spawn = |kind, tag: &str| ProbeAct::Spawn {
-            kind,
-            x: Real::ZERO,
-            y: Real::ZERO,
-            child: child(tag),
-        };
-        fx.probe(
-            k1,
-            0.0,
-            0.0,
-            p("X")
-                .with(step(ProbeOn::Step, spawn(k0, "E")).once())
-                .with(step(ProbeOn::Step, spawn(k1, "S")).once())
-                .with(step(ProbeOn::Step, spawn(k2, "L")).once()),
-        );
-        fx.tick(InputFrame::EMPTY);
-        let log = fx.log();
-        let steps: Vec<&str> = log.split(' ').filter(|t| t.starts_with('s')).collect();
-        assert_eq!(steps, steps_seen, "{join:?}: {log}");
-        // Every new instance takes part in the later phases of the tick (t-evo-1 row 3).
-        for tag in ["E", "S", "L"] {
-            assert!(log.contains(&format!("C{tag} ")), "{join:?}: Create of {tag}");
-            assert!(log.contains(&format!("e{tag} ")), "{join:?}: End Step of {tag}");
-            assert!(log.contains(&format!("d{tag} ")), "{join:?}: Draw of {tag}");
-        }
-        // Create ran inside the spawning Step, before the next instance's turn.
-        assert!(log.find("CE ").unwrap() < log.find("CL ").unwrap());
+    let spawn = |kind, tag: &str| ProbeAct::Spawn {
+        kind,
+        x: Real::ZERO,
+        y: Real::ZERO,
+        child: child(tag),
+    };
+    let mut fx = Fx::new(def.clone());
+    fx.probe(
+        k1,
+        0.0,
+        0.0,
+        p("X")
+            .with(step(ProbeOn::Step, spawn(k0, "E")).once())
+            .with(step(ProbeOn::Step, spawn(k1, "S")).once())
+            .with(step(ProbeOn::Step, spawn(k2, "L")).once()),
+    );
+    fx.tick(InputFrame::EMPTY);
+    let log = fx.log();
+    let steps: Vec<&str> = log.split(' ').filter(|t| t.starts_with('s')).collect();
+    // The early kind's turn passed; the creator's own kind and the late kind join after it.
+    assert_eq!(steps, vec!["sX", "sL"], "{log}");
+    // Every new instance takes part in the later phases of the tick (t-evo-1 row 3).
+    for tag in ["E", "S", "L"] {
+        assert!(log.contains(&format!("C{tag} ")), "Create of {tag}");
+        assert!(log.contains(&format!("e{tag} ")), "End Step of {tag}");
+        assert!(log.contains(&format!("d{tag} ")), "Draw of {tag}");
     }
+    // Create ran inside the spawning Step, before the next instance's turn.
+    assert!(log.find("CE ").unwrap() < log.find("CL ").unwrap());
 }
 
 /// Two probes A (rank 0) and B (rank 1); A requests a room in Step and logs after it.

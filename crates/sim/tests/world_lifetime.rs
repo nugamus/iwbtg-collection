@@ -50,7 +50,7 @@ fn every_walk_agrees_after_destroy() {
             assert!(!c.w.iter_visible().any(|i| i.id == gone));
             assert_eq!(c.w.count_of(ClassMask::BLOCK), 1);
             assert_eq!(c.w.first_of(ClassMask::BLOCK, &c.rules.tick), Some(kept));
-            let walk = dispatch_order(c.w, &c.rules.tick, |_| true);
+            let walk = dispatch_order(c.w, |_| true);
             assert!(!walk.contains(&gone));
             assert!(walk.contains(&kept));
             // A collision at the destroyed instance's spot sees nothing, stored or not.
@@ -87,6 +87,6 @@ fn the_r22_opt_in_is_the_only_dead_query_path() {
     assert!(!ctx.w.visible(gone, false));
     assert!(ctx.w.visible(gone, true));
     assert_eq!(ctx.w.first_of(ClassMask::BLOCK, &ctx.rules.tick), Some(gone));
-    assert!(!dispatch_order(ctx.w, &ctx.rules.tick, |_| true).contains(&gone));
+    assert!(!dispatch_order(ctx.w, |_| true).contains(&gone));
     assert!(ctx.w.get(gone).is_some(), "gm8 keeps it until the sweep");
 }

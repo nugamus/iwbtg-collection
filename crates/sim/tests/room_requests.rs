@@ -1,5 +1,5 @@
 //! Room requests around the sequence: nesting, load_game, the change bound, self-destroy in
-//! creation code, halting and the load tick.
+//! creation code and halting.
 
 use iwbtg_sim::def::RoomAction;
 use iwbtg_sim::def::testing::GameDefBuilder;
@@ -8,7 +8,6 @@ use iwbtg_sim::events::EventKind;
 use iwbtg_sim::num::Real;
 use iwbtg_sim::room::{RoomRequest, StartPoint};
 use iwbtg_sim::rules::RunnerRules;
-use iwbtg_sim::rules::room::NestedRequest;
 use iwbtg_sim::trace::{TraceTable, Value as TV};
 use iwbtg_sim::world::{Flow, SimStatus};
 
@@ -64,32 +63,6 @@ fn nested_request_chains_after_the_sequence() {
         w.engine.run.difficulty, 0,
         "LoadGame applies the save's difficulty (tr-room-12 row 137; it was 1 before)"
     );
-}
-
-#[test]
-fn nested_request_next_tick() {
-    let (def, select, load, saved) = load_game();
-    let mut rules = RunnerRules::default();
-    rules.room.nested_request = NestedRequest::NextTick;
-    let mut host = Probe::default();
-    let (mut w, r) = start(
-        &def,
-        &rules,
-        &mut host,
-        StartPoint::Room {
-            room: select,
-            difficulty: 1,
-        },
-    );
-    r.unwrap();
-    w.save = Some(slot(saved));
-    change(&def, &rules, &mut w, &mut host, RoomRequest::Goto(load)).unwrap();
-    assert_eq!(w.room, load, "rLoad gets a tick");
-    assert_eq!(w.pending, Some(RoomRequest::Goto(saved)), "left for tick row 15");
-    // Tick row 15 of the next tick.
-    change(&def, &rules, &mut w, &mut host, RoomRequest::Goto(saved)).unwrap();
-    assert_eq!(w.room, saved);
-    assert!(w.pending.is_none());
 }
 
 #[test]
