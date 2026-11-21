@@ -5,11 +5,11 @@
 //! test built-in.
 //!
 //! **Phase walk** (CLONE_SPEC tick loop, Confirmed (recorder)). A phase takes its order once at
-//! its start ([`dispatch_order`]: object index order, then creation order,
+//! its start ([`dispatch_order`]: object index rank, then instance id,
 //! traces/rely-the-needle-4-2/t-ord-1.csv) and visits each instance that is still alive and
-//! active when its turn comes. An instance created during the phase joins it per
-//! `TickRules::new_instances_join_phase` (R9). After each handler, a room request applies
-//! `TickRules::room_request` (R8); `Flow::Halt` stops everything.
+//! active when its turn comes. An instance created during the phase joins it when its rank
+//! comes later than the creator's (R9, Confirmed (recorder)). After each handler, a room request
+//! applies `TickRules::room_request` (R8); `Flow::Halt` stops everything.
 //!
 //! Calls into modules other WPs own (motion, collision geometry, views, rooms, sound, timing)
 //! go through [`Hooks`], so the pipeline can be tested with the `Probe` built-in before those
@@ -30,14 +30,11 @@ use crate::hash;
 use crate::input::Action;
 use crate::num::{Real, to_int_trunc};
 use crate::room::RoomRequest;
-use crate::rules::TickRules;
-use crate::rules::tick::{JoinPhase, PrevCapture, RoomRequestRule};
+use crate::rules::tick::{PrevCapture, RoomRequestRule};
 use crate::tick::Hooks;
 use crate::timeline;
 use crate::world::{Ctx, Flow, InstId, Instance, KindState, SimStatus, SpawnInit, Value, World};
 use crate::{builtins, script};
-
-pub use crate::rules::tick::DispatchOrder;
 
 /// One GM event an instance can receive. Keys are actions: the GM "Key Q pressed" kid event is
 /// `KeyPress(Suicide)`, "Key R pressed" on the world is `KeyPress(Restart)`.
@@ -190,13 +187,10 @@ pub enum KeyEdge {
 /// Which order a walk uses.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Order {
-    /// `TickRules::dispatch` (R2).
+    /// Dispatch order: object index rank, then instance id (R2, R12).
     Dispatch,
-    /// Draw order: depth descending, then creation (Confirmed manual).
+    /// Draw order: depth descending, then instance id (Confirmed manual).
     Draw,
-    /// Rank, then creation, whatever `TickRules::dispatch` says: the collision phase's outer
-    /// instances (R12).
-    Rank,
 }
 
 /// A sort key. `group` is everything but the creation order; R9's `LaterInOrder` compares it.
@@ -215,25 +209,22 @@ fn depth_desc(depth: Real) -> u64 {
 }
 
 /// The sort key of `inst` in `order`.
-pub(crate) fn order_key(inst: &Instance, mode: DispatchOrder, order: Order) -> OrderKey {
-    let group = match (order, mode) {
-        (Order::Draw, _) => (depth_desc(inst.depth), 0),
-        (Order::Rank, _) => (0, inst.rank),
-        (Order::Dispatch, DispatchOrder::RankThenCreation) => (0, inst.rank),
-        (Order::Dispatch, DispatchOrder::Creation) => (0, 0),
-        (Order::Dispatch, DispatchOrder::DepthThenRankThenCreation) => (depth_desc(inst.depth), inst.rank),
+pub(crate) fn order_key(inst: &Instance, order: Order) -> OrderKey {
+    let group = match order {
+        Order::Draw => (depth_desc(inst.depth), 0),
+        Order::Dispatch => (0, inst.rank),
     };
     OrderKey { group, id: inst.id }
 }
 
 /// The instances a phase visits, in dispatch order (R2), among the alive, active instances
 /// `filter` accepts.
-pub fn dispatch_order(w: &World, rules: &TickRules, filter: impl Fn(&Instance) -> bool) -> Vec<InstId> {
+pub fn dispatch_order(w: &World, filter: impl Fn(&Instance) -> bool) -> Vec<InstId> {
     let mut keyed: Vec<OrderKey> = w
         .instances()
         .iter()
         .filter(|i| i.alive && i.active && filter(i))
-        .map(|i| order_key(i, rules.dispatch, Order::Dispatch))
+        .map(|i| order_key(i, Order::Dispatch))
         .collect();
     keyed.sort_unstable();
     keyed.into_iter().map(|k| k.id).collect()
@@ -246,7 +237,7 @@ pub fn draw_order(w: &World, filter: impl Fn(&Instance) -> bool) -> Vec<InstId> 
         .instances()
         .iter()
         .filter(|i| i.alive && i.active && i.visible && filter(i))
-        .map(|i| order_key(i, DispatchOrder::Creation, Order::Draw))
+        .map(|i| order_key(i, Order::Draw))
         .collect();
     keyed.sort_unstable();
     keyed.into_iter().map(|k| k.id).collect()
@@ -363,15 +354,13 @@ fn walk(
     filter: &dyn Fn(&Ctx, &Instance) -> bool,
     mut each: impl FnMut(&mut Ctx, InstId, &mut Ctl) -> Option<Flow>,
 ) -> Flow {
-    let mode = ctx.rules.tick.dispatch;
-    let join = ctx.rules.tick.new_instances_join_phase;
     let ready = |ctx: &Ctx, i: &Instance| i.alive && i.active && filter(ctx, i);
     let mut list: Vec<OrderKey> = ctx
         .w
         .instances()
         .iter()
         .filter(|i| ready(ctx, i))
-        .map(|i| order_key(i, mode, order))
+        .map(|i| order_key(i, order))
         .collect();
     list.sort_unstable();
     let mut ctl = Ctl::new(ctx);
@@ -384,7 +373,7 @@ fn walk(
         {
             return flow;
         }
-        if join != JoinPhase::Never && ctx.w.next_id != seen {
+        if ctx.w.next_id != seen {
             let all = ctx.w.instances();
             let start = all.partition_point(|i| i.id.0 < seen);
             let joining: Vec<OrderKey> = all
@@ -392,8 +381,8 @@ fn walk(
                 .unwrap_or_default()
                 .iter()
                 .filter(|i| ready(ctx, i))
-                .map(|i| order_key(i, mode, order))
-                .filter(|k| join == JoinPhase::Always || k.group > current.group)
+                .map(|i| order_key(i, order))
+                .filter(|k| k.group > current.group)
                 .collect();
             for k in joining {
                 let rest = list.get(pos..).unwrap_or_default();
@@ -753,14 +742,16 @@ pub fn collision_phase_with(ctx: &mut Ctx, hooks: &Hooks) -> Flow {
         i.classes.intersects(targeted) || !event_set(c.def, i.kind).collisions.is_empty()
     };
     if !hooks.broadphase {
-        return walk(ctx, Order::Rank, &ready, |c, a, ctl| meet_all(c, hooks, a, ctl));
+        return walk(ctx, Order::Dispatch, &ready, |c, a, ctl| {
+            meet_all(c, hooks, a, ctl)
+        });
     }
     // Built at the first turn, so a phase in which nobody takes part costs nothing.
     let mut members: Option<Members> = None;
     // Static kind facts: a turn whose rank, classes and handlers can meet no kind's is skipped
     // before its (possibly huge) candidate cell is gathered (#1139).
     let reach = pairs::Reach::of(ctx.def);
-    walk(ctx, Order::Rank, &ready, |c, a, ctl| {
+    walk(ctx, Order::Dispatch, &ready, |c, a, ctl| {
         meet_near(c, hooks, a, ctl, &mut members, &reach)
     })
 }

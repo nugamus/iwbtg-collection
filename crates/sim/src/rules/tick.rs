@@ -14,8 +14,6 @@ pub struct TickRules {
     pub timing: TimingRules,
     /// R1 (U1, answered by the recorder): when `xprevious`/`yprevious` are captured.
     pub prev_capture: PrevCapture,
-    /// R2 (U2, answered by the recorder): instance order within a phase.
-    pub dispatch: DispatchOrder,
     /// R21 (answered by the recorder: the first in instance order, which for one object is the
     /// lowest id; famB-multikid-restart-b rows 25-26): which instance is "the first" in queries,
     /// the kid, view follow, saveGame.
@@ -25,9 +23,6 @@ pub struct TickRules {
     /// R8 (U8, answered by the recorder for room_goto and game_restart): what still runs after a
     /// room request.
     pub room_request: RoomRequestRule,
-    /// R9 (U10, answered by the recorder): whether an instance created during a phase runs that
-    /// phase too.
-    pub new_instances_join_phase: JoinPhase,
     /// R22: an instance destroyed this tick is still seen by collisions and queries. Default
     /// false (Confirmed (recorder), research T-DEAD-1: nothing sees it); no game needs true.
     pub dead_in_queries: bool,
@@ -129,23 +124,10 @@ pub enum PrevCapture {
     BeforeMotion,
 }
 
-/// R2: instance order within one phase (`events::dispatch_order`).
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
-pub enum DispatchOrder {
-    /// Object index order (rank), then creation order. Default: Confirmed (recorder),
-    /// traces/rely-the-needle-4-2/t-ord-1.csv ("depth does not matter").
-    #[default]
-    RankThenCreation,
-    /// Creation order only.
-    Creation,
-    /// Depth (higher first, as drawing), then rank, then creation.
-    DepthThenRankThenCreation,
-}
-
 /// R21: which instance is "the first" (`World::first_of`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum FirstRule {
-    /// The first in [`TickRules::dispatch`] order. Default.
+    /// The first in dispatch order: `object_order` rank, then instance id. Default.
     #[default]
     DispatchOrder,
     /// The lowest instance id.
@@ -217,23 +199,6 @@ pub enum RoomRequestRule {
     FinishPhase,
     /// Finish the whole tick.
     FinishTick,
-}
-
-/// R9: whether an instance created during a phase runs that phase.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
-pub enum JoinPhase {
-    /// Never: each phase walks the snapshot it took at its start (the plan's earlier default).
-    Never,
-    /// Only when its place in the phase order lies in a later group than the instance whose
-    /// handler created it (under `RankThenCreation`: a higher rank, never the creator's own
-    /// rank). Default: Confirmed (recorder), traces/rely-the-needle-4-2/tr-room-03-b-log.csv
-    /// row 8, traces/wanna/a3-t17-b.csv row 36, traces/rely-the-needle-4-2/t-evo-1.csv row 3.
-    /// The untraced case "an object whose turn already passed" gets no event, as this rule says.
-    #[default]
-    LaterInOrder,
-    /// Always: a new instance is put at its place among the instances not yet visited, or right
-    /// after the current one when its place has passed.
-    Always,
 }
 
 /// I1: the `keyboard_check_direct` latch.

@@ -90,17 +90,16 @@ pub struct Instance {
 ### Ranks and deterministic iteration
 
 - **Rank.** Every instance carries `rank: u16`. `crates/format` computes it from `object_order` at load, per placed instance, and `GameDef::rank_for(kind, variant)` gives it for spawned instances. `object_order` entries may be selectors (`{ kind = "spike", dir = "up" }`) so collapsed original objects keep their original index order (converter OPEN 13). The loader rejects a package where any kind that can be spawned (including engine kinds: bow, blood, blood_emitter, game_over, playerface, kid_bullet) has no rank (CR4).
-- **Dispatch order** (UNKNOWN U2 "and whether depth matters", register R2): one function decides it.
+- **Dispatch order** (UNKNOWN U2 "and whether depth matters", register R2): one function decides it, and it has one order.
 
   ```rust
   // events.rs
-  pub fn dispatch_order(w: &World, rules: &TickRules, filter: impl Fn(&Instance) -> bool) -> Vec<InstId>;
-  pub enum DispatchOrder { RankThenCreation, Creation, DepthThenRankThenCreation }
+  pub fn dispatch_order(w: &World, filter: impl Fn(&Instance) -> bool) -> Vec<InstId>;
   ```
 
-  Default `RankThenCreation` (Inferred: object index order, then creation order). Alternatives `Creation` and `DepthThenRankThenCreation` (the spec lists depth as UNKNOWN, and T-ORD-1 gives two blocks different depths on purpose). T-ORD-1 is recorded (`rely-the-needle-4-2/t-ord-1`); the default changes when the spec records its result.
-- **Snapshot per phase.** Each phase takes `dispatch_order` once at its start and walks that list, skipping instances that are dead or inactive by the time their turn comes. Whether instances created during the phase join it is R9 (`TickRules::new_instances_join_phase`): default `LaterInOrder`, they join when their place in the order comes after the creator's object (Confirmed by the recorder, CLONE_SPEC U10).
-- **"The first instance"** (R21). Every place that picks one instance out of several (queries that return an id, `World::kid`, `player.x` reads in built-ins, view follow, saveGame's kid) calls `World::first_of`, which sorts candidates by `TickRules::first_rule` (`DispatchOrder` default, alternative `LowestId`). Trace `eat-the-lemon/famb-multikid-restart*` (recorded) settles it. The broadphase grid never decides order.
+  `object_order` rank, then instance id (decision 0005). T-ORD-1 is recorded (`rely-the-needle-4-2/t-ord-1`) and confirms that depth does not matter. The `gm_id`-vs-file order for a placed instance is OPEN (#1079); the walk keys on instance id.
+- **Snapshot per phase.** Each phase takes `dispatch_order` once at its start and walks that list, skipping instances that are dead or inactive by the time their turn comes. Whether instances created during the phase join it is R9: they join when their place in the order comes after the creator's object (Confirmed by the recorder, CLONE_SPEC U10).
+- **"The first instance"** (R21). Every place that picks one instance out of several (queries that return an id, `World::kid`, `player.x` reads in built-ins, view follow, saveGame's kid) calls `World::first_of`, which sorts candidates by `TickRules::first_rule` (`FirstRule::DispatchOrder` default, alternative `LowestId`). Trace `eat-the-lemon/famb-multikid-restart*` (recorded) settles it. The broadphase grid never decides order.
 - **Draw order** (Confirmed manual: depth descending, then creation order). Used by the Draw-slot phase ([tick pipeline](tick.md) row 12) and the client.
 
 ### World and context

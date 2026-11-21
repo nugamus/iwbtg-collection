@@ -6,7 +6,6 @@ use iwbtg_sim::num::Real;
 use iwbtg_sim::output::OutputEvent;
 use iwbtg_sim::room::{RoomOutput, RoomRequest, StartPoint};
 use iwbtg_sim::rules::RunnerRules;
-use iwbtg_sim::rules::room::{RoomEndOrder, RoomStartOrder};
 
 use crate::room_support::*;
 
@@ -102,40 +101,7 @@ fn seven_step_order_with_probes() {
 }
 
 #[test]
-fn room_start_dispatch_switch() {
-    let o = order_game();
-    let mut rules = RunnerRules::default();
-    rules.room.room_start_order = RoomStartOrder::Dispatch;
-    let mut host = Probe::default();
-    let (_, r) = start(
-        &o.def,
-        &rules,
-        &mut host,
-        StartPoint::Room {
-            room: o.a,
-            difficulty: 0,
-        },
-    );
-    r.unwrap();
-    let starts: Vec<&str> = host
-        .log
-        .iter()
-        .filter(|l| l.starts_with("RoomStart"))
-        .map(String::as_str)
-        .collect();
-    assert_eq!(
-        starts,
-        [
-            "RoomStart blk",
-            "RoomStart world",
-            "RoomStart ps",
-            "RoomStart spawned"
-        ]
-    );
-}
-
-#[test]
-fn room_end_depth_switch() {
+fn room_end_follows_the_dispatch_order() {
     let mut b = GameDefBuilder::new("depth");
     let deep = probe_kind(&mut b, "deep", false);
     let shallow = probe_kind(&mut b, "shallow", false);
@@ -146,25 +112,20 @@ fn room_end_depth_switch() {
     b.place(r0, deep, 0.0, 0.0).unwrap();
     b.place(r0, shallow, 0.0, 0.0).unwrap();
     let def = b.build().unwrap();
-    for (order, want) in [
-        (RoomEndOrder::Dispatch, ["RoomEnd deep", "RoomEnd shallow"]),
-        (RoomEndOrder::Depth, ["RoomEnd shallow", "RoomEnd deep"]),
-    ] {
-        let mut rules = RunnerRules::default();
-        rules.room.room_end_order = order;
-        let mut host = Probe::default();
-        let (mut w, r) = start(
-            &def,
-            &rules,
-            &mut host,
-            StartPoint::Room {
-                room: r0,
-                difficulty: 0,
-            },
-        );
-        r.unwrap();
-        host.log.clear();
-        change(&def, &rules, &mut w, &mut host, RoomRequest::Next).unwrap();
-        assert_eq!(host.log, want, "{order:?}");
-    }
+    let rules = RunnerRules::default();
+    let mut host = Probe::default();
+    let (mut w, r) = start(
+        &def,
+        &rules,
+        &mut host,
+        StartPoint::Room {
+            room: r0,
+            difficulty: 0,
+        },
+    );
+    r.unwrap();
+    host.log.clear();
+    change(&def, &rules, &mut w, &mut host, RoomRequest::Next).unwrap();
+    // Rank, then id; depth plays no part.
+    assert_eq!(host.log, ["RoomEnd deep", "RoomEnd shallow"]);
 }

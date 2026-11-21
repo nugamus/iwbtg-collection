@@ -21,7 +21,7 @@
 //!    [`RoomRules::creation_code_on_revisit`](crate::rules::RoomRules::creation_code_on_revisit)
 //!    (rooms UNKNOWN; no persistent room of the 20 games has creation code).
 //! 7. Room Start for every instance in the room when this step begins (R10): the room's own
-//!    instances, then the carried persistent ones (Confirmed (recorder), [`RoomStartOrder`]).
+//!    instances, then the carried persistent ones (Confirmed (recorder)).
 //!
 //! A stripped (ranked) run (`World::mode`, #561, `crate::stripped`) changes three things: every
 //! entry of a cut room (a request, `game_restart`'s first room, a start point, a save load)
@@ -36,10 +36,9 @@
 //! views are reset from the room's view definitions, and the broadphase grid starts empty (every
 //! instance marked, so queries answer like brute force until the grid is rebuilt).
 //!
-//! A request raised during the sequence (room creation code, Create, Room Start) follows
-//! [`RoomRules::nested_request`](crate::rules::RoomRules::nested_request) (R23): the sequence
-//! always finishes all 7 steps, and the next change either follows at once (at most
-//! `max_chained_changes` times, then `SimError`) or waits for tick row 15 of the next tick.
+//! A request raised during the sequence (room creation code, Create, Room Start) runs before the
+//! next tick (R23): the sequence always finishes all 7 steps, then the next change follows at
+//! once (at most `max_chained_changes` times, then `SimError`).
 //! `Flow::AbortTick` from a handler inside the sequence does not stop the sequence; `Flow::Halt`
 //! does.
 //!
@@ -70,8 +69,6 @@ use crate::error::SimError;
 use crate::events::{self, EventKind, Phase};
 use crate::num::Real;
 use crate::output::OutputEvent;
-use crate::rules::TickRules;
-use crate::rules::room::{NestedRequest, RoomEndOrder, RoomStartOrder};
 use crate::save::{self, SaveSlot};
 use crate::stripped::PlayMode;
 use crate::view::{View, ViewPort};
@@ -209,12 +206,7 @@ pub enum RoomOutput {
 /// use a recording host.
 pub trait RoomHost {
     /// The instances a phase visits, in dispatch order (`events::dispatch_order`, R2).
-    fn dispatch_order(
-        &mut self,
-        w: &World,
-        rules: &TickRules,
-        filter: &dyn Fn(&Instance) -> bool,
-    ) -> Vec<InstId>;
+    fn dispatch_order(&mut self, w: &World, filter: &dyn Fn(&Instance) -> bool) -> Vec<InstId>;
 
     /// Runs one event on one instance (`events::dispatch`).
     fn dispatch(&mut self, ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Flow;
@@ -268,13 +260,8 @@ pub trait RoomHost {
 pub struct EngineHost;
 
 impl RoomHost for EngineHost {
-    fn dispatch_order(
-        &mut self,
-        w: &World,
-        rules: &TickRules,
-        filter: &dyn Fn(&Instance) -> bool,
-    ) -> Vec<InstId> {
-        events::dispatch_order(w, rules, filter)
+    fn dispatch_order(&mut self, w: &World, filter: &dyn Fn(&Instance) -> bool) -> Vec<InstId> {
+        events::dispatch_order(w, filter)
     }
 
     fn dispatch(&mut self, ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Flow {
@@ -443,8 +430,7 @@ fn redirect(ctx: &Ctx, room: RoomId) -> RoomId {
 /// `NestedRequests::LastWins` (gm8) leaves the world's one pending slot alone: `capture` does
 /// nothing and `next` takes that slot, exactly as before. `NestedRequests::Queue` takes each
 /// request out of the slot right after the event or creation action that raised it and appends
-/// it, so `next` returns them in raise order. The queue lives for this tick's chain only: the
-/// world store is identity-save's, so `NextTick` keeps the one-slot behavior.
+/// it, so `next` returns them in raise order. The queue lives for this tick's chain only.
 struct RoomQueue {
     requests: VecDeque<RoomRequest>,
     fifo: bool,
@@ -452,18 +438,13 @@ struct RoomQueue {
 
 impl RoomQueue {
     fn for_ctx(ctx: &Ctx) -> RoomQueue {
-        RoomQueue::with_policy(ctx.def.lifecycle().enter_room, ctx.rules)
+        RoomQueue::with_policy(ctx.def.lifecycle().enter_room)
     }
 
-    fn with_policy(
-        policy: crate::def::game::EnterRoomPolicy,
-        rules: &crate::rules::RunnerRules,
-    ) -> RoomQueue {
-        let fifo = policy.nested_requests == NestedRequests::Queue
-            && rules.room.nested_request == NestedRequest::ChainAfterSequence;
+    fn with_policy(policy: crate::def::game::EnterRoomPolicy) -> RoomQueue {
         RoomQueue {
             requests: VecDeque::new(),
-            fifo,
+            fifo: policy.nested_requests == NestedRequests::Queue,
         }
     }
 
@@ -504,22 +485,18 @@ fn change_inner_with<H: RoomHost + ?Sized>(
         return Ok(());
     }
     ctx.w.pending = None;
-    let mut queue = RoomQueue::with_policy(policy, ctx.rules);
+    let mut queue = RoomQueue::with_policy(policy);
     run_request(ctx, host, req, &mut queue)?;
     after_sequence(ctx, host, &mut queue)
 }
 
-/// R23: a request raised during the sequence. `ChainAfterSequence` performs it now (bounded,
-/// FIFO under [`NestedRequests::Queue`]); `NextTick` leaves it pending for tick row 15 of the
-/// next tick.
+/// R23: a request raised during the sequence runs before the next tick (bounded, FIFO under
+/// [`NestedRequests::Queue`]).
 fn after_sequence<H: RoomHost + ?Sized>(
     ctx: &mut Ctx,
     host: &mut H,
     queue: &mut RoomQueue,
 ) -> Result<(), SimError> {
-    if ctx.rules.room.nested_request == NestedRequest::NextTick {
-        return Ok(());
-    }
     let max = ctx.rules.room.max_chained_changes;
     let mut chained: u8 = 0;
     while ctx.w.status == SimStatus::Running {
@@ -738,28 +715,7 @@ fn room_end<H: RoomHost + ?Sized>(
 ) -> Result<(), SimError> {
     let def = ctx.def;
     let handles = |i: &Instance| i.alive && i.active && def.kind(i.kind).is_some_and(|k| k.events.room_end);
-    let order = match ctx.rules.room.room_end_order {
-        RoomEndOrder::Dispatch => host.dispatch_order(ctx.w, &ctx.rules.tick, &handles),
-        RoomEndOrder::Depth => {
-            let mut v: Vec<(Real, InstId)> = ctx
-                .w
-                .instances()
-                .iter()
-                .filter(|i| handles(i))
-                .map(|i| (i.depth, i.id))
-                .collect();
-            // Depth descending, then creation (id) order. Depth is never NaN (setters refuse
-            // non-finite values), so `partial_cmp` always answers. This tie-break does not
-            // reproduce showdown tr-room-14 (see `RoomEndOrder::Depth`).
-            v.sort_by(|a, b| {
-                b.0.get()
-                    .partial_cmp(&a.0.get())
-                    .unwrap_or(std::cmp::Ordering::Equal)
-                    .then(a.1.cmp(&b.1))
-            });
-            v.into_iter().map(|(_, id)| id).collect()
-        }
-    };
+    let order = host.dispatch_order(ctx.w, &handles);
     run_room_phase(ctx, host, Phase::RoomEnd, &order, queue)
 }
 
@@ -1029,7 +985,7 @@ impl RoomTransaction {
         if self.from.is_some() {
             return Ok(());
         }
-        let order = host.dispatch_order(ctx.w, &ctx.rules.tick, &|i: &Instance| i.alive && i.active);
+        let order = host.dispatch_order(ctx.w, &|i: &Instance| i.alive && i.active);
         run_room_phase(ctx, host, Phase::GameStart, &order, queue)
     }
 
@@ -1065,16 +1021,11 @@ impl RoomTransaction {
         let def = ctx.def;
         let handles =
             |i: &Instance| i.alive && i.active && def.kind(i.kind).is_some_and(|k| k.events.room_start);
-        let order: Vec<InstId> = match ctx.rules.room.room_start_order {
-            RoomStartOrder::RoomThenCarried => {
-                let in_room = ctx.w.instances().iter().filter(|i| handles(i));
-                let (carried, own): (Vec<InstId>, Vec<InstId>) = in_room
-                    .map(|i| i.id)
-                    .partition(|id| self.carried_ids.contains(id));
-                own.into_iter().chain(carried).collect()
-            }
-            RoomStartOrder::Dispatch => host.dispatch_order(ctx.w, &ctx.rules.tick, &handles),
-        };
+        let in_room = ctx.w.instances().iter().filter(|i| handles(i));
+        let (carried, own): (Vec<InstId>, Vec<InstId>) = in_room
+            .map(|i| i.id)
+            .partition(|id| self.carried_ids.contains(id));
+        let order: Vec<InstId> = own.into_iter().chain(carried).collect();
         run_room_phase(ctx, host, Phase::RoomStart, &order, queue)
     }
 }
@@ -1387,12 +1338,7 @@ mod tests {
     }
 
     impl RoomHost for RequestingHost {
-        fn dispatch_order(
-            &mut self,
-            w: &World,
-            _rules: &TickRules,
-            filter: &dyn Fn(&Instance) -> bool,
-        ) -> Vec<InstId> {
+        fn dispatch_order(&mut self, w: &World, filter: &dyn Fn(&Instance) -> bool) -> Vec<InstId> {
             let mut v: Vec<(u16, InstId)> = w
                 .instances()
                 .iter()

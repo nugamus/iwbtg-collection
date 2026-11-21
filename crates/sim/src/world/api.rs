@@ -193,7 +193,7 @@ impl World {
         match rules.first_rule {
             FirstRule::LowestId => found.map(|i| i.id).min(),
             FirstRule::DispatchOrder => found
-                .min_by_key(|i| events::order_key(i, rules.dispatch, events::Order::Dispatch))
+                .min_by_key(|i| events::order_key(i, events::Order::Dispatch))
                 .map(|i| i.id),
         }
     }
