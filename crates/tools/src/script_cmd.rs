@@ -8,7 +8,7 @@
 use std::path::Path;
 
 use iwbtg_sim::rules::NumRules;
-use iwbtg_sim::script::docs::Docs;
+use iwbtg_sim::script::docs::{Access, Docs};
 use iwbtg_sim::script::host::Iws;
 use serde_json::Value;
 
@@ -176,10 +176,16 @@ fn markdown(funcs: &[Func], docs: &Docs) -> Result<String, ToolError> {
     let mut s = String::from(INTRO);
     s.push_str("## Instance properties\n\nRead with `i.name`, write with `i.name = v` where listed read and write.\n\n| Property | Type | Access | Description |\n|---|---|---|---|\n");
     for (n, (t, r, w)) in &props {
-        let acc = match (r, w) {
-            (true, true) => "read, write",
-            (true, false) => "read only",
-            _ => "write only",
+        // A read-only property may still register a setter that refuses the write with a clear
+        // error (`docs.add_read_only`), so the description decides the access.
+        let acc = if docs.access(n) == Some(Access::ReadOnly) {
+            "read only"
+        } else {
+            match (r, w) {
+                (true, true) => "read, write",
+                (true, false) => "read only",
+                _ => "write only",
+            }
         };
         let d = describe(docs, n, &mut missing);
         s.push_str(&format!("| `{n}` | {t} | {acc} | {d} |\n"));

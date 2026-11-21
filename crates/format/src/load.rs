@@ -376,6 +376,9 @@ struct Loader<'a> {
     /// Room profile id to its index in `room_physics`; `None` for the file that is the game's
     /// own profile (`game.toml` `physics`), which rooms naming it share.
     room_physics_ids: BTreeMap<String, Option<u16>>,
+    /// Every kid profile's `[script] vars` names, interned with the other variable names
+    /// (decision 0004).
+    kid_script_vars: BTreeSet<String>,
 }
 
 impl<'a> Loader<'a> {
@@ -416,6 +419,7 @@ impl<'a> Loader<'a> {
             maps: Vec::new(),
             room_physics: Vec::new(),
             room_physics_ids: BTreeMap::new(),
+            kid_script_vars: BTreeSet::new(),
         }
     }
 

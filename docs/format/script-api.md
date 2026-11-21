@@ -19,9 +19,15 @@ Read with `i.name`, write with `i.name = v` where listed read and write.
 
 | Property | Type | Access | Description |
 |---|---|---|---|
+| `curJumps` | float | read, write | The air-jump counter, 0 to 255; a non-integer or out-of-range write is an error. |
 | `depth` | float | read, write | Draw depth; a lower value draws in front. |
 | `direction` | float | read, write | Movement direction in degrees; setting it updates `hspeed` and `vspeed`. |
+| `djump` | bool | read, write | The double-jump flag. |
+| `facing` | float | read only | Facing, -1 or 1 (read only; write `image_xscale`). |
+| `flipped` | bool | read only | The kid is the flipped variant (read only; part of the kind). |
 | `friction` | float | read, write | Speed removed each tick. |
+| `frozen` | bool | read, write | Input is blocked for the kid. |
+| `frozen2` | bool | read, write | The movement action is skipped. |
 | `gravity` | float | read, write | Gravity added each tick. |
 | `gravity_direction` | float | read, write | Direction of `gravity` in degrees. |
 | `hspeed` | float | read, write | Horizontal speed; setting it updates `speed` and `direction`. |
@@ -30,17 +36,36 @@ Read with `i.name`, write with `i.name = v` where listed read and write.
 | `image_angle` | float | read, write | Sprite rotation in degrees. |
 | `image_index` | float | read, write | Current animation frame. |
 | `image_speed` | float | read, write | Animation frames per tick. |
-| `image_xscale` | float | read, write | Horizontal scale of the sprite. |
+| `image_xscale` | float | read, write | Horizontal scale of the sprite; on the kid it is the facing, -1 or 1. |
 | `image_yscale` | float | read, write | Vertical scale of the sprite. |
+| `jump` | float | read only | The ground jump speed (read only; arrays are #997). |
+| `jump2` | float | read only | The first air jump speed (read only). |
+| `jump3` | float | read only | The second air jump speed (read only). |
 | `kind` | string | read only | The package name of the instance's kind (`@boss`). |
+| `ladder` | bool | read, write | The kid is on a ladder. |
+| `ladderjump` | bool | read only | The kid left a ladder by jumping this Step. |
+| `ladderud` | bool | read only | The kid moved on a ladder this Step. |
+| `maxFallSpeed` | float | read, write | The fall-speed clamp (`maxFallSpeed`, A4). |
+| `maxSpeed` | float | read, write | The run speed (`maxSpeed`). |
+| `maxVspeed` | float | read, write | The vertical speed clamp (`maxVspeed`). |
+| `muteki` | bool | read, write | Kills are ignored while set. |
+| `onPlatform` | bool | read, write | The kid is on a platform. |
+| `onVineL` | bool | read only | A left vine is within reach (family C). |
+| `onVineR` | bool | read only | A right vine is within reach (family C). |
+| `on_slope_last` | bool | read only | The kid was on a slope last Step. |
+| `scale` | float | read, write | The layer scale (`scale`, machinary; 1 elsewhere). |
 | `solid` | bool | read, write | Whether the instance blocks movement. |
 | `speed` | float | read, write | Speed along `direction`; setting it updates `hspeed` and `vspeed`. |
+| `tempHspeed` | float | read, write | The ice carry-over speed (`tempHspeed`). |
+| `tjump` | bool | read, write | The third-jump flag. |
 | `visible` | bool | read, write | Whether the instance is drawn. |
 | `vspeed` | float | read, write | Vertical speed; setting it updates `speed` and `direction`. |
+| `walk_h` | float | read only | The last `walk` direction, -1, 0 or 1. |
 | `x` | float | read, write | Horizontal position. |
 | `xprevious` | float | read only | `x` at the start of the tick. |
 | `xstart` | float | read only | `x` where the instance was created. |
 | `y` | float | read, write | Vertical position. |
+| `yflag` | float | read only | The gravity side, -1 or 1 (read only; flip through the gravity knob). |
 | `yprevious` | float | read only | `y` at the start of the tick. |
 | `ystart` | float | read only | `y` where the instance was created. |
 

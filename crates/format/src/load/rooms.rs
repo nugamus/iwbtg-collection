@@ -99,6 +99,9 @@ impl<'a> Loader<'a> {
         for k in &self.kinds {
             names.extend(k.params.0.keys().cloned());
         }
+        // A kid profile's `[script] vars` are declared content, not run-time inferences
+        // (decision 0004).
+        names.extend(self.kid_script_vars.iter().cloned());
         for r in rooms {
             for i in &r.file.instances {
                 names.extend(i.params.keys().cloned());
