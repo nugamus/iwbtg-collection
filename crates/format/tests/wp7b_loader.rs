@@ -146,6 +146,127 @@ pub(crate) fn load_ok(files: &PackageFiles, mode: LoadMode) -> (GameDef, LoadRep
     (r.def.clone().unwrap(), r)
 }
 
+// ---- mask aliases (#1015) ---------------------------------------------------------------------
+
+/// A precise 2 x 2 sprite sidecar with an optional `mask` alias.
+fn precise_sidecar(mask: Option<&str>) -> String {
+    format!(
+        "#:schema ../sprite.schema.json\nframes = 1\nframe_size = [2, 2]\norigin = [0, 0]\ncollision = \"precise\"\n{}",
+        mask.map_or_else(String::new, |m| format!("mask = \"{m}\"\n"))
+    )
+}
+
+/// The index of `key` in `def.sprites`; the order is the `sprite_pngs` order (`load_objects.rs`).
+fn alias_sprite_index(files: &PackageFiles, key: &str) -> usize {
+    iwbtg_format::sprites::sprite_pngs(files)
+        .iter()
+        .position(|(k, _)| k == key)
+        .unwrap_or_else(|| panic!("no sprite `{key}`"))
+}
+
+/// A package with `referrer -> middle -> terminal`; the three arts differ so a premature copy
+/// would be visible.
+fn chain_package(terminal: &str, middle: &str, referrer: &str) -> PackageFiles {
+    package("", |f| {
+        put(f, &format!("sprites/{terminal}.toml"), &precise_sidecar(None));
+        f.push((format!("sprites/{terminal}.png"), png(&["#.", ".#"])));
+        put(
+            f,
+            &format!("sprites/{middle}.toml"),
+            &precise_sidecar(Some(terminal)),
+        );
+        f.push((format!("sprites/{middle}.png"), png(&["##", "##"])));
+        put(
+            f,
+            &format!("sprites/{referrer}.toml"),
+            &precise_sidecar(Some(middle)),
+        );
+        f.push((format!("sprites/{referrer}.png"), png(&["..", ".."])));
+    })
+}
+
+/// Both alias nodes must end at the terminal's own masks, whatever the key order.
+fn assert_chain(terminal: &str, middle: &str, referrer: &str) {
+    let files = chain_package(terminal, middle, referrer);
+    let (def, _) = load_ok(&files, STRICT);
+    let t = alias_sprite_index(&files, terminal);
+    let m = alias_sprite_index(&files, middle);
+    let r = alias_sprite_index(&files, referrer);
+    assert_eq!(
+        def.sprites[m].masks, def.sprites[t].masks,
+        "{middle} must take {terminal}'s masks"
+    );
+    assert_eq!(
+        def.sprites[r].masks, def.sprites[t].masks,
+        "{referrer} must take {terminal}'s masks"
+    );
+}
+
+#[test]
+fn a_mask_chain_resolves_to_its_terminal_in_either_key_order() {
+    // Referrer first in key order: the old single pass copied the middle's own masks.
+    assert_chain("a", "b", "c");
+    // Referrer last: renaming keys without changing the graph does not change the topology.
+    assert_chain("z", "y", "x");
+}
+
+#[test]
+fn a_mask_alias_to_a_missing_sprite_is_an_error() {
+    let files = package("", |f| {
+        put(f, "sprites/a.toml", &precise_sidecar(Some("nope")));
+        f.push(("sprites/a.png".into(), png(&["##", "##"])));
+    });
+    let r = load_report(&files, STRICT);
+    assert!(
+        errors(&r)
+            .iter()
+            .any(|e| e.starts_with("sprites/a.toml:") && e.contains("mask sprite `nope` does not exist")),
+        "{}",
+        render(&r)
+    );
+}
+
+#[test]
+fn a_self_mask_alias_is_an_error() {
+    let files = package("", |f| {
+        put(f, "sprites/a.toml", &precise_sidecar(Some("a")));
+        f.push(("sprites/a.png".into(), png(&["##", "##"])));
+    });
+    let r = load_report(&files, STRICT);
+    assert!(
+        errors(&r)
+            .iter()
+            .any(|e| e.starts_with("sprites/a.toml:") && e.contains("uses itself as its mask")),
+        "{}",
+        render(&r)
+    );
+}
+
+#[test]
+fn a_mask_alias_cycle_is_an_error_at_each_sprite() {
+    let files = package("", |f| {
+        put(f, "sprites/a.toml", &precise_sidecar(Some("b")));
+        f.push(("sprites/a.png".into(), png(&["##", "##"])));
+        put(f, "sprites/b.toml", &precise_sidecar(Some("a")));
+        f.push(("sprites/b.png".into(), png(&["##", "##"])));
+    });
+    let r = load_report(&files, STRICT);
+    let e = errors(&r);
+    assert!(!r.ok());
+    assert!(
+        e.iter()
+            .any(|m| m.starts_with("sprites/a.toml:") && m.contains("a -> b -> a is a cycle")),
+        "{}",
+        render(&r)
+    );
+    assert!(
+        e.iter()
+            .any(|m| m.starts_with("sprites/b.toml:") && m.contains("b -> a -> b is a cycle")),
+        "{}",
+        render(&r)
+    );
+}
+
 // ---- tricks -----------------------------------------------------------------------------------
 
 #[test]
