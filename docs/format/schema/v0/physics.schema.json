@@ -609,6 +609,31 @@
       },
       "type": "object"
     },
+    "GravityModel": {
+      "description": "`[gravity] model`: the standard name for the gravity reapply rule, the same value as\n`[gravity] reapply`. Gravity's orientation when it flips is `[flip] model`, not this.",
+      "oneOf": [
+        {
+          "const": "constant",
+          "description": "Gravity is the constant `numbers.gravity`, reapplied every Step (A1).",
+          "type": "string"
+        },
+        {
+          "const": "step",
+          "description": "Same as `constant`.",
+          "type": "string"
+        },
+        {
+          "const": "end_step_slope",
+          "description": "Gravity is set by the End Step slope code (family B).",
+          "type": "string"
+        },
+        {
+          "const": "create_only",
+          "description": "Gravity is set only at Create (A4, A5, C).",
+          "type": "string"
+        }
+      ]
+    },
     "GravityReapply": {
       "description": "When gravity is set back to its constant.",
       "oneOf": [
@@ -631,14 +656,26 @@
     },
     "GravityRulesDraft": {
       "additionalProperties": false,
-      "description": "`[gravity]` as written.",
+      "description": "`[gravity]` as written. `model` is the standard spelling of `reapply`; a written `reapply`\nwins over it.",
       "properties": {
         "block_landing_zeroes": {
           "default": null,
+          "description": "`block_landing_zeroes = true`.",
           "type": [
             "boolean",
             "null"
           ]
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GravityModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`model = \"constant\" | \"step\" | \"end_step_slope\" | \"create_only\"`."
         },
         "reapply": {
           "anyOf": [
@@ -648,7 +685,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "`reapply = \"step\"`."
         }
       },
       "type": "object"
@@ -1759,41 +1797,122 @@
         }
       ]
     },
-    "SlopeModel": {
+    "SlopeKind": {
+      "description": "`[slope] model`: the standard name for the downhill snap model, the same value as\n`[slope] downhill`. `block_step`, `mirror_contact` and `keep_hspeed` remain separate keys.",
+      "oneOf": [
+        {
+          "const": "none",
+          "description": "No downhill snap.",
+          "type": "string"
+        },
+        {
+          "const": "poronkusema",
+          "description": "Poronkusema's downhill snap.",
+          "type": "string"
+        },
+        {
+          "const": "rainbow",
+          "description": "Rainbow's downhill snap.",
+          "type": "string"
+        },
+        {
+          "const": "fairy_tale",
+          "description": "Fairy-tale's downhill snap.",
+          "type": "string"
+        }
+      ]
+    },
+    "SlopeRulesDraft": {
       "additionalProperties": false,
-      "description": "`[slope]`: the slopes of group A and eat-the-new-year (kid/A1.md poronkusema, rainbow, rori,\nfairy-tale; kid/A4.md). `slope` rises to the right, `slope_mirror` to the left. A game's slope\nkinds carry only those classes (not `block`), so the kid's `slope` and `slope_mirror`\ncollision rows run alone, as the original's child-object events do.",
+      "description": "`[slope]` as written: a written section replaces the preset's whole (as it did before the\nstandard names), starting from the rule defaults. `model` is the standard spelling of\n`downhill`; a written `downhill` wins over it.",
       "properties": {
         "air_sprite_probe": {
-          "$ref": "#/$defs/Real",
-          "default": 0.0,
-          "description": "`air_sprite`: no fall sprite while a slope lies this many pixels below (rori, fairy-tale: 2).\n0 means off."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "`air_sprite_probe`."
         },
         "block_step": {
-          "$ref": "#/$defs/BlockSlopeStep",
-          "description": "How the horizontal block contact climbs (`block_slope_step`)."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BlockSlopeStep"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`block_step`."
         },
         "downhill": {
-          "$ref": "#/$defs/Downhill",
-          "description": "The End Step downhill snap (`downhill_snap`)."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Downhill"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`downhill`."
         },
         "jump_probe": {
-          "$ref": "#/$defs/Real",
-          "default": 0.0,
-          "description": "`slope_jump`: with a slope or mirrored slope within this many pixels below a Jump press\nforces a single jump (rainbow, rori, fairy-tale: 2). 0 means off."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "`jump_probe`."
         },
         "keep_hspeed": {
-          "default": false,
-          "description": "`walk` keeps `hspeed` while a slope is 1 px below and the key points downhill\n(eat-the-new-year, kid/A4.md).",
-          "type": "boolean"
+          "default": null,
+          "description": "`keep_hspeed`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
         },
         "mirror_contact": {
-          "$ref": "#/$defs/MirrorContact",
-          "description": "Which way the `slope_mirror` row's contact goes for a right hit or `hspeed` 0, when the\nclimb does not apply (rori: `left`, a bug the original keeps; fairy-tale: `right`)."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MirrorContact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`mirror_contact`."
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlopeKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`model = \"none\" | \"poronkusema\" | \"rainbow\" | \"fairy_tale\"`."
         },
         "step": {
-          "$ref": "#/$defs/Real",
-          "default": 3.0,
-          "description": "The climb: 3 px sideways and 3 px up."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "`step`."
         }
       },
       "type": "object"
@@ -1833,8 +1952,8 @@
         }
       ]
     },
-    "VineModel": {
-      "description": "Vine model.",
+    "VineMode": {
+      "description": "`[vine] model` as written: the standard model names, with `latched_keys` also selecting the\nkey-reading model (`[input] vine_keys = \"latched_flags\"`).",
       "oneOf": [
         {
           "const": "none",
@@ -1847,15 +1966,20 @@
           "type": "string"
         },
         {
-          "const": "distance_sym_early",
-          "description": "Both sides within one pixel (C, WP5c).",
+          "const": "latched_keys",
+          "description": "The game's latched key flags drive the vine keys (A3); the distance rule is asymmetric.",
+          "type": "string"
+        },
+        {
+          "const": "symmetric_early",
+          "description": "Both sides within one pixel (C).",
           "type": "string"
         }
       ]
     },
     "VineRulesDraft": {
       "additionalProperties": false,
-      "description": "`[vine]` as written.",
+      "description": "`[vine]` as written. `model` is the standard spelling of the vine model; `latched_keys` also\nselects the key-reading model, which `apply` writes into `[input] vine_keys`.",
       "properties": {
         "drop": {
           "anyOf": [
@@ -1866,10 +1990,12 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "`drop`."
         },
         "kick": {
           "default": null,
+          "description": "`kick`.",
           "items": {
             "$ref": "#/$defs/Real"
           },
@@ -1889,20 +2015,23 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "`left_below`."
         },
         "model": {
           "anyOf": [
             {
-              "$ref": "#/$defs/VineModel"
+              "$ref": "#/$defs/VineMode"
             },
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "`model = \"none\" | \"distance_asym\" | \"latched_keys\" | \"symmetric_early\"`."
         },
         "probe_down_fixed": {
           "default": null,
+          "description": "`probe_down_fixed`.",
           "type": [
             "boolean",
             "null"
@@ -1917,7 +2046,8 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "`right_equal`."
         },
         "slide": {
           "anyOf": [
@@ -1928,10 +2058,12 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "`slide`."
         },
         "walk_ignores_vines": {
           "default": null,
+          "description": "`walk_ignores_vines`.",
           "type": [
             "boolean",
             "null"
@@ -1980,9 +2112,47 @@
         }
       ]
     },
-    "WaterRules": {
+    "WaterModel": {
+      "description": "`[water] model`: the standard name for the water air-jump rule, the same value as\n`[jump] water_air` (docs/format/physics.md \"Standard names and aliases\").",
+      "oneOf": [
+        {
+          "const": "none",
+          "description": "Water never allows the air jump.",
+          "type": "string"
+        },
+        {
+          "const": "jump_refresh",
+          "description": "Water 2 one pixel below allows the air jump even without `djump` (A1).",
+          "type": "string"
+        },
+        {
+          "const": "full_jump",
+          "description": "Water allows any number of air jumps (family B).",
+          "type": "string"
+        },
+        {
+          "const": "water3_keeps",
+          "description": "Water 2 and 3 allow the air jump and water 3 keeps `djump` (family C).",
+          "type": "string"
+        }
+      ]
+    },
+    "WaterRulesDraft": {
       "additionalProperties": false,
-      "description": "`[water]` (WP5a).",
+      "description": "`[water]` as written. Its only standard key is `model`, which names the same value as\n`[jump] water_air`.",
+      "properties": {
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WaterModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`model = \"none\" | \"jump_refresh\" | \"full_jump\" | \"water3_keeps\"`."
+        }
+      },
       "type": "object"
     }
   },
@@ -2098,7 +2268,7 @@
           "type": "null"
         }
       ],
-      "description": "`[ladder]`."
+      "description": "`[ladder]` (standard alias `[ladders]`)."
     },
     "misc": {
       "anyOf": [
@@ -2131,7 +2301,7 @@
           "type": "null"
         }
       ],
-      "description": "`[platform]`."
+      "description": "`[platform]` (standard alias `[platforms]`)."
     },
     "preset": {
       "anyOf": [
@@ -2169,13 +2339,13 @@
     "slope": {
       "anyOf": [
         {
-          "$ref": "#/$defs/SlopeModel"
+          "$ref": "#/$defs/SlopeRulesDraft"
         },
         {
           "type": "null"
         }
       ],
-      "description": "`[slope]`."
+      "description": "`[slope]` (standard alias `[slopes]`)."
     },
     "sounds": {
       "anyOf": [
@@ -2208,12 +2378,12 @@
           "type": "null"
         }
       ],
-      "description": "`[vine]`."
+      "description": "`[vine]` (standard alias `[vines]`)."
     },
     "water": {
       "anyOf": [
         {
-          "$ref": "#/$defs/WaterRules"
+          "$ref": "#/$defs/WaterRulesDraft"
         },
         {
           "type": "null"

@@ -15,7 +15,7 @@ use crate::num::Real;
 
 pub use super::physics_ext::{
     BlockSlopeStep, Downhill, FlipKind, FlipModel, IceModel, IceRules, LadderEntry, LadderRules,
-    MirrorContact, SlopeModel,
+    MirrorContact, SlopeKind, SlopeModel, SlopeRulesDraft,
 };
 
 /// The kid engine family a profile starts from (`preset = "A1"`): documentation and defaults
@@ -358,6 +358,37 @@ pub enum WaterAir {
     Water3Keeps,
 }
 
+/// `[water] model`: the standard name for the water air-jump rule, the same value as
+/// `[jump] water_air` (docs/format/physics.md "Standard names and aliases").
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WaterModel {
+    /// Water never allows the air jump.
+    #[default]
+    None,
+    /// Water 2 one pixel below allows the air jump even without `djump` (A1).
+    #[serde(alias = "water2_without_flag")]
+    JumpRefresh,
+    /// Water allows any number of air jumps (family B).
+    #[serde(alias = "water_unlimited")]
+    FullJump,
+    /// Water 2 and 3 allow the air jump and water 3 keeps `djump` (family C).
+    Water3Keeps,
+}
+
+impl WaterModel {
+    /// The `[jump] water_air` value this model names.
+    pub fn water_air(self) -> WaterAir {
+        match self {
+            WaterModel::None => WaterAir::None,
+            WaterModel::JumpRefresh => WaterAir::Water2WithoutFlag,
+            WaterModel::FullJump => WaterAir::WaterUnlimited,
+            WaterModel::Water3Keeps => WaterAir::Water3Keeps,
+        }
+    }
+}
+
 /// An extra ground-jump condition besides the classes.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Deserialize)]
@@ -449,6 +480,34 @@ pub enum GravityReapply {
     CreateOnly,
 }
 
+/// `[gravity] model`: the standard name for the gravity reapply rule, the same value as
+/// `[gravity] reapply`. Gravity's orientation when it flips is `[flip] model`, not this.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GravityModel {
+    /// Gravity is the constant `numbers.gravity`, reapplied every Step (A1).
+    #[default]
+    Constant,
+    /// Same as `constant`.
+    Step,
+    /// Gravity is set by the End Step slope code (family B).
+    EndStepSlope,
+    /// Gravity is set only at Create (A4, A5, C).
+    CreateOnly,
+}
+
+impl GravityModel {
+    /// The `[gravity] reapply` value this model names.
+    pub fn reapply(self) -> GravityReapply {
+        match self {
+            GravityModel::Constant | GravityModel::Step => GravityReapply::Step,
+            GravityModel::EndStepSlope => GravityReapply::EndStepSlope,
+            GravityModel::CreateOnly => GravityReapply::CreateOnly,
+        }
+    }
+}
+
 /// `[gravity]`.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields, default)]
@@ -514,6 +573,40 @@ pub enum VineModel {
     DistanceAsym,
     /// Both sides within one pixel (C, WP5c).
     DistanceSymEarly,
+}
+
+/// `[vine] model` as written: the standard model names, with `latched_keys` also selecting the
+/// key-reading model (`[input] vine_keys = "latched_flags"`).
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VineMode {
+    /// No vines.
+    #[default]
+    None,
+    /// Left vine below `left_below`, right vine exactly `right_equal` (A, B).
+    DistanceAsym,
+    /// The game's latched key flags drive the vine keys (A3); the distance rule is asymmetric.
+    LatchedKeys,
+    /// Both sides within one pixel (C).
+    #[serde(alias = "distance_sym_early")]
+    SymmetricEarly,
+}
+
+impl VineMode {
+    /// The distance model this mode names.
+    pub fn vine_model(self) -> VineModel {
+        match self {
+            VineMode::None => VineModel::None,
+            VineMode::DistanceAsym | VineMode::LatchedKeys => VineModel::DistanceAsym,
+            VineMode::SymmetricEarly => VineModel::DistanceSymEarly,
+        }
+    }
+
+    /// True when the mode reads the game's latched key flags (A3).
+    pub fn latches_keys(self) -> bool {
+        matches!(self, VineMode::LatchedKeys)
+    }
 }
 
 /// `[vine]`.
@@ -737,7 +830,9 @@ fn class_names_opt<'de, D: Deserializer<'de>>(d: D) -> Result<Option<ClassMask>,
 draft_section! {
     /// `[numbers]` as written.
     KidNumbersDraft => KidNumbers {
-        jumps: Vec<Real>, gravity: Real, run_speed: Real, max_vspeed: Real, max_fall_speed: Real,
+        jumps: Vec<Real>, gravity: Real, run_speed: Real, max_vspeed: Real,
+        #[serde(alias = "max_fall")]
+        max_fall_speed: Real,
         release_mult: Real, sprite_threshold: Real, image_speed_idle: Real, image_speed_run: Real,
         air_wall_probe: Real,
     }
@@ -769,10 +864,47 @@ draft_section! {
     /// `[fall_cap]` as written.
     FallCapDraft => FallCap { rule: FallCapRule }
 }
-draft_section! {
-    /// `[gravity]` as written.
-    GravityRulesDraft => GravityRules { reapply: GravityReapply, block_landing_zeroes: bool }
+/// `[gravity]` as written. `model` is the standard spelling of `reapply`; a written `reapply`
+/// wins over it.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct GravityRulesDraft {
+    /// `reapply = "step"`.
+    pub reapply: Option<GravityReapply>,
+    /// `model = "constant" | "step" | "end_step_slope" | "create_only"`.
+    pub model: Option<GravityModel>,
+    /// `block_landing_zeroes = true`.
+    pub block_landing_zeroes: Option<bool>,
 }
+
+impl GravityRulesDraft {
+    /// The base with every field written here replacing the base's. `model` applies before an
+    /// explicit `reapply`, so `reapply` wins when both are written.
+    pub fn over(self, mut base: GravityRules) -> GravityRules {
+        if let Some(model) = self.model {
+            base.reapply = model.reapply();
+        }
+        if let Some(reapply) = self.reapply {
+            base.reapply = reapply;
+        }
+        if let Some(zeroes) = self.block_landing_zeroes {
+            base.block_landing_zeroes = zeroes;
+        }
+        base
+    }
+}
+
+/// `[water]` as written. Its only standard key is `model`, which names the same value as
+/// `[jump] water_air`.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct WaterRulesDraft {
+    /// `model = "none" | "jump_refresh" | "full_jump" | "water3_keeps"`.
+    pub model: Option<WaterModel>,
+}
+
 draft_section! {
     /// `[platform]` as written.
     PlatformRulesDraft => PlatformRules {
@@ -780,11 +912,58 @@ draft_section! {
         reversed_snap: Real,
     }
 }
-draft_section! {
-    /// `[vine]` as written.
-    VineRulesDraft => VineRules {
-        walk_ignores_vines: bool, model: VineModel, left_below: Real, right_equal: Real, slide: Real, kick: [Real; 2],
-        drop: Real, probe_down_fixed: bool,
+/// `[vine]` as written. `model` is the standard spelling of the vine model; `latched_keys` also
+/// selects the key-reading model, which `apply` writes into `[input] vine_keys`.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, PartialEq, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct VineRulesDraft {
+    /// `walk_ignores_vines`.
+    pub walk_ignores_vines: Option<bool>,
+    /// `model = "none" | "distance_asym" | "latched_keys" | "symmetric_early"`.
+    pub model: Option<VineMode>,
+    /// `left_below`.
+    pub left_below: Option<Real>,
+    /// `right_equal`.
+    pub right_equal: Option<Real>,
+    /// `slide`.
+    pub slide: Option<Real>,
+    /// `kick`.
+    pub kick: Option<[Real; 2]>,
+    /// `drop`.
+    pub drop: Option<Real>,
+    /// `probe_down_fixed`.
+    pub probe_down_fixed: Option<bool>,
+}
+
+impl VineRulesDraft {
+    /// The base with every field written here replacing the base's.
+    pub fn over(self, mut base: VineRules) -> VineRules {
+        if let Some(walk) = self.walk_ignores_vines {
+            base.walk_ignores_vines = walk;
+        }
+        if let Some(model) = self.model {
+            base.model = model.vine_model();
+        }
+        if let Some(v) = self.left_below {
+            base.left_below = v;
+        }
+        if let Some(v) = self.right_equal {
+            base.right_equal = v;
+        }
+        if let Some(v) = self.slide {
+            base.slide = v;
+        }
+        if let Some(v) = self.kick {
+            base.kick = v;
+        }
+        if let Some(v) = self.drop {
+            base.drop = v;
+        }
+        if let Some(v) = self.probe_down_fixed {
+            base.probe_down_fixed = v;
+        }
+        base
     }
 }
 draft_section! {
@@ -840,17 +1019,21 @@ pub struct PhysicsProfileDraft {
     pub fall_cap: Option<FallCapDraft>,
     /// `[gravity]`.
     pub gravity: Option<GravityRulesDraft>,
-    /// `[platform]`.
+    /// `[platform]` (standard alias `[platforms]`).
+    #[serde(alias = "platforms")]
     pub platform: Option<PlatformRulesDraft>,
-    /// `[vine]`.
+    /// `[vine]` (standard alias `[vines]`).
+    #[serde(alias = "vines")]
     pub vine: Option<VineRulesDraft>,
     /// `[water]`.
-    pub water: Option<WaterRules>,
+    pub water: Option<WaterRulesDraft>,
     /// `[ice]`.
     pub ice: Option<IceRules>,
-    /// `[slope]`.
-    pub slope: Option<SlopeModel>,
-    /// `[ladder]`.
+    /// `[slope]` (standard alias `[slopes]`).
+    #[serde(alias = "slopes")]
+    pub slope: Option<SlopeRulesDraft>,
+    /// `[ladder]` (standard alias `[ladders]`).
+    #[serde(alias = "ladders")]
     pub ladder: Option<LadderRules>,
     /// `[flip]`.
     pub flip: Option<FlipModel>,

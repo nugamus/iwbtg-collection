@@ -451,6 +451,32 @@ mod tests {
     use super::*;
     use crate::tricks::{TRICKS, TrickType};
 
+    /// The loader accepts the standard names and resolves them to exactly the profile the legacy
+    /// names resolve to, so no value (and therefore no `gameplay_hash` of an unchanged file)
+    /// moves.
+    #[test]
+    fn standard_names_load_to_the_same_profile_as_the_legacy_names() {
+        let profile = |text: &str| {
+            let mut files = PackageFiles::new();
+            files
+                .insert("physics.toml", text.as_bytes().to_vec())
+                .expect("insert");
+            let mut diags = Vec::new();
+            let loaded = load(&files, "physics.toml", false, &mut diags).expect("loads");
+            assert!(diags.is_empty(), "{} diagnostics", diags.len());
+            loaded.profile
+        };
+        let legacy = profile(
+            "preset = \"A1\"\n[numbers]\nmax_fall_speed = 5.0\n\
+             [vine]\nmodel = \"distance_sym_early\"\n",
+        );
+        let standard = profile(
+            "preset = \"A1\"\n[numbers]\nmax_fall = 5.0\n\
+             [vines]\nmodel = \"symmetric_early\"\n",
+        );
+        assert_eq!(legacy, standard);
+    }
+
     #[test]
     fn every_switch_key_has_a_case() {
         let mut draft: PhysicsProfileDraft = toml::from_str("preset = \"A1\"\n").expect("preset A1 parses");
