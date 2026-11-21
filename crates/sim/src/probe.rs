@@ -480,7 +480,7 @@ pub enum SaveField {
 pub fn sample(sim: &mut Sim, probe: &Probe, frame: i64) -> Vec<Vec<trace::Value>> {
     let ids = {
         let w = &sim.world;
-        events::dispatch_order(w, |i| i.alive && i.active && matches(sim.def(), i, probe.object))
+        events::dispatch_order(w, |i| matches(sim.def(), i, probe.object))
     };
     let mut rows = Vec::with_capacity(ids.len());
     for id in ids {
@@ -683,9 +683,7 @@ fn target_instance(
 /// `World::first_of` picks one for a class.
 pub(crate) fn first_of_target(def: &GameDef, w: &World, rules: &TickRules, t: Target) -> Option<InstId> {
     match rules.first_rule {
-        FirstRule::DispatchOrder => events::dispatch_order(w, |i| i.alive && i.active && matches(def, i, t))
-            .first()
-            .copied(),
+        FirstRule::DispatchOrder => events::dispatch_order(w, |i| matches(def, i, t)).first().copied(),
         FirstRule::LowestId => w
             .iter_alive()
             .filter(|i| i.active && matches(def, i, t))

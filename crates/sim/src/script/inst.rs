@@ -634,8 +634,8 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
             s.with_world(|w, host| {
                 let k = kind_id(host, &kind)?;
                 let mut found: Vec<(u16, InstId)> = w
-                    .iter_alive()
-                    .filter(|x| x.active && host.def.kind_covers(k, x.kind))
+                    .iter_visible()
+                    .filter(|x| host.def.kind_covers(k, x.kind))
                     .map(|x| (x.rank, x.id))
                     .collect();
                 found.sort();
