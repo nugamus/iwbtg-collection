@@ -460,6 +460,40 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
                 Ok(ImmutableString::from(kd.name.as_str()))
             })?
         });
+        let s = Rc::clone(shared);
+        docs.add(
+            "name",
+            "The instance's room-file name as a string, or `()` when the room file gives none.",
+        );
+        engine.register_get("name", move |i: &mut Inst| -> Res<Dynamic> {
+            let i = *i;
+            s.with_world(|w, host| {
+                let x = live(w, i)?;
+                Ok(x.name
+                    .and_then(|n| n.index())
+                    .and_then(|n| host.def.names.get(n))
+                    .map_or(Dynamic::UNIT, |name| {
+                        Dynamic::from(ImmutableString::from(name.as_str()))
+                    }))
+            })?
+        });
+        let s = Rc::clone(shared);
+        docs.add(
+            "group",
+            "The instance's room-file group as a string, or `()` when the room file gives none.",
+        );
+        engine.register_get("group", move |i: &mut Inst| -> Res<Dynamic> {
+            let i = *i;
+            s.with_world(|w, host| {
+                let x = live(w, i)?;
+                Ok(x.group
+                    .and_then(|g| g.index())
+                    .and_then(|g| host.def.groups.get(g))
+                    .map_or(Dynamic::UNIT, |group| {
+                        Dynamic::from(ImmutableString::from(group.as_str()))
+                    }))
+            })?
+        });
     }
 
     // ---- The package's custom variables: `this.hp` ----
