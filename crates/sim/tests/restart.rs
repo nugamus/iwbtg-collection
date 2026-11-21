@@ -1,7 +1,10 @@
 //! Restart and reset: the boot-room timeline, saved-room goto, recreate in place, reset and
 //! start from a save.
 
-use iwbtg_sim::def::{DeathOnRestart, ResetKind, RestartKind, RoleSet, RoomRole};
+use iwbtg_sim::def::{
+    DeathOnRestart, ResetKind, RestartKind, RoleSet, RoomRole, SoundDef, SoundId, SoundKind,
+};
+use iwbtg_sim::num::Real;
 use iwbtg_sim::restart::{boot_step, run_reset, run_restart};
 use iwbtg_sim::room::{RoomRequest, StartPoint, perform_change, start_game};
 use iwbtg_sim::run_globals::BootLoad;
@@ -208,4 +211,58 @@ fn start_from_save_still_works_with_the_real_load() {
     assert_eq!(w.status, SimStatus::Running);
     assert_eq!(w.room, g.play);
     assert_eq!(alive(&w, g.kid).len(), 1);
+}
+
+/// F2 in Groups A, B and C stops every sound before game_restart (CLONE_SPEC rooms; kid/A4.md).
+#[test]
+fn f2_stops_all_sounds_before_game_restart() {
+    let g = game(|d| {
+        d.sounds.push(SoundDef {
+            name: "track".into(),
+            kind: SoundKind::Multimedia,
+            length_ticks: 100,
+            volume: Real::ONE,
+            pan: Real::ZERO,
+        });
+    });
+    let mut w = World::new(g.play, 1);
+    let any = spawn(&g, &mut w, g.kid, 0.0, 0.0);
+    with(&g, &mut w, |c| {
+        iwbtg_sim::sound::play(c, SoundId(0), true).unwrap();
+    });
+    assert_eq!(w.sound.copies.len(), 1);
+    with(&g, &mut w, |c| run_reset(c, any).unwrap());
+    assert!(
+        w.sound.copies.is_empty(),
+        "the F2 handler stops all sounds before game_restart"
+    );
+    assert_eq!(w.pending, Some(RoomRequest::GameRestart));
+}
+
+/// The kaenbyou / eat-the-lemon gameReset is recorded as "resets globals and calls
+/// room_goto(rInit)" only, with no sound stop; #225 asks research for its full list.
+#[test]
+fn game_reset_keeps_sounds_until_its_script_is_traced() {
+    let g = game(|d| {
+        d.reset.kind = ResetKind::GameReset;
+        d.sounds.push(SoundDef {
+            name: "track".into(),
+            kind: SoundKind::Multimedia,
+            length_ticks: 100,
+            volume: Real::ONE,
+            pan: Real::ZERO,
+        });
+    });
+    let mut w = World::new(g.play, 1);
+    let any = spawn(&g, &mut w, g.kid, 0.0, 0.0);
+    with(&g, &mut w, |c| {
+        iwbtg_sim::sound::play(c, SoundId(0), true).unwrap();
+    });
+    with(&g, &mut w, |c| run_reset(c, any).unwrap());
+    assert_eq!(
+        w.sound.copies.len(),
+        1,
+        "gameReset has no recorded sound stop; a trace request is filed (#225)"
+    );
+    assert_eq!(w.pending, Some(RoomRequest::Goto(g.boot)));
 }
