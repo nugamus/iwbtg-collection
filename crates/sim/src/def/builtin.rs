@@ -237,6 +237,13 @@ impl Builtin {
         }
     }
 
+    /// The native behaviour this kind belongs to (decision 0005; [`crate::def::traits`]):
+    /// one of the twelve standard behaviours, the controller, the kid, or a data base.
+    #[must_use]
+    pub fn behaviour(self) -> crate::def::traits::Behaviour {
+        crate::def::traits::behaviour(self)
+    }
+
     /// The built-in a package may name, by its package-format name. `probe` and `inert` are not
     /// package names and give `None`.
     pub fn from_name(name: &str) -> Option<Builtin> {

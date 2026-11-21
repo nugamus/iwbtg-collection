@@ -15,6 +15,7 @@ use iwbtg_sim::world::{InstId, SimStatus};
 
 mod hud;
 pub(crate) mod order;
+pub(crate) mod transition;
 
 use crate::bindings::PadInput;
 use crate::input::{Collector, PadReader, key_code};
@@ -404,6 +405,7 @@ fn enter(world: &mut World) {
         ..default()
     });
     world.init_resource::<hud::SignText>();
+    world.init_resource::<transition::Transition>();
     // The sim ticks at the game's rate on a fixed clock; frames only draw what the last tick
     // left. Slow motion (practice.rs) runs the first tick slow already; `follow_room_speed`
     // keeps it so after every tick.
@@ -422,6 +424,7 @@ fn leave(world: &mut World) {
     world.remove_resource::<ViewRect>();
     world.remove_resource::<Previous>();
     world.remove_resource::<hud::SignText>();
+    world.remove_resource::<transition::Transition>();
     world.remove_resource::<RunStart>();
     world.remove_non_send::<Game>();
 }
@@ -694,6 +697,7 @@ pub(crate) fn test_world(pkg: &Package) -> World {
     world.init_resource::<Previous>();
     world.insert_resource(Collector::new(crate::bindings::Bindings::default()));
     world.init_resource::<hud::SignText>();
+    world.init_resource::<transition::Transition>();
     world
 }
 
@@ -711,6 +715,7 @@ pub(crate) fn tick(
     mut shake: ResMut<crate::audio::Shake>,
     mut previous: ResMut<Previous>,
     mut sign: ResMut<hud::SignText>,
+    mut transition: ResMut<transition::Transition>,
     mut replay: Option<ResMut<crate::replays::Recorder>>,
 ) {
     if previous.on {
@@ -738,6 +743,7 @@ pub(crate) fn tick(
         stats.ticks += 1;
         let output = &game.sim.world().output;
         hud::note_tick(&mut sign, output);
+        transition.observe(output, Instant::now());
         audio.push(Instant::now(), output);
         shake.tick(output);
     }
