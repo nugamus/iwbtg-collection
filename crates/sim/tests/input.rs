@@ -40,12 +40,18 @@ impl Fixture {
     }
 
     fn step(&mut self, held: &[Action], pressed: &[Action], released: &[Action]) -> u64 {
+        self.step_with(held, pressed, released, 0)
+    }
+
+    /// A step whose frame also carries `reserved` bits outside `Action::MASK`, to model a
+    /// hypothetical legacy replay.
+    fn step_with(&mut self, held: &[Action], pressed: &[Action], released: &[Action], reserved: u32) -> u64 {
         let bits = |list: &[Action]| list.iter().fold(0u32, |bits, a| bits | a.bit());
         self.sim
             .step(InputFrame {
-                held: bits(held),
-                pressed: bits(pressed),
-                released: bits(released),
+                held: bits(held) | reserved,
+                pressed: bits(pressed) | reserved,
+                released: bits(released) | reserved,
             })
             .tick
     }
@@ -227,4 +233,35 @@ fn only_action_bits_reach_the_latched_world() {
     assert_eq!(f.sim.world().input.frame, InputFrame::EMPTY);
     let (_, _, vs1) = f.kid();
     assert_eq!(vs1, vs0, "reserved bits did not act as a jump or a move");
+}
+
+/// A hypothetical legacy replay whose frames carry reserved bits still produces the same
+/// player-observable outcome: the sim reads no bit outside `Action::MASK`, so the tick count and
+/// the kid's trajectory match the same action input. The hashed input frame itself is masked;
+/// no recorded replay carries such a bit (the collector regression test and the git history:
+/// every replay writer has fed `Collector::take_frame`, which only sets `Action::bit()`).
+#[test]
+fn reserved_bits_do_not_change_the_outcome() {
+    const RESERVED: u32 = (1 << 19) | (1 << 31);
+    fn run(reserved: u32) -> (Vec<u64>, Vec<(f64, f64, f64)>) {
+        let mut f = fixture();
+        let script: [(&[Action], &[Action], &[Action]); 8] = [
+            (&[Action::Jump], &[Action::Jump], &[]),
+            (&[Action::Jump], &[], &[]),
+            (&[Action::Jump], &[], &[]),
+            (&[], &[], &[Action::Jump]),
+            (&[], &[], &[]),
+            (&[Action::Right], &[Action::Right], &[]),
+            (&[Action::Right, Action::Jump], &[Action::Jump], &[]),
+            (&[], &[], &[Action::Right, Action::Jump]),
+        ];
+        let mut ticks = Vec::new();
+        let mut path = Vec::new();
+        for (held, pressed, released) in script {
+            ticks.push(f.step_with(held, pressed, released, reserved));
+            path.push(f.kid());
+        }
+        (ticks, path)
+    }
+    assert_eq!(run(0), run(RESERVED));
 }
