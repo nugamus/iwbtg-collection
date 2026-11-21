@@ -41,7 +41,7 @@ struct Entry {
 }
 
 impl Entry {
-    fn of(def: &GameDef, inst: &Instance) -> Entry {
+    fn of(w: &World, def: &GameDef, inst: &Instance) -> Entry {
         let handles = event_set(def, inst.kind)
             .collisions
             .iter()
@@ -50,7 +50,7 @@ impl Entry {
             rank: inst.rank,
             classes: inst.classes,
             handles,
-            ready: inst.alive && inst.active,
+            ready: w.visible(inst.id, false),
         }
     }
 }
@@ -66,7 +66,11 @@ impl Members {
     /// Every instance of `w` as it is now.
     pub(crate) fn of(w: &World, def: &GameDef) -> Members {
         Members {
-            entries: w.instances().iter().map(|i| (i.id, Entry::of(def, i))).collect(),
+            entries: w
+                .instances()
+                .iter()
+                .map(|i| (i.id, Entry::of(w, def, i)))
+                .collect(),
         }
     }
 
@@ -76,7 +80,7 @@ impl Members {
         for id in ids {
             let found = self.entries.binary_search_by_key(&id, |(i, _)| *i);
             let entry = match w.get(id) {
-                Some(inst) => Entry::of(def, inst),
+                Some(inst) => Entry::of(w, def, inst),
                 None => match found {
                     Ok(at) => match self.entries.get_mut(at) {
                         Some((_, e)) => Entry { ready: false, ..*e },

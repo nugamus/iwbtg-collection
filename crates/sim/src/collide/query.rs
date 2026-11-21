@@ -103,11 +103,11 @@ impl<'a> Q<'a> {
         })
     }
 
-    /// Active, alive (or dead with R22 on), not `notme`, and named by `t`.
+    /// Visible (the world's one predicate, with the R22 `dead_in_queries` opt-in), not `notme`,
+    /// and named by `t`.
     fn eligible(&self, inst: &Instance, t: Target, notme: Option<InstId>) -> bool {
         Some(inst.id) != notme
-            && inst.active
-            && (inst.alive || self.rules.tick.dead_in_queries)
+            && World::visible_instance(inst, self.rules.tick.dead_in_queries)
             && t.matches(self.def, inst)
     }
 

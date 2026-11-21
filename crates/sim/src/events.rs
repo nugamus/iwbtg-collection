@@ -223,7 +223,7 @@ pub fn dispatch_order(w: &World, filter: impl Fn(&Instance) -> bool) -> Vec<Inst
     let mut keyed: Vec<OrderKey> = w
         .instances()
         .iter()
-        .filter(|i| i.alive && i.active && filter(i))
+        .filter(|i| World::visible_instance(i, false) && filter(i))
         .map(|i| order_key(i, Order::Dispatch))
         .collect();
     keyed.sort_unstable();
@@ -236,7 +236,7 @@ pub fn draw_order(w: &World, filter: impl Fn(&Instance) -> bool) -> Vec<InstId> 
     let mut keyed: Vec<OrderKey> = w
         .instances()
         .iter()
-        .filter(|i| i.alive && i.active && i.visible && filter(i))
+        .filter(|i| World::visible_instance(i, false) && i.visible && filter(i))
         .map(|i| order_key(i, Order::Draw))
         .collect();
     keyed.sort_unstable();
@@ -267,7 +267,10 @@ pub fn event_set(def: &GameDef, kind: KindId) -> &EventSet {
 /// "not the later actions of the same event" (CLONE_SPEC tick loop, Confirmed (recorder),
 /// traces/rely-the-needle-4-2/tr-room-02-c.csv row 13).
 pub fn dispatch(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Flow {
-    let Some(inst) = ctx.w.get(me).filter(|i| i.alive && i.active) else {
+    if !ctx.w.visible(me, false) {
+        return Flow::Continue;
+    }
+    let Some(inst) = ctx.w.get(me) else {
         return Flow::Continue;
     };
     let Some(kd) = ctx.def.kind(inst.kind) else {
@@ -354,7 +357,7 @@ fn walk(
     filter: &dyn Fn(&Ctx, &Instance) -> bool,
     mut each: impl FnMut(&mut Ctx, InstId, &mut Ctl) -> Option<Flow>,
 ) -> Flow {
-    let ready = |ctx: &Ctx, i: &Instance| i.alive && i.active && filter(ctx, i);
+    let ready = |ctx: &Ctx, i: &Instance| World::visible_instance(i, false) && filter(ctx, i);
     let mut list: Vec<OrderKey> = ctx
         .w
         .instances()
@@ -403,7 +406,7 @@ fn walk(
 pub fn dispatch_each(ctx: &mut Ctx, ids: &[InstId], ev: &EventKind) -> Flow {
     let mut ctl = Ctl::new(ctx);
     for &id in ids {
-        if ctx.w.exists(id)
+        if ctx.w.visible(id, false)
             && let Some(flow) = fire(ctx, &mut ctl, id, ev)
         {
             return flow;
@@ -471,7 +474,7 @@ fn capture_previous_phase(ctx: &mut Ctx, hooks: &Hooks) -> Flow {
         .w
         .instances()
         .iter()
-        .filter(|i| i.alive && i.active)
+        .filter(|i| ctx.w.visible(i.id, false))
         .map(|i| i.id)
         .collect();
     for id in ids {
@@ -508,7 +511,10 @@ fn alarm_phase(ctx: &mut Ctx) -> Flow {
         &|c: &Ctx, i: &Instance| event_set(c.def, i.kind).alarms != 0,
         |c, id, ctl| {
             for n in 0u8..12 {
-                let inst = c.w.get_mut_unmoved(id).filter(|i| i.alive && i.active)?;
+                if !c.w.visible(id, false) {
+                    return None;
+                }
+                let inst = c.w.get_mut_unmoved(id)?;
                 if c.def
                     .kind(inst.kind)
                     .is_none_or(|k| k.events.alarms & 1 << n == 0)
@@ -539,7 +545,10 @@ fn keyboard_phase(ctx: &mut Ctx) -> Flow {
         |c, id, ctl| {
             for edge in key_event_order() {
                 for a in Action::ALL {
-                    let inst = c.w.get(id).filter(|i| i.alive && i.active)?;
+                    if !c.w.visible(id, false) {
+                        return None;
+                    }
+                    let inst = c.w.get(id)?;
                     let s = event_set(c.def, inst.kind);
                     let f = c.w.input.frame;
                     let (handles, on, ev) = match edge {
@@ -626,7 +635,7 @@ fn boundary_phase(ctx: &mut Ctx, hooks: &Hooks) -> Flow {
             {
                 return Some(flow);
             }
-            if !c.w.exists(id) {
+            if !c.w.visible(id, false) {
                 return None;
             }
             let bbox = match (hooks.bbox)(c, id) {
@@ -777,6 +786,9 @@ pub fn pair_handler(handlers: &[ClassMask], classes: ClassMask) -> Option<(usize
 /// the turn starts.
 fn meet_all(ctx: &mut Ctx, hooks: &Hooks, a: InstId, ctl: &mut Ctl) -> Option<Flow> {
     let def = ctx.def;
+    if !ctx.w.visible(a, false) {
+        return None;
+    }
     let me = ctx.w.get(a)?;
     let (rank, classes) = (me.rank, me.classes);
     let mine = handler_classes(event_set(def, me.kind));
@@ -784,16 +796,16 @@ fn meet_all(ctx: &mut Ctx, hooks: &Hooks, a: InstId, ctl: &mut Ctl) -> Option<Fl
         .w
         .instances()
         .iter()
-        .filter(|b| b.id != a && b.alive && b.active && b.rank >= rank)
+        .filter(|b| b.id != a && World::visible_instance(b, false) && b.rank >= rank)
         .filter(|b| b.classes.intersects(mine) || classes.intersects(handler_classes(event_set(def, b.kind))))
         .map(|b| (b.rank, b.id))
         .collect();
     inner.sort_unstable();
     for (_, b) in inner {
-        if !ctx.w.exists(a) {
+        if !ctx.w.visible(a, false) {
             return None;
         }
-        if !ctx.w.exists(b) {
+        if !ctx.w.visible(b, false) {
             continue;
         }
         match (hooks.overlaps)(ctx, a, b) {
@@ -870,11 +882,11 @@ fn meet_near(
         inner.dedup();
         for key in inner {
             let b = key.1;
-            if !ctx.w.exists(a) {
+            if !ctx.w.visible(a, false) {
                 return None;
             }
             after = Some(key);
-            if !ctx.w.exists(b) {
+            if !ctx.w.visible(b, false) {
                 continue;
             }
             match (hooks.overlaps)(ctx, a, b) {
@@ -912,10 +924,10 @@ fn one_way(
     tested: bool,
 ) -> Option<Flow> {
     let def = ctx.def;
-    let (Some(m), Some(o)) = (
-        ctx.w.get(me).filter(|i| i.alive && i.active),
-        ctx.w.get(other).filter(|i| i.alive && i.active),
-    ) else {
+    if !ctx.w.visible(me, false) || !ctx.w.visible(other, false) {
+        return None;
+    }
+    let (Some(m), Some(o)) = (ctx.w.get(me), ctx.w.get(other)) else {
         return None;
     };
     let (_, with) = pair_handler(&event_set(def, m.kind).collisions, o.classes)?;

@@ -79,7 +79,10 @@ pub fn start_with_def(
 
 /// The run's timeline id and whether it still runs, for checks between moments.
 fn current(ctx: &Ctx, me: InstId) -> Option<(TimelineId, bool)> {
-    let inst = ctx.w.get(me).filter(|i| i.alive && i.active)?;
+    if !ctx.w.visible(me, false) {
+        return None;
+    }
+    let inst = ctx.w.get(me)?;
     inst.timeline.as_ref().map(|r| (r.timeline, r.running))
 }
 

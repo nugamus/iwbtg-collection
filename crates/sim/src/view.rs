@@ -13,7 +13,7 @@ use crate::collide::Target;
 use crate::error::SimError;
 use crate::num::{self, Real};
 use crate::rules::NumRules;
-use crate::world::{Ctx, InstId};
+use crate::world::{Ctx, InstId, World};
 
 /// One view's run-time state.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
@@ -200,7 +200,7 @@ fn follow_target(ctx: &Ctx, t: Target) -> Option<InstId> {
         .w
         .instances()
         .iter()
-        .filter(|i| i.alive && i.active && t.matches(ctx.def, i))
+        .filter(|i| World::visible_instance(i, false) && t.matches(ctx.def, i))
         .map(|i| i.id);
     ctx.w.first_among(ids, &ctx.rules.tick)
 }
