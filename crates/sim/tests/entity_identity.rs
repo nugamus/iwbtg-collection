@@ -159,3 +159,48 @@ fn no_point_is_never_a_fallback() {
         );
     }
 }
+
+/// #1153 E3: the draw layer is the declared `depth`, not an instance's numeric id. A nearer
+/// (lower) depth draws in front even when it was created later, and equal depths tie-break by
+/// creation order.
+#[test]
+fn a_draw_layer_is_the_declared_depth_not_the_instance_id() {
+    use iwbtg_sim::def::KindDef;
+    use iwbtg_sim::events::draw_order;
+
+    let mut b = GameDefBuilder::new("e3");
+    let mut near = KindDef::new("near", Builtin::Inert);
+    near.depth = Real::new(-10.0);
+    let near = b.kind(near);
+    let mut far = KindDef::new("far", Builtin::Inert);
+    far.depth = Real::new(10.0);
+    let far = b.kind(far);
+    b.room(RoomDef::new("room_0", 800, 608));
+    let def = b.build().unwrap();
+
+    let mut w = World::new(RoomId(0), 1);
+    let spawn = |w: &mut World, kind| {
+        with_ctx(&def, w, |c| {
+            c.spawn(
+                kind,
+                Real::ZERO,
+                Real::ZERO,
+                SpawnInit {
+                    rank: Some(0),
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+        })
+    };
+    // near_a has the lowest id and far the middle one, so only depth can put far first.
+    let near_a = spawn(&mut w, near);
+    let far_id = spawn(&mut w, far);
+    let near_b = spawn(&mut w, near);
+    assert!(near_a < far_id && far_id < near_b);
+    assert_eq!(
+        draw_order(&w, |_| true),
+        vec![far_id, near_a, near_b],
+        "depth 10 draws behind depth -10; equal depths keep creation order"
+    );
+}

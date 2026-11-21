@@ -174,7 +174,10 @@ pub struct Instance {
     pub solid: bool,
     /// GM `visible`.
     pub visible: bool,
-    /// GM `depth`.
+    /// GM `depth`, which is also the draw-order key (E3 of #1153): larger is farther back, and
+    /// equal depths tie-break by creation order (`events::draw_order`). The value comes from
+    /// declared data (the kind's default, a room-file instance override, or a `set depth`
+    /// script); the instance's numeric `id` is a runtime handle and tiebreak, never a layer.
     pub depth: Real,
     /// Position, speeds, gravity, friction (WP2).
     pub m: Motion,
