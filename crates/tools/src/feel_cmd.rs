@@ -295,9 +295,9 @@ kid_count = 1
     fn the_public_set_runs_from_the_checkout() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sim/tests/feel");
         let paths = contract_paths(&root).unwrap();
-        // The public set: the issue examples, the #1149 lifecycle contract and the #1158 sound
-        // contract. Update this with the contract when a new public file lands.
-        assert_eq!(paths.len(), 5, "{paths:?}");
+        // Derive the set from the directory: a new contract must not fail this test. #1241 makes
+        // the sim test's compiled-in list follow the same rule.
+        assert!(!paths.is_empty(), "the public contract set is empty");
         for path in &paths {
             let id = contract_id(&root, path);
             let (got, status, reason) = sweep_one(&root, path, None);

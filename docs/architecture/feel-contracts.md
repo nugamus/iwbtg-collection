@@ -136,7 +136,7 @@ cargo xtask feel
 
 - A mismatch prints `mismatch: tick 41, kid.y: expected 576.0, got 579.0` plus five ticks of context, like the trace diff.
 - The public set (`crates/sim/tests/feel/{lifecycle,physics,collision}/*.toml`) also runs as `cargo test -p iwbtg-sim --test feel`, so every CI target covers the format and the runner without the private repos.
-- The private set runs like `cargo xtask fidelity`, but the packages come from the **games repo** (`IWBTG_GAMES`), where the hand-worked rooms and kinds live; the trace sweep uses `IWBTG_RESEARCH` for the original traces. `--bless` updates the baseline. A missing package, a contract that fails to load and a status worse than the baseline are FAIL, never a skip.
+- The private set runs like `cargo xtask fidelity`, but the packages come from the **games repo** (`IWBTG_GAMES`), where the hand-worked rooms and kinds live. `IWBTG_RESEARCH` is the trace and evidence repo only: it supplies the originals a contract cites in `evidence`, never a feel package. `--bless` updates the baseline. A missing package, a contract that fails to load and a status worse than the baseline are FAIL, never a skip.
 - A new contract is `OPEN` until it passes. A broken contract is filed with the F tier and the game's deviation log, not deleted.
 - CI runs the public set on every sim/format change and the private set is run by the lead after merge waves and before a game is ranked, exactly as the trace sweep is today ([testing](testing.md)).
 
