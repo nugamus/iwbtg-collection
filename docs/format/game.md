@@ -11,6 +11,7 @@ version = "1.0.0"                # version of our port (semver)
 source_version = "4.2"           # version of the original we ported
 engine_pack = "yuuutu"           # engine pack in games/_engines/, optional
 engine_rev = 0                   # built-in behavior revision this package was verified against
+ruleset = "gm8@0"                # optional; absent means gm8 at engine_rev (format 0, decision 0005)
 runner = "gm80"                  # gm80 | gm81: the original's runner, provenance (same simulation rules)
 physics = "physics.toml"
 start_room = "title"
@@ -21,6 +22,17 @@ object_order = [                 # event and collision order; every kind used mu
   "save", "warp", "platform", "trigger", "@boss1",
 ]
 room_order = ["title", "room_1", "room_2"]   # optional; GM room order for room_goto_next/previous
+
+[compat]                         # optional; decision 0005
+profile = "gm8/a1@1"             # the package's family bundle; absent is inferred from the physics preset
+
+[[compat.deviation]]             # one declared deviation from the ruleset's closed catalogue
+id = "save.position"
+value = "xy_base100_bytes"
+why = "the original stores the position in bytes"
+impact = "F1"
+evidence = "trace:rely/room-1"
+issue = 1234
 
 [engine]                         # optional; engine settings
 new_game_room = "room_1"         # where a new game starts; default start_room (with a warning)
@@ -152,6 +164,16 @@ Field rules:
 | `[key_art]` | no | `image` (the game's key art) and `maps` (per-map overrides, map id to path). See [Key art](#key-art). |
 | `[controls]` | no | A label for each generic extra action the game uses: `extra1` to `extra4`, one line of 1 to 24 characters ("Teleport", "Nudge left"). The client shows a game's labels where the player binds keys and in the HUD's input display, and shows only the extra actions a game labels. Every extra action the game reads (its physics `events.keys`, its scripts) should have one. Labels are cosmetic: they are not in the gameplay hash. |
 | `[[third_party]]` | yes, one per file that is not the creator's own work or ours | `path`, `what`, `owner`, `license`, `status`. Commercial music, Kayin's sprites and engine assets all go here. |
+
+## Ruleset and compatibility profile
+
+Decision [0005](../decisions/0005-standard-mechanics.md) splits a package's behavior into a **ruleset** (the engine's semantic contract), an engine-defined **compatibility profile** (a data bundle inside that ruleset plus declared deviations) and `physics.toml` (per-game tuning and event lists). Format 0 reads the first two as declarations only; they cannot change a run.
+
+- **`ruleset = "<name>@<rev>"`.** Absent means `gm8` at the package's `engine_rev`. In format 0 the only ruleset this build implements is `gm8`, and its revision is exactly `engine_rev`; `ruleset = "gm8@0"` is therefore the explicit spelling of the absent field. `standard@1` is not implemented yet, and the format-1 shape (`ruleset@N` superseding `engine_rev`) waits on #795/#928.
+- **`[compat] profile = "<ruleset>/<family>@<n>"`** (`gm8/a1@1`). Absent means the bundle of the physics preset's family: `a1` to `a5`, `b` or `c`. The known bundles are revision 1. A different family, an unknown name or another revision is an error. A profile is data: it cannot add code or supply a [runner-rule](../architecture/sim.md) value.
+- **`[[compat.deviation]]`** declares one difference the package keeps from the ruleset. Every entry has `id`, `value`, `why`, `impact` (`F1`, `F2` or `F3`), `evidence` and `issue`; a missing or empty provenance field is an error. The ids form a **closed catalogue** in `crates/format/src/compat.rs`: `save.position`, `jump.cancel`, `jump.air`, `jump.water_air`, `fall_cap.rule`, `flip.model`, `platform.take`, `ice.model`, `input.walk`, `input.vine_keys`, `vine.model`, `gravity.reapply`, `slope.mirror_contact` and `slope.downhill`. Each selects an existing enum value and no other field. An unknown id, a value of the wrong type, or a value outside the entry's set is an error.
+- **Format 0 resolves a declaration to what the package already does.** The declared profile must name the physics preset's family, and each deviation must name the value the game's physics profile already resolves to (and no room profile may resolve it differently). Otherwise the loader errors with what the package resolves to. Because of that, `ruleset` and `[compat]` are removed before the `gameplay_hash` is computed: writing the explicit fields keeps the hash of the package without them. Format 1, when it freezes, will hash them as behavior.
+- `iwbtg pkg check` prints the resolved values (`ruleset: gm8@0`, `profile: gm8/a1@1`, `deviation: save.position=xy_base100_bytes`).
 
 ## Timing triggers
 

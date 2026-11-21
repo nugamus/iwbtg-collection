@@ -56,6 +56,7 @@ use crate::tracemap::{TRACE_MAP_PATH, TraceMap, TraceParam, TraceStatus, load_tr
 use crate::vars::intern_vars;
 use crate::{params, particles, paths, physics, sounds, timelines};
 
+mod compat;
 mod game;
 mod hash;
 mod kid;
@@ -101,6 +102,9 @@ pub struct LoadReport {
     /// How the game's physics stands against its engine pack's family preset (#802). `None` when
     /// no definition was built. A catalog or game page reads this for the custom-physics mark.
     pub physics: Option<physics::PhysicsStanding>,
+    /// The resolved ruleset, compatibility profile and declared deviations (decision 0005).
+    /// `None` when no definition was built.
+    pub compat: Option<crate::compat::Resolved>,
 }
 
 /// One map's resolved timing chain (docs/format/game.md, Maps).
@@ -141,6 +145,7 @@ pub fn load_report(files: &PackageFiles, mode: LoadMode) -> LoadReport {
                 gameplay_hash: None,
                 maps: Vec::new(),
                 physics: None,
+                compat: None,
             };
         }
     };
@@ -163,12 +168,14 @@ pub fn load_report(files: &PackageFiles, mode: LoadMode) -> LoadReport {
             .collect();
         physics::standing(files, &manifest, &def.physics, &rooms)
     });
+    let compat = def.as_ref().map(|def| crate::compat::resolve(&manifest, def));
     LoadReport {
         def,
         diagnostics: diags,
         gameplay_hash,
         maps: std::mem::take(&mut l.maps),
         physics: physics_mark,
+        compat,
     }
 }
 
@@ -609,6 +616,8 @@ impl<'a> Loader<'a> {
             self.legacy_kid_mask();
         }
         self.load_room_physics(&physics);
+        // `[compat]` (decision 0005): the profile and deviations against the resolved physics.
+        self.check_compat(&physics);
         // Step 6: variable ids, from every name the loader sees.
         let vars = self.intern(&rooms);
         // Step 4, second half, and step 5 for placed instances.
