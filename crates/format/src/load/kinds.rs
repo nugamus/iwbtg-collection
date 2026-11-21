@@ -204,11 +204,22 @@ impl<'a> Loader<'a> {
                         base = Some(Builtin::Inert);
                     }
                     None => {
+                        // The accepted set is the kind names plus the additive behaviour bases
+                        // (docs/format/builtins.md, decision 0005); name both so a typo of
+                        // either is diagnosable.
+                        let bases: Vec<&str> = iwbtg_sim::def::traits::BEHAVIOUR_BASES
+                            .iter()
+                            .map(|(name, _, _)| *name)
+                            .collect();
                         self.error(
                             path,
                             text,
                             b.span(),
-                            format!("`{}` is not a built-in kind", b.get_ref()),
+                            format!(
+                                "`{}` is not a built-in kind or a behaviour base ({})",
+                                b.get_ref(),
+                                bases.join(", ")
+                            ),
                         );
                         return;
                     }
