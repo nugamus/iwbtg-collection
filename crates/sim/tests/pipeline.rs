@@ -475,7 +475,7 @@ fn boundary_and_animation_slots_move() {
     let order_of = |boundary, anim| {
         let mut fx = Fx::new(def.clone());
         fx.rules.tick.boundary_slot = boundary;
-        fx.rules.tick.anim_slot = anim;
+        fx.rules.tick.timing.anim_slot = anim;
         let a = fx.probe(k, 795.0, 300.0, p("A"));
         fx.probe(k, 100.0, 300.0, p("B").style(iwbtg_sim::events::ProbeLog::Silent));
         fx.touch(a, true);

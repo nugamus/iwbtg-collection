@@ -8,8 +8,9 @@
 /// Rules for the tick pipeline and event dispatch.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct TickRules {
-    /// R30 (decision 0005): the run's clock and the unit of every timed system. Default: the
-    /// legacy `gm8` policy, so every current package keeps its `room_speed` behavior.
+    /// R30 (decision 0005): the run's clock, the unit of every timed system, and the phase each
+    /// advances in. Default: the legacy `gm8` policy, so every current package keeps its
+    /// `room_speed` behavior.
     pub timing: TimingRules,
     /// R1 (U1, answered by the recorder): when `xprevious`/`yprevious` are captured.
     pub prev_capture: PrevCapture,
@@ -19,16 +20,6 @@ pub struct TickRules {
     /// lowest id; famB-multikid-restart-b rows 25-26): which instance is "the first" in queries,
     /// the kid, view follow, saveGame.
     pub first_rule: FirstRule,
-    /// R6 (U6, answered by the recorder): where timelines advance.
-    pub timeline_slot: TimelineSlot,
-    /// R7 (U7, answered by the recorder): where the animation update runs.
-    pub anim_slot: AnimSlot,
-    /// R7b (answered by the recorder): whether an instance without a sprite (or with a sprite of
-    /// 0 frames) advances `image_index`.
-    pub anim_nosprite: NoSpriteAnim,
-    /// R7 (sprites Inferred step 3, not traced): a negative `image_speed` that takes
-    /// `image_index` below 0.
-    pub anim_below_zero: BelowZeroWrap,
     /// R5 (U4, answered by the recorder): where Outside Room and Intersect Boundary run.
     pub boundary_slot: BoundarySlot,
     /// R8 (U8, answered by the recorder for room_goto and game_restart): what still runs after a
@@ -84,11 +75,14 @@ pub enum TimeUnit {
     Frames,
 }
 
-/// R30: the clock and the unit of every timed system (decision 0005, "One scheduler").
+/// R30: the clock, the unit, and the phase of every timed system (decision 0005, "One
+/// scheduler").
 ///
 /// Alarms (R3), timelines (R6), paths (M8) and animation (R7) each advance exactly once per
 /// tick, so their values are tick counts. The units are declared here rather than inferred so
 /// the loader has one table to validate against and a `standard` package can state its units.
+/// The slots live here too: the tick pipeline's phase plan is built from this one table, not
+/// from per-system switches scattered through `TickRules`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct TimingRules {
     /// How the run's clock is paced.
@@ -101,6 +95,16 @@ pub struct TimingRules {
     pub paths: TimeUnit,
     /// R7: `image_index` advances by `image_speed` once per tick; `anim::advance` wraps it.
     pub animation: TimeUnit,
+    /// R6 (U6, answered by the recorder): where timeline moments advance.
+    pub timeline_slot: TimelineSlot,
+    /// R7 (U7, answered by the recorder): where the animation update runs.
+    pub anim_slot: AnimSlot,
+    /// R7b (answered by the recorder): whether an instance without a sprite (or with a sprite
+    /// of 0 frames) advances `image_index`.
+    pub anim_nosprite: NoSpriteAnim,
+    /// R7 (sprites Inferred step 3, not traced): a negative `image_speed` that takes
+    /// `image_index` below 0.
+    pub anim_below_zero: BelowZeroWrap,
 }
 
 impl TimingRules {
@@ -268,6 +272,26 @@ mod tests {
         assert_eq!(rules.timing.paths, TimeUnit::Ticks);
         assert_eq!(rules.timing.animation, TimeUnit::Ticks);
         assert!(rules.timing.all_ticks());
+        assert_eq!(rules.timing.timeline_slot, TimelineSlot::AfterBeginStep);
+        assert_eq!(rules.timing.anim_slot, AnimSlot::AfterDraw);
+        assert_eq!(rules.timing.anim_nosprite, NoSpriteAnim::Advance);
+        assert_eq!(rules.timing.anim_below_zero, BelowZeroWrap::AddFramesAndFire);
+    }
+
+    #[test]
+    fn the_timing_slots_live_only_in_timing_rules() {
+        // Every R6/R7 switch is on `TimingRules`; `TickRules` keeps only the non-timer phases.
+        let mut rules = TickRules::default();
+        rules.timing.anim_slot = AnimSlot::AfterMotion;
+        rules.timing.anim_nosprite = NoSpriteAnim::Frozen;
+        assert_eq!(
+            rules.timing,
+            TimingRules {
+                anim_slot: AnimSlot::AfterMotion,
+                anim_nosprite: NoSpriteAnim::Frozen,
+                ..TimingRules::default()
+            }
+        );
     }
 
     #[test]

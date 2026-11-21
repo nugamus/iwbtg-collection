@@ -1,5 +1,8 @@
 //! Running timelines (docs/architecture/sim/tick.md row 3, R6, R6b). WP0 declared; WP1 owns.
 //!
+//! One system in the R30 tick scheduler: `TimingRules::timelines` declares a moment to be a tick
+//! offset, and `TimingRules::timeline_slot` places the phase that advances the position.
+//!
 //! CLONE_SPEC sound section, Confirmed (recorder): a timeline set at position 0 during room
 //! entry runs moment 0 on the room's first tick, and moment N runs N ticks later;
 //! `timeline_position` reads 1 after that first tick (traces/eat-the-rori-girl/audio-rori-sync-b.csv
