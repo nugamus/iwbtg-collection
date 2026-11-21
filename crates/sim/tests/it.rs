@@ -304,8 +304,8 @@ mod kid_moving_block;
 #[path = "kid_restart.rs"]
 mod kid_restart;
 
-#[path = "lifecycle.rs"]
-mod lifecycle;
+#[path = "kid_script_slots.rs"]
+mod kid_script_slots;
 
 #[path = "kid_slope.rs"]
 mod kid_slope;
@@ -318,6 +318,9 @@ mod kid_temp;
 
 #[path = "kid_water_setters.rs"]
 mod kid_water_setters;
+
+#[path = "lifecycle.rs"]
+mod lifecycle;
 
 #[path = "lint_gm_compare.rs"]
 mod lint_gm_compare;

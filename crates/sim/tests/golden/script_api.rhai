@@ -88,6 +88,26 @@ fn alarm(n) {
                 emit("api_tick");
             }
             this.x = clamp(k.x, 100.0, 700.0);
+            // The kid field API (decision 0004): every getter reads, and every writable field
+            // writes its current value back so the corpus covers the registration without
+            // changing the run.
+            k.djump = k.djump;
+            k.tjump = k.tjump;
+            k.onPlatform = k.onPlatform;
+            k.ladder = k.ladder;
+            k.frozen = k.frozen;
+            k.frozen2 = k.frozen2;
+            k.muteki = k.muteki;
+            k.curJumps = k.curJumps;
+            k.tempHspeed = k.tempHspeed;
+            k.maxSpeed = k.maxSpeed;
+            k.maxVspeed = k.maxVspeed;
+            k.maxFallSpeed = k.maxFallSpeed;
+            k.scale = k.scale;
+            // The read-only kid fields.
+            let flags = k.ladderud || k.ladderjump || k.flipped || k.on_slope_last || k.onVineL || k.onVineR;
+            let nums = k.yflag + k.facing + k.walk_h + k.jump + k.jump2 + k.jump3;
+            if flags && gm_lt(nums, -1e9) { emit("kid_fields"); }
         }
         this.set_alarm(1, 30.0 + this.get_alarm(0) * 0.0);
     }
