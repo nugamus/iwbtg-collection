@@ -99,7 +99,7 @@ mod tests {
         assert_eq!(r.tick.timing.clock, tick::ClockPolicy::RoomSpeed);
         assert!(r.tick.timing.all_ticks());
         assert_eq!(r.tick.dispatch, tick::DispatchOrder::RankThenCreation);
-        assert_eq!(r.tick.anim_slot, tick::AnimSlot::AfterDraw);
+        assert_eq!(r.tick.timing.anim_slot, tick::AnimSlot::AfterDraw);
         assert_eq!(r.tick.new_instances_join_phase, tick::JoinPhase::LaterInOrder);
         assert_eq!(r.num.compare, num::CompareMode::Epsilon(Real::new(1e-13)));
         assert_eq!(r.num.truth, num::Truth::GeHalf);

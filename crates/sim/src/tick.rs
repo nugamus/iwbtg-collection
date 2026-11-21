@@ -20,7 +20,9 @@ use crate::input::InputFrame;
 use crate::motion::{self, MotionEvents};
 use crate::num::Real;
 use crate::room::{self, RoomRequest};
-use crate::rules::tick::{AnimSlot, BoundarySlot, ClockPolicy, DirectLatch, PrevCapture, TickRules};
+use crate::rules::tick::{
+    AnimSlot, BoundarySlot, ClockPolicy, DirectLatch, PrevCapture, TickRules, TimelineSlot, TimingRules,
+};
 use crate::sound;
 use crate::stripped;
 use crate::timing::{self, Split};
@@ -195,34 +197,7 @@ pub fn finish_tick(ctx: &mut Ctx, hooks: &Hooks) -> Result<Vec<Split>, SimError>
 /// `None` when the sim halted.
 fn rows(ctx: &mut Ctx, hooks: &Hooks) -> Option<()> {
     let rules = &ctx.rules.tick;
-    let (prev, anim, boundary) = (rules.prev_capture, rules.anim_slot, rules.boundary_slot);
-    let mut plan: Vec<Phase> = Vec::with_capacity(14);
-    if prev == PrevCapture::TickStart {
-        plan.push(Phase::CapturePrevious);
-    }
-    plan.extend([
-        Phase::BeginStep,
-        Phase::Timelines,
-        Phase::Alarms,
-        Phase::Keyboard,
-        Phase::Mouse,
-        Phase::Step,
-        Phase::Motion,
-    ]);
-    if anim == AnimSlot::AfterMotion {
-        plan.push(Phase::Animation);
-    }
-    if boundary == BoundarySlot::AfterMotion {
-        plan.push(Phase::Boundary);
-    }
-    plan.push(Phase::Collision);
-    if boundary == BoundarySlot::AfterCollision {
-        plan.push(Phase::Boundary);
-    }
-    plan.extend([Phase::EndStep, Phase::Draw]);
-    if anim == AnimSlot::AfterDraw {
-        plan.push(Phase::Animation);
-    }
+    let plan = phase_plan(rules.prev_capture, rules.boundary_slot, &rules.timing);
     for phase in plan {
         if phase == Phase::Draw
             && let Err(e) = (hooks.view_follow)(ctx)
@@ -243,6 +218,45 @@ fn rows(ctx: &mut Ctx, hooks: &Hooks) -> Option<()> {
         }
     }
     Some(())
+}
+
+/// R30: the one phase plan for rows 1-13 (decision 0005, "One scheduler").
+///
+/// Every timed system advances exactly once per tick. `TimingRules` decides where the timeline
+/// and animation phases sit and declares their unit; paths advance inside [`Phase::Motion`] and
+/// alarms have their own phase. The non-timer phases keep their recorded slots (`prev_capture`,
+/// `boundary_slot`).
+fn phase_plan(prev: PrevCapture, boundary: BoundarySlot, timing: &TimingRules) -> Vec<Phase> {
+    let mut plan: Vec<Phase> = Vec::with_capacity(14);
+    if prev == PrevCapture::TickStart {
+        plan.push(Phase::CapturePrevious);
+    }
+    plan.push(Phase::BeginStep);
+    if timing.timeline_slot == TimelineSlot::AfterBeginStep {
+        plan.push(Phase::Timelines);
+    }
+    plan.extend([
+        Phase::Alarms,
+        Phase::Keyboard,
+        Phase::Mouse,
+        Phase::Step,
+        Phase::Motion,
+    ]);
+    if timing.anim_slot == AnimSlot::AfterMotion {
+        plan.push(Phase::Animation);
+    }
+    if boundary == BoundarySlot::AfterMotion {
+        plan.push(Phase::Boundary);
+    }
+    plan.push(Phase::Collision);
+    if boundary == BoundarySlot::AfterCollision {
+        plan.push(Phase::Boundary);
+    }
+    plan.extend([Phase::EndStep, Phase::Draw]);
+    if timing.anim_slot == AnimSlot::AfterDraw {
+        plan.push(Phase::Animation);
+    }
+    plan
 }
 
 /// Row 11b: the particle update, once per tick after End Step and before Draw (CLONE_SPEC

@@ -1,5 +1,8 @@
 //! Path following (docs/architecture/sim/motion.md, M8; UNKNOWN U9, U-MECH-4). Tier 2.
 //!
+//! One system in the R30 tick scheduler: `TimingRules::paths` declares the path clock to be
+//! ticks, and [`advance`] moves the position once, inside automatic motion.
+//!
 //! [`advance`] is the only path rule. What the spec has (CLONE_SPEC motion U9, Confirmed
 //! (recorder) by `traces/rely-the-needle-4-2/t-evo-1.csv`): a probe on a 40 px path at path speed
 //! 4 moves 4 px and +0.1 path_position per tick, its `speed` reads 0 throughout, the position
