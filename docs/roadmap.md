@@ -57,7 +57,9 @@ The engine models that still reproduce GameMaker 8 implementation details, track
 | E. Presentation | [#1178](https://github.com/nugamus/iwbtg-collection/issues/1178) | F2; camera response can be F1 | Pure Draw projection, camera component, render layers, explicit transitions | Current behavior; a visible change needs the user's sign-off | None for E2–E5; E1 needs #1152 |
 | F. Time service | [#1179](https://github.com/nugamus/iwbtg-collection/issues/1179) | F1 for bullet, boss and avoidance timing; F2 for ordinary animation | Dated timelines, path/tween components, one animation phase, its own ruleset value and `gameplay_hash` | Exact timeline moments, path clock and animation phase; hashes and pins unchanged | #1165 |
 
-**Sequencing.** Three disjoint starts can run without waiting on another workstream: #1176 (the script module), #1178 (the client view and render pages) and D1 of #1177 (the build-time collider asset). The other three queue behind the lanes that own their files: #1174 behind lifecycle and dispatch (#1149, #1152) and identity (#1153); #1175 behind the identity-save and builtins lanes (#1153, #1159); #1179 behind the one scheduler (#1165). A slice that shares `room.rs`, `world/*`, `events.rs` or `def/physics.rs` starts only when the lane that owns those files is done.
+**Status (2026-11-21).** Three slices are under way on disjoint files: #1176 C1 (the script module), #1178 E2/E3 (camera and render layers) and #1177 D1 (the build-time collider asset). #1174, #1175 and #1179 are queued behind the lanes their rows name.
+
+**Sequencing.** The queued three wait on the lanes that own their files: #1174 behind lifecycle and dispatch (#1149, #1152) and identity (#1153); #1175 behind the identity-save and builtins lanes (#1153, #1159); #1179 behind the one scheduler (#1165). A slice that shares `room.rs`, `world/*`, `events.rs` or `def/physics.rs` starts only when the lane that owns those files is done.
 
 ## How work flows
 
