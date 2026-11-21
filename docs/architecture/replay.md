@@ -61,11 +61,13 @@ The research files name original keys (`hold Shift`). `iwbtg trace run` maps key
 
 The server decodes the replay, checks bounds (ticks at most the game's `max_ticks`), looks up the package by gameplay hash, and runs the sim headless in a child process (no `draw`, no audio). It requires the end trigger, compares splits and the final tick with what was claimed, and stores the verified tick count, the ranked time (its own ranked ticks plus the replay's pauses) and its own checkpoint hashes. It never trusts hashes from the client; they only help find where a replay desynced.
 
+The header's `sim_version` is checked before the run: a replay recorded on another build is reported as a `sim_version` mismatch and verification stops there. Its recorded hashes are that build's, so comparing them here would print a hash difference that hides the real cause (`iwbtg replay verify` does the same offline).
+
 ### Versions
 
 The full contract (what a board keys on, the freeze point, the bump check, old verifier builds) is [versioning](versioning.md).
 
-- `SIM_VERSION` changes whenever a sim change could alter any outcome, including any Rhai upgrade.
+- `SIM_VERSION` changes whenever a sim change could alter any outcome, including any Rhai upgrade and any state-hash encoding change (`HASH_LAYOUT`; layout 3 is `SIM_VERSION` 2).
 - A ruleset or profile move is content-level: a new `gameplay_hash` and a new board, with the old board and its replays kept on the old build. It is not a `SIM_VERSION` bump and it never silently changes a ranked outcome ([0005](../decisions/0005-standard-mechanics.md)).
 - Fixes to a built-in that change outcomes keep the old path behind `engine_rev < N`, the way osu! keeps old scoring code. A package declares the `engine_rev` it was verified against. Each branch is covered by the corpus.
 - For Rhai upgrades and other changes that cannot be branched, the server keeps old verifier builds for replays made with an older `SIM_VERSION`.

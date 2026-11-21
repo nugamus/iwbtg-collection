@@ -27,7 +27,7 @@ Keying on `SIM_VERSION` as well would split every board at every Rhai or toolcha
 
 ## When `SIM_VERSION` bumps
 
-- **Before the freeze point** it stays `1`. Outcome-changing PRs re-pin the golden hashes with `cargo xtask repin` and nothing else. Replays recorded before the freeze (local replays and PBs, #476) may stop verifying with a later build; their times stay in the local stats, and `iwbtg replay verify` reports `sim_version` mismatch for them.
+- **Before the freeze point** it normally stays `1`; outcome-changing PRs re-pin the golden hashes with `cargo xtask repin`. A state-hash encoding change still bumps it even before the freeze: `HASH_LAYOUT` 3 shipped as `SIM_VERSION` 2 (#1157/#1292, bumped by #1303), because a verifier that only compared hashes could not tell "wrong build" from "wrong run". `iwbtg replay verify` reports a `sim_version` mismatch and stops before any hash comparison for a replay from another build. Replays recorded before the freeze (local replays and PBs, #476) may stop verifying with a later build; their times stay in the local stats.
 - **The freeze point** is when `SIM_VERSION_FREEZE` in `crates/sim/src/lib.rs` changes from `None` to `Some(SIM_VERSION)`. **Default: the first build whose runs reach a public board, the first public nightly of M7** (needs-user, #933). Until then, counting versions only creates history nobody needs.
 - **After the freeze point** every change that alters an outcome of an existing package on its current `engine_rev` bumps `SIM_VERSION`. A fix that should change outcomes goes under a new `engine_rev` instead (next section), so that old revisions, the golden corpus and `SIM_VERSION` all stay as they were. A bump is therefore rare and means "this build cannot verify older replays": Rhai, Rust or `libm` upgrades, a hash encoding change, a replay decoding change.
 
@@ -35,7 +35,7 @@ Keying on `SIM_VERSION` as well would split every board at every Rhai or toolcha
 
 `crates/sim/tests/sim_version_bump.rs` (`cargo test -p iwbtg-sim --test it sim_version_bump::`), also run by `cargo xtask repin`:
 
-- Before the freeze point it is inert: `sim_version_pins.txt` holds no pins and nothing is enforced.
+- Before the freeze point the pin check is inert: `sim_version_pins.txt` holds no pins and no pin difference is enforced. One guard is still active: `a_hash_layout_change_comes_with_a_sim_version_bump` fails when `HASH_LAYOUT` and `SIM_VERSION` move apart, so a hash-encoding change without the required bump is caught locally even before the freeze.
 - After it, `sim_version_pins.txt` records every golden pin (the `FINAL_HASH` of `determinism.rs`, the state hash vectors, each golden corpus case's state hash) with the `SIM_VERSION` it was pinned under. A pin that differs while `SIM_VERSION` is unchanged fails the test with the names of the changed pins: bump `SIM_VERSION`, then run `cargo xtask repin`, which records the pins under the new version. `repin` refuses to record over a changed pin without a bump.
 - A new golden case or vector needs a `repin` (it is recorded) but no bump. `SIM_VERSION` never goes below the freeze point or the recorded version.
 - At the freeze: set `SIM_VERSION_FREEZE = Some(SIM_VERSION)` and run `cargo xtask repin` in the same PR.
