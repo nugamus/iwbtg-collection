@@ -28,6 +28,8 @@ wasm-bindgen-test = "0.3"
 # Allocation counting for the #1021 measurement harness (`tests/script_prep.rs`). Test-only;
 # `crates/sim/deny.toml` excludes dev dependencies from the sim's runtime graph.
 stats_alloc = "0.1"
+# Feel contracts (`tests/feel.rs`, #1167). Test-only: the loader stays out of the sim runtime.
+toml.workspace = true
 
 [features]
 # JSON Schema of `PhysicsProfileDraft` for docs/format/schema/v0/physics.schema.json (#255); the
@@ -50,6 +52,11 @@ path = "tests/determinism.rs"
 [[test]]
 name = "golden_corpus"
 path = "tests/golden_corpus.rs"
+
+# The public feel contracts (#1167): the format and runner without the private repos.
+[[test]]
+name = "feel"
+path = "tests/feel.rs"
 
 # The #1021 measurement harness: needs its own binary for a counting global allocator. Ignored
 # by default, so the normal test run and the wasm jobs do not pay for it.

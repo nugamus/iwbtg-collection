@@ -14,37 +14,8 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
+use crate::baseline::{Status, Statuses, compare, format_baseline, one_line, parse_baseline, word};
 use crate::trace_cmd::{ToolError, check_case, load_package, package_id, read_case};
-
-/// How one case ran.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Status {
-    /// A difference, an error, a panic or a missing package.
-    Fail,
-    /// The case is marked `open`: it cannot run until its reason is resolved.
-    Open,
-    /// Bit for bit equal to the original trace.
-    Ok,
-}
-
-impl Status {
-    fn word(self) -> &'static str {
-        match self {
-            Status::Ok => "OK",
-            Status::Open => "OPEN",
-            Status::Fail => "FAIL",
-        }
-    }
-
-    fn parse(word: &str) -> Option<Status> {
-        match word {
-            "OK" => Some(Status::Ok),
-            "OPEN" => Some(Status::Open),
-            "FAIL" => Some(Status::Fail),
-            _ => None,
-        }
-    }
-}
 
 /// One case's result: status and, when not OK, a one-line reason.
 #[derive(Debug, Clone)]
@@ -60,9 +31,6 @@ pub struct GameRow {
     pub note: Option<String>,
     pub cases: BTreeMap<String, CaseResult>,
 }
-
-/// `<pkg id>/<case name>` to status.
-pub type Statuses = BTreeMap<String, Status>;
 
 /// The paths of every entry of `dir`; a read or entry failure names the folder.
 fn read_dir_paths(dir: &Path) -> Result<Vec<PathBuf>, ToolError> {
@@ -106,16 +74,6 @@ fn stem(path: &Path) -> String {
     path.file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_default()
-}
-
-/// The first line of a message, cut to `max` characters.
-fn one_line(text: &str, max: usize) -> String {
-    let line = text.lines().next().unwrap_or("").trim();
-    if line.chars().count() <= max {
-        line.to_owned()
-    } else {
-        format!("{}...", line.chars().take(max).collect::<String>())
-    }
 }
 
 fn fail(reason: impl Into<String>) -> CaseResult {
@@ -235,78 +193,6 @@ pub fn statuses(rows: &BTreeMap<String, GameRow>) -> Statuses {
         .collect()
 }
 
-/// Reads a baseline file: `<pkg id>/<case> <STATUS>` lines; `#` starts a comment.
-pub fn parse_baseline(text: &str) -> Result<Statuses, String> {
-    let mut out = Statuses::new();
-    for (n, line) in text.lines().enumerate() {
-        let line = line.split('#').next().unwrap_or("").trim();
-        if line.is_empty() {
-            continue;
-        }
-        let mut words = line.split_whitespace();
-        let (Some(key), Some(word), None) = (words.next(), words.next(), words.next()) else {
-            return Err(format!("line {}: expected `<game>/<case> <STATUS>`", n + 1));
-        };
-        let status = Status::parse(word).ok_or_else(|| format!("line {}: unknown status {word:?}", n + 1))?;
-        out.insert(key.to_owned(), status);
-    }
-    Ok(out)
-}
-
-/// Writes a baseline file.
-pub fn format_baseline(statuses: &Statuses) -> String {
-    let mut out = String::from(
-        "# Fidelity baseline (#785): every trace case's status on the converter packages.\n\
-         # Written by `cargo xtask fidelity --bless`; names and statuses only.\n",
-    );
-    for (key, status) in statuses {
-        let _ = writeln!(out, "{key} {}", status.word());
-    }
-    out
-}
-
-/// One change against the baseline.
-#[derive(Debug, PartialEq, Eq)]
-pub struct Change {
-    pub key: String,
-    pub was: Option<Status>,
-    pub now: Option<Status>,
-}
-
-impl Change {
-    /// Worse than before, new and failing, or gone from the run.
-    ///
-    /// A baseline case that disappeared is a regression too (#1016): it can mean a removed case
-    /// file, or a cases tree that could not be enumerated, and either way the gate must not keep
-    /// passing on the cases that are left. Retiring a case is deliberate, so it also requires
-    /// rewriting the baseline with `--bless`, never a silent drop from the sweep.
-    pub fn is_regression(&self) -> bool {
-        match (self.was, self.now) {
-            (Some(was), Some(now)) => now < was,
-            (None, Some(now)) => now == Status::Fail,
-            (Some(_), None) => true,
-            (None, None) => false,
-        }
-    }
-}
-
-/// Every case whose status differs from the baseline, added or gone.
-pub fn compare(baseline: &Statuses, now: &Statuses) -> Vec<Change> {
-    let mut keys: Vec<&String> = baseline.keys().chain(now.keys()).collect();
-    keys.sort();
-    keys.dedup();
-    keys.into_iter()
-        .filter_map(|k| {
-            let (was, now) = (baseline.get(k).copied(), now.get(k).copied());
-            (was != now).then(|| Change {
-                key: k.clone(),
-                was,
-                now,
-            })
-        })
-        .collect()
-}
-
 /// The matrix: one row per game, then one line per case that is not OK.
 pub fn render(rows: &BTreeMap<String, GameRow>) -> String {
     let width = rows.keys().map(String::len).max().unwrap_or(4).max(4);
@@ -345,10 +231,6 @@ pub fn render(rows: &BTreeMap<String, GameRow>) -> String {
         out.push_str(&details);
     }
     out
-}
-
-fn word(s: Option<Status>) -> &'static str {
-    s.map_or("-", Status::word)
 }
 
 /// `iwbtg trace sweep`: `Ok(false)` on a regression against the baseline.
@@ -416,71 +298,12 @@ pub fn main(
 mod tests {
     use super::*;
 
-    fn st(pairs: &[(&str, Status)]) -> Statuses {
-        pairs.iter().map(|(k, s)| ((*k).to_owned(), *s)).collect()
-    }
-
     /// A scratch tree under the system temp dir, empty and removed first.
     fn scratch(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("iwbtg-sweep-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
-    }
-
-    #[test]
-    fn the_baseline_round_trips() {
-        let s = st(&[("a/x", Status::Ok), ("a/y", Status::Open), ("b/z", Status::Fail)]);
-        assert_eq!(parse_baseline(&format_baseline(&s)).unwrap(), s);
-        assert!(parse_baseline("a/x MAYBE").is_err());
-        assert!(parse_baseline("a/x").is_err());
-    }
-
-    #[test]
-    fn worse_or_new_failing_cases_are_regressions() {
-        let base = st(&[
-            ("a/ok_to_open", Status::Ok),
-            ("a/open_to_fail", Status::Open),
-            ("a/fail_to_ok", Status::Fail),
-            ("a/gone", Status::Ok),
-        ]);
-        let now = st(&[
-            ("a/ok_to_open", Status::Open),
-            ("a/open_to_fail", Status::Fail),
-            ("a/fail_to_ok", Status::Ok),
-            ("a/new_fail", Status::Fail),
-            ("a/new_open", Status::Open),
-        ]);
-        let regressions: Vec<String> = compare(&base, &now)
-            .into_iter()
-            .filter(Change::is_regression)
-            .map(|c| c.key)
-            .collect();
-        assert_eq!(
-            regressions,
-            ["a/gone", "a/new_fail", "a/ok_to_open", "a/open_to_fail"]
-        );
-        assert_eq!(compare(&base, &base), []);
-    }
-
-    #[test]
-    fn a_baseline_case_that_disappeared_is_a_regression() {
-        for was in [Status::Ok, Status::Open, Status::Fail] {
-            let gone = Change {
-                key: "a/x".into(),
-                was: Some(was),
-                now: None,
-            };
-            assert!(gone.is_regression(), "{was:?} -> gone");
-        }
-        assert!(
-            !Change {
-                key: "a/x".into(),
-                was: None,
-                now: None
-            }
-            .is_regression()
-        );
     }
 
     #[test]

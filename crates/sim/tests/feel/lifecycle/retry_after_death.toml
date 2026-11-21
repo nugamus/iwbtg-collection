@@ -3,8 +3,8 @@
 #
 # The gating executable copy is
 # `crates/sim/tests/lifecycle.rs::retry_after_death_returns_to_the_checkpoint_after_the_delay`.
-# The runner that consumes this file lands in #1161; until then this file is the reviewable
-# statement of the outcome and the test is the gate.
+# The runner that consumes this file is `cargo xtask feel` / `cargo test -p iwbtg-sim --test feel`
+# (#1167).
 id = "lifecycle/retry_after_death"
 impact = "F1"
 package = "fixture:lifecycle_retry"
@@ -61,7 +61,7 @@ death = 1
 # delay is the init phase, not extra client latency.
 [[assert]]
 tick = 7
-control = { action = "right", metric = "kid.x", latency_max = 1 }
+control = { action = "right", metric = "kid.x", latency_max = 1, why = "a Right press on the first controllable tick moves the Kid within one frame" }
 kid_count = 1
 death = 1
 status = "running"
