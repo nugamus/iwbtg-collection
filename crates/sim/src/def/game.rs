@@ -510,7 +510,9 @@ pub struct RetryPolicy {
     /// Room roles where R does nothing (menus).
     pub excluded_roles: RoleSet,
     /// Ticks of the engine-owned init phase before the player controls the checkpoint Kid
-    /// (R17, TR-ROOM-01). The serialized key stays `boot_ticks` for the format-0 profile.
+    /// (R17, TR-ROOM-01). The serialized key stays `boot_ticks` for the format-0 profile. `0` is
+    /// permanently `Unsupported`: no game in the 20 sets it and R17 leaves the init tick's
+    /// existence UNKNOWN, so only a trace can change it (#225).
     pub boot_ticks: u8,
     /// Added to the loaded y when the saved kid was flipped (+4 in 10 Group A games).
     pub flipped_load_dy: Real,
@@ -660,6 +662,19 @@ impl ResetPolicy {
         match self.kind {
             ResetKind::DeleteTempAndRestart => ResetScope::Room,
             ResetKind::GameReset => ResetScope::Run,
+        }
+    }
+
+    /// Whether the reset stops every sound before it changes room (F2 feedback).
+    ///
+    /// The F2 handlers of Groups A, B and C, and go-the-spook-house's, delete the temp file,
+    /// stop all sounds and call `game_restart` (CLONE_SPEC rooms; kid/A4.md "F2 pressed"). The
+    /// kaenbyou / eat-the-lemon `gameReset` handler is recorded only as "resets globals and calls
+    /// room_goto(rInit)", so it keeps the sounds until a trace says otherwise (#225).
+    pub fn sounds(&self) -> Persistence {
+        match self.kind {
+            ResetKind::DeleteTempAndRestart => Persistence::Stop,
+            ResetKind::GameReset => Persistence::Keep,
         }
     }
 }

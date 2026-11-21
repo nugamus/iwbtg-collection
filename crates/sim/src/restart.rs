@@ -82,7 +82,7 @@ pub fn run_restart(ctx: &mut Ctx, world: InstId) -> Result<Flow, SimError> {
             };
             if model.delay_ticks() == 0 {
                 return Err(SimError::unsupported(
-                    "restart with retry_delay_ticks = 0: whether the init tick exists is UNKNOWN (R17)",
+                    "restart with retry_delay_ticks = 0: the init tick's existence is UNKNOWN (R17) and no game sets 0; permanent until a trace (#225)",
                 ));
             }
             place_or_create_kid(ctx, &slot, model.flipped_load_dy)?;
@@ -126,11 +126,12 @@ pub fn run_restart(ctx: &mut Ctx, world: InstId) -> Result<Flow, SimError> {
 
 /// Runs the lifecycle's reset policy (F2), called by the world instance `world`.
 ///
-/// `DeleteTempAndRestart` (groups A, B, C): delete the temp marker and request `game_restart`
-/// (the save is kept; the globals are cleared by the restart). `GameReset` (kaenbyou,
-/// eat-the-lemon gameReset): reset the run globals and go to the Boot-role room
-/// (`crate::room::restart_room`). OPEN for `GameReset`: which other globals the original
-/// resets (the script-level globals stay).
+/// `DeleteTempAndRestart` (groups A, B, C, go-the-spook-house): delete the temp marker, stop every
+/// sound (F2 feedback; CLONE_SPEC rooms, kid/A4.md) and request `game_restart` (the save is kept;
+/// the globals are cleared by the restart). `GameReset` (kaenbyou, eat-the-lemon gameReset):
+/// reset the run globals and go to the Boot-role room (`crate::room::restart_room`). OPEN for
+/// `GameReset`: which other globals the original resets, and whether it stops sounds (the
+/// script-level globals stay; trace request #225).
 pub fn run_reset(ctx: &mut Ctx, world: InstId) -> Result<Flow, SimError> {
     let lifecycle = ctx.def.lifecycle();
     let model = lifecycle.reset.clone();
@@ -139,6 +140,9 @@ pub fn run_reset(ctx: &mut Ctx, world: InstId) -> Result<Flow, SimError> {
     }
     let _ = world;
     ctx.w.engine.run.boot_load = None;
+    if model.sounds() == crate::def::game::Persistence::Stop {
+        crate::sound::stop_all(ctx);
+    }
     match model.kind {
         ResetKind::DeleteTempAndRestart => ctx.request_room(RoomRequest::GameRestart),
         ResetKind::GameReset => {
