@@ -74,11 +74,15 @@ pub(crate) fn kind(g: &G, name: &str) -> KindId {
 }
 
 pub(crate) fn with<T>(g: &mut G, f: impl FnOnce(&mut Ctx) -> T) -> T {
-    let rules = RunnerRules::default();
+    with_rules(g, &RunnerRules::default(), f)
+}
+
+/// [`with`] under explicit rules, for the clock-policy tests (R30).
+pub(crate) fn with_rules<T>(g: &mut G, rules: &RunnerRules, f: impl FnOnce(&mut Ctx) -> T) -> T {
     let scripts = ScriptRuntime::default();
     let mut ctx = Ctx {
         def: &g.def,
-        rules: &rules,
+        rules,
         w: &mut g.w,
         scripts: &scripts,
         dll_mode: DllMode::Stub,

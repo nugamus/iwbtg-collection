@@ -20,7 +20,7 @@ use crate::input::InputFrame;
 use crate::motion::{self, MotionEvents};
 use crate::num::Real;
 use crate::room::{self, RoomRequest};
-use crate::rules::tick::{AnimSlot, BoundarySlot, DirectLatch, PrevCapture, TickRules};
+use crate::rules::tick::{AnimSlot, BoundarySlot, ClockPolicy, DirectLatch, PrevCapture, TickRules};
 use crate::sound;
 use crate::stripped;
 use crate::timing::{self, Split};
@@ -130,6 +130,10 @@ pub fn run_tick(ctx: &mut Ctx, input: InputFrame) -> Result<Vec<Split>, SimError
 /// 2-13 is skipped and the tick goes on at row 14. Row 15 resets `room_tick` to 0 after a room
 /// change; otherwise row 16 counts it up.
 pub fn run_tick_with(ctx: &mut Ctx, input: InputFrame, hooks: &Hooks) -> Result<Vec<Split>, SimError> {
+    debug_assert!(
+        ctx.rules.tick.timing.all_ticks(),
+        "the sim advances timed systems in ticks only (TimingRules)"
+    );
     if run_rows(ctx, input, hooks).is_none() {
         return Ok(Vec::new());
     }
@@ -252,6 +256,20 @@ fn particle_update(ctx: &mut Ctx) -> Result<(), SimError> {
     }
     let w = &mut *ctx.w;
     w.particles.update(&mut w.rng)
+}
+
+/// One second on the run's clock, in ticks (R30, decision 0005).
+///
+/// Under [`ClockPolicy::Fixed`] (`standard`) it is the package's
+/// [`GameDef::tick_rate`](crate::def::GameDef::tick_rate). Under the legacy [`ClockPolicy::RoomSpeed`]
+/// (`gm8`, the default for every current package) it is `World::room_speed`: the room file's
+/// speed on entry and the tick rate after the world's Room Start (R14). The play timer and
+/// `time_limit` re-arm with this value; no other sim system needs a second.
+pub fn second_ticks(def: &GameDef, rules: &TickRules, w: &World) -> Real {
+    match rules.timing.clock {
+        ClockPolicy::Fixed => Real::new(f64::from(def.tick_rate)),
+        ClockPolicy::RoomSpeed => w.room_speed,
+    }
 }
 
 /// GML `fps` (R28, Design): the game's tick rate, never a measured frame rate; 0 during the
