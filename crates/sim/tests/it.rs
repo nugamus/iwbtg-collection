@@ -223,6 +223,9 @@ mod grid;
 #[path = "hash_vectors.rs"]
 mod hash_vectors;
 
+#[path = "input.rs"]
+mod input;
+
 #[path = "kid_a1_actions.rs"]
 mod kid_a1_actions;
 
@@ -300,6 +303,9 @@ mod kid_moving_block;
 
 #[path = "kid_restart.rs"]
 mod kid_restart;
+
+#[path = "lifecycle.rs"]
+mod lifecycle;
 
 #[path = "kid_slope.rs"]
 mod kid_slope;

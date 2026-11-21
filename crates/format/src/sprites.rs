@@ -16,7 +16,7 @@ use toml::Spanned;
 
 use crate::diag::Diagnostic;
 use crate::manifest::toml_error;
-use crate::masks::{CollisionShape, build_union_mask, empty_mask};
+use crate::masks::{Collider, ColliderSet, CollisionShape, build_union_mask, empty_mask, hex_rows_to_bits};
 use crate::number::Number;
 
 /// Largest image side (docs/format/assets.md).
@@ -80,6 +80,20 @@ pub struct SpriteSidecar {
     pub separate_masks: bool,
     /// Another sprite whose masks this sprite uses (v0 `mask`).
     pub mask: Option<String>,
+    /// A baked collider, when the sidecar has a `[collider]` table.
+    pub collider: Option<BakedCollider>,
+}
+
+/// A sprite sidecar's baked collider and the alpha tolerance it was baked with.
+///
+/// The loader validates the table against the masks it builds from the PNG alpha data and keeps
+/// using those masks; making the baked collider the runtime shape is #1182 (D2).
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct BakedCollider {
+    /// The alpha tolerance the bake used. The table declares it explicitly.
+    pub alpha_tolerance: u8,
+    /// One collider for all frames, or one per frame.
+    pub set: ColliderSet,
 }
 
 impl SpriteSidecar {
@@ -131,6 +145,9 @@ pub(crate) struct RawSidecar {
     #[serde(default)]
     #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     mask: Option<Spanned<String>>,
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<RawCollider>"))]
+    collider: Option<Spanned<RawCollider>>,
 }
 
 #[derive(Deserialize, Clone, Copy)]
@@ -142,6 +159,56 @@ enum RawCollision {
     Disk,
     Diamond,
     None,
+}
+
+/// The `[collider]` table: a canonical collider baked from the art.
+///
+/// It has either the shared keys (`shape` with `bbox`/`bits`) or one `frames` entry per frame,
+/// never both. `alpha_tolerance` is required so the bake cannot silently use a different rule
+/// from the sidecar's.
+#[derive(Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RawCollider {
+    #[cfg_attr(feature = "schema", schemars(with = "Number"))]
+    alpha_tolerance: Spanned<Number>,
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<RawColliderShape>"))]
+    shape: Option<Spanned<RawColliderShape>>,
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<[i64; 4]>"))]
+    bbox: Option<Spanned<[i64; 4]>>,
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
+    bits: Option<Spanned<Vec<String>>>,
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<Vec<RawColliderFrame>>"))]
+    frames: Option<Spanned<Vec<RawColliderFrame>>>,
+}
+
+/// One frame of a per-frame `[collider]` table.
+#[derive(Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RawColliderFrame {
+    #[cfg_attr(feature = "schema", schemars(with = "RawColliderShape"))]
+    shape: RawColliderShape,
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<[i64; 4]>"))]
+    bbox: Option<[i64; 4]>,
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
+    bits: Option<Vec<String>>,
+}
+
+/// The baked shape: `none` (nothing collides), `rect` (the whole box) or `bits` (per pixel).
+#[derive(Deserialize, Clone, Copy)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+enum RawColliderShape {
+    None,
+    Rect,
+    Bits,
 }
 
 /// Where the sidecar's keys are, for later diagnostics.
@@ -183,19 +250,7 @@ pub fn parse_sidecar(path: &str, text: &str) -> Result<(SpriteSidecar, SidecarSp
     };
     let tolerance = match &raw.alpha_tolerance {
         None => 0,
-        Some(t) => {
-            let v = t.get_ref().0;
-            if !(0.0..=255.0).contains(&v) || v.fract() != 0.0 {
-                return Err(err(
-                    t.span(),
-                    "alpha_tolerance must be an integer from 0 to 255".to_owned(),
-                ));
-            }
-            // Checked just above: an integer in 0..=255.
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let v = v as u8;
-            v
-        }
+        Some(t) => parse_alpha_tolerance(path, text, t.span(), t.get_ref())?,
     };
     let collision = match raw.collision.as_ref().map(|c| *c.get_ref()) {
         None | Some(RawCollision::Precise) => Collision::Precise,
@@ -224,6 +279,18 @@ pub fn parse_sidecar(path: &str, text: &str) -> Result<(SpriteSidecar, SidecarSp
             })
         }
     };
+    let collider = match &raw.collider {
+        None => None,
+        Some(c) => Some(parse_collider(
+            path,
+            text,
+            c.get_ref(),
+            c.span(),
+            tolerance,
+            *raw.frames.get_ref(),
+            (fw, fh),
+        )?),
+    };
     let spans = SidecarSpans {
         frames: raw.frames.span(),
         bbox: raw.bbox.as_ref().map_or(raw.frames.span(), Spanned::span),
@@ -241,9 +308,269 @@ pub fn parse_sidecar(path: &str, text: &str) -> Result<(SpriteSidecar, SidecarSp
             alpha_tolerance: tolerance,
             separate_masks: raw.separate_masks.unwrap_or(false),
             mask: raw.mask.map(Spanned::into_inner),
+            collider,
         },
         spans,
     ))
+}
+
+/// Parses an `alpha_tolerance` value (the sidecar's and the collider's share the rule).
+fn parse_alpha_tolerance(
+    path: &str,
+    text: &str,
+    span: Range<usize>,
+    value: &Number,
+) -> Result<u8, Diagnostic> {
+    let v = value.0;
+    if !(0.0..=255.0).contains(&v) || v.fract() != 0.0 {
+        return Err(Diagnostic::error_at(
+            path,
+            text,
+            span.start,
+            "alpha_tolerance must be an integer from 0 to 255",
+        ));
+    }
+    // Checked just above: an integer in 0..=255.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    Ok(v as u8)
+}
+
+/// The fields of one baked collider, shared or from a `frames` entry, with spans for diagnostics.
+struct ColliderFields {
+    shape: RawColliderShape,
+    shape_span: Range<usize>,
+    bbox: Option<[i64; 4]>,
+    bbox_span: Range<usize>,
+    bits: Option<Vec<String>>,
+    bits_span: Range<usize>,
+}
+
+/// Parses and structurally validates a `[collider]` table. The table declares its own
+/// `alpha_tolerance`, which must equal the sidecar's; it holds either the shared keys or one
+/// `frames` entry per frame.
+fn parse_collider(
+    path: &str,
+    text: &str,
+    raw: &RawCollider,
+    table: Range<usize>,
+    sidecar_tolerance: u8,
+    frames: u16,
+    frame_size: (u32, u32),
+) -> Result<BakedCollider, Diagnostic> {
+    let tolerance = parse_alpha_tolerance(
+        path,
+        text,
+        raw.alpha_tolerance.span(),
+        raw.alpha_tolerance.get_ref(),
+    )?;
+    if tolerance != sidecar_tolerance {
+        return Err(Diagnostic::error_at(
+            path,
+            text,
+            raw.alpha_tolerance.span().start,
+            format!(
+                "collider alpha_tolerance {tolerance} differs from the sidecar's {sidecar_tolerance}; a baked collider uses the same alpha data"
+            ),
+        ));
+    }
+    let shared_span = raw.shape.as_ref().map_or(table.clone(), Spanned::span);
+    let set = match &raw.frames {
+        Some(raw_frames) => {
+            if raw.shape.is_some() || raw.bbox.is_some() || raw.bits.is_some() {
+                return Err(Diagnostic::error_at(
+                    path,
+                    text,
+                    shared_span.start,
+                    "a collider table has either `frames` or the shared `shape`, `bbox` and `bits`, not both",
+                ));
+            }
+            let entries = raw_frames.get_ref();
+            if entries.len() != usize::from(frames) {
+                return Err(Diagnostic::error_at(
+                    path,
+                    text,
+                    raw_frames.span().start,
+                    format!(
+                        "the collider has {} frame(s), but the sprite has {frames}",
+                        entries.len()
+                    ),
+                ));
+            }
+            let span = raw_frames.span();
+            let mut colliders = Vec::with_capacity(entries.len());
+            for (i, entry) in entries.iter().enumerate() {
+                let fields = ColliderFields {
+                    shape: entry.shape,
+                    shape_span: span.clone(),
+                    bbox: entry.bbox,
+                    bbox_span: span.clone(),
+                    bits: entry.bits.clone(),
+                    bits_span: span.clone(),
+                };
+                let collider = parse_collider_entry(path, text, &fields, frame_size).map_err(|mut d| {
+                    d.message = format!("collider frame {i}: {}", d.message);
+                    d
+                })?;
+                colliders.push(collider);
+            }
+            ColliderSet::PerFrame(colliders)
+        }
+        None => {
+            let Some(shape) = raw.shape.as_ref() else {
+                return Err(Diagnostic::error_at(
+                    path,
+                    text,
+                    table.start,
+                    "a collider table needs `shape`, or a `frames` array",
+                ));
+            };
+            let fields = ColliderFields {
+                shape: *shape.get_ref(),
+                shape_span: shape.span(),
+                bbox: raw.bbox.as_ref().map(|b| *b.get_ref()),
+                bbox_span: raw.bbox.as_ref().map_or(shape.span(), Spanned::span),
+                bits: raw.bits.as_ref().map(|b| b.get_ref().clone()),
+                bits_span: raw.bits.as_ref().map_or(shape.span(), Spanned::span),
+            };
+            ColliderSet::Shared(parse_collider_entry(path, text, &fields, frame_size)?)
+        }
+    };
+    set.validate(frame_size, frames)
+        .map_err(|e| Diagnostic::error_at(path, text, table.start, format!("collider: {e}")))?;
+    Ok(BakedCollider {
+        alpha_tolerance: tolerance,
+        set,
+    })
+}
+
+/// Parses one `none`/`rect`/`bits` entry and checks its canonical form.
+fn parse_collider_entry(
+    path: &str,
+    text: &str,
+    fields: &ColliderFields,
+    frame_size: (u32, u32),
+) -> Result<Collider, Diagnostic> {
+    let err = |span: &Range<usize>, msg: String| Diagnostic::error_at(path, text, span.start, msg);
+    match fields.shape {
+        RawColliderShape::None => {
+            if fields.bbox.is_some() || fields.bits.is_some() {
+                return Err(err(
+                    &fields.shape_span,
+                    "shape = \"none\" takes no `bbox` or `bits`".to_owned(),
+                ));
+            }
+            Ok(Collider::None)
+        }
+        RawColliderShape::Rect => {
+            if fields.bits.is_some() {
+                return Err(err(
+                    &fields.bits_span,
+                    "shape = \"rect\" takes `bbox`, not `bits`".to_owned(),
+                ));
+            }
+            let Some([left, top, right, bottom]) = fields.bbox else {
+                return Err(err(
+                    &fields.bbox_span,
+                    "shape = \"rect\" needs a `bbox`".to_owned(),
+                ));
+            };
+            let collider = Collider::Rect {
+                bbox: IRect {
+                    left,
+                    top,
+                    right,
+                    bottom,
+                },
+            };
+            collider
+                .validate(frame_size)
+                .map_err(|e| err(&fields.bbox_span, e.to_string()))?;
+            Ok(collider)
+        }
+        RawColliderShape::Bits => {
+            let Some([left, top, right, bottom]) = fields.bbox else {
+                return Err(err(
+                    &fields.bbox_span,
+                    "shape = \"bits\" needs a `bbox`".to_owned(),
+                ));
+            };
+            let Some(rows) = &fields.bits else {
+                return Err(err(
+                    &fields.bits_span,
+                    "shape = \"bits\" needs `bits` rows".to_owned(),
+                ));
+            };
+            let bbox = IRect {
+                left,
+                top,
+                right,
+                bottom,
+            };
+            // Check the box before its size drives the grid.
+            Collider::Rect { bbox }
+                .validate(frame_size)
+                .map_err(|e| err(&fields.bbox_span, e.to_string()))?;
+            let too_large = || err(&fields.bbox_span, "the collider bbox is too large".to_owned());
+            let width = u32::try_from(right - left + 1).map_err(|_| too_large())?;
+            let height = u32::try_from(bottom - top + 1).map_err(|_| too_large())?;
+            let bits = hex_rows_to_bits(rows, width, height)
+                .map_err(|e| err(&fields.bits_span, format!("bits: {e}")))?;
+            let collider = Collider::Bits { bbox, bits };
+            collider
+                .validate(frame_size)
+                .map_err(|e| err(&fields.bits_span, e.to_string()))?;
+            Ok(collider)
+        }
+    }
+}
+
+/// Checks a baked collider's solidity against the masks the loader sampled from the art.
+fn check_baked(stem: &str, baked: &BakedCollider, sampled: &ColliderSet) -> Result<(), Diagnostic> {
+    let file = format!("{stem}.toml");
+    match (&baked.set, sampled) {
+        (ColliderSet::Shared(a), ColliderSet::Shared(b)) => {
+            if a == b {
+                Ok(())
+            } else {
+                Err(Diagnostic::file_error(
+                    &file,
+                    format!(
+                        "the baked collider is `{a}`, but the PNG alpha data gives `{b}`; re-bake the collider"
+                    ),
+                ))
+            }
+        }
+        (ColliderSet::PerFrame(a), ColliderSet::PerFrame(b)) => {
+            if a.len() != b.len() {
+                return Err(Diagnostic::file_error(
+                    &file,
+                    format!(
+                        "the baked collider has {} frame(s), but the sprite has {}",
+                        a.len(),
+                        b.len()
+                    ),
+                ));
+            }
+            match a.iter().zip(b).position(|(x, y)| x != y) {
+                None => Ok(()),
+                Some(i) => Err(Diagnostic::file_error(
+                    &file,
+                    format!(
+                        "the baked collider for frame {i} is `{}`, but the PNG alpha data gives `{}`; re-bake the collider",
+                        a[i], b[i]
+                    ),
+                )),
+            }
+        }
+        (ColliderSet::Shared(_), ColliderSet::PerFrame(_)) => Err(Diagnostic::file_error(
+            &file,
+            "the baked collider is shared, but `separate_masks` builds one mask per frame; use a `frames` array",
+        )),
+        (ColliderSet::PerFrame(_), ColliderSet::Shared(_)) => Err(Diagnostic::file_error(
+            &file,
+            "the baked collider has one entry per frame, but the sprite builds one shared mask; use the shared keys",
+        )),
+    }
 }
 
 /// The sprites of a package in the order of `GameDef::sprites` (by id, bundled engine pack
@@ -303,7 +630,10 @@ pub fn load_sprite_at(
             format!("frame_size must be between 1 and {MAX_FRAME_SIDE} on each side"),
         ));
     }
-    if sidecar.frames == 0 {
+    if sidecar.frames == 0 || sidecar.collision.shape().is_none() {
+        if let Some(baked) = &sidecar.collider {
+            check_baked(stem, baked, &ColliderSet::Shared(Collider::None))?;
+        }
         return Ok((def(MaskSet::Shared(MaskId(0))), vec![empty_mask()]));
     }
     let Some(shape) = sidecar.collision.shape() else {
@@ -329,7 +659,7 @@ pub fn load_sprite_at(
     let per_frame = sidecar.separate_masks
         && sidecar.frames > 1
         && (shape == CollisionShape::Precise || sidecar.bbox.is_none());
-    if per_frame {
+    let (def, masks) = if per_frame {
         let masks: Vec<Mask> = all
             .iter()
             .map(|f| build_union_mask(&[f], fw, fh, shape, sidecar.bbox, tol))
@@ -337,11 +667,16 @@ pub fn load_sprite_at(
         let ids = (0..masks.len())
             .map(|i| MaskId(u32::try_from(i).unwrap_or(u32::MAX)))
             .collect();
-        Ok((def(MaskSet::PerFrame(ids)), masks))
+        (def(MaskSet::PerFrame(ids)), masks)
     } else {
         let mask = build_union_mask(&all, fw, fh, shape, sidecar.bbox, tol);
-        Ok((def(MaskSet::Shared(MaskId(0))), vec![mask]))
+        (def(MaskSet::Shared(MaskId(0))), vec![mask])
+    };
+    if let Some(baked) = &sidecar.collider {
+        let sampled = ColliderSet::from_masks(per_frame, &masks);
+        check_baked(stem, baked, &sampled)?;
     }
+    Ok((def, masks))
 }
 
 /// Copies each frame of the image grid out as its own `fw` x `fh` RGBA buffer; frame `f` is at
@@ -452,6 +787,7 @@ mod tests {
             alpha_tolerance: 0,
             separate_masks: separate,
             mask: None,
+            collider: None,
         }
     }
 
@@ -573,5 +909,159 @@ origin = [0, 0]
         assert!(parse_sidecar("sprites/a.toml", bad_tol).is_err());
         let unknown = "frames = 1\nframe_size = [4, 4]\norigin = [0, 0]\nsmooth = true\n";
         assert!(parse_sidecar("sprites/a.toml", unknown).is_err());
+    }
+
+    #[test]
+    fn baked_collider_matches_the_sampled_masks() {
+        let plain = "frames = 2
+frame_size = [2, 1]
+origin = [0, 0]
+";
+        let (without, _) = parse_sidecar("sprites/s.toml", plain).unwrap();
+        let (_, sampled) = load_sprite("s", &two_frames(), &without).unwrap();
+
+        // The union of both frames is the box [0, 0, 1, 0] with both pixels solid: row `c`.
+        let baked = "frames = 2
+frame_size = [2, 1]
+origin = [0, 0]
+
+[collider]
+alpha_tolerance = 0
+shape = \"bits\"
+bbox = [0, 0, 1, 0]
+bits = [\"c\"]
+";
+        let (with, _) = parse_sidecar("sprites/s.toml", baked).unwrap();
+        let (_, masks) = load_sprite("s", &two_frames(), &with).unwrap();
+        assert_eq!(masks, sampled);
+    }
+
+    #[test]
+    fn baked_collider_per_frame_matches_the_sampled_masks() {
+        let plain = "frames = 2
+frame_size = [2, 1]
+origin = [0, 0]
+separate_masks = true
+";
+        let (without, _) = parse_sidecar("sprites/s.toml", plain).unwrap();
+        let (_, sampled) = load_sprite("s", &two_frames(), &without).unwrap();
+
+        let baked = "frames = 2
+frame_size = [2, 1]
+origin = [0, 0]
+separate_masks = true
+
+[collider]
+alpha_tolerance = 0
+frames = [
+  { shape = \"bits\", bbox = [0, 0, 0, 0], bits = [\"8\"] },
+  { shape = \"bits\", bbox = [1, 0, 1, 0], bits = [\"8\"] },
+]
+";
+        let (with, _) = parse_sidecar("sprites/s.toml", baked).unwrap();
+        let (def, masks) = load_sprite("s", &two_frames(), &with).unwrap();
+        assert_eq!(masks, sampled);
+        assert!(matches!(def.masks, MaskSet::PerFrame(_)));
+    }
+
+    #[test]
+    fn baked_collider_drift_is_rejected() {
+        // One pixel where the art has two.
+        let baked = "frames = 2
+frame_size = [2, 1]
+origin = [0, 0]
+
+[collider]
+alpha_tolerance = 0
+shape = \"bits\"
+bbox = [0, 0, 1, 0]
+bits = [\"8\"]
+";
+        let (with, _) = parse_sidecar("sprites/s.toml", baked).unwrap();
+        let d = load_sprite("s", &two_frames(), &with).unwrap_err();
+        assert_eq!(d.file, "sprites/s.toml");
+        assert!(d.message.contains("re-bake"), "{}", d.message);
+        assert!(d.message.contains("2 solid pixel"), "{}", d.message);
+    }
+
+    #[test]
+    fn baked_collider_is_explicit_none_for_degenerate_masks() {
+        let transparent = png_rgba(4, 1, &[0; 16]);
+        let baked = "frames = 2
+frame_size = [2, 1]
+origin = [0, 0]
+
+[collider]
+alpha_tolerance = 0
+shape = \"none\"
+";
+        let (with, _) = parse_sidecar("sprites/s.toml", baked).unwrap();
+        let (_, masks) = load_sprite("s", &transparent, &with).unwrap();
+        assert_eq!(masks[0].shape, MaskShape::Empty);
+
+        let not_none = "frames = 2
+frame_size = [2, 1]
+origin = [0, 0]
+
+[collider]
+alpha_tolerance = 0
+shape = \"rect\"
+bbox = [0, 0, 0, 0]
+";
+        let (with, _) = parse_sidecar("sprites/s.toml", not_none).unwrap();
+        assert!(load_sprite("s", &transparent, &with).is_err());
+
+        // A zero-frame sprite may declare the explicit none too.
+        let zero = "frames = 0
+frame_size = [2, 1]
+origin = [0, 0]
+
+[collider]
+alpha_tolerance = 0
+shape = \"none\"
+";
+        let (with, _) = parse_sidecar("sprites/s.toml", zero).unwrap();
+        let (_, masks) = load_sprite("s", &[], &with).unwrap();
+        assert_eq!(masks[0].shape, MaskShape::Empty);
+    }
+
+    #[test]
+    fn baked_collider_parse_checks() {
+        let base = "frames = 2\nframe_size = [2, 1]\norigin = [0, 0]\n";
+        let with = |collider: &str| format!("{base}\n[collider]\n{collider}\n");
+        let ok = with("alpha_tolerance = 0\nshape = \"none\"");
+        assert!(parse_sidecar("sprites/a.toml", &ok).is_ok());
+
+        let missing_tol = with("shape = \"none\"");
+        assert!(parse_sidecar("sprites/a.toml", &missing_tol).is_err());
+
+        let diff_tol = "frames = 2\nframe_size = [2, 1]\norigin = [0, 0]\nalpha_tolerance = 10\n\n[collider]\nalpha_tolerance = 0\nshape = \"none\"\n";
+        let d = parse_sidecar("sprites/a.toml", diff_tol).unwrap_err();
+        assert!(d.message.contains("differs"), "{}", d.message);
+
+        let both = "frames = 2\nframe_size = [2, 1]\norigin = [0, 0]\n\n[collider]\nalpha_tolerance = 0\nshape = \"none\"\nframes = [{ shape = \"none\" }, { shape = \"none\" }]\n";
+        let d = parse_sidecar("sprites/a.toml", both).unwrap_err();
+        assert!(d.message.contains("not both"), "{}", d.message);
+
+        let count = "frames = 2\nframe_size = [2, 1]\norigin = [0, 0]\n\n[collider]\nalpha_tolerance = 0\nframes = [{ shape = \"none\" }]\n";
+        let d = parse_sidecar("sprites/a.toml", count).unwrap_err();
+        assert!(d.message.contains("1 frame"), "{}", d.message);
+
+        let none_body = with("alpha_tolerance = 0\nshape = \"none\"\nbbox = [0, 0, 0, 0]");
+        assert!(parse_sidecar("sprites/a.toml", &none_body).is_err());
+
+        let rect_no_bbox = with("alpha_tolerance = 0\nshape = \"rect\"");
+        assert!(parse_sidecar("sprites/a.toml", &rect_no_bbox).is_err());
+
+        let empty_bits = with("alpha_tolerance = 0\nshape = \"bits\"\nbbox = [0, 0, 1, 0]\nbits = [\"0\"]");
+        let d = parse_sidecar("sprites/a.toml", &empty_bits).unwrap_err();
+        assert!(d.message.contains("no solid pixel"), "{}", d.message);
+
+        let padding = with("alpha_tolerance = 0\nshape = \"bits\"\nbbox = [0, 0, 1, 0]\nbits = [\"f\"]");
+        let d = parse_sidecar("sprites/a.toml", &padding).unwrap_err();
+        assert!(d.message.contains("padding"), "{}", d.message);
+
+        let outside = with("alpha_tolerance = 0\nshape = \"rect\"\nbbox = [0, 0, 2, 0]");
+        assert!(parse_sidecar("sprites/a.toml", &outside).is_err());
     }
 }

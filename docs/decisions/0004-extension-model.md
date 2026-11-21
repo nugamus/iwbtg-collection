@@ -1,6 +1,6 @@
 # 0004: Extension model for unknown mechanics
 
-Status: Proposed for the user's approval, 2026-11-20. Issue [#778](https://github.com/nugamus/iwbtg-collection/issues/778). The PR that closes #778 is the approval; until it merges this is a draft.
+Status: Accepted, 2026-11-20. Issue [#778](https://github.com/nugamus/iwbtg-collection/issues/778); [PR #1085](https://github.com/nugamus/iwbtg-collection/pull/1085).
 
 Related: [0001 script language](0001-script-language.md), [0002 data syntax](0002-data-syntax.md), [format principles](../format/README.md), [world model](../architecture/sim/world.md), [physics profile](../format/physics.md), [scripts](../architecture/sim/scripts.md), [collision](../architecture/sim/collision.md), [versioning](../architecture/versioning.md), [content: engines](../content.md#engines).
 
@@ -67,7 +67,7 @@ A mechanic goes in the **lowest** tier that can express it. The tiers, from most
 | **Shared built-ins** | `crates/sim/src/builtins/`, documented once in `docs/format/builtins/<kind>.md`; params and presets | Maintainer, by promotion | Client release | `engine_rev` for behavior fixes; `gameplay_hash` for params |
 | **Runner rules** | `RunnerRules` (tick pipeline, motion, collision resolution, numbers, rooms, sound) and `engine_rev` branches | Maintainer only | Client release | `engine_rev`, `SIM_VERSION` |
 
-These are the **extension tiers**. They are not the `Tier 1`/`Tier 2`/`Tier 3` work-package labels in `crates/sim/src/def/builtin.rs`, and not the fidelity tiers T1-T4 in [fidelity-tiers](../plans/fidelity-tiers.md). This record does not change either.
+These are the **extension tiers**. They are not the `Tier 1`/`Tier 2`/`Tier 3` work-package labels in `crates/sim/src/def/builtin.rs`, and not the feel classes F1-F3 (formerly T1-T3; there is no T4) in [fidelity-tiers](../plans/fidelity-tiers.md). This record does not change either.
 
 Three consequences of the table:
 

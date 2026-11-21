@@ -1,5 +1,13 @@
 //! Turns key presses into one `InputFrame` per tick. The collector has no Bevy logic, so it is tested
 //! like any other code (docs/architecture/replay.md, Actions and input frames).
+//!
+//! This is the **only** place a device becomes an action frame (#1155). The sim latches the frame
+//! and never derives an edge; a replay stores the frame. Edges are kept per input, so two keys or
+//! controller inputs bound to one action each set its edge. Client inputs (`ClientKey`: quick-retry,
+//! skip-cutscene, frame-advance) and the pause menu, auto-retry and quit are deliberately **not**
+//! in the frame: they never reach the sim or a replay. `take_frame` is also what the pause menu
+//! calls when it closes, so keys pressed while it was open lose their edges while still-held keys
+//! stay held (`input/pause_edges`).
 
 use iwbtg_sim::input::{Action, InputFrame, vk};
 
@@ -543,6 +551,59 @@ mod tests {
         let f = c.take_frame();
         assert!(!f.is_held(Action::Shoot));
         assert!(f.was_pressed(Action::Shoot) && f.was_released(Action::Shoot));
+    }
+
+    /// `input/jump_on_press` at the collector boundary: a press between two ticks is in the very
+    /// next frame, never later, which is the one tick `CONTROL_LATENCY_MAX_TICKS` allows.
+    #[test]
+    fn a_press_is_in_the_next_frame() {
+        let mut c = Collector::new(Bindings::default());
+        assert_eq!(c.take_frame(), InputFrame::EMPTY);
+        c.press(vk::Z);
+        assert!(c.take_frame().was_pressed(Action::Shoot));
+    }
+
+    /// `input/second_key_edge`: a second input bound to an action that is already held sets the
+    /// action's press bit again, and releasing one of the two sets its release bit while the
+    /// action stays held. The client collector, not the sim, owns this.
+    #[test]
+    fn a_second_input_sets_the_edge_again_while_the_action_is_held() {
+        let mut c = Collector::new(Bindings::default());
+        c.press(vk::LEFT_SHIFT);
+        assert!(c.take_frame().was_pressed(Action::Jump));
+        c.press(vk::RIGHT_SHIFT);
+        let f = c.take_frame();
+        assert!(f.is_held(Action::Jump));
+        assert!(f.was_pressed(Action::Jump), "the second Shift presses again");
+        assert!(!f.was_released(Action::Jump));
+        c.release(vk::LEFT_SHIFT);
+        let f = c.take_frame();
+        assert!(f.is_held(Action::Jump), "Right Shift still holds it");
+        assert!(f.was_released(Action::Jump), "but the left Shift released");
+    }
+
+    /// `input/pause_edges`: the pause menu closes by taking a frame, which drops the edges
+    /// collected while it was open and keeps keys that are still held. A key pressed in the menu
+    /// never reaches the game, and a key released in it does not send a release edge.
+    #[test]
+    fn closing_the_pause_menu_drops_edges_but_keeps_held_keys() {
+        let mut c = Collector::new(Bindings::default());
+        c.press(vk::LEFT);
+        assert!(c.take_frame().was_pressed(Action::Left));
+        // While the menu is open: Z goes down, Left goes up. The run does not tick.
+        c.press(vk::Z);
+        c.release(vk::LEFT);
+        // Closing the menu takes a frame and throws it away (pause.rs, `act`); that frame is the
+        // only place the menu's edges exist.
+        let dropped = c.take_frame();
+        assert_eq!(dropped.pressed, Action::Shoot.bit());
+        assert_eq!(dropped.released, Action::Left.bit());
+        // The first frame the game sees has no edges but keeps the key that is still held.
+        let frame = c.take_frame();
+        assert_eq!(frame.pressed, 0, "a menu press never reaches the game");
+        assert_eq!(frame.released, 0, "nor does a menu release");
+        assert!(frame.is_held(Action::Shoot));
+        assert!(!frame.is_held(Action::Left));
     }
 
     #[test]
