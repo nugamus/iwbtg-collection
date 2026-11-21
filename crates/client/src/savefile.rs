@@ -4,12 +4,17 @@
 //! the game starts, so closing the window keeps the save like the originals' save file.
 //!
 //! One entry per game, `saves/<game id>.save` in the data area: postcard bytes of [`SaveFile`],
-//! the sim's `SaveSlot` plus a format version and the saved room's package name. The name is
-//! resolved to the package's current [`RoomId`] on load, so adding or reordering rooms does not
-//! move a save into another room (adding the showcase's boot room did exactly that, #1144), and
-//! a save in a room that is not gameplay is refused. A file that does not parse as this format
-//! (an older build's raw slot) is a warning and a new game. `--no-save-file` never reads or
-//! writes it: ranked runs and checks always start from a new game.
+//! the sim's `SaveSlot` plus a format version, the package id and built-in revision that wrote
+//! it, and the saved room's package name. The name is resolved to the package's current
+//! [`RoomId`] on load, so adding or reordering rooms does not move a save into another room
+//! (adding the showcase's boot room did exactly that, #1144), and a save in a room that is not
+//! gameplay is refused. The package id and revision decide whether this build may read the
+//! save at all: a save from another package or another built-in revision is refused rather than
+//! resumed under rules it was not written for (#1019). The version 1 envelope (#1145) had no
+//! provenance and migrates on read. A file that does not parse as a versioned envelope (an
+//! older build's raw slot) is refused; the bytes are kept beside it as `<name>.old`. Every
+//! refusal is one warning and a new game, never a silent resume. `--no-save-file` never reads
+//! or writes it: ranked runs and checks always start from a new game.
 
 use std::sync::OnceLock;
 
@@ -20,16 +25,37 @@ use iwbtg_sim::save::SaveSlot;
 use serde::{Deserialize, Serialize};
 
 /// The only save format this build reads and writes.
-const VERSION: u8 = 1;
+const VERSION: u8 = 2;
 
-/// What a save file holds: the sim's slot and the saved room's package name.
+/// The previous envelope, still read so a save from the #1145 build is not stranded.
+const VERSION_NAMED_ROOM: u8 = 1;
+
+/// What a save file holds: the sim's slot, the saved room's package name, and the provenance
+/// that decides whether this build may resume it.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 struct SaveFile {
     /// This format's version, [`VERSION`].
     version: u8,
+    /// The package that wrote the save (`GameDef::id`).
+    package: String,
+    /// The built-in behavior revision the save was written under (`GameDef::engine_rev`).
+    engine_rev: u16,
     /// `RoomDef::name`, resolved to the package's current room on load.
     room: String,
     /// The sim's saved slot, whose own `room` is resolved from `room` when read.
+    slot: SaveSlot,
+}
+
+/// The version 1 envelope (#1145): the sim's slot and the saved room's name, with no
+/// provenance. Read only, to migrate a save written before [`SaveFile`] recorded it.
+#[derive(Serialize, Deserialize)]
+struct SaveFileV1 {
+    /// [`VERSION_NAMED_ROOM`], consumed to reach the fields after it.
+    #[allow(dead_code, reason = "the version byte is consumed by the encoding, not read here")]
+    version: u8,
+    /// `RoomDef::name`.
+    room: String,
+    /// The sim's saved slot.
     slot: SaveSlot,
 }
 
@@ -89,38 +115,102 @@ pub fn read(store: &Store, name: &str, def: &GameDef) -> Result<Option<SaveSlot>
         return Ok(None);
     };
     let place = store.describe(name);
-    let file: SaveFile =
-        postcard::from_bytes(&bytes).map_err(|e| format!("{place}: not a save file ({e})"))?;
-    if file.version != VERSION {
+    let (room_name, mut slot) = decode(&bytes, def, &place)?;
+    let Some(at) = def.rooms.iter().position(|r| r.name == room_name) else {
         return Err(format!(
-            "{place}: save format version {}, this build reads {VERSION}",
-            file.version
-        ));
-    }
-    let Some(at) = def.rooms.iter().position(|r| r.name == file.room) else {
-        return Err(format!(
-            "{place}: the saved room `{}` is not in this version of the game",
-            file.room
+            "{place}: the saved room `{room_name}` is not in this version of the game"
         ));
     };
     if def.rooms[at].role != RoomRole::Play {
         return Err(format!(
-            "{place}: the saved room `{}` is not gameplay",
-            file.room
+            "{place}: the saved room `{room_name}` is not gameplay"
         ));
     }
     let room = u32::try_from(at).map_err(|_| format!("{place}: too many rooms"))?;
-    let mut slot = file.slot;
     slot.room = RoomId(room);
     Ok(Some(slot))
+}
+
+/// Decodes the envelope and checks package and revision provenance. A version 1 file migrates:
+/// it has no provenance, so it adopts this package's. Returns the saved room name and the slot.
+fn decode(bytes: &[u8], def: &GameDef, place: &str) -> Result<(String, SaveSlot), String> {
+    let version = postcard::take_from_bytes::<u8>(bytes)
+        .map(|(version, _)| version)
+        .map_err(|e| not_a_save(place, def, bytes, &e))?;
+    match version {
+        VERSION => {
+            let file: SaveFile =
+                postcard::from_bytes(bytes).map_err(|e| not_a_save(place, def, bytes, &e))?;
+            if file.package != def.id {
+                return Err(format!(
+                    "{place}: the save belongs to package `{}`, not `{}`",
+                    file.package, def.id
+                ));
+            }
+            if file.engine_rev != def.engine_rev {
+                return Err(format!(
+                    "{place}: the save was written under built-in revision {}, this build reads {}",
+                    file.engine_rev, def.engine_rev
+                ));
+            }
+            Ok((file.room, file.slot))
+        }
+        VERSION_NAMED_ROOM => {
+            let file: SaveFileV1 =
+                postcard::from_bytes(bytes).map_err(|e| not_a_save(place, def, bytes, &e))?;
+            // No provenance to compare: the room name is the whole identity a version 1 save
+            // carries, and the caller still refuses it if the room is gone or not gameplay.
+            Ok((file.room, file.slot))
+        }
+        other => Err(unknown_version(place, def, bytes, other)),
+    }
+}
+
+/// Whether the bytes are a raw `SaveSlot`, the format before #1145: no envelope, so its first
+/// byte is the room index, not a version. Requiring the index to fit this package's rooms keeps
+/// a newer envelope from being mistaken for one.
+fn raw_slot(def: &GameDef, bytes: &[u8]) -> bool {
+    postcard::from_bytes::<SaveSlot>(bytes).is_ok_and(|slot| {
+        usize::try_from(slot.room.0).is_ok_and(|room| room < def.rooms.len())
+    })
+}
+
+fn not_a_save(place: &str, def: &GameDef, bytes: &[u8], e: &postcard::Error) -> String {
+    if raw_slot(def, bytes) {
+        format!(
+            "{place}: an older build's save (a raw save slot); this build reads version {VERSION}"
+        )
+    } else {
+        format!("{place}: not a save file ({e})")
+    }
+}
+
+fn unknown_version(place: &str, def: &GameDef, bytes: &[u8], version: u8) -> String {
+    if raw_slot(def, bytes) {
+        format!(
+            "{place}: an older build's save (a raw save slot); this build reads version {VERSION}"
+        )
+    } else {
+        format!(
+            "{place}: not a save file (format version {version}, this build reads {VERSION})"
+        )
+    }
 }
 
 fn write(store: &Store, name: &str, def: &GameDef, slot: &SaveSlot) -> Result<(), String> {
     let room = def
         .room(slot.room)
         .ok_or_else(|| "the saved room is not in this version of the game".to_owned())?;
+    if room.role != RoomRole::Play {
+        return Err(format!(
+            "refusing to save in `{}`, which is not gameplay",
+            room.name
+        ));
+    }
     let file = SaveFile {
         version: VERSION,
+        package: def.id.clone(),
+        engine_rev: def.engine_rev,
         room: room.name.clone(),
         slot: slot.clone(),
     };
@@ -139,12 +229,39 @@ pub fn start_point(def: &GameDef) -> StartPoint {
     let Some(store) = Store::data() else {
         return new_game;
     };
-    match read(&store, &name_for(&def.id), def) {
+    start_from(&store, def)
+}
+
+/// The read and the warning without the data folder: [`start_point`] with a store, so tests
+/// can exercise the refusal path.
+fn start_from(store: &Store, def: &GameDef) -> StartPoint {
+    let new_game = StartPoint::NewGame { difficulty: 0 };
+    let name = name_for(&def.id);
+    match read(store, &name, def) {
         Ok(Some(slot)) => StartPoint::FromSave(slot),
         Ok(None) => new_game,
         Err(e) => {
-            storage::warn(&format!("ignoring the save file, starting a new game: {e}"));
+            match keep_unusable(store, &name) {
+                Some(kept) => storage::warn(&format!(
+                    "ignoring the save file, starting a new game: {e}; the old file is kept at {kept}"
+                )),
+                None => storage::warn(&format!("ignoring the save file, starting a new game: {e}")),
+            }
             new_game
+        }
+    }
+}
+
+/// Keeps a copy of a save this build cannot use beside it, so the bytes survive the new game
+/// (a later build, or the player, can still recover them). Returns where the copy went.
+fn keep_unusable(store: &Store, name: &str) -> Option<String> {
+    let bytes = store.read(name).ok().flatten()?;
+    let kept = format!("{name}.old");
+    match store.write(&kept, &bytes) {
+        Ok(()) => Some(store.describe(&kept)),
+        Err(e) => {
+            storage::warn(&format!("could not keep a copy of the unusable save file: {e}"));
+            None
         }
     }
 }
@@ -241,6 +358,30 @@ mod tests {
 
     const NAME: &str = "saves/x.save";
 
+    /// The current envelope for `room`, with `def`'s provenance.
+    fn envelope(def: &GameDef, room: &str, slot: SaveSlot) -> SaveFile {
+        SaveFile {
+            version: VERSION,
+            package: def.id.clone(),
+            engine_rev: def.engine_rev,
+            room: room.into(),
+            slot,
+        }
+    }
+
+    fn showcase() -> std::sync::Arc<GameDef> {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("showcase.pkg");
+        crate::package::open(&dir, false).unwrap().def
+    }
+
+    fn room_index(def: &GameDef, name: &str) -> u32 {
+        def.rooms
+            .iter()
+            .position(|r| r.name == name)
+            .and_then(|at| u32::try_from(at).ok())
+            .unwrap_or_else(|| panic!("the package has a room `{name}`"))
+    }
+
     #[test]
     fn a_save_round_trips_through_the_file() {
         let def = demo_def();
@@ -257,11 +398,7 @@ mod tests {
         store.write(NAME, b"junk").unwrap();
         assert!(read(&store, NAME, &def).unwrap_err().contains("not a save file"));
         // A room the game does not have.
-        let file = SaveFile {
-            version: VERSION,
-            room: "nowhere".into(),
-            slot: slot(),
-        };
+        let file = envelope(&def, "nowhere", slot());
         store.write(NAME, &postcard::to_stdvec(&file).unwrap()).unwrap();
         assert!(
             read(&store, NAME, &def)
@@ -269,13 +406,10 @@ mod tests {
                 .contains("is not in this version")
         );
         // A format this build does not read.
-        let file = SaveFile {
-            version: VERSION + 1,
-            room: "room_1".into(),
-            slot: slot(),
-        };
+        let mut file = envelope(&def, "stage", slot());
+        file.version = VERSION + 1;
         store.write(NAME, &postcard::to_stdvec(&file).unwrap()).unwrap();
-        assert!(read(&store, NAME, &def).unwrap_err().contains("save format version"));
+        assert!(read(&store, NAME, &def).unwrap_err().contains("format version"));
     }
 
     /// #1144: the save names its room, so a save in a play room resolves to that room now; a
@@ -283,28 +417,155 @@ mod tests {
     /// of resuming into an empty room.
     #[test]
     fn a_save_resolves_its_room_by_name_and_refuses_a_non_play_room() {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("showcase.pkg");
-        let def = crate::package::open(&dir, false).unwrap().def;
+        let def = showcase();
         let store = temp("room-name");
-        let hall = def
-            .rooms
-            .iter()
-            .position(|r| r.name == "hall")
-            .and_then(|at| u32::try_from(at).ok())
-            .expect("the showcase has a hall");
         let mut saved = slot();
-        saved.room = RoomId(hall);
+        saved.room = RoomId(room_index(&def, "hall"));
         write(&store, NAME, &def, &saved).unwrap();
         assert_eq!(read(&store, NAME, &def).unwrap(), Some(saved.clone()));
 
         // Room 0 is the boot room now; a save that names it cannot be resumed.
-        let boot = SaveFile {
-            version: VERSION,
-            room: "boot".into(),
-            slot: saved,
-        };
+        let boot = envelope(&def, "boot", saved);
         store.write(NAME, &postcard::to_stdvec(&boot).unwrap()).unwrap();
         assert!(read(&store, NAME, &def).unwrap_err().contains("is not gameplay"));
+
+        // The write side refuses it too, so this build never writes a save it cannot read.
+        let mut in_boot = slot();
+        in_boot.room = RoomId(0);
+        assert!(write(&store, NAME, &def, &in_boot).unwrap_err().contains("not gameplay"));
+    }
+
+    /// #1019: a save names its room, so a package update that reorders or inserts rooms keeps
+    /// resuming in that room even though the numeric index moved.
+    #[test]
+    fn reordered_and_inserted_rooms_keep_the_saved_room() {
+        let def = showcase();
+        let store = temp("reorder");
+
+        // Reorder: hall moves from index 2 to 1.
+        let mut reordered = (*def).clone();
+        let hall = room_index(&def, "hall") as usize;
+        reordered.rooms.swap(0, hall);
+        assert_eq!(room_index(&reordered, "hall"), 0);
+
+        let mut saved = slot();
+        saved.room = RoomId(u32::try_from(hall).unwrap());
+        write(&store, NAME, &def, &saved).unwrap();
+        let mut want = saved.clone();
+        want.room = RoomId(0);
+        assert_eq!(read(&store, NAME, &reordered).unwrap(), Some(want));
+
+        // Insert: a new room pushes hall from index 2 to 3.
+        let mut inserted = (*def).clone();
+        inserted
+            .rooms
+            .insert(0, iwbtg_sim::def::RoomDef::new("inserted", 800, 608));
+        assert_eq!(room_index(&inserted, "hall"), 3);
+
+        let mut want = saved.clone();
+        want.room = RoomId(3);
+        assert_eq!(read(&store, NAME, &inserted).unwrap(), Some(want));
+        assert_eq!(inserted.rooms[3].name, "hall");
+    }
+
+    /// A room the update removed cannot be resumed: one warning and a new game, never a
+    /// different room's index.
+    #[test]
+    fn a_removed_room_is_refused() {
+        let def = showcase();
+        let store = temp("removed");
+        let mut saved = slot();
+        saved.room = RoomId(room_index(&def, "hall"));
+        write(&store, NAME, &def, &saved).unwrap();
+
+        let mut removed = (*def).clone();
+        removed.rooms.retain(|r| r.name != "hall");
+        assert!(
+            read(&store, NAME, &removed)
+                .unwrap_err()
+                .contains("is not in this version")
+        );
+    }
+
+    /// A save written by another package or another built-in revision is refused rather than
+    /// resumed under rules it was not written for.
+    #[test]
+    fn a_save_from_another_package_or_revision_is_refused() {
+        let def = demo_def();
+        let store = temp("provenance");
+        write(&store, NAME, &def, &slot()).unwrap();
+
+        let mut other_package = (*def).clone();
+        other_package.id = "another_game".into();
+        let error = read(&store, NAME, &other_package).unwrap_err();
+        assert!(
+            error.contains(&format!("belongs to package `{}`", def.id)),
+            "{error}"
+        );
+
+        let mut other_revision = (*def).clone();
+        other_revision.engine_rev += 1;
+        let error = read(&store, NAME, &other_revision).unwrap_err();
+        assert!(error.contains("built-in revision"), "{error}");
+    }
+
+    /// A package change that leaves the saved room and the rules alone (a cosmetic or an
+    /// unrelated room update) keeps the save: the envelope checks identity, not a whole-package
+    /// hash.
+    #[test]
+    fn an_unrelated_package_change_keeps_the_save() {
+        let def = demo_def();
+        let store = temp("cosmetic");
+        write(&store, NAME, &def, &slot()).unwrap();
+
+        let mut changed = (*def).clone();
+        changed.max_ticks += 1;
+        changed.rooms[0].width += 1;
+        assert_eq!(read(&store, NAME, &changed).unwrap(), Some(slot()));
+    }
+
+    /// A save from the #1145 build (version 1, no provenance) migrates on read; its room name
+    /// still decides whether it can be resumed.
+    #[test]
+    fn a_version_1_envelope_migrates() {
+        let def = showcase();
+        let store = temp("migrate");
+        let mut saved = slot();
+        saved.room = RoomId(room_index(&def, "hall"));
+        let old = SaveFileV1 {
+            version: VERSION_NAMED_ROOM,
+            room: "hall".into(),
+            slot: saved.clone(),
+        };
+        store.write(NAME, &postcard::to_stdvec(&old).unwrap()).unwrap();
+        assert_eq!(read(&store, NAME, &def).unwrap(), Some(saved));
+
+        // A migrated file that names a room this build no longer has is still refused.
+        let old = SaveFileV1 {
+            version: VERSION_NAMED_ROOM,
+            room: "gone".into(),
+            slot: slot(),
+        };
+        store.write(NAME, &postcard::to_stdvec(&old).unwrap()).unwrap();
+        assert!(read(&store, NAME, &def).unwrap_err().contains("is not in this version"));
+    }
+
+    /// A raw `SaveSlot` (the format before #1145) has no room identity to trust: it starts a
+    /// new game, and its bytes are kept beside the save so they can be recovered.
+    #[test]
+    fn a_legacy_raw_slot_is_refused_and_kept() {
+        let def = demo_def();
+        let store = temp("legacy");
+        let name = name_for(&def.id);
+        let bytes = postcard::to_stdvec(&slot()).unwrap();
+        store.write(&name, &bytes).unwrap();
+
+        assert!(read(&store, &name, &def).unwrap_err().contains("raw save slot"));
+        assert!(matches!(
+            start_from(&store, &def),
+            StartPoint::NewGame { difficulty: 0 }
+        ));
+        assert_eq!(store.read(&format!("{name}.old")).unwrap(), Some(bytes));
     }
 
     #[test]
