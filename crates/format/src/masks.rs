@@ -239,6 +239,46 @@ impl Collider {
         }
     }
 
+    /// The collision box, or `None` when nothing collides. It may include a transparent border
+    /// when the sidecar gave a manual `bbox`; [`Collider::solid_bbox`] is the tight box.
+    pub fn bbox(&self) -> Option<IRect> {
+        match self {
+            Collider::None => None,
+            Collider::Rect { bbox } | Collider::Bits { bbox, .. } => Some(*bbox),
+        }
+    }
+
+    /// The tight box around the solid pixels, or `None` when nothing collides.
+    pub fn solid_bbox(&self) -> Option<IRect> {
+        match self {
+            Collider::None => None,
+            Collider::Rect { bbox } => Some(*bbox),
+            Collider::Bits { bbox, bits } => {
+                let mut found: Option<IRect> = None;
+                for y in 0..bits.height() {
+                    for x in 0..bits.width() {
+                        if !bits.get(i64::from(x), i64::from(y)) {
+                            continue;
+                        }
+                        let px = bbox.left + i64::from(x);
+                        let py = bbox.top + i64::from(y);
+                        let b = found.get_or_insert(IRect {
+                            left: px,
+                            top: py,
+                            right: px,
+                            bottom: py,
+                        });
+                        b.left = b.left.min(px);
+                        b.right = b.right.max(px);
+                        b.top = b.top.min(py);
+                        b.bottom = b.bottom.max(py);
+                    }
+                }
+                found
+            }
+        }
+    }
+
     /// Checks the canonical rules for a `frame_size` frame: a box inside the frame, a bit grid
     /// matching its box, and at least one solid pixel.
     pub fn validate(&self, frame_size: (u32, u32)) -> Result<(), ColliderError> {
@@ -311,6 +351,14 @@ impl ColliderSet {
         match self {
             ColliderSet::Shared(collider) => Some(collider),
             ColliderSet::PerFrame(colliders) => colliders.get(frame),
+        }
+    }
+
+    /// Number of collider entries: one for a shared set, the frame count for a per-frame set.
+    pub fn frames(&self) -> usize {
+        match self {
+            ColliderSet::Shared(_) => 1,
+            ColliderSet::PerFrame(colliders) => colliders.len(),
         }
     }
 
