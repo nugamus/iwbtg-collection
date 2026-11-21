@@ -10,4 +10,4 @@ Defaults of the object's `params` table are read by the script as `this.<name>`.
 
 **Loading.** Tests `a_scripted_kind_handles_what_its_script_defines_and_its_collides_with` and `a_scripted_object_runs_in_a_room` (a loaded package run through `Sim`, two runs hash alike) in `crates/format/tests/load_objects.rs`.
 
-`moment_<name>()` is part of the event set when the script defines it and the object's `timeline` key names a timeline whose moment uses that call ([timelines](../timelines.md)). `trigger(name)` is not a script handler yet: no event carries a trigger name.
+`moment_<name>()` is part of the event set when the script defines it and the object's `timeline` key names a timeline whose moment uses that call ([timelines](../timelines.md)). On a kind whose base is `trigger`, a kid collision (the built-in's own event) runs `trigger(name)` with the instance's room-file `name`; an unnamed trigger has no name to pass and keeps the ordinary `collide` mapping.

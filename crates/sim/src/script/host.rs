@@ -14,7 +14,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use super::inst::Inst;
 use super::{ScriptError, ScriptHost};
 use crate::def::script::ScriptRules;
-use crate::def::{GameDef, KindId, ScriptId};
+use crate::def::{Builtin, ClassMask, GameDef, KindId, ScriptId};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
 use crate::rules::RunnerRules;
@@ -82,6 +82,28 @@ fn moment_call(def: &GameDef, inst: &Instance, step: u32) -> Option<String> {
     let timeline = def.timelines.get(run.timeline.index()?)?;
     let index = timeline.moments.iter().position(|m| *m == step)?;
     timeline.calls.get(index).map(|call| format!("moment_{call}"))
+}
+
+/// The name a trigger-based kind's kid collision passes to `trigger(name)` (decision 0001).
+///
+/// The trigger built-in handles the kid classes itself (its event set), so that collision is
+/// where the script's `trigger` event runs. The name is the instance's room-file name
+/// (`PlacedInstance::name`, documented "for triggers and scripts"); an unnamed trigger keeps
+/// the ordinary `collide` mapping because there is no name to pass.
+fn trigger_name(
+    def: &GameDef,
+    inst: &Instance,
+    with: ClassMask,
+    fns: &BTreeSet<(String, usize)>,
+) -> Option<String> {
+    let kd = def.kind(inst.kind)?;
+    if kd.base != Builtin::Trigger
+        || !with.intersects(crate::builtins::warp::KIDS)
+        || !fns.contains(&("trigger".to_owned(), 1))
+    {
+        return None;
+    }
+    def.names.get(inst.name?.index()?).cloned()
 }
 
 impl ScriptRuntime {
@@ -210,6 +232,16 @@ impl ScriptHost for ScriptRuntime {
             return Err(plain(format!("kind has unknown script {}", sid.0)));
         };
         let (fname, arg): (Cow<'_, str>, Option<Dynamic>) = match ev {
+            EventKind::Collision { with, .. } => {
+                if let Some(name) = trigger_name(ctx.def, inst, *with, &script.fns) {
+                    (Cow::Borrowed("trigger"), Some(Dynamic::from(name)))
+                } else {
+                    let Some((name, arg)) = event_call(ev) else {
+                        return Ok(Flow::Continue);
+                    };
+                    (Cow::Borrowed(name), arg)
+                }
+            }
             EventKind::Moment(step) => {
                 let Some(name) = moment_call(ctx.def, inst, *step) else {
                     return Ok(Flow::Continue);
