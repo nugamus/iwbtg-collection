@@ -96,7 +96,7 @@ pub fn load_into(ctx: &mut Ctx, slot: &SaveSlot) -> Result<InstId, SimError>;
 - `quantize` reproduces what the original's save format does to a position (rooms Confirmed group table): base-100 bytes (13 games; last byte through `byte_from_real`, N5), base-256 div/mod bytes (little-runner, N8), `string()` two decimals (machinary, eat-the-new-year, N6), xprevious/yprevious exact (kaenbyou, eat-the-lemon, N7), fixed point (poronkusema), floor with the three-step +1 nudge using `place_free` (xia). This decides the respawn v-align (tricks `trick.respawn_valign`). Recorded and waiting for the spec: `kaenbyou/tr-room-08` (N7), `little-runner/num-divmod-save-*`, `eat-the-new-year/num-string-save-*`, `machinary/tr-room-07-a`, `little-runner/tr-room-06`.
 - Death-only saves update counters only. `deaths` and `time` use `checked_add` (10.3).
 - `World.save = None` means "save file missing"; the kid Create's first-play save (rely Create step 4, B Create step 4) tests it.
-- The client persists `SaveSlot` with postcard; `StartPoint::FromSave` restores it.
+- The client persists the slot inside its versioned envelope (package id, built-in revision, saved room name; [client storage](../client/storage.md)); `StartPoint::FromSave` restores it.
 
 ### Views and camera
 
