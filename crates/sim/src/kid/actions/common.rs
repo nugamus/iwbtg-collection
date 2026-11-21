@@ -46,7 +46,7 @@ pub enum CommonAction {
     CreateBow,
     /// Create step 4: when no save exists, deaths and time 0 and a save at the kid's position.
     FirstPlaySave,
-    /// Create step 5: alarm 0 = `room_speed`.
+    /// Create step 5: alarm 0 = one clock second (`room_speed` under the legacy policy, R30).
     ArmPlayTimer,
     /// Step action 2 step 4: gravity back to its constant unless on a ladder.
     Gravity,
@@ -70,7 +70,7 @@ pub enum CommonAction {
     /// Step (B): with `frozen2`, gravity, `image_speed` and speed become 0 and the rest of the
     /// Step list is skipped. `kid::on_event` runs this one itself.
     StopIfFrozen2,
-    /// Alarm 0: outside the menu roles `global.time` + 1, then alarm 0 = `room_speed` again.
+    /// Alarm 0: outside the menu roles `global.time` + 1, then alarm 0 = one clock second again.
     PlayTimer,
     /// Key Q pressed (and the killPlayer calls of key rows): the death sequence.
     Kill,
@@ -140,12 +140,13 @@ fn first_play_save(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     save::save_now(ctx, me, rules.position.model(), fixed)
 }
 
-/// Create step 5: `alarm[0] = room_speed`.
+/// Create step 5: `alarm[0] = room_speed`, i.e. one second on the run's clock (R30): the room's
+/// `room_speed` under the legacy policy, the package tick rate under `ClockPolicy::Fixed`.
 fn arm_play_timer(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
-    let speed = ctx.w.room_speed;
+    let second = crate::tick::second_ticks(ctx.def, &ctx.rules.tick, ctx.w);
     let rules = ctx.rules;
     match ctx.w.get_mut(me) {
-        Some(i) => alarm::set(i, 0, speed, &rules.num),
+        Some(i) => alarm::set(i, 0, second, &rules.num),
         None => Ok(()),
     }
 }

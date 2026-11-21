@@ -43,7 +43,7 @@ pub const MAX_ENGINE_REV: u16 = 0;
 /// All rule switches for one run.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct RunnerRules {
-    /// Tick pipeline and events (R1-R10, R21, R22).
+    /// Tick pipeline and events (R1-R10, R21, R22), plus the run's clock and timing units (R30).
     pub tick: TickRules,
     /// Automatic motion (M1, M2).
     pub motion: MotionRules,
@@ -84,6 +84,8 @@ mod tests {
     fn rev_0_defaults_match_the_register() {
         let r = RunnerRules::for_runner(Runner::Gm80, 0).unwrap();
         assert_eq!(r, RunnerRules::for_runner(Runner::Gm81, 0).unwrap());
+        assert_eq!(r.tick.timing.clock, tick::ClockPolicy::RoomSpeed);
+        assert!(r.tick.timing.all_ticks());
         assert_eq!(r.tick.dispatch, tick::DispatchOrder::RankThenCreation);
         assert_eq!(r.tick.anim_slot, tick::AnimSlot::AfterDraw);
         assert_eq!(r.tick.new_instances_join_phase, tick::JoinPhase::LaterInOrder);

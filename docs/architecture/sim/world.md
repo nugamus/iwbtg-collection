@@ -110,7 +110,7 @@ pub struct World {
     pub tick: u64,
     pub room: RoomId,
     pub room_tick: u64,
-    pub room_speed: Real,                 // GM variable; file speed on entry, 50 after world Room Start
+    pub room_speed: Real,                 // GM variable; legacy per-room clock data (R14, R30): file speed on entry, 50 after world Room Start
     pub instances: Vec<Instance>,
     pub next_id: u64,
     pub var_names: BTreeMap<String, VarId>, // run-time names only (variable ids)
