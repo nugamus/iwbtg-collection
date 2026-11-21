@@ -51,7 +51,7 @@ image_speed_idle = 0.2
 
 [input]
 walk = "direct_latch"         # direct_latch | sampled; see tricks trick.restart_glitch
-tap_fix = false               # xia directionalTapFix
+tap_fix = false               # xia directionalTapFix; research gap, no field yet (#1155)
 vine_keys = "edges"           # edges | latched_flags (wanna, rori, fairy-tale, showdown)
 
 [events]
@@ -184,7 +184,7 @@ Only SWITCHABLE tricks get switches; EMERGENT ones must fall out of the physics 
 | `bug.vine_on_ground` | none until specified | — |
 | `bug.water_full_jump_1f`, `bug.water1_low_check` | not modeled (not seen in A, C) | off |
 | `trick.restart_glitch` | `input.walk = "direct_latch"`, world param `latch_cleared_by_world` | latch on; cleared in kaenbyou, lemon, xia (Inferred) |
-| `input.sub_frame_tap` | same latch plus `input.tap_fix` | latch on; xia tap_fix off |
+| `input.sub_frame_tap` | same latch plus `input.tap_fix` | latch on; xia's `tap_fix` is **research only**: it has no physics field and the loader rejects it, so it is not a promised profile value (#1155) |
 | `trick.edge_kill_timing` | `events.boundary` | per family |
 | `trick.killer_check_timing` | killer action placement | per family |
 | `trick.vdiet` | `NumRules::float_model` (no binary32) | off |

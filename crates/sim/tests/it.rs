@@ -223,6 +223,9 @@ mod grid;
 #[path = "hash_vectors.rs"]
 mod hash_vectors;
 
+#[path = "input.rs"]
+mod input;
+
 #[path = "kid_a1_actions.rs"]
 mod kid_a1_actions;
 
