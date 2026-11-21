@@ -553,6 +553,29 @@ mod tests {
         assert!(f.was_pressed(Action::Shoot) && f.was_released(Action::Shoot));
     }
 
+    /// A replay can only contain frames the collector built, and every bit the collector sets is
+    /// `Action::bit()` (a key, a pad input or `press_action`). Pressing every virtual key and
+    /// every pad input under the default bindings therefore never produces a reserved bit: no
+    /// recorded replay can carry one, so masking them at the sim latch is a no-op for replays.
+    #[test]
+    fn every_frame_the_collector_builds_is_a_contract_frame() {
+        let mut c = Collector::new(Bindings::default());
+        for key in 0..=u8::MAX {
+            c.press(key);
+            assert!(c.take_frame().is_contract(), "key {key} press");
+            c.release(key);
+            assert!(c.take_frame().is_contract(), "key {key} release");
+        }
+        for input in PadInput::ALL {
+            c.set_pad(input, true);
+            assert!(c.take_frame().is_contract(), "pad {} press", input.name());
+            c.set_pad(input, false);
+            assert!(c.take_frame().is_contract(), "pad {} release", input.name());
+        }
+        c.press_action(Action::Restart);
+        assert!(c.take_frame().is_contract());
+    }
+
     /// `input/jump_on_press` at the collector boundary: a press between two ticks is in the very
     /// next frame, never later, which is the one tick `CONTROL_LATENCY_MAX_TICKS` allows.
     #[test]
