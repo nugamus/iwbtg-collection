@@ -1850,6 +1850,11 @@ fn value_text(value: &Value) -> String {
 mod tests {
     use super::*;
 
+    // A wasm32-unknown-unknown binary runs through `wasm-bindgen-test-runner`, which runs only
+    // `wasm_bindgen_test` functions (#1285).
+    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     fn contract(text: &str, id: &str) -> Result<Contract, String> {
         let def = fixtures::fixture("jump").unwrap();
         validate(parse(text).unwrap(), &def, id)

@@ -13,6 +13,11 @@ mod contract;
 
 use contract::Verdict;
 
+// A wasm32-unknown-unknown binary runs through `wasm-bindgen-test-runner`, which runs only
+// `wasm_bindgen_test` functions (#1285).
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+use wasm_bindgen_test::wasm_bindgen_test as test;
+
 // Every public contract, by its id (the path below the contracts root) and its text. Generated;
 // do not edit `feel/contracts.rs` by hand.
 include!("feel/contracts.rs");
