@@ -4,8 +4,8 @@
 use iwbtg_sim::collide::bbox::reported_box;
 use iwbtg_sim::collide::contact::contact_steps;
 use iwbtg_sim::collide::{Target, collision_point, instance_box, place_at, place_free, place_meeting};
-use iwbtg_sim::def::IRect;
-use iwbtg_sim::rules::collide::{BoxRound, McsStart, PlaceRound};
+use iwbtg_sim::def::{IRect, Mask, MaskId, MaskSet, MaskShape, SpriteDef, SpriteId};
+use iwbtg_sim::rules::collide::{BoxRound, McsStart, PlaceRound, ReportedBox};
 use iwbtg_sim::trace::TraceTable;
 
 use crate::collide_support::{Game, Img, game, r};
@@ -30,10 +30,27 @@ fn cbox(g: &Game, id: iwbtg_sim::world::InstId) -> IRect {
 
 /// Reported box of `id` at its own position.
 fn rbox(g: &Game, id: iwbtg_sim::world::InstId) -> IRect {
+    rbox_opt(g, id).unwrap()
+}
+
+/// Reported box of `id`, or `None` when the instance has none.
+fn rbox_opt(g: &Game, id: iwbtg_sim::world::InstId) -> Option<IRect> {
     let inst = g.w.get(id).unwrap();
-    reported_box(&g.def, inst, (inst.m.x(), inst.m.y()), &g.rules.collide)
-        .unwrap()
-        .unwrap()
+    reported_box(&g.def, inst, (inst.m.x(), inst.m.y()), &g.rules.collide).unwrap()
+}
+
+/// Appends a sprite over one mask, returning the sprite id.
+fn add_sprite(g: &mut Game, size: (u32, u32), origin: (i32, i32), frames: u16, mask: Mask) -> SpriteId {
+    let mask_id = MaskId(u32::try_from(g.def.masks.len()).expect("small mask table"));
+    g.def.masks.push(mask);
+    let sprite_id = SpriteId(u32::try_from(g.def.sprites.len()).expect("small sprite table"));
+    g.def.sprites.push(SpriteDef {
+        frames,
+        size,
+        origin,
+        masks: MaskSet::Shared(mask_id),
+    });
+    sprite_id
 }
 
 /// Plan 12: the kid box at y = 567.0, 567.4, 567.5, 566.5 (C1, C2; machinary t-col-03 and
@@ -146,6 +163,52 @@ fn mirrored_kid_stops_at_805() {
         end.unwrap(),
         (r(804.0), r(1100.4)),
         "embedded start does not move (C10)"
+    );
+}
+
+/// D2b (#1265): under `standard` (`ReportedBox::Collider`) the reported box is the one
+/// authoritative collider's box, so the mirrored second box and the empty-mask special cases
+/// disappear. `gm8` (`ReportedBox::Measured`) keeps the measured values.
+#[test]
+fn standard_reports_the_one_collider_box() {
+    let mut g = game(1600, 1200);
+    // The mirrored kid at 805: the measured box adds the mirrored left pixel (798..810), the
+    // collider is 800..810.
+    g.add_block(768.0, 1088.0);
+    let k = g.add_kid(806.0, 1100.4, -1.0);
+    g.put(k, 805.0, 1100.4);
+    let collider = cbox(&g, k);
+    assert_eq!(collider, rect(800, 1088, 810, 1108));
+    assert_eq!(
+        rbox(&g, k),
+        rect(798, 1088, 810, 1108),
+        "gm8 measured box; t-col-01-a"
+    );
+    g.rules.collide.reported_box = ReportedBox::Collider;
+    assert_eq!(rbox(&g, k), collider, "standard: one box");
+    let b = g.add_block(100.0, 100.0);
+    assert_eq!(rbox(&g, b), cbox(&g, b), "a normal box agrees in both models");
+
+    // maskNothing (2x2, empty box 1,1,0,0) and a no-frame sprite have a measured box but no
+    // collider, so the standard path reports nothing.
+    let empty = || Mask {
+        bbox: rect(1, 1, 0, 0),
+        shape: MaskShape::Empty,
+    };
+    let nothing = add_sprite(&mut g, (2, 2), (0, 0), 1, empty());
+    let m = g.add(g.vine, 50.0, 50.0, Img::sprite(nothing));
+    assert_eq!(rbox_opt(&g, m), None, "standard: no collider, no reported box");
+    let no_frame = add_sprite(&mut g, (32, 32), (0, 0), 0, empty());
+    let n = g.add(g.vine, 70.0, 70.0, Img::sprite(no_frame));
+    assert_eq!(rbox_opt(&g, n), None, "standard: no collider, no reported box");
+
+    // The same instances under gm8 keep the measured 1x1 point box and maskNothing's box.
+    g.rules.collide.reported_box = ReportedBox::Measured;
+    assert_eq!(rbox_opt(&g, m), Some(rect(50, 50, 51, 51)), "gm8 maskNothing");
+    assert_eq!(
+        rbox_opt(&g, n),
+        Some(rect(70, 70, 70, 70)),
+        "gm8 no-frame point box"
     );
 }
 
