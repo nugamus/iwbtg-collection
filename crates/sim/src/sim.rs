@@ -9,7 +9,7 @@ use crate::error::SimError;
 use crate::input::InputFrame;
 use crate::room::{self, StartPoint};
 use crate::rules::RunnerRules;
-use crate::script::ScriptRuntime;
+use crate::script::{PreparedScripts, ScriptRuntime};
 use crate::sound::DllMode;
 use crate::stripped::PlayMode;
 use crate::tick;
@@ -58,6 +58,13 @@ pub struct Sim {
     pub(crate) rows_done: bool,
 }
 
+/// The rules a run uses: the runner's, with the package's FPU model.
+fn run_rules(def: &GameDef) -> Result<RunnerRules, SimError> {
+    let mut rules = RunnerRules::for_runner(def.runner, def.engine_rev)?;
+    rules.num.float_model = def.float_model;
+    Ok(rules)
+}
+
 impl Sim {
     /// Sets up the world from `options.start`: rules from the game's runner and engine_rev,
     /// the script host (`ScriptRuntime::new`), boot instances, the first room, Game Start
@@ -73,28 +80,77 @@ impl Sim {
         Ok(sim)
     }
 
+    /// Compiles the package's scripts once so a quick retry can reuse them (#1021, #1093).
+    ///
+    /// The artifact is immutable. Every run from it gets a fresh Rhai engine and its own RNG,
+    /// budget, log and parked world; see [`Sim::new_or_halted_prepared`].
+    pub fn prepare(def: &GameDef) -> Result<PreparedScripts, SimError> {
+        PreparedScripts::new(def, &run_rules(def)?)
+    }
+
     /// [`Sim::new`], except that a start that halts (a script error in a start-room Create, #946)
     /// is returned as the halted sim, `SimStatus::Halted` in its world, as a halt during play
     /// leaves it. Only a sim that cannot be set up is an error: a map the package does not have,
     /// a runner it does not support, scripts that do not compile.
     pub fn new_or_halted(def: Arc<GameDef>, options: SimOptions) -> Result<Sim, SimError> {
-        let map = def.map_index(options.map.as_deref()).ok_or_else(|| {
+        // Keep the error precedence: map, then rules/scripts (the prepare compiles).
+        let map = Sim::map_for(&def, &options)?;
+        let prepared = Sim::prepare(&def)?;
+        Sim::build(def, options, map, &prepared)
+    }
+
+    /// [`Sim::new_or_halted`] with an artifact from [`Sim::prepare`]: the same start, without
+    /// compiling the scripts again. A quick retry uses this (#1093; the client cache is
+    /// #1093B).
+    pub fn new_or_halted_prepared(
+        def: Arc<GameDef>,
+        options: SimOptions,
+        prepared: &PreparedScripts,
+    ) -> Result<Sim, SimError> {
+        let map = Sim::map_for(&def, &options)?;
+        Sim::build(def, options, map, prepared)
+    }
+
+    /// [`Sim::new`] with a prepared artifact: a start that halts is returned as the error.
+    pub fn new_prepared(
+        def: Arc<GameDef>,
+        options: SimOptions,
+        prepared: &PreparedScripts,
+    ) -> Result<Sim, SimError> {
+        let sim = Sim::new_or_halted_prepared(def, options, prepared)?;
+        if let SimStatus::Halted(e) = &sim.world.status {
+            return Err(e.clone());
+        }
+        Ok(sim)
+    }
+
+    /// The map error first, as every constructor has always reported it.
+    fn map_for(def: &GameDef, options: &SimOptions) -> Result<u16, SimError> {
+        def.map_index(options.map.as_deref()).ok_or_else(|| {
             SimError::unsupported(format!(
                 "map `{}` is not in package `{}`",
                 options.map.as_deref().unwrap_or_default(),
                 def.id
             ))
-        })?;
-        let mut rules = RunnerRules::for_runner(def.runner, def.engine_rev)?;
-        rules.num.float_model = def.float_model;
-        let scripts = ScriptRuntime::new(&def, &rules)?;
+        })
+    }
+
+    /// The shared body of the constructors after the map check and script preparation.
+    fn build(
+        def: Arc<GameDef>,
+        options: SimOptions,
+        map: u16,
+        prepared: &PreparedScripts,
+    ) -> Result<Sim, SimError> {
+        let rules = run_rules(&def)?;
+        let scripts = ScriptRuntime::new_run(Arc::clone(&def), &rules, prepared)?;
         let mut world = World::new(def.start_room, options.seed);
         world.next_id = World::first_runtime_id(&def);
         world.mode = options.mode;
         world.map = map;
         {
             let mut ctx = Ctx {
-                def: &def,
+                def: def.as_ref(),
                 rules: &rules,
                 w: &mut world,
                 scripts: &scripts,
