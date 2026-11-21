@@ -16,7 +16,7 @@ A trace is evidence for a feel contract, not a substitute for one. Conversely, a
 
 ## What a contract contains
 
-- **Scenario.** A package or a public fixture, a start point, a seed, mods, an input script and room changes.
+- **Scenario.** A package or a public fixture, a start point, a seed, mods, an input script and room changes. A `save = { room = ..., x = ..., y = ... }` table starts the run from a checkpoint (`StartPoint::FromSave`); the run then starts in `save.room`, which must agree with `start.room` when both are given.
 - **Assertions.** Values the player can observe, with an explicit tolerance.
 - **Evidence.** The trace case, spec item, or playtest that justifies the assertion. An F1 contract names at least one trace or user playtest where one exists; an F2 contract names a screenshot or audio check.
 - **Impact.** F1, F2 or F3. An F3 contract is unusual: an invisible detail belongs in a hash or a unit test, not a feel contract.
@@ -67,10 +67,12 @@ kid.y = { exact = 576.0 }
 ticks = [41, 42]
 metric = "kid.y"
 max_delta = 0.0
+why = "the retry delay must not move the kid before control returns"
 
 [[assert]]
 tick = 43
 control = { action = "jump", metric = "kid.y", latency_max = 1 }   # the first movable tick responds
+why = "a jump pressed on the first movable tick moves the kid within one frame"
 
 [[assert]]
 tick = 90
@@ -86,10 +88,10 @@ The input script uses the `.inputs` grammar ([replay](replay.md#text-inputs-for-
 |---|---|
 | `tick` / `window.ticks` | `World::tick == N`, sampled after `Sim::step`, or the closed tick window for an envelope. |
 | `room`, `kid_count`, `death`, `time`, `clear`, `status`, `map` | Run state and counters. `room` is the name; `kid_count` is alive instances intersecting `ClassMask::KID | KID_FLIPPED`; `death` is `RunGlobals.deaths`; `time` is `RunGlobals.time`; `clear` is `RunGlobals.clear`; `status` is `running`, `ended` or `halted`. |
-| `kid.x`, `kid.y`, `kid.hspeed`, `kid.vspeed`, `kid.djump`, `global.death`, `global.time`, `instance_number(kid)`, `save.x`, `save.room`, `random_get_seed()` | A metric from `probe::registry::column`. A bare `x`/`y` is a load error. Values are `{ exact = v }`, `{ min = v, max = v }`, or `{ within = v }`; `within` is pixels or speeds, never ULP. |
+| `kid.x`, `kid.y`, `kid.hspeed`, `kid.vspeed`, `kid.djump`, `global.death`, `global.time`, `instance_number(kid)`, `save.x`, `save.room`, `random_get_seed()` | A metric from `probe::registry::column`. A bare `x`/`y` is a load error. Values are `{ exact = v }`, `{ min = v, max = v }`, or `{ within = w, of = c }`; `within` is pixels or speeds, never ULP. A bare scalar is shorthand for `exact` (`save.room = "play"`). |
 | `window.metric`, `window.max_delta`, `window.envelope` | A trajectory envelope over a tick range. An envelope has exactly `b-a+1` `[min, max]` pairs; `max_delta` is against the value at the window's first tick. |
-| `control.action`, `control.metric`, `control.latency_max` | `latency = response_tick - press.frame`, with 0 meaning the same step responded. The runner verifies the named `.inputs` frame actually presses the action, or fails "scenario out of sync". |
-| `reset_scope.persists`, `reset_scope.resets` | Names of counters/globals that survive or reset across a retry/new game. |
+| `control.action`, `control.metric`, `control.latency_max` | `latency = response_frame - press_frame`, with 0 meaning the pressed step itself responded. `response_frame = response_tick - 1`, the `.inputs` frame of the step that ended at `response_tick`. The runner finds the latest press at or before `tick - 1` (or the declared `press_frame`), verifies it actually presses the action, or fails "scenario out of sync". |
+| `reset_scope.before`, `reset_scope.after`, `reset_scope.persists`, `reset_scope.resets` | Names of counters/globals compared at the explicit `before` and `after` ticks (the `after` defaults to the assert's tick). `persists` names compare equal; `resets` names differ. |
 | `sound.event`, `sound.sound`, `sound.tick` | One of `play`, `stop`, `stop_all`, `volume`, `pitch` (the `SoundOutput` events), a `SoundTarget::Builtin` id and its tick. |
 | `rng.stream`, `rng.seed`, `rng.value` | v1 supports `stream = "gameplay"` and the signed state (`Rng::seed`, as `random_get_seed()` prints it). Named streams arrive with Area I. |
 | `matches_save` | Maps `kid.x`→`save.x`, `kid.y`→`save.y`, `room`→`save.room` for a save/load assertion. |
@@ -100,7 +102,8 @@ A contract may assert the **absence** of a difference: `retry_delay` zero moveme
 
 ### Units and identity
 
-- **Tick vs frame.** `tick = N` is `World::tick == N`, sampled after `Sim::step`. A `.inputs` frame `f` is the step that ends at `tick == f + 1`: `frame 20: press suicide` is observed at tick 21. Without this rule every trace-derived number is off by one.
+- **Tick vs frame.** `tick = N` is `World::tick == N`, sampled after `Sim::step`. A `.inputs` frame `f` is the step that ends at `tick == f + 1`: `frame 20: press suicide` is observed at tick 21. Without this rule every trace-derived number is off by one. `tick = 0` is the state `Sim::new` produced, before any step.
+- **Save scenario.** A `save` table starts the run from that checkpoint (`StartPoint::FromSave`), which is how a practice run and a retry fixture start. `start.room` and `save.room` must agree.
 - **The Kid.** `kid_count` counts alive, active kids. A bare `kid` in `control` means the `World::first_of` kid (R21); more than one kid needs an explicit `kid#<n>`.
 - **Exact floats.** A position `exact` compares the f64 bits. Use it only for a checkpoint or a placed coordinate whose value is a contract; a moving Kid uses an envelope or a window.
 - **Names.** `room` is the package room name; `reset_scope` names a counter/global as the probe registry resolves it; `sound.sound` is the package sound name. A name that does not resolve is a contract load error, not a silent skip.
@@ -138,9 +141,10 @@ cargo xtask feel
 
 ### Runner layout
 
-- `crates/sim/src/feel.rs`: `Contract`, `evaluate()`, `Verdict { Ok, Open, Fail }`, `Mismatch`; it reads `Sim`/`World` and changes no sim state.
+- `crates/sim/tests/feel/mod.rs`: `Contract`, `evaluate()`, `Verdict { Ok, Open, Fail }`, `Mismatch`; it reads `Sim`/`World` and changes no sim state. The sim test module holds it for now so `crates/sim/src` stays with its owner this wave; #1172 moves it to `crates/sim/src/feel.rs`, which is the target path.
 - `crates/sim/tests/feel.rs` plus the `[[test]]` entry in `crates/sim/Cargo.toml` (the crate has `autotests = false`) and `toml` as a dev-dependency.
-- `crates/tools/src/feel_cmd.rs`: `feel run` / `feel sweep`; `crates/tools/src/baseline.rs` extracts the status/comparison code shared with `sweep_cmd.rs`.
+- `crates/sim/tests/feel/fixtures.rs`: the public fixture worlds, built with `iwbtg_sim::def::testing::GameDefBuilder` (the golden courses' builder).
+- `crates/tools/src/feel_cmd.rs`: `feel run` / `feel sweep`, including `#[path]`-included access to the contract module; `crates/tools/src/baseline.rs` extracts the status/comparison code shared with `sweep_cmd.rs`.
 - `crates/tools/feel/<area>/<name>.toml` and `crates/tools/feel-baseline.txt`; `id` must equal the path below the root.
 - `cargo xtask feel [--bless]`, exit 0 for OK/OPEN, 1 for FAIL/regression, 2 for a tool error or an unreadable root/baseline.
 
