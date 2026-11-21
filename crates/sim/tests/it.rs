@@ -352,6 +352,9 @@ mod path;
 #[path = "pipeline.rs"]
 mod pipeline;
 
+#[path = "persistence.rs"]
+mod persistence;
+
 #[path = "placed_ids.rs"]
 mod placed_ids;
 

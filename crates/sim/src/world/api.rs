@@ -6,7 +6,7 @@
 //! runs, the instance gets no later events (traces/rely-the-needle-4-2/tr-room-03-a-log.csv row
 //! 8) and `instance_exists` stops counting it at once (traces/kaenbyou/tr-room-08.csv row 51).
 
-use super::{Ctx, InstId, Instance, KindState, SimStatus, Value, World};
+use super::{Ctx, InstId, Instance, KindState, Persistence, SimStatus, Value, World};
 use crate::def::{
     Builtin, ClassMask, EngineKind, GameDef, GroupId, KindDef, KindId, NameId, ParamValue, Params, RoomId,
     VariantSel,
@@ -333,6 +333,7 @@ impl<'a> Ctx<'a> {
         inst.visible = init.visible.unwrap_or(kd.visible);
         inst.depth = init.depth.unwrap_or(kd.depth);
         inst.persistent = kd.persistent;
+        inst.persistence = Persistence::of(kd);
         inst.img.set_sprite(kd.sprite);
         inst.img.set_mask(kd.mask);
         inst.img.set_xscale(init.xscale)?;
@@ -433,6 +434,9 @@ impl<'a> Ctx<'a> {
                 inst.depth = kd.depth;
                 inst.persistent = kd.persistent;
             }
+            // The scope follows the effective flag: `ChangeKindProps::Original` keeps the old
+            // persistent flag, while the new base decides whether it is a save object.
+            inst.persistence = Persistence::from_flags(kd.base, inst.persistent);
         }
         if run_events {
             flow = flow.combine(events::dispatch(self, id, &EventKind::Create));
