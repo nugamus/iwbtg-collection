@@ -64,11 +64,7 @@ pub fn gameplay_hash(files: &PackageFiles, manifest: &Manifest, def: &GameDef) -
                 for k in COSMETIC_MANIFEST_KEYS {
                     table.remove(k);
                 }
-                // `ruleset` and `[compat]` are declarations whose format-0 values must equal
-                // what the package already resolves to (the loader checks this), so writing
-                // them changes no behavior and must not change the hash (decision 0005).
-                table.remove("ruleset");
-                table.remove("compat");
+                normalize_compat(&mut table, *manifest.format.get_ref());
                 if let Some(toml::Value::Array(maps)) = table.get_mut("maps") {
                     for map in maps.iter_mut().filter_map(toml::Value::as_table_mut) {
                         for k in COSMETIC_MAP_KEYS {
@@ -114,6 +110,19 @@ pub fn gameplay_hash(files: &PackageFiles, manifest: &Manifest, def: &GameDef) -
         }
     }
     *h.finalize().as_bytes()
+}
+
+/// Removes `ruleset` and `[compat]` from a manifest table **only in format 0**. There the loader
+/// rejects any declaration that does not resolve to the package's existing behavior (`gm8` at
+/// `engine_rev`, the physics preset's family, a deviation equal to the physics value), so the
+/// explicit form must keep the absent-field hash. A declaration that changes behavior cannot
+/// reach the hash in format 0 because it is an error; at format 1 it must be hashed (user
+/// decision 2, decision 0005), which is the format-1 path still in #1160.
+fn normalize_compat(table: &mut toml::Table, format: u32) {
+    if format == 0 {
+        table.remove("ruleset");
+        table.remove("compat");
+    }
 }
 
 fn hash_bytes(h: &mut blake3::Hasher, b: &[u8]) {
@@ -163,5 +172,32 @@ fn canonical(h: &mut blake3::Hasher, v: &toml::Value) {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_compat;
+
+    /// The hash boundary: format 0 normalizes only declarations that must resolve to the
+    /// package's existing behavior; format 1 must hash them (decision 0005, user decision 2).
+    #[test]
+    fn compat_is_normalized_only_in_format_zero() {
+        let mut table: toml::Table =
+            toml::from_str("format = 0\nruleset = \"gm8@0\"\n[compat]\nprofile = \"gm8/a1@1\"\n")
+                .expect("table");
+        normalize_compat(&mut table, 0);
+        assert!(!table.contains_key("ruleset"));
+        assert!(!table.contains_key("compat"));
+
+        let mut table: toml::Table =
+            toml::from_str("format = 1\nruleset = \"gm8@1\"\n[compat]\nprofile = \"gm8/a1@1\"\n")
+                .expect("table");
+        normalize_compat(&mut table, 1);
+        assert!(table.contains_key("ruleset"), "format 1 hashes the ruleset");
+        assert!(
+            table.contains_key("compat"),
+            "format 1 hashes the profile and its deviations"
+        );
     }
 }
