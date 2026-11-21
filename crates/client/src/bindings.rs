@@ -309,7 +309,8 @@ impl Bindings {
         self.client_pad(input) == Some(ClientKey::QuickRetry)
     }
 
-    /// Some key or controller input stands for `action`.
+    /// Some key or controller input stands for `action` (the binding tests).
+    #[cfg(test)]
     pub fn binds(&self, action: Action) -> bool {
         self.keys.values().any(|a| *a == action) || self.pad.contains(&Some(action))
     }
