@@ -57,9 +57,16 @@ The engine models that still reproduce GameMaker 8 implementation details, track
 | E. Presentation | [#1178](https://github.com/nugamus/iwbtg-collection/issues/1178) | F2; camera response can be F1 | Pure Draw projection, camera component, render layers, explicit transitions | Current behavior; a visible change needs the user's sign-off | None for E2–E5; E1 needs #1152 |
 | F. Time service | [#1179](https://github.com/nugamus/iwbtg-collection/issues/1179) | F1 for bullet, boss and avoidance timing; F2 for ordinary animation | Dated timelines, path/tween components, one animation phase, its own ruleset value and `gameplay_hash` | Exact timeline moments, path clock and animation phase; hashes and pins unchanged | #1165 |
 
-**Status (2026-11-21).** Three slices are under way on disjoint files: #1176 C1 (the script module), #1178 E2/E3 (camera and render layers) and #1177 D1 (the build-time collider asset). #1174, #1175 and #1179 are queued behind the lanes their rows name.
+**Status (2026-11-21).** Slice state across the six workstreams:
 
-**Sequencing.** The queued three wait on the lanes that own their files: #1174 behind lifecycle and dispatch (#1149, #1152) and identity (#1153); #1175 behind the identity-save and builtins lanes (#1153, #1159); #1179 behind the one scheduler (#1165). A slice that shares `room.rs`, `world/*`, `events.rs` or `def/physics.rs` starts only when the lane that owns those files is done.
+- **#1174:** A1a, A2a and A2b merged; A1b blocked on the reader owners; A3 waits on #1153.
+- **#1175:** B5 (motion) merged; B1, B2 and B4 pending.
+- **#1176:** C1 and #1106 merged; C2 blocked on save identity/E1; C3 and C4 pending.
+- **#1177:** D1, D2a and D2b merged; D3 and D4 pending.
+- **#1178:** E3, E2a and E4a merged; E1b, E2b, E4b, E5 and E6 parked.
+- **#1179:** waits on #1165.
+
+**Sequencing.** The status list names each pending slice's blocker; the child issue carries the detail. A slice that shares `room.rs`, `world/*`, `events.rs` or `def/physics.rs` starts only when the lane that owns those files is done.
 
 ## How work flows
 
