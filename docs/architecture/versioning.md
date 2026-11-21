@@ -1,6 +1,6 @@
 # Versioning: SIM_VERSION, engine_rev, gameplay_hash and format
 
-Part of [Architecture](../architecture.md). Status: proposed by Claude, 2026-11-17 (#783). Two points are the user's to decide and wait on #933 (`needs-user`): whether a board keys on `SIM_VERSION`, and when the freeze point is. This page states the defaults used until then.
+Part of [Architecture](../architecture.md). Status: decided 2026-11-21 (#933). A board does not split on a `SIM_VERSION` bump: records are re-verified under the settings frozen at ranking, and a record that fails is quarantined rather than deleted. The replay-compatibility freeze is the first public nightly of M7.
 
 The goal: a replay recorded today still verifies, with the same time, years from now, and an engine fix never silently changes a board.
 
@@ -21,15 +21,25 @@ Four identifiers, each with one job, plus the proposed ruleset and compatibility
 
 ## What a board keys on
 
-**Default: (package id, map, mods, `gameplay_hash`), not `SIM_VERSION`** (needs-user, #933). Since `gameplay_hash` covers the ruleset (including its built-in revision) and the compatibility profile, a board pins the package's content, its semantic contract and its deviation set. `SIM_VERSION` is a property of how a run was verified, not of the board: after the freeze point every build must reproduce every older build's outcomes for the revisions it already knew, and the bump check below enforces that for the golden corpus. Where a new build cannot (the rare `SIM_VERSION` bump), old replays are verified by the old build they were made with, and their place on the board stands.
+**Decided (2026-11-21, #933): (package id, map, mods, `gameplay_hash`), not `SIM_VERSION`.** Since `gameplay_hash` covers the ruleset (including its built-in revision) and the compatibility profile, a board pins the package's content, its semantic contract and its deviation set. `SIM_VERSION` is a property of how a run was verified, not of the board: after the freeze point every build must reproduce every older build's outcomes for the revisions it already knew, and the bump check below enforces that for the golden corpus. Where a new build cannot (the rare `SIM_VERSION` bump), each record is re-verified on the new build; a failure is quarantined for review and stays verifiable on the build it was made with ([Re-verification](#re-verification-after-a-rebuild)).
 
-Keying on `SIM_VERSION` as well would split every board at every Rhai or toolchain upgrade, which players would see as their records vanishing for a change that touched no game. The cost of the default is that the server must keep old verifier builds (below).
+**Ranked settings freeze at ranking.** Once a game is ranked, its ruleset, `[compat]` profile, declared deviations and physics tuning do not change; only the engine build under it can. A rebuild therefore re-verifies the same `gameplay_hash` on a new build. A package change that moves those settings is a new `gameplay_hash` and a new board, with the old board and its replays kept.
+
+Keying on `SIM_VERSION` as well would split every board at every Rhai or toolchain upgrade, which players would see as their records vanishing for a change that touched no game. The cost of the decision is that the server must keep old verifier builds and run a re-verification pass after a bump (below).
 
 ## When `SIM_VERSION` bumps
 
 - **Before the freeze point** it normally stays `1`; outcome-changing PRs re-pin the golden hashes with `cargo xtask repin`. A state-hash encoding change still bumps it even before the freeze: `HASH_LAYOUT` 3 shipped as `SIM_VERSION` 2 (#1157/#1292, bumped by #1303), because a verifier that only compared hashes could not tell "wrong build" from "wrong run". `iwbtg replay verify` reports a `sim_version` mismatch and stops before any hash comparison for a replay from another build. Replays recorded before the freeze (local replays and PBs, #476) may stop verifying with a later build; their times stay in the local stats.
-- **The freeze point** is when `SIM_VERSION_FREEZE` in `crates/sim/src/lib.rs` changes from `None` to `Some(SIM_VERSION)`. **Default: the first build whose runs reach a public board, the first public nightly of M7** (needs-user, #933). Until then, counting versions only creates history nobody needs.
-- **After the freeze point** every change that alters an outcome of an existing package on its current `engine_rev` bumps `SIM_VERSION`. A fix that should change outcomes goes under a new `engine_rev` instead (next section), so that old revisions, the golden corpus and `SIM_VERSION` all stay as they were. A bump is therefore rare and means "this build cannot verify older replays": Rhai, Rust or `libm` upgrades, a hash encoding change, a replay decoding change.
+- **The freeze point** is when `SIM_VERSION_FREEZE` in `crates/sim/src/lib.rs` changes from `None` to `Some(SIM_VERSION)`. **Decided (2026-11-21, #933): the first public nightly of M7**, the first build whose runs reach a public board. Until then, counting versions only creates history nobody needs.
+- **After the freeze point** every change that alters an outcome of an existing package on its current `engine_rev` bumps `SIM_VERSION`. A fix that should change outcomes goes under a new `engine_rev` instead (next section), so that old revisions, the golden corpus and `SIM_VERSION` all stay as they were. A bump is therefore rare and means "this build cannot verify older replays": Rhai, Rust or `libm` upgrades, a hash encoding change, a replay decoding change. A bump never moves a board to a new key; it triggers the re-verification pass below.
+
+### Re-verification after a rebuild
+
+On a `SIM_VERSION` bump after the freeze, the server re-simulates and re-verifies every stored record with the new build, under the game's ranked settings frozen at ranking time. The package, ruleset, profile and deviations do not change; only the engine build does.
+
+- **A record that still verifies keeps its place.** There is no resubmission and no re-upload.
+- **A record that fails is quarantined, not deleted.** It stays stored, remains verifiable on the build it was set on (the kept verifier build below), and is surfaced for review. The default for a failure is review, never automatic removal.
+- **The pass is queued per board and per bump**, resumes after a restart, and records the build each record was verified with. A board is not re-verified again until the next bump ([#929](https://github.com/nugamus/iwbtg-collection/issues/929)).
 
 ### The bump check
 
@@ -58,7 +68,7 @@ A port stays on `gm8` and its profile until each F1 move is proved by a feel con
 
 ### Old verifier builds
 
-**Default: the server keeps one verifier build per `SIM_VERSION` that any stored replay still on a board was made with, forever** (they are a few MB each, and a bump is rare). Each is:
+**Decided (2026-11-21, #933): the server keeps one verifier build per `SIM_VERSION` that any stored replay still on a board was made with, forever** (they are a few MB each, and a bump is rare). The no-split and quarantine rules depend on it: a quarantined record is re-checked on the build it was set with. Each is:
 
 - built from the git tag `sim-v<N>` with the toolchain pinned in `rust-toolchain.toml` and the committed `Cargo.lock`, for x86_64 Linux;
 - stored content-addressed by the SHA-256 of the binary, in a table `SIM_VERSION -> sha256`;
@@ -82,7 +92,7 @@ A Ranked game is on `engine_rev` 3. A year later, a spike collision is found to 
 
 ## Follow-ups
 
-- Server: keep and dispatch one verifier build per `SIM_VERSION`: #929 (for #56).
+- Server: keep and dispatch one verifier build per `SIM_VERSION`, queue re-verification after a bump and quarantine failures: #929 (for #56).
 - Server: board carry-over on a SAFE `engine_rev` or format upgrade, and the legacy board: #930 (for #62).
 - `gameplay_hash` stable across format migrations: #928.
 - `iwbtg pkg upgrade` and format 1: #795.

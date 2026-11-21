@@ -153,7 +153,7 @@ cargo xtask feel
 - `crates/tools/feel/<area>/<name>.toml` and `crates/tools/feel-baseline.txt`; `id` must equal the path below the root.
 - `cargo xtask feel [--bless]`, exit 0 for OK/OPEN, 1 for FAIL/regression, 2 for a tool error or an unreadable root/baseline.
 
-The harness changes no behavior: no `SIM_VERSION`, `HASH_LAYOUT` or `REPLAY_FORMAT` bump, no board-key change, and contracts or the baseline are **not** pin files (`cargo xtask repin` never rewrites a contract). The later board-key item (ruleset and compatibility profile in `gameplay_hash`) is Area L, blocked by #933/#928/#930.
+The harness changes no behavior: no `SIM_VERSION`, `HASH_LAYOUT` or `REPLAY_FORMAT` bump, no board-key change, and contracts or the baseline are **not** pin files (`cargo xtask repin` never rewrites a contract). The later board-key item (ruleset and compatibility profile in `gameplay_hash`) is Area L, blocked by #928/#930; the #933 question is decided (a board does not split on a `SIM_VERSION` bump, [versioning](versioning.md)).
 
 ## How contracts, traces and boards fit together
 
