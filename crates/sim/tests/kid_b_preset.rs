@@ -42,6 +42,7 @@ fn the_b_lists_run_in_order_without_unsupported_actions() {
         x: r(100.0),
         y: r(100.0),
         precision: Default::default(),
+        point: None,
         flipped: false,
         facing: 1,
         difficulty: 0,

@@ -379,6 +379,7 @@ fn empty_slot() -> SaveSlot {
         x: Real::ZERO,
         y: Real::ZERO,
         precision: Default::default(),
+        point: None,
         flipped: false,
         facing: 1,
         difficulty: 0,

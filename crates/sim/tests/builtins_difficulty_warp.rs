@@ -20,6 +20,7 @@ fn difficulty_warp_starts_a_new_game() {
         x: r(1.0),
         y: r(1.0),
         precision: Default::default(),
+        point: None,
         flipped: false,
         facing: 1,
         difficulty: 0,

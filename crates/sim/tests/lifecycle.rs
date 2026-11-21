@@ -83,6 +83,7 @@ fn fixture() -> Fixture {
         x: Real::new(200.0),
         y: Real::new(500.0),
         precision: Default::default(),
+        point: None,
         flipped: false,
         facing: 1,
         difficulty: 0,

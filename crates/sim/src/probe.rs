@@ -1022,6 +1022,7 @@ mod tests {
             x: Real::new(96.0),
             y: Real::new(567.4),
             precision: Default::default(),
+            point: None,
             flipped: false,
             facing: -1,
             difficulty: 2,
