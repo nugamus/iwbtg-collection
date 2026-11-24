@@ -119,7 +119,9 @@ impl Sim {
             match ctx.destroy(id) {
                 Flow::Continue => {}
                 Flow::AbortTick => {
-                    return Err(SimError::unsupported("setup destroy: a Destroy event changed the room"));
+                    return Err(SimError::unsupported(
+                        "setup destroy: a Destroy event changed the room",
+                    ));
                 }
                 Flow::Halt => {
                     return Err(match &ctx.w.status {
@@ -646,7 +648,13 @@ mod tests {
         for (x, y) in [(100.0, 100.0), (519.0, 259.9), (520.0, 100.0), (100.0, 260.0)] {
             let id = s.world.alloc_id().expect("id");
             s.world
-                .insert(Instance::new(id, crate::def::KindId(0), 0, Real::new(x), Real::new(y)))
+                .insert(Instance::new(
+                    id,
+                    crate::def::KindId(0),
+                    0,
+                    Real::new(x),
+                    Real::new(y),
+                ))
                 .expect("insert");
             ids.push(id);
         }

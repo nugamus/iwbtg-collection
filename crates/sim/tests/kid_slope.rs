@@ -155,6 +155,34 @@ fn free_spot_uses_the_mirrored_slope_on_the_left() {
 }
 
 #[test]
+fn free_spot_steps_up_only_on_the_rows_uphill_side() {
+    // Rainbow (kid/A1-2.md A1-160): the block event steps up on both sides, nanameblockL's
+    // event only on a right hit and nanameblockR's only on a left hit. A `slope` and a
+    // `slope_mirror` share one cell ahead, like the peak of lasroom01 (a1-slope-b f52-94: walking
+    // right the kid stays at x 376). The mirror's right hit only contacts; the block's steps up.
+    for (row, want) in [("mirror", (104.0, 100.0, 0.0)), ("floor", (107.0, 97.0, 0.0))] {
+        with_kid(rainbow, |ctx, kid, k| {
+            put(ctx, k.slope, 110.0, 106.0);
+            let other = match row {
+                "mirror" => put(ctx, k.mirror, 110.0, 106.0),
+                _ => put(ctx, k.floor, 110.0, 106.0),
+            };
+            speeds(ctx, kid, 6.0, 0.0);
+            collide(ctx, kid, other, SlopeRun::BlockSlopeStep);
+            assert_eq!(at(ctx, kid), want, "{row}");
+        });
+    }
+    // The mirrored case: a left hit in the `slope` row only contacts.
+    with_kid(rainbow, |ctx, kid, k| {
+        put(ctx, k.mirror, 58.0, 106.0);
+        let s = put(ctx, k.slope, 58.0, 106.0);
+        speeds(ctx, kid, -6.0, 0.0);
+        collide(ctx, kid, s, SlopeRun::BlockSlopeStep);
+        assert_eq!(at(ctx, kid), (95.0, 100.0, 0.0));
+    });
+}
+
+#[test]
 fn replace_steps_up_instead_of_the_contact() {
     with_kid(
         |p| p.slope.block_step = BlockSlopeStep::Replace,

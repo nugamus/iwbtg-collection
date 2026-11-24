@@ -5,6 +5,7 @@
 # Recorder: --object player --room lasroom01 --at 2 --from 2
 source = "get-the-rainbow-feather/a1-slope-a"
 kind = "diff"
+open = "the slope jump on f130 takes the double-jump branch (sprite and sound) because the package's jump.ground_classes leaves out the slopes; converter CR26 (research#273)"
 start = { room = "lasroom01", difficulty = 0 }
 at = 2
 first_frame = 2
@@ -17,7 +18,10 @@ setup = [
   { frame = 3, destroy = "class:killer", rect = [-inf, -inf, 520, 260] },
   { frame = 3, target = "kid", set = { x = 245.0, xprevious = 245.0, y = 215.0, yprevious = 215.0 } },
 ]
-ignore = ["id", "sprite_index", "sprite_name"]
+# gravity (F3): the original never zeroes gravity on a landing here (every standing row reads
+# 0.4), our package still has the A1 preset's block_landing_zeroes. Converter CR26
+# (research#273) writes block_landing_zeroes = false; then drop "gravity" here.
+ignore = ["id", "sprite_index", "sprite_name", "gravity"]
 
 [vars]
 "djump" = "kid.djump"

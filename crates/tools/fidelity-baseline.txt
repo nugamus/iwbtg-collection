@@ -7,6 +7,9 @@ eat_the_lemon/famb-multikid-restart-c OK
 eat_the_lemon/famb-timer-fps-gate OK
 eat_the_new_year/kid-a4-slope-a OK
 eat_the_new_year/kid-a4-slope-b OK
+get_the_rainbow_feather/a1-slope-a OPEN
+get_the_rainbow_feather/a1-slope-b OK
+get_the_rainbow_feather/a1-slope-c OK
 kaenbyou/audio-supersound-deathfade-a OK
 kaenbyou/audio-supersound-deathfade-c OK
 kaenbyou/djump OK
