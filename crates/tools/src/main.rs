@@ -11,7 +11,6 @@ mod engine_cmd;
 mod feel_cmd;
 mod import;
 mod pack_cmd;
-mod pkg_cmd;
 mod profile_cmd;
 mod replay_cmd;
 mod room_cmd;
@@ -359,6 +358,16 @@ fn resolve_cases(
     )))
 }
 
+/// Runs one of the package commands of `iwbtg_format::pkg_cmd` (data lane, #1120) on the package
+/// folder or `.iwbz` at `dir`, read with its engine pack bundled, writing to stdout.
+fn pkg_cmd(
+    dir: &Path,
+    command: impl FnOnce(&iwbtg_format::PackageFiles, &mut std::io::StdoutLock<'static>) -> std::io::Result<bool>,
+) -> Result<bool, ToolError> {
+    let files = trace_cmd::load_package(dir)?;
+    command(&files, &mut std::io::stdout().lock()).map_err(|e| ToolError::Message(e.to_string()))
+}
+
 /// Runs a command; `Ok(false)` means it ran and found problems.
 fn run(cli: Cli) -> Result<bool, ToolError> {
     match cli.command {
@@ -411,9 +420,15 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             import::main(&trace, &pkg, research.as_deref().map(Path::new), &cases, force)?;
             Ok(true)
         }
-        Command::Pkg(PkgCommand::Check { pkg, trace_mode }) => pkg_cmd::main(&pkg, trace_mode),
-        Command::Pkg(PkgCommand::Fmt { pkg, check }) => pkg_cmd::fmt_main(&pkg, check),
-        Command::Pkg(PkgCommand::Hash { pkg, trace_mode }) => pkg_cmd::hash_main(&pkg, trace_mode),
+        Command::Pkg(PkgCommand::Check { pkg, trace_mode }) => pkg_cmd(&pkg, |files, out| {
+            iwbtg_format::pkg_cmd::check(files, trace_mode, out)
+        }),
+        Command::Pkg(PkgCommand::Fmt { pkg, check }) => pkg_cmd(&pkg, |files, out| {
+            iwbtg_format::pkg_cmd::fmt(&pkg, files, check, out)
+        }),
+        Command::Pkg(PkgCommand::Hash { pkg, trace_mode }) => pkg_cmd(&pkg, |files, out| {
+            iwbtg_format::pkg_cmd::hash(files, trace_mode, out)
+        }),
         Command::Pkg(PkgCommand::Pack { pkg, out, trace_mode }) => {
             pack_cmd::pack_main(&pkg, out.as_deref(), trace_mode)
         }

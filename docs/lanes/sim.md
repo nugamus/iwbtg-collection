@@ -1,6 +1,6 @@
 # Lane: sim
 
-**Owns:** `crates/sim`, `crates/tools` (except `pkg_cmd.rs`), `docs/architecture/sim.md` and `docs/architecture/sim/` (including the register pages), `replay.md`, `traces.md`, `docs/format/converter-requests.md`, and `docs/plans/sim-core.md` as history. The infra lane owns `.github/` and `.claude/`; touch them here only when the issue assigns it and the infra lane agrees.
+**Owns:** `crates/sim`, `crates/tools`, `docs/architecture/sim.md` and `docs/architecture/sim/` (including the register pages), `replay.md`, `traces.md`, `docs/format/converter-requests.md`, and `docs/plans/sim-core.md` as history. The infra lane owns `.github/` and `.claude/`; touch them here only when the issue assigns it and the infra lane agrees.
 **Never edits:** `crates/client` except when an issue says so.
 
 **Live text:** `docs/architecture/sim.md` and `docs/architecture/sim/` (the area pages and `register-*.md`). Converter requests are in `docs/format/converter-requests.md`. `docs/plans/sim-core.md` is history only.

@@ -11,7 +11,7 @@ use crate::trace_cmd::{ToolError, load_package};
 /// package with errors prints them and writes nothing (`Ok(false)`).
 pub fn pack_main(dir: &Path, out: Option<&Path>, trace_mode: bool) -> Result<bool, ToolError> {
     let files = load_package(dir)?;
-    let (gameplay, content) = match crate::pkg_cmd::hashes(&files, trace_mode) {
+    let (gameplay, content) = match iwbtg_format::pkg_cmd::hashes(&files, trace_mode) {
         Ok(h) => h,
         Err(errors) => {
             for e in &errors {

@@ -1,30 +1,37 @@
-//! `iwbtg pkg check` (docs/plans/sim-core.md 9.4). WP0 creates the file; WP8a owns it.
+//! The `iwbtg pkg check|fmt|hash` commands and the package hashes `pkg pack` prints
+//! (docs/architecture/cli.md). They live here, with the loader they report on, so the package
+//! format and its commands change together (#1120); the `iwbtg` binary in `crates/tools` reads the
+//! package (folder or `.iwbz`, engine pack bundled) and passes it in with stdout.
 //!
-//! Validates and loads the package with `iwbtg_format::load::load_report`, strictly or in trace
-//! mode (`--trace-mode`: unmapped script kinds load inert and converter gaps are warnings, for
-//! research converter output). Prints every diagnostic, warnings included, then the gameplay
-//! hash and `OK (<n> warnings)`, or `FAILED: <n> errors, <n> warnings`.
+//! `check` validates and loads the package with [`load_report`], strictly or in trace mode
+//! (`--trace-mode`: unmapped script kinds load inert and converter gaps are warnings, for research
+//! converter output). It prints every diagnostic, warnings included, then the gameplay hash and
+//! `OK (<n> warnings)`, or `FAILED: <n> errors, <n> warnings`.
+//!
+//! Each command returns `Ok(false)` when it ran and found problems (exit 1); `Err` is an output or
+//! file write failure.
 
+use std::io::{self, Write};
 use std::path::Path;
 
-use iwbtg_format::Severity;
-use iwbtg_format::load::{LoadMode, load_report};
-use iwbtg_format::physics::PhysicsStanding;
+use crate::load::{LoadMode, load_report};
+use crate::physics::PhysicsStanding;
+use crate::{PackageFiles, Severity};
 
-use crate::trace_cmd::{ToolError, load_package};
-
-/// `iwbtg pkg check <pkg> [--trace-mode]`: prints each diagnostic and a summary; `Ok(false)` on
-/// any error.
-pub fn main(dir: &Path, trace_mode: bool) -> Result<bool, ToolError> {
-    let files = load_package(dir)?;
-    let mode = if trace_mode {
+fn mode(trace_mode: bool) -> LoadMode {
+    if trace_mode {
         LoadMode::Trace {
             unmapped_kinds_inert: true,
         }
     } else {
         LoadMode::Strict
-    };
-    let report = load_report(&files, mode);
+    }
+}
+
+/// `iwbtg pkg check <pkg> [--trace-mode]`: writes each diagnostic and a summary; `Ok(false)` on
+/// any error.
+pub fn check(files: &PackageFiles, trace_mode: bool, out: &mut impl Write) -> io::Result<bool> {
+    let report = load_report(files, mode(trace_mode));
     let mut errors = 0usize;
     let mut warnings = 0usize;
     for d in &report.diagnostics {
@@ -32,26 +39,25 @@ pub fn main(dir: &Path, trace_mode: bool) -> Result<bool, ToolError> {
             Severity::Error => errors += 1,
             Severity::Warning => warnings += 1,
         }
-        println!("{d}");
+        writeln!(out, "{d}")?;
     }
     if report.ok() {
         if let Some(standing) = &report.physics {
             for line in physics_lines(standing) {
-                println!("{line}");
+                writeln!(out, "{line}")?;
             }
         }
         if let Some(compat) = &report.compat {
             for line in compat.lines() {
-                println!("{line}");
+                writeln!(out, "{line}")?;
             }
         }
         if let Some(hash) = report.gameplay_hash {
-            let hex: String = hash.iter().map(|b| format!("{b:02x}")).collect();
-            println!("gameplay_hash: {hex}");
+            writeln!(out, "gameplay_hash: {}", hex(&hash))?;
         }
-        println!("OK ({warnings} warnings)");
+        writeln!(out, "OK ({warnings} warnings)")?;
     } else {
-        println!("FAILED: {errors} errors, {warnings} warnings");
+        writeln!(out, "FAILED: {errors} errors, {warnings} warnings")?;
     }
     Ok(report.ok())
 }
@@ -84,46 +90,46 @@ fn physics_lines(standing: &PhysicsStanding) -> Vec<String> {
     lines
 }
 
-/// `iwbtg pkg fmt <pkg> [--check]`: formats every `.toml` file of the package (`tests/` included:
-/// its files are data too) in the canonical layout, writing the ones that change. With `check`
-/// nothing is written, the files that would change are listed and the exit code is 1.
-pub fn fmt_main(dir: &Path, check: bool) -> Result<bool, ToolError> {
-    let files = load_package(dir)?;
+/// `iwbtg pkg fmt <pkg> [--check]`: formats every `.toml` file of the package read from `dir`
+/// (`tests/` included: its files are data too; the bundled engine pack is not) in the canonical
+/// layout, writing the ones that change back under `dir`. With `check` nothing is written, the
+/// files that would change are listed and the result is `Ok(false)`.
+pub fn fmt(dir: &Path, files: &PackageFiles, check: bool, out: &mut impl Write) -> io::Result<bool> {
     let mut changed = Vec::new();
     let mut broken = false;
     for (path, bytes) in files
         .iter()
-        .filter(|(p, _)| p.ends_with(".toml") && !p.starts_with(iwbtg_format::engine_pack::ENGINE_DIR))
+        .filter(|(p, _)| p.ends_with(".toml") && !p.starts_with(crate::engine_pack::ENGINE_DIR))
     {
         let Ok(text) = std::str::from_utf8(bytes) else {
-            println!("{path}: not UTF-8");
+            writeln!(out, "{path}: not UTF-8")?;
             broken = true;
             continue;
         };
-        match iwbtg_format::fmt::format_toml(text) {
-            Ok(out) if out == text => {}
-            Ok(out) => {
+        match crate::fmt::format_toml(text) {
+            Ok(formatted) if formatted == text => {}
+            Ok(formatted) => {
                 if !check {
                     let target = dir.join(path);
-                    std::fs::write(&target, out.as_bytes())
-                        .map_err(|e| ToolError::Message(format!("{}: {e}", target.display())))?;
+                    std::fs::write(&target, formatted.as_bytes())
+                        .map_err(|e| io::Error::new(e.kind(), format!("{}: {e}", target.display())))?;
                 }
                 changed.push(path.to_owned());
             }
             Err(e) => {
-                println!("{path}: {e}");
+                writeln!(out, "{path}: {e}")?;
                 broken = true;
             }
         }
     }
     let verb = if check { "would change" } else { "formatted" };
     for p in &changed {
-        println!("{verb}: {p}");
+        writeln!(out, "{verb}: {p}")?;
     }
     if changed.is_empty() && !broken {
-        println!("no changes");
+        writeln!(out, "no changes")?;
     } else if !changed.is_empty() {
-        println!("{} file(s) {verb}", changed.len());
+        writeln!(out, "{} file(s) {verb}", changed.len())?;
     }
     Ok(!broken && !(check && !changed.is_empty()))
 }
@@ -137,6 +143,12 @@ mod fmt_tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("rooms")).unwrap();
         dir
+    }
+
+    /// Reads the folder as the `iwbtg` binary would (no engine pack here) and formats it.
+    fn fmt_main(dir: &Path, check: bool) -> io::Result<bool> {
+        let files = PackageFiles::load_dir(dir).unwrap();
+        fmt(dir, &files, check, &mut io::sink())
     }
 
     #[test]
@@ -175,15 +187,8 @@ mod fmt_tests {
 
 /// The two hashes of a package, as lowercase hex: `(gameplay_hash, content_hash)`. The gameplay
 /// hash exists only for a package that loads without errors; those errors are returned instead.
-pub fn hashes(files: &iwbtg_format::PackageFiles, trace_mode: bool) -> Result<(String, String), Vec<String>> {
-    let mode = if trace_mode {
-        LoadMode::Trace {
-            unmapped_kinds_inert: true,
-        }
-    } else {
-        LoadMode::Strict
-    };
-    let report = load_report(files, mode);
+pub fn hashes(files: &PackageFiles, trace_mode: bool) -> Result<(String, String), Vec<String>> {
+    let report = load_report(files, mode(trace_mode));
     let gameplay = match report.gameplay_hash {
         Some(h) if report.ok() => h,
         _ => {
@@ -202,24 +207,24 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// `iwbtg pkg hash <pkg>`: prints `gameplay_hash:` and `content_hash:` (docs/format/versioning.md).
-/// `Ok(false)` (exit 1) when the package has errors, which are printed instead.
-pub fn hash_main(dir: &Path, trace_mode: bool) -> Result<bool, ToolError> {
-    let files = load_package(dir)?;
-    match hashes(&files, trace_mode) {
+/// `iwbtg pkg hash <pkg>`: writes `gameplay_hash:` and `content_hash:` (docs/format/versioning.md).
+/// `Ok(false)` (exit 1) when the package has errors, which are written instead.
+pub fn hash(files: &PackageFiles, trace_mode: bool, out: &mut impl Write) -> io::Result<bool> {
+    match hashes(files, trace_mode) {
         Ok((gameplay, content)) => {
-            println!("gameplay_hash: {gameplay}");
-            println!("content_hash: {content}");
+            writeln!(out, "gameplay_hash: {gameplay}")?;
+            writeln!(out, "content_hash: {content}")?;
             Ok(true)
         }
         Err(errors) => {
             for e in &errors {
-                println!("{e}");
+                writeln!(out, "{e}")?;
             }
-            println!(
+            writeln!(
+                out,
                 "FAILED: the package has {} errors, so it has no gameplay hash",
                 errors.len()
-            );
+            )?;
             Ok(false)
         }
     }
@@ -228,8 +233,7 @@ pub fn hash_main(dir: &Path, trace_mode: bool) -> Result<bool, ToolError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use iwbtg_format::PackageFiles;
-    use iwbtg_format::physics::RoomPhysicsStanding;
+    use crate::physics::RoomPhysicsStanding;
 
     fn golden() -> PackageFiles {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sim/tests/golden/one_room.pkg");
@@ -292,6 +296,52 @@ mod tests {
             with_tests.content_hash(),
             "tests/ is not shipped"
         );
+    }
+
+    #[test]
+    fn check_and_hash_print_the_same_gameplay_hash() {
+        let base = golden();
+        let (gameplay, content) = hashes(&base, false).unwrap();
+        let mut out = Vec::new();
+        assert!(check(&base, false, &mut out).unwrap());
+        let text = String::from_utf8(out).unwrap();
+        assert!(
+            text.contains(&format!(
+                "gameplay_hash: {gameplay}
+"
+            )),
+            "{text}"
+        );
+        assert!(
+            text.ends_with(
+                "OK (0 warnings)
+"
+            ),
+            "{text}"
+        );
+        let mut out = Vec::new();
+        assert!(hash(&base, false, &mut out).unwrap());
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            format!(
+                "gameplay_hash: {gameplay}
+content_hash: {content}
+"
+            )
+        );
+    }
+
+    #[test]
+    fn a_broken_package_fails_check_and_has_no_hashes() {
+        let broken = edit(&golden(), "rooms/title.toml", |_| {
+            "size = [0, 0]
+"
+            .to_owned()
+        });
+        let mut out = Vec::new();
+        assert!(!check(&broken, false, &mut out).unwrap());
+        assert!(String::from_utf8(out).unwrap().contains("FAILED: "));
+        assert!(!hash(&broken, false, &mut io::sink()).unwrap());
     }
 
     #[test]
