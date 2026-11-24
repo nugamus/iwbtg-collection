@@ -74,8 +74,8 @@ button.theme{background:var(--surface);color:var(--ink-2);border:1px solid var(-
   border-radius:10px;padding:14px 16px;margin:18px 0;font-size:13.5px;color:var(--ink-2)}
 .callout b{color:var(--ink)}
 table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);
-  border-radius:12px;overflow:hidden}
-th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+  border-radius:12px;overflow:hidden;font-size:13.5px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
 th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
   background:var(--surface-2);font-weight:600}
 tr:last-child td{border-bottom:0}
@@ -98,6 +98,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .covvalue{text-align:right;font-variant-numeric:tabular-nums;font-size:13px}
 .covsub{text-align:right;font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
 .chartbox{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.covgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 30px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
 .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:start}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
@@ -133,10 +134,11 @@ svg{display:block;width:100%;height:auto}
 .end-label{fill:var(--ink-2);font-size:11px}
 .spark{display:grid;grid-template-columns:1fr 1fr;gap:18px}
 .spark .sub{font-size:12px;color:var(--muted)}
-.portmeta{font-size:11.5px;color:var(--muted);margin-top:2px}
+.portmeta{font-size:11px;color:var(--muted);margin-top:2px;white-space:nowrap}
+td:last-child{white-space:nowrap}
 code{background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12.5px}
 footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
-@media(max-width:900px){.summary,.grid2,.spark{grid-template-columns:1fr}.cards{grid-template-columns:1fr 1fr}
+@media(max-width:900px){.summary,.grid2,.spark,.covgrid{grid-template-columns:1fr}.cards{grid-template-columns:1fr 1fr}
   .covrow{grid-template-columns:1fr 1fr 60px}.covsub{display:none}}
 @media(max-width:600px){.stats,.cards{grid-template-columns:1fr}h1{font-size:32px}}
 </style>
@@ -155,7 +157,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
   <div class="statusrow">
     <span class="pill mid"><span class="ico">◐</span>Pre-release</span>
     <span class="pill muted">No release builds yet. The public alpha is planned for phase 7 (Online).</span>
-    <span class="pill muted">generated 2026-11-24T15:00:59Z · source gh</span>
+    <span class="pill muted">generated 2026-11-24T15:05:33Z · source gh</span>
   </div>
 </header>
 
@@ -181,127 +183,127 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
 
 <h2>Coverage by game</h2>
 <p>Sorted from lowest to highest built-in coverage. The bar is the share of placed instances covered by a built-in; the number after it is the placed-instance total.</p>
-<div class="chartbox">
-        <div class="covrow">
-          <span class="covname">I wanna clear the Easy Miku 2<span class="covslug">clear-the-easy-miku-2</span></span>
-          <span class="covtrack"><span style="width:76.0%"></span></span>
-          <span class="covvalue">76.0%</span>
-          <span class="covsub">258 placed</span>
-        </div>
-        <div class="covrow">
-          <span class="covname">I wanna be the Machinary<span class="covslug">machinary</span></span>
-          <span class="covtrack"><span style="width:87.0%"></span></span>
-          <span class="covvalue">87.0%</span>
-          <span class="covsub">2,848 placed</span>
-        </div>
-        <div class="covrow">
-          <span class="covname">I wanna wanna<span class="covslug">wanna</span></span>
-          <span class="covtrack"><span style="width:92.4%"></span></span>
-          <span class="covvalue">92.4%</span>
-          <span class="covsub">1,389 placed</span>
-        </div>
-        <div class="covrow">
-          <span class="covname">I wanna go the Spook House<span class="covslug">go-the-spook-house</span></span>
-          <span class="covtrack"><span style="width:94.7%"></span></span>
-          <span class="covvalue">94.7%</span>
-          <span class="covsub">2,228 placed</span>
-        </div>
-        <div class="covrow">
-          <span class="covname">I wanna be the Poronkusema<span class="covslug">poronkusema</span></span>
-          <span class="covtrack"><span style="width:95.2%"></span></span>
-          <span class="covvalue">95.2%</span>
-          <span class="covsub">2,115 placed</span>
-        </div>
-        <div class="covrow">
-          <span class="covname">I wanna eat the New Year!<span class="covslug">eat-the-new-year</span></span>
-          <span class="covtrack"><span style="width:96.0%"></span></span>
-          <span class="covvalue">96.0%</span>
-          <span class="covsub">2,570 placed</span>
-        </div>
-        <div class="covrow">
-          <span class="covname">I wanna eat the Rori Girl<span class="covslug">eat-the-rori-girl</span></span>
-          <span class="covtrack"><span style="width:96.6%"></span></span>
-          <span class="covvalue">96.6%</span>
-          <span class="covsub">204 placed</span>
-        </div>
-        <div class="covrow">
-          <span class="covname">I wanna Little Trap<span class="covslug">little-trap</span></span>
-          <span class="covtrack"><span style="width:96.6%"></span></span>
-          <span class="covvalue">96.6%</span>
-          <span class="covsub">3,893 placed</span>
-        </div>
-        <div class="covrow">
-          <span class="covname">I wanna be the Showdown<span class="covslug">showdown</span></span>
-          <span class="covtrack"><span style="width:97.4%"></span></span>
-          <span class="covvalue">97.4%</span>
-          <span class="covsub">8,069 placed</span>
-        </div>
-        <div class="covrow">
-          <span class="covname">I wanna be the Little runner<span class="covslug">little-runner</span></span>
-          <span class="covtrack"><span style="width:98.1%"></span></span>
-          <span class="covvalue">98.1%</span>
-          <span class="covsub">5,715 placed</span>
-        </div>
-        <div class="covrow">
-          <span class="covname">I wanna be the Animus<span class="covslug">animus</span></span>
-          <span class="covtrack"><span style="width:98.3%"></span></span>
-          <span class="covvalue">98.3%</span>
-          <span class="covsub">9,815 placed</span>
-        </div>
-        <div class="covrow">
-          <span class="covname">I wanna eat the lemon<span class="covslug">eat-the-lemon</span></span>
-          <span class="covtrack"><span style="width:98.8%"></span></span>
-          <span class="covvalue">98.8%</span>
-          <span class="covsub">3,414 placed</span>
-        </div>
-        <div class="covrow">
-          <span class="covname">I wanna get the Rainbow feather<span class="covslug">get-the-rainbow-feather</span></span>
-          <span class="covtrack"><span style="width:99.0%"></span></span>
-          <span class="covvalue">99.0%</span>
-          <span class="covsub">12,805 placed</span>
-        </div>
-        <div class="covrow">
-          <span class="covname">I wanna go the JUN-G World<span class="covslug">go-the-jun-g-world</span></span>
-          <span class="covtrack"><span style="width:99.1%"></span></span>
-          <span class="covvalue">99.1%</span>
-          <span class="covsub">5,480 placed</span>
-        </div>
-        <div class="covrow">
-          <span class="covname">I wanna Keep Celebrating for Xia<span class="covslug">keep-celebrating-for-xia</span></span>
-          <span class="covtrack"><span style="width:99.2%"></span></span>
-          <span class="covvalue">99.2%</span>
-          <span class="covsub">2,310 placed</span>
-        </div>
-        <div class="covrow">
-          <span class="covname">I wanna help the Fairy tale<span class="covslug">help-the-fairy-tale</span></span>
-          <span class="covtrack"><span style="width:99.3%"></span></span>
-          <span class="covvalue">99.3%</span>
-          <span class="covsub">12,604 placed</span>
-        </div>
-        <div class="covrow">
-          <span class="covname">I Wanna Rely The Needle 4.2<span class="covslug">rely-the-needle-4-2</span></span>
-          <span class="covtrack"><span style="width:99.4%"></span></span>
-          <span class="covvalue">99.4%</span>
-          <span class="covsub">1,997 placed</span>
-        </div>
-        <div class="covrow">
-          <span class="covname">I wanna be the Kaenbyou<span class="covslug">kaenbyou</span></span>
-          <span class="covtrack"><span style="width:99.5%"></span></span>
-          <span class="covvalue">99.5%</span>
-          <span class="covsub">4,741 placed</span>
-        </div>
-        <div class="covrow">
-          <span class="covname">I wanna be Fed up with path ;w;<span class="covslug">be-fed-up-with-path-w</span></span>
-          <span class="covtrack"><span style="width:99.5%"></span></span>
-          <span class="covvalue">99.5%</span>
-          <span class="covsub">2,219 placed</span>
-        </div>
-        <div class="covrow">
-          <span class="covname">I wanna deride Kotaro- from aslant<span class="covslug">deride-kotaro-from-aslant</span></span>
-          <span class="covtrack"><span style="width:99.8%"></span></span>
-          <span class="covvalue">99.8%</span>
-          <span class="covsub">7,085 placed</span>
-        </div></div>
+<div class="chartbox"><div class="covgrid"><div>
+            <div class="covrow" title="196 of 258 placed instances">
+              <span class="covname">I wanna clear the Easy Miku 2<span class="covslug">clear-the-easy-miku-2</span></span>
+              <span class="covtrack"><span style="width:76.0%"></span></span>
+              <span class="covvalue">76.0%</span>
+              <span class="covsub">258</span>
+            </div>
+            <div class="covrow" title="2,477 of 2,848 placed instances">
+              <span class="covname">I wanna be the Machinary<span class="covslug">machinary</span></span>
+              <span class="covtrack"><span style="width:87.0%"></span></span>
+              <span class="covvalue">87.0%</span>
+              <span class="covsub">2,848</span>
+            </div>
+            <div class="covrow" title="1,284 of 1,389 placed instances">
+              <span class="covname">I wanna wanna<span class="covslug">wanna</span></span>
+              <span class="covtrack"><span style="width:92.4%"></span></span>
+              <span class="covvalue">92.4%</span>
+              <span class="covsub">1,389</span>
+            </div>
+            <div class="covrow" title="2,110 of 2,228 placed instances">
+              <span class="covname">I wanna go the Spook House<span class="covslug">go-the-spook-house</span></span>
+              <span class="covtrack"><span style="width:94.7%"></span></span>
+              <span class="covvalue">94.7%</span>
+              <span class="covsub">2,228</span>
+            </div>
+            <div class="covrow" title="2,014 of 2,115 placed instances">
+              <span class="covname">I wanna be the Poronkusema<span class="covslug">poronkusema</span></span>
+              <span class="covtrack"><span style="width:95.2%"></span></span>
+              <span class="covvalue">95.2%</span>
+              <span class="covsub">2,115</span>
+            </div>
+            <div class="covrow" title="2,466 of 2,570 placed instances">
+              <span class="covname">I wanna eat the New Year!<span class="covslug">eat-the-new-year</span></span>
+              <span class="covtrack"><span style="width:96.0%"></span></span>
+              <span class="covvalue">96.0%</span>
+              <span class="covsub">2,570</span>
+            </div>
+            <div class="covrow" title="197 of 204 placed instances">
+              <span class="covname">I wanna eat the Rori Girl<span class="covslug">eat-the-rori-girl</span></span>
+              <span class="covtrack"><span style="width:96.6%"></span></span>
+              <span class="covvalue">96.6%</span>
+              <span class="covsub">204</span>
+            </div>
+            <div class="covrow" title="3,759 of 3,893 placed instances">
+              <span class="covname">I wanna Little Trap<span class="covslug">little-trap</span></span>
+              <span class="covtrack"><span style="width:96.6%"></span></span>
+              <span class="covvalue">96.6%</span>
+              <span class="covsub">3,893</span>
+            </div>
+            <div class="covrow" title="7,856 of 8,069 placed instances">
+              <span class="covname">I wanna be the Showdown<span class="covslug">showdown</span></span>
+              <span class="covtrack"><span style="width:97.4%"></span></span>
+              <span class="covvalue">97.4%</span>
+              <span class="covsub">8,069</span>
+            </div>
+            <div class="covrow" title="5,607 of 5,715 placed instances">
+              <span class="covname">I wanna be the Little runner<span class="covslug">little-runner</span></span>
+              <span class="covtrack"><span style="width:98.1%"></span></span>
+              <span class="covvalue">98.1%</span>
+              <span class="covsub">5,715</span>
+            </div></div><div>
+            <div class="covrow" title="9,649 of 9,815 placed instances">
+              <span class="covname">I wanna be the Animus<span class="covslug">animus</span></span>
+              <span class="covtrack"><span style="width:98.3%"></span></span>
+              <span class="covvalue">98.3%</span>
+              <span class="covsub">9,815</span>
+            </div>
+            <div class="covrow" title="3,373 of 3,414 placed instances">
+              <span class="covname">I wanna eat the lemon<span class="covslug">eat-the-lemon</span></span>
+              <span class="covtrack"><span style="width:98.8%"></span></span>
+              <span class="covvalue">98.8%</span>
+              <span class="covsub">3,414</span>
+            </div>
+            <div class="covrow" title="12,680 of 12,805 placed instances">
+              <span class="covname">I wanna get the Rainbow feather<span class="covslug">get-the-rainbow-feather</span></span>
+              <span class="covtrack"><span style="width:99.0%"></span></span>
+              <span class="covvalue">99.0%</span>
+              <span class="covsub">12,805</span>
+            </div>
+            <div class="covrow" title="5,429 of 5,480 placed instances">
+              <span class="covname">I wanna go the JUN-G World<span class="covslug">go-the-jun-g-world</span></span>
+              <span class="covtrack"><span style="width:99.1%"></span></span>
+              <span class="covvalue">99.1%</span>
+              <span class="covsub">5,480</span>
+            </div>
+            <div class="covrow" title="2,291 of 2,310 placed instances">
+              <span class="covname">I wanna Keep Celebrating for Xia<span class="covslug">keep-celebrating-for-xia</span></span>
+              <span class="covtrack"><span style="width:99.2%"></span></span>
+              <span class="covvalue">99.2%</span>
+              <span class="covsub">2,310</span>
+            </div>
+            <div class="covrow" title="12,517 of 12,604 placed instances">
+              <span class="covname">I wanna help the Fairy tale<span class="covslug">help-the-fairy-tale</span></span>
+              <span class="covtrack"><span style="width:99.3%"></span></span>
+              <span class="covvalue">99.3%</span>
+              <span class="covsub">12,604</span>
+            </div>
+            <div class="covrow" title="1,985 of 1,997 placed instances">
+              <span class="covname">I Wanna Rely The Needle 4.2<span class="covslug">rely-the-needle-4-2</span></span>
+              <span class="covtrack"><span style="width:99.4%"></span></span>
+              <span class="covvalue">99.4%</span>
+              <span class="covsub">1,997</span>
+            </div>
+            <div class="covrow" title="4,716 of 4,741 placed instances">
+              <span class="covname">I wanna be the Kaenbyou<span class="covslug">kaenbyou</span></span>
+              <span class="covtrack"><span style="width:99.5%"></span></span>
+              <span class="covvalue">99.5%</span>
+              <span class="covsub">4,741</span>
+            </div>
+            <div class="covrow" title="2,208 of 2,219 placed instances">
+              <span class="covname">I wanna be Fed up with path ;w;<span class="covslug">be-fed-up-with-path-w</span></span>
+              <span class="covtrack"><span style="width:99.5%"></span></span>
+              <span class="covvalue">99.5%</span>
+              <span class="covsub">2,219</span>
+            </div>
+            <div class="covrow" title="7,072 of 7,085 placed instances">
+              <span class="covname">I wanna deride Kotaro- from aslant<span class="covslug">deride-kotaro-from-aslant</span></span>
+              <span class="covtrack"><span style="width:99.8%"></span></span>
+              <span class="covvalue">99.8%</span>
+              <span class="covsub">7,085</span>
+            </div></div></div></div>
 
 <h2>Every game</h2>
 <div class="filters">
@@ -326,7 +328,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
           <td class="num">5</td>
           <td class="num">284</td>
           <td class="num">6</td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/1">games#1</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when · 0/1 sub-issues</div></td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/1">games#1</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done</div></td>
         </tr>
         <tr data-name="i wanna go the jun-g world go-the-jun-g-world"
             data-cov="99.1"
@@ -342,7 +344,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
           <td class="num">33</td>
           <td class="num">8</td>
           <td class="num">2</td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/2">games#2</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/2">games#2</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done</div></td>
         </tr>
         <tr data-name="i wanna deride kotaro- from aslant deride-kotaro-from-aslant"
             data-cov="99.8"
@@ -358,7 +360,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
           <td class="num">22</td>
           <td class="num">32</td>
           <td class="num">7</td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/3">games#3</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/3">games#3</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done</div></td>
         </tr>
         <tr data-name="i wanna be the kaenbyou kaenbyou"
             data-cov="99.5"
@@ -374,7 +376,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
           <td class="num">17</td>
           <td class="num">65</td>
           <td class="num">9</td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/4">games#4</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/4">games#4</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done</div></td>
         </tr>
         <tr data-name="i wanna eat the lemon eat-the-lemon"
             data-cov="98.8"
@@ -390,7 +392,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
           <td class="num">19</td>
           <td class="num">13</td>
           <td class="num">3</td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/5">games#5</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/5">games#5</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done</div></td>
         </tr>
         <tr data-name="i wanna eat the rori girl eat-the-rori-girl"
             data-cov="96.6"
@@ -406,7 +408,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
           <td class="num">5</td>
           <td class="num">6</td>
           <td class="num">2</td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/6">games#6</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/6">games#6</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done</div></td>
         </tr>
         <tr data-name="i wanna wanna wanna"
             data-cov="92.4"
@@ -422,7 +424,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
           <td class="num">28</td>
           <td class="num">36</td>
           <td class="num">5</td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/7">games#7</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/7">games#7</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done</div></td>
         </tr>
         <tr data-name="i wanna be fed up with path ;w; be-fed-up-with-path-w"
             data-cov="99.5"
@@ -438,7 +440,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
           <td class="num">28</td>
           <td class="num">0</td>
           <td class="num">0</td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/8">games#8</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/8">games#8</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done</div></td>
         </tr>
         <tr data-name="i wanna little trap little-trap"
             data-cov="96.6"
@@ -454,7 +456,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
           <td class="num">32</td>
           <td class="num">11</td>
           <td class="num">2</td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/9">games#9</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/9">games#9</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done</div></td>
         </tr>
         <tr data-name="i wanna clear the easy miku 2 clear-the-easy-miku-2"
             data-cov="76.0"
@@ -470,7 +472,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
           <td class="num">7</td>
           <td class="num">6</td>
           <td class="num">2</td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/10">games#10</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/10">games#10</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done</div></td>
         </tr>
         <tr data-name="i wanna be the little runner little-runner"
             data-cov="98.1"
@@ -486,7 +488,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
           <td class="num">57</td>
           <td class="num">40</td>
           <td class="num">6</td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/11">games#11</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/11">games#11</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done</div></td>
         </tr>
         <tr data-name="i wanna be the poronkusema poronkusema"
             data-cov="95.2"
@@ -502,7 +504,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
           <td class="num">42</td>
           <td class="num">7</td>
           <td class="num">6</td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/12">games#12</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/12">games#12</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done</div></td>
         </tr>
         <tr data-name="i wanna be the machinary machinary"
             data-cov="87.0"
@@ -518,7 +520,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
           <td class="num">46</td>
           <td class="num">38</td>
           <td class="num">5</td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/13">games#13</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/13">games#13</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done</div></td>
         </tr>
         <tr data-name="i wanna eat the new year! eat-the-new-year"
             data-cov="96.0"
@@ -534,7 +536,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
           <td class="num">33</td>
           <td class="num">5</td>
           <td class="num">1</td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/14">games#14</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/14">games#14</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done</div></td>
         </tr>
         <tr data-name="i wanna be the animus animus"
             data-cov="98.3"
@@ -550,7 +552,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
           <td class="num">61</td>
           <td class="num">35</td>
           <td class="num">5</td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/15">games#15</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/15">games#15</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done</div></td>
         </tr>
         <tr data-name="i wanna help the fairy tale help-the-fairy-tale"
             data-cov="99.3"
@@ -566,7 +568,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
           <td class="num">58</td>
           <td class="num">16</td>
           <td class="num">6</td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/16">games#16</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/16">games#16</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done</div></td>
         </tr>
         <tr data-name="i wanna get the rainbow feather get-the-rainbow-feather"
             data-cov="99.0"
@@ -582,7 +584,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
           <td class="num">87</td>
           <td class="num">3</td>
           <td class="num">1</td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/17">games#17</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/17">games#17</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done</div></td>
         </tr>
         <tr data-name="i wanna be the showdown showdown"
             data-cov="97.4"
@@ -598,7 +600,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
           <td class="num">71</td>
           <td class="num">29</td>
           <td class="num">2</td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/18">games#18</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/18">games#18</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done</div></td>
         </tr>
         <tr data-name="i wanna go the spook house go-the-spook-house"
             data-cov="94.7"
@@ -614,7 +616,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
           <td class="num">38</td>
           <td class="num">13</td>
           <td class="num">3</td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/19">games#19</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/19">games#19</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done</div></td>
         </tr>
         <tr data-name="i wanna keep celebrating for xia keep-celebrating-for-xia"
             data-cov="99.2"
@@ -630,7 +632,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
           <td class="num">10</td>
           <td class="num">0</td>
           <td class="num">0</td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/20">games#20</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/20">games#20</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done</div></td>
         </tr></tbody>
 </table>
 <p class="note">Placed instances and built-in coverage: <code>specs/mechanics.md</code> (SCAN, 2026-10-24). Custom objects: <code>shortlist.md</code>. Traces and exercised objects: the recorded CSVs under <code>specs/engines/gm8/traces/&lt;slug&gt;/</code>. <code>progress/export_research.py</code> regenerates these counts.</p>
@@ -666,10 +668,10 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
         <tr>
           <td class="phase-cell"><div class="phase-title"><span class="phase-num">2</span>Format &amp; pipeline</div>
             <div class="phase-meta">area:format, area:tools, area:port</div></td>
-          <td class="wide"><span class="mini-track" role="img" aria-label="2 · Format &amp; pipeline 72.7%"><span style="width:72.7%"></span></span>
-            <div class="meter-line"><span>88 / 121 closed</span><span>73%</span></div></td>
-          <td class="num">33</td>
-          <td class="num">96</td>
+          <td class="wide"><span class="mini-track" role="img" aria-label="2 · Format &amp; pipeline 72.1%"><span style="width:72.1%"></span></span>
+            <div class="meter-line"><span>88 / 122 closed</span><span>72%</span></div></td>
+          <td class="num">34</td>
+          <td class="num">99</td>
           <td class="gate"><details><summary>Gate</summary>
             <p><b>Entry:</b> A converted package, a format gap, or a porting step the converter cannot automate.</p><p><b>Exit:</b> The census says how many scripts the 20 ports need; the script API covers what they use; Rhai is measured on native and WASM; port layering, the extension model and the standard ruleset/profile model are decided; one command checks every port&#x27;s contracts; `docs/porting.md` is written.</p>
             <p><b>Scope:</b> The standard package format, converter, census, script API and porting pipeline.</p></details></td>
@@ -763,7 +765,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
             <p><b>Scope:</b> Packaging, installers, docs, legal and the public build.</p></details></td>
         </tr></tbody>
 </table>
-<p class="note">310 open issues, 547 closed (63.8%), 728 remaining size points (S=1, M=3, L=8).</p>
+<p class="note">311 open issues, 547 closed (63.8%), 731 remaining size points (S=1, M=3, L=8).</p>
 
 <h2>What is moving</h2>
 <div class="cards">
@@ -774,23 +776,23 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
 </div>
 
 <div class="grid2">
-  <section><h2>Open work by area</h2><p class="note">An issue can carry more than one area label.</p><div class="hbar-row"><span class="hbar-label">area:sim</span><span class="hbar-track"><span class="hbar-fill" style="width:100.0%"></span></span><span class="hbar-value">100</span></div><div class="hbar-row"><span class="hbar-label">area:client</span><span class="hbar-track"><span class="hbar-fill" style="width:75.0%"></span></span><span class="hbar-value">75</span></div><div class="hbar-row"><span class="hbar-label">area:format</span><span class="hbar-track"><span class="hbar-fill" style="width:48.0%"></span></span><span class="hbar-value">48</span></div><div class="hbar-row"><span class="hbar-label">area:server</span><span class="hbar-track"><span class="hbar-fill" style="width:48.0%"></span></span><span class="hbar-value">48</span></div><div class="hbar-row"><span class="hbar-label">area:infra</span><span class="hbar-track"><span class="hbar-fill" style="width:29.0%"></span></span><span class="hbar-value">29</span></div><div class="hbar-row"><span class="hbar-label">area:editor</span><span class="hbar-track"><span class="hbar-fill" style="width:29.0%"></span></span><span class="hbar-value">29</span></div><div class="hbar-row"><span class="hbar-label">area:docs</span><span class="hbar-track"><span class="hbar-fill" style="width:14.0%"></span></span><span class="hbar-value">14</span></div><div class="hbar-row"><span class="hbar-label">area:design</span><span class="hbar-track"><span class="hbar-fill" style="width:14.0%"></span></span><span class="hbar-value">14</span></div><div class="hbar-row"><span class="hbar-label">area:tools</span><span class="hbar-track"><span class="hbar-fill" style="width:13.0%"></span></span><span class="hbar-value">13</span></div><div class="hbar-row"><span class="hbar-label">area:port</span><span class="hbar-track"><span class="hbar-fill" style="width:6.0%"></span></span><span class="hbar-value">6</span></div><div class="hbar-row"><span class="hbar-label">area:research</span><span class="hbar-track"><span class="hbar-fill" style="width:5.0%"></span></span><span class="hbar-value">5</span></div></section>
+  <section><h2>Open work by area</h2><p class="note">An issue can carry more than one area label.</p><div class="hbar-row"><span class="hbar-label">area:sim</span><span class="hbar-track"><span class="hbar-fill" style="width:100.0%"></span></span><span class="hbar-value">100</span></div><div class="hbar-row"><span class="hbar-label">area:client</span><span class="hbar-track"><span class="hbar-fill" style="width:75.0%"></span></span><span class="hbar-value">75</span></div><div class="hbar-row"><span class="hbar-label">area:format</span><span class="hbar-track"><span class="hbar-fill" style="width:48.0%"></span></span><span class="hbar-value">48</span></div><div class="hbar-row"><span class="hbar-label">area:server</span><span class="hbar-track"><span class="hbar-fill" style="width:48.0%"></span></span><span class="hbar-value">48</span></div><div class="hbar-row"><span class="hbar-label">area:infra</span><span class="hbar-track"><span class="hbar-fill" style="width:30.0%"></span></span><span class="hbar-value">30</span></div><div class="hbar-row"><span class="hbar-label">area:editor</span><span class="hbar-track"><span class="hbar-fill" style="width:29.0%"></span></span><span class="hbar-value">29</span></div><div class="hbar-row"><span class="hbar-label">area:tools</span><span class="hbar-track"><span class="hbar-fill" style="width:14.0%"></span></span><span class="hbar-value">14</span></div><div class="hbar-row"><span class="hbar-label">area:docs</span><span class="hbar-track"><span class="hbar-fill" style="width:14.0%"></span></span><span class="hbar-value">14</span></div><div class="hbar-row"><span class="hbar-label">area:design</span><span class="hbar-track"><span class="hbar-fill" style="width:14.0%"></span></span><span class="hbar-value">14</span></div><div class="hbar-row"><span class="hbar-label">area:research</span><span class="hbar-track"><span class="hbar-fill" style="width:6.0%"></span></span><span class="hbar-value">6</span></div><div class="hbar-row"><span class="hbar-label">area:port</span><span class="hbar-track"><span class="hbar-fill" style="width:6.0%"></span></span><span class="hbar-value">6</span></div></section>
   <section><h2>Issues over time</h2><p class="note">Cumulative issues opened and closed by week.</p>
     <div class="legend"><span class="key"><i class="line-key blue"></i>Opened</span>
       <span class="key"><i class="line-key orange"></i>Closed</span></div>
     <div class="chart-wrap"><svg viewBox="0 0 760 228" role="img" aria-label="Issues opened and closed by week">
       <line x1="46" y1="164.0" x2="700" y2="164.0" class="grid"/><text x="38" y="168.0" class="axis" text-anchor="end">0</text><line x1="46" y1="133.6" x2="700" y2="133.6" class="grid"/><text x="38" y="137.6" class="axis" text-anchor="end">172</text><line x1="46" y1="103.2" x2="700" y2="103.2" class="grid"/><text x="38" y="107.2" class="axis" text-anchor="end">344</text><line x1="46" y1="72.8" x2="700" y2="72.8" class="grid"/><text x="38" y="76.8" class="axis" text-anchor="end">516</text><line x1="46" y1="42.4" x2="700" y2="42.4" class="grid"/><text x="38" y="46.4" class="axis" text-anchor="end">688</text><line x1="46" y1="12.0" x2="700" y2="12.0" class="grid"/><text x="38" y="16.0" class="axis" text-anchor="end">860</text>
-      <path d="M46.0,98.3 L264.0,70.3 L482.0,15.7 L700.0,12.5" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M46.0,98.3 L264.0,70.3 L482.0,15.7 L700.0,12.4" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linejoin="round"/>
       <path d="M46.0,131.1 L264.0,106.4 L482.0,69.4 L700.0,67.3" fill="none" stroke="var(--orange)" stroke-width="2" stroke-linejoin="round"/>
-      <circle cx="700.0" cy="12.5" r="4" fill="var(--blue)" stroke="var(--surface)" stroke-width="2"/>
+      <circle cx="700.0" cy="12.4" r="4" fill="var(--blue)" stroke="var(--surface)" stroke-width="2"/>
       <circle cx="700.0" cy="67.3" r="4" fill="var(--orange)" stroke="var(--surface)" stroke-width="2"/>
-      <text x="706" y="16.5" class="end-label">opened 857</text>
+      <text x="706" y="16.4" class="end-label">opened 858</text>
       <text x="706" y="71.3" class="end-label">closed 547</text>
       <text x="46" y="182" class="axis" text-anchor="middle">11-09</text><text x="264" y="182" class="axis" text-anchor="middle">11-16</text><text x="482" y="182" class="axis" text-anchor="middle">11-23</text><text x="700" y="182" class="axis" text-anchor="middle">11-30</text></svg></div></section>
 </div>
 
 <h2>Coverage history</h2>
-<div class="spark"><div><span class="sub">Built-in coverage</span><svg viewBox="0 0 330 74" aria-label="builtin_pct over time"><path d="M8.0,7.2 L322.0,7.2" fill="none" stroke="var(--blue)" stroke-width="2"/></svg></div><div><span class="sub">Script-object share</span><svg viewBox="0 0 330 74" aria-label="script_pct over time"><path d="M8.0,62.9 L322.0,62.9" fill="none" stroke="var(--orange)" stroke-width="2"/></svg></div></div>
+<div class="spark"><div><span class="sub">Built-in coverage</span><svg viewBox="0 0 330 74" aria-label="builtin_pct over time"><path d="M8.0,7.2 L165.0,7.2 L322.0,7.2" fill="none" stroke="var(--blue)" stroke-width="2"/></svg></div><div><span class="sub">Script-object share</span><svg viewBox="0 0 330 74" aria-label="script_pct over time"><path d="M8.0,62.9 L165.0,62.9 L322.0,62.9" fill="none" stroke="var(--orange)" stroke-width="2"/></svg></div></div>
 <p class="note">One dated point per workflow run; the line breaks at a run with no measurement.</p>
 
 <footer>

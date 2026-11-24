@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-24T15:00:59Z",
+ "generated_at": "2026-11-24T15:05:33Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -57,14 +57,14 @@
    "title": "2 · Format & pipeline",
    "name": "Format & pipeline",
    "state": "open",
-   "open": 33,
+   "open": 34,
    "closed": 88,
-   "total": 121,
-   "pct_closed": 72.7,
-   "size_points": 96,
+   "total": 122,
+   "pct_closed": 72.1,
+   "size_points": 99,
    "sizes": {
     "size:S": 11,
-    "size:M": 15,
+    "size:M": 16,
     "size:L": 5,
     "unknown": 2
    },
@@ -262,14 +262,14 @@
  ],
  "activity": {
   "totals": {
-   "issues": 857,
-   "open": 310,
+   "issues": 858,
+   "open": 311,
    "closed": 547,
    "pct_closed": 63.8
   },
-  "open_prs": 1,
+  "open_prs": 2,
   "process": {
-   "agent-ready": 157,
+   "agent-ready": 158,
    "triage": 53,
    "in-progress": 3,
    "blocked": 25,
@@ -295,11 +295,15 @@
    },
    {
     "area": "area:infra",
-    "count": 29
+    "count": 30
    },
    {
     "area": "area:editor",
     "count": 29
+   },
+   {
+    "area": "area:tools",
+    "count": 14
    },
    {
     "area": "area:docs",
@@ -310,16 +314,12 @@
     "count": 14
    },
    {
-    "area": "area:tools",
-    "count": 13
+    "area": "area:research",
+    "count": 6
    },
    {
     "area": "area:port",
     "count": 6
-   },
-   {
-    "area": "area:research",
-    "count": 5
    }
   ],
   "recent_closed": [
@@ -691,7 +691,7 @@
    }
   ],
   "closed_7d": 180,
-  "opened_7d": 284,
+  "opened_7d": 285,
   "burnup": [
    {
     "week": "2026-11-09",
@@ -710,7 +710,7 @@
    },
    {
     "week": "2026-11-30",
-    "created": 857,
+    "created": 858,
     "closed": 547
    }
   ]
