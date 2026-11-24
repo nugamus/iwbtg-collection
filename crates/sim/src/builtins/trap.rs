@@ -1,5 +1,5 @@
 //! Built-in `trap` (mechanics `trap`; docs/architecture/sim/builtins.md; docs/format/builtins/trap.md).
-//! Tier 2. WP0 creates the file; WP6b owns it.
+//! Tier 2.
 //!
 //! A trap launches once, when its trigger has fired (`trigger_model`, see `trigger::fired`) and
 //! it is idle: `hspeed` and `vspeed` both 0, and with `flag_guard` (or a stop chain) its own

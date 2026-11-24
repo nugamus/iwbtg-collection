@@ -1,8 +1,7 @@
 //! The immutable game definition (docs/architecture/sim/world.md, rooms.md; docs/format/game.md).
 //!
 //! `crates/format` builds a [`GameDef`] from a package; tests build one with
-//! [`GameDefBuilder`](super::testing::GameDefBuilder). The sim never changes it. WP0 declares;
-//! WP7a owns afterwards (WP4b owns the behavior of [`RestartModel`] and [`ResetModel`]).
+//! [`GameDefBuilder`](super::testing::GameDefBuilder). The sim never changes it.
 
 use std::collections::BTreeMap;
 
@@ -91,7 +90,7 @@ pub struct GameDef {
     /// Particle system definitions (`particles/<id>.toml`), in file path order.
     pub particle_systems: Vec<PartSystemDef>,
     /// Script sources, indexed by `ScriptId` (`KindDef::script`). Compiled by the script host
-    /// (WP9) when the `Sim` is built.
+    /// when the `Sim` is built.
     pub scripts: Vec<ScriptDef>,
     /// Timing triggers (`[timing]`). A run on a map uses that map's chain ([`GameDef::maps`]);
     /// this one only when `maps` is empty (a definition built by hand).
@@ -496,8 +495,8 @@ pub enum AutoRetry {
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct QuitPolicy;
 
-/// How the game retries after R (docs/architecture/sim/rooms.md). Behavior in `restart.rs`
-/// (WP4b); the `world` built-in runs it at the world's rank, in the phase `trigger` names.
+/// How the game retries after R (docs/architecture/sim/rooms.md). Behavior in `restart.rs`;
+/// the `world` built-in runs it at the world's rank, in the phase `trigger` names.
 ///
 /// This is [`Lifecycle::retry`]. The format layer still names the type `RestartModel` and fills
 /// the serialized format-0 keys; see [`RestartModel`].
@@ -643,7 +642,7 @@ pub enum DeathOnRestart {
 
 /// How the game resets after F2 (docs/architecture/sim/rooms.md). This is
 /// [`Lifecycle::reset`]: the `world` built-in runs it at the world's rank, in the phase
-/// `trigger` names. Behavior in `restart.rs` (WP4b).
+/// `trigger` names. Behavior in `restart.rs`.
 ///
 /// The format layer still names the type `ResetModel`; see [`ResetModel`].
 #[derive(Clone, PartialEq, Eq, Debug)]

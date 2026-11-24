@@ -1,7 +1,7 @@
 //! Per-instance built-in state (docs/architecture/sim/world.md).
 //!
-//! WP6a owns this file. Each built-in with state adds one variant here that wraps a struct from
-//! its own `builtins/<kind>.rs`; WP6b and WP6c add one line each, merged in wave order.
+//! Each built-in with state adds one variant here that wraps a struct from
+//! its own `builtins/<kind>.rs`.
 
 use serde::{Deserialize, Serialize};
 
@@ -18,35 +18,35 @@ pub enum BuiltinState {
     /// No per-instance state.
     #[default]
     Stateless,
-    /// `world` (WP6a).
+    /// `world`.
     World(world::WorldState),
-    /// `kid_start` (WP6a).
+    /// `kid_start`.
     KidStart(kid_start::KidStartState),
-    /// `boss_gate` and `secret_item` (WP6b): the flag index.
+    /// `boss_gate` and `secret_item`: the flag index.
     Flag(u8),
-    /// `boss_item` (WP6b).
+    /// `boss_item`.
     BossItem {
         /// The boss flag index.
         index: u8,
         /// The boss kind it waits for.
         watched: Option<crate::def::KindId>,
     },
-    /// `item_viewer` (WP6b).
+    /// `item_viewer`.
     ItemViewer {
         /// Shows a boss flag (else an item flag).
         boss: bool,
         /// The flag index.
         index: u8,
     },
-    /// `game_clear` (WP6b).
+    /// `game_clear`.
     GameClear(game_clear::GameClearState),
-    /// `music` (WP6b).
+    /// `music`.
     Music(music::MusicState),
     /// `death_sound` (family B death).
     DeathSound(death_sound::DeathSoundState),
-    /// `drop_platform` (WP6b).
+    /// `drop_platform`.
     DropPlatform(drop_platform::DropState),
-    /// `gravity_flip` (WP6b): flips up.
+    /// `gravity_flip`: flips up.
     GravityFlip {
         /// Sets `global.grav` (up) or clears it (down).
         up: bool,
@@ -55,68 +55,68 @@ pub enum BuiltinState {
         /// `rotate`: this activation has started (the original's `played`).
         played: bool,
     },
-    /// `bullet_blocker` (WP6b).
+    /// `bullet_blocker`.
     BulletBlocker {
         /// Spares bullets while it overlaps a kid.
         except_overlapping: bool,
     },
-    /// `edge_warp` per-edge table (WP6b).
+    /// `edge_warp` per-edge table.
     EdgeTable(edge_warp::EdgeTable),
-    /// `edge_warp` in `room_assign` mode (WP6b).
+    /// `edge_warp` in `room_assign` mode.
     RoomAssign(edge_warp::RoomAssign),
-    /// `fake_block` (WP6b).
+    /// `fake_block`.
     FakeBlock(fake_block::FakeBlockState),
-    /// `trigger` (WP6b).
+    /// `trigger`.
     Trigger(trigger::TriggerState),
-    /// `trap` (WP6b).
+    /// `trap`.
     Trap(trap::TrapState),
-    /// `breakable_block` (WP6c).
+    /// `breakable_block`.
     Breakable(breakable_block::BreakableState),
-    /// `trap_stopper` (WP6c).
+    /// `trap_stopper`.
     Stopper(trap_stopper::StopperState),
-    /// `orbit` (WP6c).
+    /// `orbit`.
     Orbit(orbit::OrbitState),
-    /// `path_platform` (WP6c).
+    /// `path_platform`.
     PathPlatform(path_platform::PathPlatformState),
-    /// `jump_refresher` (WP6c).
+    /// `jump_refresher`.
     Refresher(jump_refresher::RefresherState),
-    /// `spring` (WP6c).
+    /// `spring`.
     Spring(spring::SpringState),
-    /// `conveyor` (WP6c).
+    /// `conveyor`.
     Conveyor(conveyor::ConveyorState),
-    /// `kid_param_zone` (WP6c).
+    /// `kid_param_zone`.
     ParamZone(kid_param_zone::ZoneState),
-    /// `moving_platform` (WP6b).
+    /// `moving_platform`.
     MovingPlatform(moving_platform::MovingPlatformState),
-    /// `water` (WP6b).
+    /// `water`.
     Water(water::WaterState),
-    /// `block` (WP6a).
+    /// `block`.
     Block(block::BlockState),
-    /// `spike` (WP6a).
+    /// `spike`.
     Spike(spike::SpikeState),
-    /// `kid_bullet` (WP6a).
+    /// `kid_bullet`.
     KidBullet(kid_bullet::KidBulletState),
-    /// `save` (WP6a).
+    /// `save`.
     Save(save::SaveState),
-    /// `warp` (WP6a).
+    /// `warp`.
     Warp(warp::WarpState),
-    /// `difficulty_warp` (WP6a).
+    /// `difficulty_warp`.
     DifficultyWarp(difficulty_warp::DifficultyWarpState),
-    /// `blood` (WP6a).
+    /// `blood`.
     Blood(blood::BloodState),
-    /// `blood_emitter` (WP6a).
+    /// `blood_emitter`.
     BloodEmitter(blood_emitter::BloodEmitterState),
-    /// `game_over` (WP6a).
+    /// `game_over`.
     GameOver(game_over::GameOverState),
-    /// `bow` (WP6a).
+    /// `bow`.
     Bow(bow::BowState),
-    /// `camera` (WP6a).
+    /// `camera`.
     Camera(camera::CameraState),
-    /// `killer` (WP6a).
+    /// `killer`.
     Killer(killer::KillerState),
-    /// `sign` (WP6c).
+    /// `sign`.
     Sign(sign::SignState),
-    /// `time_limit` (WP6c).
+    /// `time_limit`.
     TimeLimit(time_limit::TimeLimitState),
     /// `particle_system` (#765).
     ParticleSystem(particle_system::ParticleSystemState),

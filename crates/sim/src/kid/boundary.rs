@@ -1,5 +1,4 @@
-//! The kid at the room edge (`events.boundary`, docs/architecture/sim/kid.md edge row). WP5a owns
-//! it.
+//! The kid at the room edge (`events.boundary`, docs/architecture/sim/kid.md edge row).
 //!
 //! Spec: kid/A1.md "Intersect Boundary". With `events.boundary = "intersect_origin"` the kid's
 //! Intersect Boundary event (the pipeline fires it when the collision box crosses the room edge,

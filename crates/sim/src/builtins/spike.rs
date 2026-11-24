@@ -1,5 +1,5 @@
 //! Built-in `spike` (mechanics `spike`; collision spikes Confirmed; docs/architecture/sim/builtins.md;
-//! docs/format/builtins/spike.md). Tier 1. WP0 creates the file; WP6a owns it.
+//! docs/format/builtins/spike.md). Tier 1.
 //!
 //! A spike is a killer: its class is `ClassMask::KILLER` (set by the loader) and the kid's
 //! "Collision with killer" handler kills, so the spike has no kill code. The mask comes from the

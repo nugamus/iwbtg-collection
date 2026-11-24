@@ -1,4 +1,4 @@
-//! Running timelines (docs/architecture/sim/tick.md row 3, R6, R6b). WP0 declared; WP1 owns.
+//! Running timelines (docs/architecture/sim/tick.md row 3, R6, R6b).
 //!
 //! One system in the R30 tick scheduler: `TimingRules::timelines` declares a moment to be a tick
 //! offset, and `TimingRules::timeline_slot` places the phase that advances the position.

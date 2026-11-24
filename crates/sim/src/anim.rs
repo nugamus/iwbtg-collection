@@ -4,7 +4,7 @@
 //! One system in the R30 tick scheduler: `TimingRules::animation` declares an advance to be
 //! frames per tick, and `TimingRules::anim_slot` places the phase that applies it.
 //!
-//! WP0 declared; WP1 owns. CLONE_SPEC "sprites and animation", Confirmed (recorder): once per
+//! CLONE_SPEC "sprites and animation", Confirmed (recorder): once per
 //! step, after End Step and Draw, `image_index += image_speed`; at least `image_number` wraps by
 //! subtracting it once and fires Animation End, whose changes stand
 //! (traces/kaenbyou/t-anim-1.csv rows 18 and 45, traces/rely-the-needle-4-2/anim-save-end.csv

@@ -1,4 +1,4 @@
-//! Kid actions specific to family A2 (kid/A2.md; docs/architecture/sim/kid.md). WP5c owns it.
+//! Kid actions specific to family A2 (kid/A2.md; docs/architecture/sim/kid.md).
 
 use serde::Deserialize;
 

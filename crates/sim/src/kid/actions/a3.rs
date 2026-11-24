@@ -1,4 +1,4 @@
-//! Kid actions specific to family A3 (kid/A3.md; docs/architecture/sim/kid.md). WP5c owns it.
+//! Kid actions specific to family A3 (kid/A3.md; docs/architecture/sim/kid.md).
 //! Showdown's ice (`ice_temp_hspeed`) is `kid/actions/ice.rs`.
 
 use serde::Deserialize;

@@ -5,7 +5,6 @@
 //! value `u = seed / 2^32` with the seed read as unsigned, one draw per call (N9; Confirmed
 //! (recorder), CLONE_SPEC numbers: `traces/rely-the-needle-4-2/num-rng-a.csv` and `-b.csv`).
 //! The start seed is UNKNOWN (the recorder fixes it); the sim takes it from the replay header.
-//! WP2 owns this file.
 
 use serde::{Deserialize, Serialize};
 

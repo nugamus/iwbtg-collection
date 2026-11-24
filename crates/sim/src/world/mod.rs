@@ -1,6 +1,4 @@
 //! The mutable world: instances, globals, room state (docs/architecture/sim/world.md).
-//!
-//! WP0 declares the structs and ships a minimal `Vec` store (`store.rs`); WP1 owns the module.
 
 pub mod api;
 pub mod instance;
@@ -67,27 +65,27 @@ pub struct World {
     pub globals: BTreeMap<VarId, Value>,
     /// Engine state that is not per instance, split by owner (docs/architecture/sim/world.md).
     pub engine: EngineGlobals,
-    /// The gameplay random generator (WP2); the shared stream under `gm8`.
+    /// The gameplay random generator; the shared stream under `gm8`.
     pub rng: Rng,
     /// The named streams a split layout adds (decision 0005, N10). Hashed: a replay observes the
     /// layout and each stream's state. Under `Shared` they are seeded but never read.
     #[serde(default)]
     pub streams: RngStreams,
-    /// This tick's input and the direct-read latch (WP1).
+    /// This tick's input and the direct-read latch.
     pub input: InputState,
-    /// The eight views (WP4b).
+    /// The eight views.
     pub views: [View; 8],
     /// One pending room request; the last request wins (Inferred, R13).
     pub pending: Option<RoomRequest>,
-    /// Instances a **persistent room** keeps while the player is away, restored on return
-    /// (WP4a). Distinct from [`Persistence::Run`] instances, which follow the room change, and
+    /// Instances a **persistent room** keeps while the player is away, restored on return.
+    /// Distinct from [`Persistence::Run`] instances, which follow the room change, and
     /// from [`Persistence::Save`] save objects, which write the checkpoint.
     pub persistent_rooms: BTreeMap<RoomId, Vec<Instance>>,
-    /// The save slot; `None` means "save file missing" (WP4b).
+    /// The save slot; `None` means "save file missing".
     pub save: Option<SaveSlot>,
-    /// Which sounds play (WP10); hashed, because `sound_isplaying` changes game state.
+    /// Which sounds play; hashed, because `sound_isplaying` changes game state.
     pub sound: SoundState,
-    /// Timing trigger state (WP8b): which splits fired, whether the run started, and the
+    /// Timing trigger state: which splits fired, whether the run started, and the
     /// `run_end` flag `game_clear` raises. Hashed and saved, so a restored run splits the same.
     pub timing: TimingState,
     /// Particle types, systems, emitters and the live particles that still draw (N10, #764):
@@ -124,7 +122,7 @@ pub struct World {
     /// A trace setup action ran (docs/architecture/sim/determinism.md). Hashed, so a run that
     /// used setup never matches a clean verification.
     pub setup_applied: bool,
-    /// Broadphase cache (WP3). Rebuilt on room entry and savestate restore; never hashed, and
+    /// Broadphase cache. Rebuilt on room entry and savestate restore; never hashed, and
     /// never makes two worlds unequal (`Grid`'s `PartialEq` is always true).
     #[serde(skip)]
     pub grid: Grid,
@@ -175,14 +173,14 @@ impl World {
     }
 }
 
-/// Engine globals split by owner (docs/architecture/sim/world.md). Each part starts empty; only its owner adds fields.
+/// Engine globals split by area (docs/architecture/sim/world.md). Each part starts empty.
 #[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
 pub struct EngineGlobals {
-    /// WP4b: difficulty, deaths, time, save slot number, clear flag.
+    /// Difficulty, deaths, time, save slot number, clear flag.
     pub run: run_globals::RunGlobals,
-    /// WP5a: grav flag, frozen, reverse, game-side key flags.
+    /// Grav flag, frozen, reverse, game-side key flags.
     pub kid: kid::KidGlobals,
-    /// WP6a: trigger models, boss and item flags.
+    /// Trigger models, boss and item flags.
     pub mech: builtins::MechGlobals,
 }
 
@@ -199,7 +197,7 @@ pub enum SimStatus {
 }
 
 /// What every built-in, the kid, rooms and scripts work through. `Sim` builds it for each tick
-/// from its own fields (WP1); tests build it by hand.
+/// from its own fields; tests build it by hand.
 pub struct Ctx<'a> {
     /// The game.
     pub def: &'a GameDef,
@@ -207,11 +205,11 @@ pub struct Ctx<'a> {
     pub rules: &'a RunnerRules,
     /// The world.
     pub w: &'a mut World,
-    /// The script host with the game's compiled scripts (WP9). Shared, not `&mut`: a script
+    /// The script host with the game's compiled scripts. Shared, not `&mut`: a script
     /// that spawns runs the new instance's Create inside `spawn`, which may run another script,
     /// so the host is re-entered while it runs. Its per-call state stays inside the host.
     pub scripts: &'a ScriptRuntime,
-    /// DLL sound adapters modeled or stubbed (`SimOptions::dll_mode`; WP10). Every kaenbyou
+    /// DLL sound adapters modeled or stubbed (`SimOptions::dll_mode`). Every kaenbyou
     /// trace runs in `Stub` mode.
     pub dll_mode: DllMode,
 }

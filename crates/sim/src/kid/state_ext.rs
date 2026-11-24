@@ -1,5 +1,4 @@
-//! Families A2-A5 and C kid state (ladders, ice, slopes, flips, triple jump). WP0 declares it
-//! empty; WP5c owns and adds the fields.
+//! Families A2-A5 and C kid state (ladders, ice, slopes, flips, triple jump).
 
 use serde::{Deserialize, Serialize};
 

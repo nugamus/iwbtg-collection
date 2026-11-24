@@ -1,5 +1,5 @@
 //! Built-in `boss_item` (mechanics `boss_item`; docs/architecture/sim/builtins.md;
-//! docs/format/builtins/boss_item.md). Tier 2. WP0 creates the file; WP6b owns it.
+//! docs/format/builtins/boss_item.md). Tier 2.
 //!
 //! The reward of a boss (KOT bossitem1, MIKU, XIA objBossItem). Create makes it invisible. Each
 //! Step, in this order: it becomes visible when no instance of `watched_object` (the boss kind)

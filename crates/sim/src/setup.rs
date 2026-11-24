@@ -3,8 +3,7 @@
 //!
 //! A fixed vocabulary that replaces the recorder's `--gml` assignments, `--x` and `--y`.
 //! Applying one sets `World::setup_applied`, which is hashed, so a run that used setup can never
-//! match a clean verification. The server refuses to start when this feature is on. WP0
-//! declares; WP8a owns.
+//! match a clean verification. The server refuses to start when this feature is on.
 //!
 //! Setup assigns, and [`SetupAction::Destroy`] destroys instances (running their Destroy event,
 //! like GML `instance_destroy`); it creates no instance and reads no file. A value a setter

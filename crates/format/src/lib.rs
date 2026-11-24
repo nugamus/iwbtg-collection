@@ -2,10 +2,7 @@
 //!
 //! A package is read into [`PackageFiles`] (path to bytes), so the client, the server and WASM
 //! share one code path. [`check()`] validates it and returns readable [`Diagnostic`]s with file,
-//! line and column. [`load_game`] turns it into the `GameDef` the sim runs
-//! (docs/format/v0.md): WP7a owns `load`, `sprites`, `masks`, `rooms`, `objects`,
-//! `order`, `vars` and `tracemap`; WP7b owns `physics`, `params`, `timelines`, `paths` and
-//! `sounds`.
+//! line and column. [`load_game`] turns it into the `GameDef` the sim runs (docs/format/v0.md).
 #![forbid(unsafe_code)]
 
 pub mod art;

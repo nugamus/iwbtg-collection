@@ -474,7 +474,7 @@ pub struct Stage {
     pub room: Option<Spanned<String>>,
 }
 
-/// The `[timing]` trigger vocabulary (WP8b, `iwbtg_sim::timing::TimingTrigger`).
+/// The `[timing]` trigger vocabulary (`iwbtg_sim::timing::TimingTrigger`).
 pub const TIMING_TRIGGERS: [&str; 3] = ["run_start", "run_end", "enter_room"];
 
 /// One `object_order` entry as written: a kind name, or a selector table

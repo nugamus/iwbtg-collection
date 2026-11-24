@@ -1,6 +1,6 @@
 //! Built-in `world`: the engine controller (docs/architecture/sim/builtins.md;
 //! docs/format/builtins/world.md).
-//! Tier 1. WP0 creates the file; WP6a owns it.
+//! Tier 1.
 //!
 //! Not a GM port: the engine services the infra objects did, at the rank of the original world
 //! object. This file does:
@@ -38,7 +38,7 @@
 //! OPEN: what the pause-delay counter starts at and how it counts (the spec names a counter, not
 //! its values: `pause_delay` ticks after each toggle here); the effect of kaenbyou and
 //! eat-the-lemon's cheat-detection check (the spec gives the test, not what it does); the sounds
-//! a mute or an unpause stops (`sound::stop_all`, WP10; the model exists, this built-in does not call it yet).
+//! a mute or an unpause stops (`sound::stop_all`; the model exists, this built-in does not call it yet).
 
 use serde::{Deserialize, Serialize};
 

@@ -3,7 +3,7 @@
 //!
 //! `objects/<id>.toml` defines `@<id>`: a preset (`base` plus params) or a scripted object
 //! (`script`, with an optional `base`). Keys other than the reserved ones below are params of the
-//! base built-in, checked against `builtins::param_specs` by `params::check` (WP7b).
+//! base built-in, checked against `builtins::param_specs` by `params::check`.
 //!
 //! Collision classes stand in for GM parents (docs/architecture/sim/world.md): each built-in has
 //! default classes ([`default_classes`]), some params pick a class ([`param_classes`]), and

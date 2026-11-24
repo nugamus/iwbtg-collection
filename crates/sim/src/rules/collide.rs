@@ -1,7 +1,6 @@
 //! Collision switches (docs/architecture/sim/tick.md, collision.md, register C2, C7b, C9, C10, C13, M7, R12).
 //!
 //! C1, C3, C4, C11, C12 and C14 live in their `collide` functions; C5 in `format::masks`.
-//! WP0 declares; WP3 owns.
 
 /// Rules for collision events and queries.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -28,7 +27,7 @@ pub struct CollideRules {
     pub mcs_start: McsStart,
     /// C13: which boxes `distance_to_object` measures.
     pub dist_boxes: DistBoxes,
-    /// C13 ("+1 or not"): offset added to the gap. WP3 picked it with the flush-kid test.
+    /// C13 ("+1 or not"): offset added to the gap, picked with the flush-kid test.
     pub dist_offset: DistOffset,
     /// C13: how the x and y gaps combine (Design).
     pub dist_combine: DistCombine,
@@ -149,7 +148,7 @@ pub enum DistBoxes {
 pub enum DistOffset {
     /// The free-pixel gap: touching boxes give 0.
     None,
-    /// Plus one: touching boxes give 1. Default, picked by WP3's flush-kid test
+    /// Plus one: touching boxes give 1. Default, picked by the flush-kid test
     /// (`tests/query.rs`, kid A1 "a flush kid is at distance 1"), and Confirmed (recorder)
     /// by animus a-vine-right-a/b/c.csv and a-vine-left-a/b.csv row 3 (touching 1, one free
     /// pixel 2, overlap 0).

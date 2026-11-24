@@ -1,6 +1,5 @@
 //! Run-wide engine globals: difficulty, deaths, time, save slot number, clear flag
-//! (docs/architecture/sim/world.md). WP0 declared `difficulty`, which `room::start_game` (WP4a)
-//! sets from the `StartPoint`; WP4b owns the file and adds the other fields.
+//! (docs/architecture/sim/world.md). `room::start_game` sets `difficulty` from the `StartPoint`.
 
 use serde::{Deserialize, Serialize};
 

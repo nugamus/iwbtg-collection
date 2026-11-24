@@ -1,11 +1,9 @@
 //! The save slot (docs/architecture/sim/rooms.md, N5-N8).
 //!
 //! The sim never touches files: the save is sim state, the client stores its bytes (postcard).
-//! WP0 declares; WP4b owns.
 //!
 //! Spec: CLONE_SPEC rooms, "Save files at the runner level" and "Saved positions per group".
-//! Not here: the file bytes (the client stores the slot), the first-play save (kid Create,
-//! WP5a) and the kid's own fields. A save reads the kid through its instance only (position,
+//! Not here: the file bytes (the client stores the slot), the first-play save (kid Create) and the kid's own fields. A save reads the kid through its instance only (position,
 //! previous position, class, `image_xscale`). "Flipped" is the class `ClassMask::KID_FLIPPED`
 //! (games that flip by object swap); games that flip by a flag are OPEN until `kid::api` has
 //! an accessor (follow-up issue).

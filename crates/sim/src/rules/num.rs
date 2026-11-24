@@ -9,7 +9,7 @@
 //! recorder where the CLONE_SPEC numbers section records a trace result (Confirmed (recorder)):
 //! compare and sign (num-eps-slip, num-eps-alpha), alarms (num-alarm-half) and save bytes
 //! (num-byte-save, which moved N5 from truncation to round-half-even). The real GM8 runner is
-//! unchecked for all of them. WP2 owns this file.
+//! unchecked for all of them.
 
 use crate::num::Real;
 

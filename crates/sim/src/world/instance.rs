@@ -1,4 +1,4 @@
-//! Instances (docs/architecture/sim/world.md). WP0 declares; WP1 owns.
+//! Instances (docs/architecture/sim/world.md).
 
 use std::collections::BTreeMap;
 
@@ -197,9 +197,9 @@ pub struct Instance {
     /// declared data (the kind's default, a room-file instance override, or a `set depth`
     /// script); the instance's numeric `id` is a runtime handle and tiebreak, never a layer.
     pub depth: Real,
-    /// Position, speeds, gravity, friction (WP2).
+    /// Position, speeds, gravity, friction.
     pub m: Motion,
-    /// Sprite, mask and image variables (WP1).
+    /// Sprite, mask and image variables.
     pub img: Image,
     /// `alarm[0..12]`; a value `<= 0` is idle. Default -1 (Inferred).
     pub alarms: [Real; 12],
@@ -251,13 +251,13 @@ pub enum KindState {
     /// No state (blocks, spikes, decor).
     #[default]
     None,
-    /// The kid (WP5a, `kid::KidState`).
+    /// The kid (`kid::KidState`).
     Kid(Box<kid::KidState>),
-    /// A built-in's state (WP6a, `builtins::BuiltinState`).
+    /// A built-in's state (`builtins::BuiltinState`).
     Builtin(builtins::BuiltinState),
-    /// A script's state (WP9, `script::ScriptState`).
+    /// A script's state (`script::ScriptState`).
     Script(script::ScriptState),
-    /// The test probe's state (WP1, `events::ProbeState`).
+    /// The test probe's state (`events::ProbeState`).
     Probe(events::ProbeState),
 }
 

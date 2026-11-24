@@ -15,7 +15,7 @@
 //! Every setter in both representations rejects a non-finite value with `SimError::NonFinite` and
 //! leaves the motion unchanged (N15). Spec: CLONE_SPEC "Automatic instance motion". The formulas
 //! are Confirmed (recorder): the traces cited on each function are OpenGMK runs, so the real
-//! runner is still unchecked. WP2 owns this file.
+//! runner is still unchecked.
 
 use serde::{Deserialize, Serialize};
 

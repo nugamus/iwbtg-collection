@@ -1,5 +1,5 @@
 //! The `block_standard` collision run: horizontal contact, vertical contact with the landing
-//! refresh, diagonal case (docs/architecture/sim/kid.md). WP5a owns it.
+//! refresh, diagonal case (docs/architecture/sim/kid.md).
 //!
 //! Spec: kid/A1.md "Collision with block (block is solid)". The pipeline has already put the kid
 //! back at its previous position (the solid put-back, `events::collision_phase`) and moves it by
@@ -14,7 +14,7 @@
 //! 3. `place_free(x + hspeed, y + vspeed)` false: `hspeed = 0`.
 //!
 //! The reversed kid of family B (`flip.model = "yflag"`) refreshes the jump on the ceiling side
-//! instead (`vspeed <= 0`); xia's flipped kid is WP5c.
+//! instead (`vspeed <= 0`); xia's flipped kid is the family C case.
 
 use serde::Deserialize;
 
@@ -86,7 +86,7 @@ pub(crate) enum SlopeRow {
 }
 
 fn check_flip(ctx: &Ctx, me: InstId) -> Result<(), SimError> {
-    // The `yflag` kid (family B) is the same object, mirrored; other flipped kids are WP5c's.
+    // The `yflag` kid (family B) is the same object, mirrored; other flipped kids are family C's.
     let rev = yflag(ctx, &state(ctx, me)?) < 0;
     if state(ctx, me)?.flipped && !rev {
         return Err(SimError::unsupported(

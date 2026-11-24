@@ -5,15 +5,15 @@
 //! parent also fires for its children (Confirmed, manual 205_00), which class sets reproduce
 //! without a parent tree.
 //!
-//! Bit layout (decision 0004; WP0 fixed the named range):
+//! Bit layout (decision 0004):
 //!
 //! | Bits | Use |
 //! |---|---|
-//! | 0-28 | the named classes below (bit 28, `slope_mirror`, added by WP5c.4c) |
+//! | 0-28 | the named classes below (bit 28 is `slope_mirror`) |
 //! | 29-31 | reserved (a new named bit asks the integrator) |
 //! | 32-127 | package-defined classes ([`ClassMask::package`], 96) |
 //!
-//! The first 16 package bits (32-47) keep the positions WP0 gave them, so every package that
+//! The first 16 package bits (32-47) keep their original positions, so every package that
 //! fits in the old 16 classes hashes to the same bytes (postcard writes `u64` and `u128` with the
 //! same LEB128 varint). Decision 0004 raised the cap from 16 to 96.
 

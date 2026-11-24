@@ -1,5 +1,5 @@
 //! Built-in `gravity_flip` (mechanics `gravity_flip`; docs/architecture/sim/builtins.md;
-//! docs/format/builtins/gravity_flip.md). Tier 2. WP0 creates the file; WP6b owns it.
+//! docs/format/builtins/gravity_flip.md). Tier 2.
 //!
 //! `direction = "up"` (KOT obj_ue, FT grav_up): a touch by the normal kid sets `global.grav`.
 //! `direction = "down"` (obj_sita, grav_down): a touch by the flipped kid clears it. The kid

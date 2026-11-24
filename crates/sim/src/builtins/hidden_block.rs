@@ -1,5 +1,5 @@
 //! Built-in `hidden_block` (mechanics `hidden_block`; docs/architecture/sim/builtins.md;
-//! docs/format/builtins/hidden_block.md). Tier 2. WP0 creates the file; WP6b owns it.
+//! docs/format/builtins/hidden_block.md). Tier 2.
 //!
 //! A solid block that is invisible until a kid comes near (KOT blockNotVis, WAN blockInvisible,
 //! XIA objBlockInvis). Create makes it invisible. While invisible, each Step: when the distance

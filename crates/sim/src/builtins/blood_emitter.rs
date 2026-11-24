@@ -1,6 +1,5 @@
 //! Built-in `blood_emitter` (kid specs "Death"; CLONE_SPEC sprites BLOOD-COUNT and numbers hidden
-//! consumers; docs/architecture/sim/builtins.md; docs/format/builtins/blood_emitter.md). Tier 1. WP0
-//! creates the file; WP6a owns it.
+//! consumers; docs/architecture/sim/builtins.md; docs/format/builtins/blood_emitter.md). Tier 1.
 //!
 //! **Alarm plus Step**, not a hard-coded count: Create sets alarm 0 to `life` (20), Alarm 0
 //! destroys the emitter, and each Step spawns the blood. How many Steps run (19 or 20) follows

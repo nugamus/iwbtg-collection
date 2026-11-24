@@ -1,10 +1,9 @@
-//! Package to `GameDef` (docs/format/v0.md). WP7a owns this file, including the
-//! calls to the WP7b steps (`physics::load`, `sounds::load`, `paths::load`, `timelines::load`,
-//! `params::check`), whose signatures WP0 fixed; WP7b owns only their bodies. The manifest's
-//! `[engine]` and `[timing]` sections are WP7a's too (`manifest.rs`).
+//! Package to `GameDef` (docs/format/v0.md). This file runs the loader steps
+//! (`physics::load`, `sounds::load`, `paths::load`, `timelines::load`, `params::check`) and
+//! reads the manifest's `[engine]` and `[timing]` sections (`manifest.rs`).
 //!
 //! Steps (docs/format/v0.md): 1 manifest and `[engine]`; 2 sprites and masks; 3 kinds; 4 rooms; 5 ranks;
-//! 6 variable ids; 7 (WP7b) physics, params, timelines, paths, sounds; 8 cross-references;
+//! 6 variable ids; 7 physics, params, timelines, paths, sounds; 8 cross-references;
 //! 9 `gameplay_hash`.
 //!
 //! This file holds `Loader`, `run` (the step order) and the shared helpers; the steps live in one
@@ -230,13 +229,13 @@ fn request_text(cr: &str) -> &'static str {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Calls into work packages that may not be merged yet.
+// Calls into loader steps that may not be implemented yet.
 
-/// Runs a call into another work package. Until that package merges, its WP0 stub panics with
-/// `not implemented: WPn: <function>`; this records the name and returns `None`, so the rest of
-/// the package still loads (with defaults) and `iwbtg pkg check` stays useful. Any other panic is
-/// passed on. Temporary scaffolding: WP11 removes it once every loader dependency is merged.
-/// On targets without unwinding (wasm32-unknown-unknown) the call is made directly.
+/// Runs a call into another loader step. Until that step is implemented, its stub panics with
+/// `not implemented: WPn: <function>` (the format the stub-name test checks); this records the
+/// name and returns `None`, so the rest of the package still loads (with defaults) and `iwbtg pkg
+/// check` stays useful. Any other panic is passed on. On targets without unwinding
+/// (wasm32-unknown-unknown) the call is made directly.
 pub(crate) fn pending_call<T>(pending: &mut BTreeSet<String>, f: impl FnOnce() -> T) -> Option<T> {
     #[cfg(panic = "unwind")]
     {
@@ -268,7 +267,7 @@ pub(crate) fn pending_call<T>(pending: &mut BTreeSet<String>, f: impl FnOnce() -
     }
 }
 
-/// `WP7b: physics::load` from a WP0 stub's panic message.
+/// The stub name (`WP7b: physics::load`) from a stub's panic message.
 #[cfg(panic = "unwind")]
 fn stub_name(msg: &str) -> Option<&str> {
     msg.strip_prefix("not implemented: ")
@@ -281,7 +280,7 @@ std::thread_local! {
     static IN_PENDING_CALL: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
 }
 
-/// Keeps WP0 stub panics caught by [`pending_call`] off stderr. A stub panic anywhere else (a
+/// Keeps stub panics caught by [`pending_call`] off stderr. A stub panic anywhere else (a
 /// tool running the sim into an unmerged work package) and every other panic print as usual.
 #[cfg(panic = "unwind")]
 fn quiet_stub_panics() {
@@ -335,7 +334,7 @@ struct Loader<'a> {
     diags: Vec<Diagnostic>,
     /// Converter request id to the items it covers.
     notes: BTreeMap<&'static str, BTreeSet<String>>,
-    /// WP0 stubs reached.
+    /// Stubs reached.
     pending: BTreeSet<String>,
     trace: Option<TraceMap>,
     sprite_ids: BTreeMap<String, SpriteEntry>,
@@ -574,7 +573,7 @@ impl<'a> Loader<'a> {
         crate::art::check(self.files, &mut self.diags);
         // Step 4, first half: parse rooms and fix their ids, so params can name rooms.
         let rooms = self.parse_rooms();
-        // Step 7 (WP7b): sounds before kinds, so params can name sounds.
+        // Step 7: sounds before kinds, so params can name sounds.
         let mut sounds = Vec::new();
         let trace = self.trace_mode();
         let mut d = Vec::new();
@@ -583,7 +582,7 @@ impl<'a> Loader<'a> {
         }
         self.diags.append(&mut d);
         self.sounds = sounds;
-        // Step 7 (WP7b): timelines before kinds, so the object `timeline` key resolves.
+        // Step 7: timelines before kinds, so the object `timeline` key resolves.
         let mut d = Vec::new();
         let timelines =
             pending_call(&mut self.pending, || timelines::load(self.files, &mut d)).unwrap_or_default();
@@ -600,7 +599,7 @@ impl<'a> Loader<'a> {
         self.resolve_kind_params();
         // Step 5, first half: object_order.
         self.load_order();
-        // Step 7 (WP7b): physics.
+        // Step 7: physics.
         let mut d = Vec::new();
         let physics_path = self.m.physics.get_ref().clone();
         let loaded = physics::load(self.files, &physics_path, self.trace_mode(), &mut d);
@@ -699,12 +698,12 @@ impl<'a> Loader<'a> {
         self.reachable_timing_rooms(&def);
         // Step 7: kinds that tie for a collision handler (#737).
         self.handler_ties(&def);
-        // Step 7 (WP7b): params against the built-ins' specs, on the built definition.
+        // Step 7: params against the built-ins' specs, on the built definition.
         let mut d = Vec::new();
         let trace = self.trace_mode();
         let _ = pending_call(&mut self.pending, || params::check(&def, trace, &mut d));
         self.diags.append(&mut d);
-        // Scripts: structure, calls, name literals and lints (WP9.3).
+        // Scripts: structure, calls, name literals and lints.
         for issue in iwbtg_sim::script::validate::validate(&def) {
             let (line, column, severity) = (issue.line, issue.column, issue.severity);
             let file = def

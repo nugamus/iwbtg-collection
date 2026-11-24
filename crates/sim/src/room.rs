@@ -1,7 +1,5 @@
 //! Room entry and the room change sequence (docs/architecture/sim/rooms.md).
 //!
-//! WP0 declares; WP4a owns.
-//!
 //! The sequence follows the manual's 7 steps (CLONE_SPEC rooms, "Room start sequence",
 //! Confirmed), run as one [`RoomTransaction`] with a declared stage order (#1174 A2):
 //!
@@ -46,14 +44,14 @@
 //! the real one (`events::dispatch`, `events::dispatch_order`, `Ctx::spawn`, `save::load_into`);
 //! tests pass a recording host, so the sequence is testable before those land.
 //!
-//! **Contract note for WP1 and WP8a.** Steps 1, 5 and 7 are the phases [`Phase::RoomEnd`],
+//! **Contract note for the tick loop and the trace sampler.** Steps 1, 5 and 7 are the phases [`Phase::RoomEnd`],
 //! [`Phase::GameStart`] and [`Phase::RoomStart`], dispatched by this module one event at a time
 //! on an order it computes, not by `events::run_phase`: `events::run_phase(ctx, phase)` takes no
 //! order, and the Confirmed (recorder) Room Start order (own instances, then carried ones) and
 //! the Room End switch need one. The loop is [`RoomHost::run_phase`]'s with a nested-request
 //! capture after each event (#1256), so this module calls [`RoomHost::dispatch`] directly.
-//! `events::run_phase` therefore never sees these three phases (WP1 need not handle them), and a
-//! per-phase hook for these steps (WP8a `--stages`) belongs in the dispatch loop here. Unlike R8
+//! `events::run_phase` therefore never sees these three phases, and a per-phase hook for these
+//! steps (the `--stages` sampler) belongs in the dispatch loop here. Unlike R8
 //! in the tick, `Flow::AbortTick` does not stop the sequence here (R23: the sequence always
 //! finishes).
 
@@ -306,7 +304,7 @@ pub fn start_game(ctx: &mut Ctx, start: &StartPoint) -> Result<(), SimError> {
 
 /// The manual's 7-step room change (Confirmed), plus nested requests (R23).
 ///
-/// Called only by tick row 15 (WP1), which passes the pending request; handlers never change
+/// Called only by tick row 15, which passes the pending request; handlers never change
 /// rooms themselves, they call `Ctx::request_room`. `World::pending` is cleared first, so any
 /// request found afterwards was raised during the sequence. A halted sim returns its error and
 /// does nothing; an ended sim does nothing. An error halts the sim and is returned.
@@ -697,7 +695,7 @@ fn game_restart<H: RoomHost + ?Sized>(
     }
     if !ctx.rules.room.globals_survive_restart {
         ctx.w.globals.clear();
-        // The temp-file marker of a retry survives: it is a file, not a global (WP4b).
+        // The temp-file marker of a retry survives: it is a file, not a global.
         let boot_load = ctx.w.engine.run.boot_load;
         ctx.w.engine = EngineGlobals::default();
         ctx.w.engine.run.boot_load = boot_load;

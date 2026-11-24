@@ -1,6 +1,5 @@
 //! The script API registered on the Rhai engine (architecture "Script API";
-//! docs/architecture/sim/scripts.md). WP9.1 registers the numeric and random part; WP9.2 adds
-//! the instance API.
+//! docs/architecture/sim/scripts.md). Every function is registered here.
 //!
 //! Every number a script sees is a FLOAT (decision 0001, rule 5): the functions take and return
 //! `f64`, and call `num` with the run's [`NumRules`](crate::rules::num::NumRules). Nothing here

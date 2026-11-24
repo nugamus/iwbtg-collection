@@ -1,8 +1,7 @@
 //! Events and dispatch (docs/architecture/sim/world.md, tick.md).
 //!
-//! WP0 declared the enums, `EventSet` and `ProbeState`; WP1 owns the file: dispatch, the phase
-//! walker every row of the tick table uses, the collision phase, the Draw slot and the `Probe`
-//! test built-in.
+//! This file holds the enums, `EventSet` and `ProbeState`, plus dispatch, the phase walker every
+//! row of the tick table uses, the collision phase, the Draw slot and the `Probe` test built-in.
 //!
 //! **Phase walk** (CLONE_SPEC tick loop, Confirmed (recorder)). A phase takes its order once at
 //! its start ([`dispatch_order`]: object index rank, then instance id,
@@ -260,7 +259,7 @@ pub fn event_set(def: &GameDef, kind: KindId) -> &EventSet {
 // ---- Dispatch ----
 
 /// Runs one event on one instance: the base built-in's handler (`builtins::on_event`, which
-/// routes the kid to `kid::on_event`), then the script's (`script::on_event`, WP9) when the kind
+/// routes the kid to `kid::on_event`), then the script's (`script::on_event`) when the kind
 /// has one. A handler's `Err` halts the sim through `Ctx::halt` and gives `Flow::Halt`.
 ///
 /// Instances that are destroyed, deactivated or unknown get nothing (`Continue`). When the base
@@ -403,7 +402,7 @@ fn walk(
 /// or deactivated by their turn, with R8 applied after each handler. For sequences whose order
 /// is not the dispatch order: Room Start on room entry runs the placed instances in file order,
 /// then the persistent ones (Confirmed (recorder), traces/rely-the-needle-4-2/t-room-1.csv row
-/// 21); WP4a calls this with that list.
+/// 21); the room change calls this with that list.
 pub fn dispatch_each(ctx: &mut Ctx, ids: &[InstId], ev: &EventKind) -> Flow {
     let mut ctl = Ctl::new(ctx);
     for &id in ids {
@@ -570,7 +569,7 @@ fn keyboard_phase(ctx: &mut Ctx) -> Flow {
 }
 
 /// Row 8: per instance, `xprevious`/`yprevious` when `prev_capture = BeforeMotion`, then
-/// automatic motion (WP2), then End of Path when the path ended (Confirmed (recorder): after
+/// automatic motion, then End of Path when the path ended (Confirmed (recorder): after
 /// Step, before Outside Room and Collision, traces/rely-the-needle-4-2/t-evo-1.csv frame 13).
 fn motion_phase(ctx: &mut Ctx, hooks: &Hooks) -> Flow {
     let capture = ctx.rules.tick.prev_capture == PrevCapture::BeforeMotion;
@@ -736,7 +735,7 @@ pub fn collision_phase(ctx: &mut Ctx) -> Flow {
 ///   traces/help-the-fairy-tale/t-col-06-e/f);
 /// - is skipped when `me` or `other` is no longer alive and active (R22);
 /// - with a solid `other`, is re-checked for overlap first (C7, Confirmed (recorder),
-///   traces/showdown/t-mot-07-a.csv) and runs inside `collide::solid_resolve` (WP3); with a
+///   traces/showdown/t-mot-07-a.csv) and runs inside `collide::solid_resolve`; with a
 ///   non-solid `other`, is re-checked under `CollideRules::recheck_nonsolid` (C7b) and runs at
 ///   the current position. The first direction of a pair follows its overlap test directly, so
 ///   it is not tested twice.
@@ -1130,7 +1129,7 @@ pub enum ProbeAct {
     SetSolid(bool),
     /// Set `image_speed`.
     SetImageSpeed(Real),
-    /// Move by `(dx, dy)` through the motion setters (WP2).
+    /// Move by `(dx, dy)` through the motion setters.
     Move(Real, Real),
     /// Set Time Line at a position.
     StartTimeline(TimelineId, Real),
@@ -1210,8 +1209,8 @@ pub enum ProbeLog {
 }
 
 /// The test probe's per-instance state: logs every event it gets to a global string and runs
-/// its steps (it can move, spawn, destroy, request a room, read keys and fail). WP1 tests and
-/// WP11 golden probe tests build worlds from it.
+/// its steps (it can move, spawn, destroy, request a room, read keys and fail). The tests and
+/// golden probe tests build worlds from it.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub struct ProbeState {
     /// Appended after each event code in the log (`sA` is A's Step).
@@ -1302,7 +1301,7 @@ fn append_log(w: &mut World, var: VarId, text: &str) {
     }
 }
 
-/// The `Probe` built-in's handler (WP1 tests, WP11 golden probe tests); `builtins::on_event`
+/// The `Probe` built-in's handler (the tests and golden probe tests); `builtins::on_event`
 /// routes `Builtin::Probe` here. Logs `<code><tag> `, then runs the matching steps in order.
 /// All of them run even after a destroy or a room request (one handler is one unit, R25);
 /// `Halt` stops at once.

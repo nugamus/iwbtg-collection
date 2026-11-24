@@ -1,5 +1,4 @@
 //! The solid collision put-back (docs/architecture/sim/tick.md step 4, C7, C9, M7).
-//! WP0 declares; WP3 owns.
 //!
 //! CLONE_SPEC collision, Confirmed (manual 111_00) for the four steps, and Inferred "What
 //! previous place and new position mean" (corrected, Confirmed (recorder)) for their meaning:

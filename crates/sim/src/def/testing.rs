@@ -1,6 +1,6 @@
 //! Hand-built game definitions for tests and golden rooms (docs/architecture/sim/determinism.md).
 //!
-//! WP0 ships a working builder; WP7a owns it afterwards. No IO, so tests on every target
+//! No IO, so tests on every target
 //! (wasm32 included) can use it.
 //!
 //! ```

@@ -1,6 +1,6 @@
 //! The `ladder`, `ladder_sprites` and `ladder_jump_reset` actions (docs/architecture/sim/kid.md,
-//! kid/A1.md Step action 2 and End Step). WP5c owns it. The ladder object itself is the
-//! `ladder` built-in (WP6c); the kid only needs its class.
+//! kid/A1.md Step action 2 and End Step). The ladder object itself is the
+//! `ladder` built-in; the kid only needs its class.
 
 use serde::Deserialize;
 

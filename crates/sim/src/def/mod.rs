@@ -2,9 +2,7 @@
 //! collision.md, rooms.md; docs/format/v0.md).
 //!
 //! `crates/format` parses a package into a [`GameDef`]. The sim never reads files and never
-//! changes a `GameDef`. File owners after WP0 (plan 13, "File overlap check"): `physics.rs`
-//! WP5a, `physics_ext.rs` WP5c, `script.rs` WP9, `builtin.rs` WP6a, `sound.rs` WP10,
-//! `timeline.rs` and `path.rs` WP2, `class.rs` WP11, the rest WP7a.
+//! changes a `GameDef`.
 
 pub mod builtin;
 pub mod class;

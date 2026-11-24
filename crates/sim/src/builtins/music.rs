@@ -1,7 +1,7 @@
 //! Built-in `music` (mechanics `music`, sound Inferred; docs/architecture/sim/builtins.md, sound.md;
-//! docs/format/builtins/music.md). Tier 2. WP0 creates the file; WP6b owns it.
+//! docs/format/builtins/music.md). Tier 2.
 //!
-//! Plays a track through the sound model (`sound::play`, WP10). `mode`:
+//! Plays a track through the sound model (`sound::play`). `mode`:
 //!
 //! - `on_create` (KOT playMusic, whose creation code plays the track): Create plays the track.
 //! - `every_step_if_not_playing` (SHO playMusic001-005): each Step, while music is on and the

@@ -2,7 +2,7 @@
 //! grid (docs/architecture/sim/collision.md, register C1-C15).
 //!
 //! `bbox.rs` is the only place that rounds. The grid never decides order: results are re-sorted
-//! by `World::first_of` order. WP0 declares; WP3 owns.
+//! by `World::first_of` order.
 
 pub mod bbox;
 pub mod bounce;

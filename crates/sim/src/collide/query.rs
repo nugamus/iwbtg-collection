@@ -2,7 +2,6 @@
 //!
 //! Each excludes `me`, skips inactive instances, skips dead ones unless
 //! `TickRules::dead_in_queries` (R22), and returns `World::first_of` order (R21).
-//! WP0 declares; WP3 owns.
 //!
 //! **Which box.** Place tests (`place_free`, `place_empty`, `place_meeting`, `instance_place`)
 //! and the precise branch of the point, rectangle and line queries use the collision mask

@@ -1,5 +1,5 @@
 //! Built-in `killer` (mechanics `spike` and `cherry`; docs/architecture/sim/builtins.md;
-//! docs/format/builtins/killer.md). Tier 1. WP0 creates the file; WP6a owns it.
+//! docs/format/builtins/killer.md). Tier 1.
 //!
 //! A generic killer: class `killer` (set by the loader) with its own sprite and mask, so the
 //! kid's "Collision with killer" kills; no kill code here. Create applies the instance settings

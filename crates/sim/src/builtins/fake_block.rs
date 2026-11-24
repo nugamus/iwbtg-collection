@@ -1,5 +1,5 @@
 //! Built-in `fake_block` (mechanics `fake_block`; docs/architecture/sim/builtins.md;
-//! docs/format/builtins/fake_block.md). Tier 2. WP0 creates the file; WP6b owns it.
+//! docs/format/builtins/fake_block.md). Tier 2.
 //!
 //! Looks like a block but is not solid, or vanishes. Create applies `solid` (default the
 //! kind data) and `visible`. `vanish_on`:

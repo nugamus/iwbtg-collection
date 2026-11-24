@@ -2,7 +2,7 @@
 //!
 //! M3-M5 live in `Motion::recompute_polar` and `recompute_cartesian`, M7 in
 //! [`CollideRules`](super::CollideRules), M8 in `path::advance`. B5 selects the motion
-//! representation (gm8 coupled vs standard velocity/acceleration). WP0 declares; WP2 owns.
+//! representation (gm8 coupled vs standard velocity/acceleration).
 
 /// Rules for `motion::apply_auto_motion`.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]

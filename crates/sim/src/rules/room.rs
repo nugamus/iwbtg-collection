@@ -1,6 +1,5 @@
 //! Room change switches (docs/architecture/sim/rooms.md, register R16, R23).
 //!
-//! WP0 declares; WP4a owns.
 
 /// Rules for the room change sequence and game_restart.
 #[derive(Clone, PartialEq, Eq, Debug)]

@@ -1,5 +1,5 @@
 //! Kid actions specific to family A5 (kid/A5.md: little-runner's End Step;
-//! docs/architecture/sim/kid.md). WP5c owns it.
+//! docs/architecture/sim/kid.md).
 
 use serde::Deserialize;
 

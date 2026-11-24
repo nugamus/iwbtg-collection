@@ -1,6 +1,6 @@
-//! The built-in kinds (docs/architecture/sim/builtins.md). WP0 lists every variant so the loader can
-//! parse kinds; WP6a owns the file afterwards. Dispatch lives in `builtins/mod.rs`, where WP0
-//! routed every variant to its own file, so WP6b and WP6c edit neither file.
+//! The built-in kinds (docs/architecture/sim/builtins.md). Every variant is listed here so the
+//! loader can parse kinds; dispatch lives in `builtins/mod.rs`, which routes every variant to
+//! its own file.
 
 /// Every built-in kind. A package kind is one of these, with params (a preset) or a script on
 /// top (`Scripted`, or a base built-in plus a script).
@@ -9,7 +9,7 @@ pub enum Builtin {
     // Engine kinds the sim spawns by role (`EngineKind`).
     /// The engine controller: restart, reset, pause, mute, timers (tier 1).
     World,
-    /// The kid (WP5a-WP5c).
+    /// The kid.
     Kid,
     /// The kid's bullet (tier 1).
     KidBullet,
@@ -111,12 +111,12 @@ pub enum Builtin {
     Decor,
     /// Builds a `particles/<id>.toml` system (#765).
     ParticleSystem,
-    /// A kind whose behavior is a script (WP9).
+    /// A kind whose behavior is a script.
     Scripted,
 
     // Not in the package format.
     /// Test built-in that logs every event and can move, spawn, destroy and request a room
-    /// (WP1 tests, WP11 golden probe tests). Never loaded from a package.
+    /// (the tests and golden probe tests). Never loaded from a package.
     Probe,
     /// `LoadMode::Trace`: an unmapped script kind loaded with no events; its mask still collides.
     Inert,

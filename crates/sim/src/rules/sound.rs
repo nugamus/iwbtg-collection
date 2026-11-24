@@ -1,6 +1,6 @@
 //! Sound model switches (docs/architecture/sim/sound.md, register S1-S5).
 //!
-//! S5 lives in the DLL adapters. WP0 declares; WP10 owns.
+//! S5 lives in the DLL adapters.
 
 /// The named sound model a run plays under (a ruleset/profile value, never package data;
 /// docs/decisions/0005-standard-mechanics.md "One sound model").

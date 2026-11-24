@@ -1,6 +1,5 @@
 //! `physics.toml` to `PhysicsProfileDraft`, then `kid::presets::apply`; legacy drafts map to
-//! their family preset with a warning (docs/format/physics.md). WP0 creates the
-//! file; WP7b owns it.
+//! their family preset with a warning (docs/format/physics.md).
 //!
 //! A file in the form of `docs/format/physics.md` is read strictly (unknown keys are errors with
 //! a position). A legacy draft, the form the research converter wrote before the profile was
@@ -282,7 +281,7 @@ fn differing_fields(actual: &PhysicsProfile, base: &PhysicsProfile) -> Vec<Strin
 /// Reads the profile file at `path` (step 7). `trace` is `LoadMode::Trace`: a legacy `rules` that
 /// names no family falls back to A1 with a warning instead of an error. `None` when it cannot be read; every problem is a
 /// diagnostic, and a legacy draft maps to its family preset with a warning. `load::load_game`
-/// (WP7a) calls this.
+/// calls this.
 pub fn load(
     files: &PackageFiles,
     path: &str,
