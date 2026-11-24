@@ -46,20 +46,20 @@
           {
             "type": "command",
             "command": "python",
-            "args": ["-I", "${CLAUDE_PROJECT_DIR}/research/.claude/hooks/guard_archive.py"],
+            "args": ["-I", "${CLAUDE_PROJECT_DIR}/iwbtg-collection-research/.claude/hooks/guard_archive.py"],
             "onFailure": "block",
             "timeout": 30
           },
           {
             "type": "command",
             "command": "python",
-            "args": ["-I", "${CLAUDE_PROJECT_DIR}/client/.claude/hooks/build_guard.py"],
+            "args": ["-I", "${CLAUDE_PROJECT_DIR}/iwbtg-collection/.claude/hooks/build_guard.py"],
             "timeout": 10
           },
           {
             "type": "command",
             "command": "python",
-            "args": ["-I", "${CLAUDE_PROJECT_DIR}/client/.claude/hooks/conflict_guard.py"],
+            "args": ["-I", "${CLAUDE_PROJECT_DIR}/iwbtg-collection/.claude/hooks/conflict_guard.py"],
             "timeout": 20
           }
         ]
@@ -71,7 +71,7 @@
           {
             "type": "command",
             "command": "python",
-            "args": ["-I", "${CLAUDE_PROJECT_DIR}/client/.claude/hooks/issues.py", "start"],
+            "args": ["-I", "${CLAUDE_PROJECT_DIR}/iwbtg-collection/.claude/hooks/issues.py", "start"],
             "timeout": 40
           }
         ]
@@ -83,7 +83,7 @@
           {
             "type": "command",
             "command": "python",
-            "args": ["-I", "${CLAUDE_PROJECT_DIR}/client/.claude/hooks/issues.py", "stop"],
+            "args": ["-I", "${CLAUDE_PROJECT_DIR}/iwbtg-collection/.claude/hooks/issues.py", "stop"],
             "timeout": 10
           }
         ]
