@@ -8,7 +8,7 @@ Read `../CLAUDE.md` for the project rules and `../docs/dev-setup.md` for the too
 
 - Code is licensed under the [MIT License](../LICENSE-MIT).
 - Documentation in `docs/` is licensed under [CC BY 4.0](../LICENSES/CC-BY-4.0.txt).
-- Unless you explicitly state otherwise, any contribution you intentionally submit for inclusion in the work is licensed under the MIT License, without any additional terms or conditions. This matches the [README](../README.md#license).
+- Unless you explicitly state otherwise, any contribution you intentionally submit for inclusion in the work is licensed under the MIT License, without any additional terms or conditions. This matches the [README](../README.md#credits-and-license).
 - Do not change the license terms. Game content is not covered by them.
 
 ## Clean room
@@ -18,7 +18,7 @@ The client rebuilds fangames from clean-room specs and recorded traces, never fr
 - Do not submit decompiled code, original game binaries or extracted game files. Examples include `.exe`, `.win`, `.gmk`, `.gms`, GameMaker data files and archives of a fangame.
 - Do not submit assets taken from a game unless the user has explicitly approved that credited exception (the Kid sprites in `crates/client/showcase.pkg` are the only one).
 - Behavior comes only from the specs and traces in the private research repo. If a spec does not answer your question, open an issue asking for a spec item or trace instead of guessing or reading another runner's source.
-- Game content belongs to its creators. See "Games and assets" in the [README](../README.md#games-and-assets).
+- Game content belongs to its creators. See "Games and assets" in the [README](../README.md#credits-and-license).
 
 ## Pull requests
 

@@ -266,7 +266,7 @@ def build_activity(issues, pulls, now):
         "needs_user": [slim(i) for i in needs_user],
         "agent_ready": [slim(i) for i in ready],
         "closed_7d": sum(1 for i in closed if closed_at(i) and closed_at(i) >= week),
-        "opened_7d": sum(1 for i in opened if i.get("created_at")
+        "opened_7d": sum(1 for i in issues if i.get("created_at")
                          and dt.datetime.fromisoformat(i["created_at"].replace("Z", "+00:00")) >= week),
         "burnup": burnup(issues, now),
     }
@@ -534,7 +534,7 @@ def port_rows(games):
             done = '<span class="muted">—</span>'
             subs = '<span class="muted">—</span>'
         traces = (f'{g.get("traces_recorded")}' if g.get("traces_recorded") is not None
-                  else '<span class="muted">—</span>')
+                  else cell(0, 0, FOLLOWUPS["traces"]))
         status = g.get("lifecycle") or "unknown"
         if status.lower() in ("unknown", ""):
             status_html = cell(0, 0, FOLLOWUPS["frontmatter"])
@@ -915,6 +915,29 @@ const BURN = __BURN_JSON__;
 """
 
 
+
+def refresh_local(data):
+    """Re-read the local inputs the committed data.json cannot hold fresh."""
+    games = load_games()
+    trace_counts, trace_date = load_trace_counts()
+    old = {g.get("slug"): g for g in data.get("games", [])}
+    for g in games:
+        g["traces_recorded"] = trace_counts.get(g["slug"])
+        if g["slug"] in old:
+            g["port"] = old[g["slug"]].get("port")
+    ov = compute_overall(games)
+    ov["traces_recorded"] = sum(trace_counts.values())
+    ov["games_with_traces"] = sum(1 for g in games if g["traces_recorded"] is not None)
+    ov["trace_source_date"] = trace_date
+    ov["ports_tracked"] = sum(1 for g in games if g.get("port"))
+    ov["ports_closed"] = sum(1 for g in games if g.get("port") and g["port"]["state"] == "closed")
+    ov["ports_in_beta"] = sum(1 for g in games if (g["lifecycle"] or "").lower() in
+                              ("beta", "ranked", "loved"))
+    data["games"] = games
+    data["overall"] = ov
+    return data
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--gh", action="store_true", help="refresh from GitHub")
@@ -922,23 +945,34 @@ def main():
     args = ap.parse_args()
     at = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     data = None
+    refreshed = False
     if args.gh:
         try:
             data = build_data(True)
+            refreshed = True
         except Exception as exc:
             print(f"warning: GitHub read failed ({exc}); using committed data.json", file=sys.stderr)
     if data is None:
         path = os.path.join(PROGRESS, "data.json")
         if os.path.exists(path):
             data = json.load(open(path, encoding="utf-8"))
+            old_source = data.get("source", "committed data.json")
+            data = refresh_local(data)
+            data["source"] = (f"stale: {old_source}" if args.gh
+                              else "committed data.json + local files")
         else:
             data = build_data(False)
-    data["generated_at"] = at
+            refreshed = True
+    if refreshed:
+        data["generated_at"] = at
     json.dump(data, open(os.path.join(PROGRESS, "data.json"), "w", encoding="utf-8"),
               ensure_ascii=False, indent=1)
-    hist = maybe_history(data, at) if args.history else (
-        json.load(open(os.path.join(PROGRESS, "history.json"), encoding="utf-8"))
-        if os.path.exists(os.path.join(PROGRESS, "history.json")) else [])
+    hist_path = os.path.join(PROGRESS, "history.json")
+    if args.history and refreshed:
+        hist = maybe_history(data, at)
+    else:
+        hist = (json.load(open(hist_path, encoding="utf-8"))
+                if os.path.exists(hist_path) else [])
     page = render(data, hist)
     open(os.path.join(PROGRESS, "index.html"), "w", encoding="utf-8", newline="").write(page)
     print(f"wrote progress/data.json, progress/index.html ({len(data['games'])} games, "
