@@ -5,7 +5,7 @@
 use crate::load_physics::LEGACY;
 use iwbtg_format::load::{LoadMode, LoadReport, load_report};
 use iwbtg_format::{PackageFiles, Severity};
-use iwbtg_sim::def::{GameDef, ParamValue, SoundKind};
+use iwbtg_sim::def::{GameDef, ParamValue, SoundId, SoundKind};
 use iwbtg_sim::num::Real;
 
 pub(crate) const STRICT: LoadMode = LoadMode::Strict;
@@ -628,6 +628,52 @@ fn sounds_and_music_get_kinds_lengths_and_ids() {
             .any(|w| w.contains("CR9") && w.contains("death") && !w.contains("jump")),
         "{}",
         render(&r)
+    );
+}
+
+/// #1173: a sound with no sidecar loads with length 0, and the sim plays it until stopped.
+#[test]
+fn a_sound_without_a_sidecar_plays_until_stopped() {
+    use iwbtg_sim::output::OutputEvent;
+    use iwbtg_sim::rules::RunnerRules;
+    use iwbtg_sim::script::ScriptRuntime;
+    use iwbtg_sim::sound::{self, DllMode, SoundOutput, SoundTarget};
+    use iwbtg_sim::world::{Ctx, World};
+
+    let files = package("", |f| put(f, "sounds/death.ogg", "ogg"));
+    let (def, _) = load_ok(&files, STRICT);
+    let id = SoundId(def.sounds.iter().position(|s| s.name == "death").unwrap() as u32);
+    let rules = RunnerRules::default();
+    let scripts = ScriptRuntime::default();
+    let mut w = World::new(def.start_room, 1);
+    let mut ctx = Ctx {
+        def: &def,
+        rules: &rules,
+        w: &mut w,
+        scripts: &scripts,
+        dll_mode: DllMode::Model,
+    };
+    sound::play(&mut ctx, id, false).unwrap();
+    for _ in 0..1000 {
+        sound::tick(&mut ctx);
+        ctx.w.tick += 1;
+    }
+    assert!(sound::is_playing(ctx.w, &def, id, &rules.sound));
+    sound::stop(&mut ctx, id);
+    assert!(!sound::is_playing(ctx.w, &def, id, &rules.sound));
+    let play: Vec<_> = w
+        .output
+        .iter()
+        .filter(|e| matches!(e, OutputEvent::Sound(SoundOutput::Play { .. })))
+        .collect();
+    assert_eq!(
+        play,
+        [&OutputEvent::Sound(SoundOutput::Play {
+            target: SoundTarget::Builtin(id),
+            looping: false,
+            length_ticks: 0,
+            tick: 0,
+        })]
     );
 }
 
