@@ -15,7 +15,8 @@
 //! `peak instances` is the most alive instances seen at the start and after each tick
 //! (`World::iter_alive`); a spike created and destroyed inside one tick is not seen.
 //! `ms per tick` is the wall time of `Sim::step` alone, summed over the run and divided by the
-//! ticks, measured on the native build.
+//! ticks, measured on the build's own target; the line names it (`native`, or the wasm target
+//! the binary was built for), so a wasm run is not reported as native.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -23,6 +24,7 @@ use std::time::{Duration, Instant};
 
 use iwbtg_format::{LoadMode, PackageFiles};
 use iwbtg_sim::mods::ModSet;
+use iwbtg_sim::room::StartPoint;
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::stripped::PlayMode;
 use iwbtg_sim::world::SimStatus;
@@ -30,6 +32,17 @@ use iwbtg_sim::{Sim, SimOptions};
 
 use crate::replay_cmd::{self, RunInput};
 use crate::trace_cmd::{ToolError, load_package};
+
+/// The target this binary was built for, as the `ms per tick` line names it: a wasm build must
+/// not report its timings as native.
+#[cfg(all(target_arch = "wasm32", target_os = "wasi"))]
+const TARGET: &str = "wasm32-wasip1";
+/// See [`TARGET`].
+#[cfg(all(target_arch = "wasm32", not(target_os = "wasi")))]
+const TARGET: &str = "wasm32";
+/// See [`TARGET`].
+#[cfg(not(target_arch = "wasm32"))]
+const TARGET: &str = "native";
 
 /// Arguments of `iwbtg profile <pkg> --replay <file>`.
 #[derive(Clone, PartialEq, Eq, Debug, clap::Args)]
@@ -56,6 +69,10 @@ pub struct ProfileArgs {
     /// carries its own, and a different `--map` is an error.
     #[arg(long)]
     pub map: Option<String>,
+    /// Start an `.inputs` run in this room; overrides the new-game room and the map's ranked
+    /// start in either play mode. An `.iwbr` replay carries its own start.
+    #[arg(long)]
+    pub room: Option<String>,
 }
 
 /// A run's profile.
@@ -87,7 +104,7 @@ impl Profile {
             self.elapsed.as_secs_f64() * 1000.0 / self.ticks as f64
         };
         format!(
-            "ticks: {}\npeak script units: {} / {} ({percent:.1}%)\npeak instances: {}\nms per tick: {ms:.3} (native)\n",
+            "ticks: {}\npeak script units: {} / {} ({percent:.1}%)\npeak instances: {}\nms per tick: {ms:.3} ({TARGET})\n",
             self.ticks, self.peak_units, self.tick_limit, self.peak_instances
         )
     }
@@ -95,19 +112,39 @@ impl Profile {
 
 /// `iwbtg profile`: reads the package and the replay, runs [`profile`] and prints its lines.
 pub fn main(args: &ProfileArgs) -> Result<(), ToolError> {
+    if args.room.is_some() && replay_cmd::is_replay(&args.replay) {
+        return Err(ToolError::Message(format!(
+            "{}: an .iwbr replay carries its own start; --room needs an .inputs file",
+            args.replay.display()
+        )));
+    }
     let pkg = load_package(&args.pkg)?;
     let input = replay_cmd::read_input(&args.replay, args.seed, args.mods, args.mode, args.map.clone())?;
-    let profile = profile(&pkg, &input, args.difficulty)?;
+    let start = match &args.room {
+        Some(room) => Some(replay_cmd::room_start(&pkg, room, args.difficulty)?),
+        None => None,
+    };
+    let profile = profile(&pkg, &input, start, args.difficulty)?;
     print!("{}", profile.lines());
     Ok(())
 }
 
-/// Profiles `pkg` on `input`'s frames, from its save slot or a new game at `difficulty`. A sim
-/// halt is an error, as in `replay run`.
-pub fn profile(pkg: &PackageFiles, input: &RunInput, difficulty: u8) -> Result<Profile, ToolError> {
+/// Profiles `pkg` on `input`'s frames. `start` is `--room`'s room; `None` uses the input's
+/// own save, else a new game at `difficulty`. The room start comes from
+/// [`replay_cmd::room_start`], the same one `replay run --room` uses. A sim halt is an error, as
+/// in `replay run`.
+pub fn profile(
+    pkg: &PackageFiles,
+    input: &RunInput,
+    start: Option<StartPoint>,
+    difficulty: u8,
+) -> Result<Profile, ToolError> {
     let def = replay_cmd::load_strict(pkg, LoadMode::Strict)?;
     let options = SimOptions {
-        start: input.start(&def, difficulty)?,
+        start: match start {
+            Some(start) => start,
+            None => input.start(&def, difficulty)?,
+        },
         seed: input.seed,
         dll_mode: DllMode::Model,
         mode: input.mode,
@@ -173,7 +210,7 @@ mod tests {
             map: Some("medium".into()),
             save: None,
         };
-        let p = profile(&pkg, &input, 0).expect("profile");
+        let p = profile(&pkg, &input, None, 0).expect("profile");
         assert_eq!(p.ticks, 60);
         assert!(p.peak_instances >= 1, "{p:?}");
         assert!(p.peak_units > 0, "the package's scripts charge the budget: {p:?}");
@@ -191,7 +228,7 @@ mod tests {
             text.contains(&format!("peak instances: {}\n", p.peak_instances)),
             "{text}"
         );
-        assert!(text.contains(" (native)\n"), "{text}");
+        assert!(text.contains(&format!(" ({TARGET})\n")), "{text}");
     }
 
     /// An empty run reports zero ticks and a zero rate rather than dividing by zero.
@@ -204,10 +241,80 @@ mod tests {
             peak_instances: 0,
             elapsed: Duration::from_millis(5),
         };
+        let text = p.lines();
         assert!(
-            p.lines().contains("ms per tick: 0.000 (native)\n"),
+            text.contains(&format!("ms per tick: 0.000 ({TARGET})\n")),
+            "{text}"
+        );
+    }
+
+    /// The `ms per tick` line names the target the binary was built for; a wasm build must not
+    /// say `native` (#1433).
+    #[test]
+    fn the_runner_label_names_the_build_target() {
+        assert!(
+            matches!(TARGET, "native" | "wasm32" | "wasm32-wasip1"),
+            "{TARGET}"
+        );
+        let p = Profile {
+            ticks: 1,
+            peak_units: 0,
+            tick_limit: 1,
+            peak_instances: 0,
+            elapsed: Duration::from_millis(1),
+        };
+        assert!(
+            p.lines().contains(&format!("ms per tick: 1.000 ({TARGET})\n")),
             "{}",
             p.lines()
         );
+    }
+
+    /// `--room` profiles the room it names: the fixture's `stage1` places four instances more
+    /// than `title` (#1433).
+    #[test]
+    fn a_room_start_profiles_that_room() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../format/tests/valid/stripped");
+        let pkg = load_package(&dir).expect("package");
+        let input = RunInput {
+            frames: vec![InputFrame::default(); 3],
+            seed: 0,
+            mods: ModSet::NONE,
+            mode: PlayMode::Original,
+            map: None,
+            save: None,
+        };
+        let from = |room: &str| {
+            let start = crate::replay_cmd::room_start(&pkg, room, 0).expect(room);
+            profile(&pkg, &input, Some(start), 0).expect(room)
+        };
+        let title = from("title");
+        let stage1 = from("stage1");
+        assert_eq!(stage1.ticks, 3);
+        assert!(
+            stage1.peak_instances > title.peak_instances,
+            "stage1 places four instances more than title: {stage1:?} vs {title:?}"
+        );
+    }
+
+    /// `--room` is for an `.inputs` file: a `.iwbr` replay carries its own start (the same rule
+    /// as `replay run --room`).
+    #[test]
+    fn a_room_option_needs_an_inputs_file() {
+        let path = std::env::temp_dir().join(format!("iwbtg-profile-room-test-{}.iwbr", std::process::id()));
+        std::fs::write(&path, b"not a replay").unwrap();
+        let args = ProfileArgs {
+            pkg: Path::new(env!("CARGO_MANIFEST_DIR")).join("../format/tests/valid/stripped"),
+            replay: path.clone(),
+            difficulty: 0,
+            seed: 0,
+            mods: ModSet::NONE,
+            mode: PlayMode::Original,
+            map: None,
+            room: Some("title".into()),
+        };
+        let err = main(&args).unwrap_err().to_string();
+        std::fs::remove_file(&path).ok();
+        assert!(err.contains("--room"), "{err}");
     }
 }

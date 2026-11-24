@@ -209,7 +209,7 @@ pub fn main(args: &ReplayRunArgs) -> Result<(), ToolError> {
 
 /// `--room`: a start in that room. [`StartPoint::Room`] already overrides the new-game room and
 /// a stripped run's ranked start; cut rooms still redirect.
-fn room_start(pkg: &PackageFiles, room: &str, difficulty: u8) -> Result<StartPoint, ToolError> {
+pub(crate) fn room_start(pkg: &PackageFiles, room: &str, difficulty: u8) -> Result<StartPoint, ToolError> {
     let def = load_strict(pkg, LoadMode::Strict)?;
     let id = def
         .rooms
@@ -223,7 +223,7 @@ fn room_start(pkg: &PackageFiles, room: &str, difficulty: u8) -> Result<StartPoi
 }
 
 /// Whether a replay argument is a recorded `.iwbr` file (as opposed to an `.inputs` file).
-fn is_replay(path: &Path) -> bool {
+pub(crate) fn is_replay(path: &Path) -> bool {
     path.extension().is_some_and(|e| e.eq_ignore_ascii_case("iwbr"))
 }
 
