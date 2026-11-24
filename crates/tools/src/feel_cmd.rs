@@ -401,6 +401,39 @@ kid_count = 1
         }
     }
 
+    /// CI has no games repo, so it cannot run the port set (#1168). It can still check that every
+    /// port contract parses, that its `id` is its path and that it names a package id (not a
+    /// fixture), and that the baseline lists exactly the contracts in the folder.
+    #[test]
+    fn the_port_set_parses_and_matches_its_baseline() {
+        let tools = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let root = tools.join("feel");
+        let paths = contract_paths(&root).unwrap();
+        assert!(!paths.is_empty(), "the port contract set is empty");
+        let mut ids = BTreeSet::new();
+        for path in &paths {
+            let id = contract_id(&root, path);
+            let text = std::fs::read_to_string(path).unwrap();
+            let raw = contract::parse(&text).unwrap_or_else(|e| panic!("{id}: {e}"));
+            assert_eq!(
+                raw.id, id,
+                "a contract's id must equal its path below crates/tools/feel"
+            );
+            let package = contract::package(&raw);
+            assert!(
+                contract::fixtures::from_package(package).is_none(),
+                "{id}: a port contract names a games-repo package id, not {package:?}"
+            );
+            ids.insert(id);
+        }
+        let text = std::fs::read_to_string(tools.join("feel-baseline.txt")).unwrap();
+        let baseline: BTreeSet<String> = parse_baseline(&text).unwrap().into_keys().collect();
+        assert_eq!(
+            baseline, ids,
+            "crates/tools/feel-baseline.txt must list every port contract; run `cargo xtask feel --bless` with IWBTG_GAMES"
+        );
+    }
+
     /// A contract's `trace` link must name a case by `source`, the case must be OK or OPEN, and
     /// every metric the contract asserts must be in the linked case's `required` list.
     #[test]

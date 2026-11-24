@@ -1,0 +1,45 @@
+# kaenbyou's spike death (B family): a full jump straight up from the rTraps spawn into the
+# spikeDown above it. The player feels when the hit kills, so the contract pins the tick the
+# Kid is last alive, the tick it is gone, and the death count. Scenario = research
+# kaenbyou/famb-death-timing-a and -b (trace frame f is the state at tick f + 1): the first
+# overlap is frame 11, the Kid is gone and global.death is 1 from frame 12.
+id = "collision/kaenbyou_spike_death_timing"
+impact = "F1"
+package = "kaenbyou"
+start = { room = "traps", difficulty = 0 }
+play_mode = "original"
+seed = 0
+mods = []
+evidence = ["research:kaenbyou/famb-death-timing-a", "research:kaenbyou/famb-death-timing-b", "case:kaenbyou/famb-death-timing-a"]
+
+inputs = """
+frames 5-30: hold jump
+frame 80: end
+"""
+
+# The jump starts on the pressed step.
+[[assert]]
+tick = 6
+kid.x = { exact = 49.0 }
+kid.y = { within = 0.5, of = 559.3, why = "the first rising step; half a pixel is below what a player sees" }
+
+# First overlap with the spike: the Kid is still alive and no death has counted.
+[[assert]]
+tick = 12
+kid_count = 1
+death = 0
+kid.y = { within = 0.5, of = 519.1, why = "the Kid's last position, where the blood appears" }
+
+# One tick later the Kid is gone and the death counts once.
+[[assert]]
+tick = 13
+kid_count = 0
+death = 1
+room = "traps"
+
+# Holding jump into the death adds no second death.
+[[assert]]
+tick = 81
+kid_count = 0
+death = 1
+status = "running"

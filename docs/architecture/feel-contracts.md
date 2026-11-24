@@ -1,6 +1,6 @@
 # Feel contracts
 
-Part of [Architecture](../architecture.md). Status: specified by [decision 0005](../decisions/0005-standard-mechanics.md), accepted 2026-11-21. The runner and the file format are specified here; the implementation is the harness issue [#1161](https://github.com/nugamus/iwbtg-collection/issues/1161). Until it lands, trace diffs and golden hashes remain the only automated evidence.
+Part of [Architecture](../architecture.md). Status: specified by [decision 0005](../decisions/0005-standard-mechanics.md), accepted 2026-11-21. The runner and the file format are specified here and implemented (#1167); the port contract set and its baseline are #1168.
 
 A **feel contract** is data: a scenario plus assertions over what a player can observe. It is the evidence that a mechanic still feels the same after a redesign, and the gate for an F1 change ([fidelity and feel tiers](../plans/fidelity-tiers.md)).
 
@@ -25,6 +25,8 @@ A trace is evidence for a feel contract, not a substitute for one. Conversely, a
 ## File shape
 
 Contracts live beside the trace cases, in `crates/tools/feel/<area>/<name>.toml` (package ids, room and kind names, no creator content). Public contracts that CI can run without the private repos live in `crates/sim/tests/feel/*.toml` and use the same fixture builder as the golden courses.
+
+The port set today (2026-11-24) is `physics/rely_the_needle_double_jump` and `collision/kaenbyou_spike_death_timing`, each taken from a recorded trace. Neither port is in the games repo yet, so both are FAIL (missing package) in `crates/tools/feel-baseline.txt`; they were checked by hand against the research converter packages, and the port PR that moves each package into the games repo blesses its contract to OK.
 
 ```toml
 # crates/tools/feel/lifecycle/retry_after_death.toml
@@ -140,6 +142,7 @@ cargo xtask feel
 
 - A mismatch prints `mismatch: tick 41, kid.y: expected 576.0, got 579.0` plus five ticks of context, like the trace diff.
 - The public set (`crates/sim/tests/feel/{lifecycle,physics,collision}/*.toml`) also runs as `cargo test -p iwbtg-sim --test feel`, so every CI target covers the format and the runner without the private repos.
+- **The one command for every port's contracts** is `IWBTG_GAMES=../iwbtg-collection-games cargo xtask feel` (add `--bless` to acknowledge a status change). Without `IWBTG_GAMES` it runs the public set and prints that the port set was not run, so a pass never hides an unrun port set.
 - The private set runs like `cargo xtask fidelity`, but the packages come from the **games repo** (`IWBTG_GAMES`), where the hand-worked rooms and kinds live. `IWBTG_RESEARCH` is the trace and evidence repo only: it supplies the originals a contract cites in `evidence`, never a feel package. `--bless` updates the baseline. A missing package, a contract that fails to load and a status worse than the baseline are FAIL, never a skip.
 - A new contract is `OPEN` until it passes. A broken contract is filed with the F tier and the game's deviation log, not deleted.
 - CI runs the public set on every sim/format change and the private set is run by the lead after merge waves and before a game is ranked, exactly as the trace sweep is today ([testing](testing.md)).

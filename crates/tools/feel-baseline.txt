@@ -1,0 +1,4 @@
+# Feel baseline (#1167): every contract's status on its packages.
+# Written by `cargo xtask feel --bless`; names and statuses only.
+collision/kaenbyou_spike_death_timing FAIL
+physics/rely_the_needle_double_jump FAIL

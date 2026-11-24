@@ -1158,6 +1158,13 @@ fn feel(root: &Path, bless: bool) -> Result<(), String> {
         (_, false) if bless => {
             println!("feel: no port contract set ({FEEL_PORT}) to bless");
         }
+        (None, true) => {
+            // Say so out loud: a silent pass here would read as "every port's contracts hold".
+            println!(
+                "feel: port set ({FEEL_PORT}) not run: set IWBTG_GAMES to the games checkout{}",
+                if bless { "; nothing blessed" } else { "" }
+            );
+        }
         _ => {}
     }
     if failed {
