@@ -92,14 +92,18 @@ pub fn run(
         None => ((fit.x * 2.0) as u32, (fit.y * 2.0) as u32).into(),
     };
     let mut app = App::new();
-    app.add_plugins(DefaultPlugins.set(WindowPlugin {
-        primary_window: Some(Window {
-            title: "IWBTG Collection: player card".to_string(),
-            resolution,
-            ..default()
-        }),
-        ..default()
-    }))
+    app.add_plugins(
+        DefaultPlugins
+            .set(crate::logging::log_plugin())
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "IWBTG Collection: player card".to_string(),
+                    resolution,
+                    ..default()
+                }),
+                ..default()
+            }),
+    )
     .add_plugins((crate::render_fix::plugin, UiKitPlugin))
     .insert_resource(ClearColor(tokens::GROUND))
     .insert_resource(Backdrop {
