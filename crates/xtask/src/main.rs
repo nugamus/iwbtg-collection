@@ -1318,6 +1318,7 @@ fn fidelity(root: &Path, bless: bool) -> Result<(), String> {
     // 101 on a panic: only 0 and 1 mean the sweep ran.
     if matches!(code, Some(0 | 1)) {
         record_fidelity_run(root);
+        record_game_progress(root, Path::new(&research));
     }
     if code == Some(0) {
         Ok(())
@@ -1340,6 +1341,125 @@ fn record_fidelity_run(root: &Path) {
     let dir = root.join("target/xtask");
     let _ = std::fs::create_dir_all(&dir);
     let _ = std::fs::write(dir.join("last-fidelity.txt"), format!("{} {secs}\n", sha.trim()));
+}
+
+/// The per-game progress stamp `issues.py start` reads (#1354): a sibling of `last-fidelity.txt`
+/// so the sweep-age line keeps its format.
+const GAME_PROGRESS_STAMP: &str = "target/xtask/game-progress.txt";
+
+/// `target/xtask/game-progress.txt`, written after a sweep that ran. It records the packages input
+/// (present or absent) and one `missing-scripts <game> <n>` line per converted package from
+/// `iwbtg pkg check --trace-mode`. Fidelity OK/OPEN/FAIL counts are not copied here: the public
+/// `crates/tools/fidelity-baseline.txt` is what the hook reads, so there is one source for them.
+/// Best effort: a missing stamp only makes the hook print `not measured`.
+fn record_game_progress(root: &Path, research: &Path) {
+    let Ok((true, sha)) = output(root, "git", &["rev-parse", "origin/main"], &[]) else {
+        return;
+    };
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let packages = research.join("build").join("packages");
+    let present = packages.is_dir();
+    let mut counts = BTreeMap::new();
+    if present {
+        let mut dirs: Vec<PathBuf> = match std::fs::read_dir(&packages) {
+            Ok(entries) => entries
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| path.is_dir())
+                .collect(),
+            Err(_) => Vec::new(),
+        };
+        dirs.sort();
+        for dir in dirs {
+            if let Some(count) = package_missing_scripts(root, &dir) {
+                let game = dir
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                if !game.is_empty() {
+                    counts.insert(game, count);
+                }
+            }
+        }
+    }
+    let text = game_progress_text(sha.trim(), secs, &packages, present, &counts);
+    let path = root.join(GAME_PROGRESS_STAMP);
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(path, text);
+}
+
+/// `iwbtg pkg check <dir> --trace-mode`; its missing-script count, or `None` when the check could
+/// not run or failed before kinds loaded (never a made-up zero).
+fn package_missing_scripts(root: &Path, dir: &Path) -> Option<usize> {
+    let dir = dir.to_string_lossy();
+    let (_, text) = output(
+        root,
+        "cargo",
+        &[
+            "run",
+            "-q",
+            "-p",
+            "iwbtg-tools",
+            "--",
+            "pkg",
+            "check",
+            &dir,
+            "--trace-mode",
+        ],
+        &[],
+    )
+    .ok()?;
+    missing_script_count(&text)
+}
+
+/// The item count of the `converter request CR1, CR2:` warning (missing scripts); `Some(0)` when a
+/// clean check reported none; `None` when the output has neither (the package failed earlier, so
+/// counting it as zero would be a guess).
+fn missing_script_count(text: &str) -> Option<usize> {
+    /// The `(<n> item(s))` count in a converter-request warning, skipping earlier parentheses.
+    fn count(rest: &str) -> Option<usize> {
+        let mut search = 0;
+        while let Some(found) = rest[search..].find('(') {
+            let start = search + found + 1;
+            let digits: String = rest[start..].chars().take_while(char::is_ascii_digit).collect();
+            if !digits.is_empty() && rest[start + digits.len()..].starts_with(" item") {
+                return digits.parse().ok();
+            }
+            search = start;
+        }
+        None
+    }
+    text.lines()
+        .find_map(|line| {
+            line.split_once("converter request CR1, CR2:")
+                .and_then(|(_, rest)| count(rest))
+        })
+        .or_else(|| text.lines().any(|line| line.starts_with("OK (")).then_some(0))
+}
+
+/// The stamp text: a comment, the commit and time, the packages input, then sorted per-game counts.
+fn game_progress_text(
+    sha: &str,
+    secs: u64,
+    packages: &Path,
+    present: bool,
+    counts: &BTreeMap<String, usize>,
+) -> String {
+    let mut out = format!(
+        "# Per-game port progress recorded by `cargo xtask fidelity` (#1354); generated.\n\
+         # {sha} {secs}\n\
+         missing-scripts-input {} {}\n",
+        if present { "present" } else { "absent" },
+        packages.display()
+    );
+    for (game, count) in counts {
+        let _ = writeln!(out, "missing-scripts {game} {count}");
+    }
+    out
 }
 
 /// What a preflight run needs: only the selected scope's tools are required (#1030).
@@ -1965,6 +2085,49 @@ version = \"1.0.0\"
         );
         assert_eq!(left_value(&text).and_then(first_hash), Some(h));
         assert_eq!(first_hash(&format!("x{h}0")), None, "65 digits is not a hash");
+    }
+
+    /// The `game-progress.txt` layout the status hook parses (#1354).
+    #[test]
+    fn the_game_progress_stamp_has_a_fixed_layout() {
+        let mut counts = BTreeMap::new();
+        counts.insert("kaenbyou".to_string(), 1200);
+        counts.insert("animus".to_string(), 0);
+        let text = game_progress_text("abc123", 42, Path::new("/r/build/packages"), true, &counts);
+        let lines: Vec<&str> = text.lines().collect();
+        assert!(lines[0].starts_with("# Per-game port progress"), "{text}");
+        assert_eq!(lines[1], "# abc123 42");
+        assert_eq!(lines[2], "missing-scripts-input present /r/build/packages");
+        assert_eq!(lines[3], "missing-scripts animus 0");
+        assert_eq!(lines[4], "missing-scripts kaenbyou 1200");
+        let absent = game_progress_text(
+            "abc123",
+            42,
+            Path::new("/r/build/packages"),
+            false,
+            &BTreeMap::new(),
+        );
+        assert!(
+            absent.contains("missing-scripts-input absent /r/build/packages"),
+            "{absent}"
+        );
+        assert!(!absent.contains("missing-scripts "), "{absent}");
+    }
+
+    /// The missing-script count comes from the CR1/CR2 warning's `(<n> items)`, never a guessed zero.
+    #[test]
+    fn the_missing_script_count_reads_the_converter_request_only() {
+        let output = "game.toml:1:1: warning: converter request CR1, CR2: objects with a script that \
+                      does not exist load inert (no events; their mask still collides) (37 items): a, b\n\
+                      OK (1 warnings)\n";
+        assert_eq!(missing_script_count(output), Some(37));
+        assert_eq!(missing_script_count("OK (0 warnings)\n"), Some(0));
+        assert_eq!(missing_script_count("FAILED: 2 errors, 0 warnings\n"), None);
+        // An earlier parenthesised phrase in the request text is not the count.
+        assert_eq!(
+            missing_script_count("converter request CR1, CR2: x (no events) (1 item): a\n"),
+            Some(1)
+        );
     }
 
     #[test]
