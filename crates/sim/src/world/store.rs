@@ -6,7 +6,7 @@
 //! not creation order (CLONE_SPEC, Instances, "Placed instance ids"). WP0 ships this working
 //! version; WP1 owns it.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use super::{InstId, Instance, World};
 use crate::collide::grid::Grid;
@@ -171,9 +171,13 @@ impl World {
     /// Removes dead instances, keeping the order of the rest (tick row 14), and forgets their
     /// room-entry rank.
     pub fn sweep(&mut self) {
+        let before = self.instances.len();
         self.instances.retain(|i| i.alive);
-        let alive: BTreeSet<InstId> = self.instances.iter().map(|i| i.id).collect();
-        self.room_entry.retain(|id, _| alive.contains(id));
+        if self.instances.len() != before {
+            let kept = &self.instances;
+            self.room_entry
+                .retain(|id, _| kept.binary_search_by_key(id, |i| i.id).is_ok());
+        }
     }
 }
 
