@@ -22,7 +22,40 @@ Part of [format v0](v0.md).
 
   `disk` and `diamond` are rasterized inside the box at load. `none` is GM's empty mask (an inverted box or a fully transparent sprite). `frames = 0` is a sprite without images: it needs no PNG and has an empty mask.
 
+  `mask` names another sprite whose masks this sprite uses. A chain (`a` -> `b` -> `c`) resolves to the last sprite's own masks, so the result does not depend on the sidecar order; a sprite that names itself, or a chain that returns to a sprite, is a load error. The target covers every frame of the sprite that uses it: a shared mask covers any frame count, and a per-frame target needs at least as many masks as the sprite has frames.
+
   Collision masks are built from PNG alpha at load, so masks never drift from the art.
+
+  A sidecar may carry an optional `[collider]` table: the canonical collider baked from the same alpha data. It is a typed form — `none`, `rect` (the whole box) or `bits` (one hex row per pixel row, the most significant bit first, `ceil(width / 4)` digits, and padding bits clear) — so a degenerate mask is an explicit `none`, never an inverted rectangle. The table declares its own required `alpha_tolerance`, which must equal the sidecar's, and holds either the shared `shape`/`bbox`/`bits` keys or one `frames` entry per frame when `separate_masks` builds separate masks. The loader re-derives the mask from the PNG and rejects a collider that differs, so a stale or hand-edited bake cannot change geometry; a package without the table loads exactly as before.
+
+  ```toml
+  #:schema ../../../client/docs/format/schema/v0/sprite.schema.json
+  frames = 2
+  frame_size = [2, 1]
+  origin = [0, 0]
+  separate_masks = true
+
+  [collider]
+  alpha_tolerance = 0
+  frames = [
+    { shape = "bits", bbox = [0, 0, 0, 0], bits = ["8"] },
+    { shape = "none" },
+  ]
+  ```
+
+  A sidecar may also carry an optional `[render_bounds]` table: the rectangle the client draws and culls with. `shape` is required and says what the bounds describe: `frame` is the whole frame (the default when the table is absent), `collider` is the tight box around every frame's solid collider pixels (an error when the mask is empty), and `custom` takes an inclusive `bbox` that must lie inside the frame and cover every solid collider pixel. The table is presentation data; the sim never reads it.
+
+  ```toml
+  #:schema ../../../client/docs/format/schema/v0/sprite.schema.json
+  frames = 1
+  frame_size = [16, 16]
+  origin = [8, 8]
+  collision = "precise"
+
+  [render_bounds]
+  shape = "custom"
+  bbox = [1, 1, 14, 14]
+  ```
 
   A sprite with the id `cherry` (at least two 21x24 frames) is also the client's pause menu selector, the delicious fruit (docs/product.md, Pause); without one the client draws its own.
 - **Backgrounds and tilesets:** `backgrounds/<id>.png`, with a sidecar for tile size and separation when used as a tileset (see Rooms).

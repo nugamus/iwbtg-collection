@@ -51,7 +51,7 @@ image_speed_idle = 0.2
 
 [input]
 walk = "direct_latch"         # direct_latch | sampled; see tricks trick.restart_glitch
-tap_fix = false               # xia directionalTapFix
+tap_fix = false               # xia directionalTapFix; research gap, no field yet (#1155)
 vine_keys = "edges"           # edges | latched_flags (wanna, rori, fairy-tale, showdown)
 
 [events]
@@ -105,6 +105,8 @@ drop = 3.0
 
 # [water], [ice], [slope], [ladder], [flip], [death], [bullet], [save], [misc]: see the rule table below
 ```
+
+The standard names for the shared concerns are accepted alongside the current spellings (`docs/format/physics.md` "Standard names and aliases"): `[vines]`/`[vine]`, `[ladders]`/`[ladder]`, `[slopes]`/`[slope]`, `[platforms]`/`[platform]`, `max_fall`/`max_fall_speed`, and the `model =` selectors `[gravity] model` (`constant`, `step`, `end_step_slope`, `create_only`), `[vines] model` (`latched_keys`, `symmetric_early`), `[slopes] model` (`poronkusema`, `rainbow`, `fairy_tale`) and `[water] model` (`jump_refresh`, `full_jump`, `water3_keeps`). Each selector maps onto an existing field (`[gravity] reapply`, `[input] vine_keys`, `[jump] water_air`, `[slope] downhill`) in `presets::apply`; a field written explicitly wins. The aliases change no preset value and no `gameplay_hash` of an unchanged file.
 
 Event lists name actions; a family's lists come from its spec's event sections in order. The `create` list must cover the spec's Create steps including the first-play save (`first_play_save`: when `World.save` is `None`, call `save::save_now`; rely Create step 4, B Create step 4) and "create world if missing" (`ensure_world`, via `EngineKind::World`).
 
@@ -184,7 +186,7 @@ Only SWITCHABLE tricks get switches; EMERGENT ones must fall out of the physics 
 | `bug.vine_on_ground` | none until specified | — |
 | `bug.water_full_jump_1f`, `bug.water1_low_check` | not modeled (not seen in A, C) | off |
 | `trick.restart_glitch` | `input.walk = "direct_latch"`, world param `latch_cleared_by_world` | latch on; cleared in kaenbyou, lemon, xia (Inferred) |
-| `input.sub_frame_tap` | same latch plus `input.tap_fix` | latch on; xia tap_fix off |
+| `input.sub_frame_tap` | same latch plus `input.tap_fix` | latch on; xia's `tap_fix` is **research only**: it has no physics field and the loader rejects it, so it is not a promised profile value (#1155) |
 | `trick.edge_kill_timing` | `events.boundary` | per family |
 | `trick.killer_check_timing` | killer action placement | per family |
 | `trick.vdiet` | `NumRules::float_model` (no binary32) | off |

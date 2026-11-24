@@ -6,8 +6,6 @@
 /// Rules for collision events and queries.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct CollideRules {
-    /// R12 (Confirmed (recorder), T-ORD-2): the order the collision phase runs its pairs in.
-    pub pair_order: PairOrder,
     /// C7b: re-check a non-solid pair's overlap right before its event. Default true
     /// (Confirmed (recorder): the killer sees the post-block position, help-the-fairy-tale
     /// t-col-06).
@@ -22,6 +20,9 @@ pub struct CollideRules {
     /// C2 (UNKNOWN: CLONE_SPEC collision, "how the collision box rounds an exact .5 in x"):
     /// whether the collision box rounds the origin first or each edge after the mask offset.
     pub box_round: BoxRound,
+    /// C1/C3 (decision 0005, D2): which box `bbox_*`, `distance_to_object` and the non-precise
+    /// point, rectangle and line queries read.
+    pub reported_box: ReportedBox,
     /// C10 (answered by the recorder, little-runner t-col-07-d): `move_contact_solid` from an
     /// overlapping start.
     pub mcs_start: McsStart,
@@ -36,37 +37,18 @@ pub struct CollideRules {
 impl Default for CollideRules {
     fn default() -> CollideRules {
         CollideRules {
-            pair_order: PairOrder::default(),
             recheck_nonsolid: true,
             solid_recheck: SolidRecheck::default(),
             solid_keep: SolidKeep::default(),
             place_round: PlaceRound::default(),
             box_round: BoxRound::default(),
+            reported_box: ReportedBox::default(),
             mcs_start: McsStart::default(),
             dist_boxes: DistBoxes::default(),
             dist_offset: DistOffset::default(),
             dist_combine: DistCombine::default(),
         }
     }
-}
-
-/// R12: the order the collision phase runs its pairs in.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
-pub enum PairOrder {
-    /// Pairs of instances, lower kind first. Default; Confirmed (recorder), OpenGMK only
-    /// (CLONE_SPEC collision "Order of collision events: pairs of instances, lower object
-    /// first"; traces/rely-the-needle-4-2/t-ord-2.md). The outer instance `a` goes by its own
-    /// rank, then id; the inner `b` is every other instance of rank greater than or equal to
-    /// `a`'s, by rank then id; per overlapping pair `a`'s handler for `b` runs, then `b`'s
-    /// handler for `a`. Two instances of one rank meet twice, both directions each time.
-    #[default]
-    LowerRankFirst,
-    /// Instance by instance in dispatch order; one instance's pairs by the other's rank, then
-    /// the other's id (the earlier Inferred reading, ruled out by T-ORD-2).
-    OtherRankThenId,
-    /// Instance by instance in dispatch order; one instance's pairs by its handler list, then
-    /// the other in dispatch order.
-    HandlerListOrder,
 }
 
 /// C9: what the final check after a solid pair's event tests.
@@ -100,6 +82,20 @@ pub enum PlaceRound {
     TestedCoord,
     /// Round, then add: `round(y) + 1`.
     RoundThenAdd,
+}
+
+/// C1/C3 (decision 0005, D2): which box `bbox_*`, `distance_to_object` and the non-precise
+/// point, rectangle and line queries read.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum ReportedBox {
+    /// The measured GM8 rule: a second, mirrored box, including the 1x1 no-frame point box,
+    /// maskNothing's normalized box and the raw edges of other inverted rectangles (C3, C15).
+    /// Default, byte-identical to the pre-D2 behavior.
+    #[default]
+    Measured,
+    /// The `standard` ruleset: the one authoritative collider's box, the same box place tests
+    /// and contacts use. No collider means no reported box, and no empty-mask special case.
+    Collider,
 }
 
 /// C2: how the collision box rounds a fractional position (ties to even either way).
@@ -154,7 +150,7 @@ pub enum DistOffset {
     /// The free-pixel gap: touching boxes give 0.
     None,
     /// Plus one: touching boxes give 1. Default, picked by WP3's flush-kid test
-    /// (`tests/wp3_query.rs`, kid A1 "a flush kid is at distance 1"), and Confirmed (recorder)
+    /// (`tests/query.rs`, kid A1 "a flush kid is at distance 1"), and Confirmed (recorder)
     /// by animus a-vine-right-a/b/c.csv and a-vine-left-a/b.csv row 3 (touching 1, one free
     /// pixel 2, overlap 0).
     #[default]

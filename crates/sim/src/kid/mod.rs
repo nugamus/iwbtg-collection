@@ -46,7 +46,7 @@ use smallvec::SmallVec;
 pub use state::{KidGlobals, KidState};
 
 use crate::def::PhysicsProfile;
-use crate::def::physics::{BoundaryModel, KeyOn};
+use crate::def::physics::{BoundaryModel, KeyOn, KidScriptSlot};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
 use crate::world::{Ctx, Flow, InstId};
@@ -88,6 +88,8 @@ pub enum KidAction {
     Ladder(actions::ladder::LadderAction),
     /// Slopes (WP5c).
     Slope(actions::slope::SlopeAction),
+    /// A script slot (`{ do = "script", fn = "dash" }`, decision 0004).
+    Script(KidScriptSlot),
 }
 
 /// Runs one named action on the kid `me`, in the file that owns it.
@@ -105,7 +107,34 @@ pub fn run_action(ctx: &mut Ctx, me: InstId, action: &KidAction) -> Result<Flow,
         KidAction::Ice(a) => actions::ice::run(ctx, me, a),
         KidAction::Ladder(a) => actions::ladder::run(ctx, me, a),
         KidAction::Slope(a) => actions::slope::run(ctx, me, a),
+        KidAction::Script(a) => run_script_slot(ctx, me, a, None),
     }
+}
+
+/// Runs a script slot on the kid `me` (decision 0004). `other` is the collision slot's argument.
+/// The function lives in the current room profile's `[script] file`; `this` is bound to the kid.
+/// A room request from the slot stops the rest of the event list, as a built-in's request does.
+fn run_script_slot(
+    ctx: &mut Ctx,
+    me: InstId,
+    slot: &KidScriptSlot,
+    other: Option<InstId>,
+) -> Result<Flow, SimError> {
+    let Some(sid) = ctx.physics().script.file else {
+        return Err(SimError::invariant(format!(
+            "kid slot `{}` runs but the profile names no `[script] file`",
+            slot.function
+        )));
+    };
+    let before = ctx.w.room_requests;
+    let flow = ctx.scripts.call_slot(ctx, sid, me, &slot.function, other)?;
+    if flow.is_halt() {
+        return Ok(flow);
+    }
+    if ctx.w.room_requests != before {
+        return Ok(Flow::AbortTick);
+    }
+    Ok(Flow::Continue)
 }
 
 /// One named collision run in `events.collisions` (`{ with = "block", run = "block_standard" }`,
@@ -126,6 +155,9 @@ pub enum KidCollisionRun {
     Slope(collisions::slope::SlopeRun),
     /// poronkusema `moving_block_por` (WP5c).
     MovingBlock(collisions::moving_block::MovingBlockRun),
+    /// A script collision slot (`{ do = "script", fn = "dash_touch" }`), called with `other`
+    /// (decision 0004).
+    Script(KidScriptSlot),
 }
 
 /// Runs one named collision run for the kid `me` against `other`, in the file that owns it.
@@ -142,6 +174,7 @@ pub fn run_collision(
         KidCollisionRun::Death(r) => death::run(ctx, me, other, r),
         KidCollisionRun::Slope(r) => collisions::slope::run(ctx, me, other, r),
         KidCollisionRun::MovingBlock(r) => collisions::moving_block::run(ctx, me, other, r),
+        KidCollisionRun::Script(s) => run_script_slot(ctx, me, s, Some(other)),
     }
 }
 

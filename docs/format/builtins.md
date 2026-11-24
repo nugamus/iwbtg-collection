@@ -4,6 +4,31 @@ Part of [format v0](v0.md).
 
 The 50 built-in kinds of v0, grouped as in the research list (`research/specs/mechanics.md`, "Final kind list (research#12)"). Each is documented once in `docs/format/builtins/<kind>.md`: parameters, defaults, events and behavior. The pages are authoritative; v0.md does not copy them. Each kind is one built-in: the differences between the original objects become parameters, and engine families never get separate kinds. The cherry is `killer`, and the original's player_start is `kid_start`. `moving_block`, `roof`, `music_zone` and `projectile` are not kinds (`projectile`: client#775).
 
+The parameter survey ([builtins-survey.md](builtins-survey.md)) lists every parameter, its games and its keep/move verdict under decision 0004's promotion and demotion rule (#1076). A parameter used by one game and not a general concept is a move candidate and is not added to another kind.
+
+## Standard behaviours
+
+Decision [0005](../decisions/0005-standard-mechanics.md) groups the kinds into twelve native behaviours: **spawn** (`kid_start`), **checkpoint** (`save`), **portal** (`warp`, `edge_warp`, `difficulty_warp`), **trigger** (`trigger`), **hazard** (`spike`, `killer`, `orbit`), **pickup** (`boss_item`, `secret_item`, `item_viewer`), **overlay** (`game_over`, `playerface`, `bow`, `sign`, `music`, `death_sound`, `camera`), **emitter** (`blood`, `blood_emitter`, `particle_system`), **solid/surface** (`block`, `platform`, `slope`, `ladder`, `vine`, `fake_block`, `hidden_block`, `breakable_block`, `conveyor`, `bullet_blocker`, `trap_stopper`, `boss_gate`), **mover/projectile** (`moving_platform`, `drop_platform`, `path_platform`, `trap`, `kid_bullet`), **kid zone** (`water`, `gravity_flip`, `kid_param_zone`, `jump_refresher`, `spring`) and **goal** (`game_clear`, `time_limit`), plus the controller (`world`), the kid and the data bases (`decor`, `scripted`). The architecture page describes the trait table that backs them ([builtins](../architecture/sim/builtins.md#behaviours-and-the-trait-table)).
+
+A package may write a behaviour base instead of a concrete kind. It is an additive alias for the behaviour's **reference kind**:
+
+| Base | Reference kind |
+|---|---|
+| `spawn` | `kid_start` |
+| `checkpoint` | `save` |
+| `portal` | `warp` |
+| `trigger` | `trigger` |
+| `hazard` | `killer` |
+| `pickup` | `boss_item` |
+| `overlay` | `game_over` |
+| `emitter` | `blood_emitter` |
+| `solid` | `block` |
+| `mover` | `moving_platform` |
+| `kid_zone` | `water` |
+| `goal` | `game_clear` |
+
+`base = "hazard"` parses exactly as `base = "killer"`, with the same params, classes and events. The other kinds of a behaviour keep their own names (`spike`, `edge_warp`, `particle_system`, `kid_bullet`, ...); the reference choice is documented and additive, and changing it would be a format change. Family differences stay in presets and scripts, not in new base names: the one-game parameters are the move slices of #1076 (#1267-#1270).
+
 **Engine kinds (spawned by the sim or placed once per game).**
 
 - [`kid`](builtins/kid.md): The player character; its events run the action lists of `physics.toml`.

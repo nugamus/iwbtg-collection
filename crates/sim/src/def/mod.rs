@@ -21,6 +21,7 @@ pub mod sound;
 pub mod sprite;
 pub mod testing;
 pub mod timeline;
+pub mod traits;
 
 pub use builtin::Builtin;
 pub use class::ClassMask;
@@ -41,3 +42,4 @@ pub use script::ScriptDef;
 pub use sound::{SoundDef, SoundKind};
 pub use sprite::{BitMask, IRect, MAX_MASK_WORDS, Mask, MaskSet, MaskShape, MaskTooLarge, SpriteDef};
 pub use timeline::TimelineDef;
+pub use traits::Behaviour;

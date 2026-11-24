@@ -6,9 +6,10 @@
 //! runs, the instance gets no later events (traces/rely-the-needle-4-2/tr-room-03-a-log.csv row
 //! 8) and `instance_exists` stops counting it at once (traces/kaenbyou/tr-room-08.csv row 51).
 
-use super::{Ctx, InstId, Instance, KindState, SimStatus, Value, World};
+use super::{Ctx, InstId, Instance, KindState, Persistence, SimStatus, Value, World};
 use crate::def::{
-    Builtin, ClassMask, EngineKind, GameDef, GroupId, KindDef, KindId, NameId, ParamValue, Params, VariantSel,
+    Builtin, ClassMask, EngineKind, GameDef, GroupId, KindDef, KindId, NameId, ParamValue, Params, RoomId,
+    VariantSel,
 };
 use crate::error::SimError;
 use crate::events::{self, EventKind, ProbeState};
@@ -17,7 +18,7 @@ use crate::output::OutputEvent;
 use crate::room::RoomRequest;
 use crate::rules::TickRules;
 use crate::rules::tick::{ChangeKindProps, FirstRule};
-use crate::{builtins, script};
+use crate::{builtins, script, timeline};
 
 /// What a handler tells the dispatcher.
 ///
@@ -141,14 +142,35 @@ impl World {
         self.instances.get_mut(i)
     }
 
-    /// GML `instance_exists` on one id: alive and active.
+    /// The visibility conditions, shared by [`World::visible`] (by id) and the iterators and
+    /// walks (by instance): an instance is visible to queries, `with`/`instances`, event
+    /// dispatch, draw and collision when it is active and alive. A destroyed instance is gone
+    /// from the store under `standard` and dead-but-stored under `gm8`; either way this is
+    /// false. `dead_in_queries` is the gm8 R22 opt-in that no package uses.
+    pub(crate) fn visible_instance(inst: &Instance, dead_in_queries: bool) -> bool {
+        inst.active && (inst.alive || dead_in_queries)
+    }
+
+    /// The one visibility predicate for a stored id: [`World::visible_instance`] after the
+    /// lookup. An id that is not stored (already removed under `standard`) is not visible.
+    pub fn visible(&self, id: InstId, dead_in_queries: bool) -> bool {
+        self.get(id)
+            .is_some_and(|i| Self::visible_instance(i, dead_in_queries))
+    }
+
+    /// GML `instance_exists` on one id: visible (alive and active).
     pub fn exists(&self, id: InstId) -> bool {
-        self.get(id).is_some_and(|i| i.alive && i.active)
+        self.visible(id, false)
     }
 
     /// Alive instances (active or not) in id order.
     pub fn iter_alive(&self) -> impl Iterator<Item = &Instance> {
         self.instances.iter().filter(|i| i.alive)
+    }
+
+    /// Visible instances (active and alive) in id order.
+    pub fn iter_visible(&self) -> impl Iterator<Item = &Instance> {
+        self.instances.iter().filter(|i| Self::visible_instance(i, false))
     }
 
     /// "The first" active instance whose classes intersect `class`, by
@@ -158,7 +180,7 @@ impl World {
         let ids = self
             .instances
             .iter()
-            .filter(|i| i.active && (i.alive || rules.dead_in_queries) && i.classes.intersects(class))
+            .filter(|i| Self::visible_instance(i, rules.dead_in_queries) && i.classes.intersects(class))
             .map(|i| i.id);
         self.first_among(ids, rules)
     }
@@ -171,16 +193,16 @@ impl World {
         match rules.first_rule {
             FirstRule::LowestId => found.map(|i| i.id).min(),
             FirstRule::DispatchOrder => found
-                .min_by_key(|i| events::order_key(i, rules.dispatch, events::Order::Dispatch))
+                .min_by_key(|i| events::order_key(i, events::Order::Dispatch))
                 .map(|i| i.id),
         }
     }
 
-    /// GML `instance_number` on a class: alive, active instances whose classes intersect it.
+    /// GML `instance_number` on a class: visible instances whose classes intersect it.
     pub fn count_of(&self, class: ClassMask) -> u32 {
         let n = self
-            .iter_alive()
-            .filter(|i| i.active && i.classes.intersects(class))
+            .iter_visible()
+            .filter(|i| i.classes.intersects(class))
             .count();
         u32::try_from(n).unwrap_or(u32::MAX)
     }
@@ -195,6 +217,30 @@ impl World {
 fn kind_def(def: &GameDef, kind: KindId) -> Result<&KindDef, SimError> {
     def.kind(kind)
         .ok_or_else(|| SimError::invariant(format!("unknown kind {}", kind.0)))
+}
+
+/// The stable key a room-file `save` object's checkpoint records (#1153 E1): the declared name
+/// when it has one, else the exact spawn position. No placement ordinal (it shifts when an
+/// instance is inserted or reordered), no runtime id and no `gm_id`; two save objects of one
+/// kind at one exact spawn position are interchangeable, so one key is honest for both.
+fn save_point_key(
+    def: &GameDef,
+    room: RoomId,
+    kind: KindId,
+    x: Real,
+    y: Real,
+    name: Option<NameId>,
+) -> Option<String> {
+    if let Some(name) = name.and_then(|n| def.names.get(n.index()?)) {
+        return Some(format!("name:{name}"));
+    }
+    let room = def.room(room)?.name.clone();
+    let kind = def.kind(kind)?.name.clone();
+    Some(format!(
+        "at:{room}/{kind}@{:016x},{:016x}",
+        x.get().to_bits(),
+        y.get().to_bits()
+    ))
 }
 
 /// `base` params overridden by `over` (a placed instance's params override the kind's).
@@ -275,12 +321,19 @@ impl<'a> Ctx<'a> {
         };
         let mut inst = Instance::new(id, kind, rank, x, y);
         inst.name = init.name;
+        // A room-file `save` object gets the stable key its checkpoint persists (#1153 E1).
+        // `rank: Some` marks a placed instance: room creation code and scripts pass
+        // `SpawnInit::default()`.
+        if kd.base == Builtin::Save && init.rank.is_some() {
+            inst.point = save_point_key(def, self.w.room, kind, x, y, init.name);
+        }
         inst.group = init.group;
         inst.classes = kd.classes;
         inst.solid = kd.solid;
         inst.visible = init.visible.unwrap_or(kd.visible);
         inst.depth = init.depth.unwrap_or(kd.depth);
         inst.persistent = kd.persistent;
+        inst.persistence = Persistence::of(kd);
         inst.img.set_sprite(kd.sprite);
         inst.img.set_mask(kd.mask);
         inst.img.set_xscale(init.xscale)?;
@@ -291,6 +344,10 @@ impl<'a> Ctx<'a> {
             if let Some(var) = def.var_names.get(name) {
                 inst.vars.insert(*var, param_value(v));
             }
+        }
+        // The object's `timeline` key starts before Create, so a script's Create can replace it.
+        if let Some(tl) = kd.timeline {
+            timeline::start_with_def(&mut inst.timeline, def, tl, Real::ZERO)?;
         }
         self.w.insert(inst)?;
         if init.run_create && events::dispatch(self, id, &EventKind::Create).is_halt() {
@@ -314,9 +371,11 @@ impl<'a> Ctx<'a> {
     }
 
     /// GML `instance_destroy`: runs Destroy now (the instance still exists during it), then
-    /// marks the instance dead; it runs no further events and the sweep at the end of the tick
-    /// removes it. An instance that is already destroyed, deactivated or unknown is left alone
-    /// (`Continue`). Returns the Destroy handler's flow; `Flow::Halt` when it halted the sim.
+    /// applies [`LifetimeRules`](crate::rules::LifetimeRules). `gm8` marks the instance dead and
+    /// the end-of-tick sweep removes it; `standard` removes it from the store at once, so no
+    /// lookup or walk finds it afterwards. An instance that is already destroyed, deactivated
+    /// or unknown is left alone (`Continue`). Returns the Destroy handler's flow; `Flow::Halt`
+    /// when it halted the sim.
     pub fn destroy(&mut self, id: InstId) -> Flow {
         if !self.w.exists(id) {
             return Flow::Continue;
@@ -325,7 +384,9 @@ impl<'a> Ctx<'a> {
         if flow.is_halt() {
             return flow;
         }
-        if let Some(inst) = self.w.get_mut(id) {
+        if self.rules.lifetime.is_immediate() {
+            self.w.remove(id);
+        } else if let Some(inst) = self.w.get_mut(id) {
             inst.alive = false;
         }
         flow
@@ -373,6 +434,9 @@ impl<'a> Ctx<'a> {
                 inst.depth = kd.depth;
                 inst.persistent = kd.persistent;
             }
+            // The scope follows the effective flag: `ChangeKindProps::Original` keeps the old
+            // persistent flag, while the new base decides whether it is a save object.
+            inst.persistence = Persistence::from_flags(kd.base, inst.persistent);
         }
         if run_events {
             flow = flow.combine(events::dispatch(self, id, &EventKind::Create));

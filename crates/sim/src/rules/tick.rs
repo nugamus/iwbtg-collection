@@ -1,4 +1,4 @@
-//! Tick pipeline switches (docs/architecture/sim/tick.md, register R1-R10, R21, R22, I1).
+//! Tick pipeline switches (docs/architecture/sim/tick.md, register R1-R10, R21, R22, R30, I1).
 //!
 //! WP0 declared every field with its engine_rev 0 default; WP1 owns the file. Where the
 //! CLONE_SPEC now records a recorder result (Confirmed (recorder), research a822655), the default
@@ -8,32 +8,21 @@
 /// Rules for the tick pipeline and event dispatch.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct TickRules {
+    /// R30 (decision 0005): the run's clock, the unit of every timed system, and the phase each
+    /// advances in. Default: the legacy `gm8` policy, so every current package keeps its
+    /// `room_speed` behavior.
+    pub timing: TimingRules,
     /// R1 (U1, answered by the recorder): when `xprevious`/`yprevious` are captured.
     pub prev_capture: PrevCapture,
-    /// R2 (U2, answered by the recorder): instance order within a phase.
-    pub dispatch: DispatchOrder,
     /// R21 (answered by the recorder: the first in instance order, which for one object is the
     /// lowest id; famB-multikid-restart-b rows 25-26): which instance is "the first" in queries,
     /// the kid, view follow, saveGame.
     pub first_rule: FirstRule,
-    /// R6 (U6, answered by the recorder): where timelines advance.
-    pub timeline_slot: TimelineSlot,
-    /// R7 (U7, answered by the recorder): where the animation update runs.
-    pub anim_slot: AnimSlot,
-    /// R7b (answered by the recorder): whether an instance without a sprite (or with a sprite of
-    /// 0 frames) advances `image_index`.
-    pub anim_nosprite: NoSpriteAnim,
-    /// R7 (sprites Inferred step 3, not traced): a negative `image_speed` that takes
-    /// `image_index` below 0.
-    pub anim_below_zero: BelowZeroWrap,
     /// R5 (U4, answered by the recorder): where Outside Room and Intersect Boundary run.
     pub boundary_slot: BoundarySlot,
     /// R8 (U8, answered by the recorder for room_goto and game_restart): what still runs after a
     /// room request.
     pub room_request: RoomRequestRule,
-    /// R9 (U10, answered by the recorder): whether an instance created during a phase runs that
-    /// phase too.
-    pub new_instances_join_phase: JoinPhase,
     /// R22: an instance destroyed this tick is still seen by collisions and queries. Default
     /// false (Confirmed (recorder), research T-DEAD-1: nothing sees it); no game needs true.
     pub dead_in_queries: bool,
@@ -50,6 +39,130 @@ pub struct TickRules {
     pub change_kind: ChangeKindProps,
 }
 
+/// R30 (decision 0005, "One scheduler": ticks are the truth): how the sim's one clock is paced.
+///
+/// The tick pipeline advances every timed system exactly once per tick. The policy decides what
+/// "one second" means when a legacy value asks for it; it never changes how often a tick runs.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum ClockPolicy {
+    /// The `gm8` rule, the default for every current package: one second is the current room's
+    /// `room_speed` (R14: the room file's speed on entry, the game's `tick_rate` after the
+    /// world's Room Start). `room_speed` is legacy per-room data, still hashed.
+    #[default]
+    RoomSpeed,
+    /// The `standard` rule: one rate per run,
+    /// [`GameDef::tick_rate`](crate::def::GameDef::tick_rate). Seconds exist only at the UI and
+    /// audio boundary; no sim value is read as a clock.
+    Fixed,
+}
+
+/// The unit a timed system's value is expressed in (decision 0005). The sim runs in ticks; a
+/// package may author a duration in seconds or frames and the loader converts it (the format
+/// follow-up). Every value here is [`TimeUnit::Ticks`] at run time.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum TimeUnit {
+    /// Simulation ticks: the standard unit and the only one the sim advances in.
+    #[default]
+    Ticks,
+    /// Real seconds, converted to ticks at load.
+    Seconds,
+    /// GM frames: one frame is one tick at the profile's rate.
+    Frames,
+}
+
+/// R30: the clock, the unit, and the phase of every timed system (decision 0005, "One
+/// scheduler").
+///
+/// Alarms (R3), timelines (R6), paths (M8) and animation (R7) each advance exactly once per
+/// tick, so their values are tick counts. The units are declared here rather than inferred so
+/// the loader has one table to validate against and a `standard` package can state its units.
+/// The slots live here too: the tick pipeline's phase plan is built from this one table, not
+/// from per-system switches scattered through `TickRules`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct TimingRules {
+    /// How the run's clock is paced.
+    pub clock: ClockPolicy,
+    /// R3: `alarm[n]` is a count of ticks; `alarm::tick` decrements it once per tick.
+    pub alarms: TimeUnit,
+    /// R6: a timeline moment is a tick offset; `timeline::advance` runs `[pos, pos + speed)`.
+    pub timelines: TimeUnit,
+    /// M8: `path_position` advances once per tick; `path::advance` moves by `speed / length`.
+    pub paths: TimeUnit,
+    /// R7: `image_index` advances by `image_speed` once per tick; `anim::advance` wraps it.
+    pub animation: TimeUnit,
+    /// R6 (U6, answered by the recorder): where timeline moments advance.
+    pub timeline_slot: TimelineSlot,
+    /// R6 (decision 0005): how a timeline's moments are ordered.
+    pub timeline_model: TimelineModel,
+    /// R7 (U7, answered by the recorder): where the animation update runs.
+    pub anim_slot: AnimSlot,
+    /// R7b (answered by the recorder): whether an instance without a sprite (or with a sprite
+    /// of 0 frames) advances `image_index`.
+    pub anim_nosprite: NoSpriteAnim,
+    /// R7 (sprites Inferred step 3, not traced): a negative `image_speed` that takes
+    /// `image_index` below 0.
+    pub anim_below_zero: BelowZeroWrap,
+}
+
+impl TimingRules {
+    /// The `gm8` ruleset: the legacy clock, `[position, position + speed)` moments and the
+    /// recorded slots. Also [`Default`], so an absent ruleset keeps every existing outcome and
+    /// hash.
+    pub const fn gm8() -> TimingRules {
+        TimingRules {
+            clock: ClockPolicy::RoomSpeed,
+            alarms: TimeUnit::Ticks,
+            timelines: TimeUnit::Ticks,
+            paths: TimeUnit::Ticks,
+            animation: TimeUnit::Ticks,
+            timeline_slot: TimelineSlot::AfterBeginStep,
+            timeline_model: TimelineModel::Moments,
+            anim_slot: AnimSlot::AfterDraw,
+            anim_nosprite: NoSpriteAnim::Advance,
+            anim_below_zero: BelowZeroWrap::AddFramesAndFire,
+        }
+    }
+
+    /// The `standard` ruleset's timing values: one fixed clock per run and dated timeline
+    /// callbacks. A package cannot select it until the ruleset selection (#1160); until then
+    /// every run uses [`TimingRules::gm8`].
+    pub const fn standard() -> TimingRules {
+        TimingRules {
+            clock: ClockPolicy::Fixed,
+            alarms: TimeUnit::Ticks,
+            timelines: TimeUnit::Ticks,
+            paths: TimeUnit::Ticks,
+            animation: TimeUnit::Ticks,
+            timeline_slot: TimelineSlot::AfterBeginStep,
+            timeline_model: TimelineModel::DatedCallbacks,
+            anim_slot: AnimSlot::AfterDraw,
+            anim_nosprite: NoSpriteAnim::Advance,
+            anim_below_zero: BelowZeroWrap::AddFramesAndFire,
+        }
+    }
+
+    /// Whether every timed system counts ticks, as the sim requires at run time. A rules value
+    /// that names seconds or frames is a loader bug: those are data units, converted before the
+    /// sim sees them.
+    pub fn all_ticks(&self) -> bool {
+        [self.alarms, self.timelines, self.paths, self.animation]
+            .into_iter()
+            .all(|unit| unit == TimeUnit::Ticks)
+    }
+}
+
+/// R6 (decision 0005): how the moments due in one tick are ordered.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum TimelineModel {
+    /// `gm8`: the recorded `[position, position + speed)` set in declaration order, descending
+    /// for a negative speed (Design). Default for every current package.
+    #[default]
+    Moments,
+    /// `standard`: moments are dated callbacks; a tick's due callbacks run by deadline, then
+    /// declaration index, whatever the position's direction.
+    DatedCallbacks,
+}
+
 /// R1: when `xprevious`/`yprevious` are captured.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum PrevCapture {
@@ -61,23 +174,10 @@ pub enum PrevCapture {
     BeforeMotion,
 }
 
-/// R2: instance order within one phase (`events::dispatch_order`).
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
-pub enum DispatchOrder {
-    /// Object index order (rank), then creation order. Default: Confirmed (recorder),
-    /// traces/rely-the-needle-4-2/t-ord-1.csv ("depth does not matter").
-    #[default]
-    RankThenCreation,
-    /// Creation order only.
-    Creation,
-    /// Depth (higher first, as drawing), then rank, then creation.
-    DepthThenRankThenCreation,
-}
-
 /// R21: which instance is "the first" (`World::first_of`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum FirstRule {
-    /// The first in [`TickRules::dispatch`] order. Default.
+    /// The first in dispatch order: `object_order` rank, then instance id. Default.
     #[default]
     DispatchOrder,
     /// The lowest instance id.
@@ -151,23 +251,6 @@ pub enum RoomRequestRule {
     FinishTick,
 }
 
-/// R9: whether an instance created during a phase runs that phase.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
-pub enum JoinPhase {
-    /// Never: each phase walks the snapshot it took at its start (the plan's earlier default).
-    Never,
-    /// Only when its place in the phase order lies in a later group than the instance whose
-    /// handler created it (under `RankThenCreation`: a higher rank, never the creator's own
-    /// rank). Default: Confirmed (recorder), traces/rely-the-needle-4-2/tr-room-03-b-log.csv
-    /// row 8, traces/wanna/a3-t17-b.csv row 36, traces/rely-the-needle-4-2/t-evo-1.csv row 3.
-    /// The untraced case "an object whose turn already passed" gets no event, as this rule says.
-    #[default]
-    LaterInOrder,
-    /// Always: a new instance is put at its place among the instances not yet visited, or right
-    /// after the current one when its place has passed.
-    Always,
-}
-
 /// I1: the `keyboard_check_direct` latch.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum DirectLatch {
@@ -189,4 +272,83 @@ pub enum ChangeKindProps {
     KindDefaults,
     /// Keep the instance's own sprite, mask, solid, visible, depth and persistent.
     KeepInstance,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_default_clock_is_the_legacy_room_speed_and_every_system_counts_ticks() {
+        let rules = TickRules::default();
+        assert_eq!(rules.timing.clock, ClockPolicy::RoomSpeed);
+        assert_eq!(rules.timing.alarms, TimeUnit::Ticks);
+        assert_eq!(rules.timing.timelines, TimeUnit::Ticks);
+        assert_eq!(rules.timing.paths, TimeUnit::Ticks);
+        assert_eq!(rules.timing.animation, TimeUnit::Ticks);
+        assert!(rules.timing.all_ticks());
+        assert_eq!(rules.timing.timeline_slot, TimelineSlot::AfterBeginStep);
+        assert_eq!(rules.timing.timeline_model, TimelineModel::Moments);
+        assert_eq!(rules.timing.anim_slot, AnimSlot::AfterDraw);
+        assert_eq!(rules.timing.anim_nosprite, NoSpriteAnim::Advance);
+        assert_eq!(rules.timing.anim_below_zero, BelowZeroWrap::AddFramesAndFire);
+    }
+
+    #[test]
+    fn the_standard_timing_values_are_the_fixed_clock_and_dated_callbacks() {
+        assert_eq!(TimingRules::default(), TimingRules::gm8());
+        let standard = TimingRules::standard();
+        assert_eq!(standard.clock, ClockPolicy::Fixed);
+        assert_eq!(standard.timeline_model, TimelineModel::DatedCallbacks);
+        assert!(standard.all_ticks());
+        assert_eq!(
+            standard.anim_slot,
+            TimingRules::gm8().anim_slot,
+            "the standard timing value does not change the animation slot"
+        );
+    }
+
+    #[test]
+    fn the_timing_slots_live_only_in_timing_rules() {
+        // Every R6/R7 switch is on `TimingRules`; `TickRules` keeps only the non-timer phases.
+        let mut rules = TickRules::default();
+        rules.timing.anim_slot = AnimSlot::AfterMotion;
+        rules.timing.anim_nosprite = NoSpriteAnim::Frozen;
+        assert_eq!(
+            rules.timing,
+            TimingRules {
+                anim_slot: AnimSlot::AfterMotion,
+                anim_nosprite: NoSpriteAnim::Frozen,
+                ..TimingRules::default()
+            }
+        );
+    }
+
+    #[test]
+    fn the_standard_ruleset_can_select_the_fixed_clock_without_changing_units() {
+        let mut rules = TickRules::default();
+        rules.timing.clock = ClockPolicy::Fixed;
+        assert_ne!(rules, TickRules::default());
+        assert_eq!(
+            TickRules {
+                timing: TimingRules {
+                    clock: ClockPolicy::RoomSpeed,
+                    ..TimingRules::default()
+                },
+                ..TickRules::default()
+            },
+            TickRules::default(),
+            "only the clock differs"
+        );
+        assert!(rules.timing.all_ticks());
+    }
+
+    #[test]
+    fn a_data_unit_is_not_a_runtime_unit() {
+        let timing = TimingRules {
+            animation: TimeUnit::Seconds,
+            ..TimingRules::default()
+        };
+        assert!(!timing.all_ticks());
+    }
 }

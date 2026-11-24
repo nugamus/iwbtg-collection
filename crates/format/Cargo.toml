@@ -11,6 +11,8 @@ autotests = false
 
 [dependencies]
 iwbtg-sim.workspace = true
+# `is_valid_identifier`: `[script] vars` names must be spellable as `this.<name>` (#1231).
+rhai.workspace = true
 serde.workspace = true
 toml.workspace = true
 toml_edit.workspace = true

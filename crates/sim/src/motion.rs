@@ -1,14 +1,21 @@
 //! GM motion variables and automatic motion (docs/architecture/sim/motion.md, register M1-M7).
 //!
-//! An instance's motion is stored in both forms: `hspeed`/`vspeed` (cartesian) and
-//! `speed`/`direction` (polar). Writing one form recomputes the other, in exactly one place each:
-//! [`Motion::recompute_polar`] and [`Motion::recompute_cartesian`] (M3-M5). Automatic motion, tick
-//! slot 8, is the single function [`apply_auto_motion`] (M1, M2). Every setter rejects a
-//! non-finite value with `SimError::NonFinite` and leaves the motion unchanged (N15).
+//! The `gm8` representation ([`Motion`], [`MotionModel::Gm8Coupled`]) stores both forms:
+//! `hspeed`/`vspeed` (cartesian) and `speed`/`direction` (polar). Writing one form recomputes the
+//! other, in exactly one place each: [`Motion::recompute_polar`] and
+//! [`Motion::recompute_cartesian`] (M3-M5). Automatic motion, tick slot 8, is the single function
+//! [`apply_auto_motion`] (M1, M2).
 //!
-//! Spec: CLONE_SPEC "Automatic instance motion". The formulas are Confirmed (recorder): the
-//! traces cited on each function are OpenGMK runs, so the real runner is still unchecked.
-//! WP2 owns this file.
+//! The `standard` representation ([`Body`], [`MotionModel::VelocityAcceleration`], B5) stores
+//! position, velocity and gravity-as-acceleration; `speed` and `direction` are views, and the
+//! polar-to-cartesian path has no integer snap. `MotionRules::model` selects one. A format-0
+//! package (and `RunnerRules::for_runner`) gets `Gm8Coupled`, so no existing run changes, and no
+//! package can select the standard value until the ruleset plumbing (#1160).
+//!
+//! Every setter in both representations rejects a non-finite value with `SimError::NonFinite` and
+//! leaves the motion unchanged (N15). Spec: CLONE_SPEC "Automatic instance motion". The formulas
+//! are Confirmed (recorder): the traces cited on each function are OpenGMK runs, so the real
+//! runner is still unchecked. WP2 owns this file.
 
 use serde::{Deserialize, Serialize};
 
@@ -17,7 +24,7 @@ use crate::error::SimError;
 use crate::num::{self, Real};
 use crate::path::{self, PathRun};
 use crate::rules::MotionRules;
-use crate::rules::motion::{FrictionRule, MotionOrder};
+use crate::rules::motion::{FrictionRule, MotionModel, MotionOrder};
 
 /// Position, speeds, gravity and friction of one instance.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -67,11 +74,18 @@ fn finite(v: Real, what: &str) -> Result<Real, SimError> {
 /// rows 20-31 (both 0 give direction `-0.0`, M4).
 fn polar_of(h: Real, v: Real) -> Result<(Real, Real), SimError> {
     let speed = finite(num::sqrt(h * h + v * v), "speed")?;
+    Ok((speed, finite(num::snap_to_int(direction_of(h, v)?), "direction")?))
+}
+
+/// `direction` of the vector `(h, v)` before the integer snap (M5): `radtodeg(atan2(-v, h))`,
+/// plus 360 when it is below 0. The gm8 representation stores the snapped value in [`polar_of`];
+/// the standard representation reads this raw value as a view ([`Body::direction`]).
+fn direction_of(h: Real, v: Real) -> Result<Real, SimError> {
     let mut direction = num::darctan2(-v, h);
     if direction.get() < 0.0 {
         direction += Real::new(360.0);
     }
-    Ok((speed, finite(num::snap_to_int(direction), "direction")?))
+    finite(direction, "direction")
 }
 
 /// `hspeed` and `vspeed` of `speed` at `direction` degrees (M3): `h = speed * dcos(direction)`,
@@ -323,6 +337,307 @@ impl Motion {
     }
 }
 
+/// The `standard` ruleset's motion representation (B5, [`MotionModel::VelocityAcceleration`]).
+///
+/// Position, velocity and gravity-as-acceleration are the state. `speed` and `direction` are
+/// views computed from the velocity, so there is no polar value to keep in step and no integer
+/// snap: writing one form does not round the other, and the direction view keeps the raw angle.
+/// Every setter rejects a non-finite value with `SimError::NonFinite` and leaves the state
+/// unchanged (N15).
+///
+/// A zero velocity has no direction: [`Body::direction`] reads `+0.0` and writing a direction at
+/// rest leaves the body at rest. A caller that wants to set both should use
+/// [`Body::motion_set`]. The gm8 representation keeps its stored, possibly negative, speed and
+/// its stored direction ([`Motion`]); that is why a port stays on `Gm8Coupled`.
+///
+/// This type is not a caller's state yet: the world stores a [`Motion`] and the default ruleset
+/// selects `Gm8Coupled`. A ruleset-selected caller adopts `Body` after #1160, and path motion
+/// stays on `Motion` until `path::advance` takes a shared motion interface.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Body {
+    x: Real,
+    y: Real,
+    xstart: Real,
+    ystart: Real,
+    xprevious: Real,
+    yprevious: Real,
+    hspeed: Real,
+    vspeed: Real,
+    gravity: Real,
+    gravity_direction: Real,
+    friction: Real,
+}
+
+impl Body {
+    /// At `(x, y)`, also the start and previous position; velocity 0, gravity 0,
+    /// gravity_direction 270, friction 0 (the same defaults as [`Motion::new_at`]).
+    pub fn new_at(x: Real, y: Real) -> Body {
+        Body {
+            x,
+            y,
+            xstart: x,
+            ystart: y,
+            xprevious: x,
+            yprevious: y,
+            hspeed: Real::ZERO,
+            vspeed: Real::ZERO,
+            gravity: Real::ZERO,
+            gravity_direction: Real::new(270.0),
+            friction: Real::ZERO,
+        }
+    }
+
+    /// GM `x`.
+    pub fn x(&self) -> Real {
+        self.x
+    }
+    /// GM `y`.
+    pub fn y(&self) -> Real {
+        self.y
+    }
+    /// GM `xstart`.
+    pub fn xstart(&self) -> Real {
+        self.xstart
+    }
+    /// GM `ystart`.
+    pub fn ystart(&self) -> Real {
+        self.ystart
+    }
+    /// GM `xprevious`.
+    pub fn xprevious(&self) -> Real {
+        self.xprevious
+    }
+    /// GM `yprevious`.
+    pub fn yprevious(&self) -> Real {
+        self.yprevious
+    }
+    /// The `x` component of the velocity (GM `hspeed`).
+    pub fn hspeed(&self) -> Real {
+        self.hspeed
+    }
+    /// The `y` component of the velocity (GM `vspeed`).
+    pub fn vspeed(&self) -> Real {
+        self.vspeed
+    }
+    /// The gravity magnitude (GM `gravity`).
+    pub fn gravity(&self) -> Real {
+        self.gravity
+    }
+    /// The gravity direction in degrees (GM `gravity_direction`).
+    pub fn gravity_direction(&self) -> Real {
+        self.gravity_direction
+    }
+    /// The friction magnitude (GM `friction`).
+    pub fn friction(&self) -> Real {
+        self.friction
+    }
+
+    /// GM `speed` as a view of the velocity (M4): `sqrt(h*h + v*v)`, non-negative and unsnapped.
+    ///
+    /// A negative speed is not a state here: writing one moves the body backwards and this view
+    /// reads the magnitude. `gm8` keeps the negative value as written ([`Motion::speed`]).
+    pub fn speed(&self) -> Result<Real, SimError> {
+        finite(
+            num::sqrt(self.hspeed * self.hspeed + self.vspeed * self.vspeed),
+            "speed",
+        )
+    }
+
+    /// GM `direction` as a view of the velocity (M5): `radtodeg(atan2(-v, h))`, plus 360 when it is
+    /// below 0, with no integer snap. A zero velocity reads `+0.0`; the view has no vector to
+    /// derive a direction from.
+    pub fn direction(&self) -> Result<Real, SimError> {
+        if self.hspeed.get() == 0.0 && self.vspeed.get() == 0.0 {
+            return Ok(Real::ZERO);
+        }
+        direction_of(self.hspeed, self.vspeed)
+    }
+
+    /// The gravity acceleration vector `(g * dcos(gd), -(g * dsin(gd)))` (M6), the formula the
+    /// gm8 gravity step applies to the velocity each tick. The vector is a view of the stored
+    /// magnitude and direction; it is not integrated here.
+    pub fn acceleration(&self) -> (Real, Real) {
+        (
+            self.gravity * num::dcos(self.gravity_direction),
+            -(self.gravity * num::dsin(self.gravity_direction)),
+        )
+    }
+
+    /// Sets `x`.
+    pub fn set_x(&mut self, v: Real) -> Result<(), SimError> {
+        self.x = finite(v, "x")?;
+        Ok(())
+    }
+    /// Sets `y`.
+    pub fn set_y(&mut self, v: Real) -> Result<(), SimError> {
+        self.y = finite(v, "y")?;
+        Ok(())
+    }
+    /// Sets `xstart`.
+    pub fn set_xstart(&mut self, v: Real) -> Result<(), SimError> {
+        self.xstart = finite(v, "xstart")?;
+        Ok(())
+    }
+    /// Sets `ystart`.
+    pub fn set_ystart(&mut self, v: Real) -> Result<(), SimError> {
+        self.ystart = finite(v, "ystart")?;
+        Ok(())
+    }
+    /// Sets `xprevious`.
+    pub fn set_xprevious(&mut self, v: Real) -> Result<(), SimError> {
+        self.xprevious = finite(v, "xprevious")?;
+        Ok(())
+    }
+    /// Sets `yprevious`.
+    pub fn set_yprevious(&mut self, v: Real) -> Result<(), SimError> {
+        self.yprevious = finite(v, "yprevious")?;
+        Ok(())
+    }
+
+    /// Sets the `x` component of the velocity (GM `hspeed`). The views follow from it; there is no
+    /// cache to recompute.
+    pub fn set_hspeed(&mut self, v: Real) -> Result<(), SimError> {
+        self.hspeed = finite(v, "hspeed")?;
+        Ok(())
+    }
+    /// Sets the `y` component of the velocity (GM `vspeed`). The views follow from it.
+    pub fn set_vspeed(&mut self, v: Real) -> Result<(), SimError> {
+        self.vspeed = finite(v, "vspeed")?;
+        Ok(())
+    }
+
+    /// Writes `speed` by deriving the velocity from it and the current direction view, without
+    /// the integer snap. A non-negative speed moves along the direction view; a negative one
+    /// moves against it.
+    pub fn set_speed(&mut self, v: Real) -> Result<(), SimError> {
+        let speed = finite(v, "speed")?;
+        let direction = self.direction()?;
+        let (h, v) = cartesian_of(speed, direction)?;
+        self.hspeed = h;
+        self.vspeed = v;
+        Ok(())
+    }
+
+    /// Writes `direction` by deriving the velocity from it and the current speed view, without
+    /// the integer snap. At rest the speed is 0, so this leaves the body at rest.
+    pub fn set_direction(&mut self, deg: Real) -> Result<(), SimError> {
+        let direction = finite(deg, "direction")?;
+        let speed = self.speed()?;
+        let (h, v) = cartesian_of(speed, direction)?;
+        self.hspeed = h;
+        self.vspeed = v;
+        Ok(())
+    }
+
+    /// GML `motion_set(dir, speed)`: the velocity from both values, without the integer snap.
+    pub fn motion_set(&mut self, dir: Real, speed: Real) -> Result<(), SimError> {
+        let dir = finite(dir, "direction")?;
+        let speed = finite(speed, "speed")?;
+        let (h, v) = cartesian_of(speed, dir)?;
+        self.hspeed = h;
+        self.vspeed = v;
+        Ok(())
+    }
+
+    /// GML `motion_add(dir, speed)`: adds the vector to the velocity, without the integer snap.
+    pub fn motion_add(&mut self, dir: Real, speed: Real) -> Result<(), SimError> {
+        let dir = finite(dir, "direction")?;
+        let speed = finite(speed, "speed")?;
+        let (dh, dv) = cartesian_of(speed, dir)?;
+        self.hspeed = finite(self.hspeed + dh, "hspeed")?;
+        self.vspeed = finite(self.vspeed + dv, "vspeed")?;
+        Ok(())
+    }
+
+    /// Sets `gravity`.
+    pub fn set_gravity(&mut self, g: Real) -> Result<(), SimError> {
+        self.gravity = finite(g, "gravity")?;
+        Ok(())
+    }
+    /// Sets `gravity_direction` in degrees, as written.
+    pub fn set_gravity_direction(&mut self, d: Real) -> Result<(), SimError> {
+        self.gravity_direction = finite(d, "gravity_direction")?;
+        Ok(())
+    }
+    /// Sets `friction`.
+    pub fn set_friction(&mut self, f: Real) -> Result<(), SimError> {
+        self.friction = finite(f, "friction")?;
+        Ok(())
+    }
+
+    /// `xprevious = x`, `yprevious = y` (R1 decides when).
+    pub fn capture_previous(&mut self) {
+        self.xprevious = self.x;
+        self.yprevious = self.y;
+    }
+
+    /// One tick of automatic motion in the standard representation: friction, gravity as an
+    /// acceleration, then `x += hspeed`, `y += vspeed`, with no integer snap.
+    ///
+    /// The order is `MotionRules::order` (M1). `MotionModel::VelocityAcceleration` is the model
+    /// this representation implements; [`apply_auto_motion`] implements `Gm8Coupled` and rejects
+    /// this one. Paths are not integrated: `path::advance` takes a [`Motion`], so a path stays on
+    /// the gm8 representation until the adoption slice. The `def` and path arguments of the gm8
+    /// function therefore have no counterpart here.
+    pub fn apply_auto_motion(&mut self, rules: &MotionRules) -> Result<MotionEvents, SimError> {
+        if rules.model != MotionModel::VelocityAcceleration {
+            return Err(SimError::unsupported(
+                "the gm8 motion representation on Body; use Motion",
+            ));
+        }
+        match rules.order {
+            MotionOrder::FrictionGravityPathMove => {
+                self.apply_friction(rules.friction)?;
+                self.apply_gravity()?;
+                let x = finite(self.x + self.hspeed, "x")?;
+                let y = finite(self.y + self.vspeed, "y")?;
+                self.x = x;
+                self.y = y;
+            }
+        }
+        Ok(MotionEvents::default())
+    }
+
+    /// Friction for one tick (M2) on the velocity, without the integer snap.
+    ///
+    /// `FrictionRule::TowardZeroClamp` shrinks the speed view by `friction` and stops at exactly
+    /// 0; the direction view is kept, so the velocity keeps its heading. A negative friction grows
+    /// the speed. The gm8 rule works on the stored (possibly negative) speed and snaps the
+    /// recomputed components; this one has no negative speed and does not snap (M3).
+    fn apply_friction(&mut self, rule: FrictionRule) -> Result<(), SimError> {
+        let f = self.friction;
+        let s = self.speed()?;
+        if f.get() == 0.0 || s.get() == 0.0 {
+            return Ok(());
+        }
+        let next = match rule {
+            FrictionRule::TowardZeroClamp => {
+                let n = s - f;
+                if n.get() < 0.0 { Real::ZERO } else { n }
+            }
+        };
+        let direction = self.direction()?;
+        let (h, v) = cartesian_of(finite(next, "speed")?, direction)?;
+        self.hspeed = h;
+        self.vspeed = v;
+        Ok(())
+    }
+
+    /// Adds the gravity acceleration to the velocity for one tick, without the integer snap.
+    ///
+    /// Skipped when gravity is 0, as in the gm8 step: adding a zero vector would turn `-0.0` into
+    /// `+0.0` and change a resting body's signed zeros (M3, M4).
+    fn apply_gravity(&mut self) -> Result<(), SimError> {
+        if self.gravity.get() == 0.0 {
+            return Ok(());
+        }
+        let (ax, ay) = self.acceleration();
+        self.hspeed = finite(self.hspeed + ax, "hspeed")?;
+        self.vspeed = finite(self.vspeed + ay, "vspeed")?;
+        Ok(())
+    }
+}
+
 /// Friction for one tick (M2, `MotionRules::friction`).
 ///
 /// `FrictionRule::TowardZeroClamp`: the size of speed shrinks by `friction` and stops at exactly
@@ -398,6 +713,11 @@ pub fn apply_auto_motion(
     def: &GameDef,
     rules: &MotionRules,
 ) -> Result<MotionEvents, SimError> {
+    if rules.model != MotionModel::Gm8Coupled {
+        return Err(SimError::unsupported(
+            "the standard motion representation on Motion; use motion::Body",
+        ));
+    }
     let mut events = MotionEvents::default();
     match rules.order {
         MotionOrder::FrictionGravityPathMove => {

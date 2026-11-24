@@ -40,6 +40,11 @@ pub fn main(dir: &Path, trace_mode: bool) -> Result<bool, ToolError> {
                 println!("{line}");
             }
         }
+        if let Some(compat) = &report.compat {
+            for line in compat.lines() {
+                println!("{line}");
+            }
+        }
         if let Some(hash) = report.gameplay_hash {
             let hex: String = hash.iter().map(|b| format!("{b:02x}")).collect();
             println!("gameplay_hash: {hex}");

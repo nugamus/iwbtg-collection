@@ -18,27 +18,26 @@
 //! a real browser needs `WASM_BINDGEN_USE_BROWSER=1` and a WebDriver. The browser target has no
 //! clock through `std`, so its table has allocation columns only.
 //!
-//! ## What the measurement says, and what the follow-up changes
+//! ## What the measurement says, and what #1093 changed
 //!
-//! Retry setup is almost entirely compilation on both targets: `prepare` and a scripted retry
-//! setup allocate nearly the same blocks (~145k), while the per-run engine is ~1.3k and the
-//! `GameDef` deep clone ~600. A prepared setup is estimated at ~1.4k allocations (~1%). A
-//! prepared retry needs three pieces, none of which changes the sim's data model:
+//! Retry setup was almost entirely compilation on both targets: an unprepared scripted retry
+//! and a preparation allocate nearly the same blocks (~145k), while the per-run engine is ~1.3k
+//! and the `GameDef` deep clone ~600. #1093 splits the path:
 //!
 //! 1. `script::PreparedScripts` (sim-owned, opaque): the compiled scripts and the kind-name
 //!    map, built once by `PreparedScripts::new(&GameDef, &RunnerRules)`. `AST` is immutable at
-//!    run time (`call_fn` takes `&AST`), so it is shared behind `Arc`; no Rhai type enters
-//!    `GameDef`.
+//!    run time (`call_fn` takes `&AST`), so it is shared behind `Rc` (the ASTs are not `Send`);
+//!    no Rhai type enters `GameDef`.
 //! 2. `ScriptRuntime::new_run(Arc<GameDef>, &RunnerRules, &PreparedScripts)`: a fresh `Iws` and
 //!    `Shared` per run (the registered functions capture `Rc<Shared>`, so per-run state stays
-//!    per run), reusing only the prepared ASTs. `Host::def` becomes `Arc<GameDef>`, which
-//!    removes the deep clone.
-//! 3. `Sim::prepare`/`Sim::new_prepared`, with the client caching the prepared artifact in
-//!    `RunStart` beside the existing `Arc<GameDef>`; `restart_run` passes it back.
+//!    per run), reusing only the prepared ASTs. `Host::def` is `Arc<GameDef>`, which removes the
+//!    deep clone.
+//! 3. `Sim::prepare`/`Sim::new_prepared`/`Sim::new_or_halted_prepared` expose the retry path.
+//!    The client caching the artifact across `restart_run` is #1093B.
 //!
-//! `tests/script_retry.rs` pins the isolation contract that the change must keep: a retry
-//! reproduces a fresh run, fresh seeds differ, interleaved sims share no RNG/budget/log, and a
-//! start error re-halts the same way.
+//! `tests/script_retry.rs` pins the isolation contract: a retry reproduces a fresh run, fresh
+//! seeds differ, interleaved sims share no RNG/budget/log, and a start error re-halts the same
+//! way; it also pins the prepared path to the same hash.
 
 /// `println!` on native; `console.log` under node, where the wasm test has no stdout.
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
@@ -60,8 +59,8 @@ use iwbtg_sim::hash::state_hash;
 use iwbtg_sim::input::InputFrame;
 use iwbtg_sim::room::StartPoint;
 use iwbtg_sim::rules::RunnerRules;
-use iwbtg_sim::script::ScriptRuntime;
 use iwbtg_sim::script::host::Iws;
+use iwbtg_sim::script::{PreparedScripts, ScriptRuntime};
 use iwbtg_sim::sim::{Sim, SimOptions};
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::stripped::PlayMode;
@@ -156,6 +155,18 @@ fn options() -> SimOptions {
 /// A sim built from `def`, stepped [`TICKS`] ticks: the retry path end to end.
 fn run(def: Arc<GameDef>) -> Sim {
     let mut sim = Sim::new_or_halted(def, options()).expect("sim");
+    step_measured(&mut sim);
+    sim
+}
+
+/// The same run from a prepared artifact: the #1093 retry path.
+fn run_prepared(def: &Arc<GameDef>, prepared: &PreparedScripts) -> Sim {
+    let mut sim = Sim::new_or_halted_prepared(Arc::clone(def), options(), prepared).expect("sim");
+    step_measured(&mut sim);
+    sim
+}
+
+fn step_measured(sim: &mut Sim) {
     for _ in 0..TICKS {
         sim.step(InputFrame::EMPTY);
     }
@@ -164,7 +175,6 @@ fn run(def: Arc<GameDef>) -> Sim {
         SimStatus::Running,
         "the measured run halted, so it did not exercise the scripts"
     );
-    sim
 }
 
 struct Measured {
@@ -258,30 +268,34 @@ fn script_preparation_and_retry() {
     drop(fresh);
     drop(retry);
 
+    // The prepared path must produce the same run as prepare-plus-run.
+    let prepared = Sim::prepare(&def).expect("prepare artifact");
+    let prepared_fresh = run_prepared(&def, &prepared);
+    assert_eq!(
+        hash,
+        state_hash(prepared_fresh.world()),
+        "the prepared path differs from a fresh run"
+    );
+    drop(prepared_fresh);
+
     // Warm the code paths once, then measure.
     drop(ScriptRuntime::new(&def, &rules).expect("warm compile"));
+    drop(ScriptRuntime::new_run(Arc::clone(&def), &rules, &prepared).expect("warm run"));
     drop(run(Arc::clone(&def)));
+    drop(run_prepared(&def, &prepared));
 
     let engine = measure(|| Iws::new(rules.num.clone()));
-    let prepare = measure(|| ScriptRuntime::new(&def, &rules).expect("compile"));
+    let prepare = measure(|| PreparedScripts::new(&def, &rules).expect("prepare"));
+    let prepared_run = measure(|| ScriptRuntime::new_run(Arc::clone(&def), &rules, &prepared).expect("run"));
     let deep_clone = measure(|| (*def).clone());
     // A retry is `Sim::new_or_halted`; the ticks after it are gameplay, not setup, so the table
-    // keeps them apart.
+    // keeps them apart. The prepared rows are the #1093 path.
     let retry = measure(|| Sim::new_or_halted(Arc::clone(&def), options()).expect("sim"));
+    let prepared_retry =
+        measure(|| Sim::new_or_halted_prepared(Arc::clone(&def), options(), &prepared).expect("sim"));
     let retry_ticks = measure(|| run(Arc::clone(&def)));
+    let prepared_ticks = measure(|| run_prepared(&def, &prepared));
     let plain = measure(|| Sim::new_or_halted(Arc::clone(&plain), options()).expect("sim"));
-
-    // A prepared retry still needs its own engine (the registered functions capture per-run
-    // state), but not compilation or the `GameDef` clone. `prepare - engine` is exactly that
-    // removable work, so the estimate is `retry - (prepare - engine)`. Allocation counts are
-    // additive enough to read as a bound, not as an exact prediction.
-    let removable = prepare.stats.allocations.saturating_sub(engine.stats.allocations);
-    let removable_bytes = prepare
-        .stats
-        .bytes_allocated
-        .saturating_sub(engine.stats.bytes_allocated);
-    let prepared_allocations = retry.stats.allocations.saturating_sub(removable);
-    let prepared_bytes = retry.stats.bytes_allocated.saturating_sub(removable_bytes);
 
     report!(
         "\nscript-heavy package: {} scripts, {} source bytes, {} kinds, {} placed, {} custom vars",
@@ -306,24 +320,32 @@ fn script_preparation_and_retry() {
     );
     print_row("engine only (Iws)", &engine);
     print_row("GameDef deep clone", &deep_clone);
-    print_row("prepare (ScriptRuntime)", &prepare);
-    print_row("retry setup (Sim::new)", &retry);
+    print_row("prepare (PreparedScripts)", &prepare);
+    print_row("run (new_run, fresh engine)", &prepared_run);
+    print_row("retry setup (Sim::new_or_halted)", &retry);
+    print_row("retry setup, prepared", &prepared_retry);
     print_row("retry setup, no scripts", &plain);
     print_row("retry + 50 ticks", &retry_ticks);
+    print_row("prepared retry + 50 ticks", &prepared_ticks);
     report!(
-        "\nretry / prepare: {:.1}x allocations ({} vs {})",
-        retry.stats.allocations as f64 / prepare.stats.allocations.max(1) as f64,
-        retry.stats.allocations,
-        prepare.stats.allocations
-    );
-    report!(
-        "estimated prepared retry: {} allocations, {} bytes ({:.0}% of today's retry allocations)",
-        prepared_allocations,
-        prepared_bytes,
-        100.0 * prepared_allocations as f64 / retry.stats.allocations.max(1) as f64
+        "\nprepared / unprepared retry setup: {:.2}x allocations ({} vs {})",
+        prepared_retry.stats.allocations as f64 / retry.stats.allocations.max(1) as f64,
+        prepared_retry.stats.allocations,
+        retry.stats.allocations
     );
 
     assert_eq!(def.scripts.len(), SCRIPT_COUNT);
     assert!(script_bytes > SCRIPT_COUNT * 1_000, "scripts are a few KiB each");
     assert!(prepare.stats.allocations > 0 && retry.stats.allocations > 0);
+    assert!(
+        prepared_retry.stats.allocations.saturating_mul(10) < retry.stats.allocations,
+        "prepared retry {} allocations is not an order of magnitude below {}",
+        prepared_retry.stats.allocations,
+        retry.stats.allocations
+    );
+    assert!(
+        prepared_retry.stats.allocations < 5_000,
+        "prepared retry {} allocations (expected ~1.3-1.4k)",
+        prepared_retry.stats.allocations
+    );
 }

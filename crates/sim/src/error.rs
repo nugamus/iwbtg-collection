@@ -1,8 +1,8 @@
 //! Why the sim halted (docs/architecture/sim/tick.md; docs/architecture/sim/tick.md, determinism.md).
 //!
 //! The sim never panics on any input. A script error, a non-finite value, an overflow, a broken
-//! invariant or an unsupported case sets `SimStatus::Halted(SimError)` and freezes the world
-//! where it stopped.
+//! invariant, an unsupported case or a Draw mutation under a pure ruleset sets
+//! `SimStatus::Halted(SimError)` and freezes the world where it stopped.
 
 use serde::{Deserialize, Serialize};
 
@@ -45,6 +45,13 @@ pub enum SimError {
         /// The script host's message.
         message: String,
     },
+    /// The Draw slot wrote hashed sim state while the ruleset requires it to be a pure
+    /// projection (decision 0005, register R15).
+    #[error("Draw mutated sim state under the pure Draw ruleset: {what}")]
+    DrawMutation {
+        /// What the guard observed.
+        what: String,
+    },
 }
 
 impl SimError {
@@ -73,5 +80,10 @@ impl SimError {
         SimError::Script {
             message: format!("{op}: {e}"),
         }
+    }
+
+    /// `DrawMutation` for `what`.
+    pub fn draw_mutation(what: impl Into<String>) -> SimError {
+        SimError::DrawMutation { what: what.into() }
     }
 }

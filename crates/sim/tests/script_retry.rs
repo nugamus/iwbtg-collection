@@ -192,6 +192,54 @@ fn a_start_script_error_halts_again_on_a_retry() {
 }
 
 #[test]
+fn a_prepared_retry_reproduces_a_fresh_run_and_keeps_per_run_state() {
+    let def = scripted();
+    let prepared = Sim::prepare(&def).expect("prepare");
+
+    // A prepared run and the prepare-plus-run path hash identically.
+    let mut plain = start(&def, 1);
+    step(&mut plain, 40);
+    let mut first =
+        Sim::new_or_halted_prepared(Arc::clone(&def), options(1), &prepared).expect("prepared sim");
+    step(&mut first, 40);
+    assert_eq!(
+        state_hash(first.world()),
+        state_hash(plain.world()),
+        "a prepared run differs from a fresh run"
+    );
+
+    // The artifact is shared, but each run owns its engine, budget and log.
+    let fresh = Sim::new_or_halted_prepared(Arc::clone(&def), options(1), &prepared).expect("prepared sim");
+    let fresh_used = fresh.scripts().engine().expect("engine").budget().used();
+    drop(fresh);
+    let mut again =
+        Sim::new_or_halted_prepared(Arc::clone(&def), options(1), &prepared).expect("prepared sim");
+    let engine = again.scripts().engine().expect("engine");
+    assert!(engine.log().is_empty(), "the log leaked into the prepared retry");
+    assert_eq!(engine.budget().used(), fresh_used, "budget from the old run");
+    step(&mut again, 40);
+    assert_eq!(state_hash(first.world()), state_hash(again.world()));
+    assert_eq!(
+        children(&first),
+        children(&again),
+        "the nested Create ran once per run"
+    );
+}
+
+#[test]
+fn a_prepared_artifact_cannot_run_another_package() {
+    let def = scripted();
+    let prepared = Sim::prepare(&def).expect("prepare");
+    let mut b = GameDefBuilder::new("other");
+    let room = b.room(RoomDef::new("room", 320, 240));
+    b.start_room(room);
+    let other = Arc::new(b.build().expect("def"));
+    let e = Sim::new_or_halted_prepared(other, options(1), &prepared)
+        .expect_err("another package's artifact must be refused");
+    assert!(e.to_string().contains("cannot run package"), "{e}");
+}
+
+#[test]
 fn game_def_stays_plain_data() {
     // The package definition is shared by `Arc` across runs and has no script host inside it
     // (docs/architecture/sim/scripts.md): it must stay `Send + Sync` so the client can keep it

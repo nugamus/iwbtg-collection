@@ -3,13 +3,14 @@
 //! A package is read into [`PackageFiles`] (path to bytes), so the client, the server and WASM
 //! share one code path. [`check()`] validates it and returns readable [`Diagnostic`]s with file,
 //! line and column. [`load_game`] turns it into the `GameDef` the sim runs
-//! (docs/plans/sim-core.md 8): WP7a owns `load`, `sprites`, `masks`, `rooms`, `objects`,
+//! (docs/format/v0.md): WP7a owns `load`, `sprites`, `masks`, `rooms`, `objects`,
 //! `order`, `vars` and `tracemap`; WP7b owns `physics`, `params`, `timelines`, `paths` and
 //! `sounds`.
 #![forbid(unsafe_code)]
 
 pub mod art;
 pub mod check;
+pub mod compat;
 pub mod diag;
 pub mod engine_pack;
 pub mod files;
@@ -22,7 +23,7 @@ pub mod number;
 #[cfg(feature = "schema")]
 pub mod schema;
 
-// Loader (docs/plans/sim-core.md 8.1).
+// Loader (docs/format/v0.md).
 pub mod load;
 pub mod masks;
 pub mod objects;

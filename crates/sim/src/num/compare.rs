@@ -23,9 +23,15 @@
 //! (rely's kid alpha stays 0.9999999999999999, CLONE_SPEC, Number handling, Confirmed (real
 //! runner)); the exact `t` on either and whether its edge is inclusive stay OPEN (N1).
 //!
-//! Under `CompareMode::Exact` they are the IEEE comparisons. In both modes every comparison is
-//! false when an operand is NaN (or `d` is NaN, as for `inf - inf` in epsilon mode), `!=`
-//! included, so `gm_ne` is not quite `!gm_eq`. How the real runner compares NaN is OPEN.
+//! Under `CompareMode::Exact` (the `standard` ruleset's value) they are the IEEE comparisons. In
+//! both modes every comparison is false when an operand is NaN (or `d` is NaN, as for
+//! `inf - inf` in epsilon mode), `!=` included, so `gm_ne` is not quite `!gm_eq`. How the real
+//! runner compares NaN is OPEN.
+//!
+//! Exact is not a mode with a hidden tolerance: where the `standard` ruleset needs a forgiving
+//! boundary (a collision contact, a trigger boundary, a save alignment), the call site declares
+//! the bound explicitly as a [`crate::num::Tolerance`]. `gm8` keeps the epsilon above; a package
+//! selects a ruleset and cannot supply a tolerance (decision 0005).
 
 use super::Real;
 use crate::rules::NumRules;
@@ -103,15 +109,15 @@ pub fn gm_ge(a: Real, b: Real, r: &NumRules) -> bool {
     }
 }
 
-/// GML truthiness of a real, for `if x` in ported code (N2): `x > 0.5` under `Truth::GtHalf`,
-/// `x >= 0.5` under `Truth::GeHalf` (the engine_rev 0 default). NaN is false.
+/// GML truthiness of a real, for `if x` in ported code (N2): `x >= 0.5` (`Truth::GeHalf`, the
+/// engine_rev 0 default and the only value in this ruleset revision). NaN is false.
 ///
 /// The spec infers `> 0.5` from the manual's "rounded value 0 or less is false" with
-/// ties-to-even rounding; no trace has a fractional condition yet, so the engine_rev 0 default
-/// keeps the earlier `>= 0.5` until one does (N2).
+/// ties-to-even rounding; no trace has a fractional condition yet, so the default keeps the
+/// earlier `>= 0.5` until one does (N2). A trace that settles it adds the other value in a
+/// ruleset revision, not a spare variant.
 pub fn gm_bool(x: Real, r: &NumRules) -> bool {
     match r.truth {
-        Truth::GtHalf => x.get() > HALF,
         Truth::GeHalf => x.get() >= HALF,
     }
 }

@@ -8,7 +8,14 @@
 //! The latch is CLONE_SPEC input Inferred: one "pressed since the last direct read" bit per key,
 //! shared by every direct read and consumed by each. The recorder does not model it
 //! (traces/rely-the-needle-4-2/t4-input-direct-tap-a.csv), so `TickRules::direct_latch` can turn
-//! it off for trace comparison.
+//! it off for trace comparison. That rule is the only per-engine edge value: it is named and
+//! trace-visible (the restart/ladder direct-read tricks), and no port gets another edge model
+//! without the same evidence (#1155).
+//!
+//! [`InputState::latch`] is the sim's input boundary: it stores
+//! [`InputFrame::masked`](crate::input::InputFrame::masked), so only action bits can reach a
+//! hashed input state. The client collector derives the frame; the sim never re-derives an edge
+//! from held state.
 
 use serde::{Deserialize, Serialize};
 
@@ -34,9 +41,12 @@ impl InputState {
     /// (the recorder's model, no latch) no press is latched, so [`InputState::direct`] reads the
     /// held state only.
     pub fn latch_with(&mut self, frame: InputFrame, latch_presses: bool) {
+        // The wire contract is action bits only: reserved bits or a raw key code a caller (or a
+        // replay) packed are dropped here, before the hashed input state sees them.
+        let frame = frame.masked();
         self.frame = frame;
         if latch_presses {
-            self.direct_latch |= frame.pressed & Action::MASK;
+            self.direct_latch |= frame.pressed;
         }
     }
 
@@ -115,6 +125,19 @@ mod tests {
         assert!(!s.direct(Action::Right));
         s.latch_with(frame(r, r, 0), false);
         assert!(s.direct(Action::Right));
+    }
+
+    #[test]
+    fn the_latch_drops_bits_outside_the_action_contract() {
+        // Bit 31 is reserved and bit 19 is above Extra4: neither may reach the input state or be
+        // readable as an action/direct read.
+        let r = Action::Right.bit();
+        let mut s = InputState::default();
+        s.latch(frame(r | 1 << 31, r | 1 << 19, 1 << 31));
+        assert_eq!(s.frame, frame(r, r, 0));
+        assert!(s.held(Action::Right) && s.pressed(Action::Right));
+        assert!(!s.direct(Action::Right) || s.held(Action::Right));
+        assert!(!s.direct(Action::Left), "reserved bits are not actions");
     }
 
     #[test]

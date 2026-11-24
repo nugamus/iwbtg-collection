@@ -10,6 +10,7 @@ use crate::def::{KindDef, Params};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
 use crate::num::Real;
+use crate::rng::Stream;
 use crate::world::{Ctx, Flow, InstId};
 
 /// The params this built-in accepts: none.
@@ -30,7 +31,7 @@ pub fn init_state(_params: &Params) -> Result<BuiltinState, ParamError> {
 /// Create draws the frame: `image_index = irandom(3)`.
 pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimError> {
     if *ev == EventKind::Create {
-        let frame = ctx.w.rng.irandom(Real::new(3.0))?;
+        let frame = ctx.w.stream_mut(Stream::Effects).irandom(Real::new(3.0))?;
         if let Some(inst) = ctx.w.get_mut(me) {
             inst.img.set_index(frame)?;
         }

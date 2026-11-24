@@ -18,6 +18,19 @@ pub fn init_state(b: Builtin, params: &Params) -> Result<BuiltinState, ParamErro
 
 `def/builtin.rs` holds the `Builtin` enum. Every variant named in the table below exists so the loader can parse kinds.
 
+### Behaviours and the trait table
+
+Decision [0005](../../decisions/0005-standard-mechanics.md) reduces the shared set to a small number of native behaviours plus presets and scripts. `Builtin::behaviour()` and `def/traits.rs` are the taxonomy: every package kind is exactly one of
+
+- **spawn** (`kid_start`), **checkpoint** (`save`), **portal** (`warp`, `edge_warp`, `difficulty_warp`), **trigger** (`trigger`), **hazard** (`spike`, `killer`, `orbit`), **pickup** (`boss_item`, `secret_item`, `item_viewer`), **overlay** (`game_over`, `playerface`, `bow`, `sign`, `music`, `death_sound`, `camera`), **emitter** (`blood`, `blood_emitter`, `particle_system`), **solid/surface** (`block`, `platform`, `slope`, `ladder`, `vine`, `fake_block`, `hidden_block`, `breakable_block`, `conveyor`, `bullet_blocker`, `trap_stopper`, `boss_gate`), **mover/projectile** (`moving_platform`, `drop_platform`, `path_platform`, `trap`, `kid_bullet`), **kid zone** (`water`, `gravity_flip`, `kid_param_zone`, `jump_refresher`, `spring`), **goal** (`game_clear`, `time_limit`);
+- the controller (`world`), the kid (Area C), or a data base (`decor`, `scripted`). `probe` and `inert` are not package kinds; they are in the table for exhaustiveness and map to the data base.
+
+The **trait table** (`def/traits.rs`) is the single place that says, per kind, its behaviour, the params that pick its classes (`class_params`), the params that pick its event set (`event_params`), the classes it carries by default, and the builder for its event set. `def::class` (`class_params`, `default_classes`) and `builtins` (`event_set`, `event_set_params`) delegate to it, so the two hand-written selector tables are gone. The existing derived-kind mechanism (`killer[bounce=true]`, `water[variant=2]`) is unchanged and reads the table through those views.
+
+The 50 kind names remain the creator vocabulary. A package may also write a behaviour base (`base = "hazard"`), an additive alias for the behaviour's reference kind in [`BEHAVIOUR_BASES`](../../../crates/sim/src/def/traits.rs): `hazard` is `killer`, `solid` is `block`, `mover` is `moving_platform`, and so on. The alias resolves to the same `KindDef`; the other kinds of a behaviour keep their own names. T2 is #1277.
+
+This table is a pure refactor (F3): every entry is the value the old tables gave, so a resolved `KindDef`, `EventSet` and initial `BuiltinState` is field-identical; the golden corpus and the valid fixtures pin it.
+
 ### Tiers and the table
 
 Tiers: tier 1 is needed by M1, M1b, M2 and game 1; tier 2 by games 2-11; tier 3 by the rest. Instance counts are placed instances from the mechanics.md coverage table.

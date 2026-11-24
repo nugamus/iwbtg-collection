@@ -5,16 +5,17 @@
 //! test built-in.
 //!
 //! **Phase walk** (CLONE_SPEC tick loop, Confirmed (recorder)). A phase takes its order once at
-//! its start ([`dispatch_order`]: object index order, then creation order,
+//! its start ([`dispatch_order`]: object index rank, then instance id,
 //! traces/rely-the-needle-4-2/t-ord-1.csv) and visits each instance that is still alive and
-//! active when its turn comes. An instance created during the phase joins it per
-//! `TickRules::new_instances_join_phase` (R9). After each handler, a room request applies
-//! `TickRules::room_request` (R8); `Flow::Halt` stops everything.
+//! active when its turn comes. An instance created during the phase joins it when its rank
+//! comes later than the creator's (R9, Confirmed (recorder)). After each handler, a room request
+//! applies `TickRules::room_request` (R8); `Flow::Halt` stops everything.
 //!
 //! Calls into modules other WPs own (motion, collision geometry, views, rooms, sound, timing)
 //! go through [`Hooks`], so the pipeline can be tested with the `Probe` built-in before those
 //! WPs merge. [`Hooks::ENGINE`] is the real set.
 
+use std::collections::BTreeSet;
 use std::sync::LazyLock;
 
 use serde::{Deserialize, Serialize};
@@ -22,21 +23,18 @@ use smallvec::SmallVec;
 
 use crate::alarm;
 use crate::anim;
-use crate::collide::pairs::{self, Members};
+use crate::collide::pairs::{self, Members, Reach};
 use crate::def::{ClassMask, GameDef, KindId, ParamValue, Params, TimelineId, VarId};
 use crate::error::SimError;
+use crate::hash;
 use crate::input::Action;
 use crate::num::{Real, to_int_trunc};
 use crate::room::RoomRequest;
-use crate::rules::TickRules;
-use crate::rules::collide::PairOrder;
-use crate::rules::tick::{JoinPhase, PrevCapture, RoomRequestRule};
+use crate::rules::tick::{PrevCapture, RoomRequestRule};
 use crate::tick::Hooks;
 use crate::timeline;
 use crate::world::{Ctx, Flow, InstId, Instance, KindState, SimStatus, SpawnInit, Value, World};
 use crate::{builtins, script};
-
-pub use crate::rules::tick::DispatchOrder;
 
 /// One GM event an instance can receive. Keys are actions: the GM "Key Q pressed" kid event is
 /// `KeyPress(Suicide)`, "Key R pressed" on the world is `KeyPress(Restart)`.
@@ -123,6 +121,9 @@ pub struct EventSet {
     pub room_end: bool,
     /// Bit `n`: user event `n`.
     pub user: u16,
+    /// Moment call names the kind's script handles (`moment_<name>`); the timeline supplies the
+    /// name at dispatch.
+    pub moments: BTreeSet<String>,
 }
 
 /// The rows of the tick pipeline (docs/architecture/sim/tick.md), for `run_phase` and `--stages` probe records.
@@ -186,13 +187,10 @@ pub enum KeyEdge {
 /// Which order a walk uses.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Order {
-    /// `TickRules::dispatch` (R2).
+    /// Dispatch order: object index rank, then instance id (R2, R12).
     Dispatch,
-    /// Draw order: depth descending, then creation (Confirmed manual).
+    /// Draw order: depth descending, then instance id (Confirmed manual).
     Draw,
-    /// Rank, then creation, whatever `TickRules::dispatch` says: the collision phase's outer
-    /// instances (R12).
-    Rank,
 }
 
 /// A sort key. `group` is everything but the creation order; R9's `LaterInOrder` compares it.
@@ -211,25 +209,22 @@ fn depth_desc(depth: Real) -> u64 {
 }
 
 /// The sort key of `inst` in `order`.
-pub(crate) fn order_key(inst: &Instance, mode: DispatchOrder, order: Order) -> OrderKey {
-    let group = match (order, mode) {
-        (Order::Draw, _) => (depth_desc(inst.depth), 0),
-        (Order::Rank, _) => (0, inst.rank),
-        (Order::Dispatch, DispatchOrder::RankThenCreation) => (0, inst.rank),
-        (Order::Dispatch, DispatchOrder::Creation) => (0, 0),
-        (Order::Dispatch, DispatchOrder::DepthThenRankThenCreation) => (depth_desc(inst.depth), inst.rank),
+pub(crate) fn order_key(inst: &Instance, order: Order) -> OrderKey {
+    let group = match order {
+        Order::Draw => (depth_desc(inst.depth), 0),
+        Order::Dispatch => (0, inst.rank),
     };
     OrderKey { group, id: inst.id }
 }
 
 /// The instances a phase visits, in dispatch order (R2), among the alive, active instances
 /// `filter` accepts.
-pub fn dispatch_order(w: &World, rules: &TickRules, filter: impl Fn(&Instance) -> bool) -> Vec<InstId> {
+pub fn dispatch_order(w: &World, filter: impl Fn(&Instance) -> bool) -> Vec<InstId> {
     let mut keyed: Vec<OrderKey> = w
         .instances()
         .iter()
-        .filter(|i| i.alive && i.active && filter(i))
-        .map(|i| order_key(i, rules.dispatch, Order::Dispatch))
+        .filter(|i| World::visible_instance(i, false) && filter(i))
+        .map(|i| order_key(i, Order::Dispatch))
         .collect();
     keyed.sort_unstable();
     keyed.into_iter().map(|k| k.id).collect()
@@ -241,8 +236,8 @@ pub fn draw_order(w: &World, filter: impl Fn(&Instance) -> bool) -> Vec<InstId> 
     let mut keyed: Vec<OrderKey> = w
         .instances()
         .iter()
-        .filter(|i| i.alive && i.active && i.visible && filter(i))
-        .map(|i| order_key(i, DispatchOrder::Creation, Order::Draw))
+        .filter(|i| World::visible_instance(i, false) && i.visible && filter(i))
+        .map(|i| order_key(i, Order::Draw))
         .collect();
     keyed.sort_unstable();
     keyed.into_iter().map(|k| k.id).collect()
@@ -272,7 +267,10 @@ pub fn event_set(def: &GameDef, kind: KindId) -> &EventSet {
 /// "not the later actions of the same event" (CLONE_SPEC tick loop, Confirmed (recorder),
 /// traces/rely-the-needle-4-2/tr-room-02-c.csv row 13).
 pub fn dispatch(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Flow {
-    let Some(inst) = ctx.w.get(me).filter(|i| i.alive && i.active) else {
+    if !ctx.w.visible(me, false) {
+        return Flow::Continue;
+    }
+    let Some(inst) = ctx.w.get(me) else {
         return Flow::Continue;
     };
     let Some(kd) = ctx.def.kind(inst.kind) else {
@@ -359,15 +357,13 @@ fn walk(
     filter: &dyn Fn(&Ctx, &Instance) -> bool,
     mut each: impl FnMut(&mut Ctx, InstId, &mut Ctl) -> Option<Flow>,
 ) -> Flow {
-    let mode = ctx.rules.tick.dispatch;
-    let join = ctx.rules.tick.new_instances_join_phase;
-    let ready = |ctx: &Ctx, i: &Instance| i.alive && i.active && filter(ctx, i);
+    let ready = |ctx: &Ctx, i: &Instance| World::visible_instance(i, false) && filter(ctx, i);
     let mut list: Vec<OrderKey> = ctx
         .w
         .instances()
         .iter()
         .filter(|i| ready(ctx, i))
-        .map(|i| order_key(i, mode, order))
+        .map(|i| order_key(i, order))
         .collect();
     list.sort_unstable();
     let mut ctl = Ctl::new(ctx);
@@ -380,7 +376,7 @@ fn walk(
         {
             return flow;
         }
-        if join != JoinPhase::Never && ctx.w.next_id != seen {
+        if ctx.w.next_id != seen {
             let all = ctx.w.instances();
             let start = all.partition_point(|i| i.id.0 < seen);
             let joining: Vec<OrderKey> = all
@@ -388,8 +384,8 @@ fn walk(
                 .unwrap_or_default()
                 .iter()
                 .filter(|i| ready(ctx, i))
-                .map(|i| order_key(i, mode, order))
-                .filter(|k| join == JoinPhase::Always || k.group > current.group)
+                .map(|i| order_key(i, order))
+                .filter(|k| k.group > current.group)
                 .collect();
             for k in joining {
                 let rest = list.get(pos..).unwrap_or_default();
@@ -410,7 +406,7 @@ fn walk(
 pub fn dispatch_each(ctx: &mut Ctx, ids: &[InstId], ev: &EventKind) -> Flow {
     let mut ctl = Ctl::new(ctx);
     for &id in ids {
-        if ctx.w.exists(id)
+        if ctx.w.visible(id, false)
             && let Some(flow) = fire(ctx, &mut ctl, id, ev)
         {
             return flow;
@@ -478,7 +474,7 @@ fn capture_previous_phase(ctx: &mut Ctx, hooks: &Hooks) -> Flow {
         .w
         .instances()
         .iter()
-        .filter(|i| i.alive && i.active)
+        .filter(|i| ctx.w.visible(i.id, false))
         .map(|i| i.id)
         .collect();
     for id in ids {
@@ -515,7 +511,10 @@ fn alarm_phase(ctx: &mut Ctx) -> Flow {
         &|c: &Ctx, i: &Instance| event_set(c.def, i.kind).alarms != 0,
         |c, id, ctl| {
             for n in 0u8..12 {
-                let inst = c.w.get_mut_unmoved(id).filter(|i| i.alive && i.active)?;
+                if !c.w.visible(id, false) {
+                    return None;
+                }
+                let inst = c.w.get_mut_unmoved(id)?;
                 if c.def
                     .kind(inst.kind)
                     .is_none_or(|k| k.events.alarms & 1 << n == 0)
@@ -546,7 +545,10 @@ fn keyboard_phase(ctx: &mut Ctx) -> Flow {
         |c, id, ctl| {
             for edge in key_event_order() {
                 for a in Action::ALL {
-                    let inst = c.w.get(id).filter(|i| i.alive && i.active)?;
+                    if !c.w.visible(id, false) {
+                        return None;
+                    }
+                    let inst = c.w.get(id)?;
                     let s = event_set(c.def, inst.kind);
                     let f = c.w.input.frame;
                     let (handles, on, ev) = match edge {
@@ -633,7 +635,7 @@ fn boundary_phase(ctx: &mut Ctx, hooks: &Hooks) -> Flow {
             {
                 return Some(flow);
             }
-            if !c.w.exists(id) {
+            if !c.w.visible(id, false) {
                 return None;
             }
             let bbox = match (hooks.bbox)(c, id) {
@@ -651,13 +653,33 @@ fn boundary_phase(ctx: &mut Ctx, hooks: &Hooks) -> Flow {
 
 /// Row 12: `Late` handlers in draw order (depth descending, then creation), visible only
 /// (Confirmed manual: Draw runs only for visible instances).
+///
+/// Under `DrawPurity::Pure` (the `standard` ruleset, decision 0005) the slot is a projection:
+/// it may emit output, but any write to hashed sim state stops the run. The check compares the
+/// state hash before and after the walk, so it covers globals, instance creation/destruction,
+/// input latching, RNG draws and room requests without a write guard on every setter. It is an
+/// `O(world)` check per tick; `standard` is package-unreachable until #1160, and the guard can
+/// become a write check if that cost ever matters. `gm8` keeps the recorder's mutable Draw and
+/// pays nothing.
 pub fn run_draw_phase(ctx: &mut Ctx) -> Flow {
-    walk(
+    let before = ctx.rules.draw.is_pure().then(|| hash::state_hash(ctx.w));
+    let flow = walk(
         ctx,
         Order::Draw,
         &|c: &Ctx, i: &Instance| i.visible && event_set(c.def, i.kind).late,
         |c, id, ctl| fire(c, ctl, id, &EventKind::Late),
-    )
+    );
+    if flow.is_halt() {
+        return flow;
+    }
+    if let Some(before) = before
+        && hash::state_hash(ctx.w) != before
+    {
+        return ctx.halt(SimError::draw_mutation(
+            "hashed state changed across the slot (globals, instances, input or RNG); Draw may only emit output",
+        ));
+    }
+    flow
 }
 
 /// Rows 8b and 13: the animation update for every alive, active instance, visible or not, and
@@ -694,9 +716,9 @@ pub fn collision_phase(ctx: &mut Ctx) -> Flow {
 
 /// [`collision_phase`] with explicit hooks.
 ///
-/// Under the default `CollideRules::pair_order`, `LowerRankFirst` (R12, Confirmed (recorder),
-/// OpenGMK only: CLONE_SPEC collision "Order of collision events: pairs of instances, lower
-/// object first", traces/rely-the-needle-4-2/t-ord-2.md), the phase walks pairs of instances:
+/// R12 (Confirmed (recorder), OpenGMK only: CLONE_SPEC collision "Order of collision events:
+/// pairs of instances, lower object first", traces/rely-the-needle-4-2/t-ord-2.md): the phase
+/// walks pairs of instances:
 /// 1. the outer instance `a` goes by its own rank, then id (new instances join per R9);
 /// 2. when `a`'s turn comes, the inner instance `b` is every other alive, active instance whose
 ///    rank is greater than or equal to `a`'s, by rank then id (lower ranks are not met again);
@@ -704,11 +726,8 @@ pub fn collision_phase(ctx: &mut Ctx) -> Flow {
 ///    for `a`, right there; two instances of one rank meet twice (`a1`-`a2` in `a1`'s turn,
 ///    `a2`-`a1` in `a2`'s), both directions each time.
 ///
-/// The alternatives `OtherRankThenId` and `HandlerListOrder` go instance by instance in
-/// dispatch order, each instance with its own pairs, sorted by the other's rank and id, or by
-/// handler list; under [`Hooks::broadphase`] their candidates also come from the grid (#944).
-///
-/// Either way, one direction of a pair (`me` with handlers, `other`):
+/// This is the one production order (decision 0005). One direction of a pair (`me` with
+/// handlers, `other`):
 /// - runs one handler: the matching handler class most specific for `other` (lowest
 ///   [`ClassMask::generality`], then first in handler order), the nearest-ancestor rule (C8,
 ///   R12b; Confirmed (recorder): a platform runs only the kid's platform event, and his block or
@@ -718,17 +737,9 @@ pub fn collision_phase(ctx: &mut Ctx) -> Flow {
 /// - with a solid `other`, is re-checked for overlap first (C7, Confirmed (recorder),
 ///   traces/showdown/t-mot-07-a.csv) and runs inside `collide::solid_resolve` (WP3); with a
 ///   non-solid `other`, is re-checked under `CollideRules::recheck_nonsolid` (C7b) and runs at
-///   the current position. The first direction of a `LowerRankFirst` pair follows its overlap
-///   test directly, so it is not tested twice.
+///   the current position. The first direction of a pair follows its overlap test directly, so
+///   it is not tested twice.
 pub fn collision_phase_with(ctx: &mut Ctx, hooks: &Hooks) -> Flow {
-    if ctx.rules.collide.pair_order != PairOrder::LowerRankFirst {
-        return walk(
-            ctx,
-            Order::Dispatch,
-            &|c: &Ctx, i: &Instance| !event_set(c.def, i.kind).collisions.is_empty(),
-            |c, a, ctl| collide_one(c, hooks, a, ctl),
-        );
-    }
     // Instances that neither handle a collision nor match anyone's handler take part in no
     // event, so the walk leaves them out.
     let targeted = ctx
@@ -740,12 +751,17 @@ pub fn collision_phase_with(ctx: &mut Ctx, hooks: &Hooks) -> Flow {
         i.classes.intersects(targeted) || !event_set(c.def, i.kind).collisions.is_empty()
     };
     if !hooks.broadphase {
-        return walk(ctx, Order::Rank, &ready, |c, a, ctl| meet_all(c, hooks, a, ctl));
+        return walk(ctx, Order::Dispatch, &ready, |c, a, ctl| {
+            meet_all(c, hooks, a, ctl)
+        });
     }
     // Built at the first turn, so a phase in which nobody takes part costs nothing.
     let mut members: Option<Members> = None;
-    walk(ctx, Order::Rank, &ready, |c, a, ctl| {
-        meet_near(c, hooks, a, ctl, &mut members)
+    // Static kind facts: a turn whose rank, classes and handlers can meet no kind's is skipped
+    // before its (possibly huge) candidate cell is gathered (#1139).
+    let reach = pairs::Reach::of(ctx.def);
+    walk(ctx, Order::Dispatch, &ready, |c, a, ctl| {
+        meet_near(c, hooks, a, ctl, &mut members, &reach)
     })
 }
 
@@ -766,10 +782,13 @@ pub fn pair_handler(handlers: &[ClassMask], classes: ClassMask) -> Option<(usize
         .map(|(handler, with)| (handler, *with))
 }
 
-/// `a`'s turn as the outer instance under `PairOrder::LowerRankFirst` (see
-/// [`collision_phase_with`]). The inner list is taken when the turn starts.
+/// `a`'s turn as the outer instance (see [`collision_phase_with`]). The inner list is taken when
+/// the turn starts.
 fn meet_all(ctx: &mut Ctx, hooks: &Hooks, a: InstId, ctl: &mut Ctl) -> Option<Flow> {
     let def = ctx.def;
+    if !ctx.w.visible(a, false) {
+        return None;
+    }
     let me = ctx.w.get(a)?;
     let (rank, classes) = (me.rank, me.classes);
     let mine = handler_classes(event_set(def, me.kind));
@@ -777,16 +796,16 @@ fn meet_all(ctx: &mut Ctx, hooks: &Hooks, a: InstId, ctl: &mut Ctl) -> Option<Fl
         .w
         .instances()
         .iter()
-        .filter(|b| b.id != a && b.alive && b.active && b.rank >= rank)
+        .filter(|b| b.id != a && World::visible_instance(b, false) && b.rank >= rank)
         .filter(|b| b.classes.intersects(mine) || classes.intersects(handler_classes(event_set(def, b.kind))))
         .map(|b| (b.rank, b.id))
         .collect();
     inner.sort_unstable();
     for (_, b) in inner {
-        if !ctx.w.exists(a) {
+        if !ctx.w.visible(a, false) {
             return None;
         }
-        if !ctx.w.exists(b) {
+        if !ctx.w.visible(b, false) {
             continue;
         }
         match (hooks.overlaps)(ctx, a, b) {
@@ -814,6 +833,7 @@ fn meet_near(
     a: InstId,
     ctl: &mut Ctl,
     members: &mut Option<Members>,
+    reach: &Reach,
 ) -> Option<Flow> {
     let def = ctx.def;
     // Turn start: bring the facts up to date from what changed since the last turn, then
@@ -842,6 +862,14 @@ fn meet_near(
     let me = ctx.w.get(a)?;
     let (rank, classes) = (me.rank, me.classes);
     let mine = handler_classes(event_set(def, me.kind));
+    // Every inner that `Members::key` would accept has a rank at or above this outer's and a
+    // class or handler that meets it. Kinds are static, so when none can, this turn can run no
+    // handler and its candidate cell is not gathered (#1139: a death's 800 stuck blood drops
+    // all share one cell, and every blood's turn would scan it for nothing). The members and
+    // grid stay in step: their update and flush above already ran.
+    if !reach.may_meet(rank, classes, mine) {
+        return None;
+    }
     // The last inner instance reached: later gathers continue after it.
     let mut after: Option<(u16, InstId)> = None;
     'gather: loop {
@@ -854,11 +882,11 @@ fn meet_near(
         inner.dedup();
         for key in inner {
             let b = key.1;
-            if !ctx.w.exists(a) {
+            if !ctx.w.visible(a, false) {
                 return None;
             }
             after = Some(key);
-            if !ctx.w.exists(b) {
+            if !ctx.w.visible(b, false) {
                 continue;
             }
             match (hooks.overlaps)(ctx, a, b) {
@@ -872,8 +900,14 @@ fn meet_near(
             if let Some(flow) = one_way(ctx, hooks, ctl, b, a, false) {
                 return Some(flow);
             }
-            // The handlers may have moved anything: gather again from `a`'s current box.
-            continue 'gather;
+            // The handlers may have moved anything (or spawned an instance, which is marked
+            // moved too): only then can a gather differ from this one. A turn whose handlers
+            // leave every box where it was has already walked the candidates this gather
+            // returned, so a pile of instances that stay put does not re-gather its whole cell
+            // for every pair (#1139).
+            if !ctx.w.grid.moved().is_empty() {
+                continue 'gather;
+            }
         }
         return None;
     }
@@ -890,10 +924,10 @@ fn one_way(
     tested: bool,
 ) -> Option<Flow> {
     let def = ctx.def;
-    let (Some(m), Some(o)) = (
-        ctx.w.get(me).filter(|i| i.alive && i.active),
-        ctx.w.get(other).filter(|i| i.alive && i.active),
-    ) else {
+    if !ctx.w.visible(me, false) || !ctx.w.visible(other, false) {
+        return None;
+    }
+    let (Some(m), Some(o)) = (ctx.w.get(me), ctx.w.get(other)) else {
         return None;
     };
     let (_, with) = pair_handler(&event_set(def, m.kind).collisions, o.classes)?;
@@ -929,93 +963,6 @@ fn run_pair(
         Ok(flow) => ctl.after(ctx, flow, before),
         Err(e) => stop(ctx, e),
     }
-}
-
-/// One collision pair: the other instance, the handler class and its index in the handler list.
-struct Pair {
-    other: InstId,
-    with: ClassMask,
-    handler: usize,
-}
-
-/// Collision events of one instance `a` under `OtherRankThenId` or `HandlerListOrder` (see
-/// [`collision_phase_with`]). The candidates are gathered through the broadphase grid (#944)
-/// under the engine's overlap test, like `LowerRankFirst`, else scanned: the pair list is fixed
-/// before any handler of this turn runs (the overlap tests and the sort read the turn-start
-/// state), so one gather at turn start gives the same pairs in the same order as the scan.
-fn collide_one(ctx: &mut Ctx, hooks: &Hooks, a: InstId, ctl: &mut Ctl) -> Option<Flow> {
-    let me = ctx.w.get(a)?;
-    let handlers = event_set(ctx.def, me.kind).collisions.clone();
-    let any = handlers.iter().fold(ClassMask::NONE, |m, c| m | *c);
-    // `near` returns the grid's cells under `a`'s box plus the moved and overflow sets: a
-    // superset of the members whose boxes can touch it, and every instance whose overlap test
-    // with it could fail. The grid is flushed first so it holds the turn-start state.
-    let candidates: Vec<InstId> = if hooks.broadphase {
-        if let Err(e) = ctx.w.ensure_grid(ctx.def, &ctx.rules.collide) {
-            return stop(ctx, e);
-        }
-        pairs::near(ctx, a)
-    } else {
-        ctx.w.instances().iter().map(|i| i.id).collect()
-    };
-    let mut pairs = Vec::new();
-    for b in candidates {
-        let Some(classes) = ctx.w.get(b).filter(|i| i.alive && i.active).map(|i| i.classes) else {
-            continue;
-        };
-        if b == a || !classes.intersects(any) {
-            continue;
-        }
-        match (hooks.overlaps)(ctx, a, b) {
-            Ok(true) => {}
-            Ok(false) => continue,
-            Err(e) => return stop(ctx, e),
-        }
-        if let Some((handler, with)) = pair_handler(&handlers, classes) {
-            pairs.push(Pair {
-                other: b,
-                with,
-                handler,
-            });
-        }
-    }
-    let rules = &ctx.rules;
-    let w = &*ctx.w;
-    let rank_id = |id: InstId| w.get(id).map_or((u16::MAX, id), |i| (i.rank, i.id));
-    let dispatch_key = |id: InstId| {
-        w.get(id)
-            .map(|i| order_key(i, rules.tick.dispatch, Order::Dispatch))
-    };
-    match rules.collide.pair_order {
-        PairOrder::HandlerListOrder => pairs.sort_by_key(|p| (p.handler, dispatch_key(p.other))),
-        PairOrder::OtherRankThenId | PairOrder::LowerRankFirst => {
-            pairs.sort_by_key(|p| (rank_id(p.other), p.handler))
-        }
-    }
-    for p in pairs {
-        if !ctx.w.exists(a) {
-            return None;
-        }
-        let Some(solid) = ctx
-            .w
-            .get(p.other)
-            .filter(|b| b.alive && b.active)
-            .map(|b| b.solid)
-        else {
-            continue;
-        };
-        if solid || ctx.rules.collide.recheck_nonsolid {
-            match (hooks.overlaps)(ctx, a, p.other) {
-                Ok(true) => {}
-                Ok(false) => continue,
-                Err(e) => return stop(ctx, e),
-            }
-        }
-        if let Some(flow) = run_pair(ctx, hooks, ctl, a, p.other, p.with, solid) {
-            return Some(flow);
-        }
-    }
-    None
 }
 
 // ---- Probe built-in ----
@@ -1339,6 +1286,8 @@ pub fn probe_event_set() -> EventSet {
         room_start: true,
         room_end: true,
         user: 0xffff,
+        // The probe handles every event in its own handler; it does not consult the name set.
+        moments: BTreeSet::new(),
     }
 }
 

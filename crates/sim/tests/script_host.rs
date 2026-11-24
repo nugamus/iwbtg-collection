@@ -2,9 +2,11 @@
 //! Create, Step, Alarm and Collision handlers, custom variables, spawn and destroy, errors with
 //! a position, the nesting and budget limits, and determinism.
 
+use iwbtg_sim::def::script::ScriptRules;
 use iwbtg_sim::def::testing::GameDefBuilder;
 use iwbtg_sim::def::{
-    Builtin, ClassMask, GameDef, KindDef, KindId, RoomDef, RoomId, ScriptDef, ScriptId, VarId,
+    Builtin, ClassMask, GameDef, GroupId, KindDef, KindId, NameId, RoomDef, RoomId, ScriptDef, ScriptId,
+    VarId,
 };
 use iwbtg_sim::events::EventSet;
 use iwbtg_sim::hash::state_hash;
@@ -15,7 +17,7 @@ use iwbtg_sim::rules::RunnerRules;
 use iwbtg_sim::script::{ScriptOutput, ScriptRuntime};
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::tick;
-use iwbtg_sim::world::{Ctx, InstId, SimStatus, SpawnInit, World};
+use iwbtg_sim::world::{Ctx, InstId, SimStatus, SpawnInit, Value, World};
 
 struct Fx {
     def: GameDef,
@@ -26,6 +28,11 @@ struct Fx {
 
 /// Kinds: 0 `walker` (script), 1 `target` (script, class package 0), 2 `plain`.
 fn fx(source: &str, walker_events: bool) -> Fx {
+    fx_rules(source, walker_events, ScriptRules::gm8(true))
+}
+
+/// The same fixture under `script_rules` (decision 0005).
+fn fx_rules(source: &str, walker_events: bool, script_rules: ScriptRules) -> Fx {
     let mut b = GameDefBuilder::new("wp9");
     let room = b.room(RoomDef::new("room", 320, 240));
     let spr = b.sprite_rect((16, 16), (0, 0));
@@ -47,8 +54,13 @@ fn fx(source: &str, walker_events: bool) -> Fx {
         source: source.into(),
     });
     def.var_names.insert("hp".into(), VarId(0));
+    // Declared but never assigned, so an unset read is not an unknown-name error.
+    def.var_names.insert("missing".into(), VarId(1));
+    // Room-file instance name and group tables (the read-only `name`/`group` properties).
+    def.names.push("walker_a".into());
+    def.groups.push("wave_1".into());
     let rules = RunnerRules::default();
-    let scripts = ScriptRuntime::new(&def, &rules).expect("scripts compile");
+    let scripts = ScriptRuntime::new_with_script_rules(&def, &rules, script_rules).expect("scripts compile");
     if walker_events {
         let mut set: EventSet = scripts.event_set(ScriptId(0));
         set.collisions.push(ClassMask::package(0).expect("class"));
@@ -60,6 +72,68 @@ fn fx(source: &str, walker_events: bool) -> Fx {
         rules,
         scripts,
         w: World::new(RoomId(0), 42),
+    }
+}
+
+/// Kinds: 0 `zone` (base `trigger`, script), 1 `kidlike` (inert, class `KID`).
+///
+/// The trigger built-in's own event set is the kid collision, so that is the event the script's
+/// `trigger(name)` runs from. The room-file name table holds `"zone_a"` at [`NameId(0)`].
+fn trigger_fx(source: &str) -> Fx {
+    let mut b = GameDefBuilder::new("wp9-trigger");
+    let room = b.room(RoomDef::new("room", 320, 240));
+    let spr = b.sprite_rect((16, 16), (0, 0));
+    let mut zone = KindDef::new("zone", Builtin::Trigger);
+    zone.script = Some(ScriptId(0));
+    zone.sprite = Some(spr);
+    zone.events = iwbtg_sim::builtins::event_set(Builtin::Trigger, &zone);
+    let mut kidlike = KindDef::new("kidlike", Builtin::Inert);
+    kidlike.sprite = Some(spr);
+    kidlike.classes = ClassMask::KID;
+    b.kind(zone);
+    b.kind(kidlike);
+    b.start_room(room);
+    let mut def = b.build().expect("def");
+    def.scripts.push(ScriptDef {
+        name: "scripts/zone.rhai".into(),
+        source: source.into(),
+    });
+    def.var_names.insert("hp".into(), VarId(0));
+    def.names.push("zone_a".into());
+    let rules = RunnerRules::default();
+    let scripts = ScriptRuntime::new(&def, &rules).expect("scripts compile");
+    Fx {
+        def,
+        rules,
+        scripts,
+        w: World::new(RoomId(0), 42),
+    }
+}
+
+fn spawn_named(f: &mut Fx, kind: u32, name: Option<NameId>) -> InstId {
+    spawn_with(f, kind, name, None)
+}
+
+fn spawn_with(f: &mut Fx, kind: u32, name: Option<NameId>, group: Option<GroupId>) -> InstId {
+    let mut c = f.ctx();
+    c.spawn(
+        KindId(kind),
+        Real::new(0.0),
+        Real::new(0.0),
+        SpawnInit {
+            name,
+            group,
+            ..Default::default()
+        },
+    )
+    .expect("spawn")
+}
+
+fn hp(f: &Fx, id: InstId) -> Option<Real> {
+    match f.w.get(id).expect("inst").vars.get(&VarId(0)) {
+        Some(Value::Real(r)) => Some(*r),
+        None => None,
+        other => panic!("hp is {other:?}"),
     }
 }
 
@@ -169,6 +243,65 @@ fn step() { if this.kind != "walker" { throw "kind"; } }
 }
 
 #[test]
+fn a_script_reads_the_room_file_name_and_group() {
+    let src = r#"
+fn create() {
+    if this.name == "walker_a" && this.group == "wave_1" { this.hp = 5.0; }
+}
+"#;
+    let mut f = fx(src, false);
+    let id = spawn_with(&mut f, 0, Some(NameId(0)), Some(GroupId(0)));
+    assert_eq!(f.halted(), None);
+    assert_eq!(hp(&f, id), Some(Real::new(5.0)));
+}
+
+#[test]
+fn an_instance_without_a_name_or_group_reads_unit() {
+    let src = r#"
+fn create() {
+    if this.name == () && this.group == () { this.hp = 3.0; }
+}
+"#;
+    let mut f = fx(src, false);
+    let id = spawn_with(&mut f, 0, None, None);
+    assert_eq!(f.halted(), None);
+    assert_eq!(hp(&f, id), Some(Real::new(3.0)));
+}
+
+#[test]
+fn a_named_trigger_runs_its_trigger_handler_with_the_name() {
+    let src = "fn trigger(name) {\n    if name == \"zone_a\" { this.hp = 7.0; }\n}\n";
+    let mut f = trigger_fx(src);
+    let zone = spawn_named(&mut f, 0, Some(NameId(0)));
+    let _kid = spawn_named(&mut f, 1, None);
+    f.run(1);
+    assert_eq!(f.halted(), None);
+    assert_eq!(hp(&f, zone), Some(Real::new(7.0)));
+}
+
+#[test]
+fn an_unnamed_trigger_has_no_name_to_pass() {
+    let src = "fn trigger(name) { this.hp = 7.0; }";
+    let mut f = trigger_fx(src);
+    let zone = spawn_named(&mut f, 0, None);
+    let _kid = spawn_named(&mut f, 1, None);
+    f.run(1);
+    assert_eq!(f.halted(), None);
+    assert_eq!(hp(&f, zone), None);
+}
+
+#[test]
+fn a_trigger_kid_collision_maps_to_trigger_not_collide() {
+    let src = "fn trigger(name) { this.hp = 7.0; }\nfn collide(other) { this.hp = 99.0; }";
+    let mut f = trigger_fx(src);
+    let zone = spawn_named(&mut f, 0, Some(NameId(0)));
+    let _kid = spawn_named(&mut f, 1, None);
+    f.run(1);
+    assert_eq!(f.halted(), None);
+    assert_eq!(hp(&f, zone), Some(Real::new(7.0)));
+}
+
+#[test]
 fn a_script_error_halts_with_file_line_and_column() {
     let src = "fn step() {\n    let a = 1.0;\n    this.hp2 = 3.0;\n}\n";
     let mut f = fx(src, true);
@@ -179,6 +312,84 @@ fn a_script_error_halts_with_file_line_and_column() {
     assert!(e.contains("line 3"), "{e}");
     assert!(e.contains("walker"), "{e}");
     assert!(e.contains("tick"), "{e}");
+}
+
+#[test]
+fn gm8_reads_an_unset_variable_as_zero() {
+    let src = "fn create() { this.hp = this.missing + 4.0; }";
+    let mut f = fx(src, false);
+    let a = f.spawn(0, 0.0, 0.0);
+    assert_eq!(f.halted(), None);
+    assert_eq!(
+        f.w.get(a).expect("a").vars.get(&VarId(0)),
+        Some(&iwbtg_sim::world::Value::Real(Real::new(4.0)))
+    );
+}
+
+#[test]
+fn standard_unset_read_halts_with_the_source_span() {
+    let src = "fn create() {\n    this.hp = this.missing + 4.0;\n}\n";
+    let mut f = fx_rules(src, false, ScriptRules::standard());
+    let mut c = f.ctx();
+    let r = c.spawn(KindId(0), Real::new(0.0), Real::new(0.0), SpawnInit::default());
+    assert!(r.is_err(), "Create must fail");
+    let e = f.halted().expect("halted");
+    assert!(e.contains("variable `missing` is not set"), "{e}");
+    assert!(e.contains("scripts/walker.rhai"), "{e}");
+    assert!(e.contains("line 2"), "{e}");
+    assert!(e.contains("position"), "{e}");
+}
+
+#[test]
+fn the_xia_switch_keeps_the_error_without_the_typed_model() {
+    // `gm8` with `uninit_reads_zero = false` (xia) errors, as it did, and does not become
+    // the standard model by accident.
+    let mut f = fx_rules(
+        "fn create() {\n    this.hp = this.missing + 4.0;\n}\n",
+        false,
+        ScriptRules::gm8(false),
+    );
+    let mut c = f.ctx();
+    let r = c.spawn(KindId(0), Real::new(0.0), Real::new(0.0), SpawnInit::default());
+    assert!(r.is_err(), "Create must fail");
+    let e = f.halted().expect("halted");
+    assert!(e.contains("variable `missing` is not set"), "{e}");
+}
+
+#[test]
+fn gm8_stores_a_bool_as_a_real() {
+    let src = "fn create() { this.hp = true; }";
+    let mut f = fx(src, false);
+    let a = f.spawn(0, 0.0, 0.0);
+    assert_eq!(f.halted(), None);
+    assert_eq!(
+        f.w.get(a).expect("a").vars.get(&VarId(0)),
+        Some(&iwbtg_sim::world::Value::Real(Real::ONE))
+    );
+}
+
+#[test]
+fn standard_refuses_to_silently_erase_a_bool_into_a_real() {
+    let src = "fn create() { this.hp = true; }";
+    let mut f = fx_rules(src, false, ScriptRules::standard());
+    let mut c = f.ctx();
+    let r = c.spawn(KindId(0), Real::new(0.0), Real::new(0.0), SpawnInit::default());
+    assert!(r.is_err(), "Create must fail");
+    let e = f.halted().expect("halted");
+    assert!(e.contains("cannot hold a bool"), "{e}");
+    assert!(e.contains("scripts/walker.rhai"), "{e}");
+}
+
+#[test]
+fn a_real_is_not_a_condition_at_run_time() {
+    // The validator cannot type a variable statically (a bool variable is a valid condition),
+    // so the no-truthiness rule is enforced by the engine: a stored real is not a bool.
+    let src = "fn create() { this.hp = 1.0; }\nfn step() { if this.hp { this.x = 5.0; } }";
+    let mut f = fx_rules(src, true, ScriptRules::standard());
+    f.spawn(0, 0.0, 0.0);
+    f.run(1);
+    let e = f.halted().expect("halted");
+    assert!(e.contains("bool"), "{e}");
 }
 
 #[test]

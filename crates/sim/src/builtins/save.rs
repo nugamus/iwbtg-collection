@@ -454,6 +454,7 @@ fn try_save(ctx: &mut Ctx, me: InstId, s: &SaveState, kid: InstId) -> Result<Flo
         return Ok(Flow::Continue);
     }
     save::save_now(ctx, kid, model_of(&s.position), s.fixed)?;
+    save::set_point(ctx, me);
     if let Some(BuiltinState::Save(st)) = state_mut(ctx, me) {
         st.timer = st.cooldown;
     }

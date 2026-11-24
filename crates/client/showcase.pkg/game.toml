@@ -7,6 +7,10 @@ engine_rev = 0
 runner = "gm80"
 physics = "physics.toml"
 start_room = "courtyard"
+# The empty boot room is first, as rInit is in the 20 games: game_restart enters it
+# before the retry's boot tick loads the save, so a play room's kid_start cannot add a
+# second kid (#1140). New games still start in the courtyard.
+room_order = ["boot", "courtyard", "hall", "summit"]
 max_ticks = 180_000
 object_order = [
   "world", "kid", "block", { kind = "spike", dir = "up" }, { kind = "spike", dir = "down" }, "kid_start",

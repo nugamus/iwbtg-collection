@@ -1,4 +1,4 @@
-//! Param validation against `builtins::param_specs` (docs/plans/sim-core.md 8.2 step 7).
+//! Param validation against `builtins::param_specs` (docs/format/builtins.md).
 //! WP0 creates the file; WP7b owns it.
 //!
 //! Every kind's params, and every placed instance's params merged over its kind's (a placed

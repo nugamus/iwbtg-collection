@@ -8,17 +8,21 @@
 //! value (CLONE_SPEC numbers, "Particle draw rules" 6 and the note on research#158).
 //!
 //! The motion rules are GM's `part_type_*` arguments as the format describes them
-//! (docs/format/particles.md). What the spec does not cover is a choice of ours, marked
-//! OPEN below and in the module page: wiggle as a sine of a fixed period, speed and size not going
-//! below 0, gravity added to the motion vector after the speed and direction increments, colors
-//! and alpha blended evenly over the life (two values: start to end; three: start, middle, end).
+//! (docs/format/particles.md), labelled from research#197, "Particles (GM8 runner): motion,
+//! colour, alpha and built-in shapes":
+//!
+//! - **Confirmed** (manual): the speed increment, and speed never below 0 (PART-003); colours and
+//!   alpha interpolate piecewise-linearly over the life, two values start to end, three through
+//!   the middle at half the life (PART-007, PART-008, PART-012); the shape sizes (PART-001).
+//! - **Inferred**: a wiggle is a random add or subtract each step, not a sine (PART-011); the
+//!   gravity is folded into the motion after the speed and direction increments (PART-013).
+//! - **OPEN**: the size clamp (PART-017), the GM8 wiggle distribution and amplitude (PART-015),
+//!   the order of the increments, wiggles and gravity inside one step (PART-016), and the exact
+//!   per-tick colour/alpha sample (PART-019).
 
 use iwbtg_sim::def::{PartLook, PartSystemDef, PartTypeDef};
 use iwbtg_sim::particles::{PartColor, PartRange};
 use iwbtg_sim::rng::Rng;
-
-/// Ticks of one wiggle swing (OPEN: the spec does not say how wiggle moves; a value of ours).
-const WIGGLE_PERIOD: f64 = 16.0;
 
 /// One live particle.
 #[derive(Clone, Debug, PartialEq)]
@@ -45,8 +49,10 @@ pub(crate) struct Particle {
     color: Option<[f32; 3]>,
     /// The sprite frame it started on.
     frame: u32,
-    /// Wiggle phase, 0 to 1.
-    phase: f64,
+    /// This step's size and orientation wiggle (Inferred, research#197 PART-011; the speed and
+    /// direction wiggles go straight into the motion).
+    size_wiggle: f64,
+    orientation_wiggle: f64,
 }
 
 /// One particle system as the client draws it. `def` is the index of its `PartSystemDef` in
@@ -129,7 +135,7 @@ impl DrawSystem {
             if let Some(c) = t.draws.step {
                 born.push((c.ty.0 as usize, c.count, p.x, p.y));
             }
-            step(&mut p, &t.look);
+            self.step(&mut p, &t.look);
             kept.push(p);
         }
         self.particles = kept;
@@ -199,7 +205,6 @@ impl DrawSystem {
         } else {
             0
         };
-        let phase = self.unit();
         self.particles.push(Particle {
             ty,
             x,
@@ -213,7 +218,8 @@ impl DrawSystem {
             age: 0,
             color,
             frame,
-            phase,
+            size_wiggle: 0.0,
+            orientation_wiggle: 0.0,
         });
     }
 
@@ -236,46 +242,68 @@ impl DrawSystem {
     }
 }
 
-/// One update's motion and changes of a live particle (OPEN rules in the module docs).
-fn step(p: &mut Particle, look: &PartLook) {
-    let [size_inc, _] = look.size_change.map(|r| r.get());
-    let [speed_inc, _] = look.speed_change.map(|r| r.get());
-    let [dir_inc, _] = look.direction_change.map(|r| r.get());
-    let [orient_inc, _] = look.orientation_change.map(|r| r.get());
-    p.size = (p.size + size_inc).max(0.0);
-    p.speed = (p.speed + speed_inc).max(0.0);
-    p.direction += dir_inc;
-    p.orientation += orient_inc;
-    let [g, g_dir] = look.gravity.map(|r| r.get());
-    let speed = p.speed + wiggle(p, look.speed_change[1].get());
-    let direction = p.direction + wiggle(p, look.direction_change[1].get());
-    let (mut vx, mut vy) = polar(speed, direction);
-    if g != 0.0 {
-        let (gx, gy) = polar(g, g_dir);
-        vx += gx;
-        vy += gy;
-        // The gravity stays in the motion: speed and direction follow the new vector.
-        p.speed = vx.hypot(vy);
-        if p.speed > 0.0 {
-            p.direction = (-vy).atan2(vx).to_degrees();
+impl DrawSystem {
+    /// One update's motion and changes of a live particle.
+    ///
+    /// Confirmed: the speed increment is added every step and the speed never goes below 0
+    /// (research#197 PART-003); the size and orientation increments are the manual's "added every
+    /// step" (PART-002, PART-005). Inferred: a wiggle is a random add or subtract each step
+    /// (PART-011), and gravity is folded into the motion after the increments (PART-013). OPEN:
+    /// whether the size can go below 0 (PART-017, so it stays clamped) and the order of the
+    /// increments, wiggles and gravity inside one step (PART-016).
+    fn step(&mut self, p: &mut Particle, look: &PartLook) {
+        let [size_inc, size_wiggle] = look.size_change.map(|r| r.get());
+        let [speed_inc, speed_wiggle] = look.speed_change.map(|r| r.get());
+        let [dir_inc, dir_wiggle] = look.direction_change.map(|r| r.get());
+        let [orient_inc, orient_wiggle] = look.orientation_change.map(|r| r.get());
+        // OPEN PART-017: the manual is silent on a size below 0, so it stays clamped.
+        p.size = (p.size + size_inc).max(0.0);
+        // Confirmed PART-003: "the speed will never become smaller than 0".
+        p.speed = (p.speed + speed_inc).max(0.0);
+        p.direction += dir_inc;
+        p.orientation += orient_inc;
+        // Inferred PART-011: the modern manual says "added or subtracted randomly ... each step".
+        // The GM8 distribution and amplitude are unmeasured (PART-015), so each is a coin flip for
+        // the whole amount; the size and orientation wiggles stay for the drawn look.
+        let speed_wiggle = self.wiggle(speed_wiggle);
+        let dir_wiggle = self.wiggle(dir_wiggle);
+        p.size_wiggle = self.wiggle(size_wiggle);
+        p.orientation_wiggle = self.wiggle(orient_wiggle);
+        let (mut vx, mut vy) = polar(p.speed + speed_wiggle, p.direction + dir_wiggle);
+        let [g, g_dir] = look.gravity.map(|r| r.get());
+        if g != 0.0 {
+            let (gx, gy) = polar(g, g_dir);
+            vx += gx;
+            vy += gy;
+            // Inferred PART-013: the gravity stays in the motion; speed and direction follow the
+            // new vector.
+            p.speed = vx.hypot(vy);
+            if p.speed > 0.0 {
+                p.direction = (-vy).atan2(vx).to_degrees();
+            }
+        }
+        p.x += vx;
+        p.y += vy;
+    }
+
+    /// One step's wiggle: `amount` added or subtracted at random (Inferred, research#197
+    /// PART-011). It uses the client's own generator, never the sim's: the recorder shows a
+    /// wiggle costs no game-RNG draw, so this cannot change a tick (PART-011).
+    fn wiggle(&mut self, amount: f64) -> f64 {
+        if amount == 0.0 {
+            0.0
+        } else if self.unit() < 0.5 {
+            -amount
+        } else {
+            amount
         }
     }
-    p.x += vx;
-    p.y += vy;
 }
 
 /// `speed` pixels in `direction` degrees (counter-clockwise on screen, y down in the room).
 fn polar(speed: f64, direction: f64) -> (f64, f64) {
     let (sin, cos) = direction.to_radians().sin_cos();
     (speed * cos, -speed * sin)
-}
-
-/// The wiggle offset of `amount` at the particle's age.
-fn wiggle(p: &Particle, amount: f64) -> f64 {
-    if amount == 0.0 {
-        return 0.0;
-    }
-    amount * (std::f64::consts::TAU * (f64::from(p.age) / WIGGLE_PERIOD + p.phase)).sin()
 }
 
 /// `0xRRGGBB` as sRGB channels 0 to 1.
@@ -300,7 +328,10 @@ fn hsv(h: f64, s: f64, v: f64) -> [f32; 3] {
     [r as f32, g as f32, b as f32]
 }
 
-/// One to three values blended evenly over the life: `t` is 0 at birth and 1 at death.
+/// One to three values blended evenly over the life: `t` is 0 at birth and 1 at death. Confirmed
+/// by the manual (research#197 PART-007, PART-008, PART-012): two values start to end, three
+/// through the middle at half the life. The exact per-tick sample and the midpoint rounding are
+/// OPEN (PART-019).
 fn over_life<const N: usize>(values: &[[f32; N]], t: f32) -> Option<[f32; N]> {
     let mix = |a: [f32; N], b: [f32; N], k: f32| std::array::from_fn(|i| a[i] + (b[i] - a[i]) * k);
     match values {
@@ -352,8 +383,10 @@ impl Particle {
             .unwrap_or([1.0; 3]);
         let alphas: Vec<[f32; 1]> = alpha.iter().map(|&a| [a]).collect();
         let alpha = over_life(&alphas, k).map_or(1.0, |[a]| a.clamp(0.0, 1.0));
-        let size = (self.size + wiggle(self, t.look.size_change[1].get())).max(0.0) as f32;
-        let mut angle = self.orientation + wiggle(self, t.look.orientation_change[1].get());
+        // The wiggles are this step's, chosen in `step` (Inferred PART-011); OPEN PART-017 keeps
+        // the size clamp, and the type alpha times the shape's own alpha is Inferred PART-014.
+        let size = (self.size + self.size_wiggle).max(0.0) as f32;
+        let mut angle = self.orientation + self.orientation_wiggle;
         if t.look.orientation_relative {
             angle += self.direction;
         }
@@ -554,6 +587,39 @@ mod tests {
         }
         let other = DrawSystem::build(0, &def, 6);
         assert_ne!(other.alpha[0][0], a, "a new system picks again");
+    }
+
+    /// Inferred research#197 PART-011: a wiggle adds or subtracts the whole amount each step,
+    /// with no sine and no period, from the client's own generator.
+    #[test]
+    fn a_wiggle_is_a_random_add_or_subtract_each_step() {
+        let mut t = ty(100.0);
+        t.look.size_change = [Real::ZERO, Real::new(2.0)];
+        let def = PartSystemDef {
+            types: vec![t],
+            creates: vec![PartCreateDef {
+                at: [Real::ZERO, Real::ZERO],
+                ty: 0,
+                number: 1,
+            }],
+            ..PartSystemDef::default()
+        };
+        let mut s = DrawSystem::build(0, &def, 11);
+        let mut signs = std::collections::BTreeSet::new();
+        for _ in 0..40 {
+            s.update(&def);
+            let w = s.particles[0].size_wiggle;
+            assert!(
+                (w.abs() - 2.0).abs() < 1e-9,
+                "the whole amount, added or subtracted: {w}"
+            );
+            signs.insert(w.signum() as i32);
+        }
+        assert_eq!(
+            signs.into_iter().collect::<Vec<_>>(),
+            vec![-1, 1],
+            "both signs over 40 steps"
+        );
     }
 
     #[test]
