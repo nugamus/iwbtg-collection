@@ -12,8 +12,9 @@
 //! - `fidelity [--bless]`: the trace sweep over every converter package; records the run in
 //!   `target/xtask/last-fidelity.txt` (#935).
 //! - `feel [--bless]`: the public feel contracts (`crates/sim/tests/feel`), plus the port set
-//!   (`crates/tools/feel`) when `IWBTG_GAMES` names the games repo; exit 0 for OK/OPEN, 1 for a
-//!   failure or regression, 2 for a tool error (#1167).
+//!   (`crates/tools/feel`) when `IWBTG_GAMES` (games repo, looked up first) and/or
+//!   `IWBTG_RESEARCH` (its `build/packages` converter output) is set (#1168); exit 0 for
+//!   OK/OPEN/SKIP, 1 for a failure or regression, 2 for a tool error (#1167).
 //! - `repin`: after a deliberate change to hashed sim state, re-pins the state hash vectors
 //!   (`tests/hash_vectors.rs`), the `FINAL_HASH` of `tests/determinism.rs` and the golden
 //!   corpus, then runs them again. After the `SIM_VERSION` freeze point it also records the pins
@@ -1116,7 +1117,10 @@ fn write_feel_contracts(root: &Path) -> Result<bool, String> {
     Ok(true)
 }
 
-/// `feel`: the public contract set, then the port set when `IWBTG_GAMES` names the games repo.
+/// `feel`: the public contract set, then the port set (#1168) when `IWBTG_GAMES` (the games repo)
+/// and/or `IWBTG_RESEARCH` (its `build/packages` converter output) is set. The tool looks a
+/// contract's package up in that order, prints the source each contract ran against, and reports
+/// a package in neither as SKIP.
 ///
 /// The tool exits 0 when every contract is OK/OPEN, 1 on a failure or a regression against the
 /// baseline, and 2 on a tool error; this wrapper keeps those codes so CI can tell them apart.
@@ -1133,45 +1137,52 @@ fn feel(root: &Path, bless: bool) -> Result<(), String> {
         &[],
     )?;
     let mut failed = feel_sweep(root, &["--contracts", FEEL_PUBLIC])? != 0;
-    let games = std::env::var_os("IWBTG_GAMES").map(PathBuf::from);
-    match (games.as_deref(), root.join(FEEL_PORT).is_dir()) {
-        (Some(games), true) => {
-            let games = games
-                .canonicalize()
-                .map_err(|e| format!("IWBTG_GAMES {}: {e}", games.display()))?;
-            let games = games.to_string_lossy().into_owned();
-            // Windows `canonicalize` returns a verbatim (`\\?\`) path; the plain form reads better.
-            let games = games.strip_prefix(r"\\?\").unwrap_or(&games).to_owned();
-            let mut args = vec![
-                "--contracts",
-                FEEL_PORT,
-                "--packages",
-                &games,
-                "--baseline",
-                FEEL_BASELINE,
-            ];
-            if bless {
-                args.push("--bless");
-            }
-            failed |= feel_sweep(root, &args)? != 0;
-        }
-        (_, false) if bless => {
+    let games = env_dir("IWBTG_GAMES", None)?;
+    let converter = env_dir("IWBTG_RESEARCH", Some("build/packages"))?;
+    let has_port_set = root.join(FEEL_PORT).is_dir();
+    if !has_port_set {
+        if bless {
             println!("feel: no port contract set ({FEEL_PORT}) to bless");
         }
-        (None, true) => {
-            // Say so out loud: a silent pass here would read as "every port's contracts hold".
-            println!(
-                "feel: port set ({FEEL_PORT}) not run: set IWBTG_GAMES to the games checkout{}",
-                if bless { "; nothing blessed" } else { "" }
-            );
+    } else if games.is_none() && converter.is_none() {
+        // Say so out loud: a silent pass here would read as "every port's contracts hold".
+        println!(
+            "feel: port set ({FEEL_PORT}) not run: set IWBTG_GAMES (the games checkout) and/or IWBTG_RESEARCH (its build/packages){}",
+            if bless { "; nothing blessed" } else { "" }
+        );
+    } else {
+        let mut args = vec!["--contracts", FEEL_PORT, "--baseline", FEEL_BASELINE];
+        if let Some(games) = &games {
+            args.extend(["--packages", games.as_str()]);
         }
-        _ => {}
+        if let Some(converter) = &converter {
+            args.extend(["--converter-packages", converter.as_str()]);
+        }
+        if bless {
+            args.push("--bless");
+        }
+        failed |= feel_sweep(root, &args)? != 0;
     }
     if failed {
         Err("feel: a contract failed (or the sweep could not run); see above".into())
     } else {
         Ok(())
     }
+}
+
+/// A folder named by an environment variable (plus `sub`), as a plain absolute path; `None`
+/// when the variable is unset. A set variable that does not resolve is an error, not a skip.
+fn env_dir(var: &str, sub: Option<&str>) -> Result<Option<String>, String> {
+    let Some(base) = std::env::var_os(var).map(PathBuf::from) else {
+        return Ok(None);
+    };
+    let dir = sub.map_or_else(|| base.clone(), |s| base.join(s));
+    let dir = dir
+        .canonicalize()
+        .map_err(|e| format!("{var} {}: {e}", dir.display()))?;
+    let dir = dir.to_string_lossy().into_owned();
+    // Windows `canonicalize` returns a verbatim (`\\?\`) path; the plain form reads better.
+    Ok(Some(dir.strip_prefix(r"\\?\").unwrap_or(&dir).to_owned()))
 }
 
 /// One `iwbtg feel sweep` run; returns the tool's exit code (0 OK/OPEN, 1 failure, 2 tool error)
