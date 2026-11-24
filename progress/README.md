@@ -106,7 +106,7 @@ No converter, census or trace data is committed to this public repo.
 
 ## Publishing
 
-The workflow restores the durable `history.json` from `gh-pages`, generates, then commits `index.html`, `data.json`, `history.json` and `.nojekyll` to `gh-pages` and requests a Pages build. Pages serves that branch at <https://nugamus.github.io/iwbtg-collection/>.
+The workflow restores the durable `history.json` from `gh-pages`, generates with `--gh --require-gh` (a failed GitHub read fails the run instead of publishing stale data), then commits `index.html`, `data.json`, `history.json` and `.nojekyll` to `gh-pages` and requests a Pages build. Pages serves that branch at <https://nugamus.github.io/iwbtg-collection/>.
 
 It deliberately does **not** write to `main`: the `main: required checks` ruleset requires `ci-ok` and `body`, and `github-actions[bot]` is not on its bypass list. `progress/history.json` on `main` is the seed for the first run; the durable history lives on `gh-pages`, so each daily run appends a point. A failed branch push or a failed build request fails the run visibly; there is no silent fallback.
 
