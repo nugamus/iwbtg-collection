@@ -114,6 +114,21 @@ class ScopeTests(unittest.TestCase):
                 for step in result['local_steps'] + result['ci_steps']:
                     self.assertTrue(step['reason'], step)
 
+    def test_feel_step_follows_the_wasm_unknown_unknown_test_step(self):
+        sim = plan(['crates/sim/src/world.rs'], self.graph)
+        self.assertTrue(sim['feel'])
+        feel = next(step for step in sim['ci_steps'] if step['kind'] == 'feel')
+        self.assertTrue(feel['selected'] and feel['reason'])
+        self.assertIn('feel=true', render_lines(sim))
+        # A docs-only change selects no wasm job, so the feel step is off.
+        native_docs = plan(['docs/format/v0.md'], self.graph)
+        self.assertFalse(native_docs['feel'])
+        skipped = next(step for step in native_docs['ci_steps'] if step['kind'] == 'feel')
+        self.assertFalse(skipped['selected'])
+        self.assertIn('feel=false', render_lines(native_docs))
+        # A script-page fixture keeps only wasip1; the unknown-unknown job (and feel) stays off.
+        self.assertFalse(plan(['docs/architecture/sim/scripts.md'], self.graph)['feel'])
+
     def test_plan_docs_and_full_selection(self):
         docs = plan(['docs/architecture/client/shell.md', 'README.md'], self.graph)
         self.assertFalse(docs['code'])

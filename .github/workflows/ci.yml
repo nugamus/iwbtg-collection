@@ -159,8 +159,10 @@ jobs:
       - uses: ./.github/actions/wasm-bindgen
         if: needs.changes.outputs.wasip1 == 'true'
       # The golden corpus again, this time linked for wasm32-unknown-unknown and run under node.
+      # The public feel contracts run on every target too (#1169); they are compiled in, so they
+      # link and run here without the private repos.
       - if: needs.changes.outputs.wasip1 == 'true'
-        run: cargo test -p iwbtg-sim --test determinism --test golden_corpus --target wasm32-unknown-unknown --locked
+        run: cargo test -p iwbtg-sim --test determinism --test golden_corpus --test feel --target wasm32-unknown-unknown --locked
 
   # The browser page a playtest uses (#29, #1078): the release wasm plus the pinned wasm-bindgen
   # output, a compressed-size budget, and a headless-browser load of a fixture package. Selected
