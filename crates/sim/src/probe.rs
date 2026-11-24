@@ -1126,10 +1126,9 @@ mod tests {
     }
 
     /// `sample` walks `events::dispatch_order`, and a `Direct` column consumes the latch (I1):
-    /// a second sample in the same tick reads only the held state. Needs the bodies of
+    /// a second sample in the same tick reads only the held state. Covers
     /// `dispatch_order`, `InputState::latch` and `InputState::direct`.
     #[test]
-    #[ignore = "needs events::dispatch_order and InputState bodies"]
     fn sample_rows_and_direct_reads_consume_the_latch() {
         use crate::input::InputFrame;
         let (mut sim, _) = sim_with_blocks();
