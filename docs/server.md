@@ -59,7 +59,7 @@ Queries that need compile-time checking use `sqlx::query!`; the `.sqlx` offline 
 
 The binary writes `tracing` JSON lines to stdout (`tracing_subscriber::fmt().json()`): one object per event with `timestamp`, `level`, `fields` and `target`. Startup lines — database ready, serving catalog, listening — are events like any other, so a collector parses them without a regex.
 
-Set `HEALTHCHECKS_URL` (`--healthchecks-url`) to the healthchecks.io check's ping URL. The server GETs it once at startup and then every 5 minutes (`crates/server/src/health.rs`, #155); with the variable unset nothing is spawned. The URL is never logged, because anyone holding it can silence the check.
+Set `HEALTHCHECKS_URL` (`--healthchecks-url`) to the healthchecks.io check's ping URL. The server GETs it once at startup and then every 5 minutes (`crates/server/src/health.rs`, #155); with the variable unset nothing is spawned. The URL is never logged, because anyone holding it can silence the check. The client uses the OS trust store (`native-tls`), so the runtime image needs `ca-certificates` (which pulls `libssl3` on Debian) rather than a bundled CA list.
 
 A failed ping — DNS, connect, a 10-second timeout, or a non-2xx status — is logged at `WARN` and the loop continues after its period, so monitoring can never take the server down. healthchecks.io alerts on the absence of pings, which covers what the server cannot report about itself: power loss, a crashed container or a dead uplink.
 

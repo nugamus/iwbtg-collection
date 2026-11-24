@@ -41,8 +41,15 @@ pub async fn ping_forever(url: String, interval: Duration) {
 pub async fn ping_once(url: &str) -> Result<u16, String> {
     let url = url.to_owned();
     tokio::task::spawn_blocking(move || {
+        // The OS trust store, not a bundled CA list: the deployment image needs
+        // `ca-certificates` (a dependency of that is libssl3 on Debian).
+        let tls = ureq::tls::TlsConfig::builder()
+            .provider(ureq::tls::TlsProvider::NativeTls)
+            .root_certs(ureq::tls::RootCerts::PlatformVerifier)
+            .build();
         let agent = ureq::Agent::config_builder()
             .timeout_global(Some(TIMEOUT))
+            .tls_config(tls)
             .build()
             .new_agent();
         agent

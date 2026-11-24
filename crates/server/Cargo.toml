@@ -31,9 +31,11 @@ sqlx = { version = "0.9", default-features = false, features = [
 # JSON logs to stdout (docs/server.md, Logs and monitoring).
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.23", features = ["json"] }
-# healthchecks.io pings (docs/server.md, Logs and monitoring): blocking, rustls-backed, and much
-# smaller than an async client. `rustls` pulls its webpki roots, so no system certificate store.
-ureq = { version = "3.5", default-features = false, features = ["rustls"] }
+# healthchecks.io pings (docs/server.md, Logs and monitoring): blocking and much smaller than an
+# async client. `native-tls-no-default` uses the OS trust store; the rustls feature would pull
+# webpki-roots, whose CDLA-Permissive-2.0 data licence deny.toml does not allow. The agent sets
+# TlsProvider::NativeTls + RootCerts::PlatformVerifier explicitly (src/health.rs).
+ureq = { version = "3.5", default-features = false, features = ["native-tls-no-default"] }
 
 [dev-dependencies]
 # `ServiceExt::oneshot`: the tests drive the router in-process, no port to pick.
