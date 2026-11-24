@@ -55,6 +55,12 @@ jobs:
           else
             python3 scripts/ci_scope.py --full --github-output "$GITHUB_OUTPUT"
           fi
+      # The deployment files are not crate inputs, so no crate job ever reads them. `compose config`
+      # validates the Compose schema and interpolation without a daemon or an image build, and
+      # ubuntu-latest preinstalls the plugin. It runs on every changes job (well under a second)
+      # rather than on a path filter: a broken compose.yaml otherwise only fails on the host (#1419).
+      - name: Validate compose.yaml
+        run: docker compose config --quiet
       - name: Workflow selector, metrics and agent hook tests
         run: |
           python3 -m unittest discover -s scripts -p 'test_*.py'
