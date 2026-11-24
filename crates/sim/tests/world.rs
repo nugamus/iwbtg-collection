@@ -4,13 +4,13 @@
 use crate::support;
 
 use iwbtg_sim::def::{Builtin, ClassMask, EngineKind, KindDef, KindId, ParamValue, Params, RoomId, VarId};
-use iwbtg_sim::events::{ProbeAct, ProbeLog, ProbeOn, ProbeStep, probe_event_set};
+use iwbtg_sim::events::{Phase, ProbeAct, ProbeLog, ProbeOn, ProbeState, ProbeStep, probe_event_set};
 use iwbtg_sim::hash::{self, CHECKPOINT_INTERVAL};
 use iwbtg_sim::input::InputFrame;
 use iwbtg_sim::num::Real;
 use iwbtg_sim::output::OutputEvent;
 use iwbtg_sim::room::RoomOutput;
-use iwbtg_sim::rules::collide::PairOrder;
+use iwbtg_sim::rules::DrawRules;
 use iwbtg_sim::rules::tick::{ChangeKindProps, FirstRule};
 use iwbtg_sim::world::{Flow, InstId, SpawnInit};
 use support::*;
@@ -33,7 +33,7 @@ fn classed(
 }
 
 #[test]
-fn wp1_spawn_runs_create_inside_the_call_and_applies_the_kind() {
+fn spawn_runs_create_inside_the_call_and_applies_the_kind() {
     let mut b = builder();
     let sprite = b.sprite_rect((4, 4), (0, 0));
     let creator = probe_kind(&mut b, "creator");
@@ -137,7 +137,7 @@ fn wp1_spawn_runs_create_inside_the_call_and_applies_the_kind() {
 }
 
 #[test]
-fn wp1_ids_are_monotonic_and_never_reused() {
+fn ids_are_monotonic_and_never_reused() {
     let mut b = builder();
     let k = probe_kind(&mut b, "p");
     let mut fx = Fx::new(b.build().unwrap());
@@ -155,7 +155,7 @@ fn wp1_ids_are_monotonic_and_never_reused() {
 }
 
 #[test]
-fn wp1_first_of_kid_and_count_of() {
+fn first_of_kid_and_count_of() {
     let mut b = builder();
     let kid = classed(&mut b, "kid", ClassMask::KID, &[]);
     let flipped = classed(&mut b, "kid2", ClassMask::KID_FLIPPED, &[]);
@@ -185,7 +185,7 @@ fn wp1_first_of_kid_and_count_of() {
 }
 
 #[test]
-fn wp1_change_kind_runs_destroy_and_create_and_takes_the_kind() {
+fn change_kind_runs_destroy_and_create_and_takes_the_kind() {
     let mut b = builder();
     let sprite = b.sprite_rect((4, 4), (0, 0));
     let from = classed(&mut b, "from", ClassMask::BLOCK, &[]);
@@ -214,24 +214,19 @@ fn wp1_change_kind_runs_destroy_and_create_and_takes_the_kind() {
 }
 
 #[test]
-fn wp1_emit_queues_output() {
+fn emit_queues_output() {
     let mut fx = Fx::new(builder().build().unwrap());
     fx.ctx().emit(OutputEvent::Room(RoomOutput::GameRestarted));
     assert_eq!(fx.w.output.len(), 1);
 }
 
 /// The kid probe K with handlers `handlers`, and others as given (kind, solid, touching).
-fn collision_fixture(
-    handlers: &[ClassMask],
-    pair_order: PairOrder,
-    recheck_nonsolid: bool,
-) -> (Fx, InstId, InstId, InstId) {
+fn collision_fixture(handlers: &[ClassMask], recheck_nonsolid: bool) -> (Fx, InstId, InstId, InstId) {
     let mut b = builder();
     let kid = classed(&mut b, "kid", ClassMask::KID, handlers);
     let block = classed(&mut b, "block", ClassMask::BLOCK, &[]);
     let killer = classed(&mut b, "killer", ClassMask::KILLER, &[]);
     let mut fx = Fx::new(b.build().unwrap());
-    fx.rules.collide.pair_order = pair_order;
     fx.rules.collide.recheck_nonsolid = recheck_nonsolid;
     let k = fx.probe(kid, 0.0, 0.0, p("K"));
     // The killer is created first, so id order alone would put it first.
@@ -251,21 +246,15 @@ fn kid_collisions(log: &str) -> Vec<String> {
 }
 
 #[test]
-fn wp1_collision_pairs_follow_pair_order() {
+fn collision_pairs_follow_rank_then_id() {
     let handlers = [ClassMask::KILLER, ClassMask::BLOCK];
-    let (mut fx, _, bl, x) = collision_fixture(&handlers, PairOrder::OtherRankThenId, true);
+    let (mut fx, _, bl, x) = collision_fixture(&handlers, true);
     fx.tick(InputFrame::EMPTY);
-    // By the other's rank: block (rank 1) before killer (rank 2); the solid pair goes through
-    // the put-back.
+    // The kid is the outer instance (rank 0); his inner list is block (rank 1) before killer
+    // (rank 2), by rank then id. The solid pair goes through the put-back.
     assert_eq!(
         kid_collisions(&fx.log()),
         vec!["put".to_owned(), format!("k{}K", bl.0), format!("k{}K", x.0)]
-    );
-    let (mut fx, _, bl, x) = collision_fixture(&handlers, PairOrder::HandlerListOrder, true);
-    fx.tick(InputFrame::EMPTY);
-    assert_eq!(
-        kid_collisions(&fx.log()),
-        vec![format!("k{}K", x.0), "put".to_owned(), format!("k{}K", bl.0)]
     );
 }
 
@@ -286,7 +275,7 @@ fn platform_hits(handlers: &[ClassMask]) -> (Vec<String>, InstId) {
 }
 
 #[test]
-fn wp1_one_other_matching_two_handlers_runs_only_the_most_specific() {
+fn one_other_matching_two_handlers_runs_only_the_most_specific() {
     // C8, R12b (Confirmed (recorder), showdown t-mot-08-a): a platform runs the kid's platform
     // handler only, whatever the handler order.
     let both = [ClassMask::BLOCK, ClassMask::PLATFORM];
@@ -313,7 +302,7 @@ fn wp1_one_other_matching_two_handlers_runs_only_the_most_specific() {
 }
 
 #[test]
-fn wp1_with_only_a_block_handler_block_runs_for_a_platform() {
+fn with_only_a_block_handler_block_runs_for_a_platform() {
     // t-mot-08-b: with the platform event cleared, the block event runs for the platform.
     let (hits, pl) = platform_hits(&[ClassMask::BLOCK]);
     assert_eq!(hits, vec![format!("k{}K", pl.0)]);
@@ -328,30 +317,46 @@ fn wp1_with_only_a_block_handler_block_runs_for_a_platform() {
 }
 
 #[test]
-fn wp1_pairs_are_rechecked_before_their_event() {
-    // The kid's block event moves him off the killer (clears the killer's touch flag).
+fn pairs_are_rechecked_before_their_event() {
+    // C7b: the first direction's event clears the pair's touch flag (as a move off the killer
+    // would); the killer's own direction of that pair is the second one, and re-checks the
+    // overlap only when C7b is on. Both instances have a handler, so both directions would log
+    // an event without the re-check.
     let run = |recheck: bool| {
-        let (mut fx, k, bl, x) = collision_fixture(
-            &[ClassMask::BLOCK, ClassMask::KILLER],
-            PairOrder::OtherRankThenId,
-            recheck,
+        let mut b = builder();
+        let kid = classed(&mut b, "kid", ClassMask::KID, &[ClassMask::KILLER]);
+        let killer = classed(&mut b, "killer", ClassMask::KILLER, &[ClassMask::KID]);
+        let mut fx = Fx::new(b.build().unwrap());
+        fx.rules.collide.recheck_nonsolid = recheck;
+        let x = fx.probe(killer, 0.0, 0.0, p("X"));
+        let k = fx.probe(
+            kid,
+            0.0,
+            0.0,
+            p("K").with(step(ProbeOn::Collision, ProbeAct::SetGlobal(touch_var(x), vr(0.0))).once()),
         );
-        let state = p("K").with(step(ProbeOn::Collision, ProbeAct::SetGlobal(touch_var(x), vr(0.0))).once());
-        fx.w.get_mut(k).unwrap().state = iwbtg_sim::world::KindState::Probe(state);
+        fx.touch(x, true);
         fx.tick(InputFrame::EMPTY);
-        (kid_collisions(&fx.log()), bl, x)
+        let log = fx.log();
+        let xhits: Vec<String> = tokens_of(&log, "X")
+            .into_iter()
+            .filter(|t| t.starts_with('k'))
+            .map(str::to_owned)
+            .collect();
+        (kid_collisions(&log), xhits, k, x)
     };
-    let (hits, bl, _) = run(true);
-    assert_eq!(
-        hits,
-        vec!["put".to_owned(), format!("k{}K", bl.0)],
-        "C7b on: the killer pair is skipped"
+    let (hits, xhits, _k, x) = run(true);
+    assert_eq!(hits, vec![format!("k{}K", x.0)], "C7b on: the kid's event runs");
+    assert!(
+        xhits.is_empty(),
+        "C7b on: the killer's direction is skipped after the move: {xhits:?}"
     );
-    let (hits, bl, x) = run(false);
+    let (hits, xhits, k, x) = run(false);
+    assert_eq!(hits, vec![format!("k{}K", x.0)], "C7b off: the kid's event runs");
     assert_eq!(
-        hits,
-        vec!["put".to_owned(), format!("k{}K", bl.0), format!("k{}K", x.0)],
-        "C7b off"
+        xhits,
+        vec![format!("k{}X", k.0)],
+        "C7b off: the killer's direction runs without re-checking"
     );
     // A solid pair is always re-checked (C7): two blocks, the first event clears the second.
     let mut b = builder();
@@ -449,7 +454,7 @@ fn pairs_of(s: &str) -> Vec<(String, String)> {
 }
 
 #[test]
-fn wp1_r12_collision_pairs_run_lower_kind_first_t_ord_2() {
+fn r12_collision_pairs_run_lower_kind_first_t_ord_2() {
     // Run A: handlers registered scrambled; probes created c1, a1, b1, c2, a2.
     let events: &[(&str, &[&str])] = &[
         ("P", &["L", "B", "C"]),
@@ -486,12 +491,8 @@ fn wp1_r12_collision_pairs_run_lower_kind_first_t_ord_2() {
 }
 
 #[test]
-fn wp1_a_destroyed_other_is_skipped() {
-    let (mut fx, k, bl, x) = collision_fixture(
-        &[ClassMask::BLOCK, ClassMask::KILLER],
-        PairOrder::OtherRankThenId,
-        false,
-    );
+fn a_destroyed_other_is_skipped() {
+    let (mut fx, k, bl, x) = collision_fixture(&[ClassMask::BLOCK, ClassMask::KILLER], false);
     let state = p("K").with(step(ProbeOn::Collision, ProbeAct::Destroy(x)).once());
     fx.w.get_mut(k).unwrap().state = iwbtg_sim::world::KindState::Probe(state);
     fx.tick(InputFrame::EMPTY);
@@ -507,7 +508,7 @@ fn wp1_a_destroyed_other_is_skipped() {
 /// with the save point (rank 2) comes later in his own turn. The second part kills an instance
 /// in the kid's turn whose pair belongs to a later outer instance's turn: that is skipped too.
 #[test]
-fn wp1_r22_a_pair_with_an_instance_killed_earlier_in_the_phase_is_skipped() {
+fn r22_a_pair_with_an_instance_killed_earlier_in_the_phase_is_skipped() {
     let mut b = builder();
     let kid = classed(&mut b, "kid", ClassMask::KID, &[ClassMask::BLOCK]);
     let block = classed(&mut b, "block", ClassMask::BLOCK, &[]);
@@ -598,7 +599,7 @@ fn wp1_r22_a_pair_with_an_instance_killed_earlier_in_the_phase_is_skipped() {
 }
 
 #[test]
-fn wp1_state_hash_covers_state_and_skips_caches() {
+fn state_hash_covers_state_and_skips_caches() {
     let mut b = builder();
     let k = probe_kind(&mut b, "p");
     let mut fx = Fx::new(b.build().unwrap());
@@ -634,8 +635,70 @@ fn wp1_state_hash_covers_state_and_skips_caches() {
     assert!(hash::checkpoint(&fx.w).is_some());
 }
 
+/// E1 (#1188): under `standard`, Draw is a pure projection of sim state, so a handler that
+/// writes a global halts the run. `gm8` keeps the recorder's mutable Draw. The probe is silent:
+/// its own event log would be a global write and would itself be a mutation.
 #[test]
-fn wp1_unknown_kind_in_dispatch_halts() {
+fn draw_is_pure_under_standard_and_mutable_under_gm8() {
+    let run = |rules: DrawRules| {
+        let mut b = builder();
+        let kind = probe_kind(&mut b, "p");
+        let mut fx = Fx::new(b.build().unwrap());
+        fx.rules.draw = rules;
+        fx.probe(
+            kind,
+            0.0,
+            0.0,
+            ProbeState::new("P", None).with(step(ProbeOn::Late, ProbeAct::SetGlobal(VarId(0), vr(1.0)))),
+        );
+        let mut c = fx.ctx();
+        let flow = iwbtg_sim::events::run_phase_with(&mut c, Phase::Draw, &HOOKS);
+        (flow, fx.w.globals.get(&VarId(0)).cloned(), fx.w.status.clone())
+    };
+    let (flow, value, status) = run(DrawRules::gm8());
+    assert_eq!(flow, Flow::Continue);
+    assert_eq!(value, Some(vr(1.0)), "gm8 Draw may mutate");
+    assert_eq!(status, iwbtg_sim::SimStatus::Running);
+    let (flow, _, status) = run(DrawRules::standard());
+    assert_eq!(flow, Flow::Halt, "standard Draw cannot mutate");
+    assert!(matches!(
+        status,
+        iwbtg_sim::SimStatus::Halted(iwbtg_sim::SimError::DrawMutation { .. })
+    ));
+}
+
+/// E1 (#1188): creating an instance is a Draw mutation under `standard` too.
+#[test]
+fn draw_cannot_spawn_under_standard() {
+    let mut b = builder();
+    let kind = probe_kind(&mut b, "p");
+    let mut fx = Fx::new(b.build().unwrap());
+    fx.rules.draw = DrawRules::standard();
+    fx.probe(
+        kind,
+        0.0,
+        0.0,
+        ProbeState::new("P", None).with(step(
+            ProbeOn::Late,
+            ProbeAct::Spawn {
+                kind,
+                x: Real::new(10.0),
+                y: Real::new(10.0),
+                child: None,
+            },
+        )),
+    );
+    let mut c = fx.ctx();
+    let flow = iwbtg_sim::events::run_phase_with(&mut c, Phase::Draw, &HOOKS);
+    assert_eq!(flow, Flow::Halt);
+    assert!(matches!(
+        fx.w.status,
+        iwbtg_sim::SimStatus::Halted(iwbtg_sim::SimError::DrawMutation { .. })
+    ));
+}
+
+#[test]
+fn unknown_kind_in_dispatch_halts() {
     let mut b = builder();
     let k = probe_kind(&mut b, "p");
     let mut fx = Fx::new(b.build().unwrap());

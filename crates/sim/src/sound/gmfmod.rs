@@ -8,14 +8,15 @@
 //! last value set** (S5, UNKNOWN: the real DLL may round to a float). The fades are game-side
 //! GML (fader objects), not here. `FMODUpdate` is a no-op.
 //!
-//! In [`DllMode::Stub`] every call changes nothing and returns 0, like `--stub-dlls`.
+//! When the run's named model does not provide GMFMODSimple (the `event`, `supersound` and
+//! `stub` profiles, and a recorder `--stub-dlls` run) every call changes nothing and returns 0.
 //!
 //! The DLL does not know a sound length, so the script host passes `length_ticks` at
 //! `sound_add` (0 = unknown: a one-shot plays until stopped).
 
 use serde::{Deserialize, Serialize};
 
-use super::{DllMode, SoundOutput, SoundTarget, active, emit};
+use super::{SoundOutput, SoundTarget, active, emit};
 use crate::num::{Real, round::to_int_round};
 use crate::world::Ctx;
 
@@ -85,7 +86,7 @@ impl Default for GmfmodState {
 }
 
 fn stub(ctx: &Ctx) -> bool {
-    ctx.dll_mode == DllMode::Stub
+    !ctx.sound_model().models_gmfmod()
 }
 
 fn id(v: Real) -> Option<u32> {
@@ -139,12 +140,15 @@ pub fn sound_add(ctx: &mut Ctx, file: &str, d3: bool, stream: bool, length_ticks
         length_ticks,
         group: 0,
     });
+    let tick = ctx.w.tick;
     emit(
         ctx,
         SoundOutput::Load {
             target: SoundTarget::FmodSound(n),
             file: file.to_owned(),
             stream,
+            length_ticks,
+            tick,
         },
     );
     Real::new(f64::from(n))
@@ -181,6 +185,7 @@ fn start(ctx: &mut Ctx, sound: Real, paused: bool, looping: bool) -> Real {
         return Real::ZERO;
     };
     let streamed = snd.stream;
+    let length_ticks = snd.length_ticks;
     let mut stopped = Vec::new();
     if streamed {
         st.instances.retain(|i| {
@@ -213,6 +218,7 @@ fn start(ctx: &mut Ctx, sound: Real, paused: bool, looping: bool) -> Real {
                     instance: old,
                     sound: sid,
                 },
+                tick: now,
             },
         );
     }
@@ -220,9 +226,24 @@ fn start(ctx: &mut Ctx, sound: Real, paused: bool, looping: bool) -> Real {
         instance: iid,
         sound: sid,
     };
-    emit(ctx, SoundOutput::Play { target, looping });
+    emit(
+        ctx,
+        SoundOutput::Play {
+            target,
+            looping,
+            length_ticks,
+            tick: now,
+        },
+    );
     if paused {
-        emit(ctx, SoundOutput::Pause { target, paused: true });
+        emit(
+            ctx,
+            SoundOutput::Pause {
+                target,
+                paused: true,
+                tick: now,
+            },
+        );
     }
     Real::new(f64::from(iid))
 }
@@ -251,10 +272,12 @@ pub fn instance_stop(ctx: &mut Ctx, inst: Real) -> Real {
         return Real::ZERO;
     };
     let sound = st.instances.remove(pos).sound;
+    let tick = ctx.w.tick;
     emit(
         ctx,
         SoundOutput::Stop {
             target: SoundTarget::FmodInstance { instance: n, sound },
+            tick,
         },
     );
     Real::ONE
@@ -281,7 +304,14 @@ pub fn instance_set_paused(ctx: &mut Ctx, inst: Real, paused: bool) -> Real {
         }
         _ => return Real::ONE,
     }
-    emit(ctx, SoundOutput::Pause { target, paused });
+    emit(
+        ctx,
+        SoundOutput::Pause {
+            target,
+            paused,
+            tick: now,
+        },
+    );
     Real::ONE
 }
 
@@ -298,7 +328,8 @@ pub fn instance_set_volume(ctx: &mut Ctx, inst: Real, value: Real) -> Real {
         instance: i.id,
         sound: i.sound,
     };
-    emit(ctx, SoundOutput::Volume { target, value });
+    let tick = ctx.w.tick;
+    emit(ctx, SoundOutput::Volume { target, value, tick });
     Real::ONE
 }
 
@@ -326,6 +357,7 @@ pub fn group_stop(ctx: &mut Ctx, grp: Real) -> Real {
     let Some(g) = group(grp) else {
         return Real::ZERO;
     };
+    let tick = ctx.w.tick;
     let st = &mut ctx.w.sound.gmfmod;
     let sounds = st.sounds.clone();
     st.instances.retain(|i| {
@@ -339,6 +371,7 @@ pub fn group_stop(ctx: &mut Ctx, grp: Real) -> Real {
         ctx,
         SoundOutput::Stop {
             target: SoundTarget::FmodGroup(u8::try_from(g).unwrap_or(0)),
+            tick,
         },
     );
     Real::ONE
@@ -353,11 +386,13 @@ pub fn group_set_volume(ctx: &mut Ctx, grp: Real, value: Real) -> Real {
         return Real::ZERO;
     };
     ctx.w.sound.gmfmod.group_volume[g] = value;
+    let tick = ctx.w.tick;
     emit(
         ctx,
         SoundOutput::Volume {
             target: SoundTarget::FmodGroup(u8::try_from(g).unwrap_or(0)),
             value,
+            tick,
         },
     );
     Real::ONE
@@ -380,11 +415,13 @@ pub fn group_set_pitch(ctx: &mut Ctx, grp: Real, value: Real) -> Real {
         return Real::ZERO;
     };
     ctx.w.sound.gmfmod.group_pitch[g] = value;
+    let tick = ctx.w.tick;
     emit(
         ctx,
         SoundOutput::Pitch {
             target: SoundTarget::FmodGroup(u8::try_from(g).unwrap_or(0)),
             value,
+            tick,
         },
     );
     Real::ONE
@@ -404,7 +441,8 @@ pub fn all_stop(ctx: &mut Ctx) -> Real {
         return Real::ZERO;
     }
     ctx.w.sound.gmfmod.instances.clear();
-    emit(ctx, SoundOutput::StopAll { adapter: true });
+    let tick = ctx.w.tick;
+    emit(ctx, SoundOutput::StopAll { adapter: true, tick });
     Real::ONE
 }
 
@@ -423,7 +461,8 @@ pub fn free(ctx: &mut Ctx) -> Real {
         next_instance: next,
         ..GmfmodState::default()
     };
-    emit(ctx, SoundOutput::StopAll { adapter: true });
+    let tick = ctx.w.tick;
+    emit(ctx, SoundOutput::StopAll { adapter: true, tick });
     Real::ONE
 }
 

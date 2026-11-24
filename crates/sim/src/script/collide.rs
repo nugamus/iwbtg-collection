@@ -104,7 +104,7 @@ fn handle(id: Option<InstId>) -> Dynamic {
 fn query<R>(s: &Shared, me: Option<Inst>, f: impl FnOnce(&Ctx) -> Result<R, SimError>) -> Res<R> {
     s.with_ctx(|ctx| {
         if let Some(i) = me
-            && !ctx.w.exists(i.0)
+            && !ctx.w.visible(i.0, false)
         {
             return Err(runtime_error(format!("instance {} no longer exists", i.0.0)));
         }

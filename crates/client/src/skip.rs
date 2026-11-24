@@ -266,12 +266,23 @@ mod tests {
         use iwbtg_sim::def::SoundId;
         use iwbtg_sim::sound::SoundTarget;
         let target = SoundTarget::Builtin(SoundId(0));
-        let play = |looping| OutputEvent::Sound(SoundOutput::Play { target, looping });
+        let play = |looping| {
+            OutputEvent::Sound(SoundOutput::Play {
+                target,
+                looping,
+                length_ticks: 0,
+                tick: 0,
+            })
+        };
         assert!(!lasts(&play(false)), "a one-shot sound");
         assert!(lasts(&play(true)), "music");
-        assert!(lasts(&OutputEvent::Sound(SoundOutput::Stop { target })));
+        assert!(lasts(&OutputEvent::Sound(SoundOutput::Stop {
+            target,
+            tick: 0
+        })));
         assert!(lasts(&OutputEvent::Sound(SoundOutput::StopAll {
-            adapter: false
+            adapter: false,
+            tick: 0,
         })));
     }
 }

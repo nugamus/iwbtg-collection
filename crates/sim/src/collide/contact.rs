@@ -24,24 +24,110 @@ use crate::world::{Ctx, InstId};
 /// Most untested steps a positive `maxdist` may take beyond the reach of every solid.
 pub const MAX_FREE_STEPS: u64 = 1 << 20;
 
+/// Why a contact move stopped.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ContactStop {
+    /// The next step would overlap a solid: the move stopped at contact.
+    Contact,
+    /// The step limit (including a zero `maxdist`) ran out before a solid was met.
+    Limit,
+    /// C10 `McsStart::ManualNoMove`: the start already overlapped a solid, so nothing moved.
+    OverlappingStart,
+}
+
+/// The axis-aligned face a contact move stopped against, pointing away from the solid.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ContactFace {
+    /// The solid is to the right; the face points left.
+    Left,
+    /// The solid is to the left; the face points right.
+    Right,
+    /// The solid is below; the face points up.
+    Up,
+    /// The solid is above; the face points down.
+    Down,
+}
+
+/// The result of [`resolve_contact_move`] (the D3 seam): where the move ended, why it stopped,
+/// and the face it stopped against when that was a contact.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct ContactMove {
+    /// The position after the move.
+    pub pos: (Real, Real),
+    /// Why the move stopped.
+    pub stop: ContactStop,
+    /// The contact face, `Some` exactly when `stop` is [`ContactStop::Contact`] and the step is
+    /// axis-aligned. A 45-degree step has no single face in this model; D4's analytic normal
+    /// replaces this.
+    pub normal: Option<ContactFace>,
+}
+
+/// The face opposite a unit step `(dcos dir, -dsin dir)`.
+fn face_normal(dir: Real) -> Option<ContactFace> {
+    let (dx, dy) = (-dcos(dir).get(), dsin(dir).get());
+    if dx.abs() > dy.abs() {
+        Some(if dx < 0.0 {
+            ContactFace::Left
+        } else {
+            ContactFace::Right
+        })
+    } else if dy.abs() > dx.abs() {
+        Some(if dy < 0.0 {
+            ContactFace::Up
+        } else {
+            ContactFace::Down
+        })
+    } else {
+        None
+    }
+}
+
 /// GML `move_contact_solid` (Inferred): unit steps `(dcos d, -dsin d)` until one more step would
 /// hit a solid, at most `maxdist` steps (C11), no limit when negative (bounded by the reach of
 /// the solids, then `Unsupported`). Overlapping start per C10 (default: no move, Confirmed
 /// (recorder) little-runner t-col-07-d.csv rows 4-5).
 pub fn move_contact_solid(ctx: &mut Ctx, me: InstId, dir: Real, maxdist: Real) -> Result<(), SimError> {
+    let run = contact_move(ctx, me, dir, maxdist)?;
+    set_position(ctx, me, run.start, run.end)
+}
+
+/// D3 seam: one solid-contact resolver around a contact move. It runs the same position loop as
+/// [`move_contact_solid`] and additionally reports why the move stopped and, for a contact, the
+/// face. No caller uses it yet; it is the API D3/D4 move the movement actions onto. Behavior and
+/// errors are identical to [`move_contact_solid`], which keeps its signature.
+pub fn resolve_contact_move(
+    ctx: &mut Ctx,
+    me: InstId,
+    dir: Real,
+    maxdist: Real,
+) -> Result<ContactMove, SimError> {
+    let run = contact_move(ctx, me, dir, maxdist)?;
+    set_position(ctx, me, run.start, run.end)?;
+    Ok(ContactMove {
+        pos: run.end,
+        stop: run.stop,
+        normal: (run.stop == ContactStop::Contact)
+            .then(|| face_normal(dir))
+            .flatten(),
+    })
+}
+
+/// The shared position loop of [`move_contact_solid`] and [`resolve_contact_move`].
+struct ContactRun {
+    start: (Real, Real),
+    end: (Real, Real),
+    stop: ContactStop,
+}
+
+fn contact_move(ctx: &mut Ctx, me: InstId, dir: Real, maxdist: Real) -> Result<ContactRun, SimError> {
     let limit = mcs_step_limit(maxdist)?;
-    let (start, end) = {
-        let q = Q::of(ctx);
-        let inst = q.inst(me)?;
-        let start = (inst.m.x(), inst.m.y());
-        let reach = || solid_reach(&q, me);
-        let hits = |x: Real, y: Real| Ok(!q.place_hits(me, x, y, Target::Any, true)?.is_empty());
-        (
-            start,
-            contact_steps(start, dir, limit, ctx.rules.collide.mcs_start, hits, reach)?,
-        )
-    };
-    set_position(ctx, me, start, end)
+    let q = Q::of(ctx);
+    let inst = q.inst(me)?;
+    let start = (inst.m.x(), inst.m.y());
+    let reach = || solid_reach(&q, me);
+    let hits = |x: Real, y: Real| Ok(!q.place_hits(me, x, y, Target::Any, true)?.is_empty());
+    let (end, stop) = contact_steps_reason(start, dir, limit, ctx.rules.collide.mcs_start, hits, reach)?;
+    Ok(ContactRun { start, end, stop })
 }
 
 /// GML `move_outside_solid` (Inferred): when `me` overlaps a solid, step 1 px in `dir` until it
@@ -101,11 +187,23 @@ pub fn contact_steps(
     dir: Real,
     limit: Option<u64>,
     start_rule: McsStart,
-    mut hits: impl FnMut(Real, Real) -> Result<bool, SimError>,
+    hits: impl FnMut(Real, Real) -> Result<bool, SimError>,
     reach: impl FnOnce() -> Result<u64, SimError>,
 ) -> Result<(Real, Real), SimError> {
+    contact_steps_reason(start, dir, limit, start_rule, hits, reach).map(|(pos, _)| pos)
+}
+
+/// [`contact_steps`] with why the loop stopped (the D3 seam). The position is identical.
+pub fn contact_steps_reason(
+    start: (Real, Real),
+    dir: Real,
+    limit: Option<u64>,
+    start_rule: McsStart,
+    mut hits: impl FnMut(Real, Real) -> Result<bool, SimError>,
+    reach: impl FnOnce() -> Result<u64, SimError>,
+) -> Result<((Real, Real), ContactStop), SimError> {
     if start_rule == McsStart::ManualNoMove && hits(start.0, start.1)? {
-        return Ok(start);
+        return Ok((start, ContactStop::OverlappingStart));
     }
     let (dx, dy) = unit_step(dir)?;
     let mut pos = start;
@@ -114,7 +212,7 @@ pub fn contact_steps(
     let mut taken: u64 = 0;
     loop {
         if limit.is_some_and(|l| taken >= l) {
-            return Ok(pos);
+            return Ok((pos, ContactStop::Limit));
         }
         // Past the reach of every solid: no step can stop any more.
         let b = match bound {
@@ -144,11 +242,11 @@ pub fn contact_steps(
             for _ in 0..rest {
                 pos = (pos.0 + dx, pos.1 + dy);
             }
-            return Ok(pos);
+            return Ok((pos, ContactStop::Limit));
         }
         let next = (pos.0 + dx, pos.1 + dy);
         if hits(next.0, next.1)? {
-            return Ok(pos);
+            return Ok((pos, ContactStop::Contact));
         }
         pos = next;
         taken += 1;
@@ -240,4 +338,19 @@ fn set_position(ctx: &mut Ctx, me: InstId, start: (Real, Real), end: (Real, Real
         inst.m.set_y(end.1)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The four axis moves report the face opposite the step; the seam's report matches the
+    /// direction the movement actions already pass.
+    #[test]
+    fn the_contact_face_is_opposite_the_step() {
+        assert_eq!(face_normal(Real::new(0.0)), Some(ContactFace::Left));
+        assert_eq!(face_normal(Real::new(90.0)), Some(ContactFace::Down));
+        assert_eq!(face_normal(Real::new(180.0)), Some(ContactFace::Right));
+        assert_eq!(face_normal(Real::new(270.0)), Some(ContactFace::Up));
+    }
 }

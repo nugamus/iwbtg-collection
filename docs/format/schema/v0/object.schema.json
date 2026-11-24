@@ -117,6 +117,13 @@
         "null"
       ]
     },
+    "timeline": {
+      "description": "Timeline id (`timelines/<id>.toml`) the kind's instances start at Create.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "visible": {
       "description": "GM `visible`; default true.",
       "type": [

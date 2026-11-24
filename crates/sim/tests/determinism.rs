@@ -22,7 +22,7 @@ const COUNTER: VarId = VarId(10);
 
 /// `state_hash` after the last tick, as lowercase hex. Recorded on Windows x86_64. A deliberate
 /// change to the sim or to `HASH_LAYOUT` updates it in the same PR.
-const FINAL_HASH: &str = "ba0d77d6a9f33841cdb2a5a65056093bd29fa0e073d0adde21ae5bd1619abddd";
+const FINAL_HASH: &str = "2f12c96339051c527d5b7d6bf85cd3e24c8240e3c1902e042ef27ce815a296c3";
 
 fn child(tag: &str) -> ProbeState {
     let mut s = ProbeState::new(tag, None);
@@ -111,7 +111,7 @@ fn hex(bytes: &[u8]) -> String {
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
 #[test]
-fn wp1_probe_world_10000_ticks_hashes_are_identical() {
+fn probe_world_10000_ticks_hashes_are_identical() {
     let (a_points, a_final) = run();
     let (b_points, b_final) = run();
     assert_eq!(

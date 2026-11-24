@@ -1,5 +1,8 @@
 //! Alarms (docs/architecture/sim/tick.md row 4, R3, R3b). WP0 declared; WP1 owns.
 //!
+//! One system in the R30 tick scheduler: `TimingRules::alarms` declares a value to be a count of
+//! ticks, and the alarm phase advances it once per tick.
+//!
 //! CLONE_SPEC tick loop, Confirmed (recorder): in the alarm phase, for each instance, alarms 0 to
 //! 11 in index order; an alarm whose object has that alarm event counts down by 1 and its event
 //! runs when it reaches 0 (traces/rely-the-needle-4-2/t-evo-1.csv rows 3-5). A fired alarm that

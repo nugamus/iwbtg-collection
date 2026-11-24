@@ -252,6 +252,15 @@ fn a_new_case_needs_a_repin_but_no_bump() {
     ));
 }
 
+/// A state-hash encoding change (`HASH_LAYOUT`) requires a `SIM_VERSION` bump
+/// (docs/architecture/versioning.md). Before the freeze point the pin check above is inert, so
+/// this pair is the active local guard: changing either half alone fails here, and changing both
+/// is a review-visible edit. `HASH_LAYOUT` 3 shipped with `SIM_VERSION` 2 (#1157/#1292, #1303).
+#[test]
+fn a_hash_layout_change_comes_with_a_sim_version_bump() {
+    assert_eq!((iwbtg_sim::hash::HASH_LAYOUT, iwbtg_sim::SIM_VERSION), (3, 2));
+}
+
 #[test]
 fn versions_never_go_below_the_freeze_or_the_record() {
     let rec = pins(3, &[("case x", A)]);

@@ -237,20 +237,40 @@ impl Builtin {
         }
     }
 
+    /// The native behaviour this kind belongs to (decision 0005; [`crate::def::traits`]):
+    /// one of the twelve standard behaviours, the controller, the kid, or a data base.
+    #[must_use]
+    pub fn behaviour(self) -> crate::def::traits::Behaviour {
+        crate::def::traits::behaviour(self)
+    }
+
     /// The built-in a package may name, by its package-format name. `probe` and `inert` are not
     /// package names and give `None`.
+    ///
+    /// A standard behaviour base name (`base = "hazard"`) is an additive alias for the
+    /// behaviour's reference kind ([`crate::def::traits::BEHAVIOUR_BASES`]); the 50 kind names
+    /// keep their own behavior.
     pub fn from_name(name: &str) -> Option<Builtin> {
         Builtin::ALL
             .iter()
             .copied()
             .filter(|b| !matches!(b, Builtin::Probe | Builtin::Inert))
             .find(|b| b.name() == name)
+            .or_else(|| crate::def::traits::base_from_name(name))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn behaviour_bases_resolve_to_their_reference_kind() {
+        assert_eq!(Builtin::from_name("hazard"), Some(Builtin::Killer));
+        assert_eq!(Builtin::from_name("solid"), Some(Builtin::Block));
+        assert_eq!(Builtin::from_name("spawn"), Some(Builtin::KidStart));
+        assert_eq!(Builtin::from_name("nope"), None);
+    }
 
     #[test]
     fn names_round_trip_and_are_unique() {

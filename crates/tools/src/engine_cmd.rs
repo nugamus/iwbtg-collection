@@ -93,7 +93,7 @@ fn run_replay(
     let mut def = load_strict(files, mode)?;
     def.engine_rev = rev;
     let options = SimOptions {
-        start: input.start(0),
+        start: input.start(&def, 0)?,
         seed: input.seed,
         dll_mode: DllMode::Model,
         mode: input.mode,

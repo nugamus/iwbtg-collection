@@ -1,4 +1,4 @@
-//! Timeline files to `TimelineDef` (docs/plans/sim-core.md 8.2 step 7; docs/format/timelines.md).
+//! Timeline files to `TimelineDef` (docs/format/timelines.md).
 //! WP0 creates the file; WP7b owns it.
 //!
 //! `timelines/<id>.toml` holds `moments = [{ t = 0, call = "intro" }, ...]` in tick order and an

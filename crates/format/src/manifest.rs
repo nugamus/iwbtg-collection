@@ -68,6 +68,15 @@ pub struct Manifest {
     /// Built-in behavior revision this package was verified against.
     #[cfg_attr(feature = "schema", schemars(with = "u16"))]
     pub engine_rev: Spanned<u16>,
+    /// Named, versioned semantic contract (`gm8@<rev>`); absent means `gm8` at `engine_rev`
+    /// (decision 0005, docs/format/game.md).
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub ruleset: Option<Spanned<String>>,
+    /// The compatibility profile and its declared deviations (decision 0005).
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<CompatSection>"))]
+    pub compat: Option<Spanned<CompatSection>>,
     /// Original runner; selects event-order differences.
     #[cfg_attr(feature = "schema", schemars(with = "crate::schema::RunnerSchema"))]
     pub runner: Spanned<Runner>,
@@ -93,7 +102,7 @@ pub struct Manifest {
     #[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
     pub room_order: Option<Spanned<Vec<Spanned<String>>>>,
     /// Engine settings: restart and reset models, boot kinds, number model, new-game room, engine
-    /// roles (docs/plans/sim-core.md 8.3).
+    /// roles (docs/format/game.md).
     #[serde(default)]
     #[cfg_attr(feature = "schema", schemars(with = "Option<EngineSection>"))]
     pub engine: Option<Spanned<EngineSection>>,
@@ -141,6 +150,48 @@ pub struct Manifest {
     /// no extra action.
     #[serde(default)]
     pub controls: Option<Controls>,
+}
+
+/// `[compat]`: the ruleset's compatibility profile and the deviations the package declares
+/// (decision 0005, docs/format/game.md).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct CompatSection {
+    /// `profile = "<ruleset>/<family>@<n>"` (`gm8/a1@1`). Absent: inferred from the physics
+    /// preset.
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub profile: Option<Spanned<String>>,
+    /// `[[compat.deviation]]` entries. Each names one id of the ruleset's closed catalogue.
+    #[serde(default)]
+    pub deviation: Vec<CompatDeviation>,
+}
+
+/// One `[[compat.deviation]]` entry. Every field is provenance: a deviation says what it selects,
+/// why, its feel tier, its evidence and the issue that tracks it.
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct CompatDeviation {
+    /// A catalogue id (`save.position`).
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub id: Spanned<String>,
+    /// The value the deviation selects, with the catalogue entry's type.
+    #[cfg_attr(feature = "schema", schemars(with = "crate::compat::DeviationValue"))]
+    pub value: Spanned<crate::compat::DeviationValue>,
+    /// Why the package keeps this behavior.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub why: Spanned<String>,
+    /// The feel tier, `F1`, `F2` or `F3`.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub impact: Spanned<String>,
+    /// The trace, feel contract or test that proves it.
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    pub evidence: Spanned<String>,
+    /// The issue that tracks the deviation.
+    #[cfg_attr(feature = "schema", schemars(with = "u64"))]
+    pub issue: Spanned<u64>,
 }
 
 /// Longest `[controls]` label, in characters: it has to fit a key binding row and the HUD.
@@ -774,7 +825,7 @@ impl ResetSection {
 }
 
 /// `[defaults.<builtin>]`: the sprite and mask a bare built-in kind uses, per variant
-/// (docs/plans/sim-core.md 8.3, "Kind default sprites per variant").
+/// (docs/format/game.md).
 #[derive(Debug, Clone, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
@@ -1098,6 +1149,8 @@ impl Manifest {
         {
             crate::engine_pack::validate(v.files, engine.get_ref(), v.out);
         }
+        self.validate_ruleset(&mut v);
+        self.validate_compat(&mut v);
         // TODO(OPEN: runner differences between GM 8.0 and 8.1, from the CLONE_SPEC): nothing to
         // check yet; the sim will read `runner` once the differences are known.
         self.validate_physics(&mut v);
@@ -1182,6 +1235,126 @@ impl Manifest {
                     ),
                 ),
                 Some(_) => {}
+            }
+        }
+    }
+
+    /// `ruleset = "<name>@<rev>"` (decision 0005). In format 0 the revision is `engine_rev` and
+    /// the only ruleset is `gm8`; `standard` and the format-1 fields are not implemented.
+    fn validate_ruleset(&self, v: &mut Validator<'_>) {
+        let Some(ruleset) = &self.ruleset else { return };
+        let rev = *self.engine_rev.get_ref();
+        match crate::compat::Ruleset::parse(ruleset.get_ref()) {
+            Err(e) => v.error(ruleset.span(), e),
+            Ok(r) if r.name != crate::compat::GM8 => v.error(
+                ruleset.span(),
+                format!(
+                    "ruleset `{}` is not implemented in format 0; `{}` at the package's \
+                     `engine_rev` is the only ruleset (decision 0005)",
+                    r.name,
+                    crate::compat::GM8
+                ),
+            ),
+            Ok(r) if r.rev != rev => v.error(
+                ruleset.span(),
+                format!(
+                    "ruleset revision {} disagrees with `engine_rev` {rev}; in format 0 \
+                     `engine_rev` is the ruleset revision",
+                    r.rev
+                ),
+            ),
+            Ok(_) => {}
+        }
+    }
+
+    /// `[compat] profile` and `[[compat.deviation]]`: the profile is one of the engine's
+    /// bundles, and a deviation names one id of the closed catalogue with its type and
+    /// provenance (decision 0005). The loader compares both with the resolved physics.
+    fn validate_compat(&self, v: &mut Validator<'_>) {
+        let Some(compat) = &self.compat else { return };
+        let c = compat.get_ref();
+        if let Some(profile) = &c.profile {
+            match crate::compat::Profile::parse(profile.get_ref()) {
+                Err(e) => v.error(profile.span(), e),
+                Ok(p) if p.ruleset != crate::compat::GM8 => v.error(
+                    profile.span(),
+                    format!(
+                        "profile ruleset `{}` is not implemented in format 0; only `{}` is",
+                        p.ruleset,
+                        crate::compat::GM8
+                    ),
+                ),
+                Ok(_) => {}
+            }
+        }
+        let mut seen = BTreeSet::new();
+        for dev in &c.deviation {
+            let id = dev.id.get_ref();
+            let Some(spec) = crate::compat::spec(id) else {
+                let ids: Vec<&str> = crate::compat::DEVIATIONS.iter().map(|d| d.id).collect();
+                v.error(
+                    dev.id.span(),
+                    format!(
+                        "unknown deviation `{id}`: the ids are the ruleset's closed catalogue \
+                         (decision 0005): {}",
+                        ids.join(", ")
+                    ),
+                );
+                continue;
+            };
+            match spec.kind {
+                crate::compat::Kind::Enum(values) => match dev.value.get_ref().as_str() {
+                    None => v.error(
+                        dev.value.span(),
+                        format!("deviation `{id}` takes one of {} as a string", values.join(", ")),
+                    ),
+                    Some(value) if !values.contains(&value) => v.error(
+                        dev.value.span(),
+                        format!(
+                            "deviation `{id}` is one of {}; `{value}` is not",
+                            values.join(", ")
+                        ),
+                    ),
+                    Some(_) => {}
+                },
+                crate::compat::Kind::Bool => {
+                    if !matches!(dev.value.get_ref(), crate::compat::DeviationValue::Bool(_)) {
+                        v.error(
+                            dev.value.span(),
+                            format!("deviation `{id}` takes `true` or `false`"),
+                        );
+                    }
+                }
+            }
+            for (field, value) in [
+                ("why", &dev.why),
+                ("impact", &dev.impact),
+                ("evidence", &dev.evidence),
+            ] {
+                if value.get_ref().trim().is_empty() {
+                    v.error(
+                        value.span(),
+                        format!("deviation `{id}` needs `{field}` (provenance)"),
+                    );
+                }
+            }
+            if !matches!(dev.impact.get_ref().as_str(), "F1" | "F2" | "F3") {
+                v.error(
+                    dev.impact.span(),
+                    format!(
+                        "deviation `{id}` impact `{}` is not a feel tier (F1, F2 or F3)",
+                        dev.impact.get_ref()
+                    ),
+                );
+            }
+            if *dev.issue.get_ref() == 0 {
+                v.error(
+                    dev.issue.span(),
+                    format!("deviation `{id}` needs the issue number that tracks it"),
+                );
+            }
+            if !seen.insert(id.to_owned()) {
+                v.error(dev.id.span(), format!("deviation `{id}` is declared twice"));
             }
         }
     }

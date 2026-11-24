@@ -190,7 +190,42 @@ pub const REAL_PROPS: &[&str] = &[
     "image_alpha",
     "depth",
     "id",
+    // The kid's fields that read as a number (decision 0004).
+    "curJumps",
+    "tempHspeed",
+    "maxSpeed",
+    "maxVspeed",
+    "maxFallSpeed",
+    "scale",
+    "yflag",
+    "facing",
+    "walk_h",
+    "jump",
+    "jump2",
+    "jump3",
 ];
+
+/// Instance properties that read as a bool: the generic flags and the kid's flag fields.
+pub const BOOL_PROPS: &[&str] = &[
+    "visible",
+    "solid",
+    "djump",
+    "tjump",
+    "onPlatform",
+    "ladder",
+    "frozen",
+    "frozen2",
+    "muteki",
+    "ladderud",
+    "ladderjump",
+    "flipped",
+    "on_slope_last",
+    "onVineL",
+    "onVineR",
+];
+
+/// Instance properties that read as a string (the room-file name and group).
+pub const STR_PROPS: &[&str] = &["name", "group"];
 
 /// Functions Rhai itself handles (function pointers); they cannot be checked statically.
 const ENGINE_FNS: &[&str] = &["Fn", "call", "curry", "is_def_fn", "is_def_var"];
@@ -247,6 +282,20 @@ impl Names {
             Names::Target => "role or kind",
         }
     }
+}
+
+/// The `(name, parameter count)` of every function `source` defines, or `None` when it does not
+/// compile under the IWS profile. The loader uses this to check the functions a kid profile's
+/// script slots name (decision 0004) while it still has the profile file's text for positions.
+#[must_use]
+pub fn function_arities(source: &str) -> Option<BTreeSet<(String, usize)>> {
+    let iws = Iws::new(RunnerRules::default().num);
+    let ast = iws.compile_ast(source).ok()?;
+    Some(
+        ast.iter_fn_def()
+            .map(|f| (f.name.to_string(), f.params.len()))
+            .collect(),
+    )
 }
 
 /// Checks every script of `def`. Issues come sorted by script, line and column.
@@ -903,10 +952,10 @@ fn g() { let t = S + OFF + B; t + N }
             assert!(getters.contains(*p), "`{p}` is not a registered getter");
         }
         for g in &getters {
-            if !["visible", "solid", "kind"].contains(&g.as_str()) {
+            if g != "kind" && !BOOL_PROPS.contains(&g.as_str()) {
                 assert!(
-                    REAL_PROPS.contains(&g.as_str()),
-                    "getter `{g}` is not in REAL_PROPS"
+                    REAL_PROPS.contains(&g.as_str()) || STR_PROPS.contains(&g.as_str()),
+                    "getter `{g}` is not in REAL_PROPS, BOOL_PROPS or STR_PROPS"
                 );
             }
         }

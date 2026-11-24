@@ -4,9 +4,11 @@
 //! `replay`.
 
 mod assets_cmd;
+mod baseline;
 mod case;
 mod determinism_cmd;
 mod engine_cmd;
+mod feel_cmd;
 mod import;
 mod pack_cmd;
 mod pkg_cmd;
@@ -50,6 +52,9 @@ enum Command {
     /// Headless replays.
     #[command(subcommand)]
     Replay(ReplayCommand),
+    /// Feel contracts: run one, or sweep a directory against a baseline.
+    #[command(subcommand)]
+    Feel(FeelCommand),
     /// Profiles a replay: script budget, instances and ms per tick.
     Profile(profile_cmd::ProfileArgs),
     /// Rooms of a package.
@@ -204,6 +209,33 @@ enum TraceCommand {
 }
 
 #[derive(Subcommand)]
+enum FeelCommand {
+    /// Runs one contract and prints its verdict and every mismatch.
+    Run {
+        /// Contract file.
+        contract: PathBuf,
+        /// Package folders for contracts that name a package id (default: a fixture only).
+        #[arg(long)]
+        packages: Option<PathBuf>,
+    },
+    /// Runs every contract below a folder and compares the statuses with a baseline.
+    Sweep {
+        /// Contracts root: `*.toml` files, each `id` equal to its path below the root.
+        #[arg(long)]
+        contracts: PathBuf,
+        /// Package folders for contracts that name a package id.
+        #[arg(long)]
+        packages: Option<PathBuf>,
+        /// Baseline file of `<area>/<name> <STATUS>` lines to compare with.
+        #[arg(long)]
+        baseline: Option<PathBuf>,
+        /// Rewrite the baseline with this run's statuses instead of comparing.
+        #[arg(long, requires = "baseline")]
+        bless: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum PkgCommand {
     /// Validates and loads a package.
     Check {
@@ -300,7 +332,7 @@ fn research_dir(arg: Option<PathBuf>) -> Result<PathBuf, ToolError> {
 /// The cases folder: `--cases`, else IWBTG_CASES, else `crates/tools/cases` in the current folder
 /// or the nearest folder above it. Decided at run time, never from the build machine's paths, so
 /// a moved checkout and a wasm32 build (with the folder preopened) work.
-fn cases_dir(arg: Option<PathBuf>) -> Result<PathBuf, ToolError> {
+pub(crate) fn cases_dir(arg: Option<PathBuf>) -> Result<PathBuf, ToolError> {
     let env = std::env::var_os("IWBTG_CASES").map(PathBuf::from);
     let cwd = std::env::current_dir().ok();
     resolve_cases(arg, env, cwd.as_deref())
@@ -426,6 +458,15 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             profile_cmd::main(&args)?;
             Ok(true)
         }
+        Command::Feel(FeelCommand::Run { contract, packages }) => {
+            feel_cmd::run_main(&contract, packages.as_deref())
+        }
+        Command::Feel(FeelCommand::Sweep {
+            contracts,
+            packages,
+            baseline,
+            bless,
+        }) => feel_cmd::sweep_main(&contracts, packages.as_deref(), baseline.as_deref(), bless),
         Command::Replay(ReplayCommand::Run(args)) => {
             replay_cmd::main(&args)?;
             Ok(true)

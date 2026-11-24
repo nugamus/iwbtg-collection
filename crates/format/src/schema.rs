@@ -117,6 +117,8 @@ pub struct ObjectShape {
     pub counts_as: Option<Vec<String>>,
     /// Classes whose touch runs the script's `collide(other)`: named classes or package class names.
     pub collides_with: Option<Vec<String>>,
+    /// Timeline id (`timelines/<id>.toml`) the kind's instances start at Create.
+    pub timeline: Option<String>,
     /// Legacy converter key, read only by trace builds. Write `counts_as` instead.
     pub roles: Option<Vec<String>>,
     /// Params with defaults; instances may override.

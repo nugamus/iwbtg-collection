@@ -9,6 +9,7 @@
 //! A new test file goes into this list (`autotests = false` in Cargo.toml, so cargo won't find it alone).
 
 // Shared helpers, loaded once here and used by the modules below.
+
 #[path = "support.rs"]
 mod support;
 
@@ -21,50 +22,197 @@ mod bbox;
 #[path = "bounce.rs"]
 mod bounce;
 
+#[path = "builtins_block.rs"]
+mod builtins_block;
+
+#[path = "builtins_block_proximity.rs"]
+mod builtins_block_proximity;
+
+#[path = "builtins_blood.rs"]
+mod builtins_blood;
+
+#[path = "builtins_blood_emitter.rs"]
+mod builtins_blood_emitter;
+
+#[path = "builtins_boss_gate.rs"]
+mod builtins_boss_gate;
+
 #[path = "builtins_boss_item.rs"]
 mod builtins_boss_item;
 
-#[path = "builtins_drop_flip_edge.rs"]
-mod builtins_drop_flip_edge;
+#[path = "builtins_boss_item_support.rs"]
+mod builtins_boss_item_support;
 
-#[path = "builtins_kid_modifiers.rs"]
-mod builtins_kid_modifiers;
+#[path = "builtins_bow.rs"]
+mod builtins_bow;
 
-#[path = "builtins_misc.rs"]
-mod builtins_misc;
+#[path = "builtins_breakable_block.rs"]
+mod builtins_breakable_block;
+
+#[path = "builtins_bullet_blocker.rs"]
+mod builtins_bullet_blocker;
+
+#[path = "builtins_camera.rs"]
+mod builtins_camera;
+
+#[path = "builtins_conveyor.rs"]
+mod builtins_conveyor;
+
+#[path = "builtins_difficulty_warp.rs"]
+mod builtins_difficulty_warp;
+
+#[path = "builtins_drop_flip_edge_support.rs"]
+mod builtins_drop_flip_edge_support;
+
+#[path = "builtins_drop_platform.rs"]
+mod builtins_drop_platform;
+
+#[path = "builtins_edge_warp.rs"]
+mod builtins_edge_warp;
+
+#[path = "builtins_fake_block.rs"]
+mod builtins_fake_block;
+
+#[path = "builtins_flags.rs"]
+mod builtins_flags;
+
+#[path = "builtins_game_clear.rs"]
+mod builtins_game_clear;
+
+#[path = "builtins_game_over.rs"]
+mod builtins_game_over;
+
+#[path = "builtins_gravity_flip.rs"]
+mod builtins_gravity_flip;
+
+#[path = "builtins_hidden_block.rs"]
+mod builtins_hidden_block;
+
+#[path = "builtins_item_viewer.rs"]
+mod builtins_item_viewer;
+
+#[path = "builtins_jump_refresher.rs"]
+mod builtins_jump_refresher;
+
+#[path = "builtins_kid_bullet.rs"]
+mod builtins_kid_bullet;
+
+#[path = "builtins_kid_modifiers_support.rs"]
+mod builtins_kid_modifiers_support;
+
+#[path = "builtins_kid_param_zone.rs"]
+mod builtins_kid_param_zone;
+
+#[path = "builtins_kid_start.rs"]
+mod builtins_kid_start;
+
+#[path = "builtins_killer.rs"]
+mod builtins_killer;
+
+#[path = "builtins_ladder_decor.rs"]
+mod builtins_ladder_decor;
+
+#[path = "builtins_misc_support.rs"]
+mod builtins_misc_support;
+
+#[path = "builtins_moving_platform.rs"]
+mod builtins_moving_platform;
 
 #[path = "builtins_music.rs"]
 mod builtins_music;
 
-#[path = "builtins_playerface_water.rs"]
-mod builtins_playerface_water;
+#[path = "builtins_music_params.rs"]
+mod builtins_music_params;
 
-#[path = "builtins_rely_a.rs"]
-mod builtins_rely_a;
+#[path = "builtins_orbit.rs"]
+mod builtins_orbit;
 
-#[path = "builtins_rely_b.rs"]
-mod builtins_rely_b;
+#[path = "builtins_path_platform.rs"]
+mod builtins_path_platform;
 
-#[path = "builtins_rely_c.rs"]
-mod builtins_rely_c;
+#[path = "builtins_platform.rs"]
+mod builtins_platform;
 
-#[path = "builtins_tier1.rs"]
-mod builtins_tier1;
+#[path = "builtins_playerface.rs"]
+mod builtins_playerface;
 
-#[path = "builtins_tier3.rs"]
-mod builtins_tier3;
+#[path = "builtins_playerface_water_support.rs"]
+mod builtins_playerface_water_support;
 
-#[path = "builtins_trap_block.rs"]
-mod builtins_trap_block;
+#[path = "builtins_rely_a_support.rs"]
+mod builtins_rely_a_support;
+
+#[path = "builtins_rely_b_support.rs"]
+mod builtins_rely_b_support;
+
+#[path = "builtins_rely_c_support.rs"]
+mod builtins_rely_c_support;
+
+#[path = "builtins_save.rs"]
+mod builtins_save;
+
+#[path = "builtins_secret_item.rs"]
+mod builtins_secret_item;
+
+#[path = "builtins_sign.rs"]
+mod builtins_sign;
+
+#[path = "builtins_slope.rs"]
+mod builtins_slope;
+
+#[path = "builtins_spike.rs"]
+mod builtins_spike;
+
+#[path = "builtins_spring.rs"]
+mod builtins_spring;
+
+#[path = "builtins_tier1_support.rs"]
+mod builtins_tier1_support;
+
+#[path = "builtins_tier3_support.rs"]
+mod builtins_tier3_support;
+
+#[path = "builtins_time_limit.rs"]
+mod builtins_time_limit;
+
+#[path = "builtins_trap.rs"]
+mod builtins_trap;
+
+#[path = "builtins_trap_block_support.rs"]
+mod builtins_trap_block_support;
+
+#[path = "builtins_trap_stopper.rs"]
+mod builtins_trap_stopper;
+
+#[path = "builtins_trigger.rs"]
+mod builtins_trigger;
+
+#[path = "builtins_vine.rs"]
+mod builtins_vine;
+
+#[path = "builtins_warp.rs"]
+mod builtins_warp;
+
+#[path = "builtins_water.rs"]
+mod builtins_water;
 
 #[path = "builtins_world.rs"]
 mod builtins_world;
+
+#[path = "builtins_world_events.rs"]
+mod builtins_world_events;
+
+#[path = "builtins_world_triggers.rs"]
+mod builtins_world_triggers;
 
 #[path = "death_sound.rs"]
 mod death_sound;
 
 #[path = "dll_sound_length.rs"]
 mod dll_sound_length;
+
+#[path = "entity_identity.rs"]
+mod entity_identity;
 
 #[path = "empty_mask.rs"]
 mod empty_mask;
@@ -77,6 +225,9 @@ mod grid;
 
 #[path = "hash_vectors.rs"]
 mod hash_vectors;
+
+#[path = "input.rs"]
+mod input;
 
 #[path = "kid_a1_actions.rs"]
 mod kid_a1_actions;
@@ -93,11 +244,23 @@ mod kid_a1_death;
 #[path = "kid_a1_gravity.rs"]
 mod kid_a1_gravity;
 
-#[path = "kid_a2_a3.rs"]
-mod kid_a2_a3;
+#[path = "kid_a2.rs"]
+mod kid_a2;
 
-#[path = "kid_a4_a5.rs"]
-mod kid_a4_a5;
+#[path = "kid_a2_a3_support.rs"]
+mod kid_a2_a3_support;
+
+#[path = "kid_a3.rs"]
+mod kid_a3;
+
+#[path = "kid_a4.rs"]
+mod kid_a4;
+
+#[path = "kid_a4_a5_support.rs"]
+mod kid_a4_a5_support;
+
+#[path = "kid_a5.rs"]
+mod kid_a5;
 
 #[path = "kid_api.rs"]
 mod kid_api;
@@ -129,8 +292,14 @@ mod kid_c_key;
 #[path = "kid_flip_swap.rs"]
 mod kid_flip_swap;
 
-#[path = "kid_ice_ladder.rs"]
-mod kid_ice_ladder;
+#[path = "kid_ice.rs"]
+mod kid_ice;
+
+#[path = "kid_ladder.rs"]
+mod kid_ladder;
+
+#[path = "kid_motion_support.rs"]
+mod kid_motion_support;
 
 #[path = "kid_moving_block.rs"]
 mod kid_moving_block;
@@ -138,14 +307,26 @@ mod kid_moving_block;
 #[path = "kid_restart.rs"]
 mod kid_restart;
 
+#[path = "kid_script_slots.rs"]
+mod kid_script_slots;
+
 #[path = "kid_slope.rs"]
 mod kid_slope;
 
 #[path = "kid_sounds.rs"]
 mod kid_sounds;
 
+#[path = "kid_temp.rs"]
+mod kid_temp;
+
 #[path = "kid_water_setters.rs"]
 mod kid_water_setters;
+
+#[path = "lifecycle.rs"]
+mod lifecycle;
+
+#[path = "multikid_restart.rs"]
+mod multikid_restart;
 
 #[path = "lint_gm_compare.rs"]
 mod lint_gm_compare;
@@ -171,6 +352,9 @@ mod path;
 #[path = "pipeline.rs"]
 mod pipeline;
 
+#[path = "persistence.rs"]
+mod persistence;
+
 #[path = "placed_ids.rs"]
 mod placed_ids;
 
@@ -180,14 +364,38 @@ mod query;
 #[path = "ranked_time.rs"]
 mod ranked_time;
 
-#[path = "restart_save_view.rs"]
-mod restart_save_view;
+#[path = "restart.rs"]
+mod restart;
 
 #[path = "rng.rs"]
 mod rng;
 
-#[path = "room.rs"]
-mod room;
+#[path = "room_persistent.rs"]
+mod room_persistent;
+
+#[path = "room_requests.rs"]
+mod room_requests;
+
+#[path = "room_restart.rs"]
+mod room_restart;
+
+#[path = "room_transaction.rs"]
+mod room_transaction;
+
+#[path = "room_rows.rs"]
+mod room_rows;
+
+#[path = "room_sequence.rs"]
+mod room_sequence;
+
+#[path = "room_start.rs"]
+mod room_start;
+
+#[path = "room_support.rs"]
+mod room_support;
+
+#[path = "save.rs"]
+mod save;
 
 #[path = "save_reverse.rs"]
 mod save_reverse;
@@ -210,8 +418,14 @@ mod script_host;
 #[path = "script_int_args.rs"]
 mod script_int_args;
 
+#[path = "script_prep.rs"]
+mod script_prep;
+
 #[path = "script_retry.rs"]
 mod script_retry;
+
+#[path = "script_save.rs"]
+mod script_save;
 
 #[path = "script_validate.rs"]
 mod script_validate;
@@ -228,11 +442,20 @@ mod slip;
 #[path = "sound.rs"]
 mod sound;
 
+#[path = "state_support.rs"]
+mod state_support;
+
 #[path = "timing.rs"]
 mod timing;
 
+#[path = "view.rs"]
+mod view;
+
 #[path = "world.rs"]
 mod world;
+
+#[path = "world_lifetime.rs"]
+mod world_lifetime;
 
 /// `autotests = false` means a new `tests/*.rs` file runs only once it is listed here or in Cargo.toml.
 #[cfg(not(target_arch = "wasm32"))]

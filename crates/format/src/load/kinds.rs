@@ -204,11 +204,22 @@ impl<'a> Loader<'a> {
                         base = Some(Builtin::Inert);
                     }
                     None => {
+                        // The accepted set is the kind names plus the additive behaviour bases
+                        // (docs/format/builtins.md, decision 0005); name both so a typo of
+                        // either is diagnosable.
+                        let bases: Vec<&str> = iwbtg_sim::def::traits::BEHAVIOUR_BASES
+                            .iter()
+                            .map(|(name, _, _)| *name)
+                            .collect();
                         self.error(
                             path,
                             text,
                             b.span(),
-                            format!("`{}` is not a built-in kind", b.get_ref()),
+                            format!(
+                                "`{}` is not a built-in kind or a behaviour base ({})",
+                                b.get_ref(),
+                                bases.join(", ")
+                            ),
                         );
                         return;
                     }
@@ -270,7 +281,26 @@ impl<'a> Loader<'a> {
         kind.persistent = o
             .persistent
             .unwrap_or_else(|| objects::default_persistent(kind.base));
+        // `timeline` is a kind key, not a param (`objects.rs` keeps it in `params` until that
+        // file's reserved list is updated).
+        if let Some(value) = o.params.get("timeline") {
+            match value.get_ref() {
+                toml::Value::String(name) => match self.timeline_ids.get(name).copied() {
+                    Some(id) => kind.timeline = Some(id),
+                    None => self.error(path, text, value.span(), format!("unknown timeline `{name}`")),
+                },
+                other => self.error(
+                    path,
+                    text,
+                    value.span(),
+                    format!("`timeline` must be a string, not a {}", other.type_str()),
+                ),
+            }
+        }
         for (key, value) in &o.params {
+            if key == "timeline" {
+                continue;
+            }
             match param_value(value.get_ref()) {
                 Ok(p) => {
                     kind.params.0.insert(key.clone(), p);
@@ -286,7 +316,11 @@ impl<'a> Loader<'a> {
                     path,
                     text,
                     c.span(),
-                    format!("too many package classes for `{}` (at most 16)", c.get_ref()),
+                    format!(
+                        "too many package classes for `{}` (at most {})",
+                        c.get_ref(),
+                        ClassMask::PACKAGE_COUNT
+                    ),
                 ),
             }
         }
@@ -298,7 +332,11 @@ impl<'a> Loader<'a> {
                     path,
                     text,
                     c.span(),
-                    format!("too many package classes for `{}` (at most 16)", c.get_ref()),
+                    format!(
+                        "too many package classes for `{}` (at most {})",
+                        c.get_ref(),
+                        ClassMask::PACKAGE_COUNT
+                    ),
                 ),
             }
         }
@@ -663,6 +701,7 @@ impl<'a> Loader<'a> {
             e.animation_end |= s.animation_end;
             e.room_start |= s.room_start;
             e.room_end |= s.room_end;
+            e.moments.extend(s.moments);
         }
     }
 

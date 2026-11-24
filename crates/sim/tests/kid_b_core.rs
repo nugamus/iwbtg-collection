@@ -497,6 +497,8 @@ fn slot(flipped: bool) -> SaveSlot {
         room: RoomId(0),
         x: r(70.0),
         y: r(119.0),
+        precision: Default::default(),
+        point: None,
         flipped,
         facing: 1,
         difficulty: 0,
