@@ -1619,39 +1619,112 @@ source = \"x\"
         ("scripts", 0),
     ];
 
+    /// Generated dashboard snapshots quote GitHub issue titles verbatim; they are output, not
+    /// authored identifiers, so they do not count against the root ceiling.
+    const WP_EXCLUDED_FILES: &[&str] = &[
+        "progress/data.json",
+        "progress/history.json",
+        "progress/index.html",
+        "progress/exporter.json",
+    ];
+
     #[test]
     fn no_new_wp_era_identifiers() {
         let root = workspace_root();
+        let files = tracked_files(&root).expect("the WP ratchet reads tracked files");
+        let problems = wp_ceiling_problems(&wp_counts(&root, &files));
+        assert!(
+            problems.is_empty(),
+            "new WP-era identifiers (docs/architecture/testing.md, \"Naming tests\"); a WP id may stay only where it explains history a reader needs:\n{}",
+            problems.join("\n")
+        );
+    }
+
+    /// A gitignored local file must not count against the ratchet (#1345). Before this fix the
+    /// walk read every file on disk, so a `.scratch/` folder (this repo ignores it) failed a clean
+    /// local checkout while CI, which has no such file, passed.
+    #[test]
+    fn a_gitignored_file_with_a_wp_id_does_not_count() {
+        let root = workspace_root();
+        let probe = root.join(".scratch").join("wp-ratchet-probe.txt");
+        std::fs::create_dir_all(probe.parent().expect("probe parent")).expect("create probe folder");
+        // Spell the ids in pieces so this source file does not itself carry a WP id.
+        let id = "WP";
+        std::fs::write(&probe, format!("{id}1 {id}2\n")).expect("write probe");
+        let tracked = tracked_files(&root).expect("git ls-files");
+        let mut with_probe = tracked.clone();
+        with_probe.push(probe.clone());
+        let clean = wp_counts(&root, &tracked);
+        let naive = wp_counts(&root, &with_probe);
+        let _ = std::fs::remove_file(&probe);
+        assert!(!tracked.contains(&probe), "the probe must not be tracked");
+        // Two ids in the probe would break the `(root)` ceiling if a folder walk counted them.
+        assert!(
+            wp_ceiling_problems(&naive)
+                .iter()
+                .any(|p| p.starts_with("(root)")),
+            "the probe must be able to break the ratchet when counted: {naive:?}"
+        );
+        assert!(
+            wp_ceiling_problems(&clean).is_empty(),
+            "tracked files alone must pass: {clean:?}"
+        );
+    }
+
+    /// The repository's tracked files (`git ls-files -z`), so a gitignored local file never counts.
+    /// Err when git cannot list them: silently reading every file on disk is the bug this replaces.
+    fn tracked_files(root: &Path) -> Result<Vec<PathBuf>, String> {
+        let out = Command::new("git")
+            .args(["ls-files", "-z"])
+            .current_dir(root)
+            .output()
+            .map_err(|e| format!("git ls-files: {e}"))?;
+        if !out.status.success() {
+            return Err(format!(
+                "git ls-files failed in {}: {}",
+                root.display(),
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
+        }
+        Ok(out
+            .stdout
+            .split(|b| *b == 0)
+            .filter(|name| !name.is_empty())
+            .map(|name| root.join(String::from_utf8_lossy(name).as_ref()))
+            .collect())
+    }
+
+    /// WP ids per [`WP_CEILINGS`] area over `files`.
+    fn wp_counts(root: &Path, files: &[PathBuf]) -> BTreeMap<String, usize> {
         let mut found: BTreeMap<String, usize> = BTreeMap::new();
-        let mut files = Vec::new();
-        text_files(&root, &mut files);
         for path in files {
-            // The dashboard snapshots quote GitHub issue titles verbatim; they are generated
-            // output, not authored identifiers, so they do not count against the root ceiling.
             let rel = path
-                .strip_prefix(&root)
-                .unwrap_or(&path)
+                .strip_prefix(root)
+                .unwrap_or(path)
                 .to_string_lossy()
                 .replace('\\', "/");
-            if matches!(
-                rel.as_str(),
-                "progress/data.json"
-                    | "progress/history.json"
-                    | "progress/index.html"
-                    | "progress/exporter.json"
-            ) {
+            if WP_EXCLUDED_FILES.contains(&rel.as_str()) {
                 continue;
             }
-            let Ok(text) = std::fs::read_to_string(&path) else {
+            // The folder walk this replaces skipped files over 1 MiB as not text.
+            if std::fs::metadata(path).map_or(true, |m| m.len() > 1 << 20) {
+                continue;
+            }
+            let Ok(text) = std::fs::read_to_string(path) else {
                 continue; // binary or not UTF-8
             };
             let count = wp_ids(&text);
             if count > 0 {
-                *found.entry(area_of(&root, &path)).or_default() += count;
+                *found.entry(area_of(root, path)).or_default() += count;
             }
         }
+        found
+    }
+
+    /// Ceiling violations, one line each: over its ceiling or missing one entirely.
+    fn wp_ceiling_problems(found: &BTreeMap<String, usize>) -> Vec<String> {
         let mut problems = Vec::new();
-        for (area, count) in &found {
+        for (area, count) in found {
             match WP_CEILINGS.iter().find(|(name, _)| name == area) {
                 Some((_, ceiling)) if count > ceiling => {
                     problems.push(format!("{area}: {count} (ceiling {ceiling})"));
@@ -1660,29 +1733,7 @@ source = \"x\"
                 None => problems.push(format!("{area}: {count} (no ceiling; add one in the same PR)")),
             }
         }
-        assert!(
-            problems.is_empty(),
-            "new WP-era identifiers (docs/architecture/testing.md, \"Naming tests\"); a WP id may stay only where it explains history a reader needs:\n{}",
-            problems.join("\n")
-        );
-    }
-
-    /// Every file small enough to be text, skipping build and VCS folders.
-    fn text_files(dir: &Path, out: &mut Vec<PathBuf>) {
-        let Ok(entries) = std::fs::read_dir(dir) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                let name = entry.file_name();
-                if !matches!(name.to_str(), Some(".git" | "target" | "node_modules")) {
-                    text_files(&path, out);
-                }
-            } else if entry.metadata().is_ok_and(|m| m.len() <= 1 << 20) {
-                out.push(path);
-            }
-        }
+        problems
     }
 
     /// The group a path counts under in [`WP_CEILINGS`].
