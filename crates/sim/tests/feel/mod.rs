@@ -41,7 +41,7 @@ use iwbtg_sim::input::{Action, ParsedInputs, parse_action_inputs};
 use iwbtg_sim::num::Real;
 use iwbtg_sim::output::OutputEvent;
 use iwbtg_sim::probe::{self, Column, ProbeTarget, registry};
-use iwbtg_sim::save::SaveSlot;
+use iwbtg_sim::save::{Checkpoint, SaveSlot};
 use iwbtg_sim::sound::{SoundOutput, SoundTarget};
 use iwbtg_sim::stripped::PlayMode;
 use iwbtg_sim::trace::Value;
@@ -1400,17 +1400,33 @@ fn step_sounds(sim: &Sim) -> Vec<SoundOutput> {
         .collect()
 }
 
+/// A contract whose start cannot be built: an unresolvable save room, or a game that will not
+/// start.
+fn start_error(e: impl std::fmt::Display) -> Verdict {
+    Verdict::Fail(vec![Mismatch {
+        tick: 0,
+        metric: "start".into(),
+        expected: "a startable run".into(),
+        got: e.to_string(),
+        context: Vec::new(),
+    }])
+}
+
 /// Runs a validated contract against a game definition. The fixture or package has already been
 /// resolved by the caller; this function reads the sim and changes no sim state.
 pub fn run(contract: &Contract, def: GameDef) -> Verdict {
-    let options = SimOptions {
-        start: match &contract.save {
-            Some(save) => StartPoint::FromSave(save.clone()),
-            None => match contract.start {
-                Start::NewGame { difficulty } => StartPoint::NewGame { difficulty },
-                Start::Room { room, difficulty } => StartPoint::Room { room, difficulty },
-            },
+    let start = match &contract.save {
+        Some(save) => match Checkpoint::from_slot(&def, save) {
+            Ok(checkpoint) => StartPoint::FromSave(checkpoint),
+            Err(e) => return start_error(e),
         },
+        None => match contract.start {
+            Start::NewGame { difficulty } => StartPoint::NewGame { difficulty },
+            Start::Room { room, difficulty } => StartPoint::Room { room, difficulty },
+        },
+    };
+    let options = SimOptions {
+        start,
         seed: contract.seed,
         dll_mode: iwbtg_sim::sound::DllMode::Model,
         mode: contract.play_mode,
@@ -1418,15 +1434,7 @@ pub fn run(contract: &Contract, def: GameDef) -> Verdict {
     };
     let mut sim = match Sim::new(Arc::new(def), options) {
         Ok(sim) => sim,
-        Err(e) => {
-            return Verdict::Fail(vec![Mismatch {
-                tick: 0,
-                metric: "start".into(),
-                expected: "a startable run".into(),
-                got: e.to_string(),
-                context: Vec::new(),
-            }]);
-        }
+        Err(e) => return start_error(e),
     };
     let metrics = contract_metrics(contract);
     let mut snapshots = BTreeMap::new();

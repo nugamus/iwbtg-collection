@@ -13,7 +13,7 @@ use iwbtg_sim::events::EventKind;
 use iwbtg_sim::num::Real;
 use iwbtg_sim::room::{RoomHost, RoomRequest, StartPoint, perform_change_with, start_game_with};
 use iwbtg_sim::rules::RunnerRules;
-use iwbtg_sim::save::SaveSlot;
+use iwbtg_sim::save::{Checkpoint, SaveSlot};
 use iwbtg_sim::script::ScriptRuntime;
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::stripped::PlayMode;
@@ -196,6 +196,12 @@ pub(crate) fn slot(room: RoomId) -> SaveSlot {
         items: 0,
         clear: false,
     }
+}
+
+/// A [`StartPoint::FromSave`] for a raw slot: the checkpoint a client save or a replay carries,
+/// which the sim resolves against the room sequence (#1238).
+pub(crate) fn from_save(def: &GameDef, slot: &SaveSlot) -> StartPoint {
+    StartPoint::FromSave(Checkpoint::from_slot(def, slot).expect("the slot names a gameplay room of the def"))
 }
 
 /// The order game: kinds ranked kid, blk, world, ps, spawned, so dispatch order differs

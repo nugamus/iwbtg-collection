@@ -62,12 +62,12 @@ use serde::{Deserialize, Serialize};
 use crate::collide::Target;
 use crate::collide::grid::Grid;
 use crate::def::game::{NestedRequests, RoomStage};
-use crate::def::{GlobalIndex, KindId, RoomAction, RoomDef, RoomId, RoomRole, RoomWhen, VarId};
+use crate::def::{GameDef, GlobalIndex, KindId, RoomAction, RoomDef, RoomId, RoomRole, RoomWhen, VarId};
 use crate::error::SimError;
 use crate::events::{self, EventKind, Phase};
 use crate::num::Real;
 use crate::output::OutputEvent;
-use crate::save::{self, SaveSlot};
+use crate::save::{self, Checkpoint, SaveSlot};
 use crate::stripped::PlayMode;
 use crate::view::{View, ViewPort};
 use crate::world::{
@@ -173,8 +173,11 @@ pub enum StartPoint {
         /// Difficulty index.
         difficulty: u8,
     },
-    /// From a save slot (practice, route testing).
-    FromSave(SaveSlot),
+    /// From a persisted checkpoint (practice, route testing): the save file a client wrote or a
+    /// replay's `FromSave` payload. The checkpoint names its room by the package name
+    /// ([`Checkpoint::room`]), so [`start_game`] resolves it against the room sequence; no
+    /// persisted byte is ever read as a numeric [`RoomId`].
+    FromSave(Checkpoint),
 }
 
 /// Room changes and transitions for the client. Visual only: the sim never reads them back.
@@ -290,8 +293,9 @@ impl RoomHost for EngineHost {
 /// stands in for rInit, Design). Then the start room is entered as the first room of the game:
 /// steps 2 to 7, with Game Start. `NewGame` deletes the save, sets the difficulty and enters
 /// `GameDef::new_game_room` (what warpStart does). `Room` sets the difficulty and enters the
-/// room (the recorder's `--room` jump). `FromSave` stores the slot, sets the difficulty, loads
-/// it (the kid is created before the room, so he is carried in) and enters the saved room.
+/// room (the recorder's `--room` jump). `FromSave` resolves the checkpoint's stable room name
+/// here ([`checkpoint_slot`]), stores the runtime slot, sets the difficulty, loads it (the kid
+/// is created before the room, so he is carried in) and enters the saved room.
 /// Before the load, `room`, `room_speed` (the saved room's file speed, R14) and the views are
 /// already the saved room's, so the kid's Create (alarm[0] = room_speed, room-role checks) sees
 /// that room (Design: the original loads in its boot room after world's Room Start; FromSave
@@ -388,12 +392,15 @@ fn start_inner<H: RoomHost + ?Sized>(
             ctx.w.engine.run.difficulty = *difficulty;
             redirect(ctx, *room)
         }
-        StartPoint::FromSave(slot) => {
+        StartPoint::FromSave(checkpoint) => {
+            // The stable room name resolves here, inside the room sequence: no byte of the
+            // checkpoint is ever a `RoomId` before this lookup (#1238).
+            let slot = checkpoint_slot(ctx.def, checkpoint)?;
             ctx.w.save = Some(slot.clone());
             let target = redirect(ctx, slot.room);
             let room = room_def(ctx, target)?;
             set_room_state(ctx, target, room);
-            load_slot(ctx, host, slot)?;
+            load_slot(ctx, host, &slot)?;
             // The saved room is entered right below; a request the load made for it is that
             // same entry.
             ctx.w.pending = None;
@@ -542,6 +549,15 @@ fn run_request<H: RoomHost + ?Sized>(
             enter(ctx, host, Some(from), target, queue, removed)
         }
     }
+}
+
+/// The runtime slot a checkpoint resolves to, or the halting error when this package no longer
+/// has its room or save point. Shared with [`crate::setup`], which needs the room before the
+/// world exists.
+pub(crate) fn checkpoint_slot(def: &GameDef, checkpoint: &Checkpoint) -> Result<SaveSlot, SimError> {
+    checkpoint
+        .to_slot(def)
+        .map_err(|e| SimError::unsupported(format!("save: {e}")))
 }
 
 /// Loads `slot` as loadGame does: the saved difficulty (kaenbyou tr-room-12 row 137: 0 from the

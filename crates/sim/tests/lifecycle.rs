@@ -18,7 +18,7 @@ use iwbtg_sim::input::{Action, InputFrame};
 use iwbtg_sim::kid::{self, presets};
 use iwbtg_sim::num::Real;
 use iwbtg_sim::output::OutputEvent;
-use iwbtg_sim::save::SaveSlot;
+use iwbtg_sim::save::{Checkpoint, SaveSlot};
 use iwbtg_sim::sound::{DllMode, SoundOutput, SoundTarget};
 use iwbtg_sim::stripped::PlayMode;
 use iwbtg_sim::world::{KindState, World};
@@ -105,7 +105,9 @@ fn sim(f: &Fixture) -> Sim {
     Sim::new(
         Arc::new(f.def.clone()),
         SimOptions {
-            start: StartPoint::FromSave(f.save.clone()),
+            start: StartPoint::FromSave(
+                Checkpoint::from_slot(&f.def, &f.save).expect("the fixture's save room"),
+            ),
             seed: 0,
             dll_mode: DllMode::Stub,
             mode: PlayMode::Original,
