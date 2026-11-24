@@ -26,7 +26,7 @@ use crate::manifest::toml_error;
 use crate::number::Number;
 
 /// Keys of an object file that are not params.
-pub const RESERVED_KEYS: [&str; 12] = [
+pub const RESERVED_KEYS: [&str; 13] = [
     "base",
     "script",
     "sprite",
@@ -38,6 +38,7 @@ pub const RESERVED_KEYS: [&str; 12] = [
     "counts_as",
     "collides_with",
     "roles",
+    "timeline",
     "params",
 ];
 
@@ -68,6 +69,8 @@ pub struct ObjectFile {
     pub collides_with: Vec<Spanned<String>>,
     /// Legacy converter key (`roles = ["block"]`), read only in `LoadMode::Trace` (CR10).
     pub roles: Vec<Spanned<String>>,
+    /// Timeline id (`timelines/<id>.toml`) the kind's instances start at Create.
+    pub timeline: Option<Spanned<String>>,
     /// Params, in key order.
     pub params: BTreeMap<String, Spanned<toml::Value>>,
 }
@@ -121,6 +124,7 @@ pub fn parse_object(id: &str, path: &str, text: &str) -> Result<ObjectFile, Diag
             "counts_as" => out.counts_as = strings("counts_as", value)?,
             "collides_with" => out.collides_with = strings("collides_with", value)?,
             "roles" => out.roles = strings("roles", value)?,
+            "timeline" => out.timeline = Some(string("timeline", value)?),
             "params" => match value.get_ref() {
                 toml::Value::Table(t) => {
                     for (k, v) in t {
