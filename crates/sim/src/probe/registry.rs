@@ -226,8 +226,8 @@ fn kind_named(name: &str, def: &GameDef) -> Option<KindId> {
         .map(KindId)
 }
 
-/// A query target: a kind name or `class:<name>`.
-fn target(arg: &str, def: &GameDef) -> Result<Target, String> {
+/// A query target: a kind name or `class:<name>` (also a trace case's setup `destroy`, #640).
+pub fn target(arg: &str, def: &GameDef) -> Result<Target, String> {
     let arg = arg.trim();
     if let Some(class) = arg.strip_prefix("class:") {
         return ClassMask::from_name(class)

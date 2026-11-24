@@ -1,0 +1,36 @@
+# Written by hand for #640. The recorder's --gml on frame 3 (a1-slope.md, Setup) stores six
+# place_meeting/place_free queries as strings in global.q1..q6 (read back by the
+# execute_string(global.qN) columns), destroys the playerKillers with x < 620 and y < 260 and moves
+# the kid to (530.0, 215).
+# Recorder: --object player --room lasroom01 --at 2 --from 2
+source = "get-the-rainbow-feather/a1-slope-c"
+kind = "diff"
+start = { room = "lasroom01", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "kid"
+original_object = "player"
+dll_mode = "model"
+seed = 0
+setup = [
+  # with(playerKiller){if(x<620 && y<260){instance_destroy()}}: playerKiller and its children.
+  { frame = 3, destroy = "class:killer", rect = [-inf, -inf, 620, 260] },
+  { frame = 3, target = "kid", set = { x = 530.0, xprevious = 530.0, y = 215.0, yprevious = 215.0 } },
+]
+ignore = ["id", "sprite_index", "sprite_name"]
+
+[vars]
+"djump" = "kid.djump"
+# global.q6 = 'return place_free(x,y+1)'
+"execute_string(global.q6)" = "place_free(x,y+1)"
+"instance_number(playerKiller)" = "instance_number(class:killer)"
+
+[unprobed]
+"execute_string(global.q1)" = "place_meeting(x,y+1,block): no place_meeting probe column"
+"execute_string(global.q2)" = "place_meeting(x,y+1,nanameblockL): no place_meeting probe column"
+"execute_string(global.q3)" = "place_meeting(x,y+1,nanameblockR): no place_meeting probe column"
+"execute_string(global.q4)" = "place_meeting(x,y+5,nanameblockL) || place_meeting(x,y+5,nanameblockR): no place_meeting probe column"
+"execute_string(global.q5)" = "place_meeting(x,y+2,nanameblockL) || place_meeting(x,y+2,nanameblockR): no place_meeting probe column"
+
+[rooms]
+"lasroom01" = "lasroom01"
