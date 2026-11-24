@@ -49,6 +49,14 @@ struct PickedTitle;
 #[derive(Component)]
 struct PickedMap;
 
+/// The keys hint under the pick; while a staged start prepares it says `Opening <name>…`.
+#[derive(Component)]
+struct HintText;
+
+/// The keys hint, and the hint when the folder holds no packages.
+const HINT: &str = "Type to search · ↑ ↓ ← → pick · Enter plays · Esc clears, quits";
+const NO_PACKAGES: &str = "No packages here (folders with a game.toml, .iwbz files).";
+
 /// The select screen: added by main.rs with the window (it needs the UI kit). The flag is
 /// `--mod-select-preview`: the mod select sheet opens with the screen.
 pub struct SelectPlugin(pub Option<PathBuf>, pub bool);
@@ -65,6 +73,8 @@ impl Plugin for SelectPlugin {
             .init_resource::<Filters>()
             .init_resource::<Shown>()
             .init_resource::<mod_sheet::Sheet>()
+            // `failed` reads it; the screen's tests add this plugin without `ShellPlugin`.
+            .add_message::<super::StartFailed>()
             .add_systems(
                 OnEnter(AppScreen::Select),
                 move |mut commands: Commands,
@@ -179,6 +189,8 @@ impl Plugin for SelectPlugin {
                     picked,
                     collections::favorite_label,
                     collections::chips,
+                    opening,
+                    failed,
                     scale,
                 )
                     .chain()
@@ -257,9 +269,9 @@ fn enter(
     };
     let where_ = folder.map_or_else(String::new, |f| f.display().to_string());
     let hint = if lib.games.is_empty() {
-        "No packages here (folders with a game.toml, .iwbz files)."
+        NO_PACKAGES
     } else {
-        "Type to search · ↑ ↓ ← → pick · Enter plays · Esc clears, quits"
+        HINT
     };
     // The left side: a placeholder until #148's title wedge, stats and tabs.
     commands.spawn((
@@ -282,7 +294,7 @@ fn enter(
             ),
             (text("", Type::barlow(18.0, 600), tokens::SOFT), PickedMap),
             text(&where_, Type::barlow(14.0, 400), tokens::MUTED),
-            text(hint, Type::BODY, tokens::SOFT),
+            (text(hint, Type::BODY, tokens::SOFT), HintText),
             collections::controls(lists, lib.games.get(sel.game).map(|g| g.id.as_str())),
         ],
     ));
@@ -296,14 +308,44 @@ fn map_id(game: &GameInfo, index: usize) -> Option<String> {
     game.maps.get(index).map(|m| m.id.clone())
 }
 
-/// Starts the package at `path` on map `map` (`None`: its first); one that does not open shows the NOT OPENED notice.
+/// Stages the package at `path` on map `map` (`None`: its first); the list stays up with
+/// `Opening <name>…` until it is ready, and one that does not open shows the NOT OPENED notice.
 fn play(commands: &mut Commands, path: PathBuf, map: Option<String>) {
     commands.queue(move |world: &mut World| {
-        if let Err(e) = super::start_map(world, &path, map.as_deref()) {
-            eprintln!("{e}");
-            notice::post(notice::Kind::Drop, &e.to_string());
-        }
+        super::start_map(world, &path, map.as_deref());
     });
+}
+
+/// A staged start that did not commit: the run on screen (if any) is unchanged, and the notice
+/// says why.
+fn failed(mut failed: MessageReader<super::StartFailed>) {
+    for super::StartFailed(e) in failed.read() {
+        eprintln!("{e}");
+        notice::post(notice::Kind::Drop, &e.to_string());
+    }
+}
+
+/// Shows `Opening <name>…` while a start is preparing, and the keys hint otherwise.
+fn opening(
+    pending: Option<Res<super::PendingStart>>,
+    lib: Option<Res<Library>>,
+    mut last: Local<String>,
+    mut hint: Query<&mut Text, With<HintText>>,
+) {
+    let empty = lib.as_deref().is_none_or(|l| l.games.is_empty());
+    // Nothing to write unless the pending start appeared or went away; the base hint does not
+    // allocate the common path.
+    let opening = pending.as_deref().map(super::PendingStart::opening);
+    let text = opening.as_deref().unwrap_or(if empty { NO_PACKAGES } else { HINT });
+    if last.as_str() == text {
+        return;
+    }
+    last.clear();
+    last.push_str(text);
+    let styled = Type::BODY.set(text);
+    for mut t in &mut hint {
+        t.0 = styled.clone();
+    }
 }
 
 /// The arrows move the selection among the games shown ([`list::step`]; Left and Right move
@@ -481,6 +523,39 @@ mod tests {
         app.update();
         app.update();
         app
+    }
+
+    /// The hint under the pick, as drawn.
+    fn hint_text(app: &mut App) -> String {
+        let world = app.world_mut();
+        let mut hint = world.query_filtered::<&Text, With<HintText>>();
+        hint.single(world).unwrap().0.clone()
+    }
+
+    /// The select screen shows `Opening <name>…` while a staged start prepares (#1023): the
+    /// player gets feedback before the expensive work, without leaving the list.
+    #[test]
+    fn the_hint_says_opening_while_a_start_prepares() {
+        let mut app = screen();
+        assert_eq!(hint_text(&mut app), HINT);
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        app.world_mut()
+            .insert_resource(super::super::PendingStart {
+                generation: 1,
+                path: PathBuf::from("big-game.pkg"),
+                map: None,
+                rx: std::sync::Mutex::new(rx),
+            });
+        app.update();
+        assert_eq!(hint_text(&mut app), "Opening big-game.pkg…");
+
+        // Once the staged start is gone (committed or failed), the keys hint is back.
+        drop(tx);
+        app.world_mut()
+            .remove_resource::<super::super::PendingStart>();
+        app.update();
+        assert_eq!(hint_text(&mut app), HINT);
     }
 
     /// Puts `text` in the search field, as typing does.

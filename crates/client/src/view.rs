@@ -20,8 +20,8 @@ pub(crate) mod transition;
 
 use crate::bindings::PadInput;
 use crate::input::{Collector, PadReader, key_code};
-use crate::package::{Package, sprite_images};
-use crate::shell::{AppScreen, InRun, LoadedPackage, RUN_ONLY, RunSteps};
+use crate::package::{Package, SpriteImage};
+use crate::shell::{AppScreen, InRun, RUN_ONLY, RunSteps};
 
 /// The running game. Not `Send` (the script host shares state by `Rc`), so it is a non-send
 /// resource and only main-thread systems touch it.
@@ -43,9 +43,28 @@ struct RunStart {
     fresh_seed: bool,
 }
 
-/// The Bevy image of each sprite strip, by `SpriteId`, with the strip size.
+/// The Bevy image of each sprite strip, by `SpriteId`, with the strip size. It starts as `None`s
+/// and [`upload_textures`] fills it a bounded chunk a frame, so a large package never stalls a
+/// frame on its GPU upload; systems that draw skip a sprite until its entry is `Some`.
 #[derive(Resource)]
 pub(crate) struct Textures(pub(crate) Vec<Option<(Handle<Image>, UVec2)>>);
+
+/// The package's decoded sprite strips, from the staged preparation (`shell::stage`) or the
+/// synchronous start (`shell::prepare`). [`setup`] takes them and queues the GPU upload.
+#[derive(Resource)]
+pub(crate) struct RunSprites(pub(crate) Vec<Option<SpriteImage>>);
+
+/// Sprite strips waiting to become Bevy images, uploaded a bounded chunk a frame
+/// ([`upload_textures`]).
+#[derive(Resource)]
+pub(crate) struct SpriteQueue {
+    sprites: Vec<Option<SpriteImage>>,
+    /// The first strip not uploaded yet.
+    next: usize,
+}
+
+/// The most sprite bytes [`upload_textures`] uploads in one frame (one sprite can exceed it).
+const UPLOAD_BUDGET_BYTES: usize = 8 << 20;
 
 /// Which Bevy entity draws which instance.
 #[derive(Resource, Default)]
@@ -278,21 +297,30 @@ pub(crate) struct NewRun {
     game: Game,
     start: RunStart,
     prepared: Prepared,
+    /// The package's decoded sprite strips, ready for [`setup`].
+    sprites: Vec<Option<SpriteImage>>,
 }
 
 impl NewRun {
-    /// Puts the sim, its prepared scripts and how it started in `world`.
+    /// Puts the sim, its prepared scripts, how it started and its decoded sprites in `world`.
     pub(crate) fn install(self, world: &mut World) {
         world.insert_non_send(self.game);
         world.insert_non_send(self.prepared);
         world.insert_resource(self.start);
+        world.insert_resource(RunSprites(self.sprites));
     }
 }
 
 /// Builds the sim for `pkg` (`shell::load` calls this before the run opens, so a game that cannot
 /// be set up never opens; nothing in `world` changes). A start that halts is not an error here.
-/// `map` is the map id, `None` the first.
-pub(crate) fn new_run(world: &World, pkg: &Package, map: Option<&str>) -> Result<NewRun, String> {
+/// `map` is the map id, `None` the first. `sprites` are `pkg`'s decoded strips
+/// (`package::sprite_images`), decoded by the caller off the UI thread when it can.
+pub(crate) fn new_run(
+    world: &World,
+    pkg: &Package,
+    map: Option<&str>,
+    sprites: Vec<Option<SpriteImage>>,
+) -> Result<NewRun, String> {
     let config = *world.resource::<RunConfig>();
     let def = Arc::clone(&pkg.def);
     let options = SimOptions {
@@ -347,6 +375,7 @@ pub(crate) fn new_run(world: &World, pkg: &Package, map: Option<&str>) -> Result
             fresh_seed: config.fresh_seed,
         },
         prepared: Prepared(prepared),
+        sprites,
     })
 }
 
@@ -402,6 +431,7 @@ impl Plugin for ViewPlugin {
                 Update,
                 (
                     follow_view,
+                    upload_textures.before(DrawInstances),
                     (set_alpha, sync_instances.in_set(DrawInstances))
                         .chain()
                         .after(follow_view),
@@ -447,6 +477,8 @@ fn enter(world: &mut World) {
 /// Closes the run's view; the sim goes last, after every module's own exit systems.
 fn leave(world: &mut World) {
     world.remove_resource::<Textures>();
+    world.remove_resource::<SpriteQueue>();
+    world.remove_resource::<RunSprites>();
     world.remove_resource::<Drawn>();
     world.remove_resource::<RoomSize>();
     world.remove_resource::<ViewRect>();
@@ -560,12 +592,12 @@ fn first_title(world: &World) -> (String, (u32, u32)) {
     (format!("IWBTG Collection: {id}"), (size.x as u32, size.y as u32))
 }
 
-/// The game camera and the sprite images.
+/// The game camera and the sprite images' place. The strips were decoded before the run opened
+/// (`RunSprites`); [`upload_textures`] moves them into `Assets<Image>` a chunk a frame.
 fn setup(
     mut commands: Commands,
-    mut images: ResMut<Assets<Image>>,
-    loaded: Res<LoadedPackage>,
     room: Res<RoomSize>,
+    mut sprites: ResMut<RunSprites>,
 ) {
     // The room always fits the window, whatever its size: letterboxed, never cropped.
     commands.spawn((
@@ -585,27 +617,48 @@ fn setup(
         }),
         RUN_ONLY,
     ));
-    let textures = sprite_images(&loaded.pkg.files)
-        .into_iter()
-        .map(|s| {
-            s.map(|s| {
-                let size = UVec2::new(s.size.0, s.size.1);
-                let image = Image::new(
-                    Extent3d {
-                        width: s.size.0,
-                        height: s.size.1,
-                        depth_or_array_layers: 1,
-                    },
-                    TextureDimension::D2,
-                    s.rgba,
-                    TextureFormat::Rgba8UnormSrgb,
-                    RenderAssetUsages::RENDER_WORLD,
-                );
-                (images.add(image), size)
-            })
-        })
-        .collect();
-    commands.insert_resource(Textures(textures));
+    let sprites = std::mem::take(&mut sprites.0);
+    commands.insert_resource(Textures(vec![None; sprites.len()]));
+    commands.insert_resource(SpriteQueue { sprites, next: 0 });
+}
+
+/// Moves queued sprite strips into `Assets<Image>`, at most [`UPLOAD_BUDGET_BYTES`] a frame, so
+/// a package with many big sprites never stalls the first frame of its run. Removes the queue when
+/// the last strip is in; the loading card waits for it before it starts [playing](crate::loading).
+fn upload_textures(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    mut queue: Option<ResMut<SpriteQueue>>,
+    mut textures: ResMut<Textures>,
+) {
+    let Some(queue) = queue.as_deref_mut() else {
+        return;
+    };
+    let mut bytes = 0usize;
+    while queue.next < queue.sprites.len() {
+        let i = queue.next;
+        if let Some(s) = queue.sprites[i].take() {
+            bytes += s.rgba.len();
+            let size = UVec2::new(s.size.0, s.size.1);
+            let image = Image::new(
+                Extent3d {
+                    width: s.size.0,
+                    height: s.size.1,
+                    depth_or_array_layers: 1,
+                },
+                TextureDimension::D2,
+                s.rgba,
+                TextureFormat::Rgba8UnormSrgb,
+                RenderAssetUsages::RENDER_WORLD,
+            );
+            textures.0[i] = Some((images.add(image), size));
+        }
+        queue.next += 1;
+        if bytes >= UPLOAD_BUDGET_BYTES && queue.next < queue.sprites.len() {
+            return;
+        }
+    }
+    commands.remove_resource::<SpriteQueue>();
 }
 
 /// Points the camera at view 0 of the sim's room (the runner's view follow already moved it this

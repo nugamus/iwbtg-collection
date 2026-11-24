@@ -14,11 +14,14 @@
 //!   the select screen.
 
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use bevy::app::RunFixedMainLoopSystems;
 use bevy::prelude::*;
 
-use crate::package::{self, OpenError, Package};
+use crate::package::{self, OpenError, Package, SpriteImage};
 
 pub mod select;
 
@@ -198,6 +201,8 @@ impl Plugin for ShellPlugin {
         app.insert_state(first)
             .add_sub_state::<RunScreen>()
             .init_resource::<FirstScreen>()
+            .add_message::<StartFailed>()
+            .add_systems(Update, poll_start)
             .insert_resource(Shell {
                 library: self.library.clone(),
                 trace_mode: self.trace_mode,
@@ -310,23 +315,87 @@ impl NextRun {
     }
 }
 
-/// Opens the package at `path` and builds its sim. Nothing in `world` changes, so a package that
-/// does not open, or a game that does not start, is an error before anything else happens.
-/// `map` is the map id to play (`None`: the package's first map).
-fn prepare(world: &World, path: &Path, trace_mode: bool, map: Option<&str>) -> Result<NextRun, StartError> {
+/// The package work a staged start does off the UI thread: opening/parsing and PNG decode are
+/// `Send`; the sim and its Rhai ASTs are not, so [`finish`] stays on the main thread.
+struct Staged {
+    pkg: Package,
+    sprites: Vec<Option<SpriteImage>>,
+}
+
+/// A worker's answer: its request generation and the staged package or why it failed.
+type StageResult = (u64, Result<Staged, StartError>);
+
+/// A start requested but not committed yet. The worker's result arrives on `rx`; a newer request
+/// replaces the resource and its `generation`, so a stale worker's result is ignored.
+#[derive(Resource)]
+pub(crate) struct PendingStart {
+    generation: u64,
+    path: PathBuf,
+    map: Option<String>,
+    /// A `Receiver` is `Send` but not `Sync`, so it sits behind a mutex to be a resource; the
+    /// poll takes the lock for one `try_recv` and never holds it while building the sim.
+    rx: Mutex<Receiver<StageResult>>,
+}
+
+impl PendingStart {
+    /// What the select screen says while the package prepares.
+    pub(crate) fn opening(&self) -> String {
+        let name = self.path.file_name().map_or_else(
+            || self.path.display().to_string(),
+            |n| n.to_string_lossy().into_owned(),
+        );
+        format!("Opening {name}…")
+    }
+}
+
+/// A staged start that did not commit: the package did not open, or its game did not start. The
+/// screen that asked shows it; the run on screen, if any, is unchanged.
+#[derive(Message, Debug)]
+pub struct StartFailed(pub StartError);
+
+/// The id of the newest [`PendingStart`].
+static NEXT_START: AtomicU64 = AtomicU64::new(0);
+
+/// Opens the package at `path` (`trace_mode`: research converter output) and decodes its sprites:
+/// the work a staged start does off the UI thread. Nothing in `world` changes.
+fn stage(path: &Path, trace_mode: bool) -> Result<Staged, StartError> {
     let fail = |why| StartError {
         path: path.to_owned(),
         why,
     };
     let pkg = package::open(path, trace_mode).map_err(|e| fail(StartFailure::Open(e)))?;
-    let run = crate::view::new_run(world, &pkg, map).map_err(|e| fail(StartFailure::Run(e)))?;
+    let sprites = package::sprite_images(&pkg.files);
+    Ok(Staged { pkg, sprites })
+}
+
+/// Builds the sim for a staged package and pairs it with the loaded package. Nothing in `world`
+/// changes, so a package that does not open, or a game that does not start, is an error before
+/// anything else happens. `map` is the map id to play (`None`: the package's first map).
+fn finish(
+    world: &World,
+    staged: Staged,
+    path: &Path,
+    map: Option<&str>,
+) -> Result<NextRun, StartError> {
+    let run = crate::view::new_run(world, &staged.pkg, map, staged.sprites)
+        .map_err(|why| StartError {
+            path: path.to_owned(),
+            why: StartFailure::Run(why),
+        })?;
     Ok(NextRun {
         loaded: LoadedPackage {
-            pkg,
+            pkg: staged.pkg,
             path: path.to_owned(),
         },
         run,
     })
+}
+
+/// [`stage`] then [`finish`], on the caller's thread: the command-line start and a dropped
+/// package (a drop during play must not change when the old run stops).
+fn prepare(world: &World, path: &Path, trace_mode: bool, map: Option<&str>) -> Result<NextRun, StartError> {
+    let staged = stage(path, trace_mode)?;
+    finish(world, staged, path, map)
 }
 
 /// Opens the package at `path` (`trace_mode`: research converter output) and makes it the loaded
@@ -344,7 +413,8 @@ pub fn load_package(
     pkg: package::Package,
     source: PathBuf,
 ) -> Result<(), StartError> {
-    let run = crate::view::new_run(world, &pkg, None).map_err(|why| StartError {
+    let sprites = package::sprite_images(&pkg.files);
+    let run = crate::view::new_run(world, &pkg, None, sprites).map_err(|why| StartError {
         path: source.clone(),
         why: StartFailure::Run(why),
     })?;
@@ -356,25 +426,115 @@ pub fn load_package(
     Ok(())
 }
 
-/// Opens the package at `path` and plays it, from the select screen or in place of the run that
-/// is playing (a dropped package, `import.rs`). A package that does not start is an error and
-/// nothing changes. Otherwise the state goes to `Run` even when it is `Run` already: the run that
-/// plays closes on `OnExit(Run)` (its replay and stats are finished there, its entities and
-/// assets dropped), then [`open_next`] puts the new one in place on `OnEnter(Run)`.
+/// Opens the package at `path` and plays it, in place of the run that is playing (a dropped
+/// package, `import.rs`). A package that does not start is an error and nothing changes.
+/// Otherwise the state goes to `Run` even when it is `Run` already: the run that plays closes on
+/// `OnExit(Run)` (its replay and stats are finished there, its entities and assets dropped), then
+/// [`open_next`] puts the new one in place on `OnEnter(Run)`.
+///
+/// This is synchronous so a drop reports its errors to the drop handler. Game select's start is
+/// staged: [`start_map`].
 pub fn start(world: &mut World, path: &Path) -> Result<(), StartError> {
-    start_map(world, path, None)
+    let trace_mode = world.get_resource::<Shell>().is_some_and(|s| s.trace_mode);
+    let next = prepare(world, path, trace_mode, None)?;
+    install(next, world);
+    Ok(())
 }
 
-/// [`start`] on the map with id `map` (game select's pick, #880); `None` is the package's first
-/// map. A map the package does not have is a [`StartFailure::Run`] error.
-pub fn start_map(world: &mut World, path: &Path, map: Option<&str>) -> Result<(), StartError> {
+/// Stages the package at `path` on the map with id `map` (game select's pick, #880; `None` is the
+/// package's first map) and returns at once: the select screen keeps drawing `Opening <name>…`
+/// while [`stage`] runs on a worker thread. [`poll_start`] builds the sim and commits the run when
+/// the worker is done; a newer call replaces this one, so its result is ignored. A failure arrives
+/// as [`StartFailed`] and the run on screen is unchanged.
+pub fn start_map(world: &mut World, path: &Path, map: Option<&str>) {
     let trace_mode = world.get_resource::<Shell>().is_some_and(|s| s.trace_mode);
-    let next = prepare(world, path, trace_mode, map)?;
+    let generation = NEXT_START.fetch_add(1, Ordering::Relaxed) + 1;
+    let rx = spawn_stage(path.to_owned(), trace_mode, generation);
+    world.insert_resource(PendingStart {
+        generation,
+        path: path.to_owned(),
+        map: map.map(str::to_owned),
+        rx: Mutex::new(rx),
+    });
+}
+
+/// Starts the worker that runs [`stage`], or, in the browser build (no threads), runs it at once
+/// and delivers the result on the same channel, so the staged path is the same code everywhere.
+fn spawn_stage(path: PathBuf, trace_mode: bool, generation: u64) -> Receiver<StageResult> {
+    let (tx, rx) = mpsc::channel();
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    {
+        let fallback = tx.clone();
+        let worker_path = path.clone();
+        let sent = std::thread::Builder::new()
+            .name("iwbtg-start".to_owned())
+            .spawn(move || {
+                let _ = tx.send((generation, stage(&worker_path, trace_mode)));
+            });
+        if sent.is_err() {
+            // No thread available: stage here rather than drop the request.
+            let _ = fallback.send((generation, stage(&path, trace_mode)));
+        }
+    }
+    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+    {
+        let _ = tx.send((generation, stage(&path, trace_mode)));
+    }
+    rx
+}
+
+/// Commits a finished [`PendingStart`]: builds the sim on this thread (it is not `Send`), then
+/// puts it in `NextRun` and asks for `Run` in one step. The run on screen keeps playing until
+/// then; a failure leaves it and the state untouched.
+fn poll_start(world: &mut World) {
+    let Some(pending) = world.get_resource::<PendingStart>() else {
+        return;
+    };
+    let received = pending
+        .rx
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .try_recv();
+    let result = match received {
+        Ok((generation, result)) if generation == pending.generation => result,
+        Ok(_) => return,
+        Err(TryRecvError::Empty) => return,
+        Err(TryRecvError::Disconnected) => {
+            let path = pending.path.clone();
+            world.remove_resource::<PendingStart>();
+            world.write_message(StartFailed(StartError {
+                path,
+                why: StartFailure::Run("the package preparation stopped".to_owned()),
+            }));
+            return;
+        }
+    };
+    let path = pending.path.clone();
+    let map = pending.map.clone();
+    world.remove_resource::<PendingStart>();
+    match result {
+        Err(e) => {
+            world.write_message(StartFailed(e));
+        }
+        Ok(staged) => match finish(world, staged, &path, map.as_deref()) {
+            Ok(next) => {
+                world.insert_non_send(next);
+                // `set`, not `set_if_different`: Run to Run closes the old run and opens the new one.
+                world.resource_mut::<NextState<AppScreen>>().set(AppScreen::Run);
+                open_on_start(world);
+            }
+            Err(e) => {
+                world.write_message(StartFailed(e));
+            }
+        },
+    }
+}
+
+/// Puts a built run in place: `NextRun` first, then the state change (`set` also for Run to Run).
+fn install(next: NextRun, world: &mut World) {
     world.insert_non_send(next);
-    // `set`, not `set_if_different`: Run to Run closes the old run and opens the new one.
     world.resource_mut::<NextState<AppScreen>>().set(AppScreen::Run);
     open_on_start(world);
-    Ok(())
 }
 
 /// Puts the run [`start`] built in place, first thing on `OnEnter(Run)`. A run from the command
