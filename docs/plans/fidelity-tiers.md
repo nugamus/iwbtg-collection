@@ -48,7 +48,7 @@ Judge a question in this order:
 - **F2 blocks Beta only if visible.** A visible F2 difference (a wrong sprite, a missing sound, a menu that misbehaves) blocks Beta until fixed or accepted on the game's page. An invisible one is F3 and is logged.
 - **F3 is recorded and never blocks.** It stays in the register and the game's deviation log so a later change does not lose it. It is free to redesign.
 - **Phase 3's done-when counts F1 only.** Phase 3 closes on the F1 items; an F2 or F3 item does not keep the phase open. The register keeps every row; closing phase 3 does not delete the tier.
-- **F2 and F3 move to the work they affect.** An F2/F3 item moves to the affected game's port issue (games repo, phase 9) or to phase 9 in its own repo. It is not closed and its labels are not removed; only its milestone changes.
+- **F2 and F3 move to the work they affect.** An F2/F3 item moves to the affected game's port issue (games repo) or to its own repo. In this repo it gets the phase 9 milestone; in the research or games repo it gets a `Phase: 9 · Content & ports` pointer and keeps its labels. It is not closed.
 - **F? is never moved and never blocks.** It stays where it is until evidence lands, then gets a tier.
 
 A tier is a judgement, not a verdict on quality: F2 and F3 items are still fidelity work, and an F1 answer can reveal an F2 follow-up.

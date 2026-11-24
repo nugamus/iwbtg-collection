@@ -365,6 +365,7 @@ def compute_overall(games):
         "tick_den": tick_den if tick_den else None,
         "tick_pct": pct(tick_num, tick_den),
         "games_census": len(census),
+        "standard_games": len(std_den_games),
         "games_tick": len(tick),
         "games_total": len(games),
     }
@@ -535,7 +536,12 @@ def port_rows(games):
         traces = (f'{g.get("traces_recorded")}' if g.get("traces_recorded") is not None
                   else '<span class="muted">—</span>')
         status = g.get("lifecycle") or "unknown"
-        cls = "good" if status.lower() in ("beta", "ranked", "loved") else "muted"
+        if status.lower() in ("unknown", ""):
+            status_html = cell(0, 0, FOLLOWUPS["frontmatter"])
+        else:
+            status_html = (f'<span class="pill '
+                           f'{"good" if status.lower() in ("beta", "ranked", "loved") else "muted"}">'
+                           f'{esc(status)}</span>')
         row = f"""
         <tr data-name="{esc((g['name'] + ' ' + g['slug']).lower())}"
             data-state="{esc(p['state'] if p else 'none')}"
@@ -546,7 +552,7 @@ def port_rows(games):
           <td class="wide">{done}</td>
           <td class="num">{subs}</td>
           <td class="num">{traces}</td>
-          <td><span class="pill {cls}">{esc(status)}</span></td>
+          <td>{status_html}</td>
         </tr>"""
         out.append(row)
     return "".join(out)
@@ -574,17 +580,39 @@ def coverage_history(hist):
                 f'<a href="https://github.com/{REPO}/issues/{FOLLOWUPS["census"]}">census</a>, '
                 f'<a href="https://github.com/{REPO}/issues/{FOLLOWUPS["traces"]}">trace</a> and '
                 f'<a href="https://github.com/{REPO}/issues/{FOLLOWUPS["converter"]}">converter</a> follow-ups.</p>')
-    # two small single-axis sparklines, one per measure
     def line(key, colour):
-        pts = [h for h in measured if h.get(key) is not None]
-        if len(pts) < 2:
-            return '<p class="empty">One point; the next run adds a line.</p>'
         w, hgt, x0, y0, x1, y1 = 340, 90, 30, 8, 330, 74
-        xs = [x0 + (x1 - x0) * i / (len(pts) - 1) for i in range(len(pts))]
-        ys = [y1 - (y1 - y0) * max(0, min(100, p[key])) / 100 for p in pts]
-        d = " ".join(("M" if i == 0 else "L") + f"{x:.1f},{yy:.1f}" for i, (x, yy) in enumerate(zip(xs, ys)))
-        return f'<svg viewBox="0 0 {w} {hgt}" role="img" aria-label="{key} over time"><path d="{d}" fill="none" stroke="{colour}" stroke-width="2"/></svg>'
-    return (f'<div class="spark"><div><span class="sub">Objects in the standard format</span>{line("standard_pct", "#3987e5")}</div>'
+        n = len(hist)
+        def x(i):
+            return x0 + (x1 - x0) * i / max(1, n - 1)
+        def y(v):
+            return y1 - (y1 - y0) * max(0, min(100, v)) / 100
+        segs, cur = [], []
+        for i, h in enumerate(hist):
+            v = h.get(key)
+            if v is None:
+                if cur:
+                    segs.append(cur)
+                    cur = []
+            else:
+                cur.append((i, v))
+        if cur:
+            segs.append(cur)
+        if not segs:
+            return '<p class="empty">No measured point for this measure yet.</p>'
+        marks = []
+        for seg in segs:
+            if len(seg) == 1:
+                i, v = seg[0]
+                marks.append(f'<circle cx="{x(i):.1f}" cy="{y(v):.1f}" r="3" fill="{colour}"/>')
+            else:
+                d = " ".join(("M" if j == 0 else "L") + f"{x(i):.1f},{y(v):.1f}"
+                             for j, (i, v) in enumerate(seg))
+                marks.append(f'<path d="{d}" fill="none" stroke="{colour}" stroke-width="2"/>')
+        return (f'<svg viewBox="0 0 {w} {hgt}" role="img" aria-label="{key} over time">'
+                f'{"".join(marks)}</svg>')
+    return (f'<div class="spark"><div><span class="sub">Objects in the standard format</span>'
+            f'{line("standard_pct", "#3987e5")}</div>'
             f'<div><span class="sub">Objects tick-accurate</span>{line("tick_pct", "#d95926")}</div></div>')
 
 
@@ -630,6 +658,8 @@ def render(data, hist):
         .replace("__COVERAGE_HISTORY__", coverage_history(hist)) \
         .replace("__STANDARD__", cell(ov["standard_num"], ov["standard_den"], FOLLOWUPS["census"])) \
         .replace("__TICK__", cell(ov["tick_num"], ov["tick_den"], FOLLOWUPS["traces"])) \
+        .replace("__STANDARD_GAMES__", str(ov.get("standard_games", 0))) \
+        .replace("__TICK_GAMES__", str(ov.get("games_tick", 0))) \
         .replace("__BURN_JSON__", json.dumps(a["burnup"])) \
         .replace("__CENSUS__", str(FOLLOWUPS["census"])) \
         .replace("__TRACEFU__", str(FOLLOWUPS["traces"])) \
@@ -829,7 +859,7 @@ footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--line);font-si
   <thead><tr><th>Game</th><th>Converter</th><th class="num">Specified</th><th class="num">Scripted</th><th class="num">Tick-accurate</th></tr></thead>
   <tbody>__COVERAGE_ROWS__</tbody>
   </table>
-  <p class="note">Overall: __STANDARD__ objects in the standard format · __TICK__ objects tick-accurate.</p>
+  <p class="note">Overall: __STANDARD__ objects in the standard format (measured across __STANDARD_GAMES__ of 20 games) · __TICK__ objects tick-accurate (measured across __TICK_GAMES__ games).</p>
 </details>
 
 <h2>Coverage history</h2>

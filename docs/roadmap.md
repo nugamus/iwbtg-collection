@@ -15,11 +15,11 @@ The order of work across all three repos: client, research and games. There are 
   - `area:*`: which part of the project the issue touches.
   - `triage`: a new issue an agent filed, waiting to be sorted into a phase.
 - **Sub-issues** break every large issue into steps, and `blocked by` links connect dependent issues, so the board shows what can start now.
-- **Ideas** that are not in any phase yet are issues without a milestone (the backlog) or lines in `potential-features.md`.
+- **Ideas** that are not in any phase yet are lines in `potential-features.md`; main-repo issues always carry a phase.
 
 ## Dispatch table
 
-Hand an agent a phase and a lane. The open count is from the 2026-11-24 snapshot; the [progress dashboard](../progress/index.html) rebuilds it from `gh`.
+Hand an agent a phase and a lane. The open count is from the 2026-11-24 snapshot; the [progress dashboard](https://nugamus.github.io/iwbtg-collection/) rebuilds it from `gh`.
 
 | Phase | `area:*` labels | Lane | Entry | Exit | Open |
 |---|---|---|---|---|---|
@@ -32,7 +32,7 @@ Hand an agent a phase and a lane. The open count is from the 2026-11-24 snapshot
 | `6 · Ranked-ready run` | `area:client`, `area:sim`, `area:design` | ui + sim + data | First playable, and the ranked rules decision for mods. | Stripped ranked mode works locally: timer and cutscene freeze, mods, retry keys, HUD, practice, results, local PBs, replays and `.iwbz` with maps. | 42 |
 | `7 · Online` | `area:server`, `area:client` | server + ui | A ranked-ready run and a local replay can be produced. | Accounts, verified submissions, leaderboards, review queue, profiles, cloud saves and engine upgrades run on the home server. | 57 |
 | `8 · Ghosts & races` | `area:client`, `area:server` | server + ui | Online leaderboards persist replays. | Ghosts of leaderboard runs and live race lobbies work. | 10 |
-| `9 · Content & ports` | `area:port`, `area:editor`, `area:sim`, `area:format` | research (ports) + ui (editor) + games repo | The sim, pipeline and ranked mode can run a port end to end. | All 20 games are in Beta, each with fidelity proof and a verified full clear; editor v1 works; community uploads validate and can be curated; a GMS runner profile reproduces traces of 3 GMS fangames. | 52 |
+| `9 · Content & ports` | `area:port`, `area:editor`, `area:sim`, `area:format` | research (ports) + ui (editor) + games repo | The sim (phase 3) and the porting pipeline (phase 2) can run a port end to end. | All 20 games are in Beta, each with fidelity proof and a verified full clear; editor v1 works; community uploads validate and can be curated; a GMS runner profile reproduces traces of 3 GMS fangames. | 52 |
 | `10 · Release` | `area:infra`, `area:docs`, `area:design`, `area:server` | infra + server + docs | The online stack and content are in place enough to ship. | Name, takedown and privacy pages, licenses, release builds and contributor docs are in place. | 24 |
 
 ## Phases
@@ -78,7 +78,7 @@ Near phases fill up with small issues while later ones hold a few large placehol
 
 - **A finding goes to the phase of the work it blocks,** not to the phase that is open now. A one-game fidelity question goes on that game's port issue (phase 9), a server idea to phase 7, and so on. Fidelity questions get a feel tier first (#784, [fidelity tiers](plans/fidelity-tiers.md)): only F1 (the T1 alias) blocks phase 3.
 - **A phase is scoped before its predecessor closes.** Its large issues get sub-issues (each port follows the standard steps listed in its issue), so the board shows the real size of the work ahead.
-- **The dashboard is not a phase.** How far the porting pipeline has got is measured on the [progress page](../progress/index.html), never as a gate.
+- **The dashboard is not a phase.** How far the porting pipeline has got is measured on the [progress page](https://nugamus.github.io/iwbtg-collection/), never as a gate.
 
 ## Modernization program
 

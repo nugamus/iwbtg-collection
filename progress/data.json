@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-24T14:23:59Z",
+ "generated_at": "2026-11-24T14:33:41Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -1359,6 +1359,7 @@
   "tick_den": null,
   "tick_pct": null,
   "games_census": 0,
+  "standard_games": 0,
   "games_tick": 0,
   "games_total": 20,
   "traces_recorded": 256,

@@ -34,19 +34,24 @@ The page leads with what is actually measured, so it is useful before the object
 Each file in `docs/games/<slug>.md` starts with:
 
 ```yaml
+---
 id: rely-the-needle-4-2
 game_id: 322
+order: 1
 name: "I Wanna Rely The Needle 4.2"
 slug: rely-the-needle-4-2
 source: https://delicious-fruit.com/game/19483
 engine: gm8
-status: unknown          # lifecycle or `unknown`
-objects_total: null       # census
-objects_specced: null     # objects with a behavior spec
-objects_scripted: null    # objects with a package script
-traces_passing: null      # objects with a passing trace
-traces_total: null        # objects trace-checked (informational)
+status: unknown
+objects_total: null
+objects_specced: null
+objects_scripted: null
+traces_passing: null
+traces_total: null
+---
 ```
+
+`status` is the lifecycle (`converted`, `trace-checked`, `Beta`, `Ranked`, `Loved`) or `unknown`. `objects_total` is the census; `objects_specced` counts objects with a behavior spec; `objects_scripted` counts objects with a package script; `traces_passing` counts objects with a passing trace; `traces_total` counts objects trace-checked. `null` and `unknown` mean not measured yet. Filling them is tracked by issue #1367.
 
 `null` and `unknown` mean not measured yet. Filling them is tracked by issue #1367.
 
@@ -101,7 +106,9 @@ No converter, census or trace data is committed to this public repo.
 
 ## Publishing
 
-The workflow publishes `progress/index.html` to the `gh-pages` branch (with `.nojekyll`), and Pages serves that branch at <https://nugamus.github.io/iwbtg-collection/>. It also commits the refreshed `data.json`, `history.json` and `index.html` back to `main` when the token may push; the published page always comes from the current run's generated files.
+The workflow restores the durable `history.json` from `gh-pages`, generates, then commits `index.html`, `data.json`, `history.json` and `.nojekyll` to `gh-pages` and requests a Pages build. Pages serves that branch at <https://nugamus.github.io/iwbtg-collection/>.
+
+It deliberately does **not** write to `main`: the `main: required checks` ruleset requires `ci-ok` and `body`, and `github-actions[bot]` is not on its bypass list. `progress/history.json` on `main` is the seed for the first run; the durable history lives on `gh-pages`, so each daily run appends a point. A failed branch push or a failed build request fails the run visibly; there is no silent fallback.
 
 If Pages is ever reset, point it at the branch once:
 

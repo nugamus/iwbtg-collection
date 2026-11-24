@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: write
+  pages: write
 
 concurrency:
   group: progress
@@ -32,31 +33,37 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Generate dashboard from committed files plus gh
-        run: python -I progress/generate.py --gh --history
-
-      - name: Commit the refreshed snapshot and history (best effort)
-        continue-on-error: true
+      - name: Restore the durable history from gh-pages
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add progress/data.json progress/history.json progress/index.html
-          if git diff --cached --quiet; then
-            echo "no snapshot change"
-          else
-            git commit -m "progress: refresh snapshot [skip ci]"
-            git push
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git fetch --depth=1 origin gh-pages
+            git show origin/gh-pages:history.json > progress/history.json 2>/dev/null || true
           fi
 
-      - name: Publish the page to the gh-pages branch
+      - name: Generate the dashboard from committed files plus gh
+        run: python -I progress/generate.py --gh --history
+
+      - name: Publish to gh-pages and fail visibly
         run: |
-          rm -rf /tmp/pages && mkdir -p /tmp/pages
-          cp progress/index.html /tmp/pages/index.html
-          touch /tmp/pages/.nojekyll
-          cd /tmp/pages
-          git init -q -b gh-pages
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html .nojekyll
-          git commit -q -m "progress: publish [skip ci]"
-          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:gh-pages
+          worktree=$(mktemp -d)
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git worktree add "$worktree" -B gh-pages origin/gh-pages
+          else
+            git worktree add --detach "$worktree"
+            git -C "$worktree" checkout --orphan gh-pages
+            git -C "$worktree" rm -rf . -q || true
+          fi
+          cp progress/index.html progress/data.json progress/history.json "$worktree/"
+          touch "$worktree/.nojekyll"
+          git -C "$worktree" add index.html data.json history.json .nojekyll
+          if git -C "$worktree" diff --cached --quiet; then
+            echo "no publish change"
+          else
+            git -C "$worktree" config user.name "github-actions[bot]"
+            git -C "$worktree" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git -C "$worktree" commit -m "progress: publish ${GITHUB_SHA:0:7} [skip ci]"
+            git -C "$worktree" push origin HEAD:gh-pages
+          fi
+
+      - name: Request a Pages build
+        run: gh api -X POST "repos/${GITHUB_REPOSITORY}/pages/builds" --silent
