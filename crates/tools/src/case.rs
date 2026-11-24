@@ -19,6 +19,8 @@
 //!   { frame = 1, global = "god_mode", value = 1.0 },              # frame < at: before room entry
 //!   { frame = 3, target = "kid", set = { x = 96.0, y = 567.4 } }, # before the tick of frame 3
 //!   { frame = 3, save = "deaths", value = 2.0 },
+//!   { frame = 3, destroy = "class:killer", rect = [-inf, -inf, 520, 260] }, # left <= x < right,
+//!                                    # top <= y < bottom: `with(playerKiller){if(x<520 && y<260)...}`
 //! ]
 //! vars = { "player.x" = "kid.x" }   # original column -> probe expression in our names
 //! ignore = ["id", "sprite_index", "sprite_name", "mask_index"]
@@ -39,7 +41,9 @@
 //! instance order, GML `instance_find(obj, n)` (`kid#0` is `kid`). Field, global and save names resolve through
 //! `iwbtg_sim::probe::registry` when the case runs. A `global` names engine state first, like a
 //! `global.<name>` column (`time`, `death`, `savenum` and `clear` are settable, #688), then a
-//! global the package declares.
+//! global the package declares. A `destroy` target is a kind name or `class:<class>` (a GM parent
+//! and its children), like an `instance_number(...)` column; it destroys every instance of it
+//! whose x and y are inside `rect`, running their Destroy events (#640).
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -224,6 +228,13 @@ pub enum SetupWhat {
         /// The value.
         value: CaseValue,
     },
+    /// Destroy the instances of a kind or class inside a rectangle.
+    Destroy {
+        /// A kind name or `class:<class>`.
+        target: String,
+        /// `[left, top, right, bottom]` as f64 bits: `left <= x < right`, `top <= y < bottom`.
+        rect: [u64; 4],
+    },
 }
 
 /// A setup value. Reals keep their exact bits, so cases compare with `Eq`.
@@ -316,6 +327,10 @@ struct RawSetup {
     save: Option<String>,
     #[serde(default)]
     value: Option<RawValue>,
+    #[serde(default)]
+    destroy: Option<String>,
+    #[serde(default)]
+    rect: Option<[f64; 4]>,
 }
 
 #[derive(Deserialize)]
@@ -359,22 +374,31 @@ impl TraceCase {
         };
         let mut setup = Vec::with_capacity(raw.setup.len());
         for (i, s) in raw.setup.into_iter().enumerate() {
-            let what = match (s.target, s.set, s.global, s.save, s.value) {
-                (Some(target), Some(set), None, None, None) => SetupWhat::Fields {
+            let destroy = match (s.destroy, s.rect) {
+                (Some(target), Some(rect)) => Some(SetupWhat::Destroy {
+                    target,
+                    rect: rect.map(f64::to_bits),
+                }),
+                (None, None) => None,
+                _ => return invalid(format!("setup entry {}: `destroy` needs `rect`", i + 1)),
+            };
+            let what = match (destroy, s.target, s.set, s.global, s.save, s.value) {
+                (Some(what), None, None, None, None, None) => what,
+                (None, Some(target), Some(set), None, None, None) => SetupWhat::Fields {
                     target,
                     set: set.into_iter().map(|(k, v)| (k, v.into_case())).collect(),
                 },
-                (None, None, Some(name), None, Some(value)) => SetupWhat::Global {
+                (None, None, None, Some(name), None, Some(value)) => SetupWhat::Global {
                     name,
                     value: value.into_case(),
                 },
-                (None, None, None, Some(field), Some(value)) => SetupWhat::Save {
+                (None, None, None, None, Some(field), Some(value)) => SetupWhat::Save {
                     field,
                     value: value.into_case(),
                 },
                 _ => {
                     return invalid(format!(
-                        "setup entry {}: expected `target` and `set`, `global` and `value`, or `save` and `value`",
+                        "setup entry {}: expected `target` and `set`, `global` and `value`, `save` and `value`, or `destroy` and `rect`",
                         i + 1
                     ));
                 }
@@ -500,6 +524,10 @@ impl TraceCase {
                     }
                     SetupWhat::Save { field, value: v } => {
                         format!("save = {}, value = {}", quote(field), value(v))
+                    }
+                    SetupWhat::Destroy { target, rect } => {
+                        let bounds: Vec<String> = rect.iter().map(|b| value(&CaseValue::Real(*b))).collect();
+                        format!("destroy = {}, rect = [{}]", quote(target), bounds.join(", "))
                     }
                 };
                 let _ = writeln!(out, "  {{ frame = {}, {body} }},", s.frame);
@@ -654,6 +682,13 @@ mod tests {
                     what: SetupWhat::Save {
                         field: "room".into(),
                         value: CaseValue::Str("x".into()),
+                    },
+                },
+                SetupEntry {
+                    frame: 4,
+                    what: SetupWhat::Destroy {
+                        target: "class:killer".into(),
+                        rect: [f64::NEG_INFINITY, -0.5, 520.0, 260.0].map(f64::to_bits),
                     },
                 },
             ],
@@ -885,6 +920,8 @@ mod tests {
             "source = \"g/t\"\nstart = { room = \"r\" }\nfirst_frame = 2\nobject = \"k\"\ndll_mode = \"real\"\n",
             "source = \"g/t\"\nstart = { room = \"r\" }\nfirst_frame = 2\nobject = \"k\"\nsetup = [{ frame = 1, global = \"g\" }]\n",
             "source = \"g/t\"\nstart = { room = \"r\" }\nfirst_frame = 2\nobject = \"k\"\nbogus = 1\n",
+            "source = \"g/t\"\nstart = { room = \"r\" }\nfirst_frame = 2\nobject = \"k\"\nsetup = [{ frame = 3, destroy = \"killer\" }]\n",
+            "source = \"g/t\"\nstart = { room = \"r\" }\nfirst_frame = 2\nobject = \"k\"\nsetup = [{ frame = 3, destroy = \"killer\", rect = [0, 0, 1, 1], global = \"g\", value = 1 }]\n",
             "source = \"g/t\"\nstart = { room = \"r\" }\nfirst_frame = 2\nobject = \"k\"\nsplit = { s = [\"x\"] }\n",
             "source = \"g/t\"\nstart = { room = \"r\" }\nfirst_frame = 2\nobject = \"k\"\nsplit = { s = [\"x:9\"] }\n",
             "source = \"g/t\"\nstart = { room = \"r\" }\nfirst_frame = 2\nobject = \"k\"\nsplit = { s = [\"a.b:1\"] }\n",
