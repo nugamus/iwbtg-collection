@@ -6,11 +6,15 @@ use iwbtg_sim::def::script::ScriptRules;
 use iwbtg_sim::def::testing::GameDefBuilder;
 use iwbtg_sim::def::{Builtin, GameDef, KindDef, KindId, RoomDef, RoomId, ScriptDef, ScriptId, VarId};
 use iwbtg_sim::events::EventKind;
+use iwbtg_sim::hash::state_hash;
+use iwbtg_sim::input::InputFrame;
 use iwbtg_sim::num::Real;
+use iwbtg_sim::room::RoomRequest;
 use iwbtg_sim::rules::RunnerRules;
 use iwbtg_sim::script::validate::validate;
 use iwbtg_sim::script::{ScriptHost, ScriptRuntime};
 use iwbtg_sim::sound::DllMode;
+use iwbtg_sim::tick;
 use iwbtg_sim::world::{Ctx, InstId, SpawnInit, Value, World};
 
 const SCRIPT: &str = r#"
@@ -35,6 +39,8 @@ fn user(n) {
     else if n == 7 { this.pattern[2.0] = [1.0, [2.0, 3.0]]; this.pattern[2][1][0] = 4.0; this.res = this.pattern[2][1][0]; }
     else if n == 8 { this.res = global.never_set; }
     else if n == 9 { this.pattern = 42.0; this.res = this.pattern[0] + this.pattern[1]; }
+    else if n == 10 { room_goto("other"); }
+    else if n == 11 { this.res = #{ a: 1.0 }; }
 }
 "#;
 
@@ -96,6 +102,7 @@ const RES: VarId = VarId(1);
 fn game(script_rules: Option<ScriptRules>) -> Game {
     let mut b = GameDefBuilder::new("arrays997");
     let room = b.room(RoomDef::new("room", 320, 240));
+    b.room(RoomDef::new("other", 320, 240));
     let mut k = KindDef::new("holder", Builtin::Block);
     k.script = Some(ScriptId(0));
     let kind = b.kind(k);
@@ -229,4 +236,72 @@ fn reading_a_stored_array_charges_its_elements() {
     // `step()` itself is a few dozen operations; reading `pattern` twice copies 2,000 elements,
     // and `len()` writes the copy back (1,000 more).
     assert!(used >= 3000, "used {used}");
+}
+
+impl Game {
+    /// Rebuilds the script runtime after a test changed the definition.
+    fn with(mut self, f: impl FnOnce(&mut GameDef, KindId)) -> Game {
+        f(&mut self.def, self.kind);
+        self.scripts = ScriptRuntime::new(&self.def, &self.rules).expect("scripts compile");
+        self
+    }
+
+    fn tick(&mut self) {
+        let mut c = self.ctx();
+        tick::run_tick(&mut c, InputFrame::default()).expect("tick");
+    }
+
+    fn goto(&mut self, room: RoomId) {
+        self.ctx().request_room(RoomRequest::Goto(room));
+        self.tick();
+    }
+}
+
+const OTHER: RoomId = RoomId(1);
+
+/// #791: a stored array lives as long as its variable. A global array and an array on a
+/// persistent (Run-scope) instance are carried into the next room; an array on an instance of a
+/// persistent room is back when the player returns.
+#[test]
+fn arrays_survive_room_changes_with_their_variable() {
+    let mut g = game(None).with(|def, kind| def.kinds[kind.0 as usize].persistent = true);
+    let me = g.holder();
+    user(&mut g, me, 10).expect("room_goto");
+    g.tick();
+    assert_eq!(g.w.room, OTHER);
+    assert_eq!(g.var(me, PATTERN), Some(&reals(&[10.0, 11.0, 12.0, 13.0, 14.0])));
+    assert_eq!(g.global("flags"), Some(&reals(&[0.0, 7.0])));
+    g.run(me, &EventKind::Step).expect("step in the new room");
+    assert_eq!(g.var(me, RES), Some(&real(13.0)));
+
+    let mut g = game(None).with(|def, _| def.rooms[0].persistent = true);
+    let me = g.holder();
+    g.goto(OTHER);
+    assert!(g.w.get(me).is_none(), "left behind in the persistent room");
+    g.goto(RoomId(0));
+    assert_eq!(g.var(me, PATTERN), Some(&reals(&[10.0, 11.0, 12.0, 13.0, 14.0])));
+}
+
+/// `World`'s postcard encoding keeps stored arrays: the decoded world hashes the same and a later
+/// event reads the same element.
+#[test]
+fn arrays_survive_a_world_snapshot() {
+    let mut g = game(None);
+    let me = g.holder();
+    let bytes = postcard::to_allocvec(&g.w).expect("encode");
+    let back: World = postcard::from_bytes(&bytes).expect("decode");
+    assert_eq!(state_hash(&back), state_hash(&g.w));
+    g.w = back;
+    g.run(me, &EventKind::Step).expect("step");
+    assert_eq!(g.var(me, RES), Some(&real(13.0)));
+}
+
+/// Maps are not stored values (#791): GM8 has no map variable, and no converted game calls a
+/// `ds_*` function (research census, #172). A Rhai map stays local to one call.
+#[test]
+fn a_map_is_not_a_stored_value() {
+    let mut g = game(None);
+    let me = g.holder();
+    let e = user(&mut g, me, 11).expect_err("a map is refused");
+    assert!(e.contains("cannot hold a map"), "{e}");
 }
