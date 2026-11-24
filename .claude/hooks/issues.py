@@ -267,15 +267,20 @@ def game_progress_lines(workspace=WORKSPACE, repo=REPO):
     port_total = f"{ports}/{len(games)}" if games_found else "not measured"
     lines.append(f"  {'total':<{PORT_PROGRESS_WIDTH}} {fidelity_total:<21} "
                  f"{str(missing_total) if missing_all else 'not measured':>15}  {port_total}")
-    # Name the missing inputs once, instead of on every row.
+    # Name the missing inputs once, instead of on every row. A stamp can hold counts for some
+    # games only (a package that failed to load, #1425); that is not "no counts recorded".
     if not missing_all:
         if not found:
             lines.append(f"  missing scripts: not measured (no fidelity sweep stamp; run `cargo xtask fidelity`, "
                          f"input {packages})")
         elif not present:
             lines.append(f"  missing scripts: not measured (no packages at {packages})")
-        else:
+        elif not missing:
             lines.append(f"  missing scripts: not measured (no per-package counts recorded for {packages})")
+        else:
+            unmeasured = sorted(game for game in games if game not in missing)
+            shown = ", ".join(unmeasured[:6]) + (f", +{len(unmeasured) - 6} more" if len(unmeasured) > 6 else "")
+            lines.append(f"  missing scripts: not measured for {shown} (sweep input {packages})")
     if not games_found:
         lines.append(f"  ports: not measured (no games checkout at {games_root})")
     return lines
@@ -524,6 +529,27 @@ def test():
         text = "\n".join(game_progress_lines(ws, repo))
         assert "12" in text and "not measured" in text  # animus was not measured
         assert "no packages at /nope/build/packages" in text
+        # A stamp with counts for some games only names the unmeasured ones and keeps the input;
+        # it must not claim that no counts were recorded (#1430).
+        (repo / GAME_PROGRESS_STAMP).write_text(
+            "missing-scripts-input present /p/build/packages\nmissing-scripts kaenbyou 12\n",
+            encoding="utf-8")
+        text = "\n".join(game_progress_lines(ws, repo))
+        assert "not measured for animus (sweep input /p/build/packages)" in text, text
+        assert "no per-package counts recorded" not in text, text
+        assert "12" in text
+        # A complete stamp has no note and sums every game.
+        (repo / GAME_PROGRESS_STAMP).write_text(
+            "missing-scripts-input present /p/build/packages\n"
+            "missing-scripts kaenbyou 12\nmissing-scripts animus 3\n", encoding="utf-8")
+        text = "\n".join(game_progress_lines(ws, repo))
+        assert "missing scripts: not measured" not in text, text
+        assert "15" in text  # total 12 + 3
+        # A present stamp with no per-game lines really did record no counts.
+        (repo / GAME_PROGRESS_STAMP).write_text(
+            "missing-scripts-input present /p2/build/packages\n", encoding="utf-8")
+        text = "\n".join(game_progress_lines(ws, repo))
+        assert "no per-package counts recorded for /p2/build/packages" in text, text
         (repo / BASELINE).unlink()
         assert game_progress_lines(ws, repo) == []
         # The stamp parser reads a measured packages input and a zero it did measure.
