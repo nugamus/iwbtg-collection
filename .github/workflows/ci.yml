@@ -34,6 +34,9 @@ jobs:
     outputs:
       code: ${{ steps.diff.outputs.code }}
       packages: ${{ steps.diff.outputs.packages }}
+      # The native job's set: consumers for a code change, the fixture readers only for a
+      # docs-fixture-only change (#1405).
+      native_packages: ${{ steps.diff.outputs.native_packages }}
       wasip1: ${{ steps.diff.outputs.wasip1 }}
       browser: ${{ steps.diff.outputs.browser }}
       web: ${{ steps.diff.outputs.web }}
@@ -64,7 +67,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     env:
-      PACKAGES: ${{ needs.changes.outputs.packages }}
+      PACKAGES: ${{ needs.changes.outputs.native_packages }}
     defaults:
       run:
         shell: bash
@@ -86,7 +89,7 @@ jobs:
       - if: runner.os == 'Linux'
         run: cargo fmt --all -- --check
       # Bevy's windowing (winit, wayland, x11) needs system libraries on Linux.
-      - if: runner.os == 'Linux' && contains(needs.changes.outputs.packages, '-p iwbtg-client')
+      - if: runner.os == 'Linux' && contains(needs.changes.outputs.native_packages, '-p iwbtg-client')
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends pkg-config libwayland-dev libxkbcommon-dev libx11-dev libxcursor-dev libxi-dev libxrandr-dev libudev-dev libasound2-dev
       - uses: Swatinem/rust-cache@v2
         with:

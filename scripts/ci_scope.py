@@ -205,6 +205,11 @@ def plan(paths, graph, full=False, root=ROOT):
     # the same step as the golden corpus. That job needs `browser` and its test step is gated on
     # `wasip1` (#1169), so the feel step mirrors that pair and stays off for a docs-only change.
     feel = browser and wasip1
+    # CI's native job tests the changed crates and their consumers for a code change. A
+    # documentation fixture cannot change a consumer's tests, so a fixture-only plan tests only the
+    # crates whose tests read it (#1405). `packages_list` keeps the full set, so `test | compile`
+    # is still the plan's package set and the local check still compile-checks the consumers.
+    native_packages = sorted(selected_all if code_input else test)
 
     local_steps = [{'kind': 'rustfmt', 'reason': 'always checks the workspace formatting'}]
     if test:
@@ -230,7 +235,7 @@ def plan(paths, graph, full=False, root=ROOT):
                           else 'no sim, format or tools code selected' if code_input
                           else 'no code input')
     ci_steps = [
-        {'kind': 'native', 'selected': code, 'reason': native_reason},
+        {'kind': 'native', 'selected': code, 'packages': native_packages, 'reason': native_reason},
         {'kind': 'clippy+test', 'packages': sorted(selected_all),
          'reason': 'CI tests changed crates and their consumers'},
         {'kind': 'wasm32-wasip1', 'selected': wasip1, 'reason': wasip1_reason},
@@ -255,6 +260,8 @@ def plan(paths, graph, full=False, root=ROOT):
         'fixtures': bool(fixtures),
         'packages': ' '.join('-p ' + name for name in sorted(selected_all)),
         'packages_list': sorted(selected_all),
+        'native_packages': native_packages,
+        'native_packages_argv': ' '.join('-p ' + name for name in native_packages),
         'test': sorted(test),
         'compile': sorted(compile_),
         'wasip1': wasip1,
@@ -326,6 +333,9 @@ def main():
             for key in ('code', 'packages', 'wasip1', 'browser', 'web', 'determinism'):
                 value = result[key]
                 out.write(f'{key}={str(value).lower() if isinstance(value, bool) else value}\n')
+            # CI's native job tests this set: consumers for a code change, only the fixture readers
+            # for a fixture-only change (#1405).
+            out.write(f"native_packages={result['native_packages_argv']}\n")
 
 
 if __name__ == '__main__':
