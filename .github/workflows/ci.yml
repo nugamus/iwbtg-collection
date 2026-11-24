@@ -1,7 +1,8 @@
 name: CI
 # Every PR runs this workflow so the required `ci-ok` check always reports (auto-merge, #528).
 # PRs select changed crates and transitive consumers; main/merge groups retain the full matrix.
-# Test-consumed docs select sim/format; ordinary documentation skips builds.
+# Test-consumed docs select sim/format natively; they select WASM/determinism only where a test
+# there reads the fixture (#1124). Ordinary documentation skips builds.
 # Every job sets `timeout-minutes` (#967): a wedged step fails and reports after minutes instead of
 # holding `ci-ok` and auto-merge for GitHub's 6 hour default. The native cap is 45 minutes: a full
 # Windows run measured 28m36s on a cold-ish cache (#1041, run 44531896479), and main also runs the
