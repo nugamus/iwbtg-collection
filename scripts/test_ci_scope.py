@@ -212,6 +212,37 @@ class ScopeTests(unittest.TestCase):
                 flags_b = identity_digest(root, graph, 'test', ['a'], both)
             self.assertNotEqual(flags_a, flags_b)
 
+    def test_step_identity_sees_crate_sources_a_rebase_brings(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'Cargo.toml').write_text('[workspace]\nmembers = ["crates/format", "crates/app"]\n')
+            (root / 'crates/format/src').mkdir(parents=True)
+            (root / 'crates/format/Cargo.toml').write_text('[package]\nname = "iwbtg-format"\n')
+            (root / 'crates/format/src/lib.rs').write_text('format v1')
+            (root / 'crates/app/src').mkdir(parents=True)
+            (root / 'crates/app/Cargo.toml').write_text(
+                '[package]\nname = "iwbtg-app"\n[dependencies]\niwbtg-format = { path = "../format" }\n')
+            (root / 'crates/app/src/lib.rs').write_text('app v1')
+            graph = packages(root)
+            changed = ['crates/app/src/lib.rs']  # equal in every call: the fixture-style list
+            before = identity_digest(root, graph, 'test', ['iwbtg-format'], changed)
+            # A rebase onto a new base replaces crates/format sources without naming them in
+            # `changed`; the identity must still differ.
+            (root / 'crates/format/src/lib.rs').write_text('format v2')
+            after = identity_digest(root, graph, 'test', ['iwbtg-format'], changed)
+            self.assertNotEqual(before, after,
+                                'a base-brought dependency source must change the identity')
+            # An unchanged-consumer edit does not enter the dependency's identity.
+            format_identity = identity_digest(root, graph, 'test', ['iwbtg-format'], changed)
+            (root / 'crates/app/src/lib.rs').write_text('app v2')
+            self.assertEqual(identity_digest(root, graph, 'test', ['iwbtg-format'], changed),
+                             format_identity)
+            # An unchanged tree reproduces the same identity, so receipts stay reusable.
+            self.assertEqual(identity_digest(root, graph, 'test', ['iwbtg-format'], changed),
+                             format_identity)
+
     def test_local_and_ci_union_never_drifts(self):
         for paths in ([], ['README.md'], ['crates/sim/src/world.rs'], ['crates/client/src/view.rs'],
                       ['crates/format/src/lib.rs'], ['Cargo.lock'], ['docs/format/game.md']):
