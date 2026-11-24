@@ -38,6 +38,7 @@ use clap::Parser;
 client_modules! {
     shell,
     bindings,
+    controls,
     screen,
     hud,
     ui,

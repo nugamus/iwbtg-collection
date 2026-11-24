@@ -298,6 +298,47 @@ impl Bindings {
             .find(|k| self.client[k.index()].pad.contains(&input))
     }
 
+    /// The keys bound to `action`, by key code (the controls panel's action rows, #52).
+    pub fn keys_of(&self, action: Action) -> Vec<u8> {
+        self.keys
+            .iter()
+            .filter(|(_, a)| **a == action)
+            .map(|(key, _)| *key)
+            .collect()
+    }
+
+    /// The controller inputs bound to `action` ([`Bindings::keys_of`]).
+    pub fn pads_of(&self, action: Action) -> Vec<PadInput> {
+        PadInput::ALL
+            .into_iter()
+            .filter(|p| self.pad_action(*p) == Some(action))
+            .collect()
+    }
+
+    /// The keys bound to a client key.
+    pub fn client_keys_of(&self, key: ClientKey) -> Vec<u8> {
+        self.client[key.index()].keys.iter().copied().collect()
+    }
+
+    /// The controller inputs bound to a client key.
+    pub fn client_pads_of(&self, key: ClientKey) -> Vec<PadInput> {
+        self.client[key.index()].pad.iter().copied().collect()
+    }
+
+    /// Whether `action` still has exactly its default keys and controller inputs.
+    pub fn is_default_action(&self, action: Action) -> bool {
+        let default = Bindings::default();
+        self.keys_of(action) == default.keys_of(action)
+            && self.pads_of(action) == default.pads_of(action)
+    }
+
+    /// Whether a client key still has exactly its default inputs.
+    pub fn is_default_client(&self, key: ClientKey) -> bool {
+        let default = Bindings::default();
+        self.client_keys_of(key) == default.client_keys_of(key)
+            && self.client_pads_of(key) == default.client_pads_of(key)
+    }
+
     /// The key quick-retries the run.
     pub fn is_quick_retry_key(&self, key: u8) -> bool {
         self.client_key(key) == Some(ClientKey::QuickRetry)
