@@ -132,8 +132,8 @@ fn place_queries_filter_targets() {
     );
 }
 
-/// R21: instance_place returns the first by rank, then creation; R22 and inactive
-/// instances.
+/// R21: instance_place returns the first in the GM instance list by default (one depth here, so
+/// room entry order), by rank then id under `DispatchOrder`; R22 and inactive instances.
 #[test]
 fn instance_place_order_dead_and_inactive() {
     let mut g = game(800, 608);
@@ -144,6 +144,12 @@ fn instance_place_order_dead_and_inactive() {
     let b3 = g.add_block(96.0, 576.0);
     let k = g.add_kid(112.0, 567.4, 1.0);
     let at = (r(112.0), r(568.4));
+    assert_eq!(
+        instance_place(&g.ctx(), k, at.0, at.1, Target::Any).unwrap(),
+        Some(plat),
+        "the instance list: the platform entered the room first"
+    );
+    g.rules.tick.first_rule = iwbtg_sim::rules::tick::FirstRule::DispatchOrder;
     assert_eq!(
         instance_place(&g.ctx(), k, at.0, at.1, Target::Any).unwrap(),
         Some(b2)

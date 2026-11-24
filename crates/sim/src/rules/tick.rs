@@ -14,9 +14,9 @@ pub struct TickRules {
     pub timing: TimingRules,
     /// R1 (U1, answered by the recorder): when `xprevious`/`yprevious` are captured.
     pub prev_capture: PrevCapture,
-    /// R21 (answered by the recorder: the first in instance order, which for one object is the
-    /// lowest id; famB-multikid-restart-b rows 25-26): which instance is "the first" in queries,
-    /// the kid, view follow, saveGame.
+    /// R21 (answered by the recorder: the first in the GM instance list, depth then room entry;
+    /// research#142, famB-multikid-restart-b rows 25-26): which instance is "the first" in
+    /// queries, the kid, view follow, saveGame.
     pub first_rule: FirstRule,
     /// R5 (U4, answered by the recorder): where Outside Room and Intersect Boundary run.
     pub boundary_slot: BoundarySlot,
@@ -177,8 +177,12 @@ pub enum PrevCapture {
 /// R21: which instance is "the first" (`World::first_of`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum FirstRule {
-    /// The first in dispatch order: `object_order` rank, then instance id. Default.
+    /// The first in the GM instance list (`World::instance_list`): depth largest first, then the
+    /// order the instances entered the room (research#142). Default.
     #[default]
+    InstanceList,
+    /// The first in dispatch order (R2): `object_order` rank, then instance id. Test-only
+    /// alternative (decision 0005).
     DispatchOrder,
     /// The lowest instance id.
     LowestId,

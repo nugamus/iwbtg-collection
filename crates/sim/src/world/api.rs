@@ -168,6 +168,24 @@ impl World {
         self.instances.iter().filter(|i| i.alive)
     }
 
+    /// The GM instance list order (research#142): every stored instance, alive or destroyed this
+    /// tick, depth largest first, then the order the instances entered the room: the room's
+    /// placed instances in file order, the carried persistent ones in their previous list order,
+    /// then the instances created during the room. `with (all)`, `instance_id[]`,
+    /// `instance_count` and the first-instance queries all use this one order, not the event
+    /// dispatch order (R2) and not id order.
+    pub fn instance_list(&self) -> Vec<InstId> {
+        let mut keyed: Vec<(u64, u64, InstId)> = self.instances.iter().map(|i| self.list_key(i)).collect();
+        keyed.sort_unstable();
+        keyed.into_iter().map(|(_, _, id)| id).collect()
+    }
+
+    /// The sort key of `inst` in [`World::instance_list`]: depth largest first, room-entry rank,
+    /// then id (only for an instance without a rank).
+    pub(crate) fn list_key(&self, inst: &Instance) -> (u64, u64, InstId) {
+        (events::depth_desc(inst.depth), self.entry_rank(inst.id), inst.id)
+    }
+
     /// Visible instances (active and alive) in id order.
     pub fn iter_visible(&self) -> impl Iterator<Item = &Instance> {
         self.instances.iter().filter(|i| Self::visible_instance(i, false))
@@ -191,6 +209,7 @@ impl World {
     pub fn first_among(&self, ids: impl IntoIterator<Item = InstId>, rules: &TickRules) -> Option<InstId> {
         let found = ids.into_iter().filter_map(|id| self.get(id));
         match rules.first_rule {
+            FirstRule::InstanceList => found.min_by_key(|i| self.list_key(i)).map(|i| i.id),
             FirstRule::LowestId => found.map(|i| i.id).min(),
             FirstRule::DispatchOrder => found
                 .min_by_key(|i| events::order_key(i, events::Order::Dispatch))

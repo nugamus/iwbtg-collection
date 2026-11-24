@@ -57,7 +57,7 @@
 //! in the tick, `Flow::AbortTick` does not stop the sequence here (R23: the sequence always
 //! finishes).
 
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use serde::{Deserialize, Serialize};
 
@@ -807,6 +807,10 @@ struct RoomTransaction {
     /// room-file ids are still pending removal, so a placed instance with one is not created
     /// again (#670).
     removed: RemovedInstances,
+    /// The old room's instance list ranks, taken by `Commit` before the store is rebuilt, so
+    /// the carried persistent instances keep their old order after the placed ones
+    /// (research#142).
+    previous: BTreeMap<InstId, u64>,
     /// `Prepare` ran.
     prepared: bool,
 }
@@ -829,6 +833,7 @@ impl RoomTransaction {
             restoring: false,
             built: Vec::new(),
             removed,
+            previous: BTreeMap::new(),
             prepared: false,
         })
     }
@@ -848,7 +853,13 @@ impl RoomTransaction {
                 }
                 RoomStage::Prepare => self.prepare(ctx)?,
                 RoomStage::Commit => self.commit(ctx)?,
-                RoomStage::Placed => self.build_placed(ctx, host, queue)?,
+                RoomStage::Placed => {
+                    self.build_placed(ctx, host, queue)?;
+                    // The GM instance list order (research#142): this room's placed instances
+                    // in file order, then the carried persistent ones in their old order, then
+                    // everything created since (Create events of the placed ones included).
+                    ctx.w.set_room_entry(&self.built, &self.previous);
+                }
                 RoomStage::GameStart => self.game_start(ctx, host, queue)?,
                 RoomStage::CreationCode => self.creation_code(ctx, host, queue)?,
                 RoomStage::RoomStart => self.room_start(ctx, host, queue)?,
@@ -888,6 +899,7 @@ impl RoomTransaction {
             ));
         }
         let room = room_def(ctx, self.to)?;
+        self.previous = ctx.w.take_room_entry();
         if let Some(old) = self.from
             && ctx.def.room(old).is_some_and(|r| r.persistent)
         {

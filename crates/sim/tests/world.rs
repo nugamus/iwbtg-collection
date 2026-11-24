@@ -163,8 +163,11 @@ fn first_of_kid_and_count_of() {
     let mut fx = Fx::new(b.build().unwrap());
     let k1 = fx.probe(kid, 0.0, 0.0, p("K1"));
     let k2 = fx.probe(flipped, 0.0, 0.0, p("K2"));
-    let rules = fx.rules.tick.clone();
+    // R21 default: the GM instance list (one depth here, so room entry order): K1 came first.
+    assert_eq!(fx.w.kid(&fx.rules.tick), Some(k1));
     // Dispatch order: the flipped kind has the lower rank.
+    let mut rules = fx.rules.tick.clone();
+    rules.first_rule = FirstRule::DispatchOrder;
     assert_eq!(fx.w.kid(&rules), Some(k2));
     let mut lowest = rules.clone();
     lowest.first_rule = FirstRule::LowestId;

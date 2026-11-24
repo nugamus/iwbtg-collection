@@ -225,6 +225,7 @@ impl<'a> Q<'a> {
     pub(crate) fn first(&self, hits: &[&Instance]) -> Option<InstId> {
         let by = |key: fn(&Instance) -> (u16, InstId)| hits.iter().map(|i| key(i)).min().map(|k| k.1);
         match self.rules.tick.first_rule {
+            FirstRule::InstanceList => hits.iter().min_by_key(|i| self.w.list_key(i)).map(|i| i.id),
             FirstRule::LowestId => by(|i| (0, i.id)),
             FirstRule::DispatchOrder => by(|i| (i.rank, i.id)),
         }

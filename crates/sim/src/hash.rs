@@ -23,7 +23,7 @@ use crate::sound::SoundState;
 use crate::stripped::PlayMode;
 use crate::timing::TimingState;
 use crate::view::View;
-use crate::world::{EngineGlobals, Instance, SimStatus, Value, World};
+use crate::world::{EngineGlobals, InstId, Instance, SimStatus, Value, World};
 
 /// Version of the [`HashView`] layout. Part of the hashed bytes, so a layout change can never
 /// match an old hash by accident.
@@ -41,6 +41,8 @@ pub struct HashView<'a> {
     room_tick: u64,
     room_speed: Real,
     instances: &'a [Instance],
+    room_entry: &'a BTreeMap<InstId, u64>,
+    next_entry: u64,
     next_id: u64,
     var_names: &'a BTreeMap<String, VarId>,
     globals: &'a BTreeMap<VarId, Value>,
@@ -71,6 +73,8 @@ impl<'a> HashView<'a> {
             room_tick: w.room_tick,
             room_speed: w.room_speed,
             instances: w.instances(),
+            room_entry: &w.room_entry,
+            next_entry: w.next_entry,
             next_id: w.next_id,
             var_names: &w.var_names,
             globals: &w.globals,

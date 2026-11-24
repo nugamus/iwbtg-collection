@@ -7,45 +7,45 @@
 f10ca4d333d4e3ad4b7079bb8b4ffe83 hits=1139 place_free solid
 818d1a25ba673015b5b107268f025c39 hits=181 instance_place wall
 818d1a25ba673015b5b107268f025c39 hits=181 instance_place block
-a8560c3f695a93bb83e9e2a5676af10f hits=52 instance_place gem
+411a60369114b1b7910b85d5e76024b3 hits=52 instance_place gem
 361d14670dbba9c4d2be9289f45deb02 hits=21 instance_place gem[v=1]
-1db1543a96f5a1295d7c7b58e5b8dddc hits=231 instance_place all
+3301cb1058314cfc1fc31ff5b23f2f28 hits=231 instance_place all
 644fa9c020d09c63b2a539b7d40688fe hits=54 instance_place instance
 3e0755524c70d80cbbf0211a72712e3b hits=118 collision_point wall
 3e0755524c70d80cbbf0211a72712e3b hits=118 collision_point block
-aec04ff7058886576dfe81c7fa77d15d hits=12 collision_point gem
+4cbfa69756b296ff23237d540e03b942 hits=12 collision_point gem
 af48ca24e1117eaa83eed8a3910fa42a hits=4 collision_point gem[v=1]
-fe08483de64a98d7e5f3682c4bd692f8 hits=136 collision_point all
+4376d75cc933e63e8e98546a6bce64c2 hits=136 collision_point all
 cdc5907c4ac957c038ab8ca18f3fca37 hits=30 collision_point instance
 3e0755524c70d80cbbf0211a72712e3b hits=118 collision_point prec=false notme wall
 3e0755524c70d80cbbf0211a72712e3b hits=118 collision_point prec=false notme block
-bfaf24f675ae96908ff18e14c8c1de76 hits=21 collision_point prec=false notme gem
+82da144ad485762cf63bbcade6dd5630 hits=21 collision_point prec=false notme gem
 a1a130dff1d3d78098994ee5e435729d hits=8 collision_point prec=false notme gem[v=1]
-44c5383b2e37c65084685933f6d11bbf hits=139 collision_point prec=false notme all
+8d70ceb15a5a5a3e944fd64d923c4ea0 hits=139 collision_point prec=false notme all
 cdc5907c4ac957c038ab8ca18f3fca37 hits=30 collision_point prec=false notme instance
 75d0e044c3c72857900004ca80614fa3 hits=234 collision_rect wall
 75d0e044c3c72857900004ca80614fa3 hits=234 collision_rect block
-b9f53bcae6c3015be7a814899427fe56 hits=84 collision_rect gem
+27bfeada8d3c8b09b74decac38b91c68 hits=84 collision_rect gem
 cb32eacca100d5a3532de8f31b030917 hits=32 collision_rect gem[v=1]
-5114d108fd62a14b3a66dbf82926c51f hits=328 collision_rect all
+ca417dbb7757f23ac9aa3b155b97ad76 hits=328 collision_rect all
 58de09b8be520a8efd7fb4e33ad4dc27 hits=48 collision_rect instance
 75d0e044c3c72857900004ca80614fa3 hits=234 collision_rect prec=false notme wall
 75d0e044c3c72857900004ca80614fa3 hits=234 collision_rect prec=false notme block
-f9b198c9cf312fcbdc69d80afa353aa7 hits=96 collision_rect prec=false notme gem
+698434550fd9f0d4d0d4276f0e83d80f hits=96 collision_rect prec=false notme gem
 7f057fbafbc5b77662746079ad6c515e hits=36 collision_rect prec=false notme gem[v=1]
-aad0d40f3d76279b82e1016993888a47 hits=317 collision_rect prec=false notme all
+1d74c641a7afce3827557d62af56ccae hits=317 collision_rect prec=false notme all
 58de09b8be520a8efd7fb4e33ad4dc27 hits=48 collision_rect prec=false notme instance
 5f54e676931a21a218d9ec41f1f9d050 hits=212 collision_line wall
 5f54e676931a21a218d9ec41f1f9d050 hits=212 collision_line block
-0663a9c452e4f9855fcfd674fc64e4e9 hits=39 collision_line gem
+b2c3eda751a212eee11985510ae964dc hits=39 collision_line gem
 430ad585c5f5ea8ba886ce78a6a5630d hits=16 collision_line gem[v=1]
-056823090e99ae426f857dffa89984b3 hits=263 collision_line all
+4768adbaddbbe327823e9fa6dd813e43 hits=263 collision_line all
 4fa2d85dfdafbd904ba656e0eade3067 hits=45 collision_line instance
 5f54e676931a21a218d9ec41f1f9d050 hits=212 collision_line prec=false notme wall
 5f54e676931a21a218d9ec41f1f9d050 hits=212 collision_line prec=false notme block
-6e7f528582f77e663f0708946f72ce72 hits=62 collision_line prec=false notme gem
+f30cbd14cbe05150c62a907c1f0e6591 hits=62 collision_line prec=false notme gem
 17b3843de4a3612608ab1db6e1b29cb8 hits=26 collision_line prec=false notme gem[v=1]
-1858ff26401ef053168827f90b15d750 hits=264 collision_line prec=false notme all
+8708e1692fb6ffa14fee37a3a85981a6 hits=264 collision_line prec=false notme all
 4fa2d85dfdafbd904ba656e0eade3067 hits=45 collision_line prec=false notme instance
 6638d6a5716bd9af71d29985b73de03b hits=181 place_meeting method wall
 6638d6a5716bd9af71d29985b73de03b hits=181 place_meeting method block

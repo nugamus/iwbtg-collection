@@ -105,7 +105,7 @@ A family may keep a different **step order** when the order is a player-visible 
 
 The standard order is one deterministic walk:
 
-- `object_order` rank, then **instance id**, for event dispatch. For a placed instance the id may be the GM8 `gm_id`, not the room-file creation ordinal; whether the two differ is OPEN (#1079), and the current behavior is kept until a trace settles it.
+- `object_order` rank, then **instance id**, for event dispatch. For a placed instance the id may be the GM8 `gm_id`, not the room-file creation ordinal; whether the two differ is OPEN (research#277), and the current behavior is kept until a trace settles it.
 - the same order for the collision phase: outer instance by rank then id, inner by rank then id, both directions per pair, one most-specific handler (today `ClassMask::generality()`, to become data whose defaults reproduce it);
 - draw order is depth descending, then id, in its own explicit layer order;
 - classes are collision data; layers are draw data; both are declared, not inferred from numeric ids.

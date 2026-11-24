@@ -169,3 +169,66 @@ fn next_previous_and_past_the_end() {
     assert!(host.log.is_empty());
     assert_eq!(w.room, p);
 }
+
+/// The GM instance list (research#142, R21): depth largest first, then room entry order, which
+/// puts the new room's placed instances (in room-file order) before the persistent instance
+/// carried in, although the carried one has the lowest id and entered the store first.
+#[test]
+fn instance_list_is_depth_then_placed_then_carried() {
+    use iwbtg_sim::def::testing::GameDefBuilder;
+    use iwbtg_sim::def::{Builtin, KindDef};
+    use iwbtg_sim::rules::tick::FirstRule;
+
+    let mut b = GameDefBuilder::new("list");
+    let keeper = probe_kind(&mut b, "keeper", true);
+    let flat = probe_kind(&mut b, "flat", false);
+    let mut deep = KindDef::new("deep", Builtin::Probe);
+    deep.depth = Real::new(5.0);
+    let deep = b.kind(deep);
+    b.boot(keeper);
+    let p = b.room(room("p", 50));
+    let q = b.room(room("q", 50));
+    b.place(q, flat, 0.0, 0.0).unwrap();
+    b.place(q, deep, 0.0, 0.0).unwrap();
+    b.place(q, flat, 8.0, 0.0).unwrap();
+    let def = b.build().unwrap();
+    let rules = RunnerRules::default();
+    let mut host = Probe::default();
+    let (mut w, r) = start(
+        &def,
+        &rules,
+        &mut host,
+        StartPoint::Room {
+            room: p,
+            difficulty: 0,
+        },
+    );
+    r.unwrap();
+    change(&def, &rules, &mut w, &mut host, RoomRequest::Goto(q)).unwrap();
+
+    let kept = ids_of(&w, &def, "keeper")[0];
+    let flats = ids_of(&w, &def, "flat");
+    let deeps = ids_of(&w, &def, "deep");
+    assert_eq!(
+        w.instance_list(),
+        [deeps[0], flats[0], flats[1], kept],
+        "depth 5 first; at depth 0 the placed ones in file order, then the carried one"
+    );
+    assert!(kept < flats[0], "the carried instance has the lowest id");
+    assert_eq!(
+        w.first_among([kept, flats[1], flats[0]], &rules.tick),
+        Some(flats[0]),
+        "\"the first\" follows the list by default"
+    );
+    let mut lowest = rules.tick.clone();
+    lowest.first_rule = FirstRule::LowestId;
+    assert_eq!(w.first_among([kept, flats[1], flats[0]], &lowest), Some(kept));
+
+    // Back to p and in again: the carried one keeps its place after q's placed instances.
+    change(&def, &rules, &mut w, &mut host, RoomRequest::Goto(p)).unwrap();
+    assert_eq!(w.instance_list(), [kept]);
+    change(&def, &rules, &mut w, &mut host, RoomRequest::Goto(q)).unwrap();
+    let flats = ids_of(&w, &def, "flat");
+    let deeps = ids_of(&w, &def, "deep");
+    assert_eq!(w.instance_list(), [deeps[0], flats[0], flats[1], kept]);
+}
