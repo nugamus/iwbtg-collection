@@ -8,6 +8,10 @@ body:
       value: |
         Thanks for the report. Do not attach original game files, decompiled code or personal data.
         For a security problem, use the private process in .github/SECURITY.md instead of this form.
+
+        At triage an agent adds a `## Context` block (code paths, the doc page, spec claim or
+        register ids, the narrow test command, and what must not change); an issue is not
+        `agent-ready` without it. You do not need to fill it in.
   - type: textarea
     id: what-happened
     attributes:
