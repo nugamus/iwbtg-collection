@@ -55,6 +55,30 @@ Queries that need compile-time checking use `sqlx::query!`; the `.sqlx` offline 
 - `Content-Type` follows the extension (`.json`, `.png`, `.ogg`, `.wav`, `.zip`/`.iwbz`), otherwise `application/octet-stream`.
 - Every file response carries `Accept-Ranges: bytes`. A single `Range: bytes=...` (`start-end`, `start-` or `-suffix`) gets `206` with the sliced body and `Content-Range`; the long cache header stays on both `200` and `206`. A valid range past the end is `416` with `Content-Range: bytes */<len>`; a malformed, other-unit or multi-range header is ignored and answered with the full `200`, never a multipart body (#1397).
 
+`iwbtg pkg publish <package> --catalog-dir <folder>` writes this layout (#806). The catalog is one JSON object with a `files` array; each entry carries the package-owned fields that exist today:
+
+```json
+{
+  "files": [
+    {
+      "id": "rely_the_needle",
+      "title": "Rely the Needle",
+      "version": "0.1.0",
+      "format": 1,
+      "url": "/files/<content_hash>.iwbz",
+      "filename": "<content_hash>.iwbz",
+      "size": 123456,
+      "content_hash": "<sha256 hex>",
+      "gameplay_hash": "<blake3 hex>",
+      "creators": [{ "name": "…", "role": "author" }],
+      "source": { "url": "https://…", "permission": "granted" }
+    }
+  ]
+}
+```
+
+`url` is the path `/files/<content_hash>.iwbz` on the same server, `filename` is its last part, and `size` is the `.iwbz` byte length. The catalog holds one entry per package `id`, sorted by id: publishing a newer version replaces the entry and leaves the older file in `files/`, because a content-addressed URL never changes. Unknown top-level fields are preserved, so a newer catalog keeps working. Publishing is idempotent. The rest of the game metadata model — tags, difficulty, port status (Beta/Ranked/Loved), the fidelity proof and known differences, the trick list, stage previews, the per-version changelog and the performance class — is #805; `pkg publish` emits only what the package already has.
+
 ## Logs and monitoring
 
 The binary writes `tracing` JSON lines to stdout (`tracing_subscriber::fmt().json()`): one object per event with `timestamp`, `level`, `fields` and `target`. Startup lines — database ready, serving catalog, listening — are events like any other, so a collector parses them without a regex.

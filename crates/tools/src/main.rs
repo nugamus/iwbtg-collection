@@ -11,6 +11,7 @@ mod feel_cmd;
 mod import;
 mod pack_cmd;
 mod profile_cmd;
+mod publish_cmd;
 mod replay_cmd;
 mod room_cmd;
 mod script_cmd;
@@ -289,6 +290,17 @@ enum PkgCommand {
         /// The folder to write.
         dir: PathBuf,
     },
+    /// Packs a package, writes `<content_hash>.iwbz` and updates `catalog.json` (#806).
+    Publish {
+        /// Package folder or `.iwbz` file.
+        pkg: PathBuf,
+        /// Folder holding `catalog.json` and `files/`, as the server's `--catalog-dir` reads it.
+        #[arg(long)]
+        catalog_dir: PathBuf,
+        /// Load converter output: unmapped script kinds become inert.
+        #[arg(long)]
+        trace_mode: bool,
+    },
     /// Prints the gameplay hash (leaderboards key on it) and the content hash (downloads).
     Hash {
         /// Package folder.
@@ -467,6 +479,11 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             pack_cmd::pack_main(&pkg, out.as_deref(), trace_mode)
         }
         Command::Pkg(PkgCommand::Unpack { file, dir }) => pack_cmd::unpack_main(&file, &dir),
+        Command::Pkg(PkgCommand::Publish {
+            pkg,
+            catalog_dir,
+            trace_mode,
+        }) => publish_cmd::publish_main(&pkg, &catalog_dir, trace_mode),
         Command::Script(ScriptCommand::ApiDocs { docs, check }) => {
             let docs = docs.unwrap_or_else(script_cmd::default_docs_dir);
             script_cmd::main(&docs, check)

@@ -51,4 +51,5 @@ The code is our own (`crates/format/src/iwbz.rs`), on `flate2` and `crc32fast`, 
 
 - `iwbtg pkg pack <dir> [-o <file>] [--trace-mode]` checks the package and writes the `.iwbz` ([CLI](../architecture/cli.md)).
 - `iwbtg pkg unpack <file> <dir>` writes it back out into a new or empty folder.
+- `iwbtg pkg publish <dir> --catalog-dir <folder> [--trace-mode]` packs and writes `<content_hash>.iwbz` plus a `catalog.json` entry for a static server ([server](../server.md#game-downloads), #806).
 - Every command that takes a package folder also takes an `.iwbz`, and so does the client ([import](../architecture/client/import.md)).
