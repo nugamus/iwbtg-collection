@@ -1,4 +1,5 @@
-//! Collision masks from RGBA pixels (docs/plans/sim-core.md 3.4, 8.1, C5, C15).
+//! Collision masks from RGBA pixels (docs/format/assets.md; C5 and C15 in
+//! docs/architecture/sim/register-collision.md).
 //!
 //! Rules (CLONE_SPEC collision, "How the manual defines masks", Confirmed manual 202_00):
 //! only pixels inside the bounding box count; the shape is precise (per pixel), the box, a disk

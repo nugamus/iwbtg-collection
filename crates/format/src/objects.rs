@@ -7,8 +7,9 @@
 //!
 //! Collision classes stand in for GM parents (docs/architecture/sim/world.md): each built-in has
 //! default classes ([`default_classes`]), some params pick a class ([`param_classes`]), and
-//! `counts_as` adds more. The defaults are Design, read off the class names and the plan 6.1
-//! table; a built-in owner who needs another default changes it here.
+//! `counts_as` adds more. The defaults are Design, read off the class names and the built-in
+//! table in `docs/architecture/sim/builtins.md`; a built-in owner who needs another default
+//! changes it here.
 
 use std::collections::BTreeMap;
 use std::ops::Range;
@@ -152,7 +153,7 @@ pub fn parse_object(id: &str, path: &str, text: &str) -> Result<ObjectFile, Diag
 }
 
 /// A number from a data value: an integer, a float or `{ bits = "..." }`. Non-finite values are
-/// refused (plan 10.2).
+/// refused (docs/architecture/sim/numbers.md).
 pub fn number(v: &toml::Value) -> Result<f64, String> {
     let n = match v {
         toml::Value::Integer(i) => {

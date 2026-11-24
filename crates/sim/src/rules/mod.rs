@@ -1,5 +1,5 @@
 //! Runner rules: every UNKNOWN, Inferred or Conflict rule the sim needs, as a switch with its
-//! engine_rev 0 default (registers in docs/plans/sim-core/).
+//! engine_rev 0 default (registers in `docs/architecture/sim/register-*.md`).
 //!
 //! Each field names its register id. A default changes only after the spec records a trace
 //! result; once a package is verified, a changed default becomes a new `engine_rev` branch in

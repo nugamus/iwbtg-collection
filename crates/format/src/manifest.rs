@@ -529,7 +529,7 @@ impl OrderItem {
     }
 }
 
-/// The `[engine]` table (docs/plans/sim-core.md 4.2, 4.3, 8.3; CR7).
+/// The `[engine]` table (docs/format/game.md; CR7 in docs/format/converter-requests.md).
 #[derive(Debug, Clone, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]

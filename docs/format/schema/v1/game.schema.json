@@ -328,7 +328,7 @@
     },
     "EngineSection": {
       "additionalProperties": false,
-      "description": "The `[engine]` table (docs/plans/sim-core.md 4.2, 4.3, 8.3; CR7).",
+      "description": "The `[engine]` table (docs/format/game.md; CR7 in docs/format/converter-requests.md).",
       "properties": {
         "boot": {
           "default": null,
