@@ -95,6 +95,24 @@ impl Value {
     }
 }
 
+/// The bare assignment `name = value` to the variable `id` of `vars` (a global or an instance
+/// variable), the GM8 rule (research `creation-code.md`, Global arrays, Confirmed by recorder,
+/// #1133; contract `script/global-array-bare-write`): the bare name is element 0, so when the
+/// variable already holds an array the write goes to element 0 and the other elements keep their
+/// values. Otherwise, or when `value` is itself an array, the variable takes `value`.
+pub fn assign_bare(vars: &mut BTreeMap<VarId, Value>, id: VarId, value: Value) {
+    if !matches!(value, Value::Array(_))
+        && let Some(Value::Array(items)) = vars.get_mut(&id)
+    {
+        match items.first_mut() {
+            Some(first) => *first = value,
+            None => items.push(value),
+        }
+        return;
+    }
+    vars.insert(id, value);
+}
+
 /// The one error for an array past its cap, so the message and its wording stay in one place.
 fn array_cap_error() -> SimError {
     SimError::unsupported(format!(
@@ -276,6 +294,28 @@ mod tests {
         assert_eq!(second.len(), 2, "no element was added to the copy");
         assert_eq!(second[0], real(1.0));
         assert_eq!(second[1].as_array().expect("nested").len(), 1);
+    }
+
+    /// Contract `script/global-array-bare-write` (#1133): a bare write keeps an array's other
+    /// elements and writes element 0; a scalar or unset variable, or an array value, is replaced.
+    #[test]
+    fn a_bare_write_writes_element_zero_of_an_array() {
+        let mut vars = BTreeMap::new();
+        vars.insert(VarId(0), Value::array(vec![real(1.0), real(2.0)]).expect("array"));
+        assign_bare(&mut vars, VarId(0), real(9.0));
+        assert_eq!(vars[&VarId(0)], Value::Array(vec![real(9.0), real(2.0)]));
+
+        vars.insert(VarId(1), Value::Array(Vec::new()));
+        assign_bare(&mut vars, VarId(1), real(4.0));
+        assert_eq!(vars[&VarId(1)], Value::Array(vec![real(4.0)]));
+
+        assign_bare(&mut vars, VarId(2), real(5.0));
+        assign_bare(&mut vars, VarId(2), real(6.0));
+        assert_eq!(vars[&VarId(2)], real(6.0));
+
+        let other = Value::array(vec![real(7.0)]).expect("array");
+        assign_bare(&mut vars, VarId(0), other.clone());
+        assert_eq!(vars[&VarId(0)], other);
     }
 
     #[test]
