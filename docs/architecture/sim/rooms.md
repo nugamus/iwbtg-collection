@@ -92,10 +92,17 @@ pub fn perform_change(ctx: &mut Ctx, req: RoomRequest) -> Result<(), SimError>;
 The sim never touches files. The save is sim state; the client stores its bytes ([client storage](../client/storage.md)).
 
 ```rust
+pub enum SavePrecision { Exact, XyBase100Bytes, XyBase256Bytes, XyText2Dec, XyPrevious, FixedPoint, FloorNudge }
 // `flipped` is `global.reverse` for a `yflag` game (family B), the kid's flip state otherwise (#267).
-pub struct SaveSlot { pub room: RoomId, pub x: Real, pub y: Real, pub flipped: bool, pub facing: i8,
-    pub difficulty: u8, pub deaths: u32, pub time: u32, pub bosses: u16, pub items: u16, pub clear: bool }
+pub struct SaveSlot { pub room: RoomId, pub x: Real, pub y: Real, pub precision: SavePrecision,
+    pub point: Option<String>, pub flipped: bool, pub facing: i8, pub difficulty: u8, pub deaths: u32,
+    pub time: u32, pub bosses: u16, pub items: u16, pub clear: bool }
 pub enum SavedPosition { XyBase100Bytes, XyBase256Bytes, XyText2Dec, XyPrevious, FixedPoint, FloorNudge }
+// The persisted form: a stable room name and the provenance of the run that wrote it.
+pub struct Checkpoint { pub format: u16, pub ruleset: RulesetId, pub profile: ProfileId, pub room: RoomKey,
+    pub point: Option<String>, pub x: Real, pub y: Real, pub precision: SavePrecision,
+    pub flipped: bool, pub facing: i8, pub difficulty: u8, pub deaths: u32, pub time: u32,
+    pub bosses: u16, pub items: u16, pub clear: bool }
 pub fn save_now(ctx: &mut Ctx, kid: InstId, model: SavedPosition, fixed: Option<(Real, Real)>) -> Result<(), SimError>;
 pub fn save_counters(ctx: &mut Ctx) -> Result<(), SimError>;        // death-only save
 pub fn quantize(x: Real, y: Real, model: SavedPosition, r: &NumRules) -> (Real, Real);
@@ -105,7 +112,9 @@ pub fn load_into(ctx: &mut Ctx, slot: &SaveSlot) -> Result<InstId, SimError>;
 - `quantize` reproduces what the original's save format does to a position (rooms Confirmed group table): base-100 bytes (13 games; last byte through `byte_from_real`, N5), base-256 div/mod bytes (little-runner, N8), `string()` two decimals (machinary, eat-the-new-year, N6), xprevious/yprevious exact (kaenbyou, eat-the-lemon, N7), fixed point (poronkusema), floor with the three-step +1 nudge using `place_free` (xia). This decides the respawn v-align (tricks `trick.respawn_valign`). Recorded and waiting for the spec: `kaenbyou/tr-room-08` (N7), `little-runner/num-divmod-save-*`, `eat-the-new-year/num-string-save-*`, `machinary/tr-room-07-a`, `little-runner/tr-room-06`.
 - Death-only saves update counters only. `deaths` and `time` use `checked_add` (10.3).
 - `World.save = None` means "save file missing"; the kid Create's first-play save (rely Create step 4, B Create step 4) tests it.
-- The client persists the slot inside its versioned envelope (package id, built-in revision, saved room name; [client storage](../client/storage.md)); `StartPoint::FromSave` restores it.
+- **The runtime keeps the resolved slot.** `World.save` and `StartPoint::FromSave` hold a `SaveSlot` with a numeric `RoomId`. A persisted save decodes to a `Checkpoint` and `Checkpoint::to_slot` resolves its stable room name (`RoomKey`) and save-point key against the package when it is loaded. No persisted byte names a numeric room, so adding, removing elsewhere or reordering rooms does not move a save.
+- The client persists the checkpoint inside its version-3 envelope (package id, built-in revision; [client storage](../client/storage.md)); a replay's `FromSave` carries the same versioned checkpoint from format 7 ([replay](../replay.md), [save built-in](../../format/builtins/save.md)). `Checkpoint` records the `ruleset`/`profile` provenance, the stored position and counters, and the `SavePrecision`.
+- **`SavePrecision` is provenance, not hashed state.** It says how the position was written (`Exact` for `standard@1`, else the original quantization model). The runtime `SaveSlot::precision` is `#[serde(skip)]` and is **not hashed**; the persisted `Checkpoint` carries it. A future hashing change must not start hashing it — the state hash, hash vectors and golden corpus do not move for it.
 - A persisted save is a `Checkpoint`: `from_slot`/`from_parts` build it and `to_slot` resolves the stable room name and save-point key. The format check is `Checkpoint::validate`, run by both `Checkpoint::decode` and `to_slot`, so the replay's `FromSave` and the client's disk path refuse a foreign format identically. Both decoders are exact — bytes after the payload are refused — and the legacy raw slot has its own exact `SaveSlot::decode`, so an appended or unknown field fails closed (#1325).
 
 ### Views and camera
