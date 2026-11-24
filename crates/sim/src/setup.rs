@@ -85,8 +85,9 @@ impl Sim {
     /// (facing 1, room 0).
     ///
     /// `Destroy` runs GML `instance_destroy` on each instance it picks, in id order, so their
-    /// Destroy events run now; they are removed by the sweep at the end of the next tick. A
-    /// Destroy event that halts the sim or changes the room is an error.
+    /// Destroy events run now; the world transaction then removes them (at once under
+    /// `standard`, at the end-of-tick sweep under `gm8`, #1174). A Destroy event that halts the
+    /// sim or changes the room is an error.
     pub fn apply_setup(&mut self, s: &SetupAction) -> Result<(), SimError> {
         self.world.setup_applied = true;
         if let SetupAction::Destroy { target, rect } = s {
@@ -100,10 +101,10 @@ impl Sim {
         let [left, top, right, bottom] = rect.map(Real::get);
         let ids: Vec<InstId> = self
             .world
-            .iter_alive()
+            .iter_visible()
             .filter(|i| {
                 let (x, y) = (i.m.x().get(), i.m.y().get());
-                i.active && target.matches(i) && left <= x && x < right && top <= y && y < bottom
+                target.matches(&self.def, i) && left <= x && x < right && top <= y && y < bottom
             })
             .map(|i| i.id)
             .collect();
