@@ -108,6 +108,38 @@ impl Stats {
         self.current.as_ref().map(|c| c.board.as_str())
     }
 
+    /// Opens the current run's tracker from the state before its first tick (#1011), so that
+    /// tick's play time, death, split or clear is counted. The first observation is only the
+    /// baseline, so a run from a save keeps that save's counters and counts no historical death.
+    /// Does nothing while a run's tracker is open; a retry or the end of the run clears it
+    /// ([`reset`]).
+    fn open_current(
+        &mut self,
+        game: &Game,
+        mods: Option<&crate::mods::RunMods>,
+        menu: Option<&crate::pause::Menu>,
+    ) {
+        if self.current.is_some() {
+            return;
+        }
+        let sim = &game.sim;
+        let def = sim.def();
+        let opts = sim.options();
+        let ranked = opts.mode == PlayMode::Stripped;
+        let mut tracker = Tracker::new(def.timing.stages.len());
+        tracker.observe(observation(sim, menu));
+        self.current = Some(Current {
+            map: map_key(&def.id, sim.map_id()),
+            game: def.id.clone(),
+            tick_rate: def.tick_rate,
+            // The board of the mods the run opened with (`mods::RunMods`).
+            board: board_key(ranked, &mods.map_or(ModSet::NONE, |m| m.0).codes()),
+            on_board: matches!(opts.start, StartPoint::NewGame { .. }),
+            rooms: def.rooms.iter().map(|r| r.name.clone()).collect(),
+            tracker,
+        });
+    }
+
     /// Writes the book when it changed. A failed write is a warning; the next change tries
     /// again.
     fn flush(&mut self) {
@@ -309,6 +341,8 @@ impl Plugin for StatsPlugin {
     fn build(&self, app: &mut App) {
         let store = if self.keep { Store::data() } else { None };
         app.insert_resource(Stats::open(store))
+            // The tracker opens on the pre-step state, so the first tick counts (#1011).
+            .add_systems(FixedUpdate, seed.before(SimTick))
             .add_systems(FixedUpdate, watch.after(SimTick))
             .add_systems(Update, flush_now_and_then)
             // Leaving the run saves its deaths and play time; the next run starts a new tracker.
@@ -316,6 +350,41 @@ impl Plugin for StatsPlugin {
                 OnExit(crate::shell::AppScreen::Run),
                 reset.in_set(crate::shell::InRun),
             );
+    }
+}
+
+/// Before the run's first tick: opens the tracker from the pre-step state, so that tick is
+/// counted (#1011). A quick retry clears the tracker; the next seed opens the new run.
+fn seed(
+    game: NonSend<Game>,
+    mut stats: ResMut<Stats>,
+    menu: Option<Res<crate::pause::Menu>>,
+    mods: Option<Res<crate::mods::RunMods>>,
+) {
+    stats.open_current(&game, mods.as_deref(), menu.as_deref());
+}
+
+/// What the sim looks like now, as the tracker reads it. Read only: the death log never touches
+/// the sim's state.
+fn observation(sim: &iwbtg_sim::sim::Sim, menu: Option<&crate::pause::Menu>) -> Observation {
+    let world = sim.world();
+    let kid = world
+        .kid(&sim.rules().tick)
+        .and_then(|id| world.get(id))
+        .map(|k| Spot {
+            room: world.room.0,
+            x: k.m.x().get().round() as i32,
+            y: k.m.y().get().round() as i32,
+        });
+    Observation {
+        tick: world.tick,
+        deaths: world.engine.run.deaths,
+        stages_done: world.timing.stages_done,
+        ended: world.timing.ended,
+        ranked_ticks: sim
+            .ranked_ticks()
+            .saturating_add(menu.map_or(0, |m| m.paused_ticks())),
+        kid,
     }
 }
 
@@ -330,42 +399,14 @@ fn watch(
     menu: Option<Res<crate::pause::Menu>>,
     mods: Option<Res<crate::mods::RunMods>>,
 ) {
-    let sim = &game.sim;
-    let def = sim.def();
-    let mut cur = stats.current.take().unwrap_or_else(|| {
-        let opts = sim.options();
-        let ranked = opts.mode == PlayMode::Stripped;
-        Current {
-            map: map_key(&def.id, sim.map_id()),
-            game: def.id.clone(),
-            tick_rate: def.tick_rate,
-            // The board of the mods the run opened with (`mods::RunMods`).
-            board: board_key(ranked, &mods.map_or(ModSet::NONE, |m| m.0).codes()),
-            on_board: matches!(opts.start, StartPoint::NewGame { .. }),
-            rooms: def.rooms.iter().map(|r| r.name.clone()).collect(),
-            tracker: Tracker::new(def.timing.stages.len()),
-        }
-    });
-    let world = sim.world();
-    // Read only: the death log never touches the sim's state.
-    let kid = world
-        .kid(&sim.rules().tick)
-        .and_then(|id| world.get(id))
-        .map(|k| Spot {
-            room: world.room.0,
-            x: k.m.x().get().round() as i32,
-            y: k.m.y().get().round() as i32,
-        });
-    let events = cur.tracker.observe(Observation {
-        tick: world.tick,
-        deaths: world.engine.run.deaths,
-        stages_done: world.timing.stages_done,
-        ended: world.timing.ended,
-        ranked_ticks: sim
-            .ranked_ticks()
-            .saturating_add(menu.map_or(0, |m| m.paused_ticks())),
-        kid,
-    });
+    // `seed` opened it before this tick; the fallback keeps a direct call (a test, or a tick
+    // that ran before the fixed loop seeded) from losing the first observation.
+    stats.open_current(&game, mods.as_deref(), menu.as_deref());
+    let mut cur = stats
+        .current
+        .take()
+        .expect("seed opened the run's tracker");
+    let events = cur.tracker.observe(observation(&game.sim, menu.as_deref()));
     let replay = replays.as_deref().and_then(|r| r.current_name());
     stats.apply(&cur, events, fixed.timestep().as_secs_f64(), replay);
     stats.current = Some(cur);
@@ -379,8 +420,8 @@ fn flush_now_and_then(time: Res<Time<Real>>, mut stats: ResMut<Stats>) {
     }
 }
 
-/// A retry (`retry.rs`) starts a new run: the old one's deaths are saved, the next tick starts
-/// a new tracker.
+/// A retry (`retry.rs`) starts a new run: the old one's deaths are saved, and the next fixed
+/// step's `seed` opens a tracker from the new run's pre-step state.
 pub(crate) fn reset(world: &mut World) {
     if let Some(mut stats) = world.get_resource_mut::<Stats>() {
         stats.current = None;
@@ -399,6 +440,43 @@ mod tests {
         let d = std::env::temp_dir().join(format!("iwbtg-stats-test-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         Store::at(d)
+    }
+
+    /// One empty fixed step, standing in for `view::tick` (which needs the whole run's
+    /// resources), so the schedule's ordering is exercised.
+    fn step(mut game: NonSendMut<Game>) {
+        game.sim.step(InputFrame::EMPTY);
+    }
+
+    /// #1011: in the plugin's schedule (`seed` before the tick, `watch` after), the run's
+    /// pre-step state is the baseline, so every stepped tick is counted, the first included.
+    /// Before the fix `watch` opened the tracker after the first step and counted none of it.
+    #[test]
+    fn the_plugin_schedule_counts_the_first_tick() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/input.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let mut world = crate::view::test_world(&pkg);
+        world.insert_resource(Time::<Fixed>::from_hz(50.0));
+        world.insert_resource(Stats::open(None));
+        let mut schedule = Schedule::default();
+        schedule.add_systems((
+            seed.before(SimTick),
+            step.in_set(SimTick),
+            watch.after(SimTick),
+        ));
+        let id = map_key(&pkg.def.id, "main");
+        schedule.run(&mut world);
+        assert_eq!(world.non_send::<Game>().sim.world().tick, 1);
+        assert_eq!(
+            world.resource::<Stats>().book.map(&id).unwrap().played_ticks,
+            1,
+            "the first tick counts"
+        );
+        schedule.run(&mut world);
+        assert_eq!(
+            world.resource::<Stats>().book.map(&id).unwrap().played_ticks,
+            2
+        );
     }
 
     #[test]
