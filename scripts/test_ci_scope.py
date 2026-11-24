@@ -40,10 +40,40 @@ class ScopeTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertEqual(scope([path], self.graph)['packages'], scope([], self.graph, True)['packages'])
 
-    def test_docs_read_by_tests_run_consumers(self):
-        for path in ('docs/format/script/iws.d.rhai', 'docs/architecture/sim/scripts.md', 'docs/decisions/0001-script-language.md'):
-            self.assertTrue(scope([path], self.graph)['wasip1'])
+    def test_native_only_fixtures_keep_the_wasm_and_determinism_matrix_off(self):
+        for path in ('docs/format/v0.md', 'docs/format/rooms.md',
+                     'docs/format/schema/v0/game.schema.json',
+                     'docs/format/examples/rely-physics.toml', 'docs/format/game.md'):
+            with self.subTest(path=path):
+                result = plan([path], self.graph)
+                self.assertTrue(result['code'], 'the native readers still run locally')
+                self.assertFalse(result['code_input'], 'a fixture is not a code input')
+                self.assertEqual(result['test'], ['iwbtg-format', 'iwbtg-sim'])
+                self.assertFalse(result['wasip1'])
+                self.assertFalse(result['browser'])
+                self.assertFalse(result['web'])
+                self.assertFalse(result['determinism'])
         self.assertFalse(scope(['README.md', 'docs/dev-setup.md', 'docs/architecture/client/shell.md', '.claude/hooks/issues.py'], self.graph)['code'])
+
+    def test_fixtures_keep_only_the_wasm_targets_that_read_them(self):
+        # `iws.d.rhai` is include_str!'d by the golden corpus, which both wasm jobs run.
+        both = plan(['docs/format/script/iws.d.rhai'], self.graph)
+        self.assertTrue(both['wasip1'] and both['browser'])
+        self.assertFalse(both['web'] or both['determinism'])
+        # The script pages are read by the sim test binary, which wasm32-wasip1 runs; the
+        # wasm32-unknown-unknown job runs only the determinism and golden-corpus binaries.
+        for path in ('docs/format/scripts.md', 'docs/architecture/sim/scripts.md',
+                     'docs/decisions/0001-script-language.md'):
+            with self.subTest(path=path):
+                result = plan([path], self.graph)
+                self.assertTrue(result['wasip1'], path)
+                self.assertFalse(result['browser'] or result['determinism'], path)
+
+    def test_fixture_plus_code_keeps_the_full_matrix(self):
+        result = plan(['docs/format/game.md', 'crates/sim/src/world.rs'], self.graph)
+        self.assertTrue(result['code_input'])
+        self.assertTrue(result['wasip1'] and result['browser'] and result['determinism'])
+        self.assertFalse(result['web'])
 
     def test_manifest_aliases_and_target_dev_dependencies(self):
         import tempfile
@@ -92,6 +122,9 @@ class ScopeTests(unittest.TestCase):
         fixture = plan(['docs/format/game.md'], self.graph)
         self.assertEqual(fixture['test'], ['iwbtg-format', 'iwbtg-sim'])
         self.assertEqual(fixture['compile'], ['iwbtg-client', 'iwbtg-tools'])
+        self.assertTrue(fixture['code'])
+        self.assertFalse(fixture['code_input'])
+        self.assertFalse(fixture['wasip1'] or fixture['browser'] or fixture['web'] or fixture['determinism'])
         full = plan(['some-new-input'], self.graph)
         self.assertTrue(full['full'])
         self.assertEqual(set(full['test']), set(self.graph))
