@@ -135,7 +135,9 @@ impl Stats {
         let def = sim.def();
         let opts = sim.options();
         let ranked = opts.mode == PlayMode::Stripped;
-        let mut tracker = Tracker::new(def.timing.stages.len());
+        // The selected map's chain, not the package `[timing]` (#1010): maps may have their own
+        // stage lists.
+        let mut tracker = Tracker::new(def.map_timing(sim.world().map).stages.len());
         tracker.observe(observation(sim, menu));
         self.current = Some(Current {
             map: map_key(&def.id, sim.map_id()),
@@ -492,8 +494,15 @@ pub(crate) fn reset(world: &mut World) {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use bevy::ecs::system::RunSystemOnce;
+    use iwbtg_sim::def::{GameDef, MapDef};
     use iwbtg_sim::input::{Action, InputFrame};
+    use iwbtg_sim::sim::{Sim, SimOptions};
+    use iwbtg_sim::sound::DllMode;
+    use iwbtg_sim::stripped::RankedStart;
+    use iwbtg_sim::timing::{TimingDef, TimingTrigger};
 
     use super::*;
 
@@ -507,6 +516,108 @@ mod tests {
     /// resources), so the schedule's ordering is exercised.
     fn step(mut game: NonSendMut<Game>) {
         game.sim.step(InputFrame::EMPTY);
+    }
+
+    /// The clear fixture with a second map `two` whose stage chain is `stages`; map 0 keeps the
+    /// package `[timing]`.
+    fn two_map_def(base: &GameDef, stages: Vec<TimingTrigger>) -> Arc<GameDef> {
+        let mut def = base.clone();
+        def.maps = vec![
+            MapDef {
+                id: "main".to_owned(),
+                timing: base.timing.clone(),
+                start: RankedStart::default(),
+            },
+            MapDef {
+                id: "two".to_owned(),
+                timing: TimingDef {
+                    start: base.timing.start,
+                    end: base.timing.end,
+                    stages,
+                },
+                start: RankedStart::default(),
+            },
+        ];
+        Arc::new(def)
+    }
+
+    /// A world playing `map` of `def` (the view's run state without a window).
+    fn world_on(def: Arc<GameDef>, map: &str) -> World {
+        let options = SimOptions {
+            start: StartPoint::NewGame { difficulty: 0 },
+            seed: 0,
+            dll_mode: DllMode::Model,
+            mode: PlayMode::Original,
+            map: Some(map.to_owned()),
+        };
+        let prepared = Sim::prepare(&def).unwrap();
+        let sim = Sim::new_prepared(def, options, &prepared).unwrap();
+        let mut world = World::new();
+        world.insert_non_send(Game { sim });
+        world
+    }
+
+    /// #1010: a run on a map with two stages records both stage splits (the package `[timing]`
+    /// has one) and a three-segment run.
+    #[test]
+    fn the_selected_maps_stages_shape_the_splits() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let base = (*pkg.def).clone();
+        let goal = base.timing.stages[0];
+        let def = two_map_def(&base, vec![TimingTrigger::RunStart, goal]);
+        let mut world = world_on(Arc::clone(&def), "two");
+        world.insert_resource(Time::<Fixed>::from_hz(50.0));
+        world.insert_resource(Stats::open(None));
+        world.run_system_once(seed).unwrap();
+        let (_, run) = play_demo_clear(&mut world, [0, 0]);
+        assert_eq!(run.segment_deaths.len(), 3, "two stages and the end");
+        assert_eq!(run.splits.len(), 3, "{:?}", run.splits);
+        assert!(run.splits[0] <= 1, "the RunStart stage is at the start: {:?}", run.splits);
+        assert!(run.splits[1] > run.splits[0], "the goal split is later: {:?}", run.splits);
+        assert_eq!(run.splits[2], run.ticks, "the clear ends the run");
+        let id = map_key(&base.id, "two");
+        let stats = world.resource::<Stats>();
+        let cur = stats.current.as_ref().unwrap();
+        assert_eq!(
+            stats.book.map(&id).unwrap().boards[&cur.board].pb().unwrap().segment_deaths.len(),
+            3
+        );
+    }
+
+    /// #1010: a death after both earlier stages counts in the selected map's last segment (of
+    /// three); the package chain's one stage would clamp it into the second.
+    #[test]
+    fn a_death_counts_in_the_selected_maps_segment() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let base = (*pkg.def).clone();
+        let def = two_map_def(&base, vec![TimingTrigger::RunStart, TimingTrigger::RunStart]);
+        let mut world = world_on(def, "two");
+        world.insert_resource(Time::<Fixed>::from_hz(50.0));
+        world.insert_resource(Stats::open(None));
+        world.run_system_once(seed).unwrap();
+        // The first tick fires both RunStart stages.
+        world.non_send_mut::<Game>().sim.step(InputFrame::EMPTY);
+        world.run_system_once(watch).unwrap();
+        let suicide = InputFrame {
+            held: Action::Suicide.bit(),
+            pressed: Action::Suicide.bit(),
+            released: 0,
+        };
+        let mut ticks = 0;
+        while world.resource::<Stats>().session.deaths == 0 {
+            assert!(ticks < 100, "no death in 100 ticks");
+            world.non_send_mut::<Game>().sim.step(suicide);
+            world.run_system_once(watch).unwrap();
+            ticks += 1;
+        }
+        let id = map_key(&base.id, "two");
+        assert_eq!(
+            world.resource::<Stats>().session.segment_deaths[&id],
+            vec![0, 0, 1],
+            "the death is in the last of three segments"
+        );
     }
 
     /// #1011: in the plugin's schedule (`seed` before the tick, `watch` after), the run's

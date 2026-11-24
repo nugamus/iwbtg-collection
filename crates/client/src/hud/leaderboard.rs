@@ -298,7 +298,8 @@ pub fn track(
         let entries = match preview.leaderboard {
             Some(sample) => sample.entries(rate),
             None => {
-                let segments = sim.def().timing.stages.len() + 1;
+                // The selected map's chain (#1010), as the stats tracker splits it.
+                let segments = sim.def().map_timing(sim.world().map).stages.len() + 1;
                 stats
                     .as_deref()
                     .and_then(|s| s.book.board(&map, ranked, &codes))
