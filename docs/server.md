@@ -78,7 +78,7 @@ These are requirements, not suggestions.
 
 ## Deployment
 
-Production is one `compose.yaml` with two services, `server` and `cloudflared` (Components). The image comes from the multi-stage `Dockerfile` in the repository root: the builder compiles `iwbtg-server` on the pinned Rust toolchain with the Cargo registry and target directory held in BuildKit cache mounts, and the runtime is `debian:trixie-slim` plus the binary, the CA roots and `curl` (the healthcheck client). Nothing in the running image is writable except the database mount.
+Production is one `compose.yaml` with two services, `server` and `cloudflared` (Components). CI parses it with `docker compose config` in the `changes` job on every PR (#1419), so a broken deployment file fails before it reaches the host. The image comes from the multi-stage `Dockerfile` in the repository root: the builder compiles `iwbtg-server` on the pinned Rust toolchain with the Cargo registry and target directory held in BuildKit cache mounts, and the runtime is `debian:trixie-slim` plus the binary, the CA roots and `curl` (the healthcheck client). Nothing in the running image is writable except the database mount.
 
 ### Host layout
 
