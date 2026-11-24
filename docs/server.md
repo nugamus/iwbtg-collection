@@ -15,7 +15,7 @@ Status: the skeleton exists: `crates/server` builds the `iwbtg-server` binary (a
 | Internet exposure | Cloudflare Tunnel (`cloudflared`) | No router port forwards, home IP hidden, DDoS protection in front, TLS handled by Cloudflare. |
 | Admin access | Tailscale (not Funnel) for SSH and admin pages | No open ports. |
 | Host | Debian 13, Docker Compose with two services: `server`, `cloudflared` | One `compose.yaml` in git describes production. |
-| Game downloads | Content-addressed files `/files/<sha256>[.<ext>]` with a long immutable cache, plus `/catalog.json` with a short one (Range support is #1397) | End-to-end hash check, caches never go stale. |
+| Game downloads | Content-addressed files `/files/<sha256>[.<ext>]` with a long immutable cache and single-range resume, plus `/catalog.json` with a short one | Resumable downloads, end-to-end hash check, caches never go stale. |
 | Backups | restic to remote storage (Backblaze B2 or a Hetzner Storage Box) | Encrypted, deduplicated, retention built in. Replaces the earlier "push backups to a Git server" idea: Git would keep password hashes and emails forever, unencrypted, and could never forget a deleted account. |
 | Logs and monitoring | `tracing` JSON logs to stdout; the check's healthchecks.io URL pinged every 5 minutes (`HEALTHCHECKS_URL`) | Alerts arrive even when the house loses power or internet. |
 | Dependency updates | Dependabot PRs for cargo and compose, `cargo audit` in CI | Updates arrive as reviewable PRs, never silently. |
@@ -53,7 +53,7 @@ Queries that need compile-time checking use `sqlx::query!`; the `.sqlx` offline 
 - `/files/...` is sent `Cache-Control: public, max-age=31536000, immutable`, because the file name is the hash: those bytes can never change under that URL.
 - A file name is accepted only as 64 lowercase hex characters plus an optional alphanumeric extension (at most 16). Everything else — `..`, encoded or literal separators, a non-hash name — is 404 before the filesystem is touched, and a missing catalog or file is also 404. There is no directory listing.
 - `Content-Type` follows the extension (`.json`, `.png`, `.ogg`, `.wav`, `.zip`/`.iwbz`), otherwise `application/octet-stream`.
-- Range requests are not implemented yet (#1397): a download that drops restarts from zero.
+- Every file response carries `Accept-Ranges: bytes`. A single `Range: bytes=...` (`start-end`, `start-` or `-suffix`) gets `206` with the sliced body and `Content-Range`; the long cache header stays on both `200` and `206`. A valid range past the end is `416` with `Content-Range: bytes */<len>`; a malformed, other-unit or multi-range header is ignored and answered with the full `200`, never a multipart body (#1397).
 
 ## Logs and monitoring
 
