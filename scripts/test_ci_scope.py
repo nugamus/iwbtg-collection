@@ -114,6 +114,21 @@ class ScopeTests(unittest.TestCase):
                 for step in result['local_steps'] + result['ci_steps']:
                     self.assertTrue(step['reason'], step)
 
+    def test_fixture_only_native_job_tests_only_the_readers(self):
+        fixture = plan(['docs/format/v0.md'], self.graph)
+        self.assertEqual(fixture['native_packages'], ['iwbtg-format', 'iwbtg-sim'])
+        self.assertEqual(fixture['native_packages_argv'], '-p iwbtg-format -p iwbtg-sim')
+        # The plan's full package set is unchanged: test | compile still covers it, and the local
+        # check still compile-checks the consumers.
+        self.assertEqual(fixture['compile'], ['iwbtg-client', 'iwbtg-tools'])
+        self.assertEqual(set(fixture['test']) | set(fixture['compile']),
+                         set(fixture['packages_list']))
+        native = next(step for step in fixture['ci_steps'] if step['kind'] == 'native')
+        self.assertEqual(native['packages'], fixture['native_packages'])
+        # A code change still tests the consumers.
+        sim = plan(['crates/sim/src/world.rs'], self.graph)
+        self.assertEqual(sim['native_packages'], sim['packages_list'])
+
     def test_feel_step_follows_the_wasm_unknown_unknown_test_step(self):
         sim = plan(['crates/sim/src/world.rs'], self.graph)
         self.assertTrue(sim['feel'])
