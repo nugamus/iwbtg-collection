@@ -84,13 +84,18 @@ pub struct Stats {
     dirty: bool,
     since_flush: f32,
     current: Option<Current>,
+    /// Text this build could not read from `stats.toml`, kept until it has been written to a
+    /// free `stats.broken*` name (#1017). While it is set the original file is never replaced,
+    /// so a failed backup (a full browser quota, a transient write error) cannot destroy it.
+    recovery: Option<String>,
 }
 
 impl Stats {
     /// The stats kept in `store` (`None`: this session keeps nothing).
     fn open(store: Option<Store>) -> Stats {
-        let book = store.as_ref().map(load).unwrap_or_default();
-        Stats {
+        let (book, recovery) =
+            store.as_ref().map_or_else(|| (Book::default(), None), load);
+        let mut stats = Stats {
             book,
             session: Session::default(),
             last: None,
@@ -99,7 +104,11 @@ impl Stats {
             dirty: false,
             since_flush: 0.0,
             current: None,
-        }
+            recovery,
+        };
+        // Try the backup at once; a success replaces the now-preserved file with the empty book.
+        stats.flush();
+        stats
     }
 
     /// The board key the current run counts on (`None` before its first tick).
@@ -141,9 +150,13 @@ impl Stats {
     }
 
     /// Writes the book when it changed. A failed write is a warning; the next change tries
-    /// again.
+    /// again. An unreadable file is backed up first: until that succeeds it is never replaced
+    /// (#1017).
     fn flush(&mut self) {
         self.since_flush = 0.0;
+        if self.preserve() {
+            return;
+        }
         if !self.dirty {
             return;
         }
@@ -154,6 +167,35 @@ impl Stats {
         match store.write_text(FILE, &self.book.to_text()) {
             Ok(()) => self.dirty = false,
             Err(e) => storage::warn(&format!("stats {e}")),
+        }
+    }
+
+    /// Writes the text [`load`] could not read to a free `stats.broken*` name (#1017). Returns
+    /// whether preservation is still pending: a failed backup is warned about here and retried
+    /// on the next flush, and the original file is left untouched meanwhile. A success marks
+    /// the empty book worth writing, so the preserved file is replaced on this same flush.
+    fn preserve(&mut self) -> bool {
+        let Some(text) = self.recovery.take() else {
+            return false;
+        };
+        // `None`: this session keeps nothing, so there is nowhere to write it.
+        let Some(store) = self.store.clone() else {
+            return false;
+        };
+        match backup_name(&store).and_then(|name| store.write_text(&name, &text).map(|()| name)) {
+            Ok(_) => {
+                // The original is safe now; the empty book replaces it with this flush.
+                self.dirty = true;
+                false
+            }
+            Err(e) => {
+                storage::warn(&format!(
+                    "stats {}: {e}; it will not be replaced until a backup is written",
+                    store.describe(FILE)
+                ));
+                self.recovery = Some(text);
+                true
+            }
         }
     }
 
@@ -231,27 +273,46 @@ impl Drop for Stats {
     }
 }
 
-/// Reads the file. A file this build cannot read is moved to `stats.broken.toml` with a
-/// warning, and the session starts an empty book.
-fn load(store: &Store) -> Book {
+/// Reads the file. A file this build cannot read comes back beside an empty book for
+/// [`Stats::preserve`] to back up before the file may be replaced (#1017).
+fn load(store: &Store) -> (Book, Option<String>) {
     match store.read_text(FILE) {
-        Ok(None) => Book::default(),
-        Ok(Some(text)) => Book::parse(&text).unwrap_or_else(|e| {
-            storage::warn(&format!(
-                "stats {}: {e}; kept as {}, starting empty",
-                store.describe(FILE),
-                store.describe(BROKEN)
-            ));
-            if let Err(e) = store.write_text(BROKEN, &text) {
-                storage::warn(&format!("stats {e}"));
+        Ok(None) => (Book::default(), None),
+        Ok(Some(text)) => match Book::parse(&text) {
+            Ok(book) => (book, None),
+            Err(e) => {
+                storage::warn(&format!(
+                    "stats {}: {e}; backing it up before it is replaced, starting empty",
+                    store.describe(FILE)
+                ));
+                (Book::default(), Some(text))
             }
-            Book::default()
-        }),
+        },
         Err(e) => {
             storage::warn(&format!("stats {e}"));
-            Book::default()
+            (Book::default(), None)
         }
     }
+}
+
+/// The first free recovery name: `stats.broken.toml`, then `stats.broken-2.toml`, and so on
+/// (#1017). An existing recovery copy is never replaced, and a name that cannot be checked is
+/// treated as taken, so an unreadable store blocks the backup rather than clobbering it.
+fn backup_name(store: &Store) -> Result<String, String> {
+    const NAMES: u32 = 100;
+    for i in 1..=NAMES {
+        let name = if i == 1 {
+            BROKEN.to_owned()
+        } else {
+            format!("stats.broken-{i}.toml")
+        };
+        match store.read_text(&name) {
+            Ok(None) => return Ok(name),
+            Ok(Some(_)) => {}
+            Err(e) => return Err(format!("cannot check {}: {e}", store.describe(&name))),
+        }
+    }
+    Err("cannot find a free backup name".to_owned())
 }
 
 /// The replays the boards in `store`'s `stats.toml` point at: the PBs' and the other top runs'
@@ -758,6 +819,59 @@ mod tests {
         assert!(stats.book.maps.is_empty());
         assert_eq!(
             store.read_text(BROKEN).unwrap().as_deref(),
+            Some("version = \"x\"")
+        );
+    }
+
+    /// #1017: while the backup cannot be written, no flush (a normal write included) replaces
+    /// the unreadable file; the backup is retried and only then is the empty book saved.
+    #[test]
+    fn a_failed_backup_never_replaces_the_unreadable_file() {
+        let dir = std::env::temp_dir()
+            .join(format!("iwbtg-stats-test-{}-broken-full", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = Store::at(dir.clone());
+        store.write_text(FILE, "version = \"x\"").unwrap();
+        // A directory in the backup's place makes checking and writing it fail.
+        std::fs::create_dir(dir.join(BROKEN)).unwrap();
+        let mut stats = Stats::open(Some(store.clone()));
+        assert!(stats.book.maps.is_empty());
+        stats.dirty = true;
+        stats.flush();
+        assert_eq!(
+            store.read_text(FILE).unwrap().as_deref(),
+            Some("version = \"x\""),
+            "the original survives a write while its backup is pending"
+        );
+        assert!(stats.recovery.is_some(), "the backup is still pending");
+        // With the name free again the retry preserves the bytes, then saves the empty book.
+        std::fs::remove_dir(dir.join(BROKEN)).unwrap();
+        stats.flush();
+        assert_eq!(
+            store.read_text(BROKEN).unwrap().as_deref(),
+            Some("version = \"x\"")
+        );
+        let written = store
+            .read_text(FILE)
+            .unwrap()
+            .expect("the empty book is written");
+        assert!(Book::parse(&written).unwrap().maps.is_empty());
+    }
+
+    /// #1017: a later unreadable file gets a new backup name; an earlier recovery copy is kept.
+    #[test]
+    fn an_existing_recovery_copy_is_kept() {
+        let store = temp("broken-again");
+        store.write_text(BROKEN, "older = \"copy\"").unwrap();
+        store.write_text(FILE, "version = \"x\"").unwrap();
+        let stats = Stats::open(Some(store.clone()));
+        assert!(stats.book.maps.is_empty());
+        assert_eq!(
+            store.read_text(BROKEN).unwrap().as_deref(),
+            Some("older = \"copy\"")
+        );
+        assert_eq!(
+            store.read_text("stats.broken-2.toml").unwrap().as_deref(),
             Some("version = \"x\"")
         );
     }
