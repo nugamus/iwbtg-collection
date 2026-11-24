@@ -1168,7 +1168,7 @@ fn holds(ctx: &Ctx, when: &RoomWhen) -> bool {
 /// already stored becomes element 0, unwritten slots read 0, and [`Value::array_push`] enforces
 /// the `MAX_ARRAY_SIZE` cap.
 fn set_global_element(ctx: &mut Ctx, var: &str, index: u32, value: &Value) -> Result<(), SimError> {
-    let id = run_time_var(ctx, var)?;
+    let id = run_time_var(ctx.def, ctx.w, var)?;
     let index = usize::try_from(index)
         .map_err(|_| SimError::unsupported(format!("set_global index {index}: too large for an array")))?;
     if index == 0 {
@@ -1224,22 +1224,31 @@ fn index_value(ctx: &Ctx, index: GlobalIndex) -> Result<u32, SimError> {
 }
 
 /// The id of a variable name first seen at run time (docs/architecture/sim/world.md): the load-time id if the
-/// package has one, else the world's, else a new one after every id in use.
-fn run_time_var(ctx: &mut Ctx, name: &str) -> Result<VarId, SimError> {
-    if let Some(v) = ctx.def.var_names.get(name).or_else(|| ctx.w.var_names.get(name)) {
-        return Ok(*v);
+/// package has one, else the world's, else a new one after every id in use. Room creation code
+/// and a script's `global.<name>` write share it (#997).
+pub(crate) fn run_time_var(
+    def: &crate::def::GameDef,
+    w: &mut crate::world::World,
+    name: &str,
+) -> Result<VarId, SimError> {
+    if let Some(v) = known_var(def, w, name) {
+        return Ok(v);
     }
-    let next = ctx
-        .def
+    let next = def
         .var_names
         .values()
-        .chain(ctx.w.var_names.values())
+        .chain(w.var_names.values())
         .map(|v| v.0)
         .max()
         .map_or(Some(0), |m| m.checked_add(1))
         .ok_or_else(|| SimError::invariant("run-time variable ids overflow"))?;
-    ctx.w.var_names.insert(name.to_owned(), VarId(next));
+    w.var_names.insert(name.to_owned(), VarId(next));
     Ok(VarId(next))
+}
+
+/// The id of `name` when the package or the run already knows it, without making one.
+pub(crate) fn known_var(def: &crate::def::GameDef, w: &crate::world::World, name: &str) -> Option<VarId> {
+    def.var_names.get(name).or_else(|| w.var_names.get(name)).copied()
 }
 
 /// `save_game` in room creation code: the save point's save from the first kid with the

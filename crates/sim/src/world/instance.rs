@@ -114,7 +114,7 @@ pub fn assign_bare(vars: &mut BTreeMap<VarId, Value>, id: VarId, value: Value) {
 }
 
 /// The one error for an array past its cap, so the message and its wording stay in one place.
-fn array_cap_error() -> SimError {
+pub(crate) fn array_cap_error() -> SimError {
     SimError::unsupported(format!(
         "array cap exceeded: an array holds at most {MAX_ARRAY_SIZE} elements"
     ))

@@ -13,6 +13,8 @@ use iwbtg_sim::rng::Rng;
 use iwbtg_sim::rules::RunnerRules;
 use iwbtg_sim::script::host::Iws;
 
+#[path = "arrays.rs"]
+mod arrays;
 #[path = "collision.rs"]
 mod collision;
 
