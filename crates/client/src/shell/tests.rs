@@ -583,3 +583,44 @@ fn a_first_tick_script_error_opens_the_error_screen_from_the_command_line() {
     frames(&mut app, 1);
     assert_eq!(app.should_exit(), Some(AppExit::Success));
 }
+
+/// A click or an Enter on a button of game select reaches every global `Activate` and
+/// `PointerClick` observer, the run screens' too. Their resources exist only in a run, so they
+/// must skip on the select screen instead of failing validation and panicking (#1467).
+#[test]
+fn activating_a_button_on_the_select_screen_does_not_panic() {
+    use bevy::camera::NormalizedRenderTarget;
+    use bevy::picking::backend::HitData;
+    use bevy::picking::events::{Pointer, PointerClick};
+    use bevy::picking::pointer::{Location, PointerButton, PointerId};
+    use bevy::window::WindowRef;
+
+    let mut app = app();
+    frames(&mut app, 3);
+    let entity = app.world_mut().spawn_empty().id();
+    app.world_mut()
+        .trigger(bevy::ui_widgets::Activate { entity });
+    app.world_mut().trigger(PointerClick {
+        entity,
+        pointer: Pointer::new(
+            PointerId::Mouse,
+            Location {
+                target: NormalizedRenderTarget::Window(
+                    WindowRef::Entity(Entity::PLACEHOLDER)
+                        .normalize(None)
+                        .unwrap_or_else(|| unreachable!()),
+                ),
+                position: Vec2::ZERO,
+            },
+        ),
+        button: PointerButton::Primary,
+        hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+        duration: Duration::ZERO,
+        count: 1,
+    });
+    frames(&mut app, 2);
+    assert_eq!(
+        *app.world().resource::<State<AppScreen>>().get(),
+        AppScreen::Select
+    );
+}

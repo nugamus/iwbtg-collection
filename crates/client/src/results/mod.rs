@@ -662,16 +662,28 @@ fn row_mark(on: bool) -> Color {
     if on { tokens::ACCENT } else { Color::NONE }
 }
 
-/// A click on a row keeps its heatmap after the pointer leaves.
-fn on_row_click(click: On<PointerClick>, rows: Query<&page::StageRow>, mut results: ResMut<Results>) {
-    if let Ok(row) = rows.get(click.entity) {
+/// A click on a row keeps its heatmap after the pointer leaves. `Results` is run-only, and this
+/// global observer also sees clicks on game select (#1467).
+fn on_row_click(
+    click: On<PointerClick>,
+    rows: Query<&page::StageRow>,
+    results: Option<ResMut<Results>>,
+) {
+    if let Some(mut results) = results
+        && let Ok(row) = rows.get(click.entity)
+    {
         results.selected = Some(row.0);
     }
 }
 
-/// A click (or Enter on a focused button) picks its action.
-fn on_activate(activate: On<Activate>, actions: Query<&Action>, mut results: ResMut<Results>) {
-    if let Ok(action) = actions.get(activate.entity)
+/// A click (or Enter on a focused button) picks its action; nothing on game select (#1467).
+fn on_activate(
+    activate: On<Activate>,
+    actions: Query<&Action>,
+    results: Option<ResMut<Results>>,
+) {
+    if let Some(mut results) = results
+        && let Ok(action) = actions.get(activate.entity)
         && results.summary.is_some()
     {
         results.picked = Some(*action);

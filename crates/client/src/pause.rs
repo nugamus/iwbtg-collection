@@ -382,9 +382,11 @@ fn on_activate(
     activate: On<Activate>,
     rows: Query<&Row>,
     screen: Option<Res<State<RunScreen>>>,
-    mut menu: ResMut<Menu>,
+    // Run-only: absent on game select, whose clicks this global observer also sees (#1467).
+    menu: Option<ResMut<Menu>>,
 ) {
-    if let Ok(row) = rows.get(activate.entity)
+    if let Some(mut menu) = menu
+        && let Ok(row) = rows.get(activate.entity)
         && is_open(screen.as_deref())
     {
         menu.selected = row.0;
