@@ -203,7 +203,7 @@ The gate the model must meet, before mass porting:
 
 - The avoidance stress package (#990) at 500, 2,000 and 5,000 live bullets, in both variants (native motion, and a `step()` on every bullet), runs at 50 ticks per second on native release and wasm32 on the reference PC. Measured 2026-11-24 ([0001](0001-script-language.md), "Revisited 2026-11-24"): native release holds at every count; wasm32-wasip1 (wasmtime 51.0.0) holds to 2,000 scripted movers (9.9 ms/tick) and misses at 5,000 scripted (27.5 ms/tick, 38% over the 20 ms tick).
 - The boss stress package (#991: phases, HP, alarms, a timeline) runs at the same rate (0.06 ms native, 0.13 ms wasm32 measured).
-- If the worst case misses the gate, the response is to promote the native pattern (for example the `projectile` decision in #775, now [#1004](https://github.com/nugamus/iwbtg-collection/issues/1004)), not to raise the budget or move the kid's physics into scripts.
+- If the worst case misses the gate, the response is to promote the native pattern (a `killer` with GM motion and `destroy_outside_room`; [#1004](https://github.com/nugamus/iwbtg-collection/issues/1004) decided against a separate `projectile` kind), not to raise the budget or move the kid's physics into scripts.
 
 The measured milliseconds per tick and peak budget units are in [0001](0001-script-language.md) (Revisited 2026-11-24), recorded by #1002; this decision sets the gate, the table carries the numbers.
 

@@ -2,7 +2,7 @@
 
 Part of [format v0](v0.md).
 
-The 50 built-in kinds of v0, grouped as in the research list (`research/specs/mechanics.md`, "Final kind list (research#12)"). Each is documented once in `docs/format/builtins/<kind>.md`: parameters, defaults, events and behavior. The pages are authoritative; v0.md does not copy them. Each kind is one built-in: the differences between the original objects become parameters, and engine families never get separate kinds. The cherry is `killer`, and the original's player_start is `kid_start`. `moving_block`, `roof`, `music_zone` and `projectile` are not kinds (`projectile`: client#775).
+The 50 built-in kinds of v0, grouped as in the research list (`research/specs/mechanics.md`, "Final kind list (research#12)"). Each is documented once in `docs/format/builtins/<kind>.md`: parameters, defaults, events and behavior. The pages are authoritative; v0.md does not copy them. Each kind is one built-in: the differences between the original objects become parameters, and engine families never get separate kinds. The cherry is `killer`, and the original's player_start is `kid_start`. `moving_block`, `roof`, `music_zone` and `projectile` are not kinds (`projectile`: decided against in #1004; `killer` with native motion covers it).
 
 The parameter survey ([builtins-survey.md](builtins-survey.md)) lists every parameter, its games and its keep/move verdict under decision 0004's promotion and demotion rule (#1076). A parameter used by one game and not a general concept is a move candidate and is not added to another kind.
 
@@ -66,7 +66,7 @@ A package may write a behaviour base instead of a concrete kind. It is an additi
 **Killers.**
 
 - [`spike`](builtins/spike.md): Static killer; `dir` picks the sprite.
-- [`killer`](builtins/killer.md): A generic killer, and the cherry (the draft `projectile`'s role is client#775).
+- [`killer`](builtins/killer.md): A generic killer, and the cherry (the draft `projectile`'s role is `killer` with native motion, #1004).
 - [`orbit`](builtins/orbit.md): Killers that move on a circle.
 
 **Triggers and traps.**
