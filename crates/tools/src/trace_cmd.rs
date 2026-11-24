@@ -102,13 +102,32 @@ pub fn resolve_case(
         }
     }
     // A `required` metric is the F1 evidence a feel contract names. It must resolve and be one of
-    // the columns this case actually compares (a probe expression from `vars`, or an unmapped
-    // original column), not an ignored, unprobed or split-away name.
-    let compared: std::collections::BTreeSet<&str> = var_columns
-        .iter()
-        .filter(|name| !case.ignore.contains(*name) && !case.unprobed.contains_key(name.as_str()))
-        .map(|name| case.vars.get(name.as_str()).map_or(name.as_str(), String::as_str))
-        .collect();
+    // the columns this case actually compares (a probe expression from `vars`, an unmapped
+    // original column, or a recorder fixed column the case does not ignore), not an ignored,
+    // unprobed or split-away name.
+    let mut compared: BTreeSet<String> = BTreeSet::new();
+    for name in var_columns {
+        if case.ignore.contains(name) || case.unprobed.contains_key(name.as_str()) {
+            continue;
+        }
+        let expr = case.vars.get(name.as_str()).map_or(name.as_str(), String::as_str);
+        compared.insert(name.clone());
+        compared.insert(expr.to_string());
+    }
+    // The recorder's 18 fixed columns are compared unless the case ignores or unprobes them. A
+    // `kid.<field>` expression is the kid-field alias of the traced row's built-in `<field>`.
+    for name in trace::FIXED_COLUMNS {
+        if case.ignore.iter().any(|ignored| ignored == name) || case.unprobed.contains_key(name) {
+            continue;
+        }
+        if registry::column(name, def).is_ok() {
+            compared.insert(name.to_string());
+            let alias = format!("kid.{name}");
+            if registry::column(&alias, def).is_ok() {
+                compared.insert(alias);
+            }
+        }
+    }
     for required in &case.required {
         if let Err(e) = registry::column(required, def) {
             errors.push(format!("required {required:?}: {e}"));
@@ -954,25 +973,42 @@ mod tests {
             required: names.iter().map(|n| (*n).to_string()).collect(),
             ..case()
         };
-        // A mapped expression and an unmapped compared column are fine.
+        // A mapped expression, an unmapped compared column and the recorder's fixed columns
+        // (bare or as `kid.<field>`) are fine.
         for names in [
             &["kid.x"][..],
             &["image_index"][..],
             &["kid.x", "keyboard_check(jump)"][..],
+            &["kid.y", "y", "hspeed", "kid.hspeed"][..],
+            &["xprevious", "vspeed"][..],
         ] {
             resolve_case(&with_required(names), &d, &vars).expect("required resolves");
         }
         // It must resolve ...
         let err = resolve_case(&with_required(&["not_a_metric"]), &d, &vars).unwrap_err();
         assert!(format!("{err}").contains("not_a_metric"), "{err}");
-        // ... and be one of the columns this case compares.
-        for name in ["kid.y", "bbox_left"] {
+        // ... and be one of the columns this case compares: an unprobed or ignored column is
+        // rejected, and so is a fixed column a case ignores.
+        for name in ["bbox_left", "id"] {
             let err = resolve_case(&with_required(&[name]), &d, &vars).unwrap_err();
             assert!(
                 format!("{err}").contains("is not a compared column"),
                 "{name}: {err}"
             );
         }
+        let ignored_hspeed = TraceCase {
+            ignore: vec!["id".into(), "hspeed".into()],
+            required: vec!["kid.hspeed".into()],
+            ..case()
+        };
+        let err = resolve_case(&ignored_hspeed, &d, &vars).unwrap_err();
+        assert!(
+            format!("{err}").contains("is not a compared column"),
+            "ignored hspeed: {err}"
+        );
+        // A fixed key (not a compared value) stays unknown.
+        let err = resolve_case(&with_required(&["frame"]), &d, &vars).unwrap_err();
+        assert!(format!("{err}").contains("required \"frame\""), "{err}");
     }
 
     #[test]
