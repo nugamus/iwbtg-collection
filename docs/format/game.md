@@ -1,17 +1,16 @@
 # Manifest: `game.toml`
 
-Part of [format v0](v0.md).
+Part of [format v0](v0.md); format 1 changes are in [v1](v1.md).
 
 ```toml
-#:schema ../../client/docs/format/schema/v0/game.schema.json
-format = 0                       # format major version (integer)
+#:schema ../../client/docs/format/schema/v1/game.schema.json
+format = 1                       # format major version (integer)
 id = "rely_the_needle"
 title = "I Wanna Rely The Needle"
 version = "1.0.0"                # version of our port (semver)
 source_version = "4.2"           # version of the original we ported
 engine_pack = "yuuutu"           # engine pack in games/_engines/, optional
-engine_rev = 0                   # built-in behavior revision this package was verified against
-ruleset = "gm8@0"                # optional; absent means gm8 at engine_rev (format 0, decision 0005)
+ruleset = "gm8@0"                # ruleset and built-in revision (decision 0005); format 0 wrote engine_rev = 0
 runner = "gm80"                  # gm80 | gm81: the original's runner, provenance (same simulation rules)
 physics = "physics.toml"
 start_room = "title"
@@ -23,8 +22,8 @@ object_order = [                 # event and collision order; every kind used mu
 ]
 room_order = ["title", "room_1", "room_2"]   # optional; GM room order for room_goto_next/previous
 
-[compat]                         # optional; decision 0005
-profile = "gm8/a1@1"             # the package's family bundle; absent is inferred from the physics preset
+[compat]                         # decision 0005; required from format 1
+profile = "gm8/a1@1"             # the package's family bundle; format 0 may leave it out (inferred from the physics preset)
 
 [[compat.deviation]]             # one declared deviation from the ruleset's closed catalogue
 id = "save.position"
@@ -142,7 +141,8 @@ Field rules:
 | `version` | yes | Semver of our port. For humans. |
 | `source_version` | no | Version of the original. |
 | `engine_pack` | no | Engine pack id ([engine packs](engine.md)); the pack must be bundled. |
-| `engine_rev` | yes | Built-in behavior revision ([architecture](../architecture/replay.md#versions)). |
+| `ruleset` | format 1: yes | `<name>@<rev>`: the ruleset and its built-in behavior revision ([architecture](../architecture/replay.md#versions), [below](#ruleset-and-compatibility-profile)). Format 0 may leave it out. |
+| `engine_rev` | format 0: yes | The format-0 spelling of the built-in revision. Format 1 refuses it: the revision is in `ruleset` ([v1](v1.md)). |
 | `runner` | yes | `gm80` or `gm81`. Records the original's runner for provenance: both use the same simulation rules (research#15). A difference found later becomes a `RunnerRules` field. |
 | `physics` | yes | Path to the physics profile. |
 | `start_room` | yes | First room. |
@@ -167,12 +167,12 @@ Field rules:
 
 ## Ruleset and compatibility profile
 
-Decision [0005](../decisions/0005-standard-mechanics.md) splits a package's behavior into a **ruleset** (the engine's semantic contract), an engine-defined **compatibility profile** (a data bundle inside that ruleset plus declared deviations) and `physics.toml` (per-game tuning and event lists). Format 0 reads the first two as declarations only; they cannot change a run.
+Decision [0005](../decisions/0005-standard-mechanics.md) splits a package's behavior into a **ruleset** (the engine's semantic contract), an engine-defined **compatibility profile** (a data bundle inside that ruleset plus declared deviations) and `physics.toml` (per-game tuning and event lists). Both formats read the first two as declarations only; they cannot change a run until the profile layer can apply a value (#1160).
 
-- **`ruleset = "<name>@<rev>"`.** Absent means `gm8` at the package's `engine_rev`. In format 0 the only ruleset this build implements is `gm8`, and its revision is exactly `engine_rev`; `ruleset = "gm8@0"` is therefore the explicit spelling of the absent field. `standard@1` is not implemented yet, and the format-1 shape (`ruleset@N` superseding `engine_rev`) waits on #795/#928.
-- **`[compat] profile = "<ruleset>/<family>@<n>"`** (`gm8/a1@1`). Absent means the bundle of the physics preset's family: `a1` to `a5`, `b` or `c`. The known bundles are revision 1. A different family, an unknown name or another revision is an error. A profile is data: it cannot add code or supply a [runner-rule](../architecture/sim.md) value.
+- **`ruleset = "<name>@<rev>"`.** Required in format 1, where it replaces `engine_rev` ([v1](v1.md)). In format 0 it is optional: absent means `gm8` at the package's `engine_rev`, and a written revision must equal `engine_rev`, so `ruleset = "gm8@0"` is the explicit spelling of the absent field. The only ruleset this build implements is `gm8`; `standard@1` is not implemented yet.
+- **`[compat] profile = "<ruleset>/<family>@<n>"`** (`gm8/a1@1`). Required in format 1. In format 0, absent means the bundle of the physics preset's family: `a1` to `a5`, `b` or `c`. The known bundles are revision 1. A different family, an unknown name or another revision is an error. A profile is data: it cannot add code or supply a [runner-rule](../architecture/sim.md) value.
 - **`[[compat.deviation]]`** declares one difference the package keeps from the ruleset. Every entry has `id`, `value`, `why`, `impact` (`F1`, `F2` or `F3`), `evidence` and `issue`; a missing or empty provenance field is an error. The ids form a **closed catalogue** in `crates/format/src/compat.rs`: `save.position`, `jump.cancel`, `jump.air`, `jump.water_air`, `fall_cap.rule`, `flip.model`, `platform.take`, `ice.model`, `input.walk`, `input.vine_keys`, `vine.model`, `gravity.reapply`, `slope.mirror_contact` and `slope.downhill`. Each selects an existing enum value and no other field. An unknown id, a value of the wrong type, or a value outside the entry's set is an error.
-- **Format 0 resolves a declaration to what the package already does.** The declared profile must name the physics preset's family, and each deviation must name the value the game's physics profile already resolves to (and no room profile may resolve it differently). Otherwise the loader errors with what the package resolves to. Because of that, `ruleset` and `[compat]` are removed before the `gameplay_hash` is computed: writing the explicit fields keeps the hash of the package without them. **The normalization stops there:** a declaration that changes behavior is a format-1 path and must enter `gameplay_hash` (user decision 2). Format 0 cannot hash one because it rejects it; format 1, when it freezes, will hash the resolved ruleset, profile and deviations.
+- **A declaration resolves to what the package already does** (both formats, until #1160's profile layer). The declared profile must name the physics preset's family, and each deviation must name the value the game's physics profile already resolves to (and no room profile may resolve it differently). Otherwise the loader errors with what the package resolves to. Because of that, `ruleset` and `[compat]` are removed before the `gameplay_hash` is computed: writing the explicit fields keeps the hash of the package without them. **The normalization stops there:** a declaration that changes behavior is a format-1 path and must enter `gameplay_hash` (user decision 2). Format 0 cannot hash one because it rejects it. Format 1 hashes `ruleset` and `[compat]` as written (they are no longer removed), so a later behavior-changing profile or deviation is a new board.
 - `iwbtg pkg check` prints the resolved values (`ruleset: gm8@0`, `profile: gm8/a1@1`, `deviation: save.position=xy_base100_bytes`).
 
 ## Timing triggers

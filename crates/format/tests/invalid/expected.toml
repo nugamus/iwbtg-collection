@@ -47,7 +47,7 @@ message = "invalid value: integer `-1`, expected u32"
 file = "game.toml"
 line = 3
 column = 10
-message = "this package uses format 1, but this client reads formats up to 0; update the client"
+message = "this package uses format 2, but this client reads formats up to 1; update the client"
 
 [key_art_file_missing]
 file = "game.toml"

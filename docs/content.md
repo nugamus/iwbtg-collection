@@ -1,6 +1,6 @@
 # Porting, assets, engines and creation
 
-How games get into the collection: porting, the shared asset library, engines, the package file and the level editor. The user decided these on 2026-11-02. Player-facing play and ranking are in [product](product.md). The file-level spec is [format v0](format/v0.md), and the items in [Format changes needed](#format-changes-needed) must reach it before format 1.
+How games get into the collection: porting, the shared asset library, engines, the package file and the level editor. The user decided these on 2026-11-02. Player-facing play and ranking are in [product](product.md). The file-level spec is [format v0](format/v0.md) with the [format 1](format/v1.md) changes; the [Format changes needed](#format-changes-needed) list is closed for format 1.
 
 ## Porting
 
@@ -124,13 +124,14 @@ Commercial music in fangames (Mega Man, Touhou and so on) is kept and removed on
 
 ## Format changes needed
 
-Changes [format v0](format/v0.md) needs before format 1:
+Changes [format v0](format/v0.md) needed before format 1. **Closed for format 1 (#795):** each item is done or deferred with its reason ([v1](format/v1.md#what-format-1-does-not-contain)). A deferred item is additive and joins format 1 before the format freeze point, or format 2 after it (#1395).
 
 - **Maps.** Versions and categories inside one package, each with its own timing triggers. Done: `[[maps]]` ([v0](format/game.md#maps)); a map starts the original's difficulty through `stripped_start`.
 - **Stripped mode.** Done: `[stripped]` ([v0](format/game.md#stripped-mode)) with the ranked start point, the cut list and cutscene and dialogue regions. The sim side is #34, #43 and #561.
 - **Physics per room,** for medleys. Done: room key `physics` and `physics/<id>.toml` ([v0](format/physics.md#room-profiles), #33).
-- **Language packs.** Text that can be translated is kept apart from the rest.
+- **Language packs.** Text that can be translated is kept apart from the rest. Deferred (#45): new optional files, outside `gameplay_hash`; the extraction pipeline decides their shape.
 - **Unusual controls.** Fields for the control hints. Done: `[controls]` labels for `extra1` to `extra4` ([v0](format/game.md), #33).
-- **Creator locks.** Flags for asset reuse and skins.
-- **Script library references** (`lib:<name>@<version>`).
+- **Creator locks.** Flags for asset reuse and skins. Deferred (#796): cosmetic flags for the asset library and the skin system, which do not exist yet.
+- **Script library references** (`lib:<name>@<version>`). Deferred (#797): needs the shared script library first; a new reference form is additive.
+- **Ruleset and profile.** Done in format 1: `ruleset = "gm8@<rev>"` replaces `engine_rev` and `[compat] profile` is required ([v1](format/v1.md), 0005 decision 3). The `standard` new-game shape without `runner`, `object_order` and `room_order` waits for the `standard` ruleset (#1149, #1153).
 - **The `.iwbz` container.** Done: [iwbz.md](format/iwbz.md) (#36); the OS file association comes with the release installers (#647).

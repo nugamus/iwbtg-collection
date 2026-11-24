@@ -252,6 +252,17 @@ enum PkgCommand {
         #[arg(long)]
         check: bool,
     },
+    /// Rewrites a package folder to the current format (docs/format/v1.md); the game plays the same.
+    Upgrade {
+        /// Package folder.
+        pkg: PathBuf,
+        /// Change nothing: list the files that would change and exit 1 if there are any.
+        #[arg(long)]
+        check: bool,
+        /// Load converter output: unmapped script kinds become inert.
+        #[arg(long)]
+        trace_mode: bool,
+    },
     /// Checks a package and writes it as one `.iwbz` file (docs/format/iwbz.md).
     Pack {
         /// Package folder.
@@ -426,6 +437,21 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
         Command::Pkg(PkgCommand::Fmt { pkg, check }) => pkg_cmd(&pkg, |files, out| {
             iwbtg_format::pkg_cmd::fmt(&pkg, files, check, out)
         }),
+        Command::Pkg(PkgCommand::Upgrade {
+            pkg,
+            check,
+            trace_mode,
+        }) => {
+            if pack_cmd::is_iwbz(&pkg) {
+                return Err(ToolError::Message(format!(
+                    "{}: upgrade the package folder, then pack it again",
+                    pkg.display()
+                )));
+            }
+            pkg_cmd(&pkg, |files, out| {
+                iwbtg_format::pkg_cmd::upgrade(&pkg, files, check, trace_mode, out)
+            })
+        }
         Command::Pkg(PkgCommand::Hash { pkg, trace_mode }) => pkg_cmd(&pkg, |files, out| {
             iwbtg_format::pkg_cmd::hash(files, trace_mode, out)
         }),

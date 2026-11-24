@@ -3,8 +3,9 @@
 //! The manifest validator has already checked the closed deviation catalogue, the types and the
 //! provenance. Here the loader checks the two things that need the package's resolved profile:
 //! the profile bundle names the physics preset's family, and every deviation names the value the
-//! package already resolves to. A format-0 declaration therefore cannot change an outcome, and
-//! [`crate::load::gameplay_hash`] normalizes it away.
+//! package already resolves to, in every format: a declaration cannot change an outcome until the
+//! profile layer can apply a value (#1160). In format 0 [`crate::load::gameplay_hash`] normalizes
+//! it away; format 1 hashes it (docs/format/v1.md).
 
 use super::*;
 use crate::compat as catalogue;
@@ -26,7 +27,7 @@ impl Loader<'_> {
                     profile.span(),
                     format!(
                         "profile `{}` names family `{}`, but the physics preset is `{expected}`; \
-                         in format 0 the profile is the preset's bundle",
+                         until a profile can apply a value (#1160) it is the preset's bundle",
                         p.id(),
                         p.family
                     ),
@@ -46,7 +47,7 @@ impl Loader<'_> {
                     dev.value.span(),
                     format!(
                         "deviation `{id}` declares `{declared}`, but the package resolves it to \
-                         `{resolved}`; in format 0 a declaration must name the resolved value \
+                         `{resolved}`; until a profile can apply a value (#1160) a declaration names the resolved value \
                          (set it in `physics.toml` instead)"
                     ),
                 ));

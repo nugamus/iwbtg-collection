@@ -19,6 +19,7 @@ pub mod ids;
 pub mod iwbz;
 pub mod key_art;
 pub mod manifest;
+pub mod migrate;
 pub mod number;
 /// The `iwbtg pkg` commands (#1120): the binary in `crates/tools` registers them.
 pub mod pkg_cmd;
