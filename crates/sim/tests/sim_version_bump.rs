@@ -1,7 +1,7 @@
 //! The `SIM_VERSION` bump check (docs/architecture/versioning.md, #783).
 //!
 //! After the freeze point (`iwbtg_sim::SIM_VERSION_FREEZE` is `Some`), every pinned golden hash
-//! (the `FINAL_HASH` of `wp1_determinism.rs`, the state hash vectors and the golden corpus cases)
+//! (the `FINAL_HASH` of `determinism.rs`, the state hash vectors and the golden corpus cases)
 //! is recorded in `sim_version_pins.txt` together with the `SIM_VERSION` it was pinned under. A
 //! pin that changes while `SIM_VERSION` stays the same fails this test: an outcome changed and old
 //! replays would stop verifying. Bump `SIM_VERSION`, then `cargo xtask repin` records the new pins.
@@ -14,7 +14,7 @@ use std::collections::BTreeMap;
 
 /// The record, compiled in like the golden corpus's expected lines.
 const RECORD: &str = include_str!("sim_version_pins.txt");
-const WP1: &str = include_str!("wp1_determinism.rs");
+const WP1: &str = include_str!("determinism.rs");
 const GOLDEN: &str = include_str!("golden/expected.txt");
 
 /// Pinned hashes by name (`final_hash`, `vector <name>`, `case <name>`) under one `SIM_VERSION`.
@@ -45,7 +45,7 @@ fn is_hash(s: &str) -> bool {
 fn current() -> BTreeMap<String, String> {
     let mut pins = BTreeMap::new();
     let prefix = "const FINAL_HASH: &str = \"";
-    let at = WP1.find(prefix).expect("FINAL_HASH in wp1_determinism.rs") + prefix.len();
+    let at = WP1.find(prefix).expect("FINAL_HASH in determinism.rs") + prefix.len();
     pins.insert("final_hash".to_owned(), WP1[at..at + 64].to_owned());
     for (name, hash) in super::hash_vectors::VECTORS {
         pins.insert(format!("vector {name}"), hash.to_owned());
@@ -250,6 +250,15 @@ fn a_new_case_needs_a_repin_but_no_bump() {
         check(Some(2), 2, Some(&rec), &now),
         Err(Failure::Stale(_))
     ));
+}
+
+/// A state-hash encoding change (`HASH_LAYOUT`) requires a `SIM_VERSION` bump
+/// (docs/architecture/versioning.md). Before the freeze point the pin check above is inert, so
+/// this pair is the active local guard: changing either half alone fails here, and changing both
+/// is a review-visible edit. `HASH_LAYOUT` 3 shipped with `SIM_VERSION` 2 (#1157/#1292, #1303).
+#[test]
+fn a_hash_layout_change_comes_with_a_sim_version_bump() {
+    assert_eq!((iwbtg_sim::hash::HASH_LAYOUT, iwbtg_sim::SIM_VERSION), (3, 2));
 }
 
 #[test]

@@ -4,6 +4,7 @@
 use crate::wp7a_load::*;
 use iwbtg_format::PackageFiles;
 use iwbtg_format::load::load_report;
+use iwbtg_sim::def::KidFamily;
 
 // -- Engine packs (docs/format/engine.md) ------------------------------------------------------
 
@@ -163,4 +164,117 @@ fn a_missing_engine_pack_sound_is_an_error() {
         errs.contains("the engine pack `a1` has no sound `nope`"),
         "{errs}"
     );
+}
+
+// -- Custom physics (#802) ---------------------------------------------------------------------
+
+#[test]
+fn a_profile_that_matches_its_pack_family_is_not_custom() {
+    let (_, report) = load_ok(&with_pack(|_| {}), STRICT);
+    let p = report.physics.expect("a pack comparison");
+    assert_eq!(p.pack.as_deref(), Some("a1"));
+    assert_eq!(p.family, KidFamily::A1);
+    assert!(p.differs.is_empty(), "{:?}", p.differs);
+    assert!(!p.is_custom());
+    assert_eq!(p.name(), "a1");
+}
+
+#[test]
+fn a_profile_that_differs_names_the_fields() {
+    let files = with_pack(|f| {
+        set(
+            f,
+            "physics.toml",
+            "preset = \"A1\"
+[numbers]
+run_speed = 5
+[gravity]
+block_landing_zeroes = false
+",
+        );
+    });
+    let (_, report) = load_ok(&files, STRICT);
+    let p = report.physics.expect("a pack comparison");
+    assert_eq!(
+        p.differs,
+        vec![
+            "numbers.run_speed".to_owned(),
+            "gravity.block_landing_zeroes".to_owned()
+        ]
+    );
+    assert!(p.is_custom());
+}
+
+#[test]
+fn a_package_without_a_pack_is_compared_with_its_own_preset() {
+    let (_, report) = load_ok(&package(|_| {}), STRICT);
+    let p = report.physics.expect("a comparison");
+    assert_eq!(p.pack, None);
+    assert_eq!(p.family, KidFamily::A1);
+    assert!(p.differs.is_empty(), "{:?}", p.differs);
+    assert_eq!(p.name(), "A1 preset");
+}
+
+#[test]
+fn a_pack_family_other_than_the_profile_preset_is_custom() {
+    let files = with_pack(|f| set(f, "engine/a1/engine.toml", PACK_TOML.replace("\"A1\"", "\"B\"")));
+    let (_, report) = load_ok(&files, STRICT);
+    let p = report.physics.expect("a comparison");
+    assert_eq!(p.family, KidFamily::B);
+    assert!(p.is_custom());
+    assert!(
+        p.differs.contains(&"numbers.max_fall_speed".to_owned()),
+        "{:?}",
+        p.differs
+    );
+}
+
+#[test]
+fn a_room_profile_that_differs_is_custom_and_named() {
+    let files = with_pack(|f| {
+        f.push((
+            "physics/fast.toml".into(),
+            b"preset = \"A1\"\n[numbers]\nrun_speed = 4\n".to_vec(),
+        ));
+    });
+    let (_, report) = load_ok(&files, STRICT);
+    let p = report.physics.expect("a comparison");
+    assert!(
+        p.is_custom(),
+        "a medley is custom physics even when the game profile matches"
+    );
+    assert!(p.differs.is_empty(), "{:?}", p.differs);
+    assert_eq!(
+        p.rooms,
+        vec![iwbtg_format::physics::RoomPhysicsStanding {
+            id: "fast".to_owned(),
+            differs: vec!["numbers.run_speed".to_owned()],
+        }]
+    );
+}
+
+#[test]
+fn a_room_profile_that_matches_the_game_profile_is_not_custom() {
+    let files = with_pack(|f| {
+        f.push(("physics/same.toml".into(), b"preset = \"A1\"\n".to_vec()));
+    });
+    let (_, report) = load_ok(&files, STRICT);
+    let p = report.physics.expect("a comparison");
+    assert!(!p.is_custom());
+    assert!(p.rooms.is_empty());
+}
+
+#[test]
+fn a_room_profile_that_reverts_to_the_preset_is_a_medley() {
+    // The game's profile is custom and a room goes back to stock A1: two engines in one package.
+    let files = with_pack(|f| {
+        set(f, "physics.toml", "preset = \"A1\"\n[numbers]\nrun_speed = 5\n");
+        f.push(("physics/stock.toml".into(), b"preset = \"A1\"\n".to_vec()));
+    });
+    let (_, report) = load_ok(&files, STRICT);
+    let p = report.physics.expect("a comparison");
+    assert_eq!(p.differs, vec!["numbers.run_speed".to_owned()]);
+    assert_eq!(p.rooms.len(), 1);
+    assert_eq!(p.rooms[0].id, "stock");
+    assert_eq!(p.rooms[0].differs, vec!["numbers.run_speed".to_owned()]);
 }

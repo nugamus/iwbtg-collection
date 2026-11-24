@@ -1,4 +1,4 @@
-//! Built-in `kid_param_zone` (mechanics `kid_param_zone`; docs/plans/sim-core.md 6.1;
+//! Built-in `kid_param_zone` (mechanics `kid_param_zone`; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/kid_param_zone.md). Tier 3.
 //!
 //! While a kid overlaps it, it writes the kid numbers it names through

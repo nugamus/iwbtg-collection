@@ -54,6 +54,25 @@ pub struct LoadingArgs {
     pub loading_preview_back: bool,
 }
 
+/// The loading card's place in the module list (main.rs): its flags and plugin. A `--screenshot`
+/// check skips the card so the other screens' checks see the game.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = LoadingArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        args: LoadingArgs,
+        startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(LoadingPlugin {
+            args,
+            skip: startup.isolated,
+        });
+    }
+}
+
 /// `--loading-preview-back`: the card says `Esc back` without a select screen.
 #[derive(Resource)]
 struct PreviewBack;
@@ -254,8 +273,8 @@ impl Plugin for LoadingPlugin {
             let tip = if preview || skip {
                 0
             } else {
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
+                crate::time::SystemTime::now()
+                    .duration_since(crate::time::UNIX_EPOCH)
                     .map_or(0, |d| d.as_secs() as usize % TIPS.len())
             };
             Loading::new(preview, tip)

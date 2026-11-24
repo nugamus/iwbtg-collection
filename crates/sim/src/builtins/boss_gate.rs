@@ -1,4 +1,4 @@
-//! Built-in `boss_gate` (mechanics `boss_gate`; docs/plans/sim-core.md 6.1;
+//! Built-in `boss_gate` (mechanics `boss_gate`; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/boss_gate.md). Tier 2. WP0 creates the file; WP6b owns it.
 //!
 //! A solid block that destroys itself once `global.boss[boss_index]` is set (KOT bossblock1,

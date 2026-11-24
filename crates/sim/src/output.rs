@@ -1,4 +1,4 @@
-//! Events the sim sends to the client (docs/plans/sim-core.md 1.5).
+//! Events the sim sends to the client (docs/architecture/sim/world.md).
 //!
 //! Audio and visual effects only: the sim never reads anything back. Not hashed. Each owner
 //! defines its own part in its own module; this enum only routes them.

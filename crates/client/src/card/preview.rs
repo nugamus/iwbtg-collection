@@ -15,7 +15,7 @@ use crate::ui::backdrop::{Backdrop, dim};
 use crate::ui::tokens;
 
 /// The card preview's flag.
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Default)]
 pub struct CardArgs {
     /// Show the player card alone (a dev view until game select and results have it).
     #[arg(long, value_enum, hide = true, value_name = "VARIANT")]

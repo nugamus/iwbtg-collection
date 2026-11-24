@@ -6,202 +6,92 @@
 //! The sim ticks at the game's rate on a fixed clock, whatever the frame rate; every visible
 //! instance with a sprite is drawn where the sim last put it.
 //!
-//! Each module owns its command-line flags (a clap `Args` group) and its systems (a Bevy
-//! `Plugin`). A new module adds one `mod` line, one flattened group and one plugin here and
-//! nothing else (#530), so parallel client work doesn't collide in this file.
+//! Each module owns its command-line flags and its systems; it exposes both from one
+//! `Registration` item (a clap `Args` group and a Bevy `Plugin`). The list below is the only
+//! place a module is named: the `client_modules!` macro declares it, flattens its group into the
+//! command line, and runs its startup checks and plugin in list order. A new module adds one
+//! line here and a `Registration` in its own file, so parallel client work doesn't collide in
+//! this file (#530, docs/architecture/client/main.md).
 
-// The browser build opens only the gallery until the web client loads packages, so the game
-// path is compiled there but not called.
+// The browser build has no command line: `web.rs` fetches a package and runs the same module list
+// with every group's default, so the CLI path is compiled there but not called.
 #![cfg_attr(target_arch = "wasm32", allow(dead_code, unused_imports))]
 
-mod art;
-mod audio;
-mod bindings;
-mod card;
-mod hud;
-mod import;
 mod input;
-mod loading;
-mod mods;
-mod overlay;
-mod package;
-mod particles;
-mod pause;
-mod practice;
+mod registration;
 mod render_fix;
-mod replays;
-mod results;
-mod retry;
-mod savefile;
-mod screen;
-mod script_error;
 mod settings;
-mod shell;
-mod skip;
-mod stats;
 mod storage;
-mod ui;
-mod view;
-mod visual;
+mod time;
+#[cfg(any(test, all(target_arch = "wasm32", target_os = "unknown")))]
+mod web;
 
 use std::process::ExitCode;
 
 use clap::Parser;
 
-/// Plays a game package.
-#[derive(Parser)]
-#[command(name = "iwbtg-client", version, about = "IWBTG Collection client")]
-struct Args {
-    #[command(flatten)]
-    package: package::PackageArgs,
-    #[command(flatten)]
-    shell: shell::ShellArgs,
-    #[command(flatten)]
-    view: view::ViewArgs,
-    #[command(flatten)]
-    audio: audio::AudioArgs,
-    #[command(flatten)]
-    screen: screen::ScreenArgs,
-    #[command(flatten)]
-    bindings: bindings::BindingsArgs,
-    #[command(flatten)]
-    ui: ui::UiArgs,
-    #[command(flatten)]
-    hud: hud::HudArgs,
-    #[command(flatten)]
-    mods: mods::ModsArgs,
-    #[command(flatten)]
-    practice: practice::PracticeArgs,
-    #[command(flatten)]
-    save: savefile::SaveArgs,
-    #[command(flatten)]
-    retry: retry::RetryArgs,
-    #[command(flatten)]
-    pause: pause::PauseArgs,
-    #[command(flatten)]
-    card: card::preview::CardArgs,
-    #[command(flatten)]
-    results: results::ResultsArgs,
-    #[command(flatten)]
-    overlay: overlay::OverlayArgs,
-    #[command(flatten)]
-    loading: loading::LoadingArgs,
-    #[command(flatten)]
-    script_error: script_error::ScriptErrorArgs,
+// One line per feature module. The order is the order startup checks and plugins run: the shell
+// first (the other plugins use its states), the bindings before the screen flags (`--show-bindings`
+// ends startup), the screens and the UI before their standalone modes (`--ui-gallery`,
+// `--card-preview`), and the run plugins last.
+client_modules! {
+    shell,
+    bindings,
+    screen,
+    hud,
+    ui,
+    card,
+    package,
+    savefile,
+    audio,
+    mods,
+    view,
+    art,
+    visual,
+    practice,
+    retry,
+    skip,
+    pause,
+    results,
+    stats,
+    replays,
+    import,
+    overlay,
+    loading,
+    particles,
+    script_error,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> ExitCode {
-    let args = Args::parse();
+    let mut args = Args::parse();
     // The settings file gives the defaults the flags override (settings.rs). A `--screenshot`
     // check neither reads nor writes it, so it looks the same on every machine.
     let isolated = args.view.screenshot.is_some();
     settings::load(isolated);
-    let bindings = match bindings::load(&args.bindings, isolated) {
-        Ok(b) => b,
-        Err(e) => {
-            eprintln!("{e}");
-            return ExitCode::FAILURE;
-        }
+    // What the modules need from each other's flags before any plugin is built.
+    let startup = registration::Startup {
+        isolated,
+        screenshot: args.view.screenshot.clone(),
+        package: args.package.package.clone(),
+        library: args.shell.select.clone(),
+        ranked: args.view.ranked,
+        trace_mode: args.package.trace_mode,
+        window: args.screen.window,
+        ratio: args
+            .screen
+            .ratio
+            .as_deref()
+            .and_then(|r| screen::parse_ratio(r).ok().flatten()),
     };
-    if args.bindings.show_bindings {
-        print!("{}", bindings.describe());
-        return ExitCode::SUCCESS;
-    }
-    if let Err(e) = screen::configure(&args.screen) {
-        eprintln!("{e}");
-        return ExitCode::FAILURE;
-    }
-    hud::configure(&args.hud);
-    ui::configure(&args.ui);
-    if args.ui.ui_gallery {
-        // `configure` has checked the ratio.
-        let ratio = args
-            .screen
-            .ratio
-            .as_deref()
-            .and_then(|r| screen::parse_ratio(r).ok().flatten());
-        let result = ui::gallery::run(
-            args.view.screenshot,
-            args.ui.reduced_motion,
-            args.screen.window,
-            ratio,
-        );
+    // Validate the flags and open any standalone mode (gallery, card preview, `--show-bindings`).
+    if let Some(result) = args.prepare(&startup) {
         return exit_code(result);
     }
-    if let Some(variant) = args.card.card_preview {
-        let ratio = args
-            .screen
-            .ratio
-            .as_deref()
-            .and_then(|r| screen::parse_ratio(r).ok().flatten());
-        let result = card::preview::run(variant, args.view.screenshot, args.screen.window, ratio);
-        return exit_code(result);
-    }
-    // Clap requires the package unless `--select`, `--ui-gallery`, `--bind` or
-    // `--show-bindings` is given; with only the bindings flags there is nothing to play.
-    let first = args.package.package;
-    let library = args.shell.select;
-    let mod_select_preview = args.shell.mod_select_preview;
-    if first.is_none() && library.is_none() {
-        return ExitCode::SUCCESS;
-    }
-    // A ranked run always starts a new game and never touches the save file.
-    let mut save = args.save;
-    save.no_save_file |= args.view.ranked;
-    savefile::configure(&save);
-    let audio = audio::AudioPlugin::new(&args.audio);
-    let run_mods = args.mods.mods;
-    let slow_speed = args.practice.slow_speed;
-    let retry = args.retry;
-    let pause = args.pause;
-    let results = args.results;
-    let overlay = args.overlay;
-    let script_error = args.script_error;
+    let first = args.package.package.clone();
     let trace_mode = args.package.trace_mode;
-    let loading = loading::LoadingPlugin {
-        args: args.loading,
-        // A `--screenshot` check of another screen sees the game at once.
-        skip: args.view.screenshot.is_some(),
-    };
-    // A `--screenshot` check keeps no stats, as it keeps no settings.
-    let keep_stats = args.view.screenshot.is_none();
-    eprintln!("{}", mods::describe(run_mods, args.view.ranked));
-    // The package on the command line opens before the window does: a broken one exits with its
-    // errors, as before game select existed.
-    let shell = shell::ShellPlugin {
-        library: library.clone(),
-        trace_mode,
-    };
-    let result = view::run(first.as_deref(), args.view, trace_mode, |app| {
-        app.add_plugins((
-            shell,
-            shell::select::SelectPlugin(library, mod_select_preview),
-            screen::ScreenPlugin,
-            hud::HudPlugin,
-            bindings::BindingsPlugin(bindings),
-            savefile::SavePlugin,
-            art::ArtPlugin,
-            audio,
-            // `--mods` and `--slow-speed` seed the mod select's picks; each run reads those.
-            (mods::ModsPlugin(run_mods), visual::VisualPlugin),
-            practice::PracticePlugin { slow_speed },
-            retry::RetryPlugin(retry),
-            skip::SkipPlugin,
-            pause::PausePlugin { args: pause },
-            results::ResultsPlugin(results),
-            stats::StatsPlugin { keep: keep_stats },
-        ));
-        // Bevy takes at most 15 plugins in one tuple.
-        app.add_plugins((
-            // A `--screenshot` check keeps no replays either.
-            replays::ReplaysPlugin { keep: keep_stats },
-            import::ImportPlugin { keep: keep_stats },
-            overlay::OverlayPlugin(overlay),
-            loading,
-            particles::ParticlesPlugin,
-            script_error::ScriptErrorPlugin(script_error),
-        ));
+    let result = view::run(first.as_deref(), args.view.clone(), trace_mode, move |app| {
+        args.add_plugins(app, &startup)
     });
     exit_code(result)
 }
@@ -216,14 +106,15 @@ fn exit_code(result: Result<(), String>) -> ExitCode {
     }
 }
 
-/// In a browser there is no command line and no package folder yet: the build opens the UI
-/// gallery (docs/dev-setup.md, UI gallery in a browser).
+/// In a browser there is no command line: `web.rs` opens the UI gallery or fetches a package over
+/// HTTP and runs the client (docs/architecture/client/web.md).
 #[cfg(target_arch = "wasm32")]
 fn main() {
     #[cfg(target_os = "unknown")]
-    input::watch_unmapped_pads();
-    // Without --screenshot the gallery has no size check, so it cannot return an error here.
-    let _ = ui::gallery::run(None, false, None, None);
+    {
+        input::watch_unmapped_pads();
+        web::start();
+    }
 }
 
 #[cfg(test)]

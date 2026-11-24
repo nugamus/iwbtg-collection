@@ -147,7 +147,7 @@ mod tests {
 id = "minimal"
 title = "Minimal"
 version = "0.1.0"
-engine_rev = 1
+engine_rev = 0
 runner = "gm80"
 physics = "physics.toml"
 start_room = "title"

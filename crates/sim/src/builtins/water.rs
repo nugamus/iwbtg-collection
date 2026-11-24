@@ -1,4 +1,4 @@
-//! Built-in `water` (mechanics `water`; kid specs per game; docs/plans/sim-core.md 6.1;
+//! Built-in `water` (mechanics `water`; kid specs per game; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/water.md). Tier 2. WP0 creates the file; WP6b owns it.
 //!
 //! Collision with the kid (either kind, one event per kid). In this order:

@@ -1,4 +1,4 @@
-//! The sound model (docs/plans/sim-core.md 7, register S1-S5; docs/format/builtins/sound.md).
+//! The sound model (docs/architecture/sim/sound.md, register S1-S5; docs/format/sounds.md).
 //!
 //! Audio output is the client's job; whether a sound **is playing** is sim state, because
 //! `sound_isplaying` changes game state in 15 games. This module answers from a deterministic
@@ -12,8 +12,13 @@
 //! `--stub-dlls` option stubs only the DLLs.
 //!
 //! **DLL adapters** ([`supersound`], [`gmfmod`], [`cleanmem`]) are called by the script host
-//! (WP9) with the arguments a GML `external_call` passes. In [`DllMode::Stub`] every call does
-//! nothing and returns 0 or "".
+//! (WP9) with the arguments a GML `external_call` passes. Which adapters answer is the run's
+//! named [`SoundModel`] (`rules.sound.model`): `event` (standard) models neither, `supersound`
+//! and `gmfmod` model one, and `stub` models neither and returns each call's stub value. A
+//! recorder `--stub-dlls` run ([`DllMode::Stub`]) forces `stub` ([`Ctx::sound_model`]).
+//!
+//! **Events.** Every event carries the sim tick of its call; `Play` and `Load` carry the
+//! sound's length so the client mixer owns playback without reading the package. Not hashed.
 //!
 //! Spec: CLONE_SPEC sound (Inferred contract; UNKNOWN S1-S5).
 
@@ -28,7 +33,7 @@ use crate::error::SimError;
 use crate::num::Real;
 use crate::output::OutputEvent;
 use crate::rules::SoundRules;
-use crate::rules::sound::{LoopPlaying, MultimediaSecond};
+use crate::rules::sound::{LoopPlaying, MultimediaSecond, SoundModel};
 use crate::world::{Ctx, World};
 
 /// A built-in sound copy that is playing. Hashed.
@@ -78,6 +83,13 @@ pub enum SoundTarget {
 }
 
 /// Sound events for the client. Not hashed; the client plays, stops and mixes.
+///
+/// Every event carries the sim `tick` of the call that produced it, so the client mixer owns
+/// latency and output while the sim's tick clock stays the authority. `Play` and `Load` also
+/// carry the sound's `length_ticks` (0 = unknown, plays until stopped) so the client does not
+/// have to read the package's sound table for a duration. A fade is a schedule of `Volume`
+/// events with their ticks: the sim keeps the per-tick schedule for trace/probe exactness, and
+/// the client may interpolate between them.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum SoundOutput {
     /// A DLL adapter loaded a file (`file` as the game passed it) as `target`.
@@ -88,6 +100,10 @@ pub enum SoundOutput {
         file: String,
         /// Streamed rather than fully loaded.
         stream: bool,
+        /// The sound's length in ticks (0 = unknown, plays until stopped).
+        length_ticks: u32,
+        /// The sim tick of the load call.
+        tick: u64,
     },
     /// Start a copy or instance at this tick.
     Play {
@@ -95,17 +111,25 @@ pub enum SoundOutput {
         target: SoundTarget,
         /// Looping.
         looping: bool,
+        /// The sound's length in ticks (0 = unknown, plays until stopped).
+        length_ticks: u32,
+        /// The sim tick of the play call.
+        tick: u64,
     },
     /// Stop every copy of the target (or the instance, or the group).
     Stop {
         /// What stops.
         target: SoundTarget,
+        /// The sim tick of the stop call.
+        tick: u64,
     },
     /// Stop everything the built-in runner plays (`sound_stop_all`), or everything an adapter
     /// plays (`FMODAllStop`) when `adapter` is set.
     StopAll {
         /// True for the DLL adapter all-stop.
         adapter: bool,
+        /// The sim tick of the call.
+        tick: u64,
     },
     /// Pause or resume a DLL sound.
     Pause {
@@ -113,6 +137,8 @@ pub enum SoundOutput {
         target: SoundTarget,
         /// True to pause.
         paused: bool,
+        /// The sim tick of the call.
+        tick: u64,
     },
     /// Volume changed. Built-in: 0 to 1 (`sound_volume`). SuperSound: hundredths of a dB (-10000
     /// to 0). FMOD: linear factor.
@@ -121,6 +147,8 @@ pub enum SoundOutput {
         target: SoundTarget,
         /// The value last set.
         value: Real,
+        /// The sim tick of the call.
+        tick: u64,
     },
     /// Pitch changed (FMOD groups): linear factor, 1 is normal.
     Pitch {
@@ -128,17 +156,33 @@ pub enum SoundOutput {
         target: SoundTarget,
         /// The value last set.
         value: Real,
+        /// The sim tick of the call.
+        tick: u64,
     },
 }
 
-/// How DLL sound calls behave.
+/// How DLL sound calls behave in a build. This is the recorder `--stub-dlls` override, not the
+/// package's profile: the run's named adapters come from [`SoundModel`] on [`SoundRules`], and
+/// [`Ctx::sound_model`] folds the two together.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub enum DllMode {
-    /// Modeled adapters, for play and replays.
+    /// Use the run's named [`SoundModel`] adapters, for play and replays.
     #[default]
     Model,
     /// Every call returns 0 or "", like the recorder `--stub-dlls`.
     Stub,
+}
+
+impl Ctx<'_> {
+    /// The sound model this run plays under. A recorder `--stub-dlls` run (`DllMode::Stub`)
+    /// overrides the profile; otherwise the profile's [`SoundModel`] answers.
+    pub fn sound_model(&self) -> SoundModel {
+        if self.dll_mode == DllMode::Stub {
+            SoundModel::Stub
+        } else {
+            self.rules.sound.model
+        }
+    }
 }
 
 /// Whether a thing started at `start` still plays at tick `now`. `length` 0 with `looping`
@@ -182,6 +226,7 @@ pub fn play(ctx: &mut Ctx, s: SoundId, looping: bool) -> Result<(), SimError> {
             ctx,
             SoundOutput::Stop {
                 target: SoundTarget::Builtin(first),
+                tick: now,
             },
         );
     }
@@ -197,6 +242,8 @@ pub fn play(ctx: &mut Ctx, s: SoundId, looping: bool) -> Result<(), SimError> {
         SoundOutput::Play {
             target: SoundTarget::Builtin(s),
             looping,
+            length_ticks,
+            tick: now,
         },
     );
     Ok(())
@@ -204,6 +251,7 @@ pub fn play(ctx: &mut Ctx, s: SoundId, looping: bool) -> Result<(), SimError> {
 
 /// GML `sound_stop`: ends every copy of `s`.
 pub fn stop(ctx: &mut Ctx, s: SoundId) {
+    let tick = ctx.w.tick;
     let before = ctx.w.sound.copies.len();
     ctx.w.sound.copies.retain(|c| c.sound != s);
     if ctx.w.sound.copies.len() != before {
@@ -211,6 +259,7 @@ pub fn stop(ctx: &mut Ctx, s: SoundId) {
             ctx,
             SoundOutput::Stop {
                 target: SoundTarget::Builtin(s),
+                tick,
             },
         );
     }
@@ -219,8 +268,9 @@ pub fn stop(ctx: &mut Ctx, s: SoundId) {
 /// GML `sound_stop_all`: ends every built-in copy. DLL sounds are not touched (the kaenbyou
 /// stop-all does not affect SuperSound).
 pub fn stop_all(ctx: &mut Ctx) {
+    let tick = ctx.w.tick;
     ctx.w.sound.copies.clear();
-    emit(ctx, SoundOutput::StopAll { adapter: false });
+    emit(ctx, SoundOutput::StopAll { adapter: false, tick });
 }
 
 /// GML `sound_volume`: output only. It changes no sim state; MULTIMEDIA sounds ignore it. A
@@ -230,11 +280,13 @@ pub fn volume(ctx: &mut Ctx, s: SoundId, value: Real) -> Result<(), SimError> {
         return Err(SimError::non_finite("sound_volume"));
     }
     if sound_def(ctx.def, s)?.kind == SoundKind::Normal {
+        let tick = ctx.w.tick;
         emit(
             ctx,
             SoundOutput::Volume {
                 target: SoundTarget::Builtin(s),
                 value,
+                tick,
             },
         );
     }

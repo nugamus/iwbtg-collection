@@ -24,6 +24,21 @@ use model::DrawSystem;
 /// Draws particle systems (main.rs adds it).
 pub(crate) struct ParticlesPlugin;
 
+/// Particles' place in the module list (main.rs): their plugin.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = crate::registration::NoArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: crate::registration::NoArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(ParticlesPlugin);
+    }
+}
+
 impl Plugin for ParticlesPlugin {
     fn build(&self, app: &mut App) {
         crate::shell::run_resource(app, |_| Tracker::default());

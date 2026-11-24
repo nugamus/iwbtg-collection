@@ -9,7 +9,7 @@
 
 use bevy::prelude::*;
 use iwbtg_sim::world::SimStatus;
-use std::time::{Duration, Instant};
+use crate::time::{Duration, Instant};
 
 use crate::hud::layout::{Density, Layout};
 use crate::hud::{HudLayout, HudOptions};
@@ -20,11 +20,26 @@ use crate::ui::{notice, tokens, widgets};
 use crate::view::{Game, ScreenshotTo, Stats};
 
 /// The overlay's command-line flag.
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Default)]
 pub struct OverlayArgs {
     /// Show the F3 debug overlay for this run (not saved), also in a `--screenshot` check.
     #[arg(long)]
     pub overlay: bool,
+}
+
+/// The overlay's place in the module list (main.rs): its flag and plugin.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = OverlayArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        args: OverlayArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(OverlayPlugin(args));
+    }
 }
 
 /// The panel's width at most, in UI px.

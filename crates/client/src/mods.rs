@@ -23,12 +23,32 @@ pub(crate) const BUILT: [Mod; 5] = [
 ];
 
 /// The mods' command-line flags (main.rs flattens each module's group, #530).
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Default)]
 pub struct ModsArgs {
     /// Mods for this run, by code: `SD` (Sudden Death), `HB` (Hitboxes), `NB` (No background),
     /// `SL` (Slow motion, see `--slow-speed`), `FA` (Frame advance). Several join with `,` or `+`.
     #[arg(long, value_name = "CODES", value_parser = parse_built, default_value = "")]
     pub mods: ModSet,
+}
+
+/// The mods' place in the module list (main.rs): its flags, the run's play-mode line and its plugin.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = ModsArgs;
+
+    fn prepare(args: &mut ModsArgs, startup: &crate::registration::Startup) -> Result<(), String> {
+        eprintln!("{}", describe(args.mods, startup.ranked));
+        Ok(())
+    }
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        args: ModsArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(ModsPlugin(args.mods));
+    }
 }
 
 /// [`ModSet::parse`], then refuses a mod the client does not play yet.

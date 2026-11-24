@@ -1,4 +1,4 @@
-//! Built-in `save` (mechanics `save`, kid specs "Saving"; docs/plans/sim-core.md 6.1;
+//! Built-in `save` (mechanics `save`, kid specs "Saving"; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/save.md). Tier 1. WP0 creates the file; WP6a owns it.
 //!
 //! A save point saves when the kid touches it with the right input (`on_touch`), when a bullet
@@ -454,6 +454,7 @@ fn try_save(ctx: &mut Ctx, me: InstId, s: &SaveState, kid: InstId) -> Result<Flo
         return Ok(Flow::Continue);
     }
     save::save_now(ctx, kid, model_of(&s.position), s.fixed)?;
+    save::set_point(ctx, me);
     if let Some(BuiltinState::Save(st)) = state_mut(ctx, me) {
         st.timer = st.cooldown;
     }

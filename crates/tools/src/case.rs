@@ -1,4 +1,4 @@
-//! Trace case files `crates/tools/cases/<package-id>/<case>.toml` (docs/plans/sim-core.md 9.2).
+//! Trace case files `crates/tools/cases/<package-id>/<case>.toml` (docs/architecture/traces.md).
 //! WP0 creates the file; WP8a owns it (the format and the importer; case contents are WP11's).
 //!
 //! A case says how to run one research trace on our sim and how to compare the result. It holds
@@ -23,7 +23,8 @@
 //!                                    # top <= y < bottom: `with(playerKiller){if(x<520 && y<260)...}`
 //! ]
 //! vars = { "player.x" = "kid.x" }   # original column -> probe expression in our names
-//! ignore = ["id", "sprite_index", "sprite_name"]
+//! ignore = ["id", "sprite_index", "sprite_name", "mask_index"]
+//! required = ["kid.x", "kid.y"]     # the metrics a feel contract relies on; exact and compared
 //! latch = { "global.tr_x" = [3, 20] }  # recorder `--gml` reads: the column holds the `vars` value
 //!                                    # of the frame before the last read frame (0 before the first)
 //! split = { "global.sv" = ["room:3", "x:3", "_:1"] }  # a byte-dump column (`"0 1 41 0 ..."`) read
@@ -54,7 +55,13 @@ pub const DEFAULT_AT: u32 = 2;
 
 /// Columns no case compares by default: ids and sprite indices never match the original's, and
 /// `GameDef` has no sprite names.
-pub const DEFAULT_IGNORE: [&str; 3] = ["id", "sprite_index", "sprite_name"];
+///
+/// `mask_index` is one of them (#925): since #919 the probe reads it as our sprite id (the sprite
+/// that owns the instance's mask), exactly like `sprite_index`, while the recorder logs the
+/// original's GM sprite id. Those ids never equal ours, so comparing the column would fail on
+/// every row. Mapping the GM ids to ours needs a sprite-id table the trace map does not carry (it
+/// maps sprite names), added for this one column; skipping it loses only the -1-versus-set signal.
+pub const DEFAULT_IGNORE: [&str; 4] = ["id", "sprite_index", "sprite_name", "mask_index"];
 
 /// One trace case: source trace, start point, first frame, traced object, DLL mode, setup,
 /// variable map, ignored columns.
@@ -62,7 +69,7 @@ pub const DEFAULT_IGNORE: [&str; 3] = ["id", "sprite_index", "sprite_name"];
 pub struct TraceCase {
     /// `<game>/<trace>` under the research traces folder.
     pub source: String,
-    /// How the case is compared (plan 9.1 kinds 1 and 3).
+    /// How the case is compared (docs/architecture/traces.md kinds 1 and 3).
     pub kind: CaseKind,
     /// Why the case cannot run yet; `trace check` reports it as OPEN instead of running it.
     pub open: Option<String>,
@@ -88,6 +95,9 @@ pub struct TraceCase {
     pub vars: BTreeMap<String, String>,
     /// Columns not compared.
     pub ignore: Vec<String>,
+    /// Metrics that must match exactly for the case to be OK, by probe-registry expression
+    /// (`kid.x`, `global.death`). A feel contract's F1 evidence names these.
+    pub required: Vec<String>,
     /// Columns the recorder's own `--gml` wrote only before the listed frames (a save file read
     /// into a global): the column keeps the `vars` value of the frame before the last read frame,
     /// 0 before the first.
@@ -282,6 +292,8 @@ struct RawCase {
     #[serde(default)]
     ignore: Option<Vec<String>>,
     #[serde(default)]
+    required: Vec<String>,
+    #[serde(default)]
     latch: BTreeMap<String, Vec<u32>>,
     #[serde(default)]
     split: BTreeMap<String, Vec<String>>,
@@ -393,6 +405,37 @@ impl TraceCase {
             };
             setup.push(SetupEntry { frame: s.frame, what });
         }
+        // `required` names a metric the trace case must compare exactly. An ignored, unprobed or
+        // split column cannot be one: the first is not compared, the second is only reported, and
+        // the third is a byte dump, not a metric. A tolerance has no place here either: a trace
+        // case is bit-exact by construction, and a feel contract's F1 evidence needs that.
+        let ignore = raw
+            .ignore
+            .unwrap_or_else(|| DEFAULT_IGNORE.iter().map(|s| s.to_string()).collect());
+        let mut required = Vec::with_capacity(raw.required.len());
+        for name in raw.required {
+            let name = name.trim().to_owned();
+            if name.is_empty() {
+                return invalid("required: an entry is empty".into());
+            }
+            if required.contains(&name) {
+                return invalid(format!("required {name:?}: listed twice"));
+            }
+            if ignore.contains(&name) {
+                return invalid(format!("required {name:?}: it is in `ignore`"));
+            }
+            if raw.unprobed.contains_key(&name) {
+                return invalid(format!(
+                    "required {name:?}: it is in `unprobed` (informational, not compared)"
+                ));
+            }
+            if raw.split.contains_key(&name) {
+                return invalid(format!(
+                    "required {name:?}: it is a `split` byte-dump column, not a metric"
+                ));
+            }
+            required.push(name);
+        }
         let mut split = BTreeMap::new();
         for (column, fields) in raw.split {
             let fields = fields
@@ -422,9 +465,8 @@ impl TraceCase {
             seed: raw.seed,
             setup,
             vars: raw.vars,
-            ignore: raw
-                .ignore
-                .unwrap_or_else(|| DEFAULT_IGNORE.iter().map(|s| s.to_string()).collect()),
+            ignore,
+            required,
             latch: raw.latch,
             split,
             unprobed: raw.unprobed,
@@ -494,6 +536,8 @@ impl TraceCase {
         }
         let ignore: Vec<String> = self.ignore.iter().map(|s| quote(s)).collect();
         let _ = writeln!(out, "ignore = [{}]", ignore.join(", "));
+        let required: Vec<String> = self.required.iter().map(|s| quote(s)).collect();
+        let _ = writeln!(out, "required = [{}]", required.join(", "));
         if !self.notes.is_empty() {
             let _ = writeln!(out, "notes = [");
             for n in &self.notes {
@@ -652,6 +696,7 @@ mod tests {
                 .into_iter()
                 .collect(),
             ignore: vec!["id".into()],
+            required: vec!["kid.x".into()],
             latch: [("global.tr_x".to_string(), vec![3, 20])].into_iter().collect(),
             split: [(
                 "global.sv".to_string(),
@@ -714,6 +759,136 @@ mod tests {
                 "{r:?} -> {v}"
             );
         }
+    }
+
+    #[test]
+    fn default_ignore_skips_sprite_columns() {
+        let text = "source = \"g/t\"\nstart = { room = \"r\" }\nfirst_frame = 2\nobject = \"kid\"\n";
+        let case = TraceCase::parse(text).expect("parse");
+        for column in ["mask_index", "sprite_index", "sprite_name"] {
+            assert!(
+                case.ignore.iter().any(|i| i == column),
+                "{column} not skipped: {:?}",
+                case.ignore
+            );
+        }
+        // An explicit list replaces the default; it is not merged with it.
+        let case = TraceCase::parse(&format!("{text}ignore = [\"id\"]\n")).expect("parse");
+        assert_eq!(case.ignore, vec!["id".to_string()]);
+    }
+
+    #[test]
+    fn required_names_are_exact_and_compared() {
+        let text = "source = \"g/t\"\nstart = { room = \"r\" }\nfirst_frame = 2\nobject = \"kid\"\n";
+        let case =
+            TraceCase::parse(&format!("{text}required = [\"kid.x\", \"global.death\"]\n")).expect("parse");
+        assert_eq!(
+            case.required,
+            vec!["kid.x".to_string(), "global.death".to_string()]
+        );
+        let round = TraceCase::parse(&case.to_toml(&[])).expect("round trip");
+        assert_eq!(round, case);
+        for bad in [
+            format!("{text}required = [\"kid.x\", \"kid.x\"]\n"),
+            format!("{text}required = [\" id \", \"\"]\n"),
+            format!("{text}ignore = [\"kid.x\"]\nrequired = [\"kid.x\"]\n"),
+            format!("{text}unprobed = {{ \"kid.x\" = \"no probe field\" }}\nrequired = [\"kid.x\"]\n"),
+            format!("{text}split = {{ \"kid.x\" = [\"a:1\"] }}\nrequired = [\"kid.x\"]\n"),
+        ] {
+            assert!(TraceCase::parse(&bad).is_err(), "{bad:?}");
+        }
+    }
+
+    /// Read-only vocabulary check against the 647 research traces: every case's `vars` key is a
+    /// column of its trace, and every `required` name is either a compared original column, the
+    /// probe expression a `vars` entry maps it to, or a `split` field. Skips without
+    /// `IWBTG_RESEARCH` (CI does not set it).
+    #[test]
+    fn research_cases_name_real_trace_columns() {
+        use iwbtg_sim::trace::{FIXED_COLUMNS, TraceTable};
+        use std::path::{Path, PathBuf};
+
+        let Some(research) = std::env::var_os("IWBTG_RESEARCH") else {
+            return;
+        };
+        let traces = Path::new(&research).join("specs/engines/gm8/traces");
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("cases");
+        let mut paths: Vec<PathBuf> = Vec::new();
+        for package in std::fs::read_dir(&root).expect("cases root") {
+            let package = package.expect("package folder").path();
+            if !package.is_dir() {
+                continue;
+            }
+            for entry in std::fs::read_dir(&package).expect("package folder") {
+                let path = entry.expect("case file").path();
+                if path.extension().is_some_and(|e| e == "toml") {
+                    paths.push(path);
+                }
+            }
+        }
+        paths.sort();
+        let mut failures = Vec::new();
+        let mut checked = 0;
+        for path in &paths {
+            let text = std::fs::read_to_string(path).expect("case file");
+            let Ok(case) = TraceCase::parse(&text) else {
+                continue;
+            };
+            let csv = traces.join(format!("{}.csv", case.source));
+            let Ok(text) = std::fs::read_to_string(&csv) else {
+                continue;
+            };
+            let table = TraceTable::parse(&text).expect("trace CSV");
+            let fixed: std::collections::BTreeSet<&str> = FIXED_COLUMNS.iter().copied().collect();
+            let original: std::collections::BTreeSet<&str> = table
+                .columns
+                .iter()
+                .skip(FIXED_COLUMNS.len())
+                .map(|c| c.name.as_str())
+                .collect();
+            let split: std::collections::BTreeSet<String> = case
+                .split
+                .iter()
+                .flat_map(|(column, fields)| {
+                    fields
+                        .iter()
+                        .filter(|f| f.name != SplitField::SKIP)
+                        .map(move |f| format!("{column}.{}", f.name))
+                })
+                .collect();
+            let split_columns: std::collections::BTreeSet<&str> =
+                case.split.keys().map(String::as_str).collect();
+            for column in case.vars.keys() {
+                // A `vars` key names an original column: a variable column, a fixed one, a split
+                // byte-dump column, or one of the fields the split turns it into.
+                if !original.contains(column.as_str())
+                    && !fixed.contains(column.as_str())
+                    && !split.contains(column)
+                    && !split_columns.contains(column.as_str())
+                {
+                    failures.push(format!(
+                        "{}: vars key {column:?} is not a trace column",
+                        case.source
+                    ));
+                }
+            }
+            for required in &case.required {
+                let mapped = case.vars.values().any(|v| v == required);
+                if !original.contains(required.as_str()) && !mapped && !split.contains(required) {
+                    failures.push(format!(
+                        "{}: required {required:?} is not in the trace or its vars",
+                        case.source
+                    ));
+                }
+            }
+            checked += 1;
+        }
+        assert!(
+            failures.is_empty(),
+            "checked {checked} cases:\n{}",
+            failures.join("\n")
+        );
+        assert!(checked > 0, "no case matched a trace under {}", traces.display());
     }
 
     #[test]

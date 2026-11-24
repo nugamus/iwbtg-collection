@@ -1,0 +1,17 @@
+IWBTG Collection game content
+
+This is not a licence. It marks files that are game content: the assets of a game
+package (sprites, backgrounds, music, sounds) and the package data that describes
+them, such as the showcase and the test fixtures in this repository.
+
+Game content is not covered by the repository's code licence (MIT OR Apache-2.0) or
+its documentation licence (CC BY 4.0). Each ported game belongs to its creators, who
+keep all rights to their game and its assets; creators can have a game removed from
+the project, its builds and its download server (README.md, "Games and assets";
+docs/content.md, "Assets").
+
+The showcase package and the test fixtures were made for this repository and carry
+their credits in their own CREDITS.md or game manifest. A few sprites of the showcase
+are third-party game content: see crates/client/showcase.pkg/CREDITS.md for their
+origin and credit. No licence is granted for any game content; do not reuse it without
+the permission of its creators.

@@ -9,6 +9,7 @@ use std::path::Path;
 
 use iwbtg_format::Severity;
 use iwbtg_format::load::{LoadMode, load_report};
+use iwbtg_format::physics::PhysicsStanding;
 
 use crate::trace_cmd::{ToolError, load_package};
 
@@ -34,6 +35,16 @@ pub fn main(dir: &Path, trace_mode: bool) -> Result<bool, ToolError> {
         println!("{d}");
     }
     if report.ok() {
+        if let Some(standing) = &report.physics {
+            for line in physics_lines(standing) {
+                println!("{line}");
+            }
+        }
+        if let Some(compat) = &report.compat {
+            for line in compat.lines() {
+                println!("{line}");
+            }
+        }
         if let Some(hash) = report.gameplay_hash {
             let hex: String = hash.iter().map(|b| format!("{b:02x}")).collect();
             println!("gameplay_hash: {hex}");
@@ -43,6 +54,34 @@ pub fn main(dir: &Path, trace_mode: bool) -> Result<bool, ToolError> {
         println!("FAILED: {errors} errors, {warnings} warnings");
     }
     Ok(report.ok())
+}
+
+/// The `physics:` lines of `pkg check` (#802, #970): the pack name when the game's physics match
+/// its pack's family preset and no room profile differs, else `custom (...)` with the fields of
+/// the game's profile and each differing room profile, named by id.
+fn physics_lines(standing: &PhysicsStanding) -> Vec<String> {
+    if !standing.is_custom() {
+        return vec![format!("physics: {}", standing.name())];
+    }
+    let mut parts = Vec::new();
+    match standing.differs.len() {
+        0 => {}
+        1 => parts.push("1 field differs".to_owned()),
+        n => parts.push(format!("{n} fields differ")),
+    }
+    match standing.rooms.len() {
+        0 => {}
+        1 => parts.push("1 room profile differs".to_owned()),
+        n => parts.push(format!("{n} room profiles differ")),
+    }
+    let mut lines = vec![format!("physics: custom ({})", parts.join(", "))];
+    if !standing.differs.is_empty() {
+        lines.push(format!("physics fields: {}", standing.differs.join(", ")));
+    }
+    for room in &standing.rooms {
+        lines.push(format!("physics room `{}`: {}", room.id, room.differs.join(", ")));
+    }
+    lines
 }
 
 /// `iwbtg pkg fmt <pkg> [--check]`: formats every `.toml` file of the package (`tests/` included:
@@ -190,6 +229,7 @@ pub fn hash_main(dir: &Path, trace_mode: bool) -> Result<bool, ToolError> {
 mod tests {
     use super::*;
     use iwbtg_format::PackageFiles;
+    use iwbtg_format::physics::RoomPhysicsStanding;
 
     fn golden() -> PackageFiles {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sim/tests/golden/one_room.pkg");
@@ -258,5 +298,71 @@ mod tests {
     fn a_broken_package_has_no_hashes() {
         let broken = edit(&golden(), "rooms/title.toml", |_| "size = [0, 0]\n".to_owned());
         assert!(hashes(&broken, false).is_err());
+    }
+
+    #[test]
+    fn physics_lines_name_the_pack_or_the_differing_fields() {
+        let matching = PhysicsStanding {
+            pack: Some("a1".to_owned()),
+            family: iwbtg_sim::def::KidFamily::A1,
+            differs: Vec::new(),
+            rooms: Vec::new(),
+        };
+        assert_eq!(physics_lines(&matching), vec!["physics: a1".to_owned()]);
+        let custom = PhysicsStanding {
+            differs: vec!["numbers.gravity".to_owned(), "events.step".to_owned()],
+            ..matching
+        };
+        assert_eq!(
+            physics_lines(&custom),
+            vec![
+                "physics: custom (2 fields differ)".to_owned(),
+                "physics fields: numbers.gravity, events.step".to_owned(),
+            ]
+        );
+        let bare = PhysicsStanding {
+            pack: None,
+            family: iwbtg_sim::def::KidFamily::B,
+            differs: Vec::new(),
+            rooms: Vec::new(),
+        };
+        assert_eq!(physics_lines(&bare), vec!["physics: B preset".to_owned()]);
+    }
+
+    #[test]
+    fn physics_lines_name_a_differing_room_profile() {
+        let room = RoomPhysicsStanding {
+            id: "fast".to_owned(),
+            differs: vec!["numbers.run_speed".to_owned()],
+        };
+        let matching = PhysicsStanding {
+            pack: Some("a1".to_owned()),
+            family: iwbtg_sim::def::KidFamily::A1,
+            differs: Vec::new(),
+            rooms: Vec::new(),
+        };
+        assert_eq!(
+            physics_lines(&PhysicsStanding {
+                rooms: vec![room.clone()],
+                ..matching.clone()
+            }),
+            vec![
+                "physics: custom (1 room profile differs)".to_owned(),
+                "physics room `fast`: numbers.run_speed".to_owned(),
+            ]
+        );
+        // The game's own profile differs too: both are named.
+        assert_eq!(
+            physics_lines(&PhysicsStanding {
+                differs: vec!["events.step".to_owned()],
+                rooms: vec![room],
+                ..matching
+            }),
+            vec![
+                "physics: custom (1 field differs, 1 room profile differs)".to_owned(),
+                "physics fields: events.step".to_owned(),
+                "physics room `fast`: numbers.run_speed".to_owned(),
+            ]
+        );
     }
 }

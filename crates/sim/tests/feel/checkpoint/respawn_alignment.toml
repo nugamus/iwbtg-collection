@@ -1,0 +1,55 @@
+# The save/respawn path (#1150): R returns the Kid to the checkpoint at the exact saved spot,
+# the first jump from the respawn responds, and the checkpoint's counters persist. The
+# `lifecycle_retry` fixture starts from a supplied checkpoint with the engine-owned retry phase
+# (#1149/#1167).
+id = "checkpoint/respawn_alignment"
+impact = "F1"
+package = "fixture:lifecycle_retry"
+ruleset = "gm8@0"
+profile = "gm8/a1@1"
+start = { room = "play", difficulty = 0 }
+save = { room = "play", x = 200.0, y = 500.0, deaths = 0, time = 3 }
+play_mode = "original"
+seed = 0
+mods = []
+evidence = ["golden:kid_a1_basics", "#1150", "#670"]
+
+# `.inputs` frame f is the step that ends at World::tick == f + 1.
+inputs = """
+frame 0: end
+frame 1: press suicide
+frame 2: release suicide
+frame 4: press restart
+frame 5: release restart
+frame 6: press jump
+frame 7: release jump
+frame 8: end
+"""
+
+# The death counts once and the Kid is gone; the death-only save records it.
+[[assert]]
+tick = 2
+death = 1
+kid_count = 0
+room = "play"
+save.room = "play"
+
+# N+1: the init phase loads the checkpoint. The Kid is at the exact saved spot, the room keeps
+# its stable name, and the death counter came back with it.
+[[assert]]
+tick = 6
+room = "play"
+kid_count = 1
+kid.x = { exact = 200.0 }
+kid.y = { exact = 500.0 }
+matches_save = true
+death = 1
+time = 3
+
+# N+2: the first controllable tick. A jump press on frame 6 responds within one frame, so the
+# respawn alignment is a spot the player can jump from (the trick's `respawn_valign`).
+[[assert]]
+tick = 7
+kid_count = 1
+death = 1
+control = { action = "jump", metric = "kid.y", latency_max = 1, why = "the first jump from the respawn responds within one frame, so the checkpoint is a jumpable spot" }

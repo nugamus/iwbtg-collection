@@ -20,14 +20,15 @@ use super::host::Shared;
 use crate::alarm;
 use crate::collide::bounce::{Against, move_bounce};
 use crate::def::class::{kind_classes, kind_params, picks_other_kind};
+use crate::def::script::{InitPolicy, ScriptRules, ValueModel};
 use crate::def::{ClassMask, KindId, ParamValue, Params, RoomId};
 use crate::error::SimError;
-use crate::kid::{self, api::KillCause};
+use crate::kid::{self, KidState, api::KillCause};
 use crate::num::Real;
 use crate::output::OutputEvent;
 use crate::room::RoomRequest;
 use crate::script::ScriptOutput;
-use crate::world::{InstId, Instance, SpawnInit, Value, World};
+use crate::world::{InstId, Instance, KindState, SpawnInit, Value, World};
 
 type Res<T> = Result<T, Box<rhai::EvalAltResult>>;
 
@@ -87,22 +88,38 @@ fn real_prop(engine: &mut Engine, s: &Rc<Shared>, name: &'static str, get: Get, 
     }
 }
 
-fn value_to_dynamic(v: Option<&Value>, zero: bool, name: &str) -> Res<Dynamic> {
+fn value_to_dynamic(v: Option<&Value>, rules: ScriptRules, name: &str) -> Res<Dynamic> {
     match v {
         Some(Value::Real(r)) => Ok(Dynamic::from_float(r.get())),
         Some(Value::Str(s)) => Ok(Dynamic::from(ImmutableString::from(s.as_str()))),
         Some(Value::Inst(i)) => Ok(Dynamic::from(Inst(*i))),
-        Some(Value::None) | None if zero => Ok(Dynamic::from_float(0.0)),
-        Some(Value::None) | None => Err(runtime_error(format!("variable `{name}` is not set"))),
+        Some(Value::None) | None => match rules.init {
+            InitPolicy::Zero => Ok(Dynamic::from_float(0.0)),
+            InitPolicy::Error => Err(runtime_error(format!("variable `{name}` is not set"))),
+        },
+        // The value model stores arrays (#984); script access to them is #997.
+        Some(Value::Array(_)) => Err(runtime_error(format!(
+            "variable `{name}` holds an array: scripts cannot read arrays yet"
+        ))),
     }
 }
 
-fn dynamic_to_value(d: &Dynamic, name: &str) -> Res<Value> {
+fn dynamic_to_value(d: &Dynamic, rules: ScriptRules, name: &str) -> Res<Value> {
     if d.is_unit() {
         return Ok(Value::None);
     }
     if let Ok(b) = d.as_bool() {
-        return Ok(Value::Real(if b { Real::ONE } else { Real::ZERO }));
+        return match rules.values {
+            // GM8 has no bool value: a bool is the real 1.0/0.0 (Confirmed).
+            ValueModel::Gm8 => Ok(Value::Real(if b { Real::ONE } else { Real::ZERO })),
+            // The standard model keeps the bool as a bool. The value model cannot carry it
+            // yet (world instance state is the entity-model seat's, #1175), so `standard`
+            // refuses the silent erasure instead of turning the value into a real.
+            ValueModel::Typed => Err(runtime_error(format!(
+                "variable `{name}` cannot hold a bool yet under `standard`; \
+                 write 1.0/0.0 and test it with gm_bool until the typed value model lands"
+            ))),
+        };
     }
     if let Ok(f) = num(d, name) {
         let r = Real::new(f);
@@ -219,6 +236,25 @@ fn show_param(v: &ParamValue) -> String {
     }
 }
 
+/// The kid fields a script may read but not write (decision 0004). They have a getter and no
+/// setter, so a write reaches the custom-variable indexer; this list keeps it a clear error
+/// rather than a silently stored variable with a field's name. `yflag` and `flipped` change only
+/// through the gravity knobs, so the mask and gravity cannot disagree.
+const READ_ONLY_KID_FIELDS: &[&str] = &[
+    "ladderud",
+    "ladderjump",
+    "yflag",
+    "flipped",
+    "facing",
+    "jump",
+    "jump2",
+    "jump3",
+    "on_slope_last",
+    "walk_h",
+    "onVineL",
+    "onVineR",
+];
+
 /// Registers the instance API on `engine`.
 #[allow(clippy::too_many_lines, reason = "one registration per script-visible name")]
 pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mut Docs) {
@@ -323,13 +359,24 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
         |i| i.img.speed(),
         Some(|i, v| i.img.set_speed(v)),
     );
-    docs.add("image_xscale", "Horizontal scale of the sprite.");
+    docs.add(
+        "image_xscale",
+        "Horizontal scale of the sprite; on the kid it is the facing, -1 or 1.",
+    );
     real_prop(
         engine,
         shared,
         "image_xscale",
         |i| i.img.xscale(),
-        Some(|i, v| i.img.set_xscale(v)),
+        Some(|i, v| {
+            i.img.set_xscale(v)?;
+            // Decision 0004: the kid's `facing` is derived from `image_xscale`, which is its one
+            // setter. A non-negative scale faces right, as a loaded kid does.
+            if let KindState::Kid(s) = &mut i.state {
+                s.facing = if v.get() < 0.0 { -1 } else { 1 };
+            }
+            Ok(())
+        }),
     );
     docs.add("image_yscale", "Vertical scale of the sprite.");
     real_prop(
@@ -413,12 +460,46 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
                 Ok(ImmutableString::from(kd.name.as_str()))
             })?
         });
+        let s = Rc::clone(shared);
+        docs.add(
+            "name",
+            "The instance's room-file name as a string, or `()` when the room file gives none.",
+        );
+        engine.register_get("name", move |i: &mut Inst| -> Res<Dynamic> {
+            let i = *i;
+            s.with_world(|w, host| {
+                let x = live(w, i)?;
+                Ok(x.name
+                    .and_then(|n| n.index())
+                    .and_then(|n| host.def.names.get(n))
+                    .map_or(Dynamic::UNIT, |name| {
+                        Dynamic::from(ImmutableString::from(name.as_str()))
+                    }))
+            })?
+        });
+        let s = Rc::clone(shared);
+        docs.add(
+            "group",
+            "The instance's room-file group as a string, or `()` when the room file gives none.",
+        );
+        engine.register_get("group", move |i: &mut Inst| -> Res<Dynamic> {
+            let i = *i;
+            s.with_world(|w, host| {
+                let x = live(w, i)?;
+                Ok(x.group
+                    .and_then(|g| g.index())
+                    .and_then(|g| host.def.groups.get(g))
+                    .map_or(Dynamic::UNIT, |group| {
+                        Dynamic::from(ImmutableString::from(group.as_str()))
+                    }))
+            })?
+        });
     }
 
     // ---- The package's custom variables: `this.hp` ----
     {
         let s = Rc::clone(shared);
-        docs.add("index$get$", "Reads the package variable `name` of an instance (`i.hp`); an unknown name is an error, an unset one reads 0 when the game allows it.");
+        docs.add("index$get$", "Reads the package variable `name` of an instance (`i.hp`); an unknown name is an error, and an unset one follows the run's script init policy (0 under `gm8`, a script error under `standard`).");
         engine.register_indexer_get(move |i: &mut Inst, name: ImmutableString| -> Res<Dynamic> {
             let i = *i;
             s.with_world(|w, host| {
@@ -428,16 +509,19 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
                     .get(name.as_str())
                     .ok_or_else(|| runtime_error(format!("unknown variable `{name}`")))?;
                 let x = live(w, i)?;
-                value_to_dynamic(x.vars.get(id), host.def.uninit_reads_zero, &name)
+                value_to_dynamic(x.vars.get(id), host.script_rules, &name)
             })?
         });
         let s = Rc::clone(shared);
-        docs.add("index$set$", "Writes the package variable `name` of an instance (`i.hp = 5`); the name must be declared in the package.");
+        docs.add("index$set$", "Writes the package variable `name` of an instance (`i.hp = 5`); the name must be declared in the package. `gm8` stores a bool as 1.0/0.0; `standard` refuses that erasure until the typed value model stores a bool.");
         engine.register_indexer_set(
             move |i: &mut Inst, name: ImmutableString, v: Dynamic| -> Res<()> {
                 let i = *i;
-                let value = dynamic_to_value(&v, &name)?;
                 s.with_world(|w, host| {
+                    if READ_ONLY_KID_FIELDS.contains(&name.as_str()) {
+                        return Err(runtime_error(format!("`{name}` is a read-only kid field")));
+                    }
+                    let value = dynamic_to_value(&v, host.script_rules, &name)?;
                     let id = *host
                         .def
                         .var_names
@@ -550,8 +634,8 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
             s.with_world(|w, host| {
                 let k = kind_id(host, &kind)?;
                 let mut found: Vec<(u16, InstId)> = w
-                    .iter_alive()
-                    .filter(|x| x.active && host.def.kind_covers(k, x.kind))
+                    .iter_visible()
+                    .filter(|x| host.def.kind_covers(k, x.kind))
                     .map(|x| (x.rank, x.id))
                     .collect();
                 found.sort();
@@ -598,6 +682,361 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
                 kid::api::kill(ctx, k, KillCause::Script).map(|_| ())
             })?;
             r.map_err(sim_err)
+        });
+    }
+}
+
+// ---- The kid's fields (decision 0004) ----
+
+fn not_a_kid(i: Inst) -> Box<rhai::EvalAltResult> {
+    runtime_error(format!("instance {} is not a kid", i.0.0))
+}
+
+fn kid_state(w: &World, i: Inst) -> Res<&KidState> {
+    match &live(w, i)?.state {
+        KindState::Kid(s) => Ok(s),
+        _ => Err(not_a_kid(i)),
+    }
+}
+
+fn kid_state_mut(w: &mut World, i: Inst) -> Res<&mut KidState> {
+    match &mut live_mut(w, i)?.state {
+        KindState::Kid(s) => Ok(s),
+        _ => Err(not_a_kid(i)),
+    }
+}
+
+/// A kid field that reads as a number. Without `set` it is read only: the custom-variable
+/// indexer refuses a write (`READ_ONLY_KID_FIELDS`).
+fn kid_real_prop(
+    engine: &mut Engine,
+    s: &Rc<Shared>,
+    docs: &mut Docs,
+    name: &'static str,
+    doc: &'static str,
+    get: fn(&KidState) -> Real,
+    set: Option<fn(&mut KidState, Real)>,
+) {
+    if set.is_some() {
+        docs.add(name, doc);
+    } else {
+        docs.add_read_only(name, doc);
+    }
+    {
+        let s = Rc::clone(s);
+        engine.register_get(name, move |i: &mut Inst| -> Res<f64> {
+            let i = *i;
+            s.with_world(|w, _| kid_state(w, i).map(|k| get(k).get()))?
+        });
+    }
+    // No setter for a read-only field: the guard in `index$set$` refuses the write.
+    if let Some(set) = set {
+        let s = Rc::clone(s);
+        engine.register_set(name, move |i: &mut Inst, v: Dynamic| -> Res<()> {
+            let v = Real::new(num(&v, name)?);
+            let i = *i;
+            s.with_world(|w, _| kid_state_mut(w, i).map(|k| set(k, v)))?
+        });
+    }
+}
+
+/// A kid flag, written as a bool. Without `set` it is read only: the custom-variable indexer
+/// refuses a write.
+fn kid_flag_prop(
+    engine: &mut Engine,
+    s: &Rc<Shared>,
+    docs: &mut Docs,
+    name: &'static str,
+    doc: &'static str,
+    get: fn(&KidState) -> bool,
+    set: Option<fn(&mut KidState, bool)>,
+) {
+    if set.is_some() {
+        docs.add(name, doc);
+    } else {
+        docs.add_read_only(name, doc);
+    }
+    {
+        let s = Rc::clone(s);
+        engine.register_get(name, move |i: &mut Inst| -> Res<bool> {
+            let i = *i;
+            s.with_world(|w, _| kid_state(w, i).map(get))?
+        });
+    }
+    // No setter for a read-only field: the guard in `index$set$` refuses the write.
+    if let Some(set) = set {
+        let s = Rc::clone(s);
+        engine.register_set(name, move |i: &mut Inst, v: bool| -> Res<()> {
+            let i = *i;
+            s.with_world(|w, _| kid_state_mut(w, i).map(|k| set(k, v)))?
+        });
+    }
+}
+
+/// An integer argument for a small counter, `0` to `255`; a non-integer or out-of-range value is
+/// an error (decision 0004, `curJumps`).
+fn int_byte(d: &Dynamic, what: &str) -> Res<u8> {
+    let n = if let Ok(i) = d.as_int() {
+        i
+    } else if let Ok(f) = d.as_float() {
+        if f.fract() != 0.0 {
+            return Err(runtime_error(format!("{what}: expected an integer, got {f}")));
+        }
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "range-checked below; a huge value saturates and fails"
+        )]
+        {
+            f as i64
+        }
+    } else {
+        return Err(runtime_error(format!(
+            "{what}: expected an integer, got {}",
+            d.type_name()
+        )));
+    };
+    u8::try_from(n).map_err(|_| runtime_error(format!("{what} must be 0 to 255, got {n}")))
+}
+
+/// The kid's own fields on an `Inst` (decision 0004, "Kid fields a script may read and write").
+/// Every field lives in `KidState`, so a write is hashed and replay-visible. An instance that is
+/// not a kid has none of them: reading or writing one is a script error. `yflag` and `flipped`
+/// stay read-only so a script cannot leave the mask and gravity disagreeing; flip by the
+/// `set_kid_gravity` knob when one exists.
+#[allow(clippy::too_many_lines, reason = "one registration per field")]
+pub fn register_kid_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mut Docs) {
+    let s = shared;
+    kid_flag_prop(
+        engine,
+        s,
+        docs,
+        "djump",
+        "The double-jump flag.",
+        |k| k.djump,
+        Some(|k, v| k.djump = v),
+    );
+    kid_flag_prop(
+        engine,
+        s,
+        docs,
+        "tjump",
+        "The third-jump flag.",
+        |k| k.tjump,
+        Some(|k, v| k.tjump = v),
+    );
+    kid_flag_prop(
+        engine,
+        s,
+        docs,
+        "onPlatform",
+        "The kid is on a platform.",
+        |k| k.on_platform,
+        Some(|k, v| k.on_platform = v),
+    );
+    kid_flag_prop(
+        engine,
+        s,
+        docs,
+        "ladder",
+        "The kid is on a ladder.",
+        |k| k.ladder,
+        Some(|k, v| k.ladder = v),
+    );
+    kid_flag_prop(
+        engine,
+        s,
+        docs,
+        "frozen",
+        "Input is blocked for the kid.",
+        |k| k.frozen,
+        Some(|k, v| k.frozen = v),
+    );
+    kid_flag_prop(
+        engine,
+        s,
+        docs,
+        "frozen2",
+        "The movement action is skipped.",
+        |k| k.frozen2,
+        Some(|k, v| k.frozen2 = v),
+    );
+    kid_flag_prop(
+        engine,
+        s,
+        docs,
+        "muteki",
+        "Kills are ignored while set.",
+        |k| k.invincible,
+        Some(|k, v| k.invincible = v),
+    );
+    kid_flag_prop(
+        engine,
+        s,
+        docs,
+        "ladderud",
+        "The kid moved on a ladder this Step.",
+        |k| k.ladder_ud,
+        None,
+    );
+    kid_flag_prop(
+        engine,
+        s,
+        docs,
+        "ladderjump",
+        "The kid left a ladder by jumping this Step.",
+        |k| k.ladder_jump,
+        None,
+    );
+    kid_flag_prop(
+        engine,
+        s,
+        docs,
+        "flipped",
+        "The kid is the flipped variant (read only; part of the kind).",
+        |k| k.flipped,
+        None,
+    );
+    kid_flag_prop(
+        engine,
+        s,
+        docs,
+        "on_slope_last",
+        "The kid was on a slope last Step.",
+        |k| k.on_slope_last,
+        None,
+    );
+    kid_flag_prop(
+        engine,
+        s,
+        docs,
+        "onVineL",
+        "A left vine is within reach (family C).",
+        |k| k.ext.on_vine_l,
+        None,
+    );
+    kid_flag_prop(
+        engine,
+        s,
+        docs,
+        "onVineR",
+        "A right vine is within reach (family C).",
+        |k| k.ext.on_vine_r,
+        None,
+    );
+    kid_real_prop(
+        engine,
+        s,
+        docs,
+        "tempHspeed",
+        "The ice carry-over speed (`tempHspeed`).",
+        |k| k.temp_hspeed,
+        Some(|k, v| k.temp_hspeed = v),
+    );
+    kid_real_prop(
+        engine,
+        s,
+        docs,
+        "maxSpeed",
+        "The run speed (`maxSpeed`).",
+        |k| k.run_speed,
+        Some(|k, v| k.run_speed = v),
+    );
+    kid_real_prop(
+        engine,
+        s,
+        docs,
+        "maxVspeed",
+        "The vertical speed clamp (`maxVspeed`).",
+        |k| k.max_vspeed,
+        Some(|k, v| k.max_vspeed = v),
+    );
+    kid_real_prop(
+        engine,
+        s,
+        docs,
+        "maxFallSpeed",
+        "The fall-speed clamp (`maxFallSpeed`, A4).",
+        |k| k.max_fall_speed,
+        Some(|k, v| k.max_fall_speed = v),
+    );
+    kid_real_prop(
+        engine,
+        s,
+        docs,
+        "scale",
+        "The layer scale (`scale`, machinary; 1 elsewhere).",
+        |k| k.scale,
+        Some(|k, v| k.scale = v),
+    );
+    kid_real_prop(
+        engine,
+        s,
+        docs,
+        "yflag",
+        "The gravity side, -1 or 1 (read only; flip through the gravity knob).",
+        |k| Real::new(f64::from(k.yflag)),
+        None,
+    );
+    kid_real_prop(
+        engine,
+        s,
+        docs,
+        "facing",
+        "Facing, -1 or 1 (read only; write `image_xscale`).",
+        |k| Real::new(f64::from(k.facing)),
+        None,
+    );
+    kid_real_prop(
+        engine,
+        s,
+        docs,
+        "walk_h",
+        "The last `walk` direction, -1, 0 or 1.",
+        |k| Real::new(f64::from(k.ext.walk_h)),
+        None,
+    );
+    kid_real_prop(
+        engine,
+        s,
+        docs,
+        "jump",
+        "The ground jump speed (read only; arrays are #997).",
+        |k| k.jump_speeds.first().copied().unwrap_or(Real::ZERO),
+        None,
+    );
+    kid_real_prop(
+        engine,
+        s,
+        docs,
+        "jump2",
+        "The first air jump speed (read only).",
+        |k| k.jump_speeds.get(1).copied().unwrap_or(Real::ZERO),
+        None,
+    );
+    kid_real_prop(
+        engine,
+        s,
+        docs,
+        "jump3",
+        "The second air jump speed (read only).",
+        |k| k.jump_speeds.get(2).copied().unwrap_or(Real::ZERO),
+        None,
+    );
+    docs.add(
+        "curJumps",
+        "The air-jump counter, 0 to 255; a non-integer or out-of-range write is an error.",
+    );
+    {
+        let s = Rc::clone(shared);
+        engine.register_get("curJumps", move |i: &mut Inst| -> Res<f64> {
+            let i = *i;
+            s.with_world(|w, _| kid_state(w, i).map(|k| f64::from(k.cur_jumps)))?
+        });
+        let s = Rc::clone(shared);
+        engine.register_set("curJumps", move |i: &mut Inst, v: Dynamic| -> Res<()> {
+            let n = int_byte(&v, "curJumps")?;
+            let i = *i;
+            s.with_world(|w, _| kid_state_mut(w, i).map(|k| k.cur_jumps = n))?
         });
     }
 }

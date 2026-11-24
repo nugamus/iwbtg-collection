@@ -1,4 +1,4 @@
-//! GM variable names to probe fields (docs/plans/sim-core.md 9.3): `djump`, `curJumps`,
+//! GM variable names to probe fields (docs/architecture/traces.md): `djump`, `curJumps`,
 //! `jump[1]`, `alarm[0]`, `image_index`, ... WP0 declares; WP8a owns.
 //!
 //! [`resolve`] maps one variable name to a [`FieldRef`]. [`column`] reads a whole probe column
@@ -79,7 +79,8 @@ pub fn resolve(name: &str, def: &GameDef) -> Option<FieldRef> {
 /// - `named(<instance name>).<field>`: a field of the instance with that room-file name;
 /// - `global.<name>`: a global the package declares, else engine state (`difficulty`, `death`, `time`,
 ///   `savenum`, `clear`, `frozen`, `frozen2`, `reverse`, `grav`, `paused`, the latched vine-key flags
-///   `key_left`, `key_right`, `key_jump`); `room_speed` and `fps` are engine state too;
+///   `key_left`, `key_right`, `key_jump`); `room_speed`, `fps` and `random_get_seed()` (the
+///   gameplay generator's state as a signed integer) are engine state too;
 /// - `place_free(<x>,<y>)`: the row's instance's place test (solids only), each argument numbers
 ///   and the row instance's fields joined by `+` and `-` (`x+hspeed`, `y-1`), evaluated left to
 ///   right in binary64 as GML does before the call;
@@ -164,6 +165,9 @@ pub fn column(expr: &str, def: &GameDef) -> Result<Column, String> {
     }
     if expr == "fps" {
         return Ok(Column::Engine(EngineVar::Fps));
+    }
+    if expr == "random_get_seed()" {
+        return Ok(Column::Engine(EngineVar::RandomSeed));
     }
     field_column(ProbeTarget::Row, expr, def, expr)
 }
@@ -433,6 +437,10 @@ mod tests {
         );
         assert_eq!(column("room_speed", &d), Ok(Column::Engine(EngineVar::RoomSpeed)));
         assert_eq!(column("fps", &d), Ok(Column::Engine(EngineVar::Fps)));
+        assert_eq!(
+            column("random_get_seed()", &d),
+            Ok(Column::Engine(EngineVar::RandomSeed))
+        );
         assert_eq!(column("global.hp", &d), Ok(Column::Global(VarId(0))));
         assert_eq!(
             column("instance_number(@bullet)", &d),

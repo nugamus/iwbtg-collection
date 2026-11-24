@@ -41,7 +41,7 @@ struct Entry {
 }
 
 impl Entry {
-    fn of(def: &GameDef, inst: &Instance) -> Entry {
+    fn of(w: &World, def: &GameDef, inst: &Instance) -> Entry {
         let handles = event_set(def, inst.kind)
             .collisions
             .iter()
@@ -50,7 +50,7 @@ impl Entry {
             rank: inst.rank,
             classes: inst.classes,
             handles,
-            ready: inst.alive && inst.active,
+            ready: w.visible(inst.id, false),
         }
     }
 }
@@ -66,7 +66,11 @@ impl Members {
     /// Every instance of `w` as it is now.
     pub(crate) fn of(w: &World, def: &GameDef) -> Members {
         Members {
-            entries: w.instances().iter().map(|i| (i.id, Entry::of(def, i))).collect(),
+            entries: w
+                .instances()
+                .iter()
+                .map(|i| (i.id, Entry::of(w, def, i)))
+                .collect(),
         }
     }
 
@@ -76,7 +80,7 @@ impl Members {
         for id in ids {
             let found = self.entries.binary_search_by_key(&id, |(i, _)| *i);
             let entry = match w.get(id) {
-                Some(inst) => Entry::of(def, inst),
+                Some(inst) => Entry::of(w, def, inst),
                 None => match found {
                     Ok(at) => match self.entries.get_mut(at) {
                         Some((_, e)) => Entry { ready: false, ..*e },
@@ -116,6 +120,58 @@ impl Members {
     }
 }
 
+/// The static kind facts that let the pair walk skip a turn with no possible inner instance
+/// (#1139): for each kind, its highest rank, its classes and the classes its collision handlers
+/// accept. Kind ranks, classes and handlers never change at run time, so a kind with no rank
+/// at or above an outer's and no class or handler that meets it cannot supply the outer's
+/// `Members::key` a candidate. That is the common case for the 800 stuck `blood` drops of a
+/// death: a blood handles `BLOCK` only, and no instance of rank greater than or equal to a
+/// blood's has class `BLOCK` or handles `BLOOD`.
+#[derive(Clone, Debug)]
+pub(crate) struct Reach {
+    /// Per rankable kind: highest rank, classes, and every handler class of its event set.
+    kinds: Vec<(u16, ClassMask, ClassMask)>,
+}
+
+impl Reach {
+    /// The facts of `def`'s kinds.
+    pub(crate) fn of(def: &GameDef) -> Reach {
+        let mut top: Vec<Option<u16>> = vec![None; def.kinds.len()];
+        for entry in &def.ranks.entries {
+            let Some(at) = entry.kind.index() else {
+                continue;
+            };
+            if let Some(slot) = top.get_mut(at) {
+                *slot = Some(slot.map_or(entry.rank, |r| r.max(entry.rank)));
+            }
+        }
+        let kinds = def
+            .kinds
+            .iter()
+            .enumerate()
+            .filter_map(|(i, kind)| {
+                // A kind with no rank entry can hold no instance (`World::spawn` refuses it),
+                // so it can never be an inner; leaving it out keeps a package's unplaced
+                // built-ins (a `platform`, say, which has class BLOCK) from disabling the
+                // skip.
+                let rank = top.get(i).copied().flatten()?;
+                let handles = kind.events.collisions.iter().fold(ClassMask::NONE, |m, c| m | *c);
+                Some((rank, kind.classes, handles))
+            })
+            .collect();
+        Reach { kinds }
+    }
+
+    /// Whether some kind can be an inner of an outer of this rank, with these classes and
+    /// handler classes, under [`Members::key`]'s test (a superset: kinds are checked, not live
+    /// instances, and a kind's highest rank is used).
+    pub(crate) fn may_meet(&self, rank: u16, classes: ClassMask, mine: ClassMask) -> bool {
+        self.kinds.iter().any(|&(kind_rank, kind_classes, kind_handles)| {
+            kind_rank >= rank && (kind_classes.intersects(mine) || kind_handles.intersects(classes))
+        })
+    }
+}
+
 /// Ids, sorted, of every instance that may overlap `a` now (with the engine's overlap test),
 /// plus every instance whose overlap test with `a` could fail: the grid's cells under `a`'s
 /// collision box, its moved and overflow instances. Every instance when the grid is not built
@@ -140,4 +196,46 @@ pub(crate) fn near(ctx: &Ctx, a: InstId) -> Vec<InstId> {
     };
     ids.extend(grid.moved().iter().copied());
     ids.into_iter().collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::def::testing::GameDefBuilder;
+    use crate::def::{Builtin, KindDef, RoomDef};
+
+    /// #1139: a turn is skippable only when no kind at or above its rank can meet it. A kind
+    /// with no rank entry can hold no instance and must not keep a turn alive: a package's
+    /// unplaced built-ins (whose classes and handlers would otherwise match) would disable the
+    /// skip.
+    #[test]
+    fn a_turn_no_kind_can_meet_is_skippable() {
+        let mut b = GameDefBuilder::new("reach");
+        let mut low = KindDef::new("low", Builtin::Probe);
+        low.classes = ClassMask::SAVE;
+        low.events.collisions.push(ClassMask::PLATFORM);
+        let low = b.kind(low);
+        let mut high = KindDef::new("high", Builtin::Probe);
+        high.classes = ClassMask::KID;
+        high.events.collisions.push(ClassMask::BLOCK);
+        let high = b.kind(high);
+        // Left out of the order, so it has no rank entry: no instance of it can exist, and it
+        // must not make any turn reachable (its KID class would answer `may_meet(2, ..., KID)`).
+        let mut rankless = KindDef::new("rankless", Builtin::Probe);
+        rankless.classes = ClassMask::KID;
+        rankless.events.collisions.push(ClassMask::PLATFORM);
+        b.kind(rankless);
+        b.order(&[low, high]);
+        b.room(RoomDef::new("room", 64, 64));
+        let def = b.build().unwrap();
+        let reach = Reach::of(&def);
+
+        // low (rank 0, classes SAVE, handlers PLATFORM): high (rank 1) has neither a SAVE class
+        // nor a PLATFORM handler.
+        assert!(!reach.may_meet(0, ClassMask::SAVE, ClassMask::PLATFORM));
+        // high's KID class answers an outer that handles KID.
+        assert!(reach.may_meet(0, ClassMask::BLOCK, ClassMask::KID));
+        // Only low and high have ranks; the rankless kind is ignored.
+        assert!(!reach.may_meet(2, ClassMask::BLOCK, ClassMask::KID));
+    }
 }

@@ -8,7 +8,7 @@
 //! the replay records every one of them, so it re-simulates to the same world as watching the
 //! cutscene would. Regions never hold in Play original, so the key does nothing there.
 
-use std::time::Instant;
+use crate::time::Instant;
 
 use bevy::prelude::*;
 use iwbtg_sim::input::InputFrame;
@@ -28,6 +28,21 @@ pub const MAX_SKIP_SECONDS: u64 = 60;
 
 /// Runs the skip key's requests.
 pub struct SkipPlugin;
+
+/// The skip's place in the module list (main.rs): its plugin.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = crate::registration::NoArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: crate::registration::NoArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(SkipPlugin);
+    }
+}
 
 impl Plugin for SkipPlugin {
     fn build(&self, app: &mut App) {
@@ -251,12 +266,23 @@ mod tests {
         use iwbtg_sim::def::SoundId;
         use iwbtg_sim::sound::SoundTarget;
         let target = SoundTarget::Builtin(SoundId(0));
-        let play = |looping| OutputEvent::Sound(SoundOutput::Play { target, looping });
+        let play = |looping| {
+            OutputEvent::Sound(SoundOutput::Play {
+                target,
+                looping,
+                length_ticks: 0,
+                tick: 0,
+            })
+        };
         assert!(!lasts(&play(false)), "a one-shot sound");
         assert!(lasts(&play(true)), "music");
-        assert!(lasts(&OutputEvent::Sound(SoundOutput::Stop { target })));
+        assert!(lasts(&OutputEvent::Sound(SoundOutput::Stop {
+            target,
+            tick: 0
+        })));
         assert!(lasts(&OutputEvent::Sound(SoundOutput::StopAll {
-            adapter: false
+            adapter: false,
+            tick: 0,
         })));
     }
 }

@@ -25,7 +25,7 @@ An empty file is `preset = "A1"`. Unknown keys, actions, classes and values are 
 
 ## Room profiles
 
-Medleys (#33). A package may add more profiles as `physics/<id>.toml`, in the same form. A room with `physics = "<id>"` uses that profile for as long as it is the current room; every other room uses the game's (`game.toml` `physics`). The kid reads its profile each time it acts, so a carried-over kid moves by the new room's numbers from its first step there. What the kid copies when it is created (its jump speeds and maximum fall speed) comes from the room it is created in and stays until it is created again. A room profile must handle the same kid events as the game's profile (the same triggers in `[events]`: Step, End Step, key rows, collision classes, alarms, boundary model), because the kid kind's events are fixed at load; its actions in those events and every value may differ, and a profile that adds or removes an event is a load error. A room naming a profile with no `physics/<id>.toml` is an error at the key. When the game's own profile lies in `physics/`, a room naming it simply uses the game's profile. `[tricks]` `required` checks read the game's profile only.
+Medleys (#33). A package may add more profiles as `physics/<id>.toml`, in the same form. A room with `physics = "<id>"` uses that profile for as long as it is the current room; every other room uses the game's (`game.toml` `physics`). The kid reads its profile each time it acts, so a carried-over kid moves by the new room's numbers from its first step there. What the kid copies when it is created (its jump speeds and maximum fall speed) comes from the room it is created in and stays until it is created again. A room profile must handle the same kid events as the game's profile (the same triggers in `[events]`: Step, End Step, key rows, collision classes, alarms, boundary model), because the kid kind's events are fixed at load; its actions in those events and every value may differ, and a profile that adds or removes an event is a load error. A room naming a profile with no `physics/<id>.toml` is an error at the key. When the game's own profile lies in `physics/`, a room naming it simply uses the game's profile. `[tricks]` `required` checks read the game's profile only. A room profile that differs from the game's profile makes the package custom physics on its game page ([engine.md](engine.md#custom-physics), #970).
 
 ## Presets and overrides
 
@@ -43,9 +43,43 @@ Medleys (#33). A package may add more profiles as `physics/<id>.toml`, in the sa
 
 An empty file is the same as `preset = "A1"`. The loader rejects unknown keys, sections, action names, run names, class names and enum values, so a typo never falls back silently.
 
+## Standard names and aliases
+
+Every shared concern has one name. The standard name and the current spelling both load and resolve to exactly the same profile; write the standard name in a new profile. Names not listed here are unchanged.
+
+| Concern | Standard | Also accepted |
+|---|---|---|
+| walk/run | `[numbers] run_speed`, `[input] walk` | — |
+| jump, double jump, variable release | `[numbers] jumps`, `[jump]`, `[numbers] release_mult` | — |
+| maximum fall speed | `[numbers] max_fall` | `max_fall_speed` |
+| gravity and flip | `[gravity] model`, `[flip] model` | `[gravity] reapply` |
+| vines | `[vines]`, `model = "none" \| "distance_asym" \| "latched_keys" \| "symmetric_early"` | `[vine]`, `model = "distance_sym_early"` |
+| ladders | `[ladders]` | `[ladder]` |
+| ice/slip | `[ice] model` | — |
+| slopes | `[slopes]`, `model = "none" \| "poronkusema" \| "rainbow" \| "fairy_tale"` | `[slope]`, `downhill = "por"` |
+| water | `[water] model = "none" \| "jump_refresh" \| "full_jump" \| "water3_keeps"` | `[jump] water_air` |
+| platforms | `[platforms]` | `[platform]` |
+| boundary | `[events] boundary` | — |
+
+A `model` selects a native implementation; the preset and the section's other keys tune it. Each selector names the field it maps onto, and a field written explicitly wins over the selector:
+
+- `[gravity] model`: `constant` or `step` is `reapply = "step"`; `end_step_slope` and `create_only` name their `reapply` values. Gravity's orientation when it flips is `[flip] model`, not this.
+- `[vines] model`: `none`, `distance_asym` and `symmetric_early` set `[vine] model`; `latched_keys` sets `[input] vine_keys = "latched_flags"` and the asymmetric distance rule (A3). `walk_ignores_vines` stays a separate key.
+- `[slope] model`: names the downhill snap only (`none`, `poronkusema` = `por`, `rainbow`, `fairy_tale`). `block_step`, `mirror_contact` and `keep_hspeed` stay separate keys; a written `[slope]` section still replaces the preset's whole.
+- `[water] model`: names `[jump] water_air` (`none`, `jump_refresh` = `water2_without_flag`, `full_jump` = `water_unlimited`, `water3_keeps`).
+- `[flip] model` (`none`, `swap_object`, `yflag`, `grav_sign`) and `[ice] model` (`none`, `slip`) already use the standard names.
+
+The legacy spellings are aliases, not a second schema: an old `physics.toml` loads to exactly the same values and keeps its `gameplay_hash` until the file text is edited. Because the profile file's parsed text is hashed, rewriting a profile to the standard names is a package edit even when the values are identical.
+
 ## Event lists
 
 An event is an ordered list of action names. The kid runs them top to bottom; a list stops early when an action asks to abort the tick (a room change). An action that belongs to a family that has not landed returns `Unsupported` and halts the sim with its name, so a profile never silently skips one.
+
+### Script slots
+
+An entry may also be a script slot: a table `{ do = "script", fn = "dash" }`. It calls the named function of the profile's `[script] file`, with `this` bound to the kid's instance (decision [0004](../decisions/0004-extension-model.md#kid-script-slots)). The slot runs where it sits, in list order, with the same script host, tick and call budget, spawn caps and error handling as any other script. It composes with the native actions around it instead of replacing them. A room request from a slot stops the rest of the event list, like a built-in's request. A collision row takes the same table as its `run`, and the function is called with `other`.
+
+A profile may name a slot in any event list (`create`, `room_start`, `step`, `end_step`, alarm rows, key rows) and in a collision row. The function must exist in the profile's script with the slot's argument count (none for a list event, one, `other`, for a collision slot); a missing function or wrong arity is a load error. A profile with a slot but no `[script] file` is also a load error. A room profile may name its own file and slots; the kid kind's event set is unchanged.
 
 `[events]` keys:
 
@@ -110,6 +144,7 @@ Not yet in `[events]`: the outside-room events of the other models.
 | `fade_in` | Step action 7 (rely): while alpha is below 1 add `misc.fade_step`; no clamp. |
 | `play_timer` | Alarm 0: `global.time` + 1 unless the room is a Boot, Title, Menu or Select room, then `alarm[0] = room_speed`. |
 | `kill` | The death sequence (`[death]`), as a key or alarm action. |
+| `{ do = "script", fn = "..." }` | A script slot: calls the named function of `[script] file` with `this` bound to the kid (decision 0004). In an event list it takes no arguments; in a collision row it takes `other`. |
 
 All real comparisons use the GM epsilon (`NumRules::compare`), so for example the rely fade-in takes 10 steps.
 
@@ -124,12 +159,13 @@ All real comparisons use the GM epsilon (`NumRules::compare`), so for example th
 | `moving_block_por` | Poronkusema, Collision with movingBlock (class `moving_block`, 64 x 64, not solid; kid/A1.md), in order: ride from above (`y <= other.y + vspeed + 2`, `vspeed > other.vspeed`, `other.y - yprevious >= 8`: `y = other.y - 9`, `vspeed` the block's, `onPlatform` and `djump` set); bump from below (`yprevious - other.y >= height + 10`: `y = other.y + height + 12`, `vspeed` the block's if it is 0 or more, else 0); else pushed out sideways to `other.x - 6` or `other.x + width + 5` by which half the kid is in. OPEN: the spec gives the numbers but not each test; the relative-motion test, the "within vspeed + 2" reading and the side choice are guesses (#314). The game places no moving block. |
 | `platform_standard` | kid/A1.md "Collision with platform": lands when `y - vspeed / 2 <= platform.y`; one-way from below. A reversed `yflag` kid lands when `y - vspeed / 2 >= platform.y + reversed_above` and is put at `platform.y + reversed_snap`. |
 | `kill` | The other instance kills the kid (`[death]`). |
+| `{ do = "script", fn = "dash_touch" }` | Calls the profile's slot function with `other` (decision 0004). A native run and a script run may share one `with`; the rows run in row order. |
 
 ## Sections
 
 Every key below is optional. Defaults are the `A1` preset's.
 
-`[numbers]`: `jumps` (list, ground jump then air jumps, `[8.5, 7.0]`), `gravity` (0.4), `run_speed` (3), `max_vspeed` (9), `max_fall_speed` (8, read only by `shift_then_clamp`), `release_mult` (0.45), `sprite_threshold` (0.05), `image_speed_idle` (0.2), `image_speed_run` (0.5), `air_wall_probe` (0; family B 2: `air_sprite` shows the fall sprite only with no `slope_wall` that many pixels in the gravity direction).
+`[numbers]`: `jumps` (list, ground jump then air jumps, `[8.5, 7.0]`), `gravity` (0.4), `run_speed` (3), `max_vspeed` (9), `max_fall` (also `max_fall_speed`; 8, read only by `shift_then_clamp`), `release_mult` (0.45), `sprite_threshold` (0.05), `image_speed_idle` (0.2), `image_speed_run` (0.5), `air_wall_probe` (0; family B 2: `air_sprite` shows the fall sprite only with no `slope_wall` that many pixels in the gravity direction).
 
 `[input]`: `walk` = `direct_latch` (`keyboard_check_direct`, sees a tap inside one tick) or `sampled`; `vine_keys` = `edges` (this tick's press) or `latched_flags` (the `key_flags` flags).
 
@@ -137,13 +173,13 @@ Every key below is optional. Defaults are the `A1` preset's.
 
 `[fall_cap]`: `rule` = `clamp_abs`, `clamp_against_gravity` (B) or `clamp_down_only` (spook house): clamp only when `vspeed * yflag` exceeds `max_vspeed`; or `shift_then_clamp` (A4): beyond `max_fall_speed` the kid's `y` first moves back by `abs(vspeed) - max_fall_speed` against the motion, then both directions clamp to `max_vspeed`.
 
-`[gravity]`: `reapply` = `step`, or `end_step_slope` (Create leaves gravity 0; the `slope_b` action, WP5b.4, sets it; `create_only` is WP5c), `block_landing_zeroes`.
+`[gravity]`: `reapply` = `step`, or `end_step_slope` (Create leaves gravity 0; the `slope_b` action, WP5b.4, sets it; `create_only` is WP5c), `model` (standard spelling of `reapply`: `constant`/`step`, `end_step_slope`, `create_only`), `block_landing_zeroes`.
 
-`[platform]`: `hold_probe` (4), `rule` = `half_vspeed`, `snap` (9), `take` = `vspeed` or `delta_y` (the platform's `y - yprevious`, family B; `yspeed_flipped`, C: the A1 rule for normal gravity; the flipped kid lands when `y - vspeed / 2 >= platform.y + height - 1`, is put at `platform.y + height + 8` and takes the platform's `yspeed` if that is 0 or less), `reversed_above` (family B 15) and `reversed_snap` (24).
+`[platforms]` (also `[platform]`): `hold_probe` (4), `rule` = `half_vspeed`, `snap` (9), `take` = `vspeed` or `delta_y` (the platform's `y - yprevious`, family B; `yspeed_flipped`, C: the A1 rule for normal gravity; the flipped kid lands when `y - vspeed / 2 >= platform.y + height - 1`, is put at `platform.y + height + 8` and takes the platform's `yspeed` if that is 0 or less), `reversed_above` (family B 15) and `reversed_snap` (24).
 
-`[vine]`: `walk_ignores_vines` (A3: `walk` has no vine rule), `model` = `distance_asym`, `distance_sym_early` (C: both sides grab at a distance of at most 1, `vine_probe` before the jump code, `vines` after it) or `none` (`distance_sym_early` is WP5c), `left_below` (2), `right_equal` (1), `slide` (2), `kick` (`[15, -9]`: horizontal, vertical), `drop` (3). `probe_down_fixed` (false; the vine tests look at `y + 1` whatever the gravity, Kotaro player2).
+`[vines]` (also `[vine]`): `walk_ignores_vines` (A3: `walk` has no vine rule), `model` = `none`, `distance_asym`, `symmetric_early` (also `distance_sym_early`; C: both sides grab at a distance of at most 1, `vine_probe` before the jump code, `vines` after it) or `latched_keys` (A3: the game's latched flags drive the keys and the distance rule is asymmetric; it sets `[input] vine_keys = "latched_flags"`), `left_below` (2), `right_equal` (1), `slide` (2), `kick` (`[15, -9]`: horizontal, vertical), `drop` (3). `probe_down_fixed` (false; the vine tests look at `y + 1` whatever the gravity, Kotaro player2).
 
-`[ice]`: `model` = `none` or `slip` (A1, A2, B: `walk` adds `slip * h` to `hspeed` while below the run speed when a `slip` block is within `probe` px (4) below, reading the slip at `read` px (10), no clamp, and standing on ice subtracts `slip * sign(hspeed)` with overshoot; off ice the speed is set outright), `clamp` (C: slip clamped to the run speed), `temp_probe` (2), `temp_decay` (0.95), `temp_zero_below` (0.2) for `ice_temp_hspeed`. `[ladder]`: `entry` = `up_or_down` or `up_only`. `[slope]`: `block_step` (`none`, `free_spot`, `replace`), `step` (3), `mirror_contact` (`normal`, `left`, `right`), `downhill` (`none`, `por`, `rainbow`, `fairy_tale`), `jump_probe` (0 = off, 2), `air_sprite_probe` (0 = off, 2: `air_sprite` shows no fall sprite with a slope that close below), `keep_hspeed` (`walk` keeps `hspeed` with a `slope` 1 px below and Left or no key, or a `slope_mirror` and Right or no key, kid/A4.md). `slope` rises to the right, `slope_mirror` to the left; a game's slope kinds carry only those classes, so the kid's `slope` and `slope_mirror` rows run alone like the original's child-object events (add `block` too only if the block row should also fire). Tier 3 `slope_c` (family C) is not built (#295). `[water]`: empty until its work package. `[flip]`: `model` (`none`, `swap_object`, `yflag`, `grav_sign`: family C reads `global.grav`, signs gravity and `image_yscale` at Create, has no key swap, and its flipped kid reads `hspeed` 0 as right in `block_standard`). With `yflag` (family B) a reversed kid (`yflag` -1): `walk` swaps Left and Right; `vines` slide at `slide * yflag`, kick at `kick[1] * yflag` and take the other key as the away key; `air_sprite` swaps the jump and fall sprites; `shoot` places the bullet at `y - offset[1] * yflag`; `create_defaults` reads `global.reverse` (y - 4, `curJumps` 1). `swap_object` (group A): the flipped kid is its own object (class `kid_flipped`); its Create sets gravity and `image_yscale` negative, and it reads like `yflag` -1 in `gravity`, `jump`, `release`, `vines`, `block_standard` and the platform rule (`platform.reversed_above`, `reversed_snap`), with no key swap. The `flip_swap` action switches objects. Kotaro's player2 quirks (kid/A2.md) are on in the A2 preset: `[vine] probe_down_fixed` (the vine tests look at `y + 1` whatever the gravity) and `[flip] solidblock_no_refresh` (a landing on a `solidblock`-only object does not restore `djump`; `block` still does). OPEN: other A2 games (animus, fed-up, easy-miku-2) may differ per game (animus snaps at +25, fed-up swaps its sprite thresholds: research#42).
+`[ice]`: `model` = `none` or `slip` (A1, A2, B: `walk` adds `slip * h` to `hspeed` while below the run speed when a `slip` block is within `probe` px (4) below, reading the slip at `read` px (10), no clamp, and standing on ice subtracts `slip * sign(hspeed)` with overshoot; off ice the speed is set outright), `clamp` (C: slip clamped to the run speed), `temp_probe` (2), `temp_decay` (0.95), `temp_zero_below` (0.2) for `ice_temp_hspeed`. `[ladders]` (also `[ladder]`): `entry` = `up_or_down` or `up_only`. `[slopes]` (also `[slope]`): `model` (standard spelling of `downhill`: `none`, `poronkusema` = `por`, `rainbow`, `fairy_tale`), `block_step` (`none`, `free_spot`, `replace`), `step` (3), `mirror_contact` (`normal`, `left`, `right`), `downhill` (`none`, `por`, `rainbow`, `fairy_tale`), `jump_probe` (0 = off, 2), `air_sprite_probe` (0 = off, 2: `air_sprite` shows no fall sprite with a slope that close below), `keep_hspeed` (`walk` keeps `hspeed` with a `slope` 1 px below and Left or no key, or a `slope_mirror` and Right or no key, kid/A4.md). `slope` rises to the right, `slope_mirror` to the left; a game's slope kinds carry only those classes, so the kid's `slope` and `slope_mirror` rows run alone like the original's child-object events (add `block` too only if the block row should also fire). Tier 3 `slope_c` (family C) is not built (#295). `[water]`: `model` = `none`, `jump_refresh` (`[jump] water_air = "water2_without_flag"`), `full_jump` (`water_unlimited`) or `water3_keeps`. `[flip]`: `model` (`none`, `swap_object`, `yflag`, `grav_sign`: family C reads `global.grav`, signs gravity and `image_yscale` at Create, has no key swap, and its flipped kid reads `hspeed` 0 as right in `block_standard`). With `yflag` (family B) a reversed kid (`yflag` -1): `walk` swaps Left and Right; `vines` slide at `slide * yflag`, kick at `kick[1] * yflag` and take the other key as the away key; `air_sprite` swaps the jump and fall sprites; `shoot` places the bullet at `y - offset[1] * yflag`; `create_defaults` reads `global.reverse` (y - 4, `curJumps` 1). `swap_object` (group A): the flipped kid is its own object (class `kid_flipped`); its Create sets gravity and `image_yscale` negative, and it reads like `yflag` -1 in `gravity`, `jump`, `release`, `vines`, `block_standard` and the platform rule (`platform.reversed_above`, `reversed_snap`), with no key swap. The `flip_swap` action switches objects. Kotaro's player2 quirks (kid/A2.md) are on in the A2 preset: `[vine] probe_down_fixed` (the vine tests look at `y + 1` whatever the gravity) and `[flip] solidblock_no_refresh` (a landing on a `solidblock`-only object does not restore `djump`; `block` still does). OPEN: other A2 games (animus, fed-up, easy-miku-2) may differ per game (animus snaps at +25, fed-up swaps its sprite thresholds: research#42).
 
 `[sounds]`: sound names by role, resolved against the package's sounds (an unknown name is a load error; a role left out plays nothing): `jump` (a ground jump), `double_jump` (an air jump, also the third jump), `shoot` (a bullet appeared), `vine_kick` (a kick off a vine, not a drop) and `death` (played by the death step `sound`). They play through `sound::play`, so `sound_isplaying` and the state hash see them. Family B's death sound is a delayed `objDeathSound` with a music fade (kid/B.md), not this immediate sound: leave `death` out for B until that is built.
 
@@ -156,6 +192,8 @@ Every key below is optional. Defaults are the `A1` preset's.
 `[misc]`: `fade_in`, `fade_step` (0.1), `idle_needs_block` (spook house: `walk` shows the idle sprite only with a ground-class instance 1 px below).
 
 `[sprites]`: sprite names from the package's sprite table, by role: `idle`, `running`, `jump`, `fall`, `sliding`, `back`, `ladder_up_down`. A role left out leaves the sprite alone.
+
+`[script]`: `file` is a script id (`scripts/<id>.rhai`, compiled as a package script), and `vars` lists the custom variable names the script may read and write as `this.<name>`; both are package content and enter `gameplay_hash`. A `vars` name must be a Rhai identifier (ASCII letters, digits and `_`, not starting with a digit, and containing at least one letter) and must not name an instance property a script already resolves: the generic `Inst` properties (`x`, `image_index`, ...) and the kid fields of 0004 (`djump`, `yflag`, ...). Such a name can never be reached as `this.<name>`, so it is a load error. A slot function the file lacks, or one with the slot's arity, is a load error, as is a slot with no `file`. A name not in `vars` is an undeclared-variable error, as for any script. See [Script slots](#script-slots) and decision [0004](../decisions/0004-extension-model.md#kid-fields-a-script-may-read-and-write) for the fields the script may touch.
 
 ## Converter note (CR8)
 

@@ -2,19 +2,21 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use crate::time::{Duration, Instant};
 
 use bevy::app::RunFixedMainLoopSystems;
 use bevy::asset::RenderAssetUsages;
 use bevy::camera::ScalingMode;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use iwbtg_sim::script::PreparedScripts;
 use iwbtg_sim::sim::{Sim, SimOptions};
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::world::{InstId, SimStatus};
 
 mod hud;
 pub(crate) mod order;
+pub(crate) mod transition;
 
 use crate::bindings::PadInput;
 use crate::input::{Collector, PadReader, key_code};
@@ -26,6 +28,11 @@ use crate::shell::{AppScreen, InRun, LoadedPackage, RUN_ONLY, RunSteps};
 pub(crate) struct Game {
     pub(crate) sim: Sim,
 }
+
+/// The package's compiled scripts, prepared once at run start and reused by a quick retry
+/// (#1093B). `PreparedScripts` is `!Send` (its Rhai ASTs are `Rc`), so it lives beside `Game` as
+/// a non-send resource, never in the `Send + Sync` `RunStart`.
+struct Prepared(PreparedScripts);
 
 /// How the run started, so a retry can start it again the same way.
 #[derive(Resource)]
@@ -114,6 +121,13 @@ pub enum FrameCap {
     Fps(u32),
     /// No limit.
     Unlimited,
+}
+
+impl Default for FrameCap {
+    /// The browser build's frame cap, the value clap gives when `--fps` is absent.
+    fn default() -> FrameCap {
+        FrameCap::Fps(60)
+    }
 }
 
 impl std::str::FromStr for FrameCap {
@@ -224,7 +238,7 @@ pub(crate) struct Stats {
 }
 
 /// The view's command-line flags (main.rs flattens each module's group, #530).
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Clone, Default)]
 pub struct ViewArgs {
     /// Frame cap: a number of frames per second, or `unlimited`. The sim ticks at the game's
     /// rate either way.
@@ -243,6 +257,13 @@ pub struct ViewArgs {
     pub ranked: bool,
 }
 
+/// The view's place in the module list (main.rs): its flags. `view::run` builds the app itself.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = ViewArgs;
+}
+
 /// How runs start: from the view's flags, the same for every package opened.
 #[derive(Resource, Clone, Copy)]
 struct RunConfig {
@@ -256,18 +277,21 @@ struct RunConfig {
 pub(crate) struct NewRun {
     game: Game,
     start: RunStart,
+    prepared: Prepared,
 }
 
 impl NewRun {
-    /// Puts the sim and how it started in `world`.
+    /// Puts the sim, its prepared scripts and how it started in `world`.
     pub(crate) fn install(self, world: &mut World) {
         world.insert_non_send(self.game);
+        world.insert_non_send(self.prepared);
         world.insert_resource(self.start);
     }
 }
 
-/// Builds the sim for `pkg` (`shell::load` calls this before the run opens, so a game that does
-/// not start never opens; nothing in `world` changes). `map` is the map id, `None` the first.
+/// Builds the sim for `pkg` (`shell::load` calls this before the run opens, so a game that cannot
+/// be set up never opens; nothing in `world` changes). A start that halts is not an error here.
+/// `map` is the map id, `None` the first.
 pub(crate) fn new_run(world: &World, pkg: &Package, map: Option<&str>) -> Result<NewRun, String> {
     let config = *world.resource::<RunConfig>();
     let def = Arc::clone(&pkg.def);
@@ -295,8 +319,25 @@ pub(crate) fn new_run(world: &World, pkg: &Package, map: Option<&str>) -> Result
         },
         map: map.map(str::to_owned),
     };
-    let sim =
-        Sim::new(Arc::clone(&def), options.clone()).map_err(|e| format!("the game did not start: {e}"))?;
+    // The sim constructors report a map error before compiling scripts. Keep that precedence:
+    // when the map is not there, let the unprepared constructor produce the error (it cannot
+    // succeed without a map).
+    if def.map_index(options.map.as_deref()).is_none() {
+        return Err(Sim::new_or_halted(Arc::clone(&def), options)
+            .err()
+            .map_or_else(
+                || "the game did not start: the map is missing".to_owned(),
+                |e| format!("the game did not start: {e}"),
+            ));
+    }
+    // Compile the scripts once and keep the artifact for the run, so a quick retry does not
+    // compile them again (#1093B).
+    let prepared = Sim::prepare(&def).map_err(|e| format!("the game did not start: {e}"))?;
+    // A start that halts (a script error in a start-room Create, #946) is a run whose sim is
+    // halted from tick 0: it opens on the script error screen (`script_error/`), as a halt in
+    // play does. Only a sim that cannot be set up is an error.
+    let sim = Sim::new_or_halted_prepared(Arc::clone(&def), options.clone(), &prepared)
+        .map_err(|e| format!("the game did not start: {e}"))?;
     def.room(sim.world().room).ok_or("the start room is missing")?;
     Ok(NewRun {
         game: Game { sim },
@@ -305,6 +346,7 @@ pub(crate) fn new_run(world: &World, pkg: &Package, map: Option<&str>) -> Result
             options,
             fresh_seed: config.fresh_seed,
         },
+        prepared: Prepared(prepared),
     })
 }
 
@@ -386,6 +428,12 @@ fn enter(world: &mut World) {
         ..default()
     });
     world.init_resource::<hud::SignText>();
+    // A `--hud-preview-sign` check raises the box at the run's start, as a sign that has just
+    // spoken leaves it, so the screenshot shows the latch rather than needing a real Up press.
+    if let Some(text) = crate::hud::sign_preview() {
+        world.resource_mut::<hud::SignText>().raise(text.to_owned());
+    }
+    world.init_resource::<transition::Transition>();
     // The sim ticks at the game's rate on a fixed clock; frames only draw what the last tick
     // left. Slow motion (practice.rs) runs the first tick slow already; `follow_room_speed`
     // keeps it so after every tick.
@@ -404,8 +452,17 @@ fn leave(world: &mut World) {
     world.remove_resource::<ViewRect>();
     world.remove_resource::<Previous>();
     world.remove_resource::<hud::SignText>();
+    world.remove_resource::<transition::Transition>();
     world.remove_resource::<RunStart>();
+    world.remove_non_send::<Prepared>();
     world.remove_non_send::<Game>();
+}
+
+/// The first package a client starts with: a path natively, or the browser's fetched files.
+enum First<'a> {
+    Path(&'a std::path::Path),
+    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+    Package(crate::package::Package, std::path::PathBuf),
 }
 
 /// Opens the window and runs until it closes. `first` is the package from the command line,
@@ -413,6 +470,31 @@ fn leave(world: &mut World) {
 /// select screen. `plugins` adds the other modules' plugins (main.rs lists them).
 pub fn run(
     first: Option<&std::path::Path>,
+    args: ViewArgs,
+    trace_mode: bool,
+    plugins: impl FnOnce(&mut App),
+) -> Result<(), String> {
+    run_inner(first.map(First::Path), args, trace_mode, plugins)
+}
+
+/// [`run`] with the first package already in memory: the browser fetched an `.iwbz`
+/// (docs/architecture/client/web.md, #29). `source` names it in messages, its URL.
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+pub fn run_package(
+    first: Option<(crate::package::Package, std::path::PathBuf)>,
+    args: ViewArgs,
+    plugins: impl FnOnce(&mut App),
+) -> Result<(), String> {
+    run_inner(
+        first.map(|(pkg, source)| First::Package(pkg, source)),
+        args,
+        false,
+        plugins,
+    )
+}
+
+fn run_inner(
+    first: Option<First>,
     args: ViewArgs,
     trace_mode: bool,
     plugins: impl FnOnce(&mut App),
@@ -432,12 +514,14 @@ pub fn run(
     // `shell::load` builds the first sim with it, before the plugins are in.
     app.insert_resource(view.config());
     let (title, (width, height)) = match first {
-        Some(path) => {
+        Some(First::Path(path)) => {
             crate::shell::load(app.world_mut(), path, trace_mode).map_err(|e| e.to_string())?;
-            let world = app.world();
-            let size = room_size(world.non_send::<Game>());
-            let id = world.resource::<RunStart>().def.id.clone();
-            (format!("IWBTG Collection: {id}"), (size.x as u32, size.y as u32))
+            first_title(app.world())
+        }
+        #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+        Some(First::Package(pkg, source)) => {
+            crate::shell::load_package(app.world_mut(), pkg, source).map_err(|e| e.to_string())?;
+            first_title(app.world())
         }
         None => (crate::shell::select::TITLE.to_owned(), (800, 608)),
     };
@@ -465,6 +549,13 @@ pub fn run(
         add_screenshot(&mut app, path, None);
     }
     shot_result(app.run())
+}
+
+/// The window title and size of the first package, which is already the loaded one.
+fn first_title(world: &World) -> (String, (u32, u32)) {
+    let size = room_size(world.non_send::<Game>());
+    let id = world.resource::<RunStart>().def.id.clone();
+    (format!("IWBTG Collection: {id}"), (size.x as u32, size.y as u32))
 }
 
 /// The game camera and the sprite images.
@@ -590,12 +681,15 @@ fn collect_pad(
 /// tick's `follow_room_speed`.
 pub(crate) fn restart_run(world: &mut World) -> Result<(), String> {
     let start = world.resource::<RunStart>();
+    // The scripts were prepared at run start; a retry reuses that artifact (#1093B).
+    let prepared = world.non_send::<Prepared>();
     let mut options = start.options.clone();
     if start.fresh_seed {
         options.seed = crate::replays::fresh_seed();
     }
-    let sim =
-        Sim::new(Arc::clone(&start.def), options).map_err(|e| format!("the game did not start: {e}"))?;
+    // A start that halts comes back halted, so the script error screen opens again (#946).
+    let sim = Sim::new_or_halted_prepared(Arc::clone(&start.def), options, &prepared.0)
+        .map_err(|e| format!("the game did not start: {e}"))?;
     world.non_send_mut::<Game>().sim = sim;
     let drawn = std::mem::take(&mut world.resource_mut::<Drawn>().0);
     for entity in drawn.into_values() {
@@ -608,7 +702,7 @@ pub(crate) fn restart_run(world: &mut World) -> Result<(), String> {
     }
     // Keys held through the retry stay held; edges from before it are dropped.
     world.resource_mut::<Collector>().take_frame();
-    world.resource_mut::<hud::SignText>().0 = None;
+    world.resource_mut::<hud::SignText>().clear();
     Ok(())
 }
 
@@ -622,9 +716,11 @@ pub(crate) fn test_world(pkg: &Package) -> World {
         mode: iwbtg_sim::stripped::PlayMode::Original,
         map: None,
     };
-    let sim = Sim::new(Arc::clone(&pkg.def), options.clone()).unwrap();
+    let prepared = Sim::prepare(&pkg.def).unwrap();
+    let sim = Sim::new_prepared(Arc::clone(&pkg.def), options.clone(), &prepared).unwrap();
     let mut world = World::new();
     world.insert_non_send(Game { sim });
+    world.insert_non_send(Prepared(prepared));
     world.insert_resource(RunStart {
         def: Arc::clone(&pkg.def),
         options,
@@ -634,6 +730,7 @@ pub(crate) fn test_world(pkg: &Package) -> World {
     world.init_resource::<Previous>();
     world.insert_resource(Collector::new(crate::bindings::Bindings::default()));
     world.init_resource::<hud::SignText>();
+    world.init_resource::<transition::Transition>();
     world
 }
 
@@ -651,6 +748,7 @@ pub(crate) fn tick(
     mut shake: ResMut<crate::audio::Shake>,
     mut previous: ResMut<Previous>,
     mut sign: ResMut<hud::SignText>,
+    mut transition: ResMut<transition::Transition>,
     mut replay: Option<ResMut<crate::replays::Recorder>>,
 ) {
     if previous.on {
@@ -678,6 +776,7 @@ pub(crate) fn tick(
         stats.ticks += 1;
         let output = &game.sim.world().output;
         hud::note_tick(&mut sign, output);
+        transition.observe(output, Instant::now());
         audio.push(Instant::now(), output);
         shake.tick(output);
     }
@@ -711,27 +810,37 @@ fn follow_room_speed(game: NonSend<Game>, speed: Option<Res<ClockSpeed>>, mut fi
 }
 
 /// Holds the frame back to the cap: sleeps most of the wait, spins the last stretch.
-fn limit_frames(cap: Res<Cap>, mut last: Local<Option<Instant>>) {
-    let FrameCap::Fps(fps) = cap.0 else {
-        *last = None;
-        return;
-    };
-    let target = Duration::from_secs_f64(1.0 / f64::from(fps));
-    let start = *last.get_or_insert_with(Instant::now);
-    let spin = Duration::from_micros(1500);
-    loop {
-        let spent = start.elapsed();
-        if spent >= target {
-            break;
-        }
-        let left = target - spent;
-        if left > spin {
-            std::thread::sleep(left - spin);
-        } else {
-            std::hint::spin_loop();
-        }
+fn limit_frames(cap: Res<Cap>, last: Local<Option<Instant>>) {
+    // A browser paces the window with animation frames, and `std::thread::sleep` panics on
+    // wasm32-unknown-unknown; the sim's fixed clock does not depend on the frame rate anyway.
+    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+    {
+        let _ = (cap, last);
     }
-    *last = Some(Instant::now());
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    {
+        let mut last = last;
+        let FrameCap::Fps(fps) = cap.0 else {
+            *last = None;
+            return;
+        };
+        let target = Duration::from_secs_f64(1.0 / f64::from(fps));
+        let start = *last.get_or_insert_with(Instant::now);
+        let spin = Duration::from_micros(1500);
+        loop {
+            let spent = start.elapsed();
+            if spent >= target {
+                break;
+            }
+            let left = target - spent;
+            if left > spin {
+                std::thread::sleep(left - spin);
+            } else {
+                std::hint::spin_loop();
+            }
+        }
+        *last = Some(Instant::now());
+    }
 }
 
 /// Makes the entities match the sim's instances: spawn, move, frame, remove. Each one's z is its
@@ -872,10 +981,18 @@ pub(crate) struct ShotSize(pub(crate) UVec2);
 #[derive(Resource, Default)]
 struct ShotFailed(Option<String>);
 
+/// The time one frame of a `--screenshot` run advances the clocks by (#942).
+pub(crate) const SHOT_FRAME: Duration = Duration::from_nanos(1_000_000_000 / 60);
+
 /// Sets up a `--screenshot` run: the capture at frame 90, the exit at frame 150 and, with `size`,
 /// the window held at that size. Finish with [`shot_result`] on what `App::run` returns.
+///
+/// Every frame advances time by [`SHOT_FRAME`], not by the real frame time, so the fixed clock
+/// (the sim, the HUD timer, the paused timer) and the real-time animations (the loading cherry,
+/// tweens) stand at the same point at frame 90 on any build and machine (#942).
 pub(crate) fn add_screenshot(app: &mut App, path: std::path::PathBuf, size: Option<UVec2>) {
-    app.insert_resource(ScreenshotTo(path))
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(SHOT_FRAME))
+        .insert_resource(ScreenshotTo(path))
         .init_resource::<ShotFailed>()
         .add_systems(Update, (hold_shot_size, take_screenshot).chain());
     if let Some(size) = size {
@@ -961,6 +1078,28 @@ fn take_screenshot(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_screenshot_run_advances_time_by_frames_not_by_the_wall_clock() {
+        use bevy::time::{TimePlugin, TimeUpdateStrategy};
+        let mut app = App::new();
+        app.add_plugins(TimePlugin);
+        add_screenshot(&mut app, "unused.png".into(), None);
+        let strategy = app.world().resource::<TimeUpdateStrategy>();
+        assert!(matches!(strategy, TimeUpdateStrategy::ManualDuration(d) if *d == SHOT_FRAME));
+        // However long a frame really takes, the fixed clock gets the same ticks: the first frame
+        // starts the clock, the other 89 at 1/60 s each are 1.483 s, 74 ticks at 50 Hz (#942).
+        app.insert_resource(Time::<Fixed>::from_hz(50.0));
+        #[derive(Resource, Default)]
+        struct Ticks(u32);
+        app.init_resource::<Ticks>()
+            .add_systems(FixedUpdate, |mut t: ResMut<Ticks>| t.0 += 1);
+        for _ in 0..90 {
+            app.update();
+            std::thread::sleep(Duration::from_micros(200));
+        }
+        assert_eq!(app.world().resource::<Ticks>().0, 74);
+    }
 
     #[test]
     fn a_capture_of_another_size_is_not_saved() {
@@ -1135,5 +1274,27 @@ mod tests {
             ..view(0.0, 0.0)
         };
         assert_eq!(blend_view(Some(view(0.0, 0.0)), flipped, 0.5), flipped);
+    }
+
+    /// A quick retry keeps the artifact prepared at run start instead of compiling the scripts
+    /// again (#1093B). A rewrite that returned to `Sim::new_or_halted` would replace it.
+    #[test]
+    fn a_retry_keeps_the_prepared_scripts() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/input.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let mut world = test_world(&pkg);
+        let before: *const Prepared = world.non_send::<Prepared>();
+        // Step the run so the retry has something to reset.
+        world
+            .non_send_mut::<Game>()
+            .sim
+            .step(iwbtg_sim::input::InputFrame::EMPTY);
+        restart_run(&mut world).unwrap();
+        let after: *const Prepared = world.non_send::<Prepared>();
+        assert!(
+            std::ptr::eq(before, after),
+            "the prepared artifact is kept, not rebuilt"
+        );
+        assert_eq!(world.non_send::<Game>().sim.world().tick, 0);
     }
 }

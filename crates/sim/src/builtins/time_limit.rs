@@ -1,15 +1,16 @@
-//! Built-in `time_limit` (mechanics `builtin.time_limit`; docs/plans/sim-core.md 6.1;
+//! Built-in `time_limit` (mechanics `builtin.time_limit`; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/time_limit.md). Tier 3.
 //!
 //! Two roles, one per object in the original (KOT, LT, MIKU, ANI, RBF):
 //!
 //! - `timer` (timelimitobject): holds hours, minutes and seconds. It starts idle. Alarm 0 takes
-//!   one second off when a kid exists, then always re-arms itself for `room_speed` ticks. Step
+//!   one second off when a kid exists, then always re-arms itself for one clock second (`room_speed`
+//!   ticks under the legacy policy, the package tick rate under `ClockPolicy::Fixed`, R30). Step
 //!   normalizes the counters: seconds below 0 borrow from minutes, then from hours; seconds
 //!   below 0 with minutes and hours both 0 is the expiry, one alarm period after the display
 //!   reads 0:00:00 (Confirmed, recorder, MIKU roommiku: 0:00 on frame 8803, timer gone on 8853).
-//! - `start_zone` (timelimitcollition): a kid touching it sets every timer's alarm 0 to
-//!   `room_speed` and destroys the zone.
+//! - `start_zone` (timelimitcollition): a kid touching it sets every timer's alarm 0 to one
+//!   clock second and destroys the zone.
 //!
 //! `on_expire`: `kill` kills the first kid and destroys the timer, `shake` spawns the `shake`
 //! kind and destroys the timer, `nothing` destroys the timer, `goto_room` goes to `room` and
@@ -172,9 +173,10 @@ pub fn init_state(params: &Params) -> Result<BuiltinState, ParamError> {
     }))
 }
 
-/// Arms alarm 0 of `id` for one second.
+/// Arms alarm 0 of `id` for one second on the run's clock (R30): `room_speed` under the legacy
+/// policy, the package tick rate under `ClockPolicy::Fixed`.
 fn arm_second(ctx: &mut Ctx, id: InstId) -> Result<(), SimError> {
-    let second = ctx.w.room_speed;
+    let second = crate::tick::second_ticks(ctx.def, &ctx.rules.tick, ctx.w);
     let rules = ctx.rules;
     if let Some(inst) = ctx.w.get_mut(id) {
         alarm::set(inst, 0, second, &rules.num)?;

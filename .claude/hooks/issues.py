@@ -13,6 +13,9 @@ PRs whose newest Actions run has sat queued over an hour (#666).
 The same file lives in all three repos; edit it in the client repo and copy it over.
 """
 import json, os, re, subprocess, sys
+import hashlib
+import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -174,13 +177,53 @@ def worktrees(root=WORKSPACE):
     return out
 
 
+STATUS_TTL = 120  # seconds; claim/merge decisions still re-read the specific issue/PR
+STATUS_CACHE = Path(__file__).resolve().parents[2] / "target" / "agent-status.json"
+
+
+def github_status(query, cache=STATUS_CACHE, refresh=False):
+    """Reuse only successful, matching snapshots. Cache errors never block a session."""
+    key = hashlib.sha256(query.encode()).hexdigest()
+    if not refresh:
+        try:
+            saved = json.loads(cache.read_text(encoding="utf-8"))
+            age = time.time() - saved["at"]
+            if saved["key"] == key and 0 <= age < STATUS_TTL:
+                return saved["data"], int(age)
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+    r = subprocess.run(["gh", "api", "graphql", "-f", f"query={query}"],
+                       capture_output=True, text=True, encoding="utf-8", timeout=30)
+    payload = json.loads(r.stdout)
+    if r.returncode or payload.get("errors") or not payload.get("data"):
+        raise ValueError("GitHub status query failed")
+    data = payload["data"]
+    temp = None
+    try:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=cache.parent, delete=False) as f:
+            temp = Path(f.name)  # private permissions; replace atomically for concurrent sessions
+            json.dump({"key": key, "at": time.time(), "data": data}, f)
+        os.replace(temp, cache)
+    except OSError:
+        pass
+    finally:
+        if temp is not None:
+            try:
+                temp.unlink(missing_ok=True)
+            except OSError:
+                pass
+    return data, 0
+
+
 def start():
     warn = settings_drift()
     q = ("query {" + " ".join(f'{k}: repository(owner: "{OWNER}", name: "{v}") {{ ...R }}' for k, v in REPOS.items())
          + " " + MAIN_CI % (OWNER, REPOS["c"]) + "}" + FRAGMENT)
     try:
-        r = subprocess.run(["gh", "api", "graphql", "-f", f"query={q}"], capture_output=True, text=True, encoding="utf-8", timeout=30)
-        data = json.loads(r.stdout)["data"]
+        data, age = github_status(q, refresh="--refresh" in sys.argv)
+        # Do not mutate the cached data's shape while rendering.
+        data = dict(data)
         red, ci_line = main_ci(data.pop("main", None))
     except Exception as e:  # offline or gh missing: say so, never block the session
         return emit(warn + f"Issue harness: could not reach GitHub ({type(e).__name__}). Run `gh auth status`; work from the issues once it is back.")
@@ -216,7 +259,7 @@ def start():
                                      ("auto-merge on", p["autoMergeRequest"]), (f"CI STUCK: queued {hours}h", hours)) if on]
             prs.append(f"{name}#{p['number']} {p['title']} ({p['headRefName']}" + "".join(f"; {n}" for n in notes) + ")")
 
-    lines = ["# Project status (from GitHub issues)", "", ci_line, "", "Milestones (closed/total across repos):"]
+    lines = [f"# Project status (GitHub snapshot, {age}s old; --refresh bypasses cache)", "", ci_line, "", "Milestones (closed/total across repos):"]
     for t in sorted(ms, key=lambda t: (ms_key(t), t)):
         o, c = ms[t]
         lines.append(f"- {t}: {c}/{o + c} ({100 * c // max(o + c, 1)}%)")
@@ -276,6 +319,10 @@ def stop():
     inp = json.load(sys.stdin)
     if inp.get("stop_hook_active"):
         return
+    # The final reply is authoritative; avoid parsing an entire session transcript on success.
+    last = inp.get("last_assistant_message")
+    if isinstance(last, str) and FINDINGS.search(last):
+        return
     try:
         with open(inp["transcript_path"], encoding="utf-8") as f:
             entries = [json.loads(l) for l in f if l.strip()]
@@ -322,6 +369,35 @@ def test():
         assert settings_drift(root) == ""  # same JSON, different formatting
         (root / ".claude" / "settings.json").write_text('{"a": 2}')
         assert settings_drift(root).startswith("WARNING")
+    from unittest.mock import patch
+    from types import SimpleNamespace
+    with tempfile.TemporaryDirectory() as d:
+        cache = Path(d) / "status.json"
+        response = SimpleNamespace(returncode=0, stdout=json.dumps({"data": {"c": {"ok": True}}}))
+        with patch("subprocess.run", return_value=response) as run:
+            assert github_status("query", cache)[0] == {"c": {"ok": True}}
+            assert github_status("query", cache)[0] == {"c": {"ok": True}}
+            assert run.call_count == 1
+            github_status("query", cache, refresh=True)
+            assert run.call_count == 2
+            github_status("changed query", cache)
+            assert run.call_count == 3
+            with patch("time.time", return_value=time.time() + STATUS_TTL + 1):
+                github_status("changed query", cache)
+            assert run.call_count == 4
+        cache.write_text("broken", encoding="utf-8")
+        with patch("subprocess.run", return_value=response) as run:
+            github_status("query", cache)
+            assert run.call_count == 1
+        with patch("subprocess.run", return_value=SimpleNamespace(returncode=1, stdout='{"errors": ["offline"]}')):
+            try:
+                github_status("query", cache, refresh=True)
+                assert False, "failed responses must not become valid snapshots"
+            except ValueError:
+                pass
+        # Cached successes remain usable after a failed refresh; issue creation/Stop are unaffected.
+        with patch("subprocess.run", side_effect=AssertionError("cache should be reused")):
+            assert github_status("query", cache)[0]["c"]["ok"]
     # Main CI (#595): a failed check is red and loud; cancelled or running commits defer to older ones.
     def commit(oid, *checks):
         return {"oid": oid * 40, "messageHeadline": f"PR {oid}", "statusCheckRollup": {"contexts": {"nodes": list(checks)}}}

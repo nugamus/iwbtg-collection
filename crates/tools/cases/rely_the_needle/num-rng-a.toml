@@ -1,0 +1,42 @@
+# Written by hand from research trace rely-the-needle-4-2/num-rng-a (#911): `iwbtg trace import`
+# refuses it because its --gml calls object_event_add. That probe only sets variables on blood and
+# a global counter, so it draws nothing and changes no compared column.
+# Recorder: --object world --room room1 --from 0 (at 2), seed 0.
+# The point of the case is the `random_get_seed()` column: room1's objEffect (preset `@effect`,
+# spawned by the room's on_create) runs two particle streams (-20, then -10) whose draws share the
+# gameplay generator with the blood, so a converter change to objEffect's systems, their order or
+# streams moves the seed (research specs num-rng.md, num-part-rng.md).
+source = "rely-the-needle-4-2/num-rng-a"
+kind = "diff"
+start = { room = "room_1", difficulty = 0 }
+at = 2
+first_frame = 2
+object = "world"
+original_object = "world"
+dll_mode = "model"
+# Frames 0 and 1 run the boot rooms (rInit, rTitle), which are client UI here, and their objEffect
+# draws move the seed from the recorder's 0 to 1598751577 (the frame 1 row). Our run starts at
+# room1's first tick with that seed.
+seed = 1598751577
+setup = []
+# The world controller's own fields (x, y, image_index ...) are the original's object only.
+# instance_number(blood) differs from frame 27 (518 against our 520): #960.
+ignore = [
+  "id", "sprite_index", "sprite_name",
+  "x", "y", "xprevious", "yprevious", "hspeed", "vspeed", "speed", "direction",
+  "gravity", "gravity_direction", "friction", "image_index",
+  "instance_number(blood)",
+]
+
+[vars]
+"instance_number(bloodEmitter)" = "instance_number(blood_emitter)"
+"instance_number(player)" = "instance_number(kid)"
+"player.x" = "kid.x"
+"player.y" = "kid.y"
+"bloodEmitter.x" = "blood_emitter.x"
+"bloodEmitter.y" = "blood_emitter.y"
+
+[unprobed]
+
+[rooms]
+"room_1" = "room1"

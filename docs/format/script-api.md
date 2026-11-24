@@ -19,28 +19,55 @@ Read with `i.name`, write with `i.name = v` where listed read and write.
 
 | Property | Type | Access | Description |
 |---|---|---|---|
+| `curJumps` | float | read, write | The air-jump counter, 0 to 255; a non-integer or out-of-range write is an error. |
 | `depth` | float | read, write | Draw depth; a lower value draws in front. |
 | `direction` | float | read, write | Movement direction in degrees; setting it updates `hspeed` and `vspeed`. |
+| `djump` | bool | read, write | The double-jump flag. |
+| `facing` | float | read only | Facing, -1 or 1 (read only; write `image_xscale`). |
+| `flipped` | bool | read only | The kid is the flipped variant (read only; part of the kind). |
 | `friction` | float | read, write | Speed removed each tick. |
+| `frozen` | bool | read, write | Input is blocked for the kid. |
+| `frozen2` | bool | read, write | The movement action is skipped. |
 | `gravity` | float | read, write | Gravity added each tick. |
 | `gravity_direction` | float | read, write | Direction of `gravity` in degrees. |
+| `group` | ? | read only | The instance's room-file group as a string, or `()` when the room file gives none. |
 | `hspeed` | float | read, write | Horizontal speed; setting it updates `speed` and `direction`. |
 | `id` | float | read only | The instance id (never reused). |
 | `image_alpha` | float | read, write | Sprite opacity, 0 to 1. |
 | `image_angle` | float | read, write | Sprite rotation in degrees. |
 | `image_index` | float | read, write | Current animation frame. |
 | `image_speed` | float | read, write | Animation frames per tick. |
-| `image_xscale` | float | read, write | Horizontal scale of the sprite. |
+| `image_xscale` | float | read, write | Horizontal scale of the sprite; on the kid it is the facing, -1 or 1. |
 | `image_yscale` | float | read, write | Vertical scale of the sprite. |
+| `jump` | float | read only | The ground jump speed (read only; arrays are #997). |
+| `jump2` | float | read only | The first air jump speed (read only). |
+| `jump3` | float | read only | The second air jump speed (read only). |
 | `kind` | string | read only | The package name of the instance's kind (`@boss`). |
+| `ladder` | bool | read, write | The kid is on a ladder. |
+| `ladderjump` | bool | read only | The kid left a ladder by jumping this Step. |
+| `ladderud` | bool | read only | The kid moved on a ladder this Step. |
+| `maxFallSpeed` | float | read, write | The fall-speed clamp (`maxFallSpeed`, A4). |
+| `maxSpeed` | float | read, write | The run speed (`maxSpeed`). |
+| `maxVspeed` | float | read, write | The vertical speed clamp (`maxVspeed`). |
+| `muteki` | bool | read, write | Kills are ignored while set. |
+| `name` | ? | read only | The instance's room-file name as a string, or `()` when the room file gives none. |
+| `onPlatform` | bool | read, write | The kid is on a platform. |
+| `onVineL` | bool | read only | A left vine is within reach (family C). |
+| `onVineR` | bool | read only | A right vine is within reach (family C). |
+| `on_slope_last` | bool | read only | The kid was on a slope last Step. |
+| `scale` | float | read, write | The layer scale (`scale`, machinary; 1 elsewhere). |
 | `solid` | bool | read, write | Whether the instance blocks movement. |
 | `speed` | float | read, write | Speed along `direction`; setting it updates `hspeed` and `vspeed`. |
+| `tempHspeed` | float | read, write | The ice carry-over speed (`tempHspeed`). |
+| `tjump` | bool | read, write | The third-jump flag. |
 | `visible` | bool | read, write | Whether the instance is drawn. |
 | `vspeed` | float | read, write | Vertical speed; setting it updates `speed` and `direction`. |
+| `walk_h` | float | read only | The last `walk` direction, -1, 0 or 1. |
 | `x` | float | read, write | Horizontal position. |
 | `xprevious` | float | read only | `x` at the start of the tick. |
 | `xstart` | float | read only | `x` where the instance was created. |
 | `y` | float | read, write | Vertical position. |
+| `yflag` | float | read only | The gravity side, -1 or 1 (read only; flip through the gravity knob). |
 | `yprevious` | float | read only | `y` at the start of the tick. |
 | `ystart` | float | read only | `y` where the instance was created. |
 
@@ -80,6 +107,12 @@ Spawn caps: `instance_create` also counts toward at most 256 instances per event
 - `ceil(?) -> float` (can fail) (cost: 1): Smallest integer not below `x`.
 - `choose(array) -> ?` (can fail) (cost: 1): One element of the array, picked by the run's one RNG; an empty array is an error.
 - `clamp(?, ?, ?) -> float` (can fail) (cost: 1): `x` limited to the range `lo` to `hi`.
+- `collision_line(?, ?, ?, ?, ?) -> ?` (can fail) (cost: 1 + 1 per pixel sampled): `collision_line(x1, y1, x2, y2, target)` or `collision_line(x1, y1, x2, y2, target, prec, notme)`: GML `collision_line`. The first instance of `target` (event order) on the 8-connected pixel line between the two rounded ends, both included, or `()`. `prec` and `notme` as for `collision_point`. Costs one budget unit per pixel sampled. Changes nothing.
+- `collision_line(?, ?, ?, ?, ?, bool, ?) -> ?` (can fail) (cost: 1 + 1 per pixel sampled): `collision_line(x1, y1, x2, y2, target)` or `collision_line(x1, y1, x2, y2, target, prec, notme)`: GML `collision_line`. The first instance of `target` (event order) on the 8-connected pixel line between the two rounded ends, both included, or `()`. `prec` and `notme` as for `collision_point`. Costs one budget unit per pixel sampled. Changes nothing.
+- `collision_point(?, ?, ?) -> ?` (can fail) (cost: 1): `collision_point(x, y, target)` or `collision_point(x, y, target, prec, notme)`: GML `collision_point`. The first instance of `target` (event order) at the room pixel (`x`, `y`) rounds to, or `()`. `prec` (default true) tests precise masks pixel by pixel, else the bounding box; `notme` is an instance to skip, or `()`. Changes nothing.
+- `collision_point(?, ?, ?, bool, ?) -> ?` (can fail) (cost: 1): `collision_point(x, y, target)` or `collision_point(x, y, target, prec, notme)`: GML `collision_point`. The first instance of `target` (event order) at the room pixel (`x`, `y`) rounds to, or `()`. `prec` (default true) tests precise masks pixel by pixel, else the bounding box; `notme` is an instance to skip, or `()`. Changes nothing.
+- `collision_rect(?, ?, ?, ?, ?) -> ?` (can fail) (cost: 1): `collision_rect(x1, y1, x2, y2, target)` or `collision_rect(x1, y1, x2, y2, target, prec, notme)`: GML `collision_rectangle`. The first instance of `target` (event order) touching the rectangle between the two corners (both included, in any order), or `()`. `prec` and `notme` as for `collision_point`. Changes nothing.
+- `collision_rect(?, ?, ?, ?, ?, bool, ?) -> ?` (can fail) (cost: 1): `collision_rect(x1, y1, x2, y2, target)` or `collision_rect(x1, y1, x2, y2, target, prec, notme)`: GML `collision_rectangle`. The first instance of `target` (event order) touching the rectangle between the two corners (both included, in any order), or `()`. `prec` and `notme` as for `collision_point`. Changes nothing.
 - `cos(?) -> float` (can fail) (cost: 1): Cosine of an angle in radians (software libm).
 - `darctan2(?, ?) -> float` (can fail) (cost: 1): Angle in degrees of the point (`x`, `y`).
 - `dcos(?) -> float` (can fail) (cost: 1): Cosine of an angle in degrees.
@@ -101,10 +134,11 @@ Spawn caps: `instance_create` also counts toward at most 256 instances per event
 - `gm_lt(?, ?) -> bool` (can fail) (cost: 1): GML `a < b` on reals, with the run's epsilon.
 - `gm_ne(?, ?) -> bool` (can fail) (cost: 1): GML `a != b` on reals, with the run's epsilon.
 - `gm_repeat(?) -> int` (can fail) (cost: 1): The iteration count GML's `repeat` gives for a real (rounded); a bad count is an error.
-- `index$get$(Instance, string) -> ?` (can fail) (cost: 1): Reads the package variable `name` of an instance (`i.hp`); an unknown name is an error, an unset one reads 0 when the game allows it.
-- `index$set$(Instance, string, ?) -> ()` (can fail) (cost: 1): Writes the package variable `name` of an instance (`i.hp = 5`); the name must be declared in the package.
+- `index$get$(Instance, string) -> ?` (can fail) (cost: 1): Reads the package variable `name` of an instance (`i.hp`); an unknown name is an error, and an unset one follows the run's script init policy (0 under `gm8`, a script error under `standard`).
+- `index$set$(Instance, string, ?) -> ()` (can fail) (cost: 1): Writes the package variable `name` of an instance (`i.hp = 5`); the name must be declared in the package. `gm8` stores a bool as 1.0/0.0; `standard` refuses that erasure until the typed value model stores a bool.
 - `instance_create(string, ?, ?) -> Instance` (can fail) (cost: 1 + 50): Creates an instance of a kind at (`x`, `y`) and runs its Create event; an optional map sets its parameters. Params that match a `[defaults.<kind>]` variant (`spike` with `dir: "down"`) take the variant's kind, with its sprite and mask, as a placed instance does. Params that pick a class or an event set (water `variant`, vine `side`, killer `bounce`, ...) take the kind the loader derived with those values; an error when there is none. Returns the handle.
 - `instance_create(string, ?, ?, map) -> Instance` (can fail) (cost: 1 + 50): Creates an instance of a kind at (`x`, `y`) and runs its Create event; an optional map sets its parameters. Params that match a `[defaults.<kind>]` variant (`spike` with `dir: "down"`) take the variant's kind, with its sprite and mask, as a placed instance does. Params that pick a class or an event set (water `variant`, vine `side`, killer `bounce`, ...) take the kind the loader derived with those values; an error when there is none. Returns the handle.
+- `instance_place(Instance, ?, ?, ?) -> ?` (can fail) (cost: 1): `instance_place(i, x, y, target)`: GML `instance_place`. The instance `place_meeting` would meet, the first in event order (rank, then id) when several do, or `()`. Changes nothing.
 - `instances(string) -> Dynamic>` (can fail) (cost: 1 + 1 per instance returned): The live instances of a kind and of the kinds the loader derived from it (`water[variant=2]` is a `water`, as a GM object covers its children) as an array, in event order, as a snapshot at call time.
 - `irandom(?) -> float` (can fail) (cost: 1): An integer from 0 to `x` inclusive, from the run's one RNG.
 - `irandom_range(?, ?) -> float` (can fail) (cost: 1): An integer between `a` and `b` inclusive, from the run's one RNG.
@@ -121,6 +155,8 @@ Spawn caps: `instance_create` also counts toward at most 256 instances per event
 - `mod(?, ?) -> float` (can fail) (cost: 1): GML `a mod b`: `a - (a div b) * b`; a zero divisor is an error.
 - `move_bounce_all(Instance, bool) -> ()` (can fail) (cost: 1): `i.move_bounce_all(precise)`: as `move_bounce_solid`, against every instance (`place_empty`).
 - `move_bounce_solid(Instance, bool) -> ()` (can fail) (cost: 1): `i.move_bounce_solid(precise)`: GML `move_bounce_solid`, the Bounce action against solid instances. Changes only `hspeed` and `vspeed`, never the position; the tick's motion then moves by the new speed. Not precise negates `hspeed` when (`x + hspeed`, `y`) is blocked, `vspeed` when (`x`, `y + vspeed`) is, both when only the diagonal is; precise picks a new direction (a multiple of 10) from 36 samples at radius `speed`.
+- `place_free(Instance, ?, ?) -> bool` (can fail) (cost: 1): `place_free(i, x, y)`: GML `place_free`. Whether `i`'s collision mask placed at (`x`, `y`) meets no solid instance. Changes nothing.
+- `place_meeting(Instance, ?, ?, ?) -> bool` (can fail) (cost: 1): `place_meeting(i, x, y, target)`: GML `place_meeting`. Whether `i`'s collision mask placed at (`x`, `y`) overlaps an instance of `target` other than `i`. The target is a role (`"block"`, `"killer"`), `"all"`, a kind (with the kinds derived from it) or an instance; a role wins over a kind of the same name. Destroyed and deactivated instances and empty masks are never met. Changes nothing.
 - `play_music(string) -> ()` (can fail) (cost: 1): Plays a music track of the package in a loop; another playing music track stops or blocks it by the run's MULTIMEDIA rule. An unknown name is an error.
 - `play_sound(string) -> ()` (can fail) (cost: 1): Plays a sound of the package once; `engine:<pack>/<id>` names a bundled pack sound. An unknown name is an error.
 - `point_direction(?, ?, ?, ?) -> float` (can fail) (cost: 1): Direction in degrees from (`x1`, `y1`) to (`x2`, `y2`), as GML.

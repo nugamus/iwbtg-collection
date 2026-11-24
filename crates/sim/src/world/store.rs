@@ -1,4 +1,4 @@
-//! The minimal instance store: a `Vec` sorted by id (docs/plans/sim-core.md 1.2).
+//! The minimal instance store: a `Vec` sorted by id (docs/architecture/sim/world.md).
 //!
 //! No map: runtime ids are handed out in increasing order and appended, so the `Vec` stays
 //! sorted by id and lookup is a binary search. Room-placed instances with a GM8 id (`gm_id`,
@@ -88,6 +88,16 @@ impl World {
         }
         self.grid = Grid::rebuild(self, def, rules)?;
         Ok(())
+    }
+
+    /// Removes `id` from the store now (the `standard` destroy path, `LifetimeRules`): the
+    /// broadphase grid is marked so its next flush drops the buckets, and a query before that
+    /// flush filters the missing id through [`World::visible`]. `gm8` does not call this; its
+    /// [`World::sweep`] removes dead instances at the end of the tick.
+    pub fn remove(&mut self, id: InstId) -> Option<Instance> {
+        let at = self.index_of(id)?;
+        self.grid.mark_moved(id);
+        Some(self.instances.remove(at))
     }
 
     /// Removes dead instances, keeping the order of the rest (tick row 14).

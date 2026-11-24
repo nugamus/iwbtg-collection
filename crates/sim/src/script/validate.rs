@@ -1,4 +1,4 @@
-//! The IWS validator (docs/plans/sim-core.md 11, decision 0001 "Validation before running"; WP9.3).
+//! The IWS validator (docs/architecture/sim/scripts.md, decision 0001 "Validation before running"; WP9.3).
 //!
 //! [`validate`] checks every script of a [`GameDef`] without running it and returns issues with
 //! file, line and column. The format loader turns them into diagnostics, so the client, the
@@ -159,6 +159,12 @@ pub const OTHER_PURE_FNS: &[&str] = &[
     "exists",
     "instances",
     "kid",
+    "place_meeting",
+    "place_free",
+    "instance_place",
+    "collision_point",
+    "collision_rect",
+    "collision_line",
 ];
 
 /// Instance properties that read as a real number.
@@ -184,7 +190,42 @@ pub const REAL_PROPS: &[&str] = &[
     "image_alpha",
     "depth",
     "id",
+    // The kid's fields that read as a number (decision 0004).
+    "curJumps",
+    "tempHspeed",
+    "maxSpeed",
+    "maxVspeed",
+    "maxFallSpeed",
+    "scale",
+    "yflag",
+    "facing",
+    "walk_h",
+    "jump",
+    "jump2",
+    "jump3",
 ];
+
+/// Instance properties that read as a bool: the generic flags and the kid's flag fields.
+pub const BOOL_PROPS: &[&str] = &[
+    "visible",
+    "solid",
+    "djump",
+    "tjump",
+    "onPlatform",
+    "ladder",
+    "frozen",
+    "frozen2",
+    "muteki",
+    "ladderud",
+    "ladderjump",
+    "flipped",
+    "on_slope_last",
+    "onVineL",
+    "onVineR",
+];
+
+/// Instance properties that read as a string (the room-file name and group).
+pub const STR_PROPS: &[&str] = &["name", "group"];
 
 /// Functions Rhai itself handles (function pointers); they cannot be checked statically.
 const ENGINE_FNS: &[&str] = &["Fn", "call", "curry", "is_def_fn", "is_def_var"];
@@ -198,6 +239,8 @@ pub enum Names {
     Sound,
     /// A room id.
     Room,
+    /// A collision query target: a role (named class), `"all"` or a kind (`script::collide`).
+    Target,
 }
 
 /// API functions that take a name, as (function, argument index, what it names). A new API
@@ -212,6 +255,11 @@ pub const NAME_ARGS: &[(&str, usize, Names)] = &[
     ("play_sound", 0, Names::Sound),
     ("play_music", 0, Names::Sound),
     ("room_goto", 0, Names::Room),
+    ("place_meeting", 3, Names::Target),
+    ("instance_place", 3, Names::Target),
+    ("collision_point", 2, Names::Target),
+    ("collision_rect", 4, Names::Target),
+    ("collision_line", 4, Names::Target),
 ];
 
 /// Whether `name` is something `what` in the package.
@@ -221,6 +269,7 @@ pub fn resolves(def: &GameDef, what: Names, name: &str) -> bool {
         Names::Kind => def.kinds.iter().any(|k| k.name == name),
         Names::Sound => def.sounds.iter().any(|s| s.name == name),
         Names::Room => def.rooms.iter().any(|r| r.name == name),
+        Names::Target => super::collide::resolves(def, name),
     }
 }
 
@@ -230,8 +279,23 @@ impl Names {
             Names::Kind => "kind",
             Names::Sound => "sound",
             Names::Room => "room",
+            Names::Target => "role or kind",
         }
     }
+}
+
+/// The `(name, parameter count)` of every function `source` defines, or `None` when it does not
+/// compile under the IWS profile. The loader uses this to check the functions a kid profile's
+/// script slots name (decision 0004) while it still has the profile file's text for positions.
+#[must_use]
+pub fn function_arities(source: &str) -> Option<BTreeSet<(String, usize)>> {
+    let iws = Iws::new(RunnerRules::default().num);
+    let ast = iws.compile_ast(source).ok()?;
+    Some(
+        ast.iter_fn_def()
+            .map(|f| (f.name.to_string(), f.params.len()))
+            .collect(),
+    )
 }
 
 /// Checks every script of `def`. Issues come sorted by script, line and column.
@@ -716,14 +780,18 @@ fn check_call(cx: &mut Ctx, c: &FnCallExpr, pos: Position, method: bool) {
         };
         cx.error(pos, message);
     }
-    if !method {
-        for (f, index, what) in NAME_ARGS {
-            if *f == name
-                && let Some(Expr::StringConstant(s, p)) = c.args.get(*index)
-                && !resolves(cx.def, *what, s)
-            {
-                cx.unknown_name(*p, *what, s);
-            }
+    // A method call (`this.place_meeting(x, y, "block")`) has its first argument before the dot.
+    for (f, index, what) in NAME_ARGS {
+        let at = if method {
+            index.checked_sub(1)
+        } else {
+            Some(*index)
+        };
+        if *f == name
+            && let Some(Expr::StringConstant(s, p)) = at.and_then(|i| c.args.get(i))
+            && !resolves(cx.def, *what, s)
+        {
+            cx.unknown_name(*p, *what, s);
         }
     }
 }
@@ -884,10 +952,10 @@ fn g() { let t = S + OFF + B; t + N }
             assert!(getters.contains(*p), "`{p}` is not a registered getter");
         }
         for g in &getters {
-            if !["visible", "solid", "kind"].contains(&g.as_str()) {
+            if g != "kind" && !BOOL_PROPS.contains(&g.as_str()) {
                 assert!(
-                    REAL_PROPS.contains(&g.as_str()),
-                    "getter `{g}` is not in REAL_PROPS"
+                    REAL_PROPS.contains(&g.as_str()) || STR_PROPS.contains(&g.as_str()),
+                    "getter `{g}` is not in REAL_PROPS, BOOL_PROPS or STR_PROPS"
                 );
             }
         }

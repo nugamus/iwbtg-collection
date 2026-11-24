@@ -93,12 +93,15 @@ impl<'a> Loader<'a> {
         r
     }
 
-    /// Step 6: every variable name the loader can see, sorted (plan 1.1).
+    /// Step 6: every variable name the loader can see, sorted (docs/architecture/sim/world.md).
     pub(super) fn intern(&self, rooms: &[ParsedRoom<'_>]) -> BTreeMap<String, iwbtg_sim::def::VarId> {
         let mut names: BTreeSet<String> = BTreeSet::new();
         for k in &self.kinds {
             names.extend(k.params.0.keys().cloned());
         }
+        // A kid profile's `[script] vars` are declared content, not run-time inferences
+        // (decision 0004).
+        names.extend(self.kid_script_vars.iter().cloned());
         for r in rooms {
             for i in &r.file.instances {
                 names.extend(i.params.keys().cloned());
@@ -230,7 +233,7 @@ impl<'a> Loader<'a> {
             None => None,
             Some(name) => {
                 let k = self.kind_by_ref(name.get_ref());
-                if k.is_none() {
+                if k.is_none() && !self.failed.contains(name.get_ref()) {
                     self.error(
                         path,
                         text,
@@ -418,7 +421,8 @@ impl<'a> Loader<'a> {
         span: Range<usize>,
     ) -> Option<KindId> {
         let k = self.kind_by_ref(kind).filter(|_| !self.dropped.contains(kind));
-        if k.is_none() {
+        // A kind whose own file failed to load was reported there already.
+        if k.is_none() && !self.failed.contains(kind) {
             self.error(
                 path,
                 text,

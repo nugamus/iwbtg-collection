@@ -8,7 +8,7 @@
 use std::path::Path;
 
 use iwbtg_sim::rules::NumRules;
-use iwbtg_sim::script::docs::Docs;
+use iwbtg_sim::script::docs::{Access, Docs};
 use iwbtg_sim::script::host::Iws;
 use serde_json::Value;
 
@@ -176,10 +176,16 @@ fn markdown(funcs: &[Func], docs: &Docs) -> Result<String, ToolError> {
     let mut s = String::from(INTRO);
     s.push_str("## Instance properties\n\nRead with `i.name`, write with `i.name = v` where listed read and write.\n\n| Property | Type | Access | Description |\n|---|---|---|---|\n");
     for (n, (t, r, w)) in &props {
-        let acc = match (r, w) {
-            (true, true) => "read, write",
-            (true, false) => "read only",
-            _ => "write only",
+        // A read-only property may still register a setter that refuses the write with a clear
+        // error (`docs.add_read_only`), so the description decides the access.
+        let acc = if docs.access(n) == Some(Access::ReadOnly) {
+            "read only"
+        } else {
+            match (r, w) {
+                (true, true) => "read, write",
+                (true, false) => "read only",
+                _ => "write only",
+            }
         };
         let d = describe(docs, n, &mut missing);
         s.push_str(&format!("| `{n}` | {t} | {acc} | {d} |\n"));
@@ -235,11 +241,12 @@ fn describe(docs: &Docs, name: &str, missing: &mut Vec<String>) -> String {
 
 /// ` (cost: 1 + 50)` for a function that charges extra, else ` (cost: 1)`.
 fn cost_note(name: &str) -> String {
-    match iwbtg_sim::script::budget::cost(name) {
+    use iwbtg_sim::script::budget;
+    match budget::cost(name) {
         (0, 0) => " (cost: 1)".to_owned(),
         (base, 0) => format!(" (cost: 1 + {base})"),
-        (0, item) => format!(" (cost: 1 + {item} per instance returned)"),
-        (base, item) => format!(" (cost: 1 + {base} + {item} per item)"),
+        (0, item) => format!(" (cost: 1 + {item} per {})", budget::cost_item(name)),
+        (base, item) => format!(" (cost: 1 + {base} + {item} per {})", budget::cost_item(name)),
     }
 }
 

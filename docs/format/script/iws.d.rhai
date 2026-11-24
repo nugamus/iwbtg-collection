@@ -56,6 +56,18 @@ fn choose(_: array) -> ?;
 
 fn clamp(_: ?, _: ?, _: ?) -> float;
 
+fn collision_line(_: ?, _: ?, _: ?, _: ?, _: ?) -> ?;
+
+fn collision_line(_: ?, _: ?, _: ?, _: ?, _: ?, _: bool, _: ?) -> ?;
+
+fn collision_point(_: ?, _: ?, _: ?) -> ?;
+
+fn collision_point(_: ?, _: ?, _: ?, _: bool, _: ?) -> ?;
+
+fn collision_rect(_: ?, _: ?, _: ?, _: ?, _: ?) -> ?;
+
+fn collision_rect(_: ?, _: ?, _: ?, _: ?, _: ?, _: bool, _: ?) -> ?;
+
 fn cos(_: ?) -> float;
 
 fn darctan2(_: ?, _: ?) -> float;
@@ -80,15 +92,29 @@ fn floor(_: ?) -> float;
 
 fn frac(_: ?) -> float;
 
+fn get curJumps(_: Instance) -> float;
+
 fn get depth(_: Instance) -> float;
 
 fn get direction(_: Instance) -> float;
 
+fn get djump(_: Instance) -> bool;
+
+fn get facing(_: Instance) -> float;
+
+fn get flipped(_: Instance) -> bool;
+
 fn get friction(_: Instance) -> float;
+
+fn get frozen(_: Instance) -> bool;
+
+fn get frozen2(_: Instance) -> bool;
 
 fn get gravity(_: Instance) -> float;
 
 fn get gravity_direction(_: Instance) -> float;
+
+fn get group(_: Instance) -> ?;
 
 fn get hspeed(_: Instance) -> float;
 
@@ -106,15 +132,53 @@ fn get image_xscale(_: Instance) -> float;
 
 fn get image_yscale(_: Instance) -> float;
 
+fn get jump(_: Instance) -> float;
+
+fn get jump2(_: Instance) -> float;
+
+fn get jump3(_: Instance) -> float;
+
 fn get kind(_: Instance) -> string;
+
+fn get ladder(_: Instance) -> bool;
+
+fn get ladderjump(_: Instance) -> bool;
+
+fn get ladderud(_: Instance) -> bool;
+
+fn get maxFallSpeed(_: Instance) -> float;
+
+fn get maxSpeed(_: Instance) -> float;
+
+fn get maxVspeed(_: Instance) -> float;
+
+fn get muteki(_: Instance) -> bool;
+
+fn get name(_: Instance) -> ?;
+
+fn get onPlatform(_: Instance) -> bool;
+
+fn get onVineL(_: Instance) -> bool;
+
+fn get onVineR(_: Instance) -> bool;
+
+fn get on_slope_last(_: Instance) -> bool;
+
+fn get scale(_: Instance) -> float;
 
 fn get solid(_: Instance) -> bool;
 
 fn get speed(_: Instance) -> float;
 
+fn get tempHspeed(_: Instance) -> float;
+
+fn get tjump(_: Instance) -> bool;
+
 fn get visible(_: Instance) -> bool;
 
 fn get vspeed(_: Instance) -> float;
+
+fn get walk_h(_: Instance) -> float;
 
 fn get x(_: Instance) -> float;
 
@@ -123,6 +187,8 @@ fn get xprevious(_: Instance) -> float;
 fn get xstart(_: Instance) -> float;
 
 fn get y(_: Instance) -> float;
+
+fn get yflag(_: Instance) -> float;
 
 fn get yprevious(_: Instance) -> float;
 
@@ -153,6 +219,8 @@ fn index$set$(_: Instance, _: string, _: ?) -> ();
 fn instance_create(_: string, _: ?, _: ?) -> Instance;
 
 fn instance_create(_: string, _: ?, _: ?, _: map) -> Instance;
+
+fn instance_place(_: Instance, _: ?, _: ?, _: ?) -> ?;
 
 fn instances(_: string) -> Dynamic>;
 
@@ -186,6 +254,10 @@ fn move_bounce_all(_: Instance, _: bool) -> ();
 
 fn move_bounce_solid(_: Instance, _: bool) -> ();
 
+fn place_free(_: Instance, _: ?, _: ?) -> bool;
+
+fn place_meeting(_: Instance, _: ?, _: ?, _: ?) -> bool;
+
 fn play_music(_: string) -> ();
 
 fn play_sound(_: string) -> ();
@@ -214,11 +286,19 @@ fn room_tick() -> float;
 
 fn round(_: ?) -> float;
 
+fn set curJumps(_: Instance, _: ?) -> ();
+
 fn set depth(_: Instance, _: ?) -> ();
 
 fn set direction(_: Instance, _: ?) -> ();
 
+fn set djump(_: Instance, _: bool) -> ();
+
 fn set friction(_: Instance, _: ?) -> ();
+
+fn set frozen(_: Instance, _: bool) -> ();
+
+fn set frozen2(_: Instance, _: bool) -> ();
 
 fn set gravity(_: Instance, _: ?) -> ();
 
@@ -238,9 +318,27 @@ fn set image_xscale(_: Instance, _: ?) -> ();
 
 fn set image_yscale(_: Instance, _: ?) -> ();
 
+fn set ladder(_: Instance, _: bool) -> ();
+
+fn set maxFallSpeed(_: Instance, _: ?) -> ();
+
+fn set maxSpeed(_: Instance, _: ?) -> ();
+
+fn set maxVspeed(_: Instance, _: ?) -> ();
+
+fn set muteki(_: Instance, _: bool) -> ();
+
+fn set onPlatform(_: Instance, _: bool) -> ();
+
+fn set scale(_: Instance, _: ?) -> ();
+
 fn set solid(_: Instance, _: bool) -> ();
 
 fn set speed(_: Instance, _: ?) -> ();
+
+fn set tempHspeed(_: Instance, _: ?) -> ();
+
+fn set tjump(_: Instance, _: bool) -> ();
 
 fn set visible(_: Instance, _: bool) -> ();
 

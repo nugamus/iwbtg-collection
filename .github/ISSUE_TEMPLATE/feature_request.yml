@@ -1,0 +1,44 @@
+name: Feature or idea
+description: Suggest a feature, a change or a game to support.
+title: "[Idea]: "
+labels: ["triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. Do not include original game files or decompiled code; they cannot be accepted.
+        Ported games need their creator's permission and a clean-room spec, so a port request is a research task, not a code drop.
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like
+      description: The feature, change or game, in a sentence or two.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: What problem it solves, or what it would let you do.
+    validations:
+      required: true
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Gameplay impact
+      description: How this would affect what a player can do. An agent confirms the F tier at triage ([fidelity tiers](https://github.com/nugamus/iwbtg-collection/blob/main/docs/plans/fidelity-tiers.md)).
+      options:
+        - F1 — changes what a skilled player can do (position, death, timing, input, respawn)
+        - F2 — only what I see or hear
+        - F3 — a player cannot observe it
+        - Not about gameplay
+        - Not sure
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Other ways to solve it, or how you work around it today.
+    validations:
+      required: false

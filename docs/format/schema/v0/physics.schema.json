@@ -174,7 +174,7 @@
       ]
     },
     "BoundaryModel": {
-      "description": "`events.boundary`: how the kid handles the room edge (plan 5.3 edge row).",
+      "description": "`events.boundary`: how the kid handles the room edge (docs/architecture/sim/kid.md edge row).",
       "oneOf": [
         {
           "const": "none",
@@ -322,7 +322,7 @@
         },
         {
           "const": "arm_play_timer",
-          "description": "Create step 5: alarm 0 = `room_speed`.",
+          "description": "Create step 5: alarm 0 = one clock second (`room_speed` under the legacy policy, R30).",
           "type": "string"
         },
         {
@@ -377,7 +377,7 @@
         },
         {
           "const": "play_timer",
-          "description": "Alarm 0: outside the menu roles `global.time` + 1, then alarm 0 = `room_speed` again.",
+          "description": "Alarm 0: outside the menu roles `global.time` + 1, then alarm 0 = one clock second again.",
           "type": "string"
         },
         {
@@ -569,7 +569,7 @@
       ]
     },
     "FlipKind": {
-      "description": "The flip models of plan 5.3, by their `physics.toml` names.",
+      "description": "The flip models (docs/architecture/sim/kid.md), by their `physics.toml` names.",
       "oneOf": [
         {
           "const": "none",
@@ -595,7 +595,7 @@
     },
     "FlipModel": {
       "additionalProperties": false,
-      "description": "`[flip]`: how gravity flips (plan 5.3 flip rows). WP5c adds the other fields\n(`mask_flipped`, ...).",
+      "description": "`[flip]`: how gravity flips (docs/architecture/sim/kid.md flip rows). WP5c adds the other fields\n(`mask_flipped`, ...).",
       "properties": {
         "model": {
           "$ref": "#/$defs/FlipKind",
@@ -608,6 +608,31 @@
         }
       },
       "type": "object"
+    },
+    "GravityModel": {
+      "description": "`[gravity] model`: the standard name for the gravity reapply rule, the same value as\n`[gravity] reapply`. Gravity's orientation when it flips is `[flip] model`, not this.",
+      "oneOf": [
+        {
+          "const": "constant",
+          "description": "Gravity is the constant `numbers.gravity`, reapplied every Step (A1).",
+          "type": "string"
+        },
+        {
+          "const": "step",
+          "description": "Same as `constant`.",
+          "type": "string"
+        },
+        {
+          "const": "end_step_slope",
+          "description": "Gravity is set by the End Step slope code (family B).",
+          "type": "string"
+        },
+        {
+          "const": "create_only",
+          "description": "Gravity is set only at Create (A4, A5, C).",
+          "type": "string"
+        }
+      ]
     },
     "GravityReapply": {
       "description": "When gravity is set back to its constant.",
@@ -631,14 +656,26 @@
     },
     "GravityRulesDraft": {
       "additionalProperties": false,
-      "description": "`[gravity]` as written.",
+      "description": "`[gravity]` as written. `model` is the standard spelling of `reapply`; a written `reapply`\nwins over it.",
       "properties": {
         "block_landing_zeroes": {
           "default": null,
+          "description": "`block_landing_zeroes = true`.",
           "type": [
             "boolean",
             "null"
           ]
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GravityModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`model = \"constant\" | \"step\" | \"end_step_slope\" | \"create_only\"`."
         },
         "reapply": {
           "anyOf": [
@@ -648,7 +685,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "`reapply = \"step\"`."
         }
       },
       "type": "object"
@@ -909,9 +947,13 @@
         {
           "$ref": "#/$defs/SlopeAction",
           "description": "Slopes (WP5c)."
+        },
+        {
+          "$ref": "#/$defs/KidScriptSlot",
+          "description": "A script slot (`{ do = \"script\", fn = \"dash\" }`, decision 0004)."
         }
       ],
-      "description": "One named action in a `physics.toml` event list (`step = [\"walk\", \"jump\", ...]`, plan 5.2).\n\nSplit by owner like `KindState`: each part is the enum of one file under `actions/`, and the\nname in the file picks the part whose enum has that name (`untagged`). Names must be unique\nacross parts."
+      "description": "One named action in a `physics.toml` event list (`step = [\"walk\", \"jump\", ...]`, docs/architecture/sim/kid.md).\n\nSplit by owner like `KindState`: each part is the enum of one file under `actions/`, and the\nname in the file picks the part whose enum has that name (`untagged`). Names must be unique\nacross parts."
     },
     "KidAlarm": {
       "additionalProperties": false,
@@ -982,9 +1024,13 @@
         {
           "$ref": "#/$defs/MovingBlockRun",
           "description": "poronkusema `moving_block_por` (WP5c)."
+        },
+        {
+          "$ref": "#/$defs/KidScriptSlot",
+          "description": "A script collision slot (`{ do = \"script\", fn = \"dash_touch\" }`), called with `other`\n(decision 0004)."
         }
       ],
-      "description": "One named collision run in `events.collisions` (`{ with = \"block\", run = \"block_standard\" }`,\nplan 5.2). Split by owner like [`KidAction`]."
+      "description": "One named collision run in `events.collisions` (`{ with = \"block\", run = \"block_standard\" }`,\ndocs/architecture/sim/kid.md). Split by owner like [`KidAction`]."
     },
     "KidEventsDraft": {
       "additionalProperties": false,
@@ -1308,6 +1354,51 @@
       },
       "type": "object"
     },
+    "KidScriptDraft": {
+      "additionalProperties": false,
+      "description": "`[script]` as written: the loader resolves `file` to a [`ScriptId`] and interns `vars`.",
+      "properties": {
+        "file": {
+          "default": null,
+          "description": "`file = \"<id>\"`: `scripts/<id>.rhai`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "vars": {
+          "default": null,
+          "description": "`vars = [\"dash_dir\"]`.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "KidScriptSlot": {
+      "additionalProperties": false,
+      "description": "One script slot in a kid event list (`{ do = \"script\", fn = \"dash\" }`, decision 0004). The\nfunction is looked up in the profile's `[script] file`: no argument in a list event, `other`\nin a collision slot, with `this` bound to the kid.",
+      "properties": {
+        "do": {
+          "$ref": "#/$defs/ScriptSlotDo",
+          "description": "Must be `\"script\"`."
+        },
+        "fn": {
+          "description": "The function of the profile's `[script] file`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "do",
+        "fn"
+      ],
+      "type": "object"
+    },
     "KidSoundNames": {
       "additionalProperties": false,
       "description": "`[sounds]` as written in a package: sound names by role, resolved to [`KidSounds`] ids by the\nloader.",
@@ -1606,7 +1697,7 @@
       ]
     },
     "Real": {
-      "description": "A GM8 real: one IEEE binary64 double.\n\nArithmetic is plain f64 arithmetic. Equality and `Eq` compare the bit pattern, so `Real` can\nkey ordered maps; `0.0` and `-0.0` differ, and a NaN equals itself. For GML-style value\ncomparison use [`gm_eq`] and friends.\n\n`Hash` and `Serialize` use [`Real::canonical_bits`], so every NaN hashes and serializes as\n[`Real::CANONICAL_NAN_BITS`] whatever payload the platform produced. The state hash is BLAKE3\nover the postcard encoding (plan 10.1); `Hash` is only for test maps. Deserializing keeps the\nbits it reads.",
+      "description": "A GM8 real: one IEEE binary64 double.\n\nArithmetic is plain f64 arithmetic. Equality and `Eq` compare the bit pattern, so `Real` can\nkey ordered maps; `0.0` and `-0.0` differ, and a NaN equals itself. For GML-style value\ncomparison use [`gm_eq`] and friends.\n\n`Hash` and `Serialize` use [`Real::canonical_bits`], so every NaN hashes and serializes as\n[`Real::CANONICAL_NAN_BITS`] whatever payload the platform produced. The state hash is BLAKE3\nover the postcard encoding (docs/architecture/sim/hash.md); `Hash` is only for test maps.\nDeserializing keeps the bits it reads.",
       "format": "double",
       "type": "number"
     },
@@ -1681,6 +1772,16 @@
       },
       "type": "object"
     },
+    "ScriptSlotDo": {
+      "description": "The only value of a kid slot's `do`: `\"script\"`. A named table keeps a typo from being read as\nsome other action.",
+      "oneOf": [
+        {
+          "const": "script",
+          "description": "A script function.",
+          "type": "string"
+        }
+      ]
+    },
     "SlopeAction": {
       "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`.",
       "oneOf": [
@@ -1696,41 +1797,122 @@
         }
       ]
     },
-    "SlopeModel": {
+    "SlopeKind": {
+      "description": "`[slope] model`: the standard name for the downhill snap model, the same value as\n`[slope] downhill`. `block_step`, `mirror_contact` and `keep_hspeed` remain separate keys.",
+      "oneOf": [
+        {
+          "const": "none",
+          "description": "No downhill snap.",
+          "type": "string"
+        },
+        {
+          "const": "poronkusema",
+          "description": "Poronkusema's downhill snap.",
+          "type": "string"
+        },
+        {
+          "const": "rainbow",
+          "description": "Rainbow's downhill snap.",
+          "type": "string"
+        },
+        {
+          "const": "fairy_tale",
+          "description": "Fairy-tale's downhill snap.",
+          "type": "string"
+        }
+      ]
+    },
+    "SlopeRulesDraft": {
       "additionalProperties": false,
-      "description": "`[slope]`: the slopes of group A and eat-the-new-year (kid/A1.md poronkusema, rainbow, rori,\nfairy-tale; kid/A4.md). `slope` rises to the right, `slope_mirror` to the left. A game's slope\nkinds carry only those classes (not `block`), so the kid's `slope` and `slope_mirror`\ncollision rows run alone, as the original's child-object events do.",
+      "description": "`[slope]` as written: a written section replaces the preset's whole (as it did before the\nstandard names), starting from the rule defaults. `model` is the standard spelling of\n`downhill`; a written `downhill` wins over it.",
       "properties": {
         "air_sprite_probe": {
-          "$ref": "#/$defs/Real",
-          "default": 0.0,
-          "description": "`air_sprite`: no fall sprite while a slope lies this many pixels below (rori, fairy-tale: 2).\n0 means off."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "`air_sprite_probe`."
         },
         "block_step": {
-          "$ref": "#/$defs/BlockSlopeStep",
-          "description": "How the horizontal block contact climbs (`block_slope_step`)."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BlockSlopeStep"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`block_step`."
         },
         "downhill": {
-          "$ref": "#/$defs/Downhill",
-          "description": "The End Step downhill snap (`downhill_snap`)."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Downhill"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`downhill`."
         },
         "jump_probe": {
-          "$ref": "#/$defs/Real",
-          "default": 0.0,
-          "description": "`slope_jump`: with a slope or mirrored slope within this many pixels below a Jump press\nforces a single jump (rainbow, rori, fairy-tale: 2). 0 means off."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "`jump_probe`."
         },
         "keep_hspeed": {
-          "default": false,
-          "description": "`walk` keeps `hspeed` while a slope is 1 px below and the key points downhill\n(eat-the-new-year, kid/A4.md).",
-          "type": "boolean"
+          "default": null,
+          "description": "`keep_hspeed`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
         },
         "mirror_contact": {
-          "$ref": "#/$defs/MirrorContact",
-          "description": "Which way the `slope_mirror` row's contact goes for a right hit or `hspeed` 0, when the\nclimb does not apply (rori: `left`, a bug the original keeps; fairy-tale: `right`)."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MirrorContact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`mirror_contact`."
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlopeKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`model = \"none\" | \"poronkusema\" | \"rainbow\" | \"fairy_tale\"`."
         },
         "step": {
-          "$ref": "#/$defs/Real",
-          "default": 3.0,
-          "description": "The climb: 3 px sideways and 3 px up."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "`step`."
         }
       },
       "type": "object"
@@ -1770,8 +1952,8 @@
         }
       ]
     },
-    "VineModel": {
-      "description": "Vine model.",
+    "VineMode": {
+      "description": "`[vine] model` as written: the standard model names, with `latched_keys` also selecting the\nkey-reading model (`[input] vine_keys = \"latched_flags\"`).",
       "oneOf": [
         {
           "const": "none",
@@ -1784,15 +1966,20 @@
           "type": "string"
         },
         {
-          "const": "distance_sym_early",
-          "description": "Both sides within one pixel (C, WP5c).",
+          "const": "latched_keys",
+          "description": "The game's latched key flags drive the vine keys (A3); the distance rule is asymmetric.",
+          "type": "string"
+        },
+        {
+          "const": "symmetric_early",
+          "description": "Both sides within one pixel (C).",
           "type": "string"
         }
       ]
     },
     "VineRulesDraft": {
       "additionalProperties": false,
-      "description": "`[vine]` as written.",
+      "description": "`[vine]` as written. `model` is the standard spelling of the vine model; `latched_keys` also\nselects the key-reading model, which `apply` writes into `[input] vine_keys`.",
       "properties": {
         "drop": {
           "anyOf": [
@@ -1803,10 +1990,12 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "`drop`."
         },
         "kick": {
           "default": null,
+          "description": "`kick`.",
           "items": {
             "$ref": "#/$defs/Real"
           },
@@ -1826,20 +2015,23 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "`left_below`."
         },
         "model": {
           "anyOf": [
             {
-              "$ref": "#/$defs/VineModel"
+              "$ref": "#/$defs/VineMode"
             },
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "`model = \"none\" | \"distance_asym\" | \"latched_keys\" | \"symmetric_early\"`."
         },
         "probe_down_fixed": {
           "default": null,
+          "description": "`probe_down_fixed`.",
           "type": [
             "boolean",
             "null"
@@ -1854,7 +2046,8 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "`right_equal`."
         },
         "slide": {
           "anyOf": [
@@ -1865,10 +2058,12 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "`slide`."
         },
         "walk_ignores_vines": {
           "default": null,
+          "description": "`walk_ignores_vines`.",
           "type": [
             "boolean",
             "null"
@@ -1917,9 +2112,47 @@
         }
       ]
     },
-    "WaterRules": {
+    "WaterModel": {
+      "description": "`[water] model`: the standard name for the water air-jump rule, the same value as\n`[jump] water_air` (docs/format/physics.md \"Standard names and aliases\").",
+      "oneOf": [
+        {
+          "const": "none",
+          "description": "Water never allows the air jump.",
+          "type": "string"
+        },
+        {
+          "const": "jump_refresh",
+          "description": "Water 2 one pixel below allows the air jump even without `djump` (A1).",
+          "type": "string"
+        },
+        {
+          "const": "full_jump",
+          "description": "Water allows any number of air jumps (family B).",
+          "type": "string"
+        },
+        {
+          "const": "water3_keeps",
+          "description": "Water 2 and 3 allow the air jump and water 3 keeps `djump` (family C).",
+          "type": "string"
+        }
+      ]
+    },
+    "WaterRulesDraft": {
       "additionalProperties": false,
-      "description": "`[water]` (WP5a).",
+      "description": "`[water]` as written. Its only standard key is `model`, which names the same value as\n`[jump] water_air`.",
+      "properties": {
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WaterModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`model = \"none\" | \"jump_refresh\" | \"full_jump\" | \"water3_keeps\"`."
+        }
+      },
       "type": "object"
     }
   },
@@ -2035,7 +2268,7 @@
           "type": "null"
         }
       ],
-      "description": "`[ladder]`."
+      "description": "`[ladder]` (standard alias `[ladders]`)."
     },
     "misc": {
       "anyOf": [
@@ -2068,7 +2301,7 @@
           "type": "null"
         }
       ],
-      "description": "`[platform]`."
+      "description": "`[platform]` (standard alias `[platforms]`)."
     },
     "preset": {
       "anyOf": [
@@ -2092,16 +2325,27 @@
       ],
       "description": "`[save]`."
     },
-    "slope": {
+    "script": {
       "anyOf": [
         {
-          "$ref": "#/$defs/SlopeModel"
+          "$ref": "#/$defs/KidScriptDraft"
         },
         {
           "type": "null"
         }
       ],
-      "description": "`[slope]`."
+      "description": "`[script]`: the slot script file and its custom variables (decision 0004)."
+    },
+    "slope": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SlopeRulesDraft"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[slope]` (standard alias `[slopes]`)."
     },
     "sounds": {
       "anyOf": [
@@ -2134,12 +2378,12 @@
           "type": "null"
         }
       ],
-      "description": "`[vine]`."
+      "description": "`[vine]` (standard alias `[vines]`)."
     },
     "water": {
       "anyOf": [
         {
-          "$ref": "#/$defs/WaterRules"
+          "$ref": "#/$defs/WaterRulesDraft"
         },
         {
           "type": "null"

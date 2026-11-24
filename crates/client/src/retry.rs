@@ -28,6 +28,21 @@ pub struct RetryArgs {
     pub auto_retry: Option<bool>,
 }
 
+/// The retry's place in the module list (main.rs): its flags and plugin.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = RetryArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        args: RetryArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(RetryPlugin(args));
+    }
+}
+
 /// Retry state: whether auto-retry is on, the death counter after the last tick, and a retry
 /// waiting for the next frame.
 #[derive(Resource)]

@@ -1,6 +1,8 @@
 # Plan: simulation core for the 20 prototype games
 
-Status: plan, revision 2, 2026-10-24. Written by Claude for parallel implementation by agents. Nothing here is code yet. Revision 2 applies the clean-room, determinism and coverage reviews: each critique was re-checked against the spec text before it went in (section 17 lists what changed).
+> **Historical.** The live design text lives in `docs/architecture/` ([simulation](../architecture/sim.md) and its area pages), which is the authority where this plan differs. The live register moved to `docs/architecture/sim/register-*.md`, and the converter-request table to `docs/format/converter-requests.md`; section 15 below keeps the original register intro as history. The rest of this page is history.
+
+Status: historical plan, revision 2, 2026-10-24. Written by Claude for parallel implementation by agents. Revision 2 applies the clean-room, determinism and coverage reviews: each critique was re-checked against the spec text before it went in (section 17 lists what changed).
 
 Goal: `crates/sim` runs any of the 20 prototype games (`research/shortlist.md`) from a v0 package and reproduces the research traces tick for tick, bit for bit. `crates/format` turns a package into a `GameDef`. `crates/tools` runs a package against a `.inputs` file and diffs the result against a recorded CSV, and runs replays headless.
 
@@ -263,7 +265,7 @@ The recorder samples after phase 13 and before phase 15 ("after End Step, drawin
 - **Inactive instances** get no events, are not drawn and are ignored by queries (Confirmed manual 403_06).
 - **Direct key reads** (Inferred input: one latch bit per key, shared by every direct read, consumed by each read). Every built-in and kid action that ports a `keyboard_check_direct` calls `InputState::direct(&mut self, Action) -> bool`; nothing else reads or clears the latch. Ladder code that reads Up twice in one Step (little-trap, rainbow, rori, fairy-tale) makes two calls. The world built-in's dummy reads (kaenbyou, eat-the-lemon, xia) are `direct` calls from the world's Step, enabled by its `latch_cleared_by_world` param (WP6a), not a kid field.
 - **Real-time variables** (R28, Design). GML reads of `fps`, `current_time`, `time_span`-style clocks (kaenbyou and eat-the-lemon world Step cheat check, numbers "round, frac and real") return fixed values derived from ticks: `fps = tick_rate` (0 during the trace runner's warm-up, `TickRules::fps_zero_ticks`, #641), clocks = `tick * 1000 / tick_rate` ms. Documented per built-in that reads them.
-- **GM 8.1** (wanna, go-the-spook-house, keep-celebrating-for-xia): `RunnerRules::for_runner(Runner::Gm81, rev)` returns the same rules as `Gm80` until T-EVO-2 shows a difference (U12, R11). Any difference becomes a field, never a branch on `runner` inside built-ins.
+- **GM 8.1** (wanna, go-the-spook-house, keep-celebrating-for-xia): `RunnerRules::for_runner(Runner::Gm81, rev)` returns the same rules as `Gm80`; research#15 found no simulation-visible difference (U12, R11). `runner` records the build for provenance. Only the real 8.1 event-order and input check remains OPEN (research#175). Any difference found later becomes a field, never a branch on `runner` inside built-ins.
 - **Halting.** A script error, a non-finite value (section 10.2), an overflow (10.3) or an invariant break sets `SimStatus::Halted(SimError)` and freezes the world. The sim never panics on any input (wasm32-unknown-unknown builds abort on panic, section 10.6).
 
 ### 2.3 Events and dispatch
@@ -856,7 +858,7 @@ WP7a (rooms, objects, order) and WP7b (physics, params, paths, sounds) propose t
 
 ### 8.4 Converter requests (gates for milestones)
 
-Moved to [its own page](sim-core/converter-requests.md) (CR1 and on), so PRs that add or settle a request do not conflict with edits elsewhere in this plan.
+Moved to [its own page](../format/converter-requests.md) (CR1 and on), so PRs that add or settle a request do not conflict with edits elsewhere in this plan.
 
 ## 9. Trace comparison and replay (`crates/tools`, WP8a, WP8b)
 
@@ -909,7 +911,7 @@ pub fn resolve(name: &str, def: &GameDef) -> Option<FieldRef>;   // "djump", "cu
 
 - `Engine(EngineVar)` reads engine state the package does not declare as a variable: `global.difficulty`, `death`, `time`, `savenum`, `clear`, `frozen`, `frozen2`, `reverse`, `grav`, `paused`, the latched vine-key flags `key_left`, `key_right`, `key_jump` (`KidGlobalsExt`; showdown's `global.button01` to `03`) and `room_speed`. These names win over a package variable of the same name (a save point's `difficulty` parameter interns one). Audio settings (`global.audio_*`, `stream_music`) are not sim state; cases list them in `[unprobed]`. `grav` on a family B kid reads the profile gravity (kid/B.md: declared, never read); `saveTimer` on a `save` instance reads its cooldown timer. `save.<name>` is a save slot field when it is one, else a field of the first `save` instance.
 - `bbox_left`, `bbox_right`, `bbox_top`, `bbox_bottom` (`FieldRef::Bbox`) read what GML reads (`collide::bbox::bbox_read`) at the instance's position: the reported box (`reported_box`, CLONE_SPEC collision "General bbox rule": rounded after the offset, ties to even); -100000 for all four with no sprite and no mask (traces/animus/bbox-nomask.csv, #905); for a sprite with no frames, as `sprite_index` or `mask_index`, the general rule on a 1x1 mask at origin 0, so round(x), round(y) at unit scale; for maskNothing (2x2, bounds 1,0,1,0) its inverted box normalized by the corner min and max (traces/help-the-fairy-tale/bbox-empty-mask.csv and -b.csv, #913). Any other empty mask (the 32x32 and 7x8 inverted rectangles that read raw inverted offsets for no known reason, a fully transparent precise mask, which was never recorded) gives an empty cell: UNKNOWN. Collisions keep using `reported_box`, which has no box for these masks (collisions with them are not traced). `place_free(<x>,<y>)` (`Column::PlaceFree`, #888) runs the row instance's place test (solids only, `collide::query`) at its two arguments: numbers and fields of the row's instance joined by `+` and `-`, evaluated left to right in binary64 as GML evaluates them before the call; the query rounds the tested coordinate (CLONE_SPEC collision, t-col-08). It never moves the instance or draws random numbers. Other calls and operators stay `[unprobed]`.
-- `mask_index`, `image_number`, `sprite_width`, `sprite_height` (`FieldRef::Sprite`, `probe::sprite_field`, #919): `mask_index` is the sprite that owns the instance's mask (`collide::bbox::mask_sprite`), -1 with no mask; like `sprite_index` it is our sprite id, so a case compares it against GM ids only once #925 settles that. `image_number` is the sprite's frame count, 0 for a no-frame sprite and for no sprite. The sizes are 0 for a no-frame sprite at any scale (CLONE_SPEC collision) and the frame size while `image_xscale` (`image_yscale`) is exactly 1; under another scale (bbox-empty-mask.csv k12 reads 6 for a 2x2 sprite at scale 3) and with no sprite the spec has no rule (research#231), so the cell is empty: UNKNOWN. Setup cannot write any of the four.
+- `mask_index`, `image_number`, `sprite_width`, `sprite_height` (`FieldRef::Sprite`, `probe::sprite_field`, #919): `mask_index` is the sprite that owns the instance's mask (`collide::bbox::mask_sprite`), -1 with no mask; like `sprite_index` it is our sprite id, so a case compares it against GM ids only once #925 settles that. `image_number` is the sprite's frame count, 0 for a no-frame sprite and for no sprite. The sizes are the frame width (height) times the signed `image_xscale` (`image_yscale`), exact under any scale and independent of `image_angle` (research#231: bbox-empty-mask.csv k12 reads 6x6 for a 2x2 sprite at scale 3 and angle 30; mask-mirror.csv frame 25 reads -48 for a 48-wide player at xscale -1), and 0 for a no-frame sprite at any scale (CLONE_SPEC collision). With no sprite (`sprite_index = -1`) the spec has no rule (OPEN, trace request `NUM-SPRITE-SIZE`), so the cell is empty; the mask does not decide. Setup cannot write any of the four.
 - Kid fields resolve through `kid::api::read_field` (1.6), so WP8a never depends on `KidState` layout; save fields through `SaveField`.
 - `KeyRead::Direct` **consumes** the latch, because the recorder's own `keyboard_check_direct` column read it at the sample point and so changed the original run the same way. `sample` therefore takes `&mut Sim`. Whether the recorder's read really consumed it is checked against `t4-input-direct-tap-*` and `t5-input-restart-latch-*` (I1).
 - Sample point: after phase 13, before the room change (2.1). One row per alive instance of the traced kind, in dispatch order. Rows only for frames the original has.
@@ -1188,13 +1190,15 @@ Stub rule: a function from another WP that is not merged yet is called through i
 
 Every rule the sim needs that the spec marks UNKNOWN, Inferred or Conflict, or that the code took from OpenGMK, with the one place the code isolates it. "Default" is what engine_rev 0 does until the spec records the trace in the last column. Fields live in `RunnerRules` (`rules/`), selected by `RunnerRules::for_runner(runner, engine_rev)`; a changed default after a package was verified becomes a new `engine_rev` branch (architecture "Versions"). "(rec)" marks a trace recorded with the OpenGMK recorder; its result is in CLONE_SPEC. "Confirmed (recorder)" is a recorder result not yet checked against the real runner (research#8 has checked N3, N14, the presence of N1's tolerance and M6's cos/sin; see CLONE_SPEC, Number handling, Confirmed (real runner)). A row whose status is still UNKNOWN or Inferred names what is missing; its default stays the engine_rev 0 choice until a trace settles it (#143).
 
-- [Tick and events](sim-core/register-tick-and-events.md)
-- [Motion](sim-core/register-motion.md)
-- [Collision](sim-core/register-collision.md)
-- [Numbers](sim-core/register-numbers.md)
-- [Sound](sim-core/register-sound.md)
-- [Input](sim-core/register-input.md)
-- [Kid and mechanics](sim-core/register-kid-and-mechanics.md)
+The **Impact** column is the fidelity tier ([fidelity tiers](fidelity-tiers.md)): T1 can change a ranked run, T2 only off-ranked paths or visuals and sound, T3 only a probe column, T? is not judged. Only T1 blocks M2; T2 and T3 move to the port issue or M5.
+
+- [Tick and events](../architecture/sim/register-tick-and-events.md)
+- [Motion](../architecture/sim/register-motion.md)
+- [Collision](../architecture/sim/register-collision.md)
+- [Numbers](../architecture/sim/register-numbers.md)
+- [Sound](../architecture/sim/register-sound.md)
+- [Input](../architecture/sim/register-input.md)
+- [Kid and mechanics](../architecture/sim/register-kid-and-mechanics.md)
 
 ## 16. Things to tell the user and research
 

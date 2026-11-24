@@ -1,5 +1,5 @@
 //! Built-in `kid_bullet` (the kid's bullet; kid/A1.md "Shooting" and the per-game bullet notes;
-//! docs/plans/sim-core.md 6.1; docs/format/builtins/kid_bullet.md). Tier 1. WP0 creates the
+//! docs/architecture/sim/builtins.md; docs/format/builtins/kid_bullet.md). Tier 1. WP0 creates the
 //! file; WP6a owns it.
 //!
 //! - Create arms alarm 0 with `life` (40); Alarm 0 destroys the bullet.

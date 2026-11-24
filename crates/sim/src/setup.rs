@@ -1,4 +1,5 @@
-//! Trace setup actions, behind the `trace-setup` feature (docs/plans/sim-core.md 9.2, 9.4, 10.4).
+//! Trace setup actions, behind the `trace-setup` feature (docs/architecture/traces.md,
+//! docs/architecture/cli.md, docs/architecture/sim/determinism.md).
 //!
 //! A fixed vocabulary that replaces the recorder's `--gml` assignments, `--x` and `--y`.
 //! Applying one sets `World::setup_applied`, which is hashed, so a run that used setup can never
@@ -133,8 +134,8 @@ impl Sim {
     /// Like [`Sim::new`], but applies `pre_entry` to the world after the rules, the script host
     /// and the empty world exist and before `room::start_game` creates the boot instances and
     /// enters the first room: the recorder's `--gml` code that ran before its `--room` jump
-    /// (plan 9.2). Only globals and the save slot exist at that point, so a `SetField` here fails
-    /// with "no instance".
+    /// (docs/architecture/traces.md). Only globals and the save slot exist at that point, so a
+    /// `SetField` here fails with "no instance".
     ///
     /// The steps are the ones `Sim::new` documents (rules from the game's runner and engine_rev,
     /// `ScriptRuntime::new`, `World::new` in the start room with the seed, a `Ctx` carrying
@@ -199,7 +200,8 @@ fn apply(def: &GameDef, rules: &RunnerRules, w: &mut World, s: &SetupAction) -> 
             set_field(inst, field, value, rules)
         }
         SetupAction::SetGlobal { var, value } => {
-            w.globals.insert(*var, value.clone());
+            // A global gets its own value: an array is copied (GML 8 rule).
+            w.globals.insert(*var, value.assigned());
             Ok(())
         }
         SetupAction::SetEngine { var, value } => set_engine(rules, w, *var, value),
@@ -365,7 +367,8 @@ fn set_field(
             {
                 return Err(SimError::non_finite("custom variable"));
             }
-            inst.vars.insert(*v, value.clone());
+            // A variable gets its own value: an array is copied (GML 8 rule).
+            inst.vars.insert(*v, value.assigned());
             Ok(())
         }
         FieldRef::Kid(f) => {
@@ -431,6 +434,8 @@ fn empty_slot() -> SaveSlot {
         room: RoomId(0),
         x: Real::ZERO,
         y: Real::ZERO,
+        precision: Default::default(),
+        point: None,
         flipped: false,
         facing: 1,
         difficulty: 0,

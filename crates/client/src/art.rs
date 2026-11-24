@@ -22,20 +22,30 @@ use iwbtg_sim::def::RoomId;
 
 use crate::package::decode_png;
 use crate::shell::{self, InRun, LoadedPackage, RUN_ONLY};
-use crate::view::order::Ladder;
+use crate::view::order::{Ladder, Layer};
 use crate::view::{Game, RoomSize};
 use crate::visual::PlainBackdrop;
-
-const COLOR_Z: f32 = -996.0;
-const BACKGROUND_Z: f32 = -995.0;
-/// In front of every instance and tile (`view::order::WORLD_Z`), behind the overlay (z 1000).
-const FOREGROUND_Z: f32 = 995.0;
 
 #[derive(Resource)]
 pub struct ArtFiles(pub PackageFiles);
 
 /// Room backgrounds and tile layers of the loaded package, for each run (`shell`).
 pub struct ArtPlugin;
+
+/// The room art's place in the module list (main.rs): its plugin.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = crate::registration::NoArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: crate::registration::NoArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(ArtPlugin);
+    }
+}
 
 impl Plugin for ArtPlugin {
     fn build(&self, app: &mut App) {
@@ -199,10 +209,19 @@ fn corner(room: Vec2, at: Vec2, z: f32) -> Transform {
     Transform::from_xyz(at.x - room.x / 2.0, room.y / 2.0 - at.y, z)
 }
 
+/// The declared layer of background `bg` at its file index `n` in the room's list: a background
+/// band, or the foreground band when it is a foreground layer. Later layers draw on top
+/// (`Layer` owns the tie rule).
+fn background_layer(bg: &Background, n: usize) -> Layer {
+    if bg.foreground {
+        Layer::Foreground(n)
+    } else {
+        Layer::Background(n)
+    }
+}
+
 fn background_z(bg: &Background, n: usize) -> f32 {
-    let base = if bg.foreground { FOREGROUND_Z } else { BACKGROUND_Z };
-    // Later layers draw on top.
-    base + n as f32 * 1e-3
+    background_layer(bg, n).z()
 }
 
 fn spawn_background(
@@ -276,7 +295,7 @@ pub fn sync_room_art(
             commands
                 .spawn((
                     Sprite::from_color(color, size),
-                    Transform::from_xyz(0.0, 0.0, COLOR_Z),
+                    Transform::from_xyz(0.0, 0.0, Layer::Colour.z()),
                     RUN_ONLY,
                 ))
                 .id(),
@@ -351,7 +370,7 @@ pub(crate) fn still(
     let tiles = load_tiles(files, name).unwrap_or_default();
     let mut out = Vec::new();
     if let Some([r, g, b]) = art.color {
-        let t = corner(room, Vec2::ZERO, COLOR_Z);
+        let t = corner(room, Vec2::ZERO, Layer::Colour.z());
         out.push((Sprite::from_color(Color::srgb_u8(r, g, b), room), t));
     }
     for (n, bg) in art.backgrounds.iter().enumerate() {
@@ -421,13 +440,27 @@ mod tests {
     }
 
     #[test]
+    fn backgrounds_take_their_declared_layer_from_the_file_foreground_flag() {
+        let behind = Background::new("sky", 0..3);
+        let front = Background {
+            foreground: true,
+            ..Background::new("stone", 0..5)
+        };
+        // The file index is the tie rule, foregrounds included, as before.
+        assert_eq!(background_layer(&behind, 2), Layer::Background(2));
+        assert_eq!(background_layer(&front, 2), Layer::Foreground(2));
+        assert!(background_z(&behind, 2) < Layer::World.z());
+        assert!(background_z(&front, 2) > Layer::World.z());
+    }
+
+    #[test]
     fn deeper_layers_are_farther_back_and_never_past_the_backgrounds() {
         let ladder = Ladder::new([0.0, 1_000_000.0, -50.0, 1e12, -1e12]);
         assert!(ladder.tile_z(1) < ladder.tile_z(0));
         assert!(ladder.tile_z(2) > ladder.tile_z(0));
-        // Eight background layers sit at BACKGROUND_Z + n * 1e-3.
-        assert!(ladder.tile_z(3) > BACKGROUND_Z + 8e-3);
-        assert!(ladder.tile_z(4) < FOREGROUND_Z);
+        // Eight background layers sit in the background band, below the world band.
+        assert!(ladder.tile_z(3) > Layer::Background(7).z());
+        assert!(ladder.tile_z(4) < Layer::Foreground(0).z());
     }
 
     #[test]

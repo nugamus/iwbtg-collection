@@ -19,12 +19,19 @@ pub const MAGIC: [u8; 4] = *b"IWBR";
 /// The replay layout version this module reads and writes. Bump it on any layout change.
 /// 2: the header's `mods` (#35). 3: the header's `play_mode` (#561). 4: the trailer's
 /// `ranked_ticks` (#34). 5: the header's `map` (#505). 6: the trailer's `pauses` (#623).
-pub const REPLAY_FORMAT: u16 = 6;
+/// 7: `StartMode::FromSave` carries a `save::Checkpoint` (checkpoint v1, #1150); earlier
+/// formats carry a raw `SaveSlot`.
+pub const REPLAY_FORMAT: u16 = 7;
 
 /// The older layout `decode` still reads: format 5, the trailer without `pauses`. Such a replay
 /// decodes with no pauses and keeps `replay_format` 5 in its header; `encode` writes only
 /// [`REPLAY_FORMAT`].
 pub const LEGACY_FORMAT: u16 = 5;
+
+/// The last layout whose `StartMode::FromSave` bytes are a raw `SaveSlot` (format 6, the
+/// `pauses` layout). [`REPLAY_FORMAT`] and later carry a `save::Checkpoint`. A consumer uses
+/// this to pick the decoder for the otherwise opaque `FromSave` bytes.
+pub const SAVE_SLOT_FORMAT: u16 = 6;
 
 /// Hard ceiling on the ticks in one replay: 48 hours at 50 ticks per second. Bounds memory when
 /// runs are expanded (6 bytes per tick) before the game's own `max_ticks` is known.
@@ -38,7 +45,8 @@ pub const CHECKPOINT_INTERVAL: u64 = 500;
 pub enum StartMode {
     /// A fresh game with an empty save slot.
     NewGame,
-    /// From a serialized save slot (practice and route testing).
+    /// From a serialized `save::Checkpoint` in replay format 7 and later, or a raw `SaveSlot`
+    /// in earlier formats (practice and route testing).
     FromSave(Vec<u8>),
 }
 
@@ -283,7 +291,7 @@ impl Replay {
         // Check the version before decoding the rest: other versions use another layout.
         let ((_, replay_format), _) = postcard::take_from_bytes::<([u8; 4], u16)>(bytes)?;
         let (file, rest) = match replay_format {
-            REPLAY_FORMAT => postcard::take_from_bytes::<FileOwned>(bytes)?,
+            REPLAY_FORMAT | SAVE_SLOT_FORMAT => postcard::take_from_bytes::<FileOwned>(bytes)?,
             LEGACY_FORMAT => {
                 let (old, rest) = postcard::take_from_bytes::<FileV5>(bytes)?;
                 (FileOwned::from(old), rest)
@@ -395,7 +403,10 @@ fn check(header: &Header, ticks: u64, trailer: &Trailer) -> Result<(), ReplayErr
     if header.magic != MAGIC {
         return Err(ReplayError::BadMagic);
     }
-    if header.replay_format != REPLAY_FORMAT && header.replay_format != LEGACY_FORMAT {
+    if !matches!(
+        header.replay_format,
+        REPLAY_FORMAT | SAVE_SLOT_FORMAT | LEGACY_FORMAT
+    ) {
         return Err(ReplayError::UnknownFormat(header.replay_format));
     }
     if !header.mods.is_known() {
@@ -871,14 +882,27 @@ mod tests {
 
     #[test]
     fn rejects_overlong_varint() {
-        // replay_format 6 is the single byte 0x06 right after the magic; 0x86 0x00 also reads
-        // as 6 but is not what encode writes.
+        // replay_format 7 is the single byte 0x07 right after the magic; 0x87 0x00 also reads
+        // as 7 but is not what encode writes.
         let bytes = small().encode().unwrap();
-        assert_eq!(bytes[4], 0x06);
+        assert_eq!(bytes[4], 0x07);
         let mut long = bytes[..4].to_vec();
-        long.extend([0x86, 0x00]);
+        long.extend([0x87, 0x00]);
         long.extend(&bytes[5..]);
         assert_eq!(Replay::decode(&long), Err(ReplayError::NotCanonical));
+    }
+
+    /// Format 6 has the same layout as 7; only the opaque `FromSave` payload differs. It still
+    /// decodes with its format kept, and `encode` moves it to 7.
+    #[test]
+    fn a_format_6_replay_still_reads() {
+        let mut r = small();
+        r.header.replay_format = SAVE_SLOT_FORMAT;
+        let bytes = encode_unchecked(&r);
+        let old = Replay::decode(&bytes).unwrap();
+        assert_eq!(old.header.replay_format, SAVE_SLOT_FORMAT);
+        assert_eq!(old, r);
+        assert_eq!(old.encode(), Err(ReplayError::UnknownFormat(SAVE_SLOT_FORMAT)));
     }
 
     #[test]

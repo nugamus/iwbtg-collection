@@ -1,5 +1,5 @@
-//! Placement and bounding boxes: the only place collision code rounds (docs/plans/sim-core.md
-//! 3.4, C1, C2). WP0 declares; WP3 owns.
+//! Placement and bounding boxes: the only place collision code rounds
+//! (docs/architecture/sim/collision.md, C1, C2). WP0 declares; WP3 owns.
 //!
 //! Two boxes, kept apart because the spec shows they differ (CLONE_SPEC collision, Confirmed
 //! (recorder)):
@@ -18,7 +18,7 @@ use crate::def::{GameDef, IRect, Mask, MaskId, MaskSet, MaskShape, SpriteDef, Sp
 use crate::error::SimError;
 use crate::num::{NumError, Real, dcos, dsin, to_int_round};
 use crate::rules::CollideRules;
-use crate::rules::collide::{BoxRound, PlaceRound};
+use crate::rules::collide::{BoxRound, PlaceRound, ReportedBox};
 use crate::world::Instance;
 
 /// A mask placed in the room.
@@ -202,11 +202,28 @@ pub fn instance_box<'a>(
 /// These masks have a reported box but no collision mask: [`instance_box`] is `None` for them,
 /// so place tests and collision events never see them, while `distance_to_object` and
 /// non-precise point, rectangle and line queries use this box (research#230, `query`).
+///
+/// Under `ReportedBox::Collider` (`standard`, decision 0005/D2) there is no second box: the
+/// reported edges are the one authoritative collider's box, exactly as [`instance_box`] places
+/// it, and an instance with no collider has no reported box.
 pub fn reported_edges(
     def: &GameDef,
     inst: &Instance,
     at: (Real, Real),
+    rules: &CollideRules,
 ) -> Result<Option<[Real; 4]>, SimError> {
+    if rules.reported_box == ReportedBox::Collider {
+        let Some(pm) = instance_box(def, inst, at, rules)? else {
+            return Ok(None);
+        };
+        let b = pm.bbox;
+        return Ok(Some([
+            real_of(b.left),
+            real_of(b.top),
+            real_of(b.right),
+            real_of(b.bottom),
+        ]));
+    }
     let source = match (inst.img.mask(), inst.img.sprite()) {
         (None, None) => return Ok(None),
         (Some(m), _) => owner(def, m),
@@ -318,7 +335,7 @@ pub fn reported_box(
     at: (Real, Real),
     rules: &CollideRules,
 ) -> Result<Option<IRect>, SimError> {
-    let Some([l, t, r, b]) = reported_edges(def, inst, at)? else {
+    let Some([l, t, r, b]) = reported_edges(def, inst, at, rules)? else {
         return Ok(None);
     };
     Ok(Some(IRect {

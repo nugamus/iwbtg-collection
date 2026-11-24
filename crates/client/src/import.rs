@@ -25,8 +25,28 @@ pub struct ImportPlugin {
     pub keep: bool,
 }
 
+/// The import's place in the module list (main.rs): its plugin. A `--screenshot` check keeps nothing.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = crate::registration::NoArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: crate::registration::NoArgs,
+        startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(ImportPlugin {
+            keep: startup.keep(),
+        });
+    }
+}
+
 impl Plugin for ImportPlugin {
     fn build(&self, app: &mut App) {
+        // A package file on disk can be copied into the library; the browser fetched its package
+        // and has no file to copy (web.rs, #29).
+        #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
         if self.keep {
             app.add_systems(OnEnter(AppScreen::Run), keep_opened.in_set(InRun));
         }

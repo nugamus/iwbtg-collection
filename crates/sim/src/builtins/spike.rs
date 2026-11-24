@@ -1,4 +1,4 @@
-//! Built-in `spike` (mechanics `spike`; collision spikes Confirmed; docs/plans/sim-core.md 6.1;
+//! Built-in `spike` (mechanics `spike`; collision spikes Confirmed; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/spike.md). Tier 1. WP0 creates the file; WP6a owns it.
 //!
 //! A spike is a killer: its class is `ClassMask::KILLER` (set by the loader) and the kid's

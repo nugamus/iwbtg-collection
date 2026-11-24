@@ -26,12 +26,29 @@ use crate::view::{ClockSpeed, SimTick};
 pub const SLOW_SPEEDS: [u8; 2] = [75, 50];
 
 /// The clock assists' command-line flags (main.rs flattens each module's group, #530).
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Default)]
 pub struct PracticeArgs {
     /// Slow motion's speed in percent of the game's rate, with `--mods SL`: 75 or 50. Overrides
     /// the settings file's `[practice] slow_speed` (default 75) for this run and is not saved.
     #[arg(long, value_name = "PERCENT", value_parser = parse_speed)]
     pub slow_speed: Option<u8>,
+}
+
+/// The practice assists' place in the module list (main.rs): its flags and plugin.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = PracticeArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        args: PracticeArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(PracticePlugin {
+            slow_speed: args.slow_speed,
+        });
+    }
 }
 
 fn parse_speed(text: &str) -> Result<u8, String> {

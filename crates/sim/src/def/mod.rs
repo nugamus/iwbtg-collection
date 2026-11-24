@@ -1,4 +1,5 @@
-//! The immutable game definition the sim runs (docs/plans/sim-core.md 1, 3.4, 4.1, 8).
+//! The immutable game definition the sim runs (docs/architecture/sim/world.md,
+//! collision.md, rooms.md; docs/format/v0.md).
 //!
 //! `crates/format` parses a package into a [`GameDef`]. The sim never reads files and never
 //! changes a `GameDef`. File owners after WP0 (plan 13, "File overlap check"): `physics.rs`
@@ -20,6 +21,7 @@ pub mod sound;
 pub mod sprite;
 pub mod testing;
 pub mod timeline;
+pub mod traits;
 
 pub use builtin::Builtin;
 pub use class::ClassMask;
@@ -40,3 +42,4 @@ pub use script::ScriptDef;
 pub use sound::{SoundDef, SoundKind};
 pub use sprite::{BitMask, IRect, MAX_MASK_WORDS, Mask, MaskSet, MaskShape, MaskTooLarge, SpriteDef};
 pub use timeline::TimelineDef;
+pub use traits::Behaviour;

@@ -1,14 +1,18 @@
 //! `iwbtg`: the command-line tool for agents and CI (docs/architecture/cli.md, The iwbtg CLI).
 //!
-//! Commands are planned in docs/plans/sim-core.md 9.4: WP8a owns `trace` and `pkg`, WP8b
+//! Commands are described in docs/architecture/cli.md: WP8a owns `trace` and `pkg`, WP8b
 //! `replay`.
 
+mod assets_cmd;
+mod baseline;
 mod case;
 mod determinism_cmd;
 mod engine_cmd;
+mod feel_cmd;
 mod import;
 mod pack_cmd;
 mod pkg_cmd;
+mod profile_cmd;
 mod replay_cmd;
 mod room_cmd;
 mod script_cmd;
@@ -48,6 +52,11 @@ enum Command {
     /// Headless replays.
     #[command(subcommand)]
     Replay(ReplayCommand),
+    /// Feel contracts: run one, or sweep a directory against a baseline.
+    #[command(subcommand)]
+    Feel(FeelCommand),
+    /// Profiles a replay: script budget, instances and ms per tick.
+    Profile(profile_cmd::ProfileArgs),
     /// Rooms of a package.
     #[command(subcommand)]
     Room(RoomCommand),
@@ -60,6 +69,24 @@ enum Command {
     /// The script language.
     #[command(subcommand)]
     Script(ScriptCommand),
+    /// Assets across the games repo.
+    #[command(subcommand)]
+    Assets(AssetsCommand),
+}
+
+#[derive(Subcommand)]
+enum AssetsCommand {
+    /// Writes the global asset index keyed by content hash (docs/content.md, Assets).
+    Index {
+        /// Games repo folder: one package folder per game, each with game.toml.
+        dir: PathBuf,
+        /// Write the index here instead of `<dir>/assets-index.toml`.
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Change nothing: exit 1 when the index is missing or would change.
+        #[arg(long)]
+        check: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -182,6 +209,33 @@ enum TraceCommand {
 }
 
 #[derive(Subcommand)]
+enum FeelCommand {
+    /// Runs one contract and prints its verdict and every mismatch.
+    Run {
+        /// Contract file.
+        contract: PathBuf,
+        /// Package folders for contracts that name a package id (default: a fixture only).
+        #[arg(long)]
+        packages: Option<PathBuf>,
+    },
+    /// Runs every contract below a folder and compares the statuses with a baseline.
+    Sweep {
+        /// Contracts root: `*.toml` files, each `id` equal to its path below the root.
+        #[arg(long)]
+        contracts: PathBuf,
+        /// Package folders for contracts that name a package id.
+        #[arg(long)]
+        packages: Option<PathBuf>,
+        /// Baseline file of `<area>/<name> <STATUS>` lines to compare with.
+        #[arg(long)]
+        baseline: Option<PathBuf>,
+        /// Rewrite the baseline with this run's statuses instead of comparing.
+        #[arg(long, requires = "baseline")]
+        bless: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum PkgCommand {
     /// Validates and loads a package.
     Check {
@@ -278,7 +332,7 @@ fn research_dir(arg: Option<PathBuf>) -> Result<PathBuf, ToolError> {
 /// The cases folder: `--cases`, else IWBTG_CASES, else `crates/tools/cases` in the current folder
 /// or the nearest folder above it. Decided at run time, never from the build machine's paths, so
 /// a moved checkout and a wasm32 build (with the folder preopened) work.
-fn cases_dir(arg: Option<PathBuf>) -> Result<PathBuf, ToolError> {
+pub(crate) fn cases_dir(arg: Option<PathBuf>) -> Result<PathBuf, ToolError> {
     let env = std::env::var_os("IWBTG_CASES").map(PathBuf::from);
     let cwd = std::env::current_dir().ok();
     resolve_cases(arg, env, cwd.as_deref())
@@ -368,6 +422,9 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             let docs = docs.unwrap_or_else(script_cmd::default_docs_dir);
             script_cmd::main(&docs, check)
         }
+        Command::Assets(AssetsCommand::Index { dir, out, check }) => {
+            assets_cmd::index_main(&dir, out.as_deref(), check)
+        }
         Command::Determinism(DeterminismCommand::Report { corpus, check }) => {
             determinism_cmd::main(&corpus, check)
         }
@@ -397,6 +454,19 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             };
             engine_cmd::main(&pkg, to, trace_mode, Some(traces))
         }
+        Command::Profile(args) => {
+            profile_cmd::main(&args)?;
+            Ok(true)
+        }
+        Command::Feel(FeelCommand::Run { contract, packages }) => {
+            feel_cmd::run_main(&contract, packages.as_deref())
+        }
+        Command::Feel(FeelCommand::Sweep {
+            contracts,
+            packages,
+            baseline,
+            bless,
+        }) => feel_cmd::sweep_main(&contracts, packages.as_deref(), baseline.as_deref(), bless),
         Command::Replay(ReplayCommand::Run(args)) => {
             replay_cmd::main(&args)?;
             Ok(true)
@@ -409,35 +479,14 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
     }
 }
 
-/// The work package named by a WP0 stub panic (`not implemented: WP6a: world::init_state`).
-fn unmerged_stub(payload: &(dyn std::any::Any + Send)) -> Option<String> {
-    let msg = payload
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| payload.downcast_ref::<&str>().copied())?;
-    msg.strip_prefix("not implemented: ")
-        .filter(|rest| rest.starts_with("WP"))
-        .map(str::to_owned)
-}
-
 fn main() -> ExitCode {
-    let cli = Cli::parse();
-    // Until every work package has merged, running the sim can reach a WP0 stub. Say so plainly
-    // instead of ending with a bare panic.
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run(cli))) {
-        Ok(Ok(true)) => ExitCode::SUCCESS,
-        Ok(Ok(false)) => ExitCode::from(1),
-        Ok(Err(e)) => {
+    match run(Cli::parse()) {
+        Ok(true) => ExitCode::SUCCESS,
+        Ok(false) => ExitCode::from(1),
+        Err(e) => {
             eprintln!("error: {e}");
             ExitCode::from(2)
         }
-        Err(payload) => match unmerged_stub(payload.as_ref()) {
-            Some(stub) => {
-                eprintln!("error: this needs {stub}, which is not merged yet");
-                ExitCode::from(3)
-            }
-            None => std::panic::resume_unwind(payload),
-        },
     }
 }
 

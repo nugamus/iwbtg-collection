@@ -1,4 +1,4 @@
-//! Sprites and collision masks as the sim sees them (docs/plans/sim-core.md 3.4).
+//! Sprites and collision masks as the sim sees them (docs/architecture/sim/collision.md).
 //!
 //! `crates/format` builds these from PNG strips at load. Image pixels never reach the sim; only
 //! mask bits do. WP0 declares; WP7a owns afterwards.

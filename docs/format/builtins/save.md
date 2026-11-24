@@ -12,14 +12,18 @@ A save point (mechanics `save`; kid specs "Saving"). The save is `save::save_now
 | `requires_gravity` | `any`, `normal`, `flipped` | `any` | The kid must match. Flipped means `global.grav` or the flipped kid kind (FT savePoint2, xia). |
 | `requires_kid_depth0` | bool | false | The kid's depth must be 0 (machinary). |
 | `requires_kid_in_room` | bool | false | The kid's origin must be inside the room: no save when `x < 0`, `x > room_width`, `y < 0` or `y > room_height` (the edges count as inside; the same test as the edge death, on the origin, not the hitbox). Every save from the point checks it, the `alarm_save` too (xia with edgeDeath on: save point User Event 0 and `objautosave`, kid/C.md). |
-| `saved_position` | `xy_base100`, `xy_base256`, `xy_text2dec`, `xy_previous`, `fixed_point`, `floor_nudge` | `xy_base100` | The game's save format (`save::SavedPosition`; sim plan 4.4). |
+| `saved_position` | `xy_base100`, `xy_base256`, `xy_text2dec`, `xy_previous`, `fixed_point`, `floor_nudge` | `xy_base100` | The game's save format (`save::SavedPosition`; sim plan 4.4). The model used is recorded in the checkpoint's `SavePrecision`; a load reads the stored position and does not re-apply it. |
 | `fixed_x`, `fixed_y` | real | none | The point for `fixed_point`; both or neither. |
 | `self_destroy_alarm` | real | none | Alarm 0 at Create destroys the point after this many ticks (LR object799). |
 | `alarm_save` | real | none | The autosave (eat-the-lemon `autosave`, xia `objautosave`; kid/B.md lemon item 7, kid/C.md objautosave): Create arms Alarm 0 for this many ticks (1 in both games), and Alarm 0 saves from the first kid in instance order (the lowest id; traces/eat-the-lemon/famb-multikid-restart-b.csv f25), if a kid exists. The point stays: `alarm[0]` reads 0 on the save tick and -1 after. Use with `on_touch = "never"` and `blink = false`. Not with `self_destroy_alarm` (both use Alarm 0). |
 | `blink` | bool | true | A save shows frame 1 with `image_speed` 0.017; Animation End goes back to frame 0 and stops. |
+
+A room-file `save` instance records its stable key in `Checkpoint.point` (its declared `name`, else its exact spawn position); a load resolves the key against the room data and refuses a point that moved, was removed or was renamed. A script-spawned save object, the first-play save and `save_game` record no point.
 
 **What a save stores as `flipped`.** `SaveSlot.flipped` is the game's own flip state. Games that flip by kind or by a kid flag store whether the kid was flipped; the load spawns the flipped kid kind when the game has one and puts the kid `restart.flipped_load_dy` lower. Games that flip by the `yflag` model (`[flip] model = "yflag"`, family B) store `global.reverse` there (kid/B.md Restart); the load writes it back to `global.reverse`, and never takes the flipped-kind and offset path, because family B has one kid kind. The two meanings never meet in one game, so there is one field. (`save::flip_by_kind` is the test; #267.)
 
 With `blink` on, Create sets `image_speed` to 0 first, so an idle save rests on frame 0 (kid/B.md Saving; traces/kaenbyou/famb-save-restart-b.csv). OPEN: kaenbyou counts `saveTimer` only while S is held (#410).
 
 Handlers are declared from the kind's params. The Step, Collision and Key held handlers all run the same save code: games that save in Step or End Step (WAN, LEM, SPK) are OPEN until a trace shows a difference. The save sound and the particles (RBF) are the client's and the sound model's.
+
+A save kind's persistence scope is `Save` (E2 of #1153): the instance writes the checkpoint and is rebuilt with its room, not carried across a room change. This is distinct from a GM `persistent` kind (`Run`) and from a persistent room, whose own placed instances are restored when the player returns.

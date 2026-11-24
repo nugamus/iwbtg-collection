@@ -1,9 +1,9 @@
-//! Package to `GameDef` (docs/plans/sim-core.md 8.1, 8.2). WP7a owns this file, including the
+//! Package to `GameDef` (docs/format/v0.md). WP7a owns this file, including the
 //! calls to the WP7b steps (`physics::load`, `sounds::load`, `paths::load`, `timelines::load`,
 //! `params::check`), whose signatures WP0 fixed; WP7b owns only their bodies. The manifest's
 //! `[engine]` and `[timing]` sections are WP7a's too (`manifest.rs`).
 //!
-//! Steps (plan 8.2): 1 manifest and `[engine]`; 2 sprites and masks; 3 kinds; 4 rooms; 5 ranks;
+//! Steps (docs/format/v0.md): 1 manifest and `[engine]`; 2 sprites and masks; 3 kinds; 4 rooms; 5 ranks;
 //! 6 variable ids; 7 (WP7b) physics, params, timelines, paths, sounds; 8 cross-references;
 //! 9 `gameplay_hash`.
 //!
@@ -25,7 +25,8 @@ use iwbtg_sim::def::{
     Builtin, ClassMask, EngineKind, GameDef, GlobalIndex, GroupId, KindDef, KindId, KindVariant, Mask,
     MaskId, MaskSet, MaskShape, NameId, ParamValue, Params, PhysicsProfile, PlacedInstance, RankEntry,
     RankTable, ResetModel, RestartModel, RoomAction, RoomDef, RoomId, RoomRole, RoomWhen, ScriptDef,
-    ScriptId, SoundDef, SoundId, SpriteDef, SpriteId, VariantSel, ViewDef, variant_matches,
+    ScriptId, SoundDef, SoundId, SpriteDef, SpriteId, TimelineDef, TimelineId, VariantSel, ViewDef,
+    variant_matches,
 };
 use iwbtg_sim::input::Action;
 use iwbtg_sim::num::Real;
@@ -55,6 +56,7 @@ use crate::tracemap::{TRACE_MAP_PATH, TraceMap, TraceParam, TraceStatus, load_tr
 use crate::vars::intern_vars;
 use crate::{params, particles, paths, physics, sounds, timelines};
 
+mod compat;
 mod game;
 mod hash;
 mod kid;
@@ -97,6 +99,12 @@ pub struct LoadReport {
     /// Every map's timing chain, in `[[maps]]` order (one `main` map without `[[maps]]`); maps
     /// whose triggers do not resolve are left out (their errors are in `diagnostics`).
     pub maps: Vec<MapTiming>,
+    /// How the game's physics stands against its engine pack's family preset (#802). `None` when
+    /// no definition was built. A catalog or game page reads this for the custom-physics mark.
+    pub physics: Option<physics::PhysicsStanding>,
+    /// The resolved ruleset, compatibility profile and declared deviations (decision 0005).
+    /// `None` when no definition was built.
+    pub compat: Option<crate::compat::Resolved>,
 }
 
 /// One map's resolved timing chain (docs/format/game.md, Maps).
@@ -136,6 +144,8 @@ pub fn load_report(files: &PackageFiles, mode: LoadMode) -> LoadReport {
                 diagnostics: diags,
                 gameplay_hash: None,
                 maps: Vec::new(),
+                physics: None,
+                compat: None,
             };
         }
     };
@@ -148,11 +158,24 @@ pub fn load_report(files: &PackageFiles, mode: LoadMode) -> LoadReport {
         Some(def) if !has_errors(&diags) => Some(gameplay_hash(files, &manifest, def)),
         _ => None,
     };
+    let physics_mark = def.as_ref().map(|def| {
+        // Room profiles in id order, with the game's own file left out (`None`): rooms naming it
+        // share the game's profile (#970).
+        let rooms: Vec<(&str, &PhysicsProfile)> = l
+            .room_physics_ids
+            .iter()
+            .filter_map(|(id, index)| Some((id.as_str(), &def.room_physics[usize::from((*index)?)])))
+            .collect();
+        physics::standing(files, &manifest, &def.physics, &rooms)
+    });
+    let compat = def.as_ref().map(|def| crate::compat::resolve(&manifest, def));
     LoadReport {
         def,
         diagnostics: diags,
         gameplay_hash,
         maps: std::mem::take(&mut l.maps),
+        physics: physics_mark,
+        compat,
     }
 }
 
@@ -339,6 +362,10 @@ struct Loader<'a> {
     scripts: Vec<ScriptDef>,
     room_ids: BTreeMap<String, RoomId>,
     sounds: Vec<SoundDef>,
+    /// `timelines/<id>.toml`, loaded before kinds so the object `timeline` key resolves.
+    timelines: Vec<TimelineDef>,
+    /// Timeline name to its index in `timelines`.
+    timeline_ids: BTreeMap<String, TimelineId>,
     spec_cache: BTreeMap<Builtin, Option<&'static [ParamSpec]>>,
     ranks: RankTable,
     /// Kinds that got a rank after the listed entries (Trace, CR4).
@@ -356,6 +383,9 @@ struct Loader<'a> {
     /// Room profile id to its index in `room_physics`; `None` for the file that is the game's
     /// own profile (`game.toml` `physics`), which rooms naming it share.
     room_physics_ids: BTreeMap<String, Option<u16>>,
+    /// Every kid profile's `[script] vars` names, interned with the other variable names
+    /// (decision 0004).
+    kid_script_vars: BTreeSet<String>,
 }
 
 impl<'a> Loader<'a> {
@@ -384,6 +414,8 @@ impl<'a> Loader<'a> {
             scripts: Vec::new(),
             room_ids: BTreeMap::new(),
             sounds: Vec::new(),
+            timelines: Vec::new(),
+            timeline_ids: BTreeMap::new(),
             spec_cache: BTreeMap::new(),
             ranks: RankTable::default(),
             appended: BTreeSet::new(),
@@ -394,6 +426,7 @@ impl<'a> Loader<'a> {
             maps: Vec::new(),
             room_physics: Vec::new(),
             room_physics_ids: BTreeMap::new(),
+            kid_script_vars: BTreeSet::new(),
         }
     }
 
@@ -550,6 +583,17 @@ impl<'a> Loader<'a> {
         }
         self.diags.append(&mut d);
         self.sounds = sounds;
+        // Step 7 (WP7b): timelines before kinds, so the object `timeline` key resolves.
+        let mut d = Vec::new();
+        let timelines =
+            pending_call(&mut self.pending, || timelines::load(self.files, &mut d)).unwrap_or_default();
+        self.diags.append(&mut d);
+        self.timeline_ids = timelines
+            .iter()
+            .enumerate()
+            .filter_map(|(i, t)| Some((t.name.clone(), TimelineId(u32::try_from(i).ok()?))))
+            .collect();
+        self.timelines = timelines;
         // Step 3.
         self.builtin_kinds();
         self.load_objects();
@@ -572,6 +616,8 @@ impl<'a> Loader<'a> {
             self.legacy_kid_mask();
         }
         self.load_room_physics(&physics);
+        // `[compat]` (decision 0005): the profile and deviations against the resolved physics.
+        self.check_compat(&physics);
         // Step 6: variable ids, from every name the loader sees.
         let vars = self.intern(&rooms);
         // Step 4, second half, and step 5 for placed instances.
@@ -587,8 +633,6 @@ impl<'a> Loader<'a> {
         let timing = self.timing();
         self.maps = self.map_timings(timing.as_ref());
         let mut d = Vec::new();
-        let timelines =
-            pending_call(&mut self.pending, || timelines::load(self.files, &mut d)).unwrap_or_default();
         let paths = pending_call(&mut self.pending, || paths::load(self.files, &mut d)).unwrap_or_default();
         self.diags.append(&mut d);
         // Step 8: cross-references not already resolved above.
@@ -642,7 +686,7 @@ impl<'a> Loader<'a> {
                 .and_then(|e| e.reset.as_ref())
                 .map_or_else(ResetModel::default, |r| r.model()),
             sounds: std::mem::take(&mut self.sounds),
-            timelines,
+            timelines: std::mem::take(&mut self.timelines),
             paths,
             particle_systems: std::mem::take(&mut self.particles),
             scripts: std::mem::take(&mut self.scripts),

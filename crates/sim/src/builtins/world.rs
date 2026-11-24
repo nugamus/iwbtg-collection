@@ -1,4 +1,5 @@
-//! Built-in `world`: the engine controller (docs/plans/sim-core.md 6.1; docs/format/builtins/world.md).
+//! Built-in `world`: the engine controller (docs/architecture/sim/builtins.md;
+//! docs/format/builtins/world.md).
 //! Tier 1. WP0 creates the file; WP6a owns it.
 //!
 //! Not a GM port: the engine services the infra objects did, at the rank of the original world

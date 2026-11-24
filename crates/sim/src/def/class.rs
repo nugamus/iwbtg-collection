@@ -1,20 +1,21 @@
-//! Collision classes: the sim's stand-in for GM parent objects (docs/plans/sim-core.md 1.1).
+//! Collision classes: the sim's stand-in for GM parent objects (docs/architecture/sim/world.md).
 //!
 //! A collision event or query "with object X" becomes "with class X". Each built-in declares its
 //! default classes; a package object may add classes (`counts_as`). A collision event with a
 //! parent also fires for its children (Confirmed, manual 205_00), which class sets reproduce
 //! without a parent tree.
 //!
-//! Bit layout, fixed by WP0 (no later appends):
+//! Bit layout (decision 0004; WP0 fixed the named range):
 //!
 //! | Bits | Use |
 //! |---|---|
-//! | 0-28 | the named classes below (28, `slope_mirror`, added by WP5c.4c) |
-//! | 29-31 | reserved for WP11 (a WP that needs a new named bit asks the integrator) |
-//! | 32-47 | 16 package-defined classes ([`ClassMask::package`]) |
-//! | 48-63 | reserved |
+//! | 0-28 | the named classes below (bit 28, `slope_mirror`, added by WP5c.4c) |
+//! | 29-31 | reserved (a new named bit asks the integrator) |
+//! | 32-127 | package-defined classes ([`ClassMask::package`], 96) |
 //!
-//! WP0 declares; WP11 owns afterwards.
+//! The first 16 package bits (32-47) keep the positions WP0 gave them, so every package that
+//! fits in the old 16 classes hashes to the same bytes (postcard writes `u64` and `u128` with the
+//! same LEB128 varint). Decision 0004 raised the cap from 16 to 96.
 
 use core::ops::{BitAnd, BitOr, BitOrAssign};
 
@@ -24,8 +25,12 @@ use super::builtin::Builtin;
 use super::kind::{KindDef, ParamValue, Params};
 
 /// A set of collision classes, one bit each.
+///
+/// A `u128` since decision 0004 so a package can define up to 96 classes. Values below 2^64
+/// serialize exactly as the old `u64` did (postcard's LEB128 varint), so existing state hashes
+/// and replays do not move.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default, Serialize, Deserialize)]
-pub struct ClassMask(pub u64);
+pub struct ClassMask(pub u128);
 
 impl ClassMask {
     /// No class.
@@ -124,13 +129,13 @@ impl ClassMask {
 
     /// First bit of the package-defined classes.
     pub const PACKAGE_FIRST_BIT: u32 = 32;
-    /// Number of package-defined classes.
-    pub const PACKAGE_COUNT: u32 = 16;
+    /// Number of package-defined classes (decision 0004 raised this from 16).
+    pub const PACKAGE_COUNT: u32 = 96;
 
-    /// Package-defined class `n` (`0..16`), or `None` when `n` is out of range.
+    /// Package-defined class `n` (`0..96`), or `None` when `n` is out of range.
     pub const fn package(n: u32) -> Option<ClassMask> {
         if n < ClassMask::PACKAGE_COUNT {
-            Some(ClassMask(1 << (ClassMask::PACKAGE_FIRST_BIT + n)))
+            Some(ClassMask(1u128 << (ClassMask::PACKAGE_FIRST_BIT + n)))
         } else {
             None
         }
@@ -156,20 +161,47 @@ impl ClassMask {
         self.0 & other.0 != 0
     }
 
+    /// Per-class specificity for collision-handler selection (C8, R12b), declared as data: the
+    /// matching handler class with the lowest number runs, then the first in handler order.
+    /// The defaults reproduce the measured GM parent chains: `block` (2) is the platform's
+    /// parent in 17 games and ranks last, `solidblock` (1) next in the other two, where the
+    /// platform also keeps the `block` bit (CLONE_SPEC collision, "One event per pair: the most
+    /// specific ancestor"). A class not listed has [`ClassMask::DEFAULT_SPECIFICITY`].
+    pub const SPECIFICITY: [(ClassMask, u8); 2] = [(ClassMask::BLOCK, 2), (ClassMask::SOLIDBLOCK, 1)];
+
+    /// The specificity of every class not listed in [`ClassMask::SPECIFICITY`]: most specific.
+    pub const DEFAULT_SPECIFICITY: u8 = 0;
+
+    /// The value [`ClassMask::generality`] gives a mask that matches no class bit. It can match
+    /// no handler, so the value is unobservable; it keeps the old last rank.
+    const EMPTY_SPECIFICITY: u8 = 2;
+
     /// How far up a GM parent chain this handler class sits, for picking one collision handler
-    /// per pair (C8, R12b): lower is more specific. Class sets have no parent tree, so the
-    /// engines' two block parents rank last: `block` (2) is the platform's parent in 17 games,
-    /// `solidblock` (1) in the other two, where the platform also keeps the `block` bit
-    /// (CLONE_SPEC collision, "One event per pair: the most specific ancestor"). Every other
-    /// class ranks 0. A handler mask with several bits takes its lowest rank.
+    /// per pair (C8, R12b): lower is more specific. This reads the [`ClassMask::SPECIFICITY`]
+    /// data; a handler mask with several bits takes its lowest number, and any bit outside the
+    /// declared classes takes [`ClassMask::DEFAULT_SPECIFICITY`].
     pub const fn generality(self) -> u8 {
-        if self.intersects(ClassMask(!(ClassMask::BLOCK.0 | ClassMask::SOLIDBLOCK.0))) {
-            0
-        } else if self.intersects(ClassMask::SOLIDBLOCK) {
-            1
-        } else {
-            2
+        // The declared classes, so a bit outside them can take the default.
+        let mut declared = ClassMask::NONE;
+        let mut i = 0;
+        while i < Self::SPECIFICITY.len() {
+            declared = ClassMask(declared.0 | Self::SPECIFICITY[i].0.0);
+            i += 1;
         }
+        let mut low = if self.intersects(ClassMask(!declared.0)) {
+            Self::DEFAULT_SPECIFICITY
+        } else {
+            Self::EMPTY_SPECIFICITY
+        };
+        let mut i = 0;
+        while i < Self::SPECIFICITY.len() {
+            let (class, specificity) = Self::SPECIFICITY[i];
+            if self.intersects(class) && specificity < low {
+                low = specificity;
+            }
+            i += 1;
+        }
+        low
     }
 }
 
@@ -211,35 +243,11 @@ impl BitAnd for ClassMask {
     }
 }
 
-/// Default collision classes of a built-in (Design; plan 1.1 and 6.1).
+/// Default collision classes of a built-in (Design; docs/architecture/sim/world.md and
+/// docs/architecture/sim/builtins.md).
 pub fn default_classes(b: Builtin) -> ClassMask {
-    match b {
-        Builtin::Kid => ClassMask::KID,
-        Builtin::KidBullet => ClassMask::KID_BULLET,
-        Builtin::Blood => ClassMask::BLOOD,
-        Builtin::Bow => ClassMask::BOW,
-        Builtin::Block | Builtin::BreakableBlock => ClassMask::BLOCK,
-        Builtin::Spike | Builtin::Killer => ClassMask::KILLER,
-        Builtin::Save => ClassMask::SAVE,
-        // GM warps and warpStart are roomChanger children.
-        Builtin::Warp | Builtin::DifficultyWarp => ClassMask::ROOM_CHANGER,
-        // The platform's parent is block in 17 games (CLONE_SPEC collision); the other two
-        // games give their platform preset `counts_as = ["solidblock"]`.
-        Builtin::Platform | Builtin::MovingPlatform | Builtin::DropPlatform | Builtin::PathPlatform => {
-            ClassMask::PLATFORM | ClassMask::BLOCK
-        }
-        Builtin::Water => ClassMask::WATER1,
-        Builtin::FakeBlock => ClassMask::FAKE_BLOCK,
-        Builtin::Trigger => ClassMask::TRIGGER,
-        Builtin::EdgeWarp => ClassMask::EDGE_WARP,
-        Builtin::BulletBlocker => ClassMask::BULLET_BLOCKER,
-        Builtin::Slope => ClassMask::SLOPE,
-        Builtin::Conveyor => ClassMask::CONVEYOR,
-        Builtin::KidParamZone => ClassMask::PARAM_ZONE,
-        Builtin::TrapStopper => ClassMask::TRAP_STOPPER,
-        Builtin::Ladder => ClassMask::LADDER,
-        _ => ClassMask::NONE,
-    }
+    // The one trait table (`def::traits`) owns the classes; this is the view the loader reads.
+    crate::def::traits::traits(b).classes
 }
 
 /// Classes that a kind's params pick (Design): water `variant` 2 and 3, vine `side`, slope
@@ -286,14 +294,8 @@ pub fn param_classes(b: Builtin, params: &Params) -> Option<ClassMask> {
 /// script spawn that sets them uses that derived kind or fails (`script::inst`, #694). The params
 /// that pick the event set work the same way ([`kind_params`]).
 pub fn class_params(b: Builtin) -> &'static [&'static str] {
-    match b {
-        Builtin::Block => &["kid_collides"],
-        Builtin::Water => &["variant"],
-        Builtin::Killer => &["kill_outside_view"],
-        Builtin::Slope => &["shape", "scale_x"],
-        Builtin::Vine => &["side"],
-        _ => &[],
-    }
+    // The one trait table (`def::traits`) owns the selection params.
+    crate::def::traits::traits(b).class_params
 }
 
 /// The params that pick a kind's classes ([`class_params`]) or its event set
@@ -403,14 +405,45 @@ mod tests {
     fn package_bits() {
         assert_eq!(ClassMask::package(0), Some(ClassMask(1 << 32)));
         assert_eq!(ClassMask::package(15), Some(ClassMask(1 << 47)));
-        assert_eq!(ClassMask::package(16), None);
+        // Decision 0004: bits 48-127 are now package classes too.
+        assert_eq!(ClassMask::package(16), Some(ClassMask(1 << 48)));
+        assert_eq!(ClassMask::package(95), Some(ClassMask(1u128 << 127)));
+        assert_eq!(ClassMask::package(96), None);
         assert_eq!(ClassMask::from_name("platform"), Some(ClassMask::PLATFORM));
         assert_eq!(ClassMask::from_name("parent"), None);
         assert!((ClassMask::PLATFORM | ClassMask::BLOCK).contains(ClassMask::BLOCK));
     }
 
+    /// #1075: the first 16 package bits keep their positions and postcard's LEB128 varint encodes
+    /// a `u128` below 2^64 exactly as the old `u64`, so existing state hashes and replays do not
+    /// move. The named bits are checked the same way.
+    #[test]
+    fn low_bits_encode_as_the_old_u64() {
+        let encoded = |mask: ClassMask| postcard::to_allocvec(&mask).expect("serializes");
+        let encoded_u64 = |bits: u64| postcard::to_allocvec(&bits).expect("serializes");
+        for n in 0..16 {
+            let mask = ClassMask::package(n).expect("package class");
+            let bits = u64::try_from(mask.0).expect("fits below 2^64");
+            assert_eq!(encoded(mask), encoded_u64(bits), "package class {n}");
+        }
+        for (mask, name) in ClassMask::NAMED {
+            let bits = u64::try_from(mask.0).expect("fits below 2^64");
+            assert_eq!(encoded(mask), encoded_u64(bits), "named class {name}");
+        }
+        // The first 32 package classes (bits 32-63) still fit the old `u64` bytes; a class at bit
+        // 64 or above needs the wider varint, as a new package may.
+        let high = ClassMask::package(32).expect("33rd class");
+        assert_eq!(high.0, 1u128 << 64);
+        assert_ne!(encoded(high), encoded_u64(0));
+    }
+
     #[test]
     fn generality_puts_the_block_parents_last() {
+        assert_eq!(
+            ClassMask::SPECIFICITY,
+            [(ClassMask::BLOCK, 2), (ClassMask::SOLIDBLOCK, 1)]
+        );
+        assert_eq!(ClassMask::DEFAULT_SPECIFICITY, 0);
         assert_eq!(ClassMask::PLATFORM.generality(), 0);
         assert_eq!(ClassMask::KILLER.generality(), 0);
         assert_eq!(ClassMask::package(0).unwrap().generality(), 0);

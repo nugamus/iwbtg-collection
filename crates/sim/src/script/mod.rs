@@ -1,4 +1,4 @@
-//! The script host (docs/plans/sim-core.md 11, decision 0001).
+//! The script host (docs/architecture/sim/scripts.md, decision 0001).
 //!
 //! The sim talks to scripts only through [`ScriptHost`], implemented by [`ScriptRuntime`], so
 //! the sim core never names Rhai types. `Sim` owns one `ScriptRuntime`, built from
@@ -6,6 +6,7 @@
 
 pub mod api;
 pub mod budget;
+pub mod collide;
 mod consts;
 pub mod docs;
 pub mod host;
@@ -14,7 +15,7 @@ pub mod validate;
 
 use serde::{Deserialize, Serialize};
 
-pub use host::ScriptRuntime;
+pub use host::{PreparedScripts, ScriptRuntime};
 
 use crate::error::SimError;
 use crate::events::EventKind;

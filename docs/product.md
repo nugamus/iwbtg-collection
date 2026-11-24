@@ -45,6 +45,7 @@ Difficulty is not a mod (decided 2026-11-04). A fangame is the parent entry in g
 - A separate tab ranks clears by fewest deaths, with time as the tiebreak.
 - Ranked runs use a random RNG seed per run, as the originals do. The server flags reused seeds.
 - Anti-cheat: the server re-simulates every replay. Top runs and flagged runs also go through manual review, which can ask for video. Runs made offline are queued and submitted when the client is back online.
+- An engine rebuild does not split a leaderboard. The server re-simulates every stored record with the new build under the settings the game was ranked with — its ruleset and compatibility profile are frozen at ranking, and only the engine build changes. A record that still verifies keeps its place; one that fails is quarantined for review, not deleted, and stays verifiable on the engine build it was set on. The replay-compatibility freeze begins with the first public M7 nightly ([versioning](architecture/versioning.md)).
 - Later: a performance-points system like osu!'s pp, which ranks players across all games. This is a release-era feature and its design is open.
 
 ## Restart keys

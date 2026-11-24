@@ -1,4 +1,4 @@
-//! Rooms as loaded from a package (docs/plans/sim-core.md 4.1).
+//! Rooms as loaded from a package (docs/architecture/sim/rooms.md).
 //!
 //! WP0 declares; WP7a owns afterwards.
 
@@ -177,7 +177,7 @@ impl PlacedInstance {
     }
 }
 
-/// One room creation code action, as data (plan 4.2 step 6).
+/// One room creation code action, as data (docs/architecture/sim/rooms.md step 6).
 #[derive(Clone, PartialEq, Debug)]
 pub enum RoomAction {
     /// `global.<var> = value`.
@@ -205,7 +205,8 @@ pub enum RoomAction {
     /// `instance_destroy()` in room creation code: destroys nothing and the rest of the code
     /// runs (R24, Confirmed).
     DestroySelf,
-    /// `global.<var>[index] = value` (#629, showdown `global.stage[global.savenum]`). The element
+    /// `global.<var>[index] = value` (#629, showdown `global.stage[global.savenum]`). Element 0
+    /// is the global itself — GM8 aliases `a` and `a[0]` (research#130) — and every other element
     /// is the run-time variable `<var>[<index>]` (`World::var_names`).
     SetGlobalIndexed {
         /// The array's global name.

@@ -1,4 +1,4 @@
-//! GML collision queries (docs/plans/sim-core.md 3.4, C12, C13, R21, R22).
+//! GML collision queries (docs/architecture/sim/collision.md, C12, C13, R21, R22).
 //!
 //! Each excludes `me`, skips inactive instances, skips dead ones unless
 //! `TickRules::dead_in_queries` (R22), and returns `World::first_of` order (R21).
@@ -33,11 +33,10 @@ use super::bbox::{
 use super::overlap::{intersect, overlaps, point_in, rect_in};
 use crate::def::{ClassMask, GameDef, IRect, KindId, MaskShape};
 use crate::error::SimError;
-use crate::events;
 use crate::num::{Real, sqrt};
 use crate::rules::RunnerRules;
 use crate::rules::collide::{DistBoxes, DistCombine, DistOffset};
-use crate::rules::tick::{DispatchOrder, FirstRule};
+use crate::rules::tick::FirstRule;
 use crate::world::{Ctx, InstId, Instance, World};
 
 /// What a query looks for.
@@ -47,6 +46,10 @@ pub enum Target {
     Class(ClassMask),
     /// Instances of one kind.
     Kind(KindId),
+    /// Instances of one kind and of the kinds the loader derived from it (`water[variant=2]`
+    /// is a `water`, `GameDef::kind_covers`), as a GM object covers its children: what a
+    /// script names with a kind (#777).
+    KindTree(KindId),
     /// One instance.
     Inst(InstId),
     /// Any instance (`all`).
@@ -55,10 +58,11 @@ pub enum Target {
 
 impl Target {
     /// True when `inst` is one of the instances this target names.
-    pub fn matches(self, inst: &Instance) -> bool {
+    pub fn matches(self, def: &GameDef, inst: &Instance) -> bool {
         match self {
             Target::Class(c) => inst.classes.intersects(c),
             Target::Kind(k) => inst.kind == k,
+            Target::KindTree(k) => def.kind_covers(k, inst.kind),
             Target::Inst(id) => inst.id == id,
             Target::Any => true,
         }
@@ -99,12 +103,12 @@ impl<'a> Q<'a> {
         })
     }
 
-    /// Active, alive (or dead with R22 on), not `notme`, and named by `t`.
+    /// Visible (the world's one predicate, with the R22 `dead_in_queries` opt-in), not `notme`,
+    /// and named by `t`.
     fn eligible(&self, inst: &Instance, t: Target, notme: Option<InstId>) -> bool {
         Some(inst.id) != notme
-            && inst.active
-            && (inst.alive || self.rules.tick.dead_in_queries)
-            && t.matches(inst)
+            && World::visible_instance(inst, self.rules.tick.dead_in_queries)
+            && t.matches(self.def, inst)
     }
 
     /// Candidates that may touch `region`, sorted by id: grid hits plus moved instances, or
@@ -219,20 +223,10 @@ impl<'a> Q<'a> {
 
     /// "The first" of `hits` by R21 (`World::first_of` order).
     pub(crate) fn first(&self, hits: &[&Instance]) -> Option<InstId> {
-        let tick = &self.rules.tick;
         let by = |key: fn(&Instance) -> (u16, InstId)| hits.iter().map(|i| key(i)).min().map(|k| k.1);
-        match (tick.first_rule, tick.dispatch) {
-            (FirstRule::LowestId, _) | (FirstRule::DispatchOrder, DispatchOrder::Creation) => {
-                by(|i| (0, i.id))
-            }
-            (FirstRule::DispatchOrder, DispatchOrder::RankThenCreation) => by(|i| (i.rank, i.id)),
-            (FirstRule::DispatchOrder, DispatchOrder::DepthThenRankThenCreation) => {
-                // Depth order is WP1's to define; ask its dispatch order.
-                let set: BTreeSet<InstId> = hits.iter().map(|i| i.id).collect();
-                events::dispatch_order(self.w, tick, |i| set.contains(&i.id))
-                    .first()
-                    .copied()
-            }
+        match self.rules.tick.first_rule {
+            FirstRule::LowestId => by(|i| (0, i.id)),
+            FirstRule::DispatchOrder => by(|i| (i.rank, i.id)),
         }
     }
 
@@ -434,7 +428,7 @@ fn dist_edges(q: &Q, inst: &Instance) -> Result<[Real; 4], SimError> {
     let edges = match rules.dist_boxes {
         DistBoxes::Reported => reported_box(q.def, inst, at, rules)?.map(from_rect),
         DistBoxes::RoundedInclusive => instance_box(q.def, inst, at, rules)?.map(|p| from_rect(p.bbox)),
-        DistBoxes::Unrounded => reported_edges(q.def, inst, at)?,
+        DistBoxes::Unrounded => reported_edges(q.def, inst, at, rules)?,
     };
     match (edges, rules.dist_boxes) {
         (Some(e), _) => Ok(e),

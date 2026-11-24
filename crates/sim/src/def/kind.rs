@@ -1,4 +1,4 @@
-//! Kinds, parameters and dispatch ranks (docs/plans/sim-core.md 1.1, 1.3, 8.2).
+//! Kinds, parameters and dispatch ranks (docs/architecture/sim/world.md; docs/format/objects.md).
 //!
 //! WP0 declares; WP7a owns afterwards.
 
@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use super::builtin::Builtin;
 use super::class::ClassMask;
-use super::ids::{KindId, MaskId, PartSystemDefId, RoomId, ScriptId, SoundId, SpriteId};
+use super::ids::{KindId, MaskId, PartSystemDefId, RoomId, ScriptId, SoundId, SpriteId, TimelineId};
 use crate::events::EventSet;
 use crate::num::Real;
 
@@ -35,6 +35,9 @@ pub struct KindDef {
     pub classes: ClassMask,
     /// Default params; a placed instance's params override them.
     pub params: Params,
+    /// The timeline an instance starts at Create (the object file's `timeline` key), at
+    /// position 0. A script's Create may replace it with `timeline::start_with_def`.
+    pub timeline: Option<TimelineId>,
     /// What the kind handles, built once at load (`events::event_set` reads it).
     pub events: EventSet,
 }
@@ -55,6 +58,7 @@ impl KindDef {
             persistent: false,
             classes: ClassMask::NONE,
             params: Params::default(),
+            timeline: None,
             events: EventSet::default(),
         }
     }

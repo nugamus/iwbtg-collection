@@ -1,4 +1,4 @@
-//! Built-in `drop_platform` (mechanics `drop_platform`; docs/plans/sim-core.md 6.1;
+//! Built-in `drop_platform` (mechanics `drop_platform`; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/drop_platform.md). Tier 2. WP0 creates the file; WP6b owns it.
 //!
 //! A platform that falls or rises when the kid stands on it. The kid is the first kid in the

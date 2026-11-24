@@ -11,6 +11,31 @@
 //! itself for `vk_shift` (true when either Left or Right Shift was pressed, whatever the other one
 //! is doing). The client's input collector must build frames the same way, so that a replay and an
 //! `.inputs` file agree for the same physical input. `held` is the OR of every input's state.
+//!
+//! # The one contract (0005, #1155)
+//!
+//! [`InputFrame`] is the only input wire contract between the client, a replay and the sim:
+//!
+//! - The **client collector** derives `held`, `pressed` and `released` from device events between
+//!   ticks (`crates/client/src/input.rs`). The **sim only latches** the frame
+//!   ([`crate::input_state::InputState::latch`]); it never derives an edge from held state, so a
+//!   tap inside one tick keeps both edge bits and a replayed frame sees the same tick.
+//! - A replay and `replay verify` store and check frames, not keys. Edges are per input, above, so
+//!   a second key bound to an already-held action sets the action's press bit again.
+//! - The fields are **action bits only**. [`InputFrame::masked`] clears anything outside
+//!   [`Action::MASK`] at the sim's latch boundary: a device, a replay or a caller can never smuggle
+//!   a raw key code or a reserved bit into the sim. Games read actions, never raw keys.
+//! - The plain edge contract above is what `standard` and every existing package use. Per-engine
+//!   edge behavior is a named rule/profile value only where a trace proves a player feels it:
+//!   `TickRules::direct_latch` is the one such value today, and the recorder's traces cannot settle
+//!   it (register I1). No port gets a new edge model without that evidence; xia's `tap_fix` remains
+//!   a documented research gap (docs/architecture/sim/kid.md).
+//! - A control press must reach the sim within [`CONTROL_LATENCY_MAX_TICKS`] ticks (F1 feel
+//!   contract, docs/architecture/replay.md).
+//!
+//! The `.inputs` compiler below keeps its own two OPEN choices ([`PRESS_WHILE_HELD_SETS_PRESSED`]
+//! and [`RELEASE_WHILE_UP_SETS_RELEASED`]); they describe how a *trace file* is turned into
+//! frames, not how the sim reads a frame.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -18,7 +43,7 @@ use serde::{Deserialize, Serialize};
 
 /// One client action. Each is one bit of a `u32`; bits above `Extra4` are reserved.
 ///
-/// `Pause`, `Mute` and `Reset` are the engines' P, M and F2 (docs/plans/sim-core.md 2.4):
+/// `Pause`, `Mute` and `Reset` are the engines' P, M and F2 (docs/architecture/sim/tick.md):
 /// they change sim state in the originals, so they are sim input. Quitting (Escape, Alt+F4) is
 /// client-only and never an action.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -119,6 +144,15 @@ impl Action {
     }
 }
 
+/// The F1 control-latency feel contract (0005, #1155): a press the player makes between two ticks
+/// is in the next frame, so the sim responds no later than the next tick.
+///
+/// `latency = response_tick - press_frame`; 0 means the same step responded. A client collector
+/// samples devices once per tick and the sim latches that frame, so the worst case for a press
+/// that misses the current sample is one tick. A larger value would be a felt input lag and a
+/// ranked-integrity risk; a smaller value is not possible without sub-tick input.
+pub const CONTROL_LATENCY_MAX_TICKS: u32 = 1;
+
 /// The input for one tick. Edge bits keep sub-tick taps: a press and a release inside one tick
 /// both show up, which GM8 treats differently from holding for one tick.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -182,6 +216,25 @@ impl InputFrame {
     /// True on the tick the action went up.
     pub const fn was_released(self, action: Action) -> bool {
         self.released & action.bit() != 0
+    }
+
+    /// The frame with every bit outside [`Action::MASK`] cleared.
+    ///
+    /// This is the wire boundary: [`crate::input_state::InputState::latch`] stores the masked
+    /// frame, so a reserved bit or a raw key code packed by a caller (or decoded from a replay)
+    /// can never reach a hashed input state, an event handler or a probe. Valid frames are
+    /// unchanged.
+    pub const fn masked(self) -> InputFrame {
+        InputFrame {
+            held: self.held & Action::MASK,
+            pressed: self.pressed & Action::MASK,
+            released: self.released & Action::MASK,
+        }
+    }
+
+    /// True when the frame carries only action bits (see [`InputFrame::masked`]).
+    pub const fn is_contract(self) -> bool {
+        (self.held | self.pressed | self.released) & !Action::MASK == 0
     }
 }
 
@@ -390,13 +443,17 @@ impl Default for KeyMap {
     }
 }
 
-/// Whether a press of a key that is already down sets its `pressed` bit again (for example two
-/// overlapping `hold` ranges of one key). OPEN: confirm in CLONE_SPEC how GM8 and OpenGMK's TAS
-/// input treat a repeated press.
+/// Whether a press of a key that is already down sets its `pressed` bit again when compiling a
+/// `.inputs` file (for example two overlapping `hold` ranges of one key). This is **trace-input
+/// compiler policy**, not a sim edge rule: at run time the client collector is the source of the
+/// edge and the sim only latches the frame (module docs, #1155). OPEN: confirm in CLONE_SPEC how
+/// GM8 and OpenGMK's TAS input treat a repeated press.
 pub const PRESS_WHILE_HELD_SETS_PRESSED: bool = true;
 
-/// Whether a release of a key that is already up sets its `released` bit. OPEN: confirm in
-/// CLONE_SPEC how GM8 and OpenGMK's TAS input treat a release of a key that is up.
+/// Whether a release of a key that is already up sets its `released` bit when compiling a
+/// `.inputs` file. Trace-input compiler policy, not a sim edge rule (see
+/// [`PRESS_WHILE_HELD_SETS_PRESSED`]). OPEN: confirm in CLONE_SPEC how GM8 and OpenGMK's TAS input
+/// treat a release of a key that is up.
 pub const RELEASE_WHILE_UP_SETS_RELEASED: bool = true;
 
 /// Highest frame number an `.inputs` file may name. Our own limit, not a GM8 fact: it bounds
@@ -832,6 +889,7 @@ frame 3: end",
                 released: e1
             }
         );
+        assert!(p.frames.iter().all(|f| f.is_contract()));
     }
 
     #[test]
@@ -877,6 +935,50 @@ frame 3: end",
         assert!(f.was_pressed(Action::Right) && !f.was_pressed(Action::Jump));
         assert!(f.was_released(Action::Left) && !f.was_released(Action::Jump));
         assert_eq!(InputFrame::from_held(0, 0), InputFrame::EMPTY);
+    }
+
+    #[test]
+    fn the_wire_contract_is_action_bits_only() {
+        // A valid frame is unchanged and reports itself as a contract frame.
+        let valid = InputFrame {
+            held: J | Action::Left.bit(),
+            pressed: J,
+            released: Action::Left.bit(),
+        };
+        assert_eq!(valid.masked(), valid);
+        assert!(valid.is_contract());
+        assert!(InputFrame::EMPTY.is_contract());
+        // The whole valid domain (every action in every field) is unchanged.
+        let all = InputFrame {
+            held: Action::MASK,
+            pressed: Action::MASK,
+            released: Action::MASK,
+        };
+        assert_eq!(all.masked(), all);
+        assert!(all.is_contract());
+        // Reserved bits (above Extra4) and anything a caller might pack are cleared.
+        let dirty = InputFrame {
+            held: J | 1 << 31,
+            pressed: 0xff00_0000,
+            released: 1 << Action::MASK.count_ones(),
+        };
+        assert!(!dirty.is_contract());
+        assert_eq!(
+            dirty.masked(),
+            InputFrame {
+                held: J,
+                pressed: 0,
+                released: 0,
+            }
+        );
+        assert!(dirty.masked().is_contract());
+    }
+
+    #[test]
+    fn the_control_latency_contract_is_one_tick() {
+        // The client samples devices once per tick and the sim latches that frame, so a press
+        // made between two samples is seen on the next tick, never later.
+        assert_eq!(CONTROL_LATENCY_MAX_TICKS, 1);
     }
 
     #[test]
@@ -1273,6 +1375,13 @@ frame 3: end",
             assert!(
                 trace_command(&text).is_some(),
                 "{}: no recorder command",
+                f.display()
+            );
+            // Every frame a trace file compiles to is action-bits-only, so replaying it through
+            // the masking latch is a no-op.
+            assert!(
+                k.inputs.frames.iter().all(|f| f.is_contract()),
+                "{}: a frame carries a reserved bit",
                 f.display()
             );
             if !k.unmapped.is_empty() {

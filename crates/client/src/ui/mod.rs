@@ -18,7 +18,7 @@ pub mod widgets;
 use bevy::prelude::*;
 
 /// The UI's command-line flags.
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Default)]
 pub struct UiArgs {
     /// Open the UI gallery (every UI component, for design review) instead of a game.
     #[arg(long)]
@@ -29,6 +29,33 @@ pub struct UiArgs {
     /// Screenshot checks: post a sample notice at start (`storage` when no kind is given).
     #[arg(long, hide = true, num_args = 0..=1, default_missing_value = "storage")]
     pub notice_preview: Option<NoticePreview>,
+}
+
+/// The UI's place in the module list (main.rs): its flags and the `--ui-gallery` mode. The UI kit
+/// plugin itself is added by the screens that use it (the HUD, the gallery).
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = UiArgs;
+
+    fn prepare(args: &mut UiArgs, _startup: &crate::registration::Startup) -> Result<(), String> {
+        configure(args);
+        Ok(())
+    }
+
+    fn standalone(
+        args: &UiArgs,
+        startup: &crate::registration::Startup,
+    ) -> Option<Result<(), String>> {
+        args.ui_gallery.then(|| {
+            gallery::run(
+                startup.screenshot.clone(),
+                args.reduced_motion,
+                startup.window,
+                startup.ratio,
+            )
+        })
+    }
 }
 
 /// The sample notices of `--notice-preview`.

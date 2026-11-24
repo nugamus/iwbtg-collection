@@ -1,0 +1,5 @@
+# Repository-relative prefixes read as data by sim/format tests.
+# Shared by xtask and CI. Add a prefix when introducing a new documentation fixture.
+docs/format/
+docs/architecture/sim/scripts.md
+docs/decisions/0001-script-language.md

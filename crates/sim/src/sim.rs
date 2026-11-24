@@ -1,4 +1,4 @@
-//! The simulation handle the client, server and CLI drive (docs/plans/sim-core.md 2.1, 13 WP0).
+//! The simulation handle the client, server and CLI drive (docs/architecture/sim/tick.md).
 //!
 //! WP0 declared; WP1 owns the method bodies.
 
@@ -7,9 +7,10 @@ use std::sync::Arc;
 use crate::def::GameDef;
 use crate::error::SimError;
 use crate::input::InputFrame;
+use crate::rng::RngStreams;
 use crate::room::{self, StartPoint};
 use crate::rules::RunnerRules;
-use crate::script::ScriptRuntime;
+use crate::script::{PreparedScripts, ScriptRuntime};
 use crate::sound::DllMode;
 use crate::stripped::PlayMode;
 use crate::tick;
@@ -58,6 +59,13 @@ pub struct Sim {
     pub(crate) rows_done: bool,
 }
 
+/// The rules a run uses: the runner's, with the package's FPU model.
+fn run_rules(def: &GameDef) -> Result<RunnerRules, SimError> {
+    let mut rules = RunnerRules::for_runner(def.runner, def.engine_rev)?;
+    rules.num.float_model = def.float_model;
+    Ok(rules)
+}
+
 impl Sim {
     /// Sets up the world from `options.start`: rules from the game's runner and engine_rev,
     /// the script host (`ScriptRuntime::new`), boot instances, the first room, Game Start
@@ -66,32 +74,93 @@ impl Sim {
     /// The world starts in `GameDef::start_room` at tick 0 before `start_game` moves it. A
     /// start that halts is returned as the error, and so is a map the package does not have.
     pub fn new(def: Arc<GameDef>, options: SimOptions) -> Result<Sim, SimError> {
-        let map = def.map_index(options.map.as_deref()).ok_or_else(|| {
+        let sim = Sim::new_or_halted(def, options)?;
+        if let SimStatus::Halted(e) = &sim.world.status {
+            return Err(e.clone());
+        }
+        Ok(sim)
+    }
+
+    /// Compiles the package's scripts once so a quick retry can reuse them (#1021, #1093).
+    ///
+    /// The artifact is immutable. Every run from it gets a fresh Rhai engine and its own RNG,
+    /// budget, log and parked world; see [`Sim::new_or_halted_prepared`].
+    pub fn prepare(def: &GameDef) -> Result<PreparedScripts, SimError> {
+        PreparedScripts::new(def, &run_rules(def)?)
+    }
+
+    /// [`Sim::new`], except that a start that halts (a script error in a start-room Create, #946)
+    /// is returned as the halted sim, `SimStatus::Halted` in its world, as a halt during play
+    /// leaves it. Only a sim that cannot be set up is an error: a map the package does not have,
+    /// a runner it does not support, scripts that do not compile.
+    pub fn new_or_halted(def: Arc<GameDef>, options: SimOptions) -> Result<Sim, SimError> {
+        // Keep the error precedence: map, then rules/scripts (the prepare compiles).
+        let map = Sim::map_for(&def, &options)?;
+        let prepared = Sim::prepare(&def)?;
+        Sim::build(def, options, map, &prepared)
+    }
+
+    /// [`Sim::new_or_halted`] with an artifact from [`Sim::prepare`]: the same start, without
+    /// compiling the scripts again. A quick retry uses this (#1093; the client cache is
+    /// #1093B).
+    pub fn new_or_halted_prepared(
+        def: Arc<GameDef>,
+        options: SimOptions,
+        prepared: &PreparedScripts,
+    ) -> Result<Sim, SimError> {
+        let map = Sim::map_for(&def, &options)?;
+        Sim::build(def, options, map, prepared)
+    }
+
+    /// [`Sim::new`] with a prepared artifact: a start that halts is returned as the error.
+    pub fn new_prepared(
+        def: Arc<GameDef>,
+        options: SimOptions,
+        prepared: &PreparedScripts,
+    ) -> Result<Sim, SimError> {
+        let sim = Sim::new_or_halted_prepared(def, options, prepared)?;
+        if let SimStatus::Halted(e) = &sim.world.status {
+            return Err(e.clone());
+        }
+        Ok(sim)
+    }
+
+    /// The map error first, as every constructor has always reported it.
+    fn map_for(def: &GameDef, options: &SimOptions) -> Result<u16, SimError> {
+        def.map_index(options.map.as_deref()).ok_or_else(|| {
             SimError::unsupported(format!(
                 "map `{}` is not in package `{}`",
                 options.map.as_deref().unwrap_or_default(),
                 def.id
             ))
-        })?;
-        let mut rules = RunnerRules::for_runner(def.runner, def.engine_rev)?;
-        rules.num.float_model = def.float_model;
-        let scripts = ScriptRuntime::new(&def, &rules)?;
+        })
+    }
+
+    /// The shared body of the constructors after the map check and script preparation.
+    fn build(
+        def: Arc<GameDef>,
+        options: SimOptions,
+        map: u16,
+        prepared: &PreparedScripts,
+    ) -> Result<Sim, SimError> {
+        let rules = run_rules(&def)?;
+        let scripts = ScriptRuntime::new_run(Arc::clone(&def), &rules, prepared)?;
         let mut world = World::new(def.start_room, options.seed);
+        // The ruleset selects the stream layout; the state it observes is hashed.
+        world.streams = RngStreams::seeded(options.seed, rules.rng.layout);
         world.next_id = World::first_runtime_id(&def);
         world.mode = options.mode;
         world.map = map;
         {
             let mut ctx = Ctx {
-                def: &def,
+                def: def.as_ref(),
                 rules: &rules,
                 w: &mut world,
                 scripts: &scripts,
                 dll_mode: options.dll_mode,
             };
-            room::start_game(&mut ctx, &options.start)?;
-        }
-        if let SimStatus::Halted(e) = &world.status {
-            return Err(e.clone());
+            // An error here has halted the world (`room::start_game`): it is in `world.status`.
+            let _ = room::start_game(&mut ctx, &options.start);
         }
         Ok(Sim {
             def,
@@ -108,7 +177,7 @@ impl Sim {
     /// keeps what `Sim::new` produced: the first room's start (music, sounds, shake) is reported
     /// with tick 0, so a client that reads `output` after every step never misses it and must
     /// not also read it after `Sim::new`. Reaching `GameDef::max_ticks` halts
-    /// with `SimError::Overflow`; any error halts (plan 2.2).
+    /// with `SimError::Overflow`; any error halts (docs/architecture/sim/tick.md).
     pub fn step(&mut self, input: InputFrame) -> StepResult {
         self.step_rows(input);
         self.finish_step()

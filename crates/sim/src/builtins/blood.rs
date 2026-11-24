@@ -1,9 +1,10 @@
 //! Built-in `blood` (a blood drop; CLONE_SPEC numbers "Hidden RNG consumers", kid/A1.md Death,
-//! kid/A3.md blood; docs/plans/sim-core.md 6.1; docs/format/builtins/blood.md). Tier 1. WP0
+//! kid/A3.md blood; docs/architecture/sim/builtins.md; docs/format/builtins/blood.md). Tier 1. WP0
 //! creates the file; WP6a owns it.
 //!
-//! Create draws from the gameplay RNG, in this order (Confirmed (recorder) rely `num-rng-b.csv`,
-//! all 40 blood of frame 15 bit for bit): the frame, `choose(0, 1, 2)`, then the gravity,
+//! Create draws from the effects stream (`gm8`: the one gameplay RNG), in this order (Confirmed
+//! (recorder) rely `num-rng-b.csv`, all 40 blood of frame 15 bit for bit): the frame,
+//! `choose(0, 1, 2)`, then the gravity,
 //! `0.1 + random(0.2)` (`-0.1 + random(-0.2)` when `flipped`). `image_speed` is 0, so blood never
 //! animates. The emitter sets direction and speed after Create (`blood_emitter`).
 //!
@@ -21,7 +22,8 @@ use crate::collide::query::place_meeting;
 use crate::def::{ClassMask, KindDef, ParamValue, Params};
 use crate::error::SimError;
 use crate::events::{EventKind, EventSet};
-use crate::num::Real;
+use crate::num::{self, Real};
+use crate::rng::Stream;
 use crate::world::{Ctx, Flow, InstId};
 
 const SPECS: &[ParamSpec] = &[
@@ -77,10 +79,11 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
     let flipped = s.flipped;
     match ev {
         EventKind::Create => {
-            // The order is the recorded one: the frame first, then the gravity.
-            let frame = ctx.w.rng.choose(3)?;
+            // The order is the recorded one: the frame first, then the gravity. These are visual
+            // values, so `standard` draws them from the effects stream (#1157).
+            let frame = ctx.w.stream_mut(Stream::Effects).choose(3)?;
             let (base, spread) = if flipped { (-0.1, -0.2) } else { (0.1, 0.2) };
-            let g = Real::new(base) + ctx.w.rng.random(Real::new(spread));
+            let g = Real::new(base) + ctx.w.stream_mut(Stream::Effects).random(Real::new(spread));
             if let Some(inst) = ctx.w.get_mut(me) {
                 inst.img.set_index(Real::new(f64::from(frame)))?;
                 inst.img.set_speed(Real::ZERO)?;
@@ -116,6 +119,21 @@ fn stick(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
             x += sx;
             y += sy;
             left -= 1.0;
+        }
+    }
+    if let Some(inst) = ctx.w.get(me) {
+        // The writes below set every value it already has: the drop is at rest at `(x, y)`.
+        // Writing them would mark the grid moved and make the pair walk re-gather this drop's
+        // whole cell after every pair, which turns a death's pile of ~800 stuck drops into
+        // near-quadratic work (#1139).
+        let r = &ctx.rules.num;
+        if num::gm_eq(inst.m.hspeed(), Real::ZERO, r)
+            && num::gm_eq(inst.m.vspeed(), Real::ZERO, r)
+            && num::gm_eq(inst.m.gravity(), Real::ZERO, r)
+            && num::gm_eq(inst.m.x(), x, r)
+            && num::gm_eq(inst.m.y(), y, r)
+        {
+            return Ok(());
         }
     }
     if let Some(inst) = ctx.w.get_mut(me) {

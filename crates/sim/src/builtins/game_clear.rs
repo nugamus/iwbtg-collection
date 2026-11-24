@@ -1,4 +1,4 @@
-//! Built-in `game_clear` (mechanics `game_clear`; docs/plans/sim-core.md 6.1;
+//! Built-in `game_clear` (mechanics `game_clear`; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/game_clear.md): raises the `run_end` timing trigger. Tier 2. WP0 creates
 //! the file; WP6b owns it.
 //!

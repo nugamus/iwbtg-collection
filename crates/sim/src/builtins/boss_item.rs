@@ -1,4 +1,4 @@
-//! Built-in `boss_item` (mechanics `boss_item`; docs/plans/sim-core.md 6.1;
+//! Built-in `boss_item` (mechanics `boss_item`; docs/architecture/sim/builtins.md;
 //! docs/format/builtins/boss_item.md). Tier 2. WP0 creates the file; WP6b owns it.
 //!
 //! The reward of a boss (KOT bossitem1, MIKU, XIA objBossItem). Create makes it invisible. Each

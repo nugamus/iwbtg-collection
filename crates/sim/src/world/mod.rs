@@ -1,4 +1,4 @@
-//! The mutable world: instances, globals, room state (docs/plans/sim-core.md 1.2, 1.4, 1.5).
+//! The mutable world: instances, globals, room state (docs/architecture/sim/world.md).
 //!
 //! WP0 declares the structs and ships a minimal `Vec` store (`store.rs`); WP1 owns the module.
 
@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 pub use api::{Flow, SpawnInit};
-pub use instance::{InstId, Instance, KindState, Value};
+pub use instance::{InstId, Instance, KindState, MAX_ARRAY_SIZE, Persistence, Value};
 
 use crate::collide::grid::Grid;
 use crate::def::{GameDef, PartSystemDefId, RoomId, VarId};
@@ -20,7 +20,7 @@ use crate::input_state::InputState;
 use crate::num::Real;
 use crate::output::OutputEvent;
 use crate::particles::{PartSystemId, Particles};
-use crate::rng::Rng;
+use crate::rng::{Rng, RngStreams};
 use crate::room::RoomRequest;
 use crate::rules::RunnerRules;
 use crate::save::SaveSlot;
@@ -42,31 +42,39 @@ pub struct World {
     pub room: RoomId,
     /// Ticks since the current room was entered.
     pub room_tick: u64,
-    /// GM `room_speed`: the file speed on entry, 50 after the world's Room Start (R14).
+    /// GM `room_speed`: legacy per-room clock data (R14, R30). The file speed on entry, the
+    /// package tick rate after the world's Room Start. `ClockPolicy::Fixed` (standard) never
+    /// reads it as a clock; it stays hashed either way.
     pub room_speed: Real,
-    /// Instances sorted by id (plan 1.2): creation order, except that room-placed instances with
+    /// Instances sorted by id (docs/architecture/sim/world.md): creation order, except that room-placed instances with
     /// a GM8 id (#669) sort below every runtime id. Private to `world` so every
     /// mutable access goes through `World::get_mut`, which keeps the broadphase grid in step
-    /// (plan 3.4); read them with `World::instances`.
+    /// (docs/architecture/sim/collision.md); read them with `World::instances`.
     pub(in crate::world) instances: Vec<Instance>,
-    /// The next runtime id to hand out (checked, plan 10.3); starts at
+    /// The next runtime id to hand out (checked, docs/architecture/sim/determinism.md); starts at
     /// [`World::first_runtime_id`].
     pub next_id: u64,
-    /// Variable names first seen at run time (scripts), plan 1.1.
+    /// Variable names first seen at run time (scripts; docs/architecture/sim/world.md).
     pub var_names: BTreeMap<String, VarId>,
     /// GML globals.
     pub globals: BTreeMap<VarId, Value>,
-    /// Engine state that is not per instance, split by owner (plan 1.5).
+    /// Engine state that is not per instance, split by owner (docs/architecture/sim/world.md).
     pub engine: EngineGlobals,
-    /// The gameplay random generator (WP2).
+    /// The gameplay random generator (WP2); the shared stream under `gm8`.
     pub rng: Rng,
+    /// The named streams a split layout adds (decision 0005, N10). Hashed: a replay observes the
+    /// layout and each stream's state. Under `Shared` they are seeded but never read.
+    #[serde(default)]
+    pub streams: RngStreams,
     /// This tick's input and the direct-read latch (WP1).
     pub input: InputState,
     /// The eight views (WP4b).
     pub views: [View; 8],
     /// One pending room request; the last request wins (Inferred, R13).
     pub pending: Option<RoomRequest>,
-    /// Saved instances of persistent rooms (WP4a).
+    /// Instances a **persistent room** keeps while the player is away, restored on return
+    /// (WP4a). Distinct from [`Persistence::Run`] instances, which follow the room change, and
+    /// from [`Persistence::Save`] save objects, which write the checkpoint.
     pub persistent_rooms: BTreeMap<RoomId, Vec<Instance>>,
     /// The save slot; `None` means "save file missing" (WP4b).
     pub save: Option<SaveSlot>,
@@ -106,8 +114,8 @@ pub struct World {
     /// timing chain and ranked start. Hashed: two maps' runs never share a state hash.
     #[serde(default)]
     pub map: u16,
-    /// A trace setup action ran (plan 10.4). Hashed, so a run that used setup never matches a
-    /// clean verification.
+    /// A trace setup action ran (docs/architecture/sim/determinism.md). Hashed, so a run that
+    /// used setup never matches a clean verification.
     pub setup_applied: bool,
     /// Broadphase cache (WP3). Rebuilt on room entry and savestate restore; never hashed, and
     /// never makes two worlds unequal (`Grid`'s `PartialEq` is always true).
@@ -136,6 +144,7 @@ impl World {
             globals: BTreeMap::new(),
             engine: EngineGlobals::default(),
             rng: Rng::new(seed),
+            streams: RngStreams::seeded(seed, crate::rules::rng::StreamLayout::Shared),
             input: InputState::default(),
             views: Default::default(),
             pending: None,
@@ -157,7 +166,7 @@ impl World {
     }
 }
 
-/// Engine globals split by owner (plan 1.5). Each part starts empty; only its owner adds fields.
+/// Engine globals split by owner (docs/architecture/sim/world.md). Each part starts empty; only its owner adds fields.
 #[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
 pub struct EngineGlobals {
     /// WP4b: difficulty, deaths, time, save slot number, clear flag.

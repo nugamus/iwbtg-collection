@@ -192,12 +192,15 @@ impl Recorder {
     /// replayed.
     fn begin(&mut self, sim: &Sim) -> Option<Recording> {
         let options = sim.options();
+        let def = sim.def();
         let start_mode = match &options.start {
             StartPoint::NewGame { .. } => StartMode::NewGame,
-            StartPoint::FromSave(slot) => StartMode::FromSave(postcard::to_stdvec(slot).ok()?),
+            StartPoint::FromSave(slot) => {
+                let checkpoint = iwbtg_sim::save::Checkpoint::from_slot(def, slot).ok()?;
+                StartMode::FromSave(checkpoint.encode().ok()?)
+            }
             _ => return None,
         };
-        let def = sim.def();
         let header = Header {
             magic: MAGIC,
             replay_format: REPLAY_FORMAT,
@@ -359,6 +362,23 @@ fn hex(bytes: &[u8]) -> String {
 /// check) records nothing.
 pub struct ReplaysPlugin {
     pub keep: bool,
+}
+
+/// The replays' place in the module list (main.rs): their plugin. A `--screenshot` check records none.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = crate::registration::NoArgs;
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: crate::registration::NoArgs,
+        startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(ReplaysPlugin {
+            keep: startup.keep(),
+        });
+    }
 }
 
 impl Plugin for ReplaysPlugin {
@@ -665,6 +685,8 @@ mod tests {
             room: pkg.def.start_room,
             x: iwbtg_sim::num::Real::new(96.0),
             y: iwbtg_sim::num::Real::new(500.0),
+            precision: Default::default(),
+            point: None,
             flipped: false,
             facing: 1,
             difficulty: 0,
@@ -687,9 +709,10 @@ mod tests {
         let name = rec.current_name().unwrap().to_owned();
         rec.finish(&sim);
         let replay = Replay::decode(&store.read(&name).unwrap().unwrap()).unwrap();
+        let checkpoint = iwbtg_sim::save::Checkpoint::from_slot(&pkg.def, &slot).unwrap();
         assert_eq!(
             replay.header.start_mode,
-            StartMode::FromSave(postcard::to_stdvec(&slot).unwrap())
+            StartMode::FromSave(checkpoint.encode().unwrap())
         );
     }
 }

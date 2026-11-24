@@ -1,4 +1,4 @@
-//! `iwbtg trace run`, `diff`, `check` (docs/plans/sim-core.md 9.4). WP0 declares; WP8a owns.
+//! `iwbtg trace run`, `diff`, `check` (docs/architecture/cli.md). WP0 declares; WP8a owns.
 //!
 //! A case runs like the recorder ran the original (research `tooling/opengmk-trace/README.md`):
 //! the run starts in the case's room (`StartPoint::Room`), which stands for the recorder's room
@@ -99,6 +99,24 @@ pub fn resolve_case(
                 errors.push(format!("column {name:?}: {e}"));
                 columns.push(None);
             }
+        }
+    }
+    // A `required` metric is the F1 evidence a feel contract names. It must resolve and be one of
+    // the columns this case actually compares (a probe expression from `vars`, or an unmapped
+    // original column), not an ignored, unprobed or split-away name.
+    let compared: std::collections::BTreeSet<&str> = var_columns
+        .iter()
+        .filter(|name| !case.ignore.contains(*name) && !case.unprobed.contains_key(name.as_str()))
+        .map(|name| case.vars.get(name.as_str()).map_or(name.as_str(), String::as_str))
+        .collect();
+    for required in &case.required {
+        if let Err(e) = registry::column(required, def) {
+            errors.push(format!("required {required:?}: {e}"));
+        }
+        if !compared.contains(required.as_str()) {
+            errors.push(format!(
+                "required {required:?} is not a compared column of this case"
+            ));
         }
     }
     let mut pre_entry = Vec::new();
@@ -600,6 +618,36 @@ pub fn bundle_engine_pack(dir: &Path, files: &mut PackageFiles) -> Result<(), To
     Ok(())
 }
 
+/// The case below `cases` whose `source` is `source`: the feel runner links a contract's `trace`
+/// key to it. `Ok(None)` when no case names that source; a malformed case file is an error, never
+/// a silent skip.
+pub fn find_case_by_source(cases: &Path, source: &str) -> Result<Option<(PathBuf, TraceCase)>, ToolError> {
+    let packages =
+        std::fs::read_dir(cases).map_err(|e| ToolError::Message(format!("{}: {e}", cases.display())))?;
+    for package in packages {
+        let package = package.map_err(|e| ToolError::Message(format!("{}: {e}", cases.display())))?;
+        let dir = package.path();
+        if !dir.is_dir() {
+            continue;
+        }
+        for entry in
+            std::fs::read_dir(&dir).map_err(|e| ToolError::Message(format!("{}: {e}", dir.display())))?
+        {
+            let path = entry
+                .map_err(|e| ToolError::Message(format!("{}: {e}", dir.display())))?
+                .path();
+            if !path.extension().is_some_and(|e| e == "toml") {
+                continue;
+            }
+            let case = read_case(&path)?;
+            if case.source == source {
+                return Ok(Some((path, case)));
+            }
+        }
+    }
+    Ok(None)
+}
+
 /// A case by path, or by name under `<cases>/<pkg id>/`.
 pub fn find_case(cases: &Path, pkg_id: &str, case: &str) -> PathBuf {
     let p = Path::new(case);
@@ -888,6 +936,43 @@ mod tests {
                 ..
             }]
         ));
+    }
+
+    #[test]
+    fn required_must_resolve_and_be_compared() {
+        let d = def();
+        let vars: Vec<String> = [
+            "alarm[0]",
+            "player.x",
+            "bbox_left",
+            "keyboard_check(16)",
+            "image_index",
+        ]
+        .map(String::from)
+        .to_vec();
+        let with_required = |names: &[&str]| TraceCase {
+            required: names.iter().map(|n| (*n).to_string()).collect(),
+            ..case()
+        };
+        // A mapped expression and an unmapped compared column are fine.
+        for names in [
+            &["kid.x"][..],
+            &["image_index"][..],
+            &["kid.x", "keyboard_check(jump)"][..],
+        ] {
+            resolve_case(&with_required(names), &d, &vars).expect("required resolves");
+        }
+        // It must resolve ...
+        let err = resolve_case(&with_required(&["not_a_metric"]), &d, &vars).unwrap_err();
+        assert!(format!("{err}").contains("not_a_metric"), "{err}");
+        // ... and be one of the columns this case compares.
+        for name in ["kid.y", "bbox_left"] {
+            let err = resolve_case(&with_required(&[name]), &d, &vars).unwrap_err();
+            assert!(
+                format!("{err}").contains("is not a compared column"),
+                "{name}: {err}"
+            );
+        }
     }
 
     #[test]

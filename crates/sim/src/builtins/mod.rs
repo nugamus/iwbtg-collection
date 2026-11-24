@@ -1,4 +1,4 @@
-//! Built-in kinds other than the kid (docs/plans/sim-core.md 6).
+//! Built-in kinds other than the kid (docs/architecture/sim/builtins.md).
 //!
 //! One file per built-in, documented in `docs/format/builtins/<kind>.md`. Each file has the same
 //! four entry points (`param_specs`, `event_set`, `init_state`, `on_event`), and WP0 wrote the
@@ -350,59 +350,8 @@ pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimEr
 /// loader calls `kid::event_set(&def.physics)` for `Builtin::Kid`; this gives an empty set for
 /// it, as for `Inert`.
 pub fn event_set(b: Builtin, kind: &KindDef) -> EventSet {
-    match b {
-        Builtin::World => world::event_set(kind),
-        Builtin::KidStart => kid_start::event_set(kind),
-        Builtin::Block => block::event_set(kind),
-        Builtin::Spike => spike::event_set(kind),
-        Builtin::Killer => killer::event_set(kind),
-        Builtin::KidBullet => kid_bullet::event_set(kind),
-        Builtin::Blood => blood::event_set(kind),
-        Builtin::BloodEmitter => blood_emitter::event_set(kind),
-        Builtin::GameOver => game_over::event_set(kind),
-        Builtin::Bow => bow::event_set(kind),
-        Builtin::Save => save::event_set(kind),
-        Builtin::Warp => warp::event_set(kind),
-        Builtin::DifficultyWarp => difficulty_warp::event_set(kind),
-        Builtin::Camera => camera::event_set(kind),
-        Builtin::Platform => platform::event_set(kind),
-        Builtin::Playerface => playerface::event_set(kind),
-        Builtin::MovingPlatform => moving_platform::event_set(kind),
-        Builtin::Water => water::event_set(kind),
-        Builtin::Vine => vine::event_set(kind),
-        Builtin::FakeBlock => fake_block::event_set(kind),
-        Builtin::HiddenBlock => hidden_block::event_set(kind),
-        Builtin::Trigger => trigger::event_set(kind),
-        Builtin::Trap => trap::event_set(kind),
-        Builtin::DropPlatform => drop_platform::event_set(kind),
-        Builtin::GravityFlip => gravity_flip::event_set(kind),
-        Builtin::EdgeWarp => edge_warp::event_set(kind),
-        Builtin::BulletBlocker => bullet_blocker::event_set(kind),
-        Builtin::Slope => slope::event_set(kind),
-        Builtin::Music => music::event_set(kind),
-        Builtin::DeathSound => death_sound::event_set(kind),
-        Builtin::BossGate => boss_gate::event_set(kind),
-        Builtin::BossItem => boss_item::event_set(kind),
-        Builtin::SecretItem => secret_item::event_set(kind),
-        Builtin::ItemViewer => item_viewer::event_set(kind),
-        Builtin::GameClear => game_clear::event_set(kind),
-        Builtin::JumpRefresher => jump_refresher::event_set(kind),
-        Builtin::Spring => spring::event_set(kind),
-        Builtin::Conveyor => conveyor::event_set(kind),
-        Builtin::KidParamZone => kid_param_zone::event_set(kind),
-        Builtin::BreakableBlock => breakable_block::event_set(kind),
-        Builtin::TrapStopper => trap_stopper::event_set(kind),
-        Builtin::Orbit => orbit::event_set(kind),
-        Builtin::PathPlatform => path_platform::event_set(kind),
-        Builtin::TimeLimit => time_limit::event_set(kind),
-        Builtin::Sign => sign::event_set(kind),
-        Builtin::Ladder => ladder::event_set(kind),
-        Builtin::Decor => decor::event_set(kind),
-        Builtin::ParticleSystem => particle_system::event_set(kind),
-        Builtin::Scripted => scripted::event_set(kind),
-        Builtin::Probe => crate::events::probe_event_set(),
-        Builtin::Kid | Builtin::Inert => EventSet::default(),
-    }
+    // The one trait table (`def::traits`) owns each kind's event builder.
+    (crate::def::traits::traits(b).events)(kind)
 }
 
 /// The params [`event_set`] reads for a built-in. A kind's event set is fixed at load, so a
@@ -411,46 +360,8 @@ pub fn event_set(b: Builtin, kind: &KindDef) -> EventSet {
 /// the loader, #853); a script spawn that sets them uses that derived kind or fails
 /// (`script::inst`). The `event_set_params_cover_event_set` test checks the list.
 pub fn event_set_params(b: Builtin) -> &'static [&'static str] {
-    match b {
-        Builtin::World => &["mute", "clear_switches_on_room_end"],
-        Builtin::Block => &["proximity_frame"],
-        Builtin::Spike => &["destroys_bullets"],
-        Builtin::Warp => warp::GATE_PARAMS,
-        Builtin::Killer => &["bounce", "destroy_outside_room", "kill_outside_view"],
-        Builtin::KidBullet => &["block_check"],
-        Builtin::Blood => &["sticks"],
-        Builtin::BloodEmitter => &["mode", "destroyed_by_restart"],
-        Builtin::Save => &["blink", "on_shot", "on_touch"],
-        Builtin::Camera => &["mode", "on_step", "on_room_start", "on_room_end"],
-        Builtin::MovingPlatform => &["carry_rule", "start_on_touch", "marker_reverse"],
-        Builtin::Water => &[
-            "destroy_outside_room",
-            "angle_step",
-            "area_left",
-            "area_right",
-            "area_top",
-            "area_bottom",
-        ],
-        Builtin::FakeBlock => &["vanish_on", "stops_bullets"],
-        Builtin::HiddenBlock => &["stops_bullets", "destroyed_by_bullet", "destroyed_by_blood"],
-        Builtin::Trap => &[
-            "launch",
-            "alm",
-            "alm2",
-            "alm3",
-            "alm4",
-            "destroy_outside_room",
-            "stop_on_stopper",
-        ],
-        Builtin::DropPlatform | Builtin::Conveyor | Builtin::EdgeWarp | Builtin::Music => &["mode"],
-        Builtin::TrapStopper => &["mode"],
-        Builtin::GravityFlip => &["transition"],
-        Builtin::BreakableBlock => &["break_on"],
-        Builtin::Orbit => &["mode", "destroy_outside_room"],
-        Builtin::PathPlatform => &["start_on_touch"],
-        Builtin::ParticleSystem => &["on_room_start", "on_room_start_destroys_instance", "on_room_end"],
-        _ => &[],
-    }
+    // The one trait table (`def::traits`) owns the event-selection params.
+    crate::def::traits::traits(b).event_params
 }
 
 /// The params a built-in accepts. The kid takes none (its settings are the physics profile).

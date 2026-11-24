@@ -1,0 +1,67 @@
+# F1 retry contract for #1149 (decision 0005): R returns the player to the checkpoint after the
+# engine-owned delay, with the room reset, one Kid and the checkpoint's counters.
+#
+# The gating executable copy is
+# `crates/sim/tests/lifecycle.rs::retry_after_death_returns_to_the_checkpoint_after_the_delay`.
+# The runner that consumes this file is `cargo xtask feel` / `cargo test -p iwbtg-sim --test feel`
+# (#1167).
+id = "lifecycle/retry_after_death"
+impact = "F1"
+package = "fixture:lifecycle_retry"
+ruleset = "gm8@0"
+start = { room = "play", difficulty = 0 }
+# The fixture starts from a checkpoint: the saved room and spot are the retry target.
+save = { room = "play", x = 200.0, y = 500.0 }
+play_mode = "original"
+seed = 0
+mods = []
+evidence = ["research:rely-the-needle-4-2/tr-room-01-a", "#670", "#1141"]
+
+# `.inputs` frame f is the step that ends at World::tick == f + 1.
+inputs = """
+frame 0: end
+frame 1: press suicide
+frame 2: release suicide
+frame 4: press restart
+frame 5: release restart
+frame 6: press right
+frame 7: release right
+frame 7: end
+"""
+
+# The death event counts once and the Kid is gone; the death-only save records it.
+[[assert]]
+tick = 2
+death = 1
+kid_count = 0
+room = "play"
+
+# N: the R tick resets the room to the Boot-role room and starts the engine init phase. No Kid
+# is left behind; the checkpoint file survives (the room it names is unchanged).
+[[assert]]
+tick = 5
+room = "init"
+kid_count = 0
+save.room = "play"
+
+# N+1: the init phase's last tick loads the checkpoint and enters its room. The Kid is created
+# at the saved spot, with no motion that tick, and the counters come back from the checkpoint.
+# The room's music object asks for its track again, but it is the same track already playing, so
+# the music is uninterrupted: no play or stop event on the retry ticks (asserted by the
+# executable test; the v1 vocabulary has no "no event" key).
+[[assert]]
+tick = 6
+room = "play"
+kid_count = 1
+kid.x = { exact = 200.0 }
+kid.y = { exact = 500.0 }
+death = 1
+
+# N+2: the first controllable tick. The Right press on frame 6 responds on tick 7: the retry
+# delay is the init phase, not extra client latency.
+[[assert]]
+tick = 7
+control = { action = "right", metric = "kid.x", latency_max = 1, why = "a Right press on the first controllable tick moves the Kid within one frame" }
+kid_count = 1
+death = 1
+status = "running"

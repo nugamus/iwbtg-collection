@@ -68,7 +68,7 @@ fn parse_ui_scale(s: &str) -> Result<u32, String> {
 }
 
 /// The HUD's command-line flags. All but the preview flags are saved in the settings file.
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Default)]
 pub struct HudArgs {
     /// Show these HUD elements (comma-separated): leaderboard, timer, deaths, stage,
     /// stage_deaths, input, mods.
@@ -86,12 +86,36 @@ pub struct HudArgs {
     /// Screenshot checks: start with the HUD hidden, as Shift+Tab leaves it.
     #[arg(long, hide = true)]
     pub hud_preview_hidden: bool,
+    /// Screenshot checks: raise this text in the sign box on the run's first tick, as a sign that
+    /// has just spoken leaves it (`view/hud.rs`, #459).
+    #[arg(long, hide = true, value_name = "TEXT")]
+    pub hud_preview_sign: Option<String>,
     /// Scale the side panels (never the game), 75 to 150 percent (Ctrl+= and Ctrl+- step by 5).
     #[arg(long, value_name = "PERCENT", value_parser = parse_ui_scale)]
     pub ui_scale: Option<u32>,
     /// Scale the game by the largest whole step that fits instead of filling the room it has (F7).
     #[arg(long)]
     pub integer_scale: bool,
+}
+
+/// The HUD's place in the module list (main.rs): its flags and plugin.
+pub struct Registration;
+
+impl crate::registration::ClientModule for Registration {
+    type Args = HudArgs;
+
+    fn prepare(args: &mut HudArgs, _startup: &crate::registration::Startup) -> Result<(), String> {
+        configure(args);
+        Ok(())
+    }
+
+    fn add(
+        app: &mut bevy::prelude::App,
+        _args: HudArgs,
+        _startup: &crate::registration::Startup,
+    ) {
+        app.add_plugins(HudPlugin);
+    }
 }
 
 /// Called by `main` after `settings::load`: puts the flags into the settings.
@@ -114,12 +138,20 @@ pub fn configure(args: &HudArgs) {
         leaderboard: args.hud_preview_leaderboard,
     });
     let _ = START_HIDDEN.set(args.hud_preview_hidden);
+    let _ = SIGN_PREVIEW.set(args.hud_preview_sign.clone());
 }
 
 /// The preview flags, set once by [`configure`].
 static PREVIEW: std::sync::OnceLock<run_info::Preview> = std::sync::OnceLock::new();
 /// `--hud-preview-hidden`, set once by [`configure`].
 static START_HIDDEN: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+/// `--hud-preview-sign`, set once by [`configure`].
+static SIGN_PREVIEW: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+
+/// The text a `--hud-preview-sign` check raises in the view's sign box on the run's first tick.
+pub fn sign_preview() -> Option<&'static str> {
+    SIGN_PREVIEW.get().and_then(|s| s.as_deref())
+}
 
 /// Which HUD elements show (`[hud.show]`).
 #[derive(Resource, Clone, Copy, Debug, PartialEq, Default)]

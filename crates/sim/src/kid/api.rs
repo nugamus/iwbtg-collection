@@ -1,4 +1,4 @@
-//! Kid access for other WPs (docs/plans/sim-core.md 1.6).
+//! Kid access for other WPs (docs/architecture/sim/world.md).
 //!
 //! Built-ins never touch `KidState` fields directly; they call these. WP0 declared the
 //! signatures; WP5a owns the bodies.
@@ -48,7 +48,7 @@ pub enum KillCause {
     Script,
 }
 
-/// A kid field by its GM name, for the probe registry (plan 9.3): `djump`, `curJumps`,
+/// A kid field by its GM name, for the probe registry (docs/architecture/traces.md): `djump`, `curJumps`,
 /// `jump[1]` is `{ name: "jump", index: Some(1) }`.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct KidField {
@@ -129,7 +129,7 @@ pub fn run_jump_release(ctx: &mut Ctx, kid: InstId) -> Result<(), SimError> {
     crate::kid::actions::common::cut_jump(ctx, kid)
 }
 
-/// A value trace setup writes to a kid field (plan 9.2).
+/// A value trace setup writes to a kid field (docs/architecture/traces.md).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum KidSetValue {
     /// A flag (`tjump`, `djump`, `onPlatform`), already reduced to its GM truth.
@@ -138,8 +138,8 @@ pub enum KidSetValue {
     Count(u8),
 }
 
-/// Writes a kid field by its GM name, for trace setup (plan 9.2): the fields [`read_field`]
-/// reads that have a setter here, `tjump` ([`set_triple_jump`]), `djump` ([`set_air_jump`]),
+/// Writes a kid field by its GM name, for trace setup (docs/architecture/traces.md): the fields
+/// [`read_field`] reads that have a setter here, `tjump` ([`set_triple_jump`]), `djump` ([`set_air_jump`]),
 /// `onPlatform` ([`set_on_platform`]) as flags and `curJumps` ([`set_cur_jumps`]) as a count.
 /// Writes the field alone, like those setters. Errors for an instance that is not a kid, for any
 /// other name (no setter yet), and for a value of the wrong shape (a count for a flag).
