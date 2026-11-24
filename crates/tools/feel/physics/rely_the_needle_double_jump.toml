@@ -1,0 +1,67 @@
+# rely_the_needle's double jump (A1 family): a held first jump, a held second jump in the air,
+# then the landing. The player judges it by the two apexes, the landing tick and the restored
+# air jump, so those are the assertions; the trace is exact, the contract allows only the
+# half-pixel a player cannot see. Scenario = research rely-the-needle-4-2/djump (trace frame f
+# is the state at tick f + 1).
+id = "physics/rely_the_needle_double_jump"
+impact = "F1"
+package = "rely_the_needle"
+start = { room = "room_1", difficulty = 0 }
+play_mode = "original"
+seed = 0
+mods = []
+evidence = ["research:rely-the-needle-4-2/djump", "case:rely_the_needle/djump"]
+
+inputs = """
+frames 10-29: hold jump
+frames 32-41: hold jump
+frame 109: end
+"""
+
+# Standing at the spawn before the first press.
+[[assert]]
+tick = 10
+room = "room_1"
+kid_count = 1
+kid.x = { exact = 49.0 }
+kid.y = { within = 0.5, of = 567.4, why = "the standing height; half a pixel is below what a player sees" }
+kid.djump = { exact = 1.0 }
+
+# The first press moves the Kid on the pressed step.
+[[assert]]
+tick = 11
+control = { action = "jump", metric = "kid.y", latency_max = 0, why = "a grounded jump responds on the pressed step" }
+
+# The first jump's apex, just before the release.
+[[assert]]
+tick = 30
+kid.y = { within = 0.5, of = 481.4, why = "the held first jump peaks at y = 481.4; half a pixel is the visible window" }
+
+# The air jump spends the double jump.
+[[assert]]
+tick = 33
+kid.djump = { exact = 0.0 }
+kid.y = { within = 0.5, of = 475.55, why = "the air jump starts rising on the pressed step" }
+
+# The second apex.
+[[assert]]
+tick = 45
+kid.y = { within = 0.5, of = 432.5, why = "the double jump peaks at y = 432.5; half a pixel is the visible window" }
+
+# Still falling one tick before the landing, landed (and the air jump restored) on the next.
+[[assert]]
+tick = 70
+kid.vspeed = { exact = 9.4 }
+kid.djump = { exact = 0.0 }
+
+[[assert]]
+tick = 71
+kid.vspeed = { exact = 0.0 }
+kid.y = { within = 0.5, of = 567.25, why = "the landing height; the original lands at 567.2499999999999, a quarter pixel above the spawn height" }
+kid.djump = { exact = 1.0 }
+
+[[assert]]
+tick = 110
+status = "running"
+death = 0
+kid_count = 1

@@ -87,7 +87,7 @@ Each phase has a scope, a lane, an entry condition and a checkable exit conditio
 
 ## Contributing
 
-Issues and pull requests are welcome. [CONTRIBUTING.md](.github/CONTRIBUTING.md) covers the licenses, the clean-room rule and what a PR must contain. Report security problems privately, never in a public issue; see [SECURITY.md](.github/SECURITY.md).
+Issues and pull requests are welcome. [CONTRIBUTING.md](.github/CONTRIBUTING.md) covers the build and test commands, the PR flow, the licenses, the clean-room and findings rules and what a PR must contain. If you want to port a game, read the [porting guide](docs/porting-guide.md). Report security problems privately, never in a public issue; see [SECURITY.md](.github/SECURITY.md).
 
 ## Credits and license
 

@@ -5,7 +5,7 @@ The converter packages are not committed, but the research repo already holds th
 census evidence:
 
   * `shortlist.md` — custom objects, rooms, engine, genre and difficulty per game;
-  * `specs/mechanics.md` — the game x built-in placed-instance coverage table;
+  * `specs/mechanics/coverage.md` — the game x built-in placed-instance coverage table;
   * `specs/engines/gm8/traces/<slug>/*.csv` — the recorded traces, and the object
     names each trace exercises.
 
@@ -99,6 +99,29 @@ def trace_stats(trace_root, slug):
     return len(files), len(objects), sorted(objects)
 
 
+def converter_state(research):
+    """Per-slug converter state from the converter's own report.
+
+    `build/reports/summary.json` is written by `uv run iwc convert` and holds, per
+    game, the result of a real `iwbtg pkg check` (`client_check`). Returns None when
+    the report is absent, so the dashboard shows "unknown" instead of a guess.
+    """
+    path = os.path.join(research, "build", "reports", "summary.json")
+    if not os.path.exists(path):
+        return None
+    state = {}
+    for entry in json.load(open(path, encoding="utf-8")):
+        check = entry.get("client_check") or {}
+        state[entry["slug"]] = {
+            "converted": bool(check.get("ok")) and not check.get("errors"),
+            "objects_in_package": entry.get("objects"),
+            "objects_unmapped": entry.get("unmapped"),
+            "check_errors": check.get("errors"),
+            "check_warnings": check.get("warnings"),
+        }
+    return state
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--research", default="../iwbtg-collection-research")
@@ -106,7 +129,7 @@ def main():
     args = ap.parse_args()
     research = os.path.abspath(args.research)
     shortlist = parse_shortlist(os.path.join(research, "shortlist.md"))
-    mechanics = parse_mechanics(os.path.join(research, "specs", "mechanics.md"))
+    mechanics = parse_mechanics(os.path.join(research, "specs", "mechanics", "coverage.md"))
     trace_root = os.path.join(research, "specs", "engines", "gm8", "traces")
     if "All placed instances" not in mechanics:
         raise SystemExit("mechanics.md coverage table not found")
@@ -114,6 +137,7 @@ def main():
     totals = {"placed": 0, "builtin": 0, "script": 0, "client": 0, "kid": 0,
               "custom": 0, "traces": 0, "exercised": 0, "rooms": 0}
     all_trace_objects = set()
+    converter = converter_state(research)
     for i, (abbr, slug) in enumerate(zip(ABBR, SLUGS)):
         placed = num(mechanics["All placed instances"][i])
         script = num(mechanics["script objects"][i])
@@ -144,6 +168,10 @@ def main():
             "objects_exercised": exercised,
             "trace_objects": names,
         }
+        if converter is not None:
+            # A game without a report entry has not been converted.
+            rec.update(converter.get(slug, {"converted": False, "objects_in_package": 0,
+                                            "objects_unmapped": 0}))
         games[slug] = rec
         totals["placed"] += placed
         totals["builtin"] += builtin
@@ -170,6 +198,7 @@ def main():
         "objects_exercised": totals["exercised"],
         "objects_exercised_unique": len(all_trace_objects),
         "games_with_traces": sum(1 for g in games.values() if g["traces_recorded"]),
+        "games_converted": sum(1 for g in games.values() if g.get("converted")),
         "games_with_census": sum(1 for g in games.values() if g["placed_instances"]),
     }
     out = {
@@ -177,8 +206,9 @@ def main():
                          .isoformat().replace("+00:00", "Z"),
         "source": {
             "shortlist": "shortlist.md",
-            "mechanics": "specs/mechanics.md",
+            "mechanics": "specs/mechanics/coverage.md",
             "traces": "specs/engines/gm8/traces",
+            "converter": "build/reports/summary.json" if converter is not None else None,
         },
         "games": games,
         "overall": overall,
@@ -186,7 +216,8 @@ def main():
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     json.dump(out, open(args.out, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print(f"wrote {args.out}: {len(games)} games, {overall['placed_instances']} placed instances, "
-          f"{overall['builtin_pct']}% built-in, {overall['traces_recorded']} traces")
+          f"{overall['builtin_pct']}% built-in, {overall['traces_recorded']} traces, "
+          f"{overall['games_converted']} converted")
 
 
 if __name__ == "__main__":

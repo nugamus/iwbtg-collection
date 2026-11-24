@@ -1412,9 +1412,20 @@ mod tests {
             stems.sort();
             for stem in stems {
                 let source = source_of(&stem).expect("source");
-                let read =
-                    |ext: &str| std::fs::read_to_string(format!("{}.{ext}", stem.display())).expect("read");
-                let i = import_text(&source, &read("inputs"), &read("csv"), names.as_ref())
+                let read = |ext: &str| {
+                    let path = format!("{}.{ext}", stem.display());
+                    std::fs::read_to_string(&path).map_err(|e| format!("{path}: {e}"))
+                };
+                let (inputs, csv) = match (read("inputs"), read("csv")) {
+                    (Ok(inputs), Ok(csv)) => (inputs, csv),
+                    (a, b) => {
+                        // An incomplete trace stem (a recording not yet copied in) is skipped, not fatal.
+                        let why = a.err().into_iter().chain(b.err()).collect::<Vec<_>>().join("; ");
+                        eprintln!("skipped incomplete trace {source}: {why}");
+                        continue;
+                    }
+                };
+                let i = import_text(&source, &inputs, &csv, names.as_ref())
                     .unwrap_or_else(|e| panic!("{source}: {e}"));
                 if let Some(case) = &i.case {
                     let text = case.to_toml(&i.header);
