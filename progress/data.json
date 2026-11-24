@@ -1,18 +1,18 @@
 {
- "generated_at": "2026-11-24T13:44:35Z",
+ "generated_at": "2026-11-24T14:07:20Z",
  "source": "gh",
  "phases": [
   {
    "number": 0,
    "title": "0 · Foundation",
    "state": "open",
-   "open": 13,
+   "open": 14,
    "closed": 63,
-   "size_points": 21,
+   "size_points": 29,
    "sizes": {
     "size:S": 7,
     "size:M": 2,
-    "size:L": 1,
+    "size:L": 2,
     "unknown": 3
    }
   },
