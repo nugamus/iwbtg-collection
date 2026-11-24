@@ -942,15 +942,21 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--gh", action="store_true", help="refresh from GitHub")
     ap.add_argument("--history", action="store_true", help="append a dated snapshot")
+    ap.add_argument("--require-gh", action="store_true",
+                    help="fail instead of falling back when --gh cannot read GitHub")
     args = ap.parse_args()
     at = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     data = None
     refreshed = False
+    if args.require_gh and not args.gh:
+        raise SystemExit("--require-gh needs --gh")
     if args.gh:
         try:
             data = build_data(True)
             refreshed = True
         except Exception as exc:
+            if args.require_gh:
+                raise SystemExit(f"GitHub refresh failed: {exc}")
             print(f"warning: GitHub read failed ({exc}); using committed data.json", file=sys.stderr)
     if data is None:
         path = os.path.join(PROGRESS, "data.json")

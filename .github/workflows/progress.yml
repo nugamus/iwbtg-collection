@@ -13,6 +13,8 @@ on:
 
 permissions:
   contents: write
+  issues: read
+  pull-requests: read
   pages: write
 
 concurrency:
@@ -41,7 +43,7 @@ jobs:
           fi
 
       - name: Generate the dashboard from committed files plus gh
-        run: python -I progress/generate.py --gh --history
+        run: python -I progress/generate.py --gh --history --require-gh
 
       - name: Publish to gh-pages and fail visibly
         run: |
