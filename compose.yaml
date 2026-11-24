@@ -1,0 +1,94 @@
+# Production stack for iwbtg-server (docs/server.md, Deployment).
+#
+# Hardening follows docs/server.md security rule 4: neither service publishes a port,
+# both run non-root on a read-only root filesystem with every capability dropped, and
+# each has memory, CPU and PID limits. The only way in is the Cloudflare Tunnel:
+# cloudflared reaches the server over this compose network, and nothing on the host
+# listens on a container port.
+#
+# Secrets never live in this file or the checkout (rule 3): the tunnel token goes in
+# /srv/iwbtg/cloudflared.env, app secrets in /srv/iwbtg/server.env, both root-only.
+
+name: iwbtg
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: iwbtg-server:local
+    restart: unless-stopped
+    environment:
+      # Listen on all interfaces inside the container network; cloudflared dials server:8080.
+      IWBTG_BIND: 0.0.0.0:8080
+      IWBTG_DB: /srv/iwbtg/data/iwbtg.db
+    # App secrets only (rule 3). Optional today: no OAuth or SMTP secret exists yet.
+    env_file:
+      - path: /srv/iwbtg/server.env
+        required: false
+    volumes:
+      # The one writable path: the SQLite file and its WAL siblings live here.
+      - iwbtg-data:/srv/iwbtg/data
+    # Everything else is read-only; the binary needs no writable path except the database.
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    # The uid/gid the image creates; the named volume is seeded with that ownership.
+    user: "10001:10001"
+    mem_limit: 512m
+    cpus: 2.0
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks: [iwbtg]
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.11.2
+    restart: unless-stopped
+    # Rule 3: this file holds only TUNNEL_TOKEN. Ingress rules (the public hostname ->
+    # http://server:8080) live in the Cloudflare dashboard, so there is no config file.
+    env_file:
+      - path: /srv/iwbtg/cloudflared.env
+        required: false
+    command: ["tunnel", "--no-autoupdate", "run"]
+    depends_on:
+      server:
+        condition: service_healthy
+    # The image's own nonroot user.
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=8m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    cpus: 1.0
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks: [iwbtg]
+
+volumes:
+  # A stable name so backups and the docs can address it across directory renames.
+  iwbtg-data:
+    name: iwbtg-data
+
+networks:
+  iwbtg:
+    driver: bridge

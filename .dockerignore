@@ -1,0 +1,23 @@
+# Build context for the iwbtg-server image (docs/server.md, Deployment). The build needs
+# the workspace manifests, every crate's manifest, the crates themselves and migrations/;
+# everything host-only stays out, so a secret can never be baked into a layer.
+.git
+.github
+.claude
+target
+data
+deploy
+docs
+progress
+scripts
+
+# Secrets and runtime config, wherever they are kept (rule 3).
+.env
+*.env
+**/*.env
+
+# Editor and OS noise.
+.idea
+.vscode
+*.swp
+.DS_Store
