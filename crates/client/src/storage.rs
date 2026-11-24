@@ -44,7 +44,19 @@ impl Store {
     #[cfg(all(test, not(all(target_arch = "wasm32", target_os = "unknown"))))]
     pub fn at(root: std::path::PathBuf) -> Store {
         Store {
-            inner: backend::Backend { root },
+            inner: backend::Backend { root, quota: None },
+        }
+    }
+
+    /// A store in a folder of the caller's choice with a byte cap on the whole tree, for the
+    /// replay quota-recovery tests (the web's full `localStorage`; `replays.rs`).
+    #[cfg(all(test, not(all(target_arch = "wasm32", target_os = "unknown"))))]
+    pub fn at_with_quota(root: std::path::PathBuf, quota: usize) -> Store {
+        Store {
+            inner: backend::Backend {
+                root,
+                quota: Some(quota),
+            },
         }
     }
 
@@ -101,6 +113,10 @@ mod backend {
     #[derive(Debug, Clone)]
     pub struct Backend {
         pub root: PathBuf,
+        /// A byte cap on the whole tree, so a test can model the web's full `localStorage`
+        /// (`Store::at_with_quota`). Every real native store has `None`: a disk has no such
+        /// quota.
+        pub quota: Option<usize>,
     }
 
     impl Backend {
@@ -110,7 +126,7 @@ mod backend {
         /// non-Windows rule (docs/architecture/client/storage.md has the table).
         pub fn open(area: Area) -> Option<Backend> {
             let env = |k: &str| std::env::var_os(k);
-            root(area, cfg!(windows), &env).map(|root| Backend { root })
+            root(area, cfg!(windows), &env).map(|root| Backend { root, quota: None })
         }
 
         fn path(&self, name: &str) -> PathBuf {
@@ -139,10 +155,22 @@ mod backend {
             }
         }
 
-        /// Writes beside the file and renames it, so a crash never leaves half a file.
+        /// Writes beside the file and renames it, so a crash never leaves half a file. A
+        /// test's quota (`at_with_quota`) fails the write like a full `localStorage`.
         pub fn write(&self, name: &str, bytes: &[u8]) -> Result<(), String> {
             let path = self.path(name);
             let err = |p: &Path, e: std::io::Error| format!("{}: cannot write ({e})", p.display());
+            if let Some(quota) = self.quota {
+                let replaced = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+                let used = usage(&self.root).saturating_sub(replaced);
+                if used + bytes.len() as u64 > quota as u64 {
+                    return Err(format!(
+                        "{}: storage is full ({used} of {quota} bytes used, {} needed)",
+                        self.describe(name),
+                        bytes.len()
+                    ));
+                }
+            }
             if let Some(dir) = path.parent() {
                 std::fs::create_dir_all(dir).map_err(|e| err(dir, e))?;
             }
@@ -166,6 +194,24 @@ mod backend {
                 _ => Ok(()),
             }
         }
+    }
+
+    /// Bytes of every file under `dir`, the quota tests' stand-in for `localStorage` usage.
+    fn usage(dir: &Path) -> u64 {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return 0;
+        };
+        entries
+            .flatten()
+            .map(|entry| {
+                let path = entry.path();
+                if entry.file_type().is_ok_and(|t| t.is_dir()) {
+                    usage(&path)
+                } else {
+                    entry.metadata().map(|m| m.len()).unwrap_or(0)
+                }
+            })
+            .sum()
     }
 
     /// The folder of `area`, from the environment `env` on Windows or elsewhere. An empty

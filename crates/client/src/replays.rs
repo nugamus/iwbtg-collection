@@ -289,15 +289,34 @@ impl Recorder {
                     },
                 };
                 match replay.encode() {
-                    Ok(bytes) => match store.write(&rec.name, &bytes) {
-                        Ok(()) => {
-                            rec.unsaved = false;
-                            rec.stored = true;
-                            printed =
-                                Some((rec.name.clone(), rec.inputs.len(), bytes.len(), final_hash));
+                    Ok(bytes) => {
+                        let written = match store.write(&rec.name, &bytes) {
+                            Ok(()) => Ok(()),
+                            Err(e) => {
+                                // On the web a full quota is the common cause: make room by
+                                // removing eligible older replays, then retry once per removal.
+                                if self.prune {
+                                    recover_quota(&store, &rec.name, &bytes)
+                                        .map_err(|q| format!("{e}; {q}"))
+                                } else {
+                                    Err(e)
+                                }
+                            }
+                        };
+                        match written {
+                            Ok(()) => {
+                                rec.unsaved = false;
+                                rec.stored = true;
+                                printed = Some((
+                                    rec.name.clone(),
+                                    rec.inputs.len(),
+                                    bytes.len(),
+                                    final_hash,
+                                ));
+                            }
+                            Err(e) => storage::warn(&format!("replay not saved: {e}")),
                         }
-                        Err(e) => storage::warn(&format!("replay not saved: {e}")),
-                    },
+                    }
                     Err(e) => storage::warn(&format!("replay not saved: {e}")),
                 }
             }
@@ -396,6 +415,69 @@ fn to_remove<'a>(
     let free = older.iter().filter(|n| !pbs.contains(**n) && !top.contains(**n));
     let ranked = older.iter().filter(|n| top.contains(**n) && !pbs.contains(**n));
     free.chain(ranked).take(excess).copied().collect()
+}
+
+/// Makes room for `bytes` under `name` by removing older replays no board protects, retrying the
+/// write after each removal. The eviction order is fixed by [`evictable`], so the pass is bounded
+/// by the index: each candidate is removed at most once.
+///
+/// A PB's replay and the replay being written are never removed. When `stats.toml` cannot be
+/// read nothing is removed (#607).
+fn recover_quota(store: &Store, name: &str, bytes: &[u8]) -> Result<(), String> {
+    let text = store.read_text(INDEX)?.unwrap_or_default();
+    let names: Vec<&str> = text.lines().filter(|l| !l.is_empty()).collect();
+    let Some((pbs, top)) = crate::stats::board_replays(store) else {
+        return Err("the stats boards cannot be read, so no replay can be safely removed".into());
+    };
+    let mut gone: Vec<&str> = Vec::new();
+    let mut failed = None;
+    for candidate in evictable(&names, name, &pbs, &top) {
+        if let Err(e) = store.remove(candidate) {
+            failed = Some(e);
+            continue;
+        }
+        gone.push(candidate);
+        if store.write(name, bytes).is_ok() {
+            let kept: Vec<&str> = names
+                .iter()
+                .copied()
+                .filter(|n| !gone.contains(n))
+                .collect();
+            let mut index = kept.join("\n");
+            if !index.is_empty() {
+                index.push('\n');
+            }
+            if let Err(e) = store.write_text(INDEX, &index) {
+                // The replay is saved; a later flush retries the index (#1012).
+                storage::warn(&format!("replay index {e}"));
+            }
+            return Ok(());
+        }
+    }
+    Err(match failed {
+        Some(e) => format!("removing the replays that may be removed did not make room ({e})"),
+        None => "no replay can be safely removed".into(),
+    })
+}
+
+/// The replays quota recovery may remove, in removal order: the oldest replays no board points
+/// at, then the oldest of the boards' top runs that are not a PB. The PB replays and `current`
+/// (the replay being written) never appear.
+fn evictable<'a>(
+    names: &[&'a str],
+    current: &str,
+    pbs: &BTreeSet<String>,
+    top: &BTreeSet<String>,
+) -> Vec<&'a str> {
+    let free = names
+        .iter()
+        .copied()
+        .filter(|n| *n != current && !pbs.contains(*n) && !top.contains(*n));
+    let ranked = names
+        .iter()
+        .copied()
+        .filter(|n| *n != current && top.contains(*n) && !pbs.contains(*n));
+    free.chain(ranked).collect()
 }
 
 /// Lowercase hex.
@@ -763,6 +845,133 @@ mod tests {
             Vec::<&str>::new()
         );
         assert_eq!(to_remove(&names, 4, &pbs, &top), Vec::<&str>::new());
+    }
+
+    /// Quota recovery never offers a PB or the replay being written: free replays go first, then
+    /// the other top runs.
+    #[test]
+    fn quota_eviction_order_skips_pbs_and_the_current_replay() {
+        let set = |v: &[&str]| v.iter().map(|s| (*s).to_owned()).collect::<BTreeSet<String>>();
+        let names = ["a", "b", "c", "d", "e"];
+        let pbs = set(&["a"]);
+        let top = set(&["b", "d"]);
+        assert_eq!(evictable(&names, "e", &pbs, &top), vec!["c", "b", "d"]);
+        assert_eq!(evictable(&names, "d", &pbs, &top), vec!["c", "e", "b"]);
+    }
+
+    /// The bytes under a test root, matching `storage.rs`'s quota accounting.
+    fn usage(dir: &std::path::Path) -> u64 {
+        std::fs::read_dir(dir)
+            .map(|entries| {
+                entries
+                    .flatten()
+                    .map(|entry| {
+                        let path = entry.path();
+                        if entry.file_type().is_ok_and(|t| t.is_dir()) {
+                            usage(&path)
+                        } else {
+                            entry.metadata().map(|m| m.len()).unwrap_or(0)
+                        }
+                    })
+                    .sum()
+            })
+            .unwrap_or(0)
+    }
+
+    /// Three finished runs in a fresh test root, for the quota tests.
+    fn three_runs(root: &std::path::Path, pkg: &crate::package::Package) -> (Store, Vec<String>) {
+        let _ = std::fs::remove_dir_all(root);
+        let store = Store::at(root.to_path_buf());
+        let options = SimOptions {
+            start: StartPoint::NewGame { difficulty: 0 },
+            seed: 1,
+            dll_mode: DllMode::Model,
+            mode: PlayMode::Stripped,
+            map: None,
+        };
+        let mut rec = Recorder::new(Some(store.clone()), pkg.gameplay_hash, ModSet::NONE);
+        rec.prune = true;
+        let mut names = Vec::new();
+        for _ in 0..3 {
+            let mut sim = Sim::new(Arc::clone(&pkg.def), options.clone()).unwrap();
+            play(&mut sim, &mut rec, 100);
+            names.push(rec.current_name().unwrap().to_owned());
+            rec.finish(&sim);
+        }
+        (store, names)
+    }
+
+    /// #1013: a full quota removes the oldest replay no board protects and then the write
+    /// succeeds; the evicted name leaves the index and the new replay is listed once.
+    #[test]
+    fn quota_recovery_evicts_the_oldest_unprotected_replay() {
+        let pkg = demo();
+        let root = std::env::temp_dir().join(format!(
+            "iwbtg-replays-test-{}-quota",
+            std::process::id()
+        ));
+        let (store, names) = three_runs(&root, &pkg);
+        assert_eq!(store.read_text(INDEX).unwrap().unwrap().lines().count(), 3);
+
+        // 64 spare bytes: room for the three runs but not for a fourth (each is larger).
+        let full = Store::at_with_quota(root.clone(), usage(&root) as usize + 64);
+        let options = SimOptions {
+            start: StartPoint::NewGame { difficulty: 0 },
+            seed: 2,
+            dll_mode: DllMode::Model,
+            mode: PlayMode::Stripped,
+            map: None,
+        };
+        let mut rec = Recorder::new(Some(full.clone()), pkg.gameplay_hash, ModSet::NONE);
+        rec.prune = true;
+        let mut sim = Sim::new(Arc::clone(&pkg.def), options).unwrap();
+        play(&mut sim, &mut rec, 3);
+        let new = rec.current_name().unwrap().to_owned();
+        rec.finish(&sim);
+
+        assert!(full.read(&new).unwrap().is_some(), "the new replay is stored");
+        assert_eq!(full.read(&names[0]).unwrap(), None, "the oldest is evicted");
+        assert!(full.read(&names[1]).unwrap().is_some());
+        assert!(full.read(&names[2]).unwrap().is_some());
+        assert_eq!(
+            full.read_text(INDEX).unwrap().unwrap(),
+            format!("{}\n{}\n{new}\n", names[1], names[2])
+        );
+    }
+
+    /// #1013: with `stats.toml` unreadable no replay may be removed (#607), so a full quota
+    /// stores nothing and leaves every old replay and the index alone.
+    #[test]
+    fn quota_recovery_without_safe_evictions_keeps_every_replay() {
+        let pkg = demo();
+        let root = std::env::temp_dir().join(format!(
+            "iwbtg-replays-test-{}-quota-none",
+            std::process::id()
+        ));
+        let (store, names) = three_runs(&root, &pkg);
+        store.write_text(crate::stats::FILE, "not = [toml").unwrap();
+        let before = store.read_text(INDEX).unwrap().unwrap();
+
+        let full = Store::at_with_quota(root.clone(), usage(&root) as usize + 64);
+        let options = SimOptions {
+            start: StartPoint::NewGame { difficulty: 0 },
+            seed: 2,
+            dll_mode: DllMode::Model,
+            mode: PlayMode::Stripped,
+            map: None,
+        };
+        let mut rec = Recorder::new(Some(full.clone()), pkg.gameplay_hash, ModSet::NONE);
+        rec.prune = true;
+        let mut sim = Sim::new(Arc::clone(&pkg.def), options).unwrap();
+        play(&mut sim, &mut rec, 3);
+        let new = rec.current_name().unwrap().to_owned();
+        rec.finish(&sim);
+
+        assert_eq!(full.read(&new).unwrap(), None, "nothing was stored");
+        for name in &names {
+            assert!(full.read(name).unwrap().is_some(), "{name} stays");
+        }
+        assert_eq!(full.read_text(INDEX).unwrap().unwrap(), before);
     }
 
     /// A run that resumes the save file records the slot, so it can be replayed.
