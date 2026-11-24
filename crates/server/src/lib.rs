@@ -6,6 +6,7 @@
 
 pub mod catalog;
 pub mod db;
+pub mod health;
 
 use std::path::PathBuf;
 

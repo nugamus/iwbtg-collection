@@ -16,7 +16,7 @@ path = "src/main.rs"
 [dependencies]
 # The HTTP surface (docs/server.md, Components): axum 0.8 on tokio.
 axum = "0.8"
-tokio = { version = "1.54.1", features = ["macros", "net", "fs", "rt-multi-thread"] }
+tokio = { version = "1.54.1", features = ["macros", "net", "fs", "io-util", "time", "rt-multi-thread"] }
 # --bind; the `env` feature adds IWBTG_BIND.
 clap = { workspace = true, features = ["env"] }
 # SQLite (WAL, one file) with migrations at startup (docs/server.md, Database). No TLS runtime:
@@ -31,6 +31,9 @@ sqlx = { version = "0.9", default-features = false, features = [
 # JSON logs to stdout (docs/server.md, Logs and monitoring).
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.23", features = ["json"] }
+# healthchecks.io pings (docs/server.md, Logs and monitoring): blocking, rustls-backed, and much
+# smaller than an async client. `rustls` pulls its webpki roots, so no system certificate store.
+ureq = { version = "3.5", default-features = false, features = ["rustls"] }
 
 [dev-dependencies]
 # `ServiceExt::oneshot`: the tests drive the router in-process, no port to pick.

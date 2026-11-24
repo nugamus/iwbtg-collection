@@ -17,7 +17,7 @@ Status: the skeleton exists: `crates/server` builds the `iwbtg-server` binary (a
 | Host | Debian 13, Docker Compose with two services: `server`, `cloudflared` | One `compose.yaml` in git describes production. |
 | Game downloads | Content-addressed files `/files/<sha256>[.<ext>]` with a long immutable cache, plus `/catalog.json` with a short one (Range support is #1397) | End-to-end hash check, caches never go stale. |
 | Backups | restic to remote storage (Backblaze B2 or a Hetzner Storage Box) | Encrypted, deduplicated, retention built in. Replaces the earlier "push backups to a Git server" idea: Git would keep password hashes and emails forever, unencrypted, and could never forget a deleted account. |
-| Logs and monitoring | `tracing` JSON logs to stdout; `/healthz` pinged to healthchecks.io every 5 minutes | Alerts arrive even when the house loses power or internet. |
+| Logs and monitoring | `tracing` JSON logs to stdout; the check's healthchecks.io URL pinged every 5 minutes (`HEALTHCHECKS_URL`) | Alerts arrive even when the house loses power or internet. |
 | Dependency updates | Dependabot PRs for cargo and compose, `cargo audit` in CI | Updates arrive as reviewable PRs, never silently. |
 
 ## Schema
@@ -54,6 +54,14 @@ Queries that need compile-time checking use `sqlx::query!`; the `.sqlx` offline 
 - A file name is accepted only as 64 lowercase hex characters plus an optional alphanumeric extension (at most 16). Everything else — `..`, encoded or literal separators, a non-hash name — is 404 before the filesystem is touched, and a missing catalog or file is also 404. There is no directory listing.
 - `Content-Type` follows the extension (`.json`, `.png`, `.ogg`, `.wav`, `.zip`/`.iwbz`), otherwise `application/octet-stream`.
 - Range requests are not implemented yet (#1397): a download that drops restarts from zero.
+
+## Logs and monitoring
+
+The binary writes `tracing` JSON lines to stdout (`tracing_subscriber::fmt().json()`): one object per event with `timestamp`, `level`, `fields` and `target`. Startup lines — database ready, serving catalog, listening — are events like any other, so a collector parses them without a regex.
+
+Set `HEALTHCHECKS_URL` (`--healthchecks-url`) to the healthchecks.io check's ping URL. The server GETs it once at startup and then every 5 minutes (`crates/server/src/health.rs`, #155); with the variable unset nothing is spawned. The URL is never logged, because anyone holding it can silence the check.
+
+A failed ping — DNS, connect, a 10-second timeout, or a non-2xx status — is logged at `WARN` and the loop continues after its period, so monitoring can never take the server down. healthchecks.io alerts on the absence of pings, which covers what the server cannot report about itself: power loss, a crashed container or a dead uplink.
 
 ## Security rules
 
