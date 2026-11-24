@@ -241,3 +241,57 @@ The user asked whether Rhai is the right choice and left the decision to Claude.
   - Non-coders: they never see Rhai. The editor's room painter, trigger wiring, timeline editor and boss builder write data, not scripts.
 - **Swappable.** The script host sits behind the `ScriptHost` trait, so a later switch stays possible.
 - **Checkpoint.** Re-check after the first boss and the first avoidance game are ported (Little Trap and Rori Girl): peak budget per tick, and how much agent effort the scripts took. Rhai is replaced only if one of those fails.
+
+## Revisited 2026-11-24
+
+The stress packages were measured before mass porting, as the checkpoint asks (#1002). The numbers
+are `iwbtg profile` on a 121-tick idle `.inputs`, so every tick after the first twenty runs with the
+room's full bullet count (the spawner adds 250 a tick). Each row is the minimum of five runs.
+
+Machine and build, so a later table can be compared: Intel Core Ultra 5 225H (14 cores: 4 P, 8 E
+and 2 low-power E), 32 GB RAM, Windows 11 Pro 10.0.26300; rustc 1.99.1; `iwbtg-tools` built from
+main `bad863f` with `cargo build --release`, and with `cargo build --release --target
+wasm32-wasip1` for the wasm rows, which ran under wasmtime 51.0.0 (the official x86_64-windows
+release zip, sha256 `d2f5853a1cded9b1256b45cd57686b6855e69049ef07fd4ad78feb78dfa3aada`, unpacked in
+a temp folder; no install). The host was shared with other agent builds, so every run was pinned
+to one core (CPU 11, a P-core) after a scan found unpinned runs up to 8x slower when Windows
+placed them on an E-core. The tool's `ms per tick` line says `(native)` on every target, wasm
+included (#1433). The avoidance package's non-start rooms were selected through a copy of the
+package with `start_room` and `[engine].new_game_room` set to that room (nothing else changed),
+because `iwbtg profile` has no `--room` (#1433).
+
+| live bullets | variant | native ms/tick | wasm32-wasip1 ms/tick | peak script units / limit |
+|---|---|---|---|---|
+| 500 | native motion | 0.458 | 0.588 | 27,036 / 1,000,000 (2.7%) |
+| 2,000 | native motion | 2.240 | 2.603 | 27,036 (2.7%) |
+| 5,000 | native motion | 4.335 | 8.320 | 27,036 (2.7%) |
+| 500 | `step()` on every bullet | 0.970 | 3.395 | 32,036 (3.2%) |
+| 2,000 | `step()` on every bullet | 4.345 | 9.859 | 47,036 (4.7%) |
+| 5,000 | `step()` on every bullet | 12.488 | 27.540 | 77,036 (7.7%) |
+| boss fight (52 instances) | one script, alarms, timeline | 0.058 | 0.133 | 979 (0.1%) |
+
+The 31-tick replays that ship with the packages read lower because the room is still filling for
+their first 20 ticks: native 0.320 / 1.676 / 3.951 and 1.200 / 4.783 / 9.236, wasmtime 0.450 /
+1.879 / 6.788 and 2.671 / 9.366 / 16.785 in the table's order (boss: 0.058 / 0.133 over its own
+121-tick replay). The 121-tick row is the one to quote.
+
+**Verdict: Rhai stays, with one qualification.** At 50 ticks per second a tick has 20 ms. Native
+release keeps that at every count measured: the worst synthetic case, 5,000 live bullets each
+running a `step()`, takes 12.5 ms (62% of the tick), and the 2,000-bullet case 4.3 ms. On
+wasm32-wasip1 the budget holds to 2,000 scripted movers (9.9 ms), but **5,000 scripted bullets
+take 27.5 ms, 38% over the tick** (about 36 ticks per second). A per-bullet `step()` costs about
+1.6 µs natively and 3.8 µs under wasmtime over the same bullet moved natively. Peak budget use is
+7.7% of the 1,000,000-unit limit, well inside the 25% rule, and the boss package's script cost is
+negligible.
+
+The shortfall is the price of one interpreter call per bullet per tick, not of scripting a game:
+at the counts a port actually plays the budget holds with room, and the 5,000-bullet all-scripted
+row is the stress ceiling. It is the input [#1004](https://github.com/nugamus/iwbtg-collection/issues/1004)
+needs for the projectile decision: a native projectile built-in removes that per-bullet call.
+Decision [0004](0004-extension-model.md)'s "50 ticks per second ... on native release and wasm32"
+sentence therefore holds for native at every count and for wasm32 up to 2,000 scripted movers, not
+for the 5,000 scripted row; the qualifier is filed as
+[#1452](https://github.com/nugamus/iwbtg-collection/issues/1452) for that document's owner.
+Nothing here triggers the replacement the checkpoint allowed for at realistic counts, and
+[#44](https://github.com/nugamus/iwbtg-collection/issues/44) is re-scoped to confirming peak
+budget and agent effort on the first real ports.
