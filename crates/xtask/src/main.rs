@@ -1682,14 +1682,40 @@ source = \"x\"
         ("scripts", 0),
     ];
 
-    /// Generated dashboard snapshots quote GitHub issue titles verbatim; they are output, not
-    /// authored identifiers, so they do not count against the root ceiling.
-    const WP_EXCLUDED_FILES: &[&str] = &[
-        "progress/data.json",
-        "progress/history.json",
-        "progress/index.html",
-        "progress/exporter.json",
-    ];
+    /// Generated files mirror authored text: the dashboard snapshots quote GitHub issue titles and
+    /// the format schemas repeat sim/format doc comments. Their WP ids are counted where they are
+    /// authored (the issues; `crates/sim/src`), so counting the generated copy again double-counts
+    /// and makes a new generated file break a ceiling without a new authored id (#1407).
+    fn wp_excluded(rel: &str) -> bool {
+        rel.starts_with("docs/format/schema/")
+            || matches!(
+                rel,
+                "progress/data.json"
+                    | "progress/history.json"
+                    | "progress/index.html"
+                    | "progress/exporter.json"
+            )
+    }
+
+    #[test]
+    fn generated_files_do_not_count_against_the_wp_ratchet() {
+        for rel in [
+            "docs/format/schema/v0/physics.schema.json",
+            "docs/format/schema/v1/physics.schema.json",
+            "progress/data.json",
+            "progress/index.html",
+        ] {
+            assert!(wp_excluded(rel), "{rel} is generated output");
+        }
+        for rel in [
+            "docs/format/physics.md",
+            "progress/README.md",
+            "crates/sim/src/def/physics.rs",
+            "docs/format/converter-requests.md",
+        ] {
+            assert!(!wp_excluded(rel), "{rel} is authored text");
+        }
+    }
 
     #[test]
     fn no_new_wp_era_identifiers() {
@@ -1767,7 +1793,7 @@ source = \"x\"
                 .unwrap_or(path)
                 .to_string_lossy()
                 .replace('\\', "/");
-            if WP_EXCLUDED_FILES.contains(&rel.as_str()) {
+            if wp_excluded(&rel) {
                 continue;
             }
             // The folder walk this replaces skipped files over 1 MiB as not text.
