@@ -1,6 +1,7 @@
 //! Loading a package folder or `.iwbz` file for the client: files, engine pack, the game
 //! definition and the sprite images. No Bevy in here, so it is tested like any other code.
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -28,6 +29,10 @@ pub struct Package {
     pub def: Arc<GameDef>,
     /// The package's `gameplay_hash`, for the replay header (`replays.rs`).
     pub gameplay_hash: [u8; 32],
+    /// The package's `sounds/<id>.ogg` and `music/<id>.ogg` by sound name, as shared handles.
+    /// Built once here; each run's `audio::Sounds` clones the handles instead of copying every
+    /// OGG (`crates/format` owns the `Vec<u8>`, so one copy at open is what `Arc<[u8]>` needs).
+    pub sound_bytes: HashMap<String, Arc<[u8]>>,
 }
 
 /// One decoded sprite strip.
@@ -126,10 +131,13 @@ pub fn from_files(files: PackageFiles, trace_mode: bool) -> Result<Package, Open
             report.diagnostics.iter().map(ToString::to_string).collect(),
         ));
     };
+    // One pass over the sound files when the package opens; a run only clones the handles.
+    let sound_bytes = crate::audio::sound_bytes(&files);
     Ok(Package {
         files: Arc::new(files),
         def: Arc::new(def),
         gameplay_hash,
+        sound_bytes,
     })
 }
 

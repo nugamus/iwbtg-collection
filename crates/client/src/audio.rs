@@ -190,7 +190,7 @@ impl Plugin for AudioPlugin {
         let (offset_ms, levels) = (self.offset_ms, self.levels);
         shell::run_resource(app, move |_| Queue::new(offset_ms));
         shell::run_resource(app, move |w| {
-            Sounds::new(&w.resource::<LoadedPackage>().pkg.files, levels)
+            Sounds::new(&w.resource::<LoadedPackage>().pkg, levels)
         });
         shell::run_resource(app, |_| Shake::default());
         app.add_systems(
@@ -405,6 +405,9 @@ impl Mixer {
 
 /// Every sound file of the package by sound name: `sounds/<id>.ogg`, `music/<id>.ogg`, and the
 /// engine pack's `engine/<pack>/...` as `engine:<pack>/<id>`.
+///
+/// Runs once when the package opens (`package::Package::sound_bytes`): the `Vec<u8>` the format
+/// crate owns is copied into an `Arc<[u8]>` here, and each run's [`Sounds`] clones those handles.
 pub fn sound_bytes(files: &PackageFiles) -> HashMap<String, Arc<[u8]>> {
     let mut out = HashMap::new();
     for (path, bytes) in files.iter() {
@@ -463,6 +466,7 @@ impl Queue {
 /// The sound files and the mixer's memory.
 #[derive(Resource)]
 pub struct Sounds {
+    /// The package's shared handles, cloned per run (`Package::sound_bytes`), never re-copied.
     bytes: HashMap<String, Arc<[u8]>>,
     handles: HashMap<SoundId, Handle<AudioSource>>,
     mixer: Mixer,
@@ -470,9 +474,9 @@ pub struct Sounds {
 }
 
 impl Sounds {
-    pub fn new(files: &PackageFiles, levels: Levels) -> Sounds {
+    pub fn new(pkg: &crate::package::Package, levels: Levels) -> Sounds {
         Sounds {
-            bytes: sound_bytes(files),
+            bytes: pkg.sound_bytes.clone(),
             handles: HashMap::new(),
             mixer: Mixer::default(),
             levels,
@@ -1072,6 +1076,27 @@ mod tests {
         );
     }
 
+    /// Two runs of one package clone the same sound handles: the OGG bytes are copied once when
+    /// the package opens, never per run.
+    #[test]
+    fn two_runs_sounds_share_the_packages_handles() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/audio.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        assert!(!pkg.sound_bytes.is_empty(), "the fixture has sound files");
+        let levels = Levels {
+            music: 1.0,
+            sound: 1.0,
+        };
+        let a = Sounds::new(&pkg, levels);
+        let b = Sounds::new(&pkg, levels);
+        assert_eq!(a.bytes.len(), pkg.sound_bytes.len());
+        assert_eq!(b.bytes.len(), pkg.sound_bytes.len());
+        for (name, bytes) in &pkg.sound_bytes {
+            assert!(Arc::ptr_eq(bytes, a.bytes.get(name).unwrap()), "{name}");
+            assert!(Arc::ptr_eq(bytes, b.bytes.get(name).unwrap()), "{name}");
+        }
+    }
+
     #[test]
     fn the_demo_package_starts_its_music_and_has_every_sound_file() {
         use iwbtg_sim::input::InputFrame;
@@ -1081,9 +1106,8 @@ mod tests {
 
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/audio.pkg");
         let pkg = crate::package::open(&dir, false).unwrap();
-        let files = sound_bytes(&pkg.files);
         for s in &pkg.def.sounds {
-            assert!(files.contains_key(&s.name), "no file for {}", s.name);
+            assert!(pkg.sound_bytes.contains_key(&s.name), "no file for {}", s.name);
         }
         let options = SimOptions {
             start: StartPoint::NewGame { difficulty: 0 },
