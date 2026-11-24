@@ -527,6 +527,8 @@ fn run_inner(
     };
     app.add_plugins(
         DefaultPlugins
+            // Drops the ICU4X segmentation notice (logging.rs, #734).
+            .set(crate::logging::log_plugin())
             .set(ImagePlugin::default_nearest())
             .set(WindowPlugin {
                 primary_window: Some(Window {
