@@ -2,7 +2,7 @@
 
 Part of the [sim register](../sim.md#register).
 
-The **Impact** column is the fidelity tier ([fidelity impact tiers](../../plans/fidelity-tiers.md)): T1 can change a ranked run, T2 only off-ranked paths or visuals and sound, T3 only a probe column, T? is not judged. T1 blocks M2; T2 and T3 move to the port (rule on the tier page).
+The **Impact** column is the fidelity tier ([fidelity impact tiers](../../plans/fidelity-tiers.md)): T1 can change a ranked run, T2 only off-ranked paths or visuals and sound, T3 only a probe column, T? is not judged. T1 blocks phase 3; T2 and T3 move to the port (rule on the tier page).
 
 The `standard` ruleset (decision 0005) changes N1 and N11 only; until a standard contract settles another row, `NumRules::standard()` carries the `gm8` value below.
 

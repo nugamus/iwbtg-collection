@@ -74,6 +74,6 @@ Template (the questions section above stays as it is; this log is added to the s
 
 - **F1 blocks Ranked; F2 blocks Beta only if visible; F3 never blocks.** A deviation accepted into Beta still gets an entry here, with the date the user or lead accepted it.
 - **Existing entries** keep their text and gain a `Contract:` line the next time they are touched. An entry written before this field existed and still without a contract is a to-do in `### Open`, not an invalidated accepted difference.
-- **F2 and F3 items move to the affected game's port issue (games repo, M5) or to M5.** The entry stays here and names where it moved.
+- **F2 and F3 items move to the affected game's port issue (games repo, phase 9) or to phase 9.** The entry stays here and names where it moved.
 - **The game page's "known differences"** ([content.md](../content.md), Game list data) is generated from the Known differences section; do not write a second list.
 - **The deviation log's Open is not the questions Open.** `## Open` above is for the user; `### Open` here is for fidelity work.

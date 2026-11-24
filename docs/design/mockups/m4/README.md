@@ -1,4 +1,4 @@
-# M4 mockups: game select, loading, HUD, pause, results
+# Phase 6 (Ranked-ready) mockups: game select, loading, HUD, pause, results
 
 Approved by the user as the current design on 2026-11-04 (#478, PR #480; three feedback rounds on the PR). Implementation issues link here: build each screen from its artboard. Live canvas: https://claude.ai/artifact/QbvtFDFHrx3HhRmuTGTM9w. The source files are in this folder: `canvas.json` places the artboards, each `.dc.html` is one artboard, and the numbers in its script are the sample data drawn.
 

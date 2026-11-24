@@ -2,11 +2,11 @@
 
 Status: Accepted by Claude on the user's behalf, 2026-11-04 (user may revisit). Issue #490.
 
-Related: [architecture, UI](../architecture/client/ui.md), [product](../product.md) (UI decisions), the M4 mockups in [`docs/design/mockups/m4/`](../design/mockups/m4/README.md).
+Related: [architecture, UI](../architecture/client/ui.md), [product](../product.md) (UI decisions), the phase 6 mockups in [`docs/design/mockups/m4/`](../design/mockups/m4/README.md).
 
 ## Context
 
-Every M4 and M6 screen (game select, mod select, loading, HUD, pause, results) uses the same shared design language (mockup README, Shared design language): rows, panels, pills and buttons sheared by 0.2 (`skewX(-11.31deg)`) with upright text and a 10 px corner radius; game art clipped to sheared panels; gradients over art; lists that fade out at their edges; Barlow with tabular numerals; OutQuint and OutElastic motion. The client is Bevy 0.20 and must run natively and in a browser (wasm32, WebGL2).
+Every ranked-ready and game-select screen (game select, mod select, loading, HUD, pause, results) uses the same shared design language (mockup README, Shared design language): rows, panels, pills and buttons sheared by 0.2 (`skewX(-11.31deg)`) with upright text and a 10 px corner radius; game art clipped to sheared panels; gradients over art; lists that fade out at their edges; Barlow with tabular numerals; OutQuint and OutElastic motion. The client is Bevy 0.20 and must run natively and in a browser (wasm32, WebGL2).
 
 The toolkit has to support:
 

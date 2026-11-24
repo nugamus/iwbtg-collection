@@ -30,7 +30,7 @@ eros and `min`/`max`, and `num/trig.rs` and `num/tests.rs` claim the recorder us
 | `sim::trace` | `TraceTable` parse/write of the recorder CSV, bit-exact `diff`. `std::fs` only under `#[cfg(test)]`. |
 | `format` | `PackageFiles`, manifest parse and validation, diagnostics with line and column. |
 | `tools` | `iwbtg` binary stub. |
-| research converter | `research/build/packages/<id>/` for all 20 games: `game.toml`, `physics.toml` (draft), `rooms/`, `objects/`, `sprites/`, `tests/trace-map.toml`. Gaps that block M1 are in section 8.4. |
+| research converter | `research/build/packages/<id>/` for all 20 games: `game.toml`, `physics.toml` (draft), `rooms/`, `objects/`, `sprites/`, `tests/trace-map.toml`. Gaps that block phase 3 are in section 8.4. |
 | traces | About 250 CSVs in 17 game folders (keep-celebrating-for-xia has none yet). Inventory and how each kind is used: section 9.1. |
 
 ### Work packages at a glance
@@ -63,11 +63,11 @@ Merge order: WP0 alone. Then each wave in any order inside the wave. A WP can st
 
 Each is a set of trace cases that must diff clean. WP11 owns them.
 
-- **M1 rely stand.** `rely-the-needle-4-2/stand`, `rely-the-needle-4-2/djump` (both `--room room1`). Needs WP0-WP4b, WP5a, WP6a (rely slice, section 6.2), WP7a, WP7b, WP8a, and converter requests CR1, CR3, CR4 (section 8.4).
-- **M1b rely right.** `rely-the-needle-4-2/right` (`--room rSelectStage --x 96 --y 567.4`). Adds CR2 (`warp_start`) or the WP7a inert-kind trace mode.
-- **M2 kaenbyou basics.** `kaenbyou/{stand, t-speed-1, famb-spawn-settle, right, djump, t-mot-06, t-anim-1, t-alarm-1}`. Adds WP5b, WP10 (DLL stub mode, the traces use `--stub-dlls`), the kid Room Start (bow, view angle) and B End Step `slope_b`.
-- **M3a rely traces.** Every diff-target trace of rely-the-needle-4-2 (section 9.1), plus CR5 (warp params).
-- **M3b rely full clear.** A full-clear `.inputs` replayed by `iwbtg replay run` reaches the end trigger. Recording that replay needs the Phase 4 Bevy client and input recording, so M3b waits for Phase 4; this plan only delivers the headless runner (WP8b).
+- **Phase 3 rely stand.** `rely-the-needle-4-2/stand`, `rely-the-needle-4-2/djump` (both `--room room1`). Needs WP0-WP4b, WP5a, WP6a (rely slice, section 6.2), WP7a, WP7b, WP8a, and converter requests CR1, CR3, CR4 (section 8.4).
+- **Phase 3 rely right.** `rely-the-needle-4-2/right` (`--room rSelectStage --x 96 --y 567.4`). Adds CR2 (`warp_start`) or the WP7a inert-kind trace mode.
+- **Phase 3 kaenbyou basics.** `kaenbyou/{stand, t-speed-1, famb-spawn-settle, right, djump, t-mot-06, t-anim-1, t-alarm-1}`. Adds WP5b, WP10 (DLL stub mode, the traces use `--stub-dlls`), the kid Room Start (bow, view angle) and B End Step `slope_b`.
+- **Phase 3 rely traces.** Every diff-target trace of rely-the-needle-4-2 (section 9.1), plus CR5 (warp params).
+- **First-playable rely full clear.** A full-clear `.inputs` replayed by `iwbtg replay run` reaches the end trigger. Recording that replay needs the phase 4 Bevy client and input recording, so it waits for phase 4; this plan only delivers the headless runner (WP8b).
 
 ## 1. World model and instance storage
 
@@ -747,7 +747,7 @@ pub fn init_state(b: Builtin, params: &Params) -> Result<BuiltinState, ParamErro
 
 ### 6.1 Table
 
-Tiers: tier 1 is needed by M1, M1b, M2 and game 1 (WP6a); tier 2 by games 2-11 (WP6b); tier 3 by the rest (WP6c). Instance counts are placed instances from the mechanics.md coverage table.
+Tiers: tier 1 is needed by phase 3 and game 1 (WP6a); tier 2 by games 2-11 (WP6b); tier 3 by the rest (WP6c). Instance counts are placed instances from the mechanics.md coverage table.
 
 | Built-in | Tier | Games (placed) | Behavior source | Notes |
 |---|---|---|---|---|
@@ -783,7 +783,7 @@ Tiers: tier 1 is needed by M1, M1b, M2 and game 1 (WP6a); tier 2 by games 2-11 (
 
 ### 6.2 Rely slice (first playable path)
 
-The smallest set that makes rely-the-needle-4-2's play rooms run: `world`, `kid_start`, `block` (with `visual_spawns_collider`), `spike`, `kid_bullet`, `save` (touch + press S/Z), `warp`, `blood_emitter`, `blood`, `game_over`, `bow`, `difficulty_warp`. `camera`, `platform` and `killer` are not placed in rely's play rooms (A1 "Placed in reference rooms"), so WP6a does them after the slice. WP6a also covers kaenbyou's tier-1 needs for M2 (held-S save, B spike rotation, B particle blood mode).
+The smallest set that makes rely-the-needle-4-2's play rooms run: `world`, `kid_start`, `block` (with `visual_spawns_collider`), `spike`, `kid_bullet`, `save` (touch + press S/Z), `warp`, `blood_emitter`, `blood`, `game_over`, `bow`, `difficulty_warp`. `camera`, `platform` and `killer` are not placed in rely's play rooms (A1 "Placed in reference rooms"), so WP6a does them after the slice. WP6a also covers kaenbyou's tier-1 needs for phase 3 (held-S save, B spike rotation, B particle blood mode).
 
 ## 7. Sound model (WP10)
 
@@ -1156,8 +1156,8 @@ Every WP ends with the user check the client `CLAUDE.md` requires. Commands assu
 
 - **Owns:** `crates/tools/cases/<pkg>/*.toml` contents, `crates/sim/tests/golden/`, `crates/sim/tests/milestones/`, `rules/mod.rs` and `def/class.rs` after WP0 (reserved class bits), CI target matrix (10.6), the register defaults when the spec records a trace result (one PR per settled item, new `engine_rev` if any package was verified).
 - **Depends on:** whichever WPs a milestone needs (section 0).
-- **Done when (per milestone):** M1, M1b, M2, M3a as listed; probe traces of 9.1 kind 2 have a golden test once the spec records their result.
-- **User check (M1):** `cargo run -p iwbtg-tools -- trace check <research>/build/packages/rely_the_needle --research <research>`. Expected: `stand OK`, `djump OK`. Broken: a diff block naming a frame and column, or "no cases found".
+- **Done when (per phase):** phase 3 as listed; probe traces of 9.1 kind 2 have a golden test once the spec records their result.
+- **User check (phase 3):** `cargo run -p iwbtg-tools -- trace check <research>/build/packages/rely_the_needle --research <research>`. Expected: `stand OK`, `djump OK`. Broken: a diff block naming a frame and column, or "no cases found".
 
 ### File overlap check
 
@@ -1180,8 +1180,8 @@ WP0 ─┬─ WP1 ─┬─ WP9 ────────────────
      ├─ WP4a ─ WP4b ──┼─ WP6a ── WP6b ── WP6c
      ├─ WP7a ─────────┴─ WP7b
      └─ WP8a ─ WP8b
-WP11: M1 = WP1-WP3, WP4a, WP4b, WP5a, WP6a (rely slice), WP7a, WP7b, WP8a + CR1, CR3, CR4
-      M1b = M1 + CR2 or Trace load mode;  M2 = M1 + WP5b + WP10;  M3a = M1b + CR5
+WP11: phase 3 (rely) = WP1-WP3, WP4a, WP4b, WP5a, WP6a (rely slice), WP7a, WP7b, WP8a + CR1, CR3, CR4
+      phase 3 (right) = phase 3 (rely) + CR2 or Trace load mode;  phase 3 (kaenbyou) = phase 3 (rely) + WP5b + WP10;  phase 3 (rely full) = phase 3 (right) + CR5
 ```
 
 Stub rule: a function from another WP that is not merged yet is called through its WP0 signature. Its WP0 body is `unimplemented!("WPn: <function>")`, so a test that reaches it fails loudly with the WP number.
@@ -1190,7 +1190,7 @@ Stub rule: a function from another WP that is not merged yet is called through i
 
 Every rule the sim needs that the spec marks UNKNOWN, Inferred or Conflict, or that the code took from OpenGMK, with the one place the code isolates it. "Default" is what engine_rev 0 does until the spec records the trace in the last column. Fields live in `RunnerRules` (`rules/`), selected by `RunnerRules::for_runner(runner, engine_rev)`; a changed default after a package was verified becomes a new `engine_rev` branch (architecture "Versions"). "(rec)" marks a trace recorded with the OpenGMK recorder; its result is in CLONE_SPEC. "Confirmed (recorder)" is a recorder result not yet checked against the real runner (research#8 has checked N3, N14, the presence of N1's tolerance and M6's cos/sin; see CLONE_SPEC, Number handling, Confirmed (real runner)). A row whose status is still UNKNOWN or Inferred names what is missing; its default stays the engine_rev 0 choice until a trace settles it (#143).
 
-The **Impact** column is the fidelity tier ([fidelity tiers](fidelity-tiers.md)): T1 can change a ranked run, T2 only off-ranked paths or visuals and sound, T3 only a probe column, T? is not judged. Only T1 blocks M2; T2 and T3 move to the port issue or M5.
+The **Impact** column is the fidelity tier ([fidelity tiers](fidelity-tiers.md)): T1 can change a ranked run, T2 only off-ranked paths or visuals and sound, T3 only a probe column, T? is not judged. Only T1 blocks phase 3; T2 and T3 move to the port issue or phase 9.
 
 - [Tick and events](../architecture/sim/register-tick-and-events.md)
 - [Motion](../architecture/sim/register-motion.md)
@@ -1223,7 +1223,7 @@ Each critique was re-checked against the spec before it went in. All were confir
 
 - Clean room: OpenGMK-derived rules widened to sign, min/max, signed zeros (N4, N11-N13); `gm_div` fixed to truncate (spec Confirmed); UCRT wording removed (M6); depth added to R2; per-pair re-check split into C7 and C7b; collision pair order defaults to the other's rank and id (R12, R12b); restart models get triggers and the showdown conflict (4.3, R26, R27); animation slot conflict and `AfterMotion` (R7), R7b default follows the spec's "has a sprite"; blood emitter as alarm plus Step, particle RNG switch without a GM claim (N10); "first" instance (R21); destroyed instances in queries (R22); nested room requests and deferral grain (R23-R25); numeric literals (N14); distance_to_object switches without "Euclidean" as a spec claim (C13); file order is Inferred, not Confirmed; Pause action added.
 - Determinism: postcard + BLAKE3 hash (10.1); non-finite setters (10.2); overflow (10.3); i64 grid math (3.4); clippy additions (10.5); Rhai features and short-circuit lint (11); `NumRules` instead of consts; `trace-setup` feature unification (10.4); sorted VarIds and a non-serialized grid (1.1, 1.4); node/wasm-bindgen target (10.6).
-- Coverage: rely blockers became converter requests and gates (8.4); M1 is rely only, kaenbyou moved to M2; `iwbtg replay run` and timing triggers (WP8b); M3 split, M3b waits for Phase 4; sound model (section 7, WP10); Draw slot order and visibility (2.1 row 12); deactivated persistent instances (4.2); kid event schema (5.2); room roles (4.1); direct-read contract (2.2); playerface and blood draw order (3.3, 6.1); real-time reads (R28); timeline offset (R6b); flipped +4 is 10 games; trace inventory and kinds (9.1).
+- Coverage: rely blockers became converter requests and gates (8.4); phase 3 starts with rely only and adds kaenbyou; `iwbtg replay run` and timing triggers (WP8b); the first-playable full clear waits for phase 4; sound model (section 7, WP10); Draw slot order and visibility (2.1 row 12); deactivated persistent instances (4.2); kid event schema (5.2); room roles (4.1); direct-read contract (2.2); playerface and blood draw order (3.3, 6.1); real-time reads (R28); timeline offset (R6b); flipped +4 is 10 games; trace inventory and kinds (9.1).
 - WP split: WP0 freezes per-owner sub-types (1.5, 1.6) so WPs never edit shared enums; WP4, WP5, WP6, WP7, WP8 split; milestone checks moved to WP11, which removes the WP5/WP6/WP7 cycles.
 ## 18. WP0 contract notes
 

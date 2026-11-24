@@ -1,0 +1,479 @@
+{
+ "generated_at": "2026-11-24T13:44:35Z",
+ "source": "gh",
+ "phases": [
+  {
+   "number": 0,
+   "title": "0 · Foundation",
+   "state": "open",
+   "open": 13,
+   "closed": 63,
+   "size_points": 21,
+   "sizes": {
+    "size:S": 7,
+    "size:M": 2,
+    "size:L": 1,
+    "unknown": 3
+   }
+  },
+  {
+   "number": 1,
+   "title": "1 · Behavior research",
+   "state": "open",
+   "open": 5,
+   "closed": 24,
+   "size_points": 4,
+   "sizes": {
+    "size:S": 4,
+    "size:M": 0,
+    "size:L": 0,
+    "unknown": 1
+   }
+  },
+  {
+   "number": 2,
+   "title": "2 · Format & pipeline",
+   "state": "open",
+   "open": 33,
+   "closed": 88,
+   "size_points": 96,
+   "sizes": {
+    "size:S": 11,
+    "size:M": 15,
+    "size:L": 5,
+    "unknown": 2
+   }
+  },
+  {
+   "number": 3,
+   "title": "3 · Sim fidelity",
+   "state": "open",
+   "open": 44,
+   "closed": 210,
+   "size_points": 53,
+   "sizes": {
+    "size:S": 16,
+    "size:M": 7,
+    "size:L": 2,
+    "unknown": 19
+   }
+  },
+  {
+   "number": 4,
+   "title": "4 · First playable",
+   "state": "open",
+   "open": 8,
+   "closed": 44,
+   "size_points": 10,
+   "sizes": {
+    "size:S": 4,
+    "size:M": 2,
+    "size:L": 0,
+    "unknown": 2
+   }
+  },
+  {
+   "number": 5,
+   "title": "5 · Client shell & UI",
+   "state": "open",
+   "open": 21,
+   "closed": 14,
+   "size_points": 50,
+   "sizes": {
+    "size:S": 9,
+    "size:M": 11,
+    "size:L": 1,
+    "unknown": 0
+   }
+  },
+  {
+   "number": 6,
+   "title": "6 · Ranked-ready run",
+   "state": "open",
+   "open": 42,
+   "closed": 90,
+   "size_points": 137,
+   "sizes": {
+    "size:S": 13,
+    "size:M": 20,
+    "size:L": 8,
+    "unknown": 1
+   }
+  },
+  {
+   "number": 7,
+   "title": "7 · Online",
+   "state": "open",
+   "open": 57,
+   "closed": 4,
+   "size_points": 134,
+   "sizes": {
+    "size:S": 32,
+    "size:M": 18,
+    "size:L": 6,
+    "unknown": 1
+   }
+  },
+  {
+   "number": 8,
+   "title": "8 · Ghosts & races",
+   "state": "open",
+   "open": 10,
+   "closed": 0,
+   "size_points": 28,
+   "sizes": {
+    "size:S": 6,
+    "size:M": 2,
+    "size:L": 2,
+    "unknown": 0
+   }
+  },
+  {
+   "number": 9,
+   "title": "9 · Content & ports",
+   "state": "open",
+   "open": 53,
+   "closed": 6,
+   "size_points": 142,
+   "sizes": {
+    "size:S": 31,
+    "size:M": 13,
+    "size:L": 9,
+    "unknown": 0
+   }
+  },
+  {
+   "number": 10,
+   "title": "10 · Release",
+   "state": "open",
+   "open": 24,
+   "closed": 2,
+   "size_points": 53,
+   "sizes": {
+    "size:S": 12,
+    "size:M": 11,
+    "size:L": 1,
+    "unknown": 0
+   }
+  }
+ ],
+ "games": [
+  {
+   "id": "animus",
+   "slug": "animus",
+   "name": "I wanna be the Animus",
+   "source": "https://delicious-fruit.com/game/10550",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null
+  },
+  {
+   "id": "be-fed-up-with-path-w",
+   "slug": "be-fed-up-with-path-w",
+   "name": "I wanna be Fed up with path ;w;",
+   "source": "https://delicious-fruit.com/game/11403",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null
+  },
+  {
+   "id": "clear-the-easy-miku-2",
+   "slug": "clear-the-easy-miku-2",
+   "name": "I wanna clear the Easy Miku 2",
+   "source": "https://delicious-fruit.com/game/12270",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null
+  },
+  {
+   "id": "deride-kotaro-from-aslant",
+   "slug": "deride-kotaro-from-aslant",
+   "name": "I wanna deride Kotaro- from aslant",
+   "source": "https://delicious-fruit.com/game/18404",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null
+  },
+  {
+   "id": "eat-the-lemon",
+   "slug": "eat-the-lemon",
+   "name": "I wanna eat the lemon",
+   "source": "https://delicious-fruit.com/game/18603",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null
+  },
+  {
+   "id": "eat-the-new-year",
+   "slug": "eat-the-new-year",
+   "name": "I wanna eat the New Year!",
+   "source": "https://delicious-fruit.com/game/11512",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null
+  },
+  {
+   "id": "eat-the-rori-girl",
+   "slug": "eat-the-rori-girl",
+   "name": "I wanna eat the Rori Girl",
+   "source": "https://delicious-fruit.com/game/11514",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null
+  },
+  {
+   "id": "get-the-rainbow-feather",
+   "slug": "get-the-rainbow-feather",
+   "name": "I wanna get the Rainbow feather",
+   "source": "https://delicious-fruit.com/game/11562",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null
+  },
+  {
+   "id": "go-the-jun-g-world",
+   "slug": "go-the-jun-g-world",
+   "name": "I wanna go the JUN-G World",
+   "source": "https://delicious-fruit.com/game/18758",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null
+  },
+  {
+   "id": "go-the-spook-house",
+   "slug": "go-the-spook-house",
+   "name": "I wanna go the Spook House",
+   "source": "https://delicious-fruit.com/game/15561",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null
+  },
+  {
+   "id": "help-the-fairy-tale",
+   "slug": "help-the-fairy-tale",
+   "name": "I wanna help the Fairy tale",
+   "source": "https://delicious-fruit.com/game/11595",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null
+  },
+  {
+   "id": "kaenbyou",
+   "slug": "kaenbyou",
+   "name": "I wanna be the Kaenbyou",
+   "source": "https://delicious-fruit.com/game/17724",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null
+  },
+  {
+   "id": "keep-celebrating-for-xia",
+   "slug": "keep-celebrating-for-xia",
+   "name": "I wanna Keep Celebrating for Xia",
+   "source": "https://delicious-fruit.com/game/21633",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null
+  },
+  {
+   "id": "little-runner",
+   "slug": "little-runner",
+   "name": "I wanna be the Little runner",
+   "source": "https://delicious-fruit.com/game/10848",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null
+  },
+  {
+   "id": "little-trap",
+   "slug": "little-trap",
+   "name": "I wanna Little Trap",
+   "source": "https://delicious-fruit.com/game/21365",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null
+  },
+  {
+   "id": "machinary",
+   "slug": "machinary",
+   "name": "I wanna be the Machinary",
+   "source": "https://delicious-fruit.com/game/18020",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null
+  },
+  {
+   "id": "poronkusema",
+   "slug": "poronkusema",
+   "name": "I wanna be the Poronkusema",
+   "source": "https://delicious-fruit.com/game/20975",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null
+  },
+  {
+   "id": "rely-the-needle-4-2",
+   "slug": "rely-the-needle-4-2",
+   "name": "I Wanna Rely The Needle 4.2",
+   "source": "https://delicious-fruit.com/game/19483",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null
+  },
+  {
+   "id": "showdown",
+   "slug": "showdown",
+   "name": "I wanna be the Showdown",
+   "source": "https://delicious-fruit.com/game/14697",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null
+  },
+  {
+   "id": "wanna",
+   "slug": "wanna",
+   "name": "I wanna wanna",
+   "source": "https://delicious-fruit.com/game/12505",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null
+  }
+ ],
+ "overall": {
+  "standard_num": null,
+  "standard_den": null,
+  "standard_pct": null,
+  "tick_num": null,
+  "tick_den": null,
+  "tick_pct": null,
+  "games_census": 0,
+  "games_tick": 0,
+  "games_total": 20
+ },
+ "followups": {
+  "census": 1364,
+  "traces": 1365,
+  "converter": 1366,
+  "frontmatter": 1367
+ }
+}

@@ -33,7 +33,7 @@ This table is a pure refactor (F3): every entry is the value the old tables gave
 
 ### Tiers and the table
 
-Tiers: tier 1 is needed by M1, M1b, M2 and game 1; tier 2 by games 2-11; tier 3 by the rest. Instance counts are placed instances from the mechanics.md coverage table.
+Tiers: tier 1 is needed by phase 3 and game 1; tier 2 by games 2-11; tier 3 by the rest. Instance counts are placed instances from the mechanics.md coverage table.
 
 | Built-in | Tier | Games (placed) | Behavior source | Notes |
 |---|---|---|---|---|
@@ -69,4 +69,4 @@ Tiers: tier 1 is needed by M1, M1b, M2 and game 1; tier 2 by games 2-11; tier 3 
 
 ### Rely slice (first playable path)
 
-The smallest set that makes rely-the-needle-4-2's play rooms run: `world`, `kid_start`, `block` (with `visual_spawns_collider`), `spike`, `kid_bullet`, `save` (touch + press S/Z), `warp`, `blood_emitter`, `blood`, `game_over`, `bow`, `difficulty_warp`. `camera`, `platform` and `killer` are not placed in rely's play rooms (A1 "Placed in reference rooms"), so they come after the slice. Kaenbyou's tier-1 needs for M2 are also in the slice: held-S save, B spike rotation and B particle blood mode.
+The smallest set that makes rely-the-needle-4-2's play rooms run: `world`, `kid_start`, `block` (with `visual_spawns_collider`), `spike`, `kid_bullet`, `save` (touch + press S/Z), `warp`, `blood_emitter`, `blood`, `game_over`, `bow`, `difficulty_warp`. `camera`, `platform` and `killer` are not placed in rely's play rooms (A1 "Placed in reference rooms"), so they come after the slice. Kaenbyou's tier-1 needs for phase 3 are also in the slice: held-S save, B spike rotation and B particle blood mode.

@@ -2,7 +2,7 @@
 
 One client that plays I Wanna Be The Guy fangames, the way osu! plays beatmaps. Every supported game is rebuilt in our own documented format; the client never runs original games or their engines. Written in Rust with Bevy, for native and web (WASM).
 
-Status: pre-release, in active development. There are no release builds yet; the public alpha is planned for M7 (Online). See `docs/roadmap.md` for the milestones and `docs/dev-setup.md` for building it yourself.
+Status: pre-release, in active development. There are no release builds yet; the public alpha is planned for phase 7 (Online). See `docs/roadmap.md` for the phases, the [progress dashboard](https://nugamus.github.io/iwbtg-collection/) for porting coverage, and `docs/dev-setup.md` for building it yourself.
 
 ## Layout
 
@@ -22,8 +22,9 @@ docs/
   product.md Player-facing decisions: ranked mode, mods, leaderboards, UI.
   content.md Porting, assets, engines, package file, level editor.
   server.md  Server stack and security rules.
-  roadmap.md Order of work.
+  roadmap.md Order of work (the phase gates).
   dev-setup.md Machine layout, toolchain versions, setup check.
+progress/    Generated porting-progress dashboard and its data.
 Potential Features.md   Feature ideas, one line each.
 ```
 
