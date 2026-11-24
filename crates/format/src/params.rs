@@ -1,5 +1,4 @@
 //! Param validation against `builtins::param_specs` (docs/format/builtins.md).
-//! WP0 creates the file; WP7b owns it.
 //!
 //! Every kind's params, and every placed instance's params merged over its kind's (a placed
 //! instance overrides), are checked: each key must be a param of the base built-in, its value
@@ -127,7 +126,7 @@ const fn skipped(b: Builtin) -> bool {
 }
 
 /// Checks every kind's and placed instance's params against `builtins::param_specs` of its
-/// base (step 7), after `load::load_game` (WP7a) has built the definition. Problems are
+/// base (step 7), after `load::load_game` has built the definition. Problems are
 /// diagnostics: errors, or warnings when `trace` (converter output).
 pub fn check(def: &GameDef, trace: bool, diags: &mut Vec<Diagnostic>) {
     let severity = if trace { Severity::Warning } else { Severity::Error };

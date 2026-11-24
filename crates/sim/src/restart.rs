@@ -3,9 +3,8 @@
 //!
 //! The policies are [`crate::def::game::Lifecycle`] values. The engines' init rooms and world
 //! objects are not ported as GM code: the retry's delay is the engine-owned [`InitPhase`]. The
-//! `world` built-in (WP6a) calls these at the world's rank, in the phase
+//! `world` built-in calls these at the world's rank, in the phase
 //! [`crate::def::game::RetryPolicy::trigger`] names; this module does not look at the trigger.
-//! WP0 declared; WP4b owns.
 //!
 //! Spec: CLONE_SPEC rooms, "game_restart" and "Retry timeline"; kid/A3.md showdown "Restart".
 //!

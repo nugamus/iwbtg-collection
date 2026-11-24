@@ -3,9 +3,6 @@
 //! No Bevy, no IO, no threads, no clock. The same package and inputs give bit-identical state on
 //! Windows, WASM and Linux. See `docs/architecture/sim.md` and the open-question registers in
 //! `docs/plans/sim-core/`.
-//!
-//! Module owners after WP0 are listed in each module's docs and in plan section 13. Only WP0
-//! edits this file.
 #![forbid(unsafe_code)]
 #![deny(
     clippy::print_stdout,
@@ -21,7 +18,7 @@ pub mod num;
 pub mod replay;
 pub mod trace;
 
-// Contracts (WP0) and their owners' modules (plan 13).
+// Contracts and their modules.
 pub mod alarm;
 pub mod anim;
 pub mod builtins;

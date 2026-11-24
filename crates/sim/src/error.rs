@@ -38,7 +38,7 @@ pub enum SimError {
         /// What was found.
         what: String,
     },
-    /// A script stopped with an error (WP9), or GML-level misuse such as reading an unset
+    /// A script stopped with an error, or GML-level misuse such as reading an unset
     /// variable in a game without "treat uninitialized as 0".
     #[error("script error: {message}")]
     Script {

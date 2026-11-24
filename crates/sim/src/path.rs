@@ -10,7 +10,7 @@
 //! position reads 1.0 and x stays at the end. Everything else here is the M8 default (Design,
 //! OPEN until TR-MECH-02): straight segments between the points, the position advancing by
 //! `path_speed / length` per tick, a closed path's last point joined to its first, the points'
-//! speed factors ignored, smooth paths `SimError::Unsupported`. WP2 owns this file.
+//! speed factors ignored, smooth paths `SimError::Unsupported`.
 
 use serde::{Deserialize, Serialize};
 

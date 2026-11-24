@@ -1,5 +1,4 @@
-//! The `platform_standard` collision run (docs/architecture/sim/kid.md, `[platform]`). WP5a owns
-//! it.
+//! The `platform_standard` collision run (docs/architecture/sim/kid.md, `[platform]`).
 //!
 //! Spec: kid/A1.md "Collision with platform (platform is not solid)". With
 //! `platform.rule = "half_vspeed"`: when `y - vspeed / 2 <= platform.y` (the kid was at or above

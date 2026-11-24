@@ -1,5 +1,5 @@
 //! Built-in `kid_start` (playerStart; mechanics `player_start`; docs/architecture/sim/builtins.md;
-//! docs/format/builtins/kid_start.md). Tier 1. WP0 creates the file; WP6a owns it.
+//! docs/format/builtins/kid_start.md). Tier 1.
 //!
 //! Room Start creates the kid at the start's position plus the spawn offset when no kid exists
 //! (the kid check counts both kid kinds, active and alive). Where the offset is added depends on

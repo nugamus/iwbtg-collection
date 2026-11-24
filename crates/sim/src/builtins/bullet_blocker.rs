@@ -1,5 +1,5 @@
 //! Built-in `bullet_blocker` (mechanics `bullet_blocker`; docs/architecture/sim/builtins.md;
-//! docs/format/builtins/bullet_blocker.md). Tier 2. WP0 creates the file; WP6b owns it.
+//! docs/format/builtins/bullet_blocker.md). Tier 2.
 //!
 //! Collision with a kid bullet destroys the bullet. With `except_when_overlapping_kid` (WAN
 //! bulletBlocker) it does nothing while it overlaps a kid.

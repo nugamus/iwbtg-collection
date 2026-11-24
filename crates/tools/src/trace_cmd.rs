@@ -1,4 +1,4 @@
-//! `iwbtg trace run`, `diff`, `check` (docs/architecture/cli.md). WP0 declares; WP8a owns.
+//! `iwbtg trace run`, `diff`, `check` (docs/architecture/cli.md).
 //!
 //! A case runs like the recorder ran the original (research `tooling/opengmk-trace/README.md`):
 //! the run starts in the case's room (`StartPoint::Room`), which stands for the recorder's room

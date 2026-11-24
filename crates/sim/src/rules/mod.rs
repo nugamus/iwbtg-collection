@@ -5,9 +5,6 @@
 //! result; once a package is verified, a changed default becomes a new `engine_rev` branch in
 //! [`RunnerRules::for_runner`], so replays verified under the old rule still verify
 //! (architecture "Versions"). Rules are values, never `const`s.
-//!
-//! File owners after WP0: `tick` WP1, `num`, `rng` and `motion` WP2, `collide` WP3, `room` WP4a,
-//! `sound` WP10, this file WP11.
 
 pub mod collide;
 pub mod draw;

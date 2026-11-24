@@ -1,5 +1,5 @@
-//! The poronkusema `moving_block_por` collision run (docs/architecture/sim/kid.md, tier 3). WP5c
-//! owns it. Spec: kid/A1.md poronkusema, "Collision with movingBlock" (64 x 64, a non-solid child
+//! The poronkusema `moving_block_por` collision run (docs/architecture/sim/kid.md, tier 3).
+//! Spec: kid/A1.md poronkusema, "Collision with movingBlock" (64 x 64, a non-solid child
 //! of block; the game places none, so every reading below is from the event code only).
 
 use serde::Deserialize;

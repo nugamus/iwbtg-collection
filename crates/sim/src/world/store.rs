@@ -3,8 +3,7 @@
 //! No map: runtime ids are handed out in increasing order and appended, so the `Vec` stays
 //! sorted by id and lookup is a binary search. Room-placed instances with a GM8 id (`gm_id`,
 //! #669) are below every runtime id and go in at their sorted place, so for them id order is
-//! not creation order (CLONE_SPEC, Instances, "Placed instance ids"). WP0 ships this working
-//! version; WP1 owns it.
+//! not creation order (CLONE_SPEC, Instances, "Placed instance ids").
 
 use std::collections::BTreeMap;
 

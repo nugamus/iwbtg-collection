@@ -1,5 +1,5 @@
 //! Built-in `difficulty_warp` (warpStart, objWarpStart; rooms; docs/architecture/sim/builtins.md;
-//! docs/format/builtins/difficulty_warp.md). Tier 1. WP0 creates the file; WP6a owns it.
+//! docs/format/builtins/difficulty_warp.md). Tier 1.
 //!
 //! Collision with the kid: set the difficulty from `dif`, delete the save, zero the death and
 //! time counters (the original writes 0 into the slot's death and time entries; the new kid's

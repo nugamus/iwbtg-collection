@@ -1,5 +1,5 @@
 //! Slope collision runs: `block_slope_step`, `slope_por_rise`, `slope_yane`
-//! (docs/architecture/sim/kid.md). WP5c owns it. Spec: kid/A1.md (poronkusema,
+//! (docs/architecture/sim/kid.md). Spec: kid/A1.md (poronkusema,
 //! get-the-rainbow-feather, rori, fairy-tale), kid/A4.md (eat-the-new-year).
 
 use serde::Deserialize;

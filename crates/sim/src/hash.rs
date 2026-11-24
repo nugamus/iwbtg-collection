@@ -6,7 +6,7 @@
 //! tables excluded. The RNG stream layout and each named stream's state are hashed (`streams`),
 //! so a replay observes them (#1157). Postcard writes lengths as varints and reals as their
 //! little-endian bits, so wasm32 and x86_64 give the same bytes. `std::hash` and its hashers are
-//! never used here. WP0 declared; WP1 owns.
+//! never used here.
 
 use std::collections::BTreeMap;
 

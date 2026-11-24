@@ -1,5 +1,5 @@
 //! Built-in `boss_gate` (mechanics `boss_gate`; docs/architecture/sim/builtins.md;
-//! docs/format/builtins/boss_gate.md). Tier 2. WP0 creates the file; WP6b owns it.
+//! docs/format/builtins/boss_gate.md). Tier 2.
 //!
 //! A solid block that destroys itself once `global.boss[boss_index]` is set (KOT bossblock1,
 //! KAE bossBlock, LR blockFlagBoss). It checks in Create and in every Step (the original only

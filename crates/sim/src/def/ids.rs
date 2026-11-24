@@ -1,7 +1,7 @@
 //! Typed indices into [`GameDef`](super::GameDef) tables (docs/architecture/sim/world.md; docs/format/v0.md).
 //!
 //! Each id is a `u32` index assigned by `crates/format` at load. Ids never hold a `usize`, so
-//! they serialize and hash the same on wasm32 and x86_64. WP0 declares; WP7a owns afterwards.
+//! they serialize and hash the same on wasm32 and x86_64.
 
 use serde::{Deserialize, Serialize};
 
@@ -67,7 +67,7 @@ def_id!(
     PartSystemDefId
 );
 def_id!(
-    /// A script file of a scripted kind. Index into `GameDef::scripts`; the script host (WP9)
+    /// A script file of a scripted kind. Index into `GameDef::scripts`; the script host
     /// compiles the same table in the same order.
     ScriptId
 );

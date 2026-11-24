@@ -1,4 +1,4 @@
-//! Sounds as the sim models them (docs/architecture/sim/sound.md). WP0 declares; WP10 owns.
+//! Sounds as the sim models them (docs/architecture/sim/sound.md).
 //!
 //! Audio data never reaches the sim; it only needs to know how long a sound plays.
 

@@ -1,13 +1,12 @@
 //! Built-in kinds other than the kid (docs/architecture/sim/builtins.md).
 //!
 //! One file per built-in, documented in `docs/format/builtins/<kind>.md`. Each file has the same
-//! four entry points (`param_specs`, `event_set`, `init_state`, `on_event`), and WP0 wrote the
-//! routing to all of them here, so WP6b and WP6c never edit this file. WP6a owns this file and
-//! `state.rs` (WP6b and WP6c add one variant each there and own their built-ins' files).
+//! four entry points (`param_specs`, `event_set`, `init_state`, `on_event`); this file routes
+//! every built-in to them.
 
 pub mod state;
 
-// Tier 1 (WP6a).
+// Tier 1.
 pub mod block;
 pub mod blood;
 pub mod blood_emitter;
@@ -25,7 +24,7 @@ pub mod spike;
 pub mod warp;
 pub mod world;
 
-// Tier 2 (WP6b).
+// Tier 2.
 pub mod boss_gate;
 pub mod boss_item;
 pub mod bullet_blocker;
@@ -46,7 +45,7 @@ pub mod trigger;
 pub mod vine;
 pub mod water;
 
-// Tier 3 (WP6c).
+// Tier 3.
 pub mod breakable_block;
 pub mod conveyor;
 pub mod decor;
@@ -74,8 +73,8 @@ use crate::events::{EventKind, EventSet};
 use crate::num::Real;
 use crate::world::{Ctx, Flow, InstId, KindState};
 
-/// Mechanism globals: trigger models, boss and item flags. WP6a adds the fields; WP4b added the
-/// two flag words the save slot holds.
+/// Mechanism globals: trigger models, boss and item flags, plus the two flag words the save
+/// slot holds.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub struct MechGlobals {
     /// Boss flags, one bit per boss (`SaveSlot::bosses`).
@@ -288,7 +287,6 @@ fn base_of(ctx: &Ctx, me: InstId) -> Result<Builtin, SimError> {
 }
 
 /// Runs one event on a built-in instance, in the built-in's own file (`match` on [`Builtin`]).
-/// WP0 wrote every arm, so WP6b and WP6c only fill their files.
 pub fn on_event(ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, SimError> {
     match base_of(ctx, me)? {
         Builtin::World => world::on_event(ctx, me, ev),
@@ -421,7 +419,7 @@ pub fn param_specs(b: Builtin) -> &'static [ParamSpec] {
 }
 
 /// The initial state of a new built-in instance from its params. The kid's state is
-/// `KindState::Kid` (WP5a), so `Kid` gives `Stateless` here, as do `Probe` and `Inert`.
+/// `KindState::Kid`, so `Kid` gives `Stateless` here, as do `Probe` and `Inert`.
 pub fn init_state(b: Builtin, params: &Params) -> Result<BuiltinState, ParamError> {
     match b {
         Builtin::World => world::init_state(params),

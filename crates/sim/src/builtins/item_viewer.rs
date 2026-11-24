@@ -1,5 +1,5 @@
 //! Built-in `item_viewer` (mechanics `item_viewer`; docs/architecture/sim/builtins.md;
-//! docs/format/builtins/item_viewer.md). Tier 2. WP0 creates the file; WP6b owns it.
+//! docs/format/builtins/item_viewer.md). Tier 2.
 //!
 //! Shows a collected boss reward or item: visible only while `global.boss[index]`
 //! (`kind = "boss"`) or `global.item[index]` (`kind = "item"`) is set (KAE bossItemViewer, JUN

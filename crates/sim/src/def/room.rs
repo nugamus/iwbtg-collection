@@ -1,6 +1,5 @@
 //! Rooms as loaded from a package (docs/architecture/sim/rooms.md).
 //!
-//! WP0 declares; WP7a owns afterwards.
 
 use super::ids::{GroupId, KindId, NameId, SoundId, VarId};
 use super::kind::Params;

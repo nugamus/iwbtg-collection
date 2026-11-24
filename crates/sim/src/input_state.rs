@@ -3,7 +3,6 @@
 //!
 //! Every built-in and kid action that ports a `keyboard_check_direct` calls
 //! [`InputState::direct`]; nothing else reads or clears the latch (the latch bits are private).
-//! WP0 declared; WP1 owns.
 //!
 //! The latch is CLONE_SPEC input Inferred: one "pressed since the last direct read" bit per key,
 //! shared by every direct read and consumed by each. The recorder does not model it

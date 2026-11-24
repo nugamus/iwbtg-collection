@@ -6,8 +6,7 @@
 //! alive, active instance of the traced kind, in dispatch order (`events::dispatch_order`).
 //!
 //! Reading is side-effect free except for [`KeyRead::Direct`], which consumes the
-//! `keyboard_check_direct` latch the way the recorder's own column read did (I1). WP0 declares;
-//! WP8a owns.
+//! `keyboard_check_direct` latch the way the recorder's own column read did (I1).
 
 pub mod registry;
 
@@ -950,7 +949,7 @@ mod tests {
     }
 
     /// A sim in one room with a world instance and two blocks, built without `Sim::new` so the
-    /// test runs before WP1's bodies exist. The instances are stored directly.
+    /// test needs no tick pipeline. The instances are stored directly.
     fn sim_with_blocks() -> (Sim, Vec<InstId>) {
         let mut b = GameDefBuilder::new("probe-test");
         let world_kind = b.kind(KindDef::new("world", Builtin::World));
@@ -1127,10 +1126,10 @@ mod tests {
     }
 
     /// `sample` walks `events::dispatch_order`, and a `Direct` column consumes the latch (I1):
-    /// a second sample in the same tick reads only the held state. Needs WP1's bodies of
+    /// a second sample in the same tick reads only the held state. Needs the bodies of
     /// `dispatch_order`, `InputState::latch` and `InputState::direct`.
     #[test]
-    #[ignore = "needs WP1: events::dispatch_order and InputState bodies"]
+    #[ignore = "needs events::dispatch_order and InputState bodies"]
     fn sample_rows_and_direct_reads_consume_the_latch() {
         use crate::input::InputFrame;
         let (mut sim, _) = sim_with_blocks();

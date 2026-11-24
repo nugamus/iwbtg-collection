@@ -1,5 +1,5 @@
 //! Built-in `secret_item` (mechanics `secret_item`; docs/architecture/sim/builtins.md;
-//! docs/format/builtins/secret_item.md). Tier 2. WP0 creates the file; WP6b owns it.
+//! docs/format/builtins/secret_item.md). Tier 2.
 //!
 //! A kid touch sets `global.item[item_index]` and destroys it (KAE secretItem, WAN, LR, RBF
 //! secretitem1). Create removes it when the item is already taken. The sound (KAE plays one, RBF

@@ -2,9 +2,8 @@
 //! docs/architecture/sim/scripts.md; decision 0001).
 //!
 //! `KindDef::script` is a [`ScriptId`](super::ScriptId) into `GameDef::scripts`. The sim keeps
-//! the source text only; the script host (`script::ScriptRuntime`, WP9) compiles it when the
-//! `Sim` is built, so `GameDef` never holds Rhai types. WP7a fills the table from the package;
-//! WP0 declares; WP9 owns this file.
+//! the source text only; the script host (`script::ScriptRuntime`) compiles it when the `Sim`
+//! is built, so `GameDef` never holds Rhai types. The loader fills the table from the package.
 
 /// One script file of the package.
 #[derive(Clone, PartialEq, Eq, Debug)]

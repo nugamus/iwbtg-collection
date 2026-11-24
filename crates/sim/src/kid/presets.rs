@@ -1,14 +1,11 @@
-//! Family presets: fill a draft profile's defaults from its `preset`
-//! (docs/architecture/sim/kid.md). WP5a owns it (WP5b and WP5c add their family's defaults
-//! here by asking WP5a).
+//! Family presets: fill a draft profile's defaults from its `preset` (docs/architecture/sim/kid.md).
 //!
 //! The A1 preset is the reference game, rely-the-needle-4-2 (kid/A1.md): rely's numbers, event
 //! lists and classes. Games of the same family override what differs (little-trap has no
-//! `platform_gravity_zero`, and so on). The `ladder` action that starts rely's Step list in plan
-//! 5.2 is WP5c; until it lands the Step list starts with `gravity` instead (#232). `ad_nudge`
-//! and `flip_swap`, dormant in rely, are left out for the same reason. The other families
-//! return the A1 profile with their `preset` recorded: WP5c replaces those arms. Family B is
-//! kaenbyou (kid/B.md).
+//! `platform_gravity_zero`, and so on). The `ladder` action is not in A1's Step list yet, so the
+//! list starts with `gravity` (#232); `ad_nudge` and `flip_swap`, dormant in rely, are left out
+//! for the same reason. The other families return the A1 profile with their `preset` recorded.
+//! Family B is kaenbyou (kid/B.md).
 
 use crate::def::physics::{
     AirJump, BoundaryModel, DeathStep, FallCapRule, FlipKind, GravityReapply, GroundAlso, IceModel, IceRules,

@@ -1,5 +1,5 @@
 //! Built-in `warp` (mechanics `warp`, roomChanger; docs/architecture/sim/builtins.md;
-//! docs/format/builtins/warp.md). Tier 1. WP0 creates the file; WP6a owns it.
+//! docs/format/builtins/warp.md). Tier 1.
 //!
 //! Collision with the kid, when `on_collide`: set the transition for the client, request the
 //! room (deferred to tick row 15, Confirmed), then in the same handler either destroy the kid

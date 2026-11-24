@@ -1,7 +1,6 @@
 //! Views and runner view follow (docs/architecture/sim/rooms.md, R19).
 //!
-//! Views affect gameplay through `view_xview` reads, so they are hashed sim state. WP0
-//! declares; WP4b owns.
+//! Views affect gameplay through `view_xview` reads, so they are hashed sim state.
 //!
 //! The follow is an explicit [`Camera`] preset (target, dead zone, room clamp, smoothing) built
 //! from a view each tick; it is derived state and adds nothing to `World`, so behavior and

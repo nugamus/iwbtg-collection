@@ -1,5 +1,4 @@
 //! Trace case files `crates/tools/cases/<package-id>/<case>.toml` (docs/architecture/traces.md).
-//! WP0 creates the file; WP8a owns it (the format and the importer; case contents are WP11's).
 //!
 //! A case says how to run one research trace on our sim and how to compare the result. It holds
 //! package ids and research trace names only, never creator content. `iwbtg trace import`

@@ -10,14 +10,14 @@ use crate::{builtins, kid, room, script, sound};
 /// One output event for the client.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum OutputEvent {
-    /// Room changes and transitions (WP4a, `room::RoomOutput`).
+    /// Room changes and transitions (`room::RoomOutput`).
     Room(room::RoomOutput),
-    /// Kid effects: death, blood (WP5a, `kid::KidOutput`).
+    /// Kid effects: death, blood (`kid::KidOutput`).
     Kid(kid::KidOutput),
-    /// Built-in effects (WP6a, `builtins::BuiltinOutput`).
+    /// Built-in effects (`builtins::BuiltinOutput`).
     Builtin(builtins::BuiltinOutput),
-    /// Sound play, stop, volume, pitch (WP10, `sound::SoundOutput`).
+    /// Sound play, stop, volume, pitch (`sound::SoundOutput`).
     Sound(sound::SoundOutput),
-    /// Script effects (WP9, `script::ScriptOutput`).
+    /// Script effects (`script::ScriptOutput`).
     Script(script::ScriptOutput),
 }

@@ -1,6 +1,6 @@
 //! Kid actions shared by every family: `create_defaults`, `gravity`, `walk`, `air_sprite`,
 //! `fall_cap`, `shoot`, `jump`, `release`, `vines` and the other rows of
-//! docs/architecture/sim/kid.md (rows marked 5a). WP5a owns the file.
+//! docs/architecture/sim/kid.md (rows marked 5a).
 //!
 //! Spec: kid/A1.md "Create", "Step" (actions 2-4), "playerJump", "playerVJump", "playerShoot".
 //! A named action whose behavior belongs to another work package returns
@@ -8,7 +8,7 @@
 //! skipping it.
 //!
 //! **OPEN (sound).** The jump, double jump, shoot and vine kick sounds are not played: the
-//! sound model exists (`sound::play`, WP10) but these actions do not call it yet. Sounds are output only, so no trace column
+//! sound model exists (`sound::play`) but these actions do not call it yet. Sounds are output only, so no trace column
 //! depends on them.
 
 use serde::Deserialize;
@@ -429,7 +429,7 @@ fn walk_dir(ctx: &mut Ctx, s: &KidState) -> i8 {
     }
 }
 
-/// Step action 3, steps 1-4 (A1; slip blocks are `[ice]`, WP5c).
+/// Step action 3, steps 1-4 (A1; slip blocks are `[ice]`).
 ///
 /// `h` is [`walk_dir`]. Facing changes to `h` unless the right vine distance is exactly 1 or the
 /// left vine distance is 1 or less; `hspeed` is set only when the direction is not blocked by a
@@ -617,7 +617,7 @@ fn air_sprite(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
 }
 
 /// Step action 3 step 6: `fall_cap.rule = "clamp_abs"`: `abs(vspeed) > max_vspeed` gives
-/// `sign(vspeed) * max_vspeed`. The other rules are WP5b and WP5c.
+/// `sign(vspeed) * max_vspeed`. The other rules are family-specific.
 fn fall_cap(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
     if frozen2(ctx, &state(ctx, me)?) {
         return Ok(());
@@ -656,7 +656,7 @@ fn fall_cap(ctx: &mut Ctx, me: InstId) -> Result<(), SimError> {
 
 /// Step action 3 step 7, `playerShoot`: when not frozen and Shoot was pressed this tick, and
 /// fewer than `bullet.max` bullets exist, a bullet appears at the kid's position moving
-/// `bullet.speed * facing`. (The bullet's own Create, life and the sound are `kid_bullet`, WP6a.)
+/// `bullet.speed * facing`. (The bullet's own Create, life and the sound are `kid_bullet`.)
 fn shoot(ctx: &mut Ctx, me: InstId) -> Result<Flow, SimError> {
     let phys = ctx.physics();
     let s = state(ctx, me)?;

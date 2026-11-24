@@ -1,4 +1,4 @@
-//! Timelines (docs/architecture/sim/tick.md row 3, R6, R6b). WP0 declares; WP2 owns.
+//! Timelines (docs/architecture/sim/tick.md row 3, R6, R6b).
 
 /// One timeline. Its moments run as `EventKind::Moment(step)` on the instance that runs it.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]

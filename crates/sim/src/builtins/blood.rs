@@ -1,6 +1,5 @@
 //! Built-in `blood` (a blood drop; CLONE_SPEC numbers "Hidden RNG consumers", kid/A1.md Death,
-//! kid/A3.md blood; docs/architecture/sim/builtins.md; docs/format/builtins/blood.md). Tier 1. WP0
-//! creates the file; WP6a owns it.
+//! kid/A3.md blood; docs/architecture/sim/builtins.md; docs/format/builtins/blood.md). Tier 1.
 //!
 //! Create draws from the effects stream (`gm8`: the one gameplay RNG), in this order (Confirmed
 //! (recorder) rely `num-rng-b.csv`, all 40 blood of frame 15 bit for bit): the frame,

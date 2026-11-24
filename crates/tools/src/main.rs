@@ -1,7 +1,6 @@
 //! `iwbtg`: the command-line tool for agents and CI (docs/architecture/cli.md, The iwbtg CLI).
 //!
-//! Commands are described in docs/architecture/cli.md: WP8a owns `trace` and `pkg`, WP8b
-//! `replay`.
+//! Commands are described in docs/architecture/cli.md.
 
 mod assets_cmd;
 mod baseline;

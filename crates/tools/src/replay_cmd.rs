@@ -1,4 +1,4 @@
-//! `iwbtg replay run`: ticks, splits, ranked time, final hash (docs/architecture/cli.md, WP8b).
+//! `iwbtg replay run`: ticks, splits, ranked time, final hash (docs/architecture/cli.md).
 //!
 //! Runs a package headless on a `.iwbr` replay or an action-named `.inputs` file and prints seven
 //! lines:
@@ -1166,8 +1166,8 @@ time: {}
     }
 
     /// The golden one-room package on its `.inputs`: 61 ticks, the run starts at tick 1, and a
-    /// second run gives the same hash. Until WP10's `sound::tick` lands the sim reaches a WP0
-    /// stub; then the test says so and passes (a stub panic aborts the CLI).
+    /// second run gives the same hash. A stub panic aborts the CLI; the test says so if one is
+    /// reached.
     #[test]
     fn the_golden_one_room_package_runs_twice_to_one_hash() {
         let golden = Path::new(env!("CARGO_MANIFEST_DIR")).join("../sim/tests/golden");

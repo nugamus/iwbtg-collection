@@ -1,9 +1,9 @@
 //! The `physics.toml` sections that only families A2-A5, B and C use: `[ice]`, `[slope]`,
 //! `[ladder]`, `[flip]` (docs/architecture/sim/kid.md).
 //!
-//! Split out of `physics.rs` (WP5a) so WP5b and WP5c add their fields without editing WP5a's
-//! file. WP0 declares; WP5c owns this file. WP5b's only field here is the `yflag` flip model,
-//! which WP0 already lists in [`FlipKind`]; anything else WP5b needs goes through WP5c.
+//! Split out of `physics.rs` so the family-specific sections stay separate. The only family B
+//! field here is the `yflag` flip model, which [`FlipKind`] already lists; the remaining
+//! sections belong to families A2-A5 and C.
 
 use serde::Deserialize;
 
@@ -259,8 +259,7 @@ pub enum LadderEntry {
     UpOnly,
 }
 
-/// `[flip]`: how gravity flips (docs/architecture/sim/kid.md flip rows). WP5c adds the other fields
-/// (`mask_flipped`, ...).
+/// `[flip]`: how gravity flips (docs/architecture/sim/kid.md flip rows).
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, PartialEq, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields, default)]
@@ -280,10 +279,10 @@ pub enum FlipKind {
     /// The game has no gravity flip.
     #[default]
     None,
-    /// Group A (11 games): swap to the flipped kid object at y - 4 (`flip_swap`, WP5c).
+    /// Group A (11 games): swap to the flipped kid object at y - 4 (`flip_swap`).
     SwapObject,
-    /// Family B: the yflag (WP5b).
+    /// Family B: the yflag.
     Yflag,
-    /// Family C: the sign of grav (WP5c).
+    /// Family C: the sign of grav.
     GravSign,
 }

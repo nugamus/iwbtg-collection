@@ -1,5 +1,4 @@
 //! Contact moves (docs/architecture/sim/collision.md, C10, C11; the bounce, C14, is `bounce.rs`).
-//! WP0 declares; WP3 owns.
 //!
 //! Both moves are computed on positions only ([`contact_steps`], [`outside_steps`]), with a
 //! closure that answers "does `me` placed here overlap a solid", and write `x` and `y` once at

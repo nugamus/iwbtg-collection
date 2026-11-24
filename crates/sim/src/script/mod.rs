@@ -2,7 +2,7 @@
 //!
 //! The sim talks to scripts only through [`ScriptHost`], implemented by [`ScriptRuntime`], so
 //! the sim core never names Rhai types. `Sim` owns one `ScriptRuntime`, built from
-//! `GameDef::scripts`, and lends it to every [`Ctx`] as `ctx.scripts`. WP0 declares; WP9 owns.
+//! `GameDef::scripts`, and lends it to every [`Ctx`] as `ctx.scripts`.
 
 pub mod api;
 pub mod array;
@@ -47,7 +47,7 @@ pub trait ScriptHost {
     fn on_event(&self, ctx: &mut Ctx, me: InstId, ev: &EventKind) -> Result<Flow, ScriptError>;
 }
 
-/// A scripted instance's state. WP9 adds the fields.
+/// A scripted instance's state.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub struct ScriptState {}
 

@@ -1,7 +1,5 @@
 //! The simulation handle the client, server and CLI drive (docs/architecture/sim/tick.md).
 //!
-//! WP0 declared; WP1 owns the method bodies.
-
 use std::sync::Arc;
 
 use crate::def::GameDef;
@@ -42,7 +40,7 @@ pub struct StepResult {
     pub tick: u64,
     /// Running, halted or ended after the step.
     pub status: SimStatus,
-    /// Timing splits recorded this tick (WP8b).
+    /// Timing splits recorded this tick.
     pub splits: Vec<Split>,
 }
 
@@ -53,7 +51,7 @@ pub struct Sim {
     pub(crate) rules: RunnerRules,
     pub(crate) world: World,
     pub(crate) options: SimOptions,
-    /// The compiled scripts, lent to each `Ctx` as `ctx.scripts` (WP9).
+    /// The compiled scripts, lent to each `Ctx` as `ctx.scripts`.
     pub(crate) scripts: ScriptRuntime,
     /// Between `step_rows` and `finish_step`.
     pub(crate) rows_done: bool,

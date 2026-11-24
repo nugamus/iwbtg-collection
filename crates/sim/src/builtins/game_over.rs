@@ -1,6 +1,5 @@
 //! Built-in `game_over` (GAMEOVER; kid/A1.md Death, kid/A2.md, kid/B.md;
-//! docs/architecture/sim/builtins.md; docs/format/builtins/game_over.md). Tier 1. WP0 creates
-//! the file; WP6a owns it.
+//! docs/architecture/sim/builtins.md; docs/format/builtins/game_over.md). Tier 1.
 //!
 //! Create places it relative to view 0 (`offset_x`, `offset_y`: rely 400, 304; POR 480, 270;
 //! A2 and B 400, 300) and, with a `delay` (A2 and B: 30), hides it until Alarm 0. The kid's death

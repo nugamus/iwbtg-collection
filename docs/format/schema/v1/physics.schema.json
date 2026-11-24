@@ -41,7 +41,7 @@
       ]
     },
     "A4Action": {
-      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`; WP5c adds one variant per action it implements.",
+      "description": "The actions this file implements, by their `physics.toml` names (snake case). Part of\n`kid::KidAction`.",
       "not": {}
     },
     "A5Action": {
@@ -89,12 +89,12 @@
         },
         {
           "const": "cur_jumps",
-          "description": "The family B counter (WP5b).",
+          "description": "The family B counter.",
           "type": "string"
         },
         {
           "const": "djump_then_tjump",
-          "description": "`djump` then `tjump` (showdown, WP5c).",
+          "description": "`djump` then `tjump` (showdown).",
           "type": "string"
         }
       ]
@@ -140,7 +140,7 @@
       ]
     },
     "BRun": {
-      "description": "The collision runs this file implements, by their `physics.toml` names (snake case). Part\nof `kid::KidCollisionRun`; WP5b adds one variant per run it implements.",
+      "description": "The collision runs this file implements, by their `physics.toml` names (snake case). Part\nof `kid::KidCollisionRun`.",
       "not": {}
     },
     "BlockRun": {
@@ -193,12 +193,12 @@
         },
         {
           "const": "outside_room_kill",
-          "description": "Outside Room kills the kid unless a room changer overlaps (family B, WP5b).",
+          "description": "Outside Room kills the kid unless a room changer overlaps (family B).",
           "type": "string"
         },
         {
           "const": "end_step_origin",
-          "description": "The origin test runs in End Step (WP5c).",
+          "description": "The origin test runs in End Step.",
           "type": "string"
         }
       ]
@@ -578,24 +578,24 @@
         },
         {
           "const": "swap_object",
-          "description": "Group A (11 games): swap to the flipped kid object at y - 4 (`flip_swap`, WP5c).",
+          "description": "Group A (11 games): swap to the flipped kid object at y - 4 (`flip_swap`).",
           "type": "string"
         },
         {
           "const": "yflag",
-          "description": "Family B: the yflag (WP5b).",
+          "description": "Family B: the yflag.",
           "type": "string"
         },
         {
           "const": "grav_sign",
-          "description": "Family C: the sign of grav (WP5c).",
+          "description": "Family C: the sign of grav.",
           "type": "string"
         }
       ]
     },
     "FlipModel": {
       "additionalProperties": false,
-      "description": "`[flip]`: how gravity flips (docs/architecture/sim/kid.md flip rows). WP5c adds the other fields\n(`mask_flipped`, ...).",
+      "description": "`[flip]`: how gravity flips (docs/architecture/sim/kid.md flip rows).",
       "properties": {
         "model": {
           "$ref": "#/$defs/FlipKind",
@@ -644,7 +644,7 @@
         },
         {
           "const": "end_step_slope",
-          "description": "Other models (WP5b, WP5c).",
+          "description": "Other models.",
           "type": "string"
         },
         {
@@ -902,51 +902,51 @@
       "anyOf": [
         {
           "$ref": "#/$defs/CommonAction",
-          "description": "Every family (WP5a)."
+          "description": "Every family."
         },
         {
           "$ref": "#/$defs/A1Action",
-          "description": "Family A1 (WP5a)."
+          "description": "Family A1."
         },
         {
           "$ref": "#/$defs/A2Action",
-          "description": "Family A2 (WP5c)."
+          "description": "Family A2."
         },
         {
           "$ref": "#/$defs/A3Action",
-          "description": "Family A3 (WP5c)."
+          "description": "Family A3."
         },
         {
           "$ref": "#/$defs/A4Action",
-          "description": "Family A4 (WP5c)."
+          "description": "Family A4."
         },
         {
           "$ref": "#/$defs/A5Action",
-          "description": "Family A5 (WP5c)."
+          "description": "Family A5."
         },
         {
           "$ref": "#/$defs/BAction",
-          "description": "Family B (WP5b)."
+          "description": "Family B."
         },
         {
           "$ref": "#/$defs/CAction",
-          "description": "Family C (WP5c)."
+          "description": "Family C."
         },
         {
           "$ref": "#/$defs/FlipAction",
-          "description": "Gravity flips (WP5c)."
+          "description": "Gravity flips."
         },
         {
           "$ref": "#/$defs/IceAction",
-          "description": "Slip blocks and ice (WP5c)."
+          "description": "Slip blocks and ice."
         },
         {
           "$ref": "#/$defs/LadderAction",
-          "description": "Ladders (WP5c)."
+          "description": "Ladders."
         },
         {
           "$ref": "#/$defs/SlopeAction",
-          "description": "Slopes (WP5c)."
+          "description": "Slopes."
         },
         {
           "$ref": "#/$defs/KidScriptSlot",
@@ -1003,27 +1003,27 @@
       "anyOf": [
         {
           "$ref": "#/$defs/BlockRun",
-          "description": "`block_standard` and friends (WP5a)."
+          "description": "`block_standard` and friends."
         },
         {
           "$ref": "#/$defs/PlatformRun",
-          "description": "`platform_standard` (WP5a)."
+          "description": "`platform_standard`."
         },
         {
           "$ref": "#/$defs/BRun",
-          "description": "Family B runs (WP5b)."
+          "description": "Family B runs."
         },
         {
           "$ref": "#/$defs/DeathRun",
-          "description": "`kill` (WP5a)."
+          "description": "`kill`."
         },
         {
           "$ref": "#/$defs/SlopeRun",
-          "description": "Slope runs (WP5c)."
+          "description": "Slope runs."
         },
         {
           "$ref": "#/$defs/MovingBlockRun",
-          "description": "poronkusema `moving_block_por` (WP5c)."
+          "description": "poronkusema `moving_block_por`."
         },
         {
           "$ref": "#/$defs/KidScriptSlot",
@@ -1697,12 +1697,12 @@
         },
         {
           "const": "delta_y",
-          "description": "The platform's `y - yprevious` (family B, WP5b).",
+          "description": "The platform's `y - yprevious` (family B).",
           "type": "string"
         },
         {
           "const": "yspeed_flipped",
-          "description": "Family C (WP5c).",
+          "description": "Family C.",
           "type": "string"
         }
       ]
@@ -1958,7 +1958,7 @@
         },
         {
           "const": "latched_flags",
-          "description": "Game-side latched flags (wanna, rori, fairy-tale, showdown; WP5c).",
+          "description": "Game-side latched flags (wanna, rori, fairy-tale and showdown).",
           "type": "string"
         }
       ]
@@ -2113,12 +2113,12 @@
         },
         {
           "const": "water_unlimited",
-          "description": "Family B (WP5b).",
+          "description": "Family B.",
           "type": "string"
         },
         {
           "const": "water3_keeps",
-          "description": "Family C (WP5c).",
+          "description": "Family C.",
           "type": "string"
         }
       ]
@@ -2169,7 +2169,7 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "A profile as written, before the preset fills its defaults. `toml::from_str` target of\n`crates/format` (WP7b); `kid::presets::apply` turns it into a [`PhysicsProfile`]: the\npreset's profile with every field written here put over it. The sections of families that\nhave not landed (`[ice]`, `[slope]`, `[ladder]`, `[flip]`) replace the preset's whole.",
+  "description": "A profile as written, before the preset fills its defaults. `toml::from_str` target of\n`crates/format`; `kid::presets::apply` turns it into a [`PhysicsProfile`]: the\npreset's profile with every field written here put over it. The sections of families that\nhave not landed (`[ice]`, `[slope]`, `[ladder]`, `[flip]`) replace the preset's whole.",
   "properties": {
     "bullet": {
       "anyOf": [
@@ -2411,7 +2411,7 @@
           "type": "null"
         }
       ],
-      "description": "`[sprites]`: sprite names. `kid::presets::apply` leaves the profile's `sprites` empty;\nthe loader (WP7b) resolves these names to ids and fills them in."
+      "description": "`[sprites]`: sprite names. `kid::presets::apply` leaves the profile's `sprites` empty;\nthe loader resolves these names to ids and fills them in."
     },
     "vine": {
       "anyOf": [

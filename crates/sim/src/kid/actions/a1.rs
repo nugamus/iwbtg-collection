@@ -1,5 +1,5 @@
 //! Kid actions specific to family A1 (kid/A1.md): `platform_gravity_zero`, `fade_in`
-//! (docs/architecture/sim/kid.md). WP5a owns it.
+//! (docs/architecture/sim/kid.md).
 
 use serde::Deserialize;
 

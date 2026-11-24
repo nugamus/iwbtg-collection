@@ -1,8 +1,7 @@
 //! The kid's physics profile, `physics.toml` (docs/architecture/sim/kid.md).
 //!
-//! WP0 declares the skeleton: every section is an empty struct. WP5a owns the file and adds the
-//! fields of 5.2 and 5.3 (WP5b asks WP5a for its fields in WP5a's sections). The `[ice]`,
-//! `[slope]`, `[ladder]` and `[flip]` sections live in `physics_ext.rs` (WP5c). Every struct
+//! Every section is an explicit struct with named fields. The `[ice]`,
+//! `[slope]`, `[ladder]` and `[flip]` sections live in `physics_ext.rs`. Every struct
 //! denies unknown fields, so a typo in a profile is a load error, not a silently ignored key.
 
 use serde::{Deserialize, Deserializer};
@@ -114,7 +113,7 @@ macro_rules! profile_section {
 }
 
 profile_section! {
-    /// `[water]` (WP5a).
+    /// `[water]`.
     WaterRules;
 }
 
@@ -186,7 +185,7 @@ pub enum VineKeys {
     /// This tick's key press edge (A1, A2, B).
     #[default]
     Edges,
-    /// Game-side latched flags (wanna, rori, fairy-tale, showdown; WP5c).
+    /// Game-side latched flags (wanna, rori, fairy-tale and showdown).
     LatchedFlags,
 }
 
@@ -201,7 +200,7 @@ pub struct KidInput {
 }
 
 /// `[events]`: ordered action lists per event (docs/architecture/sim/kid.md). Collisions, keys, alarms and the
-/// boundary arrive with the collision runs and death (WP5a.3, WP5a.4).
+/// boundary arrive with the collision runs and death.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct KidEvents {
@@ -238,9 +237,9 @@ pub enum BoundaryModel {
     /// whatever the room, the wrap adds or subtracts 800 sideways, adds 608 at the top and
     /// subtracts 600 (not 608) at the bottom.
     IntersectOriginFixed,
-    /// Outside Room kills the kid unless a room changer overlaps (family B, WP5b).
+    /// Outside Room kills the kid unless a room changer overlaps (family B).
     OutsideRoomKill,
-    /// The origin test runs in End Step (WP5c).
+    /// The origin test runs in End Step.
     EndStepOrigin,
 }
 
@@ -336,9 +335,9 @@ pub enum AirJump {
     /// The `djump` flag (A1-A5).
     #[default]
     Djump,
-    /// The family B counter (WP5b).
+    /// The family B counter.
     CurJumps,
-    /// `djump` then `tjump` (showdown, WP5c).
+    /// `djump` then `tjump` (showdown).
     DjumpThenTjump,
 }
 
@@ -352,9 +351,9 @@ pub enum WaterAir {
     /// A water 2 one pixel below allows the air jump even without `djump` (A1).
     #[default]
     Water2WithoutFlag,
-    /// Family B (WP5b).
+    /// Family B.
     WaterUnlimited,
-    /// Family C (WP5c).
+    /// Family C.
     Water3Keeps,
 }
 
@@ -474,7 +473,7 @@ pub enum GravityReapply {
     /// Every Step, unless the kid is on a ladder (A1: Step action 2.4).
     #[default]
     Step,
-    /// Other models (WP5b, WP5c).
+    /// Other models.
     EndStepSlope,
     /// Only at Create.
     CreateOnly,
@@ -555,9 +554,9 @@ pub enum PlatformTake {
     /// The platform's `vspeed` (A1).
     #[default]
     Vspeed,
-    /// The platform's `y - yprevious` (family B, WP5b).
+    /// The platform's `y - yprevious` (family B).
     DeltaY,
-    /// Family C (WP5c).
+    /// Family C.
     YspeedFlipped,
 }
 
@@ -571,7 +570,7 @@ pub enum VineModel {
     /// Left vine below `left_below`, right vine exactly `right_equal` (A, B).
     #[default]
     DistanceAsym,
-    /// Both sides within one pixel (C, WP5c).
+    /// Both sides within one pixel (C).
     DistanceSymEarly,
 }
 
@@ -664,7 +663,7 @@ pub struct KidSounds {
     pub death: Option<SoundId>,
 }
 
-/// `[sprites]`: the kid's sprites by role. Package files give names; the loader (WP7b) resolves
+/// `[sprites]`: the kid's sprites by role. Package files give names; the loader resolves
 /// them to ids. A role the game does not have stays `None` and the action leaves the sprite
 /// alone.
 #[derive(Clone, PartialEq, Eq, Debug, Default, Deserialize)]
@@ -734,7 +733,7 @@ pub struct DeathRules {
     /// In a `Select` room a kill goes to the same room again and destroys the kid, and nothing
     /// else happens (rely's special case).
     pub select_room_reset: bool,
-    /// Death stops the music. Not built (WP10); `true` is `Unsupported`.
+    /// Death stops the music. Not built; `true` is `Unsupported`.
     pub stop_music: bool,
     /// The blood emitter and GAMEOVER use the first kid's position and gravity instead of the
     /// killed kid's (family B with several kids, R21).
@@ -998,7 +997,7 @@ pub struct KidScriptDraft {
 }
 
 /// A profile as written, before the preset fills its defaults. `toml::from_str` target of
-/// `crates/format` (WP7b); `kid::presets::apply` turns it into a [`PhysicsProfile`]: the
+/// `crates/format`; `kid::presets::apply` turns it into a [`PhysicsProfile`]: the
 /// preset's profile with every field written here put over it. The sections of families that
 /// have not landed (`[ice]`, `[slope]`, `[ladder]`, `[flip]`) replace the preset's whole.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1046,7 +1045,7 @@ pub struct PhysicsProfileDraft {
     /// `[misc]`.
     pub misc: Option<KidMiscDraft>,
     /// `[sprites]`: sprite names. `kid::presets::apply` leaves the profile's `sprites` empty;
-    /// the loader (WP7b) resolves these names to ids and fills them in.
+    /// the loader resolves these names to ids and fills them in.
     pub sprites: Option<KidSpriteNames>,
     /// `[sounds]`: sound names; the loader resolves them to ids like the sprite names.
     pub sounds: Option<KidSoundNames>,

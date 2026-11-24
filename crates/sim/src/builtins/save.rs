@@ -1,5 +1,5 @@
 //! Built-in `save` (mechanics `save`, kid specs "Saving"; docs/architecture/sim/builtins.md;
-//! docs/format/builtins/save.md). Tier 1. WP0 creates the file; WP6a owns it.
+//! docs/format/builtins/save.md). Tier 1.
 //!
 //! A save point saves when the kid touches it with the right input (`on_touch`), when a bullet
 //! hits it (`on_shot`), or both. The save itself is `save::save_now` with the game's position

@@ -19,7 +19,6 @@
 //!   `floor(u / |scale|)`, and the box is exactly the set of offsets that sample inside the
 //!   mask. Scale 0 has no pixels. Order: scale and mirror first, then rotation.
 //!
-//! WP3 owns.
 
 use crate::def::IRect;
 use crate::error::SimError;

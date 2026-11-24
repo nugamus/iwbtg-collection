@@ -1,6 +1,5 @@
 //! Kinds, parameters and dispatch ranks (docs/architecture/sim/world.md; docs/format/objects.md).
 //!
-//! WP0 declares; WP7a owns afterwards.
 
 use std::collections::BTreeMap;
 
@@ -17,7 +16,7 @@ pub struct KindDef {
     pub name: String,
     /// The built-in whose handlers run for this kind.
     pub base: Builtin,
-    /// A script whose handlers run after the base handler (WP9).
+    /// A script whose handlers run after the base handler.
     pub script: Option<ScriptId>,
     /// Default sprite.
     pub sprite: Option<SpriteId>,

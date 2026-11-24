@@ -1,5 +1,5 @@
 //! `iwbtg trace import`: case skeletons, sorting traces into the three kinds of
-//! docs/architecture/traces.md. WP0 creates the file; WP8a owns it.
+//! docs/architecture/traces.md.
 //!
 //! The importer reads the recorder command line from the `.inputs` header
 //! (`iwbtg_sim::input::trace_command`; the tracer's version string is not used) and sorts the
@@ -17,7 +17,7 @@
 //!    columns must be mapped to `save.*` probe columns by hand.
 //!
 //! Original names go through the package's `tests/trace-map.toml` (rooms and objects). Until
-//! `iwbtg_format::tracemap` (WP7a) has fields, the importer reads the two tables it needs itself.
+//! `iwbtg_format::tracemap` has fields, the importer reads the two tables it needs itself.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

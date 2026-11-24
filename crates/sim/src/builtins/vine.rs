@@ -1,5 +1,5 @@
 //! Built-in `vine` (WalljumpL, WalljumpR; mechanics `vine`; docs/architecture/sim/builtins.md;
-//! docs/format/builtins/vine.md). Tier 2. WP0 creates the file; WP6b owns it.
+//! docs/format/builtins/vine.md). Tier 2.
 //!
 //! No events: all the logic is in the kid, which reads the `vine_l` and `vine_r` classes. `side`
 //! picks the class and `mask_columns` the mask strip, both applied at load; this file declares

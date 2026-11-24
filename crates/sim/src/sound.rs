@@ -13,7 +13,7 @@
 //! `--stub-dlls` option stubs only the DLLs.
 //!
 //! **DLL adapters** ([`supersound`], [`gmfmod`], [`cleanmem`]) are called by the script host
-//! (WP9) with the arguments a GML `external_call` passes. Which adapters answer is the run's
+//! with the arguments a GML `external_call` passes. Which adapters answer is the run's
 //! named [`SoundModel`] (`rules.sound.model`): `event` (standard) models neither, `supersound`
 //! and `gmfmod` model one, and `stub` models neither and returns each call's stub value. A
 //! recorder `--stub-dlls` run ([`DllMode::Stub`]) forces `stub` ([`Ctx::sound_model`]).

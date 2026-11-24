@@ -1,5 +1,5 @@
 //! Slip blocks and ice: `[ice] model = "slip"` (in `walk`) and `ice_temp_hspeed`
-//! (docs/architecture/sim/kid.md, N11). WP5c owns it.
+//! (docs/architecture/sim/kid.md, N11).
 
 use serde::Deserialize;
 

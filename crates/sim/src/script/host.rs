@@ -1,6 +1,6 @@
 //! The Rhai host (`Engine::new_raw()`, our packages only, `eval`, `**`, `**=` disabled;
 //! docs/architecture/sim/scripts.md, decision 0001). [`Iws`] is the engine; [`ScriptRuntime`] is the
-//! game's compiled scripts on top of it, and runs the script part of an event (WP9.2).
+//! game's compiled scripts on top of it, and runs the script part of an event.
 //!
 //! World access without unsafe code: while a script runs, `on_event` parks the live `World` in
 //! [`Shared`] (swapping a placeholder into `ctx.w`) and the registered functions work on the
@@ -259,7 +259,7 @@ impl ScriptRuntime {
 
     /// The events script `id` handles, from the functions it defines (`create` always runs and is
     /// not part of an event set). Collision handlers are not included: which classes a
-    /// `collide(other)` listens to is up to the kind (WP6c.4).
+    /// `collide(other)` listens to is up to the kind.
     pub fn event_set(&self, id: ScriptId) -> EventSet {
         let mut set = EventSet::default();
         let Some(script) = self
@@ -437,7 +437,7 @@ impl ScriptHost for ScriptRuntime {
     }
 }
 
-// ---- The IWS engine (WP9.1) ----
+// ---- The IWS engine ----
 
 use std::cell::{Cell, OnceCell, RefCell};
 use std::rc::{Rc, Weak};

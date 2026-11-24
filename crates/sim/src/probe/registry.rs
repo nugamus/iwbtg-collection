@@ -1,5 +1,5 @@
 //! GM variable names to probe fields (docs/architecture/traces.md): `djump`, `curJumps`,
-//! `jump[1]`, `alarm[0]`, `image_index`, ... WP0 declares; WP8a owns.
+//! `jump[1]`, `alarm[0]`, `image_index`, ...
 //!
 //! [`resolve`] maps one variable name to a [`FieldRef`]. [`column`] reads a whole probe column
 //! expression in our names (a trace case's `vars` values): a variable of the row's instance, of

@@ -1,6 +1,6 @@
 //! World and context API (docs/architecture/sim/world.md).
 //!
-//! WP0 fixed the signatures; WP1 owns the file. CLONE_SPEC rooms and tick loop, Confirmed
+//! CLONE_SPEC rooms and tick loop, Confirmed
 //! (recorder): `instance_create` runs Create at once, inside the call
 //! (traces/showdown/tr-room-14.md); after `instance_destroy` the rest of the current event still
 //! runs, the instance gets no later events (traces/rely-the-needle-4-2/tr-room-03-a-log.csv row
@@ -204,7 +204,7 @@ impl World {
     }
 
     /// The first of `ids` by [`TickRules::first_rule`] (R21), for queries that found several
-    /// candidates (WP3 sorts its results through this, so the grid never decides). Ids that name
+    /// candidates (the grid sorts its results through this, so the grid never decides). Ids that name
     /// no stored instance are ignored.
     pub fn first_among(&self, ids: impl IntoIterator<Item = InstId>, rules: &TickRules) -> Option<InstId> {
         let found = ids.into_iter().filter_map(|id| self.get(id));

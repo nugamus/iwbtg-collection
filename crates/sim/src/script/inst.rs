@@ -1,4 +1,4 @@
-//! The instance API of the script engine (architecture "Script API"; WP9.2).
+//! The instance API of the script engine (architecture "Script API").
 //!
 //! A script sees an instance as an [`Inst`] handle. Instance ids are never reused, so a handle
 //! to a destroyed instance stays safe: reads and writes through it are script errors, and

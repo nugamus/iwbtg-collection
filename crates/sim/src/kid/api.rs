@@ -1,7 +1,6 @@
 //! Kid access for other WPs (docs/architecture/sim/world.md).
 //!
-//! Built-ins never touch `KidState` fields directly; they call these. WP0 declared the
-//! signatures; WP5a owns the bodies.
+//! Built-ins never touch `KidState` fields directly; they call these.
 //!
 //! Functions that cannot return an error do nothing, or give a neutral value, for an instance
 //! that is not a live kid (documented on each); the ones that return `Result` report a broken
@@ -268,7 +267,7 @@ pub fn kill(ctx: &mut Ctx, kid: InstId, cause: KillCause) -> Result<Flow, SimErr
 /// `ladderjump`, `frozen`, `frozen2`, `yflag`, `facing`, `tempHspeed`, `maxSpeed`, `maxVspeed`,
 /// `maxFallSpeed`, `muteki`, `scale`, `maxJumps`, `infJump`, and `jump[n]` (1-based like family B's
 /// array: `jump[1]` is the ground jump; `jump` alone is the same; `jump2` and `jump3` are `jump[2]` and
-/// `jump[3]`). WP5b and WP5c add the names of their own fields.
+/// `jump[3]`). Families B and C add the names of their own fields.
 pub fn read_field(w: &World, kid: InstId, f: &KidField) -> Option<Value> {
     let s = state(w, kid)?;
     let real = |r: Real| Some(Value::Real(r));
