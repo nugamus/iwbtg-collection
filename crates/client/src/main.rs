@@ -54,6 +54,7 @@ client_modules! {
     skip,
     pause,
     results,
+    viewer,
     stats,
     replays,
     import,
