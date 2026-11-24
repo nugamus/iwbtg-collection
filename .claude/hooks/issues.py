@@ -1,6 +1,7 @@
 """Issue-tracking harness for agents, shared by the client, research and games repos.
 
-  python -I .claude/hooks/issues.py start   SessionStart: inject milestone progress, next issues,
+  python -I .claude/hooks/issues.py start   SessionStart: inject milestone progress, the next
+                                            agent-ready issues with their `## Context` block,
                                             answered needs-user questions and the triage queue.
   python -I .claude/hooks/issues.py stop    Stop: a turn that changed files must end with a
                                             "Findings:" line (issues filed, or "none").
@@ -34,12 +35,34 @@ WORKSPACE = workspace_of(REPO)
 AGENT_MARK = "<!-- agent -->"  # agents start every issue comment with this, so user replies stand out
 EDIT_TOOLS = {"Edit", "Write", "NotebookEdit"}
 FINDINGS = re.compile(r"^\W*findings\W*:", re.I | re.M)
+# The `## Context` section an agent-ready issue carries (#788), and how much of it `start` prints.
+CONTEXT_SECTION = re.compile(r"^## Context[ \t]*\r?\n(.*?)(?=^## |\Z)", re.M | re.S)
+CONTEXT_LINES = 6
+
+
+def context_block(body):
+    """The `## Context` section of an issue body, trimmed; `""` when the issue has none."""
+    if not body:
+        return ""
+    match = CONTEXT_SECTION.search(body)
+    return match.group(1).strip() if match else ""
+
+
+def context_lines(block):
+    """The compact, indented lines `start` prints under an issue."""
+    if not block:
+        return ["  (no ## Context block)"]
+    lines = [line.strip() for line in block.splitlines() if line.strip()]
+    out = [f"  {line}" for line in lines[:CONTEXT_LINES]]
+    if len(lines) > CONTEXT_LINES:
+        out.append("  … (rest in the issue)")
+    return out
 
 FRAGMENT = """
 fragment R on Repository {
   milestones(first: 30, states: OPEN) { nodes { title
     open: issues(states: OPEN) { totalCount } closed: issues(states: CLOSED) { totalCount } } }
-  ready: issues(first: 100, states: OPEN, labels: ["agent-ready"]) { nodes { number title
+  ready: issues(first: 100, states: OPEN, labels: ["agent-ready"]) { nodes { number title body
     milestone { title } blockedBy(first: 20) { nodes { state } } subIssuesSummary { total completed }
     labels(first: 20) { nodes { name } } } }
   claimed: issues(first: 50, states: OPEN, labels: ["in-progress"]) { nodes { number title } }
@@ -343,7 +366,9 @@ def start():
             if "in-progress" in [l["name"] for l in i["labels"]["nodes"]]:
                 continue  # another agent has claimed it
             if i["milestone"] and all(b["state"] == "CLOSED" for b in i["blockedBy"]["nodes"]) and s["total"] == s["completed"]:
-                ready.append((ms_key(i["milestone"]["title"]), name != REPOS["c"], i["number"], f"{name}#{i['number']} {i['title']} [{i['milestone']['title']}]"))
+                ready.append((ms_key(i["milestone"]["title"]), name != REPOS["c"], i["number"],
+                              f"{name}#{i['number']} {i['title']} [{i['milestone']['title']}]",
+                              context_block(i.get("body"))))
         for i in repo["user"]["nodes"]:
             last = i["comments"]["nodes"]
             if last and AGENT_MARK not in last[0]["body"]:
@@ -381,7 +406,10 @@ def start():
     wt = worktrees()
     if wt:
         lines += ["", "Worktrees (lanes keep theirs between issues):"] + wt
-    lines += ["", "Next unblocked agent-ready issues (unclaimed):"] + [f"- {r[3]}" for r in sorted(ready)[:10]]
+    lines += ["", "Next unblocked agent-ready issues (unclaimed), with their Context:"]
+    for r in sorted(ready)[:10]:
+        lines.append(f"- {r[3]}")
+        lines += context_lines(r[4])
     lines += ["", f"{waiting} needs-user issue(s) still wait for the user.",
               "Rules: CLAUDE.md, Issues. Unless the user names other work, offer to start the first issue above."]
     emit(red + fidelity_stale() + warn + "\n".join(lines))
@@ -532,6 +560,20 @@ def test():
         # Cached successes remain usable after a failed refresh; issue creation/Stop are unaffected.
         with patch("subprocess.run", side_effect=AssertionError("cache should be reused")):
             assert github_status("query", cache)[0]["c"]["ok"]
+    # #788: an agent-ready issue's `## Context` is printed under its line, compactly; an issue
+    # without one says so instead of printing the whole body.
+    body = ("## Goal\n\nx\n\n## Context\n\n- Code: `a.rs`\n- Test: `cargo test`\n\n"
+            "## Done when\n\n- [ ] x\n")
+    assert context_block(body) == "- Code: `a.rs`\n- Test: `cargo test`"
+    assert context_block("## Goal\n\nx\n## Done when\n") == ""
+    assert context_block("") == "" and context_block(None) == ""
+    assert context_block("## Contextual\n- not this\n") == ""
+    assert context_block("## Context\n") == ""
+    assert context_lines(context_block(body)) == ["  - Code: `a.rs`", "  - Test: `cargo test`"]
+    assert context_lines("") == ["  (no ## Context block)"]
+    many = "\n".join(f"- line {i}" for i in range(CONTEXT_LINES + 2))
+    assert context_lines(many)[-1] == "  … (rest in the issue)"
+    assert len(context_lines(many)) == CONTEXT_LINES + 1
     # Main CI (#595): a failed check is red and loud; cancelled or running commits defer to older ones.
     def commit(oid, *checks):
         return {"oid": oid * 40, "messageHeadline": f"PR {oid}", "statusCheckRollup": {"contexts": {"nodes": list(checks)}}}
