@@ -89,10 +89,13 @@ No converter, census or trace data is committed to this public repo.
 
 ## Publishing
 
-The workflow uses the `github-pages` environment and Actions deployment (`actions/deploy-pages`). If Pages is not enabled for the repository, enable it once:
+The workflow publishes `progress/index.html` to the `gh-pages` branch (with `.nojekyll`), and Pages serves that branch at <https://nugamus.github.io/iwbtg-collection/>. It also commits the refreshed `data.json`, `history.json` and `index.html` back to `main` when the token may push; the published page always comes from the current run's generated files.
+
+If Pages is ever reset, point it at the branch once:
 
 ```sh
-gh api -X POST repos/nugamus/iwbtg-collection/pages -f build_type=workflow
+gh api -X PUT repos/nugamus/iwbtg-collection/pages \
+  -f build_type=legacy -f 'source[branch]=gh-pages' -f 'source[path]=/'
 ```
 
 The generated page is also readable straight from the repo at `progress/index.html`.

@@ -293,7 +293,7 @@ def render(phases, games, ov, hist, at, source):
         for p in phases)
 
     game_rows = "".join(
-        f'<tr><td><a href="https://github.com/{REPO}/blob/main/docs/games/{esc(g["slug"])}.md">'
+        f'<tr><td><a href="{esc(g["source"] or "https://github.com/" + REPO + "/tree/main/docs/games")}">'
         f'{esc(g["name"])}</a><div class="slug">{esc(g["slug"])}</div></td>'
         f'<td>{esc(g["engine"])}</td>'
         f'<td>{("converted" if g["converted"] else "not converted") if g["converted"] is not None else cell(0,0,FOLLOWUPS["converter"])}</td>'
