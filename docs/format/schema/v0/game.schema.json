@@ -1363,7 +1363,7 @@
     },
     "runner": {
       "$ref": "#/$defs/RunnerSchema",
-      "description": "Original runner; selects event-order differences."
+      "description": "The original runner (GameMaker 8.0 or 8.1), recorded for provenance. Both runners share\nthe same simulation rules (research#15)."
     },
     "source": {
       "$ref": "#/$defs/Source",
