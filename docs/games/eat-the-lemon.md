@@ -1,6 +1,7 @@
 ---
 id: eat-the-lemon
 game_id: 354
+order: 5
 name: "I wanna eat the lemon"
 slug: eat-the-lemon
 source: https://delicious-fruit.com/game/18603

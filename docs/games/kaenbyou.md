@@ -1,6 +1,7 @@
 ---
 id: kaenbyou
 game_id: 339
+order: 4
 name: "I wanna be the Kaenbyou"
 slug: kaenbyou
 source: https://delicious-fruit.com/game/17724

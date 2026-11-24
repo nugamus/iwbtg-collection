@@ -1,6 +1,7 @@
 ---
 id: get-the-rainbow-feather
 game_id: 360
+order: 17
 name: "I wanna get the Rainbow feather"
 slug: get-the-rainbow-feather
 source: https://delicious-fruit.com/game/11562

@@ -1,11 +1,13 @@
 [
  {
-  "at": "2026-11-24T14:07:20Z",
+  "at": "2026-11-24T14:23:20Z",
   "standard_pct": null,
   "tick_pct": null,
   "games_census": 0,
   "games_tick": 0,
   "open_issues": 311,
+  "closed_issues": 545,
+  "issue_pct_closed": 63.7,
   "size_points": 736,
   "phases": [
    {

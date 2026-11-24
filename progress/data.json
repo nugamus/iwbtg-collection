@@ -1,421 +1,819 @@
 {
- "generated_at": "2026-11-24T14:13:24Z",
+ "generated_at": "2026-11-24T14:23:59Z",
  "source": "gh",
+ "project_status": {
+  "label": "Pre-release",
+  "detail": "No release builds yet. The public alpha is planned for phase 7 (Online)."
+ },
  "phases": [
   {
    "number": 0,
    "title": "0 · Foundation",
+   "name": "Foundation",
    "state": "open",
    "open": 14,
    "closed": 63,
+   "total": 77,
+   "pct_closed": 81.8,
    "size_points": 29,
    "sizes": {
     "size:S": 7,
     "size:M": 2,
     "size:L": 2,
     "unknown": 3
-   }
+   },
+   "scope": "Cross-cutting repo, build, CI and agent-harness work that every phase depends on.",
+   "feeds_from": "client repo, research repo, games repo, CI",
+   "area_labels": "area:infra, area:docs",
+   "entry": "An empty repo, or a broken build/CI/harness.",
+   "exit": "Every Foundation issue is closed and `cargo xtask check --all` plus CI pass on Windows, Linux and wasm32.",
+   "progress": "Phase 0 row on the dashboard; no per-game rows."
   },
   {
    "number": 1,
    "title": "1 · Behavior research",
+   "name": "Behavior research",
    "state": "open",
    "open": 5,
    "closed": 24,
+   "total": 29,
+   "pct_closed": 82.8,
    "size_points": 4,
    "sizes": {
     "size:S": 4,
     "size:M": 0,
     "size:L": 0,
     "unknown": 1
-   }
+   },
+   "scope": "Trace, probe and specify what the original game does, so the sim has evidence.",
+   "feeds_from": "research specs and traces, real-runner probes, humans recording inputs",
+   "area_labels": "area:research",
+   "entry": "A question about original behavior that can change what a player feels, with no spec or trace answer.",
+   "exit": "Every open F1 behavior question has a trace or a spec answer, and the gm8 CLONE_SPEC covers the mechanics the 20 games use.",
+   "progress": "Per-game `% objects specified`; trace coverage feeds `% objects tick-accurate`."
   },
   {
    "number": 2,
    "title": "2 · Format & pipeline",
+   "name": "Format & pipeline",
    "state": "open",
    "open": 33,
    "closed": 88,
+   "total": 121,
+   "pct_closed": 72.7,
    "size_points": 96,
    "sizes": {
     "size:S": 11,
     "size:M": 15,
     "size:L": 5,
     "unknown": 2
-   }
+   },
+   "scope": "The standard package format, converter, census, script API and porting pipeline.",
+   "feeds_from": "converter, format crates, research census, porting docs",
+   "area_labels": "area:format, area:tools, area:port",
+   "entry": "A converted package, a format gap, or a porting step the converter cannot automate.",
+   "exit": "The census says how many scripts the 20 ports need; the script API covers what they use; Rhai is measured on native and WASM; port layering, the extension model and the standard ruleset/profile model are decided; one command checks every port's contracts; `docs/porting.md` is written.",
+   "progress": "Per-game `% objects scripted` and converter state; overall `% of objects in the standard format`."
   },
   {
    "number": 3,
    "title": "3 · Sim fidelity",
+   "name": "Sim fidelity",
    "state": "open",
    "open": 44,
    "closed": 210,
+   "total": 254,
+   "pct_closed": 82.7,
    "size_points": 53,
    "sizes": {
     "size:S": 16,
     "size:M": 7,
     "size:L": 2,
     "unknown": 19
-   }
+   },
+   "scope": "The deterministic simulation reproduces the original mechanics tick for tick.",
+   "feeds_from": "research traces, format packages, sim crate",
+   "area_labels": "area:sim",
+   "entry": "A spec or trace answer for a mechanic, and a package that loads.",
+   "exit": "The sim reproduces rely_the_needle's traces tick for tick on Windows, Linux and WASM; all kid families, built-ins, scripts, sound and the replay runner are in; all 20 converter packages load and trace-check.",
+   "progress": "Per-game `% objects tick-accurate`; overall `% of objects tick-accurate`."
   },
   {
    "number": 4,
    "title": "4 · First playable",
+   "name": "First playable",
    "state": "open",
    "open": 8,
    "closed": 44,
+   "total": 52,
+   "pct_closed": 84.6,
    "size_points": 10,
    "sizes": {
     "size:S": 4,
     "size:M": 2,
     "size:L": 0,
     "unknown": 2
-   }
+   },
+   "scope": "One game end to end in the Bevy client, native and web.",
+   "feeds_from": "sim, format, client crate, the first port",
+   "area_labels": "area:client, area:format",
+   "entry": "The sim loads rely_the_needle and produces ticks.",
+   "exit": "The Bevy client plays rely_the_needle on native and web, and the user confirms the feel.",
+   "progress": "Overall porting coverage starts here; rely_the_needle lifecycle stage."
   },
   {
    "number": 5,
    "title": "5 · Client shell & UI",
+   "name": "Client shell & UI",
    "state": "open",
    "open": 21,
    "closed": 14,
+   "total": 35,
+   "pct_closed": 40.0,
    "size_points": 50,
    "sizes": {
     "size:S": 9,
     "size:M": 11,
     "size:L": 1,
     "unknown": 0
-   }
+   },
+   "scope": "Game select, downloads, bundled games, settings, controls panel and screens.",
+   "feeds_from": "client crate, design mockups, games repo catalog",
+   "area_labels": "area:client, area:design",
+   "entry": "First playable is confirmed on native and web.",
+   "exit": "osu!-style game select, downloads, 5 bundled games, the controls panel and settings are built from approved mockups.",
+   "progress": "Phase 5 progress; per-game lifecycle stage (selectable/downloadable)."
   },
   {
    "number": 6,
    "title": "6 · Ranked-ready run",
+   "name": "Ranked-ready run",
    "state": "open",
    "open": 42,
    "closed": 90,
+   "total": 132,
+   "pct_closed": 68.2,
    "size_points": 137,
    "sizes": {
     "size:S": 13,
     "size:M": 20,
     "size:L": 8,
     "unknown": 1
-   }
+   },
+   "scope": "Stripped ranked mode: timer, replays, local boards, HUD, practice and results.",
+   "feeds_from": "sim, client, format, design mockups",
+   "area_labels": "area:client, area:sim, area:design",
+   "entry": "First playable, and the ranked rules decision for mods.",
+   "exit": "Stripped ranked mode works locally: timer and cutscene freeze, mods, retry keys, HUD, practice, results, local PBs, replays and `.iwbz` with maps.",
+   "progress": "Per-game lifecycle stage (Beta); phase 6 progress."
   },
   {
    "number": 7,
    "title": "7 · Online",
+   "name": "Online",
    "state": "open",
    "open": 57,
    "closed": 4,
+   "total": 61,
+   "pct_closed": 6.6,
    "size_points": 134,
    "sizes": {
     "size:S": 32,
     "size:M": 18,
     "size:L": 6,
     "unknown": 1
-   }
+   },
+   "scope": "Accounts, submission, leaderboards, review queue, profiles and the home server.",
+   "feeds_from": "server crate, client, format, infra",
+   "area_labels": "area:server, area:client",
+   "entry": "A ranked-ready run and a local replay can be produced.",
+   "exit": "Accounts, verified submissions, leaderboards, review queue, profiles, cloud saves and engine upgrades run on the home server.",
+   "progress": "Per-game lifecycle stage (Ranked); phase 7 progress."
   },
   {
    "number": 8,
    "title": "8 · Ghosts & races",
+   "name": "Ghosts & races",
    "state": "open",
    "open": 10,
    "closed": 0,
+   "total": 10,
+   "pct_closed": 0.0,
    "size_points": 28,
    "sizes": {
     "size:S": 6,
     "size:M": 2,
     "size:L": 2,
     "unknown": 0
-   }
+   },
+   "scope": "Ghost playback of leaderboard runs and live race lobbies.",
+   "feeds_from": "client, server, replay format",
+   "area_labels": "area:client, area:server",
+   "entry": "Online leaderboards persist replays.",
+   "exit": "Ghosts of leaderboard runs and live race lobbies work.",
+   "progress": "Per-game ghost and race columns; phase 8 progress."
   },
   {
    "number": 9,
    "title": "9 · Content & ports",
+   "name": "Content & ports",
    "state": "open",
    "open": 53,
    "closed": 6,
+   "total": 59,
+   "pct_closed": 10.2,
    "size_points": 142,
    "sizes": {
     "size:S": 31,
     "size:M": 13,
     "size:L": 9,
     "unknown": 0
-   }
+   },
+   "scope": "The 20 games reaching Beta/Ranked, plus the editor, community games and GMS.",
+   "feeds_from": "games repo ports, editor, community uploads, research CLONE_SPECs",
+   "area_labels": "area:port, area:editor, area:sim, area:format",
+   "entry": "The sim, pipeline and ranked mode can run a port end to end.",
+   "exit": "All 20 games are in Beta, each with fidelity proof and a verified full clear; editor v1 works; community uploads validate and can be curated; a GMS runner profile reproduces traces of 3 GMS fangames.",
+   "progress": "Per-game census, converter state and lifecycle stage; phase 9 progress."
   },
   {
    "number": 10,
    "title": "10 · Release",
+   "name": "Release",
    "state": "open",
    "open": 24,
    "closed": 2,
+   "total": 26,
+   "pct_closed": 7.7,
    "size_points": 53,
    "sizes": {
     "size:S": 12,
     "size:M": 11,
     "size:L": 1,
     "unknown": 0
-   }
+   },
+   "scope": "Packaging, installers, docs, legal and the public build.",
+   "feeds_from": "client, server, docs, legal",
+   "area_labels": "area:infra, area:docs, area:design, area:server",
+   "entry": "The online stack and content are in place enough to ship.",
+   "exit": "Name, takedown and privacy pages, licenses, release builds and contributor docs are in place.",
+   "progress": "Phase 10 progress; release date is never shown."
   }
  ],
+ "activity": {
+  "totals": {
+   "issues": 856,
+   "open": 311,
+   "closed": 545,
+   "pct_closed": 63.7
+  },
+  "open_prs": 2,
+  "process": {
+   "agent-ready": 157,
+   "triage": 53,
+   "in-progress": 3,
+   "blocked": 25,
+   "revisit": 4,
+   "needs-user": 26
+  },
+  "area_open": [
+   {
+    "area": "area:sim",
+    "count": 100
+   },
+   {
+    "area": "area:client",
+    "count": 75
+   },
+   {
+    "area": "area:format",
+    "count": 48
+   },
+   {
+    "area": "area:server",
+    "count": 48
+   },
+   {
+    "area": "area:infra",
+    "count": 30
+   },
+   {
+    "area": "area:editor",
+    "count": 29
+   },
+   {
+    "area": "area:docs",
+    "count": 15
+   },
+   {
+    "area": "area:design",
+    "count": 14
+   },
+   {
+    "area": "area:tools",
+    "count": 13
+   },
+   {
+    "area": "area:port",
+    "count": 6
+   },
+   {
+    "area": "area:research",
+    "count": 5
+   }
+  ],
+  "recent_closed": [
+   {
+    "number": 1079,
+    "title": "Sim: instance list order for with (all), instance_id and first-instance queries is depth then room entry",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1079",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:sim",
+     "in-progress"
+    ],
+    "phase": "3 · Sim fidelity",
+    "updated_at": "2026-11-24T13:17:15Z",
+    "closed_at": "2026-11-24T12:57:58Z",
+    "created_at": "2026-11-20T08:21:55Z"
+   },
+   {
+    "number": 1105,
+    "title": "Format: make `timeline` a reserved object key in objects.rs",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1105",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:sim",
+     "area:format",
+     "in-progress"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-24T13:17:33Z",
+    "closed_at": "2026-11-24T12:55:38Z",
+    "created_at": "2026-11-20T09:34:28Z"
+   },
+   {
+    "number": 1109,
+    "title": "Format: the generated runner schema description still says it selects event-order differences",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1109",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:format",
+     "in-progress"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-24T13:17:37Z",
+    "closed_at": "2026-11-24T12:54:36Z",
+    "created_at": "2026-11-20T09:39:16Z"
+   },
+   {
+    "number": 1173,
+    "title": "Sim sound: a built-in one-shot with no length_ticks ends at once instead of playing until stopped",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1173",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:sim",
+     "in-progress"
+    ],
+    "phase": "3 · Sim fidelity",
+    "updated_at": "2026-11-24T13:18:36Z",
+    "closed_at": "2026-11-24T12:49:45Z",
+    "created_at": "2026-11-21T07:35:05Z"
+   },
+   {
+    "number": 1133,
+    "title": "Spec: does a bare write to a global array keep its other elements?",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1133",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:sim",
+     "area:research",
+     "in-progress"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-24T13:17:52Z",
+    "closed_at": "2026-11-24T12:19:38Z",
+    "created_at": "2026-11-20T10:33:13Z"
+   },
+   {
+    "number": 1120,
+    "title": "Tools/format: move package commands out of the sim-lane tools crate",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1120",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:format",
+     "area:tools"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-24T13:17:44Z",
+    "closed_at": "2026-11-24T12:16:34Z",
+    "created_at": "2026-11-20T09:49:39Z"
+   },
+   {
+    "number": 640,
+    "title": "Trace cases for the rainbow precise slope masks (a1-slope-a..c)",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/640",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:sim",
+     "in-progress"
+    ],
+    "phase": "3 · Sim fidelity",
+    "updated_at": "2026-11-24T13:11:29Z",
+    "closed_at": "2026-11-24T12:13:00Z",
+    "created_at": "2026-11-11T12:29:55Z"
+   },
+   {
+    "number": 998,
+    "title": "Loader: replace the stage[n] workaround with a real global array",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/998",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:sim",
+     "in-progress"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-24T13:16:06Z",
+    "closed_at": "2026-11-24T11:25:30Z",
+    "created_at": "2026-11-19T10:06:49Z"
+   },
+   {
+    "number": 1343,
+    "title": "Fidelity baseline: record rely num-rng-a as OK",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1343",
+    "labels": [
+     "size:S",
+     "area:sim"
+    ],
+    "phase": "3 · Sim fidelity",
+    "updated_at": "2026-11-24T13:20:51Z",
+    "closed_at": "2026-11-24T11:16:09Z",
+    "created_at": "2026-11-24T11:11:29Z"
+   },
+   {
+    "number": 1116,
+    "title": "Harness/naming: finish retiring WP-era ids (test target, CI wording, written naming rule)",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1116",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:sim",
+     "area:infra",
+     "in-progress"
+    ],
+    "phase": "0 · Foundation",
+    "updated_at": "2026-11-24T13:17:39Z",
+    "closed_at": "2026-11-24T11:11:13Z",
+    "created_at": "2026-11-20T09:47:34Z"
+   }
+  ],
+  "in_progress": [
+   {
+    "number": 1357,
+    "title": "Trace cases: close a1-slope-a and compare gravity in a1-slope-a..c after CR26 (research#279)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1357",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:sim",
+     "in-progress"
+    ],
+    "phase": "3 · Sim fidelity",
+    "updated_at": "2026-11-24T13:21:02Z",
+    "closed_at": null,
+    "created_at": "2026-11-24T12:23:24Z"
+   },
+   {
+    "number": 1336,
+    "title": "Format: physics JSON schema does not list the standard name aliases (#1330)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1336",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:format",
+     "in-progress"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-24T13:20:46Z",
+    "closed_at": null,
+    "created_at": "2026-11-21T17:05:16Z"
+   },
+   {
+    "number": 1127,
+    "title": "Web build: the browser client crashes within a second of starting play",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1127",
+    "labels": [
+     "bug",
+     "agent-ready",
+     "size:M",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "4 · First playable",
+    "updated_at": "2026-11-24T13:17:48Z",
+    "closed_at": null,
+    "created_at": "2026-11-20T10:09:12Z"
+   }
+  ],
+  "needs_user": [
+   {
+    "number": 953,
+    "title": "Decide: script error screen layout",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/953",
+    "labels": [
+     "needs-user",
+     "area:client",
+     "revisit"
+    ],
+    "phase": "6 · Ranked-ready run",
+    "updated_at": "2026-11-24T13:33:52Z",
+    "closed_at": null,
+    "created_at": "2026-11-17T18:09:48Z"
+   },
+   {
+    "number": 194,
+    "title": "Discord server and bug channel",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/194",
+    "labels": [
+     "needs-user",
+     "size:S",
+     "area:infra"
+    ],
+    "phase": "7 · Online",
+    "updated_at": "2026-11-24T13:33:47Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T12:40:59Z"
+   },
+   {
+    "number": 114,
+    "title": "Decide: Windows code signing and Linux packaging",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/114",
+    "labels": [
+     "needs-user",
+     "size:S",
+     "area:infra"
+    ],
+    "phase": "10 · Release",
+    "updated_at": "2026-11-24T13:33:42Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T11:55:51Z"
+   },
+   {
+    "number": 110,
+    "title": "Register Google and Discord OAuth apps; choose SMTP",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/110",
+    "labels": [
+     "needs-user",
+     "size:S",
+     "area:server"
+    ],
+    "phase": "7 · Online",
+    "updated_at": "2026-11-24T13:33:40Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T11:55:39Z"
+   },
+   {
+    "number": 108,
+    "title": "Get a domain and set up DNS and Cloudflare",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/108",
+    "labels": [
+     "needs-user",
+     "size:S",
+     "area:infra"
+    ],
+    "phase": "7 · Online",
+    "updated_at": "2026-11-24T13:33:39Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T11:55:34Z"
+   },
+   {
+    "number": 84,
+    "title": "Performance points (pp) design",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/84",
+    "labels": [
+     "needs-user",
+     "size:L",
+     "area:design"
+    ],
+    "phase": "7 · Online",
+    "updated_at": "2026-11-24T13:33:32Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T11:32:15Z"
+   },
+   {
+    "number": 83,
+    "title": "Curation criteria for Ranked and Loved",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/83",
+    "labels": [
+     "needs-user",
+     "size:M",
+     "area:design"
+    ],
+    "phase": "9 · Content & ports",
+    "updated_at": "2026-11-24T13:33:31Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T11:32:13Z"
+   },
+   {
+    "number": 82,
+    "title": "Design the skin system",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/82",
+    "labels": [
+     "needs-user",
+     "size:M",
+     "area:design"
+    ],
+    "phase": "9 · Content & ports",
+    "updated_at": "2026-11-24T13:33:30Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T11:32:11Z"
+   }
+  ],
+  "agent_ready": [
+   {
+    "number": 228,
+    "title": "CI: run format wp7a_* tests on wasm32 again after WP11",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/228",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:infra"
+    ],
+    "phase": "0 · Foundation",
+    "updated_at": "2026-11-24T13:06:31Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T14:09:28Z"
+   },
+   {
+    "number": 787,
+    "title": "Retire the WP-era scaffolding: module-named tests, no WP ownership headers, sim-core plan marked historical",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/787",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:sim",
+     "area:docs"
+    ],
+    "phase": "0 · Foundation",
+    "updated_at": "2026-11-24T13:13:13Z",
+    "closed_at": null,
+    "created_at": "2026-11-14T17:14:59Z"
+   },
+   {
+    "number": 788,
+    "title": "Issue context contract: every agent-ready issue names its code, docs, spec claims and test command",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/788",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:docs",
+     "area:infra"
+    ],
+    "phase": "0 · Foundation",
+    "updated_at": "2026-11-24T13:13:14Z",
+    "closed_at": null,
+    "created_at": "2026-11-14T17:15:01Z"
+   },
+   {
+    "number": 986,
+    "title": "Sim/format/tools: drop the WP ownership headers",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/986",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:sim",
+     "area:docs"
+    ],
+    "phase": "0 · Foundation",
+    "updated_at": "2026-11-24T13:15:50Z",
+    "closed_at": null,
+    "created_at": "2026-11-19T10:05:46Z"
+   },
+   {
+    "number": 1064,
+    "title": "xtask check: a sim doc-comment change can stale a format schema without failing the local check",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1064",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:infra"
+    ],
+    "phase": "0 · Foundation",
+    "updated_at": "2026-11-24T13:17:02Z",
+    "closed_at": null,
+    "created_at": "2026-11-20T07:47:56Z"
+   },
+   {
+    "number": 1124,
+    "title": "CI: a docs/format-only edit runs the whole sim/format WASM + determinism matrix for native-only fixture tests",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1124",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:infra"
+    ],
+    "phase": "0 · Foundation",
+    "updated_at": "2026-11-24T13:17:47Z",
+    "closed_at": null,
+    "created_at": "2026-11-20T09:51:47Z"
+   },
+   {
+    "number": 1169,
+    "title": "CI: run the public feel test on every target and scope it",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1169",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:infra"
+    ],
+    "phase": "0 · Foundation",
+    "updated_at": "2026-11-24T13:18:31Z",
+    "closed_at": null,
+    "created_at": "2026-11-21T07:25:36Z"
+   },
+   {
+    "number": 1114,
+    "title": "Docs/registers: link the split gm8 spec files and map register ids to claim ids (research#173)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1114",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:sim",
+     "area:docs"
+    ],
+    "phase": "1 · Behavior research",
+    "updated_at": "2026-11-24T13:17:38Z",
+    "closed_at": null,
+    "created_at": "2026-11-20T09:44:23Z"
+   }
+  ],
+  "closed_7d": 178,
+  "opened_7d": 137,
+  "burnup": [
+   {
+    "week": "2026-11-09",
+    "created": 372,
+    "closed": 186
+   },
+   {
+    "week": "2026-11-16",
+    "created": 530,
+    "closed": 326
+   },
+   {
+    "week": "2026-11-23",
+    "created": 839,
+    "closed": 535
+   },
+   {
+    "week": "2026-11-30",
+    "created": 856,
+    "closed": 545
+   }
+  ]
+ },
  "games": [
-  {
-   "id": "animus",
-   "slug": "animus",
-   "name": "I wanna be the Animus",
-   "source": "https://delicious-fruit.com/game/10550",
-   "engine": "gm8",
-   "lifecycle": "unknown",
-   "converted": null,
-   "objects_total": null,
-   "objects_specced": null,
-   "objects_scripted": null,
-   "objects_in_package": null,
-   "traces_passing": null,
-   "traces_total": null
-  },
-  {
-   "id": "be-fed-up-with-path-w",
-   "slug": "be-fed-up-with-path-w",
-   "name": "I wanna be Fed up with path ;w;",
-   "source": "https://delicious-fruit.com/game/11403",
-   "engine": "gm8",
-   "lifecycle": "unknown",
-   "converted": null,
-   "objects_total": null,
-   "objects_specced": null,
-   "objects_scripted": null,
-   "objects_in_package": null,
-   "traces_passing": null,
-   "traces_total": null
-  },
-  {
-   "id": "clear-the-easy-miku-2",
-   "slug": "clear-the-easy-miku-2",
-   "name": "I wanna clear the Easy Miku 2",
-   "source": "https://delicious-fruit.com/game/12270",
-   "engine": "gm8",
-   "lifecycle": "unknown",
-   "converted": null,
-   "objects_total": null,
-   "objects_specced": null,
-   "objects_scripted": null,
-   "objects_in_package": null,
-   "traces_passing": null,
-   "traces_total": null
-  },
-  {
-   "id": "deride-kotaro-from-aslant",
-   "slug": "deride-kotaro-from-aslant",
-   "name": "I wanna deride Kotaro- from aslant",
-   "source": "https://delicious-fruit.com/game/18404",
-   "engine": "gm8",
-   "lifecycle": "unknown",
-   "converted": null,
-   "objects_total": null,
-   "objects_specced": null,
-   "objects_scripted": null,
-   "objects_in_package": null,
-   "traces_passing": null,
-   "traces_total": null
-  },
-  {
-   "id": "eat-the-lemon",
-   "slug": "eat-the-lemon",
-   "name": "I wanna eat the lemon",
-   "source": "https://delicious-fruit.com/game/18603",
-   "engine": "gm8",
-   "lifecycle": "unknown",
-   "converted": null,
-   "objects_total": null,
-   "objects_specced": null,
-   "objects_scripted": null,
-   "objects_in_package": null,
-   "traces_passing": null,
-   "traces_total": null
-  },
-  {
-   "id": "eat-the-new-year",
-   "slug": "eat-the-new-year",
-   "name": "I wanna eat the New Year!",
-   "source": "https://delicious-fruit.com/game/11512",
-   "engine": "gm8",
-   "lifecycle": "unknown",
-   "converted": null,
-   "objects_total": null,
-   "objects_specced": null,
-   "objects_scripted": null,
-   "objects_in_package": null,
-   "traces_passing": null,
-   "traces_total": null
-  },
-  {
-   "id": "eat-the-rori-girl",
-   "slug": "eat-the-rori-girl",
-   "name": "I wanna eat the Rori Girl",
-   "source": "https://delicious-fruit.com/game/11514",
-   "engine": "gm8",
-   "lifecycle": "unknown",
-   "converted": null,
-   "objects_total": null,
-   "objects_specced": null,
-   "objects_scripted": null,
-   "objects_in_package": null,
-   "traces_passing": null,
-   "traces_total": null
-  },
-  {
-   "id": "get-the-rainbow-feather",
-   "slug": "get-the-rainbow-feather",
-   "name": "I wanna get the Rainbow feather",
-   "source": "https://delicious-fruit.com/game/11562",
-   "engine": "gm8",
-   "lifecycle": "unknown",
-   "converted": null,
-   "objects_total": null,
-   "objects_specced": null,
-   "objects_scripted": null,
-   "objects_in_package": null,
-   "traces_passing": null,
-   "traces_total": null
-  },
-  {
-   "id": "go-the-jun-g-world",
-   "slug": "go-the-jun-g-world",
-   "name": "I wanna go the JUN-G World",
-   "source": "https://delicious-fruit.com/game/18758",
-   "engine": "gm8",
-   "lifecycle": "unknown",
-   "converted": null,
-   "objects_total": null,
-   "objects_specced": null,
-   "objects_scripted": null,
-   "objects_in_package": null,
-   "traces_passing": null,
-   "traces_total": null
-  },
-  {
-   "id": "go-the-spook-house",
-   "slug": "go-the-spook-house",
-   "name": "I wanna go the Spook House",
-   "source": "https://delicious-fruit.com/game/15561",
-   "engine": "gm8",
-   "lifecycle": "unknown",
-   "converted": null,
-   "objects_total": null,
-   "objects_specced": null,
-   "objects_scripted": null,
-   "objects_in_package": null,
-   "traces_passing": null,
-   "traces_total": null
-  },
-  {
-   "id": "help-the-fairy-tale",
-   "slug": "help-the-fairy-tale",
-   "name": "I wanna help the Fairy tale",
-   "source": "https://delicious-fruit.com/game/11595",
-   "engine": "gm8",
-   "lifecycle": "unknown",
-   "converted": null,
-   "objects_total": null,
-   "objects_specced": null,
-   "objects_scripted": null,
-   "objects_in_package": null,
-   "traces_passing": null,
-   "traces_total": null
-  },
-  {
-   "id": "kaenbyou",
-   "slug": "kaenbyou",
-   "name": "I wanna be the Kaenbyou",
-   "source": "https://delicious-fruit.com/game/17724",
-   "engine": "gm8",
-   "lifecycle": "unknown",
-   "converted": null,
-   "objects_total": null,
-   "objects_specced": null,
-   "objects_scripted": null,
-   "objects_in_package": null,
-   "traces_passing": null,
-   "traces_total": null
-  },
-  {
-   "id": "keep-celebrating-for-xia",
-   "slug": "keep-celebrating-for-xia",
-   "name": "I wanna Keep Celebrating for Xia",
-   "source": "https://delicious-fruit.com/game/21633",
-   "engine": "gm8",
-   "lifecycle": "unknown",
-   "converted": null,
-   "objects_total": null,
-   "objects_specced": null,
-   "objects_scripted": null,
-   "objects_in_package": null,
-   "traces_passing": null,
-   "traces_total": null
-  },
-  {
-   "id": "little-runner",
-   "slug": "little-runner",
-   "name": "I wanna be the Little runner",
-   "source": "https://delicious-fruit.com/game/10848",
-   "engine": "gm8",
-   "lifecycle": "unknown",
-   "converted": null,
-   "objects_total": null,
-   "objects_specced": null,
-   "objects_scripted": null,
-   "objects_in_package": null,
-   "traces_passing": null,
-   "traces_total": null
-  },
-  {
-   "id": "little-trap",
-   "slug": "little-trap",
-   "name": "I wanna Little Trap",
-   "source": "https://delicious-fruit.com/game/21365",
-   "engine": "gm8",
-   "lifecycle": "unknown",
-   "converted": null,
-   "objects_total": null,
-   "objects_specced": null,
-   "objects_scripted": null,
-   "objects_in_package": null,
-   "traces_passing": null,
-   "traces_total": null
-  },
-  {
-   "id": "machinary",
-   "slug": "machinary",
-   "name": "I wanna be the Machinary",
-   "source": "https://delicious-fruit.com/game/18020",
-   "engine": "gm8",
-   "lifecycle": "unknown",
-   "converted": null,
-   "objects_total": null,
-   "objects_specced": null,
-   "objects_scripted": null,
-   "objects_in_package": null,
-   "traces_passing": null,
-   "traces_total": null
-  },
-  {
-   "id": "poronkusema",
-   "slug": "poronkusema",
-   "name": "I wanna be the Poronkusema",
-   "source": "https://delicious-fruit.com/game/20975",
-   "engine": "gm8",
-   "lifecycle": "unknown",
-   "converted": null,
-   "objects_total": null,
-   "objects_specced": null,
-   "objects_scripted": null,
-   "objects_in_package": null,
-   "traces_passing": null,
-   "traces_total": null
-  },
   {
    "id": "rely-the-needle-4-2",
    "slug": "rely-the-needle-4-2",
+   "order": 1,
    "name": "I Wanna Rely The Needle 4.2",
    "source": "https://delicious-fruit.com/game/19483",
    "engine": "gm8",
@@ -426,13 +824,25 @@
    "objects_scripted": null,
    "objects_in_package": null,
    "traces_passing": null,
-   "traces_total": null
+   "traces_total": null,
+   "traces_recorded": 17,
+   "port": {
+    "number": 1,
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection-games/issues/1",
+    "done": 0,
+    "total": 6,
+    "sub_done": 0,
+    "sub_total": 1,
+    "updated_at": "2026-11-24T13:34:11Z"
+   }
   },
   {
-   "id": "showdown",
-   "slug": "showdown",
-   "name": "I wanna be the Showdown",
-   "source": "https://delicious-fruit.com/game/14697",
+   "id": "go-the-jun-g-world",
+   "slug": "go-the-jun-g-world",
+   "order": 2,
+   "name": "I wanna go the JUN-G World",
+   "source": "https://delicious-fruit.com/game/18758",
    "engine": "gm8",
    "lifecycle": "unknown",
    "converted": null,
@@ -441,11 +851,131 @@
    "objects_scripted": null,
    "objects_in_package": null,
    "traces_passing": null,
-   "traces_total": null
+   "traces_total": null,
+   "traces_recorded": 8,
+   "port": {
+    "number": 2,
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection-games/issues/2",
+    "done": 0,
+    "total": 6,
+    "sub_done": 0,
+    "sub_total": 0,
+    "updated_at": "2026-11-24T13:34:13Z"
+   }
+  },
+  {
+   "id": "deride-kotaro-from-aslant",
+   "slug": "deride-kotaro-from-aslant",
+   "order": 3,
+   "name": "I wanna deride Kotaro- from aslant",
+   "source": "https://delicious-fruit.com/game/18404",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null,
+   "traces_recorded": 32,
+   "port": {
+    "number": 3,
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection-games/issues/3",
+    "done": 0,
+    "total": 6,
+    "sub_done": 0,
+    "sub_total": 0,
+    "updated_at": "2026-11-24T13:34:14Z"
+   }
+  },
+  {
+   "id": "kaenbyou",
+   "slug": "kaenbyou",
+   "order": 4,
+   "name": "I wanna be the Kaenbyou",
+   "source": "https://delicious-fruit.com/game/17724",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null,
+   "traces_recorded": 56,
+   "port": {
+    "number": 4,
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection-games/issues/4",
+    "done": 0,
+    "total": 6,
+    "sub_done": 0,
+    "sub_total": 0,
+    "updated_at": "2026-11-24T13:34:16Z"
+   }
+  },
+  {
+   "id": "eat-the-lemon",
+   "slug": "eat-the-lemon",
+   "order": 5,
+   "name": "I wanna eat the lemon",
+   "source": "https://delicious-fruit.com/game/18603",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null,
+   "traces_recorded": 9,
+   "port": {
+    "number": 5,
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection-games/issues/5",
+    "done": 0,
+    "total": 6,
+    "sub_done": 0,
+    "sub_total": 0,
+    "updated_at": "2026-11-24T13:34:18Z"
+   }
+  },
+  {
+   "id": "eat-the-rori-girl",
+   "slug": "eat-the-rori-girl",
+   "order": 6,
+   "name": "I wanna eat the Rori Girl",
+   "source": "https://delicious-fruit.com/game/11514",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null,
+   "traces_recorded": 6,
+   "port": {
+    "number": 6,
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection-games/issues/6",
+    "done": 0,
+    "total": 6,
+    "sub_done": 0,
+    "sub_total": 0,
+    "updated_at": "2026-11-24T13:34:20Z"
+   }
   },
   {
    "id": "wanna",
    "slug": "wanna",
+   "order": 7,
    "name": "I wanna wanna",
    "source": "https://delicious-fruit.com/game/12505",
    "engine": "gm8",
@@ -456,7 +986,369 @@
    "objects_scripted": null,
    "objects_in_package": null,
    "traces_passing": null,
-   "traces_total": null
+   "traces_total": null,
+   "traces_recorded": null,
+   "port": {
+    "number": 7,
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection-games/issues/7",
+    "done": 0,
+    "total": 6,
+    "sub_done": 0,
+    "sub_total": 0,
+    "updated_at": "2026-11-24T13:34:21Z"
+   }
+  },
+  {
+   "id": "be-fed-up-with-path-w",
+   "slug": "be-fed-up-with-path-w",
+   "order": 8,
+   "name": "I wanna be Fed up with path ;w;",
+   "source": "https://delicious-fruit.com/game/11403",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null,
+   "traces_recorded": null,
+   "port": {
+    "number": 8,
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection-games/issues/8",
+    "done": 0,
+    "total": 6,
+    "sub_done": 0,
+    "sub_total": 0,
+    "updated_at": "2026-11-24T13:34:23Z"
+   }
+  },
+  {
+   "id": "little-trap",
+   "slug": "little-trap",
+   "order": 9,
+   "name": "I wanna Little Trap",
+   "source": "https://delicious-fruit.com/game/21365",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null,
+   "traces_recorded": 11,
+   "port": {
+    "number": 9,
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection-games/issues/9",
+    "done": 0,
+    "total": 6,
+    "sub_done": 0,
+    "sub_total": 0,
+    "updated_at": "2026-11-24T13:34:25Z"
+   }
+  },
+  {
+   "id": "clear-the-easy-miku-2",
+   "slug": "clear-the-easy-miku-2",
+   "order": 10,
+   "name": "I wanna clear the Easy Miku 2",
+   "source": "https://delicious-fruit.com/game/12270",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null,
+   "traces_recorded": 6,
+   "port": {
+    "number": 10,
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection-games/issues/10",
+    "done": 0,
+    "total": 6,
+    "sub_done": 0,
+    "sub_total": 0,
+    "updated_at": "2026-11-24T13:34:26Z"
+   }
+  },
+  {
+   "id": "little-runner",
+   "slug": "little-runner",
+   "order": 11,
+   "name": "I wanna be the Little runner",
+   "source": "https://delicious-fruit.com/game/10848",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null,
+   "traces_recorded": 29,
+   "port": {
+    "number": 11,
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection-games/issues/11",
+    "done": 0,
+    "total": 6,
+    "sub_done": 0,
+    "sub_total": 0,
+    "updated_at": "2026-11-24T13:34:28Z"
+   }
+  },
+  {
+   "id": "poronkusema",
+   "slug": "poronkusema",
+   "order": 12,
+   "name": "I wanna be the Poronkusema",
+   "source": "https://delicious-fruit.com/game/20975",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null,
+   "traces_recorded": 7,
+   "port": {
+    "number": 12,
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection-games/issues/12",
+    "done": 0,
+    "total": 6,
+    "sub_done": 0,
+    "sub_total": 0,
+    "updated_at": "2026-11-24T13:34:30Z"
+   }
+  },
+  {
+   "id": "machinary",
+   "slug": "machinary",
+   "order": 13,
+   "name": "I wanna be the Machinary",
+   "source": "https://delicious-fruit.com/game/18020",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null,
+   "traces_recorded": 27,
+   "port": {
+    "number": 13,
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection-games/issues/13",
+    "done": 0,
+    "total": 6,
+    "sub_done": 0,
+    "sub_total": 0,
+    "updated_at": "2026-11-24T13:34:32Z"
+   }
+  },
+  {
+   "id": "eat-the-new-year",
+   "slug": "eat-the-new-year",
+   "order": 14,
+   "name": "I wanna eat the New Year!",
+   "source": "https://delicious-fruit.com/game/11512",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null,
+   "traces_recorded": 5,
+   "port": {
+    "number": 14,
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection-games/issues/14",
+    "done": 0,
+    "total": 6,
+    "sub_done": 0,
+    "sub_total": 0,
+    "updated_at": "2026-11-24T13:34:33Z"
+   }
+  },
+  {
+   "id": "animus",
+   "slug": "animus",
+   "order": 15,
+   "name": "I wanna be the Animus",
+   "source": "https://delicious-fruit.com/game/10550",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null,
+   "traces_recorded": 20,
+   "port": {
+    "number": 15,
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection-games/issues/15",
+    "done": 0,
+    "total": 6,
+    "sub_done": 0,
+    "sub_total": 0,
+    "updated_at": "2026-11-24T13:34:35Z"
+   }
+  },
+  {
+   "id": "help-the-fairy-tale",
+   "slug": "help-the-fairy-tale",
+   "order": 16,
+   "name": "I wanna help the Fairy tale",
+   "source": "https://delicious-fruit.com/game/11595",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null,
+   "traces_recorded": 9,
+   "port": {
+    "number": 16,
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection-games/issues/16",
+    "done": 0,
+    "total": 6,
+    "sub_done": 0,
+    "sub_total": 0,
+    "updated_at": "2026-11-24T13:34:37Z"
+   }
+  },
+  {
+   "id": "get-the-rainbow-feather",
+   "slug": "get-the-rainbow-feather",
+   "order": 17,
+   "name": "I wanna get the Rainbow feather",
+   "source": "https://delicious-fruit.com/game/11562",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null,
+   "traces_recorded": 3,
+   "port": {
+    "number": 17,
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection-games/issues/17",
+    "done": 0,
+    "total": 6,
+    "sub_done": 0,
+    "sub_total": 0,
+    "updated_at": "2026-11-24T13:34:38Z"
+   }
+  },
+  {
+   "id": "showdown",
+   "slug": "showdown",
+   "order": 18,
+   "name": "I wanna be the Showdown",
+   "source": "https://delicious-fruit.com/game/14697",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null,
+   "traces_recorded": 1,
+   "port": {
+    "number": 18,
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection-games/issues/18",
+    "done": 0,
+    "total": 6,
+    "sub_done": 0,
+    "sub_total": 0,
+    "updated_at": "2026-11-24T13:34:40Z"
+   }
+  },
+  {
+   "id": "go-the-spook-house",
+   "slug": "go-the-spook-house",
+   "order": 19,
+   "name": "I wanna go the Spook House",
+   "source": "https://delicious-fruit.com/game/15561",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null,
+   "traces_recorded": 10,
+   "port": {
+    "number": 19,
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection-games/issues/19",
+    "done": 0,
+    "total": 6,
+    "sub_done": 0,
+    "sub_total": 0,
+    "updated_at": "2026-11-24T13:34:42Z"
+   }
+  },
+  {
+   "id": "keep-celebrating-for-xia",
+   "slug": "keep-celebrating-for-xia",
+   "order": 20,
+   "name": "I wanna Keep Celebrating for Xia",
+   "source": "https://delicious-fruit.com/game/21633",
+   "engine": "gm8",
+   "lifecycle": "unknown",
+   "converted": null,
+   "objects_total": null,
+   "objects_specced": null,
+   "objects_scripted": null,
+   "objects_in_package": null,
+   "traces_passing": null,
+   "traces_total": null,
+   "traces_recorded": 0,
+   "port": {
+    "number": 20,
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection-games/issues/20",
+    "done": 0,
+    "total": 6,
+    "sub_done": 0,
+    "sub_total": 0,
+    "updated_at": "2026-11-24T13:34:43Z"
+   }
   }
  ],
  "overall": {
@@ -468,7 +1360,13 @@
   "tick_pct": null,
   "games_census": 0,
   "games_tick": 0,
-  "games_total": 20
+  "games_total": 20,
+  "traces_recorded": 256,
+  "games_with_traces": 18,
+  "trace_source_date": "2026-10-24",
+  "ports_tracked": 20,
+  "ports_closed": 0,
+  "ports_in_beta": 0
  },
  "followups": {
   "census": 1364,

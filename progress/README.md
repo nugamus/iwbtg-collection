@@ -17,6 +17,18 @@ python -I progress/generate.py --gh --history    # also append a dated point to 
 
 Every number is a numerator and denominator. A missing source renders **not measured yet** and links to the follow-up issue that will fill it. The generator never infers a denominator and never fills a gap with zero.
 
+## What the page shows now
+
+The page leads with what is actually measured, so it is useful before the object exporters exist:
+
+- **Project status** — pre-release, no release builds; the public alpha is planned for phase 7. The label lives in `PROJECT_STATUS` in `generate.py`, not in the data.
+- **Phase progress** — closed/total issues and remaining size points per phase, with the phase's entry and exit condition behind *Gate*.
+- **What is moving** — recently closed, in-progress, needs-user and unblocked agent-ready issues, from issue labels and timestamps.
+- **Open work by area** — open issues per `area:*` label.
+- **Issues over time** — a weekly cumulative burn-up of issues opened and closed, from `created_at`/`closed_at`.
+- **Ports** — each port issue's state, its *Done when* checklist and sub-issue progress, and the recorded trace count from `docs/architecture/traces.md` (dated source shown).
+- **Object coverage** — census/spec/script/tick-accuracy cells stay `not measured yet` until the exporters land; they are in a secondary table, not the headline.
+
 ## Per-game front-matter
 
 Each file in `docs/games/<slug>.md` starts with:

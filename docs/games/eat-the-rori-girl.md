@@ -1,6 +1,7 @@
 ---
 id: eat-the-rori-girl
 game_id: 353
+order: 6
 name: "I wanna eat the Rori Girl"
 slug: eat-the-rori-girl
 source: https://delicious-fruit.com/game/11514

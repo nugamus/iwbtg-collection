@@ -1,6 +1,7 @@
 ---
 id: keep-celebrating-for-xia
 game_id: 327
+order: 20
 name: "I wanna Keep Celebrating for Xia"
 slug: keep-celebrating-for-xia
 source: https://delicious-fruit.com/game/21633

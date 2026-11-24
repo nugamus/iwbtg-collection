@@ -1,6 +1,7 @@
 ---
 id: animus
 game_id: 335
+order: 15
 name: "I wanna be the Animus"
 slug: animus
 source: https://delicious-fruit.com/game/10550

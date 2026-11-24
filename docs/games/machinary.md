@@ -1,6 +1,7 @@
 ---
 id: machinary
 game_id: 341
+order: 13
 name: "I wanna be the Machinary"
 slug: machinary
 source: https://delicious-fruit.com/game/18020

@@ -1,6 +1,7 @@
 ---
 id: go-the-spook-house
 game_id: 362
+order: 19
 name: "I wanna go the Spook House"
 slug: go-the-spook-house
 source: https://delicious-fruit.com/game/15561

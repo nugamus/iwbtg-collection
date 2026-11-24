@@ -1,6 +1,7 @@
 ---
 id: deride-kotaro-from-aslant
 game_id: 351
+order: 3
 name: "I wanna deride Kotaro- from aslant"
 slug: deride-kotaro-from-aslant
 source: https://delicious-fruit.com/game/18404

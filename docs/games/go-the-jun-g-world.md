@@ -1,6 +1,7 @@
 ---
 id: go-the-jun-g-world
 game_id: 361
+order: 2
 name: "I wanna go the JUN-G World"
 slug: go-the-jun-g-world
 source: https://delicious-fruit.com/game/18758

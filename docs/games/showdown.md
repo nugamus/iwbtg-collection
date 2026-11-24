@@ -1,6 +1,7 @@
 ---
 id: showdown
 game_id: 345
+order: 18
 name: "I wanna be the Showdown"
 slug: showdown
 source: https://delicious-fruit.com/game/14697

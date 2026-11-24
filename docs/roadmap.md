@@ -130,7 +130,7 @@ These carry over from the original phase plan.
 
 ## Decided
 
-- **Licenses.** Code is `MIT OR Apache-2.0`. Docs, the format spec and the research specs are `CC-BY-4.0`. Game content belongs to its creators.
+- **Licenses.** Code is `MIT`. Docs, the format spec and the research specs are `CC-BY-4.0`. Game content belongs to its creators.
 - **Games storage.** Ported games and their music live in the private games repo for now. When it grows too large, they move to the home server.
 - **Accounts.** Accounts live in our own database, with each sign-in method behind one interface. The server stack is described in `docs/server.md`.
 - **Research platform.** Research runs on native Windows. Originals run only when VirusTotal-clean, through the research gate (2026-10-24).

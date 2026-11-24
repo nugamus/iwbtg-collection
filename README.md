@@ -5,14 +5,29 @@
 **One client for I Wanna Be The Guy fangames — rebuilt game by game in an open, documented format.**
 
 [![CI](https://github.com/nugamus/iwbtg-collection/actions/workflows/ci.yml/badge.svg)](https://github.com/nugamus/iwbtg-collection/actions/workflows/ci.yml)
-[![Progress](https://img.shields.io/badge/progress-live-7c8cff)](https://nugamus.github.io/iwbtg-collection/)
-[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](LICENSE-APACHE)
+[![Status](https://img.shields.io/badge/status-pre--release-fab219)](docs/roadmap.md)
+[![Progress](https://img.shields.io/badge/progress-live-3987e5)](https://nugamus.github.io/iwbtg-collection/)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE-MIT)
 
 </div>
 
 > **Status: pre-release.** There are no release builds yet. The public alpha is planned for **phase 7 (Online)**. Today the simulation is deterministic, packages load, and the client plays a showcase on native and web; the wider client, ranked mode, online play and the 20 ports are in progress.
 
 IWBTG Collection plays I Wanna Be The Guy fangames the way osu! plays beatmaps. Every supported game is rebuilt in our own readable package format from clean-room specs and recorded traces. The client never runs an original game or its engine.
+
+## Project status
+
+| Area | Status | Detail |
+|---|---|---|
+| Simulation core | **Working** | Fixed-tick, deterministic, hash-pinned on Windows, Linux and WASM. |
+| Package format | **Working** | Format v0 reader, validator and writer, including `.iwbz` containers. |
+| Client | **Showcase** | Plays the demo package natively and in the browser; game select and ranked screens are in progress. |
+| Ranked mode | **In progress** | Phase 6: timer, replays, local boards, HUD, practice and results. |
+| Online | **Planned** | Phase 7: accounts, verified submissions, leaderboards and profiles. |
+| 20 ports | **In progress** | All 20 have port issues; measured coverage is on the [dashboard](https://nugamus.github.io/iwbtg-collection/). |
+| Release builds | **None yet** | The public alpha is planned for phase 7 (Online). |
+
+The [progress dashboard](https://nugamus.github.io/iwbtg-collection/) shows phase progress, issue activity, each port's checklist and recorded traces. Object-level coverage says *not measured yet* until the census and trace exporters exist.
 
 ## What you get
 
@@ -78,6 +93,6 @@ Issues and pull requests are welcome. [CONTRIBUTING.md](.github/CONTRIBUTING.md)
 
 I Wanna Be The Guy was made by Kayin. This is an unaffiliated fan project and is not endorsed by Kayin or by the creators of any fangame. Game content — characters, sprites, music and level design — belongs to its creators and is not covered by this repository's licenses.
 
-Code is licensed under either [Apache License 2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT), at your option. Documentation in `docs/` is licensed under [CC BY 4.0](LICENSES/CC-BY-4.0.txt). Bundled fonts are under the SIL Open Font License 1.1; their licence files sit next to them. The Kid sprites in `crates/client/showcase.pkg` come from a fangame and are credited in its `CREDITS.md`.
+Code is licensed under the [MIT License](LICENSE-MIT). Documentation in `docs/` is licensed under [CC BY 4.0](LICENSES/CC-BY-4.0.txt). Bundled fonts are under the SIL Open Font License 1.1; their licence files sit next to them. The Kid sprites in `crates/client/showcase.pkg` come from a fangame and are credited in its `CREDITS.md`.
 
-Unless you explicitly state otherwise, any contribution you intentionally submit for inclusion in the work, as defined in the Apache-2.0 license, is dual licensed as above, without any additional terms or conditions.
+Unless you explicitly state otherwise, any contribution you intentionally submit for inclusion in the work is licensed under the MIT License, without any additional terms or conditions.

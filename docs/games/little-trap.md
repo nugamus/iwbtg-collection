@@ -1,6 +1,7 @@
 ---
 id: little-trap
 game_id: 329
+order: 9
 name: "I wanna Little Trap"
 slug: little-trap
 source: https://delicious-fruit.com/game/21365

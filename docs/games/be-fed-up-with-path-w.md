@@ -1,6 +1,7 @@
 ---
 id: be-fed-up-with-path-w
 game_id: 334
+order: 8
 name: "I wanna be Fed up with path ;w;"
 slug: be-fed-up-with-path-w
 source: https://delicious-fruit.com/game/11403

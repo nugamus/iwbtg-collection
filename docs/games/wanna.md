@@ -1,6 +1,7 @@
 ---
 id: wanna
 game_id: 373
+order: 7
 name: "I wanna wanna"
 slug: wanna
 source: https://delicious-fruit.com/game/12505

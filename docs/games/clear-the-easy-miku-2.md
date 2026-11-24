@@ -1,6 +1,7 @@
 ---
 id: clear-the-easy-miku-2
 game_id: 350
+order: 10
 name: "I wanna clear the Easy Miku 2"
 slug: clear-the-easy-miku-2
 source: https://delicious-fruit.com/game/12270

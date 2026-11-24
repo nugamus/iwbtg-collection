@@ -1,6 +1,7 @@
 ---
 id: rely-the-needle-4-2
 game_id: 322
+order: 1
 name: "I Wanna Rely The Needle 4.2"
 slug: rely-the-needle-4-2
 source: https://delicious-fruit.com/game/19483

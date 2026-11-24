@@ -1,6 +1,7 @@
 ---
 id: little-runner
 game_id: 340
+order: 11
 name: "I wanna be the Little runner"
 slug: little-runner
 source: https://delicious-fruit.com/game/10848

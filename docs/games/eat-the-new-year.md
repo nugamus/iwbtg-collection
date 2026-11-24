@@ -1,6 +1,7 @@
 ---
 id: eat-the-new-year
 game_id: 352
+order: 14
 name: "I wanna eat the New Year!"
 slug: eat-the-new-year
 source: https://delicious-fruit.com/game/11512

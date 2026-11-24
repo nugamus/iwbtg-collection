@@ -1,6 +1,7 @@
 ---
 id: poronkusema
 game_id: 344
+order: 12
 name: "I wanna be the Poronkusema"
 slug: poronkusema
 source: https://delicious-fruit.com/game/20975

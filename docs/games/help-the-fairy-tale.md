@@ -1,6 +1,7 @@
 ---
 id: help-the-fairy-tale
 game_id: 365
+order: 16
 name: "I wanna help the Fairy tale"
 slug: help-the-fairy-tale
 source: https://delicious-fruit.com/game/11595

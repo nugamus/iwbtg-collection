@@ -4,7 +4,7 @@
 # When several tables match a file, the last matching table wins, so the broad code
 # table comes first and the narrower documentation, font and game-content tables follow.
 #
-# Licence policy (README.md, docs/roadmap.md): code is MIT OR Apache-2.0, documentation
+# Licence policy (README.md, docs/roadmap.md): code is MIT, documentation
 # is CC-BY-4.0, bundled fonts are OFL-1.1, and game content belongs to its creators and is
 # not covered by the repository licences (see LICENSES/LicenseRef-Game-Content.txt).
 
@@ -43,7 +43,7 @@ path = [
   ".gitattributes",
 ]
 SPDX-FileCopyrightText = "2026 IWBTG Collection contributors"
-SPDX-License-Identifier = "MIT OR Apache-2.0"
+SPDX-License-Identifier = "MIT"
 
 # The generated licence list quotes the licence texts of third-party crates; one of them
 # carries an SPDX tag of its own. Override so the quoted tags are not read as this file's.
@@ -51,7 +51,7 @@ SPDX-License-Identifier = "MIT OR Apache-2.0"
 path = "THIRD_PARTY_LICENSES"
 precedence = "override"
 SPDX-FileCopyrightText = "2026 IWBTG Collection contributors"
-SPDX-License-Identifier = "MIT OR Apache-2.0"
+SPDX-License-Identifier = "MIT"
 
 # ---------------------------------------------------------------- documentation
 [[annotations]]
@@ -65,12 +65,7 @@ path = [
 SPDX-FileCopyrightText = "2026 IWBTG Collection contributors"
 SPDX-License-Identifier = "CC-BY-4.0"
 
-# The licence texts themselves.
-[[annotations]]
-path = "LICENSE-APACHE"
-SPDX-FileCopyrightText = "2026 IWBTG Collection contributors"
-SPDX-License-Identifier = "Apache-2.0"
-
+# The licence text.
 [[annotations]]
 path = "LICENSE-MIT"
 SPDX-FileCopyrightText = "2026 IWBTG Collection contributors"

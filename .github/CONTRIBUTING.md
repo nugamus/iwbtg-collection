@@ -6,9 +6,9 @@ Read `../CLAUDE.md` for the project rules and `../docs/dev-setup.md` for the too
 
 ## Licenses
 
-- Code is licensed under either the [Apache License 2.0](../LICENSE-APACHE) or [MIT](../LICENSE-MIT), at your option.
+- Code is licensed under the [MIT License](../LICENSE-MIT).
 - Documentation in `docs/` is licensed under [CC BY 4.0](../LICENSES/CC-BY-4.0.txt).
-- Unless you explicitly state otherwise, any contribution you intentionally submit for inclusion in the work, as defined in the Apache-2.0 license, is dual licensed as above, without any additional terms or conditions. This matches the [README](../README.md#license).
+- Unless you explicitly state otherwise, any contribution you intentionally submit for inclusion in the work is licensed under the MIT License, without any additional terms or conditions. This matches the [README](../README.md#license).
 - Do not change the license terms. Game content is not covered by them.
 
 ## Clean room

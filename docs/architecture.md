@@ -17,7 +17,7 @@ Facts about GameMaker 8 behavior come from the engine spec, `research/specs/engi
 
 ## Crates
 
-One Cargo workspace in `client/`, `license = "MIT OR Apache-2.0"`, toolchain pinned to an exact stable in `rust-toolchain.toml`.
+One Cargo workspace in `client/`, `license = "MIT"`, toolchain pinned to an exact stable in `rust-toolchain.toml`.
 
 | Crate | What it does | Depends on |
 |---|---|---|
