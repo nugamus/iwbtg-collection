@@ -1308,17 +1308,23 @@ fn fidelity(root: &Path, bless: bool) -> Result<(), String> {
         &[],
     )?;
     println!("$ cargo {}", args.join(" "));
-    let code = Command::new("cargo")
+    // Capture the output, not just the status: the sweep prints the per-package missing-script
+    // counts the progress stamp records (#1425). It is a matrix plus one line per changed case,
+    // so buffering it loses no useful live progress.
+    let out = Command::new("cargo")
         .args(&args)
         .current_dir(root)
-        .status()
-        .map_err(|e| format!("cargo: {e}"))?
-        .code();
+        .output()
+        .map_err(|e| format!("cargo: {e}"))?;
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    print!("{stdout}");
+    eprint!("{}", String::from_utf8_lossy(&out.stderr));
+    let code = out.status.code();
     // The tool exits 0 when every case is as good as the baseline, 1 on a regression, 2 on a tool error and
     // 101 on a panic: only 0 and 1 mean the sweep ran.
     if matches!(code, Some(0 | 1)) {
         record_fidelity_run(root);
-        record_game_progress(root, Path::new(&research));
+        record_game_progress(root, Path::new(&research), &stdout);
     }
     if code == Some(0) {
         Ok(())
@@ -1348,11 +1354,12 @@ fn record_fidelity_run(root: &Path) {
 const GAME_PROGRESS_STAMP: &str = "target/xtask/game-progress.txt";
 
 /// `target/xtask/game-progress.txt`, written after a sweep that ran. It records the packages input
-/// (present or absent) and one `missing-scripts <game> <n>` line per converted package from
-/// `iwbtg pkg check --trace-mode`. Fidelity OK/OPEN/FAIL counts are not copied here: the public
-/// `crates/tools/fidelity-baseline.txt` is what the hook reads, so there is one source for them.
-/// Best effort: a missing stamp only makes the hook print `not measured`.
-fn record_game_progress(root: &Path, research: &Path) {
+/// (present or absent) and one `missing-scripts <game> <n>` line per package from the sweep's own
+/// trace-mode load (#1425), so no second `pkg check` pass is needed. Fidelity OK/OPEN/FAIL counts
+/// are not copied here: the public `crates/tools/fidelity-baseline.txt` is what the hook reads, so
+/// there is one source for them. Best effort: a missing stamp only makes the hook print
+/// `not measured`.
+fn record_game_progress(root: &Path, research: &Path, sweep_output: &str) {
     let Ok((true, sha)) = output(root, "git", &["rev-parse", "origin/main"], &[]) else {
         return;
     };
@@ -1361,29 +1368,7 @@ fn record_game_progress(root: &Path, research: &Path) {
         .map_or(0, |d| d.as_secs());
     let packages = research.join("build").join("packages");
     let present = packages.is_dir();
-    let mut counts = BTreeMap::new();
-    if present {
-        let mut dirs: Vec<PathBuf> = match std::fs::read_dir(&packages) {
-            Ok(entries) => entries
-                .flatten()
-                .map(|entry| entry.path())
-                .filter(|path| path.is_dir())
-                .collect(),
-            Err(_) => Vec::new(),
-        };
-        dirs.sort();
-        for dir in dirs {
-            if let Some(count) = package_missing_scripts(root, &dir) {
-                let game = dir
-                    .file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                if !game.is_empty() {
-                    counts.insert(game, count);
-                }
-            }
-        }
-    }
+    let counts = sweep_missing_scripts(sweep_output);
     let text = game_progress_text(sha.trim(), secs, &packages, present, &counts);
     let path = root.join(GAME_PROGRESS_STAMP);
     if let Some(parent) = path.parent() {
@@ -1392,53 +1377,20 @@ fn record_game_progress(root: &Path, research: &Path) {
     let _ = std::fs::write(path, text);
 }
 
-/// `iwbtg pkg check <dir> --trace-mode`; its missing-script count, or `None` when the check could
-/// not run or failed before kinds loaded (never a made-up zero).
-fn package_missing_scripts(root: &Path, dir: &Path) -> Option<usize> {
-    let dir = dir.to_string_lossy();
-    let (_, text) = output(
-        root,
-        "cargo",
-        &[
-            "run",
-            "-q",
-            "-p",
-            "iwbtg-tools",
-            "--",
-            "pkg",
-            "check",
-            &dir,
-            "--trace-mode",
-        ],
-        &[],
-    )
-    .ok()?;
-    missing_script_count(&text)
-}
-
-/// The item count of the `converter request CR1, CR2:` warning (missing scripts); `Some(0)` when a
-/// clean check reported none; `None` when the output has neither (the package failed earlier, so
-/// counting it as zero would be a guess).
-fn missing_script_count(text: &str) -> Option<usize> {
-    /// The `(<n> item(s))` count in a converter-request warning, skipping earlier parentheses.
-    fn count(rest: &str) -> Option<usize> {
-        let mut search = 0;
-        while let Some(found) = rest[search..].find('(') {
-            let start = search + found + 1;
-            let digits: String = rest[start..].chars().take_while(char::is_ascii_digit).collect();
-            if !digits.is_empty() && rest[start + digits.len()..].starts_with(" item") {
-                return digits.parse().ok();
-            }
-            search = start;
-        }
-        None
-    }
-    text.lines()
-        .find_map(|line| {
-            line.split_once("converter request CR1, CR2:")
-                .and_then(|(_, rest)| count(rest))
+/// The `missing-scripts <game> <n>` lines `iwbtg trace sweep` prints, keyed by game id. The count
+/// comes from the load the sweep already ran, so the stamp matches what `pkg check --trace-mode`
+/// reported without a second pass (#1425).
+fn sweep_missing_scripts(output: &str) -> BTreeMap<String, usize> {
+    output
+        .lines()
+        .filter_map(|line| {
+            let mut words = line.split_whitespace();
+            (words.next()? == "missing-scripts").then_some(())?;
+            let game = words.next()?.to_owned();
+            let count = words.next()?.parse().ok()?;
+            words.next().is_none().then_some((game, count))
         })
-        .or_else(|| text.lines().any(|line| line.starts_with("OK (")).then_some(0))
+        .collect()
 }
 
 /// The stamp text: a comment, the commit and time, the packages input, then sorted per-game counts.
@@ -2114,20 +2066,25 @@ version = \"1.0.0\"
         assert!(!absent.contains("missing-scripts "), "{absent}");
     }
 
-    /// The missing-script count comes from the CR1/CR2 warning's `(<n> items)`, never a guessed zero.
+    /// The stamp's counts come from the sweep's own output lines (#1425).
     #[test]
-    fn the_missing_script_count_reads_the_converter_request_only() {
-        let output = "game.toml:1:1: warning: converter request CR1, CR2: objects with a script that \
-                      does not exist load inert (no events; their mask still collides) (37 items): a, b\n\
-                      OK (1 warnings)\n";
-        assert_eq!(missing_script_count(output), Some(37));
-        assert_eq!(missing_script_count("OK (0 warnings)\n"), Some(0));
-        assert_eq!(missing_script_count("FAILED: 2 errors, 0 warnings\n"), None);
-        // An earlier parenthesised phrase in the request text is not the count.
-        assert_eq!(
-            missing_script_count("converter request CR1, CR2: x (no events) (1 item): a\n"),
-            Some(1)
-        );
+    fn the_sweep_missing_scripts_are_parsed() {
+        let output = "game  OK OPEN FAIL\n\
+                      kaenbyou  3 1 0\n\
+                      \n\
+                      missing scripts per package (objects whose script does not exist):\n\
+                      missing-scripts animus 0\n\
+                      missing-scripts kaenbyou 37\n\
+                      \n\
+                      fidelity: 2 games (2 with cases), 4 cases: 3 OK, 1 OPEN, 0 FAIL\n";
+        let counts = sweep_missing_scripts(output);
+        assert_eq!(counts.get("animus"), Some(&0));
+        assert_eq!(counts.get("kaenbyou"), Some(&37));
+        assert_eq!(counts.len(), 2);
+        assert!(sweep_missing_scripts("no counts here\n").is_empty());
+        // A malformed or unrelated line is never read as a count.
+        assert!(sweep_missing_scripts("missing-scripts game\n").is_empty());
+        assert!(sweep_missing_scripts("missing scripts game 3\n").is_empty());
     }
 
     #[test]
