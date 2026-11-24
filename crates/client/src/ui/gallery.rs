@@ -44,16 +44,20 @@ pub fn run(
         None => (1600, 900).into(),
     };
     let mut app = App::new();
-    app.add_plugins(DefaultPlugins.set(WindowPlugin {
-        primary_window: Some(Window {
-            title: "IWBTG Collection: UI gallery".to_string(),
-            resolution,
-            #[cfg(target_arch = "wasm32")]
-            fit_canvas_to_parent: true,
-            ..default()
-        }),
-        ..default()
-    }))
+    app.add_plugins(
+        DefaultPlugins
+            .set(crate::logging::log_plugin())
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "IWBTG Collection: UI gallery".to_string(),
+                    resolution,
+                    #[cfg(target_arch = "wasm32")]
+                    fit_canvas_to_parent: true,
+                    ..default()
+                }),
+                ..default()
+            }),
+    )
     .add_plugins((crate::render_fix::plugin, UiKitPlugin))
     .insert_resource(ClearColor(tokens::GROUND))
     .insert_resource(ReducedMotion(reduced_motion))

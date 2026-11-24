@@ -30,6 +30,10 @@ bevy = { version = "0.20.1", default-features = false, features = [
 # The ellipsis helper (ui/widgets.rs, #636) reads cluster widths from the text layout Bevy keeps;
 # bevy_text builds parley with these features already, so this adds no crate and no rebuild.
 parley = { version = "0.11", default-features = false, features = ["std"] }
+# `logging` makes ICU4X's data errors `log` records instead of direct `eprintln!` writes, so the
+# client can drop the Japanese segmentation notice (logging.rs, #734); the `log` crate is already
+# in the graph through Bevy, so this adds no crate.
+icu_provider = { version = "2.4", default-features = false, features = ["logging"] }
 
 # In a browser: Bevy's web support (canvas, timers, asset loading through fetch).
 [target.'cfg(target_arch = "wasm32")'.dependencies]
