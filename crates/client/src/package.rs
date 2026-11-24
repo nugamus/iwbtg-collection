@@ -21,8 +21,9 @@ pub enum OpenError {
 
 /// An opened package.
 pub struct Package {
-    /// Every file, with the engine pack bundled.
-    pub files: PackageFiles,
+    /// Every file, with the engine pack bundled. Shared behind an [`Arc`]: the run's readers
+    /// (room art, the HUD, the results, the backdrop) clone this handle, not the bytes.
+    pub files: Arc<PackageFiles>,
     /// The loaded game.
     pub def: Arc<GameDef>,
     /// The package's `gameplay_hash`, for the replay header (`replays.rs`).
@@ -126,7 +127,7 @@ pub fn from_files(files: PackageFiles, trace_mode: bool) -> Result<Package, Open
         ));
     };
     Ok(Package {
-        files,
+        files: Arc::new(files),
         def: Arc::new(def),
         gameplay_hash,
     })

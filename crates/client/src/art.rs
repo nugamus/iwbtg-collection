@@ -11,6 +11,7 @@
 //! room's colour and leaves out the background layers that are not foregrounds.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use bevy::asset::RenderAssetUsages;
 use bevy::prelude::*;
@@ -26,8 +27,11 @@ use crate::view::order::{Ladder, Layer};
 use crate::view::{Game, RoomSize};
 use crate::visual::PlainBackdrop;
 
+/// The loaded package's files, shared with the other run resources that read them. Cloning this
+/// resource's handle copies an [`Arc`], never the package's bytes: every room build and scroll
+/// borrows the one immutable store that [`LoadedPackage`] owns.
 #[derive(Resource)]
-pub struct ArtFiles(pub PackageFiles);
+pub struct ArtFiles(pub Arc<PackageFiles>);
 
 /// Room backgrounds and tile layers of the loaded package, for each run (`shell`).
 pub struct ArtPlugin;
@@ -425,6 +429,26 @@ pub fn scroll_backgrounds(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn art_files_for_one_package_share_its_bytes() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/input.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        // Two runs' worth of the resource, as the shell builds it: cloning the `Arc` shares the
+        // store the package owns instead of copying every file.
+        let a = ArtFiles(pkg.files.clone());
+        let b = ArtFiles(pkg.files.clone());
+        assert!(Arc::ptr_eq(&pkg.files, &a.0));
+        assert!(Arc::ptr_eq(&a.0, &b.0));
+        // The package plus both resources hold one allocation, not three.
+        assert_eq!(Arc::strong_count(&a.0), 3);
+        // Both read the same bytes, and the loader finds the room art through either.
+        assert_eq!(a.0.get("game.toml"), b.0.get("game.toml"));
+        assert_eq!(
+            load_room_art(&a.0, &pkg.def.room(pkg.def.start_room).unwrap().name),
+            load_room_art(&b.0, &pkg.def.room(pkg.def.start_room).unwrap().name)
+        );
+    }
 
     #[test]
     fn no_background_keeps_only_the_foreground_layers() {
