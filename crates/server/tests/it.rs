@@ -16,3 +16,6 @@ mod healthz;
 
 #[path = "catalog.rs"]
 mod catalog;
+
+#[path = "healthchecks.rs"]
+mod healthchecks;
