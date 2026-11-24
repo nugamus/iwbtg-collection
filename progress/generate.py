@@ -316,6 +316,17 @@ def compute_overall(games):
     }
 
 
+def preserve_ports(games):
+    path = os.path.join(PROGRESS, "data.json")
+    if not os.path.exists(path):
+        return
+    old = json.load(open(path, encoding="utf-8"))
+    by = {g.get("slug"): g for g in old.get("games", [])}
+    for g in games:
+        if g["slug"] in by:
+            g["port"] = by[g["slug"]].get("port")
+
+
 def build_data(refresh):
     games = load_games()
     if refresh:
@@ -323,12 +334,19 @@ def build_data(refresh):
         issues = [i for i in gh_json(f"repos/{REPO}/issues?state=all&per_page=100")
                   if "pull_request" not in i]
         pulls = gh_json(f"repos/{REPO}/pulls?state=open&per_page=100")
-        games_issues = [i for i in gh_json(f"repos/{GAMES_REPO}/issues?state=all&per_page=100")
-                        if "pull_request" not in i]
         now = dt.datetime.now(dt.timezone.utc)
         phases = build_phases(milestones, issues)
         activity = build_activity(issues, pulls, now)
-        build_ports(games, games_issues)
+        try:
+            games_issues = [i for i in gh_json(f"repos/{GAMES_REPO}/issues?state=all&per_page=100")
+                            if "pull_request" not in i]
+            build_ports(games, games_issues)
+        except Exception as exc:
+            # The private games repo is not readable with the workflow's repository token.
+            # Keep the last committed port data; the public-repo data still refreshes.
+            print(f"warning: games repo read failed ({exc}); keeping committed port data",
+                  file=sys.stderr)
+            preserve_ports(games)
         source = "gh"
         at = now.isoformat().replace("+00:00", "Z")
     else:
