@@ -1,0 +1,4 @@
+# Feel baseline (#1167, #1168): every port contract's status on the package source it ran against.
+# Written by `cargo xtask feel --bless`; names and statuses only. A skipped contract keeps its last entry.
+collision/kaenbyou_spike_death_timing OK
+physics/rely_the_needle_double_jump OK

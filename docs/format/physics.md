@@ -69,7 +69,7 @@ A `model` selects a native implementation; the preset and the section's other ke
 - `[water] model`: names `[jump] water_air` (`none`, `jump_refresh` = `water2_without_flag`, `full_jump` = `water_unlimited`, `water3_keeps`).
 - `[flip] model` (`none`, `swap_object`, `yflag`, `grav_sign`) and `[ice] model` (`none`, `slip`) already use the standard names.
 
-The legacy spellings are aliases, not a second schema: an old `physics.toml` loads to exactly the same values and keeps its `gameplay_hash` until the file text is edited. Because the profile file's parsed text is hashed, rewriting a profile to the standard names is a package edit even when the values are identical.
+The legacy spellings are aliases, not a second schema: an old `physics.toml` loads to exactly the same values and keeps its `gameplay_hash` until the file text is edited. `docs/format/schema/v0/physics.schema.json` lists both spellings of each key (`[vines]`/`[vine]`, `[platforms]`/`[platform]`, `[ladders]`/`[ladder]`, `[slopes]`/`[slope]`, `[numbers] max_fall`/`max_fall_speed`), so an editor accepts either; the generator adds the aliases because schemars does not emit serde aliases. Because the profile file's parsed text is hashed, rewriting a profile to the standard names is a package edit even when the values are identical.
 
 ## Event lists
 

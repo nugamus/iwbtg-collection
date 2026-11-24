@@ -1,5 +1,6 @@
-//! The JSON Schemas in `docs/format/schema/v1/` (#212; `v0/` is the frozen format-0 copy): not stale, and the examples in
-//! format pages (`docs/format/*.md`) and the valid test packages validate against them.
+//! The JSON Schemas in `docs/format/schema/v1/` (#212; `v0/` is the frozen format-0 copy): not
+//! stale, and the examples in format pages (`docs/format/*.md`) and the valid test packages
+//! validate against them.
 //!
 //! `cargo xtask regen` rewrites the schema files: it runs `schema_files_are_not_stale` alone with
 //! `UPDATE_SCHEMAS=1`, then this whole file. Setting `UPDATE_SCHEMAS=1` on the whole file instead
@@ -275,6 +276,35 @@ fn the_family_b_physics_examples_validate() {
         let text = fs::read_to_string(client_root().join(&path)).unwrap();
         assert_valid("physics", &path, &text);
     }
+}
+
+/// A profile written with the standard names (#1330) validates, and the legacy names still do.
+#[test]
+fn the_physics_schema_lists_the_standard_names() {
+    let validator = jsonschema::validator_for(&load_schema("physics")).unwrap();
+    for (standard, legacy) in [
+        (
+            r#"{ "vines": { "model": "symmetric_early", "kick": [4, 4] } }"#,
+            r#"{ "vine": { "model": "symmetric_early", "kick": [4, 4] } }"#,
+        ),
+        (r#"{ "platforms": {} }"#, r#"{ "platform": {} }"#),
+        (r#"{ "ladders": {} }"#, r#"{ "ladder": {} }"#),
+        (
+            r#"{ "slopes": { "model": "rainbow" } }"#,
+            r#"{ "slope": { "downhill": "rainbow" } }"#,
+        ),
+        (
+            r#"{ "numbers": { "max_fall": 9 } }"#,
+            r#"{ "numbers": { "max_fall_speed": 9 } }"#,
+        ),
+    ] {
+        let standard: serde_json::Value = serde_json::from_str(standard).unwrap();
+        assert!(validator.is_valid(&standard), "{standard} should validate");
+        let legacy: serde_json::Value = serde_json::from_str(legacy).unwrap();
+        assert!(validator.is_valid(&legacy), "{legacy} should validate");
+    }
+    assert!(!validator.is_valid(&serde_json::json!({ "vines": { "bogus": 1 } })));
+    assert!(!validator.is_valid(&serde_json::json!({ "numbers": { "max_fal": 9 } })));
 }
 
 #[test]
