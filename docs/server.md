@@ -2,7 +2,7 @@
 
 The leaderboard, accounts and game downloads run on the maintainer's home server. Chosen for few moving parts, strong defaults and easy operation by agents. Versions were checked on 2026-10-23; check them again when Phase 8 starts.
 
-Status: the skeleton exists: `crates/server` builds the `iwbtg-server` binary (axum 0.8 + tokio, `--bind`/`IWBTG_BIND`, default `127.0.0.1:8080`) and serves `GET /healthz` (#152). It opens the SQLite database (`--db`/`IWBTG_DB`, default `data/iwbtg.db`), sets WAL and runs the migrations at startup (#153, Schema below). Accounts, submissions and the verify worker are later issues.
+Status: the skeleton exists: `crates/server` builds the `iwbtg-server` binary (axum 0.8 + tokio, `--bind`/`IWBTG_BIND`, default `127.0.0.1:8080`) and serves `GET /healthz` (#152). It opens the SQLite database (`--db`/`IWBTG_DB`, default `data/iwbtg.db`), sets WAL and runs the migrations at startup (#153, Schema below). A published folder is served as `GET /catalog.json` and `GET /files/<sha256>[.<ext>]` (`--catalog-dir`/`IWBTG_CATALOG_DIR`, Game downloads below); unset, both answer 404 (#807). Accounts, submissions and the verify worker are later issues.
 
 ## Components
 
@@ -15,7 +15,7 @@ Status: the skeleton exists: `crates/server` builds the `iwbtg-server` binary (a
 | Internet exposure | Cloudflare Tunnel (`cloudflared`) | No router port forwards, home IP hidden, DDoS protection in front, TLS handled by Cloudflare. |
 | Admin access | Tailscale (not Funnel) for SSH and admin pages | No open ports. |
 | Host | Debian 13, Docker Compose with two services: `server`, `cloudflared` | One `compose.yaml` in git describes production. |
-| Game downloads | Content-addressed files `/files/<sha256>.<ext>` served with Range support, plus `/catalog.json` | Resumable downloads, end-to-end hash check, caches never go stale. |
+| Game downloads | Content-addressed files `/files/<sha256>[.<ext>]` with a long immutable cache, plus `/catalog.json` with a short one (Range support is #1397) | End-to-end hash check, caches never go stale. |
 | Backups | restic to remote storage (Backblaze B2 or a Hetzner Storage Box) | Encrypted, deduplicated, retention built in. Replaces the earlier "push backups to a Git server" idea: Git would keep password hashes and emails forever, unencrypted, and could never forget a deleted account. |
 | Logs and monitoring | `tracing` JSON logs to stdout; `/healthz` pinged to healthchecks.io every 5 minutes | Alerts arrive even when the house loses power or internet. |
 | Dependency updates | Dependabot PRs for cargo and compose, `cargo audit` in CI | Updates arrive as reviewable PRs, never silently. |
@@ -38,6 +38,22 @@ Migrations live in `migrations/` at the workspace root (not in the crate), are c
 Timestamps are UTC ISO-8601 text and hashes are raw 32-byte BLOBs. Boards sort on `ticks` with ties to the earlier `submitted_at`, keyed on the replay header's `(package_id, map_id, mods, gameplay_hash)` ([versioning](architecture/versioning.md#what-a-board-keys-on)); `gameplay_hash` therefore covers `engine_rev`, and no product columns beyond the replay header are stored.
 
 Queries that need compile-time checking use `sqlx::query!`; the `.sqlx` offline data is committed once the first such query lands (#162). Until then the only SQL in `crates/server` is the PRAGMA and schema probes in the tests, which use runtime `query_scalar`, so the build needs no live database and no `DATABASE_URL`.
+
+## Game downloads
+
+`crates/server/src/catalog.rs` serves a folder chosen at startup with `--catalog-dir` (`IWBTG_CATALOG_DIR`), so the binary never needs the catalog baked in (#807). Unset, `/catalog.json` and `/files/...` answer 404 and the rest of the server runs normally. The folder layout is:
+
+```text
+<catalog-dir>/
+  catalog.json
+  files/<sha256>[.<ext>]
+```
+
+- `/catalog.json` is read per request and sent `Cache-Control: public, max-age=60`: it changes when a game is published, so caches pick a new one up within a minute.
+- `/files/...` is sent `Cache-Control: public, max-age=31536000, immutable`, because the file name is the hash: those bytes can never change under that URL.
+- A file name is accepted only as 64 lowercase hex characters plus an optional alphanumeric extension (at most 16). Everything else — `..`, encoded or literal separators, a non-hash name — is 404 before the filesystem is touched, and a missing catalog or file is also 404. There is no directory listing.
+- `Content-Type` follows the extension (`.json`, `.png`, `.ogg`, `.wav`, `.zip`/`.iwbz`), otherwise `application/octet-stream`.
+- Range requests are not implemented yet (#1397): a download that drops restarts from zero.
 
 ## Security rules
 

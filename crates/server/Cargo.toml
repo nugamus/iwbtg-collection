@@ -16,7 +16,7 @@ path = "src/main.rs"
 [dependencies]
 # The HTTP surface (docs/server.md, Components): axum 0.8 on tokio.
 axum = "0.8"
-tokio = { version = "1.54.1", features = ["macros", "net", "rt-multi-thread"] }
+tokio = { version = "1.54.1", features = ["macros", "net", "fs", "rt-multi-thread"] }
 # --bind; the `env` feature adds IWBTG_BIND.
 clap = { workspace = true, features = ["env"] }
 # SQLite (WAL, one file) with migrations at startup (docs/server.md, Database). No TLS runtime:
