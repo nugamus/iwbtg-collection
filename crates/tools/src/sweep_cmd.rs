@@ -3,7 +3,8 @@
 //! CI cannot see the private research repo, so fidelity is checked by this command instead
 //! (`cargo xtask fidelity`, docs/architecture/testing.md). It runs `trace check` for each
 //! package folder under `<research>/build/packages` in one process, prints one row per game
-//! (OK / OPEN / FAIL counts) and one line per case that is not OK, and compares every case
+//! (OK / OPEN / FAIL counts), one line per case that is not OK and, per package, a
+//! `missing-scripts <game> <n>` line for the status hook's port progress (#1425), and compares every case
 //! status with a committed baseline: names and statuses only, no private data. A case whose
 //! status got worse (OK to OPEN or FAIL, OPEN to FAIL), a new case that fails, or a baseline case
 //! that disappeared is a regression; `--bless` rewrites the baseline with the current statuses
@@ -13,6 +14,8 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
+
+use iwbtg_format::load::{LoadReport, load_report};
 
 use crate::baseline::{Status, Statuses, compare, format_baseline, one_line, parse_baseline, word};
 use crate::trace_cmd::{ToolError, check_case, load_package, package_id, read_case};
@@ -25,11 +28,14 @@ pub struct CaseResult {
 }
 
 /// One game row: its package id (or folder name), an error that kept the package from
-/// loading, and its cases by name.
+/// loading, its cases by name, and its missing-script count (#1425).
 #[derive(Debug, Default)]
 pub struct GameRow {
     pub note: Option<String>,
     pub cases: BTreeMap<String, CaseResult>,
+    /// The `CR1, CR2` item count (objects whose script does not exist) from the trace-mode load;
+    /// `None` when the package did not load and emitted no such warning.
+    pub missing_scripts: Option<usize>,
 }
 
 /// The paths of every entry of `dir`; a read or entry failure names the folder.
@@ -135,11 +141,70 @@ fn sweep_package(dir: &Path, research: &Path, cases: &Path) -> Result<(String, G
             return Ok((folder, row));
         }
     };
-    let mut row = GameRow::default();
+    let missing_scripts = package_missing_scripts(&files);
+    let mut row = GameRow {
+        missing_scripts,
+        ..GameRow::default()
+    };
     for path in case_paths(cases, &id)? {
         row.cases.insert(stem(&path), run_one(&files, &path, research));
     }
     Ok((id, row))
+}
+
+/// The `CR1, CR2` item count (objects whose script does not exist) from one trace-mode load: the
+/// same `load_report` and mode `iwbtg pkg check --trace-mode` uses, so the count is identical.
+/// `Some(0)` when a clean report has no such warning; `None` when the package does not load
+/// cleanly and the warning never ran.
+fn package_missing_scripts(files: &iwbtg_format::PackageFiles) -> Option<usize> {
+    let report = load_report(
+        files,
+        iwbtg_format::LoadMode::Trace {
+            unmapped_kinds_inert: true,
+        },
+    );
+    if let Some(count) = missing_script_count(&report) {
+        return Some(count);
+    }
+    report.ok().then_some(0)
+}
+
+/// The `missing-scripts <game> <n>` lines `cargo xtask fidelity` records for the status hook's
+/// per-game port progress (#1425), or `""` when no package reported a count. The line shape is
+/// parsed by `sweep_missing_scripts` in xtask.
+pub fn progress_lines(rows: &BTreeMap<String, GameRow>) -> String {
+    if !rows.values().any(|row| row.missing_scripts.is_some()) {
+        return String::new();
+    }
+    let mut out = String::from("missing scripts per package (objects whose script does not exist):\n");
+    for (id, row) in rows {
+        if let Some(count) = row.missing_scripts {
+            let _ = writeln!(out, "missing-scripts {id} {count}");
+        }
+    }
+    out
+}
+
+/// The item count in the `converter request CR1, CR2:` diagnostic, if the report holds one.
+fn missing_script_count(report: &LoadReport) -> Option<usize> {
+    report.diagnostics.iter().find_map(|diagnostic| {
+        let rest = diagnostic.message.split_once("converter request CR1, CR2:")?.1;
+        item_count(rest)
+    })
+}
+
+/// The `(<n> item(s))` count in a converter-request message, skipping earlier parentheses.
+fn item_count(rest: &str) -> Option<usize> {
+    let mut search = 0;
+    while let Some(found) = rest[search..].find('(') {
+        let start = search + found + 1;
+        let digits: String = rest[start..].chars().take_while(char::is_ascii_digit).collect();
+        if !digits.is_empty() && rest[start + digits.len()..].starts_with(" item") {
+            return digits.parse().ok();
+        }
+        search = start;
+    }
+    None
 }
 
 /// Every package folder under `packages`, in parallel (one thread per package), plus a row for
@@ -243,6 +308,10 @@ pub fn main(
 ) -> Result<bool, ToolError> {
     let rows = sweep(packages, research, cases)?;
     print!("{}", render(&rows));
+    let progress = progress_lines(&rows);
+    if !progress.is_empty() {
+        print!("\n{progress}");
+    }
     let now = statuses(&rows);
     let n = |s: Status| now.values().filter(|&&v| v == s).count();
     let with_cases = rows.values().filter(|r| !r.cases.is_empty()).count();
@@ -416,5 +485,46 @@ mod tests {
         assert!(text.contains("game_b     -    -    -  no cases"), "{text}");
         assert!(text.contains("game_a/y OPEN: needs a probe"), "{text}");
         assert!(!text.contains("game_a/x"), "{text}");
+    }
+
+    #[test]
+    fn the_progress_lines_are_machine_readable() {
+        let mut rows = BTreeMap::new();
+        rows.insert(
+            "game_b".to_owned(),
+            GameRow {
+                missing_scripts: Some(37),
+                ..GameRow::default()
+            },
+        );
+        rows.insert(
+            "game_a".to_owned(),
+            GameRow {
+                missing_scripts: Some(0),
+                ..GameRow::default()
+            },
+        );
+        rows.insert("game_c".to_owned(), GameRow::default()); // did not load
+        let text = progress_lines(&rows);
+        assert!(text.starts_with("missing scripts per package"), "{text}");
+        assert!(text.contains("\nmissing-scripts game_a 0\n"), "{text}");
+        assert!(text.contains("\nmissing-scripts game_b 37\n"), "{text}");
+        assert!(!text.contains("game_c"), "{text}");
+        assert_eq!(progress_lines(&BTreeMap::new()), "");
+    }
+
+    #[test]
+    fn the_missing_script_count_reads_the_converter_request_only() {
+        // The request text itself carries parentheses; only `(<n> item` is the count.
+        assert_eq!(
+            item_count(
+                "objects with a script that does not exist load inert (no events; their mask \
+                 still collides) (37 items): a, b"
+            ),
+            Some(37)
+        );
+        assert_eq!(item_count("(1 item): a"), Some(1));
+        assert_eq!(item_count("(no events)"), None);
+        assert_eq!(item_count("(2 rooms)"), None);
     }
 }
