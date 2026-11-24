@@ -379,7 +379,7 @@ code{{background:#12151d;border:1px solid var(--line);border-radius:4px;padding:
 
 <h2>Reproduce this page</h2>
 <p>From the client repo: <code>python -I progress/generate.py</code> reads the committed <code>data.json</code>, the per-game front-matter and an optional <code>progress/exporter.json</code>. <code>python -I progress/generate.py --gh --history</code> refreshes phase counts from GitHub and appends a history point. The same command runs in <code>.github/workflows/progress.yml</code> and publishes to GitHub Pages. Exporter schema and commands are in <code>progress/README.md</code>.</p>
-<p class="note">Follow-ups: census #{FOLLOWUPS["census"]}, trace coverage #{FOLLOWUPS["traces"]}, converter state #{FOLLOWUPS["converter"]}, per-game front-matter #{FOLLOWUPS["frontmatter"]}.</p>
+<p class="note">Follow-ups: census <a href="https://github.com/{REPO}/issues/{FOLLOWUPS["census"]}">#{FOLLOWUPS["census"]}</a>, trace coverage <a href="https://github.com/{REPO}/issues/{FOLLOWUPS["traces"]}">#{FOLLOWUPS["traces"]}</a>, converter state <a href="https://github.com/{REPO}/issues/{FOLLOWUPS["converter"]}">#{FOLLOWUPS["converter"]}</a>, per-game front-matter <a href="https://github.com/{REPO}/issues/{FOLLOWUPS["frontmatter"]}">#{FOLLOWUPS["frontmatter"]}</a>.</p>
 </main>
 </html>
 """
