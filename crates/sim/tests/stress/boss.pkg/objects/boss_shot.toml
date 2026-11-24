@@ -1,0 +1,6 @@
+#:schema ../../../../../../docs/format/schema/v0/object.schema.json
+# The boss's projectile: a native killer moved by `speed`/`direction`, so the pattern costs no
+# per-step script. The 4x4 sprite is its hitbox and its art.
+base = "killer"
+sprite = "shot"
+counts_as = ["killer"]

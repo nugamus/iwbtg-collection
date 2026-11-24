@@ -1,0 +1,9 @@
+#:schema ../../../../../../docs/format/schema/v0/object.schema.json
+# The stress boss: a scripted object with a 32x32 hitbox, no native behavior. `hp` and `phase`
+# are the custom variables the script reads and writes; `collides_with` is what makes the
+# kid's bullets reach `collide(other)`.
+sprite = "boss"
+script = "boss"
+collides_with = ["kid_bullet"]
+timeline = "boss_phases"
+params = { hp = 4.0, phase = 1.0 }

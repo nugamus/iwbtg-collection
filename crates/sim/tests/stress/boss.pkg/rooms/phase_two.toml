@@ -1,0 +1,11 @@
+#:schema ../../../../../../docs/format/schema/v0/room.schema.json
+# Phase two. The boss script enters this room when its first HP bar empties, so the phase
+# boundary is a timing split `iwbtg replay run` prints (`1@<tick>`). The layout matches phase
+# one (the kid spawns at y 567), so the fight is the same shape after the change.
+size = [800, 608]
+file_speed = 50
+views_enabled = false
+instances = [
+  { kind = "kid_start", x = 120, y = 544 },
+  { kind = "@boss", x = 400, y = 567 },
+]

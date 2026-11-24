@@ -1,0 +1,6 @@
+#:schema ../../../../../docs/format/schema/v0/physics.schema.json
+# The kid stays where the room puts it: the arena has no floor and needs no sprite for one.
+preset = "A1"
+
+[numbers]
+gravity = 0.0

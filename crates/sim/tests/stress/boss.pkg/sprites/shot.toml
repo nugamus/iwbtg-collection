@@ -1,0 +1,6 @@
+#:schema ../../../../../../../docs/format/schema/v0/sprite.schema.json
+# A solid 4x4 frame: the boss's projectile and, through `[defaults.kid_bullet]`, the kid's bullet.
+frames = 1
+frame_size = [4, 4]
+origin = [0, 0]
+collision = "rect"

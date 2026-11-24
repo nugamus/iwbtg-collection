@@ -1,0 +1,6 @@
+#:schema ../../../../../../../docs/format/schema/v0/sprite.schema.json
+# A solid 32x32 frame; the rect mask is the boss's whole hitbox.
+frames = 1
+frame_size = [32, 32]
+origin = [16, 16]
+collision = "rect"

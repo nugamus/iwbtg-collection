@@ -1,0 +1,8 @@
+# Phase one of the boss stress package: four presses straight into the boss's hitbox empty its
+# first HP bar, and the script moves the fight to `phase_two` (the split `1@...`).
+#   cargo run -p iwbtg-tools -- replay run crates/sim/tests/stress/boss.pkg #       crates/sim/tests/stress/boss_clear.inputs
+frame 2: press shoot
+frame 5: press shoot
+frame 8: press shoot
+frame 11: press shoot
+frame 40: end

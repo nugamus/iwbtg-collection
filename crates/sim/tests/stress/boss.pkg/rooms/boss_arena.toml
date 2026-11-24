@@ -1,0 +1,12 @@
+#:schema ../../../../../../docs/format/schema/v0/room.schema.json
+# Phase one: the kid fires straight right into the boss's 32x32 hitbox. The 4x4 bullet sprites
+# are enough for the masks, so the package needs no floor. The kid spawns 23 px below the
+# `kid_start` that places it (y 567), which is the height the boss stands at so the straight
+# shot meets its box.
+size = [800, 608]
+file_speed = 50
+views_enabled = false
+instances = [
+  { kind = "kid_start", x = 120, y = 544 },
+  { kind = "@boss", x = 400, y = 567 },
+]

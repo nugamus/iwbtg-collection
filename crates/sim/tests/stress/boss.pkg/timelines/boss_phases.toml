@@ -1,0 +1,11 @@
+#:schema ../../../../../../../docs/format/schema/v0/timeline.schema.json
+# The boss's attack pattern, synced to ticks: a repeating ring at t=0 and t=36 and a wider
+# spiral at t=24, rotated at t=12. The timeline never decides the HP phase; the `collide`
+# handler does, so a fast replay can end a phase before a moment runs.
+loop = true
+moments = [
+  { t = 0, call = "wind_up" },
+  { t = 12, call = "ring" },
+  { t = 24, call = "spiral" },
+  { t = 36, call = "ring" },
+]
