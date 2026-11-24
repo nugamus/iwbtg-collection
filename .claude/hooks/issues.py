@@ -139,6 +139,8 @@ def settings_drift(root=WORKSPACE):
 
 BASELINE = "crates/tools/fidelity-baseline.txt"
 FIDELITY_STAMP = Path("target") / "xtask" / "last-fidelity.txt"  # `cargo xtask fidelity` writes "<origin/main sha> <unix secs>"
+GAME_PROGRESS_STAMP = Path("target") / "xtask" / "game-progress.txt"  # `cargo xtask fidelity` writes the per-game `pkg check` counts (#1354)
+PORT_PROGRESS_WIDTH = 24
 
 
 def fidelity_stale(repo=WORKSPACE / REPOS["c"], ref="origin/main"):
@@ -163,6 +165,97 @@ def fidelity_stale(repo=WORKSPACE / REPOS["c"], ref="origin/main"):
         return ""
     return (f"FIDELITY STALE: {n} sim/format commit(s) on main since the last fidelity sweep. "
             "Run `IWBTG_RESEARCH=../iwbtg-collection-research cargo xtask fidelity` (lead, after a merge wave).\n\n") if n else ""
+
+
+def fidelity_games(repo=REPO):
+    """{game: {"OK", "OPEN", "FAIL"} counts} from the public fidelity baseline, or {} without one."""
+    counts = {}
+    try:
+        text = (repo / BASELINE).read_text(encoding="utf-8")
+    except OSError:
+        return counts
+    for line in text.splitlines():
+        words = line.split("#", 1)[0].split()
+        if len(words) != 2 or words[1] not in ("OK", "OPEN", "FAIL"):
+            continue
+        game = words[0].split("/", 1)[0]
+        counts.setdefault(game, {"OK": 0, "OPEN": 0, "FAIL": 0})[words[1]] += 1
+    return counts
+
+
+def game_progress_stamp(repo=REPO, fallback=None):
+    """(missing scripts by game, packages path, packages present, stamp found) from the freshest
+    `game-progress.txt`; ({}, None, False, False) when there is none."""
+    for root in [repo] + ([fallback] if fallback else []):
+        try:
+            text = (root / GAME_PROGRESS_STAMP).read_text(encoding="utf-8")
+        except OSError:
+            continue
+        missing, packages, present = {}, None, False
+        for line in text.splitlines():
+            words = line.split()
+            if not words or words[0].startswith("#"):
+                continue
+            if words[0] == "missing-scripts" and len(words) == 3:
+                try:
+                    missing[words[1]] = int(words[2])
+                except ValueError:
+                    pass
+            elif words[0] == "missing-scripts-input" and len(words) >= 3:
+                present, packages = words[1] == "present", " ".join(words[2:])
+        return missing, packages, present, True
+    return {}, None, False, False
+
+
+def game_progress_lines(workspace=WORKSPACE, repo=REPO):
+    """Per-game port progress: fidelity from the baseline, missing scripts from the last sweep's
+    `pkg check` stamp, and port yes/no from a `<game>/` folder in the games checkout. A value that
+    was not measured prints `not measured` and names the missing input; it never prints a zero
+    (#1354). Empty when the repo has no baseline."""
+    games = fidelity_games(repo)
+    if not games:
+        return []
+    missing, packages, present, found = game_progress_stamp(repo, workspace / REPOS["c"])
+    games_root = workspace / REPOS["g"]
+    games_found = games_root.is_dir()
+    packages = packages or str(workspace / REPOS["r"] / "build" / "packages")
+    lines = ["", "Port progress per game (fidelity from crates/tools/fidelity-baseline.txt; "
+                 "missing scripts from the last `cargo xtask fidelity` sweep):",
+             f"  {'game':<{PORT_PROGRESS_WIDTH}} {'fidelity OK/OPEN/FAIL':<21} {'missing scripts':>15}  port"]
+    total = {"OK": 0, "OPEN": 0, "FAIL": 0}
+    missing_total, ports = 0, 0
+    for game in sorted(games):
+        c = games[game]
+        for status in total:
+            total[status] += c[status]
+        if game in missing:
+            miss, missing_total = str(missing[game]), missing_total + missing[game]
+        else:
+            miss = "not measured"
+        if games_found:
+            port = "yes" if (games_root / game).is_dir() else "no"
+            ports += port == "yes"
+        else:
+            port = "not measured"
+        fidelity = f"{c['OK']}/{c['OPEN']}/{c['FAIL']}"
+        lines.append(f"  {game:<{PORT_PROGRESS_WIDTH}} {fidelity:<21} {miss:>15}  {port}")
+    fidelity_total = f"{total['OK']}/{total['OPEN']}/{total['FAIL']}"
+    missing_all = all(game in missing for game in games)
+    port_total = f"{ports}/{len(games)}" if games_found else "not measured"
+    lines.append(f"  {'total':<{PORT_PROGRESS_WIDTH}} {fidelity_total:<21} "
+                 f"{str(missing_total) if missing_all else 'not measured':>15}  {port_total}")
+    # Name the missing inputs once, instead of on every row.
+    if not missing_all:
+        if not found:
+            lines.append(f"  missing scripts: not measured (no fidelity sweep stamp; run `cargo xtask fidelity`, "
+                         f"input {packages})")
+        elif not present:
+            lines.append(f"  missing scripts: not measured (no packages at {packages})")
+        else:
+            lines.append(f"  missing scripts: not measured (no per-package counts recorded for {packages})")
+    if not games_found:
+        lines.append(f"  ports: not measured (no games checkout at {games_root})")
+    return lines
 
 
 def worktrees(root=WORKSPACE):
@@ -273,6 +366,7 @@ def start():
     for t in sorted(ms, key=lambda t: (ms_key(t), t)):
         o, c = ms[t]
         lines.append(f"- {t}: {c}/{o + c} ({100 * c // max(o + c, 1)}%)")
+    lines += game_progress_lines()
     if answered:
         lines += ["", "The user answered these needs-user issues. Read the reply, act on it, remove `needs-user`:"] + [f"- {a}" for a in answered]
     if triage:
@@ -382,6 +476,33 @@ def test():
         assert settings_drift(root) == ""  # same JSON, different formatting
         (root / ".claude" / "settings.json").write_text('{"a": 2}')
         assert settings_drift(root).startswith("WARNING")
+    # Port progress (#1354): fidelity from the baseline, missing scripts from the sweep stamp,
+    # port presence from a `<game>/` folder; an absent input prints `not measured`, never a zero.
+    with tempfile.TemporaryDirectory() as d:
+        ws = Path(d)
+        repo = ws / REPOS["c"]
+        (repo / "crates/tools").mkdir(parents=True)
+        (repo / BASELINE).write_text(
+            "kaenbyou/a OK\nkaenbyou/b OPEN\nkaenbyou/c FAIL\nanimus/x OK\n", encoding="utf-8")
+        (ws / REPOS["g"] / "kaenbyou").mkdir(parents=True)
+        text = "\n".join(game_progress_lines(ws, repo))
+        assert "kaenbyou" in text and "animus" in text and "total" in text
+        assert "1/1/1" in text and "1/0/0" in text and "1/2" in text  # ports: kaenbyou only
+        assert "not measured (no fidelity sweep stamp" in text
+        (repo / GAME_PROGRESS_STAMP).parent.mkdir(parents=True)
+        (repo / GAME_PROGRESS_STAMP).write_text(
+            "missing-scripts-input absent /nope/build/packages\nmissing-scripts kaenbyou 12\n",
+            encoding="utf-8")
+        text = "\n".join(game_progress_lines(ws, repo))
+        assert "12" in text and "not measured" in text  # animus was not measured
+        assert "no packages at /nope/build/packages" in text
+        (repo / BASELINE).unlink()
+        assert game_progress_lines(ws, repo) == []
+        # The stamp parser reads a measured packages input and a zero it did measure.
+        (repo / BASELINE).write_text("a/x OK\n", encoding="utf-8")
+        (repo / GAME_PROGRESS_STAMP).write_text(
+            "missing-scripts-input present /p\nmissing-scripts a 0\n", encoding="utf-8")
+        assert game_progress_stamp(repo)[:3] == ({"a": 0}, "/p", True)
     from unittest.mock import patch
     from types import SimpleNamespace
     with tempfile.TemporaryDirectory() as d:
