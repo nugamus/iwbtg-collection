@@ -2,8 +2,8 @@
 //! starts much faster than one per file. Each `tests/<file>.rs` is a module here, so its
 //! tests are named `<file>::...`; run one file with `cargo test -p iwbtg-sim --test it <file>::`.
 //! Files are named after the module they test (#985); the shared fixtures are `support.rs`
-//! and `collide_support/mod.rs`. Kept as their own targets (Cargo.toml): `wp1_determinism`
-//! (file `determinism.rs`, the target name CI runs) and `golden_corpus`, which CI runs on
+//! and `collide_support/mod.rs`. Kept as their own targets (Cargo.toml): `determinism`
+//! and `golden_corpus`, which CI runs on
 //! wasm targets or which regenerate pinned files.
 //!
 //! A new test file goes into this list (`autotests = false` in Cargo.toml, so cargo won't find it alone).

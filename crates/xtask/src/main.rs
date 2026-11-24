@@ -806,13 +806,13 @@ fn repin(root: &Path) -> Result<(), String> {
     let (ok, text) = output(
         root,
         "cargo",
-        &["test", "-p", "iwbtg-sim", "--test", "wp1_determinism"],
+        &["test", "-p", "iwbtg-sim", "--test", "determinism"],
         &[],
     )?;
     if !ok {
         let got = left_value(&text)
             .and_then(first_hash)
-            .ok_or_else(|| format!("wp1_determinism failed without a new hash:\n{text}"))?;
+            .ok_or_else(|| format!("determinism failed without a new hash:\n{text}"))?;
         replace_const(&path, "const FINAL_HASH: &str = \"", got)?;
         println!("FINAL_HASH -> {got}");
     }
@@ -862,7 +862,7 @@ fn repin(root: &Path) -> Result<(), String> {
             "-p",
             "iwbtg-sim",
             "--test",
-            "wp1_determinism",
+            "determinism",
             "--test",
             "golden_corpus",
         ],
@@ -1576,6 +1576,116 @@ name = \"wasm-bindgen\"
 version = \"0.2.129\"
 source = \"x\"
 ";
+
+    /// WP-era ids (`WP` plus a number) are retired (docs/architecture/testing.md, "Naming
+    /// tests"). Each count is a ceiling: an area that gains one fails. #986 (`crates/sim/src`)
+    /// and #1090 (`crates/sim/tests`) still carry the remaining ones; the PR that removes an
+    /// area's last ids lowers its ceiling here.
+    const WP_CEILINGS: &[(&str, usize)] = &[
+        ("(root)", 1),
+        (".claude", 1),
+        (".github", 0),
+        ("crates/format", 98),
+        ("crates/sim", 2),
+        ("crates/sim/src", 470),
+        ("crates/sim/tests", 242),
+        ("crates/tools", 16),
+        ("crates/xtask", 0),
+        ("docs", 9),
+        ("docs/architecture", 12),
+        ("docs/format", 70),
+        ("docs/lanes", 0),
+        ("docs/plans", 381),
+        ("scripts", 0),
+    ];
+
+    #[test]
+    fn no_new_wp_era_identifiers() {
+        let root = workspace_root();
+        let mut found: BTreeMap<String, usize> = BTreeMap::new();
+        let mut files = Vec::new();
+        text_files(&root, &mut files);
+        for path in files {
+            let Ok(text) = std::fs::read_to_string(&path) else {
+                continue; // binary or not UTF-8
+            };
+            let count = wp_ids(&text);
+            if count > 0 {
+                *found.entry(area_of(&root, &path)).or_default() += count;
+            }
+        }
+        let mut problems = Vec::new();
+        for (area, count) in &found {
+            match WP_CEILINGS.iter().find(|(name, _)| name == area) {
+                Some((_, ceiling)) if count > ceiling => {
+                    problems.push(format!("{area}: {count} (ceiling {ceiling})"));
+                }
+                Some(_) => {}
+                None => problems.push(format!("{area}: {count} (no ceiling; add one in the same PR)")),
+            }
+        }
+        assert!(
+            problems.is_empty(),
+            "new WP-era identifiers (docs/architecture/testing.md, \"Naming tests\"); a WP id may stay only where it explains history a reader needs:\n{}",
+            problems.join("\n")
+        );
+    }
+
+    /// Every file small enough to be text, skipping build and VCS folders.
+    fn text_files(dir: &Path, out: &mut Vec<PathBuf>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let name = entry.file_name();
+                if !matches!(name.to_str(), Some(".git" | "target" | "node_modules")) {
+                    text_files(&path, out);
+                }
+            } else if entry.metadata().is_ok_and(|m| m.len() <= 1 << 20) {
+                out.push(path);
+            }
+        }
+    }
+
+    /// The group a path counts under in [`WP_CEILINGS`].
+    fn area_of(root: &Path, path: &Path) -> String {
+        let rel = path.strip_prefix(root).unwrap_or(path);
+        let parts: Vec<String> = rel
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy().into_owned())
+            .collect();
+        match parts.first().map(String::as_str) {
+            Some("crates")
+                if parts.len() > 2 && parts[1] == "sim" && matches!(parts[2].as_str(), "src" | "tests") =>
+            {
+                format!("crates/sim/{}", parts[2])
+            }
+            Some("crates") if parts.len() > 1 => format!("crates/{}", parts[1]),
+            Some("docs")
+                if parts.len() > 1
+                    && matches!(parts[1].as_str(), "plans" | "format" | "architecture" | "lanes") =>
+            {
+                format!("docs/{}", parts[1])
+            }
+            Some("docs") => "docs".to_string(),
+            Some(name) if matches!(name, ".github" | ".claude" | "scripts") => name.to_string(),
+            _ => "(root)".to_string(),
+        }
+    }
+
+    /// `WP`/`wp` followed by an ASCII digit, at a word start.
+    fn wp_ids(text: &str) -> usize {
+        let bytes = text.as_bytes();
+        (0..bytes.len().saturating_sub(2))
+            .filter(|&i| {
+                ((bytes[i] == b'W' && bytes[i + 1] == b'P') || (bytes[i] == b'w' && bytes[i + 1] == b'p'))
+                    && bytes[i + 2].is_ascii_digit()
+                    && (i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_'))
+            })
+            .count()
+    }
 
     #[test]
     fn every_listed_pin_file_exists() {

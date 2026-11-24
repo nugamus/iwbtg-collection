@@ -72,7 +72,7 @@ def self_test():
         {"command": "cd a; cargo.exe run -p iwbtg-client -- x.pkg", "run_in_background": True},
     ]
     allowed = [
-        {"command": "cargo test -p iwbtg-sim --test it wp1_determinism::"},
+        {"command": "cargo test -p iwbtg-sim --test determinism"},
         {"command": "cargo test -p iwbtg-sim --target wasm32-wasip1"},
         {"command": "cargo clippy --workspace --tests -- -D warnings"},
         {"command": "echo RUSTFLAGS=x"},

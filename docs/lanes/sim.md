@@ -8,7 +8,8 @@
 ## Build and test
 
 - One test file is one module of the `it` binary: `cargo test -p iwbtg-sim --test it <file>::`; unit tests: `--lib <module>::`. Files are named after the module they test (for example `kid_b_core.rs`, `builtins_water.rs`); shared helpers are in `support.rs`, per-group helpers in `*_support.rs` modules, and collision helpers in `collide_support/`.
-- Determinism: `--test wp1_determinism` (the target keeps that name for CI; its file is `tests/determinism.rs`), `--test golden_corpus`.
+- Names name the subject, not the history: test files, modules and targets are named after what they test, and a module's docs describe the behavior it covers, not who owns it. A WP-era id (a `WP` followed by a number) stays only where it explains history a reader needs (the historical `docs/plans/sim-core.md`, or a comment that names the work a later change replaced); new code, tests and docs carry none. `cargo test -p xtask no_new_wp_era_identifiers` ratchets the remaining ones down.
+- Determinism: `--test determinism`, `--test golden_corpus`.
 - A deliberate change to hashed state re-pins three things (and only then) with `cargo xtask repin`: `tests/hash_vectors.rs`, the `FINAL_HASH` in `tests/determinism.rs` and the golden corpus. `HASH_LAYOUT` changes only with the encoding. A merge conflict in a pin file (`crates/xtask/pin-files.txt`): take either side and repin, never hand-merge.
 - Script conformance: `UPDATE_CONFORMANCE=1 cargo test -p iwbtg-sim --test it script_conformance::`.
 
