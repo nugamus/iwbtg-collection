@@ -605,10 +605,7 @@ impl<'a> Loader<'a> {
                     merged.0.insert(k.clone(), v.clone());
                 }
                 let base = kind.base;
-                let refused = matches!(
-                    pending_call(&mut self.pending, || builtins::init_state(base, &merged)),
-                    Some(Err(_))
-                );
+                let refused = builtins::init_state(base, &merged).is_err();
                 if !refused {
                     continue;
                 }

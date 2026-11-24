@@ -152,7 +152,6 @@ pub fn load_report(files: &PackageFiles, mode: LoadMode) -> LoadReport {
     let def = l.run();
     diags.append(&mut l.diags);
     l.emit_notes(&mut diags);
-    l.emit_pending(&mut diags);
     let gameplay_hash = match &def {
         Some(def) if !has_errors(&diags) => Some(gameplay_hash(files, &manifest, def)),
         _ => None,
@@ -229,74 +228,6 @@ fn request_text(cr: &str) -> &'static str {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Calls into loader steps that may not be implemented yet.
-
-/// Runs a call into another loader step. Until that step is implemented, its stub panics with
-/// `not implemented: WPn: <function>` (the format the stub-name test checks); this records the
-/// name and returns `None`, so the rest of the package still loads (with defaults) and `iwbtg pkg
-/// check` stays useful. Any other panic is passed on. On targets without unwinding
-/// (wasm32-unknown-unknown) the call is made directly.
-pub(crate) fn pending_call<T>(pending: &mut BTreeSet<String>, f: impl FnOnce() -> T) -> Option<T> {
-    #[cfg(panic = "unwind")]
-    {
-        quiet_stub_panics();
-        IN_PENDING_CALL.with(|c| c.set(c.get() + 1));
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
-        IN_PENDING_CALL.with(|c| c.set(c.get() - 1));
-        match result {
-            Ok(v) => Some(v),
-            Err(payload) => {
-                let msg = payload
-                    .downcast_ref::<String>()
-                    .map(String::as_str)
-                    .or_else(|| payload.downcast_ref::<&str>().copied());
-                match msg.and_then(stub_name) {
-                    Some(name) => {
-                        pending.insert(name.to_owned());
-                        None
-                    }
-                    None => std::panic::resume_unwind(payload),
-                }
-            }
-        }
-    }
-    #[cfg(not(panic = "unwind"))]
-    {
-        let _ = pending;
-        Some(f())
-    }
-}
-
-/// The stub name (`WP7b: physics::load`) from a stub's panic message.
-#[cfg(panic = "unwind")]
-fn stub_name(msg: &str) -> Option<&str> {
-    msg.strip_prefix("not implemented: ")
-        .filter(|rest| rest.starts_with("WP"))
-}
-
-#[cfg(panic = "unwind")]
-std::thread_local! {
-    /// How deep this thread is inside [`pending_call`]; the quiet hook only acts above 0.
-    static IN_PENDING_CALL: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
-}
-
-/// Keeps stub panics caught by [`pending_call`] off stderr. A stub panic anywhere else (a
-/// tool running the sim into an unmerged work package) and every other panic print as usual.
-#[cfg(panic = "unwind")]
-fn quiet_stub_panics() {
-    static ONCE: std::sync::Once = std::sync::Once::new();
-    ONCE.call_once(|| {
-        let previous = std::panic::take_hook();
-        std::panic::set_hook(Box::new(move |info| {
-            let caught = IN_PENDING_CALL.with(|c| c.get() > 0);
-            if !caught || info.payload_as_str().and_then(stub_name).is_none() {
-                previous(info);
-            }
-        }));
-    });
-}
-
-// ---------------------------------------------------------------------------------------------
 
 /// A sprite's masks as loaded, before they are appended to `GameDef::masks`.
 struct SpriteEntry {
@@ -334,8 +265,6 @@ struct Loader<'a> {
     diags: Vec<Diagnostic>,
     /// Converter request id to the items it covers.
     notes: BTreeMap<&'static str, BTreeSet<String>>,
-    /// Stubs reached.
-    pending: BTreeSet<String>,
     trace: Option<TraceMap>,
     sprite_ids: BTreeMap<String, SpriteEntry>,
     /// `particles/<id>.toml`, loaded after sprites so kind params can name them.
@@ -365,7 +294,7 @@ struct Loader<'a> {
     timelines: Vec<TimelineDef>,
     /// Timeline name to its index in `timelines`.
     timeline_ids: BTreeMap<String, TimelineId>,
-    spec_cache: BTreeMap<Builtin, Option<&'static [ParamSpec]>>,
+    spec_cache: BTreeMap<Builtin, &'static [ParamSpec]>,
     ranks: RankTable,
     /// Kinds that got a rank after the listed entries (Trace, CR4).
     appended: BTreeSet<KindId>,
@@ -396,7 +325,6 @@ impl<'a> Loader<'a> {
             manifest_text: read_text(files, MANIFEST_PATH, &mut Vec::new()).unwrap_or(""),
             diags: Vec::new(),
             notes: BTreeMap::new(),
-            pending: BTreeSet::new(),
             trace: None,
             sprite_ids: BTreeMap::new(),
             particles: Vec::new(),
@@ -518,41 +446,6 @@ impl<'a> Loader<'a> {
         }
     }
 
-    fn emit_pending(&self, out: &mut Vec<Diagnostic>) {
-        if self.pending.is_empty() {
-            return;
-        }
-        let mut by_wp: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
-        for name in &self.pending {
-            let (wp, func) = name.split_once(": ").unwrap_or(("WP?", name));
-            by_wp.entry(wp).or_default().push(func);
-        }
-        let parts: Vec<String> = by_wp
-            .iter()
-            .map(|(wp, funcs)| {
-                let shown: Vec<&str> = funcs.iter().take(4).copied().collect();
-                let more = funcs.len().saturating_sub(shown.len());
-                let tail = if more > 0 {
-                    format!(", and {more} more")
-                } else {
-                    String::new()
-                };
-                format!("{wp} ({}{tail})", shown.join(", "))
-            })
-            .collect();
-        out.push(Diagnostic {
-            file: MANIFEST_PATH.to_owned(),
-            line: 1,
-            column: 1,
-            severity: Severity::Warning,
-            message: format!(
-                "this build lacks loader steps of work packages not merged yet, so their defaults \
-                 were used and the definition is incomplete: {}",
-                parts.join("; ")
-            ),
-        });
-    }
-
     fn run(&mut self) -> Option<GameDef> {
         if self.trace_mode()
             && let Some(text) = read_text(self.files, TRACE_MAP_PATH, &mut Vec::new())
@@ -574,18 +467,14 @@ impl<'a> Loader<'a> {
         // Step 4, first half: parse rooms and fix their ids, so params can name rooms.
         let rooms = self.parse_rooms();
         // Step 7: sounds before kinds, so params can name sounds.
-        let mut sounds = Vec::new();
         let trace = self.trace_mode();
         let mut d = Vec::new();
-        if let Some(s) = pending_call(&mut self.pending, || sounds::load(self.files, trace, &mut d)) {
-            sounds = s;
-        }
+        let sounds = sounds::load(self.files, trace, &mut d);
         self.diags.append(&mut d);
         self.sounds = sounds;
         // Step 7: timelines before kinds, so the object `timeline` key resolves.
         let mut d = Vec::new();
-        let timelines =
-            pending_call(&mut self.pending, || timelines::load(self.files, &mut d)).unwrap_or_default();
+        let timelines = timelines::load(self.files, &mut d);
         self.diags.append(&mut d);
         self.timeline_ids = timelines
             .iter()
@@ -632,7 +521,7 @@ impl<'a> Loader<'a> {
         let timing = self.timing();
         self.maps = self.map_timings(timing.as_ref());
         let mut d = Vec::new();
-        let paths = pending_call(&mut self.pending, || paths::load(self.files, &mut d)).unwrap_or_default();
+        let paths = paths::load(self.files, &mut d);
         self.diags.append(&mut d);
         // Step 8: cross-references not already resolved above.
         self.warp_targets(&room_defs);
@@ -701,7 +590,7 @@ impl<'a> Loader<'a> {
         // Step 7: params against the built-ins' specs, on the built definition.
         let mut d = Vec::new();
         let trace = self.trace_mode();
-        let _ = pending_call(&mut self.pending, || params::check(&def, trace, &mut d));
+        params::check(&def, trace, &mut d);
         self.diags.append(&mut d);
         // Scripts: structure, calls, name literals and lints.
         for issue in iwbtg_sim::script::validate::validate(&def) {
@@ -906,31 +795,6 @@ mod tests {
             script_issue_message(&files, unknown_issue("boom")),
             "unknown sound \"boom\""
         );
-    }
-
-    #[test]
-    fn stub_names() {
-        assert_eq!(
-            stub_name("not implemented: WP7b: physics::load"),
-            Some("WP7b: physics::load")
-        );
-        assert_eq!(stub_name("not implemented"), None);
-        assert_eq!(stub_name("index out of bounds"), None);
-    }
-
-    #[cfg(panic = "unwind")]
-    #[test]
-    fn pending_call_catches_only_stubs() {
-        let mut pending = BTreeSet::new();
-        let r: Option<u8> = pending_call(&mut pending, || unimplemented!("WP9: script::x"));
-        assert_eq!(r, None);
-        assert!(pending.contains("WP9: script::x"));
-        assert_eq!(pending_call(&mut pending, || 5), Some(5));
-        let other = std::panic::catch_unwind(|| {
-            let mut p = BTreeSet::new();
-            pending_call(&mut p, || panic!("a real bug"))
-        });
-        assert!(other.is_err());
     }
 }
 

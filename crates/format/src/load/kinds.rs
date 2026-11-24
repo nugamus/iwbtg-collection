@@ -395,12 +395,12 @@ impl<'a> Loader<'a> {
         let specs = match self.spec_cache.get(&base) {
             Some(s) => *s,
             None => {
-                let s = pending_call(&mut self.pending, || builtins::param_specs(base));
+                let s = builtins::param_specs(base);
                 self.spec_cache.insert(base, s);
                 s
             }
         };
-        specs?.iter().find(|s| s.name == key).map(|s| s.ty)
+        specs.iter().find(|s| s.name == key).map(|s| s.ty)
     }
 
     /// Turns a text param into a room, kind or sound reference when the base's spec says so; a
@@ -630,25 +630,23 @@ impl<'a> Loader<'a> {
     pub(super) fn event_sets(&mut self, physics: &PhysicsProfile) {
         for i in 0..self.kinds.len() {
             let kind = self.kinds[i].clone();
-            let set = if kind.base == Builtin::Kid {
-                pending_call(&mut self.pending, || iwbtg_sim::kid::event_set(physics))
+            let mut set = if kind.base == Builtin::Kid {
+                iwbtg_sim::kid::event_set(physics)
             } else {
-                pending_call(&mut self.pending, || builtins::event_set(kind.base, &kind))
+                builtins::event_set(kind.base, &kind)
             };
-            if let Some(mut set) = set {
-                // A derived kind (`<kind>[...]`) listens to what its kind's script does.
-                let root = u32::try_from(i)
-                    .ok()
-                    .and_then(|i| self.rank_kind.get(&KindId(i)))
-                    .and_then(|r| r.index());
-                let name = root
-                    .and_then(|r| self.kinds.get(r))
-                    .map_or(&kind.name, |r| &r.name);
-                if let Some(masks) = self.collides.get(name) {
-                    set.collisions.extend(masks.iter().copied());
-                }
-                self.kinds[i].events = set;
+            // A derived kind (`<kind>[...]`) listens to what its kind's script does.
+            let root = u32::try_from(i)
+                .ok()
+                .and_then(|i| self.rank_kind.get(&KindId(i)))
+                .and_then(|r| r.index());
+            let name = root
+                .and_then(|r| self.kinds.get(r))
+                .map_or(&kind.name, |r| &r.name);
+            if let Some(masks) = self.collides.get(name) {
+                set.collisions.extend(masks.iter().copied());
             }
+            self.kinds[i].events = set;
         }
     }
 

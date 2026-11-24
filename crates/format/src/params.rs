@@ -130,12 +130,10 @@ const fn skipped(b: Builtin) -> bool {
 /// diagnostics: errors, or warnings when `trace` (converter output).
 pub fn check(def: &GameDef, trace: bool, diags: &mut Vec<Diagnostic>) {
     let severity = if trace { Severity::Warning } else { Severity::Error };
-    let mut pending = std::collections::BTreeSet::new();
-    let mut specs_of = |b: Builtin| crate::load::pending_call(&mut pending, || builtins::param_specs(b));
+    let specs_of = |b: Builtin| builtins::param_specs(b);
     let init_of = |b: Builtin, p: &Params| {
         let p = p.clone();
-        let mut pending = std::collections::BTreeSet::new();
-        crate::load::pending_call(&mut pending, || builtins::init_state(b, &p))
+        builtins::init_state(b, &p)
     };
     let mut placed: Vec<bool> = vec![false; def.kinds.len()];
     let mut kind_bad: Vec<bool> = vec![false; def.kinds.len()];
@@ -149,9 +147,7 @@ pub fn check(def: &GameDef, trace: bool, diags: &mut Vec<Diagnostic>) {
             }
             continue;
         }
-        let Some(specs) = specs_of(k.base) else {
-            continue;
-        };
+        let specs = specs_of(k.base);
         let who = format!("`{}` ({})", k.name, k.base.name());
         for msg in check_set(specs, &k.params, &who) {
             kind_bad[i] = true;
@@ -174,9 +170,7 @@ pub fn check(def: &GameDef, trace: bool, diags: &mut Vec<Diagnostic>) {
                 }
                 continue;
             }
-            let Some(specs) = specs_of(k.base) else {
-                continue;
-            };
+            let specs = specs_of(k.base);
             let who = format!("an instance of `{}` ({})", k.name, k.base.name());
             let mut bad = kind_bad.get(idx).copied().unwrap_or(false);
             for msg in check_set(specs, &inst.params, &who) {
@@ -191,7 +185,7 @@ pub fn check(def: &GameDef, trace: bool, diags: &mut Vec<Diagnostic>) {
                 continue;
             }
             seen.push((inst.kind, all.clone()));
-            if let Some(Err(e)) = init_of(k.base, &all) {
+            if let Err(e) = init_of(k.base, &all) {
                 report(diags, severity, &file, format!("{who}: {e}"));
             }
         }
@@ -204,10 +198,7 @@ pub fn check(def: &GameDef, trace: bool, diags: &mut Vec<Diagnostic>) {
         {
             continue;
         }
-        if specs_of(k.base).is_none() {
-            continue;
-        }
-        if let Some(Err(e)) = init_of(k.base, &k.params) {
+        if let Err(e) = init_of(k.base, &k.params) {
             // A param the kind does not set: required outright (`required`) or only together with
             // others (an edge warp needs `room_to` or per-edge rooms). A placed instance supplies
             // them, so an unplaced default kind is not an error for lacking them.
