@@ -64,7 +64,12 @@ fn script_rules(s: &Shared) -> Res<ScriptRules> {
 
 /// The value of a variable or an element for a script. `what` names it in an error
 /// ("variable `hp`", "array element 3"). An unset one follows the run's init policy.
-pub(super) fn value_to_dynamic(s: &Shared, v: Option<&Value>, rules: ScriptRules, what: &str) -> Res<Dynamic> {
+pub(super) fn value_to_dynamic(
+    s: &Shared,
+    v: Option<&Value>,
+    rules: ScriptRules,
+    what: &str,
+) -> Res<Dynamic> {
     match v {
         Some(Value::Real(r)) => Ok(Dynamic::from_float(r.get())),
         Some(Value::Str(s)) => Ok(Dynamic::from(ImmutableString::from(s.as_str()))),
@@ -194,7 +199,10 @@ pub fn register_array_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mut D
             set_element(&mut a.0, i, value);
             Ok(())
         });
-        docs.add("len", "`a.len()` or `len(a)`: the number of elements of an array, a stored one included (an INT).");
+        docs.add(
+            "len",
+            "`a.len()` or `len(a)`: the number of elements of an array, a stored one included (an INT).",
+        );
         #[allow(clippy::cast_possible_wrap, reason = "at most MAX_ARRAY_SIZE elements")]
         engine.register_fn("len", |a: &mut VarArray| a.0.len() as rhai::INT);
     }
@@ -210,22 +218,24 @@ pub fn register_array_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mut D
         });
         let s = Rc::clone(shared);
         // Pure: `global` is a constant handle, and the write goes to the world, not to it.
-        FuncRegistration::new_index_setter().with_purity(true).register_into_engine(
-            engine,
-            move |_: &mut Globals, name: ImmutableString, v: Dynamic| -> Res<()> {
-                s.with_world(|w, host| {
-                    let value = dynamic_to_value(&s, &v, host.script_rules, &name)?;
-                    let id = crate::room::run_time_var(&host.def, w, &name).map_err(sim_err)?;
-                    match host.script_rules.values {
-                        ValueModel::Gm8 => assign_bare(&mut w.globals, id, value),
-                        ValueModel::Typed => {
-                            w.globals.insert(id, value);
+        FuncRegistration::new_index_setter()
+            .with_purity(true)
+            .register_into_engine(
+                engine,
+                move |_: &mut Globals, name: ImmutableString, v: Dynamic| -> Res<()> {
+                    s.with_world(|w, host| {
+                        let value = dynamic_to_value(&s, &v, host.script_rules, &name)?;
+                        let id = crate::room::run_time_var(&host.def, w, &name).map_err(sim_err)?;
+                        match host.script_rules.values {
+                            ValueModel::Gm8 => assign_bare(&mut w.globals, id, value),
+                            ValueModel::Typed => {
+                                w.globals.insert(id, value);
+                            }
                         }
-                    }
-                    Ok(())
-                })?
-            },
-        );
+                        Ok(())
+                    })?
+                },
+            );
     }
     #[allow(
         deprecated,
@@ -259,7 +269,12 @@ mod tests {
         set_element(&mut items, 3, Value::Real(Real::ZERO));
         assert_eq!(
             items,
-            vec![Value::Real(Real::ONE), Value::None, Value::None, Value::Real(Real::ZERO)]
+            vec![
+                Value::Real(Real::ONE),
+                Value::None,
+                Value::None,
+                Value::Real(Real::ZERO)
+            ]
         );
     }
 

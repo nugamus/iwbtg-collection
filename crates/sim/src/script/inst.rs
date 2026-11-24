@@ -458,7 +458,12 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
                     .get(name.as_str())
                     .ok_or_else(|| runtime_error(format!("unknown variable `{name}`")))?;
                 let x = live(w, i)?;
-                value_to_dynamic(&s, x.vars.get(id), host.script_rules, &format!("variable `{name}`"))
+                value_to_dynamic(
+                    &s,
+                    x.vars.get(id),
+                    host.script_rules,
+                    &format!("variable `{name}`"),
+                )
             })?
         });
         let s = Rc::clone(shared);

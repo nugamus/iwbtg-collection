@@ -80,7 +80,11 @@ impl Game {
 
     fn global(&self, name: &str) -> Option<&Value> {
         // A package name keeps its load-time id; a new one gets a run-time id.
-        let id = self.def.var_names.get(name).or_else(|| self.w.var_names.get(name));
+        let id = self
+            .def
+            .var_names
+            .get(name)
+            .or_else(|| self.w.var_names.get(name));
         let id = id.expect("a global the script made");
         self.w.globals.get(id)
     }
@@ -104,7 +108,10 @@ fn game(script_rules: Option<ScriptRules>) -> Game {
     def.var_names.insert("pattern".into(), PATTERN);
     def.var_names.insert("res".into(), RES);
     let issues = validate(&def);
-    assert!(issues.is_empty(), "the validator accepts arrays and `global`: {issues:?}");
+    assert!(
+        issues.is_empty(),
+        "the validator accepts arrays and `global`: {issues:?}"
+    );
     let rules = RunnerRules::default();
     let scripts = match script_rules {
         None => ScriptRuntime::new(&def, &rules),
@@ -147,7 +154,11 @@ fn user(g: &mut Game, me: InstId, n: u8) -> Result<(), String> {
 fn negative_fractional_and_over_cap_indices_are_script_errors() {
     let mut g = game(None);
     let me = g.holder();
-    for (n, want) in [(0, "negative index"), (1, "fractional index"), (2, "array cap exceeded")] {
+    for (n, want) in [
+        (0, "negative index"),
+        (1, "fractional index"),
+        (2, "array cap exceeded"),
+    ] {
         let e = user(&mut g, me, n).expect_err("a bad index halts");
         assert!(e.contains(want), "user {n}: {e}");
     }
@@ -208,7 +219,10 @@ fn a_local_named_global_shadows_the_handle() {
 fn reading_a_stored_array_charges_its_elements() {
     let mut g = game(None);
     let me = g.holder();
-    g.w.get_mut(me).expect("holder").vars.insert(PATTERN, reals(&[1.0; 1000]));
+    g.w.get_mut(me)
+        .expect("holder")
+        .vars
+        .insert(PATTERN, reals(&[1.0; 1000]));
     g.scripts.begin_tick();
     g.run(me, &EventKind::Step).expect("step");
     let used = g.scripts.engine().expect("engine").budget().used();
