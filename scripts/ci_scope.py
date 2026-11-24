@@ -201,6 +201,10 @@ def plan(paths, graph, full=False, root=ROOT):
     # which lives under crates/client/) changed, not merely when a sim/format dependency did.
     web = bool(code_input and test & {'iwbtg-client'})
     determinism = code_input and bool(selected_all & {'iwbtg-sim', 'iwbtg-format', 'iwbtg-tools'})
+    # The public feel contracts are a sim test target that the wasm32-unknown-unknown job runs in
+    # the same step as the golden corpus. That job needs `browser` and its test step is gated on
+    # `wasip1` (#1169), so the feel step mirrors that pair and stays off for a docs-only change.
+    feel = browser and wasip1
 
     local_steps = [{'kind': 'rustfmt', 'reason': 'always checks the workspace formatting'}]
     if test:
@@ -231,6 +235,10 @@ def plan(paths, graph, full=False, root=ROOT):
          'reason': 'CI tests changed crates and their consumers'},
         {'kind': 'wasm32-wasip1', 'selected': wasip1, 'reason': wasip1_reason},
         {'kind': 'wasm32-unknown-unknown', 'selected': browser, 'reason': browser_reason},
+        {'kind': 'feel', 'selected': feel,
+         'reason': 'public feel contracts run in the wasm32-unknown-unknown test step' if feel
+         else 'no code input' if not code_input
+         else 'the sim/format test step is not selected on wasm32-unknown-unknown'},
         {'kind': 'web', 'selected': web, 'reason': 'client or its web page selected'},
         {'kind': 'determinism', 'selected': determinism, 'reason': determinism_reason},
         {'kind': 'sim-deps', 'selected': code, 'reason': 'dependency ban applies to every code change'},
@@ -251,6 +259,7 @@ def plan(paths, graph, full=False, root=ROOT):
         'compile': sorted(compile_),
         'wasip1': wasip1,
         'browser': browser,
+        'feel': feel,
         'web': web,
         'determinism': determinism,
         'inputs': inputs,
@@ -278,6 +287,7 @@ def render_lines(result):
         f"packages={result['packages']}",
         f"wasip1={str(result['wasip1']).lower()}",
         f"browser={str(result['browser']).lower()}",
+        f"feel={str(result['feel']).lower()}",
         f"web={str(result['web']).lower()}",
         f"determinism={str(result['determinism']).lower()}",
         f"identity={result['identity']}",
