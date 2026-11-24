@@ -1,0 +1,8 @@
+#:schema ../../../../../../docs/format/schema/v0/object.schema.json
+# The boss: HP and phases in `scripts/boss.rhai`, the attack cadence in `timelines/boss_attack.toml`
+# (started at Create), alarms for the phase-two pulse and the phase-change grace window.
+script = "boss"
+sprite = "boss"
+collides_with = ["kid_bullet"]
+timeline = "boss_attack"
+params = { hp = 0.0, phase = 0.0, pattern = 0.0, grace = 0.0, volleys = 0.0 }

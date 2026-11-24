@@ -1,0 +1,6 @@
+#:schema ../../../../../../docs/format/schema/v0/object.schema.json
+# A boss bullet: a killer moved only by native `speed`/`direction`, destroyed outside the room.
+base = "killer"
+sprite = "boss_shot"
+counts_as = ["killer"]
+destroy_outside_room = true

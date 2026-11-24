@@ -1,0 +1,43 @@
+#:schema ../../../../../docs/format/schema/v0/game.schema.json
+# The boss stress package (#991): one scripted boss with HP, two phases, a looping timeline, alarms
+# and `collide(other)` against kid bullets, so the script layer can be measured on a boss fight.
+# Everything here is original and deterministic: no game assets, solid-colour sprites, no RNG.
+format = 0
+id = "boss"
+title = "Boss stress"
+version = "0.1.0"
+engine_rev = 0
+runner = "gm80"
+physics = "physics.toml"
+start_room = "arena"
+max_ticks = 180_000
+object_order = [
+  "world", "kid", "kid_bullet", "bow", "blood", "blood_emitter", "game_over", "playerface",
+  "kid_start", "game_clear", "@boss", "@boss_shot",
+]
+
+[engine]
+new_game_room = "arena"
+
+[defaults.kid]
+sprite = "kid"
+
+[defaults.kid_bullet]
+sprite = "kid_bullet"
+
+# The boss creates this under the kid when its HP reaches 0; the touch raises `run_end`.
+[defaults.game_clear]
+sprite = "clear"
+
+[[creators]]
+name = "IWBTG Collection"
+role = "author"
+
+[source]
+url = "https://github.com/nugamus/iwbtg-collection"
+permission = "granted"
+permission_note = "Original synthetic package made for this repository (a stress test)."
+
+[timing]
+start = { trigger = "run_start" }
+end = { trigger = "run_end" }
