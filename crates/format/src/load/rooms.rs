@@ -111,8 +111,8 @@ impl<'a> Loader<'a> {
                     ActionFile::SetGlobal { var, index: None, .. } => {
                         names.insert(var.clone());
                     }
-                    // The element is a run-time name (`stage[1]`); only the index global is
-                    // known at load.
+                    // The element lives in the global's array (#998), not in a `stage[n]`
+                    // variable; only the index global is known at load.
                     ActionFile::SetGlobal {
                         index: Some(IndexFile::Global { global }),
                         ..

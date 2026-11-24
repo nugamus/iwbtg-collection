@@ -206,8 +206,9 @@ pub enum RoomAction {
     /// runs (R24, Confirmed).
     DestroySelf,
     /// `global.<var>[index] = value` (#629, showdown `global.stage[global.savenum]`). Element 0
-    /// is the global itself — GM8 aliases `a` and `a[0]` (research#130) — and every other element
-    /// is the run-time variable `<var>[<index>]` (`World::var_names`).
+    /// is the variable itself, so an index-0 write is the bare assignment; a higher index makes
+    /// the global a dense array in `Value::Array` (its element 0 is the scalar already stored,
+    /// unwritten slots read 0). There is no `<var>[<index>]` variable (research#130, #998).
     SetGlobalIndexed {
         /// The array's global name.
         var: String,
