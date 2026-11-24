@@ -1,21 +1,22 @@
 [
  {
-  "at": "2026-11-24T14:23:20Z",
-  "standard_pct": null,
-  "tick_pct": null,
-  "games_census": 0,
-  "games_tick": 0,
+  "at": "2026-11-24T14:57:54Z",
+  "builtin_pct": 98.0,
+  "script_pct": 1.87,
+  "placed_instances": 91759,
+  "traces_recorded": 647,
+  "objects_exercised": 73,
   "open_issues": 311,
-  "closed_issues": 545,
+  "closed_issues": 546,
   "issue_pct_closed": 63.7,
-  "size_points": 736,
+  "size_points": 729,
   "phases": [
    {
     "number": 0,
     "title": "0 · Foundation",
     "open": 14,
-    "closed": 63,
-    "size_points": 29
+    "closed": 64,
+    "size_points": 22
    },
    {
     "number": 1,
@@ -90,22 +91,23 @@
   ]
  },
  {
-  "at": "2026-11-24T14:52:15Z",
-  "standard_pct": null,
-  "tick_pct": null,
-  "games_census": 0,
-  "games_tick": 0,
-  "open_issues": 311,
-  "closed_issues": 546,
-  "issue_pct_closed": 63.7,
-  "size_points": 729,
+  "at": "2026-11-24T14:59:36Z",
+  "builtin_pct": 98.0,
+  "script_pct": 1.87,
+  "placed_instances": 91759,
+  "traces_recorded": 647,
+  "objects_exercised": 73,
+  "open_issues": 310,
+  "closed_issues": 547,
+  "issue_pct_closed": 63.8,
+  "size_points": 728,
   "phases": [
    {
     "number": 0,
     "title": "0 · Foundation",
-    "open": 14,
-    "closed": 64,
-    "size_points": 22
+    "open": 13,
+    "closed": 65,
+    "size_points": 21
    },
    {
     "number": 1,
