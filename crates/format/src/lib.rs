@@ -20,6 +20,8 @@ pub mod iwbz;
 pub mod key_art;
 pub mod manifest;
 pub mod number;
+/// The `iwbtg pkg` commands (#1120): the binary in `crates/tools` registers them.
+pub mod pkg_cmd;
 #[cfg(feature = "schema")]
 pub mod schema;
 

@@ -3,7 +3,7 @@
 Part of [Architecture](../architecture.md).
 
 
-One binary for agents and CI:
+One binary for agents and CI (`crates/tools`). The `pkg check`, `pkg fmt` and `pkg hash` commands and the hashes `pkg pack` prints are `iwbtg_format::pkg_cmd` (`crates/format/src/pkg_cmd.rs`, data lane, #1120); the binary reads the package and registers them.
 
 - `iwbtg pkg check <dir>`: full validation, one readable error list with file, line and column. A package that names an `engine_pack` gets it bundled from `../_engines/<pack>/` first ([engine packs](../format/engine.md)). It also prints `physics: <pack>` when the game's physics match the pack's family preset, or `physics: custom (<n> fields differ)` and `physics fields: ...` when they do not ([custom physics](../format/engine.md#custom-physics), #802).
 - `iwbtg pkg fmt <dir> [--check]`: canonical formatting of every `.toml` file ([0002](../decisions/0002-data-syntax.md), [v0](../format/v0.md#common-rules-for-data-files)); `--check` lists what would change and exits 1.
