@@ -2,6 +2,8 @@
 
 The steps every port follows, from download to Beta, and who owns each one. The principles are in [content](content.md#porting) (Porting); the fidelity rule and the impact tiers are in [fidelity tiers](plans/fidelity-tiers.md). This page is the pipeline design (#23): it says what the converter automates, what an agent does, where the user records or playtests, and how long each step should take.
 
+If you are porting a game as a community contributor, start with the [porting guide](porting-guide.md): it is the porter's view of what a port is, the package layout, the steps and the permission and credit rules. This page is the internal design behind it.
+
 The targets below are planning estimates, not measured averages. They are written to be checked after each port and revised here. "Agent time" is work in one lane; "human time" is the user at the keyboard and is counted separately.
 
 This page does not wait for the first finished port. `rely_the_needle` is the sample that exposed the bottlenecks ([below](#bottlenecks-found-porting-rely_the_needle)); the census (nugamus/iwbtg-collection-research#172) generalizes them to the other 19 games. What is still in flight is listed in [Dependencies](#dependencies-and-what-is-still-in-flight).
