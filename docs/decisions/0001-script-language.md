@@ -245,8 +245,9 @@ The user asked whether Rhai is the right choice and left the decision to Claude.
 ## Revisited 2026-11-24
 
 The stress packages were measured before mass porting, as the checkpoint asks (#1002). The numbers
-are `iwbtg profile` on a 121-tick idle `.inputs`, so every tick after the first twenty runs with the
-room's full bullet count (the spawner adds 250 a tick). Each row is the minimum of five runs.
+are `iwbtg profile` on a 121-tick idle `.inputs` (`frame 120: end`), so every tick after the first
+twenty runs with the room's full bullet count (the spawner adds 250 a tick). Each row is the
+minimum of five runs.
 
 Machine and build, so a later table can be compared: Intel Core Ultra 5 225H (14 cores: 4 P, 8 E
 and 2 low-power E), 32 GB RAM, Windows 11 Pro 10.0.26300; rustc 1.99.1; `iwbtg-tools` built from
@@ -255,10 +256,11 @@ wasm32-wasip1` for the wasm rows, which ran under wasmtime 51.0.0 (the official 
 release zip, sha256 `d2f5853a1cded9b1256b45cd57686b6855e69049ef07fd4ad78feb78dfa3aada`, unpacked in
 a temp folder; no install). The host was shared with other agent builds, so every run was pinned
 to one core (CPU 11, a P-core) after a scan found unpinned runs up to 8x slower when Windows
-placed them on an E-core. The tool's `ms per tick` line says `(native)` on every target, wasm
-included (#1433). The avoidance package's non-start rooms were selected through a copy of the
-package with `start_room` and `[engine].new_game_room` set to that room (nothing else changed),
-because `iwbtg profile` has no `--room` (#1433).
+placed them on an E-core. A row is reproduced with `iwbtg profile <pkg> --replay <inputs>
+--room <id>` (the same `--room` as `replay run`, #1433), and the `ms per tick` line names the
+build target it ran on (`native` or `wasm32-wasip1`). The recorded runs predate `--room`, so they
+selected each room through a copy of the package with `start_room` and `[engine].new_game_room`
+set to that room (nothing else changed); the package bytes are otherwise identical.
 
 | live bullets | variant | native ms/tick | wasm32-wasip1 ms/tick | peak script units / limit |
 |---|---|---|---|---|
