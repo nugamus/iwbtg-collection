@@ -248,6 +248,12 @@ fn spawn_background(
         .collect()
 }
 
+/// Whether the art on screen must be rebuilt: the sim is in another room, or a retry restarted
+/// the same room's clock at its first tick.
+fn needs_rebuild(shown: Option<RoomId>, start_tick: u64, room: RoomId, tick: u64) -> bool {
+    shown != Some(room) || tick < start_tick
+}
+
 /// Rebuilds the art when the sim's room changes.
 #[allow(
     clippy::too_many_arguments,
@@ -268,7 +274,7 @@ pub fn sync_room_art(
     let room = game.sim.world().room;
     let tick = game.sim.world().tick;
     // A retry starts a new sim in the same room with the tick back at its start.
-    if shown.room == Some(room) && tick >= shown.start_tick {
+    if !needs_rebuild(shown.room, shown.start_tick, room, tick) {
         return;
     }
     shown.room = Some(room);
@@ -448,6 +454,46 @@ mod tests {
             load_room_art(&a.0, &pkg.def.room(pkg.def.start_room).unwrap().name),
             load_room_art(&b.0, &pkg.def.room(pkg.def.start_room).unwrap().name)
         );
+        // Closing the run drops its resources: the package is the only owner again, so the store
+        // is released at that boundary rather than leaked per run.
+        drop((a, b));
+        assert_eq!(Arc::strong_count(&pkg.files), 1);
+    }
+
+    /// Backgrounds and tile layers load through the shared store, as a room build reads them.
+    /// The showcase's first room has three background layers and two tile layers.
+    #[test]
+    fn room_backgrounds_and_tiles_load_through_the_shared_store() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("showcase.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let a = ArtFiles(pkg.files.clone());
+        let b = ArtFiles(pkg.files.clone());
+        let art = load_room_art(&a.0, "courtyard").unwrap();
+        assert_eq!(art.backgrounds.len(), 3);
+        assert!(art.color.is_some());
+        let tiles = load_tiles(&a.0, "courtyard").unwrap();
+        assert_eq!(tiles.len(), 2);
+        assert!(!tiles[0].tiles.is_empty());
+        // The same through the other run's handle, and distinct packages never share a store.
+        assert_eq!(tiles.len(), load_tiles(&b.0, "courtyard").unwrap().len());
+        let other = crate::package::open(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg"),
+            false,
+        )
+        .unwrap();
+        assert!(!Arc::ptr_eq(&a.0, &other.files));
+    }
+
+    /// A new room rebuilds the art, and so does a retry that restarts the room's clock; a tick
+    /// moving forward in the same room does not.
+    #[test]
+    fn a_new_room_or_a_retry_rebuilds_the_art() {
+        let (room, other) = (RoomId(1), RoomId(2));
+        assert!(needs_rebuild(None, 0, room, 0), "the first build");
+        assert!(!needs_rebuild(Some(room), 10, room, 10));
+        assert!(!needs_rebuild(Some(room), 10, room, 99));
+        assert!(needs_rebuild(Some(room), 10, other, 10), "another room");
+        assert!(needs_rebuild(Some(room), 10, room, 0), "a retry");
     }
 
     #[test]
