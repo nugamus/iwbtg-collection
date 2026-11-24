@@ -134,7 +134,8 @@ pub fn fmt(dir: &Path, files: &PackageFiles, check: bool, out: &mut impl Write) 
     Ok(!broken && !(check && !changed.is_empty()))
 }
 
-#[cfg(test)]
+// Writes scratch folders under `temp_dir`, which wasm32-wasip1 has not got (the CI wasip1 job).
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod fmt_tests {
     use super::*;
 
