@@ -8,6 +8,10 @@ body:
       value: |
         Thanks for the idea. Do not include original game files or decompiled code; they cannot be accepted.
         Ported games need their creator's permission and a clean-room spec, so a port request is a research task, not a code drop.
+
+        At triage an agent adds a `## Context` block (code paths, the doc page, spec claim or
+        register ids, the narrow test command, and what must not change); an issue is not
+        `agent-ready` without it. You do not need to fill it in.
   - type: textarea
     id: idea
     attributes:

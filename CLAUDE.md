@@ -30,4 +30,6 @@
 
 **File what you find.** For every unfinished bug, gap, missing test, doc drift, idea, risk or follow-up: search existing issues, then create a GitHub issue with `triage`, Goal and Done when. Never leave findings only in chat/comments. End every turn that edited files with `Findings: <issue links>` or `Findings: none`. Keep the Stop hook enforcing this.
 
+Every issue an agent can start from carries a `## Context` block — code paths, the doc page, spec claim or register ids, the narrow test command, and what must not change; `agent-ready` requires it ([workflow details](docs/agent-workflow.md#issues-and-triage)).
+
 Start issue comments with `<!-- agent -->`. Tick completed acceptance criteria. User questions go on the issue with `needs-user` and a proposed default; irreversible format/ranked/design/people/assets decisions wait. Follow-up triage, milestone and documentation placement details are in [workflow details](docs/agent-workflow.md); read them when doing that work.
