@@ -77,7 +77,8 @@ pub struct Manifest {
     #[serde(default)]
     #[cfg_attr(feature = "schema", schemars(with = "Option<CompatSection>"))]
     pub compat: Option<Spanned<CompatSection>>,
-    /// Original runner; selects event-order differences.
+    /// The original runner (GameMaker 8.0 or 8.1), recorded for provenance. Both runners share
+    /// the same simulation rules (research#15).
     #[cfg_attr(feature = "schema", schemars(with = "crate::schema::RunnerSchema"))]
     pub runner: Spanned<Runner>,
     /// Path to the physics profile.
@@ -1151,8 +1152,6 @@ impl Manifest {
         }
         self.validate_ruleset(&mut v);
         self.validate_compat(&mut v);
-        // TODO(OPEN: runner differences between GM 8.0 and 8.1, from the CLONE_SPEC): nothing to
-        // check yet; the sim will read `runner` once the differences are known.
         self.validate_physics(&mut v);
         if v.id(&self.start_room) {
             let room = format!("rooms/{}.toml", self.start_room.get_ref());
