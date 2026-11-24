@@ -267,16 +267,21 @@ impl Plugin for ViewerPlugin {
 /// page's Watch replay button; a replay that is missing, for another package or another sim
 /// build is one warning and the page stays.
 pub(crate) fn open(world: &mut World, name: &str) {
+    let Some(store) = Store::data() else {
+        storage::warn("replay viewer: there is no data folder");
+        return;
+    };
+    open_from(world, &store, name);
+}
+
+/// [`open`] on a caller's store (the tests use a folder of their own).
+fn open_from(world: &mut World, store: &Store, name: &str) {
     if world.resource::<Viewer>().open {
         return;
     }
     let (def, hash) = {
         let loaded = world.resource::<LoadedPackage>();
         (Arc::clone(&loaded.pkg.def), loaded.pkg.gameplay_hash)
-    };
-    let Some(store) = Store::data() else {
-        storage::warn("replay viewer: there is no data folder");
-        return;
     };
     let bytes = match store.read(name) {
         Ok(Some(bytes)) => bytes,
@@ -464,7 +469,7 @@ fn keys(keys: Res<ButtonInput<KeyCode>>, mut viewer: ResMut<Viewer>) {
 }
 
 /// Applies a pending seek and advances the replayed sim at the chosen speed.
-fn drive(
+pub(crate) fn drive(
     time: Res<Time>,
     mut game: NonSendMut<Game>,
     mut viewing: Option<NonSendMut<ViewerSim>>,
@@ -555,6 +560,29 @@ fn close_now(world: &mut World, cover_results: bool) {
     if cover_results {
         cover(world, true);
     }
+}
+
+/// The test hooks for the save-file isolation regression (`savefile.rs`): open on a store of the
+/// test's own, ask for a seek, read the progress and close without the results page.
+#[cfg(test)]
+impl Viewer {
+    pub(crate) fn seek_for_test(&mut self, tick: u64) {
+        self.seek = Some(tick);
+    }
+
+    pub(crate) fn progress_for_test(&self) -> (u64, u64) {
+        (self.tick, self.total)
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn open_for_test(world: &mut World, store: &Store, name: &str) {
+    open_from(world, store, name);
+}
+
+#[cfg(test)]
+pub(crate) fn close_for_test(world: &mut World) {
+    close_now(world, false);
 }
 
 /// A click on the progress bar scrubs there: the bar's normalized x is -0.5 to 0.5.

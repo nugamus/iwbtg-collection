@@ -795,4 +795,153 @@ mod tests {
         let kid = world.get(world.kid(&again.rules().tick).unwrap()).unwrap();
         assert_eq!((kid.m.x(), kid.m.y()), (slot.x, slot.y));
     }
+
+    /// #42: the viewer swaps a replayed sim into `Game`, and that sim's save slot changes when
+    /// the replay crosses the room's save object. `persist` must leave the player's file alone
+    /// while the viewer is open (at every replay tick, including before the save point), and
+    /// resume writing normally once it closes.
+    #[test]
+    fn the_replay_viewer_never_persists_a_replayed_save() {
+        use std::sync::Arc;
+
+        use crate::shell::LoadedPackage;
+        use iwbtg_sim::input::{Action, InputFrame};
+        use iwbtg_sim::mods::ModSet;
+        use iwbtg_sim::num::Real;
+        use iwbtg_sim::replay::{Header, MAGIC, REPLAY_FORMAT, Replay, StartMode, Trailer};
+        use iwbtg_sim::sim::{Sim, SimOptions};
+        use iwbtg_sim::sound::DllMode;
+        use iwbtg_sim::stripped::PlayMode;
+
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/save.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let def = Arc::clone(&pkg.def);
+        let options = SimOptions {
+            start: StartPoint::NewGame { difficulty: 0 },
+            seed: 0,
+            dll_mode: DllMode::Model,
+            mode: PlayMode::Original,
+            map: None,
+        };
+
+        // A run that walks right onto the room's save object: its slot changes partway through.
+        let right = InputFrame {
+            held: Action::Right.bit(),
+            ..InputFrame::EMPTY
+        };
+        let mut recorded = Sim::new(Arc::clone(&def), options.clone()).unwrap();
+        let first = recorded.world().save.clone();
+        let mut inputs = Vec::new();
+        let mut touched = None;
+        for _ in 0..300 {
+            recorded.step(right);
+            inputs.push(right);
+            if recorded.world().save != first {
+                touched = Some(recorded.world().tick);
+                break;
+            }
+        }
+        let touched = touched.expect("the run walks onto the save point");
+        let saved = recorded.world().save.clone().expect("the save point saves");
+        let replay = Replay {
+            header: Header {
+                magic: MAGIC,
+                replay_format: REPLAY_FORMAT,
+                sim_version: iwbtg_sim::SIM_VERSION,
+                package_id: def.id.clone(),
+                gameplay_hash: pkg.gameplay_hash,
+                engine_rev: def.engine_rev,
+                rng_seed: 0,
+                start_mode: StartMode::NewGame,
+                play_mode: PlayMode::Original,
+                map: recorded.map_id().to_owned(),
+                mods: ModSet::NONE,
+                client_build_id: "test".to_owned(),
+            },
+            trailer: Trailer {
+                total_ticks: inputs.len() as u64,
+                splits: Vec::new(),
+                ranked_ticks: recorded.ranked_ticks(),
+                pauses: Vec::new(),
+                checkpoints: Vec::new(),
+                final_hash: recorded.state_hash(),
+            },
+            inputs,
+        };
+        let store = temp("viewer-save");
+        let name = format!("replays/{}/save-persist.iwbr", def.id);
+        store.write(&name, &replay.encode().unwrap()).unwrap();
+
+        // The run as it ended: the same inputs, so its slot is the one the save file holds.
+        let mut live = Sim::new(Arc::clone(&def), options).unwrap();
+        for frame in &replay.inputs {
+            live.step(*frame);
+        }
+        assert_eq!(live.world().save, Some(saved.clone()));
+        let save_name = name_for(&def.id);
+        write(&store, &save_name, &def, &saved).unwrap();
+        let before = store.read(&save_name).unwrap().unwrap();
+
+        let mut app = App::new();
+        app.init_resource::<Time>()
+            .init_resource::<crate::viewer::Viewer>()
+            .insert_resource(LoadedPackage {
+                pkg,
+                path: dir.clone(),
+            })
+            .insert_resource(Written {
+                slot: Some(saved.clone()),
+                store: Some(store.clone()),
+                started: true,
+            })
+            .add_systems(Update, (crate::viewer::drive, persist));
+        app.world_mut()
+            .insert_non_send(crate::view::Game { sim: live });
+        crate::viewer::open_for_test(app.world_mut(), &store, &name);
+        assert!(app.world().resource::<crate::viewer::Viewer>().is_open());
+
+        // Before the save point the replay's slot is still the first-play slot, unlike the run's:
+        // an unguarded persist would write it over the file here.
+        let before_save = touched.saturating_sub(1);
+        app.world_mut()
+            .resource_mut::<crate::viewer::Viewer>()
+            .seek_for_test(before_save);
+        app.update();
+        assert_eq!(
+            app.world().resource::<crate::viewer::Viewer>().progress_for_test().0,
+            before_save
+        );
+        assert_eq!(
+            store.read(&save_name).unwrap().unwrap(),
+            before,
+            "persist must not write the replayed sim's slot"
+        );
+
+        // Past the save point, the replay's slot changes too; the file still stays put.
+        app.world_mut()
+            .resource_mut::<crate::viewer::Viewer>()
+            .seek_for_test(u64::MAX);
+        app.update();
+        assert_eq!(
+            store.read(&save_name).unwrap().unwrap(),
+            before,
+            "persist must not write the replay's later slot either"
+        );
+
+        // Closing puts the run's own sim back, unchanged.
+        crate::viewer::close_for_test(app.world_mut());
+        assert_eq!(app.world().non_send::<Game>().sim.world().save, Some(saved.clone()));
+
+        // And persist works again: a different tracked slot makes it rewrite the file.
+        let mut other = saved.clone();
+        other.x = Real::new(other.x.get() + 64.0);
+        write(&store, &save_name, &def, &other).unwrap();
+        app.world_mut().resource_mut::<Written>().slot = Some(other);
+        app.update();
+        assert_eq!(
+            read(&store, &save_name, &def).unwrap(),
+            Some(saved),
+            "persist writes normally after the viewer closes"
+        );
+    }
 }
