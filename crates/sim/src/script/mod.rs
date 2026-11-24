@@ -5,6 +5,7 @@
 //! `GameDef::scripts`, and lends it to every [`Ctx`] as `ctx.scripts`. WP0 declares; WP9 owns.
 
 pub mod api;
+pub mod array;
 pub mod budget;
 pub mod collide;
 mod consts;

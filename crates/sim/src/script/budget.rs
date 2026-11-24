@@ -29,6 +29,8 @@ pub const COSTS: &[(&str, u64, u64, &str)] = &[
     ("instance_create", 50, 0, ""),
     ("instances", 0, 1, "instance returned"),
     ("collision_line", 0, 1, "pixel sampled"),
+    ("index$get$", 0, 1, "stored array element copied"),
+    ("index$set$", 0, 1, "stored array element copied"),
 ];
 
 /// The extra units `name` charges: (per call, per item). `(0, 0)` for a function not listed.

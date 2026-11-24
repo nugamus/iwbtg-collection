@@ -14,13 +14,14 @@ use std::rc::Rc;
 use rhai::{Array, Dynamic, Engine, ImmutableString, Map};
 
 use super::api::runtime_error;
+use super::array::{dynamic_to_value, value_to_dynamic};
 use super::budget::cost;
 use super::docs::Docs;
 use super::host::Shared;
 use crate::alarm;
 use crate::collide::bounce::{Against, move_bounce};
 use crate::def::class::{kind_classes, kind_params, picks_other_kind};
-use crate::def::script::{InitPolicy, ScriptRules, ValueModel};
+use crate::def::script::ValueModel;
 use crate::def::{ClassMask, KindId, ParamValue, Params, RoomId};
 use crate::error::SimError;
 use crate::kid::{self, KidState, api::KillCause};
@@ -28,7 +29,7 @@ use crate::num::Real;
 use crate::output::OutputEvent;
 use crate::room::RoomRequest;
 use crate::script::ScriptOutput;
-use crate::world::{InstId, Instance, KindState, SpawnInit, Value, World};
+use crate::world::{InstId, Instance, KindState, SpawnInit, World};
 
 type Res<T> = Result<T, Box<rhai::EvalAltResult>>;
 
@@ -38,7 +39,7 @@ pub struct Inst(pub InstId);
 
 /// A number argument: an integer or a float.
 #[allow(clippy::cast_precision_loss, reason = "script integers are small")]
-fn num(d: &Dynamic, what: &str) -> Res<f64> {
+pub(super) fn num(d: &Dynamic, what: &str) -> Res<f64> {
     if let Ok(f) = d.as_float() {
         Ok(f)
     } else if let Ok(i) = d.as_int() {
@@ -86,58 +87,6 @@ fn real_prop(engine: &mut Engine, s: &Rc<Shared>, name: &'static str, get: Get, 
             s.with_world(|w, _| live_mut(w, i).and_then(|x| set(x, v).map_err(sim_err)))?
         });
     }
-}
-
-fn value_to_dynamic(v: Option<&Value>, rules: ScriptRules, name: &str) -> Res<Dynamic> {
-    match v {
-        Some(Value::Real(r)) => Ok(Dynamic::from_float(r.get())),
-        Some(Value::Str(s)) => Ok(Dynamic::from(ImmutableString::from(s.as_str()))),
-        Some(Value::Inst(i)) => Ok(Dynamic::from(Inst(*i))),
-        Some(Value::None) | None => match rules.init {
-            InitPolicy::Zero => Ok(Dynamic::from_float(0.0)),
-            InitPolicy::Error => Err(runtime_error(format!("variable `{name}` is not set"))),
-        },
-        // The value model stores arrays (#984); script access to them is #997.
-        Some(Value::Array(_)) => Err(runtime_error(format!(
-            "variable `{name}` holds an array: scripts cannot read arrays yet"
-        ))),
-    }
-}
-
-fn dynamic_to_value(d: &Dynamic, rules: ScriptRules, name: &str) -> Res<Value> {
-    if d.is_unit() {
-        return Ok(Value::None);
-    }
-    if let Ok(b) = d.as_bool() {
-        return match rules.values {
-            // GM8 has no bool value: a bool is the real 1.0/0.0 (Confirmed).
-            ValueModel::Gm8 => Ok(Value::Real(if b { Real::ONE } else { Real::ZERO })),
-            // The standard model keeps the bool as a bool. The value model cannot carry it
-            // yet (world instance state is the entity-model seat's, #1175), so `standard`
-            // refuses the silent erasure instead of turning the value into a real.
-            ValueModel::Typed => Err(runtime_error(format!(
-                "variable `{name}` cannot hold a bool yet under `standard`; \
-                 write 1.0/0.0 and test it with gm_bool until the typed value model lands"
-            ))),
-        };
-    }
-    if let Ok(f) = num(d, name) {
-        let r = Real::new(f);
-        if !r.is_finite() {
-            return Err(sim_err(SimError::non_finite(name.to_owned())));
-        }
-        return Ok(Value::Real(r));
-    }
-    if let Some(s) = d.clone().try_cast::<ImmutableString>() {
-        return Ok(Value::Str(s.to_string()));
-    }
-    if let Some(i) = d.clone().try_cast::<Inst>() {
-        return Ok(Value::Inst(i.0));
-    }
-    Err(runtime_error(format!(
-        "variable `{name}` cannot hold a {}",
-        d.type_name()
-    )))
 }
 
 fn param_from(name: &str, d: &Dynamic) -> Res<ParamValue> {
@@ -499,7 +448,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
     // ---- The package's custom variables: `this.hp` ----
     {
         let s = Rc::clone(shared);
-        docs.add("index$get$", "Reads the package variable `name` of an instance (`i.hp`); an unknown name is an error, and an unset one follows the run's script init policy (0 under `gm8`, a script error under `standard`).");
+        docs.add("index$get$", "Reads a package variable of an instance (`i.hp`; an unknown name is an error), a global (`global.difficulty`) or an element of a stored array (`this.pattern[3]`). An unset variable, global or element follows the run's script init policy (0 under `gm8` with uninitialized reads as 0, else a script error). An array index is a whole number from 0 below 10,000; a fractional or negative one is a script error (OPEN in the GM8 spec). Reading a variable that holds an array copies it.");
         engine.register_indexer_get(move |i: &mut Inst, name: ImmutableString| -> Res<Dynamic> {
             let i = *i;
             s.with_world(|w, host| {
@@ -509,11 +458,11 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
                     .get(name.as_str())
                     .ok_or_else(|| runtime_error(format!("unknown variable `{name}`")))?;
                 let x = live(w, i)?;
-                value_to_dynamic(x.vars.get(id), host.script_rules, &name)
+                value_to_dynamic(&s, x.vars.get(id), host.script_rules, &format!("variable `{name}`"))
             })?
         });
         let s = Rc::clone(shared);
-        docs.add("index$set$", "Writes the package variable `name` of an instance (`i.hp = 5`); the name must be declared in the package. `gm8` stores a bool as 1.0/0.0; `standard` refuses that erasure until the typed value model stores a bool.");
+        docs.add("index$set$", "Writes a package variable of an instance (`i.hp = 5`; the name must be declared in the package), a global (`global.flags = [0.0, 0.0]`, created on first write) or an element of a stored array (`this.pattern[3] = 9.0`; past the end grows the array, the skipped elements unset; at most 10,000). `gm8` stores a bool as 1.0/0.0 and a bare write to a variable holding an array writes element 0 (contract `script/global-array-bare-write`); `standard` refuses a bool until the typed value model stores one and replaces the value.");
         engine.register_indexer_set(
             move |i: &mut Inst, name: ImmutableString, v: Dynamic| -> Res<()> {
                 let i = *i;
@@ -521,7 +470,7 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
                     if READ_ONLY_KID_FIELDS.contains(&name.as_str()) {
                         return Err(runtime_error(format!("`{name}` is a read-only kid field")));
                     }
-                    let value = dynamic_to_value(&v, host.script_rules, &name)?;
+                    let value = dynamic_to_value(&s, &v, host.script_rules, &name)?;
                     let id = *host
                         .def
                         .var_names

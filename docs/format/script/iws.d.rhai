@@ -212,9 +212,17 @@ fn gm_ne(_: ?, _: ?) -> bool;
 
 fn gm_repeat(_: ?) -> int;
 
+fn index$get$(_: Globals, _: string) -> ?;
+
 fn index$get$(_: Instance, _: string) -> ?;
 
+fn index$get$(_: VarArray, _: ?) -> ?;
+
+fn index$set$(_: Globals, _: string, _: ?) -> ();
+
 fn index$set$(_: Instance, _: string, _: ?) -> ();
+
+fn index$set$(_: VarArray, _: ?, _: ?) -> ();
 
 fn instance_create(_: string, _: ?, _: ?) -> Instance;
 
@@ -231,6 +239,8 @@ fn irandom_range(_: ?, _: ?) -> float;
 fn kid() -> ?;
 
 fn kill_kid() -> ();
+
+fn len(_: VarArray) -> int;
 
 fn lengthdir_x(_: ?, _: ?) -> float;
 

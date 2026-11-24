@@ -165,6 +165,7 @@ pub const OTHER_PURE_FNS: &[&str] = &[
     "collision_point",
     "collision_rect",
     "collision_line",
+    "len",
 ];
 
 /// Instance properties that read as a real number.

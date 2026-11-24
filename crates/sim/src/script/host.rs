@@ -633,6 +633,7 @@ impl Iws {
         super::api::register_numeric(&mut engine, &shared, &mut docs);
         super::inst::register_instance_api(&mut engine, &shared, &mut docs);
         super::inst::register_kid_api(&mut engine, &shared, &mut docs);
+        super::array::register_array_api(&mut engine, &shared, &mut docs);
         super::collide::register_collision_api(&mut engine, &shared, &mut docs);
 
         {
@@ -721,7 +722,11 @@ impl Iws {
     /// Compiles `source`, keeping Rhai's parse error (the validator reports its position).
     pub(crate) fn compile_ast(&self, source: &str) -> Result<AST, rhai::ParseError> {
         self.reset_consts();
-        self.engine.compile(source)
+        // `global` is a constant of the compile scope, so strict variables accept it; the
+        // engine's variable resolver gives its value at run time (`array.rs`, #997).
+        let mut scope = Scope::new();
+        scope.push_constant(super::array::GLOBAL, super::array::Globals);
+        self.engine.compile_with_scope(&scope, source)
     }
 
     /// Evaluates one expression (tests, the validator's constant checks).
