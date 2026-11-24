@@ -368,6 +368,49 @@ fn gm8_stores_a_bool_as_a_real() {
     );
 }
 
+/// `hp` holds [1, 2, 3]; a step script then writes the bare name `this.hp = 9.0`.
+fn bare_write_over_an_array(rules: ScriptRules) -> Option<iwbtg_sim::world::Value> {
+    use iwbtg_sim::world::Value;
+    let src = "fn step() { this.hp = 9.0; }";
+    let mut f = fx_rules(src, true, rules);
+    let a = f.spawn(0, 0.0, 0.0);
+    let arr = Value::array(vec![
+        Value::Real(Real::ONE),
+        Value::Real(Real::new(2.0)),
+        Value::Real(Real::new(3.0)),
+    ])
+    .expect("array");
+    f.w.get_mut(a).expect("a").vars.insert(VarId(0), arr);
+    f.run(1);
+    assert_eq!(f.halted(), None);
+    f.w.get(a).expect("a").vars.get(&VarId(0)).cloned()
+}
+
+/// Contract `script/global-array-bare-write` (#1133, research `creation-code.md`, Global arrays,
+/// Confirmed by recorder): under `gm8` a bare write to an instance variable that holds an array
+/// writes element 0 and keeps the other elements.
+#[test]
+fn gm8_bare_write_keeps_the_other_array_elements() {
+    use iwbtg_sim::world::Value;
+    assert_eq!(
+        bare_write_over_an_array(ScriptRules::gm8(true)),
+        Some(Value::Array(vec![
+            Value::Real(Real::new(9.0)),
+            Value::Real(Real::new(2.0)),
+            Value::Real(Real::new(3.0)),
+        ]))
+    );
+}
+
+/// The standard value model replaces the value, as assignment does everywhere else.
+#[test]
+fn standard_bare_write_replaces_an_array() {
+    assert_eq!(
+        bare_write_over_an_array(ScriptRules::standard()),
+        Some(iwbtg_sim::world::Value::Real(Real::new(9.0)))
+    );
+}
+
 #[test]
 fn standard_refuses_to_silently_erase_a_bool_into_a_real() {
     let src = "fn create() { this.hp = true; }";
