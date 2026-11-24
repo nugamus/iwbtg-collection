@@ -90,11 +90,47 @@ def digest_file(root, path):
     return digest.digest()
 
 
-def identity_digest(root, graph, kind, packages, changed, everything=False):
+# Path -> (size, mtime_ns, ctime_ns, sha256). A file's content digest is reused while all three
+# change markers match, so repeated plan() calls stat every source but re-read only what changed.
+_FILE_DIGESTS = {}
+
+
+def file_digest(path):
+    stat = path.stat()
+    entry = _FILE_DIGESTS.get(path)
+    if entry and entry[:3] == (stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns):
+        return entry[3]
+    digest = hashlib.sha256(path.read_bytes()).digest()
+    _FILE_DIGESTS[path] = (stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, digest)
+    return digest
+
+
+def source_digest(root, directory):
+    """Content manifest of one crate directory: every file, path-sorted and content-hashed.
+
+    The identity must see sources that arrive with a new base commit, which are not in `changed`
+    (#1422). Hashing the crate's own files (not the whole workspace) keeps the cost per step small;
+    `plan()` memoizes one digest per directory across its steps.
+    """
+    digest = hashlib.sha256()
+    base = root / directory
+    files = sorted(path for path in base.rglob('*') if path.is_file()) if base.is_dir() else []
+    for path in files:
+        digest.update(b'file\0')
+        digest.update(path.relative_to(root).as_posix().encode())
+        digest.update(b'\0')
+        digest.update(file_digest(path))
+    return digest.digest()
+
+
+def identity_digest(root, graph, kind, packages, changed, everything=False, sources=None):
     """Stable identity for one step: its command kind, crate inputs and shared/environment inputs.
 
     A changed consumer of a crate does not invalidate that crate's tests; a changed dependency
-    does. `everything` is for workspace-wide steps such as rustfmt.
+    does. `everything` is for workspace-wide steps such as rustfmt. The step's crate and in-repo
+    dependency source contents are part of the identity, so a rebase that replaces sources
+    invalidates the receipt even when `changed` does not name them (#1422). Pass `sources` (a dict)
+    to memoize one directory digest per plan.
     """
     digest = hashlib.sha256()
     digest.update(b'receipt-v1\0')
@@ -111,7 +147,16 @@ def identity_digest(root, graph, kind, packages, changed, everything=False):
         digest.update(b'\0')
         digest.update(os.environ.get(key, '').encode())
         digest.update(b'\0')
+
+    def source(directory):
+        if sources is None:
+            return source_digest(root, directory)
+        if directory not in sources:
+            sources[directory] = source_digest(root, directory)
+        return sources[directory]
+
     if everything:
+        dirs = {prefix for prefix, _ in graph.values()}
         relevant = sorted(set(changed))
     else:
         dirs = {graph[name][0] for name in packages}
@@ -121,6 +166,11 @@ def identity_digest(root, graph, kind, packages, changed, everything=False):
         if set(packages) & {'iwbtg-sim', 'iwbtg-format'}:
             relevant |= {path for path in changed if path.startswith(TEST_DOCS)}
         relevant = sorted(relevant)
+    for directory in sorted(dirs):
+        digest.update(b'source\0')
+        digest.update(directory.encode())
+        digest.update(b'\0')
+        digest.update(source(directory))
     for path in relevant:
         digest.update(b'path\0')
         digest.update(path.encode())
@@ -249,10 +299,13 @@ def plan(paths, graph, full=False, root=ROOT):
         {'kind': 'sim-deps', 'selected': code, 'reason': 'dependency ban applies to every code change'},
         {'kind': 'licenses', 'selected': code, 'reason': 'license check applies to every code change'},
     ]
+    # One source-directory digest per plan: every step shares it, and a later check with unchanged
+    # sources reproduces the same values.
+    sources = {}
     for step in local_steps:
         step['identity'] = identity_digest(
             root, graph, step['kind'], step.get('packages', []), paths,
-            everything=step['kind'] == 'rustfmt')
+            everything=step['kind'] == 'rustfmt', sources=sources)
     return {
         'full': force_full,
         'code': code,
@@ -272,7 +325,8 @@ def plan(paths, graph, full=False, root=ROOT):
         'inputs': inputs,
         'local_steps': local_steps,
         'ci_steps': ci_steps,
-        'identity': identity_digest(root, graph, 'plan', selected_all, paths, everything=True),
+        'identity': identity_digest(root, graph, 'plan', selected_all, paths,
+                                    everything=True, sources=sources),
     }
 
 
