@@ -303,5 +303,8 @@ fn a_map_is_not_a_stored_value() {
     let mut g = game(None);
     let me = g.holder();
     let e = user(&mut g, me, 11).expect_err("a map is refused");
-    assert!(e.contains("cannot hold a map"), "{e}");
+    assert!(
+        e.contains("cannot hold a map: a map lives only inside one call; store an array"),
+        "{e}"
+    );
 }
