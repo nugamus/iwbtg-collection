@@ -9,7 +9,7 @@
 //! and the HUD and gives the backdrop the results dim (`OnExit` undoes it and drops the page).
 //! Back (or Escape) returns to the game; Retry (click, or hold R) starts a new run as the
 //! quick-retry key does; Save replay copies the run's replay to `exports/` in the data area.
-//! Watch replay waits for the replay viewer (#42), Upload replay for M7.
+//! Watch replay opens the run's replay in the viewer (`viewer.rs`, #42), Upload replay for M7.
 //!
 //! Under the deaths per stage, the death timeline (each death a tick along the run) and, when
 //! the `[results] heatmap` setting is on, where you died in the stage hovered or clicked in the
@@ -435,6 +435,7 @@ pub fn bar_label(name: &str) -> &str {
 pub enum Action {
     Back,
     Retry,
+    WatchReplay,
     SaveReplay,
 }
 
@@ -685,7 +686,14 @@ fn keys(
     time: Res<Time>,
     mut results: ResMut<Results>,
     buttons: Query<(Entity, &Action, Has<Pressed>)>,
+    viewer: Option<Res<crate::viewer::Viewer>>,
 ) {
+    if viewer
+        .as_deref()
+        .is_some_and(crate::viewer::Viewer::is_open)
+    {
+        return;
+    }
     if results.summary.is_none() {
         results.held = 0.0;
         return;
@@ -716,6 +724,14 @@ fn keys(
 
 /// Does what was picked.
 fn act(world: &mut World) {
+    // While the replay viewer shows, the page is hidden and its keys are the viewer's.
+    if world
+        .get_resource::<crate::viewer::Viewer>()
+        .is_some_and(crate::viewer::Viewer::is_open)
+    {
+        world.resource_mut::<Results>().picked = None;
+        return;
+    }
     let Some(action) = world.resource_mut::<Results>().picked.take() else {
         return;
     };
@@ -728,6 +744,16 @@ fn act(world: &mut World) {
             }
         }
         Action::Retry => crate::retry::request(world),
+        Action::WatchReplay => {
+            let name = world
+                .resource::<Results>()
+                .summary
+                .as_ref()
+                .and_then(|s| s.replay.clone());
+            if let Some(name) = name {
+                crate::viewer::open(world, &name);
+            }
+        }
         Action::SaveReplay => {
             let mut results = world.resource_mut::<Results>();
             let Some(name) = results.summary.as_ref().and_then(|s| s.replay.clone()) else {
@@ -807,6 +833,10 @@ fn uncover(
 
 /// Draws the page at the window's UI scale (it is laid out at its artboard's size and scaled to
 /// fit the window), again when its size class or content changed.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "one Bevy system reading what the page needs"
+)]
 fn show(
     mut commands: Commands,
     results: Res<Results>,
@@ -815,10 +845,21 @@ fn show(
     mut ui_scale: ResMut<UiScale>,
     mut roots: Query<RootParts>,
     cameras: Query<Entity, With<ResultsCamera>>,
+    viewer: Option<Res<crate::viewer::Viewer>>,
 ) {
     let Some(summary) = &results.summary else {
         return;
     };
+    // The replay viewer draws the game; the page steps aside until it closes.
+    if viewer
+        .as_deref()
+        .is_some_and(crate::viewer::Viewer::is_open)
+    {
+        for (entity, _, _) in &mut roots {
+            commands.entity(entity).despawn();
+        }
+        return;
+    }
     let win = window.size();
     if win.x < 1.0 || win.y < 1.0 {
         return;
@@ -902,7 +943,15 @@ fn heat(
     mut filters: ResMut<Assets<FilterMaterial>>,
     mut pictures: ResMut<room::Pictures>,
     mut panels: Query<(Entity, &mut page::HeatPanel)>,
+    viewer: Option<Res<crate::viewer::Viewer>>,
 ) {
+    if viewer
+        .as_deref()
+        .is_some_and(crate::viewer::Viewer::is_open)
+    {
+        pictures.clear(&mut commands);
+        return;
+    }
     let Some(summary) = &results.summary else {
         pictures.clear(&mut commands);
         return;

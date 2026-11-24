@@ -999,7 +999,14 @@ fn footer(c: &mut ChildSpawner, s: &Summary, d: &Dims, saved: bool) {
             ],
         );
         c.spawn((button_with(ButtonKind::Primary, h, 22.0, retry), Action::Retry));
-        c.spawn(button_off(ButtonKind::Secondary, h, 20.0, label("Watch replay")));
+        if s.replay.is_some() {
+            c.spawn((
+                button_with(ButtonKind::Secondary, h, 20.0, label("Watch replay")),
+                Action::WatchReplay,
+            ));
+        } else {
+            c.spawn(button_off(ButtonKind::Secondary, h, 20.0, label("Watch replay")));
+        }
         if s.replay.is_some() && !saved {
             c.spawn((
                 button_with(ButtonKind::Secondary, h, 20.0, label("Save replay")),
@@ -1059,7 +1066,11 @@ mod tests {
                 assert!(all.iter().any(|t| t == want), "{want} missing from {all:?}");
             }
             let mut actions = world.query::<&Action>();
-            assert_eq!(actions.iter(&world).count(), 3, "Back, Retry, Save replay");
+            assert_eq!(
+                actions.iter(&world).count(),
+                4,
+                "Back, Retry, Watch replay, Save replay"
+            );
             let mut rows = world.query::<&StageRow>();
             assert_eq!(rows.iter(&world).count(), 7, "a row per stage");
             let mut panels = world.query::<&HeatPanel>();

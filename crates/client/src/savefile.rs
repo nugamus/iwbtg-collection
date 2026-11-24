@@ -332,7 +332,20 @@ impl Default for Written {
 }
 
 /// Writes the file when the sim's slot changes; a deleted slot (a new game) deletes the file.
-fn persist(game: NonSend<Game>, mut written: ResMut<Written>) {
+fn persist(
+    game: NonSend<Game>,
+    viewer: Option<Res<crate::viewer::Viewer>>,
+    mut written: ResMut<Written>,
+) {
+    // While the replay viewer shows, `game.sim` is the replayed run, not this one (#42): its
+    // re-simulated save slots must not reach the player's save file. The live sim comes back
+    // unchanged, so the tracked slot still matches after the viewer closes.
+    if viewer
+        .as_deref()
+        .is_some_and(crate::viewer::Viewer::is_open)
+    {
+        return;
+    }
     let slot = &game.sim.world().save;
     if !written.started {
         // The slot the game started with is already on disk (or was never saved).

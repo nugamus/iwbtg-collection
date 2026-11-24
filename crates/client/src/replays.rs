@@ -552,8 +552,17 @@ pub(crate) fn reset(world: &mut World) {
     if let Some(menu) = world.get_resource::<Menu>() {
         recorder.set_pauses(&menu.pauses);
     }
-    recorder.finish(&world.non_send::<Game>().sim);
+    recorder.finish(live_sim(world));
     world.insert_resource(recorder);
+}
+
+/// The run's own sim. While the replay viewer shows, `Game` holds the replayed sim instead
+/// (#42), so the live one comes from the viewer.
+fn live_sim(world: &World) -> &Sim {
+    match world.get_non_send::<crate::viewer::ViewerSim>() {
+        Some(viewing) => viewing.live_sim(),
+        None => &world.non_send::<Game>().sim,
+    }
 }
 
 /// Closing the window ends the run: its replay is written while the sim is still there.
@@ -562,12 +571,16 @@ fn finish_on_exit(
     game: NonSend<Game>,
     menu: Option<Res<Menu>>,
     mut recorder: ResMut<Recorder>,
+    viewing: Option<NonSend<crate::viewer::ViewerSim>>,
 ) {
     if exit.read().next().is_some() {
         if let Some(menu) = menu {
             recorder.set_pauses(&menu.pauses);
         }
-        recorder.finish(&game.sim);
+        let sim = viewing
+            .as_deref()
+            .map_or(&game.sim, crate::viewer::ViewerSim::live_sim);
+        recorder.finish(sim);
     }
 }
 
