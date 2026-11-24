@@ -1,4 +1,4 @@
-//! Sound entries to `SoundDef` (kind, length in ticks; docs/plans/sim-core.md 7, 8.3).
+//! Sound entries to `SoundDef` (kind, length in ticks; docs/format/sounds.md).
 //!
 //! Every `sounds/<id>.ogg` is a normal sound and every `music/<id>.ogg` a MULTIMEDIA one (at
 //! most one copy plays, S2). Ids are the file stems, sounds first then music, each in path

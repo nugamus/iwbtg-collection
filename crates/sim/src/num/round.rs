@@ -165,7 +165,7 @@ pub fn gm_max(a: Real, b: Real, r: &NumRules) -> Real {
 
 /// How many times GML `repeat (x)` runs its body: the rounded value of `x` (Confirmed, manual),
 /// rounding half to even (Inferred), and 0 when that is 0 or less. It takes the rules so a later
-/// `engine_rev` can change the rounding without a new signature (plan 11).
+/// `engine_rev` can change the rounding without a new signature (docs/architecture/sim/scripts.md).
 ///
 /// Errors on NaN or infinity, and on a value outside i64 (`OutOfRange`). The script step budget
 /// bounds what a large count can cost.

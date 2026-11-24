@@ -1,4 +1,5 @@
-//! `object_order` to dispatch ranks (docs/plans/sim-core.md 1.3, 8.2 step 5, CR4).
+//! `object_order` to dispatch ranks (docs/format/game.md; CR4 in
+//! docs/format/converter-requests.md).
 //!
 //! An entry is a kind name (`block`, `@world`) or a selector on one of the kind's params
 //! (`{ kind = "spike", dir = "up" }`), so originals that collapsed into one kind keep their

@@ -13,6 +13,23 @@
 - A deliberate change to hashed state re-pins three things (and only then) with `cargo xtask repin`: `tests/hash_vectors.rs`, the `FINAL_HASH` in `tests/determinism.rs` and the golden corpus. `HASH_LAYOUT` changes only with the encoding. A merge conflict in a pin file (`crates/xtask/pin-files.txt`): take either side and repin, never hand-merge.
 - Script conformance: `UPDATE_CONFORMANCE=1 cargo test -p iwbtg-sim --test it script_conformance::`.
 
+## Test files by module
+
+`tests/it.rs` is the one executable; each other file is one module in it. The separate targets are `determinism`, `golden_corpus`, `feel` and `script_prep`. Files, grouped by the module they cover:
+
+- sim core, tick and world: `world.rs`, `world_lifetime.rs`, `pipeline.rs`, `lifecycle.rs`, `input.rs`, `first_step_output.rs`, `entity_identity.rs`, `pairs.rs`.
+- hash and determinism: `determinism.rs`, `hash_vectors.rs`, `golden_corpus.rs`, `golden/`, `sim_version_bump.rs`, `sim_version_pins.txt`.
+- rooms: `room_persistent.rs`, `room_requests.rs`, `room_rows.rs`, `room_sequence.rs`, `room_start.rs`, `room_transaction.rs`, `placed_ids.rs`, `persistence.rs`.
+- kid: `kid_a1_actions.rs`, `kid_a1_boundary.rs`, `kid_a1_collisions.rs`, `kid_a1_death.rs`, `kid_a1_gravity.rs`, `kid_a2.rs`, `kid_a3.rs`, `kid_a4.rs`, `kid_a5.rs`, `kid_api.rs`, `kid_b_collisions.rs`, `kid_b_core.rs`, `kid_b_death.rs`, `kid_b_flip.rs`, `kid_b_preset.rs`, `kid_b_slope.rs`, `kid_c.rs`, `kid_c_key.rs`, `kid_flip_swap.rs`, `kid_ice.rs`, `kid_ladder.rs`, `kid_moving_block.rs`, `kid_script_slots.rs`, `kid_slope.rs`, `kid_temp.rs`, `kid_water_setters.rs`, `slip.rs`.
+- built-ins: `builtins_<kind>.rs`, one per built-in, with `builtins_*_support.rs` for shared helpers.
+- collision: `bbox.rs`, `grid.rs`, `query.rs`, `shapes.rs`, `collide_support/`.
+- motion, numbers and rng: `motion.rs`, `path.rs`, `num.rs`, `rng.rs`, `bounce.rs`, `particles_rng.rs`.
+- sound: `sound.rs`, `death_sound.rs`, `dll_sound_length.rs`, `kid_sounds.rs`.
+- scripts: `script_conformance/`, `script_derived_kinds.rs`, `script_doc_examples.rs`, `script_engine.rs`, `script_host.rs`, `script_int_args.rs`, `script_prep.rs`, `script_retry.rs`, `script_save.rs`, `script_validate.rs`.
+- save, restart, timing and view: `save.rs`, `save_reverse.rs`, `restart.rs`, `room_restart.rs`, `kid_restart.rs`, `multikid_restart.rs`, `timing.rs`, `ranked_time.rs`, `view.rs`.
+- probe, traces and feel: `motion_traces.rs` (private research fixtures), `feel.rs`, `feel/`.
+- shared fixtures and lints: `support.rs`, `state_support.rs`, `room_support.rs`, `kid_a2_a3_support.rs`, `kid_a4_a5_support.rs`, `kid_motion_support.rs`, `fixtures/`, `stress/`, `lint_gm_compare.rs`.
+
 ## Pitfalls seen before
 
 - Preserve feel, not implementation. An F3 detail (a package-authored boot room, temp file, internal id, probe-only value) is free to redesign; an F1 change needs a feel contract and, where irreversible, the user. Standard ruleset plus named `[compat]` profiles; one-game behavior goes to data, a script or a profile, never a shared-code switch ([0005](../decisions/0005-standard-mechanics.md)).

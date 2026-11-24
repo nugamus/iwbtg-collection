@@ -2,7 +2,7 @@
 //!
 //! No Bevy, no IO, no threads, no clock. The same package and inputs give bit-identical state on
 //! Windows, WASM and Linux. See `docs/architecture/sim.md` and the open-question registers in
-//! `docs/plans/sim-core/`.
+//! `docs/architecture/sim/register-*.md`.
 #![forbid(unsafe_code)]
 #![deny(
     clippy::print_stdout,

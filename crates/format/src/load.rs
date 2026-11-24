@@ -215,7 +215,7 @@ fn request_text(cr: &str) -> &'static str {
         "CR8" => {
             "the kid's mask comes from the legacy physics.toml `mask`; give the `kid` kind a mask in [defaults.kid]"
         }
-        "CR10" => "kind names are not built-ins of plan 6.1; they load inert",
+        "CR10" => "kind names are not built-ins (docs/format/builtins.md); they load inert",
         "CR11" => "objects use the legacy `roles` key; write `counts_as`",
         "CR12" => {
             "bare built-ins have no [defaults] sprite in game.toml; their sprites came from \

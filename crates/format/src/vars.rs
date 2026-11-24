@@ -1,4 +1,4 @@
-//! Variable name interning (docs/plans/sim-core.md 1.1, 8.2 step 6). Ids come from the sorted
+//! Variable name interning (docs/architecture/sim/world.md, "Variable ids"). Ids come from the sorted
 //! name list, so they never depend on run or file order (Design, determinism).
 //!
 //! The loader interns every name it can see: object and instance params (instance creation code
