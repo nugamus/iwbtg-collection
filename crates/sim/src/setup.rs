@@ -6,9 +6,10 @@
 //! match a clean verification. The server refuses to start when this feature is on. WP0
 //! declares; WP8a owns.
 //!
-//! Setup only assigns: it runs no event, creates no instance and reads no file. A value a
-//! setter rejects (non-finite, N15) or a field setup cannot write is a [`SimError`], and the
-//! caller halts the run there.
+//! Setup assigns, and [`SetupAction::Destroy`] destroys instances (running their Destroy event,
+//! like GML `instance_destroy`); it creates no instance and reads no file. A value a setter
+//! rejects (non-finite, N15) or a field setup cannot write is a [`SimError`], and the caller
+//! halts the run there.
 
 use std::sync::Arc;
 
@@ -24,7 +25,7 @@ use crate::rules::RunnerRules;
 use crate::save::SaveSlot;
 use crate::script::ScriptRuntime;
 use crate::sim::{Sim, SimOptions};
-use crate::world::{Ctx, InstId, Instance, Value, World};
+use crate::world::{Ctx, Flow, InstId, Instance, Value, World};
 
 /// One setup action.
 #[derive(Clone, PartialEq, Debug)]
@@ -60,6 +61,15 @@ pub enum SetupAction {
         /// The value.
         value: Value,
     },
+    /// Destroy every active instance of `target` whose position is inside `rect`, a recorder
+    /// `--gml` `with(obj){if(x<520 && y<260){instance_destroy()}}` (#640).
+    Destroy {
+        /// Which instances (a kind, or a class for a GM parent and its children).
+        target: crate::collide::Target,
+        /// `[left, top, right, bottom]`: `left <= x < right` and `top <= y < bottom`. A bound
+        /// may be infinite.
+        rect: [Real; 4],
+    },
 }
 
 impl Sim {
@@ -73,9 +83,55 @@ impl Sim {
     /// (`tjump`, `djump`, `onPlatform`) take `num::gm_bool` of the value; `curJumps` takes a whole
     /// number 0 to 255. `SetSave` on a missing slot first creates one with every field zero
     /// (facing 1, room 0).
+    ///
+    /// `Destroy` runs GML `instance_destroy` on each instance it picks, in id order, so their
+    /// Destroy events run now; the world transaction then removes them (at once under
+    /// `standard`, at the end-of-tick sweep under `gm8`, #1174). A Destroy event that halts the
+    /// sim or changes the room is an error.
     pub fn apply_setup(&mut self, s: &SetupAction) -> Result<(), SimError> {
         self.world.setup_applied = true;
+        if let SetupAction::Destroy { target, rect } = s {
+            return self.destroy_in_rect(*target, *rect);
+        }
         apply(&self.def, &self.rules, &mut self.world, s)
+    }
+
+    /// [`SetupAction::Destroy`].
+    fn destroy_in_rect(&mut self, target: crate::collide::Target, rect: [Real; 4]) -> Result<(), SimError> {
+        let [left, top, right, bottom] = rect.map(Real::get);
+        let ids: Vec<InstId> = self
+            .world
+            .iter_visible()
+            .filter(|i| {
+                let (x, y) = (i.m.x().get(), i.m.y().get());
+                target.matches(&self.def, i) && left <= x && x < right && top <= y && y < bottom
+            })
+            .map(|i| i.id)
+            .collect();
+        let mut ctx = Ctx {
+            def: &self.def,
+            rules: &self.rules,
+            w: &mut self.world,
+            scripts: &self.scripts,
+            dll_mode: self.options.dll_mode,
+        };
+        for id in ids {
+            match ctx.destroy(id) {
+                Flow::Continue => {}
+                Flow::AbortTick => {
+                    return Err(SimError::unsupported(
+                        "setup destroy: a Destroy event changed the room",
+                    ));
+                }
+                Flow::Halt => {
+                    return Err(match &ctx.w.status {
+                        crate::world::SimStatus::Halted(e) => e.clone(),
+                        _ => SimError::invariant("setup destroy: halted without an error"),
+                    });
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Like [`Sim::new`], but applies `pre_entry` to the world after the rules, the script host
@@ -153,6 +209,9 @@ fn apply(def: &GameDef, rules: &RunnerRules, w: &mut World, s: &SetupAction) -> 
         }
         SetupAction::SetEngine { var, value } => set_engine(rules, w, *var, value),
         SetupAction::SetSave { field, value } => set_save(def, w, *field, value),
+        SetupAction::Destroy { .. } => Err(SimError::unsupported(
+            "setup destroy before room entry: there are no instances yet",
+        )),
     }
 }
 
@@ -580,6 +639,42 @@ mod tests {
             s.apply_setup(&set_x(3, 1.0)),
             Err(SimError::Unsupported { .. })
         ));
+    }
+
+    #[test]
+    fn destroy_takes_the_instances_inside_the_rectangle() {
+        let mut s = sim();
+        let mut ids = Vec::new();
+        for (x, y) in [(100.0, 100.0), (519.0, 259.9), (520.0, 100.0), (100.0, 260.0)] {
+            let id = s.world.alloc_id().expect("id");
+            s.world
+                .insert(Instance::new(
+                    id,
+                    crate::def::KindId(0),
+                    0,
+                    Real::new(x),
+                    Real::new(y),
+                ))
+                .expect("insert");
+            ids.push(id);
+        }
+        // `with(block){if(x<520 && y<260){instance_destroy()}}`
+        let destroy = SetupAction::Destroy {
+            target: crate::collide::Target::Kind(crate::def::KindId(0)),
+            rect: [
+                Real::new(f64::NEG_INFINITY),
+                Real::new(f64::NEG_INFINITY),
+                Real::new(520.0),
+                Real::new(260.0),
+            ],
+        };
+        s.apply_setup(&destroy).expect("destroy");
+        let alive: Vec<bool> = ids.iter().map(|id| s.world.exists(*id)).collect();
+        assert_eq!(alive, [false, false, true, true]);
+        assert!(s.world.setup_applied);
+        // Before room entry there is nothing to destroy: an error, not a silent no-op.
+        let rules = s.rules.clone();
+        assert!(apply(&s.def, &rules, &mut s.world, &destroy).is_err());
     }
 
     #[test]

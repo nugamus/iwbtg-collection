@@ -150,6 +150,13 @@ pub fn resolve_case(
                 }),
                 None => errors.push(format!("setup {}: no save field {field:?}", i + 1)),
             },
+            SetupWhat::Destroy { target, rect } => match registry::target(target, def) {
+                Ok(t) => actions.push(SetupAction::Destroy {
+                    target: t,
+                    rect: rect.map(Real::from_bits),
+                }),
+                Err(e) => errors.push(format!("setup {}: {e}", i + 1)),
+            },
         }
         if s.frame < case.at {
             pre_entry.extend(actions);
