@@ -16,6 +16,7 @@ use std::collections::BTreeSet;
 use bevy::prelude::*;
 use iwbtg_sim::mods::ModSet;
 use iwbtg_sim::room::StartPoint;
+use iwbtg_sim::sim::Sim;
 use iwbtg_sim::stripped::PlayMode;
 
 #[allow(unused_imports, reason = "the screens read these (#494, #496, #151)")]
@@ -92,7 +93,7 @@ pub struct Stats {
 
 impl Stats {
     /// The stats kept in `store` (`None`: this session keeps nothing).
-    fn open(store: Option<Store>) -> Stats {
+    pub(crate) fn open(store: Option<Store>) -> Stats {
         let (book, recovery) =
             store.as_ref().map_or_else(|| (Book::default(), None), load);
         let mut stats = Stats {
@@ -122,16 +123,15 @@ impl Stats {
     /// baseline, so a run from a save keeps that save's counters and counts no historical death.
     /// Does nothing while a run's tracker is open; a retry or the end of the run clears it
     /// ([`reset`]).
-    fn open_current(
+    pub(crate) fn open_current(
         &mut self,
-        game: &Game,
+        sim: &Sim,
         mods: Option<&crate::mods::RunMods>,
         menu: Option<&crate::pause::Menu>,
     ) {
         if self.current.is_some() {
             return;
         }
-        let sim = &game.sim;
         let def = sim.def();
         let opts = sim.options();
         let ranked = opts.mode == PlayMode::Stripped;
@@ -265,6 +265,25 @@ impl Stats {
                 }
             }
         }
+    }
+
+    /// Reads one simulated tick into the open run: the tracker's events go into the book. The
+    /// post-tick `watch` uses it, and so does `skip` for every tick it runs at once (#1018), so a
+    /// skipped tick counts exactly like a watched one. Does nothing before a run's tracker is
+    /// open (no run, or the tracker was reset).
+    pub(crate) fn observe(
+        &mut self,
+        sim: &Sim,
+        menu: Option<&crate::pause::Menu>,
+        tick_seconds: f64,
+        replay: Option<&str>,
+    ) {
+        let Some(mut cur) = self.current.take() else {
+            return;
+        };
+        let events = cur.tracker.observe(observation(sim, menu));
+        self.apply(&cur, events, tick_seconds, replay);
+        self.current = Some(cur);
     }
 }
 
@@ -424,7 +443,7 @@ fn seed(
     menu: Option<Res<crate::pause::Menu>>,
     mods: Option<Res<crate::mods::RunMods>>,
 ) {
-    stats.open_current(&game, mods.as_deref(), menu.as_deref());
+    stats.open_current(&game.sim, mods.as_deref(), menu.as_deref());
 }
 
 /// What the sim looks like now, as the tracker reads it. Read only: the death log never touches
@@ -464,15 +483,14 @@ fn watch(
 ) {
     // `seed` opened it before this tick; the fallback keeps a direct call (a test, or a tick
     // that ran before the fixed loop seeded) from losing the first observation.
-    stats.open_current(&game, mods.as_deref(), menu.as_deref());
-    let mut cur = stats
-        .current
-        .take()
-        .expect("seed opened the run's tracker");
-    let events = cur.tracker.observe(observation(&game.sim, menu.as_deref()));
+    stats.open_current(&game.sim, mods.as_deref(), menu.as_deref());
     let replay = replays.as_deref().and_then(|r| r.current_name());
-    stats.apply(&cur, events, fixed.timestep().as_secs_f64(), replay);
-    stats.current = Some(cur);
+    stats.observe(
+        &game.sim,
+        menu.as_deref(),
+        fixed.timestep().as_secs_f64(),
+        replay,
+    );
 }
 
 /// Writes unsaved deaths and play time every [`FLUSH_SECONDS`].
