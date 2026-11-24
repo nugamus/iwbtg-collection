@@ -1208,7 +1208,9 @@ fn feel_sweep(root: &Path, extra: &[&str]) -> Result<i32, String> {
 /// `fidelity`: one `iwbtg trace sweep` run (all packages and cases in one process).
 fn fidelity(root: &Path, bless: bool) -> Result<(), String> {
     let Some(research) = std::env::var_os("IWBTG_RESEARCH") else {
-        return Err("set IWBTG_RESEARCH to the research checkout (for example ../research)".into());
+        return Err(
+            "set IWBTG_RESEARCH to the research checkout (for example ../iwbtg-collection-research)".into(),
+        );
     };
     // Relative to the folder cargo xtask was started in, not the workspace root it runs in.
     let research = Path::new(&research)

@@ -6,7 +6,7 @@
                                             "Findings:" line (issues filed, or "none").
   python -I .claude/hooks/issues.py --test  Self-test of the stop check, settings drift and fidelity checks.
 
-start also warns when the workspace-root .claude/settings.json differs from client/workspace/settings.json,
+start also warns when the workspace-root .claude/settings.json differs from iwbtg-collection/workspace/settings.json,
 and reports the client repo's CI on main, with a loud first line when main is red (#595), and flags open
 PRs whose newest Actions run has sat queued over an hour (#666).
 
@@ -19,9 +19,18 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-WORKSPACE = Path(__file__).resolve().parents[3]  # <workspace>/<repo>/.claude/hooks/issues.py
 OWNER = "nugamus"
 REPOS = {"c": "iwbtg-collection", "r": "iwbtg-collection-research", "g": "iwbtg-collection-games"}
+
+
+def workspace_of(repo):
+    """The folder holding the three checkouts: the parent of a main checkout, or of `worktrees/` for
+    a lane worktree (`<workspace>/worktrees/<repo>-<lane>/.claude/hooks/issues.py`)."""
+    return repo.parent.parent if repo.parent.name == "worktrees" else repo.parent
+
+
+REPO = Path(__file__).resolve().parents[2]  # <workspace>/<repo>/.claude/hooks/issues.py
+WORKSPACE = workspace_of(REPO)
 AGENT_MARK = "<!-- agent -->"  # agents start every issue comment with this, so user replies stand out
 EDIT_TOOLS = {"Edit", "Write", "NotebookEdit"}
 FINDINGS = re.compile(r"^\W*findings\W*:", re.I | re.M)
@@ -112,8 +121,9 @@ def ms_key(title):
 
 
 def settings_drift(root=WORKSPACE):
-    """A warning if the workspace-root settings differ from the tracked copy in client/workspace/, else ''."""
-    live, tracked = root / ".claude" / "settings.json", root / "client" / "workspace" / "settings.json"
+    """A warning if the workspace-root settings differ from the tracked copy in the client checkout, else ''."""
+    live = root / ".claude" / "settings.json"
+    tracked = root / REPOS["c"] / "workspace" / "settings.json"
     if not tracked.is_file():
         return ""
     try:
@@ -123,15 +133,15 @@ def settings_drift(root=WORKSPACE):
     if same:
         return ""
     return ("WARNING: the workspace-root .claude/settings.json is missing or differs from the tracked copy "
-            "client/workspace/settings.json. Copy the tracked one over (or land your change in the tracked copy "
-            "through a PR), then restart Claude Code. See client/docs/dev-setup.md.\n\n")
+            f"{REPOS['c']}/workspace/settings.json. Copy the tracked one over (or land your change in the tracked copy "
+            f"through a PR), then restart Claude Code. See {REPOS['c']}/docs/dev-setup.md.\n\n")
 
 
 BASELINE = "crates/tools/fidelity-baseline.txt"
 FIDELITY_STAMP = Path("target") / "xtask" / "last-fidelity.txt"  # `cargo xtask fidelity` writes "<origin/main sha> <unix secs>"
 
 
-def fidelity_stale(repo=WORKSPACE / "client", ref="origin/main"):
+def fidelity_stale(repo=WORKSPACE / REPOS["c"], ref="origin/main"):
     """One line when commits touching crates/sim or crates/format landed on `ref` after the last fidelity sweep
     (#935), else ''. The sweep is the commit in target/xtask/last-fidelity.txt; without it (or when that commit
     is unknown here) the commit that last changed the baseline file stands in. Local git only (no fetch)."""
@@ -152,13 +162,13 @@ def fidelity_stale(repo=WORKSPACE / "client", ref="origin/main"):
     except Exception:
         return ""
     return (f"FIDELITY STALE: {n} sim/format commit(s) on main since the last fidelity sweep. "
-            "Run `IWBTG_RESEARCH=../research cargo xtask fidelity` (lead, after a merge wave).\n\n") if n else ""
+            "Run `IWBTG_RESEARCH=../iwbtg-collection-research cargo xtask fidelity` (lead, after a merge wave).\n\n") if n else ""
 
 
 def worktrees(root=WORKSPACE):
     """One line per extra git worktree of each repo: folder, branch, uncommitted files."""
     out = []
-    for repo in ("client", "research", "games"):
+    for repo in REPOS.values():
         try:
             r = subprocess.run(["git", "-C", str(root / repo), "worktree", "list", "--porcelain"],
                                capture_output=True, text=True, encoding="utf-8", timeout=10)
@@ -358,11 +368,14 @@ def test():
     assert not stop_needs_findings({"last_assistant_message": "Done.\n\nFindings: none"}, [])
     assert stop_needs_findings({"last_assistant_message": 5}, stale)
     import tempfile
+    # The workspace root is one level above a main checkout, two above a lane worktree (#1346).
+    assert workspace_of(Path("/w") / REPOS["c"]) == Path("/w")
+    assert workspace_of(Path("/w/worktrees") / f"{REPOS['c']}-data") == Path("/w")
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
         assert settings_drift(root) == ""  # no tracked copy: nothing to compare
-        (root / "client" / "workspace").mkdir(parents=True)
-        (root / "client" / "workspace" / "settings.json").write_text('{"a": 1}')
+        (root / REPOS["c"] / "workspace").mkdir(parents=True)
+        (root / REPOS["c"] / "workspace" / "settings.json").write_text('{"a": 1}')
         assert settings_drift(root).startswith("WARNING")  # root copy missing
         (root / ".claude").mkdir()
         (root / ".claude" / "settings.json").write_text('{ "a" : 1 }')
