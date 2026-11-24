@@ -26,6 +26,9 @@ path = [
   ".claude/**",
   ".github/**",
   "workspace/**",
+  "progress/**",
+  "migrations/**",
+  "scripts/**",
   "Cargo.toml",
   "Cargo.lock",
   "deny.toml",
@@ -56,9 +59,8 @@ path = [
   "docs/**",
   "README.md",
   "CLAUDE.md",
-  "CONTRIBUTING.md",
-  "SECURITY.md",
-  "Potential Features.md",
+  ".github/CONTRIBUTING.md",
+  ".github/SECURITY.md",
 ]
 SPDX-FileCopyrightText = "2026 IWBTG Collection contributors"
 SPDX-License-Identifier = "CC-BY-4.0"

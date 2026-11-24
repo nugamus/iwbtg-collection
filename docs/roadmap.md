@@ -15,7 +15,7 @@ The order of work across all three repos: client, research and games. There are 
   - `area:*`: which part of the project the issue touches.
   - `triage`: a new issue an agent filed, waiting to be sorted into a phase.
 - **Sub-issues** break every large issue into steps, and `blocked by` links connect dependent issues, so the board shows what can start now.
-- **Ideas** that are not in any phase yet are issues without a milestone (the backlog) or lines in `Potential Features.md`.
+- **Ideas** that are not in any phase yet are issues without a milestone (the backlog) or lines in `potential-features.md`.
 
 ## Dispatch table
 
