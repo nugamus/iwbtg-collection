@@ -199,6 +199,40 @@ pub struct SoundShape {
     pub kind: Option<SoundKindShape>,
 }
 
+/// The physics schema with the serde aliases listed. schemars does not emit `#[serde(alias)]`, and
+/// the schema forbids unknown keys, so a standard-named profile (`[vines]`, `[platforms]`,
+/// `[ladders]`, `[slopes]`, `[numbers] max_fall`; docs/format/physics.md "Standard names and
+/// aliases") would be rejected. Each standard name gets a copy of its legacy key's schema. Keep
+/// this list equal to the `alias` attributes on `PhysicsProfileDraft` and `KidNumbersDraft`.
+fn physics_text() -> String {
+    fn add_alias(object: &mut Value, legacy: &str, standard: &str) {
+        let props = object["properties"].as_object_mut().expect("properties object");
+        let copy = props
+            .get(legacy)
+            .unwrap_or_else(|| panic!("no `{legacy}` to alias"))
+            .clone();
+        props.insert(standard.to_owned(), copy);
+    }
+    let mut value = serde_json::to_value(schemars::schema_for!(PhysicsProfileDraft)).expect("schema is JSON");
+    value["title"] = Value::String("IWBTG physics.toml (kid physics profile, format v0)".to_owned());
+    for (legacy, standard) in [
+        ("platform", "platforms"),
+        ("vine", "vines"),
+        ("slope", "slopes"),
+        ("ladder", "ladders"),
+    ] {
+        add_alias(&mut value, legacy, standard);
+    }
+    add_alias(
+        &mut value["$defs"]["KidNumbersDraft"],
+        "max_fall_speed",
+        "max_fall",
+    );
+    let mut s = serde_json::to_string_pretty(&value).expect("schema is JSON");
+    s.push('\n');
+    s
+}
+
 /// Every schema as `(file stem, pretty JSON text)`. The file is `<stem>.schema.json`.
 pub fn generate() -> Vec<(&'static str, String)> {
     fn text<T: JsonSchema>(title: &str) -> String {
@@ -218,10 +252,7 @@ pub fn generate() -> Vec<(&'static str, String)> {
             "object",
             text::<ObjectShape>("IWBTG objects/<id>.toml (format v0)"),
         ),
-        (
-            "physics",
-            text::<PhysicsProfileDraft>("IWBTG physics.toml (kid physics profile, format v0)"),
-        ),
+        ("physics", physics_text()),
         ("room", text::<RawRoom>("IWBTG rooms/<id>.toml (format v0)")),
         (
             "tiles",

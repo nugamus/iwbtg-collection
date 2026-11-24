@@ -1296,6 +1296,17 @@
             "null"
           ]
         },
+        "max_fall": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "max_fall_speed": {
           "anyOf": [
             {
@@ -2270,6 +2281,17 @@
       ],
       "description": "`[ladder]` (standard alias `[ladders]`)."
     },
+    "ladders": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LadderRules"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[ladder]` (standard alias `[ladders]`)."
+    },
     "misc": {
       "anyOf": [
         {
@@ -2293,6 +2315,17 @@
       "description": "`[numbers]`."
     },
     "platform": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PlatformRulesDraft"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[platform]` (standard alias `[platforms]`)."
+    },
+    "platforms": {
       "anyOf": [
         {
           "$ref": "#/$defs/PlatformRulesDraft"
@@ -2347,6 +2380,17 @@
       ],
       "description": "`[slope]` (standard alias `[slopes]`)."
     },
+    "slopes": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SlopeRulesDraft"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[slope]` (standard alias `[slopes]`)."
+    },
     "sounds": {
       "anyOf": [
         {
@@ -2370,6 +2414,17 @@
       "description": "`[sprites]`: sprite names. `kid::presets::apply` leaves the profile's `sprites` empty;\nthe loader (WP7b) resolves these names to ids and fills them in."
     },
     "vine": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/VineRulesDraft"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "`[vine]` (standard alias `[vines]`)."
+    },
+    "vines": {
       "anyOf": [
         {
           "$ref": "#/$defs/VineRulesDraft"
