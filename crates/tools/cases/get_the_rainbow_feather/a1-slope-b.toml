@@ -21,6 +21,8 @@ setup = [
 # 0.4), our package still has the A1 preset's block_landing_zeroes. Converter CR26
 # (research#273) writes block_landing_zeroes = false; then drop "gravity" here.
 ignore = ["id", "sprite_index", "sprite_name", "gravity"]
+# The F1 evidence: the peak stop and the position after it, exact in both axes.
+required = ["kid.x", "kid.y"]
 
 [vars]
 "djump" = "kid.djump"

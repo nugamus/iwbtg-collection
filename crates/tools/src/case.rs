@@ -800,8 +800,8 @@ mod tests {
 
     /// Read-only vocabulary check against the 647 research traces: every case's `vars` key is a
     /// column of its trace, and every `required` name is either a compared original column, the
-    /// probe expression a `vars` entry maps it to, or a `split` field. Skips without
-    /// `IWBTG_RESEARCH` (CI does not set it).
+    /// probe expression a `vars` entry maps it to, a `split` field, or a recorder fixed column
+    /// (bare or as `kid.<field>`). Skips without `IWBTG_RESEARCH` (CI does not set it).
     #[test]
     fn research_cases_name_real_trace_columns() {
         use iwbtg_sim::trace::{FIXED_COLUMNS, TraceTable};
@@ -873,7 +873,15 @@ mod tests {
             }
             for required in &case.required {
                 let mapped = case.vars.values().any(|v| v == required);
-                if !original.contains(required.as_str()) && !mapped && !split.contains(required) {
+                let fixed_name = fixed.contains(required.as_str())
+                    || required
+                        .strip_prefix("kid.")
+                        .is_some_and(|field| fixed.contains(field));
+                if !original.contains(required.as_str())
+                    && !mapped
+                    && !split.contains(required)
+                    && !fixed_name
+                {
                     failures.push(format!(
                         "{}: required {required:?} is not in the trace or its vars",
                         case.source
