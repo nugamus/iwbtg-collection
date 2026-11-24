@@ -75,9 +75,11 @@ struct Recording {
     inputs: Vec<InputFrame>,
     splits: Vec<(u16, u64)>,
     checkpoints: Vec<(u64, [u8; 16])>,
-    /// Ticks recorded since the last write.
+    /// Ticks recorded since the last successful data write.
     unsaved: bool,
-    /// Written at least once (so it is in the index).
+    /// The replay's bytes have been written at least once.
+    stored: bool,
+    /// The index write has succeeded (so it is in the index).
     listed: bool,
     /// A ranked run's clear: nothing more is recorded.
     closed: bool,
@@ -101,6 +103,10 @@ pub struct Recorder {
     prune: bool,
     /// The run's pauses so far (`pause::Menu::pauses`), for the trailer.
     pauses: Vec<(u64, u64)>,
+    /// Replays whose bytes are stored but whose index write has not succeeded yet, oldest first.
+    /// Kept across [`Recorder::finish`] (a finished run is no longer `current`) and retried at
+    /// every later write, so a transient index failure does not orphan the replay (#1012).
+    unlisted: Vec<String>,
 }
 
 impl Recorder {
@@ -115,6 +121,7 @@ impl Recorder {
             skip: false,
             prune: cfg!(all(target_arch = "wasm32", target_os = "unknown")),
             pauses: Vec::new(),
+            unlisted: Vec::new(),
         }
     }
 
@@ -223,6 +230,7 @@ impl Recorder {
             splits: Vec::new(),
             checkpoints: Vec::new(),
             unsaved: false,
+            stored: false,
             listed: false,
             closed: false,
             ended: false,
@@ -245,61 +253,98 @@ impl Recorder {
         }
     }
 
-    /// Writes the replay when it has unsaved ticks, lists it in the index the first time and
-    /// prints one line with the final hash (`iwbtg replay verify` prints the same).
+    /// Writes the replay when it has unsaved ticks, then lists every stored replay that is not
+    /// in the index yet and prints one line per data write with the final hash (`iwbtg replay
+    /// verify` prints the same).
+    ///
+    /// The two writes are independent (#1012): a failed data write leaves `unsaved` set, and a
+    /// failed index write leaves the name in `unlisted`, so a later flush retries it even when
+    /// the data is clean or the run has already finished.
     fn write(&mut self, sim: &Sim) {
-        let (Some(store), Some(rec)) = (&self.store, self.current.as_mut()) else {
+        let Some(store) = self.store.clone() else {
             return;
         };
-        if !rec.unsaved || rec.inputs.is_empty() {
-            return;
-        }
-        let final_hash = sim.state_hash();
-        let replay = Replay {
-            header: rec.header.clone(),
-            inputs: rec.inputs.clone(),
-            trailer: Trailer {
-                total_ticks: rec.inputs.len() as u64,
-                splits: rec.splits.clone(),
-                ranked_ticks: sim.ranked_ticks(),
-                // A pause the menu counted after the last recorded tick (none can: the menu
-                // counts only while the sim runs, and the sim ticks after it) is dropped rather
-                // than making the file invalid.
-                pauses: self
-                    .pauses
-                    .iter()
-                    .copied()
-                    .filter(|p| p.0 <= rec.inputs.len() as u64)
-                    .collect(),
-                checkpoints: rec.checkpoints.clone(),
-                final_hash,
-            },
-        };
-        let bytes = match replay.encode() {
-            Ok(b) => b,
-            Err(e) => {
-                storage::warn(&format!("replay not saved: {e}"));
-                return;
+        let mut printed = None;
+        if let Some(rec) = self.current.as_mut() {
+            if rec.unsaved && !rec.inputs.is_empty() {
+                let final_hash = sim.state_hash();
+                let replay = Replay {
+                    header: rec.header.clone(),
+                    inputs: rec.inputs.clone(),
+                    trailer: Trailer {
+                        total_ticks: rec.inputs.len() as u64,
+                        splits: rec.splits.clone(),
+                        ranked_ticks: sim.ranked_ticks(),
+                        // A pause the menu counted after the last recorded tick (none can: the
+                        // menu counts only while the sim runs, and the sim ticks after it) is
+                        // dropped rather than making the file invalid.
+                        pauses: self
+                            .pauses
+                            .iter()
+                            .copied()
+                            .filter(|p| p.0 <= rec.inputs.len() as u64)
+                            .collect(),
+                        checkpoints: rec.checkpoints.clone(),
+                        final_hash,
+                    },
+                };
+                match replay.encode() {
+                    Ok(bytes) => match store.write(&rec.name, &bytes) {
+                        Ok(()) => {
+                            rec.unsaved = false;
+                            rec.stored = true;
+                            printed =
+                                Some((rec.name.clone(), rec.inputs.len(), bytes.len(), final_hash));
+                        }
+                        Err(e) => storage::warn(&format!("replay not saved: {e}")),
+                    },
+                    Err(e) => storage::warn(&format!("replay not saved: {e}")),
+                }
             }
-        };
-        if let Err(e) = store.write(&rec.name, &bytes) {
-            storage::warn(&format!("replay not saved: {e}"));
-            return;
-        }
-        rec.unsaved = false;
-        eprintln!(
-            "replay: {} ({} ticks, {} bytes) hash {}",
-            store.describe(&rec.name),
-            rec.inputs.len(),
-            bytes.len(),
-            hex(&final_hash)
-        );
-        if !rec.listed {
-            rec.listed = true;
-            if let Err(e) = list(store, &rec.name, self.prune.then_some(WEB_KEEP)) {
-                storage::warn(&format!("replay index {e}"));
+            if rec.stored && !rec.listed && !self.unlisted.contains(&rec.name) {
+                self.unlisted.push(rec.name.clone());
             }
         }
+        if let Some((name, ticks, bytes, hash)) = printed {
+            eprintln!(
+                "replay: {} ({} ticks, {} bytes) hash {}",
+                store.describe(&name),
+                ticks,
+                bytes,
+                hex(&hash)
+            );
+        }
+        self.flush_index();
+    }
+
+    /// Retries the index update of every stored replay that is not listed yet. [`list`] drops an
+    /// existing copy of the name before appending it, so a retry never lists a name twice.
+    fn flush_index(&mut self) {
+        if self.unlisted.is_empty() {
+            return;
+        }
+        let Some(store) = self.store.clone() else {
+            self.unlisted.clear();
+            return;
+        };
+        let keep = self.prune.then_some(WEB_KEEP);
+        let mut failed = Vec::new();
+        for name in std::mem::take(&mut self.unlisted) {
+            match list(&store, &name, keep) {
+                Ok(()) => {
+                    if let Some(rec) = self.current.as_mut()
+                        && rec.name == name
+                    {
+                        rec.listed = true;
+                    }
+                }
+                Err(e) => {
+                    storage::warn(&format!("replay index {e}"));
+                    failed.push(name);
+                }
+            }
+        }
+        self.unlisted = failed;
     }
 }
 
@@ -591,6 +636,50 @@ mod tests {
         assert_eq!(listed, names[2..].iter().map(String::as_str).collect::<Vec<_>>());
         assert_eq!(store.read(&names[0]).unwrap(), None, "the oldest is removed");
         assert!(store.read(&names[2]).unwrap().is_some());
+    }
+
+    /// #1012: a replay whose bytes are stored while the index write fails is listed at a later
+    /// flush even though its data is clean, and retrying does not list the name twice.
+    #[test]
+    fn a_failed_index_write_is_retried_without_duplicates() {
+        let pkg = demo();
+        let store = temp("index-retry");
+        let options = SimOptions {
+            start: StartPoint::NewGame { difficulty: 0 },
+            seed: 1,
+            dll_mode: DllMode::Model,
+            mode: PlayMode::Stripped,
+            map: None,
+        };
+        let mut rec = Recorder::new(Some(store.clone()), pkg.gameplay_hash, ModSet::NONE);
+
+        // A directory in the index's place makes both its read and its write fail; the replay
+        // files themselves still go through.
+        let index_path = std::path::PathBuf::from(store.describe(INDEX));
+        std::fs::create_dir_all(&index_path).unwrap();
+
+        let mut sim = Sim::new(Arc::clone(&pkg.def), options.clone()).unwrap();
+        play(&mut sim, &mut rec, 3);
+        let name = rec.current_name().unwrap().to_owned();
+        rec.finish(&sim);
+        assert!(store.read(&name).unwrap().is_some(), "the replay bytes are stored");
+        assert!(store.read_text(INDEX).is_err(), "the index operation failed");
+
+        // Storage recovers: the next flush retries the index although the run has finished and
+        // its data is clean.
+        std::fs::remove_dir(&index_path).unwrap();
+        rec.finish(&sim);
+        assert_eq!(store.read_text(INDEX).unwrap().unwrap(), format!("{name}\n"));
+
+        // A later run lists itself after the retried name, exactly once.
+        let mut sim = Sim::new(Arc::clone(&pkg.def), options).unwrap();
+        play(&mut sim, &mut rec, 3);
+        let second = rec.current_name().unwrap().to_owned();
+        rec.finish(&sim);
+        assert_eq!(
+            store.read_text(INDEX).unwrap().unwrap(),
+            format!("{name}\n{second}\n")
+        );
     }
 
     /// The issue's check (#607): 60 runs on the web, the first is the PB and the second the
