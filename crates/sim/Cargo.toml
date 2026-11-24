@@ -46,7 +46,7 @@ name = "it"
 path = "tests/it.rs"
 
 [[test]]
-name = "wp1_determinism"
+name = "determinism"
 path = "tests/determinism.rs"
 
 [[test]]

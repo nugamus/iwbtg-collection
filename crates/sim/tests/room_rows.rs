@@ -19,8 +19,8 @@ fn rows_629_move_the_kid_and_save_below_the_threshold() {
         (stage, Real::new(241.0), Real::new(503.0))
     );
     assert_eq!(save.difficulty, 2);
-    // global.stage[global.savenum]: a fresh world's slot is 0, and GM8 aliases a global
-    // with its element 0 (research#130), so this writes `stage` itself.
+    // global.stage[global.savenum]: a fresh world's slot is 0, and index 0 is the variable
+    // itself (research#130), so this is the bare `stage` assignment.
     assert_eq!(w.engine.run.slot, 0);
     let id = w.var_names["stage"];
     assert_eq!(w.globals.get(&id), Some(&Value::Real(Real::new(29.0))));

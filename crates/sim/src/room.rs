@@ -1088,14 +1088,7 @@ fn run_action<H: RoomHost + ?Sized>(
         }
         RoomAction::SetGlobalIndexed { var, index, value } => {
             let i = index_value(ctx, *index)?;
-            // GM8 aliases a global and its element 0 (research#130): `global.a[0] = v` writes
-            // `global.a`, not a separate `a[0]` variable; elements 1 and up are their own.
-            let id = if i == 0 {
-                run_time_var(ctx, var)?
-            } else {
-                run_time_var(ctx, &format!("{var}[{i}]"))?
-            };
-            ctx.w.globals.insert(id, value.assigned());
+            set_global_element(ctx, var, i, value)?;
         }
         RoomAction::SaveGame => save_game(ctx)?,
         RoomAction::SaveDeathTime => save::save_counters(ctx)?,
@@ -1152,6 +1145,43 @@ fn holds(ctx: &Ctx, when: &RoomWhen) -> bool {
         .kind_absent
         .is_none_or(|k| !ctx.w.iter_alive().any(|i| i.active && i.kind == k));
     below && kid && absent
+}
+
+/// Writes `value` to element `index` of the global `var` (#998, research#130).
+///
+/// A variable and its element 0 are one storage, so an index-0 write is the bare assignment and
+/// no `<var>[0]` variable exists. A higher index makes the global a dense array: the scalar
+/// already stored becomes element 0, unwritten slots read 0, and [`Value::array_push`] enforces
+/// the `MAX_ARRAY_SIZE` cap.
+fn set_global_element(ctx: &mut Ctx, var: &str, index: u32, value: &Value) -> Result<(), SimError> {
+    let id = run_time_var(ctx, var)?;
+    let index = usize::try_from(index)
+        .map_err(|_| SimError::unsupported(format!("set_global index {index}: too large for an array")))?;
+    if index == 0 {
+        ctx.w.globals.insert(id, value.assigned());
+        return Ok(());
+    }
+    // Element 0 is the variable itself: keep the array, or carry the scalar into a new one. An
+    // unset global reads 0.
+    let first = match ctx.w.globals.get(&id) {
+        Some(Value::Array(_)) => None,
+        Some(v) => Some(v.assigned()),
+        None => Some(Value::Real(Real::ZERO)),
+    };
+    let entry = ctx
+        .w
+        .globals
+        .entry(id)
+        .or_insert_with(|| Value::Array(Vec::new()));
+    if let Some(first) = first {
+        *entry = Value::Array(vec![first]);
+    }
+    while entry.as_array().is_some_and(|items| items.len() <= index) {
+        entry.array_push(Value::Real(Real::ZERO))?;
+    }
+    let items = entry.as_array_mut().expect("an array made just above");
+    items[index] = value.assigned();
+    Ok(())
 }
 
 /// The index of an indexed `set_global`: a whole number from 0 (OPEN: what GM does with a
@@ -1296,8 +1326,8 @@ mod tests {
         }
     }
 
-    /// GM8 aliases a global and its element 0 (research#130): `global.stage[0] = 7` is
-    /// `global.stage = 7`, and no `stage[0]` variable appears.
+    /// An index-0 write is the bare assignment (research#130): the global stays a scalar and no
+    /// `stage[0]` variable appears.
     #[test]
     fn writing_index_zero_writes_the_global() {
         let sim = alias_sim(vec![indexed(0, 7.0)]);
@@ -1306,16 +1336,51 @@ mod tests {
         assert!(!w.var_names.contains_key("stage[0]"), "{:?}", w.var_names);
     }
 
-    /// The reverse holds too: a bare write is the element 0 that index 0 overwrites, while
-    /// element 1 stays its own run-time variable.
+    /// The bare write and index 0 target the same variable; a higher index then makes the
+    /// global the array, with the value the scalar held as element 0.
     #[test]
-    fn writing_the_global_is_writing_index_zero() {
+    fn a_bare_write_and_index_zero_target_the_same_variable() {
         let sim = alias_sim(vec![bare(5.0), indexed(0, 9.0), indexed(1, 8.0)]);
         let w = sim.world();
-        assert_eq!(w.globals.get(&VarId(0)), Some(&Value::Real(Real::new(9.0))));
-        let one = *w.var_names.get("stage[1]").expect("element 1 is a variable");
-        assert_eq!(w.globals.get(&one), Some(&Value::Real(Real::new(8.0))));
+        assert_eq!(
+            w.globals.get(&VarId(0)),
+            Some(&Value::Array(vec![
+                Value::Real(Real::new(9.0)),
+                Value::Real(Real::new(8.0))
+            ]))
+        );
         assert!(!w.var_names.contains_key("stage[0]"), "{:?}", w.var_names);
+        assert!(!w.var_names.contains_key("stage[1]"), "{:?}", w.var_names);
+    }
+
+    /// The array is dense: an index past its end fills the new slots with 0.
+    #[test]
+    fn an_indexed_write_grows_the_array_with_zeroes() {
+        let sim = alias_sim(vec![indexed(2, 7.0)]);
+        let w = sim.world();
+        assert_eq!(
+            w.globals.get(&VarId(0)),
+            Some(&Value::Array(vec![
+                Value::Real(Real::ZERO),
+                Value::Real(Real::ZERO),
+                Value::Real(Real::new(7.0))
+            ]))
+        );
+    }
+
+    /// A scalar already in the variable is element 0 of the array the first higher index makes.
+    #[test]
+    fn a_higher_index_keeps_the_scalar_as_element_zero() {
+        let sim = alias_sim(vec![bare(5.0), indexed(2, 7.0)]);
+        let w = sim.world();
+        assert_eq!(
+            w.globals.get(&VarId(0)),
+            Some(&Value::Array(vec![
+                Value::Real(Real::new(5.0)),
+                Value::Real(Real::ZERO),
+                Value::Real(Real::new(7.0))
+            ]))
+        );
     }
 
     // ---- Nested room requests and the creation-code destroy context (#1256) ----
