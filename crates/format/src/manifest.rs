@@ -26,8 +26,10 @@ use crate::tricks::TrickType;
 /// Path of the manifest inside a package.
 pub const MANIFEST_PATH: &str = "game.toml";
 
-/// Newest format major version this build reads. Format 0 is the v0 draft.
-pub const FORMAT_VERSION: u32 = 0;
+/// Newest format major version this build reads and `iwbtg pkg upgrade` writes. Format 0 is the
+/// v0 draft; format 1 (docs/format/v1.md) names the ruleset and the `[compat]` profile instead of
+/// `engine_rev`. Every older format still loads into the same `GameDef` (principle 7).
+pub const FORMAT_VERSION: u32 = 1;
 
 /// Default room speed when `tick_rate` is absent.
 pub const DEFAULT_TICK_RATE: u32 = 50;
@@ -65,15 +67,18 @@ pub struct Manifest {
     #[serde(default)]
     #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub engine_pack: Option<Spanned<String>>,
-    /// Built-in behavior revision this package was verified against.
-    #[cfg_attr(feature = "schema", schemars(with = "u16"))]
-    pub engine_rev: Spanned<u16>,
-    /// Named, versioned semantic contract (`gm8@<rev>`); absent means `gm8` at `engine_rev`
-    /// (decision 0005, docs/format/game.md).
+    /// Built-in behavior revision this package was verified against. Format 0 only, and
+    /// required there; format 1 names the revision in `ruleset` (docs/format/v1.md).
+    #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<u16>"))]
+    pub engine_rev: Option<Spanned<u16>>,
+    /// Named, versioned semantic contract (`gm8@<rev>`). Required in format 1; absent in format 0
+    /// means `gm8` at `engine_rev` (decision 0005, docs/format/game.md).
     #[serde(default)]
     #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub ruleset: Option<Spanned<String>>,
-    /// The compatibility profile and its declared deviations (decision 0005).
+    /// The compatibility profile and its declared deviations (decision 0005). Format 1 requires
+    /// `[compat] profile`.
     #[serde(default)]
     #[cfg_attr(feature = "schema", schemars(with = "Option<CompatSection>"))]
     pub compat: Option<Spanned<CompatSection>>,
@@ -1238,28 +1243,80 @@ impl Manifest {
         }
     }
 
+    /// The built-in behavior revision: `engine_rev` in format 0, the revision of `ruleset` in
+    /// format 1 (docs/format/v1.md). `None` when the field the format needs is missing or does
+    /// not parse; [`Manifest::validate`] reports that.
+    #[must_use]
+    pub fn engine_rev(&self) -> Option<u16> {
+        if *self.format.get_ref() == 0 {
+            return self.engine_rev.as_ref().map(|r| *r.get_ref());
+        }
+        let ruleset = self.ruleset.as_ref()?;
+        crate::compat::Ruleset::parse(ruleset.get_ref())
+            .ok()
+            .map(|r| r.rev)
+    }
+
     /// `ruleset = "<name>@<rev>"` (decision 0005). In format 0 the revision is `engine_rev` and
-    /// the only ruleset is `gm8`; `standard` and the format-1 fields are not implemented.
+    /// `ruleset` is optional; format 1 requires `ruleset` and has no `engine_rev`
+    /// (docs/format/v1.md). `gm8` is the only ruleset this build implements.
     fn validate_ruleset(&self, v: &mut Validator<'_>) {
-        let Some(ruleset) = &self.ruleset else { return };
-        let rev = *self.engine_rev.get_ref();
+        let format = *self.format.get_ref();
+        let rev = if format == 0 {
+            let Some(rev) = &self.engine_rev else {
+                v.error(
+                    0..0,
+                    "missing field `engine_rev`: format 0 names the built-in revision there \
+                     (format 1 names it in `ruleset`, docs/format/v1.md)",
+                );
+                return;
+            };
+            Some(*rev.get_ref())
+        } else {
+            if let Some(rev) = &self.engine_rev {
+                v.error(
+                    rev.span(),
+                    format!(
+                        "`engine_rev` is the format-0 spelling; format {format} names the revision \
+                         in `ruleset = \"{}@{}\"` (`iwbtg pkg upgrade` rewrites a format-0 package)",
+                        crate::compat::GM8,
+                        rev.get_ref()
+                    ),
+                );
+            }
+            None
+        };
+        let Some(ruleset) = &self.ruleset else {
+            if format > 0 {
+                v.error(
+                    0..0,
+                    format!(
+                        "missing field `ruleset`: format {format} names the ruleset and its \
+                         revision (`ruleset = \"{}@0\"`, docs/format/v1.md)",
+                        crate::compat::GM8
+                    ),
+                );
+            }
+            return;
+        };
         match crate::compat::Ruleset::parse(ruleset.get_ref()) {
             Err(e) => v.error(ruleset.span(), e),
             Ok(r) if r.name != crate::compat::GM8 => v.error(
                 ruleset.span(),
                 format!(
-                    "ruleset `{}` is not implemented in format 0; `{}` at the package's \
-                     `engine_rev` is the only ruleset (decision 0005)",
+                    "ruleset `{}` is not implemented by this build; `{}` is the only ruleset \
+                     (decision 0005)",
                     r.name,
                     crate::compat::GM8
                 ),
             ),
-            Ok(r) if r.rev != rev => v.error(
+            Ok(r) if rev.is_some_and(|rev| r.rev != rev) => v.error(
                 ruleset.span(),
                 format!(
-                    "ruleset revision {} disagrees with `engine_rev` {rev}; in format 0 \
+                    "ruleset revision {} disagrees with `engine_rev` {}; in format 0 \
                      `engine_rev` is the ruleset revision",
-                    r.rev
+                    r.rev,
+                    rev.unwrap_or_default()
                 ),
             ),
             Ok(_) => {}
@@ -1268,17 +1325,38 @@ impl Manifest {
 
     /// `[compat] profile` and `[[compat.deviation]]`: the profile is one of the engine's
     /// bundles, and a deviation names one id of the closed catalogue with its type and
-    /// provenance (decision 0005). The loader compares both with the resolved physics.
+    /// provenance (decision 0005). The loader compares both with the resolved physics. Format 1
+    /// requires the profile.
     fn validate_compat(&self, v: &mut Validator<'_>) {
-        let Some(compat) = &self.compat else { return };
+        let format = *self.format.get_ref();
+        let missing_profile = |v: &mut Validator<'_>, at: usize| {
+            v.error(
+                at..at,
+                format!(
+                    "missing `[compat] profile`: format {format} names the compatibility profile \
+                     (`profile = \"{}/<family>@{}\"`, docs/format/v1.md)",
+                    crate::compat::GM8,
+                    crate::compat::PROFILE_REV
+                ),
+            );
+        };
+        let Some(compat) = &self.compat else {
+            if format > 0 {
+                missing_profile(v, 0);
+            }
+            return;
+        };
         let c = compat.get_ref();
+        if format > 0 && c.profile.is_none() {
+            missing_profile(v, compat.span().start);
+        }
         if let Some(profile) = &c.profile {
             match crate::compat::Profile::parse(profile.get_ref()) {
                 Err(e) => v.error(profile.span(), e),
                 Ok(p) if p.ruleset != crate::compat::GM8 => v.error(
                     profile.span(),
                     format!(
-                        "profile ruleset `{}` is not implemented in format 0; only `{}` is",
+                        "profile ruleset `{}` is not implemented by this build; only `{}` is",
                         p.ruleset,
                         crate::compat::GM8
                     ),
@@ -2061,11 +2139,12 @@ end = {{ trigger = \"run_end\" }}
         assert!(run(&text, &[]).is_empty());
     }
 
-    /// The `game.md` manifest example names the revision this build knows (#1077), so a package
+    /// The `game.md` manifest example is the current format and names the revision this build
+    /// knows (#1077), so a package
     /// copied from the docs loads and runs instead of failing at `Sim::new`. (`tests/schemas.rs`
     /// checks the same block against the schema; this pins the one value a schema cannot.)
     #[test]
-    fn the_game_md_example_uses_the_current_engine_rev() {
+    fn the_game_md_example_uses_the_current_ruleset() {
         let doc = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/format/game.md"))
             .expect("docs/format/game.md");
         let block = doc
@@ -2075,9 +2154,14 @@ end = {{ trigger = \"run_end\" }}
             .expect("the manifest example TOML block");
         let example: toml::Value = toml::from_str(block).expect("the example is TOML");
         assert_eq!(
-            example["engine_rev"].as_integer(),
-            Some(i64::from(iwbtg_sim::rules::MAX_ENGINE_REV)),
-            "the game.md example must use the revision the build knows"
+            example["format"].as_integer(),
+            Some(i64::from(super::FORMAT_VERSION)),
+            "the game.md example is the current format"
+        );
+        assert_eq!(
+            example["ruleset"].as_str(),
+            Some(format!("{}@{}", crate::compat::GM8, iwbtg_sim::rules::MAX_ENGINE_REV).as_str()),
+            "the game.md example must use the ruleset and revision the build knows"
         );
     }
 }

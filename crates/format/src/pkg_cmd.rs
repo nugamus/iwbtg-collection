@@ -1,4 +1,4 @@
-//! The `iwbtg pkg check|fmt|hash` commands and the package hashes `pkg pack` prints
+//! The `iwbtg pkg check|fmt|hash|upgrade` commands and the package hashes `pkg pack` prints
 //! (docs/architecture/cli.md). They live here, with the loader they report on, so the package
 //! format and its commands change together (#1120); the `iwbtg` binary in `crates/tools` reads the
 //! package (folder or `.iwbz`, engine pack bundled) and passes it in with stdout.
@@ -229,6 +229,139 @@ pub fn hash(files: &PackageFiles, trace_mode: bool, out: &mut impl Write) -> io:
             Ok(false)
         }
     }
+}
+
+/// What `iwbtg pkg upgrade` would write: the files that change and the gameplay hash before
+/// and after (docs/format/v1.md, Upgrading a format-0 package).
+#[derive(Debug)]
+pub struct UpgradePlan {
+    /// The package's format before the upgrade.
+    pub from: u32,
+    /// Each file that changes, as (path, new bytes), in path order.
+    pub changed: Vec<(String, Vec<u8>)>,
+    /// `gameplay_hash` of the package as it is.
+    pub hash_before: [u8; 32],
+    /// `gameplay_hash` of the upgraded package. It differs from `hash_before` until #928 makes
+    /// the hash stable across migrations (docs/architecture/versioning.md, Format 1 freeze).
+    pub hash_after: [u8; 32],
+}
+
+/// Plans the upgrade of `files` to [`crate::FORMAT_VERSION`]: the package must load, every
+/// `.toml` file outside the bundled engine pack gets the current `#:schema` folder, `game.toml`
+/// is migrated step by step ([`crate::migrate`]), and the result must load into the same
+/// `GameDef`. `Err` carries the lines to print: the package's errors, or why the upgraded
+/// package is refused.
+pub fn plan_upgrade(files: &PackageFiles, trace_mode: bool) -> Result<UpgradePlan, Vec<String>> {
+    let errors = |report: &crate::load::LoadReport| -> Vec<String> {
+        report
+            .diagnostics
+            .iter()
+            .filter(|d| d.severity == Severity::Error)
+            .map(ToString::to_string)
+            .collect()
+    };
+    let before = load_report(files, mode(trace_mode));
+    let (Some(def), Some(hash_before), Some(resolved), true) = (
+        before.def.as_ref(),
+        before.gameplay_hash,
+        before.compat.as_ref(),
+        before.ok(),
+    ) else {
+        let mut lines = errors(&before);
+        lines.push("the package must load before it is upgraded".to_owned());
+        return Err(lines);
+    };
+    let text = |bytes: &[u8]| -> Result<String, String> {
+        let bytes = bytes.strip_prefix(b"\xEF\xBB\xBF".as_slice()).unwrap_or(bytes);
+        String::from_utf8(bytes.to_vec()).map_err(|_| "not UTF-8".to_owned())
+    };
+    let manifest = text(files.get(crate::manifest::MANIFEST_PATH).unwrap_or_default())
+        .map_err(|e| vec![format!("game.toml: {e}")])?;
+    let from = crate::migrate::manifest_format(&manifest).unwrap_or(crate::FORMAT_VERSION);
+    let mut upgraded = files.clone();
+    let mut changed = Vec::new();
+    for (path, bytes) in files
+        .iter()
+        .filter(|(p, _)| p.ends_with(".toml") && !p.starts_with(crate::engine_pack::ENGINE_DIR))
+    {
+        let old = text(bytes).map_err(|e| vec![format!("{path}: {e}")])?;
+        let mut new = crate::migrate::upgrade_schema_line(&old);
+        if path == crate::manifest::MANIFEST_PATH {
+            new = crate::migrate::upgrade_manifest(&new, resolved).map_err(|e| vec![e])?;
+        }
+        if new.as_bytes() != bytes {
+            upgraded
+                .insert(path, new.clone().into_bytes())
+                .map_err(|e| vec![format!("{path}: {e}")])?;
+            changed.push((path.to_owned(), new.into_bytes()));
+        }
+    }
+    let after = load_report(&upgraded, mode(trace_mode));
+    let Some(hash_after) = after.gameplay_hash.filter(|_| after.ok()) else {
+        let mut lines = errors(&after);
+        lines.push("the upgraded package does not load; nothing was written (please file a bug)".to_owned());
+        return Err(lines);
+    };
+    if after.def.as_ref() != Some(def) {
+        return Err(vec![
+            "the upgraded package would play differently; nothing was written (please file a bug)".to_owned(),
+        ]);
+    }
+    Ok(UpgradePlan {
+        from,
+        changed,
+        hash_before,
+        hash_after,
+    })
+}
+
+/// `iwbtg pkg upgrade <dir> [--check] [--trace-mode]`: rewrites the package in `dir` to the
+/// current format ([`plan_upgrade`]) and prints each changed file and both gameplay hashes. With
+/// `check` nothing is written and `Ok(false)` means the package is not current. A package that
+/// does not load, or whose upgrade would not load into the same `GameDef`, is left alone and is
+/// `Ok(false)`.
+pub fn upgrade(
+    dir: &Path,
+    files: &PackageFiles,
+    check: bool,
+    trace_mode: bool,
+    out: &mut impl Write,
+) -> io::Result<bool> {
+    let plan = match plan_upgrade(files, trace_mode) {
+        Ok(plan) => plan,
+        Err(lines) => {
+            for line in &lines {
+                writeln!(out, "{line}")?;
+            }
+            writeln!(out, "FAILED: not upgraded")?;
+            return Ok(false);
+        }
+    };
+    if plan.changed.is_empty() {
+        writeln!(out, "format {}: already current, no changes", plan.from)?;
+        return Ok(true);
+    }
+    if !check {
+        for (path, bytes) in &plan.changed {
+            let target = dir.join(path);
+            std::fs::write(&target, bytes)
+                .map_err(|e| io::Error::new(e.kind(), format!("{}: {e}", target.display())))?;
+        }
+    }
+    let verb = if check { "would change" } else { "upgraded" };
+    for (path, _) in &plan.changed {
+        writeln!(out, "{verb}: {path}")?;
+    }
+    writeln!(out, "format {} -> {}", plan.from, crate::FORMAT_VERSION)?;
+    writeln!(out, "gameplay_hash before: {}", hex(&plan.hash_before))?;
+    writeln!(out, "gameplay_hash after:  {}", hex(&plan.hash_after))?;
+    if plan.hash_before != plan.hash_after {
+        writeln!(
+            out,
+            "note: the gameplay hash moves with the format until #928; the game plays the same"
+        )?;
+    }
+    Ok(!check)
 }
 
 #[cfg(test)]

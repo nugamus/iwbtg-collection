@@ -1,6 +1,6 @@
 # Lane: data
 
-**Owns:** `crates/format` (package loading, validation, schemas), `docs/format/`, `crates/client/src/settings*` and `stats*` (settings file, local stats). The `iwbtg pkg check|fmt|hash` commands and the package hashes live in `crates/format/src/pkg_cmd.rs` (#1120); `crates/tools` only registers them.
+**Owns:** `crates/format` (package loading, validation, schemas), `docs/format/`, `crates/client/src/settings*` and `stats*` (settings file, local stats). The `iwbtg pkg check|fmt|hash|upgrade` commands and the package hashes live in `crates/format/src/pkg_cmd.rs` (#1120); `crates/tools` only registers them.
 **Never edits:** the UI kit and screens (ui lane), `crates/sim` internals (sim lane).
 
 ## Build and test

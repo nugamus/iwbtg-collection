@@ -658,7 +658,7 @@ impl<'a> Loader<'a> {
             tick_rate: self.m.tick_rate(),
             max_ticks: *self.m.max_ticks.get_ref(),
             runner: *self.m.runner.get_ref(),
-            engine_rev: *self.m.engine_rev.get_ref(),
+            engine_rev: self.m.engine_rev().unwrap_or_default(),
             float_model: match engine.and_then(|e| e.float_model) {
                 None | Some(crate::manifest::FloatModelName::F64) => FloatModel::F64,
             },

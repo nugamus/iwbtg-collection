@@ -1,5 +1,6 @@
-//! The JSON Schemas in `docs/format/schema/v0/` (#212): not stale, and the examples in
-//! format pages (`docs/format/*.md`) and the valid test packages validate against them.
+//! The JSON Schemas in `docs/format/schema/v1/` (#212; `v0/` is the frozen format-0 copy): not
+//! stale, and the examples in format pages (`docs/format/*.md`) and the valid test packages
+//! validate against them.
 //!
 //! `cargo xtask regen` rewrites the schema files: it runs `schema_files_are_not_stale` alone with
 //! `UPDATE_SCHEMAS=1`, then this whole file. Setting `UPDATE_SCHEMAS=1` on the whole file instead
@@ -15,7 +16,7 @@ fn client_root() -> PathBuf {
 }
 
 fn schema_dir() -> PathBuf {
-    client_root().join("docs/format/schema/v0")
+    client_root().join("docs/format/schema/v1")
 }
 
 fn load_schema(stem: &str) -> serde_json::Value {
@@ -343,4 +344,49 @@ fn path_and_sound_schemas_match_the_loader() {
     let timeline = load_schema("timeline");
     let v = jsonschema::validator_for(&timeline).unwrap();
     assert!(v.is_valid(&serde_json::json!({ "loop": true, "moments": [{ "t": 0, "call": "a" }] })));
+}
+
+/// The `game` schema follows the format (docs/format/v1.md): format 0 needs `engine_rev`, format 1
+/// needs `ruleset` and `[compat] profile` and refuses `engine_rev`. The upgraded copy of a valid
+/// format-0 manifest validates.
+#[test]
+fn the_game_schema_follows_the_format() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/valid/minimal/game.toml");
+    let zero = fs::read_to_string(&path).unwrap().replace("\r\n", "\n");
+    assert!(zero.contains("format = 0\n") && zero.contains("engine_rev = 1\n"));
+    let resolved = iwbtg_format::compat::Resolved {
+        ruleset: "gm8@1".to_owned(),
+        profile: "gm8/a1@1".to_owned(),
+        deviations: Vec::new(),
+        explicit: false,
+    };
+    let one = iwbtg_format::migrate::upgrade_manifest(&zero, &resolved).expect("upgrade");
+    assert_valid("game", "the upgraded minimal manifest", &one);
+
+    let schema = load_schema("game");
+    let validator = jsonschema::validator_for(&schema).expect("schema compiles");
+    let wrong = [
+        (
+            "format 0 without engine_rev",
+            zero.replace("engine_rev = 1\n", ""),
+        ),
+        (
+            "format 1 with engine_rev",
+            one.replace("ruleset = ", "engine_rev = 1\nruleset = "),
+        ),
+        (
+            "format 1 without ruleset",
+            one.replace("ruleset = \"gm8@1\"\n", ""),
+        ),
+        (
+            "format 1 without a profile",
+            one.replace("profile = \"gm8/a1@1\"\n", ""),
+        ),
+    ];
+    for (what, text) in wrong {
+        assert!(
+            !validator.is_valid(&toml_to_json(&text)),
+            "{what} validates against the game schema:\n{text}"
+        );
+    }
 }

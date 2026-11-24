@@ -1,0 +1,817 @@
+{
+  "$defs": {
+    "ActionFile": {
+      "description": "One room creation action (docs/architecture/sim/rooms.md step 6), `{ do = \"...\", ... }`. Every row\ntakes an optional `when` (#629): the row runs only while its condition holds.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "`global.<var> = value`, or `global.<var>[index] = value` with `index`.",
+          "properties": {
+            "do": {
+              "const": "set_global",
+              "type": "string"
+            },
+            "index": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/IndexFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Array index: a whole number, or `{ global = \"<name>\" }` read when the row runs."
+            },
+            "value": {
+              "description": "A number, string or boolean (true is 1)."
+            },
+            "var": {
+              "description": "Global name.",
+              "type": "string"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WhenFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Runs only while this holds."
+            }
+          },
+          "required": [
+            "do",
+            "var",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "`instance_create(x, y, kind)`.",
+          "properties": {
+            "do": {
+              "const": "spawn",
+              "type": "string"
+            },
+            "kind": {
+              "description": "Kind.",
+              "type": "string"
+            },
+            "params": {
+              "additionalProperties": true,
+              "default": {},
+              "description": "Params of the new instance.",
+              "type": "object"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WhenFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Runs only while this holds."
+            },
+            "x": {
+              "$ref": "#/$defs/Number",
+              "description": "Position."
+            },
+            "y": {
+              "$ref": "#/$defs/Number",
+              "description": "Position."
+            }
+          },
+          "required": [
+            "do",
+            "kind",
+            "x",
+            "y"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "The engine's `loadGame` (R23).",
+          "properties": {
+            "do": {
+              "const": "load_game",
+              "type": "string"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WhenFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Runs only while this holds."
+            }
+          },
+          "required": [
+            "do"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "`instance_destroy()` (R24, Confirmed: destroys nothing and the rest of the code runs).",
+          "properties": {
+            "do": {
+              "const": "destroy_self",
+              "type": "string"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WhenFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Runs only while this holds."
+            }
+          },
+          "required": [
+            "do"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "The game's save, as its save point does; with no kid the position is x 0, y 0.",
+          "properties": {
+            "do": {
+              "const": "save_game",
+              "type": "string"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WhenFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Runs only while this holds."
+            }
+          },
+          "required": [
+            "do"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "The game's death and time save (counters only).",
+          "properties": {
+            "do": {
+              "const": "save_death_time",
+              "type": "string"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WhenFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Runs only while this holds."
+            }
+          },
+          "required": [
+            "do"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "`player.x = x; player.y = y`: moves the first kid; nothing when no kid exists.",
+          "properties": {
+            "do": {
+              "const": "move_kid",
+              "type": "string"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WhenFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Runs only while this holds."
+            },
+            "x": {
+              "$ref": "#/$defs/Number",
+              "description": "Position."
+            },
+            "y": {
+              "$ref": "#/$defs/Number",
+              "description": "Position."
+            }
+          },
+          "required": [
+            "do",
+            "x",
+            "y"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "`with (kind) instance_destroy()`: destroys every instance of the kind.",
+          "properties": {
+            "do": {
+              "const": "destroy",
+              "type": "string"
+            },
+            "kind": {
+              "description": "Kind.",
+              "type": "string"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WhenFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Runs only while this holds."
+            }
+          },
+          "required": [
+            "do",
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "`sound_play(sound)`.",
+          "properties": {
+            "do": {
+              "const": "play_sound",
+              "type": "string"
+            },
+            "sound": {
+              "description": "Sound id.",
+              "type": "string"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WhenFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Runs only while this holds."
+            }
+          },
+          "required": [
+            "do",
+            "sound"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "`sound_loop(sound)`.",
+          "properties": {
+            "do": {
+              "const": "loop_sound",
+              "type": "string"
+            },
+            "sound": {
+              "description": "Sound id.",
+              "type": "string"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WhenFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Runs only while this holds."
+            }
+          },
+          "required": [
+            "do",
+            "sound"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "`sound_stop(sound)`.",
+          "properties": {
+            "do": {
+              "const": "stop_sound",
+              "type": "string"
+            },
+            "sound": {
+              "description": "Sound id.",
+              "type": "string"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WhenFile"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Runs only while this holds."
+            }
+          },
+          "required": [
+            "do",
+            "sound"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "BackgroundFile": {
+      "additionalProperties": false,
+      "description": "One entry of a room's `backgrounds` list, as written.",
+      "properties": {
+        "foreground": {
+          "default": false,
+          "description": "Drawn in front of instances and tiles (GM \"foreground image\"); default false.",
+          "type": "boolean"
+        },
+        "image": {
+          "description": "Image id (`backgrounds/<id>.png`).",
+          "type": "string"
+        },
+        "offset": {
+          "description": "Where the image's top-left corner sits in the room, in pixels; default `[0, 0]`.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "speed": {
+          "description": "Scroll speed in pixels per tick, horizontal and vertical; default `[0, 0]`.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "stretch": {
+          "default": false,
+          "description": "Stretch the image to the room's size; default false.",
+          "type": "boolean"
+        },
+        "tile": {
+          "default": null,
+          "description": "Repeat the image horizontally and vertically; default `[true, true]`.",
+          "items": {
+            "type": "boolean"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "image"
+      ],
+      "type": "object"
+    },
+    "IndexFile": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Number",
+          "description": "A whole number from 0."
+        },
+        {
+          "description": "`{ global = \"<name>\" }`: the global's value when the row runs (`savenum` is the save slot).",
+          "properties": {
+            "global": {
+              "description": "Global name.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "global"
+          ],
+          "type": "object"
+        }
+      ],
+      "description": "The index of an indexed `set_global`."
+    },
+    "InstanceShape": {
+      "additionalProperties": true,
+      "description": "One entry of `instances` in a room file. Keys other than the common ones are params of the\nkind, checked against the kind's own param list at load.",
+      "properties": {
+        "angle": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`image_angle`."
+        },
+        "gm_id": {
+          "description": "GM8 instance id from the room file; unique in the room, never with `run`.",
+          "format": "uint32",
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "group": {
+          "description": "Group tag, for triggers and scripts.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "description": "Kind: a built-in name, or `@<object id>`.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Instance name, for warps and scripts.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "params": {
+          "additionalProperties": true,
+          "description": "Params named like an instance key (`params = { kind = 20 }`, GM creation code that sets\n`kind`); every other param is a key of its own.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "run": {
+          "description": "`[columns, rows]`: expands into a grid of identical instances.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "step": {
+          "description": "`[dx, dy]` spacing of the grid; default `[32, 32]`.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "x": {
+          "$ref": "#/$defs/Number",
+          "description": "Position of the first instance."
+        },
+        "xscale": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`image_xscale`."
+        },
+        "y": {
+          "$ref": "#/$defs/Number",
+          "description": "Position of the first instance."
+        },
+        "yscale": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "`image_yscale`."
+        }
+      },
+      "required": [
+        "kind",
+        "x",
+        "y"
+      ],
+      "type": "object"
+    },
+    "Number": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "bits": {
+              "pattern": "^[0-9a-fA-F]{16}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "bits"
+          ],
+          "type": "object"
+        }
+      ],
+      "description": "A number, or { bits = \"<16 hex digits of an IEEE double>\" } for a constant that must match bit for bit."
+    },
+    "RoleName": {
+      "description": "A room role (`role` in room files, `excluded_roles` here).",
+      "oneOf": [
+        {
+          "const": "boot",
+          "description": "Boot room.",
+          "type": "string"
+        },
+        {
+          "const": "title",
+          "description": "Title.",
+          "type": "string"
+        },
+        {
+          "const": "menu",
+          "description": "Menu.",
+          "type": "string"
+        },
+        {
+          "const": "select",
+          "description": "Difficulty or stage select.",
+          "type": "string"
+        },
+        {
+          "const": "play",
+          "description": "Gameplay.",
+          "type": "string"
+        }
+      ]
+    },
+    "ViewFile": {
+      "additionalProperties": false,
+      "description": "One `[[views]]` entry.",
+      "properties": {
+        "border": {
+          "description": "Horizontal and vertical border; default 32, 32.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "follow": {
+          "default": null,
+          "description": "Kind to follow.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "port": {
+          "description": "Port on the screen: x, y, width, height; default the view's size at (0, 0).",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "speed": {
+          "description": "Horizontal and vertical speed limits; default -1, -1 (no limit).",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "view": {
+          "description": "View in the room: x, y, width, height.",
+          "items": {
+            "$ref": "#/$defs/Number"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        },
+        "visible": {
+          "default": false,
+          "description": "Visible when the room starts.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "view"
+      ],
+      "type": "object"
+    },
+    "WhenFile": {
+      "additionalProperties": false,
+      "description": "A row's condition, `when = { ... }`. Every key written must hold.",
+      "properties": {
+        "difficulty_below": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Runs only while `global.difficulty < n`."
+        },
+        "kid_exists": {
+          "default": null,
+          "description": "`true`: runs only while a kid exists; `false`: only while none does.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "kind_absent": {
+          "default": null,
+          "description": "Runs only while no instance of this kind exists.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "background": {
+      "default": null,
+      "description": "Short for one background layer with every default: `backgrounds = [{ image = \"<id>\" }]`.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "background_color": {
+      "default": null,
+      "description": "`#rrggbb`: fills the room behind every background; absent, nothing does.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "backgrounds": {
+      "description": "Up to 8 background layers in drawing order.",
+      "items": {
+        "$ref": "#/$defs/BackgroundFile"
+      },
+      "type": "array"
+    },
+    "djump_grants_tjump": {
+      "default": false,
+      "type": "boolean"
+    },
+    "file_speed": {
+      "default": null,
+      "format": "uint32",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "instances": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/InstanceShape"
+      },
+      "type": "array"
+    },
+    "music": {
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "no_restart": {
+      "default": false,
+      "type": "boolean"
+    },
+    "on_create": {
+      "items": {
+        "$ref": "#/$defs/ActionFile"
+      },
+      "type": "array"
+    },
+    "persistent": {
+      "default": false,
+      "type": "boolean"
+    },
+    "physics": {
+      "default": null,
+      "description": "The room's own physics profile: `physics/<id>.toml` (#33). Absent: the game's.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "role": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RoleName"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "size": {
+      "items": {
+        "format": "uint32",
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+    },
+    "views": {
+      "items": {
+        "$ref": "#/$defs/ViewFile"
+      },
+      "type": "array"
+    },
+    "views_enabled": {
+      "default": false,
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "size"
+  ],
+  "title": "IWBTG rooms/<id>.toml (format v1)",
+  "type": "object"
+}

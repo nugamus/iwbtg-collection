@@ -15,7 +15,7 @@ Four identifiers, each with one job, plus the proposed ruleset and compatibility
 | `ruleset` | the package's `game.toml` (proposed, 0005) | `gm8@<rev>` (compatibility) or `standard@<rev>` (new games), including the built-in revision. Absent in format 0 = `gm8@<engine_rev>`. | The sim: selects the runner implementation. Covered by `gameplay_hash`. |
 | `[compat] profile` | the package's `game.toml` (proposed, 0005) | The package names an engine-defined compatibility bundle inside its ruleset and its declared deviations. It does not supply runner-rule values. | The sim and the board (through `gameplay_hash`). |
 | `gameplay_hash` | computed by `iwbtg pkg hash` | Any gameplay edit to the package, or its ruleset, compatibility profile or deviations ([format v0](../format/versioning.md)). | Boards. Cosmetic edits keep it. |
-| `format` | the package's `game.toml` (`FORMAT_VERSION` in `crates/format/src/manifest.rs`) | The package file layout or schema. | The loader only. It never changes an outcome: every format version loads into the same `GameDef`. |
+| `format` | the package's `game.toml` (`FORMAT_VERSION` in `crates/format/src/manifest.rs`, 1 since #795) | The package file layout or schema. | The loader only. It never changes an outcome: every format version loads into the same `GameDef`. |
 
 **Ruleset and profile are content, not builds.** A compatibility profile names an engine-defined bundle; it cannot supply a new runner-rule value. A new value is a ruleset change and a client release. An absent `ruleset`/`[compat]` in a format-0 package means `gm8` at its `engine_rev`, with the profile inferred from the physics preset, so no existing `gameplay_hash` moves. A package that opts into `standard` or changes its profile gets a new `gameplay_hash` and therefore a new board; the old board and its replays stay on the old ruleset/build. `SIM_VERSION` remains build-level and is not part of the board key.
 
@@ -78,8 +78,8 @@ The verifier worker picks the build by the replay header's `sim_version`. Buildi
 
 ## Format 1 freeze
 
-- **Criteria:** every item of [content](../content.md#format-changes-needed), Format changes needed, is done or moved out of format 1 with a reason; the ported packages pass `iwbtg pkg check`; `FORMAT_VERSION` becomes 1 with schemas under `docs/format/schema/v1/`. Tracked in #795. **Default: format 1 freezes no later than the `SIM_VERSION` freeze point**, since public packages and public replays arrive together.
-- **Migration rule:** from format 1 on, any schema change bumps `format`. `crates/format` keeps a loader or in-memory migrator for every older format (principle 7), so an old package always loads; `iwbtg pkg upgrade` rewrites one on disk (#795, not built yet). Today `gameplay_hash` hashes the parsed TOML of each file, not the `GameDef`, so an upgrade that renames or moves keys changes it even though nothing plays differently. Until #928 makes the hash stable across migrations, the server treats an upgraded package like a SAFE `engine_rev` move: it re-runs the stored replays and, when all reproduce, carries the board over to the new hash.
+- **Criteria, met by #795:** every item of [content](../content.md#format-changes-needed), Format changes needed, is done or moved out of format 1 with a reason ([v1](../format/v1.md#what-format-1-does-not-contain)); the 20 converted packages upgrade and pass `iwbtg pkg check --trace-mode`; `FORMAT_VERSION` is 1 with schemas under `docs/format/schema/v1/`. **Default: format 1 freezes no later than the `SIM_VERSION` freeze point**, since public packages and public replays arrive together; until then an additive key may still join format 1. The guard that enforces the freeze, and the user's confirmation of the point, is #1395.
+- **Migration rule:** after the freeze, any schema change bumps `format`. `crates/format` loads every older format into the same `GameDef` (principle 7), so an old package always loads; `iwbtg pkg upgrade` rewrites one on disk and refuses to write unless the result loads into an equal `GameDef` ([v1](../format/v1.md#upgrading-a-format-0-package)). Today `gameplay_hash` hashes the parsed TOML of each file, not the `GameDef`, so an upgrade that renames or moves keys changes it even though nothing plays differently. Until #928 makes the hash stable across migrations, the server treats an upgraded package like a SAFE `engine_rev` move: it re-runs the stored replays and, when all reproduce, carries the board over to the new hash.
 
 ## Example: a physics bug fixed a year after release
 
@@ -95,4 +95,4 @@ A Ranked game is on `engine_rev` 3. A year later, a spike collision is found to 
 - Server: keep and dispatch one verifier build per `SIM_VERSION`, queue re-verification after a bump and quarantine failures: #929 (for #56).
 - Server: board carry-over on a SAFE `engine_rev` or format upgrade, and the legacy board: #930 (for #62).
 - `gameplay_hash` stable across format migrations: #928.
-- `iwbtg pkg upgrade` and format 1: #795.
+- `iwbtg pkg upgrade` and format 1: done (#795); the freeze guard: #1395.

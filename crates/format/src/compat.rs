@@ -6,8 +6,9 @@
 //! 0: the engine's only ruleset is `gm8`, every profile bundle that exists is the family preset
 //! the package already selected, and a deviation must declare the value the physics already
 //! resolves to. The declarations therefore normalize to the same `gameplay_hash` as the absent
-//! fields ([`crate::load::gameplay_hash`]). The format-1 freeze and the profile layer that lets
-//! a deviation select another value wait on #795/#928.
+//! fields ([`crate::load::gameplay_hash`]). Format 1 requires `ruleset` and `[compat] profile`
+//! and hashes them as written (docs/format/v1.md); the profile layer that lets a deviation
+//! select another value is #1160.
 //!
 //! A deviation is package data, never code: it names one entry of [`DEVIATIONS`], a closed
 //! catalogue of enum values the engine already implements, and says why it is there. The

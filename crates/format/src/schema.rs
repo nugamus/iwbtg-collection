@@ -1,7 +1,8 @@
 //! JSON Schemas for the data files (docs/format/v0.md, Common rules for data files).
 //!
 //! Every data file starts with a `#:schema` line that points at one of the files this module
-//! generates into `docs/format/schema/v0/`. Editors use them for completion and validation, and
+//! generates into `docs/format/schema/v1/` (the folder of [`crate::FORMAT_VERSION`];
+//! `docs/format/schema/v0/` is the frozen format-0 copy). Editors use them for completion and validation, and
 //! the converter checks its output against them. They are generated, never hand-written:
 //!
 //! - `game`, `room` and `sprite` come straight from the types the loader deserializes
@@ -199,6 +200,24 @@ pub struct SoundShape {
     pub kind: Option<SoundKindShape>,
 }
 
+/// The `game.toml` schema: [`Manifest`] plus the per-format required fields the struct cannot
+/// say (docs/format/v1.md): format 1 needs `ruleset` and `compat` and has no `engine_rev`;
+/// format 0 needs `engine_rev`.
+fn game_text() -> String {
+    let mut value = serde_json::to_value(schemars::schema_for!(Manifest)).expect("schema is JSON");
+    value["title"] = Value::String("IWBTG game.toml (format v1)".to_owned());
+    value["if"] = serde_json::json!({ "properties": { "format": { "const": 0 } } });
+    value["then"] = serde_json::json!({ "required": ["engine_rev"] });
+    value["else"] = serde_json::json!({
+        "required": ["ruleset", "compat"],
+        "not": { "required": ["engine_rev"] },
+        "properties": { "compat": { "required": ["profile"] } }
+    });
+    let mut s = serde_json::to_string_pretty(&value).expect("schema is JSON");
+    s.push('\n');
+    s
+}
+
 /// The physics schema with the serde aliases listed. schemars does not emit `#[serde(alias)]`, and
 /// the schema forbids unknown keys, so a standard-named profile (`[vines]`, `[platforms]`,
 /// `[ladders]`, `[slopes]`, `[numbers] max_fall`; docs/format/physics.md "Standard names and
@@ -214,7 +233,7 @@ fn physics_text() -> String {
         props.insert(standard.to_owned(), copy);
     }
     let mut value = serde_json::to_value(schemars::schema_for!(PhysicsProfileDraft)).expect("schema is JSON");
-    value["title"] = Value::String("IWBTG physics.toml (kid physics profile, format v0)".to_owned());
+    value["title"] = Value::String("IWBTG physics.toml (kid physics profile, format v1)".to_owned());
     for (legacy, standard) in [
         ("platform", "platforms"),
         ("vine", "vines"),
@@ -243,41 +262,41 @@ pub fn generate() -> Vec<(&'static str, String)> {
         s
     }
     vec![
-        ("game", text::<Manifest>("IWBTG game.toml (format v0)")),
+        ("game", game_text()),
         (
             "engine",
-            text::<EnginePack>("IWBTG engine pack engine.toml (format v0)"),
+            text::<EnginePack>("IWBTG engine pack engine.toml (format v1)"),
         ),
         (
             "object",
-            text::<ObjectShape>("IWBTG objects/<id>.toml (format v0)"),
+            text::<ObjectShape>("IWBTG objects/<id>.toml (format v1)"),
         ),
         ("physics", physics_text()),
-        ("room", text::<RawRoom>("IWBTG rooms/<id>.toml (format v0)")),
+        ("room", text::<RawRoom>("IWBTG rooms/<id>.toml (format v1)")),
         (
             "tiles",
-            text::<TilesFile>("IWBTG rooms/<id>.tiles.toml (format v0)"),
+            text::<TilesFile>("IWBTG rooms/<id>.tiles.toml (format v1)"),
         ),
         (
             "background",
-            text::<TilesetFile>("IWBTG backgrounds/<id>.toml tileset sidecar (format v0)"),
+            text::<TilesetFile>("IWBTG backgrounds/<id>.toml tileset sidecar (format v1)"),
         ),
         (
             "sprite",
-            text::<RawSidecar>("IWBTG sprites/<id>.toml (format v0)"),
+            text::<RawSidecar>("IWBTG sprites/<id>.toml (format v1)"),
         ),
         (
             "timeline",
-            text::<TimelineShape>("IWBTG timelines/<id>.toml (format v0)"),
+            text::<TimelineShape>("IWBTG timelines/<id>.toml (format v1)"),
         ),
-        ("path", text::<PathShape>("IWBTG paths/<id>.toml (format v0)")),
+        ("path", text::<PathShape>("IWBTG paths/<id>.toml (format v1)")),
         (
             "particles",
-            text::<ParticleFile>("IWBTG particles/<id>.toml (format v0)"),
+            text::<ParticleFile>("IWBTG particles/<id>.toml (format v1)"),
         ),
         (
             "sound",
-            text::<SoundShape>("IWBTG sounds/<id>.toml and music/<id>.toml (format v0)"),
+            text::<SoundShape>("IWBTG sounds/<id>.toml and music/<id>.toml (format v1)"),
         ),
     ]
 }
