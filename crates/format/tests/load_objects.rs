@@ -1309,3 +1309,34 @@ fn class_and_draw_data_changes_move_the_gameplay_hash() {
         "an instance depth override is in the hash"
     );
 }
+
+#[test]
+fn an_object_timeline_is_a_reserved_key_not_a_param() {
+    let o = iwbtg_format::objects::parse_object(
+        "m",
+        "objects/m.toml",
+        "timeline = \"phases\"
+",
+    )
+    .unwrap();
+    assert_eq!(o.timeline.unwrap().get_ref(), "phases");
+    assert!(o.params.is_empty());
+    let e = iwbtg_format::objects::parse_object(
+        "m",
+        "objects/m.toml",
+        "timeline = \"a\"
+[params]
+timeline = \"b\"
+",
+    )
+    .unwrap_err();
+    assert!(format!("{e:?}").contains("param `timeline` is set twice or is a reserved key"));
+    let e = iwbtg_format::objects::parse_object(
+        "m",
+        "objects/m.toml",
+        "timeline = 3
+",
+    )
+    .unwrap_err();
+    assert!(format!("{e:?}").contains("`timeline` must be a string"));
+}

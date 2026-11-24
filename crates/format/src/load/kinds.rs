@@ -281,26 +281,18 @@ impl<'a> Loader<'a> {
         kind.persistent = o
             .persistent
             .unwrap_or_else(|| objects::default_persistent(kind.base));
-        // `timeline` is a kind key, not a param (`objects.rs` keeps it in `params` until that
-        // file's reserved list is updated).
-        if let Some(value) = o.params.get("timeline") {
-            match value.get_ref() {
-                toml::Value::String(name) => match self.timeline_ids.get(name).copied() {
-                    Some(id) => kind.timeline = Some(id),
-                    None => self.error(path, text, value.span(), format!("unknown timeline `{name}`")),
-                },
-                other => self.error(
+        if let Some(name) = &o.timeline {
+            match self.timeline_ids.get(name.get_ref()).copied() {
+                Some(id) => kind.timeline = Some(id),
+                None => self.error(
                     path,
                     text,
-                    value.span(),
-                    format!("`timeline` must be a string, not a {}", other.type_str()),
+                    name.span(),
+                    format!("unknown timeline `{}`", name.get_ref()),
                 ),
             }
         }
         for (key, value) in &o.params {
-            if key == "timeline" {
-                continue;
-            }
             match param_value(value.get_ref()) {
                 Ok(p) => {
                     kind.params.0.insert(key.clone(), p);
