@@ -527,7 +527,16 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
                         .var_names
                         .get(name.as_str())
                         .ok_or_else(|| runtime_error(format!("unknown variable `{name}`")))?;
-                    live_mut(w, i)?.vars.insert(id, value);
+                    let vars = &mut live_mut(w, i)?.vars;
+                    match host.script_rules.values {
+                        // GM8: the bare name is element 0, so an array keeps its other
+                        // elements (#1133, contract `script/global-array-bare-write`).
+                        ValueModel::Gm8 => crate::world::assign_bare(vars, id, value),
+                        // The standard model replaces the value, as assignment does elsewhere.
+                        ValueModel::Typed => {
+                            vars.insert(id, value);
+                        }
+                    }
                     Ok(())
                 })?
             },

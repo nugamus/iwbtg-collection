@@ -72,7 +72,9 @@ use crate::output::OutputEvent;
 use crate::save::{self, SaveSlot};
 use crate::stripped::PlayMode;
 use crate::view::{View, ViewPort};
-use crate::world::{Ctx, EngineGlobals, Flow, InstId, Instance, SimStatus, SpawnInit, Value, World};
+use crate::world::{
+    Ctx, EngineGlobals, Flow, InstId, Instance, SimStatus, SpawnInit, Value, World, assign_bare,
+};
 
 /// How many destroyed instance ids a [`RoomRequest::GotoAfterRemovals`] carries (#670).
 ///
@@ -1055,7 +1057,7 @@ fn run_action<H: RoomHost + ?Sized>(
             value,
             difficulty,
         } => {
-            ctx.w.globals.insert(*var, value.assigned());
+            assign_bare(&mut ctx.w.globals, *var, value.assigned());
             if let Some(d) = difficulty {
                 ctx.w.engine.run.difficulty = *d;
             }
@@ -1149,8 +1151,8 @@ fn holds(ctx: &Ctx, when: &RoomWhen) -> bool {
 
 /// Writes `value` to element `index` of the global `var` (#998, research#130).
 ///
-/// A variable and its element 0 are one storage, so an index-0 write is the bare assignment and
-/// no `<var>[0]` variable exists. A higher index makes the global a dense array: the scalar
+/// A variable and its element 0 are one storage, so an index-0 write is the bare assignment
+/// ([`assign_bare`]: an array keeps its other elements, #1133) and no `<var>[0]` variable exists. A higher index makes the global a dense array: the scalar
 /// already stored becomes element 0, unwritten slots read 0, and [`Value::array_push`] enforces
 /// the `MAX_ARRAY_SIZE` cap.
 fn set_global_element(ctx: &mut Ctx, var: &str, index: u32, value: &Value) -> Result<(), SimError> {
@@ -1158,7 +1160,7 @@ fn set_global_element(ctx: &mut Ctx, var: &str, index: u32, value: &Value) -> Re
     let index = usize::try_from(index)
         .map_err(|_| SimError::unsupported(format!("set_global index {index}: too large for an array")))?;
     if index == 0 {
-        ctx.w.globals.insert(id, value.assigned());
+        assign_bare(&mut ctx.w.globals, id, value.assigned());
         return Ok(());
     }
     // Element 0 is the variable itself: keep the array, or carry the scalar into a new one. An
@@ -1381,6 +1383,29 @@ mod tests {
                 Value::Real(Real::new(7.0))
             ]))
         );
+    }
+
+    /// Contract `script/global-array-bare-write` (#1133, research `creation-code.md`, Global
+    /// arrays, Confirmed by recorder): a bare write to a global that holds an array writes element
+    /// 0 and keeps the other elements, and so does the index-0 row (one behaviour).
+    #[test]
+    fn a_bare_write_to_an_array_keeps_the_other_elements() {
+        let expect = |first: f64| {
+            Value::Array(vec![
+                Value::Real(Real::new(first)),
+                Value::Real(Real::new(2.0)),
+                Value::Real(Real::new(3.0)),
+            ])
+        };
+        let setup = || vec![indexed(0, 1.0), indexed(1, 2.0), indexed(2, 3.0)];
+        let mut rows = setup();
+        rows.push(bare(9.0));
+        let sim = alias_sim(rows);
+        assert_eq!(sim.world().globals.get(&VarId(0)), Some(&expect(9.0)));
+        let mut rows = setup();
+        rows.push(indexed(0, 9.0));
+        let sim = alias_sim(rows);
+        assert_eq!(sim.world().globals.get(&VarId(0)), Some(&expect(9.0)));
     }
 
     // ---- Nested room requests and the creation-code destroy context (#1256) ----
