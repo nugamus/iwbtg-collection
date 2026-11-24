@@ -241,3 +241,45 @@ The user asked whether Rhai is the right choice and left the decision to Claude.
   - Non-coders: they never see Rhai. The editor's room painter, trigger wiring, timeline editor and boss builder write data, not scripts.
 - **Swappable.** The script host sits behind the `ScriptHost` trait, so a later switch stays possible.
 - **Checkpoint.** Re-check after the first boss and the first avoidance game are ported (Little Trap and Rori Girl): peak budget per tick, and how much agent effort the scripts took. Rhai is replaced only if one of those fails.
+
+## Revisited 2026-11-24
+
+The stress packages were measured before mass porting, as the checkpoint asks (#1002). The numbers
+are `iwbtg profile` on the `.inputs` replay that ships next to each package in
+`crates/sim/tests/stress/` (31 ticks; a room reaches its bullet total within the first 20, so the
+mean includes the spawn ramp). Each row is the minimum of five runs.
+
+Machine and build, so a later table can be compared: Intel Core Ultra 5 225H (14 cores: 4 P, 8 E
+and 2 low-power E), 32 GB RAM, Windows 11 Pro 10.0.26300; rustc 1.99.1; `iwbtg-tools` built from
+main `bad863f` with `cargo build --release` and, for the wasm row, `cargo build --release
+--target wasm32-wasip1`. The host was shared with other agent builds, so every run was pinned to
+one core (CPU 11, a P-core) after a scan found unpinned runs up to 8x slower when Windows placed
+them on an E-core. A 121-tick steady-state run at 5,000 scripted bullets agrees with the table
+(native 9.9 ms/tick, wasm 11.7 ms/tick at its best), so the 31-tick mean is not an artifact of the
+spawn ramp.
+
+`wasm32-wasip1` ran under Node 24.19's WASI (V8). **wasmtime is not installed on this PC**, so the
+wasmtime confirmation the issue asks for is still open; the tool's `ms per tick` line says
+`(native)` on every target, including a wasm runner (#1433). The avoidance package's non-start
+rooms were selected through a copy of the package with `start_room` and `[engine].new_game_room`
+set to that room (nothing else changed), because `iwbtg profile` has no `--room` (#1433).
+
+| live bullets | variant | native ms/tick | wasm32-wasip1 ms/tick | peak script units / limit |
+|---|---|---|---|---|
+| 500 | native motion | 0.320 | 3.671 | 27,036 / 1,000,000 (2.7%) |
+| 2,000 | native motion | 1.676 | 6.350 | 27,036 (2.7%) |
+| 5,000 | native motion | 3.951 | 8.594 | 27,036 (2.7%) |
+| 500 | `step()` on every bullet | 1.200 | 6.268 | 32,036 (3.2%) |
+| 2,000 | `step()` on every bullet | 4.783 | 9.206 | 47,036 (4.7%) |
+| 5,000 | `step()` on every bullet | 9.236 | 13.513 | 77,036 (7.7%) |
+| boss fight (52 instances, 121 ticks) | one script, alarms, timeline | 0.058 | 0.95 | 979 (0.1%) |
+
+**Verdict: Rhai stays.** At 50 ticks per second a tick has 20 ms. The worst synthetic case, 5,000
+live bullets each running a `step()`, takes 9.2 ms natively and 13.5 ms under wasm (67% of the
+tick); the 2,000-bullet case, closer to a real bullet-heavy scene, takes 4.8 ms and 9.2 ms. A
+per-bullet script costs about 1.0-1.6 µs more per tick than the same bullet moved natively, on
+both targets, and the peak budget use is 7.7% of the 1,000,000-unit limit, well inside the 25% rule.
+The 5,000-bullet row is a stress ceiling, and even there the simulation keeps its 50 Hz budget;
+the boss package's script cost (0.06 ms native, 0.95 ms wasm) is negligible. Nothing in these
+numbers triggers the replacement the checkpoint allowed for. [#44](https://github.com/nugamus/iwbtg-collection/issues/44)
+is re-scoped to confirming peak budget and agent effort on the first real ports.
