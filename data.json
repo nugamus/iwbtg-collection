@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-24T15:05:33Z",
+ "generated_at": "2026-11-24T15:07:21Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -57,14 +57,14 @@
    "title": "2 · Format & pipeline",
    "name": "Format & pipeline",
    "state": "open",
-   "open": 34,
-   "closed": 88,
+   "open": 33,
+   "closed": 89,
    "total": 122,
-   "pct_closed": 72.1,
-   "size_points": 99,
+   "pct_closed": 73.0,
+   "size_points": 96,
    "sizes": {
     "size:S": 11,
-    "size:M": 16,
+    "size:M": 15,
     "size:L": 5,
     "unknown": 2
    },
@@ -263,13 +263,13 @@
  "activity": {
   "totals": {
    "issues": 858,
-   "open": 311,
-   "closed": 547,
-   "pct_closed": 63.8
+   "open": 310,
+   "closed": 548,
+   "pct_closed": 63.9
   },
-  "open_prs": 2,
+  "open_prs": 1,
   "process": {
-   "agent-ready": 158,
+   "agent-ready": 157,
    "triage": 53,
    "in-progress": 3,
    "blocked": 25,
@@ -295,15 +295,11 @@
    },
    {
     "area": "area:infra",
-    "count": 30
+    "count": 29
    },
    {
     "area": "area:editor",
     "count": 29
-   },
-   {
-    "area": "area:tools",
-    "count": 14
    },
    {
     "area": "area:docs",
@@ -314,15 +310,36 @@
     "count": 14
    },
    {
-    "area": "area:research",
-    "count": 6
+    "area": "area:tools",
+    "count": 13
    },
    {
     "area": "area:port",
     "count": 6
+   },
+   {
+    "area": "area:research",
+    "count": 5
    }
   ],
   "recent_closed": [
+   {
+    "number": 1372,
+    "title": "Object coverage exporter and a clearer progress dashboard",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1372",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:tools",
+     "area:research",
+     "area:infra"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-24T15:07:09Z",
+    "closed_at": "2026-11-24T15:07:09Z",
+    "created_at": "2026-11-24T15:01:38Z"
+   },
    {
     "number": 1370,
     "title": "Progress workflow: grant issue reads and fail visibly on a stale refresh",
@@ -434,22 +451,6 @@
     "updated_at": "2026-11-24T13:17:52Z",
     "closed_at": "2026-11-24T12:19:38Z",
     "created_at": "2026-11-20T10:33:13Z"
-   },
-   {
-    "number": 1120,
-    "title": "Tools/format: move package commands out of the sim-lane tools crate",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1120",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "area:format",
-     "area:tools"
-    ],
-    "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-24T13:17:44Z",
-    "closed_at": "2026-11-24T12:16:34Z",
-    "created_at": "2026-11-20T09:49:39Z"
    }
   ],
   "in_progress": [
@@ -690,7 +691,7 @@
     "created_at": "2026-11-20T09:51:47Z"
    }
   ],
-  "closed_7d": 180,
+  "closed_7d": 181,
   "opened_7d": 285,
   "burnup": [
    {
@@ -711,7 +712,7 @@
    {
     "week": "2026-11-30",
     "created": 858,
-    "closed": 547
+    "closed": 548
    }
   ]
  },
