@@ -213,18 +213,27 @@ enum FeelCommand {
     Run {
         /// Contract file.
         contract: PathBuf,
-        /// Package folders for contracts that name a package id (default: a fixture only).
+        /// The games repo: package folders for contracts that name a package id, looked up first.
         #[arg(long)]
         packages: Option<PathBuf>,
+        /// Converter output (`$IWBTG_RESEARCH/build/packages`), looked up when the games repo
+        /// does not have the package; loaded like the trace sweep (unmapped kinds inert).
+        #[arg(long)]
+        converter_packages: Option<PathBuf>,
     },
     /// Runs every contract below a folder and compares the statuses with a baseline.
     Sweep {
         /// Contracts root: `*.toml` files, each `id` equal to its path below the root.
         #[arg(long)]
         contracts: PathBuf,
-        /// Package folders for contracts that name a package id.
+        /// The games repo: package folders for contracts that name a package id, looked up first.
         #[arg(long)]
         packages: Option<PathBuf>,
+        /// Converter output (`$IWBTG_RESEARCH/build/packages`), looked up when the games repo
+        /// does not have the package; loaded like the trace sweep (unmapped kinds inert). A
+        /// package in neither source is SKIP.
+        #[arg(long)]
+        converter_packages: Option<PathBuf>,
         /// Baseline file of `<area>/<name> <STATUS>` lines to compare with.
         #[arg(long)]
         baseline: Option<PathBuf>,
@@ -473,15 +482,32 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             profile_cmd::main(&args)?;
             Ok(true)
         }
-        Command::Feel(FeelCommand::Run { contract, packages }) => {
-            feel_cmd::run_main(&contract, packages.as_deref())
-        }
+        Command::Feel(FeelCommand::Run {
+            contract,
+            packages,
+            converter_packages,
+        }) => feel_cmd::run_main(
+            &contract,
+            feel_cmd::Sources {
+                games: packages.as_deref(),
+                converter: converter_packages.as_deref(),
+            },
+        ),
         Command::Feel(FeelCommand::Sweep {
             contracts,
             packages,
+            converter_packages,
             baseline,
             bless,
-        }) => feel_cmd::sweep_main(&contracts, packages.as_deref(), baseline.as_deref(), bless),
+        }) => feel_cmd::sweep_main(
+            &contracts,
+            feel_cmd::Sources {
+                games: packages.as_deref(),
+                converter: converter_packages.as_deref(),
+            },
+            baseline.as_deref(),
+            bless,
+        ),
         Command::Replay(ReplayCommand::Run(args)) => {
             replay_cmd::main(&args)?;
             Ok(true)
