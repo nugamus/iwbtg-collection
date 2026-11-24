@@ -201,7 +201,7 @@ fn collide(other) {
 
 ### Costs we accept
 
-- Rhai is a tree-walking interpreter, and `set_fast_operators(false)` makes every operator slower. WASM is about 30% slower again. Bullets therefore stay native (the built-in `projectile` kind); scripts only spawn and steer them. Repeated patterns get promoted to built-ins.
+- Rhai is a tree-walking interpreter, and `set_fast_operators(false)` makes every operator slower. WASM is about 30% slower again. Bullets therefore stay native (a `killer` or `kid_bullet` with GM motion; #1004 decided against a separate `projectile` kind); scripts only spawn and steer them. Repeated patterns get promoted to built-ins.
 - Agents know Rhai less well than Lua. Generated docs, stubs, the cookbook and strict compile errors make up for it.
 - GM comparisons are explicit calls, which is more verbose than GML.
 - Operation counts tie replays to the Rhai version. The server keeps old verifier builds for replays made with an older `SIM_VERSION`.
@@ -288,12 +288,21 @@ negligible.
 
 The shortfall is the price of one interpreter call per bullet per tick, not of scripting a game:
 at the counts a port actually plays the budget holds with room, and the 5,000-bullet all-scripted
-row is the stress ceiling. It is the input [#1004](https://github.com/nugamus/iwbtg-collection/issues/1004)
-needs for the projectile decision: a native projectile built-in removes that per-bullet call.
-Decision [0004](0004-extension-model.md)'s "50 ticks per second ... on native release and wasm32"
-sentence therefore holds for native at every count and for wasm32 up to 2,000 scripted movers, not
-for the 5,000 scripted row; the qualifier is filed as
+row is the stress ceiling. Decision [0004](0004-extension-model.md)'s "50 ticks per second ... on
+native release and wasm32" sentence therefore holds for native at every count and for wasm32 up to
+2,000 scripted movers, not for the 5,000 scripted row; the qualifier is filed as
 [#1452](https://github.com/nugamus/iwbtg-collection/issues/1452) for that document's owner.
 Nothing here triggers the replacement the checkpoint allowed for at realistic counts, and
 [#44](https://github.com/nugamus/iwbtg-collection/issues/44) is re-scoped to confirming peak
 budget and agent effort on the first real ports.
+
+**Projectile (#1004).** No separate `projectile` kind. A bullet moved natively costs the same
+whether it is called a projectile or a `killer`: 4.3 ms/tick native and 8.3 ms wasm32-wasip1 at
+5,000, against 12.5 and 27.5 with a `step()` on every bullet. `killer` already provides the role
+the draft gave `projectile` — native motion (`hspeed`/`vspeed`), kill-on-touch through its class
+and `destroy_outside_room` — and the native rows above are that pattern. The research list has no
+`projectile` in `converter/kinds.toml` and its MECH-009 records that no game needs one beyond
+`killer` and scripted objects, so a new kind would split one role across two, which format
+principle 9 rejects. The docs now name `killer` where they used to say `projectile`; the open
+pointer in the research MECH-009 is filed as
+[research#297](https://github.com/nugamus/iwbtg-collection-research/issues/297).
