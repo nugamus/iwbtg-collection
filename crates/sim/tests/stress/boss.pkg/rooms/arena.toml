@@ -1,0 +1,10 @@
+#:schema ../../../../../../docs/format/schema/v0/room.schema.json
+# The arena: the kid on the left, level with the boss on the right of it. The boss fires only to
+# its right, away from the kid, so a replay that only shoots clears the fight without dodging.
+size = [800, 608]
+file_speed = 50
+views_enabled = false
+instances = [
+  { kind = "kid_start", x = 96, y = 304 },
+  { kind = "@boss", x = 256, y = 304 },
+]
