@@ -14,8 +14,21 @@ const HASH: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852
 
 /// Drives the router the binary serves, with (or without) a catalog folder.
 async fn get(catalog_dir: Option<PathBuf>, uri: &str) -> (StatusCode, HeaderMap, Vec<u8>) {
+    get_with(catalog_dir, uri, &[]).await
+}
+
+/// The same, with request headers (`Range`).
+async fn get_with(
+    catalog_dir: Option<PathBuf>,
+    uri: &str,
+    request_headers: &[(&str, &str)],
+) -> (StatusCode, HeaderMap, Vec<u8>) {
+    let mut request = Request::get(uri);
+    for (name, value) in request_headers {
+        request = request.header(*name, *value);
+    }
     let response = iwbtg_server::app(support::memory_pool().await, catalog_dir)
-        .oneshot(Request::get(uri).body(Body::empty()).unwrap())
+        .oneshot(request.body(Body::empty()).unwrap())
         .await
         .expect("router must answer");
     let status = response.status();
@@ -76,6 +89,9 @@ async fn a_hashed_file_is_served_with_an_immutable_cache() {
         header(&headers, &header::CACHE_CONTROL),
         "public, max-age=31536000, immutable"
     );
+    // Every file response says a dropped download may resume.
+    assert_eq!(header(&headers, &header::ACCEPT_RANGES), "bytes");
+    assert!(headers.get(&header::CONTENT_RANGE).is_none());
     assert_eq!(body, b"package bytes");
 }
 
@@ -153,5 +169,66 @@ async fn traversal_cannot_reach_a_file_outside_the_files_folder() {
         let (status, _, body) = get(Some(dir.path().to_path_buf()), uri).await;
         assert_eq!(status, StatusCode::NOT_FOUND, "{uri} was served");
         assert_ne!(&body[..], secret, "{uri} leaked the file");
+    }
+}
+
+/// A satisfiable single range: 206, the slice, and the bounds in `Content-Range`. The long cache
+/// stays, because the bytes at these offsets can never change either.
+#[tokio::test]
+async fn a_range_request_returns_206_and_the_slice() {
+    let dir = publish("range-206");
+    let uri = format!("/files/{HASH}");
+    for (range, expected, content_range) in [
+        ("bytes=0-6", &b"package"[..], "bytes 0-6/13"),
+        ("bytes=-5", &b"bytes"[..], "bytes 8-12/13"),
+        ("bytes=8-", &b"bytes"[..], "bytes 8-12/13"),
+        ("bytes=8-999", &b"bytes"[..], "bytes 8-12/13"),
+        ("bytes=0-0", &b"p"[..], "bytes 0-0/13"),
+    ] {
+        let (status, headers, body) =
+            get_with(Some(dir.path().to_path_buf()), &uri, &[("range", range)]).await;
+        assert_eq!(status, StatusCode::PARTIAL_CONTENT, "{range}");
+        assert_eq!(body, expected, "{range}");
+        assert_eq!(header(&headers, &header::CONTENT_RANGE), content_range, "{range}");
+        assert_eq!(header(&headers, &header::ACCEPT_RANGES), "bytes", "{range}");
+        assert_eq!(
+            header(&headers, &header::CACHE_CONTROL),
+            "public, max-age=31536000, immutable",
+            "{range}"
+        );
+    }
+}
+
+/// A syntactically valid range that selects no byte: 416 and the real length in `Content-Range`,
+/// so the client can restart from the right place.
+#[tokio::test]
+async fn an_unsatisfiable_range_is_416() {
+    let dir = publish("range-416");
+    let uri = format!("/files/{HASH}");
+    for range in ["bytes=13-", "bytes=13-99", "bytes=-0"] {
+        let (status, headers, body) =
+            get_with(Some(dir.path().to_path_buf()), &uri, &[("range", range)]).await;
+        assert_eq!(status, StatusCode::RANGE_NOT_SATISFIABLE, "{range}");
+        assert_eq!(header(&headers, &header::CONTENT_RANGE), "bytes */13", "{range}");
+        assert_eq!(header(&headers, &header::ACCEPT_RANGES), "bytes", "{range}");
+        assert!(body.is_empty(), "{range} carried a body");
+    }
+}
+
+/// Invalid syntax, another unit and several ranges are all ignored: the full 200 is the answer,
+/// never a half-understood 206.
+#[tokio::test]
+async fn an_invalid_or_multiple_range_is_a_full_200() {
+    let dir = publish("range-invalid");
+    let uri = format!("/files/{HASH}");
+    for range in ["bytes=", "bytes=abc", "bytes=5-2", "bytes=0-1,3-4", "items=0-1"] {
+        let (status, headers, body) =
+            get_with(Some(dir.path().to_path_buf()), &uri, &[("range", range)]).await;
+        assert_eq!(status, StatusCode::OK, "{range}");
+        assert!(
+            headers.get(&header::CONTENT_RANGE).is_none(),
+            "{range} answered a range"
+        );
+        assert_eq!(body, b"package bytes", "{range}");
     }
 }
