@@ -4,7 +4,7 @@ Part of [the simulation](../sim.md).
 
 ## The kid
 
-The kid built-in: its profile model, the events it runs, and the spec rules behind each field or action. This is the live text of the [sim core plan](../../plans/sim-core.md) sections 5.1-5.4, which stay only as history. Spec: `kid/A1.md` .. `kid/C.md`, mechanics.md "Physics profile fields needed by the kid families", tricks.md.
+The kid built-in: its profile model, the events it runs, and the spec rules behind each field or action. This is the live text of the [sim core plan](../../plans/sim-core.md) sections 5.1-5.4, which stay only as history. Spec: `research/specs/engines/gm8/kid/A1.md` .. `kid/C.md` (claims `A1-NNN`..`C-NNN`; index `research/specs/INDEX.md`), `mechanics.md` "Physics profile fields needed by the kid families" (claims `MECH-NNN`), `tricks.md`.
 
 ### Approach
 
@@ -179,7 +179,7 @@ Only SWITCHABLE tricks get switches; EMERGENT ones must fall out of the physics 
 | `trick.ad_align` | `misc.ad_nudge` | on in animus, easy-miku-2; off elsewhere |
 | `input.dual_shift` | `sim::input` per-key edges (built) | on |
 | `input.cactus_phantom_release` | `.inputs` and replay allow a release without press | off until UNKNOWN resolves |
-| `input.numpad_cancel` | none: no OS key layer in the client (CLONE_SPEC input Inferred) | off |
+| `input.numpad_cancel` | none: no OS key layer in the client (INP-063, Inferred) | off |
 | `trick.disable_cancels` | `jump.cancel` | edge (both B games) |
 | `trick.coyote_time`, `trick.jump_buffer` | none (no game in the set has them) | off |
 | `bug.right_vine_miss` | `vine.model` | asym in A and B, sym in C |

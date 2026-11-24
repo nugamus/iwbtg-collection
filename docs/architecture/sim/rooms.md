@@ -4,7 +4,7 @@ Part of [the simulation](../sim.md).
 
 ## Rooms
 
-Room data, the room change sequence, restart and reset, saves and views. This is the live text of the [sim core plan](../../plans/sim-core.md) sections 4.1-4.5, which stay only as history. Spec: CLONE_SPEC "rooms" (Confirmed change requests, room start sequence, persistence, views, game_restart, saves; Inferred items; UNKNOWN list), mechanics.md "camera", "save", "warp", "edge_warp".
+Room data, the room change sequence, restart and reset, saves and views. This is the live text of the [sim core plan](../../plans/sim-core.md) sections 4.1-4.5, which stay only as history. Spec: `research/specs/engines/gm8/runner/rooms.md` (claims `ROOM-NNN`; index `research/specs/INDEX.md`: Confirmed change requests, room start sequence, persistence, views, game_restart, saves; Inferred items; UNKNOWN list), mechanics.md "camera", "save", "warp", "edge_warp".
 
 ### Room data and loading
 
@@ -85,7 +85,7 @@ pub fn perform_change(ctx: &mut Ctx, req: RoomRequest) -> Result<(), SimError>;
 - **R26 (settled).** Showdown's R has no game_restart (research PR #98; recorder `traces/showdown/a3-t18-a.csv` f41-43). The rooms section counts 15 of the 20 games with a full game restart.
 - **The init phase is engine state.** A retry's delay is `RetryPolicy::boot_ticks` (the serialized format-0 name; `retry_delay_ticks` in decision 0005) and is run by `restart::InitPhase`: the R tick begins it, `boot_step` counts it down, and the tick that reaches zero loads the checkpoint. It is not a package-authored room and not a temp file. The gm8 compatibility profile still enters the package Boot room while the phase runs because an old replay's state hash observes that room; the phase itself does not depend on it. `standard` removes the package room once the stable room key lands (#1153, follow-up of #1149). A delay of 0 is permanently `Unsupported`: no game in the 20 sets it, so whether the init tick exists at all is UNKNOWN (R17; #225).
 - `room_restart` (kaenbyou warpStart, xia death in difficulty room) is `RoomRequest::Restart`.
-- `Reset` (F2): Groups A, B, C (and go-the-spook-house) delete the save's temp marker, stop every sound and game_restart (CLONE_SPEC rooms; kid/A4.md "F2 pressed"); kaenbyou/lemon gameReset resets globals and goes to the Boot-role room (rooms Confirmed), with no recorded sound stop and an OPEN global list (research trace request nugamus/iwbtg-collection-research#270, #225). The policy is `Lifecycle::reset` (`ResetPolicy`, format name `ResetModel`); its reset scope is `room` for the temp-marker restart and `run` for gameReset, and `ResetPolicy::sounds()` is `stop` for the former and `keep` for the latter.
+- `Reset` (F2): Groups A, B, C (and go-the-spook-house) delete the save's temp marker, stop every sound and game_restart (ROOM-045, ROOM-046; kid/A4.md "F2 pressed"); kaenbyou/lemon gameReset resets globals and goes to the Boot-role room (rooms Confirmed), with no recorded sound stop and an OPEN global list (research trace request nugamus/iwbtg-collection-research#270, #225). The policy is `Lifecycle::reset` (`ResetPolicy`, format name `ResetModel`); its reset scope is `room` for the temp-marker restart and `run` for gameReset, and `ResetPolicy::sounds()` is `stop` for the former and `keep` for the latter.
 
 ### Saves
 
