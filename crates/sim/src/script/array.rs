@@ -130,6 +130,13 @@ pub(super) fn dynamic_to_value(s: &Shared, d: &Dynamic, rules: ScriptRules, name
         s.charge(cost("index$set$").1.saturating_mul(items.len() as u64))?;
         return Value::array(items).map_err(sim_err);
     }
+    if d.is_map() {
+        // No stored maps (#791): GM8 has no map variable and no converted game calls `ds_*`.
+        return Err(runtime_error(format!(
+            "variable `{name}` cannot hold a map: a map lives only inside one call; \
+             store an array or one variable per key"
+        )));
+    }
     Err(runtime_error(format!(
         "variable `{name}` cannot hold a {}",
         d.type_name()
