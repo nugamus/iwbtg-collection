@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-24T15:07:21Z",
+ "generated_at": "2026-11-24T17:14:37Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -15,12 +15,12 @@
    "closed": 65,
    "total": 78,
    "pct_closed": 83.3,
-   "size_points": 21,
+   "size_points": 26,
    "sizes": {
-    "size:S": 7,
-    "size:M": 2,
+    "size:S": 9,
+    "size:M": 3,
     "size:L": 1,
-    "unknown": 3
+    "unknown": 0
    },
    "scope": "Cross-cutting repo, build, CI and agent-harness work that every phase depends on.",
    "feeds_from": "client repo, research repo, games repo, CI",
@@ -57,16 +57,16 @@
    "title": "2 · Format & pipeline",
    "name": "Format & pipeline",
    "state": "open",
-   "open": 33,
-   "closed": 89,
-   "total": 122,
-   "pct_closed": 73.0,
-   "size_points": 96,
+   "open": 34,
+   "closed": 91,
+   "total": 125,
+   "pct_closed": 72.8,
+   "size_points": 101,
    "sizes": {
-    "size:S": 11,
-    "size:M": 15,
+    "size:S": 13,
+    "size:M": 16,
     "size:L": 5,
-    "unknown": 2
+    "unknown": 0
    },
    "scope": "The standard package format, converter, census, script API and porting pipeline.",
    "feeds_from": "converter, format crates, research census, porting docs",
@@ -80,16 +80,16 @@
    "title": "3 · Sim fidelity",
    "name": "Sim fidelity",
    "state": "open",
-   "open": 44,
+   "open": 42,
    "closed": 210,
-   "total": 254,
-   "pct_closed": 82.7,
+   "total": 252,
+   "pct_closed": 83.3,
    "size_points": 53,
    "sizes": {
     "size:S": 16,
     "size:M": 7,
     "size:L": 2,
-    "unknown": 19
+    "unknown": 17
    },
    "scope": "The deterministic simulation reproduces the original mechanics tick for tick.",
    "feeds_from": "research traces, format packages, sim crate",
@@ -262,24 +262,24 @@
  ],
  "activity": {
   "totals": {
-   "issues": 858,
-   "open": 310,
-   "closed": 548,
-   "pct_closed": 63.9
+   "issues": 859,
+   "open": 309,
+   "closed": 550,
+   "pct_closed": 64.0
   },
-  "open_prs": 1,
+  "open_prs": 3,
   "process": {
-   "agent-ready": 157,
-   "triage": 53,
-   "in-progress": 3,
+   "agent-ready": 164,
+   "in-progress": 9,
+   "triage": 45,
    "blocked": 25,
    "revisit": 4,
-   "needs-user": 26
+   "needs-user": 27
   },
   "area_open": [
    {
     "area": "area:sim",
-    "count": 100
+    "count": 101
    },
    {
     "area": "area:client",
@@ -311,7 +311,7 @@
    },
    {
     "area": "area:tools",
-    "count": 13
+    "count": 12
    },
    {
     "area": "area:port",
@@ -323,6 +323,39 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 1366,
+    "title": "Progress exporter: converter state per game",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1366",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:format",
+     "area:port",
+     "in-progress"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-24T17:14:30Z",
+    "closed_at": "2026-11-24T17:14:30Z",
+    "created_at": "2026-11-24T13:43:00Z"
+   },
+   {
+    "number": 1363,
+    "title": "Tools: import::tests::every_research_trace_imports panics on a missing file when IWBTG_RESEARCH is set",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1363",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:tools",
+     "in-progress"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-24T17:11:54Z",
+    "closed_at": "2026-11-24T17:11:54Z",
+    "created_at": "2026-11-24T12:42:15Z"
+   },
    {
     "number": 1372,
     "title": "Object coverage exporter and a clearer progress dashboard",
@@ -418,57 +451,25 @@
     "updated_at": "2026-11-24T13:17:37Z",
     "closed_at": "2026-11-24T12:54:36Z",
     "created_at": "2026-11-20T09:39:16Z"
-   },
-   {
-    "number": 1173,
-    "title": "Sim sound: a built-in one-shot with no length_ticks ends at once instead of playing until stopped",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1173",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:sim",
-     "in-progress"
-    ],
-    "phase": "3 · Sim fidelity",
-    "updated_at": "2026-11-24T13:18:36Z",
-    "closed_at": "2026-11-24T12:49:45Z",
-    "created_at": "2026-11-21T07:35:05Z"
-   },
-   {
-    "number": 1133,
-    "title": "Spec: does a bare write to a global array keep its other elements?",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1133",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:sim",
-     "area:research",
-     "in-progress"
-    ],
-    "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-24T13:17:52Z",
-    "closed_at": "2026-11-24T12:19:38Z",
-    "created_at": "2026-11-20T10:33:13Z"
    }
   ],
   "in_progress": [
    {
-    "number": 1357,
-    "title": "Trace cases: close a1-slope-a and compare gravity in a1-slope-a..c after CR26 (research#279)",
+    "number": 1168,
+    "title": "Feel harness: port contract set and crates/tools/feel-baseline.txt (IWBTG_GAMES)",
     "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1357",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1168",
     "labels": [
      "agent-ready",
-     "size:S",
-     "area:sim",
+     "size:M",
+     "area:tools",
+     "area:port",
      "in-progress"
     ],
-    "phase": "3 · Sim fidelity",
-    "updated_at": "2026-11-24T13:21:02Z",
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-24T17:14:34Z",
     "closed_at": null,
-    "created_at": "2026-11-24T12:23:24Z"
+    "created_at": "2026-11-21T07:25:31Z"
    },
    {
     "number": 1336,
@@ -482,29 +483,93 @@
      "in-progress"
     ],
     "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-24T13:20:46Z",
+    "updated_at": "2026-11-24T17:11:56Z",
     "closed_at": null,
     "created_at": "2026-11-21T17:05:16Z"
    },
    {
-    "number": 1127,
-    "title": "Web build: the browser client crashes within a second of starting play",
+    "number": 997,
+    "title": "Scripts: array values on this and globals",
     "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1127",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/997",
     "labels": [
-     "bug",
      "agent-ready",
-     "size:M",
-     "area:client",
+     "size:S",
+     "area:sim",
      "in-progress"
     ],
-    "phase": "4 · First playable",
-    "updated_at": "2026-11-24T13:17:48Z",
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-24T17:06:34Z",
     "closed_at": null,
-    "created_at": "2026-11-20T10:09:12Z"
+    "created_at": "2026-11-19T10:06:46Z"
+   },
+   {
+    "number": 1114,
+    "title": "Docs/registers: link the split gm8 spec files and map register ids to claim ids (research#173)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1114",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:sim",
+     "area:docs",
+     "in-progress"
+    ],
+    "phase": "1 · Behavior research",
+    "updated_at": "2026-11-24T17:04:24Z",
+    "closed_at": null,
+    "created_at": "2026-11-20T09:44:23Z"
+   },
+   {
+    "number": 1346,
+    "title": "Harness: fidelity hints and workspace settings still use the old checkout names",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1346",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:infra",
+     "in-progress"
+    ],
+    "phase": "0 · Foundation",
+    "updated_at": "2026-11-24T16:45:46Z",
+    "closed_at": null,
+    "created_at": "2026-11-24T11:15:54Z"
+   },
+   {
+    "number": 986,
+    "title": "Sim/format/tools: drop the WP ownership headers",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/986",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:sim",
+     "area:docs",
+     "in-progress"
+    ],
+    "phase": "0 · Foundation",
+    "updated_at": "2026-11-24T16:45:44Z",
+    "closed_at": null,
+    "created_at": "2026-11-19T10:05:46Z"
    }
   ],
   "needs_user": [
+   {
+    "number": 426,
+    "title": "atan2 near-axis cutoff: find the recorder's rule between ratio 3.5e-16 and ordinary vectors",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/426",
+    "labels": [
+     "needs-user",
+     "size:S",
+     "area:research"
+    ],
+    "phase": "1 · Behavior research",
+    "updated_at": "2026-11-24T16:59:34Z",
+    "closed_at": null,
+    "created_at": "2026-11-03T16:24:02Z"
+   },
    {
     "number": 953,
     "title": "Decide: script error screen layout",
@@ -579,21 +644,6 @@
     "updated_at": "2026-11-24T13:33:39Z",
     "closed_at": null,
     "created_at": "2026-11-02T11:55:34Z"
-   },
-   {
-    "number": 84,
-    "title": "Performance points (pp) design",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/84",
-    "labels": [
-     "needs-user",
-     "size:L",
-     "area:design"
-    ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-24T13:33:32Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T11:32:15Z"
    }
   ],
   "agent_ready": [
@@ -645,22 +695,6 @@
     "created_at": "2026-11-14T17:15:01Z"
    },
    {
-    "number": 986,
-    "title": "Sim/format/tools: drop the WP ownership headers",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/986",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:sim",
-     "area:docs"
-    ],
-    "phase": "0 · Foundation",
-    "updated_at": "2026-11-24T13:15:50Z",
-    "closed_at": null,
-    "created_at": "2026-11-19T10:05:46Z"
-   },
-   {
     "number": 1064,
     "title": "xtask check: a sim doc-comment change can stale a format schema without failing the local check",
     "state": "open",
@@ -676,23 +710,38 @@
     "created_at": "2026-11-20T07:47:56Z"
    },
    {
-    "number": 1124,
-    "title": "CI: a docs/format-only edit runs the whole sim/format WASM + determinism matrix for native-only fixture tests",
+    "number": 1169,
+    "title": "CI: run the public feel test on every target and scope it",
     "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1124",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1169",
     "labels": [
      "agent-ready",
-     "size:M",
+     "size:S",
      "area:infra"
     ],
     "phase": "0 · Foundation",
-    "updated_at": "2026-11-24T13:17:47Z",
+    "updated_at": "2026-11-24T13:18:31Z",
     "closed_at": null,
-    "created_at": "2026-11-20T09:51:47Z"
+    "created_at": "2026-11-21T07:25:36Z"
+   },
+   {
+    "number": 1345,
+    "title": "xtask: the WP-era ratchet counts gitignored local files",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1345",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:infra"
+    ],
+    "phase": "0 · Foundation",
+    "updated_at": "2026-11-24T16:43:11Z",
+    "closed_at": null,
+    "created_at": "2026-11-24T11:15:52Z"
    }
   ],
-  "closed_7d": 181,
-  "opened_7d": 285,
+  "closed_7d": 177,
+  "opened_7d": 276,
   "burnup": [
    {
     "week": "2026-11-09",
@@ -711,8 +760,8 @@
    },
    {
     "week": "2026-11-30",
-    "created": 858,
-    "closed": 548
+    "created": 859,
+    "closed": 550
    }
   ]
  },
@@ -727,7 +776,9 @@
    "genre": "Needle",
    "difficulty": 31.24,
    "lifecycle": "unknown",
-   "converted": null,
+   "converted": true,
+   "objects_in_package": 39,
+   "objects_unmapped": 6,
    "rooms": 17,
    "placed_instances": 1997,
    "builtin_instances": 1985,
@@ -738,7 +789,7 @@
    "client_instances": 9,
    "kid_instances": 0,
    "custom_objects": 5,
-   "traces_recorded": 284,
+   "traces_recorded": 285,
    "objects_exercised": 6,
    "trace_objects": [
     "blood",
@@ -769,7 +820,9 @@
    "genre": "Needle",
    "difficulty": 32.98,
    "lifecycle": "unknown",
-   "converted": null,
+   "converted": true,
+   "objects_in_package": 494,
+   "objects_unmapped": 318,
    "rooms": 28,
    "placed_instances": 5480,
    "builtin_instances": 5429,
@@ -807,7 +860,9 @@
    "genre": "Needle",
    "difficulty": 29.12,
    "lifecycle": "unknown",
-   "converted": null,
+   "converted": true,
+   "objects_in_package": 153,
+   "objects_unmapped": 95,
    "rooms": 23,
    "placed_instances": 7085,
    "builtin_instances": 7072,
@@ -850,7 +905,9 @@
    "genre": "Needle",
    "difficulty": 21.33,
    "lifecycle": "unknown",
-   "converted": null,
+   "converted": true,
+   "objects_in_package": 111,
+   "objects_unmapped": 51,
    "rooms": 25,
    "placed_instances": 4741,
    "builtin_instances": 4716,
@@ -895,7 +952,9 @@
    "genre": "Needle",
    "difficulty": 23.4,
    "lifecycle": "unknown",
-   "converted": null,
+   "converted": true,
+   "objects_in_package": 129,
+   "objects_unmapped": 69,
    "rooms": 25,
    "placed_instances": 3414,
    "builtin_instances": 3373,
@@ -906,7 +965,7 @@
    "client_instances": 14,
    "kid_instances": 9,
    "custom_objects": 19,
-   "traces_recorded": 13,
+   "traces_recorded": 14,
    "objects_exercised": 3,
    "trace_objects": [
     "movingPlatform",
@@ -934,7 +993,9 @@
    "genre": "Avoidance",
    "difficulty": 17.38,
    "lifecycle": "unknown",
-   "converted": null,
+   "converted": true,
+   "objects_in_package": 185,
+   "objects_unmapped": 141,
    "rooms": 6,
    "placed_instances": 204,
    "builtin_instances": 197,
@@ -945,10 +1006,11 @@
    "client_instances": 6,
    "kid_instances": 0,
    "custom_objects": 5,
-   "traces_recorded": 6,
-   "objects_exercised": 2,
+   "traces_recorded": 9,
+   "objects_exercised": 3,
    "trace_objects": [
     "cherry",
+    "player",
     "world"
    ],
    "port": {
@@ -972,7 +1034,9 @@
    "genre": "Trap",
    "difficulty": 18.95,
    "lifecycle": "unknown",
-   "converted": null,
+   "converted": true,
+   "objects_in_package": 112,
+   "objects_unmapped": 68,
    "rooms": 12,
    "placed_instances": 1389,
    "builtin_instances": 1284,
@@ -983,7 +1047,7 @@
    "client_instances": 15,
    "kid_instances": 0,
    "custom_objects": 28,
-   "traces_recorded": 36,
+   "traces_recorded": 37,
    "objects_exercised": 5,
    "trace_objects": [
     "bow",
@@ -1013,7 +1077,9 @@
    "genre": "Trap",
    "difficulty": 27.7,
    "lifecycle": "unknown",
-   "converted": null,
+   "converted": true,
+   "objects_in_package": 240,
+   "objects_unmapped": 177,
    "rooms": 11,
    "placed_instances": 2219,
    "builtin_instances": 2208,
@@ -1048,7 +1114,9 @@
    "genre": "Trap",
    "difficulty": 20.17,
    "lifecycle": "unknown",
-   "converted": null,
+   "converted": true,
+   "objects_in_package": 230,
+   "objects_unmapped": 167,
    "rooms": 24,
    "placed_instances": 3893,
    "builtin_instances": 3759,
@@ -1059,10 +1127,11 @@
    "client_instances": 9,
    "kid_instances": 0,
    "custom_objects": 32,
-   "traces_recorded": 11,
-   "objects_exercised": 2,
+   "traces_recorded": 12,
+   "objects_exercised": 3,
    "trace_objects": [
     "menuSelect",
+    "playMusic",
     "player"
    ],
    "port": {
@@ -1086,7 +1155,9 @@
    "genre": "Avoidance",
    "difficulty": 24.4,
    "lifecycle": "unknown",
-   "converted": null,
+   "converted": true,
+   "objects_in_package": 55,
+   "objects_unmapped": 30,
    "rooms": 6,
    "placed_instances": 258,
    "builtin_instances": 196,
@@ -1124,7 +1195,9 @@
    "genre": "Adventure",
    "difficulty": 22.62,
    "lifecycle": "unknown",
-   "converted": null,
+   "converted": true,
+   "objects_in_package": 412,
+   "objects_unmapped": 368,
    "rooms": 21,
    "placed_instances": 5715,
    "builtin_instances": 5607,
@@ -1135,7 +1208,7 @@
    "client_instances": 6,
    "kid_instances": 0,
    "custom_objects": 57,
-   "traces_recorded": 40,
+   "traces_recorded": 41,
    "objects_exercised": 6,
    "trace_objects": [
     "bossBlueCherry",
@@ -1166,7 +1239,9 @@
    "genre": "Trap",
    "difficulty": 28.77,
    "lifecycle": "unknown",
-   "converted": null,
+   "converted": true,
+   "objects_in_package": 228,
+   "objects_unmapped": 175,
    "rooms": 21,
    "placed_instances": 2115,
    "builtin_instances": 2014,
@@ -1208,7 +1283,9 @@
    "genre": "Adventure",
    "difficulty": 26.72,
    "lifecycle": "unknown",
-   "converted": null,
+   "converted": true,
+   "objects_in_package": 151,
+   "objects_unmapped": 120,
    "rooms": 11,
    "placed_instances": 2848,
    "builtin_instances": 2477,
@@ -1249,7 +1326,9 @@
    "genre": "Trap",
    "difficulty": 23.33,
    "lifecycle": "unknown",
-   "converted": null,
+   "converted": true,
+   "objects_in_package": 139,
+   "objects_unmapped": 84,
    "rooms": 9,
    "placed_instances": 2570,
    "builtin_instances": 2466,
@@ -1286,7 +1365,9 @@
    "genre": "Adventure",
    "difficulty": 28.1,
    "lifecycle": "unknown",
-   "converted": null,
+   "converted": true,
+   "objects_in_package": 359,
+   "objects_unmapped": 284,
    "rooms": 32,
    "placed_instances": 9815,
    "builtin_instances": 9649,
@@ -1297,14 +1378,15 @@
    "client_instances": 9,
    "kid_instances": 0,
    "custom_objects": 61,
-   "traces_recorded": 35,
-   "objects_exercised": 5,
+   "traces_recorded": 36,
+   "objects_exercised": 6,
    "trace_objects": [
     "GAMEOVER",
     "bloodEmitter",
     "boundwhite",
     "object862",
-    "player"
+    "player",
+    "world"
    ],
    "port": {
     "number": 15,
@@ -1327,7 +1409,9 @@
    "genre": "Adventure",
    "difficulty": 24.17,
    "lifecycle": "unknown",
-   "converted": null,
+   "converted": true,
+   "objects_in_package": 326,
+   "objects_unmapped": 236,
    "rooms": 36,
    "placed_instances": 12604,
    "builtin_instances": 12517,
@@ -1338,7 +1422,7 @@
    "client_instances": 6,
    "kid_instances": 0,
    "custom_objects": 58,
-   "traces_recorded": 16,
+   "traces_recorded": 19,
    "objects_exercised": 6,
    "trace_objects": [
     "bloodEmitter",
@@ -1369,7 +1453,9 @@
    "genre": "Adventure",
    "difficulty": 26.9,
    "lifecycle": "unknown",
-   "converted": null,
+   "converted": true,
+   "objects_in_package": 388,
+   "objects_unmapped": 289,
    "rooms": 47,
    "placed_instances": 12805,
    "builtin_instances": 12680,
@@ -1406,7 +1492,9 @@
    "genre": "Adventure",
    "difficulty": 33.81,
    "lifecycle": "unknown",
-   "converted": null,
+   "converted": true,
+   "objects_in_package": 291,
+   "objects_unmapped": 230,
    "rooms": 62,
    "placed_instances": 8069,
    "builtin_instances": 7856,
@@ -1417,7 +1505,7 @@
    "client_instances": 11,
    "kid_instances": 0,
    "custom_objects": 71,
-   "traces_recorded": 29,
+   "traces_recorded": 30,
    "objects_exercised": 2,
    "trace_objects": [
     "player",
@@ -1444,7 +1532,9 @@
    "genre": "Adventure",
    "difficulty": 26.72,
    "lifecycle": "unknown",
-   "converted": null,
+   "converted": true,
+   "objects_in_package": 122,
+   "objects_unmapped": 83,
    "rooms": 23,
    "placed_instances": 2228,
    "builtin_instances": 2110,
@@ -1483,7 +1573,9 @@
    "genre": "Needle",
    "difficulty": 22.77,
    "lifecycle": "unknown",
-   "converted": null,
+   "converted": true,
+   "objects_in_package": 113,
+   "objects_unmapped": 57,
    "rooms": 19,
    "placed_instances": 2310,
    "builtin_instances": 2291,
@@ -1519,9 +1611,11 @@
   "kid_instances": 9,
   "custom_objects": 699,
   "rooms": 458,
-  "traces_recorded": 647,
-  "objects_exercised": 73,
-  "objects_exercised_unique": 34,
+  "traces_recorded": 660,
+  "objects_exercised": 76,
+  "objects_exercised_unique": 35,
+  "games_converted": 20,
+  "games_converter_known": 20,
   "games_census": 20,
   "games_traces": 18,
   "games_total": 20
