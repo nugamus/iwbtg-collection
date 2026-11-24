@@ -2,7 +2,7 @@
 
 The leaderboard, accounts and game downloads run on the maintainer's home server. Chosen for few moving parts, strong defaults and easy operation by agents. Versions were checked on 2026-10-23; check them again when Phase 8 starts.
 
-Status: the skeleton exists: `crates/server` builds the `iwbtg-server` binary (axum 0.8 + tokio, `--bind`/`IWBTG_BIND`, default `127.0.0.1:8080`) and serves `GET /healthz` (#152). It opens the SQLite database (`--db`/`IWBTG_DB`, default `data/iwbtg.db`), sets WAL and runs the migrations at startup (#153, Schema below). A published folder is served as `GET /catalog.json` and `GET /files/<sha256>[.<ext>]` (`--catalog-dir`/`IWBTG_CATALOG_DIR`, Game downloads below); unset, both answer 404 (#807). Accounts, submissions and the verify worker are later issues.
+Status: the skeleton exists: `crates/server` builds the `iwbtg-server` binary (axum 0.8 + tokio, `--bind`/`IWBTG_BIND`, default `127.0.0.1:8080`) and serves `GET /healthz` (#152). It opens the SQLite database (`--db`/`IWBTG_DB`, default `data/iwbtg.db`), sets WAL and runs the migrations at startup (#153, Schema below). A published folder is served as `GET /catalog.json`, `GET /files/<sha256>[.<ext>]` and the signed `GET /removals.json` (`--catalog-dir`/`IWBTG_CATALOG_DIR`, Game downloads below); unset, all three answer 404 (#807, #808). Accounts, submissions and the verify worker are later issues.
 
 ## Components
 
@@ -79,6 +79,35 @@ Queries that need compile-time checking use `sqlx::query!`; the `.sqlx` offline 
 
 `url` is the path `/files/<content_hash>.iwbz` on the same server, `filename` is its last part, and `size` is the `.iwbz` byte length. The catalog holds one entry per package `id`, sorted by id: publishing a newer version replaces the entry and leaves the older file in `files/`, because a content-addressed URL never changes. Unknown top-level fields are preserved, so a newer catalog keeps working. Publishing is idempotent. The rest of the game metadata model — tags, difficulty, port status (Beta/Ranked/Loved), the fidelity proof and known differences, the trick list, stage previews, the per-version changelog and the performance class — is #805; `pkg publish` emits only what the package already has.
 
+### Removal list
+
+Takedowns and moderation publish `<catalog-dir>/removals.json`; it is served at `GET /removals.json` (#808). The file is already signed and the server holds no key, so compromising the host cannot mint removals: a client verifies `signature` with the public key it ships and deletes the listed packages on start (#68).
+
+```json
+{
+  "version": 1,
+  "key_id": "2026-11",
+  "generated_at": "2026-11-24T12:00:00Z",
+  "removals": [
+    { "package_id": "iwbtg.example.game", "reason": "takedown", "at": "2026-11-20T00:00:00Z" }
+  ],
+  "signature": "128 lowercase hex characters (a 64-byte Ed25519 signature)"
+}
+```
+
+The signature covers this exact UTF-8 text, one line per entry in sorted order:
+
+```text
+iwbtg-removals-v1
+<key_id>
+<generated_at>
+<package_id>\t<reason>\t<at>
+```
+
+`package_id` is 1-64 characters of letters, digits, `.`, `_` and `-`; `reason` is 1-32 of lower-case letters, digits and `-`; `key_id` is 1-32 of letters, digits, `.`, `_` and `-`; the timestamps are 1-64 printable ASCII characters without spaces (UTC ISO-8601). Entries are sorted by `package_id` and unique. Unknown JSON fields are rejected, so nothing unsigned rides along. The response body is the file's own bytes, never a re-serialization, so the signature a publisher computed stays valid; `crates/server/src/removal.rs` pins the canonical text in a unit test.
+
+It is sent `Cache-Control: public, max-age=60`, like the catalog. A missing catalog folder or file is `404`, which a client reads as "no removals". Any file that fails the checks is `503` with a logged reason, never `404`: a broken publish must not look like an empty list and leave a taken-down game installed. A file is at most 1 MiB and 4,096 entries.
+
 ## Logs and monitoring
 
 The binary writes `tracing` JSON lines to stdout (`tracing_subscriber::fmt().json()`): one object per event with `timestamp`, `level`, `fields` and `target`. Startup lines — database ready, serving catalog, listening — are events like any other, so a collector parses them without a regex.
@@ -102,7 +131,7 @@ These are requirements, not suggestions.
 
 ## Deployment
 
-Production is one `compose.yaml` with two services, `server` and `cloudflared` (Components). CI parses it with `docker compose config` in the `changes` job on every PR (#1419), so a broken deployment file fails before it reaches the host. The image comes from the multi-stage `Dockerfile` in the repository root: the builder compiles `iwbtg-server` on the pinned Rust toolchain with the Cargo registry and target directory held in BuildKit cache mounts, and the runtime is `debian:trixie-slim` plus the binary, the CA roots and `curl` (the healthcheck client). Nothing in the running image is writable except the database mount.
+Production is one `compose.yaml` with two services, `server` and `cloudflared` (Components). CI parses it with `docker compose config` in the `changes` job on every PR (#1419), so a broken deployment file fails before it reaches the host. The image comes from the multi-stage `Dockerfile` in the repository root: the builder compiles `iwbtg-server` on the pinned Rust toolchain with the Cargo registry and target directory held in BuildKit cache mounts, and the runtime is `debian:trixie-slim` plus the binary, `ca-certificates` (the healthchecks.io ping uses ureq with native-tls and verifies against the OS trust store; OAuth and SMTP will too) and `curl` (the healthcheck client). Nothing in the running image is writable except the database mount.
 
 ### Host layout
 

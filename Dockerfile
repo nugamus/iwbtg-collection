@@ -1,8 +1,9 @@
 # syntax=docker/dockerfile:1
 #
 # Multi-stage build for iwbtg-server (docs/server.md, Deployment). The builder uses the
-# Rust version pinned in rust-toolchain.toml; the runtime carries only the binary, the
-# CA roots it will need for OAuth/SMTP, and curl for the /healthz healthcheck.
+# Rust version pinned in rust-toolchain.toml; the runtime carries only the binary, the CA
+# roots the healthchecks.io ping (and later OAuth/SMTP) need, and curl for the /healthz
+# healthcheck.
 
 FROM rust:1.99.1-bookworm AS build
 WORKDIR /src
@@ -16,8 +17,9 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     && install -D -m 0755 target/release/iwbtg-server /out/iwbtg-server
 
 FROM debian:trixie-slim AS runtime
-# curl is the healthcheck client (Dockerfile HEALTHCHECK below and compose.yaml); the CA
-# roots are for the OAuth and SMTP calls the server makes once accounts land.
+# curl is the healthcheck client (Dockerfile HEALTHCHECK below and compose.yaml). The CA
+# roots are not optional: the healthchecks.io ping uses ureq with native-tls, which verifies
+# against the OS trust store (src/health.rs), and OAuth/SMTP calls will use it too.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*

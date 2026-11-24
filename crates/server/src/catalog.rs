@@ -218,7 +218,7 @@ fn download_headers(response: &mut Response, name: &str, content_range: Option<&
 }
 
 /// A response with a body and the two headers the catalog carries.
-fn cached(content_type: &'static str, cache_control: &'static str, bytes: Vec<u8>) -> Response {
+pub(crate) fn cached(content_type: &'static str, cache_control: &'static str, bytes: Vec<u8>) -> Response {
     let mut response = bytes.into_response();
     let headers = response.headers_mut();
     headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
