@@ -3,808 +3,836 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>IWBTG Collection — porting progress</title>
+<title>IWBTG Collection — object coverage</title>
 <style>
 :root{
-  color-scheme: dark;
+  color-scheme:light;
+  --page:#f9f9f7; --surface:#fcfcfb; --surface-2:#f3f2ee;
+  --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
+  --grid:#e1e0d9; --line:rgba(11,11,11,.10);
+  --blue:#2a78d6; --orange:#eb6834; --track:#cde2fb; --gray:#c3c2b7;
+  --good:#0ca30c; --warn:#fab219; --crit:#d03b3b;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --page:#0d0d0d; --surface:#1a1a19; --surface-2:#141413;
+    --ink:#f0efec; --ink-2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --line:rgba(255,255,255,.10);
+    --blue:#3987e5; --orange:#d95926; --track:#184f95; --gray:#383835;
+    --good:#0ca30c; --warn:#fab219; --crit:#d03b3b;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
   --page:#0d0d0d; --surface:#1a1a19; --surface-2:#141413;
   --ink:#f0efec; --ink-2:#c3c2b7; --muted:#898781;
-  --grid:#2c2c2a; --baseline:#383835; --line:rgba(255,255,255,.10);
-  --blue:#3987e5; --orange:#d95926; --track:#184f95;
-  --good:#0ca30c; --warn:#fab219; --serious:#ec835a; --crit:#d03b3b;
+  --grid:#2c2c2a; --line:rgba(255,255,255,.10);
+  --blue:#3987e5; --orange:#d95926; --track:#184f95; --gray:#383835;
+  --good:#0ca30c; --warn:#fab219; --crit:#d03b3b;
 }
 *{box-sizing:border-box}
-html{background:var(--page)}
 body{margin:0;background:var(--page);color:var(--ink);
-  font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-main{max-width:1180px;margin:0 auto;padding:40px 24px 72px}
+  font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1140px;margin:0 auto;padding:38px 24px 72px}
 a{color:var(--blue);text-decoration:none}
 a:hover{text-decoration:underline}
+h1{font-size:42px;line-height:1.08;letter-spacing:-.025em;margin:6px 0 8px;font-weight:680}
+h2{font-size:22px;line-height:1.2;margin:44px 0 8px;letter-spacing:-.015em}
+h3{font-size:15px;margin:0 0 8px}
 p{color:var(--ink-2);margin:0 0 10px}
-h1{font-size:40px;line-height:1.1;letter-spacing:-.02em;margin:10px 0 8px;font-weight:680}
-h2{font-size:20px;margin:42px 0 12px;letter-spacing:-.01em}
-h3{font-size:15px;margin:0 0 8px;color:var(--ink)}
 .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
-.lede{max-width:760px;font-size:16px}
-.statusline{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;align-items:center}
+.head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}
+.lede{max-width:780px;font-size:16.5px}
+.statusrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:14px}
 .pill{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--line);
   border-radius:999px;padding:3px 10px;font-size:12px;white-space:nowrap}
+.pill.mid{color:var(--warn);border-color:rgba(250,178,25,.5)}
 .pill.good{color:var(--good);border-color:rgba(12,163,12,.45)}
-.pill.mid{color:var(--warn);border-color:rgba(250,178,25,.45)}
 .pill.muted{color:var(--muted)}
 .ico{font-size:11px}
-.chip{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:1px 7px;
-  font-size:11px;color:var(--ink-2);margin-right:6px;white-space:nowrap}
-.kpis{display:grid;grid-template-columns:1.5fr repeat(4,1fr);gap:14px;margin:28px 0 8px}
-.kpi{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
-.kpi .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
-.kpi .value{font-size:26px;font-weight:650;margin-top:6px}
-.kpi .sub{font-size:12.5px;color:var(--muted);margin-top:4px}
-.kpi.hero .figure{font-size:56px;font-weight:680;line-height:1;margin:8px 0 12px;letter-spacing:-.03em}
-.meter{height:8px;background:var(--track);border-radius:4px;overflow:hidden;margin:10px 0 6px}
-.meter>span{display:block;height:100%;background:var(--blue);border-radius:4px}
-.meter-line{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+button.theme{background:var(--surface);color:var(--ink-2);border:1px solid var(--line);
+  border-radius:8px;padding:8px 12px;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+.summary{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;margin:28px 0 8px}
+.hero{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:24px 26px}
+.hero .label{font-size:13px;color:var(--muted)}
+.hero .figure{font-size:64px;font-weight:680;line-height:1;letter-spacing:-.035em;margin:10px 0 6px}
+.hero .sub{font-size:14px;color:var(--ink-2)}
+.stack{display:flex;gap:2px;height:14px;margin:20px 0 8px;background:var(--surface)}
+.seg{display:block;height:100%;border-radius:2px}
+.seg.builtin{background:var(--blue)} .seg.script{background:var(--orange)} .seg.other{background:var(--gray)}
+.legend{display:flex;flex-wrap:wrap;gap:16px;font-size:12.5px;color:var(--ink-2);margin-top:8px}
+.key{display:inline-flex;align-items:center;gap:7px}
+.swatch{width:10px;height:10px;border-radius:2px;display:inline-block}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.stat span{display:block;font-size:12px;color:var(--muted)}
+.stat b{display:block;font-size:25px;font-weight:650;margin:4px 0 2px;letter-spacing:-.02em}
+.stat em{font-style:normal;font-size:12px;color:var(--muted)}
 .note{font-size:12.5px;color:var(--muted)}
-code{background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12.5px}
-.muted{color:var(--muted)}
-.frac{color:var(--muted);font-size:12px}
-.slug{color:var(--muted);font-size:12px;margin-top:2px}
-table{width:100%;border-collapse:collapse;background:var(--surface);
-  border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.callout{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--warn);
+  border-radius:10px;padding:14px 16px;margin:18px 0;font-size:13.5px;color:var(--ink-2)}
+.callout b{color:var(--ink)}
+table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);
+  border-radius:12px;overflow:hidden}
 th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
 th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
   background:var(--surface-2);font-weight:600}
 tr:last-child td{border-bottom:0}
 td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-td.wide{min-width:180px}
+.slug{font-size:12px;color:var(--muted);margin-top:2px}
+.frac{font-size:11.5px;color:var(--muted);font-weight:400}
+.mini-track{display:inline-block;width:92px;height:7px;background:var(--track);border-radius:4px;
+  overflow:hidden;vertical-align:middle}
+.mini-track>span{display:block;height:100%;background:var(--blue);border-radius:0 4px 4px 0}
+.covecell{min-width:190px;white-space:nowrap}
+.covnum{font-weight:600;margin-left:8px;font-variant-numeric:tabular-nums}
+.covecell .frac{margin-left:8px}
+.covrow{display:grid;grid-template-columns:230px 1fr 60px 100px;gap:12px;align-items:center;
+  padding:6px 0;border-bottom:1px solid var(--line)}
+.covrow:last-child{border-bottom:0}
+.covname{font-size:13px;line-height:1.25}
+.covslug{display:block;font-size:11px;color:var(--muted)}
+.covtrack{height:10px;background:var(--track);border-radius:4px;overflow:hidden}
+.covtrack>span{display:block;height:100%;background:var(--blue);border-radius:0 4px 4px 0}
+.covvalue{text-align:right;font-variant-numeric:tabular-nums;font-size:13px}
+.covsub{text-align:right;font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.chartbox{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:start}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.card h3{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.items{list-style:none;margin:6px 0 0;padding:0}
+.items li{padding:7px 0;border-bottom:1px solid var(--line);font-size:13px;line-height:1.4}
+.items li:last-child{border-bottom:0}
+.item-title{color:var(--ink-2)}
+.empty{color:var(--muted);font-size:13px;margin:8px 0 0}
+.chip{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:1px 7px;
+  font-size:11px;color:var(--ink-2);margin-right:6px;white-space:nowrap}
+.meter-line{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:4px}
 .phase-cell{min-width:230px}
 .phase-title{font-weight:600}
 .phase-num{display:inline-block;min-width:24px;color:var(--muted);font-variant-numeric:tabular-nums}
 .phase-meta{font-size:11.5px;color:var(--muted);margin-top:2px}
 .gate summary{cursor:pointer;color:var(--ink-2);font-size:12px}
 .gate p{font-size:12.5px;margin:6px 0}
-details.table-view{margin-top:10px;font-size:12.5px;color:var(--ink-2)}
-details.table-view summary{cursor:pointer;color:var(--muted);margin-bottom:8px}
-details.table-view table{font-size:12.5px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:start}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
-.card h3{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
-.items{list-style:none;margin:6px 0 0;padding:0}
-.items li{padding:7px 0;border-bottom:1px solid var(--line);font-size:13px;line-height:1.4}
-.items li:last-child{border-bottom:0}
-.item-title{color:var(--ink-2)}
-.empty{color:var(--muted);font-size:13px;margin:8px 0 0}
-.hbar-row{display:grid;grid-template-columns:140px 1fr 40px;gap:10px;align-items:center;
-  padding:5px 0;font-size:13px}
+.hbar-row{display:grid;grid-template-columns:140px 1fr 40px;gap:10px;align-items:center;padding:5px 0;font-size:13px}
 .hbar-label{color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hbar-track{height:14px;background:var(--track);border-radius:4px;overflow:hidden}
 .hbar-fill{display:block;height:100%;background:var(--blue);border-radius:0 4px 4px 0}
 .hbar-value{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink-2)}
-.legend{display:flex;gap:18px;margin:4px 0 6px;font-size:12.5px;color:var(--ink-2)}
-.key{display:inline-flex;align-items:center;gap:7px}
-.line-key{display:inline-block;width:18px;height:2px;border-radius:1px}
-.line-key.blue{background:var(--blue)} .line-key.orange{background:var(--orange)}
-.chart-wrap{position:relative}
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0}
+.filters input,.filters select{background:var(--surface);color:var(--ink);border:1px solid var(--line);
+  border-radius:8px;padding:8px 10px;font:inherit;font-size:13px}
+.filters input{min-width:250px}
+.filters input[type="checkbox"]{min-width:0;width:auto}
+.filters label{font-size:12.5px;color:var(--ink-2);display:inline-flex;gap:6px;align-items:center}
 svg{display:block;width:100%;height:auto}
 .grid{stroke:var(--grid);stroke-width:1}
 .axis{fill:var(--muted);font-size:10px}
 .end-label{fill:var(--ink-2);font-size:11px}
-.hit{cursor:crosshair}
-.tip{position:fixed;pointer-events:none;background:var(--surface);border:1px solid var(--line);
-  border-radius:8px;padding:8px 10px;font-size:12px;box-shadow:0 6px 24px rgba(0,0,0,.45);z-index:10}
-.tip b{color:var(--ink);font-size:13px}
 .spark{display:grid;grid-template-columns:1fr 1fr;gap:18px}
 .spark .sub{font-size:12px;color:var(--muted)}
-.mini-meter{height:6px;background:var(--track);border-radius:3px;overflow:hidden;margin-bottom:3px;min-width:90px}
-.mini-meter>span{display:block;height:100%;background:var(--blue);border-radius:3px}
-.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:10px 0}
-.filters input,.filters select{background:var(--surface);color:var(--ink);border:1px solid var(--line);
-  border-radius:8px;padding:7px 10px;font:inherit;font-size:13px}
-.filters input{min-width:240px}
-.filters label{font-size:12.5px;color:var(--ink-2);display:inline-flex;gap:6px;align-items:center}
-footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
-@media(max-width:900px){
-  .kpis{grid-template-columns:1fr 1fr}
-  .cards{grid-template-columns:1fr 1fr}
-  .grid2,.spark{grid-template-columns:1fr}
-}
-@media(max-width:600px){.kpis,.cards{grid-template-columns:1fr}h1{font-size:32px}}
+.portmeta{font-size:11.5px;color:var(--muted);margin-top:2px}
+code{background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12.5px}
+footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+@media(max-width:900px){.summary,.grid2,.spark{grid-template-columns:1fr}.cards{grid-template-columns:1fr 1fr}
+  .covrow{grid-template-columns:1fr 1fr 60px}.covsub{display:none}}
+@media(max-width:600px){.stats,.cards{grid-template-columns:1fr}h1{font-size:32px}}
 </style>
 </head>
 <body>
 <main>
 <header>
-  <div class="eyebrow">IWBTG Collection</div>
-  <h1>Porting progress</h1>
-  <p class="lede">What is built, what is moving, and what is still honest gap. Every number is a numerator and denominator; a missing source says <b>not measured yet</b> and links the issue that will fill it.</p>
-  <div class="statusline">
+  <div class="head">
+    <div>
+      <div class="eyebrow">IWBTG Collection</div>
+      <h1>Object coverage</h1>
+      <p class="lede">How much of each game is covered by the engine's documented built-in behavior, how much is game-specific script work, and how much of it the recorded traces actually exercise.</p>
+    </div>
+    <button class="theme" id="theme" type="button">Light / dark</button>
+  </div>
+  <div class="statusrow">
     <span class="pill mid"><span class="ico">◐</span>Pre-release</span>
     <span class="pill muted">No release builds yet. The public alpha is planned for phase 7 (Online).</span>
-    <span class="pill muted">generated 2026-11-24T14:36:15Z · source stale: gh</span>
+    <span class="pill muted">generated 2026-11-24T15:00:59Z · source gh</span>
   </div>
 </header>
 
-<section class="kpis">
-  <div class="kpi hero">
-    <div class="label">Issues closed</div>
-    <div class="figure">64%</div>
-    <div class="meter"><span style="width:64%"></span></div>
-    <div class="sub">545 of 856 tracked issues</div>
+<section class="summary">
+  <div class="hero">
+    <div class="label">Built-in object coverage</div>
+    <div class="figure">98.0%</div>
+    <div class="sub">89,886 of 91,759 placed instances are covered by a documented built-in</div>
+    <div class="stack" role="img" aria-label="Placed instances by coverage"><span class="seg builtin" style="width:97.96%"></span><span class="seg script" style="width:1.87%"></span><span class="seg other" style="width:0.18%"></span></div>
+    <div class="legend">
+      <span class="key"><i class="swatch" style="background:var(--blue)"></i>Built-in 89,886</span>
+      <span class="key"><i class="swatch" style="background:var(--orange)"></i>Script 1,712 (1.87%)</span>
+      <span class="key"><i class="swatch" style="background:var(--gray)"></i>Client / kid 161</span>
+    </div>
   </div>
-  <div class="kpi"><div class="label">Open issues</div><div class="value">311</div>
-    <div class="sub">178 closed / 283 opened in 7 days</div></div>
-  <div class="kpi"><div class="label">Remaining size points</div><div class="value">736</div>
-    <div class="sub">S=1 · M=3 · L=8 · no size=0</div></div>
-  <div class="kpi"><div class="label">Ports tracked</div><div class="value">20 / 20</div>
-    <div class="sub">0 in Beta or Ranked</div></div>
-  <div class="kpi"><div class="label">Recorded traces</div><div class="value">256</div>
-    <div class="sub">from traces.md, 2026-10-24</div></div>
+  <div class="stats">
+    <div class="stat"><span>Custom objects</span><b>699</b><em>across 20 games</em></div>
+    <div class="stat"><span>Script-object instances</span><b>1,712</b><em>1.87% of placed</em></div>
+    <div class="stat"><span>Recorded traces</span><b>647</b><em>across 18 games</em></div>
+    <div class="stat"><span>Objects exercised by traces</span><b>34</b><em>distinct names across all games</em></div>
+  </div>
 </section>
-<p class="note"><span class="chip">agent-ready 157</span><span class="chip">blocked 25</span><span class="chip">in-progress 3</span><span class="chip">needs-user 26</span><span class="chip">revisit 4</span><span class="chip">triage 53</span> · 2 open pull requests</p>
+
+<h2>Coverage by game</h2>
+<p>Sorted from lowest to highest built-in coverage. The bar is the share of placed instances covered by a built-in; the number after it is the placed-instance total.</p>
+<div class="chartbox">
+        <div class="covrow">
+          <span class="covname">I wanna clear the Easy Miku 2<span class="covslug">clear-the-easy-miku-2</span></span>
+          <span class="covtrack"><span style="width:76.0%"></span></span>
+          <span class="covvalue">76.0%</span>
+          <span class="covsub">258 placed</span>
+        </div>
+        <div class="covrow">
+          <span class="covname">I wanna be the Machinary<span class="covslug">machinary</span></span>
+          <span class="covtrack"><span style="width:87.0%"></span></span>
+          <span class="covvalue">87.0%</span>
+          <span class="covsub">2,848 placed</span>
+        </div>
+        <div class="covrow">
+          <span class="covname">I wanna wanna<span class="covslug">wanna</span></span>
+          <span class="covtrack"><span style="width:92.4%"></span></span>
+          <span class="covvalue">92.4%</span>
+          <span class="covsub">1,389 placed</span>
+        </div>
+        <div class="covrow">
+          <span class="covname">I wanna go the Spook House<span class="covslug">go-the-spook-house</span></span>
+          <span class="covtrack"><span style="width:94.7%"></span></span>
+          <span class="covvalue">94.7%</span>
+          <span class="covsub">2,228 placed</span>
+        </div>
+        <div class="covrow">
+          <span class="covname">I wanna be the Poronkusema<span class="covslug">poronkusema</span></span>
+          <span class="covtrack"><span style="width:95.2%"></span></span>
+          <span class="covvalue">95.2%</span>
+          <span class="covsub">2,115 placed</span>
+        </div>
+        <div class="covrow">
+          <span class="covname">I wanna eat the New Year!<span class="covslug">eat-the-new-year</span></span>
+          <span class="covtrack"><span style="width:96.0%"></span></span>
+          <span class="covvalue">96.0%</span>
+          <span class="covsub">2,570 placed</span>
+        </div>
+        <div class="covrow">
+          <span class="covname">I wanna eat the Rori Girl<span class="covslug">eat-the-rori-girl</span></span>
+          <span class="covtrack"><span style="width:96.6%"></span></span>
+          <span class="covvalue">96.6%</span>
+          <span class="covsub">204 placed</span>
+        </div>
+        <div class="covrow">
+          <span class="covname">I wanna Little Trap<span class="covslug">little-trap</span></span>
+          <span class="covtrack"><span style="width:96.6%"></span></span>
+          <span class="covvalue">96.6%</span>
+          <span class="covsub">3,893 placed</span>
+        </div>
+        <div class="covrow">
+          <span class="covname">I wanna be the Showdown<span class="covslug">showdown</span></span>
+          <span class="covtrack"><span style="width:97.4%"></span></span>
+          <span class="covvalue">97.4%</span>
+          <span class="covsub">8,069 placed</span>
+        </div>
+        <div class="covrow">
+          <span class="covname">I wanna be the Little runner<span class="covslug">little-runner</span></span>
+          <span class="covtrack"><span style="width:98.1%"></span></span>
+          <span class="covvalue">98.1%</span>
+          <span class="covsub">5,715 placed</span>
+        </div>
+        <div class="covrow">
+          <span class="covname">I wanna be the Animus<span class="covslug">animus</span></span>
+          <span class="covtrack"><span style="width:98.3%"></span></span>
+          <span class="covvalue">98.3%</span>
+          <span class="covsub">9,815 placed</span>
+        </div>
+        <div class="covrow">
+          <span class="covname">I wanna eat the lemon<span class="covslug">eat-the-lemon</span></span>
+          <span class="covtrack"><span style="width:98.8%"></span></span>
+          <span class="covvalue">98.8%</span>
+          <span class="covsub">3,414 placed</span>
+        </div>
+        <div class="covrow">
+          <span class="covname">I wanna get the Rainbow feather<span class="covslug">get-the-rainbow-feather</span></span>
+          <span class="covtrack"><span style="width:99.0%"></span></span>
+          <span class="covvalue">99.0%</span>
+          <span class="covsub">12,805 placed</span>
+        </div>
+        <div class="covrow">
+          <span class="covname">I wanna go the JUN-G World<span class="covslug">go-the-jun-g-world</span></span>
+          <span class="covtrack"><span style="width:99.1%"></span></span>
+          <span class="covvalue">99.1%</span>
+          <span class="covsub">5,480 placed</span>
+        </div>
+        <div class="covrow">
+          <span class="covname">I wanna Keep Celebrating for Xia<span class="covslug">keep-celebrating-for-xia</span></span>
+          <span class="covtrack"><span style="width:99.2%"></span></span>
+          <span class="covvalue">99.2%</span>
+          <span class="covsub">2,310 placed</span>
+        </div>
+        <div class="covrow">
+          <span class="covname">I wanna help the Fairy tale<span class="covslug">help-the-fairy-tale</span></span>
+          <span class="covtrack"><span style="width:99.3%"></span></span>
+          <span class="covvalue">99.3%</span>
+          <span class="covsub">12,604 placed</span>
+        </div>
+        <div class="covrow">
+          <span class="covname">I Wanna Rely The Needle 4.2<span class="covslug">rely-the-needle-4-2</span></span>
+          <span class="covtrack"><span style="width:99.4%"></span></span>
+          <span class="covvalue">99.4%</span>
+          <span class="covsub">1,997 placed</span>
+        </div>
+        <div class="covrow">
+          <span class="covname">I wanna be the Kaenbyou<span class="covslug">kaenbyou</span></span>
+          <span class="covtrack"><span style="width:99.5%"></span></span>
+          <span class="covvalue">99.5%</span>
+          <span class="covsub">4,741 placed</span>
+        </div>
+        <div class="covrow">
+          <span class="covname">I wanna be Fed up with path ;w;<span class="covslug">be-fed-up-with-path-w</span></span>
+          <span class="covtrack"><span style="width:99.5%"></span></span>
+          <span class="covvalue">99.5%</span>
+          <span class="covsub">2,219 placed</span>
+        </div>
+        <div class="covrow">
+          <span class="covname">I wanna deride Kotaro- from aslant<span class="covslug">deride-kotaro-from-aslant</span></span>
+          <span class="covtrack"><span style="width:99.8%"></span></span>
+          <span class="covvalue">99.8%</span>
+          <span class="covsub">7,085 placed</span>
+        </div></div>
+
+<h2>Every game</h2>
+<div class="filters">
+  <input id="q" type="search" placeholder="Filter by game name or slug">
+  <select id="sort"><option value="order">Shortlist order</option><option value="cov">Built-in coverage (low first)</option><option value="covdesc">Built-in coverage (high first)</option><option value="traces">Recorded traces</option><option value="name">Name</option></select>
+  <label><input id="traces" type="checkbox"> Only games with traces</label>
+</div>
+<table id="games">
+<thead><tr><th class="num">#</th><th>Game</th><th class="num">Placed</th><th>Built-in coverage</th><th class="num">Script</th><th class="num">Custom</th><th class="num">Traces</th><th class="num">Exercised</th><th>Port</th></tr></thead>
+<tbody>
+        <tr data-name="i wanna rely the needle 4.2 rely-the-needle-4-2"
+            data-cov="99.4"
+            data-traces="1">
+          <td class="num muted">1</td>
+          <td><a href="https://delicious-fruit.com/game/19483">I Wanna Rely The Needle 4.2</a>
+            <div class="slug">rely-the-needle-4-2 · Needle</div></td>
+          <td class="num">1,997</td>
+          <td class="covecell"><span class="mini-track" role="img" aria-label="I Wanna Rely The Needle 4.2 99.4%"><span style="width:99.4%"></span></span>
+            <span class="covnum">99.4%</span>
+            <span class="frac">1,985 / 1,997</span></td>
+          <td class="num">3<div class="frac">0.15%</div></td>
+          <td class="num">5</td>
+          <td class="num">284</td>
+          <td class="num">6</td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/1">games#1</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when · 0/1 sub-issues</div></td>
+        </tr>
+        <tr data-name="i wanna go the jun-g world go-the-jun-g-world"
+            data-cov="99.1"
+            data-traces="1">
+          <td class="num muted">2</td>
+          <td><a href="https://delicious-fruit.com/game/18758">I wanna go the JUN-G World</a>
+            <div class="slug">go-the-jun-g-world · Needle</div></td>
+          <td class="num">5,480</td>
+          <td class="covecell"><span class="mini-track" role="img" aria-label="I wanna go the JUN-G World 99.1%"><span style="width:99.1%"></span></span>
+            <span class="covnum">99.1%</span>
+            <span class="frac">5,429 / 5,480</span></td>
+          <td class="num">45<div class="frac">0.82%</div></td>
+          <td class="num">33</td>
+          <td class="num">8</td>
+          <td class="num">2</td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/2">games#2</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+        </tr>
+        <tr data-name="i wanna deride kotaro- from aslant deride-kotaro-from-aslant"
+            data-cov="99.8"
+            data-traces="1">
+          <td class="num muted">3</td>
+          <td><a href="https://delicious-fruit.com/game/18404">I wanna deride Kotaro- from aslant</a>
+            <div class="slug">deride-kotaro-from-aslant · Needle</div></td>
+          <td class="num">7,085</td>
+          <td class="covecell"><span class="mini-track" role="img" aria-label="I wanna deride Kotaro- from aslant 99.8%"><span style="width:99.8%"></span></span>
+            <span class="covnum">99.8%</span>
+            <span class="frac">7,072 / 7,085</span></td>
+          <td class="num">7<div class="frac">0.10%</div></td>
+          <td class="num">22</td>
+          <td class="num">32</td>
+          <td class="num">7</td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/3">games#3</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+        </tr>
+        <tr data-name="i wanna be the kaenbyou kaenbyou"
+            data-cov="99.5"
+            data-traces="1">
+          <td class="num muted">4</td>
+          <td><a href="https://delicious-fruit.com/game/17724">I wanna be the Kaenbyou</a>
+            <div class="slug">kaenbyou · Needle</div></td>
+          <td class="num">4,741</td>
+          <td class="covecell"><span class="mini-track" role="img" aria-label="I wanna be the Kaenbyou 99.5%"><span style="width:99.5%"></span></span>
+            <span class="covnum">99.5%</span>
+            <span class="frac">4,716 / 4,741</span></td>
+          <td class="num">11<div class="frac">0.23%</div></td>
+          <td class="num">17</td>
+          <td class="num">65</td>
+          <td class="num">9</td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/4">games#4</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+        </tr>
+        <tr data-name="i wanna eat the lemon eat-the-lemon"
+            data-cov="98.8"
+            data-traces="1">
+          <td class="num muted">5</td>
+          <td><a href="https://delicious-fruit.com/game/18603">I wanna eat the lemon</a>
+            <div class="slug">eat-the-lemon · Needle</div></td>
+          <td class="num">3,414</td>
+          <td class="covecell"><span class="mini-track" role="img" aria-label="I wanna eat the lemon 98.8%"><span style="width:98.8%"></span></span>
+            <span class="covnum">98.8%</span>
+            <span class="frac">3,373 / 3,414</span></td>
+          <td class="num">18<div class="frac">0.53%</div></td>
+          <td class="num">19</td>
+          <td class="num">13</td>
+          <td class="num">3</td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/5">games#5</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+        </tr>
+        <tr data-name="i wanna eat the rori girl eat-the-rori-girl"
+            data-cov="96.6"
+            data-traces="1">
+          <td class="num muted">6</td>
+          <td><a href="https://delicious-fruit.com/game/11514">I wanna eat the Rori Girl</a>
+            <div class="slug">eat-the-rori-girl · Avoidance</div></td>
+          <td class="num">204</td>
+          <td class="covecell"><span class="mini-track" role="img" aria-label="I wanna eat the Rori Girl 96.6%"><span style="width:96.6%"></span></span>
+            <span class="covnum">96.6%</span>
+            <span class="frac">197 / 204</span></td>
+          <td class="num">1<div class="frac">0.49%</div></td>
+          <td class="num">5</td>
+          <td class="num">6</td>
+          <td class="num">2</td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/6">games#6</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+        </tr>
+        <tr data-name="i wanna wanna wanna"
+            data-cov="92.4"
+            data-traces="1">
+          <td class="num muted">7</td>
+          <td><a href="https://delicious-fruit.com/game/12505">I wanna wanna</a>
+            <div class="slug">wanna · Trap</div></td>
+          <td class="num">1,389</td>
+          <td class="covecell"><span class="mini-track" role="img" aria-label="I wanna wanna 92.4%"><span style="width:92.4%"></span></span>
+            <span class="covnum">92.4%</span>
+            <span class="frac">1,284 / 1,389</span></td>
+          <td class="num">90<div class="frac">6.48%</div></td>
+          <td class="num">28</td>
+          <td class="num">36</td>
+          <td class="num">5</td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/7">games#7</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+        </tr>
+        <tr data-name="i wanna be fed up with path ;w; be-fed-up-with-path-w"
+            data-cov="99.5"
+            data-traces="0">
+          <td class="num muted">8</td>
+          <td><a href="https://delicious-fruit.com/game/11403">I wanna be Fed up with path ;w;</a>
+            <div class="slug">be-fed-up-with-path-w · Trap</div></td>
+          <td class="num">2,219</td>
+          <td class="covecell"><span class="mini-track" role="img" aria-label="I wanna be Fed up with path ;w; 99.5%"><span style="width:99.5%"></span></span>
+            <span class="covnum">99.5%</span>
+            <span class="frac">2,208 / 2,219</span></td>
+          <td class="num">4<div class="frac">0.18%</div></td>
+          <td class="num">28</td>
+          <td class="num">0</td>
+          <td class="num">0</td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/8">games#8</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+        </tr>
+        <tr data-name="i wanna little trap little-trap"
+            data-cov="96.6"
+            data-traces="1">
+          <td class="num muted">9</td>
+          <td><a href="https://delicious-fruit.com/game/21365">I wanna Little Trap</a>
+            <div class="slug">little-trap · Trap</div></td>
+          <td class="num">3,893</td>
+          <td class="covecell"><span class="mini-track" role="img" aria-label="I wanna Little Trap 96.6%"><span style="width:96.6%"></span></span>
+            <span class="covnum">96.6%</span>
+            <span class="frac">3,759 / 3,893</span></td>
+          <td class="num">125<div class="frac">3.21%</div></td>
+          <td class="num">32</td>
+          <td class="num">11</td>
+          <td class="num">2</td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/9">games#9</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+        </tr>
+        <tr data-name="i wanna clear the easy miku 2 clear-the-easy-miku-2"
+            data-cov="76.0"
+            data-traces="1">
+          <td class="num muted">10</td>
+          <td><a href="https://delicious-fruit.com/game/12270">I wanna clear the Easy Miku 2</a>
+            <div class="slug">clear-the-easy-miku-2 · Avoidance</div></td>
+          <td class="num">258</td>
+          <td class="covecell"><span class="mini-track" role="img" aria-label="I wanna clear the Easy Miku 2 76.0%"><span style="width:76.0%"></span></span>
+            <span class="covnum">76.0%</span>
+            <span class="frac">196 / 258</span></td>
+          <td class="num">56<div class="frac">21.71%</div></td>
+          <td class="num">7</td>
+          <td class="num">6</td>
+          <td class="num">2</td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/10">games#10</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+        </tr>
+        <tr data-name="i wanna be the little runner little-runner"
+            data-cov="98.1"
+            data-traces="1">
+          <td class="num muted">11</td>
+          <td><a href="https://delicious-fruit.com/game/10848">I wanna be the Little runner</a>
+            <div class="slug">little-runner · Adventure</div></td>
+          <td class="num">5,715</td>
+          <td class="covecell"><span class="mini-track" role="img" aria-label="I wanna be the Little runner 98.1%"><span style="width:98.1%"></span></span>
+            <span class="covnum">98.1%</span>
+            <span class="frac">5,607 / 5,715</span></td>
+          <td class="num">102<div class="frac">1.78%</div></td>
+          <td class="num">57</td>
+          <td class="num">40</td>
+          <td class="num">6</td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/11">games#11</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+        </tr>
+        <tr data-name="i wanna be the poronkusema poronkusema"
+            data-cov="95.2"
+            data-traces="1">
+          <td class="num muted">12</td>
+          <td><a href="https://delicious-fruit.com/game/20975">I wanna be the Poronkusema</a>
+            <div class="slug">poronkusema · Trap</div></td>
+          <td class="num">2,115</td>
+          <td class="covecell"><span class="mini-track" role="img" aria-label="I wanna be the Poronkusema 95.2%"><span style="width:95.2%"></span></span>
+            <span class="covnum">95.2%</span>
+            <span class="frac">2,014 / 2,115</span></td>
+          <td class="num">99<div class="frac">4.68%</div></td>
+          <td class="num">42</td>
+          <td class="num">7</td>
+          <td class="num">6</td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/12">games#12</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+        </tr>
+        <tr data-name="i wanna be the machinary machinary"
+            data-cov="87.0"
+            data-traces="1">
+          <td class="num muted">13</td>
+          <td><a href="https://delicious-fruit.com/game/18020">I wanna be the Machinary</a>
+            <div class="slug">machinary · Adventure</div></td>
+          <td class="num">2,848</td>
+          <td class="covecell"><span class="mini-track" role="img" aria-label="I wanna be the Machinary 87.0%"><span style="width:87.0%"></span></span>
+            <span class="covnum">87.0%</span>
+            <span class="frac">2,477 / 2,848</span></td>
+          <td class="num">369<div class="frac">12.96%</div></td>
+          <td class="num">46</td>
+          <td class="num">38</td>
+          <td class="num">5</td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/13">games#13</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+        </tr>
+        <tr data-name="i wanna eat the new year! eat-the-new-year"
+            data-cov="96.0"
+            data-traces="1">
+          <td class="num muted">14</td>
+          <td><a href="https://delicious-fruit.com/game/11512">I wanna eat the New Year!</a>
+            <div class="slug">eat-the-new-year · Trap</div></td>
+          <td class="num">2,570</td>
+          <td class="covecell"><span class="mini-track" role="img" aria-label="I wanna eat the New Year! 96.0%"><span style="width:96.0%"></span></span>
+            <span class="covnum">96.0%</span>
+            <span class="frac">2,466 / 2,570</span></td>
+          <td class="num">102<div class="frac">3.97%</div></td>
+          <td class="num">33</td>
+          <td class="num">5</td>
+          <td class="num">1</td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/14">games#14</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+        </tr>
+        <tr data-name="i wanna be the animus animus"
+            data-cov="98.3"
+            data-traces="1">
+          <td class="num muted">15</td>
+          <td><a href="https://delicious-fruit.com/game/10550">I wanna be the Animus</a>
+            <div class="slug">animus · Adventure</div></td>
+          <td class="num">9,815</td>
+          <td class="covecell"><span class="mini-track" role="img" aria-label="I wanna be the Animus 98.3%"><span style="width:98.3%"></span></span>
+            <span class="covnum">98.3%</span>
+            <span class="frac">9,649 / 9,815</span></td>
+          <td class="num">157<div class="frac">1.60%</div></td>
+          <td class="num">61</td>
+          <td class="num">35</td>
+          <td class="num">5</td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/15">games#15</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+        </tr>
+        <tr data-name="i wanna help the fairy tale help-the-fairy-tale"
+            data-cov="99.3"
+            data-traces="1">
+          <td class="num muted">16</td>
+          <td><a href="https://delicious-fruit.com/game/11595">I wanna help the Fairy tale</a>
+            <div class="slug">help-the-fairy-tale · Adventure</div></td>
+          <td class="num">12,604</td>
+          <td class="covecell"><span class="mini-track" role="img" aria-label="I wanna help the Fairy tale 99.3%"><span style="width:99.3%"></span></span>
+            <span class="covnum">99.3%</span>
+            <span class="frac">12,517 / 12,604</span></td>
+          <td class="num">81<div class="frac">0.64%</div></td>
+          <td class="num">58</td>
+          <td class="num">16</td>
+          <td class="num">6</td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/16">games#16</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+        </tr>
+        <tr data-name="i wanna get the rainbow feather get-the-rainbow-feather"
+            data-cov="99.0"
+            data-traces="1">
+          <td class="num muted">17</td>
+          <td><a href="https://delicious-fruit.com/game/11562">I wanna get the Rainbow feather</a>
+            <div class="slug">get-the-rainbow-feather · Adventure</div></td>
+          <td class="num">12,805</td>
+          <td class="covecell"><span class="mini-track" role="img" aria-label="I wanna get the Rainbow feather 99.0%"><span style="width:99.0%"></span></span>
+            <span class="covnum">99.0%</span>
+            <span class="frac">12,680 / 12,805</span></td>
+          <td class="num">121<div class="frac">0.94%</div></td>
+          <td class="num">87</td>
+          <td class="num">3</td>
+          <td class="num">1</td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/17">games#17</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+        </tr>
+        <tr data-name="i wanna be the showdown showdown"
+            data-cov="97.4"
+            data-traces="1">
+          <td class="num muted">18</td>
+          <td><a href="https://delicious-fruit.com/game/14697">I wanna be the Showdown</a>
+            <div class="slug">showdown · Adventure</div></td>
+          <td class="num">8,069</td>
+          <td class="covecell"><span class="mini-track" role="img" aria-label="I wanna be the Showdown 97.4%"><span style="width:97.4%"></span></span>
+            <span class="covnum">97.4%</span>
+            <span class="frac">7,856 / 8,069</span></td>
+          <td class="num">202<div class="frac">2.50%</div></td>
+          <td class="num">71</td>
+          <td class="num">29</td>
+          <td class="num">2</td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/18">games#18</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+        </tr>
+        <tr data-name="i wanna go the spook house go-the-spook-house"
+            data-cov="94.7"
+            data-traces="1">
+          <td class="num muted">19</td>
+          <td><a href="https://delicious-fruit.com/game/15561">I wanna go the Spook House</a>
+            <div class="slug">go-the-spook-house · Adventure</div></td>
+          <td class="num">2,228</td>
+          <td class="covecell"><span class="mini-track" role="img" aria-label="I wanna go the Spook House 94.7%"><span style="width:94.7%"></span></span>
+            <span class="covnum">94.7%</span>
+            <span class="frac">2,110 / 2,228</span></td>
+          <td class="num">109<div class="frac">4.89%</div></td>
+          <td class="num">38</td>
+          <td class="num">13</td>
+          <td class="num">3</td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/19">games#19</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+        </tr>
+        <tr data-name="i wanna keep celebrating for xia keep-celebrating-for-xia"
+            data-cov="99.2"
+            data-traces="0">
+          <td class="num muted">20</td>
+          <td><a href="https://delicious-fruit.com/game/21633">I wanna Keep Celebrating for Xia</a>
+            <div class="slug">keep-celebrating-for-xia · Needle</div></td>
+          <td class="num">2,310</td>
+          <td class="covecell"><span class="mini-track" role="img" aria-label="I wanna Keep Celebrating for Xia 99.2%"><span style="width:99.2%"></span></span>
+            <span class="covnum">99.2%</span>
+            <span class="frac">2,291 / 2,310</span></td>
+          <td class="num">10<div class="frac">0.43%</div></td>
+          <td class="num">10</td>
+          <td class="num">0</td>
+          <td class="num">0</td>
+          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/20">games#20</a> <span class="pill mid"><span class="ico">◐</span>open</span><div class="portmeta">0/6 done-when</div></td>
+        </tr></tbody>
+</table>
+<p class="note">Placed instances and built-in coverage: <code>specs/mechanics.md</code> (SCAN, 2026-10-24). Custom objects: <code>shortlist.md</code>. Traces and exercised objects: the recorded CSVs under <code>specs/engines/gm8/traces/&lt;slug&gt;/</code>. <code>progress/export_research.py</code> regenerates these counts.</p>
+
+<div class="callout"><b>Passing-trace coverage is not measured yet.</b> Recorded traces and the object names they exercise are shown above; proving an object tick-accurate needs a converted package and the trace runner. That measurement is <a href="https://github.com/nugamus/iwbtg-collection/issues/1365">#1365</a>. The census exporter is <code>progress/export_research.py</code>.</div>
 
 <h2>Phase progress</h2>
-<p class="note">A phase is a gate, not a date. Bars show closed issues; the size points are the open issues' S/M/L labels. Open the gate for its entry and exit condition.</p>
 <table>
 <thead><tr><th>Phase</th><th>Progress</th><th class="num">Open</th><th class="num">Points</th><th>Gate</th></tr></thead>
 <tbody>
         <tr>
-          <td class="phase-cell">
-            <div class="phase-title"><span class="phase-num">0</span>Foundation</div>
-            <div class="phase-meta">area:infra, area:docs</div>
-          </td>
-          <td class="wide"><div class="meter" role="img" aria-label="0 · Foundation 82%"><span style="width:81.8%"></span></div>
-            <div class="meter-line"><span>63 / 77 closed</span><span>82%</span></div>
-          </td>
-          <td class="num">14</td>
-          <td class="num">29</td>
+          <td class="phase-cell"><div class="phase-title"><span class="phase-num">0</span>Foundation</div>
+            <div class="phase-meta">area:infra, area:docs</div></td>
+          <td class="wide"><span class="mini-track" role="img" aria-label="0 · Foundation 83.3%"><span style="width:83.3%"></span></span>
+            <div class="meter-line"><span>65 / 78 closed</span><span>83%</span></div></td>
+          <td class="num">13</td>
+          <td class="num">21</td>
           <td class="gate"><details><summary>Gate</summary>
-            <p><b>Entry:</b> An empty repo, or a broken build/CI/harness.</p>
-            <p><b>Exit:</b> Every Foundation issue is closed and `cargo xtask check --all` plus CI pass on Windows, Linux and wasm32.</p>
-            <p><b>Scope:</b> Cross-cutting repo, build, CI and agent-harness work that every phase depends on.</p>
-            <p><b>Feeds from:</b> client repo, research repo, games repo, CI</p>
-          </details></td>
+            <p><b>Entry:</b> An empty repo, or a broken build/CI/harness.</p><p><b>Exit:</b> Every Foundation issue is closed and `cargo xtask check --all` plus CI pass on Windows, Linux and wasm32.</p>
+            <p><b>Scope:</b> Cross-cutting repo, build, CI and agent-harness work that every phase depends on.</p></details></td>
         </tr>
         <tr>
-          <td class="phase-cell">
-            <div class="phase-title"><span class="phase-num">1</span>Behavior research</div>
-            <div class="phase-meta">area:research</div>
-          </td>
-          <td class="wide"><div class="meter" role="img" aria-label="1 · Behavior research 83%"><span style="width:82.8%"></span></div>
-            <div class="meter-line"><span>24 / 29 closed</span><span>83%</span></div>
-          </td>
+          <td class="phase-cell"><div class="phase-title"><span class="phase-num">1</span>Behavior research</div>
+            <div class="phase-meta">area:research</div></td>
+          <td class="wide"><span class="mini-track" role="img" aria-label="1 · Behavior research 82.8%"><span style="width:82.8%"></span></span>
+            <div class="meter-line"><span>24 / 29 closed</span><span>83%</span></div></td>
           <td class="num">5</td>
           <td class="num">4</td>
           <td class="gate"><details><summary>Gate</summary>
-            <p><b>Entry:</b> A question about original behavior that can change what a player feels, with no spec or trace answer.</p>
-            <p><b>Exit:</b> Every open F1 behavior question has a trace or a spec answer, and the gm8 CLONE_SPEC covers the mechanics the 20 games use.</p>
-            <p><b>Scope:</b> Trace, probe and specify what the original game does, so the sim has evidence.</p>
-            <p><b>Feeds from:</b> research specs and traces, real-runner probes, humans recording inputs</p>
-          </details></td>
+            <p><b>Entry:</b> A question about original behavior that can change what a player feels, with no spec or trace answer.</p><p><b>Exit:</b> Every open F1 behavior question has a trace or a spec answer, and the gm8 CLONE_SPEC covers the mechanics the 20 games use.</p>
+            <p><b>Scope:</b> Trace, probe and specify what the original game does, so the sim has evidence.</p></details></td>
         </tr>
         <tr>
-          <td class="phase-cell">
-            <div class="phase-title"><span class="phase-num">2</span>Format &amp; pipeline</div>
-            <div class="phase-meta">area:format, area:tools, area:port</div>
-          </td>
-          <td class="wide"><div class="meter" role="img" aria-label="2 · Format &amp; pipeline 73%"><span style="width:72.7%"></span></div>
-            <div class="meter-line"><span>88 / 121 closed</span><span>73%</span></div>
-          </td>
+          <td class="phase-cell"><div class="phase-title"><span class="phase-num">2</span>Format &amp; pipeline</div>
+            <div class="phase-meta">area:format, area:tools, area:port</div></td>
+          <td class="wide"><span class="mini-track" role="img" aria-label="2 · Format &amp; pipeline 72.7%"><span style="width:72.7%"></span></span>
+            <div class="meter-line"><span>88 / 121 closed</span><span>73%</span></div></td>
           <td class="num">33</td>
           <td class="num">96</td>
           <td class="gate"><details><summary>Gate</summary>
-            <p><b>Entry:</b> A converted package, a format gap, or a porting step the converter cannot automate.</p>
-            <p><b>Exit:</b> The census says how many scripts the 20 ports need; the script API covers what they use; Rhai is measured on native and WASM; port layering, the extension model and the standard ruleset/profile model are decided; one command checks every port&#x27;s contracts; `docs/porting.md` is written.</p>
-            <p><b>Scope:</b> The standard package format, converter, census, script API and porting pipeline.</p>
-            <p><b>Feeds from:</b> converter, format crates, research census, porting docs</p>
-          </details></td>
+            <p><b>Entry:</b> A converted package, a format gap, or a porting step the converter cannot automate.</p><p><b>Exit:</b> The census says how many scripts the 20 ports need; the script API covers what they use; Rhai is measured on native and WASM; port layering, the extension model and the standard ruleset/profile model are decided; one command checks every port&#x27;s contracts; `docs/porting.md` is written.</p>
+            <p><b>Scope:</b> The standard package format, converter, census, script API and porting pipeline.</p></details></td>
         </tr>
         <tr>
-          <td class="phase-cell">
-            <div class="phase-title"><span class="phase-num">3</span>Sim fidelity</div>
-            <div class="phase-meta">area:sim</div>
-          </td>
-          <td class="wide"><div class="meter" role="img" aria-label="3 · Sim fidelity 83%"><span style="width:82.7%"></span></div>
-            <div class="meter-line"><span>210 / 254 closed</span><span>83%</span></div>
-          </td>
+          <td class="phase-cell"><div class="phase-title"><span class="phase-num">3</span>Sim fidelity</div>
+            <div class="phase-meta">area:sim</div></td>
+          <td class="wide"><span class="mini-track" role="img" aria-label="3 · Sim fidelity 82.7%"><span style="width:82.7%"></span></span>
+            <div class="meter-line"><span>210 / 254 closed</span><span>83%</span></div></td>
           <td class="num">44</td>
           <td class="num">53</td>
           <td class="gate"><details><summary>Gate</summary>
-            <p><b>Entry:</b> A spec or trace answer for a mechanic, and a package that loads.</p>
-            <p><b>Exit:</b> The sim reproduces rely_the_needle&#x27;s traces tick for tick on Windows, Linux and WASM; all kid families, built-ins, scripts, sound and the replay runner are in; all 20 converter packages load and trace-check.</p>
-            <p><b>Scope:</b> The deterministic simulation reproduces the original mechanics tick for tick.</p>
-            <p><b>Feeds from:</b> research traces, format packages, sim crate</p>
-          </details></td>
+            <p><b>Entry:</b> A spec or trace answer for a mechanic, and a package that loads.</p><p><b>Exit:</b> The sim reproduces rely_the_needle&#x27;s traces tick for tick on Windows, Linux and WASM; all kid families, built-ins, scripts, sound and the replay runner are in; all 20 converter packages load and trace-check.</p>
+            <p><b>Scope:</b> The deterministic simulation reproduces the original mechanics tick for tick.</p></details></td>
         </tr>
         <tr>
-          <td class="phase-cell">
-            <div class="phase-title"><span class="phase-num">4</span>First playable</div>
-            <div class="phase-meta">area:client, area:format</div>
-          </td>
-          <td class="wide"><div class="meter" role="img" aria-label="4 · First playable 85%"><span style="width:84.6%"></span></div>
-            <div class="meter-line"><span>44 / 52 closed</span><span>85%</span></div>
-          </td>
+          <td class="phase-cell"><div class="phase-title"><span class="phase-num">4</span>First playable</div>
+            <div class="phase-meta">area:client, area:format</div></td>
+          <td class="wide"><span class="mini-track" role="img" aria-label="4 · First playable 84.6%"><span style="width:84.6%"></span></span>
+            <div class="meter-line"><span>44 / 52 closed</span><span>85%</span></div></td>
           <td class="num">8</td>
           <td class="num">10</td>
           <td class="gate"><details><summary>Gate</summary>
-            <p><b>Entry:</b> The sim loads rely_the_needle and produces ticks.</p>
-            <p><b>Exit:</b> The Bevy client plays rely_the_needle on native and web, and the user confirms the feel.</p>
-            <p><b>Scope:</b> One game end to end in the Bevy client, native and web.</p>
-            <p><b>Feeds from:</b> sim, format, client crate, the first port</p>
-          </details></td>
+            <p><b>Entry:</b> The sim loads rely_the_needle and produces ticks.</p><p><b>Exit:</b> The Bevy client plays rely_the_needle on native and web, and the user confirms the feel.</p>
+            <p><b>Scope:</b> One game end to end in the Bevy client, native and web.</p></details></td>
         </tr>
         <tr>
-          <td class="phase-cell">
-            <div class="phase-title"><span class="phase-num">5</span>Client shell &amp; UI</div>
-            <div class="phase-meta">area:client, area:design</div>
-          </td>
-          <td class="wide"><div class="meter" role="img" aria-label="5 · Client shell &amp; UI 40%"><span style="width:40.0%"></span></div>
-            <div class="meter-line"><span>14 / 35 closed</span><span>40%</span></div>
-          </td>
+          <td class="phase-cell"><div class="phase-title"><span class="phase-num">5</span>Client shell &amp; UI</div>
+            <div class="phase-meta">area:client, area:design</div></td>
+          <td class="wide"><span class="mini-track" role="img" aria-label="5 · Client shell &amp; UI 40.0%"><span style="width:40.0%"></span></span>
+            <div class="meter-line"><span>14 / 35 closed</span><span>40%</span></div></td>
           <td class="num">21</td>
           <td class="num">50</td>
           <td class="gate"><details><summary>Gate</summary>
-            <p><b>Entry:</b> First playable is confirmed on native and web.</p>
-            <p><b>Exit:</b> osu!-style game select, downloads, 5 bundled games, the controls panel and settings are built from approved mockups.</p>
-            <p><b>Scope:</b> Game select, downloads, bundled games, settings, controls panel and screens.</p>
-            <p><b>Feeds from:</b> client crate, design mockups, games repo catalog</p>
-          </details></td>
+            <p><b>Entry:</b> First playable is confirmed on native and web.</p><p><b>Exit:</b> osu!-style game select, downloads, 5 bundled games, the controls panel and settings are built from approved mockups.</p>
+            <p><b>Scope:</b> Game select, downloads, bundled games, settings, controls panel and screens.</p></details></td>
         </tr>
         <tr>
-          <td class="phase-cell">
-            <div class="phase-title"><span class="phase-num">6</span>Ranked-ready run</div>
-            <div class="phase-meta">area:client, area:sim, area:design</div>
-          </td>
-          <td class="wide"><div class="meter" role="img" aria-label="6 · Ranked-ready run 68%"><span style="width:68.2%"></span></div>
-            <div class="meter-line"><span>90 / 132 closed</span><span>68%</span></div>
-          </td>
+          <td class="phase-cell"><div class="phase-title"><span class="phase-num">6</span>Ranked-ready run</div>
+            <div class="phase-meta">area:client, area:sim, area:design</div></td>
+          <td class="wide"><span class="mini-track" role="img" aria-label="6 · Ranked-ready run 68.2%"><span style="width:68.2%"></span></span>
+            <div class="meter-line"><span>90 / 132 closed</span><span>68%</span></div></td>
           <td class="num">42</td>
           <td class="num">137</td>
           <td class="gate"><details><summary>Gate</summary>
-            <p><b>Entry:</b> First playable, and the ranked rules decision for mods.</p>
-            <p><b>Exit:</b> Stripped ranked mode works locally: timer and cutscene freeze, mods, retry keys, HUD, practice, results, local PBs, replays and `.iwbz` with maps.</p>
-            <p><b>Scope:</b> Stripped ranked mode: timer, replays, local boards, HUD, practice and results.</p>
-            <p><b>Feeds from:</b> sim, client, format, design mockups</p>
-          </details></td>
+            <p><b>Entry:</b> First playable, and the ranked rules decision for mods.</p><p><b>Exit:</b> Stripped ranked mode works locally: timer and cutscene freeze, mods, retry keys, HUD, practice, results, local PBs, replays and `.iwbz` with maps.</p>
+            <p><b>Scope:</b> Stripped ranked mode: timer, replays, local boards, HUD, practice and results.</p></details></td>
         </tr>
         <tr>
-          <td class="phase-cell">
-            <div class="phase-title"><span class="phase-num">7</span>Online</div>
-            <div class="phase-meta">area:server, area:client</div>
-          </td>
-          <td class="wide"><div class="meter" role="img" aria-label="7 · Online 7%"><span style="width:6.6%"></span></div>
-            <div class="meter-line"><span>4 / 61 closed</span><span>7%</span></div>
-          </td>
+          <td class="phase-cell"><div class="phase-title"><span class="phase-num">7</span>Online</div>
+            <div class="phase-meta">area:server, area:client</div></td>
+          <td class="wide"><span class="mini-track" role="img" aria-label="7 · Online 6.6%"><span style="width:6.6%"></span></span>
+            <div class="meter-line"><span>4 / 61 closed</span><span>7%</span></div></td>
           <td class="num">57</td>
           <td class="num">134</td>
           <td class="gate"><details><summary>Gate</summary>
-            <p><b>Entry:</b> A ranked-ready run and a local replay can be produced.</p>
-            <p><b>Exit:</b> Accounts, verified submissions, leaderboards, review queue, profiles, cloud saves and engine upgrades run on the home server.</p>
-            <p><b>Scope:</b> Accounts, submission, leaderboards, review queue, profiles and the home server.</p>
-            <p><b>Feeds from:</b> server crate, client, format, infra</p>
-          </details></td>
+            <p><b>Entry:</b> A ranked-ready run and a local replay can be produced.</p><p><b>Exit:</b> Accounts, verified submissions, leaderboards, review queue, profiles, cloud saves and engine upgrades run on the home server.</p>
+            <p><b>Scope:</b> Accounts, submission, leaderboards, review queue, profiles and the home server.</p></details></td>
         </tr>
         <tr>
-          <td class="phase-cell">
-            <div class="phase-title"><span class="phase-num">8</span>Ghosts &amp; races</div>
-            <div class="phase-meta">area:client, area:server</div>
-          </td>
-          <td class="wide"><div class="meter" role="img" aria-label="8 · Ghosts &amp; races 0%"><span style="width:0.0%"></span></div>
-            <div class="meter-line"><span>0 / 10 closed</span><span>0%</span></div>
-          </td>
+          <td class="phase-cell"><div class="phase-title"><span class="phase-num">8</span>Ghosts &amp; races</div>
+            <div class="phase-meta">area:client, area:server</div></td>
+          <td class="wide"><span class="mini-track" role="img" aria-label="8 · Ghosts &amp; races 0.0%"><span style="width:0.0%"></span></span>
+            <div class="meter-line"><span>0 / 10 closed</span><span>0%</span></div></td>
           <td class="num">10</td>
           <td class="num">28</td>
           <td class="gate"><details><summary>Gate</summary>
-            <p><b>Entry:</b> Online leaderboards persist replays.</p>
-            <p><b>Exit:</b> Ghosts of leaderboard runs and live race lobbies work.</p>
-            <p><b>Scope:</b> Ghost playback of leaderboard runs and live race lobbies.</p>
-            <p><b>Feeds from:</b> client, server, replay format</p>
-          </details></td>
+            <p><b>Entry:</b> Online leaderboards persist replays.</p><p><b>Exit:</b> Ghosts of leaderboard runs and live race lobbies work.</p>
+            <p><b>Scope:</b> Ghost playback of leaderboard runs and live race lobbies.</p></details></td>
         </tr>
         <tr>
-          <td class="phase-cell">
-            <div class="phase-title"><span class="phase-num">9</span>Content &amp; ports</div>
-            <div class="phase-meta">area:port, area:editor, area:sim, area:format</div>
-          </td>
-          <td class="wide"><div class="meter" role="img" aria-label="9 · Content &amp; ports 10%"><span style="width:10.2%"></span></div>
-            <div class="meter-line"><span>6 / 59 closed</span><span>10%</span></div>
-          </td>
+          <td class="phase-cell"><div class="phase-title"><span class="phase-num">9</span>Content &amp; ports</div>
+            <div class="phase-meta">area:port, area:editor, area:sim, area:format</div></td>
+          <td class="wide"><span class="mini-track" role="img" aria-label="9 · Content &amp; ports 10.2%"><span style="width:10.2%"></span></span>
+            <div class="meter-line"><span>6 / 59 closed</span><span>10%</span></div></td>
           <td class="num">53</td>
           <td class="num">142</td>
           <td class="gate"><details><summary>Gate</summary>
-            <p><b>Entry:</b> The sim, pipeline and ranked mode can run a port end to end.</p>
-            <p><b>Exit:</b> All 20 games are in Beta, each with fidelity proof and a verified full clear; editor v1 works; community uploads validate and can be curated; a GMS runner profile reproduces traces of 3 GMS fangames.</p>
-            <p><b>Scope:</b> The 20 games reaching Beta/Ranked, plus the editor, community games and GMS.</p>
-            <p><b>Feeds from:</b> games repo ports, editor, community uploads, research CLONE_SPECs</p>
-          </details></td>
+            <p><b>Entry:</b> The sim, pipeline and ranked mode can run a port end to end.</p><p><b>Exit:</b> All 20 games are in Beta, each with fidelity proof and a verified full clear; editor v1 works; community uploads validate and can be curated; a GMS runner profile reproduces traces of 3 GMS fangames.</p>
+            <p><b>Scope:</b> The 20 games reaching Beta/Ranked, plus the editor, community games and GMS.</p></details></td>
         </tr>
         <tr>
-          <td class="phase-cell">
-            <div class="phase-title"><span class="phase-num">10</span>Release</div>
-            <div class="phase-meta">area:infra, area:docs, area:design, area:server</div>
-          </td>
-          <td class="wide"><div class="meter" role="img" aria-label="10 · Release 8%"><span style="width:7.7%"></span></div>
-            <div class="meter-line"><span>2 / 26 closed</span><span>8%</span></div>
-          </td>
+          <td class="phase-cell"><div class="phase-title"><span class="phase-num">10</span>Release</div>
+            <div class="phase-meta">area:infra, area:docs, area:design, area:server</div></td>
+          <td class="wide"><span class="mini-track" role="img" aria-label="10 · Release 7.7%"><span style="width:7.7%"></span></span>
+            <div class="meter-line"><span>2 / 26 closed</span><span>8%</span></div></td>
           <td class="num">24</td>
           <td class="num">53</td>
           <td class="gate"><details><summary>Gate</summary>
-            <p><b>Entry:</b> The online stack and content are in place enough to ship.</p>
-            <p><b>Exit:</b> Name, takedown and privacy pages, licenses, release builds and contributor docs are in place.</p>
-            <p><b>Scope:</b> Packaging, installers, docs, legal and the public build.</p>
-            <p><b>Feeds from:</b> client, server, docs, legal</p>
-          </details></td>
+            <p><b>Entry:</b> The online stack and content are in place enough to ship.</p><p><b>Exit:</b> Name, takedown and privacy pages, licenses, release builds and contributor docs are in place.</p>
+            <p><b>Scope:</b> Packaging, installers, docs, legal and the public build.</p></details></td>
         </tr></tbody>
 </table>
+<p class="note">310 open issues, 547 closed (63.8%), 728 remaining size points (S=1, M=3, L=8).</p>
 
 <h2>What is moving</h2>
 <div class="cards">
-  <div class="card"><h3>Recently closed</h3><ul class="items"><li><span class="chip">3</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1079">#1079</a> <span class="item-title">Sim: instance list order for with (all), instance_id and first-instance queries is depth then room entry</span></li><li><span class="chip">2</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1105">#1105</a> <span class="item-title">Format: make `timeline` a reserved object key in objects.rs</span></li><li><span class="chip">2</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1109">#1109</a> <span class="item-title">Format: the generated runner schema description still says it selects event-order differences</span></li><li><span class="chip">3</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1173">#1173</a> <span class="item-title">Sim sound: a built-in one-shot with no length_ticks ends at once instead of playing until stopped</span></li><li><span class="chip">2</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1133">#1133</a> <span class="item-title">Spec: does a bare write to a global array keep its other elements?</span></li><li><span class="chip">2</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1120">#1120</a> <span class="item-title">Tools/format: move package commands out of the sim-lane tools crate</span></li><li><span class="chip">3</span><a href="https://github.com/nugamus/iwbtg-collection/issues/640">#640</a> <span class="item-title">Trace cases for the rainbow precise slope masks (a1-slope-a..c)</span></li><li><span class="chip">2</span><a href="https://github.com/nugamus/iwbtg-collection/issues/998">#998</a> <span class="item-title">Loader: replace the stage[n] workaround with a real global array</span></li><li><span class="chip">3</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1343">#1343</a> <span class="item-title">Fidelity baseline: record rely num-rng-a as OK</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1116">#1116</a> <span class="item-title">Harness/naming: finish retiring WP-era ids (test target, CI wording, written naming rule)</span></li></ul></div>
+  <div class="card"><h3>Recently closed</h3><ul class="items"><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1370">#1370</a> <span class="item-title">Progress workflow: grant issue reads and fail visibly on a stale refresh</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1368">#1368</a> <span class="item-title">Milestone reorg: phase-gate milestones and a progress dashboard</span></li><li><span class="chip">3</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1079">#1079</a> <span class="item-title">Sim: instance list order for with (all), instance_id and first-instance queries is depth then room entry</span></li><li><span class="chip">2</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1105">#1105</a> <span class="item-title">Format: make `timeline` a reserved object key in objects.rs</span></li><li><span class="chip">2</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1109">#1109</a> <span class="item-title">Format: the generated runner schema description still says it selects event-order differences</span></li><li><span class="chip">3</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1173">#1173</a> <span class="item-title">Sim sound: a built-in one-shot with no length_ticks ends at once instead of playing until stopped</span></li><li><span class="chip">2</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1133">#1133</a> <span class="item-title">Spec: does a bare write to a global array keep its other elements?</span></li><li><span class="chip">2</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1120">#1120</a> <span class="item-title">Tools/format: move package commands out of the sim-lane tools crate</span></li></ul></div>
   <div class="card"><h3>In progress</h3><ul class="items"><li><span class="chip">3</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1357">#1357</a> <span class="item-title">Trace cases: close a1-slope-a and compare gravity in a1-slope-a..c after CR26 (research#279)</span></li><li><span class="chip">2</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1336">#1336</a> <span class="item-title">Format: physics JSON schema does not list the standard name aliases (#1330)</span></li><li><span class="chip">4</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1127">#1127</a> <span class="item-title">Web build: the browser client crashes within a second of starting play</span></li></ul></div>
-  <div class="card"><h3>Waiting on you</h3><ul class="items"><li><span class="chip">6</span><a href="https://github.com/nugamus/iwbtg-collection/issues/953">#953</a> <span class="item-title">Decide: script error screen layout</span></li><li><span class="chip">7</span><a href="https://github.com/nugamus/iwbtg-collection/issues/194">#194</a> <span class="item-title">Discord server and bug channel</span></li><li><span class="chip">10</span><a href="https://github.com/nugamus/iwbtg-collection/issues/114">#114</a> <span class="item-title">Decide: Windows code signing and Linux packaging</span></li><li><span class="chip">7</span><a href="https://github.com/nugamus/iwbtg-collection/issues/110">#110</a> <span class="item-title">Register Google and Discord OAuth apps; choose SMTP</span></li><li><span class="chip">7</span><a href="https://github.com/nugamus/iwbtg-collection/issues/108">#108</a> <span class="item-title">Get a domain and set up DNS and Cloudflare</span></li><li><span class="chip">7</span><a href="https://github.com/nugamus/iwbtg-collection/issues/84">#84</a> <span class="item-title">Performance points (pp) design</span></li><li><span class="chip">9</span><a href="https://github.com/nugamus/iwbtg-collection/issues/83">#83</a> <span class="item-title">Curation criteria for Ranked and Loved</span></li><li><span class="chip">9</span><a href="https://github.com/nugamus/iwbtg-collection/issues/82">#82</a> <span class="item-title">Design the skin system</span></li></ul></div>
-  <div class="card"><h3>Ready to start</h3><ul class="items"><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/228">#228</a> <span class="item-title">CI: run format wp7a_* tests on wasm32 again after WP11</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/787">#787</a> <span class="item-title">Retire the WP-era scaffolding: module-named tests, no WP ownership headers, sim-core plan marked historical</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/788">#788</a> <span class="item-title">Issue context contract: every agent-ready issue names its code, docs, spec claims and test command</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/986">#986</a> <span class="item-title">Sim/format/tools: drop the WP ownership headers</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1064">#1064</a> <span class="item-title">xtask check: a sim doc-comment change can stale a format schema without failing the local check</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1124">#1124</a> <span class="item-title">CI: a docs/format-only edit runs the whole sim/format WASM + determinism matrix for native-only fixture tests</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1169">#1169</a> <span class="item-title">CI: run the public feel test on every target and scope it</span></li><li><span class="chip">1</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1114">#1114</a> <span class="item-title">Docs/registers: link the split gm8 spec files and map register ids to claim ids (research#173)</span></li></ul></div>
+  <div class="card"><h3>Waiting on you</h3><ul class="items"><li><span class="chip">6</span><a href="https://github.com/nugamus/iwbtg-collection/issues/953">#953</a> <span class="item-title">Decide: script error screen layout</span></li><li><span class="chip">7</span><a href="https://github.com/nugamus/iwbtg-collection/issues/194">#194</a> <span class="item-title">Discord server and bug channel</span></li><li><span class="chip">10</span><a href="https://github.com/nugamus/iwbtg-collection/issues/114">#114</a> <span class="item-title">Decide: Windows code signing and Linux packaging</span></li><li><span class="chip">7</span><a href="https://github.com/nugamus/iwbtg-collection/issues/110">#110</a> <span class="item-title">Register Google and Discord OAuth apps; choose SMTP</span></li><li><span class="chip">7</span><a href="https://github.com/nugamus/iwbtg-collection/issues/108">#108</a> <span class="item-title">Get a domain and set up DNS and Cloudflare</span></li><li><span class="chip">7</span><a href="https://github.com/nugamus/iwbtg-collection/issues/84">#84</a> <span class="item-title">Performance points (pp) design</span></li></ul></div>
+  <div class="card"><h3>Ready to start</h3><ul class="items"><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/228">#228</a> <span class="item-title">CI: run format wp7a_* tests on wasm32 again after WP11</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/787">#787</a> <span class="item-title">Retire the WP-era scaffolding: module-named tests, no WP ownership headers, sim-core plan marked historical</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/788">#788</a> <span class="item-title">Issue context contract: every agent-ready issue names its code, docs, spec claims and test command</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/986">#986</a> <span class="item-title">Sim/format/tools: drop the WP ownership headers</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1064">#1064</a> <span class="item-title">xtask check: a sim doc-comment change can stale a format schema without failing the local check</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1124">#1124</a> <span class="item-title">CI: a docs/format-only edit runs the whole sim/format WASM + determinism matrix for native-only fixture tests</span></li></ul></div>
 </div>
 
 <div class="grid2">
-  <section>
-    <h2>Open work by area</h2>
-    <p class="note">An issue can carry more than one area label.</p>
-    <div class="hbar-row"><span class="hbar-label">area:sim</span><span class="hbar-track"><span class="hbar-fill" style="width:100.0%"></span></span><span class="hbar-value">100</span></div><div class="hbar-row"><span class="hbar-label">area:client</span><span class="hbar-track"><span class="hbar-fill" style="width:75.0%"></span></span><span class="hbar-value">75</span></div><div class="hbar-row"><span class="hbar-label">area:format</span><span class="hbar-track"><span class="hbar-fill" style="width:48.0%"></span></span><span class="hbar-value">48</span></div><div class="hbar-row"><span class="hbar-label">area:server</span><span class="hbar-track"><span class="hbar-fill" style="width:48.0%"></span></span><span class="hbar-value">48</span></div><div class="hbar-row"><span class="hbar-label">area:infra</span><span class="hbar-track"><span class="hbar-fill" style="width:30.0%"></span></span><span class="hbar-value">30</span></div><div class="hbar-row"><span class="hbar-label">area:editor</span><span class="hbar-track"><span class="hbar-fill" style="width:29.0%"></span></span><span class="hbar-value">29</span></div><div class="hbar-row"><span class="hbar-label">area:docs</span><span class="hbar-track"><span class="hbar-fill" style="width:15.0%"></span></span><span class="hbar-value">15</span></div><div class="hbar-row"><span class="hbar-label">area:design</span><span class="hbar-track"><span class="hbar-fill" style="width:14.0%"></span></span><span class="hbar-value">14</span></div><div class="hbar-row"><span class="hbar-label">area:tools</span><span class="hbar-track"><span class="hbar-fill" style="width:13.0%"></span></span><span class="hbar-value">13</span></div><div class="hbar-row"><span class="hbar-label">area:port</span><span class="hbar-track"><span class="hbar-fill" style="width:6.0%"></span></span><span class="hbar-value">6</span></div><div class="hbar-row"><span class="hbar-label">area:research</span><span class="hbar-track"><span class="hbar-fill" style="width:5.0%"></span></span><span class="hbar-value">5</span></div>
-  </section>
-  <section>
-    <h2>Issues over time</h2>
-    <p class="note">Cumulative issues opened and closed by week. One axis, same unit.</p>
-    
-    <div class="legend">
-      <span class="key"><i class="line-key blue"></i>Opened</span>
-      <span class="key"><i class="line-key orange"></i>Closed</span>
-    </div>
-    <div class="chart-wrap">
-      <svg id="burnup" viewBox="0 0 780 240" role="img" aria-label="Cumulative issues opened and closed by week">
-        <line x1="52" y1="170.0" x2="720" y2="170.0" class="grid"/><text x="44" y="174.0" class="axis" text-anchor="end">0</text><line x1="52" y1="138.8" x2="720" y2="138.8" class="grid"/><text x="44" y="142.8" class="axis" text-anchor="end">172</text><line x1="52" y1="107.6" x2="720" y2="107.6" class="grid"/><text x="44" y="111.6" class="axis" text-anchor="end">344</text><line x1="52" y1="76.4" x2="720" y2="76.4" class="grid"/><text x="44" y="80.4" class="axis" text-anchor="end">516</text><line x1="52" y1="45.2" x2="720" y2="45.2" class="grid"/><text x="44" y="49.2" class="axis" text-anchor="end">688</text><line x1="52" y1="14.0" x2="720" y2="14.0" class="grid"/><text x="44" y="18.0" class="axis" text-anchor="end">860</text>
-        <path d="M52.0,102.5 L274.7,73.9 L497.3,17.8 L720.0,14.7" fill="none" stroke="#3987e5" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-        <path d="M52.0,136.3 L274.7,110.9 L497.3,73.0 L720.0,71.1" fill="none" stroke="#d95926" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-        <circle cx="720.0" cy="14.7" r="4" fill="#3987e5" stroke="#1a1a19" stroke-width="2"/>
-        <circle cx="720.0" cy="71.1" r="4" fill="#d95926" stroke="#1a1a19" stroke-width="2"/>
-        <text x="726" y="18.7" class="end-label">opened 856</text><text x="726" y="75.1" class="end-label">closed 545</text><text x="52" y="188" class="axis" text-anchor="middle">11-09</text><text x="275" y="188" class="axis" text-anchor="middle">11-16</text><text x="497" y="188" class="axis" text-anchor="middle">11-23</text><text x="720" y="188" class="axis" text-anchor="middle">11-30</text><rect class="hit" data-i="0" x="52.0" y="14" width="167.0" height="156" fill="transparent"/><rect class="hit" data-i="1" x="219.0" y="14" width="167.0" height="156" fill="transparent"/><rect class="hit" data-i="2" x="386.0" y="14" width="167.0" height="156" fill="transparent"/><rect class="hit" data-i="3" x="553.0" y="14" width="167.0" height="156" fill="transparent"/>
-      </svg>
-      <div id="burn-tip" class="tip" hidden></div>
-    </div>
-    <details class="table-view"><summary>Table view</summary>
-      <table><thead><tr><th>Week ending</th><th class="num">Opened</th><th class="num">Closed</th><th class="num">Open</th></tr></thead>
-      <tbody><tr><td>2026-11-09</td><td class="num">372</td><td class="num">186</td><td class="num">186</td></tr><tr><td>2026-11-16</td><td class="num">530</td><td class="num">326</td><td class="num">204</td></tr><tr><td>2026-11-23</td><td class="num">839</td><td class="num">535</td><td class="num">304</td></tr><tr><td>2026-11-30</td><td class="num">856</td><td class="num">545</td><td class="num">311</td></tr></tbody></table>
-    </details>
-  </section>
+  <section><h2>Open work by area</h2><p class="note">An issue can carry more than one area label.</p><div class="hbar-row"><span class="hbar-label">area:sim</span><span class="hbar-track"><span class="hbar-fill" style="width:100.0%"></span></span><span class="hbar-value">100</span></div><div class="hbar-row"><span class="hbar-label">area:client</span><span class="hbar-track"><span class="hbar-fill" style="width:75.0%"></span></span><span class="hbar-value">75</span></div><div class="hbar-row"><span class="hbar-label">area:format</span><span class="hbar-track"><span class="hbar-fill" style="width:48.0%"></span></span><span class="hbar-value">48</span></div><div class="hbar-row"><span class="hbar-label">area:server</span><span class="hbar-track"><span class="hbar-fill" style="width:48.0%"></span></span><span class="hbar-value">48</span></div><div class="hbar-row"><span class="hbar-label">area:infra</span><span class="hbar-track"><span class="hbar-fill" style="width:29.0%"></span></span><span class="hbar-value">29</span></div><div class="hbar-row"><span class="hbar-label">area:editor</span><span class="hbar-track"><span class="hbar-fill" style="width:29.0%"></span></span><span class="hbar-value">29</span></div><div class="hbar-row"><span class="hbar-label">area:docs</span><span class="hbar-track"><span class="hbar-fill" style="width:14.0%"></span></span><span class="hbar-value">14</span></div><div class="hbar-row"><span class="hbar-label">area:design</span><span class="hbar-track"><span class="hbar-fill" style="width:14.0%"></span></span><span class="hbar-value">14</span></div><div class="hbar-row"><span class="hbar-label">area:tools</span><span class="hbar-track"><span class="hbar-fill" style="width:13.0%"></span></span><span class="hbar-value">13</span></div><div class="hbar-row"><span class="hbar-label">area:port</span><span class="hbar-track"><span class="hbar-fill" style="width:6.0%"></span></span><span class="hbar-value">6</span></div><div class="hbar-row"><span class="hbar-label">area:research</span><span class="hbar-track"><span class="hbar-fill" style="width:5.0%"></span></span><span class="hbar-value">5</span></div></section>
+  <section><h2>Issues over time</h2><p class="note">Cumulative issues opened and closed by week.</p>
+    <div class="legend"><span class="key"><i class="line-key blue"></i>Opened</span>
+      <span class="key"><i class="line-key orange"></i>Closed</span></div>
+    <div class="chart-wrap"><svg viewBox="0 0 760 228" role="img" aria-label="Issues opened and closed by week">
+      <line x1="46" y1="164.0" x2="700" y2="164.0" class="grid"/><text x="38" y="168.0" class="axis" text-anchor="end">0</text><line x1="46" y1="133.6" x2="700" y2="133.6" class="grid"/><text x="38" y="137.6" class="axis" text-anchor="end">172</text><line x1="46" y1="103.2" x2="700" y2="103.2" class="grid"/><text x="38" y="107.2" class="axis" text-anchor="end">344</text><line x1="46" y1="72.8" x2="700" y2="72.8" class="grid"/><text x="38" y="76.8" class="axis" text-anchor="end">516</text><line x1="46" y1="42.4" x2="700" y2="42.4" class="grid"/><text x="38" y="46.4" class="axis" text-anchor="end">688</text><line x1="46" y1="12.0" x2="700" y2="12.0" class="grid"/><text x="38" y="16.0" class="axis" text-anchor="end">860</text>
+      <path d="M46.0,98.3 L264.0,70.3 L482.0,15.7 L700.0,12.5" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M46.0,131.1 L264.0,106.4 L482.0,69.4 L700.0,67.3" fill="none" stroke="var(--orange)" stroke-width="2" stroke-linejoin="round"/>
+      <circle cx="700.0" cy="12.5" r="4" fill="var(--blue)" stroke="var(--surface)" stroke-width="2"/>
+      <circle cx="700.0" cy="67.3" r="4" fill="var(--orange)" stroke="var(--surface)" stroke-width="2"/>
+      <text x="706" y="16.5" class="end-label">opened 857</text>
+      <text x="706" y="71.3" class="end-label">closed 547</text>
+      <text x="46" y="182" class="axis" text-anchor="middle">11-09</text><text x="264" y="182" class="axis" text-anchor="middle">11-16</text><text x="482" y="182" class="axis" text-anchor="middle">11-23</text><text x="700" y="182" class="axis" text-anchor="middle">11-30</text></svg></div></section>
 </div>
-
-<h2>Ports</h2>
-<p class="note">Useful now: the port issue, its <em>Done when</em> checklist and sub-issue progress, and the recorded trace count. Object coverage is still a gap; it sits in the table below.</p>
-<div class="filters">
-  <input id="port-search" type="search" placeholder="Filter by game name or slug">
-  <select id="port-state"><option value="all">All port states</option><option value="open">Open</option><option value="closed">Closed</option><option value="none">No issue</option></select>
-  <label><input id="port-traces" type="checkbox"> Has recorded traces</label>
-</div>
-<table id="port-table">
-<thead><tr><th class="num">#</th><th>Game</th><th>Port issue</th><th>Done when</th><th class="num">Sub-issues</th><th class="num">Traces</th><th>Lifecycle</th></tr></thead>
-<tbody>
-        <tr data-name="i wanna rely the needle 4.2 rely-the-needle-4-2"
-            data-state="open"
-            data-traces="1">
-          <td class="num muted">1</td>
-          <td><a href="https://delicious-fruit.com/game/19483">I Wanna Rely The Needle 4.2</a><div class="slug">rely-the-needle-4-2</div></td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/1">games#1</a> <span class="pill mid"><span class="ico">◐</span>open</span></td>
-          <td class="wide"><div class="mini-meter"><span style="width:0.0%"></span></div><span class="frac">0 / 6</span></td>
-          <td class="num">0 / 1</td>
-          <td class="num">17</td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1367">not measured yet</a></span></td>
-        </tr>
-        <tr data-name="i wanna go the jun-g world go-the-jun-g-world"
-            data-state="open"
-            data-traces="1">
-          <td class="num muted">2</td>
-          <td><a href="https://delicious-fruit.com/game/18758">I wanna go the JUN-G World</a><div class="slug">go-the-jun-g-world</div></td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/2">games#2</a> <span class="pill mid"><span class="ico">◐</span>open</span></td>
-          <td class="wide"><div class="mini-meter"><span style="width:0.0%"></span></div><span class="frac">0 / 6</span></td>
-          <td class="num"><span class="muted">none yet</span></td>
-          <td class="num">8</td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1367">not measured yet</a></span></td>
-        </tr>
-        <tr data-name="i wanna deride kotaro- from aslant deride-kotaro-from-aslant"
-            data-state="open"
-            data-traces="1">
-          <td class="num muted">3</td>
-          <td><a href="https://delicious-fruit.com/game/18404">I wanna deride Kotaro- from aslant</a><div class="slug">deride-kotaro-from-aslant</div></td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/3">games#3</a> <span class="pill mid"><span class="ico">◐</span>open</span></td>
-          <td class="wide"><div class="mini-meter"><span style="width:0.0%"></span></div><span class="frac">0 / 6</span></td>
-          <td class="num"><span class="muted">none yet</span></td>
-          <td class="num">32</td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1367">not measured yet</a></span></td>
-        </tr>
-        <tr data-name="i wanna be the kaenbyou kaenbyou"
-            data-state="open"
-            data-traces="1">
-          <td class="num muted">4</td>
-          <td><a href="https://delicious-fruit.com/game/17724">I wanna be the Kaenbyou</a><div class="slug">kaenbyou</div></td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/4">games#4</a> <span class="pill mid"><span class="ico">◐</span>open</span></td>
-          <td class="wide"><div class="mini-meter"><span style="width:0.0%"></span></div><span class="frac">0 / 6</span></td>
-          <td class="num"><span class="muted">none yet</span></td>
-          <td class="num">56</td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1367">not measured yet</a></span></td>
-        </tr>
-        <tr data-name="i wanna eat the lemon eat-the-lemon"
-            data-state="open"
-            data-traces="1">
-          <td class="num muted">5</td>
-          <td><a href="https://delicious-fruit.com/game/18603">I wanna eat the lemon</a><div class="slug">eat-the-lemon</div></td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/5">games#5</a> <span class="pill mid"><span class="ico">◐</span>open</span></td>
-          <td class="wide"><div class="mini-meter"><span style="width:0.0%"></span></div><span class="frac">0 / 6</span></td>
-          <td class="num"><span class="muted">none yet</span></td>
-          <td class="num">9</td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1367">not measured yet</a></span></td>
-        </tr>
-        <tr data-name="i wanna eat the rori girl eat-the-rori-girl"
-            data-state="open"
-            data-traces="1">
-          <td class="num muted">6</td>
-          <td><a href="https://delicious-fruit.com/game/11514">I wanna eat the Rori Girl</a><div class="slug">eat-the-rori-girl</div></td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/6">games#6</a> <span class="pill mid"><span class="ico">◐</span>open</span></td>
-          <td class="wide"><div class="mini-meter"><span style="width:0.0%"></span></div><span class="frac">0 / 6</span></td>
-          <td class="num"><span class="muted">none yet</span></td>
-          <td class="num">6</td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1367">not measured yet</a></span></td>
-        </tr>
-        <tr data-name="i wanna wanna wanna"
-            data-state="open"
-            data-traces="0">
-          <td class="num muted">7</td>
-          <td><a href="https://delicious-fruit.com/game/12505">I wanna wanna</a><div class="slug">wanna</div></td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/7">games#7</a> <span class="pill mid"><span class="ico">◐</span>open</span></td>
-          <td class="wide"><div class="mini-meter"><span style="width:0.0%"></span></div><span class="frac">0 / 6</span></td>
-          <td class="num"><span class="muted">none yet</span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span></td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1367">not measured yet</a></span></td>
-        </tr>
-        <tr data-name="i wanna be fed up with path ;w; be-fed-up-with-path-w"
-            data-state="open"
-            data-traces="0">
-          <td class="num muted">8</td>
-          <td><a href="https://delicious-fruit.com/game/11403">I wanna be Fed up with path ;w;</a><div class="slug">be-fed-up-with-path-w</div></td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/8">games#8</a> <span class="pill mid"><span class="ico">◐</span>open</span></td>
-          <td class="wide"><div class="mini-meter"><span style="width:0.0%"></span></div><span class="frac">0 / 6</span></td>
-          <td class="num"><span class="muted">none yet</span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span></td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1367">not measured yet</a></span></td>
-        </tr>
-        <tr data-name="i wanna little trap little-trap"
-            data-state="open"
-            data-traces="1">
-          <td class="num muted">9</td>
-          <td><a href="https://delicious-fruit.com/game/21365">I wanna Little Trap</a><div class="slug">little-trap</div></td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/9">games#9</a> <span class="pill mid"><span class="ico">◐</span>open</span></td>
-          <td class="wide"><div class="mini-meter"><span style="width:0.0%"></span></div><span class="frac">0 / 6</span></td>
-          <td class="num"><span class="muted">none yet</span></td>
-          <td class="num">11</td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1367">not measured yet</a></span></td>
-        </tr>
-        <tr data-name="i wanna clear the easy miku 2 clear-the-easy-miku-2"
-            data-state="open"
-            data-traces="1">
-          <td class="num muted">10</td>
-          <td><a href="https://delicious-fruit.com/game/12270">I wanna clear the Easy Miku 2</a><div class="slug">clear-the-easy-miku-2</div></td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/10">games#10</a> <span class="pill mid"><span class="ico">◐</span>open</span></td>
-          <td class="wide"><div class="mini-meter"><span style="width:0.0%"></span></div><span class="frac">0 / 6</span></td>
-          <td class="num"><span class="muted">none yet</span></td>
-          <td class="num">6</td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1367">not measured yet</a></span></td>
-        </tr>
-        <tr data-name="i wanna be the little runner little-runner"
-            data-state="open"
-            data-traces="1">
-          <td class="num muted">11</td>
-          <td><a href="https://delicious-fruit.com/game/10848">I wanna be the Little runner</a><div class="slug">little-runner</div></td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/11">games#11</a> <span class="pill mid"><span class="ico">◐</span>open</span></td>
-          <td class="wide"><div class="mini-meter"><span style="width:0.0%"></span></div><span class="frac">0 / 6</span></td>
-          <td class="num"><span class="muted">none yet</span></td>
-          <td class="num">29</td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1367">not measured yet</a></span></td>
-        </tr>
-        <tr data-name="i wanna be the poronkusema poronkusema"
-            data-state="open"
-            data-traces="1">
-          <td class="num muted">12</td>
-          <td><a href="https://delicious-fruit.com/game/20975">I wanna be the Poronkusema</a><div class="slug">poronkusema</div></td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/12">games#12</a> <span class="pill mid"><span class="ico">◐</span>open</span></td>
-          <td class="wide"><div class="mini-meter"><span style="width:0.0%"></span></div><span class="frac">0 / 6</span></td>
-          <td class="num"><span class="muted">none yet</span></td>
-          <td class="num">7</td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1367">not measured yet</a></span></td>
-        </tr>
-        <tr data-name="i wanna be the machinary machinary"
-            data-state="open"
-            data-traces="1">
-          <td class="num muted">13</td>
-          <td><a href="https://delicious-fruit.com/game/18020">I wanna be the Machinary</a><div class="slug">machinary</div></td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/13">games#13</a> <span class="pill mid"><span class="ico">◐</span>open</span></td>
-          <td class="wide"><div class="mini-meter"><span style="width:0.0%"></span></div><span class="frac">0 / 6</span></td>
-          <td class="num"><span class="muted">none yet</span></td>
-          <td class="num">27</td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1367">not measured yet</a></span></td>
-        </tr>
-        <tr data-name="i wanna eat the new year! eat-the-new-year"
-            data-state="open"
-            data-traces="1">
-          <td class="num muted">14</td>
-          <td><a href="https://delicious-fruit.com/game/11512">I wanna eat the New Year!</a><div class="slug">eat-the-new-year</div></td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/14">games#14</a> <span class="pill mid"><span class="ico">◐</span>open</span></td>
-          <td class="wide"><div class="mini-meter"><span style="width:0.0%"></span></div><span class="frac">0 / 6</span></td>
-          <td class="num"><span class="muted">none yet</span></td>
-          <td class="num">5</td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1367">not measured yet</a></span></td>
-        </tr>
-        <tr data-name="i wanna be the animus animus"
-            data-state="open"
-            data-traces="1">
-          <td class="num muted">15</td>
-          <td><a href="https://delicious-fruit.com/game/10550">I wanna be the Animus</a><div class="slug">animus</div></td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/15">games#15</a> <span class="pill mid"><span class="ico">◐</span>open</span></td>
-          <td class="wide"><div class="mini-meter"><span style="width:0.0%"></span></div><span class="frac">0 / 6</span></td>
-          <td class="num"><span class="muted">none yet</span></td>
-          <td class="num">20</td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1367">not measured yet</a></span></td>
-        </tr>
-        <tr data-name="i wanna help the fairy tale help-the-fairy-tale"
-            data-state="open"
-            data-traces="1">
-          <td class="num muted">16</td>
-          <td><a href="https://delicious-fruit.com/game/11595">I wanna help the Fairy tale</a><div class="slug">help-the-fairy-tale</div></td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/16">games#16</a> <span class="pill mid"><span class="ico">◐</span>open</span></td>
-          <td class="wide"><div class="mini-meter"><span style="width:0.0%"></span></div><span class="frac">0 / 6</span></td>
-          <td class="num"><span class="muted">none yet</span></td>
-          <td class="num">9</td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1367">not measured yet</a></span></td>
-        </tr>
-        <tr data-name="i wanna get the rainbow feather get-the-rainbow-feather"
-            data-state="open"
-            data-traces="1">
-          <td class="num muted">17</td>
-          <td><a href="https://delicious-fruit.com/game/11562">I wanna get the Rainbow feather</a><div class="slug">get-the-rainbow-feather</div></td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/17">games#17</a> <span class="pill mid"><span class="ico">◐</span>open</span></td>
-          <td class="wide"><div class="mini-meter"><span style="width:0.0%"></span></div><span class="frac">0 / 6</span></td>
-          <td class="num"><span class="muted">none yet</span></td>
-          <td class="num">3</td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1367">not measured yet</a></span></td>
-        </tr>
-        <tr data-name="i wanna be the showdown showdown"
-            data-state="open"
-            data-traces="1">
-          <td class="num muted">18</td>
-          <td><a href="https://delicious-fruit.com/game/14697">I wanna be the Showdown</a><div class="slug">showdown</div></td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/18">games#18</a> <span class="pill mid"><span class="ico">◐</span>open</span></td>
-          <td class="wide"><div class="mini-meter"><span style="width:0.0%"></span></div><span class="frac">0 / 6</span></td>
-          <td class="num"><span class="muted">none yet</span></td>
-          <td class="num">1</td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1367">not measured yet</a></span></td>
-        </tr>
-        <tr data-name="i wanna go the spook house go-the-spook-house"
-            data-state="open"
-            data-traces="1">
-          <td class="num muted">19</td>
-          <td><a href="https://delicious-fruit.com/game/15561">I wanna go the Spook House</a><div class="slug">go-the-spook-house</div></td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/19">games#19</a> <span class="pill mid"><span class="ico">◐</span>open</span></td>
-          <td class="wide"><div class="mini-meter"><span style="width:0.0%"></span></div><span class="frac">0 / 6</span></td>
-          <td class="num"><span class="muted">none yet</span></td>
-          <td class="num">10</td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1367">not measured yet</a></span></td>
-        </tr>
-        <tr data-name="i wanna keep celebrating for xia keep-celebrating-for-xia"
-            data-state="open"
-            data-traces="0">
-          <td class="num muted">20</td>
-          <td><a href="https://delicious-fruit.com/game/21633">I wanna Keep Celebrating for Xia</a><div class="slug">keep-celebrating-for-xia</div></td>
-          <td><a href="https://github.com/nugamus/iwbtg-collection-games/issues/20">games#20</a> <span class="pill mid"><span class="ico">◐</span>open</span></td>
-          <td class="wide"><div class="mini-meter"><span style="width:0.0%"></span></div><span class="frac">0 / 6</span></td>
-          <td class="num"><span class="muted">none yet</span></td>
-          <td class="num">0</td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1367">not measured yet</a></span></td>
-        </tr></tbody>
-</table>
-
-<details class="table-view">
-  <summary>Object coverage (census, scripts, tick accuracy) — mostly not measured yet</summary>
-  <p class="note">These need the census, converter and trace exporters. The page never fills a gap with a guess.</p>
-  <table>
-  <thead><tr><th>Game</th><th>Converter</th><th class="num">Specified</th><th class="num">Scripted</th><th class="num">Tick-accurate</th></tr></thead>
-  <tbody>
-        <tr>
-          <td>I Wanna Rely The Needle 4.2<div class="slug">rely-the-needle-4-2</div></td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1366">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span></td>
-        </tr>
-        <tr>
-          <td>I wanna go the JUN-G World<div class="slug">go-the-jun-g-world</div></td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1366">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span></td>
-        </tr>
-        <tr>
-          <td>I wanna deride Kotaro- from aslant<div class="slug">deride-kotaro-from-aslant</div></td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1366">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span></td>
-        </tr>
-        <tr>
-          <td>I wanna be the Kaenbyou<div class="slug">kaenbyou</div></td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1366">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span></td>
-        </tr>
-        <tr>
-          <td>I wanna eat the lemon<div class="slug">eat-the-lemon</div></td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1366">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span></td>
-        </tr>
-        <tr>
-          <td>I wanna eat the Rori Girl<div class="slug">eat-the-rori-girl</div></td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1366">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span></td>
-        </tr>
-        <tr>
-          <td>I wanna wanna<div class="slug">wanna</div></td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1366">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span></td>
-        </tr>
-        <tr>
-          <td>I wanna be Fed up with path ;w;<div class="slug">be-fed-up-with-path-w</div></td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1366">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span></td>
-        </tr>
-        <tr>
-          <td>I wanna Little Trap<div class="slug">little-trap</div></td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1366">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span></td>
-        </tr>
-        <tr>
-          <td>I wanna clear the Easy Miku 2<div class="slug">clear-the-easy-miku-2</div></td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1366">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span></td>
-        </tr>
-        <tr>
-          <td>I wanna be the Little runner<div class="slug">little-runner</div></td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1366">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span></td>
-        </tr>
-        <tr>
-          <td>I wanna be the Poronkusema<div class="slug">poronkusema</div></td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1366">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span></td>
-        </tr>
-        <tr>
-          <td>I wanna be the Machinary<div class="slug">machinary</div></td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1366">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span></td>
-        </tr>
-        <tr>
-          <td>I wanna eat the New Year!<div class="slug">eat-the-new-year</div></td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1366">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span></td>
-        </tr>
-        <tr>
-          <td>I wanna be the Animus<div class="slug">animus</div></td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1366">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span></td>
-        </tr>
-        <tr>
-          <td>I wanna help the Fairy tale<div class="slug">help-the-fairy-tale</div></td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1366">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span></td>
-        </tr>
-        <tr>
-          <td>I wanna get the Rainbow feather<div class="slug">get-the-rainbow-feather</div></td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1366">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span></td>
-        </tr>
-        <tr>
-          <td>I wanna be the Showdown<div class="slug">showdown</div></td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1366">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span></td>
-        </tr>
-        <tr>
-          <td>I wanna go the Spook House<div class="slug">go-the-spook-house</div></td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1366">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span></td>
-        </tr>
-        <tr>
-          <td>I wanna Keep Celebrating for Xia<div class="slug">keep-celebrating-for-xia</div></td>
-          <td><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1366">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span></td>
-          <td class="num"><span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span></td>
-        </tr></tbody>
-  </table>
-  <p class="note">Overall: <span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">not measured yet</a></span> objects in the standard format (measured across 0 of 20 games) · <span class="missing"><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">not measured yet</a></span> objects tick-accurate (measured across 0 games).</p>
-</details>
 
 <h2>Coverage history</h2>
-<p class="empty">No measured object-coverage points yet. The exporters are the <a href="https://github.com/nugamus/iwbtg-collection/issues/1364">census</a>, <a href="https://github.com/nugamus/iwbtg-collection/issues/1365">trace</a> and <a href="https://github.com/nugamus/iwbtg-collection/issues/1366">converter</a> follow-ups.</p>
+<div class="spark"><div><span class="sub">Built-in coverage</span><svg viewBox="0 0 330 74" aria-label="builtin_pct over time"><path d="M8.0,7.2 L322.0,7.2" fill="none" stroke="var(--blue)" stroke-width="2"/></svg></div><div><span class="sub">Script-object share</span><svg viewBox="0 0 330 74" aria-label="script_pct over time"><path d="M8.0,62.9 L322.0,62.9" fill="none" stroke="var(--orange)" stroke-width="2"/></svg></div></div>
+<p class="note">One dated point per workflow run; the line breaks at a run with no measurement.</p>
 
 <footer>
-  <p>Reproduce: <code>python -I progress/generate.py</code> reads the committed data, the per-game front-matter and an optional <code>progress/exporter.json</code>; <code>--gh --history</code> refreshes from GitHub and appends a dated point. The same command runs in <code>.github/workflows/progress.yml</code>.</p>
-  <p>Follow-ups: census <a href="https://github.com/nugamus/iwbtg-collection/issues/1364">#1364</a>, trace coverage <a href="https://github.com/nugamus/iwbtg-collection/issues/1365">#1365</a>, converter state <a href="https://github.com/nugamus/iwbtg-collection/issues/1366">#1366</a>, per-game front-matter <a href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a>.</p>
+  <p>Reproduce: <code>python -I progress/export_research.py --research ../iwbtg-collection-research</code>, then <code>python -I progress/generate.py --gh --history</code>. The workflow restores history from <code>gh-pages</code>, regenerates and publishes there; it never writes <code>main</code>.</p>
+  <p>Sources: <code>shortlist.md</code> · <code>specs/mechanics.md</code> · recorded trace CSVs. Follow-ups: <a href="https://github.com/nugamus/iwbtg-collection/issues/1365">passing-trace coverage #1365</a> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1366">converter state #1366</a>.</p>
 </footer>
 </main>
 <script>
-const BURN = [{"week": "2026-11-09", "created": 372, "closed": 186}, {"week": "2026-11-16", "created": 530, "closed": 326}, {"week": "2026-11-23", "created": 839, "closed": 535}, {"week": "2026-11-30", "created": 856, "closed": 545}];
 (function(){
-  const svg = document.getElementById('burnup'), tip = document.getElementById('burn-tip');
-  if(!svg || !tip) return;
-  const hits = svg.querySelectorAll('.hit');
-  function show(ev, i){
-    const p = BURN[i]; if(!p) return;
-    tip.textContent = '';
-    const b = document.createElement('b'); b.textContent = p.week; tip.appendChild(b);
-    const line = document.createElement('div');
-    line.textContent = `opened ${p.created} · closed ${p.closed} · open ${p.created - p.closed}`;
-    tip.appendChild(line);
-    tip.hidden = false;
-    tip.style.left = Math.min(ev.clientX + 14, window.innerWidth - 220) + 'px';
-    tip.style.top = (ev.clientY + 14) + 'px';
-  }
-  hits.forEach(h => {
-    h.addEventListener('pointermove', e => show(e, +h.dataset.i));
-    h.addEventListener('pointerleave', () => { tip.hidden = true; });
+  const root=document.documentElement;
+  try{const saved=localStorage.getItem('iwbtg-theme'); if(saved) root.dataset.theme=saved;}catch(e){}
+  const b=document.getElementById('theme');
+  if(b) b.addEventListener('click',()=>{
+    const next=(root.dataset.theme|| (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'))==='dark'?'light':'dark';
+    root.dataset.theme=next; try{localStorage.setItem('iwbtg-theme',next);}catch(e){}
   });
 })();
 (function(){
-  const q = document.getElementById('port-search');
-  const state = document.getElementById('port-state');
-  const traces = document.getElementById('port-traces');
+  const q=document.getElementById('q'), sort=document.getElementById('sort'), traces=document.getElementById('traces');
   if(!q) return;
-  const rows = [...document.querySelectorAll('#port-table tbody tr')];
+  const body=document.querySelector('#games tbody');
+  const all=[...body.querySelectorAll('tr')];
+  function num(r,k){return parseFloat(r.dataset[k]||'0');}
   function apply(){
-    const text = q.value.trim().toLowerCase();
-    rows.forEach(r => {
-      const okText = !text || (r.dataset.name || '').includes(text);
-      const okState = state.value === 'all' || r.dataset.state === state.value;
-      const okTrace = !traces.checked || r.dataset.traces === '1';
-      r.hidden = !(okText && okState && okTrace);
+    const text=q.value.trim().toLowerCase();
+    all.forEach(r=>{
+      const okText=!text||(r.dataset.name||'').includes(text);
+      const okTrace=!traces.checked||r.dataset.traces==='1';
+      r.hidden=!(okText&&okTrace);
     });
+    const vis=all.filter(r=>!r.hidden);
+    const mode=sort.value;
+    vis.sort((a,b)=>{
+      if(mode==='cov') return num(a,'cov')-num(b,'cov');
+      if(mode==='covdesc') return num(b,'cov')-num(a,'cov');
+      if(mode==='traces') return num(b,'traces')-num(a,'traces');
+      if(mode==='name') return (a.dataset.name||'').localeCompare(b.dataset.name||'');
+      return all.indexOf(a)-all.indexOf(b);
+    });
+    vis.forEach(r=>body.appendChild(r));
   }
-  q.addEventListener('input', apply); state.addEventListener('change', apply); traces.addEventListener('change', apply);
+  q.addEventListener('input',apply); sort.addEventListener('change',apply); traces.addEventListener('change',apply);
 })();
 </script>
 </body>
