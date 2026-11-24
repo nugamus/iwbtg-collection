@@ -23,6 +23,8 @@ use iwbtg_sim::num::Real;
 ///   walking right meets both on one tick.
 /// - `lifecycle_retry`: the #1149 retry fixture: an engine Boot room, one play room with its
 ///   music object, and a checkpoint the contract supplies (`StartPoint::FromSave`).
+/// - `sound_unknown_length`: `sound_events` with a one-shot track (`loop = false`) whose package
+///   gives no `length_ticks` (0, unknown; CR9), so it plays until stopped (#1173).
 /// - `rng_effects`: the same room with a one-Step blood emitter, so its Step draws the blood's
 ///   frame/gravity and the emitter's direction/speed (four draws on the shared `gm8` stream).
 pub fn fixture(name: &str) -> Result<GameDef, String> {
@@ -31,12 +33,26 @@ pub fn fixture(name: &str) -> Result<GameDef, String> {
         "retry" => Ok(build("feel-retry", true, false, false, false)),
         "collision" => Ok(build("feel-collision", true, true, false, false)),
         "sound_events" => Ok(build("feel-sound", false, false, true, false)),
+        "sound_unknown_length" => Ok(sound_unknown_length()),
         "rng_effects" => Ok(build("feel-rng-effects", false, false, false, true)),
         "lifecycle_retry" => Ok(lifecycle_retry()),
         other => Err(format!(
-            "no public fixture named {other:?} (known: jump, retry, collision, sound_events, rng_effects, lifecycle_retry)"
+            "no public fixture named {other:?} (known: jump, retry, collision, sound_events, sound_unknown_length, rng_effects, lifecycle_retry)"
         )),
     }
+}
+
+/// `sound_events` with the track a one-shot of unknown length (#1173).
+fn sound_unknown_length() -> GameDef {
+    let mut def = build("feel-sound-unknown-length", false, false, true, false);
+    def.sounds[0].length_ticks = 0;
+    let music = def
+        .kinds
+        .iter_mut()
+        .find(|k| k.base == Builtin::Music)
+        .expect("the sound fixture has a music kind");
+    music.params.0.insert("loop".into(), ParamValue::Bool(false));
+    def
 }
 
 /// The lifecycle retry fixture from `crates/sim/tests/lifecycle.rs` (#1149): the world boot

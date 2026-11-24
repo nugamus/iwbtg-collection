@@ -70,14 +70,7 @@ fn slot<'a>(st: &'a mut SuperSoundState, h: &str) -> Option<(u32, &'a mut SsSoun
 }
 
 fn playing(s: &SsSound, now: u64) -> bool {
-    s.started
-        && s.paused_at.is_none()
-        && active(
-            now,
-            s.start_tick,
-            s.length_ticks,
-            s.looping || s.length_ticks == 0,
-        )
+    s.started && s.paused_at.is_none() && active(now, s.start_tick, s.length_ticks, s.looping)
 }
 
 /// `SS_Init`: returns `"Yes"` (anything but `"No"`).

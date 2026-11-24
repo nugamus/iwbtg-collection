@@ -474,6 +474,6 @@ pub(crate) fn expire(st: &mut GmfmodState, now: u64) {
             .ok()
             .and_then(|k| sounds.get(k))
             .map_or(0, |s| s.length_ticks);
-        i.looping || i.paused_at.is_some() || len == 0 || active(now, i.start_tick, len, false)
+        i.paused_at.is_some() || active(now, i.start_tick, len, i.looping)
     });
 }

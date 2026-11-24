@@ -8,4 +8,5 @@ pub const CONTRACTS: &[(&str, &str)] = &[
     ("physics/jump_apex", include_str!("physics/jump_apex.toml")),
     ("rng/effects_shared_gm8", include_str!("rng/effects_shared_gm8.toml")),
     ("sound/event_model", include_str!("sound/event_model.toml")),
+    ("sound/unknown_length_plays_until_stopped", include_str!("sound/unknown_length_plays_until_stopped.toml")),
 ];

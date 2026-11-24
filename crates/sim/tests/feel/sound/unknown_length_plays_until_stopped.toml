@@ -1,0 +1,33 @@
+# A one-shot track whose package gives no length (`length_ticks` 0, unknown; CR9) plays until it
+# is stopped (#1173, decision 0005 sound model). A playMusic object in
+# `every_step_if_not_playing` mode starts it on the first Step and, because `sound_isplaying`
+# stays true, never stops and restarts it on a later Step.
+id = "sound/unknown_length_plays_until_stopped"
+impact = "F1"
+package = "fixture:sound_unknown_length"
+start = { new_game = true, difficulty = 0 }
+play_mode = "original"
+seed = 0
+mods = []
+evidence = ["#1173", "sim:sound::an_unknown_length_one_shot_plays_until_stopped", "format:wp7b_loader::a_sound_without_a_sidecar_plays_until_stopped"]
+
+inputs = """
+frame 300: end
+"""
+
+[[assert]]
+tick = 1
+kid_count = 1
+sound = { event = "play", sound = "track", tick = 0 }
+
+[[assert]]
+tick = 2
+sound = { event = "stop_all", tick = 1, absent = true }
+
+[[assert]]
+tick = 3
+sound = { event = "play", sound = "track", tick = 2, absent = true }
+
+[[assert]]
+tick = 300
+sound = { event = "play", sound = "track", tick = 299, absent = true }

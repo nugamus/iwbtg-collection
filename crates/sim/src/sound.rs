@@ -5,7 +5,8 @@
 //! model driven by ticks, never from a device.
 //!
 //! **Built-in sounds.** `sound_play` / `sound_loop` start a copy at the call's tick. A copy
-//! plays for the ticks `start .. start + length_ticks` (a looping copy until it is stopped).
+//! plays for the ticks `start .. start + length_ticks` (a looping copy, or one with an unknown
+//! length 0, until it is stopped).
 //! [`tick`] (tick row 16) only drops the copies that have ended; [`is_playing`] does not wait
 //! for it, so a custom hook set without `tick` still answers correctly. At most one MULTIMEDIA
 //! copy exists (S2, S3). The built-in model always runs, in every [`DllMode`]: the recorder
@@ -185,10 +186,12 @@ impl Ctx<'_> {
     }
 }
 
-/// Whether a thing started at `start` still plays at tick `now`. `length` 0 with `looping`
-/// false is an ended built-in copy; DLL adapters treat an unknown length as looping.
+/// Whether a thing started at `start` still plays at tick `now`: a looping thing, or one whose
+/// `length` is 0 ("unknown": the package gave no `length_ticks`, CR9), plays until it is
+/// stopped; any other plays the ticks `start .. start + length`. The one rule for built-in
+/// copies, SuperSound sounds and FMOD instances (#1173).
 pub(crate) fn active(now: u64, start: u64, length: u32, looping: bool) -> bool {
-    looping || now.saturating_sub(start) < u64::from(length)
+    looping || length == 0 || now.saturating_sub(start) < u64::from(length)
 }
 
 pub(crate) fn emit(ctx: &mut Ctx, ev: SoundOutput) {

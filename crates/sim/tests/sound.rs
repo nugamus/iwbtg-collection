@@ -134,6 +134,47 @@ fn normal_copies_overlap_and_loop_runs_until_stopped() {
     assert!(!g.playing(FX2), "a stop is visible at once");
 }
 
+/// #1173: a sound without `length_ticks` (0, "unknown") plays until it is stopped, like the DLL
+/// adapters: `sound_isplaying` stays true, row 16 keeps the copy, and the client is told 0.
+#[test]
+fn an_unknown_length_one_shot_plays_until_stopped() {
+    let mut g = rig(DllMode::Model);
+    g.def.sounds.push(sd("nolen", SoundKind::Normal, 0));
+    g.def.sounds.push(sd("nolen_bgm", SoundKind::Multimedia, 0));
+    let (fx, bgm) = (SoundId(4), SoundId(5));
+    g.w.tick = 3;
+    g.play(fx, false);
+    g.play(bgm, false);
+    assert_eq!(
+        g.sound_events(),
+        vec![
+            SoundOutput::Play {
+                target: SoundTarget::Builtin(fx),
+                looping: false,
+                length_ticks: 0,
+                tick: 3,
+            },
+            SoundOutput::Play {
+                target: SoundTarget::Builtin(bgm),
+                looping: false,
+                length_ticks: 0,
+                tick: 3,
+            },
+        ]
+    );
+    assert!(g.playing(fx), "playing in the tick it started");
+    for _ in 0..10_000 {
+        g.tick();
+    }
+    assert!(g.playing(fx) && g.playing(bgm), "still playing; row 16 kept both");
+    assert_eq!(g.w.sound.copies.len(), 2);
+    assert_eq!(sound::current_music(&g.w), Some(bgm));
+    g.with(|c| sound::stop(c, fx));
+    assert!(!g.playing(fx) && g.playing(bgm), "sound_stop ends it");
+    g.with(sound::stop_all);
+    assert!(!g.playing(bgm), "sound_stop_all ends it");
+}
+
 #[test]
 fn stop_ends_every_copy_and_stop_all_ends_all() {
     let mut g = rig(DllMode::Model);

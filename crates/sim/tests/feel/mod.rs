@@ -195,7 +195,7 @@ pub enum Check {
         /// The justification.
         why: String,
     },
-    /// `sound = { event, sound, tick }`.
+    /// `sound = { event, sound, tick, absent }`.
     Sound {
         /// The `SoundOutput` event.
         event: SoundEvent,
@@ -205,6 +205,8 @@ pub enum Check {
         sound_name: Option<String>,
         /// The tick the event happens on.
         tick: u64,
+        /// The step must emit no such event.
+        absent: bool,
     },
     /// `rng = { stream, seed, value }`.
     Rng {
@@ -1084,12 +1086,13 @@ fn validate_sound(
     def: &GameDef,
     last_tick: u64,
 ) -> Result<Check, String> {
-    let (mut event, mut sound, mut sound_tick) = (None, None, None);
+    let (mut event, mut sound, mut sound_tick, mut absent) = (None, None, None, false);
     for (key, value) in table {
         match key.as_str() {
             "event" => event = Some(string(value, key)?),
             "sound" => sound = Some(string(value, key)?),
             "tick" => sound_tick = Some(count64(value, key)?),
+            "absent" => absent = boolean(value, key)?,
             other => return Err(format!("sound: unknown key {other:?}")),
         }
     }
@@ -1127,6 +1130,7 @@ fn validate_sound(
         sound,
         sound_name,
         tick,
+        absent,
     })
 }
 
@@ -1627,6 +1631,7 @@ impl Run {
                 sound,
                 sound_name,
                 tick: sound_tick,
+                absent,
             } => {
                 let Some(events) = self.sounds.get(sound_tick) else {
                     return Some(Mismatch {
@@ -1638,18 +1643,23 @@ impl Run {
                     });
                 };
                 let found = events.iter().any(|s| sound_matches(s, *event, *sound));
-                if found {
+                if found != *absent {
                     return None;
                 }
                 let want = match sound_name {
                     Some(name) => format!("{} {name}", event.name()),
                     None => event.name().to_owned(),
                 };
+                let (expected, got) = if *absent {
+                    (format!("no {want}"), "a matching SoundOutput event".to_owned())
+                } else {
+                    (want, "no matching SoundOutput event".to_owned())
+                };
                 Some(Mismatch {
                     tick: *sound_tick,
                     metric: "sound".into(),
-                    expected: want,
-                    got: "no matching SoundOutput event".into(),
+                    expected,
+                    got,
                     context: Vec::new(),
                 })
             }
