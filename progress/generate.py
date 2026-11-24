@@ -421,16 +421,19 @@ def mini_meter(value, label=""):
 def coverage_chart(games):
     rows = sorted([g for g in games if g["builtin_pct"] is not None],
                   key=lambda g: g["builtin_pct"])
-    out = []
-    for g in rows:
-        out.append(f"""
-        <div class="covrow">
-          <span class="covname">{esc(g['name'])}<span class="covslug">{esc(g['slug'])}</span></span>
-          <span class="covtrack"><span style="width:{g['builtin_pct']:.1f}%"></span></span>
-          <span class="covvalue">{g['builtin_pct']:.1f}%</span>
-          <span class="covsub">{fmt(g['placed_instances'])} placed</span>
-        </div>""")
-    return "".join(out)
+    def block(items):
+        out = []
+        for g in items:
+            out.append(f"""
+            <div class="covrow" title="{fmt(g['builtin_instances'])} of {fmt(g['placed_instances'])} placed instances">
+              <span class="covname">{esc(g['name'])}<span class="covslug">{esc(g['slug'])}</span></span>
+              <span class="covtrack"><span style="width:{g['builtin_pct']:.1f}%"></span></span>
+              <span class="covvalue">{g['builtin_pct']:.1f}%</span>
+              <span class="covsub">{fmt(g['placed_instances'])}</span>
+            </div>""")
+        return "".join(out)
+    mid = (len(rows) + 1) // 2
+    return f'<div class="covgrid"><div>{block(rows[:mid])}</div><div>{block(rows[mid:])}</div></div>'
 
 
 def coverage_rows(games):
@@ -443,10 +446,7 @@ def coverage_rows(games):
                      '<span class="pill good"><span class="ico">●</span>closed</span>')
             port_cell = f'<a href="{esc(port["url"])}">games#{port["number"]}</a> {state}'
             if port["total"]:
-                meta = f'{port["done"]}/{port["total"]} done-when'
-                if port["sub_total"]:
-                    meta += f' · {port["sub_done"]}/{port["sub_total"]} sub-issues'
-                port_cell += f'<div class="portmeta">{meta}</div>'
+                port_cell += f'<div class="portmeta">{port["done"]}/{port["total"]} done</div>'
         else:
             port_cell = '<span class="muted">no port issue</span>'
         traces = (f'{fmt(g["traces_recorded"])}' if g["traces_recorded"] is not None
@@ -713,8 +713,8 @@ button.theme{background:var(--surface);color:var(--ink-2);border:1px solid var(-
   border-radius:10px;padding:14px 16px;margin:18px 0;font-size:13.5px;color:var(--ink-2)}
 .callout b{color:var(--ink)}
 table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);
-  border-radius:12px;overflow:hidden}
-th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+  border-radius:12px;overflow:hidden;font-size:13.5px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
 th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
   background:var(--surface-2);font-weight:600}
 tr:last-child td{border-bottom:0}
@@ -737,6 +737,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .covvalue{text-align:right;font-variant-numeric:tabular-nums;font-size:13px}
 .covsub{text-align:right;font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
 .chartbox{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.covgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 30px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
 .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:start}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
@@ -772,10 +773,11 @@ svg{display:block;width:100%;height:auto}
 .end-label{fill:var(--ink-2);font-size:11px}
 .spark{display:grid;grid-template-columns:1fr 1fr;gap:18px}
 .spark .sub{font-size:12px;color:var(--muted)}
-.portmeta{font-size:11.5px;color:var(--muted);margin-top:2px}
+.portmeta{font-size:11px;color:var(--muted);margin-top:2px;white-space:nowrap}
+td:last-child{white-space:nowrap}
 code{background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12.5px}
 footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
-@media(max-width:900px){.summary,.grid2,.spark{grid-template-columns:1fr}.cards{grid-template-columns:1fr 1fr}
+@media(max-width:900px){.summary,.grid2,.spark,.covgrid{grid-template-columns:1fr}.cards{grid-template-columns:1fr 1fr}
   .covrow{grid-template-columns:1fr 1fr 60px}.covsub{display:none}}
 @media(max-width:600px){.stats,.cards{grid-template-columns:1fr}h1{font-size:32px}}
 </style>
