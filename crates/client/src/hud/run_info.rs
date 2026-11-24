@@ -197,7 +197,8 @@ pub fn read(
     if *look != want {
         *look = want;
     }
-    let stages = sim.def().timing.stages.len() as u32 + 1;
+    // The selected map's chain (#1010): maps may have their own stage list.
+    let stages = sim.def().map_timing(world.map).stages.len() as u32 + 1;
     let deaths = world.engine.run.deaths;
     let now = RunInfo {
         ticks: preview
@@ -705,6 +706,64 @@ mod tests {
             [Some("Teleport".into()), None, Some("Slow".into()), None]
         );
         assert_eq!(looks("clear.pkg"), [None, None, None, None]);
+    }
+
+    /// #1010: the stage total comes from the selected map's timing chain, not the package
+    /// `[timing]`'s one.
+    #[test]
+    fn the_stage_total_comes_from_the_selected_map() {
+        use bevy::ecs::system::RunSystemOnce;
+
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let mut def = (*pkg.def).clone();
+        let base = def.timing.clone();
+        def.maps = vec![
+            iwbtg_sim::def::MapDef {
+                id: "main".to_owned(),
+                timing: base.clone(),
+                start: iwbtg_sim::stripped::RankedStart::default(),
+            },
+            iwbtg_sim::def::MapDef {
+                id: "two".to_owned(),
+                timing: iwbtg_sim::timing::TimingDef {
+                    start: base.start,
+                    end: base.end,
+                    stages: vec![
+                        iwbtg_sim::timing::TimingTrigger::RunStart,
+                        iwbtg_sim::timing::TimingTrigger::RunStart,
+                    ],
+                },
+                start: iwbtg_sim::stripped::RankedStart::default(),
+            },
+        ];
+        let def = std::sync::Arc::new(def);
+        let options = iwbtg_sim::sim::SimOptions {
+            start: iwbtg_sim::room::StartPoint::NewGame { difficulty: 0 },
+            seed: 0,
+            dll_mode: iwbtg_sim::sound::DllMode::Model,
+            mode: PlayMode::Original,
+            map: Some("two".to_owned()),
+        };
+        let prepared = iwbtg_sim::sim::Sim::prepare(&def).unwrap();
+        let sim = iwbtg_sim::sim::Sim::new_prepared(def, options, &prepared).unwrap();
+        let mut world = World::new();
+        world.insert_non_send(Game { sim });
+        world.insert_resource(Paused::default());
+        world.insert_resource(Preview::default());
+        world.insert_resource(crate::hud::Shown::default());
+        world.init_resource::<StageDeaths>();
+        world.init_resource::<RunInfo>();
+        world.init_resource::<Look>();
+        // The first tick fires both RunStart stages.
+        world
+            .non_send_mut::<Game>()
+            .sim
+            .step(iwbtg_sim::input::InputFrame::EMPTY);
+        world.run_system_once(read).unwrap();
+        let info = world.resource::<RunInfo>();
+        assert_eq!(info.stages, 3, "two stage splits and the end");
+        assert_eq!(info.stage, 3, "both stages done: the last segment");
     }
 
     #[test]
