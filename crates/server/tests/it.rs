@@ -13,3 +13,6 @@ mod db;
 
 #[path = "healthz.rs"]
 mod healthz;
+
+#[path = "catalog.rs"]
+mod catalog;

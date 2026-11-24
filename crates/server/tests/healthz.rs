@@ -8,7 +8,7 @@ use crate::support;
 
 #[tokio::test]
 async fn healthz_returns_ok() {
-    let response = iwbtg_server::app(support::memory_pool().await)
+    let response = iwbtg_server::app(support::memory_pool().await, None)
         .oneshot(Request::get("/healthz").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -23,7 +23,7 @@ async fn healthz_works_without_the_database() {
     let pool = support::memory_pool().await;
     pool.close().await;
 
-    let response = iwbtg_server::app(pool)
+    let response = iwbtg_server::app(pool, None)
         .oneshot(Request::get("/healthz").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -32,7 +32,7 @@ async fn healthz_works_without_the_database() {
 
 #[tokio::test]
 async fn unknown_path_is_not_found() {
-    let response = iwbtg_server::app(support::memory_pool().await)
+    let response = iwbtg_server::app(support::memory_pool().await, None)
         .oneshot(Request::get("/nope").body(Body::empty()).unwrap())
         .await
         .unwrap();
