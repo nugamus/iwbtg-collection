@@ -6,7 +6,7 @@ Read this page when coordinating worktrees, triaging, or placing documentation. 
 
 1. Read the issue, its blockers/parent and `docs/lanes/<lane>.md`; claim it with `in-progress` and a comment.
 2. Work in your lane worktree. Run the narrow tests for what you touched, then `cargo xtask check` once before the PR. It streams actionable lines, keeps a complete per-step log under `target/xtask/logs/`, and reuses a step only when its `target/xtask/receipts/` identity, argv and cwd still match; read the log or rerun only the invalidated step instead of repeating everything.
-3. Update affected docs; open the PR with `Closes #N`, Docs updated, Follow-up issues and the real User check output.
+3. Update affected docs; open the PR with the issue link on its own line (`Closes #N`, or `Part of #N` for one part of a multi-repo issue; see [Linking the issue](#linking-the-issue)), Docs updated, Follow-up issues and the real User check output.
 4. The PR owner reviews the diff, runs the User check and requests `gh pr merge <N> --squash --auto`. Contract/cross-area changes seek domain review; routine fixes need no separate lead or reviewer chain.
 5. A lead only handles spawning and integration after merge waves; the user tests visible changes on `main` in batches.
 
@@ -15,6 +15,12 @@ Read this page when coordinating worktrees, triaging, or placing documentation. 
 Keep one warm worktree per lane: `../worktrees/<repo>-<lane>`. Create it once with `git worktree add ../worktrees/<repo>-<lane> -b issue-<N>-<name> origin/main`; reuse it for the next branch after committing and fetching. Use the lane's absolute working directory for every edit/command. Do not remove a worktree between issues or change its branch while another agent owns it. Wait for the previous owner to shut down before reassigning the lane. Never let two agents edit the same files/worktree.
 
 The PR owner performs the normal diff review against the [PR review checklist](#pr-review-checklist), executes the User check and requests auto-merge. Seek a lead/domain review when a change crosses ownership or changes a behavior contract; avoid mandatory implementer → reviewer agent → lead review chains on routine fixes. Remote required approvals/checks still apply. Leads integrate after merge waves: inspect main CI, repair breakage and run fidelity when sim/format changed; the lead refreshes the per-game port progress with the fidelity sweep after each merge wave. Screenshots are required for UI/rendering changes. User decisions and batched main playtests remain with the user.
+
+## Linking the issue
+
+The `body` check reads the issue link from a line that starts with `Closes`, `Fixes`, `Resolves`, `Part of`, `Refs` or `Tracking:` followed by `#<n>`; a list marker before the keyword is allowed. Use `Closes #N` (or `Fixes`/`Resolves`) when the PR finishes the issue — the default for a single-issue PR. Use `Part of #N` or `Refs #N` when the PR is one part of a multi-repo issue and the lead closes it after the other repositories land. A body with no such line fails the check, and a keyword inside a sentence does not count.
+
+GitHub's own auto-close still reads `closes`, `fixes` and `resolves` anywhere in the body, prose included. Never write one next to an issue number unless you mean GitHub to close it on merge; write `Part of #N` instead.
 
 ## PR review checklist
 

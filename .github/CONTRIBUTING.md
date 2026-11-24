@@ -56,7 +56,7 @@ Update the docs a change affects in the same pull request. Architecture notes go
 
 ## Pull requests
 
-1. Branch from `main` as `issue-<n>-<short-name>` and start the body with `Closes #<n>`.
+1. Branch from `main` as `issue-<n>-<short-name>` and put the issue link on its own line at the start of the body: `Closes #<n>` when the PR finishes the issue, or `Part of #<n>` / `Refs #<n>` when it is one part of a multi-repo issue. A keyword in prose is not a link, and GitHub still closes an issue on `closes`/`fixes`/`resolves` anywhere in the body, so do not write one there unless you mean it ([linking the issue](../docs/agent-workflow.md#linking-the-issue)).
 2. Fill every section of the [pull request template](pull_request_template.md):
    - **What changed** and **Docs updated**: which docs the PR touches, or why none are needed.
    - **Follow-up issues**: the issues filed for findings, or "none".
