@@ -128,6 +128,15 @@ Design:
 - Email verification needs SMTP. Until SMTP exists, leaderboard submissions are gated by the review queue instead of email verification.
 - Accounts can be deleted and exported. A privacy page exists before accounts go public.
 
+### Password endpoints
+
+`crates/server/src/auth.rs` serves the first two steps (#156):
+
+- `POST /auth/register` takes `{username, email?, password}` and answers `201 {id, username}`. The username is stored as typed plus its canonical form; the email is optional, lowercased and unique when present. A duplicate username and a duplicate email get the same `409` message, so registration does not say which one exists.
+- `POST /auth/login` takes `{login, password}`, where `login` is a username (any casing) or an email, and answers `200 {id, username}`. An unknown account and a wrong password get the same `401`; the unknown path still runs an Argon2id hash, so the timing does not tell them apart either.
+- Only the Argon2id PHC string (m=19456 KiB, t=2, p=1) is stored, never the password. Hashing runs on a blocking worker. Passwords must be 15 characters until a breached-password list exists (the documented 8 + breach branch).
+- These endpoints are JSON only and create no session; #157 adds sessions, cookies, CSRF and the server-rendered forms.
+
 ## Risks
 
 - Cloudflare's terms limit serving many large files (audio) through its CDN on free plans. When downloads grow, move `/files/` to Cloudflare R2 (no egress fees) by changing catalog URLs.
