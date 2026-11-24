@@ -8,6 +8,8 @@ version = "0.1.0"
 engine_rev = 0
 runner = "gm80"
 physics = "physics.toml"
+# A replay picks the variant room with `replay run ... --room <id>`; a run without `--room`
+# starts at the 5,000-bullet native room, as does the new game here.
 start_room = "native_5000"
 max_ticks = 180_000
 object_order = [
@@ -17,11 +19,6 @@ object_order = [
 
 [engine]
 new_game_room = "native_5000"
-
-# Ranked start: the way a `.inputs` replay picks the scripted variant, since `replay run` has no
-# room option. `--mode original` runs `start_room` (native bullets); `--mode stripped` runs this.
-[stripped]
-start = { room = "scripted_5000" }
 
 [[creators]]
 name = "IWBTG Collection"
