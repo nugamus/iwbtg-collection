@@ -1733,24 +1733,26 @@ source = \"x\"
 ";
 
     /// WP-era ids (`WP` plus a number) are retired (docs/architecture/testing.md, "Naming
-    /// tests"). Each count is a ceiling: an area that gains one fails. #986 (`crates/sim/src`)
-    /// and #1090 (`crates/sim/tests`) still carry the remaining ones; the PR that removes an
-    /// area's last ids lowers its ceiling here.
+    /// tests"). Each count is a ceiling: an area that gains one fails. #986 removed the ownership
+    /// headers and #1407 excluded the generated schemas, so #1426 set each ceiling to the tracked
+    /// count at `fe3d58c`; the PR that removes an area's last ids lowers its ceiling here.
+    /// `crates/tools` was 1 when #1350 opened: if that PR changes the count, adjust that entry
+    /// there.
     const WP_CEILINGS: &[(&str, usize)] = &[
         ("(root)", 1),
         (".claude", 1),
         (".github", 0),
-        ("crates/format", 98),
+        ("crates/format", 63),
         ("crates/sim", 2),
-        ("crates/sim/src", 470),
-        ("crates/sim/tests", 242),
-        ("crates/tools", 16),
+        ("crates/sim/src", 7),
+        ("crates/sim/tests", 127),
+        ("crates/tools", 1),
         ("crates/xtask", 0),
         ("docs", 9),
         ("docs/architecture", 12),
-        ("docs/format", 70),
+        ("docs/format", 32),
         ("docs/lanes", 0),
-        ("docs/plans", 381),
+        ("docs/plans", 377),
         ("scripts", 0),
     ];
 
