@@ -6,7 +6,7 @@ Part of [the simulation](../sim.md).
 
 Every built-in is one file under `crates/sim/src/builtins/` and one `Builtin` variant in `def/builtin.rs`. Each kind's parameters, defaults, events and behavior are documented once in `docs/format/builtins/<kind>.md`; the original objects' differences become parameters, so engine families never get separate kinds. The cherry is `killer`, and the original's player_start is `kid_start`.
 
-This is the live text of sections 6.1 and 6.2 of [the sim core plan](../../plans/sim-core.md), which stays only as history; this page is the authority.
+Spec: `research/specs/mechanics/*.md` (claims `MECH-NNN`; index `research/specs/INDEX.md`). This is the live text of sections 6.1 and 6.2 of [the sim core plan](../../plans/sim-core.md), which stays only as history; this page is the authority.
 
 ```rust
 // builtins/mod.rs

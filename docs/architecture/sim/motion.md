@@ -4,7 +4,7 @@ Part of [the simulation](../sim.md).
 
 ## Motion
 
-GM8's motion variables and the automatic motion step (row 8 of the [tick pipeline](tick.md)). This is the live text of the [sim core plan](../../plans/sim-core.md) section 3.1, which stays only as history.
+GM8's motion variables and the automatic motion step (row 8 of the [tick pipeline](tick.md)). Spec: `research/specs/engines/gm8/runner/motion.md` (claims `MOT-NNN`; index `research/specs/INDEX.md`). This is the live text of the [sim core plan](../../plans/sim-core.md) section 3.1, which stays only as history.
 
 - **`Motion`** holds every GM motion variable (`x`, `y`, `xstart`, `ystart`, `xprevious`, `yprevious`, `hspeed`, `vspeed`, `speed`, `direction`, `gravity`, `gravity_direction`, `friction`) with private fields and one accessor per variable. A setter recomputes the coupled variables and rejects a non-finite value with `SimError::NonFinite` ([numbers](numbers.md)).
 

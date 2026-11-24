@@ -45,7 +45,7 @@ crates/sim/src/
   hash.rs         Canonical state hash
 ```
 
-Each built-in is implemented once in `builtins/<kind>.rs` and documented once in `docs/format/builtins/<kind>.md`: parameters, behavior, which event phase it runs in, which games use it, and the CLONE_SPEC section it comes from.
+Each built-in is implemented once in `builtins/<kind>.rs` and documented once in `docs/format/builtins/<kind>.md`: parameters, behavior, which event phase it runs in, which games use it, and the research claim id it comes from.
 
 ### Sim purity
 
