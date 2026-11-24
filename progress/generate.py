@@ -9,7 +9,7 @@ coverage from the research checkout. `generate.py` merges that with the committe
 front-matter and, with `--gh`, the live phase/issue/port data.
 
 Object coverage is real today:
-  * placed instances and built-in coverage from specs/mechanics.md;
+  * placed instances and built-in coverage from specs/mechanics/coverage.md;
   * custom objects from shortlist.md;
   * recorded traces and the object names they exercise from the trace CSVs.
 
@@ -117,6 +117,8 @@ def load_games():
             "difficulty": as_float(ex.get("difficulty")),
             "lifecycle": ex.get("lifecycle") or fm.get("status") or "unknown",
             "converted": ex.get("converted"),
+            "objects_in_package": as_int(ex.get("objects_in_package")),
+            "objects_unmapped": as_int(ex.get("objects_unmapped")),
             "rooms": as_int(ex.get("rooms")),
             "placed_instances": placed,
             "builtin_instances": builtin,
@@ -310,6 +312,8 @@ def compute_overall(games):
         "traces_recorded": total("traces_recorded"),
         "objects_exercised": total("objects_exercised"),
         "objects_exercised_unique": len({o for g in games for o in (g.get("trace_objects") or [])}),
+        "games_converted": sum(1 for g in games if g.get("converted")),
+        "games_converter_known": sum(1 for g in games if g.get("converted") is not None),
         "games_census": sum(1 for g in games if g["placed_instances"]),
         "games_traces": sum(1 for g in games if g["traces_recorded"]),
         "games_total": len(games),
@@ -451,6 +455,13 @@ def coverage_rows(games):
             port_cell = '<span class="muted">no port issue</span>'
         traces = (f'{fmt(g["traces_recorded"])}' if g["traces_recorded"] is not None
                   else '<span class="muted">none</span>')
+        if g.get("converted") is True:
+            conv_cell = (f'<span class="pill good"><span class="ico">●</span>converted</span>'
+                         f'<div class="frac">{fmt(g["objects_in_package"])} objects</div>')
+        elif g.get("converted") is False:
+            conv_cell = '<span class="pill mid"><span class="ico">○</span>not converted</span>'
+        else:
+            conv_cell = '<span class="muted">unknown</span>'
         out.append(f"""
         <tr data-name="{esc((g['name'] + ' ' + g['slug']).lower())}"
             data-cov="{g['builtin_pct'] if g['builtin_pct'] is not None else -1}"
@@ -466,6 +477,7 @@ def coverage_rows(games):
           <td class="num">{fmt(g['custom_objects'])}</td>
           <td class="num">{traces}</td>
           <td class="num">{fmt(g['objects_exercised'])}</td>
+          <td>{conv_cell}</td>
           <td>{port_cell}</td>
         </tr>""")
     return "".join(out)
@@ -831,10 +843,10 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
   <label><input id="traces" type="checkbox"> Only games with traces</label>
 </div>
 <table id="games">
-<thead><tr><th class="num">#</th><th>Game</th><th class="num">Placed</th><th>Built-in coverage</th><th class="num">Script</th><th class="num">Custom</th><th class="num">Traces</th><th class="num">Exercised</th><th>Port</th></tr></thead>
+<thead><tr><th class="num">#</th><th>Game</th><th class="num">Placed</th><th>Built-in coverage</th><th class="num">Script</th><th class="num">Custom</th><th class="num">Traces</th><th class="num">Exercised</th><th>Converter</th><th>Port</th></tr></thead>
 <tbody>__COVERAGE_ROWS__</tbody>
 </table>
-<p class="note">Placed instances and built-in coverage: <code>specs/mechanics.md</code> (SCAN, 2026-10-24). Custom objects: <code>shortlist.md</code>. Traces and exercised objects: the recorded CSVs under <code>specs/engines/gm8/traces/&lt;slug&gt;/</code>. <code>progress/export_research.py</code> regenerates these counts.</p>
+<p class="note">Placed instances and built-in coverage: <code>specs/mechanics/coverage.md</code> (SCAN, 2026-10-24). Custom objects: <code>shortlist.md</code>. Traces and exercised objects: the recorded CSVs under <code>specs/engines/gm8/traces/&lt;slug&gt;/</code>. <code>progress/export_research.py</code> regenerates these counts.</p>
 
 <div class="callout"><b>Passing-trace coverage is not measured yet.</b> Recorded traces and the object names they exercise are shown above; proving an object tick-accurate needs a converted package and the trace runner. That measurement is <a href="https://github.com/nugamus/iwbtg-collection/issues/__TRACEFU__">#__TRACEFU__</a>. The census exporter is <code>progress/export_research.py</code>.</div>
 
@@ -864,7 +876,7 @@ __COVERAGE_HISTORY__
 
 <footer>
   <p>Reproduce: <code>python -I progress/export_research.py --research ../iwbtg-collection-research</code>, then <code>python -I progress/generate.py --gh --history</code>. The workflow restores history from <code>gh-pages</code>, regenerates and publishes there; it never writes <code>main</code>.</p>
-  <p>Sources: <code>shortlist.md</code> · <code>specs/mechanics.md</code> · recorded trace CSVs. Follow-ups: <a href="https://github.com/nugamus/iwbtg-collection/issues/__TRACEFU__">passing-trace coverage #__TRACEFU__</a> · <a href="https://github.com/nugamus/iwbtg-collection/issues/__CONVERTER__">converter state #__CONVERTER__</a>.</p>
+  <p>Sources: <code>shortlist.md</code> · <code>specs/mechanics/coverage.md</code> · recorded trace CSVs · <code>build/reports/summary.json</code> (converter check). Follow-ups: <a href="https://github.com/nugamus/iwbtg-collection/issues/__TRACEFU__">passing-trace coverage #__TRACEFU__</a> · <a href="https://github.com/nugamus/iwbtg-collection/issues/__CONVERTER__">converter state #__CONVERTER__</a>.</p>
 </footer>
 </main>
 <script>

@@ -19,7 +19,7 @@ Every number is a numerator and denominator. A missing source renders **not meas
 
 ## What the page shows now
 
-- **Object coverage** — per game: placed instances and the share covered by a documented built-in (`specs/mechanics.md`), script-object instances, custom object types (`shortlist.md`), recorded traces, and the distinct object names those traces exercise.
+- **Object coverage** — per game: placed instances and the share covered by a documented built-in (`specs/mechanics/coverage.md`), script-object instances, custom object types (`shortlist.md`), recorded traces, and the distinct object names those traces exercise.
 - **Passing-trace coverage** — not measured yet: it needs converted packages and the trace runner (#1365). Recorded traces and the objects they exercise are shown instead.
 - **Phase progress** — closed/total issues and remaining size points per phase, with the entry and exit condition behind *Gate*.
 - **Ports** — each port issue, its *Done when* progress, and its state, joined into the coverage table.
@@ -62,7 +62,7 @@ python -I progress/export_research.py --research ../iwbtg-collection-research --
 Sources:
 
 - `shortlist.md` — custom objects, rooms, engine, genre and difficulty per game;
-- `specs/mechanics.md` — the game × built-in placed-instance coverage table (SCAN, 2026-10-24);
+- `specs/mechanics/coverage.md` — the game × built-in placed-instance coverage table (SCAN, 2026-10-24);
 - `specs/engines/gm8/traces/<slug>/*.csv` — recorded traces and the distinct `object` names they exercise.
 
 Schema:
@@ -96,7 +96,18 @@ Schema:
 | `objects_exercised`, `trace_objects` | distinct object names in those CSVs |
 | `rooms`, `genre`, `difficulty`, `engine` | `shortlist.md` |
 
-Only aggregate counts are committed; no original game content is copied. Passing-trace coverage (#1365) and converter state (#1366) still need converted packages.
+Converter state comes from `build/reports/summary.json` in the research checkout, which `uv run iwc convert` writes. Each entry carries the result of a real `iwbtg pkg check` on the written package (`client_check`); the roadmap text is never read. A game is `converted` when its check ran with `ok` and no errors. If the report file is missing, the converter fields are left out and the page shows `unknown`. If the report exists but has no entry for a game, that game is `converted: false`.
+
+| Field | Meaning |
+|---|---|
+| `converted` | `true` when `pkg check` passed on the converted package, else `false` |
+| `objects_in_package` | objects in the converted package (built-in, preset, infra and unmapped) |
+| `objects_unmapped` | the part of `objects_in_package` still unmapped |
+| `check_errors`, `check_warnings` | `pkg check` diagnostic counts |
+
+`overall.games_converted` counts converted games; `source.converter` names the report, or is `null` when it was absent. The page's *Converter* column shows `converted` with the object count, `not converted`, or `unknown`. The share of census objects that sit in the package needs the census total (#1364).
+
+Only aggregate counts are committed; no original game content is copied. Passing-trace coverage (#1365) still needs the trace runner.
 
 ## Phase metrics
 

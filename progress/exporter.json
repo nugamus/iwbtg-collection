@@ -1,9 +1,10 @@
 {
- "generated_at": "2026-11-24T15:00:59Z",
+ "generated_at": "2026-11-24T17:13:20Z",
  "source": {
   "shortlist": "shortlist.md",
-  "mechanics": "specs/mechanics.md",
-  "traces": "specs/engines/gm8/traces"
+  "mechanics": "specs/mechanics/coverage.md",
+  "traces": "specs/engines/gm8/traces",
+  "converter": "build/reports/summary.json"
  },
  "games": {
   "rely-the-needle-4-2": {
@@ -22,7 +23,7 @@
    "script_pct": 0.15,
    "client_instances": 9,
    "kid_instances": 0,
-   "traces_recorded": 284,
+   "traces_recorded": 285,
    "objects_exercised": 6,
    "trace_objects": [
     "blood",
@@ -31,7 +32,12 @@
     "player",
     "savePoint",
     "world"
-   ]
+   ],
+   "converted": true,
+   "objects_in_package": 39,
+   "objects_unmapped": 6,
+   "check_errors": 0,
+   "check_warnings": 2
   },
   "go-the-jun-g-world": {
    "order": 2,
@@ -54,7 +60,12 @@
    "trace_objects": [
     "object1048",
     "player"
-   ]
+   ],
+   "converted": true,
+   "objects_in_package": 494,
+   "objects_unmapped": 318,
+   "check_errors": 0,
+   "check_warnings": 2
   },
   "deride-kotaro-from-aslant": {
    "order": 3,
@@ -82,7 +93,12 @@
     "player",
     "savePoint",
     "world"
-   ]
+   ],
+   "converted": true,
+   "objects_in_package": 153,
+   "objects_unmapped": 95,
+   "check_errors": 0,
+   "check_warnings": 2
   },
   "kaenbyou": {
    "order": 4,
@@ -112,7 +128,12 @@
     "player",
     "savePoint",
     "world"
-   ]
+   ],
+   "converted": true,
+   "objects_in_package": 111,
+   "objects_unmapped": 51,
+   "check_errors": 0,
+   "check_warnings": 2
   },
   "eat-the-lemon": {
    "order": 5,
@@ -130,13 +151,18 @@
    "script_pct": 0.53,
    "client_instances": 14,
    "kid_instances": 9,
-   "traces_recorded": 13,
+   "traces_recorded": 14,
    "objects_exercised": 3,
    "trace_objects": [
     "movingPlatform",
     "player",
     "world"
-   ]
+   ],
+   "converted": true,
+   "objects_in_package": 129,
+   "objects_unmapped": 69,
+   "check_errors": 0,
+   "check_warnings": 2
   },
   "eat-the-rori-girl": {
    "order": 6,
@@ -154,12 +180,18 @@
    "script_pct": 0.49,
    "client_instances": 6,
    "kid_instances": 0,
-   "traces_recorded": 6,
-   "objects_exercised": 2,
+   "traces_recorded": 9,
+   "objects_exercised": 3,
    "trace_objects": [
     "cherry",
+    "player",
     "world"
-   ]
+   ],
+   "converted": true,
+   "objects_in_package": 185,
+   "objects_unmapped": 141,
+   "check_errors": 0,
+   "check_warnings": 2
   },
   "wanna": {
    "order": 7,
@@ -177,7 +209,7 @@
    "script_pct": 6.48,
    "client_instances": 15,
    "kid_instances": 0,
-   "traces_recorded": 36,
+   "traces_recorded": 37,
    "objects_exercised": 5,
    "trace_objects": [
     "bow",
@@ -185,7 +217,12 @@
     "oSpike14b",
     "player",
     "world"
-   ]
+   ],
+   "converted": true,
+   "objects_in_package": 112,
+   "objects_unmapped": 68,
+   "check_errors": 0,
+   "check_warnings": 2
   },
   "be-fed-up-with-path-w": {
    "order": 8,
@@ -205,7 +242,12 @@
    "kid_instances": 0,
    "traces_recorded": 0,
    "objects_exercised": 0,
-   "trace_objects": []
+   "trace_objects": [],
+   "converted": true,
+   "objects_in_package": 240,
+   "objects_unmapped": 177,
+   "check_errors": 0,
+   "check_warnings": 2
   },
   "little-trap": {
    "order": 9,
@@ -223,12 +265,18 @@
    "script_pct": 3.21,
    "client_instances": 9,
    "kid_instances": 0,
-   "traces_recorded": 11,
-   "objects_exercised": 2,
+   "traces_recorded": 12,
+   "objects_exercised": 3,
    "trace_objects": [
     "menuSelect",
+    "playMusic",
     "player"
-   ]
+   ],
+   "converted": true,
+   "objects_in_package": 230,
+   "objects_unmapped": 167,
+   "check_errors": 0,
+   "check_warnings": 2
   },
   "clear-the-easy-miku-2": {
    "order": 10,
@@ -251,7 +299,12 @@
    "trace_objects": [
     "player",
     "world"
-   ]
+   ],
+   "converted": true,
+   "objects_in_package": 55,
+   "objects_unmapped": 30,
+   "check_errors": 0,
+   "check_warnings": 2
   },
   "little-runner": {
    "order": 11,
@@ -269,7 +322,7 @@
    "script_pct": 1.78,
    "client_instances": 6,
    "kid_instances": 0,
-   "traces_recorded": 40,
+   "traces_recorded": 41,
    "objects_exercised": 6,
    "trace_objects": [
     "bossBlueCherry",
@@ -278,7 +331,12 @@
     "camera",
     "player",
     "world"
-   ]
+   ],
+   "converted": true,
+   "objects_in_package": 412,
+   "objects_unmapped": 368,
+   "check_errors": 0,
+   "check_warnings": 2
   },
   "poronkusema": {
    "order": 12,
@@ -305,7 +363,12 @@
     "objTrigger",
     "objTriggerKey",
     "objTriggerReset"
-   ]
+   ],
+   "converted": true,
+   "objects_in_package": 228,
+   "objects_unmapped": 175,
+   "check_errors": 0,
+   "check_warnings": 2
   },
   "machinary": {
    "order": 13,
@@ -331,7 +394,12 @@
     "playMusic2",
     "player",
     "world"
-   ]
+   ],
+   "converted": true,
+   "objects_in_package": 151,
+   "objects_unmapped": 120,
+   "check_errors": 0,
+   "check_warnings": 2
   },
   "eat-the-new-year": {
    "order": 14,
@@ -353,7 +421,12 @@
    "objects_exercised": 1,
    "trace_objects": [
     "player"
-   ]
+   ],
+   "converted": true,
+   "objects_in_package": 139,
+   "objects_unmapped": 84,
+   "check_errors": 0,
+   "check_warnings": 2
   },
   "animus": {
    "order": 15,
@@ -371,15 +444,21 @@
    "script_pct": 1.6,
    "client_instances": 9,
    "kid_instances": 0,
-   "traces_recorded": 35,
-   "objects_exercised": 5,
+   "traces_recorded": 36,
+   "objects_exercised": 6,
    "trace_objects": [
     "GAMEOVER",
     "bloodEmitter",
     "boundwhite",
     "object862",
-    "player"
-   ]
+    "player",
+    "world"
+   ],
+   "converted": true,
+   "objects_in_package": 359,
+   "objects_unmapped": 284,
+   "check_errors": 0,
+   "check_warnings": 2
   },
   "help-the-fairy-tale": {
    "order": 16,
@@ -397,7 +476,7 @@
    "script_pct": 0.64,
    "client_instances": 6,
    "kid_instances": 0,
-   "traces_recorded": 16,
+   "traces_recorded": 19,
    "objects_exercised": 6,
    "trace_objects": [
     "bloodEmitter",
@@ -406,7 +485,12 @@
     "movingPlatform",
     "platform",
     "player"
-   ]
+   ],
+   "converted": true,
+   "objects_in_package": 326,
+   "objects_unmapped": 236,
+   "check_errors": 0,
+   "check_warnings": 2
   },
   "get-the-rainbow-feather": {
    "order": 17,
@@ -428,7 +512,12 @@
    "objects_exercised": 1,
    "trace_objects": [
     "player"
-   ]
+   ],
+   "converted": true,
+   "objects_in_package": 388,
+   "objects_unmapped": 289,
+   "check_errors": 0,
+   "check_warnings": 2
   },
   "showdown": {
    "order": 18,
@@ -446,12 +535,17 @@
    "script_pct": 2.5,
    "client_instances": 11,
    "kid_instances": 0,
-   "traces_recorded": 29,
+   "traces_recorded": 30,
    "objects_exercised": 2,
    "trace_objects": [
     "player",
     "world"
-   ]
+   ],
+   "converted": true,
+   "objects_in_package": 291,
+   "objects_unmapped": 230,
+   "check_errors": 0,
+   "check_warnings": 2
   },
   "go-the-spook-house": {
    "order": 19,
@@ -475,7 +569,12 @@
     "oTorch",
     "player",
     "world"
-   ]
+   ],
+   "converted": true,
+   "objects_in_package": 122,
+   "objects_unmapped": 83,
+   "check_errors": 0,
+   "check_warnings": 2
   },
   "keep-celebrating-for-xia": {
    "order": 20,
@@ -495,7 +594,12 @@
    "kid_instances": 0,
    "traces_recorded": 0,
    "objects_exercised": 0,
-   "trace_objects": []
+   "trace_objects": [],
+   "converted": true,
+   "objects_in_package": 113,
+   "objects_unmapped": 57,
+   "check_errors": 0,
+   "check_warnings": 2
   }
  },
  "overall": {
@@ -509,10 +613,11 @@
   "kid_instances": 9,
   "custom_objects": 699,
   "rooms": 458,
-  "traces_recorded": 647,
-  "objects_exercised": 73,
-  "objects_exercised_unique": 34,
+  "traces_recorded": 660,
+  "objects_exercised": 76,
+  "objects_exercised_unique": 35,
   "games_with_traces": 18,
+  "games_converted": 20,
   "games_with_census": 20
  }
 }
