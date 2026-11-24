@@ -68,6 +68,41 @@ These are requirements, not suggestions.
 7. **Host hardening.** SSH key-only, root login off, unattended security upgrades on. Docker engine updates are applied by hand or through an explicitly added apt origin.
 8. **Same site for the web client.** The WASM build is served from the same registrable domain as the API (for example `play.<domain>` and `api.<domain>`), so session cookies work.
 
+## Deployment
+
+Production is one `compose.yaml` with two services, `server` and `cloudflared` (Components). The image comes from the multi-stage `Dockerfile` in the repository root: the builder compiles `iwbtg-server` on the pinned Rust toolchain with the Cargo registry and target directory held in BuildKit cache mounts, and the runtime is `debian:trixie-slim` plus the binary, the CA roots and `curl` (the healthcheck client). Nothing in the running image is writable except the database mount.
+
+### Host layout
+
+Only `/srv/iwbtg` is created by hand. Secrets stay outside the checkout and are never mounted into the server container (rule 3):
+
+| Path | Holds | Owner and mode |
+|---|---|---|
+| `/srv/iwbtg/cloudflared.env` | `TUNNEL_TOKEN` only | `root:root`, `600` |
+| `/srv/iwbtg/server.env` | app secrets (OAuth, SMTP); optional until they exist | `root:root`, `600` |
+| named volume `iwbtg-data` | the SQLite file and its WAL siblings, at `/srv/iwbtg/data` | uid/gid `10001` |
+
+Rule 4 names `/srv/iwbtg/data` as the writable database path. Compose backs it with the named volume `iwbtg-data` rather than a host bind mount: Docker seeds a fresh volume with the image directory's ownership, so the non-root server (uid/gid `10001`) can write without a `chown` on the host. A bind mount at the same path also works; create it and `chown 10001:10001` it first.
+
+### Cloudflare Tunnel
+
+Create the tunnel in the Cloudflare dashboard (Zero Trust > Networks > Tunnels > Create a tunnel > Cloudflared), copy its token into `/srv/iwbtg/cloudflared.env`, and add a public hostname whose service is `http://server:8080`; the compose network resolves `server`. Ingress rules live in the dashboard, so `cloudflared` needs only its token and there is no second config file in git. Neither service publishes a host port (rule 4), so the tunnel is the only way in.
+
+### Install, start and update
+
+```sh
+sudo install -d -m 700 /srv/iwbtg
+sudo install -m 600 deploy/cloudflared.env.example /srv/iwbtg/cloudflared.env
+sudoedit /srv/iwbtg/cloudflared.env            # paste the tunnel token
+
+docker compose config                          # validates the file, touches nothing
+docker compose up -d --build
+docker compose ps                              # server healthy, cloudflared up
+curl -fsS https://<public-hostname>/healthz    # -> ok
+```
+
+Create the token file before the first `up`: `cloudflared` exits without it and restarts until it exists. `docker compose logs -f server` follows the JSON logs. Updates are `git pull && docker compose build && docker compose up -d`; migrations run at startup and a failed one exits 1 instead of serving (Schema). The host restic timer reads the volume through a throwaway container (`docker run --rm -v iwbtg-data:/data:ro ...`), so backup credentials never enter a container (rule 3).
+
 ## Accounts and sign-in
 
 Reference flow: https://typebeat.sh/register (observed 2026-10-23). One centred card, square corners, one accent colour, "Continue with Google" as a ghost button, an "OR" divider, short forms with hints under each field, login by username or email, "Remember me for 30 days", password reset by emailed 6-digit code.
