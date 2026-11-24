@@ -27,7 +27,7 @@ The root settings file is in no repo. Its tracked copy is `iwbtg-collection/work
 
 ## Why `iwbtg-collection-games/` has no packages yet
 
-That's expected. `iwc convert` (research) writes its packages to `iwbtg-collection-research/build/packages/`, which is gitignored. They are research builds from extracted originals. A package only moves into `iwbtg-collection-games/<game_id>/` when its port issue runs (games repo, milestones M3 and M5). On 2026-11-02, `iwbtg-collection-research/build/packages/` held 20 packages.
+That's expected. `iwc convert` (research) writes its packages to `iwbtg-collection-research/build/packages/`, which is gitignored. They are research builds from extracted originals. A package only moves into `iwbtg-collection-games/<game_id>/` when its port issue runs (games repo, phases 4 (First playable) and 9 (Content & ports)). On 2026-11-02, `iwbtg-collection-research/build/packages/` held 20 packages.
 
 ## Toolchain
 

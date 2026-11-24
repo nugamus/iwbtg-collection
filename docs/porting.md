@@ -193,7 +193,7 @@ State on 2026-11-20. Each row names what it changes in this page.
 
 ## Checklist for a port issue
 
-Each M5 port issue copies this list and splits it into sub-issues; games#1 carries the same list from the milestone review. Every item names its owner and its gate so an agent can start without re-reading this page.
+Each phase 9 port issue copies this list and splits it into sub-issues; games#1 carries the same list from the milestone review. Every item names its owner and its gate so an agent can start without re-reading this page.
 
 - [ ] **Version and source recorded** (agent, 15 min): version chosen, URL, creators, permission status.
 - [ ] **Downloaded and VirusTotal-clean** (agent; human only on a flag).

@@ -1,0 +1,69 @@
+name: progress
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "progress/**"
+      - "docs/games/**"
+      - ".github/workflows/progress.yml"
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: progress
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore the durable history from gh-pages
+        run: |
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git fetch --depth=1 origin gh-pages
+            git show origin/gh-pages:history.json > progress/history.json 2>/dev/null || true
+          fi
+
+      - name: Generate the dashboard from committed files plus gh
+        run: python -I progress/generate.py --gh --history
+
+      - name: Publish to gh-pages and fail visibly
+        run: |
+          worktree=$(mktemp -d)
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git worktree add "$worktree" -B gh-pages origin/gh-pages
+          else
+            git worktree add --detach "$worktree"
+            git -C "$worktree" checkout --orphan gh-pages
+            git -C "$worktree" rm -rf . -q || true
+          fi
+          cp progress/index.html progress/data.json progress/history.json "$worktree/"
+          touch "$worktree/.nojekyll"
+          git -C "$worktree" add index.html data.json history.json .nojekyll
+          if git -C "$worktree" diff --cached --quiet; then
+            echo "no publish change"
+          else
+            git -C "$worktree" config user.name "github-actions[bot]"
+            git -C "$worktree" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git -C "$worktree" commit -m "progress: publish ${GITHUB_SHA:0:7} [skip ci]"
+            git -C "$worktree" push origin HEAD:gh-pages
+          fi
+
+      - name: Request a Pages build
+        run: gh api -X POST "repos/${GITHUB_REPOSITORY}/pages/builds" --silent

@@ -45,7 +45,7 @@ Difficulty is not a mod (decided 2026-11-04). A fangame is the parent entry in g
 - A separate tab ranks clears by fewest deaths, with time as the tiebreak.
 - Ranked runs use a random RNG seed per run, as the originals do. The server flags reused seeds.
 - Anti-cheat: the server re-simulates every replay. Top runs and flagged runs also go through manual review, which can ask for video. Runs made offline are queued and submitted when the client is back online.
-- An engine rebuild does not split a leaderboard. The server re-simulates every stored record with the new build under the settings the game was ranked with — its ruleset and compatibility profile are frozen at ranking, and only the engine build changes. A record that still verifies keeps its place; one that fails is quarantined for review, not deleted, and stays verifiable on the engine build it was set on. The replay-compatibility freeze begins with the first public M7 nightly ([versioning](architecture/versioning.md)).
+- An engine rebuild does not split a leaderboard. The server re-simulates every stored record with the new build under the settings the game was ranked with — its ruleset and compatibility profile are frozen at ranking, and only the engine build changes. A record that still verifies keeps its place; one that fails is quarantined for review, not deleted, and stays verifiable on the engine build it was set on. The replay-compatibility freeze begins with the first public phase 7 nightly ([versioning](architecture/versioning.md)).
 - Later: a performance-points system like osu!'s pp, which ranks players across all games. This is a release-era feature and its design is open.
 
 ## Restart keys
@@ -130,7 +130,7 @@ Games whose creators cannot be reached (`community-assumed`) may be served publi
 Decided 2026-11-02.
 
 - **Open source.** The client repo (code and docs) has been public since 2026-11-02 (GitHub Actions minutes for private repos ran out, so the user made it public so CI runs). The research and games repos stay private, because they hold notes on creators' games and the ported content.
-- **Public alpha.** It starts at M7, even though the client repo is already public. Nightly builds are public from then on.
+- **Public alpha.** It starts at phase 7, even though the client repo is already public. Nightly builds are public from then on.
 - **Community.** There is a Discord server for players, porters and testers.
 - **Bug reports.** They arrive in two ways, and both become `triage` issues:
   - Players post them in a Discord bug channel, and the user or an agent copies them into issues.
@@ -156,7 +156,7 @@ Ideas the user wants to work out over time. Nothing here is decided.
 - **Community games.** Player-made games from the level editor, uploaded to the site, which become rankable only after curation.
 - **Performance points.** A cross-game skill ranking (see [Leaderboards](#leaderboards)).
 - **Player ratings.** 1-10 stars, only from players who cleared the game. Delicious-fruit ratings are never imported.
-- **Name.** The project gets its own original name before the public alpha (M7); the repo is already public under the working title. "IWBTG Collection" is a working title.
+- **Name.** The project gets its own original name before the public alpha (phase 7); the repo is already public under the working title. "IWBTG Collection" is a working title.
 
 ## Per-game questions
 

@@ -137,7 +137,7 @@ def plan(paths, graph, full=False, root=ROOT):
             selected.update({'iwbtg-sim', 'iwbtg-format'})
             inputs.append({'path': path, 'selection': 'iwbtg-sim,iwbtg-format',
                            'reason': 'documentation fixture read by sim/format tests'})
-        elif path.startswith(('docs/', 'workspace/', '.claude/')) or path.endswith('.md'):
+        elif path.startswith(('docs/', 'workspace/', '.claude/', 'progress/')) or path.endswith('.md'):
             inputs.append({'path': path, 'selection': 'none',
                            'reason': 'documentation or harness prose'})
         else:

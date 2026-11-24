@@ -1606,6 +1606,22 @@ source = \"x\"
         let mut files = Vec::new();
         text_files(&root, &mut files);
         for path in files {
+            // The dashboard snapshots quote GitHub issue titles verbatim; they are generated
+            // output, not authored identifiers, so they do not count against the root ceiling.
+            let rel = path
+                .strip_prefix(&root)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .replace('\\', "/");
+            if matches!(
+                rel.as_str(),
+                "progress/data.json"
+                    | "progress/history.json"
+                    | "progress/index.html"
+                    | "progress/exporter.json"
+            ) {
+                continue;
+            }
             let Ok(text) = std::fs::read_to_string(&path) else {
                 continue; // binary or not UTF-8
             };

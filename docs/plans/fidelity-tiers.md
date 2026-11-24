@@ -47,8 +47,8 @@ Judge a question in this order:
 - **F1 blocks Ranked.** The game's Ranked status waits until every F1 item is answered and proven (a trace case, a feel contract, or the spec's confirmed rule). Ranked is where positions, deaths and timing must match.
 - **F2 blocks Beta only if visible.** A visible F2 difference (a wrong sprite, a missing sound, a menu that misbehaves) blocks Beta until fixed or accepted on the game's page. An invisible one is F3 and is logged.
 - **F3 is recorded and never blocks.** It stays in the register and the game's deviation log so a later change does not lose it. It is free to redesign.
-- **M2's done-when counts F1 only.** M2 closes on the F1 items; an F2 or F3 item does not keep the milestone open. The register keeps every row; closing M2 does not delete the tier.
-- **F2 and F3 move to the work they affect.** An F2/F3 item moves to the affected game's port issue (games repo, M5) or to M5 in its own repo. It is not closed and its labels are not removed; only its milestone changes.
+- **Phase 3's done-when counts F1 only.** Phase 3 closes on the F1 items; an F2 or F3 item does not keep the phase open. The register keeps every row; closing phase 3 does not delete the tier.
+- **F2 and F3 move to the work they affect.** An F2/F3 item moves to the affected game's port issue (games repo) or to its own repo. In this repo it gets the phase 9 milestone; in the research or games repo it gets a `Phase: 9 · Content & ports` pointer and keeps its labels. It is not closed.
 - **F? is never moved and never blocks.** It stays where it is until evidence lands, then gets a tier.
 
 A tier is a judgement, not a verdict on quality: F2 and F3 items are still fidelity work, and an F1 answer can reveal an F2 follow-up.
@@ -70,4 +70,4 @@ A tier change is an ordinary edit. Record the date and the evidence that moved i
 
 ## The one-time triage
 
-#784 applied the tiers once to the open M2 fidelity questions: each got an `Impact:` comment, clear T2/T3 items moved to their game's port issue or M5, and ambiguous items were left as `T?` for a later pass. The tiers stay in force after that pass: every new mechanic or fidelity issue gets an F tier when it is filed, and every register row keeps one.
+#784 applied the tiers once to the open phase 3 fidelity questions: each got an `Impact:` comment, clear T2/T3 items moved to their game's port issue or phase 9, and ambiguous items were left as `T?` for a later pass. The tiers stay in force after that pass: every new mechanic or fidelity issue gets an F tier when it is filed, and every register row keeps one.

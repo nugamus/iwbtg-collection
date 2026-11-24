@@ -1,6 +1,6 @@
 # Versioning: SIM_VERSION, engine_rev, gameplay_hash and format
 
-Part of [Architecture](../architecture.md). Status: decided 2026-11-21 (#933). A board does not split on a `SIM_VERSION` bump: records are re-verified under the settings frozen at ranking, and a record that fails is quarantined rather than deleted. The replay-compatibility freeze is the first public nightly of M7.
+Part of [Architecture](../architecture.md). Status: decided 2026-11-21 (#933). A board does not split on a `SIM_VERSION` bump: records are re-verified under the settings frozen at ranking, and a record that fails is quarantined rather than deleted. The replay-compatibility freeze is the first public nightly of phase 7.
 
 The goal: a replay recorded today still verifies, with the same time, years from now, and an engine fix never silently changes a board.
 
@@ -30,7 +30,7 @@ Keying on `SIM_VERSION` as well would split every board at every Rhai or toolcha
 ## When `SIM_VERSION` bumps
 
 - **Before the freeze point** it normally stays `1`; outcome-changing PRs re-pin the golden hashes with `cargo xtask repin`. A state-hash encoding change still bumps it even before the freeze: `HASH_LAYOUT` 3 shipped as `SIM_VERSION` 2 (#1157/#1292, bumped by #1303), because a verifier that only compared hashes could not tell "wrong build" from "wrong run". `iwbtg replay verify` reports a `sim_version` mismatch and stops before any hash comparison for a replay from another build. Replays recorded before the freeze (local replays and PBs, #476) may stop verifying with a later build; their times stay in the local stats.
-- **The freeze point** is when `SIM_VERSION_FREEZE` in `crates/sim/src/lib.rs` changes from `None` to `Some(SIM_VERSION)`. **Decided (2026-11-21, #933): the first public nightly of M7**, the first build whose runs reach a public board. Until then, counting versions only creates history nobody needs.
+- **The freeze point** is when `SIM_VERSION_FREEZE` in `crates/sim/src/lib.rs` changes from `None` to `Some(SIM_VERSION)`. **Decided (2026-11-21, #933): the first public nightly of phase 7**, the first build whose runs reach a public board. Until then, counting versions only creates history nobody needs.
 - **After the freeze point** every change that alters an outcome of an existing package on its current `engine_rev` bumps `SIM_VERSION`. A fix that should change outcomes goes under a new `engine_rev` instead (next section), so that old revisions, the golden corpus and `SIM_VERSION` all stay as they were. A bump is therefore rare and means "this build cannot verify older replays": Rhai, Rust or `libm` upgrades, a hash encoding change, a replay decoding change. A bump never moves a board to a new key; it triggers the re-verification pass below.
 
 ### Re-verification after a rebuild

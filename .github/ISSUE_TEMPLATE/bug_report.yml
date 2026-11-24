@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         Thanks for the report. Do not attach original game files, decompiled code or personal data.
-        For a security problem, use the private process in SECURITY.md instead of this form.
+        For a security problem, use the private process in .github/SECURITY.md instead of this form.
   - type: textarea
     id: what-happened
     attributes:
