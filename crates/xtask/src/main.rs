@@ -623,6 +623,38 @@ fn scan_open_todos(dir: &Path, bad: &mut Vec<(PathBuf, usize, String)>) -> Resul
     Ok(())
 }
 
+/// Packages whose sources or doc comments feed a generated schema: the sim's `schema` feature
+/// renders `PhysicsProfileDraft` and its drafts from their doc comments, and the format crate owns
+/// the generator (#1064).
+const SCHEMA_INPUT_PACKAGES: [&str; 2] = ["iwbtg-sim", "iwbtg-format"];
+
+/// Whether the plan touches an input to a generated schema, as a changed crate or as a consumer of
+/// one. A doc-comment-only sim change puts the sim in `test` and the format crate in `compile`, so
+/// both sets are consulted.
+fn schema_step_needed(plan: &Plan) -> bool {
+    plan.test
+        .iter()
+        .chain(plan.compile.iter())
+        .any(|p| SCHEMA_INPUT_PACKAGES.contains(&p.as_str()))
+}
+
+/// The receipt identity for the schema step. `scripts/ci_scope.py` owns step identities and does
+/// not record this one, so derive a stable, input-sensitive identity from the recorded steps whose
+/// packages feed a schema; fall back to the whole-plan identity when none is recorded.
+fn schema_step_identity(plan: &Plan) -> String {
+    let parts: Vec<String> = plan
+        .step_identities
+        .iter()
+        .filter(|(key, _)| SCHEMA_INPUT_PACKAGES.iter().any(|p| key.contains(p)))
+        .map(|(key, identity)| format!("{key}={identity}"))
+        .collect();
+    if parts.is_empty() {
+        plan.identity.clone()
+    } else {
+        parts.join("\n")
+    }
+}
+
 fn check(root: &Path, all: bool) -> Result<(), String> {
     let files = changed_files(root, true)?;
     let plan = shared_plan(root, &files, all)?;
@@ -642,82 +674,87 @@ fn check(root: &Path, all: bool) -> Result<(), String> {
             let _ = writeln!(summary, "TODO(OPEN markers -> {e}");
         }
     }
-    let mut step = |root: &Path, what: &str, kind: &str, packages: &[String], args: &[&str]| {
-        let key = format!("{kind}:{}", packages.join(","));
-        let identity = plan
-            .step_identities
-            .get(&key)
-            .ok_or_else(|| format!("shared plan: missing identity for step `{key}`"))?;
-        let argv = format!("cargo {}", args.join(" "));
-        let cwd = root.display().to_string();
-        if let Some(receipt) = read_receipt(root, what) {
-            if receipt_usable(&receipt, identity, &argv, &cwd) {
-                println!("{what}: reused (inputs unchanged; log: {})", receipt.log);
-                let _ = writeln!(
-                    summary,
-                    "cargo {} -> reused (inputs unchanged) (log: {})",
-                    args.join(" "),
-                    receipt.log
-                );
-                return Ok(());
-            }
-            println!("{what}: invalidated (inputs or command changed)");
-        }
-        index += 1;
-        let started = Instant::now();
-        let report = run_logged(root, what, index, "cargo", args)?;
-        write_receipt(
-            root,
-            what,
-            &Receipt {
-                identity: identity.clone(),
-                argv,
-                cwd,
-                status: if report.ok { "ok" } else { "failed" }.to_owned(),
-                exit: report.exit.clone(),
-                log: report.log.display().to_string(),
-                duration_ms: started.elapsed().as_millis(),
-            },
-        )?;
-        let results: Vec<&str> = report.results.iter().map(String::as_str).collect();
-        let (passed, failed) = results.iter().fold((0u64, 0u64), |(p, f), l| {
-            let n = |word: &str| {
-                l.split(';')
-                    .find(|s| s.contains(word))
-                    .and_then(|s| s.split_whitespace().find_map(|w| w.parse::<u64>().ok()))
-                    .unwrap_or(0)
+    let mut step =
+        |root: &Path, what: &str, kind: &str, packages: &[String], args: &[&str], provided: Option<&str>| {
+            let key = format!("{kind}:{}", packages.join(","));
+            let identity = match provided {
+                Some(identity) => identity.to_owned(),
+                None => plan
+                    .step_identities
+                    .get(&key)
+                    .ok_or_else(|| format!("shared plan: missing identity for step `{key}`"))?
+                    .clone(),
             };
-            (p + n("passed"), f + n("failed"))
-        });
-        let line = if results.is_empty() {
-            format!("{what}: {}", if report.ok { "ok" } else { "FAILED" })
-        } else {
-            format!(
-                "{what}: {} test binaries, {passed} passed, {failed} failed",
-                results.len()
-            )
+            let argv = format!("cargo {}", args.join(" "));
+            let cwd = root.display().to_string();
+            if let Some(receipt) = read_receipt(root, what) {
+                if receipt_usable(&receipt, &identity, &argv, &cwd) {
+                    println!("{what}: reused (inputs unchanged; log: {})", receipt.log);
+                    let _ = writeln!(
+                        summary,
+                        "cargo {} -> reused (inputs unchanged) (log: {})",
+                        args.join(" "),
+                        receipt.log
+                    );
+                    return Ok(());
+                }
+                println!("{what}: invalidated (inputs or command changed)");
+            }
+            index += 1;
+            let started = Instant::now();
+            let report = run_logged(root, what, index, "cargo", args)?;
+            write_receipt(
+                root,
+                what,
+                &Receipt {
+                    identity: identity.clone(),
+                    argv,
+                    cwd,
+                    status: if report.ok { "ok" } else { "failed" }.to_owned(),
+                    exit: report.exit.clone(),
+                    log: report.log.display().to_string(),
+                    duration_ms: started.elapsed().as_millis(),
+                },
+            )?;
+            let results: Vec<&str> = report.results.iter().map(String::as_str).collect();
+            let (passed, failed) = results.iter().fold((0u64, 0u64), |(p, f), l| {
+                let n = |word: &str| {
+                    l.split(';')
+                        .find(|s| s.contains(word))
+                        .and_then(|s| s.split_whitespace().find_map(|w| w.parse::<u64>().ok()))
+                        .unwrap_or(0)
+                };
+                (p + n("passed"), f + n("failed"))
+            });
+            let line = if results.is_empty() {
+                format!("{what}: {}", if report.ok { "ok" } else { "FAILED" })
+            } else {
+                format!(
+                    "{what}: {} test binaries, {passed} passed, {failed} failed",
+                    results.len()
+                )
+            };
+            println!("{line}");
+            let _ = writeln!(
+                summary,
+                "cargo {} -> {line} (log: {})",
+                args.join(" "),
+                report.log.display()
+            );
+            if report.ok {
+                Ok(())
+            } else {
+                // The complete output is on disk; show the unfiltered tail so a nested cause is visible
+                // without rerunning the command (#1032).
+                Err(format!(
+                    "{what} failed ({}); full log: {}\n--- last {} lines ---\n{}",
+                    report.exit,
+                    report.log.display(),
+                    report.tail.len(),
+                    report.tail.join("\n")
+                ))
+            }
         };
-        println!("{line}");
-        let _ = writeln!(
-            summary,
-            "cargo {} -> {line} (log: {})",
-            args.join(" "),
-            report.log.display()
-        );
-        if report.ok {
-            Ok(())
-        } else {
-            // The complete output is on disk; show the unfiltered tail so a nested cause is visible
-            // without rerunning the command (#1032).
-            Err(format!(
-                "{what} failed ({}); full log: {}\n--- last {} lines ---\n{}",
-                report.exit,
-                report.log.display(),
-                report.tail.len(),
-                report.tail.join("\n")
-            ))
-        }
-    };
     let result = (|| {
         open_todos?;
         step(
@@ -726,10 +763,33 @@ fn check(root: &Path, all: bool) -> Result<(), String> {
             "rustfmt",
             &[],
             &["fmt", "--all", "--", "--check"],
+            None,
         )?;
         if !plan.code {
             println!("no crate changed (docs or harness only): nothing to build");
             return Ok(());
+        }
+        // Cheap and deterministic, and it runs before the long crate suites so a stale generated
+        // schema fails fast. A doc-comment-only change to the sim can stale the physics schema
+        // because `schemars` reads the doc comments (#1060, #1207); the shared plan then selects
+        // the sim tests and a format compile check, neither of which regenerates the schema (#1064).
+        if schema_step_needed(&plan) {
+            let identity = schema_step_identity(&plan);
+            step(
+                root,
+                "schema staleness (iwbtg-format)",
+                "schema",
+                &[],
+                &[
+                    "test",
+                    "-p",
+                    "iwbtg-format",
+                    "--test",
+                    "schemas",
+                    "schema_files_are_not_stale",
+                ],
+                Some(&identity),
+            )?;
         }
         let mut pkgs = Vec::new();
         for c in &plan.test {
@@ -744,6 +804,7 @@ fn check(root: &Path, all: bool) -> Result<(), String> {
             "clippy",
             &plan.test,
             &clippy,
+            None,
         )?;
         let mut t = vec!["test"];
         t.extend(&pkgs);
@@ -753,6 +814,7 @@ fn check(root: &Path, all: bool) -> Result<(), String> {
             "test",
             &plan.test,
             &t,
+            None,
         )?;
         if !plan.compile.is_empty() {
             let mut c = vec!["check", "--tests"];
@@ -765,6 +827,7 @@ fn check(root: &Path, all: bool) -> Result<(), String> {
                 "compile-check",
                 &plan.compile,
                 &c,
+                None,
             )?;
         }
         Ok(())
@@ -1691,10 +1754,11 @@ source = \"x\"
                 .any(|p| p.starts_with("(root)")),
             "the probe must be able to break the ratchet when counted: {naive:?}"
         );
-        assert!(
-            wp_ceiling_problems(&clean).is_empty(),
-            "tracked files alone must pass: {clean:?}"
-        );
+        // The tracked scan does not see the probe: its `(root)` count is the naive one minus the
+        // probe's two ids. Check only this, so an unrelated area over its ceiling (a merge wave
+        // waiting for its own fix) does not make this regression test fail for the wrong reason.
+        let root_ids = |counts: &BTreeMap<String, usize>| counts.get("(root)").copied().unwrap_or(0);
+        assert_eq!(root_ids(&naive), root_ids(&clean) + 2, "clean: {clean:?}");
     }
 
     /// The repository's tracked files (`git ls-files -z`), so a gitignored local file never counts.
@@ -2009,6 +2073,31 @@ version = \"1.0.0\"
             );
         }
         assert!(!plan.identity.is_empty());
+    }
+
+    /// A schema input selects the staleness test; the identity is input-sensitive and comes from
+    /// the shared plan's recorded steps (#1064).
+    #[test]
+    fn a_schema_input_change_selects_the_schema_staleness_test() {
+        // The sim's doc comments feed the physics schema (the case that cost #1060 and #1207).
+        let sim = planned(&["crates/sim/src/def/physics.rs"], false);
+        assert!(schema_step_needed(&sim), "{:?}", sim.test);
+        let identity = schema_step_identity(&sim);
+        assert!(identity.contains("test:iwbtg-sim="), "{identity}");
+        assert!(identity.contains("iwbtg-format"), "{identity}");
+        // The format crate owns the generator.
+        let format = planned(&["crates/format/src/schema.rs"], false);
+        assert!(schema_step_needed(&format), "{:?}", format.test);
+        assert!(schema_step_identity(&format).contains("test:iwbtg-format="));
+        // A client-only or docs-only change never feeds a generated schema.
+        assert!(!schema_step_needed(&planned(
+            &["crates/client/src/main.rs"],
+            false
+        )));
+        assert!(!schema_step_needed(&planned(
+            &["docs/architecture/client/shell.md"],
+            false
+        )));
     }
 
     #[test]
