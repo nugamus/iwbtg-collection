@@ -9,12 +9,14 @@ use bevy::asset::RenderAssetUsages;
 use bevy::camera::ScalingMode;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use iwbtg_sim::script::PreparedScripts;
 use iwbtg_sim::sim::{Sim, SimOptions};
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::world::{InstId, SimStatus};
 
 mod hud;
 pub(crate) mod order;
+pub(crate) mod transition;
 
 use crate::bindings::PadInput;
 use crate::input::{Collector, PadReader, key_code};
@@ -26,6 +28,11 @@ use crate::shell::{AppScreen, InRun, LoadedPackage, RUN_ONLY, RunSteps};
 pub(crate) struct Game {
     pub(crate) sim: Sim,
 }
+
+/// The package's compiled scripts, prepared once at run start and reused by a quick retry
+/// (#1093B). `PreparedScripts` is `!Send` (its Rhai ASTs are `Rc`), so it lives beside `Game` as
+/// a non-send resource, never in the `Send + Sync` `RunStart`.
+struct Prepared(PreparedScripts);
 
 /// How the run started, so a retry can start it again the same way.
 #[derive(Resource)]
@@ -270,12 +277,14 @@ struct RunConfig {
 pub(crate) struct NewRun {
     game: Game,
     start: RunStart,
+    prepared: Prepared,
 }
 
 impl NewRun {
-    /// Puts the sim and how it started in `world`.
+    /// Puts the sim, its prepared scripts and how it started in `world`.
     pub(crate) fn install(self, world: &mut World) {
         world.insert_non_send(self.game);
+        world.insert_non_send(self.prepared);
         world.insert_resource(self.start);
     }
 }
@@ -310,10 +319,24 @@ pub(crate) fn new_run(world: &World, pkg: &Package, map: Option<&str>) -> Result
         },
         map: map.map(str::to_owned),
     };
+    // The sim constructors report a map error before compiling scripts. Keep that precedence:
+    // when the map is not there, let the unprepared constructor produce the error (it cannot
+    // succeed without a map).
+    if def.map_index(options.map.as_deref()).is_none() {
+        return Err(Sim::new_or_halted(Arc::clone(&def), options)
+            .err()
+            .map_or_else(
+                || "the game did not start: the map is missing".to_owned(),
+                |e| format!("the game did not start: {e}"),
+            ));
+    }
+    // Compile the scripts once and keep the artifact for the run, so a quick retry does not
+    // compile them again (#1093B).
+    let prepared = Sim::prepare(&def).map_err(|e| format!("the game did not start: {e}"))?;
     // A start that halts (a script error in a start-room Create, #946) is a run whose sim is
     // halted from tick 0: it opens on the script error screen (`script_error/`), as a halt in
     // play does. Only a sim that cannot be set up is an error.
-    let sim = Sim::new_or_halted(Arc::clone(&def), options.clone())
+    let sim = Sim::new_or_halted_prepared(Arc::clone(&def), options.clone(), &prepared)
         .map_err(|e| format!("the game did not start: {e}"))?;
     def.room(sim.world().room).ok_or("the start room is missing")?;
     Ok(NewRun {
@@ -323,6 +346,7 @@ pub(crate) fn new_run(world: &World, pkg: &Package, map: Option<&str>) -> Result
             options,
             fresh_seed: config.fresh_seed,
         },
+        prepared: Prepared(prepared),
     })
 }
 
@@ -404,6 +428,12 @@ fn enter(world: &mut World) {
         ..default()
     });
     world.init_resource::<hud::SignText>();
+    // A `--hud-preview-sign` check raises the box at the run's start, as a sign that has just
+    // spoken leaves it, so the screenshot shows the latch rather than needing a real Up press.
+    if let Some(text) = crate::hud::sign_preview() {
+        world.resource_mut::<hud::SignText>().raise(text.to_owned());
+    }
+    world.init_resource::<transition::Transition>();
     // The sim ticks at the game's rate on a fixed clock; frames only draw what the last tick
     // left. Slow motion (practice.rs) runs the first tick slow already; `follow_room_speed`
     // keeps it so after every tick.
@@ -422,7 +452,9 @@ fn leave(world: &mut World) {
     world.remove_resource::<ViewRect>();
     world.remove_resource::<Previous>();
     world.remove_resource::<hud::SignText>();
+    world.remove_resource::<transition::Transition>();
     world.remove_resource::<RunStart>();
+    world.remove_non_send::<Prepared>();
     world.remove_non_send::<Game>();
 }
 
@@ -649,12 +681,14 @@ fn collect_pad(
 /// tick's `follow_room_speed`.
 pub(crate) fn restart_run(world: &mut World) -> Result<(), String> {
     let start = world.resource::<RunStart>();
+    // The scripts were prepared at run start; a retry reuses that artifact (#1093B).
+    let prepared = world.non_send::<Prepared>();
     let mut options = start.options.clone();
     if start.fresh_seed {
         options.seed = crate::replays::fresh_seed();
     }
     // A start that halts comes back halted, so the script error screen opens again (#946).
-    let sim = Sim::new_or_halted(Arc::clone(&start.def), options)
+    let sim = Sim::new_or_halted_prepared(Arc::clone(&start.def), options, &prepared.0)
         .map_err(|e| format!("the game did not start: {e}"))?;
     world.non_send_mut::<Game>().sim = sim;
     let drawn = std::mem::take(&mut world.resource_mut::<Drawn>().0);
@@ -668,7 +702,7 @@ pub(crate) fn restart_run(world: &mut World) -> Result<(), String> {
     }
     // Keys held through the retry stay held; edges from before it are dropped.
     world.resource_mut::<Collector>().take_frame();
-    world.resource_mut::<hud::SignText>().0 = None;
+    world.resource_mut::<hud::SignText>().clear();
     Ok(())
 }
 
@@ -682,9 +716,11 @@ pub(crate) fn test_world(pkg: &Package) -> World {
         mode: iwbtg_sim::stripped::PlayMode::Original,
         map: None,
     };
-    let sim = Sim::new(Arc::clone(&pkg.def), options.clone()).unwrap();
+    let prepared = Sim::prepare(&pkg.def).unwrap();
+    let sim = Sim::new_prepared(Arc::clone(&pkg.def), options.clone(), &prepared).unwrap();
     let mut world = World::new();
     world.insert_non_send(Game { sim });
+    world.insert_non_send(Prepared(prepared));
     world.insert_resource(RunStart {
         def: Arc::clone(&pkg.def),
         options,
@@ -694,6 +730,7 @@ pub(crate) fn test_world(pkg: &Package) -> World {
     world.init_resource::<Previous>();
     world.insert_resource(Collector::new(crate::bindings::Bindings::default()));
     world.init_resource::<hud::SignText>();
+    world.init_resource::<transition::Transition>();
     world
 }
 
@@ -711,6 +748,7 @@ pub(crate) fn tick(
     mut shake: ResMut<crate::audio::Shake>,
     mut previous: ResMut<Previous>,
     mut sign: ResMut<hud::SignText>,
+    mut transition: ResMut<transition::Transition>,
     mut replay: Option<ResMut<crate::replays::Recorder>>,
 ) {
     if previous.on {
@@ -738,6 +776,7 @@ pub(crate) fn tick(
         stats.ticks += 1;
         let output = &game.sim.world().output;
         hud::note_tick(&mut sign, output);
+        transition.observe(output, Instant::now());
         audio.push(Instant::now(), output);
         shake.tick(output);
     }
@@ -1235,5 +1274,27 @@ mod tests {
             ..view(0.0, 0.0)
         };
         assert_eq!(blend_view(Some(view(0.0, 0.0)), flipped, 0.5), flipped);
+    }
+
+    /// A quick retry keeps the artifact prepared at run start instead of compiling the scripts
+    /// again (#1093B). A rewrite that returned to `Sim::new_or_halted` would replace it.
+    #[test]
+    fn a_retry_keeps_the_prepared_scripts() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/input.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let mut world = test_world(&pkg);
+        let before: *const Prepared = world.non_send::<Prepared>();
+        // Step the run so the retry has something to reset.
+        world
+            .non_send_mut::<Game>()
+            .sim
+            .step(iwbtg_sim::input::InputFrame::EMPTY);
+        restart_run(&mut world).unwrap();
+        let after: *const Prepared = world.non_send::<Prepared>();
+        assert!(
+            std::ptr::eq(before, after),
+            "the prepared artifact is kept, not rebuilt"
+        );
+        assert_eq!(world.non_send::<Game>().sim.world().tick, 0);
     }
 }

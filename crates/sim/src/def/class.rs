@@ -161,20 +161,47 @@ impl ClassMask {
         self.0 & other.0 != 0
     }
 
+    /// Per-class specificity for collision-handler selection (C8, R12b), declared as data: the
+    /// matching handler class with the lowest number runs, then the first in handler order.
+    /// The defaults reproduce the measured GM parent chains: `block` (2) is the platform's
+    /// parent in 17 games and ranks last, `solidblock` (1) next in the other two, where the
+    /// platform also keeps the `block` bit (CLONE_SPEC collision, "One event per pair: the most
+    /// specific ancestor"). A class not listed has [`ClassMask::DEFAULT_SPECIFICITY`].
+    pub const SPECIFICITY: [(ClassMask, u8); 2] = [(ClassMask::BLOCK, 2), (ClassMask::SOLIDBLOCK, 1)];
+
+    /// The specificity of every class not listed in [`ClassMask::SPECIFICITY`]: most specific.
+    pub const DEFAULT_SPECIFICITY: u8 = 0;
+
+    /// The value [`ClassMask::generality`] gives a mask that matches no class bit. It can match
+    /// no handler, so the value is unobservable; it keeps the old last rank.
+    const EMPTY_SPECIFICITY: u8 = 2;
+
     /// How far up a GM parent chain this handler class sits, for picking one collision handler
-    /// per pair (C8, R12b): lower is more specific. Class sets have no parent tree, so the
-    /// engines' two block parents rank last: `block` (2) is the platform's parent in 17 games,
-    /// `solidblock` (1) in the other two, where the platform also keeps the `block` bit
-    /// (CLONE_SPEC collision, "One event per pair: the most specific ancestor"). Every other
-    /// class ranks 0. A handler mask with several bits takes its lowest rank.
+    /// per pair (C8, R12b): lower is more specific. This reads the [`ClassMask::SPECIFICITY`]
+    /// data; a handler mask with several bits takes its lowest number, and any bit outside the
+    /// declared classes takes [`ClassMask::DEFAULT_SPECIFICITY`].
     pub const fn generality(self) -> u8 {
-        if self.intersects(ClassMask(!(ClassMask::BLOCK.0 | ClassMask::SOLIDBLOCK.0))) {
-            0
-        } else if self.intersects(ClassMask::SOLIDBLOCK) {
-            1
-        } else {
-            2
+        // The declared classes, so a bit outside them can take the default.
+        let mut declared = ClassMask::NONE;
+        let mut i = 0;
+        while i < Self::SPECIFICITY.len() {
+            declared = ClassMask(declared.0 | Self::SPECIFICITY[i].0.0);
+            i += 1;
         }
+        let mut low = if self.intersects(ClassMask(!declared.0)) {
+            Self::DEFAULT_SPECIFICITY
+        } else {
+            Self::EMPTY_SPECIFICITY
+        };
+        let mut i = 0;
+        while i < Self::SPECIFICITY.len() {
+            let (class, specificity) = Self::SPECIFICITY[i];
+            if self.intersects(class) && specificity < low {
+                low = specificity;
+            }
+            i += 1;
+        }
+        low
     }
 }
 
@@ -219,33 +246,8 @@ impl BitAnd for ClassMask {
 /// Default collision classes of a built-in (Design; docs/architecture/sim/world.md and
 /// docs/architecture/sim/builtins.md).
 pub fn default_classes(b: Builtin) -> ClassMask {
-    match b {
-        Builtin::Kid => ClassMask::KID,
-        Builtin::KidBullet => ClassMask::KID_BULLET,
-        Builtin::Blood => ClassMask::BLOOD,
-        Builtin::Bow => ClassMask::BOW,
-        Builtin::Block | Builtin::BreakableBlock => ClassMask::BLOCK,
-        Builtin::Spike | Builtin::Killer => ClassMask::KILLER,
-        Builtin::Save => ClassMask::SAVE,
-        // GM warps and warpStart are roomChanger children.
-        Builtin::Warp | Builtin::DifficultyWarp => ClassMask::ROOM_CHANGER,
-        // The platform's parent is block in 17 games (CLONE_SPEC collision); the other two
-        // games give their platform preset `counts_as = ["solidblock"]`.
-        Builtin::Platform | Builtin::MovingPlatform | Builtin::DropPlatform | Builtin::PathPlatform => {
-            ClassMask::PLATFORM | ClassMask::BLOCK
-        }
-        Builtin::Water => ClassMask::WATER1,
-        Builtin::FakeBlock => ClassMask::FAKE_BLOCK,
-        Builtin::Trigger => ClassMask::TRIGGER,
-        Builtin::EdgeWarp => ClassMask::EDGE_WARP,
-        Builtin::BulletBlocker => ClassMask::BULLET_BLOCKER,
-        Builtin::Slope => ClassMask::SLOPE,
-        Builtin::Conveyor => ClassMask::CONVEYOR,
-        Builtin::KidParamZone => ClassMask::PARAM_ZONE,
-        Builtin::TrapStopper => ClassMask::TRAP_STOPPER,
-        Builtin::Ladder => ClassMask::LADDER,
-        _ => ClassMask::NONE,
-    }
+    // The one trait table (`def::traits`) owns the classes; this is the view the loader reads.
+    crate::def::traits::traits(b).classes
 }
 
 /// Classes that a kind's params pick (Design): water `variant` 2 and 3, vine `side`, slope
@@ -292,14 +294,8 @@ pub fn param_classes(b: Builtin, params: &Params) -> Option<ClassMask> {
 /// script spawn that sets them uses that derived kind or fails (`script::inst`, #694). The params
 /// that pick the event set work the same way ([`kind_params`]).
 pub fn class_params(b: Builtin) -> &'static [&'static str] {
-    match b {
-        Builtin::Block => &["kid_collides"],
-        Builtin::Water => &["variant"],
-        Builtin::Killer => &["kill_outside_view"],
-        Builtin::Slope => &["shape", "scale_x"],
-        Builtin::Vine => &["side"],
-        _ => &[],
-    }
+    // The one trait table (`def::traits`) owns the selection params.
+    crate::def::traits::traits(b).class_params
 }
 
 /// The params that pick a kind's classes ([`class_params`]) or its event set
@@ -443,6 +439,11 @@ mod tests {
 
     #[test]
     fn generality_puts_the_block_parents_last() {
+        assert_eq!(
+            ClassMask::SPECIFICITY,
+            [(ClassMask::BLOCK, 2), (ClassMask::SOLIDBLOCK, 1)]
+        );
+        assert_eq!(ClassMask::DEFAULT_SPECIFICITY, 0);
         assert_eq!(ClassMask::PLATFORM.generality(), 0);
         assert_eq!(ClassMask::KILLER.generality(), 0);
         assert_eq!(ClassMask::package(0).unwrap().generality(), 0);

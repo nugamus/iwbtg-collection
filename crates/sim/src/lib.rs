@@ -62,9 +62,12 @@ pub use rules::{Runner, RunnerRules};
 pub use sim::{Sim, SimOptions, StepResult};
 pub use world::{Ctx, SimStatus, World};
 
-/// Changes whenever a sim change could alter any outcome, including any Rhai upgrade
-/// (architecture "Versions").
-pub const SIM_VERSION: u32 = 1;
+/// Changes whenever a sim change could alter any outcome, including any Rhai upgrade and any
+/// state-hash encoding change (`HASH_LAYOUT`) (architecture "Versions").
+///
+/// 1: the first sim. 2: `HASH_LAYOUT` 3, the named RNG streams added to the hashed state
+/// (#1157/#1292, bumped by #1303).
+pub const SIM_VERSION: u32 = 2;
 
 /// The freeze point (docs/architecture/versioning.md): the first `SIM_VERSION` whose outcomes are
 /// kept. `None` until the freeze, and the bump check (`tests/sim_version_bump.rs`) is inert. Once

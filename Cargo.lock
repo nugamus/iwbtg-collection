@@ -3879,6 +3879,7 @@ dependencies = [
  "iwbtg-sim",
  "jsonschema",
  "png",
+ "rhai",
  "schemars",
  "serde",
  "serde_json",
@@ -3914,6 +3915,7 @@ dependencies = [
  "smallvec",
  "stats_alloc",
  "thiserror 2.0.21",
+ "toml",
  "wasm-bindgen-test",
 ]
 

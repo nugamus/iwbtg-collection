@@ -1,21 +1,115 @@
-//! Draw order as z: instances and tile layers share one z range, placed by the sim's draw order
-//! (`iwbtg_sim::events::draw_order`: depth descending, then creation), never by a float of the
-//! depth, so the client and the sim cannot disagree (#789).
+//! The room's declared render layers, back to front, and the world band's draw order.
 //!
-//! The room's tile layers are fixed rungs, spread evenly over the range; the instances between
-//! two rungs (by depth) share the gap between them, evenly by their place in the draw order.
-//! Each gap is at least `WORLD_Z` / (layers + 1) wide, so thousands of instances still get z
-//! values that `f32` keeps apart, at any depth.
+//! A room draws as these bands, in order ([`Layer`]): the room colour, the background layers in
+//! file order, the world band, the foreground layers in file order. The world band is one z
+//! range shared by tile layers and instances; its contents are placed by the sim's draw order
+//! (`iwbtg_sim::events::draw_order`: depth descending, then creation), never by a float of the
+//! depth, so the client and the sim cannot disagree (#789). Tiles and backgrounds are layer
+//! entries, not constants scattered through the art code: [`Layer`] is the one declaration and
+//! [`Ladder`] places the world band inside it.
+//!
+//! Tie rules, each with one answer and one test:
+//! - later background and foreground layers draw on top (`index` in file order);
+//! - tile layers of the same depth keep file order, so a later layer draws on top;
+//! - a tile layer at an instance's own depth draws over it (OpenGMK's picture, CLONE_SPEC
+//!   TR-ROOM-13, partial);
+//! - instances draw in the sim's order, and z strictly rises along it;
+//! - the HUD slots ([`Hud`]: the sign box and the countdown) sit above every room layer,
+//!   including the foregrounds, and below the hitboxes, so a room's art cannot cover them.
+//!
+//! The world band's tile layers are fixed rungs, spread evenly over the range; the instances
+//! between two rungs (by depth) share the gap between them, evenly by their place in the draw
+//! order. Each gap is at least `WORLD_Z` / (layers + 1) wide, so thousands of instances still
+//! get z values that `f32` keeps apart, at any depth.
 
 use bevy::prelude::*;
 use iwbtg_sim::world::{InstId, Instance, World};
 
+/// The room's plain colour, behind every other layer.
+pub(crate) const COLOUR_Z: f32 = -996.0;
+/// Background layer 0; later layers add `LAYER_STEP` (`Layer::Background` does the arithmetic).
+pub(crate) const BACKGROUND_Z: f32 = -995.0;
+/// Foreground layer 0; later layers add `LAYER_STEP` (`Layer::Foreground` does the arithmetic).
+pub(crate) const FOREGROUND_Z: f32 = 995.0;
+
 /// The z range instances and tiles use: in front of the room colour and backgrounds
-/// (`art::BACKGROUND_Z`, -995), behind the foregrounds (995), hitboxes, HUD and overlay.
+/// (`BACKGROUND_Z`, -995), behind the foregrounds (`FOREGROUND_Z`, 995), the HUD ([`Hud`]),
+/// hitboxes and overlay.
 pub(crate) const WORLD_Z: (f32, f32) = (-990.0, 990.0);
 
-/// The tile layer depths of the room on screen, in draw order (deepest first; equal depths in
-/// file order, so a later layer draws on top).
+/// The gap between two background or foreground layers, so their file order is a stable tie
+/// rule (later on top). Smaller than one pixel of any real drawable, and far from the overlay.
+const LAYER_STEP: f32 = 1e-3;
+
+/// A declared room layer, back to front. The world band is one entry; `Ladder` places its tile
+/// rungs and instances. `index` is the layer's file index, so later entries draw on top.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Layer {
+    /// The room's plain colour.
+    Colour,
+    /// A background layer (not a foreground one) at its file index.
+    Background(usize),
+    /// The shared tile/instance band, `WORLD_Z`.
+    World,
+    /// A foreground layer at its file index.
+    Foreground(usize),
+}
+
+impl Layer {
+    /// The band this layer occupies. Point layers have a zero-width band; the world band spans
+    /// [`WORLD_Z`].
+    pub(crate) fn band(self) -> (f32, f32) {
+        match self {
+            Layer::Colour => (COLOUR_Z, COLOUR_Z),
+            Layer::Background(i) => {
+                let z = BACKGROUND_Z + i as f32 * LAYER_STEP;
+                (z, z)
+            }
+            Layer::World => WORLD_Z,
+            Layer::Foreground(i) => {
+                let z = FOREGROUND_Z + i as f32 * LAYER_STEP;
+                (z, z)
+            }
+        }
+    }
+
+    /// The layer's own z. [`Layer::World`] reports its back edge (`WORLD_Z.0`); use [`band`] for
+    /// the whole range.
+    ///
+    /// [`band`]: Layer::band
+    pub(crate) fn z(self) -> f32 {
+        self.band().0
+    }
+}
+
+/// The HUD slots on the game camera: above every room layer, including the foregrounds (GM
+/// allows at most 8 background slots, so the top foreground is below `HUD_Z.0`), and below the
+/// hitboxes (`visual::HITBOX_Z`, 998) and the overlay.
+pub(crate) const HUD_Z: (f32, f32) = (FOREGROUND_Z + 1.0, FOREGROUND_Z + 2.0);
+
+/// A HUD element drawn over the game, back to front. The slots are declared here with the room
+/// layers so a room's art can never cover them.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Hud {
+    /// The sign text box at the bottom of the room.
+    Sign,
+    /// The `time_limit` countdown at the timer's own place.
+    Countdown,
+}
+
+impl Hud {
+    /// The slot's z.
+    pub(crate) fn z(self) -> f32 {
+        match self {
+            Hud::Sign => HUD_Z.0,
+            Hud::Countdown => HUD_Z.1,
+        }
+    }
+}
+
+/// The world band's contents: the room's tile layer depths on screen, in draw order (deepest
+/// first; equal depths in file order, so a later layer draws on top), with the instances placed
+/// between the rungs by the sim's draw order.
 #[derive(Resource, Default, Clone, Debug, PartialEq)]
 pub(crate) struct Ladder {
     /// Each rung's depth, in draw order.
@@ -42,12 +136,13 @@ impl Ladder {
     }
 
     fn gap(&self) -> f32 {
-        (WORLD_Z.1 - WORLD_Z.0) / (self.depths.len() + 1) as f32
+        let (lo, hi) = Layer::World.band();
+        (hi - lo) / (self.depths.len() + 1) as f32
     }
 
     /// The z of tile layer `layer` (its index in the room's file).
     pub(crate) fn tile_z(&self, layer: usize) -> f32 {
-        WORLD_Z.0 + (self.rung_of[layer] + 1) as f32 * self.gap()
+        Layer::World.z() + (self.rung_of[layer] + 1) as f32 * self.gap()
     }
 
     /// The gap an instance at `depth` sits in: below every tile layer of the same or a smaller
@@ -66,7 +161,7 @@ impl Ladder {
     /// depth and z) that draw before it and those that draw after it.
     pub(crate) fn depth_z(&self, placed: &[(f64, f32)], depth: f64) -> f32 {
         let g = self.gap_of(depth);
-        let mut lo = WORLD_Z.0 + g as f32 * self.gap();
+        let mut lo = Layer::World.z() + g as f32 * self.gap();
         let mut hi = lo + self.gap();
         for &(d, z) in placed {
             if self.gap_of(d) != g {
@@ -90,12 +185,13 @@ impl Ladder {
             count[g] += 1;
         }
         let mut seen = vec![0usize; self.depths.len() + 1];
+        let (back, _) = Layer::World.band();
         let gap = self.gap();
         gaps.iter()
             .map(|&g| {
                 seen[g] += 1;
                 let within = seen[g] as f32 / (count[g] + 1) as f32;
-                WORLD_Z.0 + (g as f32 + within) * gap
+                back + (g as f32 + within) * gap
             })
             .collect()
     }
@@ -125,6 +221,55 @@ mod tests {
 
     fn rising(z: &[f32]) -> bool {
         z.windows(2).all(|w| w[0] < w[1])
+    }
+
+    #[test]
+    fn declared_layers_run_back_to_front() {
+        // Colour, backgrounds, the world band, foregrounds: one answer for every pair.
+        assert_eq!(Layer::Colour.band(), (COLOUR_Z, COLOUR_Z));
+        assert_eq!(Layer::World.band(), WORLD_Z);
+        assert!(Layer::Colour.z() < Layer::Background(0).z());
+        assert!(
+            Layer::Background(0).z() < Layer::Background(1).z(),
+            "a later background draws on top"
+        );
+        assert!(Layer::Background(7).z() < Layer::World.z());
+        assert!(Layer::World.z() < Layer::Foreground(0).z());
+        assert!(
+            Layer::Foreground(0).z() < Layer::Foreground(1).z(),
+            "a later foreground draws on top"
+        );
+        // Above every room layer, including the top foreground, is the HUD, then the hitboxes.
+        assert!(Layer::Foreground(7).z() < Hud::Sign.z());
+        assert!(Hud::Sign.z() < Hud::Countdown.z());
+        assert!(Hud::Countdown.z() < crate::visual::HITBOX_Z);
+        // The hitboxes sit under the overlay (z 1000).
+        const { assert!(crate::visual::HITBOX_Z < 1000.0) };
+    }
+
+    #[test]
+    fn the_hud_stays_above_a_dense_world_band() {
+        // The frontmost tile rung of a 25-layer room and the frontmost instance stay under the
+        // sign box, so room art cannot cover the HUD.
+        let depths: Vec<f64> = (0..25).map(|i| -f64::from(i)).collect();
+        let ladder = Ladder::new(depths);
+        let frontmost_tile = ladder.tile_z(24);
+        assert!(frontmost_tile < Hud::Sign.z(), "tile at {frontmost_tile}");
+        for z in ladder.z_in_order(&[0.0, -1.0, -24.0]) {
+            assert!(z < Hud::Sign.z(), "instance at {z}");
+        }
+    }
+
+    #[test]
+    fn every_tile_rung_and_instance_stays_inside_the_world_band() {
+        let ladder = Ladder::new([1e9, 0.0, -1e9]);
+        for n in 0..3 {
+            let z = ladder.tile_z(n);
+            assert!(WORLD_Z.0 < z && z < WORLD_Z.1, "tile {n} at {z}");
+        }
+        for z in ladder.z_in_order(&[1e9, 1.0, 0.0, -1.0, -1e9]) {
+            assert!(WORLD_Z.0 < z && z < WORLD_Z.1, "instance at {z}");
+        }
     }
 
     #[test]

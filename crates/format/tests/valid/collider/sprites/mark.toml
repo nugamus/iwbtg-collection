@@ -1,0 +1,14 @@
+#:schema ../../../../../../docs/format/schema/v0/sprite.schema.json
+frames = 1
+frame_size = [2, 2]
+origin = [0, 0]
+collision = "precise"
+
+[collider]
+alpha_tolerance = 0
+shape = "bits"
+bbox = [0, 0, 1, 1]
+bits = ["c", "c"]
+
+[render_bounds]
+shape = "collider"

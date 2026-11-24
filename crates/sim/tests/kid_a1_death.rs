@@ -17,6 +17,7 @@ use iwbtg_sim::kid::{self, KidAction, KidState, presets};
 use iwbtg_sim::num::Real;
 use iwbtg_sim::room::RoomRequest;
 use iwbtg_sim::rules::RunnerRules;
+use iwbtg_sim::rules::tick::ClockPolicy;
 use iwbtg_sim::save::SaveSlot;
 use iwbtg_sim::script::ScriptRuntime;
 use iwbtg_sim::sound::DllMode;
@@ -90,8 +91,18 @@ fn with_kid<T>(
     tweak: impl FnOnce(&mut PhysicsProfile),
     f: impl FnOnce(&mut Ctx, InstId, &Kinds) -> T,
 ) -> T {
+    with_kid_rules(with_engine_kinds, tweak, |_| {}, f)
+}
+
+fn with_kid_rules<T>(
+    with_engine_kinds: bool,
+    tweak: impl FnOnce(&mut PhysicsProfile),
+    change: impl FnOnce(&mut RunnerRules),
+    f: impl FnOnce(&mut Ctx, InstId, &Kinds) -> T,
+) -> T {
     let (def, k) = game(with_engine_kinds, tweak);
-    let rules = RunnerRules::for_runner(def.runner, def.engine_rev).expect("rules");
+    let mut rules = RunnerRules::for_runner(def.runner, def.engine_rev).expect("rules");
+    change(&mut rules);
     let mut w = World::new(def.start_room, 1);
     w.room_speed = r(50.0);
     let scripts = ScriptRuntime::default();
@@ -128,6 +139,8 @@ fn slot(deaths: u32, time: u32) -> SaveSlot {
         room: RoomId(0),
         x: r(1.0),
         y: r(2.0),
+        precision: Default::default(),
+        point: None,
         flipped: false,
         facing: 1,
         difficulty: 0,
@@ -372,6 +385,33 @@ fn arm_play_timer_sets_alarm_zero_to_room_speed() {
         |ctx, kid, _| {
             run(ctx, kid, CommonAction::ArmPlayTimer);
             assert_eq!(ctx.w.get(kid).unwrap().alarms[0], r(50.0));
+        },
+    );
+}
+
+#[test]
+fn the_play_timer_one_second_follows_the_clock_policy() {
+    // R30: legacy reads `room_speed`; `ClockPolicy::Fixed` reads the package tick rate (50).
+    with_kid(
+        true,
+        |_| {},
+        |ctx, kid, _| {
+            ctx.w.room_speed = r(30.0);
+            run(ctx, kid, CommonAction::ArmPlayTimer);
+            assert_eq!(ctx.w.get(kid).unwrap().alarms[0], r(30.0));
+        },
+    );
+    with_kid_rules(
+        true,
+        |_| {},
+        |rules| rules.tick.timing.clock = ClockPolicy::Fixed,
+        |ctx, kid, _| {
+            ctx.w.room_speed = r(30.0);
+            run(ctx, kid, CommonAction::ArmPlayTimer);
+            assert_eq!(ctx.w.get(kid).unwrap().alarms[0], r(50.0));
+            ctx.w.get_mut(kid).unwrap().alarms[0] = r(0.0);
+            kid::on_event(ctx, kid, &EventKind::Alarm(0)).expect("alarm");
+            assert_eq!(ctx.w.get(kid).unwrap().alarms[0], r(50.0), "re-arms");
         },
     );
 }

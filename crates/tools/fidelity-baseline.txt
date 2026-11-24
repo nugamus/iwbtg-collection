@@ -57,6 +57,7 @@ kaenbyou/trick-restart-glitch-b-a OK
 kaenbyou/trick-restart-glitch-b-b OK
 kaenbyou/trick-water-jump-b OK
 rely_the_needle/djump OK
+rely_the_needle/num-rng-a OK
 rely_the_needle/right OK
 rely_the_needle/stand OK
 showdown/a3-t06 OK

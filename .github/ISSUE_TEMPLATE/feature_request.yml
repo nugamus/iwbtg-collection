@@ -22,6 +22,19 @@ body:
       description: What problem it solves, or what it would let you do.
     validations:
       required: true
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Gameplay impact
+      description: How this would affect what a player can do. An agent confirms the F tier at triage ([fidelity tiers](https://github.com/nugamus/iwbtg-collection/blob/main/docs/plans/fidelity-tiers.md)).
+      options:
+        - F1 — changes what a skilled player can do (position, death, timing, input, respawn)
+        - F2 — only what I see or hear
+        - F3 — a player cannot observe it
+        - Not about gameplay
+        - Not sure
+    validations:
+      required: false
   - type: textarea
     id: alternatives
     attributes:

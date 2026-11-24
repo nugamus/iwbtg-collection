@@ -1,6 +1,7 @@
 //! `cargo xtask <command>`: the repetitive steps of a PR as one command each (#529).
 //!
-//! - `check [--all]`: rustfmt check, then clippy and tests of the crates this branch changed
+//! - `check [--all]`: rejects free-text `TODO(OPEN` markers that name no issue or URL (#1119),
+//!   then rustfmt check, then clippy and tests of the crates this branch changed
 //!   (against `origin/main`, committed or not) plus a compile check of the crates that depend on
 //!   them. `--all` runs the whole workspace, like CI. Writes the summary to
 //!   `target/xtask/last-check.txt` for `pr-body`. Each step streams actionable lines and keeps a
@@ -10,6 +11,9 @@
 //!   without building anything (#1028).
 //! - `fidelity [--bless]`: the trace sweep over every converter package; records the run in
 //!   `target/xtask/last-fidelity.txt` (#935).
+//! - `feel [--bless]`: the public feel contracts (`crates/sim/tests/feel`), plus the port set
+//!   (`crates/tools/feel`) when `IWBTG_GAMES` names the games repo; exit 0 for OK/OPEN, 1 for a
+//!   failure or regression, 2 for a tool error (#1167).
 //! - `repin`: after a deliberate change to hashed sim state, re-pins the state hash vectors
 //!   (`tests/hash_vectors.rs`), the `FINAL_HASH` of `tests/determinism.rs` and the golden
 //!   corpus, then runs them again. After the `SIM_VERSION` freeze point it also records the pins
@@ -76,8 +80,9 @@ fn main() -> ExitCode {
             }
         }
         Some("fidelity") => fidelity(&root, args.iter().any(|a| a == "--bless")),
+        Some("feel") => feel(&root, args.iter().any(|a| a == "--bless")),
         _ => Err(
-            "usage: cargo xtask <check [--all] | plan [--all] | repin | regen | pr-body [--issue N] | doctor [--scope native|browser|wasi|all] [--warm] | fidelity [--bless]>"
+            "usage: cargo xtask <check [--all] | plan [--all] | repin | regen | pr-body [--issue N] | doctor [--scope native|browser|wasi|all] [--warm] | fidelity [--bless] | feel [--bless]>"
                 .to_string(),
         ),
     };
@@ -553,6 +558,70 @@ fn run_logged(
     })
 }
 
+/// Free-text `TODO(OPEN` markers held by files another agent is editing (#1119). Remove an entry
+/// when its marker is converted or deleted; the guard never requires an allowlisted line to exist.
+const OPEN_TODO_ALLOW: &[&str] = &[
+    "// TODO(OPEN: runner differences between GM 8.0 and 8.1, from the CLONE_SPEC): nothing to",
+    "// TODO(OPEN: built-in kind list, from research/specs/mechanics.md): check",
+];
+
+/// Whether a line is a free-text `TODO(OPEN` marker: no issue (`#123`) and no URL on the marker line.
+/// An allowlisted line is not an offence.
+fn open_todo_offends(line: &str) -> bool {
+    let line = line.trim();
+    if !line.contains("TODO(OPEN") || OPEN_TODO_ALLOW.contains(&line) {
+        return false;
+    }
+    let bytes = line.as_bytes();
+    let issue = (0..bytes.len().saturating_sub(1)).any(|i| bytes[i] == b'#' && bytes[i + 1].is_ascii_digit());
+    !issue && !line.contains("http://") && !line.contains("https://")
+}
+
+/// `crates/*/src/**/*.rs`: every `TODO(OPEN` names an issue or a URL (#1119). Cheap and offline.
+/// The xtask crate is skipped: it holds the pattern, the allowlist and this function's tests.
+fn check_open_todos(root: &Path) -> Result<(), String> {
+    let crates = root.join("crates");
+    let mut bad = Vec::new();
+    let entries = std::fs::read_dir(&crates).map_err(|e| format!("{}: {e}", crates.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        if entry.file_type().map_err(|e| e.to_string())?.is_dir() && entry.file_name() != "xtask" {
+            scan_open_todos(&entry.path().join("src"), &mut bad)?;
+        }
+    }
+    if bad.is_empty() {
+        return Ok(());
+    }
+    for (path, line, text) in &bad {
+        println!("{}:{line}: {text}", path.display());
+    }
+    Err(format!(
+        "{} free-text `TODO(OPEN` marker(s): name an issue (`TODO(#123)`) or a URL, or delete the marker (#1119)",
+        bad.len()
+    ))
+}
+
+fn scan_open_todos(dir: &Path, bad: &mut Vec<(PathBuf, usize, String)>) -> Result<(), String> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Ok(()); // a crate without src/ has nothing to scan
+    };
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if entry.file_type().map_err(|e| e.to_string())?.is_dir() {
+            scan_open_todos(&path, bad)?;
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+            for (n, line) in text.lines().enumerate() {
+                if open_todo_offends(line) {
+                    bad.push((path.clone(), n + 1, line.trim().to_owned()));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 fn check(root: &Path, all: bool) -> Result<(), String> {
     let files = changed_files(root, true)?;
     let plan = shared_plan(root, &files, all)?;
@@ -561,6 +630,17 @@ fn check(root: &Path, all: bool) -> Result<(), String> {
     }
     let mut summary = String::new();
     let mut index = 0usize;
+    // Runs before the cargo steps: it is cheap and offline, and it must also run on a docs-only branch.
+    let open_todos = check_open_todos(root);
+    match &open_todos {
+        Ok(()) => {
+            println!("TODO(OPEN markers: every one names an issue or URL");
+            let _ = writeln!(summary, "TODO(OPEN markers -> ok");
+        }
+        Err(e) => {
+            let _ = writeln!(summary, "TODO(OPEN markers -> {e}");
+        }
+    }
     let mut step = |root: &Path, what: &str, kind: &str, packages: &[String], args: &[&str]| {
         let key = format!("{kind}:{}", packages.join(","));
         let identity = plan
@@ -638,6 +718,7 @@ fn check(root: &Path, all: bool) -> Result<(), String> {
         }
     };
     let result = (|| {
+        open_todos?;
         step(
             root,
             "rustfmt",
@@ -725,13 +806,13 @@ fn repin(root: &Path) -> Result<(), String> {
     let (ok, text) = output(
         root,
         "cargo",
-        &["test", "-p", "iwbtg-sim", "--test", "wp1_determinism"],
+        &["test", "-p", "iwbtg-sim", "--test", "determinism"],
         &[],
     )?;
     if !ok {
         let got = left_value(&text)
             .and_then(first_hash)
-            .ok_or_else(|| format!("wp1_determinism failed without a new hash:\n{text}"))?;
+            .ok_or_else(|| format!("determinism failed without a new hash:\n{text}"))?;
         replace_const(&path, "const FINAL_HASH: &str = \"", got)?;
         println!("FINAL_HASH -> {got}");
     }
@@ -781,7 +862,7 @@ fn repin(root: &Path) -> Result<(), String> {
             "-p",
             "iwbtg-sim",
             "--test",
-            "wp1_determinism",
+            "determinism",
             "--test",
             "golden_corpus",
         ],
@@ -817,6 +898,10 @@ fn replace_const(path: &Path, prefix: &str, value: &str) -> Result<(), String> {
 }
 
 fn regen(root: &Path) -> Result<(), String> {
+    // The feel contract list follows its folder (#1241); the schemas and script docs follow below.
+    if write_feel_contracts(root)? {
+        println!("regen: wrote {FEEL_CONTRACTS_FILE}");
+    }
     // Write the schemas with the writer test alone, then run the whole file against them. In one
     // run the other tests read the schema files in parallel with the writer and can validate
     // against the old ones, failing once and passing on the next regen (#703).
@@ -847,7 +932,12 @@ fn regen(root: &Path) -> Result<(), String> {
         &["run", "-q", "-p", "iwbtg-tools", "--", "script", "api-docs"],
         &[],
     )?;
-    let (_, status) = output(root, "git", &["status", "--short", "docs/format"], &[])?;
+    let (_, status) = output(
+        root,
+        "git",
+        &["status", "--short", "docs/format", FEEL_CONTRACTS_FILE],
+        &[],
+    )?;
     println!(
         "{}",
         if status.trim().is_empty() {
@@ -957,6 +1047,145 @@ fn wasm_bindgen_problem(lock: &str, installed: Option<&str>) -> Result<(), Strin
 /// `doctor`: machine checks against the repo. Fails when one does.
 /// The committed fidelity baseline: `<game>/<case> <STATUS>` lines, no private data.
 const FIDELITY_BASELINE: &str = "crates/tools/fidelity-baseline.txt";
+
+/// The public feel contracts: fixtures only, so every CI target can run them.
+const FEEL_PUBLIC: &str = "crates/sim/tests/feel";
+
+/// The generated list the sim test includes; it must follow the folder (#1241).
+const FEEL_CONTRACTS_FILE: &str = "crates/sim/tests/feel/contracts.rs";
+
+/// The port feel contracts and their baseline (the games repo, #1168).
+const FEEL_PORT: &str = "crates/tools/feel";
+const FEEL_BASELINE: &str = "crates/tools/feel-baseline.txt";
+
+/// Every `*.toml` below the public feel folder, as `(id, include path)` sorted by id. The include
+/// path is relative to `contracts.rs`, which sits in the same folder.
+fn feel_contract_entries(root: &Path) -> Result<Vec<(String, String)>, String> {
+    fn walk(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
+        let entries = std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+        for entry in entries {
+            let path = entry.map_err(|e| format!("{}: {e}", dir.display()))?.path();
+            if path.is_dir() {
+                walk(&path, out)?;
+            } else if path.extension().is_some_and(|e| e == "toml") {
+                out.push(path);
+            }
+        }
+        Ok(())
+    }
+    let dir = root.join(FEEL_PUBLIC);
+    let mut paths = Vec::new();
+    walk(&dir, &mut paths)?;
+    let mut entries: Vec<(String, String)> = paths
+        .iter()
+        .map(|path| {
+            let rel = path.strip_prefix(&dir).unwrap_or(path);
+            let include = rel.to_string_lossy().replace('\\', "/");
+            let id = rel.with_extension("").to_string_lossy().replace('\\', "/");
+            (id, include)
+        })
+        .collect();
+    entries.sort();
+    Ok(entries)
+}
+
+/// The generated `contracts.rs`: a sorted `CONTRACTS` list of `(id, include_str!)` entries. The
+/// sim test includes it, so a filesystem-less target runs exactly the folder's contracts.
+fn feel_contracts_text(entries: &[(String, String)]) -> String {
+    let mut out = String::from(
+        "// @generated by `cargo xtask feel` from every `*.toml` below `crates/sim/tests/feel/`.\n\
+         // Do not edit: add a contract file and run `cargo xtask feel` (or `cargo xtask regen`).\n\
+         pub const CONTRACTS: &[(&str, &str)] = &[\n",
+    );
+    for (id, include) in entries {
+        let _ = writeln!(out, "    ({id:?}, include_str!({include:?})),");
+    }
+    out.push_str("];\n");
+    out
+}
+
+/// Rewrites `contracts.rs` when the folder changed; `Ok(true)` when it wrote.
+fn write_feel_contracts(root: &Path) -> Result<bool, String> {
+    let entries = feel_contract_entries(root)?;
+    let text = feel_contracts_text(&entries);
+    let path = root.join(FEEL_CONTRACTS_FILE);
+    if std::fs::read_to_string(&path).is_ok_and(|current| current == text) {
+        return Ok(false);
+    }
+    std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(true)
+}
+
+/// `feel`: the public contract set, then the port set when `IWBTG_GAMES` names the games repo.
+///
+/// The tool exits 0 when every contract is OK/OPEN, 1 on a failure or a regression against the
+/// baseline, and 2 on a tool error; this wrapper keeps those codes so CI can tell them apart.
+fn feel(root: &Path, bless: bool) -> Result<(), String> {
+    // Keep the sim test's compiled-in list in step with the folder (#1241); the test also fails
+    // when it is stale, so a developer who skips this command is told to run it.
+    if write_feel_contracts(root)? {
+        println!("feel: regenerated {FEEL_CONTRACTS_FILE}");
+    }
+    run(
+        root,
+        "cargo",
+        &["build", "-q", "-p", "iwbtg-tools", "--bin", "iwbtg"],
+        &[],
+    )?;
+    let mut failed = feel_sweep(root, &["--contracts", FEEL_PUBLIC])? != 0;
+    let games = std::env::var_os("IWBTG_GAMES").map(PathBuf::from);
+    match (games.as_deref(), root.join(FEEL_PORT).is_dir()) {
+        (Some(games), true) => {
+            let games = games
+                .canonicalize()
+                .map_err(|e| format!("IWBTG_GAMES {}: {e}", games.display()))?;
+            let games = games.to_string_lossy().into_owned();
+            // Windows `canonicalize` returns a verbatim (`\\?\`) path; the plain form reads better.
+            let games = games.strip_prefix(r"\\?\").unwrap_or(&games).to_owned();
+            let mut args = vec![
+                "--contracts",
+                FEEL_PORT,
+                "--packages",
+                &games,
+                "--baseline",
+                FEEL_BASELINE,
+            ];
+            if bless {
+                args.push("--bless");
+            }
+            failed |= feel_sweep(root, &args)? != 0;
+        }
+        (_, false) if bless => {
+            println!("feel: no port contract set ({FEEL_PORT}) to bless");
+        }
+        _ => {}
+    }
+    if failed {
+        Err("feel: a contract failed (or the sweep could not run); see above".into())
+    } else {
+        Ok(())
+    }
+}
+
+/// One `iwbtg feel sweep` run; returns the tool's exit code (0 OK/OPEN, 1 failure, 2 tool error)
+/// and stops the wrapper with 2 on a tool error.
+fn feel_sweep(root: &Path, extra: &[&str]) -> Result<i32, String> {
+    let mut args = vec!["run", "-q", "-p", "iwbtg-tools", "--", "feel", "sweep"];
+    args.extend_from_slice(extra);
+    println!("$ cargo {}", args.join(" "));
+    let status = Command::new("cargo")
+        .args(&args)
+        .current_dir(root)
+        .status()
+        .map_err(|e| format!("cargo: {e}"))?;
+    let code = status.code().unwrap_or(2);
+    if code == 2 {
+        // The tool could not read the contracts root or the baseline: a tool error, not a
+        // contract failure.
+        std::process::exit(2);
+    }
+    Ok(code)
+}
 
 /// `fidelity`: one `iwbtg trace sweep` run (all packages and cases in one process).
 fn fidelity(root: &Path, bless: bool) -> Result<(), String> {
@@ -1348,6 +1577,116 @@ version = \"0.2.129\"
 source = \"x\"
 ";
 
+    /// WP-era ids (`WP` plus a number) are retired (docs/architecture/testing.md, "Naming
+    /// tests"). Each count is a ceiling: an area that gains one fails. #986 (`crates/sim/src`)
+    /// and #1090 (`crates/sim/tests`) still carry the remaining ones; the PR that removes an
+    /// area's last ids lowers its ceiling here.
+    const WP_CEILINGS: &[(&str, usize)] = &[
+        ("(root)", 1),
+        (".claude", 1),
+        (".github", 0),
+        ("crates/format", 98),
+        ("crates/sim", 2),
+        ("crates/sim/src", 470),
+        ("crates/sim/tests", 242),
+        ("crates/tools", 16),
+        ("crates/xtask", 0),
+        ("docs", 9),
+        ("docs/architecture", 12),
+        ("docs/format", 70),
+        ("docs/lanes", 0),
+        ("docs/plans", 381),
+        ("scripts", 0),
+    ];
+
+    #[test]
+    fn no_new_wp_era_identifiers() {
+        let root = workspace_root();
+        let mut found: BTreeMap<String, usize> = BTreeMap::new();
+        let mut files = Vec::new();
+        text_files(&root, &mut files);
+        for path in files {
+            let Ok(text) = std::fs::read_to_string(&path) else {
+                continue; // binary or not UTF-8
+            };
+            let count = wp_ids(&text);
+            if count > 0 {
+                *found.entry(area_of(&root, &path)).or_default() += count;
+            }
+        }
+        let mut problems = Vec::new();
+        for (area, count) in &found {
+            match WP_CEILINGS.iter().find(|(name, _)| name == area) {
+                Some((_, ceiling)) if count > ceiling => {
+                    problems.push(format!("{area}: {count} (ceiling {ceiling})"));
+                }
+                Some(_) => {}
+                None => problems.push(format!("{area}: {count} (no ceiling; add one in the same PR)")),
+            }
+        }
+        assert!(
+            problems.is_empty(),
+            "new WP-era identifiers (docs/architecture/testing.md, \"Naming tests\"); a WP id may stay only where it explains history a reader needs:\n{}",
+            problems.join("\n")
+        );
+    }
+
+    /// Every file small enough to be text, skipping build and VCS folders.
+    fn text_files(dir: &Path, out: &mut Vec<PathBuf>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let name = entry.file_name();
+                if !matches!(name.to_str(), Some(".git" | "target" | "node_modules")) {
+                    text_files(&path, out);
+                }
+            } else if entry.metadata().is_ok_and(|m| m.len() <= 1 << 20) {
+                out.push(path);
+            }
+        }
+    }
+
+    /// The group a path counts under in [`WP_CEILINGS`].
+    fn area_of(root: &Path, path: &Path) -> String {
+        let rel = path.strip_prefix(root).unwrap_or(path);
+        let parts: Vec<String> = rel
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy().into_owned())
+            .collect();
+        match parts.first().map(String::as_str) {
+            Some("crates")
+                if parts.len() > 2 && parts[1] == "sim" && matches!(parts[2].as_str(), "src" | "tests") =>
+            {
+                format!("crates/sim/{}", parts[2])
+            }
+            Some("crates") if parts.len() > 1 => format!("crates/{}", parts[1]),
+            Some("docs")
+                if parts.len() > 1
+                    && matches!(parts[1].as_str(), "plans" | "format" | "architecture" | "lanes") =>
+            {
+                format!("docs/{}", parts[1])
+            }
+            Some("docs") => "docs".to_string(),
+            Some(name) if matches!(name, ".github" | ".claude" | "scripts") => name.to_string(),
+            _ => "(root)".to_string(),
+        }
+    }
+
+    /// `WP`/`wp` followed by an ASCII digit, at a word start.
+    fn wp_ids(text: &str) -> usize {
+        let bytes = text.as_bytes();
+        (0..bytes.len().saturating_sub(2))
+            .filter(|&i| {
+                ((bytes[i] == b'W' && bytes[i + 1] == b'P') || (bytes[i] == b'w' && bytes[i + 1] == b'p'))
+                    && bytes[i + 2].is_ascii_digit()
+                    && (i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_'))
+            })
+            .count()
+    }
+
     #[test]
     fn every_listed_pin_file_exists() {
         let root = workspace_root();
@@ -1608,6 +1947,33 @@ version = \"1.0.0\"
         assert!(present.ok && present.fix.is_none());
     }
 
+    #[test]
+    fn the_todo_guard_scans_crate_sources() {
+        let root = std::env::temp_dir().join(format!("xtask-todo-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("crates/a/src")).unwrap();
+        let file = root.join("crates/a/src/lib.rs");
+        std::fs::write(&file, "// TODO(OPEN: a free-text marker\n").unwrap();
+        assert!(check_open_todos(&root).is_err());
+        std::fs::write(&file, "// TODO(OPEN: see #1119\n").unwrap();
+        assert!(check_open_todos(&root).is_ok());
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn open_todo_markers_must_name_an_issue_or_url() {
+        assert!(open_todo_offends(
+            "// TODO(OPEN: runner differences between GM 8.0 and 8.1, from the CLONE_SPEC"
+        ));
+        assert!(!open_todo_offends("// TODO(OPEN: runner differences, see #1099"));
+        assert!(!open_todo_offends(
+            "// TODO(OPEN: kind list, https://example.com/spec)"
+        ));
+        assert!(!open_todo_offends("// TODO(#1119): link every open question"));
+        assert!(!open_todo_offends("// an ordinary comment"));
+        assert!(!open_todo_offends(OPEN_TODO_ALLOW[0]));
+    }
+
     /// The `schema` feature (JSON Schema through `schemars`) is for docs and tests only: never in
     /// the client, native or web (#794). `cargo test --workspace` runs this in CI.
     #[test]
@@ -1629,5 +1995,34 @@ version = \"1.0.0\"
                 String::from_utf8_lossy(&out.stdout)
             );
         }
+    }
+
+    #[test]
+    fn feel_contracts_follow_the_folder() {
+        let root = std::env::temp_dir().join(format!("xtask-feel-contracts-{}", std::process::id()));
+        let dir = root.join(FEEL_PUBLIC);
+        std::fs::create_dir_all(dir.join("b")).unwrap();
+        std::fs::create_dir_all(dir.join("a")).unwrap();
+        std::fs::write(dir.join("b/z.toml"), "").unwrap();
+        std::fs::write(dir.join("a/y.toml"), "").unwrap();
+        std::fs::write(dir.join("a/ignore.txt"), "").unwrap();
+        let entries = feel_contract_entries(&root).unwrap();
+        assert_eq!(
+            entries,
+            vec![
+                ("a/y".to_string(), "a/y.toml".to_string()),
+                ("b/z".to_string(), "b/z.toml".to_string()),
+            ]
+        );
+        let text = feel_contracts_text(&entries);
+        assert!(text.starts_with("// @generated by `cargo xtask feel`"), "{text}");
+        assert!(
+            text.contains(r#"    ("a/y", include_str!("a/y.toml")),"#),
+            "{text}"
+        );
+        // Writing follows the folder and is idempotent.
+        assert!(write_feel_contracts(&root).unwrap());
+        assert!(!write_feel_contracts(&root).unwrap());
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

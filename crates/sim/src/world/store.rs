@@ -156,6 +156,18 @@ impl World {
         Ok(())
     }
 
+    /// Removes `id` from the store now (the `standard` destroy path, `LifetimeRules`): the
+    /// broadphase grid is marked so its next flush drops the buckets, and a query before that
+    /// flush filters the missing id through [`World::visible`]. `gm8` does not call this; its
+    /// [`World::sweep`] removes dead instances at the end of the tick. Its room-entry rank goes
+    /// too.
+    pub fn remove(&mut self, id: InstId) -> Option<Instance> {
+        let at = self.index_of(id)?;
+        self.grid.mark_moved(id);
+        self.room_entry.remove(&id);
+        Some(self.instances.remove(at))
+    }
+
     /// Removes dead instances, keeping the order of the rest (tick row 14), and forgets their
     /// room-entry rank.
     pub fn sweep(&mut self) {

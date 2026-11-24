@@ -10,7 +10,7 @@ use iwbtg_sim::input::{Action, InputFrame};
 use iwbtg_sim::num::Real;
 use iwbtg_sim::room::RoomRequest;
 use iwbtg_sim::rules::tick::{
-    AnimSlot, BoundarySlot, DirectLatch, DispatchOrder, JoinPhase, RoomRequestRule,
+    AnimSlot, BoundarySlot, ClockPolicy, DirectLatch, RoomRequestRule, TimelineModel,
 };
 use iwbtg_sim::timeline;
 use iwbtg_sim::world::{SimStatus, Value};
@@ -22,7 +22,7 @@ fn step(on: ProbeOn, act: ProbeAct) -> ProbeStep {
 }
 
 #[test]
-fn wp1_one_tick_runs_every_phase_in_the_recorded_order() {
+fn one_tick_runs_every_phase_in_the_recorded_order() {
     let mut b = builder();
     let sprite = b.sprite_rect((16, 16), (8, 8));
     let mut ka = KindDef::new("a", Builtin::Probe);
@@ -67,7 +67,7 @@ fn wp1_one_tick_runs_every_phase_in_the_recorded_order() {
 }
 
 #[test]
-fn wp1_dispatch_orders_follow_the_rule() {
+fn dispatch_order_is_rank_then_id() {
     // t-ord-1 shape: world (rank 4) created first, player (rank 0), two blocks (rank 1), the
     // second with the lower depth.
     let mut b = builder();
@@ -76,74 +76,62 @@ fn wp1_dispatch_orders_follow_the_rule() {
     let kw = probe_kind(&mut b, "world");
     b.order(&[kp, kblock, kw]);
     let def = b.build().unwrap();
-    for (mode, want) in [
-        (DispatchOrder::RankThenCreation, "sP sB1 sB2 sW "),
-        (DispatchOrder::Creation, "sW sP sB1 sB2 "),
-        (DispatchOrder::DepthThenRankThenCreation, "sB1 sB2 sP sW "),
-    ] {
-        let mut fx = Fx::new(def.clone());
-        fx.rules.tick.dispatch = mode;
-        let only_step = |tag: &str| {
-            p(tag)
-                .style(iwbtg_sim::events::ProbeLog::Silent)
-                .with(step(ProbeOn::Step, ProbeAct::Log(format!("s{tag} "))))
-        };
-        fx.probe(kw, 0.0, 0.0, only_step("W"));
-        fx.probe(kp, 0.0, 0.0, only_step("P"));
-        let b1 = fx.probe(kblock, 0.0, 0.0, only_step("B1"));
-        let b2 = fx.probe(kblock, 0.0, 0.0, only_step("B2"));
-        fx.w.get_mut(b1).unwrap().depth = Real::new(100.0);
-        fx.w.get_mut(b2).unwrap().depth = Real::new(50.0);
-        fx.tick(InputFrame::EMPTY);
-        assert_eq!(fx.log(), want, "{mode:?}");
-        let order = dispatch_order(&fx.w, &fx.rules.tick, |_| true);
-        assert_eq!(order.len(), 4);
-    }
+    let mut fx = Fx::new(def.clone());
+    let only_step = |tag: &str| {
+        p(tag)
+            .style(iwbtg_sim::events::ProbeLog::Silent)
+            .with(step(ProbeOn::Step, ProbeAct::Log(format!("s{tag} "))))
+    };
+    fx.probe(kw, 0.0, 0.0, only_step("W"));
+    fx.probe(kp, 0.0, 0.0, only_step("P"));
+    let b1 = fx.probe(kblock, 0.0, 0.0, only_step("B1"));
+    let b2 = fx.probe(kblock, 0.0, 0.0, only_step("B2"));
+    fx.w.get_mut(b1).unwrap().depth = Real::new(100.0);
+    fx.w.get_mut(b2).unwrap().depth = Real::new(50.0);
+    fx.tick(InputFrame::EMPTY);
+    // Rank, then instance id; depth plays no part (t-ord-1).
+    assert_eq!(fx.log(), "sP sB1 sB2 sW ");
+    let order = dispatch_order(&fx.w, |_| true);
+    assert_eq!(order.len(), 4);
 }
 
 #[test]
-fn wp1_new_instances_join_the_phase_per_r9() {
+fn new_instances_join_when_later_in_order() {
     let mut b = builder();
     let k0 = probe_kind(&mut b, "early");
     let k1 = probe_kind(&mut b, "creator");
     let k2 = probe_kind(&mut b, "late");
     let def = b.build().unwrap();
     let child = |tag: &str| Some(Box::new(p(tag)));
-    for (join, steps_seen) in [
-        (JoinPhase::Never, vec!["sX"]),
-        (JoinPhase::LaterInOrder, vec!["sX", "sL"]),
-        (JoinPhase::Always, vec!["sX", "sE", "sS", "sL"]),
-    ] {
-        let mut fx = Fx::new(def.clone());
-        fx.rules.tick.new_instances_join_phase = join;
-        let spawn = |kind, tag: &str| ProbeAct::Spawn {
-            kind,
-            x: Real::ZERO,
-            y: Real::ZERO,
-            child: child(tag),
-        };
-        fx.probe(
-            k1,
-            0.0,
-            0.0,
-            p("X")
-                .with(step(ProbeOn::Step, spawn(k0, "E")).once())
-                .with(step(ProbeOn::Step, spawn(k1, "S")).once())
-                .with(step(ProbeOn::Step, spawn(k2, "L")).once()),
-        );
-        fx.tick(InputFrame::EMPTY);
-        let log = fx.log();
-        let steps: Vec<&str> = log.split(' ').filter(|t| t.starts_with('s')).collect();
-        assert_eq!(steps, steps_seen, "{join:?}: {log}");
-        // Every new instance takes part in the later phases of the tick (t-evo-1 row 3).
-        for tag in ["E", "S", "L"] {
-            assert!(log.contains(&format!("C{tag} ")), "{join:?}: Create of {tag}");
-            assert!(log.contains(&format!("e{tag} ")), "{join:?}: End Step of {tag}");
-            assert!(log.contains(&format!("d{tag} ")), "{join:?}: Draw of {tag}");
-        }
-        // Create ran inside the spawning Step, before the next instance's turn.
-        assert!(log.find("CE ").unwrap() < log.find("CL ").unwrap());
+    let spawn = |kind, tag: &str| ProbeAct::Spawn {
+        kind,
+        x: Real::ZERO,
+        y: Real::ZERO,
+        child: child(tag),
+    };
+    let mut fx = Fx::new(def.clone());
+    fx.probe(
+        k1,
+        0.0,
+        0.0,
+        p("X")
+            .with(step(ProbeOn::Step, spawn(k0, "E")).once())
+            .with(step(ProbeOn::Step, spawn(k1, "S")).once())
+            .with(step(ProbeOn::Step, spawn(k2, "L")).once()),
+    );
+    fx.tick(InputFrame::EMPTY);
+    let log = fx.log();
+    let steps: Vec<&str> = log.split(' ').filter(|t| t.starts_with('s')).collect();
+    // The early kind's turn passed; the creator's own kind and the late kind join after it.
+    assert_eq!(steps, vec!["sX", "sL"], "{log}");
+    // Every new instance takes part in the later phases of the tick (t-evo-1 row 3).
+    for tag in ["E", "S", "L"] {
+        assert!(log.contains(&format!("C{tag} ")), "Create of {tag}");
+        assert!(log.contains(&format!("e{tag} ")), "End Step of {tag}");
+        assert!(log.contains(&format!("d{tag} ")), "Draw of {tag}");
     }
+    // Create ran inside the spawning Step, before the next instance's turn.
+    assert!(log.find("CE ").unwrap() < log.find("CL ").unwrap());
 }
 
 /// Two probes A (rank 0) and B (rank 1); A requests a room in Step and logs after it.
@@ -180,7 +168,7 @@ fn room_request_fixture(rule: RoomRequestRule, nested: bool) -> Fx {
 }
 
 #[test]
-fn wp1_room_request_rules() {
+fn room_request_rules() {
     for nested in [false, true] {
         let mut fx = room_request_fixture(RoomRequestRule::AbortTick, nested);
         fx.tick(InputFrame::EMPTY);
@@ -209,7 +197,7 @@ fn wp1_room_request_rules() {
 }
 
 #[test]
-fn wp1_rows_stop_before_the_room_change() {
+fn rows_stop_before_the_room_change() {
     // #450: the recorder samples the tick of a room change before the change.
     let mut fx = room_request_fixture(RoomRequestRule::AbortTick, false);
     let mut c = fx.ctx();
@@ -221,7 +209,7 @@ fn wp1_rows_stop_before_the_room_change() {
 }
 
 #[test]
-fn wp1_last_room_request_wins() {
+fn last_room_request_wins() {
     let mut fx = Fx::new(builder().build().unwrap());
     let mut c = fx.ctx();
     c.request_room(RoomRequest::Goto(RoomId(1)));
@@ -231,7 +219,7 @@ fn wp1_last_room_request_wins() {
 }
 
 #[test]
-fn wp1_halt_freezes_the_tick() {
+fn halt_freezes_the_tick() {
     let mut b = builder();
     let ka = probe_kind(&mut b, "a");
     let kb = probe_kind(&mut b, "b");
@@ -264,7 +252,7 @@ fn wp1_halt_freezes_the_tick() {
 }
 
 #[test]
-fn wp1_destroy_runs_destroy_now_and_the_rest_of_the_event() {
+fn destroy_runs_destroy_now_and_the_rest_of_the_event() {
     let mut b = builder();
     let ka = probe_kind(&mut b, "a");
     let kb = probe_kind(&mut b, "b");
@@ -290,7 +278,7 @@ fn wp1_destroy_runs_destroy_now_and_the_rest_of_the_event() {
 }
 
 #[test]
-fn wp1_draw_slot_uses_depth_then_creation_and_skips_invisible() {
+fn draw_slot_uses_depth_then_creation_and_skips_invisible() {
     let mut b = builder();
     let k = probe_kind(&mut b, "p");
     let mut fx = Fx::new(b.build().unwrap());
@@ -316,7 +304,7 @@ fn wp1_draw_slot_uses_depth_then_creation_and_skips_invisible() {
 }
 
 #[test]
-fn wp1_alarms_count_fire_rearm_and_idle() {
+fn alarms_count_fire_rearm_and_idle() {
     let mut b = builder();
     let k = probe_kind(&mut b, "p");
     let mut only0 = KindDef::new("only0", Builtin::Probe);
@@ -374,7 +362,7 @@ fn wp1_alarms_count_fire_rearm_and_idle() {
 }
 
 #[test]
-fn wp1_key_events_held_then_press_then_release_in_bit_order() {
+fn key_events_held_then_press_then_release_in_bit_order() {
     let mut b = builder();
     let k = probe_kind(&mut b, "p");
     let mut jump_only = KindDef::new("jump_only", Builtin::Probe);
@@ -400,7 +388,7 @@ fn wp1_key_events_held_then_press_then_release_in_bit_order() {
 }
 
 #[test]
-fn wp1_direct_read_latch_follows_the_rule() {
+fn direct_read_latch_follows_the_rule() {
     let mut b = builder();
     let k = probe_kind(&mut b, "p");
     let def = b.build().unwrap();
@@ -429,7 +417,7 @@ fn wp1_direct_read_latch_follows_the_rule() {
 }
 
 #[test]
-fn wp1_boundary_events_match_the_recorded_edge_rule() {
+fn boundary_events_match_the_recorded_edge_rule() {
     let mut b = builder();
     let sprite = b.sprite_rect((16, 16), (8, 8));
     let mut k = KindDef::new("p", Builtin::Probe);
@@ -462,7 +450,7 @@ fn wp1_boundary_events_match_the_recorded_edge_rule() {
 }
 
 #[test]
-fn wp1_boundary_and_animation_slots_move() {
+fn boundary_and_animation_slots_move() {
     let mut b = builder();
     let sprite = b.sprite_rect((16, 16), (8, 8));
     let mut k = KindDef::new("p", Builtin::Probe);
@@ -475,7 +463,7 @@ fn wp1_boundary_and_animation_slots_move() {
     let order_of = |boundary, anim| {
         let mut fx = Fx::new(def.clone());
         fx.rules.tick.boundary_slot = boundary;
-        fx.rules.tick.anim_slot = anim;
+        fx.rules.tick.timing.anim_slot = anim;
         let a = fx.probe(k, 795.0, 300.0, p("A"));
         fx.probe(k, 100.0, 300.0, p("B").style(iwbtg_sim::events::ProbeLog::Silent));
         fx.touch(a, true);
@@ -501,7 +489,7 @@ fn wp1_boundary_and_animation_slots_move() {
 }
 
 #[test]
-fn wp1_timeline_runs_moments_from_the_position_then_advances() {
+fn timeline_runs_moments_from_the_position_then_advances() {
     let mut b = builder();
     let k = probe_kind(&mut b, "p");
     b.def_mut().timelines.push(TimelineDef {
@@ -510,8 +498,9 @@ fn wp1_timeline_runs_moments_from_the_position_then_advances() {
         ..TimelineDef::default()
     });
     let def = b.build().unwrap();
-    let moments_per_tick = |speed: f64, looping: bool, ticks: u32| {
+    let moments_per_tick = |model: TimelineModel, speed: f64, looping: bool, ticks: u32| {
         let mut fx = Fx::new(def.clone());
+        fx.rules.tick.timing.timeline_model = model;
         let a = fx.probe(k, 0.0, 0.0, p("A"));
         {
             let inst = fx.w.get_mut(a).unwrap();
@@ -539,18 +528,109 @@ fn wp1_timeline_runs_moments_from_the_position_then_advances() {
         )
     };
     // Moment N on the (N+1)th tick after setting position 0 between ticks; position reads 1
-    // after the first tick (audio-rori-sync-b.csv).
-    let (out, pos) = moments_per_tick(1.0, false, 5);
-    assert_eq!(out, vec!["t0", "", "t2", "t3", ""]);
-    assert_eq!(pos, 5.0);
-    let (out, _) = moments_per_tick(2.0, false, 3);
-    assert_eq!(out, vec!["t0", "t2,t3", ""]);
-    let (out, _) = moments_per_tick(1.0, true, 6);
-    assert_eq!(out, vec!["t0", "", "t2", "t3", "t0", ""]);
+    // after the first tick (audio-rori-sync-b.csv). `DatedCallbacks` reorders a tick's due set,
+    // not which moments are due or when the position moves, so both models agree on ascending
+    // moments at speed 1, speed > 1 and looping. The negative-speed order is pinned by the
+    // `timeline::due_moments` unit tests.
+    for model in [TimelineModel::Moments, TimelineModel::DatedCallbacks] {
+        let (out, pos) = moments_per_tick(model, 1.0, false, 5);
+        assert_eq!(out, vec!["t0", "", "t2", "t3", ""], "{model:?}");
+        assert_eq!(pos, 5.0, "{model:?}");
+        let (out, _) = moments_per_tick(model, 2.0, false, 3);
+        assert_eq!(out, vec!["t0", "t2,t3", ""], "{model:?}");
+        let (out, _) = moments_per_tick(model, 1.0, true, 6);
+        assert_eq!(out, vec!["t0", "", "t2", "t3", "t0", ""], "{model:?}");
+    }
 }
 
 #[test]
-fn wp1_end_of_path_runs_after_motion() {
+fn the_standard_timeline_model_orders_a_ticks_callbacks_by_deadline() {
+    // The loader requires ascending moments, but the ordering rule is defined for any
+    // declaration order; this makes the two models visible in one tick.
+    let mut b = builder();
+    let k = probe_kind(&mut b, "p");
+    b.def_mut().timelines.push(TimelineDef {
+        name: "tl".into(),
+        moments: vec![3, 0, 2, 1],
+        ..TimelineDef::default()
+    });
+    let def = b.build().unwrap();
+    let moments = |model: TimelineModel| {
+        let mut fx = Fx::new(def.clone());
+        fx.rules.tick.timing.timeline_model = model;
+        let a = fx.probe(k, 0.0, 0.0, p("A"));
+        {
+            let inst = fx.w.get_mut(a).unwrap();
+            timeline::start(&mut inst.timeline, TimelineId(0), Real::ZERO).unwrap();
+            inst.timeline.as_mut().unwrap().speed = Real::new(4.0);
+        }
+        fx.tick(InputFrame::EMPTY);
+        tokens_of(&fx.take_log(), "A")
+            .into_iter()
+            .filter(|t| t.starts_with('t'))
+            .map(|t| t.trim_end_matches('A').to_owned())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        moments(TimelineModel::Moments),
+        vec!["t3", "t0", "t2", "t1"],
+        "gm8 keeps declaration order"
+    );
+    assert_eq!(
+        moments(TimelineModel::DatedCallbacks),
+        vec!["t0", "t1", "t2", "t3"],
+        "standard orders by deadline"
+    );
+}
+
+#[test]
+fn a_callback_that_destroys_its_instance_stops_the_rest_of_the_tick() {
+    // Several due moments run in one tick, but a callback that destroys the instance stops the
+    // ones after it under both models (R6); the position does not advance either.
+    let mut b = builder();
+    let k = probe_kind(&mut b, "p");
+    b.def_mut().timelines.push(TimelineDef {
+        name: "tl".into(),
+        moments: vec![0, 1, 2],
+        ..TimelineDef::default()
+    });
+    let def = b.build().unwrap();
+    let run = |model: TimelineModel| {
+        let mut fx = Fx::new(def.clone());
+        fx.rules.tick.timing.timeline_model = model;
+        let a = fx.probe(
+            k,
+            0.0,
+            0.0,
+            p("A").with(step(ProbeOn::Moment(0), ProbeAct::DestroySelf)),
+        );
+        {
+            let inst = fx.w.get_mut(a).unwrap();
+            timeline::start(&mut inst.timeline, TimelineId(0), Real::ZERO).unwrap();
+            inst.timeline.as_mut().unwrap().speed = Real::new(3.0);
+        }
+        fx.tick(InputFrame::EMPTY);
+        let moments = tokens_of(&fx.take_log(), "A")
+            .into_iter()
+            .filter(|t| t.starts_with('t'))
+            .map(|t| t.trim_end_matches('A').to_owned())
+            .collect::<Vec<_>>();
+        let gone = fx.w.get(a).is_none_or(|i| !i.alive);
+        (moments, gone)
+    };
+    for model in [TimelineModel::Moments, TimelineModel::DatedCallbacks] {
+        let (moments, gone) = run(model);
+        assert_eq!(
+            moments,
+            vec!["t0"],
+            "only the destroying callback ran ({model:?})"
+        );
+        assert!(gone, "the instance is destroyed ({model:?})");
+    }
+}
+
+#[test]
+fn end_of_path_runs_after_motion() {
     let mut b = builder();
     let k = probe_kind(&mut b, "p");
     let mut fx = Fx::new(b.build().unwrap());
@@ -561,7 +641,7 @@ fn wp1_end_of_path_runs_after_motion() {
 }
 
 #[test]
-fn wp1_real_time_reads_are_tick_based() {
+fn real_time_reads_are_tick_based() {
     let mut fx = Fx::new(builder().build().unwrap());
     assert_eq!(
         tick::real_time_fps(&fx.def, &fx.rules.tick, &fx.w),
@@ -588,12 +668,31 @@ fn wp1_real_time_reads_are_tick_based() {
 }
 
 #[test]
-fn wp1_tick_counter_overflow_halts_through_the_error() {
+fn tick_counter_overflow_halts_through_the_error() {
     let mut fx = Fx::new(builder().build().unwrap());
     fx.w.tick = u64::MAX;
     let mut c = fx.ctx();
     let r = tick::run_tick_with(&mut c, InputFrame::EMPTY, &HOOKS);
     assert!(matches!(r, Err(SimError::Overflow { .. })));
+}
+
+#[test]
+fn one_second_is_the_room_speed_under_the_legacy_clock_and_the_tick_rate_under_fixed() {
+    let mut b = builder();
+    b.def_mut().tick_rate = 60;
+    let mut fx = Fx::new(b.build().unwrap());
+    fx.w.room_speed = Real::new(30.0);
+    assert_eq!(
+        tick::second_ticks(&fx.def, &fx.rules.tick, &fx.w),
+        Real::new(30.0),
+        "the default is the legacy gm8 clock"
+    );
+    fx.rules.tick.timing.clock = ClockPolicy::Fixed;
+    assert_eq!(
+        tick::second_ticks(&fx.def, &fx.rules.tick, &fx.w),
+        Real::new(60.0),
+        "a fixed clock reads the package tick rate"
+    );
 }
 
 /// `timeline::start_with_def` begins a run with `timeline_loop` set when the def says `loop`.

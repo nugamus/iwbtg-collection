@@ -90,27 +90,27 @@ fn arrays() -> World {
 pub(crate) const VECTORS: [(&str, &str); 6] = [
     (
         "empty",
-        "38f25bd28b6c80877388754e0dacdcd99058316c15adff89845e770a700791ef",
+        "04daffeb241508b6ec5d56d69fcbfd7a931dad4ad2b26f1570f9d160902041ab",
     ),
     (
         "instances",
-        "e35b7d739dc58f67a296f473c2549fd8214e335dfc8487bc990725dafde3873b",
+        "049662e24a21f03d3a94146155763180bf641cd7d88135cbd9f293aff179b3b2",
     ),
     (
         "globals",
-        "d8c700641f81f648304e580393939f223d67afb57d6b4d8a4e5fef685894cfff",
+        "55f3bc39d6599e9b6d83a66de0cba8209215ef6605e1199de2c289eb9363586b",
     ),
     (
         "rng",
-        "b3e1a61a4f126a25c39c7150647343a9009088251794b5ba84473b0967260932",
+        "6524371c03b2c44b64cab6b7f84ad9d47db64c2e52e075c1f4cbc218f5150036",
     ),
     (
         "reals",
-        "6b7c478a26c9afb5477ba65b703627667296fdd8c9ad277915d285318b10fb9d",
+        "0eb23c1c66e84f4bcc40b4569b43696daf8395130384d80a9ad48a1f456c9541",
     ),
     (
         "arrays",
-        "39d090f46244377f7a5dfb684071877e41da11ccb5e5f27095a5d1e815fda7c0",
+        "5fd642c70ec82c5f057e0a3c3b93042109cf1377943110fb972a5d3ed0168ae1",
     ),
 ];
 

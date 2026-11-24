@@ -157,6 +157,9 @@ def plan(paths, graph, full=False, root=ROOT):
     code = bool(selected_all)
     wasip1 = bool(selected_all & {'iwbtg-sim', 'iwbtg-format'})
     browser = bool(selected_all & {'iwbtg-sim', 'iwbtg-format', 'iwbtg-client'})
+    # The browser bundle is the client's own output: build it when the client (or its web page,
+    # which lives under crates/client/) changed, not merely when a sim/format dependency did.
+    web = bool(test & {'iwbtg-client'})
     determinism = bool(selected_all & {'iwbtg-sim', 'iwbtg-format', 'iwbtg-tools'})
 
     local_steps = [{'kind': 'rustfmt', 'reason': 'always checks the workspace formatting'}]
@@ -174,6 +177,7 @@ def plan(paths, graph, full=False, root=ROOT):
          'reason': 'CI tests changed crates and their consumers'},
         {'kind': 'wasm32-wasip1', 'selected': wasip1, 'reason': 'sim or format selected'},
         {'kind': 'wasm32-unknown-unknown', 'selected': browser, 'reason': 'sim, format or client selected'},
+        {'kind': 'web', 'selected': web, 'reason': 'client or its web page selected'},
         {'kind': 'determinism', 'selected': determinism, 'reason': 'sim, format or tools selected'},
         {'kind': 'sim-deps', 'selected': code, 'reason': 'dependency ban applies to every code change'},
         {'kind': 'licenses', 'selected': code, 'reason': 'license check applies to every code change'},
@@ -191,6 +195,7 @@ def plan(paths, graph, full=False, root=ROOT):
         'compile': sorted(compile_),
         'wasip1': wasip1,
         'browser': browser,
+        'web': web,
         'determinism': determinism,
         'inputs': inputs,
         'local_steps': local_steps,
@@ -203,7 +208,7 @@ def scope(paths, graph, full=False):
     """Backward-compatible subset used by CI output and older callers."""
     result = plan(paths, graph, full)
     return {key: result[key] for key in
-            ('code', 'packages', 'wasip1', 'browser', 'determinism')}
+            ('code', 'packages', 'wasip1', 'browser', 'web', 'determinism')}
 
 
 def render_lines(result):
@@ -217,6 +222,7 @@ def render_lines(result):
         f"packages={result['packages']}",
         f"wasip1={str(result['wasip1']).lower()}",
         f"browser={str(result['browser']).lower()}",
+        f"web={str(result['web']).lower()}",
         f"determinism={str(result['determinism']).lower()}",
         f"identity={result['identity']}",
     ]
@@ -251,7 +257,7 @@ def main():
     print(render_lines(result) if args.format == 'lines' else json.dumps(result, sort_keys=True))
     if args.github_output:
         with args.github_output.open('a') as out:
-            for key in ('code', 'packages', 'wasip1', 'browser', 'determinism'):
+            for key in ('code', 'packages', 'wasip1', 'browser', 'web', 'determinism'):
                 value = result[key]
                 out.write(f'{key}={str(value).lower() if isinstance(value, bool) else value}\n')
 

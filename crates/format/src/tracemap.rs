@@ -1,5 +1,6 @@
 //! `tests/trace-map.toml`: original GameMaker names to our package ids, written by the research
-//! converter (docs/plans/sim-core.md 8.1, 9; research `converter/FORMAT_NOTES.md` section 12).
+//! converter (docs/format/v0.md; docs/architecture/traces.md; research `converter/FORMAT_NOTES.md`
+//! section 12).
 //!
 //! The trace map is research data: it is never shipped or hashed (`tests/`). Tools use it to map
 //! trace columns and rooms. The loader reads it only in `LoadMode::Trace`, to accept current

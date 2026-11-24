@@ -10,7 +10,7 @@
 //! `loop` (default true) loops it. With `respects_music_off` nothing plays while music is off
 //! (`global.musicD`).
 //!
-//! Tested against the real sound model in `tests/wp6b_music_sound.rs`.
+//! Tested against the real sound model in `tests/builtins_music.rs`.
 
 use super::{BuiltinState, ParamError, ParamSpec, ParamType, param_bool, param_enum, param_error};
 use crate::def::{KindDef, ParamValue, Params, SoundId};

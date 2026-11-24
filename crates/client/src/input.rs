@@ -1,5 +1,13 @@
 //! Turns key presses into one `InputFrame` per tick. The collector has no Bevy logic, so it is tested
 //! like any other code (docs/architecture/replay.md, Actions and input frames).
+//!
+//! This is the **only** place a device becomes an action frame (#1155). The sim latches the frame
+//! and never derives an edge; a replay stores the frame. Edges are kept per input, so two keys or
+//! controller inputs bound to one action each set its edge. Client inputs (`ClientKey`: quick-retry,
+//! skip-cutscene, frame-advance) and the pause menu, auto-retry and quit are deliberately **not**
+//! in the frame: they never reach the sim or a replay. `take_frame` is also what the pause menu
+//! calls when it closes, so keys pressed while it was open lose their edges while still-held keys
+//! stay held (`input/pause_edges`).
 
 use iwbtg_sim::input::{Action, InputFrame, vk};
 
@@ -202,10 +210,15 @@ impl StickGate {
     }
 }
 
-/// Reads the controllers as `PadInput`s. Only the active controller counts: the one that last had
-/// a button pressed. A DualSense over Bluetooth can show up as a second device (motion sensors)
-/// whose axes never rest at zero, and that must not walk the kid right. The stick goes through
-/// `StickGate`, so an axis that never rests at the centre is ignored.
+/// Reads the controllers as `PadInput`s. Only the active controller counts: the one that most
+/// recently had a **new** button press (`Gamepad::get_just_pressed`, which Bevy clears each frame).
+/// A device that merely holds a button does not take over, and neither does releasing on an
+/// inactive device. If several devices press in one frame, the active one keeps priority;
+/// otherwise the lowest entity index wins, so the choice is deterministic. A takeover or a
+/// disconnect resets the stick gates: the newly active pad's axes must be seen at the centre
+/// before a stick counts. A DualSense over Bluetooth can show up as a second device (motion sensors) whose axes
+/// never rest at zero, and that must not walk the kid right. The stick goes through `StickGate`,
+/// so an axis that never rests at the centre is ignored.
 ///
 /// Native and web share this: on both, Bevy's gilrs backend fills the same `Gamepad` components
 /// (on wasm32 from the browser's Gamepad API, docs/architecture/client/view.md).
@@ -217,17 +230,31 @@ pub struct PadReader {
 
 impl PadReader {
     /// Which inputs are down this frame, indexed by `PadInput as usize`. All up when no controller
-    /// has had a button pressed yet, or the active one went away.
+    /// has been pressed yet, or the active one went away.
     pub fn read(
         &mut self,
         pads: &[(bevy::prelude::Entity, &bevy::input::gamepad::Gamepad)],
     ) -> [bool; PadInput::ALL.len()] {
         use bevy::input::gamepad::{GamepadAxis as A, GamepadButton as B};
         let mut down = [false; PadInput::ALL.len()];
-        if let Some((entity, _)) = pads.iter().find(|(_, g)| g.get_pressed().next().is_some())
-            && self.active != Some(*entity)
-        {
-            self.active = Some(*entity);
+        // Activity changes only on a press edge. Holding on the active pad or on another one is
+        // not an edge; releasing is not one either.
+        let active_alive = self.active.filter(|a| pads.iter().any(|(p, _)| p == a));
+        let active_pressed = active_alive.is_some_and(|a| {
+            pads.iter()
+                .any(|(p, g)| *p == a && g.get_just_pressed().next().is_some())
+        });
+        let next = if active_pressed {
+            active_alive
+        } else {
+            pads.iter()
+                .filter(|(_, g)| g.get_just_pressed().next().is_some())
+                .map(|(entity, _)| *entity)
+                .min_by_key(|entity| entity.index())
+                .or(active_alive)
+        };
+        if next != self.active {
+            self.active = next;
             self.gates = Default::default();
         }
         let Some(g) = self
@@ -499,6 +526,123 @@ mod tests {
         assert!(pad_down(&reader.read(&[(b, &idle)])).is_empty());
     }
 
+    /// #1014: a new press on another pad takes over even while the active pad keeps holding, and
+    /// the choice does not change back while both merely hold.
+    #[test]
+    fn a_new_press_takes_over_while_the_active_pad_holds() {
+        let mut reader = PadReader::default();
+        let (a, b) = (Entity::from_raw_u32(1).unwrap(), Entity::from_raw_u32(2).unwrap());
+        let mut first = Gamepad::default();
+        first.digital_mut().press(B::South);
+        assert_eq!(
+            pad_down(&reader.read(&[(a, &first), (b, &Gamepad::default())])),
+            ["south"]
+        );
+        // A only holds South now; B has a new press.
+        first.digital_mut().clear();
+        let mut second = Gamepad::default();
+        second.digital_mut().press(B::Start);
+        assert_eq!(
+            pad_down(&reader.read(&[(a, &first), (b, &second)])),
+            ["start"],
+            "B's new press takes over although A still holds South"
+        );
+        // Both keep holding: the active pad stays B.
+        first.digital_mut().clear();
+        second.digital_mut().clear();
+        assert_eq!(
+            pad_down(&reader.read(&[(a, &first), (b, &second)])),
+            ["start"],
+            "continued holds do not move activity back"
+        );
+    }
+
+    /// #1014: releasing on an inactive pad while the active pad still holds something else must
+    /// not steal activity back without a new press.
+    #[test]
+    fn releasing_on_an_inactive_pad_does_not_take_over() {
+        let mut reader = PadReader::default();
+        let (a, b) = (Entity::from_raw_u32(1).unwrap(), Entity::from_raw_u32(2).unwrap());
+        let mut held = Gamepad::default();
+        held.digital_mut().press(B::South);
+        assert_eq!(pad_down(&reader.read(&[(a, &held)])), ["south"]);
+        held.digital_mut().clear();
+        let mut later = Gamepad::default();
+        later.digital_mut().press(B::Start);
+        assert_eq!(pad_down(&reader.read(&[(a, &held), (b, &later)])), ["start"]);
+        // B releases Start; A still holds South but has no new press.
+        later.digital_mut().clear();
+        later.digital_mut().release(B::Start);
+        assert!(
+            pad_down(&reader.read(&[(a, &held), (b, &later)])).is_empty(),
+            "a release on B does not hand control to A's held button"
+        );
+        // A new press on A does take over.
+        held.digital_mut().release(B::South);
+        held.digital_mut().press(B::South);
+        assert_eq!(
+            pad_down(&reader.read(&[(a, &held), (b, &later)])),
+            ["south"],
+            "a new press on A takes over"
+        );
+    }
+
+    /// #1014: simultaneous press edges resolve deterministically. With no active pad the lowest
+    /// entity index wins; while a pad is active, its own press keeps priority.
+    #[test]
+    fn simultaneous_presses_pick_the_lowest_entity_and_keep_the_active_pad() {
+        let mut reader = PadReader::default();
+        let (a, b) = (Entity::from_raw_u32(1).unwrap(), Entity::from_raw_u32(2).unwrap());
+        let mut first = Gamepad::default();
+        first.digital_mut().press(B::South);
+        let mut second = Gamepad::default();
+        second.digital_mut().press(B::Start);
+        assert_eq!(
+            pad_down(&reader.read(&[(b, &second), (a, &first)])),
+            ["south"],
+            "the lowest entity index wins regardless of slice order"
+        );
+        // Both hold, then both press another button in the same frame: the active pad (A) wins.
+        first.digital_mut().clear();
+        second.digital_mut().clear();
+        first.digital_mut().press(B::East);
+        second.digital_mut().press(B::West);
+        assert_eq!(
+            pad_down(&reader.read(&[(b, &second), (a, &first)])),
+            ["south", "east"],
+            "the active pad keeps priority on a simultaneous press"
+        );
+    }
+
+    /// #1014: a takeover resets the stick gates, so the new pad's stick must be seen at the centre
+    /// before it counts (the same rule that keeps a motion-sensor device from walking the kid).
+    #[test]
+    fn a_takeover_resets_the_stick_gate() {
+        let mut reader = PadReader::default();
+        let (a, b) = (Entity::from_raw_u32(1).unwrap(), Entity::from_raw_u32(2).unwrap());
+        let mut first = Gamepad::default();
+        first.digital_mut().press(B::South);
+        assert_eq!(pad_down(&reader.read(&[(a, &first)])), ["south"]);
+        first.digital_mut().clear();
+        // B takes over with its stick already pushed: the reset gate ignores it until centred.
+        let mut second = Gamepad::default();
+        second.digital_mut().press(B::Start);
+        second.analog_mut().set(A::LeftStickX, 1.0);
+        assert_eq!(pad_down(&reader.read(&[(a, &first), (b, &second)])), ["start"]);
+        // Back to the centre, then pushed again: now it counts.
+        second.analog_mut().set(A::LeftStickX, 0.1);
+        assert_eq!(
+            pad_down(&reader.read(&[(a, &first), (b, &second)])),
+            ["start"],
+            "centred but not pushed"
+        );
+        second.analog_mut().set(A::LeftStickX, 0.9);
+        assert_eq!(
+            pad_down(&reader.read(&[(a, &first), (b, &second)])),
+            ["start", "stick-right"]
+        );
+    }
+
     /// Bevy's stick Y points up on every backend, the browser's included.
     #[test]
     fn stick_up_is_positive_y() {
@@ -543,6 +687,82 @@ mod tests {
         let f = c.take_frame();
         assert!(!f.is_held(Action::Shoot));
         assert!(f.was_pressed(Action::Shoot) && f.was_released(Action::Shoot));
+    }
+
+    /// A replay can only contain frames the collector built, and every bit the collector sets is
+    /// `Action::bit()` (a key, a pad input or `press_action`). Pressing every virtual key and
+    /// every pad input under the default bindings therefore never produces a reserved bit: no
+    /// recorded replay can carry one, so masking them at the sim latch is a no-op for replays.
+    #[test]
+    fn every_frame_the_collector_builds_is_a_contract_frame() {
+        let mut c = Collector::new(Bindings::default());
+        for key in 0..=u8::MAX {
+            c.press(key);
+            assert!(c.take_frame().is_contract(), "key {key} press");
+            c.release(key);
+            assert!(c.take_frame().is_contract(), "key {key} release");
+        }
+        for input in PadInput::ALL {
+            c.set_pad(input, true);
+            assert!(c.take_frame().is_contract(), "pad {} press", input.name());
+            c.set_pad(input, false);
+            assert!(c.take_frame().is_contract(), "pad {} release", input.name());
+        }
+        c.press_action(Action::Restart);
+        assert!(c.take_frame().is_contract());
+    }
+
+    /// `input/jump_on_press` at the collector boundary: a press between two ticks is in the very
+    /// next frame, never later, which is the one tick `CONTROL_LATENCY_MAX_TICKS` allows.
+    #[test]
+    fn a_press_is_in_the_next_frame() {
+        let mut c = Collector::new(Bindings::default());
+        assert_eq!(c.take_frame(), InputFrame::EMPTY);
+        c.press(vk::Z);
+        assert!(c.take_frame().was_pressed(Action::Shoot));
+    }
+
+    /// `input/second_key_edge`: a second input bound to an action that is already held sets the
+    /// action's press bit again, and releasing one of the two sets its release bit while the
+    /// action stays held. The client collector, not the sim, owns this.
+    #[test]
+    fn a_second_input_sets_the_edge_again_while_the_action_is_held() {
+        let mut c = Collector::new(Bindings::default());
+        c.press(vk::LEFT_SHIFT);
+        assert!(c.take_frame().was_pressed(Action::Jump));
+        c.press(vk::RIGHT_SHIFT);
+        let f = c.take_frame();
+        assert!(f.is_held(Action::Jump));
+        assert!(f.was_pressed(Action::Jump), "the second Shift presses again");
+        assert!(!f.was_released(Action::Jump));
+        c.release(vk::LEFT_SHIFT);
+        let f = c.take_frame();
+        assert!(f.is_held(Action::Jump), "Right Shift still holds it");
+        assert!(f.was_released(Action::Jump), "but the left Shift released");
+    }
+
+    /// `input/pause_edges`: the pause menu closes by taking a frame, which drops the edges
+    /// collected while it was open and keeps keys that are still held. A key pressed in the menu
+    /// never reaches the game, and a key released in it does not send a release edge.
+    #[test]
+    fn closing_the_pause_menu_drops_edges_but_keeps_held_keys() {
+        let mut c = Collector::new(Bindings::default());
+        c.press(vk::LEFT);
+        assert!(c.take_frame().was_pressed(Action::Left));
+        // While the menu is open: Z goes down, Left goes up. The run does not tick.
+        c.press(vk::Z);
+        c.release(vk::LEFT);
+        // Closing the menu takes a frame and throws it away (pause.rs, `act`); that frame is the
+        // only place the menu's edges exist.
+        let dropped = c.take_frame();
+        assert_eq!(dropped.pressed, Action::Shoot.bit());
+        assert_eq!(dropped.released, Action::Left.bit());
+        // The first frame the game sees has no edges but keeps the key that is still held.
+        let frame = c.take_frame();
+        assert_eq!(frame.pressed, 0, "a menu press never reaches the game");
+        assert_eq!(frame.released, 0, "nor does a menu release");
+        assert!(frame.is_held(Action::Shoot));
+        assert!(!frame.is_held(Action::Left));
     }
 
     #[test]

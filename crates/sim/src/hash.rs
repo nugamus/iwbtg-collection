@@ -3,7 +3,8 @@
 //! BLAKE3 over the postcard encoding of a canonical [`HashView`] borrowed from the `World`: every
 //! hashed field in a fixed order, `setup_applied` included, `output`, the grid, the per-tick
 //! `room_requests` counter and the client's `particle_defs` (#866) and `particle_clears` (#883)
-//! tables excluded. Postcard writes lengths as varints and reals as their
+//! tables excluded. The RNG stream layout and each named stream's state are hashed (`streams`),
+//! so a replay observes them (#1157). Postcard writes lengths as varints and reals as their
 //! little-endian bits, so wasm32 and x86_64 give the same bytes. `std::hash` and its hashers are
 //! never used here. WP0 declared; WP1 owns.
 
@@ -15,18 +16,18 @@ use crate::def::{RoomId, VarId};
 use crate::input_state::InputState;
 use crate::num::Real;
 use crate::particles::Particles;
-use crate::rng::Rng;
+use crate::rng::{Rng, RngStreams};
 use crate::room::RoomRequest;
 use crate::save::SaveSlot;
 use crate::sound::SoundState;
 use crate::stripped::PlayMode;
 use crate::timing::TimingState;
 use crate::view::View;
-use crate::world::{EngineGlobals, Instance, SimStatus, Value, World};
+use crate::world::{EngineGlobals, InstId, Instance, SimStatus, Value, World};
 
 /// Version of the [`HashView`] layout. Part of the hashed bytes, so a layout change can never
 /// match an old hash by accident.
-pub const HASH_LAYOUT: u32 = 2;
+pub const HASH_LAYOUT: u32 = 3;
 
 /// Replay checkpoints are taken every this many ticks (architecture "Replays").
 pub const CHECKPOINT_INTERVAL: u64 = 500;
@@ -40,11 +41,14 @@ pub struct HashView<'a> {
     room_tick: u64,
     room_speed: Real,
     instances: &'a [Instance],
+    room_entry: &'a BTreeMap<InstId, u64>,
+    next_entry: u64,
     next_id: u64,
     var_names: &'a BTreeMap<String, VarId>,
     globals: &'a BTreeMap<VarId, Value>,
     engine: &'a EngineGlobals,
     rng: &'a Rng,
+    streams: &'a RngStreams,
     input: &'a InputState,
     views: &'a [View; 8],
     pending: &'a Option<RoomRequest>,
@@ -69,11 +73,14 @@ impl<'a> HashView<'a> {
             room_tick: w.room_tick,
             room_speed: w.room_speed,
             instances: w.instances(),
+            room_entry: &w.room_entry,
+            next_entry: w.next_entry,
             next_id: w.next_id,
             var_names: &w.var_names,
             globals: &w.globals,
             engine: &w.engine,
             rng: &w.rng,
+            streams: &w.streams,
             input: &w.input,
             views: &w.views,
             pending: &w.pending,

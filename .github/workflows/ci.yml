@@ -5,8 +5,8 @@ name: CI
 # Every job sets `timeout-minutes` (#967): a wedged step fails and reports after minutes instead of
 # holding `ci-ok` and auto-merge for GitHub's 6 hour default. The native cap is 45 minutes: a full
 # Windows run measured 28m36s on a cold-ish cache (#1041, run 44531896479), and main also runs the
-# Rust-cache save there; the warm path is about 5.5 minutes. Both WASM caps stay 25 (slowest cold
-# measurement 11m33s, #961); everything else is 5 to 15.
+# Rust-cache save there; the warm path is about 5.5 minutes. The three wasm/browser caps stay 25
+# (slowest wasm cold measurement 11m33s, #961); everything else is 5 to 15.
 on:
   pull_request:
   merge_group:
@@ -35,6 +35,7 @@ jobs:
       packages: ${{ steps.diff.outputs.packages }}
       wasip1: ${{ steps.diff.outputs.wasip1 }}
       browser: ${{ steps.diff.outputs.browser }}
+      web: ${{ steps.diff.outputs.web }}
       determinism: ${{ steps.diff.outputs.determinism }}
     steps:
       - uses: actions/checkout@v5
@@ -122,9 +123,8 @@ jobs:
           # Only main writes the cache: PR runs restore it and skip the slow save (Windows: minutes).
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: bytecodealliance/actions/wasmtime/setup@v1
-      # wasm32-wasip1 aborts on panic, and the WP0 stubs that are not merged yet panic. The format
-      # integration tests that load whole packages (wp7a_*) go through them, so they run on
-      # native targets only until WP11 removes the stubs.
+      # wasm32-wasip1 aborts on panic. This job runs the library tests and the `fixtures` target;
+      # the package-loading modules (`load_*` in `tests/it.rs`) run on the native jobs.
       # `cargo test -p iwbtg-sim` runs the golden corpus here too (tests/golden_corpus.rs): it is
       # ~4 min under wasmtime on a warm cache and is most of this job's wall time.
       - run: cargo test -p iwbtg-sim --target wasm32-wasip1 --locked
@@ -153,30 +153,60 @@ jobs:
       # Clippy compiles the whole crate, including the web-only code (storage.rs localStorage backend),
       # and replaces a plain `cargo build` of the client: same errors, no codegen, plus the lints.
       - run: cargo clippy -p iwbtg-client --target wasm32-unknown-unknown --locked -- -D warnings
-      # The runner (.cargo/config.toml) is the wasm-bindgen CLI, which must match the lock file.
-      # The release tarball holds the same two binaries `cargo install wasm-bindgen-cli --locked`
-      # builds, but downloads in seconds instead of compiling for 1m38s on a cache miss (#961).
-      - name: Install wasm-bindgen CLI at the locked version
+      # The runner (.cargo/config.toml) is the wasm-bindgen CLI, which must match the lock file;
+      # the composite action installs it (and the test runner) with a checksum.
+      - uses: ./.github/actions/wasm-bindgen
         if: needs.changes.outputs.wasip1 == 'true'
-        run: |
-          set -euo pipefail
-          v=$(cargo metadata --locked --format-version 1 | jq -r '.packages[] | select(.name == "wasm-bindgen") | .version')
-          name="wasm-bindgen-$v-x86_64-unknown-linux-musl"
-          base="https://github.com/wasm-bindgen/wasm-bindgen/releases/download/$v"
-          curl --fail --retry 3 --silent --show-error --location --output "$RUNNER_TEMP/$name.tar.gz" "$base/$name.tar.gz"
-          curl --fail --retry 3 --silent --show-error --location --output "$RUNNER_TEMP/$name.sha256sum" "$base/$name.tar.gz.sha256sum"
-          # The .sha256sum asset names the file with a `gh-release/` path prefix, so compare the
-          # digests rather than letting `sha256sum --check` look for that path here.
-          want=$(cut -d' ' -f1 "$RUNNER_TEMP/$name.sha256sum")
-          got=$(sha256sum "$RUNNER_TEMP/$name.tar.gz" | cut -d' ' -f1)
-          [ "$want" = "$got" ] || { echo "::error::checksum mismatch for $name.tar.gz"; exit 1; }
-          tar --extract --gzip --file "$RUNNER_TEMP/$name.tar.gz" --directory "$RUNNER_TEMP"
-          install --mode 755 "$RUNNER_TEMP/$name/wasm-bindgen" "$RUNNER_TEMP/$name/wasm-bindgen-test-runner" "$HOME/.cargo/bin/"
-          wasm-bindgen --version
-          wasm-bindgen-test-runner --version
       # The golden corpus again, this time linked for wasm32-unknown-unknown and run under node.
       - if: needs.changes.outputs.wasip1 == 'true'
-        run: cargo test -p iwbtg-sim --test wp1_determinism --test golden_corpus --target wasm32-unknown-unknown --locked
+        run: cargo test -p iwbtg-sim --test determinism --test golden_corpus --target wasm32-unknown-unknown --locked
+
+  # The browser page a playtest uses (#29, #1078): the release wasm plus the pinned wasm-bindgen
+  # output, a compressed-size budget, and a headless-browser load of a fixture package. Selected
+  # only when the client itself (including crates/client/web/) changed, not for sim/format-only
+  # changes, which the wasm job above already lints.
+  web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    # The cold release wasm build is the long part; the same bound as the other wasm jobs.
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Only main writes the cache: PR runs restore it and skip the slow save.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: ./.github/actions/wasm-bindgen
+      - name: Build the browser bundle
+        timeout-minutes: 20
+        run: |
+          cargo build -p iwbtg-client --release --target wasm32-unknown-unknown --locked
+          wasm-bindgen --target web --no-typescript --out-dir crates/client/web/pkg target/wasm32-unknown-unknown/release/iwbtg-client.wasm
+      # The budget is the compressed wasm a server sends; scripts/check_web_size.py fails on growth.
+      - name: Check the compressed wasm size
+        timeout-minutes: 2
+        run: python3 -I scripts/check_web_size.py crates/client/web/pkg/iwbtg-client_bg.wasm
+      # A downloadable bundle should be playable without another build: the showcase is the one
+      # package a tester plays (docs/architecture/client/view.md, The showcase).
+      - name: Pack the showcase for the artifact
+        timeout-minutes: 5
+        run: cargo run -q -p iwbtg-tools --locked -- pkg pack crates/client/showcase.pkg -o crates/client/web/showcase.iwbz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-bundle
+          path: |
+            crates/client/web/index.html
+            crates/client/web/pkg
+            crates/client/web/showcase.iwbz
+          # The bundle is large; keep it long enough for a playtest, not forever.
+          retention-days: 7
+      # Packs the fixture, serves the page and asserts the browser logs the same gameplay hash
+      # native `iwbtg pkg pack` prints (scripts/web_smoke.py).
+      - name: Headless browser smoke test
+        timeout-minutes: 8
+        run: python3 -I scripts/web_smoke.py --web-dir crates/client/web --package-dir crates/client/tests/fixtures/clear.pkg
 
   # `iwbtg determinism report` on every target that can run the CLI; the next job requires the
   # three outputs to be byte-identical (docs/plans/sim-core.md 10.6). wasm32-unknown-unknown
@@ -260,7 +290,7 @@ jobs:
 
   # The one required check: green when every job above passed or was skipped for a docs-only change.
   ci-ok:
-    needs: [changes, native, wasm32-wasip1, wasm32-unknown-unknown, determinism-report, determinism-compare, sim-deps, licenses]
+    needs: [changes, native, wasm32-wasip1, wasm32-unknown-unknown, web, determinism-report, determinism-compare, sim-deps, licenses]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

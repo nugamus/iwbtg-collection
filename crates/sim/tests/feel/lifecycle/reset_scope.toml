@@ -1,0 +1,32 @@
+# What an F2 reset keeps and what it clears (R27, docs/architecture/sim/rooms.md): the save file
+# and the difficulty survive the game restart, the run counters do not.
+id = "lifecycle/reset_scope"
+impact = "F1"
+package = "fixture:retry"
+start = { new_game = true, difficulty = 0 }
+play_mode = "original"
+seed = 11
+mods = []
+evidence = ["golden:kid_a1_basics", "#1167"]
+
+inputs = """
+frame 55: press suicide
+frame 56: release suicide
+frame 90: press reset
+frame 91: release reset
+frame 110: end
+"""
+
+# One death and one tick of play time before the reset.
+[[assert]]
+tick = 56
+death = 1
+kid_count = 0
+
+# The reset restarts the game: the save and difficulty survive, deaths and time start over.
+[[assert]]
+tick = 110
+status = "running"
+kid_count = 1
+reset_scope = { before = 85, after = 110, persists = ["save.room", "global.difficulty"], resets = ["global.death", "global.time"] }
+why = "F2 keeps the save and the difficulty and clears the run counters"

@@ -2,8 +2,9 @@
 //! name list, so they never depend on run or file order (Design, determinism).
 //!
 //! The loader interns every name it can see: object and instance params (instance creation code
-//! as data) and the globals that room creation actions set. Names first seen at run time
-//! (scripts) are interned by the sim in `World::var_names`.
+//! as data), the globals that room creation actions set, and a kid profile's `[script] vars`
+//! (decision 0004). A script name that is not declared is an error: scripts do not add variable
+//! names at run time.
 
 use std::collections::{BTreeMap, BTreeSet};
 

@@ -480,9 +480,7 @@ pub enum SaveField {
 pub fn sample(sim: &mut Sim, probe: &Probe, frame: i64) -> Vec<Vec<trace::Value>> {
     let ids = {
         let w = &sim.world;
-        events::dispatch_order(w, &sim.rules.tick, |i| {
-            i.alive && i.active && matches(sim.def(), i, probe.object)
-        })
+        events::dispatch_order(w, |i| matches(sim.def(), i, probe.object))
     };
     let mut rows = Vec::with_capacity(ids.len());
     for id in ids {
@@ -687,13 +685,9 @@ pub(crate) fn first_of_target(def: &GameDef, w: &World, rules: &TickRules, t: Ta
     match rules.first_rule {
         FirstRule::InstanceList => w.instance_list().into_iter().find(|id| {
             w.get(*id)
-                .is_some_and(|i| i.alive && i.active && matches(def, i, t))
+                .is_some_and(|i| World::visible_instance(i, false) && matches(def, i, t))
         }),
-        FirstRule::DispatchOrder => {
-            events::dispatch_order(w, rules, |i| i.alive && i.active && matches(def, i, t))
-                .first()
-                .copied()
-        }
+        FirstRule::DispatchOrder => events::dispatch_order(w, |i| matches(def, i, t)).first().copied(),
         FirstRule::LowestId => w
             .iter_alive()
             .filter(|i| i.active && matches(def, i, t))
@@ -718,12 +712,10 @@ pub(crate) fn nth_of_target(
             .into_iter()
             .filter(|id| {
                 w.get(*id)
-                    .is_some_and(|i| i.alive && i.active && matches(def, i, t))
+                    .is_some_and(|i| World::visible_instance(i, false) && matches(def, i, t))
             })
             .nth(n),
-        FirstRule::DispatchOrder => events::dispatch_order(w, rules, |i| matches(def, i, t))
-            .get(n)
-            .copied(),
+        FirstRule::DispatchOrder => events::dispatch_order(w, |i| matches(def, i, t)).get(n).copied(),
         FirstRule::LowestId => {
             let mut ids: Vec<InstId> = w
                 .iter_alive()
@@ -1033,6 +1025,8 @@ mod tests {
             room: RoomId(0),
             x: Real::new(96.0),
             y: Real::new(567.4),
+            precision: Default::default(),
+            point: None,
             flipped: false,
             facing: -1,
             difficulty: 2,
