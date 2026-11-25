@@ -158,11 +158,18 @@ pub fn load_report(files: &PackageFiles, mode: LoadMode) -> LoadReport {
     };
     let physics_mark = def.as_ref().map(|def| {
         // Room profiles in id order, with the game's own file left out (`None`): rooms naming it
-        // share the game's profile (#970).
+        // share the game's profile (#970). Only a profile a built room names counts (#1063): a
+        // stray `physics/<id>.toml` that no room references is package data, not a medley.
+        let referenced: BTreeSet<u16> = def.rooms.iter().filter_map(|room| room.physics).collect();
         let rooms: Vec<(&str, &PhysicsProfile)> = l
             .room_physics_ids
             .iter()
-            .filter_map(|(id, index)| Some((id.as_str(), &def.room_physics[usize::from((*index)?)])))
+            .filter_map(|(id, index)| {
+                let index = (*index)?;
+                referenced
+                    .contains(&index)
+                    .then(|| (id.as_str(), &def.room_physics[usize::from(index)]))
+            })
             .collect();
         physics::standing(files, &manifest, &def.physics, &rooms)
     });

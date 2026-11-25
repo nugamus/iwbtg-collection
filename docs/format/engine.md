@@ -54,13 +54,13 @@ A pack sprite loads like a package sprite, with its files under `engine/<pack>/s
 [docs/content.md](../content.md#engines) marks a game **custom physics** when its physics differ from its pack's original, and a medley that mixes profiles is custom physics too. `iwbtg pkg check` computes it (#802, #970) by comparing two sets of profiles, field by field. Numbers compare with the sim's bitwise `Real` equality, so this is exactly what the sim runs.
 
 - The game's resolved profile (the `family` preset with `physics.toml`'s overrides applied, `kid::presets::defaults`) against the `family` its bundled pack declares; without an `engine_pack`, against the preset its `physics.toml` names.
-- Every room profile `physics/<id>.toml` against the game's resolved profile. A room naming the game's own file (when that file lies in `physics/`) uses the game's profile, so it is not compared twice.
+- Every room profile `physics/<id>.toml` that a built room names against the game's resolved profile; a file no room names is loaded and validated but does not make the package custom (#1063). A room naming the game's own file (when that file lies in `physics/`) uses the game's profile, so it is not compared twice.
 
 A matching profile prints `physics: <pack>`, or `<family> preset` without a pack. Any difference prints `physics: custom (...)`, naming what differs:
 
 - `physics: custom (<n> fields differ)` and then `physics fields: <fields>`, the game profile's differing fields in profile order (`numbers.gravity`, `events.step`).
-- ``physics room `<id>`: <fields>`` for each differing room profile, in id order, naming the profile.
+- ``physics room `<id>`: <fields>`` for each differing room profile a room names, in id order.
 - Both clauses appear when the game's profile and a room profile differ: `physics: custom (2 fields differ, 1 room profile differs)`.
-- A differing room profile makes the package custom even when the game's profile matches its pack, because the package mixes two profiles.
+- A differing room profile that a room names makes the package custom even when the game's profile matches its pack, because the package mixes two profiles; a differing file no room names does not.
 
-`LoadReport::physics` carries the same value for a catalog or a game page: `PhysicsStanding::differs` for the game's profile and `PhysicsStanding::rooms` for the differing room profiles; `is_custom()` is true when either is non-empty.
+`LoadReport::physics` carries the same value for a catalog or a game page: `PhysicsStanding::differs` for the game's profile and `PhysicsStanding::rooms` for the differing room profiles a room names; `is_custom()` is true when either is non-empty.
