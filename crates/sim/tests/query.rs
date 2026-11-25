@@ -1,5 +1,5 @@
-//! WP3: queries, distance_to_object, contact moves and the solid put-back
-//! (docs/plans/sim-core.md 3.4, 12; CLONE_SPEC collision).
+//! Queries, distance_to_object, contact moves and the solid put-back
+//! (docs/architecture/sim/collision.md; docs/architecture/testing.md; CLONE_SPEC collision).
 
 use iwbtg_sim::collide::contact::{contact_steps, mcs_step_limit, outside_steps};
 use iwbtg_sim::collide::{

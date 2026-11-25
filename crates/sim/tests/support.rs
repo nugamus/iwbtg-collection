@@ -1,4 +1,4 @@
-//! Shared fixture for the WP1 tests (docs/plans/sim-core.md 12, WP1 row).
+//! Shared fixture for the core tests (docs/architecture/testing.md).
 //!
 //! Loaded with `#[path]` by `tests/it.rs` (for the modules there) and `determinism.rs`; it has no tests. The
 //! pipeline runs with stand-in hooks, because motion (WP2), collision geometry (WP3), rooms

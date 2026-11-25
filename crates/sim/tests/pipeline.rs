@@ -1,6 +1,6 @@
-//! WP1: the tick pipeline, phase order, dispatch order, R8 and R9, halting, destroy, draw,
-//! alarms, keys, the direct latch, boundary events, animation slots and timelines
-//! (docs/plans/sim-core.md 2.1, 2.2, 12).
+//! The tick pipeline, phase order, dispatch order, R8 and R9, halting, destroy, draw, alarms,
+//! keys, the direct latch, boundary events, animation slots and timelines
+//! (docs/architecture/sim/tick.md; docs/architecture/testing.md).
 
 use crate::support;
 

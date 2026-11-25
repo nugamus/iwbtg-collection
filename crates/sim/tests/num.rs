@@ -1,5 +1,5 @@
-//! WP2 number sequences from the recorder traces that decide the NumRules defaults
-//! (docs/plans/sim-core.md 3.2; CLONE_SPEC numbers, Confirmed (recorder)).
+//! Number sequences from the recorder traces that decide the NumRules defaults
+//! (docs/architecture/sim/numbers.md; CLONE_SPEC numbers, Confirmed (recorder)).
 
 use iwbtg_sim::num::{self, Real};
 use iwbtg_sim::rules::NumRules;

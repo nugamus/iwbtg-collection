@@ -1,4 +1,5 @@
-//! WP5a.1: kid state, globals and `kid::api` on hand-built worlds (docs/plans/sim-core.md 1.6).
+//! Kid state, globals and `kid::api` on hand-built worlds (docs/architecture/sim/kid.md;
+//! docs/architecture/sim/world.md).
 
 use iwbtg_sim::def::testing::GameDefBuilder;
 use iwbtg_sim::def::{Builtin, GameDef, KindDef, KindId, ParamValue, Params, RoomDef};

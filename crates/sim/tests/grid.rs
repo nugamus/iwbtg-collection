@@ -1,5 +1,5 @@
-//! WP3: the broadphase grid gives the same answers as brute force (docs/plans/sim-core.md
-//! 3.4, 10.6). Runs on every target, wasm32 included.
+//! The broadphase grid gives the same answers as brute force (docs/architecture/sim/collision.md;
+//! docs/architecture/sim/determinism.md). Runs on every target, wasm32 included.
 
 use iwbtg_sim::collide::grid::Grid;
 use iwbtg_sim::collide::{

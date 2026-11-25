@@ -1,4 +1,4 @@
-//! WP2 RNG tests (docs/plans/sim-core.md 3.3, 12; N9). Values from
+//! RNG tests (docs/architecture/sim/rng.md; docs/architecture/testing.md; N9). Values from
 //! `traces/rely-the-needle-4-2/num-rng.md` (Confirmed (recorder), CLONE_SPEC numbers "RNG").
 
 use iwbtg_sim::SimError;

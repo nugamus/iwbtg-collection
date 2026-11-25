@@ -1,5 +1,5 @@
-//! WP3: placement, bounding boxes, standing heights, mirror and spike masks
-//! (docs/plans/sim-core.md 3.4, 12; CLONE_SPEC collision).
+//! Placement, bounding boxes, standing heights, mirror and spike masks
+//! (docs/architecture/sim/collision.md; docs/architecture/testing.md; CLONE_SPEC collision).
 
 use iwbtg_sim::collide::bbox::reported_box;
 use iwbtg_sim::collide::contact::contact_steps;

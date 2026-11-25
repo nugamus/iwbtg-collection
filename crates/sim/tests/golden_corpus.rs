@@ -1,4 +1,4 @@
-//! The golden corpus against its pinned lines (docs/plans/sim-core.md 10.6). Runs on every CI
+//! The golden corpus against its pinned lines (docs/architecture/sim/determinism.md). Runs on every CI
 //! target, wasm32-unknown-unknown included. `UPDATE_GOLDEN=1` rewrites `golden/expected.txt`.
 
 #[path = "golden/mod.rs"]

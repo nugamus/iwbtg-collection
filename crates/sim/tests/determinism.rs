@@ -1,5 +1,5 @@
-//! WP1 done-when: a probe world runs 10,000 ticks with identical hashes (docs/plans/sim-core.md
-//! WP1, 10.6, 12).
+//! A probe world runs 10,000 ticks with identical hashes (docs/architecture/sim/determinism.md;
+//! docs/architecture/testing.md).
 //!
 //! The world spawns, destroys, sets alarms, reads keys, writes globals and changes rooms, so every
 //! part of the state hash moves. Two runs in one process must match each other. Both must also

@@ -1,4 +1,4 @@
-//! WP2 checks against the recorded CSVs (docs/plans/sim-core.md 12). They need IWBTG_RESEARCH
+//! Checks against the recorded CSVs (docs/architecture/testing.md). They need IWBTG_RESEARCH
 //! set to the research repo and skip with a note when it is unset.
 #![allow(
     clippy::disallowed_methods,

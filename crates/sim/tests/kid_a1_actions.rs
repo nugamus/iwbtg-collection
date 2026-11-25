@@ -1,4 +1,4 @@
-//! WP5a.2: family A1 kid actions on hand-built worlds (docs/plans/sim-core.md 5.3, kid/A1.md).
+//! Family A1 kid actions on hand-built worlds (docs/architecture/sim/kid.md; kid/A1.md).
 //!
 //! The profile is built by hand with the rely numbers; presets are WP5a.4. Kid mask 11x21 with
 //! origin (5, 12), so the box is x-5..x+5 and y-12..y+8 (A1 "Object properties").
@@ -42,7 +42,7 @@ struct Sprites {
     sliding: SpriteId,
 }
 
-/// The rely numbers (A1 "Numeric constants", plan 5.2).
+/// The rely numbers (A1 "Numeric constants"; docs/architecture/sim/kid.md).
 fn a1_profile(s: &Sprites) -> PhysicsProfile {
     let mut p = PhysicsProfile::default();
     p.numbers.jumps = vec![r(8.5), r(7.0)];

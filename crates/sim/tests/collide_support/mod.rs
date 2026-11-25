@@ -157,7 +157,8 @@ pub fn spike_rows() -> Vec<String> {
         .collect()
 }
 
-/// A 15x15 disk of radius 7 (the loader rasterizes disk masks to bits; plan 3.4).
+/// A 15x15 disk of radius 7 (the loader rasterizes disk masks to bits;
+/// docs/architecture/sim/collision.md).
 pub fn disk_rows() -> Vec<String> {
     (0..15i32)
         .map(|y| {
@@ -174,7 +175,8 @@ pub fn disk_rows() -> Vec<String> {
         .collect()
 }
 
-/// A 15x15 diamond (the loader rasterizes diamond masks to bits; plan 3.4).
+/// A 15x15 diamond (the loader rasterizes diamond masks to bits;
+/// docs/architecture/sim/collision.md).
 pub fn diamond_rows() -> Vec<String> {
     (0..15i32)
         .map(|y| {
