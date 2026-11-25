@@ -17,15 +17,20 @@
 //! parsing rules are RFC 9110's: an invalid header is ignored (full 200), a syntactically valid
 //! range that lies past the end is 416, and a multi-range request is answered in full rather than
 //! with a multipart body.
+//!
+//! Responses stream from disk with an explicit `Content-Length`; a package is never buffered whole,
+//! so a 512 MB package costs socket buffers rather than its size (#1506).
 
 use std::io::SeekFrom;
 use std::path::Path;
 
+use axum::body::Body;
 use axum::extract::{Path as UrlPath, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use tokio::fs;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
+use tokio_util::io::ReaderStream;
 
 use crate::AppState;
 
@@ -74,15 +79,10 @@ pub async fn file(
         .map(|value| parse_range(value, len));
 
     match requested {
-        None | Some(ByteRange::Full) => {
-            let bytes = fs::read(&path).await.map_err(|_| StatusCode::NOT_FOUND)?;
-            Ok(full(&name, bytes))
-        }
+        None | Some(ByteRange::Full) => stream(&path, &name, 0, len, None).await,
         Some(ByteRange::Satisfiable { start, end }) => {
-            let bytes = read_slice(&path, start, end)
-                .await
-                .map_err(|_| StatusCode::NOT_FOUND)?;
-            Ok(partial(&name, start, end, len, bytes))
+            let content_range = format!("bytes {start}-{end}/{len}");
+            stream(&path, &name, start, end - start + 1, Some(&content_range)).await
         }
         Some(ByteRange::Unsatisfiable) => Ok(range_not_satisfiable(len)),
     }
@@ -162,31 +162,45 @@ fn digits(value: &str) -> Option<u64> {
     value.parse().ok()
 }
 
-/// Reads `start..=end` without loading the rest of the file into memory.
-async fn read_slice(path: &Path, start: u64, end: u64) -> std::io::Result<Vec<u8>> {
-    let mut file = fs::File::open(path).await?;
-    file.seek(SeekFrom::Start(start)).await?;
-    let length = usize::try_from(end - start + 1)
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "range too large"))?;
-    let mut bytes = vec![0; length];
-    file.read_exact(&mut bytes).await?;
-    Ok(bytes)
-}
-
-/// The plain 200 response for a file.
-fn full(name: &str, bytes: Vec<u8>) -> Response {
-    let mut response = bytes.into_response();
-    download_headers(&mut response, name, None);
-    response
-}
-
-/// The 206 response for a satisfiable range.
-fn partial(name: &str, start: u64, end: u64, len: u64, bytes: Vec<u8>) -> Response {
-    let mut response = bytes.into_response();
-    *response.status_mut() = StatusCode::PARTIAL_CONTENT;
-    let content_range = format!("bytes {start}-{end}/{len}");
-    download_headers(&mut response, name, Some(&content_range));
-    response
+/// Streams `len` bytes starting at `start`, with the headers every file response carries.
+///
+/// The file is read through a stream, never into a `Vec`: a package costs its socket buffers
+/// instead of its size, which matters because the format allows 512 MB and the container has
+/// 512 MiB (#1506). A range seeks first and takes exactly its length; `Content-Length` stays
+/// explicit so a client still sees the size before the body arrives.
+async fn stream(
+    path: &Path,
+    name: &str,
+    start: u64,
+    len: u64,
+    content_range: Option<&str>,
+) -> Result<Response, StatusCode> {
+    let mut file = fs::File::open(path).await.map_err(|_| StatusCode::NOT_FOUND)?;
+    if start > 0 {
+        file.seek(SeekFrom::Start(start))
+            .await
+            .map_err(|_| StatusCode::NOT_FOUND)?;
+    }
+    let body = Body::from_stream(ReaderStream::new(file.take(len)));
+    let mut response = body.into_response();
+    if content_range.is_some() {
+        *response.status_mut() = StatusCode::PARTIAL_CONTENT;
+    }
+    let headers = response.headers_mut();
+    headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type(name)));
+    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static(FILE_CACHE));
+    headers.insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+    headers.insert(
+        header::CONTENT_LENGTH,
+        HeaderValue::from_str(&len.to_string()).expect("a decimal length"),
+    );
+    if let Some(content_range) = content_range {
+        headers.insert(
+            header::CONTENT_RANGE,
+            HeaderValue::from_str(content_range).expect("an ASCII Content-Range"),
+        );
+    }
+    Ok(response)
 }
 
 /// The 416 response: no body, and `Content-Range` says how long the file actually is.
@@ -200,21 +214,6 @@ fn range_not_satisfiable(len: u64) -> Response {
         HeaderValue::from_str(&content_range).expect("an ASCII Content-Range"),
     );
     response
-}
-
-/// The headers every file response carries: the download type, its long cache, and the fact that
-/// a client may resume it.
-fn download_headers(response: &mut Response, name: &str, content_range: Option<&str>) {
-    let headers = response.headers_mut();
-    headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type(name)));
-    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static(FILE_CACHE));
-    headers.insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
-    if let Some(content_range) = content_range {
-        headers.insert(
-            header::CONTENT_RANGE,
-            HeaderValue::from_str(content_range).expect("an ASCII Content-Range"),
-        );
-    }
 }
 
 /// A response with a body and the two headers the catalog carries.

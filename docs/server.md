@@ -54,6 +54,7 @@ Queries that need compile-time checking use `sqlx::query!`; the `.sqlx` offline 
 - A file name is accepted only as 64 lowercase hex characters plus an optional alphanumeric extension (at most 16). Everything else — `..`, encoded or literal separators, a non-hash name — is 404 before the filesystem is touched, and a missing catalog or file is also 404. There is no directory listing.
 - `Content-Type` follows the extension (`.json`, `.png`, `.ogg`, `.wav`, `.zip`/`.iwbz`), otherwise `application/octet-stream`.
 - Every file response carries `Accept-Ranges: bytes`. A single `Range: bytes=...` (`start-end`, `start-` or `-suffix`) gets `206` with the sliced body and `Content-Range`; the long cache header stays on both `200` and `206`. A valid range past the end is `416` with `Content-Range: bytes */<len>`; a malformed, other-unit or multi-range header is ignored and answered with the full `200`, never a multipart body (#1397).
+- Responses stream from disk with an explicit `Content-Length`; a package is never held in memory whole, so a 512 MB package costs its socket buffers rather than its size (#1506). A range seeks to its first byte and streams only the slice.
 
 `iwbtg pkg publish <package> --catalog-dir <folder>` writes this layout (#806). The catalog is one JSON object with a `files` array; each entry carries the package-owned fields that exist today:
 
