@@ -528,6 +528,16 @@ impl<'a> Loader<'a> {
         self.stripped_refs(&rooms);
         let (stripped, map_starts) = self.stripped_def(&vars);
         let maps = map_defs(&self.maps, map_starts);
+        // A def with maps keeps every chain in `GameDef::maps`; `GameDef::timing` is only the
+        // fallback for a hand-built def with no maps (docs/format/game.md, Maps). Leave it at
+        // its default so a loaded package never carries a duplicate a post-load edit could
+        // change to no effect (#1472).
+        let timing = timing?;
+        let timing = if maps.is_empty() {
+            timing
+        } else {
+            TimingDef::default()
+        };
         if self.trace_mode() {
             self.inert_twins(&mut room_defs);
         }
@@ -578,7 +588,7 @@ impl<'a> Loader<'a> {
             paths,
             particle_systems: std::mem::take(&mut self.particles),
             scripts: std::mem::take(&mut self.scripts),
-            timing: timing?,
+            timing,
             maps,
             stripped,
         };

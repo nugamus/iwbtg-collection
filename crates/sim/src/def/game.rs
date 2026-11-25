@@ -93,7 +93,9 @@ pub struct GameDef {
     /// when the `Sim` is built.
     pub scripts: Vec<ScriptDef>,
     /// Timing triggers (`[timing]`). A run on a map uses that map's chain ([`GameDef::maps`]);
-    /// this one only when `maps` is empty (a definition built by hand).
+    /// this one is only the fallback when `maps` is empty, as for a definition built by hand.
+    /// A loader-built def leaves it at [`TimingDef::default`] and keeps every chain in `maps`
+    /// (#1472), so after load there is no duplicate that could fall out of step.
     pub timing: TimingDef,
     /// The package's maps in `[[maps]]` order, one [`DEFAULT_MAP_ID`] map without `[[maps]]`
     /// (docs/format/game.md, Maps). A run picks one (`SimOptions::map`, #505).
@@ -140,8 +142,15 @@ impl GameDef {
             .map_or(DEFAULT_MAP_ID, |m| m.id.as_str())
     }
 
-    /// The timing chain of map `map` ([`GameDef::timing`] without maps).
+    /// The timing chain of map `map`, or [`GameDef::timing`] for a def with no maps. This is
+    /// the only correct reader of a def's chain: a loaded def keeps each map's chain in
+    /// [`GameDef::maps`] and leaves `timing` at its default (#1472).
     pub fn map_timing(&self, map: u16) -> &TimingDef {
+        debug_assert!(
+            self.maps.is_empty() || self.timing == TimingDef::default(),
+            "a def with maps keeps its chain in maps[i].timing; GameDef::timing is only the \
+             map-less fallback"
+        );
         self.maps
             .get(usize::from(map))
             .map_or(&self.timing, |m| &m.timing)

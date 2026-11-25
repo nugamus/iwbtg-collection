@@ -539,18 +539,20 @@ mod tests {
     /// The clear fixture with a second map `two` whose stage chain is `stages`; map 0 keeps the
     /// package `[timing]`.
     fn two_map_def(base: &GameDef, stages: Vec<TimingTrigger>) -> Arc<GameDef> {
+        // A loaded def's chain lives in its map entry; `def.timing` is the map-less fallback.
+        let chain = base.map_timing(0).clone();
         let mut def = base.clone();
         def.maps = vec![
             MapDef {
                 id: "main".to_owned(),
-                timing: base.timing.clone(),
+                timing: chain.clone(),
                 start: RankedStart::default(),
             },
             MapDef {
                 id: "two".to_owned(),
                 timing: TimingDef {
-                    start: base.timing.start,
-                    end: base.timing.end,
+                    start: chain.start,
+                    end: chain.end,
                     stages,
                 },
                 start: RankedStart::default(),
@@ -582,7 +584,7 @@ mod tests {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
         let pkg = crate::package::open(&dir, false).unwrap();
         let base = (*pkg.def).clone();
-        let goal = base.timing.stages[0];
+        let goal = base.map_timing(0).stages[0];
         let def = two_map_def(&base, vec![TimingTrigger::RunStart, goal]);
         let mut world = world_on(Arc::clone(&def), "two");
         world.insert_resource(Time::<Fixed>::from_hz(50.0));
@@ -872,7 +874,7 @@ mod tests {
     fn the_clear_demo_clears_twice_with_a_split() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
         let pkg = crate::package::open(&dir, false).unwrap();
-        assert_eq!(pkg.def.timing.stages.len(), 1);
+        assert_eq!(pkg.def.map_timing(0).stages.len(), 1);
         let store = temp("clear");
         let mut world = crate::view::test_world(&pkg);
         world.insert_resource(Time::<Fixed>::from_hz(50.0));

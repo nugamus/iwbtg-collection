@@ -717,7 +717,7 @@ mod tests {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
         let pkg = crate::package::open(&dir, false).unwrap();
         let mut def = (*pkg.def).clone();
-        let base = def.timing.clone();
+        let base = def.map_timing(0).clone();
         def.maps = vec![
             iwbtg_sim::def::MapDef {
                 id: "main".to_owned(),
