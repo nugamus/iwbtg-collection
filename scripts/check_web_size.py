@@ -2,19 +2,20 @@
 """Check the browser bundle's compressed wasm against the size budget (#1078).
 
 `crates/client/web/pkg/iwbtg-client_bg.wasm` is what the page downloads; a server sends it
-gzip-compressed, so that is the number the budget guards. The release profile is the workspace's
-(no LTO, no `wasm-opt`) and is not changed here; the budget records today's bundle with about
-15% headroom, so growth is a deliberate change with a measured reason (docs/dev-setup.md, CI).
+gzip-compressed, so that is the number the budget guards. CI runs `wasm-opt -Oz` on the
+wasm-bindgen output before this check (#1131); the cargo profile stays the workspace release one,
+so the native build is unchanged. The budget records today's optimized bundle with about 15%
+headroom, so growth is a deliberate change with a measured reason (docs/dev-setup.md, CI).
 """
 import argparse
 import gzip
 import pathlib
 import sys
 
-# 22 MiB compressed. The first measured bundle (2026-11-20, #1078, the workspace release
-# profile) was 19.9 MB; the headroom covers a compiler or dependency bump between deliberate
-# reviews.
-BUDGET_BYTES = 22 * 1024 * 1024
+# 17 MiB compressed. Measured 2026-11-25 (#1131) at 20,168,221 bytes gzip from the workspace
+# release profile and 15,456,322 after `wasm-opt -Oz`; the headroom covers a compiler or dependency
+# bump between deliberate reviews.
+BUDGET_BYTES = 17 * 1024 * 1024
 
 
 def gzip_size(data: bytes) -> int:

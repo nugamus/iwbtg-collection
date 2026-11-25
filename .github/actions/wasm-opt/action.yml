@@ -1,0 +1,25 @@
+# Installs the pinned binaryen `wasm-opt` (#1131). The browser budget measures the compressed
+# `iwbtg-client_bg.wasm`; `wasm-opt -Oz` shrinks the wasm-bindgen output without touching the cargo
+# profile, so the native release build and its fingerprint stay unchanged. The release tarball is
+# pinned by version and checked against its published SHA-256, like the wasm-bindgen action.
+name: wasm-opt
+description: Install the pinned binaryen wasm-opt
+runs:
+  using: composite
+  steps:
+    - name: Install wasm-opt
+      shell: bash
+      env:
+        BINARYEN_VERSION: version_133
+      run: |
+        set -euo pipefail
+        name="binaryen-${BINARYEN_VERSION}-x86_64-linux"
+        base="https://github.com/WebAssembly/binaryen/releases/download/${BINARYEN_VERSION}"
+        curl --fail --retry 3 --silent --show-error --location --output "$RUNNER_TEMP/$name.tar.gz" "$base/$name.tar.gz"
+        curl --fail --retry 3 --silent --show-error --location --output "$RUNNER_TEMP/$name.tar.gz.sha256" "$base/$name.tar.gz.sha256"
+        want=$(cut -d' ' -f1 "$RUNNER_TEMP/$name.tar.gz.sha256")
+        got=$(sha256sum "$RUNNER_TEMP/$name.tar.gz" | cut -d' ' -f1)
+        [ "$want" = "$got" ] || { echo "::error::checksum mismatch for $name.tar.gz"; exit 1; }
+        tar --extract --gzip --file "$RUNNER_TEMP/$name.tar.gz" --directory "$RUNNER_TEMP"
+        install --mode 755 "$RUNNER_TEMP/binaryen-${BINARYEN_VERSION}/bin/wasm-opt" "$HOME/.cargo/bin/"
+        wasm-opt --version
