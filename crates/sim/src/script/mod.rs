@@ -12,6 +12,7 @@ mod consts;
 pub mod docs;
 pub mod host;
 pub mod inst;
+pub mod paths;
 pub mod validate;
 
 use serde::{Deserialize, Serialize};

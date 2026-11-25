@@ -164,6 +164,24 @@ fn get onVineR(_: Instance) -> bool;
 
 fn get on_slope_last(_: Instance) -> bool;
 
+fn get path_endaction(_: Instance) -> float;
+
+fn get path_index(_: Instance) -> float;
+
+fn get path_orientation(_: Instance) -> float;
+
+fn get path_position(_: Instance) -> float;
+
+fn get path_positionprevious(_: Instance) -> float;
+
+fn get path_scale(_: Instance) -> float;
+
+fn get path_speed(_: Instance) -> float;
+
+fn get path_x(_: Instance) -> float;
+
+fn get path_y(_: Instance) -> float;
+
 fn get scale(_: Instance) -> float;
 
 fn get solid(_: Instance) -> bool;
@@ -264,6 +282,10 @@ fn move_bounce_all(_: Instance, _: bool) -> ();
 
 fn move_bounce_solid(_: Instance, _: bool) -> ();
 
+fn path_end(_: Instance) -> ();
+
+fn path_start(_: Instance, _: string, _: ?, _: string, _: ?) -> ();
+
 fn place_free(_: Instance, _: ?, _: ?) -> bool;
 
 fn place_meeting(_: Instance, _: ?, _: ?, _: ?) -> bool;
@@ -343,6 +365,16 @@ fn set maxVspeed(_: Instance, _: ?) -> ();
 fn set muteki(_: Instance, _: bool) -> ();
 
 fn set onPlatform(_: Instance, _: bool) -> ();
+
+fn set path_endaction(_: Instance, _: ?) -> ();
+
+fn set path_orientation(_: Instance, _: ?) -> ();
+
+fn set path_position(_: Instance, _: ?) -> ();
+
+fn set path_scale(_: Instance, _: ?) -> ();
+
+fn set path_speed(_: Instance, _: ?) -> ();
 
 fn set scale(_: Instance, _: ?) -> ();
 

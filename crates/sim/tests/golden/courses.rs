@@ -961,6 +961,14 @@ fn script_objects(c: &mut Course) {
     c.def_mut().var_names.insert("hp".into(), VarId(1));
     c.def_mut().var_names.insert("phase".into(), VarId(2));
     c.def_mut().var_names.insert("arr".into(), VarId(3));
+    // A path the API case starts, advances on and ends (#1530).
+    c.def_mut().paths.push(PathDef {
+        name: "api_line".into(),
+        points: vec![(r(0.0), r(0.0), r(1.0)), (r(48.0), r(0.0), r(1.0))],
+        closed: false,
+        smooth: false,
+        precision: 4,
+    });
     c.scripts.push(ScriptDef {
         name: "scripts/api.rhai".into(),
         source: include_str!("script_api.rhai").into(),

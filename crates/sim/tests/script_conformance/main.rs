@@ -17,6 +17,8 @@ use iwbtg_sim::script::host::Iws;
 mod arrays;
 #[path = "collision.rs"]
 mod collision;
+#[path = "paths.rs"]
+mod paths;
 
 const N: usize = 10_000;
 const EXPECTED: &str = include_str!("expected.txt");
