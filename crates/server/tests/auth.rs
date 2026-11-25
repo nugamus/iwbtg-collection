@@ -485,3 +485,116 @@ async fn a_form_error_re_renders_the_form_with_the_message() {
     assert!(html.contains("name=\"csrf\""));
     assert_eq!(count(&pool, "SELECT COUNT(*) FROM accounts").await, 0);
 }
+
+/// Sends a request through an existing router, so limiter state survives across requests.
+async fn shared(router: &axum::Router, request: Request<Body>) -> (StatusCode, HeaderMap, Vec<u8>) {
+    let response = router.clone().oneshot(request).await.expect("router must answer");
+    let status = response.status();
+    let headers = response.headers().clone();
+    let bytes = axum::body::to_bytes(response.into_body(), 1 << 20)
+        .await
+        .expect("read the body")
+        .to_vec();
+    (status, headers, bytes)
+}
+
+async fn shared_status(router: &axum::Router, request: Request<Body>) -> (StatusCode, HeaderMap) {
+    let (status, headers, _) = shared(router, request).await;
+    (status, headers)
+}
+
+fn login_request(ip: &str, forwarded: Option<&str>, login: &str) -> Request<Body> {
+    let mut request = Request::post("/auth/login")
+        .header(header::CONTENT_TYPE, "application/json")
+        .header("cf-connecting-ip", ip);
+    if let Some(forwarded) = forwarded {
+        request = request.header("x-forwarded-for", forwarded);
+    }
+    request
+        .body(Body::from(
+            json!({ "login": login, "password": PASSWORD }).to_string(),
+        ))
+        .expect("a request")
+}
+
+fn register_request(ip: &str, username: &str) -> Request<Body> {
+    let body = json!({ "username": username, "password": PASSWORD }).to_string();
+    Request::post("/auth/register")
+        .header(header::CONTENT_TYPE, "application/json")
+        .header("cf-connecting-ip", ip)
+        .body(Body::from(body))
+        .expect("a request")
+}
+
+/// Rule 1: the key is `CF-Connecting-IP`. Changing a forged `X-Forwarded-For` must not reset the
+/// window, and a different real CF address must not share it (#161).
+#[tokio::test]
+async fn the_cf_header_is_the_key_and_x_forwarded_for_is_ignored() {
+    let (_dir, pool) = pool("rate-ip").await;
+    let router = iwbtg_server::app(pool.clone(), None);
+    let ip = "203.0.113.7";
+
+    for attempt in 0..10 {
+        let request = login_request(
+            ip,
+            Some(&format!("10.0.0.{attempt}")),
+            &format!("Nobody {attempt}"),
+        );
+        let (status, _) = shared_status(&router, request).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "attempt {attempt}");
+    }
+
+    // The same CF address with a brand-new forged X-Forwarded-For is still the same window.
+    let (status, headers) =
+        shared_status(&router, login_request(ip, Some("198.18.0.1"), "Nobody again")).await;
+    assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+    assert!(
+        headers.get(header::RETRY_AFTER).is_some(),
+        "a 429 without Retry-After"
+    );
+
+    // A different CF address has its own window.
+    let (status, _) = shared_status(&router, login_request("203.0.113.8", None, "Nobody other")).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+/// The account half of the limit travels across addresses: ten attempts against one name exhaust
+/// it even when every attempt comes from a different CF IP.
+#[tokio::test]
+async fn a_login_is_limited_per_account_across_addresses() {
+    let (_dir, pool) = pool("rate-account").await;
+    let router = iwbtg_server::app(pool.clone(), None);
+
+    for attempt in 0..10 {
+        let ip = format!("198.51.100.{attempt}");
+        let (status, _) = shared_status(&router, login_request(&ip, None, "Target")).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "attempt {attempt}");
+    }
+
+    // Same canonical account, fresh address, different casing.
+    let (status, headers) = shared_status(&router, login_request("198.51.100.200", None, "target")).await;
+    assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+    assert!(headers.get(header::RETRY_AFTER).is_some());
+}
+
+/// Registration is limited per address: five requests, then 429, while another address is fine.
+#[tokio::test]
+async fn registration_is_limited_per_address() {
+    let (_dir, pool) = pool("rate-register").await;
+    let router = iwbtg_server::app(pool.clone(), None);
+    let ip = "203.0.113.9";
+
+    // "ab" is invalid, so these are cheap 400s that still count against the window.
+    for attempt in 0..5 {
+        let (status, _) = shared_status(&router, register_request(ip, "ab")).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "attempt {attempt}");
+    }
+
+    let (status, headers) = shared_status(&router, register_request(ip, "ab")).await;
+    assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+    assert!(headers.get(header::RETRY_AFTER).is_some());
+    assert_eq!(count(&pool, "SELECT COUNT(*) FROM accounts").await, 0);
+
+    let (status, _) = shared_status(&router, register_request("203.0.113.10", "ab")).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "another address was limited");
+}

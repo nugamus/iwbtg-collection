@@ -73,6 +73,9 @@ async fn serve(
     // Log the bound address, not the requested one: port 0 picks a free port.
     let addr = listener.local_addr()?;
     tracing::info!(%addr, "listening");
-    axum::serve(listener, iwbtg_server::app(pool, catalog_dir)).await?;
+    // Connect info gives the rate limiter a peer address when CF-Connecting-IP is absent
+    // (local development); behind cloudflared the header is always the key (#161).
+    let app = iwbtg_server::app(pool, catalog_dir);
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;
     Ok(())
 }
