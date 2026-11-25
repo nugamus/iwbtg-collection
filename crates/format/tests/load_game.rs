@@ -6,7 +6,7 @@ use crate::load_objects::scripted_package;
 use crate::wp7a_load::*;
 use iwbtg_format::load::load_report;
 use iwbtg_format::{PackageFiles, Severity};
-use iwbtg_sim::timing::TimingTrigger;
+use iwbtg_sim::timing::{TimingDef, TimingTrigger};
 
 // ---- #31: maps ------------------------------------------------------------------------------
 
@@ -34,7 +34,9 @@ fn maps_get_their_own_timing_and_inherit_the_rest() {
     assert_eq!(ids, ["any", "hard_stage1"]);
     let def = report.def.as_ref().unwrap();
     // `any` inherits `[timing]`.
-    assert_eq!(report.maps[0].timing, def.timing);
+    assert_eq!(report.maps[0].timing, *def.map_timing(0));
+    // The loader keeps the chains in `maps` only (#1472): no duplicate in `def.timing`.
+    assert_eq!(def.timing, TimingDef::default());
     let hard = &report.maps[1].timing;
     assert_eq!(hard.start, TimingTrigger::RunStart);
     assert!(hard.stages.is_empty());
@@ -50,7 +52,12 @@ fn a_package_without_maps_has_one_main_map() {
     let report = load_report(&package(|_| {}), STRICT);
     assert_eq!(report.maps.len(), 1);
     assert_eq!(report.maps[0].id, "main");
-    assert_eq!(report.maps[0].timing, report.def.as_ref().unwrap().timing);
+    assert_eq!(report.maps[0].timing, *report.def.as_ref().unwrap().map_timing(0));
+    assert_eq!(
+        report.def.as_ref().unwrap().timing,
+        TimingDef::default(),
+        "a loaded def does not duplicate its map chain (#1472)"
+    );
 }
 
 #[test]
@@ -394,7 +401,8 @@ fn stripped_resolves_into_the_game_def() {
     assert_eq!(plain.maps.len(), 1);
     assert_eq!(plain.maps[0].id, "main");
     assert_eq!(plain.maps[0].start, plain.stripped.start);
-    assert_eq!(plain.maps[0].timing, plain.timing);
+    assert_eq!(plain.maps[0].timing, *plain.map_timing(0));
+    assert_eq!(plain.timing, TimingDef::default());
     assert!(plain.stripped.cut_rooms.is_empty() && plain.stripped.cut_kinds.is_empty());
 }
 

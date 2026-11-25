@@ -349,12 +349,11 @@ mod tests {
         });
         // Two stages fire on the step that enters the goal room, inside the skip. The loader
         // always gives the package a map (even without `[[maps]]`), and the sim reads that
-        // chain, so set both.
+        // chain, so set it there (`def.timing` is only the map-less fallback).
         let stages = vec![
             iwbtg_sim::timing::TimingTrigger::EnterRoom(goal),
             iwbtg_sim::timing::TimingTrigger::EnterRoom(goal),
         ];
-        def.timing.stages = stages.clone();
         for map in &mut def.maps {
             map.timing.stages = stages.clone();
         }

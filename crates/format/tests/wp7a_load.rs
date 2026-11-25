@@ -331,8 +331,8 @@ pub(crate) fn basic_package_loads_strict() {
     assert_eq!(def.reset.kind, iwbtg_sim::def::ResetKind::GameReset);
 
     // [timing].
-    assert_eq!(def.timing.start, TimingTrigger::RunStart);
-    assert_eq!(def.timing.stages, [TimingTrigger::EnterRoom(RoomId(1))]);
+    assert_eq!(def.map_timing(0).start, TimingTrigger::RunStart);
+    assert_eq!(def.map_timing(0).stages, [TimingTrigger::EnterRoom(RoomId(1))]);
 
     // The warp keeps its target (a room once the warp's ParamSpec names the type).
     let warp = &stage.instances[11];
