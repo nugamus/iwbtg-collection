@@ -1153,6 +1153,7 @@ TEMPLATE = r"""<!doctype html>
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;scrollbar-color:var(--rule-strong) var(--paper-2)}
+p{text-wrap:pretty}
 body{margin:0;background:var(--desk);color:var(--ink);caret-color:var(--cherry);
   font-family:"Barlow",ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
   font-size:16px;line-height:1.55;text-rendering:optimizeLegibility}
@@ -1184,7 +1185,7 @@ a:hover{color:var(--cherry-strong);text-decoration-thickness:.1em}
 .theme{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .theme-label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:500}
 .theme-options{display:flex;border:1px solid var(--rule-strong);padding:2px}
-.theme-options button{appearance:none;border:0;border-left:1px solid var(--rule-strong);background:transparent;color:var(--ink-2);font:500 12px/1 "Barlow",sans-serif;padding:0 10px;min-height:34px;cursor:pointer}
+.theme-options button{appearance:none;border:0;border-left:1px solid var(--rule-strong);background:transparent;color:var(--ink-2);font:500 12px/1 "Barlow",sans-serif;padding:8px 10px;min-height:34px;cursor:pointer}
 .theme-options button:first-child{border-left:0}
 .theme-options button:hover{background:var(--paper-2);color:var(--ink)}
 .theme-options button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
@@ -1214,7 +1215,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:clamp(44px,5.2vw,78px);li
 .stack-legend span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .swatch{display:inline-block;width:8px;height:8px;background:var(--rule-strong);flex:0 0 auto}
 .swatch.builtin{background:var(--graphite)}.swatch.script{background:var(--cherry)}.swatch.other{background:var(--rule-strong)}
-.gap-note{margin:16px 0 0;padding-top:12px;border-top:1px solid var(--rule);font-size:12.5px;line-height:1.5;color:var(--ink-2)}
+.gap-note{margin:16px 0 0;padding-top:12px;border-top:1px solid var(--rule);max-width:65ch;font-size:12.5px;line-height:1.5;color:var(--ink-2)}
 .gap-note strong{color:var(--ink)}
 .process-chips{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:12px;font-size:11.5px;line-height:1.4;color:var(--muted)}
 .process-chip b{font-weight:600;color:var(--ink-2);font-variant-numeric:tabular-nums}
@@ -1227,8 +1228,8 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:clamp(44px,5.2vw,78px);li
 .progress-alpha .progress-track>span{background:var(--cherry)}
 .progress-link{display:inline-block;margin-top:10px;color:var(--cherry);font-size:12.5px;line-height:1.4;text-decoration:underline;text-decoration-color:var(--rule-strong);text-underline-offset:.16em}
 .progress-cell:hover .progress-link{text-decoration-color:var(--cherry)}
-.progress-note{margin:12px 0 0;font-size:12.5px;line-height:1.5;color:var(--muted)}
-.scope-line{margin:10px 0 0;max-width:92ch;font-size:12.5px;line-height:1.55;color:var(--ink-2)}
+.progress-note{margin:12px 0 0;max-width:65ch;font-size:12.5px;line-height:1.5;color:var(--muted)}
+.scope-line{margin:10px 0 0;max-width:80ch;font-size:12.5px;line-height:1.55;color:var(--ink-2)}
 .scope-line .reg-label{display:inline;margin-right:8px}
 .port-meter{display:flex;gap:3px;height:8px;margin-top:0;max-width:none;background:none;overflow:visible}
 .port-step{flex:1;min-width:4px;background:var(--track);border:1px solid var(--rule)}
@@ -1252,7 +1253,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:clamp(44px,5.2vw,78px);li
 .api-surface{margin:0 0 26px;padding:16px 0 14px;border-top:1px solid var(--rule-strong);border-bottom:1px solid var(--rule-strong)}
 .api-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px 24px;flex-wrap:wrap}
 .api-subhead{margin-top:20px;padding-top:14px;border-top:1px solid var(--rule)}
-.api-note{margin:10px 0 0;max-width:74ch;font-size:12.5px;line-height:1.55;color:var(--ink-2)}
+.api-note{margin:10px 0 0;max-width:65ch;font-size:12.5px;line-height:1.55;color:var(--ink-2)}
 .api-note strong{color:var(--ink)}
 .api-groups{list-style:none;margin:10px 0 0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 24px;font-size:12px;line-height:1.45;color:var(--ink-2)}
 .api-groups b{font-weight:600;color:var(--ink)}
@@ -1304,7 +1305,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:clamp(44px,5.2vw,78px);li
 .game-facts dt{font-size:11px;line-height:1.35;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:500}
 .game-facts dd{margin:3px 0 0;font-size:13px;line-height:1.45;color:var(--ink-2);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .game-facts dd b{font-weight:600;color:var(--ink)}
-.game-explain{margin:16px 0 0;padding-top:12px;border-top:1px solid var(--rule);max-width:74ch;font-size:12.5px;line-height:1.55;color:var(--ink-2)}
+.game-explain{margin:16px 0 0;padding-top:12px;border-top:1px solid var(--rule);max-width:65ch;font-size:12.5px;line-height:1.55;color:var(--ink-2)}
 .game-explain strong{color:var(--ink)}
 .game-links{margin:10px 0 0;font-size:12.5px;line-height:1.5;color:var(--muted)}
 .game-links a{overflow-wrap:anywhere}
@@ -1313,8 +1314,8 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:clamp(44px,5.2vw,78px);li
 .state-open{color:var(--warn)}.state-open .state-mark{border-color:var(--warn)}
 .state-closed{color:var(--good)}.state-closed .state-mark{background:var(--good);border-color:var(--good)}
 .missing{color:var(--muted)}
-.source-note{margin:14px 0 0;max-width:76ch;font-size:12px;line-height:1.55;color:var(--muted)}
-.game-source{margin:8px 0 0;max-width:74ch;font-size:12px;line-height:1.5;color:var(--muted)}
+.source-note{margin:14px 0 0;max-width:65ch;font-size:12px;line-height:1.55;color:var(--muted)}
+.game-source{margin:8px 0 0;max-width:65ch;font-size:12px;line-height:1.5;color:var(--muted)}
 .source-note code{font-size:.96em}
 code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospace;background:var(--paper-2);padding:1px 5px;border-bottom:1px solid var(--rule);font-size:.92em;overflow-wrap:anywhere}
 .glossary{margin-top:34px;border-top:1px solid var(--rule-strong);padding-top:16px}
@@ -1350,8 +1351,8 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
 .dispatch-col+.dispatch-col{border-left:1px solid var(--rule);padding-left:20px}
 .dispatch-col h3{font-size:11px;line-height:1.3;letter-spacing:.09em;text-transform:uppercase;font-weight:600;color:var(--ink);margin:0 0 10px}
 .issue-list{list-style:none;margin:0;padding:0}
-.issue-list li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 8px;padding:10px 0;border-top:1px solid var(--rule);font-size:12.5px;line-height:1.35}
-.issue-list li:first-child{border-top:0;padding-top:0}
+.issue-list li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 8px;padding:12px 0;border-top:1px solid var(--rule);font-size:12.5px;line-height:1.35}
+.issue-list li:first-child{border-top:0;padding-top:12px}
 .issue-phase{grid-column:1/-1;font-size:11px;line-height:1.3;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
 .issue-number{font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
 .issue-title{color:var(--ink-2);min-width:0;overflow-wrap:anywhere}
@@ -1391,7 +1392,7 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
 .source-block p,.source-block li{font-size:13px;line-height:1.5;color:var(--ink-2)}
 .source-block p{margin:0 0 8px}
 .source-block ul{list-style:none;margin:0;padding:0}
-.source-block li{padding:7px 0;border-top:1px solid var(--rule)}
+.source-block li{padding:12px 0;border-top:1px solid var(--rule)}
 .source-block li:first-child{border-top:0;padding-top:0}
 .source-block li a{overflow-wrap:anywhere}
 .footer-bottom{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 20px;margin-top:30px;padding-top:12px;border-top:1px solid var(--rule);font-size:11px;line-height:1.4;color:var(--muted)}
@@ -1469,7 +1470,7 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
   .masthead-meta{display:none}
   .masthead-top{justify-content:flex-start;padding-bottom:10px}
   .theme{justify-content:flex-start}
-  .theme-options button{padding:0 8px}
+  .theme-options button{padding:8px 8px}
   .title-row{padding:22px 0 20px;gap:18px}
   .lede{margin-top:14px;font-size:15.5px}
   h1{font-size:clamp(38px,11vw,52px)}
