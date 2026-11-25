@@ -56,8 +56,10 @@ jobs:
             git -C "$worktree" rm -rf . -q || true
           fi
           cp progress/index.html progress/data.json progress/history.json "$worktree/"
+          mkdir -p "$worktree/fonts"
+          cp progress/fonts/* "$worktree/fonts/"
           touch "$worktree/.nojekyll"
-          git -C "$worktree" add index.html data.json history.json .nojekyll
+          git -C "$worktree" add index.html data.json history.json .nojekyll fonts
           if git -C "$worktree" diff --cached --quiet; then
             echo "no publish change"
           else

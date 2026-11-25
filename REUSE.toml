@@ -79,6 +79,9 @@ path = [
   "crates/client/assets/fonts/Barlow-*.ttf",
   "crates/client/assets/fonts/BarlowCondensed-*.ttf",
   "crates/client/assets/fonts/OFL-Barlow.txt",
+  "progress/fonts/Barlow-*.ttf",
+  "progress/fonts/BarlowCondensed-*.ttf",
+  "progress/fonts/OFL-Barlow.txt",
 ]
 SPDX-FileCopyrightText = "2017 The Barlow Project Authors (https://github.com/jpt/barlow)"
 SPDX-License-Identifier = "OFL-1.1"
