@@ -96,10 +96,18 @@ class ScopeTests(unittest.TestCase):
 
     def test_plan_splits_changed_crates_from_transitive_consumers(self):
         cases = {
-            'crates/sim/src/world.rs': (['iwbtg-sim'], ['iwbtg-client', 'iwbtg-format', 'iwbtg-tools']),
+            # The server depends on the sim for replay decoding (#162), so a sim change also
+            # compiles the server, and a format change reaches the server through the sim.
+            'crates/sim/src/world.rs': (
+                ['iwbtg-sim'],
+                ['iwbtg-client', 'iwbtg-format', 'iwbtg-server', 'iwbtg-tools'],
+            ),
             # The sim's stress-package test dev-depends on the format loader (#1068), so a
             # format change also compiles the sim's test target.
-            'crates/format/src/lib.rs': (['iwbtg-format'], ['iwbtg-client', 'iwbtg-sim', 'iwbtg-tools']),
+            'crates/format/src/lib.rs': (
+                ['iwbtg-format'],
+                ['iwbtg-client', 'iwbtg-server', 'iwbtg-sim', 'iwbtg-tools'],
+            ),
             # The shared removal-list format (#1537) is a dependency of the server and the CLI; a
             # change there reaches both, but a server change no longer reaches the CLI.
             'crates/removal/src/lib.rs': (['iwbtg-removal'], ['iwbtg-server', 'iwbtg-tools']),
@@ -125,7 +133,10 @@ class ScopeTests(unittest.TestCase):
         self.assertEqual(fixture['native_packages_argv'], '-p iwbtg-format -p iwbtg-sim')
         # The plan's full package set is unchanged: test | compile still covers it, and the local
         # check still compile-checks the consumers.
-        self.assertEqual(fixture['compile'], ['iwbtg-client', 'iwbtg-tools'])
+        # The server reads format fixtures through the sim since #162.
+        self.assertEqual(
+            fixture['compile'], ['iwbtg-client', 'iwbtg-server', 'iwbtg-tools']
+        )
         self.assertEqual(set(fixture['test']) | set(fixture['compile']),
                          set(fixture['packages_list']))
         native = next(step for step in fixture['ci_steps'] if step['kind'] == 'native')
@@ -156,7 +167,9 @@ class ScopeTests(unittest.TestCase):
         self.assertEqual(docs['compile'], [])
         fixture = plan(['docs/format/game.md'], self.graph)
         self.assertEqual(fixture['test'], ['iwbtg-format', 'iwbtg-sim'])
-        self.assertEqual(fixture['compile'], ['iwbtg-client', 'iwbtg-tools'])
+        self.assertEqual(
+            fixture['compile'], ['iwbtg-client', 'iwbtg-server', 'iwbtg-tools']
+        )
         self.assertTrue(fixture['code'])
         self.assertFalse(fixture['code_input'])
         self.assertFalse(fixture['wasip1'] or fixture['browser'] or fixture['web'] or fixture['determinism'])
@@ -173,10 +186,14 @@ class ScopeTests(unittest.TestCase):
         self.assertIn('full=false', text)
         self.assertIn('code=true', text)
         self.assertIn('test=iwbtg-sim', text)
-        self.assertIn('compile=iwbtg-client,iwbtg-format,iwbtg-tools', text)
+        # iwbtg-server joins the sim's consumers with the replay decoder (#162).
+        self.assertIn('compile=iwbtg-client,iwbtg-format,iwbtg-server,iwbtg-tools', text)
         self.assertIn('wasip1=true', text)
         self.assertIn('web=false', text)
-        self.assertIn('packages=-p iwbtg-client -p iwbtg-format -p iwbtg-sim -p iwbtg-tools', text)
+        self.assertIn(
+            'packages=-p iwbtg-client -p iwbtg-format -p iwbtg-server -p iwbtg-sim -p iwbtg-tools',
+            text,
+        )
         self.assertIn('identity=', text)
         self.assertIn('step-identity=test:iwbtg-sim=', text)
 
