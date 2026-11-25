@@ -157,7 +157,7 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
   <div class="statusrow">
     <span class="pill mid"><span class="ico">◐</span>Pre-release</span>
     <span class="pill muted">No release builds yet. The public alpha is planned for phase 7 (Online).</span>
-    <span class="pill muted">generated 2026-11-24T17:14:37Z · source gh</span>
+    <span class="pill muted">generated 2026-11-25T11:50:04Z · source gh</span>
   </div>
 </header>
 
@@ -666,10 +666,10 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
         <tr>
           <td class="phase-cell"><div class="phase-title"><span class="phase-num">0</span>Foundation</div>
             <div class="phase-meta">area:infra, area:docs</div></td>
-          <td class="wide"><span class="mini-track" role="img" aria-label="0 · Foundation 83.3%"><span style="width:83.3%"></span></span>
-            <div class="meter-line"><span>65 / 78 closed</span><span>83%</span></div></td>
-          <td class="num">13</td>
-          <td class="num">26</td>
+          <td class="wide"><span class="mini-track" role="img" aria-label="0 · Foundation 95.6%"><span style="width:95.6%"></span></span>
+            <div class="meter-line"><span>86 / 90 closed</span><span>96%</span></div></td>
+          <td class="num">4</td>
+          <td class="num">11</td>
           <td class="gate"><details><summary>Gate</summary>
             <p><b>Entry:</b> An empty repo, or a broken build/CI/harness.</p><p><b>Exit:</b> Every Foundation issue is closed and `cargo xtask check --all` plus CI pass on Windows, Linux and wasm32.</p>
             <p><b>Scope:</b> Cross-cutting repo, build, CI and agent-harness work that every phase depends on.</p></details></td>
@@ -677,10 +677,10 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
         <tr>
           <td class="phase-cell"><div class="phase-title"><span class="phase-num">1</span>Behavior research</div>
             <div class="phase-meta">area:research</div></td>
-          <td class="wide"><span class="mini-track" role="img" aria-label="1 · Behavior research 82.8%"><span style="width:82.8%"></span></span>
-            <div class="meter-line"><span>24 / 29 closed</span><span>83%</span></div></td>
-          <td class="num">5</td>
-          <td class="num">4</td>
+          <td class="wide"><span class="mini-track" role="img" aria-label="1 · Behavior research 89.7%"><span style="width:89.7%"></span></span>
+            <div class="meter-line"><span>26 / 29 closed</span><span>90%</span></div></td>
+          <td class="num">3</td>
+          <td class="num">3</td>
           <td class="gate"><details><summary>Gate</summary>
             <p><b>Entry:</b> A question about original behavior that can change what a player feels, with no spec or trace answer.</p><p><b>Exit:</b> Every open F1 behavior question has a trace or a spec answer, and the gm8 CLONE_SPEC covers the mechanics the 20 games use.</p>
             <p><b>Scope:</b> Trace, probe and specify what the original game does, so the sim has evidence.</p></details></td>
@@ -688,10 +688,10 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
         <tr>
           <td class="phase-cell"><div class="phase-title"><span class="phase-num">2</span>Format &amp; pipeline</div>
             <div class="phase-meta">area:format, area:tools, area:port</div></td>
-          <td class="wide"><span class="mini-track" role="img" aria-label="2 · Format &amp; pipeline 72.8%"><span style="width:72.8%"></span></span>
-            <div class="meter-line"><span>91 / 125 closed</span><span>73%</span></div></td>
-          <td class="num">34</td>
-          <td class="num">101</td>
+          <td class="wide"><span class="mini-track" role="img" aria-label="2 · Format &amp; pipeline 74.8%"><span style="width:74.8%"></span></span>
+            <div class="meter-line"><span>113 / 151 closed</span><span>75%</span></div></td>
+          <td class="num">38</td>
+          <td class="num">114</td>
           <td class="gate"><details><summary>Gate</summary>
             <p><b>Entry:</b> A converted package, a format gap, or a porting step the converter cannot automate.</p><p><b>Exit:</b> The census says how many scripts the 20 ports need; the script API covers what they use; Rhai is measured on native and WASM; port layering, the extension model and the standard ruleset/profile model are decided; one command checks every port&#x27;s contracts; `docs/porting.md` is written.</p>
             <p><b>Scope:</b> The standard package format, converter, census, script API and porting pipeline.</p></details></td>
@@ -699,10 +699,10 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
         <tr>
           <td class="phase-cell"><div class="phase-title"><span class="phase-num">3</span>Sim fidelity</div>
             <div class="phase-meta">area:sim</div></td>
-          <td class="wide"><span class="mini-track" role="img" aria-label="3 · Sim fidelity 83.3%"><span style="width:83.3%"></span></span>
-            <div class="meter-line"><span>210 / 252 closed</span><span>83%</span></div></td>
-          <td class="num">42</td>
-          <td class="num">53</td>
+          <td class="wide"><span class="mini-track" role="img" aria-label="3 · Sim fidelity 84.9%"><span style="width:84.9%"></span></span>
+            <div class="meter-line"><span>214 / 252 closed</span><span>85%</span></div></td>
+          <td class="num">38</td>
+          <td class="num">48</td>
           <td class="gate"><details><summary>Gate</summary>
             <p><b>Entry:</b> A spec or trace answer for a mechanic, and a package that loads.</p><p><b>Exit:</b> The sim reproduces rely_the_needle&#x27;s traces tick for tick on Windows, Linux and WASM; all kid families, built-ins, scripts, sound and the replay runner are in; all 20 converter packages load and trace-check.</p>
             <p><b>Scope:</b> The deterministic simulation reproduces the original mechanics tick for tick.</p></details></td>
@@ -721,10 +721,10 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
         <tr>
           <td class="phase-cell"><div class="phase-title"><span class="phase-num">5</span>Client shell &amp; UI</div>
             <div class="phase-meta">area:client, area:design</div></td>
-          <td class="wide"><span class="mini-track" role="img" aria-label="5 · Client shell &amp; UI 40.0%"><span style="width:40.0%"></span></span>
-            <div class="meter-line"><span>14 / 35 closed</span><span>40%</span></div></td>
-          <td class="num">21</td>
-          <td class="num">50</td>
+          <td class="wide"><span class="mini-track" role="img" aria-label="5 · Client shell &amp; UI 56.1%"><span style="width:56.1%"></span></span>
+            <div class="meter-line"><span>23 / 41 closed</span><span>56%</span></div></td>
+          <td class="num">18</td>
+          <td class="num">43</td>
           <td class="gate"><details><summary>Gate</summary>
             <p><b>Entry:</b> First playable is confirmed on native and web.</p><p><b>Exit:</b> osu!-style game select, downloads, 5 bundled games, the controls panel and settings are built from approved mockups.</p>
             <p><b>Scope:</b> Game select, downloads, bundled games, settings, controls panel and screens.</p></details></td>
@@ -732,10 +732,10 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
         <tr>
           <td class="phase-cell"><div class="phase-title"><span class="phase-num">6</span>Ranked-ready run</div>
             <div class="phase-meta">area:client, area:sim, area:design</div></td>
-          <td class="wide"><span class="mini-track" role="img" aria-label="6 · Ranked-ready run 68.2%"><span style="width:68.2%"></span></span>
-            <div class="meter-line"><span>90 / 132 closed</span><span>68%</span></div></td>
-          <td class="num">42</td>
-          <td class="num">137</td>
+          <td class="wide"><span class="mini-track" role="img" aria-label="6 · Ranked-ready run 73.2%"><span style="width:73.2%"></span></span>
+            <div class="meter-line"><span>101 / 138 closed</span><span>73%</span></div></td>
+          <td class="num">37</td>
+          <td class="num">130</td>
           <td class="gate"><details><summary>Gate</summary>
             <p><b>Entry:</b> First playable, and the ranked rules decision for mods.</p><p><b>Exit:</b> Stripped ranked mode works locally: timer and cutscene freeze, mods, retry keys, HUD, practice, results, local PBs, replays and `.iwbz` with maps.</p>
             <p><b>Scope:</b> Stripped ranked mode: timer, replays, local boards, HUD, practice and results.</p></details></td>
@@ -743,10 +743,10 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
         <tr>
           <td class="phase-cell"><div class="phase-title"><span class="phase-num">7</span>Online</div>
             <div class="phase-meta">area:server, area:client</div></td>
-          <td class="wide"><span class="mini-track" role="img" aria-label="7 · Online 6.6%"><span style="width:6.6%"></span></span>
-            <div class="meter-line"><span>4 / 61 closed</span><span>7%</span></div></td>
-          <td class="num">57</td>
-          <td class="num">134</td>
+          <td class="wide"><span class="mini-track" role="img" aria-label="7 · Online 21.2%"><span style="width:21.2%"></span></span>
+            <div class="meter-line"><span>14 / 66 closed</span><span>21%</span></div></td>
+          <td class="num">52</td>
+          <td class="num">129</td>
           <td class="gate"><details><summary>Gate</summary>
             <p><b>Entry:</b> A ranked-ready run and a local replay can be produced.</p><p><b>Exit:</b> Accounts, verified submissions, leaderboards, review queue, profiles, cloud saves and engine upgrades run on the home server.</p>
             <p><b>Scope:</b> Accounts, submission, leaderboards, review queue, profiles and the home server.</p></details></td>
@@ -765,10 +765,10 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
         <tr>
           <td class="phase-cell"><div class="phase-title"><span class="phase-num">9</span>Content &amp; ports</div>
             <div class="phase-meta">area:port, area:editor, area:sim, area:format</div></td>
-          <td class="wide"><span class="mini-track" role="img" aria-label="9 · Content &amp; ports 10.2%"><span style="width:10.2%"></span></span>
-            <div class="meter-line"><span>6 / 59 closed</span><span>10%</span></div></td>
-          <td class="num">53</td>
-          <td class="num">142</td>
+          <td class="wide"><span class="mini-track" role="img" aria-label="9 · Content &amp; ports 16.9%"><span style="width:16.9%"></span></span>
+            <div class="meter-line"><span>10 / 59 closed</span><span>17%</span></div></td>
+          <td class="num">49</td>
+          <td class="num">136</td>
           <td class="gate"><details><summary>Gate</summary>
             <p><b>Entry:</b> The sim, pipeline and ranked mode can run a port end to end.</p><p><b>Exit:</b> All 20 games are in Beta, each with fidelity proof and a verified full clear; editor v1 works; community uploads validate and can be curated; a GMS runner profile reproduces traces of 3 GMS fangames.</p>
             <p><b>Scope:</b> The 20 games reaching Beta/Ranked, plus the editor, community games and GMS.</p></details></td>
@@ -776,43 +776,43 @@ footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);font-si
         <tr>
           <td class="phase-cell"><div class="phase-title"><span class="phase-num">10</span>Release</div>
             <div class="phase-meta">area:infra, area:docs, area:design, area:server</div></td>
-          <td class="wide"><span class="mini-track" role="img" aria-label="10 · Release 7.7%"><span style="width:7.7%"></span></span>
-            <div class="meter-line"><span>2 / 26 closed</span><span>8%</span></div></td>
-          <td class="num">24</td>
-          <td class="num">53</td>
+          <td class="wide"><span class="mini-track" role="img" aria-label="10 · Release 32.1%"><span style="width:32.1%"></span></span>
+            <div class="meter-line"><span>9 / 28 closed</span><span>32%</span></div></td>
+          <td class="num">19</td>
+          <td class="num">42</td>
           <td class="gate"><details><summary>Gate</summary>
             <p><b>Entry:</b> The online stack and content are in place enough to ship.</p><p><b>Exit:</b> Name, takedown and privacy pages, licenses, release builds and contributor docs are in place.</p>
             <p><b>Scope:</b> Packaging, installers, docs, legal and the public build.</p></details></td>
         </tr></tbody>
 </table>
-<p class="note">309 open issues, 550 closed (64.0%), 738 remaining size points (S=1, M=3, L=8).</p>
+<p class="note">284 open issues, 642 closed (69.3%), 694 remaining size points (S=1, M=3, L=8).</p>
 
 <h2>What is moving</h2>
 <div class="cards">
-  <div class="card"><h3>Recently closed</h3><ul class="items"><li><span class="chip">2</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1366">#1366</a> <span class="item-title">Progress exporter: converter state per game</span></li><li><span class="chip">2</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1363">#1363</a> <span class="item-title">Tools: import::tests::every_research_trace_imports panics on a missing file when IWBTG_RESEARCH is set</span></li><li><span class="chip">2</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1372">#1372</a> <span class="item-title">Object coverage exporter and a clearer progress dashboard</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1370">#1370</a> <span class="item-title">Progress workflow: grant issue reads and fail visibly on a stale refresh</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1368">#1368</a> <span class="item-title">Milestone reorg: phase-gate milestones and a progress dashboard</span></li><li><span class="chip">3</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1079">#1079</a> <span class="item-title">Sim: instance list order for with (all), instance_id and first-instance queries is depth then room entry</span></li><li><span class="chip">2</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1105">#1105</a> <span class="item-title">Format: make `timeline` a reserved object key in objects.rs</span></li><li><span class="chip">2</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1109">#1109</a> <span class="item-title">Format: the generated runner schema description still says it selects event-order differences</span></li></ul></div>
-  <div class="card"><h3>In progress</h3><ul class="items"><li><span class="chip">2</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1168">#1168</a> <span class="item-title">Feel harness: port contract set and crates/tools/feel-baseline.txt (IWBTG_GAMES)</span></li><li><span class="chip">2</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1336">#1336</a> <span class="item-title">Format: physics JSON schema does not list the standard name aliases (#1330)</span></li><li><span class="chip">2</span><a href="https://github.com/nugamus/iwbtg-collection/issues/997">#997</a> <span class="item-title">Scripts: array values on this and globals</span></li><li><span class="chip">1</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1114">#1114</a> <span class="item-title">Docs/registers: link the split gm8 spec files and map register ids to claim ids (research#173)</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1346">#1346</a> <span class="item-title">Harness: fidelity hints and workspace settings still use the old checkout names</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/986">#986</a> <span class="item-title">Sim/format/tools: drop the WP ownership headers</span></li></ul></div>
-  <div class="card"><h3>Waiting on you</h3><ul class="items"><li><span class="chip">1</span><a href="https://github.com/nugamus/iwbtg-collection/issues/426">#426</a> <span class="item-title">atan2 near-axis cutoff: find the recorder&#x27;s rule between ratio 3.5e-16 and ordinary vectors</span></li><li><span class="chip">6</span><a href="https://github.com/nugamus/iwbtg-collection/issues/953">#953</a> <span class="item-title">Decide: script error screen layout</span></li><li><span class="chip">7</span><a href="https://github.com/nugamus/iwbtg-collection/issues/194">#194</a> <span class="item-title">Discord server and bug channel</span></li><li><span class="chip">10</span><a href="https://github.com/nugamus/iwbtg-collection/issues/114">#114</a> <span class="item-title">Decide: Windows code signing and Linux packaging</span></li><li><span class="chip">7</span><a href="https://github.com/nugamus/iwbtg-collection/issues/110">#110</a> <span class="item-title">Register Google and Discord OAuth apps; choose SMTP</span></li><li><span class="chip">7</span><a href="https://github.com/nugamus/iwbtg-collection/issues/108">#108</a> <span class="item-title">Get a domain and set up DNS and Cloudflare</span></li></ul></div>
-  <div class="card"><h3>Ready to start</h3><ul class="items"><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/228">#228</a> <span class="item-title">CI: run format wp7a_* tests on wasm32 again after WP11</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/787">#787</a> <span class="item-title">Retire the WP-era scaffolding: module-named tests, no WP ownership headers, sim-core plan marked historical</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/788">#788</a> <span class="item-title">Issue context contract: every agent-ready issue names its code, docs, spec claims and test command</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1064">#1064</a> <span class="item-title">xtask check: a sim doc-comment change can stale a format schema without failing the local check</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1169">#1169</a> <span class="item-title">CI: run the public feel test on every target and scope it</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1345">#1345</a> <span class="item-title">xtask: the WP-era ratchet counts gitignored local files</span></li></ul></div>
+  <div class="card"><h3>Recently closed</h3><ul class="items"><li><span class="chip">5</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1489">#1489</a> <span class="item-title">Client: measure browser (wasm) startup by phase</span></li><li><span class="chip">7</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1479">#1479</a> <span class="item-title">Tools: sign a removal list (Ed25519) for docs/server.md&#x27;s format</span></li><li><span class="chip">7</span><a href="https://github.com/nugamus/iwbtg-collection/issues/161">#161</a> <span class="item-title">Auth: rate limiting on CF-Connecting-IP</span></li><li><span class="chip">2</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1382">#1382</a> <span class="item-title">Sim: one fill rule for skipped array elements (room set_global vs script writes)</span></li><li><span class="chip">2</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1380">#1380</a> <span class="item-title">Script API: plan the groups the census needs that scripts.md does not list (paths, view, strings, instance_change, bounce, kid actions)</span></li><li><span class="chip">7</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1506">#1506</a> <span class="item-title">Catalog: stream /files instead of buffering whole packages (3 x 200 MiB downloads hit 610 MB)</span></li><li><span class="chip">3</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1082">#1082</a> <span class="item-title">Sim docs: clear the remaining plan citations in sim tests and pkg_cmd</span></li><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1527">#1527</a> <span class="item-title">Restore the two historical WP7a comments renamed by #1519</span></li></ul></div>
+  <div class="card"><h3>In progress</h3><ul class="items"><li><span class="chip">7</span><a href="https://github.com/nugamus/iwbtg-collection/issues/160">#160</a> <span class="item-title">Auth: password reset by emailed code</span></li><li><span class="chip">6</span><a href="https://github.com/nugamus/iwbtg-collection/issues/43">#43</a> <span class="item-title">Ranked (stripped) and Play original buttons</span></li><li><span class="chip">7</span><a href="https://github.com/nugamus/iwbtg-collection/issues/113">#113</a> <span class="item-title">Security review of the server before accounts go live</span></li><li><span class="chip">5</span><a href="https://github.com/nugamus/iwbtg-collection/issues/196">#196</a> <span class="item-title">UI translation files, English and Japanese</span></li><li><span class="chip">5</span><a href="https://github.com/nugamus/iwbtg-collection/issues/106">#106</a> <span class="item-title">Accessibility: screen-shake toggle, colorblind-friendly UI, audio cues</span></li><li><span class="chip">7</span><a href="https://github.com/nugamus/iwbtg-collection/issues/154">#154</a> <span class="item-title">Server: Docker Compose with cloudflared</span></li></ul></div>
+  <div class="card"><h3>Waiting on you</h3><ul class="items"><li><span class="chip">10</span><a href="https://github.com/nugamus/iwbtg-collection/issues/195">#195</a> <span class="item-title">Public nightly alpha builds</span></li><li><span class="chip">10</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1503">#1503</a> <span class="item-title">Licence: the generated header claims MIT OR Apache-2.0 but only MIT ships</span></li><li><a href="https://github.com/nugamus/iwbtg-collection/issues/1395">#1395</a> <span class="item-title">Format: enact the format freeze (schema guard at the freeze point, #795 follow-up)</span></li><li><span class="chip">1</span><a href="https://github.com/nugamus/iwbtg-collection/issues/426">#426</a> <span class="item-title">atan2 near-axis cutoff: find the recorder&#x27;s rule between ratio 3.5e-16 and ordinary vectors</span></li><li><span class="chip">6</span><a href="https://github.com/nugamus/iwbtg-collection/issues/953">#953</a> <span class="item-title">Decide: script error screen layout</span></li><li><span class="chip">7</span><a href="https://github.com/nugamus/iwbtg-collection/issues/194">#194</a> <span class="item-title">Discord server and bug channel</span></li></ul></div>
+  <div class="card"><h3>Ready to start</h3><ul class="items"><li><span class="chip">0</span><a href="https://github.com/nugamus/iwbtg-collection/issues/228">#228</a> <span class="item-title">CI: run format wp7a_* tests on wasm32 again after WP11</span></li><li><span class="chip">1</span><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">#1365</a> <span class="item-title">Progress exporter: trace coverage per game</span></li><li><span class="chip">10</span><a href="https://github.com/nugamus/iwbtg-collection/issues/68">#68</a> <span class="item-title">Takedown page, contact and removal list</span></li><li><span class="chip">10</span><a href="https://github.com/nugamus/iwbtg-collection/issues/69">#69</a> <span class="item-title">Privacy page, account deletion and export</span></li><li><span class="chip">10</span><a href="https://github.com/nugamus/iwbtg-collection/issues/71">#71</a> <span class="item-title">Release builds for Windows and Linux</span></li><li><span class="chip">10</span><a href="https://github.com/nugamus/iwbtg-collection/issues/74">#74</a> <span class="item-title">Creator claim flow</span></li></ul></div>
 </div>
 
 <div class="grid2">
-  <section><h2>Open work by area</h2><p class="note">An issue can carry more than one area label.</p><div class="hbar-row"><span class="hbar-label">area:sim</span><span class="hbar-track"><span class="hbar-fill" style="width:100.0%"></span></span><span class="hbar-value">101</span></div><div class="hbar-row"><span class="hbar-label">area:client</span><span class="hbar-track"><span class="hbar-fill" style="width:74.3%"></span></span><span class="hbar-value">75</span></div><div class="hbar-row"><span class="hbar-label">area:format</span><span class="hbar-track"><span class="hbar-fill" style="width:47.5%"></span></span><span class="hbar-value">48</span></div><div class="hbar-row"><span class="hbar-label">area:server</span><span class="hbar-track"><span class="hbar-fill" style="width:47.5%"></span></span><span class="hbar-value">48</span></div><div class="hbar-row"><span class="hbar-label">area:infra</span><span class="hbar-track"><span class="hbar-fill" style="width:28.7%"></span></span><span class="hbar-value">29</span></div><div class="hbar-row"><span class="hbar-label">area:editor</span><span class="hbar-track"><span class="hbar-fill" style="width:28.7%"></span></span><span class="hbar-value">29</span></div><div class="hbar-row"><span class="hbar-label">area:docs</span><span class="hbar-track"><span class="hbar-fill" style="width:13.9%"></span></span><span class="hbar-value">14</span></div><div class="hbar-row"><span class="hbar-label">area:design</span><span class="hbar-track"><span class="hbar-fill" style="width:13.9%"></span></span><span class="hbar-value">14</span></div><div class="hbar-row"><span class="hbar-label">area:tools</span><span class="hbar-track"><span class="hbar-fill" style="width:11.9%"></span></span><span class="hbar-value">12</span></div><div class="hbar-row"><span class="hbar-label">area:port</span><span class="hbar-track"><span class="hbar-fill" style="width:5.9%"></span></span><span class="hbar-value">6</span></div><div class="hbar-row"><span class="hbar-label">area:research</span><span class="hbar-track"><span class="hbar-fill" style="width:5.0%"></span></span><span class="hbar-value">5</span></div></section>
+  <section><h2>Open work by area</h2><p class="note">An issue can carry more than one area label.</p><div class="hbar-row"><span class="hbar-label">area:sim</span><span class="hbar-track"><span class="hbar-fill" style="width:100.0%"></span></span><span class="hbar-value">92</span></div><div class="hbar-row"><span class="hbar-label">area:client</span><span class="hbar-track"><span class="hbar-fill" style="width:70.7%"></span></span><span class="hbar-value">65</span></div><div class="hbar-row"><span class="hbar-label">area:server</span><span class="hbar-track"><span class="hbar-fill" style="width:51.1%"></span></span><span class="hbar-value">47</span></div><div class="hbar-row"><span class="hbar-label">area:format</span><span class="hbar-track"><span class="hbar-fill" style="width:45.7%"></span></span><span class="hbar-value">42</span></div><div class="hbar-row"><span class="hbar-label">area:editor</span><span class="hbar-track"><span class="hbar-fill" style="width:31.5%"></span></span><span class="hbar-value">29</span></div><div class="hbar-row"><span class="hbar-label">area:infra</span><span class="hbar-track"><span class="hbar-fill" style="width:23.9%"></span></span><span class="hbar-value">22</span></div><div class="hbar-row"><span class="hbar-label">area:design</span><span class="hbar-track"><span class="hbar-fill" style="width:15.2%"></span></span><span class="hbar-value">14</span></div><div class="hbar-row"><span class="hbar-label">area:tools</span><span class="hbar-track"><span class="hbar-fill" style="width:9.8%"></span></span><span class="hbar-value">9</span></div><div class="hbar-row"><span class="hbar-label">area:docs</span><span class="hbar-track"><span class="hbar-fill" style="width:7.6%"></span></span><span class="hbar-value">7</span></div><div class="hbar-row"><span class="hbar-label">area:port</span><span class="hbar-track"><span class="hbar-fill" style="width:5.4%"></span></span><span class="hbar-value">5</span></div><div class="hbar-row"><span class="hbar-label">area:research</span><span class="hbar-track"><span class="hbar-fill" style="width:5.4%"></span></span><span class="hbar-value">5</span></div></section>
   <section><h2>Issues over time</h2><p class="note">Cumulative issues opened and closed by week.</p>
     <div class="legend"><span class="key"><i class="line-key blue"></i>Opened</span>
       <span class="key"><i class="line-key orange"></i>Closed</span></div>
     <div class="chart-wrap"><svg viewBox="0 0 760 228" role="img" aria-label="Issues opened and closed by week">
-      <line x1="46" y1="164.0" x2="700" y2="164.0" class="grid"/><text x="38" y="168.0" class="axis" text-anchor="end">0</text><line x1="46" y1="133.6" x2="700" y2="133.6" class="grid"/><text x="38" y="137.6" class="axis" text-anchor="end">172</text><line x1="46" y1="103.2" x2="700" y2="103.2" class="grid"/><text x="38" y="107.2" class="axis" text-anchor="end">344</text><line x1="46" y1="72.8" x2="700" y2="72.8" class="grid"/><text x="38" y="76.8" class="axis" text-anchor="end">516</text><line x1="46" y1="42.4" x2="700" y2="42.4" class="grid"/><text x="38" y="46.4" class="axis" text-anchor="end">688</text><line x1="46" y1="12.0" x2="700" y2="12.0" class="grid"/><text x="38" y="16.0" class="axis" text-anchor="end">860</text>
-      <path d="M46.0,98.3 L264.0,70.3 L482.0,15.7 L700.0,12.2" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linejoin="round"/>
-      <path d="M46.0,131.1 L264.0,106.4 L482.0,69.4 L700.0,66.8" fill="none" stroke="var(--orange)" stroke-width="2" stroke-linejoin="round"/>
-      <circle cx="700.0" cy="12.2" r="4" fill="var(--blue)" stroke="var(--surface)" stroke-width="2"/>
-      <circle cx="700.0" cy="66.8" r="4" fill="var(--orange)" stroke="var(--surface)" stroke-width="2"/>
-      <text x="706" y="16.2" class="end-label">opened 859</text>
-      <text x="706" y="70.8" class="end-label">closed 550</text>
+      <line x1="46" y1="164.0" x2="700" y2="164.0" class="grid"/><text x="38" y="168.0" class="axis" text-anchor="end">0</text><line x1="46" y1="133.6" x2="700" y2="133.6" class="grid"/><text x="38" y="137.6" class="axis" text-anchor="end">186</text><line x1="46" y1="103.2" x2="700" y2="103.2" class="grid"/><text x="38" y="107.2" class="axis" text-anchor="end">372</text><line x1="46" y1="72.8" x2="700" y2="72.8" class="grid"/><text x="38" y="76.8" class="axis" text-anchor="end">558</text><line x1="46" y1="42.4" x2="700" y2="42.4" class="grid"/><text x="38" y="46.4" class="axis" text-anchor="end">744</text><line x1="46" y1="12.0" x2="700" y2="12.0" class="grid"/><text x="38" y="16.0" class="axis" text-anchor="end">930</text>
+      <path d="M46.0,103.2 L264.0,77.4 L482.0,26.9 L700.0,12.7" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M46.0,133.6 L264.0,110.7 L482.0,76.6 L700.0,59.1" fill="none" stroke="var(--orange)" stroke-width="2" stroke-linejoin="round"/>
+      <circle cx="700.0" cy="12.7" r="4" fill="var(--blue)" stroke="var(--surface)" stroke-width="2"/>
+      <circle cx="700.0" cy="59.1" r="4" fill="var(--orange)" stroke="var(--surface)" stroke-width="2"/>
+      <text x="706" y="16.7" class="end-label">opened 926</text>
+      <text x="706" y="63.1" class="end-label">closed 642</text>
       <text x="46" y="182" class="axis" text-anchor="middle">11-09</text><text x="264" y="182" class="axis" text-anchor="middle">11-16</text><text x="482" y="182" class="axis" text-anchor="middle">11-23</text><text x="700" y="182" class="axis" text-anchor="middle">11-30</text></svg></div></section>
 </div>
 
 <h2>Coverage history</h2>
-<div class="spark"><div><span class="sub">Built-in coverage</span><svg viewBox="0 0 330 74" aria-label="builtin_pct over time"><path d="M8.0,7.2 L86.5,7.2 L165.0,7.2 L243.5,7.2 L322.0,7.2" fill="none" stroke="var(--blue)" stroke-width="2"/></svg></div><div><span class="sub">Script-object share</span><svg viewBox="0 0 330 74" aria-label="script_pct over time"><path d="M8.0,62.9 L86.5,62.9 L165.0,62.9 L243.5,62.9 L322.0,62.9" fill="none" stroke="var(--orange)" stroke-width="2"/></svg></div></div>
+<div class="spark"><div><span class="sub">Built-in coverage</span><svg viewBox="0 0 330 74" aria-label="builtin_pct over time"><path d="M8.0,7.2 L70.8,7.2 L133.6,7.2 L196.4,7.2 L259.2,7.2 L322.0,7.2" fill="none" stroke="var(--blue)" stroke-width="2"/></svg></div><div><span class="sub">Script-object share</span><svg viewBox="0 0 330 74" aria-label="script_pct over time"><path d="M8.0,62.9 L70.8,62.9 L133.6,62.9 L196.4,62.9 L259.2,62.9 L322.0,62.9" fill="none" stroke="var(--orange)" stroke-width="2"/></svg></div></div>
 <p class="note">One dated point per workflow run; the line breaks at a run with no measurement.</p>
 
 <footer>

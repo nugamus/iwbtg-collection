@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-24T17:14:37Z",
+ "generated_at": "2026-11-25T11:50:04Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -11,14 +11,14 @@
    "title": "0 · Foundation",
    "name": "Foundation",
    "state": "open",
-   "open": 13,
-   "closed": 65,
-   "total": 78,
-   "pct_closed": 83.3,
-   "size_points": 26,
+   "open": 4,
+   "closed": 86,
+   "total": 90,
+   "pct_closed": 95.6,
+   "size_points": 11,
    "sizes": {
-    "size:S": 9,
-    "size:M": 3,
+    "size:S": 3,
+    "size:M": 0,
     "size:L": 1,
     "unknown": 0
    },
@@ -34,16 +34,16 @@
    "title": "1 · Behavior research",
    "name": "Behavior research",
    "state": "open",
-   "open": 5,
-   "closed": 24,
+   "open": 3,
+   "closed": 26,
    "total": 29,
-   "pct_closed": 82.8,
-   "size_points": 4,
+   "pct_closed": 89.7,
+   "size_points": 3,
    "sizes": {
-    "size:S": 4,
+    "size:S": 3,
     "size:M": 0,
     "size:L": 0,
-    "unknown": 1
+    "unknown": 0
    },
    "scope": "Trace, probe and specify what the original game does, so the sim has evidence.",
    "feeds_from": "research specs and traces, real-runner probes, humans recording inputs",
@@ -57,16 +57,16 @@
    "title": "2 · Format & pipeline",
    "name": "Format & pipeline",
    "state": "open",
-   "open": 34,
-   "closed": 91,
-   "total": 125,
-   "pct_closed": 72.8,
-   "size_points": 101,
+   "open": 38,
+   "closed": 113,
+   "total": 151,
+   "pct_closed": 74.8,
+   "size_points": 114,
    "sizes": {
-    "size:S": 13,
-    "size:M": 16,
+    "size:S": 11,
+    "size:M": 21,
     "size:L": 5,
-    "unknown": 0
+    "unknown": 1
    },
    "scope": "The standard package format, converter, census, script API and porting pipeline.",
    "feeds_from": "converter, format crates, research census, porting docs",
@@ -80,16 +80,16 @@
    "title": "3 · Sim fidelity",
    "name": "Sim fidelity",
    "state": "open",
-   "open": 42,
-   "closed": 210,
+   "open": 38,
+   "closed": 214,
    "total": 252,
-   "pct_closed": 83.3,
-   "size_points": 53,
+   "pct_closed": 84.9,
+   "size_points": 48,
    "sizes": {
-    "size:S": 16,
-    "size:M": 7,
+    "size:S": 14,
+    "size:M": 6,
     "size:L": 2,
-    "unknown": 17
+    "unknown": 16
    },
    "scope": "The deterministic simulation reproduces the original mechanics tick for tick.",
    "feeds_from": "research traces, format packages, sim crate",
@@ -126,14 +126,14 @@
    "title": "5 · Client shell & UI",
    "name": "Client shell & UI",
    "state": "open",
-   "open": 21,
-   "closed": 14,
-   "total": 35,
-   "pct_closed": 40.0,
-   "size_points": 50,
+   "open": 18,
+   "closed": 23,
+   "total": 41,
+   "pct_closed": 56.1,
+   "size_points": 43,
    "sizes": {
-    "size:S": 9,
-    "size:M": 11,
+    "size:S": 8,
+    "size:M": 9,
     "size:L": 1,
     "unknown": 0
    },
@@ -149,14 +149,14 @@
    "title": "6 · Ranked-ready run",
    "name": "Ranked-ready run",
    "state": "open",
-   "open": 42,
-   "closed": 90,
-   "total": 132,
-   "pct_closed": 68.2,
-   "size_points": 137,
+   "open": 37,
+   "closed": 101,
+   "total": 138,
+   "pct_closed": 73.2,
+   "size_points": 130,
    "sizes": {
-    "size:S": 13,
-    "size:M": 20,
+    "size:S": 9,
+    "size:M": 19,
     "size:L": 8,
     "unknown": 1
    },
@@ -172,13 +172,13 @@
    "title": "7 · Online",
    "name": "Online",
    "state": "open",
-   "open": 57,
-   "closed": 4,
-   "total": 61,
-   "pct_closed": 6.6,
-   "size_points": 134,
+   "open": 52,
+   "closed": 14,
+   "total": 66,
+   "pct_closed": 21.2,
+   "size_points": 129,
    "sizes": {
-    "size:S": 32,
+    "size:S": 27,
     "size:M": 18,
     "size:L": 6,
     "unknown": 1
@@ -218,14 +218,14 @@
    "title": "9 · Content & ports",
    "name": "Content & ports",
    "state": "open",
-   "open": 53,
-   "closed": 6,
+   "open": 49,
+   "closed": 10,
    "total": 59,
-   "pct_closed": 10.2,
-   "size_points": 142,
+   "pct_closed": 16.9,
+   "size_points": 136,
    "sizes": {
-    "size:S": 31,
-    "size:M": 13,
+    "size:S": 28,
+    "size:M": 12,
     "size:L": 9,
     "unknown": 0
    },
@@ -241,14 +241,14 @@
    "title": "10 · Release",
    "name": "Release",
    "state": "open",
-   "open": 24,
-   "closed": 2,
-   "total": 26,
-   "pct_closed": 7.7,
-   "size_points": 53,
+   "open": 19,
+   "closed": 9,
+   "total": 28,
+   "pct_closed": 32.1,
+   "size_points": 42,
    "sizes": {
-    "size:S": 12,
-    "size:M": 11,
+    "size:S": 10,
+    "size:M": 8,
     "size:L": 1,
     "unknown": 0
    },
@@ -262,48 +262,44 @@
  ],
  "activity": {
   "totals": {
-   "issues": 859,
-   "open": 309,
-   "closed": 550,
-   "pct_closed": 64.0
+   "issues": 926,
+   "open": 284,
+   "closed": 642,
+   "pct_closed": 69.3
   },
   "open_prs": 3,
   "process": {
-   "agent-ready": 164,
-   "in-progress": 9,
-   "triage": 45,
+   "triage": 52,
+   "agent-ready": 129,
+   "needs-user": 30,
+   "in-progress": 10,
    "blocked": 25,
-   "revisit": 4,
-   "needs-user": 27
+   "revisit": 3
   },
   "area_open": [
    {
     "area": "area:sim",
-    "count": 101
+    "count": 92
    },
    {
     "area": "area:client",
-    "count": 75
-   },
-   {
-    "area": "area:format",
-    "count": 48
+    "count": 65
    },
    {
     "area": "area:server",
-    "count": 48
+    "count": 47
    },
    {
-    "area": "area:infra",
-    "count": 29
+    "area": "area:format",
+    "count": 42
    },
    {
     "area": "area:editor",
     "count": 29
    },
    {
-    "area": "area:docs",
-    "count": 14
+    "area": "area:infra",
+    "count": 22
    },
    {
     "area": "area:design",
@@ -311,11 +307,15 @@
    },
    {
     "area": "area:tools",
-    "count": 12
+    "count": 9
+   },
+   {
+    "area": "area:docs",
+    "count": 7
    },
    {
     "area": "area:port",
-    "count": 6
+    "count": 5
    },
    {
     "area": "area:research",
@@ -324,237 +324,271 @@
   ],
   "recent_closed": [
    {
-    "number": 1366,
-    "title": "Progress exporter: converter state per game",
+    "number": 1489,
+    "title": "Client: measure browser (wasm) startup by phase",
     "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1366",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1489",
     "labels": [
      "agent-ready",
      "size:S",
-     "area:format",
-     "area:port",
+     "area:client",
      "in-progress"
     ],
-    "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-24T17:14:30Z",
-    "closed_at": "2026-11-24T17:14:30Z",
-    "created_at": "2026-11-24T13:43:00Z"
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-25T11:34:55Z",
+    "closed_at": "2026-11-25T11:34:55Z",
+    "created_at": "2026-11-25T00:18:06Z"
    },
    {
-    "number": 1363,
-    "title": "Tools: import::tests::every_research_trace_imports panics on a missing file when IWBTG_RESEARCH is set",
+    "number": 1479,
+    "title": "Tools: sign a removal list (Ed25519) for docs/server.md's format",
     "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1363",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1479",
+    "labels": [
+     "agent-ready",
+     "size:S"
+    ],
+    "phase": "7 · Online",
+    "updated_at": "2026-11-25T11:26:01Z",
+    "closed_at": "2026-11-25T11:26:01Z",
+    "created_at": "2026-11-24T23:02:59Z"
+   },
+   {
+    "number": 161,
+    "title": "Auth: rate limiting on CF-Connecting-IP",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/161",
     "labels": [
      "agent-ready",
      "size:S",
-     "area:tools",
+     "area:server",
      "in-progress"
     ],
-    "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-24T17:11:54Z",
-    "closed_at": "2026-11-24T17:11:54Z",
-    "created_at": "2026-11-24T12:42:15Z"
+    "phase": "7 · Online",
+    "updated_at": "2026-11-25T11:20:00Z",
+    "closed_at": "2026-11-25T11:20:00Z",
+    "created_at": "2026-11-02T12:01:11Z"
    },
    {
-    "number": 1372,
-    "title": "Object coverage exporter and a clearer progress dashboard",
+    "number": 1382,
+    "title": "Sim: one fill rule for skipped array elements (room set_global vs script writes)",
     "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1372",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1382",
     "labels": [
      "agent-ready",
-     "size:M",
-     "area:tools",
-     "area:research",
-     "area:infra"
+     "size:S"
     ],
     "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-24T15:07:09Z",
-    "closed_at": "2026-11-24T15:07:09Z",
-    "created_at": "2026-11-24T15:01:38Z"
+    "updated_at": "2026-11-25T11:13:51Z",
+    "closed_at": "2026-11-25T10:36:42Z",
+    "created_at": "2026-11-24T17:19:23Z"
    },
    {
-    "number": 1370,
-    "title": "Progress workflow: grant issue reads and fail visibly on a stale refresh",
+    "number": 1380,
+    "title": "Script API: plan the groups the census needs that scripts.md does not list (paths, view, strings, instance_change, bounce, kid actions)",
     "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1370",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1380",
     "labels": [
      "agent-ready",
      "size:S",
-     "area:infra"
-    ],
-    "phase": "0 · Foundation",
-    "updated_at": "2026-11-24T14:59:04Z",
-    "closed_at": "2026-11-24T14:59:03Z",
-    "created_at": "2026-11-24T14:51:50Z"
-   },
-   {
-    "number": 1368,
-    "title": "Milestone reorg: phase-gate milestones and a progress dashboard",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1368",
-    "labels": [
-     "size:L",
-     "area:docs",
-     "area:infra"
-    ],
-    "phase": "0 · Foundation",
-    "updated_at": "2026-11-24T14:49:45Z",
-    "closed_at": "2026-11-24T14:49:45Z",
-    "created_at": "2026-11-24T14:05:15Z"
-   },
-   {
-    "number": 1079,
-    "title": "Sim: instance list order for with (all), instance_id and first-instance queries is depth then room entry",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1079",
-    "labels": [
-     "agent-ready",
-     "size:M",
      "area:sim",
+     "area:docs"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-25T10:32:58Z",
+    "closed_at": "2026-11-25T10:30:59Z",
+    "created_at": "2026-11-24T17:15:26Z"
+   },
+   {
+    "number": 1506,
+    "title": "Catalog: stream /files instead of buffering whole packages (3 x 200 MiB downloads hit 610 MB)",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1506",
+    "labels": [
+     "agent-ready",
+     "size:S",
      "in-progress"
+    ],
+    "phase": "7 · Online",
+    "updated_at": "2026-11-25T10:23:31Z",
+    "closed_at": "2026-11-25T10:23:31Z",
+    "created_at": "2026-11-25T00:56:28Z"
+   },
+   {
+    "number": 1082,
+    "title": "Sim docs: clear the remaining plan citations in sim tests and pkg_cmd",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1082",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:sim",
+     "area:docs"
     ],
     "phase": "3 · Sim fidelity",
-    "updated_at": "2026-11-24T13:17:15Z",
-    "closed_at": "2026-11-24T12:57:58Z",
-    "created_at": "2026-11-20T08:21:55Z"
+    "updated_at": "2026-11-25T10:05:44Z",
+    "closed_at": "2026-11-25T10:05:44Z",
+    "created_at": "2026-11-20T08:28:10Z"
    },
    {
-    "number": 1105,
-    "title": "Format: make `timeline` a reserved object key in objects.rs",
+    "number": 1527,
+    "title": "Restore the two historical WP7a comments renamed by #1519",
     "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1105",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1527",
     "labels": [
      "agent-ready",
      "size:S",
-     "area:sim",
-     "area:format",
-     "in-progress"
+     "area:format"
     ],
-    "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-24T13:17:33Z",
-    "closed_at": "2026-11-24T12:55:38Z",
-    "created_at": "2026-11-20T09:34:28Z"
-   },
-   {
-    "number": 1109,
-    "title": "Format: the generated runner schema description still says it selects event-order differences",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1109",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:format",
-     "in-progress"
-    ],
-    "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-24T13:17:37Z",
-    "closed_at": "2026-11-24T12:54:36Z",
-    "created_at": "2026-11-20T09:39:16Z"
+    "phase": "0 · Foundation",
+    "updated_at": "2026-11-25T03:30:21Z",
+    "closed_at": "2026-11-25T03:30:21Z",
+    "created_at": "2026-11-25T03:29:15Z"
    }
   ],
   "in_progress": [
    {
-    "number": 1168,
-    "title": "Feel harness: port contract set and crates/tools/feel-baseline.txt (IWBTG_GAMES)",
+    "number": 160,
+    "title": "Auth: password reset by emailed code",
     "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1168",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/160",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:server",
+     "in-progress"
+    ],
+    "phase": "7 · Online",
+    "updated_at": "2026-11-25T11:38:45Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T11:57:51Z"
+   },
+   {
+    "number": 43,
+    "title": "Ranked (stripped) and Play original buttons",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/43",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "6 · Ranked-ready run",
+    "updated_at": "2026-11-25T11:19:32Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T11:30:26Z"
+   },
+   {
+    "number": 113,
+    "title": "Security review of the server before accounts go live",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/113",
     "labels": [
      "agent-ready",
      "size:M",
-     "area:tools",
-     "area:port",
+     "area:server",
      "in-progress"
     ],
-    "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-24T17:14:34Z",
+    "phase": "7 · Online",
+    "updated_at": "2026-11-25T02:48:55Z",
     "closed_at": null,
-    "created_at": "2026-11-21T07:25:31Z"
+    "created_at": "2026-11-02T11:55:48Z"
    },
    {
-    "number": 1336,
-    "title": "Format: physics JSON schema does not list the standard name aliases (#1330)",
+    "number": 196,
+    "title": "UI translation files, English and Japanese",
     "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1336",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/196",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-25T00:40:35Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T12:41:04Z"
+   },
+   {
+    "number": 106,
+    "title": "Accessibility: screen-shake toggle, colorblind-friendly UI, audio cues",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/106",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-24T22:25:29Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T11:55:29Z"
+   },
+   {
+    "number": 154,
+    "title": "Server: Docker Compose with cloudflared",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/154",
     "labels": [
      "agent-ready",
      "size:S",
-     "area:format",
+     "area:server",
      "in-progress"
     ],
-    "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-24T17:11:56Z",
+    "phase": "7 · Online",
+    "updated_at": "2026-11-24T22:21:14Z",
     "closed_at": null,
-    "created_at": "2026-11-21T17:05:16Z"
-   },
-   {
-    "number": 997,
-    "title": "Scripts: array values on this and globals",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/997",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:sim",
-     "in-progress"
-    ],
-    "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-24T17:06:34Z",
-    "closed_at": null,
-    "created_at": "2026-11-19T10:06:46Z"
-   },
-   {
-    "number": 1114,
-    "title": "Docs/registers: link the split gm8 spec files and map register ids to claim ids (research#173)",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1114",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:sim",
-     "area:docs",
-     "in-progress"
-    ],
-    "phase": "1 · Behavior research",
-    "updated_at": "2026-11-24T17:04:24Z",
-    "closed_at": null,
-    "created_at": "2026-11-20T09:44:23Z"
-   },
-   {
-    "number": 1346,
-    "title": "Harness: fidelity hints and workspace settings still use the old checkout names",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1346",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:infra",
-     "in-progress"
-    ],
-    "phase": "0 · Foundation",
-    "updated_at": "2026-11-24T16:45:46Z",
-    "closed_at": null,
-    "created_at": "2026-11-24T11:15:54Z"
-   },
-   {
-    "number": 986,
-    "title": "Sim/format/tools: drop the WP ownership headers",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/986",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:sim",
-     "area:docs",
-     "in-progress"
-    ],
-    "phase": "0 · Foundation",
-    "updated_at": "2026-11-24T16:45:44Z",
-    "closed_at": null,
-    "created_at": "2026-11-19T10:05:46Z"
+    "created_at": "2026-11-02T11:57:34Z"
    }
   ],
   "needs_user": [
+   {
+    "number": 195,
+    "title": "Public nightly alpha builds",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/195",
+    "labels": [
+     "needs-user",
+     "size:M",
+     "area:infra"
+    ],
+    "phase": "10 · Release",
+    "updated_at": "2026-11-25T11:14:31Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T12:41:01Z"
+   },
+   {
+    "number": 1503,
+    "title": "Licence: the generated header claims MIT OR Apache-2.0 but only MIT ships",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1503",
+    "labels": [
+     "needs-user",
+     "size:S",
+     "area:infra"
+    ],
+    "phase": "10 · Release",
+    "updated_at": "2026-11-25T01:32:39Z",
+    "closed_at": null,
+    "created_at": "2026-11-25T00:45:27Z"
+   },
+   {
+    "number": 1395,
+    "title": "Format: enact the format freeze (schema guard at the freeze point, #795 follow-up)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1395",
+    "labels": [
+     "needs-user",
+     "triage"
+    ],
+    "phase": null,
+    "updated_at": "2026-11-24T17:37:59Z",
+    "closed_at": null,
+    "created_at": "2026-11-24T17:37:59Z"
+   },
    {
     "number": 426,
     "title": "atan2 near-axis cutoff: find the recorder's rule between ratio 3.5e-16 and ordinary vectors",
@@ -599,51 +633,6 @@
     "updated_at": "2026-11-24T13:33:47Z",
     "closed_at": null,
     "created_at": "2026-11-02T12:40:59Z"
-   },
-   {
-    "number": 114,
-    "title": "Decide: Windows code signing and Linux packaging",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/114",
-    "labels": [
-     "needs-user",
-     "size:S",
-     "area:infra"
-    ],
-    "phase": "10 · Release",
-    "updated_at": "2026-11-24T13:33:42Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T11:55:51Z"
-   },
-   {
-    "number": 110,
-    "title": "Register Google and Discord OAuth apps; choose SMTP",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/110",
-    "labels": [
-     "needs-user",
-     "size:S",
-     "area:server"
-    ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-24T13:33:40Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T11:55:39Z"
-   },
-   {
-    "number": 108,
-    "title": "Get a domain and set up DNS and Cloudflare",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/108",
-    "labels": [
-     "needs-user",
-     "size:S",
-     "area:infra"
-    ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-24T13:33:39Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T11:55:34Z"
    }
   ],
   "agent_ready": [
@@ -658,90 +647,89 @@
      "area:infra"
     ],
     "phase": "0 · Foundation",
-    "updated_at": "2026-11-24T13:06:31Z",
+    "updated_at": "2026-11-24T19:02:26Z",
     "closed_at": null,
     "created_at": "2026-11-02T14:09:28Z"
    },
    {
-    "number": 787,
-    "title": "Retire the WP-era scaffolding: module-named tests, no WP ownership headers, sim-core plan marked historical",
+    "number": 1365,
+    "title": "Progress exporter: trace coverage per game",
     "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/787",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1365",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:sim",
+     "area:research"
+    ],
+    "phase": "1 · Behavior research",
+    "updated_at": "2026-11-24T16:59:17Z",
+    "closed_at": null,
+    "created_at": "2026-11-24T13:42:57Z"
+   },
+   {
+    "number": 68,
+    "title": "Takedown page, contact and removal list",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/68",
     "labels": [
      "agent-ready",
      "size:M",
-     "area:sim",
-     "area:docs"
+     "area:server"
     ],
-    "phase": "0 · Foundation",
-    "updated_at": "2026-11-24T13:13:13Z",
+    "phase": "10 · Release",
+    "updated_at": "2026-11-24T13:03:01Z",
     "closed_at": null,
-    "created_at": "2026-11-14T17:14:59Z"
+    "created_at": "2026-11-02T11:31:32Z"
    },
    {
-    "number": 788,
-    "title": "Issue context contract: every agent-ready issue names its code, docs, spec claims and test command",
+    "number": 69,
+    "title": "Privacy page, account deletion and export",
     "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/788",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/69",
     "labels": [
      "agent-ready",
-     "size:S",
-     "area:docs",
-     "area:infra"
+     "size:M",
+     "area:server"
     ],
-    "phase": "0 · Foundation",
-    "updated_at": "2026-11-24T13:13:14Z",
+    "phase": "10 · Release",
+    "updated_at": "2026-11-24T13:03:02Z",
     "closed_at": null,
-    "created_at": "2026-11-14T17:15:01Z"
+    "created_at": "2026-11-02T11:31:35Z"
    },
    {
-    "number": 1064,
-    "title": "xtask check: a sim doc-comment change can stale a format schema without failing the local check",
+    "number": 71,
+    "title": "Release builds for Windows and Linux",
     "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1064",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/71",
     "labels": [
      "agent-ready",
-     "size:S",
+     "size:M",
      "area:infra"
     ],
-    "phase": "0 · Foundation",
-    "updated_at": "2026-11-24T13:17:02Z",
+    "phase": "10 · Release",
+    "updated_at": "2026-11-25T01:31:54Z",
     "closed_at": null,
-    "created_at": "2026-11-20T07:47:56Z"
+    "created_at": "2026-11-02T11:31:41Z"
    },
    {
-    "number": 1169,
-    "title": "CI: run the public feel test on every target and scope it",
+    "number": 74,
+    "title": "Creator claim flow",
     "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1169",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/74",
     "labels": [
      "agent-ready",
-     "size:S",
-     "area:infra"
+     "size:M",
+     "area:server"
     ],
-    "phase": "0 · Foundation",
-    "updated_at": "2026-11-24T13:18:31Z",
+    "phase": "10 · Release",
+    "updated_at": "2026-11-24T13:03:09Z",
     "closed_at": null,
-    "created_at": "2026-11-21T07:25:36Z"
-   },
-   {
-    "number": 1345,
-    "title": "xtask: the WP-era ratchet counts gitignored local files",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1345",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:infra"
-    ],
-    "phase": "0 · Foundation",
-    "updated_at": "2026-11-24T16:43:11Z",
-    "closed_at": null,
-    "created_at": "2026-11-24T11:15:52Z"
+    "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 177,
-  "opened_7d": 276,
+  "closed_7d": 257,
+  "opened_7d": 331,
   "burnup": [
    {
     "week": "2026-11-09",
@@ -760,8 +748,8 @@
    },
    {
     "week": "2026-11-30",
-    "created": 859,
-    "closed": 550
+    "created": 926,
+    "closed": 642
    }
   ]
  },
