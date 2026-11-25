@@ -92,6 +92,7 @@
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;scrollbar-color:var(--rule-strong) var(--paper-2)}
+p{text-wrap:pretty}
 body{margin:0;background:var(--desk);color:var(--ink);caret-color:var(--cherry);
   font-family:"Barlow",ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
   font-size:16px;line-height:1.55;text-rendering:optimizeLegibility}
@@ -123,7 +124,7 @@ a:hover{color:var(--cherry-strong);text-decoration-thickness:.1em}
 .theme{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .theme-label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:500}
 .theme-options{display:flex;border:1px solid var(--rule-strong);padding:2px}
-.theme-options button{appearance:none;border:0;border-left:1px solid var(--rule-strong);background:transparent;color:var(--ink-2);font:500 12px/1 "Barlow",sans-serif;padding:0 10px;min-height:34px;cursor:pointer}
+.theme-options button{appearance:none;border:0;border-left:1px solid var(--rule-strong);background:transparent;color:var(--ink-2);font:500 12px/1 "Barlow",sans-serif;padding:8px 10px;min-height:34px;cursor:pointer}
 .theme-options button:first-child{border-left:0}
 .theme-options button:hover{background:var(--paper-2);color:var(--ink)}
 .theme-options button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
@@ -153,7 +154,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:clamp(44px,5.2vw,78px);li
 .stack-legend span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .swatch{display:inline-block;width:8px;height:8px;background:var(--rule-strong);flex:0 0 auto}
 .swatch.builtin{background:var(--graphite)}.swatch.script{background:var(--cherry)}.swatch.other{background:var(--rule-strong)}
-.gap-note{margin:16px 0 0;padding-top:12px;border-top:1px solid var(--rule);font-size:12.5px;line-height:1.5;color:var(--ink-2)}
+.gap-note{margin:16px 0 0;padding-top:12px;border-top:1px solid var(--rule);max-width:65ch;font-size:12.5px;line-height:1.5;color:var(--ink-2)}
 .gap-note strong{color:var(--ink)}
 .process-chips{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:12px;font-size:11.5px;line-height:1.4;color:var(--muted)}
 .process-chip b{font-weight:600;color:var(--ink-2);font-variant-numeric:tabular-nums}
@@ -166,8 +167,8 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:clamp(44px,5.2vw,78px);li
 .progress-alpha .progress-track>span{background:var(--cherry)}
 .progress-link{display:inline-block;margin-top:10px;color:var(--cherry);font-size:12.5px;line-height:1.4;text-decoration:underline;text-decoration-color:var(--rule-strong);text-underline-offset:.16em}
 .progress-cell:hover .progress-link{text-decoration-color:var(--cherry)}
-.progress-note{margin:12px 0 0;font-size:12.5px;line-height:1.5;color:var(--muted)}
-.scope-line{margin:10px 0 0;max-width:92ch;font-size:12.5px;line-height:1.55;color:var(--ink-2)}
+.progress-note{margin:12px 0 0;max-width:65ch;font-size:12.5px;line-height:1.5;color:var(--muted)}
+.scope-line{margin:10px 0 0;max-width:80ch;font-size:12.5px;line-height:1.55;color:var(--ink-2)}
 .scope-line .reg-label{display:inline;margin-right:8px}
 .port-meter{display:flex;gap:3px;height:8px;margin-top:0;max-width:none;background:none;overflow:visible}
 .port-step{flex:1;min-width:4px;background:var(--track);border:1px solid var(--rule)}
@@ -191,7 +192,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:clamp(44px,5.2vw,78px);li
 .api-surface{margin:0 0 26px;padding:16px 0 14px;border-top:1px solid var(--rule-strong);border-bottom:1px solid var(--rule-strong)}
 .api-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px 24px;flex-wrap:wrap}
 .api-subhead{margin-top:20px;padding-top:14px;border-top:1px solid var(--rule)}
-.api-note{margin:10px 0 0;max-width:74ch;font-size:12.5px;line-height:1.55;color:var(--ink-2)}
+.api-note{margin:10px 0 0;max-width:65ch;font-size:12.5px;line-height:1.55;color:var(--ink-2)}
 .api-note strong{color:var(--ink)}
 .api-groups{list-style:none;margin:10px 0 0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 24px;font-size:12px;line-height:1.45;color:var(--ink-2)}
 .api-groups b{font-weight:600;color:var(--ink)}
@@ -243,7 +244,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:clamp(44px,5.2vw,78px);li
 .game-facts dt{font-size:11px;line-height:1.35;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:500}
 .game-facts dd{margin:3px 0 0;font-size:13px;line-height:1.45;color:var(--ink-2);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .game-facts dd b{font-weight:600;color:var(--ink)}
-.game-explain{margin:16px 0 0;padding-top:12px;border-top:1px solid var(--rule);max-width:74ch;font-size:12.5px;line-height:1.55;color:var(--ink-2)}
+.game-explain{margin:16px 0 0;padding-top:12px;border-top:1px solid var(--rule);max-width:65ch;font-size:12.5px;line-height:1.55;color:var(--ink-2)}
 .game-explain strong{color:var(--ink)}
 .game-links{margin:10px 0 0;font-size:12.5px;line-height:1.5;color:var(--muted)}
 .game-links a{overflow-wrap:anywhere}
@@ -252,8 +253,8 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:clamp(44px,5.2vw,78px);li
 .state-open{color:var(--warn)}.state-open .state-mark{border-color:var(--warn)}
 .state-closed{color:var(--good)}.state-closed .state-mark{background:var(--good);border-color:var(--good)}
 .missing{color:var(--muted)}
-.source-note{margin:14px 0 0;max-width:76ch;font-size:12px;line-height:1.55;color:var(--muted)}
-.game-source{margin:8px 0 0;max-width:74ch;font-size:12px;line-height:1.5;color:var(--muted)}
+.source-note{margin:14px 0 0;max-width:65ch;font-size:12px;line-height:1.55;color:var(--muted)}
+.game-source{margin:8px 0 0;max-width:65ch;font-size:12px;line-height:1.5;color:var(--muted)}
 .source-note code{font-size:.96em}
 code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospace;background:var(--paper-2);padding:1px 5px;border-bottom:1px solid var(--rule);font-size:.92em;overflow-wrap:anywhere}
 .glossary{margin-top:34px;border-top:1px solid var(--rule-strong);padding-top:16px}
@@ -289,8 +290,8 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
 .dispatch-col+.dispatch-col{border-left:1px solid var(--rule);padding-left:20px}
 .dispatch-col h3{font-size:11px;line-height:1.3;letter-spacing:.09em;text-transform:uppercase;font-weight:600;color:var(--ink);margin:0 0 10px}
 .issue-list{list-style:none;margin:0;padding:0}
-.issue-list li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 8px;padding:10px 0;border-top:1px solid var(--rule);font-size:12.5px;line-height:1.35}
-.issue-list li:first-child{border-top:0;padding-top:0}
+.issue-list li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 8px;padding:12px 0;border-top:1px solid var(--rule);font-size:12.5px;line-height:1.35}
+.issue-list li:first-child{border-top:0;padding-top:12px}
 .issue-phase{grid-column:1/-1;font-size:11px;line-height:1.3;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
 .issue-number{font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
 .issue-title{color:var(--ink-2);min-width:0;overflow-wrap:anywhere}
@@ -330,7 +331,7 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
 .source-block p,.source-block li{font-size:13px;line-height:1.5;color:var(--ink-2)}
 .source-block p{margin:0 0 8px}
 .source-block ul{list-style:none;margin:0;padding:0}
-.source-block li{padding:7px 0;border-top:1px solid var(--rule)}
+.source-block li{padding:12px 0;border-top:1px solid var(--rule)}
 .source-block li:first-child{border-top:0;padding-top:0}
 .source-block li a{overflow-wrap:anywhere}
 .footer-bottom{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 20px;margin-top:30px;padding-top:12px;border-top:1px solid var(--rule);font-size:11px;line-height:1.4;color:var(--muted)}
@@ -408,7 +409,7 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
   .masthead-meta{display:none}
   .masthead-top{justify-content:flex-start;padding-bottom:10px}
   .theme{justify-content:flex-start}
-  .theme-options button{padding:0 8px}
+  .theme-options button{padding:8px 8px}
   .title-row{padding:22px 0 20px;gap:18px}
   .lede{margin-top:14px;font-size:15.5px}
   h1{font-size:clamp(38px,11vw,52px)}
@@ -453,7 +454,7 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
       <a href="#sources"><span class="nav-name">Sources</span><span class="nav-note">method and follow-ups</span></a>
     </nav>
     <div class="spine-meta">
-      <span>Generated 2026-11-25 12:44:38 UTC</span>
+      <span>Generated 2026-11-25 12:54:16 UTC</span>
       <span>Source: gh</span>
     </div>
   </aside>
@@ -461,7 +462,7 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
     <header class="masthead">
       <div class="masthead-top">
         <div class="masthead-meta">
-          <span>Generated <b>2026-11-25 12:44:38 UTC</b></span>
+          <span>Generated <b>2026-11-25 12:54:16 UTC</b></span>
           <span>Source <b>gh</b></span>
         </div>
         <div class="theme">
@@ -483,7 +484,7 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
           <span class="seal">Pre-release</span>
           <p class="status-detail">No release builds yet. The public alpha is planned for phase 7 (Online).</p>
           <dl class="provenance">
-            <dt>Generated</dt><dd>2026-11-25 12:44:38 UTC</dd>
+            <dt>Generated</dt><dd>2026-11-25 12:54:16 UTC</dd>
             <dt>Source</dt><dd>gh</dd>
           </dl>
         </aside>
@@ -1765,7 +1766,7 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
           <h2 id="delivery-title">Delivery</h2>
           <p>Phase gates run from Foundation to Release. A phase is a sequence, not a calendar; no deadlines are shown. The public alpha is planned to open at phase 7 (Online). Port issues and their <i>Done when</i> checklists stay in the coverage register's Port column.</p>
         </div>
-        <p class="delivery-summary"><span><b>283</b> open</span><span><b>647</b> closed of 930 (69.6%)</span><span><b>695</b> remaining size points</span><span><b>2</b> open PRs</span></p>
+        <p class="delivery-summary"><span><b>283</b> open</span><span><b>647</b> closed of 930 (69.6%)</span><span><b>695</b> remaining size points</span><span><b>4</b> open PRs</span></p>
         <ol class="phase-list">
         <li class="phase">
           <div class="phase-name">
@@ -2042,7 +2043,7 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
         <div class="process-chips activity-process" aria-label="Open issues by process label"><span class="process-chip"><b>15</b> in-progress</span><span class="process-chip"><b>30</b> needs-user</span><span class="process-chip"><b>132</b> agent-ready</span><span class="process-chip"><b>25</b> blocked</span><span class="process-chip"><b>48</b> triage</span><span class="process-chip"><b>3</b> revisit</span></div>
         <div class="dispatch">
           <section class="dispatch-col" aria-labelledby="recent-title"><h3 id="recent-title">Recently closed</h3><ul class="issue-list"><li><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1548">#1548</a> <span class="issue-title">dashboard: per-game implementation bars from repo data</span></li><li><span class="issue-phase">Phase 3</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1234">#1234</a> <span class="issue-title">Docs: sim rooms page — name the explicit Camera preset in the views section (#1189 E2a)</span></li><li><span class="issue-phase">Phase 7</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/160">#160</a> <span class="issue-title">Auth: password reset by emailed code</span></li><li><span class="issue-phase">Phase 3</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1342">#1342</a> <span class="issue-title">Docs: stale &quot;Waits on&quot; cells in the Modernization workstream table</span></li><li><span class="issue-phase">Phase 9</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a> <span class="issue-title">Fill per-game progress front-matter in docs/games</span></li><li><span class="issue-phase">Phase 5</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1489">#1489</a> <span class="issue-title">Client: measure browser (wasm) startup by phase</span></li><li><span class="issue-phase">Phase 7</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1479">#1479</a> <span class="issue-title">Tools: sign a removal list (Ed25519) for docs/server.md&#x27;s format</span></li><li><span class="issue-phase">Phase 7</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/161">#161</a> <span class="issue-title">Auth: rate limiting on CF-Connecting-IP</span></li></ul></section>
-          <section class="dispatch-col" aria-labelledby="progress-title"><h3 id="progress-title">In progress</h3><ul class="issue-list"><li><span class="issue-phase">Phase 7</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/162">#162</a> <span class="issue-title">Submissions: endpoint and replay storage</span></li><li><span class="issue-phase">Phase 2</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1530">#1530</a> <span class="issue-title">Script API: paths (path_start, path_end, path properties) (#776, census rank 14)</span></li><li><span class="issue-phase">Phase 4</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1398">#1398</a> <span class="issue-title">Showcase package is not in pkg fmt layout (3 room files), and nothing checks it</span></li><li><span class="issue-phase">Phase 6</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/39">#39</a> <span class="issue-title">Practice mode: start from stage, save or room; save states</span></li><li><span class="issue-phase">Phase 2</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1379">#1379</a> <span class="issue-title">0004 class capacity: check the 96 package classes against the census (up to 114 scripted kinds per game)</span></li><li><span class="issue-phase">Phase 2</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1093">#1093</a> <span class="issue-title">Sim scripts: prepared script artifact and shared GameDef (host.rs half of #1021)</span></li></ul></section>
+          <section class="dispatch-col" aria-labelledby="progress-title"><h3 id="progress-title">In progress</h3><ul class="issue-list"><li><span class="issue-phase">Phase 2</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1093">#1093</a> <span class="issue-title">Sim scripts: prepared script artifact and shared GameDef (host.rs half of #1021)</span></li><li><span class="issue-phase">Phase 7</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/162">#162</a> <span class="issue-title">Submissions: endpoint and replay storage</span></li><li><span class="issue-phase">Phase 2</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1530">#1530</a> <span class="issue-title">Script API: paths (path_start, path_end, path properties) (#776, census rank 14)</span></li><li><span class="issue-phase">Phase 4</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1398">#1398</a> <span class="issue-title">Showcase package is not in pkg fmt layout (3 room files), and nothing checks it</span></li><li><span class="issue-phase">Phase 6</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/39">#39</a> <span class="issue-title">Practice mode: start from stage, save or room; save states</span></li><li><span class="issue-phase">Phase 2</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1379">#1379</a> <span class="issue-title">0004 class capacity: check the 96 package classes against the census (up to 114 scripted kinds per game)</span></li></ul></section>
           <section class="dispatch-col" aria-labelledby="waiting-title"><h3 id="waiting-title">Waiting on you</h3><ul class="issue-list"><li><span class="issue-phase">Phase 10</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/195">#195</a> <span class="issue-title">Public nightly alpha builds</span></li><li><span class="issue-phase">Phase 10</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1503">#1503</a> <span class="issue-title">Licence: the generated header claims MIT OR Apache-2.0 but only MIT ships</span></li><li><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1395">#1395</a> <span class="issue-title">Format: enact the format freeze (schema guard at the freeze point, #795 follow-up)</span></li><li><span class="issue-phase">Phase 1</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/426">#426</a> <span class="issue-title">atan2 near-axis cutoff: find the recorder&#x27;s rule between ratio 3.5e-16 and ordinary vectors</span></li><li><span class="issue-phase">Phase 6</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/953">#953</a> <span class="issue-title">Decide: script error screen layout</span></li><li><span class="issue-phase">Phase 7</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/194">#194</a> <span class="issue-title">Discord server and bug channel</span></li></ul></section>
           <section class="dispatch-col" aria-labelledby="ready-title"><h3 id="ready-title">Ready to start</h3><ul class="issue-list"><li><span class="issue-phase">Phase 0</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/228">#228</a> <span class="issue-title">CI: run format wp7a_* tests on wasm32 again after WP11</span></li><li><span class="issue-phase">Phase 1</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1365">#1365</a> <span class="issue-title">Progress exporter: trace coverage per game</span></li><li><span class="issue-phase">Phase 10</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/68">#68</a> <span class="issue-title">Takedown page, contact and removal list</span></li><li><span class="issue-phase">Phase 10</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/69">#69</a> <span class="issue-title">Privacy page, account deletion and export</span></li><li><span class="issue-phase">Phase 10</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/71">#71</a> <span class="issue-title">Release builds for Windows and Linux</span></li><li><span class="issue-phase">Phase 10</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/74">#74</a> <span class="issue-title">Creator claim flow</span></li></ul></section>
         </div>
@@ -2198,7 +2199,7 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
           </section>
         </div>
         <div class="footer-bottom">
-          <span>Generated 2026-11-25 12:44:38 UTC · source gh</span>
+          <span>Generated 2026-11-25 12:54:16 UTC · source gh</span>
           <span>Static, self-contained page. No client-side API calls and no external requests. Fonts are local, credited OFL assets.</span>
         </div>
       </footer>
