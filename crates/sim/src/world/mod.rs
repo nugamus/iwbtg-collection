@@ -20,7 +20,7 @@ use crate::num::Real;
 use crate::output::OutputEvent;
 use crate::particles::{PartSystemId, Particles};
 use crate::rng::{Rng, RngStreams};
-use crate::room::RoomRequest;
+use crate::room::RoomRequests;
 use crate::rules::RunnerRules;
 use crate::save::SaveSlot;
 use crate::script::ScriptRuntime;
@@ -76,8 +76,11 @@ pub struct World {
     pub input: InputState,
     /// The eight views.
     pub views: [View; 8],
-    /// One pending room request; the last request wins (Inferred, R13).
-    pub pending: Option<RoomRequest>,
+    /// The room requests waiting for the room-change row, in raise order (Inferred, R13).
+    /// `RoomRules::nested_request` decides what is kept and when it runs: `LastWins` keeps at most
+    /// the request raised last (gm8), `Queue` runs them in raise order before the next tick, and
+    /// `QueueNextTick` runs one per following tick (#1294).
+    pub pending: RoomRequests,
     /// Instances a **persistent room** keeps while the player is away, restored on return.
     /// Distinct from [`Persistence::Run`] instances, which follow the room change, and
     /// from [`Persistence::Save`] save objects, which write the checkpoint.
@@ -155,7 +158,7 @@ impl World {
             streams: RngStreams::seeded(seed, crate::rules::rng::StreamLayout::Shared),
             input: InputState::default(),
             views: Default::default(),
-            pending: None,
+            pending: RoomRequests::default(),
             persistent_rooms: BTreeMap::new(),
             save: None,
             sound: SoundState::default(),

@@ -103,7 +103,7 @@ fn restart_does_nothing_in_an_excluded_role() {
     w.save = Some(slot(g.play));
     let kid = spawn(&g, &mut w, g.kid, 0.0, 0.0);
     let flow = with(&g, &mut w, |c| run_restart(c, kid).unwrap());
-    assert_eq!((flow, w.pending), (Flow::Continue, None));
+    assert_eq!((flow, w.pending.first()), (Flow::Continue, None));
 }
 
 #[test]
@@ -116,7 +116,7 @@ fn room_goto_saved_recreates_the_kid_and_drops_the_bow() {
     with(&g, &mut w, |c| run_restart(c, old).unwrap());
     // The ids destroyed this tick travel with the change: the restart does not create placed
     // instances with them again (#670).
-    match w.pending {
+    match w.pending.first() {
         Some(RoomRequest::GotoAfterRemovals { room, removed }) => {
             assert_eq!(room, g.boot);
             assert!(removed.contains(old) && removed.contains(bow), "{removed:?}");
@@ -149,7 +149,7 @@ fn showdown_load_never_restarts_the_game() {
     w.save = Some(slot(g.play));
     let old = spawn(&g, &mut w, g.kid, 5.0, 5.0);
     with(&g, &mut w, |c| run_restart(c, old).unwrap());
-    match w.pending {
+    match w.pending.first() {
         Some(RoomRequest::GotoAfterRemovals { room, removed }) => {
             assert_eq!(room, g.play);
             assert!(removed.contains(old), "{removed:?}");
@@ -172,7 +172,7 @@ fn recreate_in_place_puts_the_kid_at_the_saved_spot_now() {
     assert_eq!(kids.len(), 1);
     assert_eq!(w.room, g.play, "still in the current room");
     assert_eq!(w.get(kids[0]).unwrap().m.x(), r(49.0));
-    match w.pending {
+    match w.pending.first() {
         Some(RoomRequest::GotoAfterRemovals { room, removed }) => {
             assert_eq!(room, g.boot);
             assert!(removed.contains(old), "{removed:?}");
@@ -189,7 +189,7 @@ fn reset_deletes_the_marker_and_restarts_or_goes_to_the_boot_room() {
     let any = spawn(&g, &mut w, g.kid, 0.0, 0.0);
     with(&g, &mut w, |c| run_reset(c, any).unwrap());
     assert_eq!(
-        (w.pending, w.engine.run.boot_load),
+        (w.pending.first(), w.engine.run.boot_load),
         (Some(RoomRequest::GameRestart), None)
     );
 

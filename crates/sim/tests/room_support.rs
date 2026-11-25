@@ -114,7 +114,7 @@ impl RoomHost for Probe {
         let kid = ctx.def.engine_kind(EngineKind::Kid).expect("kid kind");
         let id = self.spawn(ctx, kid, slot.x, slot.y, SpawnInit::default())?;
         // A load may also request the saved room, as saveExe does.
-        ctx.w.pending = Some(RoomRequest::Goto(slot.room));
+        ctx.request_room(RoomRequest::Goto(slot.room));
         Ok(id)
     }
 }
@@ -317,7 +317,7 @@ pub(crate) fn looping(max: u8) -> (Result<(), SimError>, usize, World) {
     let mut host = Probe {
         react: Some(Box::new(move |_, ctx, _, _, ev| {
             if *ev == EventKind::RoomStart {
-                ctx.w.pending = Some(RoomRequest::Goto(lp));
+                ctx.request_room(RoomRequest::Goto(lp));
                 return Flow::AbortTick;
             }
             Flow::Continue

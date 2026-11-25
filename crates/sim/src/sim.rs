@@ -203,7 +203,7 @@ impl Sim {
                 self.rows_done = tick::run_rows(&mut ctx, input, &tick::Hooks::ENGINE).is_some();
             }
         }
-        self.rows_done && self.world.pending.is_some()
+        self.rows_done && !self.world.pending.is_empty()
     }
 
     /// Rows 15-16 of [`Sim::step`] (the room change, the sound tick, the tick count). Does nothing

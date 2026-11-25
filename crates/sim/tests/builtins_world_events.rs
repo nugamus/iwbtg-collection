@@ -27,13 +27,13 @@ fn world_key_press_runs_the_retry_when_the_model_says_so() {
     let (g, mut w, id) = world_game(Params::default(), |_| {});
     let flow = fire(&g, &mut w, id, &EventKind::KeyPress(Action::Restart));
     assert_eq!(
-        (flow, w.pending),
+        (flow, w.pending.first()),
         (Flow::AbortTick, Some(RoomRequest::GameRestart))
     );
-    w.pending = None;
+    w.pending.clear();
     let flow = fire(&g, &mut w, id, &EventKind::KeyPress(Action::Reset));
     assert_eq!(
-        (flow, w.pending),
+        (flow, w.pending.first()),
         (Flow::AbortTick, Some(RoomRequest::GameRestart))
     );
     // A game whose retry runs in Step ignores the key press event.
@@ -41,7 +41,7 @@ fn world_key_press_runs_the_retry_when_the_model_says_so() {
         d.restart.trigger = RestartTrigger::StepHeld
     });
     let flow = fire(&g, &mut w, id, &EventKind::KeyPress(Action::Restart));
-    assert_eq!((flow, w.pending), (Flow::Continue, None));
+    assert_eq!((flow, w.pending.first()), (Flow::Continue, None));
 }
 
 #[test]

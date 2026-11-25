@@ -17,6 +17,7 @@ use crate::num::Real;
 use crate::output::OutputEvent;
 use crate::room::RoomRequest;
 use crate::rules::TickRules;
+use crate::rules::room::NestedRequest;
 use crate::rules::tick::{ChangeKindProps, FirstRule};
 use crate::{builtins, script, timeline};
 
@@ -463,11 +464,22 @@ impl<'a> Ctx<'a> {
         flow
     }
 
-    /// GML `room_goto` and friends: deferred to tick row 15 (Confirmed); the last request wins
-    /// (R13). The phase running the handler applies R8 when the handler returns.
+    /// GML `room_goto` and friends: deferred to tick row 15 (Confirmed). Under
+    /// `RoomRules::nested_request = LastWins` the last request wins (R13); under `Queue` (and
+    /// `QueueNextTick`) every request is kept in raise order (#1294). The phase running the
+    /// handler applies R8 when the handler returns.
     pub fn request_room(&mut self, req: RoomRequest) {
-        self.w.pending = Some(req);
+        self.request(req);
         self.w.room_requests = self.w.room_requests.saturating_add(1);
+    }
+
+    /// Queues `req` under the profile's policy without counting it for R8 (room creation code's
+    /// `LoadGame`, which is not a handler).
+    pub(crate) fn request(&mut self, req: RoomRequest) {
+        match self.rules.room.nested_request {
+            NestedRequest::LastWins => self.w.pending.replace(req),
+            NestedRequest::Queue | NestedRequest::QueueNextTick => self.w.pending.push(req),
+        }
     }
 
     /// Queues an event for the client.
