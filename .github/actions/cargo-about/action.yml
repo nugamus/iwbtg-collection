@@ -1,0 +1,24 @@
+# Installs the pinned cargo-about release (#976). The prebuilt musl binary avoids compiling the
+# tool on every licenses job; the tarball is checked against the release's own SHA-256, like the
+# cargo-deny and wasm-bindgen actions.
+name: cargo-about
+description: Install the pinned cargo-about release
+runs:
+  using: composite
+  steps:
+    - name: Install cargo-about
+      shell: bash
+      env:
+        ABOUT_VERSION: 0.9.3
+      run: |
+        set -euo pipefail
+        name="cargo-about-${ABOUT_VERSION}-x86_64-unknown-linux-musl"
+        base="https://github.com/EmbarkStudios/cargo-about/releases/download/${ABOUT_VERSION}"
+        curl --fail --retry 3 --silent --show-error --location --output "$RUNNER_TEMP/$name.tar.gz" "$base/$name.tar.gz"
+        curl --fail --retry 3 --silent --show-error --location --output "$RUNNER_TEMP/$name.tar.gz.sha256" "$base/$name.tar.gz.sha256"
+        want=$(cut -d' ' -f1 "$RUNNER_TEMP/$name.tar.gz.sha256")
+        got=$(sha256sum "$RUNNER_TEMP/$name.tar.gz" | cut -d' ' -f1)
+        [ "$want" = "$got" ] || { echo "::error::checksum mismatch for $name.tar.gz"; exit 1; }
+        tar --extract --gzip --file "$RUNNER_TEMP/$name.tar.gz" --directory "$RUNNER_TEMP"
+        install --mode 755 "$RUNNER_TEMP/$name/cargo-about" "$HOME/.cargo/bin/"
+        cargo about --version

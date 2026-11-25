@@ -1,4 +1,6 @@
 # syntax=docker/dockerfile:1
+# SPDX-FileCopyrightText: 2026 Jonas Dahl
+# SPDX-License-Identifier: MIT
 #
 # Multi-stage build for iwbtg-server (docs/server.md, Deployment). The builder uses the
 # Rust version pinned in rust-toolchain.toml; the runtime carries only the binary, the CA

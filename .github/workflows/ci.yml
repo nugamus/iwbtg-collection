@@ -304,12 +304,31 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # The prebuilt cargo-about download plus a regeneration; reuse scans the whole checkout.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/cargo-deny
         with:
           command: check licenses
+      - run: rustup show
+      - name: Install reuse
+        timeout-minutes: 3
+        run: |
+          pipx install "reuse[charset-normalizer]==6.3.0"
+          # pipx writes the console script here; later steps need it on PATH.
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      # Every tracked file carries licence information, in REUSE.toml or an in-file or `.license` tag (#976).
+      - name: Check REUSE compliance
+        timeout-minutes: 3
+        run: reuse lint
+      - uses: ./.github/actions/cargo-about
+      # The committed list must match Cargo.lock; a dependency change regenerates it in its PR.
+      - name: THIRD_PARTY_LICENSES is current
+        timeout-minutes: 10
+        run: |
+          cargo about generate --locked --output-file THIRD_PARTY_LICENSES about.hbs
+          git diff --exit-code -- THIRD_PARTY_LICENSES
 
   # The one required check: green when every job above passed or was skipped for a docs-only change.
   ci-ok:
