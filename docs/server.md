@@ -191,7 +191,9 @@ Design:
 - `POST /auth/register` takes `{username, email?, password}` and answers `201 {id, username}`. The username is stored as typed plus its canonical form; the email is optional, lowercased and unique when present. A duplicate username and a duplicate email get the same `409` message, so registration does not say which one exists.
 - `POST /auth/login` takes `{login, password}`, where `login` is a username (any casing) or an email, and answers `200 {id, username}`. An unknown account and a wrong password get the same `401`; the unknown path still runs an Argon2id hash, so the timing does not tell them apart either.
 - Only the Argon2id PHC string (m=19456 KiB, t=2, p=1) is stored, never the password. Hashing runs on a blocking worker. Passwords must be 15 characters until a breached-password list exists (the documented 8 + breach branch).
-- These endpoints are JSON only and create no session; #157 adds sessions, cookies, CSRF and the server-rendered forms.
+- Sign-in creates a session (#157): 32 random bytes are the opaque token, only its SHA-256 is stored in `sessions`, and the row expires after 30 days. The web receives it in a `__Host-iwbtg_session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/`), so script cannot read it and a cross-site form cannot send it. Each sign-in inserts a new row; the JSON login sets the cookie too. The native bearer flow is #159.
+- The web forms are `GET /login` and `GET /register` (server-rendered HTML with `autocomplete` values and visible `:focus-visible` outlines), posting to the same paths. Each page sets a `__Host-iwbtg_csrf` cookie and embeds the same random token in a hidden field; a POST whose two halves disagree is `403` before any credential check (double submit). A form error re-renders the form with a fresh token; a successful sign-in shows the account.
+- Session lookup for protected endpoints arrives with the first consumer (#162).
 
 ## Risks
 
