@@ -6,8 +6,9 @@ name: CI
 # Every job sets `timeout-minutes` (#967): a wedged step fails and reports after minutes instead of
 # holding `ci-ok` and auto-merge for GitHub's 6 hour default. The native cap is 45 minutes: a full
 # Windows run measured 28m36s on a cold-ish cache (#1041, run 44531896479), and main also runs the
-# Rust-cache save there; the warm path is about 5.5 minutes. The three wasm/browser caps stay 25
-# (slowest wasm cold measurement 11m33s, #961); everything else is 5 to 15.
+# Rust-cache save there; the warm path is about 5.5 minutes. The two wasm caps stay 25 (slowest
+# wasm cold measurement 11m33s, #961); the web cap is 60 because the cold release build and
+# `wasm-opt -Oz` add up (#1131); everything else is 5 to 15.
 on:
   pull_request:
   merge_group:
@@ -181,8 +182,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
-    # The cold release wasm build is the long part; the same bound as the other wasm jobs.
-    timeout-minutes: 25
+    # The cold release wasm build is the long part. `wasm-opt -Oz` adds its own pass (measured
+    # 12m34s for 125.6 MB on the dev PC, #1131); a slow two-core runner needs the larger cap.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
       - run: rustup show
@@ -191,11 +193,20 @@ jobs:
           # Only main writes the cache: PR runs restore it and skip the slow save.
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: ./.github/actions/wasm-bindgen
+      - uses: ./.github/actions/wasm-opt
       - name: Build the browser bundle
         timeout-minutes: 20
         run: |
           cargo build -p iwbtg-client --release --target wasm32-unknown-unknown --locked
           wasm-bindgen --target web --no-typescript --out-dir crates/client/web/pkg target/wasm32-unknown-unknown/release/iwbtg-client.wasm
+      # Shrink the wasm-bindgen output without changing the cargo profile or the native release
+      # build (#1131). Measured 125,551,438 -> 50,336,719 bytes raw and 20,168,221 -> 15,456,322
+      # bytes gzip on 2026-11-25.
+      - name: Optimize the wasm
+        timeout-minutes: 40
+        run: |
+          wasm-opt -Oz crates/client/web/pkg/iwbtg-client_bg.wasm -o crates/client/web/pkg/iwbtg-client_bg.wasm.opt
+          mv crates/client/web/pkg/iwbtg-client_bg.wasm.opt crates/client/web/pkg/iwbtg-client_bg.wasm
       # The budget is the compressed wasm a server sends; scripts/check_web_size.py fails on growth.
       - name: Check the compressed wasm size
         timeout-minutes: 2
