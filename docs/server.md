@@ -194,6 +194,7 @@ Design:
 - Sign-in creates a session (#157): 32 random bytes are the opaque token, only its SHA-256 is stored in `sessions`, and the row expires after 30 days. The web receives it in a `__Host-iwbtg_session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/`), so script cannot read it and a cross-site form cannot send it. Each sign-in inserts a new row; the JSON login sets the cookie too. The native bearer flow is #159.
 - The web forms are `GET /login` and `GET /register` (server-rendered HTML with `autocomplete` values and visible `:focus-visible` outlines), posting to the same paths. Each page sets a `__Host-iwbtg_csrf` cookie and embeds the same random token in a hidden field; a POST whose two halves disagree is `403` before any credential check (double submit). A form error re-renders the form with a fresh token; a successful sign-in shows the account.
 - Session lookup for protected endpoints arrives with the first consumer (#162).
+- Argon2 work in flight is bounded (#1505): at most 4 hashes run at once (registration, sign-in verification and the unknown-account burn all take a permit). A request that cannot get a permit within 2 seconds gets `429` with `Retry-After`. This is deliberately separate from rate limiting (#161): that one caps requests per time window, this one caps memory in use. The arithmetic is 4 × 19 MiB = 76 MiB of Argon2 working memory, plus the server baseline and the largest `/files` buffer, under the 512 MiB container limit.
 
 ## Risks
 

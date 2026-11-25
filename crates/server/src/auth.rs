@@ -29,6 +29,9 @@
 //! the same 401 for an unknown account and a wrong password, and hashes against a fixed salt in
 //! the unknown case so the response time does not reveal which happened.
 
+use std::sync::LazyLock;
+use std::time::Duration;
+
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::{Algorithm, Argon2, Params, Version};
 use axum::Form;
@@ -40,6 +43,8 @@ use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::SqlitePool;
+use tokio::sync::{Semaphore, SemaphorePermit};
+use tokio::time::timeout;
 
 use crate::AppState;
 
@@ -69,6 +74,20 @@ const SESSION_MAX_AGE_SECONDS: u64 = 30 * 24 * 60 * 60;
 
 /// Shown when the hidden token and the cookie disagree, or the cookie is missing.
 const CSRF_ERROR: &str = "Your form expired. Please try again.";
+
+/// At most this many Argon2 operations run at once. Each costs m=19456 KiB (~19 MiB) of working
+/// memory, so 4 x 19 MiB = 76 MiB; with the server baseline and the largest file buffer that
+/// stays under the 512 MiB container limit. Raising this means redoing that arithmetic and the
+/// tests below (#1505).
+const MAX_CONCURRENT_HASHES: usize = 4;
+
+/// How long a request may wait for a hashing permit before it gets 429. Rate limiting (#161) caps
+/// the request rate; this caps the work in flight, and neither substitutes for the other.
+const HASH_PERMIT_WAIT: Duration = Duration::from_secs(2);
+
+/// The one process-wide bound around Argon2: registration, verification, and the unknown-account
+/// timing burn all take a permit. `spawn_blocking` alone would let a burst start unlimited hashes.
+static HASH_PERMITS: LazyLock<Semaphore> = LazyLock::new(|| Semaphore::new(MAX_CONCURRENT_HASHES));
 
 #[derive(Deserialize)]
 pub struct RegisterRequest {
@@ -114,13 +133,15 @@ struct ErrorBody {
     error: &'static str,
 }
 
-/// The four answers these handlers give. Every failure is a JSON `{"error": ...}`.
+/// The answers these handlers give. Every failure is a JSON `{"error": ...}`.
 #[derive(Debug)]
 pub(crate) enum AuthError {
     BadRequest(&'static str),
     Conflict,
     Unauthorized,
     Internal,
+    /// The Argon2 permit could not be had within [`HASH_PERMIT_WAIT`]; the value is Retry-After.
+    TooManyRequests(u64),
 }
 
 impl AuthError {
@@ -130,6 +151,7 @@ impl AuthError {
             Self::Conflict => StatusCode::CONFLICT,
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::TooManyRequests(_) => StatusCode::TOO_MANY_REQUESTS,
         }
     }
 
@@ -139,17 +161,44 @@ impl AuthError {
             Self::Conflict => "username or email is already registered",
             Self::Unauthorized => "invalid username or password",
             Self::Internal => "the account could not be processed",
+            Self::TooManyRequests(_) => "too many sign-ins at once, try again shortly",
+        }
+    }
+
+    fn retry_after(&self) -> Option<u64> {
+        match self {
+            Self::TooManyRequests(seconds) => Some(*seconds),
+            _ => None,
         }
     }
 }
 
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
+        let retry_after = self.retry_after();
         let body = Json(ErrorBody {
             error: self.message(),
         });
-        (self.status(), body).into_response()
+        let mut response = (self.status(), body).into_response();
+        if let Some(seconds) = retry_after {
+            response.headers_mut().insert(
+                header::RETRY_AFTER,
+                HeaderValue::from_str(&seconds.to_string()).expect("ASCII seconds"),
+            );
+        }
+        response
     }
+}
+
+/// Copies `Retry-After` onto an HTML response rendered from an error.
+fn with_retry_after(mut response: Response, error: &AuthError) -> Response {
+    if let Some(seconds) = error.retry_after() {
+        response.headers_mut().insert(
+            header::RETRY_AFTER,
+            HeaderValue::from_str(&seconds.to_string()).expect("ASCII seconds"),
+        );
+    }
+    response
 }
 
 /// `POST /auth/register` (docs/server.md, Accounts and sign-in).
@@ -323,11 +372,12 @@ pub(crate) async fn register_form(
         ),
         Err(error) => {
             let token = random_hex(32);
-            html_page(
+            let response = html_page(
                 error.status(),
                 render_register(Some(error.message()), &token),
                 Some(csrf_cookie(&token)),
-            )
+            );
+            with_retry_after(response, &error)
         }
     }
 }
@@ -349,11 +399,12 @@ pub(crate) async fn login_form(
         ),
         Err(error) => {
             let token = random_hex(32);
-            html_page(
+            let response = html_page(
                 error.status(),
                 render_login(Some(error.message()), &token),
                 Some(csrf_cookie(&token)),
-            )
+            );
+            with_retry_after(response, &error)
         }
     }
 }
@@ -613,7 +664,29 @@ fn burn_password_time(password: &str) {
     }
 }
 
+/// Waits up to `wait` for one permit. A closed semaphore is a bug (it is never closed); a wait
+/// that times out means the bound is saturated, so the request gets 429 instead of queuing.
+async fn acquire_hash_permit(
+    semaphore: &Semaphore,
+    wait: Duration,
+) -> Result<SemaphorePermit<'_>, AuthError> {
+    match timeout(wait, semaphore.acquire()).await {
+        Ok(Ok(permit)) => Ok(permit),
+        Ok(Err(_)) => {
+            tracing::error!("the Argon2 permit semaphore was closed");
+            Err(AuthError::Internal)
+        }
+        Err(_) => Err(AuthError::TooManyRequests(wait.as_secs().max(1))),
+    }
+}
+
+async fn hash_permit() -> Result<SemaphorePermit<'static>, AuthError> {
+    acquire_hash_permit(&HASH_PERMITS, HASH_PERMIT_WAIT).await
+}
+
 async fn hash_off_thread(password: String) -> Result<String, AuthError> {
+    // The permit is held across the blocking work: that is the whole point of the bound.
+    let _permit = hash_permit().await?;
     tokio::task::spawn_blocking(move || hash_password(&password))
         .await
         .map_err(|err| {
@@ -627,6 +700,8 @@ async fn hash_off_thread(password: String) -> Result<String, AuthError> {
 }
 
 async fn verify_off_thread(password: String, password_hash: Option<String>) -> Result<bool, AuthError> {
+    // The unknown-account burn is an Argon2 hash too, so it takes a permit as well.
+    let _permit = hash_permit().await?;
     tokio::task::spawn_blocking(move || match password_hash {
         Some(password_hash) => verify_password(&password, &password_hash),
         None => {
@@ -711,5 +786,64 @@ mod tests {
         assert!(validate_password("fourteen chars").is_err());
         assert!(validate_password("fifteen chars!!").is_ok());
         assert!(validate_password(&"x".repeat(1025)).is_err());
+    }
+
+    #[tokio::test]
+    async fn a_full_hash_semaphore_answers_429_after_the_wait() {
+        use std::sync::Arc;
+        use std::time::Duration;
+
+        use super::{AuthError, acquire_hash_permit};
+        use tokio::sync::Semaphore;
+
+        let semaphore = Arc::new(Semaphore::new(1));
+        let held = semaphore.clone().acquire_owned().await.expect("a permit");
+        let result = acquire_hash_permit(&semaphore, Duration::from_millis(20)).await;
+        assert!(
+            matches!(result, Err(AuthError::TooManyRequests(_))),
+            "a full semaphore did not answer 429"
+        );
+
+        drop(held);
+        assert!(
+            acquire_hash_permit(&semaphore, Duration::from_millis(20))
+                .await
+                .is_ok(),
+            "the permit was not released"
+        );
+    }
+
+    /// The bound is real: with two permits, eight tasks never see more than two inside.
+    #[tokio::test]
+    async fn the_semaphore_bounds_concurrent_hashes() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::time::Duration;
+
+        use super::acquire_hash_permit;
+        use tokio::sync::Semaphore;
+
+        let semaphore = Arc::new(Semaphore::new(2));
+        let current = Arc::new(AtomicUsize::new(0));
+        let peak = Arc::new(AtomicUsize::new(0));
+        let mut tasks = Vec::new();
+        for _ in 0..8 {
+            let semaphore = semaphore.clone();
+            let current = current.clone();
+            let peak = peak.clone();
+            tasks.push(tokio::spawn(async move {
+                let _permit = acquire_hash_permit(&semaphore, Duration::from_secs(5))
+                    .await
+                    .expect("a permit within the bound");
+                let now = current.fetch_add(1, Ordering::SeqCst) + 1;
+                peak.fetch_max(now, Ordering::SeqCst);
+                tokio::time::sleep(Duration::from_millis(20)).await;
+                current.fetch_sub(1, Ordering::SeqCst);
+            }));
+        }
+        for task in tasks {
+            task.await.expect("task");
+        }
+        assert_eq!(peak.load(Ordering::SeqCst), 2, "the bound was not respected");
     }
 }

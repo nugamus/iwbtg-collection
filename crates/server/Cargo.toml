@@ -16,7 +16,15 @@ path = "src/main.rs"
 [dependencies]
 # The HTTP surface (docs/server.md, Components): axum 0.8 on tokio.
 axum = "0.8"
-tokio = { version = "1.54.1", features = ["macros", "net", "fs", "io-util", "time", "rt-multi-thread"] }
+tokio = { version = "1.54.1", features = [
+  "macros",
+  "net",
+  "fs",
+  "io-util",
+  "time",
+  "sync",
+  "rt-multi-thread",
+] }
 # --bind; the `env` feature adds IWBTG_BIND.
 clap = { workspace = true, features = ["env"] }
 # JSON requests and responses for the auth endpoints (docs/server.md, Accounts and sign-in).

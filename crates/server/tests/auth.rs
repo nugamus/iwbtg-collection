@@ -485,3 +485,58 @@ async fn a_form_error_re_renders_the_form_with_the_message() {
     assert!(html.contains("name=\"csrf\""));
     assert_eq!(count(&pool, "SELECT COUNT(*) FROM accounts").await, 0);
 }
+
+/// The process-wide Argon2 bound (#1505): a burst of registrations either gets a permit or a
+/// 429, never an unbounded pile of blocking hashes and never a 500.
+#[tokio::test]
+async fn a_registration_burst_is_bounded_and_never_500s() {
+    let (_dir, pool) = pool("hash-bound").await;
+    let router = iwbtg_server::app(pool.clone(), None);
+
+    let mut tasks = Vec::new();
+    for index in 0..8 {
+        let router = router.clone();
+        let body = json!({
+            "username": format!("Burst {index}"),
+            "password": PASSWORD,
+        })
+        .to_string();
+        tasks.push(tokio::spawn(async move {
+            let response = router
+                .oneshot(
+                    Request::post("/auth/register")
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .body(Body::from(body))
+                        .unwrap(),
+                )
+                .await
+                .expect("router must answer");
+            response.status()
+        }));
+    }
+
+    let mut statuses = Vec::new();
+    for task in tasks {
+        statuses.push(task.await.expect("request task"));
+    }
+    assert!(
+        statuses
+            .iter()
+            .all(|status| *status == StatusCode::CREATED || *status == StatusCode::TOO_MANY_REQUESTS),
+        "unexpected answers to the burst: {statuses:?}"
+    );
+    let created = statuses
+        .iter()
+        .filter(|status| **status == StatusCode::CREATED)
+        .count() as i64;
+    assert!(created > 0, "no registration got through: {statuses:?}");
+    assert_eq!(
+        count(
+            &pool,
+            "SELECT COUNT(*) FROM accounts WHERE username LIKE 'Burst %'"
+        )
+        .await,
+        created,
+        "a 429 or a failure still created an account"
+    );
+}
