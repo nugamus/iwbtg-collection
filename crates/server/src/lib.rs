@@ -8,6 +8,7 @@ pub mod auth;
 pub mod catalog;
 pub mod db;
 pub mod health;
+pub mod removal;
 
 use std::path::PathBuf;
 
@@ -39,6 +40,7 @@ pub fn app(pool: SqlitePool, catalog_dir: Option<PathBuf>) -> Router {
         .route("/files/{name}", get(catalog::file))
         .route("/auth/register", post(auth::register))
         .route("/auth/login", post(auth::login))
+        .route("/removals.json", get(removal::removals))
         .with_state(AppState { pool, catalog_dir })
 }
 

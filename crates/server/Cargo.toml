@@ -35,6 +35,9 @@ sqlx = { version = "0.9", default-features = false, features = [
   "macros",
   "migrate",
 ] }
+# The signed removal list is strict JSON (docs/server.md, Removal list; #808): serde above parses
+# the envelope, serde_json rejects anything malformed before the file is served.
+serde_json = { workspace = true }
 # JSON logs to stdout (docs/server.md, Logs and monitoring).
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.23", features = ["json"] }
