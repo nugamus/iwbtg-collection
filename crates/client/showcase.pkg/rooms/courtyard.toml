@@ -11,11 +11,11 @@ backgrounds = [
 ]
 instances = [
   { kind = "kid_start", x = 32, y = 512 },
-  { kind = "block", x = 0, y = 160, run = [1, 14], visible = false },
-  { kind = "block", x = 768, y = 160, run = [1, 14], visible = false },
-  { kind = "block", x = 480, y = 416, run = [2, 6], visible = false },
-  { kind = "block", x = 32, y = 544, run = [14, 2], visible = false },
-  { kind = "block", x = 544, y = 544, run = [7, 2], visible = false },
+  { kind = "block", x = 0, y = 160, visible = false, run = [1, 14] },
+  { kind = "block", x = 768, y = 160, visible = false, run = [1, 14] },
+  { kind = "block", x = 480, y = 416, visible = false, run = [2, 6] },
+  { kind = "block", x = 32, y = 544, visible = false, run = [14, 2] },
+  { kind = "block", x = 544, y = 544, visible = false, run = [7, 2] },
   { kind = "music", x = 0, y = 0, track = "night", mode = "every_step_if_not_playing" },
   { kind = "@fireflies", x = 0, y = 0 },
   { kind = "sign", x = 128, y = 512, mode = "while_overlapping", text = "Welcome to the IWBTG Collection showcase! Arrows move, Shift jumps (press it again in the air for a double jump), Z shoots. Shoot the save stone or press S on it to save; R takes you back to your save." },
