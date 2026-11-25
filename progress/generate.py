@@ -44,7 +44,7 @@ SCRIPT_API_DOC = os.path.join(ROOT, "docs", "format", "script-api.md")
 REPO = "nugamus/iwbtg-collection"
 GAMES_REPO = "nugamus/iwbtg-collection-games"
 SIZE_POINTS = {"size:S": 1, "size:M": 3, "size:L": 8}
-FOLLOWUPS = {"census": 1364, "traces": 1365, "frontmatter": 1367}
+FOLLOWUPS = {"census": 1364, "traces": 1365}
 PROJECT_STATUS = {
     "label": "Pre-release",
     "detail": "No release builds yet. The public alpha is planned for phase 7 (Online).",
@@ -215,7 +215,16 @@ def load_games():
         builtin = as_int(ex.get("builtin_instances"))
         in_package = as_int(ex.get("objects_in_package"))
         unmapped = as_int(ex.get("objects_unmapped"))
-        mapped = in_package - unmapped if in_package is not None and unmapped is not None else None
+        total_objects = as_int(fm.get("objects_total"))
+        if total_objects is None:
+            total_objects = in_package
+        specced = as_int(fm.get("objects_specced"))
+        if specced is None:
+            specced = (in_package - unmapped
+                       if in_package is not None and unmapped is not None else None)
+        scripted = as_int(fm.get("objects_scripted"))
+        if scripted is None:
+            scripted = unmapped
         case_dir = case_dir_for(slug, case_dirs)
         rec = {
             "id": fm.get("id") or slug,
@@ -243,11 +252,14 @@ def load_games():
             "trace_objects": ex.get("trace_objects") or [],
             "trace_cases": trace_cases.get(case_dir) if case_dir else None,
             "trace_case_dir": case_dir,
-            "objects_in_package": in_package,
-            "objects_unmapped": unmapped,
-            "objects_mapped": mapped,
-            "objects_mapped_pct": (round(100.0 * mapped / in_package, 1)
-                                   if mapped is not None and in_package else None),
+            "objects_in_package": total_objects,
+            "objects_unmapped": scripted,
+            "objects_mapped": specced,
+            "objects_scripted": scripted,
+            "objects_mapped_pct": (round(100.0 * specced / total_objects, 1)
+                                   if specced is not None and total_objects else None),
+            "objects_scripted_pct": (round(100.0 * scripted / total_objects, 1)
+                                     if scripted is not None and total_objects else None),
             "check_errors": as_int(ex.get("check_errors")),
             "check_warnings": as_int(ex.get("check_warnings")),
             "port": None,
@@ -423,6 +435,7 @@ def compute_overall(games):
     packages = [g for g in games
                 if g.get("objects_mapped") is not None and g.get("objects_in_package")]
     package_mapped = sum(g["objects_mapped"] for g in packages)
+    package_scripted = sum(g.get("objects_scripted") or 0 for g in packages)
     package_objects = sum(g["objects_in_package"] for g in packages)
     return {
         "placed_instances": placed,
@@ -445,9 +458,12 @@ def compute_overall(games):
         "trace_cases_pct": round(100.0 * trace_ok / trace_recorded, 1) if trace_recorded else None,
         "games_with_cases": len(cases),
         "package_objects_mapped": package_mapped if packages else None,
+        "package_objects_scripted": package_scripted if packages else None,
         "package_objects": package_objects if packages else None,
         "package_mapped_pct": (round(100.0 * package_mapped / package_objects, 1)
                                if package_objects else None),
+        "package_scripted_pct": (round(100.0 * package_scripted / package_objects, 1)
+                                 if package_objects else None),
         "games_with_package": len(packages),
     }
 
@@ -527,6 +543,7 @@ def snapshot(data, at):
         "trace_cases_ok": ov["trace_cases_ok"],
         "trace_cases_recorded": ov["trace_cases_recorded"],
         "package_mapped_pct": ov["package_mapped_pct"],
+        "package_scripted_pct": ov["package_scripted_pct"],
         "open_issues": a["totals"]["open"],
         "closed_issues": a["totals"]["closed"],
         "issue_pct_closed": a["totals"]["pct_closed"],
@@ -542,7 +559,8 @@ def maybe_history(data, at):
     snap = snapshot(data, at)
     keep = ("builtin_pct", "script_pct", "placed_instances", "traces_recorded",
             "objects_exercised", "trace_cases_ok", "trace_cases_recorded",
-            "package_mapped_pct", "open_issues", "closed_issues", "issue_pct_closed",
+            "package_mapped_pct", "package_scripted_pct", "open_issues", "closed_issues",
+            "issue_pct_closed",
             "size_points")
     if hist and all(hist[-1].get(k) == snap.get(k) for k in keep) and hist[-1]["at"][:10] == at[:10]:
         return hist
@@ -631,12 +649,18 @@ def trace_bar(game):
 
 def package_bar(game):
     if game.get("objects_in_package") is None or game.get("objects_mapped") is None:
-        return impl_bar("Package objects", None, "", "no converter report", "package")
+        return impl_bar("Mapped objects", None, "", "no converter report", "package")
     value = f'{game["objects_mapped"]} / {game["objects_in_package"]} mapped'
-    if game.get("objects_unmapped"):
-        value += f' · {game["objects_unmapped"]} unmapped'
-    return impl_bar("Package objects", game.get("objects_mapped_pct"), value,
+    return impl_bar("Mapped objects", game.get("objects_mapped_pct"), value,
                     tone="package")
+
+
+def scripted_bar(game):
+    if game.get("objects_in_package") is None or game.get("objects_scripted") is None:
+        return impl_bar("Scripted objects", None, "", "no converter report", "scripted")
+    value = f'{game["objects_scripted"]} / {game["objects_in_package"]} scripted'
+    return impl_bar("Scripted objects", game.get("objects_scripted_pct"), value,
+                    tone="scripted")
 
 
 def api_surface(api):
@@ -681,9 +705,10 @@ def implementation_summary(ov):
     if ov.get("package_objects"):
         packages = (f'across games with a package, '
                     f'{fmt(ov.get("package_objects_mapped") or 0)} of '
-                    f'{fmt(ov["package_objects"])} objects are mapped')
+                    f'{fmt(ov["package_objects"])} objects are mapped and '
+                    f'{fmt(ov.get("package_objects_scripted") or 0)} are scripted')
     else:
-        packages = "package mapping is not measured yet"
+        packages = "package object mapping is not measured yet"
     return f'{cases}; {packages}.'
 
 
@@ -717,10 +742,13 @@ def coverage_rows(games, exporter_at):
         if g.get("objects_mapped") is not None and g.get("objects_in_package"):
             package_fact = (f'<b>{g["objects_mapped"]} / {g["objects_in_package"]}</b> '
                             f'mapped ({g["objects_mapped_pct"]:.1f}%)')
-            if g.get("objects_unmapped"):
-                package_fact += f' · {g["objects_unmapped"]} unmapped'
         else:
             package_fact = '<span class="missing">not measured yet</span> · no converter report'
+        if g.get("objects_scripted") is not None and g.get("objects_in_package"):
+            scripted_fact = (f'<b>{g["objects_scripted"]} / {g["objects_in_package"]}</b> '
+                             f'scripted ({g["objects_scripted_pct"]:.1f}%)')
+        else:
+            scripted_fact = '<span class="missing">not measured yet</span> · no converter report'
         if g.get("check_errors") is not None:
             converted = ("converted" if g.get("converted") is True
                          else "not converted" if g.get("converted") is False
@@ -800,6 +828,7 @@ def coverage_rows(games, exporter_at):
               <span class="impl-bars">
                 {trace_bar(g)}
                 {package_bar(g)}
+                {scripted_bar(g)}
               </span>
               {row_progress}
             </summary>
@@ -813,13 +842,13 @@ def coverage_rows(games, exporter_at):
                 <div><dt>Recorded traces</dt><dd><b>{traces}</b></dd></div>
                 <div><dt>Objects exercised</dt><dd><b>{exercised}</b></dd></div>
                 <div><dt>Trace cases</dt><dd>{trace_fact}{case_source}</dd></div>
-                <div><dt>Package objects</dt><dd>{package_fact}</dd></div>
+                <div><dt>Mapped objects</dt><dd>{package_fact}</dd></div>
+                <div><dt>Scripted objects</dt><dd>{scripted_fact}</dd></div>
                 <div><dt>Converter check</dt><dd>{check_fact}</dd></div>
-                <div><dt>Scripted object types</dt><dd><span class="missing">not measured yet</span> · <a href="https://github.com/{REPO}/issues/{FOLLOWUPS['frontmatter']}">#{FOLLOWUPS['frontmatter']}</a></dd></div>
                 <div><dt>Port</dt><dd>{port_detail}</dd></div>
               </dl>
-              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Package objects</b> counts objects mapped over objects in the converted package. Neither is a completion score. Built-in coverage and script share are composition shares of all placed instances.</p>
-              <p class="game-source">Package counts are the committed exporter snapshot of <b>{exporter_at}</b>; regenerating it needs the research checkout. Scripted object types stay <span class="missing">not measured yet</span> until the per-game front-matter is filled.</p>
+              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Mapped objects</b> and <b>scripted objects</b> partition the converted package: mapped means an object resolves to a built-in behavior spec, scripted means the package writes it as a script. They are implementation counts, not completion scores. Built-in coverage and script share are composition shares of all placed instances.</p>
+              <p class="game-source">Mapped and scripted counts are the committed exporter snapshot of <b>{exporter_at}</b>; regenerating it needs the research checkout.</p>
               <p class="game-links"><a href="{source}">Game page</a>{port_link}</p>
             </div>
           </details>
@@ -932,7 +961,12 @@ def coverage_history(hist):
         trace = (f'{fmt(h.get("trace_cases_ok"))} / {fmt(h.get("trace_cases_recorded"))}'
                  if h.get("trace_cases_recorded") is not None
                  else '<span class="missing">not measured yet</span>')
-        package = pctf(h.get("package_mapped_pct")) if h.get("package_mapped_pct") is not None else '<span class="missing">not measured yet</span>'
+        if h.get("package_mapped_pct") is not None:
+            package = f'{pctf(h.get("package_mapped_pct"))} mapped'
+            if h.get("package_scripted_pct") is not None:
+                package += f' · {pctf(h.get("package_scripted_pct"))} scripted'
+        else:
+            package = '<span class="missing">not measured yet</span>'
         rows.append(f"""
           <tr>
             <th scope="row"><time datetime="{esc(h.get('at'))}">{esc(at)}</time></th>
@@ -990,10 +1024,11 @@ def render(data, hist):
         "__COVERAGE_ROWS__": coverage_rows(data["games"], exporter_label(data)),
         "__API_SURFACE__": api_surface(data.get("script_api") or {}),
         "__EXPORTER_DATE__": esc(exporter_label(data)),
-        "__PACKAGE_HEAD__": (f'{fmt(ov["package_objects_mapped"])} / '
-                             f'{fmt(ov["package_objects"])} package objects mapped'
+        "__PACKAGE_HEAD__": (f'{fmt(ov["package_objects_mapped"])} mapped · '
+                             f'{fmt(ov.get("package_objects_scripted") or 0)} scripted '
+                             f'of {fmt(ov["package_objects"])} package objects'
                              if ov.get("package_objects") else
-                             "package mapping not measured yet"),
+                             "package object mapping not measured yet"),
         "__IMPLEMENTATION_SUMMARY__": implementation_summary(ov),
         "__PHASE_ROWS__": phase_rows(phases),
         "__AREA_BARS__": area_bars(a["area_open"]),
@@ -1017,7 +1052,6 @@ def render(data, hist):
         "__POINTS__": str(points), "__OPEN_PRS__": str(a["open_prs"]),
         "__PROCESS__": chips,
         "__CENSUS__": str(FOLLOWUPS["census"]), "__TRACEFU__": str(FOLLOWUPS["traces"]),
-        "__FRONTMATTER__": str(FOLLOWUPS["frontmatter"]),
     }
     page = TEMPLATE
     for key, value in replacements.items():
@@ -1203,14 +1237,15 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:clamp(44px,5.2vw,78px);li
 .row-progress{grid-column:1/-1;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px 12px;align-items:center;margin-top:8px}
 .row-progress-label{font-size:11px;line-height:1.3;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:500}
 .row-progress-state{font-size:11.5px;line-height:1.4;color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap}
-.impl-bars{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 24px;margin-top:10px}
+.impl-bars{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 24px;margin-top:10px}
 .impl-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;align-items:baseline;min-width:0}
 .impl-label{grid-column:1;font-size:11px;line-height:1.3;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:500;white-space:nowrap}
 .impl-track{grid-column:1/-1;grid-row:2;display:block;height:8px;min-width:40px;margin-top:2px;background:var(--track);border:1px solid var(--rule);overflow:hidden}
 .impl-track>span{display:block;height:100%;background:var(--graphite)}
 .impl-row.package .impl-track>span{background:var(--ink-2)}
+.impl-row.scripted .impl-track>span{background:var(--cherry)}
 .impl-track.is-missing{border-color:var(--rule-strong)}
-.impl-value{grid-column:2;font-size:11.5px;line-height:1.35;color:var(--ink-2);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.impl-value{grid-column:2;font-size:11.5px;line-height:1.35;color:var(--ink-2);font-variant-numeric:tabular-nums;text-align:right;white-space:normal}
 .impl-value small{display:inline;margin-left:6px;font-size:11px;color:var(--muted)}
 .impl-value.is-missing{color:var(--muted);white-space:normal}
 .fact-source{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospace;font-size:11px;color:var(--muted)}
@@ -1382,6 +1417,7 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
   .game-toggle{position:absolute;right:0;top:16px}
   .metric-label{position:static!important;width:auto!important;height:auto!important;padding:0!important;margin:0 0 2px!important;overflow:visible!important;clip:auto!important;white-space:normal!important;border:0!important;display:block;font-size:11px;line-height:1.3;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:500}
   .game-facts{grid-template-columns:1fr 1fr}
+  .impl-bars{grid-template-columns:1fr}
   .game-summary:hover{background:transparent}
 }
 @media (max-width:760px){
@@ -1545,7 +1581,7 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
       <section class="section" id="coverage" aria-labelledby="coverage-title">
         <div class="section-head">
           <h2 id="coverage-title">Coverage</h2>
-          <p>What is built-in, what is game-specific, and what evidence exists. Each game row carries two repo-derived implementation bars — <b>trace cases passing</b> and <b>package objects mapped</b> — plus its port checklist. The menu leads with each game's <b>game-specific work</b> and keeps built-in coverage as composition, not completion. Passing-trace coverage of individual objects is still not measured yet; it needs the trace runner (<a href="https://github.com/nugamus/iwbtg-collection/issues/__TRACEFU__">#__TRACEFU__</a>).</p>
+          <p>What is built-in, what is game-specific, and what evidence exists. Each game row carries three repo-derived implementation bars — <b>trace cases passing</b>, <b>mapped objects</b> and <b>scripted objects</b> — plus its port checklist. The menu leads with each game's <b>game-specific work</b> and keeps built-in coverage as composition, not completion. Passing-trace coverage of individual objects is still not measured yet; it needs the trace runner (<a href="https://github.com/nugamus/iwbtg-collection/issues/__TRACEFU__">#__TRACEFU__</a>).</p>
         </div>
         <section class="composition" aria-label="Composition of placed instances">
           <div class="composition-head">
@@ -1565,7 +1601,7 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
             <span class="reg-label">Implementation measures</span>
             <span class="composition-figure">__PACKAGE_HEAD__</span>
           </div>
-          <p class="api-note">Each game row's <b>Trace cases</b> bar is OK cases over committed cases in <code>crates/tools/cases/</code> and <code>crates/tools/fidelity-baseline.txt</code>. Its <b>Package objects</b> bar is mapped objects over objects in the converted package. Package data is the committed exporter snapshot of <b>__EXPORTER_DATE__</b>: <code>progress/exporter.json</code> is generated in the research environment and is not regenerated here. __IMPLEMENTATION_SUMMARY__</p>
+          <p class="api-note">Each game row's <b>Trace cases</b> bar is OK cases over committed cases in <code>crates/tools/cases/</code> and <code>crates/tools/fidelity-baseline.txt</code>. Its <b>Mapped objects</b> and <b>Scripted objects</b> bars partition the converted package: mapped resolves to a built-in behavior spec, scripted is written by the package as a script. Package data is the committed exporter snapshot of <b>__EXPORTER_DATE__</b>: <code>progress/exporter.json</code> is generated in the research environment and is not regenerated here. __IMPLEMENTATION_SUMMARY__</p>
           __API_SURFACE__
         </section>
         <noscript><p class="noscript">Filtering and the theme choice need JavaScript. Every game, figure and note in this register is still present and readable below.</p></noscript>
@@ -1594,7 +1630,7 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
           <span>Game</span><span>Game-specific work</span><span>Evidence</span><span>Port</span><span>Composition</span><span></span>
         </div>
         <ul class="game-menu" id="games">__COVERAGE_ROWS__</ul>
-        <p class="source-note">Placed instances and built-in coverage: <code>specs/mechanics/coverage.md</code> (SCAN, 2026-10-24). Custom objects: <code>shortlist.md</code>. Traces and exercised objects: the recorded CSVs under <code>specs/engines/gm8/traces/&lt;slug&gt;/</code>. Trace cases: <code>crates/tools/cases/</code> and <code>crates/tools/fidelity-baseline.txt</code>. Package objects: <code>progress/exporter.json</code> (snapshot of __EXPORTER_DATE__). <code>progress/export_research.py</code> regenerates the research-derived counts.</p>
+        <p class="source-note">Placed instances and built-in coverage: <code>specs/mechanics/coverage.md</code> (SCAN, 2026-10-24). Custom objects: <code>shortlist.md</code>. Traces and exercised objects: the recorded CSVs under <code>specs/engines/gm8/traces/&lt;slug&gt;/</code>. Trace cases: <code>crates/tools/cases/</code> and <code>crates/tools/fidelity-baseline.txt</code>. Mapped and scripted objects: <code>progress/exporter.json</code> (snapshot of __EXPORTER_DATE__) and the <code>docs/games</code> front-matter. <code>progress/export_research.py</code> regenerates the research-derived counts.</p>
         <details class="glossary" open>
           <summary>Terms in this register</summary>
           <dl>
@@ -1606,7 +1642,8 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
             <div><dt>Custom object types</dt><dd>Distinct custom object types placed in the game, counted by the census from <code>shortlist.md</code>.</dd></div>
             <div><dt>Client / kid</dt><dd>Placed client objects and kid instances that are neither covered by a built-in nor counted as script objects.</dd></div>
             <div><dt>Trace cases passing</dt><dd>Committed trace cases whose status in <code>crates/tools/fidelity-baseline.txt</code> is <code>OK</code>, over the cases recorded in <code>crates/tools/cases/&lt;game&gt;/</code>. A case is one recorded scenario; a passing case is evidence, not proof that every object in it is tick-accurate.</dd></div>
-            <div><dt>Package objects mapped</dt><dd>Objects mapped over objects in the converted package, from <code>progress/exporter.json</code>. The snapshot is generated in the research environment; its date is shown beside the bars.</dd></div>
+            <div><dt>Mapped objects</dt><dd>Objects resolved to a built-in behavior spec over objects in the converted package, from <code>progress/exporter.json</code> and the <code>docs/games</code> front-matter. The snapshot is generated in the research environment; its date is shown beside the bars.</dd></div>
+            <div><dt>Scripted objects</dt><dd>Objects the converted package writes as scripts over objects in the package. Mapped and scripted objects partition the package total.</dd></div>
             <div><dt>Passing-trace coverage</dt><dd>The share of individual objects proven tick-accurate by a passing trace. Not measured yet; it needs the trace runner (<a href="https://github.com/nugamus/iwbtg-collection/issues/__TRACEFU__">#__TRACEFU__</a>). This is different from the per-game <i>trace cases passing</i> bar.</dd></div>
             <div><dt>Not measured yet</dt><dd>A value the repo cannot supply honestly. The page names the missing input and, where one exists, the follow-up issue; it never prints zero or an estimate.</dd></div>
             <div><dt>Tick-accurate</dt><dd>The rebuilt object reproduces the original's behavior on every simulation tick, proven by a passing trace.</dd></div>
@@ -1686,7 +1723,6 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
             <ul>
               <li><a href="https://github.com/nugamus/iwbtg-collection/issues/__CENSUS__">#__CENSUS__</a> — census export.</li>
               <li><a href="https://github.com/nugamus/iwbtg-collection/issues/__TRACEFU__">#__TRACEFU__</a> — passing-trace coverage, not measured yet.</li>
-              <li><a href="https://github.com/nugamus/iwbtg-collection/issues/__FRONTMATTER__">#__FRONTMATTER__</a> — package-based per-game metrics.</li>
             </ul>
           </section>
         </div>

@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-25T11:56:32Z",
+ "generated_at": "2026-11-25T12:29:26Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -81,9 +81,9 @@
    "name": "Sim fidelity",
    "state": "open",
    "open": 38,
-   "closed": 214,
-   "total": 252,
-   "pct_closed": 84.9,
+   "closed": 215,
+   "total": 253,
+   "pct_closed": 85.0,
    "size_points": 48,
    "sizes": {
     "size:S": 14,
@@ -149,13 +149,13 @@
    "title": "6 · Ranked-ready run",
    "name": "Ranked-ready run",
    "state": "open",
-   "open": 37,
+   "open": 38,
    "closed": 101,
-   "total": 138,
-   "pct_closed": 73.2,
-   "size_points": 130,
+   "total": 139,
+   "pct_closed": 72.7,
+   "size_points": 131,
    "sizes": {
-    "size:S": 9,
+    "size:S": 10,
     "size:M": 19,
     "size:L": 8,
     "unknown": 1
@@ -172,13 +172,13 @@
    "title": "7 · Online",
    "name": "Online",
    "state": "open",
-   "open": 52,
-   "closed": 14,
+   "open": 51,
+   "closed": 15,
    "total": 66,
-   "pct_closed": 21.2,
-   "size_points": 129,
+   "pct_closed": 22.7,
+   "size_points": 128,
    "sizes": {
-    "size:S": 27,
+    "size:S": 26,
     "size:M": 18,
     "size:L": 6,
     "unknown": 1
@@ -218,13 +218,13 @@
    "title": "9 · Content & ports",
    "name": "Content & ports",
    "state": "open",
-   "open": 49,
-   "closed": 10,
+   "open": 48,
+   "closed": 11,
    "total": 59,
-   "pct_closed": 16.9,
-   "size_points": 136,
+   "pct_closed": 18.6,
+   "size_points": 135,
    "sizes": {
-    "size:S": 28,
+    "size:S": 27,
     "size:M": 12,
     "size:L": 9,
     "unknown": 0
@@ -262,17 +262,17 @@
  ],
  "activity": {
   "totals": {
-   "issues": 927,
-   "open": 285,
-   "closed": 642,
-   "pct_closed": 69.3
+   "issues": 930,
+   "open": 284,
+   "closed": 646,
+   "pct_closed": 69.5
   },
-  "open_prs": 3,
+  "open_prs": 2,
   "process": {
-   "agent-ready": 130,
-   "triage": 52,
+   "agent-ready": 131,
+   "triage": 50,
    "needs-user": 30,
-   "in-progress": 10,
+   "in-progress": 13,
    "blocked": 25,
    "revisit": 3
   },
@@ -283,11 +283,11 @@
    },
    {
     "area": "area:client",
-    "count": 65
+    "count": 67
    },
    {
     "area": "area:server",
-    "count": 47
+    "count": 46
    },
    {
     "area": "area:format",
@@ -311,18 +311,78 @@
    },
    {
     "area": "area:docs",
-    "count": 7
-   },
-   {
-    "area": "area:port",
-    "count": 5
+    "count": 6
    },
    {
     "area": "area:research",
     "count": 5
+   },
+   {
+    "area": "area:port",
+    "count": 4
    }
   ],
   "recent_closed": [
+   {
+    "number": 160,
+    "title": "Auth: password reset by emailed code",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/160",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:server",
+     "in-progress"
+    ],
+    "phase": "7 · Online",
+    "updated_at": "2026-11-25T12:28:49Z",
+    "closed_at": "2026-11-25T12:28:49Z",
+    "created_at": "2026-11-02T11:57:51Z"
+   },
+   {
+    "number": 1342,
+    "title": "Docs: stale \"Waits on\" cells in the Modernization workstream table",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1342",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:docs"
+    ],
+    "phase": "3 · Sim fidelity",
+    "updated_at": "2026-11-25T12:26:26Z",
+    "closed_at": "2026-11-25T12:25:19Z",
+    "created_at": "2026-11-21T17:34:17Z"
+   },
+   {
+    "number": 1367,
+    "title": "Fill per-game progress front-matter in docs/games",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1367",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:port"
+    ],
+    "phase": "9 · Content & ports",
+    "updated_at": "2026-11-25T12:15:53Z",
+    "closed_at": "2026-11-25T12:15:17Z",
+    "created_at": "2026-11-24T13:43:03Z"
+   },
+   {
+    "number": 1548,
+    "title": "dashboard: per-game implementation bars from repo data",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1548",
+    "labels": [
+     "triage",
+     "in-progress"
+    ],
+    "phase": null,
+    "updated_at": "2026-11-25T12:04:10Z",
+    "closed_at": "2026-11-25T12:04:10Z",
+    "created_at": "2026-11-25T11:57:28Z"
+   },
    {
     "number": 1489,
     "title": "Client: measure browser (wasm) startup by phase",
@@ -382,86 +442,74 @@
     "updated_at": "2026-11-25T11:13:51Z",
     "closed_at": "2026-11-25T10:36:42Z",
     "created_at": "2026-11-24T17:19:23Z"
-   },
-   {
-    "number": 1380,
-    "title": "Script API: plan the groups the census needs that scripts.md does not list (paths, view, strings, instance_change, bounce, kid actions)",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1380",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:sim",
-     "area:docs"
-    ],
-    "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-25T10:32:58Z",
-    "closed_at": "2026-11-25T10:30:59Z",
-    "created_at": "2026-11-24T17:15:26Z"
-   },
-   {
-    "number": 1506,
-    "title": "Catalog: stream /files instead of buffering whole packages (3 x 200 MiB downloads hit 610 MB)",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1506",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "in-progress"
-    ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-25T10:23:31Z",
-    "closed_at": "2026-11-25T10:23:31Z",
-    "created_at": "2026-11-25T00:56:28Z"
-   },
-   {
-    "number": 1082,
-    "title": "Sim docs: clear the remaining plan citations in sim tests and pkg_cmd",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1082",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:sim",
-     "area:docs"
-    ],
-    "phase": "3 · Sim fidelity",
-    "updated_at": "2026-11-25T10:05:44Z",
-    "closed_at": "2026-11-25T10:05:44Z",
-    "created_at": "2026-11-20T08:28:10Z"
-   },
-   {
-    "number": 1527,
-    "title": "Restore the two historical WP7a comments renamed by #1519",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1527",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:format"
-    ],
-    "phase": "0 · Foundation",
-    "updated_at": "2026-11-25T03:30:21Z",
-    "closed_at": "2026-11-25T03:30:21Z",
-    "created_at": "2026-11-25T03:29:15Z"
    }
   ],
   "in_progress": [
    {
-    "number": 160,
-    "title": "Auth: password reset by emailed code",
+    "number": 1234,
+    "title": "Docs: sim rooms page — name the explicit Camera preset in the views section (#1189 E2a)",
     "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/160",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1234",
     "labels": [
      "agent-ready",
      "size:S",
-     "area:server",
+     "area:sim",
+     "area:docs",
      "in-progress"
     ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-25T11:38:45Z",
+    "phase": "3 · Sim fidelity",
+    "updated_at": "2026-11-25T12:27:42Z",
     "closed_at": null,
-    "created_at": "2026-11-02T11:57:51Z"
+    "created_at": "2026-11-21T09:55:59Z"
+   },
+   {
+    "number": 39,
+    "title": "Practice mode: start from stage, save or room; save states",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/39",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "6 · Ranked-ready run",
+    "updated_at": "2026-11-25T12:13:47Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T11:30:16Z"
+   },
+   {
+    "number": 1379,
+    "title": "0004 class capacity: check the 96 package classes against the census (up to 114 scripted kinds per game)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1379",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:format",
+     "area:docs",
+     "in-progress"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-25T12:12:13Z",
+    "closed_at": null,
+    "created_at": "2026-11-24T17:15:16Z"
+   },
+   {
+    "number": 1093,
+    "title": "Sim scripts: prepared script artifact and shared GameDef (host.rs half of #1021)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1093",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:sim",
+     "in-progress"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-25T12:10:33Z",
+    "closed_at": null,
+    "created_at": "2026-11-20T09:06:56Z"
    },
    {
     "number": 43,
@@ -494,54 +542,6 @@
     "updated_at": "2026-11-25T02:48:55Z",
     "closed_at": null,
     "created_at": "2026-11-02T11:55:48Z"
-   },
-   {
-    "number": 196,
-    "title": "UI translation files, English and Japanese",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/196",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-25T00:40:35Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T12:41:04Z"
-   },
-   {
-    "number": 106,
-    "title": "Accessibility: screen-shake toggle, colorblind-friendly UI, audio cues",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/106",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-24T22:25:29Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T11:55:29Z"
-   },
-   {
-    "number": 154,
-    "title": "Server: Docker Compose with cloudflared",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/154",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:server",
-     "in-progress"
-    ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-24T22:21:14Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T11:57:34Z"
    }
   ],
   "needs_user": [
@@ -728,8 +728,8 @@
     "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 257,
-  "opened_7d": 332,
+  "closed_7d": 261,
+  "opened_7d": 335,
   "burnup": [
    {
     "week": "2026-11-09",
@@ -748,8 +748,8 @@
    },
    {
     "week": "2026-11-30",
-    "created": 927,
-    "closed": 642
+    "created": 930,
+    "closed": 646
    }
   ]
  },
@@ -763,7 +763,7 @@
    "engine": "gm8 8.0",
    "genre": "Needle",
    "difficulty": 31.24,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 17,
    "placed_instances": 1997,
@@ -799,7 +799,9 @@
    "objects_in_package": 39,
    "objects_unmapped": 6,
    "objects_mapped": 33,
+   "objects_scripted": 6,
    "objects_mapped_pct": 84.6,
+   "objects_scripted_pct": 15.4,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -822,7 +824,7 @@
    "engine": "gm8 8.0",
    "genre": "Needle",
    "difficulty": 32.98,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 28,
    "placed_instances": 5480,
@@ -845,7 +847,9 @@
    "objects_in_package": 494,
    "objects_unmapped": 318,
    "objects_mapped": 176,
+   "objects_scripted": 318,
    "objects_mapped_pct": 35.6,
+   "objects_scripted_pct": 64.4,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -868,7 +872,7 @@
    "engine": "gm8 8.0",
    "genre": "Needle",
    "difficulty": 29.12,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 23,
    "placed_instances": 7085,
@@ -896,7 +900,9 @@
    "objects_in_package": 153,
    "objects_unmapped": 95,
    "objects_mapped": 58,
+   "objects_scripted": 95,
    "objects_mapped_pct": 37.9,
+   "objects_scripted_pct": 62.1,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -919,7 +925,7 @@
    "engine": "gm8 8.0",
    "genre": "Needle",
    "difficulty": 21.33,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 25,
    "placed_instances": 4741,
@@ -958,7 +964,9 @@
    "objects_in_package": 111,
    "objects_unmapped": 51,
    "objects_mapped": 60,
+   "objects_scripted": 51,
    "objects_mapped_pct": 54.1,
+   "objects_scripted_pct": 45.9,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -981,7 +989,7 @@
    "engine": "gm8 8.0",
    "genre": "Needle",
    "difficulty": 23.4,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 25,
    "placed_instances": 3414,
@@ -1014,7 +1022,9 @@
    "objects_in_package": 129,
    "objects_unmapped": 69,
    "objects_mapped": 60,
+   "objects_scripted": 69,
    "objects_mapped_pct": 46.5,
+   "objects_scripted_pct": 53.5,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1037,7 +1047,7 @@
    "engine": "gm8 8.0",
    "genre": "Avoidance",
    "difficulty": 17.38,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 6,
    "placed_instances": 204,
@@ -1061,7 +1071,9 @@
    "objects_in_package": 185,
    "objects_unmapped": 141,
    "objects_mapped": 44,
+   "objects_scripted": 141,
    "objects_mapped_pct": 23.8,
+   "objects_scripted_pct": 76.2,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1084,7 +1096,7 @@
    "engine": "gm8 8.1",
    "genre": "Trap",
    "difficulty": 18.95,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 12,
    "placed_instances": 1389,
@@ -1110,7 +1122,9 @@
    "objects_in_package": 112,
    "objects_unmapped": 68,
    "objects_mapped": 44,
+   "objects_scripted": 68,
    "objects_mapped_pct": 39.3,
+   "objects_scripted_pct": 60.7,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1133,7 +1147,7 @@
    "engine": "gm8 8.0",
    "genre": "Trap",
    "difficulty": 27.7,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 11,
    "placed_instances": 2219,
@@ -1153,7 +1167,9 @@
    "objects_in_package": 240,
    "objects_unmapped": 177,
    "objects_mapped": 63,
+   "objects_scripted": 177,
    "objects_mapped_pct": 26.2,
+   "objects_scripted_pct": 73.8,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1176,7 +1192,7 @@
    "engine": "gm8 8.0",
    "genre": "Trap",
    "difficulty": 20.17,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 24,
    "placed_instances": 3893,
@@ -1200,7 +1216,9 @@
    "objects_in_package": 230,
    "objects_unmapped": 167,
    "objects_mapped": 63,
+   "objects_scripted": 167,
    "objects_mapped_pct": 27.4,
+   "objects_scripted_pct": 72.6,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1223,7 +1241,7 @@
    "engine": "gm8 8.0",
    "genre": "Avoidance",
    "difficulty": 24.4,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 6,
    "placed_instances": 258,
@@ -1246,7 +1264,9 @@
    "objects_in_package": 55,
    "objects_unmapped": 30,
    "objects_mapped": 25,
+   "objects_scripted": 30,
    "objects_mapped_pct": 45.5,
+   "objects_scripted_pct": 54.5,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1269,7 +1289,7 @@
    "engine": "gm8 8.0",
    "genre": "Adventure",
    "difficulty": 22.62,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 21,
    "placed_instances": 5715,
@@ -1296,7 +1316,9 @@
    "objects_in_package": 412,
    "objects_unmapped": 368,
    "objects_mapped": 44,
+   "objects_scripted": 368,
    "objects_mapped_pct": 10.7,
+   "objects_scripted_pct": 89.3,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1319,7 +1341,7 @@
    "engine": "gm8 8.0",
    "genre": "Trap",
    "difficulty": 28.77,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 21,
    "placed_instances": 2115,
@@ -1346,7 +1368,9 @@
    "objects_in_package": 228,
    "objects_unmapped": 175,
    "objects_mapped": 53,
+   "objects_scripted": 175,
    "objects_mapped_pct": 23.2,
+   "objects_scripted_pct": 76.8,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1369,7 +1393,7 @@
    "engine": "gm8 8.0",
    "genre": "Adventure",
    "difficulty": 26.72,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 11,
    "placed_instances": 2848,
@@ -1395,7 +1419,9 @@
    "objects_in_package": 151,
    "objects_unmapped": 120,
    "objects_mapped": 31,
+   "objects_scripted": 120,
    "objects_mapped_pct": 20.5,
+   "objects_scripted_pct": 79.5,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1418,7 +1444,7 @@
    "engine": "gm8 8.0",
    "genre": "Trap",
    "difficulty": 23.33,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 9,
    "placed_instances": 2570,
@@ -1449,7 +1475,9 @@
    "objects_in_package": 139,
    "objects_unmapped": 84,
    "objects_mapped": 55,
+   "objects_scripted": 84,
    "objects_mapped_pct": 39.6,
+   "objects_scripted_pct": 60.4,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1472,7 +1500,7 @@
    "engine": "gm8 8.0",
    "genre": "Adventure",
    "difficulty": 28.1,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 32,
    "placed_instances": 9815,
@@ -1508,7 +1536,9 @@
    "objects_in_package": 359,
    "objects_unmapped": 284,
    "objects_mapped": 75,
+   "objects_scripted": 284,
    "objects_mapped_pct": 20.9,
+   "objects_scripted_pct": 79.1,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1531,7 +1561,7 @@
    "engine": "gm8 8.0",
    "genre": "Adventure",
    "difficulty": 24.17,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 36,
    "placed_instances": 12604,
@@ -1558,7 +1588,9 @@
    "objects_in_package": 326,
    "objects_unmapped": 236,
    "objects_mapped": 90,
+   "objects_scripted": 236,
    "objects_mapped_pct": 27.6,
+   "objects_scripted_pct": 72.4,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1581,7 +1613,7 @@
    "engine": "gm8 8.0",
    "genre": "Adventure",
    "difficulty": 26.9,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 47,
    "placed_instances": 12805,
@@ -1612,7 +1644,9 @@
    "objects_in_package": 388,
    "objects_unmapped": 289,
    "objects_mapped": 99,
+   "objects_scripted": 289,
    "objects_mapped_pct": 25.5,
+   "objects_scripted_pct": 74.5,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1635,7 +1669,7 @@
    "engine": "gm8 8.0",
    "genre": "Adventure",
    "difficulty": 33.81,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 62,
    "placed_instances": 8069,
@@ -1667,7 +1701,9 @@
    "objects_in_package": 291,
    "objects_unmapped": 230,
    "objects_mapped": 61,
+   "objects_scripted": 230,
    "objects_mapped_pct": 21.0,
+   "objects_scripted_pct": 79.0,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1690,7 +1726,7 @@
    "engine": "gm8 8.1",
    "genre": "Adventure",
    "difficulty": 26.72,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 23,
    "placed_instances": 2228,
@@ -1714,7 +1750,9 @@
    "objects_in_package": 122,
    "objects_unmapped": 83,
    "objects_mapped": 39,
+   "objects_scripted": 83,
    "objects_mapped_pct": 32.0,
+   "objects_scripted_pct": 68.0,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1737,7 +1775,7 @@
    "engine": "gm8 8.1",
    "genre": "Needle",
    "difficulty": 22.77,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 19,
    "placed_instances": 2310,
@@ -1757,7 +1795,9 @@
    "objects_in_package": 113,
    "objects_unmapped": 57,
    "objects_mapped": 56,
+   "objects_scripted": 57,
    "objects_mapped_pct": 49.6,
+   "objects_scripted_pct": 50.4,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1793,15 +1833,15 @@
   "trace_cases_pct": 92.8,
   "games_with_cases": 7,
   "package_objects_mapped": 1229,
+  "package_objects_scripted": 3048,
   "package_objects": 4277,
   "package_mapped_pct": 28.7,
+  "package_scripted_pct": 71.3,
   "games_with_package": 20
  },
  "followups": {
   "census": 1364,
-  "traces": 1365,
-  "converter": 1366,
-  "frontmatter": 1367
+  "traces": 1365
  },
  "exporter": {
   "generated_at": "2026-11-24T17:13:20Z",

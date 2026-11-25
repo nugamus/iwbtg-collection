@@ -22,8 +22,8 @@ Every rate is a numerator and denominator. A missing source renders **not measur
 ## What the page shows now
 
 - **First-viewport progress register** — pre-release status and three direct bars with denominators: issues closed across all phases, all port checklist items, and the public-alpha gate at phase 7. Each bar links to its full register and is labelled as a delivery measure, not a release date or a single completion score. A scope line carries the game-specific work, room and trace counts, and the passing-trace gap keeps its follow-up.
-- **Coverage** — a composition summary for placed instances, then a filterable, expandable game menu led by each game's game-specific work: script-object instances and custom object types (`shortlist.md`). Each game row carries two repo-derived **implementation bars** (trace cases passing and package objects mapped), its port checklist meter, and the expanded facts behind them. The all-games trace-case figure sits in the implementation note, not the three-cell delivery register. Recorded traces and exercised names are in the row; placed instances, the built-in share and the script share are in the expanded detail, labelled as composition rather than completion. Built-in coverage stays visible as context, not as a progress score.
-- **Script API census** — the registered function count from `docs/format/script-api.md` and the census groups named as not registered in `docs/architecture/sim/scripts.md`. The implemented share of the script API is marked **not measured** because the census's full group list lives in the private research repo.
+- **Coverage** — a composition summary for placed instances, then a filterable, expandable game menu led by each game's game-specific work: script-object instances and custom object types (`shortlist.md`). Each game row carries three repo-derived **implementation bars** (trace cases passing, mapped objects and scripted objects), its port checklist meter, and the expanded facts behind them. The all-games trace-case figure sits in the implementation note, not the three-cell delivery register. Recorded traces and exercised names are in the row; placed instances, the built-in share and the script share are in the expanded detail, labelled as composition rather than completion. Built-in coverage stays visible as context, not as a progress score.
+- **Script API census** — the registered function count from `docs/format/script-api.md` and the census groups named as not registered in `docs/architecture/sim/scripts.md`. The implemented share of the script API is marked **not measured yet** because the census's full group list lives in the private research repo.
 - **Delivery** — each phase's closed/total issues, remaining size points and open count, with entry and exit conditions behind *Entry and exit conditions*. Port issues, their *Done when* progress and their state stay in the coverage menu.
 - **Activity** — recently closed, in-progress, needs-user and unblocked agent-ready issues; open work by area; a weekly issue burn-up; and the coverage history per run.
 - **Sources** — regeneration commands, data sources, follow-up issues and the generated/source timestamps.
@@ -35,16 +35,17 @@ Every bar has a numerator and denominator from files in this repo, read at build
 | Bar | Numerator | Denominator | Moves when |
 |---|---|---|---|
 | Trace cases | `OK` lines for the game in `crates/tools/fidelity-baseline.txt` | `*.toml` files in `crates/tools/cases/<game>/` | a case is merged or its blessed status changes |
-| Package objects | `objects_in_package - objects_unmapped` | `objects_in_package` | `progress/export_research.py` regenerates `progress/exporter.json` |
+| Mapped objects | `objects_specced` in `docs/games/<slug>.md` (exporter `objects_in_package - objects_unmapped`) | `objects_total` (exporter `objects_in_package`) | `progress/export_research.py` regenerates the exporter and the front-matter is refreshed |
+| Scripted objects | `objects_scripted` in `docs/games/<slug>.md` (exporter `objects_unmapped`) | `objects_total` | the same exporter refresh |
 | Port checklist | checked `- [x]` items in the port issue's *Done when* | all checklist items | the games-repo port issue changes |
 
-A game with no case directory shows `not measured · no case directory`; it is not counted as zero in the all-games trace figure. A game without an exporter entry shows `not measured`, never zero.
+Mapped and scripted objects partition the package total. A game with no case directory shows `not measured yet · no case directory`; it is not counted as zero in the all-games trace figure. A game without an exporter or front-matter value shows `not measured yet`, never zero.
 
-The script API census has no honest denominator in this repo: `docs/architecture/sim/scripts.md` lists seven groups that are not registered, but the census's complete group inventory is in the private research repo (research#172). The page shows the registered function count from `docs/format/script-api.md` and the seven named groups, and marks the implemented share **not measured**.
+The script API census has no honest denominator in this repo: `docs/architecture/sim/scripts.md` lists seven groups that are not registered, but the census's complete group inventory is in the private research repo (research#172). The page shows the registered function count from `docs/format/script-api.md` and the seven named groups, and marks the implemented share **not measured yet**.
 
 ### Snapshot caveat
 
-`progress/exporter.json` is generated in the research environment (`python -I progress/export_research.py --research ../iwbtg-collection-research`) and is not regenerated in this repo or by the progress workflow. The page prints its `generated_at` timestamp next to the package bars. Trace-case counts are read from `crates/tools/cases/` and `crates/tools/fidelity-baseline.txt` on every run, so they move as soon as a case or status lands.
+`progress/exporter.json` is generated in the research environment (`python -I progress/export_research.py --research ../iwbtg-collection-research`) and is not regenerated in this repo or by the progress workflow. The page prints its `generated_at` timestamp next to the package bars. Trace-case counts are read from `crates/tools/cases/` and `crates/tools/fidelity-baseline.txt` on every run, so they move as soon as a case or status lands. The `docs/games` front-matter mirrors the exporter snapshot (#1550); refreshing the exporter requires a matching front-matter refresh for the bars to move.
 
 ## Per-game front-matter
 
@@ -59,16 +60,16 @@ name: "I Wanna Rely The Needle 4.2"
 slug: rely-the-needle-4-2
 source: https://delicious-fruit.com/game/19483
 engine: gm8
-status: unknown
-objects_total: null
-objects_specced: null
-objects_scripted: null
-traces_passing: null
-traces_total: null
+status: converted
+objects_total: 39
+objects_specced: 33
+objects_scripted: 6
+traces_passing: 4
+traces_total: 4
 ---
 ```
 
-`status` is the lifecycle (`converted`, `trace-checked`, `Beta`, `Ranked`, `Loved`) or `unknown`. `objects_total` is the census; `objects_specced` counts objects with a behavior spec; `objects_scripted` counts objects with a package script; `traces_passing` counts objects with a passing trace; `traces_total` counts objects trace-checked. `null` and `unknown` mean not measured yet. `progress/exporter.json` is read first; these fields are the fallback and the place for package-based metrics later. Filling them is tracked by issue #1367.
+`status` is the lifecycle (`converted`, `trace-checked`, `Beta`, `Ranked`, `Loved`) or `unknown`. `objects_total` is the package total; `objects_specced` counts objects resolved to a built-in behavior spec; `objects_scripted` counts objects the package writes as scripts; `traces_passing` counts recorded cases that pass; `traces_total` counts recorded cases. All 20 pages were filled from the exporter snapshot in #1550. `null` and `unknown` still mean not measured yet, never zero. The generator uses these fields for the mapped/scripted bars and falls back to `progress/exporter.json` when a field is absent.
 
 ## Object-coverage export
 
