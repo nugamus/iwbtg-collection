@@ -22,7 +22,7 @@ use crate::probe::{
 use crate::room;
 use crate::rules::RunnerRules;
 use crate::save::SaveSlot;
-use crate::script::ScriptRuntime;
+use crate::script::{PreparedScripts, ScriptRuntime};
 use crate::sim::{Sim, SimOptions};
 use crate::world::{Ctx, Flow, InstId, Instance, Value, World};
 
@@ -140,16 +140,19 @@ impl Sim {
     /// `SetField` here fails with "no instance".
     ///
     /// The steps are the ones `Sim::new` documents (rules from the game's runner and engine_rev,
-    /// `ScriptRuntime::new`, `World::new` in the start room with the seed, a `Ctx` carrying
-    /// `options.dll_mode`, `room::start_game`); a run built here and one built by `Sim::new` with
-    /// no setup must stay identical apart from `setup_applied`.
+    /// the prepared script artifact (`ScriptRuntime::new_run`), `World::new` in the start room
+    /// with the seed, a `Ctx` carrying `options.dll_mode`, `room::start_game`); a run built here
+    /// and one built by `Sim::new` with no setup must stay identical apart from `setup_applied`.
     pub fn new_with_setup(
         def: Arc<GameDef>,
         options: SimOptions,
         pre_entry: &[SetupAction],
     ) -> Result<Sim, SimError> {
         let rules = RunnerRules::for_runner(def.runner, def.engine_rev)?;
-        let scripts = ScriptRuntime::new(&def, &rules)?;
+        // The same prepared-script path as `Sim::new` (#1093): the artifact is built once here and
+        // the run builds only its own engine, so a trace setup does not deep-clone the definition.
+        let prepared = PreparedScripts::new(&def, &rules)?;
+        let scripts = ScriptRuntime::new_run(Arc::clone(&def), &rules, &prepared)?;
         let first_room = match &options.start {
             room::StartPoint::NewGame { .. } => def.new_game_room,
             room::StartPoint::Room { room, .. } => *room,
@@ -482,6 +485,52 @@ mod tests {
             scripts: ScriptRuntime::default(),
             rows_done: false,
         }
+    }
+
+    /// The trace path builds the same run as `Sim::new` when it has no setup actions: the
+    /// prepared script artifact and the shared `GameDef` change nothing a run can observe (#1093).
+    #[test]
+    fn new_with_setup_matches_new_without_setup_actions() {
+        let mut b = GameDefBuilder::new("setup-path");
+        b.kind(KindDef::new("block", Builtin::Block));
+        let room = b.room(RoomDef::new("room_1", 800, 608));
+        b.start_room(room);
+        let mut def = b.build().expect("def");
+        def.scripts.push(crate::def::ScriptDef {
+            name: "scripts/s.rhai".into(),
+            source: "fn helper(n) { n + 1.0 }\n".into(),
+        });
+        let def = Arc::new(def);
+        let options = SimOptions {
+            start: StartPoint::NewGame { difficulty: 0 },
+            seed: 3,
+            dll_mode: DllMode::Stub,
+            mode: crate::stripped::PlayMode::Original,
+            map: None,
+        };
+        let plain = Sim::new_or_halted(Arc::clone(&def), options.clone()).expect("plain run");
+        let setup = Sim::new_with_setup(Arc::clone(&def), options.clone(), &[]).expect("setup run");
+        assert_eq!(
+            crate::hash::state_hash(plain.world()),
+            crate::hash::state_hash(setup.world()),
+            "the setup path starts the same run"
+        );
+        assert!(!setup.world().setup_applied);
+
+        let acted = Sim::new_with_setup(
+            Arc::clone(&def),
+            options,
+            &[SetupAction::SetGlobal {
+                var: VarId(0),
+                value: Value::Real(Real::ONE),
+            }],
+        )
+        .expect("setup run with an action");
+        assert!(acted.world().setup_applied, "the action marks the run");
+        assert_eq!(
+            acted.world().globals.get(&VarId(0)),
+            Some(&Value::Real(Real::ONE))
+        );
     }
 
     #[test]
