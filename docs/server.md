@@ -134,7 +134,7 @@ These are requirements, not suggestions.
 
 ## Deployment
 
-Production is one `compose.yaml` with two services, `server` and `cloudflared` (Components). CI parses it with `docker compose config` in the `changes` job on every PR (#1419), so a broken deployment file fails before it reaches the host. The image comes from the multi-stage `Dockerfile` in the repository root: the builder compiles `iwbtg-server` on the pinned Rust toolchain with the Cargo registry and target directory held in BuildKit cache mounts, and the runtime is `debian:trixie-slim` plus the binary, `ca-certificates` (the healthchecks.io ping uses ureq with native-tls and verifies against the OS trust store; OAuth and SMTP will too) and `curl` (the healthcheck client). Nothing in the running image is writable except the database mount.
+Production is one `compose.yaml` with two services, `server` and `cloudflared` (Components). CI parses it with `docker compose config` in the `changes` job on every PR (#1419), so a broken deployment file fails before it reaches the host. The image comes from the multi-stage `Dockerfile` in the repository root: the builder compiles `iwbtg-server` on the pinned Rust toolchain with the Cargo registry and target directory held in BuildKit cache mounts, and the runtime is `debian:trixie-slim` plus the binary, `ca-certificates` (the healthchecks.io ping uses ureq with native-tls and verifies against the OS trust store; OAuth and SMTP will too) and `curl` (the healthcheck client). Nothing in the running image is writable except the database mount. The server's 512 MiB limit is sized from its four Argon2 slots (4 × 19 MiB = 76 MiB, #1505) plus the runtime baseline and per-request buffers; raising `HASH_PERMITS` means raising it.
 
 ### Host layout
 
@@ -177,6 +177,7 @@ Design:
 - Sessions are opaque random tokens stored hashed, with expiry; a new session ID at every sign-in. Web uses an `HttpOnly; Secure; SameSite=Lax` cookie (`__Host-` prefix where possible); the native client sends `Authorization: Bearer`.
 - Auth pages are server-rendered HTML forms with CSRF protection, visible `:focus-visible` styles, and correct `autocomplete` values.
 - Passwords: Argon2id at OWASP parameters (m=19456 KiB, t=2, p=1). Minimum 15 characters, or 8 plus a breached-password check. Password reset and registration answer identically whether or not an account exists.
+- At most four password hashes run at once (`HASH_PERMITS` in `crates/server/src/auth.rs`, #1505). A request waits up to two seconds for a slot and then gets `429` with `Retry-After`. This bounds the endpoints' memory independently of rate limiting, which caps the request rate but not the work in flight.
 - Usernames: 3 to 15 characters of letters, digits, spaces, `_ - [ ]`, trimmed, no doubled spaces. A canonical form (lowercase, spaces as `_`) is unique, so "Foo Bar" and "foo_bar" cannot both exist.
 - Email: unique after lowercasing. A Google identity links to an existing account only when both emails are verified; otherwise the user links it from settings.
 - Google and Discord use OpenID Connect (`openidconnect` crate) with PKCE, state and nonce. Discord publishes OIDC discovery; confirm it returns an `id_token` before relying on it.
