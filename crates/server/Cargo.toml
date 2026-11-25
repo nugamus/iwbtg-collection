@@ -29,6 +29,9 @@ rand_core = { version = "0.6", features = ["getrandom"] }
 # SHA-256 of the session token and reset codes, so the database never holds a usable credential
 # (#157, #160).
 sha2 = { workspace = true }
+# Replay decoding for submissions, and later the verification worker (#162, #163): the server
+# runs the exact simulation the client runs (docs/server.md, Components).
+iwbtg-sim = { workspace = true }
 # Password-reset email (#160). `native-tls` keeps the OS trust store, matching the healthchecks
 # client: no bundled CA crate, so no CDLA-Permissive-2.0 edge in deny.toml.
 lettre = { version = "0.11", default-features = false, features = [

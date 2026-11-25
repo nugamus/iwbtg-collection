@@ -28,3 +28,6 @@ mod auth;
 
 #[path = "reset.rs"]
 mod reset;
+
+#[path = "submissions.rs"]
+mod submissions;

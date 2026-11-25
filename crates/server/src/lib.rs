@@ -11,11 +11,13 @@ pub mod health;
 pub mod mail;
 pub mod rate_limit;
 pub mod removal;
+pub mod submissions;
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::Router;
+use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use sqlx::SqlitePool;
@@ -57,6 +59,12 @@ pub fn app_with_mailer(pool: SqlitePool, catalog_dir: Option<PathBuf>, mailer: m
         .route("/register", get(auth::register_page).post(auth::register_form))
         .route("/login", get(auth::login_page).post(auth::login_form))
         .route("/removals.json", get(removal::removals))
+        // The per-route cap applies before the handler: an over-limit body never reaches the
+        // decoder (#162; docs/server.md, Replays).
+        .route(
+            "/submissions",
+            post(submissions::submit).layer(DefaultBodyLimit::max(submissions::MAX_REPLAY_BYTES)),
+        )
         .with_state(AppState {
             pool,
             catalog_dir,

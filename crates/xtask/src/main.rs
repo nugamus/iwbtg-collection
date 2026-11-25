@@ -2017,6 +2017,7 @@ version = \"1.0.0\"
             vec![
                 "iwbtg-client".to_string(),
                 "iwbtg-format".to_string(),
+                "iwbtg-server".to_string(),
                 "iwbtg-tools".to_string()
             ]
         );
@@ -2217,7 +2218,7 @@ version = \"1.0.0\"
             "rustfmt:",
             "clippy:iwbtg-sim",
             "test:iwbtg-sim",
-            "compile-check:iwbtg-client,iwbtg-format,iwbtg-tools",
+            "compile-check:iwbtg-client,iwbtg-format,iwbtg-server,iwbtg-tools",
         ] {
             assert!(
                 plan.step_identities.contains_key(key),

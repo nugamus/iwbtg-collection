@@ -40,6 +40,16 @@ Timestamps are UTC ISO-8601 text and hashes are raw 32-byte BLOBs. Boards sort o
 
 Queries that need compile-time checking use `sqlx::query!`; the `.sqlx` offline data is committed once the first such query lands (#162). Until then the only SQL in `crates/server` is the PRAGMA and schema probes in the tests, which use runtime `query_scalar`, so the build needs no live database and no `DATABASE_URL`.
 
+## Submissions
+
+`POST /submissions` stores a replay (#162; part of #56):
+
+- The body is the replay file itself (`application/octet-stream`), capped at 1 MiB by a per-route body limit, so an oversized request is `413` before decoding.
+- A session is required (`__Host-iwbtg_session` cookie or `Authorization: Bearer`); without one the answer is `401 sign in required`.
+- The server decodes the canonical bytes through `iwbtg_sim::replay`; anything that is not a canonical replay is `400`. It stores the exact bytes, their SHA-256, and the board key from the header (`package_id`, `map_id`, `mods`, `gameplay_hash`), leaves `ticks` NULL until verification, and queues a `verify_jobs` row.
+- The answer is `202 {run_id, replay_sha256}`. Submissions are rate limited per address and per account (Security rule 1).
+- Reproducing the run, the tick bound and the seed-reuse/copy flags are #163 and #164; nothing the client claims in the trailer is trusted or stored as a time here.
+
 ## Game downloads
 
 `crates/server/src/catalog.rs` serves a folder chosen at startup with `--catalog-dir` (`IWBTG_CATALOG_DIR`), so the binary never needs the catalog baked in (#807). Unset, `/catalog.json` and `/files/...` answer 404 and the rest of the server runs normally. The folder layout is:

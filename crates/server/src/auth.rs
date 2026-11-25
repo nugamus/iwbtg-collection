@@ -46,7 +46,8 @@ use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, Salt
 use argon2::{Algorithm, Argon2, Params, Version};
 use axum::Form;
 use axum::Json;
-use axum::extract::State;
+use axum::extract::{FromRequestParts, State};
+use axum::http::request::Parts;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use rand_core::{OsRng, RngCore};
@@ -193,6 +194,10 @@ pub(crate) enum AuthError {
     Busy,
     /// The client's request window is exhausted; the value is the Retry-After seconds (#161).
     RateLimited(u64),
+    /// A replay body that does not decode as a canonical replay (#162).
+    BadReplay,
+    /// No valid session cookie or bearer token (#162).
+    SessionRequired,
     Internal,
 }
 
@@ -203,6 +208,8 @@ impl AuthError {
             Self::Conflict => StatusCode::CONFLICT,
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
             Self::Busy | Self::RateLimited(_) => StatusCode::TOO_MANY_REQUESTS,
+            Self::BadReplay => StatusCode::BAD_REQUEST,
+            Self::SessionRequired => StatusCode::UNAUTHORIZED,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -214,6 +221,8 @@ impl AuthError {
             Self::Unauthorized => "invalid username or password",
             Self::Busy => "the sign-in queue is full; retry shortly",
             Self::RateLimited(_) => "too many requests; retry shortly",
+            Self::BadReplay => "the replay is not valid",
+            Self::SessionRequired => "sign in required",
             Self::Internal => "the account could not be processed",
         }
     }
@@ -1033,6 +1042,43 @@ fn database_error(error: sqlx::Error, context: &'static str) -> AuthError {
     }
     tracing::error!(%error, context = context, "auth database error");
     AuthError::Internal
+}
+
+/// A signed-in account, from the session cookie or `Authorization: Bearer` (docs/server.md,
+/// Accounts and sign-in; the first consumer is submissions, #162).
+pub(crate) struct Session {
+    pub account_id: i64,
+}
+
+impl FromRequestParts<AppState> for Session {
+    type Rejection = AuthError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
+        let token = bearer_token(&parts.headers)
+            .or_else(|| cookie_value(&parts.headers, SESSION_COOKIE))
+            .ok_or(AuthError::SessionRequired)?;
+        let token_hash = Sha256::digest(token.as_bytes()).to_vec();
+        let account_id: Option<i64> = sqlx::query_scalar(
+            "SELECT account_id FROM sessions
+             WHERE token_hash = ?1
+               AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+        )
+        .bind(token_hash)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|err| database_error(err, "look up session"))?;
+        account_id
+            .map(|account_id| Self { account_id })
+            .ok_or(AuthError::SessionRequired)
+    }
+}
+
+/// The `Bearer <token>` half of an `Authorization` header, case-insensitive in the scheme.
+fn bearer_token(headers: &HeaderMap) -> Option<String> {
+    let value = headers.get(header::AUTHORIZATION)?.to_str().ok()?;
+    let (scheme, token) = value.split_once(' ')?;
+    let token = token.trim();
+    (scheme.eq_ignore_ascii_case("bearer") && !token.is_empty()).then(|| token.to_owned())
 }
 
 #[cfg(test)]

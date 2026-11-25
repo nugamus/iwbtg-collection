@@ -13,7 +13,8 @@
 ## Pitfalls seen before
 
 - Selection comes from the Cargo manifests through `scripts/ci_scope.py`, shared by CI and `cargo xtask check`: a new crate needs its root `Cargo.toml` `members` entry and dependencies, with no separate `CRATES` list to update (#1028). A manifest change selects full coverage until the graph is consistent.
-- The server has no `iwbtg-sim` or `iwbtg-format` dependency yet, so editing those crates neither rebuilds nor tests it. When the verify worker links them, the manifest edges add the server as a consumer automatically.
-- No SQLite, accounts, submissions or verify worker yet: stack decisions live in `docs/server.md`, and SQLite waits for #153.
+- The server links `iwbtg-sim` for replay decoding (#162) and verification (#163), so editing sim rebuilds and tests it. A manifest edge also changes the plan's sim consumers: the hard-coded expectations in `crates/xtask/src/main.rs` (foundation-xtask) and `scripts/test_ci_scope.py` (CI seat) must be updated in the same PR. Update only the files your lane owns and ask the lead to sequence the rest.
+- SQLite (#153), accounts (#156/#157/#160), the Argon2 bound (#1505), rate limiting (#161) and replay submissions (#162) are in. The verify worker is #163 and the copy/seed flags are #164.
 - `cargo deny` (licenses; sim bans) runs in CI, not locally, so a new dependency's license shows up as a red CI job, not a local error.
+- Any dependency change must regenerate `THIRD_PARTY_LICENSES` with the pinned `cargo-about` in the same PR: `cargo about generate --locked --output-file THIRD_PARTY_LICENSES about.hbs`. The `licenses` job's freshness check fails otherwise (#976, #160).
 - Preserve feel, not implementation: a change that can alter a verified outcome or a board key is F1 and needs a replay/board migration and the user where the outcome is irreversible; an internal refactor is F3 ([0005](../decisions/0005-standard-mechanics.md), [versioning](../architecture/versioning.md)).
