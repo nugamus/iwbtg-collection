@@ -6,6 +6,7 @@ One page per module or area, so two PRs on different modules never edit the same
 
 - [Room art](client/art.md): `art.rs`
 - [Audio](client/audio.md): `audio.rs`, `audio/unlock.rs`
+- [Controls panel](client/controls.md): the game picker, `[controls]` labels and rebinding (`controls.rs`, #52)
 - [HUD](client/hud.md): `hud/`
 - [Structure](client/main.md): how modules own their flags and plugins (`main.rs`)
 - [Import](client/import.md): `.iwbz` files, the library, drag and drop (`import.rs`)

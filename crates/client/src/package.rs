@@ -47,8 +47,8 @@ pub struct SpriteImage {
 #[derive(clap::Args, Debug, Default)]
 pub struct PackageArgs {
     /// Package folder (a folder with a game.toml) or `.iwbz` file. Not needed with `--select`,
-    /// `--ui-gallery`, `--bind` or `--show-bindings`.
-    #[arg(required_unless_present_any = ["select", "ui_gallery", "card_preview", "bind", "show_bindings"])]
+    /// `--ui-gallery`, `--card-preview`, `--controls`, `--bind` or `--show-bindings`.
+    #[arg(required_unless_present_any = ["select", "ui_gallery", "card_preview", "controls", "bind", "show_bindings"])]
     pub package: Option<std::path::PathBuf>,
     /// Load converter output: unmapped script kinds become inert.
     #[arg(long)]

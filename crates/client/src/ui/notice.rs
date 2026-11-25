@@ -35,6 +35,9 @@ pub enum Kind {
         allow(dead_code, reason = "only the web build posts it")
     )]
     Pad,
+    /// A game uses extra actions, with their `[controls]` labels and current keys
+    /// (`hud/run_info.rs` when a package loads; #52). The message is the line as it stands.
+    Controls,
 }
 
 impl Kind {
@@ -44,6 +47,7 @@ impl Kind {
             Kind::Storage => "Not saved",
             Kind::Drop => "Not opened",
             Kind::Pad => "Controller",
+            Kind::Controls => "Controls",
         }
     }
 
@@ -55,7 +59,7 @@ impl Kind {
                 let _ = message;
                 "Saves and settings may not be kept this session.".to_string()
             }
-            Kind::Drop => message.to_string(),
+            Kind::Drop | Kind::Controls => message.to_string(),
             Kind::Pad => {
                 let _ = message;
                 "This browser may mix up this controller's buttons. Chrome or Edge map most controllers."
@@ -68,7 +72,7 @@ impl Kind {
     pub fn once(self) -> bool {
         match self {
             Kind::Storage | Kind::Pad => true,
-            Kind::Drop => false,
+            Kind::Drop | Kind::Controls => false,
         }
     }
 }
@@ -363,6 +367,17 @@ mod tests {
         assert_eq!(width(208.0), Val::Px(184.0));
         assert_eq!(width(124.0), Val::Px(MIN_WIDTH));
         assert_eq!(width(1000.0), Val::Px(MAX_WIDTH));
+    }
+
+    /// #52: the extra-actions notice shows for every game that has them, with its own heading.
+    #[test]
+    fn extra_actions_show_every_time() {
+        let mut shown = Shown::default();
+        assert!(shown.admit(Kind::Controls));
+        assert!(shown.admit(Kind::Controls), "not a once-a-session notice");
+        assert_eq!(Kind::Controls.heading(), "Controls");
+        let body = "Extra actions: Teleport (E), Slow (unbound).";
+        assert_eq!(Kind::Controls.body(body), body);
     }
 
     #[test]
