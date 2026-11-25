@@ -86,25 +86,25 @@ The engine models that still reproduce GameMaker 8 implementation details, track
 
 | Workstream | Issue | Tier | `standard` gets | `gm8` keeps | Waits on |
 |---|---|---|---|---|---|
-| A. World transaction | [#1174](https://github.com/nugamus/iwbtg-collection/issues/1174) | F3 mechanism; F1 where spawn or event order is observed | Immediate, final destroy; generation handles; snapshot `with`; one room transaction and commit point | The old sequence behind its profile | #1149, #1152, #1153 |
+| A. World transaction | [#1174](https://github.com/nugamus/iwbtg-collection/issues/1174) | F3 mechanism; F1 where spawn or event order is observed | Immediate, final destroy; generation handles; snapshot `with`; one room transaction and commit point | The old sequence behind its profile | #1153 |
 | B. Entity and reference | [#1175](https://github.com/nugamus/iwbtg-collection/issues/1175) | F1 where a missing reference or pause changes an outcome; F3 otherwise | Explicit `enabled` and `keep_on_room_change`, pause as a state, typed references validated at build | Zero maps to the old sentinel | #1153, #1159 |
 | C. Script semantics | [#1176](https://github.com/nugamus/iwbtg-collection/issues/1176) | F1 for ports relying on 0-defaults or save semantics; F3 (robustness) otherwise | Explicit initialization, typed values, data-only validated saves | Its semantics behind the profile | None for C1; C2 needs #1150 |
-| D. Collision geometry | [#1177](https://github.com/nugamus/iwbtg-collection/issues/1177) | F1, adopted port by port with a feel contract | Baked typed colliders, one authoritative shape, analytic resolution | Exact sampling | None for D1; D2–D4 need #1151, #1152 |
-| E. Presentation | [#1178](https://github.com/nugamus/iwbtg-collection/issues/1178) | F2; camera response can be F1 | Pure Draw projection, camera component, render layers, explicit transitions | Current behavior; a visible change needs the user's sign-off | None for E2–E5; E1 needs #1152 |
-| F. Time service | [#1179](https://github.com/nugamus/iwbtg-collection/issues/1179) | F1 for bullet, boss and avoidance timing; F2 for ordinary animation | Dated timelines, path/tween components, one animation phase, its own ruleset value and `gameplay_hash` | Exact timeline moments, path clock and animation phase; hashes and pins unchanged | #1165 |
+| D. Collision geometry | [#1177](https://github.com/nugamus/iwbtg-collection/issues/1177) | F1, adopted port by port with a feel contract | Baked typed colliders, one authoritative shape, analytic resolution | Exact sampling | None for D1–D2; D3 and D4 need #1151, #1160 |
+| E. Presentation | [#1178](https://github.com/nugamus/iwbtg-collection/issues/1178) | F2; camera response can be F1 | Pure Draw projection, camera component, render layers, explicit transitions | Current behavior; a visible change needs the user's sign-off | E1, E2b and E4b need #1160 |
+| F. Time service | [#1179](https://github.com/nugamus/iwbtg-collection/issues/1179) | F1 for bullet, boss and avoidance timing; F2 for ordinary animation | Dated timelines, path/tween components, one animation phase, its own ruleset value and `gameplay_hash` | Exact timeline moments, path clock and animation phase; hashes and pins unchanged | #1166, #1160 |
 
-**Status (2026-11-21).** Slice state across the six workstreams after the wave that merged the C2 save hardening and the first two time-service slices:
+**Status (2026-11-25).** Slice state across the six workstreams, re-checked against the live board:
 
-- **#1174:** A1a, A2a and A2b merged; A1b in review (PR #1340, auto-merge armed); A3 waits on #1153.
+- **#1174:** A1a, A2a and A2b merged; A1b merged (#1331 / PR #1340); A3 waits on #1153.
 - **#1175:** B5 (motion) merged; B1, B2 and B4 pending on #1153 and #1159.
 - **#1176:** C1, #1106 and the C2 save hardening (#1325) merged; C2's remainder (#1202) waits on the save identity work in #1153; C3 and C4 pending.
 - **#1177:** D1, D2a and D2b merged; D3 and D4 pending on #1151, #1160 and the dispatch lane's `collide/*`.
-- **#1178:** E1a, E3, E2a and E4a merged; E1b, E2b, E4b, E5 and E6 parked, with E2b and E4b gated by #1160.
+- **#1178:** E1a, E3, E2a and E4a merged; E1b, E2b, E4b, E5 and E6 parked, with E1, E2b and E4b gated by #1160.
 - **#1179:** F1 (#1165) and F2 (#1321) merged; F3, F4 and F5 wait on #1166 and the #1160 profile.
 
 Also merged this wave: #1132 (web CI for #1078), #1330 (the physics schema slice of #1151), #1339 (the E3 identity evidence for #1153) and #459's sign-box F2, which stays `needs-user` for the modal default.
 
-**Sequencing.** The status list names each pending slice's blocker; the child issue carries the detail. A slice that shares `room.rs`, `world/*`, `events.rs`, `def/physics.rs` or `collide/*` starts only when the lane that owns those files is done. Format 1 (#1160) still gates T3, F3–F5, E2b/E4b/E5, #1224 and #1195, and fidelity cannot run until `../iwbtg-collection-research/build/packages` exists.
+**Sequencing.** The status list names each pending slice's blocker; the child issue carries the detail. A slice that shares `room.rs`, `world/*`, `events.rs`, `def/physics.rs` or `collide/*` starts only when the lane that owns those files is done. Format 1 (#1160) still gates T3, F3–F5, E1, E2b/E4b/E5, #1224 and #1195, and fidelity cannot run until `../iwbtg-collection-research/build/packages` exists.
 
 ## How work flows
 
