@@ -283,7 +283,16 @@ fn start_from(store: &Store, def: &GameDef) -> StartPoint {
     let new_game = StartPoint::NewGame { difficulty: 0 };
     let name = name_for(&def.id);
     match read(store, &name, def) {
-        Ok(Some(slot)) => StartPoint::FromSave(slot),
+        // The envelope's checkpoint already resolved and validated the room and save point, so
+        // this names the same room again; the start point carries it unresolved and the sim
+        // looks the name up when it starts (#1238).
+        Ok(Some(slot)) => match Checkpoint::from_slot(def, &slot) {
+            Ok(checkpoint) => StartPoint::FromSave(checkpoint),
+            Err(e) => {
+                storage::warn(&format!("ignoring the save file, starting a new game: {e}"));
+                new_game
+            }
+        },
         Ok(None) => new_game,
         Err(e) => {
             match keep_unusable(store, &name) {
@@ -449,6 +458,25 @@ mod tests {
         let store = temp("round");
         write(&store, NAME, &def, &slot()).unwrap();
         assert_eq!(read(&store, NAME, &def).unwrap(), Some(slot()));
+    }
+
+    /// #1238: a saved game starts from the file's checkpoint, which the sim resolves; a missing
+    /// file is a new game.
+    #[test]
+    fn a_saved_game_starts_from_the_files_checkpoint() {
+        let def = demo_def();
+        let store = temp("start");
+        write(&store, &name_for(&def.id), &def, &slot()).unwrap();
+        match start_from(&store, &def) {
+            StartPoint::FromSave(checkpoint) => {
+                assert_eq!(checkpoint, Checkpoint::from_slot(&def, &slot()).unwrap());
+            }
+            other => panic!("expected a save start, got {other:?}"),
+        }
+        assert_eq!(
+            start_from(&temp("start-empty"), &def),
+            StartPoint::NewGame { difficulty: 0 }
+        );
     }
 
     #[test]
@@ -790,7 +818,9 @@ mod tests {
         let store = temp("resume");
         write(&store, NAME, &def, &slot).unwrap();
         let loaded = read(&store, NAME, &def).unwrap().unwrap();
-        let again = Sim::new(def.clone(), options(StartPoint::FromSave(loaded))).unwrap();
+        // The start point carries the checkpoint, not the resolved slot (#1238).
+        let checkpoint = Checkpoint::from_slot(&def, &loaded).expect("the loaded save's room");
+        let again = Sim::new(def.clone(), options(StartPoint::FromSave(checkpoint))).unwrap();
         let world = again.world();
         let kid = world.get(world.kid(&again.rules().tick).unwrap()).unwrap();
         assert_eq!((kid.m.x(), kid.m.y()), (slot.x, slot.y));
