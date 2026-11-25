@@ -133,6 +133,8 @@ pub struct RunKind {
     pub original: bool,
     pub mods: ModSet,
     pub slow_speed: u8,
+    /// A practice run (a stage/save/room start, #39): never ranked.
+    pub practice: bool,
 }
 
 impl Info {
@@ -197,6 +199,9 @@ pub(crate) fn authors(m: &Manifest) -> Option<String> {
 /// mod that keeps the run off the boards.
 pub fn standing(run: RunKind) -> Standing {
     const OFF: &str = "so this run won’t reach the leaderboard.";
+    if run.practice {
+        return Standing::Unranked("Practice runs stay off the leaderboard.".to_owned());
+    }
     if run.original {
         return Standing::Unranked(format!("Play original keeps your own stats only, {OFF}"));
     }
@@ -299,6 +304,7 @@ fn prepare(
     stats: Option<Res<Stats>>,
     mods: Option<Res<crate::mods::RunMods>>,
     speed: Option<Res<ClockSpeed>>,
+    practice: Option<Res<crate::practice::Practice>>,
     mut loading: ResMut<Loading>,
 ) {
     if loading.info.is_some() {
@@ -316,6 +322,7 @@ fn prepare(
         original: sim.options().mode == PlayMode::Original,
         mods,
         slow_speed: speed.map_or(100, |s| (s.0 * 100.0).round() as u8),
+        practice: practice.is_some_and(|p| p.0),
     };
     let empty = Book::default();
     let book = stats.as_ref().map_or(&empty, |s| &s.book);
@@ -522,7 +529,21 @@ mod tests {
             original,
             mods: ModSet::parse(codes).unwrap(),
             slow_speed: 75,
+            practice: false,
         }
+    }
+
+    /// A practice run says so, before the mode or mods reasons (#39).
+    #[test]
+    fn a_practice_run_says_it_is_never_ranked() {
+        let run = RunKind {
+            practice: true,
+            ..run(false, "")
+        };
+        assert_eq!(
+            standing(run),
+            Standing::Unranked("Practice runs stay off the leaderboard.".to_owned())
+        );
     }
 
     /// The artboards' two lines, and the other ways a run is ranked or not.

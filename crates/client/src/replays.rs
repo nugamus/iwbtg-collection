@@ -512,7 +512,17 @@ impl Plugin for ReplaysPlugin {
         crate::shell::run_resource(app, move |w| {
             let store = if keep { Store::data() } else { None };
             let hash = w.resource::<crate::shell::LoadedPackage>().pkg.gameplay_hash;
-            Recorder::new(store, hash, crate::mods::RunMods::of(w))
+            let mods = crate::mods::RunMods::of(w);
+            let mut recorder = Recorder::new(store, hash, mods);
+            // Practice and Save states runs are never recorded: a restored state breaks an
+            // input-only replay (`docs/architecture/replay.md`).
+            let practice = w
+                .get_resource::<crate::practice::Practice>()
+                .is_some_and(|p| p.0);
+            if practice || mods.contains(iwbtg_sim::mods::Mod::SaveStates) {
+                recorder.skip = true;
+            }
+            recorder
         });
         app
             // Bevy's own exit on the last window closing runs in `Last` too; the app stops after

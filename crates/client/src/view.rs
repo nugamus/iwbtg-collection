@@ -324,12 +324,15 @@ impl NewRun {
 
 /// Builds the sim for `pkg` (`shell::load` calls this before the run opens, so a game that cannot
 /// be set up never opens; nothing in `world` changes). A start that halts is not an error here.
-/// `map` is the map id, `None` the first. `sprites` are `pkg`'s decoded strips
-/// (`package::sprite_images`), decoded by the caller off the UI thread when it can.
+/// `map` is the map id, `None` the first; `start` is an explicit start point (game select's
+/// practice pickers, #39), `None` the mode's own (a new game for Ranked, the save or a new game
+/// for Play original). `sprites` are `pkg`'s decoded strips (`package::sprite_images`), decoded
+/// by the caller off the UI thread when it can.
 pub(crate) fn new_run(
     world: &World,
     pkg: &Package,
     map: Option<&str>,
+    start: Option<iwbtg_sim::room::StartPoint>,
     sprites: Vec<Option<SpriteImage>>,
 ) -> Result<NewRun, String> {
     let config = *world.resource::<RunConfig>();
@@ -338,11 +341,11 @@ pub(crate) fn new_run(
         // A ranked run is always a new game; Play original resumes the save file when there is
         // one, else a new game in the game's `new_game_room`. The title and menus come with the
         // rest of the client; until then the first thing on screen is the first room.
-        start: if config.ranked {
+        start: start.unwrap_or(if config.ranked {
             iwbtg_sim::room::StartPoint::NewGame { difficulty: 0 }
         } else {
             crate::savefile::start_point(&def)
-        },
+        }),
         // Every run draws a random seed, as the originals do (docs/product.md; the replay keeps
         // it). A `--screenshot` check keeps seed 0, so it looks the same every time.
         seed: if config.fresh_seed {
