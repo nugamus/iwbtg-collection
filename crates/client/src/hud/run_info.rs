@@ -20,6 +20,7 @@ use crate::stats::fmt_ticks;
 use crate::ui::fonts::Type;
 use crate::ui::glow::{Glow, glowing};
 use crate::ui::icons::{Icon, icon};
+use crate::ui::notice;
 use crate::ui::shape::{Ink, Shape};
 use crate::ui::tokens;
 use crate::ui::widgets::{sheared, text};
@@ -175,18 +176,30 @@ pub fn read(
     let world = sim.world();
     let mods = mods.map_or(ModSet::NONE, |m| m.0);
     let unranked = sim.options().mode == PlayMode::Original || mods.unranked_by().is_some();
-    let held = collector.map_or(0, |c| {
+    let held = collector.as_ref().map_or(0, |c| {
         let f = c.last();
         f.held | f.pressed
     });
     if files.as_ref().is_none_or(|f| f.is_changed()) {
-        *labels = files.as_ref().map_or_else(Default::default, |f| {
+        let parsed = files.as_ref().map_or_else(Default::default, |f| {
             f.0.get("game.toml")
                 .and_then(|b| std::str::from_utf8(b).ok())
                 .and_then(|t| Manifest::parse(t).ok())
                 .and_then(|m| m.controls.map(|c| c.labels().map(|l| l.map(str::to_owned))))
                 .unwrap_or_default()
         });
+        // #52: before play, name the extra actions this game labels and the keys bound to them.
+        // Once per package load, which is when `ArtFiles` changes.
+        if files.is_some()
+            && let Some(collector) = collector.as_ref()
+            && let Some(line) = crate::controls::extra_actions_notice(
+                parsed.each_ref().map(|l| l.as_deref()),
+                collector.bindings(),
+            )
+        {
+            notice::post(notice::Kind::Controls, &line);
+        }
+        *labels = parsed;
     }
     let want = Look {
         unranked,

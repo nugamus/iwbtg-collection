@@ -344,10 +344,7 @@ pub fn extra_actions_notice(labels: [Option<&str>; 4], bindings: &Bindings) -> O
     if parts.is_empty() {
         None
     } else {
-        Some(format!(
-            "This game uses extra actions: {}.",
-            parts.join(", ")
-        ))
+        Some(format!("Extra actions: {}.", parts.join(", ")))
     }
 }
 
@@ -1050,7 +1047,7 @@ mod tests {
             .expect("the game labels extras");
         assert_eq!(
             line,
-            "This game uses extra actions: Teleport (E), Slow (unbound)."
+            "Extra actions: Teleport (E), Slow (unbound)."
         );
         assert_eq!(extra_actions_notice([None; 4], &bindings), None);
     }

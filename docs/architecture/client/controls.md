@@ -4,9 +4,13 @@ Part of [the client](../client.md).
 
 `controls.rs` (#52; docs/content.md, Controls): a searchable picker of the games in a folder, the
 picked game's actions with the labels its package gives the four extra actions, and rebinding of
-the global bindings. `iwbtg-client --controls <folder> [--screenshot <png>]` opens it alone; a
-settings screen or the pause menu will host the same module later (the entry point is a one-line
-call, and until then the flags are how it is reached).
+the global bindings.
+
+`iwbtg-client --controls <folder> [--screenshot <png>]` is the entry for now, and the documented
+one: there is no settings screen yet (#47 is still a user question) and no pause-menu row (a new
+row is a visible change with no approved artboard), so the panel is opened from the command line
+with the same folder `--select` takes. When the settings screen lands (#53) it hosts the same
+module; that is a one-line call.
 
 ## The list
 
@@ -64,6 +68,11 @@ and `--controls-search <TEXT>` starts with that search text in the field. `contr
 covers the search, the label and notice text, a fixture package's labels, and that a refused
 rebind keeps the old binding.
 
-The notice itself, posted before play, is not wired yet: it needs a notice kind for extra actions
-(`ui/notice.rs`) and a call where a run starts (`view.rs` or `screen.rs`), neither of which this
-change owns. `extra_actions_notice` is public for that call.
+## Before play
+
+When a package loads, `hud/run_info.rs`'s `read` parses its `[controls]` labels (it needs them for
+the input display anyway) and posts `extra_actions_notice` as a notice of kind `Controls`
+(heading CONTROLS, `ui/notice.rs`) if the game labels any. It shows on every load rather than
+once a session: the card is about the game the player just opened. A game without labels posts
+nothing. Notice cards are cut at 100 characters (`notice::clip`), so a game with four long labels
+may lose the end of the line; the panel always shows the whole one.
