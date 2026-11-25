@@ -97,7 +97,9 @@ class ScopeTests(unittest.TestCase):
     def test_plan_splits_changed_crates_from_transitive_consumers(self):
         cases = {
             'crates/sim/src/world.rs': (['iwbtg-sim'], ['iwbtg-client', 'iwbtg-format', 'iwbtg-tools']),
-            'crates/format/src/lib.rs': (['iwbtg-format'], ['iwbtg-client', 'iwbtg-tools']),
+            # The sim's stress-package test dev-depends on the format loader (#1068), so a
+            # format change also compiles the sim's test target.
+            'crates/format/src/lib.rs': (['iwbtg-format'], ['iwbtg-client', 'iwbtg-sim', 'iwbtg-tools']),
             'crates/client/src/view.rs': (['iwbtg-client'], []),
             'crates/tools/src/main.rs': (['iwbtg-tools'], []),
             'crates/server/src/main.rs': (['iwbtg-server'], []),
