@@ -628,6 +628,17 @@ impl Viewer {
     }
 }
 
+/// An open viewer with no run behind it, for tests of systems that ask whether it is open.
+#[cfg(test)]
+pub(crate) fn opened_for_test() -> Viewer {
+    Viewer {
+        open: true,
+        total: 1,
+        rate: 50,
+        ..Viewer::default()
+    }
+}
+
 #[cfg(test)]
 pub(crate) fn open_for_test(world: &mut World, store: &Store, name: &str) {
     open_from(world, store, name);
