@@ -2029,7 +2029,8 @@ version = \"1.0.0\"
         assert!(!docs.code && docs.test.is_empty() && docs.compile.is_empty());
         let full = planned(&["Cargo.lock"], false);
         assert!(full.full && full.code);
-        assert_eq!(full.test.len(), 6);
+        // One per workspace member: sim, format, removal, tools, client, server, xtask.
+        assert_eq!(full.test.len(), 7);
         assert!(full.compile.is_empty());
     }
 
