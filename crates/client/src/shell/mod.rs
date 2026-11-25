@@ -413,7 +413,9 @@ pub fn load_package(
     pkg: package::Package,
     source: PathBuf,
 ) -> Result<(), StartError> {
+    let clock = crate::startup_profile::start();
     let sprites = package::sprite_images(&pkg.files);
+    crate::startup_profile::mark("sprite decode", clock);
     let run = crate::view::new_run(world, &pkg, None, sprites).map_err(|why| StartError {
         path: source.clone(),
         why: StartFailure::Run(why),

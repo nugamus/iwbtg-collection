@@ -105,13 +105,19 @@ pub fn from_iwbz_bytes(
     trace_mode: bool,
     source: &dyn std::fmt::Display,
 ) -> Result<Package, OpenError> {
-    use iwbtg_format::iwbz;
-    let err = |e: String| OpenError::Files(format!("{source}: {e}"));
-    if bytes.len() as u64 > iwbz::MAX_ARCHIVE_BYTES {
-        return Err(err(format!("over {} bytes", iwbz::MAX_ARCHIVE_BYTES)));
-    }
-    let files = iwbz::unpack(bytes).map_err(|e| err(e.to_string()))?;
+    let files = unpack_iwbz(bytes).map_err(|e| OpenError::Files(format!("{source}: {e}")))?;
     from_files(files, trace_mode)
+}
+
+/// Unpacks an `.iwbz` already in memory, refusing one over the archive limit. [`from_iwbz_bytes`]
+/// adds the game definition; the browser times the two steps apart for its startup measurement
+/// (#1489, `crates/client/web/measure_startup.py`).
+pub fn unpack_iwbz(bytes: &[u8]) -> Result<PackageFiles, String> {
+    use iwbtg_format::iwbz;
+    if bytes.len() as u64 > iwbz::MAX_ARCHIVE_BYTES {
+        return Err(format!("over {} bytes", iwbz::MAX_ARCHIVE_BYTES));
+    }
+    iwbz::unpack(bytes).map_err(|e| e.to_string())
 }
 
 /// Builds a package from files already in memory: the game definition and its `gameplay_hash`.

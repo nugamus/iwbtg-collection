@@ -38,6 +38,69 @@ and native `iwbtg pkg hash <package>` prints the same hash. The check for #29 re
 
 See [dev setup](../../dev-setup.md), The client in a browser. The page needs WebGL2; `localhost` and `127.0.0.1` are secure contexts for the Gamepad API ([view](view.md), controller).
 
+## Measuring startup
+
+`?measure` turns on startup phase timing (`startup_profile.rs`): the page logs one
+`startup phase <name>: <ms> ms` line per phase and a final `startup total sprites ready: <ms> ms`,
+which the client does not compute otherwise. `crates/client/web/measure_startup.py` serves the
+page, loads it in headless Chrome and prints those lines:
+
+```
+python -I crates/client/web/measure_startup.py --package showcase.iwbz
+python -I crates/client/web/measure_startup.py --synthetic 400 --size 256
+```
+
+The first needs the bundle and `showcase.iwbz` from "Building and running". The second packs its
+own package of 400 solid 256×256 sprites (100 MiB RGBA), the content
+`shell::tests::startup_phases` uses (#1023), with the native tools, and removes the archive
+afterwards. Each phase is the work between two clock reads:
+
+- **fetch** — the HTTP response and its array buffer. The measurement begins in `start()`, so the
+  wasm download and instantiation are not in it.
+- **unpack** — `iwbtg_format::iwbz::unpack` and the archive-limit check (`package::unpack_iwbz`).
+- **parse/masks** — `package::from_files`: `load_report` (game.toml, masks, the gameplay hash) and
+  the sound pass.
+- **client startup** — `settings::load` and `Args::prepare`.
+- **sprite decode** — `package::sprite_images` (every strip's PNG to RGBA).
+- **script prepare** — `Sim::prepare`.
+- **first room** — `Sim::new_or_halted_prepared` and the start room's Create.
+- **bevy init** — `DefaultPlugins` and every module's plugin build, including the window and the
+  renderer.
+- **sprite build (cpu)** and **sprite queue (wall)** — `view::upload_textures`: image
+  construction and insertion into `Assets<Image>` (CPU), and the frames it spans until
+  `SpriteQueue` empties (wall). The GPU transfer is not a separate phase: the renderer uploads
+  later and no browser-side boundary isolates it. The wall time is frame-bound, not CPU-bound.
+- **startup total sprites ready** — from `start()` to the queue emptying, i.e. including the
+  loading card's wait.
+
+The clock is `performance.now`, whose 100 µs resolution makes a phase under that read
+`0.000 ms`; `script prepare` usually does.
+
+**Measured 2026-11-25** on Windows 11 Pro 10.0.26300, Intel Arc 130T, Google Chrome 158.0.8127.37
+(`--headless=new` with SwiftShader WebGL2), from
+`cargo build -p iwbtg-client --release --target wasm32-unknown-unknown` and wasm-bindgen 0.2.129,
+without `wasm-opt` locally; three runs each:
+
+| phase | showcase (15 sprites, 0.2 MiB) | synthetic (400 × 256, 100 MiB RGBA) |
+| --- | --- | --- |
+| fetch | 8–30 ms | 9–10 ms |
+| unpack | 3–4 ms | 9–11 ms |
+| parse/masks | 39–48 ms | 106–121 ms |
+| client startup | 2.0–2.6 ms | 2.1–4.0 ms |
+| sprite decode | 2.2–2.8 ms | 81–92 ms |
+| script prepare | ~0.1 ms | ≤0.1 ms |
+| first room | 3.2–3.7 ms | 2.5–3.2 ms |
+| Bevy init | 193–289 ms | 224–242 ms |
+| sprite build (CPU) | ≤0.1 ms, 1 frame | ~0.2 ms, 13 frames |
+| sprite queue (wall) | 44–51 ms | 4.1–4.2 s |
+| total | 448–526 ms | 4.66–4.80 s |
+
+Compared with the native numbers in [shell](shell.md) (Startup latency, #1023), parse, decode and
+the first room are the same order. The native measurement is a debug test that reads a folder;
+the browser fetches one archive, so `open` is not like-for-like. The browser's dominant costs are
+Bevy/window/renderer init and the software-rendered frames: the 8 MiB/frame upload is 13 frames
+and ~0.2 ms of CPU, so its 4 s under SwiftShader is the renderer's frame rate, not the upload.
+
 ## Limits
 
 - There is no game select in the browser yet: the page plays the one package it is given ([shell](shell.md); the select screen is native-only until [#148](https://github.com/nugamus/iwbtg-collection/issues/148)).

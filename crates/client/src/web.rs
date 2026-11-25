@@ -15,6 +15,14 @@ pub enum Page {
     Package(String),
 }
 
+/// Whether the page asked for the startup measurement (`?measure`, #1489).
+pub fn wants_measure(search: &str) -> bool {
+    search
+        .trim_start_matches('?')
+        .split('&')
+        .any(|pair| pair == "measure")
+}
+
 /// The page a query string asks for. The gallery wins over a package, as `--ui-gallery` does
 /// natively (the gallery check comes before the package is read).
 pub fn page_from_search(search: &str) -> Page {
@@ -50,6 +58,10 @@ mod browser {
         let search = web_sys::window()
             .and_then(|w| w.location().search().ok())
             .unwrap_or_default();
+        // `?measure` logs the startup phases for `crates/client/web/measure_startup.py` (#1489).
+        if super::wants_measure(&search) {
+            crate::startup_profile::enable();
+        }
         match page_from_search(&search) {
             Page::Gallery => {
                 // Without --screenshot the gallery has no size check, so it cannot fail here.
@@ -69,8 +81,17 @@ mod browser {
     /// Fetches the `.iwbz`, loads it into `PackageFiles`, and runs the client with its defaults.
     async fn play(url: &str) -> Result<(), String> {
         set_status(&format!("Loading {url}…"));
+        let clock = crate::startup_profile::start();
         let bytes = fetch(url).await?;
-        let pkg = crate::package::from_iwbz_bytes(&bytes, false, &url).map_err(|e| e.to_string())?;
+        crate::startup_profile::mark("fetch", clock);
+        // Unpack and parse are separate so the measurement can time them apart; together they are
+        // what `package::from_iwbz_bytes` does (#1489).
+        let clock = crate::startup_profile::start();
+        let files = crate::package::unpack_iwbz(&bytes).map_err(|e| format!("{url}: {e}"))?;
+        crate::startup_profile::mark("unpack", clock);
+        let clock = crate::startup_profile::start();
+        let pkg = crate::package::from_files(files, false).map_err(|e| e.to_string())?;
+        crate::startup_profile::mark("parse/masks", clock);
         // The headless smoke check reads this line from the browser console; it is the hash
         // `iwbtg pkg hash` prints (docs/architecture/client/web.md, Determinism).
         let message = format!(
@@ -80,6 +101,7 @@ mod browser {
         );
         web_sys::console::log_1(&JsValue::from_str(&message));
         // Browser storage gives the bindings, settings, save slots and stats (storage.rs).
+        let clock = crate::startup_profile::start();
         crate::settings::load(false);
         let startup = crate::registration::Startup {
             isolated: false,
@@ -98,6 +120,7 @@ mod browser {
             return result;
         }
         set_status("");
+        crate::startup_profile::mark("client startup", clock);
         let first = Some((pkg, PathBuf::from(url)));
         crate::view::run_package(first, crate::view::ViewArgs::default(), move |app| {
             args.add_plugins(app, &startup)
@@ -179,6 +202,20 @@ mod tests {
         );
         assert_eq!(
             page_from_search("?package="),
+            Page::Package(DEFAULT_PACKAGE.into())
+        );
+    }
+
+    /// `?measure` turns on the startup phases without changing which page plays (#1489).
+    #[test]
+    fn the_page_asks_for_the_startup_measurement() {
+        assert!(wants_measure("?measure"));
+        assert!(wants_measure("?package=a.iwbz&measure"));
+        assert!(!wants_measure(""));
+        assert!(!wants_measure("?package=measure.iwbz"), "a package named measure");
+        assert!(!wants_measure("?measured"), "a different flag");
+        assert_eq!(
+            page_from_search("?measure"),
             Page::Package(DEFAULT_PACKAGE.into())
         );
     }
