@@ -26,6 +26,8 @@ argon2 = "0.5"
 # Salt generation. password-hash re-exports rand_core, but OsRng is behind its `getrandom` feature,
 # so name the crate directly with that feature enabled.
 rand_core = { version = "0.6", features = ["getrandom"] }
+# SHA-256 of the session token, so the database never holds a usable bearer credential (#157).
+sha2 = { workspace = true }
 # SQLite (WAL, one file) with migrations at startup (docs/server.md, Database). No TLS runtime:
 # the driver is a local file. `macros` is only for `sqlx::migrate!`; no `query!` yet, so no
 # DATABASE_URL or `.sqlx` offline data is needed to build.
@@ -52,6 +54,8 @@ ureq = { version = "3.5", default-features = false, features = ["native-tls-no-d
 tower = { version = "0.5", features = ["util"] }
 # Auth tests send and read JSON bodies.
 serde_json = { workspace = true }
+# Auth tests submit the HTML forms as `application/x-www-form-urlencoded`.
+serde_urlencoded = "0.7"
 
 [[test]]
 name = "it"

@@ -1,16 +1,28 @@
-//! Accounts: registration and password sign-in (#156; docs/server.md, Accounts and sign-in).
+//! Accounts: registration, password sign-in, sessions and the auth forms (#156, #157;
+//! docs/server.md, Accounts and sign-in).
 //!
-//! Two JSON endpoints, used by the native client and by the server-rendered forms #157 adds:
+//! JSON (the native client, and the tests):
 //!
 //! - `POST /auth/register` `{username, email?, password}` -> `201 {id, username}`
-//! - `POST /auth/login` `{login, password}` -> `200 {id, username}`
+//! - `POST /auth/login` `{login, password}` -> `200 {id, username}` and a session cookie
+//!
+//! Server-rendered forms (the web client; CSRF-protected):
+//!
+//! - `GET /register`, `GET /login`: HTML with a hidden token and a `__Host-iwbtg_csrf` cookie
+//! - `POST /register`, `POST /login`: form-encoded, same rules, session cookie on sign-in
 //!
 //! Passwords are Argon2id at the documented OWASP parameters (m=19456 KiB, t=2, p=1) and only the
 //! PHC string is stored. Hashing runs on a blocking worker: it is deliberately expensive, and the
 //! async runtime must keep serving the other requests meanwhile.
 //!
-//! Sessions are #157's job. Sign-in here proves the credentials and returns the account; the
-//! caller has no session yet.
+//! A sign-in creates a new session: 32 random bytes are the opaque token, only its SHA-256 is
+//! stored, and the row expires after 30 days. The web receives it in a `__Host-iwbtg_session`
+//! cookie (`HttpOnly; Secure; SameSite=Lax`), so script cannot read it and a cross-site form
+//! cannot send it. CSRF is the double-submit pattern: the form page sets a separate
+//! `__Host-iwbtg_csrf` cookie and embeds the same random token in a hidden field; a POST whose two
+//! halves do not match never reaches the credential check.
+//!
+//! Session lookup for protected endpoints arrives with the first consumer (#162).
 //!
 //! Registration collides on a canonical username or a lowercased email. The two cases answer with
 //! one message on purpose: a distinct "that email exists" would enumerate accounts. Login answers
@@ -19,12 +31,14 @@
 
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::{Algorithm, Argon2, Params, Version};
+use axum::Form;
 use axum::Json;
 use axum::extract::State;
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use rand_core::OsRng;
+use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use sqlx::SqlitePool;
 
 use crate::AppState;
@@ -43,6 +57,19 @@ const MAX_PASSWORD_BYTES: usize = 1024;
 /// A valid salt for the timing-equalizing hash of an unknown account. It is never stored.
 const DUMMY_SALT: &str = "c29tZXNhbHRzb21lc2FsdA";
 
+/// The web session cookie. The `__Host-` prefix requires `Secure`, `Path=/` and no `Domain`
+/// (docs/server.md, Accounts and sign-in).
+const SESSION_COOKIE: &str = "__Host-iwbtg_session";
+
+/// The CSRF double-submit cookie; the form carries the same value in a hidden field.
+const CSRF_COOKIE: &str = "__Host-iwbtg_csrf";
+
+/// "Remember me for 30 days" is the default; there is no shorter session yet.
+const SESSION_MAX_AGE_SECONDS: u64 = 30 * 24 * 60 * 60;
+
+/// Shown when the hidden token and the cookie disagree, or the cookie is missing.
+const CSRF_ERROR: &str = "Your form expired. Please try again.";
+
 #[derive(Deserialize)]
 pub struct RegisterRequest {
     username: String,
@@ -57,6 +84,23 @@ pub struct LoginRequest {
     #[serde(alias = "username")]
     login: String,
     password: String,
+}
+
+/// The `POST /register` form body (docs/server.md: server-rendered forms).
+#[derive(Deserialize)]
+pub struct RegisterForm {
+    username: String,
+    email: Option<String>,
+    password: String,
+    csrf: String,
+}
+
+/// The `POST /login` form body.
+#[derive(Deserialize)]
+pub struct LoginForm {
+    login: String,
+    password: String,
+    csrf: String,
 }
 
 #[derive(Serialize)]
@@ -79,18 +123,32 @@ pub(crate) enum AuthError {
     Internal,
 }
 
+impl AuthError {
+    fn status(&self) -> StatusCode {
+        match self {
+            Self::BadRequest(_) => StatusCode::BAD_REQUEST,
+            Self::Conflict => StatusCode::CONFLICT,
+            Self::Unauthorized => StatusCode::UNAUTHORIZED,
+            Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+
+    fn message(&self) -> &'static str {
+        match self {
+            Self::BadRequest(error) => error,
+            Self::Conflict => "username or email is already registered",
+            Self::Unauthorized => "invalid username or password",
+            Self::Internal => "the account could not be processed",
+        }
+    }
+}
+
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
-        let (status, error) = match self {
-            Self::BadRequest(error) => (StatusCode::BAD_REQUEST, error),
-            Self::Conflict => (StatusCode::CONFLICT, "username or email is already registered"),
-            Self::Unauthorized => (StatusCode::UNAUTHORIZED, "invalid username or password"),
-            Self::Internal => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "the account could not be processed",
-            ),
-        };
-        (status, Json(ErrorBody { error })).into_response()
+        let body = Json(ErrorBody {
+            error: self.message(),
+        });
+        (self.status(), body).into_response()
     }
 }
 
@@ -99,15 +157,42 @@ pub(crate) async fn register(
     State(state): State<AppState>,
     Json(request): Json<RegisterRequest>,
 ) -> Result<(StatusCode, Json<AccountResponse>), AuthError> {
-    let (username, canonical) = validate_username(&request.username)?;
-    let email = normalize_email(request.email.as_deref())?;
-    validate_password(&request.password)?;
+    let account = create_account(
+        &state.pool,
+        request.username,
+        request.email.as_deref(),
+        request.password,
+    )
+    .await?;
+    Ok((StatusCode::CREATED, Json(account)))
+}
+
+/// `POST /auth/login`, JSON, setting the session cookie like the form does.
+pub(crate) async fn login(
+    State(state): State<AppState>,
+    Json(request): Json<LoginRequest>,
+) -> Result<Response, AuthError> {
+    let (account, cookie) = authenticate(&state.pool, request.login.trim(), request.password).await?;
+    let mut response = Json(account).into_response();
+    set_cookie(&mut response, &cookie);
+    Ok(response)
+}
+
+/// Validates, hashes and stores a new account; the shared body of the JSON and form handlers.
+async fn create_account(
+    pool: &SqlitePool,
+    username: String,
+    email: Option<&str>,
+    password: String,
+) -> Result<AccountResponse, AuthError> {
+    let (username, canonical) = validate_username(&username)?;
+    let email = normalize_email(email)?;
+    validate_password(&password)?;
 
     // Hash before opening the transaction: this is the slow part and holds no database lock.
-    let password_hash = hash_off_thread(request.password).await?;
+    let password_hash = hash_off_thread(password).await?;
 
-    let mut transaction = state
-        .pool
+    let mut transaction = pool
         .begin()
         .await
         .map_err(|err| database_error(err, "begin registration"))?;
@@ -133,17 +218,16 @@ pub(crate) async fn register(
         .await
         .map_err(|err| database_error(err, "commit registration"))?;
 
-    Ok((StatusCode::CREATED, Json(AccountResponse { id, username })))
+    Ok(AccountResponse { id, username })
 }
 
-/// `POST /auth/login` (docs/server.md, Accounts and sign-in).
-pub(crate) async fn login(
-    State(state): State<AppState>,
-    Json(request): Json<LoginRequest>,
-) -> Result<Json<AccountResponse>, AuthError> {
-    let password = request.password;
-    let stored = lookup(&state.pool, request.login.trim()).await?;
-
+/// Checks the credentials, then starts a new session; the shared body of both sign-ins.
+async fn authenticate(
+    pool: &SqlitePool,
+    login: &str,
+    password: String,
+) -> Result<(AccountResponse, String), AuthError> {
+    let stored = lookup(pool, login).await?;
     let (password_hash, account) = match stored {
         Some((id, username, hash)) => (Some(hash), Some((id, username))),
         None => (None, None),
@@ -151,9 +235,244 @@ pub(crate) async fn login(
     let verified = verify_off_thread(password, password_hash).await?;
 
     match (verified, account) {
-        (true, Some((id, username))) => Ok(Json(AccountResponse { id, username })),
+        (true, Some((id, username))) => {
+            let cookie = create_session(pool, id).await?;
+            Ok((AccountResponse { id, username }, cookie))
+        }
         _ => Err(AuthError::Unauthorized),
     }
+}
+
+/// A new opaque session: the token goes to the client, only its SHA-256 is stored.
+///
+/// The `expires_at` default is computed by SQLite in the schema's timestamp format, so the server
+/// needs no date library.
+async fn create_session(pool: &SqlitePool, account_id: i64) -> Result<String, AuthError> {
+    let token = random_hex(32);
+    let id = random_hex(16);
+    let token_hash = Sha256::digest(token.as_bytes()).to_vec();
+    sqlx::query(
+        "INSERT INTO sessions (id, account_id, token_hash, expires_at)
+         VALUES (?1, ?2, ?3, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+30 days'))",
+    )
+    .bind(&id)
+    .bind(account_id)
+    .bind(&token_hash)
+    .execute(pool)
+    .await
+    .map_err(|err| database_error(err, "insert session"))?;
+
+    Ok(format!(
+        "{SESSION_COOKIE}={token}; Path=/; HttpOnly; Secure; SameSite=Lax; \
+         Max-Age={SESSION_MAX_AGE_SECONDS}"
+    ))
+}
+
+/// 32 random bytes as 64 hex characters: opaque, URL- and header-safe, no base64 dependency.
+fn random_hex(bytes: usize) -> String {
+    let mut buffer = vec![0u8; bytes];
+    OsRng.fill_bytes(&mut buffer);
+    buffer.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn set_cookie(response: &mut Response, cookie: &str) {
+    response.headers_mut().insert(
+        header::SET_COOKIE,
+        HeaderValue::from_str(cookie).expect("an ASCII cookie"),
+    );
+}
+
+/// `GET /register`: the form with a fresh CSRF token in a hidden field and its cookie.
+pub(crate) async fn register_page() -> Response {
+    let token = random_hex(32);
+    html_page(
+        StatusCode::OK,
+        render_register(None, &token),
+        Some(csrf_cookie(&token)),
+    )
+}
+
+/// `GET /login`: the same for signing in.
+pub(crate) async fn login_page() -> Response {
+    let token = random_hex(32);
+    html_page(
+        StatusCode::OK,
+        render_login(None, &token),
+        Some(csrf_cookie(&token)),
+    )
+}
+
+/// `POST /register`: the form path through the same account rules as the JSON endpoint.
+pub(crate) async fn register_form(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Form(form): Form<RegisterForm>,
+) -> Response {
+    if !csrf_matches(&headers, &form.csrf) {
+        return csrf_rejection(render_register);
+    }
+    match create_account(&state.pool, form.username, form.email.as_deref(), form.password).await {
+        Ok(account) => html_page(
+            StatusCode::OK,
+            success_page(
+                &format!("Account created, {}.", account.username),
+                "/login",
+                "Sign in",
+            ),
+            None,
+        ),
+        Err(error) => {
+            let token = random_hex(32);
+            html_page(
+                error.status(),
+                render_register(Some(error.message()), &token),
+                Some(csrf_cookie(&token)),
+            )
+        }
+    }
+}
+
+/// `POST /login`: credentials plus a new session cookie.
+pub(crate) async fn login_form(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Form(form): Form<LoginForm>,
+) -> Response {
+    if !csrf_matches(&headers, &form.csrf) {
+        return csrf_rejection(render_login);
+    }
+    match authenticate(&state.pool, form.login.trim(), form.password).await {
+        Ok((account, cookie)) => html_page(
+            StatusCode::OK,
+            notice_page(&format!("Signed in as {}.", account.username)),
+            Some(cookie),
+        ),
+        Err(error) => {
+            let token = random_hex(32);
+            html_page(
+                error.status(),
+                render_login(Some(error.message()), &token),
+                Some(csrf_cookie(&token)),
+            )
+        }
+    }
+}
+
+/// A failed CSRF check gets a fresh form (and token), never a credential check.
+fn csrf_rejection(render: fn(Option<&str>, &str) -> String) -> Response {
+    let token = random_hex(32);
+    html_page(
+        StatusCode::FORBIDDEN,
+        render(Some(CSRF_ERROR), &token),
+        Some(csrf_cookie(&token)),
+    )
+}
+
+/// The double-submit check: the hidden field must equal the cookie the form page set.
+fn csrf_matches(headers: &HeaderMap, submitted: &str) -> bool {
+    !submitted.is_empty() && cookie_value(headers, CSRF_COOKIE).is_some_and(|cookie| cookie == submitted)
+}
+
+/// One cookie's value from a `Cookie` request header, if present.
+fn cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
+    headers
+        .get_all(header::COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .flat_map(|value| value.split(';'))
+        .find_map(|part| {
+            let (key, value) = part.trim().split_once('=')?;
+            (key == name).then(|| value.to_owned())
+        })
+}
+
+fn csrf_cookie(token: &str) -> String {
+    format!("{CSRF_COOKIE}={token}; Path=/; HttpOnly; Secure; SameSite=Lax")
+}
+
+fn html_page(status: StatusCode, html: String, cookie: Option<String>) -> Response {
+    let mut response = html.into_response();
+    *response.status_mut() = status;
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("text/html; charset=utf-8"),
+    );
+    if let Some(cookie) = cookie {
+        set_cookie(&mut response, &cookie);
+    }
+    response
+}
+
+fn page(title: &str, content: &str) -> String {
+    format!(
+        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">\
+         <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\
+         <title>{title}</title><style>{PAGE_STYLE}</style></head>\
+         <body><main>{content}</main></body></html>"
+    )
+}
+
+const PAGE_STYLE: &str = "body{font-family:system-ui,sans-serif;max-width:22rem;margin:3rem auto;\
+padding:0 1rem;line-height:1.5}label{display:block;margin-top:.75rem}input{width:100%;box-sizing:\
+border-box;padding:.45rem;font:inherit}button{margin-top:1.25rem;padding:.5rem 1rem;font:inherit}\
+input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid #0b5fff;outline-offset:\
+2px}.error{color:#b00020}.hint{color:#555;font-size:.9em}";
+
+fn error_paragraph(error: Option<&str>) -> String {
+    match error {
+        Some(error) => format!("<p class=\"error\" role=\"alert\">{error}</p>"),
+        None => String::new(),
+    }
+}
+
+fn render_register(error: Option<&str>, csrf: &str) -> String {
+    let form = format!(
+        "<form method=\"post\" action=\"/register\">\
+         <input type=\"hidden\" name=\"csrf\" value=\"{csrf}\">\
+         <label for=\"username\">Username</label>\
+         <input id=\"username\" name=\"username\" autocomplete=\"username\" required minlength=\"3\" \
+         maxlength=\"15\">\
+         <label for=\"email\">Email <span class=\"hint\">(optional)</span></label>\
+         <input id=\"email\" name=\"email\" type=\"email\" autocomplete=\"email\">\
+         <label for=\"password\">Password</label>\
+         <input id=\"password\" name=\"password\" type=\"password\" autocomplete=\"new-password\" \
+         required minlength=\"15\"><p class=\"hint\">At least 15 characters.</p>\
+         <button type=\"submit\">Create account</button></form>\
+         <p>Already registered? <a href=\"/login\">Sign in</a>.</p>"
+    );
+    page(
+        "Create an account",
+        &format!("<h1>Create an account</h1>{}{form}", error_paragraph(error)),
+    )
+}
+
+fn render_login(error: Option<&str>, csrf: &str) -> String {
+    let form = format!(
+        "<form method=\"post\" action=\"/login\">\
+         <input type=\"hidden\" name=\"csrf\" value=\"{csrf}\">\
+         <label for=\"login\">Username or email</label>\
+         <input id=\"login\" name=\"login\" autocomplete=\"username\" required>\
+         <label for=\"password\">Password</label>\
+         <input id=\"password\" name=\"password\" type=\"password\" autocomplete=\"current-password\" \
+         required>\
+         <button type=\"submit\">Sign in</button></form>\
+         <p>New here? <a href=\"/register\">Create an account</a>.</p>"
+    );
+    page(
+        "Sign in",
+        &format!("<h1>Sign in</h1>{}{form}", error_paragraph(error)),
+    )
+}
+
+fn success_page(message: &str, href: &str, label: &str) -> String {
+    page(
+        "IWBTG Collection",
+        &format!("<h1>{message}</h1><p><a href=\"{href}\">{label}</a></p>"),
+    )
+}
+
+fn notice_page(message: &str) -> String {
+    page("IWBTG Collection", &format!("<h1>{message}</h1>"))
 }
 
 /// The account's id, typed username and password hash, found by username or email.

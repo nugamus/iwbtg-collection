@@ -2,7 +2,7 @@
 //! and sign-in).
 
 use axum::body::Body;
-use axum::http::{Request, StatusCode, header};
+use axum::http::{HeaderMap, Request, StatusCode, header};
 use serde_json::{Value, json};
 use sqlx::SqlitePool;
 use tower::ServiceExt;
@@ -23,27 +23,79 @@ async fn pool(tag: &str) -> (TempDir, SqlitePool) {
     (dir, pool)
 }
 
-async fn post(pool: &SqlitePool, uri: &str, body: Value) -> (StatusCode, Value) {
+/// Sends one request through the real router and returns the raw pieces.
+async fn send(pool: &SqlitePool, request: Request<Body>) -> (StatusCode, HeaderMap, Vec<u8>) {
     let response = iwbtg_server::app(pool.clone(), None)
-        .oneshot(
-            Request::post(uri)
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(body.to_string()))
-                .unwrap(),
-        )
+        .oneshot(request)
         .await
         .expect("router must answer");
     let status = response.status();
+    let headers = response.headers().clone();
     let bytes = axum::body::to_bytes(response.into_body(), 1 << 20)
         .await
         .expect("read the body")
         .to_vec();
+    (status, headers, bytes)
+}
+
+async fn json_post(pool: &SqlitePool, uri: &str, body: Value) -> (StatusCode, HeaderMap, Value) {
+    let request = Request::post(uri)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    let (status, headers, bytes) = send(pool, request).await;
     let body = if bytes.is_empty() {
         Value::Null
     } else {
         serde_json::from_slice(&bytes).expect("a JSON body")
     };
+    (status, headers, body)
+}
+
+async fn post(pool: &SqlitePool, uri: &str, body: Value) -> (StatusCode, Value) {
+    let (status, _headers, body) = json_post(pool, uri, body).await;
     (status, body)
+}
+
+async fn get_page(pool: &SqlitePool, uri: &str) -> (StatusCode, HeaderMap, String) {
+    let (status, headers, bytes) =
+        send(pool, Request::get(uri).body(Body::empty()).expect("a request")).await;
+    (status, headers, String::from_utf8(bytes).expect("HTML"))
+}
+
+async fn form_post(
+    pool: &SqlitePool,
+    uri: &str,
+    fields: &[(&str, &str)],
+    cookie: Option<&str>,
+) -> (StatusCode, HeaderMap, String) {
+    let body = serde_urlencoded::to_string(fields).expect("a form body");
+    let mut request = Request::post(uri).header(header::CONTENT_TYPE, "application/x-www-form-urlencoded");
+    if let Some(cookie) = cookie {
+        request = request.header(header::COOKIE, cookie);
+    }
+    let (status, headers, bytes) = send(pool, request.body(Body::from(body)).unwrap()).await;
+    (status, headers, String::from_utf8(bytes).expect("HTML"))
+}
+
+/// The value of one `Set-Cookie` header, without its attributes.
+fn set_cookie(headers: &HeaderMap, name: &str) -> Option<String> {
+    headers
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .find_map(|value| {
+            let (key, rest) = value.split_once('=')?;
+            (key == name).then(|| rest.split(';').next().unwrap_or_default().to_owned())
+        })
+}
+
+/// The hidden CSRF field the form page rendered.
+fn hidden_csrf(html: &str) -> String {
+    let marker = "name=\"csrf\" value=\"";
+    let start = html.find(marker).expect("a csrf field") + marker.len();
+    let rest = &html[start..];
+    rest[..rest.find('"').expect("the closing quote")].to_owned()
 }
 
 async fn register(
@@ -240,4 +292,196 @@ async fn invalid_emails_are_rejected() {
         let (status, _) = register(&pool, "Kid", Some(invalid), PASSWORD).await;
         assert_eq!(status, StatusCode::BAD_REQUEST, "accepted {invalid:?}");
     }
+}
+
+/// Each sign-in is a fresh opaque session: a new token, only its hash stored, and the documented
+/// `__Host-` cookie attributes (docs/server.md, Accounts and sign-in; #157).
+#[tokio::test]
+async fn a_sign_in_creates_a_new_hashed_session_and_sets_the_host_cookie() {
+    let (_dir, pool) = pool("session").await;
+    register(&pool, "Foo Bar", None, PASSWORD).await;
+
+    let (status, first_headers, _) = json_post(
+        &pool,
+        "/auth/login",
+        json!({ "login": "Foo Bar", "password": PASSWORD }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let first_token = set_cookie(&first_headers, "__Host-iwbtg_session").expect("a session cookie");
+    assert_eq!(first_token.len(), 64, "the token is 32 bytes of hex");
+    let raw_cookie = first_headers
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .find(|value| value.starts_with("__Host-iwbtg_session="))
+        .expect("the session Set-Cookie");
+    for attribute in ["Path=/", "HttpOnly", "Secure", "SameSite=Lax", "Max-Age=2592000"] {
+        assert!(
+            raw_cookie.contains(attribute),
+            "missing {attribute}: {raw_cookie}"
+        );
+    }
+
+    let (_, second_headers, _) = json_post(
+        &pool,
+        "/auth/login",
+        json!({ "login": "Foo Bar", "password": PASSWORD }),
+    )
+    .await;
+    let second_token = set_cookie(&second_headers, "__Host-iwbtg_session").expect("a second session cookie");
+    assert_ne!(first_token, second_token, "a sign-in reused a token");
+
+    assert_eq!(count(&pool, "SELECT COUNT(*) FROM sessions").await, 2);
+    let hashes: Vec<Vec<u8>> = sqlx::query_scalar("SELECT token_hash FROM sessions")
+        .fetch_all(&pool)
+        .await
+        .expect("read the token hashes");
+    assert_eq!(hashes.len(), 2);
+    for hash in hashes {
+        assert_eq!(hash.len(), 32, "not a SHA-256");
+        assert_ne!(hash, first_token.as_bytes(), "the token itself was stored");
+    }
+}
+
+/// The form pages set the double-submit cookie and embed the same token.
+#[tokio::test]
+async fn form_pages_set_a_csrf_cookie_and_embed_the_token() {
+    let (_dir, pool) = pool("csrf-pages").await;
+
+    let (status, headers, html) = get_page(&pool, "/login").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        headers
+            .get(header::CONTENT_TYPE)
+            .expect("a content type")
+            .to_str()
+            .unwrap()
+            .starts_with("text/html")
+    );
+    let login_csrf = set_cookie(&headers, "__Host-iwbtg_csrf").expect("a csrf cookie");
+    assert_eq!(hidden_csrf(&html), login_csrf);
+    assert!(html.contains("autocomplete=\"current-password\""));
+    assert!(html.contains("name=\"csrf\""));
+
+    let (_, headers, html) = get_page(&pool, "/register").await;
+    let register_csrf = set_cookie(&headers, "__Host-iwbtg_csrf").expect("a csrf cookie");
+    assert_eq!(hidden_csrf(&html), register_csrf);
+    assert!(html.contains("autocomplete=\"new-password\""));
+    assert_ne!(login_csrf, register_csrf, "a token was reused across pages");
+}
+
+/// A form without the matching cookie/token pair never reaches the credential check.
+#[tokio::test]
+async fn a_form_post_without_the_csrf_pair_is_forbidden_and_changes_nothing() {
+    let (_dir, pool) = pool("csrf-reject").await;
+    register(&pool, "Foo Bar", None, PASSWORD).await;
+
+    let (_, _headers, html) = get_page(&pool, "/login").await;
+    let csrf = hidden_csrf(&html);
+    let cookie = format!("__Host-iwbtg_csrf={csrf}");
+
+    // No cookie at all.
+    let (status, _, _) = form_post(
+        &pool,
+        "/login",
+        &[("login", "Foo Bar"), ("password", PASSWORD), ("csrf", &csrf)],
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    // A cookie, but a different hidden token.
+    let (status, _, html) = form_post(
+        &pool,
+        "/login",
+        &[("login", "Foo Bar"), ("password", PASSWORD), ("csrf", "00")],
+        Some(&cookie),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert!(html.contains("form expired"));
+
+    assert_eq!(count(&pool, "SELECT COUNT(*) FROM sessions").await, 0);
+}
+
+/// The happy path: a CSRF-checked form sign-in creates a session and shows who it is.
+#[tokio::test]
+async fn a_form_sign_in_with_csrf_creates_a_session() {
+    let (_dir, pool) = pool("form-login").await;
+    register(&pool, "Foo Bar", None, PASSWORD).await;
+
+    let (_, _headers, html) = get_page(&pool, "/login").await;
+    let csrf = hidden_csrf(&html);
+    let cookie = format!("__Host-iwbtg_csrf={csrf}");
+
+    let (status, headers, html) = form_post(
+        &pool,
+        "/login",
+        &[("login", "Foo Bar"), ("password", PASSWORD), ("csrf", &csrf)],
+        Some(&cookie),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(html.contains("Signed in as Foo Bar."), "{html}");
+    assert!(set_cookie(&headers, "__Host-iwbtg_session").is_some());
+    assert_eq!(count(&pool, "SELECT COUNT(*) FROM sessions").await, 1);
+}
+
+/// The register form goes through the same rules and creates the account, without a session.
+#[tokio::test]
+async fn a_form_registration_with_csrf_creates_the_account() {
+    let (_dir, pool) = pool("form-register").await;
+
+    let (_, _headers, html) = get_page(&pool, "/register").await;
+    let csrf = hidden_csrf(&html);
+    let cookie = format!("__Host-iwbtg_csrf={csrf}");
+
+    let (status, _, html) = form_post(
+        &pool,
+        "/register",
+        &[
+            ("username", "Form Kid"),
+            ("email", "Form@Example.com"),
+            ("password", PASSWORD),
+            ("csrf", &csrf),
+        ],
+        Some(&cookie),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(html.contains("Account created, Form Kid."), "{html}");
+
+    let (canonical, email): (String, Option<String>) =
+        sqlx::query_as("SELECT username_canonical, email FROM accounts")
+            .fetch_one(&pool)
+            .await
+            .expect("read the account");
+    assert_eq!(canonical, "form_kid");
+    assert_eq!(email.as_deref(), Some("form@example.com"));
+    assert_eq!(count(&pool, "SELECT COUNT(*) FROM sessions").await, 0);
+}
+
+/// The form path reports the same validation answers as the JSON one, as HTML.
+#[tokio::test]
+async fn a_form_error_re_renders_the_form_with_the_message() {
+    let (_dir, pool) = pool("form-error").await;
+
+    let (_, _headers, html) = get_page(&pool, "/register").await;
+    let csrf = hidden_csrf(&html);
+    let cookie = format!("__Host-iwbtg_csrf={csrf}");
+
+    let (status, _, html) = form_post(
+        &pool,
+        "/register",
+        &[("username", "ab"), ("password", PASSWORD), ("csrf", &csrf)],
+        Some(&cookie),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(html.contains("username must be 3 to 15 characters"), "{html}");
+    // The re-rendered form still carries a usable token and its cookie.
+    assert!(html.contains("name=\"csrf\""));
+    assert_eq!(count(&pool, "SELECT COUNT(*) FROM accounts").await, 0);
 }

@@ -40,6 +40,8 @@ pub fn app(pool: SqlitePool, catalog_dir: Option<PathBuf>) -> Router {
         .route("/files/{name}", get(catalog::file))
         .route("/auth/register", post(auth::register))
         .route("/auth/login", post(auth::login))
+        .route("/register", get(auth::register_page).post(auth::register_form))
+        .route("/login", get(auth::login_page).post(auth::login_form))
         .route("/removals.json", get(removal::removals))
         .with_state(AppState { pool, catalog_dir })
 }
