@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-25T12:04:19Z",
+ "generated_at": "2026-11-25T12:15:26Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -218,13 +218,13 @@
    "title": "9 · Content & ports",
    "name": "Content & ports",
    "state": "open",
-   "open": 49,
-   "closed": 10,
+   "open": 48,
+   "closed": 11,
    "total": 59,
-   "pct_closed": 16.9,
-   "size_points": 136,
+   "pct_closed": 18.6,
+   "size_points": 135,
    "sizes": {
-    "size:S": 28,
+    "size:S": 27,
     "size:M": 12,
     "size:L": 9,
     "unknown": 0
@@ -263,16 +263,16 @@
  "activity": {
   "totals": {
    "issues": 928,
-   "open": 285,
-   "closed": 643,
-   "pct_closed": 69.3
+   "open": 284,
+   "closed": 644,
+   "pct_closed": 69.4
   },
   "open_prs": 3,
   "process": {
-   "agent-ready": 130,
+   "agent-ready": 129,
    "triage": 52,
    "needs-user": 30,
-   "in-progress": 10,
+   "in-progress": 13,
    "blocked": 25,
    "revisit": 3
   },
@@ -314,15 +314,31 @@
     "count": 7
    },
    {
-    "area": "area:port",
+    "area": "area:research",
     "count": 5
    },
    {
-    "area": "area:research",
-    "count": 5
+    "area": "area:port",
+    "count": 4
    }
   ],
   "recent_closed": [
+   {
+    "number": 1367,
+    "title": "Fill per-game progress front-matter in docs/games",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1367",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:port",
+     "in-progress"
+    ],
+    "phase": "9 · Content & ports",
+    "updated_at": "2026-11-25T12:15:17Z",
+    "closed_at": "2026-11-25T12:15:17Z",
+    "created_at": "2026-11-24T13:43:03Z"
+   },
    {
     "number": 1548,
     "title": "dashboard: per-game implementation bars from repo data",
@@ -427,25 +443,58 @@
     "updated_at": "2026-11-25T10:23:31Z",
     "closed_at": "2026-11-25T10:23:31Z",
     "created_at": "2026-11-25T00:56:28Z"
-   },
-   {
-    "number": 1082,
-    "title": "Sim docs: clear the remaining plan citations in sim tests and pkg_cmd",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1082",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:sim",
-     "area:docs"
-    ],
-    "phase": "3 · Sim fidelity",
-    "updated_at": "2026-11-25T10:05:44Z",
-    "closed_at": "2026-11-25T10:05:44Z",
-    "created_at": "2026-11-20T08:28:10Z"
    }
   ],
   "in_progress": [
+   {
+    "number": 39,
+    "title": "Practice mode: start from stage, save or room; save states",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/39",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "6 · Ranked-ready run",
+    "updated_at": "2026-11-25T12:13:47Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T11:30:16Z"
+   },
+   {
+    "number": 1379,
+    "title": "0004 class capacity: check the 96 package classes against the census (up to 114 scripted kinds per game)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1379",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:format",
+     "area:docs",
+     "in-progress"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-25T12:12:13Z",
+    "closed_at": null,
+    "created_at": "2026-11-24T17:15:16Z"
+   },
+   {
+    "number": 1093,
+    "title": "Sim scripts: prepared script artifact and shared GameDef (host.rs half of #1021)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1093",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:sim",
+     "in-progress"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-25T12:10:33Z",
+    "closed_at": null,
+    "created_at": "2026-11-20T09:06:56Z"
+   },
    {
     "number": 160,
     "title": "Auth: password reset by emailed code",
@@ -493,54 +542,6 @@
     "updated_at": "2026-11-25T02:48:55Z",
     "closed_at": null,
     "created_at": "2026-11-02T11:55:48Z"
-   },
-   {
-    "number": 196,
-    "title": "UI translation files, English and Japanese",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/196",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-25T00:40:35Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T12:41:04Z"
-   },
-   {
-    "number": 106,
-    "title": "Accessibility: screen-shake toggle, colorblind-friendly UI, audio cues",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/106",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-24T22:25:29Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T11:55:29Z"
-   },
-   {
-    "number": 154,
-    "title": "Server: Docker Compose with cloudflared",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/154",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:server",
-     "in-progress"
-    ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-24T22:21:14Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T11:57:34Z"
    }
   ],
   "needs_user": [
@@ -727,7 +728,7 @@
     "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 258,
+  "closed_7d": 259,
   "opened_7d": 333,
   "burnup": [
    {
@@ -748,7 +749,7 @@
    {
     "week": "2026-11-30",
     "created": 928,
-    "closed": 643
+    "closed": 644
    }
   ]
  },
@@ -762,7 +763,7 @@
    "engine": "gm8 8.0",
    "genre": "Needle",
    "difficulty": 31.24,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 17,
    "placed_instances": 1997,
@@ -821,7 +822,7 @@
    "engine": "gm8 8.0",
    "genre": "Needle",
    "difficulty": 32.98,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 28,
    "placed_instances": 5480,
@@ -867,7 +868,7 @@
    "engine": "gm8 8.0",
    "genre": "Needle",
    "difficulty": 29.12,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 23,
    "placed_instances": 7085,
@@ -918,7 +919,7 @@
    "engine": "gm8 8.0",
    "genre": "Needle",
    "difficulty": 21.33,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 25,
    "placed_instances": 4741,
@@ -980,7 +981,7 @@
    "engine": "gm8 8.0",
    "genre": "Needle",
    "difficulty": 23.4,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 25,
    "placed_instances": 3414,
@@ -1036,7 +1037,7 @@
    "engine": "gm8 8.0",
    "genre": "Avoidance",
    "difficulty": 17.38,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 6,
    "placed_instances": 204,
@@ -1083,7 +1084,7 @@
    "engine": "gm8 8.1",
    "genre": "Trap",
    "difficulty": 18.95,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 12,
    "placed_instances": 1389,
@@ -1132,7 +1133,7 @@
    "engine": "gm8 8.0",
    "genre": "Trap",
    "difficulty": 27.7,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 11,
    "placed_instances": 2219,
@@ -1175,7 +1176,7 @@
    "engine": "gm8 8.0",
    "genre": "Trap",
    "difficulty": 20.17,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 24,
    "placed_instances": 3893,
@@ -1222,7 +1223,7 @@
    "engine": "gm8 8.0",
    "genre": "Avoidance",
    "difficulty": 24.4,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 6,
    "placed_instances": 258,
@@ -1268,7 +1269,7 @@
    "engine": "gm8 8.0",
    "genre": "Adventure",
    "difficulty": 22.62,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 21,
    "placed_instances": 5715,
@@ -1318,7 +1319,7 @@
    "engine": "gm8 8.0",
    "genre": "Trap",
    "difficulty": 28.77,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 21,
    "placed_instances": 2115,
@@ -1368,7 +1369,7 @@
    "engine": "gm8 8.0",
    "genre": "Adventure",
    "difficulty": 26.72,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 11,
    "placed_instances": 2848,
@@ -1417,7 +1418,7 @@
    "engine": "gm8 8.0",
    "genre": "Trap",
    "difficulty": 23.33,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 9,
    "placed_instances": 2570,
@@ -1471,7 +1472,7 @@
    "engine": "gm8 8.0",
    "genre": "Adventure",
    "difficulty": 28.1,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 32,
    "placed_instances": 9815,
@@ -1530,7 +1531,7 @@
    "engine": "gm8 8.0",
    "genre": "Adventure",
    "difficulty": 24.17,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 36,
    "placed_instances": 12604,
@@ -1580,7 +1581,7 @@
    "engine": "gm8 8.0",
    "genre": "Adventure",
    "difficulty": 26.9,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 47,
    "placed_instances": 12805,
@@ -1634,7 +1635,7 @@
    "engine": "gm8 8.0",
    "genre": "Adventure",
    "difficulty": 33.81,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 62,
    "placed_instances": 8069,
@@ -1689,7 +1690,7 @@
    "engine": "gm8 8.1",
    "genre": "Adventure",
    "difficulty": 26.72,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 23,
    "placed_instances": 2228,
@@ -1736,7 +1737,7 @@
    "engine": "gm8 8.1",
    "genre": "Needle",
    "difficulty": 22.77,
-   "lifecycle": "unknown",
+   "lifecycle": "converted",
    "converted": true,
    "rooms": 19,
    "placed_instances": 2310,
