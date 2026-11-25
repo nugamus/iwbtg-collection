@@ -66,7 +66,7 @@ Start from the shortlist entry, not from a download. The shortlist already carri
 **What the converter does automatically** (details in the converter's `converter/FORMAT_NOTES.md`):
 
 - Resolves resource names through `_resources.list.xml`, including escaped file names, non-ASCII names, case-only pairs and unnamed `object724` resources; writes a per-game original-name-to-id map into `tests/trace-map.toml`.
-- Writes `game.toml` fields the data carries: title, source URL, runner (`gm80`/`gm81`), tick rate, object order and background colour.
+- Writes `game.toml` fields the data carries: title, source URL, runner (`gm80`/`gm81`; the loader also accepts `gms`, which the converter does not emit yet), tick rate, object order and background colour.
 - Writes rooms: size, persistence, background layers, views, instances in creation order, tiles, tileset sidecars, creation-code constants as instance params or `on_create` rows, room roles and the restart flags.
 - Writes sprites and backgrounds: PNGs, frame count and size, origin, collision kind, bounding box and alpha tolerance; splits nothing, but reports strips that do not fit.
 - Writes sounds and music: Ogg files, the sound/music split, volume and `length_ticks`, including files a game loads through a DLL.
