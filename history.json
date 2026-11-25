@@ -1397,5 +1397,100 @@
     "size_points": 42
    }
   ]
+ },
+ {
+  "at": "2026-11-25T15:58:06Z",
+  "builtin_pct": 98.0,
+  "script_pct": 1.87,
+  "placed_instances": 91759,
+  "traces_recorded": 660,
+  "objects_exercised": 76,
+  "trace_cases_ok": 77,
+  "trace_cases_recorded": 83,
+  "package_mapped_pct": 28.7,
+  "package_scripted_pct": 71.3,
+  "open_issues": 278,
+  "closed_issues": 655,
+  "issue_pct_closed": 70.2,
+  "size_points": 684,
+  "phases": [
+   {
+    "number": 0,
+    "title": "0 · Foundation",
+    "open": 5,
+    "closed": 86,
+    "size_points": 12
+   },
+   {
+    "number": 1,
+    "title": "1 · Behavior research",
+    "open": 3,
+    "closed": 26,
+    "size_points": 3
+   },
+   {
+    "number": 2,
+    "title": "2 · Format & pipeline",
+    "open": 35,
+    "closed": 116,
+    "size_points": 105
+   },
+   {
+    "number": 3,
+    "title": "3 · Sim fidelity",
+    "open": 36,
+    "closed": 216,
+    "size_points": 47
+   },
+   {
+    "number": 4,
+    "title": "4 · First playable",
+    "open": 8,
+    "closed": 45,
+    "size_points": 10
+   },
+   {
+    "number": 5,
+    "title": "5 · Client shell & UI",
+    "open": 18,
+    "closed": 23,
+    "size_points": 43
+   },
+   {
+    "number": 6,
+    "title": "6 · Ranked-ready run",
+    "open": 39,
+    "closed": 101,
+    "size_points": 132
+   },
+   {
+    "number": 7,
+    "title": "7 · Online",
+    "open": 50,
+    "closed": 18,
+    "size_points": 127
+   },
+   {
+    "number": 8,
+    "title": "8 · Ghosts & races",
+    "open": 10,
+    "closed": 0,
+    "size_points": 28
+   },
+   {
+    "number": 9,
+    "title": "9 · Content & ports",
+    "open": 48,
+    "closed": 11,
+    "size_points": 135
+   },
+   {
+    "number": 10,
+    "title": "10 · Release",
+    "open": 19,
+    "closed": 10,
+    "size_points": 42
+   }
+  ]
  }
 ]

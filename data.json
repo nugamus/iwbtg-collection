@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-25T15:51:41Z",
+ "generated_at": "2026-11-25T15:58:06Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -262,17 +262,17 @@
  ],
  "activity": {
   "totals": {
-   "issues": 932,
-   "open": 277,
+   "issues": 933,
+   "open": 278,
    "closed": 655,
-   "pct_closed": 70.3
+   "pct_closed": 70.2
   },
-  "open_prs": 2,
+  "open_prs": 4,
   "process": {
+   "triage": 48,
    "agent-ready": 127,
-   "in-progress": 11,
+   "in-progress": 12,
    "needs-user": 30,
-   "triage": 47,
    "blocked": 25,
    "revisit": 3
   },
@@ -283,7 +283,7 @@
    },
    {
     "area": "area:client",
-    "count": 67
+    "count": 68
    },
    {
     "area": "area:server",
@@ -330,11 +330,10 @@
     "url": "https://github.com/nugamus/iwbtg-collection/issues/1530",
     "labels": [
      "agent-ready",
-     "size:M",
-     "in-progress"
+     "size:M"
     ],
     "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-25T15:49:39Z",
+    "updated_at": "2026-11-25T15:53:19Z",
     "closed_at": "2026-11-25T15:49:39Z",
     "created_at": "2026-11-25T10:07:47Z"
    },
@@ -348,7 +347,7 @@
      "size:S"
     ],
     "phase": "4 · First playable",
-    "updated_at": "2026-11-25T15:51:38Z",
+    "updated_at": "2026-11-25T15:54:09Z",
     "closed_at": "2026-11-25T15:46:38Z",
     "created_at": "2026-11-24T17:45:23Z"
    },
@@ -450,6 +449,37 @@
   ],
   "in_progress": [
    {
+    "number": 1294,
+    "title": "Sim rooms A2c: nested-request queue in the world store for NextTick (#1174)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1294",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:sim",
+     "in-progress"
+    ],
+    "phase": "6 · Ranked-ready run",
+    "updated_at": "2026-11-25T15:55:58Z",
+    "closed_at": null,
+    "created_at": "2026-11-21T12:00:40Z"
+   },
+   {
+    "number": 1531,
+    "title": "Script API: view reads and writes (view_xview-style) (#776, census rank 16)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1531",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "in-progress"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-25T15:55:53Z",
+    "closed_at": null,
+    "created_at": "2026-11-25T10:07:50Z"
+   },
+   {
     "number": 1565,
     "title": "Verification: share the replay verifier between iwbtg-tools and the server",
     "state": "open",
@@ -465,22 +495,6 @@
     "updated_at": "2026-11-25T15:33:58Z",
     "closed_at": null,
     "created_at": "2026-11-25T15:32:27Z"
-   },
-   {
-    "number": 1294,
-    "title": "Sim rooms A2c: nested-request queue in the world store for NextTick (#1174)",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1294",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:sim",
-     "in-progress"
-    ],
-    "phase": "6 · Ranked-ready run",
-    "updated_at": "2026-11-25T13:12:09Z",
-    "closed_at": null,
-    "created_at": "2026-11-21T12:00:40Z"
    },
    {
     "number": 39,
@@ -529,22 +543,6 @@
     "updated_at": "2026-11-25T00:40:35Z",
     "closed_at": null,
     "created_at": "2026-11-02T12:41:04Z"
-   },
-   {
-    "number": 106,
-    "title": "Accessibility: screen-shake toggle, colorblind-friendly UI, audio cues",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/106",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-24T22:25:29Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T11:55:29Z"
    }
   ],
   "needs_user": [
@@ -732,7 +730,7 @@
    }
   ],
   "closed_7d": 270,
-  "opened_7d": 337,
+  "opened_7d": 338,
   "burnup": [
    {
     "week": "2026-11-09",
@@ -751,7 +749,7 @@
    },
    {
     "week": "2026-11-30",
-    "created": 932,
+    "created": 933,
     "closed": 655
    }
   ]
