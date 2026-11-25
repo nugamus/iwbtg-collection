@@ -256,7 +256,7 @@ fn write_blob(path: &Path, bytes: &[u8]) -> Result<(), ToolError> {
 }
 
 /// Writes beside the target and renames, so a server reading the folder never sees a half file.
-fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), ToolError> {
+pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), ToolError> {
     let temp = path.with_extension(format!("tmp{}", std::process::id()));
     std::fs::write(&temp, bytes).map_err(|e| ToolError::Message(format!("{}: {e}", temp.display())))?;
     if let Err(e) = std::fs::rename(&temp, path) {

@@ -30,8 +30,14 @@ class ScopeTests(unittest.TestCase):
 
     def test_server_does_not_build_bevy_or_wasm(self):
         result = scope(['crates/server/src/main.rs'], self.graph)
-        self.assertEqual(result['packages'], '-p iwbtg-server')
-        self.assertFalse(result['browser'] or result['wasip1'] or result['determinism'] or result['web'])
+        # `iwbtg-tools` dev-depends on `iwbtg-server` for the removal-list round-trip test (#1479),
+        # so a server change also tests the tools crate. It is still no Bevy and no wasm.
+        self.assertEqual(result['packages'], '-p iwbtg-server -p iwbtg-tools')
+        # `iwbtg-tools` is a server consumer through the #1479 dev-dependency, and the tools crate
+        # is one of the determinism crates, so a server change now runs that job too. Still no Bevy
+        # and no wasm.
+        self.assertTrue(result['determinism'])
+        self.assertFalse(result['browser'] or result['wasip1'] or result['web'])
 
     def test_shared_unknown_deleted_and_ci_inputs_are_full(self):
         for path in ('Cargo.lock', 'Cargo.toml', 'crates/server/Cargo.toml', 'rust-toolchain.toml', '.cargo/config.toml',
@@ -90,7 +96,8 @@ class ScopeTests(unittest.TestCase):
 
     def test_mixed_changes_and_dependency_aliases(self):
         result = scope(['crates/server/src/main.rs', 'crates/client/src/view.rs'], self.graph)
-        self.assertEqual(result['packages'], '-p iwbtg-client -p iwbtg-server')
+        # The tools crate is a server consumer through the #1479 dev-dependency.
+        self.assertEqual(result['packages'], '-p iwbtg-client -p iwbtg-server -p iwbtg-tools')
         graph = {'a': ('crates/a/', set()), 'b': ('crates/b/', {'a'}), 'c': ('crates/c/', {'b'})}
         self.assertEqual(scope(['crates/a/deleted.rs'], graph)['packages'], '-p a -p b -p c')
 
@@ -102,7 +109,9 @@ class ScopeTests(unittest.TestCase):
             'crates/format/src/lib.rs': (['iwbtg-format'], ['iwbtg-client', 'iwbtg-sim', 'iwbtg-tools']),
             'crates/client/src/view.rs': (['iwbtg-client'], []),
             'crates/tools/src/main.rs': (['iwbtg-tools'], []),
-            'crates/server/src/main.rs': (['iwbtg-server'], []),
+            # The removal-list round-trip test dev-depends on the server (#1479), so a server
+            # change compile-checks (and tests) the tools crate.
+            'crates/server/src/main.rs': (['iwbtg-server'], ['iwbtg-tools']),
             'crates/xtask/src/main.rs': (['xtask'], []),
         }
         for path, (test, compile_) in cases.items():

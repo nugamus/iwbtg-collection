@@ -25,6 +25,17 @@ toml.workspace = true
 serde_json.workspace = true
 # `metadata` (only here, so the sim's own graph is unchanged): the registered API as definitions.
 rhai = { workspace = true, features = ["metadata"] }
+# `iwbtg removals sign` (#1479): Ed25519 over the canonical removal-list text (docs/server.md,
+# Removal list). The seed is read from a 600 file and never printed; `hex` and `sha2` are for the
+# signature bytes and the printed digest.
+ed25519-dalek = "2"
+hex = "0.4"
+sha2.workspace = true
+
+[dev-dependencies]
+# The round-trip test signs with this crate and validates through the server's own parser
+# (`iwbtg_server::removal`), so the two copies of the canonical rule cannot drift.
+iwbtg-server = { path = "../server" }
 
 [lints]
 workspace = true
