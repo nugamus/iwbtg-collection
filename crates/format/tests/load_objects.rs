@@ -59,10 +59,9 @@ fn a_legacy_param_for_its_game_does_not_warn() {
 }
 
 /// The same package rewritten as format 1: `ruleset` for `engine_rev` and a `[compat]` profile.
-fn save_once_package_format_one(id: &str) -> PackageFiles {
+fn save_once_package_format_one() -> PackageFiles {
     package(|f| {
         let text = manifest(ORDER_SAVE, "\n[compat]\nprofile = \"gm8/a1@1\"\n")
-            .replace("id = \"wp7a_basic\"", &format!("id = \"{id}\""))
             .replace("format = 0\n", "format = 1\n")
             .replace("engine_rev = 0\n", "ruleset = \"gm8@0\"\n");
         set(f, "game.toml", text);
@@ -75,7 +74,7 @@ fn save_once_package_format_one(id: &str) -> PackageFiles {
 
 #[test]
 fn a_legacy_param_outside_its_game_warns_in_format_one_too() {
-    let report = load_report(&save_once_package_format_one("wp7a_basic"), STRICT);
+    let report = load_report(&save_once_package_format_one(), STRICT);
     assert!(report.ok(), "{}", render(&report));
     let warning = report
         .diagnostics
