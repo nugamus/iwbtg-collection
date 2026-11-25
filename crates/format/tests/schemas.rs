@@ -237,12 +237,12 @@ fn schemas_reject_what_the_loader_rejects() {
 fn runner_schema_covers_every_runner() {
     use iwbtg_sim::rules::Runner;
     let all = |r: Runner| match r {
-        Runner::Gm80 | Runner::Gm81 => (),
+        Runner::Gm80 | Runner::Gm81 | Runner::Gms => (),
     };
     all(Runner::Gm80);
     let schema = load_schema("game");
     let runner = serde_json::to_string(&schema).unwrap();
-    for name in ["gm80", "gm81"] {
+    for name in ["gm80", "gm81", "gms"] {
         assert!(runner.contains(name), "game schema lacks runner {name}");
     }
 }

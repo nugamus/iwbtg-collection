@@ -38,6 +38,8 @@ pub enum Runner {
     Gm80,
     /// GameMaker 8.1.
     Gm81,
+    /// GameMaker Studio 1.x. The rule values stay the GM8 defaults until research#179 fixes them.
+    Gms,
 }
 
 /// Highest `engine_rev` this build knows.
@@ -69,9 +71,10 @@ pub struct RunnerRules {
 impl RunnerRules {
     /// The rules for a runner at an engine revision. GM 8.1 keeps the 8.0 rules: research#15
     /// found no simulation-visible difference (the 8.1 games differ only in renderer/content;
-    /// U12, R11). `runner` records the build for provenance; only the real 8.1 event-order and
-    /// input check remains OPEN (research#175). Any difference found later becomes a field, never
-    /// a branch on the runner inside built-ins.
+    /// U12, R11). GMS also starts from the GM8 defaults; research#179 is the open spec that may
+    /// add its own values. `runner` records the build for provenance; only the real 8.1
+    /// event-order and input check remains OPEN (research#175). Any difference found later
+    /// becomes a field, never a branch on the runner inside built-ins.
     pub fn for_runner(runner: Runner, engine_rev: u16) -> Result<RunnerRules, SimError> {
         if engine_rev > MAX_ENGINE_REV {
             return Err(SimError::Unsupported {
@@ -79,7 +82,7 @@ impl RunnerRules {
             });
         }
         match runner {
-            Runner::Gm80 | Runner::Gm81 => Ok(RunnerRules::default()),
+            Runner::Gm80 | Runner::Gm81 | Runner::Gms => Ok(RunnerRules::default()),
         }
     }
 }
@@ -105,6 +108,13 @@ mod tests {
         assert!(r.num.particles_draw_rng);
         assert_eq!(r.rng.layout, rng::StreamLayout::Shared);
         assert_eq!(r.draw.purity, draw::DrawPurity::Ambient);
+    }
+
+    #[test]
+    fn gms_gets_the_gm8_defaults() {
+        let gms = RunnerRules::for_runner(Runner::Gms, 0).unwrap();
+        assert_eq!(gms, RunnerRules::default());
+        assert_eq!(gms, RunnerRules::for_runner(Runner::Gm80, 0).unwrap());
     }
 
     #[test]

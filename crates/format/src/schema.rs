@@ -57,6 +57,8 @@ pub enum RunnerSchema {
     Gm80,
     /// GameMaker 8.1.
     Gm81,
+    /// GameMaker Studio 1.x.
+    Gms,
 }
 
 /// One entry of `instances` in a room file. Keys other than the common ones are params of the
