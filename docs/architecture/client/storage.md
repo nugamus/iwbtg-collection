@@ -16,6 +16,7 @@ A save file is a postcard envelope (`savefile::SaveFile`, version 3, #1150): a f
 | Replays | `replays/...` (data) | as above | as above | `iwbtg-collection/data/replays/...` |
 | Saved replays (results page, Save replay) | `exports/<game>-<file>.iwbr` (data) | as above | as above | `iwbtg-collection/data/exports/...` |
 | Local stats | `stats.toml` (data) | as above | as above | `iwbtg-collection/data/stats.toml` |
+| Favorites and collections | `collections.toml` (data) | as above | as above | `iwbtg-collection/data/collections.toml` |
 
 `$IWBTG_CONFIG_DIR` replaces the whole config folder (no `iwbtg-collection` is added); tests and checks use it. macOS uses the Linux folders rather than `~/Library/Application Support`, so one rule covers both. Settings survive a restart because every change is written through the config store at once (`settings::update`; `settings::tests::file_write_and_read` reads back what it wrote).
 

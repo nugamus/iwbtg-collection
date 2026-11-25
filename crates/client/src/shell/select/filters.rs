@@ -11,6 +11,7 @@ use std::cmp::Ordering;
 
 use bevy::prelude::*;
 
+use super::collections::{Collections, Pick};
 use super::library::{GameInfo, Records};
 
 /// A field the list can be grouped or sorted by.
@@ -104,6 +105,8 @@ pub struct Filters {
     pub clears: Clears,
     /// The Creator dropdown: `None` is Any.
     pub creator: Option<String>,
+    /// The Collections dropdown: `None` is Any (favorites and named collections, #105).
+    pub collection: Option<Pick>,
 }
 
 impl Default for Filters {
@@ -116,6 +119,7 @@ impl Default for Filters {
             sort: Field::Title,
             clears: Clears::Any,
             creator: None,
+            collection: None,
         }
     }
 }
@@ -152,7 +156,7 @@ pub fn creators(games: &[GameInfo]) -> Vec<String> {
 }
 
 /// Whether `game` passes the search and the filters.
-pub fn matches(game: &GameInfo, cleared: bool, f: &Filters) -> bool {
+pub fn matches(game: &GameInfo, cleared: bool, f: &Filters, lists: &Collections) -> bool {
     let words = f.search.to_lowercase();
     let title = game.title.to_lowercase();
     let by = game.creator.to_lowercase();
@@ -165,7 +169,11 @@ pub fn matches(game: &GameInfo, cleared: bool, f: &Filters) -> bool {
         Clears::Uncleared => !cleared,
     };
     let made = f.creator.as_deref().is_none_or(|c| creator(game) == c);
-    found && clears && made
+    let listed = f
+        .collection
+        .as_ref()
+        .is_none_or(|pick| lists.contains(pick, &game.id));
+    found && clears && made && listed
 }
 
 /// The group a game falls in, by `field`; `None` for [`Field::Game`] (no headers).
@@ -201,7 +209,12 @@ fn by(field: Field, a: (&GameInfo, bool), b: (&GameInfo, bool)) -> Ordering {
 /// The list's rows: the games that pass, grouped (a header before each group) and sorted
 /// within, ties by title and then by package order. A field that is not ready
 /// ([`Field::ready`]) groups and sorts like `Game` and `Title`.
-pub fn rows(games: &[GameInfo], records: &[Records], f: &Filters) -> Vec<Row> {
+pub fn rows(
+    games: &[GameInfo],
+    records: &[Records],
+    f: &Filters,
+    lists: &Collections,
+) -> Vec<Row> {
     let cleared = |i: usize| records.get(i).is_some_and(|r| r.cleared);
     let group = if f.group.ready(games) {
         f.group
@@ -210,7 +223,7 @@ pub fn rows(games: &[GameInfo], records: &[Records], f: &Filters) -> Vec<Row> {
     };
     let sort = if f.sort.ready(games) { f.sort } else { Field::Title };
     let mut shown: Vec<usize> = (0..games.len())
-        .filter(|&i| matches(&games[i], cleared(i), f))
+        .filter(|&i| matches(&games[i], cleared(i), f, lists))
         .collect();
     let key = |i: usize| group_of(group, &games[i], cleared(i));
     shown.sort_by(|&a, &b| {
@@ -269,6 +282,11 @@ mod tests {
                 })
                 .collect(),
         }
+    }
+
+    /// The rows with no collections, for the filters that do not use them.
+    fn rows(games: &[GameInfo], records: &[Records], f: &Filters) -> Vec<Row> {
+        super::rows(games, records, f, &Collections::default())
     }
 
     fn records(cleared: &[bool]) -> Vec<Records> {
@@ -417,6 +435,29 @@ mod tests {
             rows(&games, &recs, &g)[0],
             Row::Header("★ 2".into(), 1),
             "groups follow the field's order"
+        );
+    }
+
+    #[test]
+    fn the_collections_dropdown_keeps_only_its_games() {
+        let games = library();
+        let recs = records(&[false; 4]);
+        let mut lists = Collections::default();
+        // The test games' ids are their titles (`game` above).
+        lists.toggle_favorite("Kaenbyou");
+        lists.create("Warm", Some("needle hell")).unwrap();
+        let only = |collection| {
+            let f = Filters {
+                collection: Some(collection),
+                ..default()
+            };
+            order(&super::rows(&games, &recs, &f, &lists))
+        };
+        assert_eq!(only(Pick::Favorites), [1]);
+        assert_eq!(only(Pick::Named("Warm".into())), [3]);
+        assert!(
+            only(Pick::Named("missing".into())).is_empty(),
+            "a removed collection shows nothing"
         );
     }
 
