@@ -22,6 +22,7 @@ mod logging;
 mod registration;
 mod render_fix;
 mod settings;
+mod startup_profile;
 mod storage;
 mod time;
 #[cfg(any(test, all(target_arch = "wasm32", target_os = "unknown")))]

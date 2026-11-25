@@ -62,6 +62,16 @@ pub(crate) struct SpriteQueue {
     sprites: Vec<Option<SpriteImage>>,
     /// The first strip not uploaded yet.
     next: usize,
+    /// The startup measurement's counters (#1489); `None` unless the page asked (`?measure`).
+    profile: Option<UploadProfile>,
+}
+
+/// How long [`upload_textures`] spent building images and how many frames it spanned (#1489).
+struct UploadProfile {
+    started: crate::time::Instant,
+    /// CPU time inside `upload_textures` (image construction and `Assets<Image>` insertions).
+    cpu: crate::time::Duration,
+    frames: u32,
 }
 
 /// The most sprite bytes [`upload_textures`] uploads in one frame (one sprite can exceed it).
@@ -361,13 +371,17 @@ pub(crate) fn new_run(
     }
     // Compile the scripts once and keep the artifact for the run, so a quick retry does not
     // compile them again (#1093B).
+    let clock = crate::startup_profile::start();
     let prepared = Sim::prepare(&def).map_err(|e| format!("the game did not start: {e}"))?;
+    crate::startup_profile::mark("script prepare", clock);
     // A start that halts (a script error in a start-room Create, #946) is a run whose sim is
     // halted from tick 0: it opens on the script error screen (`script_error/`), as a halt in
     // play does. Only a sim that cannot be set up is an error.
+    let clock = crate::startup_profile::start();
     let sim = Sim::new_or_halted_prepared(Arc::clone(&def), options.clone(), &prepared)
         .map_err(|e| format!("the game did not start: {e}"))?;
     def.room(sim.world().room).ok_or("the start room is missing")?;
+    crate::startup_profile::mark("first room", clock);
     Ok(NewRun {
         game: Game { sim },
         start: RunStart {
@@ -558,6 +572,7 @@ fn run_inner(
         }
         None => (crate::shell::select::TITLE.to_owned(), (800, 608)),
     };
+    let clock = crate::startup_profile::start();
     app.add_plugins(
         DefaultPlugins
             // Drops the ICU4X segmentation notice (logging.rs, #734).
@@ -579,6 +594,7 @@ fn run_inner(
     .insert_resource(Cap(cap))
     .add_systems(Last, limit_frames);
     plugins(&mut app);
+    crate::startup_profile::mark("bevy init", clock);
     if let Some(path) = screenshot {
         // `screen` pins the size when `--window` gives one (`ShotSize`).
         add_screenshot(&mut app, path, None);
@@ -620,7 +636,15 @@ fn setup(
     ));
     let sprites = std::mem::take(&mut sprites.0);
     commands.insert_resource(Textures(vec![None; sprites.len()]));
-    commands.insert_resource(SpriteQueue { sprites, next: 0 });
+    commands.insert_resource(SpriteQueue {
+        sprites,
+        next: 0,
+        profile: crate::startup_profile::enabled().then(|| UploadProfile {
+            started: crate::time::Instant::now(),
+            cpu: crate::time::Duration::ZERO,
+            frames: 0,
+        }),
+    });
 }
 
 /// Moves queued sprite strips into `Assets<Image>`, at most [`UPLOAD_BUDGET_BYTES`] a frame, so
@@ -635,6 +659,10 @@ fn upload_textures(
     let Some(queue) = queue.as_deref_mut() else {
         return;
     };
+    let clock = queue
+        .profile
+        .as_ref()
+        .map(|_| crate::time::Instant::now());
     let mut bytes = 0usize;
     while queue.next < queue.sprites.len() {
         let i = queue.next;
@@ -656,10 +684,34 @@ fn upload_textures(
         }
         queue.next += 1;
         if bytes >= UPLOAD_BUDGET_BYTES && queue.next < queue.sprites.len() {
+            note_upload_frame(queue, clock);
             return;
         }
     }
+    note_upload_frame(queue, clock);
+    // The GPU transfer itself happens in the renderer, not here; this is the CPU image build and
+    // the frame span it took (docs/architecture/client/web.md, Measuring startup).
+    if let Some(profile) = queue.profile.as_ref() {
+        crate::startup_profile::log(&format!(
+            "startup phase sprite build (cpu): {:.3} ms over {} frames",
+            profile.cpu.as_secs_f64() * 1000.0,
+            profile.frames
+        ));
+        crate::startup_profile::log(&format!(
+            "startup phase sprite queue (wall): {:.3} ms",
+            profile.started.elapsed().as_secs_f64() * 1000.0
+        ));
+        crate::startup_profile::total("sprites ready");
+    }
     commands.remove_resource::<SpriteQueue>();
+}
+
+/// Adds one `upload_textures` call to the queue's startup counters (#1489).
+fn note_upload_frame(queue: &mut SpriteQueue, clock: Option<crate::time::Instant>) {
+    if let (Some(clock), Some(profile)) = (clock, queue.profile.as_mut()) {
+        profile.cpu += clock.elapsed();
+        profile.frames += 1;
+    }
 }
 
 /// Points the camera at view 0 of the sim's room (the runner's view follow already moved it this
