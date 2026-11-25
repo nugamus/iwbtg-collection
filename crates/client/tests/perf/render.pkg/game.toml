@@ -1,0 +1,36 @@
+#:schema ../../../../../docs/format/schema/v0/game.schema.json
+# The client's rendering stress package (#1024): rooms of 500, 2,000 or 5,000 visible 8x8 dots,
+# either a stable population or with spawn/destroy churn, for `--perf` measurements. Original
+# synthetic content: one solid dot, no game assets, no RNG. The rooms are picked by editing
+# `start_room` (and `[engine] new_game_room`) in a copy, or with `--room` on a replay; see
+# docs/architecture/client/perf.md.
+format = 0
+id = "perf_render"
+title = "Render stress"
+version = "0.1.0"
+engine_rev = 0
+runner = "gm80"
+physics = "physics.toml"
+start_room = "stable_500"
+max_ticks = 180_000
+object_order = [
+  "world", "kid", "kid_bullet", "bow", "blood", "blood_emitter", "game_over", "playerface",
+  "kid_start", "@spawner", "@churner", "@dot", "@dot_churn",
+]
+
+[engine]
+new_game_room = "stable_500"
+float_model = "f64"
+
+[[creators]]
+name = "IWBTG Collection"
+role = "author"
+
+[source]
+url = "https://github.com/nugamus/iwbtg-collection"
+permission = "granted"
+permission_note = "Original synthetic package made for this repository (a client stress test)."
+
+[timing]
+start = { trigger = "run_start" }
+end = { trigger = "run_end" }

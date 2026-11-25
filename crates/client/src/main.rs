@@ -39,6 +39,7 @@ client_modules! {
     shell,
     bindings,
     controls,
+    perf,
     screen,
     hud,
     ui,

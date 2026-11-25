@@ -1,0 +1,8 @@
+#:schema ../../../../../../docs/format/schema/v0/sprite.schema.json
+# One 8x8 dot, drawn at its instance's position; no animation, so a room of them costs exactly
+# one sprite each.
+frames = 1
+frame_size = [8, 8]
+origin = [4, 4]
+collision = "rect"
+bbox = [2, 2, 5, 5]
