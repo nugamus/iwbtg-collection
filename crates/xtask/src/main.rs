@@ -559,18 +559,10 @@ fn run_logged(
     })
 }
 
-/// Free-text `TODO(OPEN` markers held by files another agent is editing (#1119). Remove an entry
-/// when its marker is converted or deleted; the guard never requires an allowlisted line to exist.
-const OPEN_TODO_ALLOW: &[&str] = &[
-    "// TODO(OPEN: runner differences between GM 8.0 and 8.1, from the CLONE_SPEC): nothing to",
-    "// TODO(OPEN: built-in kind list, from research/specs/mechanics.md): check",
-];
-
 /// Whether a line is a free-text `TODO(OPEN` marker: no issue (`#123`) and no URL on the marker line.
-/// An allowlisted line is not an offence.
 fn open_todo_offends(line: &str) -> bool {
     let line = line.trim();
-    if !line.contains("TODO(OPEN") || OPEN_TODO_ALLOW.contains(&line) {
+    if !line.contains("TODO(OPEN") {
         return false;
     }
     let bytes = line.as_bytes();
@@ -579,7 +571,7 @@ fn open_todo_offends(line: &str) -> bool {
 }
 
 /// `crates/*/src/**/*.rs`: every `TODO(OPEN` names an issue or a URL (#1119). Cheap and offline.
-/// The xtask crate is skipped: it holds the pattern, the allowlist and this function's tests.
+/// The xtask crate is skipped: it holds the pattern and this function's tests.
 fn check_open_todos(root: &Path) -> Result<(), String> {
     let crates = root.join("crates");
     let mut bad = Vec::new();
@@ -2295,7 +2287,6 @@ version = \"1.0.0\"
         ));
         assert!(!open_todo_offends("// TODO(#1119): link every open question"));
         assert!(!open_todo_offends("// an ordinary comment"));
-        assert!(!open_todo_offends(OPEN_TODO_ALLOW[0]));
     }
 
     /// The `schema` feature (JSON Schema through `schemars`) is for docs and tests only: never in

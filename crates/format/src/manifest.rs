@@ -1515,8 +1515,8 @@ impl Manifest {
                         v.error(entry.span(), format!("`{shown}` is listed twice in object_order"));
                     }
                     match kind {
-                        // TODO(OPEN: built-in kind list, from research/specs/mechanics.md): check
-                        // bare kinds against the built-in list.
+                        // A bare kind is checked against the package's kinds, which hold every
+                        // built-in (`order::resolve_ranks`); this pass only validates the syntax.
                         KindRef::BuiltIn(_) => {}
                         KindRef::Package(id) => {
                             let file = format!("objects/{id}.toml");
