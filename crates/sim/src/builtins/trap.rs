@@ -60,6 +60,7 @@ const fn real(name: &'static str) -> ParamSpec {
         name,
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     }
 }
 
@@ -68,38 +69,74 @@ const fn flag(name: &'static str) -> ParamSpec {
         name,
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     }
 }
 
 const SPECS: &[ParamSpec] = &[
-    real("trigger_id"),
+    ParamSpec {
+        name: "trigger_id",
+        ty: ParamType::Real,
+        required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["go-the-spook-house"],
+            issue: 1267,
+        }),
+    },
     ParamSpec {
         name: "trigger_model",
         ty: ParamType::Enum(MODEL_WORDS),
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["go-the-spook-house"],
+            issue: 1267,
+        }),
     },
     ParamSpec {
         name: "trigger_kind",
         ty: ParamType::Kind,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "trigger_kind_b",
         ty: ParamType::Kind,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "trigger_kind_c",
         ty: ParamType::Kind,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "launch",
         ty: ParamType::Enum(LAUNCH),
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["go-the-spook-house"],
+            issue: 1267,
+        }),
     },
-    real("hspeed"),
-    real("vspeed"),
+    ParamSpec {
+        name: "hspeed",
+        ty: ParamType::Real,
+        required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["showdown"],
+            issue: 1267,
+        }),
+    },
+    ParamSpec {
+        name: "vspeed",
+        ty: ParamType::Real,
+        required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["showdown"],
+            issue: 1267,
+        }),
+    },
     real("dir"),
     real("speed"),
     real("path"),
@@ -108,15 +145,64 @@ const SPECS: &[ParamSpec] = &[
         name: "path_end",
         ty: ParamType::Enum(PATH_END),
         required: false,
+        legacy: None,
     },
     flag("path_absolute"),
     real("path_scale"),
-    real("endx"),
-    real("endy"),
-    real("hspd"),
-    real("vspd"),
-    real("to_x"),
-    real("to_y"),
+    ParamSpec {
+        name: "endx",
+        ty: ParamType::Real,
+        required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["little-runner"],
+            issue: 1267,
+        }),
+    },
+    ParamSpec {
+        name: "endy",
+        ty: ParamType::Real,
+        required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["little-runner"],
+            issue: 1267,
+        }),
+    },
+    ParamSpec {
+        name: "hspd",
+        ty: ParamType::Real,
+        required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["little-runner"],
+            issue: 1267,
+        }),
+    },
+    ParamSpec {
+        name: "vspd",
+        ty: ParamType::Real,
+        required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["little-runner"],
+            issue: 1267,
+        }),
+    },
+    ParamSpec {
+        name: "to_x",
+        ty: ParamType::Real,
+        required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["go-the-spook-house"],
+            issue: 1267,
+        }),
+    },
+    ParamSpec {
+        name: "to_y",
+        ty: ParamType::Real,
+        required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["go-the-spook-house"],
+            issue: 1267,
+        }),
+    },
     real("alm"),
     real("alm2"),
     real("alm3"),
@@ -130,6 +216,10 @@ const SPECS: &[ParamSpec] = &[
         name: "stop_on_stopper",
         ty: ParamType::Enum(STOPPER),
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["get-the-rainbow-feather"],
+            issue: 1267,
+        }),
     },
     flag("depth_reveal"),
     flag("destroy_outside_room"),
@@ -137,11 +227,13 @@ const SPECS: &[ParamSpec] = &[
         name: "kind",
         ty: ParamType::Enum(&["killer", "block", "cover", "other"]),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "sound",
         ty: ParamType::Sound,
         required: false,
+        legacy: None,
     },
     flag("sound_if_trigger"),
 ];

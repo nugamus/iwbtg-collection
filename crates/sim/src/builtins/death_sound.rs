@@ -40,16 +40,19 @@ const SPECS: &[ParamSpec] = &[
         name: "sound",
         ty: ParamType::Sound,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "music",
         ty: ParamType::Sound,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "start_volume",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
 ];
 

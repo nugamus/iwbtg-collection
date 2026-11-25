@@ -4,10 +4,59 @@
 
 use crate::load_engine_packs::with_pack;
 use crate::wp7a_load::*;
-use iwbtg_format::PackageFiles;
 use iwbtg_format::load::load_report;
+use iwbtg_format::{PackageFiles, Severity};
 use iwbtg_sim::def::{ClassMask, EngineKind, GameDef, ParamValue, RoomId};
 use iwbtg_sim::num::Real;
+
+/// The WP7a order with a `save` object appended (`@saver`, `base = "save"`).
+const ORDER_SAVE: &str = r#"object_order = [
+  "world", "kid", "block", { kind = "spike", dir = "up" }, "kid_start", "warp", "@boss",
+  { kind = "spike", dir = "down" }, "spike", "kid_bullet", "blood", "blood_emitter", "game_over",
+  "bow", "playerface", "@saver",
+]"#;
+
+/// The WP7a package with `once = true` (a little-trap move param) on a `save` object, under
+/// package id `id`.
+fn save_once_package(id: &str) -> PackageFiles {
+    package(|f| {
+        let text = manifest(ORDER_SAVE, "").replace("id = \"wp7a_basic\"", &format!("id = \"{id}\""));
+        set(f, "game.toml", text);
+        f.push((
+            "objects/saver.toml".into(),
+            b"base = \"save\"\nonce = true\n".to_vec(),
+        ));
+    })
+}
+
+#[test]
+fn a_legacy_param_outside_its_game_is_a_warning() {
+    let report = load_report(&save_once_package("wp7a_basic"), STRICT);
+    assert!(report.ok(), "{}", render(&report));
+    let warning = report
+        .diagnostics
+        .iter()
+        .find(|d| d.message.contains("format-0 legacy alias"))
+        .unwrap_or_else(|| panic!("no legacy warning:\n{}", render(&report)));
+    assert_eq!(warning.severity, Severity::Warning);
+    assert!(warning.message.contains("little-trap"), "{}", warning.message);
+    assert!(warning.message.contains("#1269"), "{}", warning.message);
+    assert!(warning.message.contains("wp7a_basic"), "{}", warning.message);
+}
+
+#[test]
+fn a_legacy_param_for_its_game_does_not_warn() {
+    let report = load_report(&save_once_package("little_trap"), STRICT);
+    assert!(report.ok(), "{}", render(&report));
+    assert!(
+        report
+            .diagnostics
+            .iter()
+            .all(|d| !d.message.contains("format-0 legacy alias")),
+        "{}",
+        render(&report)
+    );
+}
 
 // ---- #234: tier 1 built-in params ---------------------------------------------------------
 

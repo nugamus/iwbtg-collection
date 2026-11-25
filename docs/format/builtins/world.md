@@ -5,15 +5,15 @@ The engine controller, placed in `[engine] boot`. It is not a GM port: it does w
 | Param | Type | Default | Meaning |
 |---|---|---|---|
 | `latch_cleared_by_world` | bool | false | At the end of each Step, two `keyboard_check_direct` reads (Left, Right), discarded. kaenbyou, eat-the-lemon, keep-celebrating-for-xia. |
-| `pause` | `none`, `deactivate` | `none` | `deactivate` is xia's pause (below). |
+| `pause` | `none`, `deactivate` | `none` | `deactivate` is xia's pause (below). Format-0 legacy alias (`keep-celebrating-for-xia`), moves in [#1269](https://github.com/nugamus/iwbtg-collection/issues/1269). |
 | `pause_delay` | whole | 0 | Ticks after a pause toggle before the next press is accepted. |
 | `mute` | bool | false | A Mute press flips `MechGlobals::music_muted` (`global.music`, true is muted). The Ctrl in Ctrl+M (wanna, xia) is the client's binding of the action. |
 | `timer_per_tick` | whole | 0 | Added to the play time every Step while not paused and the gates below are open (family B: 2, centiseconds at 50 ticks). |
 | `timer_play_rooms_only` | bool | false | No per-tick add in rooms whose role is not `play` (boot, title, menu, select). Family B: true. |
 | `timer_needs_fps` | bool | false | No per-tick add while GML `fps` reads 0 (see Real-time reads). Family B: true. |
 | `timer_stops_on_clear` | bool | false | No per-tick add while the game is cleared (`RunGlobals::clear`, `global.clear`). Family B: true. |
-| `clear_triggers_to` | whole | none | Room Start sets `global.trigger[0]` to `[n]` false (poronkusema: 10). |
-| `clear_switches_on_room_end` | bool | false | Room End clears the switch array (go-the-spook-house). |
+| `clear_triggers_to` | whole | none | Room Start sets `global.trigger[0]` to `[n]` false (poronkusema: 10). Format-0 legacy alias (`poronkusema`), moves in [#1269](https://github.com/nugamus/iwbtg-collection/issues/1269). |
+| `clear_switches_on_room_end` | bool | false | Room End clears the switch array (go-the-spook-house). Format-0 legacy alias (`go-the-spook-house`), moves in [#1269](https://github.com/nugamus/iwbtg-collection/issues/1269). |
 
 **Loading.** The params go on the game's world object file (`base = "world"`) that `[engine.roles] world = "@<id>"` names, and are checked like any built-in's. Tests `wp6b2_params_load` and `wp6b2_params_are_checked` in `crates/format/tests/load_objects.rs`. The converter request for them is on research#31.
 

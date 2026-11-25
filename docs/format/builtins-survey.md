@@ -24,6 +24,8 @@ Verdicts:
 
 Format 0 keeps every parameter as a documented alias, so existing packages and their `gameplay_hash` do not change; a removal lands at a format major or through the `[compat]`/script layer as it becomes available. The target column says what replaces each group. Package data and scripts cover most of them. Two groups are not pure package moves: `gravity_flip.transition` (kaenbyou's view rotation) and the camera/edge-warp view writes are runner/view work (Area A; the profile layer is #1160), and the save params need a save hook (#776/#797).
 
+The loader knows the marker (#1375): every move param is a `ParamSpec` legacy alias carrying the game that may use it and the issue that replaces it. `iwbtg pkg check` warns when a format-0 package whose id is not that game uses one, so a new package cannot pick up a one-game param silently. The set is pinned against this table by `builtins_legacy_aliases` in `crates/sim/tests/`.
+
 ### `block` (4)
 
 Target: a script on `base = "block"` (spawn the named collider; declare classes) or kind data.
@@ -165,7 +167,7 @@ Target: presets or scripts on `base = "trap"` (the model belongs to the game).
 | `hspd` | little-runner | `move_to` (LR object749, object751-755): runs only while `endx` or `endy` is 0 and `global.stop[trg]` is set. Per axis with a target it moves by the step toward it, then within half a step snaps to the target, zeroes the step and replace... |
 | `hspeed` | showdown | `velocity` (the fixed-speed forms too). SHO spikeMoveUp: the loader folds `ue`, `sita`, `hidari`, `migi` into these. |
 | `launch` | go-the-spook-house | The form. |
-| `stop_on_stopper` | rainbow-feather | Touching a `trap_stopper` stops it; `flush` first snaps it to the stopper edge on the side it moves toward, horizontal first (RBF object1024). |
+| `stop_on_stopper` | get-the-rainbow-feather | Touching a `trap_stopper` stops it; `flush` first snaps it to the stopper edge on the side it moves toward, horizontal first (RBF object1024). |
 | `to_x` | go-the-spook-house | `step_toward` (go-the-spook-house playerKiller switch spikes, with `trigger_model = switch_array`): Create sets a target of 0 to the instance's own x (y). End Step, while the trigger fires, moves 1 px toward (`to_x`, `to_y`): x first, y ... |
 | `to_y` | go-the-spook-house | `step_toward` (go-the-spook-house playerKiller switch spikes, with `trigger_model = switch_array`): Create sets a target of 0 to the instance's own x (y). End Step, while the trigger fires, moves 1 px toward (`to_x`, `to_y`): x first, y ... |
 | `trigger_id` | go-the-spook-house | The id it waits for. With `shared_last` and an unset trigger (reads 0) an id of 0 launches at once. |
@@ -424,7 +426,7 @@ These stay in the kind until the shared script library (#797) can carry the diff
 | `trap.sound` | Sound | - | - | - | keep |
 | `trap.sound_if_trigger` | ? | - | - | - | keep |
 | `trap.speed` | real | 0 | - | eat-the-new-year | keep |
-| `trap.stop_on_stopper` | `none`, `zero_speed`, `flush` | `none` | - | rainbow-feather | move |
+| `trap.stop_on_stopper` | `none`, `zero_speed`, `flush` | `none` | - | get-the-rainbow-feather | move |
 | `trap.to_x` | real | 0 | go-the-spook-house | go-the-spook-house | move |
 | `trap.to_y` | real | 0 | go-the-spook-house | go-the-spook-house | move |
 | `trap.trigger_id` | real | 0 | go-the-spook-house | - | move |

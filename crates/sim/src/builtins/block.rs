@@ -39,51 +39,73 @@ const SPECS: &[ParamSpec] = &[
         name: "mask",
         ty: ParamType::Enum(MASKS),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "visible",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "depth",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "solid",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "kid_collides",
         ty: ParamType::Bool,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["rely-the-needle-4-2"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "blood_sticks",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "slip",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "visual_spawns_collider",
         ty: ParamType::Bool,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["rely-the-needle-4-2"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "collider",
         ty: ParamType::Kind,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["rely-the-needle-4-2"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "proximity_frame",
         ty: ParamType::Bool,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["eat-the-lemon"],
+            issue: 1269,
+        }),
     },
 ];
 

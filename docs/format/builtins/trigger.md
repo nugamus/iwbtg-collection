@@ -18,7 +18,7 @@ Touch zone that fires a trap id. Source: `crates/sim/src/builtins/trigger.rs`. A
 | `group` | kind | none | Another kind sharing `triggered` (an object and its children). |
 | `array` | `trigger`, `stop` | `trigger` | `flag_array` only. |
 | `reset` | bool | false | `flag_array` clears instead of sets. |
-| `one_shot_destroy`, `sets_frame` | bool | false | Destroy after touch; show frame 1 (SHO). |
+| `one_shot_destroy`, `sets_frame` | bool | false | Destroy after touch; show frame 1 (SHO). Format-0 legacy alias (`showdown`), moves in [#1269](https://github.com/nugamus/iwbtg-collection/issues/1269). |
 | `sound`, `size` | | | The client's and the loader's. |
 
 **Loading.** Every param loads on an object file or a placed instance; `group` names a kind and must exist; a wrong word or type is an error with file and line (`params::check`). Tests `wp6b2_params_load` and `wp6b2_params_are_checked` in `crates/format/tests/load_objects.rs`. Converter request CR17.

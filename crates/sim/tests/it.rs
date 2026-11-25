@@ -112,6 +112,9 @@ mod builtins_killer;
 #[path = "builtins_ladder_decor.rs"]
 mod builtins_ladder_decor;
 
+#[path = "builtins_legacy_aliases.rs"]
+mod builtins_legacy_aliases;
+
 #[path = "builtins_misc_support.rs"]
 mod builtins_misc_support;
 

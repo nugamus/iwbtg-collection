@@ -8,6 +8,13 @@
 //!
 //! Kinds with no spec (`kid`, `inert`, scripted, probe) are skipped. In `LoadMode::Trace`
 //! converter output may not match the specs yet, so the problems are warnings.
+//!
+//! A format-0 package may still use a **move** param (the survey's one-game parameters): the
+//! loader keeps each as a documented legacy alias so old packages and their `gameplay_hash` do
+//! not change (#1076, #1375). A use by a package whose id is not one of the alias's games is a
+//! warning that names the replacing issue; the alias, not the use, is the thing to remove later.
+
+use std::collections::BTreeSet;
 
 use iwbtg_sim::builtins::{self, ParamSpec, ParamType};
 use iwbtg_sim::def::{Builtin, GameDef, KindDef, KindId, ParamValue, Params};
@@ -125,10 +132,58 @@ const fn skipped(b: Builtin) -> bool {
     )
 }
 
+/// A format-0 package's legacy-alias warnings (#1076, #1375).
+struct LegacyCheck<'a> {
+    format: u32,
+    package_id: &'a str,
+    /// Kinds and params already warned about, so a placed instance does not repeat its kind.
+    seen: BTreeSet<(usize, &'static str)>,
+}
+
+impl LegacyCheck<'_> {
+    /// Warns about a survey **move** param used outside the games its legacy alias allows. One
+    /// warning per kind and param: the kind's own params are checked first, then the placed
+    /// instances that set it, so the file is the kind's or the room's.
+    fn check(
+        &mut self,
+        specs: &[ParamSpec],
+        params: &Params,
+        kind: usize,
+        who: &str,
+        file: &str,
+        diags: &mut Vec<Diagnostic>,
+    ) {
+        if self.format != 0 {
+            return;
+        }
+        for key in params.0.keys() {
+            let Some(spec) = specs.iter().find(|s| s.name == key) else {
+                continue;
+            };
+            let Some(legacy) = spec.legacy else { continue };
+            if legacy.allows(self.package_id) || !self.seen.insert((kind, spec.name)) {
+                continue;
+            }
+            report(
+                diags,
+                Severity::Warning,
+                file,
+                format!(
+                    "{who}: param `{key}` is a format-0 legacy alias for {} and moves in #{}; \
+                     package `{}` is not one of those games",
+                    legacy.games.join(", "),
+                    legacy.issue,
+                    self.package_id
+                ),
+            );
+        }
+    }
+}
+
 /// Checks every kind's and placed instance's params against `builtins::param_specs` of its
 /// base (step 7), after `load::load_game` has built the definition. Problems are
 /// diagnostics: errors, or warnings when `trace` (converter output).
-pub fn check(def: &GameDef, trace: bool, diags: &mut Vec<Diagnostic>) {
+pub fn check(def: &GameDef, format: u32, trace: bool, diags: &mut Vec<Diagnostic>) {
     let severity = if trace { Severity::Warning } else { Severity::Error };
     let specs_of = |b: Builtin| builtins::param_specs(b);
     let init_of = |b: Builtin, p: &Params| {
@@ -138,6 +193,11 @@ pub fn check(def: &GameDef, trace: bool, diags: &mut Vec<Diagnostic>) {
     let mut placed: Vec<bool> = vec![false; def.kinds.len()];
     let mut kind_bad: Vec<bool> = vec![false; def.kinds.len()];
     let mut seen: Vec<(KindId, Params)> = Vec::new();
+    let mut legacy = LegacyCheck {
+        format,
+        package_id: &def.id,
+        seen: BTreeSet::new(),
+    };
     // The kind's own params.
     for (i, k) in def.kinds.iter().enumerate() {
         if skipped(k.base) {
@@ -149,6 +209,7 @@ pub fn check(def: &GameDef, trace: bool, diags: &mut Vec<Diagnostic>) {
         }
         let specs = specs_of(k.base);
         let who = format!("`{}` ({})", k.name, k.base.name());
+        legacy.check(specs, &k.params, i, &who, &kind_file(k), diags);
         for msg in check_set(specs, &k.params, &who) {
             kind_bad[i] = true;
             report(diags, severity, &kind_file(k), msg);
@@ -172,6 +233,7 @@ pub fn check(def: &GameDef, trace: bool, diags: &mut Vec<Diagnostic>) {
             }
             let specs = specs_of(k.base);
             let who = format!("an instance of `{}` ({})", k.name, k.base.name());
+            legacy.check(specs, &inst.params, idx, &who, &file, diags);
             let mut bad = kind_bad.get(idx).copied().unwrap_or(false);
             for msg in check_set(specs, &inst.params, &who) {
                 bad = true;

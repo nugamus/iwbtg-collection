@@ -51,51 +51,67 @@ const SPECS: &[ParamSpec] = &[
         name: "trg",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "model",
         ty: ParamType::Enum(MODELS),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "need_key",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "group",
         ty: ParamType::Kind,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "array",
         ty: ParamType::Enum(ARRAYS),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "reset",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "sound",
         ty: ParamType::Sound,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "one_shot_destroy",
         ty: ParamType::Bool,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["showdown"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "sets_frame",
         ty: ParamType::Bool,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["showdown"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "size",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
 ];
 

@@ -19,11 +19,13 @@ const SPECS: &[ParamSpec] = &[
         name: "width",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "parent_kind",
         ty: ParamType::Enum(PARENTS),
         required: false,
+        legacy: None,
     },
 ];
 

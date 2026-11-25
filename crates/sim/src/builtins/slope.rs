@@ -19,11 +19,13 @@ const SPECS: &[ParamSpec] = &[
         name: "shape",
         ty: ParamType::Enum(SHAPES),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "scale_x",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
 ];
 

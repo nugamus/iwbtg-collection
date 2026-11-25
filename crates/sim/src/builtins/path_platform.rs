@@ -39,31 +39,37 @@ const SPECS: &[ParamSpec] = &[
         name: "path",
         ty: ParamType::Real,
         required: true,
+        legacy: None,
     },
     ParamSpec {
         name: "speed",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "scale",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "path_end",
         ty: ParamType::Enum(PATH_END),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "start_on_touch",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "keep_moving_when_kid_absent",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
 ];
 

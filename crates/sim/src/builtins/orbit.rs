@@ -40,6 +40,7 @@ const fn real(name: &'static str) -> ParamSpec {
         name,
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     }
 }
 
@@ -48,6 +49,7 @@ const SPECS: &[ParamSpec] = &[
         name: "mode",
         ty: ParamType::Enum(MODES),
         required: false,
+        legacy: None,
     },
     real("center_x"),
     real("center_y"),
@@ -58,22 +60,26 @@ const SPECS: &[ParamSpec] = &[
         name: "unit",
         ty: ParamType::Enum(UNITS),
         required: false,
+        legacy: None,
     },
     real("count"),
     ParamSpec {
         name: "child",
         ty: ParamType::Kind,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "keep_spawner",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "destroy_outside_room",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
 ];
 

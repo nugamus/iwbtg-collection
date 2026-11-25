@@ -33,16 +33,22 @@ const SPECS: &[ParamSpec] = &[
         name: "direction",
         ty: ParamType::Enum(DIRECTIONS),
         required: true,
+        legacy: None,
     },
     ParamSpec {
         name: "transition",
         ty: ParamType::Enum(TRANSITIONS),
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["kaenbyou"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "sound",
         ty: ParamType::Sound,
         required: false,
+        legacy: None,
     },
 ];
 

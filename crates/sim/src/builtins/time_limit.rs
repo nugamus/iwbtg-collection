@@ -42,46 +42,55 @@ const SPECS: &[ParamSpec] = &[
         name: "role",
         ty: ParamType::Enum(ROLES),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "hours",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "minutes",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "seconds",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "on_expire",
         ty: ParamType::Enum(EXPIRES),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "room",
         ty: ParamType::Room,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "warp_x",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "warp_y",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "shake",
         ty: ParamType::Kind,
         required: false,
+        legacy: None,
     },
 ];
 

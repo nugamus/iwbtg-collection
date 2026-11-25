@@ -19,21 +19,25 @@ const SPECS: &[ParamSpec] = &[
         name: "boss_index",
         ty: ParamType::Real,
         required: true,
+        legacy: None,
     },
     ParamSpec {
         name: "watched_object",
         ty: ParamType::Kind,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "sprite",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "sound",
         ty: ParamType::Sound,
         required: false,
+        legacy: None,
     },
 ];
 

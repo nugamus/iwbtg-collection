@@ -18,16 +18,19 @@ const SPECS: &[ParamSpec] = &[
         name: "kind",
         ty: ParamType::Enum(KINDS),
         required: true,
+        legacy: None,
     },
     ParamSpec {
         name: "index",
         ty: ParamType::Real,
         required: true,
+        legacy: None,
     },
     ParamSpec {
         name: "sprite",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
 ];
 

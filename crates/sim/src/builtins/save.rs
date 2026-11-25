@@ -57,71 +57,97 @@ const SPECS: &[ParamSpec] = &[
         name: "on_touch",
         ty: ParamType::Enum(TOUCH),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "on_shot",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "once",
         ty: ParamType::Bool,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["little-trap"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "cooldown",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "min_difficulty_removed",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "requires_gravity",
         ty: ParamType::Enum(GRAVITY),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "requires_kid_depth0",
         ty: ParamType::Bool,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["machinary"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "requires_kid_in_room",
         ty: ParamType::Bool,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["keep-celebrating-for-xia"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "saved_position",
         ty: ParamType::Enum(POSITION),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "fixed_x",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "fixed_y",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "self_destroy_alarm",
         ty: ParamType::Real,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["little-runner"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "alarm_save",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "blink",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
 ];
 

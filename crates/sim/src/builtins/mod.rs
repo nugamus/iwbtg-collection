@@ -170,6 +170,47 @@ pub struct ParamSpec {
     pub ty: ParamType,
     /// Must be given (no default).
     pub required: bool,
+    /// `Some` when the survey (`docs/format/builtins-survey.md`) marks this param **move**:
+    /// a documented format-0 legacy alias kept so existing packages and their `gameplay_hash`
+    /// do not change (#1076, #1375).
+    pub legacy: Option<LegacyParam>,
+}
+
+/// A **move** param's legacy marker (#1076, #1375): the games that may still use it and the
+/// issue that replaces it at a format major or through a script/profile.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct LegacyParam {
+    /// The games that may use it, by `docs/games/<game>.md` id (`rely-the-needle-4-2`).
+    pub games: &'static [&'static str],
+    /// The issue that replaces the param (#1267, #1268, #1269 or #1270).
+    pub issue: u16,
+}
+
+impl LegacyParam {
+    /// Whether `package_id` (the manifest `id`) is one of [`LegacyParam::games`]. The converter
+    /// names a package from its title, dropping "I wanna" and a trailing version
+    /// (`rely-the-needle-4-2` is `rely_the_needle`); a hand-written port may keep the slug's own
+    /// underscores (`rely_the_needle_4_2`). Both name the game, so both are accepted.
+    pub fn allows(&self, package_id: &str) -> bool {
+        self.games.iter().any(|game| package_in_game(package_id, game))
+    }
+}
+
+/// Whether a snake_case package id names the survey game `slug`.
+fn package_in_game(package_id: &str, slug: &str) -> bool {
+    let underscored = slug.replace('-', "_");
+    if package_id == underscored {
+        return true;
+    }
+    // Drop a trailing run of numeric components (`rely_the_needle_4_2` -> `rely_the_needle`).
+    let mut trimmed = underscored.as_str();
+    while let Some((head, tail)) = trimmed.rsplit_once('_') {
+        if tail.is_empty() || !tail.bytes().all(|b| b.is_ascii_digit()) {
+            break;
+        }
+        trimmed = head;
+    }
+    package_id == trimmed
 }
 
 /// Type of a built-in parameter.

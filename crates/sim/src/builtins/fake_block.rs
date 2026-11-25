@@ -42,41 +42,52 @@ const SPECS: &[ParamSpec] = &[
         name: "solid",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "visible",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "vanish_on",
         ty: ParamType::Enum(VANISH),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "approach_distance",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "blood_solid_when_no_kid",
         ty: ParamType::Bool,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["deride-kotaro-from-aslant"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "stops_bullets",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "reverses_platforms",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "sound",
         ty: ParamType::Sound,
         required: false,
+        legacy: None,
     },
 ];
 

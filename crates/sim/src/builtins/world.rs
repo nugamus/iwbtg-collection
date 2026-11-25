@@ -61,51 +61,70 @@ const SPECS: &[ParamSpec] = &[
         name: "latch_cleared_by_world",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "pause",
         ty: ParamType::Enum(PAUSES),
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["keep-celebrating-for-xia"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "pause_delay",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "mute",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "timer_per_tick",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "timer_play_rooms_only",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "timer_needs_fps",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "timer_stops_on_clear",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "clear_triggers_to",
         ty: ParamType::Real,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["poronkusema"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "clear_switches_on_room_end",
         ty: ParamType::Bool,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["go-the-spook-house"],
+            issue: 1269,
+        }),
     },
 ];
 

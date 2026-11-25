@@ -590,7 +590,7 @@ impl<'a> Loader<'a> {
         // Step 7: params against the built-ins' specs, on the built definition.
         let mut d = Vec::new();
         let trace = self.trace_mode();
-        params::check(&def, trace, &mut d);
+        params::check(&def, *self.m.format.get_ref(), trace, &mut d);
         self.diags.append(&mut d);
         // Scripts: structure, calls, name literals and lints.
         for issue in iwbtg_sim::script::validate::validate(&def) {
