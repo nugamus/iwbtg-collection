@@ -170,11 +170,19 @@ fn fmt_ratio(r: Option<(u32, u32)>) -> String {
 impl Settings {
     /// Whether screen shake is shown (`[accessibility] shake`, #106). The client's effect reads
     /// this; nothing in the sim does.
+    #[allow(
+        dead_code,
+        reason = "the render-site gating lands after #1023 frees view.rs (#106)"
+    )]
     pub fn shake(&self) -> bool {
         self.shake
     }
 
     /// Whether full-screen flashes are shown (`[accessibility] flashes`, #106).
+    #[allow(
+        dead_code,
+        reason = "the render-site gating lands after #1023 frees view.rs (#106)"
+    )]
     pub fn flashes(&self) -> bool {
         self.flashes
     }
