@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Jonas Dahl
+# SPDX-License-Identifier: MIT
+
 # Production stack for iwbtg-server (docs/server.md, Deployment).
 #
 # Hardening follows docs/server.md security rule 4: neither service publishes a port,

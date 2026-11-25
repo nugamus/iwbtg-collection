@@ -46,7 +46,7 @@ That's expected. `iwc convert` (research) writes its packages to `iwbtg-collecti
 
 ## Licences
 
-`REUSE.toml` gives every file its licence and copyright by path; source and asset files carry no SPDX headers. Check it with `uvx --from "reuse[charset-normalizer]" reuse lint` (REUSE 6.3.0; the `charset-normalizer` extra is needed on Windows), expected `Congratulations! Your project is compliant with version 3.3 of the REUSE Specification :-)`. A file without licence information, or a licence with no text in `LICENSES/`, breaks it.
+`REUSE.toml` gives most files their licence and copyright by path. A file outside its tables carries an in-file `SPDX-FileCopyrightText`/`SPDX-License-Identifier` header (in the format's comment syntax), and a binary gets a `<file>.license` sidecar with the same two tags. Check it with `uvx --from "reuse[charset-normalizer]" reuse lint` (REUSE 6.3.0; the `charset-normalizer` extra is needed on Windows), expected `Congratulations! Your project is compliant with version 3.3 of the REUSE Specification :-)`. A file without licence information, or a licence with no text in `LICENSES/`, breaks it. CI's `licenses` job runs the same `reuse lint` and regenerates `THIRD_PARTY_LICENSES`, failing on a diff (#976).
 
 `THIRD_PARTY_LICENSES` lists the Rust crates the Windows and Linux builds include, generated from `Cargo.lock` by cargo-about (`about.toml` mirrors the licences `deny.toml` allows; workspace crates are left out). Regenerate it after a `Cargo.lock` change and for each release (#71):
 

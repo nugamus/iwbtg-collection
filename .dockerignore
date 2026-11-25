@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Jonas Dahl
+# SPDX-License-Identifier: MIT
+
 # Build context for the iwbtg-server image (docs/server.md, Deployment). The build needs
 # the workspace manifests, every crate's manifest, the crates themselves and migrations/;
 # everything host-only stays out, so a secret can never be baked into a layer.
