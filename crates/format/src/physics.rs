@@ -52,13 +52,13 @@ pub struct PhysicsStanding {
     pub family: KidFamily,
     /// The fields that differ, in profile order (`numbers.gravity`, `events.step`).
     pub differs: Vec<String>,
-    /// Room profiles `physics/<id>.toml` that differ from the game's profile, in id order
-    /// (#970). Any makes the package a medley and custom physics.
+    /// Room profiles `physics/<id>.toml` that a built room names and that differ from the game's
+    /// profile, in id order (#970, #1063). Any makes the package a medley and custom physics.
     pub rooms: Vec<RoomPhysicsStanding>,
 }
 
-/// A room profile `physics/<id>.toml` that differs from the game's resolved profile (#970,
-/// docs/format/engine.md "Custom physics").
+/// A room profile `physics/<id>.toml` that a built room names and that differs from the game's
+/// resolved profile (#970, #1063, docs/format/engine.md "Custom physics").
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RoomPhysicsStanding {
     /// The profile id: the file name without `.toml`.
@@ -68,8 +68,8 @@ pub struct RoomPhysicsStanding {
 }
 
 impl PhysicsStanding {
-    /// True when the game's profile differs from the pack's family preset, or a room profile
-    /// differs from the game's profile (a medley).
+    /// True when the game's profile differs from the pack's family preset, or a room profile a
+    /// built room names differs from the game's profile (a medley).
     pub fn is_custom(&self) -> bool {
         !self.differs.is_empty() || !self.rooms.is_empty()
     }
@@ -84,11 +84,11 @@ impl PhysicsStanding {
 }
 
 /// Compares the game's resolved profile with the family preset of the pack
-/// `manifest.engine_pack` names (`kid::presets::defaults`), and every room profile with the
-/// game's resolved profile (#970). Without a pack the profile's own `preset` is the family.
-/// `Real` equality is bitwise, so this compares exactly the numbers the sim runs. `rooms` holds
-/// each loaded `physics/<id>.toml` with its id; a room profile that matches the game's file is
-/// not passed (the loader shares the game's profile for it).
+/// `manifest.engine_pack` names (`kid::presets::defaults`), and every room profile a built room
+/// names with the game's resolved profile (#970, #1063). Without a pack the profile's own
+/// `preset` is the family. `Real` equality is bitwise, so this compares exactly the numbers the
+/// sim runs. `rooms` holds each named `physics/<id>.toml` with its id; a room profile that
+/// matches the game's file is not passed (the loader shares the game's profile for it).
 pub fn standing(
     files: &PackageFiles,
     manifest: &Manifest,
