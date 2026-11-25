@@ -22,6 +22,24 @@ Part of [Architecture](../architecture.md).
 
 Tests are named after the module or subject they test (`rooms.rs`, `determinism.rs`), not after the work package that added them. A test module's docs describe the behavior it covers; ownership belongs in the lane docs. A WP-era id (a `WP` followed by a number) stays only where it explains history a reader needs (the historical `docs/plans/sim-core.md`, or a comment naming the work a later change replaced); new files, tests and docs carry none. `cargo test -p xtask no_new_wp_era_identifiers` is a per-area ceiling on the remaining ids: it fails when an area gains one, and a sweep that removes them lowers the ceiling in the same PR.
 
+## Citation ids
+
+Five kinds of id appear in client docs and code. Each has one home, one format and one rule for when to mint it; the research tree's [`specs/IDS.md`](https://github.com/nugamus/iwbtg-collection-research/blob/main/specs/IDS.md) is the model for all five (research#1121).
+
+| Namespace | Format | Home | Minted when | Resolves in |
+|---|---|---|---|---|
+| Claim id | `PREFIX-NNN`, for example `TICK-001`, `A1-007`, `NUM-058` | research `specs/engines/gm8/**`, `specs/mechanics/**` | a new behavior claim in a spec file (research only) | research `specs/INDEX.md`; the client commits the ids alone in `docs/architecture/sim/claim-ids.txt` |
+| Register id | `R12`, `R3b`, `C3`, `N14`, `M2`, `K1`, `I1`, `S1` (`[CIKMNSR]` + digits + optional letter) | client `docs/architecture/sim/register-*.md` | a new sim rule, default or test in the register | the register row; its `Claim` column names the matching claim or says why none applies |
+| Converter request | `CR7`, `CR23` | client `docs/format/converter-requests.md` | the converter or the format needs a change to write a package | the CR table row; the canonical list is research `specs/converter-requests.md` |
+| Trace / real-runner request | a free-form token: `T-COL-11`, `NUM-PART-RNG-4`, `audio-sound0`, `TR-ROOM-15`, `A3-T20`, `LR-jumps` | research `specs/engines/gm8/traces/requests/*.md`, indexed by `traces/REQUESTS.md` | a behavior claim needs a recorder trace, a real-runner capture or a probe (research only) | the request row and research `specs/INDEX.md` |
+| Issue number | `<repo>#<n>`, for example `research#130`, `client#629` | the GitHub repositories | a work item, question or follow-up | the issue |
+
+`python -I scripts/test_spec_claims.py` (also the `SpecClaimTests` unittest in CI) checks the three namespaces the client owns: every claim id cited in `docs/**` and in `crates/**/*.rs` comments is in `claim-ids.txt`; every register id cited there is a row of a `register-*.md` table; and every `CR<n>` cited there has a row in `converter-requests.md`. The checker's ignore list names the few id-shaped words that are not ids (the old milestone names `M2b` and `M9`-`M11` in the roadmap, the `M9`/`M12`/`M13` icon variants, `ISO-8601`, `RUSTSEC-2026`, `NNN`); add an entry there with a reason rather than a second id scheme.
+
+Trace-request ids stay research-owned: their tokens are free-form and would collide with trace file names, so the client does not mint, list or machine-check them. Cite one only as the research request or file it names; the research checker (`uv run python -I -m scraper.spec_index --check`) resolves it against `REQUESTS.md`/`specs/INDEX.md`, which client CI cannot read. Issue numbers are not checked.
+
+To regenerate the ids-only claim list after a research spec change, run `IWBTG_RESEARCH=../iwbtg-collection-research python3 -I scripts/test_spec_claims.py --write` and commit the result.
+
 ## CI and the fidelity sweep
 
 CI is public and sees only this repo: everything in the table above except the trace tests and the replay corpus, which need the private research and games repos (`motion_traces.rs` skips without `IWBTG_RESEARCH`, and CI never sets it). So CI proves the sim is deterministic and matches its own pinned hashes, not that it still matches the original games.

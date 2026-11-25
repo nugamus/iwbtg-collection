@@ -1,17 +1,24 @@
-"""Every claim and register id cited in the sim docs must resolve (client#1114).
+"""Every claim, register and converter-request id cited in the client must resolve (client#1114).
 
-The research GM8 spec splits its claims into `specs/engines/gm8/runner/*.md`
-under stable ids (`TICK-001`, `COL-031`, ...), with `specs/INDEX.md` as the
-generated home of every id. The client cannot read that private checkout in
-CI, so `docs/architecture/sim/claim-ids.txt` holds the ids alone (no spec text)
-and this test checks every cited id against it.
+The namespaces and their homes are in `docs/architecture/testing.md`, "Citation
+ids"; research `specs/IDS.md` is the model.
 
-Register rows (`docs/architecture/sim/register-*.md`) keep the register id as
-the row key and name the matching claim in their `Claim` column. A row with no
-matching GM8 claim says so instead.
+- Claim ids (`TICK-001`, `COL-031`, ...) come from the research GM8 spec, with
+  `specs/INDEX.md` as the generated home of every id. The client cannot read
+  that private checkout in CI, so `docs/architecture/sim/claim-ids.txt` holds
+  the ids alone (no spec text) and this test checks every cited id against it.
+- Register rows (`docs/architecture/sim/register-*.md`) keep the register id as
+  the row key and name the matching claim in their `Claim` column. A row with no
+  matching GM8 claim says so instead.
+- Converter requests (`CR7`, ...) are rows of
+  `docs/format/converter-requests.md`.
 
-Regenerate the list after the research index changes (ids are stable, so this
-is rare):
+The scan covers every client doc (`docs/**/*.md`) and code comment/file
+(`crates/**/*.rs`), not only the sim pages. Trace-request and issue ids are
+research/GitHub-owned and are not checked here.
+
+Regenerate the claim list after the research index changes (ids are stable, so
+this is rare):
 
     IWBTG_RESEARCH=../iwbtg-collection-research \
         python3 -I scripts/test_spec_claims.py --write
@@ -32,13 +39,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SIM = ROOT / "docs/architecture/sim"
 ID_LIST = SIM / "claim-ids.txt"
+CODE = ROOT / "crates"
+DOCS = ROOT / "docs"
+CONVERTER_REQUESTS = ROOT / "docs/format/converter-requests.md"
 
 CLAIM = re.compile(r"\b[A-Z][A-Z0-9]*-\d{3,}\b")
 CLAIM_ID = re.compile(r"^[A-Z][A-Z0-9]*-\d{3,}$")
 REGISTER = re.compile(r"\b[CIKMNSR]\d{1,2}[a-z]?\b")
 REGISTER_ID = re.compile(r"^[CIKMNSR]\d+[a-z]?$")
-# Id-shaped tokens that are not claim ids (a hash name in the determinism docs).
-IGNORE = {"SHA-256", "NNN"}
+CR = re.compile(r"\bCR\d+\b")
+# Id-shaped words that are not ids: a hash name, a placeholder, an ISO standard, a security
+# advisory, the old M* milestone names in the roadmap, and the client UI's icon variants.
+IGNORE_CLAIMS = {"SHA-256", "NNN", "ISO-8601", "RUSTSEC-2026"}
+IGNORE_REGISTERS = {"M2b", "M9", "M10", "M11", "M12", "M13"}
 NO_CLAIM = "—"
 
 
@@ -85,6 +98,11 @@ def write_list(research: Path) -> None:
 
 def sim_pages() -> list[Path]:
     return sorted(SIM.rglob("*.md"))
+
+
+def citation_pages() -> list[Path]:
+    """Every client page and source file that may cite an id."""
+    return sorted(DOCS.rglob("*.md")) + sorted(CODE.rglob("*.rs"))
 
 
 def register_rows() -> dict[str, tuple[Path, int, list[str]]]:
@@ -158,20 +176,20 @@ def claim_column() -> dict[str, str]:
 def cited_claims() -> list[str]:
     return [
         token
-        for page in sim_pages()
+        for page in citation_pages()
         for line in page.read_text(encoding="utf-8").splitlines()
         for token in CLAIM.findall(line)
-        if token not in IGNORE and CLAIM_ID.match(token)
+        if token not in IGNORE_CLAIMS and CLAIM_ID.match(token)
     ]
 
 
 def unknown_claim_ids() -> list[str]:
     known = set(read_ids())
     out = []
-    for page in sim_pages():
+    for page in citation_pages():
         for n, line in enumerate(page.read_text(encoding="utf-8").splitlines(), 1):
             for token in CLAIM.findall(line):
-                if token in IGNORE or CLAIM_ID.match(token) is None:
+                if token in IGNORE_CLAIMS or CLAIM_ID.match(token) is None:
                     continue
                 if token not in known:
                     out.append(f"{page.relative_to(ROOT)}:{n}: unknown claim id {token}")
@@ -181,13 +199,30 @@ def unknown_claim_ids() -> list[str]:
 def unknown_register_ids() -> list[str]:
     defined = set(register_rows())
     out = []
-    for page in sim_pages():
+    for page in citation_pages():
         for n, line in enumerate(page.read_text(encoding="utf-8").splitlines(), 1):
             for token in REGISTER.findall(line):
-                if token in IGNORE or not REGISTER_ID.match(token):
+                if token in IGNORE_REGISTERS or not REGISTER_ID.match(token):
                     continue
                 if token not in defined:
                     out.append(f"{page.relative_to(ROOT)}:{n}: unknown register id {token}")
+    return out
+
+
+def converter_rows() -> set[str]:
+    """The CR ids that have a row in `docs/format/converter-requests.md`."""
+    text = CONVERTER_REQUESTS.read_text(encoding="utf-8")
+    return set(re.findall(r"^\|\s*(CR\d+)\s*\|", text, re.M))
+
+
+def unknown_converter_ids() -> list[str]:
+    known = converter_rows()
+    out = []
+    for page in citation_pages():
+        for n, line in enumerate(page.read_text(encoding="utf-8").splitlines(), 1):
+            for token in CR.findall(line):
+                if token not in known:
+                    out.append(f"{page.relative_to(ROOT)}:{n}: unknown converter request {token}")
     return out
 
 
@@ -232,6 +267,10 @@ class SpecClaimTests(unittest.TestCase):
         problems = unknown_register_ids()
         self.assertEqual(problems, [], "\n".join(problems))
 
+    def test_cited_converter_ids_exist(self):
+        problems = unknown_converter_ids()
+        self.assertEqual(problems, [], "\n".join(problems))
+
     def test_every_register_row_names_a_claim_or_says_none(self):
         problems = claim_cell_problems()
         self.assertEqual(problems, [], "\n".join(problems))
@@ -252,12 +291,12 @@ def main(argv: list[str]) -> int:
             raise SystemExit("set IWBTG_RESEARCH to the iwbtg-collection-research checkout")
         write_list(Path(research))
         return 0
-    problems = claim_cell_problems() + unknown_claim_ids() + unknown_register_ids()
+    problems = claim_cell_problems() + unknown_claim_ids() + unknown_register_ids() + unknown_converter_ids()
     if problems:
         print("\n".join(problems), file=sys.stderr)
         return 1
-    print(f"docs/architecture/sim: {len(set(cited_claims()))} claim ids cited, "
-          f"{len(register_rows())} register rows, all resolve")
+    print(f"client docs and code: {len(set(cited_claims()))} claim ids cited, "
+          f"{len(register_rows())} register rows, {len(converter_rows())} converter requests, all resolve")
     return 0
 
 
