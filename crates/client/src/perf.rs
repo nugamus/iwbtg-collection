@@ -85,6 +85,14 @@ impl crate::registration::ClientModule for Registration {
             period: Vec::new(),
             main: Vec::new(),
             sim: Vec::new(),
+            order: Vec::new(),
+            sync: Vec::new(),
+            blend: Vec::new(),
+            despawn: Vec::new(),
+            snapshot: Vec::new(),
+            spawned: Vec::new(),
+            updated: Vec::new(),
+            removed: Vec::new(),
             last_first: None,
             main_start: Instant::now(),
             sim_start: None,
@@ -97,12 +105,32 @@ impl crate::registration::ClientModule for Registration {
             gave_up: false,
             started: None,
         })
-        .add_systems(First, begin_frame)
+        .init_resource::<Phases>()
+        .add_systems(First, (begin_frame, begin_phases))
         // `view::tick` runs in the fixed schedule, once per sim tick; the markers must too.
         .add_systems(FixedUpdate, sim_begin.before(crate::view::tick))
         .add_systems(FixedUpdate, sim_end.after(crate::view::tick))
         .add_systems(Last, end_frame);
     }
+}
+
+/// What one frame's draw path spent its time on, filled by `view.rs` when the perf mode is on
+/// (`sync_instances` and `tick` write it). All seconds.
+#[derive(Resource, Default, Debug, Clone, Copy)]
+pub(crate) struct Phases {
+    /// `view::order::instance_z`: the sim's draw order, its sort and the z mapping.
+    pub(crate) order: f64,
+    /// The per-instance loop: lookups, sprite writes and spawns.
+    pub(crate) sync: f64,
+    /// Inside `sync`: the interpolation lookup into the previous positions.
+    pub(crate) blend: f64,
+    /// The removal pass and the `Drawn` map swap.
+    pub(crate) despawn: f64,
+    /// Inside `view::tick`: the previous-position snapshot (interpolation only).
+    pub(crate) snapshot: f64,
+    pub(crate) spawned: u32,
+    pub(crate) updated: u32,
+    pub(crate) removed: u32,
 }
 
 /// The measurement in progress.
@@ -119,6 +147,16 @@ struct Perf {
     main: Vec<f64>,
     /// The sim's own time in each measured frame, seconds.
     sim: Vec<f64>,
+    /// The draw path's phases in each measured frame, seconds.
+    order: Vec<f64>,
+    sync: Vec<f64>,
+    blend: Vec<f64>,
+    despawn: Vec<f64>,
+    snapshot: Vec<f64>,
+    /// Spawned, updated and removed sprites per measured frame.
+    spawned: Vec<f64>,
+    updated: Vec<f64>,
+    removed: Vec<f64>,
     /// When the previous frame began, for its period.
     last_first: Option<Instant>,
     /// When this frame's main schedules began.
@@ -172,6 +210,11 @@ fn begin_frame(mut perf: ResMut<Perf>) {
     perf.sim_frame = 0.0;
 }
 
+/// Clears the frame's draw phases (they are filled in `Update`).
+fn begin_phases(mut phases: ResMut<Phases>) {
+    *phases = Phases::default();
+}
+
 /// Records when the sim's tick starts.
 fn sim_begin(mut perf: ResMut<Perf>) {
     perf.sim_start = Some(Instant::now());
@@ -191,6 +234,7 @@ fn end_frame(
     game: Option<NonSend<Game>>,
     sprites: Query<&Sprite>,
     stats: Res<Stats>,
+    draw: Option<Res<Phases>>,
     window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     mut exit: MessageWriter<AppExit>,
 ) {
@@ -216,6 +260,16 @@ fn end_frame(
     perf.main.push(main);
     let sim = perf.sim_frame;
     perf.sim.push(sim);
+    if let Some(draw) = draw.as_deref() {
+        perf.order.push(draw.order);
+        perf.sync.push(draw.sync);
+        perf.blend.push(draw.blend);
+        perf.despawn.push(draw.despawn);
+        perf.snapshot.push(draw.snapshot);
+        perf.spawned.push(f64::from(draw.spawned));
+        perf.updated.push(f64::from(draw.updated));
+        perf.removed.push(f64::from(draw.removed));
+    }
     if first {
         let alive = game
             .as_ref()
@@ -272,6 +326,11 @@ fn report(perf: &Perf, window: Option<UVec2>) -> String {
         ("frame period ms", &perf.period),
         ("main-thread ms", &perf.main),
         ("sim ms per frame", &perf.sim),
+        ("draw order ms", &perf.order),
+        ("sprite sync ms", &perf.sync),
+        ("blend ms (in sync)", &perf.blend),
+        ("despawn ms", &perf.despawn),
+        ("snapshot ms (in tick)", &perf.snapshot),
     ] {
         let Some(p) = Percentiles::of(samples) else {
             continue;
@@ -286,6 +345,14 @@ fn report(perf: &Perf, window: Option<UVec2>) -> String {
             p.max * 1000.0
         ));
     }
+    let mean = |v: &[f64]| v.iter().sum::<f64>() / v.len().max(1) as f64;
+    out.push_str(&format!(
+        "perf sprites per frame: {:.1} updated, {:.1} spawned, {:.1} removed
+",
+        mean(&perf.updated),
+        mean(&perf.spawned),
+        mean(&perf.removed)
+    ));
     out.push_str(
         "perf not measured: GPU and render-submit time (no timestamp queries in the client); \
 allocation counts and bytes (a counting global allocator needs `unsafe`, which the workspace \
@@ -358,6 +425,14 @@ mod tests {
             period: vec![0.004, 0.006],
             main: vec![0.001, 0.002],
             sim: vec![0.0005, 0.0006],
+            order: vec![0.001, 0.001],
+            sync: vec![0.002, 0.002],
+            blend: vec![0.0, 0.0],
+            despawn: vec![0.0, 0.0],
+            snapshot: vec![0.0, 0.0],
+            spawned: vec![0.0, 0.0],
+            updated: vec![500.0, 500.0],
+            removed: vec![0.0, 0.0],
             last_first: None,
             main_start: Instant::now(),
             sim_start: None,
@@ -380,6 +455,12 @@ mod tests {
             "perf frame period ms: p50 4.00 p95 6.00 p99 6.00",
             "perf main-thread ms:",
             "perf sim ms per frame:",
+            "perf draw order ms:",
+            "perf sprite sync ms:",
+            "perf blend ms (in sync):",
+            "perf despawn ms:",
+            "perf snapshot ms (in tick):",
+            "perf sprites per frame: 500.0 updated, 0.0 spawned, 0.0 removed",
             "perf not measured: GPU and render-submit time",
             "allocation counts and bytes",
         ] {
