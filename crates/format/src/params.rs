@@ -9,10 +9,12 @@
 //! Kinds with no spec (`kid`, `inert`, scripted, probe) are skipped. In `LoadMode::Trace`
 //! converter output may not match the specs yet, so the problems are warnings.
 //!
-//! A format-0 package may still use a **move** param (the survey's one-game parameters): the
-//! loader keeps each as a documented legacy alias so old packages and their `gameplay_hash` do
-//! not change (#1076, #1375). A use by a package whose id is not one of the alias's games is a
-//! warning that names the replacing issue; the alias, not the use, is the thing to remove later.
+//! A package may still use a **move** param (the survey's one-game parameters): the loader keeps
+//! each as a documented format-0 legacy alias so old packages and their `gameplay_hash` do not
+//! change (#1076, #1375). Format 1 keeps the format-0 parameter set (`docs/format/v1.md`), so the
+//! warning applies whenever the param is accepted, whatever the format. A use by a package whose
+//! id is not one of the alias's games warns and names the replacing issue; the alias, not the
+//! use, is the thing to remove later (#795/#928).
 
 use std::collections::BTreeSet;
 
@@ -132,9 +134,8 @@ const fn skipped(b: Builtin) -> bool {
     )
 }
 
-/// A format-0 package's legacy-alias warnings (#1076, #1375).
+/// A package's legacy-alias warnings (#1076, #1375).
 struct LegacyCheck<'a> {
-    format: u32,
     package_id: &'a str,
     /// Kinds and params already warned about, so a placed instance does not repeat its kind.
     seen: BTreeSet<(usize, &'static str)>,
@@ -153,9 +154,6 @@ impl LegacyCheck<'_> {
         file: &str,
         diags: &mut Vec<Diagnostic>,
     ) {
-        if self.format != 0 {
-            return;
-        }
         for key in params.0.keys() {
             let Some(spec) = specs.iter().find(|s| s.name == key) else {
                 continue;
@@ -169,8 +167,8 @@ impl LegacyCheck<'_> {
                 Severity::Warning,
                 file,
                 format!(
-                    "{who}: param `{key}` is a format-0 legacy alias for {} and moves in #{}; \
-                     package `{}` is not one of those games",
+                    "{who}: param `{key}` is a format-0 legacy alias for {} and moves in #{} \
+                     (removed at a format major); package `{}` is not one of those games",
                     legacy.games.join(", "),
                     legacy.issue,
                     self.package_id
@@ -183,7 +181,7 @@ impl LegacyCheck<'_> {
 /// Checks every kind's and placed instance's params against `builtins::param_specs` of its
 /// base (step 7), after `load::load_game` has built the definition. Problems are
 /// diagnostics: errors, or warnings when `trace` (converter output).
-pub fn check(def: &GameDef, format: u32, trace: bool, diags: &mut Vec<Diagnostic>) {
+pub fn check(def: &GameDef, trace: bool, diags: &mut Vec<Diagnostic>) {
     let severity = if trace { Severity::Warning } else { Severity::Error };
     let specs_of = |b: Builtin| builtins::param_specs(b);
     let init_of = |b: Builtin, p: &Params| {
@@ -194,7 +192,6 @@ pub fn check(def: &GameDef, format: u32, trace: bool, diags: &mut Vec<Diagnostic
     let mut kind_bad: Vec<bool> = vec![false; def.kinds.len()];
     let mut seen: Vec<(KindId, Params)> = Vec::new();
     let mut legacy = LegacyCheck {
-        format,
         package_id: &def.id,
         seen: BTreeSet::new(),
     };
