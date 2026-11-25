@@ -1,13 +1,15 @@
 //! Measurement harness for #1021: how much of a retry is immutable script preparation.
 //!
-//! A quick retry builds a new `Sim` (`crates/client/src/view.rs`, `restart_run`), and
-//! `Sim::new_or_halted` calls `ScriptRuntime::new`: every script is compiled again, a whole
-//! Rhai engine is registered again, and `Host` deep-clones the `GameDef`. This harness builds a
-//! synthetic script-heavy package and records, for each step of that path, the allocations
-//! (`stats_alloc`) and, where the target has a clock, the wall time.
+//! A quick retry builds a new `Sim` (`crates/client/src/view.rs`, `restart_run`).
+//! `Sim::new_or_halted` prepares the artifact and then builds a run from it, so a caller without
+//! a cache compiles every script again, registers a whole Rhai engine again and keeps the
+//! `GameDef` shared; `Sim::new_or_halted_prepared` is the cached retry the client and the trace
+//! path use. This harness builds a synthetic script-heavy package and records, for each step of
+//! both paths, the allocations (`stats_alloc`) and, where the target has a clock, the wall time.
 //!
 //! It is a measurement, not a gate: the assertions only pin facts that must hold on every
-//! target (script count and bytes, a retry reproduces a fresh run). Run it explicitly:
+//! target (script count and bytes, a retry reproduces a fresh run, and a prepared retry stays an
+//! order of magnitude below an unprepared one). Run it explicitly:
 //!
 //! ```text
 //! cargo test -p iwbtg-sim --test script_prep -- --ignored --nocapture
@@ -32,8 +34,10 @@
 //!    `Shared` per run (the registered functions capture `Rc<Shared>`, so per-run state stays
 //!    per run), reusing only the prepared ASTs. `Host::def` is `Arc<GameDef>`, which removes the
 //!    deep clone.
-//! 3. `Sim::prepare`/`Sim::new_prepared`/`Sim::new_or_halted_prepared` expose the retry path.
-//!    The client caching the artifact across `restart_run` is #1093B.
+//! 3. `Sim::prepare`/`Sim::new_prepared`/`Sim::new_or_halted_prepared` expose the retry path, and
+//!    `Sim::new_with_setup` (the trace path) builds its run the same way. The client builds the
+//!    artifact once in `view::new_run`, keeps it in a `NonSend` resource and hands it back on
+//!    every `view::restart_run`.
 //!
 //! `tests/script_retry.rs` pins the isolation contract: a retry reproduces a fresh run, fresh
 //! seeds differ, interleaved sims share no RNG/budget/log, and a start error re-halts the same
