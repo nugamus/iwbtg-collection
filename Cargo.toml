@@ -3,6 +3,7 @@ resolver = "3"
 members = [
   "crates/sim",
   "crates/format",
+  "crates/removal",
   "crates/tools",
   "crates/client",
   "crates/server",
@@ -20,6 +21,8 @@ repository = "https://github.com/nugamus/iwbtg-collection"
 [workspace.dependencies]
 iwbtg-sim = { path = "crates/sim" }
 iwbtg-format = { path = "crates/format" }
+# The signed removal-list format shared by the server and the CLI (#1537).
+iwbtg-removal = { path = "crates/removal" }
 # Rhai features per docs/decisions/0001-script-language.md and docs/plans/sim-core.md section 11.
 # WP9 owns this line. Pinned at 1.27.0 (14 days old on 2026-11-04) with compact_str (decision 0001).
 rhai = { version = "=1.27.0", default-features = false, features = [

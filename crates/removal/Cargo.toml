@@ -1,0 +1,22 @@
+[package]
+name = "iwbtg-removal"
+description = "The signed removal-list format shared by iwbtg-server and the iwbtg CLI (docs/server.md, Removal list)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+# The envelope is strict JSON; unknown fields are rejected so nothing unsigned rides along.
+serde.workspace = true
+serde_json.workspace = true
+# Ed25519 signing for `iwbtg removals sign` and verification in the round-trip test. The server
+# only parses, but it links the same rlib so producer and validator can never disagree.
+ed25519-dalek = "2"
+hex = "0.4"
+# The digest `iwbtg removals sign` prints for the audit line.
+sha2.workspace = true
+
+[lints]
+workspace = true

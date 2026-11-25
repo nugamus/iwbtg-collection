@@ -60,6 +60,7 @@ cargo xtask check
 |---|---|
 | `crates/sim` | The deterministic simulation: world, kid, collision, scripts, replays, state hash. |
 | `crates/format` | Reads, validates, hashes and writes game packages. |
+| `crates/removal` | The signed removal-list format shared by the server and the CLI. |
 | `crates/client` | The Bevy app: shell, rendering, input, audio, HUD, settings. |
 | `crates/server` | The leaderboard backend: submissions, replay verification, review queue. |
 | `crates/tools` | The `iwbtg` command-line tool. |

@@ -40,8 +40,9 @@ sqlx = { version = "0.9", default-features = false, features = [
   "macros",
   "migrate",
 ] }
-# The signed removal list is strict JSON (docs/server.md, Removal list; #808): serde above parses
-# the envelope, serde_json rejects anything malformed before the file is served.
+# The signed removal-list format, shared with `iwbtg removals sign` (docs/server.md, Removal
+# list; #808, #1537), so the producer and the validator cannot drift.
+iwbtg-removal = { workspace = true }
 serde_json = { workspace = true }
 # JSON logs to stdout (docs/server.md, Logs and monitoring).
 tracing = "0.1.41"
