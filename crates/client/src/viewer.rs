@@ -32,6 +32,7 @@ use bevy::ui::RelativeCursorPosition;
 use iwbtg_sim::def::GameDef;
 use iwbtg_sim::input::{Action, InputFrame};
 use iwbtg_sim::mods::ModSet;
+use iwbtg_sim::output::OutputEvent;
 use iwbtg_sim::replay::{
     CHECKPOINT_INTERVAL, Header, MAGIC, REPLAY_FORMAT, Replay, SAVE_SLOT_FORMAT, StartMode, Trailer,
 };
@@ -92,6 +93,8 @@ pub struct Viewer {
     accum: f64,
     /// Set when the re-sim no longer matches the replay's recorded hashes.
     error: Option<String>,
+    /// Clear the sign box on the next update (opening, closing or scrubbing backward).
+    clear_sign: bool,
     ui: Option<Ui>,
 }
 
@@ -141,7 +144,14 @@ impl ViewerSim {
 
     /// Re-simulates the recorded frames from the nearest keyframe at or before `target`, leaving
     /// `sim` and `tick` at `target`. Every checkpoint crossed is checked against the trailer.
-    fn seek(&mut self, sim: &mut Sim, tick: &mut u64, target: u64) -> Result<(), String> {
+    /// A seek's skipped ticks drain only lasting output (music), never one-shot sounds.
+    fn seek(
+        &mut self,
+        sim: &mut Sim,
+        tick: &mut u64,
+        target: u64,
+        drain: &mut dyn FnMut(&[OutputEvent], bool),
+    ) -> Result<(), String> {
         let target = target.min(self.total());
         if target < *tick {
             let (at, saved) = self
@@ -154,11 +164,20 @@ impl ViewerSim {
             *sim = saved;
             *tick = at;
         }
-        self.advance(sim, tick, target - *tick)
+        self.advance(sim, tick, target - *tick, false, drain)
     }
 
-    /// Steps `ticks` recorded frames (clamped to the replay's end), checking hashes on the way.
-    fn advance(&mut self, sim: &mut Sim, tick: &mut u64, ticks: u64) -> Result<(), String> {
+    /// Steps `ticks` recorded frames (clamped to the replay's end), checking hashes on the way
+    /// and draining each running tick's output into the client (`audible`: queue one-shot sounds
+    /// too, false while a seek skips ahead).
+    fn advance(
+        &mut self,
+        sim: &mut Sim,
+        tick: &mut u64,
+        ticks: u64,
+        audible: bool,
+        drain: &mut dyn FnMut(&[OutputEvent], bool),
+    ) -> Result<(), String> {
         let end = tick.saturating_add(ticks).min(self.total());
         while *tick < end {
             let frame = self.replay.inputs[*tick as usize];
@@ -170,6 +189,9 @@ impl ViewerSim {
                     SimStatus::Halted(e) => format!("the sim halted at tick {before}: {e}"),
                     _ => format!("the sim stopped at tick {before}"),
                 });
+            }
+            if step.status == SimStatus::Running {
+                drain(&sim.world().output, audible);
             }
             if let Some(want) = self.checkpoints.get(tick) {
                 let mut got = [0u8; 16];
@@ -214,9 +236,15 @@ impl ViewerSim {
 #[derive(clap::Args, Debug, Clone, Copy, Default)]
 pub struct ViewerArgs {
     /// Screenshot checks: store a short run of this package, open it in the viewer and scrub to
-    /// its middle.
-    #[arg(long, hide = true)]
-    pub viewer_preview: bool,
+    /// this percent of it (default 50).
+    #[arg(
+        long,
+        hide = true,
+        value_name = "PERCENT",
+        num_args = 0..=1,
+        default_missing_value = "50"
+    )]
+    pub viewer_preview: Option<u8>,
 }
 
 /// The viewer's place in the module list (main.rs): its flags and plugin.
@@ -237,7 +265,7 @@ impl crate::registration::ClientModule for Registration {
 }
 
 pub struct ViewerPlugin {
-    preview: bool,
+    preview: Option<u8>,
 }
 
 impl Plugin for ViewerPlugin {
@@ -246,7 +274,7 @@ impl Plugin for ViewerPlugin {
             .add_observer(scrub_click)
             .add_systems(
                 Update,
-                (preview, keys, close, drive)
+                (preview, keys, close, clear_sign, drive)
                     .chain()
                     .before(crate::view::follow_view)
                     .in_set(InRun),
@@ -255,8 +283,11 @@ impl Plugin for ViewerPlugin {
                 Update,
                 (ensure_ui, sync_ui).chain().in_set(InRun),
             );
-        if self.preview {
-            app.init_resource::<Preview>();
+        if let Some(percent) = self.preview {
+            app.insert_resource(Preview {
+                percent: percent.min(100),
+                stage: 0,
+            });
         }
         // Leaving the page (Back, Retry, the run closing) puts the live sim back first.
         app.add_systems(OnExit(RunScreen::Results), close_on_exit);
@@ -340,6 +371,7 @@ fn open_from(world: &mut World, store: &Store, name: &str) {
             rate,
             playing: true,
             speed: 2,
+            clear_sign: true,
             ..default()
         };
     }
@@ -468,12 +500,21 @@ fn keys(keys: Res<ButtonInput<KeyCode>>, mut viewer: ResMut<Viewer>) {
     }
 }
 
+/// Clears the sign box when a viewer opened, closed or scrubbed backward, so text from a tick
+/// the playhead is no longer at does not stay up.
+fn clear_sign(mut outputs: crate::view::output::Outputs, mut viewer: ResMut<Viewer>) {
+    if std::mem::take(&mut viewer.clear_sign) {
+        outputs.clear_sign();
+    }
+}
+
 /// Applies a pending seek and advances the replayed sim at the chosen speed.
 pub(crate) fn drive(
     time: Res<Time>,
     mut game: NonSendMut<Game>,
     mut viewing: Option<NonSendMut<ViewerSim>>,
     mut viewer: ResMut<Viewer>,
+    mut outputs: crate::view::output::Outputs,
 ) {
     if !viewer.open {
         return;
@@ -481,11 +522,16 @@ pub(crate) fn drive(
     let Some(viewing) = viewing.as_deref_mut() else {
         return;
     };
+    // A backward seek replays ticks the sign box never showed in that order; start it clean.
+    if viewer.seek.is_some_and(|target| target < viewer.tick) {
+        outputs.clear_sign();
+    }
+    let mut drain = |output: &[OutputEvent], audible: bool| outputs.drain(output, audible);
     let mut tick = viewer.tick;
     if let Some(target) = viewer.seek.take() {
         viewer.playing = false;
         viewer.accum = 0.0;
-        match viewing.seek(&mut game.sim, &mut tick, target) {
+        match viewing.seek(&mut game.sim, &mut tick, target, &mut drain) {
             Ok(()) => {}
             Err(e) => fail(&mut viewer, e),
         }
@@ -502,7 +548,13 @@ pub(crate) fn drive(
     if ticks == 0 {
         return;
     }
-    match viewing.advance(&mut game.sim, &mut tick, ticks.min(MAX_STEPS_PER_FRAME)) {
+    match viewing.advance(
+        &mut game.sim,
+        &mut tick,
+        ticks.min(MAX_STEPS_PER_FRAME),
+        true,
+        &mut drain,
+    ) {
         Ok(()) => {}
         Err(e) => fail(&mut viewer, e),
     }
@@ -544,6 +596,7 @@ fn close_now(world: &mut World, cover_results: bool) {
         viewer.close = false;
         viewer.seek = None;
         viewer.error = None;
+        viewer.clear_sign = was_open;
         (was_open, viewer.ui.take())
     };
     if let Some(ui) = ui {
@@ -572,6 +625,17 @@ impl Viewer {
 
     pub(crate) fn progress_for_test(&self) -> (u64, u64) {
         (self.tick, self.total)
+    }
+}
+
+/// An open viewer with no run behind it, for tests of systems that ask whether it is open.
+#[cfg(test)]
+pub(crate) fn opened_for_test() -> Viewer {
+    Viewer {
+        open: true,
+        total: 1,
+        rate: 50,
+        ..Viewer::default()
     }
 }
 
@@ -781,10 +845,12 @@ fn sync_ui(
     }
 }
 
-/// The `--viewer-preview` state: 0 wants the results screen, 1 opens the stored replay there.
-#[derive(Resource, Default)]
+/// The `--viewer-preview` state: 0 wants the results screen, 1 opens the stored replay there and
+/// scrubs to `percent` of it.
+#[derive(Resource)]
 struct Preview {
     stage: u8,
+    percent: u8,
 }
 
 /// `--viewer-preview`: go to the results screen (whose `OnEnter` hides the game), then store a
@@ -801,11 +867,12 @@ fn preview(world: &mut World) {
             }
         }
         1 if shell::run_screen(world) == Some(RunScreen::Results) => {
+            let percent = u64::from(world.resource::<Preview>().percent);
             world.resource_mut::<Preview>().stage = 2;
             if let Some(name) = preview_replay(world) {
                 open(world, &name);
-                let middle = world.resource::<Viewer>().total / 2;
-                world.resource_mut::<Viewer>().seek = Some(middle);
+                let at = world.resource::<Viewer>().total * percent / 100;
+                world.resource_mut::<Viewer>().seek = Some(at);
             }
         }
         _ => {}
@@ -967,6 +1034,12 @@ mod tests {
         }
     }
 
+    /// [`ViewerSim::seek`] with no presentation sink: the tests here check the re-simulation.
+    fn seek(viewing: &mut ViewerSim, sim: &mut Sim, tick: &mut u64, target: u64) -> Result<(), String> {
+        let mut drain = |_: &[OutputEvent], _: bool| {};
+        viewing.seek(sim, tick, target, &mut drain)
+    }
+
     /// A viewer state on a fresh sim of `replay`, with `live` a second clone (tests never swap).
     fn viewing(replay: Replay, def: &Arc<GameDef>) -> (ViewerSim, Sim) {
         let sim = replay_sim(&replay, def).unwrap();
@@ -990,10 +1063,9 @@ mod tests {
         let pkg = demo();
         let replay = recorded(&pkg);
         let (mut viewing, mut sim) = viewing(replay.clone(), &pkg.def);
+        let total = viewing.total();
         let mut tick = 0;
-        viewing
-            .seek(&mut sim, &mut tick, viewing.total())
-            .expect("the replay verifies");
+        seek(&mut viewing, &mut sim, &mut tick, total).expect("the replay verifies");
         assert_eq!(tick, 600);
         assert_eq!(sim.state_hash(), replay.trailer.final_hash);
     }
@@ -1006,14 +1078,14 @@ mod tests {
         let replay = recorded(&pkg);
         let (mut viewing, mut sim) = viewing(replay, &pkg.def);
         let mut tick = 0;
-        viewing.seek(&mut sim, &mut tick, 250).unwrap();
+        seek(&mut viewing, &mut sim, &mut tick, 250).unwrap();
         let at_250 = sim.state_hash();
-        viewing.seek(&mut sim, &mut tick, 520).unwrap();
-        viewing.seek(&mut sim, &mut tick, 100).unwrap();
-        viewing.seek(&mut sim, &mut tick, 250).unwrap();
+        seek(&mut viewing, &mut sim, &mut tick, 520).unwrap();
+        seek(&mut viewing, &mut sim, &mut tick, 100).unwrap();
+        seek(&mut viewing, &mut sim, &mut tick, 250).unwrap();
         assert_eq!(sim.state_hash(), at_250, "a backward seek is exact");
         assert_eq!(tick, 250);
-        viewing.seek(&mut sim, &mut tick, 600).unwrap();
+        seek(&mut viewing, &mut sim, &mut tick, 600).unwrap();
         assert!(viewing.keyframes.len() <= MAX_KEYFRAMES);
         assert_eq!(viewing.keyframes[0].0, 0, "tick 0 always stays");
     }
@@ -1026,7 +1098,7 @@ mod tests {
         replay.trailer.checkpoints[0].1 = [0xff; 16];
         let (mut viewing, mut sim) = viewing(replay, &pkg.def);
         let mut tick = 0;
-        let error = viewing.seek(&mut sim, &mut tick, 600).unwrap_err();
+        let error = seek(&mut viewing, &mut sim, &mut tick, 600).unwrap_err();
         assert!(error.contains("does not match"), "{error}");
         assert_eq!(tick, CHECKPOINT_INTERVAL);
     }
@@ -1054,6 +1126,8 @@ mod tests {
         let (viewing, sim) = viewing(replay, &pkg.def);
         let mut app = App::new();
         app.init_resource::<Time>()
+            .insert_resource(crate::audio::Queue::new(0))
+            .init_resource::<crate::audio::Shake>()
             .insert_resource(Viewer {
                 open: true,
                 total,

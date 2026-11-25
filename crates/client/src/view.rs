@@ -16,6 +16,7 @@ use iwbtg_sim::world::{InstId, SimStatus};
 
 mod hud;
 pub(crate) mod order;
+pub(crate) mod output;
 pub(crate) mod transition;
 
 use crate::bindings::PadInput;
@@ -777,10 +778,7 @@ pub(crate) fn tick(
     if step.status == SimStatus::Running {
         stats.ticks += 1;
         let output = &game.sim.world().output;
-        hud::note_tick(&mut sign, output);
-        transition.observe(output, Instant::now());
-        audio.push(Instant::now(), output);
-        shake.tick(output);
+        output::drain(output, &mut sign, &mut audio, &mut shake, Some(&mut transition), true);
     }
 }
 

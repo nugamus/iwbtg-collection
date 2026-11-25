@@ -773,14 +773,24 @@ pub fn play(
     }
 }
 
+/// Whether a tune may follow `Game.sim`'s tick. While the replay viewer shows, that sim is the
+/// replayed run (#1463): syncing would seek the music around as the player scrubs, so leave it.
+fn follows_live_tick(viewer: Option<&crate::viewer::Viewer>) -> bool {
+    !viewer.is_some_and(crate::viewer::Viewer::is_open)
+}
+
 /// Keeps looping tunes on the tick clock: a tune that has drifted more than two ticks (40 ms at
 /// 50 Hz) from where the sim tick count says it should be is seeked back to that position;
 /// smaller drift is left alone, so normal play has no audible skips.
 pub fn sync_music(
     game: NonSend<Game>,
+    viewer: Option<Res<crate::viewer::Viewer>>,
     fixed: Res<Time<Fixed>>,
     mut tunes: Query<(&AudioSink, &mut MusicSync)>,
 ) {
+    if !follows_live_tick(viewer.as_deref()) {
+        return;
+    }
     let tick_rate = f64::from(game.sim.def().tick_rate.max(1));
     let now_tick = game.sim.world().tick as f64 + f64::from(fixed.overstep_fraction());
     for (sink, mut sync) in &mut tunes {
@@ -847,6 +857,16 @@ mod tests {
 
     fn out(s: SoundOutput) -> Vec<OutputEvent> {
         vec![OutputEvent::Sound(s)]
+    }
+
+    /// #1463: music follows the live run's tick normally and is left alone while the replay
+    /// viewer shows, so scrubbing does not seek it.
+    #[test]
+    fn music_sync_follows_the_live_run_but_not_the_viewer() {
+        assert!(follows_live_tick(None));
+        assert!(follows_live_tick(Some(&crate::viewer::Viewer::default())));
+        let opened = crate::viewer::opened_for_test();
+        assert!(!follows_live_tick(Some(&opened)));
     }
 
     #[test]
