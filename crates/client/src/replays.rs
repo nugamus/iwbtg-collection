@@ -202,10 +202,7 @@ impl Recorder {
         let def = sim.def();
         let start_mode = match &options.start {
             StartPoint::NewGame { .. } => StartMode::NewGame,
-            StartPoint::FromSave(slot) => {
-                let checkpoint = iwbtg_sim::save::Checkpoint::from_slot(def, slot).ok()?;
-                StartMode::FromSave(checkpoint.encode().ok()?)
-            }
+            StartPoint::FromSave(checkpoint) => StartMode::FromSave(checkpoint.encode().ok()?),
             _ => return None,
         };
         let header = Header {
@@ -1007,8 +1004,9 @@ mod tests {
             items: 0,
             clear: false,
         };
+        let checkpoint = iwbtg_sim::save::Checkpoint::from_slot(&pkg.def, &slot).unwrap();
         let options = SimOptions {
-            start: StartPoint::FromSave(slot.clone()),
+            start: StartPoint::FromSave(checkpoint.clone()),
             seed: 0,
             dll_mode: DllMode::Model,
             mode: PlayMode::Original,
@@ -1020,7 +1018,6 @@ mod tests {
         let name = rec.current_name().unwrap().to_owned();
         rec.finish(&sim);
         let replay = Replay::decode(&store.read(&name).unwrap().unwrap()).unwrap();
-        let checkpoint = iwbtg_sim::save::Checkpoint::from_slot(&pkg.def, &slot).unwrap();
         assert_eq!(
             replay.header.start_mode,
             StartMode::FromSave(checkpoint.encode().unwrap())

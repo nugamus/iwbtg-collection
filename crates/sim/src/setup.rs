@@ -153,7 +153,9 @@ impl Sim {
         let first_room = match &options.start {
             room::StartPoint::NewGame { .. } => def.new_game_room,
             room::StartPoint::Room { room, .. } => *room,
-            room::StartPoint::FromSave(slot) => slot.room,
+            // The checkpoint's stable room name, resolved before the world exists so it is in
+            // the saved room from the start (as `room::start_game` enters it).
+            room::StartPoint::FromSave(checkpoint) => room::checkpoint_slot(&def, checkpoint)?.room,
         };
         let mut world = World::new(first_room, options.seed);
         world.next_id = World::first_runtime_id(&def);
