@@ -41,6 +41,14 @@ fn user(n) {
     else if n == 9 { this.pattern = 42.0; this.res = this.pattern[0] + this.pattern[1]; }
     else if n == 10 { room_goto("other"); }
     else if n == 11 { this.res = #{ a: 1.0 }; }
+    else if n == 12 { let sum = 0.0; for v in this.pattern { sum += v; } this.res = sum; }
+    else if n == 13 { let a = this.pattern; a.push(15.0); this.pattern = a; this.res = to_float(len(this.pattern)); }
+    else if n == 14 { this.pattern.push(16.0); this.res = to_float(len(this.pattern)); }
+    else if n == 15 { let a = this.pattern; let x = a.pop(); this.pattern = a; this.res = x; }
+    else if n == 16 { let a = this.pattern; while len(a) > 0 { a.pop(); } this.res = to_float(len(a)); }
+    else if n == 17 { let a = this.pattern; a.push(1.0); this.res = to_float(len(this.pattern)); }
+    else if n == 18 { this.pattern[7] = 1.0; let sum = 0.0; for v in this.pattern { sum += v; } this.res = sum; }
+    else if n == 19 { this.pattern[9999] = 0.0; let a = this.pattern; a.push(1.0); }
 }
 "#;
 
@@ -212,6 +220,84 @@ fn a_bare_write_keeps_the_array_under_gm8_and_replaces_it_under_standard() {
     let me = g.holder();
     let e = user(&mut g, me, 9).expect_err("a real has no elements under standard");
     assert!(e.contains("Indexer unavailable"), "{e}");
+}
+
+/// #1383: a `for` loop reads a stored array element by element, without index arithmetic.
+#[test]
+fn a_for_loop_reads_a_stored_array() {
+    let mut g = game(None);
+    let me = g.holder();
+    user(&mut g, me, 12).expect("for v in this.pattern");
+    assert_eq!(g.var(me, RES), Some(&real(10.0 + 11.0 + 12.0 + 13.0 + 14.0)));
+}
+
+/// #1383: a local copy can push and pop (the GM copy rule still holds), and the copy is
+/// assigned back to store it.
+#[test]
+fn push_and_pop_work_on_a_local_copy() {
+    let mut g = game(None);
+    let me = g.holder();
+    user(&mut g, me, 13).expect("push");
+    assert_eq!(g.var(me, RES), Some(&real(6.0)));
+    assert_eq!(
+        g.var(me, PATTERN),
+        Some(&reals(&[10.0, 11.0, 12.0, 13.0, 14.0, 15.0]))
+    );
+    // A copy's push does not change the stored array.
+    let mut g = game(None);
+    let me = g.holder();
+    user(&mut g, me, 17).expect("a local push");
+    assert_eq!(g.var(me, RES), Some(&real(5.0)));
+    assert_eq!(g.var(me, PATTERN), Some(&reals(&[10.0, 11.0, 12.0, 13.0, 14.0])));
+}
+
+#[test]
+fn pop_returns_the_last_element_and_empties() {
+    let mut g = game(None);
+    let me = g.holder();
+    user(&mut g, me, 15).expect("pop");
+    assert_eq!(g.var(me, RES), Some(&real(14.0)));
+    assert_eq!(g.var(me, PATTERN), Some(&reals(&[10.0, 11.0, 12.0, 13.0])));
+    user(&mut g, me, 16).expect("pop to empty");
+    assert_eq!(g.var(me, RES), Some(&real(0.0)));
+}
+
+#[test]
+fn a_push_past_the_cap_is_a_script_error() {
+    let mut g = game(None);
+    let me = g.holder();
+    let e = user(&mut g, me, 19).expect_err("the cap holds");
+    assert!(e.contains("array cap exceeded"), "{e}");
+}
+
+/// A push written on the property expression itself: Rhai writes the mutated copy back through
+/// the variable setter, like an index assignment.
+#[test]
+fn a_push_through_the_property_is_stored() {
+    let mut g = game(None);
+    let me = g.holder();
+    user(&mut g, me, 14).expect("property push");
+    assert_eq!(g.var(me, RES), Some(&real(6.0)));
+    assert_eq!(
+        g.var(me, PATTERN),
+        Some(&reals(&[10.0, 11.0, 12.0, 13.0, 14.0, 16.0]))
+    );
+}
+
+/// The loop reads unset elements like an index: 0 under `gm8`, an error under `standard`.
+#[test]
+fn a_loop_follows_the_init_policy_for_unset_elements() {
+    let mut g = game(None);
+    let me = g.holder();
+    user(&mut g, me, 18).expect("grow and loop under gm8");
+    assert_eq!(
+        g.var(me, RES),
+        Some(&real(10.0 + 11.0 + 12.0 + 13.0 + 14.0 + 1.0))
+    );
+    let mut g = game(Some(ScriptRules::standard()));
+    let me = g.holder();
+    let e = user(&mut g, me, 18).expect_err("an unset element in a loop");
+    assert!(e.contains("array element 5 is not set"), "{e}");
 }
 
 #[test]
