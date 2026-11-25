@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-25T13:25:53Z",
+ "generated_at": "2026-11-25T14:28:39Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -11,13 +11,13 @@
    "title": "0 · Foundation",
    "name": "Foundation",
    "state": "open",
-   "open": 4,
+   "open": 5,
    "closed": 86,
-   "total": 90,
-   "pct_closed": 95.6,
-   "size_points": 11,
+   "total": 91,
+   "pct_closed": 94.5,
+   "size_points": 12,
    "sizes": {
-    "size:S": 3,
+    "size:S": 4,
     "size:M": 0,
     "size:L": 1,
     "unknown": 0
@@ -262,14 +262,14 @@
  ],
  "activity": {
   "totals": {
-   "issues": 930,
-   "open": 278,
+   "issues": 931,
+   "open": 279,
    "closed": 652,
-   "pct_closed": 70.1
+   "pct_closed": 70.0
   },
   "open_prs": 3,
   "process": {
-   "agent-ready": 128,
+   "agent-ready": 129,
    "in-progress": 13,
    "needs-user": 30,
    "triage": 47,
@@ -299,7 +299,7 @@
    },
    {
     "area": "area:infra",
-    "count": 21
+    "count": 22
    },
    {
     "area": "area:design",
@@ -451,6 +451,22 @@
   ],
   "in_progress": [
    {
+    "number": 162,
+    "title": "Submissions: endpoint and replay storage",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/162",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:server",
+     "in-progress"
+    ],
+    "phase": "7 · Online",
+    "updated_at": "2026-11-25T13:26:22Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T12:01:14Z"
+   },
+   {
     "number": 1294,
     "title": "Sim rooms A2c: nested-request queue in the world store for NextTick (#1174)",
     "state": "open",
@@ -465,22 +481,6 @@
     "updated_at": "2026-11-25T13:12:09Z",
     "closed_at": null,
     "created_at": "2026-11-21T12:00:40Z"
-   },
-   {
-    "number": 162,
-    "title": "Submissions: endpoint and replay storage",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/162",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:server",
-     "in-progress"
-    ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-25T12:39:07Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T12:01:14Z"
    },
    {
     "number": 1530,
@@ -653,6 +653,21 @@
     "created_at": "2026-11-02T14:09:28Z"
    },
    {
+    "number": 1562,
+    "title": "CI: the selector tests hard-code the real manifest graph, so every dependency edge breaks five assertions",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1562",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:infra"
+    ],
+    "phase": "0 · Foundation",
+    "updated_at": "2026-11-25T13:37:02Z",
+    "closed_at": null,
+    "created_at": "2026-11-25T13:36:58Z"
+   },
+   {
     "number": 1365,
     "title": "Progress exporter: trace coverage per game",
     "state": "open",
@@ -712,25 +727,10 @@
     "updated_at": "2026-11-25T01:31:54Z",
     "closed_at": null,
     "created_at": "2026-11-02T11:31:41Z"
-   },
-   {
-    "number": 74,
-    "title": "Creator claim flow",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/74",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "area:server"
-    ],
-    "phase": "10 · Release",
-    "updated_at": "2026-11-24T13:03:09Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T11:31:50Z"
    }
   ],
   "closed_7d": 267,
-  "opened_7d": 335,
+  "opened_7d": 336,
   "burnup": [
    {
     "week": "2026-11-09",
@@ -749,7 +749,7 @@
    },
    {
     "week": "2026-11-30",
-    "created": 930,
+    "created": 931,
     "closed": 652
    }
   ]
