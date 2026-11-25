@@ -32,6 +32,7 @@ use bevy::ui::RelativeCursorPosition;
 use iwbtg_sim::def::GameDef;
 use iwbtg_sim::input::{Action, InputFrame};
 use iwbtg_sim::mods::ModSet;
+use iwbtg_sim::output::OutputEvent;
 use iwbtg_sim::replay::{
     CHECKPOINT_INTERVAL, Header, MAGIC, REPLAY_FORMAT, Replay, SAVE_SLOT_FORMAT, StartMode, Trailer,
 };
@@ -141,7 +142,14 @@ impl ViewerSim {
 
     /// Re-simulates the recorded frames from the nearest keyframe at or before `target`, leaving
     /// `sim` and `tick` at `target`. Every checkpoint crossed is checked against the trailer.
-    fn seek(&mut self, sim: &mut Sim, tick: &mut u64, target: u64) -> Result<(), String> {
+    /// A seek's skipped ticks drain only lasting output (music), never one-shot sounds.
+    fn seek(
+        &mut self,
+        sim: &mut Sim,
+        tick: &mut u64,
+        target: u64,
+        drain: &mut dyn FnMut(&[OutputEvent], bool),
+    ) -> Result<(), String> {
         let target = target.min(self.total());
         if target < *tick {
             let (at, saved) = self
@@ -154,11 +162,20 @@ impl ViewerSim {
             *sim = saved;
             *tick = at;
         }
-        self.advance(sim, tick, target - *tick)
+        self.advance(sim, tick, target - *tick, false, drain)
     }
 
-    /// Steps `ticks` recorded frames (clamped to the replay's end), checking hashes on the way.
-    fn advance(&mut self, sim: &mut Sim, tick: &mut u64, ticks: u64) -> Result<(), String> {
+    /// Steps `ticks` recorded frames (clamped to the replay's end), checking hashes on the way
+    /// and draining each running tick's output into the client (`audible`: queue one-shot sounds
+    /// too, false while a seek skips ahead).
+    fn advance(
+        &mut self,
+        sim: &mut Sim,
+        tick: &mut u64,
+        ticks: u64,
+        audible: bool,
+        drain: &mut dyn FnMut(&[OutputEvent], bool),
+    ) -> Result<(), String> {
         let end = tick.saturating_add(ticks).min(self.total());
         while *tick < end {
             let frame = self.replay.inputs[*tick as usize];
@@ -170,6 +187,9 @@ impl ViewerSim {
                     SimStatus::Halted(e) => format!("the sim halted at tick {before}: {e}"),
                     _ => format!("the sim stopped at tick {before}"),
                 });
+            }
+            if step.status == SimStatus::Running {
+                drain(&sim.world().output, audible);
             }
             if let Some(want) = self.checkpoints.get(tick) {
                 let mut got = [0u8; 16];
@@ -474,6 +494,9 @@ pub(crate) fn drive(
     mut game: NonSendMut<Game>,
     mut viewing: Option<NonSendMut<ViewerSim>>,
     mut viewer: ResMut<Viewer>,
+    mut audio: ResMut<crate::audio::Queue>,
+    mut shake: ResMut<crate::audio::Shake>,
+    mut transition: Option<ResMut<crate::view::transition::Transition>>,
 ) {
     if !viewer.open {
         return;
@@ -481,11 +504,20 @@ pub(crate) fn drive(
     let Some(viewing) = viewing.as_deref_mut() else {
         return;
     };
+    let mut drain = |output: &[OutputEvent], audible: bool| {
+        crate::output::drain(
+            output,
+            &mut audio,
+            &mut shake,
+            transition.as_deref_mut(),
+            audible,
+        );
+    };
     let mut tick = viewer.tick;
     if let Some(target) = viewer.seek.take() {
         viewer.playing = false;
         viewer.accum = 0.0;
-        match viewing.seek(&mut game.sim, &mut tick, target) {
+        match viewing.seek(&mut game.sim, &mut tick, target, &mut drain) {
             Ok(()) => {}
             Err(e) => fail(&mut viewer, e),
         }
@@ -502,7 +534,13 @@ pub(crate) fn drive(
     if ticks == 0 {
         return;
     }
-    match viewing.advance(&mut game.sim, &mut tick, ticks.min(MAX_STEPS_PER_FRAME)) {
+    match viewing.advance(
+        &mut game.sim,
+        &mut tick,
+        ticks.min(MAX_STEPS_PER_FRAME),
+        true,
+        &mut drain,
+    ) {
         Ok(()) => {}
         Err(e) => fail(&mut viewer, e),
     }
@@ -967,6 +1005,12 @@ mod tests {
         }
     }
 
+    /// [`ViewerSim::seek`] with no presentation sink: the tests here check the re-simulation.
+    fn seek(viewing: &mut ViewerSim, sim: &mut Sim, tick: &mut u64, target: u64) -> Result<(), String> {
+        let mut drain = |_: &[OutputEvent], _: bool| {};
+        viewing.seek(sim, tick, target, &mut drain)
+    }
+
     /// A viewer state on a fresh sim of `replay`, with `live` a second clone (tests never swap).
     fn viewing(replay: Replay, def: &Arc<GameDef>) -> (ViewerSim, Sim) {
         let sim = replay_sim(&replay, def).unwrap();
@@ -990,10 +1034,9 @@ mod tests {
         let pkg = demo();
         let replay = recorded(&pkg);
         let (mut viewing, mut sim) = viewing(replay.clone(), &pkg.def);
+        let total = viewing.total();
         let mut tick = 0;
-        viewing
-            .seek(&mut sim, &mut tick, viewing.total())
-            .expect("the replay verifies");
+        seek(&mut viewing, &mut sim, &mut tick, total).expect("the replay verifies");
         assert_eq!(tick, 600);
         assert_eq!(sim.state_hash(), replay.trailer.final_hash);
     }
@@ -1006,14 +1049,14 @@ mod tests {
         let replay = recorded(&pkg);
         let (mut viewing, mut sim) = viewing(replay, &pkg.def);
         let mut tick = 0;
-        viewing.seek(&mut sim, &mut tick, 250).unwrap();
+        seek(&mut viewing, &mut sim, &mut tick, 250).unwrap();
         let at_250 = sim.state_hash();
-        viewing.seek(&mut sim, &mut tick, 520).unwrap();
-        viewing.seek(&mut sim, &mut tick, 100).unwrap();
-        viewing.seek(&mut sim, &mut tick, 250).unwrap();
+        seek(&mut viewing, &mut sim, &mut tick, 520).unwrap();
+        seek(&mut viewing, &mut sim, &mut tick, 100).unwrap();
+        seek(&mut viewing, &mut sim, &mut tick, 250).unwrap();
         assert_eq!(sim.state_hash(), at_250, "a backward seek is exact");
         assert_eq!(tick, 250);
-        viewing.seek(&mut sim, &mut tick, 600).unwrap();
+        seek(&mut viewing, &mut sim, &mut tick, 600).unwrap();
         assert!(viewing.keyframes.len() <= MAX_KEYFRAMES);
         assert_eq!(viewing.keyframes[0].0, 0, "tick 0 always stays");
     }
@@ -1026,7 +1069,7 @@ mod tests {
         replay.trailer.checkpoints[0].1 = [0xff; 16];
         let (mut viewing, mut sim) = viewing(replay, &pkg.def);
         let mut tick = 0;
-        let error = viewing.seek(&mut sim, &mut tick, 600).unwrap_err();
+        let error = seek(&mut viewing, &mut sim, &mut tick, 600).unwrap_err();
         assert!(error.contains("does not match"), "{error}");
         assert_eq!(tick, CHECKPOINT_INTERVAL);
     }
@@ -1054,6 +1097,8 @@ mod tests {
         let (viewing, sim) = viewing(replay, &pkg.def);
         let mut app = App::new();
         app.init_resource::<Time>()
+            .insert_resource(crate::audio::Queue::new(0))
+            .init_resource::<crate::audio::Shake>()
             .insert_resource(Viewer {
                 open: true,
                 total,

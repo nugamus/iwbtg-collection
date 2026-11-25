@@ -884,6 +884,8 @@ mod tests {
 
         let mut app = App::new();
         app.init_resource::<Time>()
+            .insert_resource(crate::audio::Queue::new(0))
+            .init_resource::<crate::audio::Shake>()
             .init_resource::<crate::viewer::Viewer>()
             .insert_resource(LoadedPackage {
                 pkg,

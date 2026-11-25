@@ -778,9 +778,18 @@ pub fn play(
 /// smaller drift is left alone, so normal play has no audible skips.
 pub fn sync_music(
     game: NonSend<Game>,
+    viewer: Option<Res<crate::viewer::Viewer>>,
     fixed: Res<Time<Fixed>>,
     mut tunes: Query<(&AudioSink, &mut MusicSync)>,
 ) {
+    // While the replay viewer shows, `Game.sim` is the replayed run (#1463): syncing a tune to
+    // its tick would seek the music around as the player scrubs, so leave it alone.
+    if viewer
+        .as_deref()
+        .is_some_and(crate::viewer::Viewer::is_open)
+    {
+        return;
+    }
     let tick_rate = f64::from(game.sim.def().tick_rate.max(1));
     let now_tick = game.sim.world().tick as f64 + f64::from(fixed.overstep_fraction());
     for (sink, mut sync) in &mut tunes {
