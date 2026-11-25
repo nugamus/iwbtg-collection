@@ -23,7 +23,7 @@ use super::inst::Inst;
 use crate::def::script::{InitPolicy, ScriptRules, ValueModel};
 use crate::error::SimError;
 use crate::num::Real;
-use crate::world::{MAX_ARRAY_SIZE, Value, assign_bare};
+use crate::world::{MAX_ARRAY_SIZE, Value, assign_bare, set_element};
 
 type Res<T> = Result<T, Box<rhai::EvalAltResult>>;
 
@@ -235,15 +235,6 @@ pub(crate) fn array_index(d: &Dynamic) -> Res<usize> {
     Ok(i)
 }
 
-/// Writes `value` into element `i` of `items`, growing it with unset elements (GM8: "At the
-/// moment you use an index the array is generated", research `creation-code.md`).
-fn set_element(items: &mut Vec<Value>, i: usize, value: Value) {
-    if items.len() <= i {
-        items.resize(i + 1, Value::None);
-    }
-    items[i] = value;
-}
-
 /// Registers stored arrays (`VarArray`) and `global` (`Globals`).
 /// The `index$get$`/`index$set$` descriptions are shared with the instance indexers (`inst.rs`).
 pub fn register_array_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mut Docs) {
@@ -265,8 +256,8 @@ pub fn register_array_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mut D
             let i = array_index(&i)?;
             let rules = script_rules(&s)?;
             let value = dynamic_to_value(&s, &v, rules, &format!("array element {i}"))?;
-            set_element(&mut a.items, i, value);
-            Ok(())
+            // The one growth rule, shared with room creation code (#1382).
+            set_element(&mut a.items, i, value).map_err(sim_err)
         });
         docs.add(
             "len",
@@ -354,10 +345,12 @@ mod tests {
         assert!(array_index(&Dynamic::from(ImmutableString::from("1"))).is_err());
     }
 
+    /// The script path and the room path share one fill rule (#1382): a skipped slot is
+    /// `Value::None`, so a read follows the init policy.
     #[test]
     fn a_write_past_the_end_grows_with_unset_elements() {
         let mut items = vec![Value::Real(Real::ONE)];
-        set_element(&mut items, 3, Value::Real(Real::ZERO));
+        set_element(&mut items, 3, Value::Real(Real::ZERO)).unwrap();
         assert_eq!(
             items,
             vec![
