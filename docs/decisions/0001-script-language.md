@@ -116,6 +116,7 @@ The sandbox has four layers:
 - Host caps: 256 script spawns per call, 4,096 per tick (enforced; a Create run by a spawn counts toward the spawning call), 50,000 live instances per room (enforced in `World::insert`, so scripts and built-ins alike; instances destroyed this tick do not count).
 - Exceeding any budget or cap is a deterministic script error. It can only happen to a runaway script, because of the CI rule below.
 - CI rule: a script's measured peak use must stay under 25% of its package's tick budget over the package's test replays. `iwbtg profile <pkg> --replay <file>` reports peak units and milliseconds per tick. The validator warns at 10%.
+- Performance class: over a package's stored clear replays (`tests/replays/*.iwbr`), `iwbtg profile <pkg> --summary` reports `light` (peak under 10% of the tick budget and of the 50,000 live-instance cap), `heavy` (10-25%) or `extreme` (25% or more), taking the worse of the two fractions. It reuses the 10% warning and the 25% CI rule, so badly performing content is classified for the catalog and the game page instead of gaining a new design cap. `iwbtg pkg publish` stores the class and the peaks; the hard caps above remain the server-safety line (#798).
 - Operation counts are deterministic for a fixed Rhai version, optimization level and script. That is why the version is pinned and part of `SIM_VERSION`.
 
 ### Determinism rules
