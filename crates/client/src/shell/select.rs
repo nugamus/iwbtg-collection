@@ -71,6 +71,7 @@ impl Plugin for SelectPlugin {
         }
         app.init_resource::<ListDim>()
             .init_resource::<Filters>()
+            .init_resource::<collections::Renaming>()
             .init_resource::<Shown>()
             .init_resource::<mod_sheet::Sheet>()
             // `failed` reads it; the screen's tests add this plugin without `ShellPlugin`.
@@ -172,26 +173,33 @@ impl Plugin for SelectPlugin {
             .add_systems(
                 Update,
                 (
-                    controls::search,
-                    list::refilter,
-                    controls::labels,
-                    keys.run_if(mod_sheet::closed),
-                    collections::keys,
-                    mod_sheet::keys,
-                    mod_sheet::slide,
-                    mod_sheet::follow,
-                    mod_sheet::auto_retry,
-                    records,
-                    list::looks,
-                    list::arrange,
-                    list::settle,
-                    list::dim,
-                    picked,
-                    collections::favorite_label,
-                    collections::chips,
-                    opening,
-                    failed,
-                    scale,
+                    (
+                        controls::search,
+                        list::refilter,
+                        controls::labels,
+                        keys.run_if(mod_sheet::closed),
+                        collections::keys,
+                        mod_sheet::keys,
+                        mod_sheet::slide,
+                        mod_sheet::follow,
+                        mod_sheet::auto_retry,
+                        records,
+                        list::looks,
+                        list::arrange,
+                        list::settle,
+                        list::dim,
+                        picked,
+                        collections::favorite_label,
+                        collections::chips,
+                    )
+                        .chain(),
+                    (
+                        opening,
+                        failed,
+                        collections::editor_labels,
+                        scale,
+                    )
+                        .chain(),
                 )
                     .chain()
                     .run_if(in_state(AppScreen::Select)),
@@ -738,6 +746,99 @@ mod tests {
         assert!(
             app.world().resource::<Shown>().order().is_empty(),
             "the filter now finds nothing"
+        );
+    }
+
+    /// The name field's text.
+    fn field_text(app: &mut App) -> String {
+        let world = app.world_mut();
+        world
+            .query_filtered::<&bevy::text::EditableText, With<collections::NameField>>()
+            .iter(world)
+            .map(|field| field.value().to_string())
+            .next()
+            .unwrap_or_default()
+    }
+
+    /// A named collection is renamed and deleted from its Collections menu, keeping its games
+    /// and the favorites (#1495).
+    #[test]
+    fn a_collection_renames_and_deletes_from_the_collections_menu() {
+        use collections::{Collections, CreateButton, CreateLabel, Pick, Renaming};
+        use controls::{Control, Pick as Option};
+        let mut app = screen();
+        *app.world_mut().resource_mut::<Selection>() = Selection { game: 3, map: 0 };
+        app.update();
+        activate::<collections::Favorite>(&mut app, |_| true);
+        name_collection(&mut app, "Warmups");
+        activate::<CreateButton>(&mut app, |_| true);
+        app.update();
+        app.world_mut().resource_mut::<Filters>().collection =
+            Some(Pick::Named("Warmups".into()));
+        app.update();
+
+        // Collections -> Rename "Warmups": the field holds the old name, the button says Rename.
+        activate::<Control>(&mut app, |c| *c == Control::Collections);
+        activate::<Option>(&mut app, |p| {
+            matches!(p, Option::Rename(name) if name == "Warmups")
+        });
+        assert_eq!(
+            app.world().resource::<Renaming>().0.as_deref(),
+            Some("Warmups")
+        );
+        assert_eq!(field_text(&mut app), "Warmups");
+        let label = {
+            let world = app.world_mut();
+            world
+                .query_filtered::<&Text, With<CreateLabel>>()
+                .iter(world)
+                .map(|t| t.0.clone())
+                .collect::<Vec<_>>()
+        };
+        assert!(label.iter().any(|l| l == "Rename"), "{label:?}");
+
+        name_collection(&mut app, "Practice");
+        activate::<CreateButton>(&mut app, |_| true);
+        app.update();
+        let lists = app.world().resource::<Collections>();
+        assert_eq!(lists.names(), ["Practice"]);
+        assert!(
+            lists.contains(&Pick::Named("Practice".into()), "demo_maps"),
+            "renaming kept the game"
+        );
+        assert!(app.world().resource::<Renaming>().0.is_none());
+        assert_eq!(
+            app.world().resource::<Filters>().collection,
+            Some(Pick::Named("Practice".into())),
+            "the filter follows the new name"
+        );
+        assert_eq!(app.world().resource::<Shown>().order(), [3]);
+
+        // Collections -> Delete "Practice": the list goes, the games and the favorite stay.
+        activate::<Control>(&mut app, |c| *c == Control::Collections);
+        activate::<Option>(&mut app, |p| {
+            matches!(p, Option::Delete(name) if name == "Practice")
+        });
+        app.update();
+        let lists = app.world().resource::<Collections>();
+        assert!(lists.names().is_empty());
+        assert!(lists.is_favorite("demo_maps"), "the favorite stays");
+        assert_eq!(
+            app.world().resource::<Filters>().collection,
+            None,
+            "the filter falls back to Any"
+        );
+        assert_eq!(
+            app.world().resource::<Shown>().order().len(),
+            8,
+            "the games are still in the library"
+        );
+        app.world_mut().resource_mut::<Filters>().collection = Some(Pick::Favorites);
+        app.update();
+        assert_eq!(
+            app.world().resource::<Shown>().order(),
+            [3],
+            "the Favorites filter still finds the favorite"
         );
     }
 
