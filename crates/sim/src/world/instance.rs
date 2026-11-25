@@ -113,6 +113,23 @@ pub fn assign_bare(vars: &mut BTreeMap<VarId, Value>, id: VarId, value: Value) {
     vars.insert(id, value);
 }
 
+/// Writes `value` to element `index` of `items`, growing the array with unset ([`Value::None`])
+/// slots and enforcing [`MAX_ARRAY_SIZE`].
+///
+/// The one growth rule for arrays made by room creation code (`room::set_global_element`) and by
+/// scripts (`script::array`), #1382: a skipped slot is unset, so a read follows the run's init
+/// policy (`gm8`: 0, `standard`: a script error) whichever path grew the array.
+pub(crate) fn set_element(items: &mut Vec<Value>, index: usize, value: Value) -> Result<(), SimError> {
+    if index >= MAX_ARRAY_SIZE {
+        return Err(array_cap_error());
+    }
+    if items.len() <= index {
+        items.resize(index + 1, Value::None);
+    }
+    items[index] = value;
+    Ok(())
+}
+
 /// The one error for an array past its cap, so the message and its wording stay in one place.
 pub(crate) fn array_cap_error() -> SimError {
     SimError::unsupported(format!(

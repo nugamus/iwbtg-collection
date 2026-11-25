@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 pub use api::{Flow, SpawnInit};
+pub(crate) use instance::set_element;
 pub use instance::{InstId, Instance, KindState, MAX_ARRAY_SIZE, Persistence, Value, assign_bare};
 
 use crate::collide::grid::Grid;
