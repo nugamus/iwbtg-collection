@@ -14,6 +14,7 @@ use iwbtg_format::{iwbz, pkg_cmd};
 use serde::Serialize;
 use serde_json::{Value, json};
 
+use crate::profile_cmd;
 use crate::trace_cmd::{ToolError, load_package};
 
 /// `iwbtg pkg publish <pkg> --catalog-dir <folder> [--trace-mode]`.
@@ -56,7 +57,29 @@ pub fn publish_main(dir: &Path, catalog_dir: &Path, trace_mode: bool) -> Result<
     let blob = files_dir.join(&filename);
     write_blob(&blob, &bytes)?;
 
-    let entry = Entry::new(&manifest, &filename, bytes.len() as u64, &gameplay, &content);
+    // The class comes from the package's stored clear replays, the same measurement `iwbtg profile
+    // --summary` prints (#798). A package without one stores no class: not measured, never a guess.
+    let performance = match profile_cmd::summarize(&files) {
+        Ok(Some(summary)) => Some(PerformanceEntry {
+            class: summary.class.word().to_owned(),
+            peak_script_units: summary.peak_units,
+            tick_budget: summary.tick_limit,
+            peak_instances: summary.peak_instances,
+        }),
+        Ok(None) => None,
+        Err(error) => {
+            eprintln!("warning: performance class not measured: {error}");
+            None
+        }
+    };
+    let entry = Entry::new(
+        &manifest,
+        &filename,
+        bytes.len() as u64,
+        &gameplay,
+        &content,
+        performance,
+    );
     let catalog_path = catalog_dir.join("catalog.json");
     let mut catalog = read_catalog(&catalog_path)?;
     let entries = catalog_entries(&mut catalog, &catalog_path)?;
@@ -100,10 +123,20 @@ struct Entry {
     gameplay_hash: String,
     creators: Vec<CreatorEntry>,
     source: SourceEntry,
+    /// The measured class and peaks; absent when the package has no stored clear replay.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    performance: Option<PerformanceEntry>,
 }
 
 impl Entry {
-    fn new(manifest: &Manifest, filename: &str, size: u64, gameplay: &str, content: &str) -> Self {
+    fn new(
+        manifest: &Manifest,
+        filename: &str,
+        size: u64,
+        gameplay: &str,
+        content: &str,
+        performance: Option<PerformanceEntry>,
+    ) -> Self {
         let source = manifest.source.get_ref();
         Self {
             id: manifest.id.get_ref().clone(),
@@ -128,8 +161,18 @@ impl Entry {
                 url: source.url.get_ref().clone(),
                 permission: permission_name(*source.permission.get_ref()).to_owned(),
             },
+            performance,
         }
     }
+}
+
+/// The measured class and peaks from the stored clear replays (`iwbtg profile --summary`).
+#[derive(Debug, Serialize, PartialEq, Eq)]
+struct PerformanceEntry {
+    class: String,
+    peak_script_units: u64,
+    tick_budget: u64,
+    peak_instances: usize,
 }
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -264,6 +307,10 @@ mod tests {
                 entry["size"].as_u64().unwrap(),
                 std::fs::metadata(&path).unwrap().len()
             );
+            assert!(
+                entry.get("performance").is_none(),
+                "the fixture has no stored replay, so no class is measured"
+            );
         }
         let before = std::fs::read(root.join("catalog.json")).unwrap();
         assert!(publish_main(&fixture("minimal"), &root, false).unwrap());
@@ -308,6 +355,69 @@ mod tests {
             std::fs::read_to_string(root.join("catalog.json")).unwrap(),
             "not json"
         );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    fn copy_dir(from: &Path, to: &Path) {
+        std::fs::create_dir_all(to).unwrap();
+        for entry in std::fs::read_dir(from).unwrap() {
+            let entry = entry.unwrap();
+            let target = to.join(entry.file_name());
+            if entry.file_type().unwrap().is_dir() {
+                copy_dir(&entry.path(), &target);
+            } else {
+                std::fs::copy(entry.path(), target).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn a_package_with_a_stored_clear_replay_stores_its_class() {
+        use iwbtg_sim::input::InputFrame;
+        use iwbtg_sim::mods::ModSet;
+        use iwbtg_sim::replay::{Header, MAGIC, REPLAY_FORMAT, Replay, StartMode, Trailer};
+        use iwbtg_sim::stripped::PlayMode;
+
+        let pkg = scratch("class-pkg");
+        copy_dir(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("../client/tests/fixtures/clear.pkg"),
+            &pkg,
+        );
+        let frames = vec![InputFrame::default(); 60];
+        let replay = Replay {
+            header: Header {
+                magic: MAGIC,
+                replay_format: REPLAY_FORMAT,
+                sim_version: iwbtg_sim::SIM_VERSION,
+                package_id: "demo_clear".into(),
+                gameplay_hash: [0; 32],
+                engine_rev: 0,
+                rng_seed: 0,
+                start_mode: StartMode::NewGame,
+                play_mode: PlayMode::Original,
+                map: "main".into(),
+                mods: ModSet::NONE,
+                client_build_id: String::new(),
+            },
+            trailer: Trailer {
+                total_ticks: frames.len() as u64,
+                ..Trailer::default()
+            },
+            inputs: frames,
+        }
+        .encode()
+        .expect("encode");
+        std::fs::create_dir_all(pkg.join("tests/replays")).unwrap();
+        std::fs::write(pkg.join("tests/replays/full_clear.iwbr"), replay).unwrap();
+
+        let root = scratch("class-out");
+        assert!(publish_main(&pkg, &root, false).unwrap());
+        let entry = &catalog(&root)["files"][0];
+        let class = entry["performance"]["class"].as_str().expect("class");
+        assert!(matches!(class, "light" | "heavy" | "extreme"), "{class}");
+        assert!(entry["performance"]["peak_instances"].is_u64());
+        assert!(entry["performance"]["tick_budget"].as_u64().unwrap() > 0);
+        let _ = std::fs::remove_dir_all(&pkg);
         let _ = std::fs::remove_dir_all(&root);
     }
 

@@ -71,13 +71,16 @@ Queries that need compile-time checking use `sqlx::query!`; the `.sqlx` offline 
       "content_hash": "<sha256 hex>",
       "gameplay_hash": "<blake3 hex>",
       "creators": [{ "name": "…", "role": "author" }],
-      "source": { "url": "https://…", "permission": "granted" }
+      "source": { "url": "https://…", "permission": "granted" },
+      "performance": { "class": "light", "peak_script_units": 1234, "tick_budget": 1000000, "peak_instances": 25 }
     }
   ]
 }
 ```
 
-`url` is the path `/files/<content_hash>.iwbz` on the same server, `filename` is its last part, and `size` is the `.iwbz` byte length. The catalog holds one entry per package `id`, sorted by id: publishing a newer version replaces the entry and leaves the older file in `files/`, because a content-addressed URL never changes. Unknown top-level fields are preserved, so a newer catalog keeps working. Publishing is idempotent. The rest of the game metadata model — tags, difficulty, port status (Beta/Ranked/Loved), the fidelity proof and known differences, the trick list, stage previews, the per-version changelog and the performance class — is #805; `pkg publish` emits only what the package already has.
+`url` is the path `/files/<content_hash>.iwbz` on the same server, `filename` is its last part, and `size` is the `.iwbz` byte length. The catalog holds one entry per package `id`, sorted by id: publishing a newer version replaces the entry and leaves the older file in `files/`, because a content-addressed URL never changes. Unknown top-level fields are preserved, so a newer catalog keeps working. Publishing is idempotent.
+
+`performance` is present when the package has stored clear replays (`tests/replays/*.iwbr`): the class and peaks from `iwbtg profile --summary` ([CLI](architecture/cli.md), [0001](decisions/0001-script-language.md#step-budget)). A package with no stored replay has no `performance` field (not measured) rather than a guessed class. `ms per tick` is printed by the profile command but not stored, because it is specific to the machine and target that ran it. The rest of the game metadata model — tags, difficulty, port status (Beta/Ranked/Loved), the fidelity proof and known differences, the trick list, stage previews, the per-version changelog and the full performance display — is #805; `pkg publish` emits what the package measures today.
 
 ## Logs and monitoring
 
