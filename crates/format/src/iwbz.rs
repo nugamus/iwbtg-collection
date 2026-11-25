@@ -71,7 +71,9 @@ const WINDOWS_DEVICES: [&str; 22] = [
 /// The file types each package folder may hold (docs/format/v0.md, Package layout).
 fn folder_extensions(folder: &str) -> Option<&'static [&'static str]> {
     Some(match folder {
-        "objects" | "timelines" | "paths" | "rooms" | "particles" => &["toml"],
+        // `physics/` holds the optional room profiles (docs/format/physics.md, Room profiles);
+        // without it every medley package was refused (#1486).
+        "objects" | "timelines" | "paths" | "rooms" | "particles" | "physics" => &["toml"],
         "scripts" => &["rhai"],
         "sprites" | "backgrounds" | "fonts" | "art" => &["png", "toml"],
         "sounds" | "music" => &["ogg", "toml"],
@@ -83,8 +85,8 @@ fn folder_extensions(folder: &str) -> Option<&'static [&'static str]> {
 /// docs/format/v0.md:
 ///
 /// - at the top: `<id>.toml` (`game.toml`, `physics.toml`) and Markdown (`CREDITS.md`);
-/// - one level down, by folder: `.toml` in `objects/`, `timelines/`, `paths/`, `rooms/` and
-///   `particles/` (also `rooms/<id>.tiles.toml`), `.rhai` in `scripts/`, `.png` and `.toml` in
+/// - one level down, by folder: `.toml` in `objects/`, `timelines/`, `paths/`, `rooms/`,
+///   `particles/` and `physics/` (also `rooms/<id>.tiles.toml`), `.rhai` in `scripts/`, `.png` and `.toml` in
 ///   `sprites/`, `backgrounds/`, `fonts/` and `art/`, `.ogg` and `.toml` in `sounds/` and `music/`;
 /// - `engine/<pack>/`: `engine.toml`, Markdown, and the same folders as above;
 /// - file stems are ids (`[a-z][a-z0-9_]*`), never a Windows device name;
