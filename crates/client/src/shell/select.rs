@@ -8,6 +8,7 @@
 use std::path::{Path, PathBuf};
 
 use bevy::camera::visibility::RenderLayers;
+use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::picking::events::PointerClick;
 use bevy::prelude::*;
 use bevy::ui::IsDefaultUiCamera;
@@ -22,6 +23,7 @@ use crate::ui::notice;
 use crate::ui::tokens;
 use crate::ui::widgets::text;
 
+pub mod collections;
 pub mod controls;
 pub mod filters;
 pub mod footer;
@@ -29,6 +31,7 @@ pub mod library;
 pub mod list;
 pub mod mod_sheet;
 
+use collections::Collections;
 use filters::Filters;
 use library::{GameInfo, Library, file_name};
 use list::{GamePanel, ListDim, MapPanel, Selection, Shown};
@@ -54,6 +57,10 @@ impl Plugin for SelectPlugin {
     fn build(&self, app: &mut App) {
         let folder = self.0.clone();
         let preview = self.1;
+        // The player's favorites and collections (a test inserts its own empty set first).
+        if app.world().get_resource::<Collections>().is_none() {
+            app.insert_resource(Collections::open(crate::storage::Store::data()));
+        }
         app.init_resource::<ListDim>()
             .init_resource::<Filters>()
             .init_resource::<Shown>()
@@ -69,6 +76,7 @@ impl Plugin for SelectPlugin {
                       speed: Option<Res<crate::practice::SlowSpeed>>,
                       mut sheet: ResMut<mod_sheet::Sheet>,
                       filters: Res<Filters>,
+                      lists: Res<Collections>,
                       mut shown: ResMut<Shown>,
                       mut backdrop: ResMut<Backdrop>,
                       mut window: Query<&mut Window, With<PrimaryWindow>>| {
@@ -107,6 +115,7 @@ impl Plugin for SelectPlugin {
                                 lib,
                                 sel,
                                 &filters,
+                                &lists,
                                 &mut shown,
                             )
                         }
@@ -120,6 +129,7 @@ impl Plugin for SelectPlugin {
                                 &lib,
                                 sel,
                                 &filters,
+                                &lists,
                                 &mut shown,
                             );
                             commands.insert_resource(lib);
@@ -144,6 +154,9 @@ impl Plugin for SelectPlugin {
             )
             .add_observer(on_click)
             .add_observer(controls::on_activate)
+            .add_observer(collections::favorite)
+            .add_observer(collections::member)
+            .add_observer(collections::create)
             .add_observer(mod_sheet::on_activate)
             .add_observer(mod_sheet::on_option)
             .add_systems(
@@ -153,6 +166,7 @@ impl Plugin for SelectPlugin {
                     list::refilter,
                     controls::labels,
                     keys.run_if(mod_sheet::closed),
+                    collections::keys,
                     mod_sheet::keys,
                     mod_sheet::slide,
                     mod_sheet::follow,
@@ -163,6 +177,8 @@ impl Plugin for SelectPlugin {
                     list::settle,
                     list::dim,
                     picked,
+                    collections::favorite_label,
+                    collections::chips,
                     scale,
                 )
                     .chain()
@@ -216,6 +232,7 @@ fn camera(commands: &mut Commands) -> Entity {
 
 /// Spawns the page for `lib` with the rows `filters` leave (into `shown`) and returns the
 /// selection, kept inside the rows.
+#[allow(clippy::too_many_arguments, reason = "the page's parts")]
 fn enter(
     commands: &mut Commands,
     camera: Entity,
@@ -223,9 +240,10 @@ fn enter(
     lib: &Library,
     sel: Selection,
     filters: &Filters,
+    lists: &Collections,
     shown: &mut Shown,
 ) -> Selection {
-    shown.rows = filters::rows(&lib.games, &lib.records, filters);
+    shown.rows = filters::rows(&lib.games, &lib.records, filters, lists);
     let order = shown.order();
     let game = if order.contains(&sel.game) {
         sel.game
@@ -265,6 +283,7 @@ fn enter(
             (text("", Type::barlow(18.0, 600), tokens::SOFT), PickedMap),
             text(&where_, Type::barlow(14.0, 400), tokens::MUTED),
             text(hint, Type::BODY, tokens::SOFT),
+            collections::controls(lists, lib.games.get(sel.game).map(|g| g.id.as_str())),
         ],
     ));
     controls::spawn(commands, camera, lib, filters);
@@ -289,22 +308,29 @@ fn play(commands: &mut Commands, path: PathBuf, map: Option<String>) {
 
 /// The arrows move the selection among the games shown ([`list::step`]; Left and Right move
 /// the search field's cursor instead while it holds text), Enter plays the selected map.
-/// Escape closes an open dropdown, else clears the search, else quits.
+/// Escape closes an open dropdown, else clears the search, else quits. While the new
+/// collection's name field has the focus, the arrows and Enter stay out of the way: Enter
+/// creates the collection ([`collections::keys`]) and Escape goes back to the search field.
 #[allow(clippy::too_many_arguments, reason = "the screen's keys")]
 fn keys(
     keys: Res<ButtonInput<KeyCode>>,
     lib: Res<Library>,
     shown: Res<Shown>,
-    focus: Res<bevy::input_focus::InputFocus>,
+    mut focus: ResMut<InputFocus>,
     buttons: Query<(), With<bevy::ui_widgets::Button>>,
+    names: Query<(), With<collections::NameField>>,
     menus: Query<Entity, With<controls::Menu>>,
-    mut search: Query<&mut bevy::text::EditableText, With<crate::ui::widgets::SearchField>>,
+    mut search: Query<
+        (Entity, &mut bevy::text::EditableText),
+        With<crate::ui::widgets::SearchField>,
+    >,
     mut sel: ResMut<Selection>,
     mut commands: Commands,
 ) {
     let maps: Vec<usize> = lib.games.iter().map(|g| g.maps.len()).collect();
     let order = shown.order();
-    let typing = search.iter().any(|s| !s.value().to_string().is_empty());
+    let typing = search.iter().any(|(_, s)| !s.value().to_string().is_empty());
+    let naming = focus.get().is_some_and(|e| names.contains(e));
     for key in [
         KeyCode::ArrowDown,
         KeyCode::ArrowUp,
@@ -312,7 +338,7 @@ fn keys(
         KeyCode::ArrowLeft,
     ] {
         let sideways = matches!(key, KeyCode::ArrowLeft | KeyCode::ArrowRight);
-        if keys.just_pressed(key) && !(sideways && typing) {
+        if keys.just_pressed(key) && !(sideways && typing) && !naming {
             let next = list::step(&order, &maps, *sel, key);
             if next != *sel {
                 *sel = next;
@@ -323,18 +349,25 @@ fn keys(
     let on_button = focus.get().is_some_and(|e| buttons.contains(e));
     if keys.any_just_pressed([KeyCode::Enter, KeyCode::NumpadEnter])
         && !on_button
+        && !naming
         && order.contains(&sel.game)
         && let Some(game) = lib.games.get(sel.game)
     {
         play(&mut commands, game.path.clone(), map_id(game, sel.map));
     }
-    if keys.just_pressed(KeyCode::Escape) && !controls::close_menus(&mut commands, &menus) {
-        if typing {
-            for mut s in &mut search {
-                s.clear();
+    if keys.just_pressed(KeyCode::Escape) {
+        if naming {
+            if let Some((entity, _)) = search.iter_mut().next() {
+                focus.set(entity, FocusCause::Navigated);
             }
-        } else {
-            commands.write_message(AppExit::Success);
+        } else if !controls::close_menus(&mut commands, &menus) {
+            if typing {
+                for (_, mut s) in &mut search {
+                    s.clear();
+                }
+            } else {
+                commands.write_message(AppExit::Success);
+            }
         }
     }
 }
@@ -442,6 +475,7 @@ mod tests {
             .init_resource::<bevy::input_focus::InputFocus>()
             .init_resource::<UiScale>()
             .init_resource::<Backdrop>()
+            .init_resource::<Collections>()
             .init_state::<AppScreen>()
             .add_plugins(SelectPlugin(Some(fixtures), false));
         app.update();
@@ -542,6 +576,94 @@ mod tests {
             .collect();
         texts.sort_by_key(|t| t.0);
         texts.into_iter().map(|t| t.1).collect::<Vec<_>>().join("|")
+    }
+
+    /// Puts `name` in the new collection field, as typing does.
+    fn name_collection(app: &mut App, name: &str) {
+        let world = app.world_mut();
+        let mut fields =
+            world.query_filtered::<&mut bevy::text::EditableText, With<collections::NameField>>();
+        for mut field in fields.iter_mut(world) {
+            *field = bevy::text::EditableText::new(name);
+        }
+    }
+
+    /// The Favorite toggle, a named collection and the Collections filter (#105).
+    #[test]
+    fn favorites_and_collections_come_from_the_left_side_and_filter_the_list() {
+        use collections::{Collections, CreateButton, Favorite, FavoriteLabel, Member, Pick};
+        use crate::ui::widgets::Chip;
+        let mut app = screen();
+        *app.world_mut().resource_mut::<Selection>() = Selection { game: 3, map: 0 };
+        app.update();
+        assert_eq!(app.world().resource::<Library>().games[3].id, "demo_maps");
+
+        activate::<Favorite>(&mut app, |_| true);
+        assert!(
+            app.world().resource::<Collections>().is_favorite("demo_maps"),
+            "the toggle favorites the selected game"
+        );
+        let label = {
+            let world = app.world_mut();
+            world
+                .query_filtered::<&Text, With<FavoriteLabel>>()
+                .iter(world)
+                .map(|t| t.0.clone())
+                .collect::<Vec<_>>()
+        };
+        assert!(label.iter().any(|l| l.contains("Favorited")), "{label:?}");
+
+        app.world_mut().resource_mut::<Filters>().collection = Some(Pick::Favorites);
+        app.update();
+        assert_eq!(
+            app.world().resource::<Shown>().order(),
+            [3],
+            "the filter keeps only the favorite"
+        );
+
+        app.world_mut().resource_mut::<Filters>().collection = None;
+        app.update();
+        name_collection(&mut app, "Warmups");
+        activate::<CreateButton>(&mut app, |_| true);
+        app.update();
+        let lists = app.world().resource::<Collections>();
+        assert_eq!(lists.names(), ["Warmups"]);
+        assert!(
+            lists.contains(&Pick::Named("Warmups".into()), "demo_maps"),
+            "the selected game joins the new collection"
+        );
+
+        app.world_mut().resource_mut::<Filters>().collection =
+            Some(Pick::Named("Warmups".into()));
+        app.update();
+        assert_eq!(
+            app.world().resource::<Shown>().order(),
+            [3],
+            "the filter keeps the collection's games"
+        );
+
+        let on = {
+            let world = app.world_mut();
+            world
+                .query::<(&Member, &Chip)>()
+                .iter(world)
+                .find(|(m, _)| m.0 == "Warmups")
+                .map(|(_, chip)| chip.on)
+        };
+        assert_eq!(on, Some(true), "the new collection's chip is on");
+        activate::<Member>(&mut app, |m| m.0 == "Warmups");
+        app.update();
+        assert!(
+            !app.world()
+                .resource::<Collections>()
+                .contains(&Pick::Named("Warmups".into()), "demo_maps"),
+            "the chip takes the game out"
+        );
+        app.update();
+        assert!(
+            app.world().resource::<Shown>().order().is_empty(),
+            "the filter now finds nothing"
+        );
     }
 
     /// The Mods button opens the sheet; Sudden Death and Slow motion turn the header Unranked

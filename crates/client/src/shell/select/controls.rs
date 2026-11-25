@@ -3,8 +3,9 @@
 //! Status, Creator and Year dropdowns on the second. They write [`Filters`]; the list follows.
 //!
 //! Wired now: search (title, creator), Group and Sort (Game/Title, Creator, Cleared; Stars once
-//! #111 rates maps), the chips and Creator. Shown but faded until their data exists: the
-//! Year, Tag and Status options, the Status and Year dropdowns (#805) and Collections (#105).
+//! #111 rates maps), the chips, Creator and Collections (Any, Favorites and each named
+//! collection, #105). Shown but faded until their data exists: the Year, Tag and Status
+//! options and the Status and Year dropdowns (#805).
 
 use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::picking::events::PointerPress;
@@ -12,13 +13,14 @@ use bevy::prelude::*;
 use bevy::text::EditableText;
 use bevy::ui_widgets::Activate;
 
+use super::collections::{self, Collections};
 use super::filters::{self, Clears, Field, Filters};
 use super::library::Library;
 use crate::ui::fonts::Type;
 use crate::ui::tokens;
 use crate::ui::widgets::{
-    ButtonKind, Chip, ControlValue, SEARCH_HEIGHT, SearchField, button_off, chip, chip_off, control,
-    control_off, menu_panel, search_field, text,
+    ButtonKind, Chip, ControlValue, SEARCH_HEIGHT, SearchField, button_with, chip, chip_off,
+    control, control_off, menu_panel, search_field, text,
 };
 
 /// The controls' top and right edge, and their width (`Main.dc.html`: x 1040 to 1880 at 1920
@@ -35,6 +37,7 @@ pub(super) enum Control {
     Group,
     Sort,
     Creator,
+    Collections,
     Cleared,
     Uncleared,
 }
@@ -65,6 +68,7 @@ pub(super) enum Pick {
     Group(Field),
     Sort(Field),
     Creator(Option<String>),
+    Collection(Option<collections::Pick>),
 }
 
 /// The control's value as it reads (`Stars ▾`). Group reads without the arrow, as on the
@@ -74,6 +78,10 @@ fn value(control: Control, f: &Filters) -> String {
         Control::Group => f.group.label().to_owned(),
         Control::Sort => format!("{} ▾", f.sort.label()),
         Control::Creator => format!("{} ▾", f.creator.as_deref().unwrap_or("Any")),
+        Control::Collections => f
+            .collection
+            .as_ref()
+            .map_or_else(|| "Collections ▾".to_owned(), |p| format!("{} ▾", p.label())),
         Control::Cleared | Control::Uncleared => String::new(),
     }
 }
@@ -109,12 +117,30 @@ pub(super) fn spawn(commands: &mut Commands, camera: Entity, lib: &Library, f: &
                 },
                 children![
                     search_field(&placeholder, &f.search),
-                    // Collections: #105.
-                    button_off(
-                        ButtonKind::Control,
-                        SEARCH_HEIGHT,
-                        18.0,
-                        text("Collections ▾", Type::barlow(15.0, 600), tokens::INK),
+                    (
+                        Node {
+                            width: Val::Px(150.0),
+                            flex_direction: FlexDirection::Column,
+                            flex_shrink: 0.0,
+                            ..default()
+                        },
+                        Dropdown,
+                        children![(
+                            button_with(
+                                ButtonKind::Control,
+                                SEARCH_HEIGHT,
+                                18.0,
+                                (
+                                    text(
+                                        &value(Control::Collections, f),
+                                        Type::barlow(15.0, 600),
+                                        tokens::INK
+                                    ),
+                                    ControlValue
+                                )
+                            ),
+                            Control::Collections
+                        )]
                     ),
                 ],
             ),
@@ -145,7 +171,12 @@ pub(super) fn spawn(commands: &mut Commands, camera: Entity, lib: &Library, f: &
 }
 
 /// The options of `control`'s menu: (label, what it sets, picked now, can be picked).
-fn options(control: Control, lib: &Library, f: &Filters) -> Vec<(String, Pick, bool, bool)> {
+fn options(
+    control: Control,
+    lib: &Library,
+    lists: &Collections,
+    f: &Filters,
+) -> Vec<(String, Pick, bool, bool)> {
     let fields = |list: &[Field], now: Field, make: fn(Field) -> Pick| {
         list.iter()
             .map(|&field| {
@@ -169,6 +200,27 @@ fn options(control: Control, lib: &Library, f: &Filters) -> Vec<(String, Pick, b
                 (label, Pick::Creator(c), on, true)
             })
             .collect(),
+        Control::Collections => {
+            let mut out = vec![(
+                "Any".to_owned(),
+                Pick::Collection(None),
+                f.collection.is_none(),
+                true,
+            )];
+            let favorites = collections::Pick::Favorites;
+            out.push((
+                format!("★ {}", favorites.label()),
+                Pick::Collection(Some(favorites.clone())),
+                f.collection.as_ref() == Some(&favorites),
+                true,
+            ));
+            for name in lists.names() {
+                let pick = collections::Pick::Named(name.clone());
+                let on = f.collection.as_ref() == Some(&pick);
+                out.push((name, Pick::Collection(Some(pick)), on, true));
+            }
+            out
+        }
         Control::Cleared | Control::Uncleared => Vec::new(),
     }
 }
@@ -186,11 +238,12 @@ pub(super) fn on_activate(
     dropdowns: Query<Option<&Children>, With<Dropdown>>,
     search: Query<Entity, With<SearchField>>,
     lib: Option<Res<Library>>,
+    lists: Option<Res<Collections>>,
     filters: Option<ResMut<Filters>>,
     mut focus: ResMut<InputFocus>,
     mut commands: Commands,
 ) {
-    let (Some(lib), Some(mut f)) = (lib, filters) else {
+    let (Some(lib), Some(lists), Some(mut f)) = (lib, lists, filters) else {
         return;
     };
     let close = |commands: &mut Commands| {
@@ -210,11 +263,17 @@ pub(super) fn on_activate(
                     .is_some_and(|kids| kids.iter().any(|k| menus.contains(k)));
                 close(&mut commands);
                 if !open {
+                    // The Collections button is the search row's height, so its menu starts below it.
+                    let top = if control == Control::Collections {
+                        SEARCH_HEIGHT + 6.0
+                    } else {
+                        MENU_TOP
+                    };
                     let menu = commands
                         .spawn((menu_panel(), Menu))
                         .insert(Node {
                             position_type: PositionType::Absolute,
-                            top: Val::Px(MENU_TOP),
+                            top: Val::Px(top),
                             left: Val::Px(0.0),
                             flex_direction: FlexDirection::Column,
                             align_items: AlignItems::FlexStart,
@@ -223,7 +282,7 @@ pub(super) fn on_activate(
                             ..default()
                         })
                         .with_children(|m| {
-                            for (label, pick, on, ready) in options(control, &lib, &f) {
+                            for (label, pick, on, ready) in options(control, &lib, &lists, &f) {
                                 if ready {
                                     m.spawn((chip(&label, on), pick));
                                 } else {
@@ -258,6 +317,7 @@ pub(super) fn on_activate(
             Pick::Group(field) => f.group = field,
             Pick::Sort(field) => f.sort = field,
             Pick::Creator(c) => f.creator = c,
+            Pick::Collection(c) => f.collection = c,
         }
         close(&mut commands);
     } else {
@@ -334,5 +394,41 @@ mod tests {
             ..default()
         };
         assert_eq!(value(Control::Creator, &f), "Kira ▾");
+        assert_eq!(value(Control::Collections, &f), "Collections ▾");
+        let f = Filters {
+            collection: Some(collections::Pick::Favorites),
+            ..default()
+        };
+        assert_eq!(value(Control::Collections, &f), "Favorites ▾");
+        let f = Filters {
+            collection: Some(collections::Pick::Named("Warmups".into())),
+            ..default()
+        };
+        assert_eq!(value(Control::Collections, &f), "Warmups ▾");
+    }
+
+    /// The Collections menu is Any, the favorites list and each named collection (#105).
+    #[test]
+    fn the_collections_menu_lists_favorites_and_each_collection() {
+        let lib = Library {
+            folder: None,
+            games: Vec::new(),
+            art: Vec::new(),
+            fruit: Vec::new(),
+            records: Vec::new(),
+        };
+        let mut lists = Collections::default();
+        lists.create("Warmups", None).unwrap();
+        let options = options(Control::Collections, &lib, &lists, &Filters::default());
+        let labels: Vec<&str> = options.iter().map(|(label, ..)| label.as_str()).collect();
+        assert_eq!(labels, ["Any", "★ Favorites", "Warmups"]);
+        assert!(options[0].2, "Any is picked by default");
+        assert_eq!(
+            options[1].1,
+            Pick::Collection(Some(collections::Pick::Favorites))
+        );
+        assert_eq!(options[2].1, Pick::Collection(Some(
+            collections::Pick::Named("Warmups".into())
+        )));
     }
 }

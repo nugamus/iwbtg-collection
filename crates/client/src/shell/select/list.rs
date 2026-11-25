@@ -513,13 +513,14 @@ pub(super) fn looks(
 pub(super) fn refilter(
     filters: Res<Filters>,
     lib: Res<Library>,
+    lists: Res<super::collections::Collections>,
     mut shown: ResMut<Shown>,
     mut sel: ResMut<Selection>,
 ) {
-    if !filters.is_changed() && !lib.is_changed() {
+    if !filters.is_changed() && !lib.is_changed() && !lists.is_changed() {
         return;
     }
-    let rows = filters::rows(&lib.games, &lib.records, &filters);
+    let rows = filters::rows(&lib.games, &lib.records, &filters, &lists);
     if shown.rows != rows {
         shown.rows = rows;
     }
