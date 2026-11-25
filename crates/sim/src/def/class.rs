@@ -401,6 +401,26 @@ mod tests {
         assert_eq!(all.0, (1 << 29) - 1);
     }
 
+    /// Decision 0004's capacity: 29 named bits, 3 reserved, 96 package bits, 128 in all (#1379).
+    /// The loader side (96 accepted, the 97th an error) is in `crates/format/tests/load_objects.rs`.
+    #[test]
+    fn the_capacity_matches_decision_0004() {
+        assert_eq!(ClassMask::NAMED.len(), 29, "named bits 0-28");
+        assert_eq!(
+            ClassMask::PACKAGE_FIRST_BIT as usize,
+            ClassMask::NAMED.len() + 3,
+            "bits 29-31 stay reserved"
+        );
+        assert_eq!(ClassMask::PACKAGE_COUNT, 96, "package bits 32-127");
+        assert_eq!(
+            ClassMask::PACKAGE_FIRST_BIT + ClassMask::PACKAGE_COUNT,
+            128,
+            "the u128 mask is exactly full"
+        );
+        assert_eq!(ClassMask::package(95), Some(ClassMask(1u128 << 127)));
+        assert_eq!(ClassMask::package(96), None);
+    }
+
     #[test]
     fn package_bits() {
         assert_eq!(ClassMask::package(0), Some(ClassMask(1 << 32)));
