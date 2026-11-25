@@ -1,0 +1,119 @@
+name: Nightly
+# Public nightly alpha builds (#195). A nightly build of `main` for Windows and Linux, packaged
+# like `release.yml`: the client, `showcase.pkg` and the licence files in a zip per platform.
+#
+# The build always runs (schedule and `workflow_dispatch`) and uploads the zips as workflow
+# artifacts. Publishing is a separate, opt-in job: it creates the `nightly-<date>` prerelease only
+# when the repository variable NIGHTLY_PUBLISH is exactly `true`. Until the user approves public
+# publishing the variable stays unset, so a dispatch run produces artifacts and no release. The
+# changelog in the prerelease body is GitHub's generated notes from merged PRs.
+#
+# Not included yet: deploying the web build (needs hosting) — the other open box on #195. The
+# bundle carries the one package in this repository; the five starter games are #51.
+on:
+  schedule:
+    # 04:23 UTC daily, off the top of the hour to avoid the runner queue peak.
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  # One nightly at a time; a manual dispatch waits for a running scheduled build instead of
+  # cancelling it.
+  group: nightly
+  cancel-in-progress: false
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: windows-latest, artifact: nightly-client-windows-x86_64}
+          - {os: ubuntu-latest, artifact: nightly-client-linux-x86_64}
+    runs-on: ${{ matrix.os }}
+    # A cold release build of the Bevy client is the long part; the same bound as the release job.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup show
+      # Bevy's windowing and audio need the system libraries on Linux.
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends pkg-config libwayland-dev libxkbcommon-dev libx11-dev libxcursor-dev libxi-dev libxrandr-dev libudev-dev libasound2-dev
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Nightlies run on main, which may write the cache.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo build -p iwbtg-client --release --locked
+      - name: Stage the nightly folder
+        shell: bash
+        env:
+          ARTIFACT: ${{ matrix.artifact }}
+        run: |
+          set -euo pipefail
+          stage="dist/$ARTIFACT"
+          mkdir -p "$stage/LICENSES"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cp target/release/iwbtg-client.exe "$stage/"
+          else
+            cp target/release/iwbtg-client "$stage/"
+          fi
+          cp -R crates/client/showcase.pkg "$stage/"
+          cp THIRD_PARTY_LICENSES NOTICE LICENSE-MIT "$stage/"
+          cp LICENSES/*.txt "$stage/LICENSES/"
+          cat > "$stage/README.txt" <<'TXT'
+          IWBTG Collection client (nightly)
+          =================================
+
+          Run:  iwbtg-client showcase.pkg
+
+          This is an unreleased nightly build of main. showcase.pkg is the bundled package. On
+          Linux the binary needs the usual windowing and audio libraries (Wayland or X11,
+          libxkbcommon, libxcursor, libxi, libxrandr, libudev, libasound); install your
+          distribution's equivalents.
+
+          Licences: LICENSE-MIT (this project), NOTICE (fonts and game content),
+          THIRD_PARTY_LICENSES (Rust crates) and LICENSES/ (licence texts).
+          TXT
+      - name: Pack the nightly zip
+        shell: bash
+        env:
+          ARTIFACT: ${{ matrix.artifact }}
+        run: |
+          set -euo pipefail
+          cd dist
+          # Python is installed on both hosted runners; `python3` is the Linux name.
+          if [ "$RUNNER_OS" = "Windows" ]; then py=python; else py=python3; fi
+          "$py" -m zipfile -c "$ARTIFACT.zip" "$ARTIFACT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}.zip
+          retention-days: 7
+
+  # Publishing is opt-in and user-approved: set the repository variable NIGHTLY_PUBLISH=true to
+  # create the prerelease. While it is unset, every run stops at the artifacts above.
+  publish:
+    needs: build
+    if: ${{ vars.NIGHTLY_PUBLISH == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: nightly-client-*
+          path: dist
+          merge-multiple: true
+      - name: Publish the nightly prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="nightly-$(date -u +%Y-%m-%d)"
+          # The tag names the run's commit; a second run on the same day refreshes the assets and
+          # keeps the generated notes.
+          gh release view "$tag" >/dev/null 2>&1 || \
+            gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --prerelease --generate-notes
+          gh release upload "$tag" dist/*.zip --clobber
