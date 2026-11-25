@@ -23,9 +23,10 @@ One Cargo workspace in `client/`, `license = "MIT"`, toolchain pinned to an exac
 |---|---|---|
 | `crates/sim` | The deterministic simulation: world, built-ins, kid, collision, tick pipeline, script host, replays, state hash. No Bevy, no IO, no threads, no clock. `#![forbid(unsafe_code)]`. | `rhai` (exact pin), `libm` (exact pin, no default features), `blake3`, `smallvec`, `postcard`, `serde`. Optional later: `rustc_apfloat` (see [numbers](architecture/sim/numbers.md#number-handling)). |
 | `crates/format` | Reads, validates, hashes and writes game packages. Turns TOML files into `sim::def::GameDef`. Parses from an in-memory map of path to bytes (`PackageFiles`), so the client, the server and WASM share one code path with no filesystem. | `sim`, `toml`, `toml_edit`, `serde`, `serde_spanned`, `schemars` (optional `schema` feature: docs and tests only, never in the client or server; `cargo test -p xtask` enforces it, #794), `png`, `blake3`, `sha2`. |
-| `crates/tools` | The `iwbtg` command-line tool (see below). Later also the music preview picker and the level editor. | `sim`, `format`. |
+| `crates/removal` | The signed removal-list format: the strict JSON envelope, its checks, the canonical text a signature covers, and signing. Shared by the server (validator) and the CLI (producer), so the two cannot drift ([server](server.md#removal-list), #1537). | `serde`, `serde_json`, `ed25519-dalek`, `hex`, `sha2`. |
+| `crates/tools` | The `iwbtg` command-line tool (see below). Later also the music preview picker and the level editor. | `sim`, `format`, `removal`. |
 | `crates/client` | The Bevy app: game select, rendering, input, audio, settings. Owns one `sim::Sim`, feeds it one input frame per tick and draws its snapshots. | `sim`, `format`, `bevy`. |
-| `crates/server` | Phase 8. Leaderboard backend. Verifies replays by running `sim` in a child process ([server](server.md)). | `sim`, `format`, `axum`, `sqlx`. |
+| `crates/server` | Phase 8. Leaderboard backend. Verifies replays by running `sim` in a child process ([server](server.md)). | `sim`, `format`, `removal`, `axum`, `sqlx`. |
 
 The sim never parses text and never touches files. `format` hands it a validated `GameDef`. The client and server hand it input frames.
 ## Pages

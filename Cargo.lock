@@ -4093,12 +4093,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "iwbtg-removal"
+version = "0.1.0"
+dependencies = [
+ "ed25519-dalek",
+ "hex",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+]
+
+[[package]]
 name = "iwbtg-server"
 version = "0.1.0"
 dependencies = [
  "argon2",
  "axum",
  "clap",
+ "iwbtg-removal",
  "lettre",
  "rand_core 0.6.4",
  "serde",
@@ -4137,16 +4149,14 @@ name = "iwbtg-tools"
 version = "0.1.0"
 dependencies = [
  "clap",
- "ed25519-dalek",
  "hex",
  "iwbtg-format",
- "iwbtg-server",
+ "iwbtg-removal",
  "iwbtg-sim",
  "postcard",
  "rhai",
  "serde",
  "serde_json",
- "sha2 0.11.1",
  "thiserror 2.0.21",
  "toml",
 ]

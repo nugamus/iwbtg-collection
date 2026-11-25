@@ -109,7 +109,7 @@ iwbtg-removals-v1
 <package_id>\t<reason>\t<at>
 ```
 
-`package_id` is 1-64 characters of letters, digits, `.`, `_` and `-`; `reason` is 1-32 of lower-case letters, digits and `-`; `key_id` is 1-32 of letters, digits, `.`, `_` and `-`; the timestamps are 1-64 printable ASCII characters without spaces (UTC ISO-8601). Entries are sorted by `package_id` and unique. Unknown JSON fields are rejected, so nothing unsigned rides along. The response body is the file's own bytes, never a re-serialization, so the signature a publisher computed stays valid; `crates/server/src/removal.rs` pins the canonical text in a unit test.
+`package_id` is 1-64 characters of letters, digits, `.`, `_` and `-`; `reason` is 1-32 of lower-case letters, digits and `-`; `key_id` is 1-32 of letters, digits, `.`, `_` and `-`; the timestamps are 1-64 printable ASCII characters without spaces (UTC ISO-8601). Entries are sorted by `package_id` and unique. Unknown JSON fields are rejected, so nothing unsigned rides along. The response body is the file's own bytes, never a re-serialization, so the signature a publisher computed stays valid. `crates/removal` implements the format and pins the canonical text, and both this server and `iwbtg removals sign` use it, so producer and validator cannot drift (#1537).
 
 It is sent `Cache-Control: public, max-age=60`, like the catalog. A missing catalog folder or file is `404`, which a client reads as "no removals". Any file that fails the checks is `503` with a logged reason, never `404`: a broken publish must not look like an empty list and leave a taken-down game installed. A file is at most 1 MiB and 4,096 entries.
 
