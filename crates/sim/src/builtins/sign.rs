@@ -31,11 +31,13 @@ const SPECS: &[ParamSpec] = &[
         name: "text",
         ty: ParamType::Text,
         required: true,
+        legacy: None,
     },
     ParamSpec {
         name: "mode",
         ty: ParamType::Enum(MODES),
         required: false,
+        legacy: None,
     },
 ];
 

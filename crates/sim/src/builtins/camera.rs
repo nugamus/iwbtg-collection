@@ -40,61 +40,82 @@ const SPECS: &[ParamSpec] = &[
         name: "mode",
         ty: ParamType::Enum(MODES),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "screen_w",
         ty: ParamType::Real,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["poronkusema"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "screen_h",
         ty: ParamType::Real,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["poronkusema"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "y_offset",
         ty: ParamType::Real,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["machinary"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "on_step",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "on_room_start",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "on_room_end",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "h_div",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "v_div",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "border_x",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "border_y",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "tolerance",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
 ];
 

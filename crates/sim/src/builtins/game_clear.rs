@@ -26,21 +26,25 @@ const SPECS: &[ParamSpec] = &[
         name: "save_with_position",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "saved_position",
         ty: ParamType::Enum(POSITION),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "fixed_x",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "fixed_y",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
 ];
 

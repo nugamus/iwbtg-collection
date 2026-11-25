@@ -37,16 +37,19 @@ const SPECS: &[ParamSpec] = &[
         name: "mode",
         ty: ParamType::Enum(MODES),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "speed",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "solid",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
 ];
 

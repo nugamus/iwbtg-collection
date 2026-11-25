@@ -28,31 +28,40 @@ const SPECS: &[ParamSpec] = &[
         name: "dir",
         ty: ParamType::Enum(DIRS),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "size",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "depth",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "visible",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "destroys_bullets",
         ty: ParamType::Bool,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["eat-the-new-year"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "auto_rotate",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
 ];
 

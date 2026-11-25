@@ -17,6 +17,8 @@ const SPECS: &[ParamSpec] = &[ParamSpec {
     name: "side",
     ty: ParamType::Enum(SIDES),
     required: true,
+
+    legacy: None,
 }];
 
 /// The params this built-in accepts (`builtins::param_specs` routes here).

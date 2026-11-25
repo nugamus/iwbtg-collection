@@ -38,6 +38,7 @@ const fn room(name: &'static str) -> ParamSpec {
         name,
         ty: ParamType::Room,
         required: false,
+        legacy: None,
     }
 }
 
@@ -46,22 +47,60 @@ const SPECS: &[ParamSpec] = &[
         name: "mode",
         ty: ParamType::Enum(MODES),
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["go-the-spook-house"],
+            issue: 1268,
+        }),
     },
     room("room_to"),
     ParamSpec {
         name: "warp_x",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "warp_y",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
-    room("left_room"),
-    room("right_room"),
-    room("up_room"),
-    room("down_room"),
+    ParamSpec {
+        name: "left_room",
+        ty: ParamType::Room,
+        required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["eat-the-new-year"],
+            issue: 1268,
+        }),
+    },
+    ParamSpec {
+        name: "right_room",
+        ty: ParamType::Room,
+        required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["eat-the-new-year"],
+            issue: 1268,
+        }),
+    },
+    ParamSpec {
+        name: "up_room",
+        ty: ParamType::Room,
+        required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["eat-the-new-year"],
+            issue: 1268,
+        }),
+    },
+    ParamSpec {
+        name: "down_room",
+        ty: ParamType::Room,
+        required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["eat-the-new-year"],
+            issue: 1268,
+        }),
+    },
 ];
 
 /// The edge a kid crossed.

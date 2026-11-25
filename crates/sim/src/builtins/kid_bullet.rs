@@ -34,11 +34,13 @@ const SPECS: &[ParamSpec] = &[
         name: "life",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "block_check",
         ty: ParamType::Enum(CHECKS),
         required: false,
+        legacy: None,
     },
 ];
 

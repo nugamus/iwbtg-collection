@@ -32,36 +32,49 @@ const SPECS: &[ParamSpec] = &[
         name: "offset_x",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "offset_y",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "flipped_offset_x",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "flipped_offset_y",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "creates",
         ty: ParamType::Enum(CREATES),
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["animus"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "grav_gated",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "shift_at",
         ty: ParamType::Enum(SHIFT_AT),
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["rely-the-needle-4-2"],
+            issue: 1269,
+        }),
     },
 ];
 

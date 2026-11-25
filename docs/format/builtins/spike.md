@@ -8,7 +8,7 @@ Static killer (mechanics `spike`). Its class is `killer`; the kid's "Collision w
 | `size` | real (32 or 16) | 32 | Spike size, used by `auto_rotate`. |
 | `visible` | bool | kind default | Create sets `visible`. |
 | `depth` | real | kind default | Create sets `depth`. |
-| `destroys_bullets` | bool | false | A collision with the kid's bullet destroys the bullet (eat-the-new-year). Read from the kind, since the handler is declared per kind. |
+| `destroys_bullets` | bool | false | A collision with the kid's bullet destroys the bullet (eat-the-new-year). Read from the kind, since the handler is declared per kind. Format-0 legacy alias (`eat-the-new-year`), moves in [#1269](https://github.com/nugamus/iwbtg-collection/issues/1269). |
 | `auto_rotate` | bool | false | Family B (kid/B.md autoSpikeSprite): Create sets `image_angle` from `dir` and shifts the spike. |
 
 `auto_rotate` angles and shifts (x, y): size 32 up 0 (+16, +16), down 180 (+15, +15), left 90 (+16, +15), right 270 (+15, +16); size 16 up 0 (+8, +8), down 180 (+7, +7), left 90 (+8, +7), right 270 (+7, +8).

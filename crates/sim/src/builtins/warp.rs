@@ -34,71 +34,88 @@ const SPECS: &[ParamSpec] = &[
         name: "room_to",
         ty: ParamType::Room,
         required: true,
+        legacy: None,
     },
     ParamSpec {
         name: "warp_x",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "warp_y",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "transition",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "transition_steps",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "on_collide",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "visible",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "zero_axis",
         ty: ParamType::Enum(ZERO_AXIS),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "screen_shift",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "clear_rising",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "gate_bosses",
         ty: ParamType::List(&ParamType::Real),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "gate_items",
         ty: ParamType::List(&ParamType::Real),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "gate_need",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "gate_closed",
         ty: ParamType::Enum(GATE_CLOSED),
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["keep-celebrating-for-xia"],
+            issue: 1269,
+        }),
     },
 ];
 

@@ -5,8 +5,8 @@ A camera object writes view 0 (mechanics `camera`). It targets the first kid of 
 | Param | Type | Default | Meaning |
 |---|---|---|---|
 | `mode` | `screen_snap`, `smooth_follow`, `end_step_clamp` | `screen_snap` | See below. |
-| `screen_w`, `screen_h` | real | 800, 608 | `screen_snap` screen size (poronkusema 960 x 540). |
-| `y_offset` | real | 0 | Added to the snapped y (machinary 4). |
+| `screen_w`, `screen_h` | real | 800, 608 | `screen_snap` screen size (poronkusema 960 x 540). Format-0 legacy alias (`poronkusema`), moves in [#1269](https://github.com/nugamus/iwbtg-collection/issues/1269). |
+| `y_offset` | real | 0 | Added to the snapped y (machinary 4). Format-0 legacy alias (`machinary`), moves in [#1269](https://github.com/nugamus/iwbtg-collection/issues/1269). |
 | `on_step`, `on_room_start`, `on_room_end` | bool | true, false, false | `screen_snap` events (A2 and rely also snap in Room Start; A2 in Room End). |
 | `h_div`, `v_div` | real | 16, 12 | `smooth_follow`: speed is distance over this. |
 | `border_x`, `border_y` | real | 400, 304 | `smooth_follow`: view 0 borders. |

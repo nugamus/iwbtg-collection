@@ -26,21 +26,25 @@ const SPECS: &[ParamSpec] = &[
         name: "dif",
         ty: ParamType::Real,
         required: true,
+        legacy: None,
     },
     ParamSpec {
         name: "room_to",
         ty: ParamType::Room,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "transition",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "transition_steps",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
 ];
 

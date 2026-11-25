@@ -26,21 +26,25 @@ const SPECS: &[ParamSpec] = &[
         name: "track",
         ty: ParamType::Sound,
         required: true,
+        legacy: None,
     },
     ParamSpec {
         name: "loop",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "mode",
         ty: ParamType::Enum(MODES),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "respects_music_off",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
 ];
 

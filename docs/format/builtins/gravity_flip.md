@@ -5,7 +5,7 @@ Source: `crates/sim/src/builtins/gravity_flip.rs`.
 | Param | Type | Default | Meaning |
 |---|---|---|---|
 | `direction` | `up`, `down` | required | `up` (KOT obj_ue, FT grav_up): a touch by the normal kid sets `global.grav`. `down` (obj_sita, grav_down): a touch by the flipped kid clears it. |
-| `transition` | `swap_object`, `grav_sign`, `yflag_with_view_rotation` | `swap_object` | `swap_object` and `grav_sign` are the same write; the kid swaps object or flips on his next Step (kid code). `yflag_with_view_rotation` (KAE): see below. |
+| `transition` | `swap_object`, `grav_sign`, `yflag_with_view_rotation` | `swap_object` | `swap_object` and `grav_sign` are the same write; the kid swaps object or flips on his next Step (kid code). `yflag_with_view_rotation` (KAE): see below. Format-0 legacy alias (`kaenbyou`), moves in [#1269](https://github.com/nugamus/iwbtg-collection/issues/1269). |
 | `sound` | sound | none | FT restarts sndBlockChange; the client's. |
 
 **Loading.** `direction` is required (an instance without it is an error), all params load on an object file or a placed instance, and Tests `wp6b3_params_*` and `a_gravity_flip_with_view_rotation_loads` in `crates/format/tests/load_objects.rs`. Converter request CR17.

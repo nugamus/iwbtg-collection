@@ -27,21 +27,25 @@ const SPECS: &[ParamSpec] = &[
         name: "offset_x",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "offset_y",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "view_relative",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "delay",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
 ];
 

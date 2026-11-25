@@ -28,16 +28,19 @@ const SPECS: &[ParamSpec] = &[
         name: "follow",
         ty: ParamType::Enum(FOLLOW),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "medium_only",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "destroy_in_select",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
 ];
 

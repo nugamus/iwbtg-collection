@@ -24,11 +24,13 @@ const SPECS: &[ParamSpec] = &[
         name: "speed",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "djump",
         ty: ParamType::Enum(DJUMP),
         required: false,
+        legacy: None,
     },
 ];
 

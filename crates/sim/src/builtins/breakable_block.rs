@@ -29,21 +29,25 @@ const SPECS: &[ParamSpec] = &[
         name: "break_on",
         ty: ParamType::Enum(BREAK_ON),
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "stages",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "stage_ticks",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "sound",
         ty: ParamType::Sound,
         required: false,
+        legacy: None,
     },
 ];
 

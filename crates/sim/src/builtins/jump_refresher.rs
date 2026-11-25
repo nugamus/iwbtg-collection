@@ -29,11 +29,16 @@ const SPECS: &[ParamSpec] = &[
         name: "hide_ticks",
         ty: ParamType::Real,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["showdown"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "tjump",
         ty: ParamType::Enum(TJUMP),
         required: false,
+        legacy: None,
     },
 ];
 

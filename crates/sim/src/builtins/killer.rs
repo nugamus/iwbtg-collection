@@ -27,46 +27,64 @@ const SPECS: &[ParamSpec] = &[
         name: "image_speed",
         ty: ParamType::Real,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["animus"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "hspeed",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "vspeed",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "scale",
         ty: ParamType::Real,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["little-runner"],
+            issue: 1269,
+        }),
     },
     ParamSpec {
         name: "visible",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "depth",
         ty: ParamType::Real,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "destroy_outside_room",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "kill_outside_view",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "bounce",
         ty: ParamType::Bool,
         required: false,
+        legacy: Some(super::LegacyParam {
+            games: &["animus"],
+            issue: 1269,
+        }),
     },
 ];
 

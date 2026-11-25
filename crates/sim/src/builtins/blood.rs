@@ -30,11 +30,13 @@ const SPECS: &[ParamSpec] = &[
         name: "flipped",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
     ParamSpec {
         name: "sticks",
         ty: ParamType::Bool,
         required: false,
+        legacy: None,
     },
 ];
 

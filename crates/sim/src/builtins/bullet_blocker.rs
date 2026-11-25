@@ -17,6 +17,11 @@ const SPECS: &[ParamSpec] = &[ParamSpec {
     name: "except_when_overlapping_kid",
     ty: ParamType::Bool,
     required: false,
+
+    legacy: Some(super::LegacyParam {
+        games: &["wanna"],
+        issue: 1269,
+    }),
 }];
 
 /// The params this built-in accepts (`builtins::param_specs` routes here).
