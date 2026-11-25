@@ -26,8 +26,17 @@ argon2 = "0.5"
 # Salt generation. password-hash re-exports rand_core, but OsRng is behind its `getrandom` feature,
 # so name the crate directly with that feature enabled.
 rand_core = { version = "0.6", features = ["getrandom"] }
-# SHA-256 of the session token, so the database never holds a usable bearer credential (#157).
+# SHA-256 of the session token and reset codes, so the database never holds a usable credential
+# (#157, #160).
 sha2 = { workspace = true }
+# Password-reset email (#160). `native-tls` keeps the OS trust store, matching the healthchecks
+# client: no bundled CA crate, so no CDLA-Permissive-2.0 edge in deny.toml.
+lettre = { version = "0.11", default-features = false, features = [
+  "builder",
+  "hostname",
+  "native-tls",
+  "smtp-transport",
+] }
 # SQLite (WAL, one file) with migrations at startup (docs/server.md, Database). No TLS runtime:
 # the driver is a local file. `macros` is only for `sqlx::migrate!`; no `query!` yet, so no
 # DATABASE_URL or `.sqlx` offline data is needed to build.

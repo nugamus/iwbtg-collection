@@ -6,12 +6,12 @@ name: "I wanna be the Kaenbyou"
 slug: kaenbyou
 source: https://delicious-fruit.com/game/17724
 engine: gm8
-status: unknown
-objects_total: null
-objects_specced: null
-objects_scripted: null
-traces_passing: null
-traces_total: null
+status: converted
+objects_total: 111
+objects_specced: 60
+objects_scripted: 51
+traces_passing: 46
+traces_total: 49
 ---
 
 # I wanna be the Kaenbyou (`kaenbyou`)

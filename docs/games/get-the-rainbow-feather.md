@@ -6,12 +6,12 @@ name: "I wanna get the Rainbow feather"
 slug: get-the-rainbow-feather
 source: https://delicious-fruit.com/game/11562
 engine: gm8
-status: unknown
-objects_total: null
-objects_specced: null
-objects_scripted: null
-traces_passing: null
-traces_total: null
+status: converted
+objects_total: 388
+objects_specced: 99
+objects_scripted: 289
+traces_passing: 2
+traces_total: 3
 ---
 
 # I wanna get the Rainbow feather (`get-the-rainbow-feather`)

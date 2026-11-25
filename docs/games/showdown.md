@@ -6,12 +6,12 @@ name: "I wanna be the Showdown"
 slug: showdown
 source: https://delicious-fruit.com/game/14697
 engine: gm8
-status: unknown
-objects_total: null
-objects_specced: null
-objects_scripted: null
-traces_passing: null
-traces_total: null
+status: converted
+objects_total: 291
+objects_specced: 61
+objects_scripted: 230
+traces_passing: 20
+traces_total: 20
 ---
 
 # I wanna be the Showdown (`showdown`)

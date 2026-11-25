@@ -6,12 +6,12 @@ name: "I wanna go the Spook House"
 slug: go-the-spook-house
 source: https://delicious-fruit.com/game/15561
 engine: gm8
-status: unknown
-objects_total: null
-objects_specced: null
-objects_scripted: null
-traces_passing: null
-traces_total: null
+status: converted
+objects_total: 122
+objects_specced: 39
+objects_scripted: 83
+traces_passing: unknown
+traces_total: unknown
 ---
 
 # I wanna go the Spook House (`go-the-spook-house`)
