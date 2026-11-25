@@ -1,8 +1,18 @@
 name: progress
 
 on:
+  # The daily schedule is a backstop. The cron added 2026-11-24 never fired:
+  # the Actions API has zero `schedule` runs for this repository, so a day of
+  # merges that touch no progress path leaves the site stale (#1547).
   schedule:
     - cron: "17 4 * * *"
+  # A successful CI run on main is the reliable refresh. It covers every
+  # merge, not only the progress/docs/games paths below; unchanged data is
+  # still published as "no publish change".
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
   push:
     branches: [main]
@@ -23,6 +33,9 @@ concurrency:
 
 jobs:
   build:
+    # workflow_run also fires for failed/cancelled CI; only refresh after a
+    # successful main run. The schedule, dispatch and push triggers always run.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
