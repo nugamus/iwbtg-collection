@@ -342,15 +342,18 @@ fn keys(
     }
 }
 
-/// Counts the time shown and starts the run once the minimum has passed.
+/// Counts the time shown and starts the run once the minimum has passed and every sprite is
+/// uploaded. A large package's upload is spread over frames (`view::upload_textures`), so the
+/// card waits for it rather than starting a game whose sprites are not there yet.
 fn advance(
     time: Res<Time>,
     mut loading: ResMut<Loading>,
     mut next: ResMut<NextState<RunScreen>>,
+    uploads: Option<Res<crate::view::SpriteQueue>>,
     collector: Option<ResMut<crate::input::Collector>>,
 ) {
     loading.shown += time.delta_secs();
-    if loading.preview || loading.shown < MIN_SECONDS {
+    if loading.preview || loading.shown < MIN_SECONDS || uploads.is_some() {
         return;
     }
     next.set(RunScreen::Playing);
