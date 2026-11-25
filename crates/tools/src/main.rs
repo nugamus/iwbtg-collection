@@ -12,6 +12,7 @@ mod import;
 mod pack_cmd;
 mod profile_cmd;
 mod publish_cmd;
+mod removals_cmd;
 mod replay_cmd;
 mod room_cmd;
 mod script_cmd;
@@ -71,6 +72,9 @@ enum Command {
     /// Assets across the games repo.
     #[command(subcommand)]
     Assets(AssetsCommand),
+    /// Signed removal lists for the catalog (docs/server.md, Removal list).
+    #[command(subcommand)]
+    Removals(removals_cmd::RemovalsCommand),
 }
 
 #[derive(Subcommand)]
@@ -484,6 +488,7 @@ fn run(cli: Cli) -> Result<bool, ToolError> {
             catalog_dir,
             trace_mode,
         }) => publish_cmd::publish_main(&pkg, &catalog_dir, trace_mode),
+        Command::Removals(command) => removals_cmd::run(command),
         Command::Script(ScriptCommand::ApiDocs { docs, check }) => {
             let docs = docs.unwrap_or_else(script_cmd::default_docs_dir);
             script_cmd::main(&docs, check)
