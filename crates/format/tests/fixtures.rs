@@ -71,6 +71,22 @@ fn valid_packages_load_with_no_diagnostics() {
     }
 }
 
+/// `runner = "gms"` names the GameMaker Studio runner, and the package passes the full `pkg
+/// check` load (#982).
+#[test]
+fn gms_runner_package_passes_pkg_check() {
+    let files = PackageFiles::load_dir(tests_dir().join("valid/gms")).expect("fixture loads");
+    let text = std::str::from_utf8(files.get("game.toml").unwrap()).unwrap();
+    let m = Manifest::parse(text).expect("parses");
+    assert_eq!(*m.runner.get_ref(), iwbtg_format::manifest::Runner::Gms);
+    let report = load_report(&files, LoadMode::Strict);
+    assert!(
+        report.ok() && report.diagnostics.is_empty(),
+        "valid/gms fails the full load:\n{}",
+        render(&report.diagnostics)
+    );
+}
+
 #[test]
 fn invalid_packages_give_their_one_expected_diagnostic() {
     let dir = tests_dir().join("invalid");

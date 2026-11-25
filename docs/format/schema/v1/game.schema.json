@@ -923,6 +923,11 @@
           "const": "gm81",
           "description": "GameMaker 8.1.",
           "type": "string"
+        },
+        {
+          "const": "gms",
+          "description": "GameMaker Studio 1.x.",
+          "type": "string"
         }
       ]
     },
@@ -1392,7 +1397,7 @@
     },
     "runner": {
       "$ref": "#/$defs/RunnerSchema",
-      "description": "The original runner (GameMaker 8.0 or 8.1), recorded for provenance. Both runners share\nthe same simulation rules (research#15)."
+      "description": "The original runner (GameMaker 8.0, 8.1 or Studio), recorded for provenance. GM 8.0 and\n8.1 share the same simulation rules (research#15); GMS uses the GM8 defaults until\nresearch#179."
     },
     "source": {
       "$ref": "#/$defs/Source",

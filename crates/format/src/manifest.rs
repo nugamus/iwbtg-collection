@@ -82,8 +82,9 @@ pub struct Manifest {
     #[serde(default)]
     #[cfg_attr(feature = "schema", schemars(with = "Option<CompatSection>"))]
     pub compat: Option<Spanned<CompatSection>>,
-    /// The original runner (GameMaker 8.0 or 8.1), recorded for provenance. Both runners share
-    /// the same simulation rules (research#15).
+    /// The original runner (GameMaker 8.0, 8.1 or Studio), recorded for provenance. GM 8.0 and
+    /// 8.1 share the same simulation rules (research#15); GMS uses the GM8 defaults until
+    /// research#179.
     #[cfg_attr(feature = "schema", schemars(with = "crate::schema::RunnerSchema"))]
     pub runner: Spanned<Runner>,
     /// Path to the physics profile.
