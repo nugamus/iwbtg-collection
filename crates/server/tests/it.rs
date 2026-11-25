@@ -19,3 +19,6 @@ mod catalog;
 
 #[path = "healthchecks.rs"]
 mod healthchecks;
+
+#[path = "auth.rs"]
+mod auth;

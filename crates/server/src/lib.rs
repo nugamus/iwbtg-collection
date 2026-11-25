@@ -4,6 +4,7 @@
 //! serves [`app`]; the tests drive the same router in-process (`tower::ServiceExt::oneshot`), so
 //! they never need a port.
 
+pub mod auth;
 pub mod catalog;
 pub mod db;
 pub mod health;
@@ -12,7 +13,7 @@ use std::path::PathBuf;
 
 use axum::Router;
 use axum::http::StatusCode;
-use axum::routing::get;
+use axum::routing::{get, post};
 use sqlx::SqlitePool;
 
 /// The router state: the database pool and the folder `/catalog.json` and `/files/*` are served
@@ -36,6 +37,8 @@ pub fn app(pool: SqlitePool, catalog_dir: Option<PathBuf>) -> Router {
         .route("/healthz", get(healthz))
         .route("/catalog.json", get(catalog::catalog))
         .route("/files/{name}", get(catalog::file))
+        .route("/auth/register", post(auth::register))
+        .route("/auth/login", post(auth::login))
         .with_state(AppState { pool, catalog_dir })
 }
 
