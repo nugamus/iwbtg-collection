@@ -445,6 +445,9 @@ mod sound;
 #[path = "state_support.rs"]
 mod state_support;
 
+#[path = "stress_packages.rs"]
+mod stress_packages;
+
 #[path = "timing.rs"]
 mod timing;
 

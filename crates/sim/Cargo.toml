@@ -30,6 +30,10 @@ wasm-bindgen-test = "0.3"
 stats_alloc = "0.1"
 # Feel contracts (`tests/feel.rs`, #1167). Test-only: the loader stays out of the sim runtime.
 toml.workspace = true
+# The stress packages (#1068) are packages, so their test loads them with the real loader. A dev
+# dependency may cycle (the format crate depends on the sim); `exclude-dev` keeps it out of the
+# sim's runtime graph, and it is test-only for the same reason as the two above.
+iwbtg-format.workspace = true
 
 [features]
 # JSON Schema of `PhysicsProfileDraft` for docs/format/schema/v0/physics.schema.json (#255); the

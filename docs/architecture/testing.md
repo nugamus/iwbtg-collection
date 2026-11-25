@@ -16,6 +16,7 @@ Part of [Architecture](../architecture.md).
 | Cross-platform equality | `iwbtg determinism report` on golden rooms, conformance suite and replay corpus on `x86_64-pc-windows-msvc`, `x86_64-unknown-linux-gnu`, `wasm32-wasip1` under wasmtime and `wasm32-unknown-unknown` through wasm-bindgen-test in Node. A final job requires all hash lists to be byte-identical. | GitHub Actions matrix | every PR touching `sim` or `format` |
 | Fuzzing | Replay decoder, package loader, script host | `cargo-fuzz`, native | nightly |
 | Budget and speed | Peak script units under 25% of the budget; benchmarks of the Rori Girl and Easy Miku 2 avoidances and a 28,900-instance load, native and WASM | `iwbtg profile`, `cargo bench` | CI, early in Phase 3 |
+| Stress packages | `crates/sim/tests/stress/*.pkg` load in strict mode (warnings fatal) and each `.inputs` replay runs twice from the smallest room of its variant, with the same final hash. The test reads the packages with the format loader, so `iwbtg-format` is a **dev**-dependency of the sim: a permitted dev cycle (the format crate depends on the sim), kept out of the runtime graph by `exclude-dev = true` in `crates/sim/deny.toml`. Do not "fix" the cycle by moving a loader into the sim (#1068) | `crates/sim/tests/stress_packages.rs` | every `cargo test` |
 | Lints | `cargo clippy -D warnings` with the sim bans, `cargo deny check`, `cargo fmt --check` | CI | every PR |
 
 ## Naming tests
