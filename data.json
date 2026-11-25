@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-25T12:15:26Z",
+ "generated_at": "2026-11-25T12:44:38Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -80,13 +80,13 @@
    "title": "3 · Sim fidelity",
    "name": "Sim fidelity",
    "state": "open",
-   "open": 38,
-   "closed": 214,
-   "total": 252,
-   "pct_closed": 84.9,
-   "size_points": 48,
+   "open": 37,
+   "closed": 216,
+   "total": 253,
+   "pct_closed": 85.4,
+   "size_points": 47,
    "sizes": {
-    "size:S": 14,
+    "size:S": 13,
     "size:M": 6,
     "size:L": 2,
     "unknown": 16
@@ -103,13 +103,13 @@
    "title": "4 · First playable",
    "name": "First playable",
    "state": "open",
-   "open": 8,
+   "open": 9,
    "closed": 44,
-   "total": 52,
-   "pct_closed": 84.6,
-   "size_points": 10,
+   "total": 53,
+   "pct_closed": 83.0,
+   "size_points": 11,
    "sizes": {
-    "size:S": 4,
+    "size:S": 5,
     "size:M": 2,
     "size:L": 0,
     "unknown": 2
@@ -149,13 +149,13 @@
    "title": "6 · Ranked-ready run",
    "name": "Ranked-ready run",
    "state": "open",
-   "open": 37,
+   "open": 38,
    "closed": 101,
-   "total": 138,
-   "pct_closed": 73.2,
-   "size_points": 130,
+   "total": 139,
+   "pct_closed": 72.7,
+   "size_points": 131,
    "sizes": {
-    "size:S": 9,
+    "size:S": 10,
     "size:M": 19,
     "size:L": 8,
     "unknown": 1
@@ -173,9 +173,9 @@
    "name": "Online",
    "state": "open",
    "open": 52,
-   "closed": 14,
-   "total": 66,
-   "pct_closed": 21.2,
+   "closed": 15,
+   "total": 67,
+   "pct_closed": 22.4,
    "size_points": 129,
    "sizes": {
     "size:S": 27,
@@ -262,32 +262,32 @@
  ],
  "activity": {
   "totals": {
-   "issues": 928,
-   "open": 284,
-   "closed": 644,
-   "pct_closed": 69.4
+   "issues": 930,
+   "open": 283,
+   "closed": 647,
+   "pct_closed": 69.6
   },
-  "open_prs": 3,
+  "open_prs": 2,
   "process": {
-   "agent-ready": 129,
-   "triage": 52,
+   "agent-ready": 132,
+   "in-progress": 15,
    "needs-user": 30,
-   "in-progress": 13,
+   "triage": 48,
    "blocked": 25,
    "revisit": 3
   },
   "area_open": [
    {
     "area": "area:sim",
-    "count": 92
+    "count": 91
    },
    {
     "area": "area:client",
-    "count": 65
+    "count": 67
    },
    {
     "area": "area:server",
-    "count": 47
+    "count": 46
    },
    {
     "area": "area:format",
@@ -311,7 +311,7 @@
    },
    {
     "area": "area:docs",
-    "count": 7
+    "count": 5
    },
    {
     "area": "area:research",
@@ -324,22 +324,6 @@
   ],
   "recent_closed": [
    {
-    "number": 1367,
-    "title": "Fill per-game progress front-matter in docs/games",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1367",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:port",
-     "in-progress"
-    ],
-    "phase": "9 · Content & ports",
-    "updated_at": "2026-11-25T12:15:17Z",
-    "closed_at": "2026-11-25T12:15:17Z",
-    "created_at": "2026-11-24T13:43:03Z"
-   },
-   {
     "number": 1548,
     "title": "dashboard: per-game implementation bars from repo data",
     "state": "closed",
@@ -349,9 +333,71 @@
      "in-progress"
     ],
     "phase": null,
-    "updated_at": "2026-11-25T12:04:10Z",
-    "closed_at": "2026-11-25T12:04:10Z",
+    "updated_at": "2026-11-25T12:44:24Z",
+    "closed_at": "2026-11-25T12:44:24Z",
     "created_at": "2026-11-25T11:57:28Z"
+   },
+   {
+    "number": 1234,
+    "title": "Docs: sim rooms page — name the explicit Camera preset in the views section (#1189 E2a)",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1234",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:sim",
+     "area:docs"
+    ],
+    "phase": "3 · Sim fidelity",
+    "updated_at": "2026-11-25T12:34:15Z",
+    "closed_at": "2026-11-25T12:31:25Z",
+    "created_at": "2026-11-21T09:55:59Z"
+   },
+   {
+    "number": 160,
+    "title": "Auth: password reset by emailed code",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/160",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:server",
+     "in-progress"
+    ],
+    "phase": "7 · Online",
+    "updated_at": "2026-11-25T12:28:49Z",
+    "closed_at": "2026-11-25T12:28:49Z",
+    "created_at": "2026-11-02T11:57:51Z"
+   },
+   {
+    "number": 1342,
+    "title": "Docs: stale \"Waits on\" cells in the Modernization workstream table",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1342",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:docs"
+    ],
+    "phase": "3 · Sim fidelity",
+    "updated_at": "2026-11-25T12:26:26Z",
+    "closed_at": "2026-11-25T12:25:19Z",
+    "created_at": "2026-11-21T17:34:17Z"
+   },
+   {
+    "number": 1367,
+    "title": "Fill per-game progress front-matter in docs/games",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1367",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:port"
+    ],
+    "phase": "9 · Content & ports",
+    "updated_at": "2026-11-25T12:15:53Z",
+    "closed_at": "2026-11-25T12:15:17Z",
+    "created_at": "2026-11-24T13:43:03Z"
    },
    {
     "number": 1489,
@@ -398,54 +444,55 @@
     "updated_at": "2026-11-25T11:20:00Z",
     "closed_at": "2026-11-25T11:20:00Z",
     "created_at": "2026-11-02T12:01:11Z"
-   },
+   }
+  ],
+  "in_progress": [
    {
-    "number": 1382,
-    "title": "Sim: one fill rule for skipped array elements (room set_global vs script writes)",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1382",
-    "labels": [
-     "agent-ready",
-     "size:S"
-    ],
-    "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-25T11:13:51Z",
-    "closed_at": "2026-11-25T10:36:42Z",
-    "created_at": "2026-11-24T17:19:23Z"
-   },
-   {
-    "number": 1380,
-    "title": "Script API: plan the groups the census needs that scripts.md does not list (paths, view, strings, instance_change, bounce, kid actions)",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1380",
+    "number": 162,
+    "title": "Submissions: endpoint and replay storage",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/162",
     "labels": [
      "agent-ready",
      "size:S",
-     "area:sim",
-     "area:docs"
+     "area:server",
+     "in-progress"
     ],
-    "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-25T10:32:58Z",
-    "closed_at": "2026-11-25T10:30:59Z",
-    "created_at": "2026-11-24T17:15:26Z"
+    "phase": "7 · Online",
+    "updated_at": "2026-11-25T12:39:07Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T12:01:14Z"
    },
    {
-    "number": 1506,
-    "title": "Catalog: stream /files instead of buffering whole packages (3 x 200 MiB downloads hit 610 MB)",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1506",
+    "number": 1530,
+    "title": "Script API: paths (path_start, path_end, path properties) (#776, census rank 14)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1530",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "in-progress"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-25T12:36:33Z",
+    "closed_at": null,
+    "created_at": "2026-11-25T10:07:47Z"
+   },
+   {
+    "number": 1398,
+    "title": "Showcase package is not in pkg fmt layout (3 room files), and nothing checks it",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1398",
     "labels": [
      "agent-ready",
      "size:S",
      "in-progress"
     ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-25T10:23:31Z",
-    "closed_at": "2026-11-25T10:23:31Z",
-    "created_at": "2026-11-25T00:56:28Z"
-   }
-  ],
-  "in_progress": [
+    "phase": "4 · First playable",
+    "updated_at": "2026-11-25T12:35:45Z",
+    "closed_at": null,
+    "created_at": "2026-11-24T17:45:23Z"
+   },
    {
     "number": 39,
     "title": "Practice mode: start from stage, save or room; save states",
@@ -494,54 +541,6 @@
     "updated_at": "2026-11-25T12:10:33Z",
     "closed_at": null,
     "created_at": "2026-11-20T09:06:56Z"
-   },
-   {
-    "number": 160,
-    "title": "Auth: password reset by emailed code",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/160",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:server",
-     "in-progress"
-    ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-25T11:38:45Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T11:57:51Z"
-   },
-   {
-    "number": 43,
-    "title": "Ranked (stripped) and Play original buttons",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/43",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "6 · Ranked-ready run",
-    "updated_at": "2026-11-25T11:19:32Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T11:30:26Z"
-   },
-   {
-    "number": 113,
-    "title": "Security review of the server before accounts go live",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/113",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "area:server",
-     "in-progress"
-    ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-25T02:48:55Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T11:55:48Z"
    }
   ],
   "needs_user": [
@@ -728,8 +727,8 @@
     "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 259,
-  "opened_7d": 333,
+  "closed_7d": 262,
+  "opened_7d": 335,
   "burnup": [
    {
     "week": "2026-11-09",
@@ -748,8 +747,8 @@
    },
    {
     "week": "2026-11-30",
-    "created": 928,
-    "closed": 644
+    "created": 930,
+    "closed": 647
    }
   ]
  },
@@ -799,7 +798,9 @@
    "objects_in_package": 39,
    "objects_unmapped": 6,
    "objects_mapped": 33,
+   "objects_scripted": 6,
    "objects_mapped_pct": 84.6,
+   "objects_scripted_pct": 15.4,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -845,7 +846,9 @@
    "objects_in_package": 494,
    "objects_unmapped": 318,
    "objects_mapped": 176,
+   "objects_scripted": 318,
    "objects_mapped_pct": 35.6,
+   "objects_scripted_pct": 64.4,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -896,7 +899,9 @@
    "objects_in_package": 153,
    "objects_unmapped": 95,
    "objects_mapped": 58,
+   "objects_scripted": 95,
    "objects_mapped_pct": 37.9,
+   "objects_scripted_pct": 62.1,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -958,7 +963,9 @@
    "objects_in_package": 111,
    "objects_unmapped": 51,
    "objects_mapped": 60,
+   "objects_scripted": 51,
    "objects_mapped_pct": 54.1,
+   "objects_scripted_pct": 45.9,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1014,7 +1021,9 @@
    "objects_in_package": 129,
    "objects_unmapped": 69,
    "objects_mapped": 60,
+   "objects_scripted": 69,
    "objects_mapped_pct": 46.5,
+   "objects_scripted_pct": 53.5,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1061,7 +1070,9 @@
    "objects_in_package": 185,
    "objects_unmapped": 141,
    "objects_mapped": 44,
+   "objects_scripted": 141,
    "objects_mapped_pct": 23.8,
+   "objects_scripted_pct": 76.2,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1110,7 +1121,9 @@
    "objects_in_package": 112,
    "objects_unmapped": 68,
    "objects_mapped": 44,
+   "objects_scripted": 68,
    "objects_mapped_pct": 39.3,
+   "objects_scripted_pct": 60.7,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1153,7 +1166,9 @@
    "objects_in_package": 240,
    "objects_unmapped": 177,
    "objects_mapped": 63,
+   "objects_scripted": 177,
    "objects_mapped_pct": 26.2,
+   "objects_scripted_pct": 73.8,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1200,7 +1215,9 @@
    "objects_in_package": 230,
    "objects_unmapped": 167,
    "objects_mapped": 63,
+   "objects_scripted": 167,
    "objects_mapped_pct": 27.4,
+   "objects_scripted_pct": 72.6,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1246,7 +1263,9 @@
    "objects_in_package": 55,
    "objects_unmapped": 30,
    "objects_mapped": 25,
+   "objects_scripted": 30,
    "objects_mapped_pct": 45.5,
+   "objects_scripted_pct": 54.5,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1296,7 +1315,9 @@
    "objects_in_package": 412,
    "objects_unmapped": 368,
    "objects_mapped": 44,
+   "objects_scripted": 368,
    "objects_mapped_pct": 10.7,
+   "objects_scripted_pct": 89.3,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1346,7 +1367,9 @@
    "objects_in_package": 228,
    "objects_unmapped": 175,
    "objects_mapped": 53,
+   "objects_scripted": 175,
    "objects_mapped_pct": 23.2,
+   "objects_scripted_pct": 76.8,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1395,7 +1418,9 @@
    "objects_in_package": 151,
    "objects_unmapped": 120,
    "objects_mapped": 31,
+   "objects_scripted": 120,
    "objects_mapped_pct": 20.5,
+   "objects_scripted_pct": 79.5,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1449,7 +1474,9 @@
    "objects_in_package": 139,
    "objects_unmapped": 84,
    "objects_mapped": 55,
+   "objects_scripted": 84,
    "objects_mapped_pct": 39.6,
+   "objects_scripted_pct": 60.4,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1508,7 +1535,9 @@
    "objects_in_package": 359,
    "objects_unmapped": 284,
    "objects_mapped": 75,
+   "objects_scripted": 284,
    "objects_mapped_pct": 20.9,
+   "objects_scripted_pct": 79.1,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1558,7 +1587,9 @@
    "objects_in_package": 326,
    "objects_unmapped": 236,
    "objects_mapped": 90,
+   "objects_scripted": 236,
    "objects_mapped_pct": 27.6,
+   "objects_scripted_pct": 72.4,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1612,7 +1643,9 @@
    "objects_in_package": 388,
    "objects_unmapped": 289,
    "objects_mapped": 99,
+   "objects_scripted": 289,
    "objects_mapped_pct": 25.5,
+   "objects_scripted_pct": 74.5,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1667,7 +1700,9 @@
    "objects_in_package": 291,
    "objects_unmapped": 230,
    "objects_mapped": 61,
+   "objects_scripted": 230,
    "objects_mapped_pct": 21.0,
+   "objects_scripted_pct": 79.0,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1714,7 +1749,9 @@
    "objects_in_package": 122,
    "objects_unmapped": 83,
    "objects_mapped": 39,
+   "objects_scripted": 83,
    "objects_mapped_pct": 32.0,
+   "objects_scripted_pct": 68.0,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1757,7 +1794,9 @@
    "objects_in_package": 113,
    "objects_unmapped": 57,
    "objects_mapped": 56,
+   "objects_scripted": 57,
    "objects_mapped_pct": 49.6,
+   "objects_scripted_pct": 50.4,
    "check_errors": 0,
    "check_warnings": 2,
    "port": {
@@ -1793,15 +1832,15 @@
   "trace_cases_pct": 92.8,
   "games_with_cases": 7,
   "package_objects_mapped": 1229,
+  "package_objects_scripted": 3048,
   "package_objects": 4277,
   "package_mapped_pct": 28.7,
+  "package_scripted_pct": 71.3,
   "games_with_package": 20
  },
  "followups": {
   "census": 1364,
-  "traces": 1365,
-  "converter": 1366,
-  "frontmatter": 1367
+  "traces": 1365
  },
  "exporter": {
   "generated_at": "2026-11-24T17:13:20Z",
