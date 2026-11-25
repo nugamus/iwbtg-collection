@@ -23,13 +23,14 @@ use bevy::prelude::*;
 use bevy::text::EditableText;
 use bevy::ui_widgets::{Activate, TextInput};
 
+use super::filters::Filters;
 use super::library::Library;
 use super::list::Selection;
 use crate::storage::{self, Store};
 use crate::ui::fonts::Type;
 use crate::ui::shape::Shape;
 use crate::ui::tokens;
-use crate::ui::widgets::{ButtonKind, Chip, button, button_with, chip, text};
+use crate::ui::widgets::{ButtonKind, Chip, button_with, chip, text};
 
 /// The file in the data area.
 pub(crate) const FILE: &str = "collections.toml";
@@ -76,6 +77,10 @@ pub struct Collections {
     pub lists: Vec<Named>,
     store: Option<Store>,
 }
+
+/// The collection being renamed (`None`: the name field creates a new one).
+#[derive(Resource, Default)]
+pub struct Renaming(pub Option<String>);
 
 impl Collections {
     /// The lists kept in `store` (`None`: this session keeps nothing).
@@ -141,18 +146,7 @@ impl Collections {
     /// A new collection named `name`, with `game` in it when given. The name is trimmed, at
     /// most [`MAX_NAME_CHARS`], not [`FAVORITES`] and not an existing name (any case).
     pub fn create(&mut self, name: &str, game: Option<&str>) -> Result<Pick, String> {
-        let name = name.trim();
-        if name.is_empty() {
-            return Err("a collection needs a name".into());
-        }
-        if name.chars().count() > MAX_NAME_CHARS {
-            return Err(format!("a collection name is at most {MAX_NAME_CHARS} characters"));
-        }
-        if name.eq_ignore_ascii_case(FAVORITES)
-            || self.lists.iter().any(|l| l.name.eq_ignore_ascii_case(name))
-        {
-            return Err(format!("a collection named {name} already exists"));
-        }
+        let name = valid_name(&self.lists, name, None)?;
         let games = game.map(|g| vec![g.to_owned()]).unwrap_or_default();
         self.lists.push(Named {
             name: name.to_owned(),
@@ -160,6 +154,30 @@ impl Collections {
         });
         self.commit();
         Ok(Pick::Named(name.to_owned()))
+    }
+
+    /// Renames `from` to `to`, keeping its games. The name rules are [`create`](Self::create)'s;
+    /// the same name in another case is allowed (it is the collection's own name).
+    pub fn rename(&mut self, from: &str, to: &str) -> Result<Pick, String> {
+        let to = valid_name(&self.lists, to, Some(from))?;
+        let Some(list) = self.lists.iter_mut().find(|l| l.name == from) else {
+            return Err(format!("no collection named {from}"));
+        };
+        list.name = to.to_owned();
+        self.commit();
+        Ok(Pick::Named(to.to_owned()))
+    }
+
+    /// Removes the collection `name`, and only that: its games and the favorites stay. False
+    /// when there is no such collection.
+    pub fn delete(&mut self, name: &str) -> bool {
+        let before = self.lists.len();
+        self.lists.retain(|l| l.name != name);
+        if self.lists.len() == before {
+            return false;
+        }
+        self.commit();
+        true
     }
 
     /// Writes the file; a failed write is a warning and the next change tries again.
@@ -235,6 +253,33 @@ impl Collections {
     }
 }
 
+/// Checks a collection name: trimmed, non-empty, at most [`MAX_NAME_CHARS`], not
+/// [`FAVORITES`], and not another collection's name in any case. `renaming` is the
+/// collection's own name when it is being renamed, so a change of case is allowed.
+fn valid_name<'a>(
+    lists: &[Named],
+    name: &'a str,
+    renaming: Option<&str>,
+) -> Result<&'a str, String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("a collection needs a name".into());
+    }
+    if name.chars().count() > MAX_NAME_CHARS {
+        return Err(format!("a collection name is at most {MAX_NAME_CHARS} characters"));
+    }
+    if name.eq_ignore_ascii_case(FAVORITES) {
+        return Err(format!("{FAVORITES} is the built-in list's name"));
+    }
+    if lists
+        .iter()
+        .any(|l| Some(l.name.as_str()) != renaming && l.name.eq_ignore_ascii_case(name))
+    {
+        return Err(format!("a collection named {name} already exists"));
+    }
+    Ok(name)
+}
+
 /// A TOML string array; a missing key is empty.
 fn strings(value: Option<&toml::Value>, what: &str) -> Result<Vec<String>, String> {
     match value {
@@ -294,9 +339,18 @@ pub(super) struct Member(pub String);
 #[derive(Component)]
 pub(super) struct NameField;
 
-/// The button that creates the collection named in the field.
+/// The button that creates the collection named in the field (or renames the one being
+/// renamed: its label follows [`Renaming`]).
 #[derive(Component)]
 pub(super) struct CreateButton;
+
+/// The Add/Rename label on that button.
+#[derive(Component)]
+pub(super) struct CreateLabel;
+
+/// The line that says which collection is being renamed.
+#[derive(Component)]
+pub(super) struct RenameHint;
 
 /// The left side's lists: the Favorite toggle, a chip per named collection for the selected
 /// game, and the field that names a new one. `selected` is the selected game's package id.
@@ -359,7 +413,19 @@ pub(super) fn controls(lists: &Collections, selected: Option<&str>) -> impl Bund
                 children![
                     text("New collection:", Type::barlow(14.0, 400), tokens::SOFT),
                     name_field(),
-                    (button("Add", ButtonKind::Control), CreateButton),
+                    (
+                        button_with(
+                            ButtonKind::Control,
+                            34.0,
+                            14.0,
+                            (
+                                text("Add", Type::barlow(14.0, 600), tokens::INK),
+                                CreateLabel
+                            )
+                        ),
+                        CreateButton
+                    ),
+                    (text("", Type::barlow(14.0, 400), tokens::MUTED), RenameHint),
                 ],
             ),
         ],
@@ -433,7 +499,9 @@ pub(super) fn member(
     lists.toggle(&Pick::Named(member.0.clone()), &game.id);
 }
 
-/// The Add button creates the collection named in the field and puts the selected game in it.
+/// The Add button creates the collection named in the field and puts the selected game in it;
+/// in a rename it renames the collection instead (see [`commit`]).
+#[allow(clippy::too_many_arguments, reason = "the field's observer")]
 pub(super) fn create(
     activate: On<Activate>,
     pressed: Query<(), With<CreateButton>>,
@@ -441,6 +509,8 @@ pub(super) fn create(
     sel: Res<Selection>,
     lib: Res<Library>,
     mut lists: ResMut<Collections>,
+    mut renaming: ResMut<Renaming>,
+    mut filters: ResMut<Filters>,
 ) {
     if pressed.get(activate.entity).is_err() {
         return;
@@ -451,15 +521,63 @@ pub(super) fn create(
     let Some(game) = lib.games.get(sel.game) else {
         return;
     };
-    match lists.create(&field.value().to_string(), Some(&game.id)) {
-        Ok(_) => *field = EditableText::new(""),
+    let name = field.value().to_string();
+    match commit(&mut lists, &mut renaming, &mut filters, &name, Some(&game.id)) {
+        Ok(()) => *field = EditableText::new(""),
         Err(e) => storage::console_warn(&format!("collections: {e}")),
     }
 }
 
-/// Enter in the name field creates the collection, as the Add button does; Escape goes back to
-/// the search field (the screen's other keys stay off while the field has the focus,
-/// `super::keys`).
+/// Adds the collection `name`, or renames the one [`Renaming`] holds, keeping its games. A
+/// rename that was the Collections filter's pick moves the pick to the new name (#1495).
+fn commit(
+    lists: &mut Collections,
+    renaming: &mut Renaming,
+    filters: &mut Filters,
+    name: &str,
+    game: Option<&str>,
+) -> Result<(), String> {
+    let Some(old) = renaming.0.clone() else {
+        lists.create(name, game)?;
+        return Ok(());
+    };
+    let pick = lists.rename(&old, name)?;
+    if filters.collection.as_ref() == Some(&Pick::Named(old)) {
+        filters.collection = Some(pick);
+    }
+    renaming.0 = None;
+    Ok(())
+}
+
+/// The button and the hint say whether the name field creates a collection or renames one.
+pub(super) fn editor_labels(
+    renaming: Res<Renaming>,
+    mut labels: Query<&mut Text, With<CreateLabel>>,
+    mut hints: Query<&mut Text, (With<RenameHint>, Without<CreateLabel>)>,
+) {
+    if !renaming.is_changed() {
+        return;
+    }
+    let label = if renaming.0.is_some() { "Rename" } else { "Add" };
+    for mut text in &mut labels {
+        if text.0 != label {
+            text.0 = label.to_owned();
+        }
+    }
+    let hint = renaming.0.as_ref().map_or_else(String::new, |name| {
+        format!("Renaming “{name}” · Enter saves · Esc cancels")
+    });
+    for mut text in &mut hints {
+        if text.0 != hint {
+            text.0 = hint.clone();
+        }
+    }
+}
+
+/// Enter in the name field creates the collection (or saves a rename), as the Add button does;
+/// Escape cancels a rename and goes back to the search field (the screen's other keys stay off
+/// while the field has the focus, `super::keys`).
+#[allow(clippy::too_many_arguments, reason = "the field's keys")]
 pub(super) fn keys(
     keys: Res<ButtonInput<KeyCode>>,
     mut focus: ResMut<InputFocus>,
@@ -468,6 +586,8 @@ pub(super) fn keys(
     sel: Res<Selection>,
     lib: Res<Library>,
     mut lists: ResMut<Collections>,
+    mut renaming: ResMut<Renaming>,
+    mut filters: ResMut<Filters>,
 ) {
     let Some(focused) = focus.get() else {
         return;
@@ -478,14 +598,17 @@ pub(super) fn keys(
     if keys.any_just_pressed([KeyCode::Enter, KeyCode::NumpadEnter])
         && let Some(game) = lib.games.get(sel.game)
     {
-        match lists.create(&field.value().to_string(), Some(&game.id)) {
-            Ok(_) => *field = EditableText::new(""),
+        let name = field.value().to_string();
+        match commit(&mut lists, &mut renaming, &mut filters, &name, Some(&game.id)) {
+            Ok(()) => *field = EditableText::new(""),
             Err(e) => storage::console_warn(&format!("collections: {e}")),
         }
     }
     if keys.just_pressed(KeyCode::Escape)
         && let Ok(search) = search.single()
     {
+        renaming.0 = None;
+        *field = EditableText::new("");
         focus.set(search, bevy::input_focus::FocusCause::Navigated);
     }
 }
@@ -628,6 +751,39 @@ mod tests {
         assert!(lists.create(&"x".repeat(MAX_NAME_CHARS + 1), None).is_err());
         let longest = "y".repeat(MAX_NAME_CHARS);
         assert!(lists.create(&longest, None).is_ok());
+    }
+
+    #[test]
+    fn renaming_keeps_the_games_and_deleting_keeps_everything_else() {
+        let store = temp("manage");
+        let mut lists = Collections::open(Some(store.clone()));
+        lists.toggle_favorite("fav");
+        lists.create("Bosses", Some("a")).unwrap();
+        lists.toggle(&Pick::Named("Bosses".into()), "b");
+
+        let fights = lists.rename("Bosses", "  Fights  ").unwrap();
+        assert_eq!(fights, Pick::Named("Fights".into()));
+        assert!(lists.contains(&fights, "a"), "the created game stays");
+        assert!(lists.contains(&fights, "b"), "the added game stays");
+
+        // A change of case is the collection's own name, not a duplicate.
+        let lower = lists.rename("Fights", "fights").unwrap();
+        assert_eq!(lower, Pick::Named("fights".into()));
+        lists.create("Other", None).unwrap();
+        assert!(lists.rename("fights", "OTHER").is_err(), "another collection's name");
+        assert!(lists.rename("fights", "").is_err());
+        assert!(lists.rename("fights", "Favorites").is_err());
+        assert!(lists.rename("missing", "X").is_err(), "no such collection");
+
+        assert!(lists.delete("Other"));
+        assert!(!lists.delete("Other"), "nothing left to delete");
+        assert!(lists.contains(&lower, "b"), "the other collection kept its games");
+        assert!(lists.is_favorite("fav"), "delete kept the favorites");
+
+        let again = Collections::open(Some(store));
+        assert_eq!(again.names(), ["fights"]);
+        assert!(again.contains(&Pick::Named("fights".into()), "b"));
+        assert!(again.is_favorite("fav"));
     }
 
     #[test]

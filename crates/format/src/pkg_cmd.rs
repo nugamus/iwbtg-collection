@@ -64,7 +64,7 @@ pub fn check(files: &PackageFiles, trace_mode: bool, out: &mut impl Write) -> io
 
 /// The `physics:` lines of `pkg check` (#802, #970): the pack name when the game's physics match
 /// its pack's family preset and no room profile differs, else `custom (...)` with the fields of
-/// the game's profile and each differing room profile, named by id.
+/// the game's profile and each differing room profile a built room names, named by id (#1063).
 fn physics_lines(standing: &PhysicsStanding) -> Vec<String> {
     if !standing.is_custom() {
         return vec![format!("physics: {}", standing.name())];

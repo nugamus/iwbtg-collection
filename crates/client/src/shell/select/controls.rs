@@ -69,6 +69,10 @@ pub(super) enum Pick {
     Sort(Field),
     Creator(Option<String>),
     Collection(Option<collections::Pick>),
+    /// Rename a named collection: the name goes into the left side's field (#1495).
+    Rename(String),
+    /// Delete a named collection; its games stay in the library.
+    Delete(String),
 }
 
 /// The control's value as it reads (`Stars ▾`). Group reads without the arrow, as on the
@@ -219,6 +223,11 @@ fn options(
                 let on = f.collection.as_ref() == Some(&pick);
                 out.push((name, Pick::Collection(Some(pick)), on, true));
             }
+            // The picked named collection can be managed from its own menu (#1495).
+            if let Some(collections::Pick::Named(name)) = &f.collection {
+                out.push((format!("Rename \"{name}\""), Pick::Rename(name.clone()), false, true));
+                out.push((format!("Delete \"{name}\""), Pick::Delete(name.clone()), false, true));
+            }
             out
         }
         Control::Cleared | Control::Uncleared => Vec::new(),
@@ -226,8 +235,10 @@ fn options(
 }
 
 /// A click (or Enter, Space) on a control: a chip flips its filter, a dropdown opens or closes
-/// its menu, an option sets its filter and closes the menu. The keyboard focus goes back to the
-/// search field, so typing keeps searching.
+/// its menu, an option sets its filter and closes the menu. Rename hands the collection's name
+/// to the left side's field and focuses it; Delete drops the collection, and a filter on it goes
+/// back to Any. Otherwise the keyboard focus goes back to the search field, so typing keeps
+/// searching.
 #[allow(clippy::too_many_arguments, reason = "one observer for every control")]
 pub(super) fn on_activate(
     activate: On<Activate>,
@@ -237,13 +248,16 @@ pub(super) fn on_activate(
     cameras: Query<&UiTargetCamera>,
     dropdowns: Query<Option<&Children>, With<Dropdown>>,
     search: Query<Entity, With<SearchField>>,
+    mut fields: Query<&mut EditableText, With<collections::NameField>>,
+    names: Query<Entity, With<collections::NameField>>,
     lib: Option<Res<Library>>,
-    lists: Option<Res<Collections>>,
+    lists: Option<ResMut<Collections>>,
+    mut renaming: Option<ResMut<collections::Renaming>>,
     filters: Option<ResMut<Filters>>,
     mut focus: ResMut<InputFocus>,
     mut commands: Commands,
 ) {
-    let (Some(lib), Some(lists), Some(mut f)) = (lib, lists, filters) else {
+    let (Some(lib), Some(mut lists), Some(mut f)) = (lib, lists, filters) else {
         return;
     };
     let close = |commands: &mut Commands| {
@@ -313,13 +327,41 @@ pub(super) fn on_activate(
             }
         }
     } else if let Ok(pick) = picks.get(activate.entity) {
+        let mut refocus = true;
         match pick.clone() {
             Pick::Group(field) => f.group = field,
             Pick::Sort(field) => f.sort = field,
             Pick::Creator(c) => f.creator = c,
             Pick::Collection(c) => f.collection = c,
+            Pick::Rename(name) => {
+                if let Some(renaming) = renaming.as_mut() {
+                    renaming.0 = Some(name.clone());
+                }
+                if let Ok(mut field) = fields.single_mut() {
+                    *field = EditableText::new(&name);
+                }
+                if let Ok(entity) = names.single() {
+                    focus.set(entity, FocusCause::Navigated);
+                    refocus = false;
+                }
+            }
+            Pick::Delete(name) => {
+                if let Some(renaming) = renaming.as_mut()
+                    && renaming.0.as_deref() == Some(name.as_str())
+                {
+                    renaming.0 = None;
+                }
+                lists.delete(&name);
+                if f.collection.as_ref() == Some(&collections::Pick::Named(name)) {
+                    f.collection = None;
+                }
+            }
         }
         close(&mut commands);
+        if refocus && let Ok(search) = search.single() {
+            focus.set(search, FocusCause::Navigated);
+        }
+        return;
     } else {
         return;
     }
@@ -419,16 +461,38 @@ mod tests {
         };
         let mut lists = Collections::default();
         lists.create("Warmups", None).unwrap();
-        let options = options(Control::Collections, &lib, &lists, &Filters::default());
-        let labels: Vec<&str> = options.iter().map(|(label, ..)| label.as_str()).collect();
+        let menu = options(Control::Collections, &lib, &lists, &Filters::default());
+        let labels: Vec<&str> = menu.iter().map(|(label, ..)| label.as_str()).collect();
         assert_eq!(labels, ["Any", "★ Favorites", "Warmups"]);
-        assert!(options[0].2, "Any is picked by default");
+        assert!(menu[0].2, "Any is picked by default");
         assert_eq!(
-            options[1].1,
+            menu[1].1,
             Pick::Collection(Some(collections::Pick::Favorites))
         );
-        assert_eq!(options[2].1, Pick::Collection(Some(
+        assert_eq!(menu[2].1, Pick::Collection(Some(
             collections::Pick::Named("Warmups".into())
         )));
+
+        // While a named collection is the pick, its menu can rename or delete it (#1495).
+        let picked = Filters {
+            collection: Some(collections::Pick::Named("Warmups".into())),
+            ..default()
+        };
+        let menu = options(Control::Collections, &lib, &lists, &picked);
+        let labels: Vec<&str> = menu.iter().map(|(label, ..)| label.as_str()).collect();
+        assert_eq!(
+            labels,
+            ["Any", "★ Favorites", "Warmups", "Rename \"Warmups\"", "Delete \"Warmups\""]
+        );
+        assert_eq!(menu[3].1, Pick::Rename("Warmups".into()));
+        assert_eq!(menu[4].1, Pick::Delete("Warmups".into()));
+
+        // The favorites list itself is not a named collection and has no such actions.
+        let favorites = Filters {
+            collection: Some(collections::Pick::Favorites),
+            ..default()
+        };
+        let menu = options(Control::Collections, &lib, &lists, &favorites);
+        assert_eq!(menu.len(), 3, "Any, Favorites and the named collection");
     }
 }

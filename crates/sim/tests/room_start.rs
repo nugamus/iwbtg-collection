@@ -3,12 +3,14 @@
 
 use iwbtg_sim::def::KindId;
 use iwbtg_sim::def::NameId;
+use iwbtg_sim::def::RoomId;
 use iwbtg_sim::events::EventKind;
 use iwbtg_sim::num::Real;
 use iwbtg_sim::room::{RoomRequest, StartPoint, start_game_with};
 use iwbtg_sim::rules::RunnerRules;
+use iwbtg_sim::save::{Checkpoint, RoomKey};
 use iwbtg_sim::stripped::{PlayMode, RankedStart};
-use iwbtg_sim::world::{Flow, Value, World};
+use iwbtg_sim::world::{Flow, SimStatus, Value, World};
 
 use crate::room_support::*;
 
@@ -46,7 +48,7 @@ fn start_points() {
     };
     let mut s = slot(saved);
     s.difficulty = 1;
-    let (w, r) = start(&def, &rules, &mut host, StartPoint::FromSave(s.clone()));
+    let (w, r) = start(&def, &rules, &mut host, from_save(&def, &s));
     r.unwrap();
     assert_eq!(
         host.log,
@@ -75,6 +77,48 @@ fn start_points() {
         w.get(kid[0]).map(|k| (k.m.x(), k.m.y())),
         Some((Real::new(49.0), Real::new(119.0)))
     );
+}
+
+/// #1238: `FromSave` carries the checkpoint's stable room name, not an index. A reordering that
+/// moves the room keeps the name pointing at it, and a name this package does not have halts the
+/// start instead of landing in whatever room holds the old index.
+#[test]
+fn a_saved_start_resolves_the_room_name_in_the_room_sequence() {
+    let (mut def, _select, load, saved) = load_game();
+    let rules = RunnerRules::default();
+    let checkpoint = Checkpoint::from_slot(&def, &slot(saved)).expect("a gameplay room");
+
+    // Rooms: the save room and the load room trade places.
+    def.rooms.swap(
+        usize::try_from(load.0).expect("an index"),
+        usize::try_from(saved.0).expect("an index"),
+    );
+    let moved = RoomId(
+        u32::try_from(
+            def.rooms
+                .iter()
+                .position(|r| r.name == "room14")
+                .expect("still there"),
+        )
+        .unwrap(),
+    );
+    assert_ne!(moved, saved, "the fixture's reorder must move the room's index");
+
+    let mut host = Probe::default();
+    let (w, r) = start(&def, &rules, &mut host, StartPoint::FromSave(checkpoint.clone()));
+    r.unwrap();
+    assert_eq!(w.room, moved, "the name decides the room, not the stored index");
+
+    let mut missing = checkpoint;
+    missing.room = RoomKey("no-such-room".into());
+    let mut host = Probe::default();
+    let (w, r) = start(&def, &rules, &mut host, StartPoint::FromSave(missing));
+    let e = r.expect_err("a room the package does not have cannot start");
+    assert!(
+        e.to_string().contains("no-such-room"),
+        "the error names the room: {e}"
+    );
+    assert!(matches!(w.status, SimStatus::Halted(_)), "the start halts");
 }
 
 #[test]
@@ -174,7 +218,7 @@ fn stripped_cut_rooms_redirect_every_room_change() {
         &o.def,
         PlayMode::Stripped,
         &mut host,
-        StartPoint::FromSave(slot(o.b)),
+        from_save(&o.def, &slot(o.b)),
     );
     r.unwrap();
     assert_eq!(w.room, c);

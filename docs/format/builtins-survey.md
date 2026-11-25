@@ -24,7 +24,7 @@ Verdicts:
 
 Format 0 keeps every parameter as a documented alias, so existing packages and their `gameplay_hash` do not change; a removal lands at a format major or through the `[compat]`/script layer as it becomes available. The target column says what replaces each group. Package data and scripts cover most of them. Two groups are not pure package moves: `gravity_flip.transition` (kaenbyou's view rotation) and the camera/edge-warp view writes are runner/view work (Area A; the profile layer is #1160), and the save params need a save hook (#776/#797).
 
-The loader knows the marker (#1375): every move param is a `ParamSpec` legacy alias carrying the game that may use it and the issue that replaces it. `iwbtg pkg check` warns when a format-0 package whose id is not that game uses one, so a new package cannot pick up a one-game param silently. The set is pinned against this table by `builtins_legacy_aliases` in `crates/sim/tests/`.
+The loader knows the marker (#1375): every move param is a `ParamSpec` legacy alias carrying the game that may use it and the issue that replaces it. `iwbtg pkg check` warns when a package whose id is not that game uses one, in format 0 and in format 1 while the params are still accepted (#1510), so a new package cannot pick up a one-game param silently. The set is pinned against this table by `builtins_legacy_aliases` in `crates/sim/tests/`.
 
 ### `block` (4)
 

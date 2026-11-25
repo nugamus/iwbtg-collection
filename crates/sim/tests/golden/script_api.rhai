@@ -36,6 +36,18 @@ fn begin_step() {
 fn step() {
     let t = room_tick();
     let course = gm_eq(this.xstart, 400.0);
+    // Stored arrays (#1383): iterate and push/pop once, on the variable and on a local copy.
+    if t == 1.0 {
+        this.arr = [1.0, 2.0];
+        this.arr.push(3.0);
+        this.arr.pop();
+        let b = this.arr;
+        b.push(4.0);
+        b.pop();
+        let sum = 0.0;
+        for v in this.arr { sum += v; }
+        this.phase = this.phase + sum;
+    }
     if course {
         if t == 100.0 && tick() < 200.0 { room_restart(); }
         if t == 250.0 && gm_gt(tick(), 1200.0) { kill_kid(); }

@@ -166,7 +166,9 @@ Spawn caps: `instance_create` also counts toward at most 256 instances per event
 - `play_sound(string) -> ()` (can fail) (cost: 1): Plays a sound of the package once; `engine:<pack>/<id>` names a bundled pack sound. An unknown name is an error.
 - `point_direction(?, ?, ?, ?) -> float` (can fail) (cost: 1): Direction in degrees from (`x1`, `y1`) to (`x2`, `y2`), as GML.
 - `point_distance(?, ?, ?, ?) -> float` (can fail) (cost: 1): Distance between (`x1`, `y1`) and (`x2`, `y2`).
+- `pop(VarArray) -> ?` (can fail) (cost: 1): `a.pop()`: removes and returns the last element of a stored array, or `()` when it is empty. `this.pattern.pop()` writes the shorter array back through the variable; a local copy must be assigned back.
 - `pow(?, ?) -> float` (can fail) (cost: 1): `x` to the power `y` (software libm). There is no `**`.
+- `push(VarArray, ?) -> ()` (can fail) (cost: 1): `a.push(v)`: appends `v` to a stored array, at most 10,000 elements (a script error past that). `this.pattern.push(v)` writes the grown array back through the variable, like an index assignment; a local copy (`let a = this.pattern`) must be assigned back.
 - `radtodeg(?) -> float` (can fail) (cost: 1): Radians to degrees.
 - `random(?) -> float` (can fail) (cost: 1): A float from 0 up to `x`, from the run's one RNG.
 - `random_range(?, ?) -> float` (can fail) (cost: 1): A float between `a` and `b`, from the run's one RNG.

@@ -41,6 +41,9 @@ services:
       - no-new-privileges:true
     # The uid/gid the image creates; the named volume is seeded with that ownership.
     user: "10001:10001"
+    # Sized from auth.rs: at most HASH_PERMITS = 4 Argon2 hashes run at once, 4 x 19,456 KiB =
+    # 76 MiB, plus the runtime baseline and the per-request buffers. Raising HASH_PERMITS means
+    # raising this limit with it.
     mem_limit: 512m
     cpus: 2.0
     pids_limit: 256

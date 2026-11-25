@@ -34,6 +34,20 @@ fn a_particles_folder_round_trips() {
     assert!(back.contains("particles/fire.toml"), "the system survives unpack");
 }
 
+/// A medley package's room profiles are shipped like any other package file (#1486).
+#[test]
+fn a_physics_folder_round_trips() {
+    let mut files = demo();
+    files.insert("physics/fast.toml", b"[events]\n".to_vec()).unwrap();
+    let packed = pack(&files).unwrap();
+    let back = unpack(&packed).unwrap();
+    assert_eq!(back.content_hash(), files.content_hash());
+    assert!(
+        back.contains("physics/fast.toml"),
+        "the room profile survives unpack"
+    );
+}
+
 #[test]
 fn tests_are_left_out_and_crlf_packs_like_lf() {
     let files = demo();
@@ -81,6 +95,7 @@ fn the_allow_list() {
         ("rooms/stage1_01.toml", b""),
         ("rooms/stage1_01.tiles.toml", b""),
         ("particles/fire.toml", b""),
+        ("physics/fast.toml", b""),
         ("scripts/boss1.rhai", b""),
         ("sprites/kid.png", PNG),
         ("sprites/kid.toml", b""),
@@ -105,6 +120,8 @@ fn the_allow_list() {
         ("rooms/sub/a.toml", b""),
         ("particles/fire.rhai", b""),
         ("particles/sub/fire.toml", b""),
+        ("physics/fast.rhai", b""),
+        ("physics/sub/fast.toml", b""),
         ("sprites/kid.png", b"MZ not a png"),
         ("sounds/a.ogg", b"RIFF"),
         ("sprites/Kid.png", PNG),

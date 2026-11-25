@@ -24,10 +24,17 @@
 //!
 //! Session lookup for protected endpoints arrives with the first consumer (#162).
 //!
+//! Every hash holds [`ARGON2_M_COST`] KiB, so the endpoints are memory-bounded by [`HASH_PERMITS`]
+//! rather than by the request rate (#1505): a request waits up to [`HASH_WAIT`] for a slot and is
+//! then answered `429` with `Retry-After`. `compose.yaml` sizes the container from that number;
+//! change one and change the other.
+//!
 //! Registration collides on a canonical username or a lowercased email. The two cases answer with
 //! one message on purpose: a distinct "that email exists" would enumerate accounts. Login answers
 //! the same 401 for an unknown account and a wrong password, and hashes against a fixed salt in
 //! the unknown case so the response time does not reveal which happened.
+
+use std::time::Duration;
 
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::{Algorithm, Argon2, Params, Version};
@@ -40,6 +47,7 @@ use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::SqlitePool;
+use tokio::sync::{Semaphore, SemaphorePermit};
 
 use crate::AppState;
 
@@ -69,6 +77,17 @@ const SESSION_MAX_AGE_SECONDS: u64 = 30 * 24 * 60 * 60;
 
 /// Shown when the hidden token and the cookie disagree, or the cookie is missing.
 const CSRF_ERROR: &str = "Your form expired. Please try again.";
+
+/// How many Argon2 hashes may run at once (#1505). Each holds [`ARGON2_M_COST`] KiB, so this is
+/// what bounds the account endpoints' memory; `compose.yaml` sizes its limit from this number.
+const HASH_PERMITS: usize = 4;
+
+/// How long a request may wait for a hashing slot before it is asked to retry. Waiting absorbs a
+/// short burst without failing it; the timeout turns a sustained flood into `429`, not a queue.
+const HASH_WAIT: Duration = Duration::from_secs(2);
+
+/// The process-wide hashing bound; never closed, so acquiring only fails on the timeout.
+static HASHING: Semaphore = Semaphore::const_new(HASH_PERMITS);
 
 #[derive(Deserialize)]
 pub struct RegisterRequest {
@@ -114,12 +133,14 @@ struct ErrorBody {
     error: &'static str,
 }
 
-/// The four answers these handlers give. Every failure is a JSON `{"error": ...}`.
+/// The answers these handlers give. Every failure is a JSON `{"error": ...}`.
 #[derive(Debug)]
 pub(crate) enum AuthError {
     BadRequest(&'static str),
     Conflict,
     Unauthorized,
+    /// Every hashing slot stayed busy for [`HASH_WAIT`]; the caller should retry.
+    Busy,
     Internal,
 }
 
@@ -129,6 +150,7 @@ impl AuthError {
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::Conflict => StatusCode::CONFLICT,
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
+            Self::Busy => StatusCode::TOO_MANY_REQUESTS,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -138,6 +160,7 @@ impl AuthError {
             Self::BadRequest(error) => error,
             Self::Conflict => "username or email is already registered",
             Self::Unauthorized => "invalid username or password",
+            Self::Busy => "the sign-in queue is full; retry shortly",
             Self::Internal => "the account could not be processed",
         }
     }
@@ -145,10 +168,18 @@ impl AuthError {
 
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
+        let busy = matches!(self, Self::Busy);
         let body = Json(ErrorBody {
             error: self.message(),
         });
-        (self.status(), body).into_response()
+        let mut response = (self.status(), body).into_response();
+        if busy {
+            // One second is longer than a queued hash takes in practice.
+            response
+                .headers_mut()
+                .insert(header::RETRY_AFTER, HeaderValue::from_static("1"));
+        }
+        response
     }
 }
 
@@ -189,8 +220,12 @@ async fn create_account(
     let email = normalize_email(email)?;
     validate_password(&password)?;
 
-    // Hash before opening the transaction: this is the slow part and holds no database lock.
-    let password_hash = hash_off_thread(password).await?;
+    // Hash before opening the transaction: this is the slow part and holds no database lock. The
+    // permit is scoped to the hash, so database work does not occupy a hashing slot.
+    let password_hash = {
+        let _permit = hash_permit().await?;
+        hash_off_thread(password).await?
+    };
 
     let mut transaction = pool
         .begin()
@@ -232,7 +267,10 @@ async fn authenticate(
         Some((id, username, hash)) => (Some(hash), Some((id, username))),
         None => (None, None),
     };
-    let verified = verify_off_thread(password, password_hash).await?;
+    let verified = {
+        let _permit = hash_permit().await?;
+        verify_off_thread(password, password_hash).await?
+    };
 
     match (verified, account) {
         (true, Some((id, username))) => {
@@ -613,6 +651,22 @@ fn burn_password_time(password: &str) {
     }
 }
 
+/// One hashing slot, waiting at most [`HASH_WAIT`] before the request is told to retry.
+async fn hash_permit() -> Result<SemaphorePermit<'static>, AuthError> {
+    hash_permit_for(HASH_WAIT).await
+}
+
+/// [`hash_permit`] with an explicit wait, so a test can prove the refusal without sleeping for
+/// the production timeout.
+async fn hash_permit_for(wait: Duration) -> Result<SemaphorePermit<'static>, AuthError> {
+    match tokio::time::timeout(wait, HASHING.acquire()).await {
+        Ok(Ok(permit)) => Ok(permit),
+        // Nothing closes the semaphore; a closed one is a bug, not a burst.
+        Ok(Err(_)) => Err(AuthError::Internal),
+        Err(_) => Err(AuthError::Busy),
+    }
+}
+
 async fn hash_off_thread(password: String) -> Result<String, AuthError> {
     tokio::task::spawn_blocking(move || hash_password(&password))
         .await
@@ -654,7 +708,7 @@ fn database_error(error: sqlx::Error, context: &'static str) -> AuthError {
 
 #[cfg(test)]
 mod tests {
-    use super::{canonical_username, normalize_email, validate_password, validate_username};
+    use super::*;
 
     #[test]
     fn canonical_username_lowercases_and_joins_spaces() {
@@ -711,5 +765,38 @@ mod tests {
         assert!(validate_password("fourteen chars").is_err());
         assert!(validate_password("fifteen chars!!").is_ok());
         assert!(validate_password(&"x".repeat(1025)).is_err());
+    }
+
+    #[tokio::test]
+    async fn a_burst_beyond_the_permits_is_refused_after_the_wait() {
+        // Hold every slot, then ask with a short wait: the request is told to retry instead of
+        // queueing without a memory bound.
+        let held: Vec<_> = (0..HASH_PERMITS)
+            .map(|_| HASHING.try_acquire().expect("a free hashing slot"))
+            .collect();
+        let refused = match hash_permit_for(Duration::from_millis(10)).await {
+            Ok(_) => panic!("a hashing slot was free while all were held"),
+            Err(error) => error,
+        };
+        assert!(matches!(refused, AuthError::Busy));
+
+        drop(held);
+        assert!(
+            hash_permit_for(Duration::from_millis(10)).await.is_ok(),
+            "the slot is free again after the burst"
+        );
+    }
+
+    #[test]
+    fn a_busy_answer_is_429_with_retry_after() {
+        let response = AuthError::Busy.into_response();
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(
+            response
+                .headers()
+                .get(header::RETRY_AFTER)
+                .and_then(|value| value.to_str().ok()),
+            Some("1")
+        );
     }
 }
