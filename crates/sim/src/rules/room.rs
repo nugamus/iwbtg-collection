@@ -1,6 +1,22 @@
 //! Room change switches (docs/architecture/sim/rooms.md, register R16, R23).
 //!
 
+/// How a room request raised while a room transaction runs is kept and when it runs (R13/R23;
+/// #1174 A2c, #1294).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum NestedRequest {
+    /// One pending request: the last one raised wins, and the change runs after the transaction
+    /// (gm8, R13/R23).
+    #[default]
+    LastWins,
+    /// Every request is kept in raise order, and the changes run FIFO after the transaction
+    /// (standard).
+    Queue,
+    /// Every request is kept in raise order and left for the following ticks: the next one runs
+    /// at each tick's room-change row, so two requests cost two ticks.
+    QueueNextTick,
+}
+
 /// Rules for the room change sequence and game_restart.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RoomRules {
@@ -20,6 +36,8 @@ pub struct RoomRules {
     /// on the room being new (Design reading). No persistent room of the 20 games has creation
     /// code, so no game depends on it.
     pub creation_code_on_revisit: bool,
+    /// R23: how requests raised inside the room sequence are kept and when they run.
+    pub nested_request: NestedRequest,
 }
 
 impl Default for RoomRules {
@@ -29,6 +47,7 @@ impl Default for RoomRules {
             globals_survive_restart: false,
             restart_events: false,
             creation_code_on_revisit: true,
+            nested_request: NestedRequest::LastWins,
         }
     }
 }
@@ -44,5 +63,6 @@ mod tests {
         assert!(!r.globals_survive_restart);
         assert!(!r.restart_events);
         assert!(r.creation_code_on_revisit);
+        assert_eq!(r.nested_request, NestedRequest::LastWins);
     }
 }

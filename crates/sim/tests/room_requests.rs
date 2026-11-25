@@ -1,13 +1,14 @@
 //! Room requests around the sequence: nesting, load_game, the change bound, self-destroy in
 //! creation code and halting.
 
-use iwbtg_sim::def::RoomAction;
 use iwbtg_sim::def::testing::GameDefBuilder;
+use iwbtg_sim::def::{RoomAction, RoomId};
 use iwbtg_sim::error::SimError;
 use iwbtg_sim::events::EventKind;
 use iwbtg_sim::num::Real;
 use iwbtg_sim::room::{RoomRequest, StartPoint};
 use iwbtg_sim::rules::RunnerRules;
+use iwbtg_sim::rules::room::NestedRequest;
 use iwbtg_sim::trace::{TraceTable, Value as TV};
 use iwbtg_sim::world::{Flow, SimStatus};
 
@@ -57,12 +58,80 @@ fn nested_request_chains_after_the_sequence() {
         w.room, saved,
         "0 ticks in rLoad (kaenbyou tr-room-12 rows 136-137)"
     );
-    assert!(w.pending.is_none());
+    assert!(w.pending.is_empty());
     assert_eq!(ids_of(&w, &def, "kid").len(), 1);
     assert_eq!(
         w.engine.run.difficulty, 0,
         "LoadGame applies the save's difficulty (tr-room-12 row 137; it was 1 before)"
     );
+}
+
+/// #1294: a game where the placed `first` requests a room in Create and `second` requests one in
+/// Room Start, so one change into `from` raises two requests.
+fn two_request_rooms() -> (iwbtg_sim::def::GameDef, RoomId, RoomId, RoomId, RoomId) {
+    let mut b = GameDefBuilder::new("queue-timing");
+    let first = probe_kind(&mut b, "first", false);
+    let second = probe_kind(&mut b, "second", false);
+    let start = b.room(room("start", 50));
+    let from = b.room(room("from", 50));
+    let to_b = b.room(room("b", 50));
+    let to_c = b.room(room("c", 50));
+    b.start_room(start);
+    b.place(from, first, 0.0, 0.0).unwrap();
+    b.place(from, second, 2.0, 0.0).unwrap();
+    (b.build().unwrap(), start, from, to_b, to_c)
+}
+
+/// `QueueNextTick`: the two requests raised by one change stay queued and run on the following
+/// ticks, one per tick, in raise order. Each drain is one `perform_change`, which is what tick
+/// row 15 calls.
+#[test]
+fn queue_next_tick_drains_one_request_per_tick_in_raise_order() {
+    let (def, start_room, from, to_b, to_c) = two_request_rooms();
+    let mut rules = RunnerRules::default();
+    rules.room.nested_request = NestedRequest::QueueNextTick;
+    let mut host = Probe {
+        react: Some(Box::new(move |_, ctx, _, name, ev| {
+            match (name, ev) {
+                ("first", EventKind::Create) => ctx.request_room(RoomRequest::Goto(to_b)),
+                ("second", EventKind::RoomStart) => ctx.request_room(RoomRequest::Goto(to_c)),
+                _ => {}
+            }
+            Flow::Continue
+        })),
+        ..Probe::default()
+    };
+    let (mut w, r) = start(
+        &def,
+        &rules,
+        &mut host,
+        StartPoint::Room {
+            room: start_room,
+            difficulty: 0,
+        },
+    );
+    r.unwrap();
+    change(&def, &rules, &mut w, &mut host, RoomRequest::Goto(from)).unwrap();
+    assert_eq!(w.room, from, "the sequence itself only enters `from`");
+    assert_eq!(
+        w.pending.iter().collect::<Vec<_>>(),
+        [RoomRequest::Goto(to_b), RoomRequest::Goto(to_c)],
+        "both requests wait, in raise order"
+    );
+
+    let req = w.pending.take().expect("tick 1's request");
+    change(&def, &rules, &mut w, &mut host, req).unwrap();
+    assert_eq!(w.room, to_b, "the first request runs on the next tick");
+    assert_eq!(
+        w.pending.iter().collect::<Vec<_>>(),
+        [RoomRequest::Goto(to_c)],
+        "one request per tick"
+    );
+
+    let req = w.pending.take().expect("tick 2's request");
+    change(&def, &rules, &mut w, &mut host, req).unwrap();
+    assert_eq!(w.room, to_c, "the second runs on the tick after");
+    assert!(w.pending.is_empty(), "nothing left");
 }
 
 #[test]
@@ -211,7 +280,7 @@ fn tr_room_12_spends_no_tick_in_rload() {
     w.save = Some(s);
     // Tick 136, row 15: the warp's request.
     change(&def, &rules, &mut w, &mut host, RoomRequest::Goto(load)).unwrap();
-    assert!(w.pending.is_none(), "nothing left for tick 137");
+    assert!(w.pending.is_empty(), "nothing left for tick 137");
     assert_eq!(def.room(w.room).unwrap().name, after_room, "row 137's room");
     assert_eq!(w.engine.run.difficulty, as_u8(after_diff), "row 137's difficulty");
 }

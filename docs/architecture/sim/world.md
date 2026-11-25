@@ -120,7 +120,7 @@ pub struct World {
     pub rng: Rng,
     pub input: InputState,                // this tick's frame plus the direct-read latch
     pub views: [View; 8],
-    pub pending: Option<RoomRequest>,     // one slot, last request wins (Inferred, R13)
+    pub pending: RoomRequests,            // the requests waiting for row 15, in raise order (Inferred, R13)
     pub persistent_rooms: BTreeMap<RoomId, Vec<Instance>>,
     pub save: Option<SaveSlot>,           // None = "save file missing"
     pub sound: SoundState,                // hashed

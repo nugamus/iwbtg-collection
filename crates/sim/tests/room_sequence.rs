@@ -89,7 +89,7 @@ fn seven_step_order_with_probes() {
     assert_eq!(ids_of(&w, &o.def, "kid"), kid_id);
     assert!(ids_of(&w, &o.def, "ps").is_empty());
     assert_eq!(w.instances().len(), 3);
-    assert!(w.pending.is_none());
+    assert!(w.pending.is_empty());
     assert!(w.output.contains(&OutputEvent::Room(RoomOutput::Entered {
         from: Some(o.a),
         to: o.b
