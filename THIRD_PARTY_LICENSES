@@ -13,7 +13,7 @@ REUSE.toml, not by this file.
 
 Overview
 --------
-* MIT License (MIT): 483 crate(s)
+* MIT License (MIT): 484 crate(s)
 * Unicode License v3 (Unicode-3.0): 23 crate(s)
 * Apache License 2.0 (Apache-2.0): 18 crate(s)
 * BSD 3-Clause "New" or "Revised" License (BSD-3-Clause): 9 crate(s)
@@ -6981,6 +6981,7 @@ MIT License (MIT)
 ================================================================================
 Used by:
   - tokio-stream 0.1.19 <https://github.com/tokio-rs/tokio>
+  - tokio-util 0.7.20 <https://github.com/tokio-rs/tokio>
   - tokio 1.54.1 <https://github.com/tokio-rs/tokio>
 
 MIT License

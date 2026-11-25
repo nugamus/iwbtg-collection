@@ -92,6 +92,8 @@ async fn a_hashed_file_is_served_with_an_immutable_cache() {
     // Every file response says a dropped download may resume.
     assert_eq!(header(&headers, &header::ACCEPT_RANGES), "bytes");
     assert!(headers.get(&header::CONTENT_RANGE).is_none());
+    // The body streams, so the size still has to be declared up front.
+    assert_eq!(header(&headers, &header::CONTENT_LENGTH), "13");
     assert_eq!(body, b"package bytes");
 }
 
@@ -189,6 +191,11 @@ async fn a_range_request_returns_206_and_the_slice() {
             get_with(Some(dir.path().to_path_buf()), &uri, &[("range", range)]).await;
         assert_eq!(status, StatusCode::PARTIAL_CONTENT, "{range}");
         assert_eq!(body, expected, "{range}");
+        assert_eq!(
+            header(&headers, &header::CONTENT_LENGTH),
+            expected.len().to_string(),
+            "{range}"
+        );
         assert_eq!(header(&headers, &header::CONTENT_RANGE), content_range, "{range}");
         assert_eq!(header(&headers, &header::ACCEPT_RANGES), "bytes", "{range}");
         assert_eq!(
@@ -229,6 +236,7 @@ async fn an_invalid_or_multiple_range_is_a_full_200() {
             headers.get(&header::CONTENT_RANGE).is_none(),
             "{range} answered a range"
         );
+        assert_eq!(header(&headers, &header::CONTENT_LENGTH), "13", "{range}");
         assert_eq!(body, b"package bytes", "{range}");
     }
 }

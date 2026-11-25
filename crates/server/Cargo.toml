@@ -31,6 +31,9 @@ sha2 = { workspace = true }
 # SQLite (WAL, one file) with migrations at startup (docs/server.md, Database). No TLS runtime:
 # the driver is a local file. `macros` is only for `sqlx::migrate!`; no `query!` yet, so no
 # DATABASE_URL or `.sqlx` offline data is needed to build.
+# `ReaderStream` for `/files`: responses stream from disk instead of buffering a whole package
+# (docs/server.md, Game downloads; #1506). `axum::body::Body::from_stream` needs a `Stream`.
+tokio-util = { version = "0.7", features = ["io"] }
 sqlx = { version = "0.9", default-features = false, features = [
   "runtime-tokio",
   "sqlite",

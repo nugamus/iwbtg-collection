@@ -71,7 +71,7 @@ use crate::save::{self, Checkpoint, SaveSlot};
 use crate::stripped::PlayMode;
 use crate::view::{View, ViewPort};
 use crate::world::{
-    Ctx, EngineGlobals, Flow, InstId, Instance, SimStatus, SpawnInit, Value, World, assign_bare,
+    Ctx, EngineGlobals, Flow, InstId, Instance, SimStatus, SpawnInit, Value, World, assign_bare, set_element,
 };
 
 /// How many destroyed instance ids a [`RoomRequest::GotoAfterRemovals`] carries (#670).
@@ -1179,8 +1179,8 @@ fn holds(ctx: &Ctx, when: &RoomWhen) -> bool {
 ///
 /// A variable and its element 0 are one storage, so an index-0 write is the bare assignment
 /// ([`assign_bare`]: an array keeps its other elements, #1133) and no `<var>[0]` variable exists. A higher index makes the global a dense array: the scalar
-/// already stored becomes element 0, unwritten slots read 0, and [`Value::array_push`] enforces
-/// the `MAX_ARRAY_SIZE` cap.
+/// already stored becomes element 0, the skipped slots are unset ([`set_element`], the same rule
+/// the script setter uses, #1382), and the `MAX_ARRAY_SIZE` cap holds.
 fn set_global_element(ctx: &mut Ctx, var: &str, index: u32, value: &Value) -> Result<(), SimError> {
     let id = run_time_var(ctx.def, ctx.w, var)?;
     let index = usize::try_from(index)
@@ -1190,11 +1190,12 @@ fn set_global_element(ctx: &mut Ctx, var: &str, index: u32, value: &Value) -> Re
         return Ok(());
     }
     // Element 0 is the variable itself: keep the array, or carry the scalar into a new one. An
-    // unset global reads 0.
+    // unset global leaves element 0 unset too, like every other slot the write skips (#1382);
+    // under `gm8` it reads 0, under `standard` it is a script error.
     let first = match ctx.w.globals.get(&id) {
         Some(Value::Array(_)) => None,
         Some(v) => Some(v.assigned()),
-        None => Some(Value::Real(Real::ZERO)),
+        None => Some(Value::None),
     };
     let entry = ctx
         .w
@@ -1204,12 +1205,8 @@ fn set_global_element(ctx: &mut Ctx, var: &str, index: u32, value: &Value) -> Re
     if let Some(first) = first {
         *entry = Value::Array(vec![first]);
     }
-    while entry.as_array().is_some_and(|items| items.len() <= index) {
-        entry.array_push(Value::Real(Real::ZERO))?;
-    }
     let items = entry.as_array_mut().expect("an array made just above");
-    items[index] = value.assigned();
-    Ok(())
+    set_element(items, index, value.assigned())
 }
 
 /// The index of an indexed `set_global`: a whole number from 0 (OPEN: what GM does with a
@@ -1390,22 +1387,53 @@ mod tests {
         assert!(!w.var_names.contains_key("stage[1]"), "{:?}", w.var_names);
     }
 
-    /// The array is dense: an index past its end fills the new slots with 0.
+    /// The array is dense: the slots an index past its end skips are unset, the same rule a
+    /// script write follows (#1382).
     #[test]
-    fn an_indexed_write_grows_the_array_with_zeroes() {
+    fn an_indexed_write_leaves_the_skipped_slots_unset() {
         let sim = alias_sim(vec![indexed(2, 7.0)]);
         let w = sim.world();
         assert_eq!(
             w.globals.get(&VarId(0)),
             Some(&Value::Array(vec![
-                Value::Real(Real::ZERO),
-                Value::Real(Real::ZERO),
+                Value::None,
+                Value::None,
                 Value::Real(Real::new(7.0))
             ]))
         );
     }
 
-    /// A scalar already in the variable is element 0 of the array the first higher index makes.
+    /// A room write past the cap is the same `array cap exceeded` error a script write gives
+    /// (the shared helper enforces it, #1382).
+    #[test]
+    fn an_indexed_write_past_the_cap_is_the_array_cap_error() {
+        let mut b = GameDefBuilder::new("alias");
+        let mut room = RoomDef::new("stage", 800, 608);
+        let past_cap = u32::try_from(crate::world::MAX_ARRAY_SIZE).expect("the cap fits a u32");
+        room.on_create = vec![indexed(past_cap, 1.0)];
+        let stage = b.room(room);
+        b.start_room(stage);
+        let mut def = b.build().unwrap();
+        def.var_names.insert("stage".to_owned(), VarId(0));
+        let err = Sim::new(
+            Arc::new(def),
+            SimOptions {
+                start: StartPoint::Room {
+                    room: stage,
+                    difficulty: 0,
+                },
+                seed: 0,
+                dll_mode: DllMode::Model,
+                mode: PlayMode::Original,
+                map: None,
+            },
+        )
+        .expect_err("a room write past the cap halts");
+        assert!(err.to_string().contains("array cap exceeded"), "{err}");
+    }
+
+    /// A scalar already in the variable is element 0 of the array the first higher index makes;
+    /// only the slots the write skips are unset.
     #[test]
     fn a_higher_index_keeps_the_scalar_as_element_zero() {
         let sim = alias_sim(vec![bare(5.0), indexed(2, 7.0)]);
@@ -1414,7 +1442,7 @@ mod tests {
             w.globals.get(&VarId(0)),
             Some(&Value::Array(vec![
                 Value::Real(Real::new(5.0)),
-                Value::Real(Real::ZERO),
+                Value::None,
                 Value::Real(Real::new(7.0))
             ]))
         );

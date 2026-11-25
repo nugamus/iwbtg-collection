@@ -1,0 +1,9 @@
+#:schema ../../../../../../docs/format/schema/v0/room.schema.json
+# 2000 dots at equilibrium: 20 created and 20 destroyed every tick, each dot living 100 ticks.
+size = [800, 608]
+file_speed = 50
+views_enabled = false
+instances = [
+  { kind = "kid_start", x = 384, y = 544 },
+  { kind = "@churner", x = 400, y = 300, rate = 20, bullet = "@dot_churn" },
+]
