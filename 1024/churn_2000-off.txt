@@ -1,0 +1,9 @@
+perf package: C:/Users/Nugamus/AppData/Local/Temp/claude/p10-icu/perf-rooms/churn_2000
+perf window: 1000x760
+perf frames: 600 measured after 259 frames and 124 sim ticks of warmup
+perf scene: 1985 live instances, 1983 sprite entities
+perf ticks: 1168 sim ticks over 600 measured frames (44.6 ticks/s of measured time)
+perf frame period ms: p50 21.74 p95 178.21 p99 262.89 min 5.56 mean 43.67 max 361.01
+perf main-thread ms: p50 20.56 p95 177.09 p99 261.32 min 3.30 mean 42.24 max 358.26
+perf sim ms per frame: p50 14.48 p95 166.83 p99 248.87 min 0.00 mean 35.69 max 327.33
+perf not measured: GPU and render-submit time (no timestamp queries in the client); allocation counts and bytes (a counting global allocator needs `unsafe`, which the workspace forbids, and no counter crate is vendored); process memory (same rule). These are recorded as gaps, not estimated.
