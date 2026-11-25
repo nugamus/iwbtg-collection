@@ -1,4 +1,4 @@
-//! WP2 path tests (docs/plans/sim-core.md 3.1, M8). The traced case is
+//! Path tests (docs/architecture/sim/motion.md, M8). The traced case is
 //! `traces/rely-the-needle-4-2/t-evo-1.csv` (CLONE_SPEC motion U9, Confirmed (recorder)); the end
 //! actions are the M8 Design defaults.
 

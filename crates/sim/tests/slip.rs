@@ -1,4 +1,5 @@
-//! WP2 slip-block sequence (docs/plans/sim-core.md 3.2, 12): why N11 (`sign`) must follow N1
+//! Slip-block sequence (docs/architecture/sim/numbers.md; docs/architecture/testing.md): why N11
+//! (`sign`) must follow N1
 //! (compare). Slip blocks (CLONE_SPEC numbers, "Slip blocks", little-trap and rely player Step)
 //! add or subtract `slip = 0.2` while a direction is held and `hspeed` is inside `maxSpeed = 3`,
 //! and with no direction held subtract `slip * sign(hspeed)` while `hspeed != 0`.

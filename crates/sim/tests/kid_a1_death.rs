@@ -1,5 +1,5 @@
-//! WP5a.4: kid death, the Create-time engine actions, the play timer and the family presets
-//! (docs/plans/sim-core.md 5.3, kid/A1.md "Death", "Create", "Alarm 0").
+//! Kid death, the Create-time engine actions, the play timer and the family presets
+//! (docs/architecture/sim/kid.md; kid/A1.md "Death", "Create", "Alarm 0").
 
 use iwbtg_sim::def::physics::{
     DeathStep, JumpRulesDraft, KidEventsDraft, KidNumbersDraft, PhysicsProfileDraft,

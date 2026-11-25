@@ -1,5 +1,5 @@
-//! WP3 done-when: every query works on rect, precise, disk and diamond masks at unit scale,
-//! mirrored and at right angles (docs/plans/sim-core.md 3.4, WP3).
+//! Every query works on rect, precise, disk and diamond masks at unit scale, mirrored and at
+//! right angles (docs/architecture/sim/collision.md).
 //!
 //! Each shape is centred on its origin, and disk and diamond are symmetric under every mirror
 //! and right-angle turn, so the transformed solid set must be the unit set shifted by at most one

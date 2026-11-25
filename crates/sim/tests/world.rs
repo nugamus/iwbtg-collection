@@ -1,5 +1,6 @@
-//! WP1: world API (spawn, destroy, change_kind, first_of, kid, count_of), the collision phase
-//! and the state hash (docs/plans/sim-core.md 1, 2.3, 10.1, 12).
+//! World API (spawn, destroy, change_kind, first_of, kid, count_of), the collision phase and the
+//! state hash (docs/architecture/sim/world.md; docs/architecture/sim/tick.md;
+//! docs/architecture/sim/hash.md; docs/architecture/testing.md).
 
 use crate::support;
 

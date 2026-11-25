@@ -1,4 +1,4 @@
-//! WP8b: timing triggers at tick row 16 (docs/plans/sim-core.md 2.1 row 16, 9.4).
+//! Timing triggers at tick row 16 (docs/architecture/sim/tick.md).
 //!
 //! Hand-built worlds with probe kinds that change rooms; `run_end` is raised by hand, the way
 //! `game_clear` raises it. Sound is stubbed (`sound::tick` is WP10's stub), nothing else is.

@@ -1,5 +1,5 @@
-//! WP5a.3: the A1 kid's block and platform collision runs on hand-built worlds
-//! (docs/plans/sim-core.md 5.3, kid/A1.md "Collision with block", "Collision with platform").
+//! The A1 kid's block and platform collision runs on hand-built worlds
+//! (docs/architecture/sim/kid.md; kid/A1.md "Collision with block", "Collision with platform").
 //!
 //! The pipeline's solid put-back is not part of these tests: each starts with the kid at the
 //! position the put-back leaves it in (the previous position) and the speeds it had, then runs the

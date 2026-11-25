@@ -1,4 +1,4 @@
-//! WP10 (#20): the sound model and the DLL adapters (docs/plans/sim-core.md 7, register S1-S5).
+//! The sound model and the DLL adapters (#20; docs/architecture/sim/sound.md, register S1-S5).
 
 use iwbtg_sim::def::testing::GameDefBuilder;
 use iwbtg_sim::def::{GameDef, RoomDef, SoundDef, SoundId, SoundKind};

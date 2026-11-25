@@ -1,4 +1,4 @@
-//! WP6a (#233): the world built-in's pause, mute flag and play timer (docs/plans/sim-core.md 6.1).
+//! The world built-in's pause, mute flag and play timer (#233; docs/architecture/sim/builtins.md).
 
 use iwbtg_sim::builtins::{self, world};
 use iwbtg_sim::def::testing::GameDefBuilder;
