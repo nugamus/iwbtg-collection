@@ -44,15 +44,24 @@ pub const GLASS: Color = Color::srgba(12.0 / 255.0, 14.0 / 255.0, 22.0 / 255.0, 
 /// select dim `#110f21`). [`white`] picks its alphas against this.
 pub const BACKDROP: Color = Color::srgb_u8(0x14, 0x17, 0x34);
 
-/// Light glass of secondary buttons: `rgba(255,255,255,.12)`, as [`white`]`(0.12)`.
-pub const SECONDARY: Color = Color::srgba(1.0, 1.0, 1.0, 0.0253);
-/// Mod pills: `rgba(255,255,255,.16)`, as [`white`]`(0.16)`.
-pub const CHIP: Color = Color::srgba(1.0, 1.0, 1.0, 0.0381);
+/// Light glass of secondary buttons. The artboard's `rgba(255,255,255,.12)` renders at
+/// `white(0.0253)` with Bevy's linear blending, which is 1.47:1 against the ground; raised so the
+/// button's surface clears WCAG 1.4.11's 3:1 (3.05:1 over the lightest measured gameplay dim,
+/// 3.58:1 over the ground). A deliberate departure from the artboard for #1476, for the user's
+/// batch review.
+pub const SECONDARY: Color = Color::srgba(1.0, 1.0, 1.0, 0.14);
+/// Mod pills: the artboard's `rgba(255,255,255,.16)`, raised like [`SECONDARY`] so the pill
+/// clears 3:1 (3.34:1 over the gameplay dim, 3.95:1 over the ground; #1476).
+pub const CHIP: Color = Color::srgba(1.0, 1.0, 1.0, 0.16);
 
 /// A leaderboard row (`Leaderboard.dc.html`): `rgba(12,14,22,.62)`, as [`dark`]`(.., 0.62)` (#713).
 #[allow(dead_code, reason = "other players' rows: the Global scope (#484)")]
 pub const ROW: Color = Color::srgba(12.0 / 255.0, 14.0 / 255.0, 22.0 / 255.0, 0.8811);
-/// Your own leaderboard row: `rgba(255,255,255,.22)`, as [`white`]`(0.22)`.
+/// Your own leaderboard row: `rgba(255,255,255,.22)`, as [`white`]`(0.22)`. Kept at the
+/// artboard's value: it is a supplemental highlight, not the only cue (your row is wider, pops
+/// and carries your name and rank), and raising it to 3:1 would drop the `BEHIND` pace text on
+/// the row to 2.16:1, below the 3:1 large-text floor. WCAG 1.4.11's non-text requirement is met
+/// by those non-colour cues; see #1476.
 pub const ROW_YOU: Color = Color::srgba(1.0, 1.0, 1.0, 0.0618);
 /// One of your past runs on the Local leaderboard: `rgba(255,255,255,.07)`, as [`white`]`(0.07)`.
 pub const ROW_PAST: Color = Color::srgba(1.0, 1.0, 1.0, 0.0125);
@@ -60,14 +69,19 @@ pub const ROW_PAST: Color = Color::srgba(1.0, 1.0, 1.0, 0.0125);
 pub const ROW_NAME: Color = Color::srgb_u8(0xe3, 0xe5, 0xee);
 /// The three dots between a pinned leaderboard row and the rest.
 pub const GAP_DOT: Color = Color::srgb_u8(0x6a, 0x70, 0x88);
-/// A player with no avatar: the square and the mark on it.
-pub const AVATAR_EMPTY: Color = Color::srgb_u8(0x2a, 0x2e, 0x3d);
-pub const AVATAR_MARK: Color = Color::srgb_u8(0x5d, 0x63, 0x78);
-/// An input display arrow that is not held (`RunInfo.dc.html`): `rgba(255,255,255,.22)`, as
-/// [`white`]`(0.22)`.
-pub const KEY_IDLE: Color = Color::srgba(1.0, 1.0, 1.0, 0.0618);
-/// An input display button label that is not held: `rgba(255,255,255,.28)`, as [`white`]`(0.28)`.
-pub const BUTTON_IDLE: Color = Color::srgba(1.0, 1.0, 1.0, 0.0913);
+/// A player with no avatar: the square and the mark on it. The square clears 3:1 against the
+/// row and the measured grounds (3.19:1 at the lightest), and the mark clears 3:1 against the
+/// square (3.10:1); both were far below before #1476.
+pub const AVATAR_EMPTY: Color = Color::srgb_u8(0x6a, 0x70, 0x88);
+pub const AVATAR_MARK: Color = Color::srgb_u8(0xc9, 0xcd, 0xe0);
+/// An input display arrow that is not held (`RunInfo.dc.html`): the artboard's
+/// `rgba(255,255,255,.22)`, raised like [`SECONDARY`] so the idle state clears 3:1 (3.63:1 over
+/// the gameplay dim, 4.31:1 over the ground; #1476).
+pub const KEY_IDLE: Color = Color::srgba(1.0, 1.0, 1.0, 0.18);
+/// An input display button label that is not held: the artboard's `rgba(255,255,255,.28)`,
+/// raised like [`KEY_IDLE`] so the idle label clears 3:1 and reads as normal text (4.68:1 over
+/// the ground; #1476).
+pub const BUTTON_IDLE: Color = Color::srgba(1.0, 1.0, 1.0, 0.2);
 /// The glow under a held arrow (`drop-shadow(0 0 6px rgba(255,255,255,.55))`) and a held word
 /// (`text-shadow: 0 0 8px rgba(255,255,255,.5)`): peak alphas as [`white`], the blur in CSS px
 /// (`ui::glow::Glow`).
@@ -111,6 +125,12 @@ pub const MOD_PRACTICE: Color = AMBER;
 /// over the sum of best (`.22`), a chart's base line (`.18`) and the deaths-per-stage bars (`.38`,
 /// the stage with the most deaths `.85`). White over dark has no single Bevy alpha (#627), so
 /// these are the artboard's whites mixed over the ground in sRGB, as the browser blends them.
+///
+/// `RULE`, `RULE_STRONG` and `AXIS` are separators and chart axes only: the split values and
+/// bar lengths beside them carry the information, so WCAG 2.2 1.4.11's 3:1 non-text requirement
+/// does not apply (documented, not forced bright, in #1476). `BAR` is the value and passes 3:1
+/// (3.54:1 over the ground); its `TRACK` on the card is a redundant remainder, documented the
+/// same way.
 pub const RULE: Color = Color::srgb_u8(0x1c, 0x1e, 0x24);
 pub const RULE_STRONG: Color = Color::srgb_u8(0x41, 0x42, 0x48);
 pub const AXIS: Color = Color::srgb_u8(0x37, 0x39, 0x3e);
@@ -268,15 +288,14 @@ mod tests {
         assert!((artboard_alpha(0.5) - 0.782).abs() < 0.001);
     }
 
+    /// The artboard alphas that are still exact: the decorative row shades and the held glows.
+    /// `SECONDARY`, `CHIP`, `KEY_IDLE` and `BUTTON_IDLE` were raised for #1476 and are checked by
+    /// [`meaningful_surfaces_clear_non_text_contrast`] instead.
     #[test]
     fn white_glass_matches_the_browser_over_the_backdrop() {
         for (token, a) in [
-            (SECONDARY, 0.12),
-            (CHIP, 0.16),
             (ROW_YOU, 0.22),
             (ROW_PAST, 0.07),
-            (KEY_IDLE, 0.22),
-            (BUTTON_IDLE, 0.28),
             (KEY_GLOW, 0.55),
             (BUTTON_GLOW, 0.5),
         ] {
@@ -318,6 +337,83 @@ mod tests {
         let b = BACKDROP.to_srgba();
         let want = 0.28 * b.blue + 0.72 * 22.0 / 255.0;
         assert!((got.blue - want).abs() < 0.035, "{got:?} vs {want}");
+    }
+
+    /// Relative luminance of a linear colour (WCAG 2.2 definition; Bevy's linear channels are
+    /// already linearised sRGB).
+    fn luminance(c: Color) -> f32 {
+        let l = c.to_linear();
+        0.2126 * l.red + 0.7152 * l.green + 0.0722 * l.blue
+    }
+
+    /// What a translucent `top` renders to over `under`, with Bevy's linear blending.
+    fn rendered_over(top: Color, under: Color) -> Color {
+        let (t, u) = (top.to_linear(), under.to_linear());
+        let a = t.alpha;
+        let mix = |x: f32, y: f32| a * x + (1.0 - a) * y;
+        Color::from(LinearRgba::rgb(
+            mix(t.red, u.red),
+            mix(t.green, u.green),
+            mix(t.blue, u.blue),
+        ))
+    }
+
+    /// WCAG contrast ratio of two rendered colours.
+    fn contrast(a: Color, b: Color) -> f32 {
+        let (la, lb) = (luminance(a), luminance(b));
+        (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
+    }
+
+    /// The grounds the screens actually put these surfaces on: the m4 palette's ground, the
+    /// gameplay and select dims measured in the screenshots (`BACKDROP`'s doc), the card and the
+    /// select list's panel.
+    const SURFACE_GROUNDS: [Color; 5] = [
+        GROUND,
+        BACKDROP,
+        Color::srgb_u8(0x11, 0x0f, 0x21),
+        Color::srgb_u8(0x18, 0x20, 0x4a),
+        CARD_SOLID,
+    ];
+
+    /// WCAG 2.2 1.4.11: the interactive and meaningful surfaces clear 3:1 against every ground
+    /// they are drawn on (#1476). `ROW_YOU` is exempted in its doc: it is a supplemental
+    /// highlight with non-colour cues, and raising it would break its pace text.
+    #[test]
+    fn meaningful_surfaces_clear_non_text_contrast() {
+        for (name, token) in [
+            ("SECONDARY", SECONDARY),
+            ("CHIP", CHIP),
+            ("KEY_IDLE", KEY_IDLE),
+            ("BUTTON_IDLE", BUTTON_IDLE),
+        ] {
+            for ground in SURFACE_GROUNDS {
+                let ratio = contrast(rendered_over(token, ground), ground);
+                assert!(ratio >= 3.0, "{name} on {ground:?}: {ratio:.2}");
+            }
+        }
+        // The avatar's square and the mark on it each carry information.
+        for ground in SURFACE_GROUNDS {
+            let ratio = contrast(AVATAR_EMPTY, ground);
+            assert!(ratio >= 3.0, "AVATAR_EMPTY on {ground:?}: {ratio:.2}");
+        }
+        assert!(
+            contrast(AVATAR_MARK, AVATAR_EMPTY) >= 3.0,
+            "the mark on the avatar: {:.2}",
+            contrast(AVATAR_MARK, AVATAR_EMPTY)
+        );
+    }
+
+    /// The pairs documented as decorative stay below 3:1 by design; this pins why they are not
+    /// raised (they carry no information) and that the value graphics do pass.
+    #[test]
+    fn decorative_lines_and_the_bar_are_pinned() {
+        for (name, token) in [("RULE", RULE), ("RULE_STRONG", RULE_STRONG), ("AXIS", AXIS), ("TRACK", TRACK)] {
+            assert!(
+                contrast(token, GROUND) < 3.0,
+                "{name} is documented as decorative; raise the doc if it changes"
+            );
+        }
+        assert!(contrast(BAR, GROUND) >= 3.0, "the bar's value clears 3:1");
     }
 
     #[test]
