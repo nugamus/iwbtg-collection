@@ -1,0 +1,5 @@
+#:schema ../../../../../../docs/format/schema/v0/object.schema.json
+# A visible dot: the `decor` data base, so it has no behaviour or collision, just a sprite for
+# the draw path to carry.
+base = "decor"
+sprite = "dot"

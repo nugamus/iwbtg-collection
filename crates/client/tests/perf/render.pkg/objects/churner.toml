@@ -1,0 +1,4 @@
+#:schema ../../../../../../docs/format/schema/v0/object.schema.json
+# Creates `rate` churn dots every tick (`scripts/churner.rhai`).
+script = "churner"
+params = { rate = 0.0, bullet = "@dot_churn" }
