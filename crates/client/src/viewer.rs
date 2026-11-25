@@ -93,6 +93,8 @@ pub struct Viewer {
     accum: f64,
     /// Set when the re-sim no longer matches the replay's recorded hashes.
     error: Option<String>,
+    /// Clear the sign box on the next update (opening, closing or scrubbing backward).
+    clear_sign: bool,
     ui: Option<Ui>,
 }
 
@@ -234,9 +236,15 @@ impl ViewerSim {
 #[derive(clap::Args, Debug, Clone, Copy, Default)]
 pub struct ViewerArgs {
     /// Screenshot checks: store a short run of this package, open it in the viewer and scrub to
-    /// its middle.
-    #[arg(long, hide = true)]
-    pub viewer_preview: bool,
+    /// this percent of it (default 50).
+    #[arg(
+        long,
+        hide = true,
+        value_name = "PERCENT",
+        num_args = 0..=1,
+        default_missing_value = "50"
+    )]
+    pub viewer_preview: Option<u8>,
 }
 
 /// The viewer's place in the module list (main.rs): its flags and plugin.
@@ -257,7 +265,7 @@ impl crate::registration::ClientModule for Registration {
 }
 
 pub struct ViewerPlugin {
-    preview: bool,
+    preview: Option<u8>,
 }
 
 impl Plugin for ViewerPlugin {
@@ -266,7 +274,7 @@ impl Plugin for ViewerPlugin {
             .add_observer(scrub_click)
             .add_systems(
                 Update,
-                (preview, keys, close, drive)
+                (preview, keys, close, clear_sign, drive)
                     .chain()
                     .before(crate::view::follow_view)
                     .in_set(InRun),
@@ -275,8 +283,11 @@ impl Plugin for ViewerPlugin {
                 Update,
                 (ensure_ui, sync_ui).chain().in_set(InRun),
             );
-        if self.preview {
-            app.init_resource::<Preview>();
+        if let Some(percent) = self.preview {
+            app.insert_resource(Preview {
+                percent: percent.min(100),
+                stage: 0,
+            });
         }
         // Leaving the page (Back, Retry, the run closing) puts the live sim back first.
         app.add_systems(OnExit(RunScreen::Results), close_on_exit);
@@ -360,6 +371,7 @@ fn open_from(world: &mut World, store: &Store, name: &str) {
             rate,
             playing: true,
             speed: 2,
+            clear_sign: true,
             ..default()
         };
     }
@@ -488,15 +500,21 @@ fn keys(keys: Res<ButtonInput<KeyCode>>, mut viewer: ResMut<Viewer>) {
     }
 }
 
+/// Clears the sign box when a viewer opened, closed or scrubbed backward, so text from a tick
+/// the playhead is no longer at does not stay up.
+fn clear_sign(mut outputs: crate::view::output::Outputs, mut viewer: ResMut<Viewer>) {
+    if std::mem::take(&mut viewer.clear_sign) {
+        outputs.clear_sign();
+    }
+}
+
 /// Applies a pending seek and advances the replayed sim at the chosen speed.
 pub(crate) fn drive(
     time: Res<Time>,
     mut game: NonSendMut<Game>,
     mut viewing: Option<NonSendMut<ViewerSim>>,
     mut viewer: ResMut<Viewer>,
-    mut audio: ResMut<crate::audio::Queue>,
-    mut shake: ResMut<crate::audio::Shake>,
-    mut transition: Option<ResMut<crate::view::transition::Transition>>,
+    mut outputs: crate::view::output::Outputs,
 ) {
     if !viewer.open {
         return;
@@ -504,15 +522,11 @@ pub(crate) fn drive(
     let Some(viewing) = viewing.as_deref_mut() else {
         return;
     };
-    let mut drain = |output: &[OutputEvent], audible: bool| {
-        crate::output::drain(
-            output,
-            &mut audio,
-            &mut shake,
-            transition.as_deref_mut(),
-            audible,
-        );
-    };
+    // A backward seek replays ticks the sign box never showed in that order; start it clean.
+    if viewer.seek.is_some_and(|target| target < viewer.tick) {
+        outputs.clear_sign();
+    }
+    let mut drain = |output: &[OutputEvent], audible: bool| outputs.drain(output, audible);
     let mut tick = viewer.tick;
     if let Some(target) = viewer.seek.take() {
         viewer.playing = false;
@@ -582,6 +596,7 @@ fn close_now(world: &mut World, cover_results: bool) {
         viewer.close = false;
         viewer.seek = None;
         viewer.error = None;
+        viewer.clear_sign = was_open;
         (was_open, viewer.ui.take())
     };
     if let Some(ui) = ui {
@@ -819,10 +834,12 @@ fn sync_ui(
     }
 }
 
-/// The `--viewer-preview` state: 0 wants the results screen, 1 opens the stored replay there.
-#[derive(Resource, Default)]
+/// The `--viewer-preview` state: 0 wants the results screen, 1 opens the stored replay there and
+/// scrubs to `percent` of it.
+#[derive(Resource)]
 struct Preview {
     stage: u8,
+    percent: u8,
 }
 
 /// `--viewer-preview`: go to the results screen (whose `OnEnter` hides the game), then store a
@@ -839,11 +856,12 @@ fn preview(world: &mut World) {
             }
         }
         1 if shell::run_screen(world) == Some(RunScreen::Results) => {
+            let percent = u64::from(world.resource::<Preview>().percent);
             world.resource_mut::<Preview>().stage = 2;
             if let Some(name) = preview_replay(world) {
                 open(world, &name);
-                let middle = world.resource::<Viewer>().total / 2;
-                world.resource_mut::<Viewer>().seek = Some(middle);
+                let at = world.resource::<Viewer>().total * percent / 100;
+                world.resource_mut::<Viewer>().seek = Some(at);
             }
         }
         _ => {}

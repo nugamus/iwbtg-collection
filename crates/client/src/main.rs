@@ -19,7 +19,6 @@
 
 mod input;
 mod logging;
-mod output;
 mod registration;
 mod render_fix;
 mod settings;
