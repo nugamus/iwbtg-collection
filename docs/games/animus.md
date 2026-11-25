@@ -6,12 +6,12 @@ name: "I wanna be the Animus"
 slug: animus
 source: https://delicious-fruit.com/game/10550
 engine: gm8
-status: unknown
-objects_total: null
-objects_specced: null
-objects_scripted: null
-traces_passing: null
-traces_total: null
+status: converted
+objects_total: 359
+objects_specced: 75
+objects_scripted: 284
+traces_passing: 1
+traces_total: 1
 ---
 
 # I wanna be the Animus (`animus`)

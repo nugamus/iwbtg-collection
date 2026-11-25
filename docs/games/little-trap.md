@@ -6,12 +6,12 @@ name: "I wanna Little Trap"
 slug: little-trap
 source: https://delicious-fruit.com/game/21365
 engine: gm8
-status: unknown
-objects_total: null
-objects_specced: null
-objects_scripted: null
-traces_passing: null
-traces_total: null
+status: converted
+objects_total: 230
+objects_specced: 63
+objects_scripted: 167
+traces_passing: unknown
+traces_total: unknown
 ---
 
 # I wanna Little Trap (`little-trap`)

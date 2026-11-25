@@ -6,12 +6,12 @@ name: "I wanna deride Kotaro- from aslant"
 slug: deride-kotaro-from-aslant
 source: https://delicious-fruit.com/game/18404
 engine: gm8
-status: unknown
-objects_total: null
-objects_specced: null
-objects_scripted: null
-traces_passing: null
-traces_total: null
+status: converted
+objects_total: 153
+objects_specced: 58
+objects_scripted: 95
+traces_passing: unknown
+traces_total: unknown
 ---
 
 # I wanna deride Kotaro- from aslant (`deride-kotaro-from-aslant`)

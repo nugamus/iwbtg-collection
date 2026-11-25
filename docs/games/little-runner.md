@@ -6,12 +6,12 @@ name: "I wanna be the Little runner"
 slug: little-runner
 source: https://delicious-fruit.com/game/10848
 engine: gm8
-status: unknown
-objects_total: null
-objects_specced: null
-objects_scripted: null
-traces_passing: null
-traces_total: null
+status: converted
+objects_total: 412
+objects_specced: 44
+objects_scripted: 368
+traces_passing: unknown
+traces_total: unknown
 ---
 
 # I wanna be the Little runner (`little-runner`)

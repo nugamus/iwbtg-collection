@@ -6,12 +6,12 @@ name: "I wanna be the Poronkusema"
 slug: poronkusema
 source: https://delicious-fruit.com/game/20975
 engine: gm8
-status: unknown
-objects_total: null
-objects_specced: null
-objects_scripted: null
-traces_passing: null
-traces_total: null
+status: converted
+objects_total: 228
+objects_specced: 53
+objects_scripted: 175
+traces_passing: unknown
+traces_total: unknown
 ---
 
 # I wanna be the Poronkusema (`poronkusema`)
