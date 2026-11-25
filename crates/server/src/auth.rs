@@ -24,6 +24,12 @@
 //!
 //! Session lookup for protected endpoints arrives with the first consumer (#162).
 //!
+//! Sign-in and registration are also rate limited per client (#161). The key is
+//! `CF-Connecting-IP`; `X-Forwarded-For` is never read. A login allows 10 attempts per 5 minutes
+//! per address and per account, a registration 5 per hour per address; over the window the answer
+//! is 429 with `Retry-After`. That caps the request rate; the hashing semaphore below caps the
+//! work in flight, and neither substitutes for the other.
+//!
 //! Every hash holds [`ARGON2_M_COST`] KiB, so the endpoints are memory-bounded by [`HASH_PERMITS`]
 //! rather than by the request rate (#1505): a request waits up to [`HASH_WAIT`] for a slot and is
 //! then answered `429` with `Retry-After`. `compose.yaml` sizes the container from that number;
@@ -50,6 +56,7 @@ use sqlx::SqlitePool;
 use tokio::sync::{Semaphore, SemaphorePermit};
 
 use crate::AppState;
+use crate::rate_limit::ClientIp;
 
 /// The documented OWASP parameters (docs/server.md, Accounts and sign-in).
 const ARGON2_M_COST: u32 = 19_456;
@@ -77,6 +84,15 @@ const SESSION_MAX_AGE_SECONDS: u64 = 30 * 24 * 60 * 60;
 
 /// Shown when the hidden token and the cookie disagree, or the cookie is missing.
 const CSRF_ERROR: &str = "Your form expired. Please try again.";
+
+/// Sign-in attempts per client address, and separately per account identifier, in the window
+/// (docs/server.md, Security rules, rule 1; #161).
+const LOGIN_LIMIT: u32 = 10;
+const LOGIN_WINDOW: Duration = Duration::from_secs(5 * 60);
+
+/// Registrations per client address: one address creating many accounts is the abuse case.
+const REGISTER_LIMIT: u32 = 5;
+const REGISTER_WINDOW: Duration = Duration::from_secs(60 * 60);
 
 /// How many Argon2 hashes may run at once (#1505). Each holds [`ARGON2_M_COST`] KiB, so this is
 /// what bounds the account endpoints' memory; `compose.yaml` sizes its limit from this number.
@@ -141,6 +157,8 @@ pub(crate) enum AuthError {
     Unauthorized,
     /// Every hashing slot stayed busy for [`HASH_WAIT`]; the caller should retry.
     Busy,
+    /// The client's request window is exhausted; the value is the Retry-After seconds (#161).
+    RateLimited(u64),
     Internal,
 }
 
@@ -150,7 +168,7 @@ impl AuthError {
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::Conflict => StatusCode::CONFLICT,
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
-            Self::Busy => StatusCode::TOO_MANY_REQUESTS,
+            Self::Busy | Self::RateLimited(_) => StatusCode::TOO_MANY_REQUESTS,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -161,33 +179,91 @@ impl AuthError {
             Self::Conflict => "username or email is already registered",
             Self::Unauthorized => "invalid username or password",
             Self::Busy => "the sign-in queue is full; retry shortly",
+            Self::RateLimited(_) => "too many requests; retry shortly",
             Self::Internal => "the account could not be processed",
+        }
+    }
+
+    fn retry_after(&self) -> Option<u64> {
+        match self {
+            // One second is longer than a queued hash takes in practice.
+            Self::Busy => Some(1),
+            Self::RateLimited(seconds) => Some(*seconds),
+            _ => None,
         }
     }
 }
 
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
-        let busy = matches!(self, Self::Busy);
+        let retry_after = self.retry_after();
         let body = Json(ErrorBody {
             error: self.message(),
         });
         let mut response = (self.status(), body).into_response();
-        if busy {
-            // One second is longer than a queued hash takes in practice.
-            response
-                .headers_mut()
-                .insert(header::RETRY_AFTER, HeaderValue::from_static("1"));
+        if let Some(seconds) = retry_after {
+            response.headers_mut().insert(
+                header::RETRY_AFTER,
+                HeaderValue::from_str(&seconds.to_string()).expect("ASCII seconds"),
+            );
         }
         response
     }
 }
 
+/// Copies `Retry-After` onto an HTML response rendered from an error.
+fn with_retry_after(mut response: Response, error: &AuthError) -> Response {
+    if let Some(seconds) = error.retry_after() {
+        response.headers_mut().insert(
+            header::RETRY_AFTER,
+            HeaderValue::from_str(&seconds.to_string()).expect("ASCII seconds"),
+        );
+    }
+    response
+}
+
+/// Counts one sign-in against both the client address and the account identifier.
+fn limit_login(state: &AppState, ip: &str, login: &str) -> Result<(), AuthError> {
+    state
+        .limiter
+        .check(&format!("login-ip:{ip}"), LOGIN_LIMIT, LOGIN_WINDOW)
+        .and_then(|()| {
+            state.limiter.check(
+                &format!("login-account:{}", account_key(login)),
+                LOGIN_LIMIT,
+                LOGIN_WINDOW,
+            )
+        })
+        .map_err(AuthError::RateLimited)
+}
+
+/// Counts one registration against the client address.
+fn limit_register(state: &AppState, ip: &str) -> Result<(), AuthError> {
+    state
+        .limiter
+        .check(&format!("register-ip:{ip}"), REGISTER_LIMIT, REGISTER_WINDOW)
+        .map_err(AuthError::RateLimited)
+}
+
+/// The account half of the login key: canonical for a username, lowercased for an email, capped
+/// so a huge identifier cannot become a huge map key.
+fn account_key(login: &str) -> String {
+    let login = login.trim();
+    let key = if login.contains('@') {
+        login.to_ascii_lowercase()
+    } else {
+        canonical_username(login)
+    };
+    key.chars().take(64).collect()
+}
+
 /// `POST /auth/register` (docs/server.md, Accounts and sign-in).
 pub(crate) async fn register(
     State(state): State<AppState>,
+    ClientIp(ip): ClientIp,
     Json(request): Json<RegisterRequest>,
 ) -> Result<(StatusCode, Json<AccountResponse>), AuthError> {
+    limit_register(&state, &ip)?;
     let account = create_account(
         &state.pool,
         request.username,
@@ -201,9 +277,12 @@ pub(crate) async fn register(
 /// `POST /auth/login`, JSON, setting the session cookie like the form does.
 pub(crate) async fn login(
     State(state): State<AppState>,
+    ClientIp(ip): ClientIp,
     Json(request): Json<LoginRequest>,
 ) -> Result<Response, AuthError> {
-    let (account, cookie) = authenticate(&state.pool, request.login.trim(), request.password).await?;
+    let login = request.login.trim();
+    limit_login(&state, &ip, login)?;
+    let (account, cookie) = authenticate(&state.pool, login, request.password).await?;
     let mut response = Json(account).into_response();
     set_cookie(&mut response, &cookie);
     Ok(response)
@@ -343,11 +422,15 @@ pub(crate) async fn login_page() -> Response {
 /// `POST /register`: the form path through the same account rules as the JSON endpoint.
 pub(crate) async fn register_form(
     State(state): State<AppState>,
+    ClientIp(ip): ClientIp,
     headers: HeaderMap,
     Form(form): Form<RegisterForm>,
 ) -> Response {
     if !csrf_matches(&headers, &form.csrf) {
         return csrf_rejection(render_register);
+    }
+    if let Err(error) = limit_register(&state, &ip) {
+        return form_error(render_register, error);
     }
     match create_account(&state.pool, form.username, form.email.as_deref(), form.password).await {
         Ok(account) => html_page(
@@ -359,25 +442,22 @@ pub(crate) async fn register_form(
             ),
             None,
         ),
-        Err(error) => {
-            let token = random_hex(32);
-            html_page(
-                error.status(),
-                render_register(Some(error.message()), &token),
-                Some(csrf_cookie(&token)),
-            )
-        }
+        Err(error) => form_error(render_register, error),
     }
 }
 
 /// `POST /login`: credentials plus a new session cookie.
 pub(crate) async fn login_form(
     State(state): State<AppState>,
+    ClientIp(ip): ClientIp,
     headers: HeaderMap,
     Form(form): Form<LoginForm>,
 ) -> Response {
     if !csrf_matches(&headers, &form.csrf) {
         return csrf_rejection(render_login);
+    }
+    if let Err(error) = limit_login(&state, &ip, &form.login) {
+        return form_error(render_login, error);
     }
     match authenticate(&state.pool, form.login.trim(), form.password).await {
         Ok((account, cookie)) => html_page(
@@ -385,15 +465,19 @@ pub(crate) async fn login_form(
             notice_page(&format!("Signed in as {}.", account.username)),
             Some(cookie),
         ),
-        Err(error) => {
-            let token = random_hex(32);
-            html_page(
-                error.status(),
-                render_login(Some(error.message()), &token),
-                Some(csrf_cookie(&token)),
-            )
-        }
+        Err(error) => form_error(render_login, error),
     }
+}
+
+/// Re-renders a form with the error message (and a fresh CSRF token) and the error's headers.
+fn form_error(render: fn(Option<&str>, &str) -> String, error: AuthError) -> Response {
+    let token = random_hex(32);
+    let response = html_page(
+        error.status(),
+        render(Some(error.message()), &token),
+        Some(csrf_cookie(&token)),
+    );
+    with_retry_after(response, &error)
 }
 
 /// A failed CSRF check gets a fresh form (and token), never a credential check.
