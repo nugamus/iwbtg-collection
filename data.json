@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-25T15:35:10Z",
+ "generated_at": "2026-11-25T15:51:41Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -57,14 +57,14 @@
    "title": "2 · Format & pipeline",
    "name": "Format & pipeline",
    "state": "open",
-   "open": 36,
-   "closed": 115,
+   "open": 35,
+   "closed": 116,
    "total": 151,
-   "pct_closed": 76.2,
-   "size_points": 108,
+   "pct_closed": 76.8,
+   "size_points": 105,
    "sizes": {
     "size:S": 11,
-    "size:M": 19,
+    "size:M": 18,
     "size:L": 5,
     "unknown": 1
    },
@@ -103,13 +103,13 @@
    "title": "4 · First playable",
    "name": "First playable",
    "state": "open",
-   "open": 9,
-   "closed": 44,
+   "open": 8,
+   "closed": 45,
    "total": 53,
-   "pct_closed": 83.0,
-   "size_points": 11,
+   "pct_closed": 84.9,
+   "size_points": 10,
    "sizes": {
-    "size:S": 5,
+    "size:S": 4,
     "size:M": 2,
     "size:L": 0,
     "unknown": 2
@@ -263,14 +263,14 @@
  "activity": {
   "totals": {
    "issues": 932,
-   "open": 279,
-   "closed": 653,
-   "pct_closed": 70.1
+   "open": 277,
+   "closed": 655,
+   "pct_closed": 70.3
   },
-  "open_prs": 4,
+  "open_prs": 2,
   "process": {
-   "agent-ready": 129,
-   "in-progress": 13,
+   "agent-ready": 127,
+   "in-progress": 11,
    "needs-user": 30,
    "triage": 47,
    "blocked": 25,
@@ -323,6 +323,35 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 1530,
+    "title": "Script API: paths (path_start, path_end, path properties) (#776, census rank 14)",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1530",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "in-progress"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-25T15:49:39Z",
+    "closed_at": "2026-11-25T15:49:39Z",
+    "created_at": "2026-11-25T10:07:47Z"
+   },
+   {
+    "number": 1398,
+    "title": "Showcase package is not in pkg fmt layout (3 room files), and nothing checks it",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1398",
+    "labels": [
+     "agent-ready",
+     "size:S"
+    ],
+    "phase": "4 · First playable",
+    "updated_at": "2026-11-25T15:51:38Z",
+    "closed_at": "2026-11-25T15:46:38Z",
+    "created_at": "2026-11-24T17:45:23Z"
+   },
    {
     "number": 162,
     "title": "Submissions: endpoint and replay storage",
@@ -417,36 +446,6 @@
     "updated_at": "2026-11-25T13:11:03Z",
     "closed_at": "2026-11-25T13:02:11Z",
     "created_at": "2026-11-20T09:06:56Z"
-   },
-   {
-    "number": 1548,
-    "title": "dashboard: per-game implementation bars from repo data",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1548",
-    "labels": [
-     "triage",
-     "in-progress"
-    ],
-    "phase": null,
-    "updated_at": "2026-11-25T12:44:24Z",
-    "closed_at": "2026-11-25T12:44:24Z",
-    "created_at": "2026-11-25T11:57:28Z"
-   },
-   {
-    "number": 1234,
-    "title": "Docs: sim rooms page — name the explicit Camera preset in the views section (#1189 E2a)",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1234",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:sim",
-     "area:docs"
-    ],
-    "phase": "3 · Sim fidelity",
-    "updated_at": "2026-11-25T12:34:15Z",
-    "closed_at": "2026-11-25T12:31:25Z",
-    "created_at": "2026-11-21T09:55:59Z"
    }
   ],
   "in_progress": [
@@ -466,36 +465,6 @@
     "updated_at": "2026-11-25T15:33:58Z",
     "closed_at": null,
     "created_at": "2026-11-25T15:32:27Z"
-   },
-   {
-    "number": 1398,
-    "title": "Showcase package is not in pkg fmt layout (3 room files), and nothing checks it",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1398",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "in-progress"
-    ],
-    "phase": "4 · First playable",
-    "updated_at": "2026-11-25T15:23:46Z",
-    "closed_at": null,
-    "created_at": "2026-11-24T17:45:23Z"
-   },
-   {
-    "number": 1530,
-    "title": "Script API: paths (path_start, path_end, path properties) (#776, census rank 14)",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1530",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "in-progress"
-    ],
-    "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-25T15:22:07Z",
-    "closed_at": null,
-    "created_at": "2026-11-25T10:07:47Z"
    },
    {
     "number": 1294,
@@ -544,6 +513,38 @@
     "updated_at": "2026-11-25T11:19:32Z",
     "closed_at": null,
     "created_at": "2026-11-02T11:30:26Z"
+   },
+   {
+    "number": 196,
+    "title": "UI translation files, English and Japanese",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/196",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-25T00:40:35Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T12:41:04Z"
+   },
+   {
+    "number": 106,
+    "title": "Accessibility: screen-shake toggle, colorblind-friendly UI, audio cues",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/106",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-24T22:25:29Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T11:55:29Z"
    }
   ],
   "needs_user": [
@@ -730,7 +731,7 @@
     "created_at": "2026-11-02T11:31:41Z"
    }
   ],
-  "closed_7d": 268,
+  "closed_7d": 270,
   "opened_7d": 337,
   "burnup": [
    {
@@ -751,7 +752,7 @@
    {
     "week": "2026-11-30",
     "created": 932,
-    "closed": 653
+    "closed": 655
    }
   ]
  },
@@ -1855,7 +1856,7 @@
   }
  },
  "script_api": {
-  "registered_functions": 77,
+  "registered_functions": 79,
   "planned_groups": [
    {
     "name": "paths (14)",
