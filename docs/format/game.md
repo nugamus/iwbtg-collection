@@ -11,7 +11,7 @@ version = "1.0.0"                # version of our port (semver)
 source_version = "4.2"           # version of the original we ported
 engine_pack = "yuuutu"           # engine pack in games/_engines/, optional
 ruleset = "gm8@0"                # ruleset and built-in revision (decision 0005); format 0 wrote engine_rev = 0
-runner = "gm80"                  # gm80 | gm81: the original's runner, provenance (same simulation rules)
+runner = "gm80"                  # gm80 | gm81 | gms: the original's runner, provenance (GMS keeps the GM8 defaults until research#179)
 physics = "physics.toml"
 start_room = "title"
 tick_rate = 50                   # default room speed; rooms may override
@@ -143,7 +143,7 @@ Field rules:
 | `engine_pack` | no | Engine pack id ([engine packs](engine.md)); the pack must be bundled. |
 | `ruleset` | format 1: yes | `<name>@<rev>`: the ruleset and its built-in behavior revision ([architecture](../architecture/replay.md#versions), [below](#ruleset-and-compatibility-profile)). Format 0 may leave it out. |
 | `engine_rev` | format 0: yes | The format-0 spelling of the built-in revision. Format 1 refuses it: the revision is in `ruleset` ([v1](v1.md)). |
-| `runner` | yes | `gm80` or `gm81`. Records the original's runner for provenance: both use the same simulation rules (research#15). A difference found later becomes a `RunnerRules` field. |
+| `runner` | yes | `gm80`, `gm81` or `gms` ([the runner field](#the-runner-field)). Records the original's runner for provenance: all three use the same simulation rules (research#15), and GMS keeps the GM8 defaults until research#179. A difference found later becomes a `RunnerRules` field. |
 | `physics` | yes | Path to the physics profile. |
 | `start_room` | yes | First room. |
 | `tick_rate` | no | Default room speed, 50 if absent. |
@@ -164,6 +164,12 @@ Field rules:
 | `[key_art]` | no | `image` (the game's key art) and `maps` (per-map overrides, map id to path). See [Key art](#key-art). |
 | `[controls]` | no | A label for each generic extra action the game uses: `extra1` to `extra4`, one line of 1 to 24 characters ("Teleport", "Nudge left"). The client shows a game's labels where the player binds keys and in the HUD's input display, and shows only the extra actions a game labels. Every extra action the game reads (its physics `events.keys`, its scripts) should have one. Labels are cosmetic: they are not in the gameplay hash. |
 | `[[third_party]]` | yes, one per file that is not the creator's own work or ours | `path`, `what`, `owner`, `license`, `status`. Commercial music, Kayin's sprites and engine assets all go here. |
+
+## The runner field
+
+`runner` records the original engine for provenance. It accepts `gm80`, `gm81` and `gms`. All three use the same simulation rules, and GMS keeps the GM8 defaults until research#179 settles its rule values; a difference found later becomes a `RunnerRules` field, never a branch in built-ins.
+
+Format 0 predates the `gms` value, so the frozen `docs/format/schema/v0/game.schema.json` deliberately stays without it: #982 added `gms` to `RunnerSchema` and `docs/format/schema/v1/` only. A format-0 package with `runner = "gms"` loads, but an editor pointed at the v0 schema will not complete it. Do not unfreeze v0 to add the value; [v1](v1.md) records the same decision.
 
 ## Ruleset and compatibility profile
 
