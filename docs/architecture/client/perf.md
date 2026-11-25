@@ -134,10 +134,53 @@ No budget is agreed with the user yet. As a starting point for the native refere
   need the same flags behind the page (or a Playwright-driven build) that this client does not
   have.
 
+## Draw-path attribution (#1524)
+
+`--perf` also reports where the draw path's time goes: `view::sync_instances` times the draw order
+(`order::instance_z`), the per-instance loop, the interpolation lookup inside it and the removal
+pass, and `view::tick` times the previous-position snapshot.
+
+The answer is not what "main-thread minus sim" suggested. At 5,005 stable instances (interpolation
+off, means): main-thread 8.63 ms, sim 3.23 ms, draw path **1.66 ms** — order 0.29, sprite sync
+1.05, removal 0.32. The rest of the main schedule (2.00 / 2.32 / 3.74 ms at 505 / 2,005 / 5,005)
+is everything else in a frame: Bevy's own per-entity work (transform and visibility propagation
+over 5,000 sprites) and the HUD/UI systems. This harness has no per-system timings, so that bucket
+is **not** attributed further. The draw path is about 19% of the main-thread time at 5,000, not
+the 8.2 ms the first baseline's "main minus sim" implied: that number was every schedule except
+`view::tick`.
+
+Interpolation's client cost is small: at 5,000 the lookup inside the loop is 0.39 ms and the
+snapshot in `tick` 0.16 ms. The churn scenes' cost is the sim, as above.
+
+### The bounded change
+
+`Drawn` was a `BTreeMap<InstId, Entity>` rebuilt through a second `BTreeMap` (`alive`) every
+frame: one insert per instance, then one lookup per instance to find the removals. It is now one
+`HashMap<InstId, (Entity, u64)>`: each instance is stamped as it is drawn, and entries whose stamp
+is not the current frame are removed in place. Spawn order, z, visibility, ties, interpolation and
+determinism are unchanged (the same entity is updated or spawned in the same order; only the
+removal scan's shape changed), and the client's 427 tests pass.
+
+Before/after on `stable_5000`, p50 ms, from `iwbtg-before.exe` and `iwbtg-after.exe` built back to
+back and run interleaved. The machine was noisy — identical runs' main-thread varied from 9.6 to
+21 ms — so the untouched draw-order phase serves as the speed reference:
+
+| phase | before | after |
+|---|---|---|
+| draw order (speed reference) | 0.28 - 0.47 | 0.29 - 0.46 |
+| sprite sync | 0.83 - 2.27 | 0.91 - 2.42 |
+| removal pass | 0.24 - 0.58 | 0.02 |
+| removal / draw order | 0.86 - 1.15 | 0.05 - 0.06 |
+| sprite sync / draw order | 2.96 - 4.19 | 2.53 - 2.56 |
+
+The removal pass is effectively gone (flat, and no second map lookup per instance) and the loop's
+map work is about 15% lower once normalised by the order phase. The absolute frame effect is
+small — the draw path is about 1.3-1.5 ms of an 11 ms frame at 5,000 — and the change is kept
+because it is strictly less work with no behaviour change.
+
 ### Where that leaves the optimization question
 
-The trace shows the client's draw path is material at 5,000 instances (8.2 ms, about half the
-frame) and grows with the instance count, but it cannot attribute that time to allocations, draw
-order or the `Drawn` map without allocation counts, which are a gap above (see #1024's comment).
-A bounded issue records the measured per-instance cost and asks for the attribution first.
+The draw path is attributed and is not the frame's dominant cost at 5,000. The largest remaining
+bucket is the rest of the main schedule, which needs per-system timings to split (a follow-up
+issue). Allocations stay a gap (see above), so the map work can be compared but not counted.
 
