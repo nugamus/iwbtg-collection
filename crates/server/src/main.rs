@@ -69,13 +69,21 @@ async fn serve(
         }
         None => tracing::info!("healthchecks pings disabled (HEALTHCHECKS_URL unset)"),
     }
+    // Password-reset email (#160). Unset SMTP_URL/MAIL_FROM only disables delivery; the reset
+    // endpoint keeps the same answer, and the rest of the server is unaffected.
+    let mailer = iwbtg_server::mail::Mailer::from_env();
+    if mailer.is_enabled() {
+        tracing::info!("email delivery enabled");
+    } else {
+        tracing::info!("email delivery disabled (SMTP_URL/MAIL_FROM unset)");
+    }
     let listener = TcpListener::bind(bind).await?;
     // Log the bound address, not the requested one: port 0 picks a free port.
     let addr = listener.local_addr()?;
     tracing::info!(%addr, "listening");
     // Connect info gives the rate limiter a peer address when CF-Connecting-IP is absent
     // (local development); behind cloudflared the header is always the key (#161).
-    let app = iwbtg_server::app(pool, catalog_dir);
+    let app = iwbtg_server::app_with_mailer(pool, catalog_dir, mailer);
     axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;
     Ok(())
 }

@@ -94,6 +94,26 @@ const LOGIN_WINDOW: Duration = Duration::from_secs(5 * 60);
 const REGISTER_LIMIT: u32 = 5;
 const REGISTER_WINDOW: Duration = Duration::from_secs(60 * 60);
 
+/// Password-reset requests per client address and per submitted address (#160).
+const RESET_REQUEST_LIMIT: u32 = 5;
+const RESET_REQUEST_WINDOW: Duration = Duration::from_secs(60 * 60);
+
+/// Reset confirmations (code guesses) per client address and per submitted address, on top of
+/// the per-code attempt cap.
+const RESET_CONFIRM_LIMIT: u32 = 10;
+const RESET_CONFIRM_WINDOW: Duration = Duration::from_secs(5 * 60);
+
+/// A code dies after five wrong guesses; the row itself expires 15 minutes after it was issued.
+const RESET_MAX_ATTEMPTS: i64 = 5;
+
+/// The one error a wrong, expired or missing code produces, so nothing says which.
+const RESET_CODE_ERROR: &str = "invalid or expired code";
+
+/// Both reset-request branches wait at least this long before answering. The database write for
+/// a real account is far below it, so the response time does not say whether the address exists.
+/// The email send happens in a background task and cannot affect it either.
+const RESET_RESPONSE_FLOOR: Duration = Duration::from_millis(10);
+
 /// How many Argon2 hashes may run at once (#1505). Each holds [`ARGON2_M_COST`] KiB, so this is
 /// what bounds the account endpoints' memory; `compose.yaml` sizes its limit from this number.
 const HASH_PERMITS: usize = 4;
@@ -136,6 +156,20 @@ pub struct LoginForm {
     login: String,
     password: String,
     csrf: String,
+}
+
+/// `POST /auth/reset/request` (docs/server.md: password reset by emailed code).
+#[derive(Deserialize)]
+pub struct ResetRequest {
+    email: String,
+}
+
+/// `POST /auth/reset/confirm`.
+#[derive(Deserialize)]
+pub struct ResetConfirm {
+    email: String,
+    code: String,
+    password: String,
 }
 
 #[derive(Serialize)]
@@ -245,6 +279,29 @@ fn limit_register(state: &AppState, ip: &str) -> Result<(), AuthError> {
         .map_err(AuthError::RateLimited)
 }
 
+/// Counts one reset step against the client address and the submitted address. The submitted
+/// address is the key even when no account has it, so the window does not reveal existence.
+fn limit_reset(
+    state: &AppState,
+    scope: &str,
+    ip: &str,
+    submitted: &str,
+    limit: u32,
+    window: Duration,
+) -> Result<(), AuthError> {
+    state
+        .limiter
+        .check(&format!("{scope}-ip:{ip}"), limit, window)
+        .and_then(|()| {
+            state.limiter.check(
+                &format!("{scope}-email:{}", account_key(submitted)),
+                limit,
+                window,
+            )
+        })
+        .map_err(AuthError::RateLimited)
+}
+
 /// The account half of the login key: canonical for a username, lowercased for an email, capped
 /// so a huge identifier cannot become a huge map key.
 fn account_key(login: &str) -> String {
@@ -286,6 +343,194 @@ pub(crate) async fn login(
     let mut response = Json(account).into_response();
     set_cookie(&mut response, &cookie);
     Ok(response)
+}
+
+/// `POST /auth/reset/request` (docs/server.md, Accounts and sign-in; #160).
+///
+/// Always `204`: a registered address, an unknown one and a malformed one get the same answer.
+/// Both branches generate and hash a code, and both wait [`RESET_RESPONSE_FLOOR`]; the email is
+/// sent from a background task, so its latency is not observable either.
+pub(crate) async fn reset_request(
+    State(state): State<AppState>,
+    ClientIp(ip): ClientIp,
+    Json(request): Json<ResetRequest>,
+) -> Result<StatusCode, AuthError> {
+    let submitted = request.email.trim().to_ascii_lowercase();
+    limit_reset(
+        &state,
+        "reset-request",
+        &ip,
+        &submitted,
+        RESET_REQUEST_LIMIT,
+        RESET_REQUEST_WINDOW,
+    )?;
+
+    // The same work whether or not the account exists.
+    let code = reset_code();
+    let code_hash = hash_code(&code);
+    let email = normalize_email(Some(&submitted)).unwrap_or(None);
+    let account_id: Option<i64> = match &email {
+        Some(email) => sqlx::query_scalar(
+            "SELECT accounts.id
+             FROM accounts
+             JOIN password_credentials ON password_credentials.account_id = accounts.id
+             WHERE accounts.deleted_at IS NULL AND accounts.email = ?1",
+        )
+        .bind(email)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|err| database_error(err, "look up reset address"))?,
+        None => None,
+    };
+
+    if let Some(account_id) = account_id {
+        sqlx::query(
+            "INSERT INTO password_resets (account_id, code_hash, expires_at, attempts)
+             VALUES (?1, ?2, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+15 minutes'), 0)
+             ON CONFLICT(account_id) DO UPDATE SET
+                 code_hash = excluded.code_hash,
+                 expires_at = excluded.expires_at,
+                 attempts = 0,
+                 created_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+        )
+        .bind(account_id)
+        .bind(&code_hash)
+        .execute(&state.pool)
+        .await
+        .map_err(|err| database_error(err, "store reset code"))?;
+
+        // Sending happens off the request path: the send latency must not distinguish the cases.
+        let mailer = state.mailer.clone();
+        let to = submitted.clone();
+        tokio::spawn(async move {
+            match tokio::task::spawn_blocking(move || mailer.send_reset_code(&to, &code)).await {
+                Ok(Ok(())) => tracing::debug!("password reset email sent"),
+                Ok(Err(error)) => {
+                    // The transport error can name the recipient; keep it out of the warn line.
+                    tracing::debug!(%error, "password reset email error");
+                    tracing::warn!("password reset email not sent");
+                }
+                Err(error) => {
+                    tracing::debug!(%error, "password reset email task failed");
+                    tracing::warn!("password reset email not sent");
+                }
+            }
+        });
+    }
+
+    tokio::time::sleep(RESET_RESPONSE_FLOOR).await;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// `POST /auth/reset/confirm`: a code and the new password.
+///
+/// A missing account, an expired code and a wrong code all answer the same `400`. The new
+/// password goes through the same Argon2id path (and permit) as registration; success revokes
+/// every session, because a reset proves the mailbox, not the old sign-in.
+pub(crate) async fn reset_confirm(
+    State(state): State<AppState>,
+    ClientIp(ip): ClientIp,
+    Json(request): Json<ResetConfirm>,
+) -> Result<StatusCode, AuthError> {
+    let submitted = request.email.trim().to_ascii_lowercase();
+    limit_reset(
+        &state,
+        "reset-confirm",
+        &ip,
+        &submitted,
+        RESET_CONFIRM_LIMIT,
+        RESET_CONFIRM_WINDOW,
+    )?;
+    validate_password(&request.password)?;
+
+    let Ok(Some(email)) = normalize_email(Some(&submitted)) else {
+        return Err(AuthError::BadRequest(RESET_CODE_ERROR));
+    };
+    let stored: Option<(i64, Vec<u8>, i64)> = sqlx::query_as(
+        "SELECT password_resets.account_id, password_resets.code_hash, password_resets.attempts
+         FROM password_resets
+         JOIN accounts ON accounts.id = password_resets.account_id
+         JOIN password_credentials ON password_credentials.account_id = accounts.id
+         WHERE accounts.email = ?1
+           AND accounts.deleted_at IS NULL
+           AND password_resets.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+    )
+    .bind(&email)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|err| database_error(err, "look up reset code"))?;
+    let Some((account_id, code_hash, attempts)) = stored else {
+        return Err(AuthError::BadRequest(RESET_CODE_ERROR));
+    };
+    if attempts >= RESET_MAX_ATTEMPTS {
+        return Err(AuthError::BadRequest(RESET_CODE_ERROR));
+    }
+    if !constant_time_eq(&code_hash, &hash_code(request.code.trim())) {
+        sqlx::query("UPDATE password_resets SET attempts = attempts + 1 WHERE account_id = ?1")
+            .bind(account_id)
+            .execute(&state.pool)
+            .await
+            .map_err(|err| database_error(err, "count reset attempt"))?;
+        return Err(AuthError::BadRequest(RESET_CODE_ERROR));
+    }
+
+    let password_hash = {
+        let _permit = hash_permit().await?;
+        hash_off_thread(request.password).await?
+    };
+    let mut transaction = state
+        .pool
+        .begin()
+        .await
+        .map_err(|err| database_error(err, "begin password reset"))?;
+    sqlx::query(
+        "UPDATE password_credentials
+         SET password_hash = ?2, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+         WHERE account_id = ?1",
+    )
+    .bind(account_id)
+    .bind(&password_hash)
+    .execute(&mut *transaction)
+    .await
+    .map_err(|err| database_error(err, "update password"))?;
+    sqlx::query("DELETE FROM password_resets WHERE account_id = ?1")
+        .bind(account_id)
+        .execute(&mut *transaction)
+        .await
+        .map_err(|err| database_error(err, "clear reset code"))?;
+    // A reset proves the mailbox, not the old sign-in: every existing session is revoked.
+    sqlx::query("DELETE FROM sessions WHERE account_id = ?1")
+        .bind(account_id)
+        .execute(&mut *transaction)
+        .await
+        .map_err(|err| database_error(err, "revoke sessions"))?;
+    transaction
+        .commit()
+        .await
+        .map_err(|err| database_error(err, "commit password reset"))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// A uniformly random six-digit code.
+fn reset_code() -> String {
+    let mut bytes = [0u8; 4];
+    OsRng.fill_bytes(&mut bytes);
+    format!("{:06}", u32::from_le_bytes(bytes) % 1_000_000)
+}
+
+fn hash_code(code: &str) -> Vec<u8> {
+    Sha256::digest(code.as_bytes()).to_vec()
+}
+
+/// Compares two hashes without an early exit; lengths are equal by construction.
+fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
+    left.len() == right.len()
+        && left
+            .iter()
+            .zip(right)
+            .fold(0u8, |difference, (left, right)| difference | (left ^ right))
+            == 0
 }
 
 /// Validates, hashes and stores a new account; the shared body of the JSON and form handlers.
