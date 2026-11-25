@@ -137,7 +137,7 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:clamp(44px,5.2vw,78px);li
 .provenance{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;margin:0;font-size:11px;line-height:1.5}
 .provenance dt{color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
 .provenance dd{margin:0;color:var(--ink-2);font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospace;overflow-wrap:anywhere}
-.register{display:grid;grid-template-columns:minmax(0,1.35fr) repeat(3,minmax(0,1fr));border-top:2px solid var(--ink);border-bottom:1px solid var(--rule-strong)}
+.register{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr);border-top:2px solid var(--ink);border-bottom:1px solid var(--rule-strong)}
 .reg-cell{padding:22px 0 26px;min-width:0}
 .reg-cell+.reg-cell{border-left:1px solid var(--rule);padding-left:24px;margin-left:24px}
 .reg-label{font-size:11px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
@@ -176,21 +176,22 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:clamp(44px,5.2vw,78px);li
 .row-progress{grid-column:1/-1;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px 12px;align-items:center;margin-top:8px}
 .row-progress-label{font-size:11px;line-height:1.3;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:500}
 .row-progress-state{font-size:11.5px;line-height:1.4;color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap}
-.impl-bars{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 24px;margin-top:10px}
-.impl-row{display:grid;grid-template-columns:auto minmax(40px,1fr) auto;gap:8px;align-items:center;min-width:0}
-.impl-label{font-size:11px;line-height:1.3;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:500;white-space:nowrap}
-.impl-track{display:block;height:7px;min-width:40px;background:var(--track);overflow:hidden}
+.impl-bars{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 24px;margin-top:10px}
+.impl-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;align-items:baseline;min-width:0}
+.impl-label{grid-column:1;font-size:11px;line-height:1.3;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:500;white-space:nowrap}
+.impl-track{grid-column:1/-1;grid-row:2;display:block;height:8px;min-width:40px;margin-top:2px;background:var(--track);border:1px solid var(--rule);overflow:hidden}
 .impl-track>span{display:block;height:100%;background:var(--graphite)}
-.impl-row.package .impl-track>span{background:var(--cherry)}
-.impl-track.is-missing{background:repeating-linear-gradient(135deg,var(--track) 0 4px,var(--paper-3) 4px 8px)}
-.impl-value{font-size:11.5px;line-height:1.35;color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap}
-.impl-value small{display:block;font-size:10.5px;color:var(--muted)}
+.impl-row.package .impl-track>span{background:var(--ink-2)}
+.impl-row.scripted .impl-track>span{background:var(--cherry)}
+.impl-track.is-missing{border-color:var(--rule-strong)}
+.impl-value{grid-column:2;font-size:11.5px;line-height:1.35;color:var(--ink-2);font-variant-numeric:tabular-nums;text-align:right;white-space:normal}
+.impl-value small{display:inline;margin-left:6px;font-size:11px;color:var(--muted)}
 .impl-value.is-missing{color:var(--muted);white-space:normal}
 .fact-source{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospace;font-size:11px;color:var(--muted)}
 .api-surface{margin:0 0 26px;padding:16px 0 14px;border-top:1px solid var(--rule-strong);border-bottom:1px solid var(--rule-strong)}
 .api-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px 24px;flex-wrap:wrap}
 .api-subhead{margin-top:20px;padding-top:14px;border-top:1px solid var(--rule)}
-.api-note{margin:10px 0 0;max-width:78ch;font-size:12.5px;line-height:1.55;color:var(--ink-2)}
+.api-note{margin:10px 0 0;max-width:74ch;font-size:12.5px;line-height:1.55;color:var(--ink-2)}
 .api-note strong{color:var(--ink)}
 .api-groups{list-style:none;margin:10px 0 0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 24px;font-size:12px;line-height:1.45;color:var(--ink-2)}
 .api-groups b{font-weight:600;color:var(--ink)}
@@ -251,7 +252,8 @@ h1{font-family:"Barlow Condensed",sans-serif;font-size:clamp(44px,5.2vw,78px);li
 .state-open{color:var(--warn)}.state-open .state-mark{border-color:var(--warn)}
 .state-closed{color:var(--good)}.state-closed .state-mark{background:var(--good);border-color:var(--good)}
 .missing{color:var(--muted)}
-.source-note{margin:14px 0 0;font-size:12px;line-height:1.55;color:var(--muted)}
+.source-note{margin:14px 0 0;max-width:76ch;font-size:12px;line-height:1.55;color:var(--muted)}
+.game-source{margin:8px 0 0;max-width:74ch;font-size:12px;line-height:1.5;color:var(--muted)}
 .source-note code{font-size:.96em}
 code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospace;background:var(--paper-2);padding:1px 5px;border-bottom:1px solid var(--rule);font-size:.92em;overflow-wrap:anywhere}
 .glossary{margin-top:34px;border-top:1px solid var(--rule-strong);padding-top:16px}
@@ -354,6 +356,7 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
   .game-toggle{position:absolute;right:0;top:16px}
   .metric-label{position:static!important;width:auto!important;height:auto!important;padding:0!important;margin:0 0 2px!important;overflow:visible!important;clip:auto!important;white-space:normal!important;border:0!important;display:block;font-size:11px;line-height:1.3;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:500}
   .game-facts{grid-template-columns:1fr 1fr}
+  .impl-bars{grid-template-columns:1fr}
   .game-summary:hover{background:transparent}
 }
 @media (max-width:760px){
@@ -374,6 +377,7 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
   .game-facts{grid-template-columns:1fr}
   .impl-bars{grid-template-columns:1fr}
   .impl-label{white-space:normal}
+  .impl-value{white-space:normal}
   .api-groups{grid-template-columns:1fr}
   .glossary dl{grid-template-columns:1fr}
   .phase{grid-template-columns:1fr;gap:12px}
@@ -449,7 +453,7 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
       <a href="#sources"><span class="nav-name">Sources</span><span class="nav-note">method and follow-ups</span></a>
     </nav>
     <div class="spine-meta">
-      <span>Generated 2026-11-25 11:56:32 UTC</span>
+      <span>Generated 2026-11-25 12:29:26 UTC</span>
       <span>Source: gh</span>
     </div>
   </aside>
@@ -457,7 +461,7 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
     <header class="masthead">
       <div class="masthead-top">
         <div class="masthead-meta">
-          <span>Generated <b>2026-11-25 11:56:32 UTC</b></span>
+          <span>Generated <b>2026-11-25 12:29:26 UTC</b></span>
           <span>Source <b>gh</b></span>
         </div>
         <div class="theme">
@@ -479,7 +483,7 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
           <span class="seal">Pre-release</span>
           <p class="status-detail">No release builds yet. The public alpha is planned for phase 7 (Online).</p>
           <dl class="provenance">
-            <dt>Generated</dt><dd>2026-11-25 11:56:32 UTC</dd>
+            <dt>Generated</dt><dd>2026-11-25 12:29:26 UTC</dd>
             <dt>Source</dt><dd>gh</dd>
           </dl>
         </aside>
@@ -487,9 +491,9 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
       <section class="register progress-register" id="progress" aria-label="Project progress">
         <a class="reg-cell progress-cell" href="#delivery">
           <span class="reg-label">Issues closed · all phases</span>
-          <span class="reg-figure">69.3%</span>
-          <span class="progress-track" aria-hidden="true"><span style="width:69.3%"></span></span>
-          <span class="reg-sub">642 of 927 · 285 open · 695 size points left</span>
+          <span class="reg-figure">69.5%</span>
+          <span class="progress-track" aria-hidden="true"><span style="width:69.5%"></span></span>
+          <span class="reg-sub">646 of 930 · 284 open · 694 size points left</span>
           <span class="progress-link">Open the phase ladder</span>
         </a>
         <a class="reg-cell progress-cell" href="#coverage">
@@ -499,22 +503,15 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
           <span class="reg-sub">0 of 120 Done when items across 20 ports</span>
           <span class="progress-link">Open the game menu</span>
         </a>
-        <a class="reg-cell progress-cell" href="#coverage">
-          <span class="reg-label">Trace cases passing · all recorded</span>
-          <span class="reg-figure">92.8%</span>
-          <span class="progress-track" aria-hidden="true"><span style="width:92.8%"></span></span>
-          <span class="reg-sub">77 of 83 cases · 7 games with cases</span>
-          <span class="progress-link">Open the game menu</span>
-        </a>
         <a class="reg-cell progress-cell progress-alpha" href="#delivery">
           <span class="reg-label">Public alpha gate · Online</span>
-          <span class="reg-figure">21.2%</span>
-          <span class="progress-track" aria-hidden="true"><span style="width:21.2%"></span></span>
-          <span class="reg-sub">14 of 66 issues closed · 129 points left</span>
+          <span class="reg-figure">22.7%</span>
+          <span class="progress-track" aria-hidden="true"><span style="width:22.7%"></span></span>
+          <span class="reg-sub">15 of 66 issues closed · 128 points left</span>
           <span class="progress-link">See all phase gates</span>
         </a>
       </section>
-      <p class="progress-note">Direct ratios from the issue, port, trace-case and package data; not a single completion score or a release date.</p>
+      <p class="progress-note">Direct ratios from the issue and port data; not a single completion score or a release date. The per-game implementation bars sit in Coverage.</p>
       <p class="scope-line"><span class="reg-label">Scope</span> 20 games · 1,712 script instances · 699 custom object types · 458 rooms · 660 recorded traces across 18 of 20 games · 76 objects exercised (35 distinct names).</p>
       <p class="gap-note"><strong>Passing-trace coverage is not measured yet.</strong> The follow-up is <a href="https://github.com/nugamus/iwbtg-collection/issues/1365">issue #1365</a>.</p>
     </header>
@@ -523,7 +520,7 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
       <section class="section" id="coverage" aria-labelledby="coverage-title">
         <div class="section-head">
           <h2 id="coverage-title">Coverage</h2>
-          <p>What is built-in, what is game-specific, and what evidence exists. Each game row carries two measured implementation bars — <b>trace cases passing</b> and <b>package objects mapped</b> — plus its port checklist. The menu leads with each game's <b>game-specific work</b> and keeps built-in coverage as composition, not completion. Passing-trace coverage of individual objects is still not measured; it needs the trace runner (<a href="https://github.com/nugamus/iwbtg-collection/issues/1365">#1365</a>).</p>
+          <p>What is built-in, what is game-specific, and what evidence exists. Each game row carries three repo-derived implementation bars — <b>trace cases passing</b>, <b>mapped objects</b> and <b>scripted objects</b> — plus its port checklist. The menu leads with each game's <b>game-specific work</b> and keeps built-in coverage as composition, not completion. Passing-trace coverage of individual objects is still not measured yet; it needs the trace runner (<a href="https://github.com/nugamus/iwbtg-collection/issues/1365">#1365</a>).</p>
         </div>
         <section class="composition" aria-label="Composition of placed instances">
           <div class="composition-head">
@@ -541,15 +538,15 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
         <section class="api-surface" aria-label="Implementation measures and script API census">
           <div class="api-head">
             <span class="reg-label">Implementation measures</span>
-            <span class="composition-figure">28.7% of package objects mapped</span>
+            <span class="composition-figure">1,229 mapped · 3,048 scripted of 4,277 package objects</span>
           </div>
-          <p class="api-note">Each game row's <b>Trace cases</b> bar is OK cases over committed cases in <code>crates/tools/cases/</code> and <code>crates/tools/fidelity-baseline.txt</code>. Its <b>Package objects</b> bar is mapped objects over objects in the converted package. Package data is the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>: <code>progress/exporter.json</code> is generated in the research environment and is not regenerated here. Across the 7 games with cases, 77 of 83 cases pass; across games with a package, 1,229 of 4,277 objects are mapped.</p>
+          <p class="api-note">Each game row's <b>Trace cases</b> bar is OK cases over committed cases in <code>crates/tools/cases/</code> and <code>crates/tools/fidelity-baseline.txt</code>. Its <b>Mapped objects</b> and <b>Scripted objects</b> bars partition the converted package: mapped resolves to a built-in behavior spec, scripted is written by the package as a script. Package data is the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>: <code>progress/exporter.json</code> is generated in the research environment and is not regenerated here. Across the 7 games with cases, 77 of 83 cases pass; across games with a package, 1,229 of 4,277 objects are mapped and 3,048 are scripted.</p>
 
         <div class="api-head api-subhead">
           <span class="reg-label">Script API census</span>
-          <span class="composition-figure">share not measured</span>
+          <span class="composition-figure">share not measured yet</span>
         </div>
-        <p class="api-note"><code>docs/format/script-api.md</code> lists <b>77 registered functions</b>. The census names <b>7 groups not yet registered</b>. Their counts are scripts / objects / games. The implemented share of the script API is <b>not measured</b>: the census&#x27;s full group list (research#172) is not in this repo.</p>
+        <p class="api-note"><code>docs/format/script-api.md</code> lists <b>77 registered functions</b>. The census names <b>7 groups not yet registered</b>. Their counts are scripts / objects / games. The implemented share of the script API is <b>not measured yet</b>: the census&#x27;s full group list (research#172) is not in this repo.</p>
         <ul class="api-groups"><li><b>paths (14)</b> <span class="api-counts">37 / 153 / 11 scripts / objects / games</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1530">#1530</a></li><li><b>view (16)</b> <span class="api-counts">29 / 37 / 9 scripts / objects / games</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1531">#1531</a></li><li><b>strings (19)</b> <span class="api-counts">22 / 28 / 16 scripts / objects / games</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1532">#1532</a></li><li><b>meta (22)</b> <span class="api-counts">19 / 28 / 9 scripts / objects / games</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1533">#1533</a></li><li><b>instance_change (23)</b> <span class="api-counts">17 / 17 / 4 scripts / objects / games</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1534">#1534</a></li><li><b>bounce (24)</b> <span class="api-counts">16 / 27 / 12 scripts / objects / games</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1535">#1535</a></li><li><b>kid actions (26)</b> <span class="api-counts">12 / 20 / 13 scripts / objects / games</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1536">#1536</a></li></ul>
         </section>
         <noscript><p class="noscript">Filtering and the theme choice need JavaScript. Every game, figure and note in this register is still present and readable below.</p></noscript>
@@ -609,8 +606,9 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
               </span>
               <span class="game-toggle" aria-hidden="true"></span>
               <span class="impl-bars">
-                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track" role="img" aria-label="Trace cases: 4 / 4 OK, 100.0 percent"><span style="width:100.0%"></span></span><span class="impl-value">4 / 4 OK<small>100.0%</small></span></span>
-                <span class="impl-row package"><span class="impl-label">Package objects</span><span class="impl-track" role="img" aria-label="Package objects: 33 / 39 mapped · 6 unmapped, 84.6 percent"><span style="width:84.6%"></span></span><span class="impl-value">33 / 39 mapped · 6 unmapped<small>84.6%</small></span></span>
+                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track" aria-hidden="true"><span style="width:100.0%"></span></span><span class="impl-value">4 / 4 OK<small>· 100.0%</small></span></span>
+                <span class="impl-row package"><span class="impl-label">Mapped objects</span><span class="impl-track" aria-hidden="true"><span style="width:84.6%"></span></span><span class="impl-value">33 / 39 mapped<small>· 84.6%</small></span></span>
+                <span class="impl-row scripted"><span class="impl-label">Scripted objects</span><span class="impl-track" aria-hidden="true"><span style="width:15.4%"></span></span><span class="impl-value">6 / 39 scripted<small>· 15.4%</small></span></span>
               </span>
               <span class="row-progress"><span class="row-progress-label">Port checklist</span><span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span><span class="row-progress-state">0/6 done · 0%</span></span>
             </summary>
@@ -624,13 +622,13 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
                 <div><dt>Recorded traces</dt><dd><b>285</b></dd></div>
                 <div><dt>Objects exercised</dt><dd><b>6</b></dd></div>
                 <div><dt>Trace cases</dt><dd><b>4 / 4</b> OK (100.0%)<br><span class="fact-source">crates/tools/cases/rely_the_needle</span></dd></div>
-                <div><dt>Package objects</dt><dd><b>33 / 39</b> mapped (84.6%) · 6 unmapped</dd></div>
+                <div><dt>Mapped objects</dt><dd><b>33 / 39</b> mapped (84.6%)</dd></div>
+                <div><dt>Scripted objects</dt><dd><b>6 / 39</b> scripted (15.4%)</dd></div>
                 <div><dt>Converter check</dt><dd>converted · <b>0</b> errors · <b>2</b> warnings</dd></div>
-                <div><dt>Scripted object types</dt><dd><span class="missing">not measured</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a></dd></div>
                 <div><dt>Port</dt><dd>games#1 · open · 0/6 done<span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span></dd></div>
               </dl>
-              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Package objects</b> counts objects mapped over objects in the converted package. Neither is a completion score. Built-in coverage and script share are composition shares of all placed instances.</p>
-              <p class="game-source">Package counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout. Scripted object types stay <span class="missing">not measured</span> until the per-game front-matter is filled.</p>
+              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Mapped objects</b> and <b>scripted objects</b> partition the converted package: mapped means an object resolves to a built-in behavior spec, scripted means the package writes it as a script. They are implementation counts, not completion scores. Built-in coverage and script share are composition shares of all placed instances.</p>
+              <p class="game-source">Mapped and scripted counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout.</p>
               <p class="game-links"><a href="https://delicious-fruit.com/game/19483">Game page</a> · <a href="https://github.com/nugamus/iwbtg-collection-games/issues/1">Port issue games#1</a></p>
             </div>
           </details>
@@ -666,8 +664,9 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
               </span>
               <span class="game-toggle" aria-hidden="true"></span>
               <span class="impl-bars">
-                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured<small>no case directory</small></span></span>
-                <span class="impl-row package"><span class="impl-label">Package objects</span><span class="impl-track" role="img" aria-label="Package objects: 176 / 494 mapped · 318 unmapped, 35.6 percent"><span style="width:35.6%"></span></span><span class="impl-value">176 / 494 mapped · 318 unmapped<small>35.6%</small></span></span>
+                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured yet<small>· no case directory</small></span></span>
+                <span class="impl-row package"><span class="impl-label">Mapped objects</span><span class="impl-track" aria-hidden="true"><span style="width:35.6%"></span></span><span class="impl-value">176 / 494 mapped<small>· 35.6%</small></span></span>
+                <span class="impl-row scripted"><span class="impl-label">Scripted objects</span><span class="impl-track" aria-hidden="true"><span style="width:64.4%"></span></span><span class="impl-value">318 / 494 scripted<small>· 64.4%</small></span></span>
               </span>
               <span class="row-progress"><span class="row-progress-label">Port checklist</span><span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span><span class="row-progress-state">0/6 done · 0%</span></span>
             </summary>
@@ -680,14 +679,14 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
                 <div><dt>Custom object types</dt><dd><b>33</b></dd></div>
                 <div><dt>Recorded traces</dt><dd><b>8</b></dd></div>
                 <div><dt>Objects exercised</dt><dd><b>2</b></dd></div>
-                <div><dt>Trace cases</dt><dd><span class="missing">not measured</span> · no case directory</dd></div>
-                <div><dt>Package objects</dt><dd><b>176 / 494</b> mapped (35.6%) · 318 unmapped</dd></div>
+                <div><dt>Trace cases</dt><dd><span class="missing">not measured yet</span> · no case directory</dd></div>
+                <div><dt>Mapped objects</dt><dd><b>176 / 494</b> mapped (35.6%)</dd></div>
+                <div><dt>Scripted objects</dt><dd><b>318 / 494</b> scripted (64.4%)</dd></div>
                 <div><dt>Converter check</dt><dd>converted · <b>0</b> errors · <b>2</b> warnings</dd></div>
-                <div><dt>Scripted object types</dt><dd><span class="missing">not measured</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a></dd></div>
                 <div><dt>Port</dt><dd>games#2 · open · 0/6 done<span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span></dd></div>
               </dl>
-              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Package objects</b> counts objects mapped over objects in the converted package. Neither is a completion score. Built-in coverage and script share are composition shares of all placed instances.</p>
-              <p class="game-source">Package counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout. Scripted object types stay <span class="missing">not measured</span> until the per-game front-matter is filled.</p>
+              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Mapped objects</b> and <b>scripted objects</b> partition the converted package: mapped means an object resolves to a built-in behavior spec, scripted means the package writes it as a script. They are implementation counts, not completion scores. Built-in coverage and script share are composition shares of all placed instances.</p>
+              <p class="game-source">Mapped and scripted counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout.</p>
               <p class="game-links"><a href="https://delicious-fruit.com/game/18758">Game page</a> · <a href="https://github.com/nugamus/iwbtg-collection-games/issues/2">Port issue games#2</a></p>
             </div>
           </details>
@@ -723,8 +722,9 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
               </span>
               <span class="game-toggle" aria-hidden="true"></span>
               <span class="impl-bars">
-                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured<small>no case directory</small></span></span>
-                <span class="impl-row package"><span class="impl-label">Package objects</span><span class="impl-track" role="img" aria-label="Package objects: 58 / 153 mapped · 95 unmapped, 37.9 percent"><span style="width:37.9%"></span></span><span class="impl-value">58 / 153 mapped · 95 unmapped<small>37.9%</small></span></span>
+                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured yet<small>· no case directory</small></span></span>
+                <span class="impl-row package"><span class="impl-label">Mapped objects</span><span class="impl-track" aria-hidden="true"><span style="width:37.9%"></span></span><span class="impl-value">58 / 153 mapped<small>· 37.9%</small></span></span>
+                <span class="impl-row scripted"><span class="impl-label">Scripted objects</span><span class="impl-track" aria-hidden="true"><span style="width:62.1%"></span></span><span class="impl-value">95 / 153 scripted<small>· 62.1%</small></span></span>
               </span>
               <span class="row-progress"><span class="row-progress-label">Port checklist</span><span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span><span class="row-progress-state">0/6 done · 0%</span></span>
             </summary>
@@ -737,14 +737,14 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
                 <div><dt>Custom object types</dt><dd><b>22</b></dd></div>
                 <div><dt>Recorded traces</dt><dd><b>32</b></dd></div>
                 <div><dt>Objects exercised</dt><dd><b>7</b></dd></div>
-                <div><dt>Trace cases</dt><dd><span class="missing">not measured</span> · no case directory</dd></div>
-                <div><dt>Package objects</dt><dd><b>58 / 153</b> mapped (37.9%) · 95 unmapped</dd></div>
+                <div><dt>Trace cases</dt><dd><span class="missing">not measured yet</span> · no case directory</dd></div>
+                <div><dt>Mapped objects</dt><dd><b>58 / 153</b> mapped (37.9%)</dd></div>
+                <div><dt>Scripted objects</dt><dd><b>95 / 153</b> scripted (62.1%)</dd></div>
                 <div><dt>Converter check</dt><dd>converted · <b>0</b> errors · <b>2</b> warnings</dd></div>
-                <div><dt>Scripted object types</dt><dd><span class="missing">not measured</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a></dd></div>
                 <div><dt>Port</dt><dd>games#3 · open · 0/6 done<span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span></dd></div>
               </dl>
-              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Package objects</b> counts objects mapped over objects in the converted package. Neither is a completion score. Built-in coverage and script share are composition shares of all placed instances.</p>
-              <p class="game-source">Package counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout. Scripted object types stay <span class="missing">not measured</span> until the per-game front-matter is filled.</p>
+              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Mapped objects</b> and <b>scripted objects</b> partition the converted package: mapped means an object resolves to a built-in behavior spec, scripted means the package writes it as a script. They are implementation counts, not completion scores. Built-in coverage and script share are composition shares of all placed instances.</p>
+              <p class="game-source">Mapped and scripted counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout.</p>
               <p class="game-links"><a href="https://delicious-fruit.com/game/18404">Game page</a> · <a href="https://github.com/nugamus/iwbtg-collection-games/issues/3">Port issue games#3</a></p>
             </div>
           </details>
@@ -780,8 +780,9 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
               </span>
               <span class="game-toggle" aria-hidden="true"></span>
               <span class="impl-bars">
-                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track" role="img" aria-label="Trace cases: 46 / 49 OK · 3 OPEN, 93.9 percent"><span style="width:93.9%"></span></span><span class="impl-value">46 / 49 OK · 3 OPEN<small>93.9%</small></span></span>
-                <span class="impl-row package"><span class="impl-label">Package objects</span><span class="impl-track" role="img" aria-label="Package objects: 60 / 111 mapped · 51 unmapped, 54.1 percent"><span style="width:54.1%"></span></span><span class="impl-value">60 / 111 mapped · 51 unmapped<small>54.1%</small></span></span>
+                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track" aria-hidden="true"><span style="width:93.9%"></span></span><span class="impl-value">46 / 49 OK · 3 OPEN<small>· 93.9%</small></span></span>
+                <span class="impl-row package"><span class="impl-label">Mapped objects</span><span class="impl-track" aria-hidden="true"><span style="width:54.1%"></span></span><span class="impl-value">60 / 111 mapped<small>· 54.1%</small></span></span>
+                <span class="impl-row scripted"><span class="impl-label">Scripted objects</span><span class="impl-track" aria-hidden="true"><span style="width:45.9%"></span></span><span class="impl-value">51 / 111 scripted<small>· 45.9%</small></span></span>
               </span>
               <span class="row-progress"><span class="row-progress-label">Port checklist</span><span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span><span class="row-progress-state">0/6 done · 0%</span></span>
             </summary>
@@ -795,13 +796,13 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
                 <div><dt>Recorded traces</dt><dd><b>65</b></dd></div>
                 <div><dt>Objects exercised</dt><dd><b>9</b></dd></div>
                 <div><dt>Trace cases</dt><dd><b>46 / 49</b> OK (93.9%) · 3 OPEN<br><span class="fact-source">crates/tools/cases/kaenbyou</span></dd></div>
-                <div><dt>Package objects</dt><dd><b>60 / 111</b> mapped (54.1%) · 51 unmapped</dd></div>
+                <div><dt>Mapped objects</dt><dd><b>60 / 111</b> mapped (54.1%)</dd></div>
+                <div><dt>Scripted objects</dt><dd><b>51 / 111</b> scripted (45.9%)</dd></div>
                 <div><dt>Converter check</dt><dd>converted · <b>0</b> errors · <b>2</b> warnings</dd></div>
-                <div><dt>Scripted object types</dt><dd><span class="missing">not measured</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a></dd></div>
                 <div><dt>Port</dt><dd>games#4 · open · 0/6 done<span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span></dd></div>
               </dl>
-              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Package objects</b> counts objects mapped over objects in the converted package. Neither is a completion score. Built-in coverage and script share are composition shares of all placed instances.</p>
-              <p class="game-source">Package counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout. Scripted object types stay <span class="missing">not measured</span> until the per-game front-matter is filled.</p>
+              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Mapped objects</b> and <b>scripted objects</b> partition the converted package: mapped means an object resolves to a built-in behavior spec, scripted means the package writes it as a script. They are implementation counts, not completion scores. Built-in coverage and script share are composition shares of all placed instances.</p>
+              <p class="game-source">Mapped and scripted counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout.</p>
               <p class="game-links"><a href="https://delicious-fruit.com/game/17724">Game page</a> · <a href="https://github.com/nugamus/iwbtg-collection-games/issues/4">Port issue games#4</a></p>
             </div>
           </details>
@@ -837,8 +838,9 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
               </span>
               <span class="game-toggle" aria-hidden="true"></span>
               <span class="impl-bars">
-                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track" role="img" aria-label="Trace cases: 2 / 4 OK · 2 OPEN, 50.0 percent"><span style="width:50.0%"></span></span><span class="impl-value">2 / 4 OK · 2 OPEN<small>50.0%</small></span></span>
-                <span class="impl-row package"><span class="impl-label">Package objects</span><span class="impl-track" role="img" aria-label="Package objects: 60 / 129 mapped · 69 unmapped, 46.5 percent"><span style="width:46.5%"></span></span><span class="impl-value">60 / 129 mapped · 69 unmapped<small>46.5%</small></span></span>
+                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track" aria-hidden="true"><span style="width:50.0%"></span></span><span class="impl-value">2 / 4 OK · 2 OPEN<small>· 50.0%</small></span></span>
+                <span class="impl-row package"><span class="impl-label">Mapped objects</span><span class="impl-track" aria-hidden="true"><span style="width:46.5%"></span></span><span class="impl-value">60 / 129 mapped<small>· 46.5%</small></span></span>
+                <span class="impl-row scripted"><span class="impl-label">Scripted objects</span><span class="impl-track" aria-hidden="true"><span style="width:53.5%"></span></span><span class="impl-value">69 / 129 scripted<small>· 53.5%</small></span></span>
               </span>
               <span class="row-progress"><span class="row-progress-label">Port checklist</span><span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span><span class="row-progress-state">0/6 done · 0%</span></span>
             </summary>
@@ -852,13 +854,13 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
                 <div><dt>Recorded traces</dt><dd><b>14</b></dd></div>
                 <div><dt>Objects exercised</dt><dd><b>3</b></dd></div>
                 <div><dt>Trace cases</dt><dd><b>2 / 4</b> OK (50.0%) · 2 OPEN<br><span class="fact-source">crates/tools/cases/eat_the_lemon</span></dd></div>
-                <div><dt>Package objects</dt><dd><b>60 / 129</b> mapped (46.5%) · 69 unmapped</dd></div>
+                <div><dt>Mapped objects</dt><dd><b>60 / 129</b> mapped (46.5%)</dd></div>
+                <div><dt>Scripted objects</dt><dd><b>69 / 129</b> scripted (53.5%)</dd></div>
                 <div><dt>Converter check</dt><dd>converted · <b>0</b> errors · <b>2</b> warnings</dd></div>
-                <div><dt>Scripted object types</dt><dd><span class="missing">not measured</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a></dd></div>
                 <div><dt>Port</dt><dd>games#5 · open · 0/6 done<span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span></dd></div>
               </dl>
-              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Package objects</b> counts objects mapped over objects in the converted package. Neither is a completion score. Built-in coverage and script share are composition shares of all placed instances.</p>
-              <p class="game-source">Package counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout. Scripted object types stay <span class="missing">not measured</span> until the per-game front-matter is filled.</p>
+              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Mapped objects</b> and <b>scripted objects</b> partition the converted package: mapped means an object resolves to a built-in behavior spec, scripted means the package writes it as a script. They are implementation counts, not completion scores. Built-in coverage and script share are composition shares of all placed instances.</p>
+              <p class="game-source">Mapped and scripted counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout.</p>
               <p class="game-links"><a href="https://delicious-fruit.com/game/18603">Game page</a> · <a href="https://github.com/nugamus/iwbtg-collection-games/issues/5">Port issue games#5</a></p>
             </div>
           </details>
@@ -894,8 +896,9 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
               </span>
               <span class="game-toggle" aria-hidden="true"></span>
               <span class="impl-bars">
-                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured<small>no case directory</small></span></span>
-                <span class="impl-row package"><span class="impl-label">Package objects</span><span class="impl-track" role="img" aria-label="Package objects: 44 / 185 mapped · 141 unmapped, 23.8 percent"><span style="width:23.8%"></span></span><span class="impl-value">44 / 185 mapped · 141 unmapped<small>23.8%</small></span></span>
+                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured yet<small>· no case directory</small></span></span>
+                <span class="impl-row package"><span class="impl-label">Mapped objects</span><span class="impl-track" aria-hidden="true"><span style="width:23.8%"></span></span><span class="impl-value">44 / 185 mapped<small>· 23.8%</small></span></span>
+                <span class="impl-row scripted"><span class="impl-label">Scripted objects</span><span class="impl-track" aria-hidden="true"><span style="width:76.2%"></span></span><span class="impl-value">141 / 185 scripted<small>· 76.2%</small></span></span>
               </span>
               <span class="row-progress"><span class="row-progress-label">Port checklist</span><span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span><span class="row-progress-state">0/6 done · 0%</span></span>
             </summary>
@@ -908,14 +911,14 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
                 <div><dt>Custom object types</dt><dd><b>5</b></dd></div>
                 <div><dt>Recorded traces</dt><dd><b>9</b></dd></div>
                 <div><dt>Objects exercised</dt><dd><b>3</b></dd></div>
-                <div><dt>Trace cases</dt><dd><span class="missing">not measured</span> · no case directory</dd></div>
-                <div><dt>Package objects</dt><dd><b>44 / 185</b> mapped (23.8%) · 141 unmapped</dd></div>
+                <div><dt>Trace cases</dt><dd><span class="missing">not measured yet</span> · no case directory</dd></div>
+                <div><dt>Mapped objects</dt><dd><b>44 / 185</b> mapped (23.8%)</dd></div>
+                <div><dt>Scripted objects</dt><dd><b>141 / 185</b> scripted (76.2%)</dd></div>
                 <div><dt>Converter check</dt><dd>converted · <b>0</b> errors · <b>2</b> warnings</dd></div>
-                <div><dt>Scripted object types</dt><dd><span class="missing">not measured</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a></dd></div>
                 <div><dt>Port</dt><dd>games#6 · open · 0/6 done<span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span></dd></div>
               </dl>
-              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Package objects</b> counts objects mapped over objects in the converted package. Neither is a completion score. Built-in coverage and script share are composition shares of all placed instances.</p>
-              <p class="game-source">Package counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout. Scripted object types stay <span class="missing">not measured</span> until the per-game front-matter is filled.</p>
+              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Mapped objects</b> and <b>scripted objects</b> partition the converted package: mapped means an object resolves to a built-in behavior spec, scripted means the package writes it as a script. They are implementation counts, not completion scores. Built-in coverage and script share are composition shares of all placed instances.</p>
+              <p class="game-source">Mapped and scripted counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout.</p>
               <p class="game-links"><a href="https://delicious-fruit.com/game/11514">Game page</a> · <a href="https://github.com/nugamus/iwbtg-collection-games/issues/6">Port issue games#6</a></p>
             </div>
           </details>
@@ -951,8 +954,9 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
               </span>
               <span class="game-toggle" aria-hidden="true"></span>
               <span class="impl-bars">
-                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured<small>no case directory</small></span></span>
-                <span class="impl-row package"><span class="impl-label">Package objects</span><span class="impl-track" role="img" aria-label="Package objects: 44 / 112 mapped · 68 unmapped, 39.3 percent"><span style="width:39.3%"></span></span><span class="impl-value">44 / 112 mapped · 68 unmapped<small>39.3%</small></span></span>
+                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured yet<small>· no case directory</small></span></span>
+                <span class="impl-row package"><span class="impl-label">Mapped objects</span><span class="impl-track" aria-hidden="true"><span style="width:39.3%"></span></span><span class="impl-value">44 / 112 mapped<small>· 39.3%</small></span></span>
+                <span class="impl-row scripted"><span class="impl-label">Scripted objects</span><span class="impl-track" aria-hidden="true"><span style="width:60.7%"></span></span><span class="impl-value">68 / 112 scripted<small>· 60.7%</small></span></span>
               </span>
               <span class="row-progress"><span class="row-progress-label">Port checklist</span><span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span><span class="row-progress-state">0/6 done · 0%</span></span>
             </summary>
@@ -965,14 +969,14 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
                 <div><dt>Custom object types</dt><dd><b>28</b></dd></div>
                 <div><dt>Recorded traces</dt><dd><b>37</b></dd></div>
                 <div><dt>Objects exercised</dt><dd><b>5</b></dd></div>
-                <div><dt>Trace cases</dt><dd><span class="missing">not measured</span> · no case directory</dd></div>
-                <div><dt>Package objects</dt><dd><b>44 / 112</b> mapped (39.3%) · 68 unmapped</dd></div>
+                <div><dt>Trace cases</dt><dd><span class="missing">not measured yet</span> · no case directory</dd></div>
+                <div><dt>Mapped objects</dt><dd><b>44 / 112</b> mapped (39.3%)</dd></div>
+                <div><dt>Scripted objects</dt><dd><b>68 / 112</b> scripted (60.7%)</dd></div>
                 <div><dt>Converter check</dt><dd>converted · <b>0</b> errors · <b>2</b> warnings</dd></div>
-                <div><dt>Scripted object types</dt><dd><span class="missing">not measured</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a></dd></div>
                 <div><dt>Port</dt><dd>games#7 · open · 0/6 done<span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span></dd></div>
               </dl>
-              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Package objects</b> counts objects mapped over objects in the converted package. Neither is a completion score. Built-in coverage and script share are composition shares of all placed instances.</p>
-              <p class="game-source">Package counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout. Scripted object types stay <span class="missing">not measured</span> until the per-game front-matter is filled.</p>
+              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Mapped objects</b> and <b>scripted objects</b> partition the converted package: mapped means an object resolves to a built-in behavior spec, scripted means the package writes it as a script. They are implementation counts, not completion scores. Built-in coverage and script share are composition shares of all placed instances.</p>
+              <p class="game-source">Mapped and scripted counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout.</p>
               <p class="game-links"><a href="https://delicious-fruit.com/game/12505">Game page</a> · <a href="https://github.com/nugamus/iwbtg-collection-games/issues/7">Port issue games#7</a></p>
             </div>
           </details>
@@ -1008,8 +1012,9 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
               </span>
               <span class="game-toggle" aria-hidden="true"></span>
               <span class="impl-bars">
-                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured<small>no case directory</small></span></span>
-                <span class="impl-row package"><span class="impl-label">Package objects</span><span class="impl-track" role="img" aria-label="Package objects: 63 / 240 mapped · 177 unmapped, 26.2 percent"><span style="width:26.2%"></span></span><span class="impl-value">63 / 240 mapped · 177 unmapped<small>26.2%</small></span></span>
+                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured yet<small>· no case directory</small></span></span>
+                <span class="impl-row package"><span class="impl-label">Mapped objects</span><span class="impl-track" aria-hidden="true"><span style="width:26.2%"></span></span><span class="impl-value">63 / 240 mapped<small>· 26.2%</small></span></span>
+                <span class="impl-row scripted"><span class="impl-label">Scripted objects</span><span class="impl-track" aria-hidden="true"><span style="width:73.8%"></span></span><span class="impl-value">177 / 240 scripted<small>· 73.8%</small></span></span>
               </span>
               <span class="row-progress"><span class="row-progress-label">Port checklist</span><span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span><span class="row-progress-state">0/6 done · 0%</span></span>
             </summary>
@@ -1022,14 +1027,14 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
                 <div><dt>Custom object types</dt><dd><b>28</b></dd></div>
                 <div><dt>Recorded traces</dt><dd><b>0</b></dd></div>
                 <div><dt>Objects exercised</dt><dd><b>0</b></dd></div>
-                <div><dt>Trace cases</dt><dd><span class="missing">not measured</span> · no case directory</dd></div>
-                <div><dt>Package objects</dt><dd><b>63 / 240</b> mapped (26.2%) · 177 unmapped</dd></div>
+                <div><dt>Trace cases</dt><dd><span class="missing">not measured yet</span> · no case directory</dd></div>
+                <div><dt>Mapped objects</dt><dd><b>63 / 240</b> mapped (26.2%)</dd></div>
+                <div><dt>Scripted objects</dt><dd><b>177 / 240</b> scripted (73.8%)</dd></div>
                 <div><dt>Converter check</dt><dd>converted · <b>0</b> errors · <b>2</b> warnings</dd></div>
-                <div><dt>Scripted object types</dt><dd><span class="missing">not measured</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a></dd></div>
                 <div><dt>Port</dt><dd>games#8 · open · 0/6 done<span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span></dd></div>
               </dl>
-              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Package objects</b> counts objects mapped over objects in the converted package. Neither is a completion score. Built-in coverage and script share are composition shares of all placed instances.</p>
-              <p class="game-source">Package counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout. Scripted object types stay <span class="missing">not measured</span> until the per-game front-matter is filled.</p>
+              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Mapped objects</b> and <b>scripted objects</b> partition the converted package: mapped means an object resolves to a built-in behavior spec, scripted means the package writes it as a script. They are implementation counts, not completion scores. Built-in coverage and script share are composition shares of all placed instances.</p>
+              <p class="game-source">Mapped and scripted counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout.</p>
               <p class="game-links"><a href="https://delicious-fruit.com/game/11403">Game page</a> · <a href="https://github.com/nugamus/iwbtg-collection-games/issues/8">Port issue games#8</a></p>
             </div>
           </details>
@@ -1065,8 +1070,9 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
               </span>
               <span class="game-toggle" aria-hidden="true"></span>
               <span class="impl-bars">
-                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured<small>no case directory</small></span></span>
-                <span class="impl-row package"><span class="impl-label">Package objects</span><span class="impl-track" role="img" aria-label="Package objects: 63 / 230 mapped · 167 unmapped, 27.4 percent"><span style="width:27.4%"></span></span><span class="impl-value">63 / 230 mapped · 167 unmapped<small>27.4%</small></span></span>
+                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured yet<small>· no case directory</small></span></span>
+                <span class="impl-row package"><span class="impl-label">Mapped objects</span><span class="impl-track" aria-hidden="true"><span style="width:27.4%"></span></span><span class="impl-value">63 / 230 mapped<small>· 27.4%</small></span></span>
+                <span class="impl-row scripted"><span class="impl-label">Scripted objects</span><span class="impl-track" aria-hidden="true"><span style="width:72.6%"></span></span><span class="impl-value">167 / 230 scripted<small>· 72.6%</small></span></span>
               </span>
               <span class="row-progress"><span class="row-progress-label">Port checklist</span><span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span><span class="row-progress-state">0/6 done · 0%</span></span>
             </summary>
@@ -1079,14 +1085,14 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
                 <div><dt>Custom object types</dt><dd><b>32</b></dd></div>
                 <div><dt>Recorded traces</dt><dd><b>12</b></dd></div>
                 <div><dt>Objects exercised</dt><dd><b>3</b></dd></div>
-                <div><dt>Trace cases</dt><dd><span class="missing">not measured</span> · no case directory</dd></div>
-                <div><dt>Package objects</dt><dd><b>63 / 230</b> mapped (27.4%) · 167 unmapped</dd></div>
+                <div><dt>Trace cases</dt><dd><span class="missing">not measured yet</span> · no case directory</dd></div>
+                <div><dt>Mapped objects</dt><dd><b>63 / 230</b> mapped (27.4%)</dd></div>
+                <div><dt>Scripted objects</dt><dd><b>167 / 230</b> scripted (72.6%)</dd></div>
                 <div><dt>Converter check</dt><dd>converted · <b>0</b> errors · <b>2</b> warnings</dd></div>
-                <div><dt>Scripted object types</dt><dd><span class="missing">not measured</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a></dd></div>
                 <div><dt>Port</dt><dd>games#9 · open · 0/6 done<span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span></dd></div>
               </dl>
-              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Package objects</b> counts objects mapped over objects in the converted package. Neither is a completion score. Built-in coverage and script share are composition shares of all placed instances.</p>
-              <p class="game-source">Package counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout. Scripted object types stay <span class="missing">not measured</span> until the per-game front-matter is filled.</p>
+              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Mapped objects</b> and <b>scripted objects</b> partition the converted package: mapped means an object resolves to a built-in behavior spec, scripted means the package writes it as a script. They are implementation counts, not completion scores. Built-in coverage and script share are composition shares of all placed instances.</p>
+              <p class="game-source">Mapped and scripted counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout.</p>
               <p class="game-links"><a href="https://delicious-fruit.com/game/21365">Game page</a> · <a href="https://github.com/nugamus/iwbtg-collection-games/issues/9">Port issue games#9</a></p>
             </div>
           </details>
@@ -1122,8 +1128,9 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
               </span>
               <span class="game-toggle" aria-hidden="true"></span>
               <span class="impl-bars">
-                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured<small>no case directory</small></span></span>
-                <span class="impl-row package"><span class="impl-label">Package objects</span><span class="impl-track" role="img" aria-label="Package objects: 25 / 55 mapped · 30 unmapped, 45.5 percent"><span style="width:45.5%"></span></span><span class="impl-value">25 / 55 mapped · 30 unmapped<small>45.5%</small></span></span>
+                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured yet<small>· no case directory</small></span></span>
+                <span class="impl-row package"><span class="impl-label">Mapped objects</span><span class="impl-track" aria-hidden="true"><span style="width:45.5%"></span></span><span class="impl-value">25 / 55 mapped<small>· 45.5%</small></span></span>
+                <span class="impl-row scripted"><span class="impl-label">Scripted objects</span><span class="impl-track" aria-hidden="true"><span style="width:54.5%"></span></span><span class="impl-value">30 / 55 scripted<small>· 54.5%</small></span></span>
               </span>
               <span class="row-progress"><span class="row-progress-label">Port checklist</span><span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span><span class="row-progress-state">0/6 done · 0%</span></span>
             </summary>
@@ -1136,14 +1143,14 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
                 <div><dt>Custom object types</dt><dd><b>7</b></dd></div>
                 <div><dt>Recorded traces</dt><dd><b>6</b></dd></div>
                 <div><dt>Objects exercised</dt><dd><b>2</b></dd></div>
-                <div><dt>Trace cases</dt><dd><span class="missing">not measured</span> · no case directory</dd></div>
-                <div><dt>Package objects</dt><dd><b>25 / 55</b> mapped (45.5%) · 30 unmapped</dd></div>
+                <div><dt>Trace cases</dt><dd><span class="missing">not measured yet</span> · no case directory</dd></div>
+                <div><dt>Mapped objects</dt><dd><b>25 / 55</b> mapped (45.5%)</dd></div>
+                <div><dt>Scripted objects</dt><dd><b>30 / 55</b> scripted (54.5%)</dd></div>
                 <div><dt>Converter check</dt><dd>converted · <b>0</b> errors · <b>2</b> warnings</dd></div>
-                <div><dt>Scripted object types</dt><dd><span class="missing">not measured</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a></dd></div>
                 <div><dt>Port</dt><dd>games#10 · open · 0/6 done<span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span></dd></div>
               </dl>
-              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Package objects</b> counts objects mapped over objects in the converted package. Neither is a completion score. Built-in coverage and script share are composition shares of all placed instances.</p>
-              <p class="game-source">Package counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout. Scripted object types stay <span class="missing">not measured</span> until the per-game front-matter is filled.</p>
+              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Mapped objects</b> and <b>scripted objects</b> partition the converted package: mapped means an object resolves to a built-in behavior spec, scripted means the package writes it as a script. They are implementation counts, not completion scores. Built-in coverage and script share are composition shares of all placed instances.</p>
+              <p class="game-source">Mapped and scripted counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout.</p>
               <p class="game-links"><a href="https://delicious-fruit.com/game/12270">Game page</a> · <a href="https://github.com/nugamus/iwbtg-collection-games/issues/10">Port issue games#10</a></p>
             </div>
           </details>
@@ -1179,8 +1186,9 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
               </span>
               <span class="game-toggle" aria-hidden="true"></span>
               <span class="impl-bars">
-                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured<small>no case directory</small></span></span>
-                <span class="impl-row package"><span class="impl-label">Package objects</span><span class="impl-track" role="img" aria-label="Package objects: 44 / 412 mapped · 368 unmapped, 10.7 percent"><span style="width:10.7%"></span></span><span class="impl-value">44 / 412 mapped · 368 unmapped<small>10.7%</small></span></span>
+                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured yet<small>· no case directory</small></span></span>
+                <span class="impl-row package"><span class="impl-label">Mapped objects</span><span class="impl-track" aria-hidden="true"><span style="width:10.7%"></span></span><span class="impl-value">44 / 412 mapped<small>· 10.7%</small></span></span>
+                <span class="impl-row scripted"><span class="impl-label">Scripted objects</span><span class="impl-track" aria-hidden="true"><span style="width:89.3%"></span></span><span class="impl-value">368 / 412 scripted<small>· 89.3%</small></span></span>
               </span>
               <span class="row-progress"><span class="row-progress-label">Port checklist</span><span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span><span class="row-progress-state">0/6 done · 0%</span></span>
             </summary>
@@ -1193,14 +1201,14 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
                 <div><dt>Custom object types</dt><dd><b>57</b></dd></div>
                 <div><dt>Recorded traces</dt><dd><b>41</b></dd></div>
                 <div><dt>Objects exercised</dt><dd><b>6</b></dd></div>
-                <div><dt>Trace cases</dt><dd><span class="missing">not measured</span> · no case directory</dd></div>
-                <div><dt>Package objects</dt><dd><b>44 / 412</b> mapped (10.7%) · 368 unmapped</dd></div>
+                <div><dt>Trace cases</dt><dd><span class="missing">not measured yet</span> · no case directory</dd></div>
+                <div><dt>Mapped objects</dt><dd><b>44 / 412</b> mapped (10.7%)</dd></div>
+                <div><dt>Scripted objects</dt><dd><b>368 / 412</b> scripted (89.3%)</dd></div>
                 <div><dt>Converter check</dt><dd>converted · <b>0</b> errors · <b>2</b> warnings</dd></div>
-                <div><dt>Scripted object types</dt><dd><span class="missing">not measured</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a></dd></div>
                 <div><dt>Port</dt><dd>games#11 · open · 0/6 done<span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span></dd></div>
               </dl>
-              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Package objects</b> counts objects mapped over objects in the converted package. Neither is a completion score. Built-in coverage and script share are composition shares of all placed instances.</p>
-              <p class="game-source">Package counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout. Scripted object types stay <span class="missing">not measured</span> until the per-game front-matter is filled.</p>
+              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Mapped objects</b> and <b>scripted objects</b> partition the converted package: mapped means an object resolves to a built-in behavior spec, scripted means the package writes it as a script. They are implementation counts, not completion scores. Built-in coverage and script share are composition shares of all placed instances.</p>
+              <p class="game-source">Mapped and scripted counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout.</p>
               <p class="game-links"><a href="https://delicious-fruit.com/game/10848">Game page</a> · <a href="https://github.com/nugamus/iwbtg-collection-games/issues/11">Port issue games#11</a></p>
             </div>
           </details>
@@ -1236,8 +1244,9 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
               </span>
               <span class="game-toggle" aria-hidden="true"></span>
               <span class="impl-bars">
-                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured<small>no case directory</small></span></span>
-                <span class="impl-row package"><span class="impl-label">Package objects</span><span class="impl-track" role="img" aria-label="Package objects: 53 / 228 mapped · 175 unmapped, 23.2 percent"><span style="width:23.2%"></span></span><span class="impl-value">53 / 228 mapped · 175 unmapped<small>23.2%</small></span></span>
+                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured yet<small>· no case directory</small></span></span>
+                <span class="impl-row package"><span class="impl-label">Mapped objects</span><span class="impl-track" aria-hidden="true"><span style="width:23.2%"></span></span><span class="impl-value">53 / 228 mapped<small>· 23.2%</small></span></span>
+                <span class="impl-row scripted"><span class="impl-label">Scripted objects</span><span class="impl-track" aria-hidden="true"><span style="width:76.8%"></span></span><span class="impl-value">175 / 228 scripted<small>· 76.8%</small></span></span>
               </span>
               <span class="row-progress"><span class="row-progress-label">Port checklist</span><span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span><span class="row-progress-state">0/6 done · 0%</span></span>
             </summary>
@@ -1250,14 +1259,14 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
                 <div><dt>Custom object types</dt><dd><b>42</b></dd></div>
                 <div><dt>Recorded traces</dt><dd><b>7</b></dd></div>
                 <div><dt>Objects exercised</dt><dd><b>6</b></dd></div>
-                <div><dt>Trace cases</dt><dd><span class="missing">not measured</span> · no case directory</dd></div>
-                <div><dt>Package objects</dt><dd><b>53 / 228</b> mapped (23.2%) · 175 unmapped</dd></div>
+                <div><dt>Trace cases</dt><dd><span class="missing">not measured yet</span> · no case directory</dd></div>
+                <div><dt>Mapped objects</dt><dd><b>53 / 228</b> mapped (23.2%)</dd></div>
+                <div><dt>Scripted objects</dt><dd><b>175 / 228</b> scripted (76.8%)</dd></div>
                 <div><dt>Converter check</dt><dd>converted · <b>0</b> errors · <b>2</b> warnings</dd></div>
-                <div><dt>Scripted object types</dt><dd><span class="missing">not measured</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a></dd></div>
                 <div><dt>Port</dt><dd>games#12 · open · 0/6 done<span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span></dd></div>
               </dl>
-              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Package objects</b> counts objects mapped over objects in the converted package. Neither is a completion score. Built-in coverage and script share are composition shares of all placed instances.</p>
-              <p class="game-source">Package counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout. Scripted object types stay <span class="missing">not measured</span> until the per-game front-matter is filled.</p>
+              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Mapped objects</b> and <b>scripted objects</b> partition the converted package: mapped means an object resolves to a built-in behavior spec, scripted means the package writes it as a script. They are implementation counts, not completion scores. Built-in coverage and script share are composition shares of all placed instances.</p>
+              <p class="game-source">Mapped and scripted counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout.</p>
               <p class="game-links"><a href="https://delicious-fruit.com/game/20975">Game page</a> · <a href="https://github.com/nugamus/iwbtg-collection-games/issues/12">Port issue games#12</a></p>
             </div>
           </details>
@@ -1293,8 +1302,9 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
               </span>
               <span class="game-toggle" aria-hidden="true"></span>
               <span class="impl-bars">
-                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured<small>no case directory</small></span></span>
-                <span class="impl-row package"><span class="impl-label">Package objects</span><span class="impl-track" role="img" aria-label="Package objects: 31 / 151 mapped · 120 unmapped, 20.5 percent"><span style="width:20.5%"></span></span><span class="impl-value">31 / 151 mapped · 120 unmapped<small>20.5%</small></span></span>
+                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured yet<small>· no case directory</small></span></span>
+                <span class="impl-row package"><span class="impl-label">Mapped objects</span><span class="impl-track" aria-hidden="true"><span style="width:20.5%"></span></span><span class="impl-value">31 / 151 mapped<small>· 20.5%</small></span></span>
+                <span class="impl-row scripted"><span class="impl-label">Scripted objects</span><span class="impl-track" aria-hidden="true"><span style="width:79.5%"></span></span><span class="impl-value">120 / 151 scripted<small>· 79.5%</small></span></span>
               </span>
               <span class="row-progress"><span class="row-progress-label">Port checklist</span><span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span><span class="row-progress-state">0/6 done · 0%</span></span>
             </summary>
@@ -1307,14 +1317,14 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
                 <div><dt>Custom object types</dt><dd><b>46</b></dd></div>
                 <div><dt>Recorded traces</dt><dd><b>38</b></dd></div>
                 <div><dt>Objects exercised</dt><dd><b>5</b></dd></div>
-                <div><dt>Trace cases</dt><dd><span class="missing">not measured</span> · no case directory</dd></div>
-                <div><dt>Package objects</dt><dd><b>31 / 151</b> mapped (20.5%) · 120 unmapped</dd></div>
+                <div><dt>Trace cases</dt><dd><span class="missing">not measured yet</span> · no case directory</dd></div>
+                <div><dt>Mapped objects</dt><dd><b>31 / 151</b> mapped (20.5%)</dd></div>
+                <div><dt>Scripted objects</dt><dd><b>120 / 151</b> scripted (79.5%)</dd></div>
                 <div><dt>Converter check</dt><dd>converted · <b>0</b> errors · <b>2</b> warnings</dd></div>
-                <div><dt>Scripted object types</dt><dd><span class="missing">not measured</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a></dd></div>
                 <div><dt>Port</dt><dd>games#13 · open · 0/6 done<span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span></dd></div>
               </dl>
-              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Package objects</b> counts objects mapped over objects in the converted package. Neither is a completion score. Built-in coverage and script share are composition shares of all placed instances.</p>
-              <p class="game-source">Package counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout. Scripted object types stay <span class="missing">not measured</span> until the per-game front-matter is filled.</p>
+              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Mapped objects</b> and <b>scripted objects</b> partition the converted package: mapped means an object resolves to a built-in behavior spec, scripted means the package writes it as a script. They are implementation counts, not completion scores. Built-in coverage and script share are composition shares of all placed instances.</p>
+              <p class="game-source">Mapped and scripted counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout.</p>
               <p class="game-links"><a href="https://delicious-fruit.com/game/18020">Game page</a> · <a href="https://github.com/nugamus/iwbtg-collection-games/issues/13">Port issue games#13</a></p>
             </div>
           </details>
@@ -1350,8 +1360,9 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
               </span>
               <span class="game-toggle" aria-hidden="true"></span>
               <span class="impl-bars">
-                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track" role="img" aria-label="Trace cases: 2 / 2 OK, 100.0 percent"><span style="width:100.0%"></span></span><span class="impl-value">2 / 2 OK<small>100.0%</small></span></span>
-                <span class="impl-row package"><span class="impl-label">Package objects</span><span class="impl-track" role="img" aria-label="Package objects: 55 / 139 mapped · 84 unmapped, 39.6 percent"><span style="width:39.6%"></span></span><span class="impl-value">55 / 139 mapped · 84 unmapped<small>39.6%</small></span></span>
+                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track" aria-hidden="true"><span style="width:100.0%"></span></span><span class="impl-value">2 / 2 OK<small>· 100.0%</small></span></span>
+                <span class="impl-row package"><span class="impl-label">Mapped objects</span><span class="impl-track" aria-hidden="true"><span style="width:39.6%"></span></span><span class="impl-value">55 / 139 mapped<small>· 39.6%</small></span></span>
+                <span class="impl-row scripted"><span class="impl-label">Scripted objects</span><span class="impl-track" aria-hidden="true"><span style="width:60.4%"></span></span><span class="impl-value">84 / 139 scripted<small>· 60.4%</small></span></span>
               </span>
               <span class="row-progress"><span class="row-progress-label">Port checklist</span><span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span><span class="row-progress-state">0/6 done · 0%</span></span>
             </summary>
@@ -1365,13 +1376,13 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
                 <div><dt>Recorded traces</dt><dd><b>5</b></dd></div>
                 <div><dt>Objects exercised</dt><dd><b>1</b></dd></div>
                 <div><dt>Trace cases</dt><dd><b>2 / 2</b> OK (100.0%)<br><span class="fact-source">crates/tools/cases/eat_the_new_year</span></dd></div>
-                <div><dt>Package objects</dt><dd><b>55 / 139</b> mapped (39.6%) · 84 unmapped</dd></div>
+                <div><dt>Mapped objects</dt><dd><b>55 / 139</b> mapped (39.6%)</dd></div>
+                <div><dt>Scripted objects</dt><dd><b>84 / 139</b> scripted (60.4%)</dd></div>
                 <div><dt>Converter check</dt><dd>converted · <b>0</b> errors · <b>2</b> warnings</dd></div>
-                <div><dt>Scripted object types</dt><dd><span class="missing">not measured</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a></dd></div>
                 <div><dt>Port</dt><dd>games#14 · open · 0/6 done<span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span></dd></div>
               </dl>
-              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Package objects</b> counts objects mapped over objects in the converted package. Neither is a completion score. Built-in coverage and script share are composition shares of all placed instances.</p>
-              <p class="game-source">Package counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout. Scripted object types stay <span class="missing">not measured</span> until the per-game front-matter is filled.</p>
+              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Mapped objects</b> and <b>scripted objects</b> partition the converted package: mapped means an object resolves to a built-in behavior spec, scripted means the package writes it as a script. They are implementation counts, not completion scores. Built-in coverage and script share are composition shares of all placed instances.</p>
+              <p class="game-source">Mapped and scripted counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout.</p>
               <p class="game-links"><a href="https://delicious-fruit.com/game/11512">Game page</a> · <a href="https://github.com/nugamus/iwbtg-collection-games/issues/14">Port issue games#14</a></p>
             </div>
           </details>
@@ -1407,8 +1418,9 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
               </span>
               <span class="game-toggle" aria-hidden="true"></span>
               <span class="impl-bars">
-                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track" role="img" aria-label="Trace cases: 1 / 1 OK, 100.0 percent"><span style="width:100.0%"></span></span><span class="impl-value">1 / 1 OK<small>100.0%</small></span></span>
-                <span class="impl-row package"><span class="impl-label">Package objects</span><span class="impl-track" role="img" aria-label="Package objects: 75 / 359 mapped · 284 unmapped, 20.9 percent"><span style="width:20.9%"></span></span><span class="impl-value">75 / 359 mapped · 284 unmapped<small>20.9%</small></span></span>
+                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track" aria-hidden="true"><span style="width:100.0%"></span></span><span class="impl-value">1 / 1 OK<small>· 100.0%</small></span></span>
+                <span class="impl-row package"><span class="impl-label">Mapped objects</span><span class="impl-track" aria-hidden="true"><span style="width:20.9%"></span></span><span class="impl-value">75 / 359 mapped<small>· 20.9%</small></span></span>
+                <span class="impl-row scripted"><span class="impl-label">Scripted objects</span><span class="impl-track" aria-hidden="true"><span style="width:79.1%"></span></span><span class="impl-value">284 / 359 scripted<small>· 79.1%</small></span></span>
               </span>
               <span class="row-progress"><span class="row-progress-label">Port checklist</span><span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span><span class="row-progress-state">0/6 done · 0%</span></span>
             </summary>
@@ -1422,13 +1434,13 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
                 <div><dt>Recorded traces</dt><dd><b>36</b></dd></div>
                 <div><dt>Objects exercised</dt><dd><b>6</b></dd></div>
                 <div><dt>Trace cases</dt><dd><b>1 / 1</b> OK (100.0%)<br><span class="fact-source">crates/tools/cases/animus</span></dd></div>
-                <div><dt>Package objects</dt><dd><b>75 / 359</b> mapped (20.9%) · 284 unmapped</dd></div>
+                <div><dt>Mapped objects</dt><dd><b>75 / 359</b> mapped (20.9%)</dd></div>
+                <div><dt>Scripted objects</dt><dd><b>284 / 359</b> scripted (79.1%)</dd></div>
                 <div><dt>Converter check</dt><dd>converted · <b>0</b> errors · <b>2</b> warnings</dd></div>
-                <div><dt>Scripted object types</dt><dd><span class="missing">not measured</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a></dd></div>
                 <div><dt>Port</dt><dd>games#15 · open · 0/6 done<span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span></dd></div>
               </dl>
-              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Package objects</b> counts objects mapped over objects in the converted package. Neither is a completion score. Built-in coverage and script share are composition shares of all placed instances.</p>
-              <p class="game-source">Package counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout. Scripted object types stay <span class="missing">not measured</span> until the per-game front-matter is filled.</p>
+              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Mapped objects</b> and <b>scripted objects</b> partition the converted package: mapped means an object resolves to a built-in behavior spec, scripted means the package writes it as a script. They are implementation counts, not completion scores. Built-in coverage and script share are composition shares of all placed instances.</p>
+              <p class="game-source">Mapped and scripted counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout.</p>
               <p class="game-links"><a href="https://delicious-fruit.com/game/10550">Game page</a> · <a href="https://github.com/nugamus/iwbtg-collection-games/issues/15">Port issue games#15</a></p>
             </div>
           </details>
@@ -1464,8 +1476,9 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
               </span>
               <span class="game-toggle" aria-hidden="true"></span>
               <span class="impl-bars">
-                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured<small>no case directory</small></span></span>
-                <span class="impl-row package"><span class="impl-label">Package objects</span><span class="impl-track" role="img" aria-label="Package objects: 90 / 326 mapped · 236 unmapped, 27.6 percent"><span style="width:27.6%"></span></span><span class="impl-value">90 / 326 mapped · 236 unmapped<small>27.6%</small></span></span>
+                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured yet<small>· no case directory</small></span></span>
+                <span class="impl-row package"><span class="impl-label">Mapped objects</span><span class="impl-track" aria-hidden="true"><span style="width:27.6%"></span></span><span class="impl-value">90 / 326 mapped<small>· 27.6%</small></span></span>
+                <span class="impl-row scripted"><span class="impl-label">Scripted objects</span><span class="impl-track" aria-hidden="true"><span style="width:72.4%"></span></span><span class="impl-value">236 / 326 scripted<small>· 72.4%</small></span></span>
               </span>
               <span class="row-progress"><span class="row-progress-label">Port checklist</span><span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span><span class="row-progress-state">0/6 done · 0%</span></span>
             </summary>
@@ -1478,14 +1491,14 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
                 <div><dt>Custom object types</dt><dd><b>58</b></dd></div>
                 <div><dt>Recorded traces</dt><dd><b>19</b></dd></div>
                 <div><dt>Objects exercised</dt><dd><b>6</b></dd></div>
-                <div><dt>Trace cases</dt><dd><span class="missing">not measured</span> · no case directory</dd></div>
-                <div><dt>Package objects</dt><dd><b>90 / 326</b> mapped (27.6%) · 236 unmapped</dd></div>
+                <div><dt>Trace cases</dt><dd><span class="missing">not measured yet</span> · no case directory</dd></div>
+                <div><dt>Mapped objects</dt><dd><b>90 / 326</b> mapped (27.6%)</dd></div>
+                <div><dt>Scripted objects</dt><dd><b>236 / 326</b> scripted (72.4%)</dd></div>
                 <div><dt>Converter check</dt><dd>converted · <b>0</b> errors · <b>2</b> warnings</dd></div>
-                <div><dt>Scripted object types</dt><dd><span class="missing">not measured</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a></dd></div>
                 <div><dt>Port</dt><dd>games#16 · open · 0/6 done<span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span></dd></div>
               </dl>
-              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Package objects</b> counts objects mapped over objects in the converted package. Neither is a completion score. Built-in coverage and script share are composition shares of all placed instances.</p>
-              <p class="game-source">Package counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout. Scripted object types stay <span class="missing">not measured</span> until the per-game front-matter is filled.</p>
+              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Mapped objects</b> and <b>scripted objects</b> partition the converted package: mapped means an object resolves to a built-in behavior spec, scripted means the package writes it as a script. They are implementation counts, not completion scores. Built-in coverage and script share are composition shares of all placed instances.</p>
+              <p class="game-source">Mapped and scripted counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout.</p>
               <p class="game-links"><a href="https://delicious-fruit.com/game/11595">Game page</a> · <a href="https://github.com/nugamus/iwbtg-collection-games/issues/16">Port issue games#16</a></p>
             </div>
           </details>
@@ -1521,8 +1534,9 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
               </span>
               <span class="game-toggle" aria-hidden="true"></span>
               <span class="impl-bars">
-                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track" role="img" aria-label="Trace cases: 2 / 3 OK · 1 OPEN, 66.7 percent"><span style="width:66.7%"></span></span><span class="impl-value">2 / 3 OK · 1 OPEN<small>66.7%</small></span></span>
-                <span class="impl-row package"><span class="impl-label">Package objects</span><span class="impl-track" role="img" aria-label="Package objects: 99 / 388 mapped · 289 unmapped, 25.5 percent"><span style="width:25.5%"></span></span><span class="impl-value">99 / 388 mapped · 289 unmapped<small>25.5%</small></span></span>
+                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track" aria-hidden="true"><span style="width:66.7%"></span></span><span class="impl-value">2 / 3 OK · 1 OPEN<small>· 66.7%</small></span></span>
+                <span class="impl-row package"><span class="impl-label">Mapped objects</span><span class="impl-track" aria-hidden="true"><span style="width:25.5%"></span></span><span class="impl-value">99 / 388 mapped<small>· 25.5%</small></span></span>
+                <span class="impl-row scripted"><span class="impl-label">Scripted objects</span><span class="impl-track" aria-hidden="true"><span style="width:74.5%"></span></span><span class="impl-value">289 / 388 scripted<small>· 74.5%</small></span></span>
               </span>
               <span class="row-progress"><span class="row-progress-label">Port checklist</span><span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span><span class="row-progress-state">0/6 done · 0%</span></span>
             </summary>
@@ -1536,13 +1550,13 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
                 <div><dt>Recorded traces</dt><dd><b>3</b></dd></div>
                 <div><dt>Objects exercised</dt><dd><b>1</b></dd></div>
                 <div><dt>Trace cases</dt><dd><b>2 / 3</b> OK (66.7%) · 1 OPEN<br><span class="fact-source">crates/tools/cases/get_the_rainbow_feather</span></dd></div>
-                <div><dt>Package objects</dt><dd><b>99 / 388</b> mapped (25.5%) · 289 unmapped</dd></div>
+                <div><dt>Mapped objects</dt><dd><b>99 / 388</b> mapped (25.5%)</dd></div>
+                <div><dt>Scripted objects</dt><dd><b>289 / 388</b> scripted (74.5%)</dd></div>
                 <div><dt>Converter check</dt><dd>converted · <b>0</b> errors · <b>2</b> warnings</dd></div>
-                <div><dt>Scripted object types</dt><dd><span class="missing">not measured</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a></dd></div>
                 <div><dt>Port</dt><dd>games#17 · open · 0/6 done<span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span></dd></div>
               </dl>
-              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Package objects</b> counts objects mapped over objects in the converted package. Neither is a completion score. Built-in coverage and script share are composition shares of all placed instances.</p>
-              <p class="game-source">Package counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout. Scripted object types stay <span class="missing">not measured</span> until the per-game front-matter is filled.</p>
+              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Mapped objects</b> and <b>scripted objects</b> partition the converted package: mapped means an object resolves to a built-in behavior spec, scripted means the package writes it as a script. They are implementation counts, not completion scores. Built-in coverage and script share are composition shares of all placed instances.</p>
+              <p class="game-source">Mapped and scripted counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout.</p>
               <p class="game-links"><a href="https://delicious-fruit.com/game/11562">Game page</a> · <a href="https://github.com/nugamus/iwbtg-collection-games/issues/17">Port issue games#17</a></p>
             </div>
           </details>
@@ -1578,8 +1592,9 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
               </span>
               <span class="game-toggle" aria-hidden="true"></span>
               <span class="impl-bars">
-                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track" role="img" aria-label="Trace cases: 20 / 20 OK, 100.0 percent"><span style="width:100.0%"></span></span><span class="impl-value">20 / 20 OK<small>100.0%</small></span></span>
-                <span class="impl-row package"><span class="impl-label">Package objects</span><span class="impl-track" role="img" aria-label="Package objects: 61 / 291 mapped · 230 unmapped, 21.0 percent"><span style="width:21.0%"></span></span><span class="impl-value">61 / 291 mapped · 230 unmapped<small>21.0%</small></span></span>
+                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track" aria-hidden="true"><span style="width:100.0%"></span></span><span class="impl-value">20 / 20 OK<small>· 100.0%</small></span></span>
+                <span class="impl-row package"><span class="impl-label">Mapped objects</span><span class="impl-track" aria-hidden="true"><span style="width:21.0%"></span></span><span class="impl-value">61 / 291 mapped<small>· 21.0%</small></span></span>
+                <span class="impl-row scripted"><span class="impl-label">Scripted objects</span><span class="impl-track" aria-hidden="true"><span style="width:79.0%"></span></span><span class="impl-value">230 / 291 scripted<small>· 79.0%</small></span></span>
               </span>
               <span class="row-progress"><span class="row-progress-label">Port checklist</span><span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span><span class="row-progress-state">0/6 done · 0%</span></span>
             </summary>
@@ -1593,13 +1608,13 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
                 <div><dt>Recorded traces</dt><dd><b>30</b></dd></div>
                 <div><dt>Objects exercised</dt><dd><b>2</b></dd></div>
                 <div><dt>Trace cases</dt><dd><b>20 / 20</b> OK (100.0%)<br><span class="fact-source">crates/tools/cases/showdown</span></dd></div>
-                <div><dt>Package objects</dt><dd><b>61 / 291</b> mapped (21.0%) · 230 unmapped</dd></div>
+                <div><dt>Mapped objects</dt><dd><b>61 / 291</b> mapped (21.0%)</dd></div>
+                <div><dt>Scripted objects</dt><dd><b>230 / 291</b> scripted (79.0%)</dd></div>
                 <div><dt>Converter check</dt><dd>converted · <b>0</b> errors · <b>2</b> warnings</dd></div>
-                <div><dt>Scripted object types</dt><dd><span class="missing">not measured</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a></dd></div>
                 <div><dt>Port</dt><dd>games#18 · open · 0/6 done<span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span></dd></div>
               </dl>
-              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Package objects</b> counts objects mapped over objects in the converted package. Neither is a completion score. Built-in coverage and script share are composition shares of all placed instances.</p>
-              <p class="game-source">Package counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout. Scripted object types stay <span class="missing">not measured</span> until the per-game front-matter is filled.</p>
+              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Mapped objects</b> and <b>scripted objects</b> partition the converted package: mapped means an object resolves to a built-in behavior spec, scripted means the package writes it as a script. They are implementation counts, not completion scores. Built-in coverage and script share are composition shares of all placed instances.</p>
+              <p class="game-source">Mapped and scripted counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout.</p>
               <p class="game-links"><a href="https://delicious-fruit.com/game/14697">Game page</a> · <a href="https://github.com/nugamus/iwbtg-collection-games/issues/18">Port issue games#18</a></p>
             </div>
           </details>
@@ -1635,8 +1650,9 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
               </span>
               <span class="game-toggle" aria-hidden="true"></span>
               <span class="impl-bars">
-                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured<small>no case directory</small></span></span>
-                <span class="impl-row package"><span class="impl-label">Package objects</span><span class="impl-track" role="img" aria-label="Package objects: 39 / 122 mapped · 83 unmapped, 32.0 percent"><span style="width:32.0%"></span></span><span class="impl-value">39 / 122 mapped · 83 unmapped<small>32.0%</small></span></span>
+                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured yet<small>· no case directory</small></span></span>
+                <span class="impl-row package"><span class="impl-label">Mapped objects</span><span class="impl-track" aria-hidden="true"><span style="width:32.0%"></span></span><span class="impl-value">39 / 122 mapped<small>· 32.0%</small></span></span>
+                <span class="impl-row scripted"><span class="impl-label">Scripted objects</span><span class="impl-track" aria-hidden="true"><span style="width:68.0%"></span></span><span class="impl-value">83 / 122 scripted<small>· 68.0%</small></span></span>
               </span>
               <span class="row-progress"><span class="row-progress-label">Port checklist</span><span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span><span class="row-progress-state">0/6 done · 0%</span></span>
             </summary>
@@ -1649,14 +1665,14 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
                 <div><dt>Custom object types</dt><dd><b>38</b></dd></div>
                 <div><dt>Recorded traces</dt><dd><b>13</b></dd></div>
                 <div><dt>Objects exercised</dt><dd><b>3</b></dd></div>
-                <div><dt>Trace cases</dt><dd><span class="missing">not measured</span> · no case directory</dd></div>
-                <div><dt>Package objects</dt><dd><b>39 / 122</b> mapped (32.0%) · 83 unmapped</dd></div>
+                <div><dt>Trace cases</dt><dd><span class="missing">not measured yet</span> · no case directory</dd></div>
+                <div><dt>Mapped objects</dt><dd><b>39 / 122</b> mapped (32.0%)</dd></div>
+                <div><dt>Scripted objects</dt><dd><b>83 / 122</b> scripted (68.0%)</dd></div>
                 <div><dt>Converter check</dt><dd>converted · <b>0</b> errors · <b>2</b> warnings</dd></div>
-                <div><dt>Scripted object types</dt><dd><span class="missing">not measured</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a></dd></div>
                 <div><dt>Port</dt><dd>games#19 · open · 0/6 done<span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span></dd></div>
               </dl>
-              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Package objects</b> counts objects mapped over objects in the converted package. Neither is a completion score. Built-in coverage and script share are composition shares of all placed instances.</p>
-              <p class="game-source">Package counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout. Scripted object types stay <span class="missing">not measured</span> until the per-game front-matter is filled.</p>
+              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Mapped objects</b> and <b>scripted objects</b> partition the converted package: mapped means an object resolves to a built-in behavior spec, scripted means the package writes it as a script. They are implementation counts, not completion scores. Built-in coverage and script share are composition shares of all placed instances.</p>
+              <p class="game-source">Mapped and scripted counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout.</p>
               <p class="game-links"><a href="https://delicious-fruit.com/game/15561">Game page</a> · <a href="https://github.com/nugamus/iwbtg-collection-games/issues/19">Port issue games#19</a></p>
             </div>
           </details>
@@ -1692,8 +1708,9 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
               </span>
               <span class="game-toggle" aria-hidden="true"></span>
               <span class="impl-bars">
-                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured<small>no case directory</small></span></span>
-                <span class="impl-row package"><span class="impl-label">Package objects</span><span class="impl-track" role="img" aria-label="Package objects: 56 / 113 mapped · 57 unmapped, 49.6 percent"><span style="width:49.6%"></span></span><span class="impl-value">56 / 113 mapped · 57 unmapped<small>49.6%</small></span></span>
+                <span class="impl-row cases"><span class="impl-label">Trace cases</span><span class="impl-track is-missing" aria-hidden="true"></span><span class="impl-value is-missing">not measured yet<small>· no case directory</small></span></span>
+                <span class="impl-row package"><span class="impl-label">Mapped objects</span><span class="impl-track" aria-hidden="true"><span style="width:49.6%"></span></span><span class="impl-value">56 / 113 mapped<small>· 49.6%</small></span></span>
+                <span class="impl-row scripted"><span class="impl-label">Scripted objects</span><span class="impl-track" aria-hidden="true"><span style="width:50.4%"></span></span><span class="impl-value">57 / 113 scripted<small>· 50.4%</small></span></span>
               </span>
               <span class="row-progress"><span class="row-progress-label">Port checklist</span><span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span><span class="row-progress-state">0/6 done · 0%</span></span>
             </summary>
@@ -1706,19 +1723,19 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
                 <div><dt>Custom object types</dt><dd><b>10</b></dd></div>
                 <div><dt>Recorded traces</dt><dd><b>0</b></dd></div>
                 <div><dt>Objects exercised</dt><dd><b>0</b></dd></div>
-                <div><dt>Trace cases</dt><dd><span class="missing">not measured</span> · no case directory</dd></div>
-                <div><dt>Package objects</dt><dd><b>56 / 113</b> mapped (49.6%) · 57 unmapped</dd></div>
+                <div><dt>Trace cases</dt><dd><span class="missing">not measured yet</span> · no case directory</dd></div>
+                <div><dt>Mapped objects</dt><dd><b>56 / 113</b> mapped (49.6%)</dd></div>
+                <div><dt>Scripted objects</dt><dd><b>57 / 113</b> scripted (50.4%)</dd></div>
                 <div><dt>Converter check</dt><dd>converted · <b>0</b> errors · <b>2</b> warnings</dd></div>
-                <div><dt>Scripted object types</dt><dd><span class="missing">not measured</span> · <a href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a></dd></div>
                 <div><dt>Port</dt><dd>games#20 · open · 0/6 done<span class="port-meter" aria-hidden="true"><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span><span class="port-step"></span></span></dd></div>
               </dl>
-              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Package objects</b> counts objects mapped over objects in the converted package. Neither is a completion score. Built-in coverage and script share are composition shares of all placed instances.</p>
-              <p class="game-source">Package counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout. Scripted object types stay <span class="missing">not measured</span> until the per-game front-matter is filled.</p>
+              <p class="game-explain"><strong>What the bars mean.</strong> <b>Trace cases</b> counts committed cases under <code>crates/tools/cases/</code> whose status in <code>crates/tools/fidelity-baseline.txt</code> is OK, over the cases recorded; it rises when a case is added and passes. <b>Mapped objects</b> and <b>scripted objects</b> partition the converted package: mapped means an object resolves to a built-in behavior spec, scripted means the package writes it as a script. They are implementation counts, not completion scores. Built-in coverage and script share are composition shares of all placed instances.</p>
+              <p class="game-source">Mapped and scripted counts are the committed exporter snapshot of <b>2026-11-24 17:13:20 UTC</b>; regenerating it needs the research checkout.</p>
               <p class="game-links"><a href="https://delicious-fruit.com/game/21633">Game page</a> · <a href="https://github.com/nugamus/iwbtg-collection-games/issues/20">Port issue games#20</a></p>
             </div>
           </details>
         </li></ul>
-        <p class="source-note">Placed instances and built-in coverage: <code>specs/mechanics/coverage.md</code> (SCAN, 2026-10-24). Custom objects: <code>shortlist.md</code>. Traces and exercised objects: the recorded CSVs under <code>specs/engines/gm8/traces/&lt;slug&gt;/</code>. Trace cases: <code>crates/tools/cases/</code> and <code>crates/tools/fidelity-baseline.txt</code>. Package objects: <code>progress/exporter.json</code> (snapshot of 2026-11-24 17:13:20 UTC). <code>progress/export_research.py</code> regenerates the research-derived counts.</p>
+        <p class="source-note">Placed instances and built-in coverage: <code>specs/mechanics/coverage.md</code> (SCAN, 2026-10-24). Custom objects: <code>shortlist.md</code>. Traces and exercised objects: the recorded CSVs under <code>specs/engines/gm8/traces/&lt;slug&gt;/</code>. Trace cases: <code>crates/tools/cases/</code> and <code>crates/tools/fidelity-baseline.txt</code>. Mapped and scripted objects: <code>progress/exporter.json</code> (snapshot of 2026-11-24 17:13:20 UTC) and the <code>docs/games</code> front-matter. <code>progress/export_research.py</code> regenerates the research-derived counts.</p>
         <details class="glossary" open>
           <summary>Terms in this register</summary>
           <dl>
@@ -1730,8 +1747,10 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
             <div><dt>Custom object types</dt><dd>Distinct custom object types placed in the game, counted by the census from <code>shortlist.md</code>.</dd></div>
             <div><dt>Client / kid</dt><dd>Placed client objects and kid instances that are neither covered by a built-in nor counted as script objects.</dd></div>
             <div><dt>Trace cases passing</dt><dd>Committed trace cases whose status in <code>crates/tools/fidelity-baseline.txt</code> is <code>OK</code>, over the cases recorded in <code>crates/tools/cases/&lt;game&gt;/</code>. A case is one recorded scenario; a passing case is evidence, not proof that every object in it is tick-accurate.</dd></div>
-            <div><dt>Package objects mapped</dt><dd>Objects mapped over objects in the converted package, from <code>progress/exporter.json</code>. The snapshot is generated in the research environment; its date is shown beside the bars.</dd></div>
+            <div><dt>Mapped objects</dt><dd>Objects resolved to a built-in behavior spec over objects in the converted package, from <code>progress/exporter.json</code> and the <code>docs/games</code> front-matter. The snapshot is generated in the research environment; its date is shown beside the bars.</dd></div>
+            <div><dt>Scripted objects</dt><dd>Objects the converted package writes as scripts over objects in the package. Mapped and scripted objects partition the package total.</dd></div>
             <div><dt>Passing-trace coverage</dt><dd>The share of individual objects proven tick-accurate by a passing trace. Not measured yet; it needs the trace runner (<a href="https://github.com/nugamus/iwbtg-collection/issues/1365">#1365</a>). This is different from the per-game <i>trace cases passing</i> bar.</dd></div>
+            <div><dt>Not measured yet</dt><dd>A value the repo cannot supply honestly. The page names the missing input and, where one exists, the follow-up issue; it never prints zero or an estimate.</dd></div>
             <div><dt>Tick-accurate</dt><dd>The rebuilt object reproduces the original's behavior on every simulation tick, proven by a passing trace.</dd></div>
             <div><dt>Port</dt><dd>Each game's port issue in the games repository, with the progress of its <i>Done when</i> checklist.</dd></div>
             <div><dt>Phase gate</dt><dd>A milestone with entry and exit conditions. Delivery measures closed issues against the phase total and remaining size points, not a date.</dd></div>
@@ -1746,7 +1765,7 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
           <h2 id="delivery-title">Delivery</h2>
           <p>Phase gates run from Foundation to Release. A phase is a sequence, not a calendar; no deadlines are shown. The public alpha is planned to open at phase 7 (Online). Port issues and their <i>Done when</i> checklists stay in the coverage register's Port column.</p>
         </div>
-        <p class="delivery-summary"><span><b>285</b> open</span><span><b>642</b> closed of 927 (69.3%)</span><span><b>695</b> remaining size points</span><span><b>3</b> open PRs</span></p>
+        <p class="delivery-summary"><span><b>284</b> open</span><span><b>646</b> closed of 930 (69.5%)</span><span><b>694</b> remaining size points</span><span><b>2</b> open PRs</span></p>
         <ol class="phase-list">
         <li class="phase">
           <div class="phase-name">
@@ -1828,8 +1847,8 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
 
           </div>
           <div class="phase-body">
-            <div class="phase-values"><span>214 / 252 closed</span><span>84.9%</span></div>
-            <span class="progress-track" aria-hidden="true"><span class="progress-fill" style="width:84.9%"></span></span>
+            <div class="phase-values"><span>215 / 253 closed</span><span>85.0%</span></div>
+            <span class="progress-track" aria-hidden="true"><span class="progress-fill" style="width:85.0%"></span></span>
             <div class="phase-meta">
               <span>38 open</span>
               <span>48 size points left</span>
@@ -1900,12 +1919,12 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
 
           </div>
           <div class="phase-body">
-            <div class="phase-values"><span>101 / 138 closed</span><span>73.2%</span></div>
-            <span class="progress-track" aria-hidden="true"><span class="progress-fill" style="width:73.2%"></span></span>
+            <div class="phase-values"><span>101 / 139 closed</span><span>72.7%</span></div>
+            <span class="progress-track" aria-hidden="true"><span class="progress-fill" style="width:72.7%"></span></span>
             <div class="phase-meta">
-              <span>37 open</span>
-              <span>130 size points left</span>
-              <span>S 9 · M 19 · L 8 · 1 unlabelled</span>
+              <span>38 open</span>
+              <span>131 size points left</span>
+              <span>S 10 · M 19 · L 8 · 1 unlabelled</span>
             </div>
             <details class="gate"><summary>Entry and exit conditions</summary>
               <dl>
@@ -1924,12 +1943,12 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
             <span class="alpha-tag">Public alpha planned here</span>
           </div>
           <div class="phase-body">
-            <div class="phase-values"><span>14 / 66 closed</span><span>21.2%</span></div>
-            <span class="progress-track" aria-hidden="true"><span class="progress-fill" style="width:21.2%"></span></span>
+            <div class="phase-values"><span>15 / 66 closed</span><span>22.7%</span></div>
+            <span class="progress-track" aria-hidden="true"><span class="progress-fill" style="width:22.7%"></span></span>
             <div class="phase-meta">
-              <span>52 open</span>
-              <span>129 size points left</span>
-              <span>S 27 · M 18 · L 6 · 1 unlabelled</span>
+              <span>51 open</span>
+              <span>128 size points left</span>
+              <span>S 26 · M 18 · L 6 · 1 unlabelled</span>
             </div>
             <details class="gate"><summary>Entry and exit conditions</summary>
               <dl>
@@ -1972,12 +1991,12 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
 
           </div>
           <div class="phase-body">
-            <div class="phase-values"><span>10 / 59 closed</span><span>16.9%</span></div>
-            <span class="progress-track" aria-hidden="true"><span class="progress-fill" style="width:16.9%"></span></span>
+            <div class="phase-values"><span>11 / 59 closed</span><span>18.6%</span></div>
+            <span class="progress-track" aria-hidden="true"><span class="progress-fill" style="width:18.6%"></span></span>
             <div class="phase-meta">
-              <span>49 open</span>
-              <span>136 size points left</span>
-              <span>S 28 · M 12 · L 9</span>
+              <span>48 open</span>
+              <span>135 size points left</span>
+              <span>S 27 · M 12 · L 9</span>
             </div>
             <details class="gate"><summary>Entry and exit conditions</summary>
               <dl>
@@ -2020,18 +2039,18 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
           <h2 id="activity-title">Activity</h2>
           <p>What closed, what is claimed, what needs a decision and what an agent can start without a blocker. Each list is the most recent or highest-priority selection the generator makes, not the complete set of issues in that state.</p>
         </div>
-        <div class="process-chips activity-process" aria-label="Open issues by process label"><span class="process-chip"><b>10</b> in-progress</span><span class="process-chip"><b>30</b> needs-user</span><span class="process-chip"><b>130</b> agent-ready</span><span class="process-chip"><b>25</b> blocked</span><span class="process-chip"><b>52</b> triage</span><span class="process-chip"><b>3</b> revisit</span></div>
+        <div class="process-chips activity-process" aria-label="Open issues by process label"><span class="process-chip"><b>13</b> in-progress</span><span class="process-chip"><b>30</b> needs-user</span><span class="process-chip"><b>131</b> agent-ready</span><span class="process-chip"><b>25</b> blocked</span><span class="process-chip"><b>50</b> triage</span><span class="process-chip"><b>3</b> revisit</span></div>
         <div class="dispatch">
-          <section class="dispatch-col" aria-labelledby="recent-title"><h3 id="recent-title">Recently closed</h3><ul class="issue-list"><li><span class="issue-phase">Phase 5</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1489">#1489</a> <span class="issue-title">Client: measure browser (wasm) startup by phase</span></li><li><span class="issue-phase">Phase 7</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1479">#1479</a> <span class="issue-title">Tools: sign a removal list (Ed25519) for docs/server.md&#x27;s format</span></li><li><span class="issue-phase">Phase 7</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/161">#161</a> <span class="issue-title">Auth: rate limiting on CF-Connecting-IP</span></li><li><span class="issue-phase">Phase 2</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1382">#1382</a> <span class="issue-title">Sim: one fill rule for skipped array elements (room set_global vs script writes)</span></li><li><span class="issue-phase">Phase 2</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1380">#1380</a> <span class="issue-title">Script API: plan the groups the census needs that scripts.md does not list (paths, view, strings, instance_change, bounce, kid actions)</span></li><li><span class="issue-phase">Phase 7</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1506">#1506</a> <span class="issue-title">Catalog: stream /files instead of buffering whole packages (3 x 200 MiB downloads hit 610 MB)</span></li><li><span class="issue-phase">Phase 3</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1082">#1082</a> <span class="issue-title">Sim docs: clear the remaining plan citations in sim tests and pkg_cmd</span></li><li><span class="issue-phase">Phase 0</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1527">#1527</a> <span class="issue-title">Restore the two historical WP7a comments renamed by #1519</span></li></ul></section>
-          <section class="dispatch-col" aria-labelledby="progress-title"><h3 id="progress-title">In progress</h3><ul class="issue-list"><li><span class="issue-phase">Phase 7</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/160">#160</a> <span class="issue-title">Auth: password reset by emailed code</span></li><li><span class="issue-phase">Phase 6</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/43">#43</a> <span class="issue-title">Ranked (stripped) and Play original buttons</span></li><li><span class="issue-phase">Phase 7</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/113">#113</a> <span class="issue-title">Security review of the server before accounts go live</span></li><li><span class="issue-phase">Phase 5</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/196">#196</a> <span class="issue-title">UI translation files, English and Japanese</span></li><li><span class="issue-phase">Phase 5</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/106">#106</a> <span class="issue-title">Accessibility: screen-shake toggle, colorblind-friendly UI, audio cues</span></li><li><span class="issue-phase">Phase 7</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/154">#154</a> <span class="issue-title">Server: Docker Compose with cloudflared</span></li></ul></section>
+          <section class="dispatch-col" aria-labelledby="recent-title"><h3 id="recent-title">Recently closed</h3><ul class="issue-list"><li><span class="issue-phase">Phase 7</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/160">#160</a> <span class="issue-title">Auth: password reset by emailed code</span></li><li><span class="issue-phase">Phase 3</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1342">#1342</a> <span class="issue-title">Docs: stale &quot;Waits on&quot; cells in the Modernization workstream table</span></li><li><span class="issue-phase">Phase 9</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a> <span class="issue-title">Fill per-game progress front-matter in docs/games</span></li><li><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1548">#1548</a> <span class="issue-title">dashboard: per-game implementation bars from repo data</span></li><li><span class="issue-phase">Phase 5</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1489">#1489</a> <span class="issue-title">Client: measure browser (wasm) startup by phase</span></li><li><span class="issue-phase">Phase 7</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1479">#1479</a> <span class="issue-title">Tools: sign a removal list (Ed25519) for docs/server.md&#x27;s format</span></li><li><span class="issue-phase">Phase 7</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/161">#161</a> <span class="issue-title">Auth: rate limiting on CF-Connecting-IP</span></li><li><span class="issue-phase">Phase 2</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1382">#1382</a> <span class="issue-title">Sim: one fill rule for skipped array elements (room set_global vs script writes)</span></li></ul></section>
+          <section class="dispatch-col" aria-labelledby="progress-title"><h3 id="progress-title">In progress</h3><ul class="issue-list"><li><span class="issue-phase">Phase 3</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1234">#1234</a> <span class="issue-title">Docs: sim rooms page — name the explicit Camera preset in the views section (#1189 E2a)</span></li><li><span class="issue-phase">Phase 6</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/39">#39</a> <span class="issue-title">Practice mode: start from stage, save or room; save states</span></li><li><span class="issue-phase">Phase 2</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1379">#1379</a> <span class="issue-title">0004 class capacity: check the 96 package classes against the census (up to 114 scripted kinds per game)</span></li><li><span class="issue-phase">Phase 2</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1093">#1093</a> <span class="issue-title">Sim scripts: prepared script artifact and shared GameDef (host.rs half of #1021)</span></li><li><span class="issue-phase">Phase 6</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/43">#43</a> <span class="issue-title">Ranked (stripped) and Play original buttons</span></li><li><span class="issue-phase">Phase 7</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/113">#113</a> <span class="issue-title">Security review of the server before accounts go live</span></li></ul></section>
           <section class="dispatch-col" aria-labelledby="waiting-title"><h3 id="waiting-title">Waiting on you</h3><ul class="issue-list"><li><span class="issue-phase">Phase 10</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/195">#195</a> <span class="issue-title">Public nightly alpha builds</span></li><li><span class="issue-phase">Phase 10</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1503">#1503</a> <span class="issue-title">Licence: the generated header claims MIT OR Apache-2.0 but only MIT ships</span></li><li><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1395">#1395</a> <span class="issue-title">Format: enact the format freeze (schema guard at the freeze point, #795 follow-up)</span></li><li><span class="issue-phase">Phase 1</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/426">#426</a> <span class="issue-title">atan2 near-axis cutoff: find the recorder&#x27;s rule between ratio 3.5e-16 and ordinary vectors</span></li><li><span class="issue-phase">Phase 6</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/953">#953</a> <span class="issue-title">Decide: script error screen layout</span></li><li><span class="issue-phase">Phase 7</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/194">#194</a> <span class="issue-title">Discord server and bug channel</span></li></ul></section>
           <section class="dispatch-col" aria-labelledby="ready-title"><h3 id="ready-title">Ready to start</h3><ul class="issue-list"><li><span class="issue-phase">Phase 0</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/228">#228</a> <span class="issue-title">CI: run format wp7a_* tests on wasm32 again after WP11</span></li><li><span class="issue-phase">Phase 1</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/1365">#1365</a> <span class="issue-title">Progress exporter: trace coverage per game</span></li><li><span class="issue-phase">Phase 10</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/68">#68</a> <span class="issue-title">Takedown page, contact and removal list</span></li><li><span class="issue-phase">Phase 10</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/69">#69</a> <span class="issue-title">Privacy page, account deletion and export</span></li><li><span class="issue-phase">Phase 10</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/71">#71</a> <span class="issue-title">Release builds for Windows and Linux</span></li><li><span class="issue-phase">Phase 10</span><a class="issue-number" href="https://github.com/nugamus/iwbtg-collection/issues/74">#74</a> <span class="issue-title">Creator claim flow</span></li></ul></section>
         </div>
         <div class="analysis">
           <section aria-labelledby="area-title">
             <h3 id="area-title">Open work by area</h3>
-            <p class="note">An issue can carry more than one area label, so these counts do not sum to 285.</p>
-            <div class="area-chart"><div class="area-row"><span class="area-label">area:sim</span><span class="area-track" aria-hidden="true"><span class="area-fill" style="width:100.0%"></span></span><span class="area-count">92</span></div><div class="area-row"><span class="area-label">area:client</span><span class="area-track" aria-hidden="true"><span class="area-fill" style="width:70.7%"></span></span><span class="area-count">65</span></div><div class="area-row"><span class="area-label">area:server</span><span class="area-track" aria-hidden="true"><span class="area-fill" style="width:51.1%"></span></span><span class="area-count">47</span></div><div class="area-row"><span class="area-label">area:format</span><span class="area-track" aria-hidden="true"><span class="area-fill" style="width:45.7%"></span></span><span class="area-count">42</span></div><div class="area-row"><span class="area-label">area:editor</span><span class="area-track" aria-hidden="true"><span class="area-fill" style="width:31.5%"></span></span><span class="area-count">29</span></div><div class="area-row"><span class="area-label">area:infra</span><span class="area-track" aria-hidden="true"><span class="area-fill" style="width:25.0%"></span></span><span class="area-count">23</span></div><div class="area-row"><span class="area-label">area:design</span><span class="area-track" aria-hidden="true"><span class="area-fill" style="width:15.2%"></span></span><span class="area-count">14</span></div><div class="area-row"><span class="area-label">area:tools</span><span class="area-track" aria-hidden="true"><span class="area-fill" style="width:9.8%"></span></span><span class="area-count">9</span></div><div class="area-row"><span class="area-label">area:docs</span><span class="area-track" aria-hidden="true"><span class="area-fill" style="width:7.6%"></span></span><span class="area-count">7</span></div><div class="area-row"><span class="area-label">area:port</span><span class="area-track" aria-hidden="true"><span class="area-fill" style="width:5.4%"></span></span><span class="area-count">5</span></div><div class="area-row"><span class="area-label">area:research</span><span class="area-track" aria-hidden="true"><span class="area-fill" style="width:5.4%"></span></span><span class="area-count">5</span></div></div>
+            <p class="note">An issue can carry more than one area label, so these counts do not sum to 284.</p>
+            <div class="area-chart"><div class="area-row"><span class="area-label">area:sim</span><span class="area-track" aria-hidden="true"><span class="area-fill" style="width:100.0%"></span></span><span class="area-count">92</span></div><div class="area-row"><span class="area-label">area:client</span><span class="area-track" aria-hidden="true"><span class="area-fill" style="width:72.8%"></span></span><span class="area-count">67</span></div><div class="area-row"><span class="area-label">area:server</span><span class="area-track" aria-hidden="true"><span class="area-fill" style="width:50.0%"></span></span><span class="area-count">46</span></div><div class="area-row"><span class="area-label">area:format</span><span class="area-track" aria-hidden="true"><span class="area-fill" style="width:45.7%"></span></span><span class="area-count">42</span></div><div class="area-row"><span class="area-label">area:editor</span><span class="area-track" aria-hidden="true"><span class="area-fill" style="width:31.5%"></span></span><span class="area-count">29</span></div><div class="area-row"><span class="area-label">area:infra</span><span class="area-track" aria-hidden="true"><span class="area-fill" style="width:25.0%"></span></span><span class="area-count">23</span></div><div class="area-row"><span class="area-label">area:design</span><span class="area-track" aria-hidden="true"><span class="area-fill" style="width:15.2%"></span></span><span class="area-count">14</span></div><div class="area-row"><span class="area-label">area:tools</span><span class="area-track" aria-hidden="true"><span class="area-fill" style="width:9.8%"></span></span><span class="area-count">9</span></div><div class="area-row"><span class="area-label">area:docs</span><span class="area-track" aria-hidden="true"><span class="area-fill" style="width:6.5%"></span></span><span class="area-count">6</span></div><div class="area-row"><span class="area-label">area:research</span><span class="area-track" aria-hidden="true"><span class="area-fill" style="width:5.4%"></span></span><span class="area-count">5</span></div><div class="area-row"><span class="area-label">area:port</span><span class="area-track" aria-hidden="true"><span class="area-fill" style="width:4.3%"></span></span><span class="area-count">4</span></div></div>
           </section>
           <section aria-labelledby="burn-title">
             <h3 id="burn-title">Issues over time</h3>
@@ -2043,30 +2062,30 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
           <tbody>
           <tr>
             <th scope="row"><time datetime="2026-11-09">Nov 9</time></th>
-            <td><span class="bar-cell"><span class="bar-track" aria-hidden="true"><span class="bar-fill opened" style="width:40.1%"></span></span><span class="bar-value">372</span></span></td>
-            <td><span class="bar-cell"><span class="bar-track" aria-hidden="true"><span class="bar-fill closed" style="width:20.1%"></span></span><span class="bar-value">186</span></span></td>
+            <td><span class="bar-cell"><span class="bar-track" aria-hidden="true"><span class="bar-fill opened" style="width:40.0%"></span></span><span class="bar-value">372</span></span></td>
+            <td><span class="bar-cell"><span class="bar-track" aria-hidden="true"><span class="bar-fill closed" style="width:20.0%"></span></span><span class="bar-value">186</span></span></td>
           </tr>
           <tr>
             <th scope="row"><time datetime="2026-11-16">Nov 16</time></th>
-            <td><span class="bar-cell"><span class="bar-track" aria-hidden="true"><span class="bar-fill opened" style="width:57.2%"></span></span><span class="bar-value">530</span></span></td>
-            <td><span class="bar-cell"><span class="bar-track" aria-hidden="true"><span class="bar-fill closed" style="width:35.2%"></span></span><span class="bar-value">326</span></span></td>
+            <td><span class="bar-cell"><span class="bar-track" aria-hidden="true"><span class="bar-fill opened" style="width:57.0%"></span></span><span class="bar-value">530</span></span></td>
+            <td><span class="bar-cell"><span class="bar-track" aria-hidden="true"><span class="bar-fill closed" style="width:35.1%"></span></span><span class="bar-value">326</span></span></td>
           </tr>
           <tr>
             <th scope="row"><time datetime="2026-11-23">Nov 23</time></th>
-            <td><span class="bar-cell"><span class="bar-track" aria-hidden="true"><span class="bar-fill opened" style="width:90.5%"></span></span><span class="bar-value">839</span></span></td>
-            <td><span class="bar-cell"><span class="bar-track" aria-hidden="true"><span class="bar-fill closed" style="width:57.7%"></span></span><span class="bar-value">535</span></span></td>
+            <td><span class="bar-cell"><span class="bar-track" aria-hidden="true"><span class="bar-fill opened" style="width:90.2%"></span></span><span class="bar-value">839</span></span></td>
+            <td><span class="bar-cell"><span class="bar-track" aria-hidden="true"><span class="bar-fill closed" style="width:57.5%"></span></span><span class="bar-value">535</span></span></td>
           </tr>
           <tr>
             <th scope="row"><time datetime="2026-11-30">Nov 30</time></th>
-            <td><span class="bar-cell"><span class="bar-track" aria-hidden="true"><span class="bar-fill opened" style="width:100.0%"></span></span><span class="bar-value">927</span></span></td>
-            <td><span class="bar-cell"><span class="bar-track" aria-hidden="true"><span class="bar-fill closed" style="width:69.3%"></span></span><span class="bar-value">642</span></span></td>
+            <td><span class="bar-cell"><span class="bar-track" aria-hidden="true"><span class="bar-fill opened" style="width:100.0%"></span></span><span class="bar-value">930</span></span></td>
+            <td><span class="bar-cell"><span class="bar-track" aria-hidden="true"><span class="bar-fill closed" style="width:69.5%"></span></span><span class="bar-value">646</span></span></td>
           </tr></tbody>
         </table>
           </section>
         </div>
         <section class="history-section" id="history" aria-labelledby="history-title">
           <h3 id="history-title">Coverage history</h3>
-          <p class="note">One dated point per workflow run, with its placed-instance denominator. Trace cases and package mapping appear from the run that first recorded them; older points are marked not measured, never zero.</p>
+          <p class="note">One dated point per workflow run, with its placed-instance denominator. Trace cases and package mapping appear from the run that first recorded them; older points are marked not measured yet, never zero.</p>
 
         <table class="history-table">
           <caption class="visually-hidden">Coverage history by workflow run</caption>
@@ -2077,24 +2096,24 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
             <td class="num" data-label="Placed">91,759</td>
             <td class="num" data-label="Built-in coverage">98.0%</td>
             <td class="num" data-label="Script-object share">1.87%</td>
-            <td class="num" data-label="Trace cases"><span class="missing">not measured</span></td>
-            <td class="num" data-label="Package objects"><span class="missing">not measured</span></td>
+            <td class="num" data-label="Trace cases"><span class="missing">not measured yet</span></td>
+            <td class="num" data-label="Package objects"><span class="missing">not measured yet</span></td>
           </tr>
           <tr>
             <th scope="row"><time datetime="2026-11-24T14:59:36Z">2026-11-24 14:59:36 UTC</time></th>
             <td class="num" data-label="Placed">91,759</td>
             <td class="num" data-label="Built-in coverage">98.0%</td>
             <td class="num" data-label="Script-object share">1.87%</td>
-            <td class="num" data-label="Trace cases"><span class="missing">not measured</span></td>
-            <td class="num" data-label="Package objects"><span class="missing">not measured</span></td>
+            <td class="num" data-label="Trace cases"><span class="missing">not measured yet</span></td>
+            <td class="num" data-label="Package objects"><span class="missing">not measured yet</span></td>
           </tr>
           <tr>
             <th scope="row"><time datetime="2026-11-24T15:03:33Z">2026-11-24 15:03:33 UTC</time></th>
             <td class="num" data-label="Placed">91,759</td>
             <td class="num" data-label="Built-in coverage">98.0%</td>
             <td class="num" data-label="Script-object share">1.87%</td>
-            <td class="num" data-label="Trace cases"><span class="missing">not measured</span></td>
-            <td class="num" data-label="Package objects"><span class="missing">not measured</span></td>
+            <td class="num" data-label="Trace cases"><span class="missing">not measured yet</span></td>
+            <td class="num" data-label="Package objects"><span class="missing">not measured yet</span></td>
           </tr>
           <tr>
             <th scope="row"><time datetime="2026-11-25T11:55:28Z">2026-11-25 11:55:28 UTC</time></th>
@@ -2102,7 +2121,15 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
             <td class="num" data-label="Built-in coverage">98.0%</td>
             <td class="num" data-label="Script-object share">1.87%</td>
             <td class="num" data-label="Trace cases">77 / 83</td>
-            <td class="num" data-label="Package objects">28.7%</td>
+            <td class="num" data-label="Package objects">28.7% mapped</td>
+          </tr>
+          <tr>
+            <th scope="row"><time datetime="2026-11-25T12:29:26Z">2026-11-25 12:29:26 UTC</time></th>
+            <td class="num" data-label="Placed">91,759</td>
+            <td class="num" data-label="Built-in coverage">98.0%</td>
+            <td class="num" data-label="Script-object share">1.87%</td>
+            <td class="num" data-label="Trace cases">77 / 83</td>
+            <td class="num" data-label="Package objects">28.7% mapped · 71.3% scripted</td>
           </tr></tbody>
         </table>
         </section>
@@ -2135,13 +2162,11 @@ code{font-family:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospac
             <ul>
               <li><a href="https://github.com/nugamus/iwbtg-collection/issues/1364">#1364</a> — census export.</li>
               <li><a href="https://github.com/nugamus/iwbtg-collection/issues/1365">#1365</a> — passing-trace coverage, not measured yet.</li>
-              <li><a href="https://github.com/nugamus/iwbtg-collection/issues/1366">#1366</a> — converter state, not measured yet.</li>
-              <li><a href="https://github.com/nugamus/iwbtg-collection/issues/1367">#1367</a> — package-based per-game metrics.</li>
             </ul>
           </section>
         </div>
         <div class="footer-bottom">
-          <span>Generated 2026-11-25 11:56:32 UTC · source gh</span>
+          <span>Generated 2026-11-25 12:29:26 UTC · source gh</span>
           <span>Static, self-contained page. No client-side API calls and no external requests. Fonts are local, credited OFL assets.</span>
         </div>
       </footer>
