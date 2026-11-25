@@ -31,8 +31,64 @@ type Res<T> = Result<T, Box<rhai::EvalAltResult>>;
 pub const GLOBAL: &str = "global";
 
 /// A stored array as a script sees it: a copy of the elements, indexed by the GM rules.
-#[derive(Clone, PartialEq, Debug, Default)]
-pub struct VarArray(pub Vec<Value>);
+///
+/// It carries the run's [`Shared`] and script rules so a `for v in a` loop converts each element
+/// exactly as an index read does (#1383): the init policy for an unset element, and the copy
+/// charge for a nested array. `push`/`pop` use the same conversion.
+#[derive(Clone)]
+pub struct VarArray {
+    /// The copied elements.
+    pub items: Vec<Value>,
+    /// The run's host, for converting an element while iterating or popping it.
+    shared: Rc<Shared>,
+    /// The run's script rules, saved so iteration needs no fallible host lookup.
+    rules: ScriptRules,
+}
+
+impl std::fmt::Debug for VarArray {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("VarArray").field(&self.items).finish()
+    }
+}
+
+/// `for v in a` over a stored array (#1383). Each element is converted as an index read, so an
+/// unset element follows the init policy and a nested array's copy is charged when reached.
+pub struct VarArrayIter {
+    items: std::vec::IntoIter<Value>,
+    shared: Rc<Shared>,
+    rules: ScriptRules,
+    next: usize,
+}
+
+impl Iterator for VarArrayIter {
+    type Item = Res<Dynamic>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let v = self.items.next()?;
+        let i = self.next;
+        self.next += 1;
+        Some(value_to_dynamic(
+            &self.shared,
+            Some(&v),
+            self.rules,
+            &format!("array element {i}"),
+        ))
+    }
+}
+
+impl IntoIterator for VarArray {
+    type Item = Res<Dynamic>;
+    type IntoIter = VarArrayIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        VarArrayIter {
+            items: self.items.into_iter(),
+            shared: self.shared,
+            rules: self.rules,
+            next: 0,
+        }
+    }
+}
 
 /// The handle behind `global`: reads and writes go to the run's globals.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -65,7 +121,7 @@ fn script_rules(s: &Shared) -> Res<ScriptRules> {
 /// The value of a variable or an element for a script. `what` names it in an error
 /// ("variable `hp`", "array element 3"). An unset one follows the run's init policy.
 pub(super) fn value_to_dynamic(
-    s: &Shared,
+    s: &Rc<Shared>,
     v: Option<&Value>,
     rules: ScriptRules,
     what: &str,
@@ -80,7 +136,11 @@ pub(super) fn value_to_dynamic(
         },
         Some(Value::Array(items)) => {
             charge_copy(s, items)?;
-            Ok(Dynamic::from(VarArray(items.clone())))
+            Ok(Dynamic::from(VarArray {
+                items: items.clone(),
+                shared: Rc::clone(s),
+                rules,
+            }))
         }
     }
 }
@@ -118,8 +178,8 @@ pub(super) fn dynamic_to_value(s: &Shared, d: &Dynamic, rules: ScriptRules, name
         return Ok(Value::Inst(i.0));
     }
     if let Some(a) = d.read_lock::<VarArray>() {
-        charge_copy(s, &a.0)?;
-        return Ok(Value::Array(a.0.clone()));
+        charge_copy(s, &a.items)?;
+        return Ok(Value::Array(a.items.clone()));
     }
     if let Some(a) = d.read_lock::<Array>() {
         let items = a
@@ -189,6 +249,8 @@ fn set_element(items: &mut Vec<Value>, i: usize, value: Value) {
 pub fn register_array_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mut Docs) {
     engine.register_type_with_name::<VarArray>("VarArray");
     engine.register_type_with_name::<Globals>("Globals");
+    // `for v in a` over a stored array (#1383).
+    engine.register_iterator_result::<VarArray, Dynamic>();
 
     // ---- Stored arrays ----
     {
@@ -196,14 +258,14 @@ pub fn register_array_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mut D
         engine.register_indexer_get(move |a: &mut VarArray, i: Dynamic| -> Res<Dynamic> {
             let i = array_index(&i)?;
             let rules = script_rules(&s)?;
-            value_to_dynamic(&s, a.0.get(i), rules, &format!("array element {i}"))
+            value_to_dynamic(&s, a.items.get(i), rules, &format!("array element {i}"))
         });
         let s = Rc::clone(shared);
         engine.register_indexer_set(move |a: &mut VarArray, i: Dynamic, v: Dynamic| -> Res<()> {
             let i = array_index(&i)?;
             let rules = script_rules(&s)?;
             let value = dynamic_to_value(&s, &v, rules, &format!("array element {i}"))?;
-            set_element(&mut a.0, i, value);
+            set_element(&mut a.items, i, value);
             Ok(())
         });
         docs.add(
@@ -211,7 +273,29 @@ pub fn register_array_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mut D
             "`a.len()` or `len(a)`: the number of elements of an array, a stored one included (an INT).",
         );
         #[allow(clippy::cast_possible_wrap, reason = "at most MAX_ARRAY_SIZE elements")]
-        engine.register_fn("len", |a: &mut VarArray| a.0.len() as rhai::INT);
+        engine.register_fn("len", |a: &mut VarArray| a.items.len() as rhai::INT);
+        docs.add(
+            "push",
+            "`a.push(v)`: appends `v` to a stored array, at most 10,000 elements (a script error past that). `this.pattern.push(v)` writes the grown array back through the variable, like an index assignment; a local copy (`let a = this.pattern`) must be assigned back.",
+        );
+        engine.register_fn("push", |a: &mut VarArray, v: Dynamic| -> Res<()> {
+            if a.items.len() >= MAX_ARRAY_SIZE {
+                return Err(sim_err(crate::world::instance::array_cap_error()));
+            }
+            let value = dynamic_to_value(&a.shared, &v, a.rules, "array element")?;
+            a.items.push(value);
+            Ok(())
+        });
+        docs.add(
+            "pop",
+            "`a.pop()`: removes and returns the last element of a stored array, or `()` when it is empty. `this.pattern.pop()` writes the shorter array back through the variable; a local copy must be assigned back.",
+        );
+        engine.register_fn("pop", |a: &mut VarArray| -> Res<Dynamic> {
+            match a.items.pop() {
+                Some(v) => value_to_dynamic(&a.shared, Some(&v), a.rules, "array element"),
+                None => Ok(Dynamic::UNIT),
+            }
+        });
     }
 
     // ---- Globals: `global.<name>` ----

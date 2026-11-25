@@ -276,7 +276,11 @@ fn point_direction(_: ?, _: ?, _: ?, _: ?) -> float;
 
 fn point_distance(_: ?, _: ?, _: ?, _: ?) -> float;
 
+fn pop(_: VarArray) -> ?;
+
 fn pow(_: ?, _: ?) -> float;
+
+fn push(_: VarArray, _: ?) -> ();
 
 fn radtodeg(_: ?) -> float;
 

@@ -101,6 +101,9 @@ pub const STATE_FNS: &[&str] = &[
     "shake",
     "print",
     "debug",
+    // They change the array value they are called on (#1383).
+    "push",
+    "pop",
 ];
 
 /// Registered functions that return a number.
