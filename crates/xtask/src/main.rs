@@ -1,7 +1,8 @@
 //! `cargo xtask <command>`: the repetitive steps of a PR as one command each (#529).
 //!
 //! - `check [--all]`: rejects free-text `TODO(OPEN` markers that name no issue or URL (#1119),
-//!   then rustfmt check, then clippy and tests of the crates this branch changed
+//!   then rustfmt check, the generated-schema staleness and WP-era ratchet steps when their inputs
+//!   changed, then clippy and tests of the crates this branch changed
 //!   (against `origin/main`, committed or not) plus a compile check of the crates that depend on
 //!   them. `--all` runs the whole workspace, like CI. Writes the summary to
 //!   `target/xtask/last-check.txt` for `pr-body`. Each step streams actionable lines and keeps a
@@ -630,14 +631,14 @@ fn schema_step_needed(plan: &Plan) -> bool {
         .any(|p| SCHEMA_INPUT_PACKAGES.contains(&p.as_str()))
 }
 
-/// The receipt identity for the schema step. `scripts/ci_scope.py` owns step identities and does
-/// not record this one, so derive a stable, input-sensitive identity from the recorded steps whose
-/// packages feed a schema; fall back to the whole-plan identity when none is recorded.
-fn schema_step_identity(plan: &Plan) -> String {
+/// The receipt identity for a derived step over `packages`' inputs. `scripts/ci_scope.py` owns
+/// step identities and does not record these steps, so hash the recorded steps that mention one of
+/// the packages; fall back to the whole-plan identity when none is recorded.
+fn package_step_identity(plan: &Plan, packages: &[&str]) -> String {
     let parts: Vec<String> = plan
         .step_identities
         .iter()
-        .filter(|(key, _)| SCHEMA_INPUT_PACKAGES.iter().any(|p| key.contains(p)))
+        .filter(|(key, _)| packages.iter().any(|p| key.contains(p)))
         .map(|(key, identity)| format!("{key}={identity}"))
         .collect();
     if parts.is_empty() {
@@ -645,6 +646,29 @@ fn schema_step_identity(plan: &Plan) -> String {
     } else {
         parts.join("\n")
     }
+}
+
+/// The receipt identity for the schema step.
+fn schema_step_identity(plan: &Plan) -> String {
+    package_step_identity(plan, &SCHEMA_INPUT_PACKAGES)
+}
+
+/// Packages whose changes can add a WP-era id in an area the ratchet counts. A format or sim
+/// change never selects the xtask tests, so without this step a new id reaches main and fails only
+/// on its full run (#1519, #1522).
+const WP_RATCHET_PACKAGES: [&str; 2] = ["iwbtg-format", "iwbtg-sim"];
+
+/// Whether the plan can add a WP-era id the ratchet must see locally.
+fn wp_ratchet_needed(plan: &Plan) -> bool {
+    plan.test
+        .iter()
+        .chain(plan.compile.iter())
+        .any(|p| WP_RATCHET_PACKAGES.contains(&p.as_str()))
+}
+
+/// The receipt identity for the WP-ratchet step.
+fn wp_ratchet_identity(plan: &Plan) -> String {
+    package_step_identity(plan, &WP_RATCHET_PACKAGES)
 }
 
 fn check(root: &Path, all: bool) -> Result<(), String> {
@@ -780,6 +804,20 @@ fn check(root: &Path, all: bool) -> Result<(), String> {
                     "schemas",
                     "schema_files_are_not_stale",
                 ],
+                Some(&identity),
+            )?;
+        }
+        // A format or sim change never selects the xtask tests, so a new WP-era id used to reach
+        // main and fail only there (#1519, #1522). This runs one xtask test binary, not the
+        // workspace, and sits before the crate suites so it fails fast.
+        if wp_ratchet_needed(&plan) {
+            let identity = wp_ratchet_identity(&plan);
+            step(
+                root,
+                "WP-era identifier ratchet (xtask)",
+                "wp-ratchet",
+                &[],
+                &["test", "-p", "xtask", "no_new_wp_era_identifiers"],
                 Some(&identity),
             )?;
         }
@@ -2210,6 +2248,32 @@ version = \"1.0.0\"
         )));
         assert!(!schema_step_needed(&planned(
             &["docs/architecture/client/shell.md"],
+            false
+        )));
+    }
+
+    /// A format or sim change runs the WP ratchet; docs-only and client-only plans do not (#1522).
+    #[test]
+    fn a_format_or_sim_change_runs_the_wp_ratchet() {
+        for path in [
+            "crates/format/src/load.rs",
+            "crates/format/tests/load_objects.rs",
+            "crates/sim/src/lib.rs",
+        ] {
+            let plan = planned(&[path], false);
+            assert!(wp_ratchet_needed(&plan), "{path}: {:?}", plan.test);
+            let identity = wp_ratchet_identity(&plan);
+            assert!(
+                identity.contains("iwbtg-format") || identity.contains("iwbtg-sim"),
+                "{path}: {identity}"
+            );
+        }
+        assert!(!wp_ratchet_needed(&planned(
+            &["docs/architecture/client/shell.md"],
+            false
+        )));
+        assert!(!wp_ratchet_needed(&planned(
+            &["crates/client/src/main.rs"],
             false
         )));
     }
