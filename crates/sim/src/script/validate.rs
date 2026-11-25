@@ -104,6 +104,9 @@ pub const STATE_FNS: &[&str] = &[
     // They change the array value they are called on (#1383).
     "push",
     "pop",
+    // They change or drop the instance's path run (#1530).
+    "path_start",
+    "path_end",
 ];
 
 /// Registered functions that return a number.
@@ -207,6 +210,16 @@ pub const REAL_PROPS: &[&str] = &[
     "jump",
     "jump2",
     "jump3",
+    // The path properties (#1530).
+    "path_index",
+    "path_position",
+    "path_positionprevious",
+    "path_speed",
+    "path_endaction",
+    "path_orientation",
+    "path_scale",
+    "path_x",
+    "path_y",
 ];
 
 /// Instance properties that read as a bool: the generic flags and the kid's flag fields.
@@ -243,6 +256,8 @@ pub enum Names {
     Sound,
     /// A room id.
     Room,
+    /// A path id.
+    Path,
     /// A collision query target: a role (named class), `"all"` or a kind (`script::collide`).
     Target,
 }
@@ -259,6 +274,9 @@ pub const NAME_ARGS: &[(&str, usize, Names)] = &[
     ("play_sound", 0, Names::Sound),
     ("play_music", 0, Names::Sound),
     ("room_goto", 0, Names::Room),
+    // The instance argument moves the path name to index 1: for a method call the receiver is
+    // not in `args`, so `this.path_start("line", ...)` checks `args[0]`.
+    ("path_start", 1, Names::Path),
     ("place_meeting", 3, Names::Target),
     ("instance_place", 3, Names::Target),
     ("collision_point", 2, Names::Target),
@@ -273,6 +291,7 @@ pub fn resolves(def: &GameDef, what: Names, name: &str) -> bool {
         Names::Kind => def.kinds.iter().any(|k| k.name == name),
         Names::Sound => def.sounds.iter().any(|s| s.name == name),
         Names::Room => def.rooms.iter().any(|r| r.name == name),
+        Names::Path => def.paths.iter().any(|p| p.name == name),
         Names::Target => super::collide::resolves(def, name),
     }
 }
@@ -283,6 +302,7 @@ impl Names {
             Names::Kind => "kind",
             Names::Sound => "sound",
             Names::Room => "room",
+            Names::Path => "path",
             Names::Target => "role or kind",
         }
     }

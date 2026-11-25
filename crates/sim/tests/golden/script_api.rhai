@@ -36,6 +36,24 @@ fn begin_step() {
 fn step() {
     let t = room_tick();
     let course = gm_eq(this.xstart, 400.0);
+    // Paths (#1530): start once, read and write every property, then end it.
+    if t == 1.0 {
+        this.path_start("api_line", 4.0, "stop", false);
+    }
+    if t == 2.0 {
+        this.path_position = this.path_position;
+        this.path_speed = this.path_speed;
+        this.path_endaction = this.path_endaction;
+        this.path_orientation = this.path_orientation;
+        this.path_scale = this.path_scale;
+        this.phase = this.phase + this.path_index + this.path_positionprevious + this.path_x + this.path_y;
+    }
+    if t == 20.0 {
+        this.path_end();
+    }
+    if t == 21.0 {
+        this.phase = this.phase + this.path_index;
+    }
     // Stored arrays (#1383): iterate and push/pop once, on the variable and on a local copy.
     if t == 1.0 {
         this.arr = [1.0, 2.0];

@@ -60,11 +60,11 @@ fn gone(i: Inst) -> Box<rhai::EvalAltResult> {
     runtime_error(format!("instance {} no longer exists", i.0.0))
 }
 
-fn live(w: &World, i: Inst) -> Res<&Instance> {
+pub(super) fn live(w: &World, i: Inst) -> Res<&Instance> {
     w.get(i.0).filter(|x| x.alive).ok_or_else(|| gone(i))
 }
 
-fn live_mut(w: &mut World, i: Inst) -> Res<&mut Instance> {
+pub(super) fn live_mut(w: &mut World, i: Inst) -> Res<&mut Instance> {
     w.get_mut(i.0).filter(|x| x.alive).ok_or_else(|| gone(i))
 }
 
@@ -1002,6 +1002,9 @@ pub fn register_kid_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mut Doc
             s.with_world(|w, _| kid_state_mut(w, i).map(|k| k.cur_jumps = n))?
         });
     }
+
+    // Paths (#1530): `path_start`, `path_end` and the instance's `path_*` properties.
+    super::paths::register_path_api(engine, shared, docs);
 }
 
 /// `room_goto`, `room_goto_next`, `room_goto_previous` and `room_restart` (#731). Each sets the

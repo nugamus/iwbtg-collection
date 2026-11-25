@@ -55,6 +55,15 @@ Read with `i.name`, write with `i.name = v` where listed read and write.
 | `onVineL` | bool | read only | A left vine is within reach (family C). |
 | `onVineR` | bool | read only | A right vine is within reach (family C). |
 | `on_slope_last` | bool | read only | The kid was on a slope last Step. |
+| `path_endaction` | float | read, write | What the path does at its end: 0 stop, 1 restart, 2 continue, 3 reverse (GM `path_endaction`). |
+| `path_index` | float | read only | The path the instance follows, or -1 when it follows none. |
+| `path_orientation` | float | read, write | Path orientation in degrees; the advance turns the path about its first point before the relative anchor and scale apply (M8 default). |
+| `path_position` | float | read, write | Position along the path, 0 to 1 (GM `path_position`); setting it moves the point the next automatic-motion tick places. |
+| `path_positionprevious` | float | read only | `path_position` at the start of the last path step. |
+| `path_scale` | float | read, write | Scale of a relative path's points about its first point (GM `path_scale`); 1 is unscaled. Scale on an absolute path is OPEN (M8). |
+| `path_speed` | float | read, write | Path speed in pixels per tick (GM `path_speed`). |
+| `path_x` | float | read only | The path point's x at the current position, before scale, orientation and the relative anchor; 0 when there is no path. |
+| `path_y` | float | read only | The path point's y at the current position, before scale, orientation and the relative anchor; 0 when there is no path. |
 | `scale` | float | read, write | The layer scale (`scale`, machinary; 1 elsewhere). |
 | `solid` | bool | read, write | Whether the instance blocks movement. |
 | `speed` | float | read, write | Speed along `direction`; setting it updates `hspeed` and `vspeed`. |
@@ -160,6 +169,8 @@ Spawn caps: `instance_create` also counts toward at most 256 instances per event
 - `mod(?, ?) -> float` (can fail) (cost: 1): GML `a mod b`: `a - (a div b) * b`; a zero divisor is an error.
 - `move_bounce_all(Instance, bool) -> ()` (can fail) (cost: 1): `i.move_bounce_all(precise)`: as `move_bounce_solid`, against every instance (`place_empty`).
 - `move_bounce_solid(Instance, bool) -> ()` (can fail) (cost: 1): `i.move_bounce_solid(precise)`: GML `move_bounce_solid`, the Bounce action against solid instances. Changes only `hspeed` and `vspeed`, never the position; the tick's motion then moves by the new speed. Not precise negates `hspeed` when (`x + hspeed`, `y`) is blocked, `vspeed` when (`x`, `y + vspeed`) is, both when only the diagonal is; precise picks a new direction (a multiple of 10) from 36 samples at radius `speed`.
+- `path_end(Instance) -> ()` (can fail) (cost: 1): `i.path_end()`: stops following the path (the instance keeps its position); `path_index` reads -1 afterwards.
+- `path_start(Instance, string, ?, string, ?) -> ()` (can fail) (cost: 1): `i.path_start(path, speed, endaction, absolute)`: starts following a package path, replacing any running one. `path` is the path id; `endaction` is `"stop"`, `"restart"`, `"continue"` or `"reverse"`; `absolute` places the instance at the path's own points, else the path is relative to the instance's current position. The run advances in automatic motion from the next tick. A non-finite speed is an error.
 - `place_free(Instance, ?, ?) -> bool` (can fail) (cost: 1): `place_free(i, x, y)`: GML `place_free`. Whether `i`'s collision mask placed at (`x`, `y`) meets no solid instance. Changes nothing.
 - `place_meeting(Instance, ?, ?, ?) -> bool` (can fail) (cost: 1): `place_meeting(i, x, y, target)`: GML `place_meeting`. Whether `i`'s collision mask placed at (`x`, `y`) overlaps an instance of `target` other than `i`. The target is a role (`"block"`, `"killer"`), `"all"`, a kind (with the kinds derived from it) or an instance; a role wins over a kind of the same name. Destroyed and deactivated instances and empty masks are never met. Changes nothing.
 - `play_music(string) -> ()` (can fail) (cost: 1): Plays a music track of the package in a loop; another playing music track stops or blocks it by the run's MULTIMEDIA rule. An unknown name is an error.
