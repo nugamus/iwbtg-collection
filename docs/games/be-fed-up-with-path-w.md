@@ -6,12 +6,12 @@ name: "I wanna be Fed up with path ;w;"
 slug: be-fed-up-with-path-w
 source: https://delicious-fruit.com/game/11403
 engine: gm8
-status: unknown
-objects_total: null
-objects_specced: null
-objects_scripted: null
-traces_passing: null
-traces_total: null
+status: converted
+objects_total: 240
+objects_specced: 63
+objects_scripted: 177
+traces_passing: unknown
+traces_total: unknown
 ---
 
 # I wanna be Fed up with path ;w; (`be-fed-up-with-path-w`)

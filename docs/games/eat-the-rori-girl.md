@@ -6,12 +6,12 @@ name: "I wanna eat the Rori Girl"
 slug: eat-the-rori-girl
 source: https://delicious-fruit.com/game/11514
 engine: gm8
-status: unknown
-objects_total: null
-objects_specced: null
-objects_scripted: null
-traces_passing: null
-traces_total: null
+status: converted
+objects_total: 185
+objects_specced: 44
+objects_scripted: 141
+traces_passing: unknown
+traces_total: unknown
 ---
 
 # I wanna eat the Rori Girl (`eat-the-rori-girl`)

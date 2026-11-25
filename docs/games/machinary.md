@@ -6,12 +6,12 @@ name: "I wanna be the Machinary"
 slug: machinary
 source: https://delicious-fruit.com/game/18020
 engine: gm8
-status: unknown
-objects_total: null
-objects_specced: null
-objects_scripted: null
-traces_passing: null
-traces_total: null
+status: converted
+objects_total: 151
+objects_specced: 31
+objects_scripted: 120
+traces_passing: unknown
+traces_total: unknown
 ---
 
 # I wanna be the Machinary (`machinary`)

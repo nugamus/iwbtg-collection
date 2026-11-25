@@ -6,12 +6,12 @@ name: "I wanna eat the lemon"
 slug: eat-the-lemon
 source: https://delicious-fruit.com/game/18603
 engine: gm8
-status: unknown
-objects_total: null
-objects_specced: null
-objects_scripted: null
-traces_passing: null
-traces_total: null
+status: converted
+objects_total: 129
+objects_specced: 60
+objects_scripted: 69
+traces_passing: 2
+traces_total: 4
 ---
 
 # I wanna eat the lemon (`eat-the-lemon`)

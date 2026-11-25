@@ -6,12 +6,12 @@ name: "I wanna clear the Easy Miku 2"
 slug: clear-the-easy-miku-2
 source: https://delicious-fruit.com/game/12270
 engine: gm8
-status: unknown
-objects_total: null
-objects_specced: null
-objects_scripted: null
-traces_passing: null
-traces_total: null
+status: converted
+objects_total: 55
+objects_specced: 25
+objects_scripted: 30
+traces_passing: unknown
+traces_total: unknown
 ---
 
 # I wanna clear the Easy Miku 2 (`clear-the-easy-miku-2`)

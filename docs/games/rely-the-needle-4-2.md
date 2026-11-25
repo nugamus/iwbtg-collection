@@ -6,12 +6,12 @@ name: "I Wanna Rely The Needle 4.2"
 slug: rely-the-needle-4-2
 source: https://delicious-fruit.com/game/19483
 engine: gm8
-status: unknown
-objects_total: null
-objects_specced: null
-objects_scripted: null
-traces_passing: null
-traces_total: null
+status: converted
+objects_total: 39
+objects_specced: 33
+objects_scripted: 6
+traces_passing: 4
+traces_total: 4
 ---
 
 # I Wanna Rely The Needle 4.2 (`rely-the-needle-4-2`)

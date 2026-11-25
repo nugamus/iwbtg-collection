@@ -6,12 +6,12 @@ name: "I wanna Keep Celebrating for Xia"
 slug: keep-celebrating-for-xia
 source: https://delicious-fruit.com/game/21633
 engine: gm8
-status: unknown
-objects_total: null
-objects_specced: null
-objects_scripted: null
-traces_passing: null
-traces_total: null
+status: converted
+objects_total: 113
+objects_specced: 56
+objects_scripted: 57
+traces_passing: unknown
+traces_total: unknown
 ---
 
 # I wanna Keep Celebrating for Xia (`keep-celebrating-for-xia`)

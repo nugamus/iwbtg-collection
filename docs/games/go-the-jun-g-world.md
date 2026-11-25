@@ -6,12 +6,12 @@ name: "I wanna go the JUN-G World"
 slug: go-the-jun-g-world
 source: https://delicious-fruit.com/game/18758
 engine: gm8
-status: unknown
-objects_total: null
-objects_specced: null
-objects_scripted: null
-traces_passing: null
-traces_total: null
+status: converted
+objects_total: 494
+objects_specced: 176
+objects_scripted: 318
+traces_passing: unknown
+traces_total: unknown
 ---
 
 # I wanna go the JUN-G World (`go-the-jun-g-world`)
