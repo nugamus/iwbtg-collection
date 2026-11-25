@@ -108,16 +108,20 @@ pub enum StartSave {
 }
 
 impl RunInput {
-    /// Where the run starts: the replay's save, else a new game on `difficulty`.
+    /// Where the run starts: the replay's save, else a new game on `difficulty`. The checkpoint
+    /// travels to the sim unresolved; the sim looks its room up in the room sequence (#1238).
     pub fn start(&self, def: &GameDef, difficulty: u8) -> Result<StartPoint, ToolError> {
         match &self.save {
-            Some(StartSave::Checkpoint(checkpoint)) => {
-                let slot = checkpoint.to_slot(def).map_err(|e| {
-                    ToolError::Message(format!("the replay's checkpoint does not resolve: {e}"))
+            Some(StartSave::Checkpoint(checkpoint)) => Ok(StartPoint::FromSave(checkpoint.clone())),
+            Some(StartSave::LegacySlot(slot)) => {
+                // A pre-checkpoint replay's slot stores a numeric room; the header's
+                // `gameplay_hash` binds it to this package, so naming that room here is the
+                // conversion, not a resolution against a live save.
+                let checkpoint = Checkpoint::from_slot(def, slot).map_err(|e| {
+                    ToolError::Message(format!("the replay's save slot does not resolve: {e}"))
                 })?;
-                Ok(StartPoint::FromSave(slot))
+                Ok(StartPoint::FromSave(checkpoint))
             }
-            Some(StartSave::LegacySlot(slot)) => Ok(StartPoint::FromSave(slot.clone())),
             None => Ok(StartPoint::NewGame { difficulty }),
         }
     }
@@ -884,10 +888,11 @@ mod tests {
             .unwrap();
         let input = replay_input(&bytes, "checkpoint").unwrap();
         assert_eq!(input.save, Some(StartSave::Checkpoint(checkpoint.clone())));
-        assert!(matches!(
+        assert_eq!(
             input.start(&def, 0).unwrap(),
-            StartPoint::FromSave(s) if s == slot
-        ));
+            StartPoint::FromSave(checkpoint.clone()),
+            "the checkpoint reaches the sim unresolved (#1238)"
+        );
 
         let mut bytes = replay(StartMode::FromSave(postcard::to_stdvec(&slot).unwrap()))
             .encode()
@@ -895,10 +900,11 @@ mod tests {
         bytes[4] = u8::try_from(SAVE_SLOT_FORMAT).unwrap();
         let input = replay_input(&bytes, "legacy slot").unwrap();
         assert_eq!(input.save, Some(StartSave::LegacySlot(slot.clone())));
-        assert!(matches!(
+        assert_eq!(
             input.start(&def, 0).unwrap(),
-            StartPoint::FromSave(s) if s == slot
-        ));
+            StartPoint::FromSave(checkpoint.clone()),
+            "a legacy slot converts to the same checkpoint"
+        );
 
         // #1325: the checkpoint payload is decoded exactly, so a byte appended after it is
         // refused instead of ignored.

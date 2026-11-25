@@ -413,19 +413,19 @@ fn replay_sim(replay: &Replay, def: &Arc<GameDef>) -> Result<Sim, String> {
     let h = &replay.header;
     let start = match &h.start_mode {
         StartMode::NewGame => StartPoint::NewGame { difficulty: 0 },
-        StartMode::FromSave(bytes) if h.replay_format > SAVE_SLOT_FORMAT => {
-            let checkpoint = Checkpoint::decode(bytes)
-                .map_err(|e| format!("the replay's checkpoint does not decode: {e}"))?;
-            StartPoint::FromSave(
-                checkpoint
-                    .to_slot(def)
-                    .map_err(|e| format!("the replay's checkpoint does not resolve: {e}"))?,
-            )
-        }
-        StartMode::FromSave(bytes) => StartPoint::FromSave(
-            SaveSlot::decode(bytes)
-                .map_err(|e| format!("the replay's save slot does not decode: {e}"))?,
+        // The checkpoint travels to the sim unresolved: the sim looks its room up when it
+        // starts (#1238).
+        StartMode::FromSave(bytes) if h.replay_format > SAVE_SLOT_FORMAT => StartPoint::FromSave(
+            Checkpoint::decode(bytes)
+                .map_err(|e| format!("the replay's checkpoint does not decode: {e}"))?,
         ),
+        StartMode::FromSave(bytes) => {
+            let slot = SaveSlot::decode(bytes)
+                .map_err(|e| format!("the replay's save slot does not decode: {e}"))?;
+            StartPoint::FromSave(Checkpoint::from_slot(def, &slot).map_err(|e| {
+                format!("the replay's save slot does not resolve: {e}")
+            })?)
+        }
     };
     let seed = u32::try_from(h.rng_seed)
         .map_err(|_| format!("the replay's seed {} does not fit the sim", h.rng_seed))?;

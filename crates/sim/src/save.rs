@@ -526,6 +526,14 @@ impl Checkpoint {
         })
     }
 
+    /// The room this checkpoint names, resolved by the package name against `def`: the one lookup
+    /// that turns a persisted byte into a runtime [`RoomId`]. Refuses a foreign format, a room the
+    /// package no longer has, and a room that is not gameplay.
+    pub fn room(&self, def: &GameDef) -> Result<RoomId, CheckpointError> {
+        self.validate()?;
+        resolve_room(def, &self.room)
+    }
+
     /// Resolves the checkpoint to the runtime slot. The named room must still exist and be
     /// gameplay, and the save point — when the checkpoint recorded one — must still resolve to
     /// the same placed instance. `ruleset`, `profile` and `precision` are provenance and do not
@@ -535,8 +543,7 @@ impl Checkpoint {
     /// (never through [`Checkpoint::decode`]), so this is where its disk path and the replay's
     /// `FromSave` path agree on the format (#1325).
     pub fn to_slot(&self, def: &GameDef) -> Result<SaveSlot, CheckpointError> {
-        self.validate()?;
-        let room = resolve_room(def, &self.room)?;
+        let room = self.room(def)?;
         if let Some(point) = &self.point {
             resolve_point(def, room, point)?;
         }

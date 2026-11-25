@@ -58,7 +58,7 @@ fn game_end_and_game_restart() {
     let def = b.build().unwrap();
     let rules = RunnerRules::default();
     let mut host = Probe::default();
-    let (mut w, r) = start(&def, &rules, &mut host, StartPoint::FromSave(slot(stage)));
+    let (mut w, r) = start(&def, &rules, &mut host, from_save(&def, &slot(stage)));
     r.unwrap();
     change(&def, &rules, &mut w, &mut host, RoomRequest::Goto(title)).unwrap();
     assert!(w.persistent_rooms.contains_key(&stage));

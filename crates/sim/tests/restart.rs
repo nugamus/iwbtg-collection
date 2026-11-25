@@ -8,6 +8,7 @@ use iwbtg_sim::num::Real;
 use iwbtg_sim::restart::{boot_step, run_reset, run_restart};
 use iwbtg_sim::room::{RoomRequest, StartPoint, perform_change, start_game};
 use iwbtg_sim::run_globals::BootLoad;
+use iwbtg_sim::save::Checkpoint;
 use iwbtg_sim::world::{Flow, SimStatus, World};
 
 use crate::state_support::*;
@@ -206,7 +207,10 @@ fn start_from_save_still_works_with_the_real_load() {
     let g = game(|_| {});
     let mut w = World::new(g.boot, 1);
     let s = slot(g.play);
-    let r = with(&g, &mut w, |c| start_game(c, &StartPoint::FromSave(s.clone())));
+    let checkpoint = Checkpoint::from_slot(&g.def, &s).expect("a gameplay room");
+    let r = with(&g, &mut w, |c| {
+        start_game(c, &StartPoint::FromSave(checkpoint.clone()))
+    });
     r.unwrap();
     assert_eq!(w.status, SimStatus::Running);
     assert_eq!(w.room, g.play);
