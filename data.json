@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-26T14:46:46Z",
+ "generated_at": "2026-11-26T15:17:55Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -11,15 +11,15 @@
    "title": "0 · Foundation",
    "name": "Foundation",
    "state": "open",
-   "open": 4,
-   "closed": 87,
-   "total": 91,
-   "pct_closed": 95.6,
-   "size_points": 11,
+   "open": 5,
+   "closed": 89,
+   "total": 94,
+   "pct_closed": 94.7,
+   "size_points": 19,
    "sizes": {
     "size:S": 3,
     "size:M": 0,
-    "size:L": 1,
+    "size:L": 2,
     "unknown": 0
    },
    "scope": "Cross-cutting repo, build, CI and agent-harness work that every phase depends on.",
@@ -57,13 +57,13 @@
    "title": "2 · Format & pipeline",
    "name": "Format & pipeline",
    "state": "open",
-   "open": 32,
+   "open": 34,
    "closed": 119,
-   "total": 151,
-   "pct_closed": 78.8,
-   "size_points": 96,
+   "total": 153,
+   "pct_closed": 77.8,
+   "size_points": 98,
    "sizes": {
-    "size:S": 11,
+    "size:S": 13,
     "size:M": 15,
     "size:L": 5,
     "unknown": 1
@@ -126,16 +126,16 @@
    "title": "5 · Client shell & UI",
    "name": "Client shell & UI",
    "state": "open",
-   "open": 17,
+   "open": 18,
    "closed": 27,
-   "total": 44,
-   "pct_closed": 61.4,
+   "total": 45,
+   "pct_closed": 60.0,
    "size_points": 47,
    "sizes": {
     "size:S": 7,
     "size:M": 8,
     "size:L": 2,
-    "unknown": 0
+    "unknown": 1
    },
    "scope": "Game select, downloads, bundled games, settings, controls panel and screens.",
    "feeds_from": "client crate, design mockups, games repo catalog",
@@ -262,16 +262,16 @@
  ],
  "activity": {
   "totals": {
-   "issues": 951,
-   "open": 266,
-   "closed": 685,
-   "pct_closed": 72.0
+   "issues": 958,
+   "open": 271,
+   "closed": 687,
+   "pct_closed": 71.7
   },
-  "open_prs": 1,
+  "open_prs": 2,
   "process": {
+   "triage": 55,
+   "agent-ready": 119,
    "in-progress": 8,
-   "triage": 52,
-   "agent-ready": 117,
    "needs-user": 28,
    "blocked": 25,
    "revisit": 1
@@ -279,15 +279,15 @@
   "area_open": [
    {
     "area": "area:sim",
-    "count": 86
+    "count": 87
    },
    {
     "area": "area:client",
-    "count": 61
+    "count": 62
    },
    {
     "area": "area:format",
-    "count": 43
+    "count": 44
    },
    {
     "area": "area:server",
@@ -299,7 +299,7 @@
    },
    {
     "area": "area:infra",
-    "count": 22
+    "count": 23
    },
    {
     "area": "area:design",
@@ -307,11 +307,11 @@
    },
    {
     "area": "area:tools",
-    "count": 8
+    "count": 9
    },
    {
     "area": "area:docs",
-    "count": 5
+    "count": 8
    },
    {
     "area": "area:research",
@@ -323,6 +323,38 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 1617,
+    "title": "Harness: build_guard docstring still cites client/docs/dev-setup.md",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1617",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:infra",
+     "in-progress"
+    ],
+    "phase": "0 · Foundation",
+    "updated_at": "2026-11-26T15:12:54Z",
+    "closed_at": "2026-11-26T15:12:54Z",
+    "created_at": "2026-11-26T15:06:26Z"
+   },
+   {
+    "number": 1611,
+    "title": "Harness: the CI-stuck PR hint still names client/docs/dev-setup.md",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1611",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:infra",
+     "in-progress"
+    ],
+    "phase": "0 · Foundation",
+    "updated_at": "2026-11-26T15:12:52Z",
+    "closed_at": "2026-11-26T15:12:51Z",
+    "created_at": "2026-11-26T14:50:31Z"
+   },
    {
     "number": 489,
     "title": "Idea: badges for milestones in a run (results and player card)",
@@ -412,36 +444,6 @@
     "updated_at": "2026-11-26T14:39:25Z",
     "closed_at": "2026-11-26T14:39:25Z",
     "created_at": "2026-11-02T11:30:37Z"
-   },
-   {
-    "number": 1533,
-    "title": "Script API: script_execute with a literal target (cross-script calls) (#776, census rank 22)",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1533",
-    "labels": [
-     "agent-ready",
-     "size:M"
-    ],
-    "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-26T14:34:49Z",
-    "closed_at": "2026-11-26T13:29:39Z",
-    "created_at": "2026-11-25T10:07:55Z"
-   },
-   {
-    "number": 43,
-    "title": "Ranked (stripped) and Play original buttons",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/43",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "6 · Ranked-ready run",
-    "updated_at": "2026-11-26T13:18:15Z",
-    "closed_at": "2026-11-26T13:18:15Z",
-    "created_at": "2026-11-02T11:30:26Z"
    }
   ],
   "in_progress": [
@@ -457,7 +459,7 @@
      "in-progress"
     ],
     "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-26T14:36:25Z",
+    "updated_at": "2026-11-26T14:59:32Z",
     "closed_at": null,
     "created_at": "2026-11-26T14:36:20Z"
    },
@@ -647,7 +649,7 @@
      "area:infra"
     ],
     "phase": "0 · Foundation",
-    "updated_at": "2026-11-24T19:02:26Z",
+    "updated_at": "2026-11-26T14:50:14Z",
     "closed_at": null,
     "created_at": "2026-11-02T14:09:28Z"
    },
@@ -728,8 +730,8 @@
     "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 271,
-  "opened_7d": 291,
+  "closed_7d": 273,
+  "opened_7d": 298,
   "burnup": [
    {
     "week": "2026-11-09",
@@ -748,8 +750,8 @@
    },
    {
     "week": "2026-11-30",
-    "created": 951,
-    "closed": 685
+    "created": 958,
+    "closed": 687
    }
   ]
  },
