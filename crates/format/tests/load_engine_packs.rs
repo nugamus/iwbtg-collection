@@ -1,7 +1,7 @@
-//! Loader tests for engine packs (docs/format/engine.md). Split from `wp7a_load.rs` (#792), whose
+//! Loader tests for engine packs (docs/format/engine.md). Split from `load.rs` (#792), whose
 //! package helpers they use.
 
-use crate::wp7a_load::*;
+use crate::load::*;
 use iwbtg_format::PackageFiles;
 use iwbtg_format::load::load_report;
 use iwbtg_sim::def::KidFamily;

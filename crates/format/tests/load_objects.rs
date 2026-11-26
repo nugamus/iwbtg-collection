@@ -1,9 +1,9 @@
 //! Loader tests for objects and built-in params (docs/format/objects.md, builtins.md): tier 1-3
-//! built-in params, derived kinds, scripted objects. Split from `wp7a_load.rs` (#792), whose
+//! built-in params, derived kinds, scripted objects. Split from `load.rs` (#792), whose
 //! package helpers they use.
 
+use crate::load::*;
 use crate::load_engine_packs::with_pack;
-use crate::wp7a_load::*;
 use iwbtg_format::load::load_report;
 use iwbtg_format::{PackageFiles, Severity};
 use iwbtg_sim::def::{ClassMask, EngineKind, GameDef, ParamValue, RoomId};

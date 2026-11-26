@@ -1,5 +1,5 @@
-//! WP5b.6 (#264): the family B profiles of kaenbyou and eat-the-lemon in `physics.toml` form
-//! (docs/format/physics.md, kid/B.md).
+//! The family B profiles of kaenbyou and eat-the-lemon in `physics.toml` form (#264;
+//! docs/format/physics.md, kid/B.md).
 
 use iwbtg_sim::def::KidFamily;
 use iwbtg_sim::def::physics::PhysicsProfileDraft;

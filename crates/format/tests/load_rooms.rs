@@ -1,8 +1,8 @@
 //! Loader tests for room files (docs/format/rooms.md): common instance keys, creation code rows,
-//! instance `params`, GM ids. Split from `wp7a_load.rs` (#792), whose package helpers they use.
+//! instance `params`, GM ids. Split from `load.rs` (#792), whose package helpers they use.
 
+use crate::load::*;
 use crate::load_objects::{placed, tier2_errors, tier2_package};
-use crate::wp7a_load::*;
 use iwbtg_format::PackageFiles;
 use iwbtg_format::load::load_report;
 use iwbtg_sim::def::{ParamValue, RoomAction};

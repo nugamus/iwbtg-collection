@@ -1,7 +1,7 @@
 //! Behaviour base names (#1159 T2, decision 0005): `base = "hazard"` is an additive alias for
 //! the behaviour's reference kind; the concrete kind names keep their behavior.
 
-use crate::wp7a_load::*;
+use crate::load::*;
 use iwbtg_format::load::load_report;
 use iwbtg_sim::def::Builtin;
 
