@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-26T22:35:20Z",
+ "generated_at": "2026-11-26T22:42:12Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -11,13 +11,13 @@
    "title": "0 · Foundation",
    "name": "Foundation",
    "state": "open",
-   "open": 6,
-   "closed": 89,
+   "open": 5,
+   "closed": 90,
    "total": 95,
-   "pct_closed": 93.7,
-   "size_points": 20,
+   "pct_closed": 94.7,
+   "size_points": 19,
    "sizes": {
-    "size:S": 4,
+    "size:S": 3,
     "size:M": 0,
     "size:L": 2,
     "unknown": 0
@@ -263,15 +263,15 @@
  "activity": {
   "totals": {
    "issues": 985,
-   "open": 283,
-   "closed": 702,
-   "pct_closed": 71.3
+   "open": 282,
+   "closed": 703,
+   "pct_closed": 71.4
   },
-  "open_prs": 6,
+  "open_prs": 5,
   "process": {
    "triage": 75,
-   "agent-ready": 112,
-   "in-progress": 14,
+   "in-progress": 13,
+   "agent-ready": 111,
    "needs-user": 27,
    "blocked": 25,
    "revisit": 1
@@ -299,7 +299,7 @@
    },
    {
     "area": "area:infra",
-    "count": 25
+    "count": 24
    },
    {
     "area": "area:design",
@@ -323,6 +323,22 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 1646,
+    "title": "Harness: guard agent-ready issues missing the ## Context block",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1646",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:infra",
+     "in-progress"
+    ],
+    "phase": "0 · Foundation",
+    "updated_at": "2026-11-26T22:39:15Z",
+    "closed_at": "2026-11-26T22:39:15Z",
+    "created_at": "2026-11-26T22:05:00Z"
+   },
    {
     "number": 981,
     "title": "Fuzz harness: cargo-fuzz crate and nightly job",
@@ -436,25 +452,25 @@
     "updated_at": "2026-11-26T21:09:01Z",
     "closed_at": "2026-11-26T21:09:01Z",
     "created_at": "2026-11-26T14:50:33Z"
-   },
-   {
-    "number": 1591,
-    "title": "Format: seek-based .iwbz preview reader (avoid reading the whole archive)",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1591",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:format",
-     "in-progress"
-    ],
-    "phase": "4 · First playable",
-    "updated_at": "2026-11-26T21:05:32Z",
-    "closed_at": "2026-11-26T21:04:18Z",
-    "created_at": "2026-11-26T12:02:33Z"
    }
   ],
   "in_progress": [
+   {
+    "number": 1624,
+    "title": "UI: Classic session summary and session panel (m5 A7–A9, group 2)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1624",
+    "labels": [
+     "size:L",
+     "area:client",
+     "triage",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-26T22:36:12Z",
+    "closed_at": null,
+    "created_at": "2026-11-26T15:41:13Z"
+   },
    {
     "number": 992,
     "title": "Fuzz target: .iwbz unpack",
@@ -470,38 +486,6 @@
     "updated_at": "2026-11-26T22:35:26Z",
     "closed_at": null,
     "created_at": "2026-11-19T10:06:16Z"
-   },
-   {
-    "number": 1646,
-    "title": "Harness: guard agent-ready issues missing the ## Context block",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1646",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:infra",
-     "in-progress"
-    ],
-    "phase": "0 · Foundation",
-    "updated_at": "2026-11-26T22:33:42Z",
-    "closed_at": null,
-    "created_at": "2026-11-26T22:05:00Z"
-   },
-   {
-    "number": 1624,
-    "title": "UI: Classic session summary and session panel (m5 A7–A9, group 2)",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1624",
-    "labels": [
-     "size:L",
-     "area:client",
-     "triage",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-26T22:31:30Z",
-    "closed_at": null,
-    "created_at": "2026-11-26T15:41:13Z"
    },
    {
     "number": 1614,
@@ -549,6 +533,22 @@
     "updated_at": "2026-11-26T22:07:08Z",
     "closed_at": null,
     "created_at": "2026-11-26T15:41:11Z"
+   },
+   {
+    "number": 1619,
+    "title": "Stats: per-mode personal stats for Classic (time, deaths, finished, furthest, last played, last session)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1619",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-26T22:07:08Z",
+    "closed_at": null,
+    "created_at": "2026-11-26T15:26:20Z"
    }
   ],
   "needs_user": [
@@ -736,7 +736,7 @@
     "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 276,
+  "closed_7d": 277,
   "opened_7d": 321,
   "burnup": [
    {
@@ -757,7 +757,7 @@
    {
     "week": "2026-11-30",
     "created": 985,
-    "closed": 702
+    "closed": 703
    }
   ]
  },
