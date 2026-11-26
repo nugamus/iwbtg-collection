@@ -9,9 +9,13 @@ on:
       seconds:
         description: Seconds per target
         default: "600"
+permissions:
+  contents: read
 concurrency:
   group: fuzz
   cancel-in-progress: false
+env:
+  CARGO_TERM_COLOR: always
 jobs:
   fuzz:
     name: ${{ matrix.target }}
