@@ -209,7 +209,9 @@ impl Plugin for SelectPlugin {
                         controls::search,
                         list::refilter,
                         controls::labels,
-                        keys.run_if(mod_sheet::closed).run_if(practice::closed),
+                        keys.run_if(mod_sheet::closed)
+                            .run_if(practice::closed)
+                            .run_if(crate::settings_screen::closed),
                         collections::keys,
                         mod_sheet::keys,
                         mod_sheet::slide,

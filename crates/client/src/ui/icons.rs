@@ -71,11 +71,18 @@ pub enum Icon {
     MenuClassic,
     /// Race: a flag.
     MenuRace,
+    /// The settings sections' strip (`Settings.dc.html`, 26 px).
+    SetGeneral,
+    SetGraphics,
+    SetAudio,
+    SetInput,
+    SetGameplay,
+    SetAbout,
 }
 
 impl Icon {
     /// Every icon, for the gallery.
-    pub const ALL: [Icon; 27] = [
+    pub const ALL: [Icon; 33] = [
         Icon::Flag,
         Icon::Clock,
         Icon::Check,
@@ -103,6 +110,12 @@ impl Icon {
         Icon::MenuTimeAttack,
         Icon::MenuClassic,
         Icon::MenuRace,
+        Icon::SetGeneral,
+        Icon::SetGraphics,
+        Icon::SetAudio,
+        Icon::SetInput,
+        Icon::SetGameplay,
+        Icon::SetAbout,
     ];
 
     /// The size of the view box the shapes are drawn in.
@@ -125,6 +138,12 @@ impl Icon {
             | Icon::MenuTimeAttack
             | Icon::MenuClassic
             | Icon::MenuRace => (32.0, 32.0),
+            Icon::SetGeneral
+            | Icon::SetGraphics
+            | Icon::SetAudio
+            | Icon::SetInput
+            | Icon::SetGameplay
+            | Icon::SetAbout => (26.0, 26.0),
             _ => (14.0, 14.0),
         }
     }
@@ -168,6 +187,12 @@ impl Icon {
                 Stroke("M12 12l4.5 4.5", 2.0),
             ],
             Icon::Back => vec![Stroke("M9 2L4 7l5 5", 2.0)],
+            Icon::SetGeneral => vec![Stroke("M13 4a9 9 0 1 0 0 18a9 9 0 1 0 0-18M13 11v6M13 8v.5", 1.9)],
+            Icon::SetGraphics => vec![Stroke("M4 6h18v12H4zM9 22h8M13 18v4", 1.9)],
+            Icon::SetAudio => vec![Stroke("M5 10h4l5-4v14l-5-4H5zM18 9.5a5 5 0 0 1 0 7", 1.9)],
+            Icon::SetInput => vec![Stroke("M3 8h20v10H3zM7 13h.5M11 13h.5M15 13h.5M19 13h.5M8 16h10", 1.9)],
+            Icon::SetGameplay => vec![Stroke("M13 4a9 9 0 1 0 0 18a9 9 0 1 0 0-18M13 8v5l3 2", 1.9)],
+            Icon::SetAbout => vec![Stroke("M7 4h12v18H7zM10 8h6M10 12h6M10 16h3", 1.9)],
             Icon::Random => vec![
                 Stroke(
                     "M4.5 1.5h7a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3h-7a3 3 0 0 1-3-3v-7a3 3 0 0 1 3-3z",
