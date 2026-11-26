@@ -154,7 +154,10 @@ pub fn is_iwbz(path: &Path) -> bool {
         && !path.is_dir()
 }
 
-/// Reads and unpacks an `.iwbz` file; one over the size limit is refused before it is read.
+/// Reads what a game-select preview draws from an `.iwbz` (#1022): `game.toml`, the key art
+/// images, the first ranked room and the background images its art uses, and the `cherry`
+/// sprite. Nothing else is inflated, so a large package lists without decoding its assets;
+/// [`open`] still validates the whole package when the game starts.
 pub fn read_iwbz(path: &Path) -> Result<PackageFiles, OpenError> {
     use iwbtg_format::iwbz;
     let err = |e: String| OpenError::Files(format!("{}: {e}", path.display()));
@@ -163,7 +166,53 @@ pub fn read_iwbz(path: &Path) -> Result<PackageFiles, OpenError> {
         return Err(err(format!("over {} bytes", iwbz::MAX_ARCHIVE_BYTES)));
     }
     let bytes = std::fs::read(path).map_err(|e| err(e.to_string()))?;
-    iwbz::unpack(&bytes).map_err(|e| err(e.to_string()))
+    preview_from_iwbz(&bytes).map_err(|e| err(e.to_string()))
+}
+
+/// The selective reads behind [`read_iwbz`]: the manifest, then the files its key art, first
+/// ranked room and cherry need, then the background images that room's art names. A manifest
+/// that does not parse leaves only `game.toml`, which the caller treats as unreadable.
+fn preview_from_iwbz(bytes: &[u8]) -> Result<PackageFiles, iwbtg_format::iwbz::IwbzError> {
+    use iwbtg_format::iwbz;
+    use std::collections::BTreeSet;
+
+    let mut files = iwbz::unpack_selected(bytes, |name| name == "game.toml")?;
+    let Some(manifest) = files
+        .get("game.toml")
+        .and_then(|b| std::str::from_utf8(b).ok())
+        .and_then(|t| iwbtg_format::Manifest::parse(t).ok())
+    else {
+        return Ok(files);
+    };
+    let room = iwbtg_format::key_art::first_ranked_room(&manifest);
+    let mut wanted: BTreeSet<String> = ["game.toml", "sprites/cherry.toml", "sprites/cherry.png"]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    if let Some(section) = &manifest.key_art {
+        wanted.extend(
+            section
+                .image
+                .iter()
+                .chain(section.maps.values())
+                .map(|path| path.get_ref().clone()),
+        );
+    }
+    wanted.insert(format!("rooms/{room}.toml"));
+    files = iwbz::unpack_selected(bytes, |name| wanted.contains(name))?;
+    if let Ok(art) = iwbtg_format::art::load_room_art(&files, room) {
+        let before = wanted.len();
+        wanted.extend(
+            art.backgrounds
+                .iter()
+                .filter(|b| !b.foreground)
+                .map(|b| format!("backgrounds/{}.png", b.image)),
+        );
+        if wanted.len() > before {
+            files = iwbz::unpack_selected(bytes, |name| wanted.contains(name))?;
+        }
+    }
+    Ok(files)
 }
 
 /// The image of every sprite of the game, in `SpriteId` order. A sprite without a picture (no
@@ -423,6 +472,62 @@ mod tests {
         let bad = dir.join("bad.iwbz");
         std::fs::write(&bad, b"PK not really").unwrap();
         assert!(matches!(open(&bad, false), Err(OpenError::Files(_))));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn an_iwbz_preview_reads_the_key_art_and_room_but_not_the_sprites() {
+        let dir = std::env::temp_dir().join(format!("iwbtg-client-preview-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/maps.pkg");
+        let full = open(&folder, false).unwrap();
+        let file = dir.join("maps.iwbz");
+        std::fs::write(&file, iwbtg_format::iwbz::pack(&full.files).unwrap()).unwrap();
+        let preview = read_iwbz(&file).unwrap();
+        assert!(preview.contains("game.toml"));
+        assert!(preview.contains("art/key.png"), "the key art is read");
+        assert!(preview.contains("rooms/stage.toml"), "the first ranked room is read");
+        assert!(!preview.contains("sprites/kid.png"), "unrelated assets are not");
+        assert!(preview.len() < full.files.len());
+        let text = std::str::from_utf8(preview.get("game.toml").unwrap()).unwrap();
+        let manifest = iwbtg_format::Manifest::parse(text).unwrap();
+        assert_eq!(
+            iwbtg_format::key_art::resolve(&preview, &manifest, None),
+            iwbtg_format::key_art::resolve(&full.files, &manifest, None),
+            "the preview resolves the same key art as the full package"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn an_iwbz_preview_reads_the_first_room_backgrounds() {
+        let dir = std::env::temp_dir().join(format!("iwbtg-client-preview-bg-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("showcase.pkg");
+        let full = open(&folder, false).unwrap();
+        let file = dir.join("showcase.iwbz");
+        std::fs::write(&file, iwbtg_format::iwbz::pack(&full.files).unwrap()).unwrap();
+        let preview = read_iwbz(&file).unwrap();
+        assert!(preview.contains("rooms/courtyard.toml"), "the first ranked room is read");
+        for background in ["sky", "clouds", "hills"] {
+            assert!(
+                preview.contains(&format!("backgrounds/{background}.png")),
+                "the {background} background is read"
+            );
+        }
+        assert!(!preview.contains("music/night.ogg"), "music is not");
+        assert!(!preview.contains("objects/fireflies.toml"), "objects are not");
+        let text = std::str::from_utf8(preview.get("game.toml").unwrap()).unwrap();
+        let manifest = iwbtg_format::Manifest::parse(text).unwrap();
+        let art = iwbtg_format::key_art::resolve(&preview, &manifest, None);
+        assert_eq!(
+            art,
+            iwbtg_format::key_art::resolve(&full.files, &manifest, None),
+            "the preview resolves the same room-background key art"
+        );
+        assert!(matches!(art, iwbtg_format::key_art::KeyArt::RoomBackground(_)));
         std::fs::remove_dir_all(&dir).ok();
     }
 

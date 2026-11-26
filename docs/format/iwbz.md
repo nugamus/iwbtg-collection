@@ -39,6 +39,8 @@ The reader is written for files from strangers. Before it inflates anything it c
 
 Then for each file: it inflates to exactly its stated size (reading stops one byte past it, so a file cannot claim to be small and fill memory), its CRC-32 matches, its data does not overlap another file's (the overlapping-files zip bomb) and ends before the directory, and its name appears once, also ignoring ASCII case (`CREDITS.md` and `Credits.md` would be one file on Windows and macOS).
 
+`unpack_selected` reads only the entries a caller names: the directory, the limits and every local header and data range are still checked, but an entry it does not name is not inflated, CRC-checked or `check_entry`-checked. The client's game-select preview uses it for `game.toml`, the key art, the first ranked room and the background images its art uses, and the `cherry` sprite (#1022); opening the game still runs the full reader.
+
 ## The zip subset
 
 Written: zip 2.0, files in path order, deflate when that is smaller and stored otherwise, UTF-8 names (flag bit 11), the fixed date 1980-01-01, no extra fields, no comments. Text files (`.toml`, `.rhai`, `.md`) are written with LF line ends. So the same package always packs to the same bytes, from a Windows or a Unix checkout.

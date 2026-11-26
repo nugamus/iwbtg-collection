@@ -1,6 +1,7 @@
 //! The `.iwbz` package file (docs/format/iwbz.md): one zip holding a whole built package.
 //!
-//! [`pack`] writes it, [`unpack`] reads it back into [`PackageFiles`]. Both go through
+//! [`pack`] writes it, [`unpack`] reads it back into [`PackageFiles`], and
+//! [`unpack_selected`] reads only named entries for a preview. All go through
 //! [`check_entry`], the list of what a package may hold: the folders and file types of the
 //! package layout (docs/format/v0.md), nothing else. So an `.iwbz` can never carry code, a
 //! `tests/` folder, a link or a path outside the package.
@@ -321,6 +322,19 @@ struct Entry {
 /// Reads `.iwbz` bytes into a package, refusing anything [`check_entry`] refuses and every
 /// archive that breaks a limit (see the module docs). Folder entries (`rooms/`) are skipped.
 pub fn unpack(bytes: &[u8]) -> Result<PackageFiles, IwbzError> {
+    let files = unpack_selected(bytes, |_| true)?;
+    if !files.contains("game.toml") {
+        return Err(IwbzError::NoManifest);
+    }
+    Ok(files)
+}
+
+/// Reads only the entries `keep` accepts, for a preview that must not inflate a whole package
+/// (#1022). The central directory, the archive-wide limits and every local header and data range
+/// are still checked; only a kept entry is inflated, CRC-checked and passed to [`check_entry`].
+/// A damaged entry that `keep` rejects is therefore accepted here, while [`unpack`] still refuses
+/// it. [`unpack`] is this with `keep` accepting everything, plus the `game.toml` requirement.
+pub fn unpack_selected(bytes: &[u8], keep: impl Fn(&str) -> bool) -> Result<PackageFiles, IwbzError> {
     if bytes.len() as u64 > MAX_ARCHIVE_BYTES {
         return Err(IwbzError::TooLarge(format!(
             "the file is over {MAX_ARCHIVE_BYTES} bytes"
@@ -376,6 +390,9 @@ pub fn unpack(bytes: &[u8]) -> Result<PackageFiles, IwbzError> {
             }
             continue;
         }
+        if !keep(&e.name) {
+            continue;
+        }
         let out = match e.method {
             STORED if e.packed == e.size => data.to_vec(),
             STORED => return Err(corrupt(format!("`{}`: stored sizes differ", e.name))),
@@ -404,9 +421,6 @@ pub fn unpack(bytes: &[u8]) -> Result<PackageFiles, IwbzError> {
         {
             return Err(corrupt(format!("`{}` is in the archive twice", e.name)));
         }
-    }
-    if !files.contains("game.toml") {
-        return Err(IwbzError::NoManifest);
     }
     Ok(files)
 }
