@@ -169,6 +169,12 @@ pub const NUMBER_FNS: &[&str] = &[
     "view_hspeed",
     "view_vspeed",
     "view_current",
+    // The string functions that return a number (#1532).
+    "string_length",
+    "string_pos",
+    "string_count",
+    "chr",
+    "ord",
     "get_alarm",
     "random",
     "random_range",
@@ -200,6 +206,20 @@ pub const OTHER_PURE_FNS: &[&str] = &[
     "view_enabled",
     "view_visible",
     "view_object",
+    // The string functions that return a string (#1532).
+    "string",
+    "string_format",
+    "string_char_at",
+    "string_copy",
+    "string_delete",
+    "string_insert",
+    "string_replace",
+    "string_replace_all",
+    "string_upper",
+    "string_lower",
+    "string_digits",
+    "string_letters",
+    "string_lettersdigits",
 ];
 
 /// Instance properties that read as a real number.

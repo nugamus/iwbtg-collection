@@ -54,6 +54,8 @@ fn ceil(_: ?) -> float;
 
 fn choose(_: array) -> ?;
 
+fn chr(_: ?) -> string;
+
 fn clamp(_: ?, _: ?, _: ?) -> float;
 
 fn collision_line(_: ?, _: ?, _: ?, _: ?, _: ?) -> ?;
@@ -282,6 +284,8 @@ fn move_bounce_all(_: Instance, _: bool) -> ();
 
 fn move_bounce_solid(_: Instance, _: bool) -> ();
 
+fn ord(_: ?) -> float;
+
 fn path_end(_: Instance) -> ();
 
 fn path_start(_: Instance, _: string, _: ?, _: string, _: ?) -> ();
@@ -435,6 +439,38 @@ fn sqr(_: ?) -> float;
 fn sqrt(_: ?) -> float;
 
 fn stop_music() -> ();
+
+fn string(_: ?) -> string;
+
+fn string_char_at(_: ?, _: ?) -> string;
+
+fn string_copy(_: ?, _: ?, _: ?) -> string;
+
+fn string_count(_: ?, _: ?) -> float;
+
+fn string_delete(_: ?, _: ?, _: ?) -> string;
+
+fn string_digits(_: ?) -> string;
+
+fn string_format(_: ?, _: ?, _: ?) -> string;
+
+fn string_insert(_: ?, _: ?, _: ?) -> string;
+
+fn string_length(_: ?) -> float;
+
+fn string_letters(_: ?) -> string;
+
+fn string_lettersdigits(_: ?) -> string;
+
+fn string_lower(_: ?) -> string;
+
+fn string_pos(_: ?, _: ?) -> float;
+
+fn string_replace(_: ?, _: ?, _: ?) -> string;
+
+fn string_replace_all(_: ?, _: ?, _: ?) -> string;
+
+fn string_upper(_: ?) -> string;
 
 fn tan(_: ?) -> float;
 

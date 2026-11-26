@@ -13,6 +13,7 @@ pub mod docs;
 pub mod host;
 pub mod inst;
 pub mod paths;
+pub mod strings;
 pub mod validate;
 pub mod views;
 

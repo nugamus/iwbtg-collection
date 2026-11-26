@@ -1007,6 +1007,8 @@ pub fn register_kid_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mut Doc
     super::paths::register_path_api(engine, shared, docs);
     // Views (#1531): the `view_*` reads and `set_view_*` writes over `World::views`.
     super::views::register_view_api(engine, shared, docs);
+    // Strings (#1532): the GML string functions.
+    super::strings::register_string_api(engine, docs);
 }
 
 /// `room_goto`, `room_goto_next`, `room_goto_previous` and `room_restart` (#731). Each sets the
