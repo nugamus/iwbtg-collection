@@ -107,6 +107,8 @@ pub const STATE_FNS: &[&str] = &[
     // They change or drop the instance's path run (#1530).
     "path_start",
     "path_end",
+    // It can run any package script function (#1533).
+    "script_execute",
     // They write the hashed view state (#1531).
     "set_view_xview",
     "set_view_yview",
@@ -380,9 +382,29 @@ pub fn validate(def: &GameDef) -> Vec<Issue> {
     }
     let iws = Iws::new(RunnerRules::default().num);
     let registry = Registry::new(&iws);
+    // Every function in every script, for `script_execute`'s literal target (#1533). The source
+    // is compiled once more in `check_script`; validation is load-time and the scripts are small.
+    let mut package_fns: BTreeMap<String, BTreeSet<usize>> = BTreeMap::new();
+    for script in &def.scripts {
+        if let Ok(ast) = iws.compile_ast(&script.source) {
+            for f in ast.iter_fn_def() {
+                package_fns
+                    .entry(f.name.to_string())
+                    .or_default()
+                    .insert(f.params.len());
+            }
+        }
+    }
     let mut issues = Vec::new();
     for (index, script) in def.scripts.iter().enumerate() {
-        issues.extend(check_script(&iws, &registry, def, index, &script.source));
+        issues.extend(check_script(
+            &iws,
+            &registry,
+            def,
+            index,
+            &script.source,
+            &package_fns,
+        ));
     }
     issues.sort();
     issues.dedup();
@@ -470,6 +492,8 @@ struct Ctx<'a> {
     def: &'a GameDef,
     registry: &'a Registry,
     script: usize,
+    /// Every script function of the package, for `script_execute` (#1533).
+    package_fns: &'a BTreeMap<String, BTreeSet<usize>>,
     /// Script functions as name to argument counts.
     defined: BTreeMap<String, BTreeSet<usize>>,
     /// Script functions that can draw from the RNG or change state, directly or through a call.
@@ -506,11 +530,19 @@ impl Ctx<'_> {
 }
 
 /// Checks one script's source.
-fn check_script(iws: &Iws, registry: &Registry, def: &GameDef, script: usize, source: &str) -> Vec<Issue> {
+fn check_script(
+    iws: &Iws,
+    registry: &Registry,
+    def: &GameDef,
+    script: usize,
+    source: &str,
+    package_fns: &BTreeMap<String, BTreeSet<usize>>,
+) -> Vec<Issue> {
     let mut cx = Ctx {
         def,
         registry,
         script,
+        package_fns,
         defined: BTreeMap::new(),
         impure: BTreeSet::new(),
         issues: Vec::new(),
@@ -854,6 +886,31 @@ fn check_call(cx: &mut Ctx, c: &FnCallExpr, pos: Position, method: bool) {
         };
         cx.error(pos, message);
     }
+    // `script_execute` targets a package script function by a literal name (#1533).
+    if name == "script_execute" {
+        let arity = c.args.len().saturating_sub(1);
+        match c.args.first() {
+            Some(Expr::StringConstant(s, p)) => {
+                let known = cx
+                    .package_fns
+                    .get(s.as_str())
+                    .is_some_and(|arities| arities.contains(&arity));
+                if !known {
+                    cx.error(
+                        *p,
+                        format!(
+                            "script_execute: no script function `{s}` taking {arity} argument{}",
+                            if arity == 1 { "" } else { "s" }
+                        ),
+                    );
+                }
+            }
+            _ => cx.error(
+                pos,
+                "script_execute needs a literal script name: `script_execute(\"name\", ...)`",
+            ),
+        }
+    }
     // A method call (`this.place_meeting(x, y, "block")`) has its first argument before the dot.
     for (f, index, what) in NAME_ARGS {
         let at = if method {
@@ -1055,7 +1112,8 @@ fn g() { let t = S + OFF + B; t + N }
         }
         let iws = Iws::new(RunnerRules::default().num);
         let registry = Registry::new(&iws);
-        let check = |src: &str| check_script(&iws, &registry, &def, 0, src);
+        let no_fns = BTreeMap::new();
+        let check = |src: &str| check_script(&iws, &registry, &def, 0, src, &no_fns);
         assert!(check("fn step() { play_sound(\"boom\"); play_sound(\"engine:a1/jump\"); play_music(\"engine:a1/jump\"); }").is_empty());
         let i = check("fn step() { play_sound(\"engine:a1/gone\"); play_music(\"nope\"); }");
         assert_eq!(i.len(), 2, "{i:#?}");

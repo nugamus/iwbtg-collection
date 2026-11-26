@@ -17,6 +17,8 @@ use iwbtg_sim::script::host::Iws;
 mod arrays;
 #[path = "collision.rs"]
 mod collision;
+#[path = "execute.rs"]
+mod execute;
 #[path = "paths.rs"]
 mod paths;
 #[path = "strings.rs"]

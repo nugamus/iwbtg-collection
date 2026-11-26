@@ -36,6 +36,10 @@ fn begin_step() {
 fn step() {
     let t = room_tick();
     let course = gm_eq(this.xstart, 400.0);
+    // Cross-script calls (#1533): a literal target in this package.
+    if t == 7.0 {
+        this.phase = this.phase + script_execute("api_helper", 1.0);
+    }
     // Strings (#1532): every GML string function, folded into `phase`.
     if t == 6.0 {
         let a = string(12.5) + string_format(1.25, 6, 2) + string_char_at("abc", 2);
@@ -172,3 +176,6 @@ fn alarm(n) {
         this.set_alarm(1, 30.0 + this.get_alarm(0) * 0.0);
     }
 }
+
+/// A target for `script_execute` (#1533).
+fn api_helper(x) { x + 1.0 }
