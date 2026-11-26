@@ -89,6 +89,46 @@ fn real_prop(engine: &mut Engine, s: &Rc<Shared>, name: &'static str, get: Get, 
     }
 }
 
+/// A parameter as a script value, mapped as `Ctx::spawn` maps it to the custom variable it stores
+/// (a flag is 1.0/0.0, a resource id its index, a list its first value), so `param("x")` and
+/// `this.x` agree.
+fn param_dynamic(v: &ParamValue) -> Dynamic {
+    match v {
+        ParamValue::Real(r) => Dynamic::from_float(r.get()),
+        ParamValue::Bool(b) => Dynamic::from_float(if *b { 1.0 } else { 0.0 }),
+        ParamValue::Str(s) => Dynamic::from(ImmutableString::from(s.as_str())),
+        ParamValue::Room(id) => Dynamic::from_float(f64::from(id.0)),
+        ParamValue::Kind(id) => Dynamic::from_float(f64::from(id.0)),
+        ParamValue::Sound(id) => Dynamic::from_float(f64::from(id.0)),
+        ParamValue::Particles(id) => Dynamic::from_float(f64::from(id.0)),
+        // GML has no list value: a list reads as its first value, as a single value would.
+        ParamValue::List(l) => l.first().map_or(Dynamic::from_float(0.0), param_dynamic),
+    }
+}
+
+/// The effective parameter `name` of instance `i`: the value the instance was created with (a
+/// room-file override, creation-code value or spawn map is stored as the custom variable at
+/// spawn), else the kind's object-file default. The same resolution the built-ins get: a room
+/// value overrides the object default. A name the instance has no parameter for is an error.
+fn read_param(s: &Rc<Shared>, i: Inst, name: &str) -> Res<Dynamic> {
+    s.with_world(|w, host| {
+        let x = live(w, i)?;
+        let kd = host
+            .def
+            .kind(x.kind)
+            .ok_or_else(|| runtime_error(format!("instance {} has unknown kind", i.0.0)))?;
+        let stored = host.def.var_names.get(name).and_then(|id| x.vars.get(id));
+        match (stored, kd.params.0.get(name)) {
+            (Some(v), _) => value_to_dynamic(s, Some(v), host.script_rules, &format!("param `{name}`")),
+            (None, Some(v)) => Ok(param_dynamic(v)),
+            (None, None) => Err(runtime_error(format!(
+                "param `{name}` is not set on instance {}",
+                i.0.0
+            ))),
+        }
+    })?
+}
+
 fn param_from(name: &str, d: &Dynamic) -> Res<ParamValue> {
     if let Ok(b) = d.as_bool() {
         return Ok(ParamValue::Bool(b));
@@ -495,6 +535,32 @@ pub fn register_instance_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mu
                 })?
             },
         );
+    }
+
+    // ---- Parameters: `param(name)` and `this.param(name)` ----
+    {
+        docs.add(
+            "param",
+            "Reads one of the instance's parameters (`param(\"mode\")` or `this.param(\"mode\")`), from the object file or overridden in the room file. The value is the effective one, resolved as the built-ins resolve it: a room-file value overrides the object-file default. A name that is not set on the instance is an error; a string literal is checked at load.",
+        );
+        let s = Rc::clone(shared);
+        engine.register_fn(
+            "param",
+            move |i: &mut Inst, name: ImmutableString| -> Res<Dynamic> {
+                let i = *i;
+                read_param(&s, i, &name)
+            },
+        );
+        // The bare form reads the instance of the call running now (`this`), as `script_execute`
+        // keeps it (`host::Inner::execute`).
+        let s = Rc::clone(shared);
+        engine.register_fn("param", move |name: ImmutableString| -> Res<Dynamic> {
+            let i = s
+                .this_inst
+                .get()
+                .ok_or_else(|| runtime_error("param is only available inside a script call"))?;
+            read_param(&s, Inst(i), &name)
+        });
     }
 
     // ---- Alarms ----

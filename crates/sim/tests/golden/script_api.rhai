@@ -36,6 +36,10 @@ fn begin_step() {
 fn step() {
     let t = room_tick();
     let course = gm_eq(this.xstart, 400.0);
+    // Parameters (#1389): the object sets `speed`; the bare form reads `this` and the method
+    // form reads the same value, times 0 so the run and its hash do not change.
+    this.phase = this.phase + param("speed") * 0.0;
+    this.phase = this.phase + this.param("speed") * 0.0;
     // Cross-script calls (#1533): a literal target in this package.
     if t == 7.0 {
         this.phase = this.phase + script_execute("api_helper", 1.0);

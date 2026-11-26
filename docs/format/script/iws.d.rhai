@@ -286,6 +286,10 @@ fn move_bounce_solid(_: Instance, _: bool) -> ();
 
 fn ord(_: ?) -> float;
 
+fn param(_: Instance, _: string) -> ?;
+
+fn param(_: string) -> ?;
+
 fn path_end(_: Instance) -> ();
 
 fn path_start(_: Instance, _: string, _: ?, _: string, _: ?) -> ();

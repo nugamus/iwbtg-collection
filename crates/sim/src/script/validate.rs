@@ -25,7 +25,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use rhai::{AST, ASTFlags, ASTNode, Expr, FnCallExpr, Position, Stmt, Token};
 
 use super::host::Iws;
-use crate::def::GameDef;
+use crate::def::{GameDef, ScriptId};
 use crate::rules::RunnerRules;
 
 /// How serious an [`Issue`] is. Errors refuse the package; warnings only report.
@@ -204,6 +204,8 @@ pub const OTHER_PURE_FNS: &[&str] = &[
     "collision_rect",
     "collision_line",
     "len",
+    // A parameter read (#1389): a number or a string, no side effect.
+    "param",
     // The view reads that do not return a number (#1531).
     "view_enabled",
     "view_visible",
@@ -494,6 +496,9 @@ struct Ctx<'a> {
     script: usize,
     /// Every script function of the package, for `script_execute` (#1533).
     package_fns: &'a BTreeMap<String, BTreeSet<usize>>,
+    /// The parameters this script can read: its kinds' object-file params and their room-file
+    /// overrides, for the literal `param("x")` check (#1389).
+    params: BTreeSet<String>,
     /// Script functions as name to argument counts.
     defined: BTreeMap<String, BTreeSet<usize>>,
     /// Script functions that can draw from the RNG or change state, directly or through a call.
@@ -529,6 +534,33 @@ impl Ctx<'_> {
     }
 }
 
+/// The parameters a script can read with `param(name)` (#1389): every kind that runs it (its
+/// object-file params) and every room placement of those kinds (the room-file override).
+fn script_params(def: &GameDef, script: usize) -> BTreeSet<String> {
+    let Ok(index) = u32::try_from(script) else {
+        return BTreeSet::new();
+    };
+    let sid = Some(ScriptId(index));
+    let mut kinds: BTreeSet<u32> = BTreeSet::new();
+    let mut params: BTreeSet<String> = BTreeSet::new();
+    for (i, k) in def.kinds.iter().enumerate() {
+        if k.script == sid {
+            if let Ok(i) = u32::try_from(i) {
+                kinds.insert(i);
+            }
+            params.extend(k.params.0.keys().cloned());
+        }
+    }
+    for room in &def.rooms {
+        for inst in &room.instances {
+            if kinds.contains(&inst.kind.0) {
+                params.extend(inst.params.0.keys().cloned());
+            }
+        }
+    }
+    params
+}
+
 /// Checks one script's source.
 fn check_script(
     iws: &Iws,
@@ -543,6 +575,7 @@ fn check_script(
         registry,
         script,
         package_fns,
+        params: script_params(def, script),
         defined: BTreeMap::new(),
         impure: BTreeSet::new(),
         issues: Vec::new(),
@@ -910,6 +943,19 @@ fn check_call(cx: &mut Ctx, c: &FnCallExpr, pos: Position, method: bool) {
                 "script_execute needs a literal script name: `script_execute(\"name\", ...)`",
             ),
         }
+    }
+    // `param("x")`, `this.param("x")` and `param(other, "x")` all end in the name (#1389): a
+    // literal must be a parameter of an object that runs this script or of its room placements.
+    if name == "param"
+        && let Some(Expr::StringConstant(s, p)) = c.args.last()
+        && !cx.params.contains(s.as_str())
+    {
+        cx.error(
+            *p,
+            format!(
+                "param: `{s}` is not a parameter of the object that runs this script or of its room placements"
+            ),
+        );
     }
     // A method call (`this.place_meeting(x, y, "block")`) has its first argument before the dot.
     for (f, index, what) in NAME_ARGS {

@@ -19,6 +19,8 @@ mod arrays;
 mod collision;
 #[path = "execute.rs"]
 mod execute;
+#[path = "param.rs"]
+mod param;
 #[path = "paths.rs"]
 mod paths;
 #[path = "strings.rs"]
