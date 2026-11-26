@@ -10,6 +10,7 @@ pub mod budget;
 pub mod collide;
 mod consts;
 pub mod docs;
+pub mod execute;
 pub mod host;
 pub mod inst;
 pub mod paths;

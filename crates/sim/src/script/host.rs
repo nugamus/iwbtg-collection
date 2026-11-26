@@ -39,6 +39,49 @@ pub(crate) struct Inner {
     scripts: Rc<Vec<Compiled>>,
 }
 
+impl Inner {
+    /// Calls the package script function `name` with `args` from inside a running script
+    /// (#1533): `this` stays the calling instance, and the same engine means the same step
+    /// budget, RNG and lent world as the caller. Returns the function's value.
+    fn execute(&self, name: &str, args: Vec<Dynamic>) -> Result<Dynamic, ScriptError> {
+        let shared = &self.iws.shared;
+        let Some(this_inst) = shared.this_inst.get() else {
+            return Err(plain("script_execute is only available inside a script call"));
+        };
+        if shared.depth.get() >= MAX_DEPTH {
+            return Err(plain(
+                "scripts nest too deeply (script_execute inside script_execute ...)",
+            ));
+        }
+        let arity = args.len();
+        let Some(script) = self
+            .scripts
+            .iter()
+            .find(|s| s.fns.contains(&(name.to_owned(), arity)))
+        else {
+            return Err(plain(format!(
+                "script_execute: no script function `{name}` taking {arity} argument{}",
+                if arity == 1 { "" } else { "s" }
+            )));
+        };
+        shared.depth.set(shared.depth.get() + 1);
+        let mut this = Dynamic::from(Inst(this_inst));
+        let opts = CallFnOptions::new().bind_this_ptr(&mut this).eval_ast(false);
+        let mut scope = Scope::new();
+        let result = self
+            .iws
+            .engine
+            .call_fn_with_options::<Dynamic>(opts, &mut scope, &script.ast, name, args)
+            .map_err(|e| {
+                let mut d = script_error(&e);
+                d.message = format!("{}: {} [script_execute `{name}`]", script.name, d.message);
+                d
+            });
+        shared.depth.set(shared.depth.get() - 1);
+        result
+    }
+}
+
 /// The game's compiled scripts and the engine that runs them. Built once per `Sim` from
 /// `GameDef::scripts`, lent to every `Ctx` as `ctx.scripts`. `Default` is a host with no
 /// scripts, for tests and games without scripts. Clones share the engine.
@@ -338,6 +381,8 @@ impl ScriptRuntime {
         }
         shared.depth.set(shared.depth.get() + 1);
         shared.dll_mode.set(ctx.dll_mode);
+        // `script_execute` binds its callee's `this` to the instance of the call running now.
+        let prev_this = shared.this_inst.replace(Some(me));
         let live = std::mem::replace(ctx.w, World::new(crate::def::RoomId(0), 0));
         let prev = shared.world.borrow_mut().replace(live);
         let result = if prev.is_some() {
@@ -359,6 +404,7 @@ impl ScriptRuntime {
                 })
         };
         let back = shared.world.borrow_mut().take();
+        shared.this_inst.set(prev_this);
         shared.depth.set(shared.depth.get() - 1);
         match back {
             Some(w) => *ctx.w = w,
@@ -471,6 +517,8 @@ pub struct Shared {
     pub(crate) host: OnceCell<Host>,
     pub(crate) dll_mode: Cell<DllMode>,
     pub(crate) depth: Cell<u32>,
+    /// The instance `this` is bound to in the script call running now (`script_execute`, #1533).
+    pub(crate) this_inst: Cell<Option<InstId>>,
     /// Top-level consts seen while a script is lexed (`consts.rs`).
     consts: RefCell<super::consts::ConstScan>,
 }
@@ -491,6 +539,17 @@ pub(crate) struct Host {
 impl std::fmt::Debug for Host {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Host").finish_non_exhaustive()
+    }
+}
+
+impl Host {
+    /// Runs `script_execute`'s call from a registered function (#1533).
+    pub(crate) fn script_execute(&self, name: &str, args: Vec<Dynamic>) -> Result<Dynamic, ScriptError> {
+        let inner = self
+            .inner
+            .upgrade()
+            .ok_or_else(|| plain("the script host is gone"))?;
+        inner.execute(name, args)
     }
 }
 
@@ -617,6 +676,7 @@ impl Iws {
             host: OnceCell::new(),
             dll_mode: Cell::new(DllMode::Stub),
             depth: Cell::new(0),
+            this_inst: Cell::new(None),
             consts: RefCell::default(),
         });
         let mut engine = Engine::new_raw();

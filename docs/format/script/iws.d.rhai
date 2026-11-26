@@ -326,6 +326,24 @@ fn room_tick() -> float;
 
 fn round(_: ?) -> float;
 
+fn script_execute(_: string) -> ?;
+
+fn script_execute(_: string, _: ?) -> ?;
+
+fn script_execute(_: string, _: ?, _: ?) -> ?;
+
+fn script_execute(_: string, _: ?, _: ?, _: ?) -> ?;
+
+fn script_execute(_: string, _: ?, _: ?, _: ?, _: ?) -> ?;
+
+fn script_execute(_: string, _: ?, _: ?, _: ?, _: ?, _: ?) -> ?;
+
+fn script_execute(_: string, _: ?, _: ?, _: ?, _: ?, _: ?, _: ?) -> ?;
+
+fn script_execute(_: string, _: ?, _: ?, _: ?, _: ?, _: ?, _: ?, _: ?) -> ?;
+
+fn script_execute(_: string, _: ?, _: ?, _: ?, _: ?, _: ?, _: ?, _: ?, _: ?) -> ?;
+
 fn set curJumps(_: Instance, _: ?) -> ();
 
 fn set depth(_: Instance, _: ?) -> ();

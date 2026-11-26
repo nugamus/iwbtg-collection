@@ -1009,6 +1009,8 @@ pub fn register_kid_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mut Doc
     super::views::register_view_api(engine, shared, docs);
     // Strings (#1532): the GML string functions.
     super::strings::register_string_api(engine, docs);
+    // `script_execute` (#1533): a package script function by literal name.
+    super::execute::register_execute_api(engine, shared, docs);
 }
 
 /// `room_goto`, `room_goto_next`, `room_goto_previous` and `room_restart` (#731). Each sets the

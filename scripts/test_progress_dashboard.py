@@ -17,11 +17,11 @@ GENERATE = ROOT / "progress" / "generate.py"
 SCRIPT_API = ROOT / "docs" / "format" / "script-api.md"
 SCRIPTS = ROOT / "docs" / "architecture" / "sim" / "scripts.md"
 
-# Pinned 2026-11-26: the GML string functions landed in #1532; paths (#1530)
-# and view (#1531) landed earlier. They remain in the census table for the
-# record but are no longer unregistered groups.
-EXPECTED_FUNCTIONS = 122
-EXPECTED_GROUPS = 4
+# Pinned 2026-11-26: script_execute landed in #1533, the strings in #1532, and
+# paths (#1530) and view (#1531) earlier. They remain in the census table for
+# the record but are no longer unregistered groups.
+EXPECTED_FUNCTIONS = 123
+EXPECTED_GROUPS = 3
 
 
 def load_generate():
