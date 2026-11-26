@@ -60,7 +60,7 @@ fn app_on(skip_loading: bool, first: Option<&str>) -> App {
             ShellPlugin {
                 library,
                 trace_mode: false,
-                menu: false,
+                start: AppScreen::Select,
             },
             crate::bindings::BindingsPlugin(crate::bindings::Bindings::default()),
             crate::art::ArtPlugin,
@@ -1099,4 +1099,29 @@ fn activating_a_button_on_the_select_screen_does_not_panic() {
         *app.world().resource::<State<AppScreen>>().get(),
         AppScreen::Select
     );
+}
+
+/// The toolbar's mode switch on a mode's screen opens the other mode's screen: Classic goes to
+/// the shelf, Time Attack back to game select (m5 A1, B8; #1618). Leaving a run goes to the
+/// mode's screen.
+#[test]
+fn the_mode_switch_moves_between_game_select_and_the_shelf() {
+    use crate::ui::mode::Mode;
+    let mut app = app();
+    app.world_mut().insert_resource(Mode::TimeAttack);
+    frames(&mut app, 3);
+    *app.world_mut().resource_mut::<Mode>() = Mode::Classic;
+    frames(&mut app, 2);
+    assert_eq!(
+        *app.world().resource::<State<AppScreen>>().get(),
+        AppScreen::Shelf
+    );
+    *app.world_mut().resource_mut::<Mode>() = Mode::TimeAttack;
+    frames(&mut app, 2);
+    assert_eq!(
+        *app.world().resource::<State<AppScreen>>().get(),
+        AppScreen::Select
+    );
+    assert_eq!(mode_home(Some(Mode::Classic)), AppScreen::Shelf);
+    assert_eq!(mode_home(None), AppScreen::Select);
 }

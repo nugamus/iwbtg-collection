@@ -174,6 +174,19 @@ pub fn text(content: &str, style: Type, color: Color) -> impl Bundle + use<> {
     )
 }
 
+/// [`text`] with its own line height, a multiple of the font size (a wrapped caption's 1.4,
+/// a big title's 0.95).
+pub fn text_leading(content: &str, style: Type, color: Color, leading: f32) -> impl Bundle + use<> {
+    (
+        Text::new(style.set(content)),
+        style.font(),
+        style.spacing(),
+        bevy::text::LineHeight::RelativeToFont(leading),
+        TextColor(color),
+        Ink(color),
+    )
+}
+
 /// One line of text in several styles and colours (`Deaths <b>48,213</b>`): the first part is the
 /// text node, the rest are spans of it. Unlike [`text`], the spans do not follow `UiOpacity` or
 /// `FadeMask`, so keep it out of fading lists.

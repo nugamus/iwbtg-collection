@@ -23,7 +23,7 @@
 
 - Testers play `crates/client/showcase.pkg` (#852); unit tests open the single-feature packages in `crates/client/tests/fixtures/`. A new client feature that a tester should see goes into the showcase (original art only; the Kid there is the one exception), its test into a fixture.
 - Game art (key art, a game's own fruit) comes from the loaded package at run time; never commit a game's extracted art here. The one exception is the client's own delicious fruit, `crates/client/assets/ui/cherry.png` (credited in its `CREDITS.md`, user decision 2026-11-26, #1608).
-- Game select screenshots now need `--select-preview time-attack` (or `classic`): plain `--select` opens on the main menu (`--menu-preview <initial|top|play|classic>` for its states).
+- Game select screenshots need `--select-preview time-attack` and the Classic shelf `--select-preview classic`: plain `--select` opens on the main menu (`--menu-preview <initial|top|play|classic>` for its states).
 - A new CLI flag or plugin goes in your own module (a `Registration`: its `Args` group and `Plugin`) plus one line in the module list in `main.rs`, not into `main.rs` itself or `view::run` arguments (#530, #948), so lanes don't conflict there.
 - CJK text needs the fallback font (#502); check a Japanese title in a screenshot.
 - Game select screenshots: copy `showcase.pkg` and the fixtures into a temp folder and pass it to `--select`; the first name in sort order is the one selected (`maps.pkg` has maps and key art, so copy it as `0-maps.pkg`). A `--screenshot` run keeps no stats, so no PB or Cleared mark shows (#149). In Git Bash give the client `cygpath -m` paths: a `cygpath -w` path with `\` joined on lost its separator and the screenshot did not save.

@@ -27,6 +27,7 @@ use crate::package::{self, OpenError, Package, SpriteImage};
 
 pub mod menu;
 pub mod select;
+pub mod shelf;
 
 /// The screen the client shows.
 #[derive(States, Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
@@ -37,6 +38,8 @@ pub enum AppScreen {
     /// The main menu (`menu.rs`): where a client started on a library opens, and where Back
     /// leads from game select.
     Menu,
+    /// Classic's shelf (`shelf.rs`): one cover per game (m5 A4).
+    Shelf,
     /// Play the [`LoadedPackage`].
     Run,
 }
@@ -154,7 +157,8 @@ pub struct ShellArgs {
     /// Screenshot checks: open the main menu in this state (m5 B6, B7, A1, A2).
     #[arg(long, hide = true, value_enum, requires = "select")]
     pub menu_preview: Option<menu::MenuPreview>,
-    /// Screenshot checks: open game select in this mode instead of the main menu (m5 A3).
+    /// Screenshot checks: open this mode's screen instead of the main menu: game select for
+    /// Time Attack (m5 A3), the shelf for Classic (m5 A4).
     #[arg(long, hide = true, value_enum, requires = "select", conflicts_with = "menu_preview")]
     pub select_preview: Option<SelectPreview>,
 }
@@ -182,14 +186,25 @@ impl crate::registration::ClientModule for Registration {
         let on_select = args.mod_select_preview
             || args.practice_preview
             || args.select_preview.is_some();
-        if args.select_preview == Some(SelectPreview::Classic) {
+        let classic = args.select_preview == Some(SelectPreview::Classic);
+        if classic {
             app.insert_resource(crate::ui::mode::Mode::Classic);
         }
+        let start = if classic {
+            AppScreen::Shelf
+        } else if on_select {
+            AppScreen::Select
+        } else {
+            AppScreen::Menu
+        };
         app.add_plugins((
             ShellPlugin {
-                library: args.select,
+                library: args.select.clone(),
                 trace_mode: startup.trace_mode,
-                menu: !on_select,
+                start,
+            },
+            shelf::ShelfPlugin {
+                library: args.select,
             },
             select::SelectPlugin(library, args.mod_select_preview, args.practice_preview),
             menu::MenuPlugin {
@@ -222,25 +237,24 @@ impl Shell {
 pub struct ShellPlugin {
     pub library: Option<PathBuf>,
     pub trace_mode: bool,
-    /// Open on the main menu rather than game select.
-    pub menu: bool,
+    /// The screen it opens on without a package on the command line (the main menu; game select
+    /// or the shelf for a check).
+    pub start: AppScreen,
 }
 
 impl Plugin for ShellPlugin {
     fn build(&self, app: &mut App) {
         let first = if app.world().contains_resource::<LoadedPackage>() {
             AppScreen::Run
-        } else if self.menu {
-            AppScreen::Menu
         } else {
-            AppScreen::Select
+            self.start
         };
         let in_run = in_state(AppScreen::Run);
         app.insert_state(first)
             .add_sub_state::<RunScreen>()
             .init_resource::<FirstScreen>()
             .add_message::<StartFailed>()
-            .add_systems(Update, poll_start)
+            .add_systems(Update, (poll_start, mode_screen))
             .insert_resource(Shell {
                 library: self.library.clone(),
                 trace_mode: self.trace_mode,
@@ -609,14 +623,42 @@ fn open_next(world: &mut World) {
     }
 }
 
+/// The screen of `mode`: game select for Time Attack, the shelf for Classic (m5 A1).
+pub fn mode_home(mode: Option<crate::ui::mode::Mode>) -> AppScreen {
+    match mode.unwrap_or_default() {
+        crate::ui::mode::Mode::TimeAttack => AppScreen::Select,
+        crate::ui::mode::Mode::Classic => AppScreen::Shelf,
+    }
+}
+
+/// The toolbar's mode switch on a mode's screen opens the other mode's screen.
+fn mode_screen(
+    mode: Option<Res<crate::ui::mode::Mode>>,
+    screen: Res<State<AppScreen>>,
+    mut next: ResMut<NextState<AppScreen>>,
+) {
+    let Some(mode) = mode else {
+        return;
+    };
+    if !mode.is_changed() || mode.is_added() {
+        return;
+    }
+    let here = *screen.get();
+    if matches!(here, AppScreen::Select | AppScreen::Shelf) {
+        let want = mode_home(Some(*mode));
+        if want != here {
+            next.set(want);
+        }
+    }
+}
+
 /// Ends the run: back to the select screen, or, when the client was started on one package,
 /// exits (the replay and stats are finished either way: on `OnExit(Run)`, or on exit as when the
 /// window closes).
 pub fn leave(world: &mut World) {
     if world.get_resource::<Shell>().is_some_and(|s| s.library.is_some()) {
-        world
-            .resource_mut::<NextState<AppScreen>>()
-            .set(AppScreen::Select);
+        let to = mode_home(world.get_resource::<crate::ui::mode::Mode>().copied());
+        world.resource_mut::<NextState<AppScreen>>().set(to);
     } else {
         world.write_message(AppExit::Success);
     }
