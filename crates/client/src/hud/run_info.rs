@@ -69,11 +69,14 @@ pub struct Look {
     /// The game's `[controls]` labels for `extra1` to `extra4`; an action it does not label shows
     /// nothing.
     pub extras: [Option<String>; 4],
+    /// Auto-retry is on: the mod row carries the AR mark (m5 D8).
+    pub auto_retry: bool,
 }
 
 impl Default for Look {
     fn default() -> Self {
         Look {
+            auto_retry: false,
             unranked: false,
             mods: ModSet::NONE,
             show: HudShow::default(),
@@ -85,7 +88,7 @@ impl Default for Look {
 impl Look {
     /// The mod row shows only for an unranked run or when mods are on.
     fn mod_row(&self) -> bool {
-        self.show.mods && (self.unranked || self.mods != ModSet::NONE)
+        self.show.mods && (self.unranked || self.mods != ModSet::NONE || self.auto_retry)
     }
 }
 
@@ -170,6 +173,7 @@ pub fn read(
     paused: Res<Paused>,
     preview: Res<Preview>,
     shown: Res<super::Shown>,
+    retry: Option<Res<crate::retry::Retry>>,
     mut stage_deaths: ResMut<StageDeaths>,
     mut info: ResMut<RunInfo>,
     mut look: ResMut<Look>,
@@ -210,6 +214,7 @@ pub fn read(
         mods,
         show: shown.0,
         extras: labels.clone(),
+        auto_retry: retry.is_some_and(|r| r.auto),
     };
     if *look != want {
         *look = want;
@@ -349,7 +354,7 @@ pub fn build(width: f32, density: Density, look: Look) -> impl Bundle {
         Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
             c.spawn(paused_line());
             if look.mod_row() {
-                c.spawn(mod_row(look.unranked, look.mods));
+                c.spawn(mod_row(look.unranked, look.mods, look.auto_retry));
             }
             if show.timer {
                 c.spawn((
@@ -425,7 +430,7 @@ fn paused_line() -> impl Bundle {
 }
 
 /// The Unranked pill and the mods' codes: 24 px sheared pills, 6 px apart.
-fn mod_row(unranked_pill: bool, mods: ModSet) -> impl Bundle {
+fn mod_row(unranked_pill: bool, mods: ModSet, auto_retry: bool) -> impl Bundle {
     let unranked = Type {
         tracking: 0.1,
         ..Type::PILL_CAPS
@@ -455,6 +460,12 @@ fn mod_row(unranked_pill: bool, mods: ModSet) -> impl Bundle {
                 let mut pill = sheared(24.0, 8.0, Shape::fill(tokens::CHIP));
                 pill.0.min_width = Val::Px(38.0);
                 c.spawn((pill, children![text(m.code, code, tokens::INK)]));
+            }
+            // Auto-retry is not a mod: its mark is outlined, not filled (m5 D8).
+            if auto_retry {
+                let mut pill = sheared(24.0, 8.0, Shape::fill(Color::NONE).with_ring(1.5, tokens::white(0.5)));
+                pill.0.min_width = Val::Px(38.0);
+                c.spawn((pill, children![text(locale::text("pill_auto_retry"), code, tokens::INK)]));
             }
         })),
     )

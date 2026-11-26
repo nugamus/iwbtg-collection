@@ -987,8 +987,10 @@ fn card_content(
     description: &str,
     card: &ModCard,
     options: &[(String, bool)],
+    tag: Option<&str>,
 ) -> impl Bundle + use<> {
     let (code, name, description) = (code.to_owned(), name.to_owned(), description.to_owned());
+    let tag = tag.map(str::to_owned);
     let card = *card;
     let options = options.to_vec();
     Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
@@ -1024,11 +1026,43 @@ fn card_content(
             ..default()
         })
         .with_children(|t| {
-            t.spawn((
-                text(&name, Type::barlow(17.0, 700), card_part(CardPart::Name, &card)),
-                TextLayout::no_wrap(),
-                CardPart::Name,
-            ));
+            // The name, and the tag after it (`New`, `Coming later`; m5 D9).
+            t.spawn(Node {
+                align_items: AlignItems::Center,
+                column_gap: Val::Px(10.0),
+                ..default()
+            })
+            .with_children(|row| {
+                row.spawn((
+                    text(&name, Type::barlow(17.0, 700), card_part(CardPart::Name, &card)),
+                    TextLayout::no_wrap(),
+                    CardPart::Name,
+                ));
+                if let Some(tag) = &tag {
+                    row.spawn((
+                        Node {
+                            height: Val::Px(17.0),
+                            padding: UiRect::horizontal(Val::Px(6.0)),
+                            align_items: AlignItems::Center,
+                            ..default()
+                        },
+                        Shape {
+                            shear: 0.0,
+                            radius: 3.0,
+                            ..Shape::fill(tokens::white(0.1))
+                        },
+                        children![text(
+                            tag,
+                            Type {
+                                tracking: 0.1,
+                                caps: true,
+                                ..Type::barlow(10.0, 700)
+                            },
+                            tokens::SOFT
+                        )],
+                    ));
+                }
+            });
             t.spawn((
                 text(
                     &description,
@@ -1090,6 +1124,7 @@ pub fn mod_card(
     color: Color,
     on: bool,
     options: &[(String, bool)],
+    tag: Option<&str>,
 ) -> impl Bundle + use<> {
     let card = ModCard {
         color,
@@ -1109,13 +1144,14 @@ pub fn mod_card(
         TabIndex(0),
         UiTransform::default(),
         Tween::<Scale>::at_rest(1.0, tokens::motion::HOVER, Ease::OutQuint),
-        card_content(code, name, description, &card, options),
+        card_content(code, name, description, &card, options, tag),
     )
 }
 
 /// A mod card that cannot be picked yet (a mod the client does not play): off, faded to
-/// [`OFF_OPACITY`], no hover, focus or `Activate`.
-pub fn mod_card_off(code: &str, name: &str, description: &str) -> impl Bundle + use<> {
+/// [`OFF_OPACITY`], no hover, focus or `Activate`. `tag` is the small mark after the name
+/// (`Coming later`).
+pub fn mod_card_off(code: &str, name: &str, description: &str, tag: Option<&str>) -> impl Bundle + use<> {
     let card = ModCard {
         color: tokens::MUTED,
         on: false,
@@ -1125,7 +1161,7 @@ pub fn mod_card_off(code: &str, name: &str, description: &str) -> impl Bundle + 
         card_node(),
         Shape::fill(card_fill(&card)),
         UiOpacity(OFF_OPACITY),
-        card_content(code, name, description, &card, &[]),
+        card_content(code, name, description, &card, &[], tag),
     )
 }
 

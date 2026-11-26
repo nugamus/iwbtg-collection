@@ -102,6 +102,9 @@ pub struct Settings {
     pub flashes: bool,
     /// Which release the updater follows (`[updates] channel`, #1606).
     pub update_channel: UpdateChannel,
+    /// The ghost to race in the room (`[ghost] pick`: `off`, `pb` or `top`; m5 D9, #64). Drawn
+    /// only, never ranked; the mod sheet's footer switches it.
+    pub ghost: Ghost,
     /// The `[bindings]` table, kept as written: the input layer (#27) owns its layout and checks
     /// it; this file only stores it.
     pub bindings: Table,
@@ -171,6 +174,7 @@ impl Default for Settings {
             shake: true,
             flashes: true,
             update_channel: UpdateChannel::default(),
+            ghost: Ghost::Off,
             bindings: Table::new(),
         }
     }
@@ -235,6 +239,34 @@ impl HudShow {
             t.insert(name.into(), on.into());
         }
         t
+    }
+}
+
+/// The ghost the player races: none, their PB on the board, or the board's #1 (#64).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Ghost {
+    #[default]
+    Off,
+    Pb,
+    Top,
+}
+
+impl Ghost {
+    pub fn parse(s: &str) -> Option<Ghost> {
+        match s {
+            "off" => Some(Ghost::Off),
+            "pb" => Some(Ghost::Pb),
+            "top" => Some(Ghost::Top),
+            _ => None,
+        }
+    }
+
+    pub fn code(self) -> &'static str {
+        match self {
+            Ghost::Off => "off",
+            Ghost::Pb => "pb",
+            Ghost::Top => "top",
+        }
     }
 }
 
@@ -306,10 +338,22 @@ impl Settings {
                 ("results", Value::Table(t)) => s.read_results(t, warnings),
                 ("accessibility", Value::Table(t)) => s.read_accessibility(t, warnings),
                 ("updates", Value::Table(t)) => s.read_updates(t, warnings),
+                ("ghost", Value::Table(t)) => {
+                    for (k, v) in t {
+                        match (k.as_str(), v) {
+                            ("pick", Value::String(p)) => match Ghost::parse(p) {
+                                Some(g) => s.ghost = g,
+                                None => warnings
+                                    .push(format!("ghost.pick `{p}` is not off, pb or top, using off")),
+                            },
+                            _ => warnings.push(format!("unknown entry `ghost.{k}`, ignored")),
+                        }
+                    }
+                }
                 ("bindings", Value::Table(t)) => s.bindings = t.clone(),
                 (
                     "display" | "audio" | "hud" | "retry" | "practice" | "results" | "accessibility"
-                    | "updates" | "bindings",
+                    | "updates" | "ghost" | "bindings",
                     _,
                 ) => {
                     warnings.push(format!("`[{key}]` must be a table, using defaults"));
@@ -518,6 +562,9 @@ impl Settings {
         root.insert("results".into(), results.into());
         root.insert("accessibility".into(), accessibility.into());
         root.insert("updates".into(), updates.into());
+        let mut ghost = Table::new();
+        ghost.insert("pick".into(), self.ghost.code().into());
+        root.insert("ghost".into(), ghost.into());
         root.insert("bindings".into(), self.bindings.clone().into());
         toml::to_string(&root).unwrap_or_default()
     }
@@ -642,6 +689,7 @@ mod tests {
             results_heatmap: true,
             shake: false,
             flashes: false,
+            ghost: Ghost::Top,
             hud_show: HudShow {
                 input: false,
                 leaderboard: false,
@@ -737,6 +785,18 @@ flashes = 0
         );
         assert!(s.shake() && s.flashes(), "bad entries keep the defaults");
         assert_eq!(w.len(), 2, "{w:?}");
+        let (s, w) = parse(
+            "[ghost]
+pick = \"pb\"
+",
+        );
+        assert_eq!((s.ghost, w.len()), (Ghost::Pb, 0));
+        let (s, w) = parse(
+            "[ghost]
+pick = \"best\"
+",
+        );
+        assert_eq!((s.ghost, w.len()), (Ghost::Off, 1), "an unknown pick is off");
         let (s, w) = parse("accessibility = true\n");
         assert!(s.shake() && s.flashes());
         assert_eq!(w.len(), 1, "a section that is not a table warns: {w:?}");

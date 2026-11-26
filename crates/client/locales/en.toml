@@ -5,6 +5,7 @@
 pill_ranked = "Ranked"
 pill_unranked = "Unranked"
 pill_classic = "Classic"
+pill_auto_retry = "AR"
 
 # Notices (ui/notice.rs).
 notice_not_saved = "Not saved"

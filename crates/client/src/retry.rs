@@ -46,8 +46,8 @@ impl crate::registration::ClientModule for Registration {
 /// Retry state: whether auto-retry is on, the death counter after the last tick, and a retry
 /// waiting for the next frame.
 #[derive(Resource)]
-struct Retry {
-    auto: bool,
+pub(crate) struct Retry {
+    pub(crate) auto: bool,
     deaths: Option<u32>,
     pending: Option<Why>,
 }
