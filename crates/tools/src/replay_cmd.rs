@@ -28,20 +28,16 @@
 //! that tick is rejected (docs/architecture/replay.md, "Mods").
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
-use iwbtg_format::{LoadMode, PackageFiles, load_game};
+use iwbtg_format::{LoadMode, PackageFiles};
+use iwbtg_sim::SimOptions;
 use iwbtg_sim::def::{GameDef, RoomId};
 use iwbtg_sim::input::{Action, InputFrame, parse_action_inputs};
 use iwbtg_sim::mods::ModSet;
-use iwbtg_sim::replay::{CHECKPOINT_INTERVAL, Replay, SAVE_SLOT_FORMAT, StartMode, Trailer};
+use iwbtg_sim::replay::{Replay, StartMode};
 use iwbtg_sim::room::StartPoint;
-use iwbtg_sim::save::{Checkpoint, SaveSlot};
 use iwbtg_sim::sound::DllMode;
 use iwbtg_sim::stripped::PlayMode;
-use iwbtg_sim::timing::Split;
-use iwbtg_sim::world::SimStatus;
-use iwbtg_sim::{Sim, SimOptions};
 
 use crate::trace_cmd::{ToolError, load_package, read_text};
 
@@ -78,103 +74,9 @@ pub struct ReplayRunArgs {
     pub room: Option<String>,
 }
 
-/// What to run: the frames and the setup a replay header (or the `.inputs` flags) gives.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct RunInput {
-    /// One frame per tick.
-    pub frames: Vec<InputFrame>,
-    /// The RNG seed.
-    pub seed: u32,
-    /// The mods.
-    pub mods: ModSet,
-    /// Original or stripped.
-    pub mode: PlayMode,
-    /// The map id; `None` is the package's first map.
-    pub map: Option<String>,
-    /// The save a `FromSave` replay starts from (a client's Play original run that resumed the
-    /// save file, #476); `None` is a new game.
-    pub save: Option<StartSave>,
-}
+pub use iwbtg_verify::RunInput;
 
-/// The payload of a replay's `FromSave`: a checkpoint (format 7 and later) or the raw slot a
-/// format 5 or 6 replay kept.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub enum StartSave {
-    /// A versioned checkpoint; resolves its stable room name against the package.
-    Checkpoint(Checkpoint),
-    /// A pre-checkpoint replay's raw slot; its numeric room is bound to the replay's package by
-    /// the header's `gameplay_hash`.
-    LegacySlot(SaveSlot),
-}
-
-impl RunInput {
-    /// Where the run starts: the replay's save, else a new game on `difficulty`. The checkpoint
-    /// travels to the sim unresolved; the sim looks its room up in the room sequence (#1238).
-    pub fn start(&self, def: &GameDef, difficulty: u8) -> Result<StartPoint, ToolError> {
-        match &self.save {
-            Some(StartSave::Checkpoint(checkpoint)) => Ok(StartPoint::FromSave(checkpoint.clone())),
-            Some(StartSave::LegacySlot(slot)) => {
-                // A pre-checkpoint replay's slot stores a numeric room; the header's
-                // `gameplay_hash` binds it to this package, so naming that room here is the
-                // conversion, not a resolution against a live save.
-                let checkpoint = Checkpoint::from_slot(def, slot).map_err(|e| {
-                    ToolError::Message(format!("the replay's save slot does not resolve: {e}"))
-                })?;
-                Ok(StartPoint::FromSave(checkpoint))
-            }
-            None => Ok(StartPoint::NewGame { difficulty }),
-        }
-    }
-}
-
-/// What a headless run gives.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct ReplaySummary {
-    /// Ticks run.
-    pub ticks: u64,
-    /// Splits from the `[timing]` triggers.
-    pub splits: Vec<Split>,
-    /// Ranked time in ticks (`Sim::ranked_ticks`).
-    pub ranked_ticks: u64,
-    /// The timer's ticks inside a region (`Sim::frozen_ticks`).
-    pub frozen_ticks: u64,
-    /// The final state hash.
-    pub hash: [u8; 32],
-    /// Original or stripped.
-    pub mode: PlayMode,
-    /// The map the run played (`Sim::map_id`).
-    pub map: String,
-    /// The room the run started in (after `Sim::new`), by id.
-    pub start_room: String,
-    /// `(tick, state hash truncated to 16 bytes)` after every tick that is a multiple of
-    /// `replay::CHECKPOINT_INTERVAL`, as a replay's trailer keeps them.
-    pub checkpoints: Vec<(u64, [u8; 16])>,
-}
-
-impl ReplaySummary {
-    /// The seven output lines.
-    pub fn lines(&self) -> String {
-        let splits = if self.splits.is_empty() {
-            "none".to_owned()
-        } else {
-            self.splits
-                .iter()
-                .map(|s| format!("{}@{}", s.index, s.tick))
-                .collect::<Vec<_>>()
-                .join(" ")
-        };
-        let hash: String = self.hash.iter().map(|b| format!("{b:02x}")).collect();
-        format!(
-            "ticks: {}\nsplits: {splits}\nranked: {} frozen: {}\nhash: {hash}\nmode: {}\nmap: {}\nstart: {}\n",
-            self.ticks,
-            self.ranked_ticks,
-            self.frozen_ticks,
-            self.mode.name(),
-            self.map,
-            self.start_room
-        )
-    }
-}
+pub use iwbtg_verify::ReplaySummary;
 
 /// `iwbtg replay run`: reads the package and the input, runs [`run`] and prints `ticks: N`,
 /// `splits: ...`, `ranked: N frozen: N`, `hash: <hex>`, `mode: ...`, `map: <id>` and
@@ -240,18 +142,6 @@ pub struct ReplayVerifyArgs {
     pub replay: PathBuf,
 }
 
-/// The line that tells a verifier a replay came from another sim build, or `None` when the
-/// versions match. A run of another build cannot reproduce the recorded hashes, so
-/// [`verify_main`] reports this instead of a hash difference (a verifier cannot tell "wrong
-/// build" from "wrong run" otherwise; docs/architecture/versioning.md).
-fn sim_version_mismatch(recorded: u32, current: u32) -> Option<String> {
-    (recorded != current).then(|| {
-        format!(
-            "sim_version {recorded}, this build is {current}: a replay is verified by a build with its own SIM_VERSION"
-        )
-    })
-}
-
 /// `iwbtg replay verify`: what the server checks of a replay (docs/architecture/replay.md,
 /// Verification), offline. The replay must be for this package (id and `gameplay_hash`) and this
 /// sim (`SIM_VERSION`); a headless run on its header and inputs must reproduce every claim of its
@@ -263,86 +153,23 @@ pub fn verify_main(args: &ReplayVerifyArgs) -> Result<bool, ToolError> {
     let bytes = std::fs::read(&args.replay)
         .map_err(|e| ToolError::Message(format!("{}: {e}", args.replay.display())))?;
     let label = args.replay.display().to_string();
-    let replay = Replay::decode(&bytes).map_err(|e| ToolError::Message(format!("{label}: {e}")))?;
-    let report = iwbtg_format::load::load_report(&files, LoadMode::Strict);
-    let (Some(def), Some(gameplay_hash)) = (report.def, report.gameplay_hash) else {
-        return Err(load_strict(&files, LoadMode::Strict)
-            .err()
-            .unwrap_or_else(|| ToolError::Message("the package does not load".to_owned())));
-    };
-    let input = replay_input(&bytes, &label)?;
-    let options = SimOptions {
-        start: input.start(&def, 0)?,
-        seed: input.seed,
-        dll_mode: DllMode::Model,
-        mode: input.mode,
-        map: input.map.clone(),
-    };
-    let h = &replay.header;
-    let mut bad = Vec::new();
-    if h.package_id != def.id {
-        bad.push(format!("package `{}`, not `{}`", h.package_id, def.id));
+    // The verification itself lives in `iwbtg-verify`, shared with the server (#1565); this
+    // command only loads the package and prints the result.
+    let verification = iwbtg_verify::verify(&files, &bytes, &label)?;
+    if let Some(summary) = &verification.summary {
+        print!(
+            "{}{}",
+            summary.lines(),
+            pause_lines(&verification.pauses, verification.run_time)
+        );
     }
-    if h.gameplay_hash != gameplay_hash {
-        bad.push(format!(
-            "gameplay_hash {} is not this package's {}",
-            hex(&h.gameplay_hash),
-            hex(&gameplay_hash)
-        ));
+    for mismatch in &verification.mismatches {
+        println!("mismatch: {mismatch}");
     }
-    if let Some(line) = sim_version_mismatch(h.sim_version, iwbtg_sim::SIM_VERSION) {
-        // The recorded hashes are a different build's; do not run or report a hash difference
-        // that would hide the real cause.
-        for b in &bad {
-            println!("mismatch: {b}");
-        }
-        println!("mismatch: {line}");
-        return Ok(false);
-    }
-    let s = run_def(def, &input.frames, options, input.mods)?;
-    let t = &replay.trailer;
-    print!("{}{}", s.lines(), pause_lines(t, s.ranked_ticks));
-    if s.ticks != t.total_ticks {
-        bad.push(format!(
-            "ran {} ticks, the replay claims {}",
-            s.ticks, t.total_ticks
-        ));
-    }
-    let splits: Vec<(u16, u64)> = s.splits.iter().map(|x| (x.index, x.tick)).collect();
-    if splits != t.splits {
-        bad.push(format!("splits {splits:?}, the replay claims {:?}", t.splits));
-    }
-    if s.ranked_ticks != t.ranked_ticks {
-        bad.push(format!(
-            "ranked time {}, the replay claims {}",
-            s.ranked_ticks, t.ranked_ticks
-        ));
-    }
-    if let Some((ours, theirs)) = s.checkpoints.iter().zip(&t.checkpoints).find(|(a, b)| a != b) {
-        bad.push(format!(
-            "checkpoint at tick {} differs (first desync before tick {})",
-            theirs.0, ours.0
-        ));
-    } else if s.checkpoints.len() != t.checkpoints.len() {
-        bad.push(format!(
-            "{} checkpoints, the replay claims {}",
-            s.checkpoints.len(),
-            t.checkpoints.len()
-        ));
-    }
-    if s.hash != t.final_hash {
-        bad.push(format!(
-            "final hash differs: the replay claims {}",
-            hex(&t.final_hash)
-        ));
-    }
-    for b in &bad {
-        println!("mismatch: {b}");
-    }
-    if bad.is_empty() {
+    if verification.verified {
         println!("verified");
     }
-    Ok(bad.is_empty())
+    Ok(verification.verified)
 }
 
 /// Arguments of `iwbtg replay dump <replay>`.
@@ -451,16 +278,10 @@ fn pauses_text(pauses: &[(u64, u64)]) -> String {
 }
 
 /// The two lines `replay verify` prints after the run's: the replay's pauses and the run's
-/// time, the run's ranked ticks plus the ticks paused (`Trailer::ranked_time`; the sim never
-/// sees a pause, so the pauses are the client's claim).
-fn pause_lines(t: &Trailer, ranked_ticks: u64) -> String {
-    format!(
-        "pauses: {}
-time: {}
-",
-        pauses_text(&t.pauses),
-        ranked_ticks.saturating_add(t.paused_ticks())
-    )
+/// time (`Trailer::ranked_time`; the sim never sees a pause, so the pauses are the client's
+/// claim).
+fn pause_lines(pauses: &[(u64, u64)], run_time: u64) -> String {
+    format!("pauses: {}\ntime: {run_time}\n", pauses_text(pauses))
 }
 
 /// Lowercase hex.
@@ -471,35 +292,7 @@ fn hex(bytes: &[u8]) -> String {
 /// The frames, seed, mods and play mode of a `.iwbr` replay's bytes; `label` names the replay in
 /// errors.
 pub fn replay_input(bytes: &[u8], label: &str) -> Result<RunInput, ToolError> {
-    let replay = Replay::decode(bytes).map_err(|e| ToolError::Message(format!("{label}: {e}")))?;
-    let save = match &replay.header.start_mode {
-        StartMode::NewGame => None,
-        StartMode::FromSave(bytes) if replay.header.replay_format > SAVE_SLOT_FORMAT => {
-            Some(StartSave::Checkpoint(Checkpoint::decode(bytes).map_err(|e| {
-                ToolError::Message(format!("{label}: the replay's checkpoint does not decode: {e}"))
-            })?))
-        }
-        StartMode::FromSave(bytes) => Some(StartSave::LegacySlot(
-            // The shared exact decode: a legacy slot with bytes after it is refused (#1325).
-            SaveSlot::decode(bytes).map_err(|e| {
-                ToolError::Message(format!("{label}: the replay's save slot does not decode: {e}"))
-            })?,
-        )),
-    };
-    let seed = u32::try_from(replay.header.rng_seed).map_err(|_| {
-        ToolError::Message(format!(
-            "{label}: the replay's seed {} does not fit the sim's 32-bit seed",
-            replay.header.rng_seed
-        ))
-    })?;
-    Ok(RunInput {
-        frames: replay.inputs,
-        seed,
-        mods: replay.header.mods,
-        mode: replay.header.play_mode,
-        map: Some(replay.header.map),
-        save,
-    })
+    Ok(iwbtg_verify::replay_input(bytes, label)?)
 }
 
 /// What to run: a `.iwbr` replay's inputs and header, or the frames of an `.inputs` file (frames
@@ -553,16 +346,7 @@ pub fn run(
 
 /// Loads a package, formatting the diagnostics as an error.
 pub fn load_strict(pkg: &PackageFiles, mode: LoadMode) -> Result<GameDef, ToolError> {
-    load_game(pkg, mode).map_err(|diags| {
-        ToolError::Message(format!(
-            "the package does not load:
-  {}",
-            diags.iter().map(ToString::to_string).collect::<Vec<_>>().join(
-                "
-  "
-            )
-        ))
-    })
+    Ok(iwbtg_verify::load_strict(pkg, mode)?)
 }
 
 /// Runs a loaded game headless on these input frames, one per tick, from `options`. A run that
@@ -573,69 +357,15 @@ pub fn run_def(
     options: SimOptions,
     mods: ModSet,
 ) -> Result<ReplaySummary, ToolError> {
-    let mode = options.mode;
-    let mut sim = Sim::new(Arc::new(def), options)
-        .map_err(|e| ToolError::Message(format!("the sim did not start: {e}")))?;
-    let start_room = room_name(sim.def(), sim.world().room);
-    let map = sim.map_id().to_owned();
-    let mut splits = Vec::new();
-    let mut checkpoints = Vec::new();
-    for (index, frame) in frames.iter().enumerate() {
-        let deaths = sim.world().engine.run.deaths;
-        let step = sim.step(*frame);
-        splits.extend(step.splits);
-        // After every tick that reaches a multiple of the interval (a halted step adds no tick).
-        if step.tick > 0
-            && step.tick.is_multiple_of(CHECKPOINT_INTERVAL)
-            && checkpoints.last().map(|c: &(u64, [u8; 16])| c.0) != Some(step.tick)
-        {
-            let mut c = [0; 16];
-            c.copy_from_slice(&sim.state_hash()[..16]);
-            checkpoints.push((step.tick, c));
-        }
-        if step.status == SimStatus::Running && mods.ends_run(deaths, sim.world().engine.run.deaths) {
-            let left = frames.len() - index - 1;
-            if left > 0 {
-                return Err(ToolError::Message(format!(
-                    "Sudden Death ended the run at tick {}, but {left} more input ticks follow",
-                    step.tick
-                )));
-            }
-            break;
-        }
-        match step.status {
-            SimStatus::Running => {}
-            SimStatus::Ended => break,
-            SimStatus::Halted(e) => {
-                return Err(ToolError::Message(format!(
-                    "the sim halted at tick {}: {e}",
-                    step.tick
-                )));
-            }
-        }
-    }
-    Ok(ReplaySummary {
-        ticks: sim.world().tick,
-        splits,
-        ranked_ticks: sim.ranked_ticks(),
-        frozen_ticks: sim.frozen_ticks(),
-        hash: sim.state_hash(),
-        mode,
-        map,
-        start_room,
-        checkpoints,
-    })
-}
-
-/// A room's id from the package, or its number when the definition has no such room.
-fn room_name(def: &GameDef, room: iwbtg_sim::def::RoomId) -> String {
-    def.room(room)
-        .map_or_else(|| format!("#{}", room.0), |r| r.name.clone())
+    Ok(iwbtg_verify::run_def(def, frames, options, mods)?)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use iwbtg_sim::save::Checkpoint;
+    use iwbtg_sim::timing::Split;
+    use iwbtg_verify::{StartSave, sim_version_mismatch};
 
     #[test]
     fn lines_have_the_three_prefixes() {
@@ -1097,7 +827,10 @@ mod tests {
         old.header.sim_version = iwbtg_sim::SIM_VERSION - 1;
         assert!(!verify(&old), "another build's replay does not verify");
         assert_eq!(
-            pause_lines(&replay.trailer, s.ranked_ticks),
+            pause_lines(
+                &replay.trailer.pauses,
+                s.ranked_ticks + replay.trailer.paused_ticks()
+            ),
             format!(
                 "pauses: 5+100 40+25
 time: {}

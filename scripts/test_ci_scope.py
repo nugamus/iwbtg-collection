@@ -145,7 +145,7 @@ class ScopeTests(unittest.TestCase):
         # tools dev-depends on server) arrive through `closure` without being named here.
         for path in ('crates/sim/src/world.rs', 'crates/format/src/lib.rs', 'crates/client/src/view.rs',
                      'crates/tools/src/main.rs', 'crates/removal/src/lib.rs', 'crates/server/src/main.rs',
-                     'crates/xtask/src/main.rs'):
+                     'crates/verify/src/lib.rs', 'crates/xtask/src/main.rs'):
             with self.subTest(path=path):
                 test, compile_ = self.selected(path)
                 result = plan([path], self.graph)

@@ -4154,12 +4154,22 @@ dependencies = [
  "iwbtg-format",
  "iwbtg-removal",
  "iwbtg-sim",
+ "iwbtg-verify",
  "postcard",
  "rhai",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
  "toml",
+]
+
+[[package]]
+name = "iwbtg-verify"
+version = "0.1.0"
+dependencies = [
+ "iwbtg-format",
+ "iwbtg-sim",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

@@ -61,6 +61,8 @@ The research files name original keys (`hold Shift`). `iwbtg trace run` maps key
 
 The server decodes the replay, checks bounds (ticks at most the game's `max_ticks`), looks up the package by gameplay hash, and runs the sim headless in a child process (no `draw`, no audio). It requires the end trigger, compares splits and the final tick with what was claimed, and stores the verified tick count, the ranked time (its own ranked ticks plus the replay's pauses) and its own checkpoint hashes. It never trusts hashes from the client; they only help find where a replay desynced.
 
+Those checks live in `crates/verify` (`iwbtg-verify`), shared by `iwbtg replay verify` and the server's child process (#1565). The CLI loads the package and prints the result; the server will load the catalog file and trust the same `Verification`. One implementation is what keeps the offline tool and the verifier from drifting.
+
 The header's `sim_version` is checked before the run: a replay recorded on another build is reported as a `sim_version` mismatch and verification stops there. Its recorded hashes are that build's, so comparing them here would print a hash difference that hides the real cause (`iwbtg replay verify` does the same offline).
 
 ### Versions

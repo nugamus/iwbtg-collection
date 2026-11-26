@@ -2018,7 +2018,8 @@ version = \"1.0.0\"
                 "iwbtg-client".to_string(),
                 "iwbtg-format".to_string(),
                 "iwbtg-server".to_string(),
-                "iwbtg-tools".to_string()
+                "iwbtg-tools".to_string(),
+                "iwbtg-verify".to_string()
             ]
         );
         assert!(plan.code && !plan.full);
@@ -2030,8 +2031,8 @@ version = \"1.0.0\"
         assert!(!docs.code && docs.test.is_empty() && docs.compile.is_empty());
         let full = planned(&["Cargo.lock"], false);
         assert!(full.full && full.code);
-        // One per workspace member: sim, format, removal, tools, client, server, xtask.
-        assert_eq!(full.test.len(), 7);
+        // One per workspace member: sim, format, verify, removal, tools, client, server, xtask.
+        assert_eq!(full.test.len(), 8);
         assert!(full.compile.is_empty());
     }
 
@@ -2218,7 +2219,7 @@ version = \"1.0.0\"
             "rustfmt:",
             "clippy:iwbtg-sim",
             "test:iwbtg-sim",
-            "compile-check:iwbtg-client,iwbtg-format,iwbtg-server,iwbtg-tools",
+            "compile-check:iwbtg-client,iwbtg-format,iwbtg-server,iwbtg-tools,iwbtg-verify",
         ] {
             assert!(
                 plan.step_identities.contains_key(key),
