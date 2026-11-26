@@ -14,6 +14,7 @@ use bevy::prelude::*;
 use bevy::text::LineBreak;
 
 use super::fonts::Type;
+use super::icons::{Icon, icon};
 use super::motion::{Ease, OffsetX, Opacity, Tween};
 use super::shape::{Band, Shape, Side, UiOpacity};
 use super::tokens;
@@ -39,6 +40,9 @@ pub enum Kind {
     /// A game uses extra actions, with their `[controls]` labels and current keys
     /// (`hud/run_info.rs` when a package loads; #52). The message is the line as it stands.
     Controls,
+    /// An update could not be checked, verified or installed (#1606). The message is the line as
+    /// it stands, and the card carries the update mark (m5 D2, E8).
+    Update,
 }
 
 impl Kind {
@@ -49,6 +53,24 @@ impl Kind {
             Kind::Drop => locale::text("notice_not_opened"),
             Kind::Pad => locale::text("notice_controller"),
             Kind::Controls => locale::text("notice_controls"),
+            Kind::Update => locale::text("notice_update"),
+        }
+    }
+
+    /// The card's accent: the update notice is the one that is not a failure warning, and takes
+    /// the update kind's colour (E8's `rgba(142,203,255,...)`).
+    pub fn accent(self) -> Color {
+        match self {
+            Kind::Update => tokens::RANKED,
+            _ => tokens::ACCENT,
+        }
+    }
+
+    /// The mark beside the heading, if the kind has one (the update notice, #1606).
+    pub fn icon(self) -> Option<Icon> {
+        match self {
+            Kind::Update => Some(Icon::Update),
+            _ => None,
         }
     }
 
@@ -60,7 +82,7 @@ impl Kind {
                 let _ = message;
                 locale::text("notice_storage_body").to_string()
             }
-            Kind::Drop | Kind::Controls => message.to_string(),
+            Kind::Drop | Kind::Controls | Kind::Update => message.to_string(),
             Kind::Pad => {
                 let _ = message;
                 locale::text("notice_pad_body").to_string()
@@ -72,7 +94,7 @@ impl Kind {
     pub fn once(self) -> bool {
         match self {
             Kind::Storage | Kind::Pad => true,
-            Kind::Drop | Kind::Controls => false,
+            Kind::Drop | Kind::Controls | Kind::Update => false,
         }
     }
 }
@@ -193,6 +215,9 @@ fn notice(kind: Kind, message: &str) -> impl Bundle + use<> {
         tracking: 0.12,
         ..Type::PILL_CAPS
     };
+    let accent = kind.accent();
+    let title = kind.heading().to_string();
+    let body = clip(&kind.body(message));
     (
         Node {
             flex_direction: FlexDirection::Column,
@@ -213,7 +238,7 @@ fn notice(kind: Kind, message: &str) -> impl Bundle + use<> {
             .with_band(Band {
                 side: Side::Left,
                 width: 4.0,
-                color: tokens::ACCENT,
+                color: accent,
                 fade_to: 0.0,
             })
             .with_shadow(8.0, 24.0, tokens::black(0.5)),
@@ -226,13 +251,23 @@ fn notice(kind: Kind, message: &str) -> impl Bundle + use<> {
             age: 0.0,
             fading: false,
         },
-        children![
-            text(kind.heading(), heading, tokens::ACCENT),
-            (
-                text(&clip(&kind.body(message)), Type::barlow(14.0, 500), tokens::SOFT),
+        Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
+            c.spawn(Node {
+                align_items: AlignItems::Center,
+                column_gap: Val::Px(8.0),
+                ..default()
+            })
+            .with_children(|row| {
+                if let Some(mark) = kind.icon() {
+                    row.spawn(icon(mark, 18.0, accent));
+                }
+                row.spawn(text(&title, heading, accent));
+            });
+            c.spawn((
+                text(&body, Type::barlow(14.0, 500), tokens::SOFT),
                 TextLayout::linebreak(LineBreak::WordOrCharacter),
-            ),
-        ],
+            ));
+        })),
     )
 }
 

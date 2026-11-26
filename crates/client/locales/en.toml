@@ -11,6 +11,7 @@ notice_not_saved = "Not saved"
 notice_not_opened = "Not opened"
 notice_controller = "Controller"
 notice_controls = "Controls"
+notice_update = "Update"
 notice_storage_body = "Saves and settings may not be kept this session."
 notice_pad_body = "This browser may mix up this controller's buttons. Chrome or Edge map most controllers."
 

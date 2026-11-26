@@ -35,6 +35,21 @@ parley = { version = "0.11", default-features = false, features = ["std"] }
 # in the graph through Bevy, so this adds no crate.
 icu_provider = { version = "2.4", default-features = false, features = ["logging"] }
 
+# The updater (#1606): the GitHub API over HTTPS without a token, build.json, a sha256 check and
+# the one .exe read out of the release zip. Native only: the browser client cannot replace itself,
+# so none of this reaches the web build.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# rustls with ring, trusting the system's certificate store (rustls-native-certs, read in
+# `updater::net`). Neither bundled root store qualifies: `webpki-roots` and `webpki-root-certs`
+# are CDLA-Permissive-2.0, which `deny.toml` does not allow.
+ureq = { version = "3.5.2", default-features = false, features = [
+  "rustls-no-provider", "_ring",
+] }
+rustls-native-certs = "0.8"
+serde_json.workspace = true
+sha2.workspace = true
+flate2.workspace = true
+
 # In a browser: Bevy's web support (canvas, timers, asset loading through fetch).
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 bevy = { version = "0.20.1", default-features = false, features = ["web"] }

@@ -1,0 +1,204 @@
+name: Main latest
+# Every green CI run on `main` publishes the Windows client as one rolling prerelease tagged
+# `main-latest` (#1606). The client checks that release and updates itself, so a tester never
+# compiles. Triggered by CI's success rather than a second `push` trigger so the published exe is
+# exactly the tree CI passed (the same workflow_run head SHA).
+#
+# The concurrency group cancels an older build/publish as soon as a newer main run finishes, so
+# only the newest commit ever reaches the release. The assets are replaced in place: the tag is
+# moved to the built commit, old assets are clobbered, and build.json names the commit, date,
+# version and the titles of the PRs merged since the previous build.
+#
+# Only Windows is published for now. The web build is untouched, and nothing here needs a token
+# other than the default GITHUB_TOKEN.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: main-latest
+  cancel-in-progress: true
+jobs:
+  build:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The commit CI passed, not whatever main points at now.
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Build the client
+        env:
+          # Read at compile time by `updater::BUILD_COMMIT` / `BUILD_DATE` (`option_env!`).
+          IWBTG_GIT_SHA: ${{ github.event.workflow_run.head_sha }}
+          IWBTG_BUILD_DATE: ${{ github.event.workflow_run.updated_at }}
+        run: cargo build -p iwbtg-client --release --locked
+      - name: Stage the release folder
+        shell: bash
+        env:
+          ARTIFACT: main-latest-client-windows-x86_64
+        run: |
+          set -euo pipefail
+          stage="dist/$ARTIFACT"
+          mkdir -p "$stage/LICENSES"
+          cp target/release/iwbtg-client.exe "$stage/"
+          cp -R crates/client/showcase.pkg "$stage/"
+          cp THIRD_PARTY_LICENSES NOTICE LICENSE-MIT "$stage/"
+          cp LICENSES/*.txt "$stage/LICENSES/"
+          cat > "$stage/README.txt" <<'TXT'
+          IWBTG Collection client (main-latest)
+          ====================================
+
+          Start on a folder that holds your packages to reach the main menu, where the client
+          checks for updates:
+
+            iwbtg-client --select <folder>
+
+          Or play one package directly (no update checks run in a run):
+
+            iwbtg-client showcase.pkg
+
+          This is a development build of main, replaced after every green CI run. The client
+          updates its own .exe from this release; saves, settings, stats and packages are never
+          touched. Licences: LICENSE-MIT (this project), NOTICE (fonts and game content),
+          THIRD_PARTY_LICENSES (Rust crates) and LICENSES/ (licence texts).
+          TXT
+      - name: Pack the zip and hash it
+        shell: bash
+        env:
+          ARTIFACT: main-latest-client-windows-x86_64
+        run: |
+          set -euo pipefail
+          cd dist
+          py=python
+          "$py" - "$ARTIFACT" <<'PY'
+          import hashlib, pathlib, sys, zipfile
+          name = sys.argv[1]
+          with zipfile.ZipFile(f"{name}.zip", "w", zipfile.ZIP_DEFLATED) as z:
+              for path in sorted(pathlib.Path(name).rglob("*")):
+                  if path.is_file():
+                      z.write(path, path.as_posix())
+          digest = hashlib.sha256(pathlib.Path(f"{name}.zip").read_bytes()).hexdigest()
+          pathlib.Path("sha256.txt").write_text(f"{digest}  {name}.zip\n", encoding="utf-8")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: main-latest-windows
+          path: |
+            dist/main-latest-client-windows-x86_64.zip
+            dist/sha256.txt
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: main-latest-windows
+          path: dist
+      - name: Collect what changed since the previous build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          BUILD_DATE: ${{ github.event.workflow_run.updated_at }}
+        run: |
+          set -euo pipefail
+          mkdir -p prev
+          base=""
+          if gh release view main-latest >/dev/null 2>&1; then
+            gh release download main-latest --pattern build.json --dir prev --clobber || true
+            if [ -f prev/build.json ]; then
+              base=$(python - <<'PY'
+          import json
+          print(json.load(open("prev/build.json", encoding="utf-8")).get("commit", ""))
+          PY
+              )
+            fi
+          fi
+          if [ -n "$base" ]; then
+            gh api "repos/$GH_REPO/compare/$base...$HEAD_SHA" > compare.json
+          else
+            # First build: there is no previous manifest, so the last 20 commits stand in.
+            gh api "repos/$GH_REPO/commits?sha=$HEAD_SHA&per_page=20" > compare.json
+          fi
+          python3 - compare.json <<'PY' > what-changed.json
+          import json, re, sys
+          data = json.load(open(sys.argv[1], encoding="utf-8"))
+          commits = data.get("commits", []) if isinstance(data, dict) else data
+          numbers = []
+          for commit in commits:
+              message = commit["commit"]["message"]
+              match = re.search(r"\(#(\d+)\)", message.splitlines()[0])
+              if match and int(match.group(1)) not in numbers:
+                  numbers.append(int(match.group(1)))
+          print(json.dumps(numbers))
+          PY
+          python3 - <<'PY' > prs.json
+          import json, os, subprocess
+          numbers = json.load(open("what-changed.json", encoding="utf-8"))
+          titles = []
+          for number in numbers:
+              out = subprocess.run(
+                  ["gh", "api", f"repos/{os.environ['GH_REPO']}/pulls/{number}", "--jq", ".title"],
+                  capture_output=True, text=True)
+              if out.returncode == 0 and out.stdout.strip():
+                  titles.append(out.stdout.strip())
+          print(json.dumps(titles))
+          PY
+          python3 - "$HEAD_SHA" <<'PY'
+          import json, os, pathlib, tomllib
+          titles = json.load(open("prs.json", encoding="utf-8"))
+          head = os.environ["HEAD_SHA"]
+          version = tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"]
+          payload = {
+              "commit": head,
+              "date": os.environ["BUILD_DATE"],
+              "version": version,
+              "prs": titles,
+          }
+          pathlib.Path("dist/build.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+          lines = [f"### main-latest {head[:7]}", ""]
+          lines += [f"- {title}" for title in titles] or ["- No merged PR titles found since the previous build."]
+          lines += ["", f"Built from `{head}`. The client on the main menu updates itself to this build."]
+          pathlib.Path("notes.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+      - name: Move the tag to the built commit
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          git tag -f main-latest "$HEAD_SHA"
+          git push --force origin refs/tags/main-latest
+      - name: Publish the rolling prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if gh release view main-latest >/dev/null 2>&1; then
+            gh release edit main-latest --prerelease --title "Main builds" --notes-file notes.md
+          else
+            # The tag was pushed to HEAD in the step above; the release follows it.
+            gh release create main-latest --prerelease --title "Main builds" --notes-file notes.md
+          fi
+          gh release upload main-latest \
+            dist/main-latest-client-windows-x86_64.zip dist/sha256.txt dist/build.json --clobber

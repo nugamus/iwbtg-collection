@@ -46,6 +46,9 @@ pub enum Icon {
     Classic,
     /// The toolbar's notifications bell (22 px).
     Bell,
+    /// An update is ready (`E8_Icons.dc.html`, `18 11a7 7 0 1 1-2-4.9M18 3v4h-4`): the update
+    /// notice's mark and the main-latest dialog (#1606).
+    Update,
     /// The toolbar's settings gear (22 px).
     Gear,
     /// The outlined person of the toolbar's Sign in button (16 px).
@@ -72,7 +75,7 @@ pub enum Icon {
 
 impl Icon {
     /// Every icon, for the gallery.
-    pub const ALL: [Icon; 26] = [
+    pub const ALL: [Icon; 27] = [
         Icon::Flag,
         Icon::Clock,
         Icon::Check,
@@ -88,6 +91,7 @@ impl Icon {
         Icon::TimeAttack,
         Icon::Classic,
         Icon::Bell,
+        Icon::Update,
         Icon::Gear,
         Icon::SignIn,
         Icon::MenuPlay,
@@ -111,6 +115,7 @@ impl Icon {
             Icon::Person | Icon::SignIn => (16.0, 16.0),
             Icon::TimeAttack | Icon::Classic => (20.0, 20.0),
             Icon::Bell | Icon::Gear => (22.0, 22.0),
+            Icon::Update => (20.0, 20.0),
             Icon::MenuPlay
             | Icon::MenuBrowse
             | Icon::MenuReplays
@@ -191,6 +196,7 @@ impl Icon {
                 "M 6 15.5V10a5 5 0 0 1 10 0v5.5l1.5 1.5h-13zM 9.2 19a2 2 0 0 0 3.6 0",
                 1.8,
             )],
+            Icon::Update => vec![Stroke("M18 11a7 7 0 1 1-2-4.9M18 3v4h-4", 1.8)],
             Icon::Gear => vec![
                 Stroke("M 11 8a3 3 0 1 0 0 6a3 3 0 1 0 0-6", 1.8),
                 Stroke(

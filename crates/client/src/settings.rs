@@ -100,9 +100,52 @@ pub struct Settings {
     pub shake: bool,
     /// Show full-screen flashes (`[accessibility] flashes`, #106). On by default, as for shake.
     pub flashes: bool,
+    /// Which release the updater follows (`[updates] channel`, #1606).
+    pub update_channel: UpdateChannel,
     /// The `[bindings]` table, kept as written: the input layer (#27) owns its layout and checks
     /// it; this file only stores it.
     pub bindings: Table,
+}
+
+/// Which release the client updates itself from (`[updates] channel`, #1606).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum UpdateChannel {
+    /// Every green build of `main`, published as the rolling `main-latest` prerelease. The default
+    /// while there are no releases the client can install.
+    #[default]
+    MainBuilds,
+    /// Tagged releases (`release.yml`). The client only installs a build that publishes a
+    /// `sha256.txt`, so this reports that no release qualifies until one does.
+    Releases,
+}
+
+impl UpdateChannel {
+    /// Every channel, in the settings row's order.
+    pub const ALL: [UpdateChannel; 2] = [UpdateChannel::MainBuilds, UpdateChannel::Releases];
+
+    /// The label the Settings row shows and the file writes.
+    pub fn label(self) -> &'static str {
+        match self {
+            UpdateChannel::MainBuilds => "Main builds",
+            UpdateChannel::Releases => "Releases",
+        }
+    }
+
+    /// The value `[updates] channel` writes.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            UpdateChannel::MainBuilds => "main",
+            UpdateChannel::Releases => "releases",
+        }
+    }
+
+    fn parse(value: &str) -> Option<UpdateChannel> {
+        match value {
+            "main" => Some(UpdateChannel::MainBuilds),
+            "releases" => Some(UpdateChannel::Releases),
+            _ => None,
+        }
+    }
 }
 
 impl Default for Settings {
@@ -127,6 +170,7 @@ impl Default for Settings {
             results_heatmap: false,
             shake: true,
             flashes: true,
+            update_channel: UpdateChannel::default(),
             bindings: Table::new(),
         }
     }
@@ -261,10 +305,11 @@ impl Settings {
                 ("practice", Value::Table(t)) => s.read_practice(t, warnings),
                 ("results", Value::Table(t)) => s.read_results(t, warnings),
                 ("accessibility", Value::Table(t)) => s.read_accessibility(t, warnings),
+                ("updates", Value::Table(t)) => s.read_updates(t, warnings),
                 ("bindings", Value::Table(t)) => s.bindings = t.clone(),
                 (
                     "display" | "audio" | "hud" | "retry" | "practice" | "results" | "accessibility"
-                    | "bindings",
+                    | "updates" | "bindings",
                     _,
                 ) => {
                     warnings.push(format!("`[{key}]` must be a table, using defaults"));
@@ -387,6 +432,21 @@ impl Settings {
         }
     }
 
+    fn read_updates(&mut self, t: &Table, w: &mut Vec<String>) {
+        for (key, value) in t {
+            match (key.as_str(), value) {
+                ("channel", Value::String(c)) => match UpdateChannel::parse(c) {
+                    Some(c) => self.update_channel = c,
+                    None => w.push(format!(
+                        "updates.channel `{c}` is not main or releases, using the default"
+                    )),
+                },
+                ("channel", _) => w.push("updates.channel must be a string".into()),
+                _ => w.push(format!("unknown entry `updates.{key}`, ignored")),
+            }
+        }
+    }
+
     fn read_hud(&mut self, t: &Table, w: &mut Vec<String>) {
         for (key, value) in t {
             match (key.as_str(), value) {
@@ -442,6 +502,8 @@ impl Settings {
         let mut accessibility = Table::new();
         accessibility.insert("shake".into(), self.shake.into());
         accessibility.insert("flashes".into(), self.flashes.into());
+        let mut updates = Table::new();
+        updates.insert("channel".into(), self.update_channel.as_str().into());
         let mut root = Table::new();
         root.insert("version".into(), VERSION.into());
         if !self.name.is_empty() {
@@ -455,6 +517,7 @@ impl Settings {
         root.insert("practice".into(), practice.into());
         root.insert("results".into(), results.into());
         root.insert("accessibility".into(), accessibility.into());
+        root.insert("updates".into(), updates.into());
         root.insert("bindings".into(), self.bindings.clone().into());
         toml::to_string(&root).unwrap_or_default()
     }
@@ -779,6 +842,33 @@ sound_volume = \"loud\"
         assert!(!s.hud_show.input && s.hud_show.timer);
         assert_eq!(s.bindings.get("jump").and_then(Value::as_str), Some("Space"));
         assert_eq!(w.len(), 9, "{w:?}");
+    }
+
+    /// #1606: main builds are the channel until the file says releases, and a bad value warns.
+    #[test]
+    fn the_update_channel_defaults_to_main_builds() {
+        assert_eq!(parse("").0.update_channel, UpdateChannel::MainBuilds);
+        let (s, w) = parse(
+            "[updates]
+channel = \"releases\"
+",
+        );
+        assert_eq!(s.update_channel, UpdateChannel::Releases);
+        assert!(w.is_empty(), "{w:?}");
+        let (s, w) = parse(
+            "[updates]
+channel = \"nightly\"
+",
+        );
+        assert_eq!(s.update_channel, UpdateChannel::MainBuilds);
+        assert_eq!(w.len(), 1, "{w:?}");
+        let text = Settings {
+            update_channel: UpdateChannel::Releases,
+            ..Settings::default()
+        }
+        .to_toml();
+        assert!(text.contains("[updates]"), "{text}");
+        assert_eq!(parse(&text).0.update_channel, UpdateChannel::Releases);
     }
 
     #[test]

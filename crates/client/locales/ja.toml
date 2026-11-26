@@ -12,6 +12,7 @@ notice_not_saved = "保存できません"
 notice_not_opened = "開けません"
 notice_controller = "コントローラー"
 notice_controls = "操作"
+notice_update = "更新"
 notice_storage_body = "このセッションではセーブと設定が保存されない場合があります。"
 notice_pad_body = "このブラウザーではコントローラーのボタンが正しく割り当てられない場合があります。Chrome または Edge ではほとんどのコントローラーが正しく認識されます。"
 
