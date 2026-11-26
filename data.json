@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-26T12:37:19Z",
+ "generated_at": "2026-11-26T12:44:04Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -80,13 +80,13 @@
    "title": "3 · Sim fidelity",
    "name": "Sim fidelity",
    "state": "open",
-   "open": 36,
-   "closed": 218,
+   "open": 35,
+   "closed": 219,
    "total": 254,
-   "pct_closed": 85.8,
-   "size_points": 49,
+   "pct_closed": 86.2,
+   "size_points": 48,
    "sizes": {
-    "size:S": 15,
+    "size:S": 14,
     "size:M": 6,
     "size:L": 2,
     "unknown": 13
@@ -172,13 +172,13 @@
    "title": "7 · Online",
    "name": "Online",
    "state": "open",
-   "open": 49,
-   "closed": 21,
+   "open": 48,
+   "closed": 22,
    "total": 70,
-   "pct_closed": 30.0,
-   "size_points": 124,
+   "pct_closed": 31.4,
+   "size_points": 123,
    "sizes": {
-    "size:S": 25,
+    "size:S": 24,
     "size:M": 17,
     "size:L": 6,
     "unknown": 1
@@ -263,13 +263,13 @@
  "activity": {
   "totals": {
    "issues": 947,
-   "open": 275,
-   "closed": 672,
-   "pct_closed": 71.0
+   "open": 273,
+   "closed": 674,
+   "pct_closed": 71.2
   },
-  "open_prs": 6,
+  "open_prs": 4,
   "process": {
-   "agent-ready": 123,
+   "agent-ready": 121,
    "in-progress": 11,
    "needs-user": 34,
    "triage": 49,
@@ -291,7 +291,7 @@
    },
    {
     "area": "area:server",
-    "count": 42
+    "count": 41
    },
    {
     "area": "area:editor",
@@ -323,6 +323,35 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 1592,
+    "title": "Feel contracts cannot express a package variant or a halting start",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1592",
+    "labels": [
+     "agent-ready",
+     "size:S"
+    ],
+    "phase": "3 · Sim fidelity",
+    "updated_at": "2026-11-26T12:41:15Z",
+    "closed_at": "2026-11-26T12:41:15Z",
+    "created_at": "2026-11-26T12:02:40Z"
+   },
+   {
+    "number": 200,
+    "title": "Public replay downloads",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/200",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:server"
+    ],
+    "phase": "7 · Online",
+    "updated_at": "2026-11-26T12:40:33Z",
+    "closed_at": "2026-11-26T12:40:33Z",
+    "created_at": "2026-11-02T12:41:13Z"
+   },
    {
     "number": 1567,
     "title": "Client: attribute the main schedule's non-sim, non-draw time at 5,000 instances (#1524 follow-up)",
@@ -415,39 +444,6 @@
     "updated_at": "2026-11-26T12:14:03Z",
     "closed_at": "2026-11-26T12:14:03Z",
     "created_at": "2026-11-26T11:42:04Z"
-   },
-   {
-    "number": 1348,
-    "title": "Sim: replace-mode slope rows step up only on their uphill side (rori, fairy-tale; A1-172)",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1348",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:sim",
-     "in-progress"
-    ],
-    "phase": "3 · Sim fidelity",
-    "updated_at": "2026-11-26T12:12:29Z",
-    "closed_at": "2026-11-26T12:12:29Z",
-    "created_at": "2026-11-24T11:49:37Z"
-   },
-   {
-    "number": 1551,
-    "title": "Client: a new game from game select reuses the previous run's stats and jumps to results with the old time",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1551",
-    "labels": [
-     "bug",
-     "agent-ready",
-     "size:S",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "6 · Ranked-ready run",
-    "updated_at": "2026-11-26T12:10:38Z",
-    "closed_at": "2026-11-26T12:10:37Z",
-    "created_at": "2026-11-25T12:21:39Z"
    }
   ],
   "in_progress": [
@@ -734,7 +730,7 @@
     "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 263,
+  "closed_7d": 265,
   "opened_7d": 290,
   "burnup": [
    {
@@ -755,7 +751,7 @@
    {
     "week": "2026-11-30",
     "created": 947,
-    "closed": 672
+    "closed": 674
    }
   ]
  },
