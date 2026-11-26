@@ -82,7 +82,7 @@ death = 1
 status = "running"
 ```
 
-The input script uses the `.inputs` grammar ([replay](replay.md#text-inputs-for-tests-inputs)), so the same file can be turned into a replay by the runner. A bare `x`/`y` is a load error: every metric is a probe-registry name (`kid.x`, `kid.y`, `kid.hspeed`, `kid.djump`, `global.death`, `global.time`, `instance_number(kid)`, `save.x`, `save.room`, `random_get_seed()`), so a contract and a trace use one vocabulary.
+The input script uses the `.inputs` grammar ([replay](replay.md#text-inputs-for-tests-inputs)), so the same file can be turned into a replay by the runner. A bare `x`/`y` is a load error: every metric is a probe-registry name (`kid.x`, `kid.y`, `kid.hspeed`, `kid.djump`, `global.death`, `global.time`, `instance_number(kid)`, `save.x`, `save.room`, `save.point`, `random_get_seed()`), so a contract and a trace use one vocabulary.
 
 ### Assertion vocabulary
 
@@ -90,7 +90,7 @@ The input script uses the `.inputs` grammar ([replay](replay.md#text-inputs-for-
 |---|---|
 | `tick` / `window.ticks` | `World::tick == N`, sampled after `Sim::step`, or the closed tick window for an envelope. |
 | `room`, `kid_count`, `death`, `time`, `clear`, `status`, `map` | Run state and counters. `room` is the name; `kid_count` is alive instances intersecting `ClassMask::KID | KID_FLIPPED`; `death` is `RunGlobals.deaths`; `time` is `RunGlobals.time`; `clear` is `RunGlobals.clear`; `status` is `running`, `ended` or `halted`. |
-| `kid.x`, `kid.y`, `kid.hspeed`, `kid.vspeed`, `kid.djump`, `global.death`, `global.time`, `instance_number(kid)`, `save.x`, `save.room`, `random_get_seed()` | A metric from `probe::registry::column`. A bare `x`/`y` is a load error. Values are `{ exact = v }`, `{ min = v, max = v }`, or `{ within = w, of = c }`; `within` is pixels or speeds, never ULP. A bare scalar is shorthand for `exact` (`save.room = "play"`). |
+| `kid.x`, `kid.y`, `kid.hspeed`, `kid.vspeed`, `kid.djump`, `global.death`, `global.time`, `instance_number(kid)`, `save.x`, `save.room`, `save.point`, `random_get_seed()` | A metric from `probe::registry::column`. A bare `x`/`y` is a load error. Values are `{ exact = v }`, `{ min = v, max = v }`, or `{ within = w, of = c }`; `within` is pixels or speeds, never ULP. A bare scalar is shorthand for `exact` (`save.room = "play"`). `save.point` is the checkpoint's stable save-object key (`name:<name>`, else `at:<room>/<kind>@<xbits>,<ybits>`), empty for a first-play or creation-code save (#1297); it is a string, so `save.point = "at:play/save@4058000000000000,4081b80000000000"` asserts it exactly. |
 | `window.metric`, `window.max_delta`, `window.envelope` | A trajectory envelope over a tick range. An envelope has exactly `b-a+1` `[min, max]` pairs; `max_delta` is against the value at the window's first tick. |
 | `control.action`, `control.metric`, `control.latency_max` | `latency = response_frame - press_frame`, with 0 meaning the pressed step itself responded. `response_frame = response_tick - 1`, the `.inputs` frame of the step that ended at `response_tick`. The runner finds the latest press at or before `tick - 1` (or the declared `press_frame`), verifies it actually presses the action, or fails "scenario out of sync". |
 | `reset_scope.before`, `reset_scope.after`, `reset_scope.persists`, `reset_scope.resets` | Names of counters/globals compared at the explicit `before` and `after` ticks (the `after` defaults to the assert's tick). `persists` names compare equal; `resets` names differ. |
@@ -109,7 +109,7 @@ An assertion's `trace = "<game>/<trace>"` names its primary evidence: the trace 
 ### Units and identity
 
 - **Tick vs frame.** `tick = N` is `World::tick == N`, sampled after `Sim::step`. A `.inputs` frame `f` is the step that ends at `tick == f + 1`: `frame 20: press suicide` is observed at tick 21. Without this rule every trace-derived number is off by one. `tick = 0` is the state `Sim::new` produced, before any step.
-- **Save scenario.** A `save` table starts the run from that checkpoint (`StartPoint::FromSave`), which is how a practice run and a retry fixture start. `start.room` and `save.room` must agree.
+- **Save scenario.** A `save` table starts the run from that checkpoint (`StartPoint::FromSave`), which is how a practice run and a retry fixture start. `start.room` and `save.room` must agree. The checkpoint's save-object key is `save.point`: it names the placed instance (or its exact spawn position), never a runtime id, so it is the same string before and after rooms are added or reordered; a key the package no longer has refuses the load (`crates/sim/tests/entity_identity.rs`, `checkpoint/point_identity`).
 - **DLLs.** A contract runs with the modeled DLL adapters (`DllMode::Model`), like play, not the recorder's `--stub-dlls` mode. A contract asserts player behavior, not replayer behavior.
 - **The Kid.** `kid_count` counts alive, active kids. A bare `kid` in `control` means the `World::first_of` kid (R21); more than one kid needs an explicit `kid#<n>`.
 - **Exact floats.** A position `exact` compares the f64 bits. Use it only for a checkpoint or a placed coordinate whose value is a contract; a moving Kid uses an envelope or a window.
