@@ -511,7 +511,10 @@ mod tests {
         let preview = read_iwbz(&file).unwrap();
         assert!(preview.contains("game.toml"));
         assert!(preview.contains("art/key.png"), "the key art is read");
-        assert!(preview.contains("rooms/stage.toml"), "the first ranked room is read");
+        assert!(
+            preview.contains("rooms/goal.toml"),
+            "the first ranked room is read (the fixture's ranked start, #43)"
+        );
         assert!(!preview.contains("sprites/kid.png"), "unrelated assets are not");
         assert!(preview.len() < full.files.len());
         let text = std::str::from_utf8(preview.get("game.toml").unwrap()).unwrap();

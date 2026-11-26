@@ -330,24 +330,33 @@ impl NewRun {
 
 /// Builds the sim for `pkg` (`shell::load` calls this before the run opens, so a game that cannot
 /// be set up never opens; nothing in `world` changes). A start that halts is not an error here.
-/// `map` is the map id, `None` the first; `start` is an explicit start point (game select's
-/// practice pickers, #39), `None` the mode's own (a new game for Ranked, the save or a new game
-/// for Play original). `sprites` are `pkg`'s decoded strips (`package::sprite_images`), decoded
-/// by the caller off the UI thread when it can.
+/// `map` is the map id, `None` the first; `mode` is the run's play mode, `None` the command
+/// line's default (`--ranked` or Play original); `start` is an explicit start point (game
+/// select's practice pickers, #39), `None` the mode's own (a new game for Ranked, the save or a
+/// new game for Play original). `sprites` are `pkg`'s decoded strips
+/// (`package::sprite_images`), decoded by the caller off the UI thread when it can.
 pub(crate) fn new_run(
     world: &World,
     pkg: &Package,
     map: Option<&str>,
+    mode: Option<iwbtg_sim::stripped::PlayMode>,
     start: Option<iwbtg_sim::room::StartPoint>,
     sprites: Vec<Option<SpriteImage>>,
 ) -> Result<NewRun, String> {
+    use iwbtg_sim::stripped::PlayMode;
     let config = *world.resource::<RunConfig>();
+    let mode = mode.unwrap_or(if config.ranked {
+        PlayMode::Stripped
+    } else {
+        PlayMode::Original
+    });
     let def = Arc::clone(&pkg.def);
     let options = SimOptions {
-        // A ranked run is always a new game; Play original resumes the save file when there is
-        // one, else a new game in the game's `new_game_room`. The title and menus come with the
-        // rest of the client; until then the first thing on screen is the first room.
-        start: start.unwrap_or(if config.ranked {
+        // Ranked (stripped) is always a new game; Play original resumes the save file when
+        // there is one, else a new game in the game's `new_game_room`. The title and menus come
+        // with the rest of the client; until then the first thing on screen is the first room.
+        // An explicit `start` (practice) wins over both.
+        start: start.unwrap_or(if mode == PlayMode::Stripped {
             iwbtg_sim::room::StartPoint::NewGame { difficulty: 0 }
         } else {
             crate::savefile::start_point(&def)
@@ -360,11 +369,7 @@ pub(crate) fn new_run(
             0
         },
         dll_mode: DllMode::Model,
-        mode: if config.ranked {
-            iwbtg_sim::stripped::PlayMode::Stripped
-        } else {
-            iwbtg_sim::stripped::PlayMode::Original
-        },
+        mode,
         map: map.map(str::to_owned),
     };
     // The sim constructors report a map error before compiling scripts. Keep that precedence:

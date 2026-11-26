@@ -6,6 +6,9 @@
 //! cut kinds' placed instances and room `spawn` actions and cut placed instances (the room
 //! change sequence, `room.rs`). A [`PlayMode::Original`] run ignores all of it.
 //!
+//! The ranked timer starts on the first tick whose frame has any action (docs/product.md, Two
+//! ways to play each game): before it, no tick counts as ranked or frozen time.
+//!
 //! Cutscene and dialogue regions (#34): [`begin_tick`], at tick row 0 before the input is
 //! latched, looks at which regions hold in the world as the previous tick left it. A tick that
 //! starts with a region holding is frozen: it does not count as ranked time
@@ -176,7 +179,13 @@ pub fn begin_tick(w: &mut World, def: &GameDef, input: InputFrame) -> InputFrame
     let regions = &def.stripped;
     let frozen = region_holds(w, def);
     let t = &mut w.timing;
-    if t.started && !t.ended {
+    // A ranked run's timer starts on the first input after the start (docs/product.md, Two
+    // ways to play each game): the tick that frame is in is its first timed tick.
+    if stripped && !t.timer_started && !input.is_empty() {
+        t.timer_started = true;
+    }
+    let timer = !stripped || t.timer_started;
+    if t.started && !t.ended && timer {
         if frozen {
             t.frozen_ticks = t.frozen_ticks.saturating_add(1);
         } else {

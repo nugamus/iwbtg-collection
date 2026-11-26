@@ -12,8 +12,10 @@ use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::picking::events::PointerClick;
 use bevy::prelude::*;
 use bevy::ui::IsDefaultUiCamera;
+use bevy::ui_widgets::Activate;
 use bevy::window::PrimaryWindow;
 use iwbtg_sim::mods::ModSet;
+use iwbtg_sim::stripped::PlayMode;
 
 use super::AppScreen;
 use crate::stats::Book;
@@ -50,12 +52,16 @@ struct PickedTitle;
 #[derive(Component)]
 struct PickedMap;
 
+/// A button that plays the selected map in this mode (#43): Ranked (stripped) or Play original.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+struct ModeButton(PlayMode);
+
 /// The keys hint under the pick; while a staged start prepares it says `Opening <name>…`.
 #[derive(Component)]
 struct HintText;
 
 /// The keys hint, and the hint when the folder holds no packages.
-const HINT: &str = "Type to search · ↑ ↓ ← → pick · Enter plays · Esc clears, quits";
+const HINT: &str = "Type to search · ↑ ↓ ← → pick · Enter plays Ranked · Esc clears, quits";
 const NO_PACKAGES: &str = "No packages here (folders with a game.toml, .iwbz files).";
 
 /// The select screen: added by main.rs with the window (it needs the UI kit). The flag is
@@ -174,6 +180,7 @@ impl Plugin for SelectPlugin {
                 },
             )
             .add_observer(on_click)
+            .add_observer(on_mode)
             .add_observer(practice::open)
             .add_observer(practice::on_activate)
             .add_observer(controls::on_activate)
@@ -319,6 +326,35 @@ fn enter(
             ),
             (text("", Type::barlow(18.0, 600), tokens::SOFT), PickedMap),
             text(&where_, Type::barlow(14.0, 400), tokens::MUTED),
+            (
+                Node {
+                    column_gap: Val::Px(10.0),
+                    align_items: AlignItems::Center,
+                    flex_wrap: FlexWrap::Wrap,
+                    ..default()
+                },
+                children![
+                    (
+                        crate::ui::widgets::button(
+                            "Ranked",
+                            crate::ui::widgets::ButtonKind::Primary
+                        ),
+                        ModeButton(PlayMode::Stripped)
+                    ),
+                    (
+                        crate::ui::widgets::button(
+                            "Play original",
+                            crate::ui::widgets::ButtonKind::Secondary
+                        ),
+                        ModeButton(PlayMode::Original)
+                    ),
+                    text(
+                        "Ranked: the ranked start, timer on first input · Play original: the game as ported",
+                        Type::barlow(14.0, 400),
+                        tokens::MUTED
+                    ),
+                ],
+            ),
             (text(hint, Type::BODY, tokens::SOFT), HintText),
             (
                 Node {
@@ -361,14 +397,38 @@ fn play(
     commands: &mut Commands,
     path: PathBuf,
     map: Option<String>,
+    mode: PlayMode,
     start: Option<iwbtg_sim::room::StartPoint>,
 ) {
     commands.queue(move |world: &mut World| {
         if let Some(mut practice) = world.get_resource_mut::<crate::practice::Practice>() {
             practice.0 = false;
         }
-        super::start_map(world, &path, map.as_deref(), start);
+        super::start_map(world, &path, map.as_deref(), mode, start);
     });
+}
+
+/// The Ranked and Play original buttons play the selected map in their mode.
+fn on_mode(
+    activate: On<Activate>,
+    buttons: Query<&ModeButton>,
+    lib: Option<Res<Library>>,
+    sel: Option<Res<Selection>>,
+    mut commands: Commands,
+) {
+    let (Ok(button), Some(lib), Some(sel)) = (buttons.get(activate.entity), lib, sel) else {
+        return;
+    };
+    let Some(game) = lib.games.get(sel.game) else {
+        return;
+    };
+    play(
+        &mut commands,
+        game.path.clone(),
+        map_id(game, sel.map),
+        button.0,
+        None,
+    );
 }
 
 /// A staged start that did not commit: the run on screen (if any) is unchanged, and the notice
@@ -404,7 +464,8 @@ fn opening(
 }
 
 /// The arrows move the selection among the games shown ([`list::step`]; Left and Right move
-/// the search field's cursor instead while it holds text), Enter plays the selected map.
+/// the search field's cursor instead while it holds text), Enter plays the selected map as
+/// Ranked.
 /// Escape closes an open dropdown, else clears the search, else quits. While the new
 /// collection's name field has the focus, the arrows and Enter stay out of the way: Enter
 /// creates the collection ([`collections::keys`]) and Escape goes back to the search field.
@@ -450,7 +511,13 @@ fn keys(
         && order.contains(&sel.game)
         && let Some(game) = lib.games.get(sel.game)
     {
-        play(&mut commands, game.path.clone(), map_id(game, sel.map), None);
+        play(
+            &mut commands,
+            game.path.clone(),
+            map_id(game, sel.map),
+            PlayMode::Stripped,
+            None,
+        );
     }
     if keys.just_pressed(KeyCode::Escape) {
         if naming {
@@ -493,7 +560,13 @@ fn on_click(
         };
         if picked == *sel {
             if let Some(game) = lib.games.get(map.0) {
-                play(&mut commands, game.path.clone(), map_id(game, map.1), None);
+                play(
+                    &mut commands,
+                    game.path.clone(),
+                    map_id(game, map.1),
+                    PlayMode::Stripped,
+                    None,
+                );
             }
         } else {
             *sel = picked;
@@ -601,6 +674,7 @@ mod tests {
                 generation: 1,
                 path: PathBuf::from("big-game.pkg"),
                 map: None,
+                mode: PlayMode::Original,
                 start: None,
                 rx: std::sync::Mutex::new(rx),
             });
@@ -731,6 +805,29 @@ mod tests {
         assert!(
             matches!(pending.start, Some(StartPoint::Room { .. })),
             "the picked stage's room"
+        );
+    }
+
+    /// The left side offers the two ways to play; each stages the selected map in its mode,
+    /// and the second replaces the first (#43).
+    #[test]
+    fn the_mode_buttons_start_the_selected_map_in_their_mode() {
+        use super::super::PendingStart;
+        let mut app = screen();
+        // The hard map of the maps fixture (game 3 in the title order).
+        *app.world_mut().resource_mut::<Selection>() = Selection { game: 3, map: 1 };
+        app.update();
+        activate::<ModeButton>(&mut app, |b| b.0 == PlayMode::Stripped);
+        let pending = app.world().resource::<PendingStart>();
+        assert_eq!(pending.mode, PlayMode::Stripped);
+        assert_eq!(pending.map.as_deref(), Some("hard"));
+        assert!(pending.path.ends_with("maps.pkg"));
+
+        activate::<ModeButton>(&mut app, |b| b.0 == PlayMode::Original);
+        assert_eq!(
+            app.world().resource::<PendingStart>().mode,
+            PlayMode::Original,
+            "the second button replaces the staged start"
         );
     }
 

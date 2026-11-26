@@ -890,7 +890,13 @@ time: {}
     fn the_stripped_example_freezes_ranked_time_for_its_cutscene() {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../format/tests/valid/stripped");
         let pkg = load_package(&dir).unwrap();
-        let frames = vec![InputFrame::default(); 60];
+        // A ranked run's timer starts on the first input (#43): tick 0 carries one, so tick 1
+        // is its first timed tick.
+        let mut frames = vec![InputFrame::default(); 60];
+        frames[0] = InputFrame {
+            held: iwbtg_sim::input::Action::Jump.bit(),
+            ..InputFrame::default()
+        };
         let options = |mode| SimOptions {
             start: StartPoint::NewGame { difficulty: 0 },
             seed: 0,
