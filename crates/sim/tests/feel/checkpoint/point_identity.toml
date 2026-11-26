@@ -1,0 +1,25 @@
+# The checkpoint's stable identity (#1153 E1, #1297): a save names the object that wrote it, not
+# a runtime instance id. An unnamed placed save is `at:<room>/<kind>@<xbits>,<ybits>`, a named one
+# `name:<name>`; `save.point` is that key. It is what a reload resolves, so a package that adds or
+# reorders rooms or moves instances cannot silently resume at a different one — a key that no
+# longer resolves is refused (`crates/sim/tests/entity_identity.rs`).
+id = "checkpoint/point_identity"
+impact = "F2"
+package = "fixture:retry"
+start = { new_game = true, difficulty = 0 }
+play_mode = "original"
+seed = 0
+mods = []
+evidence = ["#1153", "#1297"]
+
+inputs = """
+frame 0: end
+"""
+
+# The kid starts on the fixture's save point, so the first step writes the checkpoint. The key
+# names the room, the kind and the exact spawn position — no index into the room list.
+[[assert]]
+tick = 1
+save.room = "room_0"
+save.point = "at:room_0/save@4058000000000000,4081b80000000000"
+why = "an unnamed placed save is named by its room, kind and exact spawn position"

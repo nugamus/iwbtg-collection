@@ -28,5 +28,5 @@ kid_count = 0
 tick = 110
 status = "running"
 kid_count = 1
-reset_scope = { before = 85, after = 110, persists = ["save.room", "global.difficulty"], resets = ["global.death", "global.time"] }
-why = "F2 keeps the save and the difficulty and clears the run counters"
+reset_scope = { before = 85, after = 110, persists = ["save.room", "save.point", "global.difficulty"], resets = ["global.death", "global.time"] }
+why = "F2 keeps the save (and the save object's stable key) and the difficulty, and clears the run counters"

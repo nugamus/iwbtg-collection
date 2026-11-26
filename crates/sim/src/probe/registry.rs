@@ -253,6 +253,7 @@ pub fn save_field(name: &str) -> Option<SaveField> {
     Some(match name {
         "exists" => SaveField::Exists,
         "room" => SaveField::Room,
+        "point" => SaveField::Point,
         "x" => SaveField::X,
         "y" => SaveField::Y,
         "flipped" => SaveField::Flipped,
