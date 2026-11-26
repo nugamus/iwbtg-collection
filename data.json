@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-26T18:11:29Z",
+ "generated_at": "2026-11-26T20:06:08Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -57,13 +57,13 @@
    "title": "2 · Format & pipeline",
    "name": "Format & pipeline",
    "state": "open",
-   "open": 33,
-   "closed": 120,
+   "open": 32,
+   "closed": 121,
    "total": 153,
-   "pct_closed": 78.4,
-   "size_points": 97,
+   "pct_closed": 79.1,
+   "size_points": 96,
    "sizes": {
-    "size:S": 12,
+    "size:S": 11,
     "size:M": 15,
     "size:L": 5,
     "unknown": 1
@@ -126,13 +126,13 @@
    "title": "5 · Client shell & UI",
    "name": "Client shell & UI",
    "state": "open",
-   "open": 24,
+   "open": 25,
    "closed": 29,
-   "total": 53,
-   "pct_closed": 54.7,
-   "size_points": 50,
+   "total": 54,
+   "pct_closed": 53.7,
+   "size_points": 51,
    "sizes": {
-    "size:S": 7,
+    "size:S": 8,
     "size:M": 9,
     "size:L": 2,
     "unknown": 6
@@ -172,14 +172,14 @@
    "title": "7 · Online",
    "name": "Online",
    "state": "open",
-   "open": 46,
+   "open": 47,
    "closed": 24,
-   "total": 70,
-   "pct_closed": 34.3,
-   "size_points": 121,
+   "total": 71,
+   "pct_closed": 33.8,
+   "size_points": 124,
    "sizes": {
     "size:S": 22,
-    "size:M": 17,
+    "size:M": 18,
     "size:L": 6,
     "unknown": 1
    },
@@ -262,17 +262,17 @@
  ],
  "activity": {
   "totals": {
-   "issues": 968,
-   "open": 276,
-   "closed": 692,
-   "pct_closed": 71.5
+   "issues": 973,
+   "open": 280,
+   "closed": 693,
+   "pct_closed": 71.2
   },
   "open_prs": 1,
   "process": {
-   "triage": 63,
-   "in-progress": 15,
-   "agent-ready": 117,
-   "needs-user": 27,
+   "triage": 68,
+   "in-progress": 14,
+   "agent-ready": 116,
+   "needs-user": 28,
    "blocked": 25,
    "revisit": 1
   },
@@ -287,11 +287,11 @@
    },
    {
     "area": "area:format",
-    "count": 44
+    "count": 45
    },
    {
     "area": "area:server",
-    "count": 41
+    "count": 43
    },
    {
     "area": "area:editor",
@@ -299,7 +299,7 @@
    },
    {
     "area": "area:infra",
-    "count": 23
+    "count": 24
    },
    {
     "area": "area:design",
@@ -311,7 +311,7 @@
    },
    {
     "area": "area:docs",
-    "count": 7
+    "count": 6
    },
    {
     "area": "area:research",
@@ -323,6 +323,23 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 1379,
+    "title": "0004 class capacity: check the 96 package classes against the census (up to 114 scripted kinds per game)",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1379",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:format",
+     "area:docs",
+     "in-progress"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-26T20:03:05Z",
+    "closed_at": "2026-11-26T19:58:37Z",
+    "created_at": "2026-11-24T17:15:16Z"
+   },
    {
     "number": 1609,
     "title": "Format tests: rename the remaining wp* test files and their plan citations",
@@ -433,41 +450,9 @@
     "updated_at": "2026-11-26T15:12:52Z",
     "closed_at": "2026-11-26T15:12:51Z",
     "created_at": "2026-11-26T14:50:31Z"
-   },
-   {
-    "number": 489,
-    "title": "Idea: badges for milestones in a run (results and player card)",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/489",
-    "labels": [
-     "needs-user",
-     "size:S",
-     "area:design"
-    ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-26T14:39:38Z",
-    "closed_at": "2026-11-26T14:39:38Z",
-    "created_at": "2026-11-04T03:11:43Z"
    }
   ],
   "in_progress": [
-   {
-    "number": 1379,
-    "title": "0004 class capacity: check the 96 package classes against the census (up to 114 scripted kinds per game)",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1379",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:format",
-     "area:docs",
-     "in-progress"
-    ],
-    "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-26T18:09:12Z",
-    "closed_at": null,
-    "created_at": "2026-11-24T17:15:16Z"
-   },
    {
     "number": 805,
     "title": "Game metadata model: tags, credits, port status, performance class, known differences, changelog",
@@ -475,13 +460,14 @@
     "url": "https://github.com/nugamus/iwbtg-collection/issues/805",
     "labels": [
      "agent-ready",
+     "needs-user",
      "size:M",
      "area:format",
      "area:design",
      "in-progress"
     ],
     "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-26T17:21:15Z",
+    "updated_at": "2026-11-26T18:29:55Z",
     "closed_at": null,
     "created_at": "2026-11-14T17:32:11Z"
    },
@@ -548,9 +534,44 @@
     "updated_at": "2026-11-26T15:32:15Z",
     "closed_at": null,
     "created_at": "2026-11-19T10:05:29Z"
+   },
+   {
+    "number": 1127,
+    "title": "Web build: the browser client crashes within a second of starting play",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1127",
+    "labels": [
+     "bug",
+     "agent-ready",
+     "size:M",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "4 · First playable",
+    "updated_at": "2026-11-26T15:30:55Z",
+    "closed_at": null,
+    "created_at": "2026-11-20T10:09:12Z"
    }
   ],
   "needs_user": [
+   {
+    "number": 805,
+    "title": "Game metadata model: tags, credits, port status, performance class, known differences, changelog",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/805",
+    "labels": [
+     "agent-ready",
+     "needs-user",
+     "size:M",
+     "area:format",
+     "area:design",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-26T18:29:55Z",
+    "closed_at": null,
+    "created_at": "2026-11-14T17:32:11Z"
+   },
    {
     "number": 195,
     "title": "Public nightly alpha builds",
@@ -625,21 +646,6 @@
     "updated_at": "2026-11-26T01:29:48Z",
     "closed_at": null,
     "created_at": "2026-11-02T11:32:15Z"
-   },
-   {
-    "number": 498,
-    "title": "Design: game select Details tab",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/498",
-    "labels": [
-     "needs-user",
-     "size:S",
-     "area:design"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-26T01:29:41Z",
-    "closed_at": null,
-    "created_at": "2026-11-04T03:17:03Z"
    }
   ],
   "agent_ready": [
@@ -735,8 +741,8 @@
     "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 270,
-  "opened_7d": 308,
+  "closed_7d": 267,
+  "opened_7d": 309,
   "burnup": [
    {
     "week": "2026-11-09",
@@ -755,8 +761,8 @@
    },
    {
     "week": "2026-11-30",
-    "created": 968,
-    "closed": 692
+    "created": 973,
+    "closed": 693
    }
   ]
  },
