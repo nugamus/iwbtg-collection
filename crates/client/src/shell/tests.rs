@@ -271,7 +271,7 @@ fn start_map_plays_the_picked_map() {
     let mut app = app();
     frames(&mut app, 3);
     let pkg = demo("tests/fixtures/maps.pkg");
-    start_map(app.world_mut(), &pkg, Some("hard"));
+    start_map(app.world_mut(), &pkg, Some("hard"), None);
     wait_for_stage(&mut app);
     frames(&mut app, 2);
     assert_eq!(map_id(&app), "hard");
@@ -282,12 +282,132 @@ fn start_map_plays_the_picked_map() {
     assert_eq!(map_id(&app), "medium", "no id: the first map");
 }
 
+/// A save state is the world: `Sim::snapshot` and `Sim::restore` round-trip the state hash and
+/// the tick, and `F5`/`F6` in a practice run save and load it (#39).
+#[test]
+fn a_save_state_restores_the_world_and_f5_f6_use_it() {
+    let mut app = app();
+    frames(&mut app, 3);
+    app.world_mut()
+        .insert_resource(crate::practice::Practice(true));
+    start(app.world_mut(), &demo("tests/fixtures/maps.pkg")).unwrap();
+    frames(&mut app, 20);
+    // The press's frame ticks before the key system saves, so read the state after it.
+    press(&mut app, crate::practice::SAVE_STATE_KEY);
+    let saved_tick = tick(&app);
+    let saved_hash = {
+        let game = app.world().non_send::<Game>();
+        iwbtg_sim::hash::state_hash(game.sim.world())
+    };
+    frames(&mut app, 20);
+    assert!(tick(&app) > saved_tick, "the run went on");
+
+    press(&mut app, crate::practice::LOAD_STATE_KEY);
+    assert_eq!(tick(&app), saved_tick, "F6 restored the tick");
+    let game = app.world().non_send::<Game>();
+    assert_eq!(
+        iwbtg_sim::hash::state_hash(game.sim.world()),
+        saved_hash,
+        "and the whole state"
+    );
+    }
+
+/// A finished run's clear does not follow the player into the next run: starting again from
+/// game select begins in `Playing` with no results page and no remembered clear (#1551).
+#[test]
+fn a_new_run_from_select_does_not_open_the_old_results() {
+    use crate::stats::{
+        Board, Cleared, DeathLog, MapStats, Recorded, Run, Stats, board_key, map_key,
+    };
+    let mut app = app();
+    frames(&mut app, 3);
+    start(app.world_mut(), &demo("tests/fixtures/clear.pkg")).unwrap();
+    frames(&mut app, 5);
+    let map = map_key("demo_clear", "main");
+    let board = board_key(false, "NM");
+    let run = Run {
+        ticks: 3000,
+        deaths: 0,
+        splits: vec![1500, 3000],
+        segment_deaths: vec![0, 0],
+        finished_at: 0,
+        replay: None,
+        death_log: DeathLog::default(),
+    };
+    {
+        let mut stats = app.world_mut().resource_mut::<Stats>();
+        let mut map_stats = MapStats {
+            game: "demo_clear".to_owned(),
+            tick_rate: 50,
+            clears: 1,
+            ..Default::default()
+        };
+        map_stats.boards.insert(
+            board.clone(),
+            Board {
+                clears: 1,
+                runs: vec![run.clone()],
+                ..Default::default()
+            },
+        );
+        stats.book.maps.insert(map.clone(), map_stats);
+        stats.last = Some(Recorded {
+            pb_before: None,
+            pb_splits_before: Vec::new(),
+            is_pb: false,
+            gold: vec![false, false],
+            place: Some(1),
+            sum_of_best_before: None,
+            sum_of_best: None,
+        });
+        stats.cleared = Some(Cleared {
+            map,
+            board,
+            run,
+        });
+    }
+    frames(&mut app, 2);
+    assert_eq!(
+        screen(&app),
+        RunScreen::Results,
+        "the recorded clear opens the page"
+    );
+
+    // Leave for game select, as the results' quit does, and start the same package again.
+    leave(app.world_mut());
+    frames(&mut app, 3);
+    assert_eq!(
+        *app.world().resource::<State<AppScreen>>().get(),
+        AppScreen::Select
+    );
+    assert!(
+        app.world().resource::<Stats>().cleared.is_none(),
+        "leaving the run forgets its clear"
+    );
+    start_map(app.world_mut(), &demo("tests/fixtures/clear.pkg"), None, None);
+    wait_for_stage(&mut app);
+    frames(&mut app, 5);
+    assert_eq!(
+        screen(&app),
+        RunScreen::Playing,
+        "the new run does not open the old results"
+    );
+
+    // And a different package after leaving again.
+    leave(app.world_mut());
+    frames(&mut app, 3);
+    start_map(app.world_mut(), &demo("tests/fixtures/audio.pkg"), None, None);
+    wait_for_stage(&mut app);
+    frames(&mut app, 5);
+    assert_eq!(screen(&app), RunScreen::Playing);
+}
+
 /// A map the package does not have is reported by the staged start and nothing changes.
 #[test]
 fn start_map_refuses_an_unknown_map() {
     let mut app = app();
     frames(&mut app, 3);
-    start_map(app.world_mut(), &demo("tests/fixtures/maps.pkg"), Some("nope"));
+    start_map(app.world_mut(), &demo("tests/fixtures/maps.pkg"), Some("nope"), None);
     wait_for_stage(&mut app);
     assert_eq!(
         *app.world().resource::<State<AppScreen>>().get(),
@@ -318,6 +438,7 @@ fn a_staged_start_keeps_the_run_until_it_is_ready() {
         generation: 1,
         path: path.clone(),
         map: None,
+        start: None,
         rx: Mutex::new(rx),
     });
     frames(&mut app, 10);
@@ -349,6 +470,7 @@ fn a_staged_start_that_halts_opens_the_error_screen() {
         app.world_mut(),
         &demo("tests/fixtures/start_error.pkg"),
         None,
+        None,
     );
     wait_for_stage(&mut app);
     frames(&mut app, 3);
@@ -375,6 +497,7 @@ fn a_failed_staged_start_keeps_the_run_playing() {
         generation: 1,
         path: path.clone(),
         map: Some("nope".to_owned()),
+        start: None,
         rx: Mutex::new(rx),
     });
     tx.send((1, Ok(stage(&path, false).unwrap()))).unwrap();
@@ -506,6 +629,7 @@ fn a_newer_staged_start_wins() {
         generation: 2,
         path: new.clone(),
         map: None,
+        start: None,
         rx: Mutex::new(rx),
     });
     // The result of generation 1 is stale and must be ignored.

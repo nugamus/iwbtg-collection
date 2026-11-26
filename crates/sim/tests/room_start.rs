@@ -69,7 +69,7 @@ fn start_points() {
         "the loaded kid is carried in like a persistent instance"
     );
     assert_eq!(w.room, saved);
-    assert!(w.pending.is_none(), "the load's own request is this entry");
+    assert!(w.pending.is_empty(), "the load's own request is this entry");
     assert_eq!(w.save, Some(s));
     assert_eq!(w.engine.run.difficulty, 1);
     let kid = ids_of(&w, &def, "kid");

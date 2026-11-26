@@ -183,6 +183,11 @@ def load_script_api():
                 if (len(cells) < 3 or cells[0].startswith("Census")
                         or set(cells[0]) <= {"-", ":", " "}):
                     continue
+                # The table keeps a landed group for the record; a status that
+                # starts "Registered" is no longer work to do (paths, #1530).
+                status = re.sub(r"[*_`]", "", cells[2]).strip()
+                if status.lower().startswith("registered"):
+                    continue
                 issue = re.search(r"#(\d+)", cells[2])
                 info["planned_groups"].append({
                     "name": cells[0],

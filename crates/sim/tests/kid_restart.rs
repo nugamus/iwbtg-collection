@@ -185,7 +185,7 @@ fn r_does_nothing_in_a_no_restart_room() {
         let old = ctx.spawn(kid, r(1.0), r(2.0), SpawnInit::default()).unwrap();
         run_restart(ctx, old).unwrap();
         assert_eq!(ctx.w.get(old).unwrap().m.x(), r(1.0), "the kid stays");
-        assert!(ctx.w.pending.is_none());
+        assert!(ctx.w.pending.is_empty());
     });
 }
 

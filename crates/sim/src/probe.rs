@@ -444,6 +444,10 @@ pub enum SaveField {
     Exists,
     /// Saved room.
     Room,
+    /// The save object's stable identity key (`name:<name>` or
+    /// `at:<room>/<kind>@<xbits>,<ybits>`); empty for a first-play or creation-code save (#1153,
+    /// #1297).
+    Point,
     /// Saved x.
     X,
     /// Saved y.
@@ -848,6 +852,7 @@ fn save_value(def: &GameDef, w: &World, f: SaveField) -> trace::Value {
         SaveField::Room => def
             .room(s.room)
             .map_or(trace::Value::Empty, |r| trace::Value::Str(r.name.clone())),
+        SaveField::Point => s.point.clone().map_or(trace::Value::Empty, trace::Value::Str),
         SaveField::X => real(s.x),
         SaveField::Y => real(s.y),
         SaveField::Flipped => truth(s.flipped),
@@ -1050,6 +1055,16 @@ mod tests {
         assert_eq!(
             save_value(sim.def(), sim.world(), SaveField::Room),
             trace::Value::Str("room_1".into())
+        );
+        // A first-play or creation-code save has no stable key (#1153 E1): the column is empty.
+        assert_eq!(
+            save_value(sim.def(), sim.world(), SaveField::Point),
+            trace::Value::Empty
+        );
+        sim.world.save.as_mut().expect("a save").point = Some("name:checkpoint_a".into());
+        assert_eq!(
+            save_value(sim.def(), sim.world(), SaveField::Point),
+            trace::Value::Str("name:checkpoint_a".into())
         );
         let field = |f: &FieldRef| read_field(sim.def(), sim.world(), &sim.rules, ids[2], f, 7);
         assert_eq!(field(&FieldRef::Alarm(0)), trace::Value::Real(-1.0));

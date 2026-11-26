@@ -5,7 +5,9 @@ use std::io::Write;
 use std::path::Path;
 
 use iwbtg_format::PackageFiles;
-use iwbtg_format::iwbz::{IwbzError, MAX_FILES, MAX_PACKAGE_BYTES, check_entry, pack, unpack};
+use iwbtg_format::iwbz::{
+    IwbzError, MAX_FILES, MAX_PACKAGE_BYTES, check_entry, pack, unpack, unpack_selected,
+};
 
 fn demo() -> PackageFiles {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../client/tests/fixtures/clear.pkg");
@@ -20,6 +22,56 @@ fn a_package_round_trips_with_the_same_content_hash() {
     assert_eq!(back.content_hash(), files.content_hash());
     assert_eq!(back.len(), files.len());
     assert_eq!(pack(&back).unwrap(), packed, "packing is reproducible");
+}
+
+#[test]
+fn a_selected_read_returns_only_the_kept_files() {
+    let files = demo();
+    let packed = pack(&files).unwrap();
+    let only = unpack_selected(&packed, |name| name == "game.toml").unwrap();
+    assert_eq!(only.len(), 1);
+    assert!(only.contains("game.toml"));
+    let rooms = unpack_selected(&packed, |name| name.starts_with("rooms/")).unwrap();
+    assert!(rooms.iter().all(|(path, _)| path.starts_with("rooms/")));
+    assert_eq!(
+        rooms.len(),
+        files
+            .iter()
+            .filter(|(path, _)| path.starts_with("rooms/"))
+            .count()
+    );
+    assert!(unpack_selected(&packed, |_| false).unwrap().is_empty());
+}
+
+/// A preview must not inflate an entry it does not name, so damaged payload elsewhere is not
+/// read (and is still refused when selected, or by a full [`unpack`]).
+#[test]
+fn a_damaged_entry_that_is_not_kept_is_not_read() {
+    let mut broken = deflated("rooms/bad.toml", &b"size = [800, 608]\n".repeat(64));
+    broken.crc ^= 1;
+    let bytes = zip(&[manifest(), broken], None);
+    assert!(unpack_selected(&bytes, |name| name == "rooms/bad.toml").is_err());
+    assert!(unpack(&bytes).is_err());
+    let files = unpack_selected(&bytes, |name| name == "game.toml").unwrap();
+    assert_eq!(files.len(), 1);
+    assert!(files.contains("game.toml"));
+}
+
+/// Structural validation and the archive-wide limits are checked before `keep`, so a preview
+/// still refuses an archive that could hide data in an entry it does not read.
+#[test]
+fn a_selected_read_still_checks_the_directory_and_limits() {
+    let entries = [manifest(), raw("rooms/a.toml", b"")];
+    assert!(matches!(
+        unpack_selected(&zip(&entries, Some(&[0, 0])), |name| name == "game.toml"),
+        Err(IwbzError::Corrupt(_))
+    ));
+    let mut bomb = deflated("rooms/a.toml", b"");
+    bomb.size = (MAX_PACKAGE_BYTES + 1) as u32;
+    assert!(matches!(
+        unpack_selected(&zip(&[manifest(), bomb], None), |name| name == "game.toml"),
+        Err(IwbzError::TooLarge(_))
+    ));
 }
 
 #[test]

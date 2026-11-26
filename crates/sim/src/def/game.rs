@@ -421,17 +421,6 @@ pub const GM8_ROOM_STAGES: [RoomStage; 7] = [
     RoomStage::RoomStart,
 ];
 
-/// How the engine treats a room request raised while a room transaction runs.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum NestedRequests {
-    /// One pending request; the last one raised wins, and the next change runs after the
-    /// transaction (gm8, R13/R23).
-    LastWins,
-    /// Every request raised by an event or creation action is queued in raise order; the
-    /// changes then run FIFO after the transaction (standard).
-    Queue,
-}
-
 /// What `enter_room` does: the manual's 7-step room sequence (docs/architecture/sim/rooms.md),
 /// run as one transaction.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -446,8 +435,6 @@ pub struct EnterRoomPolicy {
     /// The declared stage order the transaction runs. `gm8` uses [`GM8_ROOM_STAGES`]; a
     /// `standard` profile can name another order when the profile layer lands (#1160).
     pub stages: [RoomStage; 7],
-    /// What happens to a request raised while the transaction runs (R13/R23).
-    pub nested_requests: NestedRequests,
 }
 
 impl Default for EnterRoomPolicy {
@@ -457,7 +444,6 @@ impl Default for EnterRoomPolicy {
             rebuild_placed: true,
             reset_scope: ResetScope::Room,
             stages: GM8_ROOM_STAGES,
-            nested_requests: NestedRequests::LastWins,
         }
     }
 }

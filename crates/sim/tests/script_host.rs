@@ -617,7 +617,7 @@ fn scripts_request_room_changes() {
         f.run(1);
         assert_eq!(f.halted(), None, "{src}");
         assert_eq!(f.w.room, RoomId(room), "{src}");
-        assert!(f.w.pending.is_none(), "{src}: the change ran at row 15");
+        assert!(f.w.pending.is_empty(), "{src}: the change ran at row 15");
     }
     // From the second room, previous goes back to the first.
     let mut f = fx_two_rooms("fn step() { room_goto_previous(); }");

@@ -1,6 +1,6 @@
 //! The window: a camera on the room and one Bevy sprite per visible sim instance.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use crate::time::{Duration, Instant};
 
@@ -77,9 +77,15 @@ struct UploadProfile {
 /// The most sprite bytes [`upload_textures`] uploads in one frame (one sprite can exceed it).
 const UPLOAD_BUDGET_BYTES: usize = 8 << 20;
 
-/// Which Bevy entity draws which instance.
+/// Which Bevy entity draws which instance, with the frame (`stamp`) it was last seen in.
+///
+/// `sync_instances` stamps every instance it draws and then removes the entries a frame did not
+/// see: one map, one lookup and no per-frame scratch map (#1524).
 #[derive(Resource, Default)]
-struct Drawn(BTreeMap<InstId, Entity>);
+struct Drawn {
+    sprites: HashMap<InstId, (Entity, u64)>,
+    stamp: u64,
+}
 
 /// The size in pixels of the room the sim is in (kept in step with the sim's room).
 #[derive(Resource)]
@@ -324,12 +330,15 @@ impl NewRun {
 
 /// Builds the sim for `pkg` (`shell::load` calls this before the run opens, so a game that cannot
 /// be set up never opens; nothing in `world` changes). A start that halts is not an error here.
-/// `map` is the map id, `None` the first. `sprites` are `pkg`'s decoded strips
-/// (`package::sprite_images`), decoded by the caller off the UI thread when it can.
+/// `map` is the map id, `None` the first; `start` is an explicit start point (game select's
+/// practice pickers, #39), `None` the mode's own (a new game for Ranked, the save or a new game
+/// for Play original). `sprites` are `pkg`'s decoded strips (`package::sprite_images`), decoded
+/// by the caller off the UI thread when it can.
 pub(crate) fn new_run(
     world: &World,
     pkg: &Package,
     map: Option<&str>,
+    start: Option<iwbtg_sim::room::StartPoint>,
     sprites: Vec<Option<SpriteImage>>,
 ) -> Result<NewRun, String> {
     let config = *world.resource::<RunConfig>();
@@ -338,11 +347,11 @@ pub(crate) fn new_run(
         // A ranked run is always a new game; Play original resumes the save file when there is
         // one, else a new game in the game's `new_game_room`. The title and menus come with the
         // rest of the client; until then the first thing on screen is the first room.
-        start: if config.ranked {
+        start: start.unwrap_or(if config.ranked {
             iwbtg_sim::room::StartPoint::NewGame { difficulty: 0 }
         } else {
             crate::savefile::start_point(&def)
-        },
+        }),
         // Every run draws a random seed, as the originals do (docs/product.md; the replay keeps
         // it). A `--screenshot` check keeps seed 0, so it looks the same every time.
         seed: if config.fresh_seed {
@@ -799,8 +808,8 @@ pub(crate) fn restart_run(world: &mut World) -> Result<(), String> {
     let sim = Sim::new_or_halted_prepared(Arc::clone(&start.def), options, &prepared.0)
         .map_err(|e| format!("the game did not start: {e}"))?;
     world.non_send_mut::<Game>().sim = sim;
-    let drawn = std::mem::take(&mut world.resource_mut::<Drawn>().0);
-    for entity in drawn.into_values() {
+    let drawn = std::mem::take(&mut *world.resource_mut::<Drawn>());
+    for (entity, _) in drawn.sprites.into_values() {
         world.despawn(entity);
     }
     {
@@ -858,8 +867,10 @@ pub(crate) fn tick(
     mut sign: ResMut<hud::SignText>,
     mut transition: ResMut<transition::Transition>,
     mut replay: Option<ResMut<crate::replays::Recorder>>,
+    mut phases: Option<ResMut<crate::perf::Phases>>,
 ) {
     if previous.on {
+        let clock = phases.is_some().then(Instant::now);
         let world = game.sim.world();
         previous.room = Some(world.room);
         previous.view = game
@@ -873,6 +884,9 @@ pub(crate) fn tick(
             .filter(|i| i.alive)
             .map(|i| (i.id, (i.m.x().get(), i.m.y().get())))
             .collect();
+        if let (Some(draw), Some(clock)) = (phases.as_deref_mut(), clock) {
+            draw.snapshot += clock.elapsed().as_secs_f64();
+        }
     }
     let frame = collector.take_frame();
     let was_running = game.sim.world().status == SimStatus::Running;
@@ -962,6 +976,7 @@ fn sync_instances(
     mut drawn: ResMut<Drawn>,
     previous: Res<Previous>,
     ladder: Option<Res<order::Ladder>>,
+    mut phases: Option<ResMut<crate::perf::Phases>>,
     mut query: Query<(&mut Sprite, &mut Transform)>,
 ) {
     let Some(textures) = textures else { return };
@@ -969,10 +984,20 @@ fn sync_instances(
     let world = game.sim.world();
     let alpha = previous.alpha;
     let same_room = previous.room == Some(world.room);
-    let mut alive = BTreeMap::new();
+    let stamp = drawn.stamp.wrapping_add(1);
+    drawn.stamp = stamp;
     let none = order::Ladder::default();
     let ladder = ladder.as_deref().unwrap_or(&none);
-    for (id, z) in order::instance_z(world, ladder, |i| i.img.sprite().is_some()) {
+    // `--perf`: time the draw order and, below, the loop (with the interpolation lookups inside
+    // it) and the removal pass (#1524).
+    let clock = phases.is_some().then(Instant::now);
+    let order = order::instance_z(world, ladder, |i| i.img.sprite().is_some());
+    if let (Some(draw), Some(clock)) = (phases.as_deref_mut(), clock) {
+        draw.order += clock.elapsed().as_secs_f64();
+    }
+    let clock = phases.is_some().then(Instant::now);
+    let (mut spawned, mut updated) = (0u32, 0u32);
+    for (id, z) in order {
         let Some(inst) = world.get(id) else { continue };
         let Some(sprite_id) = inst.img.sprite() else {
             continue;
@@ -985,6 +1010,7 @@ fn sync_instances(
         };
         let frame = u32::from(inst.img.subimage(sprite_def.frames).unwrap_or(0));
         let cur = (inst.m.x().get(), inst.m.y().get());
+        let blend_clock = (previous.on && phases.is_some()).then(Instant::now);
         let (px, py) = if previous.on {
             blend(
                 previous.pos.get(&inst.id).copied().filter(|_| same_room),
@@ -994,6 +1020,9 @@ fn sync_instances(
         } else {
             cur
         };
+        if let (Some(draw), Some(clock)) = (phases.as_deref_mut(), blend_clock) {
+            draw.blend += clock.elapsed().as_secs_f64();
+        }
         let (rect, transform) = place_sprite(
             sprite_def,
             frame,
@@ -1005,7 +1034,7 @@ fn sync_instances(
             room.0,
         );
         let color = Color::srgba(1.0, 1.0, 1.0, inst.img.alpha().get() as f32);
-        let entity = match drawn.0.get(&inst.id).copied() {
+        let entity = match drawn.sprites.get(&inst.id).map(|(entity, _)| *entity) {
             Some(entity) => {
                 if let Ok((mut sprite, mut t)) = query.get_mut(entity) {
                     sprite.image = handle.clone();
@@ -1013,29 +1042,46 @@ fn sync_instances(
                     sprite.color = color;
                     *t = transform;
                 }
+                updated += 1;
                 entity
             }
-            None => commands
-                .spawn((
-                    Sprite {
-                        image: handle.clone(),
-                        rect: Some(rect),
-                        color,
-                        ..default()
-                    },
-                    transform,
-                    RUN_ONLY,
-                ))
-                .id(),
+            None => {
+                spawned += 1;
+                commands
+                    .spawn((
+                        Sprite {
+                            image: handle.clone(),
+                            rect: Some(rect),
+                            color,
+                            ..default()
+                        },
+                        transform,
+                        RUN_ONLY,
+                    ))
+                    .id()
+            }
         };
-        alive.insert(inst.id, entity);
+        drawn.sprites.insert(inst.id, (entity, stamp));
     }
-    for (id, entity) in &drawn.0 {
-        if !alive.contains_key(id) {
-            commands.entity(*entity).despawn();
+    if let (Some(draw), Some(clock)) = (phases.as_deref_mut(), clock) {
+        draw.sync += clock.elapsed().as_secs_f64();
+    }
+    let clock = phases.is_some().then(Instant::now);
+    let mut removed = 0u32;
+    drawn.sprites.retain(|_, (entity, seen)| {
+        if *seen == stamp {
+            return true;
         }
+        commands.entity(*entity).despawn();
+        removed += 1;
+        false
+    });
+    if let (Some(draw), Some(clock)) = (phases.as_deref_mut(), clock) {
+        draw.despawn += clock.elapsed().as_secs_f64();
+        draw.spawned += spawned;
+        draw.updated += updated;
+        draw.removed += removed;
     }
-    drawn.0 = alive;
 }
 
 /// Where frame `frame` of a sprite drawn at room position `at` (GM: y down from the room corner)

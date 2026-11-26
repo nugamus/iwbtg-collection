@@ -135,7 +135,7 @@ Only aggregate counts are committed; no original game content is copied. Passing
 
 ## Publishing
 
-The workflow restores the durable `history.json` from `gh-pages`, generates with `--gh --require-gh` (a failed GitHub read fails the run instead of publishing stale data), then commits `index.html`, `data.json`, `history.json`, `fonts/` and `.nojekyll` to `gh-pages` and requests a Pages build. Pages serves that branch at <https://nugamus.github.io/iwbtg-collection/>.
+The workflow restores the durable `history.json` from `gh-pages`, generates with `--gh --require-gh` (a failed GitHub read fails the run instead of publishing stale data), then commits `index.html`, `data.json`, `history.json`, `fonts/` and `.nojekyll` to `gh-pages`. The push triggers the `pages-build-deployment` workflow automatically; the progress workflow does not send a separate build request (that request raced the automatic build and could fail on an empty API response, #1570). Pages serves that branch at <https://nugamus.github.io/iwbtg-collection/>.
 
 CI's repository token cannot read the private games repo. The generator keeps the last committed port data and still refreshes the public-repo phases, activity and coverage; rerun `--gh` locally with games-repo access to refresh the port column.
 

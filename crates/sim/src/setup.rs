@@ -431,6 +431,11 @@ fn set_save(def: &GameDef, w: &mut World, field: SaveField, value: &Value) -> Re
         SaveField::Bosses => slot.bosses = int_as::<u16>(value, "save.bosses")?,
         SaveField::Items => slot.items = int_as::<u16>(value, "save.items")?,
         SaveField::Clear => slot.clear = int(value, "save.clear")? != 0,
+        // The save object's stable key names the placed instance that wrote the slot (#1153);
+        // setup cannot invent one.
+        SaveField::Point => {
+            return Err(SimError::unsupported("setup cannot write `save.point`"));
+        }
     }
     Ok(())
 }

@@ -162,6 +162,7 @@ pub fn timer_parts(ticks: u64, rate: u32) -> (String, String) {
 pub fn read(
     game: NonSend<Game>,
     mods: Option<Res<RunMods>>,
+    practice: Option<Res<crate::practice::Practice>>,
     collector: Option<Res<Collector>>,
     files: Option<Res<ArtFiles>>,
     mut labels: Local<[Option<String>; 4]>,
@@ -175,7 +176,9 @@ pub fn read(
     let sim = &game.sim;
     let world = sim.world();
     let mods = mods.map_or(ModSet::NONE, |m| m.0);
-    let unranked = sim.options().mode == PlayMode::Original || mods.unranked_by().is_some();
+    let unranked = sim.options().mode == PlayMode::Original
+        || practice.is_some_and(|p| p.0)
+        || mods.unranked_by().is_some();
     let held = collector.as_ref().map_or(0, |c| {
         let f = c.last();
         f.held | f.pressed

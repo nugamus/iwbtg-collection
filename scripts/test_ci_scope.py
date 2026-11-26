@@ -1,37 +1,80 @@
-"""Regression boundaries for CI and local selection: losing a consumer drops required checks."""
+"""Regression boundaries for CI and local selection: losing a consumer drops required checks.
+
+The real manifest graph is read once; every expectation below is derived from the same
+`packages()`/`closure()` data the selector uses, so a legitimate dependency edge cannot break a
+literal list here (client #1562). The only pinned set is the documentation-fixture reader policy
+(`READERS`), which is not a manifest edge. `test_a_fake_dependency_edge_changes_the_plan` is the
+regression that proves a new edge reaches the plan without editing an expectation.
+"""
 import unittest
-from ci_scope import ROOT, identity_digest, packages, plan, render_lines, scope
+from ci_scope import ROOT, closure, identity_digest, packages, plan, render_lines, scope
 
 
 class ScopeTests(unittest.TestCase):
+    # The crates whose tests read a documentation fixture (`scripts/ci_scope.py` TEST_DOCS). This is
+    # selector policy, not the manifest graph, so it stays pinned.
+    READERS = ['iwbtg-format', 'iwbtg-sim']
+
     @classmethod
     def setUpClass(cls):
         cls.graph = packages(ROOT)
 
+    def owners(self, path, graph=None):
+        """The crates a path belongs to, from the same manifest graph the selector uses."""
+        graph = graph or self.graph
+        return {name for name, (prefix, _) in graph.items() if path.startswith(prefix)}
+
+    def selected(self, *paths, graph=None):
+        """The (test, compile) a change to `paths` selects, derived from the manifest graph."""
+        graph = graph or self.graph
+        owners = set().union(*(self.owners(path, graph) for path in paths)) if paths else set()
+        return sorted(owners), sorted(closure(owners, graph) - owners)
+
+    @staticmethod
+    def packages_argv(names):
+        return ' '.join('-p ' + name for name in sorted(names))
+
     def test_client_skips_sim_reexecution(self):
-        result = scope(['crates/client/src/view.rs'], self.graph)
-        self.assertEqual(result['packages'], '-p iwbtg-client')
+        path = 'crates/client/src/view.rs'
+        test, compile_ = self.selected(path)
+        result = scope([path], self.graph)
+        self.assertEqual(result['packages'], self.packages_argv(set(test) | set(compile_)))
+        self.assertNotIn('iwbtg-sim', test + compile_, 'a client change does not rerun the sim')
         self.assertTrue(result['browser'])
         self.assertTrue(result['web'], "a client change rebuilds the browser bundle")
         self.assertFalse(result['wasip1'])
         self.assertFalse(result['determinism'])
 
     def test_sim_includes_all_transitive_consumers(self):
-        result = scope(['crates/sim/src/world.rs'], self.graph)
-        for name in ('iwbtg-sim', 'iwbtg-format', 'iwbtg-tools', 'iwbtg-client'):
-            self.assertIn('-p ' + name, result['packages'])
+        path = 'crates/sim/src/world.rs'
+        test, compile_ = self.selected(path)
+        result = scope([path], self.graph)
+        self.assertEqual(result['packages'], self.packages_argv(set(test) | set(compile_)))
+        self.assertEqual(set(test) | set(compile_), closure(test, self.graph),
+                         'the plan selects exactly the changed crates and their consumers')
         self.assertTrue(result['wasip1'] and result['browser'] and result['determinism'])
         self.assertFalse(result['web'], "a sim change does not rebuild the browser bundle")
 
     def test_web_assets_select_the_bundle(self):
-        result = scope(['crates/client/web/index.html'], self.graph)
+        path = 'crates/client/web/index.html'
+        test, compile_ = self.selected(path)
+        result = scope([path], self.graph)
         self.assertTrue(result['web'], 'the page is part of the client bundle')
-        self.assertEqual(result['packages'], '-p iwbtg-client')
+        self.assertEqual(result['packages'], self.packages_argv(set(test) | set(compile_)))
 
     def test_server_does_not_build_bevy_or_wasm(self):
-        result = scope(['crates/server/src/main.rs'], self.graph)
-        self.assertEqual(result['packages'], '-p iwbtg-server')
-        self.assertFalse(result['browser'] or result['wasip1'] or result['determinism'] or result['web'])
+        path = 'crates/server/src/main.rs'
+        test, compile_ = self.selected(path)
+        result = scope([path], self.graph)
+        self.assertEqual(result['packages'], self.packages_argv(set(test) | set(compile_)))
+        # The server's consumers are compiled; its own dependencies are not selected. The
+        # determinism report follows whether a determinism crate is selected (it does not when no
+        # consumer is one). Still no Bevy and no wasm.
+        self.assertNotIn('iwbtg-sim', test + compile_)
+        determinism_crates = {'iwbtg-sim', 'iwbtg-format', 'iwbtg-tools'}
+        self.assertEqual(result['determinism'],
+                         bool((set(test) | set(compile_)) & determinism_crates))
+        self.assertFalse(result['browser'] or result['wasip1'] or result['web'])
 
     def test_shared_unknown_deleted_and_ci_inputs_are_full(self):
         for path in ('Cargo.lock', 'Cargo.toml', 'crates/server/Cargo.toml', 'rust-toolchain.toml', '.cargo/config.toml',
@@ -48,7 +91,7 @@ class ScopeTests(unittest.TestCase):
                 result = plan([path], self.graph)
                 self.assertTrue(result['code'], 'the native readers still run locally')
                 self.assertFalse(result['code_input'], 'a fixture is not a code input')
-                self.assertEqual(result['test'], ['iwbtg-format', 'iwbtg-sim'])
+                self.assertEqual(result['test'], self.READERS)
                 self.assertFalse(result['wasip1'])
                 self.assertFalse(result['browser'])
                 self.assertFalse(result['web'])
@@ -89,54 +132,56 @@ class ScopeTests(unittest.TestCase):
             self.assertEqual(scope(['a/deleted.rs'], graph)['packages'], '-p a -p b')
 
     def test_mixed_changes_and_dependency_aliases(self):
-        result = scope(['crates/server/src/main.rs', 'crates/client/src/view.rs'], self.graph)
-        self.assertEqual(result['packages'], '-p iwbtg-client -p iwbtg-server')
+        paths = ['crates/server/src/main.rs', 'crates/client/src/view.rs']
+        test, compile_ = self.selected(*paths)
+        result = scope(paths, self.graph)
+        self.assertEqual(result['packages'], self.packages_argv(set(test) | set(compile_)))
         graph = {'a': ('crates/a/', set()), 'b': ('crates/b/', {'a'}), 'c': ('crates/c/', {'b'})}
         self.assertEqual(scope(['crates/a/deleted.rs'], graph)['packages'], '-p a -p b -p c')
 
     def test_plan_splits_changed_crates_from_transitive_consumers(self):
-        cases = {
-            # The server depends on the sim for replay decoding (#162), so a sim change also
-            # compiles the server, and a format change reaches the server through the sim.
-            'crates/sim/src/world.rs': (
-                ['iwbtg-sim'],
-                ['iwbtg-client', 'iwbtg-format', 'iwbtg-server', 'iwbtg-tools'],
-            ),
-            # The sim's stress-package test dev-depends on the format loader (#1068), so a
-            # format change also compiles the sim's test target.
-            'crates/format/src/lib.rs': (
-                ['iwbtg-format'],
-                ['iwbtg-client', 'iwbtg-server', 'iwbtg-sim', 'iwbtg-tools'],
-            ),
-            # The shared removal-list format (#1537) is a dependency of the server and the CLI; a
-            # change there reaches both, but a server change no longer reaches the CLI.
-            'crates/removal/src/lib.rs': (['iwbtg-removal'], ['iwbtg-server', 'iwbtg-tools']),
-            'crates/client/src/view.rs': (['iwbtg-client'], []),
-            'crates/tools/src/main.rs': (['iwbtg-tools'], []),
-            'crates/server/src/main.rs': (['iwbtg-server'], []),
-            'crates/xtask/src/main.rs': (['xtask'], []),
-        }
-        for path, (test, compile_) in cases.items():
+        # The split derives from the manifest graph: a changed crate is tested, its transitive
+        # consumers are compile-checked. Historical edges (#1068 sim dev-depends on format, #1479
+        # tools dev-depends on server) arrive through `closure` without being named here.
+        for path in ('crates/sim/src/world.rs', 'crates/format/src/lib.rs', 'crates/client/src/view.rs',
+                     'crates/tools/src/main.rs', 'crates/removal/src/lib.rs', 'crates/server/src/main.rs',
+                     'crates/xtask/src/main.rs'):
             with self.subTest(path=path):
+                test, compile_ = self.selected(path)
                 result = plan([path], self.graph)
                 self.assertEqual(result['test'], test)
                 self.assertEqual(result['compile'], compile_)
+                self.assertEqual(set(test) | set(compile_), closure(test, self.graph))
                 self.assertEqual(set(result['test']) | set(result['compile']),
                                  set(result['packages_list']))
                 self.assertFalse(result['full'])
                 for step in result['local_steps'] + result['ci_steps']:
                     self.assertTrue(step['reason'], step)
 
+    def test_a_fake_dependency_edge_changes_the_plan_without_editing_a_literal(self):
+        # A synthetic graph: adding a consumer of `a` must change the plan with no expectation edit.
+        graph = {'a': ('crates/a/', set()), 'b': ('crates/b/', {'a'})}
+        before = plan(['crates/a/src/lib.rs'], graph)
+        self.assertEqual(before['test'], ['a'])
+        self.assertEqual(before['compile'], ['b'])
+        grown = dict(graph) | {'c': ('crates/c/', {'a'})}
+        after = plan(['crates/a/src/lib.rs'], grown)
+        self.assertEqual(after['test'], ['a'])
+        self.assertEqual(after['compile'], ['b', 'c'])
+        # A consumer of that new consumer arrives transitively.
+        deeper = dict(grown) | {'d': ('crates/d/', {'c'})}
+        self.assertEqual(plan(['crates/a/src/lib.rs'], deeper)['compile'], ['b', 'c', 'd'])
+        # The same holds on the real graph: a fake consumer of the sim joins the compile set.
+        extended = dict(self.graph) | {'fake-consumer': ('crates/fake/', {'iwbtg-sim'})}
+        self.assertIn('fake-consumer', plan(['crates/sim/src/lib.rs'], extended)['compile'])
+
     def test_fixture_only_native_job_tests_only_the_readers(self):
         fixture = plan(['docs/format/v0.md'], self.graph)
-        self.assertEqual(fixture['native_packages'], ['iwbtg-format', 'iwbtg-sim'])
-        self.assertEqual(fixture['native_packages_argv'], '-p iwbtg-format -p iwbtg-sim')
-        # The plan's full package set is unchanged: test | compile still covers it, and the local
-        # check still compile-checks the consumers.
-        # The server reads format fixtures through the sim since #162.
-        self.assertEqual(
-            fixture['compile'], ['iwbtg-client', 'iwbtg-server', 'iwbtg-tools']
-        )
+        # The readers are the TEST_DOCS policy; the consumers are derived from the manifest graph.
+        consumers = sorted(closure(set(self.READERS), self.graph) - set(self.READERS))
+        self.assertEqual(fixture['native_packages'], self.READERS)
+        self.assertEqual(fixture['native_packages_argv'], self.packages_argv(self.READERS))
+        self.assertEqual(fixture['compile'], consumers)
         self.assertEqual(set(fixture['test']) | set(fixture['compile']),
                          set(fixture['packages_list']))
         native = next(step for step in fixture['ci_steps'] if step['kind'] == 'native')
@@ -166,10 +211,9 @@ class ScopeTests(unittest.TestCase):
         self.assertEqual(docs['test'], [])
         self.assertEqual(docs['compile'], [])
         fixture = plan(['docs/format/game.md'], self.graph)
-        self.assertEqual(fixture['test'], ['iwbtg-format', 'iwbtg-sim'])
-        self.assertEqual(
-            fixture['compile'], ['iwbtg-client', 'iwbtg-server', 'iwbtg-tools']
-        )
+        self.assertEqual(fixture['test'], self.READERS)
+        self.assertEqual(fixture['compile'],
+                         sorted(closure(set(self.READERS), self.graph) - set(self.READERS)))
         self.assertTrue(fixture['code'])
         self.assertFalse(fixture['code_input'])
         self.assertFalse(fixture['wasip1'] or fixture['browser'] or fixture['web'] or fixture['determinism'])
@@ -182,18 +226,19 @@ class ScopeTests(unittest.TestCase):
             self.assertTrue(item['reason'])
 
     def test_plan_render_lines_is_a_stable_interface(self):
-        text = render_lines(plan(['crates/sim/src/world.rs'], self.graph))
-        self.assertIn('full=false', text)
-        self.assertIn('code=true', text)
-        self.assertIn('test=iwbtg-sim', text)
-        # iwbtg-server joins the sim's consumers with the replay decoder (#162).
-        self.assertIn('compile=iwbtg-client,iwbtg-format,iwbtg-server,iwbtg-tools', text)
-        self.assertIn('wasip1=true', text)
-        self.assertIn('web=false', text)
-        self.assertIn(
-            'packages=-p iwbtg-client -p iwbtg-format -p iwbtg-server -p iwbtg-sim -p iwbtg-tools',
-            text,
-        )
+        result = plan(['crates/sim/src/world.rs'], self.graph)
+        text = render_lines(result)
+        # The field names and order are the interface; the values come from the plan.
+        for field, value in (
+            ('full', 'false'),
+            ('code', 'true'),
+            ('test', ','.join(result['test'])),
+            ('compile', ','.join(result['compile'])),
+            ('wasip1', 'true'),
+            ('web', 'false'),
+            ('packages', self.packages_argv(result['packages_list'])),
+        ):
+            self.assertIn(f'{field}={value}', text)
         self.assertIn('identity=', text)
         self.assertIn('step-identity=test:iwbtg-sim=', text)
 
@@ -267,7 +312,8 @@ class ScopeTests(unittest.TestCase):
 
     def test_local_and_ci_union_never_drifts(self):
         for paths in ([], ['README.md'], ['crates/sim/src/world.rs'], ['crates/client/src/view.rs'],
-                      ['crates/format/src/lib.rs'], ['Cargo.lock'], ['docs/format/game.md']):
+                      ['crates/format/src/lib.rs'], ['crates/removal/src/lib.rs'], ['Cargo.lock'],
+                      ['docs/format/game.md']):
             with self.subTest(paths=paths):
                 result = plan(paths, self.graph)
                 self.assertEqual(set(result['test']) | set(result['compile']),

@@ -6,6 +6,11 @@
 //! SHA-256 and the board key from the header. The claimed tick count is not stored: `runs.ticks`
 //! stays NULL until the verifier reproduces the run (#163), which is also why this endpoint only
 //! queues the `verify_jobs` row.
+//!
+//! Each accepted run records review flags in `run_flags` (#164): `exact_copy` when the same bytes
+//! were stored before, and `seed_reuse` when the same account used the same seed on the same
+//! board. A flag never rejects a run. Seed reuse is deliberately same-player and same-board,
+//! because board-wide reuse flags fire on honest runs at scale (#790).
 
 use std::time::Duration;
 
@@ -50,16 +55,43 @@ pub(crate) async fn submit(
     })?;
     let header = &replay.header;
     let replay_sha256 = Sha256::digest(&body).to_vec();
+    // The header's seed is compared bit for bit, so keep all eight bytes; an INTEGER cast could
+    // lose the high bit of the u64.
+    let rng_seed = header.rng_seed.to_be_bytes();
 
     let mut transaction = state
         .pool
         .begin()
         .await
         .map_err(|err| database_error(err, "begin submission"))?;
+    // Flags are recorded, never a rejection (#164). Looking before the insert keeps the new run
+    // out of its own matches; `detail` names the earliest run that explains the flag.
+    let exact_copy: Option<i64> =
+        sqlx::query_scalar("SELECT id FROM runs WHERE replay_sha256 = ?1 ORDER BY id LIMIT 1")
+            .bind(&replay_sha256)
+            .fetch_optional(&mut *transaction)
+            .await
+            .map_err(|err| database_error(err, "look for an exact copy"))?;
+    let seed_reuse: Option<i64> = sqlx::query_scalar(
+        "SELECT id FROM runs
+         WHERE account_id = ?1 AND package_id = ?2 AND map_id = ?3 AND mods = ?4
+           AND gameplay_hash = ?5 AND rng_seed = ?6
+         ORDER BY id LIMIT 1",
+    )
+    .bind(account_id)
+    .bind(&header.package_id)
+    .bind(&header.map)
+    .bind(i64::from(header.mods.bits()))
+    .bind(&header.gameplay_hash[..])
+    .bind(rng_seed.as_slice())
+    .fetch_optional(&mut *transaction)
+    .await
+    .map_err(|err| database_error(err, "look for a reused seed"))?;
+
     let run_id: i64 = sqlx::query_scalar(
         "INSERT INTO runs
-             (account_id, package_id, map_id, mods, gameplay_hash, replay, replay_sha256)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             (account_id, package_id, map_id, mods, gameplay_hash, rng_seed, replay, replay_sha256)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
          RETURNING id",
     )
     .bind(account_id)
@@ -67,11 +99,23 @@ pub(crate) async fn submit(
     .bind(&header.map)
     .bind(i64::from(header.mods.bits()))
     .bind(&header.gameplay_hash[..])
+    .bind(rng_seed.as_slice())
     .bind(body.as_ref())
     .bind(&replay_sha256)
     .fetch_one(&mut *transaction)
     .await
     .map_err(|err| database_error(err, "insert run"))?;
+    for (kind, detail) in [("exact_copy", exact_copy), ("seed_reuse", seed_reuse)] {
+        if let Some(detail) = detail {
+            sqlx::query("INSERT INTO run_flags (run_id, kind, detail) VALUES (?1, ?2, ?3)")
+                .bind(run_id)
+                .bind(kind)
+                .bind(detail)
+                .execute(&mut *transaction)
+                .await
+                .map_err(|err| database_error(err, "record a submission flag"))?;
+        }
+    }
     // The verifier (#163) works this queue; the run's ticks stay NULL until it has reproduced
     // them, so a claimed time is never on a board.
     sqlx::query("INSERT INTO verify_jobs (run_id) VALUES (?1)")

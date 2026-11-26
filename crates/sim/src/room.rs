@@ -61,12 +61,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::collide::Target;
 use crate::collide::grid::Grid;
-use crate::def::game::{NestedRequests, RoomStage};
+use crate::def::game::RoomStage;
 use crate::def::{GameDef, GlobalIndex, KindId, RoomAction, RoomDef, RoomId, RoomRole, RoomWhen, VarId};
 use crate::error::SimError;
 use crate::events::{self, EventKind, Phase};
 use crate::num::Real;
 use crate::output::OutputEvent;
+use crate::rules::room::NestedRequest;
 use crate::save::{self, Checkpoint, SaveSlot};
 use crate::stripped::PlayMode;
 use crate::view::{View, ViewPort};
@@ -368,9 +369,8 @@ fn start_inner<H: RoomHost + ?Sized>(
     host: &mut H,
 ) -> Result<(), SimError> {
     stop_if_halted(ctx)?;
-    ctx.w.pending = None;
-    let mut queue = RoomQueue::for_ctx(ctx);
-    create_boot(ctx, host, &mut queue)?;
+    ctx.w.pending.clear();
+    create_boot(ctx, host)?;
     if matches!(start, StartPoint::Room { .. }) {
         age_boot(ctx)?;
     }
@@ -403,13 +403,13 @@ fn start_inner<H: RoomHost + ?Sized>(
             load_slot(ctx, host, &slot)?;
             // The saved room is entered right below; a request the load made for it is that
             // same entry.
-            ctx.w.pending = None;
+            ctx.w.pending.clear();
             target
         }
     };
     room_def(ctx, target)?;
-    enter(ctx, host, None, target, &mut queue, RemovedInstances::default())?;
-    after_sequence(ctx, host, &mut queue)
+    enter(ctx, host, None, target, RemovedInstances::default())?;
+    after_sequence(ctx, host)
 }
 
 /// A stripped run's start (#561): sets `[stripped].start`'s globals (and the engine difficulty
@@ -432,82 +432,96 @@ fn redirect(ctx: &Ctx, room: RoomId) -> RoomId {
     ctx.def.stripped.redirect(ctx.w.mode, room)
 }
 
-/// Requests raised while a room transaction runs (R13/R23; #1256).
+/// The room requests waiting to run, in raise order (R13/R23, docs/architecture/sim/rooms.md).
 ///
-/// `NestedRequests::LastWins` (gm8) leaves the world's one pending slot alone: `capture` does
-/// nothing and `next` takes that slot, exactly as before. `NestedRequests::Queue` takes each
-/// request out of the slot right after the event or creation action that raised it and appends
-/// it, so `next` returns them in raise order. The queue lives for this tick's chain only.
-struct RoomQueue {
-    requests: VecDeque<RoomRequest>,
-    fifo: bool,
+/// One store for every policy: [`NestedRequest::LastWins`](crate::rules::room::NestedRequest)
+/// replaces its contents, so it holds at most the request raised last (gm8), while `Queue` and
+/// `QueueNextTick` append and keep raise order (#1294). It lives in the world rather than in the
+/// tick because a request can outlive the tick that raised it.
+///
+/// The serialized form is the postcard sequence of the requests: with zero or one element it
+/// encodes exactly like the `Option<RoomRequest>` it replaced, so the state hash does not move.
+#[derive(Clone, Default, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct RoomRequests(VecDeque<RoomRequest>);
+
+impl RoomRequests {
+    /// The next request, taken out of the queue.
+    pub fn take(&mut self) -> Option<RoomRequest> {
+        self.0.pop_front()
+    }
+
+    /// The request that will run next, without taking it.
+    pub fn first(&self) -> Option<RoomRequest> {
+        self.0.front().copied()
+    }
+
+    /// Appends a request (`NestedRequest::Queue` and `QueueNextTick`).
+    pub fn push(&mut self, req: RoomRequest) {
+        self.0.push_back(req);
+    }
+
+    /// Makes `req` the only waiting request (`NestedRequest::LastWins`).
+    pub fn replace(&mut self, req: RoomRequest) {
+        self.0.clear();
+        self.0.push_back(req);
+    }
+
+    /// Drops every waiting request.
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
+    /// No request is waiting.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// How many requests are waiting.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// The waiting requests, in raise order.
+    pub fn iter(&self) -> impl Iterator<Item = RoomRequest> + '_ {
+        self.0.iter().copied()
+    }
 }
 
-impl RoomQueue {
-    fn for_ctx(ctx: &Ctx) -> RoomQueue {
-        RoomQueue::with_policy(ctx.def.lifecycle().enter_room)
-    }
-
-    fn with_policy(policy: crate::def::game::EnterRoomPolicy) -> RoomQueue {
-        RoomQueue {
-            requests: VecDeque::new(),
-            fifo: policy.nested_requests == NestedRequests::Queue,
-        }
-    }
-
-    /// Takes a request the event or action just raised.
-    fn capture(&mut self, ctx: &mut Ctx) {
-        if self.fifo
-            && let Some(req) = ctx.w.pending.take()
-        {
-            self.requests.push_back(req);
-        }
-    }
-
-    /// The next request to run.
-    fn next(&mut self, ctx: &mut Ctx) -> Option<RoomRequest> {
-        if self.fifo {
-            self.requests.pop_front()
-        } else {
-            ctx.w.pending.take()
+/// The one-slot reading of the store (gm8 and the tests written before the queue, #1294): equal
+/// when at most one request waits and it is `other`.
+impl PartialEq<Option<RoomRequest>> for RoomRequests {
+    fn eq(&self, other: &Option<RoomRequest>) -> bool {
+        match (self.0.len(), other) {
+            (0, None) => true,
+            (1, Some(req)) => self.0.front() == Some(req),
+            _ => false,
         }
     }
 }
 
 fn change_inner<H: RoomHost + ?Sized>(ctx: &mut Ctx, req: RoomRequest, host: &mut H) -> Result<(), SimError> {
-    let policy = ctx.def.lifecycle().enter_room;
-    change_inner_with(ctx, req, host, policy)
-}
-
-/// [`change_inner`] with an explicit enter-room policy. The ruleset/profile layer (#1160) will
-/// select the policy; the public [`perform_change`] uses the definition's default.
-fn change_inner_with<H: RoomHost + ?Sized>(
-    ctx: &mut Ctx,
-    req: RoomRequest,
-    host: &mut H,
-    policy: crate::def::game::EnterRoomPolicy,
-) -> Result<(), SimError> {
     stop_if_halted(ctx)?;
     if ctx.w.status == SimStatus::Ended {
         return Ok(());
     }
-    ctx.w.pending = None;
-    let mut queue = RoomQueue::with_policy(policy);
-    run_request(ctx, host, req, &mut queue)?;
-    after_sequence(ctx, host, &mut queue)
+    // The queue keeps the requests raised before this change (`Queue` raises several in a tick);
+    // `req` itself is already out of it.
+    run_request(ctx, host, req)?;
+    after_sequence(ctx, host)
 }
 
 /// R23: a request raised during the sequence runs before the next tick (bounded, FIFO under
-/// [`NestedRequests::Queue`]).
-fn after_sequence<H: RoomHost + ?Sized>(
-    ctx: &mut Ctx,
-    host: &mut H,
-    queue: &mut RoomQueue,
-) -> Result<(), SimError> {
+/// [`NestedRequest::Queue`]). Under [`NestedRequest::QueueNextTick`] the queue is left for the
+/// following ticks instead: one request per tick, at row 15.
+fn after_sequence<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H) -> Result<(), SimError> {
+    if ctx.rules.room.nested_request == NestedRequest::QueueNextTick {
+        return Ok(());
+    }
     let max = ctx.rules.room.max_chained_changes;
     let mut chained: u8 = 0;
     while ctx.w.status == SimStatus::Running {
-        let Some(req) = queue.next(ctx) else {
+        let Some(req) = ctx.w.pending.take() else {
             break;
         };
         if chained >= max {
@@ -516,25 +530,20 @@ fn after_sequence<H: RoomHost + ?Sized>(
             )));
         }
         chained = chained.saturating_add(1);
-        run_request(ctx, host, req, queue)?;
+        run_request(ctx, host, req)?;
     }
     Ok(())
 }
 
 /// Runs one request: a room change, game_restart or game_end.
-fn run_request<H: RoomHost + ?Sized>(
-    ctx: &mut Ctx,
-    host: &mut H,
-    req: RoomRequest,
-    queue: &mut RoomQueue,
-) -> Result<(), SimError> {
+fn run_request<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H, req: RoomRequest) -> Result<(), SimError> {
     match req {
         RoomRequest::GameEnd => {
             ctx.w.status = SimStatus::Ended;
             emit(ctx, RoomOutput::GameEnded);
             Ok(())
         }
-        RoomRequest::GameRestart => game_restart(ctx, host, queue),
+        RoomRequest::GameRestart => game_restart(ctx, host),
         RoomRequest::Goto(_)
         | RoomRequest::Next
         | RoomRequest::Previous
@@ -546,7 +555,7 @@ fn run_request<H: RoomHost + ?Sized>(
             };
             let target = resolve(ctx, req)?;
             let from = ctx.w.room;
-            enter(ctx, host, Some(from), target, queue, removed)
+            enter(ctx, host, Some(from), target, removed)
         }
     }
 }
@@ -653,15 +662,10 @@ fn age_boot(ctx: &mut Ctx) -> Result<(), SimError> {
 }
 
 /// Creates the `GameDef::boot` kinds at (0, 0), as persistent instances.
-fn create_boot<H: RoomHost + ?Sized>(
-    ctx: &mut Ctx,
-    host: &mut H,
-    queue: &mut RoomQueue,
-) -> Result<(), SimError> {
+fn create_boot<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H) -> Result<(), SimError> {
     let def = ctx.def;
     for &kind in &def.boot {
         let id = host.spawn(ctx, kind, Real::ZERO, Real::ZERO, SpawnInit::default())?;
-        queue.capture(ctx);
         stop_if_halted(ctx)?;
         if let Some(inst) = ctx.w.get_mut(id) {
             inst.persistent = true;
@@ -688,13 +692,9 @@ pub(crate) fn restart_room(def: &crate::def::GameDef) -> RoomId {
 /// `globals_survive_restart`, then boot again and enter the Boot-role room ([`restart_room`];
 /// rInit in 19 of the 20 games) as the first room. The save (a file) and the sounds (Inferred,
 /// S4: `SoundRules::keep_on_restart`) are kept.
-fn game_restart<H: RoomHost + ?Sized>(
-    ctx: &mut Ctx,
-    host: &mut H,
-    queue: &mut RoomQueue,
-) -> Result<(), SimError> {
+fn game_restart<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H) -> Result<(), SimError> {
     if ctx.rules.room.restart_events {
-        room_end(ctx, host, queue)?;
+        room_end(ctx, host)?;
     }
     let ids: Vec<InstId> = ctx.w.instances().iter().map(|i| i.id).collect();
     for id in ids {
@@ -705,7 +705,7 @@ fn game_restart<H: RoomHost + ?Sized>(
     ctx.w.sweep();
     ctx.w.grid = Grid::default();
     ctx.w.persistent_rooms.clear();
-    ctx.w.pending = None;
+    ctx.w.pending.clear();
     if !ctx.rules.sound.keep_on_restart {
         crate::sound::stop_all(ctx);
     }
@@ -717,34 +717,29 @@ fn game_restart<H: RoomHost + ?Sized>(
         ctx.w.engine.run.boot_load = boot_load;
     }
     emit(ctx, RoomOutput::GameRestarted);
-    create_boot(ctx, host, queue)?;
+    create_boot(ctx, host)?;
     let first = redirect(ctx, restart_room(ctx.def));
     room_def(ctx, first)?;
-    enter(ctx, host, None, first, queue, RemovedInstances::default())
+    enter(ctx, host, None, first, RemovedInstances::default())
 }
 
 /// Step 1: Room End for every alive, active instance that handles it.
-fn room_end<H: RoomHost + ?Sized>(
-    ctx: &mut Ctx,
-    host: &mut H,
-    queue: &mut RoomQueue,
-) -> Result<(), SimError> {
+fn room_end<H: RoomHost + ?Sized>(ctx: &mut Ctx, host: &mut H) -> Result<(), SimError> {
     let def = ctx.def;
     let handles = |i: &Instance| i.alive && i.active && def.kind(i.kind).is_some_and(|k| k.events.room_end);
     let order = host.dispatch_order(ctx.w, &handles);
-    run_room_phase(ctx, host, Phase::RoomEnd, &order, queue)
+    run_room_phase(ctx, host, Phase::RoomEnd, &order)
 }
 
-/// Runs a room sequence phase on `order`, one event at a time, and captures a request each event
-/// raises (so the FIFO queue sees them in raise order). `Halt` becomes the halting error; an
-/// `AbortTick` does not stop the phase (R23). This is [`RoomHost::run_phase`]'s loop with the
-/// queue capture in it.
+/// Runs a room sequence phase on `order`, one event at a time. A request an event raises is
+/// already in `World::pending`, in raise order. `Halt` becomes the halting error; an `AbortTick`
+/// does not stop the phase (R23). This is [`RoomHost::run_phase`]'s loop with the queue capture
+/// removed (#1294).
 fn run_room_phase<H: RoomHost + ?Sized>(
     ctx: &mut Ctx,
     host: &mut H,
     phase: Phase,
     order: &[InstId],
-    queue: &mut RoomQueue,
 ) -> Result<(), SimError> {
     let ev = match phase {
         Phase::RoomEnd => EventKind::RoomEnd,
@@ -763,7 +758,6 @@ fn run_room_phase<H: RoomHost + ?Sized>(
         if host.dispatch(ctx, id, &ev) == Flow::Halt {
             return Err(halted_error(ctx));
         }
-        queue.capture(ctx);
     }
     Ok(())
 }
@@ -783,10 +777,9 @@ fn enter<H: RoomHost + ?Sized>(
     host: &mut H,
     from: Option<RoomId>,
     to: RoomId,
-    queue: &mut RoomQueue,
     removed: RemovedInstances,
 ) -> Result<(), SimError> {
-    RoomTransaction::new(ctx, from, to, removed)?.run(ctx, host, queue)
+    RoomTransaction::new(ctx, from, to, removed)?.run(ctx, host)
 }
 
 /// One engine-owned room transaction (decision 0005; #1174 A2).
@@ -852,34 +845,28 @@ impl RoomTransaction {
         })
     }
 
-    fn run<H: RoomHost + ?Sized>(
-        mut self,
-        ctx: &mut Ctx,
-        host: &mut H,
-        queue: &mut RoomQueue,
-    ) -> Result<(), SimError> {
+    fn run<H: RoomHost + ?Sized>(mut self, ctx: &mut Ctx, host: &mut H) -> Result<(), SimError> {
         for stage in self.stages {
             match stage {
                 RoomStage::RoomEnd => {
                     if self.from.is_some() {
-                        room_end(ctx, host, queue)?;
+                        room_end(ctx, host)?;
                     }
                 }
                 RoomStage::Prepare => self.prepare(ctx)?,
                 RoomStage::Commit => self.commit(ctx)?,
                 RoomStage::Placed => {
-                    self.build_placed(ctx, host, queue)?;
+                    self.build_placed(ctx, host)?;
                     // The GM instance list order (research#142): this room's placed instances
                     // in file order, then the carried persistent ones in their old order, then
                     // everything created since (Create events of the placed ones included).
                     ctx.w.set_room_entry(&self.built, &self.previous);
                 }
-                RoomStage::GameStart => self.game_start(ctx, host, queue)?,
-                RoomStage::CreationCode => self.creation_code(ctx, host, queue)?,
-                RoomStage::RoomStart => self.room_start(ctx, host, queue)?,
+                RoomStage::GameStart => self.game_start(ctx, host)?,
+                RoomStage::CreationCode => self.creation_code(ctx, host)?,
+                RoomStage::RoomStart => self.room_start(ctx, host)?,
             }
         }
-        queue.capture(ctx);
         Ok(())
     }
 
@@ -955,12 +942,7 @@ impl RoomTransaction {
     }
 
     /// Step 4: placed instances in file order, params before Create (inside spawn).
-    fn build_placed<H: RoomHost + ?Sized>(
-        &mut self,
-        ctx: &mut Ctx,
-        host: &mut H,
-        queue: &mut RoomQueue,
-    ) -> Result<(), SimError> {
+    fn build_placed<H: RoomHost + ?Sized>(&mut self, ctx: &mut Ctx, host: &mut H) -> Result<(), SimError> {
         let policy = ctx.def.lifecycle().enter_room;
         if self.restoring || !policy.rebuild_placed {
             return Ok(());
@@ -996,7 +978,6 @@ impl RoomTransaction {
             };
             let id = host.spawn(ctx, p.kind, p.x, p.y, init)?;
             self.built.push(id);
-            queue.capture(ctx);
             stop_if_halted(ctx)?;
         }
         Ok(())
@@ -1004,26 +985,16 @@ impl RoomTransaction {
 
     /// Step 5: Game Start, first room only. No kind declares it (no game in the 20 uses it),
     /// so every instance gets it.
-    fn game_start<H: RoomHost + ?Sized>(
-        &self,
-        ctx: &mut Ctx,
-        host: &mut H,
-        queue: &mut RoomQueue,
-    ) -> Result<(), SimError> {
+    fn game_start<H: RoomHost + ?Sized>(&self, ctx: &mut Ctx, host: &mut H) -> Result<(), SimError> {
         if self.from.is_some() {
             return Ok(());
         }
         let order = host.dispatch_order(ctx.w, &|i: &Instance| i.alive && i.active);
-        run_room_phase(ctx, host, Phase::GameStart, &order, queue)
+        run_room_phase(ctx, host, Phase::GameStart, &order)
     }
 
     /// Step 6: room creation actions; on a revisit per the switch (rooms UNKNOWN).
-    fn creation_code<H: RoomHost + ?Sized>(
-        &self,
-        ctx: &mut Ctx,
-        host: &mut H,
-        queue: &mut RoomQueue,
-    ) -> Result<(), SimError> {
+    fn creation_code<H: RoomHost + ?Sized>(&self, ctx: &mut Ctx, host: &mut H) -> Result<(), SimError> {
         let room = room_def(ctx, self.to)?;
         if self.restoring && !ctx.rules.room.creation_code_on_revisit {
             return Ok(());
@@ -1034,18 +1005,12 @@ impl RoomTransaction {
         };
         for action in &room.on_create {
             run_action(ctx, host, action, &context)?;
-            queue.capture(ctx);
         }
         Ok(())
     }
 
     /// Step 7: Room Start, snapshot taken now (R10).
-    fn room_start<H: RoomHost + ?Sized>(
-        &self,
-        ctx: &mut Ctx,
-        host: &mut H,
-        queue: &mut RoomQueue,
-    ) -> Result<(), SimError> {
+    fn room_start<H: RoomHost + ?Sized>(&self, ctx: &mut Ctx, host: &mut H) -> Result<(), SimError> {
         let def = ctx.def;
         let handles =
             |i: &Instance| i.alive && i.active && def.kind(i.kind).is_some_and(|k| k.events.room_start);
@@ -1054,7 +1019,7 @@ impl RoomTransaction {
             .map(|i| i.id)
             .partition(|id| self.carried_ids.contains(id));
         let order: Vec<InstId> = own.into_iter().chain(carried).collect();
-        run_room_phase(ctx, host, Phase::RoomStart, &order, queue)
+        run_room_phase(ctx, host, Phase::RoomStart, &order)
     }
 }
 
@@ -1105,7 +1070,8 @@ fn run_action<H: RoomHost + ?Sized>(
                     SimError::unsupported("LoadGame in room creation code with no save (R23)")
                 })?;
             load_slot(ctx, host, &slot)?;
-            ctx.w.pending = Some(RoomRequest::Goto(slot.room));
+            // Through the policy (no R8 counter: this is creation code, not a handler).
+            ctx.request(RoomRequest::Goto(slot.room));
         }
         // R24 (Confirmed, recorder): instance_destroy() in room creation code destroys nothing
         // and the rest of the code runs (showdown a3-t18-a rows 42-43, a3-t20, tr-room-14).
@@ -1314,9 +1280,9 @@ mod tests {
     use super::*;
     use crate::Sim;
     use crate::SimOptions;
-    use crate::def::game::{EnterRoomPolicy, NestedRequests};
     use crate::def::testing::GameDefBuilder;
     use crate::def::{Builtin, KindDef, KindId};
+    use crate::rules::room::NestedRequest;
     use crate::sound::DllMode;
 
     /// A one-room game whose creation code is `rows`, with `stage` interned at load as id 0.
@@ -1589,7 +1555,6 @@ mod tests {
         w: &mut World,
         rooms: [RoomId; 4],
         host: &mut RequestingHost,
-        policy: EnterRoomPolicy,
     ) {
         let [start, from, _, _] = rooms;
         with_ctx(def, rules, w, |ctx| {
@@ -1605,7 +1570,7 @@ mod tests {
         });
         w.output.clear();
         with_ctx(def, rules, w, |ctx| {
-            change_inner_with(ctx, RoomRequest::Goto(from), host, policy).unwrap();
+            change_inner(ctx, RoomRequest::Goto(from), host).unwrap();
         });
     }
 
@@ -1613,18 +1578,15 @@ mod tests {
     /// run, in raise order.
     #[test]
     fn queued_nested_requests_run_in_raise_order() {
-        let (def, rooms, rules) = request_game();
+        let (def, rooms, mut rules) = request_game();
+        rules.room.nested_request = NestedRequest::Queue;
         let [_, from, to_b, to_c] = rooms;
         let mut w = World::new(rooms[0], 1);
         let mut host = RequestingHost {
             on_create: vec![("first", RoomRequest::Goto(to_b))],
             on_room_start: vec![("second", RoomRequest::Goto(to_c))],
         };
-        let policy = EnterRoomPolicy {
-            nested_requests: NestedRequests::Queue,
-            ..Default::default()
-        };
-        run_change(&def, &rules, &mut w, rooms, &mut host, policy);
+        run_change(&def, &rules, &mut w, rooms, &mut host);
         assert_eq!(entered(&w), [from, to_b, to_c]);
     }
 
@@ -1638,7 +1600,7 @@ mod tests {
             on_create: vec![("first", RoomRequest::Goto(rooms[2]))],
             on_room_start: vec![("second", RoomRequest::Goto(to_c))],
         };
-        run_change(&def, &rules, &mut w, rooms, &mut host, EnterRoomPolicy::default());
+        run_change(&def, &rules, &mut w, rooms, &mut host);
         assert_eq!(entered(&w), [from, to_c]);
     }
 

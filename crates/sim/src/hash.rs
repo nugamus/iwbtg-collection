@@ -17,7 +17,7 @@ use crate::input_state::InputState;
 use crate::num::Real;
 use crate::particles::Particles;
 use crate::rng::{Rng, RngStreams};
-use crate::room::RoomRequest;
+use crate::room::RoomRequests;
 use crate::save::SaveSlot;
 use crate::sound::SoundState;
 use crate::stripped::PlayMode;
@@ -51,7 +51,7 @@ pub struct HashView<'a> {
     streams: &'a RngStreams,
     input: &'a InputState,
     views: &'a [View; 8],
-    pending: &'a Option<RoomRequest>,
+    pending: &'a RoomRequests,
     persistent_rooms: &'a BTreeMap<RoomId, Vec<Instance>>,
     save: &'a Option<SaveSlot>,
     sound: &'a SoundState,
