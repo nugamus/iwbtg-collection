@@ -78,11 +78,17 @@ pub enum Icon {
     SetInput,
     SetGameplay,
     SetAbout,
+    /// The notifications' kinds (`Notices.dc.html`, 22 px): a warning, a file, a controller, an
+    /// info mark.
+    NoteWarn,
+    NoteFile,
+    NotePad,
+    NoteInfo,
 }
 
 impl Icon {
     /// Every icon, for the gallery.
-    pub const ALL: [Icon; 33] = [
+    pub const ALL: [Icon; 37] = [
         Icon::Flag,
         Icon::Clock,
         Icon::Check,
@@ -116,6 +122,10 @@ impl Icon {
         Icon::SetInput,
         Icon::SetGameplay,
         Icon::SetAbout,
+        Icon::NoteWarn,
+        Icon::NoteFile,
+        Icon::NotePad,
+        Icon::NoteInfo,
     ];
 
     /// The size of the view box the shapes are drawn in.
@@ -127,8 +137,13 @@ impl Icon {
             Icon::Arrow => (26.0, 26.0),
             Icon::Person | Icon::SignIn => (16.0, 16.0),
             Icon::TimeAttack | Icon::Classic => (20.0, 20.0),
-            Icon::Bell | Icon::Gear => (22.0, 22.0),
             Icon::Update => (20.0, 20.0),
+            Icon::Bell
+            | Icon::Gear
+            | Icon::NoteWarn
+            | Icon::NoteFile
+            | Icon::NotePad
+            | Icon::NoteInfo => (22.0, 22.0),
             Icon::MenuPlay
             | Icon::MenuBrowse
             | Icon::MenuReplays
@@ -186,6 +201,13 @@ impl Icon {
                 Stroke("M2 7.5a5.5 5.5 0 1 0 11 0a5.5 5.5 0 1 0-11 0", 2.0),
                 Stroke("M12 12l4.5 4.5", 2.0),
             ],
+            Icon::NoteWarn => vec![Stroke("M11 3l9 16H2zM11 9v4M11 16v.5", 1.9)],
+            Icon::NoteFile => vec![Stroke("M5 2h8l4 4v14H5zM13 2v4h4M8 13h6M8 16h4", 1.9)],
+            Icon::NotePad => vec![Stroke(
+                "M6 7h10a4 4 0 0 1 4 4v1a4 4 0 0 1-7 2.6h-4A4 4 0 0 1 2 12v-1a4 4 0 0 1 4-4zM7 10v3M5.5 11.5h3M15 10.5v.5M17 12.5v.5",
+                1.9,
+            )],
+            Icon::NoteInfo => vec![Stroke("M11 2a9 9 0 1 0 0 18a9 9 0 1 0 0-18M11 10v5M11 7v.5", 1.9)],
             Icon::Back => vec![Stroke("M9 2L4 7l5 5", 2.0)],
             Icon::SetGeneral => vec![Stroke("M13 4a9 9 0 1 0 0 18a9 9 0 1 0 0-18M13 11v6M13 8v.5", 1.9)],
             Icon::SetGraphics => vec![Stroke("M4 6h18v12H4zM9 22h8M13 18v4", 1.9)],

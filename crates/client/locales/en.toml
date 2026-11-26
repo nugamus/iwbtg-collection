@@ -183,3 +183,7 @@ set_death_map_desc = "Where you died, marked on the room on results. Never durin
 set_shake = "Screen shake"
 set_shake_desc = "Turn off if shaking bothers you (#106)."
 set_flashes = "Full-screen flashes"
+notif_title = "Notifications"
+notif_clear_all = "Clear all"
+notif_empty = "Nothing yet this session."
+notif_today = "Today"

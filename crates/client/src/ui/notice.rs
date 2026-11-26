@@ -1,5 +1,8 @@
 //! Notices: a short message in a corner of the window, out of the game, that fades after a few
-//! seconds (docs/architecture/client/ui.md). Anything can post one with [`post`], from any
+//! seconds (docs/architecture/client/ui.md; m5 `D2_Notifications`, `D3_NoticesInRun`). Outside a
+//! run a notice drops in under the toolbar's bell, top right; in a run it slides in at the bottom
+//! of the leaderboard's column (`Area`), never over the game. Each kind has its tone and icon, and
+//! every notice also goes into the bell's list (`notifications.rs`). Anything can post one with [`post`], from any
 //! thread and before the app exists (settings load before it), so a module that has no `World`
 //! at hand (storage) still reaches the player.
 //!
@@ -15,7 +18,7 @@ use bevy::text::LineBreak;
 
 use super::fonts::Type;
 use super::icons::{Icon, icon};
-use super::motion::{Ease, OffsetX, Opacity, Tween};
+use super::motion::{Ease, OffsetX, OffsetY, Opacity, Tween};
 use super::shape::{Band, Shape, Side, UiOpacity};
 use super::tokens;
 use crate::locale;
@@ -57,23 +60,6 @@ impl Kind {
         }
     }
 
-    /// The card's accent: the update notice is the one that is not a failure warning, and takes
-    /// the update kind's colour (E8's `rgba(142,203,255,...)`).
-    pub fn accent(self) -> Color {
-        match self {
-            Kind::Update => tokens::RANKED,
-            _ => tokens::ACCENT,
-        }
-    }
-
-    /// The mark beside the heading, if the kind has one (the update notice, #1606).
-    pub fn icon(self) -> Option<Icon> {
-        match self {
-            Kind::Update => Some(Icon::Update),
-            _ => None,
-        }
-    }
-
     /// What the card says under the heading. A storage message names files and OS errors the
     /// player can do nothing with: it stays in the console, the card says what it means.
     pub fn body(self, message: &str) -> String {
@@ -87,6 +73,26 @@ impl Kind {
                 let _ = message;
                 locale::text("notice_pad_body").to_string()
             }
+        }
+    }
+
+    /// The kind's colour: amber for a warning, red for an error, blue for information.
+    pub fn tone(self) -> Color {
+        match self {
+            Kind::Storage => tokens::AMBER,
+            Kind::Drop => tokens::BEHIND,
+            Kind::Pad | Kind::Controls | Kind::Update => tokens::RANKED,
+        }
+    }
+
+    /// The kind's icon.
+    pub fn icon(self) -> Icon {
+        match self {
+            Kind::Storage => Icon::NoteWarn,
+            Kind::Drop => Icon::NoteFile,
+            Kind::Pad => Icon::NotePad,
+            Kind::Controls => Icon::NoteInfo,
+            Kind::Update => Icon::Update,
         }
     }
 
@@ -143,9 +149,20 @@ impl Shown {
     }
 }
 
-/// The column the notices stack in, bottom up.
+/// The column the notices stack in.
 #[derive(Component)]
 struct Stack;
+
+/// The heading of a notice and of a notification: capitals, 11 px, 700, tracked 0.12 em.
+pub const HEADING: Type = Type {
+    tracking: 0.12,
+    caps: true,
+    ..Type::barlow(11.0, 700)
+};
+
+/// The bar under a notice that runs down while it holds.
+#[derive(Component)]
+struct TimeLeft;
 
 /// One notice on screen and how long it has been there.
 #[derive(Component)]
@@ -161,7 +178,13 @@ pub(super) fn plugin(app: &mut App) {
 }
 
 /// Drains the queue into notices.
-fn show(mut commands: Commands, mut shown: ResMut<Shown>, stack: Query<Entity, With<Stack>>) {
+fn show(
+    mut commands: Commands,
+    mut shown: ResMut<Shown>,
+    stack: Query<Entity, With<Stack>>,
+    list: Option<ResMut<super::notifications::Notifications>>,
+    area: Res<Area>,
+) {
     let posted = match QUEUE.lock() {
         Ok(mut q) if !q.is_empty() => std::mem::take(&mut *q),
         _ => return,
@@ -170,9 +193,19 @@ fn show(mut commands: Commands, mut shown: ResMut<Shown>, stack: Query<Entity, W
         Some(s) => s,
         None => spawn_stack(&mut commands),
     };
+    let mut list = list;
+    // Under the bell the newest drops in from above; in a run's column it slides in from the left.
+    let from_above = area.0.is_none();
     for (kind, message) in posted {
         if shown.admit(kind) {
-            let id = commands.spawn(notice(kind, &message)).id();
+            if let Some(list) = list.as_deref_mut() {
+                list.push(super::notifications::Item {
+                    kind,
+                    message: message.clone(),
+                    at: crate::stats::now_seconds(),
+                });
+            }
+            let id = commands.spawn(notice(kind, &message, from_above)).id();
             commands.entity(stack).add_child(id);
         }
     }
@@ -210,14 +243,13 @@ pub fn clip(message: &str) -> String {
 /// The notice: a sheared dark card with an accent band on the left, a capital heading in the
 /// accent colour and the message under it in soft ink, wrapped to the stack's width (the leaderboard column's in a game). It slides
 /// in from the left and fades in (OutQuint, 400 ms).
-fn notice(kind: Kind, message: &str) -> impl Bundle + use<> {
-    let heading = Type {
-        tracking: 0.12,
-        ..Type::PILL_CAPS
+fn notice(kind: Kind, message: &str, from_above: bool) -> impl Bundle + use<> {
+    let tone = kind.tone();
+    let (dx, dy, seconds) = if from_above {
+        (0.0, -24.0, 0.6)
+    } else {
+        (-24.0, 0.0, tokens::motion::STANDARD)
     };
-    let accent = kind.accent();
-    let title = kind.heading().to_string();
-    let body = clip(&kind.body(message));
     (
         Node {
             flex_direction: FlexDirection::Column,
@@ -238,36 +270,51 @@ fn notice(kind: Kind, message: &str) -> impl Bundle + use<> {
             .with_band(Band {
                 side: Side::Left,
                 width: 4.0,
-                color: accent,
+                color: tone,
                 fade_to: 0.0,
             })
-            .with_shadow(8.0, 24.0, tokens::black(0.5)),
+            .with_shadow(12.0, 30.0, tokens::black(0.5)),
         UiTransform::default(),
         UiOpacity(0.0),
-        Tween::<Opacity>::new(0.0, 1.0, tokens::motion::STANDARD, Ease::OutQuint),
-        Tween::<OffsetX>::new(-24.0, 0.0, tokens::motion::STANDARD, Ease::OutQuint),
+        Tween::<Opacity>::new(0.0, 1.0, seconds, Ease::OutQuint),
+        Tween::<OffsetX>::new(dx, 0.0, seconds, Ease::OutQuint),
+        Tween::<OffsetY>::new(dy, 0.0, seconds, Ease::OutQuint),
         Pickable::IGNORE,
         Notice {
             age: 0.0,
             fading: false,
         },
-        Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
-            c.spawn(Node {
-                align_items: AlignItems::Center,
-                column_gap: Val::Px(8.0),
-                ..default()
-            })
-            .with_children(|row| {
-                if let Some(mark) = kind.icon() {
-                    row.spawn(icon(mark, 18.0, accent));
-                }
-                row.spawn(text(&title, heading, accent));
-            });
-            c.spawn((
-                text(&body, Type::barlow(14.0, 500), tokens::SOFT),
+        children![
+            (
+                Node {
+                    align_items: AlignItems::Center,
+                    column_gap: Val::Px(8.0),
+                    ..default()
+                },
+                children![icon(kind.icon(), 16.0, tone), text(kind.heading(), HEADING, tone)],
+            ),
+            (
+                text(&clip(&kind.body(message)), Type::barlow(14.0, 500), tokens::ROW_NAME),
                 TextLayout::linebreak(LineBreak::WordOrCharacter),
-            ));
-        })),
+            ),
+            (
+                Node {
+                    height: Val::Px(2.0),
+                    border_radius: BorderRadius::all(Val::Px(1.0)),
+                    ..default()
+                },
+                BackgroundColor(tokens::white(0.1)),
+                children![(
+                    Node {
+                        width: Val::Percent(100.0),
+                        height: Val::Percent(100.0),
+                        ..default()
+                    },
+                    BackgroundColor(tokens::white(0.4)),
+                    TimeLeft,
+                )],
+            ),
+        ],
     )
 }
 
@@ -276,10 +323,21 @@ fn notice(kind: Kind, message: &str) -> impl Bundle + use<> {
 fn age(
     mut commands: Commands,
     time: Res<Time<Real>>,
-    mut notices: Query<(Entity, &mut Notice, &mut Tween<Opacity>)>,
+    mut notices: Query<(Entity, &mut Notice, &mut Tween<Opacity>, &Children)>,
+    kids: Query<&Children>,
+    mut bars: Query<&mut Node, With<TimeLeft>>,
 ) {
-    for (entity, mut notice, mut fade) in &mut notices {
+    for (entity, mut notice, mut fade, children) in &mut notices {
         notice.age += time.delta_secs();
+        // The bar under the message runs down over the hold.
+        let left = Val::Percent(100.0 * (1.0 - notice.age / HOLD).clamp(0.0, 1.0));
+        for bar in children.iter().filter_map(|c| kids.get(c).ok()).flat_map(|k| k.iter()) {
+            if let Ok(mut node) = bars.get_mut(bar)
+                && node.width != left
+            {
+                node.width = left;
+            }
+        }
         if !notice.fading && notice.age >= HOLD {
             notice.fading = true;
             fade.retarget(0.0);
@@ -301,15 +359,28 @@ fn place(
     };
     // The window in UI px.
     let size = window.size() / ui_scale.0.max(0.01);
-    let r = area.0.unwrap_or(Rect::from_corners(Vec2::ZERO, size));
-    let want = (
-        Val::Px(r.min.x + MARGIN),
-        Val::Px(size.y - r.max.y + MARGIN),
-        Val::Px((r.width() - 2.0 * MARGIN).clamp(MIN_WIDTH, MAX_WIDTH)),
-    );
+    let want = match area.0 {
+        // In a run: the bottom of the leaderboard's column.
+        Some(r) => (
+            Val::Px(r.min.x + MARGIN),
+            Val::Auto,
+            Val::Auto,
+            Val::Px(size.y - r.max.y + MARGIN),
+            Val::Px((r.width() - 2.0 * MARGIN).clamp(MIN_WIDTH, MAX_WIDTH)),
+        ),
+        // Outside a run: under the toolbar's bell, top right.
+        None => (
+            Val::Auto,
+            Val::Px(MARGIN),
+            Val::Px(super::toolbar::HEIGHT + MARGIN),
+            Val::Auto,
+            Val::Px(MAX_WIDTH.min(size.x - 2.0 * MARGIN).max(MIN_WIDTH)),
+        ),
+    };
     for mut node in &mut stack {
-        if (node.left, node.bottom, node.width) != want {
-            (node.left, node.bottom, node.width) = want;
+        let have = (node.left, node.right, node.top, node.bottom, node.width);
+        if have != want {
+            (node.left, node.right, node.top, node.bottom, node.width) = want;
         }
     }
 }
@@ -350,6 +421,7 @@ mod tests {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins)
             .init_resource::<Shown>()
+            .init_resource::<Area>()
             .add_systems(Update, show);
         post(Kind::Storage, "settings: disk full");
         app.update();
@@ -371,7 +443,7 @@ mod tests {
     #[test]
     fn a_notice_hides_the_ui_under_it() {
         let mut world = World::new();
-        let id = world.spawn(notice(Kind::Storage, "x")).id();
+        let id = world.spawn(notice(Kind::Storage, "x", true)).id();
         let shape = world.get::<Shape>(id).expect("a notice has a shape");
         assert_eq!(shape.fill.alpha(), 1.0);
     }
