@@ -115,6 +115,11 @@ fn check(
         MAX_MANIFEST,
     )?)
     .map_err(|e| Failure::quiet(format!("build.json did not read: {e}")))?;
+    if build.commit.trim().is_empty() {
+        return Err(Failure::quiet(
+            "That release's build.json names no commit, so the client cannot tell what it is.",
+        ));
+    }
     // Main builds follow the commit; releases follow the version, or every main build would
     // "update" backwards to the last tagged release it is ahead of.
     let newer = match channel {

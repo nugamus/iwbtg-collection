@@ -179,12 +179,14 @@ pub fn swap(staged: &Path, current: &Path) -> Result<PathBuf, String> {
 pub fn install_and_restart(staged: &Path) -> Result<(), String> {
     let current = std::env::current_exe()
         .map_err(|e| format!("the running client's path is unknown: {e}"))?;
-    swap(staged, &current)?;
+    let old = swap(staged, &current)?;
     let args: Vec<_> = std::env::args_os().skip(1).collect();
-    Command::new(&current)
-        .args(args)
-        .spawn()
-        .map_err(|e| format!("the updated client could not start: {e}"))?;
+    if let Err(e) = Command::new(&current).args(args).spawn() {
+        // A new exe that cannot start is worse than the old one: put the old one back.
+        let _ = fs::remove_file(&current);
+        let _ = fs::rename(&old, &current);
+        return Err(format!("the updated client could not start: {e}"));
+    }
     Ok(())
 }
 
