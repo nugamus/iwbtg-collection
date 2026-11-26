@@ -522,11 +522,15 @@ fn flush_now_and_then(time: Res<Time<Real>>, mut stats: ResMut<Stats>) {
     }
 }
 
-/// A retry (`retry.rs`) starts a new run: the old one's deaths are saved, and the next fixed
-/// step's `seed` opens a tracker from the new run's pre-step state.
+/// A run's boundary (a retry, or leaving the run for game select): the old run's deaths are
+/// saved, and its run-scoped state goes: the tracker and the last clear with its record. Leaving
+/// the clear behind is what stops a new run from opening the results page with the old time
+/// (#1551). The stats book keeps what was written.
 pub(crate) fn reset(world: &mut World) {
     if let Some(mut stats) = world.get_resource_mut::<Stats>() {
         stats.current = None;
+        stats.last = None;
+        stats.cleared = None;
         stats.flush();
     }
 }
@@ -845,6 +849,40 @@ mod tests {
         let mut stats = Stats::open(None);
         stats.open_current(&sim, None, None, false);
         assert_eq!(stats.on_board(), Some(true), "a plain new game is");
+    }
+
+    /// Leaving a finished run forgets its clear and its record: a new run's first observation
+    /// has no clear, so nothing can open the results page with the old time (#1551).
+    #[test]
+    fn a_new_run_after_a_clear_starts_with_no_clear() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let mut world = crate::view::test_world(&pkg);
+        world.insert_resource(Time::<Fixed>::from_hz(50.0));
+        world.insert_resource(Stats::open(None));
+        let (_, first) = play_demo_clear(&mut world, [0, 0]);
+        assert!(first.ticks > 0);
+        assert!(world.resource::<Stats>().cleared.is_some());
+
+        // Leaving the run (OnExit(Run), the same call a retry makes).
+        crate::view::restart_run(&mut world).unwrap();
+        reset(&mut world);
+        assert!(
+            world.resource::<Stats>().cleared.is_none(),
+            "the finished run is forgotten"
+        );
+        assert!(world.resource::<Stats>().last.is_none());
+
+        // The new run's first observation: a fresh tracker, no clear, and the book keeps the
+        // finished run's one clear.
+        world.run_system_once(watch).unwrap();
+        let stats = world.resource::<Stats>();
+        assert!(stats.last.is_none() && stats.cleared.is_none(), "no clear on the first tick");
+        assert_eq!(
+            stats.book.map(&map_key(&pkg.def.id, "main")).unwrap().clears,
+            1,
+            "only the finished run is in the book"
+        );
     }
 
     /// #679: a run with deaths logs them with their time, room and the kid's position; the clear
