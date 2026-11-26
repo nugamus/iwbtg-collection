@@ -8,6 +8,7 @@ pub mod filter;
 pub mod fonts;
 pub mod gallery;
 pub mod glow;
+pub mod hints;
 pub mod icons;
 pub mod mode;
 pub mod motion;

@@ -12,8 +12,8 @@
 //! level; at the top it exits.
 //!
 //! What is not built yet stays visible and does nothing: Browse (#50), Replays and Settings (#53)
-//! open with their screens, Race is marked Later. Classic opens game select in the Classic accent
-//! and plays the game as made until the shelf lands (m5 A4, #851).
+//! open with their screens, Race is marked Later. Time Attack opens game select, Classic the
+//! shelf (m5 A4, `shelf.rs`).
 
 use bevy::camera::visibility::RenderLayers;
 use bevy::input_focus::InputFocus;
@@ -33,7 +33,7 @@ use crate::ui::motion::{Ease, OffsetX, OffsetY, Scale, Tween, Width};
 use crate::ui::shape::{Ink, Shape, UiOpacity};
 use crate::ui::tokens;
 use crate::ui::toolbar::toolbar;
-use crate::ui::widgets::{rich, text};
+use crate::ui::widgets::{rich, text, text_leading};
 
 /// The menu's backdrop dim (`Backdrop` with `dim="0.42"`).
 const DIM: f32 = 0.42;
@@ -640,12 +640,7 @@ fn caption_block() -> impl Bundle {
         },
         children![
             (
-                Text::new(""),
-                Type::barlow(17.0, 400).font(),
-                Type::barlow(17.0, 400).spacing(),
-                bevy::text::LineHeight::RelativeToFont(1.4),
-                TextColor(BRIGHT),
-                Ink(BRIGHT),
+                text_leading("", Type::barlow(17.0, 400), BRIGHT, 1.4),
                 CaptionLine
             ),
             (text("", Type::barlow(14.0, 400), tokens::MUTED), CaptionSub),
@@ -1010,7 +1005,7 @@ fn choose(
             if let Some(mode) = mode {
                 *mode = m;
             }
-            next.set(AppScreen::Select);
+            next.set(super::mode_home(Some(m)));
         }
         Action::Exit => {
             commands.write_message(AppExit::Success);
@@ -1238,7 +1233,7 @@ mod tests {
         assert_eq!(app.should_exit(), Some(AppExit::Success), "Escape at the top exits");
     }
 
-    /// Focusing Classic picks Classic; Race takes no focus; choosing a mode opens game select.
+    /// Focusing Classic picks Classic; Race takes no focus; choosing a mode opens its screen.
     #[test]
     fn a_focused_mode_is_the_mode_and_choosing_it_opens_its_screen() {
         let mut app = app();
@@ -1255,7 +1250,8 @@ mod tests {
         press(&mut app, KeyCode::Enter);
         assert_eq!(
             *app.world().resource::<State<AppScreen>>().get(),
-            AppScreen::Select
+            AppScreen::Shelf,
+            "Classic's screen is the shelf"
         );
         assert_eq!(*app.world().resource::<Mode>(), Mode::Classic);
     }
