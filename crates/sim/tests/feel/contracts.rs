@@ -3,6 +3,7 @@
 pub const CONTRACTS: &[(&str, &str)] = &[
     ("checkpoint/point_identity", include_str!("checkpoint/point_identity.toml")),
     ("checkpoint/respawn_alignment", include_str!("checkpoint/respawn_alignment.toml")),
+    ("checkpoint/stale_point_refused", include_str!("checkpoint/stale_point_refused.toml")),
     ("collision/overlapping_hazards", include_str!("collision/overlapping_hazards.toml")),
     ("lifecycle/reset_scope", include_str!("lifecycle/reset_scope.toml")),
     ("lifecycle/retry_after_death", include_str!("lifecycle/retry_after_death.toml")),

@@ -125,20 +125,32 @@ fn run_one(
     let text = std::fs::read_to_string(path).map_err(|e| fail(format!("{}: {e}", path.display())))?;
     let raw = contract::parse(&text).map_err(|e| fail(format!("{}: {e}", path.display())))?;
     let id = expected_id.unwrap_or(&raw.id).to_owned();
-    let (def, source) = resolve_package(contract::package(&raw), sources).map_err(|e| match e {
-        Unresolved::Missing(m) => Unresolved::Missing(m),
-        Unresolved::Fail(e) => fail(format!("{id}: {e}")),
-    })?;
-    let loaded = contract::validate(raw, &def, &id).map_err(|e| fail(format!("{}: {e}", path.display())))?;
-    if has_trace(&loaded) {
-        let root = match cases {
-            Some(root) => root.to_path_buf(),
-            None => crate::cases_dir(None).map_err(Unresolved::Fail)?,
-        };
-        check_trace_links(&loaded, &root).map_err(|e| fail(format!("{id}: {e}")))?;
+    let packages = contract::packages(&raw).map_err(|e| fail(format!("{}: {e}", path.display())))?;
+    let mut runs = Vec::new();
+    let mut used = Vec::new();
+    for package in packages {
+        let (def, source) = resolve_package(package, sources).map_err(|e| match e {
+            Unresolved::Missing(m) => Unresolved::Missing(m),
+            Unresolved::Fail(e) => fail(format!("{id}: {e}")),
+        })?;
+        let loaded = contract::validate(&raw, &def, &id, package)
+            .map_err(|e| fail(format!("{}: {e}", path.display())))?;
+        if has_trace(&loaded) {
+            let root = match cases {
+                Some(root) => root.to_path_buf(),
+                None => crate::cases_dir(None).map_err(Unresolved::Fail)?,
+            };
+            check_trace_links(&loaded, &root).map_err(|e| fail(format!("{id}: {e}")))?;
+        }
+        runs.push((package, contract::run(&loaded, &def)));
+        used.push(source);
     }
-    let verdict = contract::run(&loaded, def);
-    Ok(Ran { id, verdict, source })
+    let verdict = contract::combine(&runs);
+    Ok(Ran {
+        id,
+        verdict,
+        source: used.join(", "),
+    })
 }
 
 /// Whether any assertion names a trace case.
@@ -559,11 +571,13 @@ kid_count = 1
                 raw.id, id,
                 "a contract's id must equal its path below crates/tools/feel"
             );
-            let package = contract::package(&raw);
-            assert!(
-                contract::fixtures::from_package(package).is_none(),
-                "{id}: a port contract names a games-repo package id, not {package:?}"
-            );
+            let packages = contract::packages(&raw).unwrap_or_else(|e| panic!("{id}: {e}"));
+            for package in packages {
+                assert!(
+                    contract::fixtures::from_package(package).is_none(),
+                    "{id}: a port contract names a games-repo package id, not {package:?}"
+                );
+            }
             ids.insert(id);
         }
         let text = std::fs::read_to_string(tools.join("feel-baseline.txt")).unwrap();
@@ -680,12 +694,14 @@ tick = 0
 trace = "g/t"
 kid.x = { exact = 96.0 }
 "#;
-        let contract = contract::validate(contract::parse(text).unwrap(), &def, "self/trace").unwrap();
+        let raw = contract::parse(text).unwrap();
+        let contract = contract::validate(&raw, &def, "self/trace", "fixture:jump").unwrap();
         assert_eq!(check_trace_links(&contract, &cases), Ok(()));
 
         // A metric the trace does not require is a load error, never a silent pass.
         let wrong = text.replace("kid.x = { exact = 96.0 }", "kid.y = { exact = 567.0 }");
-        let wrong = contract::validate(contract::parse(&wrong).unwrap(), &def, "self/trace").unwrap();
+        let wrong = contract::parse(&wrong).unwrap();
+        let wrong = contract::validate(&wrong, &def, "self/trace", "fixture:jump").unwrap();
         let err = check_trace_links(&wrong, &cases).unwrap_err();
         assert!(err.contains("kid.y"), "{err}");
 

@@ -104,7 +104,7 @@ pub struct Contract {
     pub id: String,
     /// F1, F2 or F3.
     pub impact: Impact,
-    /// A package id, or `fixture:<name>`.
+    /// The one package this validated contract runs against (`package` or one of `packages`).
     pub package: String,
     /// Provenance only in harness v1 (the run uses the package's own ruleset).
     pub ruleset: Option<String>,
@@ -114,6 +114,9 @@ pub struct Contract {
     pub start: Start,
     /// A starting checkpoint (`save = { ... }`); the run starts from it (`StartPoint::FromSave`).
     pub save: Option<SaveSlot>,
+    /// The start must fail with an error containing this text (a stale point, a bad save); the
+    /// contract then asserts nothing (#1592).
+    pub start_error: Option<String>,
     /// Play original or stripped (ranked).
     pub play_mode: PlayMode,
     /// The RNG seed.
@@ -448,15 +451,20 @@ impl std::fmt::Display for Mismatch {
 
 /// The raw TOML shape. Parsing is separate from validation so the caller names the file and the
 /// sim test can parse without a `GameDef`.
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RawContract {
     /// Must equal the path below the contracts root, without `.toml`.
     pub id: String,
     /// `F1`, `F2` or `F3`.
     pub impact: String,
-    /// A package id, or `fixture:<name>`.
-    pub package: String,
+    /// One package id, or `fixture:<name>`; the shorthand for a one-element `packages`.
+    #[serde(default)]
+    pub package: Option<String>,
+    /// One or more packages, each a package id or `fixture:<name>`. Every assertion runs against
+    /// each, so a literal metric asserts the same value across the variants (#1592).
+    #[serde(default)]
+    pub packages: Vec<String>,
     /// Optional provenance.
     #[serde(default)]
     pub ruleset: Option<String>,
@@ -468,6 +476,9 @@ pub struct RawContract {
     /// A starting checkpoint; the run starts from it (`StartPoint::FromSave`).
     #[serde(default)]
     pub save: Option<RawSave>,
+    /// The start must fail with an error containing this text instead of running (#1592).
+    #[serde(default)]
+    pub start_error: Option<String>,
     /// `original` (default) or `stripped`.
     #[serde(default)]
     pub play_mode: Option<String>,
@@ -491,7 +502,7 @@ pub struct RawContract {
 }
 
 /// The raw `start` table.
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RawStart {
     /// `{ new_game = true }`.
@@ -506,7 +517,7 @@ pub struct RawStart {
 }
 
 /// The raw `save` table: a checkpoint the run starts from.
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RawSave {
     /// The saved room; defaults to the start room.
@@ -516,6 +527,10 @@ pub struct RawSave {
     pub x: f64,
     /// The saved y.
     pub y: f64,
+    /// The save-object key (`at:<room>/<kind>@<xbits>,<ybits>` or `name:<name>`). A key the
+    /// package no longer has is refused; a contract can assert that refusal with `start_error`.
+    #[serde(default)]
+    pub point: Option<String>,
     /// Saved difficulty (default: the start difficulty).
     #[serde(default)]
     pub difficulty: Option<u8>,
@@ -543,7 +558,7 @@ pub struct RawSave {
 }
 
 /// One raw `[[window]]`.
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RawWindow {
     /// `[first, last]`.
@@ -583,20 +598,43 @@ pub fn parse(text: &str) -> Result<RawContract, String> {
     toml::from_str(text).map_err(|e| e.to_string())
 }
 
-/// The raw package a contract names, so the caller can resolve its `GameDef`.
-pub fn package(raw: &RawContract) -> &str {
-    &raw.package
+/// The packages a contract names: `package = "x"` or `packages = ["x", "y"]`, never both.
+pub fn packages(raw: &RawContract) -> Result<Vec<&str>, String> {
+    match (&raw.package, raw.packages.as_slice()) {
+        (Some(one), []) => Ok(vec![one.as_str()]),
+        (None, many) if !many.is_empty() => Ok(many.iter().map(String::as_str).collect()),
+        (Some(_), _) => {
+            Err("name one package or a list of packages, not both (`package` and `packages`)".into())
+        }
+        (None, _) => Err("name a package: `package = \"<id>\"` or `packages = [\"<id>\", ...]`".into()),
+    }
 }
 
-/// Validates a raw contract against its game definition. Every unresolved name is reported, so a
-/// contract can be fixed in one pass.
-pub fn validate(raw: RawContract, def: &GameDef, expected_id: &str) -> Result<Contract, String> {
+/// Validates a raw contract against one package's game definition. `package` is the package this
+/// contract runs against; a contract may name several, and the caller validates each in turn.
+/// Every unresolved name is reported, so a contract can be fixed in one pass.
+pub fn validate(
+    raw: &RawContract,
+    def: &GameDef,
+    expected_id: &str,
+    package: &str,
+) -> Result<Contract, String> {
     let mut errors: Vec<String> = Vec::new();
     if raw.id != expected_id {
         errors.push(format!(
             "id {:?} does not match the path below the contracts root ({expected_id:?})",
             raw.id
         ));
+    }
+    if raw
+        .start_error
+        .as_ref()
+        .is_some_and(|text| text.trim().is_empty())
+    {
+        errors.push("start_error must name the text the refusal contains".into());
+    }
+    if raw.start_error.is_some() && (!raw.asserts.is_empty() || !raw.windows.is_empty()) {
+        errors.push("start_error asserts the start only; remove [[assert]] and [[window]]".into());
     }
     let impact = match Impact::parse(&raw.impact) {
         Some(i) => i,
@@ -650,17 +688,18 @@ pub fn validate(raw: RawContract, def: &GameDef, expected_id: &str) -> Result<Co
         return Err(errors.join("\n  "));
     }
     Ok(Contract {
-        id: raw.id,
+        id: raw.id.clone(),
         impact,
-        package: raw.package,
-        ruleset: raw.ruleset,
-        profile: raw.profile,
+        package: package.to_owned(),
+        ruleset: raw.ruleset.clone(),
+        profile: raw.profile.clone(),
         start,
         save,
+        start_error: raw.start_error.clone(),
         play_mode,
         seed,
-        mods: raw.mods,
-        evidence: raw.evidence,
+        mods: raw.mods.clone(),
+        evidence: raw.evidence.clone(),
         inputs: inputs.expect("checked above"),
         asserts,
         windows,
@@ -702,7 +741,7 @@ fn validate_save(raw: &RawSave, start: &Start, def: &GameDef, errors: &mut Vec<S
         x: Real::new(raw.x),
         y: Real::new(raw.y),
         precision: Default::default(),
-        point: None,
+        point: raw.point.clone(),
         flipped: raw.flipped.unwrap_or(false),
         facing: raw.facing.unwrap_or(1),
         difficulty: raw.difficulty.unwrap_or(difficulty),
@@ -1412,13 +1451,70 @@ fn start_error(e: impl std::fmt::Display) -> Verdict {
     }])
 }
 
+/// The verdict for a contract that either expects a refused start (`start_error`) or a runnable
+/// one. A matching refusal is OK (or OPEN for an F1 contract without evidence).
+fn start_outcome(contract: &Contract, result: Result<(), String>) -> Verdict {
+    let Some(expected) = contract.start_error.as_deref() else {
+        return start_error(result.expect_err("a runnable start has no error"));
+    };
+    let mismatch = |got: String| {
+        Verdict::Fail(vec![Mismatch {
+            tick: 0,
+            metric: "start_error".into(),
+            expected: format!("an error containing {expected:?}"),
+            got,
+            context: Vec::new(),
+        }])
+    };
+    match result {
+        Err(got) if got.contains(expected) => {
+            if contract.impact == Impact::F1 && contract.evidence.is_empty() {
+                Verdict::Open
+            } else {
+                Verdict::Ok
+            }
+        }
+        Err(got) => mismatch(got),
+        Ok(()) => mismatch("the sim started".into()),
+    }
+}
+
+/// Combines one verdict per package. A mismatch names its package when the contract runs more
+/// than one, so a variant failure is attributable.
+pub fn combine(runs: &[(&str, Verdict)]) -> Verdict {
+    let mut mismatches = Vec::new();
+    let mut open = false;
+    for (package, verdict) in runs {
+        match verdict {
+            Verdict::Ok => {}
+            Verdict::Open => open = true,
+            Verdict::Fail(misses) => {
+                for miss in misses {
+                    let mut miss = miss.clone();
+                    if runs.len() > 1 {
+                        miss.metric = format!("{package}:{}", miss.metric);
+                    }
+                    mismatches.push(miss);
+                }
+            }
+        }
+    }
+    if !mismatches.is_empty() {
+        Verdict::Fail(mismatches)
+    } else if open {
+        Verdict::Open
+    } else {
+        Verdict::Ok
+    }
+}
+
 /// Runs a validated contract against a game definition. The fixture or package has already been
 /// resolved by the caller; this function reads the sim and changes no sim state.
-pub fn run(contract: &Contract, def: GameDef) -> Verdict {
+pub fn run(contract: &Contract, def: &GameDef) -> Verdict {
     let start = match &contract.save {
-        Some(save) => match Checkpoint::from_slot(&def, save) {
+        Some(save) => match Checkpoint::from_slot(def, save) {
             Ok(checkpoint) => StartPoint::FromSave(checkpoint),
-            Err(e) => return start_error(e),
+            Err(e) => return start_outcome(contract, Err(e.to_string())),
         },
         None => match contract.start {
             Start::NewGame { difficulty } => StartPoint::NewGame { difficulty },
@@ -1432,7 +1528,11 @@ pub fn run(contract: &Contract, def: GameDef) -> Verdict {
         mode: contract.play_mode,
         map: None,
     };
-    let mut sim = match Sim::new(Arc::new(def), options) {
+    let started = Sim::new(Arc::new(def.clone()), options);
+    if contract.start_error.is_some() {
+        return start_outcome(contract, started.map(|_| ()).map_err(|e| e.to_string()));
+    }
+    let mut sim = match started {
         Ok(sim) => sim,
         Err(e) => return start_error(e),
     };
@@ -1876,7 +1976,66 @@ mod tests {
 
     fn contract(text: &str, id: &str) -> Result<Contract, String> {
         let def = fixtures::fixture("jump").unwrap();
-        validate(parse(text).unwrap(), &def, id)
+        validate(&parse(text).unwrap(), &def, id, "fixture:jump")
+    }
+
+    #[test]
+    fn a_contract_names_one_package_or_a_list() {
+        let body = r#"
+id = "self/packages"
+impact = "F2"
+%s
+start = { room = "room_0" }
+inputs = "frame 0: end"
+"#;
+        let one = body.replace("%s", r#"package = "fixture:jump""#);
+        assert_eq!(packages(&parse(&one).unwrap()).unwrap(), vec!["fixture:jump"]);
+        let many = body.replace("%s", r#"packages = ["fixture:jump", "fixture:retry"]"#);
+        assert_eq!(
+            packages(&parse(&many).unwrap()).unwrap(),
+            vec!["fixture:jump", "fixture:retry"]
+        );
+        let both = body.replace("%s", "package = \"fixture:jump\"\npackages = [\"fixture:retry\"]");
+        assert!(packages(&parse(&both).unwrap()).unwrap_err().contains("not both"));
+        let neither = body.replace("%s", "");
+        assert!(packages(&parse(&neither).unwrap()).is_err());
+    }
+
+    #[test]
+    fn start_error_asserts_the_start_only() {
+        let text = r#"
+id = "self/stale"
+impact = "F2"
+package = "fixture:retry"
+start = { room = "room_0" }
+save = { room = "room_0", x = 96.0, y = 567.0, point = "at:room_0/save@0,0" }
+start_error = "is not in this version of the game"
+inputs = "frame 0: end"
+[[assert]]
+tick = 0
+kid_count = 1
+"#;
+        let err = contract(text, "self/stale").unwrap_err();
+        assert!(err.contains("start_error asserts the start only"), "{err}");
+    }
+
+    #[test]
+    fn a_variant_mismatch_names_the_package() {
+        let mismatch = Mismatch {
+            tick: 1,
+            metric: "save.point".into(),
+            expected: "at:room_0/save@1,2".into(),
+            got: "at:room_0/save@3,4".into(),
+            context: Vec::new(),
+        };
+        match combine(&[("a", Verdict::Ok), ("b", Verdict::Fail(vec![mismatch.clone()]))]) {
+            Verdict::Fail(misses) => assert_eq!(misses[0].metric, "b:save.point"),
+            other => panic!("{other:?}"),
+        }
+        match combine(&[("a", Verdict::Fail(vec![mismatch]))]) {
+            Verdict::Fail(misses) => assert_eq!(misses[0].metric, "save.point"),
+            other => panic!("{other:?}"),
+        }
     }
 
     #[test]

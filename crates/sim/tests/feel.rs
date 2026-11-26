@@ -22,17 +22,21 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 // do not edit `feel/contracts.rs` by hand.
 include!("feel/contracts.rs");
 
-/// Parses, validates and runs one contract against its public fixture.
+/// Parses, validates and runs one contract against each of its public fixtures.
 fn run_contract(id: &str, text: &str) -> Verdict {
     let raw = contract::parse(text).unwrap_or_else(|e| panic!("{id}: {e}"));
-    let package = contract::package(&raw);
-    let def = match contract::fixtures::from_package(package) {
-        Some(Ok(def)) => def,
-        Some(Err(e)) => panic!("{id}: {e}"),
-        None => panic!("{id}: a public contract must name `fixture:<name>` (got package {package:?})"),
-    };
-    let loaded = contract::validate(raw, &def, id).unwrap_or_else(|e| panic!("{id}: {e}"));
-    contract::run(&loaded, def)
+    let packages = contract::packages(&raw).unwrap_or_else(|e| panic!("{id}: {e}"));
+    let mut runs = Vec::new();
+    for package in packages {
+        let def = match contract::fixtures::from_package(package) {
+            Some(Ok(def)) => def,
+            Some(Err(e)) => panic!("{id}: {e}"),
+            None => panic!("{id}: a public contract must name `fixture:<name>` (got package {package:?})"),
+        };
+        let loaded = contract::validate(&raw, &def, id, package).unwrap_or_else(|e| panic!("{id}: {e}"));
+        runs.push((package, contract::run(&loaded, &def)));
+    }
+    contract::combine(&runs)
 }
 
 /// Every public contract passes or is OPEN; a failure names the mismatch and five ticks of
@@ -168,6 +172,66 @@ fn self_missing_package_is_an_error() {
     assert!(err.contains("no public fixture"), "{err}");
 }
 
+/// #1592: the same assertion runs across a package variant; a literal metric must hold in both.
+#[test]
+fn self_variant_runs_every_package() {
+    let text = r#"
+id = "self/variant"
+impact = "F2"
+packages = ["fixture:retry", "fixture:retry_reordered"]
+start = { room = "room_0" }
+inputs = "frame 0: end"
+[[assert]]
+tick = 1
+save.point = "at:room_0/save@4058000000000000,4081b80000000000"
+"#;
+    assert_eq!(run_contract("self/variant", text), Verdict::Ok);
+}
+
+/// A variant that changes a metric fails with the package named in the mismatch.
+#[test]
+fn self_variant_mismatch_names_the_package() {
+    let text = r#"
+id = "self/variant_mismatch"
+impact = "F2"
+packages = ["fixture:retry", "fixture:retry_moved_save"]
+start = { room = "room_0" }
+inputs = "frame 0: end"
+[[assert]]
+tick = 1
+save.point = "at:room_0/save@4058000000000000,4081b80000000000"
+"#;
+    let Verdict::Fail(mismatches) = run_contract("self/variant_mismatch", text) else {
+        panic!("the moved variant must fail");
+    };
+    assert!(
+        mismatches
+            .iter()
+            .any(|m| m.metric.starts_with("fixture:retry_moved_save:")),
+        "{mismatches:?}"
+    );
+}
+
+/// #1592: a stale save point is an assertable start, not a "startable run" failure.
+#[test]
+fn self_stale_point_is_refused() {
+    let text = r#"
+id = "self/stale"
+impact = "F2"
+package = "fixture:retry_moved_save"
+start = { room = "room_0" }
+save = { room = "room_0", x = 96.0, y = 567.0, point = "at:room_0/save@4058000000000000,4081b80000000000" }
+start_error = "is not in this version of the game"
+inputs = "frame 0: end"
+"#;
+    assert_eq!(run_contract("self/stale", text), Verdict::Ok);
+    let wrong = text.replace("is not in this version", "some other error");
+    let Verdict::Fail(mismatches) = run_contract("self/stale", &wrong) else {
+        panic!("a wrong expected error must fail");
+    };
+    assert_eq!(mismatches[0].metric, "start_error");
+}
+
 /// A tick past the input script is a load error, not a silent pass.
 #[test]
 fn a_tick_past_the_inputs_is_a_load_error() {
@@ -183,6 +247,6 @@ kid_count = 1
 "#;
     let raw = contract::parse(text).unwrap();
     let def = contract::fixtures::fixture("jump").unwrap();
-    let err = contract::validate(raw, &def, "self/late").unwrap_err();
+    let err = contract::validate(&raw, &def, "self/late", "fixture:jump").unwrap_err();
     assert!(err.contains("past the inputs' last tick"), "{err}");
 }
