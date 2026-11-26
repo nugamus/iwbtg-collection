@@ -1,4 +1,4 @@
-//! Reading the `main-latest` release over HTTPS (#1606): the GitHub API with no token (the
+//! Reading the `latest` release over HTTPS (#1606): the GitHub API with no token (the
 //! repository is public), the build manifest, then the zip and its checksum, all in a worker
 //! thread so a slow download never stalls a frame.
 //!
@@ -19,7 +19,7 @@ use super::{BuildInfo, Event};
 
 const API: &str = "https://api.github.com";
 const REPO: &str = "nugamus/iwbtg-collection";
-const TAG: &str = "main-latest";
+const TAG: &str = "latest";
 /// GitHub's API rejects a request without a user agent (403).
 const USER_AGENT: &str = "iwbtg-collection-client";
 /// build.json and sha256.txt are a few hundred bytes; this is generous, not a policy.
@@ -120,7 +120,7 @@ fn check(
             "That release's build.json names no commit, so the client cannot tell what it is.",
         ));
     }
-    // Main builds follow the commit; releases follow the version, or every main build would
+    // The latest build follows the commit; releases follow the version, or every main build would
     // "update" backwards to the last tagged release it is ahead of.
     let newer = match channel {
         UpdateChannel::MainBuilds => !same_commit(&build.commit, running),

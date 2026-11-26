@@ -196,7 +196,7 @@ impl Icon {
                 "M 6 15.5V10a5 5 0 0 1 10 0v5.5l1.5 1.5h-13zM 9.2 19a2 2 0 0 0 3.6 0",
                 1.8,
             )],
-            Icon::Update => vec![Stroke("M18 11a7 7 0 1 1-2-4.9M18 3v4h-4", 1.8)],
+            Icon::Update => vec![Stroke("M 18 11a7 7 0 1 1-2-4.9M 18 3v4h-4", 1.8)],
             Icon::Gear => vec![
                 Stroke("M 11 8a3 3 0 1 0 0 6a3 3 0 1 0 0-6", 1.8),
                 Stroke(

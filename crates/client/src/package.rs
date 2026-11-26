@@ -46,9 +46,9 @@ pub struct SpriteImage {
 /// The package command-line arguments.
 #[derive(clap::Args, Debug, Default)]
 pub struct PackageArgs {
-    /// Package folder (a folder with a game.toml) or `.iwbz` file. Not needed with `--select`,
+    /// Package folder (a folder with a game.toml) or `.iwbz` file. Omit it to open the main menu
+    /// on the folder beside the client; `--select` picks another folder. Not used with
     /// `--ui-gallery`, `--card-preview`, `--controls`, `--bind` or `--show-bindings`.
-    #[arg(required_unless_present_any = ["select", "ui_gallery", "card_preview", "controls", "bind", "show_bindings"])]
     pub package: Option<std::path::PathBuf>,
     /// Load converter output: unmapped script kinds become inert.
     #[arg(long)]
@@ -63,8 +63,9 @@ impl crate::registration::ClientModule for Registration {
     type Args = PackageArgs;
 
     fn standalone(_args: &PackageArgs, startup: &crate::registration::Startup) -> Option<Result<(), String>> {
-        // Clap requires the package unless `--select`, `--ui-gallery`, `--bind` or
-        // `--show-bindings` is given; with only the bindings flags there is nothing to play.
+        // Without a package, a `--select` library, or a standalone mode there is nothing to
+        // play. A bare launch fills in the folder beside the client in `main.rs` (#1606), so
+        // this only catches a launch where that lookup failed.
         (startup.package.is_none() && startup.library.is_none()).then_some(Ok(()))
     }
 }

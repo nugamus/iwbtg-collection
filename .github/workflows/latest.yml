@@ -1,6 +1,6 @@
-name: Main latest
-# Every green CI run on `main` publishes the Windows client as one rolling prerelease tagged
-# `main-latest` (#1606). The client checks that release and updates itself, so a tester never
+name: Latest build
+# Every green CI run on `main` publishes the Windows client as one rolling release tagged
+# `latest` (#1606). The client checks that release and updates itself, so a tester never
 # compiles. Triggered by CI's success rather than a second `push` trigger so the published exe is
 # exactly the tree CI passed (the same workflow_run head SHA).
 #
@@ -19,7 +19,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: main-latest
+  group: latest-build
   cancel-in-progress: true
 jobs:
   build:
@@ -45,7 +45,7 @@ jobs:
       - name: Stage the release folder
         shell: bash
         env:
-          ARTIFACT: main-latest-client-windows-x86_64
+          ARTIFACT: IWBTG-Collection-windows-x64
         run: |
           set -euo pipefail
           stage="dist/$ARTIFACT"
@@ -55,17 +55,19 @@ jobs:
           cp THIRD_PARTY_LICENSES NOTICE LICENSE-MIT "$stage/"
           cp LICENSES/*.txt "$stage/LICENSES/"
           cat > "$stage/README.txt" <<'TXT'
-          IWBTG Collection client (main-latest)
-          ====================================
+          IWBTG Collection
+          ================
 
-          Start on a folder that holds your packages to reach the main menu, where the client
-          checks for updates:
+          Double-click iwbtg-client.exe. It opens the main menu on this folder, where the
+          client checks for updates.
 
-            iwbtg-client --select <folder>
+          To use another folder of packages:
+
+            iwbtg-client.exe --select <folder>
 
           Or play one package directly (no update checks run in a run):
 
-            iwbtg-client showcase.pkg
+            iwbtg-client.exe showcase.pkg
 
           This is a development build of main, replaced after every green CI run. The client
           updates its own .exe from this release; saves, settings, stats and packages are never
@@ -75,7 +77,7 @@ jobs:
       - name: Pack the zip and hash it
         shell: bash
         env:
-          ARTIFACT: main-latest-client-windows-x86_64
+          ARTIFACT: IWBTG-Collection-windows-x64
         run: |
           set -euo pipefail
           cd dist
@@ -92,9 +94,9 @@ jobs:
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: main-latest-windows
+          name: IWBTG-Collection-windows
           path: |
-            dist/main-latest-client-windows-x86_64.zip
+            dist/IWBTG-Collection-windows-x64.zip
             dist/sha256.txt
           retention-days: 7
 
@@ -111,7 +113,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
-          name: main-latest-windows
+          name: IWBTG-Collection-windows
           path: dist
       - name: Collect what changed since the previous build
         env:
@@ -123,8 +125,8 @@ jobs:
           set -euo pipefail
           mkdir -p prev
           base=""
-          if gh release view main-latest >/dev/null 2>&1; then
-            gh release download main-latest --pattern build.json --dir prev --clobber || true
+          if gh release view latest >/dev/null 2>&1; then
+            gh release download latest --pattern build.json --dir prev --clobber || true
             if [ -f prev/build.json ]; then
               base=$(python - <<'PY'
           import json
@@ -175,7 +177,7 @@ jobs:
               "prs": titles,
           }
           pathlib.Path("dist/build.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-          lines = [f"### main-latest {head[:7]}", ""]
+          lines = [f"### latest {head[:7]}", ""]
           lines += [f"- {title}" for title in titles] or ["- No merged PR titles found since the previous build."]
           lines += ["", f"Built from `{head}`. The client on the main menu updates itself to this build."]
           pathlib.Path("notes.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -185,20 +187,20 @@ jobs:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
-          git tag -f main-latest "$HEAD_SHA"
-          git push --force origin refs/tags/main-latest
-      - name: Publish the rolling prerelease
+          git tag -f latest "$HEAD_SHA"
+          git push --force origin refs/tags/latest
+      - name: Publish the rolling release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
-          if gh release view main-latest >/dev/null 2>&1; then
-            gh release edit main-latest --prerelease --title "Main builds" --notes-file notes.md
+          if gh release view latest >/dev/null 2>&1; then
+            gh release edit latest --title "IWBTG Collection — Latest" --notes-file notes.md
           else
             # The tag was pushed to HEAD in the step above; the release follows it.
-            gh release create main-latest --prerelease --title "Main builds" --notes-file notes.md
+            gh release create latest --title "IWBTG Collection — Latest" --notes-file notes.md
           fi
-          gh release upload main-latest \
-            dist/main-latest-client-windows-x86_64.zip dist/sha256.txt dist/build.json --clobber
+          gh release upload latest \
+            dist/IWBTG-Collection-windows-x64.zip dist/sha256.txt dist/build.json --clobber

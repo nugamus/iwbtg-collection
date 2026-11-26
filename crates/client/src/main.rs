@@ -72,6 +72,22 @@ client_modules! {
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> ExitCode {
     let mut args = Args::parse();
+    // A double-click has no package and no mode: open the main menu on the folder beside the
+    // client, the way a desktop app starts, instead of printing a missing-argument error to a
+    // console nobody sees (#1606). Explicit `--select` and standalone modes keep their meaning.
+    let standalone = args.ui.ui_gallery
+        || args.card.card_preview.is_some()
+        || args.controls.controls.is_some()
+        || !args.bindings.bind.is_empty()
+        || args.bindings.show_bindings;
+    if args.package.package.is_none()
+        && args.shell.select.is_none()
+        && !standalone
+        && let Ok(exe) = std::env::current_exe()
+        && let Some(dir) = exe.parent()
+    {
+        args.shell.select = Some(dir.to_path_buf());
+    }
     // The settings file gives the defaults the flags override (settings.rs). A `--screenshot`
     // check neither reads nor writes it, so it looks the same on every machine.
     let isolated = args.view.screenshot.is_some();

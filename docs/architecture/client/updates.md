@@ -1,22 +1,22 @@
 # Updates: the client updates itself from CI
 
-The Windows client checks the rolling `main-latest` prerelease and replaces its own `.exe`, so a
+The Windows client checks the rolling `latest` release and replaces its own `.exe`, so a
 tester runs every green build of `main` without compiling (#1606). The module is `updater/`; the
-workflow is `.github/workflows/main-latest.yml`.
+workflow is `.github/workflows/latest.yml`.
 
 ## Publishing
 
-`main-latest.yml` runs on `workflow_run` when CI completes successfully for a push to `main`, and
+`latest.yml` runs on `workflow_run` when CI completes successfully for a push to `main`, and
 checks out the CI run's head SHA, so the published exe is exactly the tree CI passed. Its
-concurrency group is `main-latest` with `cancel-in-progress`, so only the newest commit builds; an
+concurrency group is `latest-build` with `cancel-in-progress`, so only the newest commit builds; an
 older run is cancelled rather than allowed to publish after a newer one.
 
 The build job reuses `nightly.yml`'s Windows packaging (the client, `showcase.pkg`, the licence
 files) and uploads the zip and `sha256.txt`. The publish job, holding only `contents: write` and
-the default `GITHUB_TOKEN`, moves the `main-latest` tag to the built commit and replaces three
-assets on the prerelease:
+the default `GITHUB_TOKEN`, moves the `latest` tag to the built commit and replaces three
+assets on the release:
 
-- `main-latest-client-windows-x86_64.zip`, the packaged client;
+- `IWBTG-Collection-windows-x64.zip`, the packaged client;
 - `sha256.txt`, `<hash>  <zip name>` for that zip;
 - `build.json`, `{commit, date, version, prs}` where `prs` lists the titles of the PRs merged
   since the previous build (the compare API from the previous `build.json`'s commit, or the last
@@ -33,7 +33,7 @@ thread reads the release through the public GitHub API with **no token** (the re
 public; only a `User-Agent` is sent). The channel comes from `[updates] channel` in the settings
 file:
 
-- `main` (default): `/releases/tags/main-latest`;
+- `main` (default): `/releases/tags/latest`;
 - `releases`: `/releases/latest`. A release without `sha256.txt` and a Windows zip is not
   installable, and the Settings row says so; tagged releases do not publish checksums yet.
 

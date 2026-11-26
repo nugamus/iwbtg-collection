@@ -265,7 +265,7 @@ fn spawn_panel(commands: &mut Commands, updater: &Updater) {
         body.spawn(text("Settings · Updates", Type::barlow(26.0, 700), tokens::INK));
         body.spawn((
             text(
-                "Main builds follow every green CI build of main. Releases follow tagged releases.",
+                "Latest build follow every green CI build of main. Releases follow tagged releases.",
                 Type::barlow(15.0, 400),
                 tokens::SOFT,
             ),

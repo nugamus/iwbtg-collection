@@ -1,4 +1,4 @@
-//! The client updates itself from the rolling `main-latest` CI build (#1606;
+//! The client updates itself from the rolling `latest` CI build (#1606;
 //! docs/architecture/client/updates.md).
 //!
 //! On start, and every 30 minutes while on a menu, a worker thread reads the release with no
@@ -31,7 +31,7 @@ use crate::ui::notice;
 
 /// How often a menu checks for a newer build.
 pub const CHECK_INTERVAL: f32 = 30.0 * 60.0;
-/// The commit CI compiled this build from (`option_env!("IWBTG_GIT_SHA")`, set by the main-latest
+/// The commit CI compiled this build from (`option_env!("IWBTG_GIT_SHA")`, set by the latest
 /// and release workflows). A build made on a developer's machine has none and never updates.
 pub const BUILD_COMMIT: Option<&str> = option_env!("IWBTG_GIT_SHA");
 /// When CI built it, ISO 8601 (`option_env!("IWBTG_BUILD_DATE")`).

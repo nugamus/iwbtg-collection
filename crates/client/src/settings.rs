@@ -110,7 +110,7 @@ pub struct Settings {
 /// Which release the client updates itself from (`[updates] channel`, #1606).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum UpdateChannel {
-    /// Every green build of `main`, published as the rolling `main-latest` prerelease. The default
+    /// Every green build of `main`, published as the rolling `latest` release. The default
     /// while there are no releases the client can install.
     #[default]
     MainBuilds,
@@ -126,7 +126,7 @@ impl UpdateChannel {
     /// The label the Settings row shows and the file writes.
     pub fn label(self) -> &'static str {
         match self {
-            UpdateChannel::MainBuilds => "Main builds",
+            UpdateChannel::MainBuilds => "Latest build",
             UpdateChannel::Releases => "Releases",
         }
     }
