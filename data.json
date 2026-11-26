@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-26T11:49:56Z",
+ "generated_at": "2026-11-26T11:50:29Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -241,13 +241,13 @@
    "title": "10 · Release",
    "name": "Release",
    "state": "open",
-   "open": 20,
-   "closed": 11,
+   "open": 19,
+   "closed": 12,
    "total": 31,
-   "pct_closed": 35.5,
-   "size_points": 43,
+   "pct_closed": 38.7,
+   "size_points": 42,
    "sizes": {
-    "size:S": 11,
+    "size:S": 10,
     "size:M": 8,
     "size:L": 1,
     "unknown": 0
@@ -263,13 +263,13 @@
  "activity": {
   "totals": {
    "issues": 941,
-   "open": 282,
-   "closed": 659,
-   "pct_closed": 70.0
+   "open": 281,
+   "closed": 660,
+   "pct_closed": 70.1
   },
-  "open_prs": 5,
+  "open_prs": 4,
   "process": {
-   "agent-ready": 129,
+   "agent-ready": 128,
    "needs-user": 34,
    "triage": 50,
    "in-progress": 14,
@@ -299,7 +299,7 @@
    },
    {
     "area": "area:infra",
-    "count": 23
+    "count": 22
    },
    {
     "area": "area:design",
@@ -323,6 +323,21 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 1570,
+    "title": "Progress workflow: Pages build request fails with an empty response, leaving the deployed dashboard stale",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1570",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:infra"
+    ],
+    "phase": "10 · Release",
+    "updated_at": "2026-11-26T11:50:16Z",
+    "closed_at": "2026-11-26T11:50:16Z",
+    "created_at": "2026-11-25T16:02:53Z"
+   },
    {
     "number": 1569,
     "title": "Dashboard: Script API block counts a Registered census group as not registered",
@@ -428,21 +443,6 @@
     "updated_at": "2026-11-25T15:28:27Z",
     "closed_at": "2026-11-25T15:28:27Z",
     "created_at": "2026-11-02T12:01:14Z"
-   },
-   {
-    "number": 1537,
-    "title": "Tools: the #1479 round-trip test's tools->server dev edge makes every server PR run tools tests and determinism",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1537",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:infra"
-    ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-25T13:18:56Z",
-    "closed_at": "2026-11-25T13:18:56Z",
-    "created_at": "2026-11-25T10:10:32Z"
    }
   ],
   "in_progress": [
@@ -732,7 +732,7 @@
     "created_at": "2026-11-02T11:31:41Z"
    }
   ],
-  "closed_7d": 250,
+  "closed_7d": 251,
   "opened_7d": 284,
   "burnup": [
    {
@@ -753,7 +753,7 @@
    {
     "week": "2026-11-30",
     "created": 941,
-    "closed": 659
+    "closed": 660
    }
   ]
  },
