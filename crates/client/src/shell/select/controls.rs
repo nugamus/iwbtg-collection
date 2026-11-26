@@ -24,8 +24,8 @@ use crate::ui::widgets::{
 };
 
 /// The controls' top and right edge, and their width (`Main.dc.html`: x 1040 to 1880 at 1920
-/// wide, so 40 px from the right).
-const TOP: f32 = 24.0;
+/// wide, so 40 px from the right; m5 A3 moves them down under the toolbar).
+const TOP: f32 = 24.0 + super::UNDER_TOOLBAR;
 const RIGHT: f32 = 40.0;
 const WIDTH: f32 = 840.0;
 /// A dropdown opens this far below its control's top (34 px control, 6 px gap).

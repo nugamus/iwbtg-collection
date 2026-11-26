@@ -60,6 +60,7 @@ fn app_on(skip_loading: bool, first: Option<&str>) -> App {
             ShellPlugin {
                 library,
                 trace_mode: false,
+                menu: false,
             },
             crate::bindings::BindingsPlugin(crate::bindings::Bindings::default()),
             crate::art::ArtPlugin,

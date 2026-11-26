@@ -424,6 +424,22 @@ pub fn art_image(files: Option<&PackageFiles>) -> Image {
     backdrop::art_image(&rgba, sw, sh)
 }
 
+/// The game's whole key art for the backdrop of a screen outside a run (the main menu's: real
+/// game art behind the menu, #1608); `None` when the game has none of its own.
+pub fn backdrop_art(files: &PackageFiles) -> Option<Image> {
+    let art = files
+        .get("game.toml")
+        .and_then(|b| std::str::from_utf8(b).ok())
+        .and_then(|t| Manifest::parse(t).ok())
+        .map_or(key_art::KeyArt::None, |m| key_art::resolve(files, &m, None));
+    if matches!(art, key_art::KeyArt::None | key_art::KeyArt::Colour(_)) {
+        return None;
+    }
+    Some(backdrop::key_art_image(files, &art, ROOM, |bytes| {
+        decode_png(bytes).map(|s| (s.rgba, s.size.0, s.size.1))
+    }))
+}
+
 /// The panel's art box (`Main.dc.html`: the art is 1060 x 72, 30 px past the panel's left edge).
 const ART_BOX: (f32, f32) = (1060.0, 72.0);
 /// The widest strip kept: the art box at about 1.2 times 1080p. A 20-game list keeps 20 strips
@@ -464,7 +480,7 @@ pub fn strip(rgba: &[u8], w: u32, h: u32) -> (Vec<u8>, u32, u32) {
     (out, ow, oh)
 }
 
-/// The first frame of the game's `cherry` sprite, else our own fruit (the pause menu's).
+/// The first frame of the game's `cherry` sprite, else the client's own delicious fruit (the pause menu's).
 pub fn fruit_image(files: Option<&PackageFiles>) -> Image {
     let empty = PackageFiles::new();
     let both: SpriteImage = crate::pause::fruit_image(files.unwrap_or(&empty));

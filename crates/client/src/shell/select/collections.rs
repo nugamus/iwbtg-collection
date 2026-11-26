@@ -469,13 +469,15 @@ fn name_field() -> impl Bundle + use<> {
 pub(super) fn favorite(
     activate: On<Activate>,
     pressed: Query<(), With<Favorite>>,
-    sel: Res<Selection>,
-    lib: Res<Library>,
+    sel: Option<Res<Selection>>,
+    lib: Option<Res<Library>>,
     mut lists: ResMut<Collections>,
 ) {
-    if pressed.get(activate.entity).is_err() {
+    // Observers are global: a button on another screen (the main menu) reaches this too, before
+    // game select has loaded its library.
+    let (Ok(()), Some(sel), Some(lib)) = (pressed.get(activate.entity), sel, lib) else {
         return;
-    }
+    };
     let Some(game) = lib.games.get(sel.game) else {
         return;
     };
@@ -486,11 +488,11 @@ pub(super) fn favorite(
 pub(super) fn member(
     activate: On<Activate>,
     pressed: Query<&Member>,
-    sel: Res<Selection>,
-    lib: Res<Library>,
+    sel: Option<Res<Selection>>,
+    lib: Option<Res<Library>>,
     mut lists: ResMut<Collections>,
 ) {
-    let Ok(member) = pressed.get(activate.entity) else {
+    let (Ok(member), Some(sel), Some(lib)) = (pressed.get(activate.entity), sel, lib) else {
         return;
     };
     let Some(game) = lib.games.get(sel.game) else {
@@ -506,15 +508,15 @@ pub(super) fn create(
     activate: On<Activate>,
     pressed: Query<(), With<CreateButton>>,
     mut field: Query<&mut EditableText, With<NameField>>,
-    sel: Res<Selection>,
-    lib: Res<Library>,
+    sel: Option<Res<Selection>>,
+    lib: Option<Res<Library>>,
     mut lists: ResMut<Collections>,
     mut renaming: ResMut<Renaming>,
     mut filters: ResMut<Filters>,
 ) {
-    if pressed.get(activate.entity).is_err() {
+    let (Ok(()), Some(sel), Some(lib)) = (pressed.get(activate.entity), sel, lib) else {
         return;
-    }
+    };
     let Ok(mut field) = field.single_mut() else {
         return;
     };

@@ -34,11 +34,12 @@ const FROM_RIGHT: f32 = 860.0;
 const MAP_INDENT: f32 = 30.0;
 /// The selected game and map slide this far left.
 pub const SLIDE: f32 = 25.0;
-/// The first panel's top.
-pub const TOP: f32 = 150.0;
+/// The first panel's top (under the toolbar, m5 A3).
+pub const TOP: f32 = 150.0 + super::UNDER_TOOLBAR;
 /// The list keeps the selection centred between [`TOP`] and the footer's top (1080 less the
-/// footer's 26 px margin and the 108 px player card).
-pub const BOTTOM: f32 = 1080.0 - 134.0;
+/// footer's 26 px margin and the 108 px player card). Under the toolbar the window keeps m4's
+/// height and runs that much further down, behind the footer, as m5 A3 draws it.
+pub const BOTTOM: f32 = 1080.0 - 134.0 + super::UNDER_TOOLBAR;
 /// Panels that scroll above [`TOP`] fade out over this many px.
 const FADE: f32 = 30.0;
 /// Room left of the panels for the slide, the shear and the shadows.
@@ -795,7 +796,8 @@ mod tests {
 
     #[test]
     fn the_artboard_list_needs_no_scroll() {
-        // Main.dc.html: Kaenbyou, the fourth of seven games, open on its third of five maps.
+        // Main.dc.html (and m5 A3): Kaenbyou, the fourth of seven games, open on its third of five
+        // maps.
         let maps = [3, 2, 3, 5, 3, 2, 2];
         let sel = Selection { game: 3, map: 2 };
         let placed = place(&all(7), &maps, sel);

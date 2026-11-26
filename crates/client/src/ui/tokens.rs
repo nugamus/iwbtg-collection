@@ -20,6 +20,8 @@ pub const ON_ART: Color = Color::srgb_u8(0xdf, 0xe2, 0xec);
 pub const SOFT: Color = Color::srgb_u8(0xc9, 0xcd, 0xe0);
 /// Cherry red: the primary action and selection marks.
 pub const ACCENT: Color = Color::srgb_u8(0xff, 0x3d, 0x55);
+/// Violet: Classic's accent, where cherry is Time Attack's (m5 A2, `ui::mode`).
+pub const CLASSIC: Color = Color::srgb_u8(0x8f, 0x7b, 0xff);
 /// Ahead of the comparison (shown with a `−` sign as well).
 pub const AHEAD: Color = Color::srgb_u8(0x45, 0xd4, 0x83);
 /// Behind the comparison (shown with a `+` sign as well).

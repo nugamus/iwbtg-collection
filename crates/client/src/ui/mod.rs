@@ -9,10 +9,12 @@ pub mod fonts;
 pub mod gallery;
 pub mod glow;
 pub mod icons;
+pub mod mode;
 pub mod motion;
 pub mod notice;
 pub mod shape;
 pub mod tokens;
+pub mod toolbar;
 pub mod widgets;
 
 use bevy::prelude::*;
@@ -96,6 +98,7 @@ impl Plugin for UiKitPlugin {
             icons::plugin,
             glow::plugin,
             notice::plugin,
+            toolbar::plugin,
         ));
         // The game screen may have added it already.
         if !app.is_plugin_added::<backdrop::BackdropPlugin>() {

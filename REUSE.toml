@@ -132,6 +132,22 @@ path = [
 SPDX-FileCopyrightText = "2026 IWBTG Collection contributors"
 SPDX-License-Identifier = "LicenseRef-Game-Content"
 
+# The client's own delicious fruit (main menu, the fruit fallback): the engine's cherry, from
+# waka's I wanna Little Trap conversion; the fruit is Kayin's (I Wanna Be The Guy). Credited in
+# crates/client/assets/ui/CREDITS.md (user decision 2026-11-26, #1608); no licence is granted.
+[[annotations]]
+path = "crates/client/assets/ui/cherry.png"
+SPDX-FileCopyrightText = [
+  "Kayin (the delicious fruit, I Wanna Be The Guy)",
+  "waka (I wanna Little Trap conversion)",
+]
+SPDX-License-Identifier = "LicenseRef-Game-Content"
+
+[[annotations]]
+path = "crates/client/assets/ui/CREDITS.md"
+SPDX-FileCopyrightText = "2026 IWBTG Collection contributors"
+SPDX-License-Identifier = "CC-BY-4.0"
+
 # Five sprites of the showcase come from a fangame: the Kid is Kayin's character and
 # sprite (I Wanna Be The Guy), taken from waka's I wanna Little Trap conversion.
 # Credited in crates/client/showcase.pkg/CREDITS.md; no licence is granted for them.

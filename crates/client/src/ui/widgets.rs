@@ -365,8 +365,13 @@ impl ButtonKind {
     }
 
     fn rest(self) -> Color {
+        self.rest_in(tokens::ACCENT)
+    }
+
+    /// The rest fill with `accent` as the primary colour (the mode's, `ui::mode`).
+    fn rest_in(self, accent: Color) -> Color {
         match self {
-            ButtonKind::Primary => tokens::ACCENT,
+            ButtonKind::Primary => accent,
             ButtonKind::Secondary => tokens::SECONDARY,
             ButtonKind::Control => tokens::GLASS,
             ButtonKind::ControlOn => tokens::white(0.2),
@@ -375,10 +380,15 @@ impl ButtonKind {
     }
 
     fn rest_shape(self) -> Shape {
-        let shape = Shape::fill(self.rest());
+        self.rest_shape_in(tokens::ACCENT)
+    }
+
+    /// The rest shape with `accent` as the primary colour; the primary's glow follows it.
+    fn rest_shape_in(self, accent: Color) -> Shape {
+        let shape = Shape::fill(self.rest_in(accent));
         match self {
             ButtonKind::Primary => {
-                shape.with_shadow(8.0, 24.0, tokens::over(tokens::ACCENT, 0.35, tokens::GROUND))
+                shape.with_shadow(8.0, 24.0, tokens::over(accent, 0.35, tokens::GROUND))
             }
             _ => shape,
         }
@@ -386,8 +396,14 @@ impl ButtonKind {
 }
 
 /// The colour of a button's fill: hover mixes in white, pressing mixes in black (both 0 to 1).
+#[cfg(test)]
 fn button_fill(kind: ButtonKind, hover: f32, press: f32) -> Color {
-    let rest = kind.rest().to_srgba();
+    button_fill_in(kind, tokens::ACCENT, hover, press)
+}
+
+/// [`button_fill`] with `accent` as the primary colour.
+fn button_fill_in(kind: ButtonKind, accent: Color, hover: f32, press: f32) -> Color {
+    let rest = kind.rest_in(accent).to_srgba();
     let lift = |c: f32, toward: f32, by: f32| c + (toward - c) * by;
     let up = 0.12 * hover;
     let down = 0.18 * press;
@@ -830,8 +846,10 @@ fn button_looks(
     reduced: Res<ReducedMotion>,
     focus: Res<InputFocus>,
     focus_visible: Res<InputFocusVisible>,
+    mode: Option<Res<super::mode::Mode>>,
     mut buttons: Query<ButtonParts>,
 ) {
+    let accent = super::mode::accent(mode.as_deref());
     let step = if reduced.0 {
         1.0
     } else {
@@ -852,9 +870,10 @@ fn button_looks(
             look.press = press;
         }
         scale.retarget(if pressed { 0.96 } else { 1.0 });
-        let mut want = look.kind.rest_shape();
-        want.fill = button_fill(
+        let mut want = look.kind.rest_shape_in(accent);
+        want.fill = button_fill_in(
             look.kind,
+            accent,
             Ease::OutQuint.at(look.hover),
             Ease::OutQuint.at(look.press),
         );
