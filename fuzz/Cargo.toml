@@ -1,0 +1,46 @@
+[package]
+name = "iwbtg-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+# The target bodies are #992-#995; the path deps are here so a target only adds a `use`.
+iwbtg-format = { path = "../crates/format" }
+iwbtg-sim = { path = "../crates/sim" }
+
+[[bin]]
+name = "iwbz"
+path = "fuzz_targets/iwbz.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "package_load"
+path = "fuzz_targets/package_load.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "replay"
+path = "fuzz_targets/replay.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "script"
+path = "fuzz_targets/script.rs"
+test = false
+doc = false
+bench = false
+
+# Its own workspace root, so the crate in the parent folder never builds it (CLAUDE.md, Builds).
+[workspace]
