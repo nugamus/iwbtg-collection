@@ -10,6 +10,7 @@ All three repos sit side by side in one workspace folder. Runnable commands and 
 IWBTG Collection/            workspace root, not a repo
   CLAUDE.md                  points to the three repos
   TEAM_LEAD_PROMPT.md        prompt that starts an agent-team lead (in no repo)
+  run-game.bat               tester launcher: release client from iwbtg-collection/ (Tester's client)
   worktrees/                 one git worktree per working agent (in no repo)
   .claude/settings.json      plugins, MCP denylist, deny rules, archive guard, issue hooks (in no repo; copy of iwbtg-collection/workspace/settings.json)
   iwbtg-collection/          nugamus/iwbtg-collection: Bevy client, format spec, server, docs
@@ -140,6 +141,16 @@ What follows from it:
 - Keep worktrees per lane and warm (above). A cold worktree costs 5 to 10 minutes and 10 to 20 GB.
 - Locally, run the tests of what you changed; run `cargo xtask check` once before the PR (only the changed crates and their dependents; `--all` for everything) and let CI do the rest.
 - `python -I iwbtg-collection/.claude/stats.py [--days N]` from the workspace root reads the Claude Code transcripts and prints, per session and teammate, in-window wall time, logical model calls (message fragments counted once), average context per call, cargo time as both an elapsed union and a sum across overlapping commands (the percentage uses the union), idle time (waiting for a message), slow cargo calls, unclosed tool calls, merges of `main`, conflicts, PRs and timestamp-unknown events. `--issues` lists the issues that took longest; `--summary --days 7` prints tokens and hours per merged PR per lane; `--test` runs synthetic accounting fixtures, not real transcripts. `--days` clips events and tool intervals to the window instead of counting whole sessions. The lead appends its totals once a week to `docs/velocity.md` (numbers only).
+
+## Tester's client
+
+Testers launch `run-game.bat` at the workspace root (the folder above `iwbtg-collection/`; the file is in neither repo). Double-clicking plays `crates\client\showcase.pkg`; drag a package folder or `.iwbz` onto it, or run `run-game.bat <package> [client flags...]`, to play that.
+
+The launcher runs the **release** client. On start it fast-forwards a clean `main` in `iwbtg-collection/` to `origin/main`, then rebuilds `target\release\iwbtg-client.exe` only when `HEAD` differs from the stamp in `target\release\.iwbtg-client-sha` or the binary is missing; a matching stamp prints `Client is up to date with main at <sha>.` The rebuild is the heavy slot (`python -I scripts\heavy_build.py -- cargo build --release -p iwbtg-client`), and the stamp is rewritten after it.
+
+Before playing it echoes the build it chose: `Running the release build (<timestamp>):`. It falls back to `target\debug\iwbtg-client.exe` only when no release binary exists, then prints `Running the debug build` and a NOTE that the debug build lags badly. `IWBTG_NO_BUILD=1` skips the fast-forward and rebuild and runs whatever binary is there, for a tester keeping a specific build.
+
+The debug build is roughly 5–7x slower in the sim: the 897-instance death plateau cost about 20 ms/tick in release against 150–200 ms/tick in debug before #1139, and about 1 ms against 4.7 ms after. A performance report must name the build it came from, so quote the launcher's `Running the ... build (<timestamp>)` line beside the game, room and tick count. To build the release client by hand, or on a machine without the launcher: `python -I scripts/heavy_build.py -- cargo build --release -p iwbtg-client --locked`.
 
 ## The client in a browser
 
