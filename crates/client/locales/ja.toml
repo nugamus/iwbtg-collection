@@ -205,3 +205,6 @@ session_note = "クラシックにはランキングもスプリットもあり�
 session_note_finished = "クラシックのクリアはここと棚に表示されます。個人記録のみで、同じゲームのタイムアタックのランキングには影響しません。"
 session_play_again = "もう一度プレイ"
 session_continue = "プレイを続ける"
+session_panel_stage = "ステージ"
+session_panel_total = "合計 {n}"
+session_panel_of = "{n} 中"

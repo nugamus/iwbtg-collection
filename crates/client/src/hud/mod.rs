@@ -10,6 +10,7 @@
 pub mod layout;
 pub mod leaderboard;
 pub mod run_info;
+pub mod session_panel;
 
 pub use run_info::Paused;
 
@@ -221,6 +222,7 @@ impl Plugin for HudPlugin {
                 leaderboard::track,
                 place.after(crate::screen::apply),
                 run_info::show,
+                session_panel::update,
                 leaderboard::animate,
             )
                 .chain()
@@ -426,6 +428,18 @@ fn place(
             UiRect::left(Val::Px(gap))
         };
         let wrap = Node { margin, ..default() };
+        if look.classic {
+            // A Classic run: only the game and its art, and the session panel when it is on.
+            // `ClassicRun.dc.html`: 22 px in and 206 px wide in the 249 px column.
+            if column.left && look.show.session {
+                let inset = Node {
+                    margin: UiRect::left(Val::Px(col * 22.0 / 249.0)),
+                    ..default()
+                };
+                e.with_child((inset, children![session_panel::build(col * 206.0 / 249.0)]));
+            }
+            continue;
+        }
         if column.left {
             if look.show.leaderboard {
                 e.with_child((wrap, children![leaderboard::build(width, l.density, &live)]));

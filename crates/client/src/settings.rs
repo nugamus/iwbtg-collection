@@ -190,6 +190,8 @@ pub struct HudShow {
     pub stage_deaths: bool,
     pub input: bool,
     pub mods: bool,
+    /// The session panel beside a Classic run (m5 A7): off by default.
+    pub session: bool,
 }
 
 impl Default for HudShow {
@@ -202,13 +204,14 @@ impl Default for HudShow {
             stage_deaths: true,
             input: true,
             mods: true,
+            session: false,
         }
     }
 }
 
 impl HudShow {
     /// The elements' names, as the file and `--hud-show`/`--hud-hide` write them.
-    pub const NAMES: [&'static str; 7] = [
+    pub const NAMES: [&'static str; 8] = [
         "leaderboard",
         "timer",
         "deaths",
@@ -216,6 +219,7 @@ impl HudShow {
         "stage_deaths",
         "input",
         "mods",
+        "session",
     ];
 
     /// The switch for the element called `name`.
@@ -228,6 +232,7 @@ impl HudShow {
             "stage_deaths" => &mut self.stage_deaths,
             "input" => &mut self.input,
             "mods" => &mut self.mods,
+            "session" => &mut self.session,
             _ => return None,
         })
     }

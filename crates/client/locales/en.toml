@@ -207,3 +207,6 @@ session_note = "No leaderboard and no splits in Classic: the game's own saves de
 session_note_finished = "A Classic finish shows here and on the shelf. It is a personal record only; the same game's Time Attack boards are unaffected."
 session_play_again = "Play again"
 session_continue = "Continue playing"
+session_panel_stage = "Stage"
+session_panel_total = "{n} total"
+session_panel_of = "of {n}"
