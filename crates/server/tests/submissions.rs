@@ -21,6 +21,12 @@ const GAMEPLAY_HASH: [u8; 32] = [7; 32];
 
 /// A canonical, empty run: enough to exercise the endpoint without the sim.
 fn replay_bytes() -> Vec<u8> {
+    replay_with(0, 0)
+}
+
+/// The same run with a chosen seed and a different final hash, so two replays on one seed have
+/// different bytes (as two real runs with different inputs would).
+fn replay_with(rng_seed: u64, tag: u8) -> Vec<u8> {
     Replay {
         header: Header {
             magic: MAGIC,
@@ -29,7 +35,7 @@ fn replay_bytes() -> Vec<u8> {
             package_id: "test.pkg".to_owned(),
             gameplay_hash: GAMEPLAY_HASH,
             engine_rev: 0,
-            rng_seed: 0,
+            rng_seed,
             start_mode: StartMode::NewGame,
             play_mode: PlayMode::Stripped,
             map: "main".to_owned(),
@@ -43,7 +49,7 @@ fn replay_bytes() -> Vec<u8> {
             ranked_ticks: 0,
             pauses: Vec::new(),
             checkpoints: Vec::new(),
-            final_hash: [0; 32],
+            final_hash: [tag; 32],
         },
     }
     .encode()
@@ -87,11 +93,16 @@ async fn post_json(router: &Router, uri: &str, ip: &str, body: Value) -> (Status
 
 /// Registers and signs in, returning the session token the login cookie carried.
 async fn sign_in(router: &Router, ip: &str) -> String {
+    sign_in_as(router, ip, "Submitter").await
+}
+
+/// The same for a named account, so a test can hold two.
+async fn sign_in_as(router: &Router, ip: &str, username: &str) -> String {
     let (status, _, _) = post_json(
         router,
         "/auth/register",
         ip,
-        json!({ "username": "Submitter", "password": PASSWORD }),
+        json!({ "username": username, "password": PASSWORD }),
     )
     .await;
     assert_eq!(status, StatusCode::CREATED);
@@ -99,7 +110,7 @@ async fn sign_in(router: &Router, ip: &str) -> String {
         router,
         "/auth/login",
         ip,
-        json!({ "login": "Submitter", "password": PASSWORD }),
+        json!({ "login": username, "password": PASSWORD }),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -150,6 +161,15 @@ fn hex(bytes: &[u8]) -> String {
 
 async fn count(pool: &SqlitePool, sql: &'static str) -> i64 {
     sqlx::query_scalar(sql).fetch_one(pool).await.expect("count rows")
+}
+
+/// A run's flags, each with the earlier run that explains it.
+async fn flags(pool: &SqlitePool, run_id: i64) -> Vec<(String, Option<i64>)> {
+    sqlx::query_as("SELECT kind, detail FROM run_flags WHERE run_id = ?1 ORDER BY kind")
+        .bind(run_id)
+        .fetch_all(pool)
+        .await
+        .expect("read the run's flags")
 }
 
 #[tokio::test]
@@ -244,4 +264,78 @@ async fn submissions_are_rate_limited_per_account() {
     let (status, body) = post_replay(&router, replay_bytes(), Some(&token), None).await;
     assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
     assert_eq!(body["error"], "too many requests; retry shortly");
+}
+
+#[tokio::test]
+async fn an_exact_copy_is_flagged_with_the_earlier_run() {
+    let (_dir, pool, router) = fixture("flags-copy").await;
+    let first_token = sign_in_as(&router, "203.0.113.80", "First").await;
+    let second_token = sign_in_as(&router, "203.0.113.81", "Second").await;
+    let replay = replay_bytes();
+
+    let (status, first) = post_replay(&router, replay.clone(), Some(&first_token), None).await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    let first_id = first["run_id"].as_i64().expect("a run id");
+    assert!(
+        flags(&pool, first_id).await.is_empty(),
+        "the first copy is not a copy"
+    );
+
+    let (status, second) = post_replay(&router, replay, Some(&second_token), None).await;
+    assert_eq!(status, StatusCode::ACCEPTED, "a flag never rejects the run");
+    let second_id = second["run_id"].as_i64().expect("a run id");
+    assert_eq!(
+        flags(&pool, second_id).await,
+        vec![("exact_copy".to_string(), Some(first_id))]
+    );
+}
+
+#[tokio::test]
+async fn the_same_players_reused_seed_is_flagged_with_the_earlier_run() {
+    let (_dir, pool, router) = fixture("flags-seed").await;
+    let token = sign_in(&router, "203.0.113.82").await;
+
+    let (_, first) = post_replay(&router, replay_with(7, 1), Some(&token), None).await;
+    let first_id = first["run_id"].as_i64().expect("a run id");
+    let (status, second) = post_replay(&router, replay_with(7, 2), Some(&token), None).await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    let second_id = second["run_id"].as_i64().expect("a run id");
+    assert_eq!(
+        flags(&pool, second_id).await,
+        vec![("seed_reuse".to_string(), Some(first_id))]
+    );
+
+    // The seed is stored as its eight big-endian bytes, not a lossy integer.
+    let stored: Vec<u8> = sqlx::query_scalar("SELECT rng_seed FROM runs WHERE id = ?1")
+        .bind(second_id)
+        .fetch_one(&pool)
+        .await
+        .expect("read the seed");
+    assert_eq!(stored, 7u64.to_be_bytes());
+}
+
+#[tokio::test]
+async fn another_players_seed_is_not_a_reuse_flag() {
+    let (_dir, pool, router) = fixture("flags-seed-other").await;
+    let first_token = sign_in_as(&router, "203.0.113.83", "First").await;
+    let second_token = sign_in_as(&router, "203.0.113.84", "Second").await;
+
+    let (_, _) = post_replay(&router, replay_with(7, 1), Some(&first_token), None).await;
+    let (_, other) = post_replay(&router, replay_with(7, 2), Some(&second_token), None).await;
+    let other_id = other["run_id"].as_i64().expect("a run id");
+    assert!(
+        flags(&pool, other_id).await.is_empty(),
+        "seed reuse is scoped to one player (#790)"
+    );
+}
+
+#[tokio::test]
+async fn a_new_seed_is_not_a_reuse_flag() {
+    let (_dir, pool, router) = fixture("flags-seed-new").await;
+    let token = sign_in(&router, "203.0.113.85").await;
+
+    let (_, _) = post_replay(&router, replay_with(7, 1), Some(&token), None).await;
+    let (_, next) = post_replay(&router, replay_with(8, 2), Some(&token), None).await;
+    let next_id = next["run_id"].as_i64().expect("a run id");
+    assert!(flags(&pool, next_id).await.is_empty());
 }
