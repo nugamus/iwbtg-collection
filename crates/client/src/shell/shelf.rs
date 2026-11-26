@@ -1125,7 +1125,7 @@ fn hero(
 }
 
 /// `Once`, `Twice`, `3 times`.
-fn times(n: u32) -> String {
+pub fn times(n: u32) -> String {
     match n {
         1 => "Once".to_owned(),
         2 => "Twice".to_owned(),
@@ -1134,7 +1134,7 @@ fn times(n: u32) -> String {
 }
 
 /// `h:mm:ss`.
-fn clock(seconds: f64) -> String {
+pub fn clock(seconds: f64) -> String {
     let s = seconds.max(0.0) as u64;
     format!("{}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60)
 }

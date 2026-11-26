@@ -10,7 +10,9 @@ use crate::pause::FRUIT;
 use crate::ui::fonts::Type;
 use crate::ui::shape::{Shape, Veil};
 use crate::ui::tokens;
-use crate::ui::widgets::{mod_pill, rich, text, unranked_pill};
+use crate::shell::shelf::{self, Facts};
+use crate::ui::mode::Mode;
+use crate::ui::widgets::{classic_pill, mod_pill, rich, text, unranked_pill};
 
 /// The card's left and top on the artboard, and its width.
 pub const CARD_TOP: f32 = 170.0;
@@ -54,7 +56,12 @@ pub fn page(info: &Info, tip: &Tip, look: &Look) -> impl Bundle + use<> {
             height: Val::Percent(100.0),
             flex_direction: FlexDirection::Column,
             align_items: AlignItems::Center,
-            padding: UiRect::top(Val::Px(CARD_TOP)),
+            // Classic's card sits 20 px lower (`Loading2.dc.html`: top 190).
+            padding: UiRect::top(Val::Px(if info.classic.is_some() {
+                CARD_TOP + 20.0
+            } else {
+                CARD_TOP
+            })),
             ..default()
         },
         Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
@@ -66,14 +73,17 @@ pub fn page(info: &Info, tip: &Tip, look: &Look) -> impl Bundle + use<> {
             })
             .with_children(|c| {
                 card(c, &info, art);
-                loader(c, fruit, back);
-                c.spawn((
-                    Node {
-                        padding: UiRect::horizontal(Val::Px(4.0)),
-                        ..default()
-                    },
-                    children![tip_line(&tip)],
-                ));
+                let classic = info.classic.is_some();
+                loader(c, fruit, back, classic);
+                let mut foot = c.spawn(Node {
+                    padding: UiRect::horizontal(Val::Px(4.0)),
+                    ..default()
+                });
+                if classic {
+                    foot.with_child(classic_note());
+                } else {
+                    foot.with_child(tip_line(&tip));
+                }
             });
         })),
     )
@@ -94,14 +104,127 @@ fn card(c: &mut ChildSpawner, info: &Info, art: Option<Handle<Image>>) {
         shape,
     ))
     .with_children(|c| {
-        strip(c, &info.title, info.creator.as_deref(), art);
-        body(c, info);
+        let at = strip(c, &info.title, info.creator.as_deref(), art);
+        if let Some(facts) = info.classic {
+            // The CLASSIC pill in the art's top right corner (m5 A5).
+            c.world_mut().entity_mut(at).with_child((
+                Node {
+                    position_type: PositionType::Absolute,
+                    top: Val::Px(16.0),
+                    right: Val::Px(18.0),
+                    ..default()
+                },
+                children![classic_pill()],
+            ));
+            classic_body(c, facts);
+        } else {
+            body(c, info);
+        }
     });
+}
+
+/// A Classic run's facts in this game and what Play opens (m5 A5). The last-played time and
+/// where you got to wait for the stats book (#1619).
+fn classic_body(c: &mut ChildSpawner, facts: Facts) {
+    let line = if facts.played() {
+        "You played this game before: Continue in its own menu picks up your save."
+    } else {
+        "Your first time in this game."
+    };
+    let finished = if facts.finished == 0 {
+        "Not yet".to_owned()
+    } else {
+        shelf::times(facts.finished)
+    };
+    c.spawn(Node {
+        flex_direction: FlexDirection::Column,
+        row_gap: Val::Px(22.0),
+        padding: UiRect {
+            left: Val::Px(32.0),
+            right: Val::Px(32.0),
+            top: Val::Px(22.0),
+            bottom: Val::Px(28.0),
+        },
+        ..default()
+    })
+    .with_children(|c| {
+        c.spawn((
+            text(line, Type::barlow(18.0, 600), tokens::INK),
+            TextLayout::no_wrap(),
+        ));
+        c.spawn(Node {
+            display: Display::Grid,
+            grid_template_columns: RepeatedGridTrack::flex(3, 1.0),
+            column_gap: Val::Px(24.0),
+            ..default()
+        })
+        .with_children(|c| {
+            number(
+                c,
+                "Time played",
+                &shelf::clock(facts.seconds),
+                Some("all modes".to_owned()),
+            );
+            number(
+                c,
+                "Deaths",
+                &crate::card::grouped(facts.deaths),
+                Some("in this game".to_owned()),
+            );
+            number(c, "Finished", &finished, Some("in Classic".to_owned()));
+        });
+        c.spawn(Node {
+            align_items: AlignItems::Center,
+            column_gap: Val::Px(10.0),
+            min_height: Val::Px(28.0),
+            ..default()
+        })
+        .with_children(|c| {
+            c.spawn((
+                Node {
+                    width: Val::Px(70.0),
+                    flex_shrink: 0.0,
+                    ..default()
+                },
+                children![text("Opens", Type::LABEL, tokens::MUTED)],
+            ));
+            c.spawn((
+                Node {
+                    flex_shrink: 1.0,
+                    min_width: Val::Px(0.0),
+                    ..default()
+                },
+                children![text(
+                    OPENS,
+                    Type::barlow(15.0, 400),
+                    tokens::ROW_NAME
+                )],
+            ));
+        });
+    });
+}
+
+/// What Play opens in Classic.
+const OPENS: &str =
+    "the game's own title screen: New game, Continue and its file select work as in the original";
+
+/// Classic's line under the loader, in place of a tip.
+fn classic_note() -> impl Bundle + use<> {
+    text(
+        "Classic keeps your saves and your stats. Nothing here goes on a leaderboard.",
+        Type::barlow(15.0, 400),
+        tokens::MUTED,
+    )
 }
 
 /// The key art, 240 px tall, darkened towards the bottom, with the title and creator over it
 /// (also the script error card's head).
-pub(crate) fn strip(c: &mut ChildSpawner, title: &str, creator: Option<&str>, art: Option<Handle<Image>>) {
+pub(crate) fn strip(
+    c: &mut ChildSpawner,
+    title: &str,
+    creator: Option<&str>,
+    art: Option<Handle<Image>>,
+) -> Entity {
     // `Backdrop dim 0.1`, then `linear-gradient(0deg, rgba(12,14,22,.95) 0%, transparent 60%)`.
     let dim = tokens::black(0.1);
     let mut shape = Shape {
@@ -118,7 +241,7 @@ pub(crate) fn strip(c: &mut ChildSpawner, title: &str, creator: Option<&str>, ar
     }
     let title = title.to_owned();
     let creator = creator.map(str::to_owned);
-    c.spawn((
+    let mut strip = c.spawn((
         Node {
             height: Val::Px(STRIP_H),
             flex_direction: FlexDirection::Column,
@@ -133,8 +256,8 @@ pub(crate) fn strip(c: &mut ChildSpawner, title: &str, creator: Option<&str>, ar
             ..default()
         },
         shape,
-    ))
-    .with_children(|c| {
+    ));
+    strip.with_children(|c| {
         c.spawn((
             text(&title, Type::condensed(50.0, 700), tokens::INK),
             TextLayout::no_wrap(),
@@ -147,6 +270,7 @@ pub(crate) fn strip(c: &mut ChildSpawner, title: &str, creator: Option<&str>, ar
             ]));
         }
     });
+    strip.id()
 }
 
 /// The map, the numbers and the mods.
@@ -265,8 +389,14 @@ fn mods(c: &mut ChildSpawner, info: &Info) {
     });
 }
 
-/// The fruit, then `Loading · starts by itself` and `Esc back` or `Esc quit` over the progress line.
-fn loader(c: &mut ChildSpawner, fruit: Option<Handle<Image>>, back: bool) {
+/// The fruit, then `Loading · starts by itself` and `Esc back` or `Esc quit` over the progress line
+/// (`Esc back to the shelf` and the line in violet for a Classic run).
+fn loader(c: &mut ChildSpawner, fruit: Option<Handle<Image>>, back: bool, classic: bool) {
+    let accent = if classic {
+        Mode::Classic.accent()
+    } else {
+        tokens::ACCENT
+    };
     c.spawn(Node {
         align_items: AlignItems::Center,
         column_gap: Val::Px(16.0),
@@ -312,7 +442,12 @@ fn loader(c: &mut ChildSpawner, fruit: Option<Handle<Image>>, back: bool) {
                 c.spawn(rich(vec![
                     ("Esc".to_owned(), bold, tokens::INK),
                     (
-                        if back { " back" } else { " quit" }.to_owned(),
+                        match (back, classic) {
+                            (true, true) => " back to the shelf",
+                            (true, false) => " back",
+                            (false, _) => " quit",
+                        }
+                        .to_owned(),
                         plain,
                         tokens::SOFT,
                     ),
@@ -340,8 +475,8 @@ fn loader(c: &mut ChildSpawner, fruit: Option<Handle<Image>>, back: bool) {
                         ..Shape::fill(Color::NONE)
                     }
                     .with_veil(Veil::across(
-                        tokens::ACCENT,
-                        tokens::ACCENT.mix(&Color::WHITE, 0.5),
+                        accent,
+                        accent.mix(&Color::WHITE, 0.5),
                         Color::WHITE,
                         0.5,
                     )),

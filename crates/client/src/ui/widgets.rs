@@ -292,6 +292,18 @@ pub fn ranked_pill() -> impl Bundle {
     )
 }
 
+/// The CLASSIC pill (m5 A5, A8): violet with white capitals, the Ranked pill's size.
+pub fn classic_pill() -> impl Bundle {
+    pill(
+        "Classic",
+        Type::PILL_CAPS,
+        tokens::CLASSIC,
+        tokens::INK,
+        26.0,
+        12.0,
+    )
+}
+
 /// A tag (`Needle`, `Avoidance`).
 pub fn tag_pill(label: &str) -> impl Bundle + use<> {
     pill(
