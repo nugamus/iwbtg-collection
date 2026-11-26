@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>A10 Session summary after the ending</title>
+<title>D16 Pause at 4:3 on a controller, Restart run held (#624)</title>
 <script src="./support.js"></script>
 </head>
 <body>
@@ -13,12 +13,12 @@
 body{margin:0}
 </style>
 </helmet>
-<!-- A10: the session summary after finishing the game. -->
-<div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14">
-  <dc-import name="Session" finished="true" hint-size="1920px,1080px"></dc-import>
+<!-- D16: 4:3, pad glyphs, hold to restart. -->
+<div style="position: relative; width: 1024px; height: 768px; overflow: hidden; background: #0b0d14">
+  <dc-import name="Pause" mode="ta" ratio="43" pad="true" selected="2" hint-size="1024px,768px"></dc-import>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1920,"height":1080}}'>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1024,"height":768}}'>
 class Component extends DCLogic {
   renderVals() {
     return {};

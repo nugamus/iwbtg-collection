@@ -58,16 +58,16 @@ class Component extends DCLogic {
       { name: 'Time Attack', c: '#ff3d55', y: 30, loopW, loop, loopLabel: 'Back or Esc on results · Quit in pause (no results) · Back on a script error', steps: [
         st('Select', 'Game select', 'Pick a map, mods, Enter.', 'Enter', { mode: 'ta' }),
         st('Loading2', 'Loading card', 'At least 1.5 s, starts by itself. Esc goes back.', '', { mode: 'ta' }),
-        st('Run', 'The run', 'Pause: Continue, Retry from save, Restart run, Quit.', 'clear', { state: 'hud' }),
+        st('Run', 'The run', 'Pause: Continue, Retry, Restart, Practice this stage, Options, Quit.', 'clear', { state: 'hud' }),
         st('Results', 'Results (m4)', 'Retry (hold R) starts a new run from the card.', 'Back', { ring: '0 0 0 3px #ff3d55' }),
         st('Select', 'Game select again', 'Same map picked; its panel now shows the new PB.', '', { mode: 'ta' }),
       ] },
       { name: 'Classic', c: '#8f7bff', y: 440, loopW, loop, loopLabel: 'Back to the shelf in pause, or the game’s ending → session summary → Back', steps: [
-        st('Shelf', 'Shelf', 'Pick a game and a slot, Continue.', 'Continue', {}),
-        st('Loading2', 'Loading card', 'Names the slot it opens.', '', { mode: 'classic' }),
-        st('ClassicRun', 'The game, its title first', 'The game’s own menus; the session panel at the side.', 'Back to shelf', { screen: 'title' }),
+        st('Shelf', 'Shelf', 'Pick a game, Play.', 'Play', {}),
+        st('Loading2', 'Loading card', 'Where you got to last time.', '', { mode: 'classic' }),
+        st('ClassicRun', 'The game, its title first', 'The game’s own menus and saves; nothing else on screen.', 'Back to shelf', { screen: 'title' }),
         st('Session', 'Session summary', 'Continue playing goes back into the game.', 'Back', { ring: '0 0 0 3px #8f7bff' }),
-        st('Shelf', 'Shelf again', 'Same game picked; the slot shows where you stopped.', '', {}),
+        st('Shelf', 'Shelf again', 'Same game picked; Your progress shows where you got to.', '', {}),
       ] },
     ] };
   }

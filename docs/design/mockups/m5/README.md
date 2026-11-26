@@ -1,39 +1,37 @@
 # Design pass 2 (m5): play modes, app shell, settings, tools and redesigns
 
-**Proposal, not approved.** Drawn for #47 and the mode/shell issue linked from it; nothing here changes docs/product.md until the user approves. Live canvas: https://claude.ai/artifact/LvECtgqWCzfeNgtn1SKcFw. The approved design is still [m4](../m4/README.md); m5 reuses its language and its shared parts.
+**Revision 2, not approved yet.** Drawn for #47 and #1572. The user's first choices (2026-11-26, recorded on #47) are built in and the options they did not pick are removed; nothing here changes docs/product.md until the user approves the whole pass. Live canvas: https://claude.ai/artifact/LvECtgqWCzfeNgtn1SKcFw. The approved design is still [m4](../m4/README.md); m5 reuses its language and its shared parts.
 
 The source files are in this folder: `canvas.json` places the artboards and the notes (the rationale, costs and open questions are the sticky notes on the canvas), each `.dc.html` is one artboard. Most numbered artboards are thin wrappers that set props on a shared component (`MainMenu`, `Select`, `Shelf`, `Settings`, ...). Render them locally with `python -I docs/design/mockups/render.py m5` (see [m4's README](../m4/README.md#rendering-locally)).
 
-## What is proposed
+## What is drawn
 
-- **A. Two play modes.** Time Attack (today's Ranked: stripped, timed, leaderboards; cherry #ff3d55) and Classic (today's Play original: the full game with its own title, saves and difficulty select; violet #8f7bff). Direction A (recommended): the mode is chosen on the main menu and switched from the toolbar; Time Attack keeps m4's game select, Classic gets a shelf with save slots (answers #851), a slim session panel in place of the HUD, a Back-to-the-shelf pause item and a session summary instead of results. Direction B: one select with mode tabs.
-- **B. App shell.** Intro, first-launch notice (#73), first-run setup, main menu with the fruit as centrepiece (logo slot for #201), the toolbar, exit and update dialogs, the web start and loading screens.
-- **C. Play, settings and tools.** Settings overlay (#53), key bindings (#52), offset calibration (#464), practice picker and HUD (#39), Details tab (#498), collections (#105), replays, catalog (#50), profile (#60), sign-in (#158, #159).
-- **D. Redesigns.** Script error (#953), notifications, game select gaps, auto-retry (#773), mod select (#554), exit flow (#1553), drag and drop, skip hint, pause on a pad (#624), port status (#62).
+- **A. Two play modes (decided: direction A).** Time Attack (stripped, timed, leaderboards; cherry #ff3d55) and Classic (the full game as made; violet #8f7bff), picked on the main menu and switched in the toolbar. Classic has no save slots in our UI: Play opens the game's own title screen and the game's own file select handles saves (#851); the shelf only reads the save files to show progress. Ports without their own menus get the standard engine menus in game pixels (A10, #100).
+- **B. App shell.** Intro on every start, first-launch notice (#73) and 3-step setup, main menu with the delicious fruit as centrepiece (logo slot for #201), the toolbar (no Home button: Back already does it), exit and update dialogs, the web start and loading screens.
+- **C. Play, settings and tools.** Settings overlay (#53), key bindings (#52), offset calibration (#464), practice picker and HUD (#39), Details tab (#498), collections (#105), replays, catalog (#50), profile with per-mode stats and milestones (#60, #489), sign-in (#158, #159).
+- **D. Redesigns.** Script error (#953), notifications (only urgent toasts in a run), game select gaps, auto-retry in the mod footer with an AR mark (#773), the decided mod sheet with the Ghost switch (#554, #64), exit flow (#1553), drag and drop, skip hint, the redesigned pause menu with Options (D13–D16, #624), port status (#62).
+- **I. New, built around how fangames are played.** PB ghost in the room (#64), results that say where the time went and send you to practise it, a death map and consistency counter in practice, streaming settings with a window-title death count, a live stats file and an on-screen counter.
 - **E. Cross-cutting.** Steam Deck (1280x800), Japanese, colourblind check, UI sounds. **F.** Race screens, rough.
 
 ## Shared parts changed from m4
 
-`ProfileCard` gained a `mode` prop (Classic numbers and violet accent), `PauseBox` an `items` prop, `RunInfo` the `frozen`, `retry` and `status` marks. The m4 copies are unchanged.
+`ProfileCard` gained a `mode` prop (Classic numbers and violet accent), `RunInfo` the `frozen`, `retry` and `status` marks. m4's `PauseBox` is replaced by the new `Pause` component. The m4 copies are unchanged.
 
 ## Artboards
 
 | File | Artboard |
 |---|---|
-| `Main.dc.html` | A1 Main menu: Play opens the two modes (direction A) |
+| `Main.dc.html` | A1 Main menu: Play opens the two modes |
 | `A2_MenuClassic.dc.html` | A2 Main menu: Classic focused, the accent turns violet |
-| `A3_SelectTimeAttack.dc.html` | A3 Time Attack: the m4 game select under the toolbar (A) |
-| `A4_Shelf.dc.html` | A4 Classic: the shelf, Continue or New game (A, #851) |
-| `A5_ShelfNewGame.dc.html` | A5 Classic: New game over a slot with a save (#851) |
-| `A6_LoadingClassic.dc.html` | A6 Loading card in Classic |
-| `A7_ClassicTitle.dc.html` | A7 Classic run: the game's own title, session panel |
-| `A8_ClassicPause.dc.html` | A8 Classic pause: Back to the shelf |
-| `A9_Session.dc.html` | A9 Session summary on leaving Classic |
-| `A10_SessionFinished.dc.html` | A10 Session summary after the ending |
-| `A11_FallbackTitle.dc.html` | A11 Client-drawn title and menus for ports without their own (#100) |
-| `A12_CardModes.dc.html` | A12 Player card per mode |
-| `A13_BClassic.dc.html` | A13 Direction B: one select with mode tabs, Classic |
-| `A14_BTimeAttack.dc.html` | A14 Direction B: one select with mode tabs, Time Attack |
+| `A3_SelectTimeAttack.dc.html` | A3 Time Attack: the m4 game select under the toolbar |
+| `A4_Shelf.dc.html` | A4 Classic: the shelf, your progress, Play opens the game (#851) |
+| `A5_LoadingClassic.dc.html` | A5 Loading card in Classic |
+| `A6_ClassicTitle.dc.html` | A6 Classic run: the game's own title screen, nothing else |
+| `A7_ClassicPanel.dc.html` | A7 Classic run with the session panel turned on |
+| `A8_Session.dc.html` | A8 Session summary on leaving Classic |
+| `A9_SessionFinished.dc.html` | A9 Session summary after the ending |
+| `A10_EngineMenus.dc.html` | A10 Standard engine menus for ports without their own (#100) |
+| `A11_CardModes.dc.html` | A11 Player card per mode |
 | `B1_Intro.dc.html` | B1 Intro: the fruit lands on the spikes (1.8 s, any key skips) |
 | `B2_Notice.dc.html` | B2 First launch: fan project, not affiliated, credits (#73) |
 | `B3_SetupLanguage.dc.html` | B3 First run 1/3: language (#196) |
@@ -74,13 +72,20 @@ The source files are in this folder: `canvas.json` places the artboards and the 
 | `D6_ListStates.dc.html` | D6 Game list: empty, no results, loading |
 | `D7_Filters.dc.html` | D7 Game select: Status, Year and Tag filters (#805) |
 | `D8_AutoRetry.dc.html` | D8 Auto-retry: footer or HUD (#773) |
-| `D9_ModsHbRanked.dc.html` | D9 Mod select: Hitboxes ranked, Flashlight added, Mirror dropped (#554) |
-| `D9b_ModsHbPractice.dc.html` | D9b Mod select: Hitboxes as a practice aid (#554) |
+| `D9_Mods.dc.html` | D9 Mod select: Hitboxes in Practice, Flashlight, Mirror later, Ghost (#554, #64) |
 | `D10_ExitFlow.dc.html` | D10 Leaving a run in both modes (#1553) |
 | `D11_DropImport.dc.html` | D11 Drag and drop import |
 | `D12_Skip.dc.html` | D12 Skip cutscene hint and the frozen timer (#573) |
-| `D13_PausePad.dc.html` | D13 Pause on a controller (#624) |
-| `D14_PortStatus.dc.html` | D14 Port status marks (#62) |
+| `D13_PauseTimeAttack.dc.html` | D13 Pause, redesigned: Time Attack |
+| `D14_PauseClassic.dc.html` | D14 Pause, redesigned: Classic |
+| `D15_PauseOptions.dc.html` | D15 Pause: Options |
+| `D16_Pause43Pad.dc.html` | D16 Pause at 4:3 on a controller, Restart run held (#624) |
+| `D17_PortStatus.dc.html` | D17 Port status marks (#62) |
+| `I1_PbGhost.dc.html` | I1 Racing your PB ghost in the room (#64) |
+| `I2_WhereTimeWent.dc.html` | I2 Results: where the time went, practise that stage, watch #1 |
+| `I3_DeathMap.dc.html` | I3 Practice: death map and the consistency counter (#39) |
+| `I4_SettingsStream.dc.html` | I4 Settings: Streaming and recording |
+| `I5_StreamOutputs.dc.html` | I5 Streaming: window title, live stats file, death counter |
 | `E1_MenuDeck.dc.html` | E1 Main menu at 1280x800 (Steam Deck), controller hints (#117) |
 | `E2_SelectDeck.dc.html` | E2 Time Attack select at 1280x800 (#117) |
 | `E3_SettingsDeck.dc.html` | E3 Settings at 1280x800 (#117) |
@@ -107,11 +112,11 @@ The source files are in this folder: `canvas.json` places the artboards and the 
 | `Details.dc.html` | Details tab (component) |
 | `Replays.dc.html` | Replays (component) |
 | `Notices.dc.html` | Notifications (component) |
-| `ModSheet.dc.html` | Mod select variants (component) |
+| `ModSheet.dc.html` | Mod select (component) |
+| `Pause.dc.html` | Pause menu (component) |
 | `Race.dc.html` | Races (component) |
 | `Backdrop.dc.html` | Background system (from m4) |
 | `GameScene.dc.html` | Placeholder game room (from m4) |
 | `Leaderboard.dc.html` | Leaderboard (from m4) |
 | `RunInfo.dc.html` | Run info (from m4) |
-| `PauseBox.dc.html` | Pause box (from m4, items prop added) |
 | `ProfileCard.dc.html` | Player card (from m4, mode prop added) |

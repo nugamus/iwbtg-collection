@@ -13,7 +13,7 @@
 body{margin:0}
 </style>
 </helmet>
-<!-- Game select from m4 (Main.dc.html) under the new toolbar. Direction A: this screen is Time Attack only and the toolbar switches to the Classic shelf. Direction B: one shared select with mode tabs above the title wedge; in Classic the maps fold away and the left side shows saves. Everything m4 approved stays: panel art, wedge, stats, stage strip, Details / Ranking, footer, player card. -->
+<!-- Game select from m4 (Main.dc.html) under the new toolbar. Direction A: this screen is Time Attack only and the toolbar switches to the Classic shelf. Everything m4 approved stays: panel art, wedge, stats, stage strip, Details / Ranking, footer, player card. -->
 <div style="position: relative; width: {{ow}}px; height: {{oh}}px; overflow: hidden; background: #0b0d14">
 <div style="position: absolute; left: 0; top: 0; width: {{W}}px; height: {{H}}px; transform: scale({{zoom}}); transform-origin: 0 0; font-family: 'Barlow', 'Noto Sans JP', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
   <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="{{W}}px" h="{{H}}px" hue="250" scene="castle" blur="14" dim="0.38" tag="none" hint-size="1920px,1080px"></dc-import></div>
@@ -102,16 +102,6 @@ body{margin:0}
     <div style="position: absolute; left: {{ctlX}}px; top: {{dimY}}px; display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 10px; background: rgba(12,14,22,.86); transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 15px; color: #e3e5ee">{{t.dimNote}}</span></div>
   </sc-if>
 
-  <!-- left: direction B's mode tabs -->
-  <sc-if value="{{dirB}}" hint-placeholder-val="{{ false }}">
-    <div style="position: absolute; left: 54px; top: 74px; display: flex; gap: 8px" role="tablist" aria-label="{{t.mode}}">
-      <sc-for list="{{tabsB}}" as="m" hint-placeholder-count="2">
-        <button type="button" role="tab" aria-selected="{{m.sel}}" style="all: unset; height: 50px; padding: 0 26px; border-radius: 10px; background: {{m.bg}}; display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer; box-shadow: {{m.shadow}}">
-          <span style="transform: skewX(11.31deg); display: flex; align-items: baseline; gap: 10px; white-space: nowrap"><span style="font-size: 19px; font-weight: 700; color: {{m.ink}}">{{m.label}}</span><span style="font-size: 13px; font-weight: 600; color: {{m.sub}}">{{m.hint}}</span></span>
-        </button>
-      </sc-for>
-    </div>
-  </sc-if>
 
   <!-- left: title wedge -->
   <div style="position: absolute; left: -48px; top: {{wedgeY}}px; width: {{wedgeW}}px; height: {{wedgeH}}px; border-radius: 10px; overflow: hidden; transform: skewX(-11.31deg); box-shadow: 0 24px 60px rgba(0,0,0,.45)">
@@ -209,21 +199,6 @@ body{margin:0}
         </div>
       </div>
     </sc-if>
-    <sc-if value="{{showSaves}}" hint-placeholder-val="{{ false }}">
-      <div style="display: flex; flex-direction: column; gap: 4px">
-        <sc-for list="{{slots}}" as="s" hint-placeholder-count="3">
-          <div style="position: relative; margin-left: 10px; width: {{rowW}}px; height: 64px; border-radius: 10px; background: {{s.bg}}; transform: skewX(-11.31deg); box-shadow: {{s.ring}}">
-            <div style="position: absolute; inset: 0; display: grid; grid-template-columns: 70px minmax(0, 1fr) 130px 110px 120px; gap: 12px; align-items: center; padding: 0 20px 0 18px; transform: skewX(11.31deg)">
-              <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 700; color: {{s.ink}}">{{s.slot}}</span>
-              <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: 17px; font-weight: 700; white-space: nowrap">{{s.where}}</span><span style="font-size: 13px; color: #a2a8bc; white-space: nowrap">{{s.diff}}</span></span>
-              <span style="font-size: 16px; font-weight: 600; text-align: right">{{s.time}}</span>
-              <span style="font-size: 15px; color: #c9cde0; text-align: right">{{s.deaths}}</span>
-              <span style="font-size: 14px; color: #a2a8bc; text-align: right">{{s.when}}</span>
-            </div>
-          </div>
-        </sc-for>
-      </div>
-    </sc-if>
     <sc-if value="{{showDetails}}" hint-placeholder-val="{{ false }}">
       <dc-import name="Details" w="{{panelW}}" lang="{{lang}}" hint-size="860px,380px"></dc-import>
     </sc-if>
@@ -272,11 +247,11 @@ body{margin:0}
 </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"mode":{"editor":"enum","options":["ta","classic"],"default":"ta"},"dir":{"editor":"enum","options":["A","B"],"default":"A"},"tab":{"editor":"enum","options":["ranking","details","saves"],"default":"ranking"},"state":{"editor":"enum","options":["normal","sort","dim","collections","filters"],"default":"normal"},"deck":{"editor":"boolean","default":false},"lang":{"editor":"enum","options":["en","ja"],"default":"en"},"$preview":{"width":1920,"height":1080}}'>
+<script type="text/x-dc" data-dc-script data-props='{"tab":{"editor":"enum","options":["ranking","details"],"default":"ranking"},"state":{"editor":"enum","options":["normal","sort","dim","collections","filters"],"default":"normal"},"deck":{"editor":"boolean","default":false},"lang":{"editor":"enum","options":["en","ja"],"default":"en"},"$preview":{"width":1920,"height":1080}}'>
 class Component extends DCLogic {
   renderVals() {
-    const mode = this.props.mode ?? 'ta';
-    const dirB = (this.props.dir ?? 'A') === 'B';
+    const mode = 'ta';
+    const dirB = false;
     const state = this.props.state ?? 'normal';
     const deck = this.props.deck === true || this.props.deck === 'true';
     const lang = this.props.lang ?? 'en';

@@ -18,11 +18,8 @@ body{margin:0}
   <div style="position: absolute; inset: 0; background: linear-gradient(180deg, rgba(6,7,11,.92), rgba(6,7,11,.62))"></div>
   <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: rgba(255,255,255,.06)"></div>
   <div style="position: absolute; inset: 0; display: flex; align-items: stretch">
-    <button type="button" aria-label="{{t.home}}" style="all: unset; width: 64px; display: grid; place-items: center; background: {{homeBg}}; cursor: pointer">
-      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M3 10.5L11 4l8 6.5M5.5 9v9h11V9" stroke="#f3f4f8" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round"></path></svg>
-    </button>
     <sc-if value="{{showModes}}" hint-placeholder-val="{{ true }}">
-      <div style="display: flex; align-items: stretch; gap: 4px; padding-left: 12px" role="tablist" aria-label="{{t.mode}}">
+      <div style="display: flex; align-items: stretch; gap: 4px; padding-left: 20px" role="tablist" aria-label="{{t.mode}}">
         <sc-if value="{{pad}}" hint-placeholder-val="{{ false }}">
           <span style="align-self: center; height: 22px; padding: 0 6px; border-radius: 6px; background: rgba(255,255,255,.14); font-size: 12px; font-weight: 700; display: grid; place-items: center; color: #c9cde0">LB</span>
         </sc-if>
@@ -39,7 +36,7 @@ body{margin:0}
       </div>
     </sc-if>
     <sc-if value="{{crumb}}" hint-placeholder-val="{{ false }}">
-      <span style="align-self: center; padding-left: 16px; font-size: 17px; font-weight: 700">{{crumb}}</span>
+      <span style="align-self: center; padding-left: 28px; font-size: 17px; font-weight: 700">{{crumb}}</span>
     </sc-if>
     <span style="flex: 1"></span>
     <sc-if value="{{showNp}}" hint-placeholder-val="{{ true }}">
@@ -85,7 +82,7 @@ body{margin:0}
   </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"mode":{"editor":"enum","options":["ta","classic","none"],"default":"ta"},"user":{"editor":"enum","options":["in","out","expired","offline"],"default":"in"},"lang":{"editor":"enum","options":["en","ja"],"default":"en"},"badge":{"editor":"int","min":0,"max":9,"default":2},"w":{"editor":"int","min":960,"max":2560,"default":1920},"open":{"editor":"enum","options":["none","home","notif","settings"],"default":"none"},"crumb":{"editor":"text","default":""},"pad":{"editor":"boolean","default":false},"$preview":{"width":1920,"height":56}}'>
+<script type="text/x-dc" data-dc-script data-props='{"mode":{"editor":"enum","options":["ta","classic","none"],"default":"ta"},"user":{"editor":"enum","options":["in","out","expired","offline"],"default":"in"},"lang":{"editor":"enum","options":["en","ja"],"default":"en"},"badge":{"editor":"int","min":0,"max":9,"default":2},"w":{"editor":"int","min":960,"max":2560,"default":1920},"open":{"editor":"enum","options":["none","notif","settings"],"default":"none"},"crumb":{"editor":"text","default":""},"pad":{"editor":"boolean","default":false},"$preview":{"width":1920,"height":56}}'>
 class Component extends DCLogic {
   renderVals() {
     const mode = this.props.mode ?? 'ta';
@@ -115,7 +112,7 @@ class Component extends DCLogic {
       showModes: mode !== 'none' || !this.props.crumb,
       crumb: this.props.crumb || '',
       pad: this.props.pad === true || this.props.pad === 'true',
-      homeBg: open === 'home' ? hi : 'transparent', bellBg: open === 'notif' ? hi : 'transparent', gearBg: open === 'settings' ? hi : 'transparent',
+      bellBg: open === 'notif' ? hi : 'transparent', gearBg: open === 'settings' ? hi : 'transparent',
       showNp: w >= 1280, npW: w >= 1600 ? 360 : 230,
       np: 'I wanna be the Kaenbyou · [stage 1 music]',
       showClock: w >= 1600,

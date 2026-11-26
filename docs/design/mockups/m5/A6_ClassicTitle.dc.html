@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>A5 Classic: New game over a slot with a save (#851)</title>
+<title>A6 Classic run: the game&#x27;s own title screen, nothing else</title>
 <script src="./support.js"></script>
 </head>
 <body>
@@ -13,9 +13,9 @@
 body{margin:0}
 </style>
 </helmet>
-<!-- A5: starting over in a used slot. -->
+<!-- A6: Classic boots into the game&#x27;s own title screen; the session panel is off by default. -->
 <div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14">
-  <dc-import name="Shelf" state="confirm" hint-size="1920px,1080px"></dc-import>
+  <dc-import name="ClassicRun" screen="title" hint-size="1920px,1080px"></dc-import>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1920,"height":1080}}'>

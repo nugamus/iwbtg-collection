@@ -13,7 +13,7 @@
 body{margin:0}
 </style>
 </helmet>
-<!-- The toolbar's states, top to bottom. It shows on every screen outside a run; the run screens (loading, HUD, pause, results, session summary) hide it. Left to right: Home, the mode switch, now playing, clock and session time, notifications, settings, you. -->
+<!-- The toolbar's states, top to bottom. There is no Home button: Back or Esc steps back towards the main menu on every screen, and the mode switch sits at the left edge where it is easiest to reach. It shows on every screen outside a run; the run screens (loading, HUD, pause, results, session summary) hide it. Left to right: the mode switch, now playing, clock and session time, notifications, settings, you. -->
 <div style="position: relative; width: 1920px; height: 680px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8">
   <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1920px" h="680px" hue="250" blur="40" dim="0.5" tag="none" hint-size="1920px,680px"></dc-import></div>
   <div style="position: absolute; left: 0; top: 24px; display: flex; flex-direction: column; gap: 30px">

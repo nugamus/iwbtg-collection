@@ -15,7 +15,7 @@ body{margin:0}
 @media (prefers-reduced-motion: reduce){*{animation:none!important}}
 </style>
 </helmet>
-<!-- m4's loading card (Loading.dc.html), per mode. Time Attack keeps it as approved, plus a Controls row when the game uses extra actions (#52; replaces the bottom-left CONTROLS notice so it cannot be missed). Classic shows the slot it opens instead of PB and #1, and no mods. Still at least 1.5 s, starts by itself; the card slides up 24 px and fades in over 500 ms OutQuint. -->
+<!-- m4's loading card (Loading.dc.html), per mode. Time Attack keeps it as approved, plus a Controls row when the game uses extra actions (#52; replaces the bottom-left CONTROLS notice so it cannot be missed). Classic shows your play so far instead of PB and #1, and no mods; the game's own menus handle its saves. Still at least 1.5 s, starts by itself; the card slides up 24 px and fades in over 500 ms OutQuint. -->
 <div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', 'Noto Sans JP', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
   <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1920px" h="1080px" hue="{{hue}}" scene="{{scene}}" blur="45" dim="0.55" tag="none" hint-size="1920px,1080px"></dc-import></div>
   <div style="position: absolute; left: 580px; top: {{top}}px; width: 760px; display: flex; flex-direction: column; gap: 22px">
@@ -94,9 +94,9 @@ class Component extends DCLogic {
     const beta = this.props.beta === true || this.props.beta === 'true';
     const base = { ta: !classic, extra, accent: classic ? '#8f7bff' : '#ff3d55', modeBg: classic ? '#8f7bff' : '#ff3d55', modeName: classic ? 'Classic' : 'Time Attack' };
     if (classic) return Object.assign(base, {
-      hue: 250, scene: 'castle', title: 'I wanna be the Kaenbyou', creator: 'Kira☆~Kira☆~', top: 190, entry: 'Slot 1 · Stage 4 · Misty forest 3', status: '',
-      stats: [{ k: 'In this slot', v: '6:12:40', d: 'played' }, { k: 'Deaths', v: '1,284', d: 'in this slot' }, { k: 'Saved', v: '2 days ago', d: 'Very Hard' }],
-      rowKey: 'Opens', pills: [], rowText: 'the game’s own title screen, then straight into Slot 1',
+      hue: 250, scene: 'castle', title: 'I wanna be the Kaenbyou', creator: 'Kira☆~Kira☆~', top: 190, entry: 'Last played up to Stage 7 · the boss', status: '',
+      stats: [{ k: 'Time played', v: '15:59:12', d: 'in Classic' }, { k: 'Deaths', v: '5,194', d: 'in this game' }, { k: 'Last played', v: '2 days ago', d: '1:12:05 session' }],
+      rowKey: 'Opens', pills: [], rowText: 'the game’s own title screen: New game, Continue and its file select work as in the original',
       startsText: 'starts by itself', backText: 'back to the shelf', tip: 'Classic keeps your saves and your stats. Nothing here goes on a leaderboard.',
       extras: [],
     });

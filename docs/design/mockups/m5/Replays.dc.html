@@ -96,12 +96,12 @@ class Component extends DCLogic {
     const R = [
       ['21:14 today', 'I wanna be the Kaenbyou', 'Very Hard · Any% · SD', TA, 'Died · Stage 5', '#c9cde0', '1', ''],
       ['20:31 today', 'I wanna be the Kaenbyou', 'Very Hard · Any%', TA, '38:12.46 PB', '#ffc93c', '1,284', '★'],
-      ['19:02 today', 'I wanna be the Kaenbyou', 'Slot 1 · Very Hard', CL, 'Session 1:12:05', '#d4ccff', '412', ''],
+      ['19:02 today', 'I wanna be the Kaenbyou', 'Very Hard', CL, 'Session 1:12:05', '#d4ccff', '412', ''],
       ['Yesterday', 'I wanna eat the lemon', 'Hard · Any%', TA, '12:01.88', '#f3f4f8', '233', ''],
       ['Yesterday', 'I wanna eat the lemon', 'Hard · Any%', TA, 'Quit · Stage 2', '#a2a8bc', '61', ''],
       ['24 Nov', 'I Wanna Rely The Needle 4.2', 'Any% · practice', TA, 'Practice · Stage 3', '#ffc46b', '118', ''],
       ['24 Nov', 'I wanna go the Spook House', 'Normal · Any%', TA, '26:44.10', '#f3f4f8', '502', '⤓'],
-      ['21 Nov', 'I wanna help the Fairy tale', 'Slot 1', CL, 'Session 41:07', '#d4ccff', '212', ''],
+      ['21 Nov', 'I wanna help the Fairy tale', 'Classic', CL, 'Session 41:07', '#d4ccff', '212', ''],
       ['18 Nov', 'nugamus vs. tsukimi', 'downloaded replay', TA, '31:42.18 #1', '#f3f4f8', '1,261', '⤓'],
     ];
     const rows = R.map(([when, game, map, m, result, resInk, deaths, keep], i) => ({ when, game, map, mode: m[0], modeBg: m[1], modeInk: m[2], result, resInk, deaths, keep, keepInk: keep === '★' ? '#ffc93c' : '#c9cde0', x: i === 0 ? 0 : 20, bg: i === 0 ? 'rgba(255,255,255,.2)' : 'rgba(12,14,22,.74)', ring: i === 0 ? '0 0 0 2px rgba(255,255,255,.55)' : 'none' }));

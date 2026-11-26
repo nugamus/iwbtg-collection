@@ -93,7 +93,7 @@ class Component extends DCLogic {
     });
     if (kind === 'update') return Object.assign(base, {
       title: 'Version 0.9.0 is ready', body: 'It downloaded in the background (38 MB). Restart now, or it installs the next time you start.',
-      rows: [{ icon: 'M4 10h12M10 4v12', ic: '#45d483', a: 'New: Classic shelf and save slots', b: 'changelog line, sample', c: '' }, { icon: 'M5 10l3 3 7-7', ic: '#45d483', a: 'Fixed: replays of skipped cutscenes', b: 'changelog line, sample', c: '' }, { icon: 'M10 4v7M10 14.5v.5', ic: '#ffc46b', a: 'Engine build changes', b: 'Your records re-verify on the server; none are lost (product.md, Leaderboards).', c: '' }],
+      rows: [{ icon: 'M4 10h12M10 4v12', ic: '#45d483', a: 'New: the Classic shelf', b: 'changelog line, sample', c: '' }, { icon: 'M5 10l3 3 7-7', ic: '#45d483', a: 'Fixed: replays of skipped cutscenes', b: 'changelog line, sample', c: '' }, { icon: 'M10 4v7M10 14.5v.5', ic: '#ffc46b', a: 'Engine build changes', b: 'Your records re-verify on the server; none are lost (product.md, Leaderboards).', c: '' }],
       buttons: [pri('Restart and update'), sec('Later'), sec('What’s new', { bg: 'rgba(255,255,255,.06)' })], foot: 'Never mid-run: the prompt waits until you are back on a menu.', cy: 260,
     });
     if (kind === 'signin') return Object.assign(base, {

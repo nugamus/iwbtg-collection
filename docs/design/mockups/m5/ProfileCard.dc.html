@@ -107,7 +107,7 @@ class Component extends DCLogic {
       { k: 'Classic finishes', v: '9 games', d: 'own saves only', dColor: '#a2a8bc' },
       { k: 'Total deaths', v: '31,870', d: '+412 this session', dColor: '#c9cde0' },
       { k: 'Play time', v: '164h 20m', d: '+1h 12m', dColor: '#c9cde0' },
-      { k: 'Kaenbyou', v: 'Stage 4', d: 'furthest, Slot 1', dColor: '#b9adff' },
+      { k: 'Kaenbyou', v: 'Stage 4', d: 'first time this far', dColor: '#b9adff' },
     ];
     const badges = [
       { label: 'Sub-40:00 · Kaenbyou Very Hard', bg: 'rgba(255,201,60,.2)', ink: '#ffd977' },
@@ -129,7 +129,7 @@ class Component extends DCLogic {
       nameSize: footer ? 19 : full ? 24 : 17, lineSize: footer ? 13 : full ? 15 : 13,
       rankSize: footer ? 64 : full ? 120 : 64, rankTop: footer ? 8 : full ? 4 : 6,
       overall: pb && !footer ? '1,192' : '1,204', showRankDelta: pb && !footer,
-      clearedLine: classic ? 'own saves' : footer ? '13 cleared' : '13 games cleared',
+      clearedLine: classic ? 'no rank' : footer ? '13 cleared' : '13 games cleared',
       small: footer, expanded: !footer, cols: full ? 4 : 2,
       cells: (classic ? cellsClassic : full ? cells : cells.slice(0, 2)).slice(0, full ? 4 : 2), cellSize: full ? 20 : 16,
       showSpark: full && !classic, sparkLine: line, sparkArea: line + ' L166 44 L4 44 Z', sparkEndY: pts[pts.length - 1][1].toFixed(1),

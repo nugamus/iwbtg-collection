@@ -18,7 +18,7 @@ body{margin:0}
   <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1920px" h="1080px" hue="250" blur="45" dim="0.62" tag="none" hint-size="1920px,1080px"></dc-import></div>
   <div style="position: absolute; left: 80px; top: 64px; display: flex; align-items: baseline; gap: 16px">
     <span style="font-size: 26px; font-weight: 700">I wanna be the Kaenbyou</span>
-    <span style="height: 24px; padding: 0 10px; border-radius: 8px; background: #8f7bff; display: inline-flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase">Classic · Slot 1</span></span>
+    <span style="height: 24px; padding: 0 10px; border-radius: 8px; background: #8f7bff; display: inline-flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase">Classic</span></span>
     <span style="font-size: 15px; color: #a2a8bc">Very Hard · 26 Nov 2026, 21:14 – 22:26</span>
   </div>
 
@@ -27,7 +27,7 @@ body{margin:0}
     <div style="display: flex; align-items: baseline; gap: 24px">
       <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 150px; font-weight: 700; line-height: .9">{{hero}}</span>
       <sc-if value="{{finished}}" hint-placeholder-val="{{ false }}">
-        <span style="height: 40px; padding: 0 16px; border-radius: 10px; background: rgba(143,123,255,.3); display: inline-flex; align-items: center; transform: skewX(-11.31deg); box-shadow: inset 0 0 0 2px #b9adff"><span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700"><img src="/_blob/dd3504fc78d818a5c566e1ae138ad56f" alt="" width="18" height="21" style="image-rendering: pixelated">Finished on Very Hard</span></span>
+        <span style="height: 40px; padding: 0 16px; border-radius: 10px; background: rgba(143,123,255,.3); display: inline-flex; align-items: center; transform: skewX(-11.31deg); box-shadow: inset 0 0 0 2px #b9adff"><span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700"><img src="/_blob/dd3504fc78d818a5c566e1ae138ad56f" alt="" width="18" height="21" style="image-rendering: pixelated">Finished</span></span>
       </sc-if>
     </div>
     <div style="display: flex; gap: 56px; margin-top: 18px">
@@ -91,15 +91,15 @@ class Component extends DCLogic {
       heroKey: fin ? 'Last session · the ending' : 'This session',
       hero: fin ? '1:04:51' : '1:12:05',
       facts: fin ? [
-        { k: 'Deaths', v: '414', d: '5,608 in this slot', dc: '#a2a8bc' }, { k: 'Slot total', v: '7:17:31', d: 'from new game to the ending', dc: '#a2a8bc' },
-        { k: 'Stages', v: '6 → end', d: 'Stage 6 and the boss', dc: '#a2a8bc' }, { k: 'Finished', v: '2 of 4', d: 'Hard, Very Hard', dc: '#a2a8bc' },
+        { k: 'Deaths', v: '414', d: '5,608 in this game', dc: '#a2a8bc' }, { k: 'Time played', v: '17:04:03', d: 'in this game, all sessions', dc: '#a2a8bc' },
+        { k: 'Stages', v: '6 → end', d: 'Stage 6 and the boss', dc: '#a2a8bc' }, { k: 'Finished', v: '2nd time', d: 'first: 14 Sep', dc: '#a2a8bc' },
       ] : [
-        { k: 'Deaths', v: '412', d: '1,696 in this slot', dc: '#a2a8bc' }, { k: 'Progress', v: 'Stage 3 → 4', d: 'first time in Stage 4', dc: '#b9adff' },
-        { k: 'Saves', v: '6', d: 'last: Misty forest 3', dc: '#a2a8bc' }, { k: 'Rooms', v: '14', d: '5 new', dc: '#a2a8bc' },
+        { k: 'Deaths', v: '412', d: '5,194 in this game', dc: '#a2a8bc' }, { k: 'Progress', v: 'Stage 3 → 4', d: 'first time in Stage 4', dc: '#b9adff' },
+        { k: 'Save points', v: '6', d: 'last: Misty forest 3', dc: '#a2a8bc' }, { k: 'Rooms', v: '14', d: '5 new', dc: '#a2a8bc' },
       ],
       bars, ticks,
       saves: fin ? [{ x: 12, label: '6-2' }, { x: 40, label: '6-4' }, { x: 66, label: 'Boss' }] : [{ x: 8, label: '3-3' }, { x: 21, label: '3-4' }, { x: 37, label: '4-1' }, { x: 58, label: '4-2' }, { x: 79, label: '4-3' }, { x: 96, label: 'Misty 3' }],
-      note: fin ? 'A Classic finish shows here and on the shelf (the fruit on the cover). It is a personal record only; the same game’s Time Attack boards are unaffected.' : 'No leaderboard and no splits in Classic: the game’s own saves decide where you are. The replay of this session is kept like any other.',
+      note: fin ? 'A Classic finish shows here and on the shelf (the fruit on the cover). It is a personal record only; the same game’s Time Attack boards are unaffected.' : 'No leaderboard and no splits in Classic: the game’s own saves decide where you are, exactly as in the original. The replay of this session is kept like any other.',
       primary: fin ? 'Play again' : 'Continue playing',
     };
   }

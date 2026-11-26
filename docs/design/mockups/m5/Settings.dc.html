@@ -94,7 +94,7 @@ body{margin:0}
   </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"view":{"editor":"enum","options":["top","audio","online","search"],"default":"top"},"lang":{"editor":"enum","options":["en","ja"],"default":"en"},"deck":{"editor":"boolean","default":false},"$preview":{"width":1920,"height":1080}}'>
+<script type="text/x-dc" data-dc-script data-props='{"view":{"editor":"enum","options":["top","audio","online","stream","search"],"default":"top"},"lang":{"editor":"enum","options":["en","ja"],"default":"en"},"deck":{"editor":"boolean","default":false},"$preview":{"width":1920,"height":1080}}'>
 class Component extends DCLogic {
   renderVals() {
     const view = this.props.view ?? 'top';
@@ -117,20 +117,22 @@ class Component extends DCLogic {
       graphics: ['Graphics', [chips('Display', '', ['Windowed', 'Fullscreen'], 1), chips('Fullscreen ratio', 'The UI lays itself out for the shape you pick.', ['Native', '4:3', '16:9', '16:10', '21:9', '32:9'], 2), sel('Window size', 'Used in windowed mode.', '1600 × 900'), tg('Integer scale', 'Largest whole-number game scale that fits; may leave a border.', false), sel('Frame limit', 'The game always ticks at its own rate.', 'Display (144 Hz)'), sl('Backdrop blur', 'The game art around the game and behind menus.', 60, '60%'), sl('UI scale', 'The HUD side panels only, 75–150%.', 33, '100%')]],
       audio: ['Audio', [sl('Master volume', '', 100, '100%'), sl('Music', '', 80, '80%'), sl('Sound effects', '', 100, '100%'), btn('Audio offset', 'Holds sound back to match your speakers, 0–500 ms. Sound earlier than the picture is not possible yet (#464).', 'Calibrate…', '+24 ms')]],
       input: ['Input', [btn('Key bindings', 'Global keys, game actions, keyboard and controller, per-game labels.', 'Open'), sel('Controller', 'Standard-layout pad connected.', 'Pad 1 ▸ Player'), tg('Show button hints', 'The hint bar at the bottom of each screen.', true)]],
-      gameplay: ['Gameplay and HUD', [chips('On the HUD', 'Shift+Tab hides it all during a run.', ['Leaderboard', 'Timer', 'Deaths', 'Stage', 'Stage deaths', 'Input', 'Mods'], -1), tg('Auto-retry', 'Restart the run from the start after a death. Also in the mod select footer.', false), chips('Slow motion speed', 'For the SL practice mod.', ['75%', '50%'], 0), tg('Session panel in Classic', 'Session time and deaths beside the game.', true), tg('Death heatmap on results', 'Where you died, on the stage\'s room.', false), tg('Screen shake', 'Turn off if shaking bothers you (#106).', true), tg('Full-screen flashes', '', true)]],
+      gameplay: ['Gameplay and HUD', [chips('On the HUD', 'Shift+Tab hides it all during a run.', ['Leaderboard', 'Timer', 'Deaths', 'Stage', 'Stage deaths', 'Input', 'Mods'], -1), tg('Auto-retry', 'Restart the run from the start after a death. Also in the mod select footer.', false), chips('Slow motion speed', 'For the SL practice mod.', ['75%', '50%'], 0), tg('Session panel in Classic', 'Session time, deaths and stage beside the game. Off: only the game and its art.', false), tg('Death map', 'Where you died, marked on the room: in practice and on results. Never during a ranked run.', true), tg('Screen shake', 'Turn off if shaking bothers you (#106).', true), tg('Full-screen flashes', '', true)]],
       online: ['Online', [acct('nugamus', 'Signed in with Discord · since 3 Nov 2026', 'Sign out'), tg('Upload clears automatically', 'Off: results offers Upload replay for each clear.', true), tg('Public profile', 'Off: your profile page is hidden. Leaderboard rows and their replays stay public (product.md, Replays).', true), tg('Show my country flag', 'On leaderboards and your card.', true), btn('Export my data', 'A zip of your account, runs and replays.', 'Export'), btn('Delete account', 'Signs you out everywhere and removes your account and leaderboard rows. Local saves and stats stay on this computer.', 'Delete…', '', true)]],
+      stream: ['Streaming and recording', [tg('Stream-safe names', 'Other players show as their rank only, on leaderboards, ghosts and races. Your own name stays.', false), tg('Live stats file', 'Writes deaths, time, stage and the PB delta to a text file every second, for an OBS text source. Nothing is sent anywhere.', true), fld('Stats file', 'One line per value; the format is in the file’s first line.', 'Documents/…/live.txt'), chips('Death counter on screen', 'Drawn in the backdrop beside the game, never over it.', ['Off', 'Small', 'Big'], 2), tg('Input display', 'The keys you press, under the game. Also in the pause options.', false), tg('Deaths and time in the window title', 'As many fangame windows do: "Deaths: 5231 · Time: 12:44:09". Classic only.', true), tg('Hide the toolbar clock', 'For recordings without the time of day.', false)]],
     };
     const ICON = {
       general: 'M13 4a9 9 0 1 0 0 18a9 9 0 1 0 0-18M13 11v6M13 8v.5', graphics: 'M4 6h18v12H4zM9 22h8M13 18v4',
       audio: 'M5 10h4l5-4v14l-5-4H5zM18 9.5a5 5 0 0 1 0 7', input: 'M3 8h20v10H3zM7 13h.5M11 13h.5M15 13h.5M19 13h.5M8 16h10',
       gameplay: 'M13 4a9 9 0 1 0 0 18a9 9 0 1 0 0-18M13 8v5l3 2', online: 'M13 4a9 9 0 1 0 0 18a9 9 0 1 0 0-18M4 13h18M13 4c3 3 3 15 0 18M13 4c-3 3-3 15 0 18',
-      about: 'M7 4h12v18H7zM10 8h6M10 12h6M10 16h3',
+      about: 'M7 4h12v18H7zM10 8h6M10 12h6M10 16h3', stream: 'M4 7h13v12H4zM17 11l5-3v10l-5-3',
     };
-    const order = ['general', 'graphics', 'audio', 'input', 'gameplay', 'online'];
+    const order = ['general', 'graphics', 'audio', 'input', 'gameplay', 'online', 'stream'];
     let show, active, query = '', found = '', scrollTop = 0;
     if (view === 'top') { show = ['general', 'graphics']; active = 'general'; }
     else if (view === 'audio') { show = ['audio', 'input', 'gameplay']; active = 'audio'; scrollTop = 0; }
     else if (view === 'online') { show = ['online']; active = 'online'; }
+    else if (view === 'stream') { show = ['stream']; active = 'stream'; }
     else { show = ['graphics', 'gameplay']; active = 'graphics'; query = 'scale'; found = '3 results'; }
     const match = (r) => view !== 'search' || /scale|speed/i.test(r.label);
     const sections = show.map((k) => {
@@ -139,7 +141,7 @@ class Component extends DCLogic {
         title, ink: '#ffffff',
         rows: rows.filter(match).map((r, i) => {
           const hit = view === 'search';
-          const focus = (view === 'top' && k === 'graphics' && i === 1) || (view === 'audio' && k === 'audio' && i === 3);
+          const focus = (view === 'top' && k === 'graphics' && i === 1) || (view === 'audio' && k === 'audio' && i === 3) || (view === 'stream' && i === 1);
           const on = !!r.on;
           return Object.assign({}, r, {
             isToggle: r.type === 'toggle', isSelect: r.type === 'select', isChips: r.type === 'chips', isSlider: r.type === 'slider', isField: r.type === 'field', isButton: r.type === 'button', isAccount: r.type === 'account',
@@ -155,7 +157,7 @@ class Component extends DCLogic {
     });
     const w = deck ? 1280 : 1920, h = deck ? 800 : 1080;
     const T = ja ? { title: '設定', sub: '変更はすぐに保存されます', search: '設定を検索' } : { title: 'Settings', sub: 'Changes apply and save at once', search: 'Search settings' };
-    const labels = ja ? { general: '一般', graphics: 'グラフィック', audio: 'オーディオ', input: '入力', gameplay: 'ゲームプレイ', online: 'オンライン', about: 'このプロジェクト' } : { general: 'General', graphics: 'Graphics', audio: 'Audio', input: 'Input', gameplay: 'Gameplay and HUD', online: 'Online', about: 'About' };
+    const labels = ja ? { general: '一般', graphics: 'グラフィック', audio: 'オーディオ', input: '入力', gameplay: 'ゲームプレイ', online: 'オンライン', stream: '配信', about: 'このプロジェクト' } : { general: 'General', graphics: 'Graphics', audio: 'Audio', input: 'Input', gameplay: 'Gameplay and HUD', online: 'Online', stream: 'Streaming', about: 'About' };
     const icons = order.concat(['about']).map((k) => ({ d: ICON[k], label: labels[k], bg: k === active ? 'rgba(255,255,255,.06)' : 'transparent', bar: k === active ? accent : 'transparent', ink: k === active ? '#ffffff' : '#8d93a8' }));
     return {
       w, h, deck, lang, t: T, accent, icons, sections, query, found,

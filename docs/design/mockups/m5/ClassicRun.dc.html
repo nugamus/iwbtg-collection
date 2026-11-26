@@ -15,7 +15,7 @@ body{margin:0}
 @media (prefers-reduced-motion: reduce){*{animation:none!important}}
 </style>
 </helmet>
-<!-- A Classic run. The game sits where the m4 HUD puts it (16:9: fills the height). No live leaderboard and no timer: a small session panel on the left (Shift+Tab hides it, Settings can turn it off for good), nothing on the right. The panel fades in 300 ms OutQuint 3 s after the game starts and dims to 40% while the kid moves. -->
+<!-- A Classic run. The game sits where the m4 HUD puts it (16:9: fills the height), with only the game's art around it: no leaderboard, no timer. The session panel (session time, deaths, stage) is off by default; Settings → Gameplay and HUD turns it on, and then it sits on the left and dims to 40% while the kid moves. Pausing opens the pause menu (D14). -->
 <div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
   <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1920px" h="1080px" hue="250" blur="60" dim="0.45" tag="none" hint-size="1920px,1080px"></dc-import></div>
   <div style="position: absolute; left: 249px; top: 0; width: 1422px; height: 1080px; overflow: hidden; box-shadow: 0 0 60px rgba(0,0,0,.6)">
@@ -31,41 +31,28 @@ body{margin:0}
     <sc-if value="{{playing}}" hint-placeholder-val="{{ false }}">
       <div style="width: 800px; height: 608px; transform: scale(1.77632); transform-origin: 0 0"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div>
     </sc-if>
-    <sc-if value="{{paused}}" hint-placeholder-val="{{ false }}">
-      <div style="position: absolute; inset: 0; background: rgba(0,0,0,.5)"></div>
-      <div style="position: absolute; left: 444px; top: 300px; width: 300px; transform: scale(1.77632); transform-origin: 0 0"><dc-import name="PauseBox" selected="2" items="Continue|Retry from save|Back to the shelf" hint-size="300px,240px"></dc-import></div>
-    </sc-if>
   </div>
 
   <!-- the session panel -->
   <sc-if value="{{hud}}" hint-placeholder-val="{{ true }}">
     <div style="position: absolute; left: 22px; top: 360px; width: 206px; display: flex; flex-direction: column; gap: 16px; opacity: {{hudOp}}">
-      <div style="align-self: flex-start; height: 24px; padding: 0 10px; border-radius: 8px; background: #8f7bff; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase">Classic · Slot 1</span></div>
-      <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a2a8bc">This session</span><span style="font-size: 30px; font-weight: 600">0:12:44</span><span style="font-size: 13px; color: #a2a8bc">slot total 6:25:24</span></div>
+      <div style="align-self: flex-start; height: 24px; padding: 0 10px; border-radius: 8px; background: #8f7bff; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase">Classic</span></div>
+      <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a2a8bc">This session</span><span style="font-size: 30px; font-weight: 600">0:12:44</span><span style="font-size: 13px; color: #a2a8bc">16:11:56 in this game</span></div>
       <div style="display: flex; gap: 22px">
         <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a2a8bc">Deaths</span><span style="font-size: 22px; font-weight: 600">37</span><span style="font-size: 13px; color: #a2a8bc">1,321 total</span></div>
         <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a2a8bc">Stage</span><span style="font-size: 22px; font-weight: 600">{{stage}}</span><span style="font-size: 13px; color: #a2a8bc">furthest 4</span></div>
       </div>
-      <sc-if value="{{pausedLine}}" hint-placeholder-val="{{ false }}">
-        <span style="font-size: 13px; font-weight: 600; color: #c9cde0">Paused · game time stopped</span>
-      </sc-if>
-    </div>
-  </sc-if>
-  <sc-if value="{{paused}}" hint-placeholder-val="{{ false }}">
-    <div style="position: absolute; left: 1694px; top: 420px; width: 200px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.45; color: #c9cde0">
-      <span style="font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a2a8bc">Back to the shelf</span>
-      <span>Progress since your last save is lost, as in the game. Deaths and time played are kept.</span>
     </div>
   </sc-if>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"screen":{"editor":"enum","options":["title","playing","pause"],"default":"title"},"$preview":{"width":1920,"height":1080}}'>
+<script type="text/x-dc" data-dc-script data-props='{"screen":{"editor":"enum","options":["title","panel"],"default":"title"},"$preview":{"width":1920,"height":1080}}'>
 class Component extends DCLogic {
   renderVals() {
     const s = this.props.screen ?? 'title';
     return {
-      titleScreen: s === 'title', playing: s !== 'title', paused: s === 'pause', pausedLine: s === 'pause',
-      hud: true, hudOp: s === 'playing' ? 0.4 : 1, stage: s === 'title' ? '—' : '4',
+      titleScreen: s === 'title', playing: s !== 'title',
+      hud: s === 'panel', hudOp: 1, stage: s === 'title' ? '—' : '4',
     };
   }
 }

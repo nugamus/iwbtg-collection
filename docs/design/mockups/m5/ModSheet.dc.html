@@ -13,7 +13,7 @@
 body{margin:0}
 </style>
 </helmet>
-<!-- m4's mod select sheet (ModSelect.dc.html) with the two open questions of #554 drawn both ways. Variant "ranked": Hitboxes stays a ranked visual mod on its own board, Flashlight joins Challenge, Mirror is dropped. Variant "practice": Hitboxes moves to Practice and makes the run unranked. The header and footer always say which board the run counts for, so either choice explains itself. -->
+<!-- m4's mod select sheet (ModSelect.dc.html) with the decisions of #554 and #773: Hitboxes is a practice aid (Practice column, the run is unranked), Flashlight joins Challenge as a client-drawn ranked mod, Mirror shows faded as coming later (#1574), and Auto-retry lives in the footer. New: the Ghost switch (#64) picks a ghost to race in the room: off, your PB or the board's #1. A ghost is drawn only, it never touches the run, so it is not a mod and needs no board of its own. The header and footer always say which board the run counts for. Picking a mod: the wedge fills 200 ms OutQuint and its code drops into Selected. -->
 <div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8">
   <div style="position: absolute; inset: 0"><dc-import name="Select" mode="ta" hint-size="1920px,1080px"></dc-import></div>
   <div style="position: absolute; inset: 0; background: rgba(5,6,10,.55)"></div>
@@ -65,6 +65,10 @@ body{margin:0}
           <span style="display: flex; flex-direction: column; line-height: 1.15"><span style="font-size: 15px; font-weight: 700">Auto-retry</span><span style="font-size: 12px; color: #a2a8bc">Restart from the start after a death</span></span>
         </span>
       </button>
+      <div style="height: 52px; padding: 0 8px 0 18px; border-radius: 10px; background: rgba(255,255,255,.06); display: flex; align-items: center; gap: 12px; transform: skewX(-11.31deg)" role="radiogroup" aria-label="Ghost">
+        <span style="transform: skewX(11.31deg); display: flex; flex-direction: column; line-height: 1.15"><span style="font-size: 15px; font-weight: 700">Ghost</span><span style="font-size: 12px; color: #a2a8bc">drawn only, never ranked</span></span>
+        <sc-for list="{{ghosts}}" as="g" hint-placeholder-count="3"><span role="radio" aria-checked="{{g.on}}" style="height: 36px; padding: 0 14px; border-radius: 8px; background: {{g.bg}}; display: flex; align-items: center"><span style="transform: skewX(11.31deg); font-size: 14px; font-weight: {{g.w}}; color: {{g.ink}}; white-space: nowrap">{{g.label}}</span></span></sc-for>
+      </div>
       <span style="flex: 1"></span>
       <span style="font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Selected</span>
       <sc-for list="{{chosen}}" as="c" hint-placeholder-count="2">
@@ -76,16 +80,17 @@ body{margin:0}
   </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"variant":{"editor":"enum","options":["ranked","practice"],"default":"ranked"},"retry":{"editor":"boolean","default":false},"$preview":{"width":1920,"height":1080}}'>
+<script type="text/x-dc" data-dc-script data-props='{"retry":{"editor":"boolean","default":false},"hb":{"editor":"boolean","default":true},"ghost":{"editor":"enum","options":["off","pb","top"],"default":"pb"},"$preview":{"width":1920,"height":1080}}'>
 class Component extends DCLogic {
   renderVals() {
-    const practiceHB = (this.props.variant ?? 'ranked') === 'practice';
     const retry = this.props.retry === true || this.props.retry === 'true';
-    const on = { SD: true, HB: true };
-    const mk = (color, code, name, desc, opts, tag) => {
+    const hbOn = !(this.props.hb === false || this.props.hb === 'false');
+    const ghost = this.props.ghost ?? 'pb';
+    const on = { SD: true, HB: hbOn };
+    const mk = (color, code, name, desc, opts, tag, later) => {
       const sel = !!on[code];
       return {
-        code, name, desc, tag: tag || '', pressed: sel ? 'true' : 'false', op: 1,
+        code, name, desc, tag: tag || '', pressed: sel ? 'true' : 'false', op: later ? 0.45 : 1,
         bg: sel ? color.replace('rgb(', 'rgba(').replace(')', ',.22)') : 'rgba(255,255,255,.05)',
         shadow: sel ? `inset 0 0 0 2px ${color}` : 'none',
         tileBg: sel ? color : 'rgba(255,255,255,.1)', tileInk: sel ? '#10121a' : '#c9cde0',
@@ -94,18 +99,18 @@ class Component extends DCLogic {
       };
     };
     const red = 'rgb(255,96,112)', blue = 'rgb(142,203,255)', amber = 'rgb(255,196,107)';
-    const hb = mk(practiceHB ? amber : blue, 'HB', 'Hitboxes', 'Draw the kid’s and every hazard’s hitbox.', null, practiceHB ? 'moved' : '');
     const columns = [
-      { name: 'Challenge', color: red, note: '', noteColor: '#a2a8bc', mods: [mk(red, 'SD', 'Sudden Death', 'One death ends the run.'), mk(red, 'FL', 'Flashlight', 'Only a circle around the kid is lit. Client-only.', null, 'new')] },
-      { name: 'Visual', color: blue, note: '', noteColor: '#a2a8bc', mods: practiceHB ? [mk(blue, 'NB', 'No background', 'Plain backdrop behind the room.')] : [hb, mk(blue, 'NB', 'No background', 'Plain backdrop behind the room.')] },
-      { name: 'Practice', color: amber, note: '· never ranked', noteColor: '#ffc46b', mods: (practiceHB ? [hb] : []).concat([mk(amber, 'SS', 'Save states', 'Save and load anywhere.'), mk(amber, 'SL', 'Slow motion', 'Play at a lower speed.', ['75%', '50%']), mk(amber, 'FA', 'Frame advance', 'Step one tick at a time.')]) },
+      { name: 'Challenge', color: red, note: '', noteColor: '#a2a8bc', mods: [mk(red, 'SD', 'Sudden Death', 'One death ends the run.'), mk(red, 'FL', 'Flashlight', 'Only a circle around the kid is lit. Drawn by the client.', null, 'new'), mk(red, 'MR', 'Mirror', 'The rooms flipped left to right.', null, 'coming later', true)] },
+      { name: 'Visual', color: blue, note: '', noteColor: '#a2a8bc', mods: [mk(blue, 'NB', 'No background', 'Plain backdrop behind the room.')] },
+      { name: 'Practice', color: amber, note: '· never ranked', noteColor: '#ffc46b', mods: [mk(amber, 'HB', 'Hitboxes', 'Draw the kid’s and every hazard’s hitbox.'), mk(amber, 'SS', 'Save states', 'Save and load anywhere.'), mk(amber, 'SL', 'Slow motion', 'Play at a lower speed.', ['75%', '50%']), mk(amber, 'FA', 'Frame advance', 'Step one tick at a time.')] },
     ];
+    const chosen = [{ code: 'SD', color: red }].concat(hbOn ? [{ code: 'HB', color: amber }] : []);
+    const ghosts = [['off', 'Off'], ['pb', 'Your PB'], ['top', 'Board #1']].map(([k, label]) => ({ label, on: k === ghost ? 'true' : 'false', bg: k === ghost ? 'rgba(255,255,255,.2)' : 'transparent', ink: k === ghost ? '#ffffff' : '#a2a8bc', w: k === ghost ? 700 : 500 }));
     return {
-      columns,
-      chosen: [{ code: 'SD', color: red }, { code: 'HB', color: practiceHB ? amber : blue }],
-      pill: practiceHB ? 'Unranked' : 'Ranked', pillBg: practiceHB ? '#ffc46b' : '#8ecbff', pillInk: practiceHB ? '#2a1d05' : '#0b1a2a',
-      counts: practiceHB ? 'Hitboxes is a practice aid, so this run won’t reach the leaderboard.' : 'Counts for Very Hard · Any% + SD + HB',
-      dropNote: 'Mirror (MR) is not offered: it needs sim work and a per-game check (rooms that read the kid’s x), for a mod few would play. Flashlight is drawn by the client only.',
+      columns, chosen, ghosts,
+      pill: hbOn ? 'Unranked' : 'Ranked', pillBg: hbOn ? '#ffc46b' : '#8ecbff', pillInk: hbOn ? '#2a1d05' : '#0b1a2a',
+      counts: hbOn ? 'Hitboxes is a practice aid, so this run won’t reach the leaderboard.' : 'Counts for Very Hard · Any% + SD',
+      dropNote: 'Mirror comes later (#1574): it needs sim work and a check of every room that reads the kid’s x. Flashlight and the ghost are drawn by the client, so a replay plays the same with or without them.',
       retryOn: retry ? 'true' : 'false', retryBg: retry ? 'rgba(255,61,85,.2)' : 'rgba(255,255,255,.06)', retryRing: retry ? 'inset 0 0 0 2px #ff3d55' : 'none',
       trackBg: retry ? '#ff3d55' : 'rgba(255,255,255,.2)', knobX: retry ? 19 : 3, knobBg: retry ? '#ffffff' : '#c9cde0',
     };
