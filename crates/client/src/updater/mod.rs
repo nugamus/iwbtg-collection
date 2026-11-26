@@ -355,6 +355,7 @@ fn prompt(
 
 /// The prompt never covers a run: leaving the menu takes it away (it comes back on the menu).
 #[cfg(not(target_arch = "wasm32"))]
+#[allow(clippy::type_complexity)]
 fn hide_in_run(
     mut commands: Commands,
     screen: Option<Res<State<AppScreen>>>,

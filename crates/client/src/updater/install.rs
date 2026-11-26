@@ -278,7 +278,7 @@ mod tests {
         out.extend_from_slice(&0u16.to_le_bytes());
         out.extend_from_slice(&0u32.to_le_bytes());
         out.extend_from_slice(&0u32.to_le_bytes());
-        out.extend_from_slice(&name.as_bytes());
+        out.extend_from_slice(name.as_bytes());
         let central_size = out.len() as u32 - central_at;
         // End of central directory.
         out.extend_from_slice(&EOCD.to_le_bytes());
