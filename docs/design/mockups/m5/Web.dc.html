@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Web build: start and loading</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+@keyframes wb-pulse{0%,100%{opacity:.7}50%{opacity:1}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
+</style>
+</helmet>
+<!-- The browser build (web.md, #1127). Browsers keep audio off until a key, click or touch, so the page opens on a start screen that asks for one (a controller press does not count, so it says so). Then the package loads with one progress bar made of the phases the page already measures (fetch, unpack, parse, decode, first room). This replaces today's #status line. -->
+<div style="position: relative; width: 1600px; height: 900px; overflow: hidden; background: #07080c; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1600px" h="900px" hue="250" scene="castle" blur="40" dim="0.66" tag="none" hint-size="1600px,900px"></dc-import></div>
+  <img src="/_blob/dd3504fc78d818a5c566e1ae138ad56f" alt="" width="126" height="144" style="position: absolute; left: 737px; top: 170px; image-rendering: pixelated">
+  <span style="position: absolute; left: 0; right: 0; top: 340px; text-align: center; font-family: 'Barlow Condensed', sans-serif; font-size: 64px; font-weight: 700; font-style: italic">IWBTG Collection</span>
+  <sc-if value="{{start}}" hint-placeholder-val="{{ true }}">
+    <div style="position: absolute; left: 0; right: 0; top: 470px; display: flex; flex-direction: column; align-items: center; gap: 18px">
+      <button type="button" style="all: unset; height: 64px; padding: 0 40px; border-radius: 10px; background: #ff3d55; display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer; box-shadow: 0 10px 30px rgba(255,61,85,.4); animation: wb-pulse 2s ease-in-out infinite"><span style="transform: skewX(11.31deg); font-size: 22px; font-weight: 700">Click or press any key to start</span></button>
+      <span style="font-size: 16px; color: #c9cde0">Browsers keep sound off until you press something here. A controller button does not count.</span>
+      <span style="font-size: 15px; color: #a2a8bc">I wanna be the Kaenbyou · 9.8 MB · runs in this tab, nothing is installed</span>
+    </div>
+  </sc-if>
+  <sc-if value="{{loading}}" hint-placeholder-val="{{ false }}">
+    <div style="position: absolute; left: 450px; top: 470px; width: 700px; display: flex; flex-direction: column; gap: 14px">
+      <div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-size: 20px; font-weight: 700">Loading I wanna be the Kaenbyou</span><span style="font-size: 16px; color: #c9cde0">6.1 / 9.8 MB</span></div>
+      <div style="height: 10px; border-radius: 10px; background: rgba(255,255,255,.12); transform: skewX(-11.31deg); overflow: hidden"><div style="width: 62%; height: 100%; background: linear-gradient(90deg, #ff3d55, #ffb3bd)"></div></div>
+      <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 6px">
+        <sc-for list="{{phases}}" as="p" hint-placeholder-count="5">
+          <div style="display: flex; flex-direction: column; gap: 4px"><span style="height: 3px; border-radius: 2px; background: {{p.bar}}"></span><span style="font-size: 14px; font-weight: 700; color: {{p.ink}}">{{p.name}}</span><span style="font-size: 13px; color: #a2a8bc">{{p.state}}</span></div>
+        </sc-for>
+      </div>
+      <span style="margin-top: 14px; font-size: 15px; color: #a2a8bc">Saves, settings and stats stay in this browser's storage. A slow first load is the renderer starting, not the game.</span>
+    </div>
+  </sc-if>
+  <sc-if value="{{error}}" hint-placeholder-val="{{ false }}">
+    <div style="position: absolute; left: 450px; top: 470px; width: 700px; display: flex; flex-direction: column; gap: 12px">
+      <span style="font-size: 22px; font-weight: 700">The game could not be loaded</span>
+      <span style="font-size: 16px; line-height: 1.5; color: #e3e5ee">The download stopped at 6.1 MB (the server did not answer). Your saves are safe.</span>
+      <div style="display: flex; gap: 10px"><button type="button" style="all: unset; height: 50px; padding: 0 26px; border-radius: 10px; background: #ff3d55; display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer"><span style="transform: skewX(11.31deg); font-size: 17px; font-weight: 700">Try again</span></button><button type="button" style="all: unset; height: 50px; padding: 0 22px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer"><span style="transform: skewX(11.31deg); font-size: 16px; font-weight: 700">Copy details</span></button></div>
+    </div>
+  </sc-if>
+  <span style="position: absolute; left: 32px; bottom: 24px; font-size: 13px; color: #6a7088">web build · nightly 2026.11.26 · a fan project, not affiliated with Kayin</span>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"state":{"editor":"enum","options":["start","loading","error"],"default":"start"},"$preview":{"width":1600,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const s = this.props.state ?? 'start';
+    return {
+      start: s === 'start', loading: s === 'loading', error: s === 'error',
+      phases: [['Download', '62%', '#ff3d55', '#ffffff'], ['Unpack', 'next', 'rgba(255,255,255,.14)', '#a2a8bc'], ['Read the game', '', 'rgba(255,255,255,.14)', '#a2a8bc'], ['Sprites', '', 'rgba(255,255,255,.14)', '#a2a8bc'], ['First room', '', 'rgba(255,255,255,.14)', '#a2a8bc']].map(([name, state, bar, ink]) => ({ name, state, bar, ink })),
+    };
+  }
+}
+</script>
+</body>
+</html>

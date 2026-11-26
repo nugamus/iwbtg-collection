@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Notifications and notices</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- One notification system (ui.md notice.rs + osu!'s notification overlay). Every message is a notification with a kind and an icon: the game's own icon when it is about a game (downloads, uploads, placements, port updates), a kind icon otherwise, so a glance finds it; the kind decides whether it also toasts. Outside a run a toast drops in under the bell (top right, 600 ms OutQuint, 6 s, then it moves into the list); in a run it slides in at the bottom of the leaderboard column, as notices do today, and never covers the game. The bell's list keeps everything from this session; progress (downloads, uploads) lives at its top and updates in place. -->
+<div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <sc-if value="{{overlay}}" hint-placeholder-val="{{ true }}">
+    <dc-import name="Select" mode="ta" hint-size="1920px,1080px"></dc-import>
+    <div style="position: absolute; left: 0; top: 0"><dc-import name="Toolbar" w="1920" mode="ta" badge="3" open="notif" hint-size="1920px,56px"></dc-import></div>
+    <div style="position: absolute; left: 0; top: 56px; right: 0; bottom: 0; background: rgba(5,6,10,.35)"></div>
+    <div style="position: absolute; right: 0; top: 56px; bottom: 0; width: 460px; background: #10121a; box-shadow: -20px 0 60px rgba(0,0,0,.5); display: flex; flex-direction: column; gap: 8px; padding: 22px 22px">
+      <div style="display: flex; align-items: baseline; justify-content: space-between"><span style="font-size: 24px; font-weight: 700">Notifications</span><span style="font-size: 14px; font-weight: 700; color: #a2a8bc">Clear all</span></div>
+      <span style="padding-top: 8px; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">In progress</span>
+      <sc-for list="{{running}}" as="r" hint-placeholder-count="3">
+        <div style="padding: 12px 14px; border-radius: 10px; background: rgba(255,255,255,.05); display: flex; gap: 14px; align-items: center">
+          <sc-if value="{{r.game}}" hint-placeholder-val="{{ true }}"><dc-import name="GameIcon" game="{{r.game}}" size="44" hint-size="44px,44px"></dc-import></sc-if><sc-if value="{{r.sys}}" hint-placeholder-val="{{ false }}"><span style="width: 44px; height: 44px; flex: none; border-radius: 10px; background: {{r.tile}}; display: grid; place-items: center"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="{{r.sys}}" stroke="#ffffff" stroke-width="1.9" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg></span></sc-if>
+          <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; justify-content: space-between; gap: 10px"><span style="font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.a}}</span><span style="font-size: 13px; color: #c9cde0; white-space: nowrap">{{r.c}}</span></div>
+            <div style="height: 5px; border-radius: 3px; background: rgba(255,255,255,.12)"><div style="width: {{r.p}}%; height: 100%; border-radius: 3px; background: {{r.bar}}"></div></div>
+            <span style="font-size: 13px; color: #a2a8bc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.b}}</span>
+          </div>
+        </div>
+      </sc-for>
+      <span style="padding-top: 10px; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Today</span>
+      <sc-for list="{{items}}" as="n" hint-placeholder-count="5">
+        <div style="display: flex; gap: 14px; align-items: center; padding: 12px 14px; border-radius: 10px; background: {{n.bg}}">
+          <sc-if value="{{n.game}}" hint-placeholder-val="{{ true }}"><dc-import name="GameIcon" game="{{n.game}}" size="44" hint-size="44px,44px"></dc-import></sc-if><sc-if value="{{n.sys}}" hint-placeholder-val="{{ false }}"><span style="width: 44px; height: 44px; flex: none; border-radius: 10px; background: {{n.tile}}; display: grid; place-items: center"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="{{n.sys}}" stroke="#ffffff" stroke-width="1.9" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg></span></sc-if>
+          <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+            <div style="display: flex; justify-content: space-between"><span style="font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: {{n.c}}">{{n.k}}</span><span style="font-size: 12px; color: #a2a8bc">{{n.t}}</span></div>
+            <span style="font-size: 15px; line-height: 1.4; color: #e3e5ee">{{n.m}}</span>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+  <sc-if value="{{inrun}}" hint-placeholder-val="{{ false }}">
+    <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1920px" h="1080px" hue="250" blur="60" dim="0.45" tag="none" hint-size="1920px,1080px"></dc-import></div>
+    <div style="position: absolute; left: 249px; top: 0; width: 1422px; height: 1080px; overflow: hidden; box-shadow: 0 0 60px rgba(0,0,0,.6)"><div style="width: 800px; height: 608px; transform: scale(1.77632); transform-origin: 0 0"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div></div>
+    <div style="position: absolute; left: 0; top: 352px"><dc-import name="Leaderboard" scenario="p25" density="full" width="232" rows="7" hint-size="232px,360px"></dc-import></div>
+    <div style="position: absolute; left: 1694px; top: 300px"><dc-import name="RunInfo" mode="ranked" time="38:02.56" width="206" hint-size="206px,420px"></dc-import></div>
+    <div style="position: absolute; left: 12px; bottom: 24px; width: 225px; display: flex; flex-direction: column; gap: 10px">
+      <sc-for list="{{toasts}}" as="n" hint-placeholder-count="2">
+        <div style="display: flex; border-radius: 10px; background: #14161f; box-shadow: 0 12px 30px rgba(0,0,0,.5); overflow: hidden; transform: skewX(-6deg)">
+          <div style="width: 4px; background: {{n.c}}"></div>
+          <div style="flex: 1; padding: 10px 12px 10px; display: flex; flex-direction: column; gap: 4px; transform: skewX(6deg)">
+            <span style="display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: {{n.c}}"><svg width="16" height="16" viewBox="0 0 22 22" aria-hidden="true"><path d="{{n.sys}}" stroke="{{n.c}}" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>{{n.k}}</span>
+            <span style="font-size: 14px; line-height: 1.35; color: #e3e5ee">{{n.m}}</span>
+            <div style="height: 2px; border-radius: 1px; background: rgba(255,255,255,.1)"><div style="width: {{n.left}}%; height: 100%; background: rgba(255,255,255,.4)"></div></div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"view":{"editor":"enum","options":["overlay","inrun"],"default":"overlay"},"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const inrun = (this.props.view ?? 'overlay') === 'inrun';
+    const C = { ok: '#45d483', info: '#8ecbff', warn: '#ffc46b', err: '#ff6b6b', you: '#ff3d55' };
+    return {
+      overlay: !inrun, inrun,
+      running: [
+        { game: 'machinary', sys: '', tile: '', a: 'I wanna be the Machinary', b: 'Downloading · resumes after a restart', c: '64% · 2.1 MB/s', p: 64, bar: '#ff3d55' },
+        { game: 'showdown', sys: '', tile: '', a: 'I wanna be the Showdown', b: 'Queued · starts after the Machinary', c: 'waiting', p: 0, bar: '#ff3d55' },
+        { game: 'kaenbyou', sys: '', tile: '', a: 'Uploading a clear', b: 'Kaenbyou · Very Hard · 38:12.46', c: 'verifying', p: 30, bar: '#8ecbff' },
+      ],
+      items: [
+        { game: 'kaenbyou', sys: '', tile: '', k: 'New placement', m: 'Kaenbyou Very Hard: #25 Global, up from #30.', t: '21:16', c: C.you, bg: 'rgba(255,61,85,.07)' },
+        { game: 'spook', sys: '', tile: '', k: 'Port updated', m: 'I wanna go the Spook House 1.2 · your PBs stay on their boards.', t: '20:40', c: C.info, bg: 'rgba(255,255,255,.04)' },
+        { game: '', sys: 'M11 3v11M6.5 9.5L11 14l4.5-4.5M4 18h14', tile: 'rgba(142,203,255,.3)', k: 'Update ready', m: 'Version 0.9.0 installs when you restart.', t: '20:58', c: C.info, bg: 'rgba(255,255,255,.04)' },
+        { game: '', sys: 'M5 2h8l4 4v14H5zM13 2v4h4M8 13h6M8 16h4', tile: 'rgba(255,107,107,.3)', k: 'Not opened', m: 'level.zip is not a game package.', t: '19:12', c: C.err, bg: 'rgba(255,255,255,.04)' },
+        { game: '', sys: 'M11 3l9 16H2zM11 9v4M11 16v.5', tile: 'rgba(255,196,107,.3)', k: 'Storage', m: 'Could not write stats.toml; changes are kept until the next try.', t: '18:30', c: C.warn, bg: 'rgba(255,255,255,.04)' },
+      ],
+      toasts: [
+        { k: 'Controller', sys: 'M6 7h10a4 4 0 0 1 4 4v1a4 4 0 0 1-7 2.6h-4A4 4 0 0 1 2 12v-1a4 4 0 0 1 4-4zM7 10v3M5.5 11.5h3M15 10.5v.5M17 12.5v.5', m: 'Pad 1 connected.', c: C.info, left: 30 },
+        { k: 'Storage', sys: 'M11 3l9 16H2zM11 9v4M11 16v.5', m: 'Stats could not be saved; trying again.', c: C.warn, left: 80 },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

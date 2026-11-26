@@ -101,8 +101,13 @@ def sim_pages() -> list[Path]:
 
 
 def citation_pages() -> list[Path]:
-    """Every client page and source file that may cite an id."""
-    return sorted(DOCS.rglob("*.md")) + sorted(CODE.rglob("*.rs"))
+    """Every client page and source file that may cite an id.
+
+    Design mockup folders are left out: their artboards are numbered by section (A1, C16, I3, ...),
+    which look like register ids but name boards on the design canvas."""
+    mockups = DOCS / "design" / "mockups"
+    pages = [p for p in DOCS.rglob("*.md") if mockups not in p.parents]
+    return sorted(pages) + sorted(CODE.rglob("*.rs"))
 
 
 def register_rows() -> dict[str, tuple[Path, int, list[str]]]:

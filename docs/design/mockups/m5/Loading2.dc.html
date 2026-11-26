@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Loading card by mode</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;family=Noto+Sans+JP:wght@500;700&amp;display=swap">
+<style>
+body{margin:0}
+@keyframes ld2-cherry{from{transform:translateX(0)}to{transform:translateX(-84px)}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
+</style>
+</helmet>
+<!-- m4's loading card (Loading.dc.html), per mode. Time Attack keeps it as approved, plus a Controls row when the game uses extra actions (#52; replaces the bottom-left CONTROLS notice so it cannot be missed). Classic shows your play so far instead of PB and #1, and no mods; the game's own menus handle its saves. Still at least 1.5 s, starts by itself; the card slides up 24 px and fades in over 500 ms OutQuint. -->
+<div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', 'Noto Sans JP', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1920px" h="1080px" hue="{{hue}}" scene="{{scene}}" blur="45" dim="0.55" tag="none" hint-size="1920px,1080px"></dc-import></div>
+  <div style="position: absolute; left: 580px; top: {{top}}px; width: 760px; display: flex; flex-direction: column; gap: 22px">
+    <div style="border-radius: 10px; overflow: hidden; background: rgba(12,14,22,.82); box-shadow: 0 30px 80px rgba(0,0,0,.5)">
+      <div style="position: relative; height: 240px">
+        <dc-import name="Backdrop" w="760px" h="240px" hue="{{hue}}" scene="{{scene}}" blur="0" dim="0.1" tag="none" hint-size="760px,240px"></dc-import>
+        <div style="position: absolute; inset: 0; background: linear-gradient(0deg, rgba(12,14,22,.95) 0%, rgba(12,14,22,0) 60%)"></div>
+        <div style="position: absolute; right: 18px; top: 16px; height: 26px; padding: 0 12px; border-radius: 10px; background: {{modeBg}}; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #ffffff">{{modeName}}</span></div>
+        <div style="position: absolute; left: 32px; bottom: 18px; display: flex; flex-direction: column; gap: 4px">
+          <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 50px; font-weight: 700; line-height: 1">{{title}}</span>
+          <span style="font-size: 17px; color: #c9cde0">by <span style="font-weight: 600; color: #f3f4f8">{{creator}}</span></span>
+        </div>
+      </div>
+      <div style="padding: 22px 32px 28px; display: flex; flex-direction: column; gap: 22px">
+        <div style="display: flex; align-items: center; gap: 10px">
+          <sc-if value="{{ta}}" hint-placeholder-val="{{ true }}">
+            <div style="height: 26px; padding: 0 12px; border-radius: 10px; background: {{starBg}}; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 14px; font-weight: 700; color: #10121a">★ {{stars}}</span></div>
+          </sc-if>
+          <span style="font-size: 18px; font-weight: 600">{{entry}}</span>
+          <sc-if value="{{status}}" hint-placeholder-val="{{ false }}">
+            <span style="flex: 1"></span>
+            <div style="height: 24px; padding: 0 10px; border-radius: 8px; background: rgba(10,12,18,.6); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.7); display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase">Beta</span></div>
+            <span style="font-size: 14px; color: #c9cde0">{{status}}</span>
+          </sc-if>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+          <sc-for list="{{stats}}" as="s" hint-placeholder-count="3">
+            <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">{{s.k}}</span><span style="font-size: 26px; font-weight: 600">{{s.v}}</span><span style="font-size: 14px; color: #a2a8bc">{{s.d}}</span></div>
+          </sc-for>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; min-height: 28px">
+          <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc; width: 70px">{{rowKey}}</span>
+          <sc-for list="{{pills}}" as="p" hint-placeholder-count="1">
+            <div style="height: 26px; min-width: 40px; padding: 0 8px; box-sizing: border-box; border-radius: 10px; background: rgba(255,255,255,.16); display: flex; align-items: center; justify-content: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 700">{{p}}</span></div>
+          </sc-for>
+          <span style="font-size: 15px; color: #e3e5ee">{{rowText}}</span>
+        </div>
+        <sc-if value="{{extra}}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; gap: 10px; padding: 16px 18px; margin: 0 -8px; border-radius: 10px; background: rgba(255,196,107,.1)">
+            <div style="display: flex; align-items: center; gap: 10px">
+              <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #ffc46b; width: 70px">Controls</span>
+              <span style="font-size: 15px; font-weight: 600; color: #ffffff">This game uses two extra actions. Check them before you start.</span>
+            </div>
+            <div style="display: flex; gap: 24px; padding-left: 80px">
+              <sc-for list="{{extras}}" as="x" hint-placeholder-count="2">
+                <span style="display: flex; align-items: center; gap: 8px; font-size: 15px"><span style="min-width: 26px; height: 26px; padding: 0 7px; box-sizing: border-box; border-radius: 6px; background: rgba(255,255,255,.88); box-shadow: inset 0 -3px 0 rgba(0,0,0,.25); color: #10121a; display: grid; place-items: center; font-size: 13px; font-weight: 700">{{x.key}}</span><span style="font-weight: 600">{{x.label}}</span><span style="color: #a2a8bc">{{x.slot}}</span></span>
+              </sc-for>
+              <span style="flex: 1"></span>
+              <span style="font-size: 14px; color: #c9cde0"><span style="font-weight: 700; color: #ffffff">F1</span> rebind</span>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 16px; padding: 0 4px">
+      <span style="width: 42px; height: 48px; flex: none; overflow: hidden" aria-hidden="true">
+        <img src="/_blob/23ec5474ca1d50c871f0d33d2c7f8d59" alt="" width="84" height="48" style="display: block; image-rendering: pixelated; animation: ld2-cherry 640ms steps(2) infinite">
+      </span>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 15px; color: #c9cde0">
+          <span><span style="font-weight: 700; color: #f3f4f8">Loading</span> · {{startsText}}</span>
+          <span><span style="font-weight: 700; color: #f3f4f8">Esc</span> {{backText}}</span>
+        </div>
+        <div style="height: 3px; border-radius: 2px; background: rgba(255,255,255,.14); overflow: hidden"><div style="width: 64%; height: 100%; background: linear-gradient(90deg, {{accent}}, #ffffff)"></div></div>
+      </div>
+    </div>
+    <span style="padding: 0 4px; font-size: 15px; color: #a2a8bc">{{tip}}</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"mode":{"editor":"enum","options":["ta","classic"],"default":"classic"},"extra":{"editor":"boolean","default":false},"beta":{"editor":"boolean","default":false},"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const classic = (this.props.mode ?? 'classic') === 'classic';
+    const extra = this.props.extra === true || this.props.extra === 'true';
+    const beta = this.props.beta === true || this.props.beta === 'true';
+    const base = { ta: !classic, extra, accent: classic ? '#8f7bff' : '#ff3d55', modeBg: classic ? '#8f7bff' : '#ff3d55', modeName: classic ? 'Classic' : 'Time Attack' };
+    if (classic) return Object.assign(base, {
+      hue: 250, scene: 'castle', title: 'I wanna be the Kaenbyou', creator: 'Kira☆~Kira☆~', top: 190, entry: 'Last played up to Stage 7 · the boss', status: '',
+      stats: [{ k: 'Time played', v: '15:59:12', d: 'in Classic' }, { k: 'Deaths', v: '5,194', d: 'in this game' }, { k: 'Last played', v: '2 days ago', d: '1:12:05 session' }],
+      rowKey: 'Opens', pills: [], rowText: 'the game’s own title screen: New game, Continue and its file select work as in the original',
+      startsText: 'starts by itself', backText: 'back to the shelf', tip: 'Classic keeps your saves and your stats. Nothing here goes on a leaderboard.',
+      extras: [],
+    });
+    return Object.assign(base, {
+      hue: beta ? 190 : 330, scene: beta ? 'cave' : 'city', title: beta ? 'I wanna be the Machinary' : 'I Wanna Rely The Needle 4.2', creator: beta ? 'メガビリー' : 'NineightA', top: extra ? 150 : 170,
+      starBg: '#ff6070', stars: '6.20', entry: 'Any%', status: beta ? 'times on Beta boards may be reset when the port changes' : '',
+      stats: [{ k: 'Your PB', v: '12:40.18', d: '#61 Global' }, { k: 'Global #1', v: '9:58.02', d: 'kestrel' }, { k: 'Stages', v: '5', d: 'average clear 18:02.66' }],
+      rowKey: 'Mods', pills: ['NB'], rowText: 'No background · ranked',
+      startsText: 'starts by itself', backText: 'back to game select', tip: 'Tip: hold R on the results screen to retry straight away.',
+      extras: [{ key: 'C', label: 'Bomb', slot: 'extra1' }, { key: 'V', label: 'Switch gravity', slot: 'extra2' }],
+    });
+  }
+}
+</script>
+</body>
+</html>

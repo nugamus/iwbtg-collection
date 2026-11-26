@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Button hints</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;family=Noto+Sans+JP:wght@500;700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- The hint bar (#117): what each button does on this screen. It shows the glyphs of the last device used: controller faces (by position, so the same art fits Xbox, PlayStation and Deck layouts) or keycaps. Swapping glyphs cross-fades in 200 ms. Glyphs are neutral grey shapes, never coloured by brand. -->
+<div style="display: flex; align-items: center; gap: 22px; height: 40px; padding: 0 4px; font-family: 'Barlow', 'Noto Sans JP', system-ui, sans-serif; color: #e3e5ee; font-size: 15px; font-weight: 600">
+  <sc-for list="{{items}}" as="h" hint-placeholder-count="4">
+    <span style="display: flex; align-items: center; gap: 8px; white-space: nowrap">
+      <sc-if value="{{h.round}}" hint-placeholder-val="{{ true }}">
+        <span style="width: 26px; height: 26px; border-radius: 13px; background: rgba(255,255,255,.88); color: #10121a; display: grid; place-items: center; font-size: 13px; font-weight: 700">{{h.g}}</span>
+      </sc-if>
+      <sc-if value="{{h.cap}}" hint-placeholder-val="{{ false }}">
+        <span style="min-width: 26px; height: 26px; padding: 0 7px; box-sizing: border-box; border-radius: 6px; background: rgba(255,255,255,.88); box-shadow: inset 0 -3px 0 rgba(0,0,0,.25); color: #10121a; display: grid; place-items: center; font-size: 13px; font-weight: 700">{{h.g}}</span>
+      </sc-if>
+      <span>{{h.label}}</span>
+    </span>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"items":{"editor":"text","default":"A:Select|B:Back|X:Favourite|Y:Settings"},"keys":{"editor":"boolean","default":false},"$preview":{"width":560,"height":40}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const keys = this.props.keys === true || this.props.keys === 'true';
+    const raw = String(this.props.items ?? 'A:Select|B:Back|X:Favourite|Y:Settings');
+    const items = raw.split('|').map((s) => {
+      const i = s.indexOf(':');
+      const g = s.slice(0, i);
+      const round = !keys && /^[ABXY]$/.test(g);
+      return { g, label: s.slice(i + 1), round, cap: !round };
+    });
+    return { items };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Auto-retry: footer switch and HUD mark</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- #773, decided: the switch lives in the mod select footer only (built in #497), and while it is on the HUD's mod row carries an AR mark, so a death that restarts the run never surprises you. There is no switch during a run: a run has no mouse target and no spare key for it. The pause menu shows the same AR chip beside the run's mods. Turning it on: the track fills 200 ms OutQuint; the AR chip fades into the HUD's mod row 300 ms when the run starts. -->
+<div style="position: relative; width: 1920px; height: 760px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <div style="position: absolute; left: 40px; top: 30px; width: 1100px; display: flex; flex-direction: column; gap: 14px">
+    <span style="font-size: 22px; font-weight: 700">1 · Before the run: the mod select footer</span>
+    <div style="position: relative; width: 1100px; height: 619px; overflow: hidden; border-radius: 10px"><div style="width: 1920px; height: 1080px; transform: scale(.573); transform-origin: 0 0"><dc-import name="ModSheet" retry="{{ true }}" hb="{{ false }}" hint-size="1920px,1080px"></dc-import></div>
+      <div style="position: absolute; left: 100px; bottom: 8px; width: 160px; height: 42px; border-radius: 10px; box-shadow: 0 0 0 3px #ffffff"></div></div>
+  </div>
+  <div style="position: absolute; left: 1200px; top: 30px; width: 680px; display: flex; flex-direction: column; gap: 14px">
+    <span style="font-size: 22px; font-weight: 700">2 · During the run: the AR mark</span>
+    <div style="position: relative; height: 619px; border-radius: 10px; overflow: hidden">
+      <dc-import name="Backdrop" w="680px" h="619px" hue="250" blur="60" dim="0.45" tag="none" hint-size="680px,619px"></dc-import>
+      <div style="position: absolute; left: 0; top: 0; width: 420px; height: 619px; overflow: hidden; box-shadow: 0 0 40px rgba(0,0,0,.6)"><div style="width: 800px; height: 608px; transform: translate(-380px, 0) scale(1.02); transform-origin: 0 0"><dc-import name="GameScene" hint-size="800px,608px"></dc-import></div></div>
+      <div style="position: absolute; left: 450px; top: 40px"><dc-import name="RunInfo" mode="mods" retry="{{ true }}" time="38:02.56" width="206" hint-size="206px,420px"></dc-import></div>
+      <span style="position: absolute; left: 450px; top: 500px; width: 206px; font-size: 14px; line-height: 1.45; color: #c9cde0">AR sits with the run's mods. It is not part of the board: the run counts for Very Hard · Any% + SD as usual.</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1920,"height":760}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

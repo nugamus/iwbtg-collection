@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Toolbar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;family=Noto+Sans+JP:wght@500;700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- The top toolbar on every screen outside a run (osu!'s toolbar: 40 of 768 px there, 56 of 1080 here). Slides down 500 ms OutQuint when a screen that has it opens, fades out in 500 ms InQuint when a run starts. The mode switch's underline slides 500 ms OutElastic (quarter) under the picked mode, and the accent of every screen follows the mode. -->
+<div style="position: relative; width: {{w}}px; height: 56px; font-family: 'Barlow', 'Noto Sans JP', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <div style="position: absolute; inset: 0; background: linear-gradient(180deg, rgba(6,7,11,.92), rgba(6,7,11,.62))"></div>
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: rgba(255,255,255,.06)"></div>
+  <div style="position: absolute; inset: 0; display: flex; align-items: stretch">
+    <sc-if value="{{showModes}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; align-items: stretch; gap: 4px; padding-left: 20px" role="tablist" aria-label="{{t.mode}}">
+        <sc-if value="{{pad}}" hint-placeholder-val="{{ false }}">
+          <span style="align-self: center; height: 22px; padding: 0 6px; border-radius: 6px; background: rgba(255,255,255,.14); font-size: 12px; font-weight: 700; display: grid; place-items: center; color: #c9cde0">LB</span>
+        </sc-if>
+        <sc-for list="{{modes}}" as="m" hint-placeholder-count="2">
+          <button type="button" role="tab" aria-selected="{{m.on}}" style="all: unset; position: relative; display: flex; align-items: center; gap: 10px; padding: 0 16px; cursor: pointer; opacity: {{m.op}}">
+            <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="{{m.icon}}" stroke="{{m.ic}}" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            <span style="font-size: 17px; font-weight: {{m.weight}}; color: {{m.ink}}; white-space: nowrap">{{m.label}}</span>
+            <span style="position: absolute; left: 12px; right: 12px; bottom: 0; height: 3px; border-radius: 2px 2px 0 0; background: {{m.line}}"></span>
+          </button>
+        </sc-for>
+        <sc-if value="{{pad}}" hint-placeholder-val="{{ false }}">
+          <span style="align-self: center; height: 22px; padding: 0 6px; border-radius: 6px; background: rgba(255,255,255,.14); font-size: 12px; font-weight: 700; display: grid; place-items: center; color: #c9cde0">RB</span>
+        </sc-if>
+      </div>
+    </sc-if>
+    <sc-if value="{{crumb}}" hint-placeholder-val="{{ false }}">
+      <span style="align-self: center; padding-left: 28px; font-size: 17px; font-weight: 700">{{crumb}}</span>
+    </sc-if>
+    <span style="flex: 1"></span>
+    <sc-if value="{{showNp}}" hint-placeholder-val="{{ true }}">
+      <button type="button" style="all: unset; display: flex; align-items: center; gap: 12px; padding: 0 16px; cursor: pointer; max-width: {{npW}}px">
+        <span style="display: flex; align-items: flex-end; gap: 3px; height: 16px" aria-hidden="true"><span style="width: 3px; height: 9px; border-radius: 1px; background: {{accent}}"></span><span style="width: 3px; height: 16px; border-radius: 1px; background: {{accent}}"></span><span style="width: 3px; height: 6px; border-radius: 1px; background: {{accent}}"></span><span style="width: 3px; height: 12px; border-radius: 1px; background: {{accent}}"></span></span>
+        <span style="display: flex; flex-direction: column; line-height: 1.15; min-width: 0">
+          <span style="font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a2a8bc">{{t.np}}</span>
+          <span style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{np}}</span>
+        </span>
+      </button>
+    </sc-if>
+    <sc-if value="{{showClock}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; justify-content: center; align-items: flex-end; padding: 0 16px; line-height: 1.15">
+        <span style="font-size: 16px; font-weight: 700">21:14</span>
+        <span style="font-size: 12px; color: #a2a8bc">{{t.session}} 1:12:05</span>
+      </div>
+    </sc-if>
+    <button type="button" aria-label="{{t.notif}}" style="all: unset; position: relative; width: 56px; display: grid; place-items: center; cursor: pointer; background: {{bellBg}}">
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M6 15.5V10a5 5 0 0 1 10 0v5.5l1.5 1.5h-13zM9.2 19a2 2 0 0 0 3.6 0" stroke="#f3f4f8" stroke-width="1.8" fill="none" stroke-linejoin="round" stroke-linecap="round"></path></svg>
+      <sc-if value="{{badge}}" hint-placeholder-val="{{ true }}">
+        <span style="position: absolute; top: 9px; right: 7px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; background: {{accent}}; font-size: 12px; font-weight: 700; display: grid; place-items: center; color: #ffffff">{{badge}}</span>
+      </sc-if>
+    </button>
+    <button type="button" aria-label="{{t.settings}}" style="all: unset; width: 56px; display: grid; place-items: center; cursor: pointer; background: {{gearBg}}">
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="3" stroke="#f3f4f8" stroke-width="1.8" fill="none"></circle><path d="M11 2.5v2.4M11 17.1v2.4M2.5 11h2.4M17.1 11h2.4M5 5l1.7 1.7M15.3 15.3L17 17M5 17l1.7-1.7M15.3 6.7L17 5" stroke="#f3f4f8" stroke-width="1.8" stroke-linecap="round"></path></svg>
+    </button>
+    <sc-if value="{{signedIn}}" hint-placeholder-val="{{ true }}">
+      <button type="button" style="all: unset; display: flex; align-items: center; gap: 10px; padding: 0 20px 0 12px; cursor: pointer">
+        <span style="position: relative; width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, hsl(352 62% 52%), hsl(330 55% 30%)); display: grid; place-items: center; font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 700">N
+          <sc-if value="{{expired}}" hint-placeholder-val="{{ false }}"><span style="position: absolute; right: -3px; bottom: -3px; width: 12px; height: 12px; border-radius: 6px; background: #ffc46b; box-shadow: 0 0 0 2px #0b0d14"></span></sc-if>
+        </span>
+        <span style="display: flex; flex-direction: column; line-height: 1.15">
+          <span style="font-size: 15px; font-weight: 700">nugamus</span>
+          <span style="font-size: 12px; font-weight: 600; color: {{userLineInk}}">{{userLine}}</span>
+        </span>
+      </button>
+    </sc-if>
+    <sc-if value="{{signedOut}}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; align-items: center; padding: 0 20px 0 10px">
+        <button type="button" style="all: unset; height: 36px; padding: 0 18px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer"><span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.5" r="3" stroke="#f3f4f8" stroke-width="1.6" fill="none"></circle><path d="M2.5 14c.8-3 3-4.5 5.5-4.5s4.7 1.5 5.5 4.5" stroke="#f3f4f8" stroke-width="1.6" fill="none" stroke-linecap="round"></path></svg>{{t.signin}}</span></button>
+      </div>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"mode":{"editor":"enum","options":["ta","classic","none"],"default":"ta"},"user":{"editor":"enum","options":["in","out","expired","offline"],"default":"in"},"lang":{"editor":"enum","options":["en","ja"],"default":"en"},"badge":{"editor":"int","min":0,"max":9,"default":2},"w":{"editor":"int","min":960,"max":2560,"default":1920},"open":{"editor":"enum","options":["none","notif","settings"],"default":"none"},"crumb":{"editor":"text","default":""},"pad":{"editor":"boolean","default":false},"$preview":{"width":1920,"height":56}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const mode = this.props.mode ?? 'ta';
+    const user = this.props.user ?? 'in';
+    const ja = (this.props.lang ?? 'en') === 'ja';
+    const w = Number(this.props.w ?? 1920);
+    const open = this.props.open ?? 'none';
+    const T = ja ? {
+      home: 'ホーム', mode: 'モード', np: '再生中', session: 'プレイ', notif: '通知', settings: '設定', signin: 'サインイン',
+      ta: 'タイムアタック', classic: 'クラシック', online: 'オンライン', expired: 'セッション切れ', offline: 'オフライン',
+    } : {
+      home: 'Home', mode: 'Mode', np: 'Now playing', session: 'Session', notif: 'Notifications', settings: 'Settings', signin: 'Sign in',
+      ta: 'Time Attack', classic: 'Classic', online: 'Online · #1,204', expired: 'Session expired', offline: 'Offline · 1 run queued',
+    };
+    const I = {
+      ta: 'M10 4.5a6.5 6.5 0 1 0 0 13a6.5 6.5 0 1 0 0-13M10 7.5V11l2.2 1.4M8 2h4M15 4.5l1.3-1.3',
+      classic: 'M4 3h9.5L16 5.5V17H4zM7 3v4.5h6V3M7 17v-5h6v5',
+    };
+    const COL = { ta: '#ff3d55', classic: '#8f7bff', none: '#ff3d55' };
+    const modes = ['ta', 'classic'].map((k) => {
+      const on = k === mode;
+      return { label: T[k], icon: I[k], on: on ? 'true' : 'false', op: mode === 'none' ? 0.55 : 1, weight: on ? 700 : 500, ink: on ? '#ffffff' : '#a2a8bc', ic: on ? COL[k] : '#a2a8bc', line: on ? COL[k] : 'transparent' };
+    });
+    const hi = 'rgba(255,255,255,.1)';
+    return {
+      w, t: T, modes, accent: COL[mode],
+      showModes: mode !== 'none' || !this.props.crumb,
+      crumb: this.props.crumb || '',
+      pad: this.props.pad === true || this.props.pad === 'true',
+      bellBg: open === 'notif' ? hi : 'transparent', gearBg: open === 'settings' ? hi : 'transparent',
+      showNp: w >= 1280, npW: w >= 1600 ? 360 : 230,
+      np: 'I wanna be the Kaenbyou · [stage 1 music]',
+      showClock: w >= 1600,
+      badge: Number(this.props.badge ?? 2) || 0,
+      signedIn: user !== 'out', signedOut: user === 'out', expired: user === 'expired',
+      userLine: user === 'expired' ? T.expired : user === 'offline' ? T.offline : T.online,
+      userLineInk: user === 'expired' || user === 'offline' ? '#ffc46b' : '#a2a8bc',
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Audio offset calibration</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+@keyframes cal-beat{0%{transform:scale(1);opacity:1}70%{transform:scale(1.5);opacity:0}100%{transform:scale(1.5);opacity:0}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
+</style>
+</helmet>
+<!-- Audio offset calibration (#464), from Settings → Audio. A click track plays at 120 BPM; you tap Space (or A) on each beat. Each tap lands as a dot on the strip, early left, late right, and the suggestion is the median of the last 16 taps. The ring pulses on the beat as the picture sees it (each pulse is a 500 ms ring, 120 BPM), so a late dot means your sound arrives late. -->
+<div style="position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1920px" h="1080px" hue="250" scene="castle" blur="60" dim="0.72" tag="none" hint-size="1920px,1080px"></dc-import></div>
+  <div style="position: absolute; left: 0; top: 0"><dc-import name="Toolbar" w="1920" mode="none" crumb="Settings · Audio offset" hint-size="1920px,56px"></dc-import></div>
+  <div style="position: absolute; left: 0; right: 0; top: 120px; display: flex; flex-direction: column; align-items: center; gap: 10px">
+    <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 56px; font-weight: 700; font-style: italic">Tap on the beat</span>
+    <span style="font-size: 18px; color: #c9cde0">Space, Z or A on each click. Watch the ring or close your eyes; both work.</span>
+  </div>
+  <div style="position: absolute; left: 810px; top: 280px; width: 300px; height: 300px">
+    <div style="position: absolute; inset: 0; border-radius: 50%; border: 6px solid #ff3d55; animation: cal-beat 500ms ease-out infinite"></div>
+    <div style="position: absolute; inset: 60px; border-radius: 50%; background: radial-gradient(circle, rgba(255,61,85,.3), rgba(255,61,85,.08)); display: grid; place-items: center">
+      <img src="/_blob/dd3504fc78d818a5c566e1ae138ad56f" alt="" width="84" height="96" style="image-rendering: pixelated">
+    </div>
+  </div>
+  <div style="position: absolute; left: 0; right: 0; top: 600px; display: flex; justify-content: center; gap: 14px">
+    <sc-for list="{{beats}}" as="b" hint-placeholder-count="8">
+      <span style="width: 16px; height: 16px; border-radius: 4px; transform: skewX(-11.31deg); background: {{b}}"></span>
+    </sc-for>
+  </div>
+
+  <!-- the tap strip -->
+  <div style="position: absolute; left: 460px; top: 680px; width: 1000px; display: flex; flex-direction: column; gap: 10px">
+    <div style="position: relative; height: 80px; border-radius: 10px; background: rgba(12,14,22,.7)">
+      <div style="position: absolute; left: 50%; top: 10px; bottom: 10px; width: 2px; background: #ffffff"></div>
+      <div style="position: absolute; left: {{medX}}%; top: 4px; bottom: 4px; width: 3px; margin-left: -1px; background: #ff3d55"></div>
+      <sc-for list="{{taps}}" as="t" hint-placeholder-count="16">
+        <span style="position: absolute; left: {{t.x}}%; top: {{t.y}}px; width: 12px; height: 12px; margin-left: -6px; border-radius: 6px; background: rgba(255,255,255,{{t.o}})"></span>
+      </sc-for>
+    </div>
+    <div style="display: flex; justify-content: space-between; font-size: 14px; color: #a2a8bc"><span>100 ms early</span><span>on the beat</span><span>100 ms late</span></div>
+  </div>
+  <div style="position: absolute; left: 460px; top: 830px; width: 1000px; display: flex; align-items: center; gap: 30px">
+    <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Your taps land</span><span style="font-size: 34px; font-weight: 700">27 ms late</span><span style="font-size: 14px; color: #a2a8bc">median of 16 taps · spread ±9 ms</span></div>
+    <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Offset now</span><span style="font-size: 34px; font-weight: 700; color: #c9cde0">+0 ms</span><span style="font-size: 14px; color: #a2a8bc">suggested +27 ms</span></div>
+    <span style="flex: 1"></span>
+    <button type="button" style="all: unset; height: 56px; padding: 0 30px; border-radius: 10px; background: #ff3d55; display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer; box-shadow: 0 8px 24px rgba(255,61,85,.35)"><span style="transform: skewX(11.31deg); font-size: 19px; font-weight: 700">Use +27 ms</span></button>
+    <button type="button" style="all: unset; height: 56px; padding: 0 22px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: center; transform: skewX(-11.31deg); cursor: pointer"><span style="transform: skewX(11.31deg); font-size: 17px; font-weight: 700">Start over</span></button>
+  </div>
+  <span style="position: absolute; left: 460px; top: 950px; width: 1000px; font-size: 15px; line-height: 1.5; color: #a2a8bc">Early taps (sound before the picture) would need a negative offset, which the client cannot do yet (#464); the strip then says so instead of suggesting one. Music sync and replays count ticks, so the offset never changes timing or records.</span>
+  <div style="position: absolute; left: 64px; bottom: 26px"><dc-import name="Hints" items="Space:Tap|Enter:Use|R:Start over|Esc:Back" keys="{{ true }}" hint-size="500px,40px"></dc-import></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1920,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const ms = [31, 22, 27, 35, 18, 29, 26, 24, 33, 27, 20, 30, 28, 25, 36, 23];
+    const taps = ms.map((m, i) => ({ x: (50 + m / 2).toFixed(1), y: 14 + (i % 4) * 14, o: (0.35 + 0.65 * i / ms.length).toFixed(2) }));
+    const beats = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => i === 5 ? '#ff3d55' : i < 5 ? 'rgba(255,255,255,.5)' : 'rgba(255,255,255,.14)');
+    return { taps, medX: 63.5, beats };
+  }
+}
+</script>
+</body>
+</html>

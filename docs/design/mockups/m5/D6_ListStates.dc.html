@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Game list states</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+@keyframes ls-shim{0%{background-position:-400px 0}100%{background-position:400px 0}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
+</style>
+</helmet>
+<!-- The right side of game select (shell.md revisit) when it has nothing to show. Each state keeps the search and controls where they are, so the screen does not jump when games arrive. Loading panels shimmer (1.4 s loop) and are replaced in place by the real panels (300 ms fade). -->
+<div style="position: relative; width: 1920px; height: 760px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8">
+  <div style="position: absolute; inset: 0"><dc-import name="Backdrop" w="1920px" h="760px" hue="250" blur="30" dim="0.5" tag="none" hint-size="1920px,760px"></dc-import></div>
+  <div style="position: absolute; left: 40px; right: 40px; top: 30px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px">
+    <sc-for list="{{cols}}" as="c" hint-placeholder-count="3">
+      <div style="display: flex; flex-direction: column; gap: 12px">
+        <span style="font-size: 18px; font-weight: 700">{{c.name}}</span>
+        <div style="height: 44px; border-radius: 10px; background: rgba(12,14,22,.72); display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 10px; padding: 0 16px; font-size: 15px; color: {{c.qInk}}"><svg width="16" height="16" viewBox="0 0 18 18" aria-hidden="true"><circle cx="7.5" cy="7.5" r="5.5" stroke="#a2a8bc" stroke-width="2" fill="none"></circle><path d="M12 12l4.5 4.5" stroke="#a2a8bc" stroke-width="2" stroke-linecap="round"></path></svg>{{c.q}}</span></div>
+        <div style="display: flex; gap: 6px"><sc-for list="{{c.chips}}" as="h" hint-placeholder-count="3"><span style="height: 30px; padding: 0 12px; border-radius: 9px; background: {{h.bg}}; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 13px; font-weight: 600">{{h.v}}</span></span></sc-for></div>
+        <sc-if value="{{c.skeleton}}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; gap: 3px; margin-top: 16px">
+            <sc-for list="{{c.bars}}" as="b" hint-placeholder-count="7">
+              <div style="margin-left: {{b}}px; height: 72px; border-radius: 10px; transform: skewX(-11.31deg); background: linear-gradient(90deg, rgba(255,255,255,.04) 0%, rgba(255,255,255,.1) 40%, rgba(255,255,255,.04) 80%); background-size: 800px 100%; animation: ls-shim 1.4s linear infinite"></div>
+            </sc-for>
+            <span style="padding: 12px 0 0 10px; font-size: 14px; color: #a2a8bc">Reading 20 games… 12 done</span>
+          </div>
+        </sc-if>
+        <sc-if value="{{c.message}}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top: 70px; display: flex; flex-direction: column; gap: 12px; padding: 0 10px">
+            <img src="/_blob/dd3504fc78d818a5c566e1ae138ad56f" alt="" width="42" height="48" style="image-rendering: pixelated; opacity: {{c.op}}">
+            <span style="font-size: 26px; font-weight: 700">{{c.title}}</span>
+            <span style="font-size: 16px; line-height: 1.5; color: #c9cde0">{{c.body}}</span>
+            <div style="display: flex; gap: 10px; margin-top: 8px">
+              <sc-for list="{{c.btns}}" as="b" hint-placeholder-count="2"><span style="height: 46px; padding: 0 20px; border-radius: 10px; background: {{b.bg}}; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 16px; font-weight: 700">{{b.l}}</span></span></sc-for>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1920,"height":760}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = 'rgba(12,14,22,.72)', on = 'rgba(255,255,255,.2)';
+    const P = '#ff3d55', S = 'rgba(255,255,255,.12)';
+    return { cols: [
+      { name: 'Empty library', q: 'Search 0 games', qInk: '#a2a8bc', chips: [{ v: 'Group Game ▾', bg: dark }, { v: 'Sort Stars ▾', bg: dark }], skeleton: false, message: true, op: 1,
+        title: 'No games yet', body: 'Get some from the catalog, or drop an .iwbz file anywhere on this window.', btns: [{ l: 'Browse the catalog', bg: P }, { l: 'Import a file', bg: S }] },
+      { name: 'No results', q: 'kaen spook', qInk: '#ffffff', chips: [{ v: 'Cleared', bg: on }, { v: 'Status Loved ▾', bg: on }], skeleton: false, message: true, op: 0.45,
+        title: 'No games match', body: 'Nothing has both words while Cleared and Loved are on. 2 games match the words alone.', btns: [{ l: 'Clear the filters', bg: S }, { l: 'Clear the search', bg: 'rgba(255,255,255,.07)' }] },
+      { name: 'Loading', q: 'Search 20 games: title, creator, tag', qInk: '#a2a8bc', chips: [{ v: 'Group Game ▾', bg: dark }, { v: 'Sort Stars ▾', bg: dark }], skeleton: true, message: false, bars: [30, 30, 30, 0, 30, 30, 30] },
+    ] };
+  }
+}
+</script>
+</body>
+</html>

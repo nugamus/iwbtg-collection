@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Details tab</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<!-- Game select's Details tab (#498), fed by the metadata model (#805). It fills the space the Ranking tab uses and scrolls inside it (a 60 px fade at the bottom). Left: what the game is and how you do in it; right: who made it, where its parts came from and the state of the port. Brackets mark text that will come from the package or catalog; numbers are sample data except the fidelity count, which is today's baseline for kaenbyou. -->
+<div style="position: relative; width: {{w}}px; height: 380px; overflow: hidden; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <div style="display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 30px; padding: 4px 10px 0 10px">
+    <div style="display: flex; flex-direction: column; gap: 14px; min-width: 0">
+      <span style="font-size: 16px; line-height: 1.55; color: #e3e5ee">[The game's description from its catalog entry: what kind of game it is, in two or three sentences, by the creator or the porter.]</span>
+      <div style="display: flex; flex-direction: column; gap: 3px">
+        <div style="display: grid; grid-template-columns: 70px minmax(0, 1fr) 90px 80px 70px; gap: 10px; padding: 0 12px 4px; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a2a8bc"><span>Stage</span><span>Name</span><span style="text-align: right">Best seg.</span><span style="text-align: right">vs WR</span><span style="text-align: right">Deaths</span></div>
+        <sc-for list="{{stages}}" as="s" hint-placeholder-count="7">
+          <div style="display: grid; grid-template-columns: 70px minmax(0, 1fr) 90px 80px 70px; gap: 10px; align-items: center; height: 34px; padding: 0 12px; border-radius: 8px; background: {{s.bg}}">
+            <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 700">{{s.n}}</span>
+            <span style="font-size: 15px; color: #c9cde0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{s.name}}</span>
+            <span style="font-size: 15px; font-weight: 600; text-align: right; color: {{s.ink}}">{{s.best}}</span>
+            <span style="font-size: 14px; font-weight: 600; text-align: right; color: #ff6b6b">{{s.vs}}</span>
+            <span style="font-size: 14px; text-align: right; color: #a2a8bc">{{s.d}}</span>
+          </div>
+        </sc-for>
+        <span style="padding: 6px 12px 0; font-size: 13px; color: #a2a8bc">Gold <span style="color: #ffc93c">★</span> marks your best-ever segment on the picked map (Very Hard · Any%). Sum of best 36:41.02.</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">Changelog</span>
+        <span style="font-size: 14px; line-height: 1.5; color: #c9cde0"><span style="font-weight: 700; color: #ffffff">Port 1.2</span> · 20 Nov · [change line]. Boards kept: the gameplay hash did not change.</span>
+        <span style="font-size: 14px; line-height: 1.5; color: #c9cde0"><span style="font-weight: 700; color: #ffffff">Port 1.1</span> · 2 Nov · [change line]. New boards: the old ones stay under "Port 1.0".</span>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 16px">
+      <sc-for list="{{facts}}" as="f" hint-placeholder-count="5">
+        <div style="display: flex; flex-direction: column; gap: 4px">
+          <span style="font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #a2a8bc">{{f.k}}</span>
+          <sc-for list="{{f.lines}}" as="l" hint-placeholder-count="2">
+            <span style="font-size: 14px; line-height: 1.45; color: #e3e5ee">{{l}}</span>
+          </sc-for>
+        </div>
+      </sc-for>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap">
+        <sc-for list="{{links}}" as="l" hint-placeholder-count="3">
+          <span style="height: 30px; padding: 0 12px; border-radius: 9px; background: rgba(255,255,255,.1); display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 13px; font-weight: 700">{{l}} ↗</span></span>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 60px; background: linear-gradient(0deg, rgba(10,11,17,.95), rgba(10,11,17,0))"></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"w":{"editor":"int","min":600,"max":900,"default":860},"$preview":{"width":860,"height":380}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const S = [['1', '[stage name]', '3:12.40', '+0:21.6', 380, true], ['2', '[stage name]', '4:31.32', '+0:33.0', 611, false], ['3', '[stage name]', '5:50.16', '+0:12.4', 1040, true], ['4', '[stage name]', '5:38.48', '+0:47.1', 1520, false], ['5', '[stage name]', '6:02.88', '+1:02.3', 2880, false], ['6', '[stage name]', '5:11.80', '+0:18.9', 1972, true], ['Boss', '[boss name]', '7:08.08', '+0:31.2', 1009, false]];
+    return {
+      w: Number(this.props.w ?? 860),
+      stages: S.map(([n, name, best, vs, d, gold], i) => ({ n, name, best: (gold ? '★ ' : '') + best, ink: gold ? '#ffc93c' : '#f3f4f8', vs, d: d.toLocaleString('en-US'), bg: i % 2 ? 'transparent' : 'rgba(12,14,22,.5)' })),
+      facts: [
+        { k: 'Made by', lines: ['Kira☆~Kira☆~ · [year]', 'Ported by [porter] · port 1.2'] },
+        { k: 'Music', lines: ['Stage 1: [title] — [artist]', '+ 7 more tracks, all credited in the package'] },
+        { k: 'Art', lines: ['Sprites first seen in [origin game] ([release date], #1050)', 'Also in 3 other games here'] },
+        { k: 'Port', lines: ['Ranked · 46 behaviour checks pass, 3 open', 'Known differences: none that change a run · [from the deviation log, #784]'] },
+      ],
+      links: ['Creator page', 'Original download', 'Report a port bug'],
+    };
+  }
+}
+</script>
+</body>
+</html>

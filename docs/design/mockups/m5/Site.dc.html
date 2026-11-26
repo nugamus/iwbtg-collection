@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Website: accounts</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,600;1,700&amp;display=swap">
+<style>
+body{margin:0}
+@keyframes st-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}}
+</style>
+</helmet>
+<!-- The website's account pages (#85), in the client's language so the two feel like one product. Accounts are username and password at heart; the website also offers Google and Discord. Signing in with one of those the first time creates the account, which then needs a player name and a password, because the client only ever asks for a username and password (or a device code). Steps: sign in, pick a name, set a password, done; and the device page that confirms a client's code. The left art panel is the same backdrop system as the client. Pages crossfade 200 ms; the step dots slide 400 ms OutQuint. -->
+<div style="position: relative; width: 1440px; height: 900px; overflow: hidden; background: #0b0d14; font-family: 'Barlow', system-ui, sans-serif; color: #f3f4f8; font-variant-numeric: tabular-nums">
+  <!-- header -->
+  <div style="position: absolute; left: 0; right: 0; top: 0; height: 64px; display: flex; align-items: center; gap: 30px; padding: 0 40px; background: rgba(6,7,11,.9); box-shadow: inset 0 -1px 0 rgba(255,255,255,.06); z-index: 2">
+    <span style="display: flex; align-items: center; gap: 12px"><img src="/_blob/dd3504fc78d818a5c566e1ae138ad56f" alt="" width="21" height="24" style="image-rendering: pixelated"><span style="font-family: 'Barlow Condensed', sans-serif; font-size: 24px; font-weight: 700; font-style: italic">IWBTG Collection</span></span>
+    <sc-for list="{{nav}}" as="n" hint-placeholder-count="4"><span style="font-size: 16px; font-weight: 600; color: #c9cde0">{{n}}</span></sc-for>
+    <span style="flex: 1"></span>
+    <span style="height: 40px; padding: 0 20px; border-radius: 10px; background: #ff3d55; display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 15px; font-weight: 700">Download</span></span>
+  </div>
+  <!-- art -->
+  <div style="position: absolute; left: 0; top: 64px; width: 620px; height: 836px; overflow: hidden"><dc-import name="Backdrop" w="620px" h="836px" hue="{{hue}}" scene="castle" blur="0" dim="0.25" tag="none" hint-size="620px,836px"></dc-import>
+    <div style="position: absolute; inset: 0; background: linear-gradient(90deg, rgba(11,13,20,0) 50%, #0b0d14 100%)"></div>
+    <img src="/_blob/dd3504fc78d818a5c566e1ae138ad56f" alt="" width="105" height="120" style="position: absolute; left: 240px; top: 300px; image-rendering: pixelated; animation: st-bob 1.6s ease-in-out infinite">
+    <span style="position: absolute; left: 60px; right: 60px; top: 470px; text-align: center; font-family: 'Barlow Condensed', sans-serif; font-size: 40px; font-weight: 700; font-style: italic; line-height: 1.05">{{tag}}</span>
+  </div>
+
+  <!-- the card -->
+  <div style="position: absolute; left: 740px; top: 120px; width: 560px; display: flex; flex-direction: column; gap: 18px">
+    <sc-if value="{{steps}}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; align-items: center; gap: 8px">
+        <sc-for list="{{steps}}" as="d" hint-placeholder-count="3"><span style="height: 6px; width: {{d.w}}px; border-radius: 3px; background: {{d.c}}"></span></sc-for>
+        <span style="margin-left: 8px; font-size: 13px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a2a8bc">{{stepLabel}}</span>
+      </div>
+    </sc-if>
+    <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 58px; font-weight: 700; font-style: italic; line-height: .95">{{title}}</span>
+    <span style="font-size: 17px; line-height: 1.55; color: #c9cde0">{{body}}</span>
+
+    <sc-if value="{{providers}}" hint-placeholder-val="{{ false }}">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px">
+        <sc-for list="{{providers}}" as="p" hint-placeholder-count="2">
+          <span style="height: 56px; border-radius: 10px; background: {{p.bg}}; display: flex; align-items: center; justify-content: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); display: flex; align-items: center; gap: 12px; font-size: 17px; font-weight: 700; color: {{p.ink}}"><span style="width: 26px; height: 26px; border-radius: 6px; background: {{p.mBg}}; color: {{p.mInk}}; display: grid; place-items: center; font-size: 14px; font-weight: 700">{{p.m}}</span>{{p.label}}</span></span>
+        </sc-for>
+      </div>
+      <div style="display: flex; align-items: center; gap: 14px; color: #6a7088; font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase"><span style="flex: 1; height: 1px; background: rgba(255,255,255,.1)"></span>or with your username<span style="flex: 1; height: 1px; background: rgba(255,255,255,.1)"></span></div>
+    </sc-if>
+
+    <sc-for list="{{fields}}" as="f" hint-placeholder-count="2">
+      <label style="display: flex; flex-direction: column; gap: 6px">
+        <span style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; color: #c9cde0">{{f.label}}<span style="font-weight: 600; color: {{f.noteInk}}">{{f.note}}</span></span>
+        <span style="height: 56px; padding: 0 18px; border-radius: 10px; background: rgba(255,255,255,.07); box-shadow: {{f.ring}}; display: flex; align-items: center; gap: 10px; font-size: {{f.size}}px; font-weight: 600; letter-spacing: {{f.ls}}">{{f.value}}<sc-if value="{{f.caret}}" hint-placeholder-val="{{ false }}"><span style="width: 2px; height: 24px; background: #ffffff"></span></sc-if><span style="flex: 1"></span><sc-if value="{{f.ok}}" hint-placeholder-val="{{ false }}"><svg width="22" height="22" viewBox="0 0 22 22" aria-label="available" role="img"><path d="M5 11.5l4 4 8-9" stroke="#45d483" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if></span>
+        <sc-if value="{{f.meter}}" hint-placeholder-val="{{ false }}"><span style="display: flex; gap: 6px; padding-top: 4px"><span style="flex: 1; height: 5px; border-radius: 3px; background: #45d483"></span><span style="flex: 1; height: 5px; border-radius: 3px; background: #45d483"></span><span style="flex: 1; height: 5px; border-radius: 3px; background: #45d483"></span><span style="flex: 1; height: 5px; border-radius: 3px; background: rgba(255,255,255,.12)"></span></span></sc-if>
+      </label>
+    </sc-for>
+
+    <sc-if value="{{device}}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; flex-direction: column; gap: 14px; padding: 22px; border-radius: 10px; background: rgba(255,255,255,.06)">
+        <div style="display: flex; gap: 10px">
+          <sc-for list="{{codeChars}}" as="c" hint-placeholder-count="7"><span style="width: {{c.w}}px; height: 72px; border-radius: 10px; background: {{c.bg}}; display: grid; place-items: center; font-family: 'Barlow Condensed', sans-serif; font-size: 42px; font-weight: 700; color: {{c.ink}}">{{c.ch}}</span></sc-for>
+        </div>
+        <div style="display: grid; grid-template-columns: 26px 1fr; gap: 12px; align-items: center; font-size: 16px; color: #e3e5ee">
+          <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M3 5h16v10H3zM8 19h6M11 15v4" stroke="#f3f4f8" stroke-width="1.7" fill="none" stroke-linejoin="round"></path></svg>
+          <span><b style="font-weight: 700">IWBTG Collection 0.9.0</b> on Windows wants to sign in as <b style="font-weight: 700">nugamus</b>. Requested 21:14 from Sweden.</span>
+        </div>
+      </div>
+    </sc-if>
+
+    <div style="display: flex; gap: 10px; margin-top: 6px">
+      <span style="flex: 1; height: 60px; border-radius: 10px; background: #ff3d55; display: flex; align-items: center; justify-content: center; transform: skewX(-11.31deg); box-shadow: 0 10px 28px rgba(255,61,85,.35)"><span style="transform: skewX(11.31deg); font-size: 20px; font-weight: 700">{{cta}}</span></span>
+      <sc-if value="{{cta2}}" hint-placeholder-val="{{ false }}"><span style="height: 60px; padding: 0 26px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: center; transform: skewX(-11.31deg)"><span style="transform: skewX(11.31deg); font-size: 17px; font-weight: 700">{{cta2}}</span></span></sc-if>
+    </div>
+    <span style="font-size: 15px; line-height: 1.55; color: #a2a8bc">{{foot}}</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"step":{"editor":"enum","options":["signin","name","password","device"],"default":"signin"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const step = this.props.step ?? 'signin';
+    const fld = (label, value, opt) => Object.assign({ label, value, note: '', noteInk: '#a2a8bc', ring: 'none', caret: false, ok: false, meter: false, size: 18, ls: 'normal' }, opt || {});
+    const dots = (n) => [0, 1, 2].map((i) => ({ w: i === n ? 46 : 22, c: i <= n ? '#ff3d55' : 'rgba(255,255,255,.16)' }));
+    const base = { nav: ['Games', 'Leaderboards', 'Players', 'About'], hue: 250, steps: null, stepLabel: '', providers: null, fields: [], device: false, codeChars: [], cta2: '' };
+    if (step === 'signin') return Object.assign(base, {
+      tag: 'One more try.', title: 'Sign in', body: 'With Google or Discord, or with the username and password you use in the client.',
+      providers: [{ label: 'Google', m: 'G', bg: '#ffffff', ink: '#10121a', mBg: '#10121a', mInk: '#ffffff' }, { label: 'Discord', m: 'D', bg: '#5865f2', ink: '#ffffff', mBg: '#ffffff', mInk: '#5865f2' }],
+      fields: [fld('Username', 'nugamus'), fld('Password', '••••••••••', { note: 'Forgot it?', noteInk: '#ffffff', ring: 'inset 0 0 0 2px rgba(255,255,255,.6)', caret: true, size: 22, ls: '.12em' })],
+      cta: 'Sign in', foot: 'New here? Google or Discord makes your account in one step; or create one with just a username. Provider buttons follow Google’s and Discord’s own rules when built; plain marks here.',
+    });
+    if (step === 'name') return Object.assign(base, {
+      hue: 140, tag: 'Pick the name on your clears.', steps: dots(0), stepLabel: 'Step 1 of 3 · signed in with Discord',
+      title: 'Your player name', body: 'This is your username: it signs you in to the client and shows on every leaderboard. You can change it later, once every 30 days.',
+      fields: [fld('Player name', 'nugamus', { note: 'available', noteInk: '#45d483', ring: 'inset 0 0 0 2px #45d483', caret: true, ok: true, size: 22 })],
+      cta: 'Continue', foot: '3–16 letters, digits, _ or -. Checked against the name rules (#1474). Your Discord name is not shown anywhere.',
+    });
+    if (step === 'password') return Object.assign(base, {
+      hue: 300, tag: 'For the client.', steps: dots(1), stepLabel: 'Step 2 of 3',
+      title: 'Set a password', body: 'The client signs in with your username and this password, so you never need Google or Discord inside the game. You can keep using them here on the website.',
+      fields: [fld('Password', '••••••••••••••', { note: 'strong', noteInk: '#45d483', ring: 'inset 0 0 0 2px rgba(255,255,255,.6)', meter: true, size: 22, ls: '.12em' }), fld('Again', '••••••••••••••', { note: 'matches', noteInk: '#45d483', ok: true, size: 22, ls: '.12em' })],
+      cta: 'Save password', cta2: 'Skip for now', foot: 'Skip it and the client can still sign in with a browser or phone (the device code). Passwords of 8–14 characters are checked against known breached passwords (#1475); 15 or more need nothing else.',
+    });
+    const code = 'WQ7-KD4';
+    return Object.assign(base, {
+      hue: 210, tag: 'Signing in a client.', title: 'Confirm the code', body: 'Check that it matches the code on your game screen. Never enter a code someone sent you.',
+      device: true, codeChars: code.split('').map((ch) => ({ ch, w: ch === '-' ? 30 : 64, bg: ch === '-' ? 'transparent' : 'rgba(255,255,255,.1)', ink: ch === '-' ? '#6a7088' : '#ffffff' })),
+      cta: 'Sign in the client', cta2: 'Not me', foot: 'Signed in here as nugamus. The client gets its own sign-in, which you can end at any time under Account → Devices.',
+    });
+  }
+}
+</script>
+</body>
+</html>
