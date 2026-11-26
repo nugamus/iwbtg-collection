@@ -12,6 +12,7 @@ pub mod health;
 pub mod mail;
 pub mod rate_limit;
 pub mod removal;
+pub mod replays;
 pub mod submissions;
 
 use std::path::PathBuf;
@@ -76,6 +77,7 @@ pub fn app_with_mailer(pool: SqlitePool, catalog_dir: Option<PathBuf>, mailer: m
             "/submissions",
             post(submissions::submit).layer(DefaultBodyLimit::max(submissions::MAX_REPLAY_BYTES)),
         )
+        .route("/replays/{run_id}", get(replays::download))
         .with_state(app_state(pool, catalog_dir, mailer))
 }
 

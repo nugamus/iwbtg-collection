@@ -2,7 +2,7 @@
 
 The leaderboard, accounts and game downloads run on the maintainer's home server. Chosen for few moving parts, strong defaults and easy operation by agents. Versions were checked on 2026-10-23; check them again when Phase 8 starts.
 
-Status: the skeleton exists: `crates/server` builds the `iwbtg-server` binary (axum 0.8 + tokio, `--bind`/`IWBTG_BIND`, default `127.0.0.1:8080`) and serves `GET /healthz` (#152). It opens the SQLite database (`--db`/`IWBTG_DB`, default `data/iwbtg.db`), sets WAL and runs the migrations at startup (#153, Schema below). A published folder is served as `GET /catalog.json`, `GET /files/<sha256>[.<ext>]` and the signed `GET /removals.json` (`--catalog-dir`/`IWBTG_CATALOG_DIR`, Game downloads below); unset, all three answer 404 (#807, #808). Accounts, submissions and the verify worker are later issues.
+Status: the skeleton exists: `crates/server` builds the `iwbtg-server` binary (axum 0.8 + tokio, `--bind`/`IWBTG_BIND`, default `127.0.0.1:8080`) and serves `GET /healthz` (#152). It opens the SQLite database (`--db`/`IWBTG_DB`, default `data/iwbtg.db`), sets WAL and runs the migrations at startup (#153, Schema below). A published folder is served as `GET /catalog.json`, `GET /files/<sha256>[.<ext>]` and the signed `GET /removals.json` (`--catalog-dir`/`IWBTG_CATALOG_DIR`, Game downloads below); unset, all three answer 404 (#807, #808). Accounts and submissions are served (`/auth/*`, `/submissions`), the review queue runs on its own admin listener ([Admin access](#admin-access)), and a verified, non-quarantined replay downloads at `GET /replays/{run_id}` (#200). The verify worker is #163.
 
 ## Components
 
@@ -53,6 +53,10 @@ Queries that need compile-time checking use `sqlx::query!`; the `.sqlx` offline 
 - The answer is `202 {run_id, replay_sha256}`. Submissions are rate limited per address and per account (Security rule 1).
 - Every accepted run records review flags in `run_flags` (#164). `exact_copy` names the earliest run with the same replay bytes, for any account. `seed_reuse` names the earliest run by the same account on the same board (`package_id`, `map_id`, `mods`, `gameplay_hash`) with the same seed. A flag never rejects a run: it is stored, queued and answered like any other. Seed reuse is deliberately same-player and same-board, because board-wide reuse flags fire on honest runs at scale (#790, which still owns the seed source); the seed is kept as the header's eight raw bytes, so the comparison is exact.
 - Reproducing the run and the tick bound are #163; nothing the client claims in the trailer is trusted or stored as a time here. The verification checks are the shared `iwbtg-verify` crate (#1565), the same code `iwbtg replay verify` runs, not a server copy.
+
+### Replay downloads
+
+`GET /replays/{run_id}` serves the exact stored replay (#200). Only a publicly visible run is served: `status = 'verified'`, a verified tick count, and no `run_reviews` row in `quarantined`. Pending, rejected, quarantined and unknown runs all answer one uniform `404`, so the route cannot enumerate hidden runs. The body is `application/octet-stream` with `Content-Disposition: attachment; filename="<run_id>.iwbr"`, so a client can re-verify it offline with `iwbtg replay verify` ([replay file](architecture/replay.md#replay-file-iwbr)). It is cached `public, max-age=60`: the bytes for a run never change, but visibility does and a quarantine must take effect. The board-row link and the client's watch flow are #57 and #42.
 
 ## Game downloads
 

@@ -20,6 +20,9 @@ mod catalog;
 #[path = "removal.rs"]
 mod removal;
 
+#[path = "replays.rs"]
+mod replays;
+
 #[path = "healthchecks.rs"]
 mod healthchecks;
 
