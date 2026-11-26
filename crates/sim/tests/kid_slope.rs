@@ -200,6 +200,45 @@ fn replace_steps_up_instead_of_the_contact() {
 }
 
 #[test]
+fn replace_steps_up_only_on_the_rows_uphill_side() {
+    // kid/A1-2.md A1-172 (rori, fairy-tale): the block event steps up on both sides, nanameblockL's
+    // event only on a right hit and nanameblockR's only on a left hit (a right hit on the mirror is
+    // the contact `mirror_contact` picks). A peak of a `slope` and a `slope_mirror` contacts.
+    let replace = |p: &mut PhysicsProfile| p.slope.block_step = BlockSlopeStep::Replace;
+    // Right hit, hs 6: the mirror row only contacts; the block's row steps up.
+    for (row, want) in [("mirror", (104.0, 100.0, 0.0)), ("floor", (103.0, 97.0, 0.0))] {
+        with_kid(replace, |ctx, kid, k| {
+            put(ctx, k.slope, 110.0, 90.0);
+            let other = match row {
+                "mirror" => put(ctx, k.mirror, 110.0, 90.0),
+                _ => put(ctx, k.floor, 110.0, 90.0),
+            };
+            speeds(ctx, kid, 6.0, 0.0);
+            collide(ctx, kid, other, SlopeRun::BlockSlopeStep);
+            assert_eq!(at(ctx, kid), want, "{row}");
+        });
+    }
+    // Left hit, hs -6: the `slope` row only contacts; the mirror and the block step up.
+    for (row, want) in [
+        ("slope", (95.0, 100.0, 0.0)),
+        ("mirror", (97.0, 97.0, 0.0)),
+        ("floor", (97.0, 97.0, 0.0)),
+    ] {
+        with_kid(replace, |ctx, kid, k| {
+            put(ctx, k.mirror, 58.0, 90.0);
+            let other = match row {
+                "slope" => put(ctx, k.slope, 58.0, 90.0),
+                "mirror" => put(ctx, k.mirror, 58.0, 90.0),
+                _ => put(ctx, k.floor, 58.0, 90.0),
+            };
+            speeds(ctx, kid, -6.0, 0.0);
+            collide(ctx, kid, other, SlopeRun::BlockSlopeStep);
+            assert_eq!(at(ctx, kid), want, "{row}");
+        });
+    }
+}
+
+#[test]
 fn the_mirror_row_right_hit_contacts_by_the_games_rule() {
     // A right hit on a `slope_mirror` (no climb: the climb looks for a `slope`): rori contacts
     // toward 180 (a bug the original keeps), fairy-tale toward 0, the others by the block rule.
