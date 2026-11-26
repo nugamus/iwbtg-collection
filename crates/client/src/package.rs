@@ -169,6 +169,30 @@ pub fn read_iwbz(path: &Path) -> Result<PackageFiles, OpenError> {
     preview_from_iwbz(&bytes).map_err(|e| err(e.to_string()))
 }
 
+/// The manifest only, for game select's first pass (#1593): a folder's `game.toml`, or an
+/// archive's through the selective reader. No art or room data is read, so a large library
+/// lists from its metadata before any preview is built.
+pub fn read_manifest(path: &Path) -> Result<PackageFiles, OpenError> {
+    if is_iwbz(path) {
+        let err = |e: String| OpenError::Files(format!("{}: {e}", path.display()));
+        let len = std::fs::metadata(path).map_err(|e| err(e.to_string()))?.len();
+        if len > iwbtg_format::iwbz::MAX_ARCHIVE_BYTES {
+            return Err(err(format!(
+                "over {} bytes",
+                iwbtg_format::iwbz::MAX_ARCHIVE_BYTES
+            )));
+        }
+        let bytes = std::fs::read(path).map_err(|e| err(e.to_string()))?;
+        return iwbtg_format::iwbz::unpack_selected(&bytes, |name| name == "game.toml")
+            .map_err(|e| err(e.to_string()));
+    }
+    let mut files = PackageFiles::new();
+    let bytes = std::fs::read(path.join("game.toml"))
+        .map_err(|e| OpenError::Files(format!("{}: {e}", path.display())))?;
+    let _ = files.insert("game.toml", bytes);
+    Ok(files)
+}
+
 /// The selective reads behind [`read_iwbz`]: the manifest, then the files its key art, first
 /// ranked room and cherry need, then the background images that room's art names. A manifest
 /// that does not parse leaves only `game.toml`, which the caller treats as unreadable.

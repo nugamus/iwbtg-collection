@@ -452,13 +452,8 @@ mod tests {
     /// The Collections menu is Any, the favorites list and each named collection (#105).
     #[test]
     fn the_collections_menu_lists_favorites_and_each_collection() {
-        let lib = Library {
-            folder: None,
-            games: Vec::new(),
-            art: Vec::new(),
-            fruit: Vec::new(),
-            records: Vec::new(),
-        };
+        let mut images = Assets::<Image>::default();
+        let lib = Library::load(None, &[], &mut images);
         let mut lists = Collections::default();
         lists.create("Warmups", None).unwrap();
         let menu = options(Control::Collections, &lib, &lists, &Filters::default());
