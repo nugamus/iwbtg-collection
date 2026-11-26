@@ -295,7 +295,7 @@ pub fn ranked_pill() -> impl Bundle {
 /// The CLASSIC pill (m5 A5, A8): violet with white capitals, the Ranked pill's size.
 pub fn classic_pill() -> impl Bundle {
     pill(
-        "Classic",
+        locale::text("pill_classic"),
         Type::PILL_CAPS,
         tokens::CLASSIC,
         tokens::INK,
