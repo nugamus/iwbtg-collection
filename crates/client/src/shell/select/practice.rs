@@ -83,6 +83,7 @@ pub(super) fn chips(pick: Res<Pick>, mut chips: Query<(&OptionStart, &mut Chip)>
 }
 
 /// The Practice button opens the panel for the selected game and map.
+#[allow(clippy::too_many_arguments, reason = "the button's observer")]
 pub(super) fn open(
     activate: On<Activate>,
     pressed: Query<(), With<OpenButton>>,
@@ -100,6 +101,7 @@ pub(super) fn open(
 }
 
 /// `--practice-preview`: opens the panel once, on the screen's first update.
+#[allow(clippy::too_many_arguments, reason = "the preview's system")]
 pub(super) fn preview(
     mut done: Local<bool>,
     preview: Option<Res<Preview>>,
@@ -292,9 +294,13 @@ fn spawn(
     });
 }
 
+/// A panel section: its title and its options, each a label and the start (`None`: a stage
+/// without a room, shown faded).
+type Section = (String, Vec<(String, Option<StartPoint>)>);
+
 /// The panel's sections: the map's stages, the save and the start of the game, and every play
 /// room. A stage whose trigger is not `enter_room` cannot be started at, so it is faded out.
-fn sections(def: &GameDef, map: Option<&str>) -> Vec<(String, Vec<(String, Option<StartPoint>)>)> {
+fn sections(def: &GameDef, map: Option<&str>) -> Vec<Section> {
     let map_index = def.map_index(map).unwrap_or(0);
     let room = |id: RoomId| def.room(id).map(|r| r.name.clone()).unwrap_or_default();
     let stages: Vec<(String, Option<StartPoint>)> = def
