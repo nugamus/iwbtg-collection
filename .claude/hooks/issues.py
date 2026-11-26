@@ -407,7 +407,7 @@ def start():
         lines += ["", "Open PRs:"] + [f"- {p}" for p in prs]
     if stuck:
         lines += ["", "CI STUCK PRs: close and reopen starts fresh runs; reopening turns auto-merge off, so the command turns "
-                  "it on again where it was on (cancel and rerun refuse such runs; client/docs/dev-setup.md, CI):"] + stuck
+                  "it on again where it was on (cancel and rerun refuse such runs; iwbtg-collection/docs/dev-setup.md, CI):"] + stuck
     wt = worktrees()
     if wt:
         lines += ["", "Worktrees (lanes keep theirs between issues):"] + wt
