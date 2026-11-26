@@ -14,7 +14,7 @@ use iwbtg_sim::def::testing::GameDefBuilder;
 use iwbtg_sim::def::{
     Builtin, ClassMask, EngineKind, GameDef, KidFamily, KindDef, KindId, ParamValue, PartEmitterDef,
     PartSystemDef, PartTypeDef, PathDef, RoomDef, RoomId, ScriptDef, ScriptId, SoundDef, SoundKind, SpriteId,
-    VarId,
+    TimelineDef, VarId,
 };
 use iwbtg_sim::input::{Action, InputFrame};
 use iwbtg_sim::kid::{self, presets};
@@ -968,6 +968,11 @@ fn script_objects(c: &mut Course) {
         closed: false,
         smooth: false,
         precision: 4,
+    });
+    // A timeline the API case starts and stops (#1386). No moments, so nothing can fire.
+    c.def_mut().timelines.push(TimelineDef {
+        name: "api_tl".into(),
+        ..TimelineDef::default()
     });
     c.scripts.push(ScriptDef {
         name: "scripts/api.rhai".into(),
