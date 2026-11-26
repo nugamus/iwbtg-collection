@@ -19,6 +19,8 @@ mod arrays;
 mod collision;
 #[path = "paths.rs"]
 mod paths;
+#[path = "strings.rs"]
+mod strings;
 #[path = "views.rs"]
 mod views;
 

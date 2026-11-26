@@ -36,6 +36,16 @@ fn begin_step() {
 fn step() {
     let t = room_tick();
     let course = gm_eq(this.xstart, 400.0);
+    // Strings (#1532): every GML string function, folded into `phase`.
+    if t == 6.0 {
+        let a = string(12.5) + string_format(1.25, 6, 2) + string_char_at("abc", 2);
+        let b = string_copy("abcdef", 2, 2) + string_delete("abcdef", 2, 1) + string_insert("x", "ab", 2);
+        let c = string_replace("axa", "a", "b") + string_replace_all("axa", "a", "b");
+        let d = string_upper("ab") + string_lower("AB") + string_digits("a1b2") + string_letters("a1b2") + string_lettersdigits("a1-");
+        let e = chr(65) + string("x");
+        let n = string_length(a + b + c + d + e) + string_pos("a", "abc") + string_count("a", "aa") + ord("A");
+        this.phase = this.phase + n;
+    }
     // Views (#1531): read and write every view function on view 0.
     if t == 3.0 {
         set_view_xview(0, view_xview(0));

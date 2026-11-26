@@ -115,6 +115,7 @@ Spawn caps: `instance_create` also counts toward at most 256 instances per event
 - `arctan2(?, ?) -> float` (can fail) (cost: 1): Angle in radians of the point (`x`, `y`) (software libm).
 - `ceil(?) -> float` (can fail) (cost: 1): Smallest integer not below `x`.
 - `choose(array) -> ?` (can fail) (cost: 1): One element of the array, picked by the run's one RNG; an empty array is an error.
+- `chr(?) -> string` (can fail) (cost: 1): `chr(code)`: the character with code 0 to 255 (a one-character string).
 - `clamp(?, ?, ?) -> float` (can fail) (cost: 1): `x` limited to the range `lo` to `hi`.
 - `collision_line(?, ?, ?, ?, ?) -> ?` (can fail) (cost: 1 + 1 per pixel sampled): `collision_line(x1, y1, x2, y2, target)` or `collision_line(x1, y1, x2, y2, target, prec, notme)`: GML `collision_line`. The first instance of `target` (event order) on the 8-connected pixel line between the two rounded ends, both included, or `()`. `prec` and `notme` as for `collision_point`. Costs one budget unit per pixel sampled. Changes nothing.
 - `collision_line(?, ?, ?, ?, ?, bool, ?) -> ?` (can fail) (cost: 1 + 1 per pixel sampled): `collision_line(x1, y1, x2, y2, target)` or `collision_line(x1, y1, x2, y2, target, prec, notme)`: GML `collision_line`. The first instance of `target` (event order) on the 8-connected pixel line between the two rounded ends, both included, or `()`. `prec` and `notme` as for `collision_point`. Costs one budget unit per pixel sampled. Changes nothing.
@@ -169,6 +170,7 @@ Spawn caps: `instance_create` also counts toward at most 256 instances per event
 - `mod(?, ?) -> float` (can fail) (cost: 1): GML `a mod b`: `a - (a div b) * b`; a zero divisor is an error.
 - `move_bounce_all(Instance, bool) -> ()` (can fail) (cost: 1): `i.move_bounce_all(precise)`: as `move_bounce_solid`, against every instance (`place_empty`).
 - `move_bounce_solid(Instance, bool) -> ()` (can fail) (cost: 1): `i.move_bounce_solid(precise)`: GML `move_bounce_solid`, the Bounce action against solid instances. Changes only `hspeed` and `vspeed`, never the position; the tick's motion then moves by the new speed. Not precise negates `hspeed` when (`x + hspeed`, `y`) is blocked, `vspeed` when (`x`, `y + vspeed`) is, both when only the diagonal is; precise picks a new direction (a multiple of 10) from 36 samples at radius `speed`.
+- `ord(?) -> float` (can fail) (cost: 1): `ord(s)`: the character code of the first character of `s`, or 0 when it is empty.
 - `path_end(Instance) -> ()` (can fail) (cost: 1): `i.path_end()`: stops following the path (the instance keeps its position); `path_index` reads -1 afterwards.
 - `path_start(Instance, string, ?, string, ?) -> ()` (can fail) (cost: 1): `i.path_start(path, speed, endaction, absolute)`: starts following a package path, replacing any running one. `path` is the path id; `endaction` is `"stop"`, `"restart"`, `"continue"` or `"reverse"`; `absolute` places the instance at the path's own points, else the path is relative to the instance's current position. The run advances in automatic motion from the next tick. A non-finite speed is an error.
 - `place_free(Instance, ?, ?) -> bool` (can fail) (cost: 1): `place_free(i, x, y)`: GML `place_free`. Whether `i`'s collision mask placed at (`x`, `y`) meets no solid instance. Changes nothing.
@@ -210,6 +212,22 @@ Spawn caps: `instance_create` also counts toward at most 256 instances per event
 - `sqr(?) -> float` (can fail) (cost: 1): `x` squared.
 - `sqrt(?) -> float` (can fail) (cost: 1): Square root.
 - `stop_music() -> ()` (can fail) (cost: 1): Stops the music track that is playing, if any.
+- `string(?) -> string` (can fail) (cost: 1): `string(x)`: a real as GM8 writes it (an integer with no decimals, anything else with exactly two, rounded ties-to-even), a bool as 1/0, or a string unchanged.
+- `string_char_at(?, ?) -> string` (can fail) (cost: 1): `string_char_at(s, index)`: the character at 1-based `index`, or "" outside the string.
+- `string_copy(?, ?, ?) -> string` (can fail) (cost: 1): `string_copy(s, index, count)`: up to `count` characters of `s` from 1-based `index` (a shorter tail when it runs past the end).
+- `string_count(?, ?) -> float` (can fail) (cost: 1): `string_count(substr, s)`: how many times `substr` occurs in `s`, without overlap.
+- `string_delete(?, ?, ?) -> string` (can fail) (cost: 1): `string_delete(s, index, count)`: `s` without `count` characters from 1-based `index`.
+- `string_digits(?) -> string` (can fail) (cost: 1): `string_digits(s)`: only the ASCII digits of `s`.
+- `string_format(?, ?, ?) -> string` (can fail) (cost: 1): `string_format(x, total, decimals)`: `x` padded on the left to `total` characters with `decimals` places (0 to 64, total 0 to 1024); a number wider than `total` is not cut.
+- `string_insert(?, ?, ?) -> string` (can fail) (cost: 1): `string_insert(substr, s, index)`: `substr` put before 1-based `index` of `s`; an index past the end appends.
+- `string_length(?) -> float` (can fail) (cost: 1): `string_length(s)`: the number of characters (an INT as a FLOAT).
+- `string_letters(?) -> string` (can fail) (cost: 1): `string_letters(s)`: only the ASCII letters of `s`.
+- `string_lettersdigits(?) -> string` (can fail) (cost: 1): `string_lettersdigits(s)`: only the ASCII letters and digits of `s`.
+- `string_lower(?) -> string` (can fail) (cost: 1): `string_lower(s)`: `s` in lower case.
+- `string_pos(?, ?) -> float` (can fail) (cost: 1): `string_pos(substr, s)`: the 1-based character position of the first `substr` in `s`, or 0 when it is not there.
+- `string_replace(?, ?, ?) -> string` (can fail) (cost: 1): `string_replace(s, substr, new)`: replaces the first `substr` in `s`.
+- `string_replace_all(?, ?, ?) -> string` (can fail) (cost: 1): `string_replace_all(s, substr, new)`: replaces every `substr` in `s`.
+- `string_upper(?) -> string` (can fail) (cost: 1): `string_upper(s)`: `s` in upper case.
 - `tan(?) -> float` (can fail) (cost: 1): Tangent of an angle in radians (software libm).
 - `tick() -> float` (cost: 1): The run's tick counter.
 - `to_float(int) -> float` (cost: 1): An integer as a float.
