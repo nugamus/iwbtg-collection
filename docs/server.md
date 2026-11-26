@@ -32,7 +32,8 @@ Migrations live in `migrations/` at the workspace root (not in the crate), are c
 | `identities` | `(provider, subject)` unique; index on `account_id` | One row per sign-in method (Google, Discord, ...); a new provider is a new value, no schema change. |
 | `password_credentials` | `account_id` primary key | Argon2id PHC string. OIDC-only accounts have no row. |
 | `sessions` | `token_hash` unique; indexes on `account_id` and `expires_at` | Opaque session ID, SHA-256 of the bearer token, expiry. |
-| `runs` | `(package_id, map_id, mods, gameplay_hash, ticks, submitted_at)`; indexes on `replay_sha256` and `(account_id, ticks)` | The replay BLOB (at most 1 MiB), its SHA-256 for exact-copy detection, the board identity, and the verified tick count (`NULL` until the verifier has reproduced it). |
+| `runs` | `(package_id, map_id, mods, gameplay_hash, ticks, submitted_at)`; indexes on `replay_sha256`, `(account_id, ticks)` and `(account_id, package_id, map_id, mods, gameplay_hash, rng_seed)` | The replay BLOB (at most 1 MiB), its SHA-256 for exact-copy detection, the board identity, the header's `rng_seed` (eight raw bytes, for the reuse flag), and the verified tick count (`NULL` until the verifier has reproduced it). |
+| `run_flags` | primary key `(run_id, kind)`; index on `(kind, run_id)` | Review flags per run: `exact_copy` or `seed_reuse`, with `detail` naming the earlier run that explains it (#164). |
 | `verify_jobs` | index on `(state, id)` and `run_id` | Queue state per submitted run: `queued`, `running`, `done` or `failed`, with attempts, timings and the verifier's error. |
 | `password_resets` | `account_id` primary key | SHA-256 of the active six-digit reset code, its expiry and attempt count; one code per account, replaced by a new request (#160). |
 
@@ -48,7 +49,8 @@ Queries that need compile-time checking use `sqlx::query!`; the `.sqlx` offline 
 - A session is required (`__Host-iwbtg_session` cookie or `Authorization: Bearer`); without one the answer is `401 sign in required`.
 - The server decodes the canonical bytes through `iwbtg_sim::replay`; anything that is not a canonical replay is `400`. It stores the exact bytes, their SHA-256, and the board key from the header (`package_id`, `map_id`, `mods`, `gameplay_hash`), leaves `ticks` NULL until verification, and queues a `verify_jobs` row.
 - The answer is `202 {run_id, replay_sha256}`. Submissions are rate limited per address and per account (Security rule 1).
-- Reproducing the run, the tick bound and the seed-reuse/copy flags are #163 and #164; nothing the client claims in the trailer is trusted or stored as a time here.
+- Every accepted run records review flags in `run_flags` (#164). `exact_copy` names the earliest run with the same replay bytes, for any account. `seed_reuse` names the earliest run by the same account on the same board (`package_id`, `map_id`, `mods`, `gameplay_hash`) with the same seed. A flag never rejects a run: it is stored, queued and answered like any other. Seed reuse is deliberately same-player and same-board, because board-wide reuse flags fire on honest runs at scale (#790, which still owns the seed source); the seed is kept as the header's eight raw bytes, so the comparison is exact.
+- Reproducing the run and the tick bound are #163; nothing the client claims in the trailer is trusted or stored as a time here.
 
 ## Game downloads
 
