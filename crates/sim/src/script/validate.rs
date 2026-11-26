@@ -107,6 +107,19 @@ pub const STATE_FNS: &[&str] = &[
     // They change or drop the instance's path run (#1530).
     "path_start",
     "path_end",
+    // They write the hashed view state (#1531).
+    "set_view_xview",
+    "set_view_yview",
+    "set_view_wview",
+    "set_view_hview",
+    "set_view_angle",
+    "set_view_enabled",
+    "set_view_visible",
+    "set_view_object",
+    "set_view_hborder",
+    "set_view_vborder",
+    "set_view_hspeed",
+    "set_view_vspeed",
 ];
 
 /// Registered functions that return a number.
@@ -145,6 +158,17 @@ pub const NUMBER_FNS: &[&str] = &[
     "to_int",
     "tick",
     "room_tick",
+    // The view reads that return a number (#1531).
+    "view_xview",
+    "view_yview",
+    "view_wview",
+    "view_hview",
+    "view_angle",
+    "view_hborder",
+    "view_vborder",
+    "view_hspeed",
+    "view_vspeed",
+    "view_current",
     "get_alarm",
     "random",
     "random_range",
@@ -172,6 +196,10 @@ pub const OTHER_PURE_FNS: &[&str] = &[
     "collision_rect",
     "collision_line",
     "len",
+    // The view reads that do not return a number (#1531).
+    "view_enabled",
+    "view_visible",
+    "view_object",
 ];
 
 /// Instance properties that read as a real number.
@@ -277,6 +305,8 @@ pub const NAME_ARGS: &[(&str, usize, Names)] = &[
     // The instance argument moves the path name to index 1: for a method call the receiver is
     // not in `args`, so `this.path_start("line", ...)` checks `args[0]`.
     ("path_start", 1, Names::Path),
+    // The index is argument 0, the kind literal argument 1.
+    ("set_view_object", 1, Names::Kind),
     ("place_meeting", 3, Names::Target),
     ("instance_place", 3, Names::Target),
     ("collision_point", 2, Names::Target),

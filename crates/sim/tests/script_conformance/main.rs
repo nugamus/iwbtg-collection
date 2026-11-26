@@ -19,6 +19,8 @@ mod arrays;
 mod collision;
 #[path = "paths.rs"]
 mod paths;
+#[path = "views.rs"]
+mod views;
 
 const N: usize = 10_000;
 const EXPECTED: &str = include_str!("expected.txt");

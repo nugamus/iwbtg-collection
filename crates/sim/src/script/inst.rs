@@ -1005,6 +1005,8 @@ pub fn register_kid_api(engine: &mut Engine, shared: &Rc<Shared>, docs: &mut Doc
 
     // Paths (#1530): `path_start`, `path_end` and the instance's `path_*` properties.
     super::paths::register_path_api(engine, shared, docs);
+    // Views (#1531): the `view_*` reads and `set_view_*` writes over `World::views`.
+    super::views::register_view_api(engine, shared, docs);
 }
 
 /// `room_goto`, `room_goto_next`, `room_goto_previous` and `room_restart` (#731). Each sets the

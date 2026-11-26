@@ -190,6 +190,18 @@ Spawn caps: `instance_create` also counts toward at most 256 instances per event
 - `room_tick() -> float` (cost: 1): Ticks since the current room started.
 - `round(?) -> float` (can fail) (cost: 1): GML `round`: the nearest integer under the run's rounding rule.
 - `set_alarm(Instance, ?, ?) -> ()` (can fail) (cost: 1): `i.set_alarm(n, steps)` sets alarm `n` (0 to 11) to `steps` ticks, rounded as GM does; -1 means not running; a non-finite value or another `n` is an error.
+- `set_view_angle(?, ?) -> ()` (can fail) (cost: 1): `set_view_angle(i, degrees)`: sets the view's rotation.
+- `set_view_enabled(?, ?) -> ()` (can fail) (cost: 1): `set_view_enabled(i, on)`: turns the view on or off for the room.
+- `set_view_hborder(?, ?) -> ()` (can fail) (cost: 1): `set_view_hborder(i, border)`: sets the follow's horizontal dead-zone half-size.
+- `set_view_hspeed(?, ?) -> ()` (can fail) (cost: 1): `set_view_hspeed(i, speed)`: sets the follow's horizontal speed (negative snaps).
+- `set_view_hview(?, ?) -> ()` (can fail) (cost: 1): `set_view_hview(i, h)`: sets the view's height.
+- `set_view_object(?, ?) -> ()` (can fail) (cost: 1): `set_view_object(i, kind)`: makes the view follow a kind (its first matching instance, as a room's `follow` does), or `()` to follow nothing.
+- `set_view_vborder(?, ?) -> ()` (can fail) (cost: 1): `set_view_vborder(i, border)`: sets the follow's vertical dead-zone half-size.
+- `set_view_visible(?, ?) -> ()` (can fail) (cost: 1): `set_view_visible(i, on)`: shows or hides the view.
+- `set_view_vspeed(?, ?) -> ()` (can fail) (cost: 1): `set_view_vspeed(i, speed)`: sets the follow's vertical speed (negative snaps).
+- `set_view_wview(?, ?) -> ()` (can fail) (cost: 1): `set_view_wview(i, w)`: sets the view's width.
+- `set_view_xview(?, ?) -> ()` (can fail) (cost: 1): `set_view_xview(i, x)`: moves the view's left edge.
+- `set_view_yview(?, ?) -> ()` (can fail) (cost: 1): `set_view_yview(i, y)`: moves the view's top edge.
 - `shake(?, ?) -> ()` (can fail) (cost: 1): Shakes the screen for `ticks` ticks with `strength` pixels (a client effect; the sim reads nothing back).
 - `sign(?) -> float` (can fail) (cost: 1): -1, 0 or 1 by the sign of `x`.
 - `sign(float) -> float` (cost: 1): -1, 0 or 1 by the sign of `x`.
@@ -202,3 +214,16 @@ Spawn caps: `instance_create` also counts toward at most 256 instances per event
 - `tick() -> float` (cost: 1): The run's tick counter.
 - `to_float(int) -> float` (cost: 1): An integer as a float.
 - `to_int(?) -> int` (can fail) (cost: 1): A float truncated toward zero as an integer; a non-finite or huge value is an error.
+- `view_angle(?) -> float` (can fail) (cost: 1): `view_angle(i)`: the view's rotation in degrees.
+- `view_current() -> float` (cost: 1): `view_current()`: the view being drawn. There is no draw slot yet, so it is 0.
+- `view_enabled(?) -> bool` (can fail) (cost: 1): `view_enabled(i)`: whether the view is on for the room.
+- `view_hborder(?) -> float` (can fail) (cost: 1): `view_hborder(i)`: the follow's horizontal dead-zone half-size.
+- `view_hspeed(?) -> float` (can fail) (cost: 1): `view_hspeed(i)`: the most the follow moves horizontally a tick (negative snaps).
+- `view_hview(?) -> float` (can fail) (cost: 1): `view_hview(i)`: the view's height.
+- `view_object(?) -> ?` (can fail) (cost: 1): `view_object(i)`: the kind the view follows, or `()` when it follows none.
+- `view_vborder(?) -> float` (can fail) (cost: 1): `view_vborder(i)`: the follow's vertical dead-zone half-size.
+- `view_visible(?) -> bool` (can fail) (cost: 1): `view_visible(i)`: whether the view is drawn.
+- `view_vspeed(?) -> float` (can fail) (cost: 1): `view_vspeed(i)`: the most the follow moves vertically a tick (negative snaps).
+- `view_wview(?) -> float` (can fail) (cost: 1): `view_wview(i)`: the view's width.
+- `view_xview(?) -> float` (can fail) (cost: 1): `view_xview(i)`: the view's left edge in the room.
+- `view_yview(?) -> float` (can fail) (cost: 1): `view_yview(i)`: the view's top edge in the room.

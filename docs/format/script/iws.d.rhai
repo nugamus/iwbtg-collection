@@ -396,6 +396,30 @@ fn set y(_: Instance, _: ?) -> ();
 
 fn set_alarm(_: Instance, _: ?, _: ?) -> ();
 
+fn set_view_angle(_: ?, _: ?) -> ();
+
+fn set_view_enabled(_: ?, _: ?) -> ();
+
+fn set_view_hborder(_: ?, _: ?) -> ();
+
+fn set_view_hspeed(_: ?, _: ?) -> ();
+
+fn set_view_hview(_: ?, _: ?) -> ();
+
+fn set_view_object(_: ?, _: ?) -> ();
+
+fn set_view_vborder(_: ?, _: ?) -> ();
+
+fn set_view_visible(_: ?, _: ?) -> ();
+
+fn set_view_vspeed(_: ?, _: ?) -> ();
+
+fn set_view_wview(_: ?, _: ?) -> ();
+
+fn set_view_xview(_: ?, _: ?) -> ();
+
+fn set_view_yview(_: ?, _: ?) -> ();
+
 fn shake(_: ?, _: ?) -> ();
 
 fn sign(_: ?) -> float;
@@ -419,3 +443,29 @@ fn tick() -> float;
 fn to_float(_: int) -> float;
 
 fn to_int(_: ?) -> int;
+
+fn view_angle(_: ?) -> float;
+
+fn view_current() -> float;
+
+fn view_enabled(_: ?) -> bool;
+
+fn view_hborder(_: ?) -> float;
+
+fn view_hspeed(_: ?) -> float;
+
+fn view_hview(_: ?) -> float;
+
+fn view_object(_: ?) -> ?;
+
+fn view_vborder(_: ?) -> float;
+
+fn view_visible(_: ?) -> bool;
+
+fn view_vspeed(_: ?) -> float;
+
+fn view_wview(_: ?) -> float;
+
+fn view_xview(_: ?) -> float;
+
+fn view_yview(_: ?) -> float;

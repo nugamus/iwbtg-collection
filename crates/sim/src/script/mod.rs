@@ -14,6 +14,7 @@ pub mod host;
 pub mod inst;
 pub mod paths;
 pub mod validate;
+pub mod views;
 
 use serde::{Deserialize, Serialize};
 
