@@ -11,7 +11,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::collide::query::place_free;
-use crate::def::{EngineKind, GameDef, KidFamily, RoomId, RoomRole};
+use crate::def::{EngineKind, GameDef, KidFamily, KindId, NameId, RoomId, RoomRole};
 use crate::error::SimError;
 use crate::num::{self, Real};
 use crate::rules::NumRules;
@@ -419,6 +419,31 @@ fn family_name(family: KidFamily) -> &'static str {
         KidFamily::B => "b",
         KidFamily::C => "c",
     }
+}
+
+/// The stable key a room-file `save` object's checkpoint records (#1153 E1): the declared name
+/// when it has one, else the exact spawn position. No placement ordinal (it shifts when an
+/// instance is inserted or reordered), no runtime id and no `gm_id`; two save objects of one
+/// kind at one exact spawn position are interchangeable, so one key is honest for both. The
+/// client's practice pickers use it to start at a placed save object (#1579).
+pub fn point_key(
+    def: &GameDef,
+    room: RoomId,
+    kind: KindId,
+    x: Real,
+    y: Real,
+    name: Option<NameId>,
+) -> Option<String> {
+    if let Some(name) = name.and_then(|n| def.names.get(n.index()?)) {
+        return Some(format!("name:{name}"));
+    }
+    let room = def.room(room)?.name.clone();
+    let kind = def.kind(kind)?.name.clone();
+    Some(format!(
+        "at:{room}/{kind}@{:016x},{:016x}",
+        x.get().to_bits(),
+        y.get().to_bits()
+    ))
 }
 
 /// One versioned checkpoint: the payload of the client save file and of a replay's

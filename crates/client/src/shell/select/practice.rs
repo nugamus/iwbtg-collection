@@ -9,8 +9,9 @@ use std::path::PathBuf;
 
 use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
-use iwbtg_sim::def::{GameDef, RoomId, RoomRole};
+use iwbtg_sim::def::{Builtin, GameDef, RoomId, RoomRole};
 use iwbtg_sim::room::StartPoint;
+use iwbtg_sim::save::{Checkpoint, RoomKey, SavePrecision, SaveSlot};
 use iwbtg_sim::timing::TimingTrigger;
 
 use super::AppScreen;
@@ -322,6 +323,52 @@ fn sections(def: &GameDef, map: Option<&str>) -> Vec<Section> {
     let save = crate::savefile::start_point(def);
     let saved = matches!(save, StartPoint::FromSave(_)).then_some(save);
     let beginning = Some(StartPoint::NewGame { difficulty: 0 });
+    // Every placed save object of a play room, as a checkpoint that starts there (#1579).
+    let mut points: Vec<(String, Option<StartPoint>)> = Vec::new();
+    for (i, room_def) in def.rooms.iter().enumerate() {
+        if room_def.role != RoomRole::Play {
+            continue;
+        }
+        let room = RoomId(u32::try_from(i).unwrap_or(0));
+        for inst in &room_def.instances {
+            if def.kind(inst.kind).is_none_or(|k| k.base != Builtin::Save) {
+                continue;
+            }
+            let Some(point) = iwbtg_sim::save::point_key(def, room, inst.kind, inst.x, inst.y, inst.name)
+            else {
+                continue;
+            };
+            let slot = SaveSlot {
+                room,
+                x: inst.x,
+                y: inst.y,
+                precision: SavePrecision::Exact,
+                point: Some(point.clone()),
+                flipped: false,
+                facing: 1,
+                difficulty: 0,
+                deaths: 0,
+                time: 0,
+                bosses: 0,
+                items: 0,
+                clear: false,
+            };
+            let Ok(checkpoint) = Checkpoint::from_parts(def, RoomKey(room_def.name.clone()), &slot)
+            else {
+                continue;
+            };
+            let label = match point.strip_prefix("name:") {
+                Some(name) => format!("{}: {name}", room_def.name),
+                None => format!(
+                    "{}: save at {}, {}",
+                    room_def.name,
+                    inst.x.get().round() as i64,
+                    inst.y.get().round() as i64
+                ),
+            };
+            points.push((label, Some(StartPoint::FromSave(checkpoint))));
+        }
+    }
     let rooms: Vec<(String, Option<StartPoint>)> = def
         .rooms
         .iter()
@@ -342,11 +389,40 @@ fn sections(def: &GameDef, map: Option<&str>) -> Vec<Section> {
         ("STAGE".to_owned(), stages),
         (
             "SAVE".to_owned(),
-            vec![
-                ("Your save".to_owned(), saved),
-                ("Start of the game".to_owned(), beginning),
-            ],
+            std::iter::once(("Your save".to_owned(), saved))
+                .chain(std::iter::once(("Start of the game".to_owned(), beginning)))
+                .chain(points)
+                .collect(),
         ),
         ("ROOM".to_owned(), rooms),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The SAVE section lists every placed save object and the sim accepts its checkpoint
+    /// (#1579).
+    #[test]
+    fn the_save_section_lists_every_placed_save_point() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/save.pkg");
+        let pkg = crate::package::open(&path, false).unwrap();
+        let sections = sections(&pkg.def, None);
+        let (_, options) = sections.iter().find(|(title, _)| title == "SAVE").unwrap();
+        let points: Vec<&(String, Option<StartPoint>)> = options
+            .iter()
+            .filter(|(_, start)| matches!(start, Some(StartPoint::FromSave(_))))
+            .collect();
+        assert_eq!(points.len(), 1, "the fixture's one save object");
+        assert!(points[0].0.starts_with("stage:"), "{}", points[0].0);
+        let Some(StartPoint::FromSave(checkpoint)) = &points[0].1 else {
+            unreachable!("filtered to FromSave")
+        };
+        assert!(
+            checkpoint.to_slot(&pkg.def).is_ok(),
+            "the sim accepts the synthesized checkpoint"
+        );
+    }
 }

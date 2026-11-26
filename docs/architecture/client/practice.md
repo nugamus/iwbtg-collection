@@ -10,8 +10,9 @@ with three pickers for the picked map:
 
 - **Stage:** each stage whose `[timing]` trigger enters a room, as `StartPoint::Room` in that
   room. A stage without a room (an `end` on a room-less trigger) is shown faded.
-- **Save:** the game's own save (`savefile::start_point`) when there is one, as
-  `StartPoint::FromSave`; and "Start of the game".
+- **Save:** the game's own save (`savefile::start_point`) when there is one, "Start of the
+game", and every placed `save` object of a play room (`save::point_key` gives its stable key;
+the panel builds a `Checkpoint` from it), as `StartPoint::FromSave` (#1579).
 - **Room:** every room with `role = "play"`, as `StartPoint::Room`.
 
 Start stages the package and map with that explicit start (`shell::start_map`'s `start`), sets
