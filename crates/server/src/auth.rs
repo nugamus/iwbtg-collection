@@ -10,6 +10,8 @@
 //!
 //! - `GET /register`, `GET /login`: HTML with a hidden token and a `__Host-iwbtg_csrf` cookie
 //! - `POST /register`, `POST /login`: form-encoded, same rules, session cookie on sign-in
+//! - `GET /reset`, `GET /reset/code`: the reset request and code forms (#1545)
+//! - `POST /reset`, `POST /reset/confirm`: form-encoded, the same reset code as the JSON paths
 //!
 //! Passwords are Argon2id at the documented OWASP parameters (m=19456 KiB, t=2, p=1) and only the
 //! PHC string is stored. Hashing runs on a blocking worker: it is deliberately expensive, and the
@@ -171,6 +173,22 @@ pub struct ResetConfirm {
     email: String,
     code: String,
     password: String,
+}
+
+/// The `POST /reset` form body (#1545).
+#[derive(Deserialize)]
+pub struct ResetRequestForm {
+    email: String,
+    csrf: String,
+}
+
+/// The `POST /reset/confirm` form body.
+#[derive(Deserialize)]
+pub struct ResetConfirmForm {
+    email: String,
+    code: String,
+    password: String,
+    csrf: String,
 }
 
 #[derive(Serialize)]
@@ -364,11 +382,18 @@ pub(crate) async fn reset_request(
     ClientIp(ip): ClientIp,
     Json(request): Json<ResetRequest>,
 ) -> Result<StatusCode, AuthError> {
-    let submitted = request.email.trim().to_ascii_lowercase();
+    request_reset_code(&state, &ip, &request.email).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// The reset-request body shared by the JSON endpoint and the form (#1545): the same limits, the
+/// same code, the same email task, so the two paths cannot drift apart.
+async fn request_reset_code(state: &AppState, ip: &str, email: &str) -> Result<(), AuthError> {
+    let submitted = email.trim().to_ascii_lowercase();
     limit_reset(
-        &state,
+        state,
         "reset-request",
-        &ip,
+        ip,
         &submitted,
         RESET_REQUEST_LIMIT,
         RESET_REQUEST_WINDOW,
@@ -428,7 +453,7 @@ pub(crate) async fn reset_request(
     }
 
     tokio::time::sleep(RESET_RESPONSE_FLOOR).await;
-    Ok(StatusCode::NO_CONTENT)
+    Ok(())
 }
 
 /// `POST /auth/reset/confirm`: a code and the new password.
@@ -441,16 +466,28 @@ pub(crate) async fn reset_confirm(
     ClientIp(ip): ClientIp,
     Json(request): Json<ResetConfirm>,
 ) -> Result<StatusCode, AuthError> {
-    let submitted = request.email.trim().to_ascii_lowercase();
+    confirm_reset_code(&state, &ip, &request.email, &request.code, request.password).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// The reset-confirm body shared by the JSON endpoint and the form (#1545).
+async fn confirm_reset_code(
+    state: &AppState,
+    ip: &str,
+    email: &str,
+    code: &str,
+    password: String,
+) -> Result<(), AuthError> {
+    let submitted = email.trim().to_ascii_lowercase();
     limit_reset(
-        &state,
+        state,
         "reset-confirm",
-        &ip,
+        ip,
         &submitted,
         RESET_CONFIRM_LIMIT,
         RESET_CONFIRM_WINDOW,
     )?;
-    validate_password(&request.password)?;
+    validate_password(&password)?;
 
     let Ok(Some(email)) = normalize_email(Some(&submitted)) else {
         return Err(AuthError::BadRequest(RESET_CODE_ERROR));
@@ -474,7 +511,7 @@ pub(crate) async fn reset_confirm(
     if attempts >= RESET_MAX_ATTEMPTS {
         return Err(AuthError::BadRequest(RESET_CODE_ERROR));
     }
-    if !constant_time_eq(&code_hash, &hash_code(request.code.trim())) {
+    if !constant_time_eq(&code_hash, &hash_code(code.trim())) {
         sqlx::query("UPDATE password_resets SET attempts = attempts + 1 WHERE account_id = ?1")
             .bind(account_id)
             .execute(&state.pool)
@@ -485,7 +522,7 @@ pub(crate) async fn reset_confirm(
 
     let password_hash = {
         let _permit = hash_permit().await?;
-        hash_off_thread(request.password).await?
+        hash_off_thread(password).await?
     };
     let mut transaction = state
         .pool
@@ -518,7 +555,7 @@ pub(crate) async fn reset_confirm(
         .await
         .map_err(|err| database_error(err, "commit password reset"))?;
 
-    Ok(StatusCode::NO_CONTENT)
+    Ok(())
 }
 
 /// A uniformly random six-digit code.
@@ -723,6 +760,73 @@ pub(crate) async fn login_form(
     }
 }
 
+/// `GET /reset`: the reset-request form with a fresh token and its cookie (#1545).
+pub(crate) async fn reset_page() -> Response {
+    let token = random_hex(32);
+    html_page(
+        StatusCode::OK,
+        render_reset(None, &token),
+        Some(csrf_cookie(&token)),
+    )
+}
+
+/// `GET /reset/code`: the code and new-password form, posting to `/reset/confirm`.
+pub(crate) async fn reset_code_page() -> Response {
+    let token = random_hex(32);
+    html_page(
+        StatusCode::OK,
+        render_reset_code(None, &token),
+        Some(csrf_cookie(&token)),
+    )
+}
+
+/// `POST /reset`: the form path through the same reset-request body as the JSON endpoint.
+///
+/// The answer is the neutral sentence for every address, so the page cannot enumerate accounts;
+/// it links on to the code form.
+pub(crate) async fn reset_form(
+    State(state): State<AppState>,
+    ClientIp(ip): ClientIp,
+    headers: HeaderMap,
+    Form(form): Form<ResetRequestForm>,
+) -> Response {
+    if !csrf_matches(&headers, &form.csrf) {
+        return csrf_rejection(render_reset);
+    }
+    match request_reset_code(&state, &ip, &form.email).await {
+        Ok(()) => html_page(
+            StatusCode::OK,
+            success_page(
+                "If that address has an account, a reset code is on its way.",
+                "/reset/code",
+                "Enter the code",
+            ),
+            None,
+        ),
+        Err(error) => form_error(render_reset, error),
+    }
+}
+
+/// `POST /reset/confirm`: the code form through the same confirm body as the JSON endpoint.
+pub(crate) async fn reset_confirm_form(
+    State(state): State<AppState>,
+    ClientIp(ip): ClientIp,
+    headers: HeaderMap,
+    Form(form): Form<ResetConfirmForm>,
+) -> Response {
+    if !csrf_matches(&headers, &form.csrf) {
+        return csrf_rejection(render_reset_code);
+    }
+    match confirm_reset_code(&state, &ip, &form.email, &form.code, form.password).await {
+        Ok(()) => html_page(
+            StatusCode::OK,
+            success_page("Password updated.", "/login", "Sign in"),
+            None,
+        ),
+        Err(error) => form_error(render_reset_code, error),
+    }
+}
+
 /// Re-renders a form with the error message (and a fresh CSRF token) and the error's headers.
 fn form_error(render: fn(Option<&str>, &str) -> String, error: AuthError) -> Response {
     let token = random_hex(32);
@@ -836,7 +940,51 @@ fn render_login(error: Option<&str>, csrf: &str) -> String {
     );
     page(
         "Sign in",
-        &format!("<h1>Sign in</h1>{}{form}", error_paragraph(error)),
+        &format!(
+            "<h1>Sign in</h1>{}{form}<p>Forgot your password? \
+             <a href=\"/reset\">Reset it</a>.</p>",
+            error_paragraph(error)
+        ),
+    )
+}
+
+/// `GET /reset` (#1545): ask for the address; the answer never says whether it has an account.
+fn render_reset(error: Option<&str>, csrf: &str) -> String {
+    let form = format!(
+        "<form method=\"post\" action=\"/reset\">\
+         <input type=\"hidden\" name=\"csrf\" value=\"{csrf}\">\
+         <label for=\"email\">Email</label>\
+         <input id=\"email\" name=\"email\" type=\"email\" autocomplete=\"email\" required>\
+         <button type=\"submit\">Send reset code</button></form>\
+         <p class=\"hint\">If the address has an account, a six-digit code arrives by email.</p>\
+         <p>Already have a code? <a href=\"/reset/code\">Enter it</a>.</p>"
+    );
+    page(
+        "Reset your password",
+        &format!("<h1>Reset your password</h1>{}{form}", error_paragraph(error)),
+    )
+}
+
+/// `GET /reset/code` (#1545): the six-digit code and the new password. The address is repeated
+/// because the code row is keyed by it and the form has no server-side session to carry it.
+fn render_reset_code(error: Option<&str>, csrf: &str) -> String {
+    let form = format!(
+        "<form method=\"post\" action=\"/reset/confirm\">\
+         <input type=\"hidden\" name=\"csrf\" value=\"{csrf}\">\
+         <label for=\"email\">Email</label>\
+         <input id=\"email\" name=\"email\" type=\"email\" autocomplete=\"email\" required>\
+         <label for=\"code\">Six-digit code</label>\
+         <input id=\"code\" name=\"code\" autocomplete=\"one-time-code\" inputmode=\"numeric\" \
+         pattern=\"[0-9]{{6}}\" required>\
+         <label for=\"password\">New password</label>\
+         <input id=\"password\" name=\"password\" type=\"password\" autocomplete=\"new-password\" \
+         required minlength=\"15\"><p class=\"hint\">At least 15 characters.</p>\
+         <button type=\"submit\">Set new password</button></form>\
+         <p>Need a code? <a href=\"/reset\">Request one</a>.</p>"
+    );
+    page(
+        "Enter your reset code",
+        &format!("<h1>Enter your reset code</h1>{}{form}", error_paragraph(error)),
     )
 }
 

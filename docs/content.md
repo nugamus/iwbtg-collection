@@ -101,15 +101,17 @@ Commercial music in fangames (Mega Man, Touhou and so on) is kept and removed on
 
 ## Game list data
 
-- **Tags.** A fixed core set (needle, avoidance, adventure, boss rush, gimmick, trap, puzzle, medley) plus free tags.
-- **Difficulty.** Computed from play data: deaths and time per stage across players, like osu!'s star rating.
+Where each field lives and who owns it is [game-metadata](format/game-metadata.md) (#805): the package carries the game's own data, `pkg publish` projects the list fields into the catalog, and the server owns status, curation, community tags and the page text. The game page is built from those sources.
+
+- **Tags.** A fixed core set (needle, avoidance, adventure, boss rush, gimmick, trap, puzzle, medley) plus free tags. The core tags ship in the package, one to three of them; free tags are community data on the server.
+- **Difficulty.** Computed from play data: deaths and time per stage across players, like osu!'s star rating. Server-owned, per map (#111).
 - **Game page:**
-  - Creators and history (release date, version, port notes).
-  - The trick list.
-  - Previews of each stage.
-  - Port status (Beta, Ranked or Loved, the fidelity proof and known differences). The known differences are generated from the deviation log.
-- **Music preview.** The porter picks the track and start point with the picker tool.
-- **Creators.** Original creators can claim their game with a verified account. Once claimed, they can edit the page text, set the asset-reuse opt-out, approve versions and request takedown.
+  - Creators and history (release date, version, port notes). Creators and the version ship in the package; the release date is #1050 and the changelog ships in the package.
+  - The trick list, from the package's `[tricks]`.
+  - Previews of each stage, from package images.
+  - Port status (Beta, Ranked or Loved, the fidelity proof and known differences). Status and the proof are server-owned (#62); the known differences are generated from the deviation log ([games](games/README.md#deviation-log)).
+- **Music preview.** The porter picks the track and start point with the picker tool; it ships in the package.
+- **Creators.** Original creators can claim their game with a verified account. Once claimed, they can edit the page text (server-owned), set the asset-reuse opt-out, approve versions and request takedown.
 
 ## Saves, controls and play details
 

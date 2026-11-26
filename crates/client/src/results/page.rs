@@ -14,6 +14,7 @@ use super::{Action, Heat, Stage, Summary, bar_label};
 use crate::card::{self, Variant};
 use crate::hud::layout::Density;
 use crate::hud::leaderboard::{self, Live};
+use crate::locale;
 use crate::pause::FRUIT;
 use crate::stats::fmt_ticks;
 use crate::ui::filter::FilterMaterial;
@@ -342,7 +343,7 @@ fn hero(c: &mut ChildSpawner, s: &Summary, d: &Dims, fruit: Option<Handle<Image>
                             caps: true,
                             ..Type::barlow(d.small, 700)
                         };
-                        c.spawn((text("Not a PB", not, tokens::MUTED), TextLayout::no_wrap()));
+                        c.spawn((text(locale::text("results_not_pb"), not, tokens::MUTED), TextLayout::no_wrap()));
                     }
                     match s.placement() {
                         Some((place, color)) => {
@@ -362,7 +363,7 @@ fn hero(c: &mut ChildSpawner, s: &Summary, d: &Dims, fruit: Option<Handle<Image>
                                     TextLayout::no_wrap(),
                                 ))
                                 .insert(LineHeight::RelativeToFont(1.0));
-                                c.spawn((text("Local", label, tokens::SOFT), TextLayout::no_wrap()));
+                                c.spawn((text(locale::text("results_local"), label, tokens::SOFT), TextLayout::no_wrap()));
                             });
                         }
                         None => {
@@ -442,7 +443,7 @@ fn pb_chip(fruit: Option<Handle<Image>>) -> impl Bundle {
                     },
                 ));
             }
-            c.spawn(text("New PB", style, tokens::GROUND));
+            c.spawn(text(locale::text("results_new_pb"), style, tokens::GROUND));
         })),
     )
 }
@@ -553,7 +554,12 @@ fn splits(c: &mut ChildSpawner, s: &Summary, d: &Dims) {
             },
             None,
             None,
-            [head("Stage"), head("Segment"), head("Split"), head("vs PB")],
+            [
+                head(locale::text("results_table_stage")),
+                head(locale::text("results_table_segment")),
+                head(locale::text("results_table_split")),
+                head(locale::text("results_table_vs_pb")),
+            ],
         );
         // Many stages: the rows past the room are cut, the totals stay.
         c.spawn(Node {
@@ -609,14 +615,14 @@ fn splits(c: &mut ChildSpawner, s: &Summary, d: &Dims) {
             row(d.row, true),
             Some(tokens::RULE_STRONG),
             None,
-            [label("Sum of best"), None, total(s.sum_of_best), None],
+            [label(locale::text("results_sum_of_best")), None, total(s.sum_of_best), None],
         );
         table_row(
             c,
             row(d.row, false),
             None,
             None,
-            [label("Possible time save"), None, total(s.time_save()), None],
+            [label(locale::text("results_possible_time_save")), None, total(s.time_save()), None],
         );
         c.spawn((
             Node {
@@ -626,7 +632,7 @@ fn splits(c: &mut ChildSpawner, s: &Summary, d: &Dims) {
             },
             children![(
                 text(
-                    "★ gold = best segment ever · − ahead of PB · + behind PB",
+                    locale::text("results_legend"),
                     Type::barlow(12.0, 400),
                     tokens::MUTED
                 ),
@@ -683,12 +689,12 @@ fn deaths(c: &mut ChildSpawner, s: &Summary, d: &Dims, heatmap: bool) {
             })
             .with_children(|c| {
                 c.spawn((
-                    text("Deaths per stage", LABEL, tokens::MUTED),
+                    text(locale::text("results_deaths_per_stage"), LABEL, tokens::MUTED),
                     TextLayout::no_wrap(),
                 ));
                 c.spawn((
                     text(
-                        &format!("{} total", card::grouped(total)),
+                        &locale::format("results_deaths_total", &[("n", &card::grouped(total))]),
                         Type::barlow(d.small, 600),
                         tokens::INK,
                     ),
@@ -802,11 +808,11 @@ fn timeline(c: &mut ChildSpawner, s: &Summary, d: &Dims) {
         })
         .with_children(|c| {
             c.spawn((
-                text("Death timeline", LABEL, tokens::MUTED),
+                text(locale::text("results_death_timeline"), LABEL, tokens::MUTED),
                 TextLayout::no_wrap(),
             ));
             c.spawn((
-                text(&format!("0:00 → {end}"), small, tokens::MUTED),
+                text(&locale::format("results_timeline_span", &[("start", &"0:00"), ("end", &end)]), small, tokens::MUTED),
                 TextLayout::no_wrap(),
             ));
         });
@@ -847,8 +853,8 @@ pub fn heat_contents(
     picture: Option<(MaterialNode<FilterMaterial>, Vec2)>,
 ) -> impl Bundle + use<> {
     let label = match stage {
-        Some(st) => format!("Where you died · {}", st.name),
-        None => "Where you died".to_owned(),
+        Some(st) => locale::format("results_where_died_stage", &[("stage", &st.name)]),
+        None => locale::text("results_where_died").to_owned(),
     };
     let body = heat_note(stage.map_or(0, |s| s.deaths), heat.map(|h| h.room_deaths));
     let heat = heat.cloned();
@@ -944,20 +950,26 @@ fn heat_parts(
 /// The heatmap's note: how to pick a stage, and how many deaths it shows.
 pub fn heat_note(stage_deaths: u32, room_deaths: Option<u32>) -> String {
     let n = |k: u32| {
-        let unit = if k == 1 { "death" } else { "deaths" };
-        format!("{} {unit}", card::grouped(u64::from(k)))
+        let unit = locale::text(if k == 1 {
+            "results_death_one"
+        } else {
+            "results_death_other"
+        });
+        locale::format(
+            "results_death_count",
+            &[("n", &card::grouped(u64::from(k))), ("unit", &unit)],
+        )
     };
     let count = match room_deaths {
-        None if stage_deaths == 0 => "No deaths here.".to_owned(),
-        None => format!("{}, none with a known place.", n(stage_deaths)),
-        Some(r) if r == stage_deaths => format!("{}, all in this room.", n(stage_deaths)),
-        Some(r) => format!(
-            "{}, {} in this room.",
-            n(stage_deaths),
-            card::grouped(u64::from(r))
+        None if stage_deaths == 0 => locale::text("results_no_deaths_here").to_owned(),
+        None => locale::format("results_none_known", &[("n", &n(stage_deaths))]),
+        Some(r) if r == stage_deaths => locale::format("results_all_room", &[("n", &n(stage_deaths))]),
+        Some(r) => locale::format(
+            "results_some_room",
+            &[("n", &n(stage_deaths)), ("m", &card::grouped(u64::from(r)))],
         ),
     };
-    format!("Hover or click a stage in the splits. {count}")
+    locale::format("results_hover_hint", &[("count", &count)])
 }
 
 /// Back; Retry (hold R); Watch replay (the replay viewer, #42), Save replay, Upload replay (M7).
@@ -974,7 +986,7 @@ fn footer(c: &mut ChildSpawner, s: &Summary, d: &Dims, saved: bool) {
     })
     .with_children(|c| {
         c.spawn((
-            button_with(ButtonKind::Secondary, h, 22.0, label("Back")),
+            button_with(ButtonKind::Secondary, h, 22.0, label(locale::text("results_back"))),
             Action::Back,
         ));
         c.spawn(Node {
@@ -989,11 +1001,11 @@ fn footer(c: &mut ChildSpawner, s: &Summary, d: &Dims, saved: bool) {
             },
             children![
                 (
-                    text("Retry", Type::barlow(d.button_text, 700), tokens::INK),
+                    text(locale::text("results_retry"), Type::barlow(d.button_text, 700), tokens::INK),
                     TextLayout::no_wrap()
                 ),
                 (
-                    text("hold R", Type::barlow(12.0, 600), tokens::INK.with_alpha(0.8)),
+                    text(&locale::format("results_hold_key", &[("key", &"R")]), Type::barlow(12.0, 600), tokens::INK.with_alpha(0.8)),
                     TextLayout::no_wrap()
                 ),
             ],
@@ -1001,22 +1013,27 @@ fn footer(c: &mut ChildSpawner, s: &Summary, d: &Dims, saved: bool) {
         c.spawn((button_with(ButtonKind::Primary, h, 22.0, retry), Action::Retry));
         if s.replay.is_some() {
             c.spawn((
-                button_with(ButtonKind::Secondary, h, 20.0, label("Watch replay")),
+                button_with(ButtonKind::Secondary, h, 20.0, label(locale::text("results_watch_replay"))),
                 Action::WatchReplay,
             ));
         } else {
-            c.spawn(button_off(ButtonKind::Secondary, h, 20.0, label("Watch replay")));
+            c.spawn(button_off(
+                ButtonKind::Secondary,
+                h,
+                20.0,
+                label(locale::text("results_watch_replay")),
+            ));
         }
         if s.replay.is_some() && !saved {
             c.spawn((
-                button_with(ButtonKind::Secondary, h, 20.0, label("Save replay")),
+                button_with(ButtonKind::Secondary, h, 20.0, label(locale::text("results_save_replay"))),
                 Action::SaveReplay,
             ));
         } else {
-            let l = if saved { "Replay saved" } else { "Save replay" };
+            let l = locale::text(if saved { "results_replay_saved" } else { "results_save_replay" });
             c.spawn(button_off(ButtonKind::Secondary, h, 20.0, label(l)));
         }
-        c.spawn(button_off(ButtonKind::Secondary, h, 20.0, label("Upload replay")));
+        c.spawn(button_off(ButtonKind::Secondary, h, 20.0, label(locale::text("results_upload_replay"))));
     });
 }
 

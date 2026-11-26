@@ -1,8 +1,8 @@
 //! Loader tests for physics profiles (docs/format/physics.md): the game's profile, kid sprites and
-//! sounds, legacy profiles, room profiles and control labels. Split from `wp7b_loader.rs` (#792),
+//! sounds, legacy profiles, room profiles and control labels. Split from `load_defs.rs` (#792),
 //! whose package helpers they use.
 
-use crate::wp7b_loader::*;
+use crate::load_defs::*;
 use iwbtg_format::load::load_report;
 use iwbtg_sim::def::{GameDef, KidFamily};
 use iwbtg_sim::kid::presets;

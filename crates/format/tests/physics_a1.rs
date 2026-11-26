@@ -1,5 +1,5 @@
-//! WP5a.5: the `physics.toml` form of plan 5.2 loads into a draft, and the preset fills it in
-//! (docs/format/physics.md). Rely's profile is `docs/format/examples/rely-physics.toml`.
+//! The `physics.toml` form loads into a draft, and the preset fills it in (docs/format/physics.md).
+//! Rely's profile is `docs/format/examples/rely-physics.toml`.
 
 use iwbtg_sim::def::KidFamily;
 use iwbtg_sim::def::physics::{KidSpriteNames, PhysicsProfileDraft};

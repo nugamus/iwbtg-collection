@@ -40,6 +40,7 @@ use crate::ui::motion::{Ease, OffsetX, Tween};
 use crate::ui::tokens;
 use crate::ui::widgets::text;
 use crate::view::Game;
+use crate::locale;
 
 /// The key that opens and closes the menu. The game's `menu` action has no keyboard default
 /// (`Bindings::default` drops Escape, #758), so Escape never reaches the sim unless the player
@@ -64,10 +65,10 @@ impl Item {
 
     pub fn label(self) -> &'static str {
         match self {
-            Item::Continue => "Continue",
-            Item::RetryFromSave => "Retry from save",
-            Item::RestartRun => "Restart run",
-            Item::Quit => "Quit",
+            Item::Continue => locale::text("pause_continue"),
+            Item::RetryFromSave => locale::text("pause_retry_from_save"),
+            Item::RestartRun => locale::text("pause_restart_run"),
+            Item::Quit => locale::text("pause_quit"),
         }
     }
 
@@ -568,7 +569,7 @@ fn pause_box(k: f32, selected: Item, fruit: Handle<Image>) -> impl Bundle {
                 },
                 // `line-height: 1`.
                 children![(
-                    Text::new("PAUSE"),
+                    Text::new(locale::text("pause_title")),
                     heading.font(),
                     heading.spacing(),
                     bevy::text::LineHeight::RelativeToFont(1.0),

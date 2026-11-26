@@ -12,6 +12,7 @@ One page per module or area, so two PRs on different modules never edit the same
 - [Import](client/import.md): `.iwbz` files, the library, drag and drop (`import.rs`)
 - [Input](client/input.md): the device collector, bindings and the active controller (`input.rs`, `bindings.rs`)
 - [Loading card](client/loading.md): `loading/`
+- [Locale](client/locale.md): UI translations, English and Japanese (`locale.rs`, `crates/client/locales/`)
 - [Mods](client/mods.md): `mods.rs`
 - [Overlay](client/overlay.md): the F3 debug overlay (`overlay.rs`)
 - [Particles](client/particles.md): drawing `particle_system` systems (`particles/`)

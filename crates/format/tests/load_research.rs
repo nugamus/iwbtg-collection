@@ -1,5 +1,5 @@
 //! Every research converter package loads in `LoadMode::Trace` with warnings only
-//! (docs/plans/sim-core.md 12, WP7a done-criteria). Needs `IWBTG_RESEARCH` (the research repo
+//! (docs/format/converter-requests.md). Needs `IWBTG_RESEARCH` (the research repo
 //! folder); skips when it is unset. Packages are in `<research>/build/packages/<id>/`
 //! (gitignored there, built by the converter).
 

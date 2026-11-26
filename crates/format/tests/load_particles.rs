@@ -1,7 +1,7 @@
-//! Loader tests for particle files (docs/format/particles.md, #765). Split from `wp7b_loader.rs`
+//! Loader tests for particle files (docs/format/particles.md, #765). Split from `load_defs.rs`
 //! (#792), whose package helpers they use.
 
-use crate::wp7b_loader::*;
+use crate::load_defs::*;
 use iwbtg_format::PackageFiles;
 use iwbtg_format::load::load_report;
 use iwbtg_sim::def::{Builtin, ParamValue, PartSystemDefId};

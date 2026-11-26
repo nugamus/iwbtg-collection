@@ -1,8 +1,8 @@
 # Sim purity (docs/architecture/sim/layout.md, Sim purity): platform-dependent float math, clocks, IO,
 # threads and unordered maps are build errors here. Use sim::num and BTreeMap instead.
-# Section 10.5 of docs/plans/sim-core.md lists why each ban exists. Checked by hand once (WP0): a
-# `f64::max` call in sim code fails `cargo clippy -p iwbtg-sim -- -D warnings` with
-# `clippy::disallowed_methods`.
+# Why each ban exists: docs/architecture/sim/determinism.md (Lints) and the per-entry reasons below;
+# plan section 10.5 is history. Checked by hand once (WP0): a `f64::max` call in sim code fails
+# `cargo clippy -p iwbtg-sim -- -D warnings` with `clippy::disallowed_methods`.
 
 # Tests may print (skip notices for research data); library code may not (lib.rs denies
 # print_stdout and print_stderr).

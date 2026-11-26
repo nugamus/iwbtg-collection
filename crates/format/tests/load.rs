@@ -1,7 +1,7 @@
-//! WP7a loader tests (docs/plans/sim-core.md 8.2 steps 1-6, 8, 9; section 12 `format` row):
-//! sprites and masks from PNG strips, kinds, `run` expansion order, rank selectors, spawnable
-//! kind ranks, sorted variable ids, `[engine]`, `[timing]`, CR3 infra mapping, Trace-mode inert
-//! kinds, `gameplay_hash`. Packages are built in memory, so there are no binary fixtures.
+//! Loader tests (docs/format/v0.md; docs/architecture/sim/layout.md): sprites and masks from PNG
+//! strips, kinds, `run` expansion order, rank selectors, spawnable kind ranks, sorted variable
+//! ids, `[engine]`, `[timing]`, CR3 infra mapping, Trace-mode inert kinds, `gameplay_hash`.
+//! Packages are built in memory, so there are no binary fixtures.
 
 use iwbtg_format::load::{LoadMode, LoadReport, load_report};
 use iwbtg_format::{PackageFiles, Severity};

@@ -178,6 +178,8 @@ struct Job {
 struct Preview {
     index: usize,
     art: Image,
+    /// The portrait cut of the key art for Classic's shelf ([`cover_image`]).
+    cover: Image,
     fruit: Image,
 }
 
@@ -192,6 +194,8 @@ pub struct Library {
     /// Each game's key art strip, cut to the panel's band ([`art_image`]): `None` until its
     /// preview arrives or after it is evicted (the panel then shows its dark placeholder).
     pub art: Vec<Option<Handle<Image>>>,
+    /// Each game's cover on Classic's shelf ([`cover_image`]); `None` as for `art`.
+    pub cover: Vec<Option<Handle<Image>>>,
     /// Each game's fruit for the Cleared mark ([`fruit_image`]); `None` as for `art`.
     pub fruit: Vec<Option<Handle<Image>>>,
     /// The fruit drawn while a game's own has not arrived.
@@ -223,9 +227,11 @@ impl Library {
             .spawn(move || {
                 for job in job_rx {
                     let files = preview_files(&job.path);
+                    let full = full_art(files.as_ref());
                     let preview = Preview {
                         index: job.index,
-                        art: art_image(files.as_ref()),
+                        art: strip_image(&full),
+                        cover: cover_image(&full),
                         fruit: fruit_image(files.as_ref()),
                     };
                     if done_tx.send(preview).is_err() {
@@ -238,6 +244,7 @@ impl Library {
             folder: folder.map(Path::to_owned),
             games: Vec::with_capacity(paths.len()),
             art: Vec::new(),
+            cover: Vec::new(),
             fruit: Vec::new(),
             placeholder_fruit,
             records: Vec::new(),
@@ -256,6 +263,7 @@ impl Library {
                 None => GameInfo::unreadable(path),
             });
             lib.art.push(None);
+            lib.cover.push(None);
             lib.fruit.push(None);
             lib.records.push(Records::default());
             lib.keys.push(path_key(path));
@@ -289,6 +297,7 @@ impl Library {
         for i in 0..self.art.len() {
             if self.art[i].is_some() && !self.wanted.contains(&i) {
                 self.art[i] = None;
+                self.cover[i] = None;
                 self.fruit[i] = None;
                 self.revision = self.revision.wrapping_add(1);
             }
@@ -328,6 +337,7 @@ impl Library {
                     self.pending.remove(&preview.index);
                     if self.wanted.contains(&preview.index) && preview.index < self.art.len() {
                         self.art[preview.index] = Some(images.add(preview.art));
+                        self.cover[preview.index] = Some(images.add(preview.cover));
                         self.fruit[preview.index] = Some(images.add(preview.fruit));
                         self.revision = self.revision.wrapping_add(1);
                         changed = true;
@@ -404,7 +414,14 @@ fn folder_files(dir: &Path) -> Option<PackageFiles> {
 
 /// The game's key art for its panel (`key_art::resolve`, as the backdrop draws it; the client's
 /// own scene when there is nothing).
+#[cfg(test)]
 pub fn art_image(files: Option<&PackageFiles>) -> Image {
+    strip_image(&full_art(files))
+}
+
+/// The game's whole key art as the backdrop draws it (the client's own scene when there is
+/// nothing).
+fn full_art(files: Option<&PackageFiles>) -> Image {
     let empty = PackageFiles::new();
     let files = files.unwrap_or(&empty);
     let art = files
@@ -412,16 +429,68 @@ pub fn art_image(files: Option<&PackageFiles>) -> Image {
         .and_then(|b| std::str::from_utf8(b).ok())
         .and_then(|t| Manifest::parse(t).ok())
         .map_or(key_art::KeyArt::None, |m| key_art::resolve(files, &m, None));
-    let full = backdrop::key_art_image(files, &art, ROOM, |bytes| {
+    backdrop::key_art_image(files, &art, ROOM, |bytes| {
         decode_png(bytes).map(|s| (s.rgba, s.size.0, s.size.1))
-    });
+    })
+}
+
+/// The first mip level of `full`'s pixels, with its size.
+fn level0(full: &Image) -> Option<(&[u8], u32, u32)> {
     let (w, h) = (full.width(), full.height());
-    let Some(data) = full.data.as_deref() else {
-        return full;
+    let data = full.data.as_deref()?;
+    Some((&data[..((w * h * 4) as usize).min(data.len())], w, h))
+}
+
+/// The list panel's band of `full` ([`strip`]).
+fn strip_image(full: &Image) -> Image {
+    match level0(full) {
+        Some((rgba, w, h)) => {
+            let (rgba, sw, sh) = strip(rgba, w, h);
+            backdrop::art_image(&rgba, sw, sh)
+        }
+        None => full.clone(),
+    }
+}
+
+/// The shelf cover's box (`Shelf.dc.html`: the picked cover is 236 x 318 with its art 80 px wider
+/// for the shear), at twice that for sharpness.
+const COVER_BOX: (u32, u32) = (632, 636);
+
+/// The portrait middle of `full` that covers a shelf cover ([`COVER_BOX`]'s shape), shrunk to at
+/// most that size by averaging whole blocks.
+pub fn cover_image(full: &Image) -> Image {
+    let Some((rgba, w, h)) = level0(full) else {
+        return full.clone();
     };
-    let level0 = &data[..((w * h * 4) as usize).min(data.len())];
-    let (rgba, sw, sh) = strip(level0, w, h);
-    backdrop::art_image(&rgba, sw, sh)
+    let ratio = COVER_BOX.0 as f32 / COVER_BOX.1 as f32;
+    let (w, h) = (w.max(1), h.max(1));
+    let (bw, bh) = if w as f32 / h as f32 > ratio {
+        (((h as f32 * ratio).round() as u32).clamp(1, w), h)
+    } else {
+        (w, ((w as f32 / ratio).round() as u32).clamp(1, h))
+    };
+    let (x0, y0) = ((w - bw) / 2, (h - bh) / 2);
+    let k = bh.div_ceil(COVER_BOX.1).max(1);
+    let (ow, oh) = ((bw / k).max(1), (bh / k).max(1));
+    let mut out = Vec::with_capacity((ow * oh * 4) as usize);
+    for oy in 0..oh {
+        for ox in 0..ow {
+            let mut sum = [0u32; 4];
+            let mut n = 0;
+            for y in (y0 + oy * k)..(y0 + (oy + 1) * k).min(y0 + bh) {
+                for x in (x0 + ox * k)..(x0 + (ox + 1) * k).min(x0 + bw) {
+                    let i = ((y * w + x) * 4) as usize;
+                    for c in 0..4 {
+                        sum[c] += u32::from(rgba[i + c]);
+                    }
+                    n += 1;
+                }
+            }
+            let n = n.max(1);
+            out.extend(sum.iter().map(|s| (s / n) as u8));
+        }
+    }
+    backdrop::art_image(&out, ow, oh)
 }
 
 /// The game's whole key art for the backdrop of a screen outside a run (the main menu's: real

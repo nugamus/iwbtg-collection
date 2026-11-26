@@ -41,6 +41,8 @@ Then for each file: it inflates to exactly its stated size (reading stops one by
 
 `unpack_selected` reads only the entries a caller names: the directory, the limits and every local header and data range are still checked, but an entry it does not name is not inflated, CRC-checked or `check_entry`-checked. The client's game-select preview uses it for `game.toml`, the key art, the first ranked room and the background images its art uses, and the `cherry` sprite (#1022); opening the game still runs the full reader.
 
+`Archive` (since #1591) is the same reader over any `Read + Seek` source, so a preview need not hold the whole compressed archive (up to 528 MiB) in memory. `Archive::open` reads the end record and the central directory once and checks the limits above and every local header and data range; nothing is inflated. `Archive::read_selected` then seeks to and reads only the named files, so peak memory is the directory, those files' bytes and one entry's inflate buffer rather than the archive. The common case (no archive comment) reads only the last 22 bytes to find the end record. The client's game-select preview and manifest pass seek a `File`; the browser, which fetches bytes, still uses `unpack_selected`.
+
 ## The zip subset
 
 Written: zip 2.0, files in path order, deflate when that is smaller and stored otherwise, UTF-8 names (flag bit 11), the fixed date 1980-01-01, no extra fields, no comments. Text files (`.toml`, `.rhai`, `.md`) are written with LF line ends. So the same package always packs to the same bytes, from a Windows or a Unix checkout.

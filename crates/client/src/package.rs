@@ -62,10 +62,7 @@ pub struct Registration;
 impl crate::registration::ClientModule for Registration {
     type Args = PackageArgs;
 
-    fn standalone(
-        _args: &PackageArgs,
-        startup: &crate::registration::Startup,
-    ) -> Option<Result<(), String>> {
+    fn standalone(_args: &PackageArgs, startup: &crate::registration::Startup) -> Option<Result<(), String>> {
         // Clap requires the package unless `--select`, `--ui-gallery`, `--bind` or
         // `--show-bindings` is given; with only the bindings flags there is nothing to play.
         (startup.package.is_none() && startup.library.is_none()).then_some(Ok(()))
@@ -156,34 +153,27 @@ pub fn is_iwbz(path: &Path) -> bool {
 
 /// Reads what a game-select preview draws from an `.iwbz` (#1022): `game.toml`, the key art
 /// images, the first ranked room and the background images its art uses, and the `cherry`
-/// sprite. Nothing else is inflated, so a large package lists without decoding its assets;
-/// [`open`] still validates the whole package when the game starts.
+/// sprite. Nothing else is read, and the archive is seeked rather than loaded whole (#1591), so
+/// a large package lists without decoding its assets; [`open`] still validates the whole
+/// package when the game starts.
 pub fn read_iwbz(path: &Path) -> Result<PackageFiles, OpenError> {
     use iwbtg_format::iwbz;
     let err = |e: String| OpenError::Files(format!("{}: {e}", path.display()));
-    let len = std::fs::metadata(path).map_err(|e| err(e.to_string()))?.len();
-    if len > iwbz::MAX_ARCHIVE_BYTES {
-        return Err(err(format!("over {} bytes", iwbz::MAX_ARCHIVE_BYTES)));
-    }
-    let bytes = std::fs::read(path).map_err(|e| err(e.to_string()))?;
-    preview_from_iwbz(&bytes).map_err(|e| err(e.to_string()))
+    let file = std::fs::File::open(path).map_err(|e| err(e.to_string()))?;
+    let mut archive = iwbz::Archive::open(file).map_err(|e| err(e.to_string()))?;
+    preview_from_iwbz(&mut archive).map_err(|e| err(e.to_string()))
 }
 
 /// The manifest only, for game select's first pass (#1593): a folder's `game.toml`, or an
-/// archive's through the selective reader. No art or room data is read, so a large library
+/// archive's through the seek-based reader. No art or room data is read, so a large library
 /// lists from its metadata before any preview is built.
 pub fn read_manifest(path: &Path) -> Result<PackageFiles, OpenError> {
     if is_iwbz(path) {
         let err = |e: String| OpenError::Files(format!("{}: {e}", path.display()));
-        let len = std::fs::metadata(path).map_err(|e| err(e.to_string()))?.len();
-        if len > iwbtg_format::iwbz::MAX_ARCHIVE_BYTES {
-            return Err(err(format!(
-                "over {} bytes",
-                iwbtg_format::iwbz::MAX_ARCHIVE_BYTES
-            )));
-        }
-        let bytes = std::fs::read(path).map_err(|e| err(e.to_string()))?;
-        return iwbtg_format::iwbz::unpack_selected(&bytes, |name| name == "game.toml")
+        let file = std::fs::File::open(path).map_err(|e| err(e.to_string()))?;
+        let mut archive = iwbtg_format::iwbz::Archive::open(file).map_err(|e| err(e.to_string()))?;
+        return archive
+            .read_selected(|name| name == "game.toml")
             .map_err(|e| err(e.to_string()));
     }
     let mut files = PackageFiles::new();
@@ -195,12 +185,15 @@ pub fn read_manifest(path: &Path) -> Result<PackageFiles, OpenError> {
 
 /// The selective reads behind [`read_iwbz`]: the manifest, then the files its key art, first
 /// ranked room and cherry need, then the background images that room's art names. A manifest
-/// that does not parse leaves only `game.toml`, which the caller treats as unreadable.
-fn preview_from_iwbz(bytes: &[u8]) -> Result<PackageFiles, iwbtg_format::iwbz::IwbzError> {
-    use iwbtg_format::iwbz;
+/// that does not parse leaves only `game.toml`, which the caller treats as unreadable. The
+/// directory is checked once by [`iwbtg_format::iwbz::Archive::open`]; each pass reads only the
+/// entries it needs.
+fn preview_from_iwbz<R: std::io::Read + std::io::Seek>(
+    archive: &mut iwbtg_format::iwbz::Archive<R>,
+) -> Result<PackageFiles, iwbtg_format::iwbz::IwbzError> {
     use std::collections::BTreeSet;
 
-    let mut files = iwbz::unpack_selected(bytes, |name| name == "game.toml")?;
+    let mut files = archive.read_selected(|name| name == "game.toml")?;
     let Some(manifest) = files
         .get("game.toml")
         .and_then(|b| std::str::from_utf8(b).ok())
@@ -223,7 +216,7 @@ fn preview_from_iwbz(bytes: &[u8]) -> Result<PackageFiles, iwbtg_format::iwbz::I
         );
     }
     wanted.insert(format!("rooms/{room}.toml"));
-    files = iwbz::unpack_selected(bytes, |name| wanted.contains(name))?;
+    files = archive.read_selected(|name| wanted.contains(name))?;
     if let Ok(art) = iwbtg_format::art::load_room_art(&files, room) {
         let before = wanted.len();
         wanted.extend(
@@ -233,7 +226,7 @@ fn preview_from_iwbz(bytes: &[u8]) -> Result<PackageFiles, iwbtg_format::iwbz::I
                 .map(|b| format!("backgrounds/{}.png", b.image)),
         );
         if wanted.len() > before {
-            files = iwbz::unpack_selected(bytes, |name| wanted.contains(name))?;
+            files = archive.read_selected(|name| wanted.contains(name))?;
         }
     }
     Ok(files)
@@ -468,7 +461,11 @@ mod tests {
             .iter_alive()
             .filter(|i| matches!(i.state, KindState::Kid(_)))
             .collect();
-        assert_eq!(kids.len(), 1, "R leaves one kid, not the start kid and the loaded one");
+        assert_eq!(
+            kids.len(),
+            1,
+            "R leaves one kid, not the start kid and the loaded one"
+        );
         let slot = sim.world().save.clone().expect("the start room's save");
         assert_eq!(sim.world().room, slot.room);
         // The kid is made at the saved spot (quantized) and falls under gravity for the ticks
@@ -537,7 +534,10 @@ mod tests {
         let file = dir.join("showcase.iwbz");
         std::fs::write(&file, iwbtg_format::iwbz::pack(&full.files).unwrap()).unwrap();
         let preview = read_iwbz(&file).unwrap();
-        assert!(preview.contains("rooms/courtyard.toml"), "the first ranked room is read");
+        assert!(
+            preview.contains("rooms/courtyard.toml"),
+            "the first ranked room is read"
+        );
         for background in ["sky", "clouds", "hills"] {
             assert!(
                 preview.contains(&format!("backgrounds/{background}.png")),
