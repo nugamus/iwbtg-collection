@@ -977,7 +977,8 @@ fn script_objects(c: &mut Course) {
         name: "scripts/mover.rhai".into(),
         source: include_str!("script_mover.rhai").into(),
     });
-    let api = c.kind("api", Builtin::Scripted, &[]);
+    // A declared param for `param()` (#1389).
+    let api = c.kind("api", Builtin::Scripted, &[("speed", real(2.0))]);
     let mover = c.kind("mover", Builtin::Scripted, &[]);
     let small = c.small;
     let def = c.def_mut();
