@@ -361,7 +361,7 @@ pub enum ButtonKind {
     /// A control that is switched on (the Cleared chip, the picked option of a dropdown):
     /// `white(.2)` glass, 34 px (`Main.dc.html`).
     ControlOn,
-    /// The on/off switch button ([`switch`]): faint white glass, 52 px.
+    /// The on/off switch button ([`switch`]): white glass clearing 3:1 ([`tokens::SWITCH`]), 52 px.
     Switch,
 }
 
@@ -401,7 +401,7 @@ impl ButtonKind {
             ButtonKind::Secondary => tokens::SECONDARY,
             ButtonKind::Control => tokens::GLASS,
             ButtonKind::ControlOn => tokens::white(0.2),
-            ButtonKind::Switch => tokens::white(0.06),
+            ButtonKind::Switch => tokens::SWITCH,
         }
     }
 
@@ -443,9 +443,10 @@ fn button_fill_in(kind: ButtonKind, accent: Color, hover: f32, press: f32) -> Co
     // takes its CSS alpha (.12 to .20) through `tokens::white`, as at rest (#692).
     if kind == ButtonKind::Secondary && hover > 0.0 {
         c.alpha = tokens::white(0.12 + 0.08 * hover).alpha();
-    } else if kind == ButtonKind::Switch && hover > 0.0 {
-        c.alpha = tokens::white(0.06 + 0.08 * hover).alpha();
     } else if rest.alpha < 1.0 {
+        // Glass gets more opaque as it lights up. The switch's rest is [`tokens::SWITCH`]'s
+        // raised alpha, so its hover starts there and lightens, rather than the artboard's
+        // `.06 + .08` which would dip below the rest now (#1492).
         c.alpha = (rest.alpha + 0.08 * hover).min(1.0);
     }
     c.into()
@@ -735,8 +736,9 @@ pub fn button_off<B: Bundle>(kind: ButtonKind, height: f32, pad: f32, content: B
 
 /// An on/off switch: a [`ButtonKind::Switch`] button holding the track and knob and a label over
 /// a hint (`ModSelect.dc.html`'s Auto-retry: 38 x 22 px track, 16 px knob, 15/700 over 12/400).
-/// Off is the artboard's: a `white(.2)` track, the knob left in the soft colour; on, the track
-/// is the accent and the knob slides right in ink. A click, Enter or Space flips [`Switch::on`];
+/// Off is the artboard's track (`white(.2)`) with the knob at the left; on, the track is the
+/// accent and the knob slides right. The knob is ink in both states so it clears 3:1 against
+/// either track, and the position (not the colour alone) shows the state (#1492). A click, Enter or Space flips [`Switch::on`];
 /// whoever owns the setting reads it on `Changed<Switch>`, and writing `on` moves the switch.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Switch {
@@ -754,12 +756,16 @@ struct SwitchKnob;
 /// How far the knob slides: the track less the knob and its two 3 px insets.
 const KNOB_TRAVEL: f32 = 38.0 - 16.0 - 2.0 * 3.0;
 
-fn track_fill(on: bool) -> Color {
+pub(crate) fn track_fill(on: bool) -> Color {
     if on { tokens::ACCENT } else { tokens::white(0.2) }
 }
 
-fn knob_fill(on: bool) -> Color {
-    if on { tokens::INK } else { tokens::SOFT }
+/// The knob, ink in both states. The artboard's off knob is `SOFT`, but over [`tokens::SWITCH`]'s
+/// raised surface the off track is light enough that `SOFT` measures 2.66 to 2.78:1 against it;
+/// ink clears 3:1 on both tracks (3.82 to 3.99:1 off, 3.16:1 on the accent). The state is the
+/// knob's position (and the track colour), never the knob colour (#1492).
+pub(crate) fn knob_fill() -> Color {
+    tokens::INK
 }
 
 /// An upright rounded shape (the switch's track and knob are not sheared).
@@ -805,7 +811,7 @@ pub fn switch(label: &str, hint: &str, on: bool) -> impl Bundle + use<> {
                                 height: Val::Px(16.0),
                                 ..default()
                             },
-                            round(knob_fill(on), 8.0),
+                            round(knob_fill(), 8.0),
                             SwitchKnob,
                             UiTransform::from_translation(Val2::px(knob_x, 0.0)),
                             Tween::<OffsetX>::at_rest(knob_x, tokens::motion::QUICK, Ease::OutQuint),
@@ -849,7 +855,7 @@ fn switch_looks(
             if let Ok(mut shape) = tracks.get_mut(part) {
                 shape.fill = track_fill(switch.on);
             } else if let Ok((mut shape, mut tween)) = knobs.get_mut(part) {
-                shape.fill = knob_fill(switch.on);
+                shape.fill = knob_fill();
                 tween.retarget(if switch.on { KNOB_TRAVEL } else { 0.0 });
             }
         }
@@ -1366,11 +1372,14 @@ mod tests {
     #[test]
     fn a_switch_off_is_the_artboards_and_on_is_accent() {
         assert_eq!(track_fill(false), tokens::white(0.2));
-        assert_eq!(knob_fill(false).to_srgba().to_hex(), "#C9CDE0");
         assert_eq!(track_fill(true), tokens::ACCENT);
-        assert_eq!(knob_fill(true), tokens::INK);
+        assert_eq!(knob_fill(), tokens::INK, "ink clears 3:1 on either track (#1492)");
         assert_eq!(KNOB_TRAVEL, 16.0, "the knob ends 3 px from the track's right end");
-        assert_eq!(ButtonKind::Switch.rest().alpha(), tokens::white(0.06).alpha());
+        assert_eq!(
+            ButtonKind::Switch.rest(),
+            tokens::SWITCH,
+            "the surface is the 3:1 token, not an inline alpha (#1492)"
+        );
         assert_eq!(ButtonKind::Switch.height(), 52.0);
         assert_eq!(ButtonKind::Switch.pad(), 20.0);
     }
@@ -1386,6 +1395,9 @@ mod tests {
             .add_observer(flip_switch);
         let s = app.world_mut().spawn(switch("Auto-retry", "hint", false)).id();
         app.update();
+        // #1492: on and off differ by the knob's position as well as the track colour, so the
+        // state does not rely on colour alone.
+        assert_ne!(KNOB_TRAVEL, 0.0, "the knob moves between off and on");
         let parts = |app: &mut App| {
             let world = app.world_mut();
             let mut track = world.query_filtered::<&Shape, With<SwitchTrack>>();
