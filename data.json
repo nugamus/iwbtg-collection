@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-26T12:23:42Z",
+ "generated_at": "2026-11-26T12:30:22Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -57,14 +57,14 @@
    "title": "2 · Format & pipeline",
    "name": "Format & pipeline",
    "state": "open",
-   "open": 35,
-   "closed": 116,
+   "open": 34,
+   "closed": 117,
    "total": 151,
-   "pct_closed": 76.8,
-   "size_points": 105,
+   "pct_closed": 77.5,
+   "size_points": 102,
    "sizes": {
     "size:S": 11,
-    "size:M": 18,
+    "size:M": 17,
     "size:L": 5,
     "unknown": 1
    },
@@ -172,14 +172,14 @@
    "title": "7 · Online",
    "name": "Online",
    "state": "open",
-   "open": 51,
-   "closed": 19,
+   "open": 49,
+   "closed": 21,
    "total": 70,
-   "pct_closed": 27.1,
-   "size_points": 130,
+   "pct_closed": 30.0,
+   "size_points": 124,
    "sizes": {
     "size:S": 25,
-    "size:M": 19,
+    "size:M": 17,
     "size:L": 6,
     "unknown": 1
    },
@@ -263,14 +263,14 @@
  "activity": {
   "totals": {
    "issues": 947,
-   "open": 279,
-   "closed": 668,
-   "pct_closed": 70.5
+   "open": 276,
+   "closed": 671,
+   "pct_closed": 70.9
   },
-  "open_prs": 7,
+  "open_prs": 5,
   "process": {
-   "agent-ready": 127,
-   "in-progress": 12,
+   "agent-ready": 124,
+   "in-progress": 11,
    "needs-user": 34,
    "triage": 49,
    "blocked": 25,
@@ -286,12 +286,12 @@
     "count": 66
    },
    {
-    "area": "area:server",
-    "count": 44
-   },
-   {
     "area": "area:format",
     "count": 43
+   },
+   {
+    "area": "area:server",
+    "count": 42
    },
    {
     "area": "area:editor",
@@ -307,7 +307,7 @@
    },
    {
     "area": "area:tools",
-    "count": 9
+    "count": 8
    },
    {
     "area": "area:docs",
@@ -323,6 +323,52 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 58,
+    "title": "Review queue and anomaly flags",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/58",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:server"
+    ],
+    "phase": "7 · Online",
+    "updated_at": "2026-11-26T12:29:09Z",
+    "closed_at": "2026-11-26T12:29:08Z",
+    "created_at": "2026-11-02T11:31:04Z"
+   },
+   {
+    "number": 1565,
+    "title": "Verification: share the replay verifier between iwbtg-tools and the server",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1565",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:tools",
+     "area:server",
+     "in-progress"
+    ],
+    "phase": "7 · Online",
+    "updated_at": "2026-11-26T12:24:33Z",
+    "closed_at": "2026-11-26T12:24:33Z",
+    "created_at": "2026-11-25T15:32:27Z"
+   },
+   {
+    "number": 1531,
+    "title": "Script API: view reads and writes (view_xview-style) (#776, census rank 16)",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1531",
+    "labels": [
+     "agent-ready",
+     "size:M"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-26T12:25:14Z",
+    "closed_at": "2026-11-26T12:24:10Z",
+    "created_at": "2026-11-25T10:07:50Z"
+   },
    {
     "number": 1553,
     "title": "Results: Back/Escape should go to game select, not back into the finished run",
@@ -404,52 +450,6 @@
     "updated_at": "2026-11-26T12:08:34Z",
     "closed_at": "2026-11-26T12:08:33Z",
     "created_at": "2026-11-21T12:08:10Z"
-   },
-   {
-    "number": 164,
-    "title": "Submissions: flags for seed reuse and exact copies",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/164",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:server"
-    ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-26T12:03:39Z",
-    "closed_at": "2026-11-26T12:03:39Z",
-    "created_at": "2026-11-02T12:01:19Z"
-   },
-   {
-    "number": 1562,
-    "title": "CI: the selector tests hard-code the real manifest graph, so every dependency edge breaks five assertions",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1562",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:infra"
-    ],
-    "phase": "0 · Foundation",
-    "updated_at": "2026-11-26T12:01:58Z",
-    "closed_at": "2026-11-26T12:01:58Z",
-    "created_at": "2026-11-25T13:36:58Z"
-   },
-   {
-    "number": 39,
-    "title": "Practice mode: start from stage, save or room; save states",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/39",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "6 · Ranked-ready run",
-    "updated_at": "2026-11-26T11:51:36Z",
-    "closed_at": "2026-11-26T11:51:35Z",
-    "created_at": "2026-11-02T11:30:16Z"
    }
   ],
   "in_progress": [
@@ -465,41 +465,24 @@
      "in-progress"
     ],
     "phase": "4 · First playable",
-    "updated_at": "2026-11-26T12:15:20Z",
+    "updated_at": "2026-11-26T12:28:00Z",
     "closed_at": null,
     "created_at": "2026-11-26T12:03:02Z"
    },
    {
-    "number": 1565,
-    "title": "Verification: share the replay verifier between iwbtg-tools and the server",
+    "number": 1532,
+    "title": "Script API: GML string functions (#776, census rank 19)",
     "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1565",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "area:tools",
-     "area:server",
-     "in-progress"
-    ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-26T12:11:21Z",
-    "closed_at": null,
-    "created_at": "2026-11-25T15:32:27Z"
-   },
-   {
-    "number": 1531,
-    "title": "Script API: view reads and writes (view_xview-style) (#776, census rank 16)",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1531",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1532",
     "labels": [
      "agent-ready",
      "size:M",
      "in-progress"
     ],
     "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-26T11:59:08Z",
+    "updated_at": "2026-11-26T12:26:35Z",
     "closed_at": null,
-    "created_at": "2026-11-25T10:07:50Z"
+    "created_at": "2026-11-25T10:07:52Z"
    },
    {
     "number": 47,
@@ -549,6 +532,22 @@
     "updated_at": "2026-11-26T01:29:33Z",
     "closed_at": null,
     "created_at": "2026-11-20T10:09:12Z"
+   },
+   {
+    "number": 196,
+    "title": "UI translation files, English and Japanese",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/196",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-26T01:29:28Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T12:41:04Z"
    }
   ],
   "needs_user": [
@@ -737,7 +736,7 @@
     "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 259,
+  "closed_7d": 262,
   "opened_7d": 290,
   "burnup": [
    {
@@ -758,7 +757,7 @@
    {
     "week": "2026-11-30",
     "created": 947,
-    "closed": 668
+    "closed": 671
    }
   ]
  },
@@ -1862,13 +1861,8 @@
   }
  },
  "script_api": {
-  "registered_functions": 79,
+  "registered_functions": 104,
   "planned_groups": [
-   {
-    "name": "view (16)",
-    "counts": "29 / 37 / 9",
-    "issue": 1531
-   },
    {
     "name": "strings (19)",
     "counts": "22 / 28 / 16",
@@ -1895,7 +1889,7 @@
     "issue": 1536
    }
   ],
-  "planned_count": 6,
+  "planned_count": 5,
   "missing": "the census's full group list (research#172) is not in this repo"
  }
 }
