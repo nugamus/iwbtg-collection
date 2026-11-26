@@ -18,7 +18,7 @@ The internal pipeline design — what the converter automates, who owns each ste
 
 | Repository | Visibility | Holds |
 |---|---|---|
-| `iwbtg-collection` (this one) | Public | Client, format, CLI, server and docs. No originals; the only game art is the credited Kid sprites in the showcase package. |
+| `iwbtg-collection` (this one) | Public | Client, format, CLI, server and docs. No originals; game art is limited to two credited exceptions: the Kid sprites in the showcase package (games#34) and the client's UI delicious fruit in `crates/client/assets/ui/` (#1608). |
 | `iwbtg-collection-games` | Private | Ported packages, one folder per game under `games/<game_id>/`. Packages only, never originals or extraction output. |
 | `iwbtg-collection-research` | Private | Clean-room specs, traces, the converter, and the gitignored `archive/`, `extracted/` and `db/` that the converter reads. |
 
