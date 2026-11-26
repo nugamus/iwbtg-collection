@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-26T11:57:03Z",
+ "generated_at": "2026-11-26T12:04:30Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -11,13 +11,13 @@
    "title": "0 · Foundation",
    "name": "Foundation",
    "state": "open",
-   "open": 5,
-   "closed": 86,
+   "open": 4,
+   "closed": 87,
    "total": 91,
-   "pct_closed": 94.5,
-   "size_points": 12,
+   "pct_closed": 95.6,
+   "size_points": 11,
    "sizes": {
-    "size:S": 4,
+    "size:S": 3,
     "size:M": 0,
     "size:L": 1,
     "unknown": 0
@@ -84,12 +84,12 @@
    "closed": 216,
    "total": 252,
    "pct_closed": 85.7,
-   "size_points": 48,
+   "size_points": 49,
    "sizes": {
-    "size:S": 14,
+    "size:S": 15,
     "size:M": 6,
     "size:L": 2,
-    "unknown": 14
+    "unknown": 13
    },
    "scope": "The deterministic simulation reproduces the original mechanics tick for tick.",
    "feeds_from": "research traces, format packages, sim crate",
@@ -103,14 +103,14 @@
    "title": "4 · First playable",
    "name": "First playable",
    "state": "open",
-   "open": 8,
+   "open": 10,
    "closed": 45,
-   "total": 53,
-   "pct_closed": 84.9,
-   "size_points": 10,
+   "total": 55,
+   "pct_closed": 81.8,
+   "size_points": 14,
    "sizes": {
-    "size:S": 4,
-    "size:M": 2,
+    "size:S": 5,
+    "size:M": 3,
     "size:L": 0,
     "unknown": 2
    },
@@ -173,13 +173,13 @@
    "name": "Online",
    "state": "open",
    "open": 50,
-   "closed": 18,
-   "total": 68,
-   "pct_closed": 26.5,
-   "size_points": 127,
+   "closed": 19,
+   "total": 69,
+   "pct_closed": 27.5,
+   "size_points": 129,
    "sizes": {
-    "size:S": 25,
-    "size:M": 18,
+    "size:S": 24,
+    "size:M": 19,
     "size:L": 6,
     "unknown": 1
    },
@@ -262,17 +262,17 @@
  ],
  "activity": {
   "totals": {
-   "issues": 941,
-   "open": 280,
-   "closed": 661,
-   "pct_closed": 70.2
+   "issues": 946,
+   "open": 283,
+   "closed": 663,
+   "pct_closed": 70.1
   },
-  "open_prs": 6,
+  "open_prs": 8,
   "process": {
-   "agent-ready": 127,
+   "agent-ready": 129,
+   "triage": 51,
+   "in-progress": 16,
    "needs-user": 34,
-   "triage": 50,
-   "in-progress": 13,
    "blocked": 25,
    "revisit": 3
   },
@@ -283,15 +283,15 @@
    },
    {
     "area": "area:client",
-    "count": 68
+    "count": 69
    },
    {
     "area": "area:server",
-    "count": 45
+    "count": 44
    },
    {
     "area": "area:format",
-    "count": 42
+    "count": 43
    },
    {
     "area": "area:editor",
@@ -299,7 +299,7 @@
    },
    {
     "area": "area:infra",
-    "count": 22
+    "count": 21
    },
    {
     "area": "area:design",
@@ -323,6 +323,36 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 164,
+    "title": "Submissions: flags for seed reuse and exact copies",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/164",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:server"
+    ],
+    "phase": "7 · Online",
+    "updated_at": "2026-11-26T12:03:39Z",
+    "closed_at": "2026-11-26T12:03:39Z",
+    "created_at": "2026-11-02T12:01:19Z"
+   },
+   {
+    "number": 1562,
+    "title": "CI: the selector tests hard-code the real manifest graph, so every dependency edge breaks five assertions",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1562",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:infra"
+    ],
+    "phase": "0 · Foundation",
+    "updated_at": "2026-11-26T12:01:58Z",
+    "closed_at": "2026-11-26T12:01:58Z",
+    "created_at": "2026-11-25T13:36:58Z"
+   },
    {
     "number": 39,
     "title": "Practice mode: start from stage, save or room; save states",
@@ -415,37 +445,89 @@
     "updated_at": "2026-11-26T11:41:52Z",
     "closed_at": "2026-11-25T15:59:49Z",
     "created_at": "2026-11-21T12:00:40Z"
-   },
-   {
-    "number": 1530,
-    "title": "Script API: paths (path_start, path_end, path properties) (#776, census rank 14)",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1530",
-    "labels": [
-     "agent-ready",
-     "size:M"
-    ],
-    "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-25T15:53:19Z",
-    "closed_at": "2026-11-25T15:49:39Z",
-    "created_at": "2026-11-25T10:07:47Z"
-   },
-   {
-    "number": 1398,
-    "title": "Showcase package is not in pkg fmt layout (3 room files), and nothing checks it",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1398",
-    "labels": [
-     "agent-ready",
-     "size:S"
-    ],
-    "phase": "4 · First playable",
-    "updated_at": "2026-11-25T15:54:09Z",
-    "closed_at": "2026-11-25T15:46:38Z",
-    "created_at": "2026-11-24T17:45:23Z"
    }
   ],
   "in_progress": [
+   {
+    "number": 1579,
+    "title": "Practice picker: start at any save point, not only the game's save",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1579",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "6 · Ranked-ready run",
+    "updated_at": "2026-11-26T12:03:23Z",
+    "closed_at": null,
+    "created_at": "2026-11-26T11:42:04Z"
+   },
+   {
+    "number": 1348,
+    "title": "Sim: replace-mode slope rows step up only on their uphill side (rori, fairy-tale; A1-172)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1348",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:sim",
+     "in-progress"
+    ],
+    "phase": "3 · Sim fidelity",
+    "updated_at": "2026-11-26T12:02:49Z",
+    "closed_at": null,
+    "created_at": "2026-11-24T11:49:37Z"
+   },
+   {
+    "number": 1297,
+    "title": "Probe/feel: add a save.point metric for the checkpoint entity key",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1297",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:sim",
+     "area:tools",
+     "in-progress"
+    ],
+    "phase": "3 · Sim fidelity",
+    "updated_at": "2026-11-26T12:02:14Z",
+    "closed_at": null,
+    "created_at": "2026-11-21T12:08:10Z"
+   },
+   {
+    "number": 1553,
+    "title": "Results: Back/Escape should go to game select, not back into the finished run",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1553",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "6 · Ranked-ready run",
+    "updated_at": "2026-11-26T12:01:37Z",
+    "closed_at": null,
+    "created_at": "2026-11-25T12:24:59Z"
+   },
+   {
+    "number": 1531,
+    "title": "Script API: view reads and writes (view_xview-style) (#776, census rank 16)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1531",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "in-progress"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-26T11:59:08Z",
+    "closed_at": null,
+    "created_at": "2026-11-25T10:07:50Z"
+   },
    {
     "number": 1551,
     "title": "Client: a new game from game select reuses the previous run's stats and jumps to results with the old time",
@@ -462,88 +544,6 @@
     "updated_at": "2026-11-26T11:52:08Z",
     "closed_at": null,
     "created_at": "2026-11-25T12:21:39Z"
-   },
-   {
-    "number": 1297,
-    "title": "Probe/feel: add a save.point metric for the checkpoint entity key",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1297",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:sim",
-     "area:tools",
-     "in-progress"
-    ],
-    "phase": "3 · Sim fidelity",
-    "updated_at": "2026-11-26T11:43:20Z",
-    "closed_at": null,
-    "created_at": "2026-11-21T12:08:10Z"
-   },
-   {
-    "number": 47,
-    "title": "Design pass: settings and controls panel mockups",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/47",
-    "labels": [
-     "needs-user",
-     "size:M",
-     "area:design",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-26T02:07:17Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T11:30:37Z"
-   },
-   {
-    "number": 106,
-    "title": "Accessibility: screen-shake toggle, colorblind-friendly UI, audio cues",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/106",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-26T01:30:02Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T11:55:29Z"
-   },
-   {
-    "number": 1127,
-    "title": "Web build: the browser client crashes within a second of starting play",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1127",
-    "labels": [
-     "bug",
-     "agent-ready",
-     "size:M",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "4 · First playable",
-    "updated_at": "2026-11-26T01:29:33Z",
-    "closed_at": null,
-    "created_at": "2026-11-20T10:09:12Z"
-   },
-   {
-    "number": 196,
-    "title": "UI translation files, English and Japanese",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/196",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "5 · Client shell & UI",
-    "updated_at": "2026-11-26T01:29:28Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T12:41:04Z"
    }
   ],
   "needs_user": [
@@ -656,21 +656,6 @@
     "created_at": "2026-11-02T14:09:28Z"
    },
    {
-    "number": 1562,
-    "title": "CI: the selector tests hard-code the real manifest graph, so every dependency edge breaks five assertions",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1562",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:infra"
-    ],
-    "phase": "0 · Foundation",
-    "updated_at": "2026-11-26T11:54:53Z",
-    "closed_at": null,
-    "created_at": "2026-11-25T13:36:58Z"
-   },
-   {
     "number": 1365,
     "title": "Progress exporter: trace coverage per game",
     "state": "open",
@@ -730,10 +715,25 @@
     "updated_at": "2026-11-25T01:31:54Z",
     "closed_at": null,
     "created_at": "2026-11-02T11:31:41Z"
+   },
+   {
+    "number": 74,
+    "title": "Creator claim flow",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/74",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:server"
+    ],
+    "phase": "10 · Release",
+    "updated_at": "2026-11-24T13:03:09Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 252,
-  "opened_7d": 284,
+  "closed_7d": 254,
+  "opened_7d": 289,
   "burnup": [
    {
     "week": "2026-11-09",
@@ -752,8 +752,8 @@
    },
    {
     "week": "2026-11-30",
-    "created": 941,
-    "closed": 661
+    "created": 946,
+    "closed": 663
    }
   ]
  },
