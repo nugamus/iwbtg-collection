@@ -496,7 +496,10 @@ mod tests {
             "stars come with #111"
         );
         let files = files.unwrap();
-        assert!(files.contains("rooms/stage.toml") && files.contains("art/key.png"));
+        assert!(
+            files.contains("rooms/goal.toml") && files.contains("art/key.png"),
+            "the ranked start room, which the key art falls back to (#43)"
+        );
     }
 
     #[test]

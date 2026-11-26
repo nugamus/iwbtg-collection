@@ -236,6 +236,11 @@ impl InputFrame {
     pub const fn is_contract(self) -> bool {
         (self.held | self.pressed | self.released) & !Action::MASK == 0
     }
+
+    /// No action is held and no edge is set (the player did nothing this tick).
+    pub const fn is_empty(self) -> bool {
+        (self.held | self.pressed | self.released) == 0
+    }
 }
 
 /// Windows virtual-key codes, the numbering GM8's `vk_*` constants and the recorder use.

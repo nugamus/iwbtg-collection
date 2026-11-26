@@ -72,6 +72,11 @@ pub struct TimingState {
     pub run_end_raised: bool,
     /// The `start` trigger fired.
     pub started: bool,
+    /// A stripped run's timer has started: set by the first tick whose frame has any action
+    /// (`stripped::begin_tick`, docs/product.md, Two ways to play each game). Play original
+    /// counts from its start trigger and leaves this false.
+    #[serde(default)]
+    pub timer_started: bool,
     /// How many stage triggers fired; the next one to look at.
     pub stages_done: u16,
     /// The `end` trigger fired.

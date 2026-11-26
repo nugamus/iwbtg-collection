@@ -204,7 +204,13 @@ pub(super) fn on_activate(
         if let Some(mut practice) = world.get_resource_mut::<crate::practice::Practice>() {
             practice.0 = true;
         }
-        super::super::start_map(world, &path, map.as_deref(), Some(start));
+        super::super::start_map(
+            world,
+            &path,
+            map.as_deref(),
+            iwbtg_sim::stripped::PlayMode::Original,
+            Some(start),
+        );
     });
 }
 

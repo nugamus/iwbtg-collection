@@ -11,6 +11,7 @@ use bevy::state::app::StatesPlugin;
 use bevy::time::TimeUpdateStrategy;
 use bevy::window::FileDragAndDrop;
 use iwbtg_sim::mods::ModSet;
+use iwbtg_sim::stripped::PlayMode;
 
 use super::*;
 use crate::view::{Game, GameCamera, Textures};
@@ -320,7 +321,7 @@ fn start_map_plays_the_picked_map() {
     let mut app = app();
     frames(&mut app, 3);
     let pkg = demo("tests/fixtures/maps.pkg");
-    start_map(app.world_mut(), &pkg, Some("hard"), None);
+    start_map(app.world_mut(), &pkg, Some("hard"), PlayMode::Original, None);
     wait_for_stage(&mut app);
     frames(&mut app, 2);
     assert_eq!(map_id(&app), "hard");
@@ -433,7 +434,13 @@ fn a_new_run_from_select_does_not_open_the_old_results() {
         app.world().resource::<Stats>().cleared.is_none(),
         "leaving the run forgets its clear"
     );
-    start_map(app.world_mut(), &demo("tests/fixtures/clear.pkg"), None, None);
+    start_map(
+        app.world_mut(),
+        &demo("tests/fixtures/clear.pkg"),
+        None,
+        PlayMode::Original,
+        None,
+    );
     wait_for_stage(&mut app);
     frames(&mut app, 5);
     assert_eq!(
@@ -445,10 +452,49 @@ fn a_new_run_from_select_does_not_open_the_old_results() {
     // And a different package after leaving again.
     leave(app.world_mut());
     frames(&mut app, 3);
-    start_map(app.world_mut(), &demo("tests/fixtures/audio.pkg"), None, None);
+    start_map(
+        app.world_mut(),
+        &demo("tests/fixtures/audio.pkg"),
+        None,
+        PlayMode::Original,
+        None,
+    );
     wait_for_stage(&mut app);
     frames(&mut app, 5);
     assert_eq!(screen(&app), RunScreen::Playing);
+}
+
+/// The select screen's two buttons choose the play mode (#43): Ranked is stripped and starts at
+/// the ranked start, Play original is the game as ported.
+#[test]
+fn start_map_plays_the_chosen_mode() {
+    let mut app = app();
+    frames(&mut app, 3);
+    let pkg = demo("tests/fixtures/maps.pkg");
+    start_map(app.world_mut(), &pkg, Some("hard"), PlayMode::Stripped, None);
+    wait_for_stage(&mut app);
+    frames(&mut app, 2);
+    {
+        let sim = &app.world().non_send::<Game>().sim;
+        assert_eq!(sim.options().mode, PlayMode::Stripped);
+        assert_eq!(
+            sim.def().room(sim.world().room).map(|r| r.name.as_str()),
+            Some("goal"),
+            "the ranked start room"
+        );
+    }
+    leave(app.world_mut());
+    frames(&mut app, 3);
+    start_map(app.world_mut(), &pkg, Some("hard"), PlayMode::Original, None);
+    wait_for_stage(&mut app);
+    frames(&mut app, 2);
+    let sim = &app.world().non_send::<Game>().sim;
+    assert_eq!(sim.options().mode, PlayMode::Original);
+    assert_eq!(
+        sim.def().room(sim.world().room).map(|r| r.name.as_str()),
+        Some("stage"),
+        "Play original's new game room"
+    );
 }
 
 /// A map the package does not have is reported by the staged start and nothing changes.
@@ -456,7 +502,13 @@ fn a_new_run_from_select_does_not_open_the_old_results() {
 fn start_map_refuses_an_unknown_map() {
     let mut app = app();
     frames(&mut app, 3);
-    start_map(app.world_mut(), &demo("tests/fixtures/maps.pkg"), Some("nope"), None);
+    start_map(
+        app.world_mut(),
+        &demo("tests/fixtures/maps.pkg"),
+        Some("nope"),
+        PlayMode::Original,
+        None,
+    );
     wait_for_stage(&mut app);
     assert_eq!(
         *app.world().resource::<State<AppScreen>>().get(),
@@ -487,6 +539,7 @@ fn a_staged_start_keeps_the_run_until_it_is_ready() {
         generation: 1,
         path: path.clone(),
         map: None,
+        mode: PlayMode::Original,
         start: None,
         rx: Mutex::new(rx),
     });
@@ -519,6 +572,7 @@ fn a_staged_start_that_halts_opens_the_error_screen() {
         app.world_mut(),
         &demo("tests/fixtures/start_error.pkg"),
         None,
+        PlayMode::Original,
         None,
     );
     wait_for_stage(&mut app);
@@ -546,6 +600,7 @@ fn a_failed_staged_start_keeps_the_run_playing() {
         generation: 1,
         path: path.clone(),
         map: Some("nope".to_owned()),
+        mode: PlayMode::Original,
         start: None,
         rx: Mutex::new(rx),
     });
@@ -678,6 +733,7 @@ fn a_newer_staged_start_wins() {
         generation: 2,
         path: new.clone(),
         map: None,
+        mode: PlayMode::Original,
         start: None,
         rx: Mutex::new(rx),
     });

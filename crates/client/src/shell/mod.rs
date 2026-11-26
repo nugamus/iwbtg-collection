@@ -21,6 +21,7 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use bevy::app::RunFixedMainLoopSystems;
 use bevy::prelude::*;
 use iwbtg_sim::room::StartPoint;
+use iwbtg_sim::stripped::PlayMode;
 
 use crate::package::{self, OpenError, Package, SpriteImage};
 
@@ -336,6 +337,8 @@ pub(crate) struct PendingStart {
     generation: u64,
     path: PathBuf,
     map: Option<String>,
+    /// The run's play mode (game select's two buttons, #43).
+    mode: PlayMode,
     /// An explicit start point (game select's practice pickers, #39).
     start: Option<StartPoint>,
     /// A `Receiver` is `Send` but not `Sync`, so it sits behind a mutex to be a resource; the
@@ -382,9 +385,10 @@ fn finish(
     staged: Staged,
     path: &Path,
     map: Option<&str>,
+    mode: Option<PlayMode>,
     start: Option<StartPoint>,
 ) -> Result<NextRun, StartError> {
-    let run = crate::view::new_run(world, &staged.pkg, map, start, staged.sprites)
+    let run = crate::view::new_run(world, &staged.pkg, map, mode, start, staged.sprites)
         .map_err(|why| StartError {
             path: path.to_owned(),
             why: StartFailure::Run(why),
@@ -405,16 +409,17 @@ fn prepare(
     path: &Path,
     trace_mode: bool,
     map: Option<&str>,
+    mode: Option<PlayMode>,
     start: Option<StartPoint>,
 ) -> Result<NextRun, StartError> {
     let staged = stage(path, trace_mode)?;
-    finish(world, staged, path, map, start)
+    finish(world, staged, path, map, mode, start)
 }
 
 /// Opens the package at `path` (`trace_mode`: research converter output) and makes it the loaded
 /// one, before the app runs (a package on the command line). The caller starts in `Run`.
 pub fn load(world: &mut World, path: &Path, trace_mode: bool) -> Result<(), StartError> {
-    prepare(world, path, trace_mode, None, None)?.install(world);
+    prepare(world, path, trace_mode, None, None, None)?.install(world);
     Ok(())
 }
 
@@ -429,7 +434,7 @@ pub fn load_package(
     let clock = crate::startup_profile::start();
     let sprites = package::sprite_images(&pkg.files);
     crate::startup_profile::mark("sprite decode", clock);
-    let run = crate::view::new_run(world, &pkg, None, None, sprites).map_err(|why| StartError {
+    let run = crate::view::new_run(world, &pkg, None, None, None, sprites).map_err(|why| StartError {
         path: source.clone(),
         why: StartFailure::Run(why),
     })?;
@@ -451,20 +456,22 @@ pub fn load_package(
 /// staged: [`start_map`].
 pub fn start(world: &mut World, path: &Path) -> Result<(), StartError> {
     let trace_mode = world.get_resource::<Shell>().is_some_and(|s| s.trace_mode);
-    let next = prepare(world, path, trace_mode, None, None)?;
+    let next = prepare(world, path, trace_mode, None, None, None)?;
     install(next, world);
     Ok(())
 }
 
 /// Stages the package at `path` on the map with id `map` (game select's pick, #880; `None` is the
-/// package's first map) and returns at once: the select screen keeps drawing `Opening <name>…`
-/// while [`stage`] runs on a worker thread. [`poll_start`] builds the sim and commits the run when
-/// the worker is done; a newer call replaces this one, so its result is ignored. A failure arrives
-/// as [`StartFailed`] and the run on screen is unchanged.
+/// package's first map) in the play `mode` (game select's two buttons, #43) and with an
+/// explicit `start` (game select's practice pickers, #39), and returns at once: the select
+/// screen keeps drawing `Opening <name>…` while [`stage`] runs on a worker thread. [`poll_start`]
+/// builds the sim and commits the run when the worker is done; a newer call replaces this one, so
+/// its result is ignored. A failure arrives as [`StartFailed`] and the run on screen is unchanged.
 pub fn start_map(
     world: &mut World,
     path: &Path,
     map: Option<&str>,
+    mode: PlayMode,
     start: Option<StartPoint>,
 ) {
     let trace_mode = world.get_resource::<Shell>().is_some_and(|s| s.trace_mode);
@@ -474,6 +481,7 @@ pub fn start_map(
         generation,
         path: path.to_owned(),
         map: map.map(str::to_owned),
+        mode,
         start,
         rx: Mutex::new(rx),
     });
@@ -532,13 +540,14 @@ fn poll_start(world: &mut World) {
     };
     let path = pending.path.clone();
     let map = pending.map.clone();
+    let mode = pending.mode;
     let start = pending.start.clone();
     world.remove_resource::<PendingStart>();
     match result {
         Err(e) => {
             world.write_message(StartFailed(e));
         }
-        Ok(staged) => match finish(world, staged, &path, map.as_deref(), start) {
+        Ok(staged) => match finish(world, staged, &path, map.as_deref(), Some(mode), start) {
             Ok(next) => {
                 world.insert_non_send(next);
                 // `set`, not `set_if_different`: Run to Run closes the old run and opens the new one.
