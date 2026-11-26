@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-26T13:27:36Z",
+ "generated_at": "2026-11-26T13:37:03Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -57,14 +57,14 @@
    "title": "2 · Format & pipeline",
    "name": "Format & pipeline",
    "state": "open",
-   "open": 33,
-   "closed": 118,
+   "open": 32,
+   "closed": 119,
    "total": 151,
-   "pct_closed": 78.1,
-   "size_points": 99,
+   "pct_closed": 78.8,
+   "size_points": 96,
    "sizes": {
     "size:S": 11,
-    "size:M": 16,
+    "size:M": 15,
     "size:L": 5,
     "unknown": 1
    },
@@ -263,16 +263,16 @@
  "activity": {
   "totals": {
    "issues": 947,
-   "open": 269,
-   "closed": 678,
-   "pct_closed": 71.6
+   "open": 268,
+   "closed": 679,
+   "pct_closed": 71.7
   },
-  "open_prs": 3,
+  "open_prs": 2,
   "process": {
-   "agent-ready": 117,
+   "agent-ready": 116,
    "needs-user": 34,
    "triage": 49,
-   "in-progress": 9,
+   "in-progress": 8,
    "blocked": 25,
    "revisit": 3
   },
@@ -323,6 +323,21 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 1533,
+    "title": "Script API: script_execute with a literal target (cross-script calls) (#776, census rank 22)",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1533",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "in-progress"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-26T13:29:39Z",
+    "closed_at": "2026-11-26T13:29:39Z",
+    "created_at": "2026-11-25T10:07:55Z"
+   },
    {
     "number": 43,
     "title": "Ranked (stripped) and Play original buttons",
@@ -428,39 +443,9 @@
     "updated_at": "2026-11-26T12:32:50Z",
     "closed_at": "2026-11-26T12:32:50Z",
     "created_at": "2026-11-25T15:56:53Z"
-   },
-   {
-    "number": 58,
-    "title": "Review queue and anomaly flags",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/58",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "area:server"
-    ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-26T12:29:09Z",
-    "closed_at": "2026-11-26T12:29:08Z",
-    "created_at": "2026-11-02T11:31:04Z"
    }
   ],
   "in_progress": [
-   {
-    "number": 1533,
-    "title": "Script API: script_execute with a literal target (cross-script calls) (#776, census rank 22)",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1533",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "in-progress"
-    ],
-    "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-26T13:20:43Z",
-    "closed_at": null,
-    "created_at": "2026-11-25T10:07:55Z"
-   },
    {
     "number": 47,
     "title": "Design pass: settings and controls panel mockups",
@@ -541,6 +526,22 @@
     "updated_at": "2026-11-24T22:21:14Z",
     "closed_at": null,
     "created_at": "2026-11-02T11:57:34Z"
+   },
+   {
+    "number": 155,
+    "title": "Server: tracing logs and healthchecks.io",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/155",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:server",
+     "in-progress"
+    ],
+    "phase": "7 · Online",
+    "updated_at": "2026-11-24T21:09:22Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T11:57:36Z"
    }
   ],
   "needs_user": [
@@ -729,7 +730,7 @@
     "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 269,
+  "closed_7d": 270,
   "opened_7d": 289,
   "burnup": [
    {
@@ -750,7 +751,7 @@
    {
     "week": "2026-11-30",
     "created": 947,
-    "closed": 678
+    "closed": 679
    }
   ]
  },
@@ -1854,13 +1855,8 @@
   }
  },
  "script_api": {
-  "registered_functions": 122,
+  "registered_functions": 123,
   "planned_groups": [
-   {
-    "name": "meta (22)",
-    "counts": "19 / 28 / 9",
-    "issue": 1533
-   },
    {
     "name": "instance_change (23)",
     "counts": "17 / 17 / 4",
@@ -1877,7 +1873,7 @@
     "issue": 1536
    }
   ],
-  "planned_count": 4,
+  "planned_count": 3,
   "missing": "the census's full group list (research#172) is not in this repo"
  }
 }
