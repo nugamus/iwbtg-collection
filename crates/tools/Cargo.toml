@@ -21,7 +21,8 @@ postcard.workspace = true
 iwbtg-format.workspace = true
 thiserror.workspace = true
 clap.workspace = true
-# Trace case files (crates/tools/cases) and the research trace map (docs/plans/sim-core.md 9.2).
+# Trace case files (crates/tools/cases) and the research trace map:
+# docs/architecture/traces.md (Trace cases, Mapping and diff).
 serde.workspace = true
 toml.workspace = true
 serde_json.workspace = true
