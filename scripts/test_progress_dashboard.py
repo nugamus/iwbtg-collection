@@ -17,10 +17,11 @@ GENERATE = ROOT / "progress" / "generate.py"
 SCRIPT_API = ROOT / "docs" / "format" / "script-api.md"
 SCRIPTS = ROOT / "docs" / "architecture" / "sim" / "scripts.md"
 
-# Pinned 2026-11-25: path_start/path_end landed in #1530; paths remains in the
-# census table for the record but is no longer an unregistered group.
-EXPECTED_FUNCTIONS = 79
-EXPECTED_GROUPS = 6
+# Pinned 2026-11-26: the view_* reads and set_view_* writes landed in #1531;
+# paths landed in #1530. Both remain in the census table for the record but are
+# no longer unregistered groups.
+EXPECTED_FUNCTIONS = 104
+EXPECTED_GROUPS = 5
 
 
 def load_generate():
