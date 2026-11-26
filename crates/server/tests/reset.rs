@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use axum::Router;
 use axum::body::Body;
-use axum::http::{Request, StatusCode, header};
+use axum::http::{HeaderMap, Request, StatusCode, header};
 use serde_json::{Value, json};
 use sqlx::SqlitePool;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -119,6 +119,78 @@ async fn post(router: &Router, uri: &str, ip: &str, body: Value) -> (StatusCode,
         serde_json::from_slice(&bytes).expect("a JSON body")
     };
     (status, body)
+}
+
+async fn get_page(router: &Router, uri: &str) -> (StatusCode, HeaderMap, String) {
+    let response = router
+        .clone()
+        .oneshot(Request::get(uri).body(Body::empty()).expect("a request"))
+        .await
+        .expect("router must answer");
+    let status = response.status();
+    let headers = response.headers().clone();
+    let bytes = axum::body::to_bytes(response.into_body(), 1 << 20)
+        .await
+        .expect("read the body")
+        .to_vec();
+    (status, headers, String::from_utf8(bytes).expect("HTML"))
+}
+
+async fn form_post(
+    router: &Router,
+    uri: &str,
+    ip: &str,
+    fields: &[(&str, &str)],
+    cookie: Option<&str>,
+) -> (StatusCode, HeaderMap, String) {
+    let body = serde_urlencoded::to_string(fields).expect("a form body");
+    let mut request = Request::post(uri)
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .header("cf-connecting-ip", ip);
+    if let Some(cookie) = cookie {
+        request = request.header(header::COOKIE, cookie);
+    }
+    let response = router
+        .clone()
+        .oneshot(request.body(Body::from(body)).expect("a request"))
+        .await
+        .expect("router must answer");
+    let status = response.status();
+    let headers = response.headers().clone();
+    let bytes = axum::body::to_bytes(response.into_body(), 1 << 20)
+        .await
+        .expect("read the body")
+        .to_vec();
+    (status, headers, String::from_utf8(bytes).expect("HTML"))
+}
+
+/// The value of one `Set-Cookie` header, without its attributes.
+fn set_cookie(headers: &HeaderMap, name: &str) -> Option<String> {
+    headers
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .find_map(|value| {
+            let (key, rest) = value.split_once('=')?;
+            (key == name).then(|| rest.split(';').next().unwrap_or_default().to_owned())
+        })
+}
+
+/// The hidden CSRF field a reset page rendered.
+fn hidden_csrf(html: &str) -> String {
+    let marker = "name=\"csrf\" value=\"";
+    let start = html.find(marker).expect("a csrf field") + marker.len();
+    let rest = &html[start..];
+    rest[..rest.find('"').expect("the closing quote")].to_owned()
+}
+
+/// Opens a reset page and returns the hidden token with the matching `Cookie` header value.
+async fn reset_form_token(router: &Router, uri: &str) -> (String, String) {
+    let (status, headers, html) = get_page(router, uri).await;
+    assert_eq!(status, StatusCode::OK);
+    let token = set_cookie(&headers, "__Host-iwbtg_csrf").expect("a csrf cookie");
+    assert_eq!(hidden_csrf(&html), token, "the page's two token halves disagree");
+    (token.clone(), format!("__Host-iwbtg_csrf={token}"))
 }
 
 async fn register(fixture: &Fixture) {
@@ -321,4 +393,256 @@ async fn reset_requests_are_rate_limited_per_address() {
 
     let (status, _) = request_reset(&fixture, "203.0.113.61", "nobody 6@example.com").await;
     assert_eq!(status, StatusCode::NO_CONTENT, "another address was limited");
+}
+
+/// Each reset page renders its form with a token in a hidden field and the same token in the
+/// `__Host-iwbtg_csrf` cookie (#1545).
+#[tokio::test]
+async fn reset_pages_set_a_csrf_cookie_and_embed_the_token() {
+    let fixture = fixture("reset-pages").await;
+
+    let (status, headers, html) = get_page(&fixture.router, "/reset").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        headers
+            .get(header::CONTENT_TYPE)
+            .expect("a content type")
+            .to_str()
+            .unwrap()
+            .starts_with("text/html")
+    );
+    let request_token = set_cookie(&headers, "__Host-iwbtg_csrf").expect("a csrf cookie");
+    assert_eq!(hidden_csrf(&html), request_token);
+    assert!(html.contains("action=\"/reset\""), "{html}");
+    assert!(html.contains("<label for=\"email\">Email</label>"), "{html}");
+    assert!(html.contains("autocomplete=\"email\""), "{html}");
+    assert!(html.contains(":focus-visible"), "no focus outline in the page");
+
+    let (status, headers, html) = get_page(&fixture.router, "/reset/code").await;
+    assert_eq!(status, StatusCode::OK);
+    let code_token = set_cookie(&headers, "__Host-iwbtg_csrf").expect("a csrf cookie");
+    assert_eq!(hidden_csrf(&html), code_token);
+    assert_ne!(request_token, code_token, "a token was reused across pages");
+    assert!(html.contains("action=\"/reset/confirm\""), "{html}");
+    assert!(html.contains("autocomplete=\"one-time-code\""), "{html}");
+    assert!(html.contains("autocomplete=\"new-password\""), "{html}");
+    assert!(html.contains("autocomplete=\"email\""), "{html}");
+    assert!(html.contains(":focus-visible"), "no focus outline in the page");
+}
+
+/// The request form answers the same neutral sentence for a known and an unknown address, and
+/// only the known one gets mail — the form path keeps the #160 no-oracle rule.
+#[tokio::test]
+async fn a_form_reset_request_answers_the_same_for_any_address() {
+    let mut fixture = fixture("reset-form-request").await;
+    register(&fixture).await;
+
+    let (csrf, cookie) = reset_form_token(&fixture.router, "/reset").await;
+    let (known_status, _, known_html) = form_post(
+        &fixture.router,
+        "/reset",
+        "198.51.100.10",
+        &[("email", EMAIL), ("csrf", &csrf)],
+        Some(&cookie),
+    )
+    .await;
+    let confirmation = "If that address has an account, a reset code is on its way.";
+    assert_eq!(known_status, StatusCode::OK);
+    assert!(known_html.contains(confirmation), "{known_html}");
+    let _ = next_email(&mut fixture).await;
+
+    let (csrf, cookie) = reset_form_token(&fixture.router, "/reset").await;
+    let (unknown_status, _, unknown_html) = form_post(
+        &fixture.router,
+        "/reset",
+        "198.51.100.11",
+        &[("email", "nobody@example.com"), ("csrf", &csrf)],
+        Some(&cookie),
+    )
+    .await;
+    assert_eq!(unknown_status, known_status);
+    assert_eq!(unknown_html, known_html);
+    assert!(
+        tokio::time::timeout(Duration::from_millis(500), fixture.emails.recv())
+            .await
+            .is_err(),
+        "the unknown address still produced an email"
+    );
+}
+
+/// The code form goes through the same confirm body as the JSON endpoint and sets the password.
+#[tokio::test]
+async fn a_form_reset_confirm_changes_the_password() {
+    let mut fixture = fixture("reset-form-confirm").await;
+    register(&fixture).await;
+
+    let (csrf, cookie) = reset_form_token(&fixture.router, "/reset").await;
+    let (status, _, _) = form_post(
+        &fixture.router,
+        "/reset",
+        "198.51.100.20",
+        &[("email", EMAIL), ("csrf", &csrf)],
+        Some(&cookie),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let code = code_from(&next_email(&mut fixture).await);
+
+    let (csrf, cookie) = reset_form_token(&fixture.router, "/reset/code").await;
+    let (status, _, html) = form_post(
+        &fixture.router,
+        "/reset/confirm",
+        "198.51.100.21",
+        &[
+            ("email", EMAIL),
+            ("code", &code),
+            ("password", NEW_PASSWORD),
+            ("csrf", &csrf),
+        ],
+        Some(&cookie),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(html.contains("Password updated."), "{html}");
+
+    assert_eq!(
+        login(&fixture, "198.51.100.22", NEW_PASSWORD).await,
+        StatusCode::OK
+    );
+    assert_eq!(
+        login(&fixture, "198.51.100.23", OLD_PASSWORD).await,
+        StatusCode::UNAUTHORIZED
+    );
+}
+
+/// A wrong and an expired code re-render the code form with the one generic message and a fresh
+/// token, never saying which case it was.
+#[tokio::test]
+async fn a_bad_form_code_re_renders_the_generic_error_with_a_fresh_token() {
+    let mut fixture = fixture("reset-form-wrong").await;
+    register(&fixture).await;
+
+    let (csrf, cookie) = reset_form_token(&fixture.router, "/reset").await;
+    form_post(
+        &fixture.router,
+        "/reset",
+        "198.51.100.30",
+        &[("email", EMAIL), ("csrf", &csrf)],
+        Some(&cookie),
+    )
+    .await;
+    let code = code_from(&next_email(&mut fixture).await);
+    let wrong = if code == "000000" { "111111" } else { "000000" };
+
+    let (submitted, cookie) = reset_form_token(&fixture.router, "/reset/code").await;
+    let (status, headers, html) = form_post(
+        &fixture.router,
+        "/reset/confirm",
+        "198.51.100.31",
+        &[
+            ("email", EMAIL),
+            ("code", wrong),
+            ("password", NEW_PASSWORD),
+            ("csrf", &submitted),
+        ],
+        Some(&cookie),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(html.contains("invalid or expired code"), "{html}");
+    let fresh = set_cookie(&headers, "__Host-iwbtg_csrf").expect("a fresh csrf cookie");
+    assert_ne!(fresh, submitted, "the error page reused the submitted token");
+    assert_eq!(hidden_csrf(&html), fresh);
+
+    sqlx::query("UPDATE password_resets SET expires_at = '2000-01-01T00:00:00.000Z'")
+        .execute(&fixture.pool)
+        .await
+        .expect("expire the code");
+
+    let (csrf, cookie) = reset_form_token(&fixture.router, "/reset/code").await;
+    let (status, _, html) = form_post(
+        &fixture.router,
+        "/reset/confirm",
+        "198.51.100.32",
+        &[
+            ("email", EMAIL),
+            ("code", &code),
+            ("password", NEW_PASSWORD),
+            ("csrf", &csrf),
+        ],
+        Some(&cookie),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(html.contains("invalid or expired code"), "{html}");
+    assert_eq!(
+        login(&fixture, "198.51.100.33", NEW_PASSWORD).await,
+        StatusCode::UNAUTHORIZED
+    );
+}
+
+/// A form post whose hidden token and cookie disagree is `403` on both pages, before any code
+/// is issued or checked.
+#[tokio::test]
+async fn reset_form_posts_without_the_csrf_pair_are_forbidden() {
+    let mut fixture = fixture("reset-form-csrf").await;
+    register(&fixture).await;
+
+    let (csrf, cookie) = reset_form_token(&fixture.router, "/reset").await;
+
+    // No cookie: no code is issued and no mail leaves.
+    let (status, _, _) = form_post(
+        &fixture.router,
+        "/reset",
+        "198.51.100.40",
+        &[("email", EMAIL), ("csrf", &csrf)],
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(
+        count(&fixture.pool, "SELECT COUNT(*) FROM password_resets").await,
+        0
+    );
+    assert!(
+        tokio::time::timeout(Duration::from_millis(500), fixture.emails.recv())
+            .await
+            .is_err(),
+        "a failed CSRF check still sent mail"
+    );
+
+    // A cookie, but a different hidden token.
+    let (status, _, html) = form_post(
+        &fixture.router,
+        "/reset",
+        "198.51.100.41",
+        &[("email", EMAIL), ("csrf", "00")],
+        Some(&cookie),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert!(html.contains("form expired"), "{html}");
+
+    // The confirm page: mismatched CSRF is refused before the code is checked, so the password
+    // is untouched.
+    let (_, cookie) = reset_form_token(&fixture.router, "/reset/code").await;
+    let (status, _, html) = form_post(
+        &fixture.router,
+        "/reset/confirm",
+        "198.51.100.42",
+        &[
+            ("email", EMAIL),
+            ("code", "123456"),
+            ("password", NEW_PASSWORD),
+            ("csrf", "00"),
+        ],
+        Some(&cookie),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert!(html.contains("form expired"), "{html}");
+    assert_eq!(
+        login(&fixture, "198.51.100.43", OLD_PASSWORD).await,
+        StatusCode::OK
+    );
 }

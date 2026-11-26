@@ -70,6 +70,9 @@ pub fn app_with_mailer(pool: SqlitePool, catalog_dir: Option<PathBuf>, mailer: m
         .route("/auth/reset/confirm", post(auth::reset_confirm))
         .route("/register", get(auth::register_page).post(auth::register_form))
         .route("/login", get(auth::login_page).post(auth::login_form))
+        .route("/reset", get(auth::reset_page).post(auth::reset_form))
+        .route("/reset/code", get(auth::reset_code_page))
+        .route("/reset/confirm", post(auth::reset_confirm_form))
         .route("/removals.json", get(removal::removals))
         // The per-route cap applies before the handler: an over-limit body never reaches the
         // decoder (#162; docs/server.md, Replays).
