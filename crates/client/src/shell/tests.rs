@@ -310,6 +310,96 @@ fn a_save_state_restores_the_world_and_f5_f6_use_it() {
         saved_hash,
         "and the whole state"
     );
+    }
+
+/// A finished run's clear does not follow the player into the next run: starting again from
+/// game select begins in `Playing` with no results page and no remembered clear (#1551).
+#[test]
+fn a_new_run_from_select_does_not_open_the_old_results() {
+    use crate::stats::{
+        Board, Cleared, DeathLog, MapStats, Recorded, Run, Stats, board_key, map_key,
+    };
+    let mut app = app();
+    frames(&mut app, 3);
+    start(app.world_mut(), &demo("tests/fixtures/clear.pkg")).unwrap();
+    frames(&mut app, 5);
+    let map = map_key("demo_clear", "main");
+    let board = board_key(false, "NM");
+    let run = Run {
+        ticks: 3000,
+        deaths: 0,
+        splits: vec![1500, 3000],
+        segment_deaths: vec![0, 0],
+        finished_at: 0,
+        replay: None,
+        death_log: DeathLog::default(),
+    };
+    {
+        let mut stats = app.world_mut().resource_mut::<Stats>();
+        let mut map_stats = MapStats {
+            game: "demo_clear".to_owned(),
+            tick_rate: 50,
+            clears: 1,
+            ..Default::default()
+        };
+        map_stats.boards.insert(
+            board.clone(),
+            Board {
+                clears: 1,
+                runs: vec![run.clone()],
+                ..Default::default()
+            },
+        );
+        stats.book.maps.insert(map.clone(), map_stats);
+        stats.last = Some(Recorded {
+            pb_before: None,
+            pb_splits_before: Vec::new(),
+            is_pb: false,
+            gold: vec![false, false],
+            place: Some(1),
+            sum_of_best_before: None,
+            sum_of_best: None,
+        });
+        stats.cleared = Some(Cleared {
+            map,
+            board,
+            run,
+        });
+    }
+    frames(&mut app, 2);
+    assert_eq!(
+        screen(&app),
+        RunScreen::Results,
+        "the recorded clear opens the page"
+    );
+
+    // Leave for game select, as the results' quit does, and start the same package again.
+    leave(app.world_mut());
+    frames(&mut app, 3);
+    assert_eq!(
+        *app.world().resource::<State<AppScreen>>().get(),
+        AppScreen::Select
+    );
+    assert!(
+        app.world().resource::<Stats>().cleared.is_none(),
+        "leaving the run forgets its clear"
+    );
+    start_map(app.world_mut(), &demo("tests/fixtures/clear.pkg"), None, None);
+    wait_for_stage(&mut app);
+    frames(&mut app, 5);
+    assert_eq!(
+        screen(&app),
+        RunScreen::Playing,
+        "the new run does not open the old results"
+    );
+
+    // And a different package after leaving again.
+    leave(app.world_mut());
+    frames(&mut app, 3);
+    start_map(app.world_mut(), &demo("tests/fixtures/audio.pkg"), None, None);
+    wait_for_stage(&mut app);
+    frames(&mut app, 5);
+    assert_eq!(screen(&app), RunScreen::Playing);
 }
 
 /// A map the package does not have is reported by the staged start and nothing changes.
