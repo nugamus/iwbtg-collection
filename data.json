@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-26T11:50:29Z",
+ "generated_at": "2026-11-26T11:57:03Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -149,14 +149,14 @@
    "title": "6 · Ranked-ready run",
    "name": "Ranked-ready run",
    "state": "open",
-   "open": 38,
-   "closed": 104,
+   "open": 37,
+   "closed": 105,
    "total": 142,
-   "pct_closed": 73.2,
-   "size_points": 131,
+   "pct_closed": 73.9,
+   "size_points": 128,
    "sizes": {
     "size:S": 10,
-    "size:M": 19,
+    "size:M": 18,
     "size:L": 8,
     "unknown": 1
    },
@@ -263,16 +263,16 @@
  "activity": {
   "totals": {
    "issues": 941,
-   "open": 281,
-   "closed": 660,
-   "pct_closed": 70.1
+   "open": 280,
+   "closed": 661,
+   "pct_closed": 70.2
   },
-  "open_prs": 4,
+  "open_prs": 6,
   "process": {
-   "agent-ready": 128,
+   "agent-ready": 127,
    "needs-user": 34,
    "triage": 50,
-   "in-progress": 14,
+   "in-progress": 13,
    "blocked": 25,
    "revisit": 3
   },
@@ -283,7 +283,7 @@
    },
    {
     "area": "area:client",
-    "count": 69
+    "count": 68
    },
    {
     "area": "area:server",
@@ -324,6 +324,22 @@
   ],
   "recent_closed": [
    {
+    "number": 39,
+    "title": "Practice mode: start from stage, save or room; save states",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/39",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "6 · Ranked-ready run",
+    "updated_at": "2026-11-26T11:51:36Z",
+    "closed_at": "2026-11-26T11:51:35Z",
+    "created_at": "2026-11-02T11:30:16Z"
+   },
+   {
     "number": 1570,
     "title": "Progress workflow: Pages build request fails with an empty response, leaving the deployed dashboard stale",
     "state": "closed",
@@ -334,7 +350,7 @@
      "area:infra"
     ],
     "phase": "10 · Release",
-    "updated_at": "2026-11-26T11:50:16Z",
+    "updated_at": "2026-11-26T11:52:22Z",
     "closed_at": "2026-11-26T11:50:16Z",
     "created_at": "2026-11-25T16:02:53Z"
    },
@@ -349,7 +365,7 @@
      "area:infra"
     ],
     "phase": "10 · Release",
-    "updated_at": "2026-11-26T11:49:42Z",
+    "updated_at": "2026-11-26T11:52:18Z",
     "closed_at": "2026-11-26T11:49:42Z",
     "created_at": "2026-11-25T16:01:57Z"
    },
@@ -427,22 +443,6 @@
     "updated_at": "2026-11-25T15:54:09Z",
     "closed_at": "2026-11-25T15:46:38Z",
     "created_at": "2026-11-24T17:45:23Z"
-   },
-   {
-    "number": 162,
-    "title": "Submissions: endpoint and replay storage",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/162",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:server",
-     "in-progress"
-    ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-25T15:28:27Z",
-    "closed_at": "2026-11-25T15:28:27Z",
-    "created_at": "2026-11-02T12:01:14Z"
    }
   ],
   "in_progress": [
@@ -459,25 +459,9 @@
      "in-progress"
     ],
     "phase": "6 · Ranked-ready run",
-    "updated_at": "2026-11-26T11:44:48Z",
+    "updated_at": "2026-11-26T11:52:08Z",
     "closed_at": null,
     "created_at": "2026-11-25T12:21:39Z"
-   },
-   {
-    "number": 39,
-    "title": "Practice mode: start from stage, save or room; save states",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/39",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "6 · Ranked-ready run",
-    "updated_at": "2026-11-26T11:44:17Z",
-    "closed_at": null,
-    "created_at": "2026-11-02T11:30:16Z"
    },
    {
     "number": 1297,
@@ -544,6 +528,22 @@
     "updated_at": "2026-11-26T01:29:33Z",
     "closed_at": null,
     "created_at": "2026-11-20T10:09:12Z"
+   },
+   {
+    "number": 196,
+    "title": "UI translation files, English and Japanese",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/196",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "5 · Client shell & UI",
+    "updated_at": "2026-11-26T01:29:28Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T12:41:04Z"
    }
   ],
   "needs_user": [
@@ -666,7 +666,7 @@
      "area:infra"
     ],
     "phase": "0 · Foundation",
-    "updated_at": "2026-11-25T13:37:02Z",
+    "updated_at": "2026-11-26T11:54:53Z",
     "closed_at": null,
     "created_at": "2026-11-25T13:36:58Z"
    },
@@ -732,7 +732,7 @@
     "created_at": "2026-11-02T11:31:41Z"
    }
   ],
-  "closed_7d": 251,
+  "closed_7d": 252,
   "opened_7d": 284,
   "burnup": [
    {
@@ -753,7 +753,7 @@
    {
     "week": "2026-11-30",
     "created": 941,
-    "closed": 660
+    "closed": 661
    }
   ]
  },
