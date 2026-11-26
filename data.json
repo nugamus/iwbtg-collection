@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-26T22:56:15Z",
+ "generated_at": "2026-11-26T23:08:31Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -103,13 +103,13 @@
    "title": "4 · First playable",
    "name": "First playable",
    "state": "open",
-   "open": 7,
-   "closed": 48,
+   "open": 6,
+   "closed": 49,
    "total": 55,
-   "pct_closed": 87.3,
-   "size_points": 7,
+   "pct_closed": 89.1,
+   "size_points": 6,
    "sizes": {
-    "size:S": 4,
+    "size:S": 3,
     "size:M": 1,
     "size:L": 0,
     "unknown": 2
@@ -262,16 +262,16 @@
  ],
  "activity": {
   "totals": {
-   "issues": 988,
+   "issues": 989,
    "open": 282,
-   "closed": 706,
+   "closed": 707,
    "pct_closed": 71.5
   },
-  "open_prs": 7,
+  "open_prs": 6,
   "process": {
-   "triage": 77,
+   "triage": 78,
    "in-progress": 11,
-   "agent-ready": 109,
+   "agent-ready": 108,
    "needs-user": 27,
    "blocked": 25,
    "revisit": 1
@@ -279,11 +279,11 @@
   "area_open": [
    {
     "area": "area:sim",
-    "count": 86
+    "count": 87
    },
    {
     "area": "area:client",
-    "count": 72
+    "count": 71
    },
    {
     "area": "area:format",
@@ -299,7 +299,7 @@
    },
    {
     "area": "area:infra",
-    "count": 24
+    "count": 23
    },
    {
     "area": "area:design",
@@ -323,6 +323,23 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 1142,
+    "title": "Native client: run-game.bat falls back to the debug build (no release binary), so tester perf reports are 5-7x off",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1142",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:client",
+     "area:infra",
+     "in-progress"
+    ],
+    "phase": "4 · First playable",
+    "updated_at": "2026-11-26T23:03:59Z",
+    "closed_at": "2026-11-26T23:03:59Z",
+    "created_at": "2026-11-20T17:33:18Z"
+   },
    {
     "number": 1614,
     "title": "Contract: name the client's credited UI art (delicious fruit) beside the showcase Kid",
@@ -432,25 +449,41 @@
     "updated_at": "2026-11-26T22:19:00Z",
     "closed_at": "2026-11-26T22:19:00Z",
     "created_at": "2026-11-26T15:37:21Z"
-   },
-   {
-    "number": 1127,
-    "title": "Web build: the browser client crashes within a second of starting play",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1127",
-    "labels": [
-     "bug",
-     "agent-ready",
-     "size:M",
-     "area:client"
-    ],
-    "phase": "4 · First playable",
-    "updated_at": "2026-11-26T22:28:13Z",
-    "closed_at": "2026-11-26T22:17:19Z",
-    "created_at": "2026-11-20T10:09:12Z"
    }
   ],
   "in_progress": [
+   {
+    "number": 1386,
+    "title": "Script API: start_timeline/stop_timeline (#776, census rank 25)",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1386",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:sim",
+     "in-progress"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-26T23:06:41Z",
+    "closed_at": null,
+    "created_at": "2026-11-24T17:19:32Z"
+   },
+   {
+    "number": 992,
+    "title": "Fuzz target: .iwbz unpack",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/992",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:infra",
+     "in-progress"
+    ],
+    "phase": "7 · Online",
+    "updated_at": "2026-11-26T22:57:16Z",
+    "closed_at": null,
+    "created_at": "2026-11-19T10:06:16Z"
+   },
    {
     "number": 1492,
     "title": "UI kit: Switch control rest state is 2.1:1 before the settings screen uses it",
@@ -499,38 +532,6 @@
     "updated_at": "2026-11-26T22:36:12Z",
     "closed_at": null,
     "created_at": "2026-11-26T15:41:13Z"
-   },
-   {
-    "number": 992,
-    "title": "Fuzz target: .iwbz unpack",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/992",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:infra",
-     "in-progress"
-    ],
-    "phase": "7 · Online",
-    "updated_at": "2026-11-26T22:35:26Z",
-    "closed_at": null,
-    "created_at": "2026-11-19T10:06:16Z"
-   },
-   {
-    "number": 1386,
-    "title": "Script API: start_timeline/stop_timeline (#776, census rank 25)",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1386",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:sim",
-     "in-progress"
-    ],
-    "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-26T22:19:16Z",
-    "closed_at": null,
-    "created_at": "2026-11-24T17:19:32Z"
    },
    {
     "number": 1606,
@@ -734,8 +735,8 @@
     "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 280,
-  "opened_7d": 324,
+  "closed_7d": 281,
+  "opened_7d": 325,
   "burnup": [
    {
     "week": "2026-11-09",
@@ -754,8 +755,8 @@
    },
    {
     "week": "2026-11-30",
-    "created": 988,
-    "closed": 706
+    "created": 989,
+    "closed": 707
    }
   ]
  },
