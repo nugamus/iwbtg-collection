@@ -578,6 +578,8 @@ fn act(world: &mut World) {
             }
         }
         Item::RestartRun => crate::retry::request(world),
+        // Classic shows what the session did first (m5 A8); its Back to the shelf leaves.
+        Item::Quit if world.resource::<Menu>().classic => crate::session::open(world, false),
         Item::Quit => {
             eprintln!("pause: quit (the run is discarded)");
             crate::shell::leave(world);

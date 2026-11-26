@@ -577,6 +577,10 @@ fn open(
     let Some(stats) = stats else {
         return;
     };
+    // A Classic ending shows the session summary instead (m5 A9, `session/`).
+    if game.sim.options().mode == PlayMode::Original {
+        return;
+    }
     let (Some(cleared), Some(rec)) = (&stats.cleared, &stats.last) else {
         return;
     };

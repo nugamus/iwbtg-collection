@@ -34,10 +34,15 @@ fn app_with(skip_loading: bool) -> App {
 /// [`app_with`]; `first: Some(pkg)` starts the client on that package, as a package on the
 /// command line does (`view::run`: `load` before the shell plugin, no game select to go back to).
 fn app_on(skip_loading: bool, first: Option<&str>) -> App {
+    app_in(skip_loading, first, false)
+}
+
+/// [`app_on`] in a mode: `ranked` runs are Time Attack, the others Classic.
+fn app_in(skip_loading: bool, first: Option<&str>, ranked: bool) -> App {
     let mods = ModSet::parse("HB").unwrap();
     let mut app = App::new();
     app.add_plugins(crate::view::ViewPlugin {
-        ranked: false,
+        ranked,
         fresh_seed: false,
         interpolate: true,
     });
@@ -85,6 +90,9 @@ fn app_on(skip_loading: bool, first: Option<&str>) -> App {
         .add_plugins((
             crate::results::ResultsPlugin(crate::results::ResultsArgs::default()),
             crate::script_error::ScriptErrorPlugin(crate::script_error::ScriptErrorArgs::default()),
+            crate::session::SessionPlugin {
+                args: crate::session::SessionArgs::default(),
+            },
         ))
         // The window plugin adds it in the client.
         .add_message::<FileDragAndDrop>();
@@ -370,12 +378,13 @@ fn a_new_run_from_select_does_not_open_the_old_results() {
     use crate::stats::{
         Board, Cleared, DeathLog, MapStats, Recorded, Run, Stats, board_key, map_key,
     };
-    let mut app = app();
+    // Time Attack: a Classic ending opens the session summary instead (m5 A9).
+    let mut app = app_in(true, None, true);
     frames(&mut app, 3);
     start(app.world_mut(), &demo("tests/fixtures/clear.pkg")).unwrap();
     frames(&mut app, 5);
     let map = map_key("demo_clear", "main");
-    let board = board_key(false, "NM");
+    let board = board_key(true, "NM");
     let run = Run {
         ticks: 3000,
         deaths: 0,
@@ -1136,4 +1145,33 @@ fn the_mode_switch_moves_between_game_select_and_the_shelf() {
     );
     assert_eq!(mode_home(Some(Mode::Classic)), AppScreen::Shelf);
     assert_eq!(mode_home(None), AppScreen::Select);
+}
+
+/// Classic's Back to the shelf shows the session summary first (m5 A8): Enter goes back to the
+/// game, Escape leaves the run for game select.
+#[test]
+fn classic_back_to_the_shelf_shows_the_session_first() {
+    let mut app = app();
+    frames(&mut app, 3);
+    start(app.world_mut(), &demo("tests/fixtures/clear.pkg")).unwrap();
+    frames(&mut app, 5);
+    crate::session::open(app.world_mut(), false);
+    frames(&mut app, 1);
+    assert_eq!(screen(&app), RunScreen::Session);
+    let at = tick(&app);
+    frames(&mut app, 5);
+    assert_eq!(tick(&app), at, "no tick on the summary");
+    assert!(!game_shows(&mut app), "the summary covers the game");
+    press(&mut app, KeyCode::Enter);
+    frames(&mut app, 1);
+    assert_eq!(screen(&app), RunScreen::Playing, "Continue playing");
+    crate::session::open(app.world_mut(), false);
+    frames(&mut app, 1);
+    press(&mut app, KeyCode::Escape);
+    frames(&mut app, 2);
+    assert_eq!(
+        *app.world().resource::<State<AppScreen>>().get(),
+        AppScreen::Select,
+        "Back to the shelf leaves the run"
+    );
 }
