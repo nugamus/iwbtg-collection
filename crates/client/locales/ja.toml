@@ -6,6 +6,7 @@
 
 pill_ranked = "ランク付き"
 pill_unranked = "ランクなし"
+pill_classic = "クラシック"
 
 notice_not_saved = "保存できません"
 notice_not_opened = "開けません"

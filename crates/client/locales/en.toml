@@ -4,6 +4,7 @@
 # Pills shared by the kit, the HUD and the select screens.
 pill_ranked = "Ranked"
 pill_unranked = "Unranked"
+pill_classic = "Classic"
 
 # Notices (ui/notice.rs).
 notice_not_saved = "Not saved"

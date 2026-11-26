@@ -112,7 +112,7 @@ pub enum Standing {
 }
 
 /// Everything the card shows.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Info {
     pub title: String,
     /// The authors, joined; `None` hides the `by` line.
@@ -125,6 +125,9 @@ pub struct Info {
     /// The mods' codes, in table order.
     pub mods: Vec<&'static str>,
     pub standing: Standing,
+    /// A Classic run's facts in this game (m5 A5): the card shows them instead of the PB, the
+    /// stages and the mods. `None` for Time Attack and practice.
+    pub classic: Option<crate::shell::shelf::Facts>,
 }
 
 /// What the run is: its mode, mods and slow motion speed (percent).
@@ -154,9 +157,9 @@ impl Info {
             .unwrap_or_else(|| id.to_owned());
         let creator = manifest.and_then(authors);
         let mode = if run.original {
-            "Play original"
+            "Classic"
         } else {
-            "Ranked mode"
+            "Time Attack"
         };
         let (map, stages) = manifest
             .and_then(|m| {
@@ -179,6 +182,8 @@ impl Info {
             stages,
             mods: run.mods.iter().map(|d| d.code).collect(),
             standing: standing(run),
+            classic: (run.original && !run.practice)
+                .then(|| crate::shell::shelf::Facts::of(book, id)),
         }
     }
 }
@@ -195,7 +200,7 @@ pub(crate) fn authors(m: &Manifest) -> Option<String> {
     (!names.is_empty()).then(|| names.join(", "))
 }
 
-/// Ranked with its mods named, or unranked with the reason: Play original first, then the first
+/// Ranked with its mods named, or unranked with the reason: Classic first, then the first
 /// mod that keeps the run off the boards.
 pub fn standing(run: RunKind) -> Standing {
     const OFF: &str = "so this run won’t reach the leaderboard.";
@@ -203,7 +208,7 @@ pub fn standing(run: RunKind) -> Standing {
         return Standing::Unranked("Practice runs stay off the leaderboard.".to_owned());
     }
     if run.original {
-        return Standing::Unranked(format!("Play original keeps your own stats only, {OFF}"));
+        return Standing::Unranked(format!("Classic keeps your own stats only, {OFF}"));
     }
     if let Some(d) = run.mods.unranked_by() {
         let speed = if d.id == Mod::SlowMotion {
@@ -574,9 +579,9 @@ mod tests {
             )
         );
         let Standing::Unranked(why) = standing(run(true, "SD")) else {
-            panic!("Play original is never ranked");
+            panic!("Classic is never ranked");
         };
-        assert!(why.starts_with("Play original"), "{why}");
+        assert!(why.starts_with("Classic"), "{why}");
     }
 
     /// The clear fixture: its title and author, the play mode for its one map, a stage, no PB
@@ -590,7 +595,7 @@ mod tests {
         let info = Info::new(Some(&manifest), "demo-clear", "main", run(false, "SD"), &book, 50);
         assert_eq!(info.title, "Clear fixture");
         assert_eq!(info.creator.as_deref(), Some("IWBTG Collection"), "authors only");
-        assert_eq!(info.map, "Ranked mode");
+        assert_eq!(info.map, "Time Attack");
         assert_eq!(info.stages, 2, "one stage split");
         assert_eq!(info.pb, None);
         assert_eq!(info.mods, ["SD"]);
@@ -616,7 +621,7 @@ mod tests {
         let bare = Info::new(None, "demo-clear", "main", run(true, ""), &book, 50);
         assert_eq!(
             (bare.title.as_str(), bare.map.as_str()),
-            ("demo-clear", "Play original")
+            ("demo-clear", "Classic")
         );
         assert_eq!(bare.creator, None);
     }
@@ -625,7 +630,7 @@ mod tests {
     #[test]
     fn the_key_hint_says_back_with_a_select_screen() {
         let book = Book::default();
-        let info = Info::new(None, "demo", "main", run(true, ""), &book, 50);
+        let info = Info::new(None, "demo", "main", run(false, ""), &book, 50);
         for (back, word) in [(true, " back"), (false, " quit")] {
             let mut app = App::new();
             let look = page::Look {
@@ -645,6 +650,50 @@ mod tests {
             let other = if back { " quit" } else { " back" };
             assert!(!spans.iter().any(|s| s == other), "{back}: {spans:?}");
         }
+    }
+
+    /// A Classic run's card (m5 A5): the CLASSIC pill, your facts, what Play opens, `Esc back to
+    /// the shelf` and Classic's footnote instead of a tip; no PB or mods line.
+    #[test]
+    fn a_classic_card_says_what_classic_is() {
+        let book = Book::default();
+        let info = Info::new(None, "demo", "main", run(true, ""), &book, 50);
+        assert!(info.classic.is_some(), "a Classic run");
+        let mut practice = run(true, "");
+        practice.practice = true;
+        assert!(
+            Info::new(None, "demo", "main", practice, &book, 50).classic.is_none(),
+            "practice keeps its own card"
+        );
+        let mut app = App::new();
+        let look = page::Look {
+            art: None,
+            fruit: None,
+            back: true,
+        };
+        app.world_mut().spawn(page::page(&info, &TIPS[0], &look));
+        let mut words: Vec<String> = app
+            .world_mut()
+            .query::<&Text>()
+            .iter(app.world())
+            .map(|s| s.0.clone())
+            .collect();
+        words.extend(
+            app.world_mut()
+                .query::<&TextSpan>()
+                .iter(app.world())
+                .map(|s| s.0.clone()),
+        );
+        let all = words.join("|");
+        for want in [
+            "CLASSIC",
+            "TIME PLAYED",
+            " back to the shelf",
+            "Nothing here goes on a leaderboard",
+        ] {
+            assert!(all.contains(want), "{want}: {all}");
+        }
+        assert!(!all.contains("YOUR PB") && !all.contains("Tip: "), "{all}");
     }
 
     /// The card stays for the minimum time and then asks for `RunScreen::Playing`; the preview
