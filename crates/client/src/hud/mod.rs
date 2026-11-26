@@ -9,7 +9,7 @@
 
 pub mod layout;
 pub mod leaderboard;
-mod run_info;
+pub mod run_info;
 
 pub use run_info::Paused;
 

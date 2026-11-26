@@ -15,9 +15,14 @@
 //! rule, and no counter crate is vendored). Those numbers are left out rather than guessed.
 
 use std::path::PathBuf;
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
+use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
+use bevy::transform::TransformSystems;
+use bevy::ui::UiSystems;
 
 use crate::view::{Game, Stats};
 
@@ -90,6 +95,14 @@ impl crate::registration::ClientModule for Registration {
             blend: Vec::new(),
             despawn: Vec::new(),
             snapshot: Vec::new(),
+            fixed: Vec::new(),
+            transform: Vec::new(),
+            visibility: Vec::new(),
+            ui: Vec::new(),
+            hud_read: Vec::new(),
+            hud_track: Vec::new(),
+            hud_show: Vec::new(),
+            hud_animate: Vec::new(),
             spawned: Vec::new(),
             updated: Vec::new(),
             removed: Vec::new(),
@@ -106,7 +119,42 @@ impl crate::registration::ClientModule for Registration {
             started: None,
         })
         .init_resource::<Phases>()
+        .init_resource::<Marks>()
         .add_systems(First, (begin_frame, begin_phases))
+        .add_systems(
+            RunFixedMainLoop,
+            fixed_begin.in_set(bevy::app::RunFixedMainLoopSystems::BeforeFixedMainLoop),
+        )
+        .add_systems(
+            RunFixedMainLoop,
+            fixed_end.in_set(bevy::app::RunFixedMainLoopSystems::AfterFixedMainLoop),
+        )
+        // Bevy's own per-entity work and the UI's layout, bracketed by their public sets.
+        .add_systems(
+            PostUpdate,
+            (
+                transform_begin.before(TransformSystems::Propagate),
+                transform_end.after(TransformSystems::Propagate),
+                visibility_begin.before(VisibilitySystems::CalculateBounds),
+                visibility_end.after(VisibilitySystems::MarkNewlyHiddenEntitiesInvisible),
+                ui_begin.before(UiSystems::Prepare),
+                ui_end.after(UiSystems::PostLayout),
+            ),
+        )
+        // The HUD's per-frame systems (its panels rebuild only when their look changes).
+        .add_systems(
+            Update,
+            (
+                hud_read_begin.before(crate::hud::run_info::read),
+                hud_read_end.after(crate::hud::run_info::read),
+                hud_track_begin.before(crate::hud::leaderboard::track),
+                hud_track_end.after(crate::hud::leaderboard::track),
+                hud_show_begin.before(crate::hud::run_info::show),
+                hud_show_end.after(crate::hud::run_info::show),
+                hud_animate_begin.before(crate::hud::leaderboard::animate),
+                hud_animate_end.after(crate::hud::leaderboard::animate),
+            ),
+        )
         // `view::tick` runs in the fixed schedule, once per sim tick; the markers must too.
         .add_systems(FixedUpdate, sim_begin.before(crate::view::tick))
         .add_systems(FixedUpdate, sim_end.after(crate::view::tick))
@@ -133,6 +181,57 @@ pub(crate) struct Phases {
     pub(crate) removed: u32,
 }
 
+/// Nanoseconds since the first marker ran; the spans store deltas, not `Instant`s (an atomic
+/// cannot hold one).
+fn now_ns() -> u64 {
+    static ORIGIN: OnceLock<Instant> = OnceLock::new();
+    ORIGIN.get_or_init(Instant::now).elapsed().as_nanos() as u64
+}
+
+/// One bracketed span: a start marker and the total it accumulates. Atomics, so markers take the
+/// [`Marks`] resource by shared reference and never conflict with the systems they bracket.
+#[derive(Default, Debug)]
+pub(crate) struct Span {
+    start: AtomicU64,
+    total: AtomicU64,
+}
+
+impl Span {
+    fn begin(&self) {
+        // 0 means "no mark"; the first nanosecond is never 0 in practice, and `.max(1)` makes it
+        // explicit.
+        self.start.store(now_ns().max(1), Ordering::Relaxed);
+    }
+
+    fn end(&self) {
+        let start = self.start.swap(0, Ordering::Relaxed);
+        if start != 0 {
+            self.total
+                .fetch_add(now_ns().saturating_sub(start), Ordering::Relaxed);
+        }
+    }
+
+    /// Seconds accumulated since the last call, and resets.
+    fn take(&self) -> f64 {
+        self.total.swap(0, Ordering::Relaxed) as f64 / 1e9
+    }
+}
+
+/// The frame's schedule and system spans (#1567): the five main schedules, Bevy's transform,
+/// visibility and UI sets, and the HUD's per-frame systems. Filled by marker systems that take
+/// this resource by shared reference; what a span includes is in docs/architecture/client/perf.md.
+#[derive(Resource, Default, Debug)]
+pub(crate) struct Marks {
+    pub(crate) fixed: Span,
+    pub(crate) transform: Span,
+    pub(crate) visibility: Span,
+    pub(crate) ui: Span,
+    pub(crate) hud_read: Span,
+    pub(crate) hud_track: Span,
+    pub(crate) hud_show: Span,
+    pub(crate) hud_animate: Span,
+}
+
 /// The measurement in progress.
 #[derive(Resource)]
 struct Perf {
@@ -153,6 +252,15 @@ struct Perf {
     blend: Vec<f64>,
     despawn: Vec<f64>,
     snapshot: Vec<f64>,
+    /// Schedule and system spans (#1567), seconds per measured frame.
+    fixed: Vec<f64>,
+    transform: Vec<f64>,
+    visibility: Vec<f64>,
+    ui: Vec<f64>,
+    hud_read: Vec<f64>,
+    hud_track: Vec<f64>,
+    hud_show: Vec<f64>,
+    hud_animate: Vec<f64>,
     /// Spawned, updated and removed sprites per measured frame.
     spawned: Vec<f64>,
     updated: Vec<f64>,
@@ -196,6 +304,62 @@ impl Perf {
     }
 }
 
+// ---- The markers (#1567) ---------------------------------------------------------------
+//
+// The fixed loop is bracketed by its own sets, and each set or system pair brackets what it
+// measures. A bracketed interval can still contain unrelated work the parallel executor ran in
+// the same window, so a set's interval is an upper bound; the doc says so.
+
+fn fixed_begin(marks: Res<Marks>) {
+    marks.fixed.begin();
+}
+fn fixed_end(marks: Res<Marks>) {
+    marks.fixed.end();
+}
+
+fn transform_begin(marks: Res<Marks>) {
+    marks.transform.begin();
+}
+fn transform_end(marks: Res<Marks>) {
+    marks.transform.end();
+}
+fn visibility_begin(marks: Res<Marks>) {
+    marks.visibility.begin();
+}
+fn visibility_end(marks: Res<Marks>) {
+    marks.visibility.end();
+}
+fn ui_begin(marks: Res<Marks>) {
+    marks.ui.begin();
+}
+fn ui_end(marks: Res<Marks>) {
+    marks.ui.end();
+}
+fn hud_read_begin(marks: Res<Marks>) {
+    marks.hud_read.begin();
+}
+fn hud_read_end(marks: Res<Marks>) {
+    marks.hud_read.end();
+}
+fn hud_track_begin(marks: Res<Marks>) {
+    marks.hud_track.begin();
+}
+fn hud_track_end(marks: Res<Marks>) {
+    marks.hud_track.end();
+}
+fn hud_show_begin(marks: Res<Marks>) {
+    marks.hud_show.begin();
+}
+fn hud_show_end(marks: Res<Marks>) {
+    marks.hud_show.end();
+}
+fn hud_animate_begin(marks: Res<Marks>) {
+    marks.hud_animate.begin();
+}
+fn hud_animate_end(marks: Res<Marks>) {
+    marks.hud_animate.end();
+}
+
 /// Starts the frame's clock; the period is the gap to the previous frame's start.
 fn begin_frame(mut perf: ResMut<Perf>) {
     let now = Instant::now();
@@ -235,6 +399,7 @@ fn end_frame(
     sprites: Query<&Sprite>,
     stats: Res<Stats>,
     draw: Option<Res<Phases>>,
+    marks: Option<Res<Marks>>,
     window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     mut exit: MessageWriter<AppExit>,
 ) {
@@ -260,6 +425,16 @@ fn end_frame(
     perf.main.push(main);
     let sim = perf.sim_frame;
     perf.sim.push(sim);
+    if let Some(marks) = marks.as_deref() {
+        perf.fixed.push(marks.fixed.take());
+        perf.transform.push(marks.transform.take());
+        perf.visibility.push(marks.visibility.take());
+        perf.ui.push(marks.ui.take());
+        perf.hud_read.push(marks.hud_read.take());
+        perf.hud_track.push(marks.hud_track.take());
+        perf.hud_show.push(marks.hud_show.take());
+        perf.hud_animate.push(marks.hud_animate.take());
+    }
     if let Some(draw) = draw.as_deref() {
         perf.order.push(draw.order);
         perf.sync.push(draw.sync);
@@ -331,6 +506,14 @@ fn report(perf: &Perf, window: Option<UVec2>) -> String {
         ("blend ms (in sync)", &perf.blend),
         ("despawn ms", &perf.despawn),
         ("snapshot ms (in tick)", &perf.snapshot),
+        ("fixed loop ms", &perf.fixed),
+        ("post window: transform ms", &perf.transform),
+        ("post window: visibility ms", &perf.visibility),
+        ("post window: ui ms", &perf.ui),
+        ("update: hud run_info::read ms", &perf.hud_read),
+        ("update: hud leaderboard::track ms", &perf.hud_track),
+        ("update: hud run_info::show ms", &perf.hud_show),
+        ("update: hud leaderboard::animate ms", &perf.hud_animate),
     ] {
         let Some(p) = Percentiles::of(samples) else {
             continue;
@@ -430,6 +613,14 @@ mod tests {
             blend: vec![0.0, 0.0],
             despawn: vec![0.0, 0.0],
             snapshot: vec![0.0, 0.0],
+            fixed: vec![0.001, 0.001],
+            transform: vec![0.0, 0.0],
+            visibility: vec![0.0005, 0.0005],
+            ui: vec![0.0, 0.0],
+            hud_read: vec![0.0, 0.0],
+            hud_track: vec![0.0, 0.0],
+            hud_show: vec![0.0, 0.0],
+            hud_animate: vec![0.0, 0.0],
             spawned: vec![0.0, 0.0],
             updated: vec![500.0, 500.0],
             removed: vec![0.0, 0.0],
@@ -461,6 +652,9 @@ mod tests {
             "perf despawn ms:",
             "perf snapshot ms (in tick):",
             "perf sprites per frame: 500.0 updated, 0.0 spawned, 0.0 removed",
+            "perf fixed loop ms:",
+            "perf post window: visibility ms:",
+            "perf update: hud run_info::read ms:",
             "perf not measured: GPU and render-submit time",
             "allocation counts and bytes",
         ] {
