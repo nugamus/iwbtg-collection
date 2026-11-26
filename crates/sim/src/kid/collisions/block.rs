@@ -109,7 +109,9 @@ fn missing() -> SimError {
 /// Step 1, horizontal contact. With `slope_step` the `[slope] block_step` rule applies: `free_spot`
 /// (rainbow) adds the step-up after the contact when the matching slope is `step` px ahead and the
 /// spot `step` up is free; `replace` (rori, fairy-tale) steps up instead of the contact when the
-/// shifted kid overlaps the matching slope.
+/// shifted kid overlaps the matching slope. Both follow the per-event rule (kid/A1-2.md A1-160,
+/// A1-172): the block event steps up on both sides, a `slope`'s event only on a right hit and a
+/// `slope_mirror`'s only on a left hit.
 pub(crate) fn horizontal(ctx: &mut Ctx, me: InstId, row: SlopeRow) -> Result<(), SimError> {
     let slope_step = row != SlopeRow::None;
     let phys = ctx.physics();
@@ -122,12 +124,17 @@ pub(crate) fn horizontal(ctx: &mut Ctx, me: InstId, row: SlopeRow) -> Result<(),
     let rules = &phys.slope;
     let step = rules.step;
     if slope_step && rules.block_step == BlockSlopeStep::Replace {
-        let up = if gm_lt(hs, Real::ZERO, n) {
-            Some((-step, ClassMask::SLOPE_MIRROR))
-        } else if gm_gt(hs, Real::ZERO, n) {
-            Some((step, ClassMask::SLOPE))
-        } else {
-            None
+        // A1-172 (rori, fairy-tale): the block event steps up on both sides, `slope`'s event only
+        // on a right hit and `slope_mirror`'s only on a left hit — a right hit on the mirror is
+        // the contact `mirror_contact` picks below. A peak of two slopes therefore contacts
+        // instead of climbing.
+        let up = match row {
+            SlopeRow::Rise if gm_gt(hs, Real::ZERO, n) => Some((step, ClassMask::SLOPE)),
+            SlopeRow::Mirror | SlopeRow::Other if gm_lt(hs, Real::ZERO, n) => {
+                Some((-step, ClassMask::SLOPE_MIRROR))
+            }
+            SlopeRow::Other if gm_gt(hs, Real::ZERO, n) => Some((step, ClassMask::SLOPE)),
+            _ => None,
         };
         if let Some((dx, class)) = up
             && place_meeting(ctx, me, x + hs, y, Target::Class(class))?
