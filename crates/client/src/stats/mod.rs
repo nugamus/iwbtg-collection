@@ -21,8 +21,8 @@ use iwbtg_sim::stripped::PlayMode;
 
 #[allow(unused_imports, reason = "the screens read these (#494, #496, #151)")]
 pub use book::{
-    Board, Book, DEATH_LOG_RUNS, DeathLog, DeathMark, MapStats, Recorded, Run, TOP_RUNS, Totals, board_key,
-    map_key,
+    Board, Book, DEATH_LOG_RUNS, DeathLog, DeathMark, Furthest, GameMode, MapStats, ModeStats, Recorded,
+    Run, SessionSummary, TOP_RUNS, Totals, board_key, map_key, mode_key,
 };
 use track::{Event, Observation, Spot, Tracker};
 
@@ -44,6 +44,82 @@ pub struct Session {
     pub segment_deaths: std::collections::BTreeMap<String, Vec<u32>>,
 }
 
+/// One session: a run from the moment it opens until it is left or retried (#1623). The Classic
+/// session summary (m5 A8, A9) and the session panel beside a Classic run (A7) read it, while it
+/// is open ([`Stats::open_session`]) and after it ended ([`Stats::ended_session`]).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SessionLog {
+    pub game: String,
+    /// [`map_key`].
+    pub map: String,
+    /// Time Attack (`true`) or Classic.
+    pub ranked: bool,
+    pub tick_rate: u32,
+    /// Ticks played in the session.
+    pub ticks: u64,
+    /// Seconds played (each tick at the rate it ran).
+    pub seconds: f64,
+    pub deaths: u64,
+    /// Each death: the session tick and the room the kid was last seen in.
+    pub death_log: Vec<SessionDeath>,
+    /// Each room entered, in order, the start room first; `new` when it was never entered
+    /// before on this map.
+    pub rooms: Vec<RoomVisit>,
+    /// Each save the game wrote (its save slot changed): when and in which room.
+    pub saves: Vec<SaveTouch>,
+    /// The run's end fired in this session (the game was finished).
+    pub finished: bool,
+    /// When it started, seconds since 1970.
+    pub started_at: u64,
+}
+
+/// A death in a [`SessionLog`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SessionDeath {
+    pub tick: u64,
+    /// Package room id; `None` before a kid was seen.
+    pub room: Option<String>,
+}
+
+/// A room entered in a [`SessionLog`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RoomVisit {
+    pub tick: u64,
+    pub room: String,
+    pub new: bool,
+}
+
+/// A save in a [`SessionLog`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SaveTouch {
+    pub tick: u64,
+    pub room: String,
+}
+
+#[allow(dead_code, reason = "the Classic session summary and panel read it (#1624)")]
+impl SessionLog {
+    /// Deaths per room, most first (ties: the room died in first comes first).
+    pub fn deaths_by_room(&self) -> Vec<(&str, u32)> {
+        let mut rooms: Vec<(&str, u32)> = Vec::new();
+        for d in &self.death_log {
+            let Some(room) = d.room.as_deref() else {
+                continue;
+            };
+            match rooms.iter_mut().find(|(r, _)| *r == room) {
+                Some((_, n)) => *n += 1,
+                None => rooms.push((room, 1)),
+            }
+        }
+        rooms.sort_by_key(|a| std::cmp::Reverse(a.1));
+        rooms
+    }
+
+    /// Rooms entered for the first time on this map.
+    pub fn new_rooms(&self) -> usize {
+        self.rooms.iter().filter(|r| r.new).count()
+    }
+}
+
 /// The run being played and which board it counts for.
 #[derive(Debug)]
 struct Current {
@@ -57,6 +133,16 @@ struct Current {
     /// The package room ids by `RoomId` index, to name the rooms of the death log.
     rooms: Vec<String>,
     tracker: Tracker,
+    /// Time Attack (`true`) or Classic: the mode its [`ModeStats`] count in.
+    ranked: bool,
+    /// This session so far (#1623).
+    session: SessionLog,
+    /// The room after the last tick, to see a change.
+    room: Option<u32>,
+    /// The save slot's spot after the last tick, to see a save.
+    save: Option<(u32, i32, i32)>,
+    /// The room the kid was last seen alive in.
+    kid_room: Option<u32>,
 }
 
 /// The last cleared run on a board and where it went (the results screen, #41).
@@ -85,6 +171,8 @@ pub struct Stats {
     dirty: bool,
     since_flush: f32,
     current: Option<Current>,
+    /// The session that ended last (#1623), kept until the next one opens.
+    ended: Option<SessionLog>,
     /// Text this build could not read from `stats.toml`, kept until it has been written to a
     /// free `stats.broken*` name (#1017). While it is set the original file is never replaced,
     /// so a failed backup (a full browser quota, a transient write error) cannot destroy it.
@@ -105,6 +193,7 @@ impl Stats {
             dirty: false,
             since_flush: 0.0,
             current: None,
+            ended: None,
             recovery,
         };
         // Try the backup at once; a success replaces the now-preserved file with the empty book.
@@ -145,9 +234,20 @@ impl Stats {
         // The selected map's chain, not the package `[timing]` (#1010): maps may have their own
         // stage lists.
         let mut tracker = Tracker::new(def.map_timing(sim.world().map).stages.len());
-        tracker.observe(observation(sim, menu));
-        self.current = Some(Current {
-            map: map_key(&def.id, sim.map_id()),
+        let first = observation(sim, menu);
+        tracker.observe(first);
+        let map = map_key(&def.id, sim.map_id());
+        let session = SessionLog {
+            game: def.id.clone(),
+            map: map.clone(),
+            ranked,
+            tick_rate: def.tick_rate,
+            started_at: now_seconds(),
+            ..SessionLog::default()
+        };
+        self.ended = None;
+        let mut current = Current {
+            map,
             game: def.id.clone(),
             tick_rate: def.tick_rate,
             // The board of the mods the run opened with (`mods::RunMods`).
@@ -157,7 +257,75 @@ impl Stats {
                 && !mods.is_some_and(|m| m.0.contains(iwbtg_sim::mods::Mod::SaveStates)),
             rooms: def.rooms.iter().map(|r| r.name.clone()).collect(),
             tracker,
+            ranked,
+            session,
+            room: None,
+            save: first.save,
+            kid_room: first.kid.map(|k| k.room),
+        };
+        self.enter(&mut current, first.room);
+        self.current = Some(current);
+    }
+
+    /// The session being played, `None` between runs (#1623).
+    #[allow(dead_code, reason = "the Classic session panel reads it (#1624)")]
+    pub fn open_session(&self) -> Option<&SessionLog> {
+        self.current.as_ref().map(|c| &c.session)
+    }
+
+    /// The session that ended last, until the next run opens (#1623).
+    #[allow(dead_code, reason = "the Classic session summary reads it (#1624)")]
+    pub fn ended_session(&self) -> Option<&SessionLog> {
+        self.ended.as_ref()
+    }
+
+    /// Notes entering `room` (a package room index) in the session, the map's seen rooms and
+    /// the mode's furthest room.
+    fn enter(&mut self, cur: &mut Current, room: u32) {
+        if cur.room == Some(room) {
+            return;
+        }
+        cur.room = Some(room);
+        let Some(name) = cur.rooms.get(room as usize).cloned() else {
+            return;
+        };
+        let map = self.book.map_mut(&cur.map, &cur.game, cur.tick_rate);
+        let new = map.rooms_seen.insert(name.clone());
+        let mode = map.mode_mut(cur.ranked);
+        if mode.furthest.as_ref().is_none_or(|f| room > f.index) {
+            mode.furthest = Some(Furthest {
+                index: room,
+                room: name.clone(),
+            });
+        }
+        self.dirty = true;
+        cur.session.rooms.push(RoomVisit {
+            tick: cur.session.ticks,
+            room: name,
+            new,
         });
+    }
+
+    /// Closes the open session: its time and deaths become the mode's last session (#1623).
+    fn end_session(&mut self) {
+        let Some(cur) = self.current.take() else {
+            return;
+        };
+        let now = now_seconds();
+        if cur.session.ticks > 0 {
+            let mode = self
+                .book
+                .map_mut(&cur.map, &cur.game, cur.tick_rate)
+                .mode_mut(cur.ranked);
+            mode.last_played = Some(now);
+            mode.last_session = Some(SessionSummary {
+                seconds: cur.session.seconds,
+                deaths: cur.session.deaths,
+                ended_at: now,
+            });
+            self.dirty = true;
+        }
+        self.ended = Some(cur.session);
     }
 
     /// Writes the book when it changed. A failed write is a warning; the next change tries
@@ -211,7 +379,7 @@ impl Stats {
     }
 
     /// Applies one tick's events.
-    fn apply(&mut self, cur: &Current, events: Vec<Event>, tick_seconds: f64, replay: Option<&str>) {
+    fn apply(&mut self, cur: &mut Current, events: Vec<Event>, tick_seconds: f64, replay: Option<&str>) {
         for event in events {
             self.dirty = true;
             let map = self.book.map_mut(&cur.map, &cur.game, cur.tick_rate);
@@ -219,9 +387,25 @@ impl Stats {
                 Event::Ticked => {
                     map.played_ticks = map.played_ticks.saturating_add(1);
                     map.play_seconds += tick_seconds;
+                    map.mode_mut(cur.ranked).play_seconds += tick_seconds;
+                    cur.session.ticks += 1;
+                    cur.session.seconds += tick_seconds;
                 }
                 Event::Died { segment, n } => {
                     map.add_deaths(segment, n);
+                    let mode = map.mode_mut(cur.ranked);
+                    mode.deaths = mode.deaths.saturating_add(u64::from(n));
+                    cur.session.deaths = cur.session.deaths.saturating_add(u64::from(n));
+                    let room = cur
+                        .kid_room
+                        .and_then(|r| cur.rooms.get(r as usize))
+                        .cloned();
+                    for _ in 0..n {
+                        cur.session.death_log.push(SessionDeath {
+                            tick: cur.session.ticks,
+                            room: room.clone(),
+                        });
+                    }
                     self.session.deaths = self.session.deaths.saturating_add(u64::from(n));
                     let s = self.session.segment_deaths.entry(cur.map.clone()).or_default();
                     if s.len() <= segment {
@@ -237,6 +421,10 @@ impl Stats {
                     death_log,
                 } => {
                     map.clears = map.clears.saturating_add(1);
+                    let mode = map.mode_mut(cur.ranked);
+                    mode.finishes = mode.finishes.saturating_add(1);
+                    mode.finished_at = Some(now_seconds());
+                    cur.session.finished = true;
                     if cur.on_board {
                         let mut log = DeathLog::default();
                         for d in death_log {
@@ -290,8 +478,24 @@ impl Stats {
         let Some(mut cur) = self.current.take() else {
             return;
         };
-        let events = cur.tracker.observe(observation(sim, menu));
-        self.apply(&cur, events, tick_seconds, replay);
+        let now = observation(sim, menu);
+        let events = cur.tracker.observe(now);
+        self.apply(&mut cur, events, tick_seconds, replay);
+        if let Some(kid) = now.kid {
+            cur.kid_room = Some(kid.room);
+        }
+        if now.save != cur.save {
+            cur.save = now.save;
+            if let Some((room, _, _)) = now.save
+                && let Some(name) = cur.rooms.get(room as usize)
+            {
+                cur.session.saves.push(SaveTouch {
+                    tick: cur.session.ticks,
+                    room: name.clone(),
+                });
+            }
+        }
+        self.enter(&mut cur, now.room);
         self.current = Some(cur);
     }
 }
@@ -482,6 +686,14 @@ fn observation(sim: &iwbtg_sim::sim::Sim, menu: Option<&crate::pause::Menu>) -> 
             .ranked_ticks()
             .saturating_add(menu.map_or(0, |m| m.paused_ticks())),
         kid,
+        room: world.room.0,
+        save: world.save.as_ref().map(|s| {
+            (
+                s.room.0,
+                s.x.get().round() as i32,
+                s.y.get().round() as i32,
+            )
+        }),
     }
 }
 
@@ -528,7 +740,7 @@ fn flush_now_and_then(time: Res<Time<Real>>, mut stats: ResMut<Stats>) {
 /// (#1551). The stats book keeps what was written.
 pub(crate) fn reset(world: &mut World) {
     if let Some(mut stats) = world.get_resource_mut::<Stats>() {
-        stats.current = None;
+        stats.end_session();
         stats.last = None;
         stats.cleared = None;
         stats.flush();
@@ -849,6 +1061,71 @@ mod tests {
         let mut stats = Stats::open(None);
         stats.open_current(&sim, None, None, false);
         assert_eq!(stats.on_board(), Some(true), "a plain new game is");
+    }
+
+    /// #1619, #1623: a Classic run records its mode's time, deaths and finish, and the session
+    /// (its rooms, the death's room, the finish) stays readable after the run is left.
+    #[test]
+    fn a_classic_session_is_kept_per_mode_and_after_it_ends() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let mut world = world_on(Arc::clone(&pkg.def), "main");
+        world.insert_resource(Time::<Fixed>::from_hz(50.0));
+        world.insert_resource(Stats::open(None));
+        world.run_system_once(seed).unwrap();
+        {
+            let open = world.resource::<Stats>().open_session().expect("the run's session");
+            assert!(!open.ranked);
+            assert_eq!(open.rooms.len(), 1, "the start room: {:?}", open.rooms);
+            assert!(open.rooms[0].new, "never entered before");
+        }
+        let suicide = InputFrame {
+            held: Action::Suicide.bit(),
+            pressed: Action::Suicide.bit(),
+            released: 0,
+        };
+        for _ in 0..100 {
+            if world.resource::<Stats>().session.deaths > 0 {
+                break;
+            }
+            world.non_send_mut::<Game>().sim.step(suicide);
+            world.run_system_once(watch).unwrap();
+        }
+        let start_room = world.resource::<Stats>().open_session().unwrap().rooms[0].room.clone();
+        let restart = InputFrame {
+            held: Action::Restart.bit(),
+            pressed: Action::Restart.bit(),
+            released: 0,
+        };
+        for frame in [restart, InputFrame::default()] {
+            world.non_send_mut::<Game>().sim.step(frame);
+            world.run_system_once(watch).unwrap();
+        }
+        play_demo_clear(&mut world, [0, 0]);
+        reset(&mut world);
+        let stats = world.resource::<Stats>();
+        assert!(stats.open_session().is_none());
+        let s = stats.ended_session().expect("kept after the run");
+        // The suicide, and whatever the restart and the clear's route count.
+        let n = stats.session.deaths;
+        assert!(n >= 1);
+        assert_eq!(s.deaths, n);
+        assert_eq!(s.deaths_by_room()[0].0, start_room.as_str(), "the first death's room");
+        assert_eq!(
+            s.deaths_by_room().iter().map(|(_, d)| u64::from(*d)).sum::<u64>(),
+            n
+        );
+        assert!(s.finished);
+        assert!(s.rooms.len() >= 2, "{:?}", s.rooms);
+        assert_eq!(s.new_rooms(), s.rooms.iter().map(|r| &r.room).collect::<BTreeSet<_>>().len());
+        assert!(s.ticks > 0 && s.seconds > 0.0);
+        let classic = stats.book.game_mode(&pkg.def.id, false);
+        assert_eq!((classic.deaths, classic.finishes), (n, 1));
+        assert!((classic.play_seconds - s.seconds).abs() < 1e-9);
+        assert!(classic.furthest.is_some() && classic.finished_at.is_some());
+        let last = classic.last_session.expect("the session that ended");
+        assert_eq!(last.deaths, n);
+        assert_eq!(stats.book.game_mode(&pkg.def.id, true), GameMode::default(), "no Time Attack");
     }
 
     /// Leaving a finished run forgets its clear and its record: a new run's first observation

@@ -225,6 +225,27 @@ pub fn grouped(n: u64) -> String {
     out
 }
 
+/// How long ago `then` was at `now` (seconds since 1970): `just now`, `12 minutes ago`,
+/// `3 hours ago`, `yesterday`, `2 days ago`, then the date (`14 Sep`).
+pub fn ago(then: u64, now: u64) -> String {
+    let s = now.saturating_sub(then);
+    let plural = |n: u64, unit: &str| {
+        if n == 1 {
+            format!("1 {unit} ago")
+        } else {
+            format!("{n} {unit}s ago")
+        }
+    };
+    match s {
+        0..60 => "just now".to_owned(),
+        60..3600 => plural(s / 60, "minute"),
+        3600..86_400 => plural(s / 3600, "hour"),
+        86_400..172_800 => "yesterday".to_owned(),
+        172_800..604_800 => plural(s / 86_400, "day"),
+        _ => crate::hud::leaderboard::date_short(then),
+    }
+}
+
 /// Play time in its largest unit: `212h`, `38m`, `12s`.
 pub fn hours(seconds: f64) -> String {
     let s = seconds.max(0.0) as u64;

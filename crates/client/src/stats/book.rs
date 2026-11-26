@@ -266,6 +266,85 @@ pub struct MapStats {
     /// Boards by [`board_key`].
     #[serde(default)]
     pub boards: BTreeMap<String, Board>,
+    /// Per mode (`ranked`, `original`; [`mode_key`]): time, deaths, finishes, last played and
+    /// the last session (#1619). The totals above stay every mode together; maps from books
+    /// before #1619 have none until played again.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub modes: BTreeMap<String, ModeStats>,
+    /// Rooms entered on this map in any mode, by package room id: a session marks the rooms
+    /// it enters for the first time (#1623).
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub rooms_seen: BTreeSet<String>,
+}
+
+/// One mode's key in [`MapStats::modes`]: `ranked` (Time Attack) or `original` (Classic), as in
+/// [`board_key`].
+pub fn mode_key(ranked: bool) -> &'static str {
+    if ranked { "ranked" } else { "original" }
+}
+
+/// What one mode keeps of a map (#1619).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ModeStats {
+    /// Seconds played in this mode.
+    #[serde(default)]
+    pub play_seconds: f64,
+    #[serde(default)]
+    pub deaths: u64,
+    /// Clears in this mode, from a new game or a save.
+    #[serde(default)]
+    pub finishes: u32,
+    /// The last clear's date, seconds since 1970.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finished_at: Option<u64>,
+    /// When a run in this mode last ended (or last flushed), seconds since 1970.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_played: Option<u64>,
+    /// The last session in this mode, once one has ended.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_session: Option<SessionSummary>,
+    /// The furthest room reached: the highest package room index entered, and its id. Until
+    /// packages declare sections (E7) this is Classic's furthest point.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub furthest: Option<Furthest>,
+}
+
+/// The furthest room a mode reached on a map.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Furthest {
+    /// Its index in the package's room list.
+    pub index: u32,
+    /// Its package room id.
+    pub room: String,
+}
+
+/// A finished session's length and deaths.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct SessionSummary {
+    pub seconds: f64,
+    pub deaths: u64,
+    /// When it ended, seconds since 1970.
+    pub ended_at: u64,
+}
+
+/// One game's numbers in one mode, over its maps ([`Book::game_mode`]).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct GameMode {
+    pub play_seconds: f64,
+    pub deaths: u64,
+    pub finishes: u32,
+    pub finished_at: Option<u64>,
+    pub last_played: Option<u64>,
+    /// The session that ended last, on any of the game's maps.
+    pub last_session: Option<SessionSummary>,
+    pub furthest: Option<Furthest>,
+}
+
+impl GameMode {
+    /// Played at all in this mode.
+    pub fn played(&self) -> bool {
+        self.play_seconds > 0.0 || self.last_played.is_some()
+    }
 }
 
 /// The key of a map in the book: `<game id>/<map id>` (`Sim::map_id`; `main` for a package
@@ -358,6 +437,34 @@ impl Book {
         (pbs, top)
     }
 
+    /// `game`'s numbers in one mode, summed over its maps (#1619): time, deaths and finishes
+    /// add up; the latest dates and session and the furthest room win.
+    pub fn game_mode(&self, game: &str, ranked: bool) -> GameMode {
+        let mut g = GameMode::default();
+        let key = mode_key(ranked);
+        for m in self.maps.values().filter(|m| m.game == game) {
+            let Some(s) = m.modes.get(key) else {
+                continue;
+            };
+            g.play_seconds += s.play_seconds;
+            g.deaths += s.deaths;
+            g.finishes += s.finishes;
+            g.finished_at = g.finished_at.max(s.finished_at);
+            g.last_played = g.last_played.max(s.last_played);
+            if let Some(last) = s.last_session
+                && g.last_session.is_none_or(|b| last.ended_at >= b.ended_at)
+            {
+                g.last_session = Some(last);
+            }
+            if let Some(f) = &s.furthest
+                && g.furthest.as_ref().is_none_or(|b| f.index > b.index)
+            {
+                g.furthest = Some(f.clone());
+            }
+        }
+        g
+    }
+
     /// Totals over every map.
     pub fn totals(&self) -> Totals {
         let mut cleared: Vec<&str> = self
@@ -378,6 +485,11 @@ impl Book {
 }
 
 impl MapStats {
+    /// One mode's numbers, made when first needed.
+    pub fn mode_mut(&mut self, ranked: bool) -> &mut ModeStats {
+        self.modes.entry(mode_key(ranked).to_owned()).or_default()
+    }
+
     /// Counts deaths in a segment.
     pub fn add_deaths(&mut self, segment: usize, n: u32) {
         self.deaths = self.deaths.saturating_add(u64::from(n));
@@ -402,6 +514,66 @@ mod tests {
             replay: None,
             death_log: DeathLog::default(),
         }
+    }
+
+    /// #1619: one game's numbers in a mode add up over its maps; dates, the last session and
+    /// the furthest room take the latest or furthest; a book without modes still parses.
+    #[test]
+    fn a_games_mode_sums_its_maps() {
+        let mut book = Book::default();
+        let mut a = MapStats {
+            game: "g".into(),
+            ..MapStats::default()
+        };
+        *a.mode_mut(false) = ModeStats {
+            play_seconds: 10.0,
+            deaths: 3,
+            finishes: 1,
+            finished_at: Some(100),
+            last_played: Some(200),
+            last_session: Some(SessionSummary {
+                seconds: 5.0,
+                deaths: 2,
+                ended_at: 200,
+            }),
+            furthest: Some(Furthest {
+                index: 4,
+                room: "r4".into(),
+            }),
+        };
+        let mut b = a.clone();
+        let mode = b.mode_mut(false);
+        mode.last_played = Some(300);
+        mode.last_session = Some(SessionSummary {
+            seconds: 7.0,
+            deaths: 1,
+            ended_at: 300,
+        });
+        mode.furthest = Some(Furthest {
+            index: 2,
+            room: "r2".into(),
+        });
+        book.maps.insert(map_key("g", "a"), a);
+        book.maps.insert(map_key("g", "b"), b);
+        let g = book.game_mode("g", false);
+        assert_eq!((g.play_seconds, g.deaths, g.finishes), (20.0, 6, 2));
+        assert_eq!(g.last_played, Some(300));
+        assert_eq!(g.last_session.unwrap().seconds, 7.0);
+        assert_eq!(g.furthest.unwrap().room, "r4");
+        assert!(!book.game_mode("g", true).played());
+        let back = Book::parse(&book.to_text()).unwrap();
+        assert_eq!(back, book);
+        let old = Book::parse("version = 2
+[maps.\"g/main\"]
+game = \"g\"
+tick_rate = 50
+clears = 1
+deaths = 4
+played_ticks = 9
+play_seconds = 1.5
+").unwrap();
+        assert!(old.maps["g/main"].modes.is_empty());
+        assert_eq!(old.maps["g/main"].deaths, 4);
     }
 
     /// The issue's user check: two runs, PB and sum of best update.
