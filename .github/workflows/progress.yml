@@ -82,5 +82,7 @@ jobs:
             git -C "$worktree" push origin HEAD:gh-pages
           fi
 
-      - name: Request a Pages build
-        run: gh api -X POST "repos/${GITHUB_REPOSITORY}/pages/builds" --silent
+      # Pages is source-from-branch (gh-pages): the push above triggers the
+      # pages-build-deployment workflow automatically. Do not POST
+      # /pages/builds here: it raced the automatic build, and its empty-body
+      # response failed runs after a successful publish (#1570).
