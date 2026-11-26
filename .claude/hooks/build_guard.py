@@ -1,4 +1,4 @@
-"""PreToolUse guard for cargo commands (Bash and PowerShell), from client/docs/dev-setup.md, Build speed.
+"""PreToolUse guard for cargo commands (Bash and PowerShell), from iwbtg-collection/docs/dev-setup.md, Build speed.
 
 Blocks the two habits that cost the most build time:
   1. Changing the build fingerprint (RUSTFLAGS, CARGO_PROFILE_*, CARGO_INCREMENTAL, CARGO_TARGET_DIR,
@@ -34,12 +34,12 @@ def check(tool_input):
     if m:
         return (f"Blocked by build_guard: `{m.group(0).strip()}` changes the cargo build fingerprint, which "
                 "rebuilds every dependency (about 5 minutes) and again when you switch back. Run cargo with the "
-                "workspace defaults (client/CLAUDE.md, Builds). If this is really needed, add the comment "
+                "workspace defaults (iwbtg-collection/CLAUDE.md, Builds). If this is really needed, add the comment "
                 "`# build-guard: ok (<why>)` to the command.")
     if tool_input.get("run_in_background"):
         return ("Blocked by build_guard: run cargo in the foreground. A teammate is not woken when a background "
                 "command finishes, so it sits idle until the lead pings it. The shell limit is 45 minutes "
-                "(client/CLAUDE.md, Builds). A lead that really wants it in the background adds "
+                "(iwbtg-collection/CLAUDE.md, Builds). A lead that really wants it in the background adds "
                 "`# build-guard: ok (<why>)`.")
     return None
 

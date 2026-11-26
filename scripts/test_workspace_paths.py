@@ -48,6 +48,20 @@ class WorkspacePathTests(unittest.TestCase):
         self.assertIn("IWBTG_RESEARCH=../iwbtg-collection-research cargo xtask fidelity", hook)
         self.assertNotIn("IWBTG_RESEARCH=../research", hook)
 
+    def test_ci_stuck_hint_names_the_tracked_checkout(self):
+        hook = self.read(".claude/hooks/issues.py")
+        # #1611: the CI-stuck hint pointed at the retired `client/` folder.
+        self.assertIn("iwbtg-collection/docs/dev-setup.md, CI", hook)
+        self.assertNotIn("client/docs/dev-setup.md", hook)
+
+    def test_build_guard_messages_name_the_tracked_checkout(self):
+        guard = self.read(".claude/hooks/build_guard.py")
+        # #1617: the guard's docstring and messages cited the retired `client/` folder.
+        self.assertIn("iwbtg-collection/docs/dev-setup.md", guard)
+        self.assertIn("iwbtg-collection/CLAUDE.md", guard)
+        self.assertNotIn("client/docs/dev-setup.md", guard)
+        self.assertNotIn("client/CLAUDE.md", guard)
+
     def test_xtask_fidelity_error_names_the_research_checkout(self):
         xtask = self.read("crates/xtask/src/main.rs")
         self.assertIn("for example ../iwbtg-collection-research", xtask)
