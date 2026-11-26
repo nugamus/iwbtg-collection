@@ -1,6 +1,6 @@
 # Manifest: `game.toml`
 
-Part of [format v0](v0.md); format 1 changes are in [v1](v1.md).
+Part of [format v0](v0.md); format 1 changes are in [v1](v1.md). Game-page metadata and who owns each field (package, catalog, server, deviation log) is [game-metadata.md](game-metadata.md); the fields it marks proposed are not part of format 1 yet.
 
 ```toml
 #:schema ../../client/docs/format/schema/v1/game.schema.json
