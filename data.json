@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-26T12:55:20Z",
+ "generated_at": "2026-11-26T13:02:21Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -57,14 +57,14 @@
    "title": "2 · Format & pipeline",
    "name": "Format & pipeline",
    "state": "open",
-   "open": 34,
-   "closed": 117,
+   "open": 33,
+   "closed": 118,
    "total": 151,
-   "pct_closed": 77.5,
-   "size_points": 102,
+   "pct_closed": 78.1,
+   "size_points": 99,
    "sizes": {
     "size:S": 11,
-    "size:M": 17,
+    "size:M": 16,
     "size:L": 5,
     "unknown": 1
    },
@@ -263,16 +263,16 @@
  "activity": {
   "totals": {
    "issues": 947,
-   "open": 272,
-   "closed": 675,
-   "pct_closed": 71.3
+   "open": 271,
+   "closed": 676,
+   "pct_closed": 71.4
   },
   "open_prs": 3,
   "process": {
-   "agent-ready": 120,
+   "agent-ready": 119,
    "needs-user": 34,
    "triage": 49,
-   "in-progress": 10,
+   "in-progress": 9,
    "blocked": 25,
    "revisit": 3
   },
@@ -323,6 +323,20 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 1532,
+    "title": "Script API: GML string functions (#776, census rank 19)",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1532",
+    "labels": [
+     "agent-ready",
+     "size:M"
+    ],
+    "phase": "2 · Format & pipeline",
+    "updated_at": "2026-11-26T12:55:31Z",
+    "closed_at": "2026-11-26T12:55:25Z",
+    "created_at": "2026-11-25T10:07:52Z"
+   },
    {
     "number": 1593,
     "title": "Game select: incremental preview enumeration and same-path cache invalidation (rest of #1022)",
@@ -428,40 +442,9 @@
     "updated_at": "2026-11-26T12:25:14Z",
     "closed_at": "2026-11-26T12:24:10Z",
     "created_at": "2026-11-25T10:07:50Z"
-   },
-   {
-    "number": 1553,
-    "title": "Results: Back/Escape should go to game select, not back into the finished run",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1553",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "6 · Ranked-ready run",
-    "updated_at": "2026-11-26T12:15:08Z",
-    "closed_at": "2026-11-26T12:15:08Z",
-    "created_at": "2026-11-25T12:24:59Z"
    }
   ],
   "in_progress": [
-   {
-    "number": 1532,
-    "title": "Script API: GML string functions (#776, census rank 19)",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1532",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "in-progress"
-    ],
-    "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-26T12:48:14Z",
-    "closed_at": null,
-    "created_at": "2026-11-25T10:07:52Z"
-   },
    {
     "number": 47,
     "title": "Design pass: settings and controls panel mockups",
@@ -542,6 +525,22 @@
     "updated_at": "2026-11-26T01:29:22Z",
     "closed_at": null,
     "created_at": "2026-11-02T11:30:26Z"
+   },
+   {
+    "number": 154,
+    "title": "Server: Docker Compose with cloudflared",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/154",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:server",
+     "in-progress"
+    ],
+    "phase": "7 · Online",
+    "updated_at": "2026-11-24T22:21:14Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T11:57:34Z"
    }
   ],
   "needs_user": [
@@ -730,7 +729,7 @@
     "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 266,
+  "closed_7d": 267,
   "opened_7d": 290,
   "burnup": [
    {
@@ -751,7 +750,7 @@
    {
     "week": "2026-11-30",
     "created": 947,
-    "closed": 675
+    "closed": 676
    }
   ]
  },
@@ -1855,13 +1854,8 @@
   }
  },
  "script_api": {
-  "registered_functions": 104,
+  "registered_functions": 122,
   "planned_groups": [
-   {
-    "name": "strings (19)",
-    "counts": "22 / 28 / 16",
-    "issue": 1532
-   },
    {
     "name": "meta (22)",
     "counts": "19 / 28 / 9",
@@ -1883,7 +1877,7 @@
     "issue": 1536
    }
   ],
-  "planned_count": 5,
+  "planned_count": 4,
   "missing": "the census's full group list (research#172) is not in this repo"
  }
 }
