@@ -178,6 +178,42 @@ map work is about 15% lower once normalised by the order phase. The absolute fra
 small — the draw path is about 1.3-1.5 ms of an 11 ms frame at 5,000 — and the change is kept
 because it is strictly less work with no behaviour change.
 
+## The rest of the frame (#1567)
+
+The #1524 section left a bucket: everything in the main thread that is neither `view::tick` nor
+the draw path. `--perf` now brackets it with marker systems (a shared `Marks` resource of atomics,
+so a marker never conflicts with the systems it wraps): the fixed loop (`RunFixedMainLoop`'s
+before/after sets, which hold the input collection and `view::tick`), Bevy's
+`TransformSystems::Propagate`, the visibility sets (`CalculateBounds` to
+`MarkNewlyHiddenEntitiesInvisible`), the UI sets (`Prepare` to `PostLayout`), and the HUD's four
+per-frame systems. A set's interval is an **upper bound**: the parallel executor can run unrelated
+systems in the same window, and the three PostUpdate windows overlap, so they do not add up to the
+frame.
+
+At `stable_5000`, interpolation off, p50 / mean over 600 frames:
+
+| line | p50 | mean |
+|---|---|---|
+| main-thread | 11.53 | 11.63 |
+| fixed loop (input + `view::tick`) | 6.48 | 7.07 |
+| draw path (order 0.33 + sync 1.11 + removal 0.02) | 1.46 | 1.45 |
+| HUD systems (`read` 0.21, `track` 0.22, `show` 0.38, `animate` 0.38) | 1.19 | 2.68 |
+| remainder | ~2.4 | ~1.4 |
+| post window: transform (upper bound) | 1.77 | 2.65 |
+| post window: visibility (upper bound) | 2.82 | 4.70 |
+| post window: ui (upper bound) | 2.47 | 4.00 |
+
+The remainder is what the three PostUpdate windows cover, and the scaling separates what grows
+with instances from what does not: the transform window is 0.41 / 0.95 / 1.77 ms p50 at 505 /
+2,005 / 5,005 visible instances, so Bevy's per-entity propagation is roughly 0.3 ms per 1,000
+sprites of the remainder. The HUD systems are flat-to-small (0.62 / 0.68 / 1.19 ms p50 across
+those runs, which saw different machine contention), and the fixed loop's share is the sim.
+
+No single client system dominates the remainder — the largest is `leaderboard::animate` at
+0.38 ms p50 — so no optimization issue is filed from this attribution; the remainder is Bevy's
+own per-entity work and, like the sim's churn cost, is outside the client's systems. The GPU,
+allocation and browser gaps above still apply.
+
 ### Where that leaves the optimization question
 
 The draw path is attributed and is not the frame's dominant cost at 5,000. The largest remaining
