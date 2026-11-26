@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-26T13:37:03Z",
+ "generated_at": "2026-11-26T13:56:41Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -730,7 +730,7 @@
     "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 270,
+  "closed_7d": 267,
   "opened_7d": 289,
   "burnup": [
    {
