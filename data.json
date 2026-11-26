@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-26T12:48:45Z",
+ "generated_at": "2026-11-26T12:55:20Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -267,7 +267,7 @@
    "closed": 675,
    "pct_closed": 71.3
   },
-  "open_prs": 4,
+  "open_prs": 3,
   "process": {
    "agent-ready": 120,
    "needs-user": 34,
