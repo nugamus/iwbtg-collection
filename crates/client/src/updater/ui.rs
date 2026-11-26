@@ -149,10 +149,7 @@ pub(super) fn spawn_dialog(
     );
 
     commands.entity(body).with_children(|body| {
-        body.spawn((
-            text(&title, Type::barlow(30.0, 700), tokens::INK),
-            bevy::text::LineHeight::RelativeToFont(1.15),
-        ));
+        body.spawn(text(&title, Type::barlow(30.0, 700), tokens::INK));
         body.spawn((
             text(
                 "It downloaded in the background and its checksum matches. Restart now, or keep playing and update later.",
