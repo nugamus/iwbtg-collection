@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-26T12:30:22Z",
+ "generated_at": "2026-11-26T12:37:19Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -149,14 +149,14 @@
    "title": "6 · Ranked-ready run",
    "name": "Ranked-ready run",
    "state": "open",
-   "open": 34,
-   "closed": 108,
+   "open": 33,
+   "closed": 109,
    "total": 142,
-   "pct_closed": 76.1,
-   "size_points": 125,
+   "pct_closed": 76.8,
+   "size_points": 122,
    "sizes": {
     "size:S": 7,
-    "size:M": 18,
+    "size:M": 17,
     "size:L": 8,
     "unknown": 1
    },
@@ -263,13 +263,13 @@
  "activity": {
   "totals": {
    "issues": 947,
-   "open": 276,
-   "closed": 671,
-   "pct_closed": 70.9
+   "open": 275,
+   "closed": 672,
+   "pct_closed": 71.0
   },
-  "open_prs": 5,
+  "open_prs": 6,
   "process": {
-   "agent-ready": 124,
+   "agent-ready": 123,
    "in-progress": 11,
    "needs-user": 34,
    "triage": 49,
@@ -283,7 +283,7 @@
    },
    {
     "area": "area:client",
-    "count": 66
+    "count": 65
    },
    {
     "area": "area:format",
@@ -323,6 +323,21 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 1567,
+    "title": "Client: attribute the main schedule's non-sim, non-draw time at 5,000 instances (#1524 follow-up)",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1567",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:client"
+    ],
+    "phase": "6 · Ranked-ready run",
+    "updated_at": "2026-11-26T12:32:50Z",
+    "closed_at": "2026-11-26T12:32:50Z",
+    "created_at": "2026-11-25T15:56:53Z"
+   },
    {
     "number": 58,
     "title": "Review queue and anomaly flags",
@@ -433,23 +448,6 @@
     "updated_at": "2026-11-26T12:10:38Z",
     "closed_at": "2026-11-26T12:10:37Z",
     "created_at": "2026-11-25T12:21:39Z"
-   },
-   {
-    "number": 1297,
-    "title": "Probe/feel: add a save.point metric for the checkpoint entity key",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1297",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:sim",
-     "area:tools",
-     "in-progress"
-    ],
-    "phase": "3 · Sim fidelity",
-    "updated_at": "2026-11-26T12:08:34Z",
-    "closed_at": "2026-11-26T12:08:33Z",
-    "created_at": "2026-11-21T12:08:10Z"
    }
   ],
   "in_progress": [
@@ -736,7 +734,7 @@
     "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 262,
+  "closed_7d": 263,
   "opened_7d": 290,
   "burnup": [
    {
@@ -757,7 +755,7 @@
    {
     "week": "2026-11-30",
     "created": 947,
-    "closed": 671
+    "closed": 672
    }
   ]
  },
