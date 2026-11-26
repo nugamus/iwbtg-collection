@@ -15,7 +15,7 @@
 
 ## How a screen is built
 
-1. Read `docs/design/mockups/m4/README.md`, then the `.dc.html` artboard the issue names: its markup holds sizes and colours, its script the sample data.
+1. Read `docs/design/mockups/m5/README.md` (approved 2026-11-26 except section W; its Implementation table lists the work in order) and `docs/design/mockups/m4/README.md`, then the `.dc.html` artboard the issue names: its markup holds sizes and colours, its script the sample data. Where m5 redraws an m4 screen, m5 wins. m5 has no committed PNGs: render a reference with `python -I docs/design/mockups/render.py m5 <Board> --out <temp>` (needs the fruit blob in `docs/design/mockups/blobs/` for the real sprite, else a placeholder).
 2. Use the #490 kit and tokens, never one-off styles.
 3. The PR attaches `--screenshot` images at the ratios the issue lists. The PR owner checks that they match the approved artboard, runs the User check and requests `gh pr merge <N> --squash --auto`; the user tests `main` in batches. A design or cross-area contract question still seeks the user or a domain review.
 

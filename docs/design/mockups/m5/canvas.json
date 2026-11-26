@@ -1085,7 +1085,7 @@
    "kind": "title1",
    "x": 0,
    "y": 23945,
-   "text": "W · Website: accounts (Google, Discord or a username; the client uses username and password)",
+   "text": "W · Website accounts: DEFERRED, not part of the approval (2026-11-26)",
    "maxW": 10400
   },
   "w_flow": {
@@ -1094,7 +1094,7 @@
    "w": 560,
    "size": "m",
    "fill": "blue",
-   "text": "Accounts (decided 2026-11-26). Username and password are the account (#156). The website also signs in with Google or Discord (#158). The first time, that creates the account and asks for a player name (W2) and a password (W3), so the client can sign in. Skipping the password is allowed: the client can still use the device code. W4 is the page a device code opens."
+   "text": "Deferred: the user approved m5 on 2026-11-26 without this section; the website comes later. Accounts (decided 2026-11-26). Username and password are the account (#156). The website also signs in with Google or Discord (#158). The first time, that creates the account and asks for a player name (W2) and a password (W3), so the client can sign in. Skipping the password is allowed: the client can still use the device code. W4 is the page a device code opens."
   },
   "w_style": {
    "x": 620,

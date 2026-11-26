@@ -1,6 +1,6 @@
 # Design pass 2 (m5): play modes, app shell, settings, tools and redesigns
 
-**Revision 3, not approved yet.** Drawn for #47 and #1572. The user's choices and feedback (2026-11-26, recorded on #47) are built in and the options they did not pick are removed; nothing here changes docs/product.md until the user approves the whole pass. Live canvas: https://claude.ai/artifact/LvECtgqWCzfeNgtn1SKcFw. The approved design is still [m4](../m4/README.md); m5 reuses its language and its shared parts.
+**Approved by the user on 2026-11-26 (#1572), except section W (website accounts), which is deferred and not part of the approval.** Build from these boards; where m5 redraws an m4 screen, m5 wins. docs/product.md describes the approved behaviour. Live canvas: https://claude.ai/artifact/LvECtgqWCzfeNgtn1SKcFw. m5 reuses m4's language and shared parts ([m4](../m4/README.md)).
 
 The source files are in this folder: `canvas.json` places the artboards and the notes (the rationale, costs and open questions are the sticky notes on the canvas), each `.dc.html` is one artboard. Most numbered artboards are thin wrappers that set props on a shared component (`MainMenu`, `Select`, `Shelf`, `Settings`, ...). Render them locally with `python -I docs/design/mockups/render.py m5` (see [m4's README](../m4/README.md#rendering-locally)).
 
@@ -11,8 +11,40 @@ The source files are in this folder: `canvas.json` places the artboards and the 
 - **C. Play, settings and tools.** Settings overlay (#53), key bindings (#52), offset calibration (#464), practice picker and HUD (#39), Details tab (#498), collections (#105), replays, catalog (#50), a calmer Browse with search first (#50), a redone profile with more shine (#60, #489), sign-in with username and password or a browser or phone (#156, #159).
 - **D. Redesigns.** Script error (#953), notifications (only urgent toasts in a run), game select gaps, auto-retry in the mod footer with an AR mark (#773), the decided mod sheet with the Ghost switch (#554, #64), exit flow (#1553), drag and drop, skip hint, the redesigned pause menu with Options (D13–D16, #624), port status (#62).
 - **I. New, built around how fangames are played.** PB ghost in the room (#64), results that say where the time went and send you to practise it, a death map and consistency counter in practice, streaming settings with a window-title death count, a live stats file and an on-screen counter.
-- **W. Website accounts.** Sign in with Google, Discord or a username; a first Google or Discord sign-in picks a player name and a password for the client; the device-code confirm page.
+- **W. Website accounts (deferred, not approved).** Sign in with Google, Discord or a username; a first Google or Discord sign-in picks a player name and a password for the client; the device-code confirm page.
 - **E. Cross-cutting.** Steam Deck (1280x800), Japanese, colourblind check, UI sounds, the route line for progress at any game length (E7), and icons: every game has one (E8). **F.** Race screens, rough.
+
+## Implementation
+
+The work in build order, grouped by area. Each group is one issue (or more, if it is big). Use an open issue where one exists (a closed one is context only: file a new issue that links it); the UI lane files the missing ones, each with a `## Context` block, before starting. Data a screen needs and does not have (package sections and landmarks, the package `[icon]`, death positions, Classic progress from save files) is filed for the owning lane, never built in the UI lane.
+
+| # | Group | Boards | Issues |
+|---|---|---|---|
+| 1 | Mode model: main menu, toolbar (no Home), mode accent; remove the per-game Ranked / Play original buttons from #1544 | A1, A2, B6, B7, B8 | file one |
+| 2 | Classic: shelf, Classic loading card, Classic run, session summary | A4–A9 | #100, #851 |
+| 3 | Pause, redesigned | D13–D16 | #624 |
+| 4 | Route line (progress at any length) in select, pause, session, results | E7 | file one; package sections: format lane |
+| 5 | Game icons and kind icons | E8 | file one; package `[icon]`: format lane |
+| 6 | Notifications and toasts | D2, D3 | file one |
+| 7 | Mod sheet final, auto-retry switch and AR mark, Ghost switch | D8, D9 | #554, #773, #558 |
+| 8 | Opening: intro, first-launch notice, setup | B1–B5 | #73 |
+| 9 | Settings overlay, search, streaming section | C1–C4, I4 | #53, #1577 |
+| 10 | Key bindings, calibration, extra actions | C5–C8 | #52, #464 |
+| 11 | Practice: picker, HUD, death map, consistency counter | C9, C10, I3 | #39, #1575, #1607 |
+| 12 | Game select gaps: Details, collections, sort groups, list dim, list states, filters, port status | C11, C12, D4–D7, D17 | #498, #105, #805, #62 |
+| 13 | Results: where the time went | I2 | #1576 |
+| 14 | Replays browser and player | C13, C14 | file one |
+| 15 | Browse | C15 | #50 |
+| 16 | Profile and the player card per mode | C16, A10 | #60, #489 |
+| 17 | Sign-in dialogs (username and password, browser or phone) | C17–C19 | #159, #1605 |
+| 18 | Exit and update dialogs | B9, B10 | #115, #1606 |
+| 19 | Script error, drag and drop, skip hint, exit flow | D1, D10–D12 | #953, #1553, #573 |
+| 20 | PB ghost in the run | I1 | #64 |
+| 21 | Streaming outputs | I5 | #1577 |
+| 22 | Web start and loading | B11–B13 | #1127 |
+| 23 | Steam Deck layouts, Japanese, colourblind check, UI sounds | E1–E6 | #117, #196, #106, #488 |
+
+Not built: section W (website accounts, deferred) and section F (race screens, rough layouts for phase 8).
 
 ## Shared parts changed from m4
 

@@ -1,2 +1,4 @@
 blobs/
 */png-local/
+# m5 references are rendered on demand (render.py m5), not committed: 107 boards come to 32 MB.
+m5/png/
