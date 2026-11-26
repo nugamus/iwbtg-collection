@@ -1,7 +1,9 @@
 //! The select screen (`--select <folder>`): the packages in a folder as game select's list
 //! (#149, `select/list.rs`): a panel per game with its key art, its maps under the selected one.
 //! Up and Down pick a map, Left and Right a game, a click picks either; Enter (or a click on the
-//! selected map) plays, Escape quits. Above the list, search, group, sort and filters (#150,
+//! selected map) plays in the picked mode (m5: Time Attack the stripped game, Classic the game as
+//! made until the shelf, #851), Escape goes back to the main menu. The toolbar (`ui::toolbar`)
+//! runs along the top. Above the list, search, group, sort and filters (#150,
 //! `select/controls.rs`, `select/filters.rs`) pick the rows it shows. The left side is a
 //! placeholder until #148: the picked game and map, and the keys.
 
@@ -12,7 +14,6 @@ use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::picking::events::PointerClick;
 use bevy::prelude::*;
 use bevy::ui::IsDefaultUiCamera;
-use bevy::ui_widgets::Activate;
 use bevy::window::PrimaryWindow;
 use iwbtg_sim::mods::ModSet;
 use iwbtg_sim::stripped::PlayMode;
@@ -21,6 +22,7 @@ use super::AppScreen;
 use crate::stats::Book;
 use crate::ui::backdrop::{Backdrop, dim};
 use crate::ui::fonts::Type;
+use crate::ui::mode::Mode;
 use crate::ui::notice;
 use crate::ui::tokens;
 use crate::ui::widgets::text;
@@ -43,6 +45,9 @@ use list::{GamePanel, ListDim, MapPanel, Selection, Shown};
 pub const TITLE: &str = "IWBTG Collection";
 /// The layout is drawn for a window this tall (the artboard's 1080), scaled to the real one.
 const DESIGN_HEIGHT: f32 = 1080.0;
+/// How far m5's toolbar moves m4's game select down (`A3_SelectTimeAttack`: the search row from
+/// y 48 to 96).
+pub const UNDER_TOOLBAR: f32 = 48.0;
 
 /// The left side's picked game title (placeholder until #148).
 #[derive(Component)]
@@ -52,16 +57,12 @@ struct PickedTitle;
 #[derive(Component)]
 struct PickedMap;
 
-/// A button that plays the selected map in this mode (#43): Ranked (stripped) or Play original.
-#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
-struct ModeButton(PlayMode);
-
 /// The keys hint under the pick; while a staged start prepares it says `Opening <name>…`.
 #[derive(Component)]
 struct HintText;
 
 /// The keys hint, and the hint when the folder holds no packages.
-const HINT: &str = "Type to search · ↑ ↓ ← → pick · Enter plays Ranked · Esc clears, quits";
+const HINT: &str = "Type to search · ↑ ↓ ← → pick · Enter plays · Esc clears, goes back";
 const NO_PACKAGES: &str = "No packages here (folders with a game.toml, .iwbz files).";
 
 /// The select screen: added by main.rs with the window (it needs the UI kit). The flag is
@@ -103,6 +104,7 @@ impl Plugin for SelectPlugin {
                       lists: Res<Collections>,
                       mut shown: ResMut<Shown>,
                       mut backdrop: ResMut<Backdrop>,
+                      mode: Option<Res<Mode>>,
                       mut window: Query<&mut Window, With<PrimaryWindow>>| {
                     let paths = folder.as_deref().map(packages).unwrap_or_default();
                     let empty = Book::default();
@@ -164,6 +166,18 @@ impl Plugin for SelectPlugin {
                         }
                     };
                     commands.insert_resource(sel);
+                    commands.spawn((
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: Val::Px(0.0),
+                            right: Val::Px(0.0),
+                            top: Val::Px(0.0),
+                            ..default()
+                        },
+                        UiTargetCamera(camera),
+                        DespawnOnExit(AppScreen::Select),
+                        children![crate::ui::toolbar::toolbar(mode.as_deref().copied().unwrap_or_default())],
+                    ));
                     footer::spawn(&mut commands, camera, mods);
                     mod_sheet::spawn(
                         &mut commands,
@@ -180,7 +194,6 @@ impl Plugin for SelectPlugin {
                 },
             )
             .add_observer(on_click)
-            .add_observer(on_mode)
             .add_observer(practice::open)
             .add_observer(practice::on_activate)
             .add_observer(controls::on_activate)
@@ -310,7 +323,7 @@ fn enter(
         Node {
             position_type: PositionType::Absolute,
             left: Val::Px(64.0),
-            top: Val::Px(150.0),
+            top: Val::Px(150.0 + UNDER_TOOLBAR),
             width: Val::Px(860.0),
             flex_direction: FlexDirection::Column,
             row_gap: Val::Px(12.0),
@@ -326,35 +339,6 @@ fn enter(
             ),
             (text("", Type::barlow(18.0, 600), tokens::SOFT), PickedMap),
             text(&where_, Type::barlow(14.0, 400), tokens::MUTED),
-            (
-                Node {
-                    column_gap: Val::Px(10.0),
-                    align_items: AlignItems::Center,
-                    flex_wrap: FlexWrap::Wrap,
-                    ..default()
-                },
-                children![
-                    (
-                        crate::ui::widgets::button(
-                            "Ranked",
-                            crate::ui::widgets::ButtonKind::Primary
-                        ),
-                        ModeButton(PlayMode::Stripped)
-                    ),
-                    (
-                        crate::ui::widgets::button(
-                            "Play original",
-                            crate::ui::widgets::ButtonKind::Secondary
-                        ),
-                        ModeButton(PlayMode::Original)
-                    ),
-                    text(
-                        "Ranked: the ranked start, timer on first input · Play original: the game as ported",
-                        Type::barlow(14.0, 400),
-                        tokens::MUTED
-                    ),
-                ],
-            ),
             (text(hint, Type::BODY, tokens::SOFT), HintText),
             (
                 Node {
@@ -408,27 +392,13 @@ fn play(
     });
 }
 
-/// The Ranked and Play original buttons play the selected map in their mode.
-fn on_mode(
-    activate: On<Activate>,
-    buttons: Query<&ModeButton>,
-    lib: Option<Res<Library>>,
-    sel: Option<Res<Selection>>,
-    mut commands: Commands,
-) {
-    let (Ok(button), Some(lib), Some(sel)) = (buttons.get(activate.entity), lib, sel) else {
-        return;
-    };
-    let Some(game) = lib.games.get(sel.game) else {
-        return;
-    };
-    play(
-        &mut commands,
-        game.path.clone(),
-        map_id(game, sel.map),
-        button.0,
-        None,
-    );
+/// How the picked mode plays a game: Time Attack the stripped game from its ranked start,
+/// Classic the game as made (docs/product.md, Two ways to play each game).
+fn play_mode(mode: Option<&Mode>) -> PlayMode {
+    match mode.copied().unwrap_or_default() {
+        Mode::TimeAttack => PlayMode::Stripped,
+        Mode::Classic => PlayMode::Original,
+    }
 }
 
 /// A staged start that did not commit: the run on screen (if any) is unchanged, and the notice
@@ -464,9 +434,9 @@ fn opening(
 }
 
 /// The arrows move the selection among the games shown ([`list::step`]; Left and Right move
-/// the search field's cursor instead while it holds text), Enter plays the selected map as
-/// Ranked.
-/// Escape closes an open dropdown, else clears the search, else quits. While the new
+/// the search field's cursor instead while it holds text), Enter plays the selected map in the
+/// picked mode.
+/// Escape closes an open dropdown, else clears the search, else goes back to the main menu. While the new
 /// collection's name field has the focus, the arrows and Enter stay out of the way: Enter
 /// creates the collection ([`collections::keys`]) and Escape goes back to the search field.
 #[allow(clippy::too_many_arguments, reason = "the screen's keys")]
@@ -483,6 +453,8 @@ fn keys(
         With<crate::ui::widgets::SearchField>,
     >,
     mut sel: ResMut<Selection>,
+    mode: Option<Res<Mode>>,
+    mut next: ResMut<NextState<AppScreen>>,
     mut commands: Commands,
 ) {
     let maps: Vec<usize> = lib.games.iter().map(|g| g.maps.len()).collect();
@@ -515,7 +487,7 @@ fn keys(
             &mut commands,
             game.path.clone(),
             map_id(game, sel.map),
-            PlayMode::Stripped,
+            play_mode(mode.as_deref()),
             None,
         );
     }
@@ -530,7 +502,8 @@ fn keys(
                     s.clear();
                 }
             } else {
-                commands.write_message(AppExit::Success);
+                // No Home button: Back steps towards the main menu (m5 B8).
+                next.set(AppScreen::Menu);
             }
         }
     }
@@ -544,6 +517,7 @@ fn on_click(
     maps: Query<&MapPanel>,
     lib: Option<Res<Library>>,
     sel: Option<ResMut<Selection>>,
+    mode: Option<Res<Mode>>,
     mut commands: Commands,
 ) {
     let (Some(lib), Some(mut sel)) = (lib, sel) else {
@@ -564,7 +538,7 @@ fn on_click(
                     &mut commands,
                     game.path.clone(),
                     map_id(game, map.1),
-                    PlayMode::Stripped,
+                    play_mode(mode.as_deref()),
                     None,
                 );
             }
@@ -605,7 +579,7 @@ fn picked(
 }
 
 /// Scales the page with the window.
-fn scale(window: Single<&Window, With<PrimaryWindow>>, mut ui_scale: ResMut<UiScale>) {
+pub(super) fn scale(window: Single<&Window, With<PrimaryWindow>>, mut ui_scale: ResMut<UiScale>) {
     let h = window.size().y;
     if h < 1.0 {
         return;
@@ -808,27 +782,79 @@ mod tests {
         );
     }
 
-    /// The left side offers the two ways to play; each stages the selected map in its mode,
-    /// and the second replaces the first (#43).
+    /// Enter plays the selected map in the mode picked on the main menu or in the toolbar:
+    /// Time Attack stripped from the ranked start, Classic the game as made (m5, #1608).
     #[test]
-    fn the_mode_buttons_start_the_selected_map_in_their_mode() {
+    fn enter_plays_the_selected_map_in_the_picked_mode() {
         use super::super::PendingStart;
         let mut app = screen();
         // The hard map of the maps fixture (game 3 in the title order).
         *app.world_mut().resource_mut::<Selection>() = Selection { game: 3, map: 1 };
         app.update();
-        activate::<ModeButton>(&mut app, |b| b.0 == PlayMode::Stripped);
+        tap(&mut app, KeyCode::Enter);
         let pending = app.world().resource::<PendingStart>();
-        assert_eq!(pending.mode, PlayMode::Stripped);
+        assert_eq!(pending.mode, PlayMode::Stripped, "Time Attack until one is picked");
         assert_eq!(pending.map.as_deref(), Some("hard"));
         assert!(pending.path.ends_with("maps.pkg"));
 
-        activate::<ModeButton>(&mut app, |b| b.0 == PlayMode::Original);
+        app.world_mut().insert_resource(Mode::Classic);
+        tap(&mut app, KeyCode::Enter);
         assert_eq!(
             app.world().resource::<PendingStart>().mode,
             PlayMode::Original,
-            "the second button replaces the staged start"
+            "Classic plays the game as made"
         );
+    }
+
+    /// Escape with nothing to close or clear goes back to the main menu: there is no Home
+    /// button (m5 B8).
+    #[test]
+    fn escape_goes_back_to_the_main_menu() {
+        let mut app = screen();
+        tap(&mut app, KeyCode::Escape);
+        app.update();
+        assert_eq!(
+            *app.world().resource::<State<AppScreen>>().get(),
+            AppScreen::Menu
+        );
+        assert!(app.should_exit().is_none());
+    }
+
+    /// The main menu comes before game select: its buttons reach game select's global
+    /// `Activate` observers before there is a library, and they must skip, not panic (#1608).
+    #[test]
+    fn a_button_activated_before_game_select_opens_does_not_panic() {
+        use bevy::state::app::StatesPlugin;
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default(), StatesPlugin))
+            .init_asset::<Image>()
+            .init_resource::<ButtonInput<KeyCode>>()
+            .init_resource::<bevy::input_focus::InputFocus>()
+            .init_resource::<UiScale>()
+            .init_resource::<Backdrop>()
+            .init_resource::<Collections>()
+            .init_resource::<crate::practice::Practice>()
+            .insert_state(AppScreen::Menu)
+            .add_plugins(SelectPlugin(Some(fixtures), false, false));
+        app.update();
+        assert!(!app.world().contains_resource::<Library>());
+        let entity = app.world_mut().spawn_empty().id();
+        app.world_mut().trigger(bevy::ui_widgets::Activate { entity });
+        app.update();
+        assert_eq!(
+            *app.world().resource::<State<AppScreen>>().get(),
+            AppScreen::Menu
+        );
+    }
+
+    /// Presses and releases `key` over one frame.
+    fn tap(app: &mut App, key: KeyCode) {
+        app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(key);
+        app.update();
+        let mut input = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+        input.release(key);
+        input.clear();
     }
 
     /// Puts `name` in the new collection field, as typing does.

@@ -25,14 +25,18 @@ use iwbtg_sim::stripped::PlayMode;
 
 use crate::package::{self, OpenError, Package, SpriteImage};
 
+pub mod menu;
 pub mod select;
 
 /// The screen the client shows.
 #[derive(States, Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
 pub enum AppScreen {
-    /// Pick a package (`--select`).
+    /// Pick a package (`--select`): Time Attack's game select.
     #[default]
     Select,
+    /// The main menu (`menu.rs`): where a client started on a library opens, and where Back
+    /// leads from game select.
+    Menu,
     /// Play the [`LoadedPackage`].
     Run,
 }
@@ -147,6 +151,19 @@ pub struct ShellArgs {
     /// Screenshot checks: open game select's practice panel at start (#39).
     #[arg(long, hide = true, requires = "select")]
     pub practice_preview: bool,
+    /// Screenshot checks: open the main menu in this state (m5 B6, B7, A1, A2).
+    #[arg(long, hide = true, value_enum, requires = "select")]
+    pub menu_preview: Option<menu::MenuPreview>,
+    /// Screenshot checks: open game select in this mode instead of the main menu (m5 A3).
+    #[arg(long, hide = true, value_enum, requires = "select", conflicts_with = "menu_preview")]
+    pub select_preview: Option<SelectPreview>,
+}
+
+/// `--select-preview`: the mode game select opens in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum SelectPreview {
+    TimeAttack,
+    Classic,
 }
 
 /// The shell's place in the module list (main.rs): its flags and both its plugins.
@@ -161,12 +178,23 @@ impl crate::registration::ClientModule for Registration {
         startup: &crate::registration::Startup,
     ) {
         let library = args.select.clone();
+        // A client on a library opens on the main menu, unless a check opens game select.
+        let on_select = args.mod_select_preview
+            || args.practice_preview
+            || args.select_preview.is_some();
+        if args.select_preview == Some(SelectPreview::Classic) {
+            app.insert_resource(crate::ui::mode::Mode::Classic);
+        }
         app.add_plugins((
             ShellPlugin {
                 library: args.select,
                 trace_mode: startup.trace_mode,
+                menu: !on_select,
             },
             select::SelectPlugin(library, args.mod_select_preview, args.practice_preview),
+            menu::MenuPlugin {
+                preview: args.menu_preview,
+            },
         ));
     }
 }
@@ -189,16 +217,21 @@ impl Shell {
 }
 
 /// Adds the state, the sets and the select screen's list. Starts in `Run` when a
-/// [`LoadedPackage`] is already in the world (a package on the command line), else in `Select`.
+/// [`LoadedPackage`] is already in the world (a package on the command line), else on the main
+/// menu (`menu`) or in `Select`.
 pub struct ShellPlugin {
     pub library: Option<PathBuf>,
     pub trace_mode: bool,
+    /// Open on the main menu rather than game select.
+    pub menu: bool,
 }
 
 impl Plugin for ShellPlugin {
     fn build(&self, app: &mut App) {
         let first = if app.world().contains_resource::<LoadedPackage>() {
             AppScreen::Run
+        } else if self.menu {
+            AppScreen::Menu
         } else {
             AppScreen::Select
         };

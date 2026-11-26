@@ -18,7 +18,7 @@
 //! their controller inputs) pick their item at once.
 //!
 //! The selector is the delicious fruit: the package's sprite `cherry` (its first two frames) when
-//! it has one, else a placeholder drawn here. The game's own P-key pause is sim input and stays
+//! it has one, else the delicious fruit the client carries (`assets/ui/cherry.png`). The game's own P-key pause is sim input and stays
 //! the game's (docs/architecture/client.md, Pause menu).
 
 use bevy::audio::AudioSink;
@@ -691,7 +691,7 @@ fn looks(
     }
 }
 
-/// The package's `cherry` sprite (its first two frames), else the placeholder.
+/// The package's `cherry` sprite (its first two frames), else the client's own ([`bundled_fruit`]).
 pub(crate) fn fruit_image(files: &PackageFiles) -> SpriteImage {
     let path = iwbtg_format::sprites::sprite_pngs(files)
         .into_iter()
@@ -700,7 +700,7 @@ pub(crate) fn fruit_image(files: &PackageFiles) -> SpriteImage {
     path.and_then(|p| files.get(&p).and_then(decode_png))
         .filter(|s| s.size.0 >= 2 * FRUIT.x && s.size.1 >= FRUIT.y)
         .map(|s| crop(&s, 2 * FRUIT.x, FRUIT.y))
-        .unwrap_or_else(placeholder)
+        .unwrap_or_else(bundled_fruit)
 }
 
 /// The top-left `w` x `h` of `s`.
@@ -713,61 +713,14 @@ pub(crate) fn crop(s: &SpriteImage, w: u32, h: u32) -> SpriteImage {
     SpriteImage { size: (w, h), rgba }
 }
 
-/// A delicious fruit of our own (no game's art): a red cherry with a green stem, two frames
-/// whose shine moves, 21 x 24 each.
-fn placeholder() -> SpriteImage {
-    let (w, h) = (2 * FRUIT.x, FRUIT.y);
-    let mut rgba = vec![0u8; (w * h * 4) as usize];
-    let mut put = |x: i32, y: i32, c: [u8; 4]| {
-        if (0..w as i32).contains(&x) && (0..h as i32).contains(&y) {
-            let i = ((y as u32 * w + x as u32) * 4) as usize;
-            rgba[i..i + 4].copy_from_slice(&c);
-        }
-    };
-    const OUTLINE: [u8; 4] = [0x5a, 0x06, 0x12, 255];
-    const RED: [u8; 4] = [0xe0, 0x1a, 0x2c, 255];
-    const DEEP: [u8; 4] = [0xa8, 0x0c, 0x1e, 255];
-    const SHINE: [u8; 4] = [0xff, 0xff, 0xff, 255];
-    const STEM: [u8; 4] = [0x2f, 0x8a, 0x2a, 255];
-    const LEAF: [u8; 4] = [0x5c, 0xc8, 0x3c, 255];
-    for frame in 0..2 {
-        let ox = frame * FRUIT.x as i32;
-        let (cx, cy, r) = (10.0f32, 15.0f32, 7.5f32);
-        for y in 0..FRUIT.y as i32 {
-            for x in 0..FRUIT.x as i32 {
-                let d = ((x as f32 + 0.5 - cx).powi(2) + (y as f32 + 0.5 - cy).powi(2)).sqrt();
-                if d <= r - 1.0 {
-                    // The lower right is in shadow.
-                    let shade = (x as f32 - cx) + (y as f32 - cy) > 4.0;
-                    put(ox + x, y, if shade { DEEP } else { RED });
-                } else if d <= r {
-                    put(ox + x, y, OUTLINE);
-                }
-            }
-        }
-        // The stem from the top of the fruit up and to the right, and a leaf.
-        for (x, y) in [(10, 8), (11, 7), (11, 6), (12, 5), (12, 4), (13, 3), (13, 2)] {
-            put(ox + x, y, STEM);
-        }
-        for (x, y) in [
-            (14, 3),
-            (15, 3),
-            (15, 2),
-            (16, 2),
-            (14, 4),
-            (15, 4),
-            (16, 3),
-            (17, 2),
-        ] {
-            put(ox + x, y, LEAF);
-        }
-        // The shine: two pixels top left, one row lower in the second frame.
-        let sy = 11 + frame;
-        put(ox + 7, sy, SHINE);
-        put(ox + 7, sy + 1, SHINE);
-        put(ox + 8, sy, SHINE);
-    }
-    SpriteImage { size: (w, h), rgba }
+/// The delicious fruit the client carries (`assets/ui/cherry.png`, credited in
+/// `assets/ui/CREDITS.md`): the engine's cherry, two frames of 21 x 24. The main menu draws it,
+/// and it stands in for a game that has no `cherry` sprite (#1608).
+pub(crate) fn bundled_fruit() -> SpriteImage {
+    decode_png(include_bytes!("../assets/ui/cherry.png"))
+        .filter(|s| s.size.0 >= 2 * FRUIT.x && s.size.1 >= FRUIT.y)
+        .map(|s| crop(&s, 2 * FRUIT.x, FRUIT.y))
+        .expect("the bundled cherry is a 42 x 24 PNG")
 }
 
 pub(crate) fn to_bevy(s: &SpriteImage) -> Image {
@@ -819,8 +772,8 @@ mod tests {
     }
 
     #[test]
-    fn the_placeholder_fruit_has_two_frames_that_differ() {
-        let s = placeholder();
+    fn the_bundled_fruit_has_two_frames_that_differ() {
+        let s = bundled_fruit();
         assert_eq!(s.size, (42, 24));
         let frame = |f: u32| {
             crop(
