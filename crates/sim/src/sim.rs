@@ -260,6 +260,24 @@ impl Sim {
         &self.def
     }
 
+    /// The whole world as bytes: a practice save state (docs/product.md, Practice;
+    /// docs/architecture/client/practice.md). A run that saves or loads one is practice, so it is
+    /// never ranked and its replay is not recorded (the state jump breaks an input-only replay).
+    pub fn snapshot(&self) -> Vec<u8> {
+        postcard::to_allocvec(&self.world).expect("the world is plain data")
+    }
+
+    /// Replaces the world with a [`snapshot`](Self::snapshot), between two steps. The run's own
+    /// rules, scripts and options stay as they are.
+    pub fn restore(&mut self, bytes: &[u8]) -> Result<(), SimError> {
+        if self.rows_done {
+            return Err(SimError::invariant("a save state is restored between steps"));
+        }
+        self.world = postcard::from_bytes(bytes)
+            .map_err(|e| SimError::invariant(format!("the save state does not decode ({e})")))?;
+        Ok(())
+    }
+
     /// Turns the `keyboard_check_direct` latch off or on for this run. The trace runner turns it
     /// off, as the recorder has no latch (CLONE_SPEC input, Confirmed (recorder)).
     pub fn set_direct_latch(&mut self, latch: crate::rules::tick::DirectLatch) {

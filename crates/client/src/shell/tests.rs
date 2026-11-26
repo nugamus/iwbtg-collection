@@ -271,7 +271,7 @@ fn start_map_plays_the_picked_map() {
     let mut app = app();
     frames(&mut app, 3);
     let pkg = demo("tests/fixtures/maps.pkg");
-    start_map(app.world_mut(), &pkg, Some("hard"));
+    start_map(app.world_mut(), &pkg, Some("hard"), None);
     wait_for_stage(&mut app);
     frames(&mut app, 2);
     assert_eq!(map_id(&app), "hard");
@@ -282,12 +282,42 @@ fn start_map_plays_the_picked_map() {
     assert_eq!(map_id(&app), "medium", "no id: the first map");
 }
 
+/// A save state is the world: `Sim::snapshot` and `Sim::restore` round-trip the state hash and
+/// the tick, and `F5`/`F6` in a practice run save and load it (#39).
+#[test]
+fn a_save_state_restores_the_world_and_f5_f6_use_it() {
+    let mut app = app();
+    frames(&mut app, 3);
+    app.world_mut()
+        .insert_resource(crate::practice::Practice(true));
+    start(app.world_mut(), &demo("tests/fixtures/maps.pkg")).unwrap();
+    frames(&mut app, 20);
+    // The press's frame ticks before the key system saves, so read the state after it.
+    press(&mut app, crate::practice::SAVE_STATE_KEY);
+    let saved_tick = tick(&app);
+    let saved_hash = {
+        let game = app.world().non_send::<Game>();
+        iwbtg_sim::hash::state_hash(game.sim.world())
+    };
+    frames(&mut app, 20);
+    assert!(tick(&app) > saved_tick, "the run went on");
+
+    press(&mut app, crate::practice::LOAD_STATE_KEY);
+    assert_eq!(tick(&app), saved_tick, "F6 restored the tick");
+    let game = app.world().non_send::<Game>();
+    assert_eq!(
+        iwbtg_sim::hash::state_hash(game.sim.world()),
+        saved_hash,
+        "and the whole state"
+    );
+}
+
 /// A map the package does not have is reported by the staged start and nothing changes.
 #[test]
 fn start_map_refuses_an_unknown_map() {
     let mut app = app();
     frames(&mut app, 3);
-    start_map(app.world_mut(), &demo("tests/fixtures/maps.pkg"), Some("nope"));
+    start_map(app.world_mut(), &demo("tests/fixtures/maps.pkg"), Some("nope"), None);
     wait_for_stage(&mut app);
     assert_eq!(
         *app.world().resource::<State<AppScreen>>().get(),
@@ -318,6 +348,7 @@ fn a_staged_start_keeps_the_run_until_it_is_ready() {
         generation: 1,
         path: path.clone(),
         map: None,
+        start: None,
         rx: Mutex::new(rx),
     });
     frames(&mut app, 10);
@@ -349,6 +380,7 @@ fn a_staged_start_that_halts_opens_the_error_screen() {
         app.world_mut(),
         &demo("tests/fixtures/start_error.pkg"),
         None,
+        None,
     );
     wait_for_stage(&mut app);
     frames(&mut app, 3);
@@ -375,6 +407,7 @@ fn a_failed_staged_start_keeps_the_run_playing() {
         generation: 1,
         path: path.clone(),
         map: Some("nope".to_owned()),
+        start: None,
         rx: Mutex::new(rx),
     });
     tx.send((1, Ok(stage(&path, false).unwrap()))).unwrap();
@@ -506,6 +539,7 @@ fn a_newer_staged_start_wins() {
         generation: 2,
         path: new.clone(),
         map: None,
+        start: None,
         rx: Mutex::new(rx),
     });
     // The result of generation 1 is stale and must be ignored.

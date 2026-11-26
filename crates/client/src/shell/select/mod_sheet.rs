@@ -123,6 +123,7 @@ pub fn header(set: ModSet, slow_speed: u8, map: &str) -> (bool, String) {
         original: false,
         mods: set,
         slow_speed,
+        practice: false,
     };
     match standing(run) {
         Standing::Unranked(why) => (false, why),

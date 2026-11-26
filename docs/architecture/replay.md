@@ -43,7 +43,7 @@ A postcard-encoded, versioned struct. Postcard is a small, documented, stable bi
 
 - A run is ranked only when it starts a new game and every mod in it is ranked. `ModSet::unranked_by` gives the first mod that is not, for the Unranked pill's reason. Each combination has its own board, named by `ModSet::codes` (`SD+NB`, `NM` for none).
 - No mod changes what a tick computes, so replays need no mod-specific sim path. Sudden Death only fixes where a run ends: the tick that raises the death counter is the last one (`ModSet::ends_run`). The client stops there, so its replay ends on that tick, and the verifier (`iwbtg replay run`) rejects a Sudden Death replay with inputs after it.
-- Slow motion and frame advance change only the client's clock; save states break the input-only replay and are practice anyway.
+- Slow motion and frame advance change only the client's clock; save states break the input-only replay and are practice anyway. A practice or Save states run is not recorded at all (`replays::Recorder::skip`), so a state restored mid-run never becomes a replay.
 
 ### Text inputs for tests (`.inputs`)
 

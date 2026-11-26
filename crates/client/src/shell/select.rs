@@ -30,6 +30,7 @@ pub mod footer;
 pub mod library;
 pub mod list;
 pub mod mod_sheet;
+pub mod practice;
 
 use collections::Collections;
 use filters::Filters;
@@ -59,12 +60,13 @@ const NO_PACKAGES: &str = "No packages here (folders with a game.toml, .iwbz fil
 
 /// The select screen: added by main.rs with the window (it needs the UI kit). The flag is
 /// `--mod-select-preview`: the mod select sheet opens with the screen.
-pub struct SelectPlugin(pub Option<PathBuf>, pub bool);
+pub struct SelectPlugin(pub Option<PathBuf>, pub bool, pub bool);
 
 impl Plugin for SelectPlugin {
     fn build(&self, app: &mut App) {
         let folder = self.0.clone();
         let preview = self.1;
+        let practice_preview = self.2;
         // The player's favorites and collections (a test inserts its own empty set first).
         if app.world().get_resource::<Collections>().is_none() {
             app.insert_resource(Collections::open(crate::storage::Store::data()));
@@ -74,6 +76,9 @@ impl Plugin for SelectPlugin {
             .init_resource::<collections::Renaming>()
             .init_resource::<Shown>()
             .init_resource::<mod_sheet::Sheet>()
+            .init_resource::<practice::Sheet>()
+            .init_resource::<practice::Pick>()
+            .insert_resource(practice::Preview(practice_preview))
             // `failed` reads it; the screen's tests add this plugin without `ShellPlugin`.
             .add_message::<super::StartFailed>()
             .add_systems(
@@ -86,6 +91,8 @@ impl Plugin for SelectPlugin {
                       mods: Option<Res<crate::mods::RunMods>>,
                       speed: Option<Res<crate::practice::SlowSpeed>>,
                       mut sheet: ResMut<mod_sheet::Sheet>,
+                      mut practice_sheet: ResMut<practice::Sheet>,
+                      mut practice_pick: ResMut<practice::Pick>,
                       filters: Res<Filters>,
                       lists: Res<Collections>,
                       mut shown: ResMut<Shown>,
@@ -105,6 +112,8 @@ impl Plugin for SelectPlugin {
                     let mods = mods.map_or(ModSet::NONE, |m| m.0);
                     let speed = speed.map_or(crate::practice::SLOW_SPEEDS[0], |s| s.0);
                     sheet.open = false;
+                    practice_sheet.open = false;
+                    practice_pick.start = None;
                     if preview {
                         sheet.open_with(mods);
                     }
@@ -164,6 +173,8 @@ impl Plugin for SelectPlugin {
                 },
             )
             .add_observer(on_click)
+            .add_observer(practice::open)
+            .add_observer(practice::on_activate)
             .add_observer(controls::on_activate)
             .add_observer(collections::favorite)
             .add_observer(collections::member)
@@ -177,7 +188,7 @@ impl Plugin for SelectPlugin {
                         controls::search,
                         list::refilter,
                         controls::labels,
-                        keys.run_if(mod_sheet::closed),
+                        keys.run_if(mod_sheet::closed).run_if(practice::closed),
                         collections::keys,
                         mod_sheet::keys,
                         mod_sheet::slide,
@@ -197,6 +208,9 @@ impl Plugin for SelectPlugin {
                         opening,
                         failed,
                         collections::editor_labels,
+                    practice::chips,
+                    practice::keys,
+                    practice::preview,
                         scale,
                     )
                         .chain(),
@@ -303,6 +317,28 @@ fn enter(
             (text("", Type::barlow(18.0, 600), tokens::SOFT), PickedMap),
             text(&where_, Type::barlow(14.0, 400), tokens::MUTED),
             (text(hint, Type::BODY, tokens::SOFT), HintText),
+            (
+                Node {
+                    column_gap: Val::Px(10.0),
+                    align_items: AlignItems::Center,
+                    flex_wrap: FlexWrap::Wrap,
+                    ..default()
+                },
+                children![
+                    (
+                        crate::ui::widgets::button(
+                            "Practice",
+                            crate::ui::widgets::ButtonKind::Control
+                        ),
+                        practice::OpenButton
+                    ),
+                    text(
+                        "Start at a stage, your save or any room · practice runs stay off the leaderboard",
+                        Type::barlow(14.0, 400),
+                        tokens::MUTED
+                    ),
+                ],
+            ),
             collections::controls(lists, lib.games.get(sel.game).map(|g| g.id.as_str())),
         ],
     ));
@@ -318,9 +354,17 @@ fn map_id(game: &GameInfo, index: usize) -> Option<String> {
 
 /// Stages the package at `path` on map `map` (`None`: its first); the list stays up with
 /// `Opening <name>…` until it is ready, and one that does not open shows the NOT OPENED notice.
-fn play(commands: &mut Commands, path: PathBuf, map: Option<String>) {
+fn play(
+    commands: &mut Commands,
+    path: PathBuf,
+    map: Option<String>,
+    start: Option<iwbtg_sim::room::StartPoint>,
+) {
     commands.queue(move |world: &mut World| {
-        super::start_map(world, &path, map.as_deref());
+        if let Some(mut practice) = world.get_resource_mut::<crate::practice::Practice>() {
+            practice.0 = false;
+        }
+        super::start_map(world, &path, map.as_deref(), start);
     });
 }
 
@@ -403,7 +447,7 @@ fn keys(
         && order.contains(&sel.game)
         && let Some(game) = lib.games.get(sel.game)
     {
-        play(&mut commands, game.path.clone(), map_id(game, sel.map));
+        play(&mut commands, game.path.clone(), map_id(game, sel.map), None);
     }
     if keys.just_pressed(KeyCode::Escape) {
         if naming {
@@ -446,7 +490,7 @@ fn on_click(
         };
         if picked == *sel {
             if let Some(game) = lib.games.get(map.0) {
-                play(&mut commands, game.path.clone(), map_id(game, map.1));
+                play(&mut commands, game.path.clone(), map_id(game, map.1), None);
             }
         } else {
             *sel = picked;
@@ -526,8 +570,9 @@ mod tests {
             .init_resource::<UiScale>()
             .init_resource::<Backdrop>()
             .init_resource::<Collections>()
+            .init_resource::<crate::practice::Practice>()
             .init_state::<AppScreen>()
-            .add_plugins(SelectPlugin(Some(fixtures), false));
+            .add_plugins(SelectPlugin(Some(fixtures), false, false));
         app.update();
         app.update();
         app
@@ -553,6 +598,7 @@ mod tests {
                 generation: 1,
                 path: PathBuf::from("big-game.pkg"),
                 map: None,
+                start: None,
                 rx: std::sync::Mutex::new(rx),
             });
         app.update();
@@ -659,6 +705,30 @@ mod tests {
             .collect();
         texts.sort_by_key(|t| t.0);
         texts.into_iter().map(|t| t.1).collect::<Vec<_>>().join("|")
+    }
+
+    /// The Practice panel lists the map's stage and rooms; a chip and Start stage a practice
+    /// run (`Practice` set, the picked `StartPoint` in `PendingStart`, #39).
+    #[test]
+    fn the_practice_pickers_stage_a_practice_start() {
+        use super::super::PendingStart;
+        use iwbtg_sim::room::StartPoint;
+        use practice::{OpenButton, OptionStart, StartButton};
+        let mut app = screen();
+        *app.world_mut().resource_mut::<Selection>() = Selection { game: 3, map: 1 };
+        app.update();
+        activate::<OpenButton>(&mut app, |_| true);
+        assert!(app.world().resource::<practice::Sheet>().open);
+        activate::<OptionStart>(&mut app, |o| matches!(o.0, StartPoint::Room { .. }));
+        assert!(app.world().resource::<practice::Pick>().start.is_some());
+        activate::<StartButton>(&mut app, |_| true);
+        assert!(!app.world().resource::<practice::Sheet>().open, "Start closes it");
+        assert!(app.world().resource::<crate::practice::Practice>().0);
+        let pending = app.world().resource::<PendingStart>();
+        assert!(
+            matches!(pending.start, Some(StartPoint::Room { .. })),
+            "the picked stage's room"
+        );
     }
 
     /// Puts `name` in the new collection field, as typing does.

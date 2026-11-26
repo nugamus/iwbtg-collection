@@ -20,10 +20,24 @@ use iwbtg_sim::mods::{Mod, ModSet};
 use crate::audio::MusicSync;
 use crate::input::Collector;
 use crate::mods::RunMods;
-use crate::view::{ClockSpeed, SimTick};
+use crate::view::{ClockSpeed, Game, SimTick};
 
 /// The slow motion speeds the mod select offers, in percent.
 pub const SLOW_SPEEDS: [u8; 2] = [75, 50];
+
+/// A practice run (#39): started at a stage, a save or a room from game select's pickers, or one
+/// playing with Save states. Practice runs are never ranked, and their replay is not recorded:
+/// a save state restored mid-run breaks an input-only replay (docs/architecture/replay.md).
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Practice(pub bool);
+
+/// The run's saved world: `F5` saves it, `F6` restores it (practice and Save states runs only).
+#[derive(Resource, Default)]
+pub struct SaveState(Option<Vec<u8>>);
+
+/// Save states' keys. Client keys, not the game's: neither has a binding by default.
+pub const SAVE_STATE_KEY: KeyCode = KeyCode::F5;
+pub const LOAD_STATE_KEY: KeyCode = KeyCode::F6;
 
 /// The clock assists' command-line flags (main.rs flattens each module's group, #530).
 #[derive(clap::Args, Debug, Default)]
@@ -117,6 +131,27 @@ impl Plugin for PracticePlugin {
         let first = first_speed(self.slow_speed, crate::settings::get().slow_speed);
         app.insert_resource(SlowSpeed(first))
             .init_resource::<ClockSpeed>()
+            .init_resource::<Practice>()
+            // Save states: F5 saves the world, F6 restores it. Run-scoped, so a retry starts
+            // with no state; only practice and Save states runs may use them.
+            .add_systems(
+                OnEnter(crate::shell::AppScreen::Run),
+                (|mut commands: Commands| commands.insert_resource(SaveState::default()))
+                    .in_set(crate::shell::RunSteps::Resources),
+            )
+            .add_systems(
+                OnExit(crate::shell::AppScreen::Run),
+                (|world: &mut World| {
+                    world.remove_resource::<SaveState>();
+                })
+                .in_set(crate::shell::RunSteps::Resources),
+            )
+            .add_systems(
+                Update,
+                save_state_keys
+                    .run_if(in_state(crate::shell::AppScreen::Run))
+                    .run_if(in_state(crate::shell::RunScreen::Playing)),
+            )
             // Before the view's core: `view::enter` sets the run's first clock rate with it, and
             // `follow_room_speed` keeps it so after every tick.
             .add_systems(
@@ -158,6 +193,36 @@ impl Plugin for PracticePlugin {
                     .run_if(resource_exists::<Advance>)
                     .in_set(crate::shell::InRun),
             );
+    }
+}
+
+/// F5 saves the world, F6 restores it, in a practice or Save states run.
+fn save_state_keys(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut game: NonSendMut<Game>,
+    mut saved: ResMut<SaveState>,
+    practice: Option<Res<Practice>>,
+    mods: Option<Res<RunMods>>,
+) {
+    let on = practice.is_some_and(|p| p.0)
+        || mods.is_some_and(|m| m.0.contains(Mod::SaveStates));
+    if !on {
+        return;
+    }
+    if keys.just_pressed(SAVE_STATE_KEY) {
+        let tick = game.sim.world().tick;
+        saved.0 = Some(game.sim.snapshot());
+        eprintln!("practice: saved a state at tick {tick}");
+    }
+    if keys.just_pressed(LOAD_STATE_KEY) {
+        let Some(bytes) = saved.0.as_deref() else {
+            eprintln!("practice: no state saved yet");
+            return;
+        };
+        match game.sim.restore(bytes) {
+            Ok(()) => eprintln!("practice: loaded the state at tick {}", game.sim.world().tick),
+            Err(e) => eprintln!("practice: the state was not loaded: {e}"),
+        }
     }
 }
 

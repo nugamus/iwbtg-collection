@@ -118,6 +118,12 @@ impl Stats {
         self.current.as_ref().map(|c| c.board.as_str())
     }
 
+    /// Whether the current run counts on its board (`None` before its first tick).
+    #[cfg(test)]
+    pub(crate) fn on_board(&self) -> Option<bool> {
+        self.current.as_ref().map(|c| c.on_board)
+    }
+
     /// Opens the current run's tracker from the state before its first tick (#1011), so that
     /// tick's play time, death, split or clear is counted. The first observation is only the
     /// baseline, so a run from a save keeps that save's counters and counts no historical death.
@@ -128,6 +134,7 @@ impl Stats {
         sim: &Sim,
         mods: Option<&crate::mods::RunMods>,
         menu: Option<&crate::pause::Menu>,
+        practice: bool,
     ) {
         if self.current.is_some() {
             return;
@@ -145,7 +152,9 @@ impl Stats {
             tick_rate: def.tick_rate,
             // The board of the mods the run opened with (`mods::RunMods`).
             board: board_key(ranked, &mods.map_or(ModSet::NONE, |m| m.0).codes()),
-            on_board: matches!(opts.start, StartPoint::NewGame { .. }),
+            on_board: matches!(opts.start, StartPoint::NewGame { .. })
+                && !practice
+                && !mods.is_some_and(|m| m.0.contains(iwbtg_sim::mods::Mod::SaveStates)),
             rooms: def.rooms.iter().map(|r| r.name.clone()).collect(),
             tracker,
         });
@@ -442,8 +451,14 @@ fn seed(
     mut stats: ResMut<Stats>,
     menu: Option<Res<crate::pause::Menu>>,
     mods: Option<Res<crate::mods::RunMods>>,
+    practice: Option<Res<crate::practice::Practice>>,
 ) {
-    stats.open_current(&game.sim, mods.as_deref(), menu.as_deref());
+    stats.open_current(
+        &game.sim,
+        mods.as_deref(),
+        menu.as_deref(),
+        practice.is_some_and(|p| p.0),
+    );
 }
 
 /// What the sim looks like now, as the tracker reads it. Read only: the death log never touches
@@ -480,10 +495,16 @@ fn watch(
     replays: Option<Res<crate::replays::Recorder>>,
     menu: Option<Res<crate::pause::Menu>>,
     mods: Option<Res<crate::mods::RunMods>>,
+    practice: Option<Res<crate::practice::Practice>>,
 ) {
     // `seed` opened it before this tick; the fallback keeps a direct call (a test, or a tick
     // that ran before the fixed loop seeded) from losing the first observation.
-    stats.open_current(&game.sim, mods.as_deref(), menu.as_deref());
+    stats.open_current(
+        &game.sim,
+        mods.as_deref(),
+        menu.as_deref(),
+        practice.is_some_and(|p| p.0),
+    );
     let replay = replays.as_deref().and_then(|r| r.current_name());
     stats.observe(
         &game.sim,
@@ -795,6 +816,35 @@ mod tests {
             );
         }
         panic!("no clear in 2000 ticks");
+    }
+
+    /// A practice run is never put on a board, even from a new game (#39).
+    #[test]
+    fn a_practice_run_is_never_on_a_board() {
+        use iwbtg_sim::room::StartPoint;
+        use iwbtg_sim::sim::{Sim, SimOptions};
+        use iwbtg_sim::sound::DllMode;
+        use iwbtg_sim::stripped::PlayMode;
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/clear.pkg");
+        let pkg = crate::package::open(&dir, false).unwrap();
+        let sim = Sim::new(
+            pkg.def.clone(),
+            SimOptions {
+                start: StartPoint::NewGame { difficulty: 0 },
+                seed: 1,
+                dll_mode: DllMode::Model,
+                mode: PlayMode::Original,
+                map: None,
+            },
+        )
+        .unwrap();
+        let mut stats = Stats::open(None);
+        stats.open_current(&sim, None, None, true);
+        assert_eq!(stats.on_board(), Some(false), "practice is not on a board");
+
+        let mut stats = Stats::open(None);
+        stats.open_current(&sim, None, None, false);
+        assert_eq!(stats.on_board(), Some(true), "a plain new game is");
     }
 
     /// #679: a run with deaths logs them with their time, room and the kid's position; the clear

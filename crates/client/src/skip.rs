@@ -363,7 +363,7 @@ mod tests {
         // Skipped: the region holds until the goal room; then walk to the clear.
         let mut skipped_sim = sim(&def, PlayMode::Stripped);
         let mut skipped = Stats::open(None);
-        skipped.open_current(&skipped_sim, None, None);
+        skipped.open_current(&skipped_sim, None, None, false);
         let first = InputFrame {
             pressed: Action::Right.bit(),
             ..HOLD_RIGHT
@@ -388,7 +388,7 @@ mod tests {
         // Watched: the same frames one tick at a time.
         let mut watched_sim = sim(&def, PlayMode::Stripped);
         let mut watched = Stats::open(None);
-        watched.open_current(&watched_sim, None, None);
+        watched.open_current(&watched_sim, None, None, false);
         for f in &frames {
             watched_sim.step(*f);
             watched.observe(&watched_sim, None, dt, None);
@@ -453,7 +453,7 @@ mod tests {
 
         let mut skipped_sim = sim(&def, PlayMode::Stripped);
         let mut skipped = Stats::open(None);
-        skipped.open_current(&skipped_sim, None, None);
+        skipped.open_current(&skipped_sim, None, None, false);
         let mut frames = Vec::new();
         let out = run_skip(&mut skipped_sim, first, 200, |s, f, _| {
             frames.push(f);
@@ -463,7 +463,7 @@ mod tests {
 
         let mut watched_sim = sim(&def, PlayMode::Stripped);
         let mut watched = Stats::open(None);
-        watched.open_current(&watched_sim, None, None);
+        watched.open_current(&watched_sim, None, None, false);
         for f in &frames {
             watched_sim.step(*f);
             watched.observe(&watched_sim, None, dt, None);
