@@ -58,6 +58,27 @@ def context_lines(block):
         out.append("  … (rest in the issue)")
     return out
 
+
+CONTEXT_AUDIT = Path("scripts") / "check_issue_context.py"  # the guard from #1610
+CONTEXT_AUDIT_TIMEOUT = 10
+
+
+def context_audit_line(repo=REPO):
+    """The one-line agent-ready `## Context` audit (#1610), or '' when this checkout has no
+    audit script (the research and games copies) or it cannot run. Never raises: a transient
+    GitHub failure must not block a session start, which already reports GitHub itself."""
+    script = repo / CONTEXT_AUDIT
+    if not script.is_file():
+        return ""
+    try:
+        result = subprocess.run([sys.executable, "-I", str(script), "--hook"],
+                                capture_output=True, text=True, encoding="utf-8",
+                                timeout=CONTEXT_AUDIT_TIMEOUT)
+    except Exception:
+        return ""
+    lines = (result.stdout or "").strip().splitlines()
+    return lines[0].strip() if lines else ""
+
 FRAGMENT = """
 fragment R on Repository {
   milestones(first: 30, states: OPEN) { nodes { title
@@ -356,6 +377,7 @@ def start():
         # Do not mutate the cached data's shape while rendering.
         data = dict(data)
         red, ci_line = main_ci(data.pop("main", None))
+        audit = context_audit_line()
     except Exception as e:  # offline or gh missing: say so, never block the session
         return emit(warn + f"Issue harness: could not reach GitHub ({type(e).__name__}). Run `gh auth status`; work from the issues once it is back.")
 
@@ -397,6 +419,8 @@ def start():
         o, c = ms[t]
         lines.append(f"- {t}: {c}/{o + c} ({100 * c // max(o + c, 1)}%)")
     lines += game_progress_lines()
+    if audit:
+        lines += ["", audit]
     if answered:
         lines += ["", "The user answered these needs-user issues. Read the reply, act on it, remove `needs-user`:"] + [f"- {a}" for a in answered]
     if triage:
@@ -600,6 +624,20 @@ def test():
     many = "\n".join(f"- line {i}" for i in range(CONTEXT_LINES + 2))
     assert context_lines(many)[-1] == "  … (rest in the issue)"
     assert len(context_lines(many)) == CONTEXT_LINES + 1
+    # #1610: the audit script is a client-checkout file; the hook takes its first line and
+    # stays silent when the file is absent or the call fails, so a session never blocks.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        assert context_audit_line(root) == ""
+        (root / "scripts").mkdir()
+        (root / CONTEXT_AUDIT).write_text("print('audit line')", encoding="utf-8")
+        with patch("subprocess.run", return_value=SimpleNamespace(returncode=0, stdout="audit line\nmore\n")) as run:
+            assert context_audit_line(root) == "audit line"
+            assert run.call_args[0][0][-1] == "--hook" and "-I" in run.call_args[0][0]
+        with patch("subprocess.run", return_value=SimpleNamespace(returncode=1, stdout="")):
+            assert context_audit_line(root) == ""
+        with patch("subprocess.run", side_effect=OSError("boom")):
+            assert context_audit_line(root) == ""
     # Main CI (#595): a failed check is red and loud; cancelled or running commits defer to older ones.
     def commit(oid, *checks):
         return {"oid": oid * 40, "messageHeadline": f"PR {oid}", "statusCheckRollup": {"contexts": {"nodes": list(checks)}}}
