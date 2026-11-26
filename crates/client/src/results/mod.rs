@@ -40,6 +40,7 @@ use iwbtg_sim::stripped::PlayMode;
 use crate::art::{ArtFiles, ArtImages};
 use crate::card::{self, Card, RunChange};
 use crate::hud::Suspended;
+use crate::locale;
 use crate::hud::leaderboard::{self, Entry};
 use crate::shell::{self, InRun, RUN_ONLY, RunScreen};
 use crate::stats::{Board, Cleared, Recorded, Run, Stats, fmt_ticks};
@@ -348,11 +349,13 @@ impl Summary {
     fn cleared_at(&self, offset: i32) -> String {
         let s = self.finished_at;
         let local = (s as i64 + i64::from(offset)).max(0) as u64;
-        format!(
-            "Cleared {}, {:02}:{:02}",
-            leaderboard::date_at(s, offset),
-            local / 3600 % 24,
-            local / 60 % 60
+        locale::format(
+            "results_cleared",
+            &[
+                ("date", &leaderboard::date_at(s, offset)),
+                ("hour", &format!("{:02}", local / 3600 % 24)),
+                ("min", &format!("{:02}", local / 60 % 60)),
+            ],
         )
     }
 
@@ -371,32 +374,42 @@ impl Summary {
         let delta = |d: i64| leaderboard::fmt_delta(d, self.about.rate);
         let mut out = Vec::new();
         if self.about.ranked {
-            let unit = if self.runs == 1 { "run" } else { "runs" };
+            let unit = locale::text(if self.runs == 1 {
+                "results_run_one"
+            } else {
+                "results_run_other"
+            });
             out.push(Change {
-                label: "Local placement",
+                label: locale::text("results_local_placement"),
                 value: format!("#{}", self.place),
-                note: format!("of {} {unit}", self.runs),
+                note: locale::format(
+                    "results_placement_note",
+                    &[("n", &self.runs), ("unit", &unit)],
+                ),
                 color: tokens::MUTED,
             });
         }
         let now = self.ticks as i64;
         out.push(match self.pb_before {
             None => Change {
-                label: "Personal best",
+                label: locale::text("results_personal_best"),
                 value: t(self.ticks),
-                note: "First clear".to_owned(),
+                note: locale::text("results_first_clear").to_owned(),
                 color: tokens::AHEAD,
             },
             Some(before) if self.is_pb => Change {
-                label: "Personal best",
+                label: locale::text("results_personal_best"),
                 value: format!("{} → {}", t(before), t(self.ticks)),
                 note: delta(now - before as i64),
                 color: tokens::AHEAD,
             },
             Some(pb) => Change {
-                label: "Personal best",
-                value: format!("{} stands", t(pb)),
-                note: format!("{} this run", delta(now - pb as i64)),
+                label: locale::text("results_personal_best"),
+                value: locale::format("results_pb_stands", &[("time", &t(pb))]),
+                note: locale::format(
+                    "results_pb_this_run",
+                    &[("delta", &delta(now - pb as i64))],
+                ),
                 color: tokens::BEHIND,
             },
         });
@@ -421,15 +434,21 @@ pub struct Change {
 /// Segment `i` of `n`: `Stage 1`, `Stage 2`, ...; a game without stages has one, `Run`.
 pub fn stage_name(i: usize, n: usize) -> String {
     if n <= 1 {
-        "Run".to_owned()
+        locale::text("results_stage_run").to_owned()
     } else {
-        format!("Stage {}", i + 1)
+        locale::format("results_stage_number", &[("n", &(i + 1))])
     }
 }
 
-/// The bar label of a stage: `Stage 3` as `3`.
+/// The bar label of a stage: `Stage 3` as `3` (in the current language; the English sample
+/// stages in `results::sample` still strip).
 pub fn bar_label(name: &str) -> &str {
-    name.strip_prefix("Stage ").unwrap_or(name)
+    for prefix in [locale::text("results_stage_prefix"), "Stage "] {
+        if let Some(rest) = name.strip_prefix(prefix) {
+            return rest;
+        }
+    }
+    name
 }
 
 /// A button on the page.
@@ -581,7 +600,14 @@ fn open(
     if def.maps.len() > 1 {
         subtitle.push(sim.map_id().to_owned());
     }
-    subtitle.push(if original { "Play original" } else { "Ranked" }.to_owned());
+    subtitle.push(
+        locale::text(if original {
+            "results_play_original"
+        } else {
+            "pill_ranked"
+        })
+        .to_owned(),
+    );
     if mods != iwbtg_sim::mods::ModSet::NONE {
         subtitle.push(mods.codes());
     }

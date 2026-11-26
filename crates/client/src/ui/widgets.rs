@@ -15,6 +15,7 @@ use super::icons::{Icon, icon};
 use super::motion::{Ease, OffsetX, ReducedMotion, Scale, Tween};
 use super::shape::{Ink, Shape, UiOpacity};
 use super::tokens::{self, star_color};
+use crate::locale;
 
 pub(super) fn plugin(app: &mut App) {
     if !app.is_plugin_added::<TabNavigationPlugin>() {
@@ -276,13 +277,13 @@ pub fn unranked_pill() -> impl Bundle {
         tracking: 0.1,
         ..Type::PILL_CAPS
     };
-    pill("Unranked", style, tokens::AMBER, tokens::ON_AMBER, 26.0, 12.0)
+    pill(locale::text("pill_unranked"), style, tokens::AMBER, tokens::ON_AMBER, 26.0, 12.0)
 }
 
 /// The blue Ranked pill.
 pub fn ranked_pill() -> impl Bundle {
     pill(
-        "Ranked",
+        locale::text("pill_ranked"),
         Type::PILL_CAPS,
         tokens::RANKED,
         tokens::ON_RANKED,

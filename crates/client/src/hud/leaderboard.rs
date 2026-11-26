@@ -18,6 +18,7 @@ use bevy::prelude::*;
 
 use super::layout::Density;
 use super::run_info::{Field, Preview, RunInfo};
+use crate::locale;
 use crate::mods::RunMods;
 use crate::stats::{Stats, fmt_ticks, map_key};
 use crate::ui::fonts::Type;
@@ -111,9 +112,16 @@ pub fn fmt_delta(delta: i64, rate: u32) -> String {
     }
 }
 
-const MONTHS: [&str; 12] = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+/// The locale keys of the month names, January first.
+const MONTH_KEYS: [&str; 12] = [
+    "month_1", "month_2", "month_3", "month_4", "month_5", "month_6", "month_7", "month_8",
+    "month_9", "month_10", "month_11", "month_12",
 ];
+
+/// The translated month name for a 1-based month.
+fn month_name(month: usize) -> &'static str {
+    locale::text(MONTH_KEYS[(month.clamp(1, 12)) - 1])
+}
 
 /// Seconds east of UTC that the player's time zone had at `secs` (seconds since 1970): their
 /// DST rule included. UTC (0) when the system gives no zone. The one place the client asks the
@@ -134,6 +142,26 @@ pub fn date(secs: u64) -> String {
 
 /// `3 Nov 2026` for seconds since 1970 shifted by `offset` seconds east of UTC.
 pub fn date_at(secs: u64, offset: i32) -> String {
+    let (day, month, year) = civil(secs, offset);
+    locale::format(
+        "date_long",
+        &[("d", &day), ("m", &month_name(month)), ("y", &year)],
+    )
+}
+
+/// `3 Nov` for seconds since 1970 in the player's time zone: a compact panel has no year.
+pub fn date_short(secs: u64) -> String {
+    date_short_at(secs, local_offset(secs))
+}
+
+/// `3 Nov` for seconds since 1970 shifted by `offset` seconds east of UTC.
+pub fn date_short_at(secs: u64, offset: i32) -> String {
+    let (day, month, _) = civil(secs, offset);
+    locale::format("date_short", &[("d", &day), ("m", &month_name(month))])
+}
+
+/// The civil date `(day, month, year)` of `secs` shifted by `offset` seconds east of UTC.
+fn civil(secs: u64, offset: i32) -> (i64, usize, i64) {
     let secs = (secs as i64 + i64::from(offset)).max(0) as u64;
     // Days to a civil date (proleptic Gregorian), H. Hinnant's `civil_from_days`.
     let z = (secs / 86_400) as i64 + 719_468;
@@ -145,10 +173,11 @@ pub fn date_at(secs: u64, offset: i32) -> String {
     let day = doy - (153 * mp + 2) / 5 + 1;
     let month = if mp < 10 { mp + 3 } else { mp - 9 };
     let year = yoe + era * 400 + i64::from(month <= 2);
-    format!("{day} {} {year}", MONTHS[(month - 1) as usize])
+    (day, month as usize, year)
 }
 
-/// `3 Nov` from `3 Nov 2026`: a compact panel has no room for the year.
+/// `3 Nov` from `3 Nov 2026`: for the English sample dates (`Sample`), which are not translated
+/// data. Real runs use [`date_short`].
 pub fn short_date(date: &str) -> &str {
     date.rsplit_once(' ').map_or(date, |(day_month, _)| day_month)
 }
@@ -360,7 +389,7 @@ pub fn from_runs(runs: &[crate::stats::Run], segments: usize) -> Vec<Entry> {
                 Vec::new()
             },
             label: date(r.finished_at),
-            short: short_date(&date(r.finished_at)).to_owned(),
+            short: date_short(r.finished_at),
         })
         .collect()
 }
@@ -474,7 +503,7 @@ pub fn build(width: f32, density: Density, live: &Live) -> impl Bundle + use<> {
                     display: if mini { Display::None } else { Display::Flex },
                     ..default()
                 },
-                children![text("Local · your runs", header, tokens::SOFT)],
+                children![text(locale::text("leaderboard_local_runs"), header, tokens::SOFT)],
             ));
             // Frozen with #1 out of view: #1 pinned on top, three dots, then the list.
             if frozen && first > 0 {
@@ -551,7 +580,7 @@ pub fn build(width: f32, density: Density, live: &Live) -> impl Bundle + use<> {
                         ..default()
                     },
                     children![text(
-                        "No clears yet — be the first",
+                        locale::text("leaderboard_no_clears"),
                         Type::barlow(14.0, 500),
                         tokens::MUTED
                     )],
@@ -704,7 +733,7 @@ fn your_row(g: &Geometry, place: usize, fixed: Option<String>, node: Node) -> im
                 return;
             }
             c.spawn(text_column()).with_children(|c| {
-                let name = if frozen { "This run" } else { "Now" };
+                let name = locale::text(if frozen { "leaderboard_this_run" } else { "leaderboard_now" });
                 c.spawn(ellipsis_text(name, STYLES.name_you, tokens::INK));
                 lines(c);
             });
@@ -872,7 +901,10 @@ pub fn animate(
         let want = if mini {
             delta
         } else {
-            format!("{delta} vs #{}", flash.pace.vs)
+            locale::format(
+                "leaderboard_vs",
+                &[("delta", &delta), ("place", &flash.pace.vs)],
+            )
         };
         let color = if flash.pace.delta < 0 {
             tokens::AHEAD

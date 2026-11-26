@@ -25,12 +25,42 @@ pub const MAX_BACKDROP_BLUR: u32 = 100;
 /// The backdrop blur a fresh file has, in percent (`ui::backdrop::DEFAULT_BLUR`).
 pub const DEFAULT_BACKDROP_BLUR: u32 = 60;
 
+/// The UI language (`language`, #196): the key of `crates/client/locales/<code>.toml`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Language {
+    /// English.
+    #[default]
+    En,
+    /// Japanese.
+    Ja,
+}
+
+impl Language {
+    /// The code the settings file stores, and the locale file's stem.
+    pub fn code(self) -> &'static str {
+        match self {
+            Language::En => "en",
+            Language::Ja => "ja",
+        }
+    }
+
+    fn parse(code: &str) -> Option<Language> {
+        match code {
+            "en" => Some(Language::En),
+            "ja" => Some(Language::Ja),
+            _ => None,
+        }
+    }
+}
+
 /// Every player setting.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
     /// The local profile name for the player card (`name`); empty falls back to the system
     /// account's name (`card::profile_name`).
     pub name: String,
+    /// The UI language (`locale.rs`). A file without it reads as English (#196).
+    pub language: Language,
     /// Start fullscreen.
     pub fullscreen: bool,
     /// Fullscreen area shape (`None` is the monitor's own), as `screen::RATIOS`.
@@ -79,6 +109,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             name: String::new(),
+            language: Language::En,
             fullscreen: false,
             ratio: None,
             window: None,
@@ -218,6 +249,11 @@ impl Settings {
                     }
                 }
                 ("name", _) => warnings.push("`name` must be a string".into()),
+                ("language", Value::String(code)) => match Language::parse(code) {
+                    Some(language) => s.language = language,
+                    None => warnings.push(format!("`language` `{code}` is not en or ja, using the default")),
+                },
+                ("language", _) => warnings.push("`language` must be a string".into()),
                 ("display", Value::Table(t)) => s.read_display(t, warnings),
                 ("audio", Value::Table(t)) => s.read_audio(t, warnings),
                 ("hud", Value::Table(t)) => s.read_hud(t, warnings),
@@ -411,6 +447,7 @@ impl Settings {
         if !self.name.is_empty() {
             root.insert("name".into(), self.name.clone().into());
         }
+        root.insert("language".into(), self.language.code().into());
         root.insert("display".into(), display.into());
         root.insert("audio".into(), audio.into());
         root.insert("hud".into(), hud.into());
@@ -525,6 +562,7 @@ mod tests {
     fn round_trips() {
         let mut s = Settings {
             name: "Kid".into(),
+            language: Language::Ja,
             fullscreen: true,
             ratio: Some((16, 9)),
             window: Some((1280, 720)),
@@ -663,6 +701,37 @@ master_volume = 40
         let (back, w) = parse(&text);
         assert!(back.shake() && back.flashes());
         assert!(w.is_empty(), "{w:?}");
+    }
+
+    #[test]
+    fn language_is_english_by_default_and_reads_en_or_ja() {
+        assert_eq!(Settings::default().language, Language::En);
+        let (s, w) = parse("language = \"ja\"\n");
+        assert_eq!((s.language, w.len()), (Language::Ja, 0), "{w:?}");
+        let (s, w) = parse("language = \"fr\"\n");
+        assert_eq!(s.language, Language::En, "an unknown code keeps the default");
+        assert_eq!(w.len(), 1, "{w:?}");
+        let (s, w) = parse("language = 1\n");
+        assert_eq!(s.language, Language::En);
+        assert_eq!(w.len(), 1, "{w:?}");
+    }
+
+    /// A file written before #196 has no `language`: it reads as English, and the next write adds
+    /// the key.
+    #[test]
+    fn an_old_file_without_language_is_english() {
+        let (s, w) = parse(
+            "version = 1
+name = \"Kid\"
+[display]
+fullscreen = true
+",
+        );
+        assert_eq!(s.language, Language::En);
+        assert!(w.is_empty(), "{w:?}");
+        let text = s.to_toml();
+        assert!(text.contains("language = \"en\""), "{text}");
+        assert_eq!(parse(&text).0.language, Language::En);
     }
 
     #[test]
