@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-26T12:44:04Z",
+ "generated_at": "2026-11-26T12:48:45Z",
  "source": "gh",
  "project_status": {
   "label": "Pre-release",
@@ -103,14 +103,14 @@
    "title": "4 · First playable",
    "name": "First playable",
    "state": "open",
-   "open": 10,
-   "closed": 45,
+   "open": 9,
+   "closed": 46,
    "total": 55,
-   "pct_closed": 81.8,
-   "size_points": 14,
+   "pct_closed": 83.6,
+   "size_points": 11,
    "sizes": {
     "size:S": 5,
-    "size:M": 3,
+    "size:M": 2,
     "size:L": 0,
     "unknown": 2
    },
@@ -263,16 +263,16 @@
  "activity": {
   "totals": {
    "issues": 947,
-   "open": 273,
-   "closed": 674,
-   "pct_closed": 71.2
+   "open": 272,
+   "closed": 675,
+   "pct_closed": 71.3
   },
   "open_prs": 4,
   "process": {
-   "agent-ready": 121,
-   "in-progress": 11,
+   "agent-ready": 120,
    "needs-user": 34,
    "triage": 49,
+   "in-progress": 10,
    "blocked": 25,
    "revisit": 3
   },
@@ -283,7 +283,7 @@
    },
    {
     "area": "area:client",
-    "count": 65
+    "count": 64
    },
    {
     "area": "area:format",
@@ -323,6 +323,22 @@
    }
   ],
   "recent_closed": [
+   {
+    "number": 1593,
+    "title": "Game select: incremental preview enumeration and same-path cache invalidation (rest of #1022)",
+    "state": "closed",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/1593",
+    "labels": [
+     "agent-ready",
+     "size:M",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "4 · First playable",
+    "updated_at": "2026-11-26T12:48:45Z",
+    "closed_at": "2026-11-26T12:48:44Z",
+    "created_at": "2026-11-26T12:03:02Z"
+   },
    {
     "number": 1592,
     "title": "Feel contracts cannot express a package variant or a halting start",
@@ -428,41 +444,9 @@
     "updated_at": "2026-11-26T12:15:08Z",
     "closed_at": "2026-11-26T12:15:08Z",
     "created_at": "2026-11-25T12:24:59Z"
-   },
-   {
-    "number": 1579,
-    "title": "Practice picker: start at any save point, not only the game's save",
-    "state": "closed",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1579",
-    "labels": [
-     "agent-ready",
-     "size:S",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "6 · Ranked-ready run",
-    "updated_at": "2026-11-26T12:14:03Z",
-    "closed_at": "2026-11-26T12:14:03Z",
-    "created_at": "2026-11-26T11:42:04Z"
    }
   ],
   "in_progress": [
-   {
-    "number": 1593,
-    "title": "Game select: incremental preview enumeration and same-path cache invalidation (rest of #1022)",
-    "state": "open",
-    "url": "https://github.com/nugamus/iwbtg-collection/issues/1593",
-    "labels": [
-     "agent-ready",
-     "size:M",
-     "area:client",
-     "in-progress"
-    ],
-    "phase": "4 · First playable",
-    "updated_at": "2026-11-26T12:28:00Z",
-    "closed_at": null,
-    "created_at": "2026-11-26T12:03:02Z"
-   },
    {
     "number": 1532,
     "title": "Script API: GML string functions (#776, census rank 19)",
@@ -474,7 +458,7 @@
      "in-progress"
     ],
     "phase": "2 · Format & pipeline",
-    "updated_at": "2026-11-26T12:26:35Z",
+    "updated_at": "2026-11-26T12:48:14Z",
     "closed_at": null,
     "created_at": "2026-11-25T10:07:52Z"
    },
@@ -542,6 +526,22 @@
     "updated_at": "2026-11-26T01:29:28Z",
     "closed_at": null,
     "created_at": "2026-11-02T12:41:04Z"
+   },
+   {
+    "number": 43,
+    "title": "Ranked (stripped) and Play original buttons",
+    "state": "open",
+    "url": "https://github.com/nugamus/iwbtg-collection/issues/43",
+    "labels": [
+     "agent-ready",
+     "size:S",
+     "area:client",
+     "in-progress"
+    ],
+    "phase": "6 · Ranked-ready run",
+    "updated_at": "2026-11-26T01:29:22Z",
+    "closed_at": null,
+    "created_at": "2026-11-02T11:30:26Z"
    }
   ],
   "needs_user": [
@@ -730,7 +730,7 @@
     "created_at": "2026-11-02T11:31:50Z"
    }
   ],
-  "closed_7d": 265,
+  "closed_7d": 266,
   "opened_7d": 290,
   "burnup": [
    {
@@ -751,7 +751,7 @@
    {
     "week": "2026-11-30",
     "created": 947,
-    "closed": 674
+    "closed": 675
    }
   ]
  },
