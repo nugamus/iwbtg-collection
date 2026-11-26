@@ -4,6 +4,7 @@
 //! serves [`app`]; the tests drive the same router in-process (`tower::ServiceExt::oneshot`), so
 //! they never need a port.
 
+pub mod admin;
 pub mod auth;
 pub mod catalog;
 pub mod db;
@@ -45,6 +46,16 @@ pub fn app(pool: SqlitePool, catalog_dir: Option<PathBuf>) -> Router {
     app_with_mailer(pool, catalog_dir, mail::Mailer::disabled())
 }
 
+/// The router state, so the binary can serve the admin listener from the same pool (#58).
+pub fn app_state(pool: SqlitePool, catalog_dir: Option<PathBuf>, mailer: mail::Mailer) -> AppState {
+    AppState {
+        pool,
+        catalog_dir,
+        limiter: Arc::new(rate_limit::RateLimiter::new()),
+        mailer: Arc::new(mailer),
+    }
+}
+
 /// [`app`] with an explicit mailer: the binary builds one from `SMTP_URL`/`MAIL_FROM`, the reset
 /// tests point one at a local mock SMTP listener (#160).
 pub fn app_with_mailer(pool: SqlitePool, catalog_dir: Option<PathBuf>, mailer: mail::Mailer) -> Router {
@@ -65,12 +76,7 @@ pub fn app_with_mailer(pool: SqlitePool, catalog_dir: Option<PathBuf>, mailer: m
             "/submissions",
             post(submissions::submit).layer(DefaultBodyLimit::max(submissions::MAX_REPLAY_BYTES)),
         )
-        .with_state(AppState {
-            pool,
-            catalog_dir,
-            limiter: Arc::new(rate_limit::RateLimiter::new()),
-            mailer: Arc::new(mailer),
-        })
+        .with_state(app_state(pool, catalog_dir, mailer))
 }
 
 /// Liveness for healthchecks.io (docs/server.md, Logs and monitoring): unauthenticated, no IO.

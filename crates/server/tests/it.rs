@@ -26,6 +26,9 @@ mod healthchecks;
 #[path = "auth.rs"]
 mod auth;
 
+#[path = "admin.rs"]
+mod admin;
+
 #[path = "reset.rs"]
 mod reset;
 

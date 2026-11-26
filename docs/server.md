@@ -34,6 +34,8 @@ Migrations live in `migrations/` at the workspace root (not in the crate), are c
 | `sessions` | `token_hash` unique; indexes on `account_id` and `expires_at` | Opaque session ID, SHA-256 of the bearer token, expiry. |
 | `runs` | `(package_id, map_id, mods, gameplay_hash, ticks, submitted_at)`; indexes on `replay_sha256`, `(account_id, ticks)` and `(account_id, package_id, map_id, mods, gameplay_hash, rng_seed)` | The replay BLOB (at most 1 MiB), its SHA-256 for exact-copy detection, the board identity, the header's `rng_seed` (eight raw bytes, for the reuse flag), and the verified tick count (`NULL` until the verifier has reproduced it). |
 | `run_flags` | primary key `(run_id, kind)`; index on `(kind, run_id)` | Review flags per run: `exact_copy` or `seed_reuse`, with `detail` naming the earlier run that explains it (#164). |
+| `run_reviews` | primary key `run_id`; index on `(state, opened_at)` | The moderator's decision for a run: `pending`, `cleared`, `video_requested` or `quarantined`, with the note, the reviewer and the timestamps (#58). |
+| `admin_sessions` | `token_hash` unique; index on `expires_at` | The eight-hour TOTP unlock of the admin listener; only the SHA-256 of the cookie token is stored (#58). |
 | `verify_jobs` | index on `(state, id)` and `run_id` | Queue state per submitted run: `queued`, `running`, `done` or `failed`, with attempts, timings and the verifier's error. |
 | `password_resets` | `account_id` primary key | SHA-256 of the active six-digit reset code, its expiry and attempt count; one code per account, replaced by a new request (#160). |
 
@@ -142,13 +144,15 @@ These are requirements, not suggestions.
 3. **Secrets are split.** `cloudflared.env` holds only the tunnel token. `server.env` holds only app secrets (OAuth, SMTP). Backup credentials live in a root-only file read by the host backup timer, never mounted into a container. The B2 key is limited to one bucket without delete rights (or object lock on).
 4. **Containers** publish no ports, run as non-root, `read_only: true` with `tmpfs: [/tmp]`, `cap_drop: [ALL]`, `no-new-privileges`, memory/CPU/PID limits, `restart: unless-stopped`. The database lives in a bind mount (`/srv/iwbtg/data`) writable by the container user.
 5. **Network isolation.** The server sits on its own VLAN or guest network, or a host firewall blocks it from reaching the home LAN. The research archive of original games never lives on this machine.
-6. **Admin pages** (review queue, takedowns) are reachable only over Tailscale, and admin accounts require a second factor.
+6. **Admin pages** (review queue, takedowns) are reachable only over Tailscale, and admin accounts require a second factor. The review queue implements its half in `crates/server/src/admin.rs` (#58): a separate `--admin-bind` listener plus a TOTP step on top of the password session ([Admin access](#admin-access)). The tailnet binding itself is deployment, and the takedown page and per-account enrollment are #1585.
 7. **Host hardening.** SSH key-only, root login off, unattended security upgrades on. Docker engine updates are applied by hand or through an explicitly added apt origin.
 8. **Same site for the web client.** The WASM build is served from the same registrable domain as the API (for example `play.<domain>` and `api.<domain>`), so session cookies work.
 
 ## Deployment
 
 Production is one `compose.yaml` with two services, `server` and `cloudflared` (Components). CI parses it with `docker compose config` in the `changes` job on every PR (#1419), so a broken deployment file fails before it reaches the host. The image comes from the multi-stage `Dockerfile` in the repository root: the builder compiles `iwbtg-server` on the pinned Rust toolchain with the Cargo registry and target directory held in BuildKit cache mounts, and the runtime is `debian:trixie-slim` plus the binary, `ca-certificates` (the healthchecks.io ping uses ureq with native-tls and verifies against the OS trust store; OAuth and SMTP will too) and `curl` (the healthcheck client). Nothing in the running image is writable except the database mount. The server's 512 MiB limit is sized from its four Argon2 slots (4 × 19 MiB = 76 MiB, #1505) plus the runtime baseline and per-request buffers; raising `HASH_PERMITS` means raising it.
+
+Admin access is a second listener on the tailnet, not a published port: compose still publishes nothing, and the operator starts the admin address only on the tailnet interface (a Tailscale sidecar, or a host port bound to the tailnet address). The listener stays off unless `IWBTG_ADMIN_BIND` is set; see [Admin access](#admin-access). The end-to-end tailnet path is not verified by this repository (#1585).
 
 ### Host layout
 
@@ -211,6 +215,16 @@ Design:
 - Password reset (#160): `POST /auth/reset/request {email}` always answers `204`, whether or not the address has an account. Both branches generate and hash a code and wait a 10 ms response floor, and the message is sent from a background task, so text and timing agree. A registered address receives a six-digit code that expires after 15 minutes and dies after five wrong guesses; `password_resets` stores only its SHA-256, one row per account. `POST /auth/reset/confirm {email, code, password}` sets the new password through the same Argon2id path (and hashing permit) and revokes every session; a missing account, an expired code and a wrong code all get the same `400 invalid or expired code`. Both steps are rate limited like sign-in (#161).
 - Reset email goes through `SMTP_URL` and `MAIL_FROM` (`lettre`, native-tls, OS trust store, #160). With either unset the answer is unchanged and a `WARN` says no message was sent; the actual provider choice is #110.
 - Session lookup for protected endpoints arrives with the first consumer (#162).
+
+## Admin access
+
+The review queue runs on its own listener (`crates/server/src/admin.rs`, #58). The public listener never mounts these routes; the binary serves them only when `IWBTG_ADMIN_BIND` is set, and the operator binds that address to the tailnet (security rule 6). `IWBTG_ADMIN_ACCOUNTS` lists the account ids allowed in, and `IWBTG_ADMIN_TOTP_SECRET` is the base32 TOTP secret (SHA-256, six digits, thirty seconds) shared with the authenticator app. A configured but incomplete admin listener is a startup error, never a silent skip.
+
+- A `__Host-` cookie is host-scoped, so the admin listener serves its own `/login`: the same form as the public site, setting the session cookie for the admin host. The queue then asks for the TOTP code and sets `__Host-iwbtg_admin` for eight hours; only the SHA-256 of that token is stored, in `admin_sessions`.
+- `GET /` shows the queue: every run with a `run_flags` row (whatever its kind, so a new flag needs no query change) plus each board's leading verified run. The flags produced today are `exact_copy` and `seed_reuse` (#164); verifier and offline-seed kinds arrive with their producers (#163, #790). A run with no flag shows as "top run".
+- Each row takes `clear`, `request_video` or `quarantine` plus a note; the decision lands in `run_reviews` with the reviewer's account and a timestamp. A decision changes no tick count, board key or verification result: boards (#57) will honour a quarantine. A ban is deliberately not part of this issue (#1586).
+- Generate a secret with `iwbtg-server --admin-new-secret`, which prints the secret and its `otpauth://` URL; put it in the authenticator app and in `server.env`, never in git.
+- The verified Tailscale binding (a sidecar or a host port on the tailnet address) and per-account 2FA enrollment are #1585, as is the takedown page.
 
 ## Risks
 
