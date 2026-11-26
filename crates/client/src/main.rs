@@ -18,6 +18,7 @@
 #![cfg_attr(target_arch = "wasm32", allow(dead_code, unused_imports))]
 
 mod input;
+mod locale;
 mod logging;
 mod registration;
 mod render_fix;

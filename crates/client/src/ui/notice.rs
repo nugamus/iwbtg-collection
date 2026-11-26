@@ -17,6 +17,7 @@ use super::fonts::Type;
 use super::motion::{Ease, OffsetX, Opacity, Tween};
 use super::shape::{Band, Shape, Side, UiOpacity};
 use super::tokens;
+use crate::locale;
 use super::widgets::text;
 
 /// What a notice is about: its heading and whether it shows once per session.
@@ -44,10 +45,10 @@ impl Kind {
     /// The heading over the message.
     pub fn heading(self) -> &'static str {
         match self {
-            Kind::Storage => "Not saved",
-            Kind::Drop => "Not opened",
-            Kind::Pad => "Controller",
-            Kind::Controls => "Controls",
+            Kind::Storage => locale::text("notice_not_saved"),
+            Kind::Drop => locale::text("notice_not_opened"),
+            Kind::Pad => locale::text("notice_controller"),
+            Kind::Controls => locale::text("notice_controls"),
         }
     }
 
@@ -57,13 +58,12 @@ impl Kind {
         match self {
             Kind::Storage => {
                 let _ = message;
-                "Saves and settings may not be kept this session.".to_string()
+                locale::text("notice_storage_body").to_string()
             }
             Kind::Drop | Kind::Controls => message.to_string(),
             Kind::Pad => {
                 let _ = message;
-                "This browser may mix up this controller's buttons. Chrome or Edge map most controllers."
-                    .to_string()
+                locale::text("notice_pad_body").to_string()
             }
         }
     }

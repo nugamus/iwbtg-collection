@@ -25,6 +25,7 @@ use crate::ui::shape::{Ink, Shape};
 use crate::ui::tokens;
 use crate::ui::widgets::{sheared, text};
 use crate::view::Game;
+use crate::locale;
 
 /// The input display's arrows: 26 px each, 18 px apart when there is room.
 const ARROW: f32 = 26.0;
@@ -38,9 +39,9 @@ const ARROWS: [(Action, f32); 4] = [
 ];
 /// The words under the arrows: the standard three, then the game's labelled extra actions.
 const BUTTONS: [(Action, &str); 3] = [
-    (Action::Jump, "Jump"),
-    (Action::Shoot, "Shoot"),
-    (Action::Restart, "Restart"),
+    (Action::Jump, "input_jump"),
+    (Action::Shoot, "input_shoot"),
+    (Action::Restart, "input_restart"),
 ];
 /// The extra actions, in the order of `Controls::labels`.
 const EXTRAS: [Action; 4] = [Action::Extra1, Action::Extra2, Action::Extra3, Action::Extra4];
@@ -418,7 +419,7 @@ fn paused_line() -> impl Bundle {
                     Val::ZERO,
                 ),
             ),
-            text("Paused · timer running", style, PAUSED_INK),
+            text(locale::text("hud_paused_timer"), style, PAUSED_INK),
         ],
     )
 }
@@ -447,7 +448,7 @@ fn mod_row(unranked_pill: bool, mods: ModSet) -> impl Bundle {
             if unranked_pill {
                 c.spawn((
                     sheared(24.0, 12.0, Shape::fill(tokens::AMBER)),
-                    children![text("Unranked", unranked, tokens::ON_AMBER)],
+                    children![text(locale::text("pill_unranked"), unranked, tokens::ON_AMBER)],
                 ));
             }
             for m in mods.iter() {
@@ -508,11 +509,11 @@ fn stats(show: HudShow, stack: bool, value: f32) -> impl Bundle {
         },
         Children::spawn(SpawnWith(move |c: &mut ChildSpawner| {
             if show.deaths {
-                c.spawn(stat("Deaths", vec![(Field::Deaths, "0", tokens::INK)]));
+                c.spawn(stat(locale::text("hud_deaths"), vec![(Field::Deaths, "0", tokens::INK)]));
             }
             if show.stage {
                 c.spawn(stat(
-                    "Stage",
+                    locale::text("hud_stage"),
                     vec![
                         (Field::Stage, "1", tokens::INK),
                         (Field::Stages, " / 1", tokens::MUTED),
@@ -520,7 +521,7 @@ fn stats(show: HudShow, stack: bool, value: f32) -> impl Bundle {
                 ));
             }
             if show.stage_deaths {
-                c.spawn(stat("This stage", vec![(Field::StageDeaths, "0", tokens::INK)]));
+                c.spawn(stat(locale::text("hud_this_stage"), vec![(Field::StageDeaths, "0", tokens::INK)]));
             }
         })),
     )
@@ -566,7 +567,7 @@ fn input_display(width: f32, extras: &[Option<String>; 4]) -> impl Bundle {
         .filter_map(|(a, l)| l.as_deref().map(|l| (a, l.to_owned())));
     let buttons: Vec<_> = BUTTONS
         .into_iter()
-        .map(|(a, l)| (a, l.to_owned()))
+        .map(|(a, l)| (a, locale::text(l).to_owned()))
         .chain(labelled)
         .map(|(action, label)| {
             (
