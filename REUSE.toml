@@ -25,6 +25,8 @@ path = [
   ".cargo/**",
   ".claude/**",
   ".github/**",
+  # The workspace-excluded cargo-fuzz crate (#981); its README is documentation, below.
+  "fuzz/**",
   "workspace/**",
   "progress/**",
   "migrations/**",
@@ -61,6 +63,7 @@ path = [
   "CLAUDE.md",
   ".github/CONTRIBUTING.md",
   ".github/SECURITY.md",
+  "fuzz/README.md",
 ]
 SPDX-FileCopyrightText = "2026 IWBTG Collection contributors"
 SPDX-License-Identifier = "CC-BY-4.0"

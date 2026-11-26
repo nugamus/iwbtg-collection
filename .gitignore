@@ -1,6 +1,13 @@
 /target/
 .claude/worktrees/
 
+# cargo-fuzz (#981): build output, crash artifacts and coverage. The seed corpus under
+# fuzz/corpus/ is committed on purpose.
+/fuzz/target/
+/fuzz/artifacts/
+/fuzz/coverage/
+/fuzz/crash-*
+
 # The server's default SQLite location (IWBTG_DB): runtime data, never committed.
 /data/
 
