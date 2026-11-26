@@ -11,8 +11,7 @@ the parent folder never compiles it.
 | `replay` | `.iwbr` bytes through `Replay::decode` | #994 |
 | `script` | Rhai source through compile and a bounded run | #995 |
 
-The target bodies are stubs until those issues land; the harness, the workflow and the corpus
-layout are in place.
+`iwbz` has its body (#992); the other three are stubs until #993-#995 land.
 
 ## Run
 
@@ -26,6 +25,7 @@ cargo +nightly fuzz run iwbz -- -max_total_time=600
 Nightly and a Linux or macOS host are needed for libFuzzer; the scheduled job
 (`.github/workflows/fuzz.yml`) runs the same command on Linux.
 
-`corpus/<target>/` is the seed corpus and is committed. libFuzzer adds generated inputs to it:
-commit one only when it reaches new code, and prune the rest. A crash lands in
-`artifacts/<target>/`, which is gitignored.
+`corpus/<target>/` is the seed corpus and is committed. The `iwbz` seeds are the packed valid
+fixtures: `cargo run -p iwbtg-tools -- pkg pack crates/format/tests/valid/<fixture> -o
+fuzz/corpus/iwbz/<fixture>.iwbz`. libFuzzer adds generated inputs to it: commit one only when it
+reaches new code, and prune the rest. A crash lands in `artifacts/<target>/`, which is gitignored.
