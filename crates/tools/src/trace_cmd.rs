@@ -39,6 +39,14 @@ pub enum ToolError {
     Open(String),
 }
 
+/// The shared verifier's errors become a tool message, so `?` keeps working in commands that
+/// mix both (#1565).
+impl From<iwbtg_verify::VerifyError> for ToolError {
+    fn from(error: iwbtg_verify::VerifyError) -> Self {
+        Self::Message(error.to_string())
+    }
+}
+
 /// `specs/engines/gm8/traces` under the research repo.
 pub fn traces_dir(research: &Path) -> PathBuf {
     research.join("specs/engines/gm8/traces")

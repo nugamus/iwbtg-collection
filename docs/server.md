@@ -50,7 +50,7 @@ Queries that need compile-time checking use `sqlx::query!`; the `.sqlx` offline 
 - The server decodes the canonical bytes through `iwbtg_sim::replay`; anything that is not a canonical replay is `400`. It stores the exact bytes, their SHA-256, and the board key from the header (`package_id`, `map_id`, `mods`, `gameplay_hash`), leaves `ticks` NULL until verification, and queues a `verify_jobs` row.
 - The answer is `202 {run_id, replay_sha256}`. Submissions are rate limited per address and per account (Security rule 1).
 - Every accepted run records review flags in `run_flags` (#164). `exact_copy` names the earliest run with the same replay bytes, for any account. `seed_reuse` names the earliest run by the same account on the same board (`package_id`, `map_id`, `mods`, `gameplay_hash`) with the same seed. A flag never rejects a run: it is stored, queued and answered like any other. Seed reuse is deliberately same-player and same-board, because board-wide reuse flags fire on honest runs at scale (#790, which still owns the seed source); the seed is kept as the header's eight raw bytes, so the comparison is exact.
-- Reproducing the run and the tick bound are #163; nothing the client claims in the trailer is trusted or stored as a time here.
+- Reproducing the run and the tick bound are #163; nothing the client claims in the trailer is trusted or stored as a time here. The verification checks are the shared `iwbtg-verify` crate (#1565), the same code `iwbtg replay verify` runs, not a server copy.
 
 ## Game downloads
 

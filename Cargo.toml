@@ -3,6 +3,7 @@ resolver = "3"
 members = [
   "crates/sim",
   "crates/format",
+  "crates/verify",
   "crates/removal",
   "crates/tools",
   "crates/client",
@@ -21,6 +22,8 @@ repository = "https://github.com/nugamus/iwbtg-collection"
 [workspace.dependencies]
 iwbtg-sim = { path = "crates/sim" }
 iwbtg-format = { path = "crates/format" }
+# Replay verification shared by the CLI and the server (#1565).
+iwbtg-verify = { path = "crates/verify" }
 # The signed removal-list format shared by the server and the CLI (#1537).
 iwbtg-removal = { path = "crates/removal" }
 # Rhai features per docs/decisions/0001-script-language.md and docs/plans/sim-core.md section 11.

@@ -15,6 +15,8 @@ path = "src/main.rs"
 
 [dependencies]
 iwbtg-sim = { workspace = true, features = ["trace-setup"] }
+# The replay verifier, shared with the server (#1565): `replay verify` is a printer over it.
+iwbtg-verify = { workspace = true }
 postcard.workspace = true
 iwbtg-format.workspace = true
 thiserror.workspace = true
