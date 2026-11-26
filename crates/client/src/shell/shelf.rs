@@ -8,9 +8,8 @@
 //! on the picked cover plays, Escape goes back to the main menu. Typing searches. The Played and
 //! Finished chips keep the games you played or finished in Classic.
 //!
-//! Facts only where the data exists (#1619): time played and deaths are all modes together until
-//! the stats book keeps them per mode, and there is no furthest section or last session yet. The
-//! route line comes with m5 E7 (group 4).
+//! The numbers are the stats book's Classic ones (#1619). The furthest point is a room until
+//! packages declare sections, and the route line comes with m5 E7 (group 4).
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -29,7 +28,7 @@ use iwbtg_sim::stripped::PlayMode;
 use super::AppScreen;
 use super::select::library::{self, Library};
 use crate::card::{COLLECTION_GAMES, Card, Variant, card, profile_name};
-use crate::stats::Book;
+use crate::stats::{Book, SessionSummary};
 use crate::ui::backdrop::Backdrop;
 use crate::ui::fonts::Type;
 use crate::ui::hints::hints;
@@ -101,35 +100,63 @@ pub struct ShelfState {
     pub finished: bool,
 }
 
-/// One game's Classic facts from the stats book.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+/// One game's Classic facts from the stats book (`Book::game_mode`, #1619).
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Facts {
-    /// Seconds played on any of its maps (every mode until #1619).
+    /// Seconds played in Classic; every mode together when the book has no per-mode numbers
+    /// for this game yet (`all_modes`).
     pub seconds: f64,
     pub deaths: u64,
-    /// Clears on its Classic (`original/…`) boards.
+    /// Finishes in Classic.
     pub finished: u32,
+    /// The last finish's date, seconds since 1970.
+    pub finished_at: Option<u64>,
+    /// When a Classic run of it last ended.
+    pub last_played: Option<u64>,
+    /// The last Classic session.
+    pub last_session: Option<SessionSummary>,
+    /// The furthest room reached in Classic (package room id): sections come with E7.
+    pub furthest: Option<String>,
+    /// `seconds` and `deaths` are every mode together: the game was only played before the
+    /// book kept modes apart.
+    pub all_modes: bool,
 }
 
 impl Facts {
     /// `game`'s facts in `book`.
     pub fn of(book: &Book, game: &str) -> Facts {
-        let mut f = Facts::default();
-        for m in book.maps.values().filter(|m| m.game == game) {
-            f.seconds += m.play_seconds;
-            f.deaths += m.deaths;
-            f.finished += m
-                .boards
-                .iter()
-                .filter(|(k, _)| k.starts_with("original/"))
-                .map(|(_, b)| b.clears)
-                .sum::<u32>();
+        let g = book.game_mode(game, false);
+        let maps = || book.maps.values().filter(|m| m.game == game);
+        let any_modes = maps().any(|m| !m.modes.is_empty());
+        let classic_clears: u32 = maps()
+            .flat_map(|m| m.boards.iter())
+            .filter(|(k, _)| k.starts_with("original/"))
+            .map(|(_, b)| b.clears)
+            .sum();
+        if !any_modes {
+            // A book from before #1619: its totals are every mode together.
+            return Facts {
+                seconds: maps().map(|m| m.play_seconds).sum(),
+                deaths: maps().map(|m| m.deaths).sum(),
+                finished: classic_clears,
+                all_modes: maps().next().is_some(),
+                ..Facts::default()
+            };
         }
-        f
+        Facts {
+            seconds: g.play_seconds,
+            deaths: g.deaths,
+            finished: g.finishes.max(classic_clears),
+            finished_at: g.finished_at,
+            last_played: g.last_played,
+            last_session: g.last_session,
+            furthest: g.furthest.map(|f| f.room),
+            all_modes: false,
+        }
     }
 
     pub fn played(&self) -> bool {
-        self.seconds > 0.0
+        self.seconds > 0.0 || self.last_played.is_some()
     }
 
     /// The cover's line: `Finished`, `Played` or `Not started`.
@@ -141,6 +168,11 @@ impl Facts {
         } else {
             "Not started"
         }
+    }
+
+    /// The note under time played and deaths: `in Classic`, or `all modes` for an old book.
+    pub fn scope(&self) -> &'static str {
+        if self.all_modes { "all modes" } else { "in Classic" }
     }
 }
 
@@ -159,7 +191,7 @@ pub fn shown(lib: &Library, facts: &[Facts], state: &ShelfState) -> Vec<usize> {
         .filter(|&i| {
             let g = &lib.games[i];
             let hay = format!("{} {}", g.title, g.creator).to_lowercase();
-            let f = facts.get(i).copied().unwrap_or_default();
+            let f = facts.get(i).cloned().unwrap_or_default();
             words.iter().all(|w| hay.contains(w))
                 && (!state.played || f.played())
                 && (!state.finished || f.finished > 0)
@@ -189,6 +221,8 @@ enum HeroText {
     Title,
     By,
     Progress,
+    /// `last played 2 days ago` beside Your progress.
+    LastPlayed,
     Value(usize),
     Sub(usize),
     Initial,
@@ -274,7 +308,7 @@ fn enter(world: &mut World, folder: Option<&Path>) {
             DespawnOnExit(AppScreen::Shelf),
         ))
         .id();
-    let mode = world.get_resource::<Mode>().copied().unwrap_or_default();
+    let mode = world.get_resource::<Mode>().cloned().unwrap_or_default();
     let mut commands = world.commands();
     page(&mut commands, camera, mode, &player, &search, played, finished);
     world.flush();
@@ -448,7 +482,7 @@ fn hero_block() -> impl Bundle {
                     ..default()
                 },
                 Children::spawn(SpawnIter(
-                    ["Time played", "Deaths", "Finished"]
+                    ["Time played", "Deaths", "Finished", "Furthest", "Last session"]
                         .into_iter()
                         .enumerate()
                         .map(stat_column)
@@ -491,9 +525,17 @@ fn progress_block() -> impl Bundle {
             (
                 Node {
                     padding: UiRect::new(Val::Px(4.0), Val::Px(8.0), Val::Px(0.0), Val::Px(0.0)),
+                    justify_content: JustifyContent::SpaceBetween,
+                    align_items: AlignItems::Baseline,
                     ..default()
                 },
-                children![text("Your progress", Type::barlow(20.0, 700), tokens::INK)],
+                children![
+                    text("Your progress", Type::barlow(20.0, 700), tokens::INK),
+                    (
+                        text("", Type::barlow(14.0, 400), tokens::MUTED),
+                        HeroText::LastPlayed
+                    ),
+                ],
             ),
             (
                 Node {
@@ -704,7 +746,7 @@ fn rebuild_covers(world: &mut World) {
                 (
                     i,
                     lib.games[i].title.clone(),
-                    facts.get(i).copied().unwrap_or_default(),
+                    facts.get(i).cloned().unwrap_or_default(),
                     lib.cover[i].clone(),
                     lib.fruit[i].clone().unwrap_or(lib.placeholder_fruit.clone()),
                 )
@@ -1002,7 +1044,7 @@ fn shelf_looks(
             node.width = Val::Px(size.x);
             node.height = Val::Px(size.y);
         }
-        let f = facts.0.get(cover.0).copied().unwrap_or_default();
+        let f = facts.0.get(cover.0).cloned().unwrap_or_default();
         let mut want = cover_shape(f, picked, shape.image.clone());
         want.image = shape.image.clone();
         if *shape != want {
@@ -1044,7 +1086,7 @@ fn hero(
     let Some(game) = lib.games.get(state.pick) else {
         return;
     };
-    let f = facts.0.get(state.pick).copied().unwrap_or_default();
+    let f = facts.0.get(state.pick).cloned().unwrap_or_default();
     let maps = game.maps.len();
     let line = if maps > 1 {
         format!("{maps} difficulties, picked in the game")
@@ -1056,29 +1098,13 @@ fn hero(
     } else {
         format!("by {}", game.creator)
     };
-    let progress = match (f.finished, f.played()) {
-        (0, false) => "Not started yet. Play opens the game's own title screen.".to_owned(),
-        (0, true) => format!(
-            "Played {} · not finished yet · sections come with the package",
-            crate::card::hours_minutes(f.seconds)
-        ),
-        (n, _) => format!(
-            "Finished {} in Classic · sections come with the package",
-            times(n)
-        ),
-    };
-    let stats = [
-        (clock(f.seconds), "all modes".to_owned()),
-        (crate::card::grouped(f.deaths), "all modes".to_owned()),
-        (
-            if f.finished == 0 {
-                "Not yet".to_owned()
-            } else {
-                times(f.finished)
-            },
-            "in Classic".to_owned(),
-        ),
-    ];
+    let now = crate::stats::now_seconds();
+    let progress = progress_line(&f);
+    let last_played = f
+        .last_played
+        .map(|t| format!("last played {}", crate::card::ago(t, now)))
+        .unwrap_or_default();
+    let stats = hero_stats(&f, now);
     let first = game
         .creator
         .chars()
@@ -1090,6 +1116,7 @@ fn hero(
             HeroText::Title => (game.title.as_str(), Type::condensed(92.0, 700).italic()),
             HeroText::By => (by.as_str(), Type::barlow(18.0, 400)),
             HeroText::Progress => (progress.as_str(), Type::barlow(14.0, 400)),
+            HeroText::LastPlayed => (last_played.as_str(), Type::barlow(14.0, 400)),
             HeroText::Value(i) => (
                 stats.get(i).map_or("", |(v, _)| v.as_str()),
                 Type::barlow(24.0, 600),
@@ -1122,6 +1149,63 @@ fn hero(
     // Keep only the pick's art.
     art.retain(|k, _| *k == pick);
     backdrop.art = Some(handle);
+}
+
+/// The line under Your progress: the furthest room and the last finish (m5 A4).
+fn progress_line(f: &Facts) -> String {
+    if !f.played() {
+        return "Not started yet. Play opens the game's own title screen.".to_owned();
+    }
+    let furthest = f
+        .furthest
+        .as_deref()
+        .map_or_else(String::new, |r| format!("Furthest: {r} · "));
+    let finished = match (f.finished, f.finished_at) {
+        (0, _) => "not finished yet".to_owned(),
+        (n, Some(at)) => format!(
+            "finished {}, {}",
+            times(n).to_lowercase(),
+            crate::hud::leaderboard::date_short(at)
+        ),
+        (n, None) => format!("finished {}", times(n).to_lowercase()),
+    };
+    format!("{furthest}{finished} · sections come with the package")
+}
+
+/// The five numbers on the left (m5 A4): time played, deaths, finished, furthest, last session.
+fn hero_stats(f: &Facts, now: u64) -> [(String, String); 5] {
+    let finished = if f.finished == 0 {
+        ("Not yet".to_owned(), String::new())
+    } else {
+        (
+            times(f.finished),
+            f.finished_at
+                .map(crate::hud::leaderboard::date_short)
+                .unwrap_or_default(),
+        )
+    };
+    let furthest = match &f.furthest {
+        Some(room) => (room.clone(), "room reached".to_owned()),
+        None => ("—".to_owned(), String::new()),
+    };
+    let session = match f.last_session {
+        Some(s) => (
+            clock(s.seconds),
+            format!(
+                "{} deaths · {}",
+                crate::card::grouped(s.deaths),
+                crate::card::ago(s.ended_at, now)
+            ),
+        ),
+        None => ("—".to_owned(), String::new()),
+    };
+    [
+        (clock(f.seconds), f.scope().to_owned()),
+        (crate::card::grouped(f.deaths), f.scope().to_owned()),
+        finished,
+        furthest,
+        session,
+    ]
 }
 
 /// `Once`, `Twice`, `3 times`.

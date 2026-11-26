@@ -18,6 +18,11 @@ pub struct Observation {
     pub ranked_ticks: u64,
     /// Where the kid is after the tick, `None` when there is none (dead, or a room without one).
     pub kid: Option<Spot>,
+    /// The room after the tick (index into `GameDef::rooms`).
+    pub room: u32,
+    /// The save slot's room and spot in whole pixels, `None` with nothing saved: a change is a
+    /// save (#1623).
+    pub save: Option<(u32, i32, i32)>,
 }
 
 /// A place in the game: a room (index into `GameDef::rooms`) and a kid position in whole pixels.
@@ -165,6 +170,8 @@ mod tests {
             ended,
             ranked_ticks: ranked,
             kid: None,
+            room: 0,
+            save: None,
         }
     }
 

@@ -105,7 +105,7 @@ fn card(c: &mut ChildSpawner, info: &Info, art: Option<Handle<Image>>) {
     ))
     .with_children(|c| {
         let at = strip(c, &info.title, info.creator.as_deref(), art);
-        if let Some(facts) = info.classic {
+        if let Some(facts) = &info.classic {
             // The CLASSIC pill in the art's top right corner (m5 A5).
             c.world_mut().entity_mut(at).with_child((
                 Node {
@@ -123,18 +123,29 @@ fn card(c: &mut ChildSpawner, info: &Info, art: Option<Handle<Image>>) {
     });
 }
 
-/// A Classic run's facts in this game and what Play opens (m5 A5). The last-played time and
-/// where you got to wait for the stats book (#1619).
-fn classic_body(c: &mut ChildSpawner, facts: Facts) {
-    let line = if facts.played() {
-        "You played this game before: Continue in its own menu picks up your save."
-    } else {
-        "Your first time in this game."
+/// A Classic run's facts in this game and what Play opens (m5 A5): where you last got to, time
+/// played and deaths in Classic, and when you last played (else how often you finished).
+fn classic_body(c: &mut ChildSpawner, facts: &Facts) {
+    let line = match (&facts.furthest, facts.played()) {
+        (Some(room), _) => format!("Last played up to {room}"),
+        (None, true) => {
+            "You played this game before: Continue in its own menu picks up your save.".to_owned()
+        }
+        (None, false) => "Your first time in this game.".to_owned(),
     };
     let finished = if facts.finished == 0 {
         "Not yet".to_owned()
     } else {
         shelf::times(facts.finished)
+    };
+    let now = crate::stats::now_seconds();
+    let (third_key, third, third_note) = match (facts.last_played, facts.last_session) {
+        (Some(at), session) => (
+            "Last played",
+            crate::card::ago(at, now),
+            session.map(|s| format!("{} session", shelf::clock(s.seconds))),
+        ),
+        (None, _) => ("Finished", finished, Some("in Classic".to_owned())),
     };
     c.spawn(Node {
         flex_direction: FlexDirection::Column,
@@ -149,7 +160,7 @@ fn classic_body(c: &mut ChildSpawner, facts: Facts) {
     })
     .with_children(|c| {
         c.spawn((
-            text(line, Type::barlow(18.0, 600), tokens::INK),
+            text(&line, Type::barlow(18.0, 600), tokens::INK),
             TextLayout::no_wrap(),
         ));
         c.spawn(Node {
@@ -163,7 +174,7 @@ fn classic_body(c: &mut ChildSpawner, facts: Facts) {
                 c,
                 "Time played",
                 &shelf::clock(facts.seconds),
-                Some("all modes".to_owned()),
+                Some(facts.scope().to_owned()),
             );
             number(
                 c,
@@ -171,7 +182,7 @@ fn classic_body(c: &mut ChildSpawner, facts: Facts) {
                 &crate::card::grouped(facts.deaths),
                 Some("in this game".to_owned()),
             );
-            number(c, "Finished", &finished, Some("in Classic".to_owned()));
+            number(c, third_key, &third, third_note);
         });
         c.spawn(Node {
             align_items: AlignItems::Center,
